@@ -2235,7 +2235,7 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
         LookupHost("127.0.0.1", local, false);
         pnodeLocalHost = new CNode(INVALID_SOCKET, CAddress(CService(local, 0), nLocalServices));
     }
-    
+
     Discover(threadGroup);
 
 #ifdef USE_TLS

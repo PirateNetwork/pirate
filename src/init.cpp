@@ -1553,8 +1553,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     std::string proxyArg = GetArg("-proxy", "");
     SetLimited(NET_ONION);
     if (proxyArg != "" && proxyArg != "0") {
-        CService resolved;
-        LookupNumeric(proxyArg.c_str(), resolved, 9050);
+        CService resolved(LookupNumeric(proxyArg.c_str(), 9050));
         proxyType addrProxy = proxyType(resolved, proxyRandomize);
         if (!addrProxy.IsValid())
             return InitError(strprintf(_("Invalid -proxy address: '%s'"), proxyArg));
@@ -1574,8 +1573,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         if (onionArg == "0") { // Handle -noonion/-onion=0
             SetLimited(NET_ONION); // set onions as unreachable
         } else {
-            CService resolved;
-            LookupNumeric(onionArg.c_str(), resolved, 9050);
+            CService resolved(LookupNumeric(onionArg.c_str(), 9050));
             proxyType addrOnion = proxyType(resolved, proxyRandomize);
             if (!addrOnion.IsValid())
                 return InitError(strprintf(_("Invalid -onion address: '%s'"), onionArg));
