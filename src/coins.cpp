@@ -460,7 +460,7 @@ double CCoinsViewCache::GetPriority(const CTransaction &tx, int nHeight) const
     // Joinsplits do not reveal any information about the value or age of a note, so we
     // cannot apply the priority algorithm used for transparent utxos.  Instead, we pick a
     // very large number and multiply it by the transaction's fee per 1000 bytes of data.
-    // One trillion, 1000000000000, is equivalent to 1 ZEC utxo * 10000 blocks (~17 days).
+    // One trillion, 1000000000000, is equivalent to 1 ZER utxo * 10000 blocks (~17 days).
     if (tx.vjoinsplit.size() > 0) {
         unsigned int nTxSize = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
         nTotalIn += tx.GetJoinSplitValueIn();
