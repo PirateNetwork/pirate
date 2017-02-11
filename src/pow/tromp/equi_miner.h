@@ -57,7 +57,6 @@ static const u32 NBUCKETS = 1<<BUCKBITS;
 // 2_log of number of slots per bucket
 static const u32 SLOTBITS = RESTBITS+1+1;
 static const u32 SLOTRANGE = 1<<SLOTBITS;
-static const u32 SLOTMSB = 1<<(SLOTBITS-1);
 // number of slots per bucket
 static const u32 NSLOTS = SLOTRANGE * SAVEMEM;
 // number of per-xhash slots
@@ -80,40 +79,19 @@ struct tree {
     bid_s0_s1 = idx;
   }
   tree(const u32 bid, const u32 s0, const u32 s1) {
-#ifdef SLOTDIFF
-    u32 ds10 = (s1 - s0) & SLOTMASK;
-    if (ds10 & SLOTMSB) {
-      bid_s0_s1 = (((bid << SLOTBITS) | s1) << (SLOTBITS-1)) | (SLOTMASK & ~ds10);
-    } else {
-      bid_s0_s1 = (((bid << SLOTBITS) | s0) << (SLOTBITS-1)) | (ds10 - 1);
-    }
-#else
     bid_s0_s1 = (((bid << SLOTBITS) | s0) << SLOTBITS) | s1;
-#endif
   }
   u32 getindex() const {
     return bid_s0_s1;
   }
   u32 bucketid() const {
-#ifdef SLOTDIFF
-    return bid_s0_s1 >> (2 * SLOTBITS - 1);
-#else
     return bid_s0_s1 >> (2 * SLOTBITS);
-#endif
   }
   u32 slotid0() const {
-#ifdef SLOTDIFF
-    return (bid_s0_s1 >> (SLOTBITS-1)) & SLOTMASK;
-#else
     return (bid_s0_s1 >> SLOTBITS) & SLOTMASK;
-#endif
   }
   u32 slotid1() const {
-#ifdef SLOTDIFF
-    return (slotid0() + 1 + (bid_s0_s1 & (SLOTMASK>>1))) & SLOTMASK;
-#else
     return bid_s0_s1 & SLOTMASK;
-#endif
   }
 };
 
