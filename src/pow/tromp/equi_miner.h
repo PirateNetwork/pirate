@@ -368,13 +368,7 @@ struct equi {
   };
 
   struct collisiondata {
-#ifdef XBITMAP
-#if NSLOTS > 64
-#error cant use XBITMAP with more than 64 slots
-#endif
-    u64 xhashmap[NRESTS];
-    u64 xmap;
-#else
+
 #if RESTBITS <= 6
     typedef uchar xslot;
 #else
@@ -385,23 +379,12 @@ struct equi {
     xslot *xx;
     u32 n0;
     u32 n1;
-#endif
     u32 s0;
 
     void clear() {
-#ifdef XBITMAP
-      memset(xhashmap, 0, NRESTS * sizeof(u64));
-#else
       memset(nxhashslots, 0, NRESTS * sizeof(xslot));
-#endif
     }
     bool addslot(u32 s1, u32 xh) {
-#ifdef XBITMAP
-      xmap = xhashmap[xh];
-      xhashmap[xh] |= (u64)1 << s1;
-      s0 = -1;
-      return true;
-#else
       n1 = (u32)nxhashslots[xh]++;
       if (n1 >= XFULL)
         return false;
@@ -409,23 +392,12 @@ struct equi {
       xx[n1] = s1;
       n0 = 0;
       return true;
-#endif
     }
     bool nextcollision() const {
-#ifdef XBITMAP
-      return xmap != 0;
-#else
       return n0 < n1;
-#endif
     }
     u32 slot() {
-#ifdef XBITMAP
-      const u32 ffs = __builtin_ffsll(xmap);
-      s0 += ffs; xmap >>= ffs;
-      return s0;
-#else
       return (u32)xx[n0++];
-#endif
     }
   };
 
