@@ -11,9 +11,9 @@ Please provide a general summary of the issue you're experiencing
 
 ### Can you reliably reproduce the issue?
 #### If so, please list the steps to reproduce below:
-1. 
-2. 
-3. 
+1.
+2.
+3.
 
 ### Expected behaviour
 Tell us what should happen
@@ -34,9 +34,9 @@ Run `zcashd --version` to find out
 - Compiler version (gcc -version):
 
 ### Any extra information that might be useful in the debugging process.
-This includes the relevant contents of `~/.zcash/debug.log`. You can paste raw text, attach the file directly in the issue or link to the text via a pastebin type site.
+This includes the relevant contents of `~/.zero/debug.log`. You can paste raw text, attach the file directly in the issue or link to the text via a pastebin type site.
 Please also include any non-standard things you did during compilation (extra flags, dependency version changes etc.) if applicable.
 
-### Do you have a back up of `~/.zcash` directory and/or take a VM snapshot?
-- Backing up / making a copy of the `~/.zcash` directory might help make the problem reproducible. Please redact appropriately.
+### Do you have a back up of `~/.zero` directory and/or take a VM snapshot?
+- Backing up / making a copy of the `~/.zero` directory might help make the problem reproducible. Please redact appropriately.
 - Taking a VM snapshot is really helpful for interactively testing fixes

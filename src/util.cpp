@@ -393,13 +393,13 @@ void PrintExceptionContinue(const std::exception* pex, const char* pszThread)
 boost::filesystem::path GetDefaultDataDir()
 {
     namespace fs = boost::filesystem;
-    // Windows < Vista: C:\Documents and Settings\Username\Application Data\Zcash
-    // Windows >= Vista: C:\Users\Username\AppData\Roaming\Zcash
-    // Mac: ~/Library/Application Support/Zcash
+    // Windows < Vista: C:\Documents and Settings\Username\Application Data\zero
+    // Windows >= Vista: C:\Users\Username\AppData\Roaming\zero
+    // Mac: ~/Library/Application Support/zero
     // Unix: ~/.zcash
 #ifdef WIN32
     // Windows
-    return GetSpecialFolderPath(CSIDL_APPDATA) / "Zcash";
+    return GetSpecialFolderPath(CSIDL_APPDATA) / "zero";
 #else
     fs::path pathRet;
     char* pszHome = getenv("HOME");
@@ -411,10 +411,10 @@ boost::filesystem::path GetDefaultDataDir()
     // Mac
     pathRet /= "Library/Application Support";
     TryCreateDirectory(pathRet);
-    return pathRet / "Zcash";
+    return pathRet / "zero";
 #else
     // Unix
-    return pathRet / ".zcash";
+    return pathRet / ".zero";
 #endif
 #endif
 }
