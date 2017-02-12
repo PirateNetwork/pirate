@@ -1,5 +1,4 @@
 #!/bin/bash
-
 set -eu
 
 PARAMS_DIR="$HOME/.zcash-params"

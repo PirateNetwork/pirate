@@ -40,9 +40,6 @@ void ConnectMetricsScreen();
 void ThreadShowMetricsScreen();
 
 /**
- * Heart image: https://commons.wikimedia.org/wiki/File:Heart_coraz%C3%B3n.svg
- * License: CC BY-SA 3.0
- *
  * Rendering options:
  * Logo: img2txt -W 90 -H 20 -f utf8 -d none -g design.png >> design.ansi
  */

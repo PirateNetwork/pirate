@@ -2,7 +2,7 @@
 
 This issue tracker is only for technical issues related to zcashd.
 
-General Zcash questions and/or support requests and are best directed to the [Zcash Forums](https://forum.z.cash) or [Community Rocket.Chat](https://chat.zcashcommunity.com).
+General ZERO questions and/or support requests and are best directed to the https://github.com/zerocurrency/zero
 
 For reporting security vulnerabilities or for sensitive discussions with our security team, please contact [security@z.cash](mailto:security@z.cash). You can use the [GPG key](https://z.cash/gpg-pubkeys/security.asc) (fingerprint: `AF85 0445 546C 18B7 86F9  2C62 88FB 8B86 D8B5 A68C`) to send an encrypted message. The key and fingerprint are duplicated on our [Public Keys page](https://z.cash/support/pubkeys.html).
 
