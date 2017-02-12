@@ -1579,8 +1579,8 @@
         <translation>거래를 생성하는 것을 실패하였습니다</translation>
     </message>
     <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>거래가 거부되었습니다. 몇몇 코인들이 지갑에서 이미 사용된 경우, 예를 들어 코인을 이미 사용한  wallet.dat를 복사해서 사용한 경우 지금 지갑에 기록이 안되있어 이런 일이 생길 수 있습니다.</translation>
+        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.zero and coins were spent in the copy but not marked as spent here.</source>
+        <translation>거래가 거부되었습니다. 몇몇 코인들이 지갑에서 이미 사용된 경우, 예를 들어 코인을 이미 사용한  wallet.zero를 복사해서 사용한 경우 지금 지갑에 기록이 안되있어 이런 일이 생길 수 있습니다.</translation>
     </message>
     <message>
         <source>Warning: Invalid Bitcoin address</source>
@@ -2301,20 +2301,20 @@
         <translation>경고: 현재 비트코인 버전이 다른 네트워크 참여자들과 동일하지 않는 것 같습니다. 당신 또는 다른 참여자들이 동일한 비트코인 버전으로 업그레이드 할 필요가 있습니다.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>경고 : wallet.dat 파일을 읽는 중 에러가 발생했습니다. 주소 키는 모두 정확하게 로딩되었으나 거래 데이터와 주소록 필드에서 누락이나 오류가 존재할 수 있습니다. </translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>경고 : wallet.zero 파일을 읽는 중 에러가 발생했습니다. 주소 키는 모두 정확하게 로딩되었으나 거래 데이터와 주소록 필드에서 누락이나 오류가 존재할 수 있습니다. </translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>경고 : wallet.dat가 손상되어 데이터가 복구되었습니다. 원래의 wallet.dat 파일은 %s 후에 wallet.{timestamp}.bak 이름으로 저장됩니다. 잔액과 거래 내역이 정확하지 않다면 백업 파일로 부터 복원해야 합니다. </translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>경고 : wallet.zero가 손상되어 데이터가 복구되었습니다. 원래의 wallet.zero 파일은 %s 후에 wallet.{timestamp}.bak 이름으로 저장됩니다. 잔액과 거래 내역이 정확하지 않다면 백업 파일로 부터 복원해야 합니다. </translation>
     </message>
     <message>
         <source>(default: 1)</source>
         <translation>(기본값: 1)</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>손상된 wallet.dat에서 개인키 복원을 시도합니다</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>손상된 wallet.zero에서 개인키 복원을 시도합니다</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -2521,8 +2521,8 @@
         <translation>구동 중</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat 파일이 손상되었고 복구가 실패하였습니다.</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero 파일이 손상되었고 복구가 실패하였습니다.</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -2557,12 +2557,12 @@
         <translation>주소를 불러오는 중...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>wallet.dat 불러오기 에러: 지갑 오류</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>wallet.zero 불러오기 에러: 지갑 오류</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>wallet.dat 불러오기 에러</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>wallet.zero 불러오기 에러</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

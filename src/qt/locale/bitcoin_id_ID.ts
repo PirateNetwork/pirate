@@ -1509,8 +1509,8 @@
         <translation>Gagal membuat transaksi!</translation>
     </message>
     <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>Gagal: Transaksi ditolak. Ini mungkin terjadi jika beberapa dari koin dalam dompet Anda telah digunakan, seperti ketika Anda menggunakan salinan wallet.dat dan beberapa koin telah dibelanjakan dalam salinan tersebut tetapi disini tidak tertandai sebagai terpakai.</translation>
+        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.zero and coins were spent in the copy but not marked as spent here.</source>
+        <translation>Gagal: Transaksi ditolak. Ini mungkin terjadi jika beberapa dari koin dalam dompet Anda telah digunakan, seperti ketika Anda menggunakan salinan wallet.zero dan beberapa koin telah dibelanjakan dalam salinan tersebut tetapi disini tidak tertandai sebagai terpakai.</translation>
     </message>
     <message>
         <source>Warning: Invalid Bitcoin address</source>
@@ -2215,16 +2215,16 @@
         <translation>Peringatan: Kami tidak bersetujuh dengan peer-peer kami! Kemungkinan Anda harus upgrade, atau node-node lain yang harus diupgrade.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Awas: wallet.dat tidak bisa dibaca! Berhasil periksakan kunci-kunci dalam arsipnya, tetapi ada kemungkinan informasi tentang transaksi atau isi-isi buku alamat salah atau terhilang.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Awas: wallet.zero tidak bisa dibaca! Berhasil periksakan kunci-kunci dalam arsipnya, tetapi ada kemungkinan informasi tentang transaksi atau isi-isi buku alamat salah atau terhilang.</translation>
     </message>
     <message>
         <source>(default: 1)</source>
         <translation>(pengaturan awal: 1)</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Coba memulihkan kunci-kunci pribadi dari wallet.dat yang rusak</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Coba memulihkan kunci-kunci pribadi dari wallet.zero yang rusak</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -2387,8 +2387,8 @@
         <translation>Setiap transaksi dalam dompet sedang di-'Zap'...</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat rusak, tidak bisa diperbaiki</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero rusak, tidak bisa diperbaiki</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -2423,12 +2423,12 @@
         <translation>Memuat alamat...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Gagal memuat wallet.dat: Dompet rusak</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Gagal memuat wallet.zero: Dompet rusak</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Gagal memuat wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Gagal memuat wallet.zero</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

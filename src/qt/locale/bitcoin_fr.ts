@@ -1991,8 +1991,8 @@
         <translation>La création de la transaction a échoué !</translation>
     </message>
     <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>La transaction a été rejetée ! Ceci peut arriver si certaines pièces de votre portefeuille étaient déjà dépensées, par exemple si vous avez utilisé une copie de wallet.dat et que des pièces ont été dépensées dans la copie sans être marquées comme telles ici.</translation>
+        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.zero and coins were spent in the copy but not marked as spent here.</source>
+        <translation>La transaction a été rejetée ! Ceci peut arriver si certaines pièces de votre portefeuille étaient déjà dépensées, par exemple si vous avez utilisé une copie de wallet.zero et que des pièces ont été dépensées dans la copie sans être marquées comme telles ici.</translation>
     </message>
     <message>
         <source>A fee higher than %1 is considered an absurdly high fee.</source>
@@ -2857,12 +2857,12 @@
         <translation>Avertissement : nous ne semblons pas être en accord complet avec nos pairs ! Vous pourriez avoir besoin d'effectuer une mise à niveau, ou d'autres nœuds du réseau pourraient avoir besoin d'effectuer une mise à niveau.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Avertissement : une erreur est survenue lors de la lecture de wallet.dat ! Toutes les clefs ont été lues correctement mais les données de transaction ou les entrées du carnet d'adresses sont peut-être incorrectes ou manquantes.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Avertissement : une erreur est survenue lors de la lecture de wallet.zero ! Toutes les clefs ont été lues correctement mais les données de transaction ou les entrées du carnet d'adresses sont peut-être incorrectes ou manquantes.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Avertissement : wallet.dat corrompu, données récupérées ! Le fichier wallet.dat original a été enregistré en tant que wallet.{timestamp}.bak dans %s ; si votre solde ou transactions sont incorrects vous devriez effectuer une restauration depuis une sauvegarde.</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Avertissement : wallet.zero corrompu, données récupérées ! Le fichier wallet.zero original a été enregistré en tant que wallet.{timestamp}.bak dans %s ; si votre solde ou transactions sont incorrects vous devriez effectuer une restauration depuis une sauvegarde.</translation>
     </message>
     <message>
         <source>Whitelist peers connecting from the given netmask or IP address. Can be specified multiple times.</source>
@@ -2877,8 +2877,8 @@
         <translation>&lt;category&gt; peut être :</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Tenter de récupérer les clefs privées d'un wallet.dat corrompu</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Tenter de récupérer les clefs privées d'un wallet.zero corrompu</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -3169,8 +3169,8 @@ par exemple : alertnotify=echo %%s | mail -s "Alerte Bitcoin" admin@foo.com
         <translation>Impossible d'analyser la valeur -rpcbind %s comme adresse réseau</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet requires newer version of Bitcoin Core</source>
-        <translation>Erreur lors du chargement de wallet.dat : le portefeuille exige une version plus récente de Bitcoin Core</translation>
+        <source>Error loading wallet.zero: Wallet requires newer version of Bitcoin Core</source>
+        <translation>Erreur lors du chargement de wallet.zero : le portefeuille exige une version plus récente de Bitcoin Core</translation>
     </message>
     <message>
         <source>Error reading from database, shutting down.</source>
@@ -3345,8 +3345,8 @@ par exemple : alertnotify=echo %%s | mail -s "Alerte Bitcoin" admin@foo.com
         <translation>au démarrage</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat corrompu, la récupération a échoué</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero corrompu, la récupération a échoué</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -3381,8 +3381,8 @@ par exemple : alertnotify=echo %%s | mail -s "Alerte Bitcoin" admin@foo.com
         <translation>Chargement des adresses…</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Erreur lors du chargement de wallet.dat : portefeuille corrompu</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Erreur lors du chargement de wallet.zero : portefeuille corrompu</translation>
     </message>
     <message>
         <source>(1 = keep tx meta data e.g. account owner and payment request information, 2 = drop tx meta data)</source>
@@ -3421,8 +3421,8 @@ par exemple : alertnotify=echo %%s | mail -s "Alerte Bitcoin" admin@foo.com
         <translation>Toujours demander les adresses des pairs par recherche DNS (par défaut : %u)</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Erreur lors du chargement de wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Erreur lors du chargement de wallet.zero</translation>
     </message>
     <message>
         <source>Generate coins (default: %u)</source>

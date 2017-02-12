@@ -1999,8 +1999,8 @@
         <translation>Vytvoření transakce selhalo!</translation>
     </message>
     <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>Transakce byla odmítnuta! Tohle může nastat, pokud nějaké mince z tvé peněženky už jednou byly utraceny, například pokud používáš kopii souboru wallet.dat a mince byly utraceny v druhé kopii, ale nebyly označeny jako utracené v této.</translation>
+        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.zero and coins were spent in the copy but not marked as spent here.</source>
+        <translation>Transakce byla odmítnuta! Tohle může nastat, pokud nějaké mince z tvé peněženky už jednou byly utraceny, například pokud používáš kopii souboru wallet.zero a mince byly utraceny v druhé kopii, ale nebyly označeny jako utracené v této.</translation>
     </message>
     <message>
         <source>A fee higher than %1 is considered an absurdly high fee.</source>
@@ -2865,12 +2865,12 @@
         <translation>Upozornění: Nesouhlasím zcela se svými protějšky! Možná potřebuji aktualizovat nebo ostatní uzly potřebují aktualizovat.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Upozornění: nastala chyba při čtení souboru wallet.dat! Všechny klíče se přečetly správně, ale data o transakcích nebo záznamy v adresáři mohou chybět či být nesprávné.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Upozornění: nastala chyba při čtení souboru wallet.zero! Všechny klíče se přečetly správně, ale data o transakcích nebo záznamy v adresáři mohou chybět či být nesprávné.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Upozornění: soubor wallet.dat je poškozený, data jsou však zachráněna! Původní soubor wallet.dat je uložený jako wallet.{timestamp}.bak v %s. Pokud je stav tvého účtu nebo transakce nesprávné, zřejmě bys měl obnovit zálohu.</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Upozornění: soubor wallet.zero je poškozený, data jsou však zachráněna! Původní soubor wallet.zero je uložený jako wallet.{timestamp}.bak v %s. Pokud je stav tvého účtu nebo transakce nesprávné, zřejmě bys měl obnovit zálohu.</translation>
     </message>
     <message>
         <source>Whitelist peers connecting from the given netmask or IP address. Can be specified multiple times.</source>
@@ -2885,8 +2885,8 @@
         <translation>&lt;category&gt; může být:</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Pokusit se zachránit soukromé klíče z poškozeného souboru wallet.dat</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Pokusit se zachránit soukromé klíče z poškozeného souboru wallet.zero</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -3177,8 +3177,8 @@ například: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com
         <translation>Nejde mi přečíst hodnotu -rpcbind %s jako síťovou adresu</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet requires newer version of Bitcoin Core</source>
-        <translation>Chyba při načítání wallet.dat: peněženka vyžaduje novější verzi Bitcoin Core</translation>
+        <source>Error loading wallet.zero: Wallet requires newer version of Bitcoin Core</source>
+        <translation>Chyba při načítání wallet.zero: peněženka vyžaduje novější verzi Bitcoin Core</translation>
     </message>
     <message>
         <source>Error reading from database, shutting down.</source>
@@ -3353,8 +3353,8 @@ například: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com
         <translation>při startu</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>Soubor wallet.dat je poškozen, jeho záchrana se nezdařila</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>Soubor wallet.zero je poškozen, jeho záchrana se nezdařila</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -3389,8 +3389,8 @@ například: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com
         <translation>Načítám adresy...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Chyba při načítání wallet.dat: peněženka je poškozená</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Chyba při načítání wallet.zero: peněženka je poškozená</translation>
     </message>
     <message>
         <source>(1 = keep tx meta data e.g. account owner and payment request information, 2 = drop tx meta data)</source>
@@ -3429,8 +3429,8 @@ například: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com
         <translation>Vždy získávat adresy dalších protějšků přes DNS (výchozí: %u)</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Chyba při načítání wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Chyba při načítání wallet.zero</translation>
     </message>
     <message>
         <source>Generate coins (default: %u)</source>

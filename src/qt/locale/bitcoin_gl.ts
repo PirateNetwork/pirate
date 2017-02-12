@@ -1963,20 +1963,20 @@
         <translation>Precaución: Non parece que esteamos totalmente de acordo cos nosos pares! Pode que precises actualizar, ou outros nodos poden precisar actualizarse.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Precaución: erro lendo wallet.dat! Tódalas claves lidas correctamente, pero os datos de transacción ou as entradas do libro de direccións podrían estar ausentes ou incorrectos.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Precaución: erro lendo wallet.zero! Tódalas claves lidas correctamente, pero os datos de transacción ou as entradas do libro de direccións podrían estar ausentes ou incorrectos.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Precaución: wallet.dat corrupto, datos salvagardados! O wallet.dat orixinal foi gardado como wallet.{timestamp}.bak en %s; se o teu balance ou transaccións son incorrectas deberías restauralas dende unha copia de seguridade.</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Precaución: wallet.zero corrupto, datos salvagardados! O wallet.zero orixinal foi gardado como wallet.{timestamp}.bak en %s; se o teu balance ou transaccións son incorrectas deberías restauralas dende unha copia de seguridade.</translation>
     </message>
     <message>
         <source>&lt;category&gt; can be:</source>
         <translation>&lt;categoría&gt; pode ser:</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Tentar recuperar claves privadas dende un wallet.dat corrupto</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Tentar recuperar claves privadas dende un wallet.zero corrupto</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -2123,8 +2123,8 @@
         <translation>Precaución</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat corrupto, fallou o gardado</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero corrupto, fallou o gardado</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -2159,12 +2159,12 @@
         <translation>Cargando direccións...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Erro cargando wallet.dat: Moedeiro corrupto</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Erro cargando wallet.zero: Moedeiro corrupto</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Erro cargando wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Erro cargando wallet.zero</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

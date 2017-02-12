@@ -1411,16 +1411,16 @@
         <translation>Monitio: -paytxfee constitutum valde magnum!  Hoc est merces transactionis solves si mittis transactionem.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Monitio: error legendo wallet.dat!  Omnes claves recte lectae, sed data transactionum vel libri inscriptionum fortasse desint vel prava sint.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Monitio: error legendo wallet.zero!  Omnes claves recte lectae, sed data transactionum vel libri inscriptionum fortasse desint vel prava sint.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Monitio: wallet.data corrupta, data salvata!  Originalis wallet.dat salvata ut wallet.{timestamp}.bak in %s; si pendendum tuum vel transactiones pravae sunt, oportet ab conservato restituere.</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Monitio: wallet.zeroa corrupta, data salvata!  Originalis wallet.zero salvata ut wallet.{timestamp}.bak in %s; si pendendum tuum vel transactiones pravae sunt, oportet ab conservato restituere.</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Conare recipere claves privatas de corrupto wallet.dat</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Conare recipere claves privatas de corrupto wallet.zero</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -1539,8 +1539,8 @@
         <translation>Monitio</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat corrupta, salvare abortum est</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero corrupta, salvare abortum est</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -1575,12 +1575,12 @@
         <translation>Legens inscriptiones...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Error legendi wallet.dat: Cassidile corruptum</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Error legendi wallet.zero: Cassidile corruptum</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Error legendi wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Error legendi wallet.zero</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

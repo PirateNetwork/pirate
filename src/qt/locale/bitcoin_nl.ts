@@ -1991,8 +1991,8 @@
         <translation>Transactie creatie niet gelukt!</translation>
     </message>
     <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>De transactie was afgewezen. Dit kan gebeuren als u eerder uitgegeven munten opnieuw wilt versturen, zoals wanneer u een kopie van uw wallet.dat heeft gebruikt en in de kopie deze munten zijn gemarkeerd als uitgegeven, maar in de huidige nog niet.</translation>
+        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.zero and coins were spent in the copy but not marked as spent here.</source>
+        <translation>De transactie was afgewezen. Dit kan gebeuren als u eerder uitgegeven munten opnieuw wilt versturen, zoals wanneer u een kopie van uw wallet.zero heeft gebruikt en in de kopie deze munten zijn gemarkeerd als uitgegeven, maar in de huidige nog niet.</translation>
     </message>
     <message>
         <source>Payment request expired.</source>
@@ -2821,12 +2821,12 @@
         <translation>Waarschuwing: Het lijkt erop dat we geen consensus kunnen vinden met onze peers! Mogelijk dient u te upgraden, of andere nodes moeten wellicht upgraden.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Waarschuwing: Fout bij het lezen van wallet.dat! Alle sleutels zijn in goede orde uitgelezen, maar transactiedata of adresboeklemma's zouden kunnen ontbreken of fouten bevatten.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Waarschuwing: Fout bij het lezen van wallet.zero! Alle sleutels zijn in goede orde uitgelezen, maar transactiedata of adresboeklemma's zouden kunnen ontbreken of fouten bevatten.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Waarschuwing: wallet.dat is corrupt, data is veiliggesteld! Originele wallet.dat is opgeslagen als wallet.{tijdstip}.bak in %s; als uw balans of transacties incorrect zijn dient u een backup terug te zetten.</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Waarschuwing: wallet.zero is corrupt, data is veiliggesteld! Originele wallet.zero is opgeslagen als wallet.{tijdstip}.bak in %s; als uw balans of transacties incorrect zijn dient u een backup terug te zetten.</translation>
     </message>
     <message>
         <source>Whitelist peers connecting from the given netmask or IP address. Can be specified multiple times.</source>
@@ -2841,8 +2841,8 @@
         <translation>&lt;category&gt; kan zijn:</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Poog de geheime sleutels uit een corrupt wallet.dat bestand terug te halen</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Poog de geheime sleutels uit een corrupt wallet.zero bestand terug te halen</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -3051,11 +3051,11 @@ for example: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com
 </source>
         <translation>Om bitcoind of de -server optie naar bitcoin-gt te gebruiken, dient u een rpcwachtwoord in te stellen in het configuratiebestand:
  %s
-Wij raden u aan om het volgende wachtwoord willekeurig te gebruiken: 
-rpcuser=bitcoinrpc 
-rpcpassword=%s 
+Wij raden u aan om het volgende wachtwoord willekeurig te gebruiken:
+rpcuser=bitcoinrpc
+rpcpassword=%s
 (u hoeft dit wachtwoord niet te onthouden)
-De gebruikersnaam en het wachtwoorden moeten NIET hetzelfde zijn. 
+De gebruikersnaam en het wachtwoorden moeten NIET hetzelfde zijn.
 Indien het bestand niet bestaat, maak het bestand aan met bestandsrechten: alleen lezen voor eigenaar.
 Het is ook aan te raden om een alarmnotificatie in te stellen, zodat u op de hoogte bent van de problemen;
 Voorbeeld: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com</translation>
@@ -3105,8 +3105,8 @@ Voorbeeld: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com</transla
         <translation>Niet mogelijk om -rpcbind waarde %s te verwerken als netwerk adres</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet requires newer version of Bitcoin Core</source>
-        <translation>Fout bij laden wallet.dat: Portemonnee vereist een nieuwere versie van Bitcoin Core</translation>
+        <source>Error loading wallet.zero: Wallet requires newer version of Bitcoin Core</source>
+        <translation>Fout bij laden wallet.zero: Portemonnee vereist een nieuwere versie van Bitcoin Core</translation>
     </message>
     <message>
         <source>Error reading from database, shutting down.</source>
@@ -3273,8 +3273,8 @@ Voorbeeld: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com</transla
         <translation>bij opstarten</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat corrupt, veiligstellen mislukt</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero corrupt, veiligstellen mislukt</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -3309,8 +3309,8 @@ Voorbeeld: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com</transla
         <translation>Adressen aan het laden...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Fout bij laden wallet.dat: Portemonnee corrupt</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Fout bij laden wallet.zero: Portemonnee corrupt</translation>
     </message>
     <message>
         <source>(1 = keep tx meta data e.g. account owner and payment request information, 2 = drop tx meta data)</source>
@@ -3345,8 +3345,8 @@ Voorbeeld: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com</transla
         <translation>Vind anderen door middel van een DNS-naslag (standaard: %u)</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Fout bij laden wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Fout bij laden wallet.zero</translation>
     </message>
     <message>
         <source>Generate coins (default: %u)</source>

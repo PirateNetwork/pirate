@@ -2564,20 +2564,20 @@
         <translation>Προειδοποίηση: Η παράμετρος -paytxfee είναι πολύ υψηλή. Πρόκειται για την αμοιβή που θα πληρώνετε για κάθε συναλλαγή που θα στέλνετε.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Προειδοποίηση : Σφάλμα wallet.dat κατα την ανάγνωση ! Όλα τα κλειδιά αναγνωρισθηκαν σωστά, αλλά τα δεδομένα των συναλλαγών ή καταχωρήσεις στο βιβλίο διευθύνσεων μπορεί να είναι ελλιπείς ή λανθασμένα. </translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Προειδοποίηση : Σφάλμα wallet.zero κατα την ανάγνωση ! Όλα τα κλειδιά αναγνωρισθηκαν σωστά, αλλά τα δεδομένα των συναλλαγών ή καταχωρήσεις στο βιβλίο διευθύνσεων μπορεί να είναι ελλιπείς ή λανθασμένα. </translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Προειδοποίηση : το αρχειο wallet.dat ειναι διεφθαρμένο, τα δεδομένα σώζονται ! Original wallet.dat αποθηκεύονται ως wallet.{timestamp}.bak στο %s . Αν το υπόλοιπο του ή τις συναλλαγές σας, είναι λάθος θα πρέπει να επαναφέρετε από ένα αντίγραφο ασφαλείας</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Προειδοποίηση : το αρχειο wallet.zero ειναι διεφθαρμένο, τα δεδομένα σώζονται ! Original wallet.zero αποθηκεύονται ως wallet.{timestamp}.bak στο %s . Αν το υπόλοιπο του ή τις συναλλαγές σας, είναι λάθος θα πρέπει να επαναφέρετε από ένα αντίγραφο ασφαλείας</translation>
     </message>
     <message>
         <source>(default: 1)</source>
         <translation>(προεπιλογή: 1)</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Προσπάθεια για ανακτησει ιδιωτικων κλειδιων από ενα διεφθαρμένο αρχειο wallet.dat </translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Προσπάθεια για ανακτησει ιδιωτικων κλειδιων από ενα διεφθαρμένο αρχειο wallet.zero </translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -2684,8 +2684,8 @@
         <translation>Δεν μπόρεσε να αναλυθεί η παράμετρος -rpcbind value %s ως διεύθυνση δικτύου</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet requires newer version of Bitcoin Core</source>
-        <translation>Σφάλμα φόρτωσης wallet.dat: Το Πορτοφόλι απαιτεί μια νεότερη έκδοση του Bitcoin</translation>
+        <source>Error loading wallet.zero: Wallet requires newer version of Bitcoin Core</source>
+        <translation>Σφάλμα φόρτωσης wallet.zero: Το Πορτοφόλι απαιτεί μια νεότερη έκδοση του Bitcoin</translation>
     </message>
     <message>
         <source>Error reading from database, shutting down.</source>
@@ -2792,8 +2792,8 @@
         <translation>κατά την εκκίνηση</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>Το αρχειο wallet.dat ειναι διεφθαρμένο, η διάσωση απέτυχε</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>Το αρχειο wallet.zero ειναι διεφθαρμένο, η διάσωση απέτυχε</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -2828,8 +2828,8 @@
         <translation>Φόρτωση διευθύνσεων...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Σφάλμα φόρτωσης wallet.dat: Κατεστραμμένο Πορτοφόλι</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Σφάλμα φόρτωσης wallet.zero: Κατεστραμμένο Πορτοφόλι</translation>
     </message>
     <message>
         <source>How thorough the block verification of -checkblocks is (0-4, default: %u)</source>
@@ -2844,8 +2844,8 @@
         <translation>Δευτερόλεπτα πριν επιτραπεί ξανά η σύνδεση των προβληματικών peers (προεπιλογή: %u)</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Σφάλμα φόρτωσης αρχείου wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Σφάλμα φόρτωσης αρχείου wallet.zero</translation>
     </message>
     <message>
         <source>Generate coins (default: %u)</source>

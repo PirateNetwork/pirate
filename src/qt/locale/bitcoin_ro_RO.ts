@@ -1939,8 +1939,8 @@
         <translation>Creare tranzacţie nereuşită!</translation>
     </message>
     <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>Tranzacţia a fost respinsă! Acest lucru se poate întîmpla dacă o parte din monedele tale din portofel au fost deja cheltuite, la fel ca şi cum aţi fi folosit o copie a wallet.dat şi monedele au fost cheltuite în copie, dar nu au fost marcate ca şi cheltuite şi aici.</translation>
+        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.zero and coins were spent in the copy but not marked as spent here.</source>
+        <translation>Tranzacţia a fost respinsă! Acest lucru se poate întîmpla dacă o parte din monedele tale din portofel au fost deja cheltuite, la fel ca şi cum aţi fi folosit o copie a wallet.zero şi monedele au fost cheltuite în copie, dar nu au fost marcate ca şi cheltuite şi aici.</translation>
     </message>
     <message>
         <source>Payment request expired.</source>
@@ -2737,12 +2737,12 @@
         <translation>Atenţie: Aparent, nu sîntem de acord cu toţi partenerii noştri! Va trebui să faceţi o actualizare, sau alte noduri necesită actualizare.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Atenţie: eroare la citirea fişierului wallet.dat! Toate cheile sînt citite corect, dar datele tranzactiei sau anumite intrări din agenda sînt incorecte sau lipsesc.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Atenţie: eroare la citirea fişierului wallet.zero! Toate cheile sînt citite corect, dar datele tranzactiei sau anumite intrări din agenda sînt incorecte sau lipsesc.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Atenţie: fişierul wallet.dat este corupt, date salvate! Fişierul original wallet.dat a fost salvat ca wallet.{timestamp}.bak in %s; dacă balansul sau tranzactiile sînt incorecte ar trebui să restauraţi dintr-o copie de siguranţă.</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Atenţie: fişierul wallet.zero este corupt, date salvate! Fişierul original wallet.zero a fost salvat ca wallet.{timestamp}.bak in %s; dacă balansul sau tranzactiile sînt incorecte ar trebui să restauraţi dintr-o copie de siguranţă.</translation>
     </message>
     <message>
         <source>(default: 1)</source>
@@ -2753,8 +2753,8 @@
         <translation>&lt;category&gt; poate fi:</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Încercare de recuperare a cheilor private dintr-un wallet.dat corupt</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Încercare de recuperare a cheilor private dintr-un wallet.zero corupt</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -3061,8 +3061,8 @@
         <translation>la pornire</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat corupt, salvare nereuşită</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero corupt, salvare nereuşită</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -3097,8 +3097,8 @@
         <translation>Încărcare adrese...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Eroare la încărcarea wallet.dat: Portofel corupt</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Eroare la încărcarea wallet.zero: Portofel corupt</translation>
     </message>
     <message>
         <source>Output debugging information (default: %u, supplying &lt;category&gt; is optional)</source>
@@ -3113,8 +3113,8 @@
         <translation>Cifruri acceptabile (implicit: %s)</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Eroare la încărcarea wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Eroare la încărcarea wallet.zero</translation>
     </message>
     <message>
         <source>Generate coins (default: %u)</source>

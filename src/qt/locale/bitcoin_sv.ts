@@ -1992,8 +1992,8 @@ Var vänlig och försök igen.</translation>
         <translation>Transaktionen gick inte att skapa!</translation>
     </message>
     <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>Transaktionen avslogs! Detta kan hända om några av mynten i plånboken redan spenderats, t.ex om du använt en kopia av wallet.dat och mynt spenderades i kopian men inte markerats som spenderade här.</translation>
+        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.zero and coins were spent in the copy but not marked as spent here.</source>
+        <translation>Transaktionen avslogs! Detta kan hända om några av mynten i plånboken redan spenderats, t.ex om du använt en kopia av wallet.zero och mynt spenderades i kopian men inte markerats som spenderade här.</translation>
     </message>
     <message>
         <source>A fee higher than %1 is considered an absurdly high fee.</source>
@@ -2858,12 +2858,12 @@ Var vänlig och försök igen.</translation>
         <translation>Varning: Vi verkar inte helt överens med våra peers! Du kan behöva uppgradera, eller andra noder kan behöva uppgradera.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Varning: fel vid läsning av wallet.dat! Alla nycklar lästes korrekt, men transaktionsdatan eller adressbokens poster kanske saknas eller är felaktiga.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Varning: fel vid läsning av wallet.zero! Alla nycklar lästes korrekt, men transaktionsdatan eller adressbokens poster kanske saknas eller är felaktiga.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Varning: wallet.dat korrupt, datan har räddats! Den ursprungliga wallet.dat har sparas som wallet.{timestamp}.bak i %s; om ditt saldo eller transaktioner är felaktiga ska du återställa från en säkerhetskopia.</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Varning: wallet.zero korrupt, datan har räddats! Den ursprungliga wallet.zero har sparas som wallet.{timestamp}.bak i %s; om ditt saldo eller transaktioner är felaktiga ska du återställa från en säkerhetskopia.</translation>
     </message>
     <message>
         <source>Whitelist peers connecting from the given netmask or IP address. Can be specified multiple times.</source>
@@ -2878,8 +2878,8 @@ Var vänlig och försök igen.</translation>
         <translation>&lt;category&gt; Kan vara:</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Försök att rädda de privata nycklarna från en korrupt wallet.dat</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Försök att rädda de privata nycklarna från en korrupt wallet.zero</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -3166,8 +3166,8 @@ till exempel: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com
         <translation>Kunde inte tolka -rpcbind värdet %s som en nätverksadress</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet requires newer version of Bitcoin Core</source>
-        <translation>Fel vid inläsningen av wallet.dat: Kontofilen kräver en senare version av Bitcoin Core</translation>
+        <source>Error loading wallet.zero: Wallet requires newer version of Bitcoin Core</source>
+        <translation>Fel vid inläsningen av wallet.zero: Kontofilen kräver en senare version av Bitcoin Core</translation>
     </message>
     <message>
         <source>Error reading from database, shutting down.</source>
@@ -3350,8 +3350,8 @@ till exempel: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com
         <translation>under uppstarten</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat korrupt, räddning misslyckades</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero korrupt, räddning misslyckades</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -3386,8 +3386,8 @@ till exempel: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com
         <translation>Laddar adresser...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Fel vid inläsningen av wallet.dat: Plånboken är skadad</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Fel vid inläsningen av wallet.zero: Plånboken är skadad</translation>
     </message>
     <message>
         <source>(1 = keep tx meta data e.g. account owner and payment request information, 2 = drop tx meta data)</source>
@@ -3426,8 +3426,8 @@ till exempel: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com
         <translation>Sök alltid efter klientadresser med DNS sökningen (förvalt: %u)</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Fel vid inläsning av plånboksfilen wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Fel vid inläsning av plånboksfilen wallet.zero</translation>
     </message>
     <message>
         <source>Generate coins (default: %u)</source>

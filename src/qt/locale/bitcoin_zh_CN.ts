@@ -1999,8 +1999,8 @@
         <translation>交易创建失败！</translation>
     </message>
     <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>错误：该交易被拒绝！发生这种错误的原因可能是：钱包中的比特币已经被用掉，有可能您复制了wallet.dat钱包文件，然后用复制的钱包文件支付了比特币，但是这个钱包文件中没有记录。</translation>
+        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.zero and coins were spent in the copy but not marked as spent here.</source>
+        <translation>错误：该交易被拒绝！发生这种错误的原因可能是：钱包中的比特币已经被用掉，有可能您复制了wallet.zero钱包文件，然后用复制的钱包文件支付了比特币，但是这个钱包文件中没有记录。</translation>
     </message>
     <message>
         <source>A fee higher than %1 is considered an absurdly high fee.</source>
@@ -2875,12 +2875,12 @@
         <translation>警告：我们的同行似乎不完全同意！您可能需要升级，或者其他节点可能需要升级。</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>警告：钱包文件wallet.dat读取失败！最重要的公钥、私钥数据都没有问题，但是交易记录或地址簿数据不正确，或者存在数据丢失。</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>警告：钱包文件wallet.zero读取失败！最重要的公钥、私钥数据都没有问题，但是交易记录或地址簿数据不正确，或者存在数据丢失。</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>警告：钱包文件wallet.dat损坏! 原始的钱包文件已经备份到%s目录下并重命名为{timestamp}.bak 。如果您的账户余额或者交易记录不正确，请使用您的钱包备份文件恢复。</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>警告：钱包文件wallet.zero损坏! 原始的钱包文件已经备份到%s目录下并重命名为{timestamp}.bak 。如果您的账户余额或者交易记录不正确，请使用您的钱包备份文件恢复。</translation>
     </message>
     <message>
         <source>Whitelist peers connecting from the given netmask or IP address. Can be specified multiple times.</source>
@@ -2895,8 +2895,8 @@
         <translation>&lt;category&gt; 可能是：</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>尝试从损坏的钱包文件wallet.dat中恢复私钥</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>尝试从损坏的钱包文件wallet.zero中恢复私钥</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -3187,8 +3187,8 @@ rpcpassword=%s
         <translation>无法解析 -rpcbind 的值 %s 为网络地址</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet requires newer version of Bitcoin Core</source>
-        <translation>加载wallet.dat错误：需要新版的比特币核心钱包</translation>
+        <source>Error loading wallet.zero: Wallet requires newer version of Bitcoin Core</source>
+        <translation>加载wallet.zero错误：需要新版的比特币核心钱包</translation>
     </message>
     <message>
         <source>Error reading from database, shutting down.</source>
@@ -3368,8 +3368,8 @@ rpcpassword=%s
         <translation>启动中</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>钱包文件wallet.dat损坏，抢救备份失败</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>钱包文件wallet.zero损坏，抢救备份失败</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -3406,8 +3406,8 @@ rpcpassword=%s
         <translation>正在加载地址簿...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>wallet.dat 钱包文件加载出错：钱包损坏</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>wallet.zero 钱包文件加载出错：钱包损坏</translation>
     </message>
     <message>
         <source>(1 = keep tx meta data e.g. account owner and payment request information, 2 = drop tx meta data)</source>
@@ -3442,8 +3442,8 @@ rpcpassword=%s
         <translation>可接受的密码算法 (默认: %s) </translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>wallet.dat 钱包文件加载出错</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>wallet.zero 钱包文件加载出错</translation>
     </message>
     <message>
         <source>Generate coins (default: %u)</source>

@@ -1992,8 +1992,8 @@
         <translation>Erro: A criação da transação falhou! </translation>
     </message>
     <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>A transação foi rejeitada! Isto poderá acontecer se algumas das moedas na sua carteira já tiverem sido gastas, se por exemplo tiver usado uma cópia do ficheiro wallet.dat e as moedas tiverem sido gastas na cópia mas não tiverem sido marcadas como gastas aqui.</translation>
+        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.zero and coins were spent in the copy but not marked as spent here.</source>
+        <translation>A transação foi rejeitada! Isto poderá acontecer se algumas das moedas na sua carteira já tiverem sido gastas, se por exemplo tiver usado uma cópia do ficheiro wallet.zero e as moedas tiverem sido gastas na cópia mas não tiverem sido marcadas como gastas aqui.</translation>
     </message>
     <message>
         <source>Payment request expired.</source>
@@ -2798,12 +2798,12 @@
         <translation>Atenção: Parecemos não estar de acordo com os nossos pares! Poderá ter que atualizar o seu cliente, ou outros nós poderão ter que atualizar os seus clientes.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Atenção: erro ao ler wallet.dat! Todas as chaves foram lidas correctamente, mas dados de transação ou do livro de endereços podem estar em falta ou incorrectos.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Atenção: erro ao ler wallet.zero! Todas as chaves foram lidas correctamente, mas dados de transação ou do livro de endereços podem estar em falta ou incorrectos.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Atenção: wallet.dat corrompido, dados recuperados! wallet.dat original salvo como wallet.{timestamp}.bak em %s; se o seu saldo ou transações estiverem incorrectos deverá recuperar uma cópia de segurança.</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Atenção: wallet.zero corrompido, dados recuperados! wallet.zero original salvo como wallet.{timestamp}.bak em %s; se o seu saldo ou transações estiverem incorrectos deverá recuperar uma cópia de segurança.</translation>
     </message>
     <message>
         <source>Whitelist peers connecting from the given netmask or IP address. Can be specified multiple times.</source>
@@ -2818,8 +2818,8 @@
         <translation>&lt;categoria&gt; pode ser:</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Tentar recuperar chaves privadas de um wallet.dat corrupto</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Tentar recuperar chaves privadas de um wallet.zero corrupto</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -2986,8 +2986,8 @@
         <translation>Copyright (C) 2009-%i Os Programadores do Bitcoin Core</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet requires newer version of Bitcoin Core</source>
-        <translation>Erro ao carregar wallet.dat: A Carteira requer uma versão mais recente do Bitcoin Core</translation>
+        <source>Error loading wallet.zero: Wallet requires newer version of Bitcoin Core</source>
+        <translation>Erro ao carregar wallet.zero: A Carteira requer uma versão mais recente do Bitcoin Core</translation>
     </message>
     <message>
         <source>Information</source>
@@ -3062,8 +3062,8 @@
         <translation>A limpar todas as transações da carteira...</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat corrompido, recuperação falhou</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero corrompido, recuperação falhou</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -3098,12 +3098,12 @@
         <translation>A carregar endereços...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Erro ao carregar wallet.dat: Carteira danificada</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Erro ao carregar wallet.zero: Carteira danificada</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Erro ao carregar wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Erro ao carregar wallet.zero</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

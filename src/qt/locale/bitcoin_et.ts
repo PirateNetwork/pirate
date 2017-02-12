@@ -1681,16 +1681,16 @@
         <translation>Hoiatus: -paytxfee on seatud väga kõrgeks! See on sinu poolt makstav tehingu lisatasu.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Hoiatus: ilmnes tõrge wallet.dat faili lugemisel! Võtmed on terved, kuid tehingu andmed või aadressiraamatu kirjed võivad olla kadunud või vigased.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Hoiatus: ilmnes tõrge wallet.zero faili lugemisel! Võtmed on terved, kuid tehingu andmed või aadressiraamatu kirjed võivad olla kadunud või vigased.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Hoiatus: toimus wallet.dat faili andmete päästmine! Originaal wallet.dat nimetati kaustas %s ümber wallet.{ajatempel}.bak'iks, jäägi või tehingute ebakõlade puhul tuleks teha backup'ist taastamine.</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Hoiatus: toimus wallet.zero faili andmete päästmine! Originaal wallet.zero nimetati kaustas %s ümber wallet.{ajatempel}.bak'iks, jäägi või tehingute ebakõlade puhul tuleks teha backup'ist taastamine.</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Püüa vigasest wallet.dat failist taastada turvavõtmed</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Püüa vigasest wallet.zero failist taastada turvavõtmed</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -1813,8 +1813,8 @@
         <translation>käivitamisel</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat fail on katki, päästmine ebaõnnestus</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero fail on katki, päästmine ebaõnnestus</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -1849,16 +1849,16 @@
         <translation>Aadresside laadimine...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Viga wallet.dat käivitamisel. Vigane rahakkott</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Viga wallet.zero käivitamisel. Vigane rahakkott</translation>
     </message>
     <message>
         <source>(default: %s)</source>
         <translation>(vaikimisi: %s)</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Viga wallet.dat käivitamisel</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Viga wallet.zero käivitamisel</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

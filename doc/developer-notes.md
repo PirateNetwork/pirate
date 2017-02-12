@@ -164,7 +164,7 @@ Threads
 
 - DumpAddresses : Dumps IP addresses of nodes to peers.dat.
 
-- ThreadFlushWalletDB : Close the wallet.dat file if it hasn't been used in 500ms.
+- ThreadFlushWalletDB : Close the wallet.zero file if it hasn't been used in 500ms.
 
 - ThreadRPCServer : Remote procedure call handler, listens on port 8232 for connections and services them.
 

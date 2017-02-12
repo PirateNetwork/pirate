@@ -1757,8 +1757,8 @@
         <translation>יצירת ההעברה נכשלה!</translation>
     </message>
     <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>ההעברה נדחתה! מצב כזה עשוי לקרות אם חלק מהמטבעות בארנק שלך כבר הושקעו, כמו למשל עקב שימוש בעותק של wallet.dat והמטבעות הושקעו בעותק אבל לא סומנו כאילו הושקעו דרך כאן.</translation>
+        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.zero and coins were spent in the copy but not marked as spent here.</source>
+        <translation>ההעברה נדחתה! מצב כזה עשוי לקרות אם חלק מהמטבעות בארנק שלך כבר הושקעו, כמו למשל עקב שימוש בעותק של wallet.zero והמטבעות הושקעו בעותק אבל לא סומנו כאילו הושקעו דרך כאן.</translation>
     </message>
     <message>
         <source>Warning: Invalid Bitcoin address</source>
@@ -2531,12 +2531,12 @@
         <translation>אזהרה: נראה שישנה אי־הסכמה בינינו לבין שאר העמיתים שלנו! יתכן שעדיף לשדרג או שכל שאר העמיתים צריכים לשדרג.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>אזהרה: שגיאה בקריאת wallet.dat! כל המפתחות נקראו באופן תקין, אך נתוני ההעברות או ספר הכתובות עלולים להיות חסרים או שגויים.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>אזהרה: שגיאה בקריאת wallet.zero! כל המפתחות נקראו באופן תקין, אך נתוני ההעברות או ספר הכתובות עלולים להיות חסרים או שגויים.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>אזהרה: הקובץ wallet.dat הושחת, המידע חולץ! קובץ ה־wallet.dat המקורי נשמר בשם wallet.{timestamp}.bak במיקום %s; אם המאזן או ההעברות שגויים עליך לשחזר גיבוי.</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>אזהרה: הקובץ wallet.zero הושחת, המידע חולץ! קובץ ה־wallet.zero המקורי נשמר בשם wallet.{timestamp}.bak במיקום %s; אם המאזן או ההעברות שגויים עליך לשחזר גיבוי.</translation>
     </message>
     <message>
         <source>(default: 1)</source>
@@ -2547,8 +2547,8 @@
         <translation>&lt;קטגוריה&gt; יכולה להיות:</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>נסה לשחזר מפתחות פרטיים מקובץ wallet.dat מושחת.</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>נסה לשחזר מפתחות פרטיים מקובץ wallet.zero מושחת.</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -2691,8 +2691,8 @@
         <translation>לא ניתן לנתח את הערך של ‎-rpcbind שצוין בתור %s ככתובת רשת</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet requires newer version of Bitcoin Core</source>
-        <translation>אירעה שגיאה בטעינת wallet.dat: הארנק דורש גרסה חדשה יותר של ליבת ביטקוין</translation>
+        <source>Error loading wallet.zero: Wallet requires newer version of Bitcoin Core</source>
+        <translation>אירעה שגיאה בטעינת wallet.zero: הארנק דורש גרסה חדשה יותר של ליבת ביטקוין</translation>
     </message>
     <message>
         <source>Error: Unsupported argument -tor found, use -onion.</source>
@@ -2823,8 +2823,8 @@
         <translation>עם ההפעלה</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>קובץ wallet.dat מושחת, החילוץ נכשל</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>קובץ wallet.zero מושחת, החילוץ נכשל</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -2859,12 +2859,12 @@
         <translation>הכתובות בטעינה…</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>שגיאה בטעינת הקובץ wallet.dat: הארנק מושחת</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>שגיאה בטעינת הקובץ wallet.zero: הארנק מושחת</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>שגיאה בטעינת הקובץ wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>שגיאה בטעינת הקובץ wallet.zero</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

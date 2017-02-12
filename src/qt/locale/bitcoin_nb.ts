@@ -1999,8 +1999,8 @@
         <translation>Opprettelse av transaksjon feilet!</translation>
     </message>
     <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>Transaksjonen ble avvist!  Dette kan skje hvis noen av myntene i lommeboken allerede er brukt, som hvis du kopierte wallet.dat og mynter ble brukt i kopien uten å bli markert som brukt her.</translation>
+        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.zero and coins were spent in the copy but not marked as spent here.</source>
+        <translation>Transaksjonen ble avvist!  Dette kan skje hvis noen av myntene i lommeboken allerede er brukt, som hvis du kopierte wallet.zero og mynter ble brukt i kopien uten å bli markert som brukt her.</translation>
     </message>
     <message>
         <source>A fee higher than %1 is considered an absurdly high fee.</source>
@@ -2869,12 +2869,12 @@
         <translation>Advarsel: Vi ser ikke ut til å være enige med våre noder! Du må oppgradere, eller andre noder må oppgradere.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Advarsel: Feil ved lesing av wallet.dat! Alle nøkler lest riktig, men transaksjonsdataene eller oppføringer i adresseboken mangler kanskje eller er feil.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Advarsel: Feil ved lesing av wallet.zero! Alle nøkler lest riktig, men transaksjonsdataene eller oppføringer i adresseboken mangler kanskje eller er feil.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Advarsel: wallet.dat korrupt, data reddet! Original wallet.dat lagret som wallet.{timestamp}.bak i %s; hvis din saldo eller dine transaksjoner ikke er korrekte bør du gjenopprette fra en backup.</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Advarsel: wallet.zero korrupt, data reddet! Original wallet.zero lagret som wallet.{timestamp}.bak i %s; hvis din saldo eller dine transaksjoner ikke er korrekte bør du gjenopprette fra en backup.</translation>
     </message>
     <message>
         <source>Whitelist peers connecting from the given netmask or IP address. Can be specified multiple times.</source>
@@ -2889,8 +2889,8 @@
         <translation>&lt;category&gt; kan være:</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Forsøk å berge private nøkler fra en korrupt wallet.dat</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Forsøk å berge private nøkler fra en korrupt wallet.zero</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -3181,8 +3181,8 @@ for eksempel: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com
         <translation>Kunne ikke tolke -rpcbind-verdi %s som en nettverksadresse</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet requires newer version of Bitcoin Core</source>
-        <translation>Feil ved lasting av wallet.dat: Lommeboken krever en nyere versjon av Bitcoin Core</translation>
+        <source>Error loading wallet.zero: Wallet requires newer version of Bitcoin Core</source>
+        <translation>Feil ved lasting av wallet.zero: Lommeboken krever en nyere versjon av Bitcoin Core</translation>
     </message>
     <message>
         <source>Error reading from database, shutting down.</source>
@@ -3365,8 +3365,8 @@ for eksempel: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com
         <translation>ved oppstart</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat korrupt, bergning feilet</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero korrupt, bergning feilet</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -3401,8 +3401,8 @@ for eksempel: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com
         <translation>Laster adresser...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Feil ved lasting av wallet.dat: Lommeboken er skadet</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Feil ved lasting av wallet.zero: Lommeboken er skadet</translation>
     </message>
     <message>
         <source>(1 = keep tx meta data e.g. account owner and payment request information, 2 = drop tx meta data)</source>
@@ -3441,8 +3441,8 @@ for eksempel: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com
         <translation>Alltid søk etter nodeadresser via DNS-oppslag (standardverdi: %u)</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Feil ved lasting av wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Feil ved lasting av wallet.zero</translation>
     </message>
     <message>
         <source>Generate coins (default: %u)</source>

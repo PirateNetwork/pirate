@@ -1509,8 +1509,8 @@
         <translation>შეცდომა ტრანსაქციის შექმნისას!</translation>
     </message>
     <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>ტრანსაქცია უარყოფილია! შესაძლოა მონეტების ნაწილი თქვენი საფულიდან უკვე გამოყენებულია, რაც შეიძლება მოხდეს wallet.dat-ის ასლის გამოყენებისას, როცა მონეტები გაიგზავნა სხვა ასლიდან, აქ კი არ არის გაგზავნილად მონიშნული.</translation>
+        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.zero and coins were spent in the copy but not marked as spent here.</source>
+        <translation>ტრანსაქცია უარყოფილია! შესაძლოა მონეტების ნაწილი თქვენი საფულიდან უკვე გამოყენებულია, რაც შეიძლება მოხდეს wallet.zero-ის ასლის გამოყენებისას, როცა მონეტები გაიგზავნა სხვა ასლიდან, აქ კი არ არის გაგზავნილად მონიშნული.</translation>
     </message>
     <message>
         <source>Warning: Invalid Bitcoin address</source>
@@ -2231,20 +2231,20 @@
         <translation>ყურადღება: ჩვენ არ ვეთანხმებით ყველა პირს. შესაძლოა თქვენ ან სხვა კვანძებს განახლება გჭირდებათ.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>ყურადღება: არ იკითხება wallet.dat! ყველა გასაღები წაკითხულია, მაგრამ გამორჩენილი ან არასწორია ტრანსაქციის თარიღი ან ჩანაწერები მისამართების წიგნში.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>ყურადღება: არ იკითხება wallet.zero! ყველა გასაღები წაკითხულია, მაგრამ გამორჩენილი ან არასწორია ტრანსაქციის თარიღი ან ჩანაწერები მისამართების წიგნში.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>ყურადღება: wallet.dat დაზიანებულია! ორიგინალური wallet.dat შენახულია როგორც wallet.{timestamp}.bak %s-ში; თუ შეამჩნიეთ უზუსტობა ნაშთში ან ტრანსაქციებში, აღადგინეთ არქივიდან.</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>ყურადღება: wallet.zero დაზიანებულია! ორიგინალური wallet.zero შენახულია როგორც wallet.{timestamp}.bak %s-ში; თუ შეამჩნიეთ უზუსტობა ნაშთში ან ტრანსაქციებში, აღადგინეთ არქივიდან.</translation>
     </message>
     <message>
         <source>&lt;category&gt; can be:</source>
         <translation>&lt;category&gt; შეიძლება იყოს:</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>პირადი გასაღებების აღდგენის მცდელობა wallet.dat-იდან</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>პირადი გასაღებების აღდგენის მცდელობა wallet.zero-იდან</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -2415,8 +2415,8 @@
         <translation>ტრანსაქციების ჩახსნა საფულიდან...</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat დაზიანებულია, აღდგენა ვერ მოხერხდა</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero დაზიანებულია, აღდგენა ვერ მოხერხდა</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -2451,12 +2451,12 @@
         <translation>მისამართების ჩატვირთვა...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>არ იტვირთება wallet.dat: საფულე დაზიანებულია</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>არ იტვირთება wallet.zero: საფულე დაზიანებულია</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>არ იტვირთება wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>არ იტვირთება wallet.zero</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

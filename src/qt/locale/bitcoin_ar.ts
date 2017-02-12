@@ -1691,12 +1691,12 @@
         <translation>تحميل العنوان</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>خطأ عند تنزيل wallet.dat: المحفظة تالفة</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>خطأ عند تنزيل wallet.zero: المحفظة تالفة</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>خطأ عند تنزيل wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>خطأ عند تنزيل wallet.zero</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

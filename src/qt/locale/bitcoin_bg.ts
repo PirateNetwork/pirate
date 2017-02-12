@@ -2479,12 +2479,12 @@
         <translation>Зареждане на адреси...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Грешка при зареждане на wallet.dat: портфейлът е повреден</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Грешка при зареждане на wallet.zero: портфейлът е повреден</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Грешка при зареждане на wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Грешка при зареждане на wallet.zero</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

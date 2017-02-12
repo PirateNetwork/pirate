@@ -1975,8 +1975,8 @@
         <translation>Rahansiirron luonti epäonnistui!</translation>
     </message>
     <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>Rahansiirto hylättiin! Tämä saattaa tapahtua jos lompakossa olevat kolikot on jo kulutettu, kuten jos käytät kopioita wallet.dat tiedostosta ja kolikot oli jos käytetty mutta ei merkattu täällä.</translation>
+        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.zero and coins were spent in the copy but not marked as spent here.</source>
+        <translation>Rahansiirto hylättiin! Tämä saattaa tapahtua jos lompakossa olevat kolikot on jo kulutettu, kuten jos käytät kopioita wallet.zero tiedostosta ja kolikot oli jos käytetty mutta ei merkattu täällä.</translation>
     </message>
     <message>
         <source>A fee higher than %1 is considered an absurdly high fee.</source>
@@ -2793,12 +2793,12 @@
         <translation>Varoitus: Olemme vertaisverkon kanssa ristiriidassa! Sinun tulee päivittää tai toisten solmujen tulee päivitää.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Varoitus: virhe luettaessa wallet.dat-lompakkotiedostoa. Kaikki avaimet luettiin onnistuneesti, mutta siirtohistoria tai osoitekirja saattavat olla kadonneet tai virheellisiä.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Varoitus: virhe luettaessa wallet.zero-lompakkotiedostoa. Kaikki avaimet luettiin onnistuneesti, mutta siirtohistoria tai osoitekirja saattavat olla kadonneet tai virheellisiä.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Varoitus: wallet.dat -lompakkotiedosto on korruptoitunut, tiedot pelastettu. Alkuperäinen wallet.dat -lompakkotiedosto on tallennettu wallet.{timestamp}.bak kansioon %s; jos balanssisi tai siirtohistoria on virheellinen, sinun tulisi palauttaa lompakkotiedosto varmuuskopiosta.</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Varoitus: wallet.zero -lompakkotiedosto on korruptoitunut, tiedot pelastettu. Alkuperäinen wallet.zero -lompakkotiedosto on tallennettu wallet.{timestamp}.bak kansioon %s; jos balanssisi tai siirtohistoria on virheellinen, sinun tulisi palauttaa lompakkotiedosto varmuuskopiosta.</translation>
     </message>
     <message>
         <source>(default: 1)</source>
@@ -2809,8 +2809,8 @@
         <translation>&lt;category&gt; voi olla:</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Yritetään palauttaa privaattiavaimia korruptoituneesta wallet.dat -lompakkotiedostosta</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Yritetään palauttaa privaattiavaimia korruptoituneesta wallet.zero -lompakkotiedostosta</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -2985,8 +2985,8 @@
         <translation>Copyright (C) 2009-%i  Bitcoin kehittäjät</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet requires newer version of Bitcoin Core</source>
-        <translation>Virhe ladattaessa wallet.dat-tiedostoa: Tarvitset uudemman version Bitcoinista</translation>
+        <source>Error loading wallet.zero: Wallet requires newer version of Bitcoin Core</source>
+        <translation>Virhe ladattaessa wallet.zero-tiedostoa: Tarvitset uudemman version Bitcoinista</translation>
     </message>
     <message>
         <source>Error reading from database, shutting down.</source>
@@ -3101,8 +3101,8 @@
         <translation>käynnistyksessä</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat -lompakkotiedosto korruptoitunut, korjaaminen epäonnistui</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero -lompakkotiedosto korruptoitunut, korjaaminen epäonnistui</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -3137,8 +3137,8 @@
         <translation>Ladataan osoitteita...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Virhe ladattaessa wallet.dat-tiedostoa: Lompakko vioittunut</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Virhe ladattaessa wallet.zero-tiedostoa: Lompakko vioittunut</translation>
     </message>
     <message>
         <source>Use separate SOCKS5 proxy to reach peers via Tor hidden services (default: %s)</source>
@@ -3153,8 +3153,8 @@
         <translation>Hyväksyttävät salaukset (oletus: %s)</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Virhe ladattaessa wallet.dat-tiedostoa</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Virhe ladattaessa wallet.zero-tiedostoa</translation>
     </message>
     <message>
         <source>Generate coins (default: %u)</source>

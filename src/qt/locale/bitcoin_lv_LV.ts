@@ -2083,8 +2083,8 @@
         <translation>&lt;category&gt; var būt:</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Mēģināt atgūt privātās atslēgas no bojāta wallet.dat</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Mēģināt atgūt privātās atslēgas no bojāta wallet.zero</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -2187,8 +2187,8 @@
         <translation>startēšanas laikā</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat ir bojāts, glābšana neizdevās</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero ir bojāts, glābšana neizdevās</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -2223,12 +2223,12 @@
         <translation>Ielādē adreses...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Nevar ielādēt wallet.dat: maciņš bojāts</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Nevar ielādēt wallet.zero: maciņš bojāts</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Kļūda ielādējot wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Kļūda ielādējot wallet.zero</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

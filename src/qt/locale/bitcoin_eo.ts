@@ -2131,20 +2131,20 @@
         <translation>Averto: ŝajne ni ne tute konsentas kun niaj samtavolanoj! Eble vi devas ĝisdatigi vian klienton, aŭ eble aliaj nodoj faru same.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Averto: okazis eraro dum lego de wallet.dat! Ĉiuj ŝlosiloj sukcese legiĝis, sed la transakciaj datumoj aŭ la adresaro eble mankas aŭ malĝustas.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Averto: okazis eraro dum lego de wallet.zero! Ĉiuj ŝlosiloj sukcese legiĝis, sed la transakciaj datumoj aŭ la adresaro eble mankas aŭ malĝustas.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Averto: via wallet.dat estas difektita, sed la datumoj sukcese saviĝis! La originala wallet.dat estas nun konservita kiel wallet.{timestamp}.bak en %s; se via saldo aŭ transakcioj estas malĝustaj vi devus restaŭri per alia sekurkopio.</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Averto: via wallet.zero estas difektita, sed la datumoj sukcese saviĝis! La originala wallet.zero estas nun konservita kiel wallet.{timestamp}.bak en %s; se via saldo aŭ transakcioj estas malĝustaj vi devus restaŭri per alia sekurkopio.</translation>
     </message>
     <message>
         <source>&lt;category&gt; can be:</source>
         <translation>&lt;category&gt; povas esti:</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Provo ripari privatajn ŝlosilojn el difektita wallet.dat</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Provo ripari privatajn ŝlosilojn el difektita wallet.zero</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -2299,8 +2299,8 @@
         <translation>Averto</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat estas difektita, riparo malsukcesis</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero estas difektita, riparo malsukcesis</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -2335,12 +2335,12 @@
         <translation>Ŝarĝante adresojn...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Eraro dum ŝargado de wallet.dat: monujo difektita</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Eraro dum ŝargado de wallet.zero: monujo difektita</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Eraro dum ŝargado de wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Eraro dum ŝargado de wallet.zero</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

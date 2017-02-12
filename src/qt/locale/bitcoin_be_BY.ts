@@ -1497,12 +1497,12 @@
         <translation>Загружаем адрасы...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Памылка загрузкі wallet.dat: гаманец пашкоджаны</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Памылка загрузкі wallet.zero: гаманец пашкоджаны</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Памылка загрузкі wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Памылка загрузкі wallet.zero</translation>
     </message>
     <message>
         <source>Insufficient funds</source>

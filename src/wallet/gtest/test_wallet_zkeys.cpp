@@ -80,7 +80,7 @@ TEST(wallet_zkeys_tests, write_zkey_direct_to_db) {
     mapArgs["-datadir"] = pathTemp.string();
 
     bool fFirstRun;
-    CWallet wallet("wallet.dat");
+    CWallet wallet("wallet.zero");
     ASSERT_EQ(DB_LOAD_OK, wallet.LoadWallet(fFirstRun));
 
     // No default CPubKey set
@@ -103,7 +103,7 @@ TEST(wallet_zkeys_tests, write_zkey_direct_to_db) {
     auto addr = sk.address();
     int64_t now = GetTime();
     CKeyMetadata meta(now);
-    CWalletDB db("wallet.dat");
+    CWalletDB db("wallet.zero");
     db.WriteZKey(addr, sk, meta);
 
     // wallet should not be aware of key

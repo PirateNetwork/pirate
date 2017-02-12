@@ -1999,8 +1999,8 @@
         <translation>Muamelenin oluşturulması başarısız oldu!</translation>
     </message>
     <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>Muamele reddedildi! Cüzdanınızdaki madenî paraların bazıları zaten harcanmış olduğunda bu meydana gelebilir. Örneğin wallet.dat dosyasının bir kopyasını kullandıysanız ve kopyada para harcandığında ancak burada harcandığı işaretlenmediğinde.</translation>
+        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.zero and coins were spent in the copy but not marked as spent here.</source>
+        <translation>Muamele reddedildi! Cüzdanınızdaki madenî paraların bazıları zaten harcanmış olduğunda bu meydana gelebilir. Örneğin wallet.zero dosyasının bir kopyasını kullandıysanız ve kopyada para harcandığında ancak burada harcandığı işaretlenmediğinde.</translation>
     </message>
     <message>
         <source>A fee higher than %1 is considered an absurdly high fee.</source>
@@ -2861,12 +2861,12 @@
         <translation>Uyarı: eşlerimizle tamamen mutabık değiliz gibi görünüyor! Güncelleme yapmanız gerekebilir ya da diğer düğümlerin güncelleme yapmaları gerekebilir.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Uyarı: wallet.dat dosyasının okunması sırasında bir hata meydana geldi! Tüm anahtarlar doğru bir şekilde okundu, ancak muamele verileri ya da adres defteri unsurları hatalı veya eksik olabilir.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Uyarı: wallet.zero dosyasının okunması sırasında bir hata meydana geldi! Tüm anahtarlar doğru bir şekilde okundu, ancak muamele verileri ya da adres defteri unsurları hatalı veya eksik olabilir.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Uyarı: wallet.dat bozuk, veriler geri kazanıldı! Özgün wallet.dat, wallet.{zamandamgası}.bak olarak %s klasörüne kaydedildi; bakiyeniz ya da muameleleriniz yanlışsa bir yedeklemeden tekrar yüklemeniz gerekir.</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Uyarı: wallet.zero bozuk, veriler geri kazanıldı! Özgün wallet.zero, wallet.{zamandamgası}.bak olarak %s klasörüne kaydedildi; bakiyeniz ya da muameleleriniz yanlışsa bir yedeklemeden tekrar yüklemeniz gerekir.</translation>
     </message>
     <message>
         <source>Whitelist peers connecting from the given netmask or IP address. Can be specified multiple times.</source>
@@ -2881,8 +2881,8 @@
         <translation>&lt;kategori&gt; şunlar olabilir:</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Bozuk bir wallet.dat dosyasından özel anahtarları geri kazanmayı dene</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Bozuk bir wallet.zero dosyasından özel anahtarları geri kazanmayı dene</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -3173,8 +3173,8 @@ mesela: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com
         <translation>-rpcbind değeri %s şebeke adresi olarak ayrıştırılamadı</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet requires newer version of Bitcoin Core</source>
-        <translation>wallet.dat dosyasının yüklenmesinde hata: Cüzdan Bitcoin Çekirdeğinin daha yeni bir sürümünü gerektirmektedir</translation>
+        <source>Error loading wallet.zero: Wallet requires newer version of Bitcoin Core</source>
+        <translation>wallet.zero dosyasının yüklenmesinde hata: Cüzdan Bitcoin Çekirdeğinin daha yeni bir sürümünü gerektirmektedir</translation>
     </message>
     <message>
         <source>Error reading from database, shutting down.</source>
@@ -3349,8 +3349,8 @@ mesela: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com
         <translation>başlangıçta</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat bozuk, geri kazanım başarısız oldu</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero bozuk, geri kazanım başarısız oldu</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -3385,8 +3385,8 @@ mesela: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com
         <translation>Adresler yükleniyor...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>wallet.dat dosyasının yüklenmesinde hata oluştu: bozuk cüzdan</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>wallet.zero dosyasının yüklenmesinde hata oluştu: bozuk cüzdan</translation>
     </message>
     <message>
         <source>(1 = keep tx meta data e.g. account owner and payment request information, 2 = drop tx meta data)</source>
@@ -3425,8 +3425,8 @@ mesela: alertnotify=echo %%s | mail -s "Bitcoin Alert" admin@foo.com
         <translation>Eş adresleri sorgulaması için daima DNS aramasını kullan (varsayılan: %u)</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>wallet.dat dosyasının yüklenmesinde hata oluştu</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>wallet.zero dosyasının yüklenmesinde hata oluştu</translation>
     </message>
     <message>
         <source>Generate coins (default: %u)</source>

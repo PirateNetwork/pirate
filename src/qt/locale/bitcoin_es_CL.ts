@@ -1341,8 +1341,8 @@
         <translation>Atención</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat corrompió, guardado fallido</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero corrompió, guardado fallido</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -1378,12 +1378,12 @@
         <translation>Cargando direcciónes...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Error cargando wallet.dat: Billetera corrupta</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Error cargando wallet.zero: Billetera corrupta</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Error cargando wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Error cargando wallet.zero</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

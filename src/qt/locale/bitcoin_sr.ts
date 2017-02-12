@@ -779,12 +779,12 @@
         <translation>učitavam adrese....</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Грешка током учитавања wallet.dat: Новчаник је покварен      </translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Грешка током учитавања wallet.zero: Новчаник је покварен      </translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Грешка током учитавања wallet.dat      </translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Грешка током учитавања wallet.zero      </translation>
     </message>
     <message>
         <source>Loading block index...</source>

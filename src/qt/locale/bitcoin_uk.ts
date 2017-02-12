@@ -1999,8 +1999,8 @@
         <translation>Не вдалося створити транзакцію!</translation>
     </message>
     <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>Транзакцію відхилено! Це може статись, якщо декілька монет з вашого гаманця вже використані, наприклад, якщо ви використовуєте одну копію гаманця (wallet.dat), а монети були використані з іншої копії, але не позначені як використані в цій.</translation>
+        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.zero and coins were spent in the copy but not marked as spent here.</source>
+        <translation>Транзакцію відхилено! Це може статись, якщо декілька монет з вашого гаманця вже використані, наприклад, якщо ви використовуєте одну копію гаманця (wallet.zero), а монети були використані з іншої копії, але не позначені як використані в цій.</translation>
     </message>
     <message>
         <source>A fee higher than %1 is considered an absurdly high fee.</source>
@@ -2869,12 +2869,12 @@
         <translation>Увага: Наш ланцюжок блоків відрізняється від ланцюжків підключених учасників! Можливо, вам, або іншим вузлам, необхідно оновитися.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Увага: помилка читання wallet.dat! Всі ключі прочитано коректно, але дані транзакцій чи записи адресної книги можуть бути пропущені, або пошкоджені.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Увага: помилка читання wallet.zero! Всі ключі прочитано коректно, але дані транзакцій чи записи адресної книги можуть бути пропущені, або пошкоджені.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Увага: файл wallet.dat пошкоджено, дані врятовано! Оригінальний wallet.dat збережено як wallet.{timestamp}.bak до %s; якщо Ваш баланс чи транзакції неправильні, Ви можете відновити їх з резервної копії. </translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Увага: файл wallet.zero пошкоджено, дані врятовано! Оригінальний wallet.zero збережено як wallet.{timestamp}.bak до %s; якщо Ваш баланс чи транзакції неправильні, Ви можете відновити їх з резервної копії. </translation>
     </message>
     <message>
         <source>Whitelist peers connecting from the given netmask or IP address. Can be specified multiple times.</source>
@@ -2889,8 +2889,8 @@
         <translation>&lt;category&gt; може бути:</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Спроба відновити закриті ключі з пошкодженого wallet.dat</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Спроба відновити закриті ключі з пошкодженого wallet.zero</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -3181,8 +3181,8 @@ rpcpassword=%s
         <translation>Неможливо розпізнати мережеву адресу для параметру -rpcbind (%s)</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet requires newer version of Bitcoin Core</source>
-        <translation>Помилка при завантаженні wallet.dat: Гаманець потребує новішої версії Bitcoin Core</translation>
+        <source>Error loading wallet.zero: Wallet requires newer version of Bitcoin Core</source>
+        <translation>Помилка при завантаженні wallet.zero: Гаманець потребує новішої версії Bitcoin Core</translation>
     </message>
     <message>
         <source>Error reading from database, shutting down.</source>
@@ -3365,8 +3365,8 @@ rpcpassword=%s
         <translation>під час запуску</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat пошкоджено, відновлення не вдалося</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero пошкоджено, відновлення не вдалося</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -3401,8 +3401,8 @@ rpcpassword=%s
         <translation>Завантаження адрес...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Помилка при завантаженні wallet.dat: Гаманець пошкоджено</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Помилка при завантаженні wallet.zero: Гаманець пошкоджено</translation>
     </message>
     <message>
         <source>(1 = keep tx meta data e.g. account owner and payment request information, 2 = drop tx meta data)</source>
@@ -3441,8 +3441,8 @@ rpcpassword=%s
         <translation>Завжди дізнаватися адреси учасників через DNS (типово: %u)</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Помилка при завантаженні wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Помилка при завантаженні wallet.zero</translation>
     </message>
     <message>
         <source>Generate coins (default: %u)</source>

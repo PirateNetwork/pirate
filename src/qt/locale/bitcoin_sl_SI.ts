@@ -1995,8 +1995,8 @@
         <translation>Transakcije ni bilo mogoče ustvariti!</translation>
     </message>
     <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>Transakcija je bila zavrnjena! To se lahko zgodi, če so bili kateri od kovancev iz denarnice že porabljeni, kot v primeru, da ste kje uporabili kopijo datoteke wallet.dat in kovance tam že porabili, lokalno pa ti še niso bili označeni kot porabljeni.</translation>
+        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.zero and coins were spent in the copy but not marked as spent here.</source>
+        <translation>Transakcija je bila zavrnjena! To se lahko zgodi, če so bili kateri od kovancev iz denarnice že porabljeni, kot v primeru, da ste kje uporabili kopijo datoteke wallet.zero in kovance tam že porabili, lokalno pa ti še niso bili označeni kot porabljeni.</translation>
     </message>
     <message>
         <source>A fee higher than %1 is considered an absurdly high fee.</source>
@@ -2857,12 +2857,12 @@
         <translation>Opozorilo: Trenutno se s soležniki ne strinjam v popolnosti! Mogoče bi morali vi ali drugi udeleženci posodobiti odjemalce.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Opozorilo: napaka pri branju datoteke wallet.dat! Vsi ključi so bili pravilno prebrani, podatki o transakciji ali imenik vnešenih naslovov so morda izgubljeni ali nepravilni.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Opozorilo: napaka pri branju datoteke wallet.zero! Vsi ključi so bili pravilno prebrani, podatki o transakciji ali imenik vnešenih naslovov so morda izgubljeni ali nepravilni.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Opozorilo: Datoteka wallet.dat je bila okvarjena, podatki pa so bili kljub temu rešeni! Originalna datoteka je bila shranjena kot wallet.{čas.oznaka}.bak v mapo %s. Če sta skupno stanje ali seznam transakcij napačna, morate datoteko restavrirati iz varnostne kopije.</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Opozorilo: Datoteka wallet.zero je bila okvarjena, podatki pa so bili kljub temu rešeni! Originalna datoteka je bila shranjena kot wallet.{čas.oznaka}.bak v mapo %s. Če sta skupno stanje ali seznam transakcij napačna, morate datoteko restavrirati iz varnostne kopije.</translation>
     </message>
     <message>
         <source>Whitelist peers connecting from the given netmask or IP address. Can be specified multiple times.</source>
@@ -2877,8 +2877,8 @@
         <translation>&lt;category&gt; je lahko:</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Skušaj obnoviti zasebne ključe iz okvarjene datoteke wallet.dat</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Skušaj obnoviti zasebne ključe iz okvarjene datoteke wallet.zero</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -3173,8 +3173,8 @@
         <translation>ob zagonu</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>Datoteka wallet.dat je poškodovana in je ni bilo mogoče obnoviti.</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>Datoteka wallet.zero je poškodovana in je ni bilo mogoče obnoviti.</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -3209,8 +3209,8 @@
         <translation>Nalagam naslove ...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Napaka pri nalaganju wallet.dat: denarnica pokvarjena</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Napaka pri nalaganju wallet.zero: denarnica pokvarjena</translation>
     </message>
     <message>
         <source>Use separate SOCKS5 proxy to reach peers via Tor hidden services (default: %s)</source>
@@ -3225,8 +3225,8 @@
         <translation>Sprejemljivi tipi šifriranja (privzeto: %s)</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Napaka pri nalaganju wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Napaka pri nalaganju wallet.zero</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

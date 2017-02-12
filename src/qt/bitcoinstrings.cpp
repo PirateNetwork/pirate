@@ -154,10 +154,10 @@ QT_TRANSLATE_NOOP("bitcoin-core", ""
 "Warning: We do not appear to fully agree with our peers! You may need to "
 "upgrade, or other nodes may need to upgrade."),
 QT_TRANSLATE_NOOP("bitcoin-core", ""
-"Warning: error reading wallet.dat! All keys read correctly, but transaction "
+"Warning: error reading wallet.zero! All keys read correctly, but transaction "
 "data or address book entries might be missing or incorrect."),
 QT_TRANSLATE_NOOP("bitcoin-core", ""
-"Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as "
+"Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as "
 "wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect "
 "you should restore from a backup."),
 QT_TRANSLATE_NOOP("bitcoin-core", ""
@@ -181,7 +181,7 @@ QT_TRANSLATE_NOOP("bitcoin-core", "Activating best chain..."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Add a node to connect to and attempt to keep the connection open"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Allow DNS lookups for -addnode, -seednode and -connect"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Always query for peer addresses via DNS lookup (default: %u)"),
-QT_TRANSLATE_NOOP("bitcoin-core", "Attempt to recover private keys from a corrupt wallet.dat"),
+QT_TRANSLATE_NOOP("bitcoin-core", "Attempt to recover private keys from a corrupt wallet.zero"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Block creation options:"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Can't run with a wallet in prune mode."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Cannot downgrade wallet"),
@@ -204,9 +204,9 @@ QT_TRANSLATE_NOOP("bitcoin-core", "Done loading"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Error initializing block database"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Error initializing wallet database environment %s!"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Error loading block database"),
-QT_TRANSLATE_NOOP("bitcoin-core", "Error loading wallet.dat"),
-QT_TRANSLATE_NOOP("bitcoin-core", "Error loading wallet.dat: Wallet corrupted"),
-QT_TRANSLATE_NOOP("bitcoin-core", "Error loading wallet.dat: Wallet requires newer version of Bitcoin Core"),
+QT_TRANSLATE_NOOP("bitcoin-core", "Error loading wallet.zero"),
+QT_TRANSLATE_NOOP("bitcoin-core", "Error loading wallet.zero: Wallet corrupted"),
+QT_TRANSLATE_NOOP("bitcoin-core", "Error loading wallet.zero: Wallet requires newer version of Bitcoin Core"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Error opening block database"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Error reading from database, shutting down."),
 QT_TRANSLATE_NOOP("bitcoin-core", "Error"),
@@ -315,5 +315,5 @@ QT_TRANSLATE_NOOP("bitcoin-core", "Warning: Unsupported argument -debugnet ignor
 QT_TRANSLATE_NOOP("bitcoin-core", "You need to rebuild the database using -reindex to change -txindex"),
 QT_TRANSLATE_NOOP("bitcoin-core", "Zapping all transactions from wallet..."),
 QT_TRANSLATE_NOOP("bitcoin-core", "on startup"),
-QT_TRANSLATE_NOOP("bitcoin-core", "wallet.dat corrupt, salvage failed"),
+QT_TRANSLATE_NOOP("bitcoin-core", "wallet.zero corrupt, salvage failed"),
 };

@@ -966,7 +966,7 @@
     </message>
     <message>
         <source>Wallet Data (*.dat)</source>
-        <translation>داده های Wallet  
+        <translation>داده های Wallet
 (*.dat)</translation>
     </message>
     <message>
@@ -1045,12 +1045,12 @@
         <translation>لود شدن آدرسها..</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>خطا در هنگام لود شدن wallet.dat: Wallet corrupted</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>خطا در هنگام لود شدن wallet.zero: Wallet corrupted</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>خطا در هنگام لود شدن wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>خطا در هنگام لود شدن wallet.zero</translation>
     </message>
     <message>
         <source>Set minimum block size in bytes (default: %u)</source>

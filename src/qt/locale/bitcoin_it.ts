@@ -1992,8 +1992,8 @@ Per specificare più URL separarli con una barra verticale "|".</translation>
         <translation>Creazione transazione fallita!</translation>
     </message>
     <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>La transazione è stata respinta! Questo può accadere se alcuni bitcoin nel tuo portamonete sono già stati spesi, come nel caso in cui tu avessi utilizzato una copia del file wallet.dat per spendere bitcoin e questi non fossero stati considerati come spesi dal portamonete corrente.</translation>
+        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.zero and coins were spent in the copy but not marked as spent here.</source>
+        <translation>La transazione è stata respinta! Questo può accadere se alcuni bitcoin nel tuo portamonete sono già stati spesi, come nel caso in cui tu avessi utilizzato una copia del file wallet.zero per spendere bitcoin e questi non fossero stati considerati come spesi dal portamonete corrente.</translation>
     </message>
     <message>
         <source>A fee higher than %1 is considered an absurdly high fee.</source>
@@ -2854,12 +2854,12 @@ Per specificare più URL separarli con una barra verticale "|".</translation>
         <translation>Attenzione: Sembra che non vi sia pieno consenso con i nostri peer! Un aggiornamento da parte tua o degli altri nodi potrebbe essere necessario.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Attenzione: errore di lettura di wallet.dat! Tutte le chiavi sono state lette correttamente, ma i dati delle transazioni o della rubrica potrebbero essere mancanti o non corretti.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Attenzione: errore di lettura di wallet.zero! Tutte le chiavi sono state lette correttamente, ma i dati delle transazioni o della rubrica potrebbero essere mancanti o non corretti.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Attenzione: wallet.dat corrotto, dati recuperati! Il wallet.dat originale è stato salvato come wallet.{timestamp}.bak in %s. Se i dati relativi a saldo o transazioni non dovessero risultare corretti si consiglia di procedere al ripristino da un backup.</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Attenzione: wallet.zero corrotto, dati recuperati! Il wallet.zero originale è stato salvato come wallet.{timestamp}.bak in %s. Se i dati relativi a saldo o transazioni non dovessero risultare corretti si consiglia di procedere al ripristino da un backup.</translation>
     </message>
     <message>
         <source>Whitelist peers connecting from the given netmask or IP address. Can be specified multiple times.</source>
@@ -2874,8 +2874,8 @@ Per specificare più URL separarli con una barra verticale "|".</translation>
         <translation>Valori possibili per &lt;category&gt;:</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Tenta di recuperare le chiavi private da un wallet.dat corrotto</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Tenta di recuperare le chiavi private da un wallet.zero corrotto</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -3161,8 +3161,8 @@ Si raccomanda inoltre di configurare alertnotify in modo da ricevere notifiche d
         <translation>Non è stato possibile riconoscere il valore %s di -rpcbind come indirizzo di rete</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet requires newer version of Bitcoin Core</source>
-        <translation>Errore durante il caricamento del file wallet.dat: il portamonete richiede una versione di Bitcoin Core più recente</translation>
+        <source>Error loading wallet.zero: Wallet requires newer version of Bitcoin Core</source>
+        <translation>Errore durante il caricamento del file wallet.zero: il portamonete richiede una versione di Bitcoin Core più recente</translation>
     </message>
     <message>
         <source>Error reading from database, shutting down.</source>
@@ -3341,8 +3341,8 @@ Si raccomanda inoltre di configurare alertnotify in modo da ricevere notifiche d
         <translation>all'avvio</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat corrotto, recupero fallito</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero corrotto, recupero fallito</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -3377,8 +3377,8 @@ Si raccomanda inoltre di configurare alertnotify in modo da ricevere notifiche d
         <translation>Caricamento indirizzi...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Errore caricamento wallet.dat: Portamonete corrotto</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Errore caricamento wallet.zero: Portamonete corrotto</translation>
     </message>
     <message>
         <source>(1 = keep tx meta data e.g. account owner and payment request information, 2 = drop tx meta data)</source>
@@ -3417,8 +3417,8 @@ Si raccomanda inoltre di configurare alertnotify in modo da ricevere notifiche d
         <translation>Interroga sempre i DNS per ottenere gli indirizzi dei peer (predefinito: %u)</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Errore caricamento wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Errore caricamento wallet.zero</translation>
     </message>
     <message>
         <source>Generate coins (default: %u)</source>

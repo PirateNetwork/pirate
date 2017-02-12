@@ -1979,8 +1979,8 @@
         <translation>A criação de transação falhou!</translation>
     </message>
     <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>A transação foi rejeitada! Isso pode acontecer se alguns bitcoins na sua carteira já foram gastos em outro local, por exemplo se você tiver uma cópia do wallet.dat e os bitcoins tiverem sido gastos na cópia mas não marcados como gastos aqui ainda.</translation>
+        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.zero and coins were spent in the copy but not marked as spent here.</source>
+        <translation>A transação foi rejeitada! Isso pode acontecer se alguns bitcoins na sua carteira já foram gastos em outro local, por exemplo se você tiver uma cópia do wallet.zero e os bitcoins tiverem sido gastos na cópia mas não marcados como gastos aqui ainda.</translation>
     </message>
     <message>
         <source>A fee higher than %1 is considered an absurdly high fee.</source>
@@ -2821,12 +2821,12 @@
         <translation>Atenção: Nós não parecemos concordar plenamente com nossos colegas! Você pode precisar atualizar ou outros nós podem precisar atualizar.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Atenção: erro ao ler arquivo wallet.dat! Todas as chaves foram lidas corretamente, mas dados de transações e do catálogo de endereços podem estar faltando ou incorretos.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Atenção: erro ao ler arquivo wallet.zero! Todas as chaves foram lidas corretamente, mas dados de transações e do catálogo de endereços podem estar faltando ou incorretos.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Atenção: wallet.dat corrompido, dados recuperados! Arquivo wallet.dat original salvo como wallet.{timestamp}.bak em %s; se seu saldo ou transações estiverem incorretos, você deve restaurar o backup.</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Atenção: wallet.zero corrompido, dados recuperados! Arquivo wallet.zero original salvo como wallet.{timestamp}.bak em %s; se seu saldo ou transações estiverem incorretos, você deve restaurar o backup.</translation>
     </message>
     <message>
         <source>Whitelist peers connecting from the given netmask or IP address. Can be specified multiple times.</source>
@@ -2841,8 +2841,8 @@
         <translation>&lt;category&gt; pode ser:</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Tentar recuperar chaves privadas de um arquivo wallet.dat corrompido</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Tentar recuperar chaves privadas de um arquivo wallet.zero corrompido</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -3069,8 +3069,8 @@ por exemplo: alertnotify=echo %%s | mail -s "Alerta do Bitcoin" admin@foo.com.br
         <translation>Impossível interpretar o valor -rpcbind %s como um endereço da rede</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet requires newer version of Bitcoin Core</source>
-        <translation>Erro ao carregar wallet.dat: A carteira requer a nova versão do Bitcoin</translation>
+        <source>Error loading wallet.zero: Wallet requires newer version of Bitcoin Core</source>
+        <translation>Erro ao carregar wallet.zero: A carteira requer a nova versão do Bitcoin</translation>
     </message>
     <message>
         <source>Error reading from database, shutting down.</source>
@@ -3221,8 +3221,8 @@ por exemplo: alertnotify=echo %%s | mail -s "Alerta do Bitcoin" admin@foo.com.br
         <translation>ao iniciar</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat corrompido, recuperação falhou</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero corrompido, recuperação falhou</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -3257,8 +3257,8 @@ por exemplo: alertnotify=echo %%s | mail -s "Alerta do Bitcoin" admin@foo.com.br
         <translation>Carregando endereços...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Erro ao carregar wallet.dat: Carteira corrompida</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Erro ao carregar wallet.zero: Carteira corrompida</translation>
     </message>
     <message>
         <source>(default: %s)</source>
@@ -3269,8 +3269,8 @@ por exemplo: alertnotify=echo %%s | mail -s "Alerta do Bitcoin" admin@foo.com.br
         <translation>Cífras aceitas (padrão: %s)</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Erro ao carregar wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Erro ao carregar wallet.zero</translation>
     </message>
     <message>
         <source>Generate coins (default: %u)</source>

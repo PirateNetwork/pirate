@@ -1035,12 +1035,12 @@
         <translation>Хаягуудыг ачааллаж байна...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>wallet.dat-ыг ачааллахад алдаа гарлаа: Түрүйвч эвдэрсэн байна</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>wallet.zero-ыг ачааллахад алдаа гарлаа: Түрүйвч эвдэрсэн байна</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>wallet.dat-ыг ачааллахад алдаа гарлаа</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>wallet.zero-ыг ачааллахад алдаа гарлаа</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

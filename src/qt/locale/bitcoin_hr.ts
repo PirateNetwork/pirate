@@ -1849,12 +1849,12 @@
         <translation>Učitavanje adresa...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Greška kod učitavanja datoteke wallet.dat: Novčanik pokvaren</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Greška kod učitavanja datoteke wallet.zero: Novčanik pokvaren</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Greška kod učitavanja datoteke wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Greška kod učitavanja datoteke wallet.zero</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

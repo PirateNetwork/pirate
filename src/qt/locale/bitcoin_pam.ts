@@ -1435,12 +1435,12 @@
         <translation>Lo-load da ne ing address...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Me-mali ya ing pamag-load king wallet.dat: Me-corrupt ya ing wallet</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Me-mali ya ing pamag-load king wallet.zero: Me-corrupt ya ing wallet</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Me-mali ya ing pamag-load king wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Me-mali ya ing pamag-load king wallet.zero</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

@@ -1999,8 +1999,8 @@
         <translation>Ha fallat la creació de la transacció!</translation>
     </message>
     <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>S'ha rebutjat la transacció! Això pot passar si alguna de les monedes del vostre moneder ja s'han gastat; per exemple, si heu fet servir una còpia de seguretat del fitxer wallet.dat i s'haguessin gastat monedes de la còpia però sense marcar-les-hi com a gastades.</translation>
+        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.zero and coins were spent in the copy but not marked as spent here.</source>
+        <translation>S'ha rebutjat la transacció! Això pot passar si alguna de les monedes del vostre moneder ja s'han gastat; per exemple, si heu fet servir una còpia de seguretat del fitxer wallet.zero i s'haguessin gastat monedes de la còpia però sense marcar-les-hi com a gastades.</translation>
     </message>
     <message>
         <source>A fee higher than %1 is considered an absurdly high fee.</source>
@@ -2865,12 +2865,12 @@
         <translation>Avís: sembla que no estem plenament d'acord amb els nostres iguals! Podria caler que actualitzar l'aplicació, o potser que ho facin altres nodes.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
-        <translation>Avís: error en llegir el fitxer wallet.dat! Totes les claus es llegeixen correctament, però hi ha dades de transaccions o entrades de la llibreta d'adreces absents o bé son incorrectes.</translation>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <translation>Avís: error en llegir el fitxer wallet.zero! Totes les claus es llegeixen correctament, però hi ha dades de transaccions o entrades de la llibreta d'adreces absents o bé son incorrectes.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Avís: el fitxer wallet.dat és corrupte, dades rescatades! L'arxiu wallet.dat original ha estat desat com wallet.{estampa_temporal}.bak al directori %s; si el teu balanç o transaccions son incorrectes hauries de restaurar-lo de un backup.</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Avís: el fitxer wallet.zero és corrupte, dades rescatades! L'arxiu wallet.zero original ha estat desat com wallet.{estampa_temporal}.bak al directori %s; si el teu balanç o transaccions son incorrectes hauries de restaurar-lo de un backup.</translation>
     </message>
     <message>
         <source>Whitelist peers connecting from the given netmask or IP address. Can be specified multiple times.</source>
@@ -2885,8 +2885,8 @@
         <translation>&lt;category&gt; pot ser:</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Intenta recuperar les claus privades d'un fitxer wallet.dat corrupte</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Intenta recuperar les claus privades d'un fitxer wallet.zero corrupte</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -3172,8 +3172,8 @@ per exemple: alertnotify=echo %%s | mail -s "Avís de Bitcoin" admin@foo.com</tr
         <translation>No s'ha pogut analitzar el valor -rpcbind %s com una adreça de xarxa</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet requires newer version of Bitcoin Core</source>
-        <translation>Error en carregar wallet.dat: el moneder requereix una versió més nova del Bitcoin core</translation>
+        <source>Error loading wallet.zero: Wallet requires newer version of Bitcoin Core</source>
+        <translation>Error en carregar wallet.zero: el moneder requereix una versió més nova del Bitcoin core</translation>
     </message>
     <message>
         <source>Error reading from database, shutting down.</source>
@@ -3348,8 +3348,8 @@ per exemple: alertnotify=echo %%s | mail -s "Avís de Bitcoin" admin@foo.com</tr
         <translation>a l'inici de l'aplicació</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>El fitxer wallet.data és corrupte. El rescat de les dades ha fallat</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>El fitxer wallet.zeroa és corrupte. El rescat de les dades ha fallat</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -3384,8 +3384,8 @@ per exemple: alertnotify=echo %%s | mail -s "Avís de Bitcoin" admin@foo.com</tr
         <translation>S'estan carregant les adreces...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Error en carregar wallet.dat: Moneder corrupte</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Error en carregar wallet.zero: Moneder corrupte</translation>
     </message>
     <message>
         <source>(1 = keep tx meta data e.g. account owner and payment request information, 2 = drop tx meta data)</source>
@@ -3424,8 +3424,8 @@ per exemple: alertnotify=echo %%s | mail -s "Avís de Bitcoin" admin@foo.com</tr
         <translation>Demana sempre les adreces dels iguals a través de consultes DNS (per defecte: %u)</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Error en carregar wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Error en carregar wallet.zero</translation>
     </message>
     <message>
         <source>Generate coins (default: %u)</source>

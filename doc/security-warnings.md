@@ -30,7 +30,7 @@ Wallet encryption is disabled, for several reasons:
 
 - While encrypted wallets prevent spending of funds, they do not maintain the
   shielding properties of JoinSplits (due to the need to detect spends). That
-  is, someone with access to an encrypted wallet.dat has full visibility of
+  is, someone with access to an encrypted wallet.zero has full visibility of
   your entire transaction graph (other than newly-detected spends, which suffer
   from the earlier issue).
 
@@ -42,7 +42,7 @@ Wallet encryption is disabled, for several reasons:
 
 You should use full-disk encryption (or encryption of your home directory) to
 protect your wallet at rest, and should assume (even unprivileged) users who are
-runnng on your OS can read your wallet.dat file.
+runnng on your OS can read your wallet.zero file.
 
 Side-Channel Attacks
 --------------------

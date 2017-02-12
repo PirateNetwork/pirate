@@ -2003,12 +2003,12 @@
         <translation>بار گیری آدرس ها</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>خطا در بارگیری wallet.dat: کیف پول خراب شده است</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>خطا در بارگیری wallet.zero: کیف پول خراب شده است</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>خطا در بارگیری wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>خطا در بارگیری wallet.zero</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

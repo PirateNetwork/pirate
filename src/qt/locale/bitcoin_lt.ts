@@ -1695,12 +1695,12 @@
         <translation>Užkraunami adresai...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation> wallet.dat pakrovimo klaida,  wallet.dat sugadintas</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation> wallet.zero pakrovimo klaida,  wallet.zero sugadintas</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation> wallet.dat pakrovimo klaida</translation>
+        <source>Error loading wallet.zero</source>
+        <translation> wallet.zero pakrovimo klaida</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>

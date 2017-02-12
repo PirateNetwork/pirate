@@ -499,13 +499,13 @@ bool CWallet::Verify(const string& walletFile, string& warningString, string& er
         CDBEnv::VerifyResult r = bitdb.Verify(walletFile, CWalletDB::Recover);
         if (r == CDBEnv::RECOVER_OK)
         {
-            warningString += strprintf(_("Warning: wallet.dat corrupt, data salvaged!"
-                                     " Original wallet.dat saved as wallet.{timestamp}.bak in %s; if"
+            warningString += strprintf(_("Warning: wallet.zero corrupt, data salvaged!"
+                                     " Original wallet.zero saved as wallet.{timestamp}.bak in %s; if"
                                      " your balance or transactions are incorrect you should"
                                      " restore from a backup."), GetDataDir());
         }
         if (r == CDBEnv::RECOVER_FAIL)
-            errorString += _("wallet.dat corrupt, salvage failed");
+            errorString += _("wallet.zero corrupt, salvage failed");
     }
     
     return true;
@@ -750,7 +750,7 @@ void CWallet::IncrementNoteWitnesses(const CBlockIndex* pindex,
 
         // For performance reasons, we write out the witness cache in
         // CWallet::SetBestChain() (which also ensures that overall consistency
-        // of the wallet.dat is maintained).
+        // of the wallet.zero is maintained).
     }
 }
 
@@ -804,7 +804,7 @@ void CWallet::DecrementNoteWitnesses(const CBlockIndex* pindex)
 
         // For performance reasons, we write out the witness cache in
         // CWallet::SetBestChain() (which also ensures that overall consistency
-        // of the wallet.dat is maintained).
+        // of the wallet.zero is maintained).
     }
 }
 

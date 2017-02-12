@@ -1999,8 +1999,8 @@
         <translation>Vytvorenie transakcie zlyhalo!</translation>
     </message>
     <message>
-        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.</source>
-        <translation>Transakcia bola zamietnutá! Toto sa môže stať ak niektoré coins vo vašej peňaženke už boli minuté, ako keď použijete kópiu wallet.dat a coins boli minuté z kópie ale neoznačené ako minuté tu.</translation>
+        <source>The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.zero and coins were spent in the copy but not marked as spent here.</source>
+        <translation>Transakcia bola zamietnutá! Toto sa môže stať ak niektoré coins vo vašej peňaženke už boli minuté, ako keď použijete kópiu wallet.zero a coins boli minuté z kópie ale neoznačené ako minuté tu.</translation>
     </message>
     <message>
         <source>A fee higher than %1 is considered an absurdly high fee.</source>
@@ -2823,12 +2823,12 @@ The network does not appear to fully agree! Some miners appear to be experiencin
         <translation>Varovanie: Zjavne sa úplne nezhodujeme s našimi peer-mi! Možno potrebujete prejsť na novšiu verziu alebo ostatné uzly potrebujú vyššiu verziu.</translation>
     </message>
     <message>
-        <source>Warning: error reading wallet.dat! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
+        <source>Warning: error reading wallet.zero! All keys read correctly, but transaction data or address book entries might be missing or incorrect.</source>
         <translation>Varovanie: chyba pri čítaní wallet.dad! Všetky kľúče sú čitateľné ale transakčné dáta alebo záznamy v adresári môžu byť nesprávne.</translation>
     </message>
     <message>
-        <source>Warning: wallet.dat corrupt, data salvaged! Original wallet.dat saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
-        <translation>Varovanie: wallet.dat je poškodený, údaje úspešne získané! Pôvodný wallet.dat uložený ako wallet.{timestamp}.bak v %s; ak váš zostatok alebo transakcie niesu správne, mali by ste súbor obnoviť zo zálohy.</translation>
+        <source>Warning: wallet.zero corrupt, data salvaged! Original wallet.zero saved as wallet.{timestamp}.bak in %s; if your balance or transactions are incorrect you should restore from a backup.</source>
+        <translation>Varovanie: wallet.zero je poškodený, údaje úspešne získané! Pôvodný wallet.zero uložený ako wallet.{timestamp}.bak v %s; ak váš zostatok alebo transakcie niesu správne, mali by ste súbor obnoviť zo zálohy.</translation>
     </message>
     <message>
         <source>Whitelist peers connecting from the given netmask or IP address. Can be specified multiple times.</source>
@@ -2843,8 +2843,8 @@ The network does not appear to fully agree! Some miners appear to be experiencin
         <translation>&lt;category&gt; môže byť:</translation>
     </message>
     <message>
-        <source>Attempt to recover private keys from a corrupt wallet.dat</source>
-        <translation>Pokus zachrániť súkromné kľúče z poškodeného wallet.dat</translation>
+        <source>Attempt to recover private keys from a corrupt wallet.zero</source>
+        <translation>Pokus zachrániť súkromné kľúče z poškodeného wallet.zero</translation>
     </message>
     <message>
         <source>Block creation options:</source>
@@ -3067,8 +3067,8 @@ The network does not appear to fully agree! Some miners appear to be experiencin
         <translation>Nedá sa analyzovať -rpcbind hodnota %s ako sieťová adresa</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet requires newer version of Bitcoin Core</source>
-        <translation>Chyba pri čítaní wallet.dat: Peňaženka vyžaduje vyššiu verziu Jadra Bitcoin</translation>
+        <source>Error loading wallet.zero: Wallet requires newer version of Bitcoin Core</source>
+        <translation>Chyba pri čítaní wallet.zero: Peňaženka vyžaduje vyššiu verziu Jadra Bitcoin</translation>
     </message>
     <message>
         <source>Error reading from database, shutting down.</source>
@@ -3227,8 +3227,8 @@ The network does not appear to fully agree! Some miners appear to be experiencin
         <translation>pri štarte</translation>
     </message>
     <message>
-        <source>wallet.dat corrupt, salvage failed</source>
-        <translation>wallet.dat je poškodený, záchrana zlyhala</translation>
+        <source>wallet.zero corrupt, salvage failed</source>
+        <translation>wallet.zero je poškodený, záchrana zlyhala</translation>
     </message>
     <message>
         <source>Password for JSON-RPC connections</source>
@@ -3263,8 +3263,8 @@ The network does not appear to fully agree! Some miners appear to be experiencin
         <translation>Načítavanie adries...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Chyba načítania wallet.dat: Peňaženka je poškodená</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Chyba načítania wallet.zero: Peňaženka je poškodená</translation>
     </message>
     <message>
         <source>(1 = keep tx meta data e.g. account owner and payment request information, 2 = drop tx meta data)</source>
@@ -3303,8 +3303,8 @@ The network does not appear to fully agree! Some miners appear to be experiencin
         <translation>Vždy sa dotazovať adresy partnerských uzlov cez vyhľadávanie DNS (predvolené: %u)</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Chyba načítania wallet.dat</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Chyba načítania wallet.zero</translation>
     </message>
     <message>
         <source>How many blocks to check at startup (default: %u, 0 = all)</source>

@@ -2259,12 +2259,12 @@
         <translation>Címek betöltése...</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat: Wallet corrupted</source>
-        <translation>Hiba a wallet.dat betöltése közben: meghibásodott tárca</translation>
+        <source>Error loading wallet.zero: Wallet corrupted</source>
+        <translation>Hiba a wallet.zero betöltése közben: meghibásodott tárca</translation>
     </message>
     <message>
-        <source>Error loading wallet.dat</source>
-        <translation>Hiba az wallet.dat betöltése közben</translation>
+        <source>Error loading wallet.zero</source>
+        <translation>Hiba az wallet.zero betöltése közben</translation>
     </message>
     <message>
         <source>Invalid -proxy address: '%s'</source>
