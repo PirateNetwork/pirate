@@ -746,7 +746,7 @@ void StartRPCThreads()
 
     // Launch one async rpc worker.  The ability to launch multiple workers is not recommended at present and thus the option is disabled.
     getAsyncRPCQueue()->addWorker();
-/*   
+/*
     int n = GetArg("-rpcasyncthreads", 1);
     if (n<1) {
         LogPrintf("ERROR: Invalid value %d for -rpcasyncthreads.  Must be at least 1.\n", n);
@@ -1077,7 +1077,7 @@ std::string HelpExampleCli(string methodname, string args){
 
 std::string HelpExampleRpc(string methodname, string args){
     return "> curl --user myusername --data-binary '{\"jsonrpc\": \"1.0\", \"id\":\"curltest\", "
-        "\"method\": \"" + methodname + "\", \"params\": [" + args + "] }' -H 'content-type: text/plain;' http://127.0.0.1:8232/\n";
+        "\"method\": \"" + methodname + "\", \"params\": [" + args + "] }' -H 'content-type: text/plain;' http://127.0.0.1:23801/\n";
 }
 
 const CRPCTable tableRPC;

@@ -56,7 +56,7 @@ public:
         pchMessageStart[2] = 0x52; // R
         pchMessageStart[3] = 0x4F; // O
         vAlertPubKey = ParseHex("73B0");
-        nDefaultPort = 23800;
+        nDefaultPort = 23801;
         nMinerThreads = 0;
         nMaxTipAge = 24 * 60 * 60;
         nPruneAfterHeight = 100000;
@@ -150,7 +150,7 @@ public:
         pchMessageStart[2] = 0x53; // R+1
         pchMessageStart[3] = 0x50; // O+1
         vAlertPubKey = ParseHex("73B0");
-        nDefaultPort = 23801;
+        nDefaultPort = 23802;
         nMinerThreads = 0;
         nPruneAfterHeight = 1000;
         consensus.hashGenesisBlock = genesis.GetHash();
