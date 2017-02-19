@@ -27,22 +27,35 @@ Requires at least 8GB RAM.
 
 
 sudo apt-get install \
+
       build-essential pkg-config libc6-dev m4 g++-multilib \
+
       autoconf libtool ncurses-dev unzip git python \
+
       zlib1g-dev wget bsdmainutils automake
 
 
 git clone https://github.com/zerocurrency/zero.git
+
 cd zero
+
 git checkout master
+
 ./zcutil/fetch-params.sh
+
 ./zcutil/build.sh -j$(nproc)
 
 mkdir -p ~/.zero
+
 echo "rpcuser=username" > ~/.zero/zero.conf
+
 echo "rpcpassword=`head -c 32 /dev/urandom | base64`" >> ~/.zero/zero.conf
+
 echo "addnode=35.164.216.74" >> ~/.zero/zero.conf
+
 echo "addnode=35.165.120.254" >> ~/.zero/zero.conf
+
+
 
 
 
