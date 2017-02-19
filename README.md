@@ -55,7 +55,13 @@ echo "addnode=35.164.216.74" >> ~/.zero/zero.conf
 
 echo "addnode=35.165.120.254" >> ~/.zero/zero.conf
 
+echo "rpcport=23800" >> ~/.zero/zero.conf
 
+echo 'gen=1' >> ~/.zero/zero.conf
+
+echo "genproclimit=$(nproc)" >> ~/.zero/zero.conf
+
+echo 'equihashsolver=tromp' >> ~/.zero/zero.conf
 
 
 
