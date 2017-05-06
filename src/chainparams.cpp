@@ -65,6 +65,7 @@ public:
         nEquihashN = N;
         nEquihashK = K;
 
+
         /**
          * Build the genesis block. Note that the output of its generation
          * transaction cannot be spent since it did not originally exist in the
@@ -112,7 +113,6 @@ public:
 
         vFixedSeeds = std::vector<SeedSpec6>(pnSeed6_main, pnSeed6_main + ARRAYLEN(pnSeed6_main));
 
-        fRequireRPCPassword = true;
         fMiningRequiresPeers = true;
         fDefaultConsistencyChecks = false;
         fRequireStandard = true;
@@ -184,7 +184,6 @@ public:
 
         vFixedSeeds = std::vector<SeedSpec6>(pnSeed6_test, pnSeed6_test + ARRAYLEN(pnSeed6_test));
 
-        fRequireRPCPassword = true;
         fMiningRequiresPeers = true;
         fDefaultConsistencyChecks = false;
         fRequireStandard = true;
@@ -193,10 +192,11 @@ public:
 
         checkpointData = (Checkpoints::CCheckpointData) {
             boost::assign::map_list_of
-            ( 0, consensus.hashGenesisBlock),
-            genesis.nTime,
-            0,
-            0
+            (0, consensus.hashGenesisBlock),
+            genesis.nTime,  // * UNIX timestamp of last checkpoint block
+            0,       // * total number of transactions between genesis and last checkpoint
+                     //   (the tx=... number in the SetBestChain debug.log lines)
+            0        //   total number of tx / (checkpoint block height / (24 * 24))
         };
     }
 };
@@ -240,7 +240,6 @@ public:
         vFixedSeeds.clear(); //! Regtest mode doesn't have any fixed seeds.
         vSeeds.clear();  //! Regtest mode doesn't have any DNS seeds.
 
-        fRequireRPCPassword = false;
         fMiningRequiresPeers = false;
         fDefaultConsistencyChecks = true;
         fRequireStandard = false;

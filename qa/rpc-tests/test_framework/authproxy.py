@@ -106,6 +106,31 @@ class AuthServiceProxy(object):
             name = "%s.%s" % (self.__service_name, name)
         return AuthServiceProxy(self.__service_url, name, connection=self.__conn)
 
+    def _request(self, method, path, postdata):
+        '''
+        Do a HTTP request, with retry if we get disconnected (e.g. due to a timeout).
+        This is a workaround for https://bugs.python.org/issue3566 which is fixed in Python 3.5.
+        '''
+        headers = {'Host': self.__url.hostname,
+                   'User-Agent': USER_AGENT,
+                   'Authorization': self.__auth_header,
+                   'Content-type': 'application/json'}
+        try:
+            self.__conn.request(method, path, postdata, headers)
+            return self._get_response()
+        except Exception as e:
+            # If connection was closed, try again.
+            # Python 3.5+ raises BrokenPipeError instead of BadStatusLine when the connection was reset.
+            # ConnectionResetError happens on FreeBSD with Python 3.4.
+            # These classes don't exist in Python 2.x, so we can't refer to them directly.
+            if ((isinstance(e, httplib.BadStatusLine) and e.line == "''")
+                or e.__class__.__name__ in ('BrokenPipeError', 'ConnectionResetError')):
+                self.__conn.close()
+                self.__conn.request(method, path, postdata, headers)
+                return self._get_response()
+            else:
+                raise
+
     def __call__(self, *args):
         AuthServiceProxy.__id_count += 1
 
@@ -115,13 +140,7 @@ class AuthServiceProxy(object):
                                'method': self.__service_name,
                                'params': args,
                                'id': AuthServiceProxy.__id_count}, default=EncodeDecimal)
-        self.__conn.request('POST', self.__url.path, postdata,
-                            {'Host': self.__url.hostname,
-                             'User-Agent': USER_AGENT,
-                             'Authorization': self.__auth_header,
-                             'Content-type': 'application/json'})
-
-        response = self._get_response()
+        response = self._request('POST', self.__url.path, postdata)
         if response['error'] is not None:
             raise JSONRPCException(response['error'])
         elif 'result' not in response:
@@ -133,13 +152,7 @@ class AuthServiceProxy(object):
     def _batch(self, rpc_call_list):
         postdata = json.dumps(list(rpc_call_list), default=EncodeDecimal)
         log.debug("--> "+postdata)
-        self.__conn.request('POST', self.__url.path, postdata,
-                            {'Host': self.__url.hostname,
-                             'User-Agent': USER_AGENT,
-                             'Authorization': self.__auth_header,
-                             'Content-type': 'application/json'})
-
-        return self._get_response()
+        return self._request('POST', self.__url.path, postdata)
 
     def _get_response(self):
         http_response = self.__conn.getresponse()

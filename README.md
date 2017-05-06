@@ -1,5 +1,5 @@
-ZERO 1.0.6
-===========
+ZERO 1.0.8-1
+=============
 
 What is ZERO?
 --------------
@@ -66,3 +66,4 @@ echo 'equihashsolver=tromp' >> ~/.zero/zero.conf
 
 
 
+                                        

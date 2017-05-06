@@ -111,20 +111,14 @@ UniValue getinfo(const UniValue& params, bool fHelp)
 #ifdef ENABLE_WALLET
 class DescribeAddressVisitor : public boost::static_visitor<UniValue>
 {
-private:
-    isminetype mine;
-
 public:
-    DescribeAddressVisitor(isminetype mineIn) : mine(mineIn) {}
-
     UniValue operator()(const CNoDestination &dest) const { return UniValue(UniValue::VOBJ); }
 
     UniValue operator()(const CKeyID &keyID) const {
         UniValue obj(UniValue::VOBJ);
         CPubKey vchPubKey;
         obj.push_back(Pair("isscript", false));
-        if (mine == ISMINE_SPENDABLE) {
-            pwalletMain->GetPubKey(keyID, vchPubKey);
+        if (pwalletMain && pwalletMain->GetPubKey(keyID, vchPubKey)) {
             obj.push_back(Pair("pubkey", HexStr(vchPubKey)));
             obj.push_back(Pair("iscompressed", vchPubKey.IsCompressed()));
         }
@@ -133,10 +127,9 @@ public:
 
     UniValue operator()(const CScriptID &scriptID) const {
         UniValue obj(UniValue::VOBJ);
+        CScript subscript;
         obj.push_back(Pair("isscript", true));
-        if (mine != ISMINE_NO) {
-            CScript subscript;
-            pwalletMain->GetCScript(scriptID, subscript);
+        if (pwalletMain && pwalletMain->GetCScript(scriptID, subscript)) {
             std::vector<CTxDestination> addresses;
             txnouttype whichType;
             int nRequired;
@@ -202,11 +195,9 @@ UniValue validateaddress(const UniValue& params, bool fHelp)
 #ifdef ENABLE_WALLET
         isminetype mine = pwalletMain ? IsMine(*pwalletMain, dest) : ISMINE_NO;
         ret.push_back(Pair("ismine", (mine & ISMINE_SPENDABLE) ? true : false));
-        if (mine != ISMINE_NO) {
-            ret.push_back(Pair("iswatchonly", (mine & ISMINE_WATCH_ONLY) ? true: false));
-            UniValue detail = boost::apply_visitor(DescribeAddressVisitor(mine), dest);
-            ret.pushKVs(detail);
-        }
+        ret.push_back(Pair("iswatchonly", (mine & ISMINE_WATCH_ONLY) ? true: false));
+        UniValue detail = boost::apply_visitor(DescribeAddressVisitor(), dest);
+        ret.pushKVs(detail);
         if (pwalletMain && pwalletMain->mapAddressBook.count(dest))
             ret.push_back(Pair("account", pwalletMain->mapAddressBook[dest].name));
 #endif
@@ -365,9 +356,9 @@ UniValue createmultisig(const UniValue& params, bool fHelp)
 
             "\nExamples:\n"
             "\nCreate a multisig address from 2 addresses\n"
-            + HelpExampleCli("createmultisig", "2 \"[\\\"16sSauSf5pF2UkUwvKGq4qjNRzBZYqgEL5\\\",\\\"171sgjn4YtPu27adkKGrdDwzRTxnRkBfKV\\\"]\"") +
+            + HelpExampleCli("createmultisig", "2 \"[\\\"t16sSauSf5pF2UkUwvKGq4qjNRzBZYqgEL5\\\",\\\"t171sgjn4YtPu27adkKGrdDwzRTxnRkBfKV\\\"]\"") +
             "\nAs a json rpc call\n"
-            + HelpExampleRpc("createmultisig", "2, \"[\\\"16sSauSf5pF2UkUwvKGq4qjNRzBZYqgEL5\\\",\\\"171sgjn4YtPu27adkKGrdDwzRTxnRkBfKV\\\"]\"")
+            + HelpExampleRpc("createmultisig", "2, \"[\\\"t16sSauSf5pF2UkUwvKGq4qjNRzBZYqgEL5\\\",\\\"t171sgjn4YtPu27adkKGrdDwzRTxnRkBfKV\\\"]\"")
         ;
         throw runtime_error(msg);
     }
@@ -400,11 +391,11 @@ UniValue verifymessage(const UniValue& params, bool fHelp)
             "\nUnlock the wallet for 30 seconds\n"
             + HelpExampleCli("walletpassphrase", "\"mypassphrase\" 30") +
             "\nCreate the signature\n"
-            + HelpExampleCli("signmessage", "\"1D1ZrZNe3JUo7ZycKEYQQiQAWd9y54F4XZ\" \"my message\"") +
+            + HelpExampleCli("signmessage", "\"t14oHp2v54vfmdgQ3v3SNuQga8JKHTNi2a1\" \"my message\"") +
             "\nVerify the signature\n"
-            + HelpExampleCli("verifymessage", "\"1D1ZrZNe3JUo7ZycKEYQQiQAWd9y54F4XZ\" \"signature\" \"my message\"") +
+            + HelpExampleCli("verifymessage", "\"t14oHp2v54vfmdgQ3v3SNuQga8JKHTNi2a1\" \"signature\" \"my message\"") +
             "\nAs json rpc\n"
-            + HelpExampleRpc("verifymessage", "\"1D1ZrZNe3JUo7ZycKEYQQiQAWd9y54F4XZ\", \"signature\", \"my message\"")
+            + HelpExampleRpc("verifymessage", "\"t14oHp2v54vfmdgQ3v3SNuQga8JKHTNi2a1\", \"signature\", \"my message\"")
         );
 
     LOCK(cs_main);
@@ -452,10 +443,19 @@ UniValue setmocktime(const UniValue& params, bool fHelp)
     if (!Params().MineBlocksOnDemand())
         throw runtime_error("setmocktime for regression testing (-regtest mode) only");
 
-    LOCK(cs_main);
+    // cs_vNodes is locked and node send/receive times are updated
+    // atomically with the time change to prevent peers from being
+    // disconnected because we think we haven't communicated with them
+    // in a long time.
+    LOCK2(cs_main, cs_vNodes);
 
     RPCTypeCheck(params, boost::assign::list_of(UniValue::VNUM));
     SetMockTime(params[0].get_int64());
+
+    uint64_t t = GetTime();
+    BOOST_FOREACH(CNode* pnode, vNodes) {
+        pnode->nLastSend = pnode->nLastRecv = t;
+    }
 
     return NullUniValue;
 }
