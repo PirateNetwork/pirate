@@ -383,28 +383,34 @@ CCriticalSection CNode::cs_totalBytesSent;
 CNode* FindNode(const CNetAddr& ip)
 {
     LOCK(cs_vNodes);
-    BOOST_FOREACH(CNode* pnode, vNodes)
-        if ((CNetAddr)pnode->addr == ip)
-            return (pnode);
-    return NULL;
+    for (CNode* pnode : vNodes) {
+      if (static_cast<CNetAddr>(pnode->addr) == ip) {
+            return pnode;
+        }
+    }
+    return nullptr;
 }
 
 CNode* FindNode(const CSubNet& subNet)
 {
     LOCK(cs_vNodes);
-    BOOST_FOREACH(CNode* pnode, vNodes)
-    if (subNet.Match((CNetAddr)pnode->addr))
-        return (pnode);
-    return NULL;
+    for (CNode* pnode : vNodes) {
+        if (subNet.Match(static_cast<CNetAddr>(pnode->addr))) {
+            return pnode;
+        }
+    }
+    return nullptr;
 }
 
 CNode* FindNode(const std::string& addrName)
 {
     LOCK(cs_vNodes);
-    BOOST_FOREACH(CNode* pnode, vNodes)
-        if (pnode->addrName == addrName)
-            return (pnode);
-    return NULL;
+    for (CNode* pnode : vNodes) {
+        if (pnode->GetAddrName() == addrName) {
+            return pnode;
+        }
+    }
+    return nullptr;
 }
 
 CNode* FindNode(const CService& addr)
@@ -438,7 +444,7 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
             return NULL;
 
         // Look for an existing connection
-        CNode* pnode = FindNode((CService)addrConnect);
+        CNode* pnode = FindNode(static_cast<CService>(addrConnect));
         if (pnode)
         {
             pnode->AddRef();
@@ -727,7 +733,7 @@ void CNode::Ban(const CSubNet& subNet, const BanReason &banReason, int64_t banti
     {
         LOCK(cs_vNodes);
         for (CNode* pnode : vNodes) {
-            if (subNet.Match((CNetAddr)pnode->addr))
+            if (subNet.Match(static_cast<CNetAddr>(pnode->addr)))
                 pnode->fDisconnect = true;
         }
     }
@@ -1936,7 +1942,7 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
 
     if (!pszDest) {
         if (IsLocal(addrConnect) ||
-            FindNode((CNetAddr)addrConnect) || CNode::IsBanned(addrConnect) ||
+            FindNode(static_cast<CNetAddr>(addrConnect)) || IsBanned(addrConnect) ||
             FindNode(addrConnect.ToStringIPPort()))
             return false;
     } else if (FindNode(std::string(pszDest)))
