@@ -4,7 +4,7 @@ ZERO 1.0.12
 What is ZERO?
 --------------
 
-[ZERO](https://github.com/zerocurrency/zero) is is a fork of Zcash that is a fork of Bitcoin.
+[ZERO](https://github.com/tearodactyl/zero) is is a fork of Zcash that in turn :is a fork of Bitcoin.
 
 This software is the ZERO client. It downloads and stores the entire history
 of ZERO transactions; depending on the speed of your computer and network
@@ -69,9 +69,19 @@ git checkout master
 mkdir -p ~/.zero
 echo "rpcuser=username" > ~/.zero/zero.conf
 echo "rpcpassword=`head -c 32 /dev/urandom | base64`" >> ~/.zero/zero.conf
-echo "addnode=35.164.216.74" >> ~/.zero/zero.conf
-echo "addnode=94.176.235.178" >> ~/.zero/zero.conf
 echo "rpcport=23800" >> ~/.zero/zero.conf
+```
+
+### Seeder Nodes
+As of 10/4/2017 the following seeder nodes work:
+zeropool.cloud
+54.144.219.55
+
+Check the thread for updates.
+
+The way you add seeder nodes to the config file:
+```
+echo "addnode=zeropool.cloud" >> ~/.zero/zero.conf
 ```
 
 ### Enable CPU mining (optional)
@@ -102,4 +112,4 @@ Donations for running nodes and for development are welcomed here:
 t1gUHkWqcC9ruk6iGkeDKnxtPAsrgm8AGVt
 
 
-
+T
