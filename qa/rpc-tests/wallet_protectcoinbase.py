@@ -5,8 +5,13 @@
 
 
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.util import *
-from time import *
+from test_framework.authproxy import JSONRPCException
+from test_framework.util import assert_equal, initialize_chain_clean, \
+    start_nodes, connect_nodes_bi, stop_node
+
+import sys
+import time
+from decimal import Decimal
 
 class WalletProtectCoinbaseTest (BitcoinTestFramework):
 
@@ -16,10 +21,11 @@ class WalletProtectCoinbaseTest (BitcoinTestFramework):
 
     # Start nodes with -regtestprotectcoinbase to set fCoinbaseMustBeProtected to true.
     def setup_network(self, split=False):
-        self.nodes = start_nodes(3, self.options.tmpdir, extra_args=[['-regtestprotectcoinbase', '-debug=zrpcunsafe']] * 3 )
+        self.nodes = start_nodes(4, self.options.tmpdir, extra_args=[['-regtestprotectcoinbase', '-debug=zrpcunsafe']] * 4 )
         connect_nodes_bi(self.nodes,0,1)
         connect_nodes_bi(self.nodes,1,2)
         connect_nodes_bi(self.nodes,0,2)
+        connect_nodes_bi(self.nodes,0,3)
         self.is_network_split=False
         self.sync_all()
 
@@ -35,7 +41,7 @@ class WalletProtectCoinbaseTest (BitcoinTestFramework):
         for x in xrange(1, timeout):
             results = self.nodes[0].z_getoperationresult(opids)
             if len(results)==0:
-                sleep(1)
+                time.sleep(1)
             else:
                 status = results[0]["status"]
                 if status == "failed":
@@ -67,6 +73,7 @@ class WalletProtectCoinbaseTest (BitcoinTestFramework):
         assert_equal(self.nodes[0].getbalance(), 40)
         assert_equal(self.nodes[1].getbalance(), 10)
         assert_equal(self.nodes[2].getbalance(), 0)
+        assert_equal(self.nodes[3].getbalance(), 0)
 
         # Send will fail because we are enforcing the consensus rule that
         # coinbase utxos can only be sent to a zaddr.
@@ -81,6 +88,27 @@ class WalletProtectCoinbaseTest (BitcoinTestFramework):
         mytaddr = self.nodes[0].getnewaddress()
         myzaddr = self.nodes[0].z_getnewaddress()
 
+        # Node 3 will test that watch only address utxos are not selected
+        self.nodes[3].importaddress(mytaddr)
+        recipients= [{"address":myzaddr, "amount": Decimal('1')}]
+        myopid = self.nodes[3].z_sendmany(mytaddr, recipients)
+        errorString=""
+        status = None
+        opids = [myopid]
+        timeout = 10
+        for x in xrange(1, timeout):
+            results = self.nodes[3].z_getoperationresult(opids)
+            if len(results)==0:
+                time.sleep(1)
+            else:
+                status = results[0]["status"]
+                errorString = results[0]["error"]["message"]
+                break
+        assert_equal("failed", status)
+        assert_equal("no UTXOs found for taddr from address" in errorString, True)
+        stop_node(self.nodes[3], 3)
+        self.nodes.pop()
+
         # This send will fail because our wallet does not allow any change when protecting a coinbase utxo,
         # as it's currently not possible to specify a change address in z_sendmany.
         recipients = []
@@ -94,7 +122,7 @@ class WalletProtectCoinbaseTest (BitcoinTestFramework):
         for x in xrange(1, timeout):
             results = self.nodes[0].z_getoperationresult(opids)
             if len(results)==0:
-                sleep(1)
+                time.sleep(1)
             else:
                 status = results[0]["status"]
                 errorString = results[0]["error"]["message"]

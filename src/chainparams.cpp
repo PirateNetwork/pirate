@@ -57,7 +57,15 @@ public:
         pchMessageStart[3] = 0x4F; // O
         vAlertPubKey = ParseHex("73B0");
         nDefaultPort = 23801;
-        nMinerThreads = 0;
+//        nMinerThreads = 0;
+/*
+        pchMessageStart[0] = 0x24;
+        pchMessageStart[1] = 0xe9;
+        pchMessageStart[2] = 0x27;
+        pchMessageStart[3] = 0x64;
+        vAlertPubKey = ParseHex("04b7ecf0baa90495ceb4e4090f6b2fd37eec1e9c85fac68a487f3ce11589692e4a317479316ee814e066638e1db54e37a10689b70286e6315b1087b6615d179264");
+        nDefaultPort = 8233;
+*/
         nMaxTipAge = 24 * 60 * 60;
         nPruneAfterHeight = 100000;
         const size_t N = 192, K = 7;
@@ -151,7 +159,7 @@ public:
         pchMessageStart[3] = 0x50; // O+1
         vAlertPubKey = ParseHex("73B0");
         nDefaultPort = 23802;
-        nMinerThreads = 0;
+//        nMinerThreads = 0;
         nPruneAfterHeight = 1000;
         consensus.hashGenesisBlock = genesis.GetHash();
         const size_t N = 192, K = 7;
@@ -222,7 +230,6 @@ public:
         pchMessageStart[1] = 0xe8;
         pchMessageStart[2] = 0x3f;
         pchMessageStart[3] = 0x5f;
-        nMinerThreads = 1;
         nMaxTipAge = 24 * 60 * 60;
         const size_t N = 48, K = 5;
         BOOST_STATIC_ASSERT(equihash_parameters_acceptable(N, K));

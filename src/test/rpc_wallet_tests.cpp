@@ -17,6 +17,8 @@
 #include "asyncrpcqueue.h"
 #include "asyncrpcoperation.h"
 #include "wallet/asyncrpcoperation_sendmany.h"
+#include "wallet/asyncrpcoperation_shieldcoinbase.h"
+
 #include "rpcprotocol.h"
 #include "init.h"
 
@@ -973,6 +975,18 @@ BOOST_AUTO_TEST_CASE(rpc_z_sendmany_internals)
         BOOST_CHECK( msg.find("Insufficient funds, no UTXOs found") != string::npos);
     }
 
+    // minconf cannot be zero when sending from zaddr
+    {
+        try {
+            std::vector<SendManyRecipient> recipients = {SendManyRecipient(taddr1, 100.0, "DEADBEEF")};
+            std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_sendmany(zaddr1, recipients, {}, 0));
+            BOOST_CHECK(false); // Fail test if an exception is not thrown
+        } catch (const UniValue& objError) {
+            BOOST_CHECK(find_error(objError, "Minconf cannot be zero when sending from zaddr"));
+        }
+    }
+
+
     // there are no unspent notes to spend
     {
         std::vector<SendManyRecipient> recipients = { SendManyRecipient(taddr1,100.0, "DEADBEEF") };
@@ -1223,5 +1237,136 @@ BOOST_AUTO_TEST_CASE(rpc_wallet_encrypted_wallet_zkeys)
     // We can't simulate over RPC the wallet closing and being reloaded
     // but there are tests for this in gtest.
 }
+
+
+
+BOOST_AUTO_TEST_CASE(rpc_z_shieldcoinbase_parameters)
+{
+    SelectParams(CBaseChainParams::TESTNET);
+
+    LOCK(pwalletMain->cs_wallet);
+
+    BOOST_CHECK_THROW(CallRPC("z_shieldcoinbase"), runtime_error);
+    BOOST_CHECK_THROW(CallRPC("z_shieldcoinbase toofewargs"), runtime_error);
+    BOOST_CHECK_THROW(CallRPC("z_shieldcoinbase too many args here"), runtime_error);
+
+    // bad from address
+    BOOST_CHECK_THROW(CallRPC("z_shieldcoinbase "
+            "INVALIDtmRr6yJonqGK23UVhrKuyvTpF8qxQQjKigJ tnpoQJVnYBZZqkFadj2bJJLThNCxbADGB5gSGeYTAGGrT5tejsxY9Zc1BtY8nnHmZkB"), runtime_error);
+
+    // bad from address
+    BOOST_CHECK_THROW(CallRPC("z_shieldcoinbase "
+    "** tnpoQJVnYBZZqkFadj2bJJLThNCxbADGB5gSGeYTAGGrT5tejsxY9Zc1BtY8nnHmZkB"), runtime_error);
+
+    // bad to address
+    BOOST_CHECK_THROW(CallRPC("z_shieldcoinbase "
+    "tmRr6yJonqGK23UVhrKuyvTpF8qxQQjKigJ INVALIDtnpoQJVnYBZZqkFadj2bJJLThNCxbADGB5gSGeYTAGGrT5tejsxY9Zc1BtY8nnHmZkB"), runtime_error);
+
+    // invalid fee amount, cannot be negative
+    BOOST_CHECK_THROW(CallRPC("z_shieldcoinbase "
+            "tmRr6yJonqGK23UVhrKuyvTpF8qxQQjKigJ "
+            "tnpoQJVnYBZZqkFadj2bJJLThNCxbADGB5gSGeYTAGGrT5tejsxY9Zc1BtY8nnHmZkB "
+            "-0.0001"
+            ), runtime_error);
+
+    // invalid fee amount, bigger than MAX_MONEY
+    BOOST_CHECK_THROW(CallRPC("z_shieldcoinbase "
+            "tmRr6yJonqGK23UVhrKuyvTpF8qxQQjKigJ "
+            "tnpoQJVnYBZZqkFadj2bJJLThNCxbADGB5gSGeYTAGGrT5tejsxY9Zc1BtY8nnHmZkB "
+            "21000001"
+            ), runtime_error);
+
+    // Test constructor of AsyncRPCOperation_sendmany
+    std::string testnetzaddr = "ztjiDe569DPNbyTE6TSdJTaSDhoXEHLGvYoUnBU1wfVNU52TEyT6berYtySkd21njAeEoh8fFJUT42kua9r8EnhBaEKqCpP";
+    std::string mainnetzaddr = "zcMuhvq8sEkHALuSU2i4NbNQxshSAYrpCExec45ZjtivYPbuiFPwk6WHy4SvsbeZ4siy1WheuRGjtaJmoD1J8bFqNXhsG6U";
+
+    try {
+        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_shieldcoinbase({}, testnetzaddr, -1 ));
+    } catch (const UniValue& objError) {
+        BOOST_CHECK( find_error(objError, "Fee is out of range"));
+    }
+
+    try {
+        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_shieldcoinbase({}, testnetzaddr, 1));
+    } catch (const UniValue& objError) {
+        BOOST_CHECK( find_error(objError, "Empty inputs"));
+    }
+
+    // Testnet payment addresses begin with 'zt'.  This test detects an incorrect prefix.
+    try {
+        std::vector<ShieldCoinbaseUTXO> inputs = { ShieldCoinbaseUTXO{uint256(),0,0} };
+        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_shieldcoinbase(inputs, mainnetzaddr, 1) );
+    } catch (const UniValue& objError) {
+        BOOST_CHECK( find_error(objError, "payment address is for wrong network type"));
+    }
+
+}
+
+
+
+BOOST_AUTO_TEST_CASE(rpc_z_shieldcoinbase_internals)
+{
+    SelectParams(CBaseChainParams::TESTNET);
+
+    LOCK(pwalletMain->cs_wallet);
+
+    UniValue retValue;
+
+    // Test that option -mempooltxinputlimit is respected.
+    mapArgs["-mempooltxinputlimit"] = "1";
+
+    // Add keys manually
+    CZCPaymentAddress pa = pwalletMain->GenerateNewZKey();
+    std::string zaddr = pa.ToString();
+
+    // Supply 2 inputs when mempool limit is 1
+    {
+        std::vector<ShieldCoinbaseUTXO> inputs = { ShieldCoinbaseUTXO{uint256(),0,0}, ShieldCoinbaseUTXO{uint256(),0,0} };
+        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_shieldcoinbase(inputs, zaddr) );
+        operation->main();
+        BOOST_CHECK(operation->isFailed());
+        std::string msg = operation->getErrorMessage();
+        BOOST_CHECK( msg.find("Number of inputs 2 is greater than mempooltxinputlimit of 1") != string::npos);
+    }
+
+    // Insufficient funds
+    {
+        std::vector<ShieldCoinbaseUTXO> inputs = { ShieldCoinbaseUTXO{uint256(),0,0} };
+        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_shieldcoinbase(inputs, zaddr) );
+        operation->main();
+        BOOST_CHECK(operation->isFailed());
+        std::string msg = operation->getErrorMessage();
+        BOOST_CHECK( msg.find("Insufficient coinbase funds") != string::npos);
+    }
+
+    // Test the perform_joinsplit methods.
+    {
+        // Dummy input so the operation object can be instantiated.
+        std::vector<ShieldCoinbaseUTXO> inputs = { ShieldCoinbaseUTXO{uint256(),0,100000} };
+        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_shieldcoinbase(inputs, zaddr) );
+        std::shared_ptr<AsyncRPCOperation_shieldcoinbase> ptr = std::dynamic_pointer_cast<AsyncRPCOperation_shieldcoinbase> (operation);
+        TEST_FRIEND_AsyncRPCOperation_shieldcoinbase proxy(ptr);
+        static_cast<AsyncRPCOperation_shieldcoinbase *>(operation.get())->testmode = true;
+
+        ShieldCoinbaseJSInfo info;
+        info.vjsin.push_back(JSInput());
+        info.vjsin.push_back(JSInput());
+        info.vjsin.push_back(JSInput());
+        try {
+            proxy.perform_joinsplit(info);
+        } catch (const std::runtime_error & e) {
+            BOOST_CHECK( string(e.what()).find("unsupported joinsplit input")!= string::npos);
+        }
+
+        info.vjsin.clear();
+        try {
+            proxy.perform_joinsplit(info);
+        } catch (const std::runtime_error & e) {
+            BOOST_CHECK( string(e.what()).find("JoinSplit verifying key not loaded")!= string::npos);
+        }
+    }
+
+}
+
 
 BOOST_AUTO_TEST_SUITE_END()

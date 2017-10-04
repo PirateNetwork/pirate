@@ -1,4 +1,4 @@
-ZERO 1.0.8-1
+ZERO 1.0.12
 =============
 
 What is ZERO?
@@ -24,6 +24,14 @@ See important security warnings in
 [doc/security-warnings.md](doc/security-warnings.md).
 
 **ZERO is unfinished and highly experimental.** Use at your own risk.
+
+Deprecation Policy
+------------------
+
+This release is considered deprecated 16 weeks after the release day. There
+is an automatic deprecation shutdown feature which will halt the node some
+time after this 16 week time period. The automatic feature is based on block
+height and can be explicitly disabled.
 
 Building
 --------

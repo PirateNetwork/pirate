@@ -293,9 +293,7 @@ static const CRPCCommand vRPCCommands[] =
     { "blockchain",         "verifychain",            &verifychain,            true  },
 
     /* Mining */
-#ifdef ENABLE_WALLET
     { "mining",             "getblocktemplate",       &getblocktemplate,       true  },
-#endif
     { "mining",             "getmininginfo",          &getmininginfo,          true  },
     { "mining",             "getlocalsolps",          &getlocalsolps,          true  },
     { "mining",             "getnetworksolps",        &getnetworksolps,        true  },
@@ -388,6 +386,7 @@ static const CRPCCommand vRPCCommands[] =
     { "wallet",             "z_getbalance",           &z_getbalance,           false },
     { "wallet",             "z_gettotalbalance",      &z_gettotalbalance,      false },
     { "wallet",             "z_sendmany",             &z_sendmany,             false },
+    { "wallet",             "z_shieldcoinbase",       &z_shieldcoinbase,       false },
     { "wallet",             "z_getoperationstatus",   &z_getoperationstatus,   true  },
     { "wallet",             "z_getoperationresult",   &z_getoperationresult,   true  },
     { "wallet",             "z_listoperationids",     &z_listoperationids,     true  },

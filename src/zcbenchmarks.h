@@ -15,5 +15,8 @@ extern double benchmark_verify_equihash();
 extern double benchmark_large_tx();
 extern double benchmark_try_decrypt_notes(size_t nAddrs);
 extern double benchmark_increment_note_witnesses(size_t nTxs);
+extern double benchmark_connectblock_slow();
+extern double benchmark_sendtoaddress(CAmount amount);
+extern double benchmark_loadwallet();
 
 #endif
