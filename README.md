@@ -16,6 +16,10 @@ Announcement
 Launch date: 2017-02-19
 https://bitcointalk.org/index.php?topic=1796036.0
 
+Comunity took over:
+2017-12-05
+https://bitcointalk.org/index.php?topic=2525344.0
+
 
 Security Warnings
 -----------------
