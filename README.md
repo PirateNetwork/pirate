@@ -73,7 +73,7 @@ echo "rpcport=23800" >> ~/.zero/zero.conf
 ```
 
 ### Seeder Nodes
-As of 10/4/2017 the following seeder nodes work:
+As of 07/12/2017 the following seeder nodes work:
 ```
 addnode=zeropool.cloud:23801
 addnode=139.162.188.122:23801
