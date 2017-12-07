@@ -49,7 +49,7 @@ sudo apt-get install \
 
 ### Obtain the ZERO software from GitHub
 ```
-git clone https://github.com/zerocurrency/zero.git
+git clone https://github.com/backendmaster/zero.git
 cd zero
 git checkout master
 ```
@@ -75,8 +75,16 @@ echo "rpcport=23800" >> ~/.zero/zero.conf
 ### Seeder Nodes
 As of 10/4/2017 the following seeder nodes work:
 ```
-zeropool.cloud
-54.144.219.55
+addnode=zeropool.cloud:23801
+addnode=139.162.188.122:23801
+addnode=188.166.2.55:23801
+addnode=94.176.235.178:23801
+addnode=2a01:4f8:a0:8298::2:23801
+addnode=2a02:168:5829:0:b486:978b:2017:dd2:23801
+addnode=213.239.212.246:23801
+addnode=213.32.78.132:23801
+addnode=64.237.50.236:23801
+addnode=139.162.188.122:23801
 ```
 
 Check the thread for seeder node updates.
