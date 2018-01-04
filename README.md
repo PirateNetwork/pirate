@@ -122,5 +122,5 @@ The usage is currently the same as for ZCash. For more information see the [ZCas
 Donations
 --------------------
 Donations for running nodes and for development are welcomed here:
-t1gUHkWqcC9ruk6iGkeDKnxtPAsrgm8AGVt
+t1XpvXbN3UoBZf4yEsmz3oQt9UGp2TCEUu3
 
