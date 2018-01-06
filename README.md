@@ -1,10 +1,10 @@
-ZERO 1.0.12
-=============
+ZERO 1.0.14
+=======
 
 What is ZERO?
 --------------
 
-[ZERO](https://github.com/tearodactyl/zero) is is a fork of Zcash that in turn is a fork of Bitcoin.
+[ZERO](https://github.com/backendmaster/zero) is is a fork of Zcash that in turn is a fork of Bitcoin.
 
 This software is the ZERO client. It downloads and stores the entire history
 of ZERO transactions; depending on the speed of your computer and network
@@ -24,8 +24,8 @@ https://bitcointalk.org/index.php?topic=2525344.0
 Security Warnings
 -----------------
 
-See important security warnings in
-[doc/security-warnings.md](doc/security-warnings.md).
+See important security warnings on the
+[Security Information page](https://z.cash/support/security/).
 
 **ZERO is unfinished and highly experimental.** Use at your own risk.
 
@@ -117,6 +117,11 @@ Your wallet will be created (on first zcashd start) here: ~/.zero/wallet.zero
 Please backup your wallet periodically and keep it safe.
 
 The usage is currently the same as for ZCash. For more information see the [ZCash User Guide](https://github.com/zcash/zcash/wiki/1.0-User-Guide#running-zcash).
+
+License
+-------
+
+For license information see the file [COPYING](COPYING).
 
 
 Donations

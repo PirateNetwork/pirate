@@ -1172,7 +1172,7 @@ BOOST_AUTO_TEST_CASE(rpc_z_sendmany_internals)
         try {
             proxy.perform_joinsplit(info);
         } catch (const std::runtime_error & e) {
-            BOOST_CHECK( string(e.what()).find("JoinSplit verifying key not loaded")!= string::npos);
+            BOOST_CHECK( string(e.what()).find("error verifying joinsplit")!= string::npos);
         }
     }
 
@@ -1248,7 +1248,7 @@ BOOST_AUTO_TEST_CASE(rpc_z_shieldcoinbase_parameters)
 
     BOOST_CHECK_THROW(CallRPC("z_shieldcoinbase"), runtime_error);
     BOOST_CHECK_THROW(CallRPC("z_shieldcoinbase toofewargs"), runtime_error);
-    BOOST_CHECK_THROW(CallRPC("z_shieldcoinbase too many args here"), runtime_error);
+    BOOST_CHECK_THROW(CallRPC("z_shieldcoinbase too many args shown here"), runtime_error);
 
     // bad from address
     BOOST_CHECK_THROW(CallRPC("z_shieldcoinbase "
@@ -1275,6 +1275,13 @@ BOOST_AUTO_TEST_CASE(rpc_z_shieldcoinbase_parameters)
             "tnpoQJVnYBZZqkFadj2bJJLThNCxbADGB5gSGeYTAGGrT5tejsxY9Zc1BtY8nnHmZkB "
             "21000001"
             ), runtime_error);
+
+    // invalid limit, must be at least 0
+    BOOST_CHECK_THROW(CallRPC("z_shieldcoinbase "
+    "tmRr6yJonqGK23UVhrKuyvTpF8qxQQjKigJ "
+    "tnpoQJVnYBZZqkFadj2bJJLThNCxbADGB5gSGeYTAGGrT5tejsxY9Zc1BtY8nnHmZkB "
+    "100 -1"
+    ), runtime_error);
 
     // Test constructor of AsyncRPCOperation_sendmany
     std::string testnetzaddr = "ztjiDe569DPNbyTE6TSdJTaSDhoXEHLGvYoUnBU1wfVNU52TEyT6berYtySkd21njAeEoh8fFJUT42kua9r8EnhBaEKqCpP";
@@ -1362,7 +1369,7 @@ BOOST_AUTO_TEST_CASE(rpc_z_shieldcoinbase_internals)
         try {
             proxy.perform_joinsplit(info);
         } catch (const std::runtime_error & e) {
-            BOOST_CHECK( string(e.what()).find("JoinSplit verifying key not loaded")!= string::npos);
+            BOOST_CHECK( string(e.what()).find("error verifying joinsplit")!= string::npos);
         }
     }
 
