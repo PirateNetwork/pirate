@@ -1,29 +1,25 @@
-ZERO 1.0.14
+ZERO 1.0.14-1
 =======
 
 What is ZERO?
 --------------
 
-[ZERO](https://github.com/backendmaster/zero) is is a fork of Zcash that in turn is a fork of Bitcoin.
+[ZERO](https://github.com/zerocurrencycoin/zero) is a fork of Zcash.
+Zcash is a fork of Bitcoin that adds shielded transaction via zk-SNARKs.
 
-This software is the ZERO client. It downloads and stores the entire history
-of ZERO transactions; depending on the speed of your computer and network
-connection, the synchronization process could take a day or more once the
-blockchain has reached a significant size.
+This software is the ZERO node. It downloads and stores the entire history of ZERO transactions, about 1GB at this point.
+Depending on the speed of your computer and network connection, the synchronization process could take several hours.
 
-Announcement
+Announcements
 -----------------
 Launch date: 2017-02-19
 https://bitcointalk.org/index.php?topic=1796036.0
-
-Comunity took over:
-2017-12-05
 https://bitcointalk.org/index.php?topic=2525344.0
+https://bitcointalk.org/index.php?topic=3310714.0
 
 
 Security Warnings
 -----------------
-
 See important security warnings on the
 [Security Information page](https://z.cash/support/security/).
 
@@ -31,19 +27,16 @@ See important security warnings on the
 
 Deprecation Policy
 ------------------
-
-This release is considered deprecated 16 weeks after the release day. There
+This release is considered deprecated 26 weeks after the release day. There
 is an automatic deprecation shutdown feature which will halt the node some
-time after this 16 week time period. The automatic feature is based on block
+time after this 26 week time period. The automatic feature is based on block
 height and can be explicitly disabled.
 
 Building
 --------
+Currently only Linux build is officially supported.  8GB RAM is recommended.
 
-Currently only Linux is officially supported.
-Requires at least 8GB RAM.
-
-### Install packages (needs to be done once only at start)
+### Install packages (needs to be done only once)
 ```
 sudo apt-get install \
       build-essential pkg-config libc6-dev m4 g++-multilib \
@@ -51,50 +44,42 @@ sudo apt-get install \
       zlib1g-dev wget bsdmainutils automake cmake
 ```
 
-### Obtain the ZERO software from GitHub
-```
-git clone https://github.com/backendmaster/zero.git
-cd zero
-git checkout master
-```
-
-### Download cryptographic keys (needs to be done once only)
+### Download cryptographic keys (needs to be done only once)
 ```
 ./zcutil/fetch-params.sh
+```
+
+### Obtain the ZERO software from GitHub
+```
+git clone https://github.com/zerocurrencycoin/zero.git
+cd zero
+git checkout master
 ```
 
 ### Build the source code to produce binary executables:
 ```
 ./zcutil/build.sh --disable-rust -j$(nproc)
 ```
+On a typical laptop -j3 works fine, while retaining some interactivity
+```
+./zcutil/build.sh --disable-rust -j3
+```
 
 ### Create a ZERO configuration file
 ```
 mkdir -p ~/.zero
-echo "rpcuser=username" > ~/.zero/zero.conf
+echo "rpcuser=YOUR_USER" > ~/.zero/zero.conf
 echo "rpcpassword=`head -c 32 /dev/urandom | base64`" >> ~/.zero/zero.conf
 echo "rpcport=23800" >> ~/.zero/zero.conf
 ```
 
 ### Seeder Nodes
-As of 07/12/2017 the following seeder nodes work:
+As of 05/09/2018 the following seeder nodes are up and run a recent Linux version:
 ```
-addnode=zeropool.cloud:23801
-addnode=139.162.188.122:23801
-addnode=188.166.2.55:23801
-addnode=94.176.235.178:23801
-addnode=2a01:4f8:a0:8298::2:23801
-addnode=2a02:168:5829:0:b486:978b:2017:dd2:23801
-addnode=213.239.212.246:23801
-addnode=213.32.78.132:23801
-addnode=64.237.50.236:23801
-addnode=139.162.188.122:23801
-```
-
-Check the thread for seeder node updates.
-The way you add seeder nodes to the config file:
-```
-echo "addnode=zeropool.cloud" >> ~/.zero/zero.conf
+addnode=213.183.51.5
+addnode=151.50.255.170
+addnode=51.255.95.53
+addnode=79.137.70.151
 ```
 
 ### Enable CPU mining (optional)
@@ -104,28 +89,35 @@ echo "genproclimit=1" >> ~/.zero/zero.conf
 echo 'equihashsolver=tromp' >> ~/.zero/zero.conf
 ```
 
-When mining you're helping to strengthen the network and contributing to a social good.
-GPU mining is now possible, please see the announcement thread for more details.
-
+A sample of a current zero.conf
+```
+./contrib/zero.conf
+```
+A sample demonstrating a large number of command line options
+```
+./contrib/debian/examples/zero.conf
+```
 
 Running & Using ZERO
 --------------------
+After a successful build ZERO binaries are in `./src`. The two important binaries are `zcashd` and `zcash-cli`.
 
-After all the building steps you will have ZERO ready for use in folder `zero/src`. The two important binary executables are `zcashd` and `zcash-cli`.
+Your wallet will be created (on first zcashd run) in: ~/.zero/wallet.zero
+Please backup your wallet often and keep it safe.
 
-Your wallet will be created (on first zcashd start) here: ~/.zero/wallet.zero
-Please backup your wallet periodically and keep it safe.
-
-The usage is currently the same as for ZCash. For more information see the [ZCash User Guide](https://github.com/zcash/zcash/wiki/1.0-User-Guide#running-zcash).
+The usage is currently the same ZCash. For more information see the [ZCash User Guide](https://github.com/zcash/zcash/wiki/1.0-User-Guide#running-zcash).
 
 License
 -------
-
 For license information see the file [COPYING](COPYING).
-
 
 Donations
 --------------------
-Donations for running nodes and for development are welcomed here:
-t1XpvXbN3UoBZf4yEsmz3oQt9UGp2TCEUu3
+Developer Donation Wallet 
+t1cDotxmVEJrniDjNqqjsCWq8mLMApV8vXC
 
+Exchange Listings Donation Wallet 
+t1WFymzcfzUPttYExprMyt1RPtyHWkic1WV
+
+General Donation Wallet 
+t1fDbALrS7tZV7DDvadAT7yHi5Sztptj8yP
