@@ -95,7 +95,7 @@ void ThreadSendAlert()
     const std::vector<std::string> useragents = {"Pyramiden", "Longyearbyen", "Barentsburg", "Qaanaaq"};
 
     BOOST_FOREACH(const std::string& useragent, useragents) {
-        alert.setSubVer.insert(std::string("/"+useragent+":1.0.12/"));
+        alert.setSubVer.insert(std::string("/"+useragent+":1.0.14-1/"));
     }
 
     // Sanity check

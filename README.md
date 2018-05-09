@@ -1,10 +1,10 @@
-ZERO 1.0.12
-=============
+ZERO 1.0.14
+=======
 
 What is ZERO?
 --------------
 
-[ZERO](https://github.com/tearodactyl/zero) is is a fork of Zcash that in turn is a fork of Bitcoin.
+[ZERO](https://github.com/backendmaster/zero) is is a fork of Zcash that in turn is a fork of Bitcoin.
 
 This software is the ZERO client. It downloads and stores the entire history
 of ZERO transactions; depending on the speed of your computer and network
@@ -16,12 +16,16 @@ Announcement
 Launch date: 2017-02-19
 https://bitcointalk.org/index.php?topic=1796036.0
 
+Comunity took over:
+2017-12-05
+https://bitcointalk.org/index.php?topic=2525344.0
+
 
 Security Warnings
 -----------------
 
-See important security warnings in
-[doc/security-warnings.md](doc/security-warnings.md).
+See important security warnings on the
+[Security Information page](https://z.cash/support/security/).
 
 **ZERO is unfinished and highly experimental.** Use at your own risk.
 
@@ -49,7 +53,7 @@ sudo apt-get install \
 
 ### Obtain the ZERO software from GitHub
 ```
-git clone https://github.com/zerocurrency/zero.git
+git clone https://github.com/backendmaster/zero.git
 cd zero
 git checkout master
 ```
@@ -73,10 +77,18 @@ echo "rpcport=23800" >> ~/.zero/zero.conf
 ```
 
 ### Seeder Nodes
-As of 10/4/2017 the following seeder nodes work:
+As of 07/12/2017 the following seeder nodes work:
 ```
-zeropool.cloud
-54.144.219.55
+addnode=zeropool.cloud:23801
+addnode=139.162.188.122:23801
+addnode=188.166.2.55:23801
+addnode=94.176.235.178:23801
+addnode=2a01:4f8:a0:8298::2:23801
+addnode=2a02:168:5829:0:b486:978b:2017:dd2:23801
+addnode=213.239.212.246:23801
+addnode=213.32.78.132:23801
+addnode=64.237.50.236:23801
+addnode=139.162.188.122:23801
 ```
 
 Check the thread for seeder node updates.
@@ -106,9 +118,14 @@ Please backup your wallet periodically and keep it safe.
 
 The usage is currently the same as for ZCash. For more information see the [ZCash User Guide](https://github.com/zcash/zcash/wiki/1.0-User-Guide#running-zcash).
 
+License
+-------
+
+For license information see the file [COPYING](COPYING).
+
 
 Donations
 --------------------
 Donations for running nodes and for development are welcomed here:
-t1gUHkWqcC9ruk6iGkeDKnxtPAsrgm8AGVt
+t1XpvXbN3UoBZf4yEsmz3oQt9UGp2TCEUu3
 

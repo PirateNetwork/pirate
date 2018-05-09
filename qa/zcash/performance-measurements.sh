@@ -56,7 +56,7 @@ function use_200k_benchmark {
 
 function zcashd_start {
     case "$1" in
-        sendtoaddress|loadwallet)
+        sendtoaddress|loadwallet|listunspent)
             case "$2" in
                 200k-recv)
                     use_200k_benchmark 0
@@ -86,7 +86,7 @@ function zcashd_stop {
 
 function zcashd_massif_start {
     case "$1" in
-        sendtoaddress|loadwallet)
+        sendtoaddress|loadwallet|listunspent)
             case "$2" in
                 200k-recv)
                     use_200k_benchmark 0
@@ -154,6 +154,13 @@ EOF
     xzcat block-107134.tar.xz | tar x -C "$DATADIR/regtest"
 }
 
+
+if [ $# -lt 2 ]
+then
+    echo "$0 : At least two arguments are required!"
+    exit 1
+fi
+
 # Precomputation
 case "$1" in
     *)
@@ -206,6 +213,9 @@ case "$1" in
             loadwallet)
                 zcash_rpc zcbenchmark loadwallet 10 
                 ;;
+            listunspent)
+                zcash_rpc zcbenchmark listunspent 10
+                ;;
             *)
                 zcashd_stop
                 echo "Bad arguments to time."
@@ -234,6 +244,9 @@ case "$1" in
             verifyequihash)
                 zcash_rpc zcbenchmark verifyequihash 1
                 ;;
+            validatelargetx)
+                zcash_rpc zcbenchmark validatelargetx 1
+                ;;
             trydecryptnotes)
                 zcash_rpc zcbenchmark trydecryptnotes 1 "${@:3}"
                 ;;
@@ -249,6 +262,9 @@ case "$1" in
                 ;;
             loadwallet)
                 # The initial load is sufficient for measurement
+                ;;
+            listunspent)
+                zcash_rpc zcbenchmark listunspent 1
                 ;;
             *)
                 zcashd_massif_stop

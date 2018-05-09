@@ -47,7 +47,8 @@ public:
         consensus.nPowMaxAdjustDown = 30; // 30% adjustment down
         consensus.nPowMaxAdjustUp = 10; // 10% adjustment up
         consensus.nPowTargetSpacing = 2 * 60;
-        consensus.fPowAllowMinDifficultyBlocks = false;
+        //consensus.fPowAllowMinDifficultyBlocks = false;
+
         /**
          * The message start string should be awesome!
          */
@@ -116,6 +117,8 @@ public:
         base58Prefixes[EXT_SECRET_KEY]     = {0x04,0x88,0xAD,0xE4};
         // guarantees the first 2 characters, when base58 encoded, are "zc"
         base58Prefixes[ZCPAYMENT_ADDRRESS] = {0x16,0x9A};
+        // guarantees the first 4 characters, when base58 encoded, are "ZiVK"
+        base58Prefixes[ZCVIEWING_KEY]      = {0xA8,0xAB,0xD3};
         // guarantees the first 2 characters, when base58 encoded, are "SK"
         base58Prefixes[ZCSPENDING_KEY]     = {0xAB,0x36};
 
@@ -152,7 +155,8 @@ public:
         consensus.nMajorityWindow = 400;
         consensus.powLimit = uint256S("0AB1Efffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         assert(maxUint/UintToArith256(consensus.powLimit) >= consensus.nPowAveragingWindow);
-        consensus.fPowAllowMinDifficultyBlocks = true;
+
+        //consensus.fPowAllowMinDifficultyBlocks = true;
         pchMessageStart[0] = 0x5B; // Z+1
         pchMessageStart[1] = 0x46; // E+1
         pchMessageStart[2] = 0x53; // R+1
@@ -160,6 +164,7 @@ public:
         vAlertPubKey = ParseHex("73B0");
         nDefaultPort = 23802;
 //        nMinerThreads = 0;
+
         nPruneAfterHeight = 1000;
         consensus.hashGenesisBlock = genesis.GetHash();
         const size_t N = 192, K = 7;
@@ -187,6 +192,8 @@ public:
         base58Prefixes[EXT_SECRET_KEY]     = {0x04,0x35,0x83,0x94};
         // guarantees the first 2 characters, when base58 encoded, are "zt"
         base58Prefixes[ZCPAYMENT_ADDRRESS] = {0x16,0xB6};
+        // guarantees the first 4 characters, when base58 encoded, are "ZiVt"
+        base58Prefixes[ZCVIEWING_KEY]      = {0xA8,0xAC,0x0C};
         // guarantees the first 2 characters, when base58 encoded, are "ST"
         base58Prefixes[ZCSPENDING_KEY]     = {0xAC,0x08};
 
