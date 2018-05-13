@@ -14,7 +14,9 @@ Announcements
 -----------------
 Launch date: 2017-02-19
 https://bitcointalk.org/index.php?topic=1796036.0
+
 https://bitcointalk.org/index.php?topic=2525344.0
+
 https://bitcointalk.org/index.php?topic=3310714.0
 
 
@@ -60,7 +62,7 @@ git checkout master
 ```
 ./zcutil/build.sh --disable-rust -j$(nproc)
 ```
-On a typical laptop -j3 works fine, while retaining some interactivity
+On a typical laptop -j3 works fine, while retaining some UI interactivity
 ```
 ./zcutil/build.sh --disable-rust -j3
 ```
@@ -74,12 +76,10 @@ echo "rpcport=23800" >> ~/.zero/zero.conf
 ```
 
 ### Seeder Nodes
-As of 05/09/2018 the following seeder nodes are up and run a recent Linux version:
+As of 05/12/2018 the following seeder nodes are up and run a recent Linux version:
 ```
-addnode=213.183.51.5
-addnode=151.50.255.170
-addnode=51.255.95.53
-addnode=79.137.70.151
+addnode=34.236.37.74
+addnode=47.148.160.233
 ```
 
 ### Enable CPU mining (optional)
@@ -89,7 +89,7 @@ echo "genproclimit=1" >> ~/.zero/zero.conf
 echo 'equihashsolver=tromp' >> ~/.zero/zero.conf
 ```
 
-A sample of a current zero.conf
+A sample of the current zero.conf
 ```
 ./contrib/zero.conf
 ```
