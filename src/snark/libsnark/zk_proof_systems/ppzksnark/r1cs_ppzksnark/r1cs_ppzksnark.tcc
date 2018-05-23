@@ -443,9 +443,9 @@ knowledge_commitment<T1, T2> r1cs_compute_proof_kc(const qap_witness<Fr<ppT> > &
 #endif
 
 #ifdef MULTICORE
-    const size_t chunks = omp_get_max_threads(); // to override, set OMP_NUM_THREADS env var or call omp_set_num_threads()
+    const uint64_t chunks = omp_get_max_threads(); // to override, set OMP_NUM_THREADS env var or call omp_set_num_threads()
 #else
-    const size_t chunks = 1;
+    const uint64_t chunks = 1;
 #endif
 
     returnval = returnval + kc_multi_exp_with_mixed_addition<T1, T2, Fr<ppT> >(
@@ -471,9 +471,9 @@ G1<ppT> r1cs_compute_proof_K(const qap_witness<Fr<ppT>> &qap_wit, const G1_vecto
 #endif
 
 #ifdef MULTICORE
-    const size_t chunks = omp_get_max_threads(); // to override, set OMP_NUM_THREADS env var or call omp_set_num_threads()
+    const uint64_t chunks = omp_get_max_threads(); // to override, set OMP_NUM_THREADS env var or call omp_set_num_threads()
 #else
-    const size_t chunks = 1;
+    const uint64_t chunks = 1;
 #endif
 
     G1<ppT> g_K = K_query[0] + zk_shift;
@@ -500,9 +500,9 @@ G1<ppT> r1cs_compute_proof_H(const qap_witness<Fr<ppT> > &qap_wit, const G1_vect
 #endif
 
 #ifdef MULTICORE
-    const size_t chunks = omp_get_max_threads(); // to override, set OMP_NUM_THREADS env var or call omp_set_num_threads()
+    const uint64_t chunks = omp_get_max_threads(); // to override, set OMP_NUM_THREADS env var or call omp_set_num_threads()
 #else
-    const size_t chunks = 1;
+    const uint64_t chunks = 1;
 #endif
 
     g_H = g_H + multi_exp<G1<ppT>, Fr<ppT> >(
@@ -685,7 +685,7 @@ bool r1cs_ppzksnark_online_verifier_weak_IC(const r1cs_ppzksnark_processed_verif
 
     const accumulation_vector<G1<ppT> > accumulated_IC = pvk.encoded_IC_query.template accumulate_chunk<Fr<ppT> >(primary_input.begin(), primary_input.end(), 0);
     const G1<ppT> &acc = accumulated_IC.first;
-
+    
     if (!proof.is_well_formed())
     {
         return false;
