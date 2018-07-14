@@ -1058,14 +1058,14 @@ BOOST_AUTO_TEST_CASE(rpc_z_sendmany_internals)
         CTransaction tx = proxy.getTx();
         BOOST_CHECK(tx.vout.size() == 0);
 
-        CAmount amount = 123.456;
+        CAmount amount = CAmount(123.456);
         proxy.add_taddr_change_output_to_tx(amount);
         tx = proxy.getTx();
         BOOST_CHECK(tx.vout.size() == 1);
         CTxOut out = tx.vout[0];
         BOOST_CHECK_EQUAL(out.nValue, amount);
 
-        amount = 1.111;
+        amount = CAmount(1.111);
         proxy.add_taddr_change_output_to_tx(amount);
         tx = proxy.getTx();
         BOOST_CHECK(tx.vout.size() == 2);
