@@ -163,6 +163,7 @@ public:
         pchMessageStart[3] = 0x50; // O+1
         vAlertPubKey = ParseHex("73B0");
         nDefaultPort = 23802;
+        nMaxTipAge = 1000000000; // accept all - 0x7fffffff; 24 * 60 * 60;
 //        nMinerThreads = 0;
 
         nPruneAfterHeight = 1000;
@@ -202,7 +203,7 @@ public:
         fMiningRequiresPeers = true;
         fDefaultConsistencyChecks = false;
         fRequireStandard = true;
-        fMineBlocksOnDemand = false;
+        fMineBlocksOnDemand = true;
         fTestnetToBeDeprecatedFieldRPC = true;
 
         checkpointData = (Checkpoints::CCheckpointData) {
