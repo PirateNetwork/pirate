@@ -84,6 +84,7 @@ addnode=178.128.42.10
 addnode=zseed1.cryptonode.cloud
 addnode=zseed2.cryptonode.cloud
 addnode=zeroseed.cryptoforge.cc
+addnode=zerocurrency.prophetalgorithms.com
 ```
 
 ### Enable CPU mining (optional)
