@@ -79,7 +79,6 @@ echo "rpcport=23800" >> ~/.zero/zero.conf
 As of 08/03/2018 the following seeder nodes are up and run a recent Linux version:
 ```
 addnode=34.236.37.74
-addnode=47.148.160.233
 addnode=178.128.42.10
 addnode=zseed1.cryptonode.cloud
 addnode=zseed2.cryptonode.cloud
