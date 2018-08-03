@@ -80,6 +80,7 @@ As of 05/12/2018 the following seeder nodes are up and run a recent Linux versio
 ```
 addnode=34.236.37.74
 addnode=47.148.160.233
+addnode=178.128.42.10
 ```
 
 ### Enable CPU mining (optional)
