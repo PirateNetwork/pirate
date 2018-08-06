@@ -118,10 +118,10 @@ For license information see the file [COPYING](COPYING).
 Donations
 --------------------
 Developer Donation Wallet 
-t1cDotxmVEJrniDjNqqjsCWq8mLMApV8vXC
+`t1cDotxmVEJrniDjNqqjsCWq8mLMApV8vXC`
 
 Exchange Listings Donation Wallet 
-t1WFymzcfzUPttYExprMyt1RPtyHWkic1WV
+`t1WFymzcfzUPttYExprMyt1RPtyHWkic1WV`
 
 General Donation Wallet 
-t1fDbALrS7tZV7DDvadAT7yHi5Sztptj8yP
+`t1fDbALrS7tZV7DDvadAT7yHi5Sztptj8yP`
