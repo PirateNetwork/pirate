@@ -153,7 +153,9 @@ public:
         consensus.nMajorityEnforceBlockUpgrade = 51;
         consensus.nMajorityRejectBlockOutdated = 75;
         consensus.nMajorityWindow = 400;
-        consensus.powLimit = uint256S("0AB1Efffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        consensus.powLimit = uint256S("0effffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+// "0AB1Efffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        consensus.nPowAveragingWindow = 17;
         assert(maxUint/UintToArith256(consensus.powLimit) >= consensus.nPowAveragingWindow);
 
         //consensus.fPowAllowMinDifficultyBlocks = true;
@@ -162,7 +164,8 @@ public:
         pchMessageStart[2] = 0x53; // R+1
         pchMessageStart[3] = 0x50; // O+1
         vAlertPubKey = ParseHex("73B0");
-        nDefaultPort = 23802;
+        nDefaultPort = 23812;
+        nMaxTipAge = 1000000000; // accept all - 0x7fffffff; 24 * 60 * 60;
 //        nMinerThreads = 0;
 
         nPruneAfterHeight = 1000;
@@ -170,12 +173,21 @@ public:
         const size_t N = 192, K = 7;
         BOOST_STATIC_ASSERT(equihash_parameters_acceptable(N, K));
 
+
         //! Modify the testnet genesis block so the timestamp is valid for a later start.
+//        genesis.nTime = 1487500000;
         genesis.nTime = 1531037937;
         genesis.nBits    = 0x200A1FA<<4;
         genesis.nNonce   = uint256S("0000000000000000000000000000000000000000000000000000000000000005"); // 192,7
         genesis.nSolution = ParseHex("003da4d81cb7cb368659ac0b42dcd585b2b4fd8522c928df1d6f0ee2cf0c7369152ddd60ef4b1f823797936ef8390dfacc41189e91f89b05c9ef262fc0403593dbceb6cff9a075174f730021efbac9576bd66da83faad58823270ebe561f30d9efdd4b9804021dda83320519522a57b670f46b8bb6fa50f52acbe9b8c80d517fbaac930cfb8fd7b39db20c6014bb41699e83a7faa1ca1872034c9208e68ac5d813c793f24aa5eee4d9b675ad05763135100bee8d40aa35375915d037e9d0d5dcee3336ba77c5ccf00182b1564d318bad31998ec007a8f49c658b56c5eb45ecd38d3d101d2801e91a17fd14b91636d1a6870e62ce970bd5b2d86827074aeaeac90a8c928f47ba136d836a8f3736bf9b6fdbf95f2ce372a99a19cc4077d5bb81055dfea6dfb662139a337cfe8d06dd80e25d8b2ea7f49c7a07f4c159175665018dbd68f581e7108ef5adcdc5331f2a1c227a546a1c232f94a2f88993fe71ab0a3d7d5008042ea7c07c514bc49a0366c41dda632379c7fbef13ae3cec6706567fff13147ec866c16d42cb1ef6cd8fcc38a7");
         consensus.hashGenesisBlock = genesis.GetHash();
+
+LogPrintf("TESTNET\n");
+LogPrintf("consensus.hashGenesisBlock=%s\n", consensus.hashGenesisBlock.GetHex());
+LogPrintf("genesis.hashMerkleRoot=%s\n", genesis.hashMerkleRoot.GetHex());
+LogPrintf("genesis.nTime=%is\n", genesis.nTime);
+//   Might be GetDec orsomething
+
 
         assert(consensus.hashGenesisBlock == uint256S("07d3146fbe5aff11eb071207b2fa90574907154944ea0e94be8433b2c5d16ae7"));
         vFixedSeeds.clear();
