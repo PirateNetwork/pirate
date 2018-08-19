@@ -76,10 +76,14 @@ echo "rpcport=23800" >> ~/.zero/zero.conf
 ```
 
 ### Seeder Nodes
-As of 05/12/2018 the following seeder nodes are up and run a recent Linux version:
+As of 08/03/2018 the following seeder nodes are up and run a recent Linux version:
 ```
 addnode=34.236.37.74
-addnode=47.148.160.233
+addnode=178.128.42.10
+addnode=zseed1.cryptonode.cloud
+addnode=zseed2.cryptonode.cloud
+addnode=zeroseed.cryptoforge.cc
+addnode=zerocurrency.prophetalgorithms.com
 ```
 
 ### Enable CPU mining (optional)
@@ -114,10 +118,10 @@ For license information see the file [COPYING](COPYING).
 Donations
 --------------------
 Developer Donation Wallet 
-t1cDotxmVEJrniDjNqqjsCWq8mLMApV8vXC
+`t1cDotxmVEJrniDjNqqjsCWq8mLMApV8vXC`
 
 Exchange Listings Donation Wallet 
-t1WFymzcfzUPttYExprMyt1RPtyHWkic1WV
+`t1WFymzcfzUPttYExprMyt1RPtyHWkic1WV`
 
 General Donation Wallet 
-t1fDbALrS7tZV7DDvadAT7yHi5Sztptj8yP
+`t1fDbALrS7tZV7DDvadAT7yHi5Sztptj8yP`
