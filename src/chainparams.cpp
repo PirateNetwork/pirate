@@ -258,7 +258,7 @@ public:
         assert(consensus.hashGenesisBlock == uint256S("07d3146fbe5aff11eb071207b2fa90574907154944ea0e94be8433b2c5d16ae7"));
         vFixedSeeds.clear();
         vSeeds.clear();
-        //vSeeds.push_back(CDNSSeedData("z.cash", "dnsseed.testnet.z.cash")); // Zcash
+        vSeeds.push_back(CDNSSeedData("cryptoforge", "testseed.cryptoforge.cc")); // CryptoForge
 
         // guarantees the first 2 characters, when base58 encoded, are "tm"
         base58Prefixes[PUBKEY_ADDRESS]     = {0x1D,0x25};
@@ -347,7 +347,6 @@ public:
         genesis.nSolution = ParseHex("09354815a3ad96efa233c6edbff6d3a245490c12d71971cf2969791411cd11132fcec3e8");
         consensus.hashGenesisBlock = genesis.GetHash();
         nDefaultPort = 23802;
-
         assert(consensus.hashGenesisBlock == uint256S("0275863eebea76f824674494b7f6a3770ac46c732aaa62b07328feaa9d79798b"));
         nPruneAfterHeight = 1000;
 
