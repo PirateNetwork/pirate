@@ -334,6 +334,9 @@ int printMetrics(size_t cols, bool mining)
                         chainActive.Contains(mapBlockIndex[hash])) {
                     int height = mapBlockIndex[hash]->nHeight;
                     CAmount subsidy = GetBlockSubsidy(height, consensusParams);
+                    if ((height >= consensusParams.nFeeStartBlockHeight) && (height <= consensusParams.GetLastFoundersRewardBlockHeight())) {
+                        subsidy -= subsidy*0.075;
+                    }
                     if (std::max(0, COINBASE_MATURITY - (tipHeight - height)) > 0) {
                         immature += subsidy;
                     } else {

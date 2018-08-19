@@ -53,6 +53,7 @@ TEST(ContextualCheckBlock, BadCoinbaseHeight) {
     EXPECT_TRUE(ContextualCheckBlock(block, state, NULL));
 
     // Treating block as non-genesis should fail
+    //mtx.vout.push_back(CTxOut(GetBlockSubsidy(1, Params().GetConsensus())*0.075, Params().GetFoundersRewardScriptAtHeight(1)));
     CTransaction tx2 {mtx};
     block.vtx[0] = tx2;
     CBlock prev;
