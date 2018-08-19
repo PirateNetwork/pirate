@@ -347,6 +347,7 @@ public:
         genesis.nSolution = ParseHex("09354815a3ad96efa233c6edbff6d3a245490c12d71971cf2969791411cd11132fcec3e8");
         consensus.hashGenesisBlock = genesis.GetHash();
         nDefaultPort = 23802;
+
         assert(consensus.hashGenesisBlock == uint256S("0275863eebea76f824674494b7f6a3770ac46c732aaa62b07328feaa9d79798b"));
         nPruneAfterHeight = 1000;
 
