@@ -214,8 +214,8 @@ public:
     CTestNetParams() {
         strNetworkID = "test";
         strCurrencyUnits = "ZET";
-        consensus.nFeeStartBlockHeight = 8500;
-        consensus.nSubsidyHalvingInterval = 10000;
+        consensus.nFeeStartBlockHeight = 9125;
+        consensus.nSubsidyHalvingInterval = 12000;
         consensus.nMajorityEnforceBlockUpgrade = 51;
         consensus.nMajorityRejectBlockOutdated = 75;
         consensus.nMajorityWindow = 400;
@@ -258,7 +258,7 @@ public:
         assert(consensus.hashGenesisBlock == uint256S("07d3146fbe5aff11eb071207b2fa90574907154944ea0e94be8433b2c5d16ae7"));
         vFixedSeeds.clear();
         vSeeds.clear();
-        //vSeeds.push_back(CDNSSeedData("z.cash", "dnsseed.testnet.z.cash")); // Zcash
+        vSeeds.push_back(CDNSSeedData("cryptoforge", "testseed.cryptoforge.cc")); // CryptoForge
 
         // guarantees the first 2 characters, when base58 encoded, are "tm"
         base58Prefixes[PUBKEY_ADDRESS]     = {0x1D,0x25};
@@ -295,7 +295,7 @@ public:
 
         // Founders reward script expects a vector of 2-of-3 multisig addresses
         vFoundersRewardAddress = {
-          "t2UNzUUx8mWBCRYPRezvA363EYXyEpHokyi"
+          "t2Jm7Ubtf1e8BkhVWqNym3N6LdgxVAs4JmE"
           //, "t2N9PH9Wk9xjqYg9iin1Ua3aekJqfAtE543", "t2NGQjYMQhFndDHguvUw4wZdNdsssA6K7x2", "t27ktmq1kbeCWiQ5TZ7w5npSzcdbBmTB7v6",
           //"t2GcBttAKD2WTHka8HyGc2dfvVTKYZUfHmJ", "t2Q3vxWaD9LrdqUE8Xd9Ddjpr9pUQ2aGotK", "t2TTfWDsYu998fHWzVP9Gns4fgxXXRi1Wzu", "t2KS6R4MMWdSBMjLCiw2iMyhWGRQPmyRqDn",
           //"t2Q2ELrgotWv3Eec6LEtMMiiQ8dtW38u8Tj", "t2AEgJA88vTWAKqxJDFUEJWyHUtQAZi5G1D", "t2HCSdmpq1TQKksuwPQevwAzPTgfJ2rkMbG", "t2HQCPFAUQaUdJWHPhg5pPBxit7inaJzubE",
@@ -347,7 +347,6 @@ public:
         genesis.nSolution = ParseHex("09354815a3ad96efa233c6edbff6d3a245490c12d71971cf2969791411cd11132fcec3e8");
         consensus.hashGenesisBlock = genesis.GetHash();
         nDefaultPort = 23802;
-
         assert(consensus.hashGenesisBlock == uint256S("0275863eebea76f824674494b7f6a3770ac46c732aaa62b07328feaa9d79798b"));
         nPruneAfterHeight = 1000;
 
