@@ -16,7 +16,14 @@
 #include <boost/thread.hpp>
 #include <boost/thread/synchronized_value.hpp>
 #include <string>
+
+#ifdef WIN32
+#include <io.h>
+#include <windows.h>
+#else
 #include <sys/ioctl.h>
+#endif
+
 #include <unistd.h>
 
 void AtomicTimer::start()
@@ -327,6 +334,9 @@ int printMetrics(size_t cols, bool mining)
                         chainActive.Contains(mapBlockIndex[hash])) {
                     int height = mapBlockIndex[hash]->nHeight;
                     CAmount subsidy = GetBlockSubsidy(height, consensusParams);
+                    if ((height >= consensusParams.nFeeStartBlockHeight) && (height <= consensusParams.GetLastFoundersRewardBlockHeight())) {
+                        subsidy -= subsidy*0.075;
+                    }
                     if (std::max(0, COINBASE_MATURITY - (tipHeight - height)) > 0) {
                         immature += subsidy;
                     } else {
@@ -441,11 +451,18 @@ void ThreadShowMetricsScreen()
 
         // Get current window size
         if (isTTY) {
+        #ifdef WIN32
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+        cols = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+        #else
+	  cols = 80;
             struct winsize w;
             w.ws_col = 0;
             if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) != -1 && w.ws_col != 0) {
                 cols = w.ws_col;
             }
+        #endif
         }
 
         if (isScreen) {

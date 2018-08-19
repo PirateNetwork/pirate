@@ -17,6 +17,13 @@ struct Params {
 
     bool fCoinbaseMustBeProtected;
 
+    /*Block height fee will be required*/
+    int nFeeStartBlockHeight;
+
+    int nSubsidyHalvingInterval;
+    int GetLastFoundersRewardBlockHeight() const {
+        return (nSubsidyHalvingInterval*10) - 1;
+    }
     /** Used to check majorities for block version upgrade */
     int nMajorityEnforceBlockUpgrade;
     int nMajorityRejectBlockOutdated;
