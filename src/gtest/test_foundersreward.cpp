@@ -163,8 +163,8 @@ TEST(founders_reward_test, slow_start_subsidy) {
         //std::cout << "block subsidy " << nSubsidy;
         totalSubsidy += nSubsidy;
     }
-    std::cout << "Total Founders Fee " << totalSubsidy << "\n";
-    ASSERT_TRUE(totalSubsidy == 96263436800000);
+    //std::cout << "Total Founders Fee " << totalSubsidy << "\n";
+    ASSERT_TRUE(totalSubsidy == 96077136800000);
 
     //Max Money
     totalSubsidy = 0;
@@ -191,13 +191,13 @@ void verifyNumberOfRewards() {
     }
 
     std::cout << params.GetFoundersRewardAddressAtIndex(0) << " " << ms.count(params.GetFoundersRewardAddressAtIndex(0)) << "\n";
-    //ASSERT_TRUE(ms.count(params.GetFoundersRewardAddressAtIndex(0)) == 17708);
-    //for (int i = 1; i <= 46; i++) {
-    //    std::cout << params.GetFoundersRewardAddressAtIndex(i) << " " << ms.count(params.GetFoundersRewardAddressAtIndex(i)) << "\n";
-        //ASSERT_TRUE(ms.count(params.GetFoundersRewardAddressAtIndex(i)) == 17709);
-    //}
-    //std::cout << params.GetFoundersRewardAddressAtIndex(47) << " " << ms.count(params.GetFoundersRewardAddressAtIndex(47)) << "\n";
-    //ASSERT_TRUE(ms.count(params.GetFoundersRewardAddressAtIndex(47)) == 17677);
+    //ASSERT_TRUE(ms.count(params.GetFoundersRewardAddressAtIndex(0)) == 387700);
+    for (int i = 1; i <= 8; i++) {
+        std::cout << params.GetFoundersRewardAddressAtIndex(i) << " " << ms.count(params.GetFoundersRewardAddressAtIndex(i)) << "\n";
+        //ASSERT_TRUE(ms.count(params.GetFoundersRewardAddressAtIndex(i)) == 800000);
+    }
+    std::cout << params.GetFoundersRewardAddressAtIndex(9) << " " << ms.count(params.GetFoundersRewardAddressAtIndex(9)) << "\n";
+    //ASSERT_TRUE(ms.count(params.GetFoundersRewardAddressAtIndex(9)) == 800000);
 
 
 

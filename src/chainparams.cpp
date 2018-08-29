@@ -38,7 +38,7 @@ public:
         strNetworkID = "main";
         strCurrencyUnits = "ZER";
         consensus.fCoinbaseMustBeProtected = true;
-        consensus.nFeeStartBlockHeight = 410000;
+        consensus.nFeeStartBlockHeight = 412300;
         consensus.nSubsidyHalvingInterval = 800000;
         consensus.nMajorityEnforceBlockUpgrade = 750;
         consensus.nMajorityRejectBlockOutdated = 950;
@@ -170,8 +170,8 @@ public:
     CTestNetParams() {
         strNetworkID = "test";
         strCurrencyUnits = "ZET";
-        consensus.nFeeStartBlockHeight = 9125;
-        consensus.nSubsidyHalvingInterval = 12000;
+        consensus.nFeeStartBlockHeight = 100;
+        consensus.nSubsidyHalvingInterval = 500;
         consensus.nMajorityEnforceBlockUpgrade = 51;
         consensus.nMajorityRejectBlockOutdated = 75;
         consensus.nMajorityWindow = 400;
