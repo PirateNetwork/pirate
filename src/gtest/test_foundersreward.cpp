@@ -173,8 +173,8 @@ TEST(founders_reward_test, slow_start_subsidy) {
         //std::cout << "block subsidy " << nSubsidy;
         totalSubsidy += nSubsidy;
     }
-    std::cout << "Max Money " << totalSubsidy << "\n";
-    //ASSERT_TRUE(totalSubsidy==MAX_MONEY)
+    //std::cout << "Max Money " << totalSubsidy << "\n";
+    ASSERT_TRUE(totalSubsidy==MAX_MONEY);
 }
 
 
