@@ -99,7 +99,7 @@ void checkNumberOfUniqueAddresses(int nUnique) {
 
 
 TEST(founders_reward_test, general) {
-    SelectParams(CBaseChainParams::TESTNET);
+    SelectParams(CBaseChainParams::MAIN);
 
     CChainParams params = Params();
 
@@ -107,12 +107,12 @@ TEST(founders_reward_test, general) {
     // address = t2ENg7hHVqqs9JwU5cgjvSbxnT2a9USNfhy
     // script.ToString() = OP_HASH160 55d64928e69829d9376c776550b6cc710d427153 OP_EQUAL
     // HexStr(script) = a91455d64928e69829d9376c776550b6cc710d42715387
-    //EXPECT_EQ(params.GetFoundersRewardScriptAtHeight(1), ParseHex("a914ef775f1f997f122a062fff1a2d7443abd1f9c64287"));
-    //EXPECT_EQ(params.GetFoundersRewardAddressAtHeight(1), "t2UNzUUx8mWBCRYPRezvA363EYXyEpHokyi");
-    //EXPECT_EQ(params.GetFoundersRewardScriptAtHeight(53126), ParseHex("a914ac67f4c072668138d88a86ff21b27207b283212f87"));
-    //EXPECT_EQ(params.GetFoundersRewardAddressAtHeight(53126), "t2NGQjYMQhFndDHguvUw4wZdNdsssA6K7x2");
-    //EXPECT_EQ(params.GetFoundersRewardScriptAtHeight(53127), ParseHex("a91455d64928e69829d9376c776550b6cc710d42715387"));
-    //EXPECT_EQ(params.GetFoundersRewardAddressAtHeight(53127), "t2ENg7hHVqqs9JwU5cgjvSbxnT2a9USNfhy");
+    EXPECT_EQ(params.GetFoundersRewardScriptAtHeight(Params().GetConsensus().nFeeStartBlockHeight), ParseHex("a914fe928701db352019291347074bf05507b970074187"));
+    EXPECT_EQ(params.GetFoundersRewardAddressAtHeight(Params().GetConsensus().nFeeStartBlockHeight), "t3hmg6WApjqVFw9oPWTDy4JLEqXcUWthg5v");
+    EXPECT_EQ(params.GetFoundersRewardScriptAtHeight(1599999), ParseHex("a914ff856ce07140ae4127fbd9850a19922fe336c22387"));
+    EXPECT_EQ(params.GetFoundersRewardAddressAtHeight(1599999), "t3hrh5M7eaGA5zXCitPXz2pbe146GkVPWHs");
+    EXPECT_EQ(params.GetFoundersRewardScriptAtHeight(1600000), ParseHex("a914aef7be8939ed9d0175497489b789268e4e2691c287"));
+    EXPECT_EQ(params.GetFoundersRewardAddressAtHeight(1600000), "t3aWmHqBGS7watoKQLa7uykeTaYHoYqM361");
 
     int maxHeight = params.GetConsensus().GetLastFoundersRewardBlockHeight();
 
@@ -124,7 +124,7 @@ TEST(founders_reward_test, general) {
 }
 
 
-#define NUM_MAINNET_FOUNDER_ADDRESSES 1
+#define NUM_MAINNET_FOUNDER_ADDRESSES 10
 
 TEST(founders_reward_test, mainnet) {
     SelectParams(CBaseChainParams::MAIN);
@@ -132,7 +132,7 @@ TEST(founders_reward_test, mainnet) {
 }
 
 
-#define NUM_TESTNET_FOUNDER_ADDRESSES 1
+#define NUM_TESTNET_FOUNDER_ADDRESSES 10
 
 TEST(founders_reward_test, testnet) {
     SelectParams(CBaseChainParams::TESTNET);
@@ -163,8 +163,8 @@ TEST(founders_reward_test, slow_start_subsidy) {
         //std::cout << "block subsidy " << nSubsidy;
         totalSubsidy += nSubsidy;
     }
-    std::cout << "Total Founders Fee " << totalSubsidy << "\n";
-    ASSERT_TRUE(totalSubsidy == 96263436800000);
+    //std::cout << "Total Founders Fee " << totalSubsidy << "\n";
+    ASSERT_TRUE(totalSubsidy == 96077136800000);
 
     //Max Money
     totalSubsidy = 0;
@@ -173,8 +173,8 @@ TEST(founders_reward_test, slow_start_subsidy) {
         //std::cout << "block subsidy " << nSubsidy;
         totalSubsidy += nSubsidy;
     }
-    std::cout << "Max Money " << totalSubsidy << "\n";
-    //ASSERT_TRUE(totalSubsidy==MAX_MONEY)
+    //std::cout << "Max Money " << totalSubsidy << "\n";
+    ASSERT_TRUE(totalSubsidy==MAX_MONEY);
 }
 
 
@@ -191,13 +191,13 @@ void verifyNumberOfRewards() {
     }
 
     std::cout << params.GetFoundersRewardAddressAtIndex(0) << " " << ms.count(params.GetFoundersRewardAddressAtIndex(0)) << "\n";
-    //ASSERT_TRUE(ms.count(params.GetFoundersRewardAddressAtIndex(0)) == 17708);
-    //for (int i = 1; i <= 46; i++) {
-    //    std::cout << params.GetFoundersRewardAddressAtIndex(i) << " " << ms.count(params.GetFoundersRewardAddressAtIndex(i)) << "\n";
-        //ASSERT_TRUE(ms.count(params.GetFoundersRewardAddressAtIndex(i)) == 17709);
-    //}
-    //std::cout << params.GetFoundersRewardAddressAtIndex(47) << " " << ms.count(params.GetFoundersRewardAddressAtIndex(47)) << "\n";
-    //ASSERT_TRUE(ms.count(params.GetFoundersRewardAddressAtIndex(47)) == 17677);
+    //ASSERT_TRUE(ms.count(params.GetFoundersRewardAddressAtIndex(0)) == 387700);
+    for (int i = 1; i <= 8; i++) {
+        std::cout << params.GetFoundersRewardAddressAtIndex(i) << " " << ms.count(params.GetFoundersRewardAddressAtIndex(i)) << "\n";
+        //ASSERT_TRUE(ms.count(params.GetFoundersRewardAddressAtIndex(i)) == 800000);
+    }
+    std::cout << params.GetFoundersRewardAddressAtIndex(9) << " " << ms.count(params.GetFoundersRewardAddressAtIndex(9)) << "\n";
+    //ASSERT_TRUE(ms.count(params.GetFoundersRewardAddressAtIndex(9)) == 800000);
 
 
 
