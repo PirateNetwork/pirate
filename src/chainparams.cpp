@@ -172,7 +172,7 @@ public:
     CTestNetParams() {
         strNetworkID = "test";
         strCurrencyUnits = "ZET";
-        consensus.nFeeStartBlockHeight = 100;
+        consensus.nFeeStartBlockHeight = 250;
         consensus.nSubsidyHalvingInterval = 500;
         consensus.nMajorityEnforceBlockUpgrade = 51;
         consensus.nMajorityRejectBlockOutdated = 75;
