@@ -793,7 +793,7 @@ void CWallet::IncrementNoteWitnesses(const CBlockIndex* pindex,
 void CWallet::DecrementNoteWitnesses(const CBlockIndex* pindex)
 {
     {
-LogPrintf("DecrementNoteWitnesses: pindex->nHeight %d, nWitnessCacheSize %d\n", pindex->nHeight, nWitnessCacheSize);
+        LogPrintf("DecrementNoteWitnesses: pindex->nHeight %d, nWitnessCacheSize %d\n", pindex->nHeight, nWitnessCacheSize);
         LOCK(cs_wallet);
         for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
             for (mapNoteData_t::value_type& item : wtxItem.second.mapNoteData) {
