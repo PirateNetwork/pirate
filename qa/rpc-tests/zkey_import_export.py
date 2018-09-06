@@ -107,7 +107,7 @@ class ZkeyImportExportTest (BitcoinTestFramework):
         # Seed Alice with some funds
         alice.generate(10)
         self.sync_all()
-        miner.generate(100)
+        miner.generate(720)
         self.sync_all()
         # Shield Alice's coinbase funds to her zaddr
         alice_zaddr = alice.z_getnewaddress()
