@@ -120,7 +120,7 @@ class WalletBackupTest(BitcoinTestFramework):
         sync_blocks(self.nodes)
         self.nodes[2].generate(1)
         sync_blocks(self.nodes)
-        self.nodes[3].generate(100)
+        self.nodes[3].generate(720)
         sync_blocks(self.nodes)
 
         assert_equal(self.nodes[0].getbalance(), 10)
@@ -155,7 +155,7 @@ class WalletBackupTest(BitcoinTestFramework):
             self.do_one_round()
 
         # Generate 101 more blocks, so any fees paid mature
-        self.nodes[3].generate(101)
+        self.nodes[3].generate(721)
         self.sync_all()
 
         balance0 = self.nodes[0].getbalance()
@@ -164,9 +164,9 @@ class WalletBackupTest(BitcoinTestFramework):
         balance3 = self.nodes[3].getbalance()
         total = balance0 + balance1 + balance2 + balance3
 
-        # At this point, there are 214 blocks (103 for setup, then 10 rounds, then 101.)
+        # At this point, there are 214 blocks (723 for setup, then 10 rounds, then 721.)
         # 114 are mature, so the sum of all wallets should be 114 * 10 = 1140.
-        assert_equal(total, 1140)
+        assert_equal(total, 7340)
 
         ##
         # Test restoring spender wallets from backups

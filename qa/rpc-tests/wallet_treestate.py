@@ -30,9 +30,14 @@ class WalletTreeStateTest (BitcoinTestFramework):
         print "Mining blocks..."
 
         self.nodes[0].generate(100)
+        walletinfo = self.nodes[0].getwalletinfo()
+        assert_equal(walletinfo['immature_balance'], 1000)
+        assert_equal(walletinfo['balance'], 0)
         self.sync_all()
-        self.nodes[1].generate(101)
+        self.nodes[1].generate(721)
         self.sync_all()
+        assert_equal(self.nodes[0].getbalance(), 1000)
+        assert_equal(self.nodes[1].getbalance(), 10)
 
         mytaddr = self.nodes[0].getnewaddress()     # where coins were mined
         myzaddr = self.nodes[0].z_getnewaddress()
