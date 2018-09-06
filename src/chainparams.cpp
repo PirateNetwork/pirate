@@ -172,8 +172,8 @@ public:
     CTestNetParams() {
         strNetworkID = "test";
         strCurrencyUnits = "ZET";
-        consensus.nFeeStartBlockHeight = 250;
-        consensus.nSubsidyHalvingInterval = 500;
+        consensus.nFeeStartBlockHeight = 2800;
+        consensus.nSubsidyHalvingInterval = 3000;
         consensus.nMajorityEnforceBlockUpgrade = 51;
         consensus.nMajorityRejectBlockOutdated = 75;
         consensus.nMajorityWindow = 400;
@@ -188,7 +188,7 @@ public:
         pchMessageStart[2] = 0x53; // R+1
         pchMessageStart[3] = 0x50; // O+1
         vAlertPubKey = ParseHex("73B0");
-        nDefaultPort = 23812;
+        nDefaultPort = 23832;
         nMaxTipAge = 1000000000; // accept all - 0x7fffffff; 24 * 60 * 60;
 //        nMinerThreads = 0;
 
