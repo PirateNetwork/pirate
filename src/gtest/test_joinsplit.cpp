@@ -322,9 +322,9 @@ TEST(joinsplit, full_api_test)
         increment_note_witnesses(note2.cm(), witnesses, tree);
         Note note3(addr.a_pk, 2100000000000001, random_uint256(), random_uint256());
         increment_note_witnesses(note3.cm(), witnesses, tree);
-        Note note4(addr.a_pk, 1900000000000000, random_uint256(), random_uint256());
+        Note note4(addr.a_pk, 1600000000000000, random_uint256(), random_uint256());
         increment_note_witnesses(note4.cm(), witnesses, tree);
-        Note note5(addr.a_pk, 1900000000000000, random_uint256(), random_uint256());
+        Note note5(addr.a_pk, 1600000000000000, random_uint256(), random_uint256());
         increment_note_witnesses(note5.cm(), witnesses, tree);
 
         // Should work
@@ -354,8 +354,7 @@ TEST(joinsplit, full_api_test)
         2100000000000001,
         0,
         tree.root(),
-        "invalid joinsplit balance");
-        //"nonsensical vpub_old value");
+        "nonsensical vpub_old value");
 
         // rhs > MAX_MONEY
         invokeAPIFailure(params,
@@ -370,8 +369,7 @@ TEST(joinsplit, full_api_test)
         0,
         2100000000000001,
         tree.root(),
-        "invalid joinsplit balance");
-        //"nonsensical vpub_new value");
+        "nonsensical vpub_new value");
 
         // input witness for the wrong element
         invokeAPIFailure(params,
@@ -446,8 +444,7 @@ TEST(joinsplit, full_api_test)
         0,
         0,
         tree.root(),
-        "invalid joinsplit balance");
-        //"nonsensical input note value");
+        "nonsensical input note value");
 
         // Absurd total input value
         invokeAPIFailure(params,
@@ -462,8 +459,7 @@ TEST(joinsplit, full_api_test)
         0,
         0,
         tree.root(),
-        "invalid joinsplit balance");
-        //"nonsensical left hand size of joinsplit balance");
+        "nonsensical left hand size of joinsplit balance");
 
         // Absurd output value
         invokeAPIFailure(params,
@@ -478,8 +474,7 @@ TEST(joinsplit, full_api_test)
         0,
         0,
         tree.root(),
-        "invalid joinsplit balance");
-        //"nonsensical output value");
+        "nonsensical output value");
 
         // Absurd total output value
         invokeAPIFailure(params,
@@ -488,14 +483,13 @@ TEST(joinsplit, full_api_test)
             JSInput()
         },
         {
-            JSOutput(addr, 1900000000000000),
-            JSOutput(addr, 1900000000000000)
+            JSOutput(addr, 1600000000000000),
+            JSOutput(addr, 1600000000000000)
         },
         0,
         0,
         tree.root(),
-        "invalid joinsplit balance");
-        //"nonsensical right hand side of joinsplit balance");
+        "nonsensical right hand side of joinsplit balance");
 
         // Absurd total output value
         invokeAPIFailure(params,
@@ -504,7 +498,7 @@ TEST(joinsplit, full_api_test)
             JSInput()
         },
         {
-            JSOutput(addr, 1900000000000000),
+            JSOutput(addr, 1600000000000000),
             JSOutput()
         },
         0,
