@@ -15,8 +15,6 @@ Announcements
 Launch date: 2017-02-19
 https://bitcointalk.org/index.php?topic=1796036.0
 
-https://bitcointalk.org/index.php?topic=2525344.0
-
 https://bitcointalk.org/index.php?topic=3310714.0
 
 
@@ -114,14 +112,3 @@ The usage is currently the same ZCash. For more information see the [ZCash User 
 License
 -------
 For license information see the file [COPYING](COPYING).
-
-Donations
---------------------
-Developer Donation Wallet
-`t1cDotxmVEJrniDjNqqjsCWq8mLMApV8vXC`
-
-Exchange Listings Donation Wallet
-`t1WFymzcfzUPttYExprMyt1RPtyHWkic1WV`
-
-General Donation Wallet
-`t1fDbALrS7tZV7DDvadAT7yHi5Sztptj8yP`
