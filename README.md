@@ -1,4 +1,4 @@
-ZERO 1.0.14-1
+ZERO 1.0.14-2
 =======
 
 What is ZERO?
@@ -29,10 +29,10 @@ See important security warnings on the
 
 Deprecation Policy
 ------------------
-This release is considered deprecated 26 weeks after the release day. There
+This release is considered deprecated 13 weeks after the release day. There
 is an automatic deprecation shutdown feature which will halt the node some
-time after this 26 week time period. The automatic feature is based on block
-height and can be explicitly disabled.
+time after this 13 week time period. The automatic feature is based on block
+height and cannot be disabled.
 
 Building
 --------
@@ -43,7 +43,7 @@ Currently only Linux build is officially supported.  8GB RAM is recommended.
 sudo apt-get install \
       build-essential pkg-config libc6-dev m4 g++-multilib \
       autoconf libtool ncurses-dev unzip git python python-zmq \
-      zlib1g-dev wget bsdmainutils automake cmake
+      zlib1g-dev wget bsdmainutils automake cmake curl
 ```
 
 ### Download cryptographic keys (needs to be done only once)
@@ -117,11 +117,11 @@ For license information see the file [COPYING](COPYING).
 
 Donations
 --------------------
-Developer Donation Wallet 
+Developer Donation Wallet
 `t1cDotxmVEJrniDjNqqjsCWq8mLMApV8vXC`
 
-Exchange Listings Donation Wallet 
+Exchange Listings Donation Wallet
 `t1WFymzcfzUPttYExprMyt1RPtyHWkic1WV`
 
-General Donation Wallet 
+General Donation Wallet
 `t1fDbALrS7tZV7DDvadAT7yHi5Sztptj8yP`
