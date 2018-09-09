@@ -10,6 +10,8 @@ Zcash is a fork of Bitcoin that adds shielded transaction via zk-SNARKs.
 This software is the ZERO node. It downloads and stores the entire history of ZERO transactions, about 1GB at this point.
 Depending on the speed of your computer and network connection, the synchronization process could take several hours.
 
+FAST-DECENTRALIZED-ANONYMOUS-SECURE-ASIC RESISTANT
+
 Announcements
 -----------------
 Launch date: 2017-02-19
