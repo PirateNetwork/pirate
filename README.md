@@ -104,7 +104,7 @@ A sample demonstrating a large number of command line options
 
 Running & Using ZERO
 --------------------
-After a successfully building, the ZERO binaries are stored in `./src`. The two important binaries are `zcashd` and `zcash-cli`.
+After successfully building, the ZERO binaries are stored in `./src`. The two important binaries are `zcashd` and `zcash-cli`.
 
 Your wallet will be created (on first zcashd run) in: ~/.zero/wallet.zero
 Please backup your wallet often and keep it safe.
