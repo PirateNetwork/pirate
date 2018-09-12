@@ -54,7 +54,7 @@ Zero uses an alternative set of parameters taken from the equihash algorithm, th
 
 ||DECENTRALISED PAYMENTS||
 ----------------------------
-Zero is founded on a decentralized platform, there are no borders. Zero facilitates lightning fast and anonymous money transfers worldwide, without any restrictions or interference from 3rd parties.
+Zero is founded on a decentralised platform, there are no borders. Zero facilitates lightning fast and anonymous money transfers worldwide, without any restrictions or interference from 3rd parties.
 
 
 ||INFLATION||
