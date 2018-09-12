@@ -20,6 +20,8 @@ Our main focus as a team and community is to remain as transparent as we can pos
 This software is the [ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2) node. It downloads and stores the entire history of ZERO's transactions, about 1.2GB at this point.
 Depending on the speed of your computer and network connection, the synchronization process could take several hours.
 
+------------------------------------------
+
 ![alt text](https://github.com/zerocurrencycoin/Zero/blob/master/art/zero-logo-shade-black_256x256.png)
 
 
