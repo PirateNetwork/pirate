@@ -96,7 +96,8 @@ See important security warnings on the
 
 Deprecation Policy
 ------------------
-The disabledeprecation flag has also been removed. Going forward nodes will automatically shut down and must be upgraded upon reaching the deprecation block height which will occur about every 13 weeks.
+Disabledeprecation flag has been removed. Old nodes will automatically be shut down and must be upgraded upon reaching the deprecation block height, which will occur about every 13 weeks.
+
 
 Building
 --------
