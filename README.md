@@ -4,7 +4,7 @@ ZERO 1.0.14-2 - Uummannaq:1.0.14
 What is ZERO?
 --------------
 
-[ZERO](https://github.com/zerocurrencycoin/zero) is a fork of Zcash.
+[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2) is a fork of Zcash.
 Zcash is a fork of Bitcoin that adds shielded transaction via zk-SNARKs.
 
 This software is the ZERO node. It downloads and stores the entire history of ZERO transactions, about 1GB at this point.
