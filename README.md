@@ -1,16 +1,68 @@
-ZERO 1.0.14-2 - Uummannaq:1.0.14
+[ZERO](https://zerocurrency.io) - Uummannaq:1.0.14
 =======
+
+FAST-DECENTRALIZED-ANONYMOUS-SECURE-ASIC RESISTANT
+--------------------------------------------------------
 
 What is ZERO?
 --------------
 
-[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2) is a fork of Zcash.
-Zcash is a fork of Bitcoin that adds shielded transaction via zk-SNARKs.
+[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2) is a revolutionary cryptocurrency and transaction platform based on Zcash.
 
-This software is the ZERO node. It downloads and stores the entire history of ZERO transactions, about 1GB at this point.
+[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2) combines Bitcoin’s security with Zcash’s anonymity and privacy.
+
+[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2) stands out from the competition as a fully working product that has already
+implemented a set of special features not found in any other cryptocurrency.
+
+Our main focus as a team and community is to remain as transparent as we can possibly be and to maintain an interactive relationship with everyone involved. We are fully open about the project, listening to all suggestions from investors, miners and supporters. 
+
+This software is the [ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2) node. It downloads and stores the entire history of ZERO's transactions, about 1.2GB at this point.
 Depending on the speed of your computer and network connection, the synchronization process could take several hours.
 
-FAST-DECENTRALIZED-ANONYMOUS-SECURE-ASIC RESISTANT
+ZERO CORE FEATURES
+-------------------
+
+||ZERO COST||
+--------------
+Zero’s transaction fees are 0.0001 ZER, when the networks capacity is high. When Zero’s network is below full capacity the fee reduces to 0.
+
+
+||NO PREMINE||
+--------------
+0% advantage for early adopters. No Pre-Mined Zero, therefore people that buy or mine today have no disadvantages.
+
+
+||SECURE - ZERO BACKDOORS||
+----------------------------
+Zero implements zk-SNARKs, which is concluded to be a state of the art privacy technology, according to a consensus of a significant number of nonbiased parties.
+
+
+||ASIC RESISTANT||
+----------------------------
+Zero is ASIC resistant due to increased difficulty settings in its equihash algorithm, keeping specialized hardware (ASICS) out of the way.
+
+
+||SHIELDED TRANSACTIONS||
+----------------------------
+Zero has a feature called shielded transactions that ensures full anonymity when sending funds.
+
+
+||VERY HIGH MINING PROFITABILITY||
+------------------------------------------
+Zero uses an alternative set of parameters taken from the equihash algorithm, this needs atleast 4GB/8GB of RAM. Zero is one of the most profitable cryptocurrency’s to mine.
+
+
+||DECENTRALISED PAYMENTS||
+----------------------------
+Zero is founded on a decentralized platform, there are no borders. Zero facilitates lightning fast and anonymous money transfers worldwide, without any restrictions or interference from 3rd parties.
+
+
+||INFLATION||
+--------------
+Zero has a small inflation that degrades over time. With a stable supply of 7200 Zero per day.
+
+
+
 
 Announcements
 -----------------
