@@ -1,8 +1,8 @@
 [ZERO](https://zerocurrency.io) - [Uummannaq:1.0.14](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2)
 =======
 
-FAST-DECENTRALIZED-ANONYMOUS-SECURE-ASIC RESISTANT - Launch date: 2017-02-19
---------------------------------------------------------
+||FAST|| ||DECENTRALIZED|| ||ANONYMOUS|| ||SECURE|| ||ASIC RESISTANT||  - LAUNCE DATE: 2017-02-19
+----------------------------------------------------------------------------------------------------------------
 
 What is ZERO?
 --------------
