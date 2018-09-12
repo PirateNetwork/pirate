@@ -71,10 +71,10 @@ Zero has a small inflation that degrades over time. With a stable supply of 7200
 
 ------------------------------------------
 
+![alt text](https://github.com/zerocurrencycoin/Zero/blob/master/art/tech%20improv%20zero.jfif)
+
 
 ![alt text](https://github.com/zerocurrencycoin/Zero/blob/master/art/algo%20zer%20improv.jfif)
-
-![alt text](https://github.com/zerocurrencycoin/Zero/blob/master/art/tech%20improv%20zero.jfif)
 
 ------------------------------------------
 
