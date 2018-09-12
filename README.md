@@ -65,6 +65,8 @@ Zero is founded on a decentralised platform, there are no borders. Zero facilita
 --------------
 Zero has a small inflation that degrades over time. With a stable supply of 7200 Zero per day.
 
+------------------------------------------
+
 
 ![alt text](https://github.com/zerocurrencycoin/Zero/blob/master/art/algo%20zer%20improv.jfif)
 
