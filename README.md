@@ -3,6 +3,8 @@
 
 ![alt text](https://github.com/zerocurrencycoin/Zero/blob/master/art/zero-logo-shade-black.png)
 
+![alt text](https://github.com/zerocurrencycoin/Zero/blob/master/art/ZERO%20MAIN%20BANNER.jpg)
+
 ||FAST|| ||DECENTRALISED|| ||ANONYMOUS|| ||SECURE|| ||ASIC RESISTANT||  - LAUNCE DATE: 2017-02-19
 ----------------------------------------------------------------------------------------------------------------
 
