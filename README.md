@@ -79,6 +79,10 @@ Development Fund Total - 0.81 ZER / Block
 Total ZER per day = 583.2
 
 
+White Paper - Extended 
+-----------------------
+
+http://docdro.id/n9j4sJr
 
 
 Announcements
