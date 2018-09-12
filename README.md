@@ -171,9 +171,15 @@ For license information see the file [COPYING](COPYING).
 Development Fund Breakdown (Per Block)
 ------------------------------------------
 Development Fund Details 0.81 ZER / Block (~7.5%)
+
 0.324 ZER/Block (40%) Exchange Listing Funding
+
 0.243 ZER/Block (30%) Marketing Funding
+
 0.162 ZER/Block (20%) Dedicated to Radical New Capabilities
+
 0.081 ZER/Block (10%) Dedicated to Maintaining & Updating Blockchain.
+
 Development Fund Total - 0.81 ZER / Block
+
 Total ZER per day = 583.2
