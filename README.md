@@ -23,6 +23,8 @@ Depending on the speed of your computer and network connection, the synchronizat
 ZERO CORE FEATURES
 -------------------
 
+![alt text](https://github.com/zerocurrencycoin/Zero/blob/master/art/zero-logo-shade-black_256x256.png)
+
 ||ZERO COST||
 --------------
 Zero’s transaction fees are 0.0001 ZER, when the networks capacity is high. When Zero’s network is below full capacity the fee reduces to 0.
