@@ -1,7 +1,7 @@
 [ZERO](https://zerocurrency.io) - Uummannaq:1.0.14
 =======
 
-FAST-DECENTRALIZED-ANONYMOUS-SECURE-ASIC RESISTANT
+FAST-DECENTRALIZED-ANONYMOUS-SECURE-ASIC RESISTANT - Launch date: 2017-02-19
 --------------------------------------------------------
 
 What is ZERO?
@@ -83,7 +83,6 @@ Total ZER per day = 583.2
 
 Announcements
 -----------------
-Launch date: 2017-02-19
 https://bitcointalk.org/index.php?topic=1796036.0
 
 https://bitcointalk.org/index.php?topic=3310714.0
