@@ -1,7 +1,7 @@
 [ZERO](https://zerocurrency.io) - [Uummannaq:1.0.14](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2)
 =======
 
-![alt text](https://github.com/zerocurrencycoin/Zero/blob/master/art/zero-logo-shade-black.png)
+![alt text](https://github.com/zerocurrencycoin/Zero/blob/master/art/zero-logo-shade-black_256x256.png)
 
 ![alt text](https://github.com/zerocurrencycoin/Zero/blob/master/art/ZERO%20MAIN%20BANNER.jpg)
 
