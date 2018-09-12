@@ -93,14 +93,10 @@ Security Warnings
 See important security warnings on the
 [Security Information page](https://z.cash/support/security/).
 
-**ZERO is unfinished and highly experimental.** Use at your own risk.
 
 Deprecation Policy
 ------------------
-This release is considered deprecated 13 weeks after the release day. There
-is an automatic deprecation shutdown feature which will halt the node some
-time after this 13 week time period. The automatic feature is based on block
-height and cannot be disabled.
+The disabledeprecation flag has also been removed. Going forward nodes will automatically shut down and must be upgraded upon reaching the deprecation block height which will occur about every 13 weeks.
 
 Building
 --------
