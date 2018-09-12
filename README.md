@@ -72,7 +72,7 @@ Zero has a small inflation that degrades over time. With a stable supply of 7200
 
 ![alt text](https://github.com/zerocurrencycoin/Zero/blob/master/art/tech%20improv%20zero.jfif)
 
-
+------------------------------------------
 
 
 Development Fund Breakdown (Per Block)
