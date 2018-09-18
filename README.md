@@ -6,7 +6,7 @@
 
 GENESIS BLOCK - 19th Feb 2017 11:26:40 - 068cbb5db6bc11be5b93479ea4df41fa7e012e92ca8603c315f9b1a2202205c6
 
-Download the latest version here - [ZERO - Latest Version](https://zerocurrency.io) - [Uummannaq:1.0.14](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2)
+Download the latest version here - [ZERO - Latest Version- Uummannaq:1.0.14](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2)
 
 ------------------------------------------
 
