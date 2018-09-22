@@ -37,7 +37,7 @@ class WalletTest (BitcoinTestFramework):
         assert_equal(walletinfo['balance'], 0)
 
         self.sync_all()
-        self.nodes[1].generate(101)
+        self.nodes[1].generate(721)
         self.sync_all()
 
         assert_equal(self.nodes[0].getbalance(), 40)
@@ -47,7 +47,7 @@ class WalletTest (BitcoinTestFramework):
         assert_equal(self.nodes[1].getbalance("*"), 10)
         assert_equal(self.nodes[2].getbalance("*"), 0)
 
-        # Send 21 BTC from 0 to 2 using sendtoaddress call.
+        # Send 21 ZERO from 0 to 2 using sendtoaddress call.
         # Second transaction will be child of first, and will require a fee
         self.nodes[0].sendtoaddress(self.nodes[2].getnewaddress(), 11)
         self.nodes[0].sendtoaddress(self.nodes[2].getnewaddress(), 10)
@@ -61,7 +61,7 @@ class WalletTest (BitcoinTestFramework):
         self.sync_all()
 
         # Have node1 generate 100 blocks (so node0 can recover the fee)
-        self.nodes[1].generate(100)
+        self.nodes[1].generate(720)
         self.sync_all()
 
         # node0 should end up with 50 btc in block rewards plus fees, but
@@ -80,10 +80,10 @@ class WalletTest (BitcoinTestFramework):
         # Check 'generated' field of listunspent
         # Node 0: has one coinbase utxo and two regular utxos
         assert_equal(sum(int(uxto["generated"] is True) for uxto in node0utxos), 1)
-        # Node 1: has 101 coinbase utxos and no regular utxos
+        # Node 1: has 721 coinbase utxos and no regular utxos
         node1utxos = self.nodes[1].listunspent(1)
-        assert_equal(len(node1utxos), 101)
-        assert_equal(sum(int(uxto["generated"] is True) for uxto in node1utxos), 101)
+        assert_equal(len(node1utxos), 721)
+        assert_equal(sum(int(uxto["generated"] is True) for uxto in node1utxos), 721)
         # Node 2: has no coinbase utxos and two regular utxos
         node2utxos = self.nodes[2].listunspent(1)
         assert_equal(len(node2utxos), 2)
@@ -114,7 +114,7 @@ class WalletTest (BitcoinTestFramework):
         assert_equal(self.nodes[0].getbalance("*"), 0)
         assert_equal(self.nodes[2].getbalance("*"), 50)
 
-        # Send 10 BTC normal
+        # Send 10 ZERO normal
         address = self.nodes[0].getnewaddress("")
         self.nodes[2].settxfee(Decimal('0.001'))
         self.nodes[2].sendtoaddress(address, 10, "", "", False)

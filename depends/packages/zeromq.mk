@@ -1,8 +1,8 @@
 package=zeromq
-$(package)_version=4.2.1
+$(package)_version=4.2.5
 $(package)_download_path=https://github.com/zeromq/libzmq/releases/download/v$($(package)_version)/
 $(package)_file_name=$(package)-$($(package)_version).tar.gz
-$(package)_sha256_hash=27d1e82a099228ee85a7ddb2260f40830212402c605a4a10b5e5498a7e0e9d03
+$(package)_sha256_hash=cc9090ba35713d59bb2f7d7965f877036c49c5558ea0c290b0dcc6f2a17e489f
 
 define $(package)_set_vars
   $(package)_config_opts=--without-documentation --disable-shared --disable-curve

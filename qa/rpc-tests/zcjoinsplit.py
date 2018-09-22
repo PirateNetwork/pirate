@@ -14,6 +14,7 @@ class JoinSplitTest(BitcoinTestFramework):
         self.nodes = []
         self.is_network_split = False
         self.nodes.append(start_node(0, self.options.tmpdir))
+        self.nodes[0].generate(724)
 
     def run_test(self):
         zckeypair = self.nodes[0].zcrawkeygen()

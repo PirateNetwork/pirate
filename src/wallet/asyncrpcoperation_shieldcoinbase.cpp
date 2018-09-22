@@ -338,8 +338,13 @@ UniValue AsyncRPCOperation_shieldcoinbase::perform_joinsplit(ShieldCoinbaseJSInf
             {info.vjsin[0], info.vjsin[1]};
     boost::array<libzcash::JSOutput, ZC_NUM_JS_OUTPUTS> outputs
             {info.vjsout[0], info.vjsout[1]};
+    #ifdef __APPLE__
+    boost::array<uint64_t, ZC_NUM_JS_INPUTS> inputMap;
+    boost::array<uint64_t, ZC_NUM_JS_OUTPUTS> outputMap;
+    #else
     boost::array<size_t, ZC_NUM_JS_INPUTS> inputMap;
     boost::array<size_t, ZC_NUM_JS_OUTPUTS> outputMap;
+    #endif
 
     uint256 esk; // payment disclosure - secret
 

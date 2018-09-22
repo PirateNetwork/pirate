@@ -677,6 +677,11 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
         entry.push_back(Pair("sigops", pblocktemplate->vTxSigOps[index_in_template]));
 
         if (tx.IsCoinBase()) {
+            // Show founders' reward if it is required
+            if (pblock->vtx[0].vout.size() > 1) {
+                // Correct this if GetBlockTemplate changes the order
+                entry.push_back(Pair("foundersreward", (int64_t)tx.vout[1].nValue));
+            }
             entry.push_back(Pair("required", true));
             txCoinbase = entry;
         } else {
@@ -873,7 +878,7 @@ UniValue getblocksubsidy(const UniValue& params, bool fHelp)
     if (fHelp || params.size() > 1)
         throw runtime_error(
             "getblocksubsidy height\n"
-            "\nReturns block reward.\n" // founders key is left here for compatibility only
+            "\nReturns block subsidy reward, taking into account the mining slow start and the founders reward, of block at index provided.\n"
             "\nArguments:\n"
             "1. height         (numeric, optional) The block height.  If not provided, defaults to the current height of the chain.\n"
             "\nResult:\n"
@@ -887,12 +892,16 @@ UniValue getblocksubsidy(const UniValue& params, bool fHelp)
         );
 
     LOCK(cs_main);
-    int nHeight = (params.size()==1) ? params[0].get_int() : chainActive.Height();
+    int nHeight = (params.size()==1) ? params[0].get_int() : chainActive.Height() + 1;
     if (nHeight < 0)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Block height out of range");
 
     CAmount nReward = GetBlockSubsidy(nHeight, Params().GetConsensus());
     CAmount nFoundersReward = 0;
+    if ((nHeight >= Params().GetConsensus().nFeeStartBlockHeight ) && (nHeight <= Params().GetConsensus().GetLastFoundersRewardBlockHeight())) {
+        nFoundersReward = nReward*0.075;
+        nReward -= nFoundersReward;
+    }
     UniValue result(UniValue::VOBJ);
     result.push_back(Pair("miner", ValueFromAmount(nReward)));
     result.push_back(Pair("founders", ValueFromAmount(nFoundersReward)));

@@ -55,7 +55,7 @@ class ZMQTest(BitcoinTestFramework):
 
         assert_equal(genhashes[0], blkhash) #blockhash from generate must be equal to the hash received over zmq
 
-        n = 10
+        n = 721
         genhashes = self.nodes[1].generate(n)
         self.sync_all()
 

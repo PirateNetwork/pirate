@@ -322,9 +322,9 @@ TEST(joinsplit, full_api_test)
         increment_note_witnesses(note2.cm(), witnesses, tree);
         Note note3(addr.a_pk, 2100000000000001, random_uint256(), random_uint256());
         increment_note_witnesses(note3.cm(), witnesses, tree);
-        Note note4(addr.a_pk, 1900000000000000, random_uint256(), random_uint256());
+        Note note4(addr.a_pk, 1600000000000000, random_uint256(), random_uint256());
         increment_note_witnesses(note4.cm(), witnesses, tree);
-        Note note5(addr.a_pk, 1900000000000000, random_uint256(), random_uint256());
+        Note note5(addr.a_pk, 1600000000000000, random_uint256(), random_uint256());
         increment_note_witnesses(note5.cm(), witnesses, tree);
 
         // Should work
@@ -483,8 +483,8 @@ TEST(joinsplit, full_api_test)
             JSInput()
         },
         {
-            JSOutput(addr, 1900000000000000),
-            JSOutput(addr, 1900000000000000)
+            JSOutput(addr, 1600000000000000),
+            JSOutput(addr, 1600000000000000)
         },
         0,
         0,
@@ -498,7 +498,7 @@ TEST(joinsplit, full_api_test)
             JSInput()
         },
         {
-            JSOutput(addr, 1900000000000000),
+            JSOutput(addr, 1600000000000000),
             JSOutput()
         },
         0,

@@ -14,22 +14,86 @@ BOOST_FIXTURE_TEST_SUITE(main_tests, TestingSetup)
 
 static void TestBlockSubsidyHalvings(const Consensus::Params& consensusParams)
 {
-    BOOST_CHECK_EQUAL(0, 0);
+    int maxHalvings = 64;
+    CAmount nInitialSubsidy = 10.8 * COIN;
+
+    CAmount nPreviousSubsidy = nInitialSubsidy * 2; // for height == 0
+    BOOST_CHECK_EQUAL(nPreviousSubsidy, nInitialSubsidy * 2);
+    for (int nHalvings = 0; nHalvings < maxHalvings; nHalvings++) {
+        int nHeight;
+        if (nHalvings > 0) // Check subsidy right at halvings
+            nHeight = nHalvings * consensusParams.nSubsidyHalvingInterval ;
+        else // Check subsidy at 0
+            nHeight = 0;
+        CAmount nSubsidy = GetBlockSubsidy(nHeight, consensusParams);
+        BOOST_CHECK(nSubsidy <= nInitialSubsidy);
+        BOOST_CHECK_EQUAL(nSubsidy, nPreviousSubsidy / 2);
+        nPreviousSubsidy = nSubsidy;
+    }
+    BOOST_CHECK_EQUAL(GetBlockSubsidy((maxHalvings * consensusParams.nSubsidyHalvingInterval), consensusParams), 0);
 }
 
-static void TestBlockSubsidyHalvings(int nSubsidySlowStartInterval, int nSubsidyHalvingInterval)
+static void TestBlockSubsidyHalvings(int nSubsidyHalvingInterval)
 {
-    BOOST_CHECK_EQUAL(0, 0);
+    Consensus::Params consensusParams;
+    //consensusParams.nSubsidySlowStartInterval = nSubsidySlowStartInterval;
+    //consensusParams.nSubsidyHalvingInterval = nSubsidyHalvingInterval;
+    TestBlockSubsidyHalvings(consensusParams);
 }
 
 BOOST_AUTO_TEST_CASE(block_subsidy_test)
 {
-    BOOST_CHECK_EQUAL(0, 0);
+    TestBlockSubsidyHalvings(Params(CBaseChainParams::MAIN).GetConsensus()); // As in main
+    TestBlockSubsidyHalvings(150); // As in regtest
+    TestBlockSubsidyHalvings(1000); // Just another interval
 }
 
 BOOST_AUTO_TEST_CASE(subsidy_limit_test)
 {
-    BOOST_CHECK_EQUAL(0, 0);
+    const Consensus::Params& consensusParams = Params(CBaseChainParams::MAIN).GetConsensus();
+    CAmount nSum = 0;
+    // Mining slow start
+    for (int nHeight = 0; nHeight < consensusParams.nFeeStartBlockHeight; nHeight ++) {
+        CAmount nSubsidy = GetBlockSubsidy(nHeight, consensusParams);
+        if (nHeight<consensusParams.nFeeStartBlockHeight) {
+          BOOST_CHECK(nSubsidy <= 10 * COIN);
+        } else {
+          BOOST_CHECK(nSubsidy <= 10.8 * COIN);
+        }
+        nSum += nSubsidy;
+        BOOST_CHECK(MoneyRange(nSum));
+    }
+    BOOST_CHECK_EQUAL(nSum, 41000000000000ULL);
+    // Remainder of first period
+    for (int nHeight = consensusParams.nFeeStartBlockHeight; nHeight < consensusParams.nSubsidyHalvingInterval; nHeight ++) {
+        CAmount nSubsidy = GetBlockSubsidy(nHeight, consensusParams);
+        if (nHeight<consensusParams.nFeeStartBlockHeight) {
+          BOOST_CHECK(nSubsidy <= 10 * COIN);
+        } else {
+          BOOST_CHECK(nSubsidy <= 10.8 * COIN);
+        }
+        nSum += nSubsidy;
+        BOOST_CHECK(MoneyRange(nSum));
+    }
+    BOOST_CHECK_EQUAL(nSum, 831200000000000ULL);
+    // Regular mining
+    for (int nHeight = consensusParams.nSubsidyHalvingInterval; nHeight < 48800000; nHeight += 1000) {
+        CAmount nSubsidy = GetBlockSubsidy(nHeight, consensusParams);
+        if (nHeight<consensusParams.nFeeStartBlockHeight) {
+          BOOST_CHECK(nSubsidy <= 10 * COIN);
+        } else {
+          BOOST_CHECK(nSubsidy <= 10.8 * COIN);
+        }
+        nSum += nSubsidy * 1000;
+        BOOST_CHECK(MoneyRange(nSum));
+    }
+    // Changing the block interval from 10 to 2.5 minutes causes truncation
+    // effects to occur earlier (from the 9th halving interval instead of the
+    // 11th), decreasing the total monetary supply by 0.0693 ZEC. If the
+    // transaction output field is widened, this discrepancy will become smaller
+    // or disappear entirely.
+    //BOOST_CHECK_EQUAL(nSum, 2099999997690000ULL);
+    BOOST_CHECK_EQUAL(nSum, 1695199989599990ULL);
 }
 
 bool ReturnFalse() { return false; }

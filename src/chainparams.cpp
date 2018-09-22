@@ -38,6 +38,8 @@ public:
         strNetworkID = "main";
         strCurrencyUnits = "ZER";
         consensus.fCoinbaseMustBeProtected = true;
+        consensus.nFeeStartBlockHeight = 412300;
+        consensus.nSubsidyHalvingInterval = 800000;
         consensus.nMajorityEnforceBlockUpgrade = 750;
         consensus.nMajorityRejectBlockOutdated = 950;
         consensus.nMajorityWindow = 4000;
@@ -105,6 +107,11 @@ public:
 
         vFixedSeeds.clear();
         vSeeds.clear();
+        vSeeds.push_back(CDNSSeedData("CryptoForge", "zeroseed.cryptoforge.cc")); // @cryptoforge
+        vSeeds.push_back(CDNSSeedData("prophetalgorithms", "zerocurrency.prophetalgorithms.com")); // @MoodyDreamer
+        vSeeds.push_back(CDNSSeedData("cryptonode1", "zseed1.cryptonode.cloud")); // @Kryptostuff
+        vSeeds.push_back(CDNSSeedData("cryptonode2", "zseed2.cryptonode.cloud")); // @bKRyptostuff
+        vSeeds.push_back(CDNSSeedData("zerocurrency", "insight.zerocurrency.io")); // @R3DEY3
 
         // guarantees the first 2 characters, when base58 encoded, are "t1"
         base58Prefixes[PUBKEY_ADDRESS]     = {0x1C,0xB8};
@@ -138,6 +145,21 @@ public:
             0
         };
 
+        // Founders reward script expects a vector of 2-of-3 multisig addresses
+        vFoundersRewardAddress = {
+          "t3hmg6WApjqVFw9oPWTDy4JLEqXcUWthg5v", /* main-index: 0*/
+          "t3hrh5M7eaGA5zXCitPXz2pbe146GkVPWHs", /* main-index: 1*/
+          "t3aWmHqBGS7watoKQLa7uykeTaYHoYqM361", /* main-index: 2*/
+          "t3hsi89hPsZzmnbs3pny6cfAxMxV5TJLErj", /* main-index: 3*/
+          "t3TdGxPVUdMXd6qDrDCEuJETLadZ9Ki3s9r", /* main-index: 4*/
+          "t3cb5ZjKmbGbqDaYk97Auam9kXXikGQBmyY", /* main-index: 5*/
+          "t3V1YovGUPW9WSBoAHS48FDdUfUTo6LDpZR", /* main-index: 6*/
+          "t3KB9n28MVg31oo856t1tQGfJuYq8usTvSi", /* main-index: 7*/
+          "t3dqSV4YGj5V3WjQhqFGrKTMUf9Tgc6xnJM", /* main-index: 8*/
+          "t3aJkYT1i6tyytq8J6khPaDNtgZsBSXgfBf", /* main-index: 9*/
+
+        };
+        assert(vFoundersRewardAddress.size() <= consensus.GetLastFoundersRewardBlockHeight());
     }
 };
 static CMainParams mainParams;
@@ -150,6 +172,8 @@ public:
     CTestNetParams() {
         strNetworkID = "test";
         strCurrencyUnits = "ZET";
+        consensus.nFeeStartBlockHeight = 2800;
+        consensus.nSubsidyHalvingInterval = 3000;
         consensus.nMajorityEnforceBlockUpgrade = 51;
         consensus.nMajorityRejectBlockOutdated = 75;
         consensus.nMajorityWindow = 400;
@@ -164,7 +188,7 @@ public:
         pchMessageStart[2] = 0x53; // R+1
         pchMessageStart[3] = 0x50; // O+1
         vAlertPubKey = ParseHex("73B0");
-        nDefaultPort = 23812;
+        nDefaultPort = 23832;
         nMaxTipAge = 1000000000; // accept all - 0x7fffffff; 24 * 60 * 60;
 //        nMinerThreads = 0;
 
@@ -175,23 +199,24 @@ public:
 
 
         //! Modify the testnet genesis block so the timestamp is valid for a later start.
-//        genesis.nTime = 1487500000;
+        //genesis.nTime = 1487500000;
         genesis.nTime = 1531037937;
         genesis.nBits    = 0x200A1FA<<4;
         genesis.nNonce   = uint256S("0000000000000000000000000000000000000000000000000000000000000005"); // 192,7
         genesis.nSolution = ParseHex("003da4d81cb7cb368659ac0b42dcd585b2b4fd8522c928df1d6f0ee2cf0c7369152ddd60ef4b1f823797936ef8390dfacc41189e91f89b05c9ef262fc0403593dbceb6cff9a075174f730021efbac9576bd66da83faad58823270ebe561f30d9efdd4b9804021dda83320519522a57b670f46b8bb6fa50f52acbe9b8c80d517fbaac930cfb8fd7b39db20c6014bb41699e83a7faa1ca1872034c9208e68ac5d813c793f24aa5eee4d9b675ad05763135100bee8d40aa35375915d037e9d0d5dcee3336ba77c5ccf00182b1564d318bad31998ec007a8f49c658b56c5eb45ecd38d3d101d2801e91a17fd14b91636d1a6870e62ce970bd5b2d86827074aeaeac90a8c928f47ba136d836a8f3736bf9b6fdbf95f2ce372a99a19cc4077d5bb81055dfea6dfb662139a337cfe8d06dd80e25d8b2ea7f49c7a07f4c159175665018dbd68f581e7108ef5adcdc5331f2a1c227a546a1c232f94a2f88993fe71ab0a3d7d5008042ea7c07c514bc49a0366c41dda632379c7fbef13ae3cec6706567fff13147ec866c16d42cb1ef6cd8fcc38a7");
         consensus.hashGenesisBlock = genesis.GetHash();
 
-LogPrintf("TESTNET\n");
-LogPrintf("consensus.hashGenesisBlock=%s\n", consensus.hashGenesisBlock.GetHex());
-LogPrintf("genesis.hashMerkleRoot=%s\n", genesis.hashMerkleRoot.GetHex());
-LogPrintf("genesis.nTime=%is\n", genesis.nTime);
-//   Might be GetDec orsomething
+        LogPrintf("TESTNET\n");
+        LogPrintf("consensus.hashGenesisBlock=%s\n", consensus.hashGenesisBlock.GetHex());
+        LogPrintf("genesis.hashMerkleRoot=%s\n", genesis.hashMerkleRoot.GetHex());
+        LogPrintf("genesis.nTime=%is\n", genesis.nTime);
+        //   Might be GetDec orsomething
 
 
         assert(consensus.hashGenesisBlock == uint256S("07d3146fbe5aff11eb071207b2fa90574907154944ea0e94be8433b2c5d16ae7"));
         vFixedSeeds.clear();
         vSeeds.clear();
+        vSeeds.push_back(CDNSSeedData("cryptoforge", "testseed.cryptoforge.cc")); // CryptoForge
 
         // guarantees the first 2 characters, when base58 encoded, are "tm"
         base58Prefixes[PUBKEY_ADDRESS]     = {0x1D,0x25};
@@ -224,7 +249,22 @@ LogPrintf("genesis.nTime=%is\n", genesis.nTime);
             0,       // * total number of transactions between genesis and last checkpoint
                      //   (the tx=... number in the SetBestChain debug.log lines)
             0        //   total number of tx / (checkpoint block height / (24 * 24))
+          };
+
+        // Founders reward script expects a vector of 2-of-3 multisig addresses
+        vFoundersRewardAddress = {
+          "t2BEnZwurNtPyhyWdZ82zTdS93rKyoUpgMJ",
+          "t2AwNRubry4rQrEvHwAdpYve4Gz5cSmjGXA",
+          "t2FM2EZqQZANA18rbhBGLWbxKcpGk9soAvS",
+          "t2TBZfnXRCmFPc3nSrQcNtnR6AGWNzF9hzz",
+          "t2QMyS1C3jXJ5hcR7zJTPSbWFvMWQEyjVTE",
+          "t2SxA3E34aZJDDxnUxC2gZXBVrXWuoH5v7W",
+          "t2FhR8STLvuKTUPgM586T1LMUG4JAHV2XSt",
+          "t2NScRwr3FHPN8fNSgMKn8ngZG2kgfC8JNt",
+          "t2LYZj3LiCDaCGUXQNXH1ZFPmHiC46wB9se",
+          "t28azskSALVTtgbW63CqDwzXgtWQ56GVVXa"
         };
+        assert(vFoundersRewardAddress.size() <= consensus.GetLastFoundersRewardBlockHeight());
     }
 };
 static CTestNetParams testNetParams;
@@ -238,6 +278,8 @@ public:
         strNetworkID = "regtest";
         strCurrencyUnits = "REG";
         consensus.fCoinbaseMustBeProtected = false;
+        consensus.nFeeStartBlockHeight = 5000;
+        consensus.nSubsidyHalvingInterval = 10000;
         consensus.nMajorityEnforceBlockUpgrade = 750;
         consensus.nMajorityRejectBlockOutdated = 950;
         consensus.nMajorityWindow = 1000;
@@ -260,7 +302,6 @@ public:
         genesis.nSolution = ParseHex("09354815a3ad96efa233c6edbff6d3a245490c12d71971cf2969791411cd11132fcec3e8");
         consensus.hashGenesisBlock = genesis.GetHash();
         nDefaultPort = 23802;
-
         assert(consensus.hashGenesisBlock == uint256S("0275863eebea76f824674494b7f6a3770ac46c732aaa62b07328feaa9d79798b"));
         nPruneAfterHeight = 1000;
 
@@ -281,6 +322,9 @@ public:
             0
         };
 
+        // Founders reward script expects a vector of 2-of-3 multisig addresses
+        vFoundersRewardAddress = { "t2FwcEhFdNXuFMv1tcYwaBJtYVtMj8b1uTg" };
+        assert(vFoundersRewardAddress.size() <= consensus.GetLastFoundersRewardBlockHeight());
     }
 };
 static CRegTestParams regTestParams;
@@ -326,3 +370,32 @@ bool SelectParamsFromCommandLine()
     return true;
 }
 
+
+// Block height must be >0 and <=last founders reward block height
+// Index variable i ranges from 0 - (vFoundersRewardAddress.size()-1)
+std::string CChainParams::GetFoundersRewardAddressAtHeight(int nHeight) const {
+    int maxHeight = consensus.GetLastFoundersRewardBlockHeight();
+    assert(nHeight >= consensus.nFeeStartBlockHeight && nHeight <= maxHeight);
+
+    size_t addressChangeInterval = (maxHeight + vFoundersRewardAddress.size()) / vFoundersRewardAddress.size();
+    size_t i = nHeight / addressChangeInterval;
+    return vFoundersRewardAddress[i];
+}
+
+// Block height must be >0 and <=last founders reward block height
+// The founders reward address is expected to be a multisig (P2SH) address
+CScript CChainParams::GetFoundersRewardScriptAtHeight(int nHeight) const {
+    assert(nHeight >= consensus.nFeeStartBlockHeight && nHeight <= consensus.GetLastFoundersRewardBlockHeight());
+
+    CBitcoinAddress address(GetFoundersRewardAddressAtHeight(nHeight).c_str());
+    assert(address.IsValid());
+    assert(address.IsScript());
+    CScriptID scriptID = get<CScriptID>(address.Get()); // Get() returns a boost variant
+    CScript script = CScript() << OP_HASH160 << ToByteVector(scriptID) << OP_EQUAL;
+    return script;
+}
+
+std::string CChainParams::GetFoundersRewardAddressAtIndex(int i) const {
+    assert(i >= 0 && i < vFoundersRewardAddress.size());
+    return vFoundersRewardAddress[i];
+}
