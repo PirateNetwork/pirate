@@ -10,7 +10,7 @@ Download the latest version here - [ZERO - Latest Version- Uummannaq:1.0.14](htt
 
 ------------------------------------------
 
-What is ZERO?
+❓ What is ZERO?
 --------------
 
 [ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2) is a revolutionary cryptocurrency and transaction platform based on Zcash.
@@ -30,7 +30,7 @@ Depending on the speed of your computer and network connection, the synchronizat
 ![alt text](https://github.com/zerocurrencycoin/Zero/blob/master/art/zero-logo-shade-black_256x256.png)
 
 
-ZERO CORE FEATURES
+💫 ZERO CORE FEATURES
 -------------------
 
 ||ZERO COST||
@@ -82,7 +82,7 @@ Zero has a small inflation that degrades over time. With a stable supply of 7200
 ------------------------------------------
 
 
-Development Fund Breakdown (Per Block)
+🔢 Development Fund Breakdown (Per Block)
 ------------------------------------------
 Development Fund Details 0.81 ZER / Block (~7.5%)
 
@@ -99,31 +99,31 @@ Development Fund Total - 0.81 ZER / Block
 Total ZER per day = 583.2
 
 
-White Paper - Extended 
+📄 White Paper - Extended 
 -----------------------
 
 http://docdro.id/n9j4sJr
 
 
-Announcements
+📣 Announcements
 -----------------
 https://bitcointalk.org/index.php?topic=1796036.0
 
 https://bitcointalk.org/index.php?topic=3310714.0
 
 
-Security Warnings
+🔒 Security Warnings
 -----------------
 See important security warnings on the
 [Security Information page](https://z.cash/support/security/).
 
 
-Deprecation Policy
+📒 Deprecation Policy
 ------------------
 Disabledeprecation flag has been removed. Old nodes will automatically be shut down and must be upgraded upon reaching the deprecation block height, which will occur every 13 weeks.
 
 
-Building
+🔧 Building
 --------
 Currently only Linux build is officially supported.  8GB RAM is recommended.
 
@@ -201,6 +201,6 @@ Please backup your wallet often and keep it safe.
 
 The usage is currently the same as ZCash. For more information see the [ZCash User Guide](https://github.com/zcash/zcash/wiki/1.0-User-Guide#running-zcash).
 
-License
+📜 License
 -------
 For license information see the file [COPYING](COPYING).
