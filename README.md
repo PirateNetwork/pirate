@@ -192,7 +192,7 @@ A sample demonstrating a large number of command line options
 ./contrib/debian/examples/zero.conf
 ```
 
-Running & Using ZERO
+🔩 Running & Using ZERO
 --------------------
 After successfully building, the ZERO binaries are stored in `./src`. The two important binaries are `zcashd` and `zcash-cli`.
 
