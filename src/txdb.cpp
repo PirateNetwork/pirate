@@ -516,9 +516,15 @@ bool CBlockTreeDB::LoadBlockIndexGuts()
                 pindexNew->nNonce         = diskindex.nNonce;
                 pindexNew->nSolution      = diskindex.nSolution;
                 pindexNew->nStatus        = diskindex.nStatus;
+                pindexNew->nCachedBranchId = diskindex.nCachedBranchId;
                 pindexNew->nTx            = diskindex.nTx;
                 pindexNew->nSproutValue   = diskindex.nSproutValue;
 
+                // Consistency checks
+                auto header = pindexNew->GetBlockHeader();
+                if (header.GetHash() != pindexNew->GetBlockHash())
+                    return error("LoadBlockIndex(): block header inconsistency detected: on-disk = %s, in-memory = %s",
+                       diskindex.ToString(),  pindexNew->ToString());
                 if (!CheckProofOfWork(pindexNew->GetBlockHash(), pindexNew->nBits, Params().GetConsensus()))
                     return error("LoadBlockIndex(): CheckProofOfWork failed: %s", pindexNew->ToString());
 

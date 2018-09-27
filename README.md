@@ -1,6 +1,4 @@
 [ZERO](https://zerocurrency.io) - [Uummannaq:1.0.14](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2)
-=======
-![alt text](https://github.com/zerocurrencycoin/Zero/blob/master/art/ZERO%20MAIN%20BANNER.jpg)
 
 ||FAST|| ||DECENTRALISED|| ||ANONYMOUS|| ||SECURE|| ||ASIC RESISTANT||  - LAUNCE DATE: 2017-02-19
 
@@ -20,7 +18,7 @@ What is ZERO?
 [ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2) stands out from the competition as a fully working product that has already
 implemented a set of special features not found in any other cryptocurrency.
 
-Our main focus as a team and community is to remain as transparent as we can possibly be and to maintain an interactive relationship with everyone involved. We are fully open about the project, listening to all suggestions from investors, miners and supporters. 
+Our main focus as a team and community is to remain as transparent as we can possibly be and to maintain an interactive relationship with everyone involved. We are fully open about the project, listening to all suggestions from investors, miners and supporters.
 
 This software is the [ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2) node. It downloads and stores the entire history of ZERO's transactions, about 1.2GB at this point.
 Depending on the speed of your computer and network connection, the synchronization process could take several hours.
@@ -99,7 +97,7 @@ Development Fund Total - 0.81 ZER / Block
 Total ZER per day = 583.2
 
 
-White Paper - Extended 
+White Paper - Extended
 -----------------------
 
 http://docdro.id/n9j4sJr
