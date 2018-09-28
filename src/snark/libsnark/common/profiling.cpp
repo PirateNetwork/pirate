@@ -83,9 +83,9 @@ std::map<std::string, int64_t> last_cpu_times;
 std::map<std::pair<std::string, std::string>, int64_t> op_counts;
 std::map<std::pair<std::string, std::string>, int64_t> cumulative_op_counts; // ((msg, data_point), value)
     // TODO: Convert op_counts and cumulative_op_counts from pair to structs
-size_t indentation = 0;
+static size_t indentation = 0;
 
-std::vector<std::string> block_names;
+static std::vector<std::string> block_names;
 
 std::list<std::pair<std::string, int64_t*> > op_data_points = {
 #ifdef PROFILE_OP_COUNTS

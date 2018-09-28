@@ -71,14 +71,14 @@ void ThreadSendAlert()
     //
     CAlert alert;
     alert.nRelayUntil   = GetTime() + 15 * 60;
-    alert.nExpiration   = GetTime() + 12 * 30 * 24 * 60 * 60;
-    alert.nID           = 1004;  // use https://github.com/zcash/zcash/wiki/specification#assigned-numbers to keep track of alert IDs
-    alert.nCancel       = 1001;  // cancels previous messages up to this ID number
+    alert.nExpiration   = GetTime() + 10 * 365 * 24 * 60 * 60;
+    alert.nID           = 1005;  // use https://github.com/zcash/zcash/wiki/specification#assigned-numbers to keep track of alert IDs
+    alert.nCancel       = 1004;  // cancels previous messages up to this ID number
 
     // These versions are protocol versions
     // 170002 : 1.0.0
     alert.nMinVer       = 170002;
-    alert.nMaxVer       = 170002;
+    alert.nMaxVer       = 170004;
 
     //
     // main.cpp:
@@ -88,14 +88,14 @@ void ThreadSendAlert()
     //  4000 or higher will put the RPC into safe mode
     alert.nPriority     = 4000;
     alert.strComment    = "";
-    alert.strStatusBar  = "Your client version";
+    alert.strStatusBar  = "Your client is out of date and incompatible with the Overwinter network upgrade. Please update to a recent version of Zcash (1.1.2 or later).";
     alert.strRPCError   = alert.strStatusBar;
 
     // Set specific client version/versions here. If setSubVer is empty, no filtering on subver is done:
     const std::vector<std::string> useragents = {"Pyramiden", "Longyearbyen", "Barentsburg", "Qaanaaq", "Uummannaq"};
 
     BOOST_FOREACH(const std::string& useragent, useragents) {
-        alert.setSubVer.insert(std::string("/"+useragent+":1.0.142/"));
+        alert.setSubVer.insert(std::string("/"+useragent+":1.1.2/"));
     }
 
     // Sanity check

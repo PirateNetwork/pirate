@@ -1,7 +1,7 @@
 DIST_SUBDIRS = secp256k1 univalue
 
-AM_LDFLAGS = $(PTHREAD_CFLAGS) $(LIBTOOL_LDFLAGS) $(HARDENED_LDFLAGS)
-AM_CXXFLAGS = $(HARDENED_CXXFLAGS) $(ERROR_CXXFLAGS)
+AM_LDFLAGS = $(PTHREAD_CFLAGS) $(LIBTOOL_LDFLAGS) $(SAN_LDFLAGS) $(HARDENED_LDFLAGS)
+AM_CXXFLAGS = $(SAN_CXXFLAGS) $(HARDENED_CXXFLAGS) $(ERROR_CXXFLAGS)
 AM_CPPFLAGS = $(HARDENED_CPPFLAGS)
 
 if EMBEDDED_LEVELDB
@@ -51,6 +51,9 @@ LIBSNARK_CONFIG_FLAGS += MULTICORE=1
 endif
 LIBSNARK_OPTFLAGS =-O2
 LIBSNARK_OPTFLAGS +=-march=x86-64
+if TARGET_DARWIN
+LIBSNARK_CONFIG_FLAGS += PLATFORM=darwin
+endif
 
 $(LIBSNARK): $(wildcard snark/src/*)
 	$(AM_V_at) CXXFLAGS="$(LIBSNARK_CXXFLAGS)" $(MAKE) $(AM_MAKEFLAGS) -C snark/ install PREFIX=$(srcdir)/build DEPINST="$(LIBSNARK_DEPINST)" $(LIBSNARK_CONFIG_FLAGS) OPTFLAGS="$(LIBSNARK_OPTFLAGS)"
@@ -58,8 +61,8 @@ $(LIBSNARK): $(wildcard snark/src/*)
 libsnark-tests: $(wildcard snark/src/*)
 	$(AM_V_at) CXXFLAGS="$(LIBSNARK_CXXFLAGS)" $(MAKE) $(AM_MAKEFLAGS) -C snark/ check PREFIX=$(srcdir)/build DEPINST="$(LIBSNARK_DEPINST)" $(LIBSNARK_CONFIG_FLAGS) OPTFLAGS="$(LIBSNARK_OPTFLAGS)"
 
-$(LIBUNIVALUE): $(wildcard univalue/lib/*)
-	$(AM_V_at)$(MAKE) $(AM_MAKEFLAGS) -C univalue/
+$(LIBUNIVALUE): $(wildcard univalue/lib/*) $(wildcard univalue/include/*)
+	$(AM_V_at)$(MAKE) $(AM_MAKEFLAGS) -C $(@D) $(@F)
 
 # Make is not made aware of per-object dependencies to avoid limiting building parallelization
 # But to build the less dependent modules first, we manually select their order here:
@@ -128,6 +131,7 @@ BITCOIN_CORE_H = \
   asyncrpcoperation.h \
   asyncrpcqueue.h \
   base58.h \
+  bech32.h \
   bloom.h \
   chain.h \
   chainparams.h \
@@ -155,8 +159,9 @@ BITCOIN_CORE_H = \
   httpserver.h \
   init.h \
   key.h \
+  key_io.h \
   keystore.h \
-  leveldbwrapper.h \
+  dbwrapper.h \
   limitedmap.h \
   main.h \
   memusage.h \
@@ -171,6 +176,7 @@ BITCOIN_CORE_H = \
   paymentdisclosuredb.h \
   policy/fees.h \
   pow.h \
+  prevector.h \
   primitives/block.h \
   primitives/transaction.h \
   protocol.h \
@@ -248,7 +254,7 @@ libbitcoin_server_a_SOURCES = \
   httprpc.cpp \
   httpserver.cpp \
   init.cpp \
-  leveldbwrapper.cpp \
+  dbwrapper.cpp \
   main.cpp \
   merkleblock.cpp \
   metrics.cpp \
@@ -361,6 +367,7 @@ libbitcoin_common_a_SOURCES = \
   amount.cpp \
   arith_uint256.cpp \
   base58.cpp \
+  bech32.cpp \
   chainparams.cpp \
   coins.cpp \
   compressor.cpp \
@@ -369,6 +376,7 @@ libbitcoin_common_a_SOURCES = \
   core_write.cpp \
   hash.cpp \
   key.cpp \
+  key_io.cpp \
   keystore.cpp \
   netbase.cpp \
   primitives/block.cpp \
@@ -535,11 +543,11 @@ libzcash_a_SOURCES = \
 if HAVE_OPENMP
 libzcash_a_CPPFLAGS = -DMULTICORE -fopenmp
 endif
-libzcash_a_CPPFLAGS := $(libzcash_a_CPPFLAGS) -fPIC -DBINARY_OUTPUT -DCURVE_ALT_BN128 -DBOOST_SPIRIT_THREADSAFE -DHAVE_BUILD_INFO -D__STDC_FORMAT_MACROS $(HARDENED_CPPFLAGS) -pipe -O1 -g -Wstack-protector -fstack-protector-all -fPIE -fvisibility=hidden -DSTATIC $(BITCOIN_INCLUDES)
+libzcash_a_CPPFLAGS := $(libzcash_a_CPPFLAGS) -fPIC -DBINARY_OUTPUT -DCURVE_ALT_BN128 -DBOOST_SPIRIT_THREADSAFE -DHAVE_BUILD_INFO -D__STDC_FORMAT_MACROS $(HARDENED_CPPFLAGS) $(HARDENED_CXXFLAGS) $(HARDENED_LDFLAGS) -pipe $(SAN_LDFLAGS) -O1 -g -Wstack-protector $(SAN_CXXFLAGS) -fstack-protector-all -fPIE -fvisibility=hidden -DSTATIC $(BITCOIN_INCLUDES)
 
-libzcash_a_CXXFLAGS = $(HARDENED_CXXFLAGS) -fwrapv -fno-strict-aliasing
+libzcash_a_CXXFLAGS = $(SAN_CXXFLAGS) $(HARDENED_CXXFLAGS) -fwrapv -fno-strict-aliasing
 
-libzcash_a_LDFLAGS = $(HARDENED_LDFLAGS)
+libzcash_a_LDFLAGS = $(SAN_LDFLAGS) $(HARDENED_LDFLAGS)
 
 libzcash_a_CPPFLAGS += -DMONTGOMERY_OUTPUT
 
@@ -584,6 +592,7 @@ clean-local:
 	-$(MAKE) -C leveldb clean
 	-$(MAKE) -C secp256k1 clean
 	-$(MAKE) -C snark clean
+	-$(MAKE) -C univalue clean
 	rm -f leveldb/*/*.gcno leveldb/helpers/memenv/*.gcno
 	-rm -f config.h
 
@@ -615,5 +624,3 @@ if ENABLE_TESTS
 include Makefile.test.include
 include Makefile.gtest.include
 endif
-
-include Makefile.zcash.include

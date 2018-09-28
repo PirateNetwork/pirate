@@ -59,7 +59,7 @@ TEST(founders_reward_test, create_testnet_2of3multisig) {
         pWallet->AddCScript(result);
         pWallet->SetAddressBook(innerID, "", "receive");
 
-        std::string address = CBitcoinAddress(innerID).ToString();
+        std::string address = EncodeDestination(innerID);
         addresses.push_back(address);
     }
 
@@ -107,11 +107,11 @@ TEST(founders_reward_test, general) {
     // address = t2ENg7hHVqqs9JwU5cgjvSbxnT2a9USNfhy
     // script.ToString() = OP_HASH160 55d64928e69829d9376c776550b6cc710d427153 OP_EQUAL
     // HexStr(script) = a91455d64928e69829d9376c776550b6cc710d42715387
-    EXPECT_EQ(params.GetFoundersRewardScriptAtHeight(Params().GetConsensus().nFeeStartBlockHeight), ParseHex("a914fe928701db352019291347074bf05507b970074187"));
+    EXPECT_EQ(HexStr(params.GetFoundersRewardScriptAtHeight(Params().GetConsensus().nFeeStartBlockHeight)), "a914fe928701db352019291347074bf05507b970074187");
     EXPECT_EQ(params.GetFoundersRewardAddressAtHeight(Params().GetConsensus().nFeeStartBlockHeight), "t3hmg6WApjqVFw9oPWTDy4JLEqXcUWthg5v");
-    EXPECT_EQ(params.GetFoundersRewardScriptAtHeight(1599999), ParseHex("a914ff856ce07140ae4127fbd9850a19922fe336c22387"));
+    EXPECT_EQ(HexStr(params.GetFoundersRewardScriptAtHeight(1599999)), "a914ff856ce07140ae4127fbd9850a19922fe336c22387");
     EXPECT_EQ(params.GetFoundersRewardAddressAtHeight(1599999), "t3hrh5M7eaGA5zXCitPXz2pbe146GkVPWHs");
-    EXPECT_EQ(params.GetFoundersRewardScriptAtHeight(1600000), ParseHex("a914aef7be8939ed9d0175497489b789268e4e2691c287"));
+    EXPECT_EQ(HexStr(params.GetFoundersRewardScriptAtHeight(1600000)), "a914aef7be8939ed9d0175497489b789268e4e2691c287");
     EXPECT_EQ(params.GetFoundersRewardAddressAtHeight(1600000), "t3aWmHqBGS7watoKQLa7uykeTaYHoYqM361");
 
     int maxHeight = params.GetConsensus().GetLastFoundersRewardBlockHeight();

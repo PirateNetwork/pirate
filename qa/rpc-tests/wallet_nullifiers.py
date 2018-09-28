@@ -184,7 +184,6 @@ class WalletNullifiersTest (BitcoinTestFramework):
         self.nodes[3].importaddress(mytaddr1)
         self.nodes[3].z_importviewingkey(myzvkey, 'whenkeyisnew', 1)
 
-
         # Check the address has been imported
         assert_equal(myzaddr in self.nodes[3].z_listaddresses(), False)
         assert_equal(myzaddr in self.nodes[3].z_listaddresses(True), True)

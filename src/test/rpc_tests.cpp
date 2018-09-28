@@ -5,7 +5,7 @@
 #include "rpcserver.h"
 #include "rpcclient.h"
 
-#include "base58.h"
+#include "key_io.h"
 #include "netbase.h"
 #include "utilstrencodings.h"
 
@@ -252,7 +252,7 @@ BOOST_AUTO_TEST_CASE(rpc_ban)
     BOOST_CHECK(banned_until.get_int64() > now);
     BOOST_CHECK(banned_until.get_int64()-now <= 200);
 
-    // must throw an exception because 127.0.0.1 is in already banned suubnet range
+    // must throw an exception because 127.0.0.1 is in already banned subnet range
     BOOST_CHECK_THROW(r = CallRPC(string("setban 127.0.0.1 add")), runtime_error);
 
     BOOST_CHECK_NO_THROW(CallRPC(string("setban 127.0.0.0/24 remove")));;
@@ -335,5 +335,11 @@ BOOST_AUTO_TEST_CASE(rpc_raw_create_overwinter_v3)
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
 }
 
+BOOST_AUTO_TEST_CASE(rpc_getnetworksolps)
+{
+    BOOST_CHECK_NO_THROW(CallRPC("getnetworksolps"));
+    BOOST_CHECK_NO_THROW(CallRPC("getnetworksolps 120"));
+    BOOST_CHECK_NO_THROW(CallRPC("getnetworksolps 120 -1"));
+}
 
 BOOST_AUTO_TEST_SUITE_END()
