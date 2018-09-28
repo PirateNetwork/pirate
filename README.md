@@ -1,26 +1,26 @@
-[ZERO](https://zerocurrency.io) - [Uummannaq:1.0.14](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2)
+[ZERO](https://zerocurrency.io) - [Isfjorden:1.1.2](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.1.2)
 
 ||FAST|| ||DECENTRALISED|| ||ANONYMOUS|| ||SECURE|| ||ASIC RESISTANT||  - LAUNCE DATE: 2017-02-19
 
 GENESIS BLOCK - 19th Feb 2017 11:26:40 - 068cbb5db6bc11be5b93479ea4df41fa7e012e92ca8603c315f9b1a2202205c6
 
-Download the latest version here - [ZERO - Latest Version- Uummannaq:1.0.14](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2)
+Download the latest version here - [ZERO - Latest Version- Isfjorden:1.1.2](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.1.2)
 
 ------------------------------------------
 
 What is ZERO?
 --------------
 
-[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2) is a revolutionary cryptocurrency and transaction platform based on Zcash.
+[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.1.2) is a revolutionary cryptocurrency and transaction platform based on Zcash.
 
-[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2) combines Bitcoin’s security with Zcash’s anonymity and privacy.
+[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.1.2) combines Bitcoin’s security with Zcash’s anonymity and privacy.
 
-[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2) stands out from the competition as a fully working product that has already
+[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.1.2) stands out from the competition as a fully working product that has already
 implemented a set of special features not found in any other cryptocurrency.
 
 Our main focus as a team and community is to remain as transparent as we can possibly be and to maintain an interactive relationship with everyone involved. We are fully open about the project, listening to all suggestions from investors, miners and supporters.
 
-This software is the [ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.0.14-2) node. It downloads and stores the entire history of ZERO's transactions, about 1.2GB at this point.
+This software is the [ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v1.1.2) node. It downloads and stores the entire history of ZERO's transactions, about 1.2GB at this point.
 Depending on the speed of your computer and network connection, the synchronization process could take several hours.
 
 ------------------------------------------
