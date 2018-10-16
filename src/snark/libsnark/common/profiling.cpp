@@ -104,7 +104,7 @@ std::list<std::pair<std::string, int64_t*> > op_data_points = {
 #endif
 };
 
-bool inhibit_profiling_info = false;
+bool inhibit_profiling_info = true;
 bool inhibit_profiling_counters = false;
 
 void clear_profiling_counters()

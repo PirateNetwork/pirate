@@ -82,6 +82,7 @@ public:
     CMainParams() {
         strNetworkID = "main";
         strCurrencyUnits = "ZER";
+        bip44CoinType = 133; // As registered in https://github.com/satoshilabs/slips/blob/master/slip-0044.md
         consensus.fCoinbaseMustBeProtected = true;
         consensus.nFeeStartBlockHeight = 412300;
         consensus.nSubsidyHalvingInterval = 800000;
@@ -107,6 +108,9 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight =
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
 
+        // The best chain should have at least this much work.
+        consensus.nMinimumChainWork = uint256S("0x00000000000000000000000000000000000000000000000000281b32ff3198a1");
+
         /**
          * The message start string should be awesome!
          */
@@ -116,7 +120,7 @@ public:
         pchMessageStart[3] = 0x4F; // O
         vAlertPubKey = ParseHex("73B0");
         nDefaultPort = 23801;
-        nMaxTipAge = 24 * 60 * 60;
+        //nMaxTipAge = 24 * 60 * 60;
         nPruneAfterHeight = 100000;
         const size_t N = 192, K = 7;
         BOOST_STATIC_ASSERT(equihash_parameters_acceptable(N, K));
@@ -205,6 +209,7 @@ public:
     CTestNetParams() {
         strNetworkID = "test";
         strCurrencyUnits = "ZET";
+        bip44CoinType = 1;
         consensus.fCoinbaseMustBeProtected = true;
         consensus.nFeeStartBlockHeight = 2800;
         consensus.nSubsidyHalvingInterval = 3000;
@@ -230,13 +235,16 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight =
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
 
+        // The best chain should have at least this much work.
+        //consensus.nMinimumChainWork = uint256S("0x00000000000000000000000000000000000000000000000000000001d0c4d9cd");
+
         pchMessageStart[0] = 0x5B; // Z+1
         pchMessageStart[1] = 0x46; // E+1
         pchMessageStart[2] = 0x53; // R+1
         pchMessageStart[3] = 0x50; // O+1
         vAlertPubKey = ParseHex("73B0");
         nDefaultPort = 23802;
-        nMaxTipAge = 1000000000;
+        //nMaxTipAge = 1000000000;
         nPruneAfterHeight = 1000;
         const size_t N = 192, K = 7;
         BOOST_STATIC_ASSERT(equihash_parameters_acceptable(N, K));
@@ -291,6 +299,7 @@ public:
         fMineBlocksOnDemand = false;
         fTestnetToBeDeprecatedFieldRPC = true;
 
+
         checkpointData = (CCheckpointData) {
             boost::assign::map_list_of
             (0, consensus.hashGenesisBlock),
@@ -326,6 +335,7 @@ public:
     CRegTestParams() {
         strNetworkID = "regtest";
         strCurrencyUnits = "REG";
+        bip44CoinType = 1;
         consensus.fCoinbaseMustBeProtected = false;
         consensus.nFeeStartBlockHeight = 5000;
         consensus.nSubsidyHalvingInterval = 10000;
@@ -351,13 +361,17 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight =
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
 
+
+        // The best chain should have at least this much work.
+        consensus.nMinimumChainWork = uint256S("0x00");
+
         pchMessageStart[0] = 0x5C; // Z+2
         pchMessageStart[1] = 0x47; // E+2
         pchMessageStart[2] = 0x54; // R+2
         pchMessageStart[3] = 0x51; // O+2
         vAlertPubKey = ParseHex("73B0");
         nDefaultPort = 23803;
-        nMaxTipAge = 24 * 60 * 60;
+        //nMaxTipAge = 24 * 60 * 60;
         nPruneAfterHeight = 1000;
         const size_t N = 48, K = 5;
         BOOST_STATIC_ASSERT(equihash_parameters_acceptable(N, K));

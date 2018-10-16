@@ -275,7 +275,7 @@ libzcash::PaymentAddress DecodePaymentAddress(const std::string& str)
     std::vector<unsigned char> data;
     if (DecodeBase58Check(str, data)) {
         const std::vector<unsigned char>& zaddr_prefix = Params().Base58Prefix(CChainParams::ZCPAYMENT_ADDRRESS);
-        if ((data.size() == libzcash::SerializedPaymentAddressSize + zaddr_prefix.size()) &&
+        if ((data.size() == libzcash::SerializedSproutPaymentAddressSize + zaddr_prefix.size()) &&
             std::equal(zaddr_prefix.begin(), zaddr_prefix.end(), data.begin())) {
             CSerializeData serialized(data.begin() + zaddr_prefix.size(), data.end());
             CDataStream ss(serialized, SER_NETWORK, PROTOCOL_VERSION);
@@ -286,7 +286,11 @@ libzcash::PaymentAddress DecodePaymentAddress(const std::string& str)
     }
     data.clear();
     auto bech = bech32::Decode(str);
-    if (bech.first == Params().Bech32HRP(CChainParams::SAPLING_PAYMENT_ADDRESS) &&
+    bool allowSapling = Params().NetworkIDString() == "regtest" || (
+        Params().NetworkIDString() == "test" &&
+        GetBoolArg("-experimentalfeatures", false) &&
+        GetBoolArg("-developersapling", false));
+    if (allowSapling && bech.first == Params().Bech32HRP(CChainParams::SAPLING_PAYMENT_ADDRESS) &&
         bech.second.size() == ConvertedSaplingPaymentAddressSize) {
         // Bech32 decoding
         data.reserve((bech.second.size() * 5) / 8);
@@ -314,7 +318,7 @@ libzcash::ViewingKey DecodeViewingKey(const std::string& str)
     std::vector<unsigned char> data;
     if (DecodeBase58Check(str, data)) {
         const std::vector<unsigned char>& vk_prefix = Params().Base58Prefix(CChainParams::ZCVIEWING_KEY);
-        if ((data.size() == libzcash::SerializedViewingKeySize + vk_prefix.size()) &&
+        if ((data.size() == libzcash::SerializedSproutViewingKeySize + vk_prefix.size()) &&
             std::equal(vk_prefix.begin(), vk_prefix.end(), data.begin())) {
             CSerializeData serialized(data.begin() + vk_prefix.size(), data.end());
             CDataStream ss(serialized, SER_NETWORK, PROTOCOL_VERSION);
@@ -339,7 +343,7 @@ libzcash::SpendingKey DecodeSpendingKey(const std::string& str)
     std::vector<unsigned char> data;
     if (DecodeBase58Check(str, data)) {
         const std::vector<unsigned char>& zkey_prefix = Params().Base58Prefix(CChainParams::ZCSPENDING_KEY);
-        if ((data.size() == libzcash::SerializedSpendingKeySize + zkey_prefix.size()) &&
+        if ((data.size() == libzcash::SerializedSproutSpendingKeySize + zkey_prefix.size()) &&
             std::equal(zkey_prefix.begin(), zkey_prefix.end(), data.begin())) {
             CSerializeData serialized(data.begin() + zkey_prefix.size(), data.end());
             CDataStream ss(serialized, SER_NETWORK, PROTOCOL_VERSION);
@@ -352,7 +356,11 @@ libzcash::SpendingKey DecodeSpendingKey(const std::string& str)
     }
     data.clear();
     auto bech = bech32::Decode(str);
-    if (bech.first == Params().Bech32HRP(CChainParams::SAPLING_SPENDING_KEY) &&
+    bool allowSapling = Params().NetworkIDString() == "regtest" || (
+        Params().NetworkIDString() == "test" &&
+        GetBoolArg("-experimentalfeatures", false) &&
+        GetBoolArg("-developersapling", false));
+    if (allowSapling && bech.first == Params().Bech32HRP(CChainParams::SAPLING_SPENDING_KEY) &&
         bech.second.size() == ConvertedSaplingSpendingKeySize) {
         // Bech32 decoding
         data.reserve((bech.second.size() * 5) / 8);
