@@ -985,13 +985,8 @@ UniValue AsyncRPCOperation_sendmany::perform_joinsplit(
             {info.vjsin[0], info.vjsin[1]};
     std::array<libzcash::JSOutput, ZC_NUM_JS_OUTPUTS> outputs
             {info.vjsout[0], info.vjsout[1]};
-    #ifdef __APPLE__
     std::array<uint64_t, ZC_NUM_JS_INPUTS> inputMap;
     std::array<uint64_t, ZC_NUM_JS_OUTPUTS> outputMap;
-    #else
-    std::array<size_t, ZC_NUM_JS_INPUTS> inputMap;
-    std::array<size_t, ZC_NUM_JS_OUTPUTS> outputMap;
-    #endif
 
     uint256 esk; // payment disclosure - secret
 

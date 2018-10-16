@@ -46,13 +46,8 @@ void UNUSED(Types&&...) {}
 void serialize_bit_vector(std::ostream &out, const bit_vector &v);
 void deserialize_bit_vector(std::istream &in, bit_vector &v);
 
-#ifdef __APPLE__
-template<typename T>
-unsigned long size_in_bits(const std::vector<T> &v);
-#else
 template<typename T>
 uint64_t size_in_bits(const std::vector<T> &v);
-#endif
 
 #define ARRAY_SIZE(arr) (sizeof(arr)/sizeof(arr[0]))
 
