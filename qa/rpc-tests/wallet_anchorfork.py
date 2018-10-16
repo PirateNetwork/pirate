@@ -33,7 +33,7 @@ class WalletAnchorForkTest (BitcoinTestFramework):
         assert_equal(walletinfo['balance'], 0)
 
         self.sync_all()
-        self.nodes[1].generate(102)
+        self.nodes[1].generate(722)
         self.sync_all()
 
         assert_equal(self.nodes[0].getbalance(), 40)
@@ -99,10 +99,10 @@ class WalletAnchorForkTest (BitcoinTestFramework):
 
         # Mine a new block and let it propagate
         self.nodes[1].generate(1)
-        
+
         # Due to a bug in v1.0.0-1.0.3, node 0 will die with a tree root assertion, so sync_all() will throw an exception.
         self.sync_all()
-      
+
         # v1.0.4 will reach here safely
         assert_equal( self.nodes[0].getbestblockhash(), self.nodes[1].getbestblockhash())
         assert_equal( self.nodes[1].getbestblockhash(), self.nodes[2].getbestblockhash())

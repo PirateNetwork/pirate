@@ -5,19 +5,31 @@
 
 
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.util import assert_equal, start_node, \
-    start_nodes, connect_nodes_bi, bitcoind_processes
+from test_framework.util import assert_equal, initialize_chain_clean, \
+    start_node, start_nodes, connect_nodes_bi, bitcoind_processes, \
+    wait_and_assert_operationid_status
 
 import time
 from decimal import Decimal
 
 class WalletNullifiersTest (BitcoinTestFramework):
+    def setup_chain(self):
+        print("Initializing test directory "+self.options.tmpdir)
+        initialize_chain_clean(self.options.tmpdir, 4)
 
     def setup_nodes(self):
         return start_nodes(4, self.options.tmpdir,
                            extra_args=[['-experimentalfeatures', '-developerencryptwallet']] * 4)
 
     def run_test (self):
+
+        print "Mining blocks..."
+        self.sync_all()
+        self.nodes[3].generate(25)
+        self.sync_all()
+        self.nodes[0].generate(721)
+        self.sync_all()
+
         # add zaddr to node 0
         myzaddr0 = self.nodes[0].z_getnewaddress()
 
@@ -26,21 +38,22 @@ class WalletNullifiersTest (BitcoinTestFramework):
         recipients = []
         recipients.append({"address":myzaddr0, "amount":Decimal('10.0')-Decimal('0.0001')}) # utxo amount less fee
         myopid = self.nodes[0].z_sendmany(mytaddr, recipients)
+        wait_and_assert_operationid_status(self.nodes[0], myopid)
 
-        opids = []
-        opids.append(myopid)
+        #opids = []
+        #opids.append(myopid)
 
-        timeout = 120
-        status = None
-        for x in xrange(1, timeout):
-            results = self.nodes[0].z_getoperationresult(opids)
-            if len(results)==0:
-                time.sleep(1)
-            else:
-                status = results[0]["status"]
-                assert_equal("success", status)
-                mytxid = results[0]["result"]["txid"]
-                break
+        #timeout = 120
+        #status = None
+        #for x in xrange(1, timeout):
+        #    results = self.nodes[0].z_getoperationresult(opids)
+        #    if len(results)==0:
+        #        time.sleep(1)
+        #    else:
+        #        status = results[0]["status"]
+        #        assert_equal("success", status)
+        #        mytxid = results[0]["result"]["txid"]
+        #        break
 
         self.sync_all()
         self.nodes[0].generate(1)
@@ -67,21 +80,22 @@ class WalletNullifiersTest (BitcoinTestFramework):
         recipients = []
         recipients.append({"address":myzaddr, "amount":7.0})
         myopid = self.nodes[0].z_sendmany(myzaddr0, recipients)
+        wait_and_assert_operationid_status(self.nodes[0], myopid)
 
-        opids = []
-        opids.append(myopid)
+        #opids = []
+        #opids.append(myopid)
 
-        timeout = 120
-        status = None
-        for x in xrange(1, timeout):
-            results = self.nodes[0].z_getoperationresult(opids)
-            if len(results)==0:
-                time.sleep(1)
-            else:
-                status = results[0]["status"]
-                assert_equal("success", status)
-                mytxid = results[0]["result"]["txid"]
-                break
+        #timeout = 120
+        #status = None
+        #for x in xrange(1, timeout):
+        #    results = self.nodes[0].z_getoperationresult(opids)
+        #    if len(results)==0:
+        #        time.sleep(1)
+        #    else:
+        #        status = results[0]["status"]
+        #        assert_equal("success", status)
+        #        mytxid = results[0]["result"]["txid"]
+        #        break
 
         self.sync_all()
         self.nodes[0].generate(1)
@@ -99,21 +113,22 @@ class WalletNullifiersTest (BitcoinTestFramework):
         recipients = []
         recipients.append({"address":myzaddr3, "amount":2.0})
         myopid = self.nodes[2].z_sendmany(myzaddr, recipients)
+        wait_and_assert_operationid_status(self.nodes[2], myopid)
 
-        opids = []
-        opids.append(myopid)
+        #opids = []
+        #opids.append(myopid)
 
-        timeout = 120
-        status = None
-        for x in xrange(1, timeout):
-            results = self.nodes[2].z_getoperationresult(opids)
-            if len(results)==0:
-                time.sleep(1)
-            else:
-                status = results[0]["status"]
-                assert_equal("success", status)
-                mytxid = results[0]["result"]["txid"]
-                break
+        #timeout = 120
+        #status = None
+        #for x in xrange(1, timeout):
+        #    results = self.nodes[0].z_getoperationresult(opids)
+        #    if len(results)==0:
+        #        time.sleep(1)
+        #    else:
+        #        status = results[0]["status"]
+        #        assert_equal("success", status)
+        #        mytxid = results[0]["result"]["txid"]
+        #        break
 
         self.sync_all()
         self.nodes[2].generate(1)
@@ -140,22 +155,22 @@ class WalletNullifiersTest (BitcoinTestFramework):
         recipients = []
         recipients.append({"address":mytaddr1, "amount":1.0})
         myopid = self.nodes[1].z_sendmany(myzaddr, recipients)
+        wait_and_assert_operationid_status(self.nodes[1], myopid)
 
-        opids = []
-        opids.append(myopid)
+        #opids = []
+        #opids.append(myopid)
 
-        timeout = 120
-        status = None
-        for x in xrange(1, timeout):
-            results = self.nodes[1].z_getoperationresult(opids)
-            if len(results)==0:
-                time.sleep(1)
-            else:
-                status = results[0]["status"]
-                assert_equal("success", status)
-                mytxid = results[0]["result"]["txid"]
-                [mytxid] # hush pyflakes
-                break
+        #timeout = 120
+        #status = None
+        #for x in xrange(1, timeout):
+        #    results = self.nodes[0].z_getoperationresult(opids)
+        #    if len(results)==0:
+        #        time.sleep(1)
+        #    else:
+        #        status = results[0]["status"]
+        #        assert_equal("success", status)
+        #        mytxid = results[0]["result"]["txid"]
+        #        break
 
         self.sync_all()
         self.nodes[1].generate(1)

@@ -9,18 +9,21 @@
 #
 
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.util import assert_equal, start_node
+from test_framework.util import assert_equal, start_nodes, initialize_chain_clean
 
 
 # Create one-input, one-output, no-fee transaction:
 class MempoolCoinbaseTest(BitcoinTestFramework):
 
-    def setup_network(self):
+    def setup_chain(self):
+        print("Initializing test directory "+self.options.tmpdir)
+        initialize_chain_clean(self.options.tmpdir, 4)
+
+    def setup_network(self, split=False):
         # Just need one node for this test
-        args = ["-checkmempool", "-debug=mempool"]
-        self.nodes = []
-        self.nodes.append(start_node(0, self.options.tmpdir, args))
-        self.is_network_split = False
+        self.nodes = start_nodes(1, self.options.tmpdir, extra_args=[["-checkmempool", "-debug=mempool"]] * 1 )
+        self.is_network_split=False
+        self.nodes[0].generate(723)
 
     def create_tx(self, from_txid, to_address, amount):
         inputs = [{ "txid" : from_txid, "vout" : 0}]

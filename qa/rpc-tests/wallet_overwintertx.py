@@ -16,7 +16,7 @@ class WalletOverwinterTxTest (BitcoinTestFramework):
         initialize_chain_clean(self.options.tmpdir, 4)
 
     def setup_network(self, split=False):
-        self.nodes = start_nodes(4, self.options.tmpdir, extra_args=[["-nuparams=5ba81b19:200", "-debug=zrpcunsafe", "-txindex"]] * 4 )
+        self.nodes = start_nodes(4, self.options.tmpdir, extra_args=[["-nuparams=5ba81b19:820", "-debug=zrpcunsafe", "-txindex"]] * 4 )
         connect_nodes_bi(self.nodes,0,1)
         connect_nodes_bi(self.nodes,1,2)
         connect_nodes_bi(self.nodes,0,2)
@@ -25,7 +25,7 @@ class WalletOverwinterTxTest (BitcoinTestFramework):
         self.sync_all()
 
     def run_test (self):
-        self.nodes[0].generate(100)
+        self.nodes[0].generate(720)
         self.sync_all()
         self.nodes[1].generate(98)
         self.sync_all()

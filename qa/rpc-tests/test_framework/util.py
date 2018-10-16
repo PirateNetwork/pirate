@@ -121,7 +121,8 @@ def initialize_chain(test_dir):
         # gets 25 mature blocks and 25 immature.
         # blocks are created with timestamps 10 minutes apart, starting
         # at 1 Jan 2014
-        block_time = 1388534400
+        #block_time = 1388534400
+        block_time = 1531037936
         for i in range(2):
             for peer in range(4):
                 for j in range(25):

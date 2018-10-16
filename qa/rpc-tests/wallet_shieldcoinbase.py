@@ -47,7 +47,7 @@ class WalletShieldCoinbaseTest (BitcoinTestFramework):
         self.nodes[2].getnewaddress()
         self.nodes[2].generate(1)
         self.sync_all()
-        self.nodes[1].generate(101)
+        self.nodes[1].generate(721)
         self.sync_all()
         assert_equal(self.nodes[0].getbalance(), 50)
         assert_equal(self.nodes[1].getbalance(), 10)
@@ -131,7 +131,7 @@ class WalletShieldCoinbaseTest (BitcoinTestFramework):
         self.sync_all()
         self.nodes[2].generate(20)
         self.sync_all()
-        self.nodes[1].generate(100)
+        self.nodes[1].generate(720)
         self.sync_all()
         mytaddr = self.nodes[0].getnewaddress()
 
@@ -176,7 +176,9 @@ class WalletShieldCoinbaseTest (BitcoinTestFramework):
         self.sync_all()
 
         # Verify maximum number of utxos which node 0 can shield is set by default limit parameter of 50
-        self.nodes[0].generate(200)
+        self.nodes[0].generate(100)
+        self.sync_all()
+        self.nodes[1].generate(720)
         self.sync_all()
         mytaddr = self.nodes[0].getnewaddress()
         result = self.nodes[0].z_shieldcoinbase(mytaddr, myzaddr, Decimal('0.0001'))
