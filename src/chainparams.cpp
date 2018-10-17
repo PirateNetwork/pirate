@@ -95,6 +95,7 @@ public:
         consensus.nPowMaxAdjustDown = 30; // 30% adjustment down
         consensus.nPowMaxAdjustUp = 10; // 10% adjustment up
         consensus.nPowTargetSpacing = 2 * 60;
+        consensus.nPowAllowMinDifficultyBlocksAfterHeight = boost::none;
         consensus.vUpgrades[Consensus::BASE_SPROUT].nProtocolVersion = 170002;
         consensus.vUpgrades[Consensus::BASE_SPROUT].nActivationHeight =
             Consensus::NetworkUpgrade::ALWAYS_ACTIVE;
@@ -166,7 +167,7 @@ public:
         bech32HRPs[SAPLING_PAYMENT_ADDRESS]      = "zs";
         bech32HRPs[SAPLING_FULL_VIEWING_KEY]     = "zviews";
         bech32HRPs[SAPLING_INCOMING_VIEWING_KEY] = "zivks";
-        bech32HRPs[SAPLING_SPENDING_KEY]         = "secret-spending-key-main";
+        bech32HRPs[SAPLING_EXTENDED_SPEND_KEY]   = "secret-extended-key-main";
 
         fMiningRequiresPeers = true;
         fDefaultConsistencyChecks = false;
@@ -222,6 +223,7 @@ public:
         consensus.nPowMaxAdjustDown = 30; // 30% adjustment down
         consensus.nPowMaxAdjustUp = 10; // 10% adjustment up
         consensus.nPowTargetSpacing = 2 * 60;
+        consensus.nPowAllowMinDifficultyBlocksAfterHeight = boost::none;
         consensus.vUpgrades[Consensus::BASE_SPROUT].nProtocolVersion = 170002;
         consensus.vUpgrades[Consensus::BASE_SPROUT].nActivationHeight =
             Consensus::NetworkUpgrade::ALWAYS_ACTIVE;
@@ -291,7 +293,7 @@ public:
         bech32HRPs[SAPLING_PAYMENT_ADDRESS]      = "ztestsapling";
         bech32HRPs[SAPLING_FULL_VIEWING_KEY]     = "zviewtestsapling";
         bech32HRPs[SAPLING_INCOMING_VIEWING_KEY] = "zivktestsapling";
-        bech32HRPs[SAPLING_SPENDING_KEY]         = "secret-spending-key-test";
+        bech32HRPs[SAPLING_EXTENDED_SPEND_KEY]   = "secret-extended-key-test";
 
         fMiningRequiresPeers = true;
         fDefaultConsistencyChecks = false;
@@ -348,6 +350,7 @@ public:
         consensus.nPowMaxAdjustDown = 0; // Turn off adjustment down
         consensus.nPowMaxAdjustUp = 0; // Turn off adjustment up
         consensus.nPowTargetSpacing = 2 * 60;
+        consensus.nPowAllowMinDifficultyBlocksAfterHeight = 0;
         consensus.vUpgrades[Consensus::BASE_SPROUT].nProtocolVersion = 170002;
         consensus.vUpgrades[Consensus::BASE_SPROUT].nActivationHeight =
             Consensus::NetworkUpgrade::ALWAYS_ACTIVE;
@@ -415,7 +418,7 @@ public:
         bech32HRPs[SAPLING_PAYMENT_ADDRESS]      = "zregtestsapling";
         bech32HRPs[SAPLING_FULL_VIEWING_KEY]     = "zviewregtestsapling";
         bech32HRPs[SAPLING_INCOMING_VIEWING_KEY] = "zivkregtestsapling";
-        bech32HRPs[SAPLING_SPENDING_KEY]         = "secret-spending-key-regtest";
+        bech32HRPs[SAPLING_EXTENDED_SPEND_KEY]   = "secret-extended-key-regtest";
 
         fMiningRequiresPeers = false;
         fDefaultConsistencyChecks = true;

@@ -23,6 +23,35 @@ bool CKeyStore::AddKey(const CKey &key) {
     return AddKeyPubKey(key, key.GetPubKey());
 }
 
+bool CBasicKeyStore::SetHDSeed(const HDSeed& seed)
+{
+    LOCK(cs_SpendingKeyStore);
+    if (!hdSeed.IsNull()) {
+        // Don't allow an existing seed to be changed. We can maybe relax this
+        // restriction later once we have worked out the UX implications.
+        return false;
+    }
+    hdSeed = seed;
+    return true;
+}
+
+bool CBasicKeyStore::HaveHDSeed() const
+{
+    LOCK(cs_SpendingKeyStore);
+    return !hdSeed.IsNull();
+}
+
+bool CBasicKeyStore::GetHDSeed(HDSeed& seedOut) const
+{
+    LOCK(cs_SpendingKeyStore);
+    if (hdSeed.IsNull()) {
+        return false;
+    } else {
+        seedOut = hdSeed;
+        return true;
+    }
+}
+
 bool CBasicKeyStore::AddKeyPubKey(const CKey& key, const CPubKey &pubkey)
 {
     LOCK(cs_KeyStore);
@@ -95,14 +124,14 @@ bool CBasicKeyStore::AddSproutSpendingKey(const libzcash::SproutSpendingKey &sk)
 
 //! Sapling 
 bool CBasicKeyStore::AddSaplingSpendingKey(
-    const libzcash::SaplingSpendingKey &sk,
-    const boost::optional<libzcash::SaplingPaymentAddress> &defaultAddr)
+    const libzcash::SaplingExtendedSpendingKey &sk,
+    const libzcash::SaplingPaymentAddress &defaultAddr)
 {
     LOCK(cs_SpendingKeyStore);
-    auto fvk = sk.full_viewing_key();
+    auto fvk = sk.expsk.full_viewing_key();
 
     // if SaplingFullViewingKey is not in SaplingFullViewingKeyMap, add it
-    if (!AddSaplingFullViewingKey(fvk, defaultAddr)){
+    if (!AddSaplingFullViewingKey(fvk, defaultAddr)) {
         return false;
     }
 
@@ -122,17 +151,27 @@ bool CBasicKeyStore::AddSproutViewingKey(const libzcash::SproutViewingKey &vk)
 
 bool CBasicKeyStore::AddSaplingFullViewingKey(
     const libzcash::SaplingFullViewingKey &fvk,
-    const boost::optional<libzcash::SaplingPaymentAddress> &defaultAddr)
+    const libzcash::SaplingPaymentAddress &defaultAddr)
 {
     LOCK(cs_SpendingKeyStore);
     auto ivk = fvk.in_viewing_key();
     mapSaplingFullViewingKeys[ivk] = fvk;
 
-    if (defaultAddr) {
-        // Add defaultAddr -> SaplingIncomingViewing to SaplingIncomingViewingKeyMap
-        mapSaplingIncomingViewingKeys[defaultAddr.get()] = ivk;
-    }
-    
+    return CBasicKeyStore::AddSaplingIncomingViewingKey(ivk, defaultAddr);
+}
+
+// This function updates the wallet's internal address->ivk map. 
+// If we add an address that is already in the map, the map will
+// remain unchanged as each address only has one ivk.
+bool CBasicKeyStore::AddSaplingIncomingViewingKey(
+    const libzcash::SaplingIncomingViewingKey &ivk,
+    const libzcash::SaplingPaymentAddress &addr)
+{
+    LOCK(cs_SpendingKeyStore);
+
+    // Add addr -> SaplingIncomingViewing to SaplingIncomingViewingKeyMap
+    mapSaplingIncomingViewingKeys[addr] = ivk;
+
     return true;
 }
 
@@ -196,4 +235,14 @@ bool CBasicKeyStore::GetSaplingIncomingViewingKey(const libzcash::SaplingPayment
         return true;
     }
     return false;
+}
+
+bool CBasicKeyStore::GetSaplingExtendedSpendingKey(const libzcash::SaplingPaymentAddress &addr, 
+                                    libzcash::SaplingExtendedSpendingKey &extskOut) const {
+    libzcash::SaplingIncomingViewingKey ivk;
+    libzcash::SaplingFullViewingKey fvk;
+
+    return GetSaplingIncomingViewingKey(addr, ivk) &&
+            GetSaplingFullViewingKey(ivk, fvk) &&
+            GetSaplingSpendingKey(fvk, extskOut);
 }
