@@ -135,16 +135,16 @@ sudo apt-get install \
       zlib1g-dev wget bsdmainutils automake cmake curl
 ```
 
-### Download cryptographic keys (needs to be done only once)
-```
-./zcutil/fetch-params.sh
-```
-
 ### Obtain the ZERO software from GitHub
 ```
 git clone https://github.com/zerocurrencycoin/zero.git
 cd zero
 git checkout master
+```
+
+### Download cryptographic keys (needs to be done only once)
+```
+./zcutil/fetch-params.sh
 ```
 
 ### Build the source code to produce binary executables:
