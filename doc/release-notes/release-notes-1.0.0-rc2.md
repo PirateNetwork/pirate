@@ -38,7 +38,7 @@ Jack Grigg (31):
       Refactor test code to better test JSDescription::Randomized()
       Remove stale comment
       Rename libbitcoinconsensus to libzcashconsensus
-      Rename bitcoin-tx to zcash-tx
+      Rename bitcoin-tx to zero-tx
       Remove the RC 1 block index error message
       Disable wallet encryption
       Add more assertions, throw if find_output params are invalid

@@ -38,7 +38,7 @@ Pieter Wuille (3):
       Use std::atomic for fRequestShutdown and fReopenDebugLog
 
 Sean Bowe (1):
-      Add manpages for zcashd and zcash-cli binaries for debian.
+      Add manpages for zerod and zero-cli binaries for debian.
 
 Simon (4):
       Fix incorrect error message in z_sendmany

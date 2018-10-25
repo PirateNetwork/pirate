@@ -27,7 +27,7 @@ transparent and Sprout addresses are not lost.
 
 Fix Signing Raw Transactions with Unsynced Offline Nodes
 --------------------------------------------------------
-With v2.0.0, in `signrawtransaction` the consensus branch ID (which is used to construct the transaction) was estimated using the chain height. With v2.0.1 this has been improved by also considering the `APPROX_RELEASE_HEIGHT` of the release, and a new parameter to allow the caller to manually override the consensus branch ID that zcashd will use.
+With v2.0.0, in `signrawtransaction` the consensus branch ID (which is used to construct the transaction) was estimated using the chain height. With v2.0.1 this has been improved by also considering the `APPROX_RELEASE_HEIGHT` of the release, and a new parameter to allow the caller to manually override the consensus branch ID that zerod will use.
 
 [Pull request](https://github.com/zcash/zcash/pull/3520)
 
@@ -91,7 +91,7 @@ Jack Grigg (83):
       Pass correct compiler, linker, and flags into libsnark
       Use boost::filesystem::path::string() instead of path::native()
       Metrics UI: Enable virtual terminal sequence processing on Windows
-      Metrics UI: Tell Windows users how to stop zcashd
+      Metrics UI: Tell Windows users how to stop zerod
       depends: Pass correct compiler, linker, and flags into googletest
       configure: Don't add -ldl to RUST_LIBS for mingw32
       test: Fix comment in WalletTests.FindMySaplingNotes

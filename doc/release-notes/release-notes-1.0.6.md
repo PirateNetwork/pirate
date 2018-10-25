@@ -25,7 +25,7 @@ Jack Grigg (33):
       Switch miner to P2PKH, add -mineraddress option
       Update help text for mining options
       Correct #ifdef nesting of miner headers and helper functions
-      Add ZMQ libs to zcash-gtest
+      Add ZMQ libs to zero-gtest
       Fix python syntax in ZMQ RPC test
       [qa] py2: Unfiddle strings into bytes explicitly in ZMQ RPC test
       Bitcoin -> Zcash in ZMQ docs

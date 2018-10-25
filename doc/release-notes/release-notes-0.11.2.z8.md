@@ -47,7 +47,7 @@ Simon (21):
       Extend try catch block around calls to libsnark, per discussion in #1126.
       Remove GetSerializeHash() method.
       Use -O1 opimitization flag when building libzcash. Continuation of #1064 and related to #1168.
-      Add test for non-malleable txids.  To run just this test: ./zcash-gtest --gtest_filter="txid_tests*"
+      Add test for non-malleable txids.  To run just this test: ./zero-gtest --gtest_filter="txid_tests*"
 
 Taylor Hornby (8):
       Make the --enable-hardening flag explicit.

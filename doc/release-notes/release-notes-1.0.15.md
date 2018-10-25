@@ -31,7 +31,7 @@ transactions once the Overwinter activation height has been reached.
 Overwinter transaction expiry
 -----------------------------
 
-Overwinter transactions created by `zcashd` will also have a default expiry
+Overwinter transactions created by `zerod` will also have a default expiry
 height set (the block height after which the transaction becomes invalid) of 20
 blocks after the height of the next block. This can be configured with the
 config option `-txexpirydelta`.

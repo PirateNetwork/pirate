@@ -424,7 +424,7 @@ UniValue z_exportwallet(const UniValue& params, bool fHelp)
             "z_exportwallet \"filename\"\n"
             "\nExports all wallet keys, for taddr and zaddr, in a human-readable format.  Overwriting an existing file is not permitted.\n"
             "\nArguments:\n"
-            "1. \"filename\"    (string, required) The filename, saved in folder set by zcashd -exportdir option\n"
+            "1. \"filename\"    (string, required) The filename, saved in folder set by zerod -exportdir option\n"
             "\nResult:\n"
             "\"path\"           (string) The full path of the destination file\n"
             "\nExamples:\n"
@@ -445,7 +445,7 @@ UniValue dumpwallet(const UniValue& params, bool fHelp)
             "dumpwallet \"filename\"\n"
             "\nDumps taddr wallet keys in a human-readable format.  Overwriting an existing file is not permitted.\n"
             "\nArguments:\n"
-            "1. \"filename\"    (string, required) The filename, saved in folder set by zcashd -exportdir option\n"
+            "1. \"filename\"    (string, required) The filename, saved in folder set by zerod -exportdir option\n"
             "\nResult:\n"
             "\"path\"           (string) The full path of the destination file\n"
             "\nExamples:\n"
@@ -469,7 +469,7 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
         throw JSONRPCError(RPC_INTERNAL_ERROR, e.what());
     }
     if (exportdir.empty()) {
-        throw JSONRPCError(RPC_WALLET_ERROR, "Cannot export wallet until the zcashd -exportdir option has been set");
+        throw JSONRPCError(RPC_WALLET_ERROR, "Cannot export wallet until the zerod -exportdir option has been set");
     }
     std::string unclean = params[0].get_str();
     std::string clean = SanitizeFilename(unclean);

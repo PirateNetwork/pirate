@@ -72,7 +72,7 @@ Jack Grigg (83):
       Pass correct compiler, linker, and flags into libsnark
       Use boost::filesystem::path::string() instead of path::native()
       Metrics UI: Enable virtual terminal sequence processing on Windows
-      Metrics UI: Tell Windows users how to stop zcashd
+      Metrics UI: Tell Windows users how to stop zerod
       depends: Pass correct compiler, linker, and flags into googletest
       configure: Don't add -ldl to RUST_LIBS for mingw32
       test: Fix comment in WalletTests.FindMySaplingNotes

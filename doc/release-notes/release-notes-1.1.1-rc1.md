@@ -1,14 +1,14 @@
 Notable changes
 ===============
 
-zcash-cli: arguments privacy
+zero-cli: arguments privacy
 ----------------------------
 
 The RPC command line client gained a new argument, `-stdin`
 to read extra arguments from standard input, one per line until EOF/Ctrl-D.
 For example:
 
-    $ src/zcash-cli -stdin walletpassphrase
+    $ src/zero-cli -stdin walletpassphrase
     mysecretcode
     120
     ^D (Ctrl-D)
@@ -30,7 +30,7 @@ and are affected by this change:
 - RPC `decoderawtransaction`
 - REST `/rest/tx/` (JSON format)
 - REST `/rest/block/` (JSON format when including extended tx details)
-- `zcash-tx -json`
+- `zero-tx -json`
 
 For example, the `scriptSig.asm` property of a transaction input that
 previously showed an assembly representation of:
