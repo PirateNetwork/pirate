@@ -212,8 +212,8 @@ public:
         strCurrencyUnits = "ZET";
         bip44CoinType = 1;
         consensus.fCoinbaseMustBeProtected = true;
-        consensus.nFeeStartBlockHeight = 2800;
-        consensus.nSubsidyHalvingInterval = 3000;
+        consensus.nFeeStartBlockHeight = 0;
+        consensus.nSubsidyHalvingInterval = 800000;
         consensus.nMajorityEnforceBlockUpgrade = 51;
         consensus.nMajorityRejectBlockOutdated = 75;
         consensus.nMajorityWindow = 400;
@@ -231,10 +231,10 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_TESTDUMMY].nActivationHeight =
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
         consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nProtocolVersion = 170005;
-        consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = 1500;
+        consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = 100;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170007;
-        consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight =
-            Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
+        consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 200;
+
 
         // The best chain should have at least this much work.
         consensus.nMinimumChainWork = uint256S("0x00");
@@ -253,9 +253,9 @@ public:
         nEquihashK = K;
 
         genesis = CreateGenesisBlock(
-            1540006009,
-            uint256S("0000000000000000000000000000000000000000000000000000000000000006"),
-            ParseHex("01316b635b7e61820891b4f1b0aec8d1b02fb548b2c5ca9a8a1781349a4e9d7644ee7fee0804ae150dd0daa16a9419a411f6052456613809e7b10115ad1fc3a6946df78d9de93e194e9fef2abb0f42f4226e3ec1bdd7e6931f79647018fa031dc796912f10fa1bbb75af6b207bd7f5caa21ff6dc080f1580f6914d1f9916dc70585872b6a3d75bbe9c95e3d97faa669b01cd93de58921370381c5862a799119dac0f83d83cf2fc441a014b6b5487fd1ee49016d4731db1f25914fcc4c1056fa3762d93b98185ffad0d32f753647a47c54fa47de60b7718ef5c6d9f125143f6a2752afdc41ab8f09d6ec750185886003d9ee7184e1f8a67d4f044369e82f94b0ce70db1ba78dc66d38fc4d0e81ea88a6f57c4d83d222ac86799932897d6b362f406b1ef0d840599a113489d7c125a3e1b1494619ee59626a0d24d92da5626d9f88b53a6ae0535d8eb69b28121de2a5ed48264c70bad6dee620dcb450dd53418c3bcf05f56208ddb36c01e956969632dffe273718f6bc1b119b9e3164ec6ba9b453ff13db1af9f777aa63e603a618ad06f"),
+            1540605888,
+            uint256S("0000000000000000000000000000000000000000000000000000000000000000"),
+            ParseHex("00b066fb87c4967503dcf88611fc1f9649d5f0a1abb47a34e148e36ad91dba1de1b79f81c2a6d50b4f92dae304f127f0cd5d03297cbc84f56017c2f9ed41c2ff50a21fa8d5ece3412c4af104ce9b9f2d62c85e8a2f0813718d86bcd40e6e0dc5c18e0f1b0758a4bd131e15a37df270a0c200509e034d59bc23731de6db25f750af07a0a5f5d3ff5821e498cef3ea62db075077de25d925ab87a37ff510b39a16c78b32710abd20daf92ecd659fd4c82acbbc586c5154be52ce74224433b13406e3fee45a4bf20afd0183ffbe6d5c91f933b921e3d4968852ab66e2d1882dda73cc02fbec8a6a6b5064153963ab308b58d07ee621982c25485b7707574d9fe50e820a424faad591401be391ed89f2cf1f69a57734009c36d3eaad6c815bb34126a50c968f9139c7eba3d4665d05dd5a62382ec3e2b0ba3b65709ac048e24b31908787a1f57610ec5ba5adf44ab7a392aa131372910dc6cf9150b06f89c74d0675912ba695acd3895e5976217a214bdf3d8060c13a4e66df10842d43d362f03245dd304aa32fee569c13edca42ddb8ab31"),
             0x200A1FA<<4, 4, 0);
         consensus.hashGenesisBlock = genesis.GetHash();
 
@@ -264,7 +264,7 @@ public:
         //LogPrintf("genesis.hashMerkleRoot=%s\n", genesis.hashMerkleRoot.GetHex());
         //LogPrintf("genesis.nTime=%is\n", genesis.nTime);
 
-        assert(consensus.hashGenesisBlock == uint256S("05eae350e9af3f6cff4e62b2a58040f81f19458703a9bcc708988c40692988a9"));
+        assert(consensus.hashGenesisBlock == uint256S("095e70765a97b5ee5b55fe8c5661fe58d61ea60a441d08aefc30119666b0e817"));
         assert(genesis.hashMerkleRoot == uint256S("094ef7f8882f3ec07edf16aa707c9511562b0e6211a8ed9db36332134bfe5357"));
 
         vFixedSeeds.clear();
