@@ -179,7 +179,7 @@ void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue&
             CSpentIndexKey spentKey(txin.prevout.hash, txin.prevout.n);
             if (GetSpentIndex(spentKey, spentInfo)) {
                 in.push_back(Pair("value", ValueFromAmount(spentInfo.satoshis)));
-                in.push_back(Pair("valueSat", spentInfo.satoshis));
+                in.push_back(Pair("valueZat", spentInfo.satoshis));
                 if (spentInfo.addressType == 1) {
                     in.push_back(Pair("address", EncodeDestination(CKeyID(spentInfo.addressHash))));
                 } else if (spentInfo.addressType == 2)  {
@@ -279,7 +279,7 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
         const CTxOut& txout = tx.vout[i];
         UniValue out(UniValue::VOBJ);
         out.push_back(Pair("value", ValueFromAmount(txout.nValue)));
-        out.push_back(Pair("valueSat", txout.nValue));
+        out.push_back(Pair("valueZat", txout.nValue));
         out.push_back(Pair("n", (int64_t)i));
         UniValue o(UniValue::VOBJ);
         ScriptPubKeyToJSON(txout.scriptPubKey, o, true);
