@@ -212,7 +212,7 @@ public:
         strCurrencyUnits = "ZET";
         bip44CoinType = 1;
         consensus.fCoinbaseMustBeProtected = true;
-        consensus.nFeeStartBlockHeight = 0;
+        consensus.nFeeStartBlockHeight = 1;
         consensus.nSubsidyHalvingInterval = 800000;
         consensus.nMajorityEnforceBlockUpgrade = 51;
         consensus.nMajorityRejectBlockOutdated = 75;
@@ -253,18 +253,18 @@ public:
         nEquihashK = K;
 
         genesis = CreateGenesisBlock(
-            1540605888,
-            uint256S("0000000000000000000000000000000000000000000000000000000000000000"),
-            ParseHex("00b066fb87c4967503dcf88611fc1f9649d5f0a1abb47a34e148e36ad91dba1de1b79f81c2a6d50b4f92dae304f127f0cd5d03297cbc84f56017c2f9ed41c2ff50a21fa8d5ece3412c4af104ce9b9f2d62c85e8a2f0813718d86bcd40e6e0dc5c18e0f1b0758a4bd131e15a37df270a0c200509e034d59bc23731de6db25f750af07a0a5f5d3ff5821e498cef3ea62db075077de25d925ab87a37ff510b39a16c78b32710abd20daf92ecd659fd4c82acbbc586c5154be52ce74224433b13406e3fee45a4bf20afd0183ffbe6d5c91f933b921e3d4968852ab66e2d1882dda73cc02fbec8a6a6b5064153963ab308b58d07ee621982c25485b7707574d9fe50e820a424faad591401be391ed89f2cf1f69a57734009c36d3eaad6c815bb34126a50c968f9139c7eba3d4665d05dd5a62382ec3e2b0ba3b65709ac048e24b31908787a1f57610ec5ba5adf44ab7a392aa131372910dc6cf9150b06f89c74d0675912ba695acd3895e5976217a214bdf3d8060c13a4e66df10842d43d362f03245dd304aa32fee569c13edca42ddb8ab31"),
+            1540752040,
+            uint256S("0000000000000000000000000000000000000000000000000000000000000003"),
+            ParseHex("023829a925985426873c3ea9809d02cae71fc9ee29b9c55407303458d2d945dab71853667b1480711e8e61567db019c8c44a08b01de59ff2170abcae5f66e33def6ad30e617cd364d177201a8303234a3cb0ef94baad8a849ebcfe8d556128541b67623f0380707cbad9026fc9816138aa339c7dcae786f8fd559f434d0ace9acd81ec8dead0a7142ba873c6df615116e56a15e315390512a12b992a52d5f2ed1a96d2b10fa9e0485137dd47737ca921e1ba6b9f85cb8b061e9e330439d96a5875698a54c9edfcf103efeb2534d455c6eafb1812d55526f6e901b21868f79db72706bd8148466f60125ef8806ca14e69ed0cd7765e9ec97c896905341c6f5fbf12ea811964ec95859d9e7e521eb9ba7dba4bef065cf854594b13b688d595f541e736b9a98c6ab992d5d13a8005a505b1d993c6cd6ada96fcb2eb99d7ae4bcd504bb5f8f2145e5284d0a52df8ffbbbdc11068f6b6cc83025f3b2d6ff0e5f4181780d42017c9c5fe380833c25cb2a99a50b73c4ca7f7116819615d3070ece82d66fb791311f117b2ddd2292e107df34e24"),
             0x200A1FA<<4, 4, 0);
         consensus.hashGenesisBlock = genesis.GetHash();
 
-        //LogPrintf("TESTNET\n");
-        //LogPrintf("consensus.hashGenesisBlock=%s\n", consensus.hashGenesisBlock.GetHex());
-        //LogPrintf("genesis.hashMerkleRoot=%s\n", genesis.hashMerkleRoot.GetHex());
-        //LogPrintf("genesis.nTime=%is\n", genesis.nTime);
+        LogPrintf("TESTNET\n");
+        LogPrintf("consensus.hashGenesisBlock=%s\n", consensus.hashGenesisBlock.GetHex());
+        LogPrintf("genesis.hashMerkleRoot=%s\n", genesis.hashMerkleRoot.GetHex());
+        LogPrintf("genesis.nTime=%is\n", genesis.nTime);
 
-        assert(consensus.hashGenesisBlock == uint256S("095e70765a97b5ee5b55fe8c5661fe58d61ea60a441d08aefc30119666b0e817"));
+        assert(consensus.hashGenesisBlock == uint256S("02282acb5c913481d7c064bfa7de938b37cfc312d0db03385ce1cdf874b05d0e"));
         assert(genesis.hashMerkleRoot == uint256S("094ef7f8882f3ec07edf16aa707c9511562b0e6211a8ed9db36332134bfe5357"));
 
         vFixedSeeds.clear();
