@@ -26,6 +26,7 @@
 #include "zcash/zip32.h"
 #include "base58.h"
 
+#include <univalue.h>
 #include <algorithm>
 #include <map>
 #include <set>
@@ -150,6 +151,12 @@ static void WriteOrderPos(const int64_t& nOrderPos, mapValue_t& mapValue)
         return;
     mapValue["n"] = i64tostr(nOrderPos);
 }
+
+CAmount getBalanceTaddr(std::string transparentAddress, int minDepth=1, bool ignoreUnspendable=true);
+CAmount getBalanceZaddr(std::string address, int minDepth = 1, bool ignoreUnspendable=true);
+void AcentryToJSON(const CAccountingEntry& acentry, const std::string& strAccount, UniValue& ret);
+void ListTransactions(const CWalletTx& wtx, const std::string& strAccount, int nMinDepth, bool fLong, UniValue& ret, const isminefilter& filter);
+
 
 struct COutputEntry
 {
