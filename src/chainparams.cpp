@@ -231,9 +231,9 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_TESTDUMMY].nActivationHeight =
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
         consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nProtocolVersion = 170005;
-        consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = 100;
+        consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = 50;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170007;
-        consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 200;
+        consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 50;
 
 
         // The best chain should have at least this much work.
@@ -253,18 +253,18 @@ public:
         nEquihashK = K;
 
         genesis = CreateGenesisBlock(
-            1540752040,
-            uint256S("0000000000000000000000000000000000000000000000000000000000000003"),
-            ParseHex("023829a925985426873c3ea9809d02cae71fc9ee29b9c55407303458d2d945dab71853667b1480711e8e61567db019c8c44a08b01de59ff2170abcae5f66e33def6ad30e617cd364d177201a8303234a3cb0ef94baad8a849ebcfe8d556128541b67623f0380707cbad9026fc9816138aa339c7dcae786f8fd559f434d0ace9acd81ec8dead0a7142ba873c6df615116e56a15e315390512a12b992a52d5f2ed1a96d2b10fa9e0485137dd47737ca921e1ba6b9f85cb8b061e9e330439d96a5875698a54c9edfcf103efeb2534d455c6eafb1812d55526f6e901b21868f79db72706bd8148466f60125ef8806ca14e69ed0cd7765e9ec97c896905341c6f5fbf12ea811964ec95859d9e7e521eb9ba7dba4bef065cf854594b13b688d595f541e736b9a98c6ab992d5d13a8005a505b1d993c6cd6ada96fcb2eb99d7ae4bcd504bb5f8f2145e5284d0a52df8ffbbbdc11068f6b6cc83025f3b2d6ff0e5f4181780d42017c9c5fe380833c25cb2a99a50b73c4ca7f7116819615d3070ece82d66fb791311f117b2ddd2292e107df34e24"),
+            1542244402,
+            uint256S("0000000000000000000000000000000000000000000000000000000000000007"),
+            ParseHex("0112369e83d7c1667babefb9901f494ca75088c6e3cd4231a1099789c7bc2125da167d562261ec5d856c45614a28578a378a118ef63d77c1d5bf8b159d26d2649f21d31d5cdbc31ac2317c31072ade90a0e557e4f6b5f45718c997080ea65d63a7d90cc50160bf20d536abbac91af665d11e1f69c068556e5094f0edaa1bf7ac44ce072456237a18cae937477fc3590ecb0babff50511712877c99a4d29ed4d7d99d32f7cc221c67f541df6eec718f20dc90aadec4908541dc09be52f135f244b55df32031fb00b808916c99ee23072fade4657287a9b6168178c30e746de5bff7143f955b534179d1bf1d6724a1a42845f7ff389322a4c416913cf95e6ee36252df00d803347433815d58eced61974300aa734d1fc533cb9ce09a0ffa83f405d56937ac283a70c7b5804c260e43c349d2a30ebb3e58de7e033d0a7290da6390bbf9f56dd53c1d7f3886471214c50a66fb394145ee891ecb71cc7bc3f44022609fcc97ca0e58755d89d513b9e8c5ed9b393b6655f17ba1371f6bb1ff3651cb1737f0cc18d89d5d940ab2fd3f9dcd8ca6"),
             0x200A1FA<<4, 4, 0);
         consensus.hashGenesisBlock = genesis.GetHash();
 
-        LogPrintf("TESTNET\n");
-        LogPrintf("consensus.hashGenesisBlock=%s\n", consensus.hashGenesisBlock.GetHex());
-        LogPrintf("genesis.hashMerkleRoot=%s\n", genesis.hashMerkleRoot.GetHex());
-        LogPrintf("genesis.nTime=%is\n", genesis.nTime);
+        //LogPrintf("TESTNET\n");
+        //LogPrintf("consensus.hashGenesisBlock=%s\n", consensus.hashGenesisBlock.GetHex());
+        //LogPrintf("genesis.hashMerkleRoot=%s\n", genesis.hashMerkleRoot.GetHex());
+        //LogPrintf("genesis.nTime=%is\n", genesis.nTime);
 
-        assert(consensus.hashGenesisBlock == uint256S("02282acb5c913481d7c064bfa7de938b37cfc312d0db03385ce1cdf874b05d0e"));
+        assert(consensus.hashGenesisBlock == uint256S("09c59b03b8d80af0d0e05737fd3ccbd29cfa389fd17395ae5c99143c9e3ad434"));
         assert(genesis.hashMerkleRoot == uint256S("094ef7f8882f3ec07edf16aa707c9511562b0e6211a8ed9db36332134bfe5357"));
 
         vFixedSeeds.clear();
