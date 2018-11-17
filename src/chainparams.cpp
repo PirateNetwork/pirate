@@ -143,7 +143,6 @@ public:
 
         vSeeds.clear();
         vSeeds.push_back(CDNSSeedData("CryptoForge", "zeroseed.cryptoforge.cc")); // @cryptoforge
-        vSeeds.push_back(CDNSSeedData("prophetalgorithms", "zerocurrency.prophetalgorithms.com")); // @MoodyDreamer
         vSeeds.push_back(CDNSSeedData("cryptonode1", "zseed1.cryptonode.cloud")); // @Kryptostuff
         vSeeds.push_back(CDNSSeedData("cryptonode2", "zseed2.cryptonode.cloud")); // @bKRyptostuff
         vSeeds.push_back(CDNSSeedData("zerocurrency", "insight.zerocurrency.io")); // @R3DEY3
