@@ -1,2 +1,2 @@
-DEBIAN/manpages/zcash-cli.1
-DEBIAN/manpages/zcashd.1
+DEBIAN/manpages/zero-cli.1
+DEBIAN/manpages/zerod.1

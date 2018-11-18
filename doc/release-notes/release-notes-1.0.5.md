@@ -17,7 +17,7 @@ Jack Grigg (22):
       Update debug categories
       Rename build-aux/m4/bitcoin_find_bdb48.m4 to remove version
       Throw an error if zcash.conf is missing
-      Show a friendly message explaining why zcashd needs a zcash.conf
+      Show a friendly message explaining why zerod needs a zcash.conf
       Fix gtest ordering broken by #1949
       Debian package lint
       Generate Debian control file to fix shlibs lint
@@ -45,7 +45,7 @@ Simon Liu (13):
       Bump COPYRIGHT_YEAR from 2016 to 2017.
       Closes #1780. Result of z_getoperationstatus now sorted by creation time of operation
       Remove UTF-8 BOM efbbbf from zcash.conf to avoid problems with command line tools
-      Closes #1097 so zcash-cli now displays license info like zcashd.
+      Closes #1097 so zero-cli now displays license info like zerod.
       Fixes #1497 ZCA-009 by restricting data exporting to user defined folder.
       Closes #1957 by adding tx serialization size to listtransactions output.
       Fixes #1960: z_getoperationstatus/result now includes operation details.

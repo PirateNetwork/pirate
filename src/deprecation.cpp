@@ -4,6 +4,7 @@
 
 #include "deprecation.h"
 
+#include "alert.h"
 #include "clientversion.h"
 #include "init.h"
 #include "ui_interface.h"
@@ -12,7 +13,7 @@
 
 static const std::string CLIENT_VERSION_STR = FormatVersion(CLIENT_VERSION);
 
-void EnforceNodeDeprecation(int nHeight, bool forceLogging) {
+void EnforceNodeDeprecation(int nHeight, bool forceLogging, bool fThread) {
 
     // Do not enforce deprecation in regtest or on testnet
     std::string networkID = Params().NetworkIDString();
@@ -31,6 +32,7 @@ void EnforceNodeDeprecation(int nHeight, bool forceLogging) {
                                  DEPRECATION_HEIGHT) + " " +
                        _("You should upgrade to the latest version of ZERO.");
             LogPrintf("*** %s\n", msg);
+            CAlert::Notify(msg, fThread);
             uiInterface.ThreadSafeMessageBox(msg, "", CClientUIInterface::MSG_ERROR);
         }
         StartShutdown();
@@ -40,6 +42,7 @@ void EnforceNodeDeprecation(int nHeight, bool forceLogging) {
                             DEPRECATION_HEIGHT) + " " +
                   _("You should upgrade to the latest version of ZERO.");
         LogPrintf("*** %s\n", msg);
+        CAlert::Notify(msg, fThread);
         uiInterface.ThreadSafeMessageBox(msg, "", CClientUIInterface::MSG_WARNING);
     }
 }

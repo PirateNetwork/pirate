@@ -1,10 +1,10 @@
 #include "httprpc.h"
 
-#include "base58.h"
 #include "chainparams.h"
 #include "httpserver.h"
-#include "rpcprotocol.h"
-#include "rpcserver.h"
+#include "key_io.h"
+#include "rpc/protocol.h"
+#include "rpc/server.h"
 #include "random.h"
 #include "sync.h"
 #include "util.h"
@@ -17,7 +17,7 @@
 static const char* WWW_AUTH_HEADER_DATA = "Basic realm=\"jsonrpc\"";
 
 /** Simple one-shot callback timer to be used by the RPC mechanism to e.g.
- * re-lock the wellet.
+ * re-lock the wallet.
  */
 class HTTPRPCTimer : public RPCTimerBase
 {

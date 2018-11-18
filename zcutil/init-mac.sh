@@ -134,11 +134,7 @@ if [ ! -f "$HOME/Library/Application Support/zero/zero.conf" ]; then
     echo "rpcuser=$USER" > ~/Library/Application\ Support/zero/zero.conf
     PASSWORD=$(cat /dev/urandom | env LC_CTYPE=C tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
     echo "rpcpassword=$PASSWORD" >> ~/Library/Application\ Support/zero/zero.conf
-    echo "rpcport=23800" >> ~/Library/Application\ Support/zero/zero.conf
-    echo "port=23801" >> ~/Library/Application\ Support/zero/zero.conf
     echo "txindex=1" >> ~/Library/Application\ Support/zero/zero.conf
-    echo "addnode=zeroseed.cryptoforge.cc:23801" >> ~/Library/Application\ Support/zero/zero.conf
-    echo "addnode=34.236.37.74:23801" >> ~/Library/Application\ Support/zero/zero.conf
     echo "server=1" >> ~/Library/Application\ Support/zero/zero.conf
     echo "Complete!"
 fi
