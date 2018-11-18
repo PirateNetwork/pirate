@@ -1,3 +1,4 @@
+![alt text](https://github.com/zerocurrencycoin/Zero/blob/master/art/zero%203d%20track.jpg?raw=true)
 [ZERO](https://zerocurrency.io) - [Isfjorden:2.0.1](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.1)
 
 ||FAST|| ||DECENTRALISED|| ||ANONYMOUS|| ||SECURE|| ||ASIC RESISTANT||  - LAUNCE DATE: 2017-02-19
