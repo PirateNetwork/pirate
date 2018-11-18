@@ -47,7 +47,7 @@ Jack Grigg (20):
       Remove redundant `= 0` initialisations
       Ensure that ECDSA constant sizes are correctly-sized
       Add test for -mempooltxinputlimit
-      Hold an ECCVerifyHandle in zcash-gtest
+      Hold an ECCVerifyHandle in zero-gtest
       Additional testing of -mempooltxinputlimit
       Fix comment
       Use sendfrom for both t-addr calls

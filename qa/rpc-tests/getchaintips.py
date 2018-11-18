@@ -8,12 +8,27 @@
 # This gives us two tips, verify that it works.
 
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.util import assert_equal
+from test_framework.util import assert_equal, initialize_chain_clean, \
+    start_nodes, connect_nodes_bi
 
 class GetChainTipsTest (BitcoinTestFramework):
 
+    def setup_chain(self):
+        print("Initializing test directory "+self.options.tmpdir)
+        initialize_chain_clean(self.options.tmpdir, 4)
+
+    def setup_network(self, split=False):
+        self.nodes = start_nodes(4, self.options.tmpdir, extra_args=[["-debug=zrpcunsafe", "-txindex"]] * 4 )
+        connect_nodes_bi(self.nodes,0,1)
+        connect_nodes_bi(self.nodes,1,2)
+        connect_nodes_bi(self.nodes,0,2)
+        connect_nodes_bi(self.nodes,0,3)
+        self.is_network_split=False
+        self.nodes[0].generate(200)
+        self.sync_all ()
+
     def run_test (self):
-        BitcoinTestFramework.run_test (self)
+        #BitcoinTestFramework.run_test (self)
 
         tips = self.nodes[0].getchaintips ()
         assert_equal (len (tips), 1)

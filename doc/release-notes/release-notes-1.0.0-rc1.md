@@ -85,7 +85,7 @@ Kevin Gallagher (24):
       Add alertkeys.h to libbitcoin_server_a_SOURCES
       Adds files in src/zcash/circuit to libzcash_a_SOURCES
       Adds zcbenchmarks.h to libbitcoin_wallet_a_SOURCES
-      Adds json_test_vectors.h to zcash_gtest_SOURCES
+      Adds json_test_vectors.h to zero_gtest_SOURCES
       Adds additional licenses to Debian copyright file
       Updates Zcash Core developers -> Zcash developers
       Adds . to blank lines in Google license
@@ -108,7 +108,7 @@ Simon (11):
       Use -debug=zrpc for z_* rpc calls (#1504)
       Document CWallet::GetFilteredNotes and fix return type which should be void.
       Fix test so that the encrypted wallet is output to the test_bitcoin -datadir folder.
-      Reorder gtests in zcash-gtest.
+      Reorder gtests in zero-gtest.
       Return improved error message when trying to spend Coinbase coins (#1373).
 
 Wladimir J. van der Laan (6):

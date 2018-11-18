@@ -58,7 +58,7 @@ Nathan Wilcox (39):
       Enable set -u mode.
       Fix a variable name typo.
       Reuse zcash_rpc.
-      Do not use `-rpcwait` on all `zcash_rpc` invocations, only block when starting zcashd.
+      Do not use `-rpcwait` on all `zcash_rpc` invocations, only block when starting zerod.
       Fix `release-process.md` doc usage for `make-release.py` to have correct arguments and order.
       Include release version in commit comments.
       Examine all future versions which are assumed to follow the same Version parser schema.
@@ -86,5 +86,5 @@ Simon Liu (5):
       Patch to build Proton with minimal dependencies.
 
 emilrus (1):
-      Replace bitcoind with zcashd
+      Replace bitcoind with zerod
 

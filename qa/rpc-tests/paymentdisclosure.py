@@ -40,7 +40,7 @@ class PaymentDisclosureTest (BitcoinTestFramework):
         self.sync_all()
         self.nodes[2].generate(3)
         self.sync_all()
-        self.nodes[1].generate(101)
+        self.nodes[1].generate(721)
         self.sync_all()
         assert_equal(self.nodes[0].getbalance(), 40)
         assert_equal(self.nodes[1].getbalance(), 10)

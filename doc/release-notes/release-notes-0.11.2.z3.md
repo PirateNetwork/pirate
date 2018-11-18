@@ -3,8 +3,8 @@ Daira Hopwood (1):
 
 Nathan Wilcox (4):
       Add a depends description for googletest.
-      Add a zcash-gtest binary to our build with a single tautological test.
-      Add coverage support scoped to only the zcash-gtest run; invoke with make zcash-cov; make cov is a superset.
+      Add a zero-gtest binary to our build with a single tautological test.
+      Add coverage support scoped to only the zero-gtest run; invoke with make zcash-cov; make cov is a superset.
       Add googlemock 1.7.0 dependency.
 
 Sean Bowe (49):
@@ -17,14 +17,14 @@ Sean Bowe (49):
       Improve well-formedness checks and add additional serialization/deserialization tests.
       Add more well-formedness checks/tests to tree.
       Make appending algorithm more succinct.
-      Move incremental merkle tree tests to zcash-gtest.
+      Move incremental merkle tree tests to zero-gtest.
       NoteEncryption implementation and integration, removal of ECIES and crypto++ dependencies.
       Move NoteEncryption tests to gtest suite.
       Add additional tests for ephemeral key behavior.
       Clarify the usage of decryption API.
       Check exception has specific string message.
       Small nit fixes
-      Run `zcash-gtest` in `make check` and fix performance tests.
+      Run `zero-gtest` in `make check` and fix performance tests.
       Perform zerocash tests as part of full-test-suite, in preparation for removal of zerocash waterfall.
       Distinguish the failure cases of wfcheck in tree.
       Change ciphertext length to match protocol spec, and refactor the use of constants.
@@ -63,7 +63,7 @@ Taylor Hornby (7):
       Fix sighash tests
       Add empty merkle/noteencryption tests so Sean can rebase.
       Fix RPC tests
-      Rename bitcoin.conf and bitcoind.pid to zcash.conf and zcashd.pid in qa/ and src/
+      Rename bitcoin.conf and bitcoind.pid to zcash.conf and zerod.pid in qa/ and src/
       Trivial change: Capitalize the Z in Zerocash
       Remove the Merkle tree hash function's fixed point.
 

@@ -5,42 +5,38 @@
 
 
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.util import assert_equal, start_node, \
-    start_nodes, connect_nodes_bi, bitcoind_processes
+from test_framework.util import assert_equal, assert_true, bitcoind_processes, \
+    connect_nodes_bi, start_node, start_nodes, wait_and_assert_operationid_status
 
-import time
 from decimal import Decimal
 
 class WalletNullifiersTest (BitcoinTestFramework):
+    def setup_chain(self):
+        print("Initializing test directory "+self.options.tmpdir)
+        initialize_chain_clean(self.options.tmpdir, 4)
 
     def setup_nodes(self):
         return start_nodes(4, self.options.tmpdir,
                            extra_args=[['-experimentalfeatures', '-developerencryptwallet']] * 4)
 
     def run_test (self):
+
+        print "Mining blocks..."
+        self.sync_all()
+        self.nodes[3].generate(25)
+        self.sync_all()
+        self.nodes[0].generate(721)
+        self.sync_all()
+
         # add zaddr to node 0
         myzaddr0 = self.nodes[0].z_getnewaddress()
 
         # send node 0 taddr to zaddr to get out of coinbase
-        mytaddr = self.nodes[0].getnewaddress();
+        mytaddr = self.nodes[0].getnewaddress()
         recipients = []
         recipients.append({"address":myzaddr0, "amount":Decimal('10.0')-Decimal('0.0001')}) # utxo amount less fee
-        myopid = self.nodes[0].z_sendmany(mytaddr, recipients)
 
-        opids = []
-        opids.append(myopid)
-
-        timeout = 120
-        status = None
-        for x in xrange(1, timeout):
-            results = self.nodes[0].z_getoperationresult(opids)
-            if len(results)==0:
-                time.sleep(1)
-            else:
-                status = results[0]["status"]
-                assert_equal("success", status)
-                mytxid = results[0]["result"]["txid"]
-                break
+        wait_and_assert_operationid_status(self.nodes[0], self.nodes[0].z_sendmany(mytaddr, recipients), timeout=120)
 
         self.sync_all()
         self.nodes[0].generate(1)
@@ -66,22 +62,8 @@ class WalletNullifiersTest (BitcoinTestFramework):
         # send node 0 zaddr to note 2 zaddr
         recipients = []
         recipients.append({"address":myzaddr, "amount":7.0})
-        myopid = self.nodes[0].z_sendmany(myzaddr0, recipients)
 
-        opids = []
-        opids.append(myopid)
-
-        timeout = 120
-        status = None
-        for x in xrange(1, timeout):
-            results = self.nodes[0].z_getoperationresult(opids)
-            if len(results)==0:
-                time.sleep(1)
-            else:
-                status = results[0]["status"]
-                assert_equal("success", status)
-                mytxid = results[0]["result"]["txid"]
-                break
+        wait_and_assert_operationid_status(self.nodes[0], self.nodes[0].z_sendmany(myzaddr0, recipients), timeout=120)
 
         self.sync_all()
         self.nodes[0].generate(1)
@@ -98,22 +80,8 @@ class WalletNullifiersTest (BitcoinTestFramework):
         # send node 2 zaddr to note 3 zaddr
         recipients = []
         recipients.append({"address":myzaddr3, "amount":2.0})
-        myopid = self.nodes[2].z_sendmany(myzaddr, recipients)
 
-        opids = []
-        opids.append(myopid)
-
-        timeout = 120
-        status = None
-        for x in xrange(1, timeout):
-            results = self.nodes[2].z_getoperationresult(opids)
-            if len(results)==0:
-                time.sleep(1)
-            else:
-                status = results[0]["status"]
-                assert_equal("success", status)
-                mytxid = results[0]["result"]["txid"]
-                break
+        wait_and_assert_operationid_status(self.nodes[2], self.nodes[2].z_sendmany(myzaddr, recipients), timeout=120)
 
         self.sync_all()
         self.nodes[2].generate(1)
@@ -136,26 +104,11 @@ class WalletNullifiersTest (BitcoinTestFramework):
         # This requires that node 1 be unlocked, which triggers caching of
         # uncached nullifiers.
         self.nodes[1].walletpassphrase("test", 600)
-        mytaddr1 = self.nodes[1].getnewaddress();
+        mytaddr1 = self.nodes[1].getnewaddress()
         recipients = []
         recipients.append({"address":mytaddr1, "amount":1.0})
-        myopid = self.nodes[1].z_sendmany(myzaddr, recipients)
 
-        opids = []
-        opids.append(myopid)
-
-        timeout = 120
-        status = None
-        for x in xrange(1, timeout):
-            results = self.nodes[1].z_getoperationresult(opids)
-            if len(results)==0:
-                time.sleep(1)
-            else:
-                status = results[0]["status"]
-                assert_equal("success", status)
-                mytxid = results[0]["result"]["txid"]
-                [mytxid] # hush pyflakes
-                break
+        wait_and_assert_operationid_status(self.nodes[1], self.nodes[1].z_sendmany(myzaddr, recipients), timeout=120)
 
         self.sync_all()
         self.nodes[1].generate(1)
@@ -184,15 +137,27 @@ class WalletNullifiersTest (BitcoinTestFramework):
         self.nodes[3].importaddress(mytaddr1)
         self.nodes[3].z_importviewingkey(myzvkey, 'whenkeyisnew', 1)
 
-
         # Check the address has been imported
         assert_equal(myzaddr in self.nodes[3].z_listaddresses(), False)
         assert_equal(myzaddr in self.nodes[3].z_listaddresses(True), True)
 
-        # Node 3 should see the same received notes as node 2
-        assert_equal(
-            self.nodes[2].z_listreceivedbyaddress(myzaddr),
-            self.nodes[3].z_listreceivedbyaddress(myzaddr))
+        # Node 3 should see the same received notes as node 2; however,
+        # some of the notes were change for node 2 but not for node 3.
+        # Aside from that the recieved notes should be the same. So,
+        # group by txid and then check that all properties aside from
+        # change are equal.
+        node2Received = dict([r['txid'], r] for r in self.nodes[2].z_listreceivedbyaddress(myzaddr))
+        node3Received = dict([r['txid'], r] for r in self.nodes[3].z_listreceivedbyaddress(myzaddr))
+        assert_equal(len(node2Received), len(node2Received))
+        for txid in node2Received:
+            received2 = node2Received[txid]
+            received3 = node3Received[txid]
+            # the change field will be omitted for received3, but all other fields should be shared
+            assert_true(len(received2) >= len(received3))
+            for key in received2:
+                # check all the properties except for change
+                if key != 'change':
+                    assert_equal(received2[key], received3[key])
 
         # Node 3's balances should be unchanged without explicitly requesting
         # to include watch-only balances
