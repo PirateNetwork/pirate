@@ -2,15 +2,11 @@
 *.deb
 *.exe
 src/bitcoin
-src/zcashd
-src/zcash-cli
-src/zcash-gtest
-src/zcash-tx
+src/zerod
+src/zero-cli
+src/zero-gtest
+src/zero-tx
 src/test/test_bitcoin
-
-# Zcash utilities
-src/zcash/GenerateParams
-src/zcash/CreateJoinSplit
 
 *zcashTest.pk
 *zcashTest.vk
@@ -92,7 +88,7 @@ build
 *.gcda
 /*.info
 test_bitcoin.coverage/
-zcash-gtest.coverage/
+zero-gtest.coverage/
 total.coverage/
 coverage_percent.txt
 

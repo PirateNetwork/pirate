@@ -12,19 +12,11 @@
 
 namespace libsnark {
 
-#ifdef __APPLE__
 template<typename T>
-unsigned long size_in_bits(const std::vector<T> &v)
+uint64_t size_in_bits(const std::vector<T> &v)
 {
     return v.size() * T::size_in_bits();
 }
-#else
-template<typename T>
-size_t size_in_bits(const std::vector<T> &v)
-{
-    return v.size() * T::size_in_bits();
-}
-#endif
 
 } // libsnark
 

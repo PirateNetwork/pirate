@@ -8,9 +8,9 @@
 
 #include "amount.h"
 #include "coins.h"
-#include "consensus/consensus.h"
 #include "key.h"
 #include "keystore.h"
+#include "main.h"
 #include "primitives/block.h"
 #include "primitives/transaction.h"
 #include "tinyformat.h"
@@ -21,9 +21,12 @@
 #include "wallet/crypter.h"
 #include "wallet/wallet_ismine.h"
 #include "wallet/walletdb.h"
+#include "wallet/rpcwallet.h"
 #include "zcash/Address.hpp"
+#include "zcash/zip32.h"
 #include "base58.h"
 
+#include <univalue.h>
 #include <algorithm>
 #include <map>
 #include <set>
@@ -58,7 +61,10 @@ static const unsigned int MAX_FREE_TRANSACTION_CREATE_SIZE = 1000;
 //! Size of witness cache
 //  Should be large enough that we can expect not to reorg beyond our cache
 //  unless there is some exceptional network disruption.
-static const unsigned int WITNESS_CACHE_SIZE = COINBASE_MATURITY;
+static const unsigned int WITNESS_CACHE_SIZE = MAX_REORG_LENGTH + 1;
+
+//! Size of HD seed in bytes
+static const size_t HD_WALLET_SEED_LENGTH = 32;
 
 class CBlockIndex;
 class CCoinControl;
@@ -93,8 +99,9 @@ public:
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-        if (!(nType & SER_GETHASH))
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        int nVersion = s.GetVersion();
+        if (!(s.GetType() & SER_GETHASH))
             READWRITE(nVersion);
         READWRITE(nTime);
         READWRITE(vchPubKey);
@@ -145,6 +152,12 @@ static void WriteOrderPos(const int64_t& nOrderPos, mapValue_t& mapValue)
     mapValue["n"] = i64tostr(nOrderPos);
 }
 
+CAmount getBalanceTaddr(std::string transparentAddress, int minDepth=1, bool ignoreUnspendable=true);
+CAmount getBalanceZaddr(std::string address, int minDepth = 1, bool ignoreUnspendable=true);
+void AcentryToJSON(const CAccountingEntry& acentry, const std::string& strAccount, UniValue& ret);
+void ListTransactions(const CWalletTx& wtx, const std::string& strAccount, int nMinDepth, bool fLong, UniValue& ret, const isminefilter& filter);
+
+
 struct COutputEntry
 {
     CTxDestination destination;
@@ -152,28 +165,23 @@ struct COutputEntry
     int vout;
 };
 
-/** An note outpoint */
+/** A note outpoint */
 class JSOutPoint
 {
 public:
     // Transaction hash
     uint256 hash;
     // Index into CTransaction.vjoinsplit
-    #ifdef __APPLE__
     uint64_t js;
-    #else
-    size_t js;
-    #endif
-    // Index into JSDescription fields of length ZC_NUM_JS_OUTPUTS
     uint8_t n;
 
     JSOutPoint() { SetNull(); }
-    JSOutPoint(uint256 h, size_t js, uint8_t n) : hash {h}, js {js}, n {n} { }
+    JSOutPoint(uint256 h, uint64_t js, uint8_t n) : hash {h}, js {js}, n {n} { }
 
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
+    inline void SerializationOp(Stream& s, Operation ser_action) {
         READWRITE(hash);
         READWRITE(js);
         READWRITE(n);
@@ -199,14 +207,14 @@ public:
     std::string ToString() const;
 };
 
-class CNoteData
+class SproutNoteData
 {
 public:
-    libzcash::PaymentAddress address;
+    libzcash::SproutPaymentAddress address;
 
     /**
      * Cached note nullifier. May not be set if the wallet was not unlocked when
-     * this was CNoteData was created. If not set, we always assume that the
+     * this was SproutNoteData was created. If not set, we always assume that the
      * note has not been spent.
      *
      * It's okay to cache the nullifier in the wallet, because we are storing
@@ -222,12 +230,12 @@ public:
      * Cached incremental witnesses for spendable Notes.
      * Beginning of the list is the most recent witness.
      */
-    std::list<ZCIncrementalWitness> witnesses;
+    std::list<SproutWitness> witnesses;
 
     /**
      * Block height corresponding to the most current witness.
      *
-     * When we first create a CNoteData in CWallet::FindMyNotes, this is set to
+     * When we first create a SproutNoteData in CWallet::FindMySproutNotes, this is set to
      * -1 as a placeholder. The next time CWallet::ChainTip is called, we can
      * determine what height the witness cache for this note is valid for (even
      * if no witnesses were cached), and so can set the correct value in
@@ -235,46 +243,111 @@ public:
      */
     int witnessHeight;
 
-    CNoteData() : address(), nullifier(), witnessHeight {-1} { }
-    CNoteData(libzcash::PaymentAddress a) :
+    SproutNoteData() : address(), nullifier(), witnessHeight {-1} { }
+    SproutNoteData(libzcash::SproutPaymentAddress a) :
             address {a}, nullifier(), witnessHeight {-1} { }
-    CNoteData(libzcash::PaymentAddress a, uint256 n) :
+    SproutNoteData(libzcash::SproutPaymentAddress a, uint256 n) :
             address {a}, nullifier {n}, witnessHeight {-1} { }
 
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
+    inline void SerializationOp(Stream& s, Operation ser_action) {
         READWRITE(address);
         READWRITE(nullifier);
         READWRITE(witnesses);
         READWRITE(witnessHeight);
     }
 
-    friend bool operator<(const CNoteData& a, const CNoteData& b) {
+    friend bool operator<(const SproutNoteData& a, const SproutNoteData& b) {
         return (a.address < b.address ||
                 (a.address == b.address && a.nullifier < b.nullifier));
     }
 
-    friend bool operator==(const CNoteData& a, const CNoteData& b) {
+    friend bool operator==(const SproutNoteData& a, const SproutNoteData& b) {
         return (a.address == b.address && a.nullifier == b.nullifier);
     }
 
-    friend bool operator!=(const CNoteData& a, const CNoteData& b) {
+    friend bool operator!=(const SproutNoteData& a, const SproutNoteData& b) {
         return !(a == b);
     }
 };
 
-typedef std::map<JSOutPoint, CNoteData> mapNoteData_t;
-
-/** Decrypted note and its location in a transaction. */
-struct CNotePlaintextEntry
+class SaplingNoteData
 {
-    JSOutPoint jsop;
-    libzcash::NotePlaintext plaintext;
+public:
+    /**
+     * We initialize the height to -1 for the same reason as we do in SproutNoteData.
+     * See the comment in that class for a full description.
+     */
+    SaplingNoteData() : witnessHeight {-1}, nullifier() { }
+    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk) : ivk {ivk}, witnessHeight {-1}, nullifier() { }
+    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk, uint256 n) : ivk {ivk}, witnessHeight {-1}, nullifier(n) { }
+
+    std::list<SaplingWitness> witnesses;
+    int witnessHeight;
+    libzcash::SaplingIncomingViewingKey ivk;
+    boost::optional<uint256> nullifier;
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        int nVersion = s.GetVersion();
+        if (!(s.GetType() & SER_GETHASH)) {
+            READWRITE(nVersion);
+        }
+        READWRITE(ivk);
+        READWRITE(nullifier);
+        READWRITE(witnesses);
+        READWRITE(witnessHeight);
+    }
+
+    friend bool operator==(const SaplingNoteData& a, const SaplingNoteData& b) {
+        return (a.ivk == b.ivk && a.nullifier == b.nullifier && a.witnessHeight == b.witnessHeight);
+    }
+
+    friend bool operator!=(const SaplingNoteData& a, const SaplingNoteData& b) {
+        return !(a == b);
+    }
 };
 
+typedef std::map<JSOutPoint, SproutNoteData> mapSproutNoteData_t;
+typedef std::map<SaplingOutPoint, SaplingNoteData> mapSaplingNoteData_t;
 
+/** Decrypted note and its location in a transaction. */
+struct CSproutNotePlaintextEntry
+{
+    JSOutPoint jsop;
+    libzcash::SproutPaymentAddress address;
+    libzcash::SproutNotePlaintext plaintext;
+};
+
+/** Decrypted note, location in a transaction, and confirmation height. */
+struct CUnspentSproutNotePlaintextEntry {
+    JSOutPoint jsop;
+    libzcash::SproutPaymentAddress address;
+    libzcash::SproutNotePlaintext plaintext;
+    int nHeight;
+};
+
+/** Sapling note and its location in a transaction. */
+struct SaplingNoteEntry
+{
+    SaplingOutPoint op;
+    libzcash::SaplingPaymentAddress address;
+    libzcash::SaplingNote note;
+    std::array<unsigned char, ZC_MEMO_SIZE> memo;
+};
+
+/** Sapling note, location in a transaction, and confirmation height. */
+struct UnspentSaplingNoteEntry {
+    SaplingOutPoint op;
+    libzcash::SaplingPaymentAddress address;
+    libzcash::SaplingNote note;
+    std::array<unsigned char, ZC_MEMO_SIZE> memo;
+    int nHeight;
+};
 
 /** A transaction with a merkle branch linking it to the block chain. */
 class CMerkleTx : public CTransaction
@@ -311,9 +384,8 @@ public:
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
+    inline void SerializationOp(Stream& s, Operation ser_action) {
         READWRITE(*(CTransaction*)this);
-        nVersion = this->nVersion;
         READWRITE(hashBlock);
         READWRITE(vMerkleBranch);
         READWRITE(nIndex);
@@ -346,7 +418,8 @@ private:
 
 public:
     mapValue_t mapValue;
-    mapNoteData_t mapNoteData;
+    mapSproutNoteData_t mapSproutNoteData;
+    mapSaplingNoteData_t mapSaplingNoteData;
     std::vector<std::pair<std::string, std::string> > vOrderForm;
     unsigned int fTimeReceivedIsTxTime;
     unsigned int nTimeReceived; //! time received by this node
@@ -399,7 +472,8 @@ public:
     {
         pwallet = pwalletIn;
         mapValue.clear();
-        mapNoteData.clear();
+        mapSproutNoteData.clear();
+        mapSaplingNoteData.clear();
         vOrderForm.clear();
         fTimeReceivedIsTxTime = false;
         nTimeReceived = 0;
@@ -430,7 +504,7 @@ public:
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
+    inline void SerializationOp(Stream& s, Operation ser_action) {
         if (ser_action.ForRead())
             Init(NULL);
         char fSpent = false;
@@ -449,12 +523,16 @@ public:
         std::vector<CMerkleTx> vUnused; //! Used to be vtxPrev
         READWRITE(vUnused);
         READWRITE(mapValue);
-        READWRITE(mapNoteData);
+        READWRITE(mapSproutNoteData);
         READWRITE(vOrderForm);
         READWRITE(fTimeReceivedIsTxTime);
         READWRITE(nTimeReceived);
         READWRITE(fFromMe);
         READWRITE(fSpent);
+
+        if (fOverwintered && nVersion >= SAPLING_TX_VERSION) {
+            READWRITE(mapSaplingNoteData);
+        }
 
         if (ser_action.ForRead())
         {
@@ -491,7 +569,8 @@ public:
         MarkDirty();
     }
 
-    void SetNoteData(mapNoteData_t &noteData);
+    void SetSproutNoteData(mapSproutNoteData_t &noteData);
+    void SetSaplingNoteData(mapSaplingNoteData_t &noteData);
 
     //! filter decides which addresses will count towards the debit
     CAmount GetDebit(const isminefilter& filter) const;
@@ -563,8 +642,9 @@ public:
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-        if (!(nType & SER_GETHASH))
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        int nVersion = s.GetVersion();
+        if (!(s.GetType() & SER_GETHASH))
             READWRITE(nVersion);
         READWRITE(vchPrivKey);
         READWRITE(nTimeCreated);
@@ -608,8 +688,9 @@ public:
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-        if (!(nType & SER_GETHASH))
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        int nVersion = s.GetVersion();
+        if (!(s.GetType() & SER_GETHASH))
             READWRITE(nVersion);
         //! Note: strAccount is serialized as part of the key, not here.
         READWRITE(nCreditDebit);
@@ -622,7 +703,7 @@ public:
 
             if (!(mapValue.empty() && _ssExtra.empty()))
             {
-                CDataStream ss(nType, nVersion);
+                CDataStream ss(s.GetType(), s.GetVersion());
                 ss.insert(ss.begin(), '\0');
                 ss << mapValue;
                 ss.insert(ss.end(), _ssExtra.begin(), _ssExtra.end());
@@ -638,7 +719,7 @@ public:
             mapValue.clear();
             if (std::string::npos != nSepPos)
             {
-                CDataStream ss(std::vector<char>(strComment.begin() + nSepPos + 1, strComment.end()), nType, nVersion);
+                CDataStream ss(std::vector<char>(strComment.begin() + nSepPos + 1, strComment.end()), s.GetType(), s.GetVersion());
                 ss >> mapValue;
                 _ssExtra = std::vector<char>(ss.begin(), ss.end());
             }
@@ -690,10 +771,12 @@ private:
      * detect and report conflicts (double-spends).
      */
     typedef TxSpendMap<uint256> TxNullifiers;
-    TxNullifiers mapTxNullifiers;
+    TxNullifiers mapTxSproutNullifiers;
+    TxNullifiers mapTxSaplingNullifiers;
 
-    void AddToSpends(const COutPoint& outpoint, const uint256& wtxid);
-    void AddToSpends(const uint256& nullifier, const uint256& wtxid);
+    void AddToTransparentSpends(const COutPoint& outpoint, const uint256& wtxid);
+    void AddToSproutSpends(const uint256& nullifier, const uint256& wtxid);
+    void AddToSaplingSpends(const uint256& nullifier, const uint256& wtxid);
     void AddToSpends(const uint256& wtxid);
 
 public:
@@ -712,7 +795,8 @@ protected:
      */
     void IncrementNoteWitnesses(const CBlockIndex* pindex,
                                 const CBlock* pblock,
-                                ZCIncrementalMerkleTree& tree);
+                                SproutMerkleTree& sproutTree,
+                                SaplingMerkleTree& saplingTree);
     /**
      * pindex is the old tip being disconnected.
      */
@@ -765,6 +849,9 @@ protected:
     bool UpdatedNoteData(const CWalletTx& wtxIn, CWalletTx& wtx);
     void MarkAffectedTransactionsDirty(const CTransaction& tx);
 
+    /* the hd chain data model (chain counters) */
+    CHDChain hdChain;
+
 public:
     /*
      * Main wallet lock.
@@ -780,7 +867,8 @@ public:
 
     std::set<int64_t> setKeyPool;
     std::map<CKeyID, CKeyMetadata> mapKeyMetadata;
-    std::map<libzcash::PaymentAddress, CKeyMetadata> mapZKeyMetadata;
+    std::map<libzcash::SproutPaymentAddress, CKeyMetadata> mapSproutZKeyMetadata;
+    std::map<libzcash::SaplingIncomingViewingKey, CKeyMetadata> mapSaplingZKeyMetadata;
 
     typedef std::map<unsigned int, CMasterKey> MasterKeyMap;
     MasterKeyMap mapMasterKeys;
@@ -835,7 +923,7 @@ public:
      *
      * - GetFilteredNotes can't filter out spent notes.
      *
-     *   - Per the comment in CNoteData, we assume that if we don't have a
+     *   - Per the comment in SproutNoteData, we assume that if we don't have a
      *     cached nullifier, the note is not spent.
      *
      * Another more problematic implication is that the wallet can fail to
@@ -868,7 +956,9 @@ public:
      * - Restarting the node with -reindex (which operates on a locked wallet
      *   but with the now-cached nullifiers).
      */
-    std::map<uint256, JSOutPoint> mapNullifiersToNotes;
+    std::map<uint256, JSOutPoint> mapSproutNullifiersToNotes;
+
+    std::map<uint256, SaplingOutPoint> mapSaplingNullifiersToNotes;
 
     std::map<uint256, CWalletTx> mapWallet;
 
@@ -880,6 +970,8 @@ public:
     CPubKey vchDefaultKey;
 
     std::set<COutPoint> setLockedCoins;
+    std::set<JSOutPoint> setLockedSproutNotes;
+    std::set<SaplingOutPoint> setLockedSaplingNotes;
 
     int64_t nTimeFirstKey;
 
@@ -892,13 +984,26 @@ public:
     bool SelectCoinsMinConf(const CAmount& nTargetValue, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet) const;
 
     bool IsSpent(const uint256& hash, unsigned int n) const;
-    bool IsSpent(const uint256& nullifier) const;
+    bool IsSproutSpent(const uint256& nullifier) const;
+    bool IsSaplingSpent(const uint256& nullifier) const;
 
     bool IsLockedCoin(uint256 hash, unsigned int n) const;
     void LockCoin(COutPoint& output);
     void UnlockCoin(COutPoint& output);
     void UnlockAllCoins();
     void ListLockedCoins(std::vector<COutPoint>& vOutpts);
+
+    bool IsLockedNote(const JSOutPoint& outpt) const;
+    void LockNote(const JSOutPoint& output);
+    void UnlockNote(const JSOutPoint& output);
+    void UnlockAllSproutNotes();
+    std::vector<JSOutPoint> ListLockedSproutNotes();
+
+    bool IsLockedNote(const SaplingOutPoint& output) const;
+    void LockNote(const SaplingOutPoint& output);
+    void UnlockNote(const SaplingOutPoint& output);
+    void UnlockAllSaplingNotes();
+    std::vector<SaplingOutPoint> ListLockedSaplingNotes();
 
     /**
      * keystore implementation
@@ -946,23 +1051,55 @@ public:
       * ZKeys
       */
     //! Generates a new zaddr
-    CZCPaymentAddress GenerateNewZKey();
+    libzcash::PaymentAddress GenerateNewZKey();
     //! Adds spending key to the store, and saves it to disk
-    bool AddZKey(const libzcash::SpendingKey &key);
+    bool AddSproutZKey(const libzcash::SproutSpendingKey &key);
     //! Adds spending key to the store, without saving it to disk (used by LoadWallet)
-    bool LoadZKey(const libzcash::SpendingKey &key);
+    bool LoadZKey(const libzcash::SproutSpendingKey &key);
     //! Load spending key metadata (used by LoadWallet)
-    bool LoadZKeyMetadata(const libzcash::PaymentAddress &addr, const CKeyMetadata &meta);
+    bool LoadZKeyMetadata(const libzcash::SproutPaymentAddress &addr, const CKeyMetadata &meta);
     //! Adds an encrypted spending key to the store, without saving it to disk (used by LoadWallet)
-    bool LoadCryptedZKey(const libzcash::PaymentAddress &addr, const libzcash::ReceivingKey &rk, const std::vector<unsigned char> &vchCryptedSecret);
+    bool LoadCryptedZKey(const libzcash::SproutPaymentAddress &addr, const libzcash::ReceivingKey &rk, const std::vector<unsigned char> &vchCryptedSecret);
     //! Adds an encrypted spending key to the store, and saves it to disk (virtual method, declared in crypter.h)
-    bool AddCryptedSpendingKey(const libzcash::PaymentAddress &address, const libzcash::ReceivingKey &rk, const std::vector<unsigned char> &vchCryptedSecret);
+    bool AddCryptedSproutSpendingKey(
+        const libzcash::SproutPaymentAddress &address,
+        const libzcash::ReceivingKey &rk,
+        const std::vector<unsigned char> &vchCryptedSecret);
 
-    //! Adds a viewing key to the store, and saves it to disk.
-    bool AddViewingKey(const libzcash::ViewingKey &vk);
-    bool RemoveViewingKey(const libzcash::ViewingKey &vk);
-    //! Adds a viewing key to the store, without saving it to disk (used by LoadWallet)
-    bool LoadViewingKey(const libzcash::ViewingKey &dest);
+    //! Adds a Sprout viewing key to the store, and saves it to disk.
+    bool AddSproutViewingKey(const libzcash::SproutViewingKey &vk);
+    bool RemoveSproutViewingKey(const libzcash::SproutViewingKey &vk);
+    //! Adds a Sprout viewing key to the store, without saving it to disk (used by LoadWallet)
+    bool LoadSproutViewingKey(const libzcash::SproutViewingKey &dest);
+
+    /**
+      * Sapling ZKeys
+      */
+    //! Generates new Sapling key
+    libzcash::SaplingPaymentAddress GenerateNewSaplingZKey();
+    //! Adds Sapling spending key to the store, and saves it to disk
+    bool AddSaplingZKey(
+        const libzcash::SaplingExtendedSpendingKey &key,
+        const libzcash::SaplingPaymentAddress &defaultAddr);
+    bool AddSaplingIncomingViewingKey(
+        const libzcash::SaplingIncomingViewingKey &ivk,
+        const libzcash::SaplingPaymentAddress &addr);
+    bool AddCryptedSaplingSpendingKey(
+        const libzcash::SaplingExtendedFullViewingKey &extfvk,
+        const std::vector<unsigned char> &vchCryptedSecret,
+        const libzcash::SaplingPaymentAddress &defaultAddr);
+    //! Adds spending key to the store, without saving it to disk (used by LoadWallet)
+    bool LoadSaplingZKey(const libzcash::SaplingExtendedSpendingKey &key);
+    //! Load spending key metadata (used by LoadWallet)
+    bool LoadSaplingZKeyMetadata(const libzcash::SaplingIncomingViewingKey &ivk, const CKeyMetadata &meta);
+    //! Adds a Sapling payment address -> incoming viewing key map entry,
+    //! without saving it to disk (used by LoadWallet)
+    bool LoadSaplingPaymentAddress(
+        const libzcash::SaplingPaymentAddress &addr,
+        const libzcash::SaplingIncomingViewingKey &ivk);
+    //! Adds an encrypted spending key to the store, without saving it to disk (used by LoadWallet)
+    bool LoadCryptedSaplingZKey(const libzcash::SaplingExtendedFullViewingKey &extfvk,
+                                const std::vector<unsigned char> &vchCryptedSecret);
 
     /**
      * Increment the next transaction order id
@@ -983,13 +1120,15 @@ public:
     void MarkDirty();
     bool UpdateNullifierNoteMap();
     void UpdateNullifierNoteMapWithTx(const CWalletTx& wtx);
+    void UpdateSaplingNullifierNoteMapWithTx(CWalletTx& wtx);
+    void UpdateSaplingNullifierNoteMapForBlock(const CBlock* pblock);
     bool AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb);
     void SyncTransaction(const CTransaction& tx, const CBlock* pblock);
     bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate);
     void EraseFromWallet(const uint256 &hash);
     void WitnessNoteCommitment(
          std::vector<uint256> commitments,
-         std::vector<boost::optional<ZCIncrementalWitness>>& witnesses,
+         std::vector<boost::optional<SproutWitness>>& witnesses,
          uint256 &final_anchor);
     int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false);
     void ReacceptWalletTransactions();
@@ -1023,17 +1162,24 @@ public:
 
     std::set<CTxDestination> GetAccountAddresses(const std::string& strAccount) const;
 
-    boost::optional<uint256> GetNoteNullifier(
+    boost::optional<uint256> GetSproutNoteNullifier(
         const JSDescription& jsdesc,
-        const libzcash::PaymentAddress& address,
+        const libzcash::SproutPaymentAddress& address,
         const ZCNoteDecryption& dec,
         const uint256& hSig,
         uint8_t n) const;
-    mapNoteData_t FindMyNotes(const CTransaction& tx) const;
-    bool IsFromMe(const uint256& nullifier) const;
-    void GetNoteWitnesses(
+    mapSproutNoteData_t FindMySproutNotes(const CTransaction& tx) const;
+    std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> FindMySaplingNotes(const CTransaction& tx) const;
+    bool IsSproutNullifierFromMe(const uint256& nullifier) const;
+    bool IsSaplingNullifierFromMe(const uint256& nullifier) const;
+
+    void GetSproutNoteWitnesses(
          std::vector<JSOutPoint> notes,
-         std::vector<boost::optional<ZCIncrementalWitness>>& witnesses,
+         std::vector<boost::optional<SproutWitness>>& witnesses,
+         uint256 &final_anchor);
+    void GetSaplingNoteWitnesses(
+         std::vector<SaplingOutPoint> notes,
+         std::vector<boost::optional<SaplingWitness>>& witnesses,
          uint256 &final_anchor);
 
     isminetype IsMine(const CTxIn& txin) const;
@@ -1048,9 +1194,12 @@ public:
     CAmount GetDebit(const CTransaction& tx, const isminefilter& filter) const;
     CAmount GetCredit(const CTransaction& tx, const isminefilter& filter) const;
     CAmount GetChange(const CTransaction& tx) const;
-    void ChainTip(const CBlockIndex *pindex, const CBlock *pblock, ZCIncrementalMerkleTree tree, bool added);
+    void ChainTip(const CBlockIndex *pindex, const CBlock *pblock, SproutMerkleTree sproutTree, SaplingMerkleTree saplingTree, bool added);
     /** Saves witness caches and best block locator to disk. */
     void SetBestChain(const CBlockLocator& loc);
+    std::set<std::pair<libzcash::PaymentAddress, uint256>> GetNullifiersForAddresses(const std::set<libzcash::PaymentAddress> & addresses);
+    bool IsNoteSproutChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet, const libzcash::PaymentAddress & address, const JSOutPoint & entry);
+    bool IsNoteSaplingChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet, const libzcash::PaymentAddress & address, const SaplingOutPoint & entry);
 
     DBErrors LoadWallet(bool& fFirstRunRet);
     DBErrors ZapWalletTx(std::vector<CWalletTx>& vWtx);
@@ -1124,13 +1273,50 @@ public:
     /** Set whether this wallet broadcasts transactions. */
     void SetBroadcastTransactions(bool broadcast) { fBroadcastTransactions = broadcast; }
 
+    /* Returns true if HD is enabled for all address types, false if only for Sapling */
+    bool IsHDFullyEnabled() const;
+
+    /* Generates a new HD seed (will reset the chain child index counters)
+       Sets the seed's version based on the current wallet version (so the
+       caller must ensure the current wallet version is correct before calling
+       this function). */
+    void GenerateNewSeed();
+
+    bool SetHDSeed(const HDSeed& seed);
+    bool SetCryptedHDSeed(const uint256& seedFp, const std::vector<unsigned char> &vchCryptedSecret);
+
+    /* Set the HD chain model (chain child index counters) */
+    void SetHDChain(const CHDChain& chain, bool memonly);
+    const CHDChain& GetHDChain() const { return hdChain; }
+
+    /* Set the current HD seed, without saving it to disk (used by LoadWallet) */
+    bool LoadHDSeed(const HDSeed& key);
+    /* Set the current encrypted HD seed, without saving it to disk (used by LoadWallet) */
+    bool LoadCryptedHDSeed(const uint256& seedFp, const std::vector<unsigned char>& seed);
+
     /* Find notes filtered by payment address, min depth, ability to spend */
-    void GetFilteredNotes(std::vector<CNotePlaintextEntry> & outEntries,
+    void GetFilteredNotes(std::vector<CSproutNotePlaintextEntry>& sproutEntries,
+                          std::vector<SaplingNoteEntry>& saplingEntries,
                           std::string address,
                           int minDepth=1,
                           bool ignoreSpent=true,
                           bool ignoreUnspendable=true);
 
+    /* Find notes filtered by payment addresses, min depth, ability to spend */
+    void GetFilteredNotes(std::vector<CSproutNotePlaintextEntry>& sproutEntries,
+                          std::vector<SaplingNoteEntry>& saplingEntries,
+                          std::set<libzcash::PaymentAddress>& filterAddresses,
+                          int minDepth=1,
+                          bool ignoreSpent=true,
+                          bool ignoreUnspendable=true);
+
+    /* Find unspent notes filtered by payment address, min depth and max depth */
+    void GetUnspentFilteredNotes(std::vector<CUnspentSproutNotePlaintextEntry>& sproutEntries,
+                                 std::vector<UnspentSaplingNoteEntry>& saplingEntries,
+                                 std::set<libzcash::PaymentAddress>& filterAddresses,
+                                 int minDepth=1,
+                                 int maxDepth=INT_MAX,
+                                 bool requireSpendingKey=true);
 };
 
 /** A key allocated from the key pool. */
@@ -1180,11 +1366,86 @@ public:
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
-        if (!(nType & SER_GETHASH))
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        int nVersion = s.GetVersion();
+        if (!(s.GetType() & SER_GETHASH))
             READWRITE(nVersion);
         READWRITE(vchPubKey);
     }
 };
+
+//
+// Shielded key and address generalizations
+//
+
+class PaymentAddressBelongsToWallet : public boost::static_visitor<bool>
+{
+private:
+    CWallet *m_wallet;
+public:
+    PaymentAddressBelongsToWallet(CWallet *wallet) : m_wallet(wallet) {}
+
+    bool operator()(const libzcash::SproutPaymentAddress &zaddr) const;
+    bool operator()(const libzcash::SaplingPaymentAddress &zaddr) const;
+    bool operator()(const libzcash::InvalidEncoding& no) const;
+};
+
+class HaveSpendingKeyForPaymentAddress : public boost::static_visitor<bool>
+{
+private:
+    CWallet *m_wallet;
+public:
+    HaveSpendingKeyForPaymentAddress(CWallet *wallet) : m_wallet(wallet) {}
+
+    bool operator()(const libzcash::SproutPaymentAddress &zaddr) const;
+    bool operator()(const libzcash::SaplingPaymentAddress &zaddr) const;
+    bool operator()(const libzcash::InvalidEncoding& no) const;
+};
+
+class GetSpendingKeyForPaymentAddress : public boost::static_visitor<boost::optional<libzcash::SpendingKey>>
+{
+private:
+    CWallet *m_wallet;
+public:
+    GetSpendingKeyForPaymentAddress(CWallet *wallet) : m_wallet(wallet) {}
+
+    boost::optional<libzcash::SpendingKey> operator()(const libzcash::SproutPaymentAddress &zaddr) const;
+    boost::optional<libzcash::SpendingKey> operator()(const libzcash::SaplingPaymentAddress &zaddr) const;
+    boost::optional<libzcash::SpendingKey> operator()(const libzcash::InvalidEncoding& no) const;
+};
+
+enum SpendingKeyAddResult {
+    KeyAlreadyExists,
+    KeyAdded,
+    KeyNotAdded,
+};
+
+class AddSpendingKeyToWallet : public boost::static_visitor<SpendingKeyAddResult>
+{
+private:
+    CWallet *m_wallet;
+    const Consensus::Params &params;
+    int64_t nTime;
+    boost::optional<std::string> hdKeypath; // currently sapling only
+    boost::optional<std::string> seedFpStr; // currently sapling only
+    bool log;
+public:
+    AddSpendingKeyToWallet(CWallet *wallet, const Consensus::Params &params) :
+        m_wallet(wallet), params(params), nTime(1), hdKeypath(boost::none), seedFpStr(boost::none), log(false) {}
+    AddSpendingKeyToWallet(
+        CWallet *wallet,
+        const Consensus::Params &params,
+        int64_t _nTime,
+        boost::optional<std::string> _hdKeypath,
+        boost::optional<std::string> _seedFp,
+        bool _log
+    ) : m_wallet(wallet), params(params), nTime(_nTime), hdKeypath(_hdKeypath), seedFpStr(_seedFp), log(_log) {}
+
+
+    SpendingKeyAddResult operator()(const libzcash::SproutSpendingKey &sk) const;
+    SpendingKeyAddResult operator()(const libzcash::SaplingExtendedSpendingKey &sk) const;
+    SpendingKeyAddResult operator()(const libzcash::InvalidEncoding& no) const;
+};
+
 
 #endif // BITCOIN_WALLET_WALLET_H

@@ -40,7 +40,7 @@ Simon Liu (3):
       Add note about zkey and encrypted wallets.
 
 Gaurav Rana (1):
-      Update zcash-cli stop message.
+      Update zero-cli stop message.
 
 Tom Ritter (1):
       Clarify comment about nonce space for Note Encryption.

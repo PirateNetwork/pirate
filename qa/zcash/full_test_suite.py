@@ -4,6 +4,7 @@
 #
 
 import argparse
+from glob import glob
 import os
 import re
 import subprocess
@@ -62,30 +63,38 @@ def check_security_hardening():
     # PIE, RELRO, Canary, and NX are tested by make check-security.
     ret &= subprocess.call(['make', '-C', repofile('src'), 'check-security']) == 0
 
-    ret &= test_rpath_runpath('src/zcashd')
-    ret &= test_rpath_runpath('src/zcash-cli')
-    ret &= test_rpath_runpath('src/zcash-gtest')
-    ret &= test_rpath_runpath('src/zcash-tx')
+    # The remaining checks are only for ELF binaries
+    # Assume that if zerod is an ELF binary, they all are
+    with open(repofile('src/zerod'), 'rb') as f:
+        magic = f.read(4)
+        if not magic.startswith(b'\x7fELF'):
+            return ret
+
+    ret &= test_rpath_runpath('src/zerod')
+    ret &= test_rpath_runpath('src/zero-cli')
+    ret &= test_rpath_runpath('src/zero-gtest')
+    ret &= test_rpath_runpath('src/zero-tx')
     ret &= test_rpath_runpath('src/test/test_bitcoin')
-    ret &= test_rpath_runpath('src/zcash/GenerateParams')
 
     # NOTE: checksec.sh does not reliably determine whether FORTIFY_SOURCE
     # is enabled for the entire binary. See issue #915.
-    ret &= test_fortify_source('src/zcashd')
-    ret &= test_fortify_source('src/zcash-cli')
-    ret &= test_fortify_source('src/zcash-gtest')
-    ret &= test_fortify_source('src/zcash-tx')
+    ret &= test_fortify_source('src/zerod')
+    ret &= test_fortify_source('src/zero-cli')
+    ret &= test_fortify_source('src/zero-gtest')
+    ret &= test_fortify_source('src/zero-tx')
     ret &= test_fortify_source('src/test/test_bitcoin')
-    ret &= test_fortify_source('src/zcash/GenerateParams')
 
     return ret
 
 def ensure_no_dot_so_in_depends():
-    arch_dir = os.path.join(
-        REPOROOT,
-        'depends',
-        'x86_64-unknown-linux-gnu',
-    )
+    depends_dir = os.path.join(REPOROOT, 'depends')
+    arch_dir = os.path.join(depends_dir, 'x86_64-unknown-linux-gnu')
+    if not os.path.isdir(arch_dir):
+        # Not Linux, try MacOS
+        arch_dirs = glob(os.path.join(depends_dir, 'x86_64-apple-darwin*'))
+        if arch_dirs:
+            # Just try the first one; there will only be on in CI
+            arch_dir = arch_dirs[0]
 
     exit_code = 0
 
@@ -99,7 +108,7 @@ def ensure_no_dot_so_in_depends():
                 exit_code = 1
     else:
         exit_code = 2
-        print "arch-specific build dir not present: {}".format(arch_dir)
+        print "arch-specific build dir not present"
         print "Did you build the ./depends tree?"
         print "Are you on a currently unsupported architecture?"
 
@@ -136,7 +145,7 @@ STAGES = [
 
 STAGE_COMMANDS = {
     'btest': [repofile('src/test/test_bitcoin'), '-p'],
-    'gtest': [repofile('src/zcash-gtest')],
+    'gtest': [repofile('src/zero-gtest')],
     'sec-hard': check_security_hardening,
     'no-dot-so': ensure_no_dot_so_in_depends,
     'util-test': util_test,

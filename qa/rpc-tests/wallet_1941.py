@@ -12,7 +12,8 @@ from test_framework.util import assert_equal, initialize_chain_clean, \
 
 from decimal import Decimal
 
-starttime = 1388534400
+#starttime = 1388534400
+starttime = 1531037936
 
 class Wallet1941RegressionTest (BitcoinTestFramework):
 
@@ -44,7 +45,7 @@ class Wallet1941RegressionTest (BitcoinTestFramework):
         print "Mining blocks..."
 
         self.nodes[0].setmocktime(starttime)
-        self.nodes[0].generate(101)
+        self.nodes[0].generate(721)
 
         mytaddr = self.nodes[0].getnewaddress()     # where coins were mined
         myzaddr = self.nodes[0].z_getnewaddress()
@@ -75,12 +76,12 @@ class Wallet1941RegressionTest (BitcoinTestFramework):
         self.add_second_node()
         self.nodes[1].getnewaddress()
         self.nodes[1].z_getnewaddress()
-        self.nodes[1].generate(101)
+        self.nodes[1].generate(721)
         self.sync_all()
 
         # Import the key on node 1, only scanning the last few blocks.
         # (uses 'true' to test boolean fallback)
-        self.nodes[1].z_importkey(key, 'true', self.nodes[1].getblockchaininfo()['blocks'] - 100)
+        self.nodes[1].z_importkey(key, 'true', self.nodes[1].getblockchaininfo()['blocks'] - 720)
 
         # Confirm that the balance on node 1 is zero, as we have not
         # rescanned over the older transactions
@@ -88,7 +89,7 @@ class Wallet1941RegressionTest (BitcoinTestFramework):
         assert_equal(Decimal(resp), 0)
 
         # Re-import the key on node 1, scanning from before the transaction.
-        self.nodes[1].z_importkey(key, 'yes', self.nodes[1].getblockchaininfo()['blocks'] - 110)
+        self.nodes[1].z_importkey(key, 'yes', self.nodes[1].getblockchaininfo()['blocks'] - 730)
 
         # Confirm that the balance on node 1 is valid now (node 1 must
         # have rescanned)

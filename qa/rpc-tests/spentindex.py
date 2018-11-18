@@ -81,7 +81,7 @@ class SpentIndexTest(BitcoinTestFramework):
         # Check that verbose raw transaction includes input values
         txVerbose2 = self.nodes[3].getrawtransaction(txid, 1)
         assert_equal(txVerbose2["vin"][0]["value"], Decimal(unspent[0]["amount"]))
-        assert_equal(txVerbose2["vin"][0]["valueSat"], amount)
+        assert_equal(txVerbose2["vin"][0]["valueZat"], amount)
 
         # Check that verbose raw transaction includes address values and input values
         privkey2 = "cSdkPxkAjA4HDr5VHgsebAPDEh9Gyub4HK8UJr2DFGGqKKy4K5sG"
@@ -101,7 +101,7 @@ class SpentIndexTest(BitcoinTestFramework):
         txVerbose3 = self.nodes[1].getrawtransaction(txid2, 1)
         assert_equal(txVerbose3["vin"][0]["address"], address2)
         assert_equal(txVerbose3["vin"][0]["value"], Decimal(unspent[0]["amount"]))
-        assert_equal(txVerbose3["vin"][0]["valueSat"], amount)
+        assert_equal(txVerbose3["vin"][0]["valueZat"], amount)
 
         # Check the database index
         block_hash = self.nodes[0].generate(1)
@@ -110,7 +110,7 @@ class SpentIndexTest(BitcoinTestFramework):
         txVerbose4 = self.nodes[3].getrawtransaction(txid2, 1)
         assert_equal(txVerbose4["vin"][0]["address"], address2)
         assert_equal(txVerbose4["vin"][0]["value"], Decimal(unspent[0]["amount"]))
-        assert_equal(txVerbose4["vin"][0]["valueSat"], amount)
+        assert_equal(txVerbose4["vin"][0]["valueZat"], amount)
 
 
         # Check block deltas

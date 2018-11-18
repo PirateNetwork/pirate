@@ -121,7 +121,6 @@ TEST_F(DeprecationTest, DeprecatedNodeIgnoredOnTestnet) {
     EXPECT_FALSE(ShutdownRequested());
 }
 
-/*
 TEST_F(DeprecationTest, AlertNotify) {
     boost::filesystem::path temp = GetTempPath() /
         boost::filesystem::unique_path("alertnotify-%%%%.txt");
@@ -129,7 +128,7 @@ TEST_F(DeprecationTest, AlertNotify) {
     mapArgs["-alertnotify"] = std::string("echo %s >> ") + temp.string();
 
     EXPECT_CALL(mock_, ThreadSafeMessageBox(::testing::_, "", CClientUIInterface::MSG_WARNING));
-    EnforceNodeDeprecation(DEPRECATION_HEIGHT - DEPRECATION_WARN_LIMIT, false);
+    EnforceNodeDeprecation(DEPRECATION_HEIGHT - DEPRECATION_WARN_LIMIT, false, false);
 
     std::vector<std::string> r = read_lines(temp);
     EXPECT_EQ(r.size(), 1u);
@@ -148,4 +147,3 @@ TEST_F(DeprecationTest, AlertNotify) {
 #endif
     boost::filesystem::remove(temp);
 }
-*/

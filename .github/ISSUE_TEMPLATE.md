@@ -1,6 +1,6 @@
 <!--- Remove text and sections that do not apply -->
 
-This issue tracker is only for technical issues related to zcashd.
+This issue tracker is only for technical issues related to zerod.
 
 General ZERO questions and/or support requests and are best directed to the https://github.com/zerocurrency/zero
 
@@ -22,7 +22,7 @@ Tell us what should happen
 Tell us what happens instead including any noticable error output (any messages displayed on-screen when e.g. a crash occurred)
 
 ### The version of Zcash you were using:
-Run `zcashd --version` to find out
+Run `zerod --version` to find out
 
 ### Machine specs:
 - OS name + version:
