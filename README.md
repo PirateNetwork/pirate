@@ -13,6 +13,8 @@ Download the latest version here - [ZERO - Latest Version - Isfjorden:2.0.1](htt
 ❓ What is ZERO?
 --------------
 
+[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.1) offers total payment confidentiality, while still maintaining a decentralised network using a public blockchain.
+
 [ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.1) is a revolutionary cryptocurrency and transaction platform based on Zcash.
 
 [ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.1) combines Bitcoin’s security with Zcash’s anonymity and privacy.
