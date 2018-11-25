@@ -1,3 +1,5 @@
+![alt text](https://github.com/zerocurrencycoin/Zero/blob/master/art/zero%203d%20mountain.png?raw=true)
+
 [ZERO](https://zerocurrency.io) - [Isfjorden:2.0.1](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.1)
 
 ||FAST|| ||DECENTRALISED|| ||ANONYMOUS|| ||SECURE|| ||ASIC RESISTANT||  - LAUNCE DATE: 2017-02-19
@@ -12,6 +14,8 @@ Download the latest version here - [ZERO - Latest Version - Isfjorden:2.0.1](htt
 --------------
 
 [ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.1) is a revolutionary cryptocurrency and transaction platform based on Zcash.
+
+[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.1) offers total payment confidentiality, while still maintaining a decentralised network using a public blockchain.
 
 [ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.1) combines Bitcoin’s security with Zcash’s anonymity and privacy.
 
