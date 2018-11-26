@@ -172,6 +172,7 @@ As of 08/03/2018 the following seeder nodes are up and run a recent Linux versio
 addnode=34.236.37.74
 addnode=178.128.42.10
 addnode=86.31.59.86
+addnode=46.101.66.152
 addnode=zseed1.cryptonode.cloud
 addnode=zseed2.cryptonode.cloud
 addnode=zeroseed.cryptoforge.cc
