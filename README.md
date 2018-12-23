@@ -151,11 +151,11 @@ git checkout master
 
 ### Build the source code to produce binary executables:
 ```
-./zcutil/build.sh --disable-rust -j$(nproc)
+./zcutil/build.sh -j$(nproc)
 ```
 On a typical laptop -j3 works fine, while retaining some UI interactivity
 ```
-./zcutil/build.sh --disable-rust -j3
+./zcutil/build.sh -j3
 ```
 
 ### Create a ZERO configuration file
