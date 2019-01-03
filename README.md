@@ -72,7 +72,7 @@ Zero is founded on a decentralised platform, there are no borders. Zero facilita
 
 ||INFLATION||
 --------------
-Zero has a small inflation that degrades over time. With a stable supply of 7200 Zero per day.
+Zero has a small inflation that degrades over time. With a stable supply of 7776 Zero per day.
 
 ------------------------------------------
 
