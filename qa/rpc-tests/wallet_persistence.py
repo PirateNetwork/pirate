@@ -1,7 +1,9 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # Copyright (c) 2018 The Zcash developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+import sys; assert sys.version_info < (3,), ur"This script does not run under Python 3. Please use Python 2.7.x."
 
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
@@ -69,10 +71,20 @@ class WalletPersistenceTest (BitcoinTestFramework):
         # Verify shielded balance
         assert_equal(self.nodes[0].z_getbalance(sapling_addr), Decimal('20'))
 
+        # Verify size of shielded pools
+        pools = self.nodes[0].getblockchaininfo()['valuePools']
+        assert_equal(pools[0]['chainValue'], Decimal('0'))  # Sprout
+        assert_equal(pools[1]['chainValue'], Decimal('20')) # Sapling
+
         # Restart the nodes
         stop_nodes(self.nodes)
         wait_bitcoinds()
         self.setup_network()
+
+        # Verify size of shielded pools
+        pools = self.nodes[0].getblockchaininfo()['valuePools']
+        assert_equal(pools[0]['chainValue'], Decimal('0'))  # Sprout
+        assert_equal(pools[1]['chainValue'], Decimal('20')) # Sapling
 
         # Node 0 sends some shielded funds to Node 1
         dest_addr = self.nodes[1].z_getnewaddress('sapling')
