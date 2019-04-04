@@ -1,8 +1,7 @@
 Security Warnings
 ====================
 
-Security Audit
---------------
+This document has been relocated to https://zcash.readthedocs.io/en/latest/rtd_pages/security_warnings.html
 
 Zcash has been subjected to a formal third-party security review. For security
 announcements, audit results and other general security information, see

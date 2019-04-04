@@ -46,7 +46,7 @@ Sweep up with a fee of 0.1 ZEC and set limit on the maximum number of UTXOs to s
 
 ### Asynchronous Call
 
-The `z_shieldcoinbase` RPC call is an asynchronous call, so you can queue up multiple operations. 
+The `z_shieldcoinbase` RPC call is an asynchronous call, so you can queue up multiple operations.
 
 When you invoke
 
@@ -99,3 +99,4 @@ Here is an example of using `z_shieldcoinbase` on testnet to shield multi-sig co
   - https://explorer.testnet.z.cash/tx/cf4f3da2e434f68b6e361303403344e22a9ff9a8fda9abc180d9520d0ca6527d
 
 
+The source for this document is available at https://gitlab.com/zcash-docs/zcash-docs/blob/master/source/rtd_pages/shield_coinbase.rst
