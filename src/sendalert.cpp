@@ -94,10 +94,10 @@ void ThreadSendAlert()
     alert.strRPCError   = alert.strStatusBar;
 
     // Set specific client version/versions here. If setSubVer is empty, no filtering on subver is done:
-    const std::vector<std::string> useragents = {"Pyramiden", "Longyearbyen", "Barentsburg", "Qaanaaq", "Uummannaq","Isfjorden"};
+    const std::vector<std::string> useragents = {"Isfjorden"};
 
     BOOST_FOREACH(const std::string& useragent, useragents) {
-        alert.setSubVer.insert(std::string("/"+useragent+":1.1.2/"));
+        alert.setSubVer.insert(std::string("/"+useragent+":2.0.1/"));
     }
 
     // Sanity check
