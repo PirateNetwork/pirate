@@ -140,10 +140,11 @@ public:
         vFixedSeeds = std::vector<SeedSpec6>(pnSeed6_main, pnSeed6_main + ARRAYLEN(pnSeed6_main));
 
         vSeeds.clear();
-        vSeeds.push_back(CDNSSeedData("CryptoForge", "zeroseed.cryptoforge.cc")); // @cryptoforge
-        vSeeds.push_back(CDNSSeedData("cryptonode1", "zseed1.cryptonode.cloud")); // @Kryptostuff
-        vSeeds.push_back(CDNSSeedData("cryptonode2", "zseed2.cryptonode.cloud")); // @bKRyptostuff
-        vSeeds.push_back(CDNSSeedData("zerocurrency", "insight.zerocurrency.io")); // @R3DEY3
+        vSeeds.push_back(CDNSSeedData("zerocurrency1", "seed1.zerocurrency.io"));
+        vSeeds.push_back(CDNSSeedData("zerocurrency2", "seed2.zerocurrency.io"));
+        vSeeds.push_back(CDNSSeedData("zerocurrency3", "seed3.zerocurrency.io"));
+        vSeeds.push_back(CDNSSeedData("zerocurrency4", "seed4.zerocurrency.io"));
+        vSeeds.push_back(CDNSSeedData("zerocurrency5", "seed5.zerocurrency.io"));
 
         // guarantees the first 2 characters, when base58 encoded, are "t1"
         base58Prefixes[PUBKEY_ADDRESS]     = {0x1C,0xB8};
@@ -268,7 +269,8 @@ public:
         vFixedSeeds = std::vector<SeedSpec6>(pnSeed6_test, pnSeed6_test + ARRAYLEN(pnSeed6_test));
 
         vSeeds.clear();
-        vSeeds.push_back(CDNSSeedData("cryptoforge", "testseed.cryptoforge.cc")); // CryptoForge
+        vSeeds.push_back(CDNSSeedData("testnet1", "testnet1.zerocurrency.io"));
+        vSeeds.push_back(CDNSSeedData("testnet2", "testnet2.zerocurrency.io"));
 
         // guarantees the first 2 characters, when base58 encoded, are "tm"
         base58Prefixes[PUBKEY_ADDRESS]     = {0x1D,0x25};
@@ -306,6 +308,15 @@ public:
                      //   (the tx=... number in the SetBestChain debug.log lines)
             0        //   total number of tx / (checkpoint block height / (24 * 24))
           };
+
+        // Hardcoded fallback value for the Sprout shielded value pool balance
+        // for nodes that have not reindexed since the introduction of monitoring
+        // in #2795.
+        //nSproutValuePoolCheckpointHeight = 440329;
+        //nSproutValuePoolCheckpointBalance = 40000029096803;
+        //fZIP209Enabled = true;
+        //hashSproutValuePoolCheckpointBlock = uint256S("000a95d08ba5dcbabe881fc6471d11807bcca7df5f1795c99f3ec4580db4279b");
+
 
         // Founders reward script expects a vector of 2-of-3 multisig addresses
         vFoundersRewardAddress = {

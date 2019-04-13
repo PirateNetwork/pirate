@@ -1,6 +1,6 @@
 # Wallet Backup Instructions
 
-## Overview
+This document has been relocated to https://zcash.readthedocs.io/en/latest/rtd_pages/wallet_backup.html
 
 Backing up your Zcash private keys is the best way to be proactive about preventing loss of access to your ZEC.
 
@@ -8,7 +8,7 @@ Problems resulting from bugs in the code, user error, device failure, etc. may l
 
 No matter what the cause of a corrupted or lost wallet could be, we highly recommend all users backup on a regular basis. Anytime a new address in the wallet is generated, we recommending making a new backup so all private keys for addresses in your wallet are safe.
 
-Note that a backup is a duplicate of data needed to spend ZEC so where you keep your backup(s) is another important consideration. You should not store backups where they would be equally or increasingly susceptible to loss or theft. 
+Note that a backup is a duplicate of data needed to spend ZEC so where you keep your backup(s) is another important consideration. You should not store backups where they would be equally or increasingly susceptible to loss or theft.
 
 ## Instructions for backing up your wallet and/or private keys
 
@@ -22,7 +22,7 @@ For all methods, you will need to include an export directory setting in your co
 
 You may chose any directory within the home directory as the location for export & backup files. If the directory doesn't exist, it will be created.
 
-Note that zerod will need to be stopped and restarted for edits in the config file to take effect. 
+Note that zerod will need to be stopped and restarted for edits in the config file to take effect.
 
 ### Using `backupwallet`
 
