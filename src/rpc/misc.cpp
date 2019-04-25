@@ -90,8 +90,7 @@ UniValue getalldata(const UniValue& params, bool fHelp)
     int nMinDepth = 1;
     CAmount nBalance = getBalanceTaddr("", nMinDepth, true);
     CAmount nPrivateBalance = getBalanceZaddr("", nMinDepth, true);
-    //CAmount nLockedCoin = pwalletMain->GetLockedCoins();
-    CAmount nLockedCoin = 0;
+    CAmount nLockedCoin = pwalletMain->GetLockedCoins();
 
     CAmount nTotalBalance = nBalance + nPrivateBalance + nLockedCoin;
 
@@ -115,72 +114,98 @@ UniValue getalldata(const UniValue& params, bool fHelp)
 
     if (params.size() > 0 && (params[0].get_int() == 1 || params[0].get_int() == 0))
     {
-      for (const std::pair<CTxDestination, CAddressBookData>& item : pwalletMain->mapAddressBook) {
+      BOOST_FOREACH(const PAIRTYPE(CTxDestination, CAddressBookData)& item, pwalletMain->mapAddressBook)
+      {
           UniValue addr(UniValue::VOBJ);
           const CTxDestination& dest = item.first;
+
           isminetype mine = pwalletMain ? IsMine(*pwalletMain, dest) : ISMINE_NO;
-          const std::string& strAccount = item.second.name;
+
+          const string& strName = item.second.name;
           nBalance = getBalanceTaddr(EncodeDestination(dest), nMinDepth, false);
+
           addr.push_back(Pair("amount", ValueFromAmount(nBalance)));
           addr.push_back(Pair("ismine", (mine & ISMINE_SPENDABLE) ? true : false));
           addrlist.push_back(Pair(EncodeDestination(dest), addr));
       }
 
       //address grouping
-      LOCK2(cs_main, pwalletMain->cs_wallet);
-      map<CTxDestination, CAmount> balances = pwalletMain->GetAddressBalances();
-      BOOST_FOREACH(set<CTxDestination> grouping, pwalletMain->GetAddressGroupings())
       {
-          BOOST_FOREACH(CTxDestination address, grouping)
+          LOCK2(cs_main, pwalletMain->cs_wallet);
+
+          map<CTxDestination, CAmount> balances = pwalletMain->GetAddressBalances();
+          BOOST_FOREACH(set<CTxDestination> grouping, pwalletMain->GetAddressGroupings())
           {
-              UniValue addr(UniValue::VOBJ);
-              const string& strName = EncodeDestination(address);
-              std::cout << "Address " << strName << "\n";
-              if(addrlist.exists(strName))
-                  continue;
-              isminetype mine = pwalletMain ? IsMine(*pwalletMain, address) : ISMINE_NO;
-              nBalance = getBalanceTaddr(strName, nMinDepth, false);
-              addr.push_back(Pair("amount", ValueFromAmount(nBalance)));
-              addr.push_back(Pair("ismine", (mine & ISMINE_SPENDABLE) ? true : false));
-              addrlist.push_back(Pair(strName, addr));
+              BOOST_FOREACH(CTxDestination address, grouping)
+              {
+                  UniValue addr(UniValue::VOBJ);
+                  const string& strName = EncodeDestination(address);
+                  if(addrlist.exists(strName))
+                      continue;
+                  isminetype mine = pwalletMain ? IsMine(*pwalletMain, address) : ISMINE_NO;
+
+                  nBalance = getBalanceTaddr(strName, nMinDepth, false);
+
+                  addr.push_back(Pair("amount", ValueFromAmount(nBalance)));
+                  addr.push_back(Pair("ismine", (mine & ISMINE_SPENDABLE) ? true : false));
+                  addrlist.push_back(Pair(strName, addr));
+              }
           }
       }
 
-      //get all z address - Sprout
-      std::set<libzcash::SproutPaymentAddress> addressSprout;
-      pwalletMain->GetSproutPaymentAddresses(addressSprout);
-      for (auto addr : addressSprout ) {
-          if (pwalletMain->HaveSproutSpendingKey(addr)) {
-              UniValue address(UniValue::VOBJ);
-              const string& strName = EncodePaymentAddress(addr);
-              nBalance = getBalanceZaddr(strName, nMinDepth, false);
-              address.push_back(Pair("amount", ValueFromAmount(nBalance)));
-              address.push_back(Pair("ismine", true));
-              addrlist.push_back(Pair(strName, address));
+      //get all z address
+      {
+          std::set<libzcash::SproutPaymentAddress> addresses;
+          pwalletMain->GetSproutPaymentAddresses(addresses);
+          for (auto addr : addresses) {
+              if (pwalletMain->HaveSproutSpendingKey(addr)) {
+                  UniValue address(UniValue::VOBJ);
+                  const string& strName = EncodePaymentAddress(addr);
+                  nBalance = getBalanceZaddr(strName, nMinDepth, false);
+                  address.push_back(Pair("amount", ValueFromAmount(nBalance)));
+                  address.push_back(Pair("ismine", true));
+                  addrlist.push_back(Pair(strName, address));
+              }
+              else
+              {
+                  UniValue address(UniValue::VOBJ);
+                  const string& strName = EncodePaymentAddress(addr);
+                  nBalance = getBalanceZaddr(strName, nMinDepth, false);
+                  address.push_back(Pair("amount", ValueFromAmount(nBalance)));
+                  address.push_back(Pair("ismine", false));
+                  addrlist.push_back(Pair(strName, address));
+              }
           }
       }
-
-      //get all z address - Sapling
-      std::set<libzcash::SaplingPaymentAddress> addressSapling;
-      pwalletMain->GetSaplingPaymentAddresses(addressSapling);
-      for (auto addr : addressSapling ) {
-        libzcash::SaplingIncomingViewingKey ivk;
-        libzcash::SaplingFullViewingKey fvk;
-        if (pwalletMain->GetSaplingIncomingViewingKey(addr, ivk) &&
-            pwalletMain->GetSaplingFullViewingKey(ivk, fvk) &&
-            pwalletMain->HaveSaplingSpendingKey(fvk)) {
-              UniValue address(UniValue::VOBJ);
-              const string& strName = EncodePaymentAddress(addr);
-              nBalance = getBalanceZaddr(strName, nMinDepth, false);
-              address.push_back(Pair("amount", ValueFromAmount(nBalance)));
-              address.push_back(Pair("ismine", true));
-              addrlist.push_back(Pair(strName, address));
+      {
+          std::set<libzcash::SaplingPaymentAddress> addresses;
+          pwalletMain->GetSaplingPaymentAddresses(addresses);
+          libzcash::SaplingIncomingViewingKey ivk;
+          libzcash::SaplingFullViewingKey fvk;
+          for (auto addr : addresses) {
+              if (pwalletMain->GetSaplingIncomingViewingKey(addr, ivk) &&
+                  pwalletMain->GetSaplingFullViewingKey(ivk, fvk)) {
+                  if(pwalletMain->HaveSaplingSpendingKey(fvk)) {
+                      UniValue address(UniValue::VOBJ);
+                      const string& strName = EncodePaymentAddress(addr);
+                      nBalance = getBalanceZaddr(strName, nMinDepth, false);
+                      address.push_back(Pair("amount", ValueFromAmount(nBalance)));
+                      address.push_back(Pair("ismine", true));
+                      addrlist.push_back(Pair(strName, address));
+                  }
+                  else
+                  {
+                      UniValue address(UniValue::VOBJ);
+                      const string& strName = EncodePaymentAddress(addr);
+                      nBalance = getBalanceZaddr(strName, nMinDepth, false);
+                      address.push_back(Pair("amount", ValueFromAmount(nBalance)));
+                      address.push_back(Pair("ismine", false));
+                      addrlist.push_back(Pair(strName, address));
+                  }
+              }
           }
       }
-
     }
-
-
 
     addressbalance.push_back(addrlist);
     returnObj.push_back(Pair("addressbalance", addressbalance));
@@ -211,6 +236,14 @@ UniValue getalldata(const UniValue& params, bool fHelp)
             {
                 day = 30;
             }
+            else if(params[1].get_int() == 4)
+            {
+                day = 90;
+            }
+            else if(params[1].get_int() == 5)
+            {
+                day = 365;
+            }
         }
 
         std::list<CAccountingEntry> acentries;
@@ -225,7 +258,11 @@ UniValue getalldata(const UniValue& params, bool fHelp)
             CAccountingEntry *const pacentry = (*it).second.second;
             if (pacentry != 0)
                 AcentryToJSON(*pacentry, strAccount, trans);
-            if (pwtx->nTimeReceived <= (t - (day * 60 * 60 * 24))) break;
+            int confirms = pwtx->GetDepthInMainChain();
+            if(confirms > 0)
+            {
+                if (mapBlockIndex[pwtx->hashBlock]->GetBlockTime() <= (t - (day * 60 * 60 * 24)) && (int)trans.size() >= nCount) break;
+            }
         }
 
         vector<UniValue> arrTmp = trans.getValues();
