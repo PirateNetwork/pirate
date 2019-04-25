@@ -351,7 +351,9 @@ class COutPoint : public BaseOutPoint
 public:
     COutPoint() : BaseOutPoint() {};
     COutPoint(uint256 hashIn, uint32_t nIn) : BaseOutPoint(hashIn, nIn) {};
+    std::string ToStringShort() const;
     std::string ToString() const;
+    uint256 GetHash();
 };
 
 /** An outpoint - a combination of a transaction hash and an index n into its sapling
@@ -360,7 +362,7 @@ class SaplingOutPoint : public BaseOutPoint
 {
 public:
     SaplingOutPoint() : BaseOutPoint() {};
-    SaplingOutPoint(uint256 hashIn, uint32_t nIn) : BaseOutPoint(hashIn, nIn) {}; 
+    SaplingOutPoint(uint256 hashIn, uint32_t nIn) : BaseOutPoint(hashIn, nIn) {};
     std::string ToString() const;
 };
 
@@ -374,6 +376,7 @@ public:
     COutPoint prevout;
     CScript scriptSig;
     uint32_t nSequence;
+    CScript prevPubKey;
 
     CTxIn()
     {
@@ -778,6 +781,18 @@ struct CMutableTransaction
      * fly, as opposed to GetHash() in CTransaction, which uses a cached result.
      */
     uint256 GetHash() const;
+
+    std::string ToString() const;
+
+    friend bool operator==(const CMutableTransaction& a, const CMutableTransaction& b)
+    {
+        return a.GetHash() == b.GetHash();
+    }
+
+    friend bool operator!=(const CMutableTransaction& a, const CMutableTransaction& b)
+    {
+        return !(a == b);
+    }
 };
 
 #endif // BITCOIN_PRIMITIVES_TRANSACTION_H

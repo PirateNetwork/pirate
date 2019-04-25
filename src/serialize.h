@@ -27,6 +27,8 @@
 
 #include "prevector.h"
 
+class CScript;
+
 static const unsigned int MAX_SIZE = 0x02000000;
 
 /**
@@ -534,6 +536,12 @@ template<typename Stream, typename T, typename A, typename V> void Unserialize_i
 template<typename Stream, typename T, typename A> inline void Unserialize(Stream& is, std::vector<T, A>& v);
 
 /**
+ * others derived from vector
+ */
+template<typename Stream> void Serialize(Stream& os, const CScript& v);
+template<typename Stream> void Unserialize(Stream& is, CScript& v);
+
+/**
  * optional
  */
 template<typename Stream, typename T> void Serialize(Stream& os, const boost::optional<T>& item);
@@ -762,6 +770,20 @@ inline void Unserialize(Stream& is, std::vector<T, A>& v)
     Unserialize_impl(is, v, T());
 }
 
+/**
+ * others derived from vector
+ */
+template<typename Stream>
+void Serialize(Stream& os, const CScript& v)
+{
+    Serialize(os, (const std::vector<unsigned char>&)v);
+}
+
+template<typename Stream>
+void Unserialize(Stream& is, CScript& v)
+{
+    Unserialize(is, (std::vector<unsigned char>&)v);
+}
 
 
 /**

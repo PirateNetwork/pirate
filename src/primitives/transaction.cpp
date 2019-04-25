@@ -144,6 +144,11 @@ uint256 JSDescription::h_sig(ZCJoinSplit& params, const uint256& joinSplitPubKey
     return params.h_sig(randomSeed, nullifiers, joinSplitPubKey);
 }
 
+std::string COutPoint::ToStringShort() const
+{
+    return strprintf("%s-%u", hash.ToString().substr(0,64), n);
+}
+
 std::string COutPoint::ToString() const
 {
     return strprintf("COutPoint(%s, %u)", hash.ToString().substr(0,10), n);
@@ -152,6 +157,11 @@ std::string COutPoint::ToString() const
 std::string SaplingOutPoint::ToString() const
 {
     return strprintf("SaplingOutPoint(%s, %u)", hash.ToString().substr(0, 10), n);
+}
+
+uint256 COutPoint::GetHash()
+{
+    return Hash(BEGIN(hash), END(hash), BEGIN(n), END(n));
 }
 
 CTxIn::CTxIn(COutPoint prevoutIn, CScript scriptSigIn, uint32_t nSequenceIn)
@@ -212,6 +222,47 @@ CMutableTransaction::CMutableTransaction(const CTransaction& tx) : nVersion(tx.n
 uint256 CMutableTransaction::GetHash() const
 {
     return SerializeHash(*this);
+}
+
+std::string CMutableTransaction::ToString() const
+{
+  std::string str;
+  if (!fOverwintered) {
+      str += strprintf("CTransaction(hash=%s, ver=%d, vin.size=%u, vout.size=%u, nLockTime=%u)\n",
+          GetHash().ToString().substr(0,10),
+          nVersion,
+          vin.size(),
+          vout.size(),
+          nLockTime);
+  } else if (nVersion >= SAPLING_MIN_TX_VERSION) {
+      str += strprintf("CTransaction(hash=%s, ver=%d, fOverwintered=%d, nVersionGroupId=%08x, vin.size=%u, vout.size=%u, nLockTime=%u, nExpiryHeight=%u, valueBalance=%u, vShieldedSpend.size=%u, vShieldedOutput.size=%u)\n",
+          GetHash().ToString().substr(0,10),
+          nVersion,
+          fOverwintered,
+          nVersionGroupId,
+          vin.size(),
+          vout.size(),
+          nLockTime,
+          nExpiryHeight,
+          valueBalance,
+          vShieldedSpend.size(),
+          vShieldedOutput.size());
+  } else if (nVersion >= 3) {
+      str += strprintf("CTransaction(hash=%s, ver=%d, fOverwintered=%d, nVersionGroupId=%08x, vin.size=%u, vout.size=%u, nLockTime=%u, nExpiryHeight=%u)\n",
+          GetHash().ToString().substr(0,10),
+          nVersion,
+          fOverwintered,
+          nVersionGroupId,
+          vin.size(),
+          vout.size(),
+          nLockTime,
+          nExpiryHeight);
+  }
+  for (unsigned int i = 0; i < vin.size(); i++)
+      str += "    " + vin[i].ToString() + "\n";
+  for (unsigned int i = 0; i < vout.size(); i++)
+      str += "    " + vout[i].ToString() + "\n";
+  return str;
 }
 
 void CTransaction::UpdateHash() const

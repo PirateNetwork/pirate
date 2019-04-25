@@ -567,6 +567,7 @@ public:
 
     bool IsPayToPublicKeyHash() const;
 
+    bool IsNormalPaymentScript() const;
     bool IsPayToScriptHash() const;
 
     /** Called by IsStandardTx and P2SH/BIP62 VerifyScript (which makes it consensus-critical). */

@@ -20,6 +20,7 @@
 #include "key_io.h"
 #include "main.h"
 #include "metrics.h"
+#include "zeronode/zeronode-sync.h"
 #include "net.h"
 #include "pow.h"
 #include "primitives/transaction.h"
@@ -31,6 +32,12 @@
 #include "validationinterface.h"
 
 #include "sodium.h"
+
+#ifdef ENABLE_WALLET
+#include "wallet/wallet.h"
+#endif
+#include "zeronode/payments.h"
+#include "zeronode/spork.h"
 
 #include <boost/thread.hpp>
 #include <boost/tuple/tuple.hpp>
@@ -402,22 +409,17 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn)
         txNew.vin[0].prevout.SetNull();
         txNew.vout.resize(1);
         txNew.vout[0].scriptPubKey = scriptPubKeyIn;
-        txNew.vout[0].nValue = GetBlockSubsidy(nHeight, chainparams.GetConsensus());
+
         // Set to 0 so expiry height does not apply to coinbase txs
         txNew.nExpiryHeight = 0;
 
-        if ((nHeight >= chainparams.GetConsensus().nFeeStartBlockHeight) && (nHeight <= chainparams.GetConsensus().GetLastFoundersRewardBlockHeight())) {
-            // Founders reward is 20% of the block subsidy
-            auto vFoundersReward = txNew.vout[0].nValue * 0.075;
-            // Take some reward away from us
-            txNew.vout[0].nValue -= vFoundersReward;
+        // Zeronode and general budget payments
+        FillBlockPayee(txNew, nFees);
 
-            // And give it to the founders
-            txNew.vout.push_back(CTxOut(vFoundersReward, chainparams.GetFoundersRewardScriptAtHeight(nHeight)));
-        }
+        // Make payee
+        pblock->payee = txNew.vout[txNew.vout.size() - 1].scriptPubKey;
 
         // Add fees
-        txNew.vout[0].nValue += nFees;
         txNew.vin[0].scriptSig = CScript() << nHeight << OP_0;
 
         pblock->vtx[0] = txNew;

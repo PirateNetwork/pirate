@@ -121,6 +121,7 @@ LIBZCASH_H = \
 BITCOIN_CORE_H = \
 	addressindex.h \
 	spentindex.h \
+	zeronode/activezeronode.h \
   addrman.h \
   alert.h \
   amount.h \
@@ -166,6 +167,12 @@ BITCOIN_CORE_H = \
   dbwrapper.h \
   limitedmap.h \
   main.h \
+	zeronode/zeronode.h \
+  zeronode/payments.h \
+  zeronode/budget.h \
+  zeronode/zeronode-sync.h \
+  zeronode/zeronodeman.h \
+  zeronode/zeronodeconfig.h \
   memusage.h \
   merkleblock.h \
   metrics.h \
@@ -174,6 +181,7 @@ BITCOIN_CORE_H = \
   net.h \
   netbase.h \
   noui.h \
+	zeronode/obfuscation.h \
   policy/fees.h \
   pow.h \
   prevector.h \
@@ -195,12 +203,15 @@ BITCOIN_CORE_H = \
   script/sign.h \
   script/standard.h \
   serialize.h \
+	zeronode/spork.h \
+  zeronode/sporkdb.h \
   streams.h \
   support/allocators/secure.h \
   support/allocators/zeroafterfree.h \
   support/cleanse.h \
   support/events.h \
   support/pagelocker.h \
+	zeronode/swifttx.h \
   sync.h \
   threadsafety.h \
   timedata.h \
@@ -276,7 +287,11 @@ libbitcoin_server_a_SOURCES = \
   rpc/net.cpp \
   rpc/rawtransaction.cpp \
   rpc/server.cpp \
+	rpc/zeronode.cpp \
+  rpc/zeronode-budget.cpp \
+	rpc/spork.cpp \
   script/sigcache.cpp \
+	zeronode/sporkdb.cpp \
   timedata.cpp \
   torcontrol.cpp \
   txdb.cpp \
@@ -307,6 +322,10 @@ endif
 libbitcoin_wallet_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 libbitcoin_wallet_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libbitcoin_wallet_a_SOURCES = \
+	zeronode/activezeronode.cpp \
+	zeronode/obfuscation.cpp \
+  utiltest.cpp \
+  utiltest.h \
   zcbenchmarks.cpp \
   zcbenchmarks.h \
   wallet/asyncrpcoperation_mergetoaddress.cpp \
@@ -315,6 +334,13 @@ libbitcoin_wallet_a_SOURCES = \
   wallet/crypter.cpp \
   wallet/db.cpp \
   wallet/paymentdisclosure.cpp \
+	zeronode/swifttx.cpp \
+  zeronode/zeronode.cpp \
+  zeronode/budget.cpp \
+  zeronode/payments.cpp \
+  zeronode/zeronode-sync.cpp \
+  zeronode/zeronodeconfig.cpp \
+  zeronode/zeronodeman.cpp \
   wallet/paymentdisclosuredb.cpp \
   wallet/rpcdisclosure.cpp \
   wallet/rpcdump.cpp \
@@ -387,6 +413,8 @@ libbitcoin_common_a_SOURCES = \
   script/script_error.cpp \
   script/sign.cpp \
   script/standard.cpp \
+	zeronode/spork.cpp \
+	zeronode/sporkdb.cpp \
   transaction_builder.cpp \
   utiltest.cpp \
   $(BITCOIN_CORE_H) \

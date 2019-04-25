@@ -17,7 +17,19 @@ static const char* ppszTypeName[] =
     "ERROR",
     "tx",
     "block",
-    "filtered block"
+    "filtered block",
+    "tx lock request",
+    "tx lock vote",
+    "spork",
+    "zn winner",
+    "zn scan error",
+    "zn budget vote",
+    "zn budget proposal",
+    "zn budget finalized",
+    "zn budget finalized vote",
+    "zn quorum",
+    "zn announce",
+    "zn ping"
 };
 
 CMessageHeader::CMessageHeader(const MessageStartChars& pchMessageStartIn)
@@ -127,6 +139,10 @@ bool operator<(const CInv& a, const CInv& b)
 bool CInv::IsKnownType() const
 {
     return (type >= 1 && type < (int)ARRAYLEN(ppszTypeName));
+}
+
+bool CInv::IsZeroNodeType() const{
+ 	return (type >= 6);
 }
 
 const char* CInv::GetCommand() const

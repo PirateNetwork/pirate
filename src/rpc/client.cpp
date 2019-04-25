@@ -24,6 +24,7 @@ public:
 static const CRPCConvertParam vRPCConvertParams[] =
 {
     { "getalldata", 0},
+    { "getalldata", 1},
     { "stop", 0 },
     { "setmocktime", 0 },
     { "getaddednodeinfo", 0 },
@@ -140,7 +141,9 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "z_importkey", 2 },
     { "z_importviewingkey", 2 },
     { "z_getpaymentdisclosure", 1},
-    { "z_getpaymentdisclosure", 2}
+    { "z_getpaymentdisclosure", 2},
+    { "spork", 1},
+    { "spork", 2},
 };
 
 class CRPCConvertTable

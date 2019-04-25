@@ -99,6 +99,18 @@ namespace boost {
 
 using namespace std;
 
+// Zeronode
+// SwiftX
+bool fEnableSwiftTX = true;
+int nSwiftTXDepth = 5;
+bool fZeroNode = false;
+string strZeroNodePrivKey = "";
+string strZeroNodeAddr = "";
+bool fLiteMode = false;
+/** All denominations used by obfuscation */
+std::vector<int64_t> obfuScationDenominations;
+string strBudgetMode = "";
+
 map<string, string> mapArgs;
 map<string, vector<string> > mapMultiArgs;
 bool fDebug = false;
@@ -601,6 +613,13 @@ boost::filesystem::path GetConfigFile()
     if (!pathConfigFile.is_complete())
         pathConfigFile = GetDataDir(false) / pathConfigFile;
 
+    return pathConfigFile;
+}
+
+boost::filesystem::path GetZeronodeConfigFile()
+{
+    boost::filesystem::path pathConfigFile(GetArg("-znconf", "zeronode.conf"));
+    if (!pathConfigFile.is_complete()) pathConfigFile = GetDataDir() / pathConfigFile;
     return pathConfigFile;
 }
 
