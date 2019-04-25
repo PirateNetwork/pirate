@@ -7,6 +7,7 @@
 #include "rpc/server.h"
 #include "init.h"
 #include "main.h"
+#include "zeronode/zeronodeconfig.h"
 #include "noui.h"
 #include "scheduler.h"
 #include "util.h"
@@ -127,6 +128,15 @@ bool AppInit(int argc, char* argv[])
             fprintf(stderr, "Error: Invalid combination of -regtest and -testnet.\n");
             return false;
         }
+
+        //Start Zeronode
+        // parse zeronode.conf
+        std::string strErr;
+        if (!zeronodeConfig.read(strErr)) {
+            fprintf(stderr, "Error reading zeronode configuration file: %s\n", strErr.c_str());
+            return false;
+        }
+        //End Zeronode
 
         // Command-line RPC
         bool fCommandLine = false;

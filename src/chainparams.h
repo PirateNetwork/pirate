@@ -98,6 +98,17 @@ public:
     const std::string& Bech32HRP(Bech32Type type) const { return bech32HRPs[type]; }
     const std::vector<SeedSpec6>& FixedSeeds() const { return vFixedSeeds; }
     const CCheckpointData& Checkpoints() const { return checkpointData; }
+
+    /** Start Zeronode **/
+    /** The zeronode count that we will allow the see-saw reward payments to be off by */
+    int ZeronodeCountDrift() const { return nZeronodeCountDrift; }
+    std::string SporkKey() const { return strSporkKey; }
+    std::string ZeronodeDummyAddress() const { return strZeronodeDummyAddress; }
+    /** Headers first syncing is disabled */
+    bool HeadersFirstSyncingActive() const { return fHeadersFirstSyncingActive; };
+    int64_t Budget_Fee_Confirmations() const { return nBudget_Fee_Confirmations; }
+    /**End Zeronode **/
+
     /** Return the founder's reward address and script for a given block height */
     std::string GetFoundersRewardAddressAtHeight(int height) const;
     CScript GetFoundersRewardScriptAtHeight(int height) const;
@@ -128,6 +139,15 @@ protected:
     bool fRequireStandard = false;
     bool fMineBlocksOnDemand = false;
     bool fTestnetToBeDeprecatedFieldRPC = false;
+
+    /** Start Zeronode **/
+    int nZeronodeCountDrift;
+    std::string strSporkKey;
+    bool fHeadersFirstSyncingActive;
+    std::string strZeronodeDummyAddress;
+    int64_t nBudget_Fee_Confirmations;
+    /** Start Zeronode **/
+
     CCheckpointData checkpointData;
     std::vector<std::string> vFoundersRewardAddress;
 

@@ -12,6 +12,7 @@
 #include "crypto/equihash.h"
 #endif
 #include "init.h"
+#include "key_io.h"
 #include "main.h"
 #include "metrics.h"
 #include "miner.h"
@@ -21,6 +22,7 @@
 #include "txmempool.h"
 #include "util.h"
 #include "validationinterface.h"
+#include "zeronode/spork.h"
 
 #include <stdint.h>
 
@@ -459,6 +461,20 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
             "  \"curtime\" : ttt,                  (numeric) current timestamp in seconds since epoch (Jan 1 1970 GMT)\n"
             "  \"bits\" : \"xxx\",                 (string) compressed target of next block\n"
             "  \"height\" : n                      (numeric) The height of the next block\n"
+            "  \"votes\" : [\n                     (array) show vote candidates\n"
+            "        { ... }                       (json object) vote candidate\n"
+            "        ,...\n"
+            "  ],\n"
+            "  \"coinbase_required_outputs\" : [\n (array) required coinbase transactions\n"
+            "      {\n"
+            "         \"payee\" : \"xxxx\",        (string) required payee for the next block\n"
+            "         \"payee_amount\" : \"xxxx\", (numeric) required amount to pay\n"
+            "         \"type\" : \"xxxx\"          (string) payee type, devfee, utilitynode, etc...\n"
+            "      }\n"
+            "  \"payee\" : \"xxx\",                (string) required zeronode payee for the next block\n"
+            "  \"payee_amount\" : n,               (numeric) required amount to pay\n"
+            "  \"zeronode_payments\" : true|false,         (boolean) true, if zeronode payments are enabled\n"
+            "  \"enforce_zeronode_payments\" : true|false  (boolean) true, if zeronode payments are enforced\n"
             "}\n"
 
             "\nExamples:\n"
@@ -532,7 +548,7 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid mode");
 
     if (vNodes.empty())
-        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "Zcash is not connected!");
+        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "ZERO is not connected!");
 
     if (IsInitialBlockDownload())
         throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "ZERO is downloading blocks...");
@@ -687,6 +703,7 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
         aMutable.push_back("prevblock");
     }
 
+    UniValue aVotes(UniValue::VARR);
     UniValue result(UniValue::VOBJ);
     result.push_back(Pair("capabilities", aCaps));
     result.push_back(Pair("version", pblock->nVersion));
@@ -710,6 +727,60 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
     result.push_back(Pair("curtime", pblock->GetBlockTime()));
     result.push_back(Pair("bits", strprintf("%08x", pblock->nBits)));
     result.push_back(Pair("height", (int64_t)(pindexPrev->nHeight+1)));
+    result.push_back(Pair("votes", aVotes));
+
+    // List of all required coinbase transaction for the current block
+    if (pblock->vtx.size()) {
+        UniValue requiredCoinbaseArr(UniValue::VARR);
+        int nCoinbaseOutSize = pblock->vtx[0].vout.size();
+        int nCoinbaseIndex = 0;
+        bool foundersRewardActive = false;
+        if ((pindexPrev->nHeight+1 >= Params().GetConsensus().nFeeStartBlockHeight ) && (pindexPrev->nHeight+1 <= Params().GetConsensus().GetLastFoundersRewardBlockHeight())) {
+          foundersRewardActive = true;
+        }
+
+        //Founders Reward
+        if (nCoinbaseOutSize > nCoinbaseIndex + 1 && foundersRewardActive == true) {
+            nCoinbaseIndex++;
+            UniValue rqCoinbase(UniValue::VOBJ);
+            CTxDestination dest;
+            ExtractDestination(pblock->vtx[0].vout[nCoinbaseIndex].scriptPubKey, dest);
+            rqCoinbase.push_back(Pair("payee", EncodeDestination(dest)));
+            rqCoinbase.push_back(Pair("script", HexStr(pblock->vtx[0].vout[nCoinbaseIndex].scriptPubKey.begin(), pblock->vtx[0].vout[nCoinbaseIndex].scriptPubKey.end())));
+            rqCoinbase.push_back(Pair("amount", pblock->vtx[0].vout[nCoinbaseIndex].nValue));
+            rqCoinbase.push_back(Pair("type", "foundersreward"));
+            rqCoinbase.push_back(Pair("enforced", true));
+            requiredCoinbaseArr.push_back(rqCoinbase);
+        }
+
+        //Zeronode Payments
+        if (nCoinbaseOutSize > nCoinbaseIndex + 1 && IsSporkActive(SPORK_7_ZERONODE_PAYMENT_ENABLED)) {
+            nCoinbaseIndex++;
+            UniValue rqCoinbase(UniValue::VOBJ);
+            CTxDestination dest;
+            ExtractDestination(pblock->vtx[0].vout[nCoinbaseIndex].scriptPubKey, dest);
+            rqCoinbase.push_back(Pair("payee", EncodeDestination(dest)));
+            rqCoinbase.push_back(Pair("script", HexStr(pblock->vtx[0].vout[nCoinbaseIndex].scriptPubKey.begin(), pblock->vtx[0].vout[nCoinbaseIndex].scriptPubKey.end())));
+            rqCoinbase.push_back(Pair("amount", pblock->vtx[0].vout[nCoinbaseIndex].nValue));
+            rqCoinbase.push_back(Pair("type", "zeronode"));
+            rqCoinbase.push_back(Pair("enforced", IsSporkActive(SPORK_8_ZERONODE_PAYMENT_ENFORCEMENT)));
+            requiredCoinbaseArr.push_back(rqCoinbase);
+            // Legacy Masternode blocktemplate
+            result.push_back(Pair("payee", EncodeDestination(dest)));
+            result.push_back(Pair("payee_amount", pblock->vtx[0].vout[nCoinbaseIndex].nValue));
+        } else {
+            // Legacy Masternode blocktemplate
+            result.push_back(Pair("payee", ""));
+            result.push_back(Pair("payee_amount", ""));
+        }
+
+        result.push_back(Pair("masternode_payments", IsSporkActive(SPORK_7_ZERONODE_PAYMENT_ENABLED)));
+        result.push_back(Pair("enforce_masternode_payments", IsSporkActive(SPORK_8_ZERONODE_PAYMENT_ENFORCEMENT)));
+        result.push_back(Pair("coinbase_required_outputs",requiredCoinbaseArr));
+
+    } else {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Block didn't have any transactions in it...");
+    }
 
     return result;
 }

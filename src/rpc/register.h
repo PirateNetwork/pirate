@@ -19,6 +19,12 @@ void RegisterMiscRPCCommands(CRPCTable &tableRPC);
 void RegisterMiningRPCCommands(CRPCTable &tableRPC);
 /** Register raw transaction RPC commands */
 void RegisterRawTransactionRPCCommands(CRPCTable &tableRPC);
+/**Register Zeronode Commands */
+void RegisterZeronodeRPCCommands(CRPCTable &tableRPC);
+/**Register Budget Commands */
+void RegisterBudgetRPCCommands(CRPCTable &tableRPC);
+/** Register Spork RPC commands */
+void RegisterSporkRPCCommands(CRPCTable &tableRPC);
 
 static inline void RegisterAllCoreRPCCommands(CRPCTable &tableRPC)
 {
@@ -27,6 +33,9 @@ static inline void RegisterAllCoreRPCCommands(CRPCTable &tableRPC)
     RegisterMiscRPCCommands(tableRPC);
     RegisterMiningRPCCommands(tableRPC);
     RegisterRawTransactionRPCCommands(tableRPC);
+    RegisterZeronodeRPCCommands(tableRPC);
+    //RegisterBudgetRPCCommands(tableRPC); //Disabled for now
+    RegisterSporkRPCCommands(tableRPC);
 }
 
 #endif

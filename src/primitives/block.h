@@ -84,6 +84,7 @@ public:
     std::vector<CTransaction> vtx;
 
     // memory only
+    mutable CScript payee;
     mutable std::vector<uint256> vMerkleTree;
 
     CBlock()
@@ -109,6 +110,7 @@ public:
     {
         CBlockHeader::SetNull();
         vtx.clear();
+        payee = CScript();
         vMerkleTree.clear();
     }
 

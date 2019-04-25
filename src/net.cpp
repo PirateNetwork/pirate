@@ -353,16 +353,16 @@ CNode* FindNode(const CService& addr)
     return NULL;
 }
 
-CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
+CNode* ConnectNode(CAddress addrConnect, const char* pszDest, bool obfuScationMaster)
 {
     if (pszDest == NULL) {
-        if (IsLocal(addrConnect))
+      if (IsLocal(addrConnect) && !obfuScationMaster)
             return NULL;
 
         // Look for an existing connection
         CNode* pnode = FindNode((CService)addrConnect);
-        if (pnode)
-        {
+        if (pnode) {
+            pnode->fObfuScationMaster = obfuScationMaster;
             pnode->AddRef();
             return pnode;
         }
@@ -397,6 +397,7 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
         }
 
         pnode->nTimeConnected = GetTime();
+        if (obfuScationMaster) pnode->fObfuScationMaster = true;
 
         return pnode;
     } else if (!proxyConnectionFailed) {
@@ -731,7 +732,6 @@ public:
     {
         if (this != &other) {
             LOCK(cs_vNodes);
-
             _pnode->Release();
             _pnode = other._pnode;
             _pnode->AddRef();
@@ -1888,6 +1888,30 @@ void RelayTransaction(const CTransaction& tx, const CDataStream& ss)
             if (pnode->pfilter->IsRelevantAndUpdate(tx))
                 pnode->PushInventory(inv);
         } else
+            pnode->PushInventory(inv);
+    }
+}
+
+void RelayTransactionLockReq(const CTransaction& tx, bool relayToAll)
+{
+    CInv inv(MSG_TXLOCK_REQUEST, tx.GetHash());
+
+    //broadcast the new lock
+    LOCK(cs_vNodes);
+    BOOST_FOREACH (CNode* pnode, vNodes) {
+        if (!relayToAll && !pnode->fRelayTxes)
+            continue;
+
+        pnode->PushMessage("ix", tx);
+    }
+}
+
+void RelayInv(CInv& inv)
+{
+    LOCK(cs_vNodes);
+    BOOST_FOREACH (CNode* pnode, vNodes){
+    		if((pnode->nServices==NODE_BLOOM_WITHOUT_MN) && inv.IsZeroNodeType())continue;
+        if (pnode->nVersion >= ActiveProtocol())
             pnode->PushInventory(inv);
     }
 }

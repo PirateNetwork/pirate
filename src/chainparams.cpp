@@ -126,6 +126,13 @@ public:
         nEquihashN = N;
         nEquihashK = K;
 
+        //Start Zeronode
+        nZeronodeCountDrift = 0;
+        strSporkKey = "0477f4d5094e70c26bf998ba0d0e06af8c31b399c5b794895da2158dac086260353c50eaf477e7c5ec6b87349fc63bacdd56f0ffe4dcc112dca71d8335cd1ad2c1";
+        strZeronodeDummyAddress = "t1TLNF3seMZennWmmxik8r1PVEKj5zudgRw";
+        nBudget_Fee_Confirmations = 6; // Number of confirmations for the finalization fee
+        //End Zeronode
+
         genesis = CreateGenesisBlock(
             1487500000,
             uint256S("4c697665206c6f6e6720616e642070726f7370657221014592005a64336e336b"),
@@ -249,6 +256,13 @@ public:
         BOOST_STATIC_ASSERT(equihash_parameters_acceptable(N, K));
         nEquihashN = N;
         nEquihashK = K;
+
+        //Start Zeronode
+        nZeronodeCountDrift = 0;
+        strSporkKey = "04f249a25f6708898afead4e01fc726269ffbdcbbecad7f675ed2470f68571e57ac32bde7111781e476b0c0256cc5e7b71cc5fd56fcffbfb1ead0cb6fe89d91303";
+        strZeronodeDummyAddress = "tmWuQ8Yh3pHDa8MingmN8ECPRBxo2n8uZRs";
+        nBudget_Fee_Confirmations = 6; // Number of confirmations for the finalization fee
+        //End Zeronode
 
         genesis = CreateGenesisBlock(
             1542244402,
@@ -386,6 +400,13 @@ public:
         BOOST_STATIC_ASSERT(equihash_parameters_acceptable(N, K));
         nEquihashN = N;
         nEquihashK = K;
+
+        //Start Zeronode
+        nZeronodeCountDrift = 0;
+        strSporkKey = "045da9271f5d9df405d9e83c7c7e62e9c831cc85c51ffaa6b515c4f9c845dec4bf256460003f26ba9d394a17cb57e6759fe231eca75b801c20bccd19cbe4b7942d";
+        strZeronodeDummyAddress = "s1eQnJdoWDhKhxDrX8ev3aFjb1J6ZwXCxUT";
+        nBudget_Fee_Confirmations = 6; // Number of confirmations for the finalization fee
+        //End Zeronode
 
         genesis = CreateGenesisBlock(
             1531037936,
