@@ -72,7 +72,7 @@ Zero is founded on a decentralised platform, there are no borders. Zero facilita
 
 ||INFLATION||
 --------------
-Zero has a small inflation that degrades over time. With a stable supply of 7200 Zero per day.
+Zero has a small inflation that degrades over time. With a stable supply of 7776 Zero per day.
 
 ------------------------------------------
 
@@ -151,11 +151,11 @@ git checkout master
 
 ### Build the source code to produce binary executables:
 ```
-./zcutil/build.sh --disable-rust -j$(nproc)
+./zcutil/build.sh -j$(nproc)
 ```
 On a typical laptop -j3 works fine, while retaining some UI interactivity
 ```
-./zcutil/build.sh --disable-rust -j3
+./zcutil/build.sh -j3
 ```
 
 ### Create a ZERO configuration file
@@ -167,11 +167,12 @@ echo "rpcport=23800" >> ~/.zero/zero.conf
 ```
 
 ### Seeder Nodes
-As of 08/03/2018 the following seeder nodes are up and run a recent Linux version:
+As of 26/11/2018 the following seeder nodes are up and run a recent Linux version:
 ```
 addnode=34.236.37.74
 addnode=178.128.42.10
-addnode=86.31.59.86
+addnode=86.26.174.151
+addnode=46.101.66.152:33801
 addnode=zseed1.cryptonode.cloud
 addnode=zseed2.cryptonode.cloud
 addnode=zeroseed.cryptoforge.cc
