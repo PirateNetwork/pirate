@@ -1,30 +1,30 @@
 ![alt text](https://github.com/zerocurrencycoin/Zero/blob/master/art/zero%203d%20mountain.png?raw=true)
 
-[ZERO](https://zerocurrency.io) - [Isfjorden:2.0.1](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.1)
+[ZERO](https://zerocurrency.io) - [Ny-Alesund:2.0.4](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.4)
 
 ||FAST|| ||DECENTRALISED|| ||ANONYMOUS|| ||SECURE|| ||ASIC RESISTANT||  - LAUNCE DATE: 2017-02-19
 
 GENESIS BLOCK - 19th Feb 2017 11:26:40 - 068cbb5db6bc11be5b93479ea4df41fa7e012e92ca8603c315f9b1a2202205c6
 
-Download the latest version here - [ZERO - Latest Version - Isfjorden:2.0.1](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.1)
+Download the latest version here - [ZERO - Latest Version - Ny-Alesund:2.0.4](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.4)
 
 ------------------------------------------
 
 ❓ What is ZERO?
 --------------
 
-[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.1) is a revolutionary cryptocurrency and transaction platform based on Zcash.
+[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.4) is a revolutionary cryptocurrency and transaction platform based on Zcash.
 
-[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.1) offers total payment confidentiality, while still maintaining a decentralised network using a public blockchain.
+[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.4) offers total payment confidentiality, while still maintaining a decentralised network using a public blockchain.
 
-[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.1) combines Bitcoin’s security with Zcash’s anonymity and privacy.
+[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.4) combines Bitcoin’s security with Zcash’s anonymity and privacy.
 
-[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.1) stands out from the competition as a fully working product that has already
+[ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.4) stands out from the competition as a fully working product that has already
 implemented a set of special features not found in any other cryptocurrency.
 
 Our main focus as a team and community is to remain as transparent as we can possibly be and to maintain an interactive relationship with everyone involved. We are fully open about the project, listening to all suggestions from investors, miners and supporters.
 
-This software is the [ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.1) node. It downloads and stores the entire history of ZERO's transactions, about 1.2GB at this point.
+This software is the [ZERO](https://github.com/zerocurrencycoin/Zero/releases/tag/v2.0.4) node. It downloads and stores the entire history of ZERO's transactions, about 1.2GB at this point.
 Depending on the speed of your computer and network connection, the synchronization process could take several hours.
 
 ------------------------------------------
@@ -72,7 +72,7 @@ Zero is founded on a decentralised platform, there are no borders. Zero facilita
 
 ||INFLATION||
 --------------
-Zero has a small inflation that degrades over time. With a stable supply of 7200 Zero per day.
+Zero has a small inflation that degrades over time. With a stable supply of 7776 Zero per day.
 
 ------------------------------------------
 
@@ -122,7 +122,7 @@ See important security warnings on the
 
 📒 Deprecation Policy
 ------------------
-Disabledeprecation flag has been removed. Old nodes will automatically be shut down and must be upgraded upon reaching the deprecation block height, which will occur approximately 32 weeks (7/1/2019) from the release of v2.0.1.
+Disabledeprecation flag has been removed. Old nodes will automatically be shut down and must be upgraded upon reaching the deprecation block height, which will occur approximately 32 weeks (7/1/2019) from the release of v2.0.4.
 
 
 🔧 Building
@@ -151,11 +151,11 @@ git checkout master
 
 ### Build the source code to produce binary executables:
 ```
-./zcutil/build.sh --disable-rust -j$(nproc)
+./zcutil/build.sh -j$(nproc)
 ```
 On a typical laptop -j3 works fine, while retaining some UI interactivity
 ```
-./zcutil/build.sh --disable-rust -j3
+./zcutil/build.sh -j3
 ```
 
 ### Create a ZERO configuration file
@@ -167,11 +167,12 @@ echo "rpcport=23800" >> ~/.zero/zero.conf
 ```
 
 ### Seeder Nodes
-As of 08/03/2018 the following seeder nodes are up and run a recent Linux version:
+As of 26/11/2018 the following seeder nodes are up and run a recent Linux version:
 ```
 addnode=34.236.37.74
 addnode=178.128.42.10
-addnode=86.31.59.86
+addnode=86.26.174.151
+addnode=46.101.66.152:33801
 addnode=zseed1.cryptonode.cloud
 addnode=zseed2.cryptonode.cloud
 addnode=zeroseed.cryptoforge.cc

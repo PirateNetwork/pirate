@@ -331,6 +331,7 @@ public:
         //fZIP209Enabled = true;
         //hashSproutValuePoolCheckpointBlock = uint256S("000a95d08ba5dcbabe881fc6471d11807bcca7df5f1795c99f3ec4580db4279b");
 
+
         // Founders reward script expects a vector of 2-of-3 multisig addresses
         vFoundersRewardAddress = {
           "t2BEnZwurNtPyhyWdZ82zTdS93rKyoUpgMJ",
