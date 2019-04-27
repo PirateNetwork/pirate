@@ -236,7 +236,7 @@ public:
     bool PropExists(uint256 nHash);
     bool IsTransactionValid(const CTransaction& txNew, int nBlockHeight);
     std::string GetRequiredPaymentsString(int nBlockHeight);
-    void FillBlockPayee(CMutableTransaction& txNew, CAmount nFees);
+    void FillBlockPayee(CMutableTransaction& txNew, CAmount nFees, CTxOut& txFounders, CTxOut& txZeronodes);
 
     void CheckOrphanVotes();
     void Clear()

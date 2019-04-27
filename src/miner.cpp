@@ -414,7 +414,7 @@ CBlockTemplate* CreateNewBlock(const CScript& scriptPubKeyIn)
         txNew.nExpiryHeight = 0;
 
         // Zeronode and general budget payments
-        FillBlockPayee(txNew, nFees);
+        FillBlockPayee(txNew, nFees, pblock->txoutFounders, pblock->txoutZeronode);
 
         // Make payee
         pblock->payee = txNew.vout[txNew.vout.size() - 1].scriptPubKey;

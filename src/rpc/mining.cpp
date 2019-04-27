@@ -679,9 +679,9 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
 
         if (tx.IsCoinBase()) {
             // Show founders' reward if it is required
-            if (pblock->vtx[0].vout.size() > 1) {
+            if (pblock->txoutFounders != CTxOut()) {
                 // Correct this if GetBlockTemplate changes the order
-                entry.push_back(Pair("foundersreward", (int64_t)tx.vout[1].nValue));
+                entry.push_back(Pair("foundersreward", (int64_t)pblock->txoutFounders.nValue));
             }
             entry.push_back(Pair("required", true));
             txCoinbase = entry;
@@ -729,58 +729,41 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp)
     result.push_back(Pair("height", (int64_t)(pindexPrev->nHeight+1)));
     result.push_back(Pair("votes", aVotes));
 
-    // List of all required coinbase transaction for the current block
-    if (pblock->vtx.size()) {
-        UniValue requiredCoinbaseArr(UniValue::VARR);
-        int nCoinbaseOutSize = pblock->vtx[0].vout.size();
-        int nCoinbaseIndex = 0;
-        bool foundersRewardActive = false;
-        if ((pindexPrev->nHeight+1 >= Params().GetConsensus().nFeeStartBlockHeight ) && (pindexPrev->nHeight+1 <= Params().GetConsensus().GetLastFoundersRewardBlockHeight())) {
-          foundersRewardActive = true;
-        }
-
-        //Founders Reward
-        if (nCoinbaseOutSize > nCoinbaseIndex + 1 && foundersRewardActive == true) {
-            nCoinbaseIndex++;
-            UniValue rqCoinbase(UniValue::VOBJ);
-            CTxDestination dest;
-            ExtractDestination(pblock->vtx[0].vout[nCoinbaseIndex].scriptPubKey, dest);
-            rqCoinbase.push_back(Pair("payee", EncodeDestination(dest)));
-            rqCoinbase.push_back(Pair("script", HexStr(pblock->vtx[0].vout[nCoinbaseIndex].scriptPubKey.begin(), pblock->vtx[0].vout[nCoinbaseIndex].scriptPubKey.end())));
-            rqCoinbase.push_back(Pair("amount", pblock->vtx[0].vout[nCoinbaseIndex].nValue));
-            rqCoinbase.push_back(Pair("type", "foundersreward"));
-            rqCoinbase.push_back(Pair("enforced", true));
-            requiredCoinbaseArr.push_back(rqCoinbase);
-        }
-
-        //Zeronode Payments
-        if (nCoinbaseOutSize > nCoinbaseIndex + 1 && IsSporkActive(SPORK_7_ZERONODE_PAYMENT_ENABLED)) {
-            nCoinbaseIndex++;
-            UniValue rqCoinbase(UniValue::VOBJ);
-            CTxDestination dest;
-            ExtractDestination(pblock->vtx[0].vout[nCoinbaseIndex].scriptPubKey, dest);
-            rqCoinbase.push_back(Pair("payee", EncodeDestination(dest)));
-            rqCoinbase.push_back(Pair("script", HexStr(pblock->vtx[0].vout[nCoinbaseIndex].scriptPubKey.begin(), pblock->vtx[0].vout[nCoinbaseIndex].scriptPubKey.end())));
-            rqCoinbase.push_back(Pair("amount", pblock->vtx[0].vout[nCoinbaseIndex].nValue));
-            rqCoinbase.push_back(Pair("type", "zeronode"));
-            rqCoinbase.push_back(Pair("enforced", IsSporkActive(SPORK_8_ZERONODE_PAYMENT_ENFORCEMENT)));
-            requiredCoinbaseArr.push_back(rqCoinbase);
-            // Legacy Masternode blocktemplate
-            result.push_back(Pair("payee", EncodeDestination(dest)));
-            result.push_back(Pair("payee_amount", pblock->vtx[0].vout[nCoinbaseIndex].nValue));
-        } else {
-            // Legacy Masternode blocktemplate
-            result.push_back(Pair("payee", ""));
-            result.push_back(Pair("payee_amount", ""));
-        }
-
-        result.push_back(Pair("masternode_payments", IsSporkActive(SPORK_7_ZERONODE_PAYMENT_ENABLED)));
-        result.push_back(Pair("enforce_masternode_payments", IsSporkActive(SPORK_8_ZERONODE_PAYMENT_ENFORCEMENT)));
-        result.push_back(Pair("coinbase_required_outputs",requiredCoinbaseArr));
-
-    } else {
-        throw JSONRPCError(RPC_INTERNAL_ERROR, "Block didn't have any transactions in it...");
+    //List of all required coinbase transactions
+    UniValue requiredCoinbaseArr(UniValue::VARR);
+    if (pblock->txoutFounders != CTxOut()) {
+      UniValue rqCoinbase(UniValue::VOBJ);
+      CTxDestination dest;
+      ExtractDestination(pblock->txoutFounders.scriptPubKey, dest);
+      rqCoinbase.push_back(Pair("payee", EncodeDestination(dest)));
+      rqCoinbase.push_back(Pair("script", HexStr(pblock->txoutFounders.scriptPubKey.begin(), pblock->txoutFounders.scriptPubKey.end())));
+      rqCoinbase.push_back(Pair("amount", pblock->txoutFounders.nValue));
+      rqCoinbase.push_back(Pair("type", "foundersreward"));
+      rqCoinbase.push_back(Pair("enforced", true));
+      requiredCoinbaseArr.push_back(rqCoinbase);
     }
+
+    if(pblock->txoutZeronode != CTxOut()) {
+      UniValue rqCoinbase(UniValue::VOBJ);
+      CTxDestination dest;
+      ExtractDestination(pblock->txoutZeronode.scriptPubKey, dest);
+      rqCoinbase.push_back(Pair("payee", EncodeDestination(dest)));
+      rqCoinbase.push_back(Pair("script", HexStr(pblock->txoutZeronode.scriptPubKey.begin(), pblock->txoutZeronode.scriptPubKey.end())));
+      rqCoinbase.push_back(Pair("amount", pblock->txoutZeronode.nValue));
+      rqCoinbase.push_back(Pair("type", "zeronode"));
+      rqCoinbase.push_back(Pair("enforced", IsSporkActive(SPORK_8_ZERONODE_PAYMENT_ENFORCEMENT)));
+      requiredCoinbaseArr.push_back(rqCoinbase);
+      // Legacy Masternode blocktemplate
+      result.push_back(Pair("payee", EncodeDestination(dest)));
+      result.push_back(Pair("payee_amount", pblock->txoutZeronode.nValue));
+    } else {
+      // Legacy Masternode blocktemplate
+      result.push_back(Pair("payee", ""));
+      result.push_back(Pair("payee_amount", ""));
+    }
+    result.push_back(Pair("masternode_payments", IsSporkActive(SPORK_7_ZERONODE_PAYMENT_ENABLED)));
+    result.push_back(Pair("enforce_masternode_payments", IsSporkActive(SPORK_8_ZERONODE_PAYMENT_ENFORCEMENT)));
+    result.push_back(Pair("coinbase_required_outputs",requiredCoinbaseArr));
 
     return result;
 }

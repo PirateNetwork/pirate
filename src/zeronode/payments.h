@@ -32,7 +32,7 @@ void ProcessMessageZeronodePayments(CNode* pfrom, std::string& strCommand, CData
 bool IsBlockPayeeValid(const CBlock& block, int nBlockHeight);
 std::string GetRequiredPaymentsString(int nBlockHeight);
 bool IsBlockValueValid(const CBlock& block, CAmount nExpectedValue);
-void FillBlockPayee(CMutableTransaction& txNew, CAmount nFees);
+void FillBlockPayee(CMutableTransaction& txNew, CAmount nFees, CTxOut& txFounders, CTxOut& txZeronodes);
 
 void DumpZeronodePayments();
 
@@ -285,7 +285,7 @@ public:
     int GetMinZeronodePaymentsProto();
     void ProcessMessageZeronodePayments(CNode* pfrom, std::string& strCommand, CDataStream& vRecv);
     std::string GetRequiredPaymentsString(int nBlockHeight);
-    void FillBlockPayee(CMutableTransaction& txNew, int64_t nFees);
+    void FillBlockPayee(CMutableTransaction& txNew, int64_t nFees, CTxOut& txFounders, CTxOut& txZeronodes);
     std::string ToString() const;
     int GetOldestBlock();
     int GetNewestBlock();

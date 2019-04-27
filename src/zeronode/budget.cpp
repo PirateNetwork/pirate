@@ -490,7 +490,7 @@ void CBudgetManager::CheckAndRemove()
 
 }
 
-void CBudgetManager::FillBlockPayee(CMutableTransaction& txNew, CAmount nFees)
+void CBudgetManager::FillBlockPayee(CMutableTransaction& txNew, CAmount nFees, CTxOut& txFounders, CTxOut& txZeronodes)
 {
     LOCK(cs);
 
@@ -529,13 +529,15 @@ void CBudgetManager::FillBlockPayee(CMutableTransaction& txNew, CAmount nFees)
         txNew.vout[0].nValue -= vFoundersReward;
 
         // And give it to the founders
-        txNew.vout.push_back(CTxOut(vFoundersReward, Params().GetFoundersRewardScriptAtHeight(pindexPrev->nHeight + 1)));
+        txFounders = CTxOut(vFoundersReward, Params().GetFoundersRewardScriptAtHeight(pindexPrev->nHeight + 1));
+        txNew.vout.push_back(txFounders);
     }
 
     if(nHighestCount > 0){
         txNew.vout[0].nValue -= nAmount;
 
-        txNew.vout.push_back(CTxOut(nAmount, payee));
+        txZeronodes = CTxOut(nAmount, payee);
+        txNew.vout.push_back(txZeronodes);
 
         CTxDestination address1;
         ExtractDestination(payee, address1);

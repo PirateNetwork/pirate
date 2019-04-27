@@ -264,15 +264,15 @@ bool IsBlockPayeeValid(const CBlock& block, int nBlockHeight)
 }
 
 
-void FillBlockPayee(CMutableTransaction& txNew, CAmount nFees)
+void FillBlockPayee(CMutableTransaction& txNew, CAmount nFees, CTxOut& txFounders, CTxOut& txZeronodes)
 {
     CBlockIndex* pindexPrev = chainActive.Tip();
     if (!pindexPrev) return;
 
     if (IsSporkActive(SPORK_13_ENABLE_SUPERBLOCKS) && budget.IsBudgetPaymentBlock(pindexPrev->nHeight + 1)) {
-        budget.FillBlockPayee(txNew, nFees);
+        budget.FillBlockPayee(txNew, nFees, txFounders, txZeronodes);
     } else {
-        zeronodePayments.FillBlockPayee(txNew, nFees);
+        zeronodePayments.FillBlockPayee(txNew, nFees, txFounders, txZeronodes);
     }
 }
 
@@ -285,7 +285,7 @@ std::string GetRequiredPaymentsString(int nBlockHeight)
     }
 }
 
-void CZeronodePayments::FillBlockPayee(CMutableTransaction& txNew, int64_t nFees)
+void CZeronodePayments::FillBlockPayee(CMutableTransaction& txNew, int64_t nFees, CTxOut& txFounders, CTxOut& txZeronodes)
 {
     CBlockIndex* pindexPrev = chainActive.Tip();
     if (!pindexPrev) return;
@@ -324,12 +324,14 @@ void CZeronodePayments::FillBlockPayee(CMutableTransaction& txNew, int64_t nFees
         txNew.vout[0].nValue -= vFoundersReward;
 
         // And give it to the founders
-        txNew.vout.push_back(CTxOut(vFoundersReward, Params().GetFoundersRewardScriptAtHeight(nHeight)));
+        txFounders = CTxOut(vFoundersReward, Params().GetFoundersRewardScriptAtHeight(nHeight));
+        txNew.vout.push_back(txFounders);
     }
 
     //@TODO zeronode
     if(hasPayment == true && zeronodePayment > 0) {
-        txNew.vout.push_back(CTxOut(zeronodePayment, payee));
+        txZeronodes = CTxOut(zeronodePayment, payee);
+        txNew.vout.push_back(txZeronodes);
 
         CTxDestination address1;
         ExtractDestination(payee, address1);
@@ -337,9 +339,9 @@ void CZeronodePayments::FillBlockPayee(CMutableTransaction& txNew, int64_t nFees
           LogPrint("zeronode","Zeronode payment to %s\n", EncodeDestination(address1));
     }
     LogPrint("zeronode","Total miner to %s\n", FormatMoney(txNew.vout[0].nValue).c_str());
-    LogPrint("zeronode","Total founder to %s\n", FormatMoney(txNew.vout[1].nValue).c_str());
-    LogPrint("zeronode","Total zero node to %s\n", FormatMoney(txNew.vout[2].nValue).c_str());
-    LogPrint("zeronode","Total Coinbase to %s\n", FormatMoney(txNew.vout[0].nValue+txNew.vout[1].nValue+txNew.vout[2].nValue).c_str());
+    LogPrint("zeronode","Total founder to %s\n", FormatMoney(txFounders.nValue).c_str());
+    LogPrint("zeronode","Total zero node to %s\n", FormatMoney(txZeronodes.nValue).c_str());
+    LogPrint("zeronode","Total Coinbase to %s\n", FormatMoney(txNew.vout[0].nValue+txFounders.nValue+txZeronodes.nValue).c_str());
 }
 
 int CZeronodePayments::GetMinZeronodePaymentsProto()
