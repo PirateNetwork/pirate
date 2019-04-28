@@ -685,7 +685,7 @@ bool CZeronodePaymentWinner::IsValid(CNode* pnode, std::string& strError)
         if (n > ZNPAYMENTS_SIGNATURES_TOTAL * 2) {
             strError = strprintf("Zeronode not in the top %d (%d)", ZNPAYMENTS_SIGNATURES_TOTAL * 2, n);
             LogPrint("zeronode","CZeronodePaymentWinner::IsValid - %s\n", strError);
-            //if (zeronodeSync.IsSynced()) Misbehaving(pnode->GetId(), 20);
+            if (zeronodeSync.IsSynced()) Misbehaving(pnode->GetId(), 20);
         }
         return false;
     }
