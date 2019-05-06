@@ -71,13 +71,13 @@ void CActiveZeronode::ManageStatus()
         LogPrintf("CActiveZeronode::ManageStatus() - Checking inbound connection to '%s'\n", service.ToString());
 
         if(NetworkIdFromCommandLine() == CBaseChainParams::MAIN) {
-            if(service.GetPort() != 23821) {
-                notCapableReason = strprintf("Invalid port: %u - only 23821 is supported on mainnet.", service.GetPort());
+            if(service.GetPort() != 23801) {
+                notCapableReason = strprintf("Invalid port: %u - only 23801 is supported on mainnet.", service.GetPort());
                 LogPrintf("CActiveZeronode::ManageStatus() - not capable: %s\n", notCapableReason);
                 return;
             }
-        } else if(service.GetPort() == 23821) {
-            notCapableReason = strprintf("Invalid port: %u - 23821 is only supported on mainnet.", service.GetPort());
+        } else if(service.GetPort() == 23801) {
+            notCapableReason = strprintf("Invalid port: %u - 23801 is only supported on mainnet.", service.GetPort());
             LogPrintf("CActiveZeronode::ManageStatus() - not capable: %s\n", notCapableReason);
             return;
         }

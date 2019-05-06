@@ -70,14 +70,14 @@ bool CZeronodeConfig::read(std::string& strErr)
             if (port != 23801) {
                 strErr = _("Invalid port detected in zeronode.conf") + "\n" +
                          strprintf(_("Line: %d"), linenumber) + "\n\"" + line + "\"" + "\n" +
-                         _("(must be 23821 for mainnet)");
+                         _("(must be 23801 for mainnet)");
                 streamConfig.close();
                 return false;
             }
         } else if (port == 23801) {
             strErr = _("Invalid port detected in zeronode.conf") + "\n" +
                      strprintf(_("Line: %d"), linenumber) + "\n\"" + line + "\"" + "\n" +
-                     _("(23821 could be used only on mainnet)");
+                     _("(23801 could be used only on mainnet)");
             streamConfig.close();
             return false;
         }
