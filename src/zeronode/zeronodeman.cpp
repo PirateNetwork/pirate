@@ -525,12 +525,16 @@ CZeronode* CZeronodeMan::GetNextZeronodeInQueueForPayment(int nBlockHeight, bool
     //  -- This doesn't look at who is being paid in the +8-10 blocks, allowing for double payments very rarely
     //  -- 1/100 payments should be a double payment on mainnet - (1/(3000/10))*2
     //  -- (chance per block * chances before IsScheduled will fire)
+    // Look at all nodes when node count is equal to ZERONODES_MIN_PAYMENT_COUNT or less
+    int nMinMnCount = ZERONODES_MIN_PAYMENT_COUNT;
     int nTenthNetwork = nMnCount / 10;
     int nCountTenth = 0;
     arith_uint256 nHighest = 0;
     BOOST_FOREACH (PAIRTYPE(int64_t, CTxIn) & s, vecZeronodeLastPaid) {
         CZeronode* pzn = Find(s.second);
         if (!pzn) break;
+
+        if (nMinMnCount > nTenthNetwork) nTenthNetwork = nMinMnCount;
 
         arith_uint256 n = pzn->CalculateScore(blockHash);
         if (n > nHighest) {
