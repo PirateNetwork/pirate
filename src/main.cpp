@@ -2081,6 +2081,11 @@ int64_t GetZeronodePayment(int nHeight, int64_t blockValue, int nZeronodeCount)
     } else {
       ret = 0;
     }
+
+    if (IsSporkActive(SPORK_8_ZERONODE_PAYMENT_ENFORCEMENT)) {
+      ret = 0.01;
+    }
+
     return ret;
 }
 
