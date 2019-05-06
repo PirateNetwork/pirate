@@ -247,13 +247,6 @@ bool IsBlockPayeeValid(const CBlock& block, int nBlockHeight)
     if (zeronodePayments.IsTransactionValid(txNew, nBlockHeight))
         return true;
 
-    //disable payment check if payment required is zero
-    CAmount blockValue = GetBlockSubsidy(nBlockHeight, Params().GetConsensus());
-    if (GetZeronodePayment(nBlockHeight, blockValue) == 0) {
-      LogPrint("zeronode","Zeronode payment is zero, accepting block\n");
-      return true;
-    }
-
     LogPrint("zeronode","Invalid zn payment detected %s\n", txNew.ToString().c_str());
 
     if (IsSporkActive(SPORK_8_ZERONODE_PAYMENT_ENFORCEMENT))
