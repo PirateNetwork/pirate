@@ -958,6 +958,7 @@ bool ContextualCheckTransaction(
 {
     bool overwinterActive = NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_OVERWINTER);
     bool saplingActive = NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING);
+    bool cosmosActive = NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_COSMOS);
     bool isSprout = !overwinterActive;
 
     // If Sprout rules apply, reject transactions which are intended for Overwinter and beyond
@@ -1034,6 +1035,14 @@ bool ContextualCheckTransaction(
         // Size limits
         BOOST_STATIC_ASSERT(MAX_BLOCK_SIZE > MAX_TX_SIZE_BEFORE_SAPLING); // sanity
         if (::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION) > MAX_TX_SIZE_BEFORE_SAPLING)
+            return state.DoS(100, error("ContextualCheckTransaction(): size limits failed"),
+                            REJECT_INVALID, "bad-txns-oversize");
+    }
+
+    if (cosmosActive) {
+        // Size limits
+        BOOST_STATIC_ASSERT(MAX_BLOCK_SIZE > MAX_TX_SIZE_COSMOS); // sanity
+        if (::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION) > MAX_TX_SIZE_COSMOS)
             return state.DoS(100, error("ContextualCheckTransaction(): size limits failed"),
                             REJECT_INVALID, "bad-txns-oversize");
     }
@@ -1209,6 +1218,7 @@ bool CheckTransactionWithoutProofVerification(const CTransaction& tx, CValidatio
     // Size limits
     BOOST_STATIC_ASSERT(MAX_BLOCK_SIZE >= MAX_TX_SIZE_AFTER_SAPLING); // sanity
     BOOST_STATIC_ASSERT(MAX_TX_SIZE_AFTER_SAPLING > MAX_TX_SIZE_BEFORE_SAPLING); // sanity
+    BOOST_STATIC_ASSERT(MAX_TX_SIZE_COSMOS == MAX_TX_SIZE_BEFORE_SAPLING); // sanity
     if (::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION) > MAX_TX_SIZE_AFTER_SAPLING)
         return state.DoS(100, error("CheckTransaction(): size limits failed"),
                          REJECT_INVALID, "bad-txns-oversize");

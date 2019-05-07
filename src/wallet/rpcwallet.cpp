@@ -3626,6 +3626,7 @@ UniValue z_getoperationstatus_IMPL(const UniValue& params, bool fRemoveFinishedO
 // For now though, we assume we use one joinsplit per zaddr output (and the second output note is change).
 // We reduce the result by 1 to ensure there is room for non-joinsplit CTransaction data.
 #define Z_SENDMANY_MAX_ZADDR_OUTPUTS_BEFORE_SAPLING    ((MAX_TX_SIZE_BEFORE_SAPLING / V3_JS_DESCRIPTION_SIZE) - 1)
+#define Z_SENDMANY_MAX_ZADDR_OUTPUTS_COSMOS            ((MAX_TX_SIZE_COSMOS / V3_JS_DESCRIPTION_SIZE) - 1)
 
 // transaction.h comment: spending taddr output requires CTxIn >= 148 bytes and typical taddr txout is 34 bytes
 #define CTXIN_SPEND_DUST_SIZE   148
@@ -3806,6 +3807,10 @@ UniValue z_sendmany(const UniValue& params, bool fHelp)
         }
     }
 
+    if (NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_COSMOS)) {
+        max_tx_size = MAX_TX_SIZE_COSMOS;
+    }
+
     // If Sapling is not active, do not allow sending from or sending to Sapling addresses.
     if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
         if (fromSapling || containsSaplingOutput) {
@@ -3936,7 +3941,7 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp)
             "\nby the caller.  If the limit parameter is set to zero, and Overwinter is not yet active, the -mempooltxinputlimit"
             "\noption will determine the number of uxtos.  Any limit is constrained by the consensus rule defining a maximum"
             "\ntransaction size of "
-            + strprintf("%d bytes before Sapling, and %d bytes once Sapling activates.", MAX_TX_SIZE_BEFORE_SAPLING, MAX_TX_SIZE_AFTER_SAPLING)
+            + strprintf("%d bytes before Sapling, %d bytes once Sapling activates, and %d bytes once Cosmos activates.", MAX_TX_SIZE_BEFORE_SAPLING, MAX_TX_SIZE_AFTER_SAPLING, MAX_TX_SIZE_COSMOS)
             + HelpRequiringPassphrase() + "\n"
             "\nArguments:\n"
             "1. \"fromaddress\"         (string, required) The address is a taddr or \"*\" for all taddrs belonging to the wallet.\n"
@@ -4000,6 +4005,9 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp)
     unsigned int max_tx_size = MAX_TX_SIZE_AFTER_SAPLING;
     if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
         max_tx_size = MAX_TX_SIZE_BEFORE_SAPLING;
+    }
+    if (NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_COSMOS)) {
+        max_tx_size = MAX_TX_SIZE_COSMOS;
     }
 
     // If Sapling is not active, do not allow sending to a Sapling address.
@@ -4162,8 +4170,9 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp)
             "\nnumber of UTXOs.  After Overwinter has activated -mempooltxinputlimit is ignored and having a transparent"
             "\ninput limit of zero will mean limit the number of UTXOs based on the size of the transaction.  Any limit is"
             "\nconstrained by the consensus rule defining a maximum transaction size of "
-            + strprintf("%d bytes before Sapling, and %d", MAX_TX_SIZE_BEFORE_SAPLING, MAX_TX_SIZE_AFTER_SAPLING)
-            + "\nbytes once Sapling activates."
+            + strprintf("%d bytes before Sapling, %d", MAX_TX_SIZE_BEFORE_SAPLING, MAX_TX_SIZE_AFTER_SAPLING)
+            + "\nbytes once Sapling activates, "
+            + strprintf("and %d bytes once Cosmos activates.", MAX_TX_SIZE_COSMOS)
             + HelpRequiringPassphrase() + "\n"
             "\nArguments:\n"
             "1. fromaddresses         (array, required) A JSON array with addresses.\n"
@@ -4262,6 +4271,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp)
     const int nextBlockHeight = chainActive.Height() + 1;
     const bool overwinterActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_OVERWINTER);
     const bool saplingActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING);
+    const bool cosmosActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_COSMOS);
 
     // Validate the destination address
     auto destaddress = params[1].get_str();
@@ -4344,6 +4354,8 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp)
     size_t mempoolLimit = (nUTXOLimit != 0) ? nUTXOLimit : (overwinterActive ? 0 : (size_t)GetArg("-mempooltxinputlimit", 0));
 
     unsigned int max_tx_size = saplingActive ? MAX_TX_SIZE_AFTER_SAPLING : MAX_TX_SIZE_BEFORE_SAPLING;
+    if (cosmosActive) max_tx_size = MAX_TX_SIZE_COSMOS;
+
     size_t estimatedTxSize = 200;  // tx overhead + wiggle room
     if (isToSproutZaddr) {
         estimatedTxSize += JOINSPLIT_SIZE;
