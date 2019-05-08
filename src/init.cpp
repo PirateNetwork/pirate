@@ -722,9 +722,9 @@ static void ZC_LoadParams(
         boost::filesystem::exists(sprout_groth16)
     )) {
         uiInterface.ThreadSafeMessageBox(strprintf(
-            _("Cannot find the Zcash network parameters in the following directory:\n"
+            _("Cannot find the Zero network parameters in the following directory:\n"
               "%s\n"
-              "Please run 'zcash-fetch-params' or './zcutil/fetch-params.sh' and then restart."),
+              "Please run 'zero-fetch-params' or './zcutil/fetch-params.sh' and then restart."),
                 ZC_GetParamsDir()),
             "", CClientUIInterface::MSG_ERROR);
         StartShutdown();
@@ -875,7 +875,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     fLogIPs = GetBoolArg("-logips", false);
 
     LogPrintf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
-    LogPrintf("Zcash version %s (%s)\n", FormatFullVersion(), CLIENT_DATE);
+    LogPrintf("Zero version %s (%s)\n", FormatFullVersion(), CLIENT_DATE);
 
     // when specifying an explicit binding address, you want to listen on it
     // even when -connect or -proxy is specified
@@ -1174,7 +1174,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     // Sanity check
     if (!InitSanityCheck())
-        return InitError(_("Initialization sanity check failed. Zcash is shutting down."));
+        return InitError(_("Initialization sanity check failed. Zero is shutting down."));
 
     std::string strDataDir = GetDataDir().string();
 #ifdef ENABLE_WALLET
@@ -1190,9 +1190,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     try {
         static boost::interprocess::file_lock lock(pathLockFile.string().c_str());
         if (!lock.try_lock())
-            return InitError(strprintf(_("Cannot obtain a lock on data directory %s. Zcash is probably already running."), strDataDir));
+            return InitError(strprintf(_("Cannot obtain a lock on data directory %s. Zero is probably already running."), strDataDir));
     } catch(const boost::interprocess::interprocess_exception& e) {
-        return InitError(strprintf(_("Cannot obtain a lock on data directory %s. Zcash is probably already running.") + " %s.", strDataDir, e.what()));
+        return InitError(strprintf(_("Cannot obtain a lock on data directory %s. Zero is probably already running.") + " %s.", strDataDir, e.what()));
     }
 
 #ifndef WIN32
@@ -1248,7 +1248,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     libsnark::inhibit_profiling_info = true;
     libsnark::inhibit_profiling_counters = true;
 
-    // Initialize Zcash circuit parameters
+    // Initialize Zero circuit parameters
     ZC_LoadParams(chainparams);
 
     if (GetBoolArg("-savesproutr1cs", false)) {
@@ -1657,7 +1657,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
             else if (nLoadWalletRet == DB_NEED_REWRITE)
             {
-                strErrors << _("Wallet needed to be rewritten: restart Zcash to complete") << "\n";
+                strErrors << _("Wallet needed to be rewritten: restart Zero to complete") << "\n";
                 LogPrintf("%s", strErrors.str());
                 return InitError(strErrors.str());
             }
@@ -1764,10 +1764,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 #ifdef ENABLE_MINING
  #ifndef ENABLE_WALLET
     if (GetBoolArg("-minetolocalwallet", false)) {
-        return InitError(_("Zcash was not built with wallet support. Set -minetolocalwallet=0 to use -mineraddress, or rebuild Zcash with wallet support."));
+        return InitError(_("Zero was not built with wallet support. Set -minetolocalwallet=0 to use -mineraddress, or rebuild Zero with wallet support."));
     }
     if (GetArg("-mineraddress", "").empty() && GetBoolArg("-gen", false)) {
-        return InitError(_("Zcash was not built with wallet support. Set -mineraddress, or rebuild Zcash with wallet support."));
+        return InitError(_("Zero was not built with wallet support. Set -mineraddress, or rebuild Zero with wallet support."));
     }
  #endif // !ENABLE_WALLET
 
