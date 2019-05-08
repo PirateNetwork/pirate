@@ -2090,7 +2090,7 @@ int64_t GetZeronodePayment(int nHeight, int64_t blockValue, int nZeronodeCount)
         if(nHeight >= Params().GetConsensus().nSubsidyHalvingInterval * 3) ret = blockValue * 35 / 100;
         if(nHeight >= Params().GetConsensus().nSubsidyHalvingInterval * 4) ret = blockValue * 40 / 100;
       } else {
-        ret = 0.01;
+        ret = CENT;
       }
     } else {
       ret = 0;
@@ -4076,7 +4076,7 @@ bool FindUndoPos(CValidationState &state, int nFile, CDiskBlockPos &pos, unsigne
 
 bool CheckBlockHeader(const CBlockHeader& block, CValidationState& state, bool fCheckPOW)
 {
-  
+
     bool cosmosActive = NetworkUpgradeActive(chainActive.Height(), Params().GetConsensus(), Consensus::UPGRADE_COSMOS);
 
     // Check block version
