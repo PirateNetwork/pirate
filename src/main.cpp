@@ -4076,8 +4076,8 @@ bool FindUndoPos(CValidationState &state, int nFile, CDiskBlockPos &pos, unsigne
 
 bool CheckBlockHeader(const CBlockHeader& block, CValidationState& state, bool fCheckPOW)
 {
-
-    bool cosmosActive = NetworkUpgradeActive(chainActive.Height(), Params().GetConsensus(), Consensus::UPGRADE_COSMOS);
+  
+    bool cosmosActive = NetworkUpgradeActive(chainActive.Height()+1, Params().GetConsensus(), Consensus::UPGRADE_COSMOS);
 
     // Check block version
     if (block.nVersion < MIN_BLOCK_VERSION)
