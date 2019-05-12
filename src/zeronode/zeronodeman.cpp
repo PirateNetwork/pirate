@@ -528,13 +528,13 @@ CZeronode* CZeronodeMan::GetNextZeronodeInQueueForPayment(int nBlockHeight, bool
     // Look at all nodes when node count is equal to ZERONODES_MIN_PAYMENT_COUNT or less
     int nMinMnCount = ZERONODES_MIN_PAYMENT_COUNT;
     int nTenthNetwork = nMnCount / 10;
+    if (nMinMnCount > nTenthNetwork) nTenthNetwork = nMinMnCount;
+
     int nCountTenth = 0;
     arith_uint256 nHighest = 0;
     BOOST_FOREACH (PAIRTYPE(int64_t, CTxIn) & s, vecZeronodeLastPaid) {
         CZeronode* pzn = Find(s.second);
         if (!pzn) break;
-
-        if (nMinMnCount > nTenthNetwork) nTenthNetwork = nMinMnCount;
 
         arith_uint256 n = pzn->CalculateScore(blockHash);
         if (n > nHighest) {

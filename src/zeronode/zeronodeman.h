@@ -17,7 +17,7 @@
 
 #define ZERONODES_DUMP_SECONDS (15 * 60)
 #define ZERONODES_DSEG_SECONDS (3 * 60 * 60)
-#define ZERONODES_MIN_PAYMENT_COUNT 25
+#define ZERONODES_MIN_PAYMENT_COUNT 10
 
 using namespace std;
 
