@@ -1024,9 +1024,9 @@ bool AsyncRPCOperation_sendmany::find_utxos(bool fAcceptCoinbase=false) {
         t_inputs_.push_back(utxo);
     }
 
-    // sort in ascending order, so smaller utxos appear first
+    // sort in ascending order, so larger utxos appear first
     std::sort(t_inputs_.begin(), t_inputs_.end(), [](SendManyInputUTXO i, SendManyInputUTXO j) -> bool {
-        return ( std::get<2>(i) < std::get<2>(j));
+        return ( std::get<2>(i) > std::get<2>(j));
     });
 
     return t_inputs_.size() > 0;
