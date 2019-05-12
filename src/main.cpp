@@ -1218,7 +1218,7 @@ bool CheckTransactionWithoutProofVerification(const CTransaction& tx, CValidatio
     // Size limits
     BOOST_STATIC_ASSERT(MAX_BLOCK_SIZE >= MAX_TX_SIZE_AFTER_SAPLING); // sanity
     BOOST_STATIC_ASSERT(MAX_TX_SIZE_AFTER_SAPLING > MAX_TX_SIZE_BEFORE_SAPLING); // sanity
-    BOOST_STATIC_ASSERT(MAX_TX_SIZE_COSMOS == MAX_TX_SIZE_BEFORE_SAPLING); // sanity
+    BOOST_STATIC_ASSERT(MAX_TX_SIZE_COSMOS > MAX_TX_SIZE_BEFORE_SAPLING); // sanity
     if (::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION) > MAX_TX_SIZE_AFTER_SAPLING)
         return state.DoS(100, error("CheckTransaction(): size limits failed"),
                          REJECT_INVALID, "bad-txns-oversize");
@@ -4076,7 +4076,7 @@ bool FindUndoPos(CValidationState &state, int nFile, CDiskBlockPos &pos, unsigne
 
 bool CheckBlockHeader(const CBlockHeader& block, CValidationState& state, bool fCheckPOW)
 {
-  
+
     bool cosmosActive = NetworkUpgradeActive(chainActive.Height()+1, Params().GetConsensus(), Consensus::UPGRADE_COSMOS);
 
     // Check block version
