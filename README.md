@@ -10,6 +10,7 @@ This is the official PirateChain sourcecode repository based on https://github.c
 ## Development Resources
 
 - PirateChain Website: [https://pirate.black](https://pirate.black/)
+- Komodo Platform: [https://komodoplatform.com](https://komodoplatform.com/)
 - Pirate Blockexplorer: [https://explorer.pirate.black](https://pirate.black/)
 - Pirate Discord: [https://pirate.black/discord](https://pirate.black/discord)
 - BTT ANN: [https://bitcointalk.org/index.php?topic=4979549.0](https://bitcointalk.org/index.php?topic=4979549.0/)
