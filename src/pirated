@@ -1,0 +1,25 @@
+#!/bin/bash
+# Copyright (c) 2019 PirateChain - no rights reserved
+
+# set working directory to the location of this script
+DIR="$( cd "$( dirname "$( readlink -f "${BASH_SOURCE[0]}" )" )" && pwd )"
+cd $DIR
+
+NAME=PIRATE
+
+# Chain parameters
+
+SUPPLY=0
+REWARD=25600000000
+HALVING=77777
+PRIVATE=1
+SEEDNODE=136.243.102.225
+
+# Full speed ahead
+KMD=${KOMODOD:-./komodod}
+$KMD -ac_name=$NAME                              \
+     -ac_supply=$SUPPLY                          \ 
+     -ac_reward=$REWARD                          \
+     -ac_halving=$HALVING                        \
+     -ac_private=$PRIVATE                        \
+     -addnode=$SEEDNODE  "$@"
