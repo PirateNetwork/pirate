@@ -252,8 +252,7 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170007;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 50;
         consensus.vUpgrades[Consensus::UPGRADE_COSMOS].nProtocolVersion = 170008;
-        consensus.vUpgrades[Consensus::UPGRADE_COSMOS].nActivationHeight =
-            Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
+        consensus.vUpgrades[Consensus::UPGRADE_COSMOS].nActivationHeight =47925;
 
 
         // The best chain should have at least this much work.
