@@ -2084,13 +2084,13 @@ int64_t GetZeronodePayment(int nHeight, int64_t blockValue, int nZeronodeCount)
 {
     int64_t ret = blockValue * 20 / 100; //default: 20%
     if (IsSporkActive(SPORK_7_ZERONODE_PAYMENT_ENABLED)) {
-      if (IsSporkActive(SPORK_8_ZERONODE_PAYMENT_ENFORCEMENT)) {
+      if (IsSporkActive(SPORK_6_ZERONODE_FULL_PAYMENT_ENABLED)) {
         if(nHeight >= Params().GetConsensus().nSubsidyHalvingInterval * 1) ret = blockValue * 25 / 100;
         if(nHeight >= Params().GetConsensus().nSubsidyHalvingInterval * 2) ret = blockValue * 30 / 100;
         if(nHeight >= Params().GetConsensus().nSubsidyHalvingInterval * 3) ret = blockValue * 35 / 100;
         if(nHeight >= Params().GetConsensus().nSubsidyHalvingInterval * 4) ret = blockValue * 40 / 100;
       } else {
-        ret = CENT;
+        ret = 100000;
       }
     } else {
       ret = 0;
