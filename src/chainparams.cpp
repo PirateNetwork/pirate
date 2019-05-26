@@ -149,11 +149,16 @@ public:
         vFixedSeeds = std::vector<SeedSpec6>(pnSeed6_main, pnSeed6_main + ARRAYLEN(pnSeed6_main));
 
         vSeeds.clear();
+        vSeeds.push_back(CDNSSeedData("zerocurrency0", "seed0.zerocurrency.io"));
         vSeeds.push_back(CDNSSeedData("zerocurrency1", "seed1.zerocurrency.io"));
         vSeeds.push_back(CDNSSeedData("zerocurrency2", "seed2.zerocurrency.io"));
         vSeeds.push_back(CDNSSeedData("zerocurrency3", "seed3.zerocurrency.io"));
         vSeeds.push_back(CDNSSeedData("zerocurrency4", "seed4.zerocurrency.io"));
         vSeeds.push_back(CDNSSeedData("zerocurrency5", "seed5.zerocurrency.io"));
+        vSeeds.push_back(CDNSSeedData("zerocurrency6", "seed6.zerocurrency.io"));
+        vSeeds.push_back(CDNSSeedData("zerocurrency7", "seed7.zerocurrency.io"));
+        vSeeds.push_back(CDNSSeedData("zerocurrency8", "seed8.zerocurrency.io"));
+        vSeeds.push_back(CDNSSeedData("zerocurrency9", "seed9.zerocurrency.io"));
 
         // guarantees the first 2 characters, when base58 encoded, are "t1"
         base58Prefixes[PUBKEY_ADDRESS]     = {0x1C,0xB8};
