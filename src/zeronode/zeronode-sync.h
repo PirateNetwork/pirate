@@ -18,7 +18,7 @@
 #define ZERONODE_SYNC_FINISHED 999
 
 #define ZERONODE_SYNC_TIMEOUT 5
-#define ZERONODE_SYNC_THRESHOLD 0
+#define ZERONODE_SYNC_THRESHOLD 2
 
 class CZeronodeSync;
 extern CZeronodeSync zeronodeSync;
