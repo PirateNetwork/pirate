@@ -1015,15 +1015,17 @@ BOOST_AUTO_TEST_CASE(rpc_z_sendmany_parameters)
 BOOST_AUTO_TEST_CASE(rpc_z_sendmany_internals)
 {
     SelectParams(CBaseChainParams::TESTNET);
+    auto consensusParams = Params().GetConsensus();
 
     LOCK(pwalletMain->cs_wallet);
 
     UniValue retValue;
 
     // Mutable tx containing contextual information we need to build tx
-    retValue = CallRPC("getblockcount");
-    int nHeight = retValue.get_int();
-    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nHeight + 1);
+    // We removed the ability to create pre-Sapling Sprout proofs, so we can
+    // only create Sapling-onwards transactions.
+    int nHeight = consensusParams.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight;
+    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(consensusParams, nHeight + 1);
     if (mtx.nVersion == 1) {
         mtx.nVersion = 2;
     }
@@ -1600,17 +1602,16 @@ BOOST_AUTO_TEST_CASE(rpc_z_shieldcoinbase_parameters)
 BOOST_AUTO_TEST_CASE(rpc_z_shieldcoinbase_internals)
 {
     SelectParams(CBaseChainParams::TESTNET);
+    auto consensusParams = Params().GetConsensus();
 
     LOCK(pwalletMain->cs_wallet);
 
     // Mutable tx containing contextual information we need to build tx
-    UniValue retValue = CallRPC("getblockcount");
-    int nHeight = retValue.get_int();
-    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nHeight + 1);
-    if (mtx.nVersion == 1) {
-        mtx.nVersion = 2;
-    }
-    
+    // We removed the ability to create pre-Sapling Sprout proofs, so we can
+    // only create Sapling-onwards transactions.
+    int nHeight = consensusParams.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight;
+    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(consensusParams, nHeight + 1);
+
     // Test that option -mempooltxinputlimit is respected.
     mapArgs["-mempooltxinputlimit"] = "1";
 
@@ -1797,13 +1798,17 @@ BOOST_AUTO_TEST_CASE(rpc_z_mergetoaddress_parameters)
 BOOST_AUTO_TEST_CASE(rpc_z_mergetoaddress_internals)
 {
     SelectParams(CBaseChainParams::TESTNET);
+    auto consensusParams = Params().GetConsensus();
 
     LOCK(pwalletMain->cs_wallet);
 
+    UniValue retValue;
+
     // Mutable tx containing contextual information we need to build tx
-    UniValue retValue = CallRPC("getblockcount");
-    int nHeight = retValue.get_int();
-    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nHeight + 1);
+    // We removed the ability to create pre-Sapling Sprout proofs, so we can
+    // only create Sapling-onwards transactions.
+    int nHeight = consensusParams.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight;
+    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(consensusParams, nHeight + 1);
 
     // Test that option -mempooltxinputlimit is respected.
     mapArgs["-mempooltxinputlimit"] = "1";
