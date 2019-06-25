@@ -1,6 +1,6 @@
 rust_packages := rust librustzcash
 
-zcash_packages := libgmp libsodium utfcpp
+zcash_packages := libsodium utfcpp
 
 ifneq ($(build_os),darwin)
 	proton_packages := proton
