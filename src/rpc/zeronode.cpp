@@ -567,7 +567,7 @@ UniValue listzeronodeconf (const UniValue& params, bool fHelp)
             zne.getTxHash().find(strFilter) == string::npos &&
             strStatus.find(strFilter) == string::npos) continue;
 
-        UniValue znObj(UniValue::VARR);
+        UniValue znObj(UniValue::VOBJ);
         znObj.push_back(Pair("alias", zne.getAlias()));
         znObj.push_back(Pair("address", zne.getIp()));
         znObj.push_back(Pair("privateKey", zne.getPrivKey()));
@@ -605,7 +605,7 @@ UniValue getzeronodestatus (const UniValue& params, bool fHelp)
     CZeronode* pzn = znodeman.Find(activeZeronode.vin);
 
     if (pzn) {
-        UniValue znObj(UniValue::VARR);
+        UniValue znObj(UniValue::VOBJ);
         znObj.push_back(Pair("txhash", activeZeronode.vin.prevout.hash.ToString()));
         znObj.push_back(Pair("outputidx", (uint64_t)activeZeronode.vin.prevout.n));
         znObj.push_back(Pair("netaddr", activeZeronode.service.ToString()));
