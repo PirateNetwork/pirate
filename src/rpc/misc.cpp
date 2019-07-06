@@ -17,6 +17,7 @@
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
+#include "wallet/rpczerowallet.h"
 #endif
 
 #include <stdint.h>
@@ -88,17 +89,29 @@ UniValue getalldata(const UniValue& params, bool fHelp)
     }
 
     int nMinDepth = 1;
-    CAmount nBalance = getBalanceTaddr("", nMinDepth, true);
-    CAmount nPrivateBalance = getBalanceZaddr("", nMinDepth, true);
-    CAmount nLockedCoin = pwalletMain->GetLockedCoins();
+    CAmount nBalance = 0;
+    CAmount nBalanceUnconfirmed = 0;
+    CAmount nBalanceTotal = 0;
 
-    CAmount nTotalBalance = nBalance + nPrivateBalance + nLockedCoin;
+    CAmount nTransparentBalance = getBalanceTaddr("", nMinDepth, true);
+    CAmount nTransparentBalanceUnconfirmed = getBalanceTaddr("", 0, true);
+    CAmount nPrivateBalance = getBalanceZaddr("", nMinDepth, true);
+    CAmount nPrivateBalanceUnconfirmed = getBalanceZaddr("", 0, true);
+    CAmount nSpendableTotal = nTransparentBalance + nPrivateBalance;
+    CAmount nSpendableTotalUnconfirmed = nTransparentBalanceUnconfirmed + nPrivateBalanceUnconfirmed;
+
+    CAmount nLockedCoin = pwalletMain->GetLockedCoins();
+    CAmount nTotalBalance = nTransparentBalance + nPrivateBalance + nLockedCoin;
 
     returnObj.push_back(Pair("connectionCount", connectionCount));
     returnObj.push_back(Pair("besttime", chainActive.Tip()->GetBlockTime()));
     returnObj.push_back(Pair("bestblockhash", chainActive.Tip()->GetBlockHash().GetHex()));
-    returnObj.push_back(Pair("transparentbalance", FormatMoney(nBalance)));
+    returnObj.push_back(Pair("transparentbalance", FormatMoney(nTransparentBalance)));
+    returnObj.push_back(Pair("transparentbalanceunconfirmed", FormatMoney(nTransparentBalanceUnconfirmed - nTransparentBalance)));
     returnObj.push_back(Pair("privatebalance", FormatMoney(nPrivateBalance)));
+    returnObj.push_back(Pair("privatebalanceunconfirmed", FormatMoney(nPrivateBalanceUnconfirmed - nPrivateBalance)));
+    returnObj.push_back(Pair("spendabletotal", FormatMoney(nSpendableTotal)));
+    returnObj.push_back(Pair("spendabletotalunconfirmed", FormatMoney(nSpendableTotalUnconfirmed - nSpendableTotal)));
     returnObj.push_back(Pair("lockedbalance", FormatMoney(nLockedCoin)));
     returnObj.push_back(Pair("totalbalance", FormatMoney(nTotalBalance)));
     returnObj.push_back(Pair("remainingValue", ValueFromAmount(remainingValue)));
@@ -120,13 +133,18 @@ UniValue getalldata(const UniValue& params, bool fHelp)
           const CTxDestination& dest = item.first;
 
           isminetype mine = pwalletMain ? IsMine(*pwalletMain, dest) : ISMINE_NO;
+          if (mine == ISMINE_SPENDABLE) {
+            const string& strName = item.second.name;
+            nBalance = getBalanceTaddr(EncodeDestination(dest), nMinDepth, true);
+            nBalanceUnconfirmed = getBalanceTaddr(EncodeDestination(dest), 0, true);
+            nBalanceTotal = getBalanceTaddr(EncodeDestination(dest), nMinDepth, false);
 
-          const string& strName = item.second.name;
-          nBalance = getBalanceTaddr(EncodeDestination(dest), nMinDepth, false);
-
-          addr.push_back(Pair("amount", ValueFromAmount(nBalance)));
-          addr.push_back(Pair("ismine", (mine & ISMINE_SPENDABLE) ? true : false));
-          addrlist.push_back(Pair(EncodeDestination(dest), addr));
+            addr.push_back(Pair("amount", ValueFromAmount(nBalance)));
+            addr.push_back(Pair("unconfirmed", ValueFromAmount(nBalanceUnconfirmed - nBalance)));
+            addr.push_back(Pair("unspendable", ValueFromAmount(nBalanceTotal - nBalance)));
+            addr.push_back(Pair("ismine", true));
+            addrlist.push_back(Pair(EncodeDestination(dest), addr));
+          }
       }
 
       //address grouping
@@ -143,12 +161,20 @@ UniValue getalldata(const UniValue& params, bool fHelp)
                   if(addrlist.exists(strName))
                       continue;
                   isminetype mine = pwalletMain ? IsMine(*pwalletMain, address) : ISMINE_NO;
+                  if (mine == ISMINE_SPENDABLE) {
 
-                  nBalance = getBalanceTaddr(strName, nMinDepth, false);
+                    nBalance = getBalanceTaddr(strName, nMinDepth, true);
+                    nBalanceUnconfirmed = getBalanceTaddr(strName, 0, true);
+                    nBalanceTotal = getBalanceTaddr(strName, nMinDepth, false);
 
-                  addr.push_back(Pair("amount", ValueFromAmount(nBalance)));
-                  addr.push_back(Pair("ismine", (mine & ISMINE_SPENDABLE) ? true : false));
-                  addrlist.push_back(Pair(strName, addr));
+                    addr.push_back(Pair("amount", ValueFromAmount(nBalance)));
+                    addr.push_back(Pair("unconfirmed", ValueFromAmount(nBalanceUnconfirmed - nBalance)));
+                    addr.push_back(Pair("unspendable", ValueFromAmount(nBalanceTotal - nBalance)));
+
+                    addr.push_back(Pair("ismine", true));
+                    addrlist.push_back(Pair(strName, addr));
+
+                  }
               }
           }
       }
@@ -161,20 +187,28 @@ UniValue getalldata(const UniValue& params, bool fHelp)
               if (pwalletMain->HaveSproutSpendingKey(addr)) {
                   UniValue address(UniValue::VOBJ);
                   const string& strName = EncodePaymentAddress(addr);
-                  nBalance = getBalanceZaddr(strName, nMinDepth, false);
+
+                  nBalance = getBalanceZaddr(strName, nMinDepth, true);
+                  nBalanceUnconfirmed = getBalanceZaddr(strName, 0, true);
+                  nBalanceTotal = getBalanceZaddr(strName, nMinDepth, true);
+
                   address.push_back(Pair("amount", ValueFromAmount(nBalance)));
+                  address.push_back(Pair("unconfirmed", ValueFromAmount(nBalanceUnconfirmed - nBalance)));
+                  address.push_back(Pair("unspendable", ValueFromAmount(nBalanceTotal - nBalance)));
                   address.push_back(Pair("ismine", true));
                   addrlist.push_back(Pair(strName, address));
               }
-              else
-              {
-                  UniValue address(UniValue::VOBJ);
-                  const string& strName = EncodePaymentAddress(addr);
-                  nBalance = getBalanceZaddr(strName, nMinDepth, false);
-                  address.push_back(Pair("amount", ValueFromAmount(nBalance)));
-                  address.push_back(Pair("ismine", false));
-                  addrlist.push_back(Pair(strName, address));
-              }
+              // else
+              // {
+              //     UniValue address(UniValue::VOBJ);
+              //     const string& strName = EncodePaymentAddress(addr);
+              //     nBalance = getBalanceZaddr(strName, nMinDepth, false);
+              //     nBalanceUnconfirmed = getBalanceZaddr(strName, 0, false);
+              //     address.push_back(Pair("amount", ValueFromAmount(nBalance)));
+              //     address.push_back(Pair("unconfirmed", ValueFromAmount(nBalanceUnconfirmed)));
+              //     address.push_back(Pair("ismine", false));
+              //     addrlist.push_back(Pair(strName, address));
+              // }
           }
       }
       {
@@ -188,20 +222,28 @@ UniValue getalldata(const UniValue& params, bool fHelp)
                   if(pwalletMain->HaveSaplingSpendingKey(fvk)) {
                       UniValue address(UniValue::VOBJ);
                       const string& strName = EncodePaymentAddress(addr);
-                      nBalance = getBalanceZaddr(strName, nMinDepth, false);
+
+                      nBalance = getBalanceZaddr(strName, nMinDepth, true);
+                      nBalanceUnconfirmed = getBalanceZaddr(strName, 0, true);
+                      nBalanceTotal = getBalanceZaddr(strName, nMinDepth, true);
+
                       address.push_back(Pair("amount", ValueFromAmount(nBalance)));
+                      address.push_back(Pair("unconfirmed", ValueFromAmount(nBalanceUnconfirmed - nBalance)));
+                      address.push_back(Pair("unspendable", ValueFromAmount(nBalanceTotal - nBalance)));
                       address.push_back(Pair("ismine", true));
                       addrlist.push_back(Pair(strName, address));
                   }
-                  else
-                  {
-                      UniValue address(UniValue::VOBJ);
-                      const string& strName = EncodePaymentAddress(addr);
-                      nBalance = getBalanceZaddr(strName, nMinDepth, false);
-                      address.push_back(Pair("amount", ValueFromAmount(nBalance)));
-                      address.push_back(Pair("ismine", false));
-                      addrlist.push_back(Pair(strName, address));
-                  }
+                  // else
+                  // {
+                  //     UniValue address(UniValue::VOBJ);
+                  //     const string& strName = EncodePaymentAddress(addr);
+                  //     nBalance = getBalanceZaddr(strName, nMinDepth, false);
+                  //     nBalanceUnconfirmed = getBalanceZaddr(strName, 0, false);
+                  //     address.push_back(Pair("amount", ValueFromAmount(nBalance)));
+                  //     address.push_back(Pair("unconfirmed", ValueFromAmount(nBalanceUnconfirmed)));
+                  //     address.push_back(Pair("ismine", false));
+                  //     addrlist.push_back(Pair(strName, address));
+                  // }
               }
           }
       }
@@ -246,23 +288,55 @@ UniValue getalldata(const UniValue& params, bool fHelp)
             }
         }
 
-        std::list<CAccountingEntry> acentries;
-        CWallet::TxItems txOrdered = pwalletMain->OrderedTxItems(acentries, strAccount);
+        // std::list<CAccountingEntry> acentries;
+        // CWallet::TxItems txOrdered = pwalletMain->OrderedTxItems(acentries, strAccount);
+        // uint64_t t = GetTime();
+        // // iterate backwards until we have nCount items to return:
+        // for (CWallet::TxItems::reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it)
+        // {
+
+        map<int64_t,CWalletTx> orderedTxs;
+        for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it) {
+          const CWalletTx& wtx = (*it).second;
+          orderedTxs.insert(std::pair<int64_t,CWalletTx>(wtx.nOrderPos, wtx));
+        }
+
         uint64_t t = GetTime();
-        // iterate backwards until we have nCount items to return:
-        for (CWallet::TxItems::reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it)
+        for (map<int64_t,CWalletTx>::reverse_iterator it = orderedTxs.rbegin(); it != orderedTxs.rend(); ++it)
         {
-            CWalletTx *const pwtx = (*it).second.first;
-            if (pwtx != 0)
-                ListTransactions(*pwtx, strAccount, 0, true, trans, filter);
-            CAccountingEntry *const pacentry = (*it).second.second;
-            if (pacentry != 0)
-                AcentryToJSON(*pacentry, strAccount, trans);
-            int confirms = pwtx->GetDepthInMainChain();
-            if(confirms > 0)
-            {
-                if (mapBlockIndex[pwtx->hashBlock]->GetBlockTime() <= (t - (day * 60 * 60 * 24)) && (int)trans.size() >= nCount) break;
+            const CWalletTx& wtx = (*it).second;
+            bool includeTransaction = true;
+
+            //Excude transactions with less confirmations than required
+            if (wtx.GetDepthInMainChain() < 0 ) {
+                includeTransaction = false;
             }
+
+            //Exclude Transactions older that max days old
+            if (wtx.GetDepthInMainChain() > 0) {
+              if (mapBlockIndex[wtx.hashBlock]->GetBlockTime() < (t - (day * 60 * 60 * 24))) {
+                includeTransaction = false;
+              }
+            }
+
+            if (includeTransaction) {
+              zsWalletTxJSON(wtx, trans, "*", false, 0);
+            }
+
+            if (trans.size() > nCount) break;
+
+
+            // CWalletTx *const pwtx = (*it).second.first;
+            // if (pwtx != 0)
+            //     ListTransactions(*pwtx, strAccount, 0, true, trans, filter);
+            // CAccountingEntry *const pacentry = (*it).second.second;
+            // if (pacentry != 0)
+            //     AcentryToJSON(*pacentry, strAccount, trans);
+            // int confirms = pwtx->GetDepthInMainChain();
+            // if(confirms > 0)
+            // {
+            //     if (mapBlockIndex[pwtx->hashBlock]->GetBlockTime() <= (t - (day * 60 * 60 * 24)) && (int)trans.size() >= nCount) break;
+            // }
         }
 
         vector<UniValue> arrTmp = trans.getValues();
