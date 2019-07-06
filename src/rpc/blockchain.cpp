@@ -424,7 +424,13 @@ UniValue getrawmempool(const UniValue& params, bool fHelp)
 UniValue getblockdeltas(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
-        throw runtime_error("");
+    throw runtime_error(
+        "getblockdeltas blockhash\n"
+        "\nReturns blockdeltas.\n"
+        "\nExamples:\n"
+        + HelpExampleCli("getblockhashes", "002e3917fdd7f4b7ae45edbfed915abaa6c483d0e024e3cfc038251d17a65cd6")
+        + HelpExampleRpc("getblockhashes", "002e3917fdd7f4b7ae45edbfed915abaa6c483d0e024e3cfc038251d17a65cd6")
+        );;
 
     std::string strHash = params[0].get_str();
     uint256 hash(uint256S(strHash));
@@ -1240,7 +1246,7 @@ static const CRPCCommand commands[] =
     { "blockchain",         "getbestblockhash",       &getbestblockhash,       true  },
     { "blockchain",         "getblockcount",          &getblockcount,          true  },
     { "blockchain",         "getblock",               &getblock,               true  },
-    { "blockchain",         "getblockdeltas",         &getblockdeltas,         false },
+    { "blockchain",         "getblockdeltas",         &getblockdeltas,         true  },
     { "blockchain",         "getblockhash",           &getblockhash,           true  },
     { "blockchain",         "getblockhashes",         &getblockhashes,         true  },
     { "blockchain",         "getblockheader",         &getblockheader,         true  },
