@@ -239,6 +239,7 @@ BITCOIN_CORE_H = \
   wallet/paymentdisclosure.h \
   wallet/paymentdisclosuredb.h \
   wallet/rpcwallet.h \
+	wallet/rpczerowallet.h \
   wallet/wallet.h \
   wallet/wallet_ismine.h \
   wallet/walletdb.h \
@@ -345,6 +346,7 @@ libbitcoin_wallet_a_SOURCES = \
   wallet/rpcdisclosure.cpp \
   wallet/rpcdump.cpp \
   wallet/rpcwallet.cpp \
+	wallet/rpczerowallet.cpp \
   wallet/wallet.cpp \
   wallet/wallet_ismine.cpp \
   wallet/walletdb.cpp \

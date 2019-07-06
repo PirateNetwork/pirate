@@ -25,6 +25,8 @@ void RegisterZeronodeRPCCommands(CRPCTable &tableRPC);
 void RegisterBudgetRPCCommands(CRPCTable &tableRPC);
 /** Register Spork RPC commands */
 void RegisterSporkRPCCommands(CRPCTable &tableRPC);
+/** Register Experimental RPC commands */
+void RegisterZeroExclusiveRPCCommands(CRPCTable &tableRPC);
 
 static inline void RegisterAllCoreRPCCommands(CRPCTable &tableRPC)
 {
@@ -36,6 +38,7 @@ static inline void RegisterAllCoreRPCCommands(CRPCTable &tableRPC)
     RegisterZeronodeRPCCommands(tableRPC);
     //RegisterBudgetRPCCommands(tableRPC); //Disabled for now
     RegisterSporkRPCCommands(tableRPC);
+    RegisterZeroExclusiveRPCCommands(tableRPC);
 }
 
 #endif
