@@ -3154,38 +3154,20 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp)
 
     std::string defaultType = ADDR_TYPE_SAPLING;
 
-    if (fHelp || params.size() > 1)
+    if (fHelp || params.size() > 0)
         throw runtime_error(
-            "z_getnewaddress ( type )\n"
+            "z_getnewaddress\n"
             "\nReturns a new shielded address for receiving payments.\n"
-            "\nWith no arguments, returns a Sapling address.\n"
-            "\nArguments:\n"
-            "1. \"type\"         (string, optional, default=\"" + defaultType + "\") The type of address. One of [\""
-            + ADDR_TYPE_SPROUT + "\", \"" + ADDR_TYPE_SAPLING + "\"].\n"
             "\nResult:\n"
             "\"zcashaddress\"    (string) The new shielded address.\n"
-            "\nExamples:\n"
-            + HelpExampleCli("z_getnewaddress", "")
-            + HelpExampleCli("z_getnewaddress", ADDR_TYPE_SAPLING)
-            + HelpExampleRpc("z_getnewaddress", "")
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     EnsureWalletIsUnlocked();
 
-    auto addrType = defaultType;
-    if (params.size() > 0) {
-        addrType = params[0].get_str();
-    }
+    return EncodePaymentAddress(pwalletMain->GenerateNewSaplingZKey());
 
-    if (addrType == ADDR_TYPE_SPROUT) {
-        return EncodePaymentAddress(pwalletMain->GenerateNewSproutZKey());
-    } else if (addrType == ADDR_TYPE_SAPLING) {
-        return EncodePaymentAddress(pwalletMain->GenerateNewSaplingZKey());
-    } else {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid address type");
-    }
 }
 
 
@@ -4662,7 +4644,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "walletpassphrasechange",   &walletpassphrasechange,   true  },
     { "wallet",             "walletpassphrase",         &walletpassphrase,         true  },
     { "wallet",             "zcbenchmark",              &zc_benchmark,             true  },
-    { "wallet",             "zcrawkeygen",              &zc_raw_keygen,            true  },
+    //{ "wallet",             "zcrawkeygen",              &zc_raw_keygen,            true  },
     { "wallet",             "zcrawjoinsplit",           &zc_raw_joinsplit,         true  },
     { "wallet",             "zcrawreceive",             &zc_raw_receive,           true  },
     { "wallet",             "zcsamplejoinsplit",        &zc_sample_joinsplit,      true  },
