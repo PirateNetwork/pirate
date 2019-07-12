@@ -5,18 +5,20 @@
 #ifndef BITCOIN_WALLET_RPCZEROWALLET_H
 #define BITCOIN_WALLET_RPCZEROWALLET_H
 
+struct balancestruct {
+  CAmount confirmed;
+  CAmount unconfirmed;
+  CAmount locked;
+  CAmount immature;
+};
+
 void zsTxSpendsToJSON(const CWalletTx& wtx, UniValue& spends, CAmount& totalSpends, CAmount& filteredSpends, const std::string& strAddress, bool filterByAddress);
 void zsTxReceivedToJSON(const CWalletTx& wtx, UniValue& received, CAmount& totalReceived, const std::string& strAddress, bool filterByAddress);
 void zsTxSendsToJSON(const CWalletTx& wtx, UniValue& sends, CAmount& totalSends, const std::string& strAddress, bool filterByAddress);
 void zsWalletTxJSON(const CWalletTx& wtx, UniValue& ret, const std::string strAddress, bool fBool, const int returnType);
 
-
 class CRPCTable;
 
 void RegisterZeroExclusiveRPCCommands(CRPCTable &tableRPC);
-
-
-
-
 
 #endif //BITCOIN_WALLET_RPCWALLET_H

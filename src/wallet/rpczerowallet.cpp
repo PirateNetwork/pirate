@@ -7,6 +7,8 @@
 #include "key_io.h"
 #include "rpc/server.h"
 #include "wallet.h"
+#include "rpczerowallet.h"
+#include "utilmoneystr.h"
 
 using namespace std;
 using namespace libzcash;
@@ -1378,14 +1380,379 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp) {
     return ret;
 }
 
+
+
+/**
+ *Return current blockchain status, wallet balance, address balance and the last 200 transactions
+**/
+UniValue getalldata(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() > 3)
+        throw runtime_error(
+            "getalldata \"datatype transactiontype \"\n"
+            "\n"
+            "This function only returns information on wallet addresses with full spending keys."
+            "\n"
+            "\nArguments:\n"
+            "1. \"datatype\"     (integer, required) \n"
+            "                    Value of 0: Return address, balance, transactions and blockchain info\n"
+            "                    Value of 1: Return address, balance, blockchain info\n"
+            "                    Value of 2: Return transactions and blockchain info\n"
+            "2. \"transactiontype\"     (integer, optional) \n"
+            "                    Value of 1: Return all transactions in the last 24 hours\n"
+            "                    Value of 2: Return all transactions in the last 7 days\n"
+            "                    Value of 3: Return all transactions in the last 30 days\n"
+            "                    Other number: Return all transactions in the last 24 hours\n"
+            "3. \"transactioncount\"     (integer, optional) \n"
+            "\nResult:\n"
+            "\nExamples:\n"
+            + HelpExampleCli("getalldata", "0")
+            + HelpExampleRpc("getalldata", "0")
+        );
+
+    LOCK(cs_main);
+
+    UniValue returnObj(UniValue::VOBJ);
+    int connectionCount = 0;
+    {
+        LOCK2(cs_main, cs_vNodes);
+        connectionCount = (int)vNodes.size();
+    }
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    int nMinDepth = 1;
+
+    CAmount confirmed = 0;
+    CAmount unconfirmed = 0;
+    CAmount locked = 0;
+    CAmount immature = 0;
+
+    CAmount privateConfirmed = 0;
+    CAmount privateUnconfirmed = 0;
+    CAmount privateLocked = 0;
+    CAmount privateImmature = 0;
+
+    balancestruct txAmounts;
+    txAmounts.confirmed = 0;
+    txAmounts.unconfirmed = 0;
+    txAmounts.locked = 0;
+    txAmounts.immature = 0;
+
+
+    //Create map of addresses
+    //Add all Transaparent addresses to list
+    map<string, balancestruct> addressBalances;
+    BOOST_FOREACH(const PAIRTYPE(CTxDestination, CAddressBookData)& item, pwalletMain->mapAddressBook)
+    {
+        string addressString = EncodeDestination(item.first);
+        if (addressBalances.count(addressString) == 0)
+          addressBalances.insert(make_pair(addressString,txAmounts));
+    }
+
+    //Add all Sapling addresses to map
+    std::set<libzcash::SaplingPaymentAddress> zs_addresses;
+    pwalletMain->GetSaplingPaymentAddresses(zs_addresses);
+    for (auto addr : zs_addresses) {
+      string addressString = EncodePaymentAddress(addr);
+      if (addressBalances.count(addressString) == 0)
+        addressBalances.insert(make_pair(addressString,txAmounts));
+    }
+
+    //Add all Sprout addresses to map
+    std::set<libzcash::SproutPaymentAddress> zc_addresses;
+    pwalletMain->GetSproutPaymentAddresses(zc_addresses);
+    for (auto addr : zc_addresses) {
+      string addressString = EncodePaymentAddress(addr);
+      if (addressBalances.count(addressString) == 0)
+        addressBalances.insert(make_pair(addressString,txAmounts));
+    }
+
+
+    //Create Ordered List
+    map<int64_t,CWalletTx> orderedTxs;
+    for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it) {
+      const uint256& wtxid = it->first;
+      const CWalletTx& wtx = (*it).second;
+      orderedTxs.insert(std::pair<int64_t,CWalletTx>(wtx.nOrderPos, wtx));
+
+      unsigned int txType = 0;
+      // 0 Unassigend
+      // 1 Immature
+      // 2 Unconfirmed
+      // 3 Locked
+
+      if (!CheckFinalTx(wtx))
+          continue;
+
+      if (!wtx.IsTrusted())
+          continue;
+
+      //Assign Immature
+      if (txType == 0 && wtx.IsCoinBase() && wtx.GetBlocksToMaturity() > 0)
+        txType = 1;
+
+      //Assign Unconfirmed
+      if (txType == 0 && wtx.GetDepthInMainChain() == 0)
+        txType = 2;
+
+      for (unsigned int i = 0; i < wtx.vout.size(); i++) {
+
+        CTxDestination address;
+        if (!ExtractDestination(wtx.vout[i].scriptPubKey, address))
+          continue;
+
+        //excluded coins that we dont have the spending keys for
+        isminetype mine = IsMine(*pwalletMain,address);
+        if (mine != ISMINE_SPENDABLE)
+          continue;
+
+        //Exclude spent coins
+        if (pwalletMain->IsSpent(wtxid, i))
+          continue;
+
+        //Assign locked
+        if (txType == 0 && pwalletMain->IsLockedCoin((*it).first, i))
+          txType = 3;
+
+        //Assign Locked to 10000 Zer inputs for GetZeronodes
+        if (txType == 0 && fZeroNode && wtx.vout[i].nValue == 10000 * COIN)
+          txType = 3;
+
+        string addressString = EncodeDestination(address);
+        if (addressBalances.count(addressString) == 0)
+          addressBalances.insert(make_pair(addressString,txAmounts));
+
+        if (txType == 0) {
+          addressBalances.at(addressString).confirmed += wtx.vout[i].nValue;
+          confirmed += wtx.vout[i].nValue;
+        } else if (txType == 1) {
+          addressBalances.at(addressString).immature+= wtx.vout[i].nValue;
+          immature += wtx.vout[i].nValue;
+        } else if (txType == 2) {
+          addressBalances.at(addressString).unconfirmed += wtx.vout[i].nValue;
+          unconfirmed += wtx.vout[i].nValue;
+        } else if (txType == 3) {
+          addressBalances.at(addressString).locked += wtx.vout[i].nValue;
+          locked += wtx.vout[i].nValue;
+        }
+      }
+
+      for (auto & pair : wtx.mapSaplingNoteData) {
+        SaplingOutPoint op = pair.first;
+        SaplingNoteData nd = pair.second;
+
+        //Skip Spent
+        if (nd.nullifier && pwalletMain->IsSaplingSpent(*nd.nullifier))
+            continue;
+
+        //Decrypt sapling incoming commitments using IVK
+        for (auto addr : zs_addresses) {
+          libzcash::SaplingExtendedSpendingKey extsk;
+          if (pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
+            auto pt = libzcash::SaplingNotePlaintext::decrypt(wtx.vShieldedOutput[op.n].encCiphertext,nd.ivk,wtx.vShieldedOutput[op.n].ephemeralKey,wtx.vShieldedOutput[op.n].cm);
+
+            if (txType == 0 && pwalletMain->IsLockedNote(op))
+                txType == 3;
+
+            if (pt) {
+              auto note = pt.get();
+              string addressString = EncodePaymentAddress(addr);
+              if (addressBalances.count(addressString) == 0)
+                addressBalances.insert(make_pair(addressString,txAmounts));
+
+              if (txType == 0) {
+                addressBalances.at(addressString).confirmed += note.value();
+                privateConfirmed += note.value();
+              } else if (txType == 1) {
+                addressBalances.at(addressString).immature+= note.value();
+                privateImmature += note.value();
+              } else if (txType == 2) {
+                addressBalances.at(addressString).unconfirmed += note.value();
+                privateUnconfirmed += note.value();
+              } else if (txType == 3) {
+                addressBalances.at(addressString).locked += note.value();
+                privateLocked += note.value();
+              }
+
+              continue;
+
+            }
+          }
+        }
+      }
+
+      for (auto & pair : wtx.mapSproutNoteData) {
+        JSOutPoint jsop = pair.first;
+        SproutNoteData nd = pair.second;
+        libzcash::SproutPaymentAddress pa = nd.address;
+
+        int i = jsop.js; // Index into CTransaction.vjoinsplit
+        int j = jsop.n; // Index into JSDescription.ciphertexts
+
+        //Skip Spent
+        if (nd.nullifier && pwalletMain->IsSproutSpent(*nd.nullifier))
+            continue;
+
+        for (auto addr : zc_addresses) {
+          try {
+            libzcash::SproutSpendingKey sk;
+            pwalletMain->GetSproutSpendingKey(addr, sk);
+            ZCNoteDecryption decryptor(sk.receiving_key());
+
+            // determine amount of funds in the note
+            auto hSig = wtx.vjoinsplit[i].h_sig(*pzcashParams, wtx.joinSplitPubKey);
+
+            SproutNotePlaintext pt = libzcash::SproutNotePlaintext::decrypt(decryptor,wtx.vjoinsplit[i].ciphertexts[j],wtx.vjoinsplit[i].ephemeralKey,hSig,(unsigned char) j);
+
+            auto note = pt.note(addr);
+            string addressString = EncodePaymentAddress(addr);
+            if (addressBalances.count(addressString) == 0)
+              addressBalances.insert(make_pair(addressString,txAmounts));
+
+            if (txType == 0) {
+              addressBalances.at(addressString).confirmed += note.value();
+              privateConfirmed += note.value();
+            } else if (txType == 1) {
+              addressBalances.at(addressString).immature+= note.value();
+              privateImmature += note.value();
+            } else if (txType == 2) {
+              addressBalances.at(addressString).unconfirmed += note.value();
+              privateUnconfirmed += note.value();
+            } else if (txType == 3) {
+              addressBalances.at(addressString).locked += note.value();
+              privateLocked += note.value();
+            }
+
+            continue;
+
+          } catch (const note_decryption_failed &err) {
+            //do nothing
+          }
+        }
+      }
+    }
+
+
+    CAmount nBalance = 0;
+    CAmount nBalanceUnconfirmed = 0;
+    CAmount nBalanceTotal = 0;
+    CAmount totalBalance= confirmed + privateConfirmed;
+    CAmount totalUnconfirmed = unconfirmed + privateUnconfirmed;
+
+
+    returnObj.push_back(Pair("connectionCount", connectionCount));
+    returnObj.push_back(Pair("besttime", chainActive.Tip()->GetBlockTime()));
+    returnObj.push_back(Pair("bestblockhash", chainActive.Tip()->GetBlockHash().GetHex()));
+    returnObj.push_back(Pair("transparentbalance", FormatMoney(confirmed)));
+    returnObj.push_back(Pair("transparentbalanceunconfirmed", FormatMoney(unconfirmed)));
+    returnObj.push_back(Pair("privatebalance", FormatMoney(privateConfirmed)));
+    returnObj.push_back(Pair("privatebalanceunconfirmed", FormatMoney(privateUnconfirmed)));
+    returnObj.push_back(Pair("totalbalance", FormatMoney(totalBalance)));
+    returnObj.push_back(Pair("totalunconfirmed", FormatMoney(totalUnconfirmed)));
+    returnObj.push_back(Pair("lockedbalance", FormatMoney(locked)));
+    returnObj.push_back(Pair("immaturebalance", FormatMoney(immature)));
+
+    //get all t address
+    UniValue addressbalance(UniValue::VARR);
+    UniValue addrlist(UniValue::VOBJ);
+
+    if (params.size() > 0 && (params[0].get_int() == 1 || params[0].get_int() == 0))
+    {
+      for (map<string, balancestruct>::iterator it = addressBalances.begin(); it != addressBalances.end(); ++it) {
+        UniValue addr(UniValue::VOBJ);
+        addr.push_back(Pair("amount", ValueFromAmount(it->second.confirmed)));
+        addr.push_back(Pair("unconfirmed", ValueFromAmount(it->second.unconfirmed)));
+        addr.push_back(Pair("locked", ValueFromAmount(it->second.locked)));
+        addr.push_back(Pair("immature", ValueFromAmount(it->second.immature)));
+        addr.push_back(Pair("ismine", true));
+        addrlist.push_back(Pair(it->first, addr));
+      }
+    }
+
+    addressbalance.push_back(addrlist);
+    returnObj.push_back(Pair("addressbalance", addressbalance));
+
+
+    //get transactions
+    int nCount = 200;
+    UniValue trans(UniValue::VARR);
+    UniValue transTime(UniValue::VARR);
+
+    if (params.size() == 3)
+    {
+      nCount = params[2].get_int();
+    }
+
+    if (params.size() > 0 && (params[0].get_int() == 2 || params[0].get_int() == 0))
+    {
+        int day = 365 * 30; //30 Years
+        if(params.size() > 1)
+        {
+            if(params[1].get_int() == 1)
+            {
+                day = 1;
+            }
+            else if(params[1].get_int() == 2)
+            {
+                day = 7;
+            }
+            else if(params[1].get_int() == 3)
+            {
+                day = 30;
+            }
+            else if(params[1].get_int() == 4)
+            {
+                day = 90;
+            }
+            else if(params[1].get_int() == 5)
+            {
+                day = 365;
+            }
+        }
+
+
+        uint64_t t = GetTime();
+        for (map<int64_t,CWalletTx>::reverse_iterator it = orderedTxs.rbegin(); it != orderedTxs.rend(); ++it)
+        {
+            const CWalletTx& wtx = (*it).second;
+
+            //Excude transactions with less confirmations than required
+            if (wtx.GetDepthInMainChain() < 0 )
+              continue;
+
+            //Exclude Transactions older that max days old
+            if (wtx.GetDepthInMainChain() > 0 && mapBlockIndex[wtx.hashBlock]->GetBlockTime() < (t - (day * 60 * 60 * 24))) {
+              continue;
+            }
+
+            zsWalletTxJSON(wtx, trans, "*", false, 0);
+            if (trans.size() >= nCount) break;
+
+        }
+
+        vector<UniValue> arrTmp = trans.getValues();
+
+        std::reverse(arrTmp.begin(), arrTmp.end()); // Return oldest to newest
+
+        trans.clear();
+        trans.setArray();
+        trans.push_backV(arrTmp);
+    }
+
+    returnObj.push_back(Pair("listtransactions", trans));
+    return returnObj;
+}
+
+
 static const CRPCCommand commands[] =
 {   //  category              name                          actor (function)              okSafeMode
     //  --------------------- ------------------------      -----------------------       ----------
-    {   "zero Exclusive",   "zs_listtransactions",       &zs_listtransactions,       true },
-    {   "zero Exclusive",   "zs_gettransaction",         &zs_gettransaction,         true },
-    {   "zero Exclusive",   "zs_listspentbyaddress",     &zs_listspentbyaddress,     true },
-    {   "zero Exclusive",   "zs_listreceivedbyaddress",  &zs_listreceivedbyaddress,  true },
-    {   "zero Exclusive",   "zs_listsentbyaddress",      &zs_listsentbyaddress,      true },
+    {   "zero Exclusive",     "zs_listtransactions",       &zs_listtransactions,       true },
+    {   "zero Exclusive",     "zs_gettransaction",         &zs_gettransaction,         true },
+    {   "zero Exclusive",     "zs_listspentbyaddress",     &zs_listspentbyaddress,     true },
+    {   "zero Exclusive",     "zs_listreceivedbyaddress",  &zs_listreceivedbyaddress,  true },
+    {   "zero Exclusive",     "zs_listsentbyaddress",      &zs_listsentbyaddress,      true },
+    {   "zero Exclusive",     "getalldata",                &getalldata,                true },
 };
 
 void RegisterZeroExclusiveRPCCommands(CRPCTable &tableRPC)
