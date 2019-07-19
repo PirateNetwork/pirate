@@ -1,5 +1,5 @@
-// Copyright (c) 2010 Satoshi Nakamoto
-// Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2019 Cryptoforge
+// Copyright (c) 2019 The Zero developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -636,7 +636,7 @@ UniValue zs_listtransactions(const UniValue& params, bool fHelp)
         "1. 0 - O confimations required\n"
         "2. 0 - Returns all transactions\n"
         "3. 9999999 - Ignored\n"
-        "3. 9999999 - Return the last 9,999,999 transactions.\n"
+        "4. 9999999 - Return the last 9,999,999 transactions.\n"
         "\n"
         "\nResult:\n"
         "[{\n                                     An Array of Transactions\n"
@@ -730,10 +730,10 @@ UniValue zs_listtransactions(const UniValue& params, bool fHelp)
         "\nExamples:\n"
         + HelpExampleCli("zs_listtransactions", "")
         + HelpExampleCli("zs_listtransactions", "1")
-        + HelpExampleCli("zs_listtransactions", "1 1 30")
+        + HelpExampleCli("zs_listtransactions", "1 1 30 200")
         + HelpExampleRpc("zs_listtransactions", "")
         + HelpExampleRpc("zs_listtransactions", "1")
-        + HelpExampleRpc("zs_listtransactions", "1 1 30")
+        + HelpExampleRpc("zs_listtransactions", "1 1 30 200")
     );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -779,33 +779,41 @@ UniValue zs_listtransactions(const UniValue& params, bool fHelp)
     //Reverse Iterate thru transactions
     for (map<int64_t,CWalletTx>::reverse_iterator it = orderedTxs.rbegin(); it != orderedTxs.rend(); ++it)
     {
-
         const CWalletTx& wtx = (*it).second;
-        bool includeTransaction = true;
+
+        if (!CheckFinalTx(wtx))
+            continue;
+
+        if (wtx.GetDepthInMainChain() < 0)
+            continue;
+
+        if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapSproutNoteData.size() == 0 && !wtx.IsTrusted())
+            continue;
 
         //Excude transactions with less confirmations than required
-        if (wtx.GetDepthInMainChain() < nMinConfirms) {
-            includeTransaction = false;
-        }
+        if (wtx.GetDepthInMainChain() < nMinConfirms)
+            continue;
 
         //Exclude Transactions older that max days old
-        if (wtx.GetDepthInMainChain() > 0) {
-          if (nFilterType == 1 && mapBlockIndex[wtx.hashBlock]->GetBlockTime() < (t - (nFilter * 60 * 60 * 24))) {
-            includeTransaction = false;
-          }
-        }
+        if (wtx.GetDepthInMainChain() > 0 && nFilterType == 1 && mapBlockIndex[wtx.hashBlock]->GetBlockTime() < (t - (nFilter * 60 * 60 * 24)))
+            continue;
 
         //Exclude transactions with greater than max confirmations
-        if (nFilterType == 2 && wtx.GetDepthInMainChain() > nFilter){
-            includeTransaction = false;
-        }
+        if (nFilterType == 2 && wtx.GetDepthInMainChain() > nFilter)
+            continue;
 
-        if (includeTransaction) {
-          zsWalletTxJSON(wtx, ret, "*", false, 0);
-        }
+        zsWalletTxJSON(wtx, ret, "*", false, 0);
 
-        if (ret.size() > nCount) break;
+        if (ret.size() >= nCount) break;
     }
+
+    vector<UniValue> arrTmp = ret.getValues();
+
+    std::reverse(arrTmp.begin(), arrTmp.end()); // Return oldest to newest
+
+    ret.clear();
+    ret.setArray();
+    ret.push_backV(arrTmp);
 
     return ret;
 
@@ -963,6 +971,7 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp) {
         "                               Last n number of transactions returned\n"
         "\n"
         "Default Parameters:\n"
+        "1. Zero Address\n"
         "2. 0 - O confimations required\n"
         "3. 0 - Returns all transactions\n"
         "4. 9999999 - Ignored\n"
@@ -1016,7 +1025,7 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp) {
     //param values`
     int64_t nMinConfirms = 0;
     int64_t nFilterType = 0;
-    int64_t nFilter = 999999;
+    int64_t nFilter = 9999999;
     int64_t nCount = 9999999;
 
     if (params.size() >= 2)
@@ -1052,31 +1061,40 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp) {
       //Reverse Iterate thru transactions
       for (map<int64_t,CWalletTx>::reverse_iterator it = orderedTxs.rbegin(); it != orderedTxs.rend(); ++it) {
         const CWalletTx& wtx = (*it).second;
-        bool includeTransaction = true;
+
+        if (!CheckFinalTx(wtx))
+            continue;
+
+        if (wtx.GetDepthInMainChain() < 0)
+            continue;
+
+        if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapSproutNoteData.size() == 0 && !wtx.IsTrusted())
+            continue;
 
         //Excude transactions with less confirmations than required
-        if (wtx.GetDepthInMainChain() < nMinConfirms) {
-            includeTransaction = false;
-        }
+        if (wtx.GetDepthInMainChain() < nMinConfirms)
+            continue;
 
         //Exclude Transactions older that max days old
-        if (wtx.GetDepthInMainChain() > 0) {
-          if (nFilterType == 1 && mapBlockIndex[wtx.hashBlock]->GetBlockTime() < (t - (nFilter * 60 * 60 * 24))) {
-            includeTransaction = false;
-          }
-        }
+        if (wtx.GetDepthInMainChain() > 0 && nFilterType == 1 && mapBlockIndex[wtx.hashBlock]->GetBlockTime() < (t - (nFilter * 60 * 60 * 24)))
+            continue;
 
         //Exclude transactions with greater than max confirmations
-        if (nFilterType == 2 && wtx.GetDepthInMainChain() > nFilter){
-            includeTransaction = false;
-        }
+        if (nFilterType == 2 && wtx.GetDepthInMainChain() > nFilter)
+            continue;
 
-        if (includeTransaction) {
-          zsWalletTxJSON(wtx, ret, params[0].get_str() , true, 1);
-        }
+        zsWalletTxJSON(wtx, ret, params[0].get_str() , true, 1);
 
-        if (ret.size() > nCount) break;
+        if (ret.size() >= nCount) break;
     }
+
+    vector<UniValue> arrTmp = ret.getValues();
+
+    std::reverse(arrTmp.begin(), arrTmp.end()); // Return oldest to newest
+
+    ret.clear();
+    ret.setArray();
+    ret.push_backV(arrTmp);
 
     return ret;
 }
@@ -1167,7 +1185,7 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp) {
     //param values`
     int64_t nMinConfirms = 0;
     int64_t nFilterType = 0;
-    int64_t nFilter = 999999;
+    int64_t nFilter = 9999999;
     int64_t nCount = 9999999;
 
     if (params.size() >= 2)
@@ -1202,32 +1220,41 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp) {
     uint64_t t = GetTime();
     //Reverse Iterate thru transactions
     for (map<int64_t,CWalletTx>::reverse_iterator it = orderedTxs.rbegin(); it != orderedTxs.rend(); ++it) {
-        const CWalletTx& wtx = (*it).second;
-        bool includeTransaction = true;
+      const CWalletTx& wtx = (*it).second;
 
-        //Excude transactions with less confirmations than required
-        if (wtx.GetDepthInMainChain() < nMinConfirms) {
-            includeTransaction = false;
-        }
+      if (!CheckFinalTx(wtx))
+          continue;
 
-        //Exclude Transactions older that max days old
-        if (wtx.GetDepthInMainChain() > 0) {
-          if (nFilterType == 1 && mapBlockIndex[wtx.hashBlock]->GetBlockTime() < (t - (nFilter * 60 * 60 * 24))) {
-            includeTransaction = false;
-          }
-        }
+      if (wtx.GetDepthInMainChain() < 0)
+          continue;
 
-        //Exclude transactions with greater than max confirmations
-        if (nFilterType == 2 && wtx.GetDepthInMainChain() > nFilter){
-            includeTransaction = false;
-        }
+      if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapSproutNoteData.size() == 0 && !wtx.IsTrusted())
+          continue;
 
-        if (includeTransaction) {
-          zsWalletTxJSON(wtx, ret, params[0].get_str() , true, 2);
-        }
+      //Excude transactions with less confirmations than required
+      if (wtx.GetDepthInMainChain() < nMinConfirms)
+          continue;
 
-        if (ret.size() > nCount) break;
+      //Exclude Transactions older that max days old
+      if (wtx.GetDepthInMainChain() > 0 && nFilterType == 1 && mapBlockIndex[wtx.hashBlock]->GetBlockTime() < (t - (nFilter * 60 * 60 * 24)))
+          continue;
+
+      //Exclude transactions with greater than max confirmations
+      if (nFilterType == 2 && wtx.GetDepthInMainChain() > nFilter)
+          continue;
+
+        zsWalletTxJSON(wtx, ret, params[0].get_str() , true, 2);
+
+        if (ret.size() >= nCount) break;
     }
+
+    vector<UniValue> arrTmp = ret.getValues();
+
+    std::reverse(arrTmp.begin(), arrTmp.end()); // Return oldest to newest
+
+    ret.clear();
+    ret.setArray();
+    ret.push_backV(arrTmp);
 
     return ret;
 }
@@ -1315,7 +1342,7 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp) {
     //param values`
     int64_t nMinConfirms = 0;
     int64_t nFilterType = 0;
-    int64_t nFilter = 999999;
+    int64_t nFilter = 9999999;
     int64_t nCount = 9999999;
 
     if (params.size() >= 2)
@@ -1350,32 +1377,42 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp) {
     uint64_t t = GetTime();
     //Reverse Iterate thru transactions
     for (map<int64_t,CWalletTx>::reverse_iterator it = orderedTxs.rbegin(); it != orderedTxs.rend(); ++it) {
-        const CWalletTx& wtx = (*it).second;
-        bool includeTransaction = true;
+      const CWalletTx& wtx = (*it).second;
 
-        //Excude transactions with less confirmations than required
-        if (wtx.GetDepthInMainChain() < nMinConfirms) {
-            includeTransaction = false;
-        }
+      if (!CheckFinalTx(wtx))
+          continue;
 
-        //Exclude Transactions older that max days old
-        if (wtx.GetDepthInMainChain() > 0) {
-          if (nFilterType == 1 && mapBlockIndex[wtx.hashBlock]->GetBlockTime() < (t - (nFilter * 60 * 60 * 24))) {
-            includeTransaction = false;
-          }
-        }
+      if (wtx.GetDepthInMainChain() < 0)
+          continue;
 
-        //Exclude transactions with greater than max confirmations
-        if (nFilterType == 2 && wtx.GetDepthInMainChain() > nFilter){
-            includeTransaction = false;
-        }
+      if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapSproutNoteData.size() == 0 && !wtx.IsTrusted())
+          continue;
 
-        if (includeTransaction) {
-          zsWalletTxJSON(wtx, ret, params[0].get_str() , true, 3);
-        }
+      //Excude transactions with less confirmations than required
+      if (wtx.GetDepthInMainChain() < nMinConfirms)
+          continue;
 
-        if (ret.size() > nCount) break;
+      //Exclude Transactions older that max days old
+      if (wtx.GetDepthInMainChain() > 0 && nFilterType == 1 && mapBlockIndex[wtx.hashBlock]->GetBlockTime() < (t - (nFilter * 60 * 60 * 24)))
+          continue;
+
+      //Exclude transactions with greater than max confirmations
+      if (nFilterType == 2 && wtx.GetDepthInMainChain() > nFilter)
+          continue;
+
+      zsWalletTxJSON(wtx, ret, params[0].get_str() , true, 3);
+
+
+      if (ret.size() >= nCount) break;
     }
+
+    vector<UniValue> arrTmp = ret.getValues();
+
+    std::reverse(arrTmp.begin(), arrTmp.end()); // Return oldest to newest
+
+    ret.clear();
+    ret.setArray();
+    ret.push_backV(arrTmp);
 
     return ret;
 }
@@ -1484,7 +1521,10 @@ UniValue getalldata(const UniValue& params, bool fHelp)
       if (!CheckFinalTx(wtx))
           continue;
 
-      if (!wtx.IsTrusted())
+      if (wtx.GetDepthInMainChain() < 0)
+          continue;
+
+      if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapSproutNoteData.size() == 0 && !wtx.IsTrusted())
           continue;
 
       //Assign Immature
@@ -1514,7 +1554,7 @@ UniValue getalldata(const UniValue& params, bool fHelp)
         if (txType == 0 && pwalletMain->IsLockedCoin((*it).first, i))
           txType = 3;
 
-        //Assign Locked to 10000 Zer inputs for GetZeronodes
+        //Assign Locked to 10000 Zer inputs for Zeronodes
         if (txType == 0 && fZeroNode && wtx.vout[i].nValue == 10000 * COIN)
           txType = 3;
 
@@ -1549,7 +1589,8 @@ UniValue getalldata(const UniValue& params, bool fHelp)
         for (auto addr : zs_addresses) {
           libzcash::SaplingExtendedSpendingKey extsk;
           if (pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
-            auto pt = libzcash::SaplingNotePlaintext::decrypt(wtx.vShieldedOutput[op.n].encCiphertext,nd.ivk,wtx.vShieldedOutput[op.n].ephemeralKey,wtx.vShieldedOutput[op.n].cm);
+            auto pt = libzcash::SaplingNotePlaintext::decrypt(
+              wtx.vShieldedOutput[op.n].encCiphertext,extsk.expsk.full_viewing_key().in_viewing_key(),wtx.vShieldedOutput[op.n].ephemeralKey,wtx.vShieldedOutput[op.n].cm);
 
             if (txType == 0 && pwalletMain->IsLockedNote(op))
                 txType == 3;
@@ -1564,7 +1605,7 @@ UniValue getalldata(const UniValue& params, bool fHelp)
                 addressBalances.at(addressString).confirmed += note.value();
                 privateConfirmed += note.value();
               } else if (txType == 1) {
-                addressBalances.at(addressString).immature+= note.value();
+                addressBalances.at(addressString).immature += note.value();
                 privateImmature += note.value();
               } else if (txType == 2) {
                 addressBalances.at(addressString).unconfirmed += note.value();
@@ -1715,6 +1756,12 @@ UniValue getalldata(const UniValue& params, bool fHelp)
         for (map<int64_t,CWalletTx>::reverse_iterator it = orderedTxs.rbegin(); it != orderedTxs.rend(); ++it)
         {
             const CWalletTx& wtx = (*it).second;
+
+            if (!CheckFinalTx(wtx))
+                continue;
+
+            if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapSproutNoteData.size() == 0 && !wtx.IsTrusted())
+                continue;
 
             //Excude transactions with less confirmations than required
             if (wtx.GetDepthInMainChain() < 0 )
