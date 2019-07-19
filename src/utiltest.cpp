@@ -43,7 +43,7 @@ CWalletTx GetValidReceive(ZCJoinSplit& params,
 
     // Prepare JoinSplits
     uint256 rt;
-    JSDescription jsdesc {false, params, mtx.joinSplitPubKey, rt,
+    JSDescription jsdesc {true, params, mtx.joinSplitPubKey, rt,
                           inputs, outputs, 2*value, 0, false};
     mtx.vjoinsplit.push_back(jsdesc);
 
@@ -132,7 +132,7 @@ CWalletTx GetValidSpend(ZCJoinSplit& params,
 
     // Prepare JoinSplits
     uint256 rt = tree.root();
-    JSDescription jsdesc {false, params, mtx.joinSplitPubKey, rt,
+    JSDescription jsdesc {true, params, mtx.joinSplitPubKey, rt,
                           inputs, outputs, 0, value, false};
     mtx.vjoinsplit.push_back(jsdesc);
 
