@@ -27,7 +27,6 @@
 #include "librustzcash.h"
 
 JSDescription::JSDescription(
-    bool makeGrothProof,
     ZCJoinSplit& params,
     const uint256& joinSplitPubKey,
     const uint256& anchor,
@@ -42,7 +41,6 @@ JSDescription::JSDescription(
     std::array<libzcash::SproutNote, ZC_NUM_JS_OUTPUTS> notes;
 
     proof = params.prove(
-        makeGrothProof,
         inputs,
         outputs,
         notes,
@@ -62,7 +60,6 @@ JSDescription::JSDescription(
 }
 
 JSDescription JSDescription::Randomized(
-    bool makeGrothProof,
     ZCJoinSplit& params,
     const uint256& joinSplitPubKey,
     const uint256& anchor,
@@ -87,7 +84,6 @@ JSDescription JSDescription::Randomized(
     MappedShuffle(outputs.begin(), outputMap.begin(), ZC_NUM_JS_OUTPUTS, gen);
 
     return JSDescription(
-        makeGrothProof,
         params, joinSplitPubKey, anchor, inputs, outputs,
         vpub_old, vpub_new, computeProof,
         esk // payment disclosure
