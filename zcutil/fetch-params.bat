@@ -4,14 +4,14 @@ cd %THIS_DIR%
 IF NOT EXIST "%APPDATA%"\ZcashParams (
 MKDIR "%APPDATA%"\ZcashParams
 )
-IF NOT EXIST "%APPDATA%"\ZcashParams\sprout-proving.key (
-    ECHO Downloading Zcash trusted setup sprout-proving.key, this may take a while ...
-    .\wget64.exe --progress=dot:giga --continue --retry-connrefused --waitretry=3 --timeout=30 https://z.cash/downloads/sprout-proving.key.deprecated-sworn-elves -O "%APPDATA%"\ZcashParams\sprout-proving.key
-)
-IF NOT EXIST "%APPDATA%"\ZcashParams\sprout-verifying.key (
-    ECHO Downloading Zcash trusted setup sprout-verifying.key, this may take a while ...
-    .\wget64.exe --progress=dot:giga --continue --retry-connrefused --waitretry=3 --timeout=30 https://z.cash/downloads/sprout-verifying.key -O "%APPDATA%"\ZcashParams\sprout-verifying.key
-)
+@REM IF NOT EXIST "%APPDATA%"\ZcashParams\sprout-proving.key (
+@REM     ECHO Downloading Zcash trusted setup sprout-proving.key, this may take a while ...
+@REM     .\wget64.exe --progress=dot:giga --continue --retry-connrefused --waitretry=3 --timeout=30 https://z.cash/downloads/sprout-proving.key.deprecated-sworn-elves -O "%APPDATA%"\ZcashParams\sprout-proving.key
+@REM )
+@REM IF NOT EXIST "%APPDATA%"\ZcashParams\sprout-verifying.key (
+@REM     ECHO Downloading Zcash trusted setup sprout-verifying.key, this may take a while ...
+@REM     .\wget64.exe --progress=dot:giga --continue --retry-connrefused --waitretry=3 --timeout=30 https://z.cash/downloads/sprout-verifying.key -O "%APPDATA%"\ZcashParams\sprout-verifying.key
+@REM )
 IF NOT EXIST "%APPDATA%"\ZcashParams\sapling-spend.params (
     ECHO Downloading Zcash trusted setup sprout-proving.key, this may take a while ...
     .\wget64.exe --progress=dot:giga --continue --retry-connrefused --waitretry=3 --timeout=30 https://z.cash/downloads/sapling-spend.params -O "%APPDATA%"\ZcashParams\sapling-spend.params
