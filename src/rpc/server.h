@@ -210,6 +210,8 @@ extern UniValue getaddresstxids(const UniValue& params, bool fHelp);
 extern UniValue getsnapshot(const UniValue& params, bool fHelp);
 extern UniValue getaddressbalance(const UniValue& params, bool fHelp);
 extern UniValue getpeerinfo(const UniValue& params, bool fHelp);
+extern UniValue checknotarization(const UniValue& params, bool fHelp);
+extern UniValue getnotarypayinfo(const UniValue& params, bool fHelp);
 extern UniValue ping(const UniValue& params, bool fHelp);
 extern UniValue addnode(const UniValue& params, bool fHelp);
 extern UniValue disconnectnode(const UniValue& params, bool fHelp);
@@ -265,12 +267,15 @@ extern UniValue oraclesaddress(const UniValue& params, bool fHelp);
 extern UniValue oracleslist(const UniValue& params, bool fHelp);
 extern UniValue oraclesinfo(const UniValue& params, bool fHelp);
 extern UniValue oraclescreate(const UniValue& params, bool fHelp);
+extern UniValue oraclesfund(const UniValue& params, bool fHelp);
 extern UniValue oraclesregister(const UniValue& params, bool fHelp);
 extern UniValue oraclessubscribe(const UniValue& params, bool fHelp);
 extern UniValue oraclesdata(const UniValue& params, bool fHelp);
+extern UniValue oraclessample(const UniValue& params, bool fHelp);
 extern UniValue oraclessamples(const UniValue& params, bool fHelp);
 extern UniValue pricesaddress(const UniValue& params, bool fHelp);
 extern UniValue priceslist(const UniValue& params, bool fHelp);
+extern UniValue mypriceslist(const UniValue& params, bool fHelp);
 extern UniValue pricesinfo(const UniValue& params, bool fHelp);
 extern UniValue pegsaddress(const UniValue& params, bool fHelp);
 extern UniValue marmaraaddress(const UniValue& params, bool fHelp);
@@ -285,8 +290,11 @@ extern UniValue marmara_lock(const UniValue& params, bool fHelp);
 extern UniValue paymentsaddress(const UniValue& params, bool fHelp);
 extern UniValue payments_release(const UniValue& params, bool fHelp);
 extern UniValue payments_fund(const UniValue& params, bool fHelp);
+extern UniValue payments_merge(const UniValue& params, bool fHelp);
 extern UniValue payments_txidopret(const UniValue& params, bool fHelp);
 extern UniValue payments_create(const UniValue& params, bool fHelp);
+extern UniValue payments_airdrop(const UniValue& params, bool fHelp);
+extern UniValue payments_airdroptokens(const UniValue& params, bool fHelp);
 extern UniValue payments_info(const UniValue& params, bool fHelp);
 extern UniValue payments_list(const UniValue& params, bool fHelp);
 
@@ -341,6 +349,16 @@ extern UniValue FSMcreate(const UniValue& params, bool fHelp);
 extern UniValue FSMlist(const UniValue& params, bool fHelp);
 extern UniValue FSMinfo(const UniValue& params, bool fHelp);
 extern UniValue auctionaddress(const UniValue& params, bool fHelp);
+extern UniValue pegscreate(const UniValue& params, bool fHelp);
+extern UniValue pegsfund(const UniValue& params, bool fHelp);
+extern UniValue pegsget(const UniValue& params, bool fHelp);
+extern UniValue pegsredeem(const UniValue& params, bool fHelp);
+extern UniValue pegsliquidate(const UniValue& params, bool fHelp);
+extern UniValue pegsexchange(const UniValue& params, bool fHelp);
+extern UniValue pegsaccounthistory(const UniValue& params, bool fHelp);
+extern UniValue pegsaccountinfo(const UniValue& params, bool fHelp);
+extern UniValue pegsworstaccounts(const UniValue& params, bool fHelp);
+extern UniValue pegsinfo(const UniValue& params, bool fHelp);
 
 extern UniValue getnewaddress(const UniValue& params, bool fHelp); // in rpcwallet.cpp
 //extern UniValue getnewaddress64(const UniValue& params, bool fHelp); // in rpcwallet.cpp
@@ -443,9 +461,22 @@ extern UniValue importgatewaywithdraw(const UniValue& params, bool fHelp);
 extern UniValue importgatewaypartialsign(const UniValue& params, bool fHelp);
 extern UniValue importgatewaycompletesigning(const UniValue& params, bool fHelp);
 extern UniValue importgatewaymarkdone(const UniValue& params, bool fHelp);
-extern UniValue importgatewaypendingdeposits(const UniValue& params, bool fHelp);
 extern UniValue importgatewaypendingwithdraws(const UniValue& params, bool fHelp);
 extern UniValue importgatewayprocessed(const UniValue& params, bool fHelp);
+extern UniValue genminingCSV(const UniValue& params, bool fHelp);
+
+extern UniValue nspv_getinfo(const UniValue& params, bool fHelp);
+extern UniValue nspv_login(const UniValue& params, bool fHelp);
+extern UniValue nspv_listtransactions(const UniValue& params, bool fHelp);
+extern UniValue nspv_mempool(const UniValue& params, bool fHelp);
+extern UniValue nspv_listunspent(const UniValue& params, bool fHelp);
+extern UniValue nspv_spentinfo(const UniValue& params, bool fHelp);
+extern UniValue nspv_notarizations(const UniValue& params, bool fHelp);
+extern UniValue nspv_hdrsproof(const UniValue& params, bool fHelp);
+extern UniValue nspv_txproof(const UniValue& params, bool fHelp);
+extern UniValue nspv_spend(const UniValue& params, bool fHelp);
+extern UniValue nspv_broadcast(const UniValue& params, bool fHelp);
+extern UniValue nspv_logout(const UniValue& params, bool fHelp);
 
 extern UniValue getblocksubsidy(const UniValue& params, bool fHelp);
 
@@ -466,6 +497,7 @@ extern UniValue z_shieldcoinbase(const UniValue& params, bool fHelp); // in rpcw
 extern UniValue z_getoperationstatus(const UniValue& params, bool fHelp); // in rpcwallet.cpp
 extern UniValue z_getoperationresult(const UniValue& params, bool fHelp); // in rpcwallet.cpp
 extern UniValue z_listoperationids(const UniValue& params, bool fHelp); // in rpcwallet.cpp
+extern UniValue opreturn_burn(const UniValue& params, bool fHelp); // in rpcwallet.cpp
 extern UniValue z_validateaddress(const UniValue& params, bool fHelp); // in rpcmisc.cpp
 extern UniValue z_getpaymentdisclosure(const UniValue& params, bool fHelp); // in rpcdisclosure.cpp
 extern UniValue z_validatepaymentdisclosure(const UniValue &params, bool fHelp); // in rpcdisclosure.cpp
@@ -478,9 +510,13 @@ extern UniValue crosschainproof(const UniValue& params, bool fHelp);
 extern UniValue getNotarisationsForBlock(const UniValue& params, bool fHelp);
 extern UniValue scanNotarisationsDB(const UniValue& params, bool fHelp);
 extern UniValue getimports(const UniValue& params, bool fHelp);
+extern UniValue getwalletburntransactions(const UniValue& params, bool fHelp);
 extern UniValue migrate_converttoexport(const UniValue& params, bool fHelp);
+extern UniValue migrate_createburntransaction(const UniValue& params, bool fHelp);
 extern UniValue migrate_createimporttransaction(const UniValue& params, bool fHelp);
 extern UniValue migrate_completeimporttransaction(const UniValue& params, bool fHelp);
+extern UniValue migrate_checkburntransactionsource(const UniValue& params, bool fHelp);
+extern UniValue migrate_createnotaryapprovaltransaction(const UniValue& params, bool fHelp);
 
 extern UniValue notaries(const UniValue& params, bool fHelp);
 extern UniValue minerids(const UniValue& params, bool fHelp);
@@ -493,11 +529,14 @@ extern UniValue paxdeposit(const UniValue& params, bool fHelp);
 extern UniValue paxwithdraw(const UniValue& params, bool fHelp);
 
 extern UniValue prices(const UniValue& params, bool fHelp);
+extern UniValue pricesbet(const UniValue& params, bool fHelp);
+extern UniValue pricessetcostbasis(const UniValue& params, bool fHelp);
+extern UniValue pricescashout(const UniValue& params, bool fHelp);
+extern UniValue pricesrekt(const UniValue& params, bool fHelp);
+extern UniValue pricesaddfunding(const UniValue& params, bool fHelp);
+extern UniValue pricesgetorderbook(const UniValue& params, bool fHelp);
+extern UniValue pricesrefillfund(const UniValue& params, bool fHelp);
 
-// test rpc:
-extern UniValue test_ac(const UniValue& params, bool fHelp);
-extern UniValue test_heirmarker(const UniValue& params, bool fHelp);
-extern UniValue test_burntx(const UniValue& params, bool fHelp);
-extern UniValue test_proof(const UniValue& params, bool fHelp);
+
 
 #endif // BITCOIN_RPCSERVER_H

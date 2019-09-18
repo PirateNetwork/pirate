@@ -69,14 +69,16 @@ bool komodo_txnotarizedconfirmed(uint256 txid);
 uint32_t komodo_chainactive_timestamp();
 int32_t komodo_whoami(char *pubkeystr,int32_t height,uint32_t timestamp);
 extern uint64_t KOMODO_INTERESTSUM,KOMODO_WALLETBALANCE;
-extern int32_t KOMODO_LASTMINED,JUMBLR_PAUSE,KOMODO_LONGESTCHAIN,IS_STAKED_NOTARY,IS_KOMODO_NOTARY,STAKED_ERA;
+extern int32_t KOMODO_LASTMINED,JUMBLR_PAUSE,KOMODO_LONGESTCHAIN,IS_STAKED_NOTARY,IS_KOMODO_NOTARY,STAKED_ERA,KOMODO_INSYNC;
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 uint32_t komodo_segid32(char *coinaddr);
 int64_t komodo_coinsupply(int64_t *zfundsp,int64_t *sproutfundsp,int32_t height);
 int32_t notarizedtxid_height(char *dest,char *txidstr,int32_t *kmdnotarized_heightp);
 int8_t StakedNotaryID(std::string &notaryname, char *Raddress);
+uint64_t komodo_notarypayamount(int32_t nHeight, int64_t notarycount);
+int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);
 
-#define KOMODO_VERSION "0.3.3b"
+#define KOMODO_VERSION "0.4.0a"
 #define VERUS_VERSION "0.4.0g"
 extern uint16_t ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT;
 extern uint32_t ASSETCHAINS_CC;
@@ -168,7 +170,7 @@ UniValue geterablockheights(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() != 0)
       throw runtime_error(
-          "getnotarysendmany\n"
+          "geterablockheights\n"
           "Returns a JSON object with the first block in each era.\n"
           );
       
@@ -220,70 +222,75 @@ UniValue getinfo(const UniValue& params, bool fHelp)
             + HelpExampleCli("getinfo", "")
             + HelpExampleRpc("getinfo", "")
         );
-//#ifdef ENABLE_WALLET
-//    LOCK2(cs_main, pwalletMain ? &pwalletMain->cs_wallet : NULL);
-//#else
+    //#ifdef ENABLE_WALLET
+    //    LOCK2(cs_main, pwalletMain ? &pwalletMain->cs_wallet : NULL);
+    //#else
     LOCK(cs_main);
-//#endif
-
+    //#endif
+    
     proxyType proxy;
     GetProxy(NET_IPV4, proxy);
     notarized_height = komodo_notarized_height(&prevMoMheight,&notarized_hash,&notarized_desttxid);
     //fprintf(stderr,"after notarized_height %u\n",(uint32_t)time(NULL));
-
+    
     UniValue obj(UniValue::VOBJ);
     obj.push_back(Pair("version", CLIENT_VERSION));
     obj.push_back(Pair("protocolversion", PROTOCOL_VERSION));
     obj.push_back(Pair("KMDversion", KOMODO_VERSION));
+    obj.push_back(Pair("synced", KOMODO_INSYNC!=0));
     //obj.push_back(Pair("VRSCversion", VERUS_VERSION));
     obj.push_back(Pair("notarized", notarized_height));
     obj.push_back(Pair("prevMoMheight", prevMoMheight));
     obj.push_back(Pair("notarizedhash", notarized_hash.ToString()));
     obj.push_back(Pair("notarizedtxid", notarized_desttxid.ToString()));
-    txid_height = notarizedtxid_height(ASSETCHAINS_SYMBOL[0] != 0 ? (char *)"KMD" : (char *)"BTC",(char *)notarized_desttxid.ToString().c_str(),&kmdnotarized_height);
-    if ( txid_height > 0 )
-        obj.push_back(Pair("notarizedtxid_height", txid_height));
-    else obj.push_back(Pair("notarizedtxid_height", "mempool"));
-    if ( ASSETCHAINS_SYMBOL[0] != 0 )
-        obj.push_back(Pair("KMDnotarized_height", kmdnotarized_height));
-    obj.push_back(Pair("notarized_confirms", txid_height < kmdnotarized_height ? (kmdnotarized_height - txid_height + 1) : 0));
-    //fprintf(stderr,"after notarized_confirms %u\n",(uint32_t)time(NULL));
+    if ( KOMODO_NSPV_FULLNODE )
+    {
+        txid_height = notarizedtxid_height(ASSETCHAINS_SYMBOL[0] != 0 ? (char *)"KMD" : (char *)"BTC",(char *)notarized_desttxid.ToString().c_str(),&kmdnotarized_height);
+        if ( txid_height > 0 )
+            obj.push_back(Pair("notarizedtxid_height", txid_height));
+        else obj.push_back(Pair("notarizedtxid_height", "mempool"));
+        if ( ASSETCHAINS_SYMBOL[0] != 0 )
+            obj.push_back(Pair("KMDnotarized_height", kmdnotarized_height));
+        obj.push_back(Pair("notarized_confirms", txid_height < kmdnotarized_height ? (kmdnotarized_height - txid_height + 1) : 0));
+        //fprintf(stderr,"after notarized_confirms %u\n",(uint32_t)time(NULL));
 #ifdef ENABLE_WALLET
-    if (pwalletMain) {
-        obj.push_back(Pair("walletversion", pwalletMain->GetVersion()));
-        if ( ASSETCHAINS_SYMBOL[0] == 0 )
-        {
-            obj.push_back(Pair("interest",       ValueFromAmount(KOMODO_INTERESTSUM)));
-            obj.push_back(Pair("balance",       ValueFromAmount(KOMODO_WALLETBALANCE))); //pwalletMain->GetBalance()
+        if (pwalletMain) {
+            obj.push_back(Pair("walletversion", pwalletMain->GetVersion()));
+            if ( ASSETCHAINS_SYMBOL[0] == 0 )
+            {
+                obj.push_back(Pair("interest",       ValueFromAmount(KOMODO_INTERESTSUM)));
+                obj.push_back(Pair("balance",       ValueFromAmount(KOMODO_WALLETBALANCE))); //pwalletMain->GetBalance()
+            }
+            else
+            {
+                obj.push_back(Pair("balance",       ValueFromAmount(pwalletMain->GetBalance()))); //
+            }
         }
-        else
-        {
-            obj.push_back(Pair("balance",       ValueFromAmount(pwalletMain->GetBalance()))); //
-        }
-    }
 #endif
-    //fprintf(stderr,"after wallet %u\n",(uint32_t)time(NULL));
-    obj.push_back(Pair("blocks",        (int)chainActive.Height()));
-    if ( (longestchain= KOMODO_LONGESTCHAIN) != 0 && chainActive.Height() > longestchain )
-        longestchain = chainActive.Height();
-    //fprintf(stderr,"after longestchain %u\n",(uint32_t)time(NULL));
-    obj.push_back(Pair("longestchain",        longestchain));
+        //fprintf(stderr,"after wallet %u\n",(uint32_t)time(NULL));
+        obj.push_back(Pair("blocks",        (int)chainActive.Height()));
+        if ( (longestchain= KOMODO_LONGESTCHAIN) != 0 && chainActive.Height() > longestchain )
+            longestchain = chainActive.Height();
+        //fprintf(stderr,"after longestchain %u\n",(uint32_t)time(NULL));
+        obj.push_back(Pair("longestchain",        longestchain));
+        if ( chainActive.LastTip() != 0 )
+            obj.push_back(Pair("tiptime", (int)chainActive.LastTip()->nTime));
+        obj.push_back(Pair("difficulty",    (double)GetDifficulty()));
+#ifdef ENABLE_WALLET
+        if (pwalletMain) {
+            obj.push_back(Pair("keypoololdest", pwalletMain->GetOldestKeyPoolTime()));
+            obj.push_back(Pair("keypoolsize",   (int)pwalletMain->GetKeyPoolSize()));
+        }
+        if (pwalletMain && pwalletMain->IsCrypted())
+            obj.push_back(Pair("unlocked_until", nWalletUnlockTime));
+        obj.push_back(Pair("paytxfee",      ValueFromAmount(payTxFee.GetFeePerK())));
+#endif
+        obj.push_back(Pair("sapling", ASSETCHAINS_SAPLING));
+    }
     obj.push_back(Pair("timeoffset",    GetTimeOffset()));
-    if ( chainActive.LastTip() != 0 )
-        obj.push_back(Pair("tiptime", (int)chainActive.LastTip()->nTime));
     obj.push_back(Pair("connections",   (int)vNodes.size()));
     obj.push_back(Pair("proxy",         (proxy.IsValid() ? proxy.proxy.ToStringIPPort() : string())));
-    obj.push_back(Pair("difficulty",    (double)GetDifficulty()));
     obj.push_back(Pair("testnet",       Params().TestnetToBeDeprecatedFieldRPC()));
-#ifdef ENABLE_WALLET
-    if (pwalletMain) {
-        obj.push_back(Pair("keypoololdest", pwalletMain->GetOldestKeyPoolTime()));
-        obj.push_back(Pair("keypoolsize",   (int)pwalletMain->GetKeyPoolSize()));
-    }
-    if (pwalletMain && pwalletMain->IsCrypted())
-        obj.push_back(Pair("unlocked_until", nWalletUnlockTime));
-    obj.push_back(Pair("paytxfee",      ValueFromAmount(payTxFee.GetFeePerK())));
-#endif
     obj.push_back(Pair("relayfee",      ValueFromAmount(::minRelayTxFee.GetFeePerK())));
     obj.push_back(Pair("errors",        GetWarnings("statusbar")));
      if ( NOTARY_PUBKEY33[0] != 0 ) {
@@ -301,7 +308,6 @@ UniValue getinfo(const UniValue& params, bool fHelp)
     if ( ASSETCHAINS_CC != 0 )
         obj.push_back(Pair("CCid",        (int)ASSETCHAINS_CC));
     obj.push_back(Pair("name",        ASSETCHAINS_SYMBOL[0] == 0 ? "KMD" : ASSETCHAINS_SYMBOL));
-    obj.push_back(Pair("sapling", ASSETCHAINS_SAPLING));
 
     obj.push_back(Pair("p2pport",        ASSETCHAINS_P2PPORT));
     obj.push_back(Pair("rpcport",        ASSETCHAINS_RPCPORT));
@@ -1216,6 +1222,106 @@ UniValue getaddressdeltas(const UniValue& params, bool fHelp)
     }
 }
 
+CAmount checkburnaddress(CAmount &received, int64_t &nNotaryPay, int32_t &height, std::string sAddress)
+{
+    CBitcoinAddress address(sAddress);
+    uint160 hashBytes; int type = 0; CAmount balance = 0;
+    if (address.GetIndexKey(hashBytes, type, false))
+    {
+        std::vector<std::pair<CAddressIndexKey, CAmount> > addressIndex;
+        if (GetAddressIndex(hashBytes, type, addressIndex))
+        {
+            for (std::vector<std::pair<CAddressIndexKey, CAmount> >::const_iterator it=addressIndex.begin(); it!=addressIndex.end(); it++)
+            {
+                if (it->second > 0)
+                    received += it->second;
+                balance += it->second;
+            }
+            // Get notary pay from current chain tip
+            CBlockIndex* pindex = chainActive.LastTip();
+            nNotaryPay = pindex->nNotaryPay;
+            height = pindex->GetHeight();
+        }
+    }
+    return balance;
+}
+
+UniValue checknotarization(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "checknotarization\n"
+            "\nReturns true if burn address balance is greater than total notary pay. (requires addressindex to be enabled).\n"
+        );
+
+    UniValue result(UniValue::VOBJ); CAmount balance = 0, received = 0; int64_t nNotaryPay = 0; int32_t height;
+    
+    // helper to test burn address's
+    /*uint8_t priv[32] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    uint8_t pub[33] =  { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+    char coinaddr[64]; uint8_t buf33[33];
+    //pubkey2addr(coinaddr, pub);
+    priv2addr(coinaddr,buf33,priv);
+    fprintf(stderr, "what.%s\n", coinaddr);
+    result.push_back(Pair("address", coinaddr));
+    return result;
+    */
+    
+    if ( ASSETCHAINS_NOTARY_PAY[0] == 0 )
+        throw runtime_error("only works for ac_notarypay chains");
+    // pubkey 020000000000000000000000000000000
+    balance = checkburnaddress(received, nNotaryPay, height, "REDVp3ox1pbcWYCzySadfHhk8UU3HM4k5x");
+    if ( nNotaryPay >= balance || received != balance )
+        return false;
+    return true;
+}
+
+UniValue getnotarypayinfo(const UniValue& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "getnotarypayinfo\n"
+            "\nReturns infomation about ac_notaypay status (requires addressindex to be enabled).\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"height\"  (number) The current block height\n"
+            "  \"balance\"  (number) The current balance of the burn address\n"
+            "  \"spent\"  (bool) true if coins have been spent from the burn address\n"
+            "  \"Total_NotaryPay\"  (number) Total amount paid to notaries\n"
+            "  \"Estimated_Notarizations_Left\"  (number) the estimated amount of notarizations left before the balance is consumed\n"
+            "  \"Estimated_Days_Left\"  (number) the estimated amount of days the current balance will last\n"
+            "  \"Estimated_Height\"  (number) the estimated block height funds will run out\n"
+            "}\n"
+        );
+    
+    if ( ASSETCHAINS_NOTARY_PAY[0] == 0 )
+        throw runtime_error("only works for ac_notarypay chains");
+    
+    UniValue result(UniValue::VOBJ); CAmount balance = 0, received = 0; int64_t TotalNotaryPay = 0, NotaryPay, notaleft = 0, daysleft = 0, notarycount; int32_t height, endheight = 0; uint8_t notarypubkeys[64][33] = {0};
+    
+    // pubkey 020000000000000000000000000000000
+    balance = checkburnaddress(received, TotalNotaryPay, height, "REDVp3ox1pbcWYCzySadfHhk8UU3HM4k5x");
+    
+    notarycount = komodo_notaries(notarypubkeys, height, chainActive[height]->GetBlockTime());
+    NotaryPay = komodo_notarypayamount(height, notarycount)*notarycount;
+    bool spent = (received != balance);
+    if ( !spent )
+    {
+        notaleft = ((int64_t)balance - TotalNotaryPay) / NotaryPay;
+        daysleft = (((ASSETCHAINS_BLOCKTIME * 5) * notaleft) / 3600) / 24;
+        endheight = (notaleft * 5) + height;
+    }
+    
+    result.push_back(Pair("height", height));
+    result.push_back(Pair("balance", ValueFromAmount(balance)));
+    result.push_back(Pair("spent", spent));
+    result.push_back(Pair("Total_NotaryPay", ValueFromAmount(TotalNotaryPay)));
+    result.push_back(Pair("Estimated_Notarizations_Left", notaleft));
+    result.push_back(Pair("Estimated_Days_Left", daysleft));
+    result.push_back(Pair("Estimated_Height", endheight));
+    return result;
+}
+
 UniValue getaddressbalance(const UniValue& params, bool fHelp)
 {
     if (fHelp ||params.size() > 2 || params.size() == 0)
@@ -1281,8 +1387,13 @@ UniValue getsnapshot(const UniValue& params, bool fHelp)
 
     if (params.size() > 0 && !params[0].isNull()) {
         top = atoi(params[0].get_str().c_str());
-    if (top <= 0)
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, top must be a positive integer");
+        if ( top < 0 ) 
+        {
+            if ( KOMODO_SNAPSHOT_INTERVAL == 0 )
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, top must be a positive integer");
+            else 
+                top = -1;
+        }
     }
 
     if ( fHelp || params.size() > 1)
@@ -1329,7 +1440,7 @@ UniValue getsnapshot(const UniValue& params, bool fHelp)
 
 UniValue getaddresstxids(const UniValue& params, bool fHelp)
 {
-    if (fHelp || params.size() > 2)
+    if (fHelp || params.size() > 2 || params.size() < 1)
         throw runtime_error(
             "getaddresstxids (ccvout)\n"
             "\nReturns the txids for an address(es) (requires addressindex to be enabled).\n"

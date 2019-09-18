@@ -52,13 +52,17 @@ one other technical note is that komodod has the insight-explorer extensions bui
 #include "../utlist.h"
 #include "../uthash.h"
 #include "merkleblock.h"
+#include "../komodo_nSPV_defs.h"
 
 #define CC_BURNPUBKEY "02deaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddeaddead"
 #define CC_MAXVINS 1024
+#define CC_REQUIREMENTS_MSG (KOMODO_NSPV_SUPERLITE?"to use CC contracts you need to nspv_login first\n":"to use CC contracts, you need to launch daemon with valid -pubkey= for an address in your wallet\n")
 
 #define SMALLVAL 0.000000000000001
 #define SATOSHIDEN ((uint64_t)100000000L)
 #define dstr(x) ((double)(x) / SATOSHIDEN)
+#define CCDISABLEALL memset(ASSETCHAINS_CCDISABLES,1,sizeof(ASSETCHAINS_CCDISABLES))
+#define CCENABLE(x) ASSETCHAINS_CCDISABLES[((uint8_t)x)] = 0
 
 #ifndef _BITS256
 #define _BITS256
@@ -77,6 +81,7 @@ one other technical note is that komodod has the insight-explorer extensions bui
     OPRETID_CHANNELSDATA = 0x14,
     OPRETID_HEIRDATA = 0x15,
     OPRETID_ROGUEGAMEDATA = 0x16,
+    OPRETID_PEGSDATA = 0x17,
 
     // non cc contract data:
     OPRETID_FIRSTNONCCDATA = 0x80,
@@ -124,7 +129,7 @@ struct CCcontract_info
 
 	// the same for tokens 1of2 keys cc 
 	char tokens1of2addr[64];
-	CPubKey tokens1of2pk[2];
+	CPubKey tokens1of2pk[2]; uint8_t tokens1of2priv[32];
 
 	// this is for spending from two additional 'unspendable' CC addresses of other eval codes 
 	// (that is, for spending from several cc contract 'unspendable' addresses):
@@ -148,6 +153,7 @@ struct oracleprice_info
 };
 
 typedef std::vector<uint8_t> vscript_t;
+extern struct NSPV_CCmtxinfo NSPV_U;
 
 #ifdef ENABLE_WALLET
 extern CWallet* pwalletMain;
@@ -170,12 +176,14 @@ static const uint256 zeroid;
 static uint256 ignoretxid;
 static int32_t ignorevin;
 bool myGetTransaction(const uint256 &hash, CTransaction &txOut, uint256 &hashBlock);
+bool NSPV_myGetTransaction(const uint256 &hash, CTransaction &txOut, uint256 &hashBlock, int32_t &txheight, int32_t &currentheight);
 int32_t is_hexstr(char *str,int32_t n);
 bool myAddtomempool(CTransaction &tx, CValidationState *pstate = NULL, bool fSkipExpiry = false);
-int32_t CCgettxout(uint256 txid,int32_t vout,int32_t mempoolflag,int32_t lockflag);
+int64_t CCgettxout(uint256 txid,int32_t vout,int32_t mempoolflag,int32_t lockflag);
 bool myIsutxo_spentinmempool(uint256 &spenttxid,int32_t &spentvini,uint256 txid,int32_t vout);
 bool mytxid_inmempool(uint256 txid);
 int32_t myIsutxo_spent(uint256 &spenttxid,uint256 txid,int32_t vout);
+int32_t myGet_mempool_txs(std::vector<CTransaction> &txs,uint8_t evalcode,uint8_t funcid);
 int32_t decode_hex(uint8_t *bytes,int32_t n,char *hex);
 int32_t iguana_rwnum(int32_t rwflag,uint8_t *serialized,int32_t len,void *endianedp);
 int32_t iguana_rwbignum(int32_t rwflag,uint8_t *serialized,int32_t len,uint8_t *endianedp);
@@ -206,13 +214,13 @@ int32_t komodo_blockload(CBlock& block,CBlockIndex *pindex);
 
 CScript EncodeTokenCreateOpRet(uint8_t funcid, std::vector<uint8_t> origpubkey, std::string name, std::string description, vscript_t vopretNonfungible);
 CScript EncodeTokenCreateOpRet(uint8_t funcid, std::vector<uint8_t> origpubkey, std::string name, std::string description, std::vector<std::pair<uint8_t, vscript_t>> oprets);
-CScript EncodeTokenImportOpRet(std::vector<uint8_t> origpubkey, std::string name, std::string description, uint256 srctokenid, std::vector<std::pair<uint8_t, vscript_t>> oprets);
+
 CScript EncodeTokenOpRet(uint256 tokenid, std::vector<CPubKey> voutPubkeys, std::pair<uint8_t, vscript_t> opretWithId);
 CScript EncodeTokenOpRet(uint256 tokenid, std::vector<CPubKey> voutPubkeys, std::vector<std::pair<uint8_t, vscript_t>> oprets);
 int64_t AddCClibtxfee(struct CCcontract_info *cp,CMutableTransaction &mtx,CPubKey pk);
 uint8_t DecodeTokenCreateOpRet(const CScript &scriptPubKey, std::vector<uint8_t> &origpubkey, std::string &name, std::string &description);
 uint8_t DecodeTokenCreateOpRet(const CScript &scriptPubKey, std::vector<uint8_t> &origpubkey, std::string &name, std::string &description, std::vector<std::pair<uint8_t, vscript_t>>  &oprets);
-uint8_t DecodeTokenImportOpRet(const CScript &scriptPubKey, std::vector<uint8_t> &origpubkey, std::string &name, std::string &description, uint256 &srctokenid, std::vector<std::pair<uint8_t, vscript_t>>  &oprets);
+
 uint8_t DecodeTokenOpRet(const CScript scriptPubKey, uint8_t &evalCodeTokens, uint256 &tokenid, std::vector<CPubKey> &voutPubkeys, std::vector<std::pair<uint8_t, vscript_t>>  &oprets);
 void GetNonfungibleData(uint256 tokenid, vscript_t &vopretNonfungible);
 bool ExtractTokensCCVinPubkeys(const CTransaction &tx, std::vector<CPubKey> &vinPubkeys);
@@ -226,8 +234,11 @@ bool priv2addr(char *coinaddr,uint8_t buf33[33],uint8_t priv32[32]);
 CPubKey buf2pk(uint8_t *buf33);
 void endiancpy(uint8_t *dest,uint8_t *src,int32_t len);
 uint256 DiceHashEntropy(uint256 &entropy,uint256 _txidpriv,int32_t entropyvout,int32_t usevout);
-CTxOut MakeCC1vout(uint8_t evalcode,CAmount nValue,CPubKey pk);
-CTxOut MakeCC1of2vout(uint8_t evalcode,CAmount nValue,CPubKey pk,CPubKey pk2);
+CTxOut MakeCC1vout(uint8_t evalcode,CAmount nValue,CPubKey pk, std::vector<std::vector<unsigned char>>* vData = NULL);
+CTxOut MakeCC1of2vout(uint8_t evalcode,CAmount nValue,CPubKey pk,CPubKey pk2, std::vector<std::vector<unsigned char>>* vData = NULL);
+int32_t has_opret(const CTransaction &tx, uint8_t evalcode);
+bool getCCopret(const CScript &scriptPubKey, CScript &opret);
+bool makeCCopret(CScript &opret, std::vector<std::vector<unsigned char>> &vData);
 CC *MakeCCcond1(uint8_t evalcode,CPubKey pk);
 CC *MakeCCcond1of2(uint8_t evalcode,CPubKey pk1,CPubKey pk2);
 CC* GetCryptoCondition(CScript const& scriptSig);
@@ -244,11 +255,11 @@ CC *MakeTokensCCcond1(uint8_t evalcode, CPubKey pk);
 CC *MakeTokensCCcond1(uint8_t evalcode, uint8_t evalcode2, CPubKey pk);
 bool GetTokensCCaddress(struct CCcontract_info *cp, char *destaddr, CPubKey pk);
 bool GetTokensCCaddress1of2(struct CCcontract_info *cp, char *destaddr, CPubKey pk, CPubKey pk2);
-void CCaddrTokens1of2set(struct CCcontract_info *cp, CPubKey pk1, CPubKey pk2, char *coinaddr);
+void CCaddrTokens1of2set(struct CCcontract_info *cp, CPubKey pk1, CPubKey pk2, uint8_t *priv, char *coinaddr);
 int32_t CClib_initcp(struct CCcontract_info *cp,uint8_t evalcode);
 
 bool IsCCInput(CScript const& scriptSig);
-bool CheckTxFee(const CTransaction &tx, uint64_t txfee, uint32_t height, uint64_t blocktime);
+bool CheckTxFee(const CTransaction &tx, uint64_t txfee, uint32_t height, uint64_t blocktime,int64_t &actualtxfee);
 int32_t unstringbits(char *buf,uint64_t bits);
 uint64_t stringbits(char *str);
 uint256 revuint256(uint256 txid);
@@ -281,9 +292,12 @@ extern std::vector<CPubKey> NULL_pubkeys;
 std::string FinalizeCCTx(uint64_t skipmask,struct CCcontract_info *cp,CMutableTransaction &mtx,CPubKey mypk,uint64_t txfee,CScript opret,std::vector<CPubKey> pubkeys = NULL_pubkeys);
 void SetCCunspents(std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > &unspentOutputs,char *coinaddr,bool CCflag = true);
 void SetCCtxids(std::vector<std::pair<CAddressIndexKey, CAmount> > &addressIndex,char *coinaddr,bool CCflag = true);
+void SetCCtxids(std::vector<uint256> &txids,char *coinaddr,bool ccflag, uint8_t evalcode, uint256 filtertxid, uint8_t func);
+int64_t NSPV_AddNormalinputs(CMutableTransaction &mtx,CPubKey mypk,int64_t total,int32_t maxinputs,struct NSPV_CCmtxinfo *ptr);
 int64_t AddNormalinputs(CMutableTransaction &mtx,CPubKey mypk,int64_t total,int32_t maxinputs);
 int64_t AddNormalinputs2(CMutableTransaction &mtx,int64_t total,int32_t maxinputs);
 int64_t CCutxovalue(char *coinaddr,uint256 utxotxid,int32_t utxovout,int32_t CCflag);
+bool NSPV_SignTx(CMutableTransaction &mtx,int32_t vini,int64_t utxovalue,const CScript scriptPubKey,uint32_t nTime);
 
 // curve25519 and sha256
 bits256 curve25519_shared(bits256 privkey,bits256 otherpub);
@@ -293,6 +307,9 @@ void vcalc_sha256(char deprecated[(256 >> 3) * 2 + 1],uint8_t hash[256 >> 3],uin
 bits256 bits256_doublesha256(char *deprecated,uint8_t *data,int32_t datalen);
 UniValue ValueFromAmount(const CAmount& amount);
 
+int64_t TotalPubkeyNormalInputs(const CTransaction &tx, const CPubKey &pubkey);
+int64_t TotalPubkeyCCInputs(const CTransaction &tx, const CPubKey &pubkey);
+inline std::string STR_TOLOWER(const std::string &str) { std::string out; for (std::string::const_iterator i = str.begin(); i != str.end(); i++) out += std::tolower(*i); return out; }
 
 // bitcoin LogPrintStr with category "-debug" cmdarg support for C++ ostringstream:
 #define CCLOG_INFO   0

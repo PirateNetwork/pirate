@@ -88,7 +88,7 @@ static const unsigned int DEFAULT_MIN_RELAY_TX_FEE = 100;
 /** Default for -maxorphantx, maximum number of orphan transactions kept in memory */
 static const unsigned int DEFAULT_MAX_ORPHAN_TRANSACTIONS = 100;
 /** Default for -txexpirydelta, in number of blocks */
-static const unsigned int DEFAULT_TX_EXPIRY_DELTA = 20;
+static const unsigned int DEFAULT_TX_EXPIRY_DELTA = 200;
 /** The maximum size of a blk?????.dat file (since 0.8) */
 static const unsigned int MAX_BLOCKFILE_SIZE = 0x8000000; // 128 MiB 
 static const unsigned int MAX_TEMPFILE_SIZE = 0x1000000; // 16 MiB 0x8000000
@@ -706,7 +706,7 @@ bool ContextualCheckInputs(const CTransaction& tx, CValidationState &state, cons
                            std::vector<CScriptCheck> *pvChecks = NULL);
 
 /** Check a transaction contextually against a set of consensus rules */
-bool ContextualCheckTransaction(const CBlock *block, CBlockIndex * const pindexPrev,const CTransaction& tx, CValidationState &state, int nHeight, int dosLevel,
+bool ContextualCheckTransaction(int32_t slowflag,const CBlock *block, CBlockIndex * const pindexPrev,const CTransaction& tx, CValidationState &state, int nHeight, int dosLevel,
                                 bool (*isInitBlockDownload)() = IsInitialBlockDownload,int32_t validateprices=1);
 
 /** Apply the effects of this transaction on the UTXO set represented by view */
@@ -829,7 +829,7 @@ bool CheckBlock(int32_t *futureblockp,int32_t height,CBlockIndex *pindex,const C
 
 /** Context-dependent validity checks */
 bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& state, CBlockIndex *pindexPrev);
-bool ContextualCheckBlock(const CBlock& block, CValidationState& state, CBlockIndex *pindexPrev);
+bool ContextualCheckBlock(int32_t slowflag,const CBlock& block, CValidationState& state, CBlockIndex *pindexPrev);
 
 /** Check a block is completely valid from start to finish (only works on top of our current best block, with cs_main held) */
 bool TestBlockValidity(CValidationState &state, const CBlock& block, CBlockIndex *pindexPrev, bool fCheckPOW = true, bool fCheckMerkleRoot = true);

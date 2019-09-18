@@ -48,6 +48,8 @@
 
 #include <univalue.h>
 
+int32_t komodo_notarized_height(int32_t *prevMoMheightp,uint256 *hashp,uint256 *txidp);
+
 using namespace std;
 
 extern char ASSETCHAINS_SYMBOL[];
@@ -185,10 +187,13 @@ int32_t myIsutxo_spent(uint256 &spenttxid,uint256 txid,int32_t vout)
 
 void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue& entry, int nHeight = 0, int nConfirmations = 0, int nBlockTime = 0)
 {
+    uint256 notarized_hash,notarized_desttxid; int32_t prevMoMheight,notarized_height;
+    notarized_height = komodo_notarized_height(&prevMoMheight,&notarized_hash,&notarized_desttxid);
     uint256 txid = tx.GetHash();
     entry.push_back(Pair("txid", txid.GetHex()));
     entry.push_back(Pair("overwintered", tx.fOverwintered));
     entry.push_back(Pair("version", tx.nVersion));
+    entry.push_back(Pair("last_notarized_height", notarized_height));
     if (tx.fOverwintered) {
         entry.push_back(Pair("versiongroupid", HexInt(tx.nVersionGroupId)));
     }
@@ -201,9 +206,9 @@ void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue&
         UniValue in(UniValue::VOBJ);
         if (tx.IsCoinBase())
             in.push_back(Pair("coinbase", HexStr(txin.scriptSig.begin(), txin.scriptSig.end())));
-        else if (tx.IsCoinImport()) {
+        else if (tx.IsCoinImport() && txin.prevout.n==10e8) {
             in.push_back(Pair("is_import", "1"));
-            TxProof proof; CTransaction burnTx; std::vector<CTxOut> payouts; CTxDestination importaddress;
+            ImportProof proof; CTransaction burnTx; std::vector<CTxOut> payouts; CTxDestination importaddress;
             if (UnmarshalImportTx(tx, proof, burnTx, payouts)) 
             {
                 if (burnTx.vout.size() == 0)
@@ -217,7 +222,8 @@ void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue&
                 {
                     if (rawproof.size() > 0)
                     {
-                        std::string sourceSymbol(rawproof.begin(), rawproof.end());
+                        std::string sourceSymbol; 
+                        E_UNMARSHAL(rawproof, ss >> sourceSymbol);
                         in.push_back(Pair("address", "IMP-" + sourceSymbol + "-" + burnTx.GetHash().ToString()));
                     }
                 }
@@ -362,13 +368,13 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
     entry.push_back(Pair("vin", vin));
     UniValue vout(UniValue::VARR);
     BlockMap::iterator it = mapBlockIndex.find(pcoinsTip->GetBestBlock());
-    CBlockIndex *tipindex,*pindex = it->second;
+    CBlockIndex *tipindex;//,*pindex = it->second;
     uint64_t interest;
     for (unsigned int i = 0; i < tx.vout.size(); i++) {
         const CTxOut& txout = tx.vout[i];
         UniValue out(UniValue::VOBJ);
         out.push_back(Pair("value", ValueFromAmount(txout.nValue)));
-        if ( ASSETCHAINS_SYMBOL[0] == 0 && pindex != 0 && tx.nLockTime >= 500000000 && (tipindex= chainActive.LastTip()) != 0 )
+        if ( KOMODO_NSPV_FULLNODE && ASSETCHAINS_SYMBOL[0] == 0 && tx.nLockTime >= 500000000 && (tipindex= chainActive.LastTip()) != 0 )
         {
             int64_t interest; int32_t txheight; uint32_t locktime;
             interest = komodo_accrued_interest(&txheight,&locktime,tx.GetHash(),i,0,txout.nValue,(int32_t)tipindex->GetHeight());
@@ -721,27 +727,31 @@ UniValue verifytxoutproof(const UniValue& params, bool fHelp)
 
 UniValue createrawtransaction(const UniValue& params, bool fHelp)
 {
+    string examplescriptPubKey = "21021ce1eac70455c3e6c52d67c133549b8aed4a588fba594372e8048e65c4f0fcb6ac";
+
     if (fHelp || params.size() < 2 || params.size() > 4)
         throw runtime_error(
             "createrawtransaction [{\"txid\":\"id\",\"vout\":n},...] {\"address\":amount,...} ( locktime ) ( expiryheight )\n"
-            "\nCreate a transaction spending the given inputs and sending to the given addresses.\n"
+            "\nCreate a transaction spending the given inputs and creating new outputs.\n"
+            "Outputs can be addresses or standart scripts (in hex) or data.\n"
             "Returns hex-encoded raw transaction.\n"
             "Note that the transaction's inputs are not signed, and\n"
             "it is not stored in the wallet or transmitted to the network.\n"
 
             "\nArguments:\n"
-            "1. \"transactions\"        (string, required) A json array of json objects\n"
+            "1. \"inputs\"                (array, required) A json array of json objects\n"
             "     [\n"
             "       {\n"
             "         \"txid\":\"id\",    (string, required) The transaction id\n"
-            "         \"vout\":n        (numeric, required) The output number\n"
-            "         \"sequence\":n    (numeric, optional) The sequence number\n"
-            "       }\n"
+            "         \"vout\":n,         (numeric, required) The output number\n"
+            "         \"sequence\":n      (numeric, optional) The sequence number\n"
+            "       } \n"
             "       ,...\n"
             "     ]\n"
-            "2. \"addresses\"           (string, required) a json object with addresses as keys and amounts as values\n"
+            "2. \"outputs\"               (object, required) a json object with outputs\n"
             "    {\n"
-            "      \"address\": x.xxx   (numeric, required) The key is the Komodo address, the value is the " + CURRENCY_UNIT + " amount\n"
+            "      \"address\": x.xxx,    (numeric or string, required) The key is the komodo address or script (in hex), the numeric value (can be string) is the " + CURRENCY_UNIT + " amount\n"
+            "      \"data\": \"hex\"      (string, required) The key is \"data\", the value is hex encoded data\n"
             "      ,...\n"
             "    }\n"
             "3. locktime              (numeric, optional, default=0) Raw locktime. Non-0 value also locktime-activates inputs\n"
@@ -751,7 +761,11 @@ UniValue createrawtransaction(const UniValue& params, bool fHelp)
 
             "\nExamples\n"
             + HelpExampleCli("createrawtransaction", "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" \"{\\\"address\\\":0.01}\"")
+            + HelpExampleCli("createrawtransaction", "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" \"{\\\""+examplescriptPubKey+"\\\":0.01}\"")
+            + HelpExampleCli("createrawtransaction", "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\" \"{\\\"data\\\":\\\"00010203\\\"}\"")
             + HelpExampleRpc("createrawtransaction", "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", \"{\\\"address\\\":0.01}\"")
+            + HelpExampleRpc("createrawtransaction", "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", \"{\\\""+examplescriptPubKey+"\\\":0.01}\"")
+            + HelpExampleRpc("createrawtransaction", "\"[{\\\"txid\\\":\\\"myid\\\",\\\"vout\\\":0}]\", \"{\\\"data\\\":\\\"00010203\\\"}\"")
         );
 
     LOCK(cs_main);
@@ -811,22 +825,61 @@ UniValue createrawtransaction(const UniValue& params, bool fHelp)
     }
 
     std::set<CTxDestination> destinations;
+    //std::set<std::string> destinations;
+
     vector<string> addrList = sendTo.getKeys();
-    for (const std::string& name_ : addrList) {
-        CTxDestination destination = DecodeDestination(name_);
-        if (!IsValidDestination(destination)) {
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, std::string("Invalid Komodo address: ") + name_);
+
+    if (addrList.size() != sendTo.size()) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, std::string("Invalid outputs")); // for checking edge case, should never happened ...
+    }
+
+    //for (const std::string& name_ : addrList) {
+    for (size_t idx = 0; idx < sendTo.size(); idx++) {
+
+        const std::string& name_ = addrList[idx];
+
+        CScript scriptPubKey;
+        CTxDestination destination;
+
+        if (name_ == "data") {
+            std::vector<unsigned char> data = ParseHexV(sendTo[name_].getValStr(),"Data");
+            CTxOut out(0, CScript() << OP_RETURN << data);
+            rawTx.vout.push_back(out);
+        } else {
+            destination = DecodeDestination(name_);
+            if (IsValidDestination(destination)) {
+                scriptPubKey = GetScriptForDestination(destination);
+            } else if (IsHex(name_)) {
+                std::vector<unsigned char> data(ParseHex(name_));
+                scriptPubKey = CScript(data.begin(), data.end());
+                // destination is not valid, but we should convert it to valid anyway, to be able to check duplicates,
+                // so we need to get destination from existing scriptPubKey via ExtractDestination
+                if (!(ExtractDestination(scriptPubKey, destination) &&
+                    (scriptPubKey.IsPayToPublicKeyHash() || scriptPubKey.IsPayToPublicKey() || scriptPubKey.IsPayToScriptHash())
+                    )) {
+                        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, std::string("Invalid script: ") + name_ + std::string(" (only P2PKH, P2PK and P2SH scripts are allowed)"));
+                }
+            }
+            else {
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, std::string("Invalid Komodo address or script: ") + name_);
+            }
+
+            if (!(fExperimentalMode && IS_KOMODO_NOTARY)) {
+                // support of sending duplicates in createrawtransaction requires experimental features enabled and
+                // notary flag, to prevent common users to get messed up with duplicates
+
+                //if (!destinations.insert(EncodeDestination(destination)).second) {
+                if (!destinations.insert(destination).second) {
+                    throw JSONRPCError(RPC_INVALID_PARAMETER, std::string("Invalid parameter, duplicated destination: ") + name_);
+                }
+            }
+
+            // CAmount nAmount = AmountFromValue(sendTo[name_]);    // operator[](const std::string& key) const;
+            CAmount nAmount = AmountFromValue(sendTo[idx]);         // operator[](size_t index) const;
+
+            CTxOut out(nAmount, scriptPubKey);
+            rawTx.vout.push_back(out);
         }
-
-        if (!destinations.insert(destination).second) {
-            throw JSONRPCError(RPC_INVALID_PARAMETER, std::string("Invalid parameter, duplicated address: ") + name_);
-        }
-
-        CScript scriptPubKey = GetScriptForDestination(destination);
-        CAmount nAmount = AmountFromValue(sendTo[name_]);
-
-        CTxOut out(nAmount, scriptPubKey);
-        rawTx.vout.push_back(out);
     }
 
     return EncodeHexTx(rawTx);
@@ -1276,6 +1329,8 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp)
     return result;
 }
 
+extern UniValue NSPV_broadcast(char *hex);
+
 UniValue sendrawtransaction(const UniValue& params, bool fHelp)
 {
     if (fHelp || params.size() < 1 || params.size() > 2)
@@ -1311,30 +1366,35 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp)
     bool fOverrideFees = false;
     if (params.size() > 1)
         fOverrideFees = params[1].get_bool();
-
-    CCoinsViewCache &view = *pcoinsTip;
-    const CCoins* existingCoins = view.AccessCoins(hashTx);
-    bool fHaveMempool = mempool.exists(hashTx);
-    bool fHaveChain = existingCoins && existingCoins->nHeight < 1000000000;
-    if (!fHaveMempool && !fHaveChain) {
-        // push to local node and sync with wallets
-        CValidationState state;
-        bool fMissingInputs;
-        if (!AcceptToMemoryPool(mempool, state, tx, false, &fMissingInputs, !fOverrideFees)) {
-            if (state.IsInvalid()) {
-                throw JSONRPCError(RPC_TRANSACTION_REJECTED, strprintf("%i: %s", state.GetRejectCode(), state.GetRejectReason()));
-            } else {
-                if (fMissingInputs) {
-                    throw JSONRPCError(RPC_TRANSACTION_ERROR, "Missing inputs");
+    if ( KOMODO_NSPV_FULLNODE )
+    {
+        CCoinsViewCache &view = *pcoinsTip;
+        const CCoins* existingCoins = view.AccessCoins(hashTx);
+        bool fHaveMempool = mempool.exists(hashTx);
+        bool fHaveChain = existingCoins && existingCoins->nHeight < 1000000000;
+        if (!fHaveMempool && !fHaveChain) {
+            // push to local node and sync with wallets
+            CValidationState state;
+            bool fMissingInputs;
+            if (!AcceptToMemoryPool(mempool, state, tx, false, &fMissingInputs, !fOverrideFees)) {
+                if (state.IsInvalid()) {
+                    throw JSONRPCError(RPC_TRANSACTION_REJECTED, strprintf("%i: %s", state.GetRejectCode(), state.GetRejectReason()));
+                } else {
+                    if (fMissingInputs) {
+                        throw JSONRPCError(RPC_TRANSACTION_ERROR, "Missing inputs");
+                    }
+                    throw JSONRPCError(RPC_TRANSACTION_ERROR, state.GetRejectReason());
                 }
-                throw JSONRPCError(RPC_TRANSACTION_ERROR, state.GetRejectReason());
             }
+        } else if (fHaveChain) {
+            throw JSONRPCError(RPC_TRANSACTION_ALREADY_IN_CHAIN, "transaction already in block chain");
         }
-    } else if (fHaveChain) {
-        throw JSONRPCError(RPC_TRANSACTION_ALREADY_IN_CHAIN, "transaction already in block chain");
+        RelayTransaction(tx);
     }
-    RelayTransaction(tx);
-
+    else
+    {
+        NSPV_broadcast((char *)params[0].get_str().c_str());
+    }
     return hashTx.GetHex();
 }
 

@@ -1,5 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2019 The Hush developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -45,6 +46,7 @@
 
 using namespace RPCServer;
 using namespace std;
+extern uint16_t ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT;
 
 static bool fRPCRunning = false;
 static bool fRPCInWarmup = true;
@@ -350,9 +352,13 @@ static const CRPCCommand vRPCCommands[] =
     { "crosschain",         "getNotarisationsForBlock", &getNotarisationsForBlock, true },
     { "crosschain",         "scanNotarisationsDB",    &scanNotarisationsDB,    true },
     { "crosschain",         "getimports",             &getimports,             true },
+    { "crosschain",         "getwalletburntransactions",  &getwalletburntransactions,             true },
     { "crosschain",         "migrate_converttoexport", &migrate_converttoexport, true  },
+    { "crosschain",         "migrate_createburntransaction", &migrate_createburntransaction, true },
     { "crosschain",         "migrate_createimporttransaction", &migrate_createimporttransaction, true  },
     { "crosschain",         "migrate_completeimporttransaction", &migrate_completeimporttransaction, true  },
+    { "crosschain",         "migrate_checkburntransactionsource", &migrate_checkburntransactionsource, true },
+    { "crosschain",         "migrate_createnotaryapprovaltransaction", &migrate_createnotaryapprovaltransaction, true },
     { "crosschain",         "selfimport", &selfimport, true  },
     { "crosschain",         "importdual", &importdual, true  },
     //ImportGateway
@@ -364,7 +370,6 @@ static const CRPCCommand vRPCCommands[] =
     { "crosschain",       "importgatewaypartialsign",  &importgatewaypartialsign,     true },
     { "crosschain",       "importgatewaycompletesigning",  &importgatewaycompletesigning,     true },
     { "crosschain",       "importgatewaymarkdone",  &importgatewaymarkdone,     true },
-    { "crosschain",       "importgatewaypendingdeposits",   &importgatewaypendingdeposits,      true },
     { "crosschain",       "importgatewaypendingwithdraws",   &importgatewaypendingwithdraws,      true },
     { "crosschain",       "importgatewayprocessed",   &importgatewayprocessed,  true },
 
@@ -379,6 +384,7 @@ static const CRPCCommand vRPCCommands[] =
     { "mining",             "prioritisetransaction",  &prioritisetransaction,  true  },
     { "mining",             "submitblock",            &submitblock,            true  },
     { "mining",             "getblocksubsidy",        &getblocksubsidy,        true  },
+    { "mining",             "genminingCSV",           &genminingCSV,           true  },
 
 #ifdef ENABLE_MINING
     /* Coin generation */
@@ -409,6 +415,20 @@ static const CRPCCommand vRPCCommands[] =
     { "FSM", "FSMcreate",    &FSMcreate,  true },
     { "FSM",   "FSMlist",      &FSMlist,    true },
     { "FSM",   "FSMinfo",      &FSMinfo,    true },
+
+    // fsm
+    { "nSPV",   "nspv_getinfo",         &nspv_getinfo, true },
+    { "nSPV",   "nspv_login",           &nspv_login, true },
+    { "nSPV",   "nspv_listunspent",     &nspv_listunspent,  true },
+    { "nSPV",   "nspv_mempool",         &nspv_mempool,  true },
+    { "nSPV",   "nspv_listtransactions",&nspv_listtransactions,  true },
+    { "nSPV",   "nspv_spentinfo",       &nspv_spentinfo,    true },
+    { "nSPV",   "nspv_notarizations",   &nspv_notarizations,    true },
+    { "nSPV",   "nspv_hdrsproof",       &nspv_hdrsproof,    true },
+    { "nSPV",   "nspv_txproof",         &nspv_txproof,    true },
+    { "nSPV",   "nspv_spend",           &nspv_spend,    true },
+    { "nSPV",   "nspv_broadcast",       &nspv_broadcast,    true },
+    { "nSPV",   "nspv_logout",          &nspv_logout,    true },
 
     // rewards
     { "rewards",       "rewardslist",       &rewardslist,     true },
@@ -450,16 +470,26 @@ static const CRPCCommand vRPCCommands[] =
     { "oracles",       "oracleslist",      &oracleslist,        true },
     { "oracles",       "oraclesinfo",      &oraclesinfo,        true },
     { "oracles",       "oraclescreate",    &oraclescreate,      true },
+    { "oracles",       "oraclesfund",  &oraclesfund,    true },
     { "oracles",       "oraclesregister",  &oraclesregister,    true },
     { "oracles",       "oraclessubscribe", &oraclessubscribe,   true },
     { "oracles",       "oraclesdata",      &oraclesdata,        true },
+    { "oracles",       "oraclessample",   &oraclessample,     true },
     { "oracles",       "oraclessamples",   &oraclessamples,     true },
 
     // Prices
     { "prices",       "prices",      &prices,      true },
     { "prices",       "pricesaddress",      &pricesaddress,      true },
     { "prices",       "priceslist",         &priceslist,         true },
+    { "prices",       "mypriceslist",         &mypriceslist,         true },
     { "prices",       "pricesinfo",         &pricesinfo,         true },
+    { "prices",       "pricesbet",         &pricesbet,         true },
+    { "prices",       "pricessetcostbasis",         &pricessetcostbasis,         true },
+    { "prices",       "pricescashout",         &pricescashout,         true },
+    { "prices",       "pricesrekt",         &pricesrekt,         true },
+    { "prices",       "pricesaddfunding",         &pricesaddfunding,         true },
+    { "prices",       "pricesgetorderbook",         &pricesgetorderbook,         true },
+    { "prices",       "pricesrefillfund",         &pricesrefillfund,         true },
 
     // Pegs
     { "pegs",       "pegsaddress",   &pegsaddress,      true },
@@ -476,12 +506,15 @@ static const CRPCCommand vRPCCommands[] =
     { "marmara",       "marmaralock",   &marmara_lock,      true },
 
     // Payments
-    { "payments",       "paymentsaddress",   &paymentsaddress,      true },
-    { "payments",       "paymentstxidopret", &payments_txidopret,      true },
-    { "payments",       "paymentscreate",    &payments_create,      true },
-    { "payments",       "paymentslist",      &payments_list,      true },
-    { "payments",       "paymentsinfo",      &payments_info,      true },
-    { "payments",       "paymentsfund",      &payments_fund,      true },
+    { "payments",       "paymentsaddress",   &paymentsaddress,       true },
+    { "payments",       "paymentstxidopret", &payments_txidopret,    true },
+    { "payments",       "paymentscreate",    &payments_create,       true },
+    { "payments",       "paymentsairdrop",   &payments_airdrop,      true },
+    { "payments",       "paymentsairdroptokens",   &payments_airdroptokens,      true },
+    { "payments",       "paymentslist",      &payments_list,         true },
+    { "payments",       "paymentsinfo",      &payments_info,         true },
+    { "payments",       "paymentsfund",      &payments_fund,         true },
+    { "payments",       "paymentsmerge",     &payments_merge,        true },
     { "payments",       "paymentsrelease",   &payments_release,      true },
 
     { "CClib",       "cclibaddress",   &cclibaddress,      true },
@@ -535,9 +568,23 @@ static const CRPCCommand vRPCCommands[] =
     //{ "tokens",       "tokenfillswap",    &tokenfillswap,     true },
     { "tokens",       "tokenconvert", &tokenconvert, true },
 
+    // pegs
+    { "pegs",       "pegscreate",     &pegscreate,      true },
+    { "pegs",       "pegsfund",         &pegsfund,      true },
+    { "pegs",       "pegsget",         &pegsget,        true },
+    { "pegs",       "pegsredeem",         &pegsredeem,        true },
+    { "pegs",       "pegsliquidate",         &pegsliquidate,        true },
+    { "pegs",       "pegsexchange",         &pegsexchange,        true },
+    { "pegs",       "pegsaccounthistory", &pegsaccounthistory,      true },
+    { "pegs",       "pegsaccountinfo", &pegsaccountinfo,      true },
+    { "pegs",       "pegsworstaccounts",         &pegsworstaccounts,      true },
+    { "pegs",       "pegsinfo",         &pegsinfo,      true },
+
     /* Address index */
     { "addressindex",       "getaddressmempool",      &getaddressmempool,      true  },
     { "addressindex",       "getaddressutxos",        &getaddressutxos,        false },
+    { "addressindex",       "checknotarization",      &checknotarization,      false },
+    { "addressindex",       "getnotarypayinfo",       &getnotarypayinfo,       false },
     { "addressindex",       "getaddressdeltas",       &getaddressdeltas,       false },
     { "addressindex",       "getaddresstxids",        &getaddresstxids,        false },
     { "addressindex",       "getaddressbalance",      &getaddressbalance,      false },
@@ -561,10 +608,6 @@ static const CRPCCommand vRPCCommands[] =
     { "util",             "reconsiderblock",        &reconsiderblock,        true  },
     /* Not shown in help */
     { "hidden",             "setmocktime",            &setmocktime,            true  },
-	{ "hidden",             "test_ac",                &test_ac,            true },
-	{ "hidden",             "test_heirmarker",        &test_heirmarker,    true }, 
-	{ "hidden",             "test_proof",        &test_proof,    true },
-    { "hidden",             "test_burntx",            &test_burntx,    true },
 
 
 #ifdef ENABLE_WALLET
@@ -635,6 +678,7 @@ static const CRPCCommand vRPCCommands[] =
     { "wallet",             "z_importviewingkey",     &z_importviewingkey,     true  },
     { "wallet",             "z_exportwallet",         &z_exportwallet,         true  },
     { "wallet",             "z_importwallet",         &z_importwallet,         true  },
+    { "wallet",             "opreturn_burn",          &opreturn_burn,          true  },
 
     // TODO: rearrange into another category
     { "disclosure",         "z_getpaymentdisclosure", &z_getpaymentdisclosure, true  },
@@ -839,21 +883,30 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
 
 std::string HelpExampleCli(const std::string& methodname, const std::string& args)
 {
-    return "> komodo-cli " + methodname + " " + args + "\n";
+    if ( ASSETCHAINS_SYMBOL[0] == 0 ) {
+        return "> komodo-cli " + methodname + " " + args + "\n";
+    } else if ((strncmp(ASSETCHAINS_SYMBOL, "HUSH3", 5) == 0) ) {
+        return "> hush-cli " + methodname + " " + args + "\n";
+    } else {
+        return "> komodo-cli -ac_name=" + strprintf("%s", ASSETCHAINS_SYMBOL) + " " + methodname + " " + args + "\n";
+    }
 }
 
 std::string HelpExampleRpc(const std::string& methodname, const std::string& args)
 {
-    return "> curl --user myusername --data-binary '{\"jsonrpc\": \"1.0\", \"id\":\"curltest\", "
-        "\"method\": \"" + methodname + "\", \"params\": [" + args + "] }' -H 'content-type: text/plain;' http://127.0.0.1:7771/\n";
+    return  "> curl --user myusername --data-binary '{\"jsonrpc\": \"1.0\", \"id\":\"curltest\", "
+        "\"method\": \"" + methodname + "\", \"params\": [" + args + "] }' -H 'content-type: text/plain;' http://127.0.0.1:" + to_string(ASSETCHAINS_RPCPORT) + "/\n";
 }
 
 string experimentalDisabledHelpMsg(const string& rpc, const string& enableArg)
 {
+    string daemon = ASSETCHAINS_SYMBOL[0] == 0 ? "komodod" : "hushd";
+    string ticker = ASSETCHAINS_SYMBOL[0] == 0 ? "komodo" : ASSETCHAINS_SYMBOL;
+
     return "\nWARNING: " + rpc + " is disabled.\n"
-        "To enable it, restart zcashd with the -experimentalfeatures and\n"
+        "To enable it, restart " + daemon + " with the -experimentalfeatures and\n"
         "-" + enableArg + " commandline options, or add these two lines\n"
-        "to the zcash.conf file:\n\n"
+        "to the " + ticker + ".conf file:\n\n"
         "experimentalfeatures=1\n"
         + enableArg + "=1\n";
 }
