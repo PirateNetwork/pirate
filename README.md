@@ -27,10 +27,22 @@ This is the official PirateChain sourcecode repository based on https://github.c
 
 
 ## Tech Specification
+<<<<<<< HEAD
 - Max Supply: 200 million ARRR
 - Block Time: 60s
 - Block Reward: 256 KMD
 - Mining Algorithm: Equihash 200,9
+||||||| merged common ancestors
+- Max Supply: 200 million KMD
+- Block Time: 1m 2s
+- Block Reward: 3 KMD
+- Mining Algorithm: Equihash
+=======
+- Max Supply: 200 million KMD
+- Block Time: 60 seconds
+- Block Reward: 3 KMD
+- Mining Algorithm: Equihash
+>>>>>>> 1592c2dd4cb7979325b8296459be8732c88bbf16
 
 ## About this Project
 PirateChain (ARRR) is a 100% private send cryptocurrency. It uses a privacy protocol that cannot be compromised by other users activity on the network. Most privacy coins are riddled with holes created by optional privacy. PirateChain uses zk-SNARKs to shield 100% of the peer to peer transactions on the blockchain making for highly anonymous and private transactions.
@@ -61,16 +73,42 @@ cd pirate
 #This can take some time.
 ```
 
+
 #### OSX
-Ensure you have [brew](https://brew.sh) and the command line tools installed (comes automatically with XCode) and run:
+Ensure you have [brew](https://brew.sh) and Command Line Tools installed.
 ```shell
+<<<<<<< HEAD
 brew update && brew install gcc@6
 git clone https://github.com/mrmlynch/pirate --branch dev --single-branch
 cd pirate
+||||||| merged common ancestors
+brew update && brew install gcc@6
+git clone https://github.com/komodoplatform/komodo --branch master --single-branch
+cd komodo
+=======
+# Install brew
+/usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+# Install Xcode, opens a pop-up window to install CLT without installing the entire Xcode package
+xcode-select --install 
+# Update brew and install dependencies
+brew update
+brew upgrade
+brew tap discoteq/discoteq; brew install flock
+brew install autoconf autogen automake
+brew update && brew install gcc@8
+brew install binutils
+brew install protobuf
+brew install coreutils
+brew install wget
+# Clone the Komodo repo
+git clone https://github.com/komodoplatform/komodo --branch master --single-branch
+# Change master branch to other branch you wish to compile
+cd komodo
+>>>>>>> 1592c2dd4cb7979325b8296459be8732c88bbf16
 ./zcutil/fetch-params.sh
 # -j8 = using 8 threads for the compilation - replace 8 with number of threads you want to use; -j$(nproc) for all threads available
 ./zcutil/build-mac.sh -j8
-#This can take some time.
+# This can take some time.
 ```
 
 #### Windows
