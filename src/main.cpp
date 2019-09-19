@@ -150,6 +150,24 @@ const string strMessageMagic = "Komodo Signed Message:\n";
 // Internal stuff
 namespace {
 
+    /** Abort with a message */
+    bool AbortNode(const std::string& strMessage, const std::string& userMessage="")
+    {
+        strMiscWarning = strMessage;
+        LogPrintf("*** %s\n", strMessage);
+        uiInterface.ThreadSafeMessageBox(
+            userMessage.empty() ? _("Error: A fatal internal error occurred, see debug.log for details") : userMessage,
+            "", CClientUIInterface::MSG_ERROR);
+        StartShutdown();
+        return false;
+    }
+
+    bool AbortNode(CValidationState& state, const std::string& strMessage, const std::string& userMessage="")
+    {
+        AbortNode(strMessage, userMessage);
+        return state.Error(strMessage);
+    }
+
     struct CBlockIndexWorkComparator
     {
         bool operator()(CBlockIndex *pa, const CBlockIndex *pb) const {
@@ -2936,24 +2954,6 @@ namespace {
             return error("%s: %s Checksum mismatch %s vs %s", __func__,hashBlock.GetHex().c_str(),hashChecksum.GetHex().c_str(),hasher.GetHash().GetHex().c_str());
 
         return true;
-    }
-
-    /** Abort with a message */
-    bool AbortNode(const std::string& strMessage, const std::string& userMessage="")
-    {
-        strMiscWarning = strMessage;
-        LogPrintf("*** %s\n", strMessage);
-        uiInterface.ThreadSafeMessageBox(
-                                         userMessage.empty() ? _("Error: A fatal internal error occurred, see debug.log for details") : userMessage,
-                                         "", CClientUIInterface::MSG_ERROR);
-        StartShutdown();
-        return false;
-    }
-
-    bool AbortNode(CValidationState& state, const std::string& strMessage, const std::string& userMessage="")
-    {
-        AbortNode(strMessage, userMessage);
-        return state.Error(strMessage);
     }
 
 } // anon namespace
