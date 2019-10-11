@@ -82,7 +82,7 @@ curl https://sh.rustup.rs -sSf | sh
 source $HOME/.cargo/env
 rustup target add x86_64-pc-windows-gnu
 git clone https://github.com/PirateNetwork/pirate --branch beta --single-branch
-cd komodo
+cd pirate
 ./zcutil/fetch-params.sh
 # -j8 = using 8 threads for the compilation - replace 8 with number of threads you want to use; -j$(nproc) for all threads available
 ./zcutil/build-win.sh -j8
