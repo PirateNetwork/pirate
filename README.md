@@ -54,7 +54,7 @@ Komodo builds for all operating systems out of the same codebase. Follow the OS 
 
 #### Linux
 ```shell
-git clone https://github.com/PirateNetwork/pirate --branch beta --single-branch
+git clone https://github.com/PirateNetwork/pirate --branch master --single-branch
 cd pirate
 ./zcutil/fetch-params.sh
 # -j8 = using 8 threads for the compilation - replace 8 with number of threads you want to use; -j$(nproc) for all threads available
@@ -66,7 +66,7 @@ cd pirate
 Ensure you have [brew](https://brew.sh) and the command line tools installed (comes automatically with XCode) and run:
 ```shell
 brew update && brew install gcc@6
-git clone https://github.com/PirateNetwork/pirate --branch beta --single-branch
+git clone https://github.com/PirateNetwork/pirate --branch master --single-branch
 cd pirate
 ./zcutil/fetch-params.sh
 # -j8 = using 8 threads for the compilation - replace 8 with number of threads you want to use; -j$(nproc) for all threads available
@@ -81,7 +81,7 @@ sudo apt-get install build-essential pkg-config libc6-dev m4 g++-multilib autoco
 curl https://sh.rustup.rs -sSf | sh
 source $HOME/.cargo/env
 rustup target add x86_64-pc-windows-gnu
-git clone https://github.com/PirateNetwork/pirate --branch beta --single-branch
+git clone https://github.com/PirateNetwork/pirate --branch master --single-branch
 cd komodo
 ./zcutil/fetch-params.sh
 # -j8 = using 8 threads for the compilation - replace 8 with number of threads you want to use; -j$(nproc) for all threads available
