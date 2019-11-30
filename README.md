@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/KomodoPlatform/komodo.svg?branch=master)](https://travis-ci.org/KomodoPlatform/komodo)
+[![Build Status](https://travis-ci.org/KomodoPlatform/komodo.svg?branch=dev)](https://travis-ci.org/KomodoPlatform/komodo)
 ---
 ![Pirate Logo](https://i.ibb.co/F7Dgnxy/Pirate-Logo-Wordmark-Gold.png "PirateChain Logo")
 
@@ -54,7 +54,7 @@ Komodo builds for all operating systems out of the same codebase. Follow the OS 
 
 #### Linux
 ```shell
-git clone https://github.com/PirateNetwork/pirate --branch beta --single-branch
+git clone https://github.com/PirateNetwork/pirate --branch beta
 cd pirate
 ./zcutil/fetch-params.sh
 # -j8 = using 8 threads for the compilation - replace 8 with number of threads you want to use; -j$(nproc) for all threads available
@@ -66,7 +66,7 @@ cd pirate
 Ensure you have [brew](https://brew.sh) and the command line tools installed (comes automatically with XCode) and run:
 ```shell
 brew update && brew install gcc@6
-git clone https://github.com/PirateNetwork/pirate --branch beta --single-branch
+git clone https://github.com/PirateNetwork/pirate --branch beta
 cd pirate
 ./zcutil/fetch-params.sh
 # -j8 = using 8 threads for the compilation - replace 8 with number of threads you want to use; -j$(nproc) for all threads available
@@ -81,8 +81,8 @@ sudo apt-get install build-essential pkg-config libc6-dev m4 g++-multilib autoco
 curl https://sh.rustup.rs -sSf | sh
 source $HOME/.cargo/env
 rustup target add x86_64-pc-windows-gnu
-git clone https://github.com/PirateNetwork/pirate --branch beta --single-branch
-cd pirate
+git clone https://github.com/PirateNetwork/pirate --branch beta
+cd komodo
 ./zcutil/fetch-params.sh
 # -j8 = using 8 threads for the compilation - replace 8 with number of threads you want to use; -j$(nproc) for all threads available
 ./zcutil/build-win.sh -j8

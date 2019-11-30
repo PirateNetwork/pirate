@@ -29,9 +29,9 @@
 #include "asn/Secp256k1Fulfillment.h"
 #include "asn/Secp256k1FingerprintContents.h"
 #include "asn/OCTET_STRING.h"
-#include "include/cJSON.h"
+//#include <cJSON.h>
 #include "include/secp256k1/include/secp256k1.h"
-#include "cryptoconditions.h"
+//#include "../include/cryptoconditions.h"
 #include "internal.h"
 
 
@@ -196,6 +196,7 @@ int cc_signTreeSecp256k1Msg32(CC *cond, const unsigned char *privateKey, const u
     unsigned char publicKey[SECP256K1_PK_SIZE];
     size_t ol = SECP256K1_PK_SIZE;
     secp256k1_ec_pubkey_serialize(ec_ctx_verify, publicKey, &ol, &spk, SECP256K1_EC_COMPRESSED);
+    if ( 0 )
     {
         int32_t z;
         for (z=0; z<33; z++)
