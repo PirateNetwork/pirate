@@ -34,7 +34,6 @@ struct CSpentIndexKey {
         txid.SetNull();
         outputIndex = 0;
     }
-
 };
 
 struct CSpentIndexValue {

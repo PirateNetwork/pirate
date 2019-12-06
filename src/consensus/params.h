@@ -27,6 +27,7 @@ enum UpgradeIndex {
     UPGRADE_OVERWINTER,
     UPGRADE_SAPLING,
     UPGRADE_COSMOS,
+    UPGRADE_BLOSSOM,
     // NOTE: Also add new upgrades to NetworkUpgradeInfo in upgrades.cpp
     MAX_NETWORK_UPGRADES
 };

@@ -108,7 +108,10 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 492850;
         consensus.vUpgrades[Consensus::UPGRADE_COSMOS].nProtocolVersion = 170008;
         consensus.vUpgrades[Consensus::UPGRADE_COSMOS].nActivationHeight = 620450;
-        
+        consensus.vUpgrades[Consensus::UPGRADE_BLOSSOM].nProtocolVersion = 170009;
+        consensus.vUpgrades[Consensus::UPGRADE_BLOSSOM].nActivationHeight =
+            Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
+
         // The best chain should have at least this much work.
         consensus.nMinimumChainWork = uint256S("0x00");
 
@@ -204,6 +207,14 @@ public:
                                         //   total number of tx / (checkpoint block height / (24 * 24))
         };
 
+        // Hardcoded fallback value for the Sprout shielded value pool balance
+        // for nodes that have not reindexed since the introduction of monitoring
+        // in #2795.
+        nSproutValuePoolCheckpointHeight = 520633;
+        nSproutValuePoolCheckpointBalance = 22145062442933;
+        fZIP209Enabled = true;
+        hashSproutValuePoolCheckpointBlock = uint256S("0000000000c7b46b6bc04b4cbf87d8bb08722aebd51232619b214f7273f8460e");
+
         // Founders reward script expects a vector of 2-of-3 multisig addresses
         vFoundersRewardAddress = {
           "t3hmg6WApjqVFw9oPWTDy4JLEqXcUWthg5v", /* main-index: 0*/
@@ -257,6 +268,9 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 50;
         consensus.vUpgrades[Consensus::UPGRADE_COSMOS].nProtocolVersion = 170008;
         consensus.vUpgrades[Consensus::UPGRADE_COSMOS].nActivationHeight =47925;
+        consensus.vUpgrades[Consensus::UPGRADE_BLOSSOM].nProtocolVersion = 170009;
+        consensus.vUpgrades[Consensus::UPGRADE_BLOSSOM].nActivationHeight =
+            Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
 
 
         // The best chain should have at least this much work.
@@ -403,8 +417,11 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight =
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
         consensus.vUpgrades[Consensus::UPGRADE_COSMOS].nProtocolVersion = 170008;
-        consensus.vUpgrades[Consensus::UPGRADE_COSMOS].nActivationHeight = 
+        consensus.vUpgrades[Consensus::UPGRADE_COSMOS].nActivationHeight =
                 Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
+        consensus.vUpgrades[Consensus::UPGRADE_BLOSSOM].nProtocolVersion = 170009;
+        consensus.vUpgrades[Consensus::UPGRADE_BLOSSOM].nActivationHeight =
+            Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
 
 
         // The best chain should have at least this much work.
@@ -493,6 +510,10 @@ public:
         assert(idx > Consensus::BASE_SPROUT && idx < Consensus::MAX_NETWORK_UPGRADES);
         consensus.vUpgrades[idx].nActivationHeight = nActivationHeight;
     }
+
+    void SetRegTestZIP209Enabled() {
+        fZIP209Enabled = true;
+    }
 };
 static CRegTestParams regTestParams;
 
@@ -524,6 +545,11 @@ void SelectParams(CBaseChainParams::Network network) {
     // Some python qa rpc tests need to enforce the coinbase consensus rule
     if (network == CBaseChainParams::REGTEST && mapArgs.count("-regtestprotectcoinbase")) {
         regTestParams.SetRegTestCoinbaseMustBeProtected();
+    }
+
+    // When a developer is debugging turnstile violations in regtest mode, enable ZIP209
+    if (network == CBaseChainParams::REGTEST && mapArgs.count("-developersetpoolsizezero")) {
+        regTestParams.SetRegTestZIP209Enabled();
     }
 }
 
