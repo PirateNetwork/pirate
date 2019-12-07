@@ -89,6 +89,11 @@ public:
         consensus.nMajorityEnforceBlockUpgrade = 750;
         consensus.nMajorityRejectBlockOutdated = 950;
         consensus.nMajorityWindow = 4000;
+
+        const size_t N = 192, K = 7;
+        BOOST_STATIC_ASSERT(equihash_parameters_acceptable(N, K));
+        consensus.nEquihashN = N;
+        consensus.nEquihashK = K;
         consensus.powLimit = uint256S("0AB1Efffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.nPowAveragingWindow = 17;
         assert(maxUint/UintToArith256(consensus.powLimit) >= consensus.nPowAveragingWindow);
@@ -126,10 +131,6 @@ public:
         nDefaultPort = 23801;
         //nMaxTipAge = 24 * 60 * 60;
         nPruneAfterHeight = 100000;
-        const size_t N = 192, K = 7;
-        BOOST_STATIC_ASSERT(equihash_parameters_acceptable(N, K));
-        nEquihashN = N;
-        nEquihashK = K;
 
         //Start Zeronode
         nZeronodeCountDrift = 0;
@@ -249,6 +250,11 @@ public:
         consensus.nMajorityEnforceBlockUpgrade = 51;
         consensus.nMajorityRejectBlockOutdated = 75;
         consensus.nMajorityWindow = 400;
+        
+        const size_t N = 192, K = 7;
+        BOOST_STATIC_ASSERT(equihash_parameters_acceptable(N, K));
+        consensus.nEquihashN = N;
+        consensus.nEquihashK = K;
         consensus.powLimit = uint256S("0effffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.nPowAveragingWindow = 17;
         assert(maxUint/UintToArith256(consensus.powLimit) >= consensus.nPowAveragingWindow);
@@ -284,10 +290,6 @@ public:
         nDefaultPort = 23802;
         //nMaxTipAge = 1000000000;
         nPruneAfterHeight = 1000;
-        const size_t N = 192, K = 7;
-        BOOST_STATIC_ASSERT(equihash_parameters_acceptable(N, K));
-        nEquihashN = N;
-        nEquihashK = K;
 
         //Start Zeronode
         nZeronodeCountDrift = 0;
@@ -397,6 +399,10 @@ public:
         consensus.nMajorityEnforceBlockUpgrade = 750;
         consensus.nMajorityRejectBlockOutdated = 950;
         consensus.nMajorityWindow = 1000;
+        const size_t N = 48, K = 5;
+        BOOST_STATIC_ASSERT(equihash_parameters_acceptable(N, K));
+        consensus.nEquihashN = N;
+        consensus.nEquihashK = K;
         consensus.powLimit = uint256S("0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f");
         consensus.nPowAveragingWindow = 17;
         assert(maxUint/UintToArith256(consensus.powLimit) >= consensus.nPowAveragingWindow);
@@ -435,10 +441,6 @@ public:
         nDefaultPort = 23803;
         //nMaxTipAge = 24 * 60 * 60;
         nPruneAfterHeight = 1000;
-        const size_t N = 48, K = 5;
-        BOOST_STATIC_ASSERT(equihash_parameters_acceptable(N, K));
-        nEquihashN = N;
-        nEquihashK = K;
 
         //Start Zeronode
         nZeronodeCountDrift = 0;
@@ -462,8 +464,8 @@ public:
         assert(consensus.hashGenesisBlock == uint256S("0275863eebea76f824674494b7f6a3770ac46c732aaa62b07328feaa9d79798b"));
         //assert(genesis.hashMerkleRoot == uint256S(""));
 
-        vFixedSeeds.clear(); //! Regtest mode doesn't have any fixed seeds.
-        vSeeds.clear();  //! Regtest mode doesn't have any DNS seeds.
+        vFixedSeeds.clear(); //!< Regtest mode doesn't have any fixed seeds.
+        vSeeds.clear();      //!< Regtest mode doesn't have any DNS seeds.
 
         // guarantees the first 2 characters, when base58 encoded, are "tm"
         base58Prefixes[PUBKEY_ADDRESS]     = {0x1D,0x25};

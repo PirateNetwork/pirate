@@ -20,6 +20,8 @@ public:
 
     virtual void main();
 
+    virtual void cancel();
+
     virtual UniValue getStatus() const;
 
 private:
@@ -27,7 +29,7 @@ private:
 
     bool main_impl();
 
-    void setMigrationResult(int numTxCreated);
+    void setMigrationResult(int numTxCreated, const CAmount& amountMigrated, const std::vector<std::string>& migrationTxIds);
 
     CAmount chooseAmount(const CAmount& availableFunds);
 };

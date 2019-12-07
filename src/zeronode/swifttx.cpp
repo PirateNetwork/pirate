@@ -180,7 +180,7 @@ bool IsIXTXValid(const CTransaction& txCollateral)
     BOOST_FOREACH (const CTxIn i, txCollateral.vin) {
         CTransaction tx2;
         uint256 hash;
-        if (GetTransaction(i.prevout.hash, tx2, hash, true)) {
+        if (GetTransaction(i.prevout.hash, tx2, Params().GetConsensus(), hash, true)) {
             if (tx2.vout.size() > i.prevout.n) {
                 nValueIn += tx2.vout[i.prevout.n].nValue;
             }

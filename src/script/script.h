@@ -569,10 +569,15 @@ public:
 
     bool IsNormalPaymentScript() const;
 
+    // insightexplorer, there may be more script types in the future
+    enum ScriptType : int {
+        UNKNOWN = 0,
+        P2PKH = 1,
+        P2SH = 2,
+    };
     bool IsPayToPublicKeyHash() const;
     bool IsPayToScriptHash() const;
-
-    int Type() const;
+    ScriptType GetType() const;
     uint160 AddressHash() const;
 
     /** Called by IsStandardTx and P2SH/BIP62 VerifyScript (which makes it consensus-critical). */

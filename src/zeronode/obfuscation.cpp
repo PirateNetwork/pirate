@@ -52,7 +52,7 @@ bool CObfuScationSigner::IsVinAssociatedWithPubkey(CTxIn& vin, CPubKey& pubkey)
 
     CTransaction txVin;
     uint256 hash;
-    if (GetTransaction(vin.prevout.hash, txVin, hash, true)) {
+    if (GetTransaction(vin.prevout.hash, txVin, Params().GetConsensus(), hash, true)) {
         BOOST_FOREACH (CTxOut out, txVin.vout) {
             if (out.nValue == 10000 * COIN) {
                 if (out.scriptPubKey == payee2) return true;

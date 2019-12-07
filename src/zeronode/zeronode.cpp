@@ -608,7 +608,7 @@ bool CZeronodeBroadcast::CheckInputsAndAdd(int& nDoS)
     // should be at least not earlier than block when 10000 ZER tx got ZERONODE_MIN_CONFIRMATIONS
     uint256 hashBlock = uint256();
     CTransaction tx2;
-    GetTransaction(vin.prevout.hash, tx2, hashBlock, true);
+    GetTransaction(vin.prevout.hash, tx2, Params().GetConsensus(), hashBlock, true);
     BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
     if (mi != mapBlockIndex.end() && (*mi).second) {
         CBlockIndex* pMNIndex = (*mi).second;                                                        // block for 1000 Zero tx -> 1 confirmation

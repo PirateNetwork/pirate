@@ -150,7 +150,7 @@ UniValue TxShieldedOutputsToJSON(const CTransaction& tx) {
 void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue& entry,
                       int nHeight = 0, int nConfirmations = 0, int nBlockTime = 0)
 {
-    uint256 txid = tx.GetHash();
+    const uint256 txid = tx.GetHash();
     entry.push_back(Pair("txid", txid.GetHex()));
     entry.push_back(Pair("overwintered", tx.fOverwintered));
     entry.push_back(Pair("version", tx.nVersion));
@@ -180,13 +180,13 @@ void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue&
             if (GetSpentIndex(spentKey, spentInfo)) {
                 in.push_back(Pair("value", ValueFromAmount(spentInfo.satoshis)));
                 in.push_back(Pair("valueZat", spentInfo.satoshis));
-                if (spentInfo.addressType == 1) {
-                    in.push_back(Pair("address", EncodeDestination(CKeyID(spentInfo.addressHash))));
-                } else if (spentInfo.addressType == 2)  {
-                    in.push_back(Pair("address", EncodeDestination(CScriptID(spentInfo.addressHash))));
+
+                boost::optional<CTxDestination> dest =
+                    DestFromAddressHash(spentInfo.addressType, spentInfo.addressHash);
+                if (dest) {
+                    in.push_back(Pair("address", EncodeDestination(*dest)));
                 }
             }
-
         }
         in.push_back(Pair("sequence", (int64_t)txin.nSequence));
         vin.push_back(in);
@@ -211,7 +211,6 @@ void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue&
             out.push_back(Pair("spentIndex", (int)spentInfo.inputIndex));
             out.push_back(Pair("spentHeight", spentInfo.blockHeight));
         }
-
         vout.push_back(out);
     }
     entry.push_back(Pair("vout", vout));
@@ -400,13 +399,13 @@ UniValue getrawtransaction(const UniValue& params, bool fHelp)
             + HelpExampleRpc("getrawtransaction", "\"mytxid\", 1")
         );
 
-    //LOCK(cs_main);
-
     uint256 hash = ParseHashV(params[0], "parameter 1");
 
     bool fVerbose = false;
     if (params.size() > 1)
         fVerbose = (params[1].get_int() != 0);
+
+    LOCK(cs_main);
 
     CTransaction tx;
     uint256 hashBlock;
@@ -416,7 +415,7 @@ UniValue getrawtransaction(const UniValue& params, bool fHelp)
 
     {
         LOCK(cs_main);
-        if (!GetTransaction(hash, tx, hashBlock, true))
+        if (!GetTransaction(hash, tx, Params().GetConsensus(), hashBlock, true))
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "No information available about transaction");
 
         BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
@@ -502,7 +501,7 @@ UniValue gettxoutproof(const UniValue& params, bool fHelp)
     if (pblockindex == NULL)
     {
         CTransaction tx;
-        if (!GetTransaction(oneTxid, tx, hashBlock, false) || hashBlock.IsNull())
+        if (!GetTransaction(oneTxid, tx, Params().GetConsensus(), hashBlock, false) || hashBlock.IsNull())
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Transaction not yet in block");
         if (!mapBlockIndex.count(hashBlock))
             throw JSONRPCError(RPC_INTERNAL_ERROR, "Transaction index corrupt");
@@ -510,7 +509,7 @@ UniValue gettxoutproof(const UniValue& params, bool fHelp)
     }
 
     CBlock block;
-    if(!ReadBlockFromDisk(block, pblockindex))
+    if(!ReadBlockFromDisk(block, pblockindex, Params().GetConsensus()))
         throw JSONRPCError(RPC_INTERNAL_ERROR, "Can't read block from disk");
 
     unsigned int ntxFound = 0;

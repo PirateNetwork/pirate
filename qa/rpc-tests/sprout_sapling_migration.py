@@ -45,9 +45,10 @@ class SproutSaplingMigration(BitcoinTestFramework):
         # Add migration parameters to nodes[0]
         extra_args[0] = extra_args[0] + [
             '-migration',
-            '-migrationdestaddress=' + SAPLING_ADDR
+            '-migrationdestaddress=' + SAPLING_ADDR,
+            '-debug=zrpcunsafe'
         ]
-        assert_equal(4, len(extra_args[0]))
+        assert_equal(5, len(extra_args[0]))
         assert_equal(2, len(extra_args[1]))
         return start_nodes(4, self.options.tmpdir, extra_args)
 
@@ -87,6 +88,8 @@ class SproutSaplingMigration(BitcoinTestFramework):
         assert_equal('saplingmigration', result['method'])
         assert_equal(target_height, result['target_height'])
         assert_equal(1, result['result']['num_tx_created'])
+        assert_equal(1, len(result['result']['migration_txids']))
+        assert_true(result['result']['amount_migrated'] > Decimal('0'))
 
         assert_equal(0, len(node.getrawmempool()), "mempool size at 495 % 500")
 
@@ -102,10 +105,24 @@ class SproutSaplingMigration(BitcoinTestFramework):
         self.sync_all()
 
         # At 499 % 500 there will be a transaction in the mempool and the note will be locked
-        assert_equal(1, len(node.getrawmempool()), "mempool size at 499 % 500")
+        mempool = node.getrawmempool()
+        print("mempool: {}".format(mempool))
+        assert_equal(1, len(mempool), "mempool size at 499 % 500")
         assert_equal(node.z_getbalance(sproutAddr), Decimal('0'))
         assert_equal(node.z_getbalance(saplingAddr), Decimal('0'))
         assert_true(node.z_getbalance(saplingAddr, 0) > Decimal('0'), "Unconfirmed sapling balance at 499 % 500")
+        # Check that unmigrated amount + unfinalized = starting balance - fee
+        status = node.z_getmigrationstatus()
+        print("status: {}".format(status))
+        assert_equal(Decimal('9.9999'), Decimal(status['unmigrated_amount']) + Decimal(status['unfinalized_migrated_amount']))
+
+        # The transaction in the mempool should be the one listed in migration_txids,
+        # and it should expire at the next 450 % 500.
+        assert_equal(1, len(status['migration_txids']))
+        txid = status['migration_txids'][0]
+        assert_equal(txid, mempool[0])
+        tx = node.getrawtransaction(txid, 1)
+        assert_equal(target_height + 450, tx['expiryheight'])
 
         node.generate(1)
         self.sync_all()
