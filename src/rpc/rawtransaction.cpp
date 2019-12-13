@@ -1,7 +1,7 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2015 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
 #include "consensus/upgrades.h"
 #include "consensus/validation.h"
@@ -60,9 +60,9 @@ void ScriptPubKeyToJSON(const CScript& scriptPubKey, UniValue& out, bool fInclud
 
 UniValue TxJoinSplitToJSON(const CTransaction& tx) {
     bool useGroth = tx.fOverwintered && tx.nVersion >= SAPLING_TX_VERSION;
-    UniValue vjoinsplit(UniValue::VARR);
-    for (unsigned int i = 0; i < tx.vjoinsplit.size(); i++) {
-        const JSDescription& jsdescription = tx.vjoinsplit[i];
+    UniValue vJoinSplit(UniValue::VARR);
+    for (unsigned int i = 0; i < tx.vJoinSplit.size(); i++) {
+        const JSDescription& jsdescription = tx.vJoinSplit[i];
         UniValue joinsplit(UniValue::VOBJ);
 
         joinsplit.push_back(Pair("vpub_old", ValueFromAmount(jsdescription.vpub_old)));
@@ -112,9 +112,9 @@ UniValue TxJoinSplitToJSON(const CTransaction& tx) {
             joinsplit.push_back(Pair("ciphertexts", ciphertexts));
         }
 
-        vjoinsplit.push_back(joinsplit);
+        vJoinSplit.push_back(joinsplit);
     }
-    return vjoinsplit;
+    return vJoinSplit;
 }
 
 UniValue TxShieldedSpendsToJSON(const CTransaction& tx) {
@@ -177,14 +177,14 @@ void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue&
             // Add address and value info if spentindex enabled
             CSpentIndexValue spentInfo;
             CSpentIndexKey spentKey(txin.prevout.hash, txin.prevout.n);
-            if (GetSpentIndex(spentKey, spentInfo)) {
+            if (fSpentIndex && GetSpentIndex(spentKey, spentInfo)) {
                 in.push_back(Pair("value", ValueFromAmount(spentInfo.satoshis)));
                 in.push_back(Pair("valueZat", spentInfo.satoshis));
 
-                boost::optional<CTxDestination> dest =
+                CTxDestination dest =
                     DestFromAddressHash(spentInfo.addressType, spentInfo.addressHash);
-                if (dest) {
-                    in.push_back(Pair("address", EncodeDestination(*dest)));
+                if (IsValidDestination(dest)) {
+                    in.push_back(Pair("address", EncodeDestination(dest)));
                 }
             }
         }
@@ -198,6 +198,7 @@ void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue&
         UniValue out(UniValue::VOBJ);
         out.push_back(Pair("value", ValueFromAmount(txout.nValue)));
         out.push_back(Pair("valueZat", txout.nValue));
+        out.push_back(Pair("valueSat", txout.nValue));
         out.push_back(Pair("n", (int64_t)i));
         UniValue o(UniValue::VOBJ);
         ScriptPubKeyToJSON(txout.scriptPubKey, o, true);
@@ -206,7 +207,7 @@ void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue&
         // Add spent information if spentindex is enabled
         CSpentIndexValue spentInfo;
         CSpentIndexKey spentKey(txid, i);
-        if (GetSpentIndex(spentKey, spentInfo)) {
+        if (fSpentIndex && GetSpentIndex(spentKey, spentInfo)) {
             out.push_back(Pair("spentTxId", spentInfo.txid.GetHex()));
             out.push_back(Pair("spentIndex", (int)spentInfo.inputIndex));
             out.push_back(Pair("spentHeight", spentInfo.blockHeight));
@@ -585,7 +586,9 @@ UniValue createrawtransaction(const UniValue& params, bool fHelp)
             "      ,...\n"
             "    }\n"
             "3. locktime              (numeric, optional, default=0) Raw locktime. Non-0 value also locktime-activates inputs\n"
-            "4. expiryheight          (numeric, optional, default=nextblockheight+" + strprintf("%d", DEFAULT_TX_EXPIRY_DELTA) + ") Expiry height of transaction (if Overwinter is active)\n"
+            "4. expiryheight          (numeric, optional, default="
+                + strprintf("nextblockheight+%d (pre-Blossom) or nextblockheight+%d (post-Blossom)", DEFAULT_PRE_BLOSSOM_TX_EXPIRY_DELTA, DEFAULT_POST_BLOSSOM_TX_EXPIRY_DELTA) + ") "
+                "Expiry height of transaction (if Overwinter is active)\n"
             "\nResult:\n"
             "\"transaction\"            (string) hex string of the transaction\n"
 
@@ -614,7 +617,7 @@ UniValue createrawtransaction(const UniValue& params, bool fHelp)
     }
 
     if (params.size() > 3 && !params[3].isNull()) {
-        if (NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_OVERWINTER)) {
+        if (Params().GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_OVERWINTER)) {
             int64_t nExpiryHeight = params[3].get_int64();
             if (nExpiryHeight < 0 || nExpiryHeight >= TX_EXPIRY_HEIGHT_THRESHOLD) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid parameter, expiryheight must be nonnegative and less than %d.", TX_EXPIRY_HEIGHT_THRESHOLD));
@@ -1130,7 +1133,7 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp)
     // DoS mitigation: reject transactions expiring soon
     if (tx.nExpiryHeight > 0) {
         int nextBlockHeight = chainActive.Height() + 1;
-        if (NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_OVERWINTER)) {
+        if (Params().GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_OVERWINTER)) {
             if (nextBlockHeight + TX_EXPIRING_SOON_THRESHOLD > tx.nExpiryHeight) {
                 throw JSONRPCError(RPC_TRANSACTION_REJECTED,
                     strprintf("tx-expiring-soon: expiryheight is %d but should be at least %d to avoid transaction expiring soon",

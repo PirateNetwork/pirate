@@ -1,7 +1,7 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
 #include "amount.h"
 #include "consensus/upgrades.h"
@@ -3063,7 +3063,7 @@ UniValue zc_raw_joinsplit(const UniValue& params, bool fHelp)
         assert(jsdesc.Verify(*pzcashParams, verifier, joinSplitPubKey));
     }
 
-    mtx.vjoinsplit.push_back(jsdesc);
+    mtx.vJoinSplit.push_back(jsdesc);
 
     // Empty output script.
     CScript scriptCode;
@@ -3457,8 +3457,8 @@ UniValue z_gettotalbalance(const UniValue& params, bool fHelp)
             "\nResult:\n"
             "{\n"
             "  \"transparent\": xxxxx,     (numeric) the total balance of transparent funds\n"
-            "  \"private\": xxxxx,         (numeric) the total balance of private funds (in both Sprout and Sapling addresses)\n"
-            "  \"total\": xxxxx,           (numeric) the total balance of both transparent and private funds\n"
+            "  \"private\": xxxxx,         (numeric) the total balance of shielded funds (in both Sprout and Sapling addresses)\n"
+            "  \"total\": xxxxx,           (numeric) the total balance of both transparent and shielded funds\n"
             "}\n"
             "\nExamples:\n"
             "\nThe total amount in the wallet\n"
@@ -3773,8 +3773,8 @@ UniValue z_sendmany(const UniValue& params, bool fHelp)
     mtx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
     mtx.nVersion = SAPLING_TX_VERSION;
     unsigned int max_tx_size = MAX_TX_SIZE_AFTER_SAPLING;
-    if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
-        if (NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_OVERWINTER)) {
+    if (!Params().GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_SAPLING)) {
+        if (Params().GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_OVERWINTER)) {
             mtx.nVersionGroupId = OVERWINTER_VERSION_GROUP_ID;
             mtx.nVersion = OVERWINTER_TX_VERSION;
         } else {
@@ -3790,12 +3790,12 @@ UniValue z_sendmany(const UniValue& params, bool fHelp)
         }
     }
 
-    if (NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_COSMOS)) {
+    if (Params().GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_COSMOS)) {
         max_tx_size = MAX_TX_SIZE_COSMOS;
     }
 
     // If Sapling is not active, do not allow sending from or sending to Sapling addresses.
-    if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
+    if (!Params().GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_SAPLING)) {
         if (fromSapling || containsSaplingOutput) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Sapling has not activated");
         }
@@ -3815,7 +3815,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp)
             if (mtx.fOverwintered && (mtx.nVersion >= SAPLING_TX_VERSION)) {
                 jsdesc.proof = GrothProof();
             }
-            mtx.vjoinsplit.push_back(jsdesc);
+            mtx.vJoinSplit.push_back(jsdesc);
         }
     }
     CTransaction tx(mtx);
@@ -3875,7 +3875,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp)
     // Builder (used if Sapling addresses are involved)
     boost::optional<TransactionBuilder> builder;
     if (noSproutAddrs) {
-        builder = TransactionBuilder(Params().GetConsensus(), nextBlockHeight, expiryDelta, pwalletMain);
+        builder = TransactionBuilder(Params().GetConsensus(), nextBlockHeight, pwalletMain);
     }
 
     // Contextual transaction we will build on
@@ -3883,7 +3883,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp)
     CMutableTransaction contextualTx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nextBlockHeight);
     bool isShielded = !fromTaddr || zaddrRecipients.size() > 0;
     if (contextualTx.nVersion == 1 && isShielded) {
-        contextualTx.nVersion = 2; // Tx format should support vjoinsplits
+        contextualTx.nVersion = 2; // Tx format should support vJoinSplits
     }
 
     // Create operation and add to global queue
@@ -3977,9 +3977,9 @@ UniValue z_getmigrationstatus(const UniValue& params, bool fHelp) {
         // * one or more Sprout JoinSplits with nonzero vpub_new field; and
         // * no Sapling Spends, and;
         // * one or more Sapling Outputs.
-        if (tx.vjoinsplit.size() > 0 && tx.vShieldedSpend.empty() && tx.vShieldedOutput.size() > 0) {
+        if (tx.vJoinSplit.size() > 0 && tx.vShieldedSpend.empty() && tx.vShieldedOutput.size() > 0) {
             bool nonZeroVPubNew = false;
-            for (const auto& js : tx.vjoinsplit) {
+            for (const auto& js : tx.vJoinSplit) {
                 if (js.vpub_new > 0) {
                     nonZeroVPubNew = true;
                     break;
@@ -4109,18 +4109,19 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp)
     }
 
     int nextBlockHeight = chainActive.Height() + 1;
-    bool overwinterActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_OVERWINTER);
+    bool overwinterActive = Params().GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_OVERWINTER);
     unsigned int max_tx_size = MAX_TX_SIZE_AFTER_SAPLING;
-    if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
+    if (!Params().GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_SAPLING)) {
         max_tx_size = MAX_TX_SIZE_BEFORE_SAPLING;
     }
-    if (NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_COSMOS)) {
+    if (Params().GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_COSMOS)) {
         max_tx_size = MAX_TX_SIZE_COSMOS;
     }
 
     // If Sapling is not active, do not allow sending to a Sapling address.
-    if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
+    if (!Params().GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_SAPLING)) {
         auto res = DecodePaymentAddress(destaddress);
+        // If Sapling is not active, do not allow sending to a Sapling address.
         if (IsValidPaymentAddress(res)) {
             bool toSapling = boost::get<libzcash::SaplingPaymentAddress>(&res) != nullptr;
             if (toSapling) {
@@ -4218,14 +4219,14 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp)
 
     // Builder (used if Sapling addresses are involved)
     TransactionBuilder builder = TransactionBuilder(
-        Params().GetConsensus(), nextBlockHeight, expiryDelta, pwalletMain);
+        Params().GetConsensus(), nextBlockHeight, pwalletMain);
 
     // Contextual transaction we will build on
     // (used if no Sapling addresses are involved)
     CMutableTransaction contextualTx = CreateNewContextualCMutableTransaction(
         Params().GetConsensus(), nextBlockHeight);
     if (contextualTx.nVersion == 1) {
-        contextualTx.nVersion = 2; // Tx format should support vjoinsplits
+        contextualTx.nVersion = 2; // Tx format should support vJoinSplit
     }
 
     // Create operation and add to global queue
@@ -4379,9 +4380,9 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp)
     }
 
     const int nextBlockHeight = chainActive.Height() + 1;
-    const bool overwinterActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_OVERWINTER);
-    const bool saplingActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING);
-    const bool cosmosActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_COSMOS);
+    const bool overwinterActive = Params().GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_OVERWINTER);
+    const bool saplingActive = Params().GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_SAPLING);
+    const bool cosmosActive = Params().GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_COSMOS);
 
     // Validate the destination address
     auto destaddress = params[1].get_str();
@@ -4642,13 +4643,13 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp)
         nextBlockHeight);
     bool isSproutShielded = sproutNoteInputs.size() > 0 || isToSproutZaddr;
     if (contextualTx.nVersion == 1 && isSproutShielded) {
-        contextualTx.nVersion = 2; // Tx format should support vjoinsplit
+        contextualTx.nVersion = 2; // Tx format should support vJoinSplit
     }
 
     // Builder (used if Sapling addresses are involved)
     boost::optional<TransactionBuilder> builder;
     if (isToSaplingZaddr || saplingNoteInputs.size() > 0) {
-        builder = TransactionBuilder(Params().GetConsensus(), nextBlockHeight, expiryDelta, pwalletMain);
+        builder = TransactionBuilder(Params().GetConsensus(), nextBlockHeight, pwalletMain);
     }
     // Create operation and add to global queue
     std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();

@@ -1,7 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
 #include "miner.h"
 #ifdef ENABLE_MINING
@@ -341,7 +341,7 @@ CBlockTemplate* CreateNewBlock(const CChainParams& chainparams, const CScript& s
 
                 saplingValueDummy += -tx.valueBalance;
 
-                for (auto js : tx.vjoinsplit) {
+                for (auto js : tx.vJoinSplit) {
                     sproutValueDummy += js.vpub_old;
                     sproutValueDummy -= js.vpub_new;
                 }

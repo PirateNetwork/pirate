@@ -521,7 +521,7 @@ void CBudgetManager::FillBlockPayee(CMutableTransaction& txNew, CAmount nFees, C
     //miners get the full amount on these blocks
     txNew.vout[0].nValue = blockValue;
 
-    if ((pindexPrev->nHeight + 1 >= Params().GetConsensus().nFeeStartBlockHeight) && (pindexPrev->nHeight + 1 <= Params().GetConsensus().GetLastFoundersRewardBlockHeight())) {
+    if ((pindexPrev->nHeight + 1 >= Params().GetConsensus().nFeeStartBlockHeight) && (pindexPrev->nHeight + 1 <= Params().GetConsensus().GetLastFoundersRewardBlockHeight(pindexPrev->nHeight))) {
         // Founders reward is 7.5% of the block subsidy
         CAmount vFoundersReward = txNew.vout[0].nValue * 7.5 / 100;
 

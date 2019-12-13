@@ -13,6 +13,7 @@
 #include <vector>
 #include <boost/filesystem.hpp>
 #include "util.h"
+#include "utiltest.h"
 
 // To run tests:
 // ./zero-gtest --gtest_filter="founders_reward_test.*"
@@ -83,15 +84,19 @@ TEST(founders_reward_test, create_testnet_2of3multisig) {
 #endif
 
 
+static int GetLastFoundersRewardHeight(const Consensus::Params& params) {
+    int blossomActivationHeight = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_BLOSSOM].nActivationHeight;
+    bool blossom = blossomActivationHeight != Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
+    return params.GetLastFoundersRewardBlockHeight(blossom ? blossomActivationHeight : 0);
+}
+
 // Utility method to check the number of unique addresses from height 1 to maxHeight
 void checkNumberOfUniqueAddresses(int nUnique) {
-    int startHeight = Params().GetConsensus().nFeeStartBlockHeight;
-    int maxHeight = Params().GetConsensus().GetLastFoundersRewardBlockHeight();
     std::set<std::string> addresses;
-    for (int i = startHeight; i <= maxHeight; i++) {
+    for (int i = 1; i <= GetLastFoundersRewardHeight(Params().GetConsensus()); i++) {
         addresses.insert(Params().GetFoundersRewardAddressAtHeight(i));
     }
-    ASSERT_TRUE(addresses.size() == nUnique);
+    EXPECT_EQ(addresses.size(), nUnique);
 }
 
 
@@ -111,7 +116,7 @@ TEST(founders_reward_test, general) {
     EXPECT_EQ(HexStr(params.GetFoundersRewardScriptAtHeight(1600000)), "a914aef7be8939ed9d0175497489b789268e4e2691c287");
     EXPECT_EQ(params.GetFoundersRewardAddressAtHeight(1600000), "t3aWmHqBGS7watoKQLa7uykeTaYHoYqM361");
 
-    int maxHeight = params.GetConsensus().GetLastFoundersRewardBlockHeight();
+    int maxHeight = GetLastFoundersRewardHeight(params.GetConsensus());
 
     // If the block height parameter is out of bounds, there is an assert.
     EXPECT_DEATH(params.GetFoundersRewardScriptAtHeight(0), "nHeight");
@@ -120,6 +125,22 @@ TEST(founders_reward_test, general) {
     EXPECT_DEATH(params.GetFoundersRewardAddressAtHeight(maxHeight+1), "nHeight");
 }
 
+TEST(founders_reward_test, regtest_get_last_block_blossom) {
+    int blossomActivationHeight = Consensus::PRE_BLOSSOM_REGTEST_HALVING_INTERVAL / 2; // = 75
+    auto params = RegtestActivateBlossom(false, blossomActivationHeight);
+    int lastFRHeight = params.GetLastFoundersRewardBlockHeight(blossomActivationHeight);
+    EXPECT_EQ(0, params.Halving(lastFRHeight));
+    EXPECT_EQ(1, params.Halving(lastFRHeight + 1));
+    RegtestDeactivateBlossom();
+}
+
+TEST(founders_reward_test, mainnet_get_last_block) {
+    SelectParams(CBaseChainParams::MAIN);
+    auto params = Params().GetConsensus();
+    int lastFRHeight = GetLastFoundersRewardHeight(params);
+    EXPECT_EQ(0, params.Halving(lastFRHeight));
+    EXPECT_EQ(1, params.Halving(lastFRHeight + 1));
+}
 
 #define NUM_MAINNET_FOUNDER_ADDRESSES 10
 
@@ -152,12 +173,9 @@ TEST(founders_reward_test, slow_start_subsidy) {
     SelectParams(CBaseChainParams::MAIN);
     CChainParams params = Params();
 
-    int startHeight = params.GetConsensus().nFeeStartBlockHeight;
-    int maxHeight = params.GetConsensus().GetLastFoundersRewardBlockHeight();
     CAmount totalSubsidy = 0;
-    for (int nHeight = startHeight; nHeight <= maxHeight; nHeight++) {
-        CAmount nSubsidy = GetBlockSubsidy(nHeight, params.GetConsensus()) * 0.075;
-        //std::cout << "block subsidy " << nSubsidy;
+    for (int nHeight = 1; nHeight <= GetLastFoundersRewardHeight(Params().GetConsensus()); nHeight++) {
+        CAmount nSubsidy = GetBlockSubsidy(nHeight, params.GetConsensus()) / 5;
         totalSubsidy += nSubsidy;
     }
     //std::cout << "Total Founders Fee " << totalSubsidy << "\n";
@@ -179,26 +197,22 @@ TEST(founders_reward_test, slow_start_subsidy) {
 // Verify the number of rewards each individual address receives.
 void verifyNumberOfRewards() {
     CChainParams params = Params();
-    int startHeight = params.GetConsensus().nFeeStartBlockHeight;
-    int maxHeight = params.GetConsensus().GetLastFoundersRewardBlockHeight();
-    std::multiset<std::string> ms;
-    for (int nHeight = startHeight; nHeight <= maxHeight; nHeight++) {
-        //std::cout << "Test Fee by address nHeight " << nHeight << "\n";
-        ms.insert(params.GetFoundersRewardAddressAtHeight(nHeight));
+    int maxHeight = GetLastFoundersRewardHeight(params.GetConsensus());
+    std::map<std::string, CAmount> ms;
+    for (int nHeight = 1; nHeight <= maxHeight; nHeight++) {
+        std::string addr = params.GetFoundersRewardAddressAtHeight(nHeight);
+        if (ms.count(addr) == 0) {
+            ms[addr] = 0;
+        }
+        ms[addr] = ms[addr] + GetBlockSubsidy(nHeight, params.GetConsensus()) / 5;
     }
 
-    std::cout << params.GetFoundersRewardAddressAtIndex(0) << " " << ms.count(params.GetFoundersRewardAddressAtIndex(0)) << "\n";
-    //ASSERT_TRUE(ms.count(params.GetFoundersRewardAddressAtIndex(0)) == 387700);
-    for (int i = 1; i <= 8; i++) {
-        std::cout << params.GetFoundersRewardAddressAtIndex(i) << " " << ms.count(params.GetFoundersRewardAddressAtIndex(i)) << "\n";
-        //ASSERT_TRUE(ms.count(params.GetFoundersRewardAddressAtIndex(i)) == 800000);
+    EXPECT_EQ(ms[params.GetFoundersRewardAddressAtIndex(0)], 1960039937500);
+    EXPECT_EQ(ms[params.GetFoundersRewardAddressAtIndex(1)], 4394460062500);
+    for (int i = 2; i <= 46; i++) {
+        EXPECT_EQ(ms[params.GetFoundersRewardAddressAtIndex(i)], 17709 * COIN * 2.5);
     }
-    std::cout << params.GetFoundersRewardAddressAtIndex(9) << " " << ms.count(params.GetFoundersRewardAddressAtIndex(9)) << "\n";
-    //ASSERT_TRUE(ms.count(params.GetFoundersRewardAddressAtIndex(9)) == 800000);
-
-
-
-
+    EXPECT_EQ(ms[params.GetFoundersRewardAddressAtIndex(47)], 17677 * COIN * 2.5);
 }
 
 // Verify the number of rewards going to each mainnet address

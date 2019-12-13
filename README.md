@@ -78,6 +78,11 @@ Zero has a small inflation that degrades over time. With a stable supply of 7776
 
 ![alt text](https://github.com/zerocurrencycoin/Zero/blob/master/art/tech%20improv%20zero.jfif)
 
+[Zero](https://z.cash/) is an implementation of the "Zerocash" protocol.
+Based on Bitcoin's code, Zero intends to offer a far higher standard of privacy
+through a sophisticated zero-knowledge proving scheme that preserves
+confidentiality of transaction metadata. More technical details are available
+in our [Protocol Specification](https://github.com/zcash/zips/raw/master/protocol/protocol.pdf).
 
 ![alt text](https://github.com/zerocurrencycoin/Zero/blob/master/art/algo%20zer%20improv.jfif)
 
@@ -119,6 +124,7 @@ https://bitcointalk.org/index.php?topic=3310714.0
 See important security warnings on the
 [Security Information page](https://z.cash/support/security/).
 
+**Zero is experimental and a work in progress.** Use it at your own risk.
 
 📒 Deprecation Policy
 ------------------

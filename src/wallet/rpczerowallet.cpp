@@ -123,8 +123,8 @@ void zsTxSpendsToJSON(const CWalletTx& wtx, UniValue& spends, CAmount& totalSpen
   //Sprout Inputs belonging to the wallet
   UniValue zcSpends(UniValue::VARR);
   if (isZcAddress || !filterByAddress) {
-    for (int itr = 0; itr < wtx.vjoinsplit.size(); itr++) {
-      const JSDescription& jsdesc = wtx.vjoinsplit[itr];
+    for (int itr = 0; itr < wtx.vJoinSplit.size(); itr++) {
+      const JSDescription& jsdesc = wtx.vJoinSplit[itr];
 
       for (const uint256 &nullifier : jsdesc.nullifiers) {
         UniValue obj(UniValue::VOBJ);
@@ -133,7 +133,7 @@ void zsTxSpendsToJSON(const CWalletTx& wtx, UniValue& spends, CAmount& totalSpen
         if (pwalletMain->IsSproutNullifierFromMe(nullifier)) {
           const CWalletTx* parent = pwalletMain->GetWalletTx(pwalletMain->mapSproutNullifiersToNotes[nullifier].hash);
 
-          int i = op.js; // Index into CTransaction.vjoinsplit
+          int i = op.js; // Index into CTransaction.vJoinSplit
           int j = op.n; // Index into JSDescription.ciphertexts
 
           std::set<libzcash::SproutPaymentAddress> addresses;
@@ -145,10 +145,10 @@ void zsTxSpendsToJSON(const CWalletTx& wtx, UniValue& spends, CAmount& totalSpen
               ZCNoteDecryption decryptor(sk.receiving_key());
 
               // determine amount of funds in the note
-              auto hSig = parent->vjoinsplit[i].h_sig(*pzcashParams, parent->joinSplitPubKey);
+              auto hSig = parent->vJoinSplit[i].h_sig(*pzcashParams, parent->joinSplitPubKey);
 
               SproutNotePlaintext pt = SproutNotePlaintext::decrypt(
-                      decryptor,parent->vjoinsplit[i].ciphertexts[j],parent->vjoinsplit[i].ephemeralKey,hSig,(unsigned char) j);
+                      decryptor,parent->vJoinSplit[i].ciphertexts[j],parent->vJoinSplit[i].ephemeralKey,hSig,(unsigned char) j);
 
               auto decrypted_note = pt.note(addr);
               totalSpends += CAmount(-decrypted_note.value());
@@ -288,8 +288,8 @@ void zsTxReceivedToJSON(const CWalletTx& wtx, UniValue& received, CAmount& total
   //Sprout Received belonging to the wallet
   UniValue zcReceived(UniValue::VARR);
   if (isZcAddress || !filterByAddress) {
-    for (int i = 0; i < wtx.vjoinsplit.size(); i++) {
-      const JSDescription& jsdesc = wtx.vjoinsplit[i];
+    for (int i = 0; i < wtx.vJoinSplit.size(); i++) {
+      const JSDescription& jsdesc = wtx.vJoinSplit[i];
 
       for (int j = 0; j < jsdesc.ciphertexts.size(); j++) {
         UniValue obj(UniValue::VOBJ);
@@ -303,10 +303,10 @@ void zsTxReceivedToJSON(const CWalletTx& wtx, UniValue& received, CAmount& total
             ZCNoteDecryption decryptor(sk.receiving_key());
 
             // determine amount of funds in the note
-            auto hSig = wtx.vjoinsplit[i].h_sig(*pzcashParams, wtx.joinSplitPubKey);
+            auto hSig = wtx.vJoinSplit[i].h_sig(*pzcashParams, wtx.joinSplitPubKey);
 
             SproutNotePlaintext pt = SproutNotePlaintext::decrypt(
-                    decryptor,wtx.vjoinsplit[i].ciphertexts[j],wtx.vjoinsplit[i].ephemeralKey,hSig,(unsigned char) j);
+                    decryptor,wtx.vJoinSplit[i].ciphertexts[j],wtx.vJoinSplit[i].ephemeralKey,hSig,(unsigned char) j);
 
             auto decrypted_note = pt.note(addr);
             obj.push_back(Pair("address",EncodePaymentAddress(addr)));
@@ -315,10 +315,10 @@ void zsTxReceivedToJSON(const CWalletTx& wtx, UniValue& received, CAmount& total
             obj.push_back(Pair("jsoutindex", j));
 
             //Check Change Status
-            if (wtx.vjoinsplit.size()!=0) {
+            if (wtx.vJoinSplit.size()!=0) {
               std::set<std::pair<PaymentAddress, uint256>> nullifierSet;
               nullifierSet = pwalletMain->GetNullifiersForAddresses({addr});
-              BOOST_FOREACH(const JSDescription& jDesc, wtx.vjoinsplit) {
+              BOOST_FOREACH(const JSDescription& jDesc, wtx.vJoinSplit) {
                 for (const uint256 &nullifier : jDesc.nullifiers) {
                   if (nullifierSet.count(std::make_pair(addr, nullifier))) {
                       changeTx = true;
@@ -495,7 +495,7 @@ void zsTxSendsToJSON(const CWalletTx& wtx, UniValue& sends, CAmount& totalSends,
   //Does the transaction contain sprout sends
   if (!filterByAddress) {
     UniValue zcSends(UniValue::VARR);
-    BOOST_FOREACH(const JSDescription& jsDesc, wtx.vjoinsplit) {
+    BOOST_FOREACH(const JSDescription& jsDesc, wtx.vJoinSplit) {
       UniValue obj(UniValue::VOBJ);
       obj.push_back(Pair("address",""));
       obj.push_back(Pair("vpub_old",ValueFromAmount(CAmount(jsDesc.vpub_old))));
@@ -1627,7 +1627,7 @@ UniValue getalldata(const UniValue& params, bool fHelp)
         SproutNoteData nd = pair.second;
         libzcash::SproutPaymentAddress pa = nd.address;
 
-        int i = jsop.js; // Index into CTransaction.vjoinsplit
+        int i = jsop.js; // Index into CTransaction.vJoinSplit
         int j = jsop.n; // Index into JSDescription.ciphertexts
 
         //Skip Spent
@@ -1641,9 +1641,9 @@ UniValue getalldata(const UniValue& params, bool fHelp)
             ZCNoteDecryption decryptor(sk.receiving_key());
 
             // determine amount of funds in the note
-            auto hSig = wtx.vjoinsplit[i].h_sig(*pzcashParams, wtx.joinSplitPubKey);
+            auto hSig = wtx.vJoinSplit[i].h_sig(*pzcashParams, wtx.joinSplitPubKey);
 
-            SproutNotePlaintext pt = libzcash::SproutNotePlaintext::decrypt(decryptor,wtx.vjoinsplit[i].ciphertexts[j],wtx.vjoinsplit[i].ephemeralKey,hSig,(unsigned char) j);
+            SproutNotePlaintext pt = libzcash::SproutNotePlaintext::decrypt(decryptor,wtx.vJoinSplit[i].ciphertexts[j],wtx.vJoinSplit[i].ephemeralKey,hSig,(unsigned char) j);
 
             auto note = pt.note(addr);
             string addressString = EncodePaymentAddress(addr);

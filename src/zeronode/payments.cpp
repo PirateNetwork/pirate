@@ -312,7 +312,7 @@ void CZeronodePayments::FillBlockPayee(CMutableTransaction& txNew, int64_t nFees
 
     txNew.vout[0].nValue = minerValue + nFees;
 
-    if ((nHeight >= Params().GetConsensus().nFeeStartBlockHeight) && (nHeight <= Params().GetConsensus().GetLastFoundersRewardBlockHeight())) {
+    if ((nHeight >= Params().GetConsensus().nFeeStartBlockHeight) && (nHeight <= Params().GetConsensus().GetLastFoundersRewardBlockHeight(nHeight))) {
         // Take some reward away from us
         txNew.vout[0].nValue -= vFoundersReward;
 

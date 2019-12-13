@@ -1,7 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
 #include "main.h"
 
@@ -91,7 +91,7 @@ bool fAlerts = DEFAULT_ALERTS;
  */
 int64_t nMaxTipAge = DEFAULT_MAX_TIP_AGE;
 
-unsigned int expiryDelta = DEFAULT_TX_EXPIRY_DELTA;
+boost::optional<unsigned int> expiryDeltaArg = boost::none;
 
 /** Fees smaller than this (in satoshi) are considered zero fee (for relaying and mining) */
 CFeeRate minRelayTxFee = CFeeRate(DEFAULT_MIN_RELAY_TX_FEE);
@@ -319,9 +319,9 @@ void UpdatePreferredDownload(CNode* node, CNodeState* state)
 }
 
 // Returns time at which to timeout block request (nTime in microseconds)
-int64_t GetBlockTimeout(int64_t nTime, int nValidatedQueuedBefore, const Consensus::Params &consensusParams)
+int64_t GetBlockTimeout(int64_t nTime, int nValidatedQueuedBefore, const Consensus::Params &consensusParams, int nHeight)
 {
-    return nTime + 500000 * consensusParams.nPowTargetSpacing * (4 + nValidatedQueuedBefore);
+    return nTime + 500000 * consensusParams.PoWTargetSpacing(nHeight) * (4 + nValidatedQueuedBefore);
 }
 
 void InitializeNode(NodeId nodeid, const CNode *pnode) {
@@ -376,7 +376,8 @@ void MarkBlockAsInFlight(NodeId nodeid, const uint256& hash, const Consensus::Pa
     MarkBlockAsReceived(hash);
 
     int64_t nNow = GetTimeMicros();
-    QueuedBlock newentry = {hash, pindex, nNow, pindex != NULL, GetBlockTimeout(nNow, nQueuedValidatedHeaders, consensusParams)};
+    int nHeight = pindex != NULL ? pindex->nHeight : chainActive.Height(); // Help block timeout computation
+    QueuedBlock newentry = {hash, pindex, nNow, pindex != NULL, GetBlockTimeout(nNow, nQueuedValidatedHeaders, consensusParams, nHeight)};
     nQueuedValidatedHeaders += newentry.fValidatedHeaders;
     list<QueuedBlock>::iterator it = state->vBlocksInFlight.insert(state->vBlocksInFlight.end(), newentry);
     state->nBlocksInFlight++;
@@ -665,8 +666,8 @@ unsigned int LimitOrphanTxSize(unsigned int nMaxOrphans) EXCLUSIVE_LOCKS_REQUIRE
 
 bool IsStandardTx(const CTransaction& tx, string& reason, const CChainParams& chainparams, const int nHeight)
 {
-    bool overwinterActive = NetworkUpgradeActive(nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_OVERWINTER);
-    bool saplingActive = NetworkUpgradeActive(nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_SAPLING);
+    bool overwinterActive = chainparams.GetConsensus().NetworkUpgradeActive(nHeight,  Consensus::UPGRADE_OVERWINTER);
+    bool saplingActive = chainparams.GetConsensus().NetworkUpgradeActive(nHeight, Consensus::UPGRADE_SAPLING);
 
     if (saplingActive) {
         // Sapling standard rules apply
@@ -958,9 +959,9 @@ bool ContextualCheckTransaction(
         const int dosLevel,
         bool (*isInitBlockDownload)(const CChainParams&))
 {
-    bool overwinterActive = NetworkUpgradeActive(nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_OVERWINTER);
-    bool saplingActive = NetworkUpgradeActive(nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_SAPLING);
-    bool cosmosActive = NetworkUpgradeActive(nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_COSMOS);
+    bool overwinterActive = chainparams.GetConsensus().NetworkUpgradeActive(nHeight, Consensus::UPGRADE_OVERWINTER);
+    bool saplingActive = chainparams.GetConsensus().NetworkUpgradeActive(nHeight, Consensus::UPGRADE_SAPLING);
+    bool cosmosActive = chainparams.GetConsensus().NetworkUpgradeActive(nHeight, Consensus::UPGRADE_COSMOS);
     bool isSprout = !overwinterActive;
 
     // If Sprout rules apply, reject transactions which are intended for Overwinter and beyond
@@ -1051,7 +1052,7 @@ bool ContextualCheckTransaction(
 
     uint256 dataToBeSigned;
 
-    if (!tx.vjoinsplit.empty() ||
+    if (!tx.vJoinSplit.empty() ||
         !tx.vShieldedSpend.empty() ||
         !tx.vShieldedOutput.empty())
     {
@@ -1066,7 +1067,7 @@ bool ContextualCheckTransaction(
         }
     }
 
-    if (!tx.vjoinsplit.empty())
+    if (!tx.vJoinSplit.empty())
     {
         BOOST_STATIC_ASSERT(crypto_sign_PUBLICKEYBYTES == 32);
 
@@ -1150,7 +1151,7 @@ bool CheckTransaction(const CTransaction& tx, CValidationState &state,
         return false;
     } else {
         // Ensure that zk-SNARKs verify
-        BOOST_FOREACH(const JSDescription &joinsplit, tx.vjoinsplit) {
+        BOOST_FOREACH(const JSDescription &joinsplit, tx.vJoinSplit) {
             if (!joinsplit.Verify(*pzcashParams, verifier, tx.joinSplitPubKey)) {
                 return state.DoS(100, error("CheckTransaction(): joinsplit does not verify"),
                                     REJECT_INVALID, "bad-txns-joinsplit-verification-failed");
@@ -1207,13 +1208,13 @@ bool CheckTransactionWithoutProofVerification(const CTransaction& tx, CValidatio
     }
 
     // Transactions containing empty `vin` must have either non-empty
-    // `vjoinsplit` or non-empty `vShieldedSpend`.
-    if (tx.vin.empty() && tx.vjoinsplit.empty() && tx.vShieldedSpend.empty())
+    // `vJoinSplit` or non-empty `vShieldedSpend`.
+    if (tx.vin.empty() && tx.vJoinSplit.empty() && tx.vShieldedSpend.empty())
         return state.DoS(10, error("CheckTransaction(): vin empty"),
                          REJECT_INVALID, "bad-txns-vin-empty");
     // Transactions containing empty `vout` must have either non-empty
-    // `vjoinsplit` or non-empty `vShieldedOutput`.
-    if (tx.vout.empty() && tx.vjoinsplit.empty() && tx.vShieldedOutput.empty())
+    // `vJoinSplit` or non-empty `vShieldedOutput`.
+    if (tx.vout.empty() && tx.vJoinSplit.empty() && tx.vShieldedOutput.empty())
         return state.DoS(10, error("CheckTransaction(): vout empty"),
                          REJECT_INVALID, "bad-txns-vout-empty");
 
@@ -1264,7 +1265,7 @@ bool CheckTransactionWithoutProofVerification(const CTransaction& tx, CValidatio
     }
 
     // Ensure that joinsplit values are well-formed
-    BOOST_FOREACH(const JSDescription& joinsplit, tx.vjoinsplit)
+    BOOST_FOREACH(const JSDescription& joinsplit, tx.vJoinSplit)
     {
         if (joinsplit.vpub_old < 0) {
             return state.DoS(100, error("CheckTransaction(): joinsplit.vpub_old negative"),
@@ -1304,7 +1305,7 @@ bool CheckTransactionWithoutProofVerification(const CTransaction& tx, CValidatio
     // to the value pool.
     {
         CAmount nValueIn = 0;
-        for (std::vector<JSDescription>::const_iterator it(tx.vjoinsplit.begin()); it != tx.vjoinsplit.end(); ++it)
+        for (std::vector<JSDescription>::const_iterator it(tx.vJoinSplit.begin()); it != tx.vJoinSplit.end(); ++it)
         {
             nValueIn += it->vpub_new;
 
@@ -1339,7 +1340,7 @@ bool CheckTransactionWithoutProofVerification(const CTransaction& tx, CValidatio
     // Check for duplicate joinsplit nullifiers in this transaction
     {
         set<uint256> vJoinSplitNullifiers;
-        BOOST_FOREACH(const JSDescription& joinsplit, tx.vjoinsplit)
+        BOOST_FOREACH(const JSDescription& joinsplit, tx.vJoinSplit)
         {
             BOOST_FOREACH(const uint256& nf, joinsplit.nullifiers)
             {
@@ -1368,7 +1369,7 @@ bool CheckTransactionWithoutProofVerification(const CTransaction& tx, CValidatio
     if (tx.IsCoinBase())
     {
         // There should be no joinsplits in a coinbase transaction
-        if (tx.vjoinsplit.size() > 0)
+        if (tx.vJoinSplit.size() > 0)
             return state.DoS(100, error("CheckTransaction(): coinbase has joinsplits"),
                              REJECT_INVALID, "bad-cb-has-joinsplits");
 
@@ -1438,7 +1439,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
     // Node operator can choose to reject tx by number of transparent inputs
     static_assert(std::numeric_limits<size_t>::max() >= std::numeric_limits<int64_t>::max(), "size_t too small");
     size_t limit = (size_t) GetArg("-mempooltxinputlimit", 0);
-    if (NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_OVERWINTER)) {
+    if (Params().GetConsensus().NetworkUpgradeActive(nextBlockHeight, Consensus::UPGRADE_OVERWINTER)) {
         limit = 0;
     }
     if (limit > 0) {
@@ -1501,7 +1502,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
             return false;
         }
     }
-    BOOST_FOREACH(const JSDescription &joinsplit, tx.vjoinsplit) {
+    BOOST_FOREACH(const JSDescription &joinsplit, tx.vJoinSplit) {
         BOOST_FOREACH(const uint256 &nf, joinsplit.nullifiers) {
             if (pool.nullifierExists(nf, SPROUT)) {
                 return false;
@@ -1547,8 +1548,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
 
         // are the joinsplits' and sapling spends' requirements met in tx(valid anchors/nullifiers)?
         if (!view.HaveShieldedRequirements(tx))
-            return state.Invalid(error("AcceptToMemoryPool: joinsplit requirements not met"),
-                                 REJECT_DUPLICATE, "bad-txns-joinsplit-requirements-not-met");
+            return state.Invalid(error("AcceptToMemoryPool: shielded requirements not met"),
+                                 REJECT_DUPLICATE, "bad-txns-shielded-requirements-not-met");
 
         // Bring the best block into scope
         view.GetBestBlock();
@@ -1600,7 +1601,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         unsigned int nSize = entry.GetTxSize();
 
         // Accept a tx if it contains joinsplits and has at least the default fee specified by z_sendmany.
-        if (tx.vjoinsplit.size() > 0 && nFees >= ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE) {
+        if (tx.vJoinSplit.size() > 0 && nFees >= ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE) {
             // In future we will we have more accurate and dynamic computation of fees for tx with joinsplits.
         } else {
             // Don't accept it if it can't get into a block
@@ -1678,13 +1679,63 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
             pool.addAddressIndex(entry, view);
         }
 
-        // Add memory spent index
+        // insightexplorer: Add memory spent index
         if (fSpentIndex) {
             pool.addSpentIndex(entry, view);
         }
     }
 
-    SyncWithWallets(tx, NULL);
+    return true;
+}
+
+bool GetTimestampIndex(unsigned int high, unsigned int low, bool fActiveOnly,
+    std::vector<std::pair<uint256, unsigned int> > &hashes)
+{
+    if (!fTimestampIndex)
+        return error("Timestamp index not enabled");
+
+    if (!pblocktree->ReadTimestampIndex(high, low, fActiveOnly, hashes))
+        return error("Unable to get hashes for timestamps");
+
+    return true;
+}
+
+bool GetSpentIndex(CSpentIndexKey &key, CSpentIndexValue &value)
+{
+    AssertLockHeld(cs_main);
+    if (!fSpentIndex)
+        return error("Spent index not enabled");
+
+    if (mempool.getSpentIndex(key, value))
+        return true;
+
+    if (!pblocktree->ReadSpentIndex(key, value))
+        return error("Unable to get spent index information");
+
+    return true;
+}
+
+bool GetAddressIndex(const uint160& addressHash, int type,
+                     std::vector<CAddressIndexDbEntry>& addressIndex,
+                     int start, int end)
+{
+    if (!fAddressIndex)
+        return error("address index not enabled");
+
+    if (!pblocktree->ReadAddressIndex(addressHash, type, addressIndex, start, end))
+        return error("unable to get txids for address");
+
+    return true;
+}
+
+bool GetAddressUnspent(const uint160& addressHash, int type,
+                       std::vector<CAddressUnspentDbEntry>& unspentOutputs)
+{
+    if (!fAddressIndex)
+        return error("address index not enabled");
+
+    if (!pblocktree->ReadAddressUnspentIndex(addressHash, type, unspentOutputs))
+        return error("unable to get txids for address");
 
     return true;
 }
@@ -1833,7 +1884,7 @@ bool AcceptableInputs(CTxMemPool& pool, CValidationState& state, const CTransact
 
         // Don't accept it if it can't get into a block
         // Accept a tx if it contains joinsplits and has at least the default fee specified by z_sendmany.
-          if (tx.vjoinsplit.size() > 0 && nFees >= ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE) {
+          if (tx.vJoinSplit.size() > 0 && nFees >= ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE) {
               // In future we will we have more accurate and dynamic computation of fees for tx with joinsplits.
           } else {
             CAmount txMinFee = GetMinRelayFee(tx, nSize, true);
@@ -1885,55 +1936,6 @@ bool AcceptableInputs(CTxMemPool& pool, CValidationState& state, const CTransact
     }
 
     // SyncWithWallets(tx, NULL);
-
-    return true;
-}
-
-bool GetTimestampIndex(const unsigned int &high, const unsigned int &low, const bool fActiveOnly, std::vector<std::pair<uint256, unsigned int> > &hashes)
-{
-    if (!fTimestampIndex)
-        return error("Timestamp index not enabled");
-
-    if (!pblocktree->ReadTimestampIndex(high, low, fActiveOnly, hashes))
-        return error("Unable to get hashes for timestamps");
-
-    return true;
-}
-
-bool GetSpentIndex(CSpentIndexKey &key, CSpentIndexValue &value)
-{
-    if (!fSpentIndex)
-        return false;
-
-    if (mempool.getSpentIndex(key, value))
-        return true;
-
-    if (!pblocktree->ReadSpentIndex(key, value))
-        return false;
-
-    return true;
-}
-
-bool GetAddressIndex(uint160 addressHash, int type,
-                     std::vector<std::pair<CAddressIndexKey, CAmount> > &addressIndex, int start, int end)
-{
-    if (!fAddressIndex)
-        return error("address index not enabled");
-
-    if (!pblocktree->ReadAddressIndex(addressHash, type, addressIndex, start, end))
-        return error("unable to get txids for address");
-
-    return true;
-}
-
-bool GetAddressUnspent(uint160 addressHash, int type,
-                       std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > &unspentOutputs)
-{
-    if (!fAddressIndex)
-        return error("address index not enabled");
-
-    if (!pblocktree->ReadAddressUnspentIndex(addressHash, type, unspentOutputs))
-        return error("unable to get txids for address");
 
     return true;
 }
@@ -2072,14 +2074,17 @@ CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams)
     nSubsidy = 10.8 * COIN;
   }
 
-    int halvings = (nHeight) / consensusParams.nSubsidyHalvingInterval;
+    int halvings = consensusParams.Halving(nHeight);
     // Force block reward to zero when right shift is undefined.
     if (halvings >= 64)
         return 0;
 
-    // Subsidy is cut in half every 800,000 blocks which will occur approximately every 3 years.
-    nSubsidy >>= halvings;
-    return nSubsidy;
+    if (consensusParams.NetworkUpgradeActive(nHeight, Consensus::UPGRADE_BLOSSOM)) {
+        return (nSubsidy / Consensus::BLOSSOM_POW_TARGET_SPACING_RATIO) >> halvings;
+    } else {
+        // Subsidy is cut in half every 800,000 blocks which will occur approximately every 3 years.
+        return nSubsidy >> halvings;
+    }
 }
 
 int64_t GetZeronodePayment(int nHeight, int64_t blockValue, int nZeronodeCount)
@@ -2087,10 +2092,10 @@ int64_t GetZeronodePayment(int nHeight, int64_t blockValue, int nZeronodeCount)
     int64_t ret = blockValue * 20 / 100; //default: 20%
     if (IsSporkActive(SPORK_7_ZERONODE_PAYMENT_ENABLED)) {
       if (IsSporkActive(SPORK_6_ZERONODE_FULL_PAYMENT_ENABLED)) {
-        if(nHeight >= Params().GetConsensus().nSubsidyHalvingInterval * 1) ret = blockValue * 25 / 100;
-        if(nHeight >= Params().GetConsensus().nSubsidyHalvingInterval * 2) ret = blockValue * 30 / 100;
-        if(nHeight >= Params().GetConsensus().nSubsidyHalvingInterval * 3) ret = blockValue * 35 / 100;
-        if(nHeight >= Params().GetConsensus().nSubsidyHalvingInterval * 4) ret = blockValue * 40 / 100;
+        if(nHeight >= Params().GetConsensus().nPreBlossomSubsidyHalvingInterval * 1) ret = blockValue * 25 / 100;
+        if(nHeight >= Params().GetConsensus().nPreBlossomSubsidyHalvingInterval * 2) ret = blockValue * 30 / 100;
+        if(nHeight >= Params().GetConsensus().nPreBlossomSubsidyHalvingInterval * 3) ret = blockValue * 35 / 100;
+        if(nHeight >= Params().GetConsensus().nPreBlossomSubsidyHalvingInterval * 4) ret = blockValue * 40 / 100;
       } else {
         ret = 100000;
       }
@@ -2730,7 +2735,7 @@ static DisconnectResult DisconnectBlock(const CBlock& block, CValidationState& s
     // However, this is only reliable if the last block was on or after
     // the Sapling activation height. Otherwise, the last anchor was the
     // empty root.
-    if (NetworkUpgradeActive(pindex->pprev->nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_SAPLING)) {
+    if (chainparams.GetConsensus().NetworkUpgradeActive(pindex->pprev->nHeight, Consensus::UPGRADE_SAPLING)) {
         view.PopAnchor(pindex->pprev->hashFinalSaplingRoot, SAPLING);
     } else {
         view.PopAnchor(SaplingMerkleTree::empty_root(), SAPLING);
@@ -2796,10 +2801,8 @@ void ThreadScriptCheck() {
 // Called periodically asynchronously; alerts if it smells like
 // we're being fed a bad chain (blocks being generated much
 // too slowly or too quickly).
-//
 void PartitionCheck(bool (*initialDownloadCheck)(const CChainParams&),
-                    CCriticalSection& cs, const CBlockIndex *const &bestHeader,
-                    int64_t nPowTargetSpacing)
+                    CCriticalSection& cs, const CBlockIndex *const &bestHeader)
 {
     if (bestHeader == NULL || initialDownloadCheck(Params())) return;
 
@@ -2809,14 +2812,30 @@ void PartitionCheck(bool (*initialDownloadCheck)(const CChainParams&),
 
     const int SPAN_HOURS=4;
     const int SPAN_SECONDS=SPAN_HOURS*60*60;
-    int BLOCKS_EXPECTED = SPAN_SECONDS / nPowTargetSpacing;
+
+    LOCK(cs);
+
+    Consensus::Params consensusParams = Params().GetConsensus();
+
+    int BLOCKS_EXPECTED;
+    // TODO: This can be simplified when the Blossom activation height is set
+    int nBlossomBlocks = consensusParams.vUpgrades[Consensus::UPGRADE_BLOSSOM].nActivationHeight == Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT ?
+        0 : std::max(0, bestHeader->nHeight - consensusParams.vUpgrades[Consensus::UPGRADE_BLOSSOM].nActivationHeight);
+    int blossomBlockTime = nBlossomBlocks * consensusParams.nPostBlossomPowTargetSpacing;
+    // If the span period includes Blossom activation, adjust the number of expected blocks.
+    if (blossomBlockTime < SPAN_SECONDS) {
+        // If there are 0 blossomBlocks the following is equivalent to
+        // BLOCKS_EXPECTED = SPAN_SECONDS / consensusParams.nPreBlossomPowTargetSpacing
+        BLOCKS_EXPECTED = nBlossomBlocks + (SPAN_SECONDS - blossomBlockTime) / consensusParams.nPreBlossomPowTargetSpacing;
+    } else {
+        BLOCKS_EXPECTED = SPAN_SECONDS / consensusParams.nPostBlossomPowTargetSpacing;
+    }
 
     boost::math::poisson_distribution<double> poisson(BLOCKS_EXPECTED);
 
     std::string strWarning;
     int64_t startTime = GetAdjustedTime()-SPAN_SECONDS;
 
-    LOCK(cs);
     const CBlockIndex* i = bestHeader;
     int nBlocks = 0;
     while (i->GetBlockTime() >= startTime) {
@@ -3088,7 +3107,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         }
         UpdateCoins(tx, view, i == 0 ? undoDummy : blockundo.vtxundo.back(), pindex->nHeight);
 
-        BOOST_FOREACH(const JSDescription &joinsplit, tx.vjoinsplit) {
+        BOOST_FOREACH(const JSDescription &joinsplit, tx.vJoinSplit) {
             BOOST_FOREACH(const uint256 &note_commitment, joinsplit.commitments) {
                 // Insert the note commitments into our temporary tree.
 
@@ -3113,7 +3132,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
     // If Sapling is active, block.hashFinalSaplingRoot must be the
     // same as the root of the Sapling tree
-    if (NetworkUpgradeActive(pindex->nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_SAPLING)) {
+    if (chainparams.GetConsensus().NetworkUpgradeActive(pindex->nHeight, Consensus::UPGRADE_SAPLING)) {
         if (block.hashFinalSaplingRoot != sapling_tree.root()) {
             return state.DoS(100,
                          error("ConnectBlock(): block's hashFinalSaplingRoot is incorrect"),
@@ -3921,7 +3940,7 @@ bool ReceivedBlockTransactions(
         // pool. So we invert the sign here.
         saplingValue += -tx.valueBalance;
 
-        for (auto js : tx.vjoinsplit) {
+        for (auto js : tx.vJoinSplit) {
             sproutValue += js.vpub_old;
             sproutValue -= js.vpub_new;
         }
@@ -4085,7 +4104,7 @@ bool CheckBlockHeader(
     bool fCheckPOW)
 {
 
-    bool cosmosActive = NetworkUpgradeActive(chainActive.Height()+1, Params().GetConsensus(), Consensus::UPGRADE_COSMOS);
+    bool cosmosActive = chainparams.GetConsensus().NetworkUpgradeActive(chainActive.Height()+1, Consensus::UPGRADE_COSMOS);
 
     // Check block version
     if (block.nVersion < MIN_BLOCK_VERSION)
@@ -4309,7 +4328,7 @@ bool ContextualCheckBlock(
     // reward block is reached, with exception of the genesis block.
     // The last founders reward block is defined as the block just before the
     // first subsidy halving block, which occurs at halving_interval + slow_start_shift
-    if ((nHeight >= consensusParams.nFeeStartBlockHeight) && (nHeight <= consensusParams.GetLastFoundersRewardBlockHeight())) {
+    if ((nHeight >= consensusParams.nFeeStartBlockHeight) && (nHeight <= consensusParams.GetLastFoundersRewardBlockHeight(nHeight))) {
         bool found = false;
 
         BOOST_FOREACH(const CTxOut& output, block.vtx[0].vout) {
@@ -4827,9 +4846,10 @@ bool static LoadBlockIndexDB()
     // insightexplorer
     // Check whether block explorer features are enabled
     pblocktree->ReadFlag("insightexplorer", fInsightExplorer);
-    LogPrintf("%s: insight explorer %s\n", __func__, fAddressIndex ? "enabled" : "disabled");
+    LogPrintf("%s: insight explorer %s\n", __func__, fInsightExplorer ? "enabled" : "disabled");
     fAddressIndex = fInsightExplorer;
     fSpentIndex = fInsightExplorer;
+    fTimestampIndex = fInsightExplorer;
 
     // Fill in-memory data
     BOOST_FOREACH(const PAIRTYPE(uint256, CBlockIndex*)& item, mapBlockIndex)
@@ -5000,7 +5020,9 @@ bool RewindBlockIndex(const CChainParams& chainparams, bool& clearWitnessCaches)
         // This is true when we intend to do a long rewind.
         bool intendedRewind =
             (networkID == "test" && nHeight == 252500 && *phashFirstInsufValidated ==
-             uint256S("0018bd16a9c6f15795a754c498d2b2083ab78f14dae44a66a8d0e90ba8464d9c"));
+             uint256S("0018bd16a9c6f15795a754c498d2b2083ab78f14dae44a66a8d0e90ba8464d9c")) ||
+            (networkID == "test" && nHeight == 584000 && *phashFirstInsufValidated ==
+             uint256S("002e1d6daf4ab7b296e7df839dc1bee9d615583bb4bc34b1926ce78307532852"));
 
         clearWitnessCaches = (rewindLength > MAX_REORG_LENGTH && intendedRewind);
 
@@ -6168,7 +6190,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                     // not a direct successor.
                     pfrom->PushMessage("getheaders", chainActive.GetLocator(pindexBestHeader), inv.hash);
                     CNodeState *nodestate = State(pfrom->GetId());
-                    if (chainActive.Tip()->GetBlockTime() > GetAdjustedTime() - chainparams.GetConsensus().nPowTargetSpacing * 20 &&
+
+                    if (chainActive.Tip()->GetBlockTime() > GetAdjustedTime() - chainparams.GetConsensus().PoWTargetSpacing(pindexBestHeader->nHeight) * 20 &&
                         nodestate->nBlocksInFlight < MAX_BLOCKS_IN_TRANSIT_PER_PEER) {
                         vToFetch.push_back(inv);
                         // Mark block as in flight already, even though the actual "getdata" message only goes out
@@ -6239,7 +6262,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
             // If pruning, don't inv blocks unless we have on disk and are likely to still have
             // for some reasonable time window (1 hour) that block relay might require.
-            const int nPrunedBlocksLikelyToHave = MIN_BLOCKS_TO_KEEP - 3600 / chainparams.GetConsensus().nPowTargetSpacing;
+            const int nPrunedBlocksLikelyToHave = MIN_BLOCKS_TO_KEEP - 3600 / chainparams.GetConsensus().PoWTargetSpacing(pindex->nHeight);
             if (fPruneMode && (!(pindex->nStatus & BLOCK_HAVE_DATA) || pindex->nHeight <= chainActive.Tip()->nHeight - nPrunedBlocksLikelyToHave))
             {
                 LogPrint("net", " getblocks stopping, pruned or too old block at %d %s\n", pindex->nHeight, pindex->GetBlockHash().ToString());
@@ -6385,7 +6408,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
         // TODO: currently, prohibit joinsplits and shielded spends/outputs from entering mapOrphans
         else if (fMissingInputs &&
-                 tx.vjoinsplit.empty() &&
+                 tx.vJoinSplit.empty() &&
                  tx.vShieldedSpend.empty() &&
                  tx.vShieldedOutput.empty())
         {
@@ -7120,7 +7143,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         // more quickly than once every 5 minutes, then we'll shorten the download window for this block).
         if (!pto->fDisconnect && state.vBlocksInFlight.size() > 0) {
             QueuedBlock &queuedBlock = state.vBlocksInFlight.front();
-            int64_t nTimeoutIfRequestedNow = GetBlockTimeout(nNow, nQueuedValidatedHeaders - state.nBlocksInFlightValidHeaders, consensusParams);
+            int64_t nTimeoutIfRequestedNow = GetBlockTimeout(nNow, nQueuedValidatedHeaders - state.nBlocksInFlightValidHeaders, consensusParams, pindexBestHeader->nHeight);
             if (queuedBlock.nTimeDisconnect > nTimeoutIfRequestedNow) {
                 LogPrint("net", "Reducing block download timeout for peer=%d block=%s, orig=%d new=%d\n", pto->id, queuedBlock.hash.ToString(), queuedBlock.nTimeDisconnect, nTimeoutIfRequestedNow);
                 queuedBlock.nTimeDisconnect = nTimeoutIfRequestedNow;
@@ -7209,33 +7232,33 @@ public:
 // Set default values of new CMutableTransaction based on consensus rules at given height.
 CMutableTransaction CreateNewContextualCMutableTransaction(const Consensus::Params& consensusParams, int nHeight)
 {
-    return CreateNewContextualCMutableTransaction(consensusParams, nHeight, expiryDelta);
-}
-
-CMutableTransaction CreateNewContextualCMutableTransaction(const Consensus::Params& consensusParams, int nHeight, int nExpiryDelta) {
     CMutableTransaction mtx;
-    bool isOverwintered = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_OVERWINTER);
+    bool isOverwintered = consensusParams.NetworkUpgradeActive(nHeight, Consensus::UPGRADE_OVERWINTER);
     if (isOverwintered) {
         mtx.fOverwintered = true;
-        mtx.nExpiryHeight = nHeight + nExpiryDelta;
-
-        if (mtx.nExpiryHeight <= 0 || mtx.nExpiryHeight >= TX_EXPIRY_HEIGHT_THRESHOLD) {
-            throw new std::runtime_error("CreateNewContextualCMutableTransaction: invalid expiry height");
-        }
-
-        // NOTE: If the expiry height crosses into an incompatible consensus epoch, and it is changed to the last block
-        // of the current epoch (see below: Overwinter->Sapling), the transaction will be rejected if it falls within
-        // the expiring soon threshold of 3 blocks (for DoS mitigation) based on the current height.
-        // TODO: Generalise this code so behaviour applies to all post-Overwinter epochs
-        if (NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_SAPLING)) {
+        if (consensusParams.NetworkUpgradeActive(nHeight, Consensus::UPGRADE_SAPLING)) {
             mtx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
             mtx.nVersion = SAPLING_TX_VERSION;
         } else {
             mtx.nVersionGroupId = OVERWINTER_VERSION_GROUP_ID;
             mtx.nVersion = OVERWINTER_TX_VERSION;
-            mtx.nExpiryHeight = std::min(
-                mtx.nExpiryHeight,
-                static_cast<uint32_t>(consensusParams.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight - 1));
+        }
+
+        bool blossomActive = consensusParams.NetworkUpgradeActive(nHeight, Consensus::UPGRADE_BLOSSOM);
+        unsigned int defaultExpiryDelta = blossomActive ? DEFAULT_POST_BLOSSOM_TX_EXPIRY_DELTA : DEFAULT_PRE_BLOSSOM_TX_EXPIRY_DELTA;
+        mtx.nExpiryHeight = nHeight + (expiryDeltaArg ? expiryDeltaArg.get() : defaultExpiryDelta);
+
+        // mtx.nExpiryHeight == 0 is valid for coinbase transactions
+        if (mtx.nExpiryHeight <= 0 || mtx.nExpiryHeight >= TX_EXPIRY_HEIGHT_THRESHOLD) {
+            throw new std::runtime_error("CreateNewContextualCMutableTransaction: invalid expiry height");
+        }
+
+        // NOTE: If the expiry height crosses into an incompatible consensus epoch, and it is changed to the last block
+        // of the current epoch, the transaction will be rejected if it falls within the expiring soon threshold of
+        // TX_EXPIRING_SOON_THRESHOLD (3) blocks (for DoS mitigation) based on the current height.
+        auto nextActivationHeight = NextActivationHeight(nHeight, consensusParams);
+        if (nextActivationHeight) {
+            mtx.nExpiryHeight = std::min(mtx.nExpiryHeight, static_cast<uint32_t>(nextActivationHeight.get()) - 1);
         }
     }
     return mtx;

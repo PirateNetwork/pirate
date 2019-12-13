@@ -1,7 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
-// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+// file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
 #ifndef BITCOIN_WALLET_WALLET_H
 #define BITCOIN_WALLET_WALLET_H
@@ -182,7 +182,7 @@ class JSOutPoint
 public:
     // Transaction hash
     uint256 hash;
-    // Index into CTransaction.vjoinsplit
+    // Index into CTransaction.vJoinSplit
     uint64_t js;
     uint8_t n;
 
@@ -388,7 +388,7 @@ public:
         READWRITE(nIndex);
     }
 
-    int SetMerkleBranch(const CBlock& block);
+    void SetMerkleBranch(const CBlock& block);
 
 
     /**
@@ -1229,7 +1229,7 @@ public:
                            std::string& strFailReason, const CCoinControl *coinControl = NULL, bool sign = true, AvailableCoinsType coin_type=ALL_COINS, bool useIX=false, CAmount nFeePay=0);
     bool CreateTransaction(CScript scriptPubKey, const CAmount& nValue,
                            CWalletTx& wtxNew, CReserveKey& reservekey, CAmount& nFeeRet, std::string& strFailReason, const CCoinControl *coinControl = NULL, AvailableCoinsType coin_type=ALL_COINS, bool useIX=false, CAmount nFeePay=0);
-    bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey, std::string strCommand="tx");
+    bool CommitTransaction(CWalletTx& wtxNew, boost::optional<CReserveKey&> reservekey, std::string strCommand="tx");
 
     static CFeeRate minTxFee;
     static CAmount GetMinimumFee(unsigned int nTxBytes, unsigned int nConfirmTarget, const CTxMemPool& pool);
