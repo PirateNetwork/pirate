@@ -23,6 +23,7 @@
 #include "key_io.h"
 #endif
 #include "main.h"
+#include "mempool_limit.h"
 #include "zeronode/budget.h"
 #include "zeronode/payments.h"
 #include "zeronode/zeronodeconfig.h"
@@ -65,8 +66,6 @@
 #include <boost/interprocess/sync/file_lock.hpp>
 #include <boost/thread.hpp>
 #include <openssl/crypto.h>
-
-#include <libsnark/common/profiling.hpp>
 
 #if ENABLE_ZMQ
 #include "zmq/zmqnotificationinterface.h"
@@ -403,6 +402,8 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-maxconnections=<n>", strprintf(_("Maintain at most <n> connections to peers (default: %u)"), DEFAULT_MAX_PEER_CONNECTIONS));
     strUsage += HelpMessageOpt("-maxreceivebuffer=<n>", strprintf(_("Maximum per-connection receive buffer, <n>*1000 bytes (default: %u)"), 5000));
     strUsage += HelpMessageOpt("-maxsendbuffer=<n>", strprintf(_("Maximum per-connection send buffer, <n>*1000 bytes (default: %u)"), 1000));
+    strUsage += HelpMessageOpt("-mempoolevictionmemoryminutes=<n>", strprintf(_("The number of minutes before allowing rejected transactions to re-enter the mempool. (default: %u)"), DEFAULT_MEMPOOL_EVICTION_MEMORY_MINUTES));
+    strUsage += HelpMessageOpt("-mempooltxcostlimit=<n>",strprintf(_("An upper bound on the maximum size in bytes of all transactions in the mempool. (default: %s)"), DEFAULT_MEMPOOL_TOTAL_COST_LIMIT));
     strUsage += HelpMessageOpt("-onion=<ip:port>", strprintf(_("Use separate SOCKS5 proxy to reach peers via Tor hidden services (default: %s)"), "-proxy"));
     strUsage += HelpMessageOpt("-onlynet=<net>", _("Only connect to nodes in network <net> (ipv4, ipv6 or onion)"));
     strUsage += HelpMessageOpt("-permitbaremultisig", strprintf(_("Relay non-P2SH multisig (default: %u)"), 1));
@@ -552,7 +553,7 @@ std::string HelpMessage(HelpMessageMode mode)
         strUsage += HelpMessageOpt("-rpcservertimeout=<n>", strprintf("Timeout during HTTP requests (default: %d)", DEFAULT_HTTP_SERVER_TIMEOUT));
     }
 
-    // Disabled until we can lock notes and also tune performance of libsnark which by default uses multiple threads
+    // Disabled until we can lock notes and also tune performance of the prover which by default uses multiple threads
     //strUsage += HelpMessageOpt("-rpcasyncthreads=<n>", strprintf(_("Set the number of threads to service Async RPC calls (default: %d)"), 1));
 
     if (mode == HMM_BITCOIND) {
@@ -730,15 +731,11 @@ static void ZC_LoadParams(
     struct timeval tv_start, tv_end;
     float elapsed;
 
-    boost::filesystem::path pk_path = ZC_GetParamsDir() / "sprout-proving.key";
-    boost::filesystem::path vk_path = ZC_GetParamsDir() / "sprout-verifying.key";
     boost::filesystem::path sapling_spend = ZC_GetParamsDir() / "sapling-spend.params";
     boost::filesystem::path sapling_output = ZC_GetParamsDir() / "sapling-output.params";
     boost::filesystem::path sprout_groth16 = ZC_GetParamsDir() / "sprout-groth16.params";
 
     if (!(
-        boost::filesystem::exists(pk_path) &&
-        boost::filesystem::exists(vk_path) &&
         boost::filesystem::exists(sapling_spend) &&
         boost::filesystem::exists(sapling_output) &&
         boost::filesystem::exists(sprout_groth16)
@@ -753,14 +750,7 @@ static void ZC_LoadParams(
         return;
     }
 
-    LogPrintf("Loading verifying key from %s\n", vk_path.string().c_str());
-    gettimeofday(&tv_start, 0);
-
-    pzcashParams = ZCJoinSplit::Prepared(vk_path.string(), pk_path.string());
-
-    gettimeofday(&tv_end, 0);
-    elapsed = float(tv_end.tv_sec-tv_start.tv_sec) + (tv_end.tv_usec-tv_start.tv_usec)/float(1000000);
-    LogPrintf("Loaded verifying key in %fs seconds.\n", elapsed);
+    pzcashParams = ZCJoinSplit::Prepared();
 
     static_assert(
         sizeof(boost::filesystem::path::value_type) == sizeof(codeunit),
@@ -887,8 +877,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             return InitError(_("Payment disclosure requires -experimentalfeatures."));
         } else if (mapArgs.count("-zmergetoaddress")) {
             return InitError(_("RPC method z_mergetoaddress requires -experimentalfeatures."));
-        } else if (mapArgs.count("-savesproutr1cs")) {
-            return InitError(_("Saving the Sprout R1CS requires -experimentalfeatures."));
         } else if (mapArgs.count("-insightexplorer")) {
             return InitError(_("Insight explorer requires -experimentalfeatures."));
         }
@@ -1016,6 +1004,11 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     if (ratio != 0) {
         mempool.setSanityCheck(1.0 / ratio);
     }
+
+    int64_t mempoolTotalCostLimit = GetArg("-mempooltxcostlimit", DEFAULT_MEMPOOL_TOTAL_COST_LIMIT);
+    int64_t mempoolEvictionMemorySeconds = GetArg("-mempoolevictionmemoryminutes", DEFAULT_MEMPOOL_EVICTION_MEMORY_MINUTES) * 60;
+    mempool.SetMempoolCostLimit(mempoolTotalCostLimit, mempoolEvictionMemorySeconds);
+
     fCheckBlockIndex = GetBoolArg("-checkblockindex", chainparams.DefaultConsistencyChecks());
     fCheckpointsEnabled = GetBoolArg("-checkpoints", true);
 
@@ -1279,21 +1272,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         threadGroup.create_thread(&ThreadShowMetricsScreen);
     }
 
-    // These must be disabled for now, they are buggy and we probably don't
-    // want any of libsnark's profiling in production anyway.
-    libsnark::inhibit_profiling_info = true;
-    libsnark::inhibit_profiling_counters = true;
-
-    // Initialize Zero circuit parameters
+    // Initialize Zcash circuit parameters
     ZC_LoadParams(chainparams);
-
-    if (GetBoolArg("-savesproutr1cs", false)) {
-        boost::filesystem::path r1cs_path = ZC_GetParamsDir() / "r1cs";
-
-        LogPrintf("Saving Sprout R1CS to %s\n", r1cs_path.string());
-
-        pzcashParams->saveR1CS(r1cs_path.string());
-    }
 
     /* Start the RPC server already.  It will be started in "warmup" mode
      * and not really process calls already (but it will signify connections

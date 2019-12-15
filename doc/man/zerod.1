@@ -75,7 +75,7 @@ limit applied)
 .HP
 \fB\-par=\fR<n>
 .IP
-Set the number of script verification threads (\fB\-6\fR to 16, 0 = auto, <0 =
+Set the number of script verification threads (\fB\-2\fR to 16, 0 = auto, <0 =
 leave that many cores free, default: 0)
 .HP
 \fB\-pid=\fR<file>
@@ -184,6 +184,16 @@ Maximum per\-connection receive buffer, <n>*1000 bytes (default: 5000)
 \fB\-maxsendbuffer=\fR<n>
 .IP
 Maximum per\-connection send buffer, <n>*1000 bytes (default: 1000)
+.HP
+\fB\-mempoolevictionmemoryminutes=\fR<n>
+.IP
+The number of minutes before allowing rejected transactions to re\-enter
+the mempool. (default: 60)
+.HP
+\fB\-mempooltxcostlimit=\fR<n>
+.IP
+An upper bound on the maximum size in bytes of all transactions in the
+mempool. (default: 80000000)
 .HP
 \fB\-onion=\fR<ip:port>
 .IP

@@ -111,10 +111,16 @@ public:
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
         consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nProtocolVersion = 170005;
         consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = 492850;
+        consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].hashActivationBlock =
+           uint256S("0000004c1c7583dfda0e37d1f52a00f0452dba3054444011c332858ad48b5e66");
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170007;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 492850;
+        consensus.vUpgrades[Consensus::UPGRADE_SAPLING].hashActivationBlock =
+            uint256S("0000004c1c7583dfda0e37d1f52a00f0452dba3054444011c332858ad48b5e66");
         consensus.vUpgrades[Consensus::UPGRADE_COSMOS].nProtocolVersion = 170008;
         consensus.vUpgrades[Consensus::UPGRADE_COSMOS].nActivationHeight = 620450;
+        consensus.vUpgrades[Consensus::UPGRADE_COSMOS].hashActivationBlock =
+           uint256S("00000049b61eca40af429e1552500116d40ea446d0271dce141af5d51956cb6e");
         consensus.vUpgrades[Consensus::UPGRADE_BLOSSOM].nProtocolVersion = 170009;
         consensus.vUpgrades[Consensus::UPGRADE_BLOSSOM].nActivationHeight =
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
@@ -274,13 +280,21 @@ public:
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
         consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nProtocolVersion = 170005;
         consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = 50;
+        consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].hashActivationBlock =
+            uint256S("0000257c4331b098045023fcfbfa2474681f4564ab483f84e4e1ad078e4acf44");
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170007;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 50;
+        consensus.vUpgrades[Consensus::UPGRADE_SAPLING].hashActivationBlock =
+            uint256S("000420e7fcc3a49d729479fb0b560dd7b8617b178a08e9e389620a9d1dd6361a");
         consensus.vUpgrades[Consensus::UPGRADE_COSMOS].nProtocolVersion = 170008;
         consensus.vUpgrades[Consensus::UPGRADE_COSMOS].nActivationHeight =47925;
+        consensus.vUpgrades[Consensus::UPGRADE_COSMOS].hashActivationBlock =
+            uint256S("00367515ef2e781b8c9358b443b6329572599edd02c59e8af67db9785122f298");
         consensus.vUpgrades[Consensus::UPGRADE_BLOSSOM].nProtocolVersion = 170009;
         consensus.vUpgrades[Consensus::UPGRADE_BLOSSOM].nActivationHeight =
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
+        consensus.vUpgrades[Consensus::UPGRADE_BLOSSOM].hashActivationBlock =
+            uint256S("00367515ef2e781b8c9358b443b6329572599edd02c59e8af67db9785122f298");
 
 
         // The best chain should have at least this much work.

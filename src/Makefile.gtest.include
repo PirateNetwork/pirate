@@ -27,6 +27,7 @@ zero_gtest_SOURCES += \
 	gtest/test_keystore.cpp \
 	gtest/test_noteencryption.cpp \
 	gtest/test_mempool.cpp \
+	gtest/test_mempoollimit.cpp \
 	gtest/test_merkletree.cpp \
 	gtest/test_metrics.cpp \
 	gtest/test_miner.cpp \
@@ -38,10 +39,8 @@ zero_gtest_SOURCES += \
 	gtest/test_transaction_builder.cpp \
 	gtest/test_upgrades.cpp \
 	gtest/test_validation.cpp \
-	gtest/test_circuit.cpp \
 	gtest/test_txid.cpp \
 	gtest/test_libzcash_utils.cpp \
-	gtest/test_proofs.cpp \
 	gtest/test_pedersen_hash.cpp \
 	gtest/test_checkblock.cpp \
 	gtest/test_zip32.cpp
@@ -51,13 +50,7 @@ zero_gtest_SOURCES += \
 	wallet/gtest/test_wallet.cpp
 endif
 
-#zero_gtest_CPPFLAGS = $(AM_CPPFLAGS) -DMULTICORE -fopenmp -DBINARY_OUTPUT -DCURVE_ALT_BN128 -DSTATIC $(BITCOIN_INCLUDES)
-zero_gtest_CPPFLAGS = $(AM_CPPFLAGS)
-if HAVE_OPENMP
-zero_gtest_CPPFLAGS += -DMULTICORE -fopenmp
-endif
-zero_gtest_CPPFLAGS += -DBINARY_OUTPUT -DCURVE_ALT_BN128 -DSTATIC $(BITCOIN_INCLUDES)
-
+zero_gtest_CPPFLAGS = $(AM_CPPFLAGS) -DBINARY_OUTPUT -DCURVE_ALT_BN128 -DSTATIC $(BITCOIN_INCLUDES)
 zero_gtest_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
 zero_gtest_LDADD = -lgtest -lgmock $(LIBBITCOIN_SERVER) $(LIBBITCOIN_CLI) $(LIBBITCOIN_COMMON) $(LIBBITCOIN_UTIL) $(LIBBITCOIN_CRYPTO) $(LIBUNIVALUE) $(LIBLEVELDB) $(LIBMEMENV) \
@@ -69,7 +62,7 @@ if ENABLE_WALLET
 zero_gtest_LDADD += $(LIBBITCOIN_WALLET)
 endif
 
-zero_gtest_LDADD += $(LIBZCASH_CONSENSUS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(LIBZCASH) $(LIBSNARK) $(LIBZCASH_LIBS)
+zero_gtest_LDADD += $(LIBZCASH_CONSENSUS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(LIBZCASH) $(LIBZCASH_LIBS)
 
 if ENABLE_PROTON
 zero_gtest_LDADD += $(LIBBITCOIN_PROTON) $(PROTON_LIBS)
