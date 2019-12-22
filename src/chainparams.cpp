@@ -126,7 +126,7 @@ public:
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
 
         // The best chain should have at least this much work.
-        consensus.nMinimumChainWork = uint256S("0x00");
+        consensus.nMinimumChainWork = uint256S("0x0000000000000000000000000000000000000000000000000000023297bef3cd");
 
         /**
          * The message start string should be awesome!
@@ -208,21 +208,22 @@ public:
             ( 300000, uint256S("0x000001e0b15c1f74af391c39bcb2d61ea879238b53ba738a45303cccd84c2c3f"))
             ( 400000, uint256S("0x000001ebcc62c257dd00d70bb7fbc210580875e8dbc9f1f9c9aafdb4dc1d8a4e"))
             ( 500000, uint256S("0x000000c642fda400a464c50dcf310e65efa2627799b9b0c378524205ba2307b7"))
-            ( 550000, uint256S("0x000003cb1f3c128819bdf84632fd31058014542af64eea8959d5139fc26c21cd")),
-            1553590617,     // * UNIX timestamp of last checkpoint block
-            1067556,         // * total number of transactions between genesis and last checkpoint
+            ( 600000, uint256S("0x000000a0e6efed6a536c2c5063c666102fb2f9ddb4a226b34a0894c723519e48"))
+            ( 700000, uint256S("0x000001bee8c5bc29fb8d6c3642662ecb479ec85df648e851edaaa0e090b2c797")),
+            1571551061,     // * UNIX timestamp of last checkpoint block
+            1376076,         // * total number of transactions between genesis and last checkpoint
                                         //   (the tx=... number in the SetBestChain debug.log lines)
-            1118            // * estimated number of transactions per day after checkpoint
+            1132            // * estimated number of transactions per day after checkpoint
                                         //   total number of tx / (checkpoint block height / (24 * 24))
         };
 
         // Hardcoded fallback value for the Sprout shielded value pool balance
         // for nodes that have not reindexed since the introduction of monitoring
         // in #2795.
-        nSproutValuePoolCheckpointHeight = 520633;
-        nSproutValuePoolCheckpointBalance = 22145062442933;
+        nSproutValuePoolCheckpointHeight = 492850;
+        nSproutValuePoolCheckpointBalance = 7517901832365;
         fZIP209Enabled = true;
-        hashSproutValuePoolCheckpointBlock = uint256S("0000000000c7b46b6bc04b4cbf87d8bb08722aebd51232619b214f7273f8460e");
+        hashSproutValuePoolCheckpointBlock = uint256S("0000004c1c7583dfda0e37d1f52a00f0452dba3054444011c332858ad48b5e66");
 
         // Founders reward script expects a vector of 2-of-3 multisig addresses
         vFoundersRewardAddress = {
@@ -280,21 +281,21 @@ public:
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
         consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nProtocolVersion = 170005;
         consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = 50;
-        consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].hashActivationBlock =
-            uint256S("0000257c4331b098045023fcfbfa2474681f4564ab483f84e4e1ad078e4acf44");
+        // consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].hashActivationBlock =
+            // uint256S("0000257c4331b098045023fcfbfa2474681f4564ab483f84e4e1ad078e4acf44");
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170007;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 50;
-        consensus.vUpgrades[Consensus::UPGRADE_SAPLING].hashActivationBlock =
-            uint256S("000420e7fcc3a49d729479fb0b560dd7b8617b178a08e9e389620a9d1dd6361a");
+        // consensus.vUpgrades[Consensus::UPGRADE_SAPLING].hashActivationBlock =
+        //     uint256S("000420e7fcc3a49d729479fb0b560dd7b8617b178a08e9e389620a9d1dd6361a");
         consensus.vUpgrades[Consensus::UPGRADE_COSMOS].nProtocolVersion = 170008;
         consensus.vUpgrades[Consensus::UPGRADE_COSMOS].nActivationHeight =47925;
-        consensus.vUpgrades[Consensus::UPGRADE_COSMOS].hashActivationBlock =
-            uint256S("00367515ef2e781b8c9358b443b6329572599edd02c59e8af67db9785122f298");
+        // consensus.vUpgrades[Consensus::UPGRADE_COSMOS].hashActivationBlock =
+        //     uint256S("00367515ef2e781b8c9358b443b6329572599edd02c59e8af67db9785122f298");
         consensus.vUpgrades[Consensus::UPGRADE_BLOSSOM].nProtocolVersion = 170009;
         consensus.vUpgrades[Consensus::UPGRADE_BLOSSOM].nActivationHeight =
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
-        consensus.vUpgrades[Consensus::UPGRADE_BLOSSOM].hashActivationBlock =
-            uint256S("00367515ef2e781b8c9358b443b6329572599edd02c59e8af67db9785122f298");
+        // consensus.vUpgrades[Consensus::UPGRADE_BLOSSOM].hashActivationBlock =
+        //     uint256S("00367515ef2e781b8c9358b443b6329572599edd02c59e8af67db9785122f298");
 
 
         // The best chain should have at least this much work.
