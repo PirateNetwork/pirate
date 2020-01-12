@@ -862,13 +862,19 @@ public:
     void ClearNoteWitnessCache();
 
 protected:
+
+    void ClearSingleNoteWitnessCache(SaplingNoteData* nd);
+    int WitnessMinimumHeight(const uint256& nullifier, int nWitnessHeight, int nMinimumHeight);
+    int VerifyAndSetInitialWitness(const CBlockIndex* pindex);
+    void BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly);
+
     /**
      * pindex is the new tip being connected.
      */
-    void IncrementNoteWitnesses(const CBlockIndex* pindex,
-                                const CBlock* pblock,
-                                SproutMerkleTree& sproutTree,
-                                SaplingMerkleTree& saplingTree);
+    // void IncrementNoteWitnesses(const CBlockIndex* pindex,
+    //                             const CBlock* pblock,
+    //                             SproutMerkleTree& sproutTree,
+    //                             SaplingMerkleTree& saplingTree);
     /**
      * pindex is the old tip being disconnected.
      */
@@ -923,7 +929,7 @@ protected:
 private:
     template <class T>
     void SyncMetaData(std::pair<typename TxSpendMap<T>::iterator, typename TxSpendMap<T>::iterator>);
-    void ChainTipAdded(const CBlockIndex *pindex, const CBlock *pblock, SproutMerkleTree sproutTree, SaplingMerkleTree saplingTree);
+    void ChainTipAdded(const CBlockIndex *pindex, const CBlock *pblock, SproutMerkleTree sproutTree, SaplingMerkleTree saplingTree, bool calculateWitnesses);
 
 protected:
     bool UpdatedNoteData(const CWalletTx& wtxIn, CWalletTx& wtx);
