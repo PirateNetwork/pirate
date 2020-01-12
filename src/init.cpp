@@ -48,6 +48,7 @@
 #include "key_io.h"
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
+#include "wallet/asyncrpcoperation_saplingconsolidation.h"
 #endif
 #include <stdint.h>
 #include <stdio.h>
@@ -427,6 +428,8 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-keypool=<n>", strprintf(_("Set key pool size to <n> (default: %u)"), 100));
     strUsage += HelpMessageOpt("-migration", _("Enable the Sprout to Sapling migration"));
     strUsage += HelpMessageOpt("-migrationdestaddress=<zaddr>", _("Set the Sapling migration address"));
+    strUsage += HelpMessageOpt("-consolidation", _("Enable auto Sapling note consolidation"));
+    strUsage += HelpMessageOpt("-consolidationtxfee", strprintf(_("Fee amount in Satoshis used send consolidation transactions. (default %i)"), DEFAULT_CONSOLIDATION_FEE));
     strUsage += HelpMessageOpt("-deletetx", _("Enable Old Transaction Deletion"));
     strUsage += HelpMessageOpt("-deleteinterval", strprintf(_("Delete transaction every <n> blocks during inital block download (default: %i)"), DEFAULT_TX_DELETE_INTERVAL));
     strUsage += HelpMessageOpt("-keeptxnum", strprintf(_("Keep the last <n> transactions (default: %i)"), DEFAULT_TX_RETENTION_LASTTX));
@@ -1728,6 +1731,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
         // Set sapling migration status
         pwalletMain->fSaplingMigrationEnabled = GetBoolArg("-migration", false);
+
+        //Set Sapling Consolidation
+        pwalletMain->fSaplingConsolidationEnabled = GetBoolArg("-consolidation", false);
+        fConsolidationTxFee  = GetArg("-consolidationtxfee", DEFAULT_CONSOLIDATION_FEE);
 
         //Set Transaction Deletion Options
         fTxDeleteEnabled = GetBoolArg("-deletetx", false);

@@ -838,6 +838,9 @@ private:
     std::vector<CTransaction> pendingSaplingMigrationTxs;
     AsyncRPCOperationId saplingMigrationOperationId;
 
+    std::vector<CTransaction> pendingSaplingConsolidationTxs;
+    AsyncRPCOperationId saplingConsolidationOperationId;
+
     void AddToTransparentSpends(const COutPoint& outpoint, const uint256& wtxid);
     void AddToSproutSpends(const uint256& nullifier, const uint256& wtxid);
     void AddToSaplingSpends(const uint256& nullifier, const uint256& wtxid);
@@ -858,6 +861,7 @@ public:
      */
     int64_t nWitnessCacheSize;
     bool fSaplingMigrationEnabled = false;
+    bool fSaplingConsolidationEnabled = false;
 
     void ClearNoteWitnessCache();
 
@@ -1319,6 +1323,8 @@ public:
     void ChainTip(const CBlockIndex *pindex, const CBlock *pblock, SproutMerkleTree sproutTree, SaplingMerkleTree saplingTree, bool added);
     void RunSaplingMigration(int blockHeight);
     void AddPendingSaplingMigrationTx(const CTransaction& tx);
+    void RunSaplingConsolidation(int blockHeight);
+    void CommitConsolidationTx(const CTransaction& tx);
     /** Saves witness caches and best block locator to disk. */
     void SetBestChain(const CBlockLocator& loc);
     std::set<std::pair<libzcash::PaymentAddress, uint256>> GetNullifiersForAddresses(const std::set<libzcash::PaymentAddress> & addresses);
