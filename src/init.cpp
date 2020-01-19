@@ -1738,7 +1738,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
         //Set Transaction Deletion Options
         fTxDeleteEnabled = GetBoolArg("-deletetx", false);
-        fTxConflictDeleteEnabled = GetBoolArg("-deleteconlicttx", true);
+        fTxConflictDeleteEnabled = GetBoolArg("-deleteconflicttx", true);
 
         fDeleteInterval = GetArg("-deleteinterval", DEFAULT_TX_DELETE_INTERVAL);
         if (fDeleteInterval < 1)
