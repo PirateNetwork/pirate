@@ -1204,14 +1204,16 @@ int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex)
   int nMinimumHeight = pindex->nHeight;
 
   for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
-    bool changed = false;
     nWitnessTxIncrement += 1;
 
-    for (mapSaplingNoteData_t::value_type& item : wtxItem.second.mapSaplingNoteData) {
-      if (wtxItem.second.GetDepthInMainChain() > 0) {
+    if (wtxItem.second.GetDepthInMainChain() > 0) {
+      auto wtxHash = wtxItem.second.GetHash();
+      int wtxHeight = mapBlockIndex[wtxItem.second.hashBlock]->nHeight;
+
+      for (mapSaplingNoteData_t::value_type& item : wtxItem.second.mapSaplingNoteData) {
+
         auto op = item.first;
         auto* nd = &(item.second);
-        auto wtxHash = wtxItem.second.GetHash();
         CBlockIndex* pblockindex;
         uint256 blockRoot;
         uint256 witnessRoot;
@@ -1227,15 +1229,8 @@ int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex)
             continue;
           }
 
-          //Validate current block if witness is from the previous block
-          blockRoot = pindex->pprev->hashFinalSaplingRoot;
-          witnessRoot = nd->witnesses.front().root();
-          if (nd->witnessHeight == pindex->nHeight - 1 && witnessRoot == blockRoot) {
-            nMinimumHeight = WitnessMinimumHeight(*item.second.nullifier, nd->witnessHeight, nMinimumHeight);
-            continue;
-          }
-
           //Validate the witness at the witness height
+          witnessRoot = nd->witnesses.front().root();
           pblockindex = chainActive[nd->witnessHeight];
           blockRoot = pblockindex->hashFinalSaplingRoot;
           if (witnessRoot == blockRoot) {
@@ -1245,22 +1240,10 @@ int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex)
         }
 
         //Clear witness Cache for all other scenarios
+        pblockindex = chainActive[wtxHeight];
         ClearSingleNoteWitnessCache(nd);
-        changed = true;
 
-        //Get the block index of note
-        CTransaction ctx;
-        uint256 hashBlock;
-        GetTransaction(wtxHash, ctx, Params().GetConsensus(), hashBlock, true);
-
-        BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
-        if (mi != mapBlockIndex.end() && (*mi).second) {
-          CBlockIndex* pfoundindex = (*mi).second;
-          if (chainActive.Contains(pfoundindex)) {
-              pblockindex = chainActive[pfoundindex->nHeight];
-          }
-        }
-
+        LogPrintf("Setting Inital Witness for tx %s, %i of %i\n", wtxHash.ToString(), nWitnessTxIncrement, nWitnessTotalTxCount);
 
         SaplingMerkleTree saplingTree;
         blockRoot = pblockindex->pprev->hashFinalSaplingRoot;
@@ -1304,11 +1287,6 @@ int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex)
         nMinimumHeight = WitnessMinimumHeight(*item.second.nullifier, nd->witnessHeight, nMinimumHeight);
       }
     }
-
-    // if (changed) {
-    //   CWalletDB walletdb(strWalletFile, "r+", false);
-    //   wtxItem.second.WriteToDisk(&walletdb);
-    // }
   }
 
   return nMinimumHeight;
@@ -1332,7 +1310,7 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
 
     if (pblockindex->nHeight % 100 == 0 && pblockindex->nHeight < chainActive.Height() - 5) {
       double height = chainActive.Height();
-      LogPrintf("Building Witness for block %i %.4f complete\n", pblockindex->nHeight, pblockindex->nHeight / height);
+      LogPrintf("Building Witnesses for block %i %.4f complete\n", pblockindex->nHeight, pblockindex->nHeight / height);
     }
 
     SaplingMerkleTree saplingTree;
