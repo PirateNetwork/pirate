@@ -49,6 +49,7 @@ extern bool bSpendZeroConfChange;
 extern bool fSendFreeTransactions;
 extern bool fPayAtLeastCustomFee;
 extern bool fTxDeleteEnabled;
+extern bool fTxConflictDeleteEnabled;
 extern int fDeleteInterval;
 extern unsigned int fDeleteTransactionsAfterNBlocks;
 extern unsigned int fKeepLastNTransactions;
