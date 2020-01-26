@@ -2094,11 +2094,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         // Add wallet transactions that aren't already in a block to mapTransactions
         pwalletMain->ReacceptWalletTransactions();
 
-        if (fTxDeleteEnabled) {
-          //Run Transaction Deleted
-          pwalletMain->DeleteWalletTransactions(chainActive.Tip(), true);
-        }
-
         // Run a thread to flush wallet periodically
         threadGroup.create_thread(boost::bind(&ThreadFlushWalletDB, boost::ref(pwalletMain->strWalletFile)));
     }
