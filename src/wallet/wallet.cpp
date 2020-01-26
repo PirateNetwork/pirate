@@ -3006,10 +3006,9 @@ void CWallet::UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletT
   }
 
   //Update Next Wallet Tx Positon
-  previousPosition++;
-  CWalletDB(strWalletFile).WriteOrderPosNext(previousPosition);
-  LogPrintf("Delete Tx - Total Transactions Reordered %i, Next Position %i\n ", mapUpdatedTxs.size(), previousPosition);
-
+  nOrderPosNext = previousPosition++;
+  CWalletDB(strWalletFile).WriteOrderPosNext(nOrderPosNext);
+  LogPrintf("Delete Tx - Total Transactions Reordered %i, Next Position %i\n ", mapUpdatedTxs.size(), nOrderPosNext);
 
 }
 
@@ -3050,6 +3049,7 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool runBuildW
           if (maxOrderPos > int64_t(mapSorted.size())*10) {
             //reset the postion when the max postion is 10x bigger than the
             //number of transactions in the wallet
+            LogPrintf("Reorder Tx - maxOrderPos %i mapSorted Size %i", maxOrderPos, int64_t(mapSorted.size())*10);
             UpdateWalletTransactionOrder(mapSorted, true);
           }
           else {
