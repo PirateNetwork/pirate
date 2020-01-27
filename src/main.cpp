@@ -4261,7 +4261,7 @@ bool CheckBlock(const CBlock& block, CValidationState& state,
              }
          } else {
              if (fDebug)
-                 LogPrintf("CheckBlock(): Zeronode payment check skipped on sync - skipping IsBlockPayeeValid()\n");
+                 LogPrint("zeronode","CheckBlock(): Zeronode payment check skipped on sync - skipping IsBlockPayeeValid()\n");
          }
      }
 
