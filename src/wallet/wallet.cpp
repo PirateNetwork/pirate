@@ -591,6 +591,9 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
             DeleteWalletTransactions(pindex, false);
         } else if (initialDownloadCheck && pindex->nHeight % fDeleteInterval == 0) {
             DeleteWalletTransactions(pindex, true);
+        } else {
+          //Build intial witnesses on every block
+          BuildWitnessCache(pindex, true);
         }
     } else {
         DecrementNoteWitnesses(pindex);
@@ -3025,10 +3028,6 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool runBuildW
 
       if (pindex && fTxDeleteEnabled) {
 
-        //Every note needs at least 1 witness to calculate the nullifers to determine spent status.
-        if (runBuildWitnesses)
-          BuildWitnessCache(pindex, true);
-
         //Check for acentries - exit function if found
         {
             std::list<CAccountingEntry> acentries;
@@ -3040,154 +3039,80 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool runBuildW
             }
         }
         //delete transactions
-        // for (int d = 0; d < 2; d++){
 
-          //Sort Transactions by block and block index
-          int64_t maxOrderPos = 0;
-          std::map<std::pair<int,int>, CWalletTx> mapSorted;
-          ReorderWalletTransactions(mapSorted, maxOrderPos);
-          if (maxOrderPos > int64_t(mapSorted.size())*10) {
-            //reset the postion when the max postion is 10x bigger than the
-            //number of transactions in the wallet
-            LogPrintf("Reorder Tx - maxOrderPos %i mapSorted Size %i", maxOrderPos, int64_t(mapSorted.size())*10);
-            UpdateWalletTransactionOrder(mapSorted, true);
-          }
-          else {
-            UpdateWalletTransactionOrder(mapSorted, false);
-          }
+        //Sort Transactions by block and block index
+        int64_t maxOrderPos = 0;
+        std::map<std::pair<int,int>, CWalletTx> mapSorted;
+        ReorderWalletTransactions(mapSorted, maxOrderPos);
+        if (maxOrderPos > int64_t(mapSorted.size())*10) {
+          //reset the postion when the max postion is 10x bigger than the
+          //number of transactions in the wallet
+          LogPrintf("Reorder Tx - maxOrderPos %i mapSorted Size %i", maxOrderPos, int64_t(mapSorted.size())*10);
+          UpdateWalletTransactionOrder(mapSorted, true);
+        }
+        else {
+          UpdateWalletTransactionOrder(mapSorted, false);
+        }
 
-          //Process Transactions in sorted order
-          int txConflictCount = 0;
-          int txUnConfirmed = 0;
-          int txCount = 0;
-          int txSaveCount = 0;
-          std::vector<uint256> removeTxs;
+        //Process Transactions in sorted order
+        int txConflictCount = 0;
+        int txUnConfirmed = 0;
+        int txCount = 0;
+        int txSaveCount = 0;
+        std::vector<uint256> removeTxs;
 
-          for (auto & item : mapSorted)
-          {
+        for (auto & item : mapSorted)
+        {
 
-            CWalletTx& wtx = item.second;
-            const uint256& wtxid = wtx.GetHash();
-            bool deleteTx = true;
-            txCount += 1;
-            int wtxDepth = wtx.GetDepthInMainChain();
+          CWalletTx& wtx = item.second;
+          const uint256& wtxid = wtx.GetHash();
+          bool deleteTx = true;
+          txCount += 1;
+          int wtxDepth = wtx.GetDepthInMainChain();
 
-            //Keep anything newer than N Blocks
-            if (wtxDepth == 0)
-              txUnConfirmed++;
+          //Keep anything newer than N Blocks
+          if (wtxDepth == 0)
+            txUnConfirmed++;
 
-            if (wtxDepth < nDeleteAfter && wtxDepth >= 0) {
-              LogPrint("db","DeleteTx - Transaction above minimum depth, tx %s\n", wtx.GetHash().ToString());
+          if (wtxDepth < nDeleteAfter && wtxDepth >= 0) {
+            LogPrint("db","DeleteTx - Transaction above minimum depth, tx %s\n", wtx.GetHash().ToString());
+            deleteTx = false;
+            txSaveCount++;
+            continue;
+          } else if (wtxDepth == -1) {
+            txConflictCount++;
+            //Enabled by default
+            if (!fTxConflictDeleteEnabled) {
+              LogPrint("db","DeleteTx - Conflict delete is not enabled tx %s\n", wtx.GetHash().ToString());
               deleteTx = false;
               txSaveCount++;
               continue;
-            } else if (wtxDepth == -1) {
-              txConflictCount++;
-              //Enabled by default
-              if (!fTxConflictDeleteEnabled) {
-                LogPrint("db","DeleteTx - Conflict delete is not enabled tx %s\n", wtx.GetHash().ToString());
+            }
+          } else {
+
+            //Check for unspent inputs or spend less than N Blocks ago. (Sapling)
+            for (auto & pair : wtx.mapSaplingNoteData) {
+              SaplingNoteData nd = pair.second;
+              if (!nd.nullifier || pwalletMain->GetSaplingSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
+                LogPrint("db","DeleteTx - Unspent sapling input tx %s\n", wtx.GetHash().ToString());
                 deleteTx = false;
-                txSaveCount++;
                 continue;
               }
-            } else {
+            }
 
-              //Check for unspent inputs or spend less than N Blocks ago. (Sapling)
-              for (auto & pair : wtx.mapSaplingNoteData) {
-                SaplingNoteData nd = pair.second;
-                if (!nd.nullifier || pwalletMain->GetSaplingSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
-                  LogPrint("db","DeleteTx - Unspent sapling input tx %s\n", wtx.GetHash().ToString());
-                  deleteTx = false;
-                  continue;
-                }
-              }
+            if (!deleteTx) {
+              txSaveCount++;
+              continue;
+            }
 
-              if (!deleteTx) {
-                txSaveCount++;
-                continue;
-              }
-
-              //Check for outputs that no longer have parents in the wallet. Exclude parents that are in the same transaction. (Sapling)
-              for (int i = 0; i < wtx.vShieldedSpend.size(); i++) {
-                const SpendDescription& spendDesc = wtx.vShieldedSpend[i];
-                if (pwalletMain->IsSaplingNullifierFromMe(spendDesc.nullifier)) {
-                  const uint256& parentHash = pwalletMain->mapSaplingNullifiersToNotes[spendDesc.nullifier].hash;
-                  const CWalletTx* parent = pwalletMain->GetWalletTx(parentHash);
-                  if (parent != NULL && parentHash != wtxid) {
-                    LogPrint("db","DeleteTx - Parent of sapling tx %s found\n", wtx.GetHash().ToString());
-                    deleteTx = false;
-                    continue;
-                  }
-                }
-              }
-
-              if (!deleteTx) {
-                txSaveCount++;
-                continue;
-              }
-
-              //Check for unspent inputs or spend less than N Blocks ago. (Sprout)
-              for (auto & pair : wtx.mapSproutNoteData) {
-                SproutNoteData nd = pair.second;
-                if (!nd.nullifier || pwalletMain->GetSproutSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
-                  LogPrint("db","DeleteTx - Unspent sprout input tx %s\n", wtx.GetHash().ToString());
-                  deleteTx = false;
-                  continue;
-                }
-              }
-
-              if (!deleteTx) {
-                txSaveCount++;
-                continue;
-              }
-
-              //Check for outputs that no longer have parents in the wallet. Exclude parents that are in the same transaction. (Sprout)
-              for (int i = 0; i < wtx.vJoinSplit.size(); i++) {
-                const JSDescription& jsdesc = wtx.vJoinSplit[i];
-                for (const uint256 &nullifier : jsdesc.nullifiers) {
-                  // JSOutPoint op = pwalletMain->mapSproutNullifiersToNotes[nullifier];
-                  if (pwalletMain->IsSproutNullifierFromMe(nullifier)) {
-                    const uint256& parentHash = pwalletMain->mapSproutNullifiersToNotes[nullifier].hash;
-                    const CWalletTx* parent = pwalletMain->GetWalletTx(parentHash);
-                    if (parent != NULL && parentHash != wtxid) {
-                      LogPrint("db","DeleteTx - Parent of sprout tx %s found\n", wtx.GetHash().ToString());
-                      deleteTx = false;
-                      continue;
-                    }
-                  }
-                }
-              }
-
-              if (!deleteTx) {
-                txSaveCount++;
-                continue;
-              }
-
-              //Check for unspent inputs or spend less than N Blocks ago. (Transparent)
-              for (unsigned int i = 0; i < wtx.vout.size(); i++) {
-                CTxDestination address;
-                ExtractDestination(wtx.vout[i].scriptPubKey, address);
-                if(IsMine(wtx.vout[i])) {
-                  if (pwalletMain->GetSpendDepth(wtx.GetHash(), i) <= fDeleteTransactionsAfterNBlocks) {
-                    LogPrint("db","DeleteTx - Unspent transparent input tx %s\n", wtx.GetHash().ToString());
-                    deleteTx = false;
-                    continue;
-                  }
-                }
-              }
-
-              if (!deleteTx) {
-                txSaveCount++;
-                continue;
-              }
-
-              //Chcek for output with that no longer have parents in the wallet. (Transparent)
-              for (int i = 0; i < wtx.vin.size(); i++) {
-                const CTxIn& txin = wtx.vin[i];
-                const uint256& parentHash = txin.prevout.hash;
-                const CWalletTx* parent = pwalletMain->GetWalletTx(txin.prevout.hash);
+            //Check for outputs that no longer have parents in the wallet. Exclude parents that are in the same transaction. (Sapling)
+            for (int i = 0; i < wtx.vShieldedSpend.size(); i++) {
+              const SpendDescription& spendDesc = wtx.vShieldedSpend[i];
+              if (pwalletMain->IsSaplingNullifierFromMe(spendDesc.nullifier)) {
+                const uint256& parentHash = pwalletMain->mapSaplingNullifiersToNotes[spendDesc.nullifier].hash;
+                const CWalletTx* parent = pwalletMain->GetWalletTx(parentHash);
                 if (parent != NULL && parentHash != wtxid) {
-                  LogPrint("db","DeleteTx - Parent of transparent tx %s found\n", wtx.GetHash().ToString());
+                  LogPrint("db","DeleteTx - Parent of sapling tx %s found\n", wtx.GetHash().ToString());
                   deleteTx = false;
                   continue;
                 }
@@ -3199,39 +3124,109 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool runBuildW
               continue;
             }
 
-            //Keep Last N Transactions
-            if (mapSorted.size() - txCount < fKeepLastNTransactions + txConflictCount + txUnConfirmed) {
-              LogPrint("db","DeleteTx - Transaction set position %i, tx %s\n", mapSorted.size() - txCount, wtxid.ToString());
-              deleteTx = false;
+            //Check for unspent inputs or spend less than N Blocks ago. (Sprout)
+            for (auto & pair : wtx.mapSproutNoteData) {
+              SproutNoteData nd = pair.second;
+              if (!nd.nullifier || pwalletMain->GetSproutSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
+                LogPrint("db","DeleteTx - Unspent sprout input tx %s\n", wtx.GetHash().ToString());
+                deleteTx = false;
+                continue;
+              }
+            }
+
+            if (!deleteTx) {
               txSaveCount++;
               continue;
             }
 
-            //Collect everything else for deletion
-            if (deleteTx) {
-              removeTxs.push_back(wtxid);
-              runCompact = true;
+            //Check for outputs that no longer have parents in the wallet. Exclude parents that are in the same transaction. (Sprout)
+            for (int i = 0; i < wtx.vJoinSplit.size(); i++) {
+              const JSDescription& jsdesc = wtx.vJoinSplit[i];
+              for (const uint256 &nullifier : jsdesc.nullifiers) {
+                // JSOutPoint op = pwalletMain->mapSproutNullifiersToNotes[nullifier];
+                if (pwalletMain->IsSproutNullifierFromMe(nullifier)) {
+                  const uint256& parentHash = pwalletMain->mapSproutNullifiersToNotes[nullifier].hash;
+                  const CWalletTx* parent = pwalletMain->GetWalletTx(parentHash);
+                  if (parent != NULL && parentHash != wtxid) {
+                    LogPrint("db","DeleteTx - Parent of sprout tx %s found\n", wtx.GetHash().ToString());
+                    deleteTx = false;
+                    continue;
+                  }
+                }
+              }
+            }
+
+            if (!deleteTx) {
+              txSaveCount++;
+              continue;
+            }
+
+            //Check for unspent inputs or spend less than N Blocks ago. (Transparent)
+            for (unsigned int i = 0; i < wtx.vout.size(); i++) {
+              CTxDestination address;
+              ExtractDestination(wtx.vout[i].scriptPubKey, address);
+              if(IsMine(wtx.vout[i])) {
+                if (pwalletMain->GetSpendDepth(wtx.GetHash(), i) <= fDeleteTransactionsAfterNBlocks) {
+                  LogPrint("db","DeleteTx - Unspent transparent input tx %s\n", wtx.GetHash().ToString());
+                  deleteTx = false;
+                  continue;
+                }
+              }
+            }
+
+            if (!deleteTx) {
+              txSaveCount++;
+              continue;
+            }
+
+            //Chcek for output with that no longer have parents in the wallet. (Transparent)
+            for (int i = 0; i < wtx.vin.size(); i++) {
+              const CTxIn& txin = wtx.vin[i];
+              const uint256& parentHash = txin.prevout.hash;
+              const CWalletTx* parent = pwalletMain->GetWalletTx(txin.prevout.hash);
+              if (parent != NULL && parentHash != wtxid) {
+                LogPrint("db","DeleteTx - Parent of transparent tx %s found\n", wtx.GetHash().ToString());
+                deleteTx = false;
+                continue;
+              }
             }
           }
 
-
-
-          //Delete Transactions from wallet
-          if (int(removeTxs.size()) > 50)
-            LogPrintf("Delete Tx - Deleting %i transactions, this could take a while.\n", min(int(removeTxs.size()),1000));
-
-          for (int i = 0; i < int(removeTxs.size()); i++) {
-            if (i % 50 == 0)
-              LogPrintf("Delete Tx - Deleting transactions, %.4f complete\n", i/min(double(removeTxs.size()),1000.00));
-
-            EraseFromWallet(removeTxs[i]);
-
-            //Delete 1000 transactions Max so not to bog down the node.
-            if (i + 1 >= 1000)
-              break;
+          if (!deleteTx) {
+            txSaveCount++;
+            continue;
           }
-          LogPrintf("Delete Tx - Total Transaction Count %i, Transactions Deleted %i\n ", txCount, min(txCount-txSaveCount,1000));
-        // }
+
+          //Keep Last N Transactions
+          if (mapSorted.size() - txCount < fKeepLastNTransactions + txConflictCount + txUnConfirmed) {
+            LogPrint("db","DeleteTx - Transaction set position %i, tx %s\n", mapSorted.size() - txCount, wtxid.ToString());
+            deleteTx = false;
+            txSaveCount++;
+            continue;
+          }
+
+          //Collect everything else for deletion
+          if (deleteTx) {
+            removeTxs.push_back(wtxid);
+            runCompact = true;
+          }
+        }
+
+        //Delete Transactions from wallet
+        if (int(removeTxs.size()) > 50)
+          LogPrintf("Delete Tx - Deleting %i transactions, this could take a while.\n", min(int(removeTxs.size()),1000));
+
+        for (int i = 0; i < int(removeTxs.size()); i++) {
+          if (i % 50 == 0)
+            LogPrintf("Delete Tx - Deleting transactions, %.4f complete\n", i/min(double(removeTxs.size()),1000.00));
+
+          EraseFromWallet(removeTxs[i]);
+
+          //Delete 1000 transactions Max so not to bog down the node.
+          if (i + 1 >= 1000)
+            break;
+        }
+        LogPrintf("Delete Tx - Total Transaction Count %i, Transactions Deleted %i\n ", txCount, min(txCount-txSaveCount,1000));
 
         //Compress Wallet
         if (runCompact)
@@ -3288,10 +3283,11 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
                     assert(pcoinsTip->GetSaplingAnchorAt(pindex->pprev->hashFinalSaplingRoot, saplingTree));
                 }
             }
-            // Increment note witness caches
-            if (pindex->nHeight == chainActive.Tip()->nHeight)
-              BuildWitnessCache(pindex, false);
 
+            // Build inital witness caches
+            BuildWitnessCache(pindex, true);
+
+            //Delete Transactions
             if (pindex->nHeight % fDeleteInterval == 0)
               DeleteWalletTransactions(pindex, false);
 
@@ -3301,6 +3297,9 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
             }
             pindex = chainActive.Next(pindex);
         }
+
+        //Update all witness caches
+        BuildWitnessCache(chainActive.Tip(), false);
 
         ShowProgress(_("Rescanning..."), 100); // hide progress dialog in GUI
     }
