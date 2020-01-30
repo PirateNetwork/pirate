@@ -1416,6 +1416,10 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
 
   LOCK2(cs_wallet,cs_main);
 
+  //Set witnessBuilt to false to prevent zsendmany from attempting
+  //collect witnesses during sync
+  initWitnessesBuilt = false;
+
   int startHeight = VerifyAndSetInitialWitness(pindex) + 1;
 
   if (startHeight > pindex->nHeight || witnessOnly) {
@@ -1506,6 +1510,9 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
     pblockindex = chainActive.Next(pblockindex);
 
   }
+
+  //Set witnessBuilt to true to allow zsendmany to run
+  initWitnessesBuilt = true;
 }
 
 bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
