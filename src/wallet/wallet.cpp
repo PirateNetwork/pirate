@@ -588,13 +588,15 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
             BuildWitnessCache(pindex, false);
             RunSaplingMigration(pindex->nHeight);
             RunSaplingConsolidation(pindex->nHeight);
-            DeleteWalletTransactions(pindex, false);
-        } else if (initialDownloadCheck && pindex->nHeight % fDeleteInterval == 0) {
-            DeleteWalletTransactions(pindex, true);
+            DeleteWalletTransactions(pindex);
         } else {
           //Build intial witnesses on every block
           BuildWitnessCache(pindex, true);
+          if (initialDownloadCheck && pindex->nHeight % fDeleteInterval == 0) {
+            DeleteWalletTransactions(pindex);
+          }
         }
+
     } else {
         DecrementNoteWitnesses(pindex);
         UpdateNullifierNoteMapForBlock(pblock);
@@ -3019,7 +3021,7 @@ void CWallet::UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletT
  * Delete transactions from the Wallet
  */
 
-void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool runBuildWitnesses) {
+void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
 
       LOCK2(cs_wallet,cs_main);
 
@@ -3289,7 +3291,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
 
             //Delete Transactions
             if (pindex->nHeight % fDeleteInterval == 0)
-              DeleteWalletTransactions(pindex, false);
+              DeleteWalletTransactions(pindex);
 
             if (GetTime() >= nNow + 60) {
                 nNow = GetTime();
