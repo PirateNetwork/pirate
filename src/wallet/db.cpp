@@ -170,7 +170,7 @@ bool CDBEnv::Compact(const std::string& strFile)
     LOCK(cs_db);
 
     DB_COMPACT dbcompact;
-    dbcompact.compact_fillpercent = 100;
+    dbcompact.compact_fillpercent = 80;
     dbcompact.compact_pages = DB_MAX_PAGES;
     dbcompact.compact_timeout = 0;
 
