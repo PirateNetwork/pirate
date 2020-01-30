@@ -3222,20 +3222,24 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
         }
 
         //Delete Transactions from wallet
-        if (int(removeTxs.size()) > 50)
-          LogPrintf("Delete Tx - Deleting %i transactions, this could take a while.\n", min(int(removeTxs.size()),1000));
+        int maxRemoveTxSize = MAX_REMOVE_WHILE_SYNCING;
+        if (initWitnessesBuilt)
+          maxRemoveTxSize = MAX_REMOVE_WHILE_SYNCED;
+
+        if (int(removeTxs.size()) > 25)
+          LogPrintf("Delete Tx - Deleting %i transactions, this could take a while.\n", min(int(removeTxs.size()),maxRemoveTxSize));
 
         for (int i = 0; i < int(removeTxs.size()); i++) {
-          if (i % 50 == 0)
-            LogPrintf("Delete Tx - Deleting transactions, %.4f complete\n", i/min(double(removeTxs.size()),1000.00));
+          if (i % 25 == 0)
+            LogPrintf("Delete Tx - Deleting transactions, %.4f complete\n", i/min(double(removeTxs.size()),double(maxRemoveTxSize)));
 
           EraseFromWallet(removeTxs[i]);
 
-          //Delete 1000 transactions Max so not to bog down the node.
-          if (i + 1 >= 1000)
+          //Delete maxRemoveTxSize transactions Max so not to bog down the node.
+          if (i + 1 >= maxRemoveTxSize)
             break;
         }
-        LogPrintf("Delete Tx - Total Transaction Count %i, Transactions Deleted %i\n ", txCount, min(txCount-txSaveCount,1000));
+        LogPrintf("Delete Tx - Total Transaction Count %i, Transactions Deleted %i\n ", txCount, min(txCount-txSaveCount,maxRemoveTxSize));
 
         //Compress Wallet
         if (runCompact)

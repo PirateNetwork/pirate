@@ -84,6 +84,12 @@ static const unsigned int DEFAULT_TX_RETENTION_BLOCKS = 1000;
 //Default Retenion Last N-Transactions
 static const unsigned int DEFAULT_TX_RETENTION_LASTTX = 200;
 
+//Amount of transactions to delete per run while syncing
+static const int MAX_REMOVE_WHILE_SYNCING = 250;
+
+//Amount of transaction to delete per run once synced
+static const int MAX_REMOVE_WHILE_SYNCED = 50;
+
 class CBlockIndex;
 class CCoinControl;
 class COutput;
