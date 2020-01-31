@@ -1439,13 +1439,12 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
 
   LOCK2(cs_wallet,cs_main);
 
-  //Set witnessBuilt to false to prevent zsendmany from attempting
-  //collect witnesses during sync
-  initWitnessesBuilt = false;
-
   int startHeight = VerifyAndSetInitialWitness(pindex, witnessOnly) + 1;
 
   if (startHeight > pindex->nHeight || witnessOnly) {
+    //Set witnessBuilt to false to prevent zsendmany from attempting
+    //collect witnesses during sync
+    initWitnessesBuilt = false;
     return;
   }
 
