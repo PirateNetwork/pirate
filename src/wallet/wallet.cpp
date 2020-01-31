@@ -1216,6 +1216,7 @@ void ClearSingleNoteWitnessCache(NoteData* nd)
 {
   nd->witnesses.clear();
   nd->witnessHeight = -1;
+  nd->witnessRootValidated = false;
 }
 
 int CWallet::SproutWitnessMinimumHeight(const uint256& nullifier, int nWitnessHeight, int nMinimumHeight)
@@ -1234,7 +1235,7 @@ int CWallet::SaplingWitnessMinimumHeight(const uint256& nullifier, int nWitnessH
     return nMinimumHeight;
 }
 
-int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex)
+int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex, bool witnessOnly)
 {
   LOCK2(cs_wallet,cs_main);
 
@@ -1265,6 +1266,16 @@ int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex)
 
         if (!nd->witnesses.empty() && nd->witnessHeight > 0) {
 
+          //Skip all functions for validated witness while witness only = true
+          if (nd->witnessRootValidated && witnessOnly)
+            continue;
+
+          //Skip Validation when witness root has been validated
+          if (nd->witnessRootValidated) {
+            nMinimumHeight = SproutWitnessMinimumHeight(*item.second.nullifier, nd->witnessHeight, nMinimumHeight);
+            continue;
+          }
+
           //Skip Validation when witness height is greater that block height
           if (nd->witnessHeight > pindex->nHeight - 1) {
             nMinimumHeight = SproutWitnessMinimumHeight(*item.second.nullifier, nd->witnessHeight, nMinimumHeight);
@@ -1276,6 +1287,7 @@ int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex)
           pblockindex = chainActive[nd->witnessHeight];
           blockRoot = pblockindex->hashFinalSproutRoot;
           if (witnessRoot == blockRoot) {
+            nd->witnessRootValidated = true;
             nMinimumHeight = SproutWitnessMinimumHeight(*item.second.nullifier, nd->witnessHeight, nMinimumHeight);
             continue;
           }
@@ -1344,6 +1356,16 @@ int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex)
 
         if (!nd->witnesses.empty() && nd->witnessHeight > 0) {
 
+          //Skip all functions for validated witness while witness only = true
+          if (nd->witnessRootValidated && witnessOnly)
+            continue;
+
+          //Skip Validation when witness root has been validated
+          if (nd->witnessRootValidated) {
+            nMinimumHeight = SaplingWitnessMinimumHeight(*item.second.nullifier, nd->witnessHeight, nMinimumHeight);
+            continue;
+          }
+
           //Skip Validation when witness height is greater that block height
           if (nd->witnessHeight > pindex->nHeight - 1) {
             nMinimumHeight = SaplingWitnessMinimumHeight(*item.second.nullifier, nd->witnessHeight, nMinimumHeight);
@@ -1355,6 +1377,7 @@ int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex)
           pblockindex = chainActive[nd->witnessHeight];
           blockRoot = pblockindex->hashFinalSaplingRoot;
           if (witnessRoot == blockRoot) {
+            nd->witnessRootValidated = true;
             nMinimumHeight = SaplingWitnessMinimumHeight(*item.second.nullifier, nd->witnessHeight, nMinimumHeight);
             continue;
           }
@@ -1420,7 +1443,7 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
   //collect witnesses during sync
   initWitnessesBuilt = false;
 
-  int startHeight = VerifyAndSetInitialWitness(pindex) + 1;
+  int startHeight = VerifyAndSetInitialWitness(pindex, witnessOnly) + 1;
 
   if (startHeight > pindex->nHeight || witnessOnly) {
     return;
@@ -1429,12 +1452,12 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
   uint256 sproutRoot;
   uint256 saplingRoot;
   CBlockIndex* pblockindex = chainActive[startHeight];
+  int height = chainActive.Height();
 
   while (pblockindex) {
 
-    if (pblockindex->nHeight % 100 == 0 && pblockindex->nHeight < chainActive.Height() - 5) {
-      double height = chainActive.Height();
-      LogPrintf("Building Witnesses for block %i %.4f complete\n", pblockindex->nHeight, pblockindex->nHeight / height);
+    if (pblockindex->nHeight % 100 == 0 && pblockindex->nHeight < height - 5) {
+      LogPrintf("Building Witnesses for block %i %.4f complete\n", pblockindex->nHeight, pblockindex->nHeight / double(height));
     }
 
     SproutMerkleTree sproutTree;
