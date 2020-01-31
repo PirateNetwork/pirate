@@ -1989,7 +1989,7 @@ bool CWallet::UpdatedNoteData(const CWalletTx& wtxIn, CWalletTx& wtx)
  * updated; instead, the transaction being in the mempool or conflicted is determined on
  * the fly in CMerkleTx::GetDepthInMainChain().
  */
-bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate)
+bool CWallet::AddToWalletIfInvolvingMe(CWalletDB& walletdb, const CTransaction& tx, const CBlock* pblock, bool fUpdate)
 {
     {
         AssertLockHeld(cs_wallet);
@@ -2022,8 +2022,6 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
 
             // Do not flush the wallet here for performance reasons
             // this is safe, as in case of a crash, we rescan the necessary blocks on startup through our SetBestChain-mechanism
-            CWalletDB walletdb(strWalletFile, "r+", false);
-
             return AddToWallet(wtx, false, &walletdb);
         }
     }
@@ -2033,7 +2031,8 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
 void CWallet::SyncTransaction(const CTransaction& tx, const CBlock* pblock)
 {
     LOCK(cs_wallet);
-    if (!AddToWalletIfInvolvingMe(tx, pblock, true))
+    CWalletDB walletdb(strWalletFile, "r+", false);
+    if (!AddToWalletIfInvolvingMe(walletdb, tx, pblock, true))
         return; // Not one of ours
 
     MarkAffectedTransactionsDirty(tx);
@@ -3009,10 +3008,10 @@ void CWallet::UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletT
   }
 
   //Update transacitons nOrderPos for transactions that changed
+  CWalletDB walletdb(strWalletFile, "r+", false);
   for (map<const uint256, CWalletTx>::iterator it = mapUpdatedTxs.begin(); it != mapUpdatedTxs.end(); ++it) {
     CWalletTx wtx = it->second;
     LogPrintf("Delete Tx - Updating Positon to %i for Tx %s\n ", wtx.nOrderPos, wtx.GetHash().ToString());
-    CWalletDB walletdb(strWalletFile, "r+", false);
     wtx.WriteToDisk(&walletdb);
     mapWallet[wtx.GetHash()].nOrderPos = wtx.nOrderPos;
   }
@@ -3272,6 +3271,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
         ShowProgress(_("Rescanning..."), 0); // show rescan progress in GUI as dialog or on splashscreen, if -rescan on startup
         double dProgressStart = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pindex, false);
         double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.Tip(), false);
+        CWalletDB walletdb(strWalletFile, "r+", false);
         while (pindex)
         {
             if (pindex->nHeight % 100 == 0 && dProgressTip - dProgressStart > 0.0)
@@ -3281,7 +3281,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
             ReadBlockFromDisk(block, pindex, Params().GetConsensus());
             BOOST_FOREACH(CTransaction& tx, block.vtx)
             {
-                if (AddToWalletIfInvolvingMe(tx, &block, fUpdate)) {
+                if (AddToWalletIfInvolvingMe(walletdb, tx, &block, fUpdate)) {
                     ret++;
                 }
             }
