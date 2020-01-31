@@ -3026,6 +3026,21 @@ void CWallet::UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletT
 /**
  * Delete transactions from the Wallet
  */
+void CWallet::DeleteTransactions(std::vector<uint256> &removeTxs) {
+    LOCK(cs_wallet);
+
+    CWalletDB walletdb(strWalletFile, "r+", false);
+
+    for (int i = 0; i< removeTxs.size(); i++) {
+        if (mapWallet.erase(removeTxs[i])) {
+            walletdb.EraseTx(removeTxs[i]);
+            LogPrint("deletetx","Delete Tx - Deleting tx %s, %i.\n", removeTxs[i].ToString(),i);
+        } else {
+            LogPrint("deletetx","Delete Tx - Deleting tx %failed.\n", removeTxs[i].ToString());
+            return;
+        }
+    }
+}
 
 void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
 
@@ -3214,31 +3229,17 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
           }
 
           //Collect everything else for deletion
-          if (deleteTx) {
+          if (deleteTx && int(removeTxs.size()) < MAX_DELETE_TX_SIZE) {
             removeTxs.push_back(wtxid);
             runCompact = true;
           }
+
         }
 
         //Delete Transactions from wallet
-        int maxRemoveTxSize = MAX_REMOVE_WHILE_SYNCING;
-        if (initWitnessesBuilt)
-          maxRemoveTxSize = MAX_REMOVE_WHILE_SYNCED;
-
-        if (int(removeTxs.size()) > 25)
-          LogPrintf("Delete Tx - Deleting %i transactions, this could take a while.\n", min(int(removeTxs.size()),maxRemoveTxSize));
-
-        for (int i = 0; i < int(removeTxs.size()); i++) {
-          if (i % 25 == 0)
-            LogPrintf("Delete Tx - Deleting transactions, %.4f complete\n", i/min(double(removeTxs.size()),double(maxRemoveTxSize)));
-
-          EraseFromWallet(removeTxs[i]);
-
-          //Delete maxRemoveTxSize transactions Max so not to bog down the node.
-          if (i + 1 >= maxRemoveTxSize)
-            break;
-        }
-        LogPrintf("Delete Tx - Total Transaction Count %i, Transactions Deleted %i\n ", txCount, min(txCount-txSaveCount,maxRemoveTxSize));
+        LogPrintf("Delete Tx - Delete Transactions started.");
+        DeleteTransactions(removeTxs);
+        LogPrintf("Delete Tx - Total Transaction Count %i, Transactions Deleted %i\n ", txCount, int(removeTxs.size()));
 
         //Compress Wallet
         if (runCompact)

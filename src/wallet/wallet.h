@@ -85,10 +85,7 @@ static const unsigned int DEFAULT_TX_RETENTION_BLOCKS = 1000;
 static const unsigned int DEFAULT_TX_RETENTION_LASTTX = 200;
 
 //Amount of transactions to delete per run while syncing
-static const int MAX_REMOVE_WHILE_SYNCING = 250;
-
-//Amount of transaction to delete per run once synced
-static const int MAX_REMOVE_WHILE_SYNCED = 50;
+static const int MAX_DELETE_TX_SIZE = 50000;
 
 class CBlockIndex;
 class CCoinControl;
@@ -1246,6 +1243,7 @@ public:
          uint256 &final_anchor);
     void ReorderWalletTransactions(std::map<std::pair<int,int>, CWalletTx> &mapSorted, int64_t &maxOrderPos);
     void UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletTx> &mapSorted, bool resetOrder);
+    void DeleteTransactions(std::vector<uint256> &removeTxs);
     void DeleteWalletTransactions(const CBlockIndex* pindex);
     int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false);
     void ReacceptWalletTransactions();
