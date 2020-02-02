@@ -429,6 +429,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-migration", _("Enable the Sprout to Sapling migration"));
     strUsage += HelpMessageOpt("-migrationdestaddress=<zaddr>", _("Set the Sapling migration address"));
     strUsage += HelpMessageOpt("-consolidation", _("Enable auto Sapling note consolidation"));
+    strUsage += HelpMessageOpt("-consolidatesaplingaddress=<zaddr>", _("Specify Sapling Address to Consolidate. (default: all)"));
     strUsage += HelpMessageOpt("-consolidationtxfee", strprintf(_("Fee amount in Satoshis used send consolidation transactions. (default %i)"), DEFAULT_CONSOLIDATION_FEE));
     strUsage += HelpMessageOpt("-deletetx", _("Enable Old Transaction Deletion"));
     strUsage += HelpMessageOpt("-deleteinterval", strprintf(_("Delete transaction every <n> blocks during inital block download (default: %i)"), DEFAULT_TX_DELETE_INTERVAL));
