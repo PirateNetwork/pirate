@@ -3262,7 +3262,6 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
         }
 
         //Delete Transactions from wallet
-        LogPrintf("Delete Tx - Delete Transactions started.");
         DeleteTransactions(removeTxs);
         LogPrintf("Delete Tx - Total Transaction Count %i, Transactions Deleted %i\n ", txCount, int(removeTxs.size()));
 
