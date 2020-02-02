@@ -7,6 +7,7 @@
 //Default fee used for consolidation transactions
 static const CAmount DEFAULT_CONSOLIDATION_FEE = 0;
 extern CAmount fConsolidationTxFee;
+extern bool fConsolidationMapUsed;
 
 class AsyncRPCOperation_saplingconsolidation : public AsyncRPCOperation
 {

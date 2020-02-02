@@ -13,7 +13,8 @@
 #include "wallet.h"
 
 CAmount fConsolidationTxFee = DEFAULT_CONSOLIDATION_FEE;
-const int CONSOLIDATION_EXPIRY_DELTA = 100;
+bool fConsolidationMapUsed = false;
+const int CONSOLIDATION_EXPIRY_DELTA = 15;
 
 
 AsyncRPCOperation_saplingconsolidation::AsyncRPCOperation_saplingconsolidation(int targetHeight) : targetHeight_(targetHeight) {}
@@ -87,7 +88,18 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
         // an anchor at height N-10 for each Sprout JoinSplit description
         // Consider, should notes be sorted?
         pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, "", 11);
-        pwalletMain->GetSaplingPaymentAddresses(addresses);
+        if (fConsolidationMapUsed) {
+            const vector<string>& v = mapMultiArgs["-consolidatesaplingaddress"];
+            for(int i = 0; i < v.size(); i++) {
+                auto zAddress = DecodePaymentAddress(v[i]);
+                if (boost::get<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
+                    libzcash::SaplingPaymentAddress saplingAddress = boost::get<libzcash::SaplingPaymentAddress>(zAddress);
+                    addresses.insert(saplingAddress );
+                }
+            }
+        } else {
+            pwalletMain->GetSaplingPaymentAddresses(addresses);
+        }
     }
 
     int numTxCreated = 0;
