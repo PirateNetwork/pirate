@@ -3128,13 +3128,14 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
             txSaveCount++;
             continue;
           } else if (wtxDepth == -1) {
-            txConflictCount++;
             //Enabled by default
             if (!fTxConflictDeleteEnabled) {
               LogPrint("deletetx","DeleteTx - Conflict delete is not enabled tx %s\n", wtx.GetHash().ToString());
               deleteTx = false;
               txSaveCount++;
               continue;
+            } else {
+              txConflictCount++;
             }
           } else {
 
@@ -3238,19 +3239,19 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
                 continue;
               }
             }
-          }
 
-          if (!deleteTx) {
-            txSaveCount++;
-            continue;
-          }
+            if (!deleteTx) {
+              txSaveCount++;
+              continue;
+            }
 
-          //Keep Last N Transactions
-          if (mapSorted.size() - txCount < fKeepLastNTransactions + txConflictCount + txUnConfirmed) {
-            LogPrint("deletetx","DeleteTx - Transaction set position %i, tx %s\n", mapSorted.size() - txCount, wtxid.ToString());
-            deleteTx = false;
-            txSaveCount++;
-            continue;
+            //Keep Last N Transactions
+            if (mapSorted.size() - txCount < fKeepLastNTransactions + txConflictCount + txUnConfirmed) {
+              LogPrint("deletetx","DeleteTx - Transaction set position %i, tx %s\n", mapSorted.size() - txCount, wtxid.ToString());
+              deleteTx = false;
+              txSaveCount++;
+              continue;
+            }
           }
 
           //Collect everything else for deletion
@@ -3258,7 +3259,6 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
             removeTxs.push_back(wtxid);
             runCompact = true;
           }
-
         }
 
         //Delete Transactions from wallet
