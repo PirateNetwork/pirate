@@ -79,7 +79,7 @@ static const size_t HD_WALLET_SEED_LENGTH = 32;
 static const int DEFAULT_TX_DELETE_INTERVAL = 1000;
 
 //Default Transaction Rentention N-BLOCKS
-static const unsigned int DEFAULT_TX_RETENTION_BLOCKS = 1000;
+static const unsigned int DEFAULT_TX_RETENTION_BLOCKS = 10000;
 
 //Default Retenion Last N-Transactions
 static const unsigned int DEFAULT_TX_RETENTION_LASTTX = 200;
