@@ -214,6 +214,11 @@ bool CNetAddr::IsRFC7343() const
     return (GetByte(15) == 0x20 && GetByte(14) == 0x01 && GetByte(13) == 0x00 && (GetByte(12) & 0xF0) == 0x20);
 }
 
+bool CNetAddr::IsHeNet() const
+{
+    return (GetByte(15) == 0x20 && GetByte(14) == 0x01 && GetByte(13) == 0x04 && GetByte(12) == 0x70);
+}
+
 /**
  * @returns Whether or not this is a dummy address that maps an onion address
  *          into IPv6.
@@ -554,9 +559,8 @@ std::vector<unsigned char> CNetAddr::GetGroup(const std::vector<bool> &asmap) co
         nClass = NET_ONION;
         nStartByte = 6;
         nBits = 4;
-    }
-    // for he.net, use /36 groups
-    else if (GetByte(15) == 0x20 && GetByte(14) == 0x01 && GetByte(13) == 0x04 && GetByte(12) == 0x70)
+    } else if (IsHeNet()) {
+        // for he.net, use /36 groups
         nBits = 36;
     // for the rest of the IPv6 network, use /32 groups
     else
