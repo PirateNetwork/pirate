@@ -20,6 +20,7 @@
 
 #include "wallet/wallet.h"
 
+#include "asyncrpcqueue.h"
 #include "checkpoints.h"
 #include "coincontrol.h"
 #include "consensus/upgrades.h"
@@ -37,6 +38,7 @@
 #include "zcash/Note.hpp"
 #include "crypter.h"
 #include "coins.h"
+#include "wallet/asyncrpcoperation_saplingconsolidation.h"
 #include "zcash/zip32.h"
 #include "cc/CCinclude.h"
 
@@ -589,11 +591,15 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
                        bool added)
 {
     if (added) {
+        // Prevent witness cache building && consolidation transactions
+        // from being created when node is syncing after launch,
+        // and also when node wakes up from suspension/hibernation and incoming blocks are old.
         bool initialDownloadCheck = IsInitialBlockDownload();
         if (!initialDownloadCheck &&
             pblock->GetBlockTime() > GetAdjustedTime() - 8640) //Last 144 blocks 2.4 * 60 * 60
         {
             BuildWitnessCache(pindex, false);
+            RunSaplingConsolidation(pindex->GetHeight());
             DeleteWalletTransactions(pindex);
         } else {
             //Build intial witnesses on every block
@@ -607,6 +613,35 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
         DecrementNoteWitnesses(pindex);
         UpdateNullifierNoteMapForBlock(pblock);
     }
+}
+
+void CWallet::RunSaplingConsolidation(int blockHeight) {
+    if (!NetworkUpgradeActive(blockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
+        return;
+    }
+    LOCK(cs_wallet);
+    if (!fSaplingConsolidationEnabled) {
+        return;
+    }
+
+    int consolidateInterval = rand() % 5 + 5;
+    if (blockHeight % consolidateInterval == 0) {
+        std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
+        std::shared_ptr<AsyncRPCOperation> lastOperation = q->getOperationForId(saplingConsolidationOperationId);
+        if (lastOperation != nullptr) {
+            lastOperation->cancel();
+        }
+        pendingSaplingConsolidationTxs.clear();
+        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_saplingconsolidation(blockHeight + 5));
+        saplingConsolidationOperationId = operation->getId();
+        q->addOperation(operation);
+    }
+}
+
+void CWallet::CommitConsolidationTx(const CTransaction& tx) {
+  CWalletTx wtx(this, tx);
+  CReserveKey reservekey(pwalletMain);
+  CommitTransaction(wtx, reservekey);
 }
 
 void CWallet::SetBestChain(const CBlockLocator& loc)
