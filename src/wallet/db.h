@@ -88,6 +88,7 @@ public:
      * NOTE: reads the entire database into memory, so cannot be used
      * for huge databases.
      */
+    bool Compact(const std::string& strFile);
     typedef std::pair<std::vector<unsigned char>, std::vector<unsigned char> > KeyValPair;
     bool Salvage(const std::string& strFile, bool fAggressive, std::vector<KeyValPair>& vResult);
 
