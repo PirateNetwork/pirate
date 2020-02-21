@@ -74,7 +74,7 @@ UniValue getsaplingwitness(const UniValue& params, bool fHelp,  const CPubKey& m
 
   //Cycle through block and transactions build sapling tree until the commitment needed is reached
   CBlock pblock;
-  ReadBlockFromDisk(pblock, pblockindex);
+  ReadBlockFromDisk(pblock, pblockindex, false);
   for (const CTransaction& tx : pblock.vtx) {
       auto hash = tx.GetHash();
 
@@ -162,7 +162,7 @@ UniValue getsaplingwitnessatheight(const UniValue& params, bool fHelp,  const CP
 
   //Cycle through block and transactions build sapling tree until the commitment needed is reached
   CBlock pblock;
-  ReadBlockFromDisk(pblock, pblockindex);
+  ReadBlockFromDisk(pblock, pblockindex, false);
   for (const CTransaction& tx : pblock.vtx) {
       auto hash = tx.GetHash();
 
@@ -195,7 +195,7 @@ UniValue getsaplingwitnessatheight(const UniValue& params, bool fHelp,  const CP
     if (fHavePruned && !(pblockindex->nStatus & BLOCK_HAVE_DATA) && pblockindex->nTx > 0)
         throw JSONRPCError(RPC_INTERNAL_ERROR, "Block not available (pruned data)");
 
-    if(!ReadBlockFromDisk(block, pblockindex))
+    if(!ReadBlockFromDisk(block, pblockindex, false))
         throw JSONRPCError(RPC_INTERNAL_ERROR, "Can't read block from disk");
 
 
