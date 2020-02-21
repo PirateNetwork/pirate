@@ -15,7 +15,7 @@ using namespace libzcash;
 
 bool EnsureWalletIsAvailable(bool avoidException);
 
-UniValue getsaplingwitness(const UniValue& params, bool fHelp) {
+UniValue getsaplingwitness(const UniValue& params, bool fHelp,  const CPubKey& mypk) {
 
   if (!EnsureWalletIsAvailable(fHelp))
       return NullUniValue;
@@ -102,7 +102,7 @@ UniValue getsaplingwitness(const UniValue& params, bool fHelp) {
 }
 
 
-UniValue getsaplingwitnessatheight(const UniValue& params, bool fHelp) {
+UniValue getsaplingwitnessatheight(const UniValue& params, bool fHelp,  const CPubKey& mypk) {
 
   if (!EnsureWalletIsAvailable(fHelp))
       return NullUniValue;
@@ -224,7 +224,7 @@ UniValue getsaplingwitnessatheight(const UniValue& params, bool fHelp) {
 }
 
 
-UniValue getsaplingblocks(const UniValue& params, bool fHelp)
+UniValue getsaplingblocks(const UniValue& params, bool fHelp,  const CPubKey& mypk)
 {
     if (fHelp || params.size() != 2)
         throw runtime_error(
