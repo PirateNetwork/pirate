@@ -264,6 +264,7 @@ BITCOIN_CORE_H = \
   wallet/wallet.h \
   wallet/wallet_ismine.h \
   wallet/walletdb.h \
+  wallet/witness.h \ #CHMEX https://github.com/CryptoForge/Zero/commit/3fcbc026349738667cf480c3d1c9093a6d1fbea3
   zmq/zmqabstractnotifier.h \
   zmq/zmqconfig.h\
   zmq/zmqnotificationinterface.h \
@@ -399,6 +400,7 @@ libbitcoin_wallet_a_SOURCES = \
   wallet/wallet.cpp \
   wallet/wallet_ismine.cpp \
   wallet/walletdb.cpp \
+  wallet/witness.cpp \ #CHMEX https://github.com/CryptoForge/Zero/commit/3fcbc026349738667cf480c3d1c9093a6d1fbea3
   zcash/zip32.cpp \
   $(BITCOIN_CORE_H) \
   $(LIBZCASH_H)
