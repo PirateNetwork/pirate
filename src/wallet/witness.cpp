@@ -271,7 +271,7 @@ UniValue getsaplingblocks(const UniValue& params, bool fHelp,  const CPubKey& my
       if (fHavePruned && !(pblockindex->nStatus & BLOCK_HAVE_DATA) && pblockindex->nTx > 0)
           throw JSONRPCError(RPC_INTERNAL_ERROR, "Block not available (pruned data)");
 
-      if(!ReadBlockFromDisk(block, pblockindex))
+      if(!ReadBlockFromDisk(block, pblockindex, false))
           throw JSONRPCError(RPC_INTERNAL_ERROR, "Can't read block from disk");
 
       jsonblock.push_back(Pair("hash", block.GetHash().GetHex()));
