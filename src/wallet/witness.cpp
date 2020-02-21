@@ -276,7 +276,7 @@ UniValue getsaplingblocks(const UniValue& params, bool fHelp)
 
       jsonblock.push_back(Pair("hash", block.GetHash().GetHex()));
       jsonblock.push_back(Pair("previousblockhash", pblockindex->pprev->GetBlockHash().GetHex()));
-      jsonblock.push_back(Pair("height", pblockindex->nHeight));
+      jsonblock.push_back(Pair("height", pblockindex->GetHeight()));
       jsonblock.push_back(Pair("finalsaplingroot", block.hashFinalSaplingRoot.GetHex()));
 
       UniValue jsontxs(UniValue::VARR);
