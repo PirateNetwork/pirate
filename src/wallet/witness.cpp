@@ -53,7 +53,7 @@ UniValue getsaplingwitness(const UniValue& params, bool fHelp,  const CPubKey& m
       if (mi != mapBlockIndex.end() && (*mi).second) {
           CBlockIndex* pindex = (*mi).second;
           if (chainActive.Contains(pindex)) {
-              nHeight = pindex->nHeight;
+              nHeight = pindex->GetHeight();
           } else {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "transaction not found in valid block");
           }
@@ -140,7 +140,7 @@ UniValue getsaplingwitnessatheight(const UniValue& params, bool fHelp,  const CP
       if (mi != mapBlockIndex.end() && (*mi).second) {
           CBlockIndex* pindex = (*mi).second;
           if (chainActive.Contains(pindex)) {
-              nHeight = pindex->nHeight;
+              nHeight = pindex->GetHeight();
           } else {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "transaction not found in valid block");
           }
