@@ -90,7 +90,7 @@ cd komodo
 ```
 **pirate is experimental and a work-in-progress.** Use at your own risk.
 
-To reset the PirateChain blockchain change into the *~/.komodo/PIRATE* data directory and delete the corresponding files by running `rm -rf blocks chainstate debug.log komodostate db.log` and restart daemon
+To reset the PirateChain blockchain change into the `~/.komodo/PIRATE` data directory and delete the corresponding files by running `rm -rf blocks chainstate debug.log komodostate db.log` and restart daemon
 
 
 
