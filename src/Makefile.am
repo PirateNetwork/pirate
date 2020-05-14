@@ -266,6 +266,7 @@ BITCOIN_CORE_H = \
   policy/fees.h \
   pow.h \
   prevector.h \
+	span.h \
   primitives/block.h \
   primitives/transaction.h \
   primitives/nonce.h \
