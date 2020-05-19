@@ -354,7 +354,7 @@ public:
     }
 
     template<typename T>
-    CBaseDataStream& operator>>(T& obj)
+    CBaseDataStream& operator>>(T&& obj)
     {
         // Unserialize from this stream
         ::Unserialize(*this, obj);
