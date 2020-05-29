@@ -65,12 +65,12 @@ jobs:
         # flag for some CC tests transactions - so DO NOT USE THIS CI ARTIFACTS IN PRODUCTION!!!
         export CONFIGURE_FLAGS='CPPFLAGS=-DTESTMODE'
         ./zcutil/build-win-dtest.sh -j$(nproc)
-        zip --junk-paths komodod_win src/komodod.exe src/komodo-cli.exe
+        zip --junk-paths pirated_win src/komodod.exe src/komodo-cli.exe
     - name: Upload komodod.exe as artifact
       uses: actions/upload-artifact@v1
       with:
-        name: komodod_win
-        path: ./komodod_win.zip
+        name: pirated_win
+        path: ./pirated_win.zip
 
   windows-test-baserpc:
 
@@ -81,16 +81,16 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Download komodo_win.zip
+      - name: Download pirate_win.zip
         uses: actions/download-artifact@v1
         with:
-          name: komodod_win
+          name: pirated_win
 
       - name: Install deps (Base)
         shell: cmd
         run: |
-          move komodod_win\komodod_win.zip
-          7z e komodod_win.zip
+          move pirated_win\pirated_win.zip
+          7z e pirated_win.zip
           move komodod.exe src\
           python.exe -m pip install --upgrade setuptools
           python.exe -m pip install --upgrade pip
@@ -111,16 +111,16 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Download komodo_win.zip
+      - name: Download pirate_win.zip
         uses: actions/download-artifact@v1
         with:
-          name: komodod_win
+          name: pirated_win
 
       - name: Install deps (MainCC)
         shell: cmd
         run: |
-          move komodod_win\komodod_win.zip
-          7z e komodod_win.zip
+          move pirated_win\pirated_win.zip
+          7z e pirated_win.zip
           move komodod.exe src\
           python.exe -m pip install --upgrade setuptools
           python.exe -m pip install --upgrade pip
@@ -141,16 +141,16 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Download komodo_win.zip
+      - name: Download pirate_win.zip
         uses: actions/download-artifact@v1
         with:
-          name: komodod_win
+          name: pirated_win
 
       - name: Install deps (OraclesCC)
         shell: cmd
         run: |
-          move komodod_win\komodod_win.zip
-          7z e komodod_win.zip
+          move pirated_win\pirated_win.zip
+          7z e pirated_win.zip
           move komodod.exe src\
           python.exe -m pip install --upgrade setuptools
           python.exe -m pip install --upgrade pip
@@ -171,16 +171,16 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Download komodo_win.zip
+      - name: Download pirate_win.zip
         uses: actions/download-artifact@v1
         with:
-          name: komodod_win
+          name: pirated_win
 
       - name: Install deps (CC Heir)
         shell: cmd
         run: |
-          move komodod_win\komodod_win.zip
-          7z e komodod_win.zip
+          move pirated_win\pirated_win.zip
+          7z e pirated_win.zip
           move komodod.exe src\
           python.exe -m pip install --upgrade setuptools
           python.exe -m pip install --upgrade pip
@@ -201,16 +201,16 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Download komodo_win.zip
+      - name: Download pirate_win.zip
         uses: actions/download-artifact@v1
         with:
-          name: komodod_win
+          name: pirated_win
 
       - name: Install deps (ChannelsCC)
         shell: cmd
         run: |
-          move komodod_win\komodod_win.zip
-          7z e komodod_win.zip
+          move pirated_win\pirated_win.zip
+          7z e pirated_win.zip
           move komodod.exe src\
           python.exe -m pip install --upgrade setuptools
           python.exe -m pip install --upgrade pip

@@ -35,13 +35,13 @@ jobs:
           # flag for some CC tests transactions - so DO NOT USE THIS CI ARTIFACTS IN PRODUCTION!!!
           export CPATH=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/
           ./zcutil/build-mac-dtest.sh -j4
-          tar -czvf komodo-macos.tar.gz src/komodod src/komodo-cli
+          tar -czvf pirate-macos.tar.gz src/komodod src/komodo-cli
 
-      - name: Upload komodo-macos.tar.gz as artifact
+      - name: Upload pirate-macos.tar.gz as artifact
         uses: actions/upload-artifact@v1
         with:
-          name: komodo-macos
-          path: ./komodo-macos.tar.gz
+          name: pirate-macos
+          path: ./pirate-macos.tar.gz
 
   macos-test-dice-token-reards-faucet-cc:
 
@@ -58,16 +58,16 @@ jobs:
           python3 -m pip install setuptools wheel
           python3 -m pip install slick-bitcoinrpc pytest wget jsonschema
 
-      - name: Download komodo-macos.tar.gz
+      - name: Download pirate-macos.tar.gz
         uses: actions/download-artifact@v1
         with:
-          name: komodo-macos
+          name: pirate-macos
 
       - name: Test CC (MacOS)
         run: |
-          mv komodo-macos/komodo-macos.tar.gz .
+          mv pirate-macos/pirate-macos.tar.gz .
           mkdir -p src
-          tar xzvf komodo-macos.tar.gz
+          tar xzvf pirate-macos.tar.gz
           ./zcutil/fetch-params.sh
           cd qa/pytest_komodo
           ./ci_setup.sh "cc_modules/test_dice.py cc_modules/test_faucet.py cc_modules/test_token.py cc_modules/test_rewards.py"
@@ -86,16 +86,16 @@ jobs:
           brew install python3 curl
           python3 -m pip install setuptools wheel
           python3 -m pip install slick-bitcoinrpc pytest wget jsonschema
-      - name: Download komodo-macos.tar.gz
+      - name: Download pirate-macos.tar.gz
         uses: actions/download-artifact@v1
         with:
-          name: komodo-macos
+          name: pirate-macos
 
       - name: Oracles Test (macos)
         run: |
-          mv komodo-macos/komodo-macos.tar.gz .
+          mv pirate-macos/pirate-macos.tar.gz .
           mkdir -p src
-          tar xzvf komodo-macos.tar.gz
+          tar xzvf pirate-macos.tar.gz
           ./zcutil/fetch-params.sh
           cd qa/pytest_komodo
           ./ci_setup.sh cc_modules/test_oracles.py
@@ -114,16 +114,16 @@ jobs:
           brew install python3 curl
           python3 -m pip install setuptools wheel
           python3 -m pip install slick-bitcoinrpc pytest wget jsonschema
-      - name: Download komodo-macos.tar.gz
+      - name: Download pirate-macos.tar.gz
         uses: actions/download-artifact@v1
         with:
-          name: komodo-macos
+          name: pirate-macos
 
       - name: BasicRPC Test (macos)
         run: |
-          mv komodo-macos/komodo-macos.tar.gz .
+          mv pirate-macos/pirate-macos.tar.gz .
           mkdir -p src
-          tar xzvf komodo-macos.tar.gz
+          tar xzvf pirate-macos.tar.gz
           ./zcutil/fetch-params.sh
           cd qa/pytest_komodo
           ./ci_setup.sh basic
@@ -142,16 +142,16 @@ jobs:
           brew install python3 curl
           python3 -m pip install setuptools wheel
           python3 -m pip install slick-bitcoinrpc pytest wget jsonschema
-      - name: Download komodo-macos.tar.gz
+      - name: Download pirate-macos.tar.gz
         uses: actions/download-artifact@v1
         with:
-          name: komodo-macos
+          name: pirate-macos
 
       - name: Channels Test (macos)
         run: |
-          mv komodo-macos/komodo-macos.tar.gz .
+          mv pirate-macos/pirate-macos.tar.gz .
           mkdir -p src
-          tar xzvf komodo-macos.tar.gz
+          tar xzvf pirate-macos.tar.gz
           ./zcutil/fetch-params.sh
           cd qa/pytest_komodo
           ./ci_setup.sh cc_modules/test_channels.py
@@ -170,16 +170,16 @@ jobs:
           brew install python3 curl
           python3 -m pip install setuptools wheel
           python3 -m pip install slick-bitcoinrpc pytest wget jsonschema
-      - name: Download komodo-macos.tar.gz
+      - name: Download pirate-macos.tar.gz
         uses: actions/download-artifact@v1
         with:
-          name: komodo-macos
+          name: pirate-macos
 
       - name: Heir Test (macos)
         run: |
-          mv komodo-macos/komodo-macos.tar.gz .
+          mv pirate-macos/pirate-macos.tar.gz .
           mkdir -p src
-          tar xzvf komodo-macos.tar.gz
+          tar xzvf pirate-macos.tar.gz
           ./zcutil/fetch-params.sh
           cd qa/pytest_komodo
           ./ci_setup.sh cc_modules/test_heir.py
