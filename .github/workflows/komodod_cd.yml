@@ -50,26 +50,12 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           ./zcutil/build.sh -j$(nproc)
-          zip --junk-paths komodo-linux src/komodod src/komodo-cli
-      - name: Upload komodo-linux.zip as artifact
+          zip --junk-paths pirate-linux src/komodod src/komodo-cli
+      - name: Upload pirate-linux.zip as artifact
         uses: actions/upload-artifact@v1
         with:
-          name: komodo-linux
-          path: ./komodo-linux.zip
-
-      - name: Login to docker hub
-        uses: actions-hub/docker/login@master
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build container
-        run: docker build -f Dockerfile.release -t komodoofficial/komodo:cd_release_${{ steps.shortify_commit.outputs.sha_short }}_${{ steps.extract_branch.outputs.branch }} .
-
-      - name: Push to docker hub
-        uses: actions-hub/docker@master
-        with:
-          args: push komodoofficial/komodo:cd_release_${{ steps.shortify_commit.outputs.sha_short }}_${{ steps.extract_branch.outputs.branch }}
+          name: pirate-linux
+          path: ./pirate-linux.zip
 
   osx-build:
     name: OSX Build
@@ -91,12 +77,12 @@ jobs:
       - name: Build (macOS)
         run: |
           ./zcutil/build-mac.sh -j4
-          zip --junk-paths komodo-osx src/komodod src/komodo-cli
-      - name: Upload komodo-osx.zip as artifact
+          zip --junk-paths pirate-osx src/komodod src/komodo-cli
+      - name: Upload pirate-osx.zip as artifact
         uses: actions/upload-artifact@v1
         with:
-          name: komodo-osx
-          path: ./komodo-osx.zip
+          name: pirate-osx
+          path: ./pirate-osx.zip
 
   windows-build:
     name: Windows Build (mingw)
@@ -122,30 +108,30 @@ jobs:
       - name: Build (Windows)
         run: |
           ./zcutil/build-win.sh -j$(nproc)
-          zip --junk-paths komodo-win src/komodod.exe src/komodo-cli.exe
-      - name: Upload komodo-win.zip as artifact
+          zip --junk-paths pirate-win src/komodod.exe src/komodo-cli.exe
+      - name: Upload pirate-win.zip as artifact
         uses: actions/upload-artifact@v1
         with:
-          name: komodo-win
-          path: ./komodo-win.zip      
+          name: pirate-win
+          path: ./pirate-win.zip      
 
   publish-release:
       name: Publishing CD releases
       runs-on: ubuntu-latest
       needs: [linux-build, osx-build, windows-build]
       steps:
-        - name: Download komodo-linux.zip
+        - name: Download pirate-linux.zip
           uses: actions/download-artifact@v1
           with:
-            name: komodo-linux  
-        - name: Download komodo-osx.zip
+            name: pirate-linux  
+        - name: Download pirate-osx.zip
           uses: actions/download-artifact@v1
           with:
-            name: komodo-osx
-        - name: Download komodo-win.zip
+            name: pirate-osx
+        - name: Download pirate-win.zip
           uses: actions/download-artifact@v1
           with:
-            name: komodo-win
+            name: pirate-win
 
         - name: Extract branch name
           shell: bash
@@ -174,8 +160,8 @@ jobs:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           with:
             upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-            asset_path: komodo-linux/komodo-linux.zip
-            asset_name: komodo_${{ steps.shortify_commit.outputs.sha_short }}_${{ steps.extract_branch.outputs.branch }}_linux.zip
+            asset_path: pirate-linux/pirate-linux.zip
+            asset_name: pirate${{ steps.shortify_commit.outputs.sha_short }}_${{ steps.extract_branch.outputs.branch }}_linux.zip
             asset_content_type: application/zip
         - name: Upload OSX Release Asset
           id: upload-osx-release-asset 
@@ -184,8 +170,8 @@ jobs:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           with:
             upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-            asset_path: komodo-osx/komodo-osx.zip
-            asset_name: komodo_${{ steps.shortify_commit.outputs.sha_short }}_${{ steps.extract_branch.outputs.branch }}_osx.zip
+            asset_path: pirate-osx/pirate-osx.zip
+            asset_name: pirate${{ steps.shortify_commit.outputs.sha_short }}_${{ steps.extract_branch.outputs.branch }}_osx.zip
             asset_content_type: application/zip
         - name: Upload Windows Release Asset
           id: upload-windows-release-asset 
@@ -194,6 +180,6 @@ jobs:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           with:
             upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-            asset_path: komodo-win/komodo-win.zip
-            asset_name: komodo_${{ steps.shortify_commit.outputs.sha_short }}_${{ steps.extract_branch.outputs.branch }}_win.zip
+            asset_path: pirate-win/pirate-win.zip
+            asset_name: pirate${{ steps.shortify_commit.outputs.sha_short }}_${{ steps.extract_branch.outputs.branch }}_win.zip
             asset_content_type: application/zip

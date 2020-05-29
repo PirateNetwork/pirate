@@ -18,7 +18,7 @@ SEEDNODE=136.243.102.225
 # Full speed ahead
 KMD=${KOMODOD:-./komodod}
 $KMD -ac_name=$NAME                              \
-     -ac_supply=$SUPPLY                          \ 
+     -ac_supply=$SUPPLY                          \
      -ac_reward=$REWARD                          \
      -ac_halving=$HALVING                        \
      -ac_private=$PRIVATE                        \
