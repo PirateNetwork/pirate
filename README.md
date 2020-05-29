@@ -1,3 +1,4 @@
+![Pirate CD test releases](https://github.com/PirateNetwork/pirate/workflows/Pirate%20CD%20test%20releases/badge.svg)
 ![Pirate Logo](https://i.ibb.co/F7Dgnxy/Pirate-Logo-Wordmark-Gold.png "PirateChain Logo")
 
 
