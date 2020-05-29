@@ -179,6 +179,16 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "height_MoM", 1},
     { "calc_MoM", 2},
     { "migrate_completeimporttransaction", 1},
+
+    { "getsaplingwitness", 1},
+    { "getsaplingwitness", 2},
+    { "getsaplingwitnessatheight", 1},
+    { "getsaplingwitnessatheight", 2},
+    { "getsaplingwitnessatheight", 3},
+    { "getsaplingblocks", 0},
+    { "getsaplingblocks", 1},
+    { "getsaplingblocks", 2},
+
 };
 
 class CRPCConvertTable

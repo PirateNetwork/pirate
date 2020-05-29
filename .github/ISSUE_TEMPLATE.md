@@ -1,8 +1,8 @@
 <!--- Remove text and sections that do not apply -->
 
-This issue tracker is only for technical issues related to komodod
+This issue tracker is only for technical issues related to pirated
 
-General Komodo questions and/or support requests and are best directed to [Discord](https://komodoplatform.com/discord)
+General Pirate questions and/or support requests and are best directed to [Discord](https://discord.com/invite/92xSWTN)
 
 ### Describe the issue
 Please provide a general summary of the issue you're experiencing
@@ -32,9 +32,9 @@ Run `komodod --version` to find out
 - Compiler version (gcc -version):
 
 ### Any extra information that might be useful in the debugging process.
-This includes the relevant contents of `~/.komodo/debug.log`. You can paste raw text, attach the file directly in the issue or link to the text via a pastebin type site.
+This includes the relevant contents of `~/.komodo/PIRATE/debug.log`. You can paste raw text, attach the file directly in the issue or link to the text via a pastebin type site.
 Please also include any non-standard things you did during compilation (extra flags, dependency version changes etc.) if applicable.
 
 ### Do you have a backup of `~/.komodo` directory and/or take a VM snapshot?
-- Backing up / making a copy of the `~/.komodo` directory might help make the problem reproducible. Please redact appropriately.
+- Backing up / making a copy of the `~/.komodo/PIRATE` directory might help make the problem reproducible. Please redact appropriately.
 - Taking a VM snapshot is really helpful for interactively testing fixes

@@ -1340,7 +1340,7 @@ UniValue movecmd(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (!walletdb.TxnBegin())
         throw JSONRPCError(RPC_DATABASE_ERROR, "database error");
 
-    int64_t nNow = GetAdjustedTime();
+    int64_t nNow = GetTime();
 
     // Debit
     CAccountingEntry debit;
@@ -1511,7 +1511,7 @@ UniValue sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
                 throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, std::string("Invalid Komodo address or pubkey: ") + name_);
         }
         CScript scriptPubKey = GetScriptForDestination(dest);
-
+        
         CAmount nAmount = AmountFromValue(sendTo[i]);
         i++;
         if (nAmount <= 0)
@@ -4506,7 +4506,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    THROW_IF_SYNCING(KOMODO_INSYNC);
+    //THROW_IF_SYNCING(KOMODO_INSYNC);
 
     // Check that the from address is valid.
     auto fromaddress = params[0].get_str();
@@ -4818,7 +4818,7 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp, const CPubKey& myp
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    THROW_IF_SYNCING(KOMODO_INSYNC);
+    //THROW_IF_SYNCING(KOMODO_INSYNC);
 
     // Validate the from address
     auto fromaddress = params[0].get_str();

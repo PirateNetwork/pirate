@@ -56,7 +56,7 @@
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
-
+#include "wallet/asyncrpcoperation_saplingconsolidation.h"
 #endif
 #include <stdint.h>
 #include <stdio.h>
@@ -443,6 +443,13 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageGroup(_("Wallet options:"));
     strUsage += HelpMessageOpt("-disablewallet", _("Do not load the wallet and disable wallet RPC calls"));
     strUsage += HelpMessageOpt("-keypool=<n>", strprintf(_("Set key pool size to <n> (default: %u)"), 100));
+    strUsage += HelpMessageOpt("-consolidation", _("Enable auto Sapling note consolidation"));
+    strUsage += HelpMessageOpt("-consolidatesaplingaddress=<zaddr>", _("Specify Sapling Address to Consolidate. (default: all)"));
+    strUsage += HelpMessageOpt("-consolidationtxfee", strprintf(_("Fee amount in Satoshis used send consolidation transactions. (default %i)"), DEFAULT_CONSOLIDATION_FEE));
+    strUsage += HelpMessageOpt("-deletetx", _("Enable Old Transaction Deletion"));
+    strUsage += HelpMessageOpt("-deleteinterval", strprintf(_("Delete transaction every <n> blocks during inital block download (default: %i)"), DEFAULT_TX_DELETE_INTERVAL));
+    strUsage += HelpMessageOpt("-keeptxnum", strprintf(_("Keep the last <n> transactions (default: %i)"), DEFAULT_TX_RETENTION_LASTTX));
+    strUsage += HelpMessageOpt("-keeptxfornblocks", strprintf(_("Keep transactions for at least <n> blocks (default: %i)"), DEFAULT_TX_RETENTION_BLOCKS));
     if (showDebug)
         strUsage += HelpMessageOpt("-mintxfee=<amt>", strprintf("Fees (in %s/kB) smaller than this are considered zero fee for transaction creation (default: %s)",
             CURRENCY_UNIT, FormatMoney(CWallet::minTxFee.GetFeePerK())));
@@ -494,7 +501,7 @@ std::string HelpMessage(HelpMessageMode mode)
         strUsage += HelpMessageOpt("-stopafterblockimport", strprintf("Stop running after importing blocks from disk (default: %u)", 0));
         strUsage += HelpMessageOpt("-nuparams=hexBranchId:activationHeight", "Use given activation height for specified network upgrade (regtest-only)");
     }
-    string debugCategories = "addrman, alert, bench, coindb, db, estimatefee, http, libevent, lock, mempool, net, partitioncheck, pow, proxy, prune, "
+    string debugCategories = "addrman, alert, bench, coindb, db, deletetx, estimatefee, http, libevent, lock, mempool, net, partitioncheck, pow, proxy, prune, "
                              "rand, reindex, rpc, selectcoins, tor, zmq, zrpc, zrpcunsafe (implies zrpc)"; // Don't translate these
     strUsage += HelpMessageOpt("-debug=<category>", strprintf(_("Output debugging information (default: %u, supplying <category> is optional)"), 0) + ". " +
         _("If <category> is not supplied or if <category> = 1, output all debugging information.") + " " + _("<category> can be:") + " " + debugCategories + ".");
@@ -747,6 +754,70 @@ void ThreadNotifyRecentlyAdded()
 
         mempool.NotifyRecentlyAdded();
     }
+}
+
+/* declarations needed for ThreadUpdateKomodoInternals */
+void komodo_passport_iteration();
+void komodo_cbopretupdate(int32_t forceflag);
+
+void ThreadUpdateKomodoInternals() {
+    RenameThread("int-updater");
+
+    // boost::signals2::connection c = uiInterface.NotifyBlockTip.connect(
+    //     [](const uint256& hashNewTip) mutable {
+    //         CBlockIndex* pblockindex = mapBlockIndex[hashNewTip];
+    //         std::cerr << __FUNCTION__ << ": NotifyBlockTip " << hashNewTip.ToString() << " - " << pblockindex->GetHeight() << std::endl;
+    //     }
+    //     );
+
+    int fireDelaySeconds = 10;
+
+    try {
+        while (true) {
+
+            if ( ASSETCHAINS_SYMBOL[0] == 0 )
+                fireDelaySeconds = 10;
+            else
+                fireDelaySeconds = ASSETCHAINS_BLOCKTIME/5 + 1;
+
+            // Run the updater on an integer fireDelaySeconds seconds in the steady clock.
+            auto now = std::chrono::steady_clock::now().time_since_epoch();
+            auto nextFire = std::chrono::duration_cast<std::chrono::seconds>(
+                now + std::chrono::seconds(fireDelaySeconds));
+            std::this_thread::sleep_until(
+                std::chrono::time_point<std::chrono::steady_clock>(nextFire));
+
+            boost::this_thread::interruption_point();
+
+            if ( ASSETCHAINS_SYMBOL[0] == 0 )
+                {
+                    if ( KOMODO_NSPV_FULLNODE ) {
+                        auto start = std::chrono::high_resolution_clock::now();
+                        komodo_passport_iteration(); // call komodo_interestsum() inside (possible locks)
+                        auto finish = std::chrono::high_resolution_clock::now();
+                        std::chrono::duration<double, std::milli> elapsed = finish - start;
+                        // std::cerr << DateTimeStrFormat("%Y-%m-%d %H:%M:%S", GetTime()) << " " << __FUNCTION__ << ": komodo_passport_iteration -> Elapsed Time: " << elapsed.count() << " ms" << std::endl;
+                    }
+                }
+            else
+                {
+                    if ( ASSETCHAINS_CBOPRET != 0 )
+                        komodo_cbopretupdate(0);
+                }
+        }
+    }
+    catch (const boost::thread_interrupted&) {
+        // std::cerr << "ThreadUpdateKomodoInternals() interrupted" << std::endl;
+        // c.disconnect();
+        throw;
+    }
+    catch (const std::exception& e) {
+        PrintExceptionContinue(&e, "ThreadUpdateKomodoInternals()");
+    }
+    catch (...) {
+        PrintExceptionContinue(NULL, "ThreadUpdateKomodoInternals()");
+    }
+
 }
 
 /** Sanity checks
@@ -1528,32 +1599,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     fReindex = GetBoolArg("-reindex", false);
 
-    // Upgrading to 0.8; hard-link the old blknnnn.dat files into /blocks/
-    boost::filesystem::path blocksDir = GetDataDir() / "blocks";
-    if (!boost::filesystem::exists(blocksDir))
-    {
-        boost::filesystem::create_directories(blocksDir);
-        bool linked = false;
-        for (unsigned int i = 1; i < 10000; i++) {
-            boost::filesystem::path source = GetDataDir() / strprintf("blk%04u.dat", i);
-            if (!boost::filesystem::exists(source)) break;
-            boost::filesystem::path dest = blocksDir / strprintf("blk%05u.dat", i-1);
-            try {
-                boost::filesystem::create_hard_link(source, dest);
-                LogPrintf("Hardlinked %s -> %s\n", source.string(), dest.string());
-                linked = true;
-            } catch (const boost::filesystem::filesystem_error& e) {
-                // Note: hardlink creation failing is not a disaster, it just means
-                // blocks will get re-downloaded from peers.
-                LogPrintf("Error hardlinking blk%04u.dat: %s\n", i, e.what());
-                break;
-            }
-        }
-        if (linked)
-        {
-            fReindex = true;
-        }
-    }
+    boost::filesystem::create_directories(GetDataDir() / "blocks");
 
     // block tree db settings
     int dbMaxOpenFiles = GetArg("-dbmaxopenfiles", DEFAULT_DB_MAX_OPEN_FILES);
@@ -1824,6 +1870,42 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             pwalletMain->GenerateNewSeed();
         }
 
+        //Set Sapling Consolidation
+        pwalletMain->fSaplingConsolidationEnabled = GetBoolArg("-consolidation", false);
+        fConsolidationTxFee  = GetArg("-consolidationtxfee", DEFAULT_CONSOLIDATION_FEE);
+        fConsolidationMapUsed = !mapMultiArgs["-consolidatesaplingaddress"].empty();
+
+        //Validate Sapling Addresses
+        vector<string>& vaddresses = mapMultiArgs["-consolidatesaplingaddress"];
+        for (int i = 0; i < vaddresses.size(); i++) {
+            LogPrintf("Consolidating Sapling Address: %s\n", vaddresses[i]);
+            auto zAddress = DecodePaymentAddress(vaddresses[i]);
+            if (!IsValidPaymentAddress(zAddress)) {
+                return InitError("Invalid consolidation address");
+            }
+        }
+
+        //Set Transaction Deletion Options
+        fTxDeleteEnabled = GetBoolArg("-deletetx", false);
+        fTxConflictDeleteEnabled = GetBoolArg("-deleteconflicttx", true);
+
+        fDeleteInterval = GetArg("-deleteinterval", DEFAULT_TX_DELETE_INTERVAL);
+        if (fDeleteInterval < 1)
+          return InitError("deleteinterval must be greater than 0");
+
+        fKeepLastNTransactions = GetArg("-keeptxnum", DEFAULT_TX_RETENTION_LASTTX);
+        if (fKeepLastNTransactions < 1)
+          return InitError("keeptxnum must be greater than 0");
+
+        fDeleteTransactionsAfterNBlocks = GetArg("-keeptxfornblocks", DEFAULT_TX_RETENTION_BLOCKS);
+        if (fDeleteTransactionsAfterNBlocks < 1)
+          return InitError("keeptxfornblocks must be greater than 0");
+
+        if (fDeleteTransactionsAfterNBlocks < MAX_REORG_LENGTH + 1 ) {
+          LogPrintf("keeptxfornblock is less the MAX_REORG_LENGTH, Setting to %i\n", MAX_REORG_LENGTH + 1);
+          fDeleteTransactionsAfterNBlocks = MAX_REORG_LENGTH + 1;
+        }
+
         if (fFirstRun)
         {
             // Create new keyUser and set as default key
@@ -1991,6 +2073,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     // Start the thread that notifies listeners of transactions that have been
     // recently added to the mempool.
     threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "txnotify", &ThreadNotifyRecentlyAdded));
+
+    // Start the thread that updates komodo internal structures
+    threadGroup.create_thread(&ThreadUpdateKomodoInternals);
 
     if (GetBoolArg("-listenonion", DEFAULT_LISTEN_ONION))
         StartTorControl(threadGroup, scheduler);

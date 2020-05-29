@@ -1210,6 +1210,11 @@ bool BackupWallet(const CWallet& wallet, const string& strDest)
     return false;
 }
 
+bool CWalletDB::Compact(CDBEnv& dbenv, const std::string& strFile)
+{
+  bool fSuccess = dbenv.Compact(strFile);
+  return fSuccess;
+}
 //
 // Try to (very carefully!) recover wallet.dat if there is a problem.
 //

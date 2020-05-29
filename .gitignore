@@ -6,7 +6,7 @@ src/zcash-cli
 src/zcash-gtest
 src/zcash-tx
 src/test/test_bitcoin
-
+diffs
 *zcashTest.pk
 *zcashTest.vk
 
@@ -156,3 +156,10 @@ src/cc/rogue/confdefs.h
 src/cc/rogue/x64
 
 src/cc/dapps/a.out
+
+Makefile.in
+configure
+doc/man/Makefile.in
+src/Makefile.in
+src/cc/customcc.so
+src/libcc.so
