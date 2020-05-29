@@ -6,8 +6,6 @@ name: Pirate CD test releases
 on:
   push:
     branches:
-    - beta
-    - dev
     - master
 
 
@@ -150,7 +148,6 @@ jobs:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           with:
             tag_name: cd_release_${{ steps.shortify_commit.outputs.sha_short }}_${{ steps.extract_branch.outputs.branch }}
-            target_commitish: ${{ steps.shortify_commit.outputs.sha_short }}
             release_name: CD Release ${{ steps.shortify_commit.outputs.sha_short }} ${{ steps.extract_branch.outputs.branch }}
             draft: false
             prerelease: true
