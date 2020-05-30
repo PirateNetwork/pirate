@@ -38,7 +38,7 @@ void RegisterRawTransactionRPCCommands(CRPCTable &tableRPC);
 /** Register test transaction RPC commands */
 void RegisterTesttransactionsRPCCommands(CRPCTable &tableRPC);
 
-/** CHMEX https://github.com/CryptoForge/Zero/commit/3fcbc026349738667cf480c3d1c9093a6d1fbea3 */
+
 void RegisterZeroExperimentalRPCCommands(CRPCTable &tableRPC);
 
 static inline void RegisterAllCoreRPCCommands(CRPCTable &tableRPC)
@@ -48,7 +48,7 @@ static inline void RegisterAllCoreRPCCommands(CRPCTable &tableRPC)
     RegisterMiscRPCCommands(tableRPC);
     RegisterMiningRPCCommands(tableRPC);
     RegisterRawTransactionRPCCommands(tableRPC);
-/** CHMEX https://github.com/CryptoForge/Zero/commit/3fcbc026349738667cf480c3d1c9093a6d1fbea3 */
+
     RegisterZeroExperimentalRPCCommands(tableRPC);
 
 #ifdef TESTMODE

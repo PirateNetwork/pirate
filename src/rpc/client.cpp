@@ -179,7 +179,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "height_MoM", 1},
     { "calc_MoM", 2},
     { "migrate_completeimporttransaction", 1},
-//CHMEX added https://github.com/CryptoForge/Zero/commit/3fcbc026349738667cf480c3d1c9093a6d1fbea3
+
     { "getsaplingwitness", 1},
     { "getsaplingwitness", 2},
     { "getsaplingwitnessatheight", 1},
@@ -188,7 +188,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getsaplingblocks", 0},
     { "getsaplingblocks", 1},
     { "getsaplingblocks", 2},
-// CHMEX END https://github.com/CryptoForge/Zero/commit/3fcbc026349738667cf480c3d1c9093a6d1fbea3
+
 };
 
 class CRPCConvertTable
