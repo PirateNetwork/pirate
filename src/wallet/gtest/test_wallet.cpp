@@ -371,8 +371,8 @@ TEST(WalletTests, SetSaplingNoteAddrsInCWalletTx) {
     auto ivk = fvk.in_viewing_key();
     auto pk = sk.DefaultAddress();
 
-    libzcash::SaplingNote note(pk, 50000);
-    auto cm = note.cm().get();
+    libzcash::SaplingNote note(pk, 50000, 0x01);
+    auto cm = note.cmu().get();
     SaplingMerkleTree tree;
     tree.append(cm);
     auto anchor = tree.root();
@@ -687,8 +687,8 @@ TEST(WalletTests, GetConflictedSaplingNotes) {
     ASSERT_TRUE(wallet.HaveSaplingSpendingKey(fvk));
 
     // Generate note A
-    libzcash::SaplingNote note(pk, 50000);
-    auto cm = note.cm().get();
+    libzcash::SaplingNote note(pk, 50000, 0x01);
+    auto cm = note.cmu().get();
     SaplingMerkleTree saplingTree;
     saplingTree.append(cm);
     auto anchor = saplingTree.root();
@@ -1085,8 +1085,8 @@ TEST(WalletTests, SpentSaplingNoteIsFromMe) {
     auto pk = sk.DefaultAddress();
 
     // Generate Sapling note A
-    libzcash::SaplingNote note(pk, 50000);
-    auto cm = note.cm().get();
+    libzcash::SaplingNote note(pk, 50000, 0x01);
+    auto cm = note.cmu().get();
     SaplingMerkleTree saplingTree;
     saplingTree.append(cm);
     auto anchor = saplingTree.root();

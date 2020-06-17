@@ -20,6 +20,78 @@ SpendDescriptionInfo::SpendDescriptionInfo(
     librustzcash_sapling_generate_r(alpha.begin());
 }
 
+boost::optional<OutputDescription> OutputDescriptionInfo::Build(void* ctx) {
+    auto cmu = this->note.cmu();
+    if (!cmu) {
+        return boost::none;
+    }
+
+    libzcash::SaplingNotePlaintext notePlaintext(this->note, this->memo);
+
+    auto res = notePlaintext.encrypt(this->note.pk_d);
+    if (!res) {
+        return boost::none;
+    }
+    auto enc = res.get();
+    auto encryptor = enc.second;
+
+    libzcash::SaplingPaymentAddress address(this->note.d, this->note.pk_d);
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << address;
+    std::vector<unsigned char> addressBytes(ss.begin(), ss.end());
+
+    OutputDescription odesc;
+    uint256 rcm = this->note.rcm();
+    if (!librustzcash_sapling_output_proof(
+            ctx,
+            encryptor.get_esk().begin(),
+            addressBytes.data(),
+            rcm.begin(),
+            this->note.value(),
+            odesc.cv.begin(),
+            odesc.zkproof.begin())) {
+        return boost::none;
+    }
+
+    odesc.cmu = *cmu;
+    odesc.ephemeralKey = encryptor.get_epk();
+    odesc.encCiphertext = enc.first;
+
+    libzcash::SaplingOutgoingPlaintext outPlaintext(this->note.pk_d, encryptor.get_esk());
+    odesc.outCiphertext = outPlaintext.encrypt(
+        this->ovk,
+        odesc.cv,
+        odesc.cmu,
+        encryptor);
+
+    return odesc;
+}
+
+TransactionBuilderResult::TransactionBuilderResult(const CTransaction& tx) : maybeTx(tx) {}
+
+TransactionBuilderResult::TransactionBuilderResult(const std::string& error) : maybeError(error) {}
+
+bool TransactionBuilderResult::IsTx() { return maybeTx != boost::none; }
+
+bool TransactionBuilderResult::IsError() { return maybeError != boost::none; }
+
+CTransaction TransactionBuilderResult::GetTxOrThrow() {
+    if (maybeTx) {
+        return maybeTx.get();
+    } else {
+        throw JSONRPCError(RPC_WALLET_ERROR, "Failed to build transaction: " + GetError());
+    }
+}
+
+std::string TransactionBuilderResult::GetError() {
+    if (maybeError) {
+        return maybeError.get();
+    } else {
+        // This can only happen if isTx() is true in which case we should not call getError()
+        throw std::runtime_error("getError() was called in TransactionBuilderResult, but the result was not initialized as an error.");
+    }
+}
+
 TransactionBuilder::TransactionBuilder(
     const Consensus::Params& consensusParams,
     int nHeight,
@@ -52,7 +124,12 @@ void TransactionBuilder::AddSaplingOutput(
     CAmount value,
     std::array<unsigned char, ZC_MEMO_SIZE> memo)
 {
-    auto note = libzcash::SaplingNote(to, value);
+    // Sanity check: cannot add Sapling output to pre-Sapling transaction
+    if (mtx.nVersion < SAPLING_TX_VERSION) {
+        throw std::runtime_error("TransactionBuilder cannot add Sapling output to pre-Sapling transaction");
+    }
+
+    auto note = libzcash::SaplingNote(to, value, 0x01); // TODO
     outputs.emplace_back(ovk, note, memo);
     mtx.valueBalance -= value;
 }
@@ -184,12 +261,13 @@ boost::optional<CTransaction> TransactionBuilder::Build()
         std::vector<unsigned char> witness(ss.begin(), ss.end());
 
         SpendDescription sdesc;
+        uint256 rcm = spend.note.rcm();
         if (!librustzcash_sapling_spend_proof(
                 ctx,
                 spend.expsk.full_viewing_key().ak.begin(),
                 spend.expsk.nsk.begin(),
                 spend.note.d.data(),
-                spend.note.r.begin(),
+                rcm.begin(),
                 spend.alpha.begin(),
                 spend.note.value(),
                 spend.anchor.begin(),
@@ -208,47 +286,19 @@ boost::optional<CTransaction> TransactionBuilder::Build()
 
     // Create Sapling OutputDescriptions
     for (auto output : outputs) {
-        auto cm = output.note.cm();
-        if (!cm) {
+        // Check this out here as well to provide better logging.
+        if (!output.note.cmu()) {
             librustzcash_sapling_proving_ctx_free(ctx);
-            return boost::none;
+            return TransactionBuilderResult("Output is invalid");
         }
 
-        libzcash::SaplingNotePlaintext notePlaintext(output.note, output.memo);
-
-        auto res = notePlaintext.encrypt(output.note.pk_d);
-        if (!res) {
+        auto odesc = output.Build(ctx);
+        if (!odesc) {
             librustzcash_sapling_proving_ctx_free(ctx);
-            return boost::none;
-        }
-        auto enc = res.get();
-        auto encryptor = enc.second;
-
-        OutputDescription odesc;
-        if (!librustzcash_sapling_output_proof(
-                ctx,
-                encryptor.get_esk().begin(),
-                output.note.d.data(),
-                output.note.pk_d.begin(),
-                output.note.r.begin(),
-                output.note.value(),
-                odesc.cv.begin(),
-                odesc.zkproof.begin())) {
-            librustzcash_sapling_proving_ctx_free(ctx);
-            return boost::none;
+            return TransactionBuilderResult("Failed to create output description");
         }
 
-        odesc.cm = *cm;
-        odesc.ephemeralKey = encryptor.get_epk();
-        odesc.encCiphertext = enc.first;
-
-        libzcash::SaplingOutgoingPlaintext outPlaintext(output.note.pk_d, encryptor.get_esk());
-        odesc.outCiphertext = outPlaintext.encrypt(
-            output.ovk,
-            odesc.cv,
-            odesc.cm,
-            encryptor);
-        mtx.vShieldedOutput.push_back(odesc);
+        mtx.vShieldedOutput.push_back(odesc.get());
     }
 
     // add op_return if there is one to add
