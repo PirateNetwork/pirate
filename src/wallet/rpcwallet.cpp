@@ -4285,8 +4285,9 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp, const CPubKey& my
         auto op = res->second;
         auto wtxPrev = pwalletMain->mapWallet.at(op.hash);
 
-        // TODO: decide which height to use here instead of wtxPrev.nExpiryHeight
-        auto decrypted = wtxPrev.DecryptSaplingNote(Params().GetConsensus(), wtxPrev.nExpiryHeight, op).get();
+        // We don't need to check the leadbyte here: if wtx exists in
+        // the wallet, it must have already passed the leadbyte check
+        auto decrypted = wtxPrev.DecryptSaplingNoteWithoutLeadByteCheck(op).get();
         auto notePt = decrypted.first;
         auto pa = decrypted.second;
 
@@ -4314,16 +4315,16 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp, const CPubKey& my
         SaplingPaymentAddress pa;
         bool isRecovered;
 
-        // TODO: decide which height to use here instead of wtx.nExpiryHeight
-        auto decrypted = wtx.DecryptSaplingNote(Params().GetConsensus(), wtx.nExpiryHeight, op);
+        // We don't need to check the leadbyte here: if wtx exists in
+        // the wallet, it must have already passed the leadbyte check
+        auto decrypted = wtx.DecryptSaplingNoteWithoutLeadByteCheck(op);
         if (decrypted) {
             notePt = decrypted->first;
             pa = decrypted->second;
             isRecovered = false;
         } else {
             // Try recovering the output
-            // TODO: decide which height to use here instead of wtxPrev.nExpiryHeight
-            auto recovered = wtx.RecoverSaplingNote(Params().GetConsensus(), wtx.nExpiryHeight, op, ovks);
+            auto recovered = wtx.RecoverSaplingNoteWithoutLeadByteCheck(op, ovks);
             if (recovered) {
                 notePt = recovered->first;
                 pa = recovered->second;
