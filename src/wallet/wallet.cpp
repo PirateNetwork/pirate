@@ -2576,7 +2576,7 @@ boost::optional<std::pair<
 
     if (!optDeserialized) {
         // The transaction would not have entered the wallet unless
-        // its plaintest had been succesfully decrypted previously.
+        // its plaintext had been successfully decrypted previously.
         assert(false);
     }
 
@@ -2651,7 +2651,7 @@ boost::optional<std::pair<
 
         if (!optDeserialized) {
             // The transaction would not have entered the wallet unless
-            // its plaintest had been succesfully decrypted previously.
+            // its plaintext had been successfully decrypted previously.
             assert(false);
         }
 
@@ -3886,7 +3886,7 @@ bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wt
     wtxNew.BindWallet(this);
     int nextBlockHeight = chainActive.Height() + 1;
     CMutableTransaction txNew = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nextBlockHeight);
-    
+
     //if ((uint32_t)chainActive.LastTip()->nTime < ASSETCHAINS_STAKED_HF_TIMESTAMP)
     if ( !komodo_hardfork_active((uint32_t)chainActive.LastTip()->nTime) )
         txNew.nLockTime = (uint32_t)chainActive.LastTip()->nTime + 1; // set to a time close to now
@@ -5219,7 +5219,7 @@ void CWallet::GetFilteredNotes(
 
             if (!optDeserialized) {
                 // The transaction would not have entered the wallet unless
-                // its plaintest had been succesfully decrypted previously.
+                // its plaintext had been successfully decrypted previously.
                 assert(false);
             }
             // We don't need to check the leadbyte here: if wtx exists in
