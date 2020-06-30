@@ -1761,7 +1761,7 @@ bool CWallet::UpdatedNoteData(const CWalletTx& wtxIn, CWalletTx& wtx)
  * pblock is optional, but should be provided if the transaction is known to be in a block.
  * If fUpdate is true, existing transactions will be updated.
  */
-bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate)
+bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, const CBlockIndex* pindex, bool fUpdate)
 {
     {
         AssertLockHeld(cs_wallet);
@@ -1770,7 +1770,15 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
         bool fExisted = mapWallet.count(tx.GetHash()) != 0;
         if (fExisted && !fUpdate) return false;
         auto sproutNoteData = FindMySproutNotes(tx);
-        auto saplingNoteDataAndAddressesToAdd = FindMySaplingNotes(tx, chainActive.Height());
+        int height;
+        if (pblock) {
+            height = pindex->nHeight;
+        } else {
+            // assume tx is in mempool
+            LOCK(cs_main);
+            height = chainActive.Height();
+        }
+        auto saplingNoteDataAndAddressesToAdd = FindMySaplingNotes(tx, height);
         auto saplingNoteData = saplingNoteDataAndAddressesToAdd.first;
         auto addressesToAdd = saplingNoteDataAndAddressesToAdd.second;
         for (const auto &addressToAdd : addressesToAdd) {
@@ -1846,10 +1854,10 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
     return false;
 }
 
-void CWallet::SyncTransaction(const CTransaction& tx, const CBlock* pblock)
+void CWallet::SyncTransaction(const CTransaction& tx, const CBlock* pblock, const CBlockIndex* pindex)
 {
     LOCK(cs_wallet);
-    if (!AddToWalletIfInvolvingMe(tx, pblock, true))
+    if (!AddToWalletIfInvolvingMe(tx, pblock, pindex, true))
         return; // Not one of ours
 
     MarkAffectedTransactionsDirty(tx);
@@ -2975,7 +2983,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
             ReadBlockFromDisk(block, pindex,1);
             BOOST_FOREACH(CTransaction& tx, block.vtx)
             {
-                if (AddToWalletIfInvolvingMe(tx, &block, fUpdate)) {
+                if (AddToWalletIfInvolvingMe(tx, &block, pindex, fUpdate)) {
                     myTxHashes.push_back(tx.GetHash());
                     ret++;
                 }
