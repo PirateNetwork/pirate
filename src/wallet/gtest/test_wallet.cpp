@@ -365,10 +365,10 @@ TEST(WalletTests, SetSaplingNoteAddrsInCWalletTx) {
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_CANOPY, canopyActivationHeight);
     auto consensusParams = Params().GetConsensus();
 
-    bool is_zip_212[] = {false, true};
+    std::vector<libzcash::Zip212Enabled> zip_212_enabled = {libzcash::Zip212Enabled::BeforeZip212, libzcash::Zip212Enabled::AfterZip212};
     int builderHeights[] = {saplingActivationHeight, canopyActivationHeight};
 
-    for (int ver = 0; ver < sizeof(is_zip_212); ver++) {
+    for (int ver = 0; ver < zip_212_enabled.size(); ver++) {
         TestWallet wallet;
         LOCK(wallet.cs_wallet);
 
@@ -378,7 +378,7 @@ TEST(WalletTests, SetSaplingNoteAddrsInCWalletTx) {
         auto ivk = fvk.in_viewing_key();
         auto pk = sk.DefaultAddress();
 
-        libzcash::SaplingNote note(pk, 50000, is_zip_212[ver]);
+        libzcash::SaplingNote note(pk, 50000, zip_212_enabled[ver]);
         auto cm = note.cmu().get();
         SaplingMerkleTree tree;
         tree.append(cm);
@@ -682,10 +682,10 @@ TEST(WalletTests, GetConflictedSaplingNotes) {
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_CANOPY, canopyActivationHeight);
     auto consensusParams = Params().GetConsensus();
 
-    bool is_zip_212[] = {false, true};
+    std::vector<libzcash::Zip212Enabled> zip_212_enabled = {libzcash::Zip212Enabled::BeforeZip212, libzcash::Zip212Enabled::AfterZip212};
     int builderHeights[] = {saplingActivationHeight, canopyActivationHeight};
 
-    for (int ver = 0; ver < sizeof(is_zip_212); ver++) {
+    for (int ver = 0; ver < zip_212_enabled.size(); ver++) {
         TestWallet wallet;
         LOCK2(cs_main, wallet.cs_wallet);
 
@@ -700,7 +700,7 @@ TEST(WalletTests, GetConflictedSaplingNotes) {
         ASSERT_TRUE(wallet.HaveSaplingSpendingKey(extfvk));
 
         // Generate note A
-        libzcash::SaplingNote note(pk, 50000, is_zip_212[ver]);
+        libzcash::SaplingNote note(pk, 50000, zip_212_enabled[ver]);
         auto cm = note.cmu().get();
         SaplingMerkleTree saplingTree;
         saplingTree.append(cm);
@@ -1087,10 +1087,10 @@ TEST(WalletTests, SpentSaplingNoteIsFromMe) {
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_CANOPY, canopyActivationHeight);
     auto consensusParams = Params().GetConsensus();
 
-    bool is_zip_212[] = {false, true};
+    std::vector<libzcash::Zip212Enabled> zip_212_enabled = {libzcash::Zip212Enabled::BeforeZip212, libzcash::Zip212Enabled::AfterZip212};
     int builderHeights[] = {saplingActivationHeight, canopyActivationHeight};
 
-    for (int ver = 0; ver < sizeof(is_zip_212); ver++) {
+    for (int ver = 0; ver < zip_212_enabled.size(); ver++) {
         TestWallet wallet;
         LOCK2(cs_main, wallet.cs_wallet);
 
@@ -1102,7 +1102,7 @@ TEST(WalletTests, SpentSaplingNoteIsFromMe) {
         auto pk = sk.DefaultAddress();
 
         // Generate Sapling note A
-        libzcash::SaplingNote note(pk, 50000, is_zip_212[ver]);
+        libzcash::SaplingNote note(pk, 50000, zip_212_enabled[ver]);
         auto cm = note.cmu().get();
         SaplingMerkleTree saplingTree;
         saplingTree.append(cm);
