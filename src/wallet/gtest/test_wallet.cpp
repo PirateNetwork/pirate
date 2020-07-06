@@ -357,18 +357,14 @@ TEST(WalletTests, SetSproutNoteAddrsInCWalletTx) {
 
 TEST(WalletTests, SetSaplingNoteAddrsInCWalletTx) {
     SelectParams(CBaseChainParams::REGTEST);
-    int overwinterActivationHeight = 5;
-    int saplingActivationHeight = 30;
-    int canopyActivationHeight = 70;
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, overwinterActivationHeight);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, saplingActivationHeight);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_CANOPY, canopyActivationHeight);
-    auto consensusParams = Params().GetConsensus();
 
     std::vector<libzcash::Zip212Enabled> zip_212_enabled = {libzcash::Zip212Enabled::BeforeZip212, libzcash::Zip212Enabled::AfterZip212};
-    int builderHeights[] = {saplingActivationHeight, canopyActivationHeight};
+    const Consensus::Params& (*activations [])() = {RegtestActivateSapling, RegtestActivateCanopy};
+    void (*deactivations [])() = {RegtestDeactivateSapling, RegtestDeactivateCanopy};
 
     for (int ver = 0; ver < zip_212_enabled.size(); ver++) {
+        auto consensusParams = (*activations[ver])();
+
         TestWallet wallet;
         LOCK(wallet.cs_wallet);
 
@@ -389,7 +385,7 @@ TEST(WalletTests, SetSaplingNoteAddrsInCWalletTx) {
         ASSERT_TRUE(nf);
         uint256 nullifier = nf.get();
 
-        auto builder = TransactionBuilder(consensusParams, builderHeights[ver]);
+        auto builder = TransactionBuilder(consensusParams, 1);
         builder.AddSaplingSpend(expsk, note, anchor, witness);
         builder.AddSaplingOutput(fvk.ovk, pk, 50000, {});
         builder.SetFee(0);
@@ -416,11 +412,9 @@ TEST(WalletTests, SetSaplingNoteAddrsInCWalletTx) {
         EXPECT_EQ(nullifier, wtx.mapSaplingNoteData[op].nullifier);
         EXPECT_EQ(nd.witnessHeight, wtx.mapSaplingNoteData[op].witnessHeight);
         EXPECT_TRUE(witness == wtx.mapSaplingNoteData[op].witnesses.front());
-    }
 
-    // Revert to default
-    RegtestDeactivateCanopy();
-    RegtestDeactivateSapling();
+        (*deactivations[ver])();
+    }
 }
 
 TEST(WalletTests, SetSproutInvalidNoteAddrsInCWalletTx) {
@@ -674,18 +668,14 @@ TEST(WalletTests, GetConflictedSproutNotes) {
 // Generate note A and spend to create note B, from which we spend to create two conflicting transactions
 TEST(WalletTests, GetConflictedSaplingNotes) {
     SelectParams(CBaseChainParams::REGTEST);
-    int overwinterActivationHeight = 5;
-    int saplingActivationHeight = 30;
-    int canopyActivationHeight = 70;
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, overwinterActivationHeight);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, saplingActivationHeight);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_CANOPY, canopyActivationHeight);
-    auto consensusParams = Params().GetConsensus();
 
     std::vector<libzcash::Zip212Enabled> zip_212_enabled = {libzcash::Zip212Enabled::BeforeZip212, libzcash::Zip212Enabled::AfterZip212};
-    int builderHeights[] = {saplingActivationHeight, canopyActivationHeight};
+    const Consensus::Params& (*activations [])() = {RegtestActivateSapling, RegtestActivateCanopy};
+    void (*deactivations [])() = {RegtestDeactivateSapling, RegtestDeactivateCanopy};
 
     for (int ver = 0; ver < zip_212_enabled.size(); ver++) {
+        auto consensusParams = (*activations[ver])();
+
         TestWallet wallet;
         LOCK2(cs_main, wallet.cs_wallet);
 
@@ -708,7 +698,7 @@ TEST(WalletTests, GetConflictedSaplingNotes) {
         auto witness = saplingTree.witness();
 
         // Generate tx to create output note B
-        auto builder = TransactionBuilder(consensusParams, builderHeights[ver]);
+        auto builder = TransactionBuilder(consensusParams, 1);
         builder.AddSaplingSpend(expsk, note, anchor, witness);
         builder.AddSaplingOutput(extfvk.fvk.ovk, pk, 35000, {});
         auto tx = builder.Build().GetTxOrThrow();
@@ -728,7 +718,7 @@ TEST(WalletTests, GetConflictedSaplingNotes) {
         EXPECT_EQ(0, chainActive.Height());
 
         // Simulate SyncTransaction which calls AddToWalletIfInvolvingMe
-        auto saplingNoteData = wallet.FindMySaplingNotes(wtx,  builderHeights[ver]).first;
+        auto saplingNoteData = wallet.FindMySaplingNotes(wtx,  1).first;
         ASSERT_TRUE(saplingNoteData.size() > 0);
         wtx.SetSaplingNoteData(saplingNoteData);
         wtx.SetMerkleBranch(block);
@@ -764,13 +754,13 @@ TEST(WalletTests, GetConflictedSaplingNotes) {
         anchor = saplingTree.root();
 
         // Create transaction to spend note B
-        auto builder2 = TransactionBuilder(consensusParams, builderHeights[ver] + 1);
+        auto builder2 = TransactionBuilder(consensusParams, 2);
         builder2.AddSaplingSpend(expsk, note2, anchor, spend_note_witness);
         builder2.AddSaplingOutput(extfvk.fvk.ovk, pk, 20000, {});
         auto tx2 = builder2.Build().GetTxOrThrow();
 
         // Create conflicting transaction which also spends note B
-        auto builder3 = TransactionBuilder(consensusParams, builderHeights[ver] + 1);
+        auto builder3 = TransactionBuilder(consensusParams, 2);
         builder3.AddSaplingSpend(expsk, note2, anchor, spend_note_witness);
         builder3.AddSaplingOutput(extfvk.fvk.ovk, pk, 19999, {});
         auto tx3 = builder3.Build().GetTxOrThrow();
@@ -798,11 +788,9 @@ TEST(WalletTests, GetConflictedSaplingNotes) {
         // Tear down
         chainActive.SetTip(NULL);
         mapBlockIndex.erase(blockHash);
-    }
 
-    // Revert to default
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        (*deactivations[ver])();
+    }
 }
 
 TEST(WalletTests, SproutNullifierIsSpent) {
@@ -1079,18 +1067,14 @@ TEST(WalletTests, SpentSproutNoteIsFromMe) {
 // Create note A, spend A to create note B, spend and verify note B is from me.
 TEST(WalletTests, SpentSaplingNoteIsFromMe) {
     SelectParams(CBaseChainParams::REGTEST);
-    int overwinterActivationHeight = 5;
-    int saplingActivationHeight = 30;
-    int canopyActivationHeight = 70;
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, overwinterActivationHeight);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, saplingActivationHeight);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_CANOPY, canopyActivationHeight);
-    auto consensusParams = Params().GetConsensus();
 
     std::vector<libzcash::Zip212Enabled> zip_212_enabled = {libzcash::Zip212Enabled::BeforeZip212, libzcash::Zip212Enabled::AfterZip212};
-    int builderHeights[] = {saplingActivationHeight, canopyActivationHeight};
+    const Consensus::Params& (*activations [])() = {RegtestActivateSapling, RegtestActivateCanopy};
+    void (*deactivations [])() = {RegtestDeactivateSapling, RegtestDeactivateCanopy};
 
     for (int ver = 0; ver < zip_212_enabled.size(); ver++) {
+        auto consensusParams = (*activations[ver])();
+
         TestWallet wallet;
         LOCK2(cs_main, wallet.cs_wallet);
 
@@ -1110,7 +1094,7 @@ TEST(WalletTests, SpentSaplingNoteIsFromMe) {
         auto witness = saplingTree.witness();
 
         // Generate transaction, which sends funds to note B
-        auto builder = TransactionBuilder(consensusParams, builderHeights[ver]);
+        auto builder = TransactionBuilder(consensusParams, 1);
         builder.AddSaplingSpend(expsk, note, anchor, witness);
         builder.AddSaplingOutput(extfvk.fvk.ovk, pk, 25000, {});
         auto tx = builder.Build().GetTxOrThrow();
@@ -1132,7 +1116,7 @@ TEST(WalletTests, SpentSaplingNoteIsFromMe) {
         EXPECT_TRUE(chainActive.Contains(&fakeIndex));
         EXPECT_EQ(0, chainActive.Height());
 
-        auto saplingNoteData = wallet.FindMySaplingNotes(wtx, builderHeights[ver]).first;
+        auto saplingNoteData = wallet.FindMySaplingNotes(wtx, 1).first;
         ASSERT_TRUE(saplingNoteData.size() > 0);
         wtx.SetSaplingNoteData(saplingNoteData);
         wtx.SetMerkleBranch(block);
@@ -1182,7 +1166,7 @@ TEST(WalletTests, SpentSaplingNoteIsFromMe) {
         anchor = saplingTree.root();
 
         // Create transaction to spend note B
-        auto builder2 = TransactionBuilder(consensusParams, builderHeights[ver] + 1);
+        auto builder2 = TransactionBuilder(consensusParams, 2);
         builder2.AddSaplingSpend(expsk, note2, anchor, spend_note_witness);
         builder2.AddSaplingOutput(extfvk.fvk.ovk, pk, 12500, {});
         auto tx2 = builder2.Build().GetTxOrThrow();
@@ -1209,7 +1193,7 @@ TEST(WalletTests, SpentSaplingNoteIsFromMe) {
         EXPECT_TRUE(chainActive.Contains(&fakeIndex2));
         EXPECT_EQ(1, chainActive.Height());
 
-        auto saplingNoteData2 = wallet.FindMySaplingNotes(wtx2, builderHeights[ver]).first;
+        auto saplingNoteData2 = wallet.FindMySaplingNotes(wtx2, 2).first;
         ASSERT_TRUE(saplingNoteData2.size() > 0);
         wtx2.SetSaplingNoteData(saplingNoteData2);
         wtx2.SetMerkleBranch(block2);
@@ -1226,11 +1210,9 @@ TEST(WalletTests, SpentSaplingNoteIsFromMe) {
         chainActive.SetTip(NULL);
         mapBlockIndex.erase(blockHash);
         mapBlockIndex.erase(blockHash2);
-    }
 
-    // Revert to test default
-    RegtestDeactivateCanopy();
-    RegtestActivateSapling();
+        (*deactivations[ver])();
+    }
 }
 
 TEST(WalletTests, CachedWitnessesEmptyChain) {

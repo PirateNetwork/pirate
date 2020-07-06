@@ -32,6 +32,11 @@ const Consensus::Params& RegtestActivateSapling();
 void RegtestDeactivateSapling();
 
 
+const Consensus::Params& RegtestActivateCanopy(bool updatePow, int canopyActivationHeight = Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+const Consensus::Params& RegtestActivateCanopy();
+
+void RegtestDeactivateCanopy();
+
 libzcash::SaplingExtendedSpendingKey GetTestMasterSaplingSpendingKey();
 
 CKey AddTestCKeyToKeyStore(CBasicKeyStore& keyStore);
