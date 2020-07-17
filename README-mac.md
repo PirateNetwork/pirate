@@ -38,7 +38,7 @@ touch ~/Library/Application\ Support/Komodo/PIRATE/PIRATE.conf
 nano ~/Library/Application\ Support/Komodo/PIRATE/PIRATE.conf
 ```
 
-Add the following lines to the Komodo.conf file:
+Add the following lines to the PIRATE.conf file:
 
 ```shell
 rpcuser=dontuseweakusernameoryougetrobbed
