@@ -87,7 +87,7 @@ sudo update-alternatives --config x86_64-w64-mingw32-g++
 # (configure to use POSIX variant)
 
 git clone https://github.com/PirateNetwork/pirate --branch master
-cd komodo
+cd pirate
 ./zcutil/fetch-params.sh
 # -j8 = using 8 threads for the compilation - replace 8 with number of threads you want to use; -j$(nproc) for all threads available
 ./zcutil/build-win.sh -j8
