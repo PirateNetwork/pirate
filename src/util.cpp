@@ -28,7 +28,7 @@
 #include "random.h"
 #include "serialize.h"
 #include "sync.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 #include "utiltime.h"
 #include "komodo_defs.h"
 

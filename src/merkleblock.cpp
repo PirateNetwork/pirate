@@ -22,7 +22,7 @@
 
 #include "hash.h"
 #include "consensus/consensus.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 #include "komodo_defs.h"
 using namespace std;
 

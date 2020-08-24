@@ -7,7 +7,7 @@
 #include "init.h"
 #include "ui_interface.h"
 #include "util.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 
 #include <boost/filesystem/operations.hpp>
 #include <fstream>

@@ -3,7 +3,7 @@
 #include "main.h"
 #include "utilmoneystr.h"
 #include "chainparams.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 #include "zcash/Address.hpp"
 #include "wallet/wallet.h"
 #include "amount.h"

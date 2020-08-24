@@ -7,7 +7,7 @@
 #include "primitives/block.h"
 #include "rpc/server.h"
 #include "streams.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 
 extern UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool txDetails = false);
 

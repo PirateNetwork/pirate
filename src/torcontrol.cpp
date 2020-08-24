@@ -6,7 +6,7 @@
 #include "torcontrol.h"
 
 #include "chainparams.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 #include "net.h"
 #include "util.h"
 #include "util/readwritefile.h"

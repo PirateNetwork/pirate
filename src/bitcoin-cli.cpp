@@ -23,7 +23,7 @@
 #include "rpc/client.h"
 #include "rpc/protocol.h"
 #include "util.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 
 #include <boost/filesystem/operations.hpp>
 #include <stdio.h>

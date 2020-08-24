@@ -12,7 +12,7 @@
 #include "netbase.h"
 #include "chainparams.h"
 #include "tinyformat.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 
 #define NODE_NONE 0
 

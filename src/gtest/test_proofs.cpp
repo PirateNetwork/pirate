@@ -19,7 +19,7 @@ typedef libsnark::default_r1cs_ppzksnark_pp::Fqe_type curve_Fq2;
 
 #include "streams.h"
 #include "version.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 
 TEST(proofs, g1_pairing_at_infinity)
 {

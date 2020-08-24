@@ -23,7 +23,7 @@
 #include "crypto/equihash.h"
 
 #include "util.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 
 #include <assert.h>
 

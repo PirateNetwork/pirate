@@ -200,6 +200,7 @@ BITCOIN_CORE_H = \
   addressindex.h \
   spentindex.h \
   addrman.h \
+	attributes.h \
 	addrdb.h \
   alert.h \
   amount.h \
@@ -308,7 +309,8 @@ BITCOIN_CORE_H = \
   undo.h \
   util.h \
   utilmoneystr.h \
-  utilstrencodings.h \
+  util/strencodings.h \
+	util/string.h \
   utiltime.h \
   validationinterface.h \
   version.h \
@@ -627,8 +629,9 @@ libbitcoin_util_a_SOURCES = \
   uint256.cpp \
   util.cpp \
   utilmoneystr.cpp \
-  utilstrencodings.cpp \
-  utiltime.cpp \
+  util/strencodings.cpp \
+	util/string.cpp \
+	utiltime.cpp \
   util/asmap.cpp \
 	util/readwritefile.cpp \
   $(BITCOIN_CORE_H) \

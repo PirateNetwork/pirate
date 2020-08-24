@@ -27,6 +27,8 @@
 #include "keystore.h"
 #include "zcash/Address.hpp"
 #include "zcash/address/zip32.h"
+#include "util.h"
+#include "utiltime.h"
 
 #include <list>
 #include <stdint.h>

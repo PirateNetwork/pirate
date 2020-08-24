@@ -28,7 +28,7 @@
 #include <univalue.h>
 #include "util.h"
 #include "utilmoneystr.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 
 #include <boost/assign/list_of.hpp>
 #include <boost/foreach.hpp>

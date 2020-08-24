@@ -7,12 +7,12 @@
 #include "chainparamsbase.h"
 #include "compat.h"
 #include "util.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 #include "netbase.h"
 #include "rpc/protocol.h" // For HTTP status codes
 #include "sync.h"
 #include "ui_interface.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 
 #include <stdio.h>
 #include <stdlib.h>

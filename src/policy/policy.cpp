@@ -12,7 +12,7 @@
 #include "tinyformat.h"
 #include "util.h"
 #include "main.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 
 unsigned int nBytesPerSigOp = DEFAULT_BYTES_PER_SIGOP;
 

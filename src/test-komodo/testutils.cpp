@@ -12,7 +12,7 @@
 #include "rpc/protocol.h"
 #include "txdb.h"
 #include "util.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 #include "utiltime.h"
 #include "consensus/validation.h"
 #include "primitives/transaction.h"

@@ -26,7 +26,7 @@
 #endif
 #include "serialize.h"        // for begin_ptr(vec)
 #include "util.h"             // for LogPrint()
-#include "utilstrencodings.h" // for GetTime()
+#include "util/strencodings.h" // for GetTime()
 
 #include <limits>
 

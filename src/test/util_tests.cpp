@@ -8,7 +8,7 @@
 #include "primitives/transaction.h"
 #include "random.h"
 #include "sync.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 #include "utilmoneystr.h"
 #include "test/test_bitcoin.h"
 

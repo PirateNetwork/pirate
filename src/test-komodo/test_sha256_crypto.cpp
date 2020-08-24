@@ -3,7 +3,7 @@
 #include "uint256.h"
 #include <stdexcept>
 #include "random.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 
 namespace TestSHA256Crypto {
 

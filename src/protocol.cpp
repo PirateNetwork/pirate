@@ -22,7 +22,7 @@
 #include "protocol.h"
 
 #include "util.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 
 #ifndef _WIN32
 # include <arpa/inet.h>

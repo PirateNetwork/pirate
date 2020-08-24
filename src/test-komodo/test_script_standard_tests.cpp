@@ -5,7 +5,7 @@
 #include "script/script.h"
 #include "script/script_error.h"
 #include "script/standard.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 
 namespace TestScriptStandartTests {
 

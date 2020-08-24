@@ -23,7 +23,7 @@
 #include "pubkey.h"
 #include "script/script.h"
 #include "util.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 #include "script/cc.h"
 
 #include <boost/foreach.hpp>

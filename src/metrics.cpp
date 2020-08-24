@@ -26,7 +26,7 @@
 #include "util.h"
 #include "utiltime.h"
 #include "utilmoneystr.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 
 #include <boost/thread.hpp>
 #include <boost/thread/synchronized_value.hpp>

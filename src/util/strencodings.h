@@ -1,15 +1,19 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2009-2020 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 /**
  * Utilities for converting data from/to strings.
  */
-#ifndef BITCOIN_UTILSTRENCODINGS_H
-#define BITCOIN_UTILSTRENCODINGS_H
+#ifndef BITCOIN_UTIL_STRENCODINGS_H
+#define BITCOIN_UTIL_STRENCODINGS_H
 
-#include <stdint.h>
+#include "attributes.h"
+#include "span.h"
+
+#include <cstdint>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -27,7 +31,8 @@ enum SafeChars
 {
     SAFE_CHARS_DEFAULT, //!< The full set of allowed chars
     SAFE_CHARS_UA_COMMENT, //!< BIP-0014 subset
-    SAFE_CHARS_URI //!< Chars allowed in URIs (RFC 3986)
+    SAFE_CHARS_FILENAME, //!< Chars allowed in filenames
+    SAFE_CHARS_URI, //!< Chars allowed in URIs (RFC 3986)
 };
 
 std::string SanitizeFilename(const std::string& str);
@@ -44,22 +49,53 @@ uint32_t ParseHexToUInt32(const std::string& str);
 std::vector<unsigned char> ParseHex(const char* psz);
 std::vector<unsigned char> ParseHex(const std::string& str);
 signed char HexDigit(char c);
+/* Returns true if each character in str is a hex character, and has an even
+ * number of hex digits.*/
 bool IsHex(const std::string& str);
-std::vector<unsigned char> DecodeBase64(const char* p, bool* pfInvalid = NULL);
-std::string DecodeBase64(const std::string& str);
+/**
+* Return true if the string is a hex number, optionally prefixed with "0x"
+*/
+bool IsHexNumber(const std::string& str);
+std::vector<unsigned char> DecodeBase64(const char* p, bool* pf_invalid = nullptr);
+std::string DecodeBase64(const std::string& str, bool* pf_invalid = nullptr);
 std::string EncodeBase64(const unsigned char* pch, size_t len);
 std::string EncodeBase64(const std::string& str);
-std::vector<unsigned char> DecodeBase32(const char* p, bool* pfInvalid = NULL);
-std::string DecodeBase32(const std::string& str);
+std::vector<unsigned char> DecodeBase32(const char* p, bool* pf_invalid = nullptr);
+std::string DecodeBase32(const std::string& str, bool* pf_invalid = nullptr);
 std::string EncodeBase32(const unsigned char* pch, size_t len);
 std::string EncodeBase32(const std::string& str);
 
-void SplitHostPort(std::string in, int &portOut, std::string &hostOut);
+void SplitHostPort(std::string in, int& portOut, std::string& hostOut);
 std::string i64tostr(int64_t n);
 std::string itostr(int n);
 int64_t atoi64(const char* psz);
 int64_t atoi64(const std::string& str);
 int atoi(const std::string& str);
+
+/**
+ * Tests if the given character is a decimal digit.
+ * @param[in] c     character to test
+ * @return          true if the argument is a decimal digit; otherwise false.
+ */
+constexpr bool IsDigit(char c)
+{
+    return c >= '0' && c <= '9';
+}
+
+/**
+ * Tests if the given character is a whitespace character. The whitespace characters
+ * are: space, form-feed ('\f'), newline ('\n'), carriage return ('\r'), horizontal
+ * tab ('\t'), and vertical tab ('\v').
+ *
+ * This function is locale independent. Under the C locale this function gives the
+ * same result as std::isspace.
+ *
+ * @param[in] c     character to test
+ * @return          true if the argument is a whitespace character; otherwise false
+ */
+constexpr inline bool IsSpace(char c) noexcept {
+    return c == ' ' || c == '\f' || c == '\n' || c == '\r' || c == '\t' || c == '\v';
+}
 
 /**
  * Convert string to signed 32-bit integer with strict parse error feedback.
@@ -74,6 +110,27 @@ bool ParseInt32(const std::string& str, int32_t *out);
  *   false if not the entire string could be parsed or when overflow or underflow occurred.
  */
 bool ParseInt64(const std::string& str, int64_t *out);
+
+/**
+ * Convert decimal string to unsigned 8-bit integer with strict parse error feedback.
+ * @returns true if the entire string could be parsed as valid integer,
+ *   false if not the entire string could be parsed or when overflow or underflow occurred.
+ */
+bool ParseUInt8(const std::string& str, uint8_t *out);
+
+/**
+ * Convert decimal string to unsigned 32-bit integer with strict parse error feedback.
+ * @returns true if the entire string could be parsed as valid integer,
+ *   false if not the entire string could be parsed or when overflow or underflow occurred.
+ */
+bool ParseUInt32(const std::string& str, uint32_t *out);
+
+/**
+ * Convert decimal string to unsigned 64-bit integer with strict parse error feedback.
+ * @returns true if the entire string could be parsed as valid integer,
+ *   false if not the entire string could be parsed or when overflow or underflow occurred.
+ */
+bool ParseUInt64(const std::string& str, uint64_t *out);
 
 /**
  * Convert string to double with strict parse error feedback.
@@ -108,6 +165,12 @@ inline std::string HexStr(const T& vch, bool fSpaces=false)
 }
 
 /**
+ * Convert a span of bytes to a lower-case hexadecimal string.
+ */
+std::string HexStr(const Span<const uint8_t> s);
+inline std::string HexStr(const Span<const char> s) { return HexStr(MakeUCharSpan(s)); }
+
+/**
  * Format a paragraph of text to a fixed width, adding spaces for
  * indentation to any added line.
  */
@@ -135,16 +198,7 @@ bool TimingResistantEqual(const T& a, const T& b)
  */
 bool ParseFixedPoint(const std::string &val, int decimals, int64_t *amount_out);
 
-/**
- * Convert from one power-of-2 number base to another.
- *
- * Examples using ConvertBits<8, 5, true>():
- * 000000 -> 0000000000
- * 202020 -> 0400100200
- * 757575 -> 0e151a170a
- * abcdef -> 150f061e1e
- * ffffff -> 1f1f1f1f1e
- */
+/** Convert from one power-of-2 number base to another. */
 template<int frombits, int tobits, bool pad, typename O, typename I>
 bool ConvertBits(const O& outfn, I it, I end) {
     size_t acc = 0;
@@ -168,4 +222,67 @@ bool ConvertBits(const O& outfn, I it, I end) {
     return true;
 }
 
-#endif // BITCOIN_UTILSTRENCODINGS_H
+/**
+ * Converts the given character to its lowercase equivalent.
+ * This function is locale independent. It only converts uppercase
+ * characters in the standard 7-bit ASCII range.
+ * This is a feature, not a limitation.
+ *
+ * @param[in] c     the character to convert to lowercase.
+ * @return          the lowercase equivalent of c; or the argument
+ *                  if no conversion is possible.
+ */
+constexpr char ToLower(char c)
+{
+    return (c >= 'A' && c <= 'Z' ? (c - 'A') + 'a' : c);
+}
+
+/**
+ * Returns the lowercase equivalent of the given string.
+ * This function is locale independent. It only converts uppercase
+ * characters in the standard 7-bit ASCII range.
+ * This is a feature, not a limitation.
+ *
+ * @param[in] str   the string to convert to lowercase.
+ * @returns         lowercased equivalent of str
+ */
+std::string ToLower(const std::string& str);
+
+/**
+ * Converts the given character to its uppercase equivalent.
+ * This function is locale independent. It only converts lowercase
+ * characters in the standard 7-bit ASCII range.
+ * This is a feature, not a limitation.
+ *
+ * @param[in] c     the character to convert to uppercase.
+ * @return          the uppercase equivalent of c; or the argument
+ *                  if no conversion is possible.
+ */
+constexpr char ToUpper(char c)
+{
+    return (c >= 'a' && c <= 'z' ? (c - 'a') + 'A' : c);
+}
+
+/**
+ * Returns the uppercase equivalent of the given string.
+ * This function is locale independent. It only converts lowercase
+ * characters in the standard 7-bit ASCII range.
+ * This is a feature, not a limitation.
+ *
+ * @param[in] str   the string to convert to uppercase.
+ * @returns         UPPERCASED EQUIVALENT OF str
+ */
+std::string ToUpper(const std::string& str);
+
+/**
+ * Capitalizes the first character of the given string.
+ * This function is locale independent. It only converts lowercase
+ * characters in the standard 7-bit ASCII range.
+ * This is a feature, not a limitation.
+ *
+ * @param[in] str   the string to capitalize.
+ * @returns         string with the first letter capitalized.
+ */
+std::string Capitalize(std::string str);
+
+#endif // BITCOIN_UTIL_STRENCODINGS_H

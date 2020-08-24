@@ -32,7 +32,7 @@
 #include "tinyformat.h"
 #include "ui_interface.h"
 #include "util.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 #include "validationinterface.h"
 #include "wallet/crypter.h"
 #include "wallet/wallet_ismine.h"

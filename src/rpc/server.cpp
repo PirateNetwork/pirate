@@ -27,7 +27,7 @@
 #include "sync.h"
 #include "ui_interface.h"
 #include "util.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 #include "asyncrpcqueue.h"
 
 #include <memory>

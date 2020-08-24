@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 
 #include <boost/foreach.hpp>
 #include <boost/variant/get.hpp>

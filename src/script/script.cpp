@@ -21,7 +21,7 @@
 #include "script.h"
 
 #include "tinyformat.h"
-#include "utilstrencodings.h"
+#include "util/strencodings.h"
 #include "script/cc.h"
 #include "cc/eval.h"
 #include "standard.h"
