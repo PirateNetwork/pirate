@@ -495,6 +495,8 @@ crypto_libbitcoin_crypto_a_SOURCES = \
   crypto/ripemd160.h \
   crypto/sha1.cpp \
   crypto/sha1.h \
+	crypto/sha3.cpp \
+  crypto/sha3.h \
   crypto/sha256.cpp \
   crypto/sha256.h \
   crypto/sha512.cpp \
@@ -849,6 +851,7 @@ libzcashconsensus_la_SOURCES = \
   crypto/hmac_sha512.cpp \
   crypto/ripemd160.cpp \
   crypto/sha1.cpp \
+	crypto/sha3.cpp \
   crypto/sha256.cpp \
   crypto/sha512.cpp \
   hash.cpp \
