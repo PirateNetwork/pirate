@@ -63,7 +63,9 @@ jobs:
       - name: Install deps (macOS)
         run: |
           brew uninstall openssl@1.0.2t
+          brew uninstall python@2.7.17
           brew untap local/openssl
+          brew untap local/python2
           brew update
           brew upgrade
           brew tap discoteq/discoteq; brew install flock
