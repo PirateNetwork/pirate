@@ -62,7 +62,11 @@ jobs:
       - uses: actions/checkout@v2
       - name: Install deps (macOS)
         run: |
-          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
+          brew uninstall openssl@1.0.2t
+          brew uninstall python@2.7.17
+          brew untap local/openssl
+          brew untap local/python2
+          brew cask install xquartz
           brew update
           brew upgrade
           brew tap discoteq/discoteq; brew install flock
