@@ -389,6 +389,28 @@ public:
     std::string ToString() const;
 };
 
+/** An block location point used to log the exact chain location of archived transactions */
+class ArchiveTxPoint
+{
+public:
+    uint256 hashBlock;
+    int nIndex;
+
+    ArchiveTxPoint() { SetNull(); }
+    ArchiveTxPoint(uint256 hashIn, int nIn) { hashBlock = hashIn; nIndex = nIn; }
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(hashBlock);
+        READWRITE(nIndex);
+    }
+
+    void SetNull() { hashBlock.SetNull(); nIndex = -1; }
+    bool IsNull() const { return (hashBlock.IsNull() && nIndex == -1); }
+};
+
 /** An input of a transaction.  It contains the location of the previous
  * transaction's output that it claims and a signature that matches the
  * output's public key.
