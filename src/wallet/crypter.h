@@ -25,7 +25,7 @@
 #include "streams.h"
 #include "support/allocators/secure.h"
 #include "zcash/Address.hpp"
-#include "zcash/zip32.h"
+#include "zcash/address/zip32.h"
 
 class uint256;
 
@@ -35,13 +35,13 @@ const unsigned int WALLET_CRYPTO_SALT_SIZE = 8;
 /**
  * Private key encryption is done based on a CMasterKey,
  * which holds a salt and random encryption key.
- * 
+ *
  * CMasterKeys are encrypted using AES-256-CBC using a key
  * derived using derivation method nDerivationMethod
  * (0 == EVP_sha512()) and derivation iterations nDeriveIterations.
  * vchOtherDerivationParameters is provided for alternative algorithms
  * which may require more parameters (such as scrypt).
- * 
+ *
  * Wallet Private Keys are then encrypted using AES-256-CBC
  * with the double-sha256 of the public key as the IV, and the
  * master key's key as the encryption key (see keystore.[ch]).
@@ -254,29 +254,27 @@ public:
             mi++;
         }
     }
-    //! Sapling 
+    //! Sapling
     virtual bool AddCryptedSaplingSpendingKey(
         const libzcash::SaplingExtendedFullViewingKey &extfvk,
-        const std::vector<unsigned char> &vchCryptedSecret,
-        const libzcash::SaplingPaymentAddress &defaultAddr);
+        const std::vector<unsigned char> &vchCryptedSecret);
     bool AddSaplingSpendingKey(
-        const libzcash::SaplingExtendedSpendingKey &sk,
-        const libzcash::SaplingPaymentAddress &defaultAddr);
-    bool HaveSaplingSpendingKey(const libzcash::SaplingFullViewingKey &fvk) const
+        const libzcash::SaplingExtendedSpendingKey &sk);
+    bool HaveSaplingSpendingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk) const
     {
         {
             LOCK(cs_SpendingKeyStore);
             if (!IsCrypted())
-                return CBasicKeyStore::HaveSaplingSpendingKey(fvk);
+                return CBasicKeyStore::HaveSaplingSpendingKey(extfvk);
             for (auto entry : mapCryptedSaplingSpendingKeys) {
-                if (entry.first.fvk == fvk) {
+                if (entry.first == extfvk) {
                     return true;
                 }
             }
         }
         return false;
     }
-    bool GetSaplingSpendingKey(const libzcash::SaplingFullViewingKey &fvk, libzcash::SaplingExtendedSpendingKey &skOut) const;
+    bool GetSaplingSpendingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk, libzcash::SaplingExtendedSpendingKey &skOut) const;
 
 
     /**
