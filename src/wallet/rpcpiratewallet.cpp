@@ -10,13 +10,15 @@
 #include "rpcpiratewallet.h"
 #include "utilmoneystr.h"
 
+#include "komodo_defs.h"
+
 #include <utf8.h>
 
 using namespace std;
 using namespace libzcash;
 
 bool EnsureWalletIsAvailable(bool avoidException);
-
+int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
 
 template<typename RpcTx>
 void getTransparentSpends(RpcTx &tx, vector<TransactionSpendT> &vSpend, CAmount &transparentValue) {
@@ -88,6 +90,11 @@ void getTransparentRecieves(RpcTx &tx, vector<TransactionReceivedT> &vReceived) 
             received.encodedScriptPubKey = HexStr(txout.scriptPubKey.begin(), txout.scriptPubKey.end());
             received.amount = txout.nValue;
             received.vout =  i;
+            if(IsMine(*pwalletMain, address) == ISMINE_SPENDABLE) {
+                received.spendable = true;
+            } else {
+                received.spendable = false;
+            }
             vReceived.push_back(received);
         }
     }
@@ -121,9 +128,9 @@ void getSproutSpends(RpcTx &tx, vector<TransactionSpendZC> &vSpend, CAmount &spr
             pwalletMain->GetSproutPaymentAddresses(addresses);
             for (auto addr : addresses) {
                 try {
-                    SproutSpendingKey sk;
-                    pwalletMain->GetSproutSpendingKey(addr, sk);
-                    ZCNoteDecryption decryptor(sk.receiving_key());
+                    SproutViewingKey vk;
+                    pwalletMain->GetSproutViewingKey(addr, vk);
+                    ZCNoteDecryption decryptor(vk.sk_enc);
 
                     // determine amount of funds in the note
                     auto hSig = jsOut.h_sig(*pzcashParams, parentctx.joinSplitPubKey);
@@ -161,9 +168,9 @@ void getSproutReceives(RpcTx &tx, vector<TransactionReceivedZC> &vReceived) {
             pwalletMain->GetSproutPaymentAddresses(addresses);
             for (auto addr : addresses) {
                 try {
-                    SproutSpendingKey sk;
-                    pwalletMain->GetSproutSpendingKey(addr, sk);
-                    ZCNoteDecryption decryptor(sk.receiving_key());
+                    SproutViewingKey vk;
+                    pwalletMain->GetSproutViewingKey(addr, vk);
+                    ZCNoteDecryption decryptor(vk.sk_enc);
 
                     // determine amount of funds in the note
                     auto hSig = jsOut.h_sig(*pzcashParams, tx.joinSplitPubKey);
@@ -176,6 +183,7 @@ void getSproutReceives(RpcTx &tx, vector<TransactionReceivedZC> &vReceived) {
                     receive.amount = decrypted_note.value();
                     receive.jsIndex = i;
                     receive.jsOutIndex = j;
+                    receive.spendable = pwalletMain->HaveSproutSpendingKey(addr);
                     vReceived.push_back(receive);
 
                 } catch (const note_decryption_failed &err) {
@@ -304,6 +312,10 @@ void getSaplingReceives(RpcTx &tx, vector<uint256> &ivks, vector<TransactionRece
                 received.shieldedOutputIndex = i;
                 received.memo = HexStr(memo);
 
+                libzcash::SaplingExtendedFullViewingKey extfvk;
+                pwalletMain->GetSaplingFullViewingKey(ivk, extfvk);
+                received.spendable = pwalletMain->HaveSaplingSpendingKey(extfvk);
+
                 // If the leading byte is 0xF4 or lower, the memo field should be interpreted as a
                 // UTF-8-encoded text string.
                 if (memo[0] <= 0xf4) {
@@ -342,9 +354,12 @@ void getAllSaplingOVKs(vector<uint256> &ovks) {
     std::set<libzcash::SaplingPaymentAddress> addresses;
     pwalletMain->GetSaplingPaymentAddresses(addresses);
     for (auto addr : addresses) {
-        libzcash::SaplingExtendedSpendingKey extsk;
-        if (pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
-            ovks.push_back(extsk.expsk.full_viewing_key().ovk);
+        libzcash::SaplingIncomingViewingKey ivk;
+        libzcash::SaplingExtendedFullViewingKey extfvk;
+        if(pwalletMain->GetSaplingIncomingViewingKey(addr, ivk)) {
+            if(pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
+                ovks.push_back(extfvk.fvk.ovk);
+            }
         }
     }
 
@@ -362,9 +377,12 @@ void getAllSaplingIVKs(vector<uint256> &ivks) {
     std::set<libzcash::SaplingPaymentAddress> addresses;
     pwalletMain->GetSaplingPaymentAddresses(addresses);
     for (auto addr : addresses) {
-        libzcash::SaplingExtendedSpendingKey extsk;
-        if (pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
-            ivks.push_back(extsk.expsk.full_viewing_key().in_viewing_key());
+        libzcash::SaplingIncomingViewingKey ivk;
+        libzcash::SaplingExtendedFullViewingKey extfvk;
+        if(pwalletMain->GetSaplingIncomingViewingKey(addr, ivk)) {
+            if(pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
+                ivks.push_back(extfvk.fvk.in_viewing_key());
+            }
         }
     }
 }
@@ -381,7 +399,12 @@ void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, vector<uint256> &ivks,
     if (!hashBlock.IsNull() && mapBlockIndex[hashBlock] != nullptr) {
         arcTx.coinbase = tx.IsCoinBase();
         arcTx.blockHash = hashBlock;
-        arcTx.confirmations = chainActive.Tip()->GetHeight() - mapBlockIndex[hashBlock]->GetHeight() + 1;
+
+        int nHeight = chainActive.Tip()->GetHeight();
+        int txHeight = mapBlockIndex[hashBlock]->GetHeight();
+        arcTx.rawconfirmations = nHeight - txHeight + 1;
+        arcTx.confirmations = komodo_dpowconfs(txHeight, nHeight - txHeight + 1);
+
         arcTx.nBlockTime = mapBlockIndex[hashBlock]->GetBlockTime();
 
         CBlockIndex* pblockindex = chainActive[mapBlockIndex[hashBlock]->GetHeight()];
@@ -404,7 +427,8 @@ void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, vector<uint256> &ivks,
         arcTx.blockHash = uint256();
         arcTx.blockIndex = 0;
         arcTx.nBlockTime = 0;
-
+        arcTx.rawconfirmations = 0;
+        arcTx.confirmations = 0;
     }
 
     //Spends must be located to determine if outputs are change
@@ -439,12 +463,14 @@ void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, vector<uint256> &ivks,
     arcTx.txid = tx.GetHash();
     arcTx.blockIndex = tx.nIndex;
     arcTx.blockHash = tx.hashBlock;
-    arcTx.confirmations = tx.GetDepthInMainChain();
+    arcTx.rawconfirmations = tx.GetDepthInMainChain();
 
     if (!tx.hashBlock.IsNull() && mapBlockIndex[tx.hashBlock] != nullptr) {
         arcTx.nBlockTime = mapBlockIndex[tx.hashBlock]->GetBlockTime();
+        arcTx.confirmations = komodo_dpowconfs(mapBlockIndex[tx.hashBlock]->GetHeight(), tx.GetDepthInMainChain());
     } else {
         arcTx.nBlockTime = 0;
+        arcTx.confirmations = 0;
     }
 
     if (tx.IsCoinBase())
@@ -505,6 +531,7 @@ void getRpcArcTxJSONHeader(RpcArcTransaction &arcTx, UniValue& ArcTxJSON) {
     ArcTxJSON.push_back(Pair("blockhash", arcTx.blockHash.ToString()));
     ArcTxJSON.push_back(Pair("blockindex", arcTx.blockIndex));
     ArcTxJSON.push_back(Pair("blocktime", arcTx.nBlockTime));
+    ArcTxJSON.push_back(Pair("rawconfirmations", arcTx.rawconfirmations));
     ArcTxJSON.push_back(Pair("confirmations", arcTx.confirmations));
     ArcTxJSON.push_back(Pair("time", arcTx.nTime));
     ArcTxJSON.push_back(Pair("expiryHeight", arcTx.expiryHeight));
@@ -597,7 +624,7 @@ void getRpcArcTxJSONSends(RpcArcTransaction &arcTx, UniValue& ArcTxJSON, bool fi
 
     if (arcTx.sproutValue - arcTx.sproutValueSpent - sproutValueReceived != 0) {
         UniValue obj(UniValue::VOBJ);
-        obj.push_back(Pair("type", "Sprout"));
+        obj.push_back(Pair("type", "sprout"));
         obj.push_back(Pair("address", ""));
         obj.push_back(Pair("value", ValueFromAmount(CAmount(arcTx.sproutValue - arcTx.sproutValueSpent))));
         obj.push_back(Pair("valueZat", arcTx.sproutValue - arcTx.sproutValueSpent));
@@ -634,6 +661,7 @@ void getRpcArcTxJSONReceives(RpcArcTransaction &arcTx, UniValue& ArcTxJSON, bool
         obj.push_back(Pair("value", ValueFromAmount(CAmount(arcTx.vTReceived[i].amount))));
         obj.push_back(Pair("valueZat", arcTx.vTReceived[i].amount));
         obj.push_back(Pair("change", change));
+        obj.push_back(Pair("spendable", arcTx.vTReceived[i].spendable));
         if (!filterAddress || arcTx.vTReceived[i].encodedAddress == encodedAddress)
             ArcTxJSON.push_back(obj);
     }
@@ -649,6 +677,7 @@ void getRpcArcTxJSONReceives(RpcArcTransaction &arcTx, UniValue& ArcTxJSON, bool
         obj.push_back(Pair("value", ValueFromAmount(CAmount(arcTx.vZcReceived[i].amount))));
         obj.push_back(Pair("valueZat", arcTx.vZcReceived[i].amount));
         obj.push_back(Pair("change", change));
+        obj.push_back(Pair("spendable", arcTx.vZcReceived[i].spendable));
         obj.push_back(Pair("memo", arcTx.vZcReceived[i].memo));
         obj.push_back(Pair("memoStr", arcTx.vZcReceived[i].memoStr));
         if (!filterAddress || arcTx.vZcReceived[i].encodedAddress == encodedAddress)
@@ -665,6 +694,7 @@ void getRpcArcTxJSONReceives(RpcArcTransaction &arcTx, UniValue& ArcTxJSON, bool
         obj.push_back(Pair("value", ValueFromAmount(CAmount(arcTx.vZsReceived[i].amount))));
         obj.push_back(Pair("valueZat", arcTx.vZsReceived[i].amount));
         obj.push_back(Pair("change", change));
+        obj.push_back(Pair("spendable", arcTx.vZsReceived[i].spendable));
         obj.push_back(Pair("memo", arcTx.vZsReceived[i].memo));
         obj.push_back(Pair("memoStr", arcTx.vZsReceived[i].memoStr));
         if (!filterAddress || arcTx.vZsReceived[i].encodedAddress == encodedAddress)

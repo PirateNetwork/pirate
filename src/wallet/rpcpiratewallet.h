@@ -48,6 +48,7 @@ public:
     string encodedScriptPubKey;
     CAmount amount;
     int vout;
+    bool spendable;
 };
 
 
@@ -71,6 +72,7 @@ public:
     int jsOutIndex;
     string memo;
     string memoStr;
+    bool spendable;
 };
 
 class TransactionSpendZS
@@ -101,6 +103,7 @@ public:
     int shieldedOutputIndex;
     string memo;
     string memoStr;
+    bool spendable;
 };
 
 
@@ -115,6 +118,7 @@ public:
       int blockIndex;
       int64_t nBlockTime;
       int confirmations;
+      int rawconfirmations;
       int64_t nTime;
       int64_t expiryHeight;
       uint64_t size;
