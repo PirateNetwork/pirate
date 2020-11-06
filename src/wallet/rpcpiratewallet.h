@@ -10,6 +10,7 @@ struct balancestruct {
   CAmount unconfirmed;
   CAmount locked;
   CAmount immature;
+  bool spendable;
 };
 
 enum
@@ -29,6 +30,7 @@ public:
     CAmount amount;
     string spendTxid;
     int spendVout;
+    bool spendable;
 };
 
 class TransactionSendT
@@ -60,7 +62,7 @@ public:
     string spendTxid;
     int spendJsIndex;
     int spendJsOutIndex;
-
+    bool spendable;
 };
 
 class TransactionReceivedZC
@@ -82,6 +84,7 @@ public:
     CAmount amount;
     string spendTxid;
     int spendShieldedOutputIndex;
+    bool spendable;
 };
 
 class TransactionSendZS
@@ -149,34 +152,34 @@ template<typename RpcTx>
 void getTransparentSends(RpcTx &tx, vector<TransactionSendT> &vSend, CAmount &transparentValue);
 
 template<typename RpcTx>
-void getTransparentSpends(RpcTx &tx, vector<TransactionSpendT> &vSpend, CAmount &transparentValue);
+void getTransparentSpends(RpcTx &tx, vector<TransactionSpendT> &vSpend, CAmount &transparentValue, bool fIncludeWatchonly = false);
 
 template<typename RpcTx>
-void getTransparentRecieves(RpcTx &tx, vector<TransactionReceivedT> &vReceived);
+void getTransparentRecieves(RpcTx &tx, vector<TransactionReceivedT> &vReceived, bool fIncludeWatchonly = false);
 
 
 template<typename RpcTx>
-void getSproutSpends(RpcTx &tx, vector<TransactionSpendZC> &vSpend, CAmount &sproutValue, CAmount &sproutValueSpent);
+void getSproutSpends(RpcTx &tx, vector<TransactionSpendZC> &vSpend, CAmount &sproutValue, CAmount &sproutValueSpent, bool fIncludeWatchonly = false);
 
 template<typename RpcTx>
-void getSproutReceives(RpcTx &tx, vector<TransactionReceivedZC> &vReceived);
+void getSproutReceives(RpcTx &tx, vector<TransactionReceivedZC> &vReceived, bool fIncludeWatchonly = false);
 
 
 template<typename RpcTx>
 void getSaplingSends(RpcTx &tx, vector<uint256> &ovks, vector<TransactionSendZS> &vSend);
 
 template<typename RpcTx>
-void getSaplingSpends(RpcTx &tx, vector<uint256> &ivks, vector<TransactionSpendZS> &vSpend);
+void getSaplingSpends(RpcTx &tx, vector<uint256> &ivks, vector<TransactionSpendZS> &vSpend, bool fIncludeWatchonly = false);
 
 template<typename RpcTx>
-void getSaplingReceives(RpcTx &tx, vector<uint256> &ivks, vector<TransactionReceivedZS> &vReceived);
+void getSaplingReceives(RpcTx &tx, vector<uint256> &ivks, vector<TransactionReceivedZS> &vReceived, bool fIncludeWatchonly = false);
 
 void getAllSproutRKs(vector<uint256> &rks);
-void getAllSaplingOVKs(vector<uint256> &ovks);
-void getAllSaplingIVKs(vector<uint256> &ivks);
+void getAllSaplingOVKs(vector<uint256> &ovks, bool fIncludeWatchonly = false);
+void getAllSaplingIVKs(vector<uint256> &ivks, bool fIncludeWatchonly = false);
 
-void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, vector<uint256> &ivks, vector<uint256> &ovks, int type);
-void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, vector<uint256> &ivks, vector<uint256> &ovks, int type);
+void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, vector<uint256> &ivks, vector<uint256> &ovks, bool fIncludeWatchonly = false);
+void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, vector<uint256> &ivks, vector<uint256> &ovks, bool fIncludeWatchonly = false);
 
 void getRpcArcTxJSONHeader(RpcArcTransaction &arcTx, UniValue& ArcTxJSON);
 void getRpcArcTxJSONSpends(RpcArcTransaction &arcTx, UniValue& ArcTxJSON, bool filterAddress = false, string addressString = "");
