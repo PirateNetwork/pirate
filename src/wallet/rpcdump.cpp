@@ -792,7 +792,7 @@ UniValue z_importkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     // We want to scan for transactions and notes
     if (fRescan) {
-        pwalletMain->ScanForWalletTransactions(chainActive[nRescanHeight], true);
+        pwalletMain->ScanForWalletTransactions(chainActive[nRescanHeight], true, true);
     }
 
     return NullUniValue;
@@ -884,9 +884,12 @@ UniValue z_importviewingkey(const UniValue& params, bool fHelp, const CPubKey& m
       throw JSONRPCError(RPC_WALLET_ERROR, "Error adding viewing key to wallet");
   }
 
+  // whenever a key is imported, we need to scan the whole chain
+  pwalletMain->nTimeFirstKey = 1; // 0 would be considered 'no value'
+
   // We want to scan for transactions and notes
   if (fRescan) {
-      pwalletMain->ScanForWalletTransactions(chainActive[nRescanHeight], true);
+      pwalletMain->ScanForWalletTransactions(chainActive[nRescanHeight], true, true);
   }
 
   return result;
