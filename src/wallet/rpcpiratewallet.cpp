@@ -139,9 +139,8 @@ void getSproutSpends(RpcTx &tx, vector<TransactionSpendZC> &vSpend, CAmount &spr
             pwalletMain->GetSproutPaymentAddresses(addresses);
             for (auto addr : addresses) {
                 try {
-                    SproutViewingKey vk;
-                    pwalletMain->GetSproutViewingKey(addr, vk);
-                    ZCNoteDecryption decryptor(vk.sk_enc);
+                    ZCNoteDecryption decryptor;
+                    pwalletMain->GetNoteDecryptor(addr, decryptor);
 
                     // determine amount of funds in the note
                     auto hSig = jsOut.h_sig(*pzcashParams, parentctx.joinSplitPubKey);
@@ -183,9 +182,8 @@ void getSproutReceives(RpcTx &tx, vector<TransactionReceivedZC> &vReceived, bool
             pwalletMain->GetSproutPaymentAddresses(addresses);
             for (auto addr : addresses) {
                 try {
-                    SproutViewingKey vk;
-                    pwalletMain->GetSproutViewingKey(addr, vk);
-                    ZCNoteDecryption decryptor(vk.sk_enc);
+                    ZCNoteDecryption decryptor;
+                    pwalletMain->GetNoteDecryptor(addr, decryptor);
 
                     // determine amount of funds in the note
                     auto hSig = jsOut.h_sig(*pzcashParams, tx.joinSplitPubKey);
@@ -425,7 +423,6 @@ void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, vector<uint256> &ivks,
     //try to find the transaction to pull the hashblock
     GetTransaction(txid, tx, hashBlock, true);
     if (!hashBlock.IsNull() && mapBlockIndex[hashBlock] != nullptr) {
-        arcTx.coinbase = tx.IsCoinBase();
         arcTx.blockHash = hashBlock;
 
         int nHeight = chainActive.Tip()->GetHeight();
@@ -434,6 +431,15 @@ void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, vector<uint256> &ivks,
         arcTx.confirmations = komodo_dpowconfs(txHeight, nHeight - txHeight + 1);
 
         arcTx.nBlockTime = mapBlockIndex[hashBlock]->GetBlockTime();
+
+        if (tx.IsCoinBase())
+        {
+            arcTx.coinbase = true;
+            arcTx.category =  "generate";
+        } else {
+            arcTx.coinbase = false;
+            arcTx.category = "standard";
+        }
 
         CBlockIndex* pblockindex = chainActive[mapBlockIndex[hashBlock]->GetHeight()];
         CBlock block;
@@ -1954,8 +1960,8 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "                    Value of 1: Return all transactions in the last 24 hours\n"
             "                    Value of 2: Return all transactions in the last 7 days\n"
             "                    Value of 3: Return all transactions in the last 30 days\n"
-            "                    Value of 3: Return all transactions in the last 90 days\n"
-            "                    Value of 3: Return all transactions in the last 365 days\n"
+            "                    Value of 4: Return all transactions in the last 90 days\n"
+            "                    Value of 5: Return all transactions in the last 365 days\n"
             "                    Other number: Return all transactions\n"
             "3. \"transactioncount\"     (integer, optional) \n"
             "4. \"Include Watch Only\"   (bool, optional, Default = false) \n"
@@ -2084,45 +2090,45 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
       for (unsigned int i = 0; i < wtx.vout.size(); i++) {
 
-        CTxDestination address;
-        if (!ExtractDestination(wtx.vout[i].scriptPubKey, address))
-          continue;
+          CTxDestination address;
+          if (!ExtractDestination(wtx.vout[i].scriptPubKey, address))
+            continue;
 
-        //excluded coins that we dont have the spending or watchonly keys for
-        isminetype mine = IsMine(*pwalletMain, address);
-        if (mine != ISMINE_SPENDABLE && !(mine == ISMINE_WATCH_ONLY  && fIncludeWatchonly))
-          continue;
+          //excluded coins that we dont have the spending or watchonly keys for
+          isminetype mine = IsMine(*pwalletMain, address);
+          if (mine != ISMINE_SPENDABLE && !(mine == ISMINE_WATCH_ONLY  && fIncludeWatchonly))
+              continue;
 
-        //Exclude spent coins
-        if (pwalletMain->IsSpent(wtxid, i))
-          continue;
+          //Exclude spent coins
+          if (pwalletMain->IsSpent(wtxid, i))
+              continue;
 
-        //Assign locked
-        if (txType == 0 && pwalletMain->IsLockedCoin((*it).first, i))
-          txType = 3;
+          //Assign locked
+          if (txType == 0 && pwalletMain->IsLockedCoin((*it).first, i))
+              txType = 3;
 
-        string addressString = EncodeDestination(address);
-        if (addressBalances.count(addressString) == 0)
-          addressBalances.insert(make_pair(addressString,txAmounts));
+          string addressString = EncodeDestination(address);
+          if (addressBalances.count(addressString) == 0)
+              addressBalances.insert(make_pair(addressString,txAmounts));
 
-        if (txType == 0) {
-          addressBalances.at(addressString).confirmed += wtx.vout[i].nValue;
-          confirmed += wtx.vout[i].nValue;
-        } else if (txType == 1) {
-          addressBalances.at(addressString).immature+= wtx.vout[i].nValue;
-          immature += wtx.vout[i].nValue;
-        } else if (txType == 2) {
-          addressBalances.at(addressString).unconfirmed += wtx.vout[i].nValue;
-          unconfirmed += wtx.vout[i].nValue;
-        } else if (txType == 3) {
-          addressBalances.at(addressString).locked += wtx.vout[i].nValue;
-          locked += wtx.vout[i].nValue;
-        }
-        if (mine == ISMINE_SPENDABLE) {
-          addressBalances.at(addressString).spendable = true;
-        } else {
-          addressBalances.at(addressString).spendable = false;
-        }
+          if (txType == 0) {
+              addressBalances.at(addressString).confirmed += wtx.vout[i].nValue;
+              confirmed += wtx.vout[i].nValue;
+          } else if (txType == 1) {
+              addressBalances.at(addressString).immature+= wtx.vout[i].nValue;
+              immature += wtx.vout[i].nValue;
+          } else if (txType == 2) {
+              addressBalances.at(addressString).unconfirmed += wtx.vout[i].nValue;
+              unconfirmed += wtx.vout[i].nValue;
+          } else if (txType == 3) {
+              addressBalances.at(addressString).locked += wtx.vout[i].nValue;
+              locked += wtx.vout[i].nValue;
+          }
+          if (mine == ISMINE_SPENDABLE) {
+              addressBalances.at(addressString).spendable = true;
+          } else {
+              addressBalances.at(addressString).spendable = false;
+          }
 
 
       }
@@ -2141,38 +2147,36 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
               libzcash::SaplingExtendedFullViewingKey extfvk;
               if(pwalletMain->GetSaplingIncomingViewingKey(addr, ivk)) {
                   if(pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
-                      if (!pwalletMain->HaveSaplingSpendingKey(extfvk) && !fIncludeWatchonly)
-                          continue;
+                      if (pwalletMain->HaveSaplingSpendingKey(extfvk) || fIncludeWatchonly) {
 
-                      auto pt = libzcash::SaplingNotePlaintext::decrypt(
-                          wtx.vShieldedOutput[op.n].encCiphertext,ivk,wtx.vShieldedOutput[op.n].ephemeralKey,wtx.vShieldedOutput[op.n].cm);
+                          auto pt = libzcash::SaplingNotePlaintext::decrypt(
+                              wtx.vShieldedOutput[op.n].encCiphertext,ivk,wtx.vShieldedOutput[op.n].ephemeralKey,wtx.vShieldedOutput[op.n].cm);
 
-                      if (txType == 0 && pwalletMain->IsLockedNote(op))
-                          txType == 3;
+                          if (txType == 0 && pwalletMain->IsLockedNote(op))
+                              txType == 3;
 
-                      if (pt) {
-                          auto note = pt.get();
-                          string addressString = EncodePaymentAddress(addr);
-                          if (addressBalances.count(addressString) == 0)
-                              addressBalances.insert(make_pair(addressString,txAmounts));
+                          if (pt) {
+                              auto note = pt.get();
+                              string addressString = EncodePaymentAddress(addr);
+                              if (addressBalances.count(addressString) == 0)
+                                  addressBalances.insert(make_pair(addressString,txAmounts));
 
-                          if (txType == 0) {
-                              addressBalances.at(addressString).confirmed += note.value();
-                              privateConfirmed += note.value();
-                          } else if (txType == 1) {
-                              addressBalances.at(addressString).immature += note.value();
-                              privateImmature += note.value();
-                          } else if (txType == 2) {
-                              addressBalances.at(addressString).unconfirmed += note.value();
-                              privateUnconfirmed += note.value();
-                          } else if (txType == 3) {
-                              addressBalances.at(addressString).locked += note.value();
-                              privateLocked += note.value();
+                              if (txType == 0) {
+                                  addressBalances.at(addressString).confirmed += note.value();
+                                  privateConfirmed += note.value();
+                              } else if (txType == 1) {
+                                  addressBalances.at(addressString).immature += note.value();
+                                  privateImmature += note.value();
+                              } else if (txType == 2) {
+                                  addressBalances.at(addressString).unconfirmed += note.value();
+                                  privateUnconfirmed += note.value();
+                              } else if (txType == 3) {
+                                  addressBalances.at(addressString).locked += note.value();
+                                  privateLocked += note.value();
+                              }
+                              addressBalances.at(addressString).spendable = pwalletMain->HaveSaplingSpendingKey(extfvk);
+                              continue;
                           }
-                          addressBalances.at(addressString).spendable = pwalletMain->HaveSaplingSpendingKey(extfvk);
-
-                          continue;
-
                       }
                   }
               }
@@ -2182,7 +2186,6 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
       for (auto & pair : wtx.mapSproutNoteData) {
           JSOutPoint jsop = pair.first;
           SproutNoteData nd = pair.second;
-          libzcash::SproutPaymentAddress pa = nd.address;
 
           int i = jsop.js; // Index into CTransaction.vjoinsplit
           int j = jsop.n; // Index into JSDescription.ciphertexts
@@ -2193,39 +2196,37 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
           for (auto addr : zc_addresses) {
               try {
-                  if (!pwalletMain->HaveSproutSpendingKey(addr) && !fIncludeWatchonly)
+                  if (pwalletMain->HaveSproutSpendingKey(addr) || fIncludeWatchonly) {
+
+                      ZCNoteDecryption decryptor;
+                      pwalletMain->GetNoteDecryptor(addr, decryptor);
+
+                      // determine amount of funds in the note
+                      auto hSig = wtx.vjoinsplit[i].h_sig(*pzcashParams, wtx.joinSplitPubKey);
+                      SproutNotePlaintext pt = libzcash::SproutNotePlaintext::decrypt(decryptor,wtx.vjoinsplit[i].ciphertexts[j],wtx.vjoinsplit[i].ephemeralKey,hSig,(unsigned char) j);
+
+                      auto note = pt.note(addr);
+                      string addressString = EncodePaymentAddress(addr);
+                      if (addressBalances.count(addressString) == 0)
+                          addressBalances.insert(make_pair(addressString,txAmounts));
+
+                      if (txType == 0) {
+                          addressBalances.at(addressString).confirmed += note.value();
+                          privateConfirmed += note.value();
+                      } else if (txType == 1) {
+                          addressBalances.at(addressString).immature+= note.value();
+                          privateImmature += note.value();
+                      } else if (txType == 2) {
+                          addressBalances.at(addressString).unconfirmed += note.value();
+                          privateUnconfirmed += note.value();
+                      } else if (txType == 3) {
+                          addressBalances.at(addressString).locked += note.value();
+                          privateLocked += note.value();
+                      }
+                      addressBalances.at(addressString).spendable = pwalletMain->HaveSproutSpendingKey(addr);
+
                       continue;
-
-                  SproutViewingKey vk;
-                  pwalletMain->GetSproutViewingKey(addr, vk);
-                  ZCNoteDecryption decryptor(vk.sk_enc);
-
-                  // determine amount of funds in the note
-                  auto hSig = wtx.vjoinsplit[i].h_sig(*pzcashParams, wtx.joinSplitPubKey);
-
-                  SproutNotePlaintext pt = libzcash::SproutNotePlaintext::decrypt(decryptor,wtx.vjoinsplit[i].ciphertexts[j],wtx.vjoinsplit[i].ephemeralKey,hSig,(unsigned char) j);
-
-                  auto note = pt.note(addr);
-                  string addressString = EncodePaymentAddress(addr);
-                  if (addressBalances.count(addressString) == 0)
-                      addressBalances.insert(make_pair(addressString,txAmounts));
-
-                  if (txType == 0) {
-                      addressBalances.at(addressString).confirmed += note.value();
-                      privateConfirmed += note.value();
-                  } else if (txType == 1) {
-                      addressBalances.at(addressString).immature+= note.value();
-                      privateImmature += note.value();
-                  } else if (txType == 2) {
-                      addressBalances.at(addressString).unconfirmed += note.value();
-                      privateUnconfirmed += note.value();
-                  } else if (txType == 3) {
-                      addressBalances.at(addressString).locked += note.value();
-                      privateLocked += note.value();
                   }
-                  addressBalances.at(addressString).spendable = pwalletMain->HaveSproutSpendingKey(addr);
-
-                  continue;
 
               } catch (const note_decryption_failed &err) {
                 //do nothing
