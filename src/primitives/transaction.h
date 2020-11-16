@@ -45,6 +45,8 @@
 #include "zcash/JoinSplit.hpp"
 #include "zcash/Proof.hpp"
 
+static const int SERIALIZE_TRANSACTION_NO_WITNESS = 0x40000000;
+
 extern uint32_t ASSETCHAINS_MAGIC;
 extern std::string ASSETCHAINS_SELFIMPORT;
 
@@ -385,7 +387,7 @@ class SaplingOutPoint : public BaseOutPoint
 {
 public:
     SaplingOutPoint() : BaseOutPoint() {};
-    SaplingOutPoint(uint256 hashIn, uint32_t nIn) : BaseOutPoint(hashIn, nIn) {}; 
+    SaplingOutPoint(uint256 hashIn, uint32_t nIn) : BaseOutPoint(hashIn, nIn) {};
     std::string ToString() const;
 };
 
@@ -717,6 +719,13 @@ public:
     // Compute modified tx size for priority calculation (optionally given tx size)
     unsigned int CalculateModifiedSize(unsigned int nTxSize=0) const;
 
+    /**
+     * Get the total transaction size in bytes, including witness data.
+     * "Total Size" defined in BIP141 and BIP144.
+     * @return Total transaction size in bytes
+     */
+    unsigned int GetTotalSize() const;
+    
     bool IsMint() const
     {
         return IsCoinImport() || IsCoinBase();

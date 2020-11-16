@@ -19,13 +19,13 @@ BITCOIN_CLI_BIN=$(top_builddir)/src/komodo-cli$(EXEEXT)
 BITCOIN_WIN_INSTALLER=$(PACKAGE)-$(PACKAGE_VERSION)-win$(WINDOWS_BITS)-setup$(EXEEXT)
 
 if TARGET_DARWIN
-OSX_APP=Agama.app
-OSX_DMG=Agama.dmg
+OSX_APP=Komodo-Qt.app
+OSX_DMG=Komodo-Core.dmg
 OSX_BACKGROUND_IMAGE=background.tiff
 OSX_DEPLOY_SCRIPT=$(top_srcdir)/contrib/macdeploy/macdeployqtplus
 OSX_FANCY_PLIST=$(top_srcdir)/contrib/macdeploy/fancy.plist
 OSX_BASE_LPROJ_DIR=$(top_srcdir)/contrib/macdeploy/Base.lproj/InfoPlist.strings
-OSX_INSTALLER_ICONS=$(top_srcdir)/src/qt/res/icons/bitcoin.icns
+OSX_INSTALLER_ICONS=$(top_srcdir)/src/qt/res/icons/pirate.icns
 OSX_PLIST=$(top_srcdir)/share/qt/Info.plist #not installed
 OSX_QT_TRANSLATIONS = da,de,es,hu,ru,uk,zh_CN,zh_TW
 endif

@@ -41,6 +41,11 @@ int64_t GetTimeMicros()
             std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
+int64_t GetSystemTimeInSeconds()
+{
+    return GetTimeMicros()/1000000;
+}
+
 void MilliSleep(int64_t n)
 {
     boost::this_thread::sleep_for(boost::chrono::milliseconds(n));

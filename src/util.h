@@ -46,6 +46,9 @@
 
 #define _MAX_BLOCK_SIZE (4096 * 1024) // changing just _MAX_BLOCK_SIZE will hardfork to that size
 
+// Application startup time (used for uptime calculation)
+int64_t GetStartupTime();
+
 static const bool DEFAULT_LOGTIMEMICROS = false;
 static const bool DEFAULT_LOGIPS        = false;
 static const bool DEFAULT_LOGTIMESTAMPS = true;
@@ -182,7 +185,7 @@ inline bool IsSwitchChar(char c)
  * @param strVal string to split
  * @param outVals array of numbers from string or default
  *      if the string is null, nDefault is used for all array entries
- *      else if the string has fewer than _MAX_ERAS entries, then the last 
+ *      else if the string has fewer than _MAX_ERAS entries, then the last
  *      entry fills remaining entries
  */
 void Split(const std::string& strVal, int32_t outsize, uint64_t *outVals, uint64_t nDefault);
@@ -213,6 +216,14 @@ int64_t GetArg(const std::string& strArg, int64_t nDefault);
  * @return command-line argument or default value
  */
 bool GetBoolArg(const std::string& strArg, bool fDefault);
+
+/**
+ * Return true if the given argument has been manually set
+ *
+ * @param strArg Argument to get (e.g. "-foo")
+ * @return true if the argument has been set
+ */
+bool IsArgSet(const std::string& strArg);
 
 /**
  * Set an argument if it doesn't already have a value
@@ -255,6 +266,8 @@ std::string HelpMessageOpt(const std::string& option, const std::string& message
  * when boost is newer than 1.56.
  */
 int GetNumCores();
+
+std::string CopyrightHolders(const std::string& strPrefix);
 
 void SetThreadPriority(int nPriority);
 void RenameThread(const char* name);

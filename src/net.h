@@ -21,6 +21,7 @@
 #ifndef BITCOIN_NET_H
 #define BITCOIN_NET_H
 
+#include "addrdb.h"
 #include "bloom.h"
 #include "compat.h"
 #include "hash.h"
@@ -78,6 +79,8 @@ static const unsigned int DEFAULT_MAX_PEER_CONNECTIONS = 384;
 /** The period before a network upgrade activates, where connections to upgrading peers are preferred (in blocks). */
 static const int NETWORK_UPGRADE_PEER_PREFERENCE_BLOCK_PERIOD = 24 * 24 * 3;
 
+extern std::atomic<bool> fNetworkActive;
+
 unsigned int ReceiveFloodSize();
 unsigned int SendBufferSize();
 
@@ -95,10 +98,33 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler);
 bool StopNode();
 void SocketSendData(CNode *pnode);
 
+void GetBanned(banmap_t &banmap);
+void SetBanned(const banmap_t &banmap);
+
+    //!check is the banlist has unwritten changes
+bool BannedSetIsDirty();
+    //!set the "dirty" flag for the banlist
+void SetBannedSetDirty(bool dirty=true);
+    //!clean unused entries (if bantime has expired)
+void SweepBanned();
+
 typedef int NodeId;
+
+enum NumConnections {
+    CONNECTIONS_NONE = 0,
+    CONNECTIONS_IN = (1U << 0),
+    CONNECTIONS_OUT = (1U << 1),
+    CONNECTIONS_ALL = (CONNECTIONS_IN | CONNECTIONS_OUT),
+};
+
+size_t GetNodeCount(NumConnections num);
+
+bool GetNetworkActive();
+void SetNetworkActive(bool active);
 
 class CNodeStats;
 void CopyNodeStats(std::vector<CNodeStats>& vstats);
+
 
 struct CombinerAll
 {
@@ -207,6 +233,7 @@ public:
     bool fWhitelisted;
     double dPingTime;
     double dPingWait;
+    double dMinPing;
     std::string addrLocal;
     // Address of this peer
     CAddress addr;
@@ -320,8 +347,8 @@ protected:
 
     // Denial-of-service detection/prevention
     // Key is IP address, value is banned-until-time
-    static std::map<CSubNet, int64_t> setBanned;
-    static CCriticalSection cs_setBanned;
+    // static std::map<CSubNet, int64_t> setBanned;
+    // static CCriticalSection cs_setBanned;
 
     // Whitelisted ranges. Any node connecting from these is automatically
     // whitelisted (as well as those connecting to whitelisted binds).
@@ -431,7 +458,7 @@ public:
         if (addr.IsValid() && !addrKnown.contains(addr.GetKey())) {
             if (vAddrToSend.size() >= MAX_ADDR_TO_SEND) {
                 vAddrToSend[insecure_rand() % vAddrToSend.size()] = addr;
-            } else { 
+            } else {
                 vAddrToSend.push_back(addr);
             }
         }
@@ -648,8 +675,8 @@ public:
     static void ClearBanned(); // needed for unit testing
     static bool IsBanned(CNetAddr ip);
     static bool IsBanned(CSubNet subnet);
-    static void Ban(const CNetAddr &ip, int64_t bantimeoffset = 0, bool sinceUnixEpoch = false);
-    static void Ban(const CSubNet &subNet, int64_t bantimeoffset = 0, bool sinceUnixEpoch = false);
+    static void Ban(const CNetAddr &ip, const BanReason& reason, int64_t bantimeoffset = 0, bool sinceUnixEpoch = false);
+    static void Ban(const CSubNet &subNet, const BanReason& reason, int64_t bantimeoffset = 0, bool sinceUnixEpoch = false);
     static bool Unban(const CNetAddr &ip);
     static bool Unban(const CSubNet &ip);
     static void GetBanned(std::map<CSubNet, int64_t> &banmap);

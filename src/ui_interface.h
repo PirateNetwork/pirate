@@ -9,6 +9,8 @@
 #include <stdint.h>
 #include <string>
 
+#include "chain.h"
+
 #include <boost/signals2/last_value.hpp>
 #include <boost/signals2/signal.hpp>
 
@@ -84,6 +86,9 @@ public:
     /** Number of network connections changed. */
     boost::signals2::signal<void (int newNumConnections)> NotifyNumConnectionsChanged;
 
+    /** Network activity state changed. */
+    boost::signals2::signal<void (bool networkActive)> NotifyNetworkActiveChanged;
+
     /**
      * New, updated or cancelled alert.
      * @note called with lock cs_mapAlerts held.
@@ -94,10 +99,16 @@ public:
     boost::signals2::signal<void (CWallet* wallet)> LoadWallet;
 
     /** Show progress e.g. for verifychain */
-    boost::signals2::signal<void (const std::string &title, int nProgress)> ShowProgress;
+    boost::signals2::signal<void (const std::string &title, int nProgress, bool resume_possible)> ShowProgress;
 
     /** New block has been accepted */
-    boost::signals2::signal<void (const uint256& hash)> NotifyBlockTip;
+    boost::signals2::signal<void (bool, const CBlockIndex *)> NotifyBlockTip;
+
+    //    /** Best header has changed */
+    boost::signals2::signal<void (bool, const CBlockIndex *)> NotifyHeaderTip;
+
+    /** Banlist did change. */
+    boost::signals2::signal<void (void)> BannedListChanged;
 };
 
 extern CClientUIInterface uiInterface;

@@ -21,6 +21,22 @@
 #ifndef BITCOIN_CONSENSUS_CONSENSUS_H
 #define BITCOIN_CONSENSUS_CONSENSUS_H
 
+#if defined(_MSC_VER) || defined(macintosh) || defined(__APPLE__) || defined(__APPLE_CC__)
+typedef signed int            int32_t;
+typedef unsigned int          uint32_t;
+#endif
+
+#if defined(linux) || defined(__linux)
+#include <stdint.h>
+#endif
+
+#if defined(_WINDOWS) || defined(_WIN32)
+#if defined(__MINGW__) || defined(__MINGW32__) || defined(__MINGW64__)
+/** x86_64-w64-mingw32-gcc detect */
+#include <stdint.h>
+#endif
+#endif
+
 /** The minimum allowed block version (network rule) */
 static const int32_t MIN_BLOCK_VERSION = 4;
 /** The minimum allowed transaction version (network rule) */
@@ -53,5 +69,7 @@ enum {
 
 /** Used as the flags parameter to CheckFinalTx() in non-consensus code */
 static const unsigned int STANDARD_LOCKTIME_VERIFY_FLAGS = LOCKTIME_MEDIAN_TIME_PAST;
+
+static const int WITNESS_SCALE_FACTOR = 4;
 
 #endif // BITCOIN_CONSENSUS_CONSENSUS_H

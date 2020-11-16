@@ -598,6 +598,8 @@ public:
     bool IsCoinImport() const;
     bool MayAcceptCryptoCondition() const;
 
+    bool IsWitnessProgram(int& version, std::vector<unsigned char>& program) const;
+
     /** Called by IsStandardTx and P2SH/BIP62 VerifyScript (which makes it consensus-critical). */
     bool IsPushOnly(const_iterator pc) const;
     bool IsPushOnly() const;

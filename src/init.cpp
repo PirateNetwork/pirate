@@ -618,13 +618,18 @@ std::string HelpMessage(HelpMessageMode mode)
     return strUsage;
 }
 
-static void BlockNotifyCallback(const uint256& hashNewTip)
+static void BlockNotifyCallback(bool initialSync, const CBlockIndex *pBlockIndex)
 {
-    std::string strCmd = GetArg("-blocknotify", "");
+    if (initialSync || !pBlockIndex)
+        return;
 
-    boost::replace_all(strCmd, "%s", hashNewTip.GetHex());
-    boost::thread t(runCommand, strCmd); // thread runs free
+    std::string strCmd = GetArg("-blocknotify", "");
+    if (!strCmd.empty()) {
+        boost::replace_all(strCmd, "%s", pBlockIndex->GetBlockHash().GetHex());
+        boost::thread t(runCommand, strCmd); // thread runs free
+    }
 }
+
 
 struct CImportingNow
 {
@@ -2012,6 +2017,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             }
         }
         pwalletMain->SetBroadcastTransactions(GetBoolArg("-walletbroadcast", true));
+
+        vpwallets.push_back(pwalletMain);
     } // (!fDisableWallet)
 #else // ENABLE_WALLET
     LogPrintf("No wallet support compiled in!\n");

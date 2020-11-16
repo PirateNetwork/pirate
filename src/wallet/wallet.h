@@ -51,6 +51,9 @@
 #include <utility>
 #include <vector>
 
+typedef CWallet* CWalletRef;
+extern std::vector<CWalletRef> vpwallets;
+
 /**
  * Settings
  */
@@ -60,6 +63,7 @@ extern unsigned int nTxConfirmTarget;
 extern bool bSpendZeroConfChange;
 extern bool fSendFreeTransactions;
 extern bool fPayAtLeastCustomFee;
+extern bool fWalletRbf;
 extern bool fTxDeleteEnabled;
 extern bool fTxConflictDeleteEnabled;
 extern int fDeleteInterval;
@@ -70,6 +74,8 @@ extern unsigned int fKeepLastNTransactions;
 
 //! -paytxfee default
 static const CAmount DEFAULT_TRANSACTION_FEE = 0;
+//! -fallbackfee default
+static const CAmount DEFAULT_FALLBACK_FEE = 20000;
 //! -paytxfee will warn if called with a higher fee than this amount (in satoshis) per KB
 static const CAmount nHighTransactionFeeWarning = 0.01 * COIN;
 //! -maxtxfee default
@@ -80,6 +86,12 @@ static const unsigned int DEFAULT_TX_CONFIRM_TARGET = 2;
 static const CAmount nHighTransactionMaxFeeWarning = 100 * nHighTransactionFeeWarning;
 //! Largest (in bytes) free transaction we're willing to create
 static const unsigned int MAX_FREE_TRANSACTION_CREATE_SIZE = 1000;
+//! target minimum change amount
+static const CAmount MIN_CHANGE = CENT;
+
+static const bool DEFAULT_DISABLE_WALLET = false;
+static const bool DEFAULT_WALLET_RBF = false;
+
 //! Size of witness cache
 //  Should be large enough that we can expect not to reorg beyond our cache
 //  unless there is some exceptional network disruption.
@@ -373,6 +385,9 @@ struct SaplingNoteEntry
 class CMerkleTx : public CTransaction
 {
 private:
+    /** Constant used in hashBlock to indicate tx has been abandoned */
+    static const uint256 ABANDON_HASH;
+
     int GetDepthInMainChainINTERNAL(const CBlockIndex* &pindexRet) const;
 
 public:
@@ -425,6 +440,8 @@ public:
     bool IsInMainChain() const { const CBlockIndex *pindexRet; return GetDepthInMainChainINTERNAL(pindexRet) > 0; }
     int GetBlocksToMaturity() const;
     bool AcceptToMemoryPool(bool fLimitFree=true, bool fRejectAbsurdFee=true);
+
+    bool isAbandoned() const { return (hashBlock == ABANDON_HASH); }
 };
 
 /**
@@ -622,6 +639,7 @@ public:
         return (GetDebit(filter) > 0);
     }
 
+    bool InMempool() const;
     bool IsTrusted() const;
 
     bool WriteToDisk(CWalletDB *pwalletdb);
@@ -937,6 +955,11 @@ public:
     MasterKeyMap mapMasterKeys;
     unsigned int nMasterKeyMaxID;
 
+    std::string GetName() const
+    {
+        return "dummy";
+    }
+
     CWallet()
     {
         SetNull();
@@ -1029,6 +1052,7 @@ public:
     std::map<uint256, int> mapRequestCount;
 
     std::map<CTxDestination, CAddressBookData> mapAddressBook;
+    std::map<libzcash::PaymentAddress, CAddressBookData> mapZAddressBook;
 
     CPubKey vchDefaultKey;
 
@@ -1044,6 +1068,16 @@ public:
     bool CanSupportFeature(enum WalletFeature wf) { AssertLockHeld(cs_wallet); return nWalletMaxVersion >= wf; }
 
     void AvailableCoins(std::vector<COutput>& vCoins, bool fOnlyConfirmed=true, const CCoinControl *coinControl = NULL, bool fIncludeZeroValue=false, bool fIncludeCoinBase=true) const;
+    /**
+     * Return list of available coins and locked coins grouped by non-change output address.
+     */
+    std::map<CTxDestination, std::vector<COutput>> ListCoins() const;
+
+    /**
+     * Find non-change parent output.
+     */
+    const CTxOut& FindNonChangeParentOutput(const CWalletTx& tx, int output) const;
+
     bool SelectCoinsMinConf(const CAmount& nTargetValue, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet) const;
 
     bool IsSpent(const uint256& hash, unsigned int n) const;
@@ -1057,7 +1091,7 @@ public:
     void LockCoin(COutPoint& output);
     void UnlockCoin(COutPoint& output);
     void UnlockAllCoins();
-    void ListLockedCoins(std::vector<COutPoint>& vOutpts);
+    void ListLockedCoins(std::vector<COutPoint>& vOutpts) const;
 
     bool IsLockedNote(const JSOutPoint& outpt) const;
     void LockNote(const JSOutPoint& output);
@@ -1100,6 +1134,8 @@ public:
     bool LoadDestData(const CTxDestination &dest, const std::string &key, const std::string &value);
     //! Look up a destination data tuple in the store, return true if found false otherwise
     bool GetDestData(const CTxDestination &dest, const std::string &key, std::string *value) const;
+    //! Get all destination values matching a prefix.
+    std::vector<std::string> GetDestValues(const std::string& prefix) const;
 
     //! Adds a watch-only address to the store, and saves it to disk.
     bool AddWatchOnly(const CScript &dest);
@@ -1214,13 +1250,17 @@ public:
     CAmount GetWatchOnlyBalance() const;
     CAmount GetUnconfirmedWatchOnlyBalance() const;
     CAmount GetImmatureWatchOnlyBalance() const;
+    CAmount GetAvailableBalance(const CCoinControl* coinControl = nullptr) const;
+
     bool FundTransaction(CMutableTransaction& tx, CAmount& nFeeRet, int& nChangePosRet, std::string& strFailReason);
     bool CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey, CAmount& nFeeRet, int& nChangePosRet,
                            std::string& strFailReason, const CCoinControl *coinControl = NULL, bool sign = true);
     bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey);
 
     static CFeeRate minTxFee;
-    static CAmount GetMinimumFee(unsigned int nTxBytes, unsigned int nConfirmTarget, const CTxMemPool& pool);
+    static CFeeRate fallbackFee;
+
+    // static CAmount GetMinimumFee(unsigned int nTxBytes, unsigned int nConfirmTarget, const CTxMemPool& pool);
 
     bool NewKeyPool();
     bool TopUpKeyPool(unsigned int kpSize = 0);
@@ -1283,8 +1323,10 @@ public:
     DBErrors ZapWalletTx(std::vector<CWalletTx>& vWtx);
 
     bool SetAddressBook(const CTxDestination& address, const std::string& strName, const std::string& purpose);
+    bool SetZAddressBook(const libzcash::PaymentAddress& address, const std::string& strName, const std::string& purpose);
 
     bool DelAddressBook(const CTxDestination& address);
+    bool DelZAddressBook(const libzcash::PaymentAddress& address);
 
     void UpdatedTransaction(const uint256 &hashTx);
 
@@ -1332,6 +1374,11 @@ public:
             &address, const std::string &label, bool isMine,
             const std::string &purpose,
             ChangeType status)> NotifyAddressBookChanged;
+
+    boost::signals2::signal<void (CWallet *wallet, const libzcash::PaymentAddress
+            &address, const std::string &label, bool isMine,
+            const std::string &purpose,
+            ChangeType status)> NotifyZAddressBookChanged;
 
     /**
      * Wallet transaction added, removed or updated.

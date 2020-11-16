@@ -8,6 +8,8 @@ define(_ZC_BUILD_VAL, m4_if(m4_eval(_CLIENT_VERSION_BUILD < 25), 1, m4_incr(_CLI
 define(_CLIENT_VERSION_SUFFIX, m4_if(m4_eval(_CLIENT_VERSION_BUILD < 25), 1, _CLIENT_VERSION_REVISION-beta$1, m4_eval(_CLIENT_VERSION_BUILD < 50), 1, _CLIENT_VERSION_REVISION-rc$1, m4_eval(_CLIENT_VERSION_BUILD == 50), 1, _CLIENT_VERSION_REVISION, _CLIENT_VERSION_REVISION-$1)))
 define(_CLIENT_VERSION_IS_RELEASE, true)
 define(_COPYRIGHT_YEAR, 2018)
+define(_COPYRIGHT_HOLDERS, "The %s developers")
+define(_COPYRIGHT_HOLDERS_SUBSTITUTION, "Pirate")
 AC_INIT([Verus-CLI],[_CLIENT_VERSION_MAJOR._CLIENT_VERSION_MINOR._CLIENT_VERSION_SUFFIX(_ZC_BUILD_VAL)],[https://github.com/VerusCoin/VerusCoin/issues],[verus-cli])
 AC_CONFIG_SRCDIR([src/main.cpp])
 AC_CONFIG_HEADERS([src/config/bitcoin-config.h])
@@ -15,6 +17,7 @@ AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([build-aux/m4])
 
 BITCOIN_DAEMON_NAME=komodod
+BITCOIN_GUI_NAME=pirate-qt
 BITCOIN_CLI_NAME=komodo-cli
 BITCOIN_TX_NAME=komodo-tx
 
@@ -118,6 +121,12 @@ AC_ARG_ENABLE([tsan],
   [instrument the executables with tsan (default is no)])],
   [use_tsan=$enableval],
   [use_tsan=no])
+
+AC_ARG_WITH([qrencode],
+  [AS_HELP_STRING([--with-qrencode],
+  [enable QR code support (default is yes if qt is enabled and libqrencode is found)])],
+  [use_qr=$withval],
+  [use_qr=auto])
 
 if test x$TARGET_OS = xdarwin; then
 AC_ARG_ENABLE([hardening],
@@ -331,30 +340,30 @@ case $host in
          fi
        fi
 
-dnl       AC_CHECK_PROG([BREW],brew, brew)
-dnl       if test x$BREW = xbrew; then
+       AC_CHECK_PROG([BREW],brew, brew)
+       if test x$BREW = xbrew; then
         dnl These Homebrew packages may be keg-only, meaning that they won't be found
         dnl in expected paths because they may conflict with system files. Ask
         dnl Homebrew where each one is located, then adjust paths accordingly.
         dnl It's safe to add these paths even if the functionality is disabled by
-        dnl the user (--without-wallet for example).
+        dnl the user (--without-wallet or --without-gui for example).
 
-dnl         openssl_prefix=`$BREW --prefix openssl 2>/dev/null`
-dnl         bdb_prefix=`$BREW --prefix berkeley-db4 2>/dev/null`
-dnl         qt5_prefix=`$BREW --prefix qt5 2>/dev/null`
-dnl         if test x$openssl_prefix != x; then
-dnl           PKG_CONFIG_PATH="$PKG_CONFIG_PATH"
-dnl           export PKG_CONFIG_PATH
-dnl         fi
-dnl         if test x$bdb_prefix != x; then
-dnl           CPPFLAGS="$CPPFLAGS -I$bdb_prefix/include"
-dnl           LIBS="$LIBS -L$bdb_prefix/lib"
-dnl         fi
-dnl         if test x$qt5_prefix != x; then
-dnl           PKG_CONFIG_PATH="$qt5_prefix/lib/pkgconfig:$PKG_CONFIG_PATH"
-dnl           export PKG_CONFIG_PATH
-dnl         fi
-dnl       fi
+         openssl_prefix=`$BREW --prefix openssl 2>/dev/null`
+         bdb_prefix=`$BREW --prefix berkeley-db4 2>/dev/null`
+         qt5_prefix=`$BREW --prefix qt5 2>/dev/null`
+         if test x$openssl_prefix != x; then
+           PKG_CONFIG_PATH="$PKG_CONFIG_PATH"
+           export PKG_CONFIG_PATH
+         fi
+         if test x$bdb_prefix != x; then
+           CPPFLAGS="$CPPFLAGS -I$bdb_prefix/include"
+           LIBS="$LIBS -L$bdb_prefix/lib"
+         fi
+         if test x$qt5_prefix != x; then
+           PKG_CONFIG_PATH="$qt5_prefix/lib/pkgconfig:$PKG_CONFIG_PATH"
+           export PKG_CONFIG_PATH
+         fi
+       fi
      else
        case $build_os in
          *darwin*)
@@ -612,7 +621,12 @@ else
     AC_DEFINE(ENABLE_PROTON, 0, [Define to 1 to enable Proton functions])
 fi
 
-if test x$build_bitcoin_utils$build_bitcoind$use_tests = xnonono; then
+BITCOIN_QT_INIT
+
+dnl sets $bitcoin_enable_qt, $bitcoin_enable_qt_test, $bitcoin_enable_qt_dbus
+BITCOIN_QT_CONFIGURE([$use_pkgconfig], [qt5])
+
+if test x$build_bitcoin_utils$build_bitcoind$use_tests$bitcoin_enable_qt = xnononono; then
     use_boost=no
 else
     use_boost=yes
@@ -679,6 +693,12 @@ if test x$use_pkgconfig = xyes; then
     [
       PKG_CHECK_MODULES([SSL], [libssl],, [AC_MSG_ERROR(openssl  not found.)])
       PKG_CHECK_MODULES([CRYPTO], [libcrypto],,[AC_MSG_ERROR(libcrypto  not found.)])
+      if test x$enable_bip70 != xno; then
+        BITCOIN_QT_CHECK([PKG_CHECK_MODULES([PROTOBUF], [protobuf], [have_protobuf=yes], [BITCOIN_QT_FAIL(libprotobuf not found)])])
+      fi
+      if test x$use_qr != xno; then
+        BITCOIN_QT_CHECK([PKG_CHECK_MODULES([QR], [libqrencode], [have_qrencode=yes], [have_qrencode=no])])
+      fi
       if test x$build_bitcoin_utils$build_bitcoind$bitcoin_enable_qt$use_tests != xnononono; then
         PKG_CHECK_MODULES([EVENT], [libevent],, [AC_MSG_ERROR(libevent not found.)])
         if test x$TARGET_OS != xwindows; then
@@ -736,6 +756,13 @@ else
         ZMQ_CFLAGS="$ZMQ_CFLAGS -DZMQ_STATIC"
       ;;
     esac
+  fi
+  if test x$enable_bip70 != xno; then
+    BITCOIN_QT_CHECK(AC_CHECK_LIB([protobuf] ,[main],[PROTOBUF_LIBS=-lprotobuf], BITCOIN_QT_FAIL(libprotobuf not found)))
+  fi
+  if test x$use_qr != xno; then
+    BITCOIN_QT_CHECK([AC_CHECK_LIB([qrencode], [main],[QR_LIBS=-lqrencode], [have_qrencode=no])])
+    BITCOIN_QT_CHECK([AC_CHECK_HEADER([qrencode.h],, have_qrencode=no)])
   fi
 fi
 
@@ -810,6 +837,11 @@ AX_CHECK_COMPILE_FLAG([-Wno-builtin-declaration-mismatch],[CXXFLAGS="$CXXFLAGS -
 
 LIBZCASH_LIBS="-lgmp -lgmpxx $BOOST_SYSTEM_LIB -lcrypto -lsodium $RUST_LIBS"
 
+
+if test x$enable_bip70 != xno; then
+  BITCOIN_QT_PATH_PROGS([PROTOC], [protoc],$protoc_bin_path)
+fi
+
 AC_MSG_CHECKING([whether to build bitcoind])
 AM_CONDITIONAL([BUILD_BITCOIND], [test x$build_bitcoind = xyes])
 AC_MSG_RESULT($build_bitcoind)
@@ -868,6 +900,25 @@ else
   AC_MSG_RESULT(no)
 fi
 
+dnl these are only used when qt is enabled
+BUILD_TEST_QT=""
+if test x$bitcoin_enable_qt != xno; then
+  dnl enable qr support
+  AC_MSG_CHECKING([whether to build GUI with support for QR codes])
+  if test x$have_qrencode = xno; then
+    if test x$use_qr = xyes; then
+      AC_MSG_ERROR([QR support requested but cannot be built. Use --without-qrencode])
+    fi
+    use_qr=no
+  else
+    if test x$use_qr != xno; then
+      AC_DEFINE([USE_QRCODE],[1],[Define if QR support should be compiled in])
+      use_qr=yes
+    fi
+  fi
+  AC_MSG_RESULT([$use_qr])
+fi
+
 AM_CONDITIONAL([ENABLE_ZMQ], [test "x$use_zmq" = "xyes"])
 
 AM_CONDITIONAL([ENABLE_PROTON], [test "x$use_proton" = "xyes"])
@@ -899,6 +950,9 @@ AM_CONDITIONAL([TARGET_WINDOWS], [test x$TARGET_OS = xwindows])
 AM_CONDITIONAL([ENABLE_WALLET],[test x$enable_wallet = xyes])
 AM_CONDITIONAL([ENABLE_MINING],[test x$enable_mining = xyes])
 AM_CONDITIONAL([ENABLE_TESTS],[test x$BUILD_TEST = xyes])
+AM_CONDITIONAL([ENABLE_QT],[test x$bitcoin_enable_qt = xyes])
+AM_CONDITIONAL([ENABLE_QT_TESTS],[test x$BUILD_TEST_QT = xyes])
+AM_CONDITIONAL([USE_QRCODE], [test x$use_qr = xyes])
 AM_CONDITIONAL([USE_LCOV],[test x$use_lcov = xyes])
 AM_CONDITIONAL([GLIBC_BACK_COMPAT],[test x$use_glibc_compat = xyes])
 AM_CONDITIONAL([HARDEN],[test x$use_hardening = xyes])
@@ -912,12 +966,16 @@ AC_DEFINE(CLIENT_VERSION_REVISION, _CLIENT_VERSION_REVISION, [Build revision])
 AC_DEFINE(CLIENT_VERSION_BUILD, _CLIENT_VERSION_BUILD, [Version Build])
 AC_DEFINE(CLIENT_VERSION_IS_RELEASE, _CLIENT_VERSION_IS_RELEASE, [Version is release])
 AC_DEFINE(COPYRIGHT_YEAR, _COPYRIGHT_YEAR, [Version is release])
+AC_DEFINE(COPYRIGHT_HOLDERS, _COPYRIGHT_HOLDERS, [---])
+AC_DEFINE(COPYRIGHT_HOLDERS_SUBSTITUTION, _COPYRIGHT_HOLDERS_SUBSTITUTION, [---])
 AC_SUBST(CLIENT_VERSION_MAJOR, _CLIENT_VERSION_MAJOR)
 AC_SUBST(CLIENT_VERSION_MINOR, _CLIENT_VERSION_MINOR)
 AC_SUBST(CLIENT_VERSION_REVISION, _CLIENT_VERSION_REVISION)
 AC_SUBST(CLIENT_VERSION_BUILD, _CLIENT_VERSION_BUILD)
 AC_SUBST(CLIENT_VERSION_IS_RELEASE, _CLIENT_VERSION_IS_RELEASE)
 AC_SUBST(COPYRIGHT_YEAR, _COPYRIGHT_YEAR)
+AC_SUBST(COPYRIGHT_HOLDERS, _COPYRIGHT_HOLDERS)
+AC_SUBST(COPYRIGHT_HOLDERS_SUBSTITUTION, _COPYRIGHT_HOLDERS_SUBSTITUTION)
 AC_SUBST(BITCOIN_DAEMON_NAME)
 AC_SUBST(BITCOIN_CLI_NAME)
 AC_SUBST(BITCOIN_TX_NAME)
@@ -988,15 +1046,21 @@ case $host in
    ;;
 esac
 
-echo 
+echo
 echo "Options used to compile and link:"
 echo "  with wallet   = $enable_wallet"
+echo "  with gui / qt = $bitcoin_enable_qt"
+if test x$bitcoin_enable_qt != xno; then
+    echo "    qt version  = $bitcoin_qt_got_major_vers"
+    echo "    with bip70  = $enable_bip70"
+    echo "    with qr     = $use_qr"
+fi
 echo "  with proton   = $use_proton"
 echo "  with zmq      = $use_zmq"
 echo "  with test     = $use_tests"
 echo "  debug enabled = $enable_debug"
 echo "  werror        = $enable_werror"
-echo 
+echo
 echo "  target os     = $TARGET_OS"
 echo "  build os      = $BUILD_OS"
 echo
@@ -1007,4 +1071,4 @@ echo "  CXX           = $CXX"
 echo "  CXXFLAGS      = $CXXFLAGS"
 echo "  LDFLAGS       = $LDFLAGS"
 echo "  ARFLAGS       = $ARFLAGS"
-echo 
+echo

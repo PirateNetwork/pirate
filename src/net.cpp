@@ -93,6 +93,10 @@ static std::vector<ListenSocket> vhListenSocket;
 CAddrMan addrman;
 int nMaxConnections = DEFAULT_MAX_PEER_CONNECTIONS;
 bool fAddressesInitialized = false;
+std::atomic<bool> fNetworkActive = { true };
+bool setBannedIsDirty = false;
+bool GetNetworkActive() { return fNetworkActive; };
+
 std::string strSubVersion;
 
 vector<CNode*> vNodes;
@@ -116,6 +120,11 @@ CCriticalSection cs_nLastNodeId;
 
 static CSemaphore *semOutbound = NULL;
 static boost::condition_variable messageHandlerCondition;
+
+// Denial-of-service detection/prevention
+// Key is IP address, value is banned-until-time
+banmap_t setBanned;
+CCriticalSection cs_setBanned;
 
 // Signals for message handling
 static CNodeSignals g_signals;
@@ -474,13 +483,38 @@ void CNode::PushVersion()
 
 
 
-std::map<CSubNet, int64_t> CNode::setBanned;
-CCriticalSection CNode::cs_setBanned;
+// std::map<CSubNet, int64_t> CNode::setBanned;
+// CCriticalSection CNode::cs_setBanned;
+
+void DumpBanlist()
+{
+    SweepBanned(); // clean unused entries (if bantime has expired)
+
+    if (!BannedSetIsDirty())
+        return;
+
+    int64_t nStart = GetTimeMillis();
+
+    CBanDB bandb;
+    banmap_t banmap;
+    GetBanned(banmap);
+    if (bandb.Write(banmap)) {
+        SetBannedSetDirty(false);
+    }
+
+    LogPrint("net", "Flushed %d banned node ips/subnets to banlist.dat  %dms\n",
+        banmap.size(), GetTimeMillis() - nStart);
+}
 
 void CNode::ClearBanned()
 {
-    LOCK(cs_setBanned);
-    setBanned.clear();
+    {
+        LOCK(cs_setBanned);
+        setBanned.clear();
+        setBannedIsDirty = true;
+    }
+    DumpBanlist(); //store banlist to disk
+    uiInterface.BannedListChanged();
 }
 
 bool CNode::IsBanned(CNetAddr ip)
@@ -488,12 +522,12 @@ bool CNode::IsBanned(CNetAddr ip)
     bool fResult = false;
     {
         LOCK(cs_setBanned);
-        for (std::map<CSubNet, int64_t>::iterator it = setBanned.begin(); it != setBanned.end(); it++)
+        for (banmap_t::iterator it = setBanned.begin(); it != setBanned.end(); it++)
         {
             CSubNet subNet = (*it).first;
-            int64_t t = (*it).second;
+            CBanEntry banEntry = (*it).second;
 
-            if(subNet.Match(ip) && GetTime() < t)
+            if(subNet.Match(ip) && GetTime() < banEntry.nBanUntil)
                 fResult = true;
         }
     }
@@ -505,30 +539,46 @@ bool CNode::IsBanned(CSubNet subnet)
     bool fResult = false;
     {
         LOCK(cs_setBanned);
-        std::map<CSubNet, int64_t>::iterator i = setBanned.find(subnet);
+        banmap_t::iterator i = setBanned.find(subnet);
         if (i != setBanned.end())
         {
-            int64_t t = (*i).second;
-            if (GetTime() < t)
+            CBanEntry banEntry = (*i).second;
+            if (GetTime() < banEntry.nBanUntil)
                 fResult = true;
         }
     }
     return fResult;
 }
 
-void CNode::Ban(const CNetAddr& addr, int64_t bantimeoffset, bool sinceUnixEpoch) {
+void CNode::Ban(const CNetAddr& addr, const BanReason &banReason, int64_t bantimeoffset, bool sinceUnixEpoch) {
     CSubNet subNet(addr.ToString()+(addr.IsIPv4() ? "/32" : "/128"));
-    Ban(subNet, bantimeoffset, sinceUnixEpoch);
+    Ban(subNet, banReason, bantimeoffset, sinceUnixEpoch);
 }
 
-void CNode::Ban(const CSubNet& subNet, int64_t bantimeoffset, bool sinceUnixEpoch) {
-    int64_t banTime = GetTime()+GetArg("-bantime", 60*60*24);  // Default 24-hour ban
+void CNode::Ban(const CSubNet& subNet, const BanReason &banReason, int64_t bantimeoffset, bool sinceUnixEpoch) {
+    CBanEntry banEntry(GetTime()+GetArg("-bantime", 60*60*24));  // Default 24-hour ban
     if (bantimeoffset > 0)
-        banTime = (sinceUnixEpoch ? 0 : GetTime() )+bantimeoffset;
+        banEntry.nBanUntil = (sinceUnixEpoch ? 0 : GetTime() )+bantimeoffset;
 
-    LOCK(cs_setBanned);
-    if (setBanned[subNet] < banTime)
-        setBanned[subNet] = banTime;
+    {
+        LOCK(cs_setBanned);
+        if (setBanned[subNet].nBanUntil < banEntry.nBanUntil) {
+            setBanned[subNet] = banEntry;
+            setBannedIsDirty = true;
+        }
+        else
+            return;
+    }
+    uiInterface.BannedListChanged();
+    {
+        LOCK(cs_vNodes);
+        for (CNode* pnode : vNodes) {
+            if (subNet.Match((CNetAddr)pnode->addr))
+                pnode->fDisconnect = true;
+        }
+    }
+    if(banReason == BanReasonManuallyAdded)
+        DumpBanlist(); //store banlist to disk immediately if user requested ban
 }
 
 bool CNode::Unban(const CNetAddr &addr) {
@@ -537,18 +587,64 @@ bool CNode::Unban(const CNetAddr &addr) {
 }
 
 bool CNode::Unban(const CSubNet &subNet) {
-    LOCK(cs_setBanned);
-    if (setBanned.erase(subNet))
-        return true;
-    return false;
+    {
+        LOCK(cs_setBanned);
+        if (!setBanned.erase(subNet))
+            return false;
+        setBannedIsDirty = true;
+    }
+    uiInterface.BannedListChanged();
+    DumpBanlist(); //store banlist to disk immediately
+    return true;
 }
 
-void CNode::GetBanned(std::map<CSubNet, int64_t> &banMap)
+void GetBanned(banmap_t &banMap)
 {
     LOCK(cs_setBanned);
+    // Sweep the banlist so expired bans are not returned
+    SweepBanned();
     banMap = setBanned; //create a thread safe copy
 }
 
+void SetBanned(const banmap_t &banMap)
+{
+    LOCK(cs_setBanned);
+    setBanned = banMap;
+    setBannedIsDirty = true;
+}
+
+void SweepBanned()
+{
+    int64_t now = GetTime();
+
+    LOCK(cs_setBanned);
+    banmap_t::iterator it = setBanned.begin();
+    while(it != setBanned.end())
+    {
+        CSubNet subNet = (*it).first;
+        CBanEntry banEntry = (*it).second;
+        if(now > banEntry.nBanUntil)
+        {
+            setBanned.erase(it++);
+            setBannedIsDirty = true;
+            LogPrint("net", "%s: Removed banned node ip/subnet from banlist.dat: %s\n", __func__, subNet.ToString());
+        }
+        else
+            ++it;
+    }
+}
+
+bool BannedSetIsDirty()
+{
+    LOCK(cs_setBanned);
+    return setBannedIsDirty;
+}
+
+void SetBannedSetDirty(bool dirty)
+{
+    LOCK(cs_setBanned); //reuse setBanned lock for the isDirty flag
+    setBannedIsDirty = dirty;
+}
 
 std::vector<CSubNet> CNode::vWhitelistedRange;
 CCriticalSection CNode::cs_vWhitelistedRange;
@@ -600,6 +696,7 @@ void CNode::copyStats(CNodeStats &stats, const std::vector<bool> &m_asmap)
 
     // Raw ping time is in microseconds, but show it to user as whole seconds (Bitcoin users should be well used to small numbers with many decimal places by now :)
     stats.dPingTime = (((double)nPingUsecTime) / 1e6);
+    stats.dMinPing  = (((double)nMinPingUsecTime) / 1e6);
     stats.dPingWait = (((double)nPingUsecWait) / 1e6);
 
     // Leave string empty if addrLocal invalid (not filled in yet)
@@ -1549,6 +1646,10 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
     // Initiate outbound network connection
     //
     boost::this_thread::interruption_point();
+    if (!fNetworkActive) {
+        return false;
+    }
+
     if (!pszDest) {
         if (IsLocal(addrConnect) ||
             FindNode((CNetAddr)addrConnect) || CNode::IsBanned(addrConnect) ||
@@ -2259,6 +2360,43 @@ void CNode::EndMessage() UNLOCK_FUNCTION(cs_vSend)
         SocketSendData(this);
 
     LEAVE_CRITICAL_SECTION(cs_vSend);
+}
+
+size_t GetNodeCount(NumConnections flags)
+{
+    LOCK(cs_vNodes);
+    if (flags == CONNECTIONS_ALL) // Shortcut if we want total
+        return vNodes.size();
+
+    int nNum = 0;
+    for (const auto& pnode : vNodes) {
+        if (flags & (pnode->fInbound ? CONNECTIONS_IN : CONNECTIONS_OUT)) {
+            nNum++;
+        }
+    }
+
+    return nNum;
+}
+
+void SetNetworkActive(bool active)
+{
+    LogPrint("net", "SetNetworkActive: %s\n", active);
+
+    if (fNetworkActive == active) {
+        return;
+    }
+
+    fNetworkActive = active;
+
+    if (!fNetworkActive) {
+        LOCK(cs_vNodes);
+        // Close sockets to all nodes
+        for (CNode* pnode : vNodes) {
+            pnode->CloseSocketDisconnect();
+        }
+    }
+
+    uiInterface.NotifyNetworkActiveChanged(fNetworkActive);
 }
 
 void CopyNodeStats(std::vector<CNodeStats>& vstats)

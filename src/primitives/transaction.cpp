@@ -335,11 +335,11 @@ CAmount CTransaction::GetShieldedValueIn() const
     {
         // NB: vpub_new "gives" money to the transparent value pool just as inputs do
         nValue += it->vpub_new;
-        
+
         if (!MoneyRange(it->vpub_new) || !MoneyRange(nValue))
             throw std::runtime_error("CTransaction::GetShieldedValueIn(): value out of range");
     }
-    
+
     return nValue;
 }
 
@@ -367,6 +367,11 @@ unsigned int CTransaction::CalculateModifiedSize(unsigned int nTxSize) const
             nTxSize -= offset;
     }
     return nTxSize;
+}
+
+unsigned int CTransaction::GetTotalSize() const
+{
+    return ::GetSerializeSize(*this, SER_NETWORK, PROTOCOL_VERSION);
 }
 
 // will return the open time or block if this is a time locked transaction output that we recognize.

@@ -255,7 +255,7 @@ bool CScript::IsPayToScriptHash() const
             (*this)[22] == OP_EQUAL);
 }
 
-// this returns true if either there is nothing left and pc points at the end, or 
+// this returns true if either there is nothing left and pc points at the end, or
 // all instructions from the pc to the end of the script are balanced pushes and pops
 // if there is data, it also returns all the values as byte vectors in a list of vectors
 bool CScript::GetBalancedData(const_iterator& pc, std::vector<std::vector<unsigned char>>& vSolutions) const
@@ -274,8 +274,8 @@ bool CScript::GetBalancedData(const_iterator& pc, std::vector<std::vector<unsign
                 // this should never pop what it hasn't pushed (like a success code)
                 if (--netPushes < 0)
                     return false;
-            } 
-            else 
+            }
+            else
             {
                 // push or fail
                 netPushes++;
@@ -429,6 +429,24 @@ bool CScript::IsPushOnly(const_iterator pc) const
             return false;
     }
     return true;
+}
+
+// A witness program is any valid CScript that consists of a 1-byte push opcode
+// followed by a data push between 2 and 40 bytes.
+bool CScript::IsWitnessProgram(int& version, std::vector<unsigned char>& program) const
+{
+    if (this->size() < 4 || this->size() > 42) {
+        return false;
+    }
+    if ((*this)[0] != OP_0 && ((*this)[0] < OP_1 || (*this)[0] > OP_16)) {
+        return false;
+    }
+    if ((size_t)((*this)[1] + 2) == this->size()) {
+        version = DecodeOP_N((opcodetype)(*this)[0]);
+        program = std::vector<unsigned char>(this->begin() + 2, this->end());
+        return true;
+    }
+    return false;
 }
 
 bool CScript::IsPushOnly() const
