@@ -7,6 +7,7 @@
 #include "utilstrencodings.h"
 #include "net.h"
 #include "util.h"
+#include "util/readwritefile.h"
 #include "crypto/hmac_sha256.h"
 
 #include <vector>
@@ -356,52 +357,6 @@ static std::map<std::string,std::string> ParseTorReplyMapping(const std::string 
         mapping[key] = value;
     }
     return mapping;
-}
-
-/** Read full contents of a file and return them in a std::string.
- * Returns a pair <status, string>.
- * If an error occured, status will be false, otherwise status will be true and the data will be returned in string.
- *
- * @param maxsize Puts a maximum size limit on the file that is read. If the file is larger than this, truncated data
- *         (with len > maxsize) will be returned.
- */
-static std::pair<bool,std::string> ReadBinaryFile(const std::string &filename, size_t maxsize=std::numeric_limits<size_t>::max())
-{
-    FILE *f = fopen(filename.c_str(), "rb");
-    if (f == NULL)
-        return std::make_pair(false,"");
-    std::string retval;
-    char buffer[128];
-    size_t n;
-    while ((n=fread(buffer, 1, sizeof(buffer), f)) > 0) {
-        // Check for reading errors so we don't return any data if we couldn't
-        // read the entire file (or up to maxsize)
-        if (ferror(f)) {
-            fclose(f);
-            return std::make_pair(false,"");
-        }
-        retval.append(buffer, buffer+n);
-        if (retval.size() > maxsize)
-            break;
-    }
-    fclose(f);
-    return std::make_pair(true,retval);
-}
-
-/** Write contents of std::string to a file.
- * @return true on success.
- */
-static bool WriteBinaryFile(const std::string &filename, const std::string &data)
-{
-    FILE *f = fopen(filename.c_str(), "wb");
-    if (f == NULL)
-        return false;
-    if (fwrite(data.data(), 1, data.size(), f) != data.size()) {
-        fclose(f);
-        return false;
-    }
-    fclose(f);
-    return true;
 }
 
 /****** Bitcoin specific TorController implementation ********/
@@ -774,4 +729,3 @@ void StopTorControl()
         gBase = 0;
     }
 }
-
