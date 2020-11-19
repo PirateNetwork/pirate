@@ -398,9 +398,9 @@ std::string HelpMessage(HelpMessageMode mode)
 #ifndef _WIN32
     strUsage += HelpMessageOpt("-pid=<file>", strprintf(_("Specify pid file (default: %s)"), "komodod.pid"));
 #endif
-    strUsage += HelpMessageOpt("-prune=<n>", strprintf(_("Reduce storage requirements by pruning (deleting) old blocks. This mode disables wallet support and is incompatible with -txindex. "
-            "Warning: Reverting this setting requires re-downloading the entire blockchain. "
-            "(default: 0 = disable pruning blocks, >%u = target size in MiB to use for block files)"), MIN_DISK_SPACE_FOR_BLOCK_FILES / 1024 / 1024));
+    // strUsage += HelpMessageOpt("-prune=<n>", strprintf(_("Reduce storage requirements by pruning (deleting) old blocks. This mode disables wallet support and is incompatible with -txindex. "
+    //         "Warning: Reverting this setting requires re-downloading the entire blockchain. "
+    //         "(default: 0 = disable pruning blocks, >%u = target size in MiB to use for block files)"), MIN_DISK_SPACE_FOR_BLOCK_FILES / 1024 / 1024));
     strUsage += HelpMessageOpt("-reindex", _("Rebuild block chain index from current blk000??.dat files on startup"));
 #if !defined(WIN32)
     strUsage += HelpMessageOpt("-sysperms", _("Create new files with system default permissions, instead of umask 077 (only effective with disabled wallet functionality)"));
@@ -1110,18 +1110,18 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     fprintf(stderr,"nMaxConnections %d\n",nMaxConnections);
     // if using block pruning, then disable txindex
     // also disable the wallet (for now, until SPV support is implemented in wallet)
-    if (GetArg("-prune", 0)) {
-        if (GetBoolArg("-txindex", true))
-            return InitError(_("Prune mode is incompatible with -txindex."));
-#ifdef ENABLE_WALLET
-        if (!GetBoolArg("-disablewallet", false)) {
-            if (SoftSetBoolArg("-disablewallet", true))
-                LogPrintf("%s : parameter interaction: -prune -> setting -disablewallet=1\n", __func__);
-            else
-                return InitError(_("Can't run with a wallet in prune mode."));
-        }
-#endif
-    }
+//     if (GetArg("-prune", 0)) {
+//         if (GetBoolArg("-txindex", true))
+//             return InitError(_("Prune mode is incompatible with -txindex."));
+// #ifdef ENABLE_WALLET
+//         if (!GetBoolArg("-disablewallet", false)) {
+//             if (SoftSetBoolArg("-disablewallet", true))
+//                 LogPrintf("%s : parameter interaction: -prune -> setting -disablewallet=1\n", __func__);
+//             else
+//                 return InitError(_("Can't run with a wallet in prune mode."));
+//         }
+// #endif
+//     }
 
     // ********************************************************* Step 3: parameter-to-internal-flags
 
@@ -1173,18 +1173,18 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     fServer = GetBoolArg("-server", false);
 
     // block pruning; get the amount of disk space (in MB) to allot for block & undo files
-    int64_t nSignedPruneTarget = GetArg("-prune", 0) * 1024 * 1024;
-    if (nSignedPruneTarget < 0) {
-        return InitError(_("Prune cannot be configured with a negative value."));
-    }
-    nPruneTarget = (uint64_t) nSignedPruneTarget;
-    if (nPruneTarget) {
-        if (nPruneTarget < MIN_DISK_SPACE_FOR_BLOCK_FILES) {
-            return InitError(strprintf(_("Prune configured below the minimum of %d MB.  Please use a higher number."), MIN_DISK_SPACE_FOR_BLOCK_FILES / 1024 / 1024));
-        }
-        LogPrintf("Prune configured to target %uMiB on disk for block and undo files.\n", nPruneTarget / 1024 / 1024);
-        fPruneMode = true;
-    }
+    // int64_t nSignedPruneTarget = GetArg("-prune", 0) * 1024 * 1024;
+    // if (nSignedPruneTarget < 0) {
+    //     return InitError(_("Prune cannot be configured with a negative value."));
+    // }
+    // nPruneTarget = (uint64_t) nSignedPruneTarget;
+    // if (nPruneTarget) {
+    //     if (nPruneTarget < MIN_DISK_SPACE_FOR_BLOCK_FILES) {
+    //         return InitError(strprintf(_("Prune configured below the minimum of %d MB.  Please use a higher number."), MIN_DISK_SPACE_FOR_BLOCK_FILES / 1024 / 1024));
+    //     }
+    //     LogPrintf("Prune configured to target %uMiB on disk for block and undo files.\n", nPruneTarget / 1024 / 1024);
+    //     fPruneMode = true;
+    // }
 
     RegisterAllCoreRPCCommands(tableRPC);
 #ifdef ENABLE_WALLET
@@ -1345,7 +1345,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     globalVerifyHandle.reset(new ECCVerifyHandle());
 
     // set the hash algorithm to use for this chain
-    // Again likely better solution here, than using long IF ELSE. 
+    // Again likely better solution here, than using long IF ELSE.
     extern uint32_t ASSETCHAINS_ALGO, ASSETCHAINS_VERUSHASH, ASSETCHAINS_VERUSHASHV1_1;
     CVerusHash::init();
     CVerusHashV2::init();
@@ -1747,7 +1747,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                     strLoadError = _("You need to rebuild the database using -reindex to go back to unpruned mode.  This will redownload the entire blockchain");
                     break;
                 }
-                
+
                 if ( ASSETCHAINS_CC != 0 && KOMODO_SNAPSHOT_INTERVAL != 0 && chainActive.Height() >= KOMODO_SNAPSHOT_INTERVAL )
                 {
                     if ( !komodo_dailysnapshot(chainActive.Height()) )
