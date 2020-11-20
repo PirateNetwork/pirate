@@ -99,7 +99,7 @@ int nScriptCheckThreads = 0;
 bool fExperimentalMode = true;
 bool fImporting = false;
 bool fReindex = false;
-bool fTxIndex = false;
+bool fTxIndex = true;
 bool fAddressIndex = false;
 bool fTimestampIndex = false;
 bool fSpentIndex = false;
@@ -6563,7 +6563,7 @@ bool InitBlockIndex() {
     if ( pblocktree != 0 )
     {
         // Use the provided setting for -txindex in the new database
-        fTxIndex = GetBoolArg("-txindex", true);
+        // fTxIndex = GetBoolArg("-txindex", true);
         pblocktree->WriteFlag("txindex", fTxIndex);
         // Use the provided setting for -addressindex in the new database
         fAddressIndex = GetBoolArg("-addressindex", DEFAULT_ADDRESSINDEX);
