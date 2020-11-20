@@ -100,6 +100,7 @@ bool fExperimentalMode = true;
 bool fImporting = false;
 bool fReindex = false;
 bool fTxIndex = true;
+bool fArchive = true;
 bool fAddressIndex = false;
 bool fTimestampIndex = false;
 bool fSpentIndex = false;
@@ -6562,6 +6563,8 @@ bool InitBlockIndex() {
     }
     if ( pblocktree != 0 )
     {
+
+        pblocktree->WriteFlag("archiverule", fArchive);
         // Use the provided setting for -txindex in the new database
         // fTxIndex = GetBoolArg("-txindex", true);
         pblocktree->WriteFlag("txindex", fTxIndex);

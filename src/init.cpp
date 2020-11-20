@@ -1682,6 +1682,14 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             fprintf(stderr,"set spentindex, will reindex. could take a while.\n");
             fReindex = true;
         }
+        //One time reindex to enable transaction archiving.
+        pblocktree->ReadFlag("archiverule", checkval);
+        if (checkval != fArchive)
+        {
+            pblocktree->WriteFlag("archiverule", fArchive);
+            LogPrintf("Transaction archive not set, will reindex. could take a while.\n");
+            fReindex = true;
+        }
     }
 
     bool clearWitnessCaches = false;
