@@ -758,11 +758,13 @@ UniValue zs_listtransactions(const UniValue& params, bool fHelp, const CPubKey& 
         "                               Value of 0: Returns all transactions in the wallet\n"
         "                               Value of 1: Returns the last x days of transactions\n"
         "                               Value of 2: Returns transactions with confimations less than x\n"
+        "                               Value of 3: Returns transactions with a minimum block height of x\n"
         "\n"
         "3. \"Filter:\"                 (numeric, optional, default=0) \n"
         "                               Filter Type equal 0: paramater ignored\n"
         "                               Filter Type equal 1: number represents the number of days returned\n"
         "                               Filter Type equal 2: number represents the max confirmations for transaction to be returned\n"
+        "                               Filter Type equal 3: number represents the minimum block height of the transactions returned\n"
         "\n"
         "4. \"Count:\"                 (numeric, optional, default=100000) \n"
         "                               Last n number of transactions returned\n"
@@ -867,8 +869,8 @@ UniValue zs_listtransactions(const UniValue& params, bool fHelp, const CPubKey& 
     if (nMinConfirms < 0)
       throw runtime_error("Minimum confimations must be greater that 0");
 
-    if (nFilterType < 0 || nFilterType > 2)
-        throw runtime_error("Filter type must be 0, 1 or 2.");
+    if (nFilterType < 0 || nFilterType > 3)
+        throw runtime_error("Filter type must be 0, 1, 2 or 3.");
 
     if (nFilter < 0)
         throw runtime_error("Filter must be equal or greater than 0.");
@@ -924,6 +926,10 @@ UniValue zs_listtransactions(const UniValue& params, bool fHelp, const CPubKey& 
     {
         uint256 txid = (*it).second;
         RpcArcTransaction arcTx;
+
+        //Exclude transactions with block height lower the type 3 filter minimum
+        if (nFilterType == 3 && (*it).first.first < nFilter)
+            continue;
 
         if (pwalletMain->mapWallet.count(txid)) {
 
@@ -1142,11 +1148,13 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
         "                               Value of 0: Returns all transactions in the wallet\n"
         "                               Value of 1: Returns the last x days of transactions\n"
         "                               Value of 2: Returns transactions with confimations less than x\n"
+        "                               Value of 3: Returns transactions with a minimum block height of x\n"
         "\n"
         "4. \"Filter:\"                 (numeric, optional, default=0) \n"
         "                               Filter Type equal 0: paramater ignored\n"
         "                               Filter Type equal 1: number represents the number of days returned\n"
         "                               Filter Type equal 2: number represents the max confirmations for transaction to be returned\n"
+        "                               Filter Type equal 3: number represents the minimum block height of the transactions returned\n"
         "\n"
         "5. \"Count:\"                 (numeric, optional, default=100000) \n"
         "                               Last n number of transactions returned\n"
@@ -1215,8 +1223,8 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
     if (nMinConfirms < 0)
       throw runtime_error("Minimum confimations must be greater that 0");
 
-    if (nFilterType < 0 || nFilterType > 2)
-        throw runtime_error("Filter type must be 0, 1 or 2.");
+    if (nFilterType < 0 || nFilterType > 3)
+        throw runtime_error("Filter type must be 0, 1, 2 or 3.");
 
     if (nFilter < 0)
         throw runtime_error("Filter must be equal or greater than 0.");
@@ -1301,6 +1309,10 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
     {
         uint256 txid = (*it).second;
         RpcArcTransaction arcTx;
+
+        //Exclude transactions with block height lower the type 3 filter minimum
+        if (nFilterType == 3 && (*it).first.first < nFilter)
+            continue;
 
         if (pwalletMain->mapWallet.count(txid)) {
 
@@ -1413,11 +1425,13 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
         "                               Value of 0: Returns all transactions in the wallet\n"
         "                               Value of 1: Returns the last x days of transactions\n"
         "                               Value of 2: Returns transactions with confimations less than x\n"
+        "                               Value of 3: Returns transactions with a minimum block height of x\n"
         "\n"
         "4. \"Filter:\"                 (numeric, optional, default=0) \n"
         "                               Filter Type equal 0: paramater ignored\n"
         "                               Filter Type equal 1: number represents the number of days returned\n"
         "                               Filter Type equal 2: number represents the max confirmations for transaction to be returned\n"
+        "                               Filter Type equal 3: number represents the minimum block height of the transactions returned\n"
         "\n"
         "5. \"Count:\"                 (numeric, optional, default=100000) \n"
         "                               Last n number of transactions returned\n"
@@ -1487,8 +1501,8 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
     if (nMinConfirms < 0)
       throw runtime_error("Minimum confimations must be greater that 0");
 
-    if (nFilterType < 0 || nFilterType > 2)
-        throw runtime_error("Filter type must be 0, 1 or 2.");
+    if (nFilterType < 0 || nFilterType > 3)
+        throw runtime_error("Filter type must be 0, 1, 2 or 3.");
 
     if (nFilter < 0)
         throw runtime_error("Filter must be equal or greater than 0.");
@@ -1571,6 +1585,10 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
     {
         uint256 txid = (*it).second;
         RpcArcTransaction arcTx;
+
+        //Exclude transactions with block height lower the type 3 filter minimum
+        if (nFilterType == 3 && (*it).first.first < nFilter)
+            continue;
 
         if (pwalletMain->mapWallet.count(txid)) {
 
@@ -1683,11 +1701,13 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
         "                               Value of 0: Returns all transactions in the wallet\n"
         "                               Value of 1: Returns the last x days of transactions\n"
         "                               Value of 2: Returns transactions with confimations less than x\n"
+        "                               Value of 3: Returns transactions with a minimum block height of x\n"
         "\n"
         "4. \"Filter:\"                 (numeric, optional, default=0) \n"
         "                               Filter Type equal 0: paramater ignored\n"
         "                               Filter Type equal 1: number represents the number of days returned\n"
         "                               Filter Type equal 2: number represents the max confirmations for transaction to be returned\n"
+        "                               Filter Type equal 3: number represents the minimum block height of the transactions returned\n"
         "\n"
         "5. \"Count:\"                 (numeric, optional, default=100000) \n"
         "                               Last n number of transactions returned\n"
@@ -1756,8 +1776,8 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
     if (nMinConfirms < 0)
       throw runtime_error("Minimum confimations must be greater that 0");
 
-    if (nFilterType < 0 || nFilterType > 2)
-        throw runtime_error("Filter type must be 0, 1 or 2.");
+    if (nFilterType < 0 || nFilterType > 3)
+        throw runtime_error("Filter type must be 0, 1, 2 or 3.");
 
     if (nFilter < 0)
         throw runtime_error("Filter must be equal or greater than 0.");
@@ -1842,6 +1862,10 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
     {
         uint256 txid = (*it).second;
         RpcArcTransaction arcTx;
+
+        //Exclude transactions with block height lower the type 3 filter minimum
+        if (nFilterType == 3 && (*it).first.first < nFilter)
+            continue;
 
         if (pwalletMain->mapWallet.count(txid)) {
 
