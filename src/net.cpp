@@ -1242,8 +1242,6 @@ static void AcceptConnection(const ListenSocket& hListenSocket) {
     socklen_t len = sizeof(sockaddr);
     SOCKET hSocket = accept(hListenSocket.socket, (struct sockaddr*)&sockaddr, &len);
     CAddress addr;
-    int nInbound = 0;
-    int nMaxInbound = nMaxConnections - MAX_OUTBOUND_CONNECTIONS;
 
     if (hSocket == INVALID_SOCKET) {
         const int nErr = WSAGetLastError();
@@ -1260,7 +1258,21 @@ static void AcceptConnection(const ListenSocket& hListenSocket) {
     const CAddress addr_bind = GetBindAddress(hSocket);
 
     bool whitelisted = hListenSocket.whitelisted || CNode::IsWhitelistedRange(addr);
+
+    CreateNodeFromAcceptedSocket(hSocket, whitelisted, addr_bind, addr);
+}
+
+void CreateNodeFromAcceptedSocket(SOCKET hSocket,
+                                            bool whitelisted,
+                                            const CAddress& addr_bind,
+                                            const CAddress& addr)
+{
+    struct sockaddr_storage sockaddr;
+    socklen_t len = sizeof(sockaddr);
     int nInboundThisIP = 0;
+    int nInbound = 0;
+    int nMaxInbound = nMaxConnections - MAX_OUTBOUND_CONNECTIONS;
+
 
     {
         LOCK(cs_vNodes);
