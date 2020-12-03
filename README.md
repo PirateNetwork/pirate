@@ -96,8 +96,9 @@ cd pirate
 **pirate is experimental and a work-in-progress.** Use at your own risk.
 
 To run the daemon for PirateChain:  
-`komodod -ac_name=PIRATE -ac_supply=0 -ac_reward=25600000000 -ac_halving=77777 -ac_private=1`  
-both komodod and komodo-cl are located in the src directory after successfully building  
+`./komodod -ac_name=PIRATE -ac_supply=0 -ac_reward=25600000000 -ac_halving=77777 -ac_private=1`  
+both komodod and komodo-cli are located in the src directory after successfully building. Run commands with
+`./komodo-cli -ac_name=PIRATE <command>` for example `./komodo-cli -ac_name=PIRATE help`
 
 To reset the PirateChain blockchain change into the *~/.komodo/PIRATE* data directory and delete the corresponding files by running `rm -rf blocks chainstate debug.log komodostate db.log` and restart daemon
 
