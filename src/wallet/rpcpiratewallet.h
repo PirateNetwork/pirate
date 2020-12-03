@@ -186,6 +186,8 @@ void getRpcArcTxJSONSpends(RpcArcTransaction &arcTx, UniValue& ArcTxJSON, bool f
 void getRpcArcTxJSONSends(RpcArcTransaction &arcTx, UniValue& ArcTxJSON, bool filterAddress = false, string addressString = "");
 void getRpcArcTxJSONReceives(RpcArcTransaction &arcTx, UniValue& ArcTxJSON, bool filterAddress = false, string addressString = "");
 
+void decrypttransaction(CTransaction &tx, RpcArcTransaction &arcTx);
+
 class CRPCTable;
 
 void RegisterPirateExclusiveRPCCommands(CRPCTable &tableRPC);

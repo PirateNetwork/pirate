@@ -2461,6 +2461,44 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return returnObj;
 }
 
+void decrypttransaction(CTransaction &tx, RpcArcTransaction &arcTx) {
+    //get Ovks for sapling decryption
+    std::vector<uint256> ovks;
+    getAllSaplingOVKs(ovks, true);
+
+    //get Ivks for sapling decryption
+    std::vector<uint256> ivks;
+    getAllSaplingIVKs(ivks, true);
+
+
+    //Spends must be located to determine if outputs are change
+    getTransparentSpends(tx, arcTx.vTSpend, arcTx.transparentValue, true);
+    getSproutSpends(tx, arcTx.vZcSpend, arcTx.sproutValue, arcTx.sproutValueSpent, true);
+    getSaplingSpends(tx, ivks, arcTx.vZsSpend, true);
+
+    getTransparentSends(tx, arcTx.vTSend, arcTx.transparentValue);
+    getSaplingSends(tx, ovks, arcTx.vZsSend);
+
+    getTransparentRecieves(tx, arcTx.vTReceived, true);
+    getSproutReceives(tx, arcTx.vZcReceived, true);
+    getSaplingReceives(tx, ivks, arcTx.vZsReceived, true);
+
+    arcTx.saplingValue = -tx.valueBalance;
+
+    for (int i = 0; i < arcTx.vTSpend.size(); i++) {
+        arcTx.spentFrom.insert(arcTx.vTSpend[i].encodedAddress);
+    }
+
+    for (int i = 0; i < arcTx.vZcSpend.size(); i++) {
+        arcTx.spentFrom.insert(arcTx.vZcSpend[i].encodedAddress);
+    }
+
+    for (int i = 0; i < arcTx.vZsSpend.size(); i++) {
+        arcTx.spentFrom.insert(arcTx.vZsSpend[i].encodedAddress);
+    }
+
+}
+
 
 static const CRPCCommand commands[] =
 {   //  category              name                          actor (function)              okSafeMode
