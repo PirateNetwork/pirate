@@ -36,6 +36,9 @@
 #include <univalue.h>
 #include <pubkey.h>
 
+extern bool fBuilingWitnessCache;
+extern bool fInitWitnessesBuilt;
+
 class AsyncRPCQueue;
 class CRPCCommand;
 

@@ -625,6 +625,12 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
             if (initialDownloadCheck && pindex->GetHeight() % fDeleteInterval == 0) {
                 DeleteWalletTransactions(pindex);
             }
+
+            //Build full witness cache 1 hour before IsInitialBlockDownload() unlocks
+            if (pblock->GetBlockTime() > GetTime() - nMaxTipAge - 3600) {
+                BuildWitnessCache(pindex, false);
+            }
+
         }
 
     } else {
@@ -1183,6 +1189,7 @@ int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex, bool witnessO
   int nWitnessTxIncrement = 0;
   int nWitnessTotalTxCount = mapWallet.size();
   int nMinimumHeight = pindex->GetHeight();
+  bool walletHasNotes = false; //Use to enable z_sendmany when no notes are present
 
   for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
     nWitnessTxIncrement += 1;
@@ -1191,6 +1198,7 @@ int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex, bool witnessO
       continue;
 
     if (wtxItem.second.GetDepthInMainChain() > 0) {
+      walletHasNotes = true;
       auto wtxHash = wtxItem.second.GetHash();
       int wtxHeight = mapBlockIndex[wtxItem.second.hashBlock]->GetHeight();
 
@@ -1372,6 +1380,12 @@ int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex, bool witnessO
       }
     }
   }
+  //enable z_sendmany when the wallet has no Notes
+  if (!IsInitialBlockDownload()) {
+      if (!walletHasNotes || nMinimumHeight == pindex->GetHeight()) {
+          fInitWitnessesBuilt = true;
+      }
+  }
 
   return nMinimumHeight;
 }
@@ -1385,6 +1399,11 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
 
   if (startHeight > pindex->GetHeight() || witnessOnly) {
     return;
+  }
+
+  //Disable RPC while IsInitialBlockDownload()
+  if (IsInitialBlockDownload() && !fInitWitnessesBuilt) {
+      fBuilingWitnessCache = true;
   }
 
   uint256 sproutRoot;
@@ -1471,6 +1490,9 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
     pblockindex = chainActive.Next(pblockindex);
 
   }
+
+  fInitWitnessesBuilt = true;
+  fBuilingWitnessCache = false;
 
 }
 
