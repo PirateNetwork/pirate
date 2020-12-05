@@ -4999,6 +4999,92 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp, const CPubKey& myp
     return o;
 }
 
+// UniValue enableconsolidation(const UniValue& params, bool fHelp, const CPubKey& mypk)
+// {
+//
+//     if (!EnsureWalletIsAvailable(fHelp))
+//         return NullUniValue;
+//
+//     if (fHelp || params.size() != 1)
+//         throw runtime_error(
+//             "enableconsolidation true/false\n"
+//             "\nEnable or Disable consolidation function in a running node."
+//             "}\n"
+//             "\nExamples:\n"
+//             + HelpExampleCli("enableconsolidation", "true")
+//             + HelpExampleCli("enableconsolidation", "1")
+//             + HelpExampleRpc("enableconsolidation", "true")
+//             + HelpExampleRpc("enableconsolidation", "1")
+//         );
+//
+//       LOCK2(cs_main, pwalletMain->cs_wallet);
+//
+//       bool enabled = false;
+//       if (params[0].isNum()) {
+//           if (params[0].get_int() != 0) {
+//               enabled = true;
+//           }
+//       } else if (params[0].isBool()) {
+//           if (params[0].isTrue()) {
+//               enabled = true;
+//           }
+//       } else if(params[0].isStr()) {
+//           if (params[0].get_str() == "true" || "1") {
+//               enabled = true;
+//           } else if (params[0].get_str() == "false" || "0") {
+//               enabled = false;
+//           } else {
+//             throw JSONRPCError(RPC_TYPE_ERROR, "Invalid type provided. Verbose parameter must be a boolean.");
+//           }
+//       } else {
+//           throw JSONRPCError(RPC_TYPE_ERROR, "Invalid type provided. Verbose parameter must be a boolean.");
+//       }
+//
+//
+//       pwalletMain->fSaplingConsolidationEnabled = enabled;
+//
+//       UniValue result(UniValue::VOBJ);
+//       result.push_back(Pair("consolidationEnabled", enabled));
+//
+//       return result;
+// }
+
+UniValue consolidationstatus(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() > 0)
+        throw runtime_error(
+            "consolidationstatus\n"
+            "\nEnable or Disable consolidation function in a running node."
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("consolidationstatus", "true")
+            + HelpExampleRpc("consolidationstatus", "true")
+        );
+
+      LOCK2(cs_main, pwalletMain->cs_wallet);
+
+      UniValue result(UniValue::VOBJ);
+      result.push_back(Pair("consolidationEnabled", pwalletMain->fSaplingConsolidationEnabled));
+      result.push_back(Pair("isRunning", pwalletMain->fConsolidationRunning));
+      if (pwalletMain->fConsolidationRunning) {
+          result.push_back(Pair("nextConsolidation", pwalletMain->initializeConsolidationInterval + chainActive.Tip()->GetHeight()));
+      } else {
+          if (pwalletMain->nextConsolidation == 0) {
+              result.push_back(Pair("nextConsolidation",  chainActive.Tip()->GetHeight() + 1));
+          } else {
+              result.push_back(Pair("nextConsolidation", pwalletMain->nextConsolidation));
+          }
+      }
+      result.push_back(Pair("consolidationInterval", pwalletMain->initializeConsolidationInterval));
+      result.push_back(Pair("targetQty", pwalletMain->targetConsolidationQty));
+
+      return result;
+}
+
 #define MERGE_TO_ADDRESS_DEFAULT_TRANSPARENT_LIMIT 50
 #define MERGE_TO_ADDRESS_DEFAULT_SPROUT_LIMIT 10
 #define MERGE_TO_ADDRESS_DEFAULT_SAPLING_LIMIT 90
@@ -8491,7 +8577,11 @@ static const CRPCCommand commands[] =
     { "wallet",             "z_viewtransaction",        &z_viewtransaction,        true  },
     // TODO: rearrange into another category
     { "disclosure",         "z_getpaymentdisclosure",   &z_getpaymentdisclosure,   true  },
-    { "disclosure",         "z_validatepaymentdisclosure", &z_validatepaymentdisclosure, true }
+    { "disclosure",         "z_validatepaymentdisclosure", &z_validatepaymentdisclosure, true },
+
+    // { "consolidation",         "enableconsolidation",      &enableconsolidation,       true },
+    { "consolidation",         "consolidationstatus",      &consolidationstatus,       true }
+
 };
 
 void RegisterWalletRPCCommands(CRPCTable &tableRPC)
