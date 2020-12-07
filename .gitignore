@@ -122,6 +122,15 @@ src/komodod.exe
 src/komodo-tx.exe
 src/wallet-utility.exe
 pirate-qt-win.exe
+pirate-qt-linux
+pirate.qt-mac
+src/qt/komodo-qt
+
+#QT Files
+src/qt/moc_*.cpp
+src/qt/locale/*.qm
+src/qt/*.moc
+src/qt/forms/ui_*.h
 
 #output during builds, symbol tables?
 *.dSYM
@@ -164,6 +173,4 @@ configure
 doc/man/Makefile.in
 src/Makefile.in
 src/cc/customcc.so
-src/cc/customcc.dll
 src/libcc.so
-src/libcc.dll

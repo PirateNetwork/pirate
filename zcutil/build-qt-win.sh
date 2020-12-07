@@ -11,11 +11,12 @@ cd "$(dirname "$(readlink -f "$0")")/.."
 
 cd depends/ && make HOST=$HOST V=1
 cd ../
-WD=$PWD
-cd src/cc
-echo $PWD
-./makecustom
-cd $WD
+
+# WD=$PWD
+# cd src/cc
+# echo $PWD
+# ./makecustom
+# cd $WD
 
 ./autogen.sh
 
