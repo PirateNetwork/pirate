@@ -61,9 +61,9 @@ CBlockIndex *komodo_chainactive(int32_t height);
 #include <QThread>
 #include <QTimer>
 #include <QTranslator>
-#ifdef ENABLE_BIP70
-#include <QSslConfiguration>
-#endif
+// #ifdef ENABLE_BIP70
+// #include <QSslConfiguration>
+// #endif
 
 #if defined(QT_STATICPLUGIN)
 #include <QtPlugin>
@@ -548,9 +548,9 @@ void KomodoApplication::initializeResult(bool success)
         // Log this only after AppInitMain finishes, as then logging setup is guaranteed complete
         qWarning() << "Platform customization:" << platformStyle->getName();
 #ifdef ENABLE_WALLET
-    #ifdef ENABLE_BIP70
-        PaymentServer::LoadRootCAs();
-    #endif
+    // #ifdef ENABLE_BIP70
+    //     PaymentServer::LoadRootCAs();
+    // #endif
         paymentServer->setOptionsModel(optionsModel);
 #endif
 
@@ -566,10 +566,10 @@ void KomodoApplication::initializeResult(bool success)
             window->addWallet(PirateOceanGUI::DEFAULT_WALLET, walletModel);
             window->setCurrentWallet(PirateOceanGUI::DEFAULT_WALLET);
 
-            #ifdef ENABLE_BIP70
-            connect(walletModel, SIGNAL(coinsSent(CWallet*,SendCoinsRecipient,QByteArray)),
-                             paymentServer, SLOT(fetchPaymentACK(CWallet*,const SendCoinsRecipient&,QByteArray)));
-            #endif
+            // #ifdef ENABLE_BIP70
+            // connect(walletModel, SIGNAL(coinsSent(CWallet*,SendCoinsRecipient,QByteArray)),
+            //                  paymentServer, SLOT(fetchPaymentACK(CWallet*,const SendCoinsRecipient&,QByteArray)));
+            // #endif
         }
 #endif
 
@@ -656,11 +656,11 @@ int main(int argc, char *argv[])
 #if QT_VERSION >= 0x050500
     // Because of the POODLE attack it is recommended to disable SSLv3 (https://disablessl3.com/),
     // so set SSL protocols to TLS1.0+.
-    #ifdef ENABLE_BIP70
-    QSslConfiguration sslconf = QSslConfiguration::defaultConfiguration();
-    sslconf.setProtocol(QSsl::TlsV1_0OrLater);
-    QSslConfiguration::setDefaultConfiguration(sslconf);
-    #endif
+    // #ifdef ENABLE_BIP70
+    // QSslConfiguration sslconf = QSslConfiguration::defaultConfiguration();
+    // sslconf.setProtocol(QSsl::TlsV1_0OrLater);
+    // QSslConfiguration::setDefaultConfiguration(sslconf);
+    // #endif
 #endif
 
     // Register meta types used for QMetaObject::invokeMethod

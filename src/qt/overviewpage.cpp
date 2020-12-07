@@ -122,6 +122,7 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
     currentWatchOnlyBalance(-1),
     currentWatchUnconfBalance(-1),
     currentWatchImmatureBalance(-1),
+    currentPrivateWatchBalance(-1),
     currentPrivateBalance(-1),
     currentInterestBalance(-1),
     txdelegate(new TxViewDelegate(platformStyle, this))
@@ -164,7 +165,7 @@ OverviewPage::~OverviewPage()
     delete ui;
 }
 
-void OverviewPage::setBalance(const CAmount& balance, const CAmount& unconfirmedBalance, const CAmount& immatureBalance, const CAmount& watchOnlyBalance, const CAmount& watchUnconfBalance, const CAmount& watchImmatureBalance, const CAmount& privateBalance, const CAmount& interestBalance)
+void OverviewPage::setBalance(const CAmount& balance, const CAmount& unconfirmedBalance, const CAmount& immatureBalance, const CAmount& watchOnlyBalance, const CAmount& watchUnconfBalance, const CAmount& watchImmatureBalance, const CAmount& privateWatchBalance, const CAmount& privateBalance, const CAmount& interestBalance)
 {
     int unit = walletModel->getOptionsModel()->getDisplayUnit();
     currentBalance = balance;
@@ -173,6 +174,7 @@ void OverviewPage::setBalance(const CAmount& balance, const CAmount& unconfirmed
     currentWatchOnlyBalance = watchOnlyBalance;
     currentWatchUnconfBalance = watchUnconfBalance;
     currentWatchImmatureBalance = watchImmatureBalance;
+    currentPrivateWatchBalance = privateWatchBalance;
     currentPrivateBalance = privateBalance;
     currentInterestBalance = interestBalance;
     ui->labelBalance->setText(KomodoUnits::formatWithUnit(unit, balance, false, KomodoUnits::separatorAlways));
@@ -183,7 +185,7 @@ void OverviewPage::setBalance(const CAmount& balance, const CAmount& unconfirmed
     ui->labelWatchPending->setText(KomodoUnits::formatWithUnit(unit, watchUnconfBalance, false, KomodoUnits::separatorAlways));
     ui->labelWatchImmature->setText(KomodoUnits::formatWithUnit(unit, watchImmatureBalance, false, KomodoUnits::separatorAlways));
     ui->labelWatchTotal->setText(KomodoUnits::formatWithUnit(unit, watchOnlyBalance + watchUnconfBalance + watchImmatureBalance, false, KomodoUnits::separatorAlways));
-
+    ui->labelPrivateWatchBalance->setText(KomodoUnits::formatWithUnit(unit, privateWatchBalance, false, KomodoUnits::separatorAlways));
     ui->labelPrivateBalance->setText(KomodoUnits::formatWithUnit(unit, privateBalance, false, KomodoUnits::separatorAlways));
     ui->labelInterestBalance->setText(KomodoUnits::formatWithUnit(unit, interestBalance, false, KomodoUnits::separatorAlways));
 
@@ -192,6 +194,14 @@ void OverviewPage::setBalance(const CAmount& balance, const CAmount& unconfirmed
     bool showImmature = immatureBalance != 0;
     bool showWatchOnlyImmature = watchImmatureBalance != 0;
     bool showInterest = (ASSETCHAINS_SYMBOL[0] == 0);
+
+    bool showTransparent = balance !=0;
+    bool showWatchOnlyTransaparent = watchOnlyBalance != 0;
+
+    // for symmetry reasons also show immature label when the watch-only one is shown
+    ui->labelBalance->setVisible(showTransparent || showWatchOnlyTransaparent);
+    ui->labelBalanceText->setVisible(showTransparent || showWatchOnlyTransaparent);
+    ui->labelWatchAvailable->setVisible(showWatchOnlyTransaparent); // show watch-only immature balance
 
     // for symmetry reasons also show immature label when the watch-only one is shown
     ui->labelImmature->setVisible(showImmature || showWatchOnlyImmature);
@@ -207,17 +217,17 @@ void OverviewPage::setBalance(const CAmount& balance, const CAmount& unconfirmed
 void OverviewPage::updateWatchOnlyLabels(bool showWatchOnly)
 {
 
-    ui->labelSpendable->setVisible(showWatchOnly);      // show spendable label (only when watch-only is active)
-    ui->labelWatchonly->setVisible(showWatchOnly);      // show watch-only label
-    ui->lineWatchBalance->setVisible(showWatchOnly);    // show watch-only balance separator line
-    ui->labelWatchAvailable->setVisible(showWatchOnly); // show watch-only available balance
-    ui->labelWatchPending->setVisible(showWatchOnly);   // show watch-only pending balance
-    ui->labelWatchTotal->setVisible(showWatchOnly);     // show watch-only total balance
+    ui->labelSpendable->setVisible(showWatchOnly);            // show spendable label (only when watch-only is active)
+    ui->labelWatchonly->setVisible(showWatchOnly);            // show watch-only label
+    ui->lineWatchBalance->setVisible(showWatchOnly);          // show watch-only balance separator line
+    ui->labelWatchAvailable->setVisible(showWatchOnly);       // show watch-only available balance
+    ui->labelWatchPending->setVisible(showWatchOnly);         // show watch-only pending balance
+    ui->labelWatchTotal->setVisible(showWatchOnly);           // show watch-only total balance
+    ui->labelWatchImmature->setVisible(showWatchOnly);        // show watch-only immature balance
+    ui->labelPrivateWatchBalance->setVisible(showWatchOnly);  // show watch-only private balance
 
-
-
-    if (!showWatchOnly)
-        ui->labelWatchImmature->hide();
+    // if (!showWatchOnly)
+    //     ui->labelWatchImmature->hide();
 }
 
 void OverviewPage::setClientModel(ClientModel *model)
@@ -251,8 +261,8 @@ void OverviewPage::setWalletModel(WalletModel *model)
         // Keep up to date with wallet
         setBalance(model->getBalance(), model->getUnconfirmedBalance(), model->getImmatureBalance(),
                    model->getWatchBalance(), model->getWatchUnconfirmedBalance(), model->getWatchImmatureBalance(),
-                   model->getPrivateBalance(),model->getInterestBalance());
-        connect(model, SIGNAL(balanceChanged(CAmount,CAmount,CAmount,CAmount,CAmount,CAmount,CAmount,CAmount)), this, SLOT(setBalance(CAmount,CAmount,CAmount,CAmount,CAmount,CAmount,CAmount,CAmount)));
+                   model->getPrivateWatchBalance(), model->getPrivateBalance(),model->getInterestBalance());
+        connect(model, SIGNAL(balanceChanged(CAmount,CAmount,CAmount,CAmount,CAmount,CAmount,CAmount,CAmount,CAmount)), this, SLOT(setBalance(CAmount,CAmount,CAmount,CAmount,CAmount,CAmount,CAmount,CAmount,CAmount)));
 
         connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
 
@@ -271,7 +281,7 @@ void OverviewPage::updateDisplayUnit()
         if(currentBalance != -1)
             setBalance(currentBalance, currentUnconfirmedBalance, currentImmatureBalance,
                        currentWatchOnlyBalance, currentWatchUnconfBalance, currentWatchImmatureBalance,
-                       currentPrivateBalance, currentInterestBalance);
+                       currentPrivateWatchBalance, currentPrivateBalance, currentInterestBalance);
 
         // Update txdelegate->unit with the current unit
         txdelegate->unit = walletModel->getOptionsModel()->getDisplayUnit();

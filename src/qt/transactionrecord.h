@@ -117,6 +117,7 @@ public:
     std::string address;
     CAmount debit;
     CAmount credit;
+    int archiveType;
     /**@}*/
 
     /** Subtransaction index, for sort key */

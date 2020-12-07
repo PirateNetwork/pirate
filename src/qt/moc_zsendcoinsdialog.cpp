@@ -20,8 +20,8 @@ QT_BEGIN_MOC_NAMESPACE
 QT_WARNING_PUSH
 QT_WARNING_DISABLE_DEPRECATED
 struct qt_meta_stringdata_ZSendCoinsDialog_t {
-    QByteArrayData data[26];
-    char stringdata0[342];
+    QByteArrayData data[29];
+    char stringdata0[393];
 };
 #define QT_MOC_LITERAL(idx, ofs, len) \
     Q_STATIC_BYTE_ARRAY_DATA_HEADER_INITIALIZER_WITH_OFFSET(len, \
@@ -49,13 +49,16 @@ QT_MOC_LITERAL(15, 149, 15), // "immatureBalance"
 QT_MOC_LITERAL(16, 165, 16), // "watchOnlyBalance"
 QT_MOC_LITERAL(17, 182, 18), // "watchUnconfBalance"
 QT_MOC_LITERAL(18, 201, 20), // "watchImmatureBalance"
-QT_MOC_LITERAL(19, 222, 17), // "updatePayFromList"
-QT_MOC_LITERAL(20, 240, 21), // "on_sendButton_clicked"
-QT_MOC_LITERAL(21, 262, 11), // "removeEntry"
-QT_MOC_LITERAL(22, 274, 5), // "entry"
-QT_MOC_LITERAL(23, 280, 19), // "useAvailableBalance"
-QT_MOC_LITERAL(24, 300, 17), // "updateDisplayUnit"
-QT_MOC_LITERAL(25, 318, 23) // "coinControlUpdateLabels"
+QT_MOC_LITERAL(19, 222, 19), // "privateWatchBalance"
+QT_MOC_LITERAL(20, 242, 14), // "privateBalance"
+QT_MOC_LITERAL(21, 257, 15), // "interestBalance"
+QT_MOC_LITERAL(22, 273, 17), // "updatePayFromList"
+QT_MOC_LITERAL(23, 291, 21), // "on_sendButton_clicked"
+QT_MOC_LITERAL(24, 313, 11), // "removeEntry"
+QT_MOC_LITERAL(25, 325, 5), // "entry"
+QT_MOC_LITERAL(26, 331, 19), // "useAvailableBalance"
+QT_MOC_LITERAL(27, 351, 17), // "updateDisplayUnit"
+QT_MOC_LITERAL(28, 369, 23) // "coinControlUpdateLabels"
 
     },
     "ZSendCoinsDialog\0message\0\0title\0style\0"
@@ -64,10 +67,11 @@ QT_MOC_LITERAL(25, 318, 23) // "coinControlUpdateLabels"
     "setBalance\0CAmount\0balance\0"
     "unconfirmedBalance\0immatureBalance\0"
     "watchOnlyBalance\0watchUnconfBalance\0"
-    "watchImmatureBalance\0updatePayFromList\0"
-    "on_sendButton_clicked\0removeEntry\0"
-    "entry\0useAvailableBalance\0updateDisplayUnit\0"
-    "coinControlUpdateLabels"
+    "watchImmatureBalance\0privateWatchBalance\0"
+    "privateBalance\0interestBalance\0"
+    "updatePayFromList\0on_sendButton_clicked\0"
+    "removeEntry\0entry\0useAvailableBalance\0"
+    "updateDisplayUnit\0coinControlUpdateLabels"
 };
 #undef QT_MOC_LITERAL
 
@@ -93,13 +97,13 @@ static const uint qt_meta_data_ZSendCoinsDialog[] = {
        7,    0,   88,    2, 0x0a /* Public */,
        8,    0,   89,    2, 0x0a /* Public */,
       10,    0,   90,    2, 0x0a /* Public */,
-      11,    6,   91,    2, 0x0a /* Public */,
-      19,    0,  104,    2, 0x0a /* Public */,
-      20,    0,  105,    2, 0x08 /* Private */,
-      21,    1,  106,    2, 0x08 /* Private */,
-      23,    1,  109,    2, 0x08 /* Private */,
-      24,    0,  112,    2, 0x08 /* Private */,
-      25,    0,  113,    2, 0x08 /* Private */,
+      11,    9,   91,    2, 0x0a /* Public */,
+      22,    0,  110,    2, 0x0a /* Public */,
+      23,    0,  111,    2, 0x08 /* Private */,
+      24,    1,  112,    2, 0x08 /* Private */,
+      26,    1,  115,    2, 0x08 /* Private */,
+      27,    0,  118,    2, 0x08 /* Private */,
+      28,    0,  119,    2, 0x08 /* Private */,
 
  // signals: parameters
     QMetaType::Void, QMetaType::QString, QMetaType::QString, QMetaType::UInt,    3,    1,    4,
@@ -110,11 +114,11 @@ static const uint qt_meta_data_ZSendCoinsDialog[] = {
     QMetaType::Void,
     0x80000000 | 9,
     QMetaType::Void,
-    QMetaType::Void, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12,   13,   14,   15,   16,   17,   18,
+    QMetaType::Void, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12,   13,   14,   15,   16,   17,   18,   19,   20,   21,
     QMetaType::Void,
     QMetaType::Void,
-    QMetaType::Void, 0x80000000 | 9,   22,
-    QMetaType::Void, 0x80000000 | 9,   22,
+    QMetaType::Void, 0x80000000 | 9,   25,
+    QMetaType::Void, 0x80000000 | 9,   25,
     QMetaType::Void,
     QMetaType::Void,
 
@@ -134,7 +138,7 @@ void ZSendCoinsDialog::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int
         case 4: { SendCoinsEntry* _r = _t->addEntry();
             if (_a[0]) *reinterpret_cast< SendCoinsEntry**>(_a[0]) = std::move(_r); }  break;
         case 5: _t->updateTabsAndLabels(); break;
-        case 6: _t->setBalance((*reinterpret_cast< const CAmount(*)>(_a[1])),(*reinterpret_cast< const CAmount(*)>(_a[2])),(*reinterpret_cast< const CAmount(*)>(_a[3])),(*reinterpret_cast< const CAmount(*)>(_a[4])),(*reinterpret_cast< const CAmount(*)>(_a[5])),(*reinterpret_cast< const CAmount(*)>(_a[6]))); break;
+        case 6: _t->setBalance((*reinterpret_cast< const CAmount(*)>(_a[1])),(*reinterpret_cast< const CAmount(*)>(_a[2])),(*reinterpret_cast< const CAmount(*)>(_a[3])),(*reinterpret_cast< const CAmount(*)>(_a[4])),(*reinterpret_cast< const CAmount(*)>(_a[5])),(*reinterpret_cast< const CAmount(*)>(_a[6])),(*reinterpret_cast< const CAmount(*)>(_a[7])),(*reinterpret_cast< const CAmount(*)>(_a[8])),(*reinterpret_cast< const CAmount(*)>(_a[9]))); break;
         case 7: _t->updatePayFromList(); break;
         case 8: _t->on_sendButton_clicked(); break;
         case 9: _t->removeEntry((*reinterpret_cast< SendCoinsEntry*(*)>(_a[1]))); break;

@@ -109,10 +109,24 @@ bool CBasicKeyStore::AddWatchOnly(const CScript &dest)
     return true;
 }
 
+bool CBasicKeyStore::AddSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk)
+{
+    LOCK(cs_KeyStore);
+    setSaplingWatchOnly.insert(extfvk);
+    return true;
+}
+
 bool CBasicKeyStore::RemoveWatchOnly(const CScript &dest)
 {
     LOCK(cs_KeyStore);
     setWatchOnly.erase(dest);
+    return true;
+}
+
+bool CBasicKeyStore::RemoveSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk)
+{
+    LOCK(cs_KeyStore);
+    setSaplingWatchOnly.erase(extfvk);
     return true;
 }
 
@@ -122,10 +136,23 @@ bool CBasicKeyStore::HaveWatchOnly(const CScript &dest) const
     return setWatchOnly.count(dest) > 0;
 }
 
+bool CBasicKeyStore::HaveSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk) const
+{
+    LOCK(cs_KeyStore);
+    return setSaplingWatchOnly.count(extfvk) > 0;
+}
+
 bool CBasicKeyStore::HaveWatchOnly() const
 {
     LOCK(cs_KeyStore);
-    return (!setWatchOnly.empty());
+
+    if (!setWatchOnly.empty())
+        return true;
+
+    if (!setSaplingWatchOnly.empty())
+        return true;
+
+    return false;
 }
 
 bool CBasicKeyStore::AddSproutSpendingKey(const libzcash::SproutSpendingKey &sk)

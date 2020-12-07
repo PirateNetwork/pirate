@@ -20,8 +20,8 @@ QT_BEGIN_MOC_NAMESPACE
 QT_WARNING_PUSH
 QT_WARNING_DISABLE_DEPRECATED
 struct qt_meta_stringdata_OverviewPage_t {
-    QByteArrayData data[22];
-    char stringdata0[343];
+    QByteArrayData data[23];
+    char stringdata0[363];
 };
 #define QT_MOC_LITERAL(idx, ofs, len) \
     Q_STATIC_BYTE_ARRAY_DATA_HEADER_INITIALIZER_WITH_OFFSET(len, \
@@ -43,15 +43,16 @@ QT_MOC_LITERAL(9, 109, 15), // "immatureBalance"
 QT_MOC_LITERAL(10, 125, 16), // "watchOnlyBalance"
 QT_MOC_LITERAL(11, 142, 18), // "watchUnconfBalance"
 QT_MOC_LITERAL(12, 161, 20), // "watchImmatureBalance"
-QT_MOC_LITERAL(13, 182, 14), // "privateBalance"
-QT_MOC_LITERAL(14, 197, 15), // "interestBalance"
-QT_MOC_LITERAL(15, 213, 17), // "updateDisplayUnit"
-QT_MOC_LITERAL(16, 231, 24), // "handleTransactionClicked"
-QT_MOC_LITERAL(17, 256, 12), // "updateAlerts"
-QT_MOC_LITERAL(18, 269, 8), // "warnings"
-QT_MOC_LITERAL(19, 278, 21), // "updateWatchOnlyLabels"
-QT_MOC_LITERAL(20, 300, 13), // "showWatchOnly"
-QT_MOC_LITERAL(21, 314, 28) // "handleOutOfSyncWarningClicks"
+QT_MOC_LITERAL(13, 182, 19), // "privateWatchBalance"
+QT_MOC_LITERAL(14, 202, 14), // "privateBalance"
+QT_MOC_LITERAL(15, 217, 15), // "interestBalance"
+QT_MOC_LITERAL(16, 233, 17), // "updateDisplayUnit"
+QT_MOC_LITERAL(17, 251, 24), // "handleTransactionClicked"
+QT_MOC_LITERAL(18, 276, 12), // "updateAlerts"
+QT_MOC_LITERAL(19, 289, 8), // "warnings"
+QT_MOC_LITERAL(20, 298, 21), // "updateWatchOnlyLabels"
+QT_MOC_LITERAL(21, 320, 13), // "showWatchOnly"
+QT_MOC_LITERAL(22, 334, 28) // "handleOutOfSyncWarningClicks"
 
     },
     "OverviewPage\0transactionClicked\0\0index\0"
@@ -59,9 +60,10 @@ QT_MOC_LITERAL(21, 314, 28) // "handleOutOfSyncWarningClicks"
     "CAmount\0balance\0unconfirmedBalance\0"
     "immatureBalance\0watchOnlyBalance\0"
     "watchUnconfBalance\0watchImmatureBalance\0"
-    "privateBalance\0interestBalance\0"
-    "updateDisplayUnit\0handleTransactionClicked\0"
-    "updateAlerts\0warnings\0updateWatchOnlyLabels\0"
+    "privateWatchBalance\0privateBalance\0"
+    "interestBalance\0updateDisplayUnit\0"
+    "handleTransactionClicked\0updateAlerts\0"
+    "warnings\0updateWatchOnlyLabels\0"
     "showWatchOnly\0handleOutOfSyncWarningClicks"
 };
 #undef QT_MOC_LITERAL
@@ -84,23 +86,23 @@ static const uint qt_meta_data_OverviewPage[] = {
        4,    0,   57,    2, 0x06 /* Public */,
 
  // slots: name, argc, parameters, tag, flags
-       5,    8,   58,    2, 0x0a /* Public */,
-      15,    0,   75,    2, 0x08 /* Private */,
-      16,    1,   76,    2, 0x08 /* Private */,
-      17,    1,   79,    2, 0x08 /* Private */,
-      19,    1,   82,    2, 0x08 /* Private */,
-      21,    0,   85,    2, 0x08 /* Private */,
+       5,    9,   58,    2, 0x0a /* Public */,
+      16,    0,   77,    2, 0x08 /* Private */,
+      17,    1,   78,    2, 0x08 /* Private */,
+      18,    1,   81,    2, 0x08 /* Private */,
+      20,    1,   84,    2, 0x08 /* Private */,
+      22,    0,   87,    2, 0x08 /* Private */,
 
  // signals: parameters
     QMetaType::Void, QMetaType::QModelIndex,    3,
     QMetaType::Void,
 
  // slots: parameters
-    QMetaType::Void, 0x80000000 | 6, 0x80000000 | 6, 0x80000000 | 6, 0x80000000 | 6, 0x80000000 | 6, 0x80000000 | 6, 0x80000000 | 6, 0x80000000 | 6,    7,    8,    9,   10,   11,   12,   13,   14,
+    QMetaType::Void, 0x80000000 | 6, 0x80000000 | 6, 0x80000000 | 6, 0x80000000 | 6, 0x80000000 | 6, 0x80000000 | 6, 0x80000000 | 6, 0x80000000 | 6, 0x80000000 | 6,    7,    8,    9,   10,   11,   12,   13,   14,   15,
     QMetaType::Void,
     QMetaType::Void, QMetaType::QModelIndex,    3,
-    QMetaType::Void, QMetaType::QString,   18,
-    QMetaType::Void, QMetaType::Bool,   20,
+    QMetaType::Void, QMetaType::QString,   19,
+    QMetaType::Void, QMetaType::Bool,   21,
     QMetaType::Void,
 
        0        // eod
@@ -114,7 +116,7 @@ void OverviewPage::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id
         switch (_id) {
         case 0: _t->transactionClicked((*reinterpret_cast< const QModelIndex(*)>(_a[1]))); break;
         case 1: _t->outOfSyncWarningClicked(); break;
-        case 2: _t->setBalance((*reinterpret_cast< const CAmount(*)>(_a[1])),(*reinterpret_cast< const CAmount(*)>(_a[2])),(*reinterpret_cast< const CAmount(*)>(_a[3])),(*reinterpret_cast< const CAmount(*)>(_a[4])),(*reinterpret_cast< const CAmount(*)>(_a[5])),(*reinterpret_cast< const CAmount(*)>(_a[6])),(*reinterpret_cast< const CAmount(*)>(_a[7])),(*reinterpret_cast< const CAmount(*)>(_a[8]))); break;
+        case 2: _t->setBalance((*reinterpret_cast< const CAmount(*)>(_a[1])),(*reinterpret_cast< const CAmount(*)>(_a[2])),(*reinterpret_cast< const CAmount(*)>(_a[3])),(*reinterpret_cast< const CAmount(*)>(_a[4])),(*reinterpret_cast< const CAmount(*)>(_a[5])),(*reinterpret_cast< const CAmount(*)>(_a[6])),(*reinterpret_cast< const CAmount(*)>(_a[7])),(*reinterpret_cast< const CAmount(*)>(_a[8])),(*reinterpret_cast< const CAmount(*)>(_a[9]))); break;
         case 3: _t->updateDisplayUnit(); break;
         case 4: _t->handleTransactionClicked((*reinterpret_cast< const QModelIndex(*)>(_a[1]))); break;
         case 5: _t->updateAlerts((*reinterpret_cast< const QString(*)>(_a[1]))); break;

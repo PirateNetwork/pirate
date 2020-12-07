@@ -637,8 +637,9 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             ssKey >> vk;
             char fYes;
             ssValue >> fYes;
-            if (fYes == '1')
+            if (fYes == '1') {
                 pwallet->LoadSproutViewingKey(vk);
+            }
 
             // Viewing keys have no birthday information for now,
             // so set the wallet birthday to the beginning of time.
@@ -689,6 +690,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             ssValue >> fYes;
             if (fYes == '1') {
                 pwallet->LoadSaplingFullViewingKey(extfvk);
+                pwallet->LoadSaplingWatchOnly(extfvk);
             }
 
             // Viewing keys have no birthday information for now,
@@ -889,7 +891,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 strErr = "Error reading wallet database: LoadSaplingPaymentAddress failed";
                 return false;
             }
-            
+
             pwallet->mapZAddressBook[addr].name = "z-sapling";
             pwallet->mapZAddressBook[addr].purpose = "unknown";
         }

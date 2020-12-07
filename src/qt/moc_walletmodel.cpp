@@ -20,8 +20,8 @@ QT_BEGIN_MOC_NAMESPACE
 QT_WARNING_PUSH
 QT_WARNING_DISABLE_DEPRECATED
 struct qt_meta_stringdata_WalletModel_t {
-    QByteArrayData data[41];
-    char stringdata0[539];
+    QByteArrayData data[42];
+    char stringdata0[559];
 };
 #define QT_MOC_LITERAL(idx, ofs, len) \
     Q_STATIC_BYTE_ARRAY_DATA_HEADER_INITIALIZER_WITH_OFFSET(len, \
@@ -40,54 +40,56 @@ QT_MOC_LITERAL(6, 63, 15), // "immatureBalance"
 QT_MOC_LITERAL(7, 79, 16), // "watchOnlyBalance"
 QT_MOC_LITERAL(8, 96, 18), // "watchUnconfBalance"
 QT_MOC_LITERAL(9, 115, 20), // "watchImmatureBalance"
-QT_MOC_LITERAL(10, 136, 14), // "privateBalance"
-QT_MOC_LITERAL(11, 151, 15), // "interestBalance"
-QT_MOC_LITERAL(12, 167, 23), // "encryptionStatusChanged"
-QT_MOC_LITERAL(13, 191, 6), // "status"
-QT_MOC_LITERAL(14, 198, 13), // "requireUnlock"
-QT_MOC_LITERAL(15, 212, 7), // "message"
-QT_MOC_LITERAL(16, 220, 5), // "title"
-QT_MOC_LITERAL(17, 226, 5), // "style"
-QT_MOC_LITERAL(18, 232, 9), // "coinsSent"
-QT_MOC_LITERAL(19, 242, 8), // "CWallet*"
-QT_MOC_LITERAL(20, 251, 6), // "wallet"
-QT_MOC_LITERAL(21, 258, 18), // "SendCoinsRecipient"
-QT_MOC_LITERAL(22, 277, 9), // "recipient"
-QT_MOC_LITERAL(23, 287, 11), // "transaction"
-QT_MOC_LITERAL(24, 299, 10), // "coinsZSent"
-QT_MOC_LITERAL(25, 310, 19), // "AsyncRPCOperationId"
-QT_MOC_LITERAL(26, 330, 11), // "operationId"
-QT_MOC_LITERAL(27, 342, 12), // "showProgress"
-QT_MOC_LITERAL(28, 355, 9), // "nProgress"
-QT_MOC_LITERAL(29, 365, 22), // "notifyWatchonlyChanged"
-QT_MOC_LITERAL(30, 388, 14), // "fHaveWatchonly"
-QT_MOC_LITERAL(31, 403, 12), // "updateStatus"
-QT_MOC_LITERAL(32, 416, 17), // "updateTransaction"
-QT_MOC_LITERAL(33, 434, 17), // "updateAddressBook"
-QT_MOC_LITERAL(34, 452, 7), // "address"
-QT_MOC_LITERAL(35, 460, 5), // "label"
-QT_MOC_LITERAL(36, 466, 6), // "isMine"
-QT_MOC_LITERAL(37, 473, 7), // "purpose"
-QT_MOC_LITERAL(38, 481, 18), // "updateZAddressBook"
-QT_MOC_LITERAL(39, 500, 19), // "updateWatchOnlyFlag"
-QT_MOC_LITERAL(40, 520, 18) // "pollBalanceChanged"
+QT_MOC_LITERAL(10, 136, 19), // "watchPrivateBalance"
+QT_MOC_LITERAL(11, 156, 14), // "privateBalance"
+QT_MOC_LITERAL(12, 171, 15), // "interestBalance"
+QT_MOC_LITERAL(13, 187, 23), // "encryptionStatusChanged"
+QT_MOC_LITERAL(14, 211, 6), // "status"
+QT_MOC_LITERAL(15, 218, 13), // "requireUnlock"
+QT_MOC_LITERAL(16, 232, 7), // "message"
+QT_MOC_LITERAL(17, 240, 5), // "title"
+QT_MOC_LITERAL(18, 246, 5), // "style"
+QT_MOC_LITERAL(19, 252, 9), // "coinsSent"
+QT_MOC_LITERAL(20, 262, 8), // "CWallet*"
+QT_MOC_LITERAL(21, 271, 6), // "wallet"
+QT_MOC_LITERAL(22, 278, 18), // "SendCoinsRecipient"
+QT_MOC_LITERAL(23, 297, 9), // "recipient"
+QT_MOC_LITERAL(24, 307, 11), // "transaction"
+QT_MOC_LITERAL(25, 319, 10), // "coinsZSent"
+QT_MOC_LITERAL(26, 330, 19), // "AsyncRPCOperationId"
+QT_MOC_LITERAL(27, 350, 11), // "operationId"
+QT_MOC_LITERAL(28, 362, 12), // "showProgress"
+QT_MOC_LITERAL(29, 375, 9), // "nProgress"
+QT_MOC_LITERAL(30, 385, 22), // "notifyWatchonlyChanged"
+QT_MOC_LITERAL(31, 408, 14), // "fHaveWatchonly"
+QT_MOC_LITERAL(32, 423, 12), // "updateStatus"
+QT_MOC_LITERAL(33, 436, 17), // "updateTransaction"
+QT_MOC_LITERAL(34, 454, 17), // "updateAddressBook"
+QT_MOC_LITERAL(35, 472, 7), // "address"
+QT_MOC_LITERAL(36, 480, 5), // "label"
+QT_MOC_LITERAL(37, 486, 6), // "isMine"
+QT_MOC_LITERAL(38, 493, 7), // "purpose"
+QT_MOC_LITERAL(39, 501, 18), // "updateZAddressBook"
+QT_MOC_LITERAL(40, 520, 19), // "updateWatchOnlyFlag"
+QT_MOC_LITERAL(41, 540, 18) // "pollBalanceChanged"
 
     },
     "WalletModel\0balanceChanged\0\0CAmount\0"
     "balance\0unconfirmedBalance\0immatureBalance\0"
     "watchOnlyBalance\0watchUnconfBalance\0"
-    "watchImmatureBalance\0privateBalance\0"
-    "interestBalance\0encryptionStatusChanged\0"
-    "status\0requireUnlock\0message\0title\0"
-    "style\0coinsSent\0CWallet*\0wallet\0"
-    "SendCoinsRecipient\0recipient\0transaction\0"
-    "coinsZSent\0AsyncRPCOperationId\0"
-    "operationId\0showProgress\0nProgress\0"
-    "notifyWatchonlyChanged\0fHaveWatchonly\0"
-    "updateStatus\0updateTransaction\0"
-    "updateAddressBook\0address\0label\0isMine\0"
-    "purpose\0updateZAddressBook\0"
-    "updateWatchOnlyFlag\0pollBalanceChanged"
+    "watchImmatureBalance\0watchPrivateBalance\0"
+    "privateBalance\0interestBalance\0"
+    "encryptionStatusChanged\0status\0"
+    "requireUnlock\0message\0title\0style\0"
+    "coinsSent\0CWallet*\0wallet\0SendCoinsRecipient\0"
+    "recipient\0transaction\0coinsZSent\0"
+    "AsyncRPCOperationId\0operationId\0"
+    "showProgress\0nProgress\0notifyWatchonlyChanged\0"
+    "fHaveWatchonly\0updateStatus\0"
+    "updateTransaction\0updateAddressBook\0"
+    "address\0label\0isMine\0purpose\0"
+    "updateZAddressBook\0updateWatchOnlyFlag\0"
+    "pollBalanceChanged"
 };
 #undef QT_MOC_LITERAL
 
@@ -105,39 +107,39 @@ static const uint qt_meta_data_WalletModel[] = {
        8,       // signalCount
 
  // signals: name, argc, parameters, tag, flags
-       1,    8,   84,    2, 0x06 /* Public */,
-      12,    1,  101,    2, 0x06 /* Public */,
-      14,    0,  104,    2, 0x06 /* Public */,
-      15,    3,  105,    2, 0x06 /* Public */,
-      18,    3,  112,    2, 0x06 /* Public */,
-      24,    1,  119,    2, 0x06 /* Public */,
-      27,    2,  122,    2, 0x06 /* Public */,
-      29,    1,  127,    2, 0x06 /* Public */,
+       1,    9,   84,    2, 0x06 /* Public */,
+      13,    1,  103,    2, 0x06 /* Public */,
+      15,    0,  106,    2, 0x06 /* Public */,
+      16,    3,  107,    2, 0x06 /* Public */,
+      19,    3,  114,    2, 0x06 /* Public */,
+      25,    1,  121,    2, 0x06 /* Public */,
+      28,    2,  124,    2, 0x06 /* Public */,
+      30,    1,  129,    2, 0x06 /* Public */,
 
  // slots: name, argc, parameters, tag, flags
-      31,    0,  130,    2, 0x0a /* Public */,
-      32,    0,  131,    2, 0x0a /* Public */,
-      33,    5,  132,    2, 0x0a /* Public */,
-      38,    5,  143,    2, 0x0a /* Public */,
-      39,    1,  154,    2, 0x0a /* Public */,
-      40,    0,  157,    2, 0x0a /* Public */,
+      32,    0,  132,    2, 0x0a /* Public */,
+      33,    0,  133,    2, 0x0a /* Public */,
+      34,    5,  134,    2, 0x0a /* Public */,
+      39,    5,  145,    2, 0x0a /* Public */,
+      40,    1,  156,    2, 0x0a /* Public */,
+      41,    0,  159,    2, 0x0a /* Public */,
 
  // signals: parameters
-    QMetaType::Void, 0x80000000 | 3, 0x80000000 | 3, 0x80000000 | 3, 0x80000000 | 3, 0x80000000 | 3, 0x80000000 | 3, 0x80000000 | 3, 0x80000000 | 3,    4,    5,    6,    7,    8,    9,   10,   11,
-    QMetaType::Void, QMetaType::Int,   13,
+    QMetaType::Void, 0x80000000 | 3, 0x80000000 | 3, 0x80000000 | 3, 0x80000000 | 3, 0x80000000 | 3, 0x80000000 | 3, 0x80000000 | 3, 0x80000000 | 3, 0x80000000 | 3,    4,    5,    6,    7,    8,    9,   10,   11,   12,
+    QMetaType::Void, QMetaType::Int,   14,
     QMetaType::Void,
-    QMetaType::Void, QMetaType::QString, QMetaType::QString, QMetaType::UInt,   16,   15,   17,
-    QMetaType::Void, 0x80000000 | 19, 0x80000000 | 21, QMetaType::QByteArray,   20,   22,   23,
-    QMetaType::Void, 0x80000000 | 25,   26,
-    QMetaType::Void, QMetaType::QString, QMetaType::Int,   16,   28,
-    QMetaType::Void, QMetaType::Bool,   30,
+    QMetaType::Void, QMetaType::QString, QMetaType::QString, QMetaType::UInt,   17,   16,   18,
+    QMetaType::Void, 0x80000000 | 20, 0x80000000 | 22, QMetaType::QByteArray,   21,   23,   24,
+    QMetaType::Void, 0x80000000 | 26,   27,
+    QMetaType::Void, QMetaType::QString, QMetaType::Int,   17,   29,
+    QMetaType::Void, QMetaType::Bool,   31,
 
  // slots: parameters
     QMetaType::Void,
     QMetaType::Void,
-    QMetaType::Void, QMetaType::QString, QMetaType::QString, QMetaType::Bool, QMetaType::QString, QMetaType::Int,   34,   35,   36,   37,   13,
-    QMetaType::Void, QMetaType::QString, QMetaType::QString, QMetaType::Bool, QMetaType::QString, QMetaType::Int,   34,   35,   36,   37,   13,
-    QMetaType::Void, QMetaType::Bool,   30,
+    QMetaType::Void, QMetaType::QString, QMetaType::QString, QMetaType::Bool, QMetaType::QString, QMetaType::Int,   35,   36,   37,   38,   14,
+    QMetaType::Void, QMetaType::QString, QMetaType::QString, QMetaType::Bool, QMetaType::QString, QMetaType::Int,   35,   36,   37,   38,   14,
+    QMetaType::Void, QMetaType::Bool,   31,
     QMetaType::Void,
 
        0        // eod
@@ -149,7 +151,7 @@ void WalletModel::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id,
         WalletModel *_t = static_cast<WalletModel *>(_o);
         Q_UNUSED(_t)
         switch (_id) {
-        case 0: _t->balanceChanged((*reinterpret_cast< const CAmount(*)>(_a[1])),(*reinterpret_cast< const CAmount(*)>(_a[2])),(*reinterpret_cast< const CAmount(*)>(_a[3])),(*reinterpret_cast< const CAmount(*)>(_a[4])),(*reinterpret_cast< const CAmount(*)>(_a[5])),(*reinterpret_cast< const CAmount(*)>(_a[6])),(*reinterpret_cast< const CAmount(*)>(_a[7])),(*reinterpret_cast< const CAmount(*)>(_a[8]))); break;
+        case 0: _t->balanceChanged((*reinterpret_cast< const CAmount(*)>(_a[1])),(*reinterpret_cast< const CAmount(*)>(_a[2])),(*reinterpret_cast< const CAmount(*)>(_a[3])),(*reinterpret_cast< const CAmount(*)>(_a[4])),(*reinterpret_cast< const CAmount(*)>(_a[5])),(*reinterpret_cast< const CAmount(*)>(_a[6])),(*reinterpret_cast< const CAmount(*)>(_a[7])),(*reinterpret_cast< const CAmount(*)>(_a[8])),(*reinterpret_cast< const CAmount(*)>(_a[9]))); break;
         case 1: _t->encryptionStatusChanged((*reinterpret_cast< int(*)>(_a[1]))); break;
         case 2: _t->requireUnlock(); break;
         case 3: _t->message((*reinterpret_cast< const QString(*)>(_a[1])),(*reinterpret_cast< const QString(*)>(_a[2])),(*reinterpret_cast< uint(*)>(_a[3]))); break;
@@ -168,7 +170,7 @@ void WalletModel::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id,
     } else if (_c == QMetaObject::IndexOfMethod) {
         int *result = reinterpret_cast<int *>(_a[0]);
         {
-            typedef void (WalletModel::*_t)(const CAmount & , const CAmount & , const CAmount & , const CAmount & , const CAmount & , const CAmount & , const CAmount & , const CAmount & );
+            typedef void (WalletModel::*_t)(const CAmount & , const CAmount & , const CAmount & , const CAmount & , const CAmount & , const CAmount & , const CAmount & , const CAmount & , const CAmount & );
             if (*reinterpret_cast<_t *>(_a[1]) == static_cast<_t>(&WalletModel::balanceChanged)) {
                 *result = 0;
                 return;
@@ -263,9 +265,9 @@ int WalletModel::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
 }
 
 // SIGNAL 0
-void WalletModel::balanceChanged(const CAmount & _t1, const CAmount & _t2, const CAmount & _t3, const CAmount & _t4, const CAmount & _t5, const CAmount & _t6, const CAmount & _t7, const CAmount & _t8)
+void WalletModel::balanceChanged(const CAmount & _t1, const CAmount & _t2, const CAmount & _t3, const CAmount & _t4, const CAmount & _t5, const CAmount & _t6, const CAmount & _t7, const CAmount & _t8, const CAmount & _t9)
 {
-    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(&_t1)), const_cast<void*>(reinterpret_cast<const void*>(&_t2)), const_cast<void*>(reinterpret_cast<const void*>(&_t3)), const_cast<void*>(reinterpret_cast<const void*>(&_t4)), const_cast<void*>(reinterpret_cast<const void*>(&_t5)), const_cast<void*>(reinterpret_cast<const void*>(&_t6)), const_cast<void*>(reinterpret_cast<const void*>(&_t7)), const_cast<void*>(reinterpret_cast<const void*>(&_t8)) };
+    void *_a[] = { nullptr, const_cast<void*>(reinterpret_cast<const void*>(&_t1)), const_cast<void*>(reinterpret_cast<const void*>(&_t2)), const_cast<void*>(reinterpret_cast<const void*>(&_t3)), const_cast<void*>(reinterpret_cast<const void*>(&_t4)), const_cast<void*>(reinterpret_cast<const void*>(&_t5)), const_cast<void*>(reinterpret_cast<const void*>(&_t6)), const_cast<void*>(reinterpret_cast<const void*>(&_t7)), const_cast<void*>(reinterpret_cast<const void*>(&_t8)), const_cast<void*>(reinterpret_cast<const void*>(&_t9)) };
     QMetaObject::activate(this, &staticMetaObject, 0, _a);
 }
 

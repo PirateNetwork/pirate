@@ -70,7 +70,7 @@ WalletModel::WalletModel(const PlatformStyle *platformStyle, CWallet *_wallet, O
     transactionTableModel(0),
     recentRequestsTableModel(0),
     cachedBalance(0), cachedUnconfirmedBalance(0), cachedImmatureBalance(0),
-    cachedPrivateBalance(0), cachedInterestBalance(0),
+    cachedWatchPrivateBalance(0), cachedPrivateBalance(0), cachedInterestBalance(0),
     cachedEncryptionStatus(Unencrypted),
     cachedNumBlocks(0)
 {
@@ -107,7 +107,7 @@ CAmount WalletModel::getBalance(const CCoinControl *coinControl) const
 
 CAmount WalletModel::getUnconfirmedBalance() const
 {
-    return wallet->GetUnconfirmedBalance();
+    return wallet->GetUnconfirmedBalance() + getBalanceZaddr("", 0, true) - getBalanceZaddr("", 1, true);
 }
 
 CAmount WalletModel::getImmatureBalance() const
@@ -118,6 +118,11 @@ CAmount WalletModel::getImmatureBalance() const
 CAmount WalletModel::getPrivateBalance() const
 {
     return getBalanceZaddr("", 1, true);
+}
+
+CAmount WalletModel::getPrivateWatchBalance() const
+{
+    return getBalanceZaddr("", 1, false) - getBalanceZaddr("", 1, true);
 }
 
 CAmount WalletModel::getInterestBalance() const
@@ -137,7 +142,10 @@ CAmount WalletModel::getWatchBalance() const
 
 CAmount WalletModel::getWatchUnconfirmedBalance() const
 {
-    return wallet->GetUnconfirmedWatchOnlyBalance();
+    CAmount balance = wallet->GetUnconfirmedWatchOnlyBalance();
+     balance += getBalanceZaddr("", 0, false) - getBalanceZaddr("", 1, false);
+     balance -= (getBalanceZaddr("", 0, true) - getBalanceZaddr("", 1, true));
+    return balance;
 }
 
 CAmount WalletModel::getWatchImmatureBalance() const
@@ -186,6 +194,7 @@ void WalletModel::checkBalanceChanged()
     CAmount newWatchOnlyBalance = 0;
     CAmount newWatchUnconfBalance = 0;
     CAmount newWatchImmatureBalance = 0;
+    CAmount newWatchPrivateBalance = 0;
     CAmount newprivateBalance = getBalanceZaddr("", 1, true);
     CAmount newinterestBalance = (ASSETCHAINS_SYMBOL[0] == 0) ? komodo_interestsum() : 0;
     if (haveWatchOnly())
@@ -193,11 +202,12 @@ void WalletModel::checkBalanceChanged()
         newWatchOnlyBalance = getWatchBalance();
         newWatchUnconfBalance = getWatchUnconfirmedBalance();
         newWatchImmatureBalance = getWatchImmatureBalance();
+        newWatchPrivateBalance = getBalanceZaddr("", 1, false);
     }
 
     if(cachedBalance != newBalance || cachedUnconfirmedBalance != newUnconfirmedBalance || cachedImmatureBalance != newImmatureBalance ||
         cachedWatchOnlyBalance != newWatchOnlyBalance || cachedWatchUnconfBalance != newWatchUnconfBalance || cachedWatchImmatureBalance != newWatchImmatureBalance ||
-        cachedPrivateBalance != newprivateBalance || cachedInterestBalance != newinterestBalance)
+        cachedWatchPrivateBalance != newWatchPrivateBalance || cachedPrivateBalance != newprivateBalance || cachedInterestBalance != newinterestBalance)
     {
         cachedBalance = newBalance;
         cachedUnconfirmedBalance = newUnconfirmedBalance;
@@ -205,10 +215,12 @@ void WalletModel::checkBalanceChanged()
         cachedWatchOnlyBalance = newWatchOnlyBalance;
         cachedWatchUnconfBalance = newWatchUnconfBalance;
         cachedWatchImmatureBalance = newWatchImmatureBalance;
+        cachedWatchPrivateBalance = newWatchPrivateBalance;
         cachedPrivateBalance = newprivateBalance;
         cachedInterestBalance = newinterestBalance;
         Q_EMIT balanceChanged(newBalance, newUnconfirmedBalance, newImmatureBalance,
-                            newWatchOnlyBalance, newWatchUnconfBalance, newWatchImmatureBalance, newprivateBalance, newinterestBalance);
+                            newWatchOnlyBalance, newWatchUnconfBalance, newWatchImmatureBalance,
+                            newWatchPrivateBalance, newprivateBalance, newinterestBalance);
     }
 }
 

@@ -2,9 +2,32 @@ TEMPLATE = app
 TARGET = PirateOceanGUI
 VERSION = 0.4.0.0
 
-INCLUDEPATH += src src\qt src\libsnark src\protobuf src\secp256k1 src\secp256k1\include src\leveldb\include src\leveldb\helpers\memenv src\leveldb src\univalue\include src\libevent\include src\libevent\compat src\cryptoconditions\include src\cryptoconditions src\cryptoconditions\src\asn
+
+
+INCLUDEPATH += \
+            $$PWD/src \
+            $$PWD/src/qt \
+            $$PWD/src/qt/include \
+            $$PWD/src/config \
+            $$PWD/src/secp256k1/include \
+            $$PWD/src/cc/includes \
+            $$PWD/src/cryptoconditions/include \
+            $$PWD/src/cryptoconditions/src \
+            $$PWD/src/cryptoconditions/src/asn \
+            $$PWD/src/snark \
+            $$PWD/src/snark/libsnark \
+            $$PWD/src/univalue/include \
+            $$PWD/src/leveldb/include \
+            $$PWD/src/leveldb/helpers/memenv \
+            $$PWD/src/leveldb \
+#            $$PWD/depends/x86_64-unknown-linux-gnu/include \
+#            $$PWD/depends/x86_64-unknown-linux-gnu/lib
 
 MINIUPNPC_INCLUDE_PATH = src\miniupnpc
+
+MOC_DIR = moc
+OBJECTS_DIR = bin
+UI_DIR = ui
 
 windows:INCLUDEPATH += depends\libgmp_6.1.1_msvc14\include
 windows:INCLUDEPATH += depends\BDB_6.2.32\include depends\db-6.2.23\build_windows
@@ -37,24 +60,24 @@ MINGW_THREAD_BUGFIX = 0
 
 Release:DESTDIR = release
 Release:OBJECTS_DIR = build_release
-Release:MOC_DIR = build_release
+Release:DIR = build_release
 Release:RCC_DIR = build_release
 Release:UI_DIR = build_release
 
 Debug:DESTDIR = debug
 Debug:OBJECTS_DIR = build_debug
-Debug:MOC_DIR = build_debug
+Debug:DIR = build_debug
 Debug:RCC_DIR = build_debug
 Debug:UI_DIR = build_debug
 
 # Mac: compile for maximum compatibility (10.5, 32-bit)
 macx:QMAKE_CXXFLAGS += -mmacosx-version-min=10.5 -arch x86_64 -isysroot /Developer/SDKs/MacOSX10.5.sdk
 
-!windows:!macx {
-     # Linux: static link
-     LIBS += -Wl,-Bstatic
-#     LIBS += -Wl,-Bdynamic
-}
+#!windows:!macx {
+#     # Linux: static link
+#     LIBS += -Wl,-Bstatic
+##     LIBS += -Wl,-Bdynamic
+#}
 
 !windows {
 # for extra security against potential buffer overflows: enable GCCs Stack Smashing Protection
@@ -142,441 +165,150 @@ linux:QMAKE_CXXFLAGS_WARN_ON = -fdiagnostics-show-option -Wall -Wextra -Wno-igno
 
 # Input
 DEPENDPATH += .
-HEADERS += src\komodo_globals.h \
-     src\qt\pirateoceangui.h \
-     src\qt\transactiontablemodel.h \
-     src\qt\addresstablemodel.h \
-     src\qt\zaddresstablemodel.h \
-     src\qt\optionsdialog.h \
-     src\qt\coincontroldialog.h \
-     src\qt\coincontroltreewidget.h \
-     src\qt\sendcoinsdialog.h \
-     src\qt\zsendcoinsdialog.h \
-     src\qt\addressbookpage.h \
-     src\qt\zaddressbookpage.h \
-     src\qt\signverifymessagedialog.h \
-     src\qt\editaddressdialog.h \
-     src\qt\editzaddressdialog.h \
-     src\qt\komodoaddressvalidator.h \
-     src\qt\clientmodel.h \
-     src\qt\guiutil.h \
-     src\qt\optionsmodel.h \
-     src\qt\trafficgraphwidget.h \
-     src\qt\transactiondesc.h \
-     src\qt\transactiondescdialog.h \
-     src\qt\komodoamountfield.h \
-     src\qt\transactionfilterproxy.h \
-     src\qt\transactionview.h \
-     src\qt\walletmodel.h \
-     src\qt\overviewpage.h \
-     src\qt\csvmodelwriter.h \
-     src\qt\sendcoinsentry.h \
-     src\qt\qvalidatedlineedit.h \
-     src\qt\komodounits.h \
-     src\qt\qvaluecombobox.h \
-     src\qt\askpassphrasedialog.h \
-     src\qt\intro.h \
-     src\qt\splashscreen.h \
-     src\qt\utilitydialog.h \
-     src\qt\notificator.h \
-     src\qt\modaloverlay.h \
-     src\qt\openuridialog.h \
-     src\qt\walletframe.h \
-     src\qt\paymentserver.h \
-     src\qt\rpcconsole.h \
-     src\qt\bantablemodel.h \
-     src\qt\peertablemodel.h \
-     src\qt\recentrequeststablemodel.h \
-     src\qt\walletview.h \
-     src\qt\receivecoinsdialog.h \
-     src\qt\receiverequestdialog.h \
-     src\streams.h \
-     src\komodo_bitcoind.h \
-     src\komodo_utils.h \
-     src\komodo_notary.h \
-     src\komodo_gateway.h
 
-SOURCES += \ #src\protobuf\google\protobuf\any.cc \
-#    src\protobuf\google\protobuf\arena.cc \
-#    src\protobuf\google\protobuf\descriptor.cc \
-#    src\protobuf\google\protobuf\descriptor.pb.cc \
-#    src\protobuf\google\protobuf\descriptor_database.cc \
-#    src\protobuf\google\protobuf\dynamic_message.cc \
-#    src\protobuf\google\protobuf\extension_set.cc \
-#    src\protobuf\google\protobuf\extension_set_heavy.cc \
-#    src\protobuf\google\protobuf\generated_message_reflection.cc \
-#    src\protobuf\google\protobuf\generated_message_util.cc \
-#    src\protobuf\google\protobuf\io\coded_stream.cc \
-#    src\protobuf\google\protobuf\io\strtod.cc \
-#    src\protobuf\google\protobuf\io\tokenizer.cc \
-#    src\protobuf\google\protobuf\io\zero_copy_stream.cc \
-#    src\protobuf\google\protobuf\io\zero_copy_stream_impl.cc \
-#    src\protobuf\google\protobuf\io\zero_copy_stream_impl_lite.cc \
-#    src\protobuf\google\protobuf\map_field.cc \
-#    src\protobuf\google\protobuf\message.cc \
-#    src\protobuf\google\protobuf\message_lite.cc \
-#    src\protobuf\google\protobuf\reflection_ops.cc \
-#    src\protobuf\google\protobuf\repeated_field.cc \
-#    src\protobuf\google\protobuf\stubs\atomicops_internals_x86_msvc.cc \
-#    src\protobuf\google\protobuf\stubs\common.cc \
-#    src\protobuf\google\protobuf\stubs\int128.cc \
-#    src\protobuf\google\protobuf\stubs\io_win32.cc \
-#    src\protobuf\google\protobuf\stubs\once.cc \
-#    src\protobuf\google\protobuf\stubs\status.cc \
-#    src\protobuf\google\protobuf\stubs\stringpiece.cc \
-#    src\protobuf\google\protobuf\stubs\stringprintf.cc \
-#    src\protobuf\google\protobuf\stubs\structurally_valid.cc \
-#    src\protobuf\google\protobuf\stubs\strutil.cc \
-#    src\protobuf\google\protobuf\stubs\substitute.cc \
-#    src\protobuf\google\protobuf\text_format.cc \
-#    src\protobuf\google\protobuf\unknown_field_set.cc \
-#    src\protobuf\google\protobuf\wire_format.cc \
-#    src\protobuf\google\protobuf\wire_format_lite.cc \
-    src\addrdb.cpp \
-    src\addrman.cpp \
-    src\alert.cpp \
-    src\amount.cpp \
-    src\arith_uint256.cpp \
-    src\asyncrpcoperation.cpp \
-    src\asyncrpcqueue.cpp \
-    src\base58.cpp \
-    src\bech32.cpp \
-    src\bloom.cpp \
-    src\chain.cpp \
-    src\chainparamsbase.cpp \
-    src\checkpoints.cpp \
-    src\clientversion.cpp \
-    src\coins.cpp \
-    src\compat\glibc_sanity.cpp \
-    src\compat\glibcxx_sanity.cpp \
-    src\compressor.cpp \
-    src\core_read.cpp \
-    src\core_write.cpp \
-    src\crosschain.cpp \
-    src\crypto\equihash.cpp \
-    src\crypto\haraka.cpp \
-    src\crypto\haraka_portable.cpp \
-    src\crypto\hmac_sha256.cpp \
-    src\crypto\hmac_sha512.cpp \
-    src\crypto\ripemd160.cpp \
-    src\crypto\sha1.cpp \
-    src\crypto\sha256.cpp \
-    src\crypto\sha512.cpp \
-    src\crypto\verus_hash.cpp \
-    src\fs.cpp \
-    src\hash.cpp \
-    src\httprpc.cpp \
-    src\httpserver.cpp \
-    src\init.cpp \
-    src\importcoin.cpp \
-    src\key.cpp \
-    src\keystore.cpp \
-    src\key_io.cpp \
-    src\leveldb\db\builder.cc \
-    src\leveldb\db\db_impl.cc \
-    src\leveldb\db\db_iter.cc \
-    src\leveldb\db\dbformat.cc \
-    src\leveldb\db\filename.cc \
-    src\leveldb\db\log_reader.cc \
-    src\leveldb\db\log_writer.cc \
-    src\leveldb\db\memtable.cc \
-    src\leveldb\db\table_cache.cc \
-    src\leveldb\db\version_edit.cc \
-    src\leveldb\db\version_set.cc \
-    src\leveldb\db\write_batch.cc \
-    src\leveldb\helpers\memenv\memenv.cc \
-    src\leveldb\port\port_posix_sse.cc \
-    src\leveldb\port\port_win.cc \
-    src\leveldb\table\block.cc \
-    src\leveldb\table\block_builder.cc \
-    src\leveldb\table\filter_block.cc \
-    src\leveldb\table\format.cc \
-    src\leveldb\table\iterator.cc \
-    src\leveldb\table\merger.cc \
-    src\leveldb\table\table.cc \
-    src\leveldb\table\table_builder.cc \
-    src\leveldb\table\two_level_iterator.cc \
-    src\leveldb\util\arena_leveldb.cc \
-    src\leveldb\util\bloom.cc \
-    src\leveldb\util\cache.cc \
-    src\leveldb\util\coding.cc \
-    src\leveldb\util\comparator.cc \
-    src\leveldb\util\crc32c.cc \
-    src\leveldb\util\env.cc \
-    src\leveldb\util\env_win.cc \
-    src\leveldb\util\filter_policy.cc \
-    src\leveldb\util\hash.cc \
-    src\leveldb\util\logging.cc \
-    src\leveldb\util\options.cc \
-    src\leveldb\util\status_leveldb.cc \
-    src\dbwrapper.cpp \
-    src\libevent\buffer.c \
-    src\libevent\buffer_iocp.c \
-    src\libevent\bufferevent.c \
-    src\libevent\bufferevent_async.c \
-    src\libevent\bufferevent_ratelim.c \
-    src\libevent\bufferevent_sock.c \
-    src\libevent\event.c \
-    src\libevent\event_iocp.c \
-    src\libevent\evmap.c \
-    src\libevent\evthread.c \
-    src\libevent\evthread_win32.c \
-    src\libevent\evutil.c \
-    src\libevent\evutil_rand.c \
-    src\libevent\evutil_time.c \
-    src\libevent\http.c \
-    src\libevent\listener.c \
-    src\libevent\log.c \
-    src\libevent\signal.c \
-    src\libevent\strlcpy.c \
-    src\libevent\win32select.c \
-    src\libsnark\algebra\curves\alt_bn128\alt_bn128_g1.cpp \
-    src\libsnark\algebra\curves\alt_bn128\alt_bn128_g2.cpp \
-    src\libsnark\algebra\curves\alt_bn128\alt_bn128_init.cpp \
-    src\libsnark\algebra\curves\alt_bn128\alt_bn128_pairing.cpp \
-    src\libsnark\algebra\curves\alt_bn128\alt_bn128_pp.cpp \
-    src\libsnark\common\profiling.cpp \
-    src\libsnark\common\utils.cpp \
-    src\main.cpp \
-    src\merkleblock.cpp \
-    src\metrics.cpp \
-    src\miner.cpp \
-    src\net.cpp \
-    src\netbase.cpp \
-    src\notarisationdb.cpp \
-    src\policy\fees.cpp \
-    src\policy\policy.cpp \
-    src\pow.cpp \
-    src\primitives\block.cpp \
-    src\primitives\nonce.cpp \
-    src\primitives\transaction.cpp \
-    src\protocol.cpp \
-    src\pubkey.cpp \
-    src\qt\addressbookpage.cpp \
-    src\qt\zaddressbookpage.cpp \
-    src\qt\addresstablemodel.cpp \
-    src\qt\zaddresstablemodel.cpp \
-    src\qt\askpassphrasedialog.cpp \
-    src\qt\bantablemodel.cpp \
-    src\qt\clientmodel.cpp \
-    src\qt\coincontroldialog.cpp \
-    src\qt\coincontroltreewidget.cpp \
-    src\qt\csvmodelwriter.cpp \
-    src\qt\editaddressdialog.cpp \
-    src\qt\editzaddressdialog.cpp \
-    src\qt\guiutil.cpp \
-    src\qt\intro.cpp \
-    src\qt\komodo.cpp \
-    src\qt\komodoaddressvalidator.cpp \
-    src\qt\komodoamountfield.cpp \
-    src\qt\pirateoceangui.cpp \
-    src\qt\komodounits.cpp \
-    src\qt\modaloverlay.cpp \
-    src\qt\networkstyle.cpp \
-    src\qt\notificator.cpp \
-    src\qt\openuridialog.cpp \
-    src\qt\optionsdialog.cpp \
-    src\qt\optionsmodel.cpp \
-    src\qt\overviewpage.cpp \
-    src\qt\paymentrequest.pb.cc \
-    src\qt\paymentrequestplus.cpp \
-    src\qt\paymentserver.cpp \
-    src\qt\peertablemodel.cpp \
-    src\qt\platformstyle.cpp \
-    src\qt\qvalidatedlineedit.cpp \
-    src\qt\qvaluecombobox.cpp \
-    src\qt\receivecoinsdialog.cpp \
-    src\qt\receiverequestdialog.cpp \
-    src\qt\recentrequeststablemodel.cpp \
-    src\qt\rpcconsole.cpp \
-    src\qt\sendcoinsdialog.cpp \
-    src\qt\zsendcoinsdialog.cpp \
-    src\qt\sendcoinsentry.cpp \
-    src\qt\signverifymessagedialog.cpp \
-    src\qt\splashscreen.cpp \
-    src\qt\trafficgraphwidget.cpp \
-    src\qt\transactiondesc.cpp \
-    src\qt\transactiondescdialog.cpp \
-    src\qt\transactionfilterproxy.cpp \
-    src\qt\transactionrecord.cpp \
-    src\qt\transactiontablemodel.cpp \
-    src\qt\transactionview.cpp \
-    src\qt\utilitydialog.cpp \
-    src\qt\walletframe.cpp \
-    src\qt\walletmodel.cpp \
-    src\qt\walletmodeltransaction.cpp \
-    src\qt\walletmodelztransaction.cpp \
-    src\qt\walletview.cpp \
-    src\qt\winshutdownmonitor.cpp \
-    src\random.cpp \
-    src\rest.cpp \
-    src\rpc\blockchain.cpp \
-    src\rpc\client.cpp \
-    src\rpc\crosschain.cpp \
-    src\rpc\mining.cpp \
-    src\rpc\misc.cpp \
-    src\rpc\net.cpp \
-    src\rpc\protocol_rpc.cpp \
-    src\rpc\rawtransaction.cpp \
-    src\rpc\server.cpp \
-    src\scheduler.cpp \
-    src\script\interpreter.cpp \
-    src\script\script.cpp \
-    src\script\script_error.cpp \
-    src\script\script_ext.cpp \
-    src\script\serverchecker.cpp \
-    src\script\sign.cpp \
-    src\script\standard.cpp \
-    src\secp256k1\src\secp256k1.c \
-    src\sendalert.cpp \
-    src\support\cleanse.cpp \
-    src\support\pagelocker.cpp \
-    src\sync.cpp \
-    src\sys\time.cpp \
-    src\threadinterrupt.cpp \
-    src\timedata.cpp \
-    src\torcontrol.cpp \
-    src\transaction_builder.cpp \
-    src\txdb.cpp \
-    src\txmempool.cpp \
-    src\uint256.cpp \
-    src\univalue\lib\univalue.cpp \
-    src\univalue\lib\univalue_read.cpp \
-    src\univalue\lib\univalue_write.cpp \
-    src\util.cpp \
-    src\utilmoneystr.cpp \
-    src\utilstrencodings.cpp \
-    src\utiltest.cpp \
-    src\utiltime.cpp \
-    src\validationinterface.cpp \
-    src\versionbits.cpp \
-    src\wallet\asyncrpcoperation_sendmany.cpp \
-    src\wallet\crypter.cpp \
-    src\wallet\db.cpp \
-    src\wallet\rpcdump.cpp \
-    src\wallet\rpcwallet.cpp \
-    src\wallet\wallet.cpp \
-    src\wallet\wallet_fees.cpp \
-    src\wallet\wallet_ismine.cpp \
-    src\wallet\walletdb.cpp \
-    src\zcash\Address.cpp \
-    src\zcash\IncrementalMerkleTree.cpp \
-    src\zcash\JoinSplit.cpp \
-    src\zcash\Note.cpp \
-    src\zcash\NoteEncryption.cpp \
-    src\zcash\prf.cpp \
-    src\zcash\Proof.cpp \
-    src\zcash\util_zcash.cpp \
-    src\zcash\zip32.cpp \
-    src\zcbenchmarks.cpp \
-    src\chainparams.cpp \
-    src\cc\assets.cpp \
-    src\cc\auction.cpp \
-    src\cc\betprotocol.cpp \
-    src\cc\channels.cpp \
-    src\cc\CCassetstx.cpp \
-    src\cc\CCassetsCore.cpp \
-    src\cc\CCcustom.cpp \
-    src\cc\CCtx.cpp \
-    src\cc\CCutils.cpp \
-    src\cc\dice.cpp \
-    src\cc\eval.cpp \
-    src\cc\faucet.cpp \
-    src\cc\fsm.cpp \
-    src\cc\gateways.cpp \
-    src\cc\heir.cpp \
-    src\cc\import.cpp \
-    src\cc\lotto.cpp \
-    src\cc\oracles.cpp \
-    src\cc\payments.cpp \
-    src\cc\pegs.cpp \
-    src\cc\prices.cpp \
-    src\cc\rewards.cpp \
-    src\cc\triggers.cpp \
-    src\consensus\upgrades.cpp \
-    src\deprecation.cpp \
-    src\paymentdisclosure.cpp \
-    src\paymentdisclosuredb.cpp \
-    src\script\cc.cpp \
-    src\wallet\asyncrpcoperation_mergetoaddress.cpp \
-    src\wallet\asyncrpcoperation_shieldcoinbase.cpp \
-    src\wallet\rpcdisclosure.cpp \
-    src\cryptoconditions\src\cryptoconditions.cpp \
-    src\cryptoconditions\src\asn\Condition.c	\
-    src\cryptoconditions\src\asn\SimpleSha256Condition.c	\
-    src\cryptoconditions\src\asn\CompoundSha256Condition.c	\
-    src\cryptoconditions\src\asn\ConditionTypes.c	\
-    src\cryptoconditions\src\asn\Fulfillment.c	\
-    src\cryptoconditions\src\asn\PreimageFulfillment.c	\
-    src\cryptoconditions\src\asn\PrefixFulfillment.c	\
-    src\cryptoconditions\src\asn\ThresholdFulfillment.c	\
-    src\cryptoconditions\src\asn\RsaSha256Fulfillment.c	\
-    src\cryptoconditions\src\asn\Ed25519Sha512Fulfillment.c	\
-    src\cryptoconditions\src\asn\Secp256k1Fulfillment.c	\
-    src\cryptoconditions\src\asn\EvalFulfillment.c	\
-    src\cryptoconditions\src\asn\PrefixFingerprintContents.c	\
-    src\cryptoconditions\src\asn\ThresholdFingerprintContents.c	\
-    src\cryptoconditions\src\asn\RsaFingerprintContents.c	\
-    src\cryptoconditions\src\asn\Ed25519FingerprintContents.c	\
-    src\cryptoconditions\src\asn\Secp256k1FingerprintContents.c \
-    src\cryptoconditions\src\asn\INTEGER.c \
-    src\cryptoconditions\src\asn\NativeEnumerated.c \
-    src\cryptoconditions\src\asn\NativeInteger.c \
-    src\cryptoconditions\src\asn\asn_SET_OF.c \
-    src\cryptoconditions\src\asn\constr_CHOICE.c \
-    src\cryptoconditions\src\asn\constr_SEQUENCE.c \
-    src\cryptoconditions\src\asn\constr_SET_OF.c \
-    src\cryptoconditions\src\asn\OCTET_STRING.c \
-    src\cryptoconditions\src\asn\BIT_STRING.c \
-    src\cryptoconditions\src\asn\asn_codecs_prim.c \
-    src\cryptoconditions\src\asn\ber_tlv_length.c \
-    src\cryptoconditions\src\asn\ber_tlv_tag.c \
-    src\cryptoconditions\src\asn\ber_decoder.c \
-    src\cryptoconditions\src\asn\der_encoder.c \
-    src\cryptoconditions\src\asn\constr_TYPE.c \
-    src\cryptoconditions\src\asn\constraints.c \
-    src\cryptoconditions\src\asn\xer_support.c \
-    src\cryptoconditions\src\asn\xer_decoder.c \
-    src\cryptoconditions\src\asn\xer_encoder.c \
-    src\cryptoconditions\src\asn\per_support.c \
-    src\cryptoconditions\src\asn\per_decoder.c \
-    src\cryptoconditions\src\asn\per_encoder.c \
-    src\cryptoconditions\src\asn\per_opentype.c \
-    src\cryptoconditions\src\cryptoconditions_utils.cpp \
-    src\cryptoconditions\src\include\cryptoconditions_sha256.c \
-    src\cryptoconditions\src\include\ed25519\src\keypair.cpp \
-    src\cryptoconditions\src\include\ed25519\src\cryptoconditions_sign.cpp \
-    src\cryptoconditions\src\include\ed25519\src\verify.cpp \
-    src\cryptoconditions\src\include\ed25519\src\cryptoconditions_sha512.cpp \
-    src\cryptoconditions\src\include\ed25519\src\ge.cpp \
-    src\cryptoconditions\src\include\ed25519\src\sc.cpp \
-    src\cryptoconditions\src\include\ed25519\src\fe.cpp
+HEADERS += \
+     src/qt/addressbookpage.h \
+     src/qt/addresstablemodel.h \
+     src/qt/askpassphrasedialog.h \
+     src/qt/bantablemodel.h \
+     src/qt/callback.h \
+     src/qt/clientmodel.h \
+     src/qt/coincontroldialog.h \
+     src/qt/coincontroltreewidget.h \
+     src/qt/csvmodelwriter.h \
+     src/qt/editaddressdialog.h \
+     src/qt/editzaddressdialog.h \
+     src/qt/guiconstants.h \
+     src/qt/guiutil.h \
+     src/qt/intro.h \
+     src/qt/komodoaddressvalidator.h \
+     src/qt/komodoamountfield.h \
+     src/qt/komodounits.h \
+     src/qt/macdockiconhandler.h \
+     src/qt/macnotificationhandler.h \
+     src/qt/modaloverlay.h \
+     src/qt/networkstyle.h \
+     src/qt/notificator.h \
+     src/qt/openuridialog.h \
+     src/qt/optionsdialog.h \
+     src/qt/optionsmodel.h \
+     src/qt/overviewpage.h \
+     src/qt/paymentserver.h \
+     src/qt/peertablemodel.h \
+     src/qt/pirateoceangui.h \
+     src/qt/platformstyle.h \
+     src/qt/precompiled.h \
+     src/qt/qvalidatedlineedit.h \
+     src/qt/qvaluecombobox.h \
+     src/qt/receivecoinsdialog.h \
+     src/qt/receiverequestdialog.h \
+     src/qt/recentrequeststablemodel.h \
+     src/qt/rpcconsole.h \
+     src/qt/sendcoinsdialog.h \
+     src/qt/sendcoinsentry.h \
+     src/qt/signverifymessagedialog.h \
+     src/qt/splashscreen.h \
+     src/qt/trafficgraphwidget.h \
+     src/qt/transactiondesc.h \
+     src/qt/transactiondescdialog.h \
+     src/qt/transactionfilterproxy.h \
+     src/qt/transactionrecord.h \
+     src/qt/transactiontablemodel.h \
+     src/qt/transactionview.h \
+     src/qt/utilitydialog.h \
+     src/qt/walletframe.h \
+     src/qt/walletmodel.h \
+     src/qt/walletmodeltransaction.h \
+     src/qt/walletmodelztransaction.h \
+     src/qt/walletview.h \
+     src/qt/winshutdownmonitor.h \
+     src/qt/zaddressbookpage.h \
+     src/qt/zaddresstablemodel.h \
+     src/qt/zsendcoinsdialog.h \
+
+SOURCES += \
+    src/qt/addressbookpage.cpp \
+    src/qt/addresstablemodel.cpp \
+    src/qt/askpassphrasedialog.cpp \
+    src/qt/bantablemodel.cpp \
+    src/qt/clientmodel.cpp \
+    src/qt/coincontroldialog.cpp \
+    src/qt/coincontroltreewidget.cpp \
+    src/qt/csvmodelwriter.cpp \
+    src/qt/editaddressdialog.cpp \
+    src/qt/editzaddressdialog.cpp \
+    src/qt/guiutil.cpp \
+    src/qt/intro.cpp \
+    src/qt/komodo.cpp \
+    src/qt/komodoaddressvalidator.cpp \
+    src/qt/komodoamountfield.cpp \
+    src/qt/komodostrings.cpp \
+    src/qt/komodounits.cpp \
+    src/qt/modaloverlay.cpp \
+    src/qt/networkstyle.cpp \
+    src/qt/notificator.cpp \
+    src/qt/openuridialog.cpp \
+    src/qt/optionsdialog.cpp \
+    src/qt/optionsmodel.cpp \
+    src/qt/overviewpage.cpp \
+#    src/qt/paymentrequestplus.cpp \
+    src/qt/paymentserver.cpp \
+    src/qt/peertablemodel.cpp \
+    src/qt/pirateoceangui.cpp \
+    src/qt/platformstyle.cpp \
+    src/qt/qvalidatedlineedit.cpp \
+    src/qt/qvaluecombobox.cpp \
+    src/qt/receivecoinsdialog.cpp \
+    src/qt/receiverequestdialog.cpp \
+    src/qt/recentrequeststablemodel.cpp \
+    src/qt/rpcconsole.cpp \
+    src/qt/sendcoinsdialog.cpp \
+    src/qt/sendcoinsentry.cpp \
+    src/qt/signverifymessagedialog.cpp \
+    src/qt/splashscreen.cpp \
+    src/qt/trafficgraphwidget.cpp \
+    src/qt/transactiondesc.cpp \
+    src/qt/transactiondescdialog.cpp \
+    src/qt/transactionfilterproxy.cpp \
+    src/qt/transactionrecord.cpp \
+    src/qt/transactiontablemodel.cpp \
+    src/qt/transactionview.cpp \
+    src/qt/utilitydialog.cpp \
+    src/qt/walletframe.cpp \
+    src/qt/walletmodel.cpp \
+    src/qt/walletmodeltransaction.cpp \
+    src/qt/walletmodelztransaction.cpp \
+    src/qt/walletview.cpp \
+    src/qt/winshutdownmonitor.cpp \
+    src/qt/zaddressbookpage.cpp \
+    src/qt/zaddresstablemodel.cpp \
+    src/qt/zsendcoinsdialog.cpp \
 
 RESOURCES += \
-    src\qt\komodo.qrc \
-    src\qt\komodo_locale.qrc
+    src/qt/komodo.qrc \
+    src/qt/komodo_locale.qrc
 
 FORMS += \
-    src\qt\forms\coincontroldialog.ui \
-    src\qt\forms\sendcoinsdialog.ui \
-    src\qt\forms\zsendcoinsdialog.ui \
-    src\qt\forms\addressbookpage.ui \
-    src\qt\forms\zaddressbookpage.ui \
-    src\qt\forms\signverifymessagedialog.ui \
-    src\qt\forms\editaddressdialog.ui \
-    src\qt\forms\editzaddressdialog.ui \
-    src\qt\forms\transactiondescdialog.ui \
-    src\qt\forms\overviewpage.ui \
-    src\qt\forms\sendcoinsentry.ui \
-    src\qt\forms\askpassphrasedialog.ui \
-    src\qt\forms\debugwindow.ui \
-    src\qt\forms\helpmessagedialog.ui \
-    src\qt\forms\intro.ui \
-    src\qt\forms\modaloverlay.ui \
-    src\qt\forms\openuridialog.ui \
-    src\qt\forms\receivecoinsdialog.ui \
-    src\qt\forms\receiverequestdialog.ui \
-    src\qt\forms\optionsdialog.ui
+    src/qt/forms/addressbookpage.ui \
+    src/qt/forms/askpassphrasedialog.ui \
+    src/qt/forms/coincontroldialog.ui \
+    src/qt/forms/editaddressdialog.ui \
+    src/qt/forms/helpmessagedialog.ui \
+    src/qt/forms/intro.ui \
+    src/qt/forms/modaloverlay.ui \
+    src/qt/forms/openuridialog.ui \
+    src/qt/forms/optionsdialog.ui \
+    src/qt/forms/overviewpage.ui \
+    src/qt/forms/receivecoinsdialog.ui \
+    src/qt/forms/receiverequestdialog.ui \
+    src/qt/forms/debugwindow.ui \
+    src/qt/forms/sendcoinsdialog.ui \
+    src/qt/forms/zsendcoinsdialog.ui \
+    src/qt/forms/sendcoinsentry.ui \
+    src/qt/forms/signverifymessagedialog.ui \
+    src/qt/forms/transactiondescdialog.ui \
+    src/qt/forms/zaddressbookpage.ui \
+    src/qt/forms/editzaddressdialog.ui
 
 CODECFORTR = UTF-8
 
@@ -639,24 +371,105 @@ macx:QMAKE_LFLAGS_THREAD += -pthread
 # Set libraries and includes at end, to use platform-defined defaults if not overridden
 LIBS += $$join(BOOST_LIB_PATH,,-L,) $$join(OPENSSL_LIB_PATH,,-L,) $$join(RUST_LIB_PATH,,-L,)
 LIBS += $$BDB_LIB_SUFFIX
-windows:LIBS += -lws2_32 -lshlwapi -lmswsock -lole32 -loleaut32 -luuid -lgdi32 -luser32 -luserenv
+#windows:LIBS += -lws2_32 -lshlwapi -lmswsock -lole32 -loleaut32 -luuid -lgdi32 -luser32 -luserenv
 LIBS += -lboost_system$$BOOST_LIB_SUFFIX -lboost_filesystem$$BOOST_LIB_SUFFIX -lboost_program_options$$BOOST_LIB_SUFFIX -lboost_thread$$BOOST_THREAD_LIB_SUFFIX
-windows:LIBS += -lboost_chrono$$BOOST_LIB_SUFFIX
-LIBS += -lrustzcash
+#windows:LIBS += -lboost_chrono$$BOOST_LIB_SUFFIX
 
-Release:LIBS += -ldepends\libgmp_6.1.1_msvc14\lib\x64\gmp
-Release:LIBS += -ldepends\libsodium-1.0.15-msvc\x64\Release\v140\dynamic\libsodium
-Release:LIBS += -ldepends\libcurl-master\lib\dll-release-x64\libcurl
-Release:LIBS += -ldepends\db-6.2.23\build_windows\x64\Release\libdb62
-Release:LIBS += -llibcryptoMD -llibsslMD
-Release:LIBS += -ldepends\pthreads-master\dll\x64\Release\pthreads
 
-Debug:LIBS += -ldepends\libgmp_6.1.1_msvc14\lib\x64\gmp
-Debug:LIBS += -ldepends\libsodium-1.0.15-msvc\x64\Debug\v140\dynamic\libsodium
-Debug:LIBS += -ldepends\libcurl-master\lib\dll-debug-x64\libcurl_debug
-Debug:LIBS += -ldepends\db-6.2.23\build_windows\x64\Debug\libdb62d
-Debug:LIBS += -llibcryptoMDd -llibsslMDd
-Debug:LIBS += -ldepends\pthreads-master\dll\x64\Debug\pthreads
+
+
+LIBS += -L$$PWD/src -lbitcoin_server
+LIBS += -L$$PWD/src -lbitcoin_zmq
+LIBS += -L$$PWD/src -lbitcoin_wallet
+LIBS += -L$$PWD/src -lbitcoin_cli
+LIBS += -L$$PWD/src -lbitcoin_common
+LIBS += -L$$PWD/src -lbitcoin_util
+
+
+LIBS += -L$$PWD/src/crypto -lverus_portable_crypto
+LIBS += -L$$PWD/src/crypto -lverus_crypto
+LIBS += -L$$PWD/src/crypto -lbitcoin_crypto
+
+LIBS += -L$$PWD/src -lzcash
+
+LIBS += -L$$PWD/src/cryptoconditions/.libs/ -lcryptoconditions_core
+LIBS += -L$$PWD/src/secp256k1/.libs/ -lsecp256k1
+
+LIBS += -L$$PWD/src/univalue/.libs -lunivalue
+LIBS += -L$$PWD/src/leveldb/ -lleveldb
+LIBS += -L$$PWD/src/leveldb/ -lmemenv
+
+LIBS += -L$$PWD/src/snark/ -lsnark
+
+
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -ldb-6.2
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -ldb
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -ldb_cxx-6.2
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -ldb_cxx
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lqpid-proton-cpp-static
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lqpid-proton-static
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lqpid-proton-core-static
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lrustzcash
+
+#LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lxcb-static
+
+#LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lqtlibpng
+#LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lqtharfbuzz
+#LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lXau
+#LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lexpat
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lz
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lprotobuf
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lprotobuf-lite
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lqrencode
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lcurl
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lgmock
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lgtest
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lsodium
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lgmp
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lgmpxx
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lzmq
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -levent
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -levent_core
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -levent_extra
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -levent_pthreads
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lssl
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lcrypto
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lboost_filesystem
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lboost_prg_exec_monitor
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lboost_program_options
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lboost_system
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lboost_test_exec_monitor
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lboost_thread
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lboost_unit_test_framework
+LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lboost_chrono
+
+
+
+LIBS += -lanl -lgomp
+
+#LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lrustzcash
+#LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lsodium
+#LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lgmp
+#LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lgmpxx
+#LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -ldb
+#LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -ldb_cxx
+#LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -levent
+#LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -lcrypto
+
+
+#Release:LIBS += -ldepends\libgmp_6.1.1_msvc14\lib\x64\gmp
+#Release:LIBS += -ldepends\libsodium-1.0.15-msvc\x64\Release\v140\dynamic\libsodium
+#Release:LIBS += -ldepends\libcurl-master\lib\dll-release-x64\libcurl
+#Release:LIBS += -ldepends\db-6.2.23\build_windows\x64\Release\libdb62
+#Release:LIBS += -llibcryptoMD -llibsslMD
+#Release:LIBS += -ldepends\pthreads-master\dll\x64\Release\pthreads
+
+#Debug:LIBS += -ldepends\libgmp_6.1.1_msvc14\lib\x64\gmp
+#Debug:LIBS += -ldepends\libsodium-1.0.15-msvc\x64\Debug\v140\dynamic\libsodium
+#Debug:LIBS += -ldepends\libcurl-master\lib\dll-debug-x64\libcurl_debug
+#Debug:LIBS += -ldepends\db-6.2.23\build_windows\x64\Debug\libdb62d
+#Debug:LIBS += -llibcryptoMDd -llibsslMDd
+#Debug:LIBS += -ldepends\pthreads-master\dll\x64\Debug\pthreads
 
 !windows:!macx {
     DEFINES += LINUX
@@ -666,7 +479,7 @@ Debug:LIBS += -ldepends\pthreads-master\dll\x64\Debug\pthreads
 #QMAKE_CXXFLAGS += -O2 -bigobj -Zp8 -GS -wd4800 -wd4100 -wd4267 -wd4244 -wd4101 -w14100 -wd4146 -wd4189 -wd4018 -wd4290 -wd4334 -wd4996
 #QMAKE_CFLAGS += -O2 -bigobj -Zp8 -GS -wd4800 -wd4100 -wd4267 -wd4244 -wd4101 -w14100 -wd4146 -wd4189 -wd4018 -wd4290 -wd4334 -wd4996
 
-#QMAKE_CXXFLAGS_RELEASE += $$QMAKE_CFLAGS_RELEASE_WITH_DEBUGINFO
-#QMAKE_LFLAGS_RELEASE += $$QMAKE_LFLAGS_RELEASE_WITH_DEBUGINFO
+QMAKE_CXXFLAGS_RELEASE += $$QMAKE_CFLAGS_RELEASE_WITH_DEBUGINFO
+QMAKE_LFLAGS_RELEASE += $$QMAKE_LFLAGS_RELEASE_WITH_DEBUGINFO
 
 system($$QMAKE_LRELEASE -silent $$_PRO_FILE_)

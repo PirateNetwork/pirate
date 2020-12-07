@@ -67,8 +67,11 @@ public:
 
     //! Support for Watch-only addresses
     virtual bool AddWatchOnly(const CScript &dest) =0;
+    virtual bool AddSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk) =0;
     virtual bool RemoveWatchOnly(const CScript &dest) =0;
+    virtual bool RemoveSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk) =0;
     virtual bool HaveWatchOnly(const CScript &dest) const =0;
+    virtual bool HaveSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk) const =0;
     virtual bool HaveWatchOnly() const =0;
 
     //! Add a spending key to the store.
@@ -117,6 +120,7 @@ public:
 typedef std::map<CKeyID, CKey> KeyMap;
 typedef std::map<CScriptID, CScript > ScriptMap;
 typedef std::set<CScript> WatchOnlySet;
+typedef std::set<libzcash::SaplingExtendedFullViewingKey> SaplingWatchOnlySet;
 typedef std::map<libzcash::SproutPaymentAddress, libzcash::SproutSpendingKey> SproutSpendingKeyMap;
 typedef std::map<libzcash::SproutPaymentAddress, libzcash::SproutViewingKey> SproutViewingKeyMap;
 typedef std::map<libzcash::SproutPaymentAddress, ZCNoteDecryption> NoteDecryptorMap;
@@ -136,6 +140,7 @@ protected:
     KeyMap mapKeys;
     ScriptMap mapScripts;
     WatchOnlySet setWatchOnly;
+    SaplingWatchOnlySet setSaplingWatchOnly;
     SproutSpendingKeyMap mapSproutSpendingKeys;
     SproutViewingKeyMap mapSproutViewingKeys;
     NoteDecryptorMap mapNoteDecryptors;
@@ -190,8 +195,11 @@ public:
     virtual bool GetCScript(const CScriptID &hash, CScript& redeemScriptOut) const;
 
     virtual bool AddWatchOnly(const CScript &dest);
+    virtual bool AddSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk);
     virtual bool RemoveWatchOnly(const CScript &dest);
+    virtual bool RemoveSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk);
     virtual bool HaveWatchOnly(const CScript &dest) const;
+    virtual bool HaveSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk) const;
     virtual bool HaveWatchOnly() const;
 
     bool AddSproutSpendingKey(const libzcash::SproutSpendingKey &sk);

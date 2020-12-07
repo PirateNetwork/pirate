@@ -120,6 +120,8 @@ src/wallet-utility
 src/komodo-cli.exe
 src/komodod.exe
 src/komodo-tx.exe
+src/wallet-utility.exe
+pirate-qt-win.exe
 
 #output during builds, symbol tables?
 *.dSYM
@@ -162,4 +164,6 @@ configure
 doc/man/Makefile.in
 src/Makefile.in
 src/cc/customcc.so
+src/cc/customcc.dll
 src/libcc.so
+src/libcc.dll

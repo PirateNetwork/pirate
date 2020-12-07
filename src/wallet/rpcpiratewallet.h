@@ -21,7 +21,6 @@ enum
     RECEIVE_SECTION = 3
 };
 
-
 class TransactionSpendT
 {
 public:
@@ -109,7 +108,10 @@ public:
     bool spendable;
 };
 
-
+enum ArchiveType {
+  ARCHIVED = 0,
+  ACTIVE = 1
+};
 
 class RpcArcTransaction
 {
@@ -129,6 +131,7 @@ public:
       CAmount sproutValue = 0;
       CAmount sproutValueSpent = 0;
       CAmount saplingValue = 0;
+      int archiveType;
       std::set<string> spentFrom;
       std::vector<TransactionSpendT> vTSpend;
       std::vector<TransactionSpendZC> vZcSpend;

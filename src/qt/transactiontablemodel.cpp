@@ -19,6 +19,7 @@
 #include "util.h"
 #include "main.h"
 #include "wallet/wallet.h"
+#include "wallet/rpcpiratewallet.h"
 
 #include <QColor>
 #include <QDateTime>
@@ -78,12 +79,215 @@ public:
     {
         qDebug() << "TransactionTablePriv::refreshWallet";
         cachedWallet.clear();
+
+        bool fIncludeWatchonly = true;
         {
             LOCK2(cs_main, wallet->cs_wallet);
-            for(std::map<uint256, CWalletTx>::iterator it = wallet->mapWallet.begin(); it != wallet->mapWallet.end(); ++it)
+
+            //get Ovks for sapling decryption
+            std::vector<uint256> ovks;
+            getAllSaplingOVKs(ovks, fIncludeWatchonly);
+
+            //get Ivks for sapling decryption
+            std::vector<uint256> ivks;
+            getAllSaplingIVKs(ivks, fIncludeWatchonly);
+
+            //Get all Archived Transactions
+            uint256 ut;
+            std::map<std::pair<int,int>, uint256> sortedArchive;
+            for (map<uint256, ArchiveTxPoint>::iterator it = wallet->mapArcTxs.begin(); it != wallet->mapArcTxs.end(); ++it)
             {
-                if(TransactionRecord::showTransaction(it->second))
-                    cachedWallet.append(TransactionRecord::decomposeTransaction(wallet, it->second));
+                uint256 txid = (*it).first;
+                ArchiveTxPoint arcTxPt = (*it).second;
+                std::pair<int,int> key;
+
+                if (!arcTxPt.hashBlock.IsNull() && mapBlockIndex[arcTxPt.hashBlock] != nullptr) {
+                    key = make_pair(mapBlockIndex[arcTxPt.hashBlock]->GetHeight(), arcTxPt.nIndex);
+                    sortedArchive[key] = txid;
+                }
+            }
+
+
+            int nPosUnconfirmed = 0;
+            for (map<uint256, CWalletTx>::iterator it = wallet->mapWallet.begin(); it != wallet->mapWallet.end(); ++it) {
+                CWalletTx wtx = (*it).second;
+                std::pair<int,int> key;
+
+                if (wtx.GetDepthInMainChain() == 0) {
+                    ut = wtx.GetHash();
+                    key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
+                    sortedArchive[key] = wtx.GetHash();
+                    nPosUnconfirmed++;
+                } else if (!wtx.hashBlock.IsNull() && mapBlockIndex[wtx.hashBlock] != nullptr) {
+                    key = make_pair(mapBlockIndex[wtx.hashBlock]->GetHeight(), wtx.nIndex);
+                    sortedArchive[key] = wtx.GetHash();
+                } else {
+                    key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
+                    sortedArchive[key] = wtx.GetHash();
+                    nPosUnconfirmed++;
+                }
+            }
+
+
+
+            for (map<std::pair<int,int>, uint256>::reverse_iterator it = sortedArchive.rbegin(); it != sortedArchive.rend(); ++it)
+            {
+
+                uint256 txid = (*it).second;
+                RpcArcTransaction arcTx;
+
+                if (wallet->mapWallet.count(txid)) {
+
+                    CWalletTx& wtx = wallet->mapWallet[txid];
+
+                    if (!CheckFinalTx(wtx))
+                        continue;
+
+                    if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapSproutNoteData.size() == 0 && !wtx.IsTrusted())
+                        continue;
+
+                    //Excude transactions with less confirmations than required
+                    if (wtx.GetDepthInMainChain() < 0 )
+                        continue;
+
+                    getRpcArcTx(wtx, arcTx, ivks, ovks, fIncludeWatchonly);
+
+                } else {
+                    //Archived Transactions
+                    getRpcArcTx(txid, arcTx, ivks, ovks, fIncludeWatchonly);
+
+                    if (arcTx.blockHash.IsNull() || mapBlockIndex[arcTx.blockHash] == nullptr)
+                      continue;
+
+                }
+
+                if (arcTx.spentFrom.size() > 0) {
+
+                    for (int i = 0; i < arcTx.vTSend.size(); i++) {
+                        auto tx = TransactionRecord();
+                        tx.archiveType = arcTx.archiveType;
+                        tx.hash = arcTx.txid;
+                        tx.time = arcTx.nTime;
+                        tx.address = arcTx.vTSend[i].encodedAddress;
+                        tx.debit = arcTx.vTSend[i].amount;
+                        tx.idx = arcTx.vTSend[i].vout;
+
+                        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vTSend[i].encodedAddress) != arcTx.spentFrom.end();
+                        if (change) {
+                            tx.type = TransactionRecord::SendToSelf;
+                        } else {
+                            tx.type = TransactionRecord::SendToAddress;
+                        }
+                        cachedWallet.append(tx);
+                    }
+
+
+                    CAmount sproutValueReceived = 0;
+                    for (int i = 0; i < arcTx.vZcReceived.size(); i++) {
+                        sproutValueReceived += arcTx.vZcReceived[i].amount;
+                        auto tx = TransactionRecord();
+                        tx.archiveType = arcTx.archiveType;
+                        tx.hash = arcTx.txid;
+                        tx.time = arcTx.nTime;
+                        tx.address = arcTx.vZcReceived[i].encodedAddress;
+                        tx.credit = -arcTx.vZcReceived[i].amount;
+                        tx.idx = arcTx.vZcReceived[i].jsOutIndex;
+
+                        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZcReceived[i].encodedAddress) != arcTx.spentFrom.end();
+                        if (change) {
+                            tx.type = TransactionRecord::SendToSelf;
+                        } else {
+                            tx.type = TransactionRecord::SendToAddress;
+                        }
+                        cachedWallet.append(tx);
+                    }
+
+                    if (arcTx.sproutValue - arcTx.sproutValueSpent - sproutValueReceived != 0) {
+                        auto tx = TransactionRecord();
+                        tx.archiveType = arcTx.archiveType;
+                        tx.hash = arcTx.txid;
+                        tx.time = arcTx.nTime;
+                        tx.address = "Private Sprout Address";
+                        tx.credit = -arcTx.sproutValue - arcTx.sproutValueSpent;
+                        tx.type = TransactionRecord::SendToAddress;
+                        cachedWallet.append(tx);
+                    }
+
+                    for (int i = 0; i < arcTx.vZsSend.size(); i++) {
+                        auto tx = TransactionRecord();
+                        tx.archiveType = arcTx.archiveType;
+                        tx.hash = arcTx.txid;
+                        tx.time = arcTx.nTime;
+                        tx.address = arcTx.vZsSend[i].encodedAddress;
+                        tx.credit = -arcTx.vZsSend[i].amount;
+                        tx.idx = arcTx.vZsSend[i].shieldedOutputIndex;
+
+                        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsSend[i].encodedAddress) != arcTx.spentFrom.end();
+                        if (change) {
+                            tx.type = TransactionRecord::SendToSelf;
+                        } else {
+                            tx.type = TransactionRecord::SendToAddress;
+                        }
+                        cachedWallet.append(tx);
+                    }
+                }
+
+                for (int i = 0; i < arcTx.vTReceived.size(); i++) {
+                    auto tx = TransactionRecord();
+                    tx.archiveType = arcTx.archiveType;
+                    tx.hash = arcTx.txid;
+                    tx.time = arcTx.nTime;
+                    tx.address = arcTx.vTReceived[i].encodedAddress;
+                    tx.debit = arcTx.vTReceived[i].amount;
+                    tx.idx = arcTx.vTReceived[i].vout;
+
+                    bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vTReceived[i].encodedAddress) != arcTx.spentFrom.end();
+                    if (change) {
+                        tx.type = TransactionRecord::SendToSelf;
+                    } else {
+                        tx.type = TransactionRecord::RecvWithAddress;
+                    }
+                    cachedWallet.append(tx);
+                }
+
+
+                for (int i = 0; i < arcTx.vZcReceived.size(); i++) {
+                    auto tx = TransactionRecord();
+                    tx.archiveType = arcTx.archiveType;
+                    tx.hash = arcTx.txid;
+                    tx.time = arcTx.nTime;
+                    tx.address = arcTx.vZcReceived[i].encodedAddress;
+                    tx.debit = arcTx.vZcReceived[i].amount;
+                    tx.idx = arcTx.vZcReceived[i].jsOutIndex;
+
+                    bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZcReceived[i].encodedAddress) != arcTx.spentFrom.end();
+                    if (change) {
+                        tx.type = TransactionRecord::SendToSelf;
+                    } else {
+                        tx.type = TransactionRecord::RecvWithAddress;
+                    }
+                    cachedWallet.append(tx);
+                }
+
+                for (int i = 0; i < arcTx.vZsReceived.size(); i++) {
+                    auto tx = TransactionRecord();
+                    tx.archiveType = arcTx.archiveType;
+                    tx.hash = arcTx.txid;
+                    tx.time = arcTx.nTime;
+                    tx.address = arcTx.vZsReceived[i].encodedAddress;
+                    tx.debit = arcTx.vZsReceived[i].amount;
+                    tx.idx = arcTx.vZsReceived[i].shieldedOutputIndex;
+
+                    bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsReceived[i].encodedAddress) != arcTx.spentFrom.end();
+                    if (change) {
+                        tx.type = TransactionRecord::SendToSelf;
+                    } else {
+                        tx.type = TransactionRecord::RecvWithAddress;
+                    }
+                    cachedWallet.append(tx);
+                }
+
+                if (cachedWallet.size() >= 200) break;
             }
         }
     }
@@ -271,7 +475,8 @@ void TransactionTableModel::updateTransaction(const QString &hash, int status, b
     uint256 updated;
     updated.SetHex(hash.toStdString());
 
-    priv->updateWallet(updated, status, showTransaction);
+    priv->refreshWallet(); //Fix decompose transaction to use updateWallet
+    // priv->updateWallet(updated, status, showTransaction);
 }
 
 void TransactionTableModel::updateConfirmations()
@@ -299,42 +504,45 @@ int TransactionTableModel::columnCount(const QModelIndex &parent) const
 QString TransactionTableModel::formatTxStatus(const TransactionRecord *wtx) const
 {
     QString status;
-
-    switch(wtx->status.status)
-    {
-    case TransactionStatus::OpenUntilBlock:
-        status = tr("Open for %n more block(s)","",wtx->status.open_for);
-        break;
-    case TransactionStatus::OpenUntilDate:
-        status = tr("Open until %1").arg(GUIUtil::dateTimeStr(wtx->status.open_for));
-        break;
-    case TransactionStatus::Offline:
-        status = tr("Offline");
-        break;
-    case TransactionStatus::Unconfirmed:
-        status = tr("Unconfirmed");
-        break;
-    case TransactionStatus::Abandoned:
-        status = tr("Abandoned");
-        break;
-    case TransactionStatus::Confirming:
-        status = tr("Confirming (%1 of %2 recommended confirmations)").arg(wtx->status.depth).arg(TransactionRecord::RecommendedNumConfirmations);
-        break;
-    case TransactionStatus::Confirmed:
-        status = tr("Confirmed (%1 confirmations)").arg(wtx->status.depth);
-        break;
-    case TransactionStatus::Conflicted:
-        status = tr("Conflicted");
-        break;
-    case TransactionStatus::Immature:
-        status = tr("Immature (%1 confirmations, will be available after %2)").arg(wtx->status.depth).arg(wtx->status.depth + wtx->status.matures_in);
-        break;
-    case TransactionStatus::MaturesWarning:
-        status = tr("This block was not received by any other nodes and will probably not be accepted!");
-        break;
-    case TransactionStatus::NotAccepted:
-        status = tr("Generated but not accepted");
-        break;
+    if (!wtx->archiveType == ARCHIVED) {
+        switch(wtx->status.status)
+        {
+        case TransactionStatus::OpenUntilBlock:
+            status = tr("Open for %n more block(s)","",wtx->status.open_for);
+            break;
+        case TransactionStatus::OpenUntilDate:
+            status = tr("Open until %1").arg(GUIUtil::dateTimeStr(wtx->status.open_for));
+            break;
+        case TransactionStatus::Offline:
+            status = tr("Offline");
+            break;
+        case TransactionStatus::Unconfirmed:
+            status = tr("Unconfirmed");
+            break;
+        case TransactionStatus::Abandoned:
+            status = tr("Abandoned");
+            break;
+        case TransactionStatus::Confirming:
+            status = tr("Confirming (%1 of %2 recommended confirmations)").arg(wtx->status.depth).arg(TransactionRecord::RecommendedNumConfirmations);
+            break;
+        case TransactionStatus::Confirmed:
+            status = tr("Confirmed (%1 confirmations)").arg(wtx->status.depth);
+            break;
+        case TransactionStatus::Conflicted:
+            status = tr("Conflicted");
+            break;
+        case TransactionStatus::Immature:
+            status = tr("Immature (%1 confirmations, will be available after %2)").arg(wtx->status.depth).arg(wtx->status.depth + wtx->status.matures_in);
+            break;
+        case TransactionStatus::MaturesWarning:
+            status = tr("This block was not received by any other nodes and will probably not be accepted!");
+            break;
+        case TransactionStatus::NotAccepted:
+            status = tr("Generated but not accepted");
+            break;
+        }
+    } else {
+        status = tr("Archived");
     }
 
     return status;
@@ -372,10 +580,11 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
     switch(wtx->type)
     {
     case TransactionRecord::RecvWithAddress:
-        return tr("Received with");
+        return tr("Received from");
     case TransactionRecord::RecvFromOther:
         return tr("Received from");
     case TransactionRecord::SendToAddress:
+        return tr("Sent to");
     case TransactionRecord::SendToOther:
         return tr("Sent to");
     case TransactionRecord::SendToSelf:
@@ -394,9 +603,11 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
     case TransactionRecord::Generated:
         return QIcon(":/icons/tx_mined");
     case TransactionRecord::RecvWithAddress:
+        return QIcon(":/icons/tx_input");
     case TransactionRecord::RecvFromOther:
         return QIcon(":/icons/tx_input");
     case TransactionRecord::SendToAddress:
+        return QIcon(":/icons/tx_output");
     case TransactionRecord::SendToOther:
         return QIcon(":/icons/tx_output");
     default:
@@ -417,12 +628,15 @@ QString TransactionTableModel::formatTxToAddress(const TransactionRecord *wtx, b
     case TransactionRecord::RecvFromOther:
         return QString::fromStdString(wtx->address) + watchAddress;
     case TransactionRecord::RecvWithAddress:
-    case TransactionRecord::SendToAddress:
-    case TransactionRecord::Generated:
-        return lookupAddress(wtx->address, tooltip) + watchAddress;
-    case TransactionRecord::SendToOther:
         return QString::fromStdString(wtx->address) + watchAddress;
+    case TransactionRecord::SendToAddress:
+        return QString::fromStdString(wtx->address);
+    case TransactionRecord::Generated:
+        return QString::fromStdString(wtx->address);
+    case TransactionRecord::SendToOther:
+        return QString::fromStdString(wtx->address);
     case TransactionRecord::SendToSelf:
+        return QString::fromStdString(wtx->address) + watchAddress;
     default:
         return tr("(n/a)") + watchAddress;
     }
@@ -431,28 +645,30 @@ QString TransactionTableModel::formatTxToAddress(const TransactionRecord *wtx, b
 QVariant TransactionTableModel::addressColor(const TransactionRecord *wtx) const
 {
     // Show addresses without label in a less visible color
-    switch(wtx->type)
-    {
-    case TransactionRecord::RecvWithAddress:
-    case TransactionRecord::SendToAddress:
-    case TransactionRecord::Generated:
-        {
-        QString label = walletModel->getAddressTableModel()->labelForAddress(QString::fromStdString(wtx->address));
-        if(label.isEmpty())
-            return COLOR_BAREADDRESS;
-        } break;
-    case TransactionRecord::SendToSelf:
-        return COLOR_BAREADDRESS;
-    default:
-        break;
-    }
-    return QVariant();
+    // switch(wtx->type)
+    // {
+    // case TransactionRecord::RecvWithAddress:
+    // case TransactionRecord::SendToAddress:
+    // case TransactionRecord::Generated:
+    //     {
+    //     QString label = walletModel->getAddressTableModel()->labelForAddress(QString::fromStdString(wtx->address));
+    //     if(label.isEmpty())
+    //         return COLOR_BAREADDRESS;
+    //     } break;
+    // case TransactionRecord::SendToSelf:
+    //     return COLOR_BAREADDRESS;
+    // default:
+    //     break;
+    // }
+    // return QVariant();
+
+    return COLOR_BLACK;
 }
 
 QString TransactionTableModel::formatTxAmount(const TransactionRecord *wtx, bool showUnconfirmed, KomodoUnits::SeparatorStyle separators) const
 {
     QString str = KomodoUnits::format(walletModel->getOptionsModel()->getDisplayUnit(), wtx->credit + wtx->debit, false, separators);
-    if(showUnconfirmed)
+    if(showUnconfirmed && !wtx->archiveType == ARCHIVED)
     {
         if(!wtx->status.countsForBalance)
         {
@@ -464,41 +680,44 @@ QString TransactionTableModel::formatTxAmount(const TransactionRecord *wtx, bool
 
 QVariant TransactionTableModel::txStatusDecoration(const TransactionRecord *wtx) const
 {
-    switch(wtx->status.status)
-    {
-    case TransactionStatus::OpenUntilBlock:
-    case TransactionStatus::OpenUntilDate:
-        return COLOR_TX_STATUS_OPENUNTILDATE;
-    case TransactionStatus::Offline:
-        return COLOR_TX_STATUS_OFFLINE;
-    case TransactionStatus::Unconfirmed:
-        return QIcon(":/icons/transaction_0");
-    case TransactionStatus::Abandoned:
-        return QIcon(":/icons/transaction_abandoned");
-    case TransactionStatus::Confirming:
-        switch(wtx->status.depth)
+    if (!wtx->archiveType == ARCHIVED) {
+        switch(wtx->status.status)
         {
-        case 1: return QIcon(":/icons/transaction_1");
-        case 2: return QIcon(":/icons/transaction_2");
-        case 3: return QIcon(":/icons/transaction_3");
-        case 4: return QIcon(":/icons/transaction_4");
-        default: return QIcon(":/icons/transaction_5");
-        };
-    case TransactionStatus::Confirmed:
-        return QIcon(":/icons/transaction_confirmed");
-    case TransactionStatus::Conflicted:
-        return QIcon(":/icons/transaction_conflicted");
-    case TransactionStatus::Immature: {
-        int total = wtx->status.depth + wtx->status.matures_in;
-        int part = (wtx->status.depth * 4 / total) + 1;
-        return QIcon(QString(":/icons/transaction_%1").arg(part));
+        case TransactionStatus::OpenUntilBlock:
+        case TransactionStatus::OpenUntilDate:
+            return COLOR_TX_STATUS_OPENUNTILDATE;
+        case TransactionStatus::Offline:
+            return COLOR_TX_STATUS_OFFLINE;
+        case TransactionStatus::Unconfirmed:
+            return QIcon(":/icons/transaction_0");
+        case TransactionStatus::Abandoned:
+            return QIcon(":/icons/transaction_abandoned");
+        case TransactionStatus::Confirming:
+            switch(wtx->status.depth)
+            {
+            case 1: return QIcon(":/icons/transaction_1");
+            case 2: return QIcon(":/icons/transaction_2");
+            case 3: return QIcon(":/icons/transaction_3");
+            case 4: return QIcon(":/icons/transaction_4");
+            default: return QIcon(":/icons/transaction_5");
+            };
+        case TransactionStatus::Confirmed:
+            return QIcon(":/icons/transaction_confirmed");
+        case TransactionStatus::Conflicted:
+            return QIcon(":/icons/transaction_conflicted");
+        case TransactionStatus::Immature: {
+            int total = wtx->status.depth + wtx->status.matures_in;
+            int part = (wtx->status.depth * 4 / total) + 1;
+            return QIcon(QString(":/icons/transaction_%1").arg(part));
+            }
+        case TransactionStatus::MaturesWarning:
+        case TransactionStatus::NotAccepted:
+            return QIcon(":/icons/transaction_0");
+        default:
+            return COLOR_BLACK;
         }
-    case TransactionStatus::MaturesWarning:
-    case TransactionStatus::NotAccepted:
-        return QIcon(":/icons/transaction_0");
-    default:
-        return COLOR_BLACK;
     }
+    return COLOR_BLACK;
 }
 
 QVariant TransactionTableModel::txWatchonlyDecoration(const TransactionRecord *wtx) const
@@ -581,12 +800,12 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
         return column_alignments[index.column()];
     case Qt::ForegroundRole:
         // Use the "danger" color for abandoned transactions
-        if(rec->status.status == TransactionStatus::Abandoned)
+        if(rec->status.status == TransactionStatus::Abandoned && !rec->archiveType == ARCHIVED)
         {
             return COLOR_TX_STATUS_DANGER;
         }
         // Non-confirmed (but not immature) as transactions are grey
-        if(!rec->status.countsForBalance && rec->status.status != TransactionStatus::Immature)
+        if(!rec->status.countsForBalance && rec->status.status != TransactionStatus::Immature  && !rec->archiveType == ARCHIVED)
         {
             return COLOR_UNCONFIRMED;
         }
@@ -650,6 +869,9 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
             return details;
         }
     case ConfirmedRole:
+        if (rec->archiveType == ARCHIVED) {
+            return true;
+        }
         return rec->status.countsForBalance;
     case FormattedAmountRole:
         // Used for copy/export, so don't include separators

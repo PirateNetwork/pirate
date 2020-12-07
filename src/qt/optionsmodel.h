@@ -9,11 +9,11 @@
 
 #include <QAbstractListModel>
 
-QT_BEGIN_NAMESPACE
-#ifdef ENABLE_BIP70
-class QNetworkProxy;
-#endif
-QT_END_NAMESPACE
+// QT_BEGIN_NAMESPACE
+// // #ifdef ENABLE_BIP70
+// // class QNetworkProxy;
+// // #endif
+// QT_END_NAMESPACE
 
 /** Interface from Qt to configuration data structure for Komodo client.
    To Qt, the options are presented as a list with the different options
@@ -66,9 +66,9 @@ public:
     bool getMinimizeOnClose() const { return fMinimizeOnClose; }
     int getDisplayUnit() const { return nDisplayUnit; }
     QString getThirdPartyTxUrls() const { return "http://explorer.pirate.black/tx/%s"; }
-    #ifdef ENABLE_BIP70
-    bool getProxySettings(QNetworkProxy& proxy) const;
-    #endif
+    // #ifdef ENABLE_BIP70
+    // bool getProxySettings(QNetworkProxy& proxy) const;
+    // #endif
     bool getCoinControlFeatures() const { return fCoinControlFeatures; }
     const QString& getOverriddenByCommandLine() { return strOverriddenByCommandLine; }
 

@@ -416,6 +416,7 @@ void getAllSaplingIVKs(vector<uint256> &ivks, bool fIncludeWatchonly) {
 
 void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, vector<uint256> &ivks, vector<uint256> &ovks, bool fIncludeWatchonly) {
 
+    arcTx.archiveType = ARCHIVED;
     arcTx.txid = txid;
 
     CTransaction tx;
@@ -494,6 +495,7 @@ void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, vector<uint256> &ivks,
 
 void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, vector<uint256> &ivks, vector<uint256> &ovks, bool fIncludeWatchonly) {
 
+    arcTx.archiveType = ACTIVE;
     arcTx.txid = tx.GetHash();
     arcTx.blockIndex = tx.nIndex;
     arcTx.blockHash = tx.hashBlock;

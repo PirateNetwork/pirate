@@ -606,17 +606,19 @@ komodod_LDADD += \
   $(LIBBITCOIN_CRYPTO) \
   $(LIBVERUS_CRYPTO) \
   $(LIBVERUS_PORTABLE_CRYPTO) \
-  $(LIBZCASH_LIBS)
+  $(LIBZCASH_LIBS) \
+  $(LIBSECP256K1) \
+  $(LIBCRYPTOCONDITIONS)
 
-if TARGET_DARWIN
-komodod_LDADD += libcc.dylib $(LIBSECP256K1)
-endif
-if TARGET_WINDOWS
-komodod_LDADD += libcc.dll $(LIBSECP256K1)
-endif
-if TARGET_LINUX
-komodod_LDADD += libcc.so $(LIBSECP256K1)
-endif
+# if TARGET_DARWIN
+# komodod_LDADD += libcc.dylib $(LIBSECP256K1)
+# endif
+# if TARGET_WINDOWS
+# komodod_LDADD += libcc.dll $(LIBSECP256K1)
+# endif
+# if TARGET_LINUX
+# komodod_LDADD += libcc.so $(LIBSECP256K1)
+# endif
 
 if ENABLE_PROTON
 komodod_LDADD += $(LIBBITCOIN_PROTON) $(PROTON_LIBS)

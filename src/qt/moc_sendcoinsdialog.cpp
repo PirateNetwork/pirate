@@ -20,8 +20,8 @@ QT_BEGIN_MOC_NAMESPACE
 QT_WARNING_PUSH
 QT_WARNING_DISABLE_DEPRECATED
 struct qt_meta_stringdata_SendCoinsDialog_t {
-    QByteArrayData data[42];
-    char stringdata0[748];
+    QByteArrayData data[45];
+    char stringdata0[799];
 };
 #define QT_MOC_LITERAL(idx, ofs, len) \
     Q_STATIC_BYTE_ARRAY_DATA_HEADER_INITIALIZER_WITH_OFFSET(len, \
@@ -49,29 +49,32 @@ QT_MOC_LITERAL(15, 148, 15), // "immatureBalance"
 QT_MOC_LITERAL(16, 164, 16), // "watchOnlyBalance"
 QT_MOC_LITERAL(17, 181, 18), // "watchUnconfBalance"
 QT_MOC_LITERAL(18, 200, 20), // "watchImmatureBalance"
-QT_MOC_LITERAL(19, 221, 21), // "on_sendButton_clicked"
-QT_MOC_LITERAL(20, 243, 26), // "on_buttonChooseFee_clicked"
-QT_MOC_LITERAL(21, 270, 28), // "on_buttonMinimizeFee_clicked"
-QT_MOC_LITERAL(22, 299, 11), // "removeEntry"
-QT_MOC_LITERAL(23, 311, 5), // "entry"
-QT_MOC_LITERAL(24, 317, 19), // "useAvailableBalance"
-QT_MOC_LITERAL(25, 337, 17), // "updateDisplayUnit"
-QT_MOC_LITERAL(26, 355, 25), // "coinControlFeatureChanged"
-QT_MOC_LITERAL(27, 381, 24), // "coinControlButtonClicked"
-QT_MOC_LITERAL(28, 406, 24), // "coinControlChangeChecked"
-QT_MOC_LITERAL(29, 431, 23), // "coinControlChangeEdited"
-QT_MOC_LITERAL(30, 455, 23), // "coinControlUpdateLabels"
-QT_MOC_LITERAL(31, 479, 28), // "coinControlClipboardQuantity"
-QT_MOC_LITERAL(32, 508, 26), // "coinControlClipboardAmount"
-QT_MOC_LITERAL(33, 535, 23), // "coinControlClipboardFee"
-QT_MOC_LITERAL(34, 559, 28), // "coinControlClipboardAfterFee"
-QT_MOC_LITERAL(35, 588, 25), // "coinControlClipboardBytes"
-QT_MOC_LITERAL(36, 614, 29), // "coinControlClipboardLowOutput"
-QT_MOC_LITERAL(37, 644, 26), // "coinControlClipboardChange"
-QT_MOC_LITERAL(38, 671, 13), // "setMinimumFee"
-QT_MOC_LITERAL(39, 685, 24), // "updateFeeSectionControls"
-QT_MOC_LITERAL(40, 710, 17), // "updateMinFeeLabel"
-QT_MOC_LITERAL(41, 728, 19) // "updateSmartFeeLabel"
+QT_MOC_LITERAL(19, 221, 19), // "privateWatchBalance"
+QT_MOC_LITERAL(20, 241, 14), // "privateBalance"
+QT_MOC_LITERAL(21, 256, 15), // "interestBalance"
+QT_MOC_LITERAL(22, 272, 21), // "on_sendButton_clicked"
+QT_MOC_LITERAL(23, 294, 26), // "on_buttonChooseFee_clicked"
+QT_MOC_LITERAL(24, 321, 28), // "on_buttonMinimizeFee_clicked"
+QT_MOC_LITERAL(25, 350, 11), // "removeEntry"
+QT_MOC_LITERAL(26, 362, 5), // "entry"
+QT_MOC_LITERAL(27, 368, 19), // "useAvailableBalance"
+QT_MOC_LITERAL(28, 388, 17), // "updateDisplayUnit"
+QT_MOC_LITERAL(29, 406, 25), // "coinControlFeatureChanged"
+QT_MOC_LITERAL(30, 432, 24), // "coinControlButtonClicked"
+QT_MOC_LITERAL(31, 457, 24), // "coinControlChangeChecked"
+QT_MOC_LITERAL(32, 482, 23), // "coinControlChangeEdited"
+QT_MOC_LITERAL(33, 506, 23), // "coinControlUpdateLabels"
+QT_MOC_LITERAL(34, 530, 28), // "coinControlClipboardQuantity"
+QT_MOC_LITERAL(35, 559, 26), // "coinControlClipboardAmount"
+QT_MOC_LITERAL(36, 586, 23), // "coinControlClipboardFee"
+QT_MOC_LITERAL(37, 610, 28), // "coinControlClipboardAfterFee"
+QT_MOC_LITERAL(38, 639, 25), // "coinControlClipboardBytes"
+QT_MOC_LITERAL(39, 665, 29), // "coinControlClipboardLowOutput"
+QT_MOC_LITERAL(40, 695, 26), // "coinControlClipboardChange"
+QT_MOC_LITERAL(41, 722, 13), // "setMinimumFee"
+QT_MOC_LITERAL(42, 736, 24), // "updateFeeSectionControls"
+QT_MOC_LITERAL(43, 761, 17), // "updateMinFeeLabel"
+QT_MOC_LITERAL(44, 779, 19) // "updateSmartFeeLabel"
 
     },
     "SendCoinsDialog\0message\0\0title\0style\0"
@@ -80,8 +83,9 @@ QT_MOC_LITERAL(41, 728, 19) // "updateSmartFeeLabel"
     "setBalance\0CAmount\0balance\0"
     "unconfirmedBalance\0immatureBalance\0"
     "watchOnlyBalance\0watchUnconfBalance\0"
-    "watchImmatureBalance\0on_sendButton_clicked\0"
-    "on_buttonChooseFee_clicked\0"
+    "watchImmatureBalance\0privateWatchBalance\0"
+    "privateBalance\0interestBalance\0"
+    "on_sendButton_clicked\0on_buttonChooseFee_clicked\0"
     "on_buttonMinimizeFee_clicked\0removeEntry\0"
     "entry\0useAvailableBalance\0updateDisplayUnit\0"
     "coinControlFeatureChanged\0"
@@ -122,29 +126,29 @@ static const uint qt_meta_data_SendCoinsDialog[] = {
        7,    0,  168,    2, 0x0a /* Public */,
        8,    0,  169,    2, 0x0a /* Public */,
       10,    0,  170,    2, 0x0a /* Public */,
-      11,    6,  171,    2, 0x0a /* Public */,
-      19,    0,  184,    2, 0x08 /* Private */,
-      20,    0,  185,    2, 0x08 /* Private */,
-      21,    0,  186,    2, 0x08 /* Private */,
-      22,    1,  187,    2, 0x08 /* Private */,
-      24,    1,  190,    2, 0x08 /* Private */,
-      25,    0,  193,    2, 0x08 /* Private */,
-      26,    1,  194,    2, 0x08 /* Private */,
-      27,    0,  197,    2, 0x08 /* Private */,
-      28,    1,  198,    2, 0x08 /* Private */,
-      29,    1,  201,    2, 0x08 /* Private */,
-      30,    0,  204,    2, 0x08 /* Private */,
-      31,    0,  205,    2, 0x08 /* Private */,
-      32,    0,  206,    2, 0x08 /* Private */,
-      33,    0,  207,    2, 0x08 /* Private */,
-      34,    0,  208,    2, 0x08 /* Private */,
-      35,    0,  209,    2, 0x08 /* Private */,
-      36,    0,  210,    2, 0x08 /* Private */,
-      37,    0,  211,    2, 0x08 /* Private */,
-      38,    0,  212,    2, 0x08 /* Private */,
-      39,    0,  213,    2, 0x08 /* Private */,
-      40,    0,  214,    2, 0x08 /* Private */,
-      41,    0,  215,    2, 0x08 /* Private */,
+      11,    9,  171,    2, 0x0a /* Public */,
+      22,    0,  190,    2, 0x08 /* Private */,
+      23,    0,  191,    2, 0x08 /* Private */,
+      24,    0,  192,    2, 0x08 /* Private */,
+      25,    1,  193,    2, 0x08 /* Private */,
+      27,    1,  196,    2, 0x08 /* Private */,
+      28,    0,  199,    2, 0x08 /* Private */,
+      29,    1,  200,    2, 0x08 /* Private */,
+      30,    0,  203,    2, 0x08 /* Private */,
+      31,    1,  204,    2, 0x08 /* Private */,
+      32,    1,  207,    2, 0x08 /* Private */,
+      33,    0,  210,    2, 0x08 /* Private */,
+      34,    0,  211,    2, 0x08 /* Private */,
+      35,    0,  212,    2, 0x08 /* Private */,
+      36,    0,  213,    2, 0x08 /* Private */,
+      37,    0,  214,    2, 0x08 /* Private */,
+      38,    0,  215,    2, 0x08 /* Private */,
+      39,    0,  216,    2, 0x08 /* Private */,
+      40,    0,  217,    2, 0x08 /* Private */,
+      41,    0,  218,    2, 0x08 /* Private */,
+      42,    0,  219,    2, 0x08 /* Private */,
+      43,    0,  220,    2, 0x08 /* Private */,
+      44,    0,  221,    2, 0x08 /* Private */,
 
  // signals: parameters
     QMetaType::Void, QMetaType::QString, QMetaType::QString, QMetaType::UInt,    3,    1,    4,
@@ -155,12 +159,12 @@ static const uint qt_meta_data_SendCoinsDialog[] = {
     QMetaType::Void,
     0x80000000 | 9,
     QMetaType::Void,
-    QMetaType::Void, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12,   13,   14,   15,   16,   17,   18,
+    QMetaType::Void, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12, 0x80000000 | 12,   13,   14,   15,   16,   17,   18,   19,   20,   21,
     QMetaType::Void,
     QMetaType::Void,
     QMetaType::Void,
-    QMetaType::Void, 0x80000000 | 9,   23,
-    QMetaType::Void, 0x80000000 | 9,   23,
+    QMetaType::Void, 0x80000000 | 9,   26,
+    QMetaType::Void, 0x80000000 | 9,   26,
     QMetaType::Void,
     QMetaType::Void, QMetaType::Bool,    2,
     QMetaType::Void,
@@ -195,7 +199,7 @@ void SendCoinsDialog::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int 
         case 4: { SendCoinsEntry* _r = _t->addEntry();
             if (_a[0]) *reinterpret_cast< SendCoinsEntry**>(_a[0]) = std::move(_r); }  break;
         case 5: _t->updateTabsAndLabels(); break;
-        case 6: _t->setBalance((*reinterpret_cast< const CAmount(*)>(_a[1])),(*reinterpret_cast< const CAmount(*)>(_a[2])),(*reinterpret_cast< const CAmount(*)>(_a[3])),(*reinterpret_cast< const CAmount(*)>(_a[4])),(*reinterpret_cast< const CAmount(*)>(_a[5])),(*reinterpret_cast< const CAmount(*)>(_a[6]))); break;
+        case 6: _t->setBalance((*reinterpret_cast< const CAmount(*)>(_a[1])),(*reinterpret_cast< const CAmount(*)>(_a[2])),(*reinterpret_cast< const CAmount(*)>(_a[3])),(*reinterpret_cast< const CAmount(*)>(_a[4])),(*reinterpret_cast< const CAmount(*)>(_a[5])),(*reinterpret_cast< const CAmount(*)>(_a[6])),(*reinterpret_cast< const CAmount(*)>(_a[7])),(*reinterpret_cast< const CAmount(*)>(_a[8])),(*reinterpret_cast< const CAmount(*)>(_a[9]))); break;
         case 7: _t->on_sendButton_clicked(); break;
         case 8: _t->on_buttonChooseFee_clicked(); break;
         case 9: _t->on_buttonMinimizeFee_clicked(); break;
