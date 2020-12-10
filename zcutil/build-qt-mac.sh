@@ -71,3 +71,6 @@ CXXFLAGS='-arch x86_64 -I/usr/local/Cellar/gcc\@8/8.3.0/include/c++/8.3.0/ '"-I$
 make "$@" V=1 NO_GTEST=1 STATIC=1
 
 cp src/qt/komodo-qt "$mydir"/pirate-qt-mac
+
+#Package as App bundle in a dmg
+cd ./makeReleaseMac.sh

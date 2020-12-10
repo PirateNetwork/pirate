@@ -123,7 +123,7 @@ src/komodo-tx.exe
 src/wallet-utility.exe
 pirate-qt-win.exe
 pirate-qt-linux
-pirate.qt-mac
+pirate-qt-mac
 src/qt/komodo-qt
 
 #QT Files
@@ -131,6 +131,9 @@ src/qt/moc_*.cpp
 src/qt/locale/*.qm
 src/qt/*.moc
 src/qt/forms/ui_*.h
+
+#Mac Packaged App
+PirateWallet.app
 
 #output during builds, symbol tables?
 *.dSYM

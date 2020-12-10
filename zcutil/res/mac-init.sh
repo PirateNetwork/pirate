@@ -206,4 +206,6 @@ EOF
 
 main
 rm -f /tmp/fetch_params.lock
+clear
+echo -e "\x1B[1;35mSetup Complete. Please close this window and restart the wallet.\x1B[0m"
 exit 0

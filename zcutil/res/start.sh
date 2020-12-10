@@ -1,0 +1,62 @@
+#!/bin/bash
+
+cd "${0%/*}"
+
+function checkParams {
+  SHA256CMD="$(command -v sha256sum || echo shasum)"
+  SHA256ARGS="$(command -v sha256sum >/dev/null || echo '-a 256')"
+
+  PARAMS_DIR="$HOME/Library/Application Support/ZcashParams"
+
+  SPROUT_PKEY_NAME='sprout-proving.key'
+  SPROUT_PKEY_EXPECTED="8bc20a7f013b2b58970cddd2e7ea028975c88ae7ceb9259a5344a16bc2c0eef7  ""$PARAMS_DIR/$SPROUT_PKEY_NAME"
+  SPROUT_PKEY_SHA=$($SHA256CMD $SHA256ARGS "$PARAMS_DIR/$SPROUT_PKEY_NAME")
+  if  [ "$SPROUT_PKEY_SHA" != "$SPROUT_PKEY_EXPECTED" ]; then
+    rm -rf "$PARAMS_DIR"
+    return 1
+  fi
+
+  SPROUT_VKEY_NAME='sprout-verifying.key'
+  SPROUT_VKEY_EXPECTED="4bd498dae0aacfd8e98dc306338d017d9c08dd0918ead18172bd0aec2fc5df82  ""$PARAMS_DIR/$SPROUT_VKEY_NAME"
+  SPROUT_VKEY_SHA=$($SHA256CMD $SHA256ARGS "$PARAMS_DIR/$SPROUT_VKEY_NAME")
+  if  [ "$SPROUT_VKEY_SHA" != "$SPROUT_VKEY_EXPECTED" ]; then
+    rm -rf "$PARAMS_DIR"
+    return 1
+  fi
+
+  SAPLING_SPEND_NAME='sapling-spend.params'
+  SAPLING_SPEND_EXPECTED="8e48ffd23abb3a5fd9c5589204f32d9c31285a04b78096ba40a79b75677efc13  ""$PARAMS_DIR/$SAPLING_SPEND_NAME"
+  SAPLING_SPEND_SHA=$($SHA256CMD $SHA256ARGS "$PARAMS_DIR/$SAPLING_SPEND_NAME")
+  if  [ "$SAPLING_SPEND_SHA" != "$SAPLING_SPEND_EXPECTED" ]; then
+    rm -rf "$PARAMS_DIR"
+    return 1
+  fi
+
+
+  SAPLING_OUTPUT_NAME='sapling-output.params'
+  SAPLING_OUTPUT_EXPECTED="2f0ebbcbb9bb0bcffe95a397e7eba89c29eb4dde6191c339db88570e3f3fb0e4  ""$PARAMS_DIR/$SAPLING_OUTPUT_NAME"
+  SAPLING_OUTPUT_SHA=$($SHA256CMD $SHA256ARGS "$PARAMS_DIR/$SAPLING_OUTPUT_NAME")
+  if  [ "$SAPLING_OUTPUT_SHA" != "$SAPLING_OUTPUT_EXPECTED" ]; then
+    rm -rf "$PARAMS_DIR"
+    return 1
+  fi
+
+  SAPLING_SPROUT_GROTH16_NAME='sprout-groth16.params'
+  SAPLING_SPROUT_GROTH16_EXPECTED="b685d700c60328498fbde589c8c7c484c722b788b265b72af448a5bf0ee55b50  ""$PARAMS_DIR/$SAPLING_SPROUT_GROTH16_NAME"
+  SAPLING_SPROUT_GROTH16_SHA=$($SHA256CMD $SHA256ARGS "$PARAMS_DIR/$SAPLING_SPROUT_GROTH16_NAME")
+  if  [ "$SAPLING_SPROUT_GROTH16_SHA" != "$SAPLING_SPROUT_GROTH16_EXPECTED" ]; then
+    rm -rf "$PARAMS_DIR"
+    return 1
+  fi
+
+  return 0
+}
+
+checkParams
+CHECK=$?
+
+if [[ "$CHECK" == "0" ]]; then
+  ./pirate-qt-mac
+else
+  open -a Terminal.app mac-init.sh
+fi
