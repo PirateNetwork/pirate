@@ -475,8 +475,8 @@ void TransactionTableModel::updateTransaction(const QString &hash, int status, b
     uint256 updated;
     updated.SetHex(hash.toStdString());
 
-    priv->refreshWallet(); //Fix decompose transaction to use updateWallet
-    // priv->updateWallet(updated, status, showTransaction);
+    priv->updateWallet(updated, status, showTransaction);
+    priv->refreshWallet(); //Fix decompose transaction to remove
 }
 
 void TransactionTableModel::updateConfirmations()
