@@ -552,7 +552,12 @@ bool CWallet::LoadWatchOnly(const CScript &dest)
 
 bool CWallet::LoadSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk)
 {
-    return CCryptoKeyStore::AddSaplingWatchOnly(extfvk);
+    if (CCryptoKeyStore::AddSaplingWatchOnly(extfvk)) {
+        NotifyWatchonlyChanged(true);
+        return true;
+    }
+
+    return false;
 }
 
 
@@ -6166,6 +6171,7 @@ KeyAddResult AddViewingKeyToWallet::operator()(const libzcash::SaplingExtendedFu
     } else if (m_wallet->HaveSaplingFullViewingKey(extfvk.fvk.in_viewing_key())) {
         return KeyAlreadyExists;
     } else if (m_wallet->AddSaplingFullViewingKey(extfvk)) {
+        m_wallet->LoadSaplingWatchOnly(extfvk);
         return KeyAdded;
     } else {
         return KeyNotAdded;
