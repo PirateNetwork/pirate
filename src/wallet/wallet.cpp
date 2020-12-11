@@ -3343,6 +3343,7 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
 
       int nDeleteAfter = (int)fDeleteTransactionsAfterNBlocks;
       bool runCompact = false;
+      auto startTime = GetTime();
 
       if (pindex && fTxDeleteEnabled) {
 
@@ -3371,6 +3372,8 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
         else {
           UpdateWalletTransactionOrder(mapSorted, false);
         }
+        auto reorderTime = GetTime();
+        LogPrintf("Delete Tx - Time to Reorder %s\n", DateTimeStrFormat("%H:%M:%S", reorderTime-startTime));
 
         //Process Transactions in sorted order
         int txConflictCount = 0;
@@ -3531,15 +3534,25 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
           }
         }
 
+        auto selectTime = GetTime();
+        LogPrintf("Delete Tx - Time to Select %s\n", DateTimeStrFormat("%H:%M:%S", selectTime - reorderTime));
+
         //Delete Transactions from wallet
         DeleteTransactions(removeTxs);
+
+        auto deleteTime = GetTime();
+        LogPrintf("Delete Tx - Time to Delete %s\n", DateTimeStrFormat("%H:%M:%S", deleteTime - selectTime));
+
         LogPrintf("Delete Tx - Total Transaction Count %i, Transactions Deleted %i\n ", txCount, int(removeTxs.size()));
-        if (GetBoolArg("-deletetx", true))
-          uiInterface.InitMessage(_(("Rescanning - Current Wallet Transaction Count " + std::to_string(txCount)).c_str()) + ((" " + std::to_string(scanperc)).c_str()) + ("%"));
+        // if (GetBoolArg("-deletetx", true))
+        //   uiInterface.InitMessage(_(("Rescanning - Current Wallet Transaction Count " + std::to_string(txCount)).c_str()) + ((" " + std::to_string(scanperc)).c_str()) + ("%"));
         //Compress Wallet
         if (runCompact)
           CWalletDB::Compact(bitdb,strWalletFile);
       }
+
+      auto totalTime = GetTime();
+      LogPrintf("Delete Tx - Time to Run Total Function %s\n", DateTimeStrFormat("%H:%M:%S", totalTime - startTime));
 }
 
 
