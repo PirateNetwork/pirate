@@ -109,7 +109,7 @@ void EditZAddressDialog::accept()
             break;
         case ZAddressTableModel::INVALID_ADDRESS:
             QMessageBox::warning(this, windowTitle(),
-                tr("The entered address \"%1\" is not a valid Komodo z-address.").arg(ui->addressEdit->text()),
+                tr("The entered address \"%1\" is not a valid Pirate z-address.").arg(ui->addressEdit->text()),
                 QMessageBox::Ok, QMessageBox::Ok);
             break;
         case ZAddressTableModel::DUPLICATE_ADDRESS:

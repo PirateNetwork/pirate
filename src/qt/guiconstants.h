@@ -48,9 +48,9 @@ static const int MAX_URI_LENGTH = 255;
 /* Number of frames in spinner animation */
 #define SPINNER_FRAMES 36
 
-#define QAPP_ORG_NAME "Komodo"
-#define QAPP_ORG_DOMAIN "komodo.org"
-#define QAPP_APP_NAME_DEFAULT "PirateOceanGUI"
-#define QAPP_APP_NAME_TESTNET "PirateOceanGUI-testnet"
+#define QAPP_ORG_NAME "Pirate Chain"
+#define QAPP_ORG_DOMAIN "pirate.black"
+#define QAPP_APP_NAME_DEFAULT "Pirate Wallet"
+#define QAPP_APP_NAME_TESTNET "Pirate Wallet Testnet"
 
 #endif // KOMODO_QT_GUICONSTANTS_H
