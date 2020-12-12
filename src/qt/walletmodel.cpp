@@ -658,7 +658,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(WalletModelTransaction &tran
             }
             else
             #endif
-                if (!rcp.message.isEmpty()) // Message from normal komodo:URI (komodo:123...?message=example)
+                if (!rcp.message.isEmpty()) // Message from normal pirate:URI (pirate:123...?message=example)
                     newTx->vOrderForm.push_back(make_pair("Message", rcp.message.toStdString()));
         }
 

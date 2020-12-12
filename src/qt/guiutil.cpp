@@ -150,8 +150,8 @@ void setupAmountWidget(QLineEdit *widget, QWidget *parent)
 
 bool parseKomodoURI(const QUrl &uri, SendCoinsRecipient *out)
 {
-    // return if URI is not valid or is no komodo: URI
-    if(!uri.isValid() || uri.scheme() != QString("komodo"))
+    // return if URI is not valid or is no pirate: URI
+    if(!uri.isValid() || uri.scheme() != QString("pirate"))
         return false;
 
     SendCoinsRecipient rv;
@@ -211,13 +211,13 @@ bool parseKomodoURI(const QUrl &uri, SendCoinsRecipient *out)
 
 bool parseKomodoURI(QString uri, SendCoinsRecipient *out)
 {
-    // Convert komodo:// to komodo:
+    // Convert pirate:// to pirate:
     //
-    //    Cannot handle this later, because komodo:// will cause Qt to see the part after // as host,
+    //    Cannot handle this later, because pirate:// will cause Qt to see the part after // as host,
     //    which will lower-case it (and thus invalidate the address).
-    if(uri.startsWith("komodo://", Qt::CaseInsensitive))
+    if(uri.startsWith("pirate://", Qt::CaseInsensitive))
     {
-        uri.replace(0, 10, "komodo:");
+        uri.replace(0, 10, "pirate:");
     }
     QUrl uriInstance(uri);
     return parseKomodoURI(uriInstance, out);
@@ -225,7 +225,7 @@ bool parseKomodoURI(QString uri, SendCoinsRecipient *out)
 
 QString formatKomodoURI(const SendCoinsRecipient &info)
 {
-    QString ret = QString("komodo:%1").arg(info.address);
+    QString ret = QString("pirate:%1").arg(info.address);
     int paramCount = 0;
 
     if (info.amount)

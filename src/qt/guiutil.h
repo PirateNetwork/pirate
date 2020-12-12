@@ -44,7 +44,7 @@ namespace GUIUtil
     void setupAddressWidget(QValidatedLineEdit *widget, QWidget *parent, bool allowZAddresses = false);
     void setupAmountWidget(QLineEdit *widget, QWidget *parent);
 
-    // Parse "komodo:" URI into recipient object, return true on successful parsing
+    // Parse "pirate:" URI into recipient object, return true on successful parsing
     bool parseKomodoURI(const QUrl &uri, SendCoinsRecipient *out);
     bool parseKomodoURI(QString uri, SendCoinsRecipient *out);
     QString formatKomodoURI(const SendCoinsRecipient &info);

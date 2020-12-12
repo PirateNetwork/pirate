@@ -586,7 +586,7 @@ void KomodoApplication::initializeResult(bool success)
 
 #ifdef ENABLE_WALLET
         // Now that initialization/startup is done, process any command-line
-        // komodo: URIs or payment requests:
+        // pirate: URIs or payment requests:
         connect(paymentServer, SIGNAL(receivedPaymentRequest(SendCoinsRecipient)),
                          window, SLOT(handlePaymentRequest(SendCoinsRecipient)));
         /*connect(paymentServer, SIGNAL(receivedZPaymentRequest(SendCoinsRecipient)),
@@ -768,7 +768,7 @@ int main(int argc, char *argv[])
         exit(EXIT_SUCCESS);
 
     // Start up the payment server early, too, so impatient users that click on
-    // komodo: links repeatedly have their payment requests routed to this process:
+    // pirate: links repeatedly have their payment requests routed to this process:
     app.createPaymentServer();
 #endif
 
