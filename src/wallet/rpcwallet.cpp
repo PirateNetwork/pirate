@@ -3778,9 +3778,13 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
     if (addrType == ADDR_TYPE_SPROUT) {
         if ( GetTime() >= KOMODO_SAPLING_DEADLINE )
             throw JSONRPCError(RPC_INVALID_PARAMETER, "sprout not valid anymore");
-        return EncodePaymentAddress(pwalletMain->GenerateNewSproutZKey());
+        auto zAddress = pwalletMain->GenerateNewSproutZKey();
+        pwalletMain->SetZAddressBook(zAddress, "z-sprout", "");
+        return EncodePaymentAddress(zAddress);
     } else if (addrType == ADDR_TYPE_SAPLING) {
-        return EncodePaymentAddress(pwalletMain->GenerateNewSaplingZKey());
+        auto zAddress = pwalletMain->GenerateNewSaplingZKey();
+        pwalletMain->SetZAddressBook(zAddress, "z-sapling", "");
+        return EncodePaymentAddress(zAddress);
     } else {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid address type");
     }

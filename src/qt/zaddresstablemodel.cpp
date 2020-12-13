@@ -134,7 +134,7 @@ public:
                 break;
             }
             parent->beginInsertRows(QModelIndex(), lowerIndex, lowerIndex);
-            cachedAddressTable.insert(lowerIndex, AddressTableEntry(newEntryType, address, address));
+            cachedAddressTable.insert(lowerIndex, AddressTableEntry(newEntryType, label, address));
             parent->endInsertRows();
             break;
         case CT_UPDATED:
@@ -181,7 +181,7 @@ public:
 ZAddressTableModel::ZAddressTableModel(const PlatformStyle *_platformStyle, CWallet *_wallet, WalletModel *parent) :
     QAbstractTableModel(parent),walletModel(parent),wallet(_wallet),priv(0),platformStyle(_platformStyle)
 {
-    columns << tr("Mine") << tr("Balance") << tr("Address") << tr("Address");
+    columns << tr("Mine") << tr("Balance") << tr("Type") << tr("Address");
     priv = new ZAddressTablePriv(wallet, this);
     priv->refreshAddressTable();
 }

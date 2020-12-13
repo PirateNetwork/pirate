@@ -1910,6 +1910,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         {
             // generate a new HD seed
             pwalletMain->GenerateNewSeed();
+
+            // generate 1 address
+            auto zAddress = pwalletMain->GenerateNewSaplingZKey();
+            pwalletMain->SetZAddressBook(zAddress, "z-sapling", "");
         }
 
         //Set Sapling Consolidation
