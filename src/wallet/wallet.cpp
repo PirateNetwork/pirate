@@ -3586,6 +3586,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             {
                 scanperc = (int)((Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pindex, false) - dProgressStart) / (dProgressTip - dProgressStart) * 100);
                 uiInterface.ShowProgress(_(("Rescanning - Currently on block " + std::to_string(pindex->GetHeight()) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
+                uiInterface.InitMessage(_(("Rescanning - Currently on block " + std::to_string(pindex->GetHeight())).c_str()) + ((" " + std::to_string(scanperc)).c_str()) + ("%"));
             }
             CBlock block;
             ReadBlockFromDisk(block, pindex,1);
