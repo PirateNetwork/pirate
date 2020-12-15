@@ -17,7 +17,7 @@ do
     cp zcutil/res/start.sh ${PACKAGE_DIR}/Contents/MacOS/
     cp zcutil/res/Info.plist ${PACKAGE_DIR}/Contents/
     cp zcutil/res/PkgInfo ${PACKAGE_DIR}/Contents/
-    cp zcutil/res/logo.icns ${PACKAGE_DIR}/Contents/Resources/
+    cp src/qt/res/icons/pirate.icns ${PACKAGE_DIR}/Contents/Resources/logo.icns
     # find the dylibs to copy for komodod
     DYLIBS=`otool -L ${PACKAGE_DIR}/Contents/MacOS/${binary} | grep "/usr/local" | awk -F' ' '{ print $1 }'`
     echo "copying ${DYLIBS} to ${PACKAGE_DIR}"

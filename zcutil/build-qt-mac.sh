@@ -73,4 +73,4 @@ make "$@" V=1 NO_GTEST=1 STATIC=1
 cp src/qt/komodo-qt "$mydir"/pirate-qt-mac
 
 #Package as App bundle in a dmg
-cd ./makeReleaseMac.sh
+./makeReleaseMac.sh
