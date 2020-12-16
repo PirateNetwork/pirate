@@ -11,6 +11,8 @@
 #include "script/script.h"
 #include "script/standard.h"
 #include "uint256.h"
+#include "serialize.h"
+#include "streams.h"
 #include "zcash/Address.hpp"
 #include "zcash/IncrementalMerkleTree.hpp"
 #include "zcash/Note.hpp"
@@ -32,6 +34,38 @@ struct SpendDescriptionInfo {
         SaplingWitness witness);
 };
 
+class SpendDescriptionInfoRaw
+{
+public:
+
+    libzcash::SaplingPaymentAddress addr;
+    CAmount value;
+    SaplingOutPoint op;
+
+    SpendDescriptionInfoRaw() {}
+
+    SpendDescriptionInfoRaw(
+      libzcash::SaplingPaymentAddress addrIn,
+      CAmount valueIn,
+      SaplingOutPoint opIn) {
+      addr = addrIn;
+      value = valueIn;
+      op = opIn;
+    }
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(addr);
+        READWRITE(value);
+        READWRITE(op);
+    }
+
+};
+
+
+
 struct OutputDescriptionInfo {
     uint256 ovk;
     libzcash::SaplingNote note;
@@ -42,6 +76,35 @@ struct OutputDescriptionInfo {
         libzcash::SaplingNote note,
         std::array<unsigned char, ZC_MEMO_SIZE> memo) : ovk(ovk), note(note), memo(memo) {}
 };
+
+
+class OutputDescriptionInfoRaw
+{
+public:
+
+    libzcash::SaplingPaymentAddress addr;
+    CAmount value;
+    std::array<unsigned char, ZC_MEMO_SIZE> memo;
+
+    OutputDescriptionInfoRaw() {}
+    OutputDescriptionInfoRaw(
+        libzcash::SaplingPaymentAddress addrIn,
+        CAmount valueIn,
+        std::array<unsigned char, ZC_MEMO_SIZE> memoIn) { addr = addrIn; value = valueIn; memo = memoIn; }
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(addr);
+        READWRITE(value);
+        READWRITE(memo);
+    }
+
+};
+
+
+
 
 struct TransparentInputInfo {
     CScript scriptPubKey;
@@ -72,10 +135,28 @@ private:
     bool AddOpRetLast(CScript &s);
 
 public:
+    std::vector<SpendDescriptionInfoRaw> rawSpends;
+    std::vector<OutputDescriptionInfoRaw> rawOutputs;
+
     TransactionBuilder() {}
     TransactionBuilder(const Consensus::Params& consensusParams, int nHeight, CKeyStore* keyStore = nullptr);
 
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(rawSpends);
+        READWRITE(rawOutputs);
+        READWRITE(mtx);
+        READWRITE(fee);
+    }
+
+
     void SetFee(CAmount fee);
+
+    void SetExpiryHeight(int nHeight);
+
+    CTransaction getTransaction() {return mtx;}
 
     // Returns false if the anchor does not match the anchor used by
     // previously-added Sapling spends.
@@ -85,11 +166,23 @@ public:
         uint256 anchor,
         SaplingWitness witness);
 
+    bool AddSaplingSpendRaw(
+      libzcash::SaplingPaymentAddress from,
+      CAmount value,
+      SaplingOutPoint op);
+
     void AddSaplingOutput(
         uint256 ovk,
         libzcash::SaplingPaymentAddress to,
         CAmount value,
         std::array<unsigned char, ZC_MEMO_SIZE> memo = {{0}});
+
+    void AddSaplingOutputRaw(
+        libzcash::SaplingPaymentAddress to,
+        CAmount value,
+        std::array<unsigned char, ZC_MEMO_SIZE> memo = {{0}});
+
+    void ConvertRawSaplingOutput(uint256 ovk);
 
     // Assumes that the value correctly corresponds to the provided UTXO.
     void AddTransparentInput(COutPoint utxo, CScript scriptPubKey, CAmount value, uint32_t nSequence = 0xffffffff);

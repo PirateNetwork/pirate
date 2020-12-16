@@ -46,6 +46,23 @@ bool TransactionBuilder::AddSaplingSpend(
     return true;
 }
 
+bool TransactionBuilder::AddSaplingSpendRaw(
+  libzcash::SaplingPaymentAddress from,
+  CAmount value,
+  SaplingOutPoint op)
+{
+    rawSpends.emplace_back(from, value, op);
+
+    // Consistency check: all from addresses must equal the first one
+    if (!rawSpends.empty()) {
+        if (!(rawSpends[0].addr == from)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 void TransactionBuilder::AddSaplingOutput(
     uint256 ovk,
     libzcash::SaplingPaymentAddress to,
@@ -56,6 +73,22 @@ void TransactionBuilder::AddSaplingOutput(
     outputs.emplace_back(ovk, note, memo);
     mtx.valueBalance -= value;
 }
+
+void TransactionBuilder::AddSaplingOutputRaw(
+    libzcash::SaplingPaymentAddress to,
+    CAmount value,
+    std::array<unsigned char, ZC_MEMO_SIZE> memo)
+{
+    rawOutputs.emplace_back(to, value, memo);
+}
+
+void TransactionBuilder::ConvertRawSaplingOutput(uint256 ovk)
+{
+    for (int i = 0; i < rawOutputs.size(); i++) {
+        AddSaplingOutput(ovk, rawOutputs[i].addr, rawOutputs[i].value, rawOutputs[i].memo);
+    }
+}
+
 
 void TransactionBuilder::AddTransparentInput(COutPoint utxo, CScript scriptPubKey, CAmount value, uint32_t _nSequence)
 {
@@ -103,6 +136,11 @@ void TransactionBuilder::AddOpRet(CScript &s)
 void TransactionBuilder::SetFee(CAmount fee)
 {
     this->fee = fee;
+}
+
+void TransactionBuilder::SetExpiryHeight(int nHeight)
+{
+    this->mtx.nExpiryHeight = nHeight;
 }
 
 void TransactionBuilder::SendChangeTo(libzcash::SaplingPaymentAddress changeAddr, uint256 ovk)

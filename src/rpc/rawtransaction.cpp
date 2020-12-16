@@ -30,6 +30,7 @@
 #include "net.h"
 #include "primitives/transaction.h"
 #include "rpc/server.h"
+#include "transaction_builder.h"
 #include "script/script.h"
 #include "script/script_error.h"
 #include "script/sign.h"
@@ -38,6 +39,7 @@
 #include "importcoin.h"
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
+#include "wallet/rpcpiratewallet.h"
 #endif
 
 #include "komodo_defs.h"
@@ -47,6 +49,7 @@
 #include <boost/assign/list_of.hpp>
 
 #include <univalue.h>
+#include <utf8.h>
 
 int32_t komodo_notarized_height(int32_t *prevMoMheightp,uint256 *hashp,uint256 *txidp);
 
@@ -185,12 +188,14 @@ int32_t myIsutxo_spent(uint256 &spenttxid,uint256 txid,int32_t vout)
     return(-1);
 }
 
-void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue& entry, int nHeight = 0, int nConfirmations = 0, int nBlockTime = 0)
+void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue& entry, bool isTxBuilder = false, int nHeight = 0, int nConfirmations = 0, int nBlockTime = 0)
 {
     uint256 notarized_hash,notarized_desttxid; int32_t prevMoMheight,notarized_height;
     notarized_height = komodo_notarized_height(&prevMoMheight,&notarized_hash,&notarized_desttxid);
     uint256 txid = tx.GetHash();
-    entry.push_back(Pair("txid", txid.GetHex()));
+    if (!isTxBuilder)
+      entry.push_back(Pair("txid", txid.GetHex()));
+
     entry.push_back(Pair("overwintered", tx.fOverwintered));
     entry.push_back(Pair("version", tx.nVersion));
     entry.push_back(Pair("last_notarized_height", notarized_height));
@@ -209,7 +214,7 @@ void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue&
         else if (tx.IsCoinImport() && txin.prevout.n==10e8) {
             in.push_back(Pair("is_import", "1"));
             ImportProof proof; CTransaction burnTx; std::vector<CTxOut> payouts; CTxDestination importaddress;
-            if (UnmarshalImportTx(tx, proof, burnTx, payouts)) 
+            if (UnmarshalImportTx(tx, proof, burnTx, payouts))
             {
                 if (burnTx.vout.size() == 0)
                     continue;
@@ -222,7 +227,7 @@ void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue&
                 {
                     if (rawproof.size() > 0)
                     {
-                        std::string sourceSymbol; 
+                        std::string sourceSymbol;
                         E_UNMARSHAL(rawproof, ss >> sourceSymbol);
                         in.push_back(Pair("address", "IMP-" + sourceSymbol + "-" + burnTx.GetHash().ToString()));
                     }
@@ -285,7 +290,7 @@ void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue&
         if (txout.scriptPubKey.IsOpReturn() && txout.nValue != 0)
         {
             std::vector<uint8_t> burnOpret; std::string targetSymbol; uint32_t targetCCid; uint256 payoutsHash; std::vector<uint8_t>rawproof;
-            if (UnmarshalBurnTx(tx, targetSymbol, &targetCCid, payoutsHash, rawproof)) 
+            if (UnmarshalBurnTx(tx, targetSymbol, &targetCCid, payoutsHash, rawproof))
             {
                 out.push_back(Pair("target", "EXPORT->" +  targetSymbol));
             }
@@ -309,7 +314,9 @@ void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue&
     entry.push_back(Pair("vjoinsplit", vjoinsplit));
 
     if (tx.fOverwintered && tx.nVersion >= SAPLING_TX_VERSION) {
-        entry.push_back(Pair("valueBalance", ValueFromAmount(tx.valueBalance)));
+        if (!isTxBuilder)
+          entry.push_back(Pair("valueBalance", ValueFromAmount(tx.valueBalance)));
+
         UniValue vspenddesc = TxShieldedSpendsToJSON(tx);
         entry.push_back(Pair("vShieldedSpend", vspenddesc));
         UniValue voutputdesc = TxShieldedOutputsToJSON(tx);
@@ -379,7 +386,7 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
             int64_t interest; int32_t txheight; uint32_t locktime;
             interest = komodo_accrued_interest(&txheight,&locktime,tx.GetHash(),i,0,txout.nValue,(int32_t)tipindex->GetHeight());
             out.push_back(Pair("interest", ValueFromAmount(interest)));
-        }        
+        }
         out.push_back(Pair("valueZat", txout.nValue));
         out.push_back(Pair("n", (int64_t)i));
         UniValue o(UniValue::VOBJ);
@@ -557,7 +564,7 @@ UniValue getrawtransaction(const UniValue& params, bool fHelp, const CPubKey& my
 
     UniValue result(UniValue::VOBJ);
     result.push_back(Pair("hex", strHex));
-    TxToJSONExpanded(tx, hashBlock, result, nHeight, nConfirmations, nBlockTime);
+    TxToJSONExpanded(tx, hashBlock, result, false, nHeight, nConfirmations, nBlockTime);
     return result;
 }
 
@@ -786,7 +793,7 @@ UniValue createrawtransaction(const UniValue& params, bool fHelp, const CPubKey&
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, locktime out of range");
         rawTx.nLockTime = nLockTime;
     }
-    
+
     if (params.size() > 3 && !params[3].isNull()) {
         if (NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_OVERWINTER)) {
             int64_t nExpiryHeight = params[3].get_int64();
@@ -969,16 +976,95 @@ UniValue decoderawtransaction(const UniValue& params, bool fHelp, const CPubKey&
     LOCK(cs_main);
     RPCTypeCheck(params, boost::assign::list_of(UniValue::VSTR));
 
-    CTransaction tx;
+    string strHexTx = params[0].get_str();
+    string strHexTb = params[0].get_str();
+    if (!IsHex(strHexTx))
+        return false;
 
-    if (!DecodeHexTx(tx, params[0].get_str()))
-        throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
+    CTransaction tx;
+    TransactionBuilder tb;
+
+    bool isTx = DecodeHexTx(tx, strHexTx);
+
+    if (!isTx) {
+      vector<unsigned char> txBuilder(ParseHex(strHexTb));
+      CDataStream ssData(txBuilder, SER_NETWORK, PROTOCOL_VERSION);
+      try {
+          ssData >> tb;
+          tx = tb.getTransaction();
+      }
+      catch (const std::exception&) {
+          throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
+      }
+    }
+
+
+
 
     UniValue result(UniValue::VOBJ);
-    TxToJSON(tx, uint256(), result);
+
+    if (!isTx) {
+        result.push_back(Pair("rawtype","instuctions"));
+        TxToJSONExpanded(tx, uint256(), result, true);
+
+        UniValue inputs(UniValue::VARR);
+        for (int i = 0; i < tb.rawSpends.size(); i++) {
+            UniValue input(UniValue::VOBJ);
+            input.push_back(Pair("fromaddr",EncodePaymentAddress(tb.rawSpends[i].addr)));
+            input.push_back(Pair("value", ValueFromAmount(CAmount(tb.rawSpends[i].value))));
+            input.push_back(Pair("valueZat", tb.rawSpends[i].value));;
+            input.push_back(Pair("txid",tb.rawSpends[i].op.hash.ToString()));
+            input.push_back(Pair("shieldedoutputindex",(uint64_t)tb.rawSpends[i].op.n));
+            inputs.push_back(input);
+        }
+
+        UniValue outputs(UniValue::VARR);
+        for (int i = 0; i < tb.rawOutputs.size(); i++) {
+            UniValue output(UniValue::VOBJ);
+            output.push_back(Pair("toaddr",EncodePaymentAddress(tb.rawOutputs[i].addr)));
+            output.push_back(Pair("value", ValueFromAmount(CAmount(tb.rawOutputs[i].value))));
+            output.push_back(Pair("valueZat", tb.rawOutputs[i].value));;
+
+            auto memo = tb.rawOutputs[i].memo;
+            output.push_back(Pair("memo", HexStr(memo)));
+            if (memo[0] <= 0xf4) {
+                // Trim off trailing zeroes
+                auto end = std::find_if(
+                    memo.rbegin(),
+                    memo.rend(),
+                    [](unsigned char v) { return v != 0; });
+                std::string memoStr(memo.begin(), end.base());
+                if (utf8::is_valid(memoStr)) {
+                    output.push_back(Pair("memoStr",memoStr));
+                } else {
+                    output.push_back(Pair("memoStr",""));
+                }
+            }
+
+            outputs.push_back(output);
+        }
+
+        result.push_back(Pair("rawinputs",inputs));
+        result.push_back(Pair("rawoutputs",outputs));
+    } else {
+        result.push_back(Pair("rawtype","raw"));
+        TxToJSONExpanded(tx, uint256(), result, false);
+
+        RpcArcTransaction dtx;
+        decrypttransaction(tx, dtx);
+
+        UniValue spends(UniValue::VARR);
+        getRpcArcTxJSONSpends(dtx, spends);
+        result.push_back(Pair("decryptedinputs", spends));
+
+        UniValue sends(UniValue::VARR);
+        getRpcArcTxJSONSends(dtx, sends);
+        result.push_back(Pair("decryptedoutputs", sends));
+    }
 
     return result;
 }
+
 
 UniValue decodescript(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
@@ -1238,7 +1324,7 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
     }
 
     bool fHashSingle = ((nHashType & ~SIGHASH_ANYONECANPAY) == SIGHASH_SINGLE);
-    // Use the approximate release height if it is greater so offline nodes 
+    // Use the approximate release height if it is greater so offline nodes
     // have a better estimation of the current height and will be more likely to
     // determine the correct consensus branch ID.  Regtest mode ignores release height.
     int chainHeight = chainActive.Height() + 1;
@@ -1251,8 +1337,8 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
         if (!IsConsensusBranchId(consensusBranchId)) {
             throw runtime_error(params[4].get_str() + " is not a valid consensus branch id");
         }
-    } 
-    
+    }
+
     // Script verification errors
     UniValue vErrors(UniValue::VARR);
 
@@ -1288,19 +1374,19 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
             }
             const CScript& prevPubKey = coins->vout[txin.prevout.n].scriptPubKey;
             const CAmount& amount = coins->vout[txin.prevout.n].nValue;
-            
+
             SignatureData sigdata;
             // Only sign SIGHASH_SINGLE if there's a corresponding output:
             if (!fHashSingle || (i < mergedTx.vout.size()))
                 ProduceSignature(MutableTransactionSignatureCreator(&keystore, &mergedTx, i, amount, nHashType), prevPubKey, sigdata, consensusBranchId);
-            
+
             // ... and merge in other signatures:
             BOOST_FOREACH(const CMutableTransaction& txv, txVariants) {
                 sigdata = CombineSignatures(prevPubKey, TransactionSignatureChecker(&txConst, i, amount), sigdata, DataFromTransaction(txv, i), consensusBranchId);
             }
-            
+
             UpdateTransaction(mergedTx, i, sigdata);
-            
+
             ScriptError serror = SCRIPT_ERR_OK;
             if (!VerifyScript(txin.scriptSig, prevPubKey, STANDARD_SCRIPT_VERIFY_FLAGS, TransactionSignatureChecker(&txConst, i, amount), consensusBranchId, &serror)) {
                 TxInErrorToJSON(txin, vErrors, ScriptErrorString(serror));
@@ -1398,18 +1484,314 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
     return hashTx.GetHex();
 }
 
-static const CRPCCommand commands[] =
-{ //  category              name                      actor (function)         okSafeMode
-  //  --------------------- ------------------------  -----------------------  ----------
-    { "rawtransactions",    "getrawtransaction",      &getrawtransaction,      true  },
-    { "rawtransactions",    "createrawtransaction",   &createrawtransaction,   true  },
-    { "rawtransactions",    "decoderawtransaction",   &decoderawtransaction,   true  },
-    { "rawtransactions",    "decodescript",           &decodescript,           true  },
-    { "rawtransactions",    "sendrawtransaction",     &sendrawtransaction,     false },
-    { "rawtransactions",    "signrawtransaction",     &signrawtransaction,     false }, /* uses wallet if enabled */
+UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+  if (fHelp || params.size() != 1)
+      throw runtime_error(
+          "z_buildrawtransaction \"hexstring\"\n"
+          "\nReturn a JSON object representing the serialized, hex-encoded transaction.\n"
 
-    { "blockchain",         "gettxoutproof",          &gettxoutproof,          true  },
-    { "blockchain",         "verifytxoutproof",       &verifytxoutproof,       true  },
+          "\nArguments:\n"
+          "1. \"hex\"      (string, required) The transaction hex string\n"
+
+          "\nExamples:\n"
+          + HelpExampleCli("z_buildrawtransaction", "\"hexstring\"")
+          + HelpExampleRpc("z_buildrawtransaction", "\"hexstring\"")
+      );
+
+  LOCK2(cs_main, pwalletMain->cs_wallet);
+  RPCTypeCheck(params, boost::assign::list_of(UniValue::VSTR));
+
+  string strHexTx = params[0].get_str();
+  if (!IsHex(strHexTx))
+      return false;
+
+  CTransaction tx;
+  TransactionBuilder tb;
+
+  if (DecodeHexTx(tx, strHexTx)) {
+      throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX does not require building. If transaction is unsigned use signrawtransaction.");
+  }
+
+  vector<unsigned char> txBuilder(ParseHex(strHexTx));
+  CDataStream ssData(txBuilder, SER_NETWORK, PROTOCOL_VERSION);
+  try {
+      ssData >> tb;
+  }
+  catch (const std::exception&) {
+      throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
+  }
+
+  libzcash::SaplingExtendedSpendingKey primaryKey;
+
+  for (int i = 0; i < tb.rawSpends.size(); i++) {
+      SaplingOutPoint op = tb.rawSpends[i].op;
+      std::map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.find(op.hash);
+      if (it != pwalletMain->mapWallet.end()) {
+            CWalletTx wtx = (*it).second;
+            auto maybe_decrypted = wtx.DecryptSaplingNote(op);
+            if (maybe_decrypted == boost::none)
+                throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Note decryption failed.");
+
+            auto decrypted = maybe_decrypted.get();
+            libzcash::SaplingNotePlaintext pt = decrypted.first;
+            libzcash::SaplingPaymentAddress pa = decrypted.second;
+
+            auto witness = wtx.mapSaplingNoteData.at(op).witnesses.front();
+            auto anchor = witness.root();
+            auto note = pt.note(wtx.mapSaplingNoteData.at(op).ivk).get();
+
+            libzcash::SaplingExtendedFullViewingKey extfvk;
+            pwalletMain->GetSaplingFullViewingKey(wtx.mapSaplingNoteData.at(op).ivk, extfvk);
+
+            libzcash::SaplingExtendedSpendingKey extsk;
+            if (!pwalletMain->HaveSaplingSpendingKey(extfvk))
+                throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Spending key for SaplingOutpoint not found.");
+
+            pwalletMain->GetSaplingExtendedSpendingKey(pa, extsk);
+
+            if (i == 0) {
+              primaryKey = extsk;
+            } else if (!(primaryKey == extsk)) {
+                throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction with that use multiple spending keys are not supported.");
+            }
+
+            if (!tb.AddSaplingSpend(extsk.expsk, note, anchor, witness))
+                throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX converting raw Sapling Spends failed.");
+      } else {
+          throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction with SaplingOutpoint not found.");
+      }
+  }
+
+  uint256 ovk = primaryKey.ToXFVK().fvk.ovk;
+  tb.ConvertRawSaplingOutput(ovk);
+
+  auto maybe_rtx = tb.Build();
+  if (maybe_rtx == boost::none)
+      throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction build failed.");
+
+  CTransaction rtx = maybe_rtx.get();
+  CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
+  ssTx << rtx;
+  return HexStr(ssTx.begin(), ssTx.end());
+
+}
+
+UniValue z_createbuildinstuctions(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+  if (fHelp)
+      throw runtime_error(
+          "z_createbuildinstuctions \n"
+          "\nExamples:\n"
+
+          "\nArguments:\n"
+          "1. \"inputs\"                (array, required) A json array of json input objects\n"
+          "     [\n"
+          "       {\n"
+          "         \"txid\":\"id\",          (string, required) The transaction id\n"
+          "         \"index\":n,          (numeric, required) shieldedOutputIndex of input transaction\n"
+          "       } \n"
+          "       ,...\n"
+          "     ]\n"
+          "2. \"outputs\"               (array, required) A json array of json output objects\n"
+          "     [\n"
+          "       {\n"
+          "         \"address\":address     (string, required) Pirate zaddr\n"
+          "         \"amount\":amount       (numeric, required) The numeric amount in ARRR\n"
+          "         \"memo\": \"string\"    (string, optional) String memo in UTF8 ro Hexidecimal format\n"
+          "         ,...\n"
+          "       }\n"
+          "     ]\n"
+          "3. fee                  (numeric, optional, default=0.0001\n"
+          "4. expiryheight          (numeric, optional, default=" + strprintf("%d", DEFAULT_TX_EXPIRY_DELTA) + ") Expiry height of transaction (if Overwinter is active)\n"
+          "\nResult:\n"
+          "\"transaction\"            (string) hex string of the transaction\n"
+
+
+          + HelpExampleCli("z_createbuildinstuctions", "\"[{\\\"txid\\\":\\\"myid\\\",\\\"index\\\":0\\\"type\\\":\\\"sapling\\\"},...]\"")
+      );
+
+    LOCK(cs_main);
+    RPCTypeCheck(params, boost::assign::list_of(UniValue::VARR)(UniValue::VARR)(UniValue::VNUM)(UniValue::VNUM), true);
+    if (params[0].isNull() || params[1].isNull())
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, arguments 1 and 2 must be non-null");
+
+    UniValue inputs = params[0].get_array();
+    UniValue outputs = params[1].get_array();
+
+    CAmount total = 0;
+    TransactionBuilder tx = TransactionBuilder(Params().GetConsensus(), chainActive.Tip()->GetHeight() + 1, pwalletMain);
+
+
+    CAmount nFee = 10000;
+    if (!params[2].isNull()) {
+      double fee = params[2].get_real();
+      nFee = AmountFromValue(fee);
+      if (nFee < 0)
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, fee must be positive");
+    }
+    tx.SetFee(nFee);
+    total -= nFee;
+
+    if (!params[3].isNull()) {
+      int nHeight = params[3].get_int();
+      if (nHeight < 0)
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expiry height must be positive");
+
+      tx.SetExpiryHeight(nHeight);
+    }
+
+    for (size_t idx = 0; idx < inputs.size(); idx++) {
+        const UniValue& input = inputs[idx];
+        const UniValue& o = input.get_obj();
+
+        uint256 txid = ParseHashO(o, "txid");
+
+        const UniValue& nIndex = find_value(o, "index");
+        if (!nIndex.isNum())
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, missing index key");
+        int nOutput = nIndex.get_int();
+        if (nOutput < 0)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, index must be positive");
+
+
+
+        const CWalletTx* wtx = pwalletMain->GetWalletTx(txid);
+        if (wtx != NULL) {
+            SaplingOutPoint op = SaplingOutPoint(txid, nOutput);
+
+            auto maybe_decrypted = wtx->DecryptSaplingNote(op);
+            if (maybe_decrypted == boost::none)
+                throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Note decryption failed.");
+
+            auto decrypted = maybe_decrypted.get();
+            libzcash::SaplingNotePlaintext pt = decrypted.first;
+            libzcash::SaplingPaymentAddress pa = decrypted.second;
+            auto note = pt.note(wtx->mapSaplingNoteData.at(op).ivk).get();
+            CAmount value = note.value();
+            total += value;
+
+            if (!tx.AddSaplingSpendRaw(pa, value, op))
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "All inputs must be from the same address");
+
+        } else {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Wallet transaction does not exist");
+        }
+    }
+
+    for (size_t idx = 0; idx < outputs.size(); idx++) {
+      const UniValue& output = outputs[idx];
+      const UniValue& o = output.get_obj();
+
+      // sanity check, report error if unknown key-value pairs
+      for (const string& name_ : o.getKeys()) {
+          std::string s = name_;
+          if (s != "address" && s != "amount" && s != "memo")
+              throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, unknown key: ")+s);
+      }
+
+      //Check address
+      bool isTAddr = false;
+      CTxDestination tAddress;
+      bool isZsAddr = false;
+      libzcash::SaplingPaymentAddress zsAddress;
+
+      UniValue addrValue = find_value(o, "address");
+      if (!addrValue.isNull()) {
+          string encodedAddress = addrValue.get_str();
+          tAddress = DecodeDestination(encodedAddress);
+          if (IsValidDestination(tAddress)) {
+              isTAddr = true;
+          } else {
+              auto zAddress = DecodePaymentAddress(encodedAddress);
+              if (boost::get<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
+                  zsAddress = boost::get<libzcash::SaplingPaymentAddress>(zAddress);
+                  isZsAddr = true;
+              } else {
+                  throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid address.");
+              }
+          }
+      } else {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Address not found.");
+      }
+
+      //get amount
+      UniValue av = find_value(o, "amount");
+      CAmount nAmount = AmountFromValue( av );
+      if (nAmount < 0)
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, amount must be positive");
+
+      //get memo
+      std::array<unsigned char, ZC_MEMO_SIZE> hexMemo = {{0xF6}};
+      UniValue memoValue = find_value(o, "memo");
+      string memo;
+      if (!memoValue.isNull()) {
+          memo = memoValue.get_str();
+
+          if (!isZsAddr) {
+              throw JSONRPCError(RPC_INVALID_PARAMETER, "Memo cannot be used with a taddr.  It can only be used with a zaddr.");
+          }
+          if (!IsHex(memo)) {
+              memo = HexStr(memo);
+          }
+          if (memo.length() > ZC_MEMO_SIZE*2) {
+              throw JSONRPCError(RPC_INVALID_PARAMETER,  strprintf("Invalid parameter, size of memo is larger than maximum allowed %d", ZC_MEMO_SIZE ));
+          }
+
+          std::vector<unsigned char> rawMemo = ParseHex(memo.c_str());
+
+          // If ParseHex comes across a non-hex char, it will stop but still return results so far.
+          size_t slen = memo.length();
+          if (slen % 2 !=0 || (slen>0 && rawMemo.size()!=slen/2)) {
+              throw JSONRPCError(RPC_INVALID_PARAMETER, "Memo must be in hexadecimal format");
+          }
+
+          if (rawMemo.size() > ZC_MEMO_SIZE) {
+              throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Memo size of %d is too big, maximum allowed is %d", rawMemo.size(), ZC_MEMO_SIZE));
+          }
+
+          // copy vector into boost array
+          int lenMemo = rawMemo.size();
+          for (int i = 0; i < ZC_MEMO_SIZE && i < lenMemo; i++) {
+              hexMemo[i] = rawMemo[i];
+          }
+      }
+
+
+      if (isZsAddr) {
+          tx.AddSaplingOutputRaw(zsAddress, nAmount, hexMemo);
+          total -= nAmount;
+      } else {
+          tx.AddTransparentOutput(tAddress,nAmount);
+      }
+    }
+
+    if (total < 0)
+      throw JSONRPCError(RPC_INVALID_PARAMETER, "Output values plus tx fee are greater than input values");
+
+    CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
+    ssTx << tx;
+    return HexStr(ssTx.begin(), ssTx.end());
+
+
+}
+
+
+static const CRPCCommand commands[] =
+{ //  category              name                      actor (function)            okSafeMode
+  //  --------------------- ------------------------  -----------------------     ----------
+    { "rawtransactions",    "getrawtransaction",        &getrawtransaction,         true  },
+    { "rawtransactions",    "createrawtransaction",     &createrawtransaction,      true  },
+    { "rawtransactions",    "decoderawtransaction",     &decoderawtransaction,      true  },
+    { "rawtransactions",    "decodescript",             &decodescript,              true  },
+    { "rawtransactions",    "sendrawtransaction",       &sendrawtransaction,        false },
+    { "rawtransactions",    "signrawtransaction",       &signrawtransaction,        false }, /* uses wallet if enabled */
+
+    { "rawtransactions",    "z_createbuildinstuctions", &z_createbuildinstuctions,  true  }, /* uses wallet if enabled */
+    { "rawtransactions",    "z_buildrawtransaction",    &z_buildrawtransaction,     false }, /* uses wallet if enabled */
+
+    { "blockchain",         "gettxoutproof",            &gettxoutproof,             true  },
+    { "blockchain",         "verifytxoutproof",         &verifytxoutproof,          true  },
 };
 
 void RegisterRawTransactionRPCCommands(CRPCTable &tableRPC)

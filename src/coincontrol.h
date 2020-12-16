@@ -21,6 +21,7 @@
 #define BITCOIN_COINCONTROL_H
 
 #include "primitives/transaction.h"
+#include "wallet/wallet_fees.h"
 
 /** Coin Control Features. */
 class CCoinControl
@@ -29,6 +30,15 @@ public:
     CTxDestination destChange;
     //! If false, allows unselected inputs, but requires all selected inputs be used
     bool fAllowOtherInputs;
+    //! Override automatic min/max checks on fee, m_feerate must be set if true
+    bool fOverrideFeeRate;
+    //! Override the default payTxFee if set
+    boost::optional<CFeeRate> m_feerate;
+    //! Override the default confirmation target if set
+    unsigned int m_confirm_target;
+    //! Signal BIP-125 replace by fee.
+    bool signalRbf;
+  //! Fee estimation mode to control arguments to estimateSmartFee
 
     CCoinControl()
     {

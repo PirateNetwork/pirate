@@ -1,7 +1,7 @@
 #include <chainparams.h>
 #include <key_io.h>
 #include <zcash/Address.hpp>
-#include <zcash/zip32.h>
+#include <zcash/address/zip32.h>
 #include "consensus/upgrades.h"
 
 #include <gtest/gtest.h>

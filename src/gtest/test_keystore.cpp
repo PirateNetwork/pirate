@@ -8,7 +8,7 @@
 #include "wallet/crypter.h"
 #endif
 #include "zcash/Address.hpp"
-#include "zcash/zip32.h"
+#include "zcash/address/zip32.h"
 
 #include "json_test_vectors.h"
 
@@ -44,7 +44,7 @@ TEST(keystore_tests, StoreAndRetrieveHDSeed) {
 TEST(keystore_tests, sapling_keys) {
     // ["sk, ask, nsk, ovk, ak, nk, ivk, default_d, default_pk_d, note_v, note_r, note_cm, note_pos, note_nf"],
     UniValue sapling_keys = read_json(MAKE_STRING(json_tests::sapling_key_components));
-    
+
     // Skipping over comments in sapling_key_components.json file
     for (size_t i = 2; i < 12; i++) {
         uint256 skSeed, ask, nsk, ovk, ak, nk, ivk;
@@ -55,40 +55,40 @@ TEST(keystore_tests, sapling_keys) {
         ak.SetHex(sapling_keys[i][4].getValStr());
         nk.SetHex(sapling_keys[i][5].getValStr());
         ivk.SetHex(sapling_keys[i][6].getValStr());
-        
+
         libzcash::diversifier_t default_d;
         std::copy_n(ParseHex(sapling_keys[i][7].getValStr()).begin(), 11, default_d.begin());
-        
+
         uint256 default_pk_d;
         default_pk_d.SetHex(sapling_keys[i][8].getValStr());
-        
+
         auto sk = libzcash::SaplingSpendingKey(skSeed);
-        
+
         // Check that expanded spending key from primitives and from sk are the same
         auto exp_sk_2 = libzcash::SaplingExpandedSpendingKey(ask, nsk, ovk);
         auto exp_sk = sk.expanded_spending_key();
         EXPECT_EQ(exp_sk, exp_sk_2);
-            
+
         // Check that full viewing key derived from sk and expanded sk are the same
         auto full_viewing_key = sk.full_viewing_key();
         EXPECT_EQ(full_viewing_key, exp_sk.full_viewing_key());
-        
+
         // Check that full viewing key from primitives and from sk are the same
         auto full_viewing_key_2 = libzcash::SaplingFullViewingKey(ak, nk, ovk);
         EXPECT_EQ(full_viewing_key, full_viewing_key_2);
-            
+
         // Check that incoming viewing key from primitives and from sk are the same
         auto in_viewing_key = full_viewing_key.in_viewing_key();
         auto in_viewing_key_2 = libzcash::SaplingIncomingViewingKey(ivk);
         EXPECT_EQ(in_viewing_key, in_viewing_key_2);
-        
+
         // Check that the default address from primitives and from sk method are the same
         auto default_addr = sk.default_address();
         auto addrOpt2 = in_viewing_key.address(default_d);
         EXPECT_TRUE(addrOpt2);
         auto default_addr_2 = addrOpt2.value();
         EXPECT_EQ(default_addr, default_addr_2);
-        
+
         auto default_addr_3 = libzcash::SaplingPaymentAddress(default_d, default_pk_d);
         EXPECT_EQ(default_addr_2, default_addr_3);
         EXPECT_EQ(default_addr, default_addr_3);
@@ -195,36 +195,36 @@ TEST(keystore_tests, StoreAndRetrieveViewingKey) {
 TEST(keystore_tests, StoreAndRetrieveSaplingSpendingKey) {
     CBasicKeyStore keyStore;
     libzcash::SaplingExtendedSpendingKey skOut;
-    libzcash::SaplingFullViewingKey fvkOut;
+    libzcash::SaplingExtendedFullViewingKey extfvkOut;
     libzcash::SaplingIncomingViewingKey ivkOut;
 
     std::vector<unsigned char, secure_allocator<unsigned char>> rawSeed(32);
     HDSeed seed(rawSeed);
     auto sk = libzcash::SaplingExtendedSpendingKey::Master(seed);
-    auto fvk = sk.expsk.full_viewing_key();
-    auto ivk = fvk.in_viewing_key();
+    auto extfvk = sk.ToXFVK();
+    auto ivk = extfvk.fvk.in_viewing_key();
     auto addr = sk.DefaultAddress();
 
     // Sanity-check: we can't get a key we haven't added
-    EXPECT_FALSE(keyStore.HaveSaplingSpendingKey(fvk));
-    EXPECT_FALSE(keyStore.GetSaplingSpendingKey(fvk, skOut));
+    EXPECT_FALSE(keyStore.HaveSaplingSpendingKey(extfvk));
+    EXPECT_FALSE(keyStore.GetSaplingSpendingKey(extfvk, skOut));
     // Sanity-check: we can't get a full viewing key we haven't added
     EXPECT_FALSE(keyStore.HaveSaplingFullViewingKey(ivk));
-    EXPECT_FALSE(keyStore.GetSaplingFullViewingKey(ivk, fvkOut));
+    EXPECT_FALSE(keyStore.GetSaplingFullViewingKey(ivk, extfvkOut));
     // Sanity-check: we can't get an incoming viewing key we haven't added
     EXPECT_FALSE(keyStore.HaveSaplingIncomingViewingKey(addr));
     EXPECT_FALSE(keyStore.GetSaplingIncomingViewingKey(addr, ivkOut));
 
     // When we specify the default address, we get the full mapping
-    keyStore.AddSaplingSpendingKey(sk, addr);
-    EXPECT_TRUE(keyStore.HaveSaplingSpendingKey(fvk));
-    EXPECT_TRUE(keyStore.GetSaplingSpendingKey(fvk, skOut));
+    keyStore.AddSaplingSpendingKey(sk);
+    EXPECT_TRUE(keyStore.HaveSaplingSpendingKey(extfvk));
+    EXPECT_TRUE(keyStore.GetSaplingSpendingKey(extfvk, skOut));
     EXPECT_TRUE(keyStore.HaveSaplingFullViewingKey(ivk));
-    EXPECT_TRUE(keyStore.GetSaplingFullViewingKey(ivk, fvkOut));
+    EXPECT_TRUE(keyStore.GetSaplingFullViewingKey(ivk, extfvkOut));
     EXPECT_TRUE(keyStore.HaveSaplingIncomingViewingKey(addr));
     EXPECT_TRUE(keyStore.GetSaplingIncomingViewingKey(addr, ivkOut));
     EXPECT_EQ(sk, skOut);
-    EXPECT_EQ(fvk, fvkOut);
+    EXPECT_EQ(extfvk, extfvkOut);
     EXPECT_EQ(ivk, ivkOut);
 }
 

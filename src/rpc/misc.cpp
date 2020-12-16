@@ -172,7 +172,7 @@ UniValue geterablockheights(const UniValue& params, bool fHelp, const CPubKey& m
           "geterablockheights\n"
           "Returns a JSON object with the first block in each era.\n"
           );
-      
+
     CBlockIndex *pindex; int8_t lastera,era = 0; UniValue ret(UniValue::VOBJ);
 
     for (size_t i = 1; i < chainActive.LastTip()->GetHeight(); i++)
@@ -187,7 +187,7 @@ UniValue geterablockheights(const UniValue& params, bool fHelp, const CPubKey& m
             lastera = era;
         }
     }
-    
+
     return(ret);
 }
 
@@ -226,12 +226,12 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
     //#else
     LOCK(cs_main);
     //#endif
-    
+
     proxyType proxy;
     GetProxy(NET_IPV4, proxy);
     notarized_height = komodo_notarized_height(&prevMoMheight,&notarized_hash,&notarized_desttxid);
     //fprintf(stderr,"after notarized_height %u\n",(uint32_t)time(NULL));
-    
+
     UniValue obj(UniValue::VOBJ);
     obj.push_back(Pair("version", CLIENT_VERSION));
     obj.push_back(Pair("protocolversion", PROTOCOL_VERSION));
@@ -622,10 +622,10 @@ public:
 #ifdef ENABLE_WALLET
         if (pwalletMain) {
             libzcash::SaplingIncomingViewingKey ivk;
-            libzcash::SaplingFullViewingKey fvk;
+            libzcash::SaplingExtendedFullViewingKey extfvk;
             bool isMine = pwalletMain->GetSaplingIncomingViewingKey(zaddr, ivk) &&
-                pwalletMain->GetSaplingFullViewingKey(ivk, fvk) &&
-                pwalletMain->HaveSaplingSpendingKey(fvk);
+                pwalletMain->GetSaplingFullViewingKey(ivk, extfvk) &&
+                pwalletMain->HaveSaplingSpendingKey(extfvk);
             obj.push_back(Pair("ismine", isMine));
         }
 #endif
@@ -1254,7 +1254,7 @@ UniValue checknotarization(const UniValue& params, bool fHelp, const CPubKey& my
         );
 
     UniValue result(UniValue::VOBJ); CAmount balance = 0, received = 0; int64_t nNotaryPay = 0; int32_t height;
-    
+
     // helper to test burn address's
     /*uint8_t priv[32] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
     uint8_t pub[33] =  { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
@@ -1265,7 +1265,7 @@ UniValue checknotarization(const UniValue& params, bool fHelp, const CPubKey& my
     result.push_back(Pair("address", coinaddr));
     return result;
     */
-    
+
     if ( ASSETCHAINS_NOTARY_PAY[0] == 0 )
         throw runtime_error("only works for ac_notarypay chains");
     // pubkey 020000000000000000000000000000000
@@ -1292,15 +1292,15 @@ UniValue getnotarypayinfo(const UniValue& params, bool fHelp, const CPubKey& myp
             "  \"Estimated_Height\"  (number) the estimated block height funds will run out\n"
             "}\n"
         );
-    
+
     if ( ASSETCHAINS_NOTARY_PAY[0] == 0 )
         throw runtime_error("only works for ac_notarypay chains");
-    
+
     UniValue result(UniValue::VOBJ); CAmount balance = 0, received = 0; int64_t TotalNotaryPay = 0, NotaryPay, notaleft = 0, daysleft = 0, notarycount; int32_t height, endheight = 0; uint8_t notarypubkeys[64][33] = {0};
-    
+
     // pubkey 020000000000000000000000000000000
     balance = checkburnaddress(received, TotalNotaryPay, height, "REDVp3ox1pbcWYCzySadfHhk8UU3HM4k5x");
-    
+
     notarycount = komodo_notaries(notarypubkeys, height, chainActive[height]->GetBlockTime());
     NotaryPay = komodo_notarypayamount(height, notarycount)*notarycount;
     bool spent = (received != balance);
@@ -1310,7 +1310,7 @@ UniValue getnotarypayinfo(const UniValue& params, bool fHelp, const CPubKey& myp
         daysleft = (((ASSETCHAINS_BLOCKTIME * 5) * notaleft) / 3600) / 24;
         endheight = (notaleft * 5) + height;
     }
-    
+
     result.push_back(Pair("height", height));
     result.push_back(Pair("balance", ValueFromAmount(balance)));
     result.push_back(Pair("spent", spent));
@@ -1386,11 +1386,11 @@ UniValue getsnapshot(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     if (params.size() > 0 && !params[0].isNull()) {
         top = atoi(params[0].get_str().c_str());
-        if ( top < 0 ) 
+        if ( top < 0 )
         {
             if ( KOMODO_SNAPSHOT_INTERVAL == 0 )
                 throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, top must be a positive integer");
-            else 
+            else
                 top = -1;
         }
     }
@@ -1604,16 +1604,16 @@ UniValue decodeccopret(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (fHelp || params.size() < 1 || params.size() > 1)
     {
         string msg = "decodeccopret scriptPubKey\n"
-            "\nReturns eval code and function id for CC OP RETURN data.\n"           
+            "\nReturns eval code and function id for CC OP RETURN data.\n"
 
             "\nArguments:\n"
-            "1. scriptPubKey      (string, required) Hex of scriptPubKey with OP_RETURN data.\n"          
+            "1. scriptPubKey      (string, required) Hex of scriptPubKey with OP_RETURN data.\n"
 
             "\nResult:\n"
             "{\n"
-            "  eval_code,  (string) Eval code name.\n" 
-            "  function,   (char) Function id char.\n"           
-            "}\n"           
+            "  eval_code,  (string) Eval code name.\n"
+            "  function,   (char) Function id char.\n"
+            "}\n"
         ;
         throw runtime_error(msg);
     }
@@ -1623,12 +1623,12 @@ UniValue decodeccopret(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (DecodeTokenOpRet(scripthex,tokenevalcode,tokenid,pubkeys, oprets)!=0 && tokenevalcode==EVAL_TOKENS && oprets.size()>0)
     {
         // seems we need a loop here
-        vOpretExtra = oprets[0].second;  
+        vOpretExtra = oprets[0].second;
         UniValue obj(UniValue::VOBJ);
         GetOpReturnData(scripthex,vopret);
         script = (uint8_t *)vopret.data();
         if ( vopret.size() > 1)
-        {        
+        {
             char func[5];
             sprintf(func,"%c",script[1]);
             obj.push_back(Pair("eval_code", EvalToStr(script[0])));
@@ -1644,10 +1644,10 @@ UniValue decodeccopret(const UniValue& params, bool fHelp, const CPubKey& mypk)
     else GetOpReturnData(scripthex,vopret);
     script = (uint8_t *)vopret.data();
     if ( vopret.size() > 1)
-    {        
+    {
         char func[5]; UniValue obj(UniValue::VOBJ);
         result.push_back(Pair("result", "success"));
-        sprintf(func,"%c",script[1]);        
+        sprintf(func,"%c",script[1]);
         obj.push_back(Pair("eval_code", EvalToStr(script[0])));
         obj.push_back(Pair("function", func));
         array.push_back(obj);

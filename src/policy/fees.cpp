@@ -327,6 +327,33 @@ void CBlockPolicyEstimator::removeTx(uint256 hash)
     mapMemPoolTxs.erase(hash);
 }
 
+CBlockPolicyEstimator::CBlockPolicyEstimator()
+    : nBestSeenHeight(0)
+{
+    minTrackedFee = CFeeRate(MIN_FEERATE);
+    std::vector<double> vfeelist;
+    for (double bucketBoundary = minTrackedFee.GetFeePerK(); bucketBoundary <= MAX_FEERATE; bucketBoundary *= FEE_SPACING) {
+        vfeelist.push_back(bucketBoundary);
+    }
+    feeStats.Initialize(vfeelist, MAX_BLOCK_CONFIRMS, DEFAULT_DECAY, "FeeRate");
+
+    minTrackedPriority = AllowFreeThreshold() < MIN_PRIORITY ? MIN_PRIORITY : AllowFreeThreshold();
+    std::vector<double> vprilist;
+    for (double bucketBoundary = minTrackedPriority; bucketBoundary <= MAX_PRIORITY; bucketBoundary *= PRI_SPACING) {
+        vprilist.push_back(bucketBoundary);
+    }
+    priStats.Initialize(vprilist, MAX_BLOCK_CONFIRMS, DEFAULT_DECAY, "Priority");
+
+    feeUnlikely = CFeeRate(0);
+    feeLikely = CFeeRate(INF_FEERATE);
+    priUnlikely = 0;
+    priLikely = INF_PRIORITY;
+}
+
+CBlockPolicyEstimator::~CBlockPolicyEstimator()
+{
+}
+
 CBlockPolicyEstimator::CBlockPolicyEstimator(const CFeeRate& _minRelayFee)
     : nBestSeenHeight(0)
 {

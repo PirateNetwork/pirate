@@ -40,7 +40,7 @@
 using namespace std;
 
 static uint64_t nAccountingEntryNumber = 0;
-static list<uint256> deadTxns; 
+static list<uint256> deadTxns;
 extern CBlockIndex *komodo_blockindex(uint256 hash);
 
 //
@@ -72,6 +72,44 @@ bool CWalletDB::ErasePurpose(const string& strPurpose)
     nWalletDBUpdated++;
     return Erase(make_pair(string("purpose"), strPurpose));
 }
+
+//Begin Historical Wallet Tx
+bool CWalletDB::WriteArcTx(uint256 hash, ArchiveTxPoint arcTxPoint)
+{
+    nWalletDBUpdated++;
+    return Write(std::make_pair(std::string("arctx"), hash), arcTxPoint);
+}
+
+bool CWalletDB::EraseArcTx(uint256 hash)
+{
+    nWalletDBUpdated++;
+    return Erase(std::make_pair(std::string("arctx"), hash));
+}
+
+bool CWalletDB::WriteArcSproutOp(uint256 nullifier, JSOutPoint op)
+{
+    nWalletDBUpdated++;
+    return Write(std::make_pair(std::string("arczcop"), nullifier), op);
+}
+
+bool CWalletDB::EraseArcSproutOp(uint256 nullifier)
+{
+    nWalletDBUpdated++;
+    return Erase(std::make_pair(std::string("arczcop"), nullifier));
+}
+
+bool CWalletDB::WriteArcSaplingOp(uint256 nullifier, SaplingOutPoint op)
+{
+    nWalletDBUpdated++;
+    return Write(std::make_pair(std::string("arczsop"), nullifier), op);
+}
+
+bool CWalletDB::EraseArcSaplingOp(uint256 nullifier)
+{
+    nWalletDBUpdated++;
+    return Erase(std::make_pair(std::string("arczsop"), nullifier));
+}
+//End Historical Wallet Tx
 
 bool CWalletDB::WriteTx(uint256 hash, const CWalletTx& wtx)
 {
@@ -212,6 +250,20 @@ bool CWalletDB::EraseSproutViewingKey(const libzcash::SproutViewingKey &vk)
 {
     nWalletDBUpdated++;
     return Erase(std::make_pair(std::string("vkey"), vk));
+}
+
+bool CWalletDB::WriteSaplingExtendedFullViewingKey(
+    const libzcash::SaplingExtendedFullViewingKey &extfvk)
+{
+    nWalletDBUpdated++;
+    return Write(std::make_pair(std::string("sapextfvk"), extfvk), '1');
+}
+
+bool CWalletDB::EraseSaplingExtendedFullViewingKey(
+    const libzcash::SaplingExtendedFullViewingKey &extfvk)
+{
+    nWalletDBUpdated++;
+    return Erase(std::make_pair(std::string("sapextfvk"), extfvk));
 }
 
 bool CWalletDB::WriteCScript(const uint160& hash, const CScript& redeemScript)
@@ -487,8 +539,8 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             CValidationState state;
             auto verifier = libzcash::ProofVerifier::Strict();
             // ac_public chains set at height like KMD and ZEX, will force a rescan if we dont ignore this error: bad-txns-acpublic-chain
-            // there cannot be any ztx in the wallet on ac_public chains that started from block 1, so this wont affect those. 
-            // PIRATE fails this check for notary nodes, need exception. Triggers full rescan without it. 
+            // there cannot be any ztx in the wallet on ac_public chains that started from block 1, so this wont affect those.
+            // PIRATE fails this check for notary nodes, need exception. Triggers full rescan without it.
             if ( !(CheckTransaction(0,wtx, state, verifier, 0, 0) && (wtx.GetHash() == hash) && state.IsValid()) && (state.GetRejectReason() != "bad-txns-acpublic-chain" && state.GetRejectReason() != "bad-txns-acprivacy-chain" && state.GetRejectReason() != "bad-txns-stakingtx") )
             {
                 //fprintf(stderr, "tx failed: %s rejectreason.%s\n", wtx.GetHash().GetHex().c_str(), state.GetRejectReason().c_str());
@@ -521,6 +573,33 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 wss.fAnyUnordered = true;
 
             pwallet->AddToWallet(wtx, true, NULL);
+        }
+        else if (strType == "arctx")
+        {
+            uint256 wtxid;
+            ssKey >> wtxid;
+            ArchiveTxPoint ArcTxPt;
+            ssValue >> ArcTxPt;
+
+            pwallet->AddToArcTxs(wtxid, ArcTxPt);
+        }
+        else if (strType == "arczcop")
+        {
+            uint256 nullifier;
+            ssKey >> nullifier;
+            JSOutPoint op;
+            ssValue >> op;
+
+            pwallet->AddToArcJSOutPoints(nullifier, op);
+        }
+        else if (strType == "arczsop")
+        {
+            uint256 nullifier;
+            ssKey >> nullifier;
+            SaplingOutPoint op;
+            ssValue >> op;
+
+            pwallet->AddToArcSaplingOutPoints(nullifier, op);
         }
         else if (strType == "acentry")
         {
@@ -558,8 +637,9 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             ssKey >> vk;
             char fYes;
             ssValue >> fYes;
-            if (fYes == '1')
+            if (fYes == '1') {
                 pwallet->LoadSproutViewingKey(vk);
+            }
 
             // Viewing keys have no birthday information for now,
             // so set the wallet birthday to the beginning of time.
@@ -578,6 +658,9 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 return false;
             }
 
+            pwallet->mapZAddressBook[addr].name = "z-sprout";
+            pwallet->mapZAddressBook[addr].purpose = "unknown";
+
             wss.nZKeys++;
         }
         else if (strType == "sapzkey")
@@ -593,8 +676,26 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 return false;
             }
 
+            pwallet->mapZAddressBook[key.DefaultAddress()].name = "z-sapling";
+            pwallet->mapZAddressBook[key.DefaultAddress()].purpose = "unknown";
+
             //add checks for integrity
             wss.nZKeys++;
+        }
+        else if (strType == "sapextfvk")
+        {
+            libzcash::SaplingExtendedFullViewingKey extfvk;
+            ssKey >> extfvk;
+            char fYes;
+            ssValue >> fYes;
+            if (fYes == '1') {
+                pwallet->LoadSaplingFullViewingKey(extfvk);
+                pwallet->LoadSaplingWatchOnly(extfvk);
+            }
+
+            // Viewing keys have no birthday information for now,
+            // so set the wallet birthday to the beginning of time.
+            pwallet->nTimeFirstKey = 1;
         }
 
         else if (strType == "key" || strType == "wkey")
@@ -708,6 +809,10 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 strErr = "Error reading wallet database: LoadCryptedZKey failed";
                 return false;
             }
+
+            pwallet->mapZAddressBook[addr].name = "z-sprout";
+            pwallet->mapZAddressBook[addr].purpose = "unknown";
+
             wss.fIsEncrypted = true;
         }
         else if (strType == "csapzkey")
@@ -725,6 +830,10 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 strErr = "Error reading wallet database: LoadCryptedSaplingZKey failed";
                 return false;
             }
+
+            pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
+            pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
+
             wss.fIsEncrypted = true;
         }
         else if (strType == "keymeta")
@@ -751,6 +860,9 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             wss.nZKeyMeta++;
 
             pwallet->LoadZKeyMetadata(addr, keyMeta);
+
+            pwallet->mapZAddressBook[addr].name = "z-sprout";
+            pwallet->mapZAddressBook[addr].purpose = "unknown";
 
             // ignore earliest key creation time as taddr will exist before any zaddr
         }
@@ -779,6 +891,9 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 strErr = "Error reading wallet database: LoadSaplingPaymentAddress failed";
                 return false;
             }
+
+            pwallet->mapZAddressBook[addr].name = "z-sapling";
+            pwallet->mapZAddressBook[addr].purpose = "unknown";
         }
         else if (strType == "defaultkey")
         {
@@ -963,10 +1078,10 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
 
     if ( !deadTxns.empty() )
     {
-        // staking chains with vin-empty error is a failed staking tx. 
+        // staking chains with vin-empty error is a failed staking tx.
         // we remove then re add the tx here to stop needing a full rescan, which does not actually fix the problem.
         int32_t reAdded = 0;
-        BOOST_FOREACH (uint256& hash, deadTxns) 
+        BOOST_FOREACH (uint256& hash, deadTxns)
         {
             fprintf(stderr, "Removing possible orphaned staking transaction from wallet.%s\n", hash.ToString().c_str());
             if (!EraseTx(hash))
@@ -983,7 +1098,7 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
         fNoncriticalErrors = false;
         deadTxns.clear();
     }
-    
+
     if (fNoncriticalErrors && result == DB_LOAD_OK)
         result = DB_NONCRITICAL_ERROR;
 
@@ -1020,7 +1135,7 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
     return result;
 }
 
-DBErrors CWalletDB::FindWalletTx(CWallet* pwallet, vector<uint256>& vTxHash, vector<CWalletTx>& vWtx)
+DBErrors CWalletDB::FindWalletTxToZap(CWallet* pwallet, vector<uint256>& vTxHash, vector<CWalletTx>& vWtx, vector<uint256>& vArcHash, vector<uint256>& vArcSproutNullifier, vector<uint256>& vArcSaplingNullifier)
 {
     pwallet->vchDefaultKey = CPubKey();
     bool fNoncriticalErrors = false;
@@ -1078,6 +1193,18 @@ DBErrors CWalletDB::FindWalletTx(CWallet* pwallet, vector<uint256>& vTxHash, vec
                 }
 
                 vTxHash.push_back(hash);
+            } if (strType == "arctx") {
+                uint256 hash;
+                ssKey >> hash;
+                vArcHash.push_back(hash);
+            } if (strType == "arczcop") {
+                uint256 nullifier;
+                ssKey >> nullifier;
+                vArcSproutNullifier.push_back(nullifier);
+            } if (strType == "arczsop") {
+                uint256 nullifier;
+                ssKey >> nullifier;
+                vArcSaplingNullifier.push_back(nullifier);
             }
         }
         pcursor->close();
@@ -1099,7 +1226,10 @@ DBErrors CWalletDB::ZapWalletTx(CWallet* pwallet, vector<CWalletTx>& vWtx)
 {
     // build list of wallet TXs
     vector<uint256> vTxHash;
-    DBErrors err = FindWalletTx(pwallet, vTxHash, vWtx);
+    vector<uint256> vArcTxHash;
+    vector<uint256> vArcSproutNullifier;
+    vector<uint256> vArcSaplingNullifier;
+    DBErrors err = FindWalletTxToZap(pwallet, vTxHash, vWtx, vArcTxHash, vArcSproutNullifier, vArcSaplingNullifier);
     if (err != DB_LOAD_OK)
         return err;
 
@@ -1109,6 +1239,23 @@ DBErrors CWalletDB::ZapWalletTx(CWallet* pwallet, vector<CWalletTx>& vWtx)
             return DB_CORRUPT;
     }
 
+    // erase each archive TX
+    BOOST_FOREACH (uint256& arcHash, vArcTxHash) {
+        if (!EraseArcTx(arcHash))
+            return DB_CORRUPT;
+    }
+
+    // erase each archive Nullier SaplingOutput set
+    BOOST_FOREACH (uint256& arcNullifier, vArcSproutNullifier) {
+        if (!EraseArcSproutOp(arcNullifier))
+            return DB_CORRUPT;
+    }
+
+    // erase each archive Nullier SaplingOutput set
+    BOOST_FOREACH (uint256& arcNullifier, vArcSaplingNullifier) {
+        if (!EraseArcSaplingOp(arcNullifier))
+            return DB_CORRUPT;
+    }
     return DB_LOAD_OK;
 }
 

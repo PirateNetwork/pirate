@@ -24,6 +24,7 @@ BITCOIN_CONFIG_INCLUDES=-I$(builddir)/config
 BITCOIN_INCLUDES=-I$(builddir) -I$(builddir)/obj $(BDB_CPPFLAGS) $(BOOST_CPPFLAGS) $(LEVELDB_CPPFLAGS) $(CRYPTO_CFLAGS) $(SSL_CFLAGS)
 
 BITCOIN_INCLUDES += -I$(srcdir)/secp256k1/include
+BITCOIN_INCLUDES += -I$(srcdir)/cc/includes
 BITCOIN_INCLUDES += -I$(srcdir)/cryptoconditions/include
 BITCOIN_INCLUDES += -I$(srcdir)/cryptoconditions/src
 BITCOIN_INCLUDES += -I$(srcdir)/cryptoconditions/src/asn
@@ -46,6 +47,7 @@ LIBBITCOIN_COMMON=libbitcoin_common.a
 LIBBITCOIN_CLI=libbitcoin_cli.a
 LIBBITCOIN_UTIL=libbitcoin_util.a
 LIBBITCOIN_CRYPTO=crypto/libbitcoin_crypto.a
+LIBBITCOINQT=qt/libkomodoqt.a
 LIBVERUS_CRYPTO=crypto/libverus_crypto.a
 LIBVERUS_PORTABLE_CRYPTO=crypto/libverus_portable_crypto.a
 LIBSECP256K1=secp256k1/libsecp256k1.la
@@ -139,9 +141,11 @@ LIBZCASH_H = \
   zcash/Note.hpp \
   zcash/prf.h \
   zcash/Proof.hpp \
+	zcash/address/sapling.hpp \
+	zcash/address/sprout.hpp \
   zcash/util.h \
   zcash/Zcash.h \
-  zcash/zip32.h
+  zcash/address/zip32.h
 
 .PHONY: FORCE collate-libsnark check-symbols check-security
 # bitcoin core #
@@ -149,6 +153,7 @@ BITCOIN_CORE_H = \
   addressindex.h \
   spentindex.h \
   addrman.h \
+	addrdb.h \
   alert.h \
   amount.h \
   amqp/amqpabstractnotifier.h \
@@ -263,7 +268,9 @@ BITCOIN_CORE_H = \
   wallet/crypter.h \
   wallet/db.h \
   wallet/rpcwallet.h \
+	wallet/rpcpiratewallet.h \
   wallet/wallet.h \
+	wallet/wallet_fees.h \
   wallet/wallet_ismine.h \
   wallet/walletdb.h \
   wallet/witness.h \
@@ -285,6 +292,7 @@ libbitcoin_server_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libbitcoin_server_a_SOURCES = \
   sendalert.cpp \
   addrman.cpp \
+	addrdb.cpp \
   alert.cpp \
   alertkeys.h \
   asyncrpcoperation.cpp \
@@ -355,6 +363,7 @@ libbitcoin_server_a_SOURCES = \
   txdb.cpp \
   txmempool.cpp \
   validationinterface.cpp \
+	cc/cclib.cpp \
   $(BITCOIN_CORE_H) \
   $(LIBZCASH_H)
 
@@ -400,11 +409,13 @@ libbitcoin_wallet_a_SOURCES = \
   cc/CCassetstx.cpp \
   cc/CCtx.cpp \
   wallet/rpcwallet.cpp \
+	wallet/rpcpiratewallet.cpp \
   wallet/wallet.cpp \
+	wallet/wallet_fees.cpp \
   wallet/wallet_ismine.cpp \
   wallet/walletdb.cpp \
   wallet/witness.cpp \
-  zcash/zip32.cpp \
+  zcash/address/zip32.cpp \
   $(BITCOIN_CORE_H) \
   $(LIBZCASH_H)
 
@@ -595,17 +606,19 @@ komodod_LDADD += \
   $(LIBBITCOIN_CRYPTO) \
   $(LIBVERUS_CRYPTO) \
   $(LIBVERUS_PORTABLE_CRYPTO) \
-  $(LIBZCASH_LIBS)
+  $(LIBZCASH_LIBS) \
+  $(LIBSECP256K1) \
+  $(LIBCRYPTOCONDITIONS)
 
-if TARGET_DARWIN
-komodod_LDADD += libcc.dylib $(LIBSECP256K1)
-endif
-if TARGET_WINDOWS
-komodod_LDADD += libcc.dll $(LIBSECP256K1)
-endif
-if TARGET_LINUX
-komodod_LDADD += libcc.so $(LIBSECP256K1)
-endif
+# if TARGET_DARWIN
+# komodod_LDADD += libcc.dylib $(LIBSECP256K1)
+# endif
+# if TARGET_WINDOWS
+# komodod_LDADD += libcc.dll $(LIBSECP256K1)
+# endif
+# if TARGET_LINUX
+# komodod_LDADD += libcc.so $(LIBSECP256K1)
+# endif
 
 if ENABLE_PROTON
 komodod_LDADD += $(LIBBITCOIN_PROTON) $(PROTON_LIBS)
@@ -705,8 +718,10 @@ libzcash_a_SOURCES = \
 	zcash/Proof.cpp \
 	zcash/Note.cpp \
 	zcash/prf.cpp \
+	zcash/address/sapling.cpp \
+	zcash/address/sprout.cpp \
 	zcash/util.cpp \
-  zcash/zip32.cpp \
+  zcash/address/zip32.cpp \
 	zcash/circuit/commitment.tcc \
 	zcash/circuit/gadget.tcc \
 	zcash/circuit/merkle.tcc \
@@ -799,3 +814,7 @@ include Makefile.ktest.include
 #include Makefile.test.include
 #include Makefile.gtest.include
 endif
+
+#if ENABLE_QT
+include Makefile.qt.include
+#endif

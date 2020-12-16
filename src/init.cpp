@@ -379,7 +379,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-blocknotify=<cmd>", _("Execute command when the best block changes (%s in cmd is replaced by block hash)"));
     strUsage += HelpMessageOpt("-checkblocks=<n>", strprintf(_("How many blocks to check at startup (default: %u, 0 = all)"), 288));
     strUsage += HelpMessageOpt("-checklevel=<n>", strprintf(_("How thorough the block verification of -checkblocks is (0-4, default: %u)"), 3));
-    strUsage += HelpMessageOpt("-clientname=<SomeName>", _("Full node client name, default 'MagicBean'"));
+    strUsage += HelpMessageOpt("-clientname=<SomeName>", _("Full node client name, default 'Dabloon'"));
     strUsage += HelpMessageOpt("-conf=<file>", strprintf(_("Specify configuration file (default: %s)"), "komodo.conf"));
     if (mode == HMM_BITCOIND)
     {
@@ -398,14 +398,14 @@ std::string HelpMessage(HelpMessageMode mode)
 #ifndef _WIN32
     strUsage += HelpMessageOpt("-pid=<file>", strprintf(_("Specify pid file (default: %s)"), "komodod.pid"));
 #endif
-    strUsage += HelpMessageOpt("-prune=<n>", strprintf(_("Reduce storage requirements by pruning (deleting) old blocks. This mode disables wallet support and is incompatible with -txindex. "
-            "Warning: Reverting this setting requires re-downloading the entire blockchain. "
-            "(default: 0 = disable pruning blocks, >%u = target size in MiB to use for block files)"), MIN_DISK_SPACE_FOR_BLOCK_FILES / 1024 / 1024));
+    // strUsage += HelpMessageOpt("-prune=<n>", strprintf(_("Reduce storage requirements by pruning (deleting) old blocks. This mode disables wallet support and is incompatible with -txindex. "
+    //         "Warning: Reverting this setting requires re-downloading the entire blockchain. "
+    //         "(default: 0 = disable pruning blocks, >%u = target size in MiB to use for block files)"), MIN_DISK_SPACE_FOR_BLOCK_FILES / 1024 / 1024));
     strUsage += HelpMessageOpt("-reindex", _("Rebuild block chain index from current blk000??.dat files on startup"));
 #if !defined(WIN32)
     strUsage += HelpMessageOpt("-sysperms", _("Create new files with system default permissions, instead of umask 077 (only effective with disabled wallet functionality)"));
 #endif
-    strUsage += HelpMessageOpt("-txindex", strprintf(_("Maintain a full transaction index, used by the getrawtransaction rpc call (default: %u)"), 0));
+    // strUsage += HelpMessageOpt("-txindex", strprintf(_("Maintain a full transaction index, used by the getrawtransaction rpc call (default: %u)"), 0));
     strUsage += HelpMessageOpt("-addressindex", strprintf(_("Maintain a full address index, used to query for the balance, txids and unspent outputs for addresses (default: %u)"), DEFAULT_ADDRESSINDEX));
     strUsage += HelpMessageOpt("-timestampindex", strprintf(_("Maintain a timestamp index for block hashes, used to query blocks hashes by a range of timestamps (default: %u)"), DEFAULT_TIMESTAMPINDEX));
     strUsage += HelpMessageOpt("-spentindex", strprintf(_("Maintain a full spent index, used to query the spending txid and input index for an outpoint (default: %u)"), DEFAULT_SPENTINDEX));
@@ -618,13 +618,18 @@ std::string HelpMessage(HelpMessageMode mode)
     return strUsage;
 }
 
-static void BlockNotifyCallback(const uint256& hashNewTip)
+static void BlockNotifyCallback(bool initialSync, const CBlockIndex *pBlockIndex)
 {
-    std::string strCmd = GetArg("-blocknotify", "");
+    if (initialSync || !pBlockIndex)
+        return;
 
-    boost::replace_all(strCmd, "%s", hashNewTip.GetHex());
-    boost::thread t(runCommand, strCmd); // thread runs free
+    std::string strCmd = GetArg("-blocknotify", "");
+    if (!strCmd.empty()) {
+        boost::replace_all(strCmd, "%s", pBlockIndex->GetBlockHash().GetHex());
+        boost::thread t(runCommand, strCmd); // thread runs free
+    }
 }
+
 
 struct CImportingNow
 {
@@ -1110,18 +1115,18 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     fprintf(stderr,"nMaxConnections %d\n",nMaxConnections);
     // if using block pruning, then disable txindex
     // also disable the wallet (for now, until SPV support is implemented in wallet)
-    if (GetArg("-prune", 0)) {
-        if (GetBoolArg("-txindex", true))
-            return InitError(_("Prune mode is incompatible with -txindex."));
-#ifdef ENABLE_WALLET
-        if (!GetBoolArg("-disablewallet", false)) {
-            if (SoftSetBoolArg("-disablewallet", true))
-                LogPrintf("%s : parameter interaction: -prune -> setting -disablewallet=1\n", __func__);
-            else
-                return InitError(_("Can't run with a wallet in prune mode."));
-        }
-#endif
-    }
+//     if (GetArg("-prune", 0)) {
+//         if (GetBoolArg("-txindex", true))
+//             return InitError(_("Prune mode is incompatible with -txindex."));
+// #ifdef ENABLE_WALLET
+//         if (!GetBoolArg("-disablewallet", false)) {
+//             if (SoftSetBoolArg("-disablewallet", true))
+//                 LogPrintf("%s : parameter interaction: -prune -> setting -disablewallet=1\n", __func__);
+//             else
+//                 return InitError(_("Can't run with a wallet in prune mode."));
+//         }
+// #endif
+//     }
 
     // ********************************************************* Step 3: parameter-to-internal-flags
 
@@ -1173,18 +1178,18 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     fServer = GetBoolArg("-server", false);
 
     // block pruning; get the amount of disk space (in MB) to allot for block & undo files
-    int64_t nSignedPruneTarget = GetArg("-prune", 0) * 1024 * 1024;
-    if (nSignedPruneTarget < 0) {
-        return InitError(_("Prune cannot be configured with a negative value."));
-    }
-    nPruneTarget = (uint64_t) nSignedPruneTarget;
-    if (nPruneTarget) {
-        if (nPruneTarget < MIN_DISK_SPACE_FOR_BLOCK_FILES) {
-            return InitError(strprintf(_("Prune configured below the minimum of %d MB.  Please use a higher number."), MIN_DISK_SPACE_FOR_BLOCK_FILES / 1024 / 1024));
-        }
-        LogPrintf("Prune configured to target %uMiB on disk for block and undo files.\n", nPruneTarget / 1024 / 1024);
-        fPruneMode = true;
-    }
+    // int64_t nSignedPruneTarget = GetArg("-prune", 0) * 1024 * 1024;
+    // if (nSignedPruneTarget < 0) {
+    //     return InitError(_("Prune cannot be configured with a negative value."));
+    // }
+    // nPruneTarget = (uint64_t) nSignedPruneTarget;
+    // if (nPruneTarget) {
+    //     if (nPruneTarget < MIN_DISK_SPACE_FOR_BLOCK_FILES) {
+    //         return InitError(strprintf(_("Prune configured below the minimum of %d MB.  Please use a higher number."), MIN_DISK_SPACE_FOR_BLOCK_FILES / 1024 / 1024));
+    //     }
+    //     LogPrintf("Prune configured to target %uMiB on disk for block and undo files.\n", nPruneTarget / 1024 / 1024);
+    //     fPruneMode = true;
+    // }
 
     RegisterAllCoreRPCCommands(tableRPC);
 #ifdef ENABLE_WALLET
@@ -1345,7 +1350,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     globalVerifyHandle.reset(new ECCVerifyHandle());
 
     // set the hash algorithm to use for this chain
-    // Again likely better solution here, than using long IF ELSE. 
+    // Again likely better solution here, than using long IF ELSE.
     extern uint32_t ASSETCHAINS_ALGO, ASSETCHAINS_VERUSHASH, ASSETCHAINS_VERUSHASHV1_1;
     CVerusHash::init();
     CVerusHashV2::init();
@@ -1647,11 +1652,11 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     if (GetBoolArg("-addressindex", DEFAULT_ADDRESSINDEX) || GetBoolArg("-spentindex", DEFAULT_SPENTINDEX)) {
         // enable 3/4 of the cache if addressindex and/or spentindex is enabled
         nBlockTreeDBCache = nTotalCache * 3 / 4;
-    } else {
-        if (nBlockTreeDBCache > (1 << 21) && !GetBoolArg("-txindex", false)) {
-            nBlockTreeDBCache = (1 << 21); // block tree db cache shouldn't be larger than 2 MiB
-        }
-    }
+    } // else {
+    //     if (nBlockTreeDBCache > (1 << 21) && !GetBoolArg("-txindex", false)) {
+    //         nBlockTreeDBCache = (1 << 21); // block tree db cache shouldn't be larger than 2 MiB
+    //     }
+    // }
     nTotalCache -= nBlockTreeDBCache;
     int64_t nCoinDBCache = std::min(nTotalCache / 2, (nTotalCache / 4) + (1 << 23)); // use 25%-50% of the remainder for disk cache
     nTotalCache -= nCoinDBCache;
@@ -1680,6 +1685,14 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         {
             pblocktree->WriteFlag("spentindex", fSpentIndex);
             fprintf(stderr,"set spentindex, will reindex. could take a while.\n");
+            fReindex = true;
+        }
+        //One time reindex to enable transaction archiving.
+        pblocktree->ReadFlag("archiverule", checkval);
+        if (checkval != fArchive)
+        {
+            pblocktree->WriteFlag("archiverule", fArchive);
+            LogPrintf("Transaction archive not set, will reindex. could take a while.\n");
             fReindex = true;
         }
     }
@@ -1736,10 +1749,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 }
                 KOMODO_LOADINGBLOCKS = 0;
                 // Check for changed -txindex state
-                if (fTxIndex != GetBoolArg("-txindex", true)) {
-                    strLoadError = _("You need to rebuild the database using -reindex to change -txindex");
-                    break;
-                }
+                // if (fTxIndex != GetBoolArg("-txindex", true)) {
+                //     strLoadError = _("You need to rebuild the database using -reindex to change -txindex");
+                //     break;
+                // }
 
                 // Check for changed -prune state.  What we are concerned about is a user who has pruned blocks
                 // in the past, but is now trying to run unpruned.
@@ -1747,7 +1760,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                     strLoadError = _("You need to rebuild the database using -reindex to go back to unpruned mode.  This will redownload the entire blockchain");
                     break;
                 }
-                
+
                 if ( ASSETCHAINS_CC != 0 && KOMODO_SNAPSHOT_INTERVAL != 0 && chainActive.Height() >= KOMODO_SNAPSHOT_INTERVAL )
                 {
                     if ( !komodo_dailysnapshot(chainActive.Height()) )
@@ -1877,6 +1890,57 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 strErrors << _("Error loading wallet.dat") << "\n";
         }
 
+        uiInterface.InitMessage(_("Validating transaction archive..."));
+        bool fInitializeArcTx = pwalletMain->initalizeArcTx();
+        if(!fInitializeArcTx) {
+          //ArcTx validation failed, delete wallet point and clear vWtx
+          delete pwalletMain;
+          pwalletMain = NULL;
+          vWtx.clear();
+
+          //Zap All Transactions
+          uiInterface.InitMessage(_("Transaction archive not initalized, Zapping all transactions..."));
+          LogPrintf("Transaction archive not initalized, Zapping all transactions.\n");
+          pwalletMain = new CWallet(strWalletFile);
+          DBErrors nZapWalletRet = pwalletMain->ZapWalletTx(vWtx);
+          if (nZapWalletRet != DB_LOAD_OK) {
+              uiInterface.InitMessage(_("Error loading wallet.zero: Wallet corrupted"));
+              return false;
+          }
+
+          delete pwalletMain;
+          pwalletMain = NULL;
+
+          //Reload Wallet
+          uiInterface.InitMessage(_("Reloading wallet, set to rescan..."));
+          pwalletMain = new CWallet(strWalletFile);
+          DBErrors nLoadWalletRet = pwalletMain->LoadWallet(fFirstRun);
+          if (nLoadWalletRet != DB_LOAD_OK)
+          {
+              if (nLoadWalletRet == DB_CORRUPT)
+                  strErrors << _("Error loading wallet.zero: Wallet corrupted") << "\n";
+              else if (nLoadWalletRet == DB_NONCRITICAL_ERROR)
+              {
+                  string msg(_("Warning: error reading wallet.zero! All keys read correctly, but transaction data"
+                               " or address book entries might be missing or incorrect."));
+                  InitWarning(msg);
+              }
+              else if (nLoadWalletRet == DB_TOO_NEW)
+                  strErrors << _("Error loading wallet.zero: Wallet requires newer version of Bitcoin Core") << "\n";
+
+              else if (nLoadWalletRet == DB_NEED_REWRITE)
+              {
+                  strErrors << _("Wallet needed to be rewritten: restart Zero to complete") << "\n";
+                  LogPrintf("%s", strErrors.str());
+                  return InitError(strErrors.str());
+              }
+              else
+                  strErrors << _("Error loading wallet.zero") << "\n";
+          }
+
+        }
+
+
         if (GetBoolArg("-upgradewallet", fFirstRun))
         {
             int nMaxVersion = GetArg("-upgradewallet", 0);
@@ -1897,6 +1961,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         {
             // generate a new HD seed
             pwalletMain->GenerateNewSeed();
+
+            // generate 1 address
+            auto zAddress = pwalletMain->GenerateNewSaplingZKey();
+            pwalletMain->SetZAddressBook(zAddress, "z-sapling", "");
         }
 
         //Set Sapling Consolidation
@@ -1954,7 +2022,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         RegisterValidationInterface(pwalletMain);
 
         CBlockIndex *pindexRescan = chainActive.Tip();
-        if (clearWitnessCaches || GetBoolArg("-rescan", false))
+        if (clearWitnessCaches || GetBoolArg("-rescan", false) || !fInitializeArcTx)
         {
             pwalletMain->ClearNoteWitnessCache();
             pindexRescan = chainActive.Genesis();
@@ -1979,7 +2047,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             nWalletDBUpdated++;
 
             // Restore wallet transaction metadata after -zapwallettxes=1
-            if (GetBoolArg("-zapwallettxes", false) && GetArg("-zapwallettxes", "1") != "2")
+            if (GetBoolArg("-zapwallettxes", false) && GetArg("-zapwallettxes", "1") != "2" && fInitializeArcTx)
             {
                 CWalletDB walletdb(strWalletFile);
 
@@ -2004,6 +2072,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             }
         }
         pwalletMain->SetBroadcastTransactions(GetBoolArg("-walletbroadcast", true));
+
+        vpwallets.push_back(pwalletMain);
     } // (!fDisableWallet)
 #else // ENABLE_WALLET
     LogPrintf("No wallet support compiled in!\n");

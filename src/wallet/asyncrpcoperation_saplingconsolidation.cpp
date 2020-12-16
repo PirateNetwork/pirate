@@ -94,7 +94,7 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
                 auto zAddress = DecodePaymentAddress(v[i]);
                 if (boost::get<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
                     libzcash::SaplingPaymentAddress saplingAddress = boost::get<libzcash::SaplingPaymentAddress>(zAddress);
-                    addresses.insert(saplingAddress );
+                    addresses.insert(saplingAddress);
                 }
             }
         } else {
@@ -106,6 +106,7 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
     std::vector<std::string> consolidationTxIds;
     CAmount amountConsolidated = 0;
     CCoinsViewCache coinsView(pcoinsTip);
+    bool consolidationComplete = true;
 
     for (auto addr : addresses) {
         libzcash::SaplingExtendedSpendingKey extsk;
@@ -114,6 +115,28 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
             std::vector<SaplingNoteEntry> fromNotes;
             CAmount amountToSend = 0;
             int maxQuantity = rand() % 35 + 10;
+
+            //Count Notes availiable for this address
+            int targetCount = pwalletMain->targetConsolidationQty;
+            int noteCount = 0;
+            for (const SaplingNoteEntry& saplingEntry : saplingEntries) {
+
+              libzcash::SaplingIncomingViewingKey ivk;
+              pwalletMain->GetSaplingIncomingViewingKey(boost::get<libzcash::SaplingPaymentAddress>(saplingEntry.address), ivk);
+
+              if (ivk == extsk.expsk.full_viewing_key().in_viewing_key()) {
+                noteCount ++;
+              }
+            }
+
+            //Don't consolidate if under the threshold
+            if (noteCount < targetCount){
+                continue;
+            }
+
+            //if we make it here then we need to consolidate and the routine is considered incomplete
+            consolidationComplete = false;
+
             for (const SaplingNoteEntry& saplingEntry : saplingEntries) {
 
                 libzcash::SaplingIncomingViewingKey ivk;
@@ -188,6 +211,11 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
             consolidationTxIds.push_back(tx.GetHash().ToString());
 
         }
+    }
+
+    if (consolidationComplete) {
+        pwalletMain->nextConsolidation = pwalletMain->initializeConsolidationInterval + chainActive.Tip()->GetHeight();
+        pwalletMain->fConsolidationRunning = false;
     }
 
     LogPrint("zrpcunsafe", "%s: Created %d transactions with total Sapling output amount=%s\n", getId(), numTxCreated, FormatMoney(amountConsolidated));

@@ -36,6 +36,9 @@
 #include <univalue.h>
 #include <pubkey.h>
 
+extern bool fBuilingWitnessCache;
+extern bool fInitWitnessesBuilt;
+
 class AsyncRPCQueue;
 class CRPCCommand;
 
@@ -56,6 +59,7 @@ public:
     UniValue id;
     std::string strMethod;
     UniValue params;
+    std::string URI;
 
     JSONRequest() { id = NullUniValue; }
     void parse(const UniValue& valRequest);
@@ -172,6 +176,12 @@ public:
      * Commands cannot be overwritten (returns false).
      */
     bool appendCommand(const std::string& name, const CRPCCommand* pcmd);
+
+    /**
+    * Returns a list of registered commands
+    * @returns List of registered commands.
+    */
+    std::vector<std::string> listCommands() const;
 };
 
 extern CRPCTable tableRPC;
@@ -434,6 +444,9 @@ extern UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPu
 extern UniValue gettxoutproof(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue verifytxoutproof(const UniValue& params, bool fHelp, const CPubKey& mypk);
 
+extern UniValue z_createbuildinstuctions(const UniValue& params, bool fHelp, const CPubKey& mypk);
+extern UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk);
+
 extern UniValue getblockcount(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcblockchain.cpp
 extern UniValue getbestblockhash(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue getdifficulty(const UniValue& params, bool fHelp, const CPubKey& mypk);
@@ -494,6 +507,10 @@ extern UniValue z_importwallet(const UniValue& params, bool fHelp, const CPubKey
 extern UniValue z_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue z_getbalance(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue z_gettotalbalance(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
+
+// extern UniValue enableconsolidation(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
+extern UniValue consolidationstatus(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
+
 extern UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue z_shieldcoinbase(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp

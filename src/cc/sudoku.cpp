@@ -293,7 +293,7 @@ typedef struct {
 } cellmap;
 
 /* Array structure to help map cell index back to row, column, and region */
-static cellmap const map[PUZZLE_CELLS] = {
+static cellmap const sudokuMap[PUZZLE_CELLS] = {
     { 0, 0, 0 },
     { 0, 1, 0 },
     { 0, 2, 0 },
@@ -424,7 +424,7 @@ static void mypause()
 static int bitcount(short cell)
 {
     int i, count, mask;
-    
+
     mask = 1;
     for (i = count = 0; i < 16; i++) {
         if (mask & cell) count++;
@@ -459,7 +459,7 @@ static inline short bitcount(short cell)
         3,4,4,5,4,5,5,6,4,5,5,6,5,6,6,7,4,5,5,6,5,6,6,7,5,6,6,7,6,7,7,8,
         3,4,4,5,4,5,5,6,4,5,5,6,5,6,6,7,4,5,5,6,5,6,6,7,5,6,6,7,6,7,7,8,
         4,5,5,6,5,6,6,7,5,6,6,7,6,7,7,8,5,6,6,7,6,7,7,8,6,7,7,8,7,8,8,9};
-    
+
     return bcounts[cell];
 }
 
@@ -471,7 +471,7 @@ static inline short bitcount(short cell)
 static inline void explain_indent(FILE *h)
 {
     int i;
-    
+
     for (i = 0; i < lvl-1; i++) fprintf(h, "  ");
 }
 
@@ -483,20 +483,20 @@ static char *clues(short cell)
 {
     int i, m, multi, mask;
     static char buf[64], *p;
-    
+
     multi = m = bitcount(cell);
-    
+
     if (!multi) return "NULL";
-    
+
     if (multi > 1) {
         strcpy(buf, "tuple (");
     }
     else {
         strcpy(buf, "value ");
     }
-    
+
     p = buf + strlen(buf);
-    
+
     for (mask = i = 1; i <= PUZZLE_DIM; i++) {
         if (mask & cell) {
             *p++ = symtab[mask];
@@ -516,12 +516,12 @@ static char *clues(short cell)
 static void explain_markup_elim(grid *g, int chgd, int clue)
 {
     int chgd_row, chgd_col, clue_row, clue_col;
-    
-    chgd_row = map[chgd].row+1;
-    chgd_col = map[chgd].col+1;
-    clue_row = map[clue].row+1;
-    clue_col = map[clue].col+1;
-    
+
+    chgd_row = sudokuMap[chgd].row+1;
+    chgd_col = sudokuMap[chgd].col+1;
+    clue_row = sudokuMap[clue].row+1;
+    clue_col = sudokuMap[clue].col+1;
+
     explain_indent(solnfile);
     fprintf(solnfile, "Candidate %s removed from row %d, col %d because of cell at row %d, col %d\n",
             clues(g->cell[clue]), chgd_row, chgd_col, clue_row, clue_col);
@@ -533,7 +533,7 @@ static void explain_markup_elim(grid *g, int chgd, int clue)
 static void explain_current_markup(grid *g)
 {
     if (g->exposed >= PUZZLE_CELLS) return;
-    
+
     fprintf(solnfile, "\n");
     explain_indent(solnfile);
     fprintf(solnfile, "Current markup is as follows:");
@@ -547,10 +547,10 @@ static void explain_current_markup(grid *g)
 static void explain_solve_cell(grid *g, int chgd)
 {
     int chgd_row, chgd_col;
-    
-    chgd_row = map[chgd].row+1;
-    chgd_col = map[chgd].col+1;
-    
+
+    chgd_row = sudokuMap[chgd].row+1;
+    chgd_col = sudokuMap[chgd].col+1;
+
     explain_indent(solnfile);
     fprintf(solnfile, "Cell at row %d, col %d solved with %s\n",
             chgd_row, chgd_col, clues(g->cell[chgd]));
@@ -562,12 +562,12 @@ static void explain_solve_cell(grid *g, int chgd)
 static void explain_markup_impasse(grid *g, int chgd, int clue)
 {
     int chgd_row, chgd_col, clue_row, clue_col;
-    
-    chgd_row = map[chgd].row+1;
-    chgd_col = map[chgd].col+1;
-    clue_row = map[clue].row+1;
-    clue_col = map[clue].col+1;
-    
+
+    chgd_row = sudokuMap[chgd].row+1;
+    chgd_col = sudokuMap[chgd].col+1;
+    clue_row = sudokuMap[clue].row+1;
+    clue_col = sudokuMap[clue].col+1;
+
     explain_indent(solnfile);
     fprintf(solnfile, "Impasse for cell at row %d, col %d because cell at row %d, col %d removes last candidate\n",
             chgd_row, chgd_col, clue_row, clue_col);
@@ -580,11 +580,11 @@ static void explain_markup_impasse(grid *g, int chgd, int clue)
 static void explain_singleton(grid *g, int chgd, int mask, char *vdesc)
 {
     int chgd_row, chgd_col, chgd_reg;
-    
-    chgd_row = map[chgd].row+1;
-    chgd_col = map[chgd].col+1;
-    chgd_reg = map[chgd].region+1;
-    
+
+    chgd_row = sudokuMap[chgd].row+1;
+    chgd_col = sudokuMap[chgd].col+1;
+    chgd_reg = sudokuMap[chgd].region+1;
+
     explain_indent(solnfile);
     fprintf(solnfile, "Cell of region %d at row %d, col %d will only solve for %s in this %s\n",
             chgd_reg, chgd_row, chgd_col, clues(mask), vdesc);
@@ -607,10 +607,10 @@ static void explain_markup()
 static void explain_given(int cell, char val)
 {
     int cell_row, cell_col;
-    
-    cell_row = map[cell].row+1;
-    cell_col = map[cell].col+1;
-    
+
+    cell_row = sudokuMap[cell].row+1;
+    cell_col = sudokuMap[cell].col+1;
+
     explain_indent(solnfile);
     fprintf(solnfile, "Cell at row %d, col %d is given clue value %c\n", cell_row, cell_col, val);
 }
@@ -621,10 +621,10 @@ static void explain_given(int cell, char val)
 static void explain_vector_elim(char *desc, int i, int cell, int val, int region)
 {
     int cell_row, cell_col;
-    
-    cell_row = map[cell].row+1;
-    cell_col = map[cell].col+1;
-    
+
+    cell_row = sudokuMap[cell].row+1;
+    cell_col = sudokuMap[cell].col+1;
+
     explain_indent(solnfile);
     fprintf(solnfile, "Candidate %s removed from cell at row %d, col %d because it aligns along %s %d in region %d\n",
             clues(val), cell_row, cell_col, desc, i+1, region+1);
@@ -636,10 +636,10 @@ static void explain_vector_elim(char *desc, int i, int cell, int val, int region
 static void explain_vector_impasse(grid *g, char *desc, int i, int cell, int val, int region)
 {
     int cell_row, cell_col;
-    
-    cell_row = map[cell].row+1;
-    cell_col = map[cell].col+1;
-    
+
+    cell_row = sudokuMap[cell].row+1;
+    cell_col = sudokuMap[cell].col+1;
+
     explain_indent(solnfile);
     fprintf(solnfile, "Impasse at cell at row %d, col %d because candidate %s aligns along %s %d in region %d\n",
             cell_row, cell_col, clues(val), desc, i+1, region+1);
@@ -664,8 +664,8 @@ static void explain_tuple_elim(char *desc, int elt, int tuple, int cell)
 {
     explain_indent(solnfile);
     fprintf(solnfile, "Values of %s in %s %d removed from cell at row %d, col %d\n",
-            clues(tuple), desc, elt+1, map[cell].row+1, map[cell].col+1);
-    
+            clues(tuple), desc, elt+1, sudokuMap[cell].row+1, sudokuMap[cell].col+1);
+
 }
 
 /**************************************************/
@@ -674,7 +674,7 @@ static void explain_tuple_elim(char *desc, int elt, int tuple, int cell)
 static void explain_soln_found(grid *g)
 {
     char buf[90];
-    
+
     fprintf(solnfile, "\n");
     explain_indent(solnfile);
     fprintf(solnfile, "Solution found: %s\n", format_answer(g, buf));
@@ -688,7 +688,7 @@ static void explain_soln_found(grid *g)
 static void explain_grid(grid *g)
 {
     char buf[90];
-    
+
     fprintf(solnfile, "Initial puzzle: %s\n", format_answer(g, buf));
     print_grid(buf, solnfile);
     explain_current_markup(g);
@@ -702,7 +702,7 @@ static void explain_trial(int cell, int value)
 {
     explain_indent(solnfile);
     fprintf(solnfile, "Attempt trial where cell at row %d, col %d is assigned value %s\n",
-            map[cell].row+1, map[cell].col+1, clues(value));
+            sudokuMap[cell].row+1, sudokuMap[cell].col+1, clues(value));
 }
 
 /**********************************************/
@@ -711,7 +711,7 @@ static void explain_trial(int cell, int value)
 static void explain_backtrack()
 {
     if (lvl <= 1) return;
-    
+
     explain_indent(solnfile);
     fprintf(solnfile, "Backtracking\n\n");
 }
@@ -771,7 +771,7 @@ static void explain_backtrack()
 static void init_grid(grid *g)
 {
     int i;
-    
+
     for (i = 0; i < PUZZLE_CELLS; i++) g->cell[i] = 0x01ff;
     memset(g->cellflags, 0, PUZZLE_CELLS*sizeof(g->cellflags[0]));
     g->exposed = 0;
@@ -799,9 +799,9 @@ static void init_grid(grid *g)
 static void cvt_to_grid(grid *g, char *game)
 {
     int i;
-    
+
     init_grid(g);
-    
+
     for (i = 0; i < PUZZLE_CELLS; i++) {
         if (is_given(game[i])) {
             /* warning -- ASCII charset assumed */
@@ -825,14 +825,14 @@ static void diagnostic_grid(grid *g, FILE *h)
     int i, j, flag;
     short c;
     char line1[40], line2[40], line3[40], cbuf1[5], cbuf2[5], cbuf3[5], outbuf[PUZZLE_CELLS+1];
-    
+
     /* Sanity check */
     for (flag = 1, i = 0; flag && i < PUZZLE_CELLS; i++) {
         if (bitcount(g->cell[i]) != 1) {
             flag = 0;
         }
     }
-    
+
     /* Don't need to print grid with diagnostic markup? */
     if (flag) {
         format_answer(g, outbuf);
@@ -840,20 +840,20 @@ static void diagnostic_grid(grid *g, FILE *h)
         fflush(h);
         return;
     }
-    
+
     strcpy(cbuf1, "   |");
     strcpy(cbuf2, cbuf1);
     strcpy(cbuf3, cbuf1);
     fprintf(h, "\n");
-    
+
     for (i = 0; i < PUZZLE_DIM; i++) {
-        
+
         *line1 = *line2 = *line3 = 0;
-        
+
         for (j = 0; j < PUZZLE_DIM; j++) {
-            
+
             c = g->cell[row[i][j]];
-            
+
             if (bitcount(c) == 1) {
                 strcpy(cbuf1, "   |");
                 strcpy(cbuf2, cbuf1);
@@ -871,12 +871,12 @@ static void diagnostic_grid(grid *g, FILE *h)
                 if (c & 128) cbuf3[1] = '*'; else cbuf3[1] = '.';
                 if (c & 256) cbuf3[2] = '*'; else cbuf3[2] = '.';
             }
-            
+
             strcat(line1, cbuf1);
             strcat(line2, cbuf2);
             strcat(line3, cbuf3);
         }
-        
+
         EXPLAIN_INDENT(h);
         fprintf(h, "+---+---+---+---+---+---+---+---+---+\n");
         EXPLAIN_INDENT(h);
@@ -899,17 +899,17 @@ static void diagnostic_grid(grid *g, FILE *h)
 static int validate(grid *g, int verbose)
 {
     int i, j, regmask, rowmask, colmask, flag = 1;
-    
+
     /* Sanity check */
     for (i = 0; i < PUZZLE_CELLS; i++) {
         if (bitcount(g->cell[i]) != 1) {
             if (verbose) {
-                fprintf(rejects, "Cell %d at row %d, col %d has no unique soln.\n", 1+i, 1+map[i].row, 1+map[i].col); fflush(rejects);
+                fprintf(rejects, "Cell %d at row %d, col %d has no unique soln.\n", 1+i, 1+sudokuMap[i].row, 1+sudokuMap[i].col); fflush(rejects);
                 flag = 0;
             } else return 0;
         }
     }
-    
+
     /* Check rows */
     for (i = 0; i < PUZZLE_DIM; i++) {
         for (rowmask = j = 0; j < PUZZLE_DIM; j++) {
@@ -922,7 +922,7 @@ static int validate(grid *g, int verbose)
             } else return 0;
         }
     }
-    
+
     /* Check columns */
     for (i = 0; i < PUZZLE_DIM; i++) {
         for (colmask = j = 0; j < PUZZLE_DIM; j++) {
@@ -935,7 +935,7 @@ static int validate(grid *g, int verbose)
             } else return 0;
         }
     }
-    
+
     /* Check 3x3 regions */
     for (i = 0; i < PUZZLE_DIM; i++) {
         for (regmask = j = 0; j < PUZZLE_DIM; j++) {
@@ -948,7 +948,7 @@ static int validate(grid *g, int verbose)
             } else return 0;
         }
     }
-    
+
     return flag;
 }
 
@@ -969,43 +969,43 @@ static int mark_cells(grid *g)
     int i, chgflag, bc;
     int const *r, *c, *reg;
     short elt, mask, before;
-    
-    
+
+
     chgflag = NOCHANGE;
-    
+
     while (g->tail < g->exposed) {
-        
+
         elt = g->solved[g->tail++];
-        
-        r = row[map[elt].row];
-        c = col[map[elt].col];
-        reg = region[map[elt].region];
-        
+
+        r = row[sudokuMap[elt].row];
+        c = col[sudokuMap[elt].col];
+        reg = region[sudokuMap[elt].region];
+
         mask = ~g->cell[elt];
-        
+
         for (i = 0; i < PUZZLE_DIM; i++) {
-            
+
             if (r[i] != elt) {
-                
+
                 /* Get the cell value */
                 before = g->cell[r[i]];
-                
+
                 /* Eliminate this candidate value whilst preserving other candidate values */
                 g->cell[r[i]] &= mask;
-                
+
                 /* Did the cell change value? */
                 if (before != g->cell[r[i]]) {
-                    
+
                     chgflag |= CHANGE;	/* Flag that puzzle markup was changed */
                     g->score += g->inc;	/* More work means higher scoring      */
-                    
+
                     if (!(bc = bitcount(g->cell[r[i]]))) {
                         EXPLAIN_MARKUP_IMPASSE(g, r[i], elt);
                         return STUCK;	/* Crap out if no candidates remain */
                     }
-                    
+
                     EXPLAIN_MARKUP_ELIM(g, r[i], elt);
-                    
+
                     /* Check if we solved for this cell, i.e. bit count indicates a unique value */
                     if (bc == 1) {
                         g->cellflags[r[i]] = FOUND;	/* Mark cell as found  */
@@ -1015,28 +1015,28 @@ static int mark_cells(grid *g)
                     }
                 }
             }
-            
+
             if (c[i] != elt) {
-                
+
                 /* Get the cell value */
                 before = g->cell[c[i]];
-                
+
                 /* Eliminate this candidate value whilst preserving other candidate values */
                 g->cell[c[i]] &= mask;
-                
+
                 /* Did the cell change value? */
                 if (before != g->cell[c[i]]) {
-                    
+
                     chgflag |= CHANGE;	/* Flag that puzzle markup was changed */
                     g->score += g->inc;	/* More work means higher scoring      */
-                    
+
                     if (!(bc = bitcount(g->cell[c[i]]))) {
                         EXPLAIN_MARKUP_IMPASSE(g, c[i], elt);
                         return STUCK;	/* Crap out if no candidates remain */
                     }
-                    
+
                     EXPLAIN_MARKUP_ELIM(g, c[i], elt);
-                    
+
                     /* Check if we solved for this cell, i.e. bit count indicates a unique value */
                     if (bc == 1) {
                         g->cellflags[c[i]] = FOUND;	/* Mark cell as found  */
@@ -1046,28 +1046,28 @@ static int mark_cells(grid *g)
                     }
                 }
             }
-            
+
             if (reg[i] != elt) {
-                
+
                 /* Get the cell value */
                 before = g->cell[reg[i]];
-                
+
                 /* Eliminate this candidate value whilst preserving other candidate values */
                 g->cell[reg[i]] &= mask;
-                
+
                 /* Did the cell change value? */
                 if (before != g->cell[reg[i]]) {
-                    
+
                     chgflag |= CHANGE;	/* Flag that puzzle markup was changed */
                     g->score += g->inc;	/* More work means higher scoring      */
-                    
+
                     if (!(bc = bitcount(g->cell[reg[i]]))) {
                         EXPLAIN_MARKUP_IMPASSE(g, reg[i], elt);
                         return STUCK;	/* Crap out if no candidates remain */
                     }
-                    
+
                     EXPLAIN_MARKUP_ELIM(g, reg[i], elt);
-                    
+
                     /* Check if we solved for this cell, i.e. bit count indicates a unique value */
                     if (bc == 1) {
                         g->cellflags[reg[i]] = FOUND;	/* Mark cell as found  */
@@ -1077,10 +1077,10 @@ static int mark_cells(grid *g)
                     }
                 }
             }
-            
+
         }
     }
-    
+
     return chgflag;
 }
 
@@ -1099,36 +1099,36 @@ static int mark_cells(grid *g)
 static int find_singletons(grid *g, int const *vector, char *vdesc)
 {
     int i, j, mask, hist[PUZZLE_DIM], value[PUZZLE_DIM], found = NOCHANGE;
-    
+
     /* We are going to create a histogram of cell candidate values */
     /* for the specified cell vector (row/column/region).          */
     /* First set all buckets to zero.                              */
     memset(hist, 0, sizeof(hist[0])*PUZZLE_DIM);
-    
+
     /* For each cell in the vector... */
     for (i = 0; i < PUZZLE_DIM; i++) {
-        
+
         /* For each possible candidate value... */
         for (mask = 1, j = 0; j < PUZZLE_DIM; j++) {
-            
+
             /* If the cell may possibly assume this value... */
             if (g->cell[vector[i]] & mask) {
-                
+
                 value[j] = vector[i];	/* Save the cell coordinate */
                 hist[j] += 1;		/* Bump bucket in histogram */
             }
-            
+
             mask <<= 1;	/* Next candidate value */
         }
     }
-    
+
     /* Examine each bucket in the histogram... */
     for (mask = 1, i = 0; i < PUZZLE_DIM; i++) {
-        
+
         /* If the bucket == 1 and the cell is not already solved,  */
         /* then the cell has a unique solution specified by "mask" */
         if (hist[i] == 1 && !g->cellflags[value[i]]) {
-            
+
             found = CHANGE;			/* Indicate that markup has been changed */
             g->cell[value[i]] = mask;	/* Assign solution value to cell         */
             g->cellflags[value[i]] = FOUND;	/* Mark cell as solved                   */
@@ -1136,10 +1136,10 @@ static int find_singletons(grid *g, int const *vector, char *vdesc)
             g->solved[g->exposed++] = value[i];
             EXPLAIN_SINGLETON(g, value[i], mask, vdesc);
         }
-        
+
         mask <<= 1;		/* Get next candidate value */
     }
-    
+
     return found;
 }
 
@@ -1157,22 +1157,22 @@ static int find_singletons(grid *g, int const *vector, char *vdesc)
 static int eliminate_singles(grid *g)
 {
     int i, found = NOCHANGE;
-    
+
     /* Do rows */
     for (i = 0; i < PUZZLE_DIM; i++) {
         found |= find_singletons(g, row[i], (char *)"row");
     }
-    
+
     /* Do columns */
     for (i = 0; i < PUZZLE_DIM; i++) {
         found |= find_singletons(g, col[i], (char *)"column");
     }
-    
+
     /* Do regions */
     for (i = 0; i < PUZZLE_DIM; i++) {
         found |= find_singletons(g, region[i], (char *)"region");
     }
-    
+
     return found;
 }
 
@@ -1187,22 +1187,22 @@ static int eliminate_singles(grid *g)
 static int simple_solver(grid *g)
 {
     int flag = NOCHANGE;
-    
+
     /* Mark the unsolved cells with candidate solutions based upon the current set of "givens" and solved cells */
     while ((flag |= mark_cells(g)) == CHANGE) {
-        
+
         g->inc = 1;	     /* After initial markup, we start scoring for additional markup work */
-        
+
         EXPLAIN_CURRENT_MARKUP(g);
-        
+
         /* Continue to eliminate cells with unique candidate solutions from the game until */
         /* elimination and repeated markup efforts produce no changes in the remaining     */
         /* candidate solutions.                                                            */
         if (eliminate_singles(g) == NOCHANGE) break;
-        
+
         EXPLAIN_CURRENT_MARKUP(g);
     }
-    
+
     return flag;
 }
 
@@ -1221,25 +1221,25 @@ static int region_vector_elim(grid *g, int region_no, int num)
 {
     int i, j, r, c, mask, t, found;
     short rowhist[PUZZLE_DIM], colhist[PUZZLE_DIM];
-    
+
     /* Init */
     found = NOCHANGE;
     memset(rowhist, 0, sizeof(rowhist[0])*PUZZLE_DIM);
     memset(colhist, 0, sizeof(colhist[0])*PUZZLE_DIM);
-    
+
     mask = 1 << num;
-    
+
     /* Create histograms for row and column placements for the value being checked */
     for (i = 0; i < PUZZLE_DIM; i++) {
         j = region[region_no][i];
         if ((g->cell[j] & mask)) {
-            rowhist[map[j].row] += 1;
-            colhist[map[j].col] += 1;
+            rowhist[sudokuMap[j].row] += 1;
+            colhist[sudokuMap[j].col] += 1;
         }
     }
-    
+
     /* Figure out if this number lies in only one row or column */
-    
+
     /* Check rows first*/
     r = c = -1;
     for (i = 0; i < PUZZLE_DIM; i++) {
@@ -1253,7 +1253,7 @@ static int region_vector_elim(grid *g, int region_no, int num)
             }
         }
     }
-    
+
     /* Now check columns */
     for (i = 0; i < PUZZLE_DIM; i++) {
         if (colhist[i]) {
@@ -1266,12 +1266,12 @@ static int region_vector_elim(grid *g, int region_no, int num)
             }
         }
     }
-    
+
     /* If the number is only in one row, then eliminate this number from the cells in the row outside of this region */
     if (r >= 0) {
         for (i = 0; i < PUZZLE_DIM; i++) {
             j = row[r][i];
-            if (map[j].region != region_no && !g->cellflags[j]) {
+            if (sudokuMap[j].region != region_no && !g->cellflags[j]) {
                 t = g->cell[j];
                 if ((g->cell[j] &= ~mask) == 0) {
                     EXPLAIN_VECTOR_IMPASSE(g, "row", r, j, mask, region_no);
@@ -1292,12 +1292,12 @@ static int region_vector_elim(grid *g, int region_no, int num)
             }
         }
     }
-    
+
     /* If the number is only in one column, then eliminate this number from the cells in the column outside of this region */
     else if (c >= 0) {
         for (i = 0; i < PUZZLE_DIM; i++) {
             j = col[c][i];
-            if (map[j].region != region_no && !g->cellflags[j]) {
+            if (sudokuMap[j].region != region_no && !g->cellflags[j]) {
                 t = g->cell[j];
                 if ((g->cell[j] &= ~mask) == 0) {
                     EXPLAIN_VECTOR_IMPASSE(g, "column", c, j, mask, region_no);
@@ -1318,11 +1318,11 @@ static int region_vector_elim(grid *g, int region_no, int num)
             }
         }
     }
-    
+
     if (found == CHANGE) {
         g->score += 10;	/* Bump score for sucessfully invoking this rule */
     }
-    
+
     return found;
 }
 
@@ -1341,20 +1341,20 @@ static int region_vector_elim(grid *g, int region_no, int num)
 static int vector_elimination(grid *g)
 {
     int i, j, rc;
-    
+
     /* For each region... */
     for (rc = NOCHANGE, i = 0; i < PUZZLE_DIM && rc != STUCK; i++) {
-        
+
         /* For each digit... */
         for (j = 0; j < PUZZLE_DIM && rc != STUCK; j++) {
-            
+
             /* Eliminate candidates outside of regions when a particular */
             /* candidate value aligns itself to a row or column within   */
             /* a 3x3 region.                                             */
             rc |= region_vector_elim(g, i, j);
         }
     }
-    
+
     return rc;
 }
 
@@ -1377,38 +1377,38 @@ static int elim_matches(grid *g, int const *cell_list, char *desc, int ndx)
     int i, j, k, e, count, rc, flag;
     short c, mask, tmp, elts[PUZZLE_DIM], eliminated[PUZZLE_DIM];
     static int counts[1<<PUZZLE_DIM];
-    
+
     rc = NOCHANGE;
-    
+
     /* Check for two and three valued subsets. Any more than that burns CPU cycles */
     /* and just slows us down.                                                     */
     for (i = 2; i < 4; i++) {
-        
+
         flag = 0;
-        
+
         /* Create histogram to detect cells with matching subsets */
         for (j = 0; j < PUZZLE_DIM; j++) {
             k = cell_list[j];
             elts[j] = g->cell[k];			/* Copy original cell candidates */
-            
+
             if (bitcount(g->cell[k]) == i) {
                 counts[g->cell[k]] += 1;        /* The bucket records the number of cells with this subset */
             }
         }
-        
+
         /* For each cell in the list... */
         for (e = j = 0; j < PUZZLE_DIM; j++) {
-            
+
             c = g->cell[cell_list[j]];		/* Get cell's candidates */
-            
+
             /* Check to see if we've already eliminated this subset */
             for (k = 0; k < e; k++)
                 if (c == eliminated[k]) break;
             if (e && k < e) continue;
-            
+
             /* Get count from histogram bucket */
             count = (int) (counts[c]);
-            
+
             /* If too few solution candidates for the number of cells, then we're stuck */
             if (count > i) {
                 EXPLAIN_TUPLE_IMPASSE(g, desc, ndx, c, count, i);
@@ -1417,42 +1417,42 @@ static int elim_matches(grid *g, int const *cell_list, char *desc, int ndx)
                 g->score += 10;
                 return STUCK;
             }
-            
+
             /* Do candidate and cell counts match? */
             if (count == i) {
-                
+
                 /* Compute mask used to eliminate candidates from other cells */
                 mask = ~c;
-                
+
                 /* Record (for later) the values being eliminated */
                 eliminated[e++] = c;
-                
+
                 /* Eliminate candidates from the other cells in the list */
-                
+
                 /* For each cell... */
                 for (k = 0; k < PUZZLE_DIM; k++) {
-                    
+
                     /* If the cell candidates do not exactly match the current subset... */
                     if (c != g->cell[cell_list[k]] && !g->cellflags[cell_list[k]]) {
-                        
+
                         /* Get cell candidates */
                         tmp = g->cell[cell_list[k]];
-                        
+
                         /* Eliminate candidates with our mask */
                         g->cell[cell_list[k]] &= mask;
-                        
+
                         /* Did the elimination change the candidates? */
                         if (tmp != g->cell[cell_list[k]]) {
-                            
+
                             /* Note the change and bump the score */
                             flag = CHANGE;
                             g->score += i;
-                            
+
                             EXPLAIN_TUPLE_ELIM(desc, ndx, c, cell_list[k]);
-                            
+
                             /* Did we solve the cell under consideration? */
                             if (bitcount(g->cell[cell_list[k]]) == 1) {
-                                
+
                                 /* Mark cell as found and bump the score */
                                 g->cellflags[cell_list[k]] = FOUND;
                                 g->score += g->reward;
@@ -1464,13 +1464,13 @@ static int elim_matches(grid *g, int const *cell_list, char *desc, int ndx)
                 }
             }
         }
-        
+
         /* Cleanup the static histogram array */
         for (j = 0; j < PUZZLE_DIM; j++) counts[elts[j]] = 0;
-        
+
         rc |= flag;
     }
-    
+
     return rc;
 }
 
@@ -1486,22 +1486,22 @@ static int elim_matches(grid *g, int const *cell_list, char *desc, int ndx)
 static int mult_elimination(grid *g)
 {
     int i, rc = NOCHANGE;
-    
+
     /* Eliminate subsets from rows */
     for (i = 0; i < PUZZLE_DIM; i++) {
         rc |= elim_matches(g, row[i], (char *)"row", i);
     }
-    
+
     /* Eliminate subsets from columns */
     for (i = 0; i < PUZZLE_DIM; i++) {
         rc |= elim_matches(g, col[i], (char *)"column", i);
     }
-    
+
     /* Eliminate subsets from regions */
     for (i = 0; i < PUZZLE_DIM; i++) {
         rc |= elim_matches(g, region[i], (char *)"region", i);
     }
-    
+
     return rc;
 }
 
@@ -1512,50 +1512,50 @@ static int rsolve(grid *g, return_soln soln_callback)
 {
     int i, j, min, c, weight, mask, flag = 0;
     grid mygrid;
-    
+
     /* Keep track of recursive depth */
     lvl += 1;
     if (lvl > g->maxlvl) g->maxlvl = lvl;
-    
+
     for (;;) {
-        
+
         /* Attempt a simple solution */
         if (simple_solver(g) == STUCK) break;
-        
+
         /* Check for solution */
         if (g->exposed >= PUZZLE_CELLS) break;
-        
+
         g->reward += 2;		/* Bump reward as we graduate to more "advanced" solving techniques */
-        
+
         /* Eliminate tuples */
         if ((flag = mult_elimination(g)) == CHANGE) {
             EXPLAIN_CURRENT_MARKUP(g);
             continue;
         }
-        
+
         /* Check if impasse */
         if (flag == STUCK) break;
-        
+
         /* Check for solution */
         if (g->exposed >= PUZZLE_CELLS) break;
-        
+
         /* Eliminate clues aligned within regions from exterior cells in rows or columns */
         if ((flag = vector_elimination(g)) == CHANGE) {
             EXPLAIN_CURRENT_MARKUP(g);
             continue;
         }
-        
+
         /* Check if impasse */
         if (flag == STUCK) break;
-        
+
         /* Check for solution */
         if (g->exposed >= PUZZLE_CELLS) break;
-        
+
         g->reward += 5;		/* Bump reward as we are about to start trial soutions */
-        
+
         /* Attempt a trial solution */
         memcpy(&mygrid, g, sizeof(grid));	/* Make working copy of puzzle */
-        
+
         /* Find the first cell with the smallest number of alternatives */
         for (weight= 0, c = -1, min = PUZZLE_DIM, i = 0; i < PUZZLE_CELLS; i++) {
             if (!mygrid.cellflags[i]) {
@@ -1567,34 +1567,34 @@ static int rsolve(grid *g, return_soln soln_callback)
                 }
             }
         }
-        
+
         mygrid.score += weight;	/* Add penalty to score */
-        
+
         /* Cell at index 'c' will be our starting point */
         if (c >= 0) for (mask = 1, i = 0; i < PUZZLE_DIM; i++) {
-            
+
             /* Is this a candidate? */
             if (mask & g->cell[c]) {
-                
+
                 EXPLAIN_TRIAL(c, mask);
-                
+
                 mygrid.score += (int)(((50.0 * lvl * weight) / (double)(PUZZLE_CELLS)) + 0.5);	/* Add'l penalty */
-                
+
                 /* Try one of the possible candidates for this cell */
                 mygrid.cell[c] = mask;
                 mygrid.cellflags[c] = FOUND;
                 mygrid.solved[mygrid.exposed++] = c;
-                
+
                 EXPLAIN_CURRENT_MARKUP(&mygrid);
                 flag = rsolve(&mygrid, soln_callback);	/* Recurse with working copy of puzzle */
-                
+
                 /* Did we find a solution? */
                 if (flag == FOUND && !enumerate_all) {
                     EXPLAIN_BACKTRACK;
                     lvl -= 1;
                     return FOUND;
                 }
-                
+
                 /* Preserve score, solution count and recursive depth as we back out of recursion */
                 g->score = mygrid.score;
                 g->solncount = mygrid.solncount;
@@ -1603,10 +1603,10 @@ static int rsolve(grid *g, return_soln soln_callback)
             }
             mask <<= 1;	/* Get next possible candidate */
         }
-        
+
         break;
     }
-    
+
     if (g->exposed == PUZZLE_CELLS && validate(g, 0)) {
         soln_callback(g);
         g->solncount += 1;
@@ -1620,7 +1620,7 @@ static int rsolve(grid *g, return_soln soln_callback)
         flag = STUCK;
         if (!lvl && !g->solncount) validate(g, 1);		/* Print verbose diagnostic for insoluble puzzle */
     }
-    
+
     return flag;
 }
 
@@ -1632,7 +1632,7 @@ static int rsolve(grid *g, return_soln soln_callback)
 static int add_soln(grid *g)
 {
     grid *tmp;
-    
+
     if ((tmp = (grid *)malloc(sizeof(grid))) == NULL) {
         fprintf(stderr, "Out of memory.\n");
         exit(1);
@@ -1680,11 +1680,11 @@ static void usage()
 static char *format_answer(grid *g, char *outbuf)
 {
     int i;
-    
+
     for (i = 0; i < PUZZLE_CELLS; i++)
         outbuf[i] = symtab[g->cell[i]];
     outbuf[i] = 0;
-    
+
     return outbuf;
 }
 
@@ -1694,38 +1694,38 @@ static char *format_answer(grid *g, char *outbuf)
 
 static void print_grid(char *sud, FILE *h)
 {
-    
+
     fprintf(h, "\n");
     EXPLAIN_INDENT(h);
     fprintf(h, "+---+---+---+\n");
-    
+
     EXPLAIN_INDENT(h);
     fprintf(h, "|%*.*s|%*.*s|%*.*s|\n", PUZZLE_ORDER, PUZZLE_ORDER, sud, PUZZLE_ORDER, PUZZLE_ORDER, sud+3, PUZZLE_ORDER, PUZZLE_ORDER, sud+6);
     EXPLAIN_INDENT(h);
     fprintf(h, "|%*.*s|%*.*s|%*.*s|\n", PUZZLE_ORDER, PUZZLE_ORDER, sud+9, PUZZLE_ORDER, PUZZLE_ORDER, sud+12, PUZZLE_ORDER, PUZZLE_ORDER, sud+15);
     EXPLAIN_INDENT(h);
     fprintf(h, "|%*.*s|%*.*s|%*.*s|\n", PUZZLE_ORDER, PUZZLE_ORDER, sud+18, PUZZLE_ORDER, PUZZLE_ORDER, sud+21, PUZZLE_ORDER, PUZZLE_ORDER, sud+24);
-    
+
     EXPLAIN_INDENT(h);
     fprintf(h, "+---+---+---+\n");
-    
+
     EXPLAIN_INDENT(h);
     fprintf(h, "|%*.*s|%*.*s|%*.*s|\n", PUZZLE_ORDER, PUZZLE_ORDER, sud+27, PUZZLE_ORDER, PUZZLE_ORDER, sud+30, PUZZLE_ORDER, PUZZLE_ORDER, sud+33);
     EXPLAIN_INDENT(h);
     fprintf(h, "|%*.*s|%*.*s|%*.*s|\n", PUZZLE_ORDER, PUZZLE_ORDER, sud+36, PUZZLE_ORDER, PUZZLE_ORDER, sud+39, PUZZLE_ORDER, PUZZLE_ORDER, sud+42);
     EXPLAIN_INDENT(h);
     fprintf(h, "|%*.*s|%*.*s|%*.*s|\n", PUZZLE_ORDER, PUZZLE_ORDER, sud+45, PUZZLE_ORDER, PUZZLE_ORDER, sud+48, PUZZLE_ORDER, PUZZLE_ORDER, sud+51);
-    
+
     EXPLAIN_INDENT(h);
     fprintf(h, "+---+---+---+\n");
-    
+
     EXPLAIN_INDENT(h);
     fprintf(h, "|%*.*s|%*.*s|%*.*s|\n", PUZZLE_ORDER, PUZZLE_ORDER, sud+54, PUZZLE_ORDER, PUZZLE_ORDER, sud+57, PUZZLE_ORDER, PUZZLE_ORDER, sud+60);
     EXPLAIN_INDENT(h);
     fprintf(h, "|%*.*s|%*.*s|%*.*s|\n", PUZZLE_ORDER, PUZZLE_ORDER, sud+63, PUZZLE_ORDER, PUZZLE_ORDER, sud+66, PUZZLE_ORDER, PUZZLE_ORDER, sud+69);
     EXPLAIN_INDENT(h);
     fprintf(h, "|%*.*s|%*.*s|%*.*s|\n", PUZZLE_ORDER, PUZZLE_ORDER, sud+72, PUZZLE_ORDER, PUZZLE_ORDER, sud+75, PUZZLE_ORDER, PUZZLE_ORDER, sud+78);
-    
+
     EXPLAIN_INDENT(h);
     fprintf(h, "+---+---+---+\n");
 }
@@ -1742,7 +1742,7 @@ static char *cvt_to_mask(char *mbuf, char *sbuf)
     char *mask_buf = mbuf;
     static const char *maskchar = "01234567";
     int i, m;
-    
+
     mask_buf[PUZZLE_DIM*3] = 0;
     for (i = 0; i < PUZZLE_CELLS; i += 3) {
         m = 0;
@@ -1883,21 +1883,21 @@ int dupree_solver(int32_t dispflag,int32_t *scorep,char *puzzle)
         usage();
         exit(1);
     }
-    
+
     if (!enumerate_all && prt_score) {
         fprintf(stderr, "Scoring is meaningless when multi-solution mode is disabled.\n");
     }
-    
+
     if (rejectfile && !(rejects = fopen(rejectfile, "w"))) {
         fprintf(stderr, "Failed to open reject output file: %s\n", rejectfile);
         exit(1);
     }
-    
+
     if (outfile && !(solnfile = fopen(outfile, "w"))) {
         fprintf(stderr, "Failed to open solution output file: %s\n", outfile);
         exit(1);
     }
-    
+
     /*if (infile && strcmp(infile, "-") && !(h = fopen(infile, "r"))) {
      fprintf(stderr, "Failed to open input game file: %s\n", infile);
      exit(1);
@@ -1911,17 +1911,17 @@ int dupree_solver(int32_t dispflag,int32_t *scorep,char *puzzle)
     prt_num = dispflag;
     /* Set prt flag if we're printing anything at all */
     prt = prt_mask | prt_grid | prt_score | prt_depth | prt_answer | prt_num | prt_givens;
-    
+
     strcpy(inbuf,puzzle);
     count = solved = unsolved = 0;
     //printf("inbuf.(%s)\n",inbuf);
     while (*inbuf) {
-        
+
         if ((len = (int32_t)strlen(inbuf)) && inbuf[len-1] == '\n') {
             len -= 1;
             inbuf[len] = 0;
         }
-        
+
         count += 1;
         if (len != PUZZLE_CELLS) {
             fprintf(rejects, "%d: %s bogus puzzle format\n", count, inbuf); fflush(rejects);
@@ -1930,7 +1930,7 @@ int dupree_solver(int32_t dispflag,int32_t *scorep,char *puzzle)
             //if (h) fgets(inbuf, 128, h);
             continue;
         }
-        
+
         cvt_to_grid(&g, inbuf);
         if (g.givens < 17) {
             fprintf(rejects, "%d: %*.*s bogus puzzle has less than 17 givens\n", count, PUZZLE_CELLS, PUZZLE_CELLS, inbuf); fflush(rejects);
@@ -1939,13 +1939,13 @@ int dupree_solver(int32_t dispflag,int32_t *scorep,char *puzzle)
             //if (h) fgets(inbuf, 128, h);
             continue;
         }
-        
+
         for (s = soln_list; s;) {
             s = soln_list->next;
             free(soln_list);
             soln_list = s;
         }
-        
+
         flag = rsolve(&g, add_soln);
         if (soln_list) {
             solved++;
@@ -1988,11 +1988,11 @@ int dupree_solver(int32_t dispflag,int32_t *scorep,char *puzzle)
             mypause();
 #endif
         }
-        
+
         *inbuf = 0;
         //if (h) fgets(inbuf, 128, h);
     }
-    
+
     //if (prt) fprintf(solnfile, "\nPuzzles: %d, Solved: %d, Unsolved: %d, Bogus: %d\n", count, solved, unsolved, bog);
     *scorep = g.score;
     return solncount;
@@ -2051,23 +2051,23 @@ int show_solution(int*);
 
 
 int show_solution (int* solution) {
-    
+
     int i;
     int counter = 0;
-    
+
     printf( " -----------------------------------\n" );
-    
+
     for ( i = 0; i < TOTAL; i++ ) {
         if ( i % LINE == 0 )
             printf( "|" );
-        
+
         if ( solution[i] ) {
             printf( " %d ", solution[i]);
             counter++;
         }
         else
             printf( "   ");
-        
+
         if ( i % LINE == (LINE - 1) ) {
             printf( "|\n" );
             if ( i != (TOTAL - 1) ) {
@@ -2084,9 +2084,9 @@ int show_solution (int* solution) {
                 printf( ":" );
         }
     }
-    
+
     printf( " -----------------------------------" );
-    
+
     return counter;
 }
 
@@ -2100,11 +2100,11 @@ int show_solution (int* solution) {
  */
 struct dimensions_collection get_collection (int index) {
     struct dimensions_collection ret;
-    
+
     ret.row = (int) (index / LINE);
     ret.column = index % LINE;
     ret.small_square = SMALL_LINE * (int) (ret.row / SMALL_LINE) + (int) (ret.column / SMALL_LINE);
-    
+
     return ret;
 }
 
@@ -2154,40 +2154,40 @@ void get_square (int which, int* ret) {
  *	- move is good if it's the last one
  */
 int set_values (int index, int forbidden_number) {
-    
+
     if ( taking_back && tries_to_set > (2 * LIMIT) )
         return 1;
-    
+
     int real_index = indices[index];
     struct dimensions_collection blocks = get_collection(real_index);
     int elements[LINE];
-    
+
     for ( int i = 1; i <= LINE; i++ ) {
         if ( forbidden_number && i == forbidden_number )
             continue;
-        
+
         tries_to_set++;
-        
+
         get_horizontal(blocks.row, elements);
         if ( contains_element(elements, i, LINE) )
             continue;
-        
+
         get_vertical(blocks.column, elements);
         if ( contains_element(elements, i, LINE) )
             continue;
-        
+
         get_square(blocks.small_square, elements);
         if ( contains_element(elements, i, LINE) )
             continue;
-        
+
         riddle[real_index] = i;
-        
+
         if ( index == (TOTAL - 1) || set_values((index + 1), 0) )
             return 1;
     }
-    
+
     riddle[real_index] = 0;
-    
+
     return 0;
 }
 
@@ -2204,14 +2204,14 @@ int set_values (int index, int forbidden_number) {
  *	e) Stop if all pieces are tried or calculation limit is reached
  */
 void take_back (int unset_count) {
-    
+
     global_unset_count++;
-    
+
     int i;
-    
+
     int tmp = riddle[indices[TOTAL - unset_count]];
     int redundant = set_values((TOTAL - unset_count), tmp);
-    
+
     if ( !redundant ) {
         unsolved[indices[TOTAL - unset_count]] = 0;
         take_back(++unset_count);
@@ -2220,11 +2220,11 @@ void take_back (int unset_count) {
         riddle[indices[TOTAL - unset_count]] = tmp;
         for ( i = 1; i < unset_count; i++ )
             riddle[indices[TOTAL - unset_count + i]] = 0;
-        
+
         for ( i = (TOTAL - unset_count); i > 0; i-- )
             indices[i] = indices[i - 1];
         indices[0] = tmp;
-        
+
         if ( global_unset_count < TOTAL && tries_to_set < LIMIT )
             take_back(unset_count);
     }
@@ -2235,25 +2235,25 @@ int sudoku(uint8_t solved9[LINE][LINE],uint8_t unsolved9[LINE][LINE],uint32_t sr
 {
     int i, j, random, small_rows, small_cols, tmp, redundant,ind;
     int multi_raw[LINE][LINE];
-    
+
     memset(indices,0,sizeof(indices));
     memset(solved,0,sizeof(solved));
     memset(unsolved,0,sizeof(unsolved));
     tries_to_set = 0;
     taking_back = 0;
     global_unset_count = 0;
-    
+
     //time_t t;
     //time(&t);
     srand(srandi);
-    
+
     /**
      * Initialization:
      * Fields are set to 0 ( i.e. we dont' know the number yet)
      */
     for ( i = 0; i < TOTAL; i++ )
         riddle[i] = 0;
-    
+
     /**
      * Second initialization:
      * LINE times numbers from 0 to (LINE - 1),
@@ -2296,8 +2296,8 @@ int sudoku(uint8_t solved9[LINE][LINE],uint8_t unsolved9[LINE][LINE],uint32_t sr
             j = 0;
         }
     }
-    
-    
+
+
     /**
      * Randomization for every element of multi_raw.
      * Suffle only inside squares
@@ -2312,60 +2312,60 @@ int sudoku(uint8_t solved9[LINE][LINE],uint8_t unsolved9[LINE][LINE],uint32_t sr
             multi_raw[i][random] = tmp;
         }
     }
-    
+
     /**
      * Linearization
      */
     for ( i = 0; i < LINE; i++ )
         for ( j = 0; j < LINE; j++ )
             indices[i * LINE + j] = multi_raw[i][j];
-    
-    
+
+
     /**
      * Setting numbers, start with the first one.
      * Variable 'redundant' is needed only for formal reasons
      */
     taking_back = 0;
     redundant = set_values(0, 0);
-    
-    
+
+
     memcpy(solved, riddle, (TOTAL * sizeof(int)));
     memcpy(unsolved, riddle, (TOTAL * sizeof(int)));
-    
-    
+
+
     /**
      * Exchanging some (few) indices for more randomized game
      */
     int random2;
     for ( i = (LINE - 1); i > 0; i-- ) {
         for ( j = 0; j < (int) (sqrt(i)); j++ ) {
-            
+
             if ( !(rand() % ((int) (i * sqrt(i)))) || !(LINE - j) )
                 continue;
-            
+
             random = i * LINE + (int) (rand() % (LINE - j));
             random2 = rand() % TOTAL;
-            
+
             if ( random == random2 )
                 continue;
-            
+
             tmp = indices[random];
             indices[random] = indices[random2];
             indices[random2] = tmp;
         }
     }
-    
-    
+
+
     tries_to_set = 0;
     taking_back = 1;
     take_back(1);
-    
-    
+
+
     if ( SHOW_SOLVED ) {
         printf( "\n\n" );
         redundant = show_solution(solved);
     }
-    
+
     int counter = show_solution(unsolved);
     printf( "\t *** %d numbers left *** \n", counter );
     ind = 0;
@@ -2375,7 +2375,7 @@ int sudoku(uint8_t solved9[LINE][LINE],uint8_t unsolved9[LINE][LINE],uint32_t sr
             solved9[i][j] = solved[ind];
             unsolved9[i][j] = unsolved[ind];
         }
-    
+
     return 0;
 }
 // end https://github.com/mentalmove/SudokuGenerator
@@ -2513,7 +2513,7 @@ void sudoku_gen(uint8_t key32[32],uint8_t unsolved[9][9],uint32_t srandi)
  "result": "success",
  "hex": "0400008085202f8901328455ce926086f00be1b2adac0ba9adc22067a30948c71572f3da80adc1135d010000007b4c79a276a072a26ba067a565802102c57d40c1ddc92a5246a937bd7338823f1e8c916b137f2092d38cf250d74cb5ab8140f92d54f611aa3cb3d187eaadd56b06f3a8c0f5fba23956b26fdefc6038d9b6282de38525f72ebd8945a7994cef63ebca711ecf8fe6baeefcc218cf58efb59dc2a100af03800111a10001ffffffff02f0b9f505000000002321039433dc3749aece1bd568f374a45da3b0bc6856990d7da3cd175399577940a775ac0000000000000000fd9f016a4d9b01115351343639383233373135383735393631323334323331343537363938393134363735383233363533313832343739373832333934313536333436323139353837353238373336393431313937353438333632fd4401000000005c5078355c50783600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000"
  }
- 
+
  cclib solution 17 \"[%224d50336780d5a300a1f01b12fe36f46a82f3b9935bb115e01e0113dc4f337aae%22,%22234791685716258943589643712865934127341827596927516438492375861178462359653189274%22,0,0,1548859143,1548859146,0,1548859146,0,1548859148,1548859149,0,1548859151,1548859152,0,1548859154,1548859155,1548859158,1548859159,0,0,0,1548859161,1548859163,0,1548859164,1548859168,0,1548859168,1548859170,1548859172,1548859172,1548859175,0,0,1548859176,0,0,1548859178,1548859178,0,0,1548859180,1548859181,1548859183,1548859184,1548859185,1548859186,1548859188,1548859190,1548859191,1548859192,1548859192,0,0,1548859195,1548859196,1548859197,1548859198,0,0,1548859199,1548859202,1548859202,0,1548859204,1548859205,1548859206,1548859209,1548859210,1548859211,1548859212,0,1548859214,1548859216,0,1548859217,1548859218,1548859219,1548859220,0,1548859222,1548859222]\"
  */
 
@@ -3043,10 +3043,8 @@ bool sudoku_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const 
                     default: return eval->Invalid("invalid funcid");
                 }
             } else return eval->Invalid("invalid evalcode");
-            
+
         }
     }
     return eval->Invalid("not enough vouts");
 }
-
-
