@@ -113,8 +113,11 @@ contrib/debian/substvars
 
 src/rpcmisc~.cpp
 src/komodo-cli
+src/pirate-cli
 src/komodod
+src/pirated
 src/komodo-tx
+src/pirate-tx
 src/komodo-test
 src/wallet-utility
 src/komodo-cli.exe
