@@ -73,4 +73,4 @@ do
 done
 
 
-create-dmg --volname "PirateWallet-v3.0.0" --volicon "zcutil/res/logo.icns" --window-pos 200 120 --icon "PirateWallet.app" 200 190  --app-drop-link 600 185 --hide-extension "PirateWallet.app"  --window-size 800 400 --hdiutil-quiet --background zcutil/res/dmgbg.png  PirateWallet-v3.0.0.dmg PirateWallet.app
+create-dmg --volname "pirate-qt-mac" --volicon "zcutil/res/logo.icns" --window-pos 200 120 --icon "PirateWallet.app" 200 190  --app-drop-link 600 185 --hide-extension "PirateWallet.app"  --window-size 800 400 --hdiutil-quiet --background zcutil/res/dmgbg.png  pirate-qt-mac.dmg PirateWallet.app
