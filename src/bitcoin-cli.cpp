@@ -96,7 +96,7 @@ static int AppInitRPC(int argc, char* argv[])
     //
     ParseParameters(argc, argv);
     std:string name;
-    name = GetArg("-ac_name","");
+    name = GetArg("-ac_name","PIRATE");
     if ( !name.empty() )
         strncpy(ASSETCHAINS_SYMBOL,name.c_str(),sizeof(ASSETCHAINS_SYMBOL)-1);
 
