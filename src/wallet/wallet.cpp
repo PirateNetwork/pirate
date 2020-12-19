@@ -3606,11 +3606,13 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
                 uiInterface.ShowProgress(_(("Rescanning - Currently on block " + std::to_string(pindex->GetHeight()) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
                 uiInterface.InitMessage(_(("Rescanning - Currently on block " + std::to_string(pindex->GetHeight())).c_str()) + ((" " + std::to_string(scanperc)).c_str()) + ("%"));
             }
+            bool blockInvolvesMe = false;
             CBlock block;
             ReadBlockFromDisk(block, pindex,1);
             BOOST_FOREACH(CTransaction& tx, block.vtx)
             {
                 if (AddToWalletIfInvolvingMe(tx, &block, fUpdate)) {
+                    blockInvolvesMe = true;
                     ret++;
                 }
             }
@@ -3627,11 +3629,12 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             }
 
             // Build inital witness caches
-            BuildWitnessCache(pindex, true);
+            if (blockInvolvesMe)
+                BuildWitnessCache(pindex, true);
 
             //Delete Transactions
             if (pindex->GetHeight() % fDeleteInterval == 0)
-              DeleteWalletTransactions(pindex);
+                DeleteWalletTransactions(pindex);
 
             if (GetTime() >= nNow + 60) {
                 nNow = GetTime();
