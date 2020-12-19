@@ -1,8 +1,8 @@
-TESTS += komodo-test
-bin_PROGRAMS += komodo-test
+TESTS += pirate-test
+bin_PROGRAMS += pirate-test
 
 # tool for generating our public parameters
-komodo_test_SOURCES = \
+pirate_test_SOURCES = \
 	test-komodo/main.cpp \
 	test-komodo/testutils.cpp \
 	test-komodo/test_cryptoconditions.cpp \
@@ -16,8 +16,8 @@ komodo_test_SOURCES = \
 	test-komodo/test_addrman.cpp \
 	test-komodo/test_netbase_tests.cpp
 
-komodo_test_CPPFLAGS = $(komodod_CPPFLAGS)
+pirate_test_CPPFLAGS = $(pirated_CPPFLAGS)
 
-komodo_test_LDADD = -lgtest $(komodod_LDADD)
+pirate_test_LDADD = -lgtest $(pirated_LDADD)
 
-komodo_test_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) -static
+pirate_test_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) -static
