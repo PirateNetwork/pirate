@@ -1750,12 +1750,6 @@ void komodo_args(char *argv0)
     SoftSetArg("-ac_private", std::string("1"));
     SoftSetArg("-ac_halving", std::string("77777"));
 
-    SoftSetArg("-consolidation", std::string("1"));
-    SoftSetArg("-deletetx", std::string("1"));
-    SoftSetArg("-deleteinterval", std::string("1"));
-    SoftSetArg("-keeptxnum", std::string("10"));
-    SoftSetArg("-keeptxfornblocks", std::string("100"));
-
     SoftSetArg("-addnode", std::string("zero.kolo.supernet.org"));
     vector<string> PIRATEnodes = { "136.243.58.134","209.250.227.29","195.201.230.227","159.89.45.197","67.207.94.69","178.63.77.56","94.45.155.6","195.93.180.221","51.83.3.42","45.76.232.40","139.99.208.174" };
     mapMultiArgs["-addnode"] = PIRATEnodes;
