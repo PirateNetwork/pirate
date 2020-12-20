@@ -1577,11 +1577,11 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
 
 }
 
-UniValue z_createbuildinstuctions(const UniValue& params, bool fHelp, const CPubKey& mypk)
+UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
   if (fHelp)
       throw runtime_error(
-          "z_createbuildinstuctions \n"
+          "z_createbuildinstructions \n"
           "\nExamples:\n"
 
           "\nArguments:\n"
@@ -1608,7 +1608,7 @@ UniValue z_createbuildinstuctions(const UniValue& params, bool fHelp, const CPub
           "\"transaction\"            (string) hex string of the transaction\n"
 
 
-          + HelpExampleCli("z_createbuildinstuctions", "\"[{\\\"txid\\\":\\\"myid\\\",\\\"index\\\":0\\\"type\\\":\\\"sapling\\\"},...]\"")
+          + HelpExampleCli("z_createbuildinstructions", "\"[{\\\"txid\\\":\\\"myid\\\",\\\"index\\\":0\\\"type\\\":\\\"sapling\\\"},...]\"")
       );
 
     LOCK(cs_main);
@@ -1787,7 +1787,7 @@ static const CRPCCommand commands[] =
     { "rawtransactions",    "sendrawtransaction",       &sendrawtransaction,        false },
     { "rawtransactions",    "signrawtransaction",       &signrawtransaction,        false }, /* uses wallet if enabled */
 
-    { "rawtransactions",    "z_createbuildinstuctions", &z_createbuildinstuctions,  true  }, /* uses wallet if enabled */
+    { "rawtransactions",    "z_createbuildinstructions", &z_createbuildinstructions,  true  }, /* uses wallet if enabled */
     { "rawtransactions",    "z_buildrawtransaction",    &z_buildrawtransaction,     false }, /* uses wallet if enabled */
 
     { "blockchain",         "gettxoutproof",            &gettxoutproof,             true  },
