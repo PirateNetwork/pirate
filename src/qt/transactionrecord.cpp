@@ -9,6 +9,7 @@
 #include "timedata.h"
 #include "main.h"
 #include "wallet/wallet.h"
+#include "wallet/rpcpiratewallet.h"
 #include "key_io.h"
 
 #include <stdint.h>
@@ -29,137 +30,146 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 /*
  * Decompose CWallet transaction to model transaction records.
  */
-QList<TransactionRecord> TransactionRecord::decomposeTransaction(const CWallet *wallet, const CWalletTx &wtx)
+QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTransaction &arcTx)
 {
     QList<TransactionRecord> parts;
-    int64_t nTime = wtx.GetTxTime();
-    CAmount nCredit = wtx.GetCredit(ISMINE_ALL);
-    CAmount nDebit = wtx.GetDebit(ISMINE_ALL);
-    CAmount nNet = nCredit - nDebit;
-    uint256 hash = wtx.GetHash();
-    std::map<std::string, std::string> mapValue = wtx.mapValue;
+    QList<TransactionRecord> partsChange;
 
-    if (nNet > 0 || wtx.IsCoinBase())
-    {
-        //
-        // Credit
-        //
-        for(unsigned int i = 0; i < wtx.vout.size(); i++)
-        {
-            const CTxOut& txout = wtx.vout[i];
-            isminetype mine = wallet->IsMine(txout);
-            if(mine)
-            {
-                TransactionRecord sub(hash, nTime);
-                CTxDestination address;
-                sub.idx = i; // vout index
-                sub.credit = txout.nValue;
-                sub.involvesWatchAddress = mine & ISMINE_WATCH_ONLY;
-                if (ExtractDestination(txout.scriptPubKey, address) && IsMine(*wallet, address))
-                {
-                    // Received by Komodo Address
-                    sub.type = TransactionRecord::RecvWithAddress;
-                    sub.address = EncodeDestination(address);
-                }
-                else
-                {
-                    // Received by IP connection (deprecated features), or a multisignature or other non-simple transaction
-                    sub.type = TransactionRecord::RecvFromOther;
-                    sub.address = mapValue["from"];
-                }
-                if (wtx.IsCoinBase())
-                {
-                    // Generated
-                    sub.type = TransactionRecord::Generated;
-                }
+    if (arcTx.spentFrom.size() > 0) {
 
-                parts.append(sub);
+        for (int i = 0; i < arcTx.vTSend.size(); i++) {
+            auto tx = TransactionRecord();
+            tx.archiveType = arcTx.archiveType;
+            tx.hash = arcTx.txid;
+            tx.time = arcTx.nTime;
+            tx.address = arcTx.vTSend[i].encodedAddress;
+            tx.debit = arcTx.vTSend[i].amount;
+            tx.idx = arcTx.vTSend[i].vout;
+
+            bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vTSend[i].encodedAddress) != arcTx.spentFrom.end();
+            if (change) {
+                tx.type = TransactionRecord::SendToSelf;
+                partsChange.append(tx);
+            } else {
+                tx.type = TransactionRecord::SendToAddress;
+                parts.append(tx);
+            }
+        }
+
+
+        CAmount sproutValueReceived = 0;
+        for (int i = 0; i < arcTx.vZcReceived.size(); i++) {
+            sproutValueReceived += arcTx.vZcReceived[i].amount;
+            auto tx = TransactionRecord();
+            tx.archiveType = arcTx.archiveType;
+            tx.hash = arcTx.txid;
+            tx.time = arcTx.nTime;
+            tx.address = arcTx.vZcReceived[i].encodedAddress;
+            tx.credit = -arcTx.vZcReceived[i].amount;
+            tx.idx = arcTx.vZcReceived[i].jsOutIndex;
+
+            bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZcReceived[i].encodedAddress) != arcTx.spentFrom.end();
+            if (change) {
+                tx.type = TransactionRecord::SendToSelf;
+                partsChange.append(tx);
+            } else {
+                tx.type = TransactionRecord::SendToAddress;
+                parts.append(tx);
+            }
+        }
+
+        if (arcTx.sproutValue - arcTx.sproutValueSpent - sproutValueReceived != 0) {
+            auto tx = TransactionRecord();
+            tx.archiveType = arcTx.archiveType;
+            tx.hash = arcTx.txid;
+            tx.time = arcTx.nTime;
+            tx.address = "Private Sprout Address";
+            tx.credit = -arcTx.sproutValue - arcTx.sproutValueSpent;
+            tx.type = TransactionRecord::SendToAddress;
+            parts.append(tx);
+        }
+
+        for (int i = 0; i < arcTx.vZsSend.size(); i++) {
+            auto tx = TransactionRecord();
+            tx.archiveType = arcTx.archiveType;
+            tx.hash = arcTx.txid;
+            tx.time = arcTx.nTime;
+            tx.address = arcTx.vZsSend[i].encodedAddress;
+            tx.credit = -arcTx.vZsSend[i].amount;
+            tx.idx = arcTx.vZsSend[i].shieldedOutputIndex;
+
+            bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsSend[i].encodedAddress) != arcTx.spentFrom.end();
+            if (change) {
+                tx.type = TransactionRecord::SendToSelf;
+                partsChange.append(tx);
+            } else {
+                tx.type = TransactionRecord::SendToAddress;
+                parts.append(tx);
             }
         }
     }
-    else
-    {
-        bool involvesWatchAddress = false;
-        isminetype fAllFromMe = ISMINE_SPENDABLE;
-        for (const CTxIn& txin : wtx.vin)
-        {
-            isminetype mine = wallet->IsMine(txin);
-            if(mine & ISMINE_WATCH_ONLY) involvesWatchAddress = true;
-            if(fAllFromMe > mine) fAllFromMe = mine;
+
+
+    for (int i = 0; i < arcTx.vTReceived.size(); i++) {
+        auto tx = TransactionRecord();
+        tx.archiveType = arcTx.archiveType;
+        tx.hash = arcTx.txid;
+        tx.time = arcTx.nTime;
+        tx.address = arcTx.vTReceived[i].encodedAddress;
+        tx.debit = arcTx.vTReceived[i].amount;
+        tx.idx = arcTx.vTReceived[i].vout;
+
+        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vTReceived[i].encodedAddress) != arcTx.spentFrom.end();
+        if (change) {
+            tx.type = TransactionRecord::SendToSelf;
+            partsChange.append(tx);
+        } else {
+            tx.type = TransactionRecord::RecvWithAddress;
+            parts.append(tx);
         }
+    }
 
-        isminetype fAllToMe = ISMINE_SPENDABLE;
-        for (const CTxOut& txout : wtx.vout)
-        {
-            isminetype mine = wallet->IsMine(txout);
-            if(mine & ISMINE_WATCH_ONLY) involvesWatchAddress = true;
-            if(fAllToMe > mine) fAllToMe = mine;
+
+    for (int i = 0; i < arcTx.vZcReceived.size(); i++) {
+        auto tx = TransactionRecord();
+        tx.archiveType = arcTx.archiveType;
+        tx.hash = arcTx.txid;
+        tx.time = arcTx.nTime;
+        tx.address = arcTx.vZcReceived[i].encodedAddress;
+        tx.debit = arcTx.vZcReceived[i].amount;
+        tx.idx = arcTx.vZcReceived[i].jsOutIndex;
+
+        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZcReceived[i].encodedAddress) != arcTx.spentFrom.end();
+        if (change) {
+            tx.type = TransactionRecord::SendToSelf;
+            partsChange.append(tx);
+        } else {
+            tx.type = TransactionRecord::RecvWithAddress;
+            parts.append(tx);
         }
+    }
 
-        if (fAllFromMe && fAllToMe)
-        {
-            // Payment to self
-            CAmount nChange = wtx.GetChange();
+    for (int i = 0; i < arcTx.vZsReceived.size(); i++) {
+        auto tx = TransactionRecord();
+        tx.archiveType = arcTx.archiveType;
+        tx.hash = arcTx.txid;
+        tx.time = arcTx.nTime;
+        tx.address = arcTx.vZsReceived[i].encodedAddress;
+        tx.debit = arcTx.vZsReceived[i].amount;
+        tx.idx = arcTx.vZsReceived[i].shieldedOutputIndex;
 
-            parts.append(TransactionRecord(hash, nTime, TransactionRecord::SendToSelf, "",
-                            -(nDebit - nChange), nCredit - nChange));
-            parts.last().involvesWatchAddress = involvesWatchAddress;   // maybe pass to TransactionRecord as constructor argument
+        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsReceived[i].encodedAddress) != arcTx.spentFrom.end();
+        if (change) {
+            tx.type = TransactionRecord::SendToSelf;
+            partsChange.append(tx);
+        } else {
+            tx.type = TransactionRecord::RecvWithAddress;
+            parts.append(tx);
         }
-        else if (fAllFromMe)
-        {
-            //
-            // Debit
-            //
-            CAmount nTxFee = nDebit - wtx.GetValueOut();
+    }
 
-            for (unsigned int nOut = 0; nOut < wtx.vout.size(); nOut++)
-            {
-                const CTxOut& txout = wtx.vout[nOut];
-                TransactionRecord sub(hash, nTime);
-                sub.idx = nOut;
-                sub.involvesWatchAddress = involvesWatchAddress;
-
-                if(wallet->IsMine(txout))
-                {
-                    // Ignore parts sent to self, as this is usually the change
-                    // from a transaction sent back to our own address.
-                    continue;
-                }
-
-                CTxDestination address;
-                if (ExtractDestination(txout.scriptPubKey, address))
-                {
-                    // Sent to Komodo Address
-                    sub.type = TransactionRecord::SendToAddress;
-                    sub.address = EncodeDestination(address);
-                }
-                else
-                {
-                    // Sent to IP, or other non-address transaction like OP_EVAL
-                    sub.type = TransactionRecord::SendToOther;
-                    sub.address = mapValue["to"];
-                }
-
-                CAmount nValue = txout.nValue;
-                /* Add fee to first output */
-                if (nTxFee > 0)
-                {
-                    nValue += nTxFee;
-                    nTxFee = 0;
-                }
-                sub.debit = -nValue;
-
-                parts.append(sub);
-            }
-        }
-        else
-        {
-            //
-            // Mixed debit transaction, can't break down payees
-            //
-            parts.append(TransactionRecord(hash, nTime, TransactionRecord::Other, "", nNet, 0));
-            parts.last().involvesWatchAddress = involvesWatchAddress;
-        }
+    if (parts.size() == 0) {
+        parts.append(partsChange);
     }
 
     return parts;
