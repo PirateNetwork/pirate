@@ -1965,7 +1965,7 @@ void CWallet::UpdateNullifierNoteMapForBlock(const CBlock *pblock) {
     }
 }
 
-bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb)
+bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb, bool fRescan)
 {
     uint256 hash = wtxIn.GetHash();
 
@@ -2067,16 +2067,18 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
         LogPrintf("AddToWallet %s  %s%s\n", wtxIn.GetHash().ToString(), (fInsertedNew ? "new" : ""), (fUpdated ? "update" : ""));
 
         // Write to disk and update tx archive map
-        if (fInsertedNew || fUpdated)
+        if (fInsertedNew || fUpdated) {
             AddToArcTxs(hash, ArchiveTxPoint(wtx.hashBlock, wtx.nIndex));
             if (!wtx.WriteToDisk(pwalletdb))
                 return false;
+        }
 
         // Break debit/credit balance caches:
         wtx.MarkDirty();
 
         // Notify UI of new or updated transaction
-        NotifyTransactionChanged(this, hash, fInsertedNew ? CT_NEW : CT_UPDATED);
+        if (!fRescan)
+            NotifyTransactionChanged(this, hash, fInsertedNew ? CT_NEW : CT_UPDATED);
 
         // notify an external script when a wallet transaction comes in or is updated
         std::string strCmd = GetArg("-walletnotify", "");
@@ -2133,7 +2135,7 @@ bool CWallet::UpdatedNoteData(const CWalletTx& wtxIn, CWalletTx& wtx)
  * pblock is optional, but should be provided if the transaction is known to be in a block.
  * If fUpdate is true, existing transactions will be updated.
  */
-bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate)
+bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate, bool fRescan)
 {
     {
         AssertLockHeld(cs_wallet);
@@ -2212,7 +2214,7 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
             // this is safe, as in case of a crash, we rescan the necessary blocks on startup through our SetBestChain-mechanism
             CWalletDB walletdb(strWalletFile, "r+", false);
 
-            return AddToWallet(wtx, false, &walletdb);
+            return AddToWallet(wtx, false, &walletdb, fRescan);
         }
     }
     return false;
@@ -3597,8 +3599,22 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
     CBlockIndex* pindex = pindexStart;
 
+    std::set<uint256> txList;
+    std::set<uint256> txListOriginal;
+
     {
         LOCK2(cs_main, cs_wallet);
+
+        //Get List of current list of txids
+        for (map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.begin(); it != pwalletMain->mapArcTxs.end(); ++it)
+        {
+            txListOriginal.insert((*it).first);
+        }
+        for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+        {
+            if (txListOriginal.count((*it).first))
+                txListOriginal.insert((*it).first);
+        }
 
         // no need to read and scan block, if block was created before
         // our wallet birthday (as adjusted for block time variability)
@@ -3616,13 +3632,15 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
                 uiInterface.ShowProgress(_(("Rescanning - Currently on block " + std::to_string(pindex->GetHeight()) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
                 uiInterface.InitMessage(_(("Rescanning - Currently on block " + std::to_string(pindex->GetHeight())).c_str()) + ((" " + std::to_string(scanperc)).c_str()) + ("%"));
             }
+
             bool blockInvolvesMe = false;
             CBlock block;
             ReadBlockFromDisk(block, pindex,1);
             BOOST_FOREACH(CTransaction& tx, block.vtx)
             {
-                if (AddToWalletIfInvolvingMe(tx, &block, fUpdate)) {
+                if (AddToWalletIfInvolvingMe(tx, &block, fUpdate, true)) {
                     blockInvolvesMe = true;
+                    txList.insert(tx.GetHash());
                     ret++;
                 }
             }
@@ -3657,6 +3675,13 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
         uiInterface.ShowProgress(_("Rescanning..."), 100, false); // hide progress dialog in GUI
     }
+
+    for (set<uint256>::iterator it = txList.begin(); it != txList.end(); ++it)
+    {
+        bool fInsertedNew = (txListOriginal.count(*it) == 0);
+        NotifyTransactionChanged(this, *it, fInsertedNew ? CT_NEW : CT_UPDATED);
+    }
+
     return ret;
 }
 
