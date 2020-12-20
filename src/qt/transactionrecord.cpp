@@ -124,7 +124,11 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
             tx.type = TransactionRecord::SendToSelf;
             partsChange.append(tx);
         } else {
-            tx.type = TransactionRecord::RecvWithAddress;
+            if (arcTx.coinbase) {
+                tx.type = TransactionRecord::Generated;
+            } else {
+                tx.type = TransactionRecord::RecvWithAddress;
+            }
             parts.append(tx);
         }
     }
