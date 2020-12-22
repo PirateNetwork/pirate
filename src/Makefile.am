@@ -212,6 +212,7 @@ BITCOIN_CORE_H = \
   netbase.h \
   notaries_staked.h \
   noui.h \
+	params.h \
   paymentdisclosure.h \
   paymentdisclosuredb.h \
   policy/fees.h \
@@ -344,6 +345,7 @@ libbitcoin_server_a_SOURCES = \
   notaries_staked.cpp \
   noui.cpp \
   notarisationdb.cpp \
+	params.cpp \
   paymentdisclosure.cpp \
   paymentdisclosuredb.cpp \
   policy/fees.cpp \

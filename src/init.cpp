@@ -35,6 +35,7 @@
 #include "httprpc.h"
 #include "key.h"
 #include "notarisationdb.h"
+#include "params.h"
 
 #ifdef ENABLE_MINING
 #include "key_io.h"
@@ -847,7 +848,7 @@ bool InitSanityCheck(void)
 
 
 static void ZC_LoadParams(
-    const CChainParams& chainparams
+    const CChainParams& chainparams, bool verified
 )
 {
     struct timeval tv_start, tv_end;
@@ -874,6 +875,19 @@ static void ZC_LoadParams(
             "", CClientUIInterface::MSG_ERROR);
         StartShutdown();
         return;
+    }
+
+    if (!verified) {
+        if (!checkParams()) {
+          uiInterface.ThreadSafeMessageBox(strprintf(
+              _("Network parameters checksums failed:\n"
+                "%s\n"
+                "Please restart the wallet to re-download."),
+                  ZC_GetParamsDir()),
+              "", CClientUIInterface::MSG_ERROR);
+          StartShutdown();
+          return;
+        }
     }
 
     LogPrintf("Loading verifying key from %s\n", vk_path.string().c_str());
@@ -1439,8 +1453,27 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     if ( KOMODO_NSPV_FULLNODE )
     {
         // Initialize Zcash circuit parameters
-        ZC_LoadParams(chainparams);
+        uiInterface.InitMessage(_("Verifying Params...\n"));
+        initalizeMapParam();
+        bool paramsVerified = checkParams();
+        if(!paramsVerified) {
+            getParams();
+        }
+        if (fRequestShutdown)
+        {
+            LogPrintf("Shutdown requested. Exiting.\n");
+            return false;
+        }
+        
+        ZC_LoadParams(chainparams, paramsVerified);
     }
+
+    if (fRequestShutdown)
+    {
+        LogPrintf("Shutdown requested. Exiting.\n");
+        return false;
+    }
+
     /* Start the RPC server already.  It will be started in "warmup" mode
      * and not really process calls already (but it will signify connections
      * that the server is there and will be ready later).  Warmup mode will
