@@ -13,8 +13,6 @@ for binary in "${binaries[@]}";
 do
     # do the work in the destination directory
     cp ${binary} ${PACKAGE_DIR}/Contents/MacOS/
-    cp zcutil/res/mac-init.sh ${PACKAGE_DIR}/Contents/MacOS/
-    cp zcutil/res/start.sh ${PACKAGE_DIR}/Contents/MacOS/
     cp zcutil/res/Info.plist ${PACKAGE_DIR}/Contents/
     cp zcutil/res/PkgInfo ${PACKAGE_DIR}/Contents/
     cp src/qt/res/icons/pirate.icns ${PACKAGE_DIR}/Contents/Resources/logo.icns
