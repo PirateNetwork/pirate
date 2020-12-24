@@ -402,6 +402,7 @@ std::string HelpMessage(HelpMessageMode mode)
     // strUsage += HelpMessageOpt("-prune=<n>", strprintf(_("Reduce storage requirements by pruning (deleting) old blocks. This mode disables wallet support and is incompatible with -txindex. "
     //         "Warning: Reverting this setting requires re-downloading the entire blockchain. "
     //         "(default: 0 = disable pruning blocks, >%u = target size in MiB to use for block files)"), MIN_DISK_SPACE_FOR_BLOCK_FILES / 1024 / 1024));
+    strUsage += HelpMessageOpt("-bootstrap", _("Download and install bootstrap on startup"));
     strUsage += HelpMessageOpt("-reindex", _("Rebuild block chain index from current blk000??.dat files on startup"));
 #if !defined(WIN32)
     strUsage += HelpMessageOpt("-sysperms", _("Create new files with system default permissions, instead of umask 077 (only effective with disabled wallet functionality)"));
@@ -1453,18 +1454,18 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     if ( KOMODO_NSPV_FULLNODE )
     {
         // Initialize Zcash circuit parameters
-        uiInterface.InitMessage(_("Verifying Params...\n"));
+        uiInterface.InitMessage(_("Verifying Params..."));
         initalizeMapParam();
         bool paramsVerified = checkParams();
         if(!paramsVerified) {
-            getParams();
+            downloadFiles("Network Params");
         }
         if (fRequestShutdown)
         {
             LogPrintf("Shutdown requested. Exiting.\n");
             return false;
         }
-        
+
         ZC_LoadParams(chainparams, paramsVerified);
     }
 
@@ -1665,6 +1666,44 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     // ********************************************************* Step 7: load block chain
 
     fReindex = GetBoolArg("-reindex", false);
+
+    bool useBootstrap = false;
+    bool newInstall = GetBoolArg("-bootstrapinstall", false);
+    if (!boost::filesystem::exists(GetDataDir() / "blocks") || !boost::filesystem::exists(GetDataDir() / "chainstate"))
+        newInstall = true;
+
+    if (newInstall) {
+        bool fBoot = uiInterface.ThreadSafeMessageBox(
+            "\n\n" + _("New install detected.\n\nPress OK to download the blockchain bootstrap."),
+            "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
+        if (fBoot) {
+            useBootstrap = true;
+        }
+    }
+
+    if (GetBoolArg("-bootstrap", false) && !useBootstrap) {
+        bool fBoot = uiInterface.ThreadSafeMessageBox(
+            "\n\n" + _("Bootstrap option detected.\n\nPress OK to download the blockchain bootstrap."),
+            "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
+        if (fBoot) {
+            useBootstrap = true;
+        }
+    }
+
+    if (useBootstrap) {
+        fReindex = false;
+        boost::filesystem::remove_all(GetDataDir() / "blocks");
+        boost::filesystem::remove_all(GetDataDir() / "chainstate");
+        boost::filesystem::remove_all(GetDataDir() / "notarisations");
+        boost::filesystem::remove_all(GetDataDir() / "database");
+        getBootstrap();
+    }
+
+    if (fRequestShutdown)
+    {
+        LogPrintf("Shutdown requested. Exiting.\n");
+        return false;
+    }
 
     boost::filesystem::create_directories(GetDataDir() / "blocks");
 
@@ -2055,7 +2094,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         RegisterValidationInterface(pwalletMain);
 
         CBlockIndex *pindexRescan = chainActive.Tip();
-        if (clearWitnessCaches || GetBoolArg("-rescan", false) || !fInitializeArcTx)
+        if (clearWitnessCaches || GetBoolArg("-rescan", false) || !fInitializeArcTx || useBootstrap)
         {
             pwalletMain->ClearNoteWitnessCache();
             pindexRescan = chainActive.Genesis();

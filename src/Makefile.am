@@ -33,13 +33,13 @@ BITCOIN_INCLUDES += -I$(srcdir)/snark/libsnark
 BITCOIN_INCLUDES += -I$(srcdir)/univalue/include
 
 if TARGET_WINDOWS
-LIBBITCOIN_SERVER=libbitcoin_server.a -lcurl
+LIBBITCOIN_SERVER=libbitcoin_server.a -lcurl -larchive
 endif
 if TARGET_DARWIN
-LIBBITCOIN_SERVER=libbitcoin_server.a -lcurl
+LIBBITCOIN_SERVER=libbitcoin_server.a -lcurl -larchive
 endif
 if TARGET_LINUX
-LIBBITCOIN_SERVER=libbitcoin_server.a -lcurl
+LIBBITCOIN_SERVER=libbitcoin_server.a -lcurl -larchive
 endif
 
 LIBBITCOIN_WALLET=libbitcoin_wallet.a

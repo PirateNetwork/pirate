@@ -19,6 +19,9 @@
 /* curl stuff */
 #include <curl/curl.h>
 
+#include <archive.h>
+#include <archive_entry.h>
+
 #include <boost/filesystem.hpp>
 #include <boost/thread.hpp>
 
@@ -67,9 +70,14 @@ struct ParamFile {
 extern std::map<std::string, ParamFile> mapParams;
 
 extern bool checkParams();
+extern void initalizeMapParamBootstrap();
 extern void initalizeMapParam();
 static size_t write_data(void *ptr, size_t size, size_t nmemb, void *stream);
-extern bool getParams();
-// extern bool getParams(std::map<std::string, ParamFile> *mapParams);
+extern bool downloadFiles(std::string title);
+extern void getBootstrap();
+static bool extract(const char *filename);
+static int copy_data(struct archive *ar, struct archive *aw);
+
+static int verbose = 0;
 
 #endif // BITCOIN_PARAMS_H

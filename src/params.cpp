@@ -21,7 +21,6 @@ int sha256_file(const char *path, char outputBuffer[65])
     errno = 0;
     FILE *file = fopen(path, "rb");
     if (!file) {
-        LogPrintf("Error %d \n", errno);
         return -534;
     }
 
@@ -48,7 +47,7 @@ int sha256_file(const char *path, char outputBuffer[65])
 bool checkParams() {
     bool allVerified = true;
     for (std::map<std::string, ParamFile>::iterator it = mapParams.begin(); it != mapParams.end(); ++it) {
-        std::string uiMessage = "Verifying " + it->second.name + "....\n";
+        std::string uiMessage = "Verifying " + it->second.name + "....";
         uiInterface.InitMessage(_(uiMessage.c_str()));
         const char *path = it->second.path.string().c_str();
         char calc_hash[65];
@@ -91,7 +90,24 @@ static int xferinfo(void *p,
   return 0;
 }
 
+void initalizeMapParamBootstrap() {
+  mapParams.clear();
+
+  ParamFile bootFile;
+  bootFile.name = "bootstrap";
+  bootFile.URL = "http://bootstrap.dexstats.info/ARRR-bootstrap.tar.gz";
+  bootFile.verified = false;
+  bootFile.path = GetDataDir() / "ARRR-bootstrap.tar.gz";
+  bootFile.dlnow = 0;
+  bootFile.dltotal = 0;
+  mapParams[bootFile.URL] = bootFile;
+
+}
+
+
 void initalizeMapParam() {
+
+    mapParams.clear();
 
     ParamFile pkFile;
     pkFile.name = "sprout-proving.key";
@@ -145,9 +161,10 @@ void initalizeMapParam() {
 
 }
 
-bool getParams()
+bool downloadFiles(std::string title)
 {
 
+    bool downloadComplete = true;
     curl_global_init(CURL_GLOBAL_ALL);
     CURLM *multi_handle;
     multi_handle = curl_multi_init();
@@ -161,7 +178,6 @@ bool getParams()
 
         if (!it->second.verified) {
             /* init the curl session */
-            LogPrintf("Downloading %s\n",it->second.URL);
             it->second.curl = curl_easy_init();
             if(it->second.curl) {
                 it->second.prog.lastruntime = 0;
@@ -191,29 +207,37 @@ bool getParams()
 
     curl_multi_perform(multi_handle, &still_running);
 
+    std::string uiMessage;
+    uiMessage = "Downloading " + title + "......0.00%";
+    uiInterface.InitMessage(_(uiMessage.c_str()));
+    int64_t nNow = GetTime();
+
     while(still_running) {
       boost::this_thread::interruption_point();
 
-      if (ShutdownRequested())
+      if (ShutdownRequested()) {
+          downloadComplete = false;
           break;
+      }
 
-      std::string uiNotification;
-      uiNotification = "Downloading Params...\n";
-      for (std::map<std::string, ParamFile>::iterator it = mapParams.begin(); it != mapParams.end(); ++it) {
-          if (!it->second.verified) {
-              if (it->second.dltotal > 0) {
-                  double pert = (it->second.dlnow / (double)it->second.dltotal) * 100;
-                  // double rounded = (int)(pert * 100 + .5);
-                  // double roundedPert = (double)rounded / 100;
-                  std::string addedNotification = it->second.name + "...... " + std::to_string(pert).substr(0,6) + "%\n";
-                  uiNotification.append(addedNotification);
-              } else {
-                std::string addedNotification = it->second.name + "...... " + std::to_string(0.00) + "%\n";
-                uiNotification.append(addedNotification);
+      if (GetTime() >= nNow + 1) {
+          nNow = GetTime();
+          long dltotal = 0;
+          long dlnow = 0;
+          for (std::map<std::string, ParamFile>::iterator it = mapParams.begin(); it != mapParams.end(); ++it) {
+              if (!it->second.verified) {
+                  dltotal += it->second.dltotal;
+                  dlnow += it->second.dlnow;
               }
           }
+          double pert = 0.00;
+          if (dltotal > 0) {
+              pert = (dlnow / (double)dltotal) * 100;
+          }
+          uiMessage = "Downloading " + title + "......" + std::to_string(pert).substr(0,10) + "%";
+          uiInterface.InitMessage(_(uiMessage.c_str()));
       }
-      uiInterface.InitMessage(_(uiNotification.c_str()));
+
 
       struct timeval timeout;
       int rc; /* select() return code */
@@ -248,6 +272,7 @@ bool getParams()
 
       if(mc != CURLM_OK) {
         fprintf(stderr, "curl_multi_fdset() failed, code %d.\n", mc);
+        downloadComplete = false;
         break;
       }
 
@@ -275,7 +300,7 @@ bool getParams()
 
       switch(rc) {
       case -1:
-        /* select error */
+        downloadComplete = false;
         break;
       case 0:
       default:
@@ -296,5 +321,119 @@ bool getParams()
     curl_multi_cleanup(multi_handle);
     curl_global_cleanup();
 
-    return true;
+    return downloadComplete;
+}
+
+
+void getBootstrap() {
+    initalizeMapParamBootstrap();
+    bool dlsuccess = downloadFiles("Bootstrap");
+
+    for (std::map<std::string, ParamFile>::iterator it = mapParams.begin(); it != mapParams.end(); ++it) {
+        const char *path = it->second.path.string().c_str();
+        if (dlsuccess) {
+            extract(path);
+        }
+        if (boost::filesystem::exists(it->second.path.string())) {
+            boost::filesystem::remove(it->second.path.string());
+        }
+    }
+}
+
+
+bool extract(const char *filename) {
+
+  bool extractComplete = true;
+	struct archive *a;
+	struct archive *ext;
+	struct archive_entry *entry;
+	int r;
+
+  int flags = ARCHIVE_EXTRACT_TIME;
+  flags |= ARCHIVE_EXTRACT_PERM;
+  flags |= ARCHIVE_EXTRACT_ACL;
+  flags |= ARCHIVE_EXTRACT_FFLAGS;
+
+	a = archive_read_new();
+	ext = archive_write_disk_new();
+	archive_write_disk_set_options(ext, flags);
+  archive_write_disk_set_standard_lookup(ext);
+
+	if (archive_read_support_format_tar(a) != ARCHIVE_OK)
+      extractComplete = false;
+
+  if (archive_read_support_filter_gzip(a) != ARCHIVE_OK)
+        extractComplete = false;
+
+	if (filename != NULL && strcmp(filename, "-") == 0)
+		filename = NULL;
+
+  r = archive_read_open_filename(a, filename, 10240);
+	if (r != ARCHIVE_OK) {
+      LogPrintf("archive_read_open_filename() %s %d\n",archive_error_string(a), r);
+      extractComplete = false;
+  }
+
+  if (extractComplete) {
+      for (;;) {
+          r = archive_read_next_header(a, &entry);
+          if (r == ARCHIVE_EOF) {
+              break;
+          }
+          if (r != ARCHIVE_OK) {
+              LogPrintf("archive_read_next_header() %s %d\n",archive_error_string(a), r);
+              extractComplete = false;
+          }
+
+          const char* currentFile = archive_entry_pathname(entry);
+          std::string path = GetDataDir().string() + "/" + currentFile;
+          std::string uiMessage = "Extracting Bootstrap file " + path;
+          uiInterface.InitMessage(_(uiMessage.c_str()));
+          archive_entry_set_pathname(entry, path.c_str());
+          r = archive_write_header(ext, entry);
+          if (r != ARCHIVE_OK) {
+              LogPrintf("archive_write_header() %s %d\n",archive_error_string(ext), r);
+              extractComplete = false;
+          } else {
+              copy_data(a, ext);
+              r = archive_write_finish_entry(ext);
+              if (r != ARCHIVE_OK) {
+                  LogPrintf("archive_write_finish_entry() %s %d\n",archive_error_string(ext), r);
+                  extractComplete = false;
+              }
+          }
+      }
+  }
+
+	archive_read_close(a);
+	archive_read_free(a);
+
+	archive_write_close(ext);
+  archive_write_free(ext);
+
+	return extractComplete;
+}
+
+
+static int copy_data(struct archive *ar, struct archive *aw) {
+    int r;
+    const void *buff;
+    size_t size;
+    int64_t offset;
+
+    for (;;) {
+        r = archive_read_data_block(ar, &buff, &size, &offset);
+
+        if (r == ARCHIVE_EOF)
+            return (ARCHIVE_OK);
+
+        if (r != ARCHIVE_OK)
+            return (r);
+
+        r = archive_write_data_block(aw, buff, size, offset);
+        if (r != ARCHIVE_OK) {
+            LogPrintf("archive_write_data_block() %s\n",archive_error_string(aw));
+            return (r);
+        }
+    }
 }
