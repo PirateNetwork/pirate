@@ -1,9 +1,9 @@
 package=libcurl
-$(package)_version=7.67.0
+$(package)_version=7.74.0
 $(package)_dependencies=openssl
 $(package)_download_path=https://curl.haxx.se/download
 $(package)_file_name=curl-$($(package)_version).tar.gz
-$(package)_sha256_hash=52af3361cf806330b88b4fe6f483b6844209d47ae196ac46da4de59bb361ab02
+$(package)_sha256_hash=e56b3921eeb7a2951959c02db0912b5fcd5fdba5aca071da819e1accf338bbd7
 $(package)_config_opts_linux=--disable-shared --enable-static --prefix=$(host_prefix) --host=x86_64-unknown-linux-gnu
 $(package)_config_opts_mingw32=--enable-mingw --disable-shared --enable-static --prefix=$(host_prefix) --host=x86_64-w64-mingw32
 $(package)_config_opts_darwin=--disable-shared --enable-static --prefix=$(host_prefix)
@@ -27,7 +27,7 @@ define $(package)_config_cmds
   echo '=== config for $(package):' && \
   echo '$($(package)_config_env) $($(package)_conf_tool) $($(package)_config_opts)' && \
   echo '=== ' && \
-  $($(package)_config_env) $($(package)_conf_tool) $($(package)_config_opts) 
+  $($(package)_config_env) $($(package)_conf_tool) $($(package)_config_opts)
 endef
 
 ifeq ($(build_os),darwin)

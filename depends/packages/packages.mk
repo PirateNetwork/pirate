@@ -8,7 +8,7 @@ else
 endif
 
 qt_native_packages = native_protobuf
-qt_packages = qrencode protobuf zlib
+qt_packages = qrencode protobuf
 
 qt_linux_packages:=qt expat libxcb xcb_proto libXau xproto freetype fontconfig
 qt_android_packages=qt
@@ -56,7 +56,7 @@ native_packages := native_ccache
 wallet_packages=bdb
 
 ifeq ($(host_os),linux)
-	packages := boost openssl libevent zeromq $(zcash_packages) libarchive googletest libcurl #googlemock
+	packages := boost openssl libevent zeromq $(zcash_packages) zlib libarchive googletest libcurl #googlemock
 else
-	packages := boost openssl libevent zeromq $(zcash_packages) libarchive libcurl googletest #googlemock
+	packages := boost openssl libevent zeromq $(zcash_packages) zlib libarchive libcurl googletest #googlemock
 endif

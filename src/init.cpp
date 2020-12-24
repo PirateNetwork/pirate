@@ -1696,6 +1696,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         boost::filesystem::remove_all(GetDataDir() / "chainstate");
         boost::filesystem::remove_all(GetDataDir() / "notarisations");
         boost::filesystem::remove_all(GetDataDir() / "database");
+        boost::filesystem::remove(GetDataDir() / "komodostate");
+        boost::filesystem::remove(GetDataDir() / "signedmasks");
+        boost::filesystem::remove(GetDataDir() / "komodostate.ind");
         getBootstrap();
     }
 

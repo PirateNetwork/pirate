@@ -59,8 +59,8 @@ struct ParamFile {
     bool verified;
     boost::filesystem::path path;
     FILE *file;
-    long dlnow;
-    long dltotal;
+    int64_t dlnow;
+    int64_t dltotal;
     CURL *curl;
     CurlProgress prog;
 };

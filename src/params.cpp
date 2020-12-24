@@ -222,8 +222,8 @@ bool downloadFiles(std::string title)
 
       if (GetTime() >= nNow + 1) {
           nNow = GetTime();
-          long dltotal = 0;
-          long dlnow = 0;
+          int64_t dltotal = 0;
+          int64_t dlnow = 0;
           for (std::map<std::string, ParamFile>::iterator it = mapParams.begin(); it != mapParams.end(); ++it) {
               if (!it->second.verified) {
                   dltotal += it->second.dltotal;
@@ -387,7 +387,8 @@ bool extract(const char *filename) {
 
           const char* currentFile = archive_entry_pathname(entry);
           std::string path = GetDataDir().string() + "/" + currentFile;
-          std::string uiMessage = "Extracting Bootstrap file " + path;
+          std::string uiMessage = "Extracting Bootstrap file ";
+          uiMessage.append(currentFile);
           uiInterface.InitMessage(_(uiMessage.c_str()));
           archive_entry_set_pathname(entry, path.c_str());
           r = archive_write_header(ext, entry);
