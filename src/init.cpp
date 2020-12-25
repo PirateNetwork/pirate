@@ -1692,10 +1692,11 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     if (useBootstrap) {
         fReindex = false;
+        //wipe transactions from wallet to create a clean slate
+        OverrideSetArg("-zappwallettxes","2");
         boost::filesystem::remove_all(GetDataDir() / "blocks");
         boost::filesystem::remove_all(GetDataDir() / "chainstate");
         boost::filesystem::remove_all(GetDataDir() / "notarisations");
-        boost::filesystem::remove_all(GetDataDir() / "database");
         boost::filesystem::remove(GetDataDir() / "komodostate");
         boost::filesystem::remove(GetDataDir() / "signedmasks");
         boost::filesystem::remove(GetDataDir() / "komodostate.ind");
@@ -2080,6 +2081,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
         if (fFirstRun)
         {
+            useBootstrap = false;
             // Create new keyUser and set as default key
             CPubKey newDefaultKey;
             if (pwalletMain->GetKeyFromPool(newDefaultKey)) {

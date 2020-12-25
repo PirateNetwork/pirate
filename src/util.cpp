@@ -481,6 +481,11 @@ bool IsArgSet(const std::string& strArg)
     return mapArgs.count(strArg);
 }
 
+void OverrideSetArg(const std::string& strArg, const std::string& strValue)
+{
+    mapArgs[strArg] = strValue;
+}
+
 bool SoftSetArg(const std::string& strArg, const std::string& strValue)
 {
     if (mapArgs.count(strArg))
