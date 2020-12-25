@@ -208,9 +208,7 @@ public:
             }
             if(showTransaction)
             {
-                LogPrintf("Update Transaction pre lock");
                 LOCK2(cs_main, wallet->cs_wallet);
-                LogPrintf("Update Transaction post lock");
                 // Find transaction in wallet
                 bool isActiveTx = false;
                 bool isArchiveTx = false;

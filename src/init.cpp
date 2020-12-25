@@ -1955,10 +1955,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 InitWarning(msg);
             }
             else if (nLoadWalletRet == DB_TOO_NEW)
-                strErrors << _("Error loading wallet.dat: Wallet requires newer version of Komodo") << "\n";
+                strErrors << _("Error loading wallet.dat: Wallet requires newer version of Pirate") << "\n";
             else if (nLoadWalletRet == DB_NEED_REWRITE)
             {
-                strErrors << _("Wallet needed to be rewritten: restart Zcash to complete") << "\n";
+                strErrors << _("Wallet needed to be rewritten: restart Pirate to complete") << "\n";
                 LogPrintf("%s", strErrors.str());
                 return InitError(strErrors.str());
             }
@@ -1980,7 +1980,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
           pwalletMain = new CWallet(strWalletFile);
           DBErrors nZapWalletRet = pwalletMain->ZapWalletTx(vWtx);
           if (nZapWalletRet != DB_LOAD_OK) {
-              uiInterface.InitMessage(_("Error loading wallet.zero: Wallet corrupted"));
+              uiInterface.InitMessage(_("Error loading wallet.dat: Wallet corrupted"));
               return false;
           }
 
@@ -1994,24 +1994,24 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
           if (nLoadWalletRet != DB_LOAD_OK)
           {
               if (nLoadWalletRet == DB_CORRUPT)
-                  strErrors << _("Error loading wallet.zero: Wallet corrupted") << "\n";
+                  strErrors << _("Error loading wallet.dat: Wallet corrupted") << "\n";
               else if (nLoadWalletRet == DB_NONCRITICAL_ERROR)
               {
-                  string msg(_("Warning: error reading wallet.zero! All keys read correctly, but transaction data"
+                  string msg(_("Warning: error reading wallet.dat! All keys read correctly, but transaction data"
                                " or address book entries might be missing or incorrect."));
                   InitWarning(msg);
               }
               else if (nLoadWalletRet == DB_TOO_NEW)
-                  strErrors << _("Error loading wallet.zero: Wallet requires newer version of Bitcoin Core") << "\n";
+                  strErrors << _("Error loading wallet.dat: Wallet requires newer version of Pirate") << "\n";
 
               else if (nLoadWalletRet == DB_NEED_REWRITE)
               {
-                  strErrors << _("Wallet needed to be rewritten: restart Zero to complete") << "\n";
+                  strErrors << _("Wallet needed to be rewritten: restart Pirate to complete") << "\n";
                   LogPrintf("%s", strErrors.str());
                   return InitError(strErrors.str());
               }
               else
-                  strErrors << _("Error loading wallet.zero") << "\n";
+                  strErrors << _("Error loading wallet.dat") << "\n";
           }
 
         }
