@@ -1431,6 +1431,7 @@ void komodo_configfile(char *symbol,uint16_t rpcport)
                 fprintf(fp,"rpcuser=user%u\nrpcpassword=pass%s\nrpcport=%u\nserver=1\ntxindex=1\nrpcworkqueue=256\nrpcallowip=127.0.0.1\nrpcbind=127.0.0.1\n",crc,password,rpcport);
                 fclose(fp);
                 printf("Created (%s)\n",fname);
+								SoftSetArg("-bootstrapinstall", std::string("1"));
             } else printf("Couldnt create (%s)\n",fname);
 #endif
         }
@@ -1749,12 +1750,6 @@ void komodo_args(char *argv0)
     SoftSetArg("-ac_reward", std::string("25600000000"));
     SoftSetArg("-ac_private", std::string("1"));
     SoftSetArg("-ac_halving", std::string("77777"));
-
-    SoftSetArg("-consolidation", std::string("1"));
-    SoftSetArg("-deletetx", std::string("1"));
-    SoftSetArg("-deleteinterval", std::string("1"));
-    SoftSetArg("-keeptxnum", std::string("10"));
-    SoftSetArg("-keeptxfornblocks", std::string("100"));
 
     SoftSetArg("-addnode", std::string("zero.kolo.supernet.org"));
     vector<string> PIRATEnodes = { "136.243.58.134","209.250.227.29","195.201.230.227","159.89.45.197","67.207.94.69","178.63.77.56","94.45.155.6","195.93.180.221","51.83.3.42","45.76.232.40","139.99.208.174" };

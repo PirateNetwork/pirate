@@ -33,13 +33,13 @@ BITCOIN_INCLUDES += -I$(srcdir)/snark/libsnark
 BITCOIN_INCLUDES += -I$(srcdir)/univalue/include
 
 if TARGET_WINDOWS
-LIBBITCOIN_SERVER=libbitcoin_server.a -lcurl
+LIBBITCOIN_SERVER=libbitcoin_server.a -lcurl -larchive
 endif
 if TARGET_DARWIN
-LIBBITCOIN_SERVER=libbitcoin_server.a -lcurl
+LIBBITCOIN_SERVER=libbitcoin_server.a -lcurl -larchive
 endif
 if TARGET_LINUX
-LIBBITCOIN_SERVER=libbitcoin_server.a -lcurl
+LIBBITCOIN_SERVER=libbitcoin_server.a -lcurl -larchive
 endif
 
 LIBBITCOIN_WALLET=libbitcoin_wallet.a
@@ -122,11 +122,11 @@ noinst_PROGRAMS =
 TESTS =
 
 #if BUILD_BITCOIND
-  bin_PROGRAMS += komodod
+  bin_PROGRAMS += pirated
 #endif
 
 if BUILD_BITCOIN_UTILS
-  bin_PROGRAMS += komodo-cli komodo-tx
+  bin_PROGRAMS += pirate-cli pirate-tx
 endif
 if ENABLE_WALLET
   bin_PROGRAMS += wallet-utility
@@ -212,6 +212,7 @@ BITCOIN_CORE_H = \
   netbase.h \
   notaries_staked.h \
   noui.h \
+	params.h \
   paymentdisclosure.h \
   paymentdisclosuredb.h \
   policy/fees.h \
@@ -344,6 +345,7 @@ libbitcoin_server_a_SOURCES = \
   notaries_staked.cpp \
   noui.cpp \
   notarisationdb.cpp \
+	params.cpp \
   paymentdisclosure.cpp \
   paymentdisclosuredb.cpp \
   policy/fees.cpp \
@@ -564,16 +566,16 @@ nodist_libbitcoin_util_a_SOURCES = $(srcdir)/obj/build.h
 #
 
 # bitcoind binary #
-komodod_SOURCES = bitcoind.cpp
-komodod_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
-komodod_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-komodod_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
+pirated_SOURCES = bitcoind.cpp
+pirated_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
+pirated_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+pirated_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 
 if TARGET_WINDOWS
-komodod_SOURCES += bitcoind-res.rc
+pirated_SOURCES += bitcoind-res.rc
 endif
 
-komodod_LDADD = \
+pirated_LDADD = \
   $(LIBBITCOIN_SERVER) \
   $(LIBBITCOIN_COMMON) \
   $(LIBUNIVALUE) \
@@ -591,10 +593,10 @@ komodod_LDADD = \
   $(LIBCRYPTOCONDITIONS)
 
 if ENABLE_WALLET
-komodod_LDADD += $(LIBBITCOIN_WALLET)
+pirated_LDADD += $(LIBBITCOIN_WALLET)
 endif
 
-komodod_LDADD += \
+pirated_LDADD += \
   $(BOOST_LIBS) \
   $(BDB_LIBS) \
   $(SSL_LIBS) \
@@ -611,31 +613,31 @@ komodod_LDADD += \
   $(LIBCRYPTOCONDITIONS)
 
 # if TARGET_DARWIN
-# komodod_LDADD += libcc.dylib $(LIBSECP256K1)
+# pirated_LDADD += libcc.dylib $(LIBSECP256K1)
 # endif
 # if TARGET_WINDOWS
-# komodod_LDADD += libcc.dll $(LIBSECP256K1)
+# pirated_LDADD += libcc.dll $(LIBSECP256K1)
 # endif
 # if TARGET_LINUX
-# komodod_LDADD += libcc.so $(LIBSECP256K1)
+# pirated_LDADD += libcc.so $(LIBSECP256K1)
 # endif
 
 if ENABLE_PROTON
-komodod_LDADD += $(LIBBITCOIN_PROTON) $(PROTON_LIBS)
+pirated_LDADD += $(LIBBITCOIN_PROTON) $(PROTON_LIBS)
 endif
 
 # [+] Decker: use static linking for libstdc++.6.dylib, libgomp.1.dylib, libgcc_s.1.dylib
 if TARGET_DARWIN
-komodod_LDFLAGS += -static-libgcc
+pirated_LDFLAGS += -static-libgcc
 endif
 
 # bitcoin-cli binary #
-komodo_cli_SOURCES = bitcoin-cli.cpp
-komodo_cli_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(EVENT_CFLAGS)
-komodo_cli_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-komodo_cli_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
+pirate_cli_SOURCES = bitcoin-cli.cpp
+pirate_cli_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(EVENT_CFLAGS)
+pirate_cli_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+pirate_cli_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 if TARGET_DARWIN
-komodo_cli_LDFLAGS += -static-libgcc
+pirate_cli_LDFLAGS += -static-libgcc
 endif
 
 # wallet-utility binary #
@@ -647,10 +649,10 @@ wallet_utility_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 endif
 
 if TARGET_WINDOWS
-komodo_cli_SOURCES += bitcoin-cli-res.rc
+pirate_cli_SOURCES += bitcoin-cli-res.rc
 endif
 
-komodo_cli_LDADD = \
+pirate_cli_LDADD = \
 	$(LIBBITCOIN_CLI) \
 	$(LIBUNIVALUE) \
 	$(LIBBITCOIN_UTIL) \
@@ -683,17 +685,17 @@ wallet_utility_LDADD = \
 endif
 
 # zcash-tx binary #
-komodo_tx_SOURCES = komodo-tx.cpp
-komodo_tx_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
-komodo_tx_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-komodo_tx_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
+pirate_tx_SOURCES = komodo-tx.cpp
+pirate_tx_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
+pirate_tx_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+pirate_tx_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 
 if TARGET_WINDOWS
-komodo_tx_SOURCES += bitcoin-tx-res.rc
+pirate_tx_SOURCES += bitcoin-tx-res.rc
 endif
 
 # FIXME: Is libzcash needed for zcash_tx?
-komodo_tx_LDADD = \
+pirate_tx_LDADD = \
   $(LIBUNIVALUE) \
   $(LIBBITCOIN_COMMON) \
   $(LIBBITCOIN_UTIL) \
@@ -706,7 +708,7 @@ komodo_tx_LDADD = \
   $(LIBZCASH_LIBS) \
   $(LIBCRYPTOCONDITIONS)
 
-komodo_tx_LDADD += $(BOOST_LIBS) $(CRYPTO_LIBS)
+pirate_tx_LDADD += $(BOOST_LIBS) $(CRYPTO_LIBS)
 #
 
 # zcash protocol primitives #
@@ -815,6 +817,6 @@ include Makefile.ktest.include
 #include Makefile.gtest.include
 endif
 
-#if ENABLE_QT
+if ENABLE_QT
 include Makefile.qt.include
-#endif
+endif

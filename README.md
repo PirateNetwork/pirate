@@ -44,33 +44,48 @@ sudo apt-get update && sudo apt-get upgrade -y
 sudo apt-get install build-essential pkg-config libc6-dev m4 g++-multilib autoconf libtool libncurses-dev unzip git python zlib1g-dev wget bsdmainutils automake libboost-all-dev libssl-dev libprotobuf-dev protobuf-compiler libqrencode-dev libdb++-dev ntp ntpdate nano software-properties-common curl libevent-dev libcurl4-gnutls-dev cmake clang libsodium-dev -y
 ```
 
-### Build Komodo
+### Build Pirate
 
-This software is based on zcash and considered experimental and is continously undergoing heavy development.
+This software is based on zcash and considered experimental and is continuously undergoing heavy development.
 
-The dev branch is considered the bleeding edge codebase while the master-branch is considered tested (unit tests, runtime tests, functionality). At no point of time do the Komodo Platform developers take any responsbility for any damage out of the usage of this software. 
-Komodo builds for all operating systems out of the same codebase. Follow the OS specific instructions from below.
+The dev branch is considered the bleeding edge codebase while the master-branch is considered tested (unit tests, runtime tests, functionality). At no point of time do the Pirate developers take any responsibility for any damage out of the usage of this software.
+Pirate builds for all operating systems out of the same codebase. Follow the OS specific instructions from below.
 
 #### Linux
 ```shell
 git clone https://github.com/PirateNetwork/pirate --branch master
 cd pirate
+# This step is not required for when using the Qt GUI
 ./zcutil/fetch-params.sh
+
 # -j8 = using 8 threads for the compilation - replace 8 with number of threads you want to use; -j$(nproc) for all threads available
+
+#For CLI binaries
 ./zcutil/build.sh -j8
-# This can take some time.
+
+#For qt GUI binaries
+./zcutil/build-qt-linux.sh -j8.
 ```
 
 #### OSX
 Ensure you have [brew](https://brew.sh) and the command line tools installed (comes automatically with XCode) and run:
 ```shell
-brew update && brew install gcc@6
+brew update
+brew upgrade
+brew tap discoteq/discoteq; brew install flock
+brew install autoconf autogen automake gcc@8 binutilsprotobuf coreutils wget python3
 git clone https://github.com/PirateNetwork/pirate --branch master
 cd pirate
+# This step is not required for when using the Qt GUI
 ./zcutil/fetch-params.sh
+
 # -j8 = using 8 threads for the compilation - replace 8 with number of threads you want to use; -j$(nproc) for all threads available
+
+#For CLI binaries
 ./zcutil/build-mac.sh -j8
-#This can take some time.
+
+#For qt GUI binaries
+./zcutil/build-qt-mac.sh -j8
 ```
 
 #### Windows
@@ -88,19 +103,38 @@ sudo update-alternatives --config x86_64-w64-mingw32-g++
 
 git clone https://github.com/PirateNetwork/pirate --branch master
 cd pirate
+# This step is not required for when using the Qt GUI
 ./zcutil/fetch-params.sh
+
 # -j8 = using 8 threads for the compilation - replace 8 with number of threads you want to use; -j$(nproc) for all threads available
+
+#For CLI binaries
 ./zcutil/build-win.sh -j8
-#This can take some time.
+
+#For qt GUI binaries
+./zcutil/build-qt-win.sh -j8
 ```
-**pirate is experimental and a work-in-progress.** Use at your own risk.
+**Pirate is experimental and a work-in-progress.** Use at your own risk.
+
+To run the Pirate GUI wallet:
+
+**Linux**
+`pirate-qt-linux`
+
+**OSX**
+`pirate-qt-mac`
+
+**Windows**
+`pirate-qt-win.exe`
+
 
 To run the daemon for PirateChain:  
-`komodod -ac_name=PIRATE -ac_supply=0 -ac_reward=25600000000 -ac_halving=77777 -ac_private=1`  
-both komodod and komodo-cl are located in the src directory after successfully building  
+`pirated`
+both pirated and pirate-cli are located in the src directory after successfully building  
 
 To reset the PirateChain blockchain change into the *~/.komodo/PIRATE* data directory and delete the corresponding files by running `rm -rf blocks chainstate debug.log komodostate db.log` and restart daemon
 
+To initiate a bootstrap download on the GUI wallet add bootstrap=1 to the PIRATE.conf file.
 
 
 **Pirate is based on Komodo which is unfinished and highly experimental.** Use at your own risk.

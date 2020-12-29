@@ -226,6 +226,14 @@ bool GetBoolArg(const std::string& strArg, bool fDefault);
 bool IsArgSet(const std::string& strArg);
 
 /**
+ * Set an argument even if it already has a value
+ *
+ * @param strArg Argument to set (e.g. "-foo")
+ * @param strValue Value (e.g. "1")
+ */
+void OverrideSetArg(const std::string& strArg, const std::string& strValue);
+
+/**
  * Set an argument if it doesn't already have a value
  *
  * @param strArg Argument to set (e.g. "-foo")

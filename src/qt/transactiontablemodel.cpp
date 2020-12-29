@@ -161,131 +161,7 @@ public:
 
                 }
 
-                if (arcTx.spentFrom.size() > 0) {
-
-                    for (int i = 0; i < arcTx.vTSend.size(); i++) {
-                        auto tx = TransactionRecord();
-                        tx.archiveType = arcTx.archiveType;
-                        tx.hash = arcTx.txid;
-                        tx.time = arcTx.nTime;
-                        tx.address = arcTx.vTSend[i].encodedAddress;
-                        tx.debit = arcTx.vTSend[i].amount;
-                        tx.idx = arcTx.vTSend[i].vout;
-
-                        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vTSend[i].encodedAddress) != arcTx.spentFrom.end();
-                        if (change) {
-                            tx.type = TransactionRecord::SendToSelf;
-                        } else {
-                            tx.type = TransactionRecord::SendToAddress;
-                        }
-                        cachedWallet.append(tx);
-                    }
-
-
-                    CAmount sproutValueReceived = 0;
-                    for (int i = 0; i < arcTx.vZcReceived.size(); i++) {
-                        sproutValueReceived += arcTx.vZcReceived[i].amount;
-                        auto tx = TransactionRecord();
-                        tx.archiveType = arcTx.archiveType;
-                        tx.hash = arcTx.txid;
-                        tx.time = arcTx.nTime;
-                        tx.address = arcTx.vZcReceived[i].encodedAddress;
-                        tx.credit = -arcTx.vZcReceived[i].amount;
-                        tx.idx = arcTx.vZcReceived[i].jsOutIndex;
-
-                        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZcReceived[i].encodedAddress) != arcTx.spentFrom.end();
-                        if (change) {
-                            tx.type = TransactionRecord::SendToSelf;
-                        } else {
-                            tx.type = TransactionRecord::SendToAddress;
-                        }
-                        cachedWallet.append(tx);
-                    }
-
-                    if (arcTx.sproutValue - arcTx.sproutValueSpent - sproutValueReceived != 0) {
-                        auto tx = TransactionRecord();
-                        tx.archiveType = arcTx.archiveType;
-                        tx.hash = arcTx.txid;
-                        tx.time = arcTx.nTime;
-                        tx.address = "Private Sprout Address";
-                        tx.credit = -arcTx.sproutValue - arcTx.sproutValueSpent;
-                        tx.type = TransactionRecord::SendToAddress;
-                        cachedWallet.append(tx);
-                    }
-
-                    for (int i = 0; i < arcTx.vZsSend.size(); i++) {
-                        auto tx = TransactionRecord();
-                        tx.archiveType = arcTx.archiveType;
-                        tx.hash = arcTx.txid;
-                        tx.time = arcTx.nTime;
-                        tx.address = arcTx.vZsSend[i].encodedAddress;
-                        tx.credit = -arcTx.vZsSend[i].amount;
-                        tx.idx = arcTx.vZsSend[i].shieldedOutputIndex;
-
-                        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsSend[i].encodedAddress) != arcTx.spentFrom.end();
-                        if (change) {
-                            tx.type = TransactionRecord::SendToSelf;
-                        } else {
-                            tx.type = TransactionRecord::SendToAddress;
-                        }
-                        cachedWallet.append(tx);
-                    }
-                }
-
-                for (int i = 0; i < arcTx.vTReceived.size(); i++) {
-                    auto tx = TransactionRecord();
-                    tx.archiveType = arcTx.archiveType;
-                    tx.hash = arcTx.txid;
-                    tx.time = arcTx.nTime;
-                    tx.address = arcTx.vTReceived[i].encodedAddress;
-                    tx.debit = arcTx.vTReceived[i].amount;
-                    tx.idx = arcTx.vTReceived[i].vout;
-
-                    bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vTReceived[i].encodedAddress) != arcTx.spentFrom.end();
-                    if (change) {
-                        tx.type = TransactionRecord::SendToSelf;
-                    } else {
-                        tx.type = TransactionRecord::RecvWithAddress;
-                    }
-                    cachedWallet.append(tx);
-                }
-
-
-                for (int i = 0; i < arcTx.vZcReceived.size(); i++) {
-                    auto tx = TransactionRecord();
-                    tx.archiveType = arcTx.archiveType;
-                    tx.hash = arcTx.txid;
-                    tx.time = arcTx.nTime;
-                    tx.address = arcTx.vZcReceived[i].encodedAddress;
-                    tx.debit = arcTx.vZcReceived[i].amount;
-                    tx.idx = arcTx.vZcReceived[i].jsOutIndex;
-
-                    bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZcReceived[i].encodedAddress) != arcTx.spentFrom.end();
-                    if (change) {
-                        tx.type = TransactionRecord::SendToSelf;
-                    } else {
-                        tx.type = TransactionRecord::RecvWithAddress;
-                    }
-                    cachedWallet.append(tx);
-                }
-
-                for (int i = 0; i < arcTx.vZsReceived.size(); i++) {
-                    auto tx = TransactionRecord();
-                    tx.archiveType = arcTx.archiveType;
-                    tx.hash = arcTx.txid;
-                    tx.time = arcTx.nTime;
-                    tx.address = arcTx.vZsReceived[i].encodedAddress;
-                    tx.debit = arcTx.vZsReceived[i].amount;
-                    tx.idx = arcTx.vZsReceived[i].shieldedOutputIndex;
-
-                    bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsReceived[i].encodedAddress) != arcTx.spentFrom.end();
-                    if (change) {
-                        tx.type = TransactionRecord::SendToSelf;
-                    } else {
-                        tx.type = TransactionRecord::RecvWithAddress;
-                    }
-                    cachedWallet.append(tx);
-                }
+                cachedWallet.append(TransactionRecord::decomposeTransaction(arcTx));
 
                 if (cachedWallet.size() >= 200) break;
             }
@@ -334,15 +210,45 @@ public:
             {
                 LOCK2(cs_main, wallet->cs_wallet);
                 // Find transaction in wallet
+                bool isActiveTx = false;
+                bool isArchiveTx = false;
+                RpcArcTransaction arcTx;
+                bool fIncludeWatchonly = true;
+
+                //get Ovks for sapling decryption
+                std::vector<uint256> ovks;
+                getAllSaplingOVKs(ovks, fIncludeWatchonly);
+
+                //get Ivks for sapling decryption
+                std::vector<uint256> ivks;
+                getAllSaplingIVKs(ivks, fIncludeWatchonly);
+
+                //Try mapWallet first
                 std::map<uint256, CWalletTx>::iterator mi = wallet->mapWallet.find(hash);
-                if(mi == wallet->mapWallet.end())
-                {
+                if(mi != wallet->mapWallet.end()) {
+                    isActiveTx = true;
+                    CWalletTx& wtx = wallet->mapWallet[hash];
+                    getRpcArcTx(wtx, arcTx, ivks, ovks, fIncludeWatchonly);
+                }
+
+                //Try ArcTx is nor found in mapWallet
+                if (!isActiveTx) {
+                    std::map<uint256, ArchiveTxPoint>::iterator ami = wallet->mapArcTxs.find(hash);
+                    if(ami != wallet->mapArcTxs.end()) {
+                          isArchiveTx = true;
+                          uint256 txid = hash;
+                          getRpcArcTx(txid, arcTx, ivks, ovks, fIncludeWatchonly);
+                    }
+                }
+
+                if (!isActiveTx && !isArchiveTx) {
                     qWarning() << "TransactionTablePriv::updateWallet: Warning: Got CT_NEW, but transaction is not in wallet";
                     break;
                 }
+
                 // Added -- insert at the right position
                 QList<TransactionRecord> toInsert =
-                        TransactionRecord::decomposeTransaction(wallet, mi->second);
+                        TransactionRecord::decomposeTransaction(arcTx);
                 if(!toInsert.isEmpty()) /* only if something to insert */
                 {
                     parent->beginInsertRows(QModelIndex(), lowerIndex, lowerIndex+toInsert.size()-1);
@@ -476,7 +382,6 @@ void TransactionTableModel::updateTransaction(const QString &hash, int status, b
     updated.SetHex(hash.toStdString());
 
     priv->updateWallet(updated, status, showTransaction);
-    priv->refreshWallet(); //Fix decompose transaction to remove
 }
 
 void TransactionTableModel::updateConfirmations()
@@ -580,7 +485,7 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
     switch(wtx->type)
     {
     case TransactionRecord::RecvWithAddress:
-        return tr("Received from");
+        return tr("Received with");
     case TransactionRecord::RecvFromOther:
         return tr("Received from");
     case TransactionRecord::SendToAddress:

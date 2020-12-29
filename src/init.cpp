@@ -35,6 +35,7 @@
 #include "httprpc.h"
 #include "key.h"
 #include "notarisationdb.h"
+#include "params.h"
 
 #ifdef ENABLE_MINING
 #include "key_io.h"
@@ -401,6 +402,7 @@ std::string HelpMessage(HelpMessageMode mode)
     // strUsage += HelpMessageOpt("-prune=<n>", strprintf(_("Reduce storage requirements by pruning (deleting) old blocks. This mode disables wallet support and is incompatible with -txindex. "
     //         "Warning: Reverting this setting requires re-downloading the entire blockchain. "
     //         "(default: 0 = disable pruning blocks, >%u = target size in MiB to use for block files)"), MIN_DISK_SPACE_FOR_BLOCK_FILES / 1024 / 1024));
+    strUsage += HelpMessageOpt("-bootstrap", _("Download and install bootstrap on startup"));
     strUsage += HelpMessageOpt("-reindex", _("Rebuild block chain index from current blk000??.dat files on startup"));
 #if !defined(WIN32)
     strUsage += HelpMessageOpt("-sysperms", _("Create new files with system default permissions, instead of umask 077 (only effective with disabled wallet functionality)"));
@@ -847,7 +849,7 @@ bool InitSanityCheck(void)
 
 
 static void ZC_LoadParams(
-    const CChainParams& chainparams
+    const CChainParams& chainparams, bool verified
 )
 {
     struct timeval tv_start, tv_end;
@@ -874,6 +876,19 @@ static void ZC_LoadParams(
             "", CClientUIInterface::MSG_ERROR);
         StartShutdown();
         return;
+    }
+
+    if (!verified) {
+        if (!checkParams()) {
+          uiInterface.ThreadSafeMessageBox(strprintf(
+              _("Network parameters checksums failed:\n"
+                "%s\n"
+                "Please restart the wallet to re-download."),
+                  ZC_GetParamsDir()),
+              "", CClientUIInterface::MSG_ERROR);
+          StartShutdown();
+          return;
+        }
     }
 
     LogPrintf("Loading verifying key from %s\n", vk_path.string().c_str());
@@ -1439,8 +1454,27 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     if ( KOMODO_NSPV_FULLNODE )
     {
         // Initialize Zcash circuit parameters
-        ZC_LoadParams(chainparams);
+        uiInterface.InitMessage(_("Verifying Params..."));
+        initalizeMapParam();
+        bool paramsVerified = checkParams();
+        if(!paramsVerified) {
+            downloadFiles("Network Params");
+        }
+        if (fRequestShutdown)
+        {
+            LogPrintf("Shutdown requested. Exiting.\n");
+            return false;
+        }
+
+        ZC_LoadParams(chainparams, paramsVerified);
     }
+
+    if (fRequestShutdown)
+    {
+        LogPrintf("Shutdown requested. Exiting.\n");
+        return false;
+    }
+
     /* Start the RPC server already.  It will be started in "warmup" mode
      * and not really process calls already (but it will signify connections
      * that the server is there and will be ready later).  Warmup mode will
@@ -1632,6 +1666,48 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     // ********************************************************* Step 7: load block chain
 
     fReindex = GetBoolArg("-reindex", false);
+
+    bool useBootstrap = false;
+    bool newInstall = GetBoolArg("-bootstrapinstall", false);
+    if (!boost::filesystem::exists(GetDataDir() / "blocks") || !boost::filesystem::exists(GetDataDir() / "chainstate"))
+        newInstall = true;
+
+    if (newInstall) {
+        bool fBoot = uiInterface.ThreadSafeMessageBox(
+            "\n\n" + _("New install detected.\n\nPress OK to download the blockchain bootstrap."),
+            "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
+        if (fBoot) {
+            useBootstrap = true;
+        }
+    }
+
+    if (GetBoolArg("-bootstrap", false) && !useBootstrap) {
+        bool fBoot = uiInterface.ThreadSafeMessageBox(
+            "\n\n" + _("Bootstrap option detected.\n\nPress OK to download the blockchain bootstrap."),
+            "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
+        if (fBoot) {
+            useBootstrap = true;
+        }
+    }
+
+    if (useBootstrap) {
+        fReindex = false;
+        //wipe transactions from wallet to create a clean slate
+        OverrideSetArg("-zappwallettxes","2");
+        boost::filesystem::remove_all(GetDataDir() / "blocks");
+        boost::filesystem::remove_all(GetDataDir() / "chainstate");
+        boost::filesystem::remove_all(GetDataDir() / "notarisations");
+        boost::filesystem::remove(GetDataDir() / "komodostate");
+        boost::filesystem::remove(GetDataDir() / "signedmasks");
+        boost::filesystem::remove(GetDataDir() / "komodostate.ind");
+        getBootstrap();
+    }
+
+    if (fRequestShutdown)
+    {
+        LogPrintf("Shutdown requested. Exiting.\n");
+        return false;
+    }
 
     boost::filesystem::create_directories(GetDataDir() / "blocks");
 
@@ -1879,10 +1955,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 InitWarning(msg);
             }
             else if (nLoadWalletRet == DB_TOO_NEW)
-                strErrors << _("Error loading wallet.dat: Wallet requires newer version of Komodo") << "\n";
+                strErrors << _("Error loading wallet.dat: Wallet requires newer version of Pirate") << "\n";
             else if (nLoadWalletRet == DB_NEED_REWRITE)
             {
-                strErrors << _("Wallet needed to be rewritten: restart Zcash to complete") << "\n";
+                strErrors << _("Wallet needed to be rewritten: restart Pirate to complete") << "\n";
                 LogPrintf("%s", strErrors.str());
                 return InitError(strErrors.str());
             }
@@ -1904,7 +1980,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
           pwalletMain = new CWallet(strWalletFile);
           DBErrors nZapWalletRet = pwalletMain->ZapWalletTx(vWtx);
           if (nZapWalletRet != DB_LOAD_OK) {
-              uiInterface.InitMessage(_("Error loading wallet.zero: Wallet corrupted"));
+              uiInterface.InitMessage(_("Error loading wallet.dat: Wallet corrupted"));
               return false;
           }
 
@@ -1918,24 +1994,24 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
           if (nLoadWalletRet != DB_LOAD_OK)
           {
               if (nLoadWalletRet == DB_CORRUPT)
-                  strErrors << _("Error loading wallet.zero: Wallet corrupted") << "\n";
+                  strErrors << _("Error loading wallet.dat: Wallet corrupted") << "\n";
               else if (nLoadWalletRet == DB_NONCRITICAL_ERROR)
               {
-                  string msg(_("Warning: error reading wallet.zero! All keys read correctly, but transaction data"
+                  string msg(_("Warning: error reading wallet.dat! All keys read correctly, but transaction data"
                                " or address book entries might be missing or incorrect."));
                   InitWarning(msg);
               }
               else if (nLoadWalletRet == DB_TOO_NEW)
-                  strErrors << _("Error loading wallet.zero: Wallet requires newer version of Bitcoin Core") << "\n";
+                  strErrors << _("Error loading wallet.dat: Wallet requires newer version of Pirate") << "\n";
 
               else if (nLoadWalletRet == DB_NEED_REWRITE)
               {
-                  strErrors << _("Wallet needed to be rewritten: restart Zero to complete") << "\n";
+                  strErrors << _("Wallet needed to be rewritten: restart Pirate to complete") << "\n";
                   LogPrintf("%s", strErrors.str());
                   return InitError(strErrors.str());
               }
               else
-                  strErrors << _("Error loading wallet.zero") << "\n";
+                  strErrors << _("Error loading wallet.dat") << "\n";
           }
 
         }
@@ -2005,6 +2081,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
         if (fFirstRun)
         {
+            useBootstrap = false;
             // Create new keyUser and set as default key
             CPubKey newDefaultKey;
             if (pwalletMain->GetKeyFromPool(newDefaultKey)) {
@@ -2022,7 +2099,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         RegisterValidationInterface(pwalletMain);
 
         CBlockIndex *pindexRescan = chainActive.Tip();
-        if (clearWitnessCaches || GetBoolArg("-rescan", false) || !fInitializeArcTx)
+        if (clearWitnessCaches || GetBoolArg("-rescan", false) || !fInitializeArcTx || useBootstrap)
         {
             pwalletMain->ClearNoteWitnessCache();
             pindexRescan = chainActive.Genesis();

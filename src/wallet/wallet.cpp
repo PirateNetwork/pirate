@@ -413,6 +413,9 @@ bool CWallet::LoadKeyMetadata(const CPubKey &pubkey, const CKeyMetadata &meta)
 bool CWallet::LoadZKeyMetadata(const SproutPaymentAddress &addr, const CKeyMetadata &meta)
 {
     AssertLockHeld(cs_wallet); // mapSproutZKeyMetadata
+    if (meta.nCreateTime && (!nTimeFirstKey || meta.nCreateTime < nTimeFirstKey))
+        nTimeFirstKey = meta.nCreateTime;
+
     mapSproutZKeyMetadata[addr] = meta;
     return true;
 }
@@ -437,6 +440,13 @@ bool CWallet::LoadCryptedSaplingZKey(
 bool CWallet::LoadSaplingZKeyMetadata(const libzcash::SaplingIncomingViewingKey &ivk, const CKeyMetadata &meta)
 {
     AssertLockHeld(cs_wallet); // mapSaplingZKeyMetadata
+    if (meta.nCreateTime && (!nTimeFirstKey || meta.nCreateTime < nTimeFirstKey))
+        nTimeFirstKey = meta.nCreateTime;
+
+    if (meta.seedFp == uint256()) {
+        nTimeFirstKey = 1;
+    }
+
     mapSaplingZKeyMetadata[ivk] = meta;
     return true;
 }
@@ -633,7 +643,6 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
                        SaplingMerkleTree saplingTree,
                        bool added)
 {
-    LOCK2(cs_main, cs_wallet);
 
     if (added) {
         // Prevent witness cache building && consolidation transactions
@@ -1211,6 +1220,7 @@ int CWallet::SaplingWitnessMinimumHeight(const uint256& nullifier, int nWitnessH
 
 int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex, bool witnessOnly)
 {
+  LOCK2(cs_main, cs_wallet);
 
   int nWitnessTxIncrement = 0;
   int nWitnessTotalTxCount = mapWallet.size();
@@ -1218,7 +1228,6 @@ int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex, bool witnessO
   bool walletHasNotes = false; //Use to enable z_sendmany when no notes are present
 
   for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
-    boost::this_thread::interruption_point();
 
     nWitnessTxIncrement += 1;
 
@@ -1420,6 +1429,7 @@ int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex, bool witnessO
 
 void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
 {
+  LOCK2(cs_main, cs_wallet);
 
   int startHeight = VerifyAndSetInitialWitness(pindex, witnessOnly) + 1;
 
@@ -1438,8 +1448,6 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
   int height = chainActive.Height();
 
   while (pblockindex) {
-
-    boost::this_thread::interruption_point();
 
     if (pblockindex->GetHeight() % 100 == 0 && pblockindex->GetHeight() < height - 5) {
       LogPrintf("Building Witnesses for block %i %.4f complete\n", pblockindex->GetHeight(), pblockindex->GetHeight() / double(height));
@@ -1955,7 +1963,7 @@ void CWallet::UpdateNullifierNoteMapForBlock(const CBlock *pblock) {
     }
 }
 
-bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb)
+bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb, bool fRescan)
 {
     uint256 hash = wtxIn.GetHash();
 
@@ -2057,16 +2065,18 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
         LogPrintf("AddToWallet %s  %s%s\n", wtxIn.GetHash().ToString(), (fInsertedNew ? "new" : ""), (fUpdated ? "update" : ""));
 
         // Write to disk and update tx archive map
-        if (fInsertedNew || fUpdated)
+        if (fInsertedNew || fUpdated) {
             AddToArcTxs(hash, ArchiveTxPoint(wtx.hashBlock, wtx.nIndex));
             if (!wtx.WriteToDisk(pwalletdb))
                 return false;
+        }
 
         // Break debit/credit balance caches:
         wtx.MarkDirty();
 
         // Notify UI of new or updated transaction
-        NotifyTransactionChanged(this, hash, fInsertedNew ? CT_NEW : CT_UPDATED);
+        if (!fRescan)
+            NotifyTransactionChanged(this, hash, fInsertedNew ? CT_NEW : CT_UPDATED);
 
         // notify an external script when a wallet transaction comes in or is updated
         std::string strCmd = GetArg("-walletnotify", "");
@@ -2123,7 +2133,7 @@ bool CWallet::UpdatedNoteData(const CWalletTx& wtxIn, CWalletTx& wtx)
  * pblock is optional, but should be provided if the transaction is known to be in a block.
  * If fUpdate is true, existing transactions will be updated.
  */
-bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate)
+bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate, bool fRescan)
 {
     {
         AssertLockHeld(cs_wallet);
@@ -2202,7 +2212,7 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
             // this is safe, as in case of a crash, we rescan the necessary blocks on startup through our SetBestChain-mechanism
             CWalletDB walletdb(strWalletFile, "r+", false);
 
-            return AddToWallet(wtx, false, &walletdb);
+            return AddToWallet(wtx, false, &walletdb, fRescan);
         }
     }
     return false;
@@ -3261,6 +3271,7 @@ void CWallet::WitnessNoteCommitment(std::vector<uint256> commitments,
  */
 
 void CWallet::ReorderWalletTransactions(std::map<std::pair<int,int>, CWalletTx> &mapSorted, int64_t &maxOrderPos) {
+    LOCK2(cs_main, cs_wallet);
 
     int maxSortNumber = chainActive.Tip()->GetHeight() + 1;
 
@@ -3286,6 +3297,7 @@ void CWallet::ReorderWalletTransactions(std::map<std::pair<int,int>, CWalletTx> 
  */
 
 void CWallet::UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletTx> &mapSorted, bool resetOrder) {
+  LOCK2(cs_main, cs_wallet);
 
   int64_t previousPosition = 0;
   std::map<const uint256, CWalletTx> mapUpdatedTxs;
@@ -3325,6 +3337,7 @@ void CWallet::UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletT
  * Delete transactions from the Wallet
  */
 void CWallet::DeleteTransactions(std::vector<uint256> &removeTxs) {
+    LOCK(cs_wallet);
 
     CWalletDB walletdb(strWalletFile, "r+", false);
 
@@ -3340,6 +3353,8 @@ void CWallet::DeleteTransactions(std::vector<uint256> &removeTxs) {
 }
 
 void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
+
+      LOCK2(cs_main, cs_wallet);
 
       int nDeleteAfter = (int)fDeleteTransactionsAfterNBlocks;
       bool runCompact = false;
@@ -3366,14 +3381,13 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
         if (maxOrderPos > int64_t(mapSorted.size())*10) {
           //reset the postion when the max postion is 10x bigger than the
           //number of transactions in the wallet
-          LogPrint("deletetx","Reorder Tx - maxOrderPos %i mapSorted Size %i\n", maxOrderPos, int64_t(mapSorted.size())*10);
           UpdateWalletTransactionOrder(mapSorted, true);
         }
         else {
           UpdateWalletTransactionOrder(mapSorted, false);
         }
         auto reorderTime = GetTime();
-        LogPrintf("Delete Tx - Time to Reorder %s\n", DateTimeStrFormat("%H:%M:%S", reorderTime-startTime));
+        LogPrint("deletetx","Delete Tx - Time to Reorder %s\n", DateTimeStrFormat("%H:%M:%S", reorderTime-startTime));
 
         //Process Transactions in sorted order
         int txConflictCount = 0;
@@ -3396,14 +3410,12 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
             txUnConfirmed++;
 
           if (wtxDepth < nDeleteAfter && wtxDepth >= 0) {
-            LogPrint("deletetx","DeleteTx - Transaction above minimum depth, tx %s\n", wtx.GetHash().ToString());
             deleteTx = false;
             txSaveCount++;
             continue;
           } else if (wtxDepth == -1) {
             //Enabled by default
             if (!fTxConflictDeleteEnabled) {
-              LogPrint("deletetx","DeleteTx - Conflict delete is not enabled tx %s\n", wtx.GetHash().ToString());
               deleteTx = false;
               txSaveCount++;
               continue;
@@ -3416,7 +3428,6 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
             for (auto & pair : wtx.mapSaplingNoteData) {
               SaplingNoteData nd = pair.second;
               if (!nd.nullifier || pwalletMain->GetSaplingSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
-                LogPrint("deletetx","DeleteTx - Unspent sapling input tx %s\n", wtx.GetHash().ToString());
                 deleteTx = false;
                 continue;
               }
@@ -3434,7 +3445,6 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
                 const uint256& parentHash = pwalletMain->mapSaplingNullifiersToNotes[spendDesc.nullifier].hash;
                 const CWalletTx* parent = pwalletMain->GetWalletTx(parentHash);
                 if (parent != NULL && parentHash != wtxid) {
-                  LogPrint("deletetx","DeleteTx - Parent of sapling tx %s found\n", wtx.GetHash().ToString());
                   deleteTx = false;
                   continue;
                 }
@@ -3450,7 +3460,6 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
             for (auto & pair : wtx.mapSproutNoteData) {
               SproutNoteData nd = pair.second;
               if (!nd.nullifier || pwalletMain->GetSproutSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
-                LogPrint("deletetx","DeleteTx - Unspent sprout input tx %s\n", wtx.GetHash().ToString());
                 deleteTx = false;
                 continue;
               }
@@ -3470,7 +3479,6 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
                   const uint256& parentHash = pwalletMain->mapSproutNullifiersToNotes[nullifier].hash;
                   const CWalletTx* parent = pwalletMain->GetWalletTx(parentHash);
                   if (parent != NULL && parentHash != wtxid) {
-                    LogPrint("deletetx","DeleteTx - Parent of sprout tx %s found\n", wtx.GetHash().ToString());
                     deleteTx = false;
                     continue;
                   }
@@ -3489,7 +3497,6 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
               ExtractDestination(wtx.vout[i].scriptPubKey, address);
               if(IsMine(wtx.vout[i])) {
                 if (pwalletMain->GetSpendDepth(wtx.GetHash(), i) <= fDeleteTransactionsAfterNBlocks) {
-                  LogPrint("deletetx","DeleteTx - Unspent transparent input tx %s\n", wtx.GetHash().ToString());
                   deleteTx = false;
                   continue;
                 }
@@ -3507,7 +3514,6 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
               const uint256& parentHash = txin.prevout.hash;
               const CWalletTx* parent = pwalletMain->GetWalletTx(txin.prevout.hash);
               if (parent != NULL && parentHash != wtxid) {
-                LogPrint("deletetx","DeleteTx - Parent of transparent tx %s found\n", wtx.GetHash().ToString());
                 deleteTx = false;
                 continue;
               }
@@ -3520,7 +3526,6 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
 
             //Keep Last N Transactions
             if (mapSorted.size() - txCount < fKeepLastNTransactions + txConflictCount + txUnConfirmed) {
-              LogPrint("deletetx","DeleteTx - Transaction set position %i, tx %s\n", mapSorted.size() - txCount, wtxid.ToString());
               deleteTx = false;
               txSaveCount++;
               continue;
@@ -3531,28 +3536,27 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
           if (deleteTx && int(removeTxs.size()) < MAX_DELETE_TX_SIZE) {
             removeTxs.push_back(wtxid);
             runCompact = true;
+          } else {
+            break; //no need to continue with the loop
           }
         }
 
         auto selectTime = GetTime();
-        LogPrintf("Delete Tx - Time to Select %s\n", DateTimeStrFormat("%H:%M:%S", selectTime - reorderTime));
+        LogPrint("deletetx","Delete Tx - Time to Select %s\n", DateTimeStrFormat("%H:%M:%S", selectTime - reorderTime));
 
         //Delete Transactions from wallet
         DeleteTransactions(removeTxs);
 
         auto deleteTime = GetTime();
-        LogPrintf("Delete Tx - Time to Delete %s\n", DateTimeStrFormat("%H:%M:%S", deleteTime - selectTime));
+        LogPrint("deletetx","Delete Tx - Time to Delete %s\n", DateTimeStrFormat("%H:%M:%S", deleteTime - selectTime));
+        LogPrint("deletetx","Delete Tx - Total Transaction Count %i, Transactions Deleted %i\n ", txCount, int(removeTxs.size()));
 
-        LogPrintf("Delete Tx - Total Transaction Count %i, Transactions Deleted %i\n ", txCount, int(removeTxs.size()));
-        // if (GetBoolArg("-deletetx", true))
-        //   uiInterface.InitMessage(_(("Rescanning - Current Wallet Transaction Count " + std::to_string(txCount)).c_str()) + ((" " + std::to_string(scanperc)).c_str()) + ("%"));
-        //Compress Wallet
         if (runCompact)
           CWalletDB::Compact(bitdb,strWalletFile);
       }
 
       auto totalTime = GetTime();
-      LogPrintf("Delete Tx - Time to Run Total Function %s\n", DateTimeStrFormat("%H:%M:%S", totalTime - startTime));
+      LogPrint("deletetx","Delete Tx - Time to Run Total Function %s\n", DateTimeStrFormat("%H:%M:%S", totalTime - startTime));
 }
 
 
@@ -3587,8 +3591,22 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
     CBlockIndex* pindex = pindexStart;
 
+    std::set<uint256> txList;
+    std::set<uint256> txListOriginal;
+
     {
         LOCK2(cs_main, cs_wallet);
+
+        //Get List of current list of txids
+        for (map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.begin(); it != pwalletMain->mapArcTxs.end(); ++it)
+        {
+            txListOriginal.insert((*it).first);
+        }
+        for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+        {
+            if (txListOriginal.count((*it).first))
+                txListOriginal.insert((*it).first);
+        }
 
         // no need to read and scan block, if block was created before
         // our wallet birthday (as adjusted for block time variability)
@@ -3606,11 +3624,15 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
                 uiInterface.ShowProgress(_(("Rescanning - Currently on block " + std::to_string(pindex->GetHeight()) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
                 uiInterface.InitMessage(_(("Rescanning - Currently on block " + std::to_string(pindex->GetHeight())).c_str()) + ((" " + std::to_string(scanperc)).c_str()) + ("%"));
             }
+
+            bool blockInvolvesMe = false;
             CBlock block;
             ReadBlockFromDisk(block, pindex,1);
             BOOST_FOREACH(CTransaction& tx, block.vtx)
             {
-                if (AddToWalletIfInvolvingMe(tx, &block, fUpdate)) {
+                if (AddToWalletIfInvolvingMe(tx, &block, fUpdate, true)) {
+                    blockInvolvesMe = true;
+                    txList.insert(tx.GetHash());
                     ret++;
                 }
             }
@@ -3627,11 +3649,12 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             }
 
             // Build inital witness caches
-            BuildWitnessCache(pindex, true);
+            if (blockInvolvesMe)
+                BuildWitnessCache(pindex, true);
 
             //Delete Transactions
             if (pindex->GetHeight() % fDeleteInterval == 0)
-              DeleteWalletTransactions(pindex);
+                DeleteWalletTransactions(pindex);
 
             if (GetTime() >= nNow + 60) {
                 nNow = GetTime();
@@ -3644,6 +3667,13 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
         uiInterface.ShowProgress(_("Rescanning..."), 100, false); // hide progress dialog in GUI
     }
+
+    for (set<uint256>::iterator it = txList.begin(); it != txList.end(); ++it)
+    {
+        bool fInsertedNew = (txListOriginal.count(*it) == 0);
+        NotifyTransactionChanged(this, *it, fInsertedNew ? CT_NEW : CT_UPDATED);
+    }
+
     return ret;
 }
 

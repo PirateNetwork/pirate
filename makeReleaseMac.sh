@@ -1,6 +1,6 @@
 #!/bin/sh
 
-PACKAGE_DIR="PirateWallet.app"
+PACKAGE_DIR="PirateOcean.app"
 mkdir ${PACKAGE_DIR}
 mkdir ${PACKAGE_DIR}/Contents
 mkdir ${PACKAGE_DIR}/Contents/MacOS
@@ -13,8 +13,6 @@ for binary in "${binaries[@]}";
 do
     # do the work in the destination directory
     cp ${binary} ${PACKAGE_DIR}/Contents/MacOS/
-    cp zcutil/res/mac-init.sh ${PACKAGE_DIR}/Contents/MacOS/
-    cp zcutil/res/start.sh ${PACKAGE_DIR}/Contents/MacOS/
     cp zcutil/res/Info.plist ${PACKAGE_DIR}/Contents/
     cp zcutil/res/PkgInfo ${PACKAGE_DIR}/Contents/
     cp src/qt/res/icons/pirate.icns ${PACKAGE_DIR}/Contents/Resources/logo.icns
@@ -73,4 +71,4 @@ do
 done
 
 
-create-dmg --volname "PirateWallet-v3.0.0" --volicon "zcutil/res/logo.icns" --window-pos 200 120 --icon "PirateWallet.app" 200 190  --app-drop-link 600 185 --hide-extension "PirateWallet.app"  --window-size 800 400 --hdiutil-quiet --background zcutil/res/dmgbg.png  PirateWallet-v3.0.0.dmg PirateWallet.app
+create-dmg --volname "pirate-qt-mac" --volicon "zcutil/res/logo.icns" --window-pos 200 120 --icon "PirateOcean.app" 200 190  --app-drop-link 600 185 --hide-extension "PirateOcean.app"  --window-size 800 400 --hdiutil-quiet --background zcutil/res/dmgbg.png  pirate-qt-mac.dmg PirateOcean.app

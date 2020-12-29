@@ -1,14 +1,17 @@
-package=libcurl
-$(package)_version=7.74.0
-$(package)_dependencies=openssl
-$(package)_download_path=https://curl.haxx.se/download
-$(package)_file_name=curl-$($(package)_version).tar.gz
-$(package)_sha256_hash=e56b3921eeb7a2951959c02db0912b5fcd5fdba5aca071da819e1accf338bbd7
-$(package)_config_opts_linux=--disable-shared --enable-static --prefix=$(host_prefix) --host=x86_64-unknown-linux-gnu
-$(package)_config_opts_mingw32=--enable-mingw --disable-shared --enable-static --prefix=$(host_prefix) --host=x86_64-w64-mingw32
-$(package)_config_opts_darwin=--disable-shared --enable-static --prefix=$(host_prefix)
+package=libarchive
+$(package)_version=3.4.1
+$(package)_download_path=https://github.com/libarchive/libarchive/releases/download/v$($(package)_version)
+$(package)_file_name=$(package)-$($(package)_version).tar.gz
+$(package)_download_file=$(package)-$($(package)_version).tar.gz
+$(package)_config_opts=--with-sysroot=$(host_prefix)/lib
+$(package)_config_opts_linux=--disable-bsdtar --disable-bsdcpio --disable-shared --enable-static --prefix=$(host_prefix) --host=x86_64-unknown-linux-gnu
+$(package)_config_opts_mingw32=--disable-bsdtar --disable-bsdcpio --disable-shared --enable-static --prefix=$(host_prefix) --host=x86_64-w64-mingw32
+$(package)_config_opts_darwin=--disable-bsdtar --disable-bsdcpio --disable-shared --enable-static --prefix=$(host_prefix)
+$(package)_sha256_hash=fcf87f3ad8db2e4f74f32526dee62dd1fb9894782b0a503a89c9d7a70a235191
 $(package)_cflags_darwin=-mmacosx-version-min=10.9
 $(package)_conf_tool=./configure
+
+$(package)_dependencies=zlib
 
 ifeq ($(build_os),darwin)
 define $(package)_set_vars
@@ -36,7 +39,7 @@ define $(package)_build_cmds
 endef
 else
 define $(package)_build_cmds
-  $(MAKE)
+  $(MAKE) CPPFLAGS="-I$(host_prefix)/include -fPIC"
 endef
 endif
 

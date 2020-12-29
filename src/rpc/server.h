@@ -444,7 +444,7 @@ extern UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPu
 extern UniValue gettxoutproof(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue verifytxoutproof(const UniValue& params, bool fHelp, const CPubKey& mypk);
 
-extern UniValue z_createbuildinstuctions(const UniValue& params, bool fHelp, const CPubKey& mypk);
+extern UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk);
 
 extern UniValue getblockcount(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcblockchain.cpp

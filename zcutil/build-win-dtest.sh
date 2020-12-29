@@ -21,4 +21,4 @@ cd $WD
 CONFIG_SITE=$PWD/depends/x86_64-w64-mingw32/share/config.site CXXFLAGS="-DPTW32_STATIC_LIB -DCURL_STATICLIB -DCURVE_ALT_BN128 -fopenmp -pthread" CPPFLAGS=-DTESTMODE ./configure --prefix="${PREFIX}" --host=x86_64-w64-mingw32 --enable-static --disable-shared
 sed -i 's/-lboost_system-mt /-lboost_system-mt-s /' configure
 cd src/
-CC="${CC} -g " CXX="${CXX} -g " make V=1  komodod.exe komodo-cli.exe komodo-tx.exe
+CC="${CC} -g " CXX="${CXX} -g " make V=1  pirated.exe pirate-cli.exe pirate-tx.exe
