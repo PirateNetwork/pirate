@@ -817,6 +817,6 @@ include Makefile.ktest.include
 #include Makefile.gtest.include
 endif
 
-#if ENABLE_QT
+if ENABLE_QT
 include Makefile.qt.include
-#endif
+endif

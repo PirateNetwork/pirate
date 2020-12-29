@@ -43,13 +43,6 @@ PREFIX="$(pwd)/depends/$TRIPLET"
 
 make "$@" -C ./depends/ V=1 # NO_PROTON=1
 
-### don't used here, bcz we have cclib static built-in in libbitcoin_server_a
-#BUILD CCLIB
-#WD=$PWD
-#cd src/cc
-#echo $PWD
-#./makecustom
-#cd $WD
 
 ./autogen.sh
 
@@ -61,12 +54,6 @@ CPPFLAGS="-I$PREFIX/include -arch x86_64" LDFLAGS="-L$PREFIX/lib -arch x86_64 -W
 
 CXXFLAGS='-arch x86_64 -I/usr/local/Cellar/gcc\@8/8.3.0/include/c++/8.3.0/ '"-I${PREFIX}/include"' -fwrapv -fno-strict-aliasing -g0 -O2 -Wl,-undefined -Wl,dynamic_lookup' \
 ./configure --prefix="${PREFIX}" --disable-bip70 --with-gui=qt5 --enable-tests=no "$HARDENING_ARG" "$LCOV_ARG"
-
-# here we need a small hacks, bcz QT_QPA_PLATFORM_COCOA and QT_STATICPLUGIN still have
-# incorect values after configure (TODO: fix it)
-
-# sed -i -e "s/\/\* #undef QT_QPA_PLATFORM_COCOA \*\//#define QT_QPA_PLATFORM_COCOA 1/" src/config/bitcoin-config.h
-# sed -i -e "s/\/\* #undef QT_STATICPLUGIN \*\//#define QT_STATICPLUGIN 1/" src/config/bitcoin-config.h
 
 make "$@" V=1 NO_GTEST=1 STATIC=1
 

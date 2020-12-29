@@ -119,6 +119,7 @@ src/pirated
 src/komodo-tx
 src/pirate-tx
 src/komodo-test
+src/pirate-test
 src/wallet-utility
 src/komodo-cli.exe
 src/komodod.exe
