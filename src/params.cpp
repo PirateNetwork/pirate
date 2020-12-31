@@ -3,45 +3,41 @@
 #include "ui_interface.h"
 
 std::map<std::string, ParamFile> mapParams;
+static const int K_READ_BUF_SIZE{ 1024 * 16 };
 
-void sha256_hash_string (unsigned char hash[SHA256_DIGEST_LENGTH], char outputBuffer[65])
+std::string CalcSha256(std::string filename)
 {
-    int i = 0;
-
-    for(i = 0; i < SHA256_DIGEST_LENGTH; i++)
-    {
-        sprintf(outputBuffer + (i * 2), "%02x", hash[i]);
+    // Initialize openssl
+    SHA256_CTX context;
+    if(!SHA256_Init(&context)) {
+        return "";
     }
 
-    outputBuffer[64] = 0;
+    // Read file and update calculated SHA
+    char buf[K_READ_BUF_SIZE];
+    std::ifstream file(filename, std::ifstream::binary);
+    while (file.good()) {
+        file.read(buf, sizeof(buf));
+        if(!SHA256_Update(&context, buf, file.gcount())) {
+            return "";
+        }
+    }
+
+    // Get Final SHA
+    unsigned char result[SHA256_DIGEST_LENGTH];
+    if(!SHA256_Final(result, &context)) {
+        return "";
+    }
+
+    // Transform byte-array to string
+    std::stringstream shastr;
+    shastr << std::hex << std::setfill('0');
+    for (const auto &byte: result) {
+        shastr << std::setw(2) << (int)byte;
+    }
+    return shastr.str();
 }
 
-int sha256_file(const char *path, char outputBuffer[65])
-{
-    errno = 0;
-    FILE *file = fopen(path, "rb");
-    if (!file) {
-        return -534;
-    }
-
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256_CTX sha256;
-    SHA256_Init(&sha256);
-    const int bufSize = 32768;
-    unsigned char *buffer = (unsigned char *)malloc(bufSize);
-    int bytesRead = 0;
-    if(!buffer) return ENOMEM;
-    while((bytesRead = fread(buffer, 1, bufSize, file)))
-    {
-        SHA256_Update(&sha256, buffer, bytesRead);
-    }
-    SHA256_Final(hash, &sha256);
-
-    sha256_hash_string(hash, outputBuffer);
-    fclose(file);
-    free(buffer);
-    return 0;
-}
 
 
 bool checkParams() {
@@ -49,10 +45,13 @@ bool checkParams() {
     for (std::map<std::string, ParamFile>::iterator it = mapParams.begin(); it != mapParams.end(); ++it) {
         std::string uiMessage = "Verifying " + it->second.name + "....";
         uiInterface.InitMessage(_(uiMessage.c_str()));
-        const char *path = it->second.path.string().c_str();
-        char calc_hash[65];
-        sha256_file(path ,calc_hash);
-        if (calc_hash == it->second.hash) {
+
+        std::string sha256Sum = CalcSha256(it->second.path.string());
+
+        LogPrintf("sha256Sum %s\n", sha256Sum);
+        LogPrintf("checkSum %s\n", it->second.hash);
+
+        if (sha256Sum == it->second.hash) {
             it->second.verified = true;
         } else {
             allVerified = false;
@@ -185,8 +184,7 @@ bool downloadFiles(std::string title)
             }
 
             //open file for writing
-            const char *path = it->second.path.string().c_str();
-            it->second.file = fopen(path, "wb");
+            it->second.file = fopen(it->second.path.string().c_str(), "wb");
             if (!it->second.file) {
                 return false;
             }
@@ -203,7 +201,6 @@ bool downloadFiles(std::string title)
             curl_multi_add_handle(multi_handle, it->second.curl);
         }
     }
-
 
     curl_multi_perform(multi_handle, &still_running);
 
@@ -237,7 +234,6 @@ bool downloadFiles(std::string title)
           uiMessage = "Downloading " + title + "......" + std::to_string(pert).substr(0,10) + "%";
           uiInterface.InitMessage(_(uiMessage.c_str()));
       }
-
 
       struct timeval timeout;
       int rc; /* select() return code */
