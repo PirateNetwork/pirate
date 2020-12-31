@@ -210,7 +210,6 @@ bool downloadFiles(std::string title)
     int64_t nNow = GetTime();
 
     while(still_running) {
-      boost::this_thread::interruption_point();
 
       if (ShutdownRequested()) {
           downloadComplete = false;
