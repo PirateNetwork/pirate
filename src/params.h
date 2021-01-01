@@ -75,7 +75,7 @@ extern void initalizeMapParam();
 static size_t write_data(void *ptr, size_t size, size_t nmemb, void *stream);
 extern bool downloadFiles(std::string title);
 extern void getBootstrap();
-static bool extract(const char *filename);
+static bool extract(boost::filesystem::path filename);
 static int copy_data(struct archive *ar, struct archive *aw);
 
 static int verbose = 0;

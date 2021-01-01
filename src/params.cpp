@@ -325,9 +325,8 @@ void getBootstrap() {
     bool dlsuccess = downloadFiles("Bootstrap");
 
     for (std::map<std::string, ParamFile>::iterator it = mapParams.begin(); it != mapParams.end(); ++it) {
-        const char *path = it->second.path.string().c_str();
         if (dlsuccess) {
-            extract(path);
+            extract(it->second.path);
         }
         if (boost::filesystem::exists(it->second.path.string())) {
             boost::filesystem::remove(it->second.path.string());
@@ -336,7 +335,7 @@ void getBootstrap() {
 }
 
 
-bool extract(const char *filename) {
+bool extract(boost::filesystem::path filename) {
 
   bool extractComplete = true;
 	struct archive *a;
@@ -360,10 +359,7 @@ bool extract(const char *filename) {
   if (archive_read_support_filter_gzip(a) != ARCHIVE_OK)
         extractComplete = false;
 
-	if (filename != NULL && strcmp(filename, "-") == 0)
-		filename = NULL;
-
-  r = archive_read_open_filename(a, filename, 10240);
+  r = archive_read_open_filename(a, filename.string().c_str(), 10240);
 	if (r != ARCHIVE_OK) {
       LogPrintf("archive_read_open_filename() %s %d\n",archive_error_string(a), r);
       extractComplete = false;
