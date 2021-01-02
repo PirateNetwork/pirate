@@ -1673,7 +1673,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         newInstall = true;
 
     //Prompt on new install
-    if (newInstall && GetArg("-bootstrap", "1") != "2") {
+    if (newInstall && !GetBoolArg("-bootstrap", false)) {
         bool fBoot = uiInterface.ThreadSafeMessageBox(
             "\n\n" + _("New install detected.\n\nPress OK to download the blockchain bootstrap."),
             "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
@@ -1707,7 +1707,15 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         boost::filesystem::remove(GetDataDir() / "komodostate");
         boost::filesystem::remove(GetDataDir() / "signedmasks");
         boost::filesystem::remove(GetDataDir() / "komodostate.ind");
-        getBootstrap();
+        if (!getBootstrap() && !fRequestShutdown ) {
+            bool keepRunning = uiInterface.ThreadSafeMessageBox(
+                "\n\n" + _("Bootstrap download failed!!!\n\nPress OK to continue and sync from the network."),
+                "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
+
+            if (!keepRunning) {
+                fRequestShutdown = true;
+            }
+        }
     }
 
     if (fRequestShutdown)

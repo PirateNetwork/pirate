@@ -57,10 +57,12 @@ struct ParamFile {
     std::string URL;
     std::string hash;
     bool verified;
+    bool complete = false;
     boost::filesystem::path path;
     FILE *file;
     int64_t dlnow;
     int64_t dltotal;
+    int64_t dlretrytotal = 0;
     CURL *curl;
     CurlProgress prog;
 };
@@ -74,7 +76,7 @@ extern void initalizeMapParamBootstrap();
 extern void initalizeMapParam();
 static size_t write_data(void *ptr, size_t size, size_t nmemb, void *stream);
 extern bool downloadFiles(std::string title);
-extern void getBootstrap();
+extern bool getBootstrap();
 static bool extract(boost::filesystem::path filename);
 static int copy_data(struct archive *ar, struct archive *aw);
 
