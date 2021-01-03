@@ -361,8 +361,12 @@ bool getBootstrap() {
 
     for (std::map<std::string, ParamFile>::iterator it = mapParams.begin(); it != mapParams.end(); ++it) {
         if (dlsuccess) {
-            extract(it->second.path);
-        } 
+            if (!extract(it->second.path)) {
+                boost::filesystem::remove_all(GetDataDir() / "blocks");
+                boost::filesystem::remove_all(GetDataDir() / "chainstate");
+                dlsuccess = false;
+            }
+        }
         if (boost::filesystem::exists(it->second.path.string())) {
             boost::filesystem::remove(it->second.path.string());
         }
@@ -410,6 +414,7 @@ bool extract(boost::filesystem::path filename) {
           if (r != ARCHIVE_OK) {
               LogPrintf("archive_read_next_header() %s %d\n",archive_error_string(a), r);
               extractComplete = false;
+              break;
           }
 
           const char* currentFile = archive_entry_pathname(entry);
@@ -422,12 +427,14 @@ bool extract(boost::filesystem::path filename) {
           if (r != ARCHIVE_OK) {
               LogPrintf("archive_write_header() %s %d\n",archive_error_string(ext), r);
               extractComplete = false;
+              break;
           } else {
               copy_data(a, ext);
               r = archive_write_finish_entry(ext);
               if (r != ARCHIVE_OK) {
                   LogPrintf("archive_write_finish_entry() %s %d\n",archive_error_string(ext), r);
                   extractComplete = false;
+                  break;
               }
           }
       }
