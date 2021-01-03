@@ -112,18 +112,15 @@ contrib/debian/files
 contrib/debian/substvars
 
 src/rpcmisc~.cpp
-src/komodo-cli
 src/pirate-cli
-src/komodod
 src/pirated
-src/komodo-tx
 src/pirate-tx
-src/komodo-test
 src/pirate-test
 src/wallet-utility
-src/komodo-cli.exe
-src/komodod.exe
-src/komodo-tx.exe
+src/pirate-cli.exe
+src/pirated.exe
+src/pirate-tx.exe
+src/pirate-test.exe
 src/wallet-utility.exe
 pirate-qt-win.exe
 pirate-qt-linux
@@ -137,7 +134,7 @@ src/qt/*.moc
 src/qt/forms/ui_*.h
 
 #Mac Packaged App
-PirateWallet.app
+PirateOcean.app
 
 #output during builds, symbol tables?
 *.dSYM

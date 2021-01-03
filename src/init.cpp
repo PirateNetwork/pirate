@@ -402,7 +402,7 @@ std::string HelpMessage(HelpMessageMode mode)
     // strUsage += HelpMessageOpt("-prune=<n>", strprintf(_("Reduce storage requirements by pruning (deleting) old blocks. This mode disables wallet support and is incompatible with -txindex. "
     //         "Warning: Reverting this setting requires re-downloading the entire blockchain. "
     //         "(default: 0 = disable pruning blocks, >%u = target size in MiB to use for block files)"), MIN_DISK_SPACE_FOR_BLOCK_FILES / 1024 / 1024));
-    strUsage += HelpMessageOpt("-bootstrap", _("Download and install bootstrap on startup"));
+    strUsage += HelpMessageOpt("-bootstrap", _("Download and install bootstrap on startup (1 to show GUI prompt, 2 to force download when using CLI)"));
     strUsage += HelpMessageOpt("-reindex", _("Rebuild block chain index from current blk000??.dat files on startup"));
 #if !defined(WIN32)
     strUsage += HelpMessageOpt("-sysperms", _("Create new files with system default permissions, instead of umask 077 (only effective with disabled wallet functionality)"));
@@ -1672,7 +1672,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     if (!boost::filesystem::exists(GetDataDir() / "blocks") || !boost::filesystem::exists(GetDataDir() / "chainstate"))
         newInstall = true;
 
-    if (newInstall) {
+    //Prompt on new install
+    if (newInstall && !GetBoolArg("-bootstrap", false)) {
         bool fBoot = uiInterface.ThreadSafeMessageBox(
             "\n\n" + _("New install detected.\n\nPress OK to download the blockchain bootstrap."),
             "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
@@ -1681,13 +1682,19 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         }
     }
 
-    if (GetBoolArg("-bootstrap", false) && !useBootstrap) {
+    //Prompt GUI
+    if (GetBoolArg("-bootstrap", false) && GetArg("-bootstrap", "1") != "2" && !useBootstrap) {
         bool fBoot = uiInterface.ThreadSafeMessageBox(
             "\n\n" + _("Bootstrap option detected.\n\nPress OK to download the blockchain bootstrap."),
             "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
         if (fBoot) {
             useBootstrap = true;
         }
+    }
+
+    //Force Download- used for CLI
+    if (GetBoolArg("-bootstrap", false) && GetArg("-bootstrap", "1") == "2") {
+        useBootstrap = true;
     }
 
     if (useBootstrap) {
@@ -1700,7 +1707,15 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         boost::filesystem::remove(GetDataDir() / "komodostate");
         boost::filesystem::remove(GetDataDir() / "signedmasks");
         boost::filesystem::remove(GetDataDir() / "komodostate.ind");
-        getBootstrap();
+        if (!getBootstrap() && !fRequestShutdown ) {
+            bool keepRunning = uiInterface.ThreadSafeMessageBox(
+                "\n\n" + _("Bootstrap download failed!!!\n\nPress OK to continue and sync from the network."),
+                "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
+
+            if (!keepRunning) {
+                fRequestShutdown = true;
+            }
+        }
     }
 
     if (fRequestShutdown)

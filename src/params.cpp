@@ -3,45 +3,41 @@
 #include "ui_interface.h"
 
 std::map<std::string, ParamFile> mapParams;
+static const int K_READ_BUF_SIZE{ 1024 * 16 };
 
-void sha256_hash_string (unsigned char hash[SHA256_DIGEST_LENGTH], char outputBuffer[65])
+std::string CalcSha256(std::string filename)
 {
-    int i = 0;
-
-    for(i = 0; i < SHA256_DIGEST_LENGTH; i++)
-    {
-        sprintf(outputBuffer + (i * 2), "%02x", hash[i]);
+    // Initialize openssl
+    SHA256_CTX context;
+    if(!SHA256_Init(&context)) {
+        return "";
     }
 
-    outputBuffer[64] = 0;
+    // Read file and update calculated SHA
+    char buf[K_READ_BUF_SIZE];
+    std::ifstream file(filename, std::ifstream::binary);
+    while (file.good()) {
+        file.read(buf, sizeof(buf));
+        if(!SHA256_Update(&context, buf, file.gcount())) {
+            return "";
+        }
+    }
+
+    // Get Final SHA
+    unsigned char result[SHA256_DIGEST_LENGTH];
+    if(!SHA256_Final(result, &context)) {
+        return "";
+    }
+
+    // Transform byte-array to string
+    std::stringstream shastr;
+    shastr << std::hex << std::setfill('0');
+    for (const auto &byte: result) {
+        shastr << std::setw(2) << (int)byte;
+    }
+    return shastr.str();
 }
 
-int sha256_file(const char *path, char outputBuffer[65])
-{
-    errno = 0;
-    FILE *file = fopen(path, "rb");
-    if (!file) {
-        return -534;
-    }
-
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256_CTX sha256;
-    SHA256_Init(&sha256);
-    const int bufSize = 32768;
-    unsigned char *buffer = (unsigned char *)malloc(bufSize);
-    int bytesRead = 0;
-    if(!buffer) return ENOMEM;
-    while((bytesRead = fread(buffer, 1, bufSize, file)))
-    {
-        SHA256_Update(&sha256, buffer, bytesRead);
-    }
-    SHA256_Final(hash, &sha256);
-
-    sha256_hash_string(hash, outputBuffer);
-    fclose(file);
-    free(buffer);
-    return 0;
-}
 
 
 bool checkParams() {
@@ -49,10 +45,13 @@ bool checkParams() {
     for (std::map<std::string, ParamFile>::iterator it = mapParams.begin(); it != mapParams.end(); ++it) {
         std::string uiMessage = "Verifying " + it->second.name + "....";
         uiInterface.InitMessage(_(uiMessage.c_str()));
-        const char *path = it->second.path.string().c_str();
-        char calc_hash[65];
-        sha256_file(path ,calc_hash);
-        if (calc_hash == it->second.hash) {
+
+        std::string sha256Sum = CalcSha256(it->second.path.string());
+
+        LogPrintf("sha256Sum %s\n", sha256Sum);
+        LogPrintf("checkSum %s\n", it->second.hash);
+
+        if (sha256Sum == it->second.hash) {
             it->second.verified = true;
         } else {
             allVerified = false;
@@ -164,184 +163,219 @@ void initalizeMapParam() {
 bool downloadFiles(std::string title)
 {
 
-    bool downloadComplete = true;
-    curl_global_init(CURL_GLOBAL_ALL);
-    CURLM *multi_handle;
-    multi_handle = curl_multi_init();
-    int still_running = 0; /* keep number of running handles */
 
     if (!exists(ZC_GetParamsDir())) {
         create_directory(ZC_GetParamsDir());
     }
 
     for (std::map<std::string, ParamFile>::iterator it = mapParams.begin(); it != mapParams.end(); ++it) {
-
         if (!it->second.verified) {
-            /* init the curl session */
-            it->second.curl = curl_easy_init();
-            if(it->second.curl) {
-                it->second.prog.lastruntime = 0;
-                it->second.prog.curl = it->second.curl;
-            }
-
             //open file for writing
-            const char *path = it->second.path.string().c_str();
-            it->second.file = fopen(path, "wb");
+            it->second.file = fopen(it->second.path.string().c_str(), "wb");
             if (!it->second.file) {
                 return false;
             }
-
-            curl_easy_setopt(it->second.curl, CURLOPT_URL, it->second.URL.c_str());
-            curl_easy_setopt(it->second.curl, CURLOPT_SSL_VERIFYPEER, 0L);
-            curl_easy_setopt(it->second.curl, CURLOPT_SSL_VERIFYHOST, 0L);
-            curl_easy_setopt(it->second.curl, CURLOPT_VERBOSE, 0L);
-            curl_easy_setopt(it->second.curl, CURLOPT_XFERINFOFUNCTION, xferinfo);
-            curl_easy_setopt(it->second.curl, CURLOPT_XFERINFODATA, &it->second.prog);
-            curl_easy_setopt(it->second.curl, CURLOPT_NOPROGRESS, 0L);
-            curl_easy_setopt(it->second.curl, CURLOPT_WRITEFUNCTION, write_data);
-            curl_easy_setopt(it->second.curl, CURLOPT_WRITEDATA, it->second.file);
-            curl_multi_add_handle(multi_handle, it->second.curl);
         }
     }
 
+    bool downloadComplete;
+    curl_global_init(CURL_GLOBAL_ALL);
 
-    curl_multi_perform(multi_handle, &still_running);
+    for (int i = 0; i < 500; i++) {
 
-    std::string uiMessage;
-    uiMessage = "Downloading " + title + "......0.00%";
-    uiInterface.InitMessage(_(uiMessage.c_str()));
-    int64_t nNow = GetTime();
+        downloadComplete = true;
 
-    while(still_running) {
-      boost::this_thread::interruption_point();
-
-      if (ShutdownRequested()) {
-          downloadComplete = false;
-          break;
-      }
-
-      if (GetTime() >= nNow + 1) {
-          nNow = GetTime();
-          int64_t dltotal = 0;
-          int64_t dlnow = 0;
-          for (std::map<std::string, ParamFile>::iterator it = mapParams.begin(); it != mapParams.end(); ++it) {
-              if (!it->second.verified) {
-                  dltotal += it->second.dltotal;
-                  dlnow += it->second.dlnow;
-              }
-          }
-          double pert = 0.00;
-          if (dltotal > 0) {
-              pert = (dlnow / (double)dltotal) * 100;
-          }
-          uiMessage = "Downloading " + title + "......" + std::to_string(pert).substr(0,10) + "%";
-          uiInterface.InitMessage(_(uiMessage.c_str()));
-      }
+        CURLM *multi_handle;
+        multi_handle = curl_multi_init();
+        int still_running = 0; /* keep number of running handles */
 
 
-      struct timeval timeout;
-      int rc; /* select() return code */
-      CURLMcode mc; /* curl_multi_fdset() return code */
 
-      fd_set fdread;
-      fd_set fdwrite;
-      fd_set fdexcep;
-      int maxfd = -1;
+        for (std::map<std::string, ParamFile>::iterator it = mapParams.begin(); it != mapParams.end(); ++it) {
 
-      long curl_timeo = -1;
+            if (!it->second.verified) {
+                /* init the curl session */
+                it->second.curl = curl_easy_init();
+                if(it->second.curl) {
+                    it->second.prog.lastruntime = 0;
+                    it->second.prog.curl = it->second.curl;
+                }
 
-      FD_ZERO(&fdread);
-      FD_ZERO(&fdwrite);
-      FD_ZERO(&fdexcep);
+                curl_easy_setopt(it->second.curl, CURLOPT_URL, it->second.URL.c_str());
+                curl_easy_setopt(it->second.curl, CURLOPT_SSL_VERIFYPEER, 0L);
+                curl_easy_setopt(it->second.curl, CURLOPT_SSL_VERIFYHOST, 0L);
+                curl_easy_setopt(it->second.curl, CURLOPT_VERBOSE, 0L);
+                curl_easy_setopt(it->second.curl, CURLOPT_TCP_KEEPALIVE, 1L);
+                curl_easy_setopt(it->second.curl, CURLOPT_XFERINFOFUNCTION, xferinfo);
+                curl_easy_setopt(it->second.curl, CURLOPT_XFERINFODATA, &it->second.prog);
+                curl_easy_setopt(it->second.curl, CURLOPT_NOPROGRESS, 0L);
+                curl_easy_setopt(it->second.curl, CURLOPT_WRITEFUNCTION, write_data);
+                curl_easy_setopt(it->second.curl, CURLOPT_WRITEDATA, it->second.file);
+                curl_easy_setopt(it->second.curl, CURLOPT_RESUME_FROM_LARGE, it->second.dlretrytotal);
+                curl_multi_add_handle(multi_handle, it->second.curl);
+            }
+        }
 
-      /* set a suitable timeout to play around with */
-      timeout.tv_sec = 1;
-      timeout.tv_usec = 0;
-
-      curl_multi_timeout(multi_handle, &curl_timeo);
-      if(curl_timeo >= 0) {
-        timeout.tv_sec = curl_timeo / 1000;
-        if(timeout.tv_sec > 1)
-          timeout.tv_sec = 1;
-        else
-          timeout.tv_usec = (curl_timeo % 1000) * 1000;
-      }
-
-      /* get file descriptors from the transfers */
-      mc = curl_multi_fdset(multi_handle, &fdread, &fdwrite, &fdexcep, &maxfd);
-
-      if(mc != CURLM_OK) {
-        fprintf(stderr, "curl_multi_fdset() failed, code %d.\n", mc);
-        downloadComplete = false;
-        break;
-      }
-
-      /* On success the value of maxfd is guaranteed to be >= -1. We call
-         select(maxfd + 1, ...); specially in case of (maxfd == -1) there are
-         no fds ready yet so we call select(0, ...) --or Sleep() on Windows--
-         to sleep 100ms, which is the minimum suggested value in the
-         curl_multi_fdset() doc. */
-
-      if(maxfd == -1) {
-#ifdef _WIN32
-        Sleep(100);
-        rc = 0;
-#else
-        /* Portable sleep for platforms other than Windows. */
-        struct timeval wait = { 0, 100 * 1000 }; /* 100ms */
-        rc = select(0, NULL, NULL, NULL, &wait);
-#endif
-      }
-      else {
-        /* Note that on some platforms 'timeout' may be modified by select().
-           If you need access to the original value save a copy beforehand. */
-        rc = select(maxfd + 1, &fdread, &fdwrite, &fdexcep, &timeout);
-      }
-
-      switch(rc) {
-      case -1:
-        downloadComplete = false;
-        break;
-      case 0:
-      default:
-        /* timeout or readable/writable sockets */
         curl_multi_perform(multi_handle, &still_running);
-        break;
-      }
-    }
 
+        std::string uiMessage;
+        uiMessage = "Downloading " + title + "......0.00%";
+        uiInterface.InitMessage(_(uiMessage.c_str()));
+        int64_t nNow = GetTime();
+
+        while(still_running) {
+
+          if (ShutdownRequested()) {
+              downloadComplete = false;
+              break;
+          }
+
+          if (GetTime() >= nNow + 2) {
+              nNow = GetTime();
+              int64_t dltotal = 0;
+              int64_t dlnow = 0;
+              for (std::map<std::string, ParamFile>::iterator it = mapParams.begin(); it != mapParams.end(); ++it) {
+                  if (!it->second.verified) {
+                      dltotal += it->second.dltotal + it->second.dlretrytotal;
+                      dlnow += it->second.dlnow + it->second.dlretrytotal;
+                  }
+              }
+              double pert = 0.00;
+              if (dltotal > 0) {
+                  pert = (dlnow / (double)dltotal) * 100;
+              }
+              uiMessage = "Downloading " + title + "......" + std::to_string(pert).substr(0,10) + "%";
+              uiInterface.InitMessage(_(uiMessage.c_str()));
+          }
+
+          struct timeval timeout;
+          int rc; /* select() return code */
+          CURLMcode mc; /* curl_multi_fdset() return code */
+
+          fd_set fdread;
+          fd_set fdwrite;
+          fd_set fdexcep;
+          int maxfd = -1;
+
+          long curl_timeo = 5;
+
+          FD_ZERO(&fdread);
+          FD_ZERO(&fdwrite);
+          FD_ZERO(&fdexcep);
+
+          /* set a suitable timeout to play around with */
+          timeout.tv_sec = 1;
+          timeout.tv_usec = 0;
+
+          curl_multi_timeout(multi_handle, &curl_timeo);
+          if(curl_timeo >= 0) {
+            timeout.tv_sec = curl_timeo / 1000;
+            if(timeout.tv_sec > 1)
+              timeout.tv_sec = 1;
+            else
+              timeout.tv_usec = (curl_timeo % 1000) * 1000;
+          }
+
+          /* get file descriptors from the transfers */
+          mc = curl_multi_fdset(multi_handle, &fdread, &fdwrite, &fdexcep, &maxfd);
+
+          if(mc != CURLM_OK) {
+            fprintf(stderr, "curl_multi_fdset() failed, code %d.\n", mc);
+            downloadComplete = false;
+            break;
+          }
+
+          /* On success the value of maxfd is guaranteed to be >= -1. We call
+             select(maxfd + 1, ...); specially in case of (maxfd == -1) there are
+             no fds ready yet so we call select(0, ...) --or Sleep() on Windows--
+             to sleep 100ms, which is the minimum suggested value in the
+             curl_multi_fdset() doc. */
+
+          if(maxfd == -1) {
+    #ifdef _WIN32
+            Sleep(100);
+            rc = 0;
+    #else
+            /* Portable sleep for platforms other than Windows. */
+            struct timeval wait = { 0, 100 * 1000 }; /* 100ms */
+            rc = select(0, NULL, NULL, NULL, &wait);
+    #endif
+          }
+          else {
+            /* Note that on some platforms 'timeout' may be modified by select().
+               If you need access to the original value save a copy beforehand. */
+            rc = select(maxfd + 1, &fdread, &fdwrite, &fdexcep, &timeout);
+          }
+
+          switch(rc) {
+          case -1:
+            downloadComplete = false;
+            break;
+          case 0:
+          default:
+            /* timeout or readable/writable sockets */
+            curl_multi_perform(multi_handle, &still_running);
+            break;
+          }
+        }
+
+        if (downloadComplete)
+        for (std::map<std::string, ParamFile>::iterator it = mapParams.begin(); it != mapParams.end(); ++it) {
+            if (!it->second.verified) {
+                it->second.dlretrytotal += it->second.dlnow;
+                curl_easy_cleanup(it->second.curl);
+                if (it->second.dlnow != it->second.dltotal) {
+                    downloadComplete = false;
+                }
+            }
+        }
+
+        curl_multi_cleanup(multi_handle);
+        curl_global_cleanup();
+
+        if (downloadComplete)
+            break;
+
+        if (ShutdownRequested()) {
+            downloadComplete = false;
+            break;
+        }
+        LogPrintf("Retrying Download - Retry #%d\n", i);
+    }
 
     for (std::map<std::string, ParamFile>::iterator it = mapParams.begin(); it != mapParams.end(); ++it) {
         if (!it->second.verified) {
             fclose(it->second.file);
-            curl_easy_cleanup(it->second.curl);
+
         }
     }
 
-    curl_multi_cleanup(multi_handle);
-    curl_global_cleanup();
 
     return downloadComplete;
 }
 
 
-void getBootstrap() {
+bool getBootstrap() {
     initalizeMapParamBootstrap();
     bool dlsuccess = downloadFiles("Bootstrap");
 
     for (std::map<std::string, ParamFile>::iterator it = mapParams.begin(); it != mapParams.end(); ++it) {
-        const char *path = it->second.path.string().c_str();
         if (dlsuccess) {
-            extract(path);
+            if (!extract(it->second.path)) {
+                boost::filesystem::remove_all(GetDataDir() / "blocks");
+                boost::filesystem::remove_all(GetDataDir() / "chainstate");
+                dlsuccess = false;
+            }
         }
         if (boost::filesystem::exists(it->second.path.string())) {
             boost::filesystem::remove(it->second.path.string());
         }
     }
+    return dlsuccess;
 }
 
 
-bool extract(const char *filename) {
+bool extract(boost::filesystem::path filename) {
 
   bool extractComplete = true;
 	struct archive *a;
@@ -365,10 +399,7 @@ bool extract(const char *filename) {
   if (archive_read_support_filter_gzip(a) != ARCHIVE_OK)
         extractComplete = false;
 
-	if (filename != NULL && strcmp(filename, "-") == 0)
-		filename = NULL;
-
-  r = archive_read_open_filename(a, filename, 10240);
+  r = archive_read_open_filename(a, filename.string().c_str(), 10240);
 	if (r != ARCHIVE_OK) {
       LogPrintf("archive_read_open_filename() %s %d\n",archive_error_string(a), r);
       extractComplete = false;
@@ -383,6 +414,7 @@ bool extract(const char *filename) {
           if (r != ARCHIVE_OK) {
               LogPrintf("archive_read_next_header() %s %d\n",archive_error_string(a), r);
               extractComplete = false;
+              break;
           }
 
           const char* currentFile = archive_entry_pathname(entry);
@@ -395,12 +427,14 @@ bool extract(const char *filename) {
           if (r != ARCHIVE_OK) {
               LogPrintf("archive_write_header() %s %d\n",archive_error_string(ext), r);
               extractComplete = false;
+              break;
           } else {
               copy_data(a, ext);
               r = archive_write_finish_entry(ext);
               if (r != ARCHIVE_OK) {
                   LogPrintf("archive_write_finish_entry() %s %d\n",archive_error_string(ext), r);
                   extractComplete = false;
+                  break;
               }
           }
       }
