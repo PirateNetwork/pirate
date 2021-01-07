@@ -159,10 +159,13 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
             if (fromNotes.size() < minQuantity)
               continue;
 
+            CAmount fee = fConsolidationTxFee;
+            if (amountToSend <= fConsolidationTxFee) {
+              fee = 0;
+            }
             amountConsolidated += amountToSend;
             auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
-            //builder.SetExpiryHeight(targetHeight_ + CONSOLIDATION_EXPIRY_DELTA);
-            LogPrint("zrpcunsafe", "%s: Beginning creating transaction with Sapling output amount=%s\n", getId(), FormatMoney(amountToSend - fConsolidationTxFee));
+            LogPrint("zrpcunsafe", "%s: Beginning creating transaction with Sapling output amount=%s\n", getId(), FormatMoney(amountToSend - fee));
 
             // Select Sapling notes
             std::vector<SaplingOutPoint> ops;
@@ -189,8 +192,9 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
                 builder.AddSaplingSpend(extsk.expsk, notes[i], anchor, witnesses[i].get());
             }
 
-            builder.SetFee(fConsolidationTxFee);
-            builder.AddSaplingOutput(extsk.expsk.ovk, addr, amountToSend - fConsolidationTxFee);
+
+            builder.SetFee(fee);
+            builder.AddSaplingOutput(extsk.expsk.ovk, addr, amountToSend - fee);
             //CTransaction tx = builder.Build();
 
             auto maybe_tx = builder.Build();
@@ -207,7 +211,7 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
 
             pwalletMain->CommitAutomatedTx(tx);
             LogPrint("zrpcunsafe", "%s: Committed consolidation transaction with txid=%s\n", getId(), tx.GetHash().ToString());
-            amountConsolidated += amountToSend - fConsolidationTxFee;
+            amountConsolidated += amountToSend - fee;
             consolidationTxIds.push_back(tx.GetHash().ToString());
 
         }
