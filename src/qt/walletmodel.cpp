@@ -261,6 +261,34 @@ bool WalletModel::validateAddress(const QString &address, bool allowZAddresses)
     return false;
 }
 
+bool WalletModel::validateMemo(const QString &memo)
+{
+      string memoValue;
+      if (!memo.isNull()) {
+          memoValue = memo.toStdString();
+
+          if (!IsHex(memoValue)) {
+              memoValue = HexStr(memoValue);
+          }
+          if (memoValue.length() > ZC_MEMO_SIZE*2) {
+            return false;
+          }
+
+          std::vector<unsigned char> rawMemo = ParseHex(memoValue.c_str());
+
+          // If ParseHex comes across a non-hex char, it will stop but still return results so far.
+          size_t slen = memoValue.length();
+          if (slen % 2 !=0 || (slen>0 && rawMemo.size()!=slen/2)) {
+              return false;
+          }
+
+          if (rawMemo.size() > ZC_MEMO_SIZE) {
+            return false;
+          }
+      }
+    return true;
+}
+
 WalletModel::SendCoinsReturn WalletModel::prepareTransaction(WalletModelTransaction &transaction, const CCoinControl& coinControl)
 {
     CAmount total = 0;
@@ -482,9 +510,13 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
         setAddress.insert(rcp.address.toStdString());
 
         string memo;
-        //Memo validation
-        //..... add later
-        //Now it is null
+        if (!rcp.memo.isNull()) {
+            memo = rcp.memo.toStdString();
+
+            if (!IsHex(memo)) {
+                memo = HexStr(memo);
+            }
+        }
 
         if (isZaddr) {
             zaddrRecipients.push_back( SendManyRecipient(rcp.address.toStdString(), rcp.amount, memo) );

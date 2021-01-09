@@ -47,8 +47,8 @@ class SendCoinsRecipient
 {
 public:
     explicit SendCoinsRecipient() : amount(0), fSubtractFeeFromAmount(false), nVersion(SendCoinsRecipient::CURRENT_VERSION) { }
-    explicit SendCoinsRecipient(const QString &addr, const QString &_label, const CAmount& _amount, const QString &_message):
-        address(addr), label(_label), amount(_amount), message(_message), fSubtractFeeFromAmount(false), nVersion(SendCoinsRecipient::CURRENT_VERSION) {}
+    explicit SendCoinsRecipient(const QString &addr, const QString &_label, const CAmount& _amount, const QString &_memo, const QString &_message):
+        address(addr), label(_label), amount(_amount), memo(_memo), message(_message), fSubtractFeeFromAmount(false), nVersion(SendCoinsRecipient::CURRENT_VERSION) {}
 
     // If from an unauthenticated payment request, this is used for storing
     // the addresses, e.g. address-A<br />address-B<br />address-C.
@@ -58,6 +58,7 @@ public:
     QString address;
     QString label;
     CAmount amount;
+    QString memo;
     // If from a payment request, this is used for storing the memo
     QString message;
 
@@ -85,6 +86,7 @@ public:
         std::string sAddress = address.toStdString();
         std::string sLabel = label.toStdString();
         std::string sMessage = message.toStdString();
+        std::string sMemo = memo.toStdString();
         #ifdef ENABLE_BIP70
         std::string sPaymentRequest;
         if (!ser_action.ForRead() && paymentRequest.IsInitialized())
@@ -96,6 +98,7 @@ public:
         READWRITE(sAddress);
         READWRITE(sLabel);
         READWRITE(amount);
+        READWRITE(sMemo);
         READWRITE(sMessage);
         READWRITE(sPaymentRequest);
         READWRITE(sAuthenticatedMerchant);
@@ -175,6 +178,9 @@ public:
 
     // Check address for validity
     bool validateAddress(const QString &address, bool allowZAddresses=false);
+
+    //check memo validity
+    bool validateMemo(const QString &memo);
 
     // Return status record for SendCoins, contains error id + information
     struct SendCoinsReturn

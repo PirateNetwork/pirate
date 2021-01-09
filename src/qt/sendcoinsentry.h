@@ -24,6 +24,8 @@ namespace Ui {
 class SendCoinsEntry : public QStackedWidget
 {
     Q_OBJECT
+private:
+  QString validatedMemo;
 
 public:
     explicit SendCoinsEntry(const PlatformStyle *platformStyle, QWidget *parent = 0, bool allowZAddresses = false);
@@ -39,6 +41,7 @@ public:
     void setValue(const SendCoinsRecipient &value);
     void setAddress(const QString &address);
     void setAmount(const CAmount &amount);
+    void setMemo(const QString &memo);
 
     /** Set up the tab chain manually, as Qt messes up the tab chain by default in some cases
      *  (issue https://bugreports.qt-project.org/browse/QTBUG-10907).

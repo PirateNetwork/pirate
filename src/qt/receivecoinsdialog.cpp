@@ -135,6 +135,7 @@ void ReceiveCoinsDialog::on_receiveButton_clicked()
 
     QString address;
     QString label = ui->reqLabel->text();
+    QString memo = "";
     if(ui->reuseAddress->isChecked())
     {
         /* Choose existing receiving address */
@@ -155,7 +156,7 @@ void ReceiveCoinsDialog::on_receiveButton_clicked()
         address = model->getAddressTableModel()->addRow(AddressTableModel::Receive, label, "");
     }
     SendCoinsRecipient info(address, label,
-        ui->reqAmount->value(), ui->reqMessage->text());
+        ui->reqAmount->value(), memo, ui->reqMessage->text());
     ReceiveRequestDialog *dialog = new ReceiveRequestDialog(this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     dialog->setModel(model->getOptionsModel());
