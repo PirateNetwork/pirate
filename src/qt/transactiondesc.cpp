@@ -21,6 +21,7 @@
 #include "main.h"
 #include "wallet/db.h"
 #include "wallet/wallet.h"
+#include "wallet/rpcpiratewallet.h"
 #include "key_io.h"
 
 #include <stdint.h>
@@ -52,280 +53,181 @@ QString TransactionDesc::FormatTxStatus(const CWalletTx& wtx)
     }
 }
 
-QString TransactionDesc::toHTML(CWallet *wallet, CWalletTx &wtx, TransactionRecord *rec, int unit)
+QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int unit)
 {
     QString strHTML;
+    QString sendHTML;
+    QString sendChangeHTML;
+    QString recHTML;
+    QString recChangeHTML;
+    bool allChange = true;
 
     LOCK2(cs_main, wallet->cs_wallet);
     strHTML.reserve(4000);
     strHTML += "<html><font face='verdana, arial, helvetica, sans-serif'>";
 
-    int64_t nTime = wtx.GetTxTime();
-    CAmount nCredit = wtx.GetCredit(ISMINE_ALL);
-    CAmount nDebit = wtx.GetDebit(ISMINE_ALL);
-    CAmount nNet = nCredit - nDebit;
+    //Get the ArcTx
+    uint256 txid = rec->hash;
+    RpcArcTransaction arcTx;
+    bool fIncludeWatchonly = true;
 
-    strHTML += "<b>" + tr("Status") + ":</b> " + FormatTxStatus(wtx);
-    int nRequests = wtx.GetRequestCount();
-    if (nRequests != -1)
-    {
-        if (nRequests == 0)
-            strHTML += tr(", has not been successfully broadcast yet");
-        else if (nRequests > 0)
-            strHTML += tr(", broadcast through %n node(s)", "", nRequests);
-    }
-    strHTML += "<br>";
+    //get Ovks for sapling decryption
+    std::vector<uint256> ovks;
+    getAllSaplingOVKs(ovks, fIncludeWatchonly);
 
-    strHTML += "<b>" + tr("Date") + ":</b> " + (nTime ? GUIUtil::dateTimeStr(nTime) : "") + "<br>";
+    //get Ivks for sapling decryption
+    std::vector<uint256> ivks;
+    getAllSaplingIVKs(ivks, fIncludeWatchonly);
 
-    //
-    // From
-    //
-    if (wtx.IsCoinBase())
-    {
-        strHTML += "<b>" + tr("Source") + ":</b> " + tr("Generated") + "<br>";
+    if (wallet->mapWallet.count(txid)) {
+        CWalletTx& wtx = wallet->mapWallet[txid];
+        getRpcArcTx(wtx, arcTx, ivks, ovks, fIncludeWatchonly);
+    } else {
+        getRpcArcTx(txid, arcTx, ivks, ovks, fIncludeWatchonly);
     }
-    else if (wtx.mapValue.count("from") && !wtx.mapValue["from"].empty())
-    {
-        // Online transaction
-        strHTML += "<b>" + tr("From") + ":</b> " + GUIUtil::HtmlEscape(wtx.mapValue["from"]) + "<br>";
+
+    strHTML += "<b>" + tr("Date") + ":</b> " + (GUIUtil::dateTimeStr(arcTx.nTime)) + "<br>";
+    strHTML += "<b>" + tr("Txid") + ":</b> " + GUIUtil::HtmlEscape(arcTx.txid.ToString()) + "<br>";
+    if (arcTx.coinbase) {
+        strHTML += "<b>" + tr("coinbase") + ":</b> True<br>";
+    } else {
+        strHTML += "<b>" + tr("coinbase") + ":</b> False<br>";
     }
-    else
-    {
-        // Offline transaction
-        if (nNet > 0)
-        {
-            // Credit
-            CTxDestination address = DecodeDestination(rec->address);
-            if (IsValidDestination(address)) {
-                if (wallet->mapAddressBook.count(address))
-                {
-                    strHTML += "<b>" + tr("From") + ":</b> " + tr("unknown") + "<br>";
-                    strHTML += "<b>" + tr("To") + ":</b> ";
-                    strHTML += GUIUtil::HtmlEscape(rec->address);
-                    QString addressOwned = (::IsMine(*wallet, address) == ISMINE_SPENDABLE) ? tr("own address") : tr("watch-only");
-                    if (!wallet->mapAddressBook[address].name.empty())
-                        strHTML += " (" + addressOwned + ", " + tr("label") + ": " + GUIUtil::HtmlEscape(wallet->mapAddressBook[address].name) + ")";
-                    else
-                        strHTML += " (" + addressOwned + ")";
-                    strHTML += "<br>";
-                }
+    strHTML += "<b>" + tr("category") + ":</b> " + GUIUtil::HtmlEscape(arcTx.category) + "<br>";
+    strHTML += "<b>" + tr("blockhash") + ":</b> " + GUIUtil::HtmlEscape(arcTx.blockHash.ToString()) + "<br>";
+    strHTML += "<b>" + tr("blockindex") + ":</b> " + QString::number(arcTx.blockIndex) + "<br>";
+    strHTML += "<b>" + tr("blocktime") + ":</b> " + GUIUtil::dateTimeStr(arcTx.nBlockTime)  + "<br>";
+    strHTML += "<b>" + tr("rawconfirmations") + ":</b> " + QString::number(arcTx.rawconfirmations) + "<br>";
+    strHTML += "<b>" + tr("confirmations") + ":</b> " + QString::number(arcTx.confirmations) + "<br>";
+    strHTML += "<b>" + tr("expiryHeight") + ":</b> " + QString::number(arcTx.expiryHeight) + "<br>";
+    strHTML += "<b>" + tr("fee") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, -(arcTx.transparentValue + arcTx.sproutValue + arcTx.saplingValue)) + "<br>";
+
+
+
+    if (arcTx.spentFrom.size() > 0) {
+        for (int i = 0; i < arcTx.vTSend.size(); i++) {
+            QString tempHTML;
+            bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vTSend[i].encodedAddress) != arcTx.spentFrom.end();
+            tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Transparent Send")  + "<br>";
+            tempHTML += "<b>" + tr("    Address") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vTSend[i].encodedAddress)  + "<br>";
+            tempHTML += "<b>" + tr("    Value") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, CAmount(arcTx.vTSend[i].amount)) + "<br>";
+            if (change) {
+                tempHTML += "<b>" + tr("    Change") + ":</b> True<br>";
+                sendChangeHTML += tempHTML;
+            } else {
+                allChange = false;
+                tempHTML += "<b>" + tr("    Change") + ":</b> False<br>";
+                sendHTML += tempHTML;
+            }
+        }
+
+        CAmount sproutValueReceived = 0;
+        for (int i = 0; i < arcTx.vZcReceived.size(); i++) {
+            QString tempHTML;
+            bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZcReceived[i].encodedAddress) != arcTx.spentFrom.end();
+            sproutValueReceived += arcTx.vZcReceived[i].amount;
+            tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Sprout Send")  + "<br>";
+            tempHTML += "<b>" + tr("    Address") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZcReceived[i].encodedAddress)  + "<br>";
+            tempHTML += "<b>" + tr("    Value") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, CAmount(arcTx.vZcReceived[i].amount)) + "<br>";
+            if (change) {
+                tempHTML += "<b>" + tr("    Change") + ":</b> True<br>";
+                sendChangeHTML += tempHTML;
+            } else {
+                allChange = false;
+                tempHTML += "<b>" + tr("    Change") + ":</b> False<br>";
+                sendHTML += tempHTML;
+            }
+        }
+
+        if (arcTx.sproutValue - arcTx.sproutValueSpent - sproutValueReceived != 0) {
+            QString tempHTML;
+            tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Sprout Send")  + "<br>";
+            tempHTML += "<b>" + tr("    Address") + ":</b> " + "Shielded"  + "<br>";
+            tempHTML += "<b>" + tr("    Value") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, CAmount(arcTx.sproutValue - arcTx.sproutValueSpent)) + "<br>";
+            tempHTML += "<b>" + tr("    Change") + ":</b> False<br>";
+            sendHTML += tempHTML;
+        }
+
+        for (int i = 0; i < arcTx.vZsSend.size(); i++) {
+            QString tempHTML;
+            bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsSend[i].encodedAddress) != arcTx.spentFrom.end();
+            tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Sapling Send")  + "<br>";
+            tempHTML += "<b>" + tr("    Address") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZsSend[i].encodedAddress)  + "<br>";
+            tempHTML += "<b>" + tr("    Value") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, CAmount(arcTx.vZsSend[i].amount)) + "<br>";
+            if (change) {
+                tempHTML += "<b>" + tr("    Change") + ":</b> True<br>";
+            } else {
+                allChange = false;
+                tempHTML += "<b>" + tr("    Change") + ":</b> False<br>";
+            }
+            tempHTML += "<b>" + tr("    Memo") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZsSend[i].memoStr)  + "<br>";
+            if (change) {
+                sendChangeHTML += tempHTML;
+            } else {
+                sendHTML += tempHTML;
             }
         }
     }
 
-    //
-    // To
-    //
-    if (wtx.mapValue.count("to") && !wtx.mapValue["to"].empty())
-    {
-        // Online transaction
-        std::string strAddress = wtx.mapValue["to"];
-        strHTML += "<b>" + tr("To") + ":</b> ";
-        CTxDestination dest = DecodeDestination(strAddress);
-        if (wallet->mapAddressBook.count(dest) && !wallet->mapAddressBook[dest].name.empty())
-            strHTML += GUIUtil::HtmlEscape(wallet->mapAddressBook[dest].name) + " ";
-        strHTML += GUIUtil::HtmlEscape(strAddress) + "<br>";
-    }
-
-    //
-    // Amount
-    //
-    if (wtx.IsCoinBase() && nCredit == 0)
-    {
-        //
-        // Coinbase
-        //
-        CAmount nUnmatured = 0;
-        for (const CTxOut& txout : wtx.vout)
-            nUnmatured += wallet->GetCredit(txout, ISMINE_ALL);
-        strHTML += "<b>" + tr("Credit") + ":</b> ";
-        if (wtx.IsInMainChain())
-            strHTML += KomodoUnits::formatHtmlWithUnit(unit, nUnmatured)+ " (" + tr("matures in %n more block(s)", "", wtx.GetBlocksToMaturity()) + ")";
-        else
-            strHTML += "(" + tr("not accepted") + ")";
-        strHTML += "<br>";
-    }
-    else if (nNet > 0)
-    {
-        //
-        // Credit
-        //
-        strHTML += "<b>" + tr("Credit") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, nNet) + "<br>";
-    }
-    else
-    {
-        isminetype fAllFromMe = ISMINE_SPENDABLE;
-        for (const CTxIn& txin : wtx.vin)
-        {
-            isminetype mine = wallet->IsMine(txin);
-            if(fAllFromMe > mine) fAllFromMe = mine;
-        }
-
-        isminetype fAllToMe = ISMINE_SPENDABLE;
-        for (const CTxOut& txout : wtx.vout)
-        {
-            isminetype mine = wallet->IsMine(txout);
-            if(fAllToMe > mine) fAllToMe = mine;
-        }
-
-        if (fAllFromMe)
-        {
-            if(fAllFromMe & ISMINE_WATCH_ONLY)
-                strHTML += "<b>" + tr("From") + ":</b> " + tr("watch-only") + "<br>";
-
-            //
-            // Debit
-            //
-            for (const CTxOut& txout : wtx.vout)
-            {
-                // Ignore change
-                isminetype toSelf = wallet->IsMine(txout);
-                if ((toSelf == ISMINE_SPENDABLE) && (fAllFromMe == ISMINE_SPENDABLE))
-                    continue;
-
-                if (!wtx.mapValue.count("to") || wtx.mapValue["to"].empty())
-                {
-                    // Offline transaction
-                    CTxDestination address;
-                    if (ExtractDestination(txout.scriptPubKey, address))
-                    {
-                        strHTML += "<b>" + tr("To") + ":</b> ";
-                        if (wallet->mapAddressBook.count(address) && !wallet->mapAddressBook[address].name.empty())
-                            strHTML += GUIUtil::HtmlEscape(wallet->mapAddressBook[address].name) + " ";
-                        strHTML += GUIUtil::HtmlEscape(EncodeDestination(address));
-                        if(toSelf == ISMINE_SPENDABLE)
-                            strHTML += " (own address)";
-                        else if(toSelf & ISMINE_WATCH_ONLY)
-                            strHTML += " (watch-only)";
-                        strHTML += "<br>";
-                    }
-                }
-
-                strHTML += "<b>" + tr("Debit") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, -txout.nValue) + "<br>";
-                if(toSelf)
-                    strHTML += "<b>" + tr("Credit") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, txout.nValue) + "<br>";
-            }
-
-            if (fAllToMe)
-            {
-                // Payment to self
-                CAmount nChange = wtx.GetChange();
-                CAmount nValue = nCredit - nChange;
-                strHTML += "<b>" + tr("Total debit") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, -nValue) + "<br>";
-                strHTML += "<b>" + tr("Total credit") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, nValue) + "<br>";
-            }
-
-            CAmount nTxFee = nDebit - wtx.GetValueOut();
-            if (nTxFee > 0)
-                strHTML += "<b>" + tr("Transaction fee") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, -nTxFee) + "<br>";
-        }
-        else
-        {
-            //
-            // Mixed debit transaction
-            //
-            for (const CTxIn& txin : wtx.vin)
-                if (wallet->IsMine(txin))
-                    strHTML += "<b>" + tr("Debit") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, -wallet->GetDebit(txin, ISMINE_ALL)) + "<br>";
-            for (const CTxOut& txout : wtx.vout)
-                if (wallet->IsMine(txout))
-                    strHTML += "<b>" + tr("Credit") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, wallet->GetCredit(txout, ISMINE_ALL)) + "<br>";
+    for (int i = 0; i < arcTx.vTReceived.size(); i++) {
+        QString tempHTML;
+        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vTReceived[i].encodedAddress) != arcTx.spentFrom.end();
+        tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Transparent Received")  + "<br>";
+        tempHTML += "<b>" + tr("    Address") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vTReceived[i].encodedAddress)  + "<br>";
+        tempHTML += "<b>" + tr("    Value") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, CAmount(arcTx.vTReceived[i].amount)) + "<br>";
+        if (change) {
+            tempHTML += "<b>" + tr("    Change") + ":</b> True<br>";
+            recChangeHTML += tempHTML;
+        } else {
+            allChange = false;
+            tempHTML += "<b>" + tr("    Change") + ":</b> False<br>";
+            recHTML += tempHTML;
         }
     }
 
-    strHTML += "<b>" + tr("Net amount") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, nNet, true) + "<br>";
-
-    //
-    // Message
-    //
-    if (wtx.mapValue.count("message") && !wtx.mapValue["message"].empty())
-        strHTML += "<br><b>" + tr("Message") + ":</b><br>" + GUIUtil::HtmlEscape(wtx.mapValue["message"], true) + "<br>";
-    if (wtx.mapValue.count("comment") && !wtx.mapValue["comment"].empty())
-        strHTML += "<br><b>" + tr("Comment") + ":</b><br>" + GUIUtil::HtmlEscape(wtx.mapValue["comment"], true) + "<br>";
-
-    strHTML += "<b>" + tr("Transaction ID") + ":</b> " + rec->getTxID() + "<br>";
-    strHTML += "<b>" + tr("Transaction total size") + ":</b> " + QString::number(wtx.GetTotalSize()) + " bytes<br>";
-    strHTML += "<b>" + tr("Output index") + ":</b> " + QString::number(rec->getOutputIndex()) + "<br>";
-
-    // Message from normal pirate:URI (pirate:123...?message=example)
-    for (const std::pair<std::string, std::string>& r : wtx.vOrderForm)
-        if (r.first == "Message")
-            strHTML += "<br><b>" + tr("Message") + ":</b><br>" + GUIUtil::HtmlEscape(r.second, true) + "<br>";
-
-    #ifdef ENABLE_BIP70
-    //
-    // PaymentRequest info:
-    //
-    for (const std::pair<std::string, std::string>& r : wtx.vOrderForm)
-    {
-        if (r.first == "PaymentRequest")
-        {
-            PaymentRequestPlus req;
-            req.parse(QByteArray::fromRawData(r.second.data(), r.second.size()));
-            QString merchant;
-            if (req.getMerchant(PaymentServer::getCertStore(), merchant))
-                strHTML += "<b>" + tr("Merchant") + ":</b> " + GUIUtil::HtmlEscape(merchant) + "<br>";
+    for (int i = 0; i < arcTx.vZcReceived.size(); i++) {
+        QString tempHTML;
+        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZcReceived[i].encodedAddress) != arcTx.spentFrom.end();
+        tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Sprout Received")  + "<br>";
+        tempHTML += "<b>" + tr("    Address") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZcReceived[i].encodedAddress)  + "<br>";
+        tempHTML += "<b>" + tr("    Value") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, CAmount(arcTx.vZcReceived[i].amount)) + "<br>";
+        if (change) {
+            tempHTML += "<b>" + tr("    Change") + ":</b> True<br>";
+            recChangeHTML += tempHTML;
+        } else {
+            allChange = false;
+            tempHTML += "<b>" + tr("    Change") + ":</b> False<br>";
+            recHTML += tempHTML;
         }
     }
-    #endif
 
-    if (wtx.IsCoinBase())
-    {
-        quint32 numBlocksToMaturity = COINBASE_MATURITY +  1;
-        strHTML += "<br>" + tr("Generated coins must mature %1 blocks before they can be spent. When you generated this block, it was broadcast to the network to be added to the block chain. If it fails to get into the chain, its state will change to \"not accepted\" and it won't be spendable. This may occasionally happen if another node generates a block within a few seconds of yours.").arg(QString::number(numBlocksToMaturity)) + "<br>";
-    }
-
-    //
-    // Debug view
-    //
-    if (fDebug)
-    {
-        strHTML += "<hr><br>" + tr("Debug information") + "<br><br>";
-        for (const CTxIn& txin : wtx.vin)
-            if(wallet->IsMine(txin))
-                strHTML += "<b>" + tr("Debit") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, -wallet->GetDebit(txin, ISMINE_ALL)) + "<br>";
-        for (const CTxOut& txout : wtx.vout)
-            if(wallet->IsMine(txout))
-                strHTML += "<b>" + tr("Credit") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, wallet->GetCredit(txout, ISMINE_ALL)) + "<br>";
-
-        strHTML += "<br><b>" + tr("Transaction") + ":</b><br>";
-        strHTML += GUIUtil::HtmlEscape(wtx.ToString(), true);
-
-        strHTML += "<br><b>" + tr("Inputs") + ":</b>";
-        strHTML += "<ul>";
-
-        for (const CTxIn& txin : wtx.vin)
-        {
-            COutPoint prevout = txin.prevout;
-
-            CCoins prev;
-            if(pcoinsTip->GetCoins(prevout.hash, prev))
-            {
-                {
-                    for (unsigned int i = 0; i < prev.vout.size(); i++)
-                    {
-                        strHTML += "<li>";
-
-                        const CTxOut &vout = prev.vout[i];
-                        CTxDestination address;
-                        if (ExtractDestination(vout.scriptPubKey, address))
-                        {
-                            if (wallet->mapAddressBook.count(address) && !wallet->mapAddressBook[address].name.empty())
-                                strHTML += GUIUtil::HtmlEscape(wallet->mapAddressBook[address].name) + " ";
-                            strHTML += QString::fromStdString(EncodeDestination(address));
-                        }
-                        strHTML = strHTML + " " + tr("Amount") + "=" + KomodoUnits::formatHtmlWithUnit(unit, vout.nValue);
-                        strHTML = strHTML + " IsMine=" + (wallet->IsMine(vout) & ISMINE_SPENDABLE ? tr("true") : tr("false"));
-                        strHTML = strHTML + " IsWatchOnly=" + (wallet->IsMine(vout) & ISMINE_WATCH_ONLY ? tr("true") : tr("false"));
-                        strHTML += "</li>";
-                    }
-                }
-            }
+    for (int i = 0; i < arcTx.vZsReceived.size(); i++) {
+        QString tempHTML;
+        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsReceived[i].encodedAddress) != arcTx.spentFrom.end();
+        tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Sapling Received")  + "<br>";
+        tempHTML += "<b>" + tr("    Address") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZsReceived[i].encodedAddress)  + "<br>";
+        tempHTML += "<b>" + tr("    Value") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, CAmount(arcTx.vZsReceived[i].amount)) + "<br>";
+        if (change) {
+            tempHTML += "<b>" + tr("    Change") + ":</b> True<br>";
+        } else {
+            allChange = false;
+            tempHTML += "<b>" + tr("    Change") + ":</b> False<br>";
         }
-
-        strHTML += "</ul>";
+        tempHTML += "<b>" + tr("    Memo") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZsSend[i].memoStr)  + "<br>";
+        if (change) {
+            recChangeHTML += tempHTML;
+        } else {
+            allChange = false;
+            recHTML += tempHTML;
+        }
     }
+
+    if (allChange) {
+        strHTML += sendHTML + sendChangeHTML + recHTML + recChangeHTML;
+    } else {
+        strHTML += sendHTML + recHTML;
+    }
+
 
     strHTML += "</font></html>";
     return strHTML;

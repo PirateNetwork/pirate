@@ -50,6 +50,8 @@ public:
         WatchonlyDecorationRole,
         /** Long description (HTML format) */
         LongDescriptionRole,
+        /** Memo str */
+        MemoDescriptionRole,
         /** Address of transaction */
         AddressRole,
         /** Label of address related to transaction */

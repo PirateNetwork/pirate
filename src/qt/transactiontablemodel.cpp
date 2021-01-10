@@ -325,10 +325,10 @@ public:
     {
         {
             LOCK2(cs_main, wallet->cs_wallet);
-            std::map<uint256, CWalletTx>::iterator mi = wallet->mapWallet.find(rec->hash);
-            if(mi != wallet->mapWallet.end())
+            std::map<uint256, ArchiveTxPoint>::iterator mi = wallet->mapArcTxs.find(rec->hash);
+            if(mi != wallet->mapArcTxs.end())
             {
-                return TransactionDesc::toHTML(wallet, mi->second, rec, unit);
+                return TransactionDesc::toHTML(wallet, rec, unit);
             }
         }
         return QString();
@@ -486,14 +486,20 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
     {
     case TransactionRecord::RecvWithAddress:
         return tr("Received with");
+    case TransactionRecord::RecvWithAddressWithMemo:
+        return tr("Received with Memo");
     case TransactionRecord::RecvFromOther:
         return tr("Received from");
     case TransactionRecord::SendToAddress:
         return tr("Sent to");
+    case TransactionRecord::SendToAddressWithMemo:
+        return tr("Sent with Memo");
     case TransactionRecord::SendToOther:
         return tr("Sent to");
     case TransactionRecord::SendToSelf:
-        return tr("Payment to yourself");
+        return tr("Internal");
+    case TransactionRecord::SendToSelfWithMemo:
+        return tr("Internal with Memo");
     case TransactionRecord::Generated:
         return tr("Mined");
     default:
@@ -509,9 +515,13 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
         return QIcon(":/icons/tx_mined");
     case TransactionRecord::RecvWithAddress:
         return QIcon(":/icons/tx_input");
+    case TransactionRecord::RecvWithAddressWithMemo:
+        return QIcon(":/icons/tx_input");
     case TransactionRecord::RecvFromOther:
         return QIcon(":/icons/tx_input");
     case TransactionRecord::SendToAddress:
+        return QIcon(":/icons/tx_output");
+    case TransactionRecord::SendToAddressWithMemo:
         return QIcon(":/icons/tx_output");
     case TransactionRecord::SendToOther:
         return QIcon(":/icons/tx_output");
@@ -534,13 +544,19 @@ QString TransactionTableModel::formatTxToAddress(const TransactionRecord *wtx, b
         return QString::fromStdString(wtx->address) + watchAddress;
     case TransactionRecord::RecvWithAddress:
         return QString::fromStdString(wtx->address) + watchAddress;
+    case TransactionRecord::RecvWithAddressWithMemo:
+        return QString::fromStdString(wtx->address) + watchAddress;
     case TransactionRecord::SendToAddress:
+        return QString::fromStdString(wtx->address);
+    case TransactionRecord::SendToAddressWithMemo:
         return QString::fromStdString(wtx->address);
     case TransactionRecord::Generated:
         return QString::fromStdString(wtx->address);
     case TransactionRecord::SendToOther:
         return QString::fromStdString(wtx->address);
     case TransactionRecord::SendToSelf:
+        return QString::fromStdString(wtx->address) + watchAddress;
+    case TransactionRecord::SendToSelfWithMemo:
         return QString::fromStdString(wtx->address) + watchAddress;
     default:
         return tr("(n/a)") + watchAddress;
@@ -637,7 +653,8 @@ QString TransactionTableModel::formatTooltip(const TransactionRecord *rec) const
 {
     QString tooltip = formatTxStatus(rec) + QString("\n") + formatTxType(rec);
     if(rec->type==TransactionRecord::RecvFromOther || rec->type==TransactionRecord::SendToOther ||
-       rec->type==TransactionRecord::SendToAddress || rec->type==TransactionRecord::RecvWithAddress)
+       rec->type==TransactionRecord::SendToAddress || rec->type==TransactionRecord::RecvWithAddress ||
+       rec->type==TransactionRecord::SendToAddressWithMemo || rec->type==TransactionRecord::RecvWithAddressWithMemo)
     {
         tooltip += QString(" ") + formatTxToAddress(rec, true);
     }
@@ -733,6 +750,8 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
         return txWatchonlyDecoration(rec);
     case LongDescriptionRole:
         return priv->describe(rec, walletModel->getOptionsModel()->getDisplayUnit());
+    case MemoDescriptionRole:
+        return QString::fromStdString(rec->memo);
     case AddressRole:
         return QString::fromStdString(rec->address);
     case LabelRole:
