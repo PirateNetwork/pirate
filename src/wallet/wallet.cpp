@@ -1491,10 +1491,24 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
   CBlockIndex* pblockindex = chainActive[startHeight];
   int height = chainActive.Height();
 
+  //Show in UI
+  bool uiShown = false;
+  const CChainParams& chainParams = Params();
+  double dProgressStart = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false);
+  double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.LastTip(), false);
+
   while (pblockindex) {
 
+    //exit loop if trying to shutdoen
+    if (ShutdownRequested()) {
+        break;
+    }
+
     if (pblockindex->GetHeight() % 100 == 0 && pblockindex->GetHeight() < height - 5) {
-      LogPrintf("Building Witnesses for block %i %.4f complete\n", pblockindex->GetHeight(), pblockindex->GetHeight() / double(height));
+      uiShown = true;
+      scanperc = (int)((Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false) - dProgressStart) / (dProgressTip - dProgressStart) * 100);
+      uiInterface.ShowProgress(_(("Building Witnesses for block " + std::to_string(pblockindex->GetHeight()) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
+      uiInterface.InitMessage(_(("Building Witnesses for block " + std::to_string(pblockindex->GetHeight())).c_str()) + ((" " + std::to_string(scanperc)).c_str()) + ("%"));
     }
 
     SproutMerkleTree sproutTree;
@@ -1569,6 +1583,10 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
 
     pblockindex = chainActive.Next(pblockindex);
 
+  }
+
+  if (uiShown) {
+      uiInterface.ShowProgress(_("Witness Cache Complete..."), 100, false);
   }
 
   fInitWitnessesBuilt = true;
