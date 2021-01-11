@@ -96,6 +96,8 @@ void verus_hash(void *result, const void *data, size_t len)
 }
 
 void (*CVerusHashV2::haraka512Function)(unsigned char *out, const unsigned char *in);
+void (*CVerusHashV2::haraka512KeyedFunction)(unsigned char *out, const unsigned char *in, const u128 *rc);
+void (*CVerusHashV2::haraka256Function)(unsigned char *out, const unsigned char *in);
 
 void CVerusHashV2::init()
 {
@@ -103,12 +105,16 @@ void CVerusHashV2::init()
     {
         load_constants();
         haraka512Function = &haraka512;
+        haraka512KeyedFunction = &haraka512_keyed;
+        haraka256Function = &haraka256;
     }
     else
     {
-        // load and tweak the haraka constants
+        // load the haraka constants
         load_constants_port();
         haraka512Function = &haraka512_port;
+        haraka512KeyedFunction = &haraka512_port_keyed;
+        haraka256Function = &haraka256_port;
     }
 }
 

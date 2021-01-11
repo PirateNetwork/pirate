@@ -1,5 +1,5 @@
 /******************************************************************************
- * Copyright © 2014-2019 The SuperNET Developers.                             *
+ * Copyright © 2014-2018 The SuperNET Developers.                             *
  *                                                                            *
  * See the AUTHORS, DEVELOPER-AGREEMENT and LICENSE files at                  *
  * the top-level directory of this distribution for the individual copyright  *
@@ -81,7 +81,7 @@ bits320 fexpand(bits256 basepoint)
     return(out);
 }
 
-#if __amd64__
+ #if defined(__amd64)  || defined(__aarch64__)
 // donna: special gcc mode for 128-bit integers. It's implemented on 64-bit platforms only as far as I know.
 typedef unsigned uint128_t __attribute__((mode(TI)));
 
@@ -891,7 +891,7 @@ void OS_randombytes(unsigned char *x,long xlen);
 bits256 rand256(int32_t privkeyflag)
 {
     bits256 randval;
-    #ifndef __WIN32
+    #ifndef _WIN32
     OS_randombytes(randval.bytes,sizeof(randval));
     #else
     randombytes_buf(randval.bytes,sizeof(randval));

@@ -260,6 +260,16 @@ AC_ARG_WITH([daemon],
   [build_bitcoind=$withval],
   [build_bitcoind=yes])
 
+GCC_TARGET=`$CC -dumpmachine 2>&1`
+case $GCC_TARGET in
+  arm*-*-*)
+    have_arm=true
+    ;;
+  aarch64*-*-*)
+    have_arm=true
+    ;;
+esac
+
 use_pkgconfig=yes
 case $host in
   *mingw*)
@@ -949,6 +959,7 @@ AM_CONDITIONAL([TARGET_WINDOWS], [test x$TARGET_OS = xwindows])
 AM_CONDITIONAL([ENABLE_WALLET],[test x$enable_wallet = xyes])
 AM_CONDITIONAL([ENABLE_MINING],[test x$enable_mining = xyes])
 AM_CONDITIONAL([ENABLE_TESTS],[test x$BUILD_TEST = xyes])
+AM_CONDITIONAL([ARCH_ARM], [test x$have_arm = xtrue])
 AM_CONDITIONAL([ENABLE_QT],[test x$bitcoin_enable_qt = xyes])
 AM_CONDITIONAL([ENABLE_QT_TESTS],[test x$BUILD_TEST_QT = xyes])
 AM_CONDITIONAL([USE_QRCODE], [test x$use_qr = xyes])

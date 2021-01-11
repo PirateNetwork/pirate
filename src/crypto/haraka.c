@@ -23,6 +23,21 @@ SOFTWARE.
 
 Optimized Implementations for Haraka256 and Haraka512
 */
+#if defined(__arm__)  || defined(__aarch64__)
+#include "crypto/SSE2NEON.h"
+__m128i _mm_aesenc_si128 (__m128i a, __m128i RoundKey)
+{   //TODO intrinsic version of ARM AESENC
+      uint8x16_t tmp1, tmp2, tmp3;
+
+ tmp1 = a;
+ tmp2 = RoundKey;
+
+ tmp3 = vaesmcq_u8(vaeseq_u8(tmp1, (uint8x16_t){})) ^ tmp2;
+ 
+	
+	return tmp3;
+}	
+#endif
 
 #include <stdio.h>
 #include "crypto/haraka.h"
@@ -113,6 +128,34 @@ void test_implementations() {
 }
 
 void haraka256(unsigned char *out, const unsigned char *in) {
+  __m128i s[2], tmp;
+
+  s[0] = LOAD(in);
+  s[1] = LOAD(in + 16);
+
+  AES2(s[0], s[1], 0);
+  MIX2(s[0], s[1]);
+
+  AES2(s[0], s[1], 4);
+  MIX2(s[0], s[1]);
+
+  AES2(s[0], s[1], 8);
+  MIX2(s[0], s[1]);
+
+  AES2(s[0], s[1], 12);
+  MIX2(s[0], s[1]);
+
+  AES2(s[0], s[1], 16);
+  MIX2(s[0], s[1]);
+
+  s[0] = _mm_xor_si128(s[0], LOAD(in));
+  s[1] = _mm_xor_si128(s[1], LOAD(in + 16));
+
+  STORE(out, s[0]);
+  STORE(out + 16, s[1]);
+}
+
+void haraka256_keyed(unsigned char *out, const unsigned char *in, const u128 *rc) {
   __m128i s[2], tmp;
 
   s[0] = LOAD(in);
@@ -387,6 +430,37 @@ void haraka512_zero(unsigned char *out, const unsigned char *in) {
   MIX4(s[0], s[1], s[2], s[3]);
 
   AES4_zero(s[0], s[1], s[2], s[3], 32);
+  MIX4(s[0], s[1], s[2], s[3]);
+
+  s[0] = _mm_xor_si128(s[0], LOAD(in));
+  s[1] = _mm_xor_si128(s[1], LOAD(in + 16));
+  s[2] = _mm_xor_si128(s[2], LOAD(in + 32));
+  s[3] = _mm_xor_si128(s[3], LOAD(in + 48));
+
+  TRUNCSTORE(out, s[0], s[1], s[2], s[3]);
+}
+
+void haraka512_keyed(unsigned char *out, const unsigned char *in, const u128 *rc) {
+  u128 s[4], tmp;
+
+  s[0] = LOAD(in);
+  s[1] = LOAD(in + 16);
+  s[2] = LOAD(in + 32);
+  s[3] = LOAD(in + 48);
+
+  AES4(s[0], s[1], s[2], s[3], 0);
+  MIX4(s[0], s[1], s[2], s[3]);
+
+  AES4(s[0], s[1], s[2], s[3], 8);
+  MIX4(s[0], s[1], s[2], s[3]);
+
+  AES4(s[0], s[1], s[2], s[3], 16);
+  MIX4(s[0], s[1], s[2], s[3]);
+
+  AES4(s[0], s[1], s[2], s[3], 24);
+  MIX4(s[0], s[1], s[2], s[3]);
+
+  AES4(s[0], s[1], s[2], s[3], 32);
   MIX4(s[0], s[1], s[2], s[3]);
 
   s[0] = _mm_xor_si128(s[0], LOAD(in));

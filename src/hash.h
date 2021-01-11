@@ -327,6 +327,44 @@ public:
     }
 };
 
+/** A writer stream (for serialization) that computes a 256-bit VerusHash 2.0 hash */
+class CVerusHashV2bWriter
+{
+private:
+    CVerusHashV2 state;
+
+public:
+    int nType;
+    int nVersion;
+
+    CVerusHashV2bWriter(int nTypeIn, int nVersionIn, int solutionVersion=SOLUTION_VERUSHHASH_V2, uint64_t keysize=VERUSKEYSIZE) :
+        nType(nTypeIn), nVersion(nVersionIn), state(solutionVersion) {}
+
+    void Reset() { state.Reset(); }
+
+    CVerusHashV2bWriter& write(const char *pch, size_t size) {
+        state.Write((const unsigned char*)pch, size);
+        return (*this);
+    }
+
+    // invalidates the object for further writing
+    uint256 GetHash() {
+        uint256 result;
+        state.Finalize2b((unsigned char*)&result);
+        return result;
+    }
+
+    inline int64_t *xI64p() { return state.ExtraI64Ptr(); }
+    CVerusHashV2 &GetState() { return state; }
+
+    template<typename T>
+    CVerusHashV2bWriter& operator<<(const T& obj) {
+        // Serialize to this stream
+        ::Serialize(*this, obj);
+        return (*this);
+    }
+};
+
 /** Compute the 256-bit hash of an object's serialization. */
 template<typename T>
 uint256 SerializeHash(const T& obj, int nType=SER_GETHASH, int nVersion=PROTOCOL_VERSION)
