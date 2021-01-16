@@ -80,9 +80,6 @@ void OptionsModel::Init(bool resetSettings)
         settings.setValue("strThirdPartyTxUrls", "");
     strThirdPartyTxUrls = settings.value("strThirdPartyTxUrls", "").toString();
 
-    if (!settings.contains("fCoinControlFeatures"))
-        settings.setValue("fCoinControlFeatures", false);
-    fCoinControlFeatures = settings.value("fCoinControlFeatures", false).toBool();
 
     // These are shared with the core or have a command-line parameter
     // and we want command-line parameters to overwrite the GUI settings.
@@ -108,10 +105,51 @@ void OptionsModel::Init(bool resetSettings)
 
     // Wallet
 #ifdef ENABLE_WALLET
-    if (!settings.contains("bSpendZeroConfChange"))
-        settings.setValue("bSpendZeroConfChange", true);
-    if (!SoftSetBoolArg("-spendzeroconfchange", settings.value("bSpendZeroConfChange").toBool()))
-        addOverriddenOption("-spendzeroconfchange");
+    if (!settings.contains("fTxDeleteEnabled"))
+        settings.setValue("fTxDeleteEnabled", true);
+    if (!SoftSetBoolArg("-deletetx", settings.value("fTxDeleteEnabled").toBool()))
+        addOverriddenOption("-deletetx");
+
+    if (!settings.contains("fSaplingConsolidationEnabled"))
+        settings.setValue("fSaplingConsolidationEnabled", true);
+    if (!SoftSetBoolArg("-consolidation", settings.value("fSaplingConsolidationEnabled").toBool()))
+        addOverriddenOption("-consolidation");
+
+    if (!settings.contains("fEnableReindex"))
+        settings.setValue("fEnableReindex", false);
+    if (!SoftSetBoolArg("-reindex", settings.value("fEnableReindex").toBool()))
+        addOverriddenOption("-reindex");
+    settings.setValue("fEnableReindex", false);
+
+    if (!settings.contains("fEnableRescan"))
+        settings.setValue("fEnableRescan", false);
+    if (!SoftSetBoolArg("-rescan", settings.value("fEnableRescan").toBool()))
+        addOverriddenOption("-rescan");
+    settings.setValue("fEnableRescan", false);
+
+
+    if (!settings.contains("fEnableBootstrap"))
+        settings.setValue("fEnableBootstrap", false);
+    if (settings.value("fEnableBootstrap").toBool() == true) {
+      if (!SoftSetArg("-bootstrap", std::string("2")))
+          addOverriddenOption("-bootstrap");
+    } else {
+      if (!SoftSetArg("-bootstrap", std::string("0")))
+          addOverriddenOption("-bootstrap");
+    }
+    settings.setValue("fEnableBootstrap", false);
+
+    if (!settings.contains("fZapWalletTxes"))
+        settings.setValue("fZapWalletTxes", false);
+    if (settings.value("fZapWalletTxes").toBool() == true) {
+      if (!SoftSetArg("-zapwallettxes", std::string("2")))
+          addOverriddenOption("-zapwallettxes");
+    } else {
+      if (!SoftSetArg("-zapwallettxes", std::string("0")))
+          addOverriddenOption("-zapwallettxes");
+    }
+    settings.setValue("fZapWalletTxes", false);
+
 #endif
 
     // Network
@@ -250,8 +288,18 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         }
 
 #ifdef ENABLE_WALLET
-        case SpendZeroConfChange:
-            return settings.value("bSpendZeroConfChange");
+        case EnableDeleteTx:
+            return settings.value("fTxDeleteEnabled");
+        case SaplingConsolidationEnabled:
+            return settings.value("fSaplingConsolidationEnabled");
+        case EnableReindex:
+            return settings.value("fEnableReindex");
+        case EnableRescan:
+            return settings.value("fEnableRescan");
+        case EnableBootstrap:
+            return settings.value("fEnableBootstrap");
+        case ZapWalletTxes:
+            return settings.value("fZapWalletTxes");
 #endif
         case DisplayUnit:
             return nDisplayUnit;
@@ -259,8 +307,6 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return strThirdPartyTxUrls;
         case Language:
             return settings.value("language");
-        case CoinControlFeatures:
-            return fCoinControlFeatures;
         case DatabaseCache:
             return settings.value("nDatabaseCache");
         case ThreadsScriptVerif:
@@ -365,12 +411,42 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         break;
 
 #ifdef ENABLE_WALLET
-        case SpendZeroConfChange:
-            if (settings.value("bSpendZeroConfChange") != value) {
-                settings.setValue("bSpendZeroConfChange", value);
+        case EnableDeleteTx:
+            if (settings.value("fTxDeleteEnabled") != value) {
+                settings.setValue("fTxDeleteEnabled", value);
                 setRestartRequired(true);
             }
             break;
+        case SaplingConsolidationEnabled:
+            if (settings.value("fSaplingConsolidationEnabled") != value) {
+                settings.setValue("fSaplingConsolidationEnabled", value);
+                setRestartRequired(true);
+            }
+            break;
+      case EnableReindex:
+          if (settings.value("fEnableReindex") != value) {
+              settings.setValue("fEnableReindex", value);
+              setRestartRequired(true);
+          }
+          break;
+      case EnableRescan:
+          if (settings.value("fEnableRescan") != value) {
+              settings.setValue("fEnableRescan", value);
+              setRestartRequired(true);
+          }
+          break;
+      case EnableBootstrap:
+          if (settings.value("fEnableBootstrap") != value) {
+              settings.setValue("fEnableBootstrap", value);
+              setRestartRequired(true);
+          }
+          break;
+      case ZapWalletTxes:
+          if (settings.value("fZapWalletTxes") != value) {
+              settings.setValue("fZapWalletTxes", value);
+              setRestartRequired(true);
+          }
+          break;
 #endif
         case DisplayUnit:
             setDisplayUnit(value);
@@ -387,11 +463,6 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
                 settings.setValue("language", value);
                 setRestartRequired(true);
             }
-            break;
-        case CoinControlFeatures:
-            fCoinControlFeatures = value.toBool();
-            settings.setValue("fCoinControlFeatures", fCoinControlFeatures);
-            Q_EMIT coinControlFeaturesChanged(fCoinControlFeatures);
             break;
         case DatabaseCache:
             if (settings.value("nDatabaseCache") != value) {

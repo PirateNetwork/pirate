@@ -32,9 +32,6 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
 {
     ui->setupUi(this);
 
-    //Not working....
-    ui->tabWidget->removeTab(1);
-
     /* Main elements init */
     ui->databaseCache->setMinimum(nMinDbCache);
     ui->databaseCache->setMaximum(nMaxDbCache);
@@ -165,7 +162,12 @@ void OptionsDialog::setModel(OptionsModel *_model)
     connect(ui->databaseCache, SIGNAL(valueChanged(int)), this, SLOT(showRestartWarning()));
     connect(ui->threadsScriptVerif, SIGNAL(valueChanged(int)), this, SLOT(showRestartWarning()));
     /* Wallet */
-    connect(ui->spendZeroConfChange, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->enableDeleteTx, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->saplingConsolidationEnabled, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->chkReindex, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->chkRescan, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->chkBootstrap, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->chkZapWalletTxes, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     /* Network */
     connect(ui->allowIncoming, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     connect(ui->connectSocks, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
@@ -183,8 +185,12 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->databaseCache, OptionsModel::DatabaseCache);
 
     /* Wallet */
-    mapper->addMapping(ui->spendZeroConfChange, OptionsModel::SpendZeroConfChange);
-    mapper->addMapping(ui->coinControlFeatures, OptionsModel::CoinControlFeatures);
+    mapper->addMapping(ui->saplingConsolidationEnabled, OptionsModel::SaplingConsolidationEnabled);
+    mapper->addMapping(ui->enableDeleteTx, OptionsModel::EnableDeleteTx);
+    mapper->addMapping(ui->chkReindex, OptionsModel::EnableReindex);
+    mapper->addMapping(ui->chkRescan, OptionsModel::EnableRescan);
+    mapper->addMapping(ui->chkBootstrap, OptionsModel::EnableBootstrap);
+    mapper->addMapping(ui->chkZapWalletTxes, OptionsModel::ZapWalletTxes);
 
     /* Network */
     mapper->addMapping(ui->mapPortUpnp, OptionsModel::MapPortUPnP);

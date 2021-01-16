@@ -29,25 +29,29 @@ public:
     explicit OptionsModel(QObject *parent = 0, bool resetSettings = false);
 
     enum OptionID {
-        StartAtStartup,         // bool
-        HideTrayIcon,           // bool
-        MinimizeToTray,         // bool
-        MapPortUPnP,            // bool
-        MinimizeOnClose,        // bool
-        ProxyUse,               // bool
-        ProxyIP,                // QString
-        ProxyPort,              // int
-        ProxyUseTor,            // bool
-        ProxyIPTor,             // QString
-        ProxyPortTor,           // int
-        DisplayUnit,            // KomodoUnits::Unit
-        ThirdPartyTxUrls,       // QString
-        Language,               // QString
-        CoinControlFeatures,    // bool
-        ThreadsScriptVerif,     // int
-        DatabaseCache,          // int
-        SpendZeroConfChange,    // bool
-        Listen,                 // bool
+        StartAtStartup,                 // bool
+        HideTrayIcon,                   // bool
+        MinimizeToTray,                 // bool
+        MapPortUPnP,                    // bool
+        MinimizeOnClose,                // bool
+        ProxyUse,                       // bool
+        ProxyIP,                        // QString
+        ProxyPort,                      // int
+        ProxyUseTor,                    // bool
+        ProxyIPTor,                     // QString
+        ProxyPortTor,                   // int
+        DisplayUnit,                    // KomodoUnits::Unit
+        ThirdPartyTxUrls,               // QString
+        Language,                       // QString
+        EnableDeleteTx,                 // bool
+        EnableReindex,                  // bool
+        EnableRescan,                   // bool
+        EnableBootstrap,                // bool
+        ZapWalletTxes,                  // bool
+        ThreadsScriptVerif,             // int
+        DatabaseCache,                  // int
+        SaplingConsolidationEnabled,    // bool
+        Listen,                         // bool
         OptionIDRowCount,
     };
 
@@ -69,7 +73,6 @@ public:
     // #ifdef ENABLE_BIP70
     // bool getProxySettings(QNetworkProxy& proxy) const;
     // #endif
-    bool getCoinControlFeatures() const { return fCoinControlFeatures; }
     const QString& getOverriddenByCommandLine() { return strOverriddenByCommandLine; }
 
     /* Restart flag helper */
@@ -84,7 +87,6 @@ private:
     QString language;
     int nDisplayUnit;
     QString strThirdPartyTxUrls;
-    bool fCoinControlFeatures;
     /* settings that were overridden by command-line */
     QString strOverriddenByCommandLine;
 
@@ -95,7 +97,6 @@ private:
     void checkAndMigrate();
 Q_SIGNALS:
     void displayUnitChanged(int unit);
-    void coinControlFeaturesChanged(bool);
     void hideTrayIconChanged(bool);
 };
 

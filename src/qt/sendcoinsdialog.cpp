@@ -167,10 +167,10 @@ void SendCoinsDialog::setModel(WalletModel *_model)
         updateDisplayUnit();
 
         // Coin Control
-        connect(_model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(coinControlUpdateLabels()));
-        connect(_model->getOptionsModel(), SIGNAL(coinControlFeaturesChanged(bool)), this, SLOT(coinControlFeatureChanged(bool)));
-        ui->frameCoinControl->setVisible(_model->getOptionsModel()->getCoinControlFeatures());
-        coinControlUpdateLabels();
+        // connect(_model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(coinControlUpdateLabels()));
+        // connect(_model->getOptionsModel(), SIGNAL(coinControlFeaturesChanged(bool)), this, SLOT(coinControlFeatureChanged(bool)));
+        // ui->frameCoinControl->setVisible(_model->getOptionsModel()->getCoinControlFeatures());
+        // coinControlUpdateLabels();
 
         // fee section
         for (const int &n : confTargets) {
@@ -266,8 +266,8 @@ void SendCoinsDialog::on_sendButton_clicked()
 
     // Always use a CCoinControl instance, use the CoinControlDialog instance if CoinControl has been enabled
     CCoinControl ctrl;
-    if (model->getOptionsModel()->getCoinControlFeatures())
-        ctrl = *CoinControlDialog::coinControl;
+    // if (model->getOptionsModel()->getCoinControlFeatures())
+    //     ctrl = *CoinControlDialog::coinControl;
 
     updateCoinControlState(ctrl);
 
@@ -619,9 +619,9 @@ void SendCoinsDialog::useAvailableBalance(SendCoinsEntry* entry)
 {
     // Get CCoinControl instance if CoinControl is enabled or create a new one.
     CCoinControl coin_control;
-    if (model->getOptionsModel()->getCoinControlFeatures()) {
-        coin_control = *CoinControlDialog::coinControl;
-    }
+    // if (model->getOptionsModel()->getCoinControlFeatures()) {
+    //     coin_control = *CoinControlDialog::coinControl;
+    // }
 
     // Calculate available amount to send.
     CAmount amount = model->getBalance(&coin_control);
