@@ -132,6 +132,12 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
         move(QApplication::desktop()->availableGeometry().center() - frameGeometry().center());
     }
 
+    QCoreApplication::setAttribute(Qt::AA_UseStyleSheetPropagationInWidgetStyles, true);
+    QFile file(":/stylesheets/pirate");
+    file.open(QFile::ReadOnly);
+    QString stylesheet = QLatin1String(file.readAll());
+    qApp->setStyleSheet(stylesheet);
+
     QString windowTitle = "Pirate Chain (ARRR) - ";
 #ifdef ENABLE_WALLET
     enableWallet = WalletModel::isWalletEnabled();
@@ -160,6 +166,7 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     {
         /** Create wallet frame and make it the central widget */
         walletFrame = new WalletFrame(_platformStyle, this);
+        walletFrame->setObjectName("MainFrame");
         setCentralWidget(walletFrame);
     } else
 #endif // ENABLE_WALLET
@@ -202,6 +209,7 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     unitDisplayControl = new UnitDisplayStatusBarControl(platformStyle);
     labelWalletEncryptionIcon = new QLabel();
     labelWalletHDStatusIcon = new QLabel();
+    labelWalletHDStatusIcon->hide(); //HD not used
     connectionsControl = new GUIUtil::ClickableLabel();
     labelBlocksIcon = new GUIUtil::ClickableLabel();
     if(enableWallet)
@@ -229,10 +237,10 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     // as they make the text unreadable (workaround for issue #1071)
     // See https://qt-project.org/doc/qt-4.8/gallery.html
     QString curStyle = QApplication::style()->metaObject()->className();
-    if(curStyle == "QWindowsStyle" || curStyle == "QWindowsXPStyle")
-    {
-        progressBar->setStyleSheet("QProgressBar { background-color: #e8e8e8; border: 1px solid grey; border-radius: 7px; padding: 1px; text-align: center; } QProgressBar::chunk { background: QLinearGradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #FF8000, stop: 1 orange); border-radius: 7px; margin: 0px; }");
-    }
+    // if(curStyle == "QWindowsStyle" || curStyle == "QWindowsXPStyle")
+    // {
+    //     progressBar->setStyleSheet("QProgressBar { background-color: #e8e8e8; border: 1px solid grey; border-radius: 7px; padding: 1px; text-align: center; } QProgressBar::chunk { background: QLinearGradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #FF8000, stop: 1 orange); border-radius: 7px; margin: 0px; }");
+    // }
 
     statusBar()->addWidget(progressBarLabel);
     statusBar()->addWidget(progressBar);
@@ -424,7 +432,7 @@ void PirateOceanGUI::createActions()
 
     new QShortcut(QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_C), this, SLOT(showDebugWindowActivateConsole()));
     new QShortcut(QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_D), this, SLOT(showDebugWindow()));
-    setStyleSheet("background-color: lightGray;");
+    // setStyleSheet("background-color: lightGray;");
 
     //hide all the bits that are for t addys
     sendCoinsAction->setVisible(false);
@@ -1267,7 +1275,7 @@ UnitDisplayStatusBarControl::UnitDisplayStatusBarControl(const PlatformStyle *pl
     }
     setMinimumSize(max_width, 0);
     setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    setStyleSheet(QString("QLabel { color : %1 }").arg(platformStyle->SingleColor().name()));
+    // setStyleSheet(QString("QLabel { color : %1 }").arg(platformStyle->SingleColor().name()));
 }
 
 /** So that it responds to button clicks */

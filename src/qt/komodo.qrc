@@ -1,4 +1,12 @@
 <!DOCTYPE RCC><RCC version="1.0">
+    <qresource prefix="/stylesheets">
+        <file alias="pirate">res/stylesheets/pirate.css</file>
+    </qresource>
+
+    <qresource prefix="/backgrounds">
+        <file alias="pirate">res/backgrounds/pirate.png</file>
+    </qresource>
+
     <qresource prefix="/icons">
         <file alias="komodo">res/icons/pirate.png</file>
         <file alias="address-book">res/icons/address-book.png</file>

@@ -18,6 +18,7 @@
 
 #include <QAbstractItemDelegate>
 #include <QPainter>
+#include <QFile>
 
 #define DECORATION_SIZE 54
 #define NUM_ITEMS 5

@@ -720,26 +720,26 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
         return formatTooltip(rec);
     case Qt::TextAlignmentRole:
         return column_alignments[index.column()];
-    case Qt::ForegroundRole:
-        // Use the "danger" color for abandoned transactions
-        if(rec->status.status == TransactionStatus::Abandoned && !rec->archiveType == ARCHIVED)
-        {
-            return COLOR_TX_STATUS_DANGER;
-        }
-        // Non-confirmed (but not immature) as transactions are grey
-        if(!rec->status.countsForBalance && rec->status.status != TransactionStatus::Immature  && !rec->archiveType == ARCHIVED)
-        {
-            return COLOR_UNCONFIRMED;
-        }
-        if(index.column() == Amount && (rec->credit+rec->debit) < 0)
-        {
-            return COLOR_NEGATIVE;
-        }
-        if(index.column() == ToAddress)
-        {
-            return addressColor(rec);
-        }
-        break;
+    // case Qt::ForegroundRole:
+    //     // Use the "danger" color for abandoned transactions
+    //     if(rec->status.status == TransactionStatus::Abandoned && !rec->archiveType == ARCHIVED)
+    //     {
+    //         return COLOR_TX_STATUS_DANGER;
+    //     }
+    //     // Non-confirmed (but not immature) as transactions are grey
+    //     if(!rec->status.countsForBalance && rec->status.status != TransactionStatus::Immature  && !rec->archiveType == ARCHIVED)
+    //     {
+    //         return COLOR_UNCONFIRMED;
+    //     }
+    //     if(index.column() == Amount && (rec->credit+rec->debit) < 0)
+    //     {
+    //         return COLOR_NEGATIVE;
+    //     }
+    //     if(index.column() == ToAddress)
+    //     {
+    //         return addressColor(rec);
+    //     }
+    //     break;
     case TypeRole:
         return rec->type;
     case DateRole:

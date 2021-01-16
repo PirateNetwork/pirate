@@ -403,7 +403,8 @@ KOMODO_QT_CPP += \
 	rpc/server.cpp
 
 
-RES_IMAGES =
+RES_IMAGES = \
+  qt/res/backgrounds/pirate.png
 
 RES_MOVIES = $(wildcard $(srcdir)/qt/res/movies/spinner-*.png)
 
