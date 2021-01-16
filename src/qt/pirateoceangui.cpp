@@ -405,6 +405,9 @@ void PirateOceanGUI::createActions()
     showHelpMessageAction->setMenuRole(QAction::NoRole);
     showHelpMessageAction->setStatusTip(tr("Show the %1 help message to get a list with possible Pirate command-line options").arg(tr(PACKAGE_NAME)));
 
+    //hide backup wallet, needs work...
+    backupWalletAction->setVisible(false);
+
     connect(quitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
     connect(aboutAction, SIGNAL(triggered()), this, SLOT(aboutClicked()));
     connect(aboutQtAction, SIGNAL(triggered()), qApp, SLOT(aboutQt()));

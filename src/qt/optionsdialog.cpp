@@ -32,6 +32,9 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
 {
     ui->setupUi(this);
 
+    //Not working....
+    ui->tabWidget->removeTab(1);
+
     /* Main elements init */
     ui->databaseCache->setMinimum(nMinDbCache);
     ui->databaseCache->setMaximum(nMaxDbCache);
@@ -42,6 +45,9 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
 #ifndef USE_UPNP
     ui->mapPortUpnp->setEnabled(false);
 #endif
+
+    //Not working....
+    ui->mapPortUpnp->hide();
 
     ui->proxyIp->setEnabled(false);
     ui->proxyPort->setEnabled(false);

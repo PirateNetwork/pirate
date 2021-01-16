@@ -39,6 +39,9 @@ SendCoinsEntry::SendCoinsEntry(const PlatformStyle *_platformStyle, QWidget *par
     ui->deleteButton_s->setIcon(platformStyle->SingleColorIcon(":/icons/remove"));
     ui->useAvailableBalanceButton->setIcon(platformStyle->SingleColorIcon(":/icons/all_balance"));
 
+    //hide addressbook, needs work...
+    ui->addressBookButton->hide();
+
     setCurrentWidget(ui->SendCoins);
 
     if (platformStyle->getUseExtraSpacing())
