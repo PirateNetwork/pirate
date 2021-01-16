@@ -62,7 +62,7 @@ private:
 
     OverviewPage *overviewPage;
     QWidget *transactionsPage;
-    ReceiveCoinsDialog *receiveCoinsPage;
+    QWidget *receiveCoinsPage;
     SendCoinsDialog *sendCoinsPage;
     ZSendCoinsDialog *zsendCoinsPage;
     AddressBookPage *usedSendingAddressesPage;
@@ -70,6 +70,7 @@ private:
     ZAddressBookPage *usedReceivingZAddressesPage;
 
     TransactionView *transactionView;
+    ZAddressBookPage *receiveCoinsView;
 
     QProgressDialog *progressDialog;
     const PlatformStyle *platformStyle;

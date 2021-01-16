@@ -15,6 +15,7 @@
 #include "platformstyle.h"
 #include "receivecoinsdialog.h"
 #include "sendcoinsdialog.h"
+#include "zaddressbookpage.h"
 #include "zsendcoinsdialog.h"
 #include "signverifymessagedialog.h"
 #include "transactiontablemodel.h"
@@ -55,17 +56,23 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, QWidget *parent):
     vbox->addLayout(hbox_buttons);
     transactionsPage->setLayout(vbox);
 
-    receiveCoinsPage = new ReceiveCoinsDialog(platformStyle);
+    receiveCoinsPage = new QWidget(this);
+    QVBoxLayout *rvbox = new QVBoxLayout();
+    receiveCoinsView = new ZAddressBookPage(platformStyle, ZAddressBookPage::ForEditing, ZAddressBookPage::ReceivingTab, this);
+    rvbox->addWidget(receiveCoinsView);
+    receiveCoinsPage->setLayout(rvbox);
+
+
     sendCoinsPage = new SendCoinsDialog(platformStyle);
     zsendCoinsPage = new ZSendCoinsDialog(platformStyle);
 
     usedSendingAddressesPage = new AddressBookPage(platformStyle, AddressBookPage::ForEditing, AddressBookPage::SendingTab, this);
     usedReceivingAddressesPage = new AddressBookPage(platformStyle, AddressBookPage::ForEditing, AddressBookPage::ReceivingTab, this);
-    usedReceivingZAddressesPage = new ZAddressBookPage(platformStyle, ZAddressBookPage::ForEditing, ZAddressBookPage::ReceivingTab, this);
+    // usedReceivingZAddressesPage = new ZAddressBookPage(platformStyle, ZAddressBookPage::ForEditing, ZAddressBookPage::ReceivingTab, this);
 
     addWidget(overviewPage);
     addWidget(transactionsPage);
-    addWidget(receiveCoinsPage);
+    addWidget(receiveCoinsView);
     addWidget(sendCoinsPage);
     addWidget(zsendCoinsPage);
 
@@ -128,11 +135,11 @@ void WalletView::setWalletModel(WalletModel *_walletModel)
     // Put transaction list in tabs
     transactionView->setModel(_walletModel);
     overviewPage->setWalletModel(_walletModel);
-    receiveCoinsPage->setModel(_walletModel);
+    receiveCoinsView->setModel(_walletModel->getZAddressTableModel());
     sendCoinsPage->setModel(_walletModel);
     zsendCoinsPage->setModel(_walletModel);
     usedReceivingAddressesPage->setModel(_walletModel->getAddressTableModel());
-    usedReceivingZAddressesPage->setModel(_walletModel->getZAddressTableModel());
+    // usedReceivingZAddressesPage->setModel(_walletModel->getZAddressTableModel());
     usedSendingAddressesPage->setModel(_walletModel->getAddressTableModel());
 
     if (_walletModel)
@@ -191,7 +198,7 @@ void WalletView::gotoHistoryPage()
 
 void WalletView::gotoReceiveCoinsPage()
 {
-    setCurrentWidget(receiveCoinsPage);
+    setCurrentWidget(receiveCoinsView);
 }
 
 void WalletView::gotoSendCoinsPage(QString addr)
@@ -326,9 +333,9 @@ void WalletView::usedReceivingZAddresses()
     if(!walletModel)
         return;
 
-    usedReceivingZAddressesPage->show();
-    usedReceivingZAddressesPage->raise();
-    usedReceivingZAddressesPage->activateWindow();
+    // usedReceivingZAddressesPage->show();
+    // usedReceivingZAddressesPage->raise();
+    // usedReceivingZAddressesPage->activateWindow();
 }
 
 void WalletView::showProgress(const QString &title, int nProgress)

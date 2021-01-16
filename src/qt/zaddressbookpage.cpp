@@ -76,6 +76,9 @@ ZAddressBookPage::ZAddressBookPage(const PlatformStyle *platformStyle, Mode _mod
         break;
     }
 
+    //Hide close button
+    ui->closeButton->hide();
+
     // Context menu actions
     QAction *copyAddressAction = new QAction(tr("&Copy Address"), this);
     QAction *copyLabelAction = new QAction(tr("Copy &Label"), this);
@@ -154,9 +157,13 @@ void ZAddressBookPage::setModel(ZAddressTableModel *_model)
 
     // Set column widths
 #if QT_VERSION < 0x050000
+    ui->tableView->horizontalHeader()->setResizeMode(ZAddressTableModel::isMine, QHeaderView::ResizeToContents);
+    ui->tableView->horizontalHeader()->setResizeMode(ZAddressTableModel::Balance, QHeaderView::ResizeToContents);
     ui->tableView->horizontalHeader()->setResizeMode(ZAddressTableModel::Label, QHeaderView::Stretch);
     ui->tableView->horizontalHeader()->setResizeMode(ZAddressTableModel::Address, QHeaderView::ResizeToContents);
 #else
+    ui->tableView->horizontalHeader()->setSectionResizeMode(ZAddressTableModel::isMine, QHeaderView::ResizeToContents);
+    ui->tableView->horizontalHeader()->setSectionResizeMode(ZAddressTableModel::Balance, QHeaderView::ResizeToContents);
     ui->tableView->horizontalHeader()->setSectionResizeMode(ZAddressTableModel::Label, QHeaderView::Stretch);
     ui->tableView->horizontalHeader()->setSectionResizeMode(ZAddressTableModel::Address, QHeaderView::ResizeToContents);
 #endif

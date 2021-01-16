@@ -181,7 +181,7 @@ public:
 ZAddressTableModel::ZAddressTableModel(const PlatformStyle *_platformStyle, CWallet *_wallet, WalletModel *parent) :
     QAbstractTableModel(parent),walletModel(parent),wallet(_wallet),priv(0),platformStyle(_platformStyle)
 {
-    columns << tr("Mine") << tr("Balance") << tr("Type") << tr("Address");
+    columns << tr("Mine") << tr("Balance") << tr("Address") << tr("Type");
     priv = new ZAddressTablePriv(wallet, this);
     priv->refreshAddressTable();
 }

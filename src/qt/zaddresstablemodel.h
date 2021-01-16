@@ -29,8 +29,9 @@ public:
     enum ColumnIndex {
         isMine = 0,
         Balance = 1,
-        Label = 2,   /**< User specified label */
-        Address = 3  /**< Komodo z-address */
+        Address = 2,  /**< Komodo z-address */
+        Label = 3,   /**< User specified label */
+
     };
 
     enum RoleIndex {
