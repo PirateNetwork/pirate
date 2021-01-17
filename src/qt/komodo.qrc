@@ -1,6 +1,7 @@
 <!DOCTYPE RCC><RCC version="1.0">
     <qresource prefix="/stylesheets">
         <file alias="pirate">res/stylesheets/pirate.css</file>
+        <file alias="dark">res/stylesheets/dark.css</file>
     </qresource>
 
     <qresource prefix="/backgrounds">

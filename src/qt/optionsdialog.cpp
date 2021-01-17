@@ -23,6 +23,9 @@
 #include <QLocale>
 #include <QMessageBox>
 #include <QTimer>
+#include <QApplication>
+#include <QFile>
+#include <QSettings>
 
 OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
     QDialog(parent),
@@ -80,6 +83,11 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
     ui->komodoAtStartup->setText(ui->komodoAtStartup->text().arg(tr(PACKAGE_NAME)));
 
     ui->openKomodoConfButton->setToolTip(ui->openKomodoConfButton->toolTip().arg(tr(PACKAGE_NAME)));
+
+    //Add Wallet themes available
+    ui->theme->addItem("Pirate", QVariant("pirate"));
+    ui->theme->addItem("Dark", QVariant("dark"));
+    ui->theme->addItem("Light", QVariant("light"));
 
     ui->lang->setToolTip(ui->lang->toolTip().arg(tr(PACKAGE_NAME)));
     ui->lang->addItem(QString("(") + tr("default") + QString(")"), QVariant(""));
@@ -155,6 +163,8 @@ void OptionsDialog::setModel(OptionsModel *_model)
 
         updateDefaultProxyNets();
     }
+    /* Change without restarting */
+    connect(ui->theme, SIGNAL(valueChanged()), this, SLOT(setTheme()));
 
     /* warn when one of the following settings changes by user action (placed here so init via mapper doesn't trigger them) */
 
@@ -214,6 +224,7 @@ void OptionsDialog::setMapper()
     /* Display */
     mapper->addMapping(ui->lang, OptionsModel::Language);
     mapper->addMapping(ui->unit, OptionsModel::DisplayUnit);
+    mapper->addMapping(ui->theme, OptionsModel::Theme);
     mapper->addMapping(ui->thirdPartyTxUrls, OptionsModel::ThirdPartyTxUrls);
 }
 
@@ -275,6 +286,21 @@ void OptionsDialog::on_hideTrayIcon_stateChanged(int fState)
     {
         ui->minimizeToTray->setEnabled(true);
     }
+}
+
+void OptionsDialog::setTheme()
+{
+      //Set the theme in the settings
+      QSettings settings;
+      QString strTheme = ui->theme->itemData(ui->theme->currentIndex()).toString();
+      settings.setValue("strTheme", strTheme);
+
+      //Set the Theme in the app
+      LogPrintf("Setting Theme: %s %s\n", strTheme.toStdString(),__func__);
+      QFile file(":/stylesheets/" + strTheme);
+      file.open(QFile::ReadOnly);
+      QString stylesheet = QLatin1String(file.readAll());
+      qApp->setStyleSheet(stylesheet);
 }
 
 void OptionsDialog::showRestartWarning(bool fPersistent)

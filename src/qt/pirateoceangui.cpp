@@ -133,10 +133,19 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     }
 
     QCoreApplication::setAttribute(Qt::AA_UseStyleSheetPropagationInWidgetStyles, true);
-    QFile file(":/stylesheets/pirate");
+
+    //Set the theme in the settings
+    QString strTheme = settings.value("strTheme","default").toString();
+    // strTheme = strTheme.toLower();
+
+    //Set the Theme in the app
+    LogPrintf("Setting Theme: %s %s\n", strTheme.toStdString(), __func__);
+    QFile file(":/stylesheets/" + strTheme);
     file.open(QFile::ReadOnly);
     QString stylesheet = QLatin1String(file.readAll());
     qApp->setStyleSheet(stylesheet);
+
+
 
     QString windowTitle = "Pirate Chain (ARRR) - ";
 #ifdef ENABLE_WALLET

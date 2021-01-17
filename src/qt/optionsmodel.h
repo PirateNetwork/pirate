@@ -41,6 +41,7 @@ public:
         ProxyIPTor,                     // QString
         ProxyPortTor,                   // int
         DisplayUnit,                    // KomodoUnits::Unit
+        Theme,                          // QString
         ThirdPartyTxUrls,               // QString
         Language,                       // QString
         EnableDeleteTx,                 // bool
@@ -87,6 +88,7 @@ private:
     QString language;
     int nDisplayUnit;
     QString strThirdPartyTxUrls;
+    QString strTheme;
     /* settings that were overridden by command-line */
     QString strOverriddenByCommandLine;
 

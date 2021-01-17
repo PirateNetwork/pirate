@@ -6,7 +6,7 @@ QMainWindow
 
 
 QFrame#MainFrame {
-    border-image: url(':/backgrounds/pirate') 0 0 0 0 stretch stretch;
+    
 }
 
 

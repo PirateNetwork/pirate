@@ -80,6 +80,9 @@ void OptionsModel::Init(bool resetSettings)
         settings.setValue("strThirdPartyTxUrls", "");
     strThirdPartyTxUrls = settings.value("strThirdPartyTxUrls", "").toString();
 
+    if (!settings.contains("strTheme"))
+        settings.setValue("strTheme", "pirate");
+    strTheme = settings.value("strTheme", "pirate").toString();
 
     // These are shared with the core or have a command-line parameter
     // and we want command-line parameters to overwrite the GUI settings.
@@ -305,6 +308,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case ZapWalletTxes:
             return settings.value("fZapWalletTxes");
 #endif
+        case Theme:
+            return strTheme;
         case DisplayUnit:
             return nDisplayUnit;
         case ThirdPartyTxUrls:
@@ -454,6 +459,12 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
 #endif
         case DisplayUnit:
             setDisplayUnit(value);
+            break;
+        case Theme:
+            if (strTheme != value.toString()) {
+                strTheme = value.toString();
+                settings.setValue("strTheme", strTheme);
+            }
             break;
         case ThirdPartyTxUrls:
             if (strThirdPartyTxUrls != value.toString()) {
