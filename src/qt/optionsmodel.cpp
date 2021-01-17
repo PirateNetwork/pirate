@@ -142,8 +142,12 @@ void OptionsModel::Init(bool resetSettings)
     if (!settings.contains("fZapWalletTxes"))
         settings.setValue("fZapWalletTxes", false);
     if (settings.value("fZapWalletTxes").toBool() == true) {
-      if (!SoftSetArg("-zapwallettxes", std::string("2")))
+      if (!SoftSetArg("-zapwallettxes", std::string("2"))) {
           addOverriddenOption("-zapwallettxes");
+      } else {
+          LogPrintf("%s: QT ZapWalletTxes setting -rescan=1\n", __func__);
+          OverrideSetArg("-rescan", std::string("1"));
+      }
     } else {
       if (!SoftSetArg("-zapwallettxes", std::string("0")))
           addOverriddenOption("-zapwallettxes");

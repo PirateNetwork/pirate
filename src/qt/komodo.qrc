@@ -5,6 +5,7 @@
 
     <qresource prefix="/backgrounds">
         <file alias="pirate">res/backgrounds/pirate.png</file>
+        <file alias="splash">res/backgrounds/splash.png</file>
     </qresource>
 
     <qresource prefix="/icons">

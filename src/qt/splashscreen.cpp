@@ -30,8 +30,8 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     QWidget(0, f), curAlignment(0)
 {
     // set reference point, paddings
-    int paddingRight            = 190;
-    int paddingTop              = 50;
+    int paddingRight            = 125;
+    int paddingTop              = 275;
     int titleVersionVSpace      = 47; // version down from title
     int titleCopyrightVSpace    = 60; // down from title
 
@@ -50,8 +50,10 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     QString font            = QApplication::font().toString();
 
     // create a bitmap according to device pixelratio
-    QSize splashSize(480*devicePixelRatio,260*devicePixelRatio);
-    pixmap = QPixmap(splashSize);
+    QSize splashSize(640*devicePixelRatio,456*devicePixelRatio);
+    // pixmap = QPixmap(splashSize);
+    pixmap.load(":/backgrounds/splash");
+    pixmap = pixmap.scaled(splashSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 
 #if QT_VERSION > 0x050100
     // change to HiDPI if it makes sense
@@ -59,24 +61,25 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
 #endif
 
     QPainter pixPaint(&pixmap);
-    pixPaint.setPen(QColor(50, 50, 50));
+    // pixPaint.setPen(QColor(50, 50, 50));
 
     // draw a slightly radial gradient
-    QRadialGradient gradient(QPoint(0, 0), splashSize.width() / devicePixelRatio);
-    gradient.setColorAt(0, Qt::white); //top left color
-    gradient.setColorAt(1, QColor(188, 172, 94)); //bottom right color
-    QRect rGradient(QPoint(0, 0), splashSize);
-    pixPaint.fillRect(rGradient, gradient);
+    // QRadialGradient gradient(QPoint(0, 0), splashSize.width() / devicePixelRatio);
+    // gradient.setColorAt(0, Qt::white); //top left color
+    // gradient.setColorAt(1, QColor(188, 172, 94)); //bottom right color
+    // QRect rGradient(QPoint(0, 0), splashSize);
+    // pixPaint.fillRect(rGradient, gradient);
 
     // draw the pirate.icon, expected size of PNG: 1024x1024
-    QRect rectIcon(QPoint(20,40), QSize(160,160));
-
-    const QSize requiredSize(1024,1024);
-    QPixmap icon(networkStyle->getAppIcon().pixmap(requiredSize));
-
-    pixPaint.drawPixmap(rectIcon, icon);
+    // QRect rectIcon(QPoint(20,40), QSize(160,160));
+    //
+    // const QSize requiredSize(1024,1024);
+    // QPixmap icon(networkStyle->getAppIcon().pixmap(requiredSize));
+    //
+    // pixPaint.drawPixmap(rectIcon, icon);
 
     // check font size and drawing with
+    pixPaint.setPen(QColor(193, 157, 66));
     pixPaint.setFont(QFont(font, 33*fontFactor));
     QFontMetrics fm = pixPaint.fontMetrics();
     int titleTextWidth = fm.width(titleText);
@@ -87,7 +90,7 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     pixPaint.setFont(QFont(font, 33*fontFactor));
     fm = pixPaint.fontMetrics();
     titleTextWidth  = fm.width(titleText);
-    pixPaint.drawText(pixmap.width()/devicePixelRatio-titleTextWidth-paddingRight,paddingTop,titleText);
+    // pixPaint.drawText(pixmap.width()/devicePixelRatio-titleTextWidth-paddingRight,paddingTop,titleText);
 
     pixPaint.setFont(QFont(font, 15*fontFactor));
 
@@ -98,14 +101,14 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
         pixPaint.setFont(QFont(font, 10*fontFactor));
         titleVersionVSpace -= 5;
     }
-    pixPaint.drawText(pixmap.width()/devicePixelRatio-titleTextWidth-paddingRight+2,paddingTop+titleVersionVSpace,versionText);
+    pixPaint.drawText(pixmap.width()/devicePixelRatio-titleTextWidth-paddingRight+6,paddingTop+titleVersionVSpace,versionText);
 
     // draw copyright stuff
     {
         pixPaint.setFont(QFont(font, 10*fontFactor));
         const int x = pixmap.width()/devicePixelRatio-titleTextWidth-paddingRight;
-        const int y = paddingTop+titleCopyrightVSpace;
-        QRect copyrightRect(x, y, pixmap.width() + x - paddingRight, pixmap.height() - y);
+        const int y = paddingTop+titleCopyrightVSpace-10;
+        QRect copyrightRect(x, y, pixmap.width() + x - paddingRight + 10, pixmap.height() - y);
         pixPaint.drawText(copyrightRect, Qt::AlignLeft | Qt::AlignTop, copyrightText);
     }
 
@@ -167,7 +170,7 @@ static void InitMessage(SplashScreen *splash, const std::string &message)
         Qt::QueuedConnection,
         Q_ARG(QString, QString::fromStdString(message)),
         Q_ARG(int, Qt::AlignBottom|Qt::AlignHCenter),
-        Q_ARG(QColor, QColor(55,55,55)));
+        Q_ARG(QColor, QColor(193, 157, 66)));
 }
 
 static void ShowProgress(SplashScreen *splash, const std::string &title, int nProgress, bool resume_possible)
