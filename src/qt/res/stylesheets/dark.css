@@ -126,21 +126,21 @@ QFrame#SendCoins QLabel
 
 QLineEdit
 {
-    background-color: rgba(48,48,48,1);
+    background-color: rgba(58,58,58,1);
     color: #ffffff;
     border: none;
 }
 
 QValidatedLineEdit
 {
-    background-color: rgba(48,48,48,1);
+    background-color: rgba(58,58,58,1);
     color: #ffffff;
     border: none;
 }
 
 KomodoAmountField QWidget
 {
-    background-color: rgba(48,48,48,1);
+    background-color: rgba(58,58,58,1);
     color: #ffffff;
     border: none;
 }
@@ -174,11 +174,15 @@ QHeaderView::section {
     color: #ffffff;
 }
 
-QWidget#RPCConsole {
+QWidget#AddressBookPage QLabel {
     background-color: #303030;
     color: #ffffff;
 }
 
+QWidget#RPCConsole {
+    background-color: #303030;
+    color: #ffffff;
+}
 
 
 QDialog#HelpMessageDialog {
