@@ -2,6 +2,7 @@
     <qresource prefix="/stylesheets">
         <file alias="pirate">res/stylesheets/pirate.css</file>
         <file alias="dark">res/stylesheets/dark.css</file>
+        <file alias="light">res/stylesheets/light.css</file>
     </qresource>
 
     <qresource prefix="/backgrounds">

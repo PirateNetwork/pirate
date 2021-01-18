@@ -76,6 +76,10 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
         ui->tabWidget->removeTab(ui->tabWidget->indexOf(ui->tabWallet));
     }
 
+    for(int i = 0; i < ui->tabWidget->count(); ++i) {
+        ui->tabWidget->widget(i)->setAutoFillBackground(true);
+    }
+
     /* Display elements init */
     QDir translations(":translations");
 

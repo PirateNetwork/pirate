@@ -6,22 +6,33 @@ QMainWindow
 
 
 QFrame#MainFrame {
-    
+
 }
 
 
 QMenuBar {
     background-color: #303030;
     color: #ffffff;
+    border:none
+}
+
+QMenuBar::item:selected { /* when selected using mouse or keyboard */
+    background: #585858;
+}
+
+QMenuBar::item:pressed {
+    background: #585858;
 }
 
 QMenu {
     background-color: #303030;
     color: #ffffff;
+    border:none
 }
 
 QMenu::item:selected {
-    background-color: #654321;
+    background-color: #585858;
+    color: #ffffff;
 }
 
 
@@ -29,6 +40,7 @@ QMenu::item:selected {
 QToolBar {
     background-color: #303030;
     color: #ffffff;
+    border:none
 }
 
 QToolButton {
@@ -37,10 +49,9 @@ QToolButton {
 }
 
 QPushButton {
-    background-color: #303030;
+    background-color: #585858;
     color: #ffffff;
 }
-
 
 QStatusBar
 {
@@ -68,48 +79,48 @@ QProgressBar::chunk {
 
 QFrame#frame
 {
-    background-color: rgba(0,0,0,0.6);
+    background-color: rgba(48,48,48,1);
     color: #ffffff;
 }
 
 QFrame#frame_2
 {
-    background-color: rgba(0,0,0,0.6);
+    background-color: rgba(48,48,48,1);
     color: #ffffff;
 }
 
 QFrame#frameCoinControl
 {
-    background-color: rgba(0,0,0,0.6);
+    background-color: rgba(48,48,48,1);
     color: #ffffff;
 }
 
 QFrame#frameFee
 {
-    background-color: rgba(0,0,0,0.6);
+    background-color: rgba(48,48,48,1);
     color: #ffffff;
 }
 
 QFrame#frameResult
 {
-    background-color: rgba(0,0,0,0.6);
+    background-color: rgba(48,48,48,1);
     color: #ffffff;
 }
 
 QScrollArea {
-    background-color: rgba(0,0,0,0.6);
+    background-color: rgba(48,48,48,1);
     color: #ffffff;
 }
 
 QFrame#SendCoins
 {
-    background-color: rgba(0,0,0,0.6);
+    background-color: rgba(48,48,48,1);
     color: #ffffff;
 }
 
 QFrame#SendCoins QLabel
 {
-    background-color: rgba(0,0,0,0);
+    background-color: rgba(48,48,48,1);
     color: #ffffff;
 }
 
@@ -117,21 +128,31 @@ QLineEdit
 {
     background-color: rgba(48,48,48,1);
     color: #ffffff;
+    border: none;
 }
 
 QValidatedLineEdit
 {
     background-color: rgba(48,48,48,1);
     color: #ffffff;
+    border: none;
 }
 
-KomodoAmountField
+KomodoAmountField QWidget
 {
     background-color: rgba(48,48,48,1);
     color: #ffffff;
+    border: none;
 }
 
 QComboBox
+{
+    background-color: rgba(48,48,48,1);
+    selection-background-color: rgba(48,48,48,1);
+    color: #ffffff;
+}
+
+QComboBox::item:selected
 {
     background-color: rgba(48,48,48,1);
     color: #ffffff;
@@ -143,8 +164,13 @@ QComboBox QAbstractItemView {
 }
 
 QTableView {
-    background-color: rgba(48,48,48,0.6);
-    alternate-background-color: rgba(48,48,48,0.8);
+    background-color: rgba(48,48,48,1);
+    alternate-background-color: rgba(58,58,58,1);
+    color: #ffffff;
+}
+
+QHeaderView::section {
+    background-color: rgba(48,48,48,1);
     color: #ffffff;
 }
 
@@ -153,10 +179,7 @@ QWidget#RPCConsole {
     color: #ffffff;
 }
 
-QTabWidget {
-    background-color: #303030;
-    color: #ffffff;
-}
+
 
 QDialog#HelpMessageDialog {
     background-color: #303030;
@@ -191,4 +214,29 @@ QMessageBox {
 QTextEdit {
     background-color: #202020;
     color: #ffffff;
+}
+
+QTabWidget::tab-bar {
+    background-color: #585858;
+    color: #ffffff;
+}
+
+QTabBar::tab {
+  background-color: #282828;
+  color: #ffffff;
+  padding: 10px;
+}
+
+QTabBar::tab:!selected {
+  background-color: #585858;
+  color: #ffffff;
+}
+
+QTabWidget::pane {
+  background-color: #484848;
+  color: #ffffff;
+  border-top:1px solid #989898;
+  border-left:1px solid #989898;
+  border-right:1px solid #989898;
+  border-bottom: 1px solid #989898;
 }
