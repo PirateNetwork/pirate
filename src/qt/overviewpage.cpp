@@ -18,6 +18,7 @@
 
 #include <QAbstractItemDelegate>
 #include <QPainter>
+#include <QSettings>
 
 #define DECORATION_SIZE 54
 #define NUM_ITEMS 5
@@ -70,13 +71,30 @@ public:
         if (index.data(TransactionTableModel::WatchonlyRole).toBool())
         {
             QIcon iconWatchonly = qvariant_cast<QIcon>(index.data(TransactionTableModel::WatchonlyDecorationRole));
+            iconWatchonly = platformStyle->SingleColorIcon(iconWatchonly);
             QRect watchonlyRect(boundingRect.right() + 5, mainRect.top()+ypad+halfheight, 16, halfheight);
             iconWatchonly.paint(painter, watchonlyRect);
         }
 
         if(amount < 0)
         {
-            foreground = COLOR_NEGATIVE;
+            QSettings settings;
+            if (settings.value("strTheme", "pirate").toString() == "dark") {
+                foreground = COLOR_NEGATIVE_DARK;
+            } else {
+                foreground = COLOR_NEGATIVE;
+            }
+        }
+        else if(amount > 0)
+        {
+            QSettings settings;
+            if (settings.value("strTheme", "pirate").toString() == "dark") {
+                foreground = COLOR_POSITIVE_DARK;
+            } else if (settings.value("strTheme", "pirate").toString() == "pirate") {
+                foreground = COLOR_POSITIVE_PIRATE;
+            } else {
+                foreground = COLOR_POSITIVE;
+            }
         }
         else if(!confirmed)
         {

@@ -26,6 +26,7 @@
 #include <QDebug>
 #include <QIcon>
 #include <QList>
+#include <QSettings>
 
 // Amount column is right-aligned it contains numbers
 static int column_alignments[] = {
@@ -720,7 +721,7 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
         return formatTooltip(rec);
     case Qt::TextAlignmentRole:
         return column_alignments[index.column()];
-    // case Qt::ForegroundRole:
+    case Qt::ForegroundRole:
     //     // Use the "danger" color for abandoned transactions
     //     if(rec->status.status == TransactionStatus::Abandoned && !rec->archiveType == ARCHIVED)
     //     {
@@ -731,15 +732,31 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
     //     {
     //         return COLOR_UNCONFIRMED;
     //     }
-    //     if(index.column() == Amount && (rec->credit+rec->debit) < 0)
-    //     {
-    //         return COLOR_NEGATIVE;
-    //     }
+        if(index.column() == Amount && (rec->credit+rec->debit) < 0)
+        {
+            QSettings settings;
+            if (settings.value("strTheme", "pirate").toString() == "dark") {
+                return COLOR_NEGATIVE_DARK;
+            } else {
+                return COLOR_NEGATIVE;
+            }
+        }
+        if(index.column() == Amount && (rec->credit+rec->debit) > 0)
+        {
+            QSettings settings;
+            if (settings.value("strTheme", "pirate").toString() == "dark") {
+                return COLOR_POSITIVE_DARK;
+            } else if (settings.value("strTheme", "pirate").toString() == "pirate") {
+                return COLOR_POSITIVE_PIRATE;
+            } else {
+                return COLOR_POSITIVE;
+            }
+        }
     //     if(index.column() == ToAddress)
     //     {
     //         return addressColor(rec);
     //     }
-    //     break;
+        break;
     case TypeRole:
         return rec->type;
     case DateRole:
