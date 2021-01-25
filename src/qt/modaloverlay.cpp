@@ -8,19 +8,26 @@
 #include "guiutil.h"
 
 #include "chainparams.h"
+#include "platformstyle.h"
 
 #include <QResizeEvent>
 #include <QPropertyAnimation>
 
-ModalOverlay::ModalOverlay(QWidget *parent) :
+ModalOverlay::ModalOverlay(const PlatformStyle *_platformStyle, QWidget *parent) :
 QWidget(parent),
 ui(new Ui::ModalOverlay),
 bestHeaderHeight(0),
 bestHeaderDate(QDateTime()),
 layerIsVisible(false),
-userClosed(false)
+userClosed(false),
+platformStyle(_platformStyle)
 {
     ui->setupUi(this);
+
+    QIcon icon = platformStyle->SingleColorIcon(":/icons/warning");
+    icon.addPixmap(icon.pixmap(QSize(64,64), QIcon::Normal), QIcon::Disabled); // also set the disabled icon because we are using a disabled QPushButton to work around missing HiDPI support of QLabel (https://bugreports.qt.io/browse/QTBUG-42503)
+    ui->warningIcon->setIcon(icon);
+
     connect(ui->closeButton, SIGNAL(clicked()), this, SLOT(closeClicked()));
     if (parent) {
         parent->installEventFilter(this);
@@ -104,7 +111,7 @@ void ModalOverlay::tipUpdate(int count, const QDateTime& blockDate, double nVeri
         ui->progressIncreasePerH->setText(QString::number(progressPerHour * 100, 'f', 2)+"%");
 
         // show expected remaining time
-        if(remainingMSecs >= 0) {	
+        if(remainingMSecs >= 0) {
             ui->expectedTimeLeft->setText(GUIUtil::formatNiceTimeOffset(remainingMSecs / 1000.0));
         } else {
             ui->expectedTimeLeft->setText(QObject::tr("unknown"));
@@ -152,13 +159,15 @@ void ModalOverlay::showHide(bool hide, bool userRequested)
 {
     if ( (layerIsVisible && !hide) || (!layerIsVisible && hide) || (!hide && userClosed && !userRequested)) { return; }
 
-    if (isVisible()) { setStyleSheet("background-color: transparent;"); }
-    else { setStyleSheet("background-color: lightGray;"); }
+    // if (isVisible()) {
+    //   setStyleSheet("background-color: transparent;");
+    // } else {
+    //   setStyleSheet("background-color: lightGray;");
+    // }
 
-    if (!isVisible() && !hide)
-    {
-        setStyleSheet("background-color: transparent;");
-         setVisible(true);
+    if (!isVisible() && !hide) {
+        // setStyleSheet("background-color: transparent;");
+        setVisible(true);
     }
 
     setGeometry(0, hide ? 0 : height(), width(), height());

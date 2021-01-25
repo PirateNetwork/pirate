@@ -60,24 +60,6 @@ QStatusBar
     color: #ffffff;
 }
 
-QProgressBar {
-    background-color: #e8e8e8;
-    border: 1px solid grey;
-    border-radius: 7px;
-    padding: 1px;
-    text-align: center;
-}
-
-QProgressBar::chunk {
-    background: QLinearGradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #FF8000, stop: 1 orange);
-    border-radius: 7px;
-    margin: 0px;
-}
-
-
-
-
-
 QFrame#frame
 {
     background-color: rgba(0,0,0,0.6);
@@ -129,6 +111,9 @@ QLineEdit
 {
     background-color: rgba(48,48,48,1);
     color: #ffffff;
+    height: 20px;
+    padding-top: 2px;
+    padding-bottom: 2px;
     border: none;
 }
 
@@ -136,14 +121,17 @@ QValidatedLineEdit
 {
     background-color: rgba(48,48,48,1);
     color: #ffffff;
+    height: 20px;
+    padding-top: 2px;
+    padding-bottom: 2px;
     border: none;
 }
 
-KomodoAmountField QWidget
+QAbstractSpinBox#UnitBox
 {
     background-color: rgba(48,48,48,1);
     color: #ffffff;
-    border: none;
+    height: 20px;
 }
 
 QComboBox
@@ -157,11 +145,22 @@ QComboBox::item:selected
 {
     background-color: rgba(48,48,48,1);
     color: #ffffff;
+    padding: 0px;
 }
 
 QComboBox QAbstractItemView {
     background-color: rgba(28,28,28,1);
     color: #ffffff;
+}
+
+QComboBox::indicator {
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  selection-background-color: transparent;
+  color: transparent;
+  selection-color: transparent;
+  /* Needed to remove indicator - fix #132 */
 }
 
 QTableView {
@@ -238,4 +237,48 @@ QTabWidget::pane {
   border-left:1px solid #989898;
   border-right:1px solid #989898;
   border-bottom: 1px solid #989898;
+}
+
+QCheckBox {
+    background-color: #303030;
+    color: #ffffff;
+    spacing: 5px;
+}
+
+QCheckBox::indicator {
+    background-color: #000000;
+    color: #ffffff;
+    width: 8px;
+    height: 8px;
+    border: 4px solid #000000;
+    border-radius: 8px;
+}
+
+QCheckBox::indicator:checked {
+    background-color: rgba(25,225,25);
+    color: #ffffff;
+    width: 8px;
+    height: 8px;
+    border: 4px solid #000000;
+    border-radius: 8px;
+}
+
+QWidget#ShutDown {
+    background-color: #303030;
+    color: #ffffff;
+}
+
+QWidget#bgWidget {
+    background: rgba(0,0,0,0.8);
+    color: #c5cad3;
+}
+
+QWidget#contentWidget {
+    background: #303030;
+    color: #ffffff;
+}
+
+QWidget#contentWidget QLabel{
+    background: #303030;
+    color: #ffffff;
 }

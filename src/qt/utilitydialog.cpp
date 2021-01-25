@@ -182,6 +182,7 @@ QWidget *ShutdownWindow::showShutdownWindow(PirateOceanGUI *window)
 
     // Show a simple window indicating shutdown status
     QWidget *shutdownWindow = new ShutdownWindow();
+    shutdownWindow->setObjectName("ShutDown");
     shutdownWindow->setWindowTitle(window->windowTitle());
 
     // Center shutdown window at where main window was

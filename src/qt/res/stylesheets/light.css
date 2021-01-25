@@ -5,11 +5,6 @@ QMainWindow
 }
 
 
-QFrame#MainFrame {
-
-}
-
-
 QMenuBar {
     background-color: rgba(255,255,255,1);
     color: #000000;
@@ -21,7 +16,7 @@ QMenu {
 }
 
 QMenu::item:selected {
-    background-color: #e8f4f8
+    background-color: #e8f4f8;
 }
 
 
@@ -37,12 +32,12 @@ QToolBar QToolButton {
 }
 
 QToolButton {
-    background-color: #e8f4f8
+    background-color: #e8f4f8;
     color: #000000;
 }
 
 QPushButton {
-    background-color: #e8f4f8
+    background-color: #e8f4f8;
     color: #000000;
 }
 
@@ -52,24 +47,6 @@ QStatusBar
     background-color: rgba(255,255,255,1);
     color: #000000;
 }
-
-QProgressBar {
-    background-color: #e8e8e8;
-    border: 1px solid grey;
-    border-radius: 7px;
-    padding: 1px;
-    text-align: center;
-}
-
-QProgressBar::chunk {
-    background: QLinearGradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #FF8000, stop: 1 orange);
-    border-radius: 7px;
-    margin: 0px;
-}
-
-
-
-
 
 QFrame#frame
 {
@@ -122,20 +99,29 @@ QLineEdit
 {
     background-color: rgba(255,255,255,1);
     border: 1px solid #000000;
+    height: 20px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    border: 1px solid #000000;
 }
 
 QValidatedLineEdit
 {
     background-color: rgba(255,255,255,1);
     color: #000000;
+    height: 20px;
+    padding-top: 2px;
+    padding-bottom: 2px;
     border: 1px solid #000000;
 }
 
-KomodoAmountField QWidget
+
+QAbstractSpinBox#UnitBox
 {
     background-color: rgba(255,255,255,1);
     color: #000000;
     border: 1px solid #000000;
+    height: 20px;
 }
 
 QComboBox
@@ -148,18 +134,29 @@ QComboBox
 
 QComboBox::item:selected
 {
-    background-color: rgba(255,255,255,1);
-    color: #ffffff;
+    background-color: #e8f4f8;
+    color: #000000;
+    padding: 0px;
 }
 
 QComboBox QAbstractItemView {
-    background-color: #e8f4f8
+    background-color: rgba(255,255,255,1);
     color: #000000;
+}
+
+QComboBox::indicator {
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  selection-background-color: transparent;
+  color: transparent;
+  selection-color: transparent;
+  /* Needed to remove indicator - fix #132 */
 }
 
 QTableView {
     background-color: rgba(255,255,255,1);
-    alternate-background-color: #e8f4f8
+    alternate-background-color: #e8f4f8;
     color: #000000;
 }
 
@@ -170,14 +167,16 @@ QHeaderView::section {
     border-bottom: 1px solid #D8D8D8;
     background-color: rgba(225,225,225,1);
     padding:4px;
+    border: 1px solid #000000;
 }
 
-QTableCornerButton::section{
+QTableCornerButton::section {
     border-top:0px solid #D8D8D8;
     border-left:0px solid #D8D8D8;
     border-right:1px solid #D8D8D8;
     border-bottom: 1px solid #D8D8D8;
     background-color: rgba(225,225,225,1);
+    border: 1px solid #000000;
 }
 
 QWidget#RPCConsole {
@@ -222,5 +221,20 @@ QMessageBox {
 
 QTextEdit {
     background-color: rgba(225,225,225,1);
+    color: #000000;
+}
+
+QWidget#bgWidget {
+    background: rgba(0,0,0,0.8);
+    color: #000000;
+}
+
+QWidget#contentWidget {
+    background-color: rgba(255,255,255,1);
+    color: #000000;
+}
+
+QWidget#contentWidget QLabel{
+    background-color: rgba(255,255,255,1);
     color: #000000;
 }

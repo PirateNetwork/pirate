@@ -48,7 +48,7 @@ ZSendCoinsDialog::ZSendCoinsDialog(const PlatformStyle *_platformStyle, QWidget 
     ui->setupUi(this);
 
     ui->payFromAddress->setMaxVisibleItems(10);
-    ui->payFromAddress->setStyleSheet("QComboBox { combobox-popup: 0; }");
+    // ui->payFromAddress->setStyleSheet("QComboBox { combobox-popup: 0; }");
 
     if (!_platformStyle->getImagesOnButtons()) {
         ui->addButton->setIcon(QIcon());
