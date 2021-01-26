@@ -213,7 +213,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
             allChange = false;
             tempHTML += "<b>" + tr("    Change") + ":</b> False<br>";
         }
-        tempHTML += "<b>" + tr("    Memo") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZsSend[i].memoStr)  + "<br>";
+        tempHTML += "<b>" + tr("    Memo") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZsReceived[i].memoStr)  + "<br>";
         if (change) {
             recChangeHTML += tempHTML;
         } else {
