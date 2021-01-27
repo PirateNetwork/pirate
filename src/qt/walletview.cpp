@@ -72,7 +72,7 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, QWidget *parent):
 
     addWidget(overviewPage);
     addWidget(transactionsPage);
-    addWidget(receiveCoinsView);
+    addWidget(receiveCoinsPage);
     addWidget(sendCoinsPage);
     addWidget(zsendCoinsPage);
 
@@ -198,7 +198,7 @@ void WalletView::gotoHistoryPage()
 
 void WalletView::gotoReceiveCoinsPage()
 {
-    setCurrentWidget(receiveCoinsView);
+    setCurrentWidget(receiveCoinsPage);
 }
 
 void WalletView::gotoSendCoinsPage(QString addr)
