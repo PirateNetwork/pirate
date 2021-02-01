@@ -19,6 +19,7 @@
 #include "sendcoinsdialog.h"
 #include "zsendcoinsdialog.h"
 #include "transactiontablemodel.h"
+#include "importkeydialog.h"
 
 #include "base58.h"
 #include "chain.h"
@@ -159,6 +160,87 @@ void WalletModel::updateStatus()
 
     if(cachedEncryptionStatus != newEncryptionStatus)
         Q_EMIT encryptionStatusChanged(newEncryptionStatus);
+}
+
+void WalletModel::importSpendingKey(QString strKey) {
+    LOCK2(cs_main, wallet->cs_wallet);
+
+    QMessageBox msgBox;
+    msgBox.setText("Error importing key.");
+    msgBox.setStandardButtons(QMessageBox::Ok);
+    msgBox.setDefaultButton(QMessageBox::Ok);
+
+    auto spendingkey = DecodeSpendingKey(strKey.toStdString());
+    if (!IsValidSpendingKey(spendingkey)) {
+      msgBox.setInformativeText("Invalid Key!!!");
+      int ret = msgBox.exec();
+      return;
+    }
+
+    auto addResult = boost::apply_visitor(AddSpendingKeyToWallet(wallet, Params().GetConsensus()), spendingkey);
+    if (addResult == KeyAlreadyExists) {
+        msgBox.setInformativeText("Key already exists!!!");
+        int ret = msgBox.exec();
+        return;
+    }
+
+    wallet->MarkDirty();
+    if (addResult == KeyNotAdded) {
+      msgBox.setInformativeText("Key not added!!!");
+      int ret = msgBox.exec();
+      return;
+    }
+
+    // whenever a key is imported, we need to scan the whole chain
+    wallet->nTimeFirstKey = 1;
+
+    // We want to scan for transactions and notes
+    wallet->ScanForWalletTransactions(chainActive[1200000], true, true);
+    // wallet->ScanForWalletTransactions(chainActive.Genesis(), true, true);
+
+    if (transactionTableModel)
+        transactionTableModel->refreshWallet();
+
+}
+
+
+void WalletModel::importViewingKey (QString strKey) {
+    LOCK2(cs_main, wallet->cs_wallet);
+
+    QMessageBox msgBox;
+    msgBox.setText("Error importing key.");
+    msgBox.setStandardButtons(QMessageBox::Ok);
+    msgBox.setDefaultButton(QMessageBox::Ok);
+
+    auto viewingkey = DecodeViewingKey(strKey.toStdString());
+    if (!IsValidViewingKey(viewingkey)) {
+        msgBox.setInformativeText("Invalid Key!!!");
+        int ret = msgBox.exec();
+        return;
+    }
+
+    auto addResult = boost::apply_visitor(AddViewingKeyToWallet(wallet), viewingkey);
+    if (addResult == KeyAlreadyExists || addResult == SpendingKeyExists) {
+        msgBox.setInformativeText("Key already exists!!!");
+        int ret = msgBox.exec();
+        return;
+    }
+
+    wallet->MarkDirty();
+    if (addResult == KeyNotAdded) {
+        msgBox.setInformativeText("Key not added!!!");
+        int ret = msgBox.exec();
+        return;
+    }
+
+    // whenever a key is imported, we need to scan the whole chain
+    wallet->nTimeFirstKey = 1;
+
+    // We want to scan for transactions and notes
+    wallet->ScanForWalletTransactions(chainActive.Genesis(), true, true);
+
+    if (transactionTableModel)
+        transactionTableModel->refreshWallet();
 }
 
 void WalletModel::pollBalanceChanged()
@@ -927,7 +1009,7 @@ static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, 
 static void ShowProgress(WalletModel *walletmodel, const std::string &title, int nProgress)
 {
     // emits signal "showProgress"
-    QMetaObject::invokeMethod(walletmodel, "showProgress", Qt::QueuedConnection,
+    bool x = QMetaObject::invokeMethod(walletmodel, "showProgress", Qt::DirectConnection,
                               Q_ARG(QString, QString::fromStdString(title)),
                               Q_ARG(int, nProgress));
 }
@@ -940,6 +1022,8 @@ static void NotifyWatchonlyChanged(WalletModel *walletmodel, bool fHaveWatchonly
 
 void WalletModel::subscribeToCoreSignals()
 {
+    uiInterface.ShowProgress.connect(boost::bind(ShowProgress, this, _1, _2));
+
     // Connect signals to wallet
     wallet->NotifyStatusChanged.connect(boost::bind(&NotifyKeyStoreStatusChanged, this, _1));
     wallet->NotifyAddressBookChanged.connect(boost::bind(NotifyAddressBookChanged, this, _1, _2, _3, _4, _5, _6));
@@ -951,6 +1035,8 @@ void WalletModel::subscribeToCoreSignals()
 
 void WalletModel::unsubscribeFromCoreSignals()
 {
+    uiInterface.ShowProgress.disconnect(boost::bind(ShowProgress, this, _1, _2));
+
     // Disconnect signals from wallet
     wallet->NotifyStatusChanged.disconnect(boost::bind(&NotifyKeyStoreStatusChanged, this, _1));
     wallet->NotifyAddressBookChanged.disconnect(boost::bind(NotifyAddressBookChanged, this, _1, _2, _3, _4, _5, _6));

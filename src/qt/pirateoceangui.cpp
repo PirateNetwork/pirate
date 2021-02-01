@@ -410,6 +410,12 @@ void PirateOceanGUI::createActions()
     openAction = new QAction(platformStyle->TextColorIcon(":/icons/open"), tr("Open &URI..."), this);
     openAction->setStatusTip(tr("Open a pirate: URI or payment request"));
 
+    importSpendAction = new QAction(platformStyle->TextColorIcon(":/icons/key"), tr("&Import Spending Key"), this);
+    importSpendAction->setStatusTip(tr("Import extended spending key"));
+
+    importViewAction = new QAction(platformStyle->TextColorIcon(":/icons/key"), tr("&Import Viewing Key"), this);
+    importViewAction->setStatusTip(tr("Import extended viewing key"));
+
     showHelpMessageAction = new QAction(platformStyle->TextColorIcon(":/icons/info"), tr("&Command-line options"), this);
     showHelpMessageAction->setMenuRole(QAction::NoRole);
     showHelpMessageAction->setStatusTip(tr("Show the %1 help message to get a list with possible Pirate command-line options").arg(tr(PACKAGE_NAME)));
@@ -425,6 +431,8 @@ void PirateOceanGUI::createActions()
     connect(toggleHideAction, SIGNAL(triggered()), this, SLOT(toggleHidden()));
     connect(showHelpMessageAction, SIGNAL(triggered()), this, SLOT(showHelpMessageClicked()));
     connect(openRPCConsoleAction, SIGNAL(triggered()), this, SLOT(showDebugWindow()));
+    connect(importSpendAction, SIGNAL(triggered()), this, SLOT(gotoImportSK()));
+    connect(importViewAction, SIGNAL(triggered()), this, SLOT(gotoImportVK()));
     // prevents an open debug window from becoming stuck/unusable on client shutdown
     connect(quitAction, SIGNAL(triggered()), rpcConsole, SLOT(hide()));
 
@@ -472,10 +480,14 @@ void PirateOceanGUI::createMenuBar()
     QMenu *file = appMenuBar->addMenu(tr("&File"));
     if(walletFrame)
     {
+
         file->addAction(openAction);
         file->addAction(backupWalletAction);
         file->addAction(signMessageAction);
         file->addAction(verifyMessageAction);
+        file->addSeparator();
+        file->addAction(importSpendAction);
+        file->addAction(importViewAction);
         file->addSeparator();
         file->addAction(usedSendingAddressesAction);
         file->addAction(usedReceivingAddressesAction);
@@ -541,9 +553,6 @@ void PirateOceanGUI::setClientModel(ClientModel *_clientModel)
 
         // Receive and report messages from client model
         connect(_clientModel, SIGNAL(message(QString,QString,unsigned int)), this, SLOT(message(QString,QString,unsigned int)));
-
-        // Show progress dialog
-        connect(_clientModel, SIGNAL(showProgress(QString,int)), this, SLOT(showProgress(QString,int)));
 
         rpcConsole->setClientModel(_clientModel);
 #ifdef ENABLE_WALLET
@@ -786,6 +795,16 @@ void PirateOceanGUI::gotoSignMessageTab(QString addr)
 void PirateOceanGUI::gotoVerifyMessageTab(QString addr)
 {
     if (walletFrame) walletFrame->gotoVerifyMessageTab(addr);
+}
+
+void PirateOceanGUI::gotoImportSK()
+{
+    if (walletFrame) walletFrame->importSK();
+}
+
+void PirateOceanGUI::gotoImportVK()
+{
+    if (walletFrame) walletFrame->importVK();
 }
 #endif // ENABLE_WALLET
 
@@ -1196,29 +1215,6 @@ void PirateOceanGUI::detectShutdown()
             rpcConsole->hide();
         qApp->quit();
     }
-}
-
-void PirateOceanGUI::showProgress(const QString &title, int nProgress)
-{
-    if (nProgress == 0)
-    {
-        progressDialog = new QProgressDialog(title, "", 0, 100);
-        progressDialog->setWindowModality(Qt::ApplicationModal);
-        progressDialog->setMinimumDuration(0);
-        progressDialog->setCancelButton(0);
-        progressDialog->setAutoClose(false);
-        progressDialog->setValue(0);
-    }
-    else if (nProgress == 100)
-    {
-        if (progressDialog)
-        {
-            progressDialog->close();
-            progressDialog->deleteLater();
-        }
-    }
-    else if (progressDialog)
-        progressDialog->setValue(nProgress);
 }
 
 void PirateOceanGUI::setTrayIconVisible(bool fHideTrayIcon)

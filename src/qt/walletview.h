@@ -21,6 +21,8 @@ class TransactionView;
 class WalletModel;
 class AddressBookPage;
 class ZAddressBookPage;
+class OpenSKDialog;
+class OpenVKDialog;
 
 QT_BEGIN_NAMESPACE
 class QModelIndex;
@@ -72,6 +74,9 @@ private:
     TransactionView *transactionView;
     ZAddressBookPage *receiveCoinsView;
 
+    OpenSKDialog *importSKView;
+    OpenVKDialog *importVKView;
+
     QProgressDialog *progressDialog;
     const PlatformStyle *platformStyle;
 
@@ -91,6 +96,11 @@ public Q_SLOTS:
     void gotoSignMessageTab(QString addr = "");
     /** Show Sign/Verify Message dialog and switch to verify message tab */
     void gotoVerifyMessageTab(QString addr = "");
+
+    /**Show import spending key dialog*/
+    void importSK();
+    /**Show import viewing key dialog*/
+    void importVK();
 
     /** Show incoming transaction notification for new transactions.
 

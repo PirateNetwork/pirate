@@ -21,6 +21,7 @@
 #include "transactiontablemodel.h"
 #include "transactionview.h"
 #include "walletmodel.h"
+#include "importkeydialog.h"
 
 #include "ui_interface.h"
 
@@ -258,6 +259,36 @@ void WalletView::updateEncryptionStatus()
     Q_EMIT encryptionStatusChanged(walletModel->getEncryptionStatus());
 }
 
+void WalletView::importSK()
+{
+    if(!walletModel)
+        return;
+    OpenSKDialog dlg(this);
+    QString privateKey;
+    dlg.exec();
+    if (dlg.result() == QDialog::Accepted) {
+          privateKey = dlg.privateKey;
+    }
+    dlg.close();
+
+    walletModel->importSpendingKey(privateKey);
+}
+
+void WalletView::importVK()
+{
+    if(!walletModel)
+        return;
+    OpenVKDialog dlg(this);
+    QString privateKey;
+    dlg.exec();
+    if (dlg.result() == QDialog::Accepted) {
+          privateKey = dlg.privateKey;
+    }
+    dlg.close();
+
+    walletModel->importViewingKey(privateKey);
+}
+
 void WalletView::encryptWallet(bool status)
 {
     if(!walletModel)
@@ -344,6 +375,8 @@ void WalletView::showProgress(const QString &title, int nProgress)
     {
         progressDialog = new QProgressDialog(title, "", 0, 100);
         progressDialog->setWindowModality(Qt::ApplicationModal);
+        progressDialog->setMinimumHeight(75);
+        progressDialog->setMinimumWidth(325);
         progressDialog->setMinimumDuration(0);
         progressDialog->setCancelButton(0);
         progressDialog->setAutoClose(false);
@@ -358,6 +391,7 @@ void WalletView::showProgress(const QString &title, int nProgress)
         }
     }
     else if (progressDialog)
+        progressDialog->setLabelText(title);
         progressDialog->setValue(nProgress);
 }
 

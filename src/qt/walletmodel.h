@@ -30,6 +30,7 @@ class RecentRequestsTableModel;
 class TransactionTableModel;
 class WalletModelTransaction;
 class WalletModelZTransaction;
+class OpenSKDialog;
 
 class CCoinControl;
 class CKeyID;
@@ -325,6 +326,10 @@ Q_SIGNALS:
     void notifyWatchonlyChanged(bool fHaveWatchonly);
 
 public Q_SLOTS:
+    /*Import spending key */
+    void importSpendingKey(QString strKey);
+    /* Import Viewing Key */
+    void importViewingKey(QString strKey);
     /* Wallet status might have changed */
     void updateStatus();
     /* New transaction, or transaction changed status */

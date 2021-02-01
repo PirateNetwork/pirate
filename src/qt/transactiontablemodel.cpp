@@ -79,6 +79,8 @@ public:
     void refreshWallet()
     {
         qDebug() << "TransactionTablePriv::refreshWallet";
+        LogPrintf("Refreshing GUI Wallet from core.");
+
         cachedWallet.clear();
 
         bool fIncludeWatchonly = true;
@@ -176,24 +178,31 @@ public:
      */
     void updateWallet(const uint256 &hash, int status, bool showTransaction)
     {
-        qDebug() << "TransactionTablePriv::updateWallet: " + QString::fromStdString(hash.ToString()) + " " + QString::number(status);
 
         // Find bounds of this transaction in model
+        bool inModel = false;
+        QList<TransactionRecord>::iterator i;
+        for (i = cachedWallet.begin(); i != cachedWallet.end(); ++i) {
+            TransactionRecord tRecord = *i;
+            if (tRecord.hash == hash) {
+                inModel = true;
+            }
+        }
+
         QList<TransactionRecord>::iterator lower = qLowerBound(
             cachedWallet.begin(), cachedWallet.end(), hash, TxLessThan());
         QList<TransactionRecord>::iterator upper = qUpperBound(
             cachedWallet.begin(), cachedWallet.end(), hash, TxLessThan());
         int lowerIndex = (lower - cachedWallet.begin());
         int upperIndex = (upper - cachedWallet.begin());
-        bool inModel = (lower != upper);
 
-        if(status == CT_UPDATED)
-        {
-            if(showTransaction && !inModel)
-                status = CT_NEW; /* Not in model, but want to show, treat as new */
-            if(!showTransaction && inModel)
-                status = CT_DELETED; /* In model, but want to hide, treat as deleted */
-        }
+        if(showTransaction && inModel)
+            status = CT_UPDATED; /* In model, but want to show, do nothing */
+        if(showTransaction && !inModel)
+            status = CT_NEW; /* Not in model, but want to show, treat as new */
+        if(!showTransaction && inModel)
+            status = CT_DELETED; /* In model, but want to hide, treat as deleted */
+
 
         qDebug() << "    inModel=" + QString::number(inModel) +
                     " Index=" + QString::number(lowerIndex) + "-" + QString::number(upperIndex) +
@@ -393,6 +402,11 @@ void TransactionTableModel::updateConfirmations()
     //  visible rows.
     Q_EMIT dataChanged(index(0, Status), index(priv->size()-1, Status));
     Q_EMIT dataChanged(index(0, ToAddress), index(priv->size()-1, ToAddress));
+}
+
+void TransactionTableModel::refreshWallet()
+{
+    return priv->refreshWallet();
 }
 
 int TransactionTableModel::rowCount(const QModelIndex &parent) const
