@@ -456,6 +456,7 @@ void PirateOceanGUI::createActions()
     // setStyleSheet("background-color: lightGray;");
 
     //hide all the bits that are for t addys
+    openAction->setVisible(false);
     sendCoinsAction->setVisible(false);
     // receiveCoinsAction->setVisible(false);
     encryptWalletAction->setVisible(false);
