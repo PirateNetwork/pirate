@@ -185,10 +185,6 @@ QMenuBar::item:selected {
 QMenu {
     background-color:#303335;
     color:#c5cad3;
-    padding-right: 5px;
-    padding-top: 5px;
-    padding-left: 20px;
-    padding-bottom: 10px;
 }
 
 QMenu::item {
@@ -328,6 +324,11 @@ QValueComboBox::item:selected {
 }
 
 QWidget#ShutDown {
+    background-color:#303335;
+    color: #c5cad3;
+}
+
+QWidget#RPCConsole {
     background-color:#303335;
     color: #c5cad3;
 }

@@ -734,6 +734,7 @@ void PirateOceanGUI::showDebugWindow()
     rpcConsole->showNormal();
     rpcConsole->show();
     rpcConsole->raise();
+    rpcConsole->clear();
     rpcConsole->activateWindow();
 }
 

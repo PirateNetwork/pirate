@@ -733,17 +733,41 @@ void RPCConsole::clear(bool clearHistory)
 
     // Set default style sheet
     QFontInfo fixedFontInfo(GUIUtil::fixedPitchFont());
-    ui->messagesWidget->document()->setDefaultStyleSheet(
+    QSettings settings;
+    if (settings.value("strTheme", "pirate").toString() == "pirate") {
+        ui->messagesWidget->document()->setDefaultStyleSheet(
         QString(
-                "table { }"
-                "td.time { color: #808080; font-size: %2; padding-top: 3px; } "
-                "td.message { font-family: %1; font-size: %2; white-space:pre-wrap; } "
-                "td.cmd-request { color: #006060; } "
-                "td.cmd-error { color: red; } "
-                ".secwarning { color: red; }"
-                "b { color: #006060; } "
-            ).arg(fixedFontInfo.family(), QString("%1pt").arg(consoleFontSize))
-        );
+        "table { }"
+        "td.time { color: #c5cad3; font-size: %2; padding-top: 3px; } "
+        "td.message { font-family: %1; font-size: %2; white-space:pre-wrap; } "
+        "td.cmd-request { color: #4cb24c; } "
+        "td.cmd-error { color: #ff4e4e; } "
+        ".secwarning { color: #ff4e4e; }"
+        "b { color: #4cb24c; }").arg(fixedFontInfo.family(), QString("%1pt").arg(consoleFontSize))
+      );
+    } else if (settings.value("strTheme", "pirate").toString() == "dark") {
+        ui->messagesWidget->document()->setDefaultStyleSheet(
+        QString(
+        "table { }"
+        "td.time { color: #c5cad3; font-size: %2; padding-top: 3px; } "
+        "td.message { font-family: %1; font-size: %2; white-space:pre-wrap; } "
+        "td.cmd-request { color: #4cb24c; } "
+        "td.cmd-error { color: #ff4e4e; } "
+        ".secwarning { color: #ff4e4e; }"
+        "b { color: #4cb24c; }").arg(fixedFontInfo.family(), QString("%1pt").arg(consoleFontSize))
+      );
+    } else {
+        ui->messagesWidget->document()->setDefaultStyleSheet(
+        QString(
+        "table { }"
+        "td.time { color: #808080; font-size: %2; padding-top: 3px; } "
+        "td.message { font-family: %1; font-size: %2; white-space:pre-wrap; } "
+        "td.cmd-request { color: #006060; } "
+        "td.cmd-error { color: red; } "
+        ".secwarning { color: red; } "
+        "b { color: #006060; }").arg(fixedFontInfo.family(), QString("%1pt").arg(consoleFontSize))
+      );
+    }
 
 #ifdef Q_OS_MAC
     QString clsKey = "(???)-L";
