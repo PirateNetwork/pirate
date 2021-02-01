@@ -8,6 +8,7 @@
 #include <QDialog>
 
 class ZAddressTableModel;
+class WalletModel;
 class PlatformStyle;
 
 namespace Ui {
@@ -41,15 +42,20 @@ public:
     explicit ZAddressBookPage(const PlatformStyle *platformStyle, Mode mode, Tabs tab, QWidget *parent);
     ~ZAddressBookPage();
 
+
     void setModel(ZAddressTableModel *model);
+    void setWalletModel(WalletModel *walletModel);
     const QString &getReturnValue() const { return returnValue; }
 
 public Q_SLOTS:
     void done(int retval);
-
+    void exportSK();
+    void exportVK();
+    
 private:
     Ui::ZAddressBookPage *ui;
     ZAddressTableModel *model;
+    WalletModel *walletModel;
     Mode mode;
     Tabs tab;
     QString returnValue;

@@ -137,6 +137,7 @@ void WalletView::setWalletModel(WalletModel *_walletModel)
     transactionView->setModel(_walletModel);
     overviewPage->setWalletModel(_walletModel);
     receiveCoinsView->setModel(_walletModel->getZAddressTableModel());
+    receiveCoinsView->setWalletModel(_walletModel);
     sendCoinsPage->setModel(_walletModel);
     zsendCoinsPage->setModel(_walletModel);
     usedReceivingAddressesPage->setModel(_walletModel->getAddressTableModel());

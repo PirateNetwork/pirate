@@ -15,6 +15,8 @@
 #include "editzaddressdialog.h"
 #include "guiutil.h"
 #include "platformstyle.h"
+#include "walletmodel.h"
+#include "transactiondescdialog.h"
 
 #include <QIcon>
 #include <QMenu>
@@ -87,6 +89,9 @@ ZAddressBookPage::ZAddressBookPage(const PlatformStyle *platformStyle, Mode _mod
     QAction *copyZSendManyToAction = new QAction(tr("Copy zsendmany (to) template"), this);
     QAction *copyZSendManyFromAction = new QAction(tr("Copy zsendmany (from) template"), this);
 
+    QAction *exportSpendingKeyAction = new QAction(tr("Export extended spending key"), this);
+    QAction *exportViewingKeyAction = new QAction(tr("Export extended viewing key"), this);
+
     deleteAction = new QAction(ui->deleteAddress->text(), this);
 
     // Build context menu
@@ -97,6 +102,9 @@ ZAddressBookPage::ZAddressBookPage(const PlatformStyle *platformStyle, Mode _mod
 
     contextMenu->addAction(copyZSendManyToAction);
     contextMenu->addAction(copyZSendManyFromAction);
+
+    contextMenu->addAction(exportSpendingKeyAction);
+    contextMenu->addAction(exportViewingKeyAction);
 
     if(tab == SendingTab)
         contextMenu->addAction(deleteAction);
@@ -111,6 +119,9 @@ ZAddressBookPage::ZAddressBookPage(const PlatformStyle *platformStyle, Mode _mod
     connect(copyZSendManyToAction, SIGNAL(triggered()), this, SLOT(onCopyZSendManyToAction()));
     connect(copyZSendManyFromAction, SIGNAL(triggered()), this, SLOT(onCopyZSendManyFromAction()));
 
+    connect(exportSpendingKeyAction, SIGNAL(triggered()), this, SLOT(exportSK()));
+    connect(exportViewingKeyAction, SIGNAL(triggered()), this, SLOT(exportVK()));
+
     connect(ui->tableView, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(contextualMenu(QPoint)));
 
     connect(ui->closeButton, SIGNAL(clicked()), this, SLOT(accept()));
@@ -119,6 +130,10 @@ ZAddressBookPage::ZAddressBookPage(const PlatformStyle *platformStyle, Mode _mod
 ZAddressBookPage::~ZAddressBookPage()
 {
     delete ui;
+}
+
+void ZAddressBookPage::setWalletModel(WalletModel *_walletModel) {
+    this->walletModel = _walletModel;
 }
 
 void ZAddressBookPage::setModel(ZAddressTableModel *_model)
@@ -176,6 +191,38 @@ void ZAddressBookPage::setModel(ZAddressTableModel *_model)
 
     selectionChanged();
 }
+
+void ZAddressBookPage::exportSK()
+{
+    QModelIndexList selection = GUIUtil::getEntryData(ui->tableView, ZAddressTableModel::Address);
+    if(!selection.isEmpty())
+    {
+
+        QString key = walletModel->getSpendingKey(selection.at(0).data(ZAddressTableModel::Address).toString());
+        if (key != "") {
+            TransactionDescDialog *dlg = new TransactionDescDialog(selection.at(0), SPENDING_KEY, key);
+            dlg->setAttribute(Qt::WA_DeleteOnClose);
+            dlg->show();
+        }
+    }
+}
+
+void ZAddressBookPage::exportVK()
+{
+    QModelIndexList selection = GUIUtil::getEntryData(ui->tableView, ZAddressTableModel::Address);
+    if(!selection.isEmpty())
+    {
+
+        QString key = walletModel->getViewingKey(selection.at(0).data(ZAddressTableModel::Address).toString());
+
+        if (key != "") {
+          TransactionDescDialog *dlg = new TransactionDescDialog(selection.at(0), VIEWING_KEY, key);
+          dlg->setAttribute(Qt::WA_DeleteOnClose);
+          dlg->show();
+        }
+    }
+}
+
 
 void ZAddressBookPage::onCopyZSendManyFromAction()
 {

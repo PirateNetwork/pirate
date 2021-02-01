@@ -326,8 +326,12 @@ Q_SIGNALS:
     void notifyWatchonlyChanged(bool fHaveWatchonly);
 
 public Q_SLOTS:
+    /*Export spending key */
+    QString getSpendingKey(QString strAddress);
     /*Import spending key */
     void importSpendingKey(QString strKey);
+    /*Export spending key */
+    QString getViewingKey(QString strAddress);
     /* Import Viewing Key */
     void importViewingKey(QString strKey);
     /* Wallet status might have changed */

@@ -162,6 +162,31 @@ void WalletModel::updateStatus()
         Q_EMIT encryptionStatusChanged(newEncryptionStatus);
 }
 
+QString WalletModel::getSpendingKey(QString strAddress) {
+      LOCK2(cs_main, wallet->cs_wallet);
+
+      QMessageBox msgBox;
+      msgBox.setText("Error importing key.");
+      msgBox.setStandardButtons(QMessageBox::Ok);
+      msgBox.setDefaultButton(QMessageBox::Ok);
+
+      auto address = DecodePaymentAddress(strAddress.toStdString());
+      if (!IsValidPaymentAddress(address)) {
+          msgBox.setInformativeText("Invalid Z-Address!!!");
+          int ret = msgBox.exec();
+          return QString("");
+      }
+
+      // Sapling support
+      auto sk = boost::apply_visitor(GetSpendingKeyForPaymentAddress(wallet), address);
+      if (!sk) {
+          msgBox.setInformativeText("Wallet does not hold private zkey for this zaddrs!!!");
+          int ret = msgBox.exec();
+          return QString("");
+      }
+      return QString::fromStdString(EncodeSpendingKey(sk.get()));
+}
+
 void WalletModel::importSpendingKey(QString strKey) {
     LOCK2(cs_main, wallet->cs_wallet);
 
@@ -203,6 +228,31 @@ void WalletModel::importSpendingKey(QString strKey) {
 
 }
 
+QString WalletModel::getViewingKey(QString strAddress) {
+      LOCK2(cs_main, wallet->cs_wallet);
+
+      QMessageBox msgBox;
+      msgBox.setText("Error importing key.");
+      msgBox.setStandardButtons(QMessageBox::Ok);
+      msgBox.setDefaultButton(QMessageBox::Ok);
+
+      auto address = DecodePaymentAddress(strAddress.toStdString());
+      if (!IsValidPaymentAddress(address)) {
+          msgBox.setInformativeText("Invalid Z-Address!!!");
+          int ret = msgBox.exec();
+          return QString("");
+      }
+
+      // Sapling support
+      auto vk = boost::apply_visitor(GetViewingKeyForPaymentAddress(wallet), address);
+      if (!vk) {
+          msgBox.setInformativeText("Wallet does not hold private key or viewing key for this zaddr!!!");
+          int ret = msgBox.exec();
+          return QString("");
+      }
+
+      return QString::fromStdString(EncodeViewingKey(vk.get()));
+}
 
 void WalletModel::importViewingKey (QString strKey) {
     LOCK2(cs_main, wallet->cs_wallet);

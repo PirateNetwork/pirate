@@ -18,7 +18,9 @@ QT_END_NAMESPACE
 enum
 {
     FULL_TRANSACTION = 0,
-    MEMO_ONLY = 1
+    MEMO_ONLY = 1,
+    SPENDING_KEY = 2,
+    VIEWING_KEY = 3
 };
 
 
@@ -28,7 +30,7 @@ class TransactionDescDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit TransactionDescDialog(const QModelIndex &idx, int type, QWidget *parent = 0);
+    explicit TransactionDescDialog(const QModelIndex &idx, int type, QString message = "", QWidget *parent = 0);
     ~TransactionDescDialog();
 
 private:
