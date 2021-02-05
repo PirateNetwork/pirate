@@ -74,7 +74,8 @@ static AddressTableEntry::Type translateTransactionType(const QString &strPurpos
     else if (strPurpose == "receive")
         addressType = AddressTableEntry::Receiving;
     else if (strPurpose == "unknown" || strPurpose == "") // if purpose not set, guess
-        addressType = (isMine ? AddressTableEntry::Receiving : AddressTableEntry::Sending);
+        // addressType = (isMine ? AddressTableEntry::Receiving : AddressTableEntry::Sending);
+        addressType = AddressTableEntry::Receiving;
     return addressType;
 }
 
@@ -94,17 +95,25 @@ public:
         cachedAddressTable.clear();
         {
             LOCK(wallet->cs_wallet);
+            isminetype mine = ISMINE_NO;
             for (const std::pair<libzcash::PaymentAddress, CAddressBookData>& item : wallet->mapZAddressBook)
             {
-                const libzcash::PaymentAddress& address = item.first;
-//                bool fMine = wallet->HaveSpendingKey(address) | wallet->HaveViewingKey(address);
-                bool fMine = boost::apply_visitor(PaymentAddressBelongsToWallet(wallet), address);
+                const libzcash::PaymentAddress& zaddr = item.first;
+                auto saplingAddr = boost::get<libzcash::SaplingPaymentAddress>(&zaddr);
+                if (saplingAddr != nullptr) {
+                  libzcash::SaplingIncomingViewingKey ivk;
+                  libzcash::SaplingExtendedFullViewingKey extfvk;
+                  if (wallet->GetSaplingIncomingViewingKey(*saplingAddr, ivk) &&
+                      wallet->GetSaplingFullViewingKey(ivk, extfvk) &&
+                      wallet->HaveSaplingSpendingKey(extfvk)) mine = ISMINE_SPENDABLE;
+                }
+
                 AddressTableEntry::Type addressType = translateTransactionType(
-                        QString::fromStdString(item.second.purpose), fMine);
+                        QString::fromStdString(item.second.purpose), mine);
                 const std::string& strName = item.second.name;
                 cachedAddressTable.append(AddressTableEntry(addressType,
                                   QString::fromStdString(strName),
-                                  QString::fromStdString(EncodePaymentAddress(address))));
+                                  QString::fromStdString(EncodePaymentAddress(zaddr))));
             }
         }
         // qLowerBound() and qUpperBound() require our cachedAddressTable list to be sorted in asc order
@@ -223,9 +232,15 @@ QVariant ZAddressTableModel::data(const QModelIndex &index, int role) const
 
                 if (isValid)
                 {
-                    libzcash::PaymentAddress dest = DecodePaymentAddress(rec->address.toStdString());
-//                    if (wallet->HaveSpendingKey(dest) || wallet->HaveViewingKey(dest)) mine = ISMINE_SPENDABLE;
-                    if (boost::apply_visitor(PaymentAddressBelongsToWallet(wallet), dest)) mine = ISMINE_SPENDABLE;
+                    libzcash::PaymentAddress zaddr = DecodePaymentAddress(rec->address.toStdString());
+                    auto saplingAddr = boost::get<libzcash::SaplingPaymentAddress>(&zaddr);
+                    if (saplingAddr != nullptr) {
+                      libzcash::SaplingIncomingViewingKey ivk;
+                      libzcash::SaplingExtendedFullViewingKey extfvk;
+                      if (wallet->GetSaplingIncomingViewingKey(*saplingAddr, ivk) &&
+                          wallet->GetSaplingFullViewingKey(ivk, extfvk) &&
+                          wallet->HaveSaplingSpendingKey(extfvk)) mine = ISMINE_SPENDABLE;
+                    }
                     else mine = ISMINE_NO;
                 }
             }

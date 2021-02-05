@@ -782,10 +782,15 @@ UniValue z_importkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (addResult == KeyAlreadyExists && fIgnoreExistingKey) {
         return NullUniValue;
     }
+    
     pwalletMain->MarkDirty();
     if (addResult == KeyNotAdded) {
         throw JSONRPCError(RPC_WALLET_ERROR, "Error adding spending key to wallet");
     }
+
+    //Add to ZAddress book
+    auto zInfo = boost::apply_visitor(libzcash::AddressInfoFromSpendingKey{}, spendingkey);
+    pwalletMain->SetZAddressBook(zInfo.second, zInfo.first, "");
 
     // whenever a key is imported, we need to scan the whole chain
     pwalletMain->nTimeFirstKey = 1; // 0 would be considered 'no value'
@@ -883,6 +888,9 @@ UniValue z_importviewingkey(const UniValue& params, bool fHelp, const CPubKey& m
   if (addResult == KeyNotAdded) {
       throw JSONRPCError(RPC_WALLET_ERROR, "Error adding viewing key to wallet");
   }
+
+  //Add to ZAddress book
+  pwalletMain->SetZAddressBook(addrInfo.second, addrInfo.first, "");
 
   // whenever a key is imported, we need to scan the whole chain
   pwalletMain->nTimeFirstKey = 1; // 0 would be considered 'no value'

@@ -693,6 +693,9 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 pwallet->LoadSaplingWatchOnly(extfvk);
             }
 
+            pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
+            pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
+
             // Viewing keys have no birthday information for now,
             // so set the wallet birthday to the beginning of time.
             pwallet->nTimeFirstKey = 1;

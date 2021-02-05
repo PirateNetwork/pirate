@@ -319,9 +319,6 @@ Q_SIGNALS:
     // Coins sent: from wallet, to recipient, in (serialized) transaction:
     void coinsZSent(AsyncRPCOperationId operationId);
 
-    // Show progress dialog e.g. for rescan
-    void showProgress(const QString &title, int nProgress);
-
     // Watch-only address added
     void notifyWatchonlyChanged(bool fHaveWatchonly);
 

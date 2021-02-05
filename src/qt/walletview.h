@@ -115,7 +115,6 @@ public Q_SLOTS:
     void changePassphrase();
     /** Ask for passphrase to unlock wallet temporarily */
     void unlockWallet();
-
     /** Show used sending addresses */
     void usedSendingAddresses();
     /** Show used receiving addresses */
@@ -125,9 +124,6 @@ public Q_SLOTS:
 
     /** Re-emit encryption status signal */
     void updateEncryptionStatus();
-
-    /** Show progress dialog e.g. for rescan */
-    void showProgress(const QString &title, int nProgress);
 
     /** User has requested more information about the out of sync state */
     void requestedSyncWarningInfo();

@@ -10,6 +10,7 @@
         <file alias="splash">res/backgrounds/splash.png</file>
     </qresource>
 
+
     <qresource prefix="/icons">
         <file alias="komodo">res/icons/pirate.png</file>
         <file alias="address-book">res/icons/address-book.png</file>

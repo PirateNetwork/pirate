@@ -1,4 +1,4 @@
-QMainWindow
+QMainWindow, QProgressDialog
 {
     color: #ffffff;
     background-color: #303030;
@@ -191,6 +191,16 @@ QDialog#OptionsDialog {
 
 QDialog#OpenURIDialog {
     background-color: #303030;
+    color: #ffffff;
+}
+
+QDialog#OpenSKDialog {
+    background-color: #202020;
+    color: #ffffff;
+}
+
+QDialog#OpenVKDialog {
+    background-color: #202020;
     color: #ffffff;
 }
 

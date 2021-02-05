@@ -163,8 +163,6 @@ void WalletView::setWalletModel(WalletModel *_walletModel)
         // Ask for passphrase if needed
         connect(_walletModel, SIGNAL(requireUnlock()), this, SLOT(unlockWallet()));
 
-        // Show progress dialog
-        connect(_walletModel, SIGNAL(showProgress(QString,int)), this, SLOT(showProgress(QString,int)));
     }
 }
 
@@ -269,10 +267,9 @@ void WalletView::importSK()
     dlg.exec();
     if (dlg.result() == QDialog::Accepted) {
           privateKey = dlg.privateKey;
+          walletModel->importSpendingKey(privateKey);
     }
     dlg.close();
-
-    walletModel->importSpendingKey(privateKey);
 }
 
 void WalletView::importVK()
@@ -284,10 +281,9 @@ void WalletView::importVK()
     dlg.exec();
     if (dlg.result() == QDialog::Accepted) {
           privateKey = dlg.privateKey;
+          walletModel->importViewingKey(privateKey);
     }
     dlg.close();
-
-    walletModel->importViewingKey(privateKey);
 }
 
 void WalletView::encryptWallet(bool status)
@@ -368,32 +364,6 @@ void WalletView::usedReceivingZAddresses()
     // usedReceivingZAddressesPage->show();
     // usedReceivingZAddressesPage->raise();
     // usedReceivingZAddressesPage->activateWindow();
-}
-
-void WalletView::showProgress(const QString &title, int nProgress)
-{
-    if (nProgress == 0)
-    {
-        progressDialog = new QProgressDialog(title, "", 0, 100);
-        progressDialog->setWindowModality(Qt::ApplicationModal);
-        progressDialog->setMinimumHeight(75);
-        progressDialog->setMinimumWidth(325);
-        progressDialog->setMinimumDuration(0);
-        progressDialog->setCancelButton(0);
-        progressDialog->setAutoClose(false);
-        progressDialog->setValue(0);
-    }
-    else if (nProgress == 100)
-    {
-        if (progressDialog)
-        {
-            progressDialog->close();
-            progressDialog->deleteLater();
-        }
-    }
-    else if (progressDialog)
-        progressDialog->setLabelText(title);
-        progressDialog->setValue(nProgress);
 }
 
 void WalletView::requestedSyncWarningInfo()

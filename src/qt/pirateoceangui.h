@@ -159,6 +159,8 @@ Q_SIGNALS:
     void receivedURI(const QString &uri);
 
 public Q_SLOTS:
+    /** Show progress dialog e.g. for verifychain */
+    void showProgress(const QString &title, int nProgress);
     /** Set number of connections shown in the UI */
     void setNumConnections(int count);
     /** Set network state shown in the UI */

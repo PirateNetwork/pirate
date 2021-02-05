@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
  <class>OpenVKDialog</class>
- <widget class="QDialog" name="imortSKDialog">
+ <widget class="QDialog" name="OpenVKDialog">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Open URI</string>
+   <string>Import Key</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
@@ -72,7 +72,7 @@
   <connection>
    <sender>buttonBox</sender>
    <signal>accepted()</signal>
-   <receiver>imortSKDialog</receiver>
+   <receiver>OpenVKDialog</receiver>
    <slot>accept()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -88,7 +88,7 @@
   <connection>
    <sender>buttonBox</sender>
    <signal>rejected()</signal>
-   <receiver>imortSKDialog</receiver>
+   <receiver>OpenVKDialog</receiver>
    <slot>reject()</slot>
    <hints>
     <hint type="sourcelabel">
