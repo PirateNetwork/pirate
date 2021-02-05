@@ -56,6 +56,7 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QVBoxLayout>
+#include <QPalette>
 
 #if QT_VERSION < 0x050000
 #include <QTextDocument>
@@ -135,7 +136,7 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     QCoreApplication::setAttribute(Qt::AA_UseStyleSheetPropagationInWidgetStyles, true);
 
     //Set the theme in the settings
-    QString strTheme = settings.value("strTheme","default").toString();
+    QString strTheme = settings.value("strTheme","pirate").toString();
     // strTheme = strTheme.toLower();
 
     //Set the Theme in the app
@@ -145,6 +146,10 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     QString stylesheet = QLatin1String(file.readAll());
     qApp->setStyleSheet(stylesheet);
 
+    QPalette newPal(qApp->palette());
+    newPal.setColor(QPalette::Link, COLOR_POSITIVE_DARK);
+    newPal.setColor(QPalette::LinkVisited, COLOR_NEGATIVE_DARK);
+    qApp->setPalette(newPal);
 
 
     QString windowTitle = "Pirate Chain (ARRR) - ";

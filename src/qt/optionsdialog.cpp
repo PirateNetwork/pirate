@@ -11,6 +11,7 @@
 
 #include "komodounits.h"
 #include "guiutil.h"
+#include "guiconstants.h"
 #include "optionsmodel.h"
 
 #include "netbase.h"
@@ -26,6 +27,7 @@
 #include <QApplication>
 #include <QFile>
 #include <QSettings>
+#include <QPalette>
 
 OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
     QDialog(parent),
@@ -305,6 +307,11 @@ void OptionsDialog::setTheme()
       file.open(QFile::ReadOnly);
       QString stylesheet = QLatin1String(file.readAll());
       qApp->setStyleSheet(stylesheet);
+
+      QPalette newPal(qApp->palette());
+      newPal.setColor(QPalette::Link, COLOR_POSITIVE_DARK);
+      newPal.setColor(QPalette::LinkVisited, COLOR_NEGATIVE_DARK);
+      qApp->setPalette(newPal);
 }
 
 void OptionsDialog::showRestartWarning(bool fPersistent)
