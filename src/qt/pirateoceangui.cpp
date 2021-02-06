@@ -1232,6 +1232,8 @@ void PirateOceanGUI::showProgress(const QString &title, int nProgress)
     {
         progressDialog = new QProgressDialog(title, "", 0, 100);
         progressDialog->setWindowModality(Qt::ApplicationModal);
+        progressDialog->setMinimumHeight(75);
+        progressDialog->setMinimumWidth(325);
         progressDialog->setMinimumDuration(0);
         progressDialog->setCancelButton(0);
         progressDialog->setAutoClose(false);
@@ -1246,6 +1248,7 @@ void PirateOceanGUI::showProgress(const QString &title, int nProgress)
         }
     }
     else if (progressDialog)
+        progressDialog->setLabelText(title);
         progressDialog->setValue(nProgress);
 }
 
