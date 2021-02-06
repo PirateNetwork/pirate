@@ -152,16 +152,16 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     qApp->setPalette(newPal);
 
 
-    QString windowTitle = "Pirate Chain (ARRR) - ";
+    QString windowTitle = "Treasure Chest";
 #ifdef ENABLE_WALLET
     enableWallet = WalletModel::isWalletEnabled();
 #endif // ENABLE_WALLET
-    if(enableWallet)
-    {
-        windowTitle += tr("Wallet");
-    } else {
-        windowTitle += tr("Node");
-    }
+    // if(enableWallet)
+    // {
+    //     windowTitle += tr("Wallet");
+    // } else {
+    //     windowTitle += tr("Node");
+    // }
     windowTitle += " " + networkStyle->getTitleAddText();
     QApplication::setWindowIcon(networkStyle->getTrayAndWindowIcon());
     setWindowIcon(networkStyle->getTrayAndWindowIcon());
