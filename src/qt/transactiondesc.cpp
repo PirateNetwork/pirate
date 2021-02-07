@@ -86,6 +86,11 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
         getRpcArcTx(txid, arcTx, ivks, ovks, fIncludeWatchonly);
     }
 
+    if (arcTx.blockHash.IsNull() || mapBlockIndex[arcTx.blockHash] == nullptr) {
+        strHTML += "</font></html>";
+        return strHTML;
+    }
+
     strHTML += "<b>" + tr("Date") + ":</b> " + (GUIUtil::dateTimeStr(arcTx.nTime)) + "<br>";
     strHTML += "<b>" + tr("Txid") + ":</b> " + GUIUtil::HtmlEscape(arcTx.txid.ToString()) + "<br>";
     if (arcTx.coinbase) {

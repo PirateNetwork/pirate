@@ -1112,6 +1112,10 @@ UniValue zs_gettransaction(const UniValue& params, bool fHelp, const CPubKey& my
     }
 
     UniValue txObj(UniValue::VOBJ);
+    if (arcTx.blockHash.IsNull() || mapBlockIndex[arcTx.blockHash] == nullptr) {
+        return txObj;
+    }
+    
     getRpcArcTxJSONHeader(arcTx, txObj);
 
     UniValue spends(UniValue::VARR);

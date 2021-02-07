@@ -248,11 +248,17 @@ public:
                           isArchiveTx = true;
                           uint256 txid = hash;
                           getRpcArcTx(txid, arcTx, ivks, ovks, fIncludeWatchonly);
+                          if (arcTx.blockHash.IsNull() || mapBlockIndex[arcTx.blockHash] == nullptr) {
+                              isArchiveTx = false;
+                          }
                     }
                 }
 
                 if (!isActiveTx && !isArchiveTx) {
                     qWarning() << "TransactionTablePriv::updateWallet: Warning: Got CT_NEW, but transaction is not in wallet";
+                    parent->beginRemoveRows(QModelIndex(), lowerIndex, upperIndex-1);
+                    cachedWallet.erase(lower, upper);
+                    parent->endRemoveRows();
                     break;
                 }
 
