@@ -1247,9 +1247,10 @@ void PirateOceanGUI::showProgress(const QString &title, int nProgress)
             progressDialog->deleteLater();
         }
     }
-    else if (progressDialog)
+    else if (progressDialog && nProgress > 0 && nProgress < 100 ) {
         progressDialog->setLabelText(title);
         progressDialog->setValue(nProgress);
+    }
 }
 
 void PirateOceanGUI::setTrayIconVisible(bool fHideTrayIcon)
