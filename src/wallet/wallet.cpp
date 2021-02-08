@@ -1505,7 +1505,10 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
     }
 
     if (pblockindex->GetHeight() % 100 == 0 && pblockindex->GetHeight() < height - 5) {
-      uiShown = true;
+      if (!uiShown) {
+          uiShown = true;
+          uiInterface.ShowProgress("Building Witnesses", 0, false);
+      }
       scanperc = (int)((Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false) - dProgressStart) / (dProgressTip - dProgressStart) * 100);
       uiInterface.ShowProgress(_(("Building Witnesses for block " + std::to_string(pblockindex->GetHeight()) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
       uiInterface.InitMessage(_(("Building Witnesses for block " + std::to_string(pblockindex->GetHeight())).c_str()) + ((" " + std::to_string(scanperc)).c_str()) + ("%"));
