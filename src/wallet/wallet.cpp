@@ -3730,10 +3730,12 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             }
             pindex = chainActive.Next(pindex);
         }
+
+        uiInterface.ShowProgress(_("Rescanning..."), 100, false); // hide progress dialog in GUI
+
         //Update all witness caches
         BuildWitnessCache(chainActive.Tip(), false);
 
-        uiInterface.ShowProgress(_("Rescanning..."), 100, false); // hide progress dialog in GUI
     }
 
     for (set<uint256>::iterator it = txList.begin(); it != txList.end(); ++it)
