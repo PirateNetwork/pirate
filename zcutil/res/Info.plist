@@ -9,19 +9,19 @@
 	<key>CFBundleIconFile</key>
 	<string>logo.icns</string>
 	<key>CFBundleIdentifier</key>
-	<string>org.pirate.pirateocean</string>
+	<string>org.pirate.treasurechest</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>PirateOcean</string>
+	<string>Treasure Chest</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>3.0.0</string>
+	<string>5.0.0</string>
 	<key>CFBundleVersion</key>
-	<string>3.0.0</string>
+	<string>5.0.0</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>Copyright © 2020 PirateNetwork. All rights reserved.</string>
+	<string>Copyright © 2021 PirateNetwork. All rights reserved.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>NSSupportsAutomaticGraphicsSwitching</key>

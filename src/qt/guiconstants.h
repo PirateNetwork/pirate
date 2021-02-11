@@ -59,7 +59,7 @@ static const int MAX_URI_LENGTH = 255;
 
 #define QAPP_ORG_NAME "Pirate Chain"
 #define QAPP_ORG_DOMAIN "pirate.black"
-#define QAPP_APP_NAME_DEFAULT "Pirate Ocean"
-#define QAPP_APP_NAME_TESTNET "Pirate Ocean Testnet"
+#define QAPP_APP_NAME_DEFAULT "Treasure Chest"
+#define QAPP_APP_NAME_TESTNET "Treasure Chest Testnet"
 
 #endif // KOMODO_QT_GUICONSTANTS_H
