@@ -1237,6 +1237,8 @@ void PirateOceanGUI::showProgress(const QString &title, int nProgress)
         progressDialog->setMinimumDuration(0);
         progressDialog->setCancelButton(0);
         progressDialog->setAutoClose(false);
+        progressDialog->setWindowTitle(title);
+        progressDialog->setLabelText(title);
         progressDialog->setValue(0);
     }
     else if (nProgress == 100)
@@ -1251,6 +1253,7 @@ void PirateOceanGUI::showProgress(const QString &title, int nProgress)
         progressDialog->setLabelText(title);
         progressDialog->setValue(nProgress);
     }
+    qApp->processEvents();
 }
 
 void PirateOceanGUI::setTrayIconVisible(bool fHideTrayIcon)
