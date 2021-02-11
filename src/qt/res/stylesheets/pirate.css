@@ -204,6 +204,11 @@ QDialog#OpenVKDialog {
     color: #ffffff;
 }
 
+QDialog#NewZAddress {
+    background-color: #202020;
+    color: #ffffff;
+}
+
 QDialog#TransactionDescDialog {
     background-color: #303030;
     color: #ffffff;

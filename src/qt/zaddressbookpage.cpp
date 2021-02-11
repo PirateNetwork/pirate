@@ -271,6 +271,7 @@ void ZAddressBookPage::onEditAction()
         tab == SendingTab ?
         EditZAddressDialog::EditSendingAddress :
         EditZAddressDialog::EditReceivingAddress, this);
+    dlg.setObjectName("NewZAddress");
     dlg.setModel(model);
     QModelIndex origIndex = proxyModel->mapToSource(indexes.at(0));
     dlg.loadRow(origIndex.row());
@@ -286,6 +287,7 @@ void ZAddressBookPage::on_newAddress_clicked()
         tab == SendingTab ?
         EditZAddressDialog::NewSendingAddress :
         EditZAddressDialog::NewReceivingAddress, this);
+    dlg.setObjectName("NewZAddress");
     dlg.setModel(model);
     if(dlg.exec())
     {
