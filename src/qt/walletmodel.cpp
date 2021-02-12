@@ -227,10 +227,6 @@ void WalletModel::importSpendingKey(QString strKey) {
 
     // We want to scan for transactions and notes
     wallet->ScanForWalletTransactions(chainActive.Genesis(), true, true);
-
-    if (transactionTableModel)
-        transactionTableModel->refreshWallet();
-
 }
 
 QString WalletModel::getViewingKey(QString strAddress) {
@@ -300,9 +296,6 @@ void WalletModel::importViewingKey (QString strKey) {
 
     // We want to scan for transactions and notes
     wallet->ScanForWalletTransactions(chainActive.Genesis(), true, true);
-
-    if (transactionTableModel)
-        transactionTableModel->refreshWallet();
 }
 
 void WalletModel::pollBalanceChanged()

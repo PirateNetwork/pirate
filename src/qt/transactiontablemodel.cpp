@@ -79,7 +79,7 @@ public:
     void refreshWallet()
     {
         qDebug() << "TransactionTablePriv::refreshWallet";
-        LogPrintf("Refreshing GUI Wallet from core.");
+        LogPrintf("Refreshing GUI Wallet from core\n");
 
         cachedWallet.clear();
 
