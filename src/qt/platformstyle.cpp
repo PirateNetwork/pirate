@@ -78,7 +78,7 @@ PlatformStyle::PlatformStyle(const QString &_name, bool _imagesOnButtons, bool _
     colorizeIcons(_colorizeIcons),
     useExtraSpacing(_useExtraSpacing),
     singleColor(193, 157, 66), //main icons
-    textColor(97, 79, 33)      //tx & small icon
+    textColor(193, 157, 66)      //tx & small icon
 {
     // Determine icon highlighting color
     if (colorizeIcons) {
@@ -144,4 +144,3 @@ const PlatformStyle *PlatformStyle::instantiate(const QString &platformId)
     }
     return 0;
 }
-

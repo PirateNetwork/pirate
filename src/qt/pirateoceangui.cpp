@@ -56,6 +56,7 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QVBoxLayout>
+#include <QPalette>
 
 #if QT_VERSION < 0x050000
 #include <QTextDocument>
@@ -132,16 +133,35 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
         move(QApplication::desktop()->availableGeometry().center() - frameGeometry().center());
     }
 
-    QString windowTitle = "Pirate Chain (ARRR) - ";
+    QCoreApplication::setAttribute(Qt::AA_UseStyleSheetPropagationInWidgetStyles, true);
+
+    //Set the theme in the settings
+    QString strTheme = settings.value("strTheme","pirate").toString();
+    // strTheme = strTheme.toLower();
+
+    //Set the Theme in the app
+    LogPrintf("Setting Theme: %s %s\n", strTheme.toStdString(), __func__);
+    QFile file(":/stylesheets/" + strTheme);
+    file.open(QFile::ReadOnly);
+    QString stylesheet = QLatin1String(file.readAll());
+    qApp->setStyleSheet(stylesheet);
+
+    QPalette newPal(qApp->palette());
+    newPal.setColor(QPalette::Link, COLOR_POSITIVE_DARK);
+    newPal.setColor(QPalette::LinkVisited, COLOR_NEGATIVE_DARK);
+    qApp->setPalette(newPal);
+
+
+    QString windowTitle = "Treasure Chest";
 #ifdef ENABLE_WALLET
     enableWallet = WalletModel::isWalletEnabled();
 #endif // ENABLE_WALLET
-    if(enableWallet)
-    {
-        windowTitle += tr("Wallet");
-    } else {
-        windowTitle += tr("Node");
-    }
+    // if(enableWallet)
+    // {
+    //     windowTitle += tr("Wallet");
+    // } else {
+    //     windowTitle += tr("Node");
+    // }
     windowTitle += " " + networkStyle->getTitleAddText();
     QApplication::setWindowIcon(networkStyle->getTrayAndWindowIcon());
     setWindowIcon(networkStyle->getTrayAndWindowIcon());
@@ -160,6 +180,7 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     {
         /** Create wallet frame and make it the central widget */
         walletFrame = new WalletFrame(_platformStyle, this);
+        walletFrame->setObjectName("MainFrame");
         setCentralWidget(walletFrame);
     } else
 #endif // ENABLE_WALLET
@@ -202,6 +223,7 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     unitDisplayControl = new UnitDisplayStatusBarControl(platformStyle);
     labelWalletEncryptionIcon = new QLabel();
     labelWalletHDStatusIcon = new QLabel();
+    labelWalletHDStatusIcon->hide(); //HD not used
     connectionsControl = new GUIUtil::ClickableLabel();
     labelBlocksIcon = new GUIUtil::ClickableLabel();
     if(enableWallet)
@@ -229,10 +251,10 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     // as they make the text unreadable (workaround for issue #1071)
     // See https://qt-project.org/doc/qt-4.8/gallery.html
     QString curStyle = QApplication::style()->metaObject()->className();
-    if(curStyle == "QWindowsStyle" || curStyle == "QWindowsXPStyle")
-    {
-        progressBar->setStyleSheet("QProgressBar { background-color: #e8e8e8; border: 1px solid grey; border-radius: 7px; padding: 1px; text-align: center; } QProgressBar::chunk { background: QLinearGradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #FF8000, stop: 1 orange); border-radius: 7px; margin: 0px; }");
-    }
+    // if(curStyle == "QWindowsStyle" || curStyle == "QWindowsXPStyle")
+    // {
+    //     progressBar->setStyleSheet("QProgressBar { background-color: #e8e8e8; border: 1px solid grey; border-radius: 7px; padding: 1px; text-align: center; } QProgressBar::chunk { background: QLinearGradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #FF8000, stop: 1 orange); border-radius: 7px; margin: 0px; }");
+    // }
 
     statusBar()->addWidget(progressBarLabel);
     statusBar()->addWidget(progressBar);
@@ -249,7 +271,7 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
 
     connect(connectionsControl, SIGNAL(clicked(QPoint)), this, SLOT(toggleNetworkActive()));
 
-    modalOverlay = new ModalOverlay(this->centralWidget());
+    modalOverlay = new ModalOverlay(platformStyle, this->centralWidget());
 #ifdef ENABLE_WALLET
     if(enableWallet) {
         connect(walletFrame, SIGNAL(requestedSyncWarningInfo()), this, SLOT(showModalOverlay()));
@@ -393,9 +415,19 @@ void PirateOceanGUI::createActions()
     openAction = new QAction(platformStyle->TextColorIcon(":/icons/open"), tr("Open &URI..."), this);
     openAction->setStatusTip(tr("Open a pirate: URI or payment request"));
 
+    importSpendAction = new QAction(platformStyle->TextColorIcon(":/icons/key"), tr("&Import Spending Key"), this);
+    importSpendAction->setStatusTip(tr("Import extended spending key"));
+
+    importViewAction = new QAction(platformStyle->TextColorIcon(":/icons/key"), tr("&Import Viewing Key"), this);
+    importViewAction->setStatusTip(tr("Import extended viewing key"));
+
     showHelpMessageAction = new QAction(platformStyle->TextColorIcon(":/icons/info"), tr("&Command-line options"), this);
     showHelpMessageAction->setMenuRole(QAction::NoRole);
     showHelpMessageAction->setStatusTip(tr("Show the %1 help message to get a list with possible Pirate command-line options").arg(tr(PACKAGE_NAME)));
+
+    //hide backup wallet, needs work...
+    backupWalletAction->setVisible(false);
+    changePassphraseAction->setVisible(false);
 
     connect(quitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
     connect(aboutAction, SIGNAL(triggered()), this, SLOT(aboutClicked()));
@@ -404,6 +436,8 @@ void PirateOceanGUI::createActions()
     connect(toggleHideAction, SIGNAL(triggered()), this, SLOT(toggleHidden()));
     connect(showHelpMessageAction, SIGNAL(triggered()), this, SLOT(showHelpMessageClicked()));
     connect(openRPCConsoleAction, SIGNAL(triggered()), this, SLOT(showDebugWindow()));
+    connect(importSpendAction, SIGNAL(triggered()), this, SLOT(gotoImportSK()));
+    connect(importViewAction, SIGNAL(triggered()), this, SLOT(gotoImportVK()));
     // prevents an open debug window from becoming stuck/unusable on client shutdown
     connect(quitAction, SIGNAL(triggered()), rpcConsole, SLOT(hide()));
 
@@ -424,13 +458,16 @@ void PirateOceanGUI::createActions()
 
     new QShortcut(QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_C), this, SLOT(showDebugWindowActivateConsole()));
     new QShortcut(QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_D), this, SLOT(showDebugWindow()));
-    setStyleSheet("background-color: lightGray;");
+    // setStyleSheet("background-color: lightGray;");
+
     //hide all the bits that are for t addys
+    openAction->setVisible(false);
     sendCoinsAction->setVisible(false);
-    receiveCoinsAction->setVisible(false);
+    // receiveCoinsAction->setVisible(false);
     encryptWalletAction->setVisible(false);
     usedSendingAddressesAction->setVisible(false);
     usedReceivingAddressesAction->setVisible(false);
+    usedReceivingZAddressesAction->setVisible(false);
     signMessageAction->setVisible(false);
     verifyMessageAction->setVisible(false);
 }
@@ -449,10 +486,14 @@ void PirateOceanGUI::createMenuBar()
     QMenu *file = appMenuBar->addMenu(tr("&File"));
     if(walletFrame)
     {
+
         file->addAction(openAction);
         file->addAction(backupWalletAction);
         file->addAction(signMessageAction);
         file->addAction(verifyMessageAction);
+        file->addSeparator();
+        file->addAction(importSpendAction);
+        file->addAction(importViewAction);
         file->addSeparator();
         file->addAction(usedSendingAddressesAction);
         file->addAction(usedReceivingAddressesAction);
@@ -521,7 +562,6 @@ void PirateOceanGUI::setClientModel(ClientModel *_clientModel)
 
         // Show progress dialog
         connect(_clientModel, SIGNAL(showProgress(QString,int)), this, SLOT(showProgress(QString,int)));
-
         rpcConsole->setClientModel(_clientModel);
 #ifdef ENABLE_WALLET
         if(walletFrame)
@@ -701,6 +741,7 @@ void PirateOceanGUI::showDebugWindow()
     rpcConsole->showNormal();
     rpcConsole->show();
     rpcConsole->raise();
+    rpcConsole->clear();
     rpcConsole->activateWindow();
 }
 
@@ -763,6 +804,16 @@ void PirateOceanGUI::gotoSignMessageTab(QString addr)
 void PirateOceanGUI::gotoVerifyMessageTab(QString addr)
 {
     if (walletFrame) walletFrame->gotoVerifyMessageTab(addr);
+}
+
+void PirateOceanGUI::gotoImportSK()
+{
+    if (walletFrame) walletFrame->importSK();
+}
+
+void PirateOceanGUI::gotoImportVK()
+{
+    if (walletFrame) walletFrame->importVK();
 }
 #endif // ENABLE_WALLET
 
@@ -1181,9 +1232,13 @@ void PirateOceanGUI::showProgress(const QString &title, int nProgress)
     {
         progressDialog = new QProgressDialog(title, "", 0, 100);
         progressDialog->setWindowModality(Qt::ApplicationModal);
+        progressDialog->setMinimumHeight(75);
+        progressDialog->setMinimumWidth(325);
         progressDialog->setMinimumDuration(0);
         progressDialog->setCancelButton(0);
         progressDialog->setAutoClose(false);
+        progressDialog->setWindowTitle(title);
+        progressDialog->setLabelText(title);
         progressDialog->setValue(0);
     }
     else if (nProgress == 100)
@@ -1194,8 +1249,11 @@ void PirateOceanGUI::showProgress(const QString &title, int nProgress)
             progressDialog->deleteLater();
         }
     }
-    else if (progressDialog)
+    else if (progressDialog && nProgress > 0 && nProgress < 100 ) {
+        progressDialog->setLabelText(title);
         progressDialog->setValue(nProgress);
+    }
+    qApp->processEvents();
 }
 
 void PirateOceanGUI::setTrayIconVisible(bool fHideTrayIcon)
@@ -1265,7 +1323,7 @@ UnitDisplayStatusBarControl::UnitDisplayStatusBarControl(const PlatformStyle *pl
     }
     setMinimumSize(max_width, 0);
     setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-    setStyleSheet(QString("QLabel { color : %1 }").arg(platformStyle->SingleColor().name()));
+    // setStyleSheet(QString("QLabel { color : %1 }").arg(platformStyle->SingleColor().name()));
 }
 
 /** So that it responds to button clicks */

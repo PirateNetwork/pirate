@@ -97,13 +97,24 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
             tx.address = arcTx.vZsSend[i].encodedAddress;
             tx.credit = -arcTx.vZsSend[i].amount;
             tx.idx = arcTx.vZsSend[i].shieldedOutputIndex;
+            if (arcTx.vZsSend[i].memoStr.length() != 0) {
+                tx.memo = arcTx.vZsSend[i].memoStr;
+            }
 
             bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsSend[i].encodedAddress) != arcTx.spentFrom.end();
             if (change) {
-                tx.type = TransactionRecord::SendToSelf;
+                if (arcTx.vZsSend[i].memoStr.length() == 0) {
+                    tx.type = TransactionRecord::SendToSelf;
+                } else {
+                    tx.type = TransactionRecord::SendToSelfWithMemo;
+                }
                 partsChange.append(tx);
             } else {
-                tx.type = TransactionRecord::SendToAddress;
+                if (arcTx.vZsSend[i].memoStr.length() == 0) {
+                    tx.type = TransactionRecord::SendToAddress;
+                } else {
+                    tx.type = TransactionRecord::SendToAddressWithMemo;
+                }
                 parts.append(tx);
             }
         }
@@ -161,13 +172,25 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
         tx.address = arcTx.vZsReceived[i].encodedAddress;
         tx.debit = arcTx.vZsReceived[i].amount;
         tx.idx = arcTx.vZsReceived[i].shieldedOutputIndex;
+        if (arcTx.vZsReceived[i].memoStr.length() != 0) {
+            tx.memo = arcTx.vZsReceived[i].memoStr;
+        }
 
         bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsReceived[i].encodedAddress) != arcTx.spentFrom.end();
         if (change) {
-            tx.type = TransactionRecord::SendToSelf;
+            if (arcTx.vZsReceived[i].memoStr.length() == 0) {
+                tx.type = TransactionRecord::SendToSelf;
+            } else {
+                tx.type = TransactionRecord::SendToSelfWithMemo;
+            }
             partsChange.append(tx);
         } else {
-            tx.type = TransactionRecord::RecvWithAddress;
+            if (arcTx.vZsReceived[i].memoStr.length() == 0) {
+                tx.type = TransactionRecord::RecvWithAddress;
+            } else {
+                tx.type = TransactionRecord::RecvWithAddressWithMemo;
+            }
+
             parts.append(tx);
         }
     }

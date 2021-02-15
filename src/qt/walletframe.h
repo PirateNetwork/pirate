@@ -78,6 +78,11 @@ public Q_SLOTS:
     /** Show Sign/Verify Message dialog and switch to verify message tab */
     void gotoVerifyMessageTab(QString addr = "");
 
+    /**Show import spending key dialog*/
+    void importSK();
+    /**Show import viewing key dialog*/
+    void importVK();
+
     /** Encrypt the wallet */
     void encryptWallet(bool status);
     /** Backup the wallet */

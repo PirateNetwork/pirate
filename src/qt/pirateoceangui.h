@@ -114,6 +114,8 @@ private:
     QAction *openRPCConsoleAction;
     QAction *openAction;
     QAction *showHelpMessageAction;
+    QAction *importSpendAction;
+    QAction *importViewAction;
 
     QSystemTrayIcon *trayIcon;
     QMenu *trayIconMenu;
@@ -157,6 +159,8 @@ Q_SIGNALS:
     void receivedURI(const QString &uri);
 
 public Q_SLOTS:
+    /** Show progress dialog e.g. for verifychain */
+    void showProgress(const QString &title, int nProgress);
     /** Set number of connections shown in the UI */
     void setNumConnections(int count);
     /** Set network state shown in the UI */
@@ -210,6 +214,11 @@ private Q_SLOTS:
     /** Show Sign/Verify Message dialog and switch to verify message tab */
     void gotoVerifyMessageTab(QString addr = "");
 
+    /**Show import spending key dialog*/
+    void gotoImportSK();
+    /**Show import viewing key dialog*/
+    void gotoImportVK();
+
     /** Show open dialog */
     void openClicked();
 #endif // ENABLE_WALLET
@@ -238,9 +247,6 @@ private Q_SLOTS:
 
     /** called by a timer to check if fRequestShutdown has been set **/
     void detectShutdown();
-
-    /** Show progress dialog e.g. for verifychain */
-    void showProgress(const QString &title, int nProgress);
 
     /** When hideTrayIcon setting is changed in OptionsModel hide or show the icon accordingly. */
     void setTrayIconVisible(bool);

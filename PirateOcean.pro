@@ -289,12 +289,16 @@ RESOURCES += \
     src/qt/komodo_locale.qrc
 
 FORMS += \
+    src/qt/forms/ImportSKdialog.ui \
+    src/qt/forms/ImportVKdialog.ui \
     src/qt/forms/addressbookpage.ui \
     src/qt/forms/askpassphrasedialog.ui \
     src/qt/forms/coincontroldialog.ui \
     src/qt/forms/editaddressdialog.ui \
     src/qt/forms/helpmessagedialog.ui \
     src/qt/forms/intro.ui \
+    src/qt/forms/importSKdialog.ui \
+    src/qt/forms/importVKdialog.ui \
     src/qt/forms/modaloverlay.ui \
     src/qt/forms/openuridialog.ui \
     src/qt/forms/optionsdialog.ui \

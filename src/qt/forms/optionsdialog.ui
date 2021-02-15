@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>560</width>
-    <height>440</height>
+    <width>587</width>
+    <height>569</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -136,30 +136,43 @@
       <attribute name="title">
        <string>W&amp;allet</string>
       </attribute>
-      <layout class="QVBoxLayout" name="verticalLayout_Wallet">
+      <layout class="QVBoxLayout" name="verticalLayout_5">
+       <item>
+        <spacer name="verticalSpacer_3">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>14</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
        <item>
         <widget class="QGroupBox" name="groupBox">
          <property name="title">
-          <string>Expert</string>
+          <string>Automated Maintenance</string>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_2">
           <item>
-           <widget class="QCheckBox" name="coinControlFeatures">
+           <widget class="QCheckBox" name="enableDeleteTx">
             <property name="toolTip">
-             <string>Whether to show coin control features or not.</string>
+             <string>Enable or Disable DeleteTx</string>
             </property>
             <property name="text">
-             <string>Enable coin &amp;control features</string>
+             <string>Enable deleteTx</string>
             </property>
            </widget>
           </item>
           <item>
-           <widget class="QCheckBox" name="spendZeroConfChange">
+           <widget class="QCheckBox" name="saplingConsolidationEnabled">
             <property name="toolTip">
-             <string>If you disable the spending of unconfirmed change, the change from a transaction cannot be used until that transaction has at least one confirmation. This also affects how your balance is computed.</string>
+             <string>Enable automatic creation of consolidation transactions to reduce walle size and number of active notes.</string>
             </property>
             <property name="text">
-             <string>&amp;Spend unconfirmed change</string>
+             <string>&amp;Enable Consolidation</string>
             </property>
            </widget>
           </item>
@@ -167,14 +180,76 @@
         </widget>
        </item>
        <item>
-        <spacer name="verticalSpacer_Wallet">
+        <spacer name="verticalSpacer_2">
          <property name="orientation">
           <enum>Qt::Vertical</enum>
          </property>
          <property name="sizeHint" stdset="0">
           <size>
            <width>20</width>
-           <height>40</height>
+           <height>13</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QGroupBox" name="groupBox_2">
+         <property name="title">
+          <string>Troubleshooting</string>
+         </property>
+         <layout class="QVBoxLayout" name="verticalLayout_3">
+          <item>
+           <widget class="QCheckBox" name="chkReindex">
+            <property name="toolTip">
+             <string>Reindex on restart</string>
+            </property>
+            <property name="text">
+             <string>Reindex</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="chkRescan">
+            <property name="toolTip">
+             <string>Rescan the blockchain for missing transactions.</string>
+            </property>
+            <property name="text">
+             <string>Rescan</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="chkZapWalletTxes">
+            <property name="toolTip">
+             <string>Remove all wallet transaction and rescan the blockchain for all transactions.</string>
+            </property>
+            <property name="text">
+             <string>Zap Wallet Transactions and Rescan</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="chkBootstrap">
+            <property name="toolTip">
+             <string>Reset wallet data using the downloadable bootstrap.</string>
+            </property>
+            <property name="text">
+             <string>Reindex and Rescan with bootstrap</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer_4">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>14</height>
           </size>
          </property>
         </spacer>
@@ -553,7 +628,31 @@
       <attribute name="title">
        <string>&amp;Display</string>
       </attribute>
-      <layout class="QVBoxLayout" name="verticalLayout_Display">
+      <layout class="QVBoxLayout" name="verticalLayout_6">
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_4_Display">
+         <item>
+          <widget class="QLabel" name="themeLabel">
+           <property name="text">
+            <string>Wallet Theme</string>
+           </property>
+           <property name="textFormat">
+            <enum>Qt::PlainText</enum>
+           </property>
+           <property name="buddy">
+            <cstring>theme</cstring>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QValueComboBox" name="theme">
+           <property name="toolTip">
+            <string>The user interface language can be set here. This setting will take effect after restarting %1.</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_1_Display">
          <item>

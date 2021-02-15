@@ -134,7 +134,7 @@ src/qt/*.moc
 src/qt/forms/ui_*.h
 
 #Mac Packaged App
-PirateOcean.app
+TreasureChest.app
 
 #output during builds, symbol tables?
 *.dSYM

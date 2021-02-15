@@ -30,6 +30,7 @@ public:
         setAlignment(Qt::AlignRight);
 
         connect(lineEdit(), SIGNAL(textEdited(QString)), this, SIGNAL(valueChanged()));
+        this->setObjectName("UnitBox");
     }
 
     QValidator::State validate(QString &text, int &pos) const
@@ -206,6 +207,7 @@ KomodoAmountField::KomodoAmountField(QWidget *parent) :
     layout->addWidget(unit);
     layout->addStretch(1);
     layout->setContentsMargins(0,0,0,0);
+    unit->setVisible(false);
 
     setLayout(layout);
 
@@ -229,7 +231,7 @@ void KomodoAmountField::clear()
 void KomodoAmountField::setEnabled(bool fEnabled)
 {
     amount->setEnabled(fEnabled);
-    unit->setEnabled(fEnabled);
+    unit->setVisible(false);
 }
 
 bool KomodoAmountField::validate()

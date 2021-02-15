@@ -21,6 +21,8 @@ class TransactionView;
 class WalletModel;
 class AddressBookPage;
 class ZAddressBookPage;
+class OpenSKDialog;
+class OpenVKDialog;
 
 QT_BEGIN_NAMESPACE
 class QModelIndex;
@@ -62,7 +64,7 @@ private:
 
     OverviewPage *overviewPage;
     QWidget *transactionsPage;
-    ReceiveCoinsDialog *receiveCoinsPage;
+    QWidget *receiveCoinsPage;
     SendCoinsDialog *sendCoinsPage;
     ZSendCoinsDialog *zsendCoinsPage;
     AddressBookPage *usedSendingAddressesPage;
@@ -70,6 +72,10 @@ private:
     ZAddressBookPage *usedReceivingZAddressesPage;
 
     TransactionView *transactionView;
+    ZAddressBookPage *receiveCoinsView;
+
+    OpenSKDialog *importSKView;
+    OpenVKDialog *importVKView;
 
     QProgressDialog *progressDialog;
     const PlatformStyle *platformStyle;
@@ -91,6 +97,11 @@ public Q_SLOTS:
     /** Show Sign/Verify Message dialog and switch to verify message tab */
     void gotoVerifyMessageTab(QString addr = "");
 
+    /**Show import spending key dialog*/
+    void importSK();
+    /**Show import viewing key dialog*/
+    void importVK();
+
     /** Show incoming transaction notification for new transactions.
 
         The new items are those between start and end inclusive, under the given parent item.
@@ -104,7 +115,6 @@ public Q_SLOTS:
     void changePassphrase();
     /** Ask for passphrase to unlock wallet temporarily */
     void unlockWallet();
-
     /** Show used sending addresses */
     void usedSendingAddresses();
     /** Show used receiving addresses */
@@ -114,9 +124,6 @@ public Q_SLOTS:
 
     /** Re-emit encryption status signal */
     void updateEncryptionStatus();
-
-    /** Show progress dialog e.g. for rescan */
-    void showProgress(const QString &title, int nProgress);
 
     /** User has requested more information about the out of sync state */
     void requestedSyncWarningInfo();

@@ -26,6 +26,7 @@
 #include <QDebug>
 #include <QIcon>
 #include <QList>
+#include <QSettings>
 
 // Amount column is right-aligned it contains numbers
 static int column_alignments[] = {
@@ -78,6 +79,8 @@ public:
     void refreshWallet()
     {
         qDebug() << "TransactionTablePriv::refreshWallet";
+        LogPrintf("Refreshing GUI Wallet from core\n");
+
         cachedWallet.clear();
 
         bool fIncludeWatchonly = true;
@@ -175,24 +178,31 @@ public:
      */
     void updateWallet(const uint256 &hash, int status, bool showTransaction)
     {
-        qDebug() << "TransactionTablePriv::updateWallet: " + QString::fromStdString(hash.ToString()) + " " + QString::number(status);
 
         // Find bounds of this transaction in model
+        bool inModel = false;
+        QList<TransactionRecord>::iterator i;
+        for (i = cachedWallet.begin(); i != cachedWallet.end(); ++i) {
+            TransactionRecord tRecord = *i;
+            if (tRecord.hash == hash) {
+                inModel = true;
+            }
+        }
+
         QList<TransactionRecord>::iterator lower = qLowerBound(
             cachedWallet.begin(), cachedWallet.end(), hash, TxLessThan());
         QList<TransactionRecord>::iterator upper = qUpperBound(
             cachedWallet.begin(), cachedWallet.end(), hash, TxLessThan());
         int lowerIndex = (lower - cachedWallet.begin());
         int upperIndex = (upper - cachedWallet.begin());
-        bool inModel = (lower != upper);
 
-        if(status == CT_UPDATED)
-        {
-            if(showTransaction && !inModel)
-                status = CT_NEW; /* Not in model, but want to show, treat as new */
-            if(!showTransaction && inModel)
-                status = CT_DELETED; /* In model, but want to hide, treat as deleted */
-        }
+        if(showTransaction && inModel)
+            status = CT_UPDATED; /* In model, but want to show, do nothing */
+        if(showTransaction && !inModel)
+            status = CT_NEW; /* Not in model, but want to show, treat as new */
+        if(!showTransaction && inModel)
+            status = CT_DELETED; /* In model, but want to hide, treat as deleted */
+
 
         qDebug() << "    inModel=" + QString::number(inModel) +
                     " Index=" + QString::number(lowerIndex) + "-" + QString::number(upperIndex) +
@@ -238,11 +248,17 @@ public:
                           isArchiveTx = true;
                           uint256 txid = hash;
                           getRpcArcTx(txid, arcTx, ivks, ovks, fIncludeWatchonly);
+                          if (arcTx.blockHash.IsNull() || mapBlockIndex[arcTx.blockHash] == nullptr) {
+                              isArchiveTx = false;
+                          }
                     }
                 }
 
                 if (!isActiveTx && !isArchiveTx) {
                     qWarning() << "TransactionTablePriv::updateWallet: Warning: Got CT_NEW, but transaction is not in wallet";
+                    parent->beginRemoveRows(QModelIndex(), lowerIndex, upperIndex-1);
+                    cachedWallet.erase(lower, upper);
+                    parent->endRemoveRows();
                     break;
                 }
 
@@ -325,10 +341,10 @@ public:
     {
         {
             LOCK2(cs_main, wallet->cs_wallet);
-            std::map<uint256, CWalletTx>::iterator mi = wallet->mapWallet.find(rec->hash);
-            if(mi != wallet->mapWallet.end())
+            std::map<uint256, ArchiveTxPoint>::iterator mi = wallet->mapArcTxs.find(rec->hash);
+            if(mi != wallet->mapArcTxs.end())
             {
-                return TransactionDesc::toHTML(wallet, mi->second, rec, unit);
+                return TransactionDesc::toHTML(wallet, rec, unit);
             }
         }
         return QString();
@@ -392,6 +408,11 @@ void TransactionTableModel::updateConfirmations()
     //  visible rows.
     Q_EMIT dataChanged(index(0, Status), index(priv->size()-1, Status));
     Q_EMIT dataChanged(index(0, ToAddress), index(priv->size()-1, ToAddress));
+}
+
+void TransactionTableModel::refreshWallet()
+{
+    return priv->refreshWallet();
 }
 
 int TransactionTableModel::rowCount(const QModelIndex &parent) const
@@ -486,14 +507,20 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
     {
     case TransactionRecord::RecvWithAddress:
         return tr("Received with");
+    case TransactionRecord::RecvWithAddressWithMemo:
+        return tr("Received with Memo");
     case TransactionRecord::RecvFromOther:
         return tr("Received from");
     case TransactionRecord::SendToAddress:
         return tr("Sent to");
+    case TransactionRecord::SendToAddressWithMemo:
+        return tr("Sent with Memo");
     case TransactionRecord::SendToOther:
         return tr("Sent to");
     case TransactionRecord::SendToSelf:
-        return tr("Payment to yourself");
+        return tr("Internal");
+    case TransactionRecord::SendToSelfWithMemo:
+        return tr("Internal with Memo");
     case TransactionRecord::Generated:
         return tr("Mined");
     default:
@@ -509,9 +536,13 @@ QVariant TransactionTableModel::txAddressDecoration(const TransactionRecord *wtx
         return QIcon(":/icons/tx_mined");
     case TransactionRecord::RecvWithAddress:
         return QIcon(":/icons/tx_input");
+    case TransactionRecord::RecvWithAddressWithMemo:
+        return QIcon(":/icons/tx_input");
     case TransactionRecord::RecvFromOther:
         return QIcon(":/icons/tx_input");
     case TransactionRecord::SendToAddress:
+        return QIcon(":/icons/tx_output");
+    case TransactionRecord::SendToAddressWithMemo:
         return QIcon(":/icons/tx_output");
     case TransactionRecord::SendToOther:
         return QIcon(":/icons/tx_output");
@@ -534,13 +565,19 @@ QString TransactionTableModel::formatTxToAddress(const TransactionRecord *wtx, b
         return QString::fromStdString(wtx->address) + watchAddress;
     case TransactionRecord::RecvWithAddress:
         return QString::fromStdString(wtx->address) + watchAddress;
+    case TransactionRecord::RecvWithAddressWithMemo:
+        return QString::fromStdString(wtx->address) + watchAddress;
     case TransactionRecord::SendToAddress:
+        return QString::fromStdString(wtx->address);
+    case TransactionRecord::SendToAddressWithMemo:
         return QString::fromStdString(wtx->address);
     case TransactionRecord::Generated:
         return QString::fromStdString(wtx->address);
     case TransactionRecord::SendToOther:
         return QString::fromStdString(wtx->address);
     case TransactionRecord::SendToSelf:
+        return QString::fromStdString(wtx->address) + watchAddress;
+    case TransactionRecord::SendToSelfWithMemo:
         return QString::fromStdString(wtx->address) + watchAddress;
     default:
         return tr("(n/a)") + watchAddress;
@@ -637,7 +674,8 @@ QString TransactionTableModel::formatTooltip(const TransactionRecord *rec) const
 {
     QString tooltip = formatTxStatus(rec) + QString("\n") + formatTxType(rec);
     if(rec->type==TransactionRecord::RecvFromOther || rec->type==TransactionRecord::SendToOther ||
-       rec->type==TransactionRecord::SendToAddress || rec->type==TransactionRecord::RecvWithAddress)
+       rec->type==TransactionRecord::SendToAddress || rec->type==TransactionRecord::RecvWithAddress ||
+       rec->type==TransactionRecord::SendToAddressWithMemo || rec->type==TransactionRecord::RecvWithAddressWithMemo)
     {
         tooltip += QString(" ") + formatTxToAddress(rec, true);
     }
@@ -704,24 +742,40 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
     case Qt::TextAlignmentRole:
         return column_alignments[index.column()];
     case Qt::ForegroundRole:
-        // Use the "danger" color for abandoned transactions
-        if(rec->status.status == TransactionStatus::Abandoned && !rec->archiveType == ARCHIVED)
-        {
-            return COLOR_TX_STATUS_DANGER;
-        }
-        // Non-confirmed (but not immature) as transactions are grey
-        if(!rec->status.countsForBalance && rec->status.status != TransactionStatus::Immature  && !rec->archiveType == ARCHIVED)
-        {
-            return COLOR_UNCONFIRMED;
-        }
+    //     // Use the "danger" color for abandoned transactions
+    //     if(rec->status.status == TransactionStatus::Abandoned && !rec->archiveType == ARCHIVED)
+    //     {
+    //         return COLOR_TX_STATUS_DANGER;
+    //     }
+    //     // Non-confirmed (but not immature) as transactions are grey
+    //     if(!rec->status.countsForBalance && rec->status.status != TransactionStatus::Immature  && !rec->archiveType == ARCHIVED)
+    //     {
+    //         return COLOR_UNCONFIRMED;
+    //     }
         if(index.column() == Amount && (rec->credit+rec->debit) < 0)
         {
-            return COLOR_NEGATIVE;
+            QSettings settings;
+            if (settings.value("strTheme", "pirate").toString() == "dark") {
+                return COLOR_NEGATIVE_DARK;
+            } else {
+                return COLOR_NEGATIVE;
+            }
         }
-        if(index.column() == ToAddress)
+        if(index.column() == Amount && (rec->credit+rec->debit) > 0)
         {
-            return addressColor(rec);
+            QSettings settings;
+            if (settings.value("strTheme", "pirate").toString() == "dark") {
+                return COLOR_POSITIVE_DARK;
+            } else if (settings.value("strTheme", "pirate").toString() == "pirate") {
+                return COLOR_POSITIVE_PIRATE;
+            } else {
+                return COLOR_POSITIVE;
+            }
         }
+    //     if(index.column() == ToAddress)
+    //     {
+    //         return addressColor(rec);
+    //     }
         break;
     case TypeRole:
         return rec->type;
@@ -733,6 +787,8 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
         return txWatchonlyDecoration(rec);
     case LongDescriptionRole:
         return priv->describe(rec, walletModel->getOptionsModel()->getDisplayUnit());
+    case MemoDescriptionRole:
+        return QString::fromStdString(rec->memo);
     case AddressRole:
         return QString::fromStdString(rec->address);
     case LabelRole:

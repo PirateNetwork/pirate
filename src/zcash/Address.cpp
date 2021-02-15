@@ -12,20 +12,20 @@ const uint32_t SAPLING_BRANCH_ID = 0x76b809bb;
 namespace libzcash {
 
   std::pair<std::string, PaymentAddress> AddressInfoFromSpendingKey::operator()(const SproutSpendingKey &sk) const {
-      return std::make_pair("sprout", sk.address());
+      return std::make_pair("z-sprout", sk.address());
   }
   std::pair<std::string, PaymentAddress> AddressInfoFromSpendingKey::operator()(const SaplingExtendedSpendingKey &sk) const {
-      return std::make_pair("sapling", sk.DefaultAddress());
+      return std::make_pair("z-sapling", sk.DefaultAddress());
   }
   std::pair<std::string, PaymentAddress> AddressInfoFromSpendingKey::operator()(const InvalidEncoding&) const {
       throw std::invalid_argument("Cannot derive default address from invalid spending key");
   }
 
   std::pair<std::string, PaymentAddress> AddressInfoFromViewingKey::operator()(const SproutViewingKey &sk) const {
-      return std::make_pair("sprout", sk.address());
+      return std::make_pair("z-sprout", sk.address());
   }
   std::pair<std::string, PaymentAddress> AddressInfoFromViewingKey::operator()(const SaplingExtendedFullViewingKey &sk) const {
-      return std::make_pair("sapling", sk.DefaultAddress());
+      return std::make_pair("z-sapling", sk.DefaultAddress());
   }
   std::pair<std::string, PaymentAddress> AddressInfoFromViewingKey::operator()(const InvalidEncoding&) const {
       throw std::invalid_argument("Cannot derive default address from invalid viewing key");

@@ -15,11 +15,13 @@
 #include "platformstyle.h"
 #include "receivecoinsdialog.h"
 #include "sendcoinsdialog.h"
+#include "zaddressbookpage.h"
 #include "zsendcoinsdialog.h"
 #include "signverifymessagedialog.h"
 #include "transactiontablemodel.h"
 #include "transactionview.h"
 #include "walletmodel.h"
+#include "importkeydialog.h"
 
 #include "ui_interface.h"
 
@@ -55,13 +57,19 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, QWidget *parent):
     vbox->addLayout(hbox_buttons);
     transactionsPage->setLayout(vbox);
 
-    receiveCoinsPage = new ReceiveCoinsDialog(platformStyle);
+    receiveCoinsPage = new QWidget(this);
+    QVBoxLayout *rvbox = new QVBoxLayout();
+    receiveCoinsView = new ZAddressBookPage(platformStyle, ZAddressBookPage::ForEditing, ZAddressBookPage::ReceivingTab, this);
+    rvbox->addWidget(receiveCoinsView);
+    receiveCoinsPage->setLayout(rvbox);
+
+
     sendCoinsPage = new SendCoinsDialog(platformStyle);
     zsendCoinsPage = new ZSendCoinsDialog(platformStyle);
 
     usedSendingAddressesPage = new AddressBookPage(platformStyle, AddressBookPage::ForEditing, AddressBookPage::SendingTab, this);
     usedReceivingAddressesPage = new AddressBookPage(platformStyle, AddressBookPage::ForEditing, AddressBookPage::ReceivingTab, this);
-    usedReceivingZAddressesPage = new ZAddressBookPage(platformStyle, ZAddressBookPage::ForEditing, ZAddressBookPage::ReceivingTab, this);
+    // usedReceivingZAddressesPage = new ZAddressBookPage(platformStyle, ZAddressBookPage::ForEditing, ZAddressBookPage::ReceivingTab, this);
 
     addWidget(overviewPage);
     addWidget(transactionsPage);
@@ -128,11 +136,12 @@ void WalletView::setWalletModel(WalletModel *_walletModel)
     // Put transaction list in tabs
     transactionView->setModel(_walletModel);
     overviewPage->setWalletModel(_walletModel);
-    receiveCoinsPage->setModel(_walletModel);
+    receiveCoinsView->setModel(_walletModel->getZAddressTableModel());
+    receiveCoinsView->setWalletModel(_walletModel);
     sendCoinsPage->setModel(_walletModel);
     zsendCoinsPage->setModel(_walletModel);
     usedReceivingAddressesPage->setModel(_walletModel->getAddressTableModel());
-    usedReceivingZAddressesPage->setModel(_walletModel->getZAddressTableModel());
+    // usedReceivingZAddressesPage->setModel(_walletModel->getZAddressTableModel());
     usedSendingAddressesPage->setModel(_walletModel->getAddressTableModel());
 
     if (_walletModel)
@@ -154,8 +163,6 @@ void WalletView::setWalletModel(WalletModel *_walletModel)
         // Ask for passphrase if needed
         connect(_walletModel, SIGNAL(requireUnlock()), this, SLOT(unlockWallet()));
 
-        // Show progress dialog
-        connect(_walletModel, SIGNAL(showProgress(QString,int)), this, SLOT(showProgress(QString,int)));
     }
 }
 
@@ -251,6 +258,34 @@ void WalletView::updateEncryptionStatus()
     Q_EMIT encryptionStatusChanged(walletModel->getEncryptionStatus());
 }
 
+void WalletView::importSK()
+{
+    if(!walletModel)
+        return;
+    OpenSKDialog dlg(this);
+    QString privateKey;
+    dlg.exec();
+    if (dlg.result() == QDialog::Accepted) {
+          privateKey = dlg.privateKey;
+          walletModel->importSpendingKey(privateKey);
+    }
+    dlg.close();
+}
+
+void WalletView::importVK()
+{
+    if(!walletModel)
+        return;
+    OpenVKDialog dlg(this);
+    QString privateKey;
+    dlg.exec();
+    if (dlg.result() == QDialog::Accepted) {
+          privateKey = dlg.privateKey;
+          walletModel->importViewingKey(privateKey);
+    }
+    dlg.close();
+}
+
 void WalletView::encryptWallet(bool status)
 {
     if(!walletModel)
@@ -326,32 +361,9 @@ void WalletView::usedReceivingZAddresses()
     if(!walletModel)
         return;
 
-    usedReceivingZAddressesPage->show();
-    usedReceivingZAddressesPage->raise();
-    usedReceivingZAddressesPage->activateWindow();
-}
-
-void WalletView::showProgress(const QString &title, int nProgress)
-{
-    if (nProgress == 0)
-    {
-        progressDialog = new QProgressDialog(title, "", 0, 100);
-        progressDialog->setWindowModality(Qt::ApplicationModal);
-        progressDialog->setMinimumDuration(0);
-        progressDialog->setCancelButton(0);
-        progressDialog->setAutoClose(false);
-        progressDialog->setValue(0);
-    }
-    else if (nProgress == 100)
-    {
-        if (progressDialog)
-        {
-            progressDialog->close();
-            progressDialog->deleteLater();
-        }
-    }
-    else if (progressDialog)
-        progressDialog->setValue(nProgress);
+    // usedReceivingZAddressesPage->show();
+    // usedReceivingZAddressesPage->raise();
+    // usedReceivingZAddressesPage->activateWindow();
 }
 
 void WalletView::requestedSyncWarningInfo()

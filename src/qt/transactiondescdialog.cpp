@@ -9,13 +9,27 @@
 
 #include <QModelIndex>
 
-TransactionDescDialog::TransactionDescDialog(const QModelIndex &idx, QWidget *parent) :
+TransactionDescDialog::TransactionDescDialog(const QModelIndex &idx, int type, QString message, QWidget *parent) :
     QDialog(parent),
     ui(new Ui::TransactionDescDialog)
 {
     ui->setupUi(this);
-    setWindowTitle(tr("Details for %1").arg(idx.data(TransactionTableModel::TxIDRole).toString()));
-    QString desc = idx.data(TransactionTableModel::LongDescriptionRole).toString();
+
+    QString desc;
+    if (type == FULL_TRANSACTION) {
+        setWindowTitle(tr("Details for %1").arg(idx.data(TransactionTableModel::TxIDRole).toString()));
+        desc = idx.data(TransactionTableModel::LongDescriptionRole).toString();
+    } else if (type == MEMO_ONLY) {
+        setWindowTitle(tr("Memo for %1").arg(idx.data(TransactionTableModel::TxIDRole).toString()));
+        desc = idx.data(TransactionTableModel::MemoDescriptionRole).toString();
+    } else if (type == SPENDING_KEY) {
+        setWindowTitle(tr("Extended Spending Key"));
+        desc = message;
+    } else if (type == VIEWING_KEY) {
+        setWindowTitle(tr("Extended Viewing Key"));
+        desc = message;
+    }
+
     ui->detailText->setHtml(desc);
 }
 

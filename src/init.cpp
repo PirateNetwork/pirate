@@ -58,6 +58,7 @@
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
 #include "wallet/asyncrpcoperation_saplingconsolidation.h"
+#include "wallet/asyncrpcoperation_sweeptoaddress.h"
 #endif
 #include <stdint.h>
 #include <stdio.h>
@@ -450,8 +451,11 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-disablewallet", _("Do not load the wallet and disable wallet RPC calls"));
     strUsage += HelpMessageOpt("-keypool=<n>", strprintf(_("Set key pool size to <n> (default: %u)"), 100));
     strUsage += HelpMessageOpt("-consolidation", _("Enable auto Sapling note consolidation"));
-    strUsage += HelpMessageOpt("-consolidatesaplingaddress=<zaddr>", _("Specify Sapling Address to Consolidate. (default: all)"));
+    strUsage += HelpMessageOpt("-consolidatesaplingaddress=<zaddr>", _("Specify Sapling Address to Consolidate. Consolidation address must be the same as sweep  (default: all)"));
     strUsage += HelpMessageOpt("-consolidationtxfee", strprintf(_("Fee amount in Satoshis used send consolidation transactions. (default %i)"), DEFAULT_CONSOLIDATION_FEE));
+    strUsage += HelpMessageOpt("-sweep", _("Enable auto Sapling note sweep, automatically move all funds to a sigle address periodocally."));
+    strUsage += HelpMessageOpt("-sweepsaplingaddress=<zaddr>", _("Specify Sapling Address to Sweep funds to. (default: all)"));
+    strUsage += HelpMessageOpt("-sweeptxfee", strprintf(_("Fee amount in Satoshis used send sweep transactions. (default %i)"), DEFAULT_SWEEP_FEE));
     strUsage += HelpMessageOpt("-deletetx", _("Enable Old Transaction Deletion"));
     strUsage += HelpMessageOpt("-deleteinterval", strprintf(_("Delete transaction every <n> blocks during inital block download (default: %i)"), DEFAULT_TX_DELETE_INTERVAL));
     strUsage += HelpMessageOpt("-keeptxnum", strprintf(_("Keep the last <n> transactions (default: %i)"), DEFAULT_TX_RETENTION_LASTTX));
@@ -2070,6 +2074,47 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             auto zAddress = DecodePaymentAddress(vaddresses[i]);
             if (!IsValidPaymentAddress(zAddress)) {
                 return InitError("Invalid consolidation address");
+            }
+        }
+
+        //Set Sapling Sweep
+        pwalletMain->fSaplingSweepEnabled = GetBoolArg("-sweep", false);
+
+        if (pwalletMain->fSaplingSweepEnabled) {
+            fSweepTxFee  = GetArg("-sweeptxfee", DEFAULT_SWEEP_FEE);
+            fSweepMapUsed = !mapMultiArgs["-sweepsaplingaddress"].empty();
+
+            //Validate Sapling Addresses
+            vector<string>& vSweep = mapMultiArgs["-sweepsaplingaddress"];
+            if (vSweep.size() != 1) {
+                return InitError("A single sweep address must be specified.");
+            }
+
+            for (int i = 0; i < vSweep.size(); i++) {
+                LogPrintf("Sweep Sapling Address: %s\n", vSweep[i]);
+                auto zSweep = DecodePaymentAddress(vSweep[i]);
+                if (!IsValidPaymentAddress(zSweep)) {
+                    return InitError("Invalid sweep address");
+                }
+                auto hasSpendingKey = boost::apply_visitor(HaveSpendingKeyForPaymentAddress(pwalletMain), zSweep);
+                if (!hasSpendingKey) {
+                    return InitError("Wallet must have the spending key of sweep address");
+                }
+            }
+
+            if (pwalletMain->fSaplingConsolidationEnabled) {
+                //Validate 1 Consolidation address only that matches the sweep address
+                vector<string>& vaddresses = mapMultiArgs["-consolidatesaplingaddress"];
+                if (vaddresses.size() == 0) {
+                    fConsolidationMapUsed = true;
+                    mapMultiArgs["-consolidatesaplingaddress"] = vSweep;
+                } else {
+                    for (int i = 0; i < vaddresses.size(); i++) {
+                        if (vSweep[0] != vaddresses[i]) {
+                            return InitError("Consolidation can only be used on the sweep address when sweep is enabled.");
+                        }
+                    }
+                }
             }
         }
 

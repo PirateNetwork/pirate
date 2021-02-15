@@ -208,6 +208,20 @@ void WalletFrame::usedReceivingZAddresses()
         walletView->usedReceivingZAddresses();
 }
 
+void WalletFrame::importSK()
+{
+    WalletView *walletView = currentWalletView();
+    if (walletView)
+        walletView->importSK();
+}
+
+void WalletFrame::importVK()
+{
+    WalletView *walletView = currentWalletView();
+    if (walletView)
+        walletView->importVK();
+}
+
 WalletView *WalletFrame::currentWalletView()
 {
     return qobject_cast<WalletView*>(walletStack->currentWidget());

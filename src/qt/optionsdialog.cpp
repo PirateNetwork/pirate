@@ -11,6 +11,7 @@
 
 #include "komodounits.h"
 #include "guiutil.h"
+#include "guiconstants.h"
 #include "optionsmodel.h"
 
 #include "netbase.h"
@@ -23,6 +24,10 @@
 #include <QLocale>
 #include <QMessageBox>
 #include <QTimer>
+#include <QApplication>
+#include <QFile>
+#include <QSettings>
+#include <QPalette>
 
 OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
     QDialog(parent),
@@ -42,6 +47,9 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
 #ifndef USE_UPNP
     ui->mapPortUpnp->setEnabled(false);
 #endif
+
+    //Not working....
+    ui->mapPortUpnp->hide();
 
     ui->proxyIp->setEnabled(false);
     ui->proxyPort->setEnabled(false);
@@ -70,6 +78,10 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
         ui->tabWidget->removeTab(ui->tabWidget->indexOf(ui->tabWallet));
     }
 
+    for(int i = 0; i < ui->tabWidget->count(); ++i) {
+        ui->tabWidget->widget(i)->setAutoFillBackground(true);
+    }
+
     /* Display elements init */
     QDir translations(":translations");
 
@@ -77,6 +89,11 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
     ui->komodoAtStartup->setText(ui->komodoAtStartup->text().arg(tr(PACKAGE_NAME)));
 
     ui->openKomodoConfButton->setToolTip(ui->openKomodoConfButton->toolTip().arg(tr(PACKAGE_NAME)));
+
+    //Add Wallet themes available
+    ui->theme->addItem("Pirate", QVariant("pirate"));
+    ui->theme->addItem("Dark", QVariant("dark"));
+    ui->theme->addItem("Light", QVariant("light"));
 
     ui->lang->setToolTip(ui->lang->toolTip().arg(tr(PACKAGE_NAME)));
     ui->lang->addItem(QString("(") + tr("default") + QString(")"), QVariant(""));
@@ -152,6 +169,8 @@ void OptionsDialog::setModel(OptionsModel *_model)
 
         updateDefaultProxyNets();
     }
+    /* Change without restarting */
+    connect(ui->theme, SIGNAL(valueChanged()), this, SLOT(setTheme()));
 
     /* warn when one of the following settings changes by user action (placed here so init via mapper doesn't trigger them) */
 
@@ -159,7 +178,12 @@ void OptionsDialog::setModel(OptionsModel *_model)
     connect(ui->databaseCache, SIGNAL(valueChanged(int)), this, SLOT(showRestartWarning()));
     connect(ui->threadsScriptVerif, SIGNAL(valueChanged(int)), this, SLOT(showRestartWarning()));
     /* Wallet */
-    connect(ui->spendZeroConfChange, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->enableDeleteTx, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->saplingConsolidationEnabled, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->chkReindex, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->chkRescan, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->chkBootstrap, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->chkZapWalletTxes, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     /* Network */
     connect(ui->allowIncoming, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     connect(ui->connectSocks, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
@@ -177,8 +201,12 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->databaseCache, OptionsModel::DatabaseCache);
 
     /* Wallet */
-    mapper->addMapping(ui->spendZeroConfChange, OptionsModel::SpendZeroConfChange);
-    mapper->addMapping(ui->coinControlFeatures, OptionsModel::CoinControlFeatures);
+    mapper->addMapping(ui->saplingConsolidationEnabled, OptionsModel::SaplingConsolidationEnabled);
+    mapper->addMapping(ui->enableDeleteTx, OptionsModel::EnableDeleteTx);
+    mapper->addMapping(ui->chkReindex, OptionsModel::EnableReindex);
+    mapper->addMapping(ui->chkRescan, OptionsModel::EnableRescan);
+    mapper->addMapping(ui->chkBootstrap, OptionsModel::EnableBootstrap);
+    mapper->addMapping(ui->chkZapWalletTxes, OptionsModel::ZapWalletTxes);
 
     /* Network */
     mapper->addMapping(ui->mapPortUpnp, OptionsModel::MapPortUPnP);
@@ -202,6 +230,7 @@ void OptionsDialog::setMapper()
     /* Display */
     mapper->addMapping(ui->lang, OptionsModel::Language);
     mapper->addMapping(ui->unit, OptionsModel::DisplayUnit);
+    mapper->addMapping(ui->theme, OptionsModel::Theme);
     mapper->addMapping(ui->thirdPartyTxUrls, OptionsModel::ThirdPartyTxUrls);
 }
 
@@ -263,6 +292,26 @@ void OptionsDialog::on_hideTrayIcon_stateChanged(int fState)
     {
         ui->minimizeToTray->setEnabled(true);
     }
+}
+
+void OptionsDialog::setTheme()
+{
+      //Set the theme in the settings
+      QSettings settings;
+      QString strTheme = ui->theme->itemData(ui->theme->currentIndex()).toString();
+      settings.setValue("strTheme", strTheme);
+
+      //Set the Theme in the app
+      LogPrintf("Setting Theme: %s %s\n", strTheme.toStdString(),__func__);
+      QFile file(":/stylesheets/" + strTheme);
+      file.open(QFile::ReadOnly);
+      QString stylesheet = QLatin1String(file.readAll());
+      qApp->setStyleSheet(stylesheet);
+
+      QPalette newPal(qApp->palette());
+      newPal.setColor(QPalette::Link, COLOR_POSITIVE_DARK);
+      newPal.setColor(QPalette::LinkVisited, COLOR_NEGATIVE_DARK);
+      qApp->setPalette(newPal);
 }
 
 void OptionsDialog::showRestartWarning(bool fPersistent)

@@ -39,6 +39,9 @@ SendCoinsEntry::SendCoinsEntry(const PlatformStyle *_platformStyle, QWidget *par
     ui->deleteButton_s->setIcon(platformStyle->SingleColorIcon(":/icons/remove"));
     ui->useAvailableBalanceButton->setIcon(platformStyle->SingleColorIcon(":/icons/all_balance"));
 
+    //hide addressbook, needs work...
+    ui->addressBookButton->hide();
+
     setCurrentWidget(ui->SendCoins);
 
     if (platformStyle->getUseExtraSpacing())
@@ -110,6 +113,10 @@ void SendCoinsEntry::clear()
     ui->messageTextLabel->clear();
     ui->messageTextLabel->hide();
     ui->messageLabel->hide();
+    ui->addAsLabel->clear();
+    ui->addAsLabel->hide();
+    ui->labellLabel->hide();
+    ui->memo->clear();
     // clear UI elements for unauthenticated payment request
     ui->payTo_is->clear();
     ui->memoTextLabel_is->clear();
@@ -168,6 +175,10 @@ bool SendCoinsEntry::validate(bool allowZAddresses)
         retval = false;
     }
 
+    if(!model->validateMemo(ui->memo->text())) {
+        retval = false;
+    }
+
     // Sending a zero amount is invalid
     if (ui->payAmount->value(0) <= 0)
     {
@@ -199,6 +210,7 @@ SendCoinsRecipient SendCoinsEntry::getValue()
     recipient.address = ui->payTo->text();
     recipient.label = ui->addAsLabel->text();
     recipient.amount = ui->payAmount->value();
+    recipient.memo = ui->memo->text();
     recipient.message = ui->messageTextLabel->text();
     recipient.fSubtractFeeFromAmount = (ui->checkboxSubtractFeeFromAmount->checkState() == Qt::Checked);
 

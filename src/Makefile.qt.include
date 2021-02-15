@@ -106,6 +106,8 @@ QT_FORMS_UI = \
   qt/forms/editaddressdialog.ui \
   qt/forms/helpmessagedialog.ui \
   qt/forms/intro.ui \
+  qt/forms/importSKdialog.ui \
+  qt/forms/importVKdialog.ui \
   qt/forms/modaloverlay.ui \
   qt/forms/openuridialog.ui \
   qt/forms/optionsdialog.ui \
@@ -141,6 +143,7 @@ QT_MOC_CPP = \
   qt/moc_editzaddressdialog.cpp \
   qt/moc_guiutil.cpp \
   qt/moc_intro.cpp \
+  qt/moc_importkeydialog.cpp\
   qt/moc_macdockiconhandler.cpp \
   qt/moc_macnotificationhandler.cpp \
   qt/moc_modaloverlay.cpp \
@@ -222,6 +225,7 @@ KOMODO_QT_H = \
   qt/guiconstants.h \
   qt/guiutil.h \
   qt/intro.h \
+  qt/importkeydialog.h \
   qt/macdockiconhandler.h \
   qt/macnotificationhandler.h \
   qt/modaloverlay.h \
@@ -353,6 +357,7 @@ KOMODO_QT_WALLET_CPP = \
   qt/coincontroltreewidget.cpp \
   qt/editaddressdialog.cpp \
   qt/editzaddressdialog.cpp \
+  qt/importkeydialog.cpp \
   qt/openuridialog.cpp \
   qt/overviewpage.cpp \
   qt/paymentserver.cpp \
@@ -403,7 +408,9 @@ KOMODO_QT_CPP += \
 	rpc/server.cpp
 
 
-RES_IMAGES =
+RES_IMAGES = \
+  qt/res/backgrounds/pirate.png \
+  qt/res/backgrounds/splash.png
 
 RES_MOVIES = $(wildcard $(srcdir)/qt/res/movies/spinner-*.png)
 

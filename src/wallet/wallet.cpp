@@ -40,6 +40,7 @@
 #include "crypter.h"
 #include "coins.h"
 #include "wallet/asyncrpcoperation_saplingconsolidation.h"
+#include "wallet/asyncrpcoperation_sweeptoaddress.h"
 #include "zcash/address/zip32.h"
 #include "cc/CCinclude.h"
 
@@ -654,6 +655,7 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
         {
             BuildWitnessCache(pindex, false);
             RunSaplingConsolidation(pindex->GetHeight());
+            RunSaplingSweep(pindex->GetHeight());
             DeleteWalletTransactions(pindex);
         } else {
             //Build intial witnesses on every block
@@ -675,6 +677,43 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
     }
 }
 
+void CWallet::RunSaplingSweep(int blockHeight) {
+    if (!NetworkUpgradeActive(blockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
+        return;
+    }
+    LOCK(cs_wallet);
+    if (!fSaplingSweepEnabled) {
+        return;
+    }
+
+    if (nextSweep > blockHeight) {
+        return;
+    }
+
+    //Don't Run if consolidation will run soon.
+    if (fSaplingConsolidationEnabled && nextConsolidation - 15 <= blockHeight) {
+        return;
+    }
+
+    //Don't Run While consolidation is running.
+    if (fConsolidationRunning) {
+        return;
+    }
+
+    fSweepRunning = true;
+
+    std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
+    std::shared_ptr<AsyncRPCOperation> lastOperation = q->getOperationForId(saplingSweepOperationId);
+    if (lastOperation != nullptr) {
+        lastOperation->cancel();
+    }
+    pendingSaplingSweepTxs.clear();
+    std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_sweeptoaddress(blockHeight + 5));
+    saplingSweepOperationId = operation->getId();
+    q->addOperation(operation);
+}
+
+
 void CWallet::RunSaplingConsolidation(int blockHeight) {
     if (!NetworkUpgradeActive(blockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
         return;
@@ -685,6 +724,11 @@ void CWallet::RunSaplingConsolidation(int blockHeight) {
     }
 
     if (nextConsolidation > blockHeight) {
+        return;
+    }
+
+    //Don't Run While sweep is running.
+    if (fSweepRunning) {
         return;
     }
 
@@ -704,7 +748,7 @@ void CWallet::RunSaplingConsolidation(int blockHeight) {
     }
 }
 
-void CWallet::CommitConsolidationTx(const CTransaction& tx) {
+void CWallet::CommitAutomatedTx(const CTransaction& tx) {
   CWalletTx wtx(this, tx);
   CReserveKey reservekey(pwalletMain);
   CommitTransaction(wtx, reservekey);
@@ -1447,10 +1491,27 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
   CBlockIndex* pblockindex = chainActive[startHeight];
   int height = chainActive.Height();
 
+  //Show in UI
+  bool uiShown = false;
+  const CChainParams& chainParams = Params();
+  double dProgressStart = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false);
+  double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.LastTip(), false);
+
   while (pblockindex) {
 
+    //exit loop if trying to shutdoen
+    if (ShutdownRequested()) {
+        break;
+    }
+
     if (pblockindex->GetHeight() % 100 == 0 && pblockindex->GetHeight() < height - 5) {
-      LogPrintf("Building Witnesses for block %i %.4f complete\n", pblockindex->GetHeight(), pblockindex->GetHeight() / double(height));
+      if (!uiShown) {
+          uiShown = true;
+          uiInterface.ShowProgress("Building Witnesses", 0, false);
+      }
+      scanperc = (int)((Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false) - dProgressStart) / (dProgressTip - dProgressStart) * 100);
+      uiInterface.ShowProgress(_(("Building Witnesses for block " + std::to_string(pblockindex->GetHeight()) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
+      uiInterface.InitMessage(_(("Building Witnesses for block " + std::to_string(pblockindex->GetHeight())).c_str()) + ((" " + std::to_string(scanperc)).c_str()) + ("%"));
     }
 
     SproutMerkleTree sproutTree;
@@ -1525,6 +1586,10 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
 
     pblockindex = chainActive.Next(pblockindex);
 
+  }
+
+  if (uiShown) {
+      uiInterface.ShowProgress(_("Witness Cache Complete..."), 100, false);
   }
 
   fInitWitnessesBuilt = true;
@@ -3549,14 +3614,17 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
 
         auto deleteTime = GetTime();
         LogPrint("deletetx","Delete Tx - Time to Delete %s\n", DateTimeStrFormat("%H:%M:%S", deleteTime - selectTime));
-        LogPrint("deletetx","Delete Tx - Total Transaction Count %i, Transactions Deleted %i\n ", txCount, int(removeTxs.size()));
+        LogPrintf("Delete Tx - Total Transaction Count %i, Transactions Deleted %i\n ", txCount, int(removeTxs.size()));
 
-        if (runCompact)
+        if (runCompact) {
           CWalletDB::Compact(bitdb,strWalletFile);
+        }
+
+        auto totalTime = GetTime();
+        LogPrint("deletetx","Delete Tx - Time to Run Total Function %s\n", DateTimeStrFormat("%H:%M:%S", totalTime - startTime));
       }
 
-      auto totalTime = GetTime();
-      LogPrint("deletetx","Delete Tx - Time to Run Total Function %s\n", DateTimeStrFormat("%H:%M:%S", totalTime - startTime));
+
 }
 
 
@@ -3662,10 +3730,12 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             }
             pindex = chainActive.Next(pindex);
         }
+
+        uiInterface.ShowProgress(_("Rescanning..."), 100, false); // hide progress dialog in GUI
+
         //Update all witness caches
         BuildWitnessCache(chainActive.Tip(), false);
 
-        uiInterface.ShowProgress(_("Rescanning..."), 100, false); // hide progress dialog in GUI
     }
 
     for (set<uint256>::iterator it = txList.begin(); it != txList.end(); ++it)

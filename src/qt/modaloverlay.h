@@ -8,6 +8,8 @@
 #include <QDateTime>
 #include <QWidget>
 
+class PlatformStyle;
+
 //! The required delta of headers to the estimated number of available headers until we show the IBD progress
 static constexpr int HEADER_HEIGHT_DELTA_SYNC = 24;
 
@@ -21,7 +23,7 @@ class ModalOverlay : public QWidget
     Q_OBJECT
 
 public:
-    explicit ModalOverlay(QWidget *parent);
+    explicit ModalOverlay(const PlatformStyle *platformStyle, QWidget *parent);
     ~ModalOverlay();
 
 public Q_SLOTS:
@@ -45,6 +47,7 @@ private:
     QVector<QPair<qint64, double> > blockProcessTime;
     bool layerIsVisible;
     bool userClosed;
+    const PlatformStyle *platformStyle;
 };
 
 #endif // KOMODO_QT_MODALOVERLAY_H

@@ -19,6 +19,7 @@
 #include "sendcoinsdialog.h"
 #include "zsendcoinsdialog.h"
 #include "transactiontablemodel.h"
+#include "importkeydialog.h"
 
 #include "base58.h"
 #include "chain.h"
@@ -161,6 +162,142 @@ void WalletModel::updateStatus()
         Q_EMIT encryptionStatusChanged(newEncryptionStatus);
 }
 
+QString WalletModel::getSpendingKey(QString strAddress) {
+      LOCK2(cs_main, wallet->cs_wallet);
+
+      QMessageBox msgBox;
+      msgBox.setText("Error importing key.");
+      msgBox.setStandardButtons(QMessageBox::Ok);
+      msgBox.setDefaultButton(QMessageBox::Ok);
+
+      auto address = DecodePaymentAddress(strAddress.toStdString());
+      if (!IsValidPaymentAddress(address)) {
+          msgBox.setInformativeText("Invalid Z-Address!!!");
+          int ret = msgBox.exec();
+          return QString("");
+      }
+
+      // Sapling support
+      auto sk = boost::apply_visitor(GetSpendingKeyForPaymentAddress(wallet), address);
+      if (!sk) {
+          msgBox.setInformativeText("Wallet does not hold private zkey for this zaddrs!!!");
+          int ret = msgBox.exec();
+          return QString("");
+      }
+      return QString::fromStdString(EncodeSpendingKey(sk.get()));
+}
+
+void WalletModel::importSpendingKey(QString strKey) {
+    LOCK2(cs_main, wallet->cs_wallet);
+
+    QMessageBox msgBox;
+    msgBox.setText("Error importing key.");
+    msgBox.setStandardButtons(QMessageBox::Ok);
+    msgBox.setDefaultButton(QMessageBox::Ok);
+
+    auto sk = DecodeSpendingKey(strKey.toStdString());
+    if (!IsValidSpendingKey(sk)) {
+      msgBox.setInformativeText("Invalid Key!!!");
+      int ret = msgBox.exec();
+      return;
+    }
+
+    auto addResult = boost::apply_visitor(AddSpendingKeyToWallet(wallet, Params().GetConsensus()), sk);
+    if (addResult == KeyAlreadyExists) {
+        msgBox.setInformativeText("Key already exists!!!");
+        int ret = msgBox.exec();
+        return;
+    }
+
+    wallet->MarkDirty();
+    if (addResult == KeyNotAdded) {
+      msgBox.setInformativeText("Key not added!!!");
+      int ret = msgBox.exec();
+      return;
+    }
+
+    //Add to ZAddress book
+    auto zInfo = boost::apply_visitor(libzcash::AddressInfoFromSpendingKey{}, sk);
+    wallet->SetZAddressBook(zInfo.second, zInfo.first, "");
+
+    updateZAddressBook(QString::fromStdString(EncodePaymentAddress(zInfo.second)), "z-sapling", true, "", CT_NEW);
+
+    // whenever a key is imported, we need to scan the whole chain
+    wallet->nTimeFirstKey = 1;
+
+    // We want to scan for transactions and notes
+    wallet->ScanForWalletTransactions(chainActive.Genesis(), true, true);
+}
+
+QString WalletModel::getViewingKey(QString strAddress) {
+      LOCK2(cs_main, wallet->cs_wallet);
+
+      QMessageBox msgBox;
+      msgBox.setText("Error importing key.");
+      msgBox.setStandardButtons(QMessageBox::Ok);
+      msgBox.setDefaultButton(QMessageBox::Ok);
+
+      auto address = DecodePaymentAddress(strAddress.toStdString());
+      if (!IsValidPaymentAddress(address)) {
+          msgBox.setInformativeText("Invalid Z-Address!!!");
+          int ret = msgBox.exec();
+          return QString("");
+      }
+
+      // Sapling support
+      auto vk = boost::apply_visitor(GetViewingKeyForPaymentAddress(wallet), address);
+      if (!vk) {
+          msgBox.setInformativeText("Wallet does not hold private key or viewing key for this zaddr!!!");
+          int ret = msgBox.exec();
+          return QString("");
+      }
+
+      return QString::fromStdString(EncodeViewingKey(vk.get()));
+}
+
+void WalletModel::importViewingKey (QString strKey) {
+    LOCK2(cs_main, wallet->cs_wallet);
+
+    QMessageBox msgBox;
+    msgBox.setText("Error importing key.");
+    msgBox.setStandardButtons(QMessageBox::Ok);
+    msgBox.setDefaultButton(QMessageBox::Ok);
+
+    auto extfvk = DecodeViewingKey(strKey.toStdString());
+    if (!IsValidViewingKey(extfvk)) {
+        msgBox.setInformativeText("Invalid Key!!!");
+        int ret = msgBox.exec();
+        return;
+    }
+
+    auto addResult = boost::apply_visitor(AddViewingKeyToWallet(wallet), extfvk);
+    if (addResult == KeyAlreadyExists || addResult == SpendingKeyExists) {
+        msgBox.setInformativeText("Key already exists!!!");
+        int ret = msgBox.exec();
+        return;
+    }
+
+    wallet->MarkDirty();
+    if (addResult == KeyNotAdded) {
+        msgBox.setInformativeText("Key not added!!!");
+        int ret = msgBox.exec();
+        return;
+    }
+
+    //Add to ZAddress book
+    auto zInfo = boost::apply_visitor(libzcash::AddressInfoFromViewingKey{}, extfvk);
+    wallet->SetZAddressBook(zInfo.second, zInfo.first, "");
+    // const QString zaddr = QString::fromStdString(EncodePaymentAddress(zInfo.second)),
+
+    updateZAddressBook(QString::fromStdString(EncodePaymentAddress(zInfo.second)), "z-sapling", false, "", CT_NEW);
+
+    // whenever a key is imported, we need to scan the whole chain
+    wallet->nTimeFirstKey = 1;
+
+    // We want to scan for transactions and notes
+    wallet->ScanForWalletTransactions(chainActive.Genesis(), true, true);
+}
+
 void WalletModel::pollBalanceChanged()
 {
     // Get required locks upfront. This avoids the GUI from getting stuck on
@@ -259,6 +396,34 @@ bool WalletModel::validateAddress(const QString &address, bool allowZAddresses)
     if (allowZAddresses) return IsValidPaymentAddressString(address.toStdString(), CurrentEpochBranchId(chainActive.Height(), Params().GetConsensus()));
 
     return false;
+}
+
+bool WalletModel::validateMemo(const QString &memo)
+{
+      string memoValue;
+      if (!memo.isNull()) {
+          memoValue = memo.toStdString();
+
+          if (!IsHex(memoValue)) {
+              memoValue = HexStr(memoValue);
+          }
+          if (memoValue.length() > ZC_MEMO_SIZE*2) {
+            return false;
+          }
+
+          std::vector<unsigned char> rawMemo = ParseHex(memoValue.c_str());
+
+          // If ParseHex comes across a non-hex char, it will stop but still return results so far.
+          size_t slen = memoValue.length();
+          if (slen % 2 !=0 || (slen>0 && rawMemo.size()!=slen/2)) {
+              return false;
+          }
+
+          if (rawMemo.size() > ZC_MEMO_SIZE) {
+            return false;
+          }
+      }
+    return true;
 }
 
 WalletModel::SendCoinsReturn WalletModel::prepareTransaction(WalletModelTransaction &transaction, const CCoinControl& coinControl)
@@ -482,9 +647,13 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
         setAddress.insert(rcp.address.toStdString());
 
         string memo;
-        //Memo validation
-        //..... add later
-        //Now it is null
+        if (!rcp.memo.isNull()) {
+            memo = rcp.memo.toStdString();
+
+            if (!IsHex(memo)) {
+                memo = HexStr(memo);
+            }
+        }
 
         if (isZaddr) {
             zaddrRecipients.push_back( SendManyRecipient(rcp.address.toStdString(), rcp.amount, memo) );
@@ -892,14 +1061,6 @@ static void NotifyTransactionChanged(WalletModel *walletmodel, CWallet *wallet, 
     QMetaObject::invokeMethod(walletmodel, "updateTransaction", Qt::QueuedConnection);
 }
 
-static void ShowProgress(WalletModel *walletmodel, const std::string &title, int nProgress)
-{
-    // emits signal "showProgress"
-    QMetaObject::invokeMethod(walletmodel, "showProgress", Qt::QueuedConnection,
-                              Q_ARG(QString, QString::fromStdString(title)),
-                              Q_ARG(int, nProgress));
-}
-
 static void NotifyWatchonlyChanged(WalletModel *walletmodel, bool fHaveWatchonly)
 {
     QMetaObject::invokeMethod(walletmodel, "updateWatchOnlyFlag", Qt::QueuedConnection,
@@ -913,7 +1074,6 @@ void WalletModel::subscribeToCoreSignals()
     wallet->NotifyAddressBookChanged.connect(boost::bind(NotifyAddressBookChanged, this, _1, _2, _3, _4, _5, _6));
     wallet->NotifyZAddressBookChanged.connect(boost::bind(NotifyZAddressBookChanged, this, _1, _2, _3, _4, _5, _6));
     wallet->NotifyTransactionChanged.connect(boost::bind(NotifyTransactionChanged, this, _1, _2, _3));
-    wallet->ShowProgress.connect(boost::bind(ShowProgress, this, _1, _2));
     wallet->NotifyWatchonlyChanged.connect(boost::bind(NotifyWatchonlyChanged, this, _1));
 }
 
@@ -924,7 +1084,6 @@ void WalletModel::unsubscribeFromCoreSignals()
     wallet->NotifyAddressBookChanged.disconnect(boost::bind(NotifyAddressBookChanged, this, _1, _2, _3, _4, _5, _6));
     wallet->NotifyZAddressBookChanged.disconnect(boost::bind(NotifyZAddressBookChanged, this, _1, _2, _3, _4, _5, _6));
     wallet->NotifyTransactionChanged.disconnect(boost::bind(NotifyTransactionChanged, this, _1, _2, _3));
-    wallet->ShowProgress.disconnect(boost::bind(ShowProgress, this, _1, _2));
     wallet->NotifyWatchonlyChanged.disconnect(boost::bind(NotifyWatchonlyChanged, this, _1));
 }
 

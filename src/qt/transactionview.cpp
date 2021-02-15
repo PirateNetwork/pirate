@@ -75,6 +75,7 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     dateWidget->addItem(tr("Last month"), LastMonth);
     dateWidget->addItem(tr("This year"), ThisYear);
     dateWidget->addItem(tr("Range..."), Range);
+    dateWidget->setObjectName("dateComboBox");
     hlayout->addWidget(dateWidget);
 
     typeWidget = new QComboBox(this);
@@ -92,7 +93,7 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     typeWidget->addItem(tr("To yourself"), TransactionFilterProxy::TYPE(TransactionRecord::SendToSelf));
     typeWidget->addItem(tr("Mined"), TransactionFilterProxy::TYPE(TransactionRecord::Generated));
     typeWidget->addItem(tr("Other"), TransactionFilterProxy::TYPE(TransactionRecord::Other));
-
+    typeWidget->setObjectName("typeComboBox");
     hlayout->addWidget(typeWidget);
 
     addressWidget = new QLineEdit(this);
@@ -158,6 +159,7 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     QAction *copyTxHexAction = new QAction(tr("Copy raw transaction"), this);
     QAction *copyTxPlainText = new QAction(tr("Copy full transaction details"), this);
     QAction *editLabelAction = new QAction(tr("Edit label"), this);
+    QAction *showMemoAction = new QAction(tr("Show Memo"), this);
     QAction *showDetailsAction = new QAction(tr("Show transaction details"), this);
 
     contextMenu = new QMenu(this);
@@ -168,6 +170,7 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     contextMenu->addAction(copyTxIDAction);
     contextMenu->addAction(copyTxHexAction);
     contextMenu->addAction(copyTxPlainText);
+    contextMenu->addAction(showMemoAction);
     contextMenu->addAction(showDetailsAction);
     contextMenu->addSeparator();
     contextMenu->addAction(editLabelAction);
@@ -195,6 +198,7 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     connect(copyTxHexAction, SIGNAL(triggered()), this, SLOT(copyTxHex()));
     connect(copyTxPlainText, SIGNAL(triggered()), this, SLOT(copyTxPlainText()));
     connect(editLabelAction, SIGNAL(triggered()), this, SLOT(editLabel()));
+    connect(showMemoAction, SIGNAL(triggered()), this, SLOT(showMemo()));
     connect(showDetailsAction, SIGNAL(triggered()), this, SLOT(showDetails()));
 }
 
@@ -478,7 +482,20 @@ void TransactionView::showDetails()
     QModelIndexList selection = transactionView->selectionModel()->selectedRows();
     if(!selection.isEmpty())
     {
-        TransactionDescDialog *dlg = new TransactionDescDialog(selection.at(0));
+        TransactionDescDialog *dlg = new TransactionDescDialog(selection.at(0), FULL_TRANSACTION);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        dlg->show();
+    }
+}
+
+void TransactionView::showMemo()
+{
+    if(!transactionView->selectionModel())
+        return;
+    QModelIndexList selection = transactionView->selectionModel()->selectedRows();
+    if(!selection.isEmpty())
+    {
+        TransactionDescDialog *dlg = new TransactionDescDialog(selection.at(0), MEMO_ONLY);
         dlg->setAttribute(Qt::WA_DeleteOnClose);
         dlg->show();
     }

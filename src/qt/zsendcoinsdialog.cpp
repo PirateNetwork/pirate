@@ -48,7 +48,7 @@ ZSendCoinsDialog::ZSendCoinsDialog(const PlatformStyle *_platformStyle, QWidget 
     ui->setupUi(this);
 
     ui->payFromAddress->setMaxVisibleItems(10);
-    ui->payFromAddress->setStyleSheet("QComboBox { combobox-popup: 0; }");
+    // ui->payFromAddress->setStyleSheet("QComboBox { combobox-popup: 0; }");
 
     if (!_platformStyle->getImagesOnButtons()) {
         ui->addButton->setIcon(QIcon());
@@ -167,8 +167,8 @@ void ZSendCoinsDialog::on_sendButton_clicked()
 
     // Always use a CCoinControl instance, use the CoinControlDialog instance if CoinControl has been enabled
     CCoinControl ctrl;
-    if (model->getOptionsModel()->getCoinControlFeatures())
-        ctrl = *CoinControlDialog::coinControl;
+    // if (model->getOptionsModel()->getCoinControlFeatures())
+    //     ctrl = *CoinControlDialog::coinControl;
 
     updateCoinControlState(ctrl);
 
@@ -518,9 +518,9 @@ void ZSendCoinsDialog::useAvailableBalance(SendCoinsEntry* entry)
 {
     // Get CCoinControl instance if CoinControl is enabled or create a new one.
     CCoinControl coin_control;
-    if (model->getOptionsModel()->getCoinControlFeatures()) {
-        coin_control = *CoinControlDialog::coinControl;
-    }
+    // if (model->getOptionsModel()->getCoinControlFeatures()) {
+    //     coin_control = *CoinControlDialog::coinControl;
+    // }
 
     if (ui->payFromAddress->currentText().isEmpty())
     {

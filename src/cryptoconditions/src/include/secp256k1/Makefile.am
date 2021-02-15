@@ -54,6 +54,12 @@ noinst_HEADERS += contrib/lax_der_parsing.c
 noinst_HEADERS += contrib/lax_der_privatekey_parsing.h
 noinst_HEADERS += contrib/lax_der_privatekey_parsing.c
 
+if ARCH_ARM
+	PLATFORM_VARIANT = armv8.1-a+crypto
+else
+	PLATFORM_VARIANT = x86-64
+endif
+
 if USE_EXTERNAL_ASM
 COMMON_LIB = libsecp256k1_common.la
 noinst_LTLIBRARIES = $(COMMON_LIB)
@@ -71,7 +77,7 @@ endif
 endif
 
 libsecp256k1_la_SOURCES = src/secp256k1.c
-libsecp256k1_la_CPPFLAGS = -DSECP256K1_BUILD -I$(top_srcdir)/include -I$(top_srcdir)/src $(SECP_INCLUDES) -march=x86-64 -g
+libsecp256k1_la_CPPFLAGS = -DSECP256K1_BUILD -I$(top_srcdir)/include -I$(top_srcdir)/src $(SECP_INCLUDES) -march=$(PLATFORM_VARIANT) -g
 libsecp256k1_la_LIBADD = $(JNI_LIB) $(SECP_LIBS) $(COMMON_LIB)
 
 libsecp256k1_jni_la_SOURCES  = src/java/org_bitcoin_NativeSecp256k1.c src/java/org_bitcoin_Secp256k1Context.c
