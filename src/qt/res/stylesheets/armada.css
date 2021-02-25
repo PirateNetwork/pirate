@@ -1,0 +1,304 @@
+QMainWindow, QProgressDialog
+{
+    color: #ffffff;
+    background-color: #303030;
+}
+
+
+QFrame#MainFrame {
+    border-image: url(':/backgrounds/armada') 0 0 0 0 stretch stretch;
+}
+
+
+QMenuBar {
+    background-color: #303030;
+    color: #ffffff;
+    border:none
+}
+
+QMenuBar::item:selected { /* when selected using mouse or keyboard */
+    background: #585858;
+}
+
+QMenuBar::item:pressed {
+    background: #585858;
+}
+
+QMenu {
+    background-color: #303030;
+    color: #ffffff;
+    border:none
+}
+
+QMenu::item:selected {
+    background-color: #585858;
+    color: #ffffff;
+}
+
+
+
+QToolBar {
+    background-color: #303030;
+    color: #ffffff;
+    border:none
+}
+
+QToolButton {
+    background-color: #303030;
+    color: #ffffff;
+}
+
+QPushButton {
+    background-color: #585858;
+    color: #ffffff;
+}
+
+
+QStatusBar
+{
+    background-color: #515151;
+    color: #ffffff;
+}
+
+QFrame#frame
+{
+    background-color: rgba(0,0,0,0.8);
+    color: #ffffff;
+}
+
+QFrame#frame_2
+{
+    background-color: rgba(0,0,0,0.8);
+    color: #ffffff;
+}
+
+QFrame#frameCoinControl
+{
+    background-color: rgba(0,0,0,0.6);
+    color: #ffffff;
+}
+
+QFrame#frameFee
+{
+    background-color: rgba(0,0,0,0.6);
+    color: #ffffff;
+}
+
+QFrame#frameResult
+{
+    background-color: rgba(0,0,0,0.6);
+    color: #ffffff;
+}
+
+QScrollArea {
+    background-color: rgba(0,0,0,0.6);
+    color: #ffffff;
+}
+
+QFrame#SendCoins
+{
+    background-color: rgba(0,0,0,0.6);
+    color: #ffffff;
+}
+
+QFrame#SendCoins QLabel
+{
+    background-color: rgba(0,0,0,0);
+    color: #ffffff;
+}
+
+QLineEdit
+{
+    background-color: rgba(48,48,48,1);
+    color: #ffffff;
+    height: 20px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    border: none;
+}
+
+QValidatedLineEdit
+{
+    background-color: rgba(48,48,48,1);
+    color: #ffffff;
+    height: 20px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    border: none;
+}
+
+QAbstractSpinBox#UnitBox
+{
+    background-color: rgba(48,48,48,1);
+    color: #ffffff;
+    height: 20px;
+}
+
+QComboBox
+{
+    background-color: rgba(48,48,48,1);
+    selection-background-color: rgba(48,48,48,1);
+    color: #ffffff;
+}
+
+QComboBox::item:selected
+{
+    background-color: rgba(48,48,48,1);
+    color: #ffffff;
+    padding: 0px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: rgba(28,28,28,1);
+    color: #ffffff;
+}
+
+QComboBox::indicator {
+  border: none;
+  border-radius: 0;
+  background-color: transparent;
+  selection-background-color: transparent;
+  color: transparent;
+  selection-color: transparent;
+  /* Needed to remove indicator - fix #132 */
+}
+
+QTableView {
+    background-color: rgba(0,0,0,0.8);
+    alternate-background-color: rgba(25,25,25,0.8);
+    color: #ffffff;
+}
+
+QHeaderView::section {
+    background-color: rgba(48,48,48,1);
+    color: #ffffff;
+}
+
+QWidget#RPCConsole {
+    background-color: #303030;
+    color: #ffffff;
+}
+
+QDialog#HelpMessageDialog {
+    background-color: #303030;
+    color: #ffffff;
+}
+
+QDialog#OptionsDialog {
+    background-color: #303030;
+    color: #ffffff;
+}
+
+QDialog#OpenURIDialog {
+    background-color: #303030;
+    color: #ffffff;
+}
+
+QDialog#OpenSKDialog {
+    background-color: #202020;
+    color: #ffffff;
+}
+
+QDialog#OpenVKDialog {
+    background-color: #202020;
+    color: #ffffff;
+}
+
+QDialog#NewZAddress {
+    background-color: #202020;
+    color: #ffffff;
+}
+
+QDialog#TransactionDescDialog {
+    background-color: #303030;
+    color: #ffffff;
+}
+
+QFileDialog {
+    background-color: #303030;
+    color: #ffffff;
+}
+
+QMessageBox {
+    background-color: #303030;
+    color: #ffffff;
+}
+
+QTextEdit {
+    background-color: #202020;
+    color: #ffffff;
+}
+
+QTabWidget::tab-bar {
+    background-color: #585858;
+    color: #ffffff;
+}
+
+QTabBar::tab {
+  background-color: #282828;
+  color: #ffffff;
+  padding: 10px;
+}
+
+QTabBar::tab:!selected {
+  background-color: #585858;
+  color: #ffffff;
+}
+
+QTabWidget::pane {
+  background-color: #484848;
+  color: #ffffff;
+  border-top:1px solid #989898;
+  border-left:1px solid #989898;
+  border-right:1px solid #989898;
+  border-bottom: 1px solid #989898;
+}
+
+QCheckBox {
+    background-color: #303030;
+    color: #ffffff;
+    spacing: 5px;
+}
+
+QCheckBox::indicator {
+    background-color: #000000;
+    color: #ffffff;
+    width: 8px;
+    height: 8px;
+    border: 4px solid #000000;
+    border-radius: 8px;
+}
+
+QCheckBox::indicator:checked {
+    background-color: rgba(25,225,25);
+    color: #ffffff;
+    width: 8px;
+    height: 8px;
+    border: 4px solid #000000;
+    border-radius: 8px;
+}
+
+QWidget#ShutDown {
+    background-color: #303030;
+    color: #ffffff;
+}
+
+QWidget#RPCConsole {
+  background-color: #303030;
+  color: #ffffff;
+}
+
+QWidget#bgWidget {
+    background: rgba(0,0,0,0.8);
+    color: #c5cad3;
+}
+
+QWidget#contentWidget {
+    background: #303030;
+    color: #ffffff;
+}
+
+QWidget#contentWidget QLabel{
+    background: #303030;
+    color: #ffffff;
+}

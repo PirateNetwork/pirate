@@ -755,7 +755,21 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
         if(index.column() == Amount && (rec->credit+rec->debit) < 0)
         {
             QSettings settings;
-            if (settings.value("strTheme", "pirate").toString() == "dark") {
+            if (settings.value("strTheme", "armada").toString() == "dark") {
+                return COLOR_NEGATIVE_DARK;
+            } else if (settings.value("strTheme", "armada").toString() == "pirate") {
+                return COLOR_NEGATIVE;
+            } else if (settings.value("strTheme", "armada").toString() == "piratemap") {
+                return COLOR_NEGATIVE_DARK;
+            } else if (settings.value("strTheme", "armada").toString() == "armada") {
+                return COLOR_NEGATIVE_DARK;
+            } else if (settings.value("strTheme", "armada").toString() == "treasure") {
+                return COLOR_NEGATIVE_DARK;
+            } else if (settings.value("strTheme", "armada").toString() == "treasuremap") {
+                return COLOR_NEGATIVE_DARK;
+            } else if (settings.value("strTheme", "armada").toString() == "ghostship") {
+                return COLOR_NEGATIVE_DARK;
+            } else if (settings.value("strTheme", "armada").toString() == "night") {
                 return COLOR_NEGATIVE_DARK;
             } else {
                 return COLOR_NEGATIVE;
@@ -764,9 +778,21 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
         if(index.column() == Amount && (rec->credit+rec->debit) > 0)
         {
             QSettings settings;
-            if (settings.value("strTheme", "pirate").toString() == "dark") {
+            if (settings.value("strTheme", "armada").toString() == "dark") {
                 return COLOR_POSITIVE_DARK;
-            } else if (settings.value("strTheme", "pirate").toString() == "pirate") {
+            } else if (settings.value("strTheme", "armada").toString() == "pirate") {
+                return COLOR_POSITIVE_PIRATE;
+            } else if (settings.value("strTheme", "armada").toString() == "piratemap") {
+                return COLOR_POSITIVE_PIRATE;
+            } else if (settings.value("strTheme", "armada").toString() == "armada") {
+                return COLOR_POSITIVE_PIRATE;
+            } else if (settings.value("strTheme", "armada").toString() == "treasure") {
+                return COLOR_POSITIVE_PIRATE;
+            } else if (settings.value("strTheme", "armada").toString() == "treasuremap") {
+                return COLOR_POSITIVE_PIRATE;
+            } else if (settings.value("strTheme", "armada").toString() == "ghostship") {
+                return COLOR_POSITIVE_PIRATE;
+            } else if (settings.value("strTheme", "armada").toString() == "night") {
                 return COLOR_POSITIVE_PIRATE;
             } else {
                 return COLOR_POSITIVE;
