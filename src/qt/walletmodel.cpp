@@ -320,6 +320,10 @@ void WalletModel::pollBalanceChanged()
         checkBalanceChanged();
         if(transactionTableModel)
             transactionTableModel->updateConfirmations();
+
+        if(zaddressTableModel)
+            zaddressTableModel->updateBalances();
+
     }
 }
 

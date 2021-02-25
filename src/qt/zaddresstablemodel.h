@@ -91,6 +91,8 @@ private:
     void emitDataChanged(int index);
 
 public Q_SLOTS:
+    /*update address balances from the core*/
+    void updateBalances();
     /* Update address list from core.
      */
     void updateEntry(const QString &address, const QString &label, bool isMine, const QString &purpose, int status);

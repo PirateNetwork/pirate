@@ -40,6 +40,7 @@ struct AddressTableEntry
     Type type;
     QString label;
     QString address;
+    CAmount balance;
 
     AddressTableEntry() {}
     AddressTableEntry(Type _type, const QString &_label, const QString &_address):
@@ -121,6 +122,14 @@ public:
         // is sorted by binary address, not by base58() address.
         qSort(cachedAddressTable.begin(), cachedAddressTable.end(), AddressTableEntryLessThan());
     }
+
+    void updateBalances() {
+
+        for (int i = 0; i < cachedAddressTable.size(); ++i) {
+            cachedAddressTable[i].balance = getBalanceZaddr(cachedAddressTable[i].address.toStdString(), 1, false);
+        }
+    }
+
 
     void updateEntry(const QString &address, const QString &label, bool isMine, const QString &purpose, int status)
     {
@@ -281,7 +290,7 @@ QVariant ZAddressTableModel::data(const QModelIndex &index, int role) const
             return rec->address;
         case Balance:
             {
-                CAmount nBalance = getBalanceZaddr(rec->address.toStdString(), 1, false);
+                CAmount nBalance = rec->balance;
                 return QString::number(ValueFromAmount(nBalance).get_real(),'f',8);
             }
         }
@@ -416,6 +425,10 @@ QModelIndex ZAddressTableModel::index(int row, int column, const QModelIndex &pa
     {
         return QModelIndex();
     }
+}
+
+void ZAddressTableModel::updateBalances() {
+    priv->updateBalances();
 }
 
 void ZAddressTableModel::updateEntry(const QString &address,
