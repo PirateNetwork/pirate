@@ -416,6 +416,21 @@ CNode* FindNode(const CService& addr)
     return NULL;
 }
 
+static CAddress GetBindAddress(SOCKET sock)
+{
+    CAddress addr_bind;
+    struct sockaddr_storage sockaddr_bind;
+    socklen_t sockaddr_bind_len = sizeof(sockaddr_bind);
+    if (sock != INVALID_SOCKET) {
+        if (!getsockname(sock, (struct sockaddr*)&sockaddr_bind, &sockaddr_bind_len)) {
+            addr_bind.SetSockAddr((const struct sockaddr*)&sockaddr_bind);
+        } else {
+            LogPrintf("Warning: getsockname failed\n");
+        }
+    }
+    return addr_bind;
+}
+
 CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
 {
     if (pszDest == NULL) {
@@ -1241,6 +1256,8 @@ static void AcceptConnection(const ListenSocket& hListenSocket) {
     if (!addr.SetSockAddr((const struct sockaddr*)&sockaddr)) {
         LogPrintf("Warning: Unknown socket family\n");
     }
+
+    const CAddress addr_bind = GetBindAddress(hSocket);
 
     bool whitelisted = hListenSocket.whitelisted || CNode::IsWhitelistedRange(addr);
     int nInboundThisIP = 0;
