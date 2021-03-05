@@ -136,8 +136,7 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     QCoreApplication::setAttribute(Qt::AA_UseStyleSheetPropagationInWidgetStyles, true);
 
     //Set the theme in the settings
-    QString strTheme = settings.value("strTheme","pirate").toString();
-    // strTheme = strTheme.toLower();
+    QString strTheme = settings.value("strTheme","armada").toString();
 
     //Set the Theme in the app
     LogPrintf("Setting Theme: %s %s\n", strTheme.toStdString(), __func__);

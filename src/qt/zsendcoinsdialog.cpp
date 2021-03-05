@@ -417,6 +417,8 @@ void ZSendCoinsDialog::setBalance(const CAmount& balance, const CAmount& unconfi
     if(model && model->getOptionsModel())
     {
         ui->labelBalance->setText(KomodoUnits::formatWithUnit(model->getOptionsModel()->getDisplayUnit(), balance));
+        ui->labelBalance->setVisible(false);
+        ui->label->setVisible(false);
     }
 }
 

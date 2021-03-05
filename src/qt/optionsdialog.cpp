@@ -91,13 +91,13 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
     ui->openKomodoConfButton->setToolTip(ui->openKomodoConfButton->toolTip().arg(tr(PACKAGE_NAME)));
 
     //Add Wallet themes available
-    // ui->theme->addItem("Pirate", QVariant("pirate"));
-    ui->theme->addItem("Pirate Map", QVariant("piratemap"));
     ui->theme->addItem("Armada", QVariant("armada"));
     ui->theme->addItem("Ghost Ship", QVariant("ghostship"));
+    ui->theme->addItem("Night Ship", QVariant("night"));
+    ui->theme->addItem("Pirate", QVariant("pirate"));
+    ui->theme->addItem("Pirate Map", QVariant("piratemap"));
     ui->theme->addItem("Treasure", QVariant("treasure"));
     ui->theme->addItem("Treasure Map", QVariant("treasuremap"));
-    ui->theme->addItem("Night Ship", QVariant("night"));
     ui->theme->addItem("Dark", QVariant("dark"));
     ui->theme->addItem("Light", QVariant("light"));
 
