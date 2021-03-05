@@ -92,7 +92,7 @@ private:
 
 public Q_SLOTS:
     /*update address balances from the core*/
-    void updateBalances();
+    void updateBalances(std::map<libzcash::PaymentAddress, CAmount> balances);
     /* Update address list from core.
      */
     void updateEntry(const QString &address, const QString &label, bool isMine, const QString &purpose, int status);

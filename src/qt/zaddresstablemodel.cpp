@@ -9,7 +9,6 @@
 #include "guiutil.h"
 #include "walletmodel.h"
 #include "platformstyle.h"
-#include "key_io.h"
 
 #include "base58.h"
 #include "wallet/wallet.h"
@@ -123,10 +122,21 @@ public:
         qSort(cachedAddressTable.begin(), cachedAddressTable.end(), AddressTableEntryLessThan());
     }
 
-    void updateBalances() {
+    void updateBalances(std::map<libzcash::PaymentAddress, CAmount> balances) {
 
-        for (int i = 0; i < cachedAddressTable.size(); ++i) {
-            cachedAddressTable[i].balance = getBalanceZaddr(cachedAddressTable[i].address.toStdString(), 1, false);
+        for (std::map<libzcash::PaymentAddress, CAmount>::iterator it = balances.begin(); it != balances.end(); it++) {
+
+            const libzcash::PaymentAddress& zaddr = it->first;
+            // auto saplingAddr = boost::get<libzcash::SaplingPaymentAddress>(&zaddr);
+            QString qsZaddr = QString::fromStdString(EncodePaymentAddress(zaddr));
+
+            CAmount balance = it->second;
+
+            for (int i = 0; i < cachedAddressTable.size(); ++i) {
+                if (cachedAddressTable[i].address == qsZaddr) {
+                    cachedAddressTable[i].balance = balance;
+                }
+            }
         }
     }
 
@@ -427,8 +437,11 @@ QModelIndex ZAddressTableModel::index(int row, int column, const QModelIndex &pa
     }
 }
 
-void ZAddressTableModel::updateBalances() {
-    priv->updateBalances();
+void ZAddressTableModel::updateBalances(std::map<libzcash::PaymentAddress, CAmount> balances) {
+
+    if (priv) {
+        priv->updateBalances(balances);
+    }
 }
 
 void ZAddressTableModel::updateEntry(const QString &address,
