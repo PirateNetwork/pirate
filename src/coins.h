@@ -562,10 +562,21 @@ public:
      * so may not be able to calculate this.
      * @param[in] nHeight the chain height
      * @param[out] interestp the interest found
-     * @param[in] tx transaction for which we are checking input total
-     * @returns Sum of value of all inputs (scriptSigs), (positive valueBalance or zero) and JoinSplit vpub_new
+     * @param[in] tx	transaction for which we are checking input total
+     * @return	Sum of value of all inputs (scriptSigs), JoinSplit vpub_new, and
+     *          positive values of valueBalanceSapling, and valueBalanceOrchard.
      */
     CAmount GetValueIn(int32_t nHeight,int64_t &interestp,const CTransaction& tx) const;
+
+    /**
+     * Amount of coins coming in to a transaction in the transparent inputs.
+     *
+     * @param[in] nHeight the chain height
+     * @param[out] interestp the interest found
+     * @param[in] tx	transaction for which we are checking input total
+     * @return	Sum of value of all inputs (scriptSigs)
+     */
+    CAmount GetTransparentValueIn(int32_t nHeight,int64_t &interestp,const CTransaction& tx) const;
 
     //! Check whether all prevouts of the transaction are present in the UTXO set represented by this view
     bool HaveInputs(const CTransaction& tx) const;

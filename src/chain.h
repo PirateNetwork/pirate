@@ -39,6 +39,7 @@ extern CCriticalSection cs_main;
 
 static const int SPROUT_VALUE_VERSION = 80102;
 static const int SAPLING_VALUE_VERSION = 80102;
+static const int TRANSPARENT_VALUE_VERSION = 80103;
 
 // These 5 are declared here to avoid circular dependencies
 // code used this moved into .cpp
@@ -193,6 +194,34 @@ public:
     //! (memory only) The anchor for the tree state up to the end of this block
     uint256 hashFinalSproutRoot;
 
+    //! The change to the chain supply caused by this block. This is defined as
+    //! the value of the coinbase outputs in this block, minus fees not claimed
+    //! by the miner.
+    //!
+    //! Will be std::nullopt under the following conditions:
+    //! - if the block has never been connected to a chain tip
+    //! - for older blocks until a reindex has taken place
+    boost::optional<CAmount> nChainSupplyDelta;
+
+    //! (memory only) Total chain supply up to and including this block.
+    //!
+    //! Will be std::nullopt until a reindex has taken place, if nChainTx is
+    //! zero, or if the block has never been connected to a chain tip.
+    boost::optional<CAmount> nChainTotalSupply;
+
+    //! Change in value in the transparent pool produced by the action of the
+    //! transparent inputs to and outputs from transactions in this block.
+    //!
+    //! Will be std::nullopt for older blocks until a reindex has taken place.
+    boost::optional<CAmount> nTransparentValue;
+
+    //! (memory only) Total value of the transparent value pool up to and
+    //! including this block.
+    //!
+    //! Will be std::nullopt until a reindex has taken place.
+    //! Will be std::nullopt if nChainTx is zero.
+    boost::optional<CAmount> nChainTransparentValue;
+
     //! Change in value held by the Sprout circuit over this block.
     //! Will be boost::none for older blocks on old nodes until a reindex has taken place.
     boost::optional<CAmount> nSproutValue;
@@ -249,6 +278,11 @@ public:
         hashSproutAnchor = uint256();
         hashFinalSproutRoot = uint256();
         nSequenceId = 0;
+
+        nChainSupplyDelta = boost::none;
+        nChainTotalSupply = boost::none;
+        nTransparentValue = boost::none;
+        nChainTransparentValue = boost::none;
         nSproutValue = boost::none;
         nChainSproutValue = boost::none;
         nSaplingValue = 0;
@@ -442,6 +476,13 @@ public:
         READWRITE(nBits);
         READWRITE(nNonce);
         READWRITE(nSolution);
+
+        // Only read/write nTransparentValue if the client version used to create
+        // this index was storing them.
+        if ((s.GetType() & SER_DISK) && (nVersion >= TRANSPARENT_VALUE_VERSION)) {
+            READWRITE(nChainSupplyDelta);
+            READWRITE(nTransparentValue);
+        }
 
         // Only read/write nSproutValue if the client version used to create
         // this index was storing them.
