@@ -99,6 +99,6 @@ HOST="$HOST" BUILD="$BUILD" "$MAKE" "$@" -C ./depends/ V=1
 
 ./configure --prefix="${PREFIX}" --with-gui=qt5 --disable-bip70 --enable-tests=no --enable-wallet=yes "$HARDENING_ARG" "$LCOV_ARG" "$TEST_ARG" "$MINING_ARG" "$PROTON_ARG" $CONFIGURE_FLAGS CXXFLAGS='-g0 -O2'
 
-"$MAKE" "$@" V=1
+nice -n 20 "$MAKE" "$@" V=1
 
 cp src/qt/komodo-qt ./pirate-qt-linux
