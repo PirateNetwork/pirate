@@ -105,8 +105,10 @@ private:
     bool isfromtaddr_;
     bool isfromzaddr_;
     CTxDestination fromtaddr_;
+    std::string fromAddress_;
     PaymentAddress frompaymentaddress_;
     SpendingKey spendingkey_;
+    bool  bOfflineSpendingKey;
     
     uint256 joinSplitPubKey_;
     unsigned char joinSplitPrivKey_[crypto_sign_SECRETKEYBYTES];

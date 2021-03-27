@@ -115,6 +115,11 @@ struct TransparentInputInfo {
         CAmount value) : scriptPubKey(scriptPubKey), value(value) {}
 };
 
+#define SAPLING_TREE_DEPTH 32                                         //From rustzcash.rs
+struct myCharArray_s{
+  unsigned char cArray[1 + 33 * SAPLING_TREE_DEPTH + 8];
+};
+
 class TransactionBuilder
 {
 private:
@@ -123,9 +128,26 @@ private:
     const CKeyStore* keystore;
     CMutableTransaction mtx;
     CAmount fee = 10000;
+    int iMinConf = 1;
+    uint32_t consensusBranchId;
+    
+    std::string fromAddress_;    
+    typedef struct
+    {
+      std::string sAddr;
+      CAmount iValue;
+      std::string sMemo;
+    }Output_s;
+    
 
+    //Split witness into its components that are used by the transaction builder:
+    std::vector<uint64_t> alWitnessPosition; 
+    std::vector<myCharArray_s> asWitness;       //From rustzcash.rs
+    
     std::vector<SpendDescriptionInfo> spends;
     std::vector<OutputDescriptionInfo> outputs;
+    std::vector<std::string> sOutputRecipients;
+    std::vector<Output_s> outputs_offline;
     std::vector<TransparentInputInfo> tIns;
 
     boost::optional<std::pair<uint256, libzcash::SaplingPaymentAddress>> zChangeAddr;
@@ -137,9 +159,12 @@ private:
 public:
     std::vector<SpendDescriptionInfoRaw> rawSpends;
     std::vector<OutputDescriptionInfoRaw> rawOutputs;
+    
 
     TransactionBuilder() {}
-    TransactionBuilder(const Consensus::Params& consensusParams, int nHeight, CKeyStore* keyStore = nullptr);
+    TransactionBuilder(const Consensus::Params& consensusParams, int nHeight, CKeyStore* keyStore = nullptr);    
+    //For signing offline transactions:
+    TransactionBuilder(bool fOverwintered, uint32_t nExpiryHeight, uint32_t nVersionGroupId, int32_t nVersion, uint32_t branchId);
 
     ADD_SERIALIZE_METHODS;
 
@@ -153,6 +178,7 @@ public:
 
 
     void SetFee(CAmount fee);
+    void SetMinConfirmations(int iMinConf);
 
     void SetExpiryHeight(int nHeight);
 
@@ -165,6 +191,22 @@ public:
         libzcash::SaplingNote note,
         uint256 anchor,
         SaplingWitness witness);
+    
+    bool AddSaplingSpend_process_offline_transaction(
+        libzcash::SaplingExpandedSpendingKey expsk,
+        libzcash::SaplingNote note,
+        uint256 anchor,
+        
+        uint64_t lWitnessPosition,
+        unsigned char *pcWitness); 
+    
+    bool AddSaplingSpend_prepare_offline_transaction(
+        std::string sFromAddr,
+        libzcash::SaplingNote note,
+        uint256 anchor,
+        
+        uint64_t lWitnessPosition,
+        unsigned char *pcWitness);     
 
     bool AddSaplingSpendRaw(
       libzcash::SaplingPaymentAddress from,
@@ -176,6 +218,14 @@ public:
         libzcash::SaplingPaymentAddress to,
         CAmount value,
         std::array<unsigned char, ZC_MEMO_SIZE> memo = {{0}});
+    
+    void AddSaplingOutput_offline_transaction(
+        //uint256 ovk,
+        std::string address,
+        CAmount value,
+        std::array<unsigned char, ZC_MEMO_SIZE> memo = {{0}});    
+    
+    void AddPaymentOutput( std::string sAddr, CAmount iValue, std::string sMemo);
 
     void AddSaplingOutputRaw(
         libzcash::SaplingPaymentAddress to,
@@ -200,6 +250,7 @@ public:
     void SetLockTime(uint32_t time) { this->mtx.nLockTime = time; }
 
     boost::optional<CTransaction> Build();
+    std::string Build_offline_transaction();
 };
 
 #endif /* TRANSACTION_BUILDER_H */

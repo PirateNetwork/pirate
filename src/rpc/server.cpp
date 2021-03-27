@@ -670,6 +670,8 @@ static const CRPCCommand vRPCCommands[] =
     { "wallet",             "z_gettotalbalance",      &z_gettotalbalance,      false },
     { "wallet",             "z_mergetoaddress",       &z_mergetoaddress,       false },
     { "wallet",             "z_sendmany",             &z_sendmany,             false },
+    { "wallet",             "z_sendmany_prepare_offline", &z_sendmany_prepare_offline,     false },
+    { "wallet",             "z_sign_offline",             &z_sign_offline,     false },
     { "wallet",             "z_shieldcoinbase",       &z_shieldcoinbase,       false },
     { "wallet",             "z_getoperationstatus",   &z_getoperationstatus,   true  },
     { "wallet",             "z_getoperationresult",   &z_getoperationresult,   true  },
@@ -872,6 +874,10 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
 
     if (!fInitWitnessesBuilt && pcmd->name == "z_sendmany")
         throw JSONRPCError(RPC_DISABLED_BEFORE_WITNESSES, "RPC Command disabled until witnesses are built.");
+    
+    if (!fInitWitnessesBuilt && pcmd->name == "z_sendmany_prepare_offline")
+        throw JSONRPCError(RPC_DISABLED_BEFORE_WITNESSES, "RPC Command disabled until witnesses are built.");
+    
 
     if (fBuilingWitnessCache)
         throw JSONRPCError(RPC_BUILDING_WITNESS_CACHE, "RPC Interface disabled while builing witness cache. Check the debug.log for progress.");

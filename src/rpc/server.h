@@ -513,6 +513,8 @@ extern UniValue consolidationstatus(const UniValue& params, bool fHelp, const CP
 
 extern UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
+extern UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
+extern UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue z_shieldcoinbase(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue z_getoperationstatus(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue z_getoperationresult(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
