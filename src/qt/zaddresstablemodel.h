@@ -8,6 +8,8 @@
 #include <QAbstractTableModel>
 #include <QStringList>
 
+#include "key_io.h"
+
 class ZAddressTablePriv;
 class WalletModel;
 class PlatformStyle;
