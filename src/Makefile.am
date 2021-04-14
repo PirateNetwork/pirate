@@ -29,6 +29,8 @@ endif
 BITCOIN_CONFIG_INCLUDES=-I$(builddir)/config
 BITCOIN_INCLUDES=-I$(builddir) -I$(builddir)/obj $(BDB_CPPFLAGS) $(BOOST_CPPFLAGS) $(LEVELDB_CPPFLAGS) $(CRYPTO_CFLAGS) $(SSL_CFLAGS)
 
+BITCOIN_CONFIG_INCLUDES += -I$(srcdir)/rust/include
+BITCOIN_INCLUDES += -I$(srcdir)/rust/include
 BITCOIN_INCLUDES += -I$(srcdir)/secp256k1/include
 BITCOIN_INCLUDES += -I$(srcdir)/cc/includes
 BITCOIN_INCLUDES += -I$(srcdir)/cryptoconditions/include
@@ -58,6 +60,7 @@ LIBBITCOIN_UTIL=libbitcoin_util.a
 LIBBITCOIN_CRYPTO=crypto/libbitcoin_crypto.a
 LIBBITCOINQT=qt/libkomodoqt.a
 LIBVERUS_CRYPTO=crypto/libverus_crypto.a
+LIBRUSTZCASH=$(top_builddir)/target/$(RUST_TARGET)/release/librustzcash.a
 LIBVERUS_PORTABLE_CRYPTO=crypto/libverus_portable_crypto.a
 LIBSECP256K1=secp256k1/libsecp256k1.la
 LIBCRYPTOCONDITIONS=cryptoconditions/libcryptoconditions_core.la
@@ -77,6 +80,38 @@ endif
 if ENABLE_WALLET
 LIBBITCOIN_WALLET=libbitcoin_wallet.a
 endif
+
+
+RUST_ENV_VARS = RUSTC="$(RUSTC)" TERM=dumb
+RUST_BUILD_OPTS = --lib --release --target $(RUST_TARGET)
+
+rust_verbose = $(rust_verbose_@AM_V@)
+rust_verbose_ = $(rust_verbose_@AM_DEFAULT_V@)
+rust_verbose_1 = --verbose
+
+if ENABLE_ONLINE_RUST
+# Ensure that .cargo/config does not exist
+CARGO_CONFIGURED = $(top_srcdir)/.cargo/.configured-for-online
+$(CARGO_CONFIGURED):
+	$(AM_V_at)rm -f $(top_srcdir)/.cargo/.configured-for-offline $(top_srcdir)/.cargo/config
+	$(AM_V_at)touch $@
+
+else
+# Enable dependency vendoring
+RUST_BUILD_OPTS += --locked
+
+CARGO_CONFIGURED = $(top_srcdir)/.cargo/.configured-for-offline
+$(CARGO_CONFIGURED): $(top_srcdir)/.cargo/config.offline
+	$(AM_V_at)rm -f $(top_srcdir)/.cargo/.configured-for-online
+	$(AM_V_at)cp $< $(top_srcdir)/.cargo/config
+	$(AM_V_at)echo "directory = \"$(RUST_VENDORED_SOURCES)\"" >>$(top_srcdir)/.cargo/config
+	$(AM_V_at)touch $@
+endif
+
+cargo-build: $(CARGO_CONFIGURED)
+	$(RUST_ENV_VARS) $(CARGO) build $(RUST_BUILD_OPTS) $(rust_verbose) --manifest-path $(top_srcdir)/Cargo.toml
+
+$(LIBRUSTZCASH): cargo-build
 
 $(LIBSECP256K1): $(wildcard secp256k1/src/*) $(wildcard secp256k1/include/*)
 	$(AM_V_at)$(MAKE) $(AM_MAKEFLAGS) -C $(@D) $(@F) OPTFLAGS="-O2 -march=$(PLATFORM_VARIANT) -g "
@@ -613,6 +648,7 @@ pirated_LDADD = \
   $(LIBVERUS_CRYPTO) \
   $(LIBVERUS_PORTABLE_CRYPTO) \
   $(LIBZCASH) \
+	$(LIBRUSTZCASH) \
   $(LIBSNARK) \
   $(LIBLEVELDB) \
   $(LIBMEMENV) \
@@ -688,6 +724,7 @@ pirate_cli_LDADD = \
 	$(CRYPTO_LIBS) \
 	$(EVENT_LIBS) \
 	$(LIBZCASH) \
+	$(LIBRUSTZCASH) \
 	$(LIBBITCOIN_CRYPTO) \
   $(LIBVERUS_CRYPTO) \
   $(LIBVERUS_PORTABLE_CRYPTO) \
@@ -728,6 +765,7 @@ pirate_tx_LDADD = \
   $(LIBBITCOIN_UTIL) \
   $(LIBSECP256K1) \
   $(LIBZCASH) \
+	$(LIBRUSTZCASH) \
   $(LIBSNARK) \
   $(LIBBITCOIN_CRYPTO) \
   $(LIBVERUS_CRYPTO) \
@@ -794,7 +832,7 @@ endif
 
 libzcashconsensus_la_LDFLAGS = $(AM_LDFLAGS) -no-undefined $(RELDFLAGS)
 libzcashconsensus_la_LIBADD = $(LIBSECP256K1)
-libzcashconsensus_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(builddir)/obj -I$(srcdir)/secp256k1/include -I$(srcdir)/cryptoconditions/include -DBUILD_BITCOIN_INTERNAL
+libzcashconsensus_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(builddir)/obj -I$(srcdir)/rust/include -I$(srcdir)/secp256k1/include -I$(srcdir)/cryptoconditions/include -DBUILD_BITCOIN_INTERNAL
 libzcashconsensus_la_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
 endif
@@ -804,7 +842,7 @@ CLEANFILES = leveldb/libleveldb.a leveldb/libmemenv.a *.gcda *.gcno */*.gcno wal
 
 DISTCLEANFILES = obj/build.h
 
-EXTRA_DIST = leveldb snark
+EXTRA_DIST = leveldb snark rust
 
 clean-local:
 	-$(MAKE) -C leveldb clean
