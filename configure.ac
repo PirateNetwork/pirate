@@ -77,11 +77,20 @@ AC_PATH_TOOL(GCOV, gcov)
 AC_PATH_PROG(LCOV, lcov)
 AC_PATH_PROG(GENHTML, genhtml)
 AC_PATH_PROG([GIT], [git])
+AC_PATH_PROG(RUSTC, rustc)
+AC_PATH_PROG(CARGO, cargo)
 AC_PATH_PROG(CCACHE,ccache)
 AC_PATH_PROG(XGETTEXT,xgettext)
 AC_PATH_PROG(HEXDUMP,hexdump)
 AC_PATH_TOOL(READELF,readelf)
 AC_PATH_TOOL(CPPFILT,c++filt)
+
+AC_ARG_ENABLE([online-rust],
+  [AS_HELP_STRING([--enable-online-rust],
+  [enable Rust to fetch dependencies from the network (default is to use vendored dependencies)])],
+  [enable_online_rust=$enableval],
+  [enable_online_rust=no])
+AM_CONDITIONAL(ENABLE_ONLINE_RUST, test "$enable_online_rust" != no)
 
 # Enable wallet
 AC_ARG_ENABLE([wallet],
@@ -776,9 +785,10 @@ fi
 #AC_CHECK_HEADER([libsnark/gadgetlib1/gadget.hpp],,AC_MSG_ERROR(libsnark headers missing))
 #AC_CHECK_LIB([snark],[main],LIBSNARK_LIBS=-lsnark, [AC_MSG_ERROR(libsnark missing)], [-lgmpxx])
 
-RUST_LIBS="-lrustzcash"
+RUST_LIBS=""
 case $host in
   *mingw*)
+    RUST_LIBS="$RUST_LIBS -luserenv"
     ;;
   *)
     RUST_LIBS="$RUST_LIBS -ldl"
@@ -809,6 +819,7 @@ AX_CHECK_COMPILE_FLAG([-fno-strict-aliasing],[CXXFLAGS="$CXXFLAGS -fno-strict-al
 AX_CHECK_COMPILE_FLAG([-Wno-builtin-declaration-mismatch],[CXXFLAGS="$CXXFLAGS -Wno-builtin-declaration-mismatch"],,[[$CXXFLAG_WERROR]])
 
 LIBZCASH_LIBS="-lgmp -lgmpxx $BOOST_SYSTEM_LIB -lcrypto -lsodium $RUST_LIBS"
+# LIBZCASH_LIBS="$BOOST_SYSTEM_LIB -lsodium $RUST_LIBS"
 
 AC_MSG_CHECKING([whether to build bitcoind])
 AM_CONDITIONAL([BUILD_BITCOIND], [test x$build_bitcoind = xyes])
@@ -922,6 +933,8 @@ AC_SUBST(BITCOIN_DAEMON_NAME)
 AC_SUBST(BITCOIN_CLI_NAME)
 AC_SUBST(BITCOIN_TX_NAME)
 
+AC_SUBST(RUST_TARGET)
+AC_SUBST(RUST_VENDORED_SOURCES)
 AC_SUBST(RELDFLAGS)
 AC_SUBST(ERROR_CXXFLAGS)
 AC_SUBST(SAN_CXXFLAGS)
@@ -988,7 +1001,7 @@ case $host in
    ;;
 esac
 
-echo 
+echo
 echo "Options used to compile and link:"
 echo "  with wallet   = $enable_wallet"
 echo "  with proton   = $use_proton"
@@ -996,7 +1009,7 @@ echo "  with zmq      = $use_zmq"
 echo "  with test     = $use_tests"
 echo "  debug enabled = $enable_debug"
 echo "  werror        = $enable_werror"
-echo 
+echo
 echo "  target os     = $TARGET_OS"
 echo "  build os      = $BUILD_OS"
 echo
@@ -1007,4 +1020,4 @@ echo "  CXX           = $CXX"
 echo "  CXXFLAGS      = $CXXFLAGS"
 echo "  LDFLAGS       = $LDFLAGS"
 echo "  ARFLAGS       = $ARFLAGS"
-echo 
+echo
