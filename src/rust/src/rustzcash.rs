@@ -3,7 +3,7 @@
 //! This is internal to zcashd and is not an officially-supported API.
 
 // Catch documentation errors caused by code changes.
-#![deny(intra_doc_link_resolution_failure)]
+#![deny(broken_intra_doc_links)]
 // Clippy has a default-deny lint to prevent dereferencing raw pointer arguments
 // in a non-unsafe function. However, declaring a function as unsafe has the
 // side-effect that the entire function body is treated as an unsafe {} block,
@@ -63,6 +63,7 @@ use zcash_history::{Entry as MMREntry, NodeData as MMRNodeData, Tree as MMRTree}
 
 mod blake2b;
 mod ed25519;
+mod metrics_ffi;
 mod tracing_ffi;
 
 #[cfg(test)]
@@ -145,19 +146,18 @@ pub extern "C" fn librustzcash_init_zksnark_params(
     );
 
     // Load params
-    let (spend_params, spend_vk, output_params, output_vk, sprout_vk) =
-        load_parameters(spend_path, output_path, sprout_path);
+    let params = load_parameters(spend_path, output_path, sprout_path);
 
     // Caller is responsible for calling this function once, so
     // these global mutations are safe.
     unsafe {
-        SAPLING_SPEND_PARAMS = Some(spend_params);
-        SAPLING_OUTPUT_PARAMS = Some(output_params);
+        SAPLING_SPEND_PARAMS = Some(params.spend_params);
+        SAPLING_OUTPUT_PARAMS = Some(params.output_params);
         SPROUT_GROTH16_PARAMS_PATH = sprout_path.map(|p| p.to_owned());
 
-        SAPLING_SPEND_VK = Some(spend_vk);
-        SAPLING_OUTPUT_VK = Some(output_vk);
-        SPROUT_GROTH16_VK = sprout_vk;
+        SAPLING_SPEND_VK = Some(params.spend_vk);
+        SAPLING_OUTPUT_VK = Some(params.output_vk);
+        SPROUT_GROTH16_VK = params.sprout_vk;
     }
 }
 
@@ -386,7 +386,7 @@ pub extern "C" fn librustzcash_sapling_compute_nf(
     let vk = ViewingKey { ak, nk };
     let nf = note.nf(&vk, position);
     let result = unsafe { &mut *result };
-    result.copy_from_slice(&nf);
+    result.copy_from_slice(&nf.0);
 
     true
 }
@@ -1249,44 +1249,4 @@ pub extern "system" fn librustzcash_mmr_hash_node(
 pub extern "C" fn librustzcash_getrandom(buf: *mut u8, buf_len: usize) {
     let buf = unsafe { slice::from_raw_parts_mut(buf, buf_len) };
     OsRng.fill_bytes(buf);
-}
-
-// The `librustzcash_zebra_crypto_sign_verify_detached` API attempts to
-// mimic the `crypto_sign_verify_detached` API in libsodium, but uses
-// the ed25519-zebra crate internally instead.
-const LIBSODIUM_OK: isize = 0;
-const LIBSODIUM_ERROR: isize = -1;
-
-#[no_mangle]
-pub extern "system" fn librustzcash_zebra_crypto_sign_verify_detached(
-    sig: *const [u8; 64],
-    m: *const u8,
-    mlen: u64,
-    pk: *const [u8; 32],
-) -> isize {
-    use ed25519_zebra::{Signature, VerificationKey};
-    use std::convert::TryFrom;
-
-    let sig = Signature::from(*unsafe {
-        match sig.as_ref() {
-            Some(sig) => sig,
-            None => return LIBSODIUM_ERROR,
-        }
-    });
-
-    let pk = match VerificationKey::try_from(*match unsafe { pk.as_ref() } {
-        Some(pk) => pk,
-        None => return LIBSODIUM_ERROR,
-    }) {
-        Ok(pk) => pk,
-        Err(_) => return LIBSODIUM_ERROR,
-    };
-
-    let m = unsafe { slice::from_raw_parts(m, mlen as usize) };
-
-    if pk.verify(&sig, m).is_err() {
-        LIBSODIUM_ERROR
-    } else {
-        LIBSODIUM_OK
-    }
 }
