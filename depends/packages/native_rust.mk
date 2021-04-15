@@ -1,12 +1,12 @@
 package=native_rust
-$(package)_version=1.44.1
+$(package)_version=1.51.0
 $(package)_download_path=https://static.rust-lang.org/dist
 $(package)_file_name_linux=rust-$($(package)_version)-x86_64-unknown-linux-gnu.tar.gz
-$(package)_sha256_hash_linux=a41df89a461a580536aeb42755e43037556fba2e527dd13a1e1bb0749de28202
+$(package)_sha256_hash_linux=9e125977aa13f012a68fdc6663629c685745091ae244f0587dd55ea4e3a3e42f
 $(package)_file_name_darwin=rust-$($(package)_version)-x86_64-apple-darwin.tar.gz
-$(package)_sha256_hash_darwin=a5464e7bcbce9647607904a4afa8362382f1fc55d39e7bbaf4483ac00eb5d56a
+$(package)_sha256_hash_darwin=765212098a415996b767d1e372ce266caf94027402b269fec33291fffc085ca4
 $(package)_file_name_freebsd=rust-$($(package)_version)-x86_64-unknown-freebsd.tar.gz
-$(package)_sha256_hash_freebsd=36a14498f9d1d7fb50d6fc01740960a99aff3d4c4c3d2e4fff2795ac8042c957
+$(package)_sha256_hash_freebsd=d764ab80889460caca86cda7b7ca2ced80544bb477634adc8cade0e27f4f663b
 
 # Mapping from GCC canonical hosts to Rust targets
 # If a mapping is not present, we assume they are identical, unless $host_os is
@@ -15,12 +15,12 @@ $(package)_rust_target_x86_64-pc-linux-gnu=x86_64-unknown-linux-gnu
 $(package)_rust_target_x86_64-w64-mingw32=x86_64-pc-windows-gnu
 
 # Mapping from Rust targets to SHA-256 hashes
-$(package)_rust_std_sha256_hash_aarch64-unknown-linux-gnu=666c6d1f2c65a9bb6e20ae68a6eaa1c5aadee44ff4eb43c593836fe7daba1441
-$(package)_rust_std_sha256_hash_x86_64-apple-darwin=716305d18cfa88151b0446e8c1424e07831affa215d0c9a221c31a918f18b498
-$(package)_rust_std_sha256_hash_x86_64-pc-windows-gnu=d82ee422b024451c0001ee4dd4282e948405df7a3c315b2791880ed68c1ff88b
+$(package)_rust_std_sha256_hash_aarch64-unknown-linux-gnu=a6ed4abe59dfaf2119e2803f67fd8aef757a622ae3ac9a040946af2b02f4c269
+$(package)_rust_std_sha256_hash_x86_64-apple-darwin=2856bc46d3624ae2658897c15388c0c353bea916963a2fc5991c23b920d5678c
+$(package)_rust_std_sha256_hash_x86_64-pc-windows-gnu=55f871bdaf361a26280ca5396297cc7c67237cd86d4ebfe3cbdf9fac14ce0327
 
 define rust_target
-$(if $($(1)_rust_target_$(2)),$($(1)_rust_target_$(2)),$(if $(findstring darwin,$(3)),x86_64-apple-darwin,$(2)))
+$(if $($(1)_rust_target_$(2)),$($(1)_rust_target_$(2)),$(if $(findstring darwin,$(3)),x86_64-apple-darwin,$(if $(findstring freebsd,$(3)),x86_64-unknown-freebsd,$(2))))
 endef
 
 ifneq ($(canonical_host),$(build))
@@ -47,12 +47,12 @@ define $(package)_extract_cmds
 endef
 
 define $(package)_stage_cmds
-  bash ./install.sh --destdir=$($(package)_staging_dir) --prefix=$(build_prefix) --disable-ldconfig && \
+  bash ./install.sh --without=rust-docs --destdir=$($(package)_staging_dir) --prefix=$(build_prefix) --disable-ldconfig && \
   ../$(canonical_host)/install.sh --destdir=$($(package)_staging_dir) --prefix=$(build_prefix) --disable-ldconfig
 endef
 else
 
 define $(package)_stage_cmds
-  bash ./install.sh --destdir=$($(package)_staging_dir) --prefix=$(build_prefix) --disable-ldconfig
+  bash ./install.sh --without=rust-docs --destdir=$($(package)_staging_dir) --prefix=$(build_prefix) --disable-ldconfig
 endef
 endif
