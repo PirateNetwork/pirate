@@ -163,3 +163,7 @@ doc/man/Makefile.in
 src/Makefile.in
 src/cc/customcc.so
 src/libcc.so
+
+target*
+.cargo/config
+.cargo/.configured*
