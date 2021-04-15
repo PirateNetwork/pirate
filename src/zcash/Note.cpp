@@ -58,10 +58,10 @@ SaplingNote::SaplingNote(
 }
 
 // Call librustzcash to compute the commitment
-boost::optional<uint256> SaplingNote::cm() const {
+boost::optional<uint256> SaplingNote::cmu() const {
     uint256 result;
     uint256 rcm_tmp = rcm();
-    if (!librustzcash_sapling_compute_cm(
+    if (!librustzcash_sapling_compute_cmu(
             d.data(),
             pk_d.begin(),
             value(),
@@ -237,7 +237,7 @@ boost::optional<SaplingNotePlaintext> SaplingNotePlaintext::decrypt(
 
     uint256 cmu_expected;
     uint256 rcm = ret.rcm();
-    if (!librustzcash_sapling_compute_cm(
+    if (!librustzcash_sapling_compute_cmu(
         ret.d.data(),
         pk_d.begin(),
         ret.value(),
@@ -296,7 +296,7 @@ boost::optional<SaplingNotePlaintext> SaplingNotePlaintext::decrypt(
 
     uint256 cmu_expected;
     uint256 rcm = ret.rcm();
-    if (!librustzcash_sapling_compute_cm(
+    if (!librustzcash_sapling_compute_cmu(
         ret.d.data(),
         pk_d.begin(),
         ret.value(),

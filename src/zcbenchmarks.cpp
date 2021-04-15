@@ -482,7 +482,7 @@ double benchmark_create_sapling_spend()
     auto address = sk.default_address();
     SaplingNote note(address, GetRand(MAX_MONEY), 0x01);
     SaplingMerkleTree tree;
-    auto maybe_cm = note.cm();
+    auto maybe_cm = note.cmu();
     tree.append(maybe_cm.get());
     auto anchor = tree.root();
     auto witness = tree.witness();
@@ -619,7 +619,7 @@ double benchmark_verify_sapling_output()
     bool result = librustzcash_sapling_check_output(
                 ctx,
                 output.cv.begin(),
-                output.cm.begin(),
+                output.cmu.begin(),
                 output.ephemeralKey.begin(),
                 output.zkproof.begin()
             );

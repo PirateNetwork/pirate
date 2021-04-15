@@ -248,10 +248,10 @@ boost::optional<CTransaction> TransactionBuilder::Build()
 
     // Create Sapling SpendDescriptions
     for (auto spend : spends) {
-        auto cm = spend.note.cm();
+        auto cmu = spend.note.cmu();
         auto nf = spend.note.nullifier(
             spend.expsk.full_viewing_key(), spend.witness.position());
-        if (!(cm && nf)) {
+        if (!(cmu && nf)) {
             librustzcash_sapling_proving_ctx_free(ctx);
             return boost::none;
         }

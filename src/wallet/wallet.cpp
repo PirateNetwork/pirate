@@ -1108,7 +1108,7 @@ void CWallet::IncrementNoteWitnesses(const CBlockIndex* pindex,
         }
         // Sapling
         for (uint32_t i = 0; i < tx.vShieldedOutput.size(); i++) {
-            const uint256& note_commitment = tx.vShieldedOutput[i].cm;
+            const uint256& note_commitment = tx.vShieldedOutput[i].cmu;
             saplingTree.append(note_commitment);
 
             // Increment existing witnesses
@@ -1546,7 +1546,7 @@ void CWallet::UpdateSaplingNullifierNoteMapWithTx(CWalletTx& wtx) {
             if (mapSaplingFullViewingKeys.count(nd.ivk) != 0) {
                 SaplingFullViewingKey fvk = mapSaplingFullViewingKeys.at(nd.ivk);
                 OutputDescription output = wtx.vShieldedOutput[op.n];
-                auto optPlaintext = SaplingNotePlaintext::decrypt(output.encCiphertext, nd.ivk, output.ephemeralKey, output.cm);
+                auto optPlaintext = SaplingNotePlaintext::decrypt(output.encCiphertext, nd.ivk, output.ephemeralKey, output.cmu);
                 if (!optPlaintext) {
                     // An item in mapSaplingNoteData must have already been successfully decrypted,
                     // otherwise the item would not exist in the first place.
@@ -1996,7 +1996,7 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
         bool found = false;
         for (auto it = mapSaplingFullViewingKeys.begin(); it != mapSaplingFullViewingKeys.end(); ++it) {
             SaplingIncomingViewingKey ivk = it->first;
-            auto result = SaplingNotePlaintext::decrypt(output.encCiphertext, ivk, output.ephemeralKey, output.cm);
+            auto result = SaplingNotePlaintext::decrypt(output.encCiphertext, ivk, output.ephemeralKey, output.cmu);
             if (result) {
                 auto address = ivk.address(result.get().d);
                 if (address && mapSaplingIncomingViewingKeys.count(address.get()) == 0) {
@@ -2015,7 +2015,7 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
         if (!found) {
             for (auto it = mapSaplingIncomingViewingKeys.begin(); it != mapSaplingIncomingViewingKeys.end(); ++it) {
                 SaplingIncomingViewingKey ivk = it-> second;
-                auto result = SaplingNotePlaintext::decrypt(output.encCiphertext, ivk, output.ephemeralKey, output.cm);
+                auto result = SaplingNotePlaintext::decrypt(output.encCiphertext, ivk, output.ephemeralKey, output.cmu);
                 if (!result) {
                     continue;
                 }
@@ -2553,7 +2553,7 @@ boost::optional<std::pair<
         output.encCiphertext,
         nd.ivk,
         output.ephemeralKey,
-        output.cm);
+        output.cmu);
     assert(static_cast<bool>(maybe_pt));
     auto notePt = maybe_pt.get();
 
@@ -2576,7 +2576,7 @@ boost::optional<std::pair<
             output.outCiphertext,
             ovk,
             output.cv,
-            output.cm,
+            output.cmu,
             output.ephemeralKey);
         if (!outPt) {
             continue;
@@ -2587,7 +2587,7 @@ boost::optional<std::pair<
             output.ephemeralKey,
             outPt->esk,
             outPt->pk_d,
-            output.cm);
+            output.cmu);
         assert(static_cast<bool>(maybe_pt));
         auto notePt = maybe_pt.get();
 
@@ -5146,7 +5146,7 @@ void CWallet::GetFilteredNotes(
                 wtx.vShieldedOutput[op.n].encCiphertext,
                 nd.ivk,
                 wtx.vShieldedOutput[op.n].ephemeralKey,
-                wtx.vShieldedOutput[op.n].cm);
+                wtx.vShieldedOutput[op.n].cmu);
             assert(static_cast<bool>(maybe_pt));
             auto notePt = maybe_pt.get();
 
