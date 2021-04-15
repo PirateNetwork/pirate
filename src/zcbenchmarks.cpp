@@ -544,6 +544,10 @@ double benchmark_create_sapling_output()
     auto enc = res.get();
     auto encryptor = enc.second;
 
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << address;
+    std::vector<unsigned char> addressBytes(ss.begin(), ss.end());
+
     auto ctx = librustzcash_sapling_proving_ctx_init();
 
     struct timeval tv_start;
