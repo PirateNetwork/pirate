@@ -15,6 +15,7 @@ HASH_LENGTH:=11
 DOWNLOAD_CONNECT_TIMEOUT:=10
 DOWNLOAD_RETRIES:=3
 CRATE_REGISTRY:=vendored-sources
+CRATE_ARCHIVE = $(SOURCES_PATH)/vendored-crates.tar.gz
 
 host:=$(BUILD)
 ifneq ($(HOST),)
@@ -95,6 +96,12 @@ $(host_prefix)/.stamp_$(final_build_id): $(native_packages) $(packages)
 	$(AT)echo copying packages: $^
 	$(AT)echo to: $(@D)
 	$(AT)cd $(@D); $(foreach package,$^, tar xf $($(package)_cached); )
+	$(AT)if test -f "$(CRATE_ARCHIVE)"; \
+	then echo Extracting pre-vendored crates from $(CRATE_ARCHIVE)...; \
+		tar xf $(CRATE_ARCHIVE) -C $(@D); \
+	else echo Vendoring crates...; \
+		$(@D)/native/bin/cargo vendor --locked --manifest-path $(BASEDIR)/../Cargo.toml $(@D)/$(CRATE_REGISTRY); \
+	fi
 	$(AT)touch $@
 
 $(host_prefix)/share/config.site : config.site.in $(host_prefix)/.stamp_$(final_build_id)
@@ -112,6 +119,7 @@ $(host_prefix)/share/config.site : config.site.in $(host_prefix)/.stamp_$(final_
             -e 's|@CXXFLAGS@|$(strip $(host_CXXFLAGS) $(host_$(release_type)_CXXFLAGS))|' \
             -e 's|@CPPFLAGS@|$(strip $(host_CPPFLAGS) $(host_$(release_type)_CPPFLAGS))|' \
             -e 's|@LDFLAGS@|$(strip $(host_LDFLAGS) $(host_$(release_type)_LDFLAGS))|' \
+            -e 's|@rust_target@|$(call rust_target,native_rust,$(canonical_host),$(host_os))|' \
             -e 's|@no_wallet@|$(NO_WALLET)|' \
             -e 's|@debug@|$(DEBUG)|' \
             $< > $@
@@ -143,6 +151,16 @@ check-packages: check-sources
 
 install: check-packages $(host_prefix)/share/config.site
 
+crates_download_dir=$(base_download_dir)/crates
+download-crates: native_rust
+	$(AT)echo Vendoring crates...
+	$(AT)mkdir -p $(SOURCES_PATH)
+	$(AT)rm -rf $(crates_download_dir)
+	$(AT)mkdir -p $(crates_download_dir)
+	$(AT)tar xf $(native_rust_cached) -C $(crates_download_dir)
+	$(AT)$(crates_download_dir)/native/bin/cargo vendor --locked --manifest-path $(BASEDIR)/../Cargo.toml $(crates_download_dir)/$(CRATE_REGISTRY)
+	$(AT)cd $(crates_download_dir); find $(CRATE_REGISTRY) | sort | tar --no-recursion -czf $(CRATE_ARCHIVE) -T -
+	$(AT)rm -rf $(crates_download_dir)
 
 download-one: check-sources $(all_sources)
 
