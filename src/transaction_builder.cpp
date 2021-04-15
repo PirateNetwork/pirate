@@ -6,6 +6,7 @@
 
 #include "main.h"
 #include "pubkey.h"
+#include "rpc/protocol.h"
 #include "script/sign.h"
 
 #include <boost/variant.hpp>
@@ -200,7 +201,7 @@ bool TransactionBuilder::SendChangeTo(CTxDestination& changeAddr)
     return true;
 }
 
-boost::optional<CTransaction> TransactionBuilder::Build()
+TransactionBuilderResult TransactionBuilder::Build()
 {
     //
     // Consistency checks
@@ -215,7 +216,7 @@ boost::optional<CTransaction> TransactionBuilder::Build()
         change -= tOut.nValue;
     }
     if (change < 0) {
-        return boost::none;
+        return TransactionBuilderResult("Change cannot be negative");
     }
 
     //
@@ -236,7 +237,7 @@ boost::optional<CTransaction> TransactionBuilder::Build()
             libzcash::SaplingPaymentAddress changeAddr(note.d, note.pk_d);
             AddSaplingOutput(fvk.ovk, changeAddr, change);
         } else {
-            return boost::none;
+            return TransactionBuilderResult("Could not determine change address");
         }
     }
 
@@ -253,7 +254,7 @@ boost::optional<CTransaction> TransactionBuilder::Build()
             spend.expsk.full_viewing_key(), spend.witness.position());
         if (!(cmu && nf)) {
             librustzcash_sapling_proving_ctx_free(ctx);
-            return boost::none;
+            return TransactionBuilderResult("Spend is invalid");
         }
 
         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
@@ -276,7 +277,7 @@ boost::optional<CTransaction> TransactionBuilder::Build()
                 sdesc.rk.begin(),
                 sdesc.zkproof.data())) {
             librustzcash_sapling_proving_ctx_free(ctx);
-            return boost::none;
+            return TransactionBuilderResult("Spend proof failed");
         }
 
         sdesc.anchor = spend.anchor;
@@ -317,7 +318,7 @@ boost::optional<CTransaction> TransactionBuilder::Build()
         dataToBeSigned = SignatureHash(scriptCode, mtx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId);
     } catch (std::logic_error ex) {
         librustzcash_sapling_proving_ctx_free(ctx);
-        return boost::none;
+        return TransactionBuilderResult("Could not construct signature hash: " + std::string(ex.what()));
     }
 
     // Create Sapling spendAuth and binding signatures
@@ -347,7 +348,7 @@ boost::optional<CTransaction> TransactionBuilder::Build()
             tIn.scriptPubKey, sigdata, consensusBranchId);
 
         if (!signSuccess) {
-            return boost::none;
+            return TransactionBuilderResult("Failed to sign transaction");
         } else {
             UpdateTransaction(mtx, nIn, sigdata);
         }
