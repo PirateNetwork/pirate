@@ -8,7 +8,7 @@ This is the official PirateChain sourcecode repository based on https://github.c
 
 ## Development Resources
 
-- PirateChain Website: [https://pirate.black](https://pirate.black/)
+- Pirate Chain Website: [https://pirate.black](https://pirate.black/)
 - Komodo Platform: [https://komodoplatform.com](https://komodoplatform.com/)
 - Pirate Blockexplorer: [https://explorer.pirate.black](https://pirate.black/)
 - Pirate Discord: [https://pirate.black/discord](https://pirate.black/discord)
@@ -19,7 +19,7 @@ This is the official PirateChain sourcecode repository based on https://github.c
 - Blog: [https://pirate.black/blog](https://pirate.black/blog/)
 - Whitepaper: [PirateChain Whitepaper](https://pirate.black/whitepaper)
 
-## Komodo Platform Technologies Integrated In PirateChain
+## Komodo Platform Technologies Integrated In Pirate Chain
 
 - Delayed Proof of Work (dPoW) - Additional security layer and Komodos own consensus algorithm  
 - zk-SNARKs - Komodo Platform's privacy technology for shielded transactions  
