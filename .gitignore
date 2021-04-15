@@ -181,3 +181,6 @@ src/libcc.so
 
 artifacts*
 release*
+target*
+.cargo/config
+.cargo/.configured*
