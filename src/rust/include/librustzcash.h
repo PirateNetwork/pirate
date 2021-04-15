@@ -1,5 +1,5 @@
-#ifndef LIBRUSTZCASH_INCLUDE_H_
-#define LIBRUSTZCASH_INCLUDE_H_
+#ifndef ZCASH_RUST_INCLUDE_LIBRUSTZCASH_H
+#define ZCASH_RUST_INCLUDE_LIBRUSTZCASH_H
 
 #include "rust/types.h"
 
@@ -364,15 +364,8 @@ extern "C" {
         unsigned char *buf,
         size_t buf_len
     );
-
-    int librustzcash_zebra_crypto_sign_verify_detached(
-        const unsigned char *sig,
-        const unsigned char *m,
-        unsigned long long mlen,
-        const unsigned char *pk
-    );
 #ifdef __cplusplus
 }
 #endif
 
-#endif // LIBRUSTZCASH_INCLUDE_H_
+#endif // ZCASH_RUST_INCLUDE_LIBRUSTZCASH_H
