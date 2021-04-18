@@ -865,7 +865,7 @@ void CTxMemPool::NotifyRecentlyAdded()
     // wallet transaction's block information.
     for (auto tx : txs) {
         try {
-            SyncWithWallets(tx, NULL);
+            SyncWithWallets(tx, NULL, chainActive.Tip()->GetHeight() + 1);
         } catch (const boost::thread_interrupted&) {
             throw;
         } catch (const std::exception& e) {

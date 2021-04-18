@@ -4174,7 +4174,7 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
              if ( !GetBoolArg("-disablewallet", false) && KOMODO_NSPV_FULLNODE )
                  pwalletMain->EraseFromWallet(tx.GetHash());
 #endif
-        } else SyncWithWallets(tx, NULL);
+        } else SyncWithWallets(tx, NULL, pindexDelete->GetHeight());
     }
     // Update cached incremental witnesses
     GetMainSignals().ChainTip(pindexDelete, &block, newSproutTree, newSaplingTree, false);
@@ -4328,11 +4328,11 @@ bool static ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *
         // Tell wallet about transactions that went from mempool
         // to conflicted:
         BOOST_FOREACH(const CTransaction &tx, txConflicted) {
-            SyncWithWallets(tx, NULL);
+            SyncWithWallets(tx, NULL, pindexNew->GetHeight());
         }
         // ... and about transactions that got confirmed:
         BOOST_FOREACH(const CTransaction &tx, pblock->vtx) {
-            SyncWithWallets(tx, pblock);
+            SyncWithWallets(tx, pblock, pindexNew->GetHeight());
         }
     }
     // Update cached incremental witnesses
@@ -5304,7 +5304,7 @@ bool CheckBlock(int32_t *futureblockp,int32_t height,CBlockIndex *pindex,const C
 
     if (ptx)
     {
-        SyncWithWallets(*ptx, &block);
+        SyncWithWallets(*ptx, &block, pindex->GetHeight());
     }
 
     if ( ASSETCHAINS_CC != 0 )
