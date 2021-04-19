@@ -3790,6 +3790,28 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
     }
 }
 
+UniValue z_getnewdiversifiedaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() > 0)
+        throw runtime_error(
+            "z_getnewdiversifiedaddress\n"
+            "\nReturns a new diversified shielded address for receiving payments.\n"
+            "\nResult:\n"
+            "\"" + strprintf("%s",komodo_chainname()) + "_address\"    (string) The new diversified shielded address.\n"
+            "\nExamples:\n"
+            + HelpExampleCli("z_getnewdiversifiedaddress","")
+            + HelpExampleRpc("z_getnewdiversifiedaddress","")
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    EnsureWalletIsUnlocked();
+
+    return EncodePaymentAddress(pwalletMain->GenerateNewSaplingDiversifiedAddress());
+}
 
 UniValue z_listaddresses(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
@@ -8571,6 +8593,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "z_getoperationresult",     &z_getoperationresult,     true  },
     { "wallet",             "z_listoperationids",       &z_listoperationids,       true  },
     { "wallet",             "z_getnewaddress",          &z_getnewaddress,          true  },
+    { "wallet",             "z_getnewdiversifiedaddress", &z_getnewdiversifiedaddress, true  },
     { "wallet",             "z_listaddresses",          &z_listaddresses,          true  },
     { "wallet",             "z_exportkey",              &z_exportkey,              true  },
     { "wallet",             "z_importkey",              &z_importkey,              true  },

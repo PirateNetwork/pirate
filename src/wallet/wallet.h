@@ -1189,6 +1189,8 @@ public:
       */
     //! Generates new Sapling key
     libzcash::SaplingPaymentAddress GenerateNewSaplingZKey();
+    //! Generates new Sapling diversified payment address
+    libzcash::SaplingPaymentAddress GenerateNewSaplingDiversifiedAddress();
     //! Adds Sapling spending key to the store, and saves it to disk
     bool AddSaplingZKey(
         const libzcash::SaplingExtendedSpendingKey &key,
