@@ -215,6 +215,16 @@ public:
                           const CKeyMetadata  &keyMeta);
     bool WriteSaplingPaymentAddress(const libzcash::SaplingPaymentAddress &addr,
                                     const libzcash::SaplingIncomingViewingKey &ivk);
+
+    bool WriteSaplingDiversifiedAddress(
+        const libzcash::SaplingPaymentAddress &addr,
+        const libzcash::SaplingIncomingViewingKey &ivk,
+        const blob88 &path);
+
+    bool WriteLastDiversifierUsed(
+        const libzcash::SaplingIncomingViewingKey &ivk,
+        const blob88 &path);
+
     bool WriteCryptedZKey(const libzcash::SproutPaymentAddress & addr,
                           const libzcash::ReceivingKey & rk,
                           const std::vector<unsigned char>& vchCryptedSecret,

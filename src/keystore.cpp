@@ -215,6 +215,31 @@ bool CBasicKeyStore::AddSaplingIncomingViewingKey(
     return true;
 }
 
+bool CBasicKeyStore::AddSaplingDiversifiedAddess(
+    const libzcash::SaplingPaymentAddress &addr,
+    const libzcash::SaplingIncomingViewingKey &ivk,
+    const blob88 &path
+)
+{
+    LOCK(cs_SpendingKeyStore);
+    DiversifierPath dPath(ivk, path);
+
+    mapSaplingPaymentAddresses[addr] = dPath;
+
+    return true;
+}
+
+bool CBasicKeyStore::AddLastDiversifierUsed(
+    const libzcash::SaplingIncomingViewingKey &ivk,
+    const blob88 &path)
+{
+    LOCK(cs_SpendingKeyStore);
+
+    mapLastDiversifierPath[ivk] = path;
+
+    return true;
+}
+
 bool CBasicKeyStore::RemoveSproutViewingKey(const libzcash::SproutViewingKey &vk)
 {
     LOCK(cs_SpendingKeyStore);

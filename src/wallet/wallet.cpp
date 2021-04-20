@@ -243,8 +243,16 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingDiversifiedAddress()
         }
     } else {
         blob88 diversifier;
+
         for (int j = 0; j < diversifier.size(); j++) {
             diversifier.begin()[j] = 0;
+        }
+
+        //Get Last used diversifier
+        for (auto entry : mapLastDiversifierPath) {
+            if (entry.first == ivk) {
+                diversifier = entry.second;
+            }
         }
 
         bool found = false;
@@ -252,6 +260,11 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingDiversifiedAddress()
           addr = xsk.ToXFVK().Address(diversifier).get().second;
           if (!GetSaplingExtendedSpendingKey(addr, xsk)) {
               found = true;
+
+              if (!AddLastDiversifierUsed(ivk, diversifier)) {
+                  throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): AddLastDiversifierUsed failed");
+              }
+
           }
 
           //increment the diversifier
@@ -275,6 +288,11 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingDiversifiedAddress()
         if (!AddSaplingIncomingViewingKey(ivk, addr)) {
             throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): AddSaplingIncomingViewingKey failed");
         }
+
+        if (!AddSaplingDiversifiedAddess(addr, ivk, diversifier)) {
+            throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): AddSaplingDiversifiedAddess failed");
+        }
+
     }
     // return default sapling payment address on key key, otherwise diversified sapling payment address
     return addr;
@@ -341,6 +359,48 @@ bool CWallet::AddSaplingFullViewingKey(const libzcash::SaplingExtendedFullViewin
     return CWalletDB(strWalletFile).WriteSaplingExtendedFullViewingKey(extfvk);
 }
 
+bool CWallet::AddSaplingDiversifiedAddess(
+    const libzcash::SaplingPaymentAddress &addr,
+    const libzcash::SaplingIncomingViewingKey &ivk,
+    const blob88 &path)
+{
+    AssertLockHeld(cs_wallet); // mapSaplingZKeyMetadata
+
+    if (!CCryptoKeyStore::AddSaplingDiversifiedAddess(addr, ivk, path)) {
+        return false;
+    }
+
+    if (!fFileBacked) {
+        return true;
+    }
+
+    if (!IsCrypted()) {
+        return CWalletDB(strWalletFile).WriteSaplingDiversifiedAddress(addr, ivk, path);
+    }
+
+    return true;
+}
+
+bool CWallet::AddLastDiversifierUsed(
+    const libzcash::SaplingIncomingViewingKey &ivk,
+    const blob88 &path)
+{
+    AssertLockHeld(cs_wallet); // mapSaplingZKeyMetadata
+
+    if (!CCryptoKeyStore::AddLastDiversifierUsed(ivk, path)) {
+        return false;
+    }
+
+    if (!fFileBacked) {
+        return true;
+    }
+
+    if (!IsCrypted()) {
+        return CWalletDB(strWalletFile).WriteLastDiversifierUsed(ivk, path);
+    }
+
+    return true;
+}
 // Add spending key to keystore and persist to disk
 bool CWallet::AddSproutZKey(const libzcash::SproutSpendingKey &key)
 {
@@ -550,6 +610,21 @@ bool CWallet::LoadSaplingPaymentAddress(
     const libzcash::SaplingIncomingViewingKey &ivk)
 {
     return CCryptoKeyStore::AddSaplingIncomingViewingKey(ivk, addr);
+}
+
+bool CWallet::LoadSaplingDiversifiedAddess(
+    const libzcash::SaplingPaymentAddress &addr,
+    const libzcash::SaplingIncomingViewingKey &ivk,
+    const blob88 &path)
+{
+    return CCryptoKeyStore::AddSaplingDiversifiedAddess(addr, ivk, path);
+}
+
+bool CWallet::LoadLastDiversifierUsed(
+    const libzcash::SaplingIncomingViewingKey &ivk,
+    const blob88 &path)
+{
+    return CCryptoKeyStore::AddLastDiversifierUsed(ivk, path);
 }
 
 bool CWallet::LoadZKey(const libzcash::SproutSpendingKey &key)
