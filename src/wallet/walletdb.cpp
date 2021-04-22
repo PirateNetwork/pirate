@@ -260,6 +260,13 @@ bool CWalletDB::WriteLastDiversifierUsed(
     return Write(std::make_pair(std::string("sapzlastdiv"), ivk), path);
 }
 
+bool CWalletDB::WritePrimarySaplingSpendingKey(
+    const libzcash::SaplingExtendedSpendingKey &key)
+{
+    nWalletDBUpdated++;
+    return Write(std::string("pspendkey"), key);
+}
+
 bool CWalletDB::WriteSproutViewingKey(const libzcash::SproutViewingKey &vk)
 {
     nWalletDBUpdated++;
@@ -943,6 +950,13 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 strErr = "Error reading wallet database: LoadSaplingPaymentAddress failed";
                 return false;
             }
+        }
+        else if (strType == "pspendkey")
+        {
+            libzcash::SaplingExtendedSpendingKey key;
+            ssValue >> key;
+
+            pwallet->primarySaplingSpendingKey = key;
         }
         else if (strType == "defaultkey")
         {

@@ -960,6 +960,8 @@ public:
     std::map<libzcash::SproutPaymentAddress, CKeyMetadata> mapSproutZKeyMetadata;
     std::map<libzcash::SaplingIncomingViewingKey, CKeyMetadata> mapSaplingZKeyMetadata;
 
+    //Key used to create diversified address
+    boost::optional<libzcash::SaplingExtendedSpendingKey> primarySaplingSpendingKey;
     typedef std::map<unsigned int, CMasterKey> MasterKeyMap;
     MasterKeyMap mapMasterKeys;
     unsigned int nMasterKeyMaxID;
@@ -1191,6 +1193,9 @@ public:
     libzcash::SaplingPaymentAddress GenerateNewSaplingZKey();
     //! Generates new Sapling diversified payment address
     libzcash::SaplingPaymentAddress GenerateNewSaplingDiversifiedAddress();
+    //Set Primary key for address diversification
+    bool SetPrimarySpendingKey(
+        const libzcash::SaplingExtendedSpendingKey &extsk);
     //! Adds Sapling spending key to the store, and saves it to disk
     bool AddSaplingZKey(
         const libzcash::SaplingExtendedSpendingKey &key,

@@ -178,6 +178,12 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingZKey()
         xsk = m_32h_cth.Derive(hdChain.saplingAccountCounter | ZIP32_HARDENED_KEY_LIMIT);
         metadata.hdKeypath = "m/32'/" + std::to_string(bip44CoinType) + "'/" + std::to_string(hdChain.saplingAccountCounter) + "'";
         metadata.seedFp = hdChain.seedFp;
+
+        //Set Primary key for diversification
+        if (hdChain.saplingAccountCounter == 0) {
+            SetPrimarySpendingKey(xsk);
+        }
+
         // Increment childkey index
         hdChain.saplingAccountCounter++;
     } while (HaveSaplingSpendingKey(xsk.ToXFVK()));
@@ -202,100 +208,106 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingDiversifiedAddress()
 {
     AssertLockHeld(cs_wallet); // mapSaplingZKeyMetadata
 
-    // Create new metadata
-    int64_t nCreationTime = GetTime();
-    CKeyMetadata metadata(nCreationTime);
+    libzcash::SaplingExtendedSpendingKey extsk;
+    if (pwalletMain->primarySaplingSpendingKey == boost::none) {
+        // Try to get the seed
+        HDSeed seed;
+        if (!GetHDSeed(seed))
+            throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): HD seed not found");
 
-    // Try to get the seed
-    HDSeed seed;
-    if (!GetHDSeed(seed))
-        throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): HD seed not found");
-
-    auto m = libzcash::SaplingExtendedSpendingKey::Master(seed);
-    uint32_t bip44CoinType = Params().BIP44CoinType();
-
-    // We use a fixed keypath scheme of m/32'/coin_type'/account'
-    // Derive m/32'
-    auto m_32h = m.Derive(32 | ZIP32_HARDENED_KEY_LIMIT);
-    // Derive m/32'/coin_type'
-    auto m_32h_cth = m_32h.Derive(bip44CoinType | ZIP32_HARDENED_KEY_LIMIT);
-
-    // Derive account key at next index, skip keys already known to the wallet
-    libzcash::SaplingExtendedSpendingKey xsk;
-
-    xsk = m_32h_cth.Derive(0 | ZIP32_HARDENED_KEY_LIMIT);
-    metadata.hdKeypath = "m/32'/" + std::to_string(bip44CoinType) + "'/0'";
-    metadata.seedFp = hdChain.seedFp;
-
-    // Update the chain model in the database
-    if (fFileBacked && !CWalletDB(strWalletFile).WriteHDChain(hdChain))
-        throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): Writing HD chain model failed");
-
-    auto ivk = xsk.expsk.full_viewing_key().in_viewing_key();
-    mapSaplingZKeyMetadata[ivk] = metadata;
-
-    SaplingPaymentAddress addr;
-    //if the default spending key does not exist add it and return the default address
-    if (!HaveSaplingSpendingKey(xsk.expsk.full_viewing_key())) {
-        addr = xsk.DefaultAddress();
-        if (!AddSaplingZKey(xsk, addr)) {
-            throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): AddSaplingZKey failed");
+        auto m = libzcash::SaplingExtendedSpendingKey::Master(seed);
+        uint32_t bip44CoinType = Params().BIP44CoinType();
+        auto m_32h = m.Derive(32 | ZIP32_HARDENED_KEY_LIMIT);
+        auto m_32h_cth = m_32h.Derive(bip44CoinType | ZIP32_HARDENED_KEY_LIMIT);
+        extsk = m_32h_cth.Derive(0 | ZIP32_HARDENED_KEY_LIMIT);
+        auto ivk = extsk.expsk.full_viewing_key().in_viewing_key();
+        libzcash::SaplingExtendedFullViewingKey extfvk;
+        pwalletMain->GetSaplingFullViewingKey(ivk, extfvk);
+        if (!HaveSaplingSpendingKey(extfvk)) {
+            throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): default spending key does not belong to the wallet");
+        } else {
+            SetPrimarySpendingKey(extsk);
         }
     } else {
-        blob88 diversifier;
+        extsk = pwalletMain->primarySaplingSpendingKey.get();
+    }
 
-        for (int j = 0; j < diversifier.size(); j++) {
-            diversifier.begin()[j] = 0;
+    auto ivk = extsk.expsk.full_viewing_key().in_viewing_key();
+    SaplingPaymentAddress addr;
+    blob88 diversifier;
+
+    //Initalize diversifier
+    for (int j = 0; j < diversifier.size(); j++) {
+        diversifier.begin()[j] = 0;
+    }
+
+    //Get Last used diversifier if one exists
+    for (auto entry : mapLastDiversifierPath) {
+        if (entry.first == ivk) {
+            diversifier = entry.second;
         }
+    }
 
-        //Get Last used diversifier
-        for (auto entry : mapLastDiversifierPath) {
-            if (entry.first == ivk) {
-                diversifier = entry.second;
-            }
-        }
-
-        bool found = false;
-        do {
-          addr = xsk.ToXFVK().Address(diversifier).get().second;
-          if (!GetSaplingExtendedSpendingKey(addr, xsk)) {
-              found = true;
-
-              if (!AddLastDiversifierUsed(ivk, diversifier)) {
-                  throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): AddLastDiversifierUsed failed");
-              }
-
+    bool found = false;
+    do {
+      addr = extsk.ToXFVK().Address(diversifier).get().second;
+      if (!GetSaplingExtendedSpendingKey(addr, extsk)) {
+          found = true;
+          //Save last used diversifier by ivk
+          if (!AddLastDiversifierUsed(ivk, diversifier)) {
+              throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): AddLastDiversifierUsed failed");
           }
 
-          //increment the diversifier
-          for (int j = 0; j < diversifier.size(); j++) {
-              int i = diversifier.begin()[j];
-              diversifier.begin()[j]++;
-              i++;
-              if ( i >= 256) {
-                  diversifier.begin()[j] = 0;
-              } else {
-                break;
-              }
-              //Should only be reached after all combinations have been tried
-              if (i >= 256 && j+1 == diversifier.size())
-                  throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): Unable to find new diversified address with the current key");
+      }
+
+      //increment the diversifier
+      for (int j = 0; j < diversifier.size(); j++) {
+          int i = diversifier.begin()[j];
+          diversifier.begin()[j]++;
+          i++;
+          if ( i >= 256) {
+              diversifier.begin()[j] = 0;
+          } else {
+            break;
           }
-
-        }
-        while (!found);
-
-        if (!AddSaplingIncomingViewingKey(ivk, addr)) {
-            throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): AddSaplingIncomingViewingKey failed");
-        }
-
-        if (!AddSaplingDiversifiedAddess(addr, ivk, diversifier)) {
-            throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): AddSaplingDiversifiedAddess failed");
-        }
+          //Should only be reached after all combinations have been tried
+          if (i >= 256 && j+1 == diversifier.size())
+              throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): Unable to find new diversified address with the current key");
+      }
 
     }
+    while (!found);
+
+    //Add to wallet
+    if (!AddSaplingIncomingViewingKey(ivk, addr)) {
+        throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): AddSaplingIncomingViewingKey failed");
+    }
+
+    //Add to wallet
+    if (!AddSaplingDiversifiedAddess(addr, ivk, diversifier)) {
+        throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): AddSaplingDiversifiedAddess failed");
+    }
+
     // return default sapling payment address on key key, otherwise diversified sapling payment address
     return addr;
+}
+
+bool CWallet::SetPrimarySpendingKey(
+    const libzcash::SaplingExtendedSpendingKey &extsk)
+{
+      AssertLockHeld(cs_wallet); // mapSaplingZKeyMetadata
+
+      pwalletMain->primarySaplingSpendingKey = extsk;
+
+      if (!fFileBacked) {
+          return true;
+      }
+
+      if (!IsCrypted()) {
+          return CWalletDB(strWalletFile).WritePrimarySaplingSpendingKey(extsk);
+      }
+
+      return true;
 }
 
 // Add spending key to keystore

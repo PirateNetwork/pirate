@@ -3813,6 +3813,42 @@ UniValue z_getnewdiversifiedaddress(const UniValue& params, bool fHelp, const CP
     return EncodePaymentAddress(pwalletMain->GenerateNewSaplingDiversifiedAddress());
 }
 
+UniValue z_setprimaryspendingkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "z_setprimaryspendingkey\n"
+            "\nSet the primary spending key used to create diversified payment addresses.\n"
+            "\nResult: Returns True if the spending key was successfully set.\n"
+            "\nExamples:\n"
+            + HelpExampleCli("z_getnewdiversifiedaddress","\"secret-extended-key-.....\"")
+            + HelpExampleRpc("z_getnewdiversifiedaddress","\"secret-extended-key-.....\"")
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    EnsureWalletIsUnlocked();
+
+    string strSecret = params[0].get_str();
+    auto spendingkey = DecodeSpendingKey(strSecret);
+    if (!IsValidSpendingKey(spendingkey)) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid spending key!");
+    }
+
+    if (boost::get<libzcash::SaplingExtendedSpendingKey>(&spendingkey) == nullptr) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Primary key must be a Sapling Extended Spending Key!");
+    }
+
+    const libzcash::SaplingExtendedSpendingKey extsk = *(boost::get<libzcash::SaplingExtendedSpendingKey>(&spendingkey));
+    // const libzcash::SaplingExtendedSpendingKey sk = *extsk;
+
+    return pwalletMain->SetPrimarySpendingKey(extsk);
+
+}
+
 UniValue z_listaddresses(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (!EnsureWalletIsAvailable(fHelp))
@@ -8594,6 +8630,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "z_listoperationids",       &z_listoperationids,       true  },
     { "wallet",             "z_getnewaddress",          &z_getnewaddress,          true  },
     { "wallet",             "z_getnewdiversifiedaddress", &z_getnewdiversifiedaddress, true  },
+    { "wallet",             "z_setprimaryspendingkey",  &z_setprimaryspendingkey,  true  },
     { "wallet",             "z_listaddresses",          &z_listaddresses,          true  },
     { "wallet",             "z_exportkey",              &z_exportkey,              true  },
     { "wallet",             "z_importkey",              &z_importkey,              true  },
