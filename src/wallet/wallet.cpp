@@ -2594,12 +2594,15 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
     mapSaplingNoteData_t noteData;
     SaplingIncomingViewingKeyMap viewingKeysToAdd;
 
+    std::set <SaplingIncomingViewingKey> keysTried;
+
     // Protocol Spec: 4.19 Block Chain Scanning (Sapling)
     for (uint32_t i = 0; i < tx.vShieldedOutput.size(); ++i) {
         const OutputDescription output = tx.vShieldedOutput[i];
         bool found = false;
         for (auto it = mapSaplingFullViewingKeys.begin(); it != mapSaplingFullViewingKeys.end(); ++it) {
             SaplingIncomingViewingKey ivk = it->first;
+            keysTried.insert(ivk);
             auto result = SaplingNotePlaintext::decrypt(output.encCiphertext, ivk, output.ephemeralKey, output.cm);
             if (result) {
                 auto address = ivk.address(result.get().d);
@@ -2619,17 +2622,21 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
         if (!found) {
             for (auto it = mapSaplingIncomingViewingKeys.begin(); it != mapSaplingIncomingViewingKeys.end(); ++it) {
                 SaplingIncomingViewingKey ivk = it-> second;
-                auto result = SaplingNotePlaintext::decrypt(output.encCiphertext, ivk, output.ephemeralKey, output.cm);
-                if (!result) {
-                    continue;
+                std::set <SaplingIncomingViewingKey>::iterator kit = keysTried.find(ivk);
+                if (kit == keysTried.end()) {
+                  keysTried.insert(ivk);
+                  auto result = SaplingNotePlaintext::decrypt(output.encCiphertext, ivk, output.ephemeralKey, output.cm);
+                  if (!result) {
+                      continue;
+                  }
+                  // We don't cache the nullifier here as computing it requires knowledge of the note position
+                  // in the commitment tree, which can only be determined when the transaction has been mined.
+                  SaplingOutPoint op {hash, i};
+                  SaplingNoteData nd;
+                  nd.ivk = ivk;
+                  noteData.insert(std::make_pair(op, nd));
+                  break;
                 }
-                // We don't cache the nullifier here as computing it requires knowledge of the note position
-                // in the commitment tree, which can only be determined when the transaction has been mined.
-                SaplingOutPoint op {hash, i};
-                SaplingNoteData nd;
-                nd.ivk = ivk;
-                noteData.insert(std::make_pair(op, nd));
-                break;
             }
         }
     }
