@@ -215,12 +215,12 @@ public:
                           const CKeyMetadata  &keyMeta);
     bool WriteSaplingPaymentAddress(const libzcash::SaplingPaymentAddress &addr,
                                     const libzcash::SaplingIncomingViewingKey &ivk);
-
+    //Wrtie the address, ivk and path of diversified address to the wallet
     bool WriteSaplingDiversifiedAddress(
         const libzcash::SaplingPaymentAddress &addr,
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path);
-
+    //Write the last used diversifier and ivk used
     bool WriteLastDiversifierUsed(
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path);

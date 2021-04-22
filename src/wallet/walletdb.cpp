@@ -930,7 +930,8 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 strErr = "Error reading wallet database: LoadSaplingPaymentAddress failed";
                 return false;
             }
-        }else if (strType == "sapzlastdiv")
+        }
+        else if (strType == "sapzlastdiv")
         {
             libzcash::SaplingIncomingViewingKey ivk;
             ssKey >> ivk;
