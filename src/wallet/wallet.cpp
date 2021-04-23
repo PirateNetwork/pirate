@@ -217,14 +217,33 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingDiversifiedAddress()
 
         auto m = libzcash::SaplingExtendedSpendingKey::Master(seed);
         uint32_t bip44CoinType = Params().BIP44CoinType();
+
+        //Derive default key
         auto m_32h = m.Derive(32 | ZIP32_HARDENED_KEY_LIMIT);
         auto m_32h_cth = m_32h.Derive(bip44CoinType | ZIP32_HARDENED_KEY_LIMIT);
         extsk = m_32h_cth.Derive(0 | ZIP32_HARDENED_KEY_LIMIT);
+
+        //Check of default spending key
         auto ivk = extsk.expsk.full_viewing_key().in_viewing_key();
         libzcash::SaplingExtendedFullViewingKey extfvk;
         pwalletMain->GetSaplingFullViewingKey(ivk, extfvk);
         if (!HaveSaplingSpendingKey(extfvk)) {
-            throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): default spending key does not belong to the wallet");
+
+          //Set metadata
+          int64_t nCreationTime = GetTime();
+          CKeyMetadata metadata(nCreationTime);
+          metadata.hdKeypath = "m/32'/" + std::to_string(bip44CoinType) + "'/0'";
+          metadata.seedFp = hdChain.seedFp;
+          mapSaplingZKeyMetadata[ivk] = metadata;
+
+          //Add Address to wallet
+          auto addr = extsk.DefaultAddress();
+          if (!AddSaplingZKey(extsk, addr)) {
+              throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): AddSaplingZKey failed");
+          }
+
+          //Return default address for default key
+          return addr;
         } else {
             SetPrimarySpendingKey(extsk);
         }
@@ -288,7 +307,7 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingDiversifiedAddress()
         throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): AddSaplingDiversifiedAddess failed");
     }
 
-    // return default sapling payment address on key key, otherwise diversified sapling payment address
+    // return diversified sapling payment address
     return addr;
 }
 

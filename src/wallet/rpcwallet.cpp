@@ -3738,7 +3738,7 @@ UniValue zc_raw_keygen(const UniValue& params, bool fHelp, const CPubKey& mypk)
 }
 
 
-UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
+UniValue z_getnewaddresskey(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
@@ -3752,18 +3752,19 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
 
     if (fHelp || params.size() > 1)
         throw runtime_error(
-            "z_getnewaddress ( type )\n"
-            "\nReturns a new shielded address for receiving payments.\n"
-            "\nWith no arguments, returns a Sprout address.\n"
+            "z_getnewaddresskey ( type )\n"
+            "This creates a new sapling extended spending key and\n"
+            "returns a new shielded address for receiving payments.\n"
+            "\nWith no arguments, returns a Sapling address.\n"
             "\nArguments:\n"
             "1. \"type\"         (string, optional, default=\"" + defaultType + "\") The type of address. One of [\""
             + ADDR_TYPE_SPROUT + "\", \"" + ADDR_TYPE_SAPLING + "\"].\n"
             "\nResult:\n"
             "\"" + strprintf("%s",komodo_chainname()) + "_address\"    (string) The new shielded address.\n"
             "\nExamples:\n"
-            + HelpExampleCli("z_getnewaddress", "")
-            + HelpExampleCli("z_getnewaddress", ADDR_TYPE_SAPLING)
-            + HelpExampleRpc("z_getnewaddress", "")
+            + HelpExampleCli("z_getnewaddresskey", "")
+            + HelpExampleCli("z_getnewaddresskey", ADDR_TYPE_SAPLING)
+            + HelpExampleRpc("z_getnewaddresskey", "")
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -3790,27 +3791,30 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
     }
 }
 
-UniValue z_getnewdiversifiedaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
+UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() > 0)
         throw runtime_error(
-            "z_getnewdiversifiedaddress\n"
+            "z_getnewaddress\n"
             "\nReturns a new diversified shielded address for receiving payments.\n"
             "\nResult:\n"
             "\"" + strprintf("%s",komodo_chainname()) + "_address\"    (string) The new diversified shielded address.\n"
             "\nExamples:\n"
-            + HelpExampleCli("z_getnewdiversifiedaddress","")
-            + HelpExampleRpc("z_getnewdiversifiedaddress","")
+            + HelpExampleCli("z_getnewaddress","")
+            + HelpExampleRpc("z_getnewaddress","")
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     EnsureWalletIsUnlocked();
 
-    return EncodePaymentAddress(pwalletMain->GenerateNewSaplingDiversifiedAddress());
+    auto zAddress = pwalletMain->GenerateNewSaplingDiversifiedAddress();
+    pwalletMain->SetZAddressBook(zAddress, "z-sapling", "");
+    return EncodePaymentAddress(zAddress);
+
 }
 
 UniValue z_setprimaryspendingkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
@@ -3824,8 +3828,8 @@ UniValue z_setprimaryspendingkey(const UniValue& params, bool fHelp, const CPubK
             "\nSet the primary spending key used to create diversified payment addresses.\n"
             "\nResult: Returns True if the spending key was successfully set.\n"
             "\nExamples:\n"
-            + HelpExampleCli("z_getnewdiversifiedaddress","\"secret-extended-key-.....\"")
-            + HelpExampleRpc("z_getnewdiversifiedaddress","\"secret-extended-key-.....\"")
+            + HelpExampleCli("z_getnewaddress","\"secret-extended-key-.....\"")
+            + HelpExampleRpc("z_getnewaddress","\"secret-extended-key-.....\"")
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -8628,8 +8632,8 @@ static const CRPCCommand commands[] =
     { "wallet",             "z_getoperationstatus",     &z_getoperationstatus,     true  },
     { "wallet",             "z_getoperationresult",     &z_getoperationresult,     true  },
     { "wallet",             "z_listoperationids",       &z_listoperationids,       true  },
+    { "wallet",             "z_getnewaddresskey",       &z_getnewaddresskey,       true  },
     { "wallet",             "z_getnewaddress",          &z_getnewaddress,          true  },
-    { "wallet",             "z_getnewdiversifiedaddress", &z_getnewdiversifiedaddress, true  },
     { "wallet",             "z_setprimaryspendingkey",  &z_setprimaryspendingkey,  true  },
     { "wallet",             "z_listaddresses",          &z_listaddresses,          true  },
     { "wallet",             "z_exportkey",              &z_exportkey,              true  },
