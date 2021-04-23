@@ -211,6 +211,7 @@ bool CBasicKeyStore::AddSaplingIncomingViewingKey(
 
     // Add addr -> SaplingIncomingViewing to SaplingIncomingViewingKeyMap
     mapSaplingIncomingViewingKeys[addr] = ivk;
+    setSaplingIncomingViewingKeys.insert(ivk);
 
     return true;
 }

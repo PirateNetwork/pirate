@@ -2651,8 +2651,8 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
             }
         }
         if (!found) {
-            for (auto it = mapSaplingIncomingViewingKeys.begin(); it != mapSaplingIncomingViewingKeys.end(); ++it) {
-                SaplingIncomingViewingKey ivk = it-> second;
+            for (auto it = setSaplingIncomingViewingKeys.begin(); it != setSaplingIncomingViewingKeys.end(); ++it) {
+                SaplingIncomingViewingKey ivk = *it;
                 std::set <SaplingIncomingViewingKey>::iterator kit = keysTried.find(ivk);
                 if (kit == keysTried.end()) {
                   keysTried.insert(ivk);

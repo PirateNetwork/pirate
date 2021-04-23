@@ -141,7 +141,7 @@ typedef std::map<libzcash::SaplingExtendedFullViewingKey, libzcash::SaplingExten
 typedef std::map<libzcash::SaplingIncomingViewingKey, libzcash::SaplingExtendedFullViewingKey> SaplingFullViewingKeyMap;
 // Only maps from default addresses to ivk, may need to be reworked when adding diversified addresses.
 typedef std::map<libzcash::SaplingPaymentAddress, libzcash::SaplingIncomingViewingKey> SaplingIncomingViewingKeyMap;
-
+typedef std::set<libzcash::SaplingIncomingViewingKey> SaplingIncomingViewingKeySet;
 //diversified addresses
 typedef std::pair<libzcash::SaplingIncomingViewingKey, blob88> DiversifierPath;
 typedef std::map<libzcash::SaplingPaymentAddress, DiversifierPath> SaplingPaymentAddresses;
@@ -164,6 +164,7 @@ protected:
     SaplingSpendingKeyMap mapSaplingSpendingKeys;
     SaplingFullViewingKeyMap mapSaplingFullViewingKeys;
     SaplingIncomingViewingKeyMap mapSaplingIncomingViewingKeys;
+    SaplingIncomingViewingKeySet setSaplingIncomingViewingKeys;
     SaplingPaymentAddresses mapSaplingPaymentAddresses;
     LastDiversifierPath mapLastDiversifierPath;
 
