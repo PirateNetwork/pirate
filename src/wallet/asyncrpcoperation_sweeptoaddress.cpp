@@ -141,7 +141,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
               libzcash::SaplingIncomingViewingKey ivk;
               pwalletMain->GetSaplingIncomingViewingKey(boost::get<libzcash::SaplingPaymentAddress>(saplingEntry.address), ivk);
 
-              if (ivk == extsk.expsk.full_viewing_key().in_viewing_key()) {
+              if (ivk == extsk.expsk.full_viewing_key().in_viewing_key() && saplingEntry.address == addr) {
                 noteCount ++;
               }
             }
@@ -160,7 +160,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
                 pwalletMain->GetSaplingIncomingViewingKey(boost::get<libzcash::SaplingPaymentAddress>(saplingEntry.address), ivk);
 
                 //Select Notes from that same address we will be sending to.
-                if (ivk == extsk.expsk.full_viewing_key().in_viewing_key()) {
+                if (ivk == extsk.expsk.full_viewing_key().in_viewing_key() && saplingEntry.address == addr) {
                   amountToSend += CAmount(saplingEntry.note.value());
                   fromNotes.push_back(saplingEntry);
                 }
