@@ -321,10 +321,10 @@ void WalletModel::pollBalanceChanged()
         if(transactionTableModel)
             transactionTableModel->updateConfirmations();
 
-        if(zaddressTableModel) {
-          std::map<libzcash::PaymentAddress, CAmount> balances = getZAddressBalances();
-          zaddressTableModel->updateBalances(balances);
-        }
+        // if(zaddressTableModel) {
+        //   std::map<libzcash::PaymentAddress, CAmount> balances = getZAddressBalances();
+        //   zaddressTableModel->updateBalances(balances);
+        // }
 
 
     }

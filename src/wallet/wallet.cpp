@@ -2320,7 +2320,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
 
         // Write to disk and update tx archive map
         if (fInsertedNew || fUpdated) {
-            AddToArcTxs(hash, ArchiveTxPoint(wtx.hashBlock, wtx.nIndex));
+            // AddToArcTxs(hash, ArchiveTxPoint(wtx.hashBlock, wtx.nIndex));
             if (!wtx.WriteToDisk(pwalletdb))
                 return false;
         }

@@ -249,19 +249,19 @@ QVariant ZAddressTableModel::data(const QModelIndex &index, int role) const
 //!!!!! check validity
                 bool isValid = true;
 
-                if (isValid)
-                {
-                    libzcash::PaymentAddress zaddr = DecodePaymentAddress(rec->address.toStdString());
-                    auto saplingAddr = boost::get<libzcash::SaplingPaymentAddress>(&zaddr);
-                    if (saplingAddr != nullptr) {
-                      libzcash::SaplingIncomingViewingKey ivk;
-                      libzcash::SaplingExtendedFullViewingKey extfvk;
-                      if (wallet->GetSaplingIncomingViewingKey(*saplingAddr, ivk) &&
-                          wallet->GetSaplingFullViewingKey(ivk, extfvk) &&
-                          wallet->HaveSaplingSpendingKey(extfvk)) mine = ISMINE_SPENDABLE;
-                    }
-                    else mine = ISMINE_NO;
-                }
+                // if (isValid)
+                // {
+                //     libzcash::PaymentAddress zaddr = DecodePaymentAddress(rec->address.toStdString());
+                //     auto saplingAddr = boost::get<libzcash::SaplingPaymentAddress>(&zaddr);
+                //     if (saplingAddr != nullptr) {
+                //       libzcash::SaplingIncomingViewingKey ivk;
+                //       libzcash::SaplingExtendedFullViewingKey extfvk;
+                //       if (wallet->GetSaplingIncomingViewingKey(*saplingAddr, ivk) &&
+                //           wallet->GetSaplingFullViewingKey(ivk, extfvk) &&
+                //           wallet->HaveSaplingSpendingKey(extfvk)) mine = ISMINE_SPENDABLE;
+                //     }
+                //     else mine = ISMINE_NO;
+                // }
             }
         }
     }
