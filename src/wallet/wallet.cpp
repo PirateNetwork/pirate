@@ -3598,17 +3598,28 @@ void CWallet::UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletT
 /**
  * Delete transactions from the Wallet
  */
-void CWallet::DeleteTransactions(std::vector<uint256> &removeTxs) {
+void CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<uint256> &removeArcTxs) {
     LOCK(cs_wallet);
 
     CWalletDB walletdb(strWalletFile, "r+", false);
 
-    for (int i = 0; i< removeTxs.size(); i++) {
+    for (int i = 0; i < removeTxs.size(); i++) {
         if (mapWallet.erase(removeTxs[i])) {
             walletdb.EraseTx(removeTxs[i]);
             LogPrint("deletetx","Delete Tx - Deleting tx %s, %i.\n", removeTxs[i].ToString(),i);
         } else {
             LogPrint("deletetx","Delete Tx - Deleting tx %failed.\n", removeTxs[i].ToString());
+            return;
+        }
+    }
+
+    //Remove Conflicted ArcTx transactions from the wallet database
+    for (int i = 0; i < removeArcTxs.size(); i++) {
+        if (mapArcTxs.erase(removeArcTxs[i])) {
+            walletdb.EraseArcTx(removeArcTxs[i]);
+            LogPrint("deletetx","Delete Tx - Deleting Arc tx %s, %i.\n", removeArcTxs[i].ToString(),i);
+        } else {
+            LogPrint("deletetx","Delete Tx - Deleting Arc tx %failed.\n", removeArcTxs[i].ToString());
             return;
         }
     }
@@ -3657,6 +3668,7 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
         int txCount = 0;
         int txSaveCount = 0;
         std::vector<uint256> removeTxs;
+        std::vector<uint256> removeArcTxs;
 
         for (auto & item : mapSorted)
         {
@@ -3682,6 +3694,7 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
               txSaveCount++;
               continue;
             } else {
+              removeArcTxs.push_back(wtxid);
               txConflictCount++;
             }
           } else {
@@ -3807,7 +3820,7 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
         LogPrint("deletetx","Delete Tx - Time to Select %s\n", DateTimeStrFormat("%H:%M:%S", selectTime - reorderTime));
 
         //Delete Transactions from wallet
-        DeleteTransactions(removeTxs);
+        DeleteTransactions(removeTxs, removeArcTxs);
 
         auto deleteTime = GetTime();
         LogPrint("deletetx","Delete Tx - Time to Delete %s\n", DateTimeStrFormat("%H:%M:%S", deleteTime - selectTime));
