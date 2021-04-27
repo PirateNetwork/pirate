@@ -374,6 +374,7 @@ void getAllSaplingOVKs(vector<uint256> &ovks, bool fIncludeWatchonly) {
 
     //get ovks for all spending keys
     std::set<libzcash::SaplingPaymentAddress> addresses;
+    std::set<uint256> setOvks;
     pwalletMain->GetSaplingPaymentAddresses(addresses);
     for (auto addr : addresses) {
         libzcash::SaplingIncomingViewingKey ivk;
@@ -381,7 +382,9 @@ void getAllSaplingOVKs(vector<uint256> &ovks, bool fIncludeWatchonly) {
         if(pwalletMain->GetSaplingIncomingViewingKey(addr, ivk)) {
             if(pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
                 if (pwalletMain->HaveSaplingSpendingKey(extfvk) || fIncludeWatchonly) {
-                    ovks.push_back(extfvk.fvk.ovk);
+                    if (setOvks.insert(extfvk.fvk.ovk).second) {
+                        ovks.push_back(extfvk.fvk.ovk);
+                    }
                 }
             }
         }
@@ -399,6 +402,7 @@ void getAllSaplingIVKs(vector<uint256> &ivks, bool fIncludeWatchonly) {
 
     //get ivks for all spending keys
     std::set<libzcash::SaplingPaymentAddress> addresses;
+    std::set<uint256> setIvks;
     pwalletMain->GetSaplingPaymentAddresses(addresses);
     for (auto addr : addresses) {
         libzcash::SaplingIncomingViewingKey ivk;
@@ -406,7 +410,9 @@ void getAllSaplingIVKs(vector<uint256> &ivks, bool fIncludeWatchonly) {
         if(pwalletMain->GetSaplingIncomingViewingKey(addr, ivk)) {
             if(pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
                 if (pwalletMain->HaveSaplingSpendingKey(extfvk) || fIncludeWatchonly) {
-                    ivks.push_back(extfvk.fvk.in_viewing_key());
+                    if(setIvks.insert(ivk).second == false) {
+                        ivks.push_back(ivk);
+                    }
                 }
             }
         }
