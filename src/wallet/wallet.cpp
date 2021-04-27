@@ -3606,6 +3606,7 @@ void CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<ui
     for (int i = 0; i < removeTxs.size(); i++) {
         if (mapWallet.erase(removeTxs[i])) {
             walletdb.EraseTx(removeTxs[i]);
+            NotifyTransactionChanged(this, removeTxs[i], CT_DELETED);
             LogPrint("deletetx","Delete Tx - Deleting tx %s, %i.\n", removeTxs[i].ToString(),i);
         } else {
             LogPrint("deletetx","Delete Tx - Deleting tx %failed.\n", removeTxs[i].ToString());
@@ -3617,6 +3618,7 @@ void CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<ui
     for (int i = 0; i < removeArcTxs.size(); i++) {
         if (mapArcTxs.erase(removeArcTxs[i])) {
             walletdb.EraseArcTx(removeArcTxs[i]);
+            NotifyTransactionChanged(this, removeArcTxs[i], CT_DELETED);
             LogPrint("deletetx","Delete Tx - Deleting Arc tx %s, %i.\n", removeArcTxs[i].ToString(),i);
         } else {
             LogPrint("deletetx","Delete Tx - Deleting Arc tx %failed.\n", removeArcTxs[i].ToString());
