@@ -180,6 +180,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
             }
             amountSwept += amountToSend;
             auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
+            builder.SetExpiryHeight(targetHeight_+ SWEEP_EXPIRY_DELTA);
             LogPrint("zrpcunsafe", "%s: Beginning creating transaction with Sapling output amount=%s\n", getId(), FormatMoney(amountToSend - fee));
 
             // Select Sapling notes
