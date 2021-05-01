@@ -3163,9 +3163,7 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
         //Map all notes by address
         std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>>::iterator it;
-        LogPrintf("z_listunspent #4a\n");
         it = mapResults.find(entry.address);
-        LogPrintf("z_listunspent #4b\n");
         if (it != mapResults.end()) {
             it->second.push_back(entry);
         } else {
