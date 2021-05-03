@@ -3450,12 +3450,59 @@ void CWalletTx::GetAccountAmounts(const string& strAccount, CAmount& nReceived,
 
 bool CWalletTx::WriteToDisk(CWalletDB *pwalletdb)
 {
+      bool txWrite = false;
+      bool arcTxWrite = false;
 
-      bool txWrite = pwalletdb->WriteTx(GetHash(), *this);
-      bool arcTxWrite = pwalletdb->WriteArcTx(GetHash(), ArchiveTxPoint(this->hashBlock, this->nIndex));
+      while(!txWrite || !arcTxWrite) {
 
-      if (!txWrite || !arcTxWrite)
-          return false;
+          //Writing transaction to the database
+          if(!pwalletdb->TxnBegin()) {
+              LogPrintf("WriteToDisk(): Failed to begin tx CWalletTx, aborting.e\n");
+              pwalletdb->TxnAbort();
+              return false;
+          } else {
+              pwalletdb->TxnSetTimeout();
+              txWrite = pwalletdb->WriteTx(GetHash(), *this);
+              if (!txWrite) {
+                  LogPrintf("WriteToDisk(): Failed to write tx CWalletTx, aborting.e\n");
+                  pwalletdb->TxnAbort();
+                  return false;
+              }
+          }
+
+          if(!pwalletdb->TxnCommit()) {
+            LogPrintf("WriteToDisk(): Failed to commit CWalletTx, aborting.e\n");
+            return false;
+          }
+
+
+          //Writing arc transaction to the database
+          if(!pwalletdb->TxnBegin()) {
+              LogPrintf("WriteToDisk(): Failed to begin ArcTx, aborting.e\n");
+              pwalletdb->TxnAbort();
+              return false;
+          } else {
+              pwalletdb->TxnSetTimeout();
+              arcTxWrite = pwalletdb->WriteArcTx(GetHash(), ArchiveTxPoint(this->hashBlock, this->nIndex));
+              if (!arcTxWrite) {
+                  LogPrintf("WriteToDisk(): Failed to write ArcTx, aborting.e\n");
+                  pwalletdb->TxnAbort();
+                  return false;
+              }
+          }
+
+          if(!pwalletdb->TxnCommit()) {
+            LogPrintf("WriteToDisk(): Failed to commit ArcTx, aborting.e\n");
+            return false;
+          }
+
+          if (!txWrite || !arcTxWrite) {
+            MilliSleep(1000);
+            txWrite = false;
+            arcTxWrite = false;
+            LogPrintf("Transaction Write Failed!!! Retrying.");
+          }
+      }
 
       return true;
 }
