@@ -43,6 +43,7 @@
 #include "wallet/asyncrpcoperation_sweeptoaddress.h"
 #include "zcash/address/zip32.h"
 #include "cc/CCinclude.h"
+#include "rpcpiratewallet.h"
 
 #include <assert.h>
 
@@ -1336,9 +1337,82 @@ void CWallet::AddToSaplingSpends(const uint256& nullifier, const uint256& wtxid)
     SyncMetaData<uint256>(range);
 }
 
+
+void CWallet::LoadArcTxs(const uint256& wtxid, const ArchiveTxPoint& ArcTxPt)
+{
+    mapArcTxs[wtxid] = ArcTxPt;
+}
+
 void CWallet::AddToArcTxs(const uint256& wtxid, const ArchiveTxPoint& ArcTxPt)
 {
     mapArcTxs[wtxid] = ArcTxPt;
+
+    uint256 txid = wtxid;
+    RpcArcTransaction arcTx;
+
+    //Get Wallet ovks
+    std::vector<uint256> ovks;
+    getAllSaplingOVKs(ovks, true);
+
+    //Get Wallet ivks
+    std::vector<uint256> ivks;
+    getAllSaplingIVKs(ivks, true);
+
+    getRpcArcTx(txid, arcTx, ivks, ovks, true);
+
+    //Update Address txid map
+    for (auto it = arcTx.addresses.begin(); it != arcTx.addresses.end(); ++it) {
+        std::string addr = *it;
+
+        std::set<uint256> txids;
+        std::map<std::string, std::set<uint256>>::iterator ait;
+
+        ait = mapAddressTxids.find(addr);
+        if (ait != mapAddressTxids.end()) {
+            txids = ait->second;
+        }
+
+        txids.insert(txid);
+
+        mapAddressTxids[addr] = txids;
+
+    }
+}
+
+void CWallet::AddToArcTxs(const CWalletTx& wtx, const ArchiveTxPoint& ArcTxPt)
+{
+    mapArcTxs[wtx.GetHash()] = ArcTxPt;
+
+    CWalletTx tx = wtx;
+
+    RpcArcTransaction arcTx;
+
+    //Get Wallet ovks
+    std::vector<uint256> ovks;
+    getAllSaplingOVKs(ovks, false);
+
+    //Get Wallet ivks
+    std::vector<uint256> ivks;
+    getAllSaplingIVKs(ivks, false);
+
+    getRpcArcTx(tx, arcTx, ivks, ovks, true);
+
+    //Update Address txid map
+    for (auto it = arcTx.addresses.begin(); it != arcTx.addresses.end(); ++it) {
+        std::string addr = *it;
+        std::set<uint256> txids;
+        std::map<std::string, std::set<uint256>>::iterator ait;
+
+        ait = mapAddressTxids.find(addr);
+        if (ait != mapAddressTxids.end()) {
+            txids = ait->second;
+        }
+
+        txids.insert(arcTx.txid);
+
+        mapAddressTxids[addr] = txids;
+
+    }
 }
 
 void CWallet::AddToArcJSOutPoints(const uint256& nullifier, const JSOutPoint& op)
@@ -2320,7 +2394,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
 
         // Write to disk and update tx archive map
         if (fInsertedNew || fUpdated) {
-            // AddToArcTxs(hash, ArchiveTxPoint(wtx.hashBlock, wtx.nIndex));
+            AddToArcTxs(wtx, ArchiveTxPoint(wtx.hashBlock, wtx.nIndex));
             if (!wtx.WriteToDisk(pwalletdb))
                 return false;
         }
@@ -3890,14 +3964,22 @@ bool CWallet::initalizeArcTx() {
 
     for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
         const uint256& wtxid = (*it).first;
+        const CWalletTx wtx = (*it).second;
 
-        CWalletTx wtx = (*it).second;
         if (wtx.GetDepthInMainChain() > 0) {
             map<uint256, ArchiveTxPoint>::iterator ait = mapArcTxs.find(wtxid);
             if (ait == mapArcTxs.end()){
                 return false;
             }
         }
+
+        //Add to mapAddessTxids
+        AddToArcTxs(wtx, ArchiveTxPoint(wtx.hashBlock, wtx.nIndex));
+    }
+
+    for (map<uint256, ArchiveTxPoint>::iterator it = mapArcTxs.begin(); it != mapArcTxs.end(); it++) {
+        //Add to mapAddessTxids
+        AddToArcTxs(it->first, it->second);
     }
 
   return true;

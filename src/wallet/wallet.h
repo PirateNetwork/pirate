@@ -861,8 +861,11 @@ public:
     int64_t NullifierCount();
     std::set<uint256> GetNullifiers();
 
+    std::map<std::string, std::set<uint256>> mapAddressTxids;
     std::map<uint256, ArchiveTxPoint> mapArcTxs;
+    void LoadArcTxs(const uint256& wtxid, const ArchiveTxPoint& ArcTxPt);
     void AddToArcTxs(const uint256& wtxid, const ArchiveTxPoint& ArcTxPt);
+    void AddToArcTxs(const CWalletTx& wtx, const ArchiveTxPoint& ArcTxPt);
 
     std::map<uint256, JSOutPoint> mapArcJSOutPoints;
     void AddToArcJSOutPoints(const uint256& nullifier, const JSOutPoint& op);

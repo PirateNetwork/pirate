@@ -608,7 +608,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             ArchiveTxPoint ArcTxPt;
             ssValue >> ArcTxPt;
 
-            pwallet->AddToArcTxs(wtxid, ArcTxPt);
+            pwallet->LoadArcTxs(wtxid, ArcTxPt);
         }
         else if (strType == "arczcop")
         {

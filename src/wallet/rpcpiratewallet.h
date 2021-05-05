@@ -133,6 +133,7 @@ public:
       CAmount saplingValue = 0;
       int archiveType;
       std::set<string> spentFrom;
+      std::set<string> addresses;
       std::vector<TransactionSpendT> vTSpend;
       std::vector<TransactionSpendZC> vZcSpend;
       std::vector<TransactionSpendZS> vZsSpend;

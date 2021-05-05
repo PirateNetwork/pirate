@@ -413,55 +413,84 @@ void getAllSaplingIVKs(vector<uint256> &ivks, bool fIncludeWatchonly) {
 
 void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, vector<uint256> &ivks, vector<uint256> &ovks, bool fIncludeWatchonly) {
 
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    //set defaults
     arcTx.archiveType = ARCHIVED;
     arcTx.txid = txid;
+    arcTx.coinbase = false;
+    arcTx.category = "not found";
+    arcTx.blockHash = uint256();
+    arcTx.blockIndex = 0;
+    arcTx.nBlockTime = 0;
+    arcTx.rawconfirmations = 0;
+    arcTx.confirmations = 0;
 
     CTransaction tx;
     uint256 hashBlock;
+    int nIndex;
+    ArchiveTxPoint arcTxPt;
+
     //try to find the transaction to pull the hashblock
-    GetTransaction(txid, tx, hashBlock, true);
-    if (!hashBlock.IsNull() && mapBlockIndex[hashBlock] != nullptr) {
-        arcTx.blockHash = hashBlock;
+    // GetTransaction(txid, tx, hashBlock, true);
 
-        int nHeight = chainActive.Tip()->GetHeight();
-        int txHeight = mapBlockIndex[hashBlock]->GetHeight();
-        arcTx.rawconfirmations = nHeight - txHeight + 1;
-        arcTx.confirmations = komodo_dpowconfs(txHeight, nHeight - txHeight + 1);
 
-        arcTx.nBlockTime = mapBlockIndex[hashBlock]->GetBlockTime();
+    std::map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.find(txid);
+    if (it != pwalletMain->mapArcTxs.end()) {
+        //Get Location of tx in blockchain
+        arcTxPt = it->second;
+        hashBlock = arcTxPt.hashBlock;
+        nIndex = arcTxPt.nIndex;
 
-        if (tx.IsCoinBase())
-        {
-            arcTx.coinbase = true;
-            arcTx.category =  "generate";
-        } else {
-            arcTx.coinbase = false;
-            arcTx.category = "standard";
+        // Find the block it claims to be in
+        BlockMap::iterator mi = mapBlockIndex.find(hashBlock);
+        if (mi == mapBlockIndex.end()) {
+            return;
+        }
+        CBlockIndex* pindex = (*mi).second;
+        if (!pindex || !chainActive.Contains(pindex)) {
+            return;
         }
 
-        CBlockIndex* pblockindex = chainActive[mapBlockIndex[hashBlock]->GetHeight()];
+        //Get Tx from block
         CBlock block;
-        ReadBlockFromDisk(block, pblockindex, 1);
+        ReadBlockFromDisk(block, pindex, 1);
 
-        for (int i = 0; i < block.vtx.size(); i++) {
-            if (txid == block.vtx[i].GetHash()) {
-                arcTx.blockIndex = i;
-            }
+        if (nIndex > block.vtx.size() - 1){
+            return; //Tx nIndex is invalid;
         }
 
-        arcTx.nTime = arcTx.nBlockTime;
-        arcTx.expiryHeight = 0;
-        arcTx.size = static_cast<uint64_t>(GetSerializeSize(static_cast<CTransaction>(tx), SER_NETWORK, PROTOCOL_VERSION));
+        //Get Tx
+        tx = block.vtx[nIndex];
 
+        if (tx.GetHash() != txid) {
+            return; //Tx Hash doesn't match;
+        }
+    } else {
+      return;
+    }
+
+    arcTx.blockHash = hashBlock;
+
+    int nHeight = chainActive.Tip()->GetHeight();
+    int txHeight = mapBlockIndex[hashBlock]->GetHeight();
+    arcTx.rawconfirmations = nHeight - txHeight + 1;
+    arcTx.confirmations = komodo_dpowconfs(txHeight, nHeight - txHeight + 1);
+
+    arcTx.nBlockTime = mapBlockIndex[hashBlock]->GetBlockTime();
+
+    if (tx.IsCoinBase())
+    {
+        arcTx.coinbase = true;
+        arcTx.category =  "generate";
     } else {
         arcTx.coinbase = false;
-        arcTx.category = "not found";
-        arcTx.blockHash = uint256();
-        arcTx.blockIndex = 0;
-        arcTx.nBlockTime = 0;
-        arcTx.rawconfirmations = 0;
-        arcTx.confirmations = 0;
+        arcTx.category = "standard";
     }
+
+    arcTx.blockIndex = nIndex;
+    arcTx.nTime = arcTx.nBlockTime;
+    arcTx.expiryHeight = 0;
+    arcTx.size = static_cast<uint64_t>(GetSerializeSize(static_cast<CTransaction>(tx), SER_NETWORK, PROTOCOL_VERSION));
 
     //Spends must be located to determine if outputs are change
     getTransparentSpends(tx, arcTx.vTSpend, arcTx.transparentValue, fIncludeWatchonly);
@@ -477,20 +506,48 @@ void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, vector<uint256> &ivks,
 
     arcTx.saplingValue = -tx.valueBalance;
 
+    //Create Set of wallet address the belong to the wallet for this tx and have been spent from
     for (int i = 0; i < arcTx.vTSpend.size(); i++) {
         arcTx.spentFrom.insert(arcTx.vTSpend[i].encodedAddress);
     }
-
     for (int i = 0; i < arcTx.vZcSpend.size(); i++) {
         arcTx.spentFrom.insert(arcTx.vZcSpend[i].encodedAddress);
     }
-
     for (int i = 0; i < arcTx.vZsSpend.size(); i++) {
         arcTx.spentFrom.insert(arcTx.vZsSpend[i].encodedAddress);
     }
+
+    //Create Set of wallet address the belong to the wallet for this tx
+    for (int i = 0; i < arcTx.vTSpend.size(); i++) {
+        arcTx.addresses.insert(arcTx.vTSpend[i].encodedAddress);
+    }
+    for (int i = 0; i < arcTx.vZcSpend.size(); i++) {
+        arcTx.addresses.insert(arcTx.vZcSpend[i].encodedAddress);
+    }
+    for (int i = 0; i < arcTx.vZsSpend.size(); i++) {
+        arcTx.addresses.insert(arcTx.vZsSpend[i].encodedAddress);
+    }
+    for (int i = 0; i < arcTx.vTSend.size(); i++) {
+        arcTx.addresses.insert(arcTx.vTSend[i].encodedAddress);
+    }
+    for (int i = 0; i < arcTx.vZsSend.size(); i++) {
+        arcTx.addresses.insert(arcTx.vZsSend[i].encodedAddress);
+    }
+    for (int i = 0; i < arcTx.vTReceived.size(); i++) {
+        arcTx.addresses.insert(arcTx.vTReceived[i].encodedAddress);
+    }
+    for(int i = 0; i < arcTx.vZcReceived.size(); i++) {
+        arcTx.addresses.insert(arcTx.vZcReceived[i].encodedAddress);
+    }
+    for(int i = 0; i < arcTx.vZsReceived.size(); i++) {
+        arcTx.addresses.insert(arcTx.vZsReceived[i].encodedAddress);
+    }
+
 }
 
 void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, vector<uint256> &ivks, vector<uint256> &ovks, bool fIncludeWatchonly) {
+
+    LOCK(pwalletMain->cs_wallet);
 
     arcTx.archiveType = ACTIVE;
     arcTx.txid = tx.GetHash();
@@ -539,16 +596,41 @@ void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, vector<uint256> &ivks,
 
     arcTx.saplingValue = -tx.valueBalance;
 
+    //Create Set of wallet address the belong to the wallet for this tx and have been spent from
     for (int i = 0; i < arcTx.vTSpend.size(); i++) {
         arcTx.spentFrom.insert(arcTx.vTSpend[i].encodedAddress);
     }
-
     for (int i = 0; i < arcTx.vZcSpend.size(); i++) {
         arcTx.spentFrom.insert(arcTx.vZcSpend[i].encodedAddress);
     }
-
     for (int i = 0; i < arcTx.vZsSpend.size(); i++) {
         arcTx.spentFrom.insert(arcTx.vZsSpend[i].encodedAddress);
+    }
+
+    //Create Set of wallet address the belong to the wallet for this tx
+    for (int i = 0; i < arcTx.vTSpend.size(); i++) {
+        arcTx.addresses.insert(arcTx.vTSpend[i].encodedAddress);
+    }
+    for (int i = 0; i < arcTx.vZcSpend.size(); i++) {
+        arcTx.addresses.insert(arcTx.vZcSpend[i].encodedAddress);
+    }
+    for (int i = 0; i < arcTx.vZsSpend.size(); i++) {
+        arcTx.addresses.insert(arcTx.vZsSpend[i].encodedAddress);
+    }
+    for (int i = 0; i < arcTx.vTSend.size(); i++) {
+        arcTx.addresses.insert(arcTx.vTSend[i].encodedAddress);
+    }
+    for (int i = 0; i < arcTx.vZsSend.size(); i++) {
+        arcTx.addresses.insert(arcTx.vZsSend[i].encodedAddress);
+    }
+    for (int i = 0; i < arcTx.vTReceived.size(); i++) {
+        arcTx.addresses.insert(arcTx.vTReceived[i].encodedAddress);
+    }
+    for(int i = 0; i < arcTx.vZcReceived.size(); i++) {
+        arcTx.addresses.insert(arcTx.vZcReceived[i].encodedAddress);
+    }
+    for(int i = 0; i < arcTx.vZsReceived.size(); i++) {
+        arcTx.addresses.insert(arcTx.vZsReceived[i].encodedAddress);
     }
 }
 
