@@ -4146,6 +4146,92 @@ UniValue z_getbalance(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return ValueFromAmount(nBalance);
 }
 
+UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() > 1)
+        throw runtime_error(
+            "z_getbalances ( minconf includeWatchonly )\n"
+            "\nReturns array of wallet sapling addresses and balances.\n"
+            "Results are an array of Objects, each of which has:\n"
+            "{address,balance,unconfirmed,spendable}\n"
+            "\nArguments:\n"
+            "1. includeWatchonly (bool, optional, default=false) Also include watchonly addresses (see 'z_importviewingkey')\n"
+            "\nResult\n"
+            "[                             (array of json object)\n"
+            "  {\n"
+            "    \"address\" : \"address\",          (string) the transaction id \n"
+            "    \"balance\" : n             (numeric) confirmed address balance\n"
+            "    \"unconfirmed\" : n             (numeric) unconfirmed address balance\n"
+            "  }\n"
+            "  ,...\n"
+            "]\n"
+            "\nExamples\n"
+            + HelpExampleCli("z_getbalances", "")
+            + HelpExampleCli("z_getbalances", "false")
+            + HelpExampleRpc("z_getbalances", "true")
+        );
+
+    RPCTypeCheck(params, boost::assign::list_of((UniValue::VBOOL)));
+
+
+    bool fIncludeWatchonly = false;
+    if (params.size() > 0) {
+        fIncludeWatchonly = params[0].get_bool();
+    }
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    UniValue results(UniValue::VARR);
+
+    //Get All Notes
+    std::set<libzcash::PaymentAddress> zaddrs = {};
+    std::vector<CSproutNotePlaintextEntry> sproutEntries;
+    std::vector<SaplingNoteEntry> saplingEntries;
+    pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, zaddrs, 0, 99999999, true, !fIncludeWatchonly, false);
+    std::map<libzcash::SaplingPaymentAddress, std::vector<CAmount>> mapResults;
+
+    for (auto & entry : saplingEntries) {
+        //Get Note depths
+        int nHeight   = tx_height(entry.op.hash);
+        int dpowconfs = komodo_dpowconfs(nHeight, entry.confirmations);
+
+        //Map all balances by address
+        std::map<libzcash::SaplingPaymentAddress, std::vector<CAmount>>::iterator it;
+        it = mapResults.find(entry.address);
+        if (it != mapResults.end()) {
+            if (entry.confirmations > 0) {
+                it->second[0] += CAmount(entry.note.value());
+            } else {
+                it->second[1] += CAmount(entry.note.value());
+            }
+        } else {
+            std::vector<CAmount> balance;
+            if (entry.confirmations > 0) {
+                balance.push_back(CAmount(entry.note.value()));
+                balance.push_back(0);
+            } else {
+                balance.push_back(0);
+                balance.push_back(CAmount(entry.note.value()));
+            }
+            mapResults[entry.address] = balance;
+        }
+    }
+
+    for (std::map<libzcash::SaplingPaymentAddress, std::vector<CAmount>>::iterator it = mapResults.begin(); it != mapResults.end(); it++) {
+        UniValue obj(UniValue::VOBJ);
+        auto hasSaplingSpendingKey = boost::apply_visitor(HaveSpendingKeyForPaymentAddress(pwalletMain), it->first);
+        obj.push_back(Pair("address", EncodePaymentAddress(it->first)));
+        obj.push_back(Pair("balance", ValueFromAmount(it->second[0])));
+        obj.push_back(Pair("unconfirmed", ValueFromAmount(it->second[1])));
+        obj.push_back(Pair("spendable", hasSaplingSpendingKey));
+        results.push_back(obj);
+    }
+
+    return results;
+}
 
 UniValue z_gettotalbalance(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
