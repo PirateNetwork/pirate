@@ -3452,56 +3452,55 @@ bool CWalletTx::WriteToDisk(CWalletDB *pwalletdb)
 {
       bool txWrite = false;
       bool arcTxWrite = false;
+      int retries = 0;
 
       while(!txWrite || !arcTxWrite) {
 
           //Writing transaction to the database
           if(!pwalletdb->TxnBegin()) {
-              LogPrintf("WriteToDisk(): Failed to begin tx CWalletTx, aborting.e\n");
+              LogPrintf("WriteToDisk(): Failed to begin tx CWalletTx, will retry.\n");
               pwalletdb->TxnAbort();
-              return false;
           } else {
               pwalletdb->TxnSetTimeout();
               txWrite = pwalletdb->WriteTx(GetHash(), *this);
               if (!txWrite) {
-                  LogPrintf("WriteToDisk(): Failed to write tx CWalletTx, aborting.e\n");
+                  LogPrintf("WriteToDisk(): Failed to write tx CWalletTx, will retry.\n");
                   pwalletdb->TxnAbort();
-                  return false;
+              } else {
+                  if(!pwalletdb->TxnCommit()) {
+                    LogPrintf("WriteToDisk(): Failed to commit CWalletTx, warning.\n");
+                  }
               }
           }
 
-          if(!pwalletdb->TxnCommit()) {
-            LogPrintf("WriteToDisk(): Failed to commit CWalletTx, aborting.e\n");
-            return false;
-          }
-
-
           //Writing arc transaction to the database
           if(!pwalletdb->TxnBegin()) {
-              LogPrintf("WriteToDisk(): Failed to begin ArcTx, aborting.e\n");
+              LogPrintf("WriteToDisk(): Failed to begin ArcTx, will retry.\n");
               pwalletdb->TxnAbort();
-              return false;
           } else {
               pwalletdb->TxnSetTimeout();
               arcTxWrite = pwalletdb->WriteArcTx(GetHash(), ArchiveTxPoint(this->hashBlock, this->nIndex));
               if (!arcTxWrite) {
-                  LogPrintf("WriteToDisk(): Failed to write ArcTx, aborting.e\n");
+                  LogPrintf("WriteToDisk(): Failed to write ArcTx, will retry.\n");
                   pwalletdb->TxnAbort();
-                  return false;
+              } else {
+                  if(!pwalletdb->TxnCommit()) {
+                    LogPrintf("WriteToDisk(): Failed to commit ArcTx, warning.\n");
+                  }
               }
-          }
-
-          if(!pwalletdb->TxnCommit()) {
-            LogPrintf("WriteToDisk(): Failed to commit ArcTx, aborting.e\n");
-            return false;
           }
 
           if (!txWrite || !arcTxWrite) {
             MilliSleep(1000);
             txWrite = false;
             arcTxWrite = false;
-            LogPrintf("Transaction Write Failed!!! Retrying.");
+            retries++;
+            LogPrintf("Transaction Write Failed!!! Retrying.\n");
           }
+      }
+
+      if (retries > 0) {
+         LogPrintf("WriteToDisk complete after %d retires.\n", retries);
       }
 
       return true;
