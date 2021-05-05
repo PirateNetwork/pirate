@@ -372,20 +372,16 @@ void getAllSproutRKs(vector<uint256> &rks) {
 
 void getAllSaplingOVKs(vector<uint256> &ovks, bool fIncludeWatchonly) {
 
+    std::set<libzcash::SaplingIncomingViewingKey> setIvks;
+    pwalletMain->GetSaplingIncomingViewingKeySet(setIvks);
     //get ovks for all spending keys
-    std::set<libzcash::SaplingPaymentAddress> addresses;
-    std::set<uint256> setOvks;
-    pwalletMain->GetSaplingPaymentAddresses(addresses);
-    for (auto addr : addresses) {
-        libzcash::SaplingIncomingViewingKey ivk;
+    for (std::set<libzcash::SaplingIncomingViewingKey>::iterator it = setIvks.begin(); it != setIvks.end(); it++) {
+        libzcash::SaplingIncomingViewingKey ivk = (*it);
         libzcash::SaplingExtendedFullViewingKey extfvk;
-        if(pwalletMain->GetSaplingIncomingViewingKey(addr, ivk)) {
-            if(pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
-                if (pwalletMain->HaveSaplingSpendingKey(extfvk) || fIncludeWatchonly) {
-                    if (setOvks.insert(extfvk.fvk.ovk).second) {
-                        ovks.push_back(extfvk.fvk.ovk);
-                    }
-                }
+
+        if(pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
+            if (pwalletMain->HaveSaplingSpendingKey(extfvk) || fIncludeWatchonly) {
+                ovks.push_back(extfvk.fvk.ovk);
             }
         }
     }
@@ -395,25 +391,20 @@ void getAllSaplingOVKs(vector<uint256> &ovks, bool fIncludeWatchonly) {
     if (pwalletMain->GetHDSeed(seed)) {
         ovks.push_back(ovkForShieldingFromTaddr(seed));
     }
-
 }
 
 void getAllSaplingIVKs(vector<uint256> &ivks, bool fIncludeWatchonly) {
 
+    std::set<libzcash::SaplingIncomingViewingKey> setIvks;
+    pwalletMain->GetSaplingIncomingViewingKeySet(setIvks);
     //get ivks for all spending keys
-    std::set<libzcash::SaplingPaymentAddress> addresses;
-    std::set<uint256> setIvks;
-    pwalletMain->GetSaplingPaymentAddresses(addresses);
-    for (auto addr : addresses) {
-        libzcash::SaplingIncomingViewingKey ivk;
+    for (std::set<libzcash::SaplingIncomingViewingKey>::iterator it = setIvks.begin(); it != setIvks.end(); it++) {
+        libzcash::SaplingIncomingViewingKey ivk = (*it);
         libzcash::SaplingExtendedFullViewingKey extfvk;
-        if(pwalletMain->GetSaplingIncomingViewingKey(addr, ivk)) {
-            if(pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
-                if (pwalletMain->HaveSaplingSpendingKey(extfvk) || fIncludeWatchonly) {
-                    if(setIvks.insert(ivk).second == false) {
-                        ivks.push_back(ivk);
-                    }
-                }
+
+        if(pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
+            if (pwalletMain->HaveSaplingSpendingKey(extfvk) || fIncludeWatchonly) {
+                ivks.push_back(ivk);
             }
         }
     }

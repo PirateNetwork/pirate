@@ -278,6 +278,13 @@ public:
     }
 
     //! Sapling
+    void GetSaplingIncomingViewingKeySet(SaplingIncomingViewingKeySet &ivks) {
+        LOCK(cs_SpendingKeyStore);
+        for (SaplingIncomingViewingKeySet::iterator it = setSaplingIncomingViewingKeys.begin(); it != setSaplingIncomingViewingKeys.end(); it++) {
+            ivks.insert(*it);
+        }
+    }
+
     bool AddSaplingSpendingKey(
         const libzcash::SaplingExtendedSpendingKey &sk);
     bool HaveSaplingSpendingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk) const
