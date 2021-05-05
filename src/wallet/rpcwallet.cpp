@@ -4222,11 +4222,10 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     for (std::map<libzcash::SaplingPaymentAddress, std::vector<CAmount>>::iterator it = mapResults.begin(); it != mapResults.end(); it++) {
         UniValue obj(UniValue::VOBJ);
-        auto hasSaplingSpendingKey = boost::apply_visitor(HaveSpendingKeyForPaymentAddress(pwalletMain), it->first);
         obj.push_back(Pair("address", EncodePaymentAddress(it->first)));
         obj.push_back(Pair("balance", ValueFromAmount(it->second[0])));
         obj.push_back(Pair("unconfirmed", ValueFromAmount(it->second[1])));
-        obj.push_back(Pair("spendable", hasSaplingSpendingKey));
+        obj.push_back(Pair("spendable", HaveSpendingKeyForPaymentAddress(pwalletMain)(it->first)));
         results.push_back(obj);
     }
 
