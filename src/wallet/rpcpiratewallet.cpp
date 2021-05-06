@@ -2472,8 +2472,6 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
           }
 
           if (wtx.GetDepthInMainChain() == 0) {
-            LogPrintf("Unconfirmed Tx %s\n", wtx.GetHash().ToString());
-            LogPrintf("Unconfirmed Tx Key %i %i\n", chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
             ut = wtx.GetHash();
             key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
             sortedArchive[key] = wtx.GetHash();
@@ -2482,8 +2480,6 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
             key = make_pair(mapBlockIndex[wtx.hashBlock]->GetHeight(), wtx.nIndex);
             sortedArchive[key] = wtx.GetHash();
           } else {
-            LogPrintf("Unconfirmed Tx else %s\n", wtx.GetHash().ToString());
-            LogPrintf("Unconfirmed Tx else Key %i %i\n", chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
             key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
             sortedArchive[key] = wtx.GetHash();
             nPosUnconfirmed++;
