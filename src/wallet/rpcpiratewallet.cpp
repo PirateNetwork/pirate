@@ -2112,6 +2112,14 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
     txAmounts.locked = 0;
     txAmounts.immature = 0;
 
+    //get Ovks for sapling decryption
+    std::vector<uint256> ovks;
+    getAllSaplingOVKs(ovks, fIncludeWatchonly);
+
+    //get Ivks for sapling decryption
+    std::vector<uint256> ivks;
+    getAllSaplingIVKs(ivks, fIncludeWatchonly);
+
 
     //Create map of addresses
     //Add all Transaparent addresses to list
@@ -2250,41 +2258,41 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
               continue;
 
           //Decrypt sapling incoming commitments using IVK
-          for (auto addr : zs_addresses) {
-              libzcash::SaplingIncomingViewingKey ivk;
+          for (int i = 0; i < ivks.size(); i++) {
+              auto ivk = SaplingIncomingViewingKey(ivks[i]);
               libzcash::SaplingExtendedFullViewingKey extfvk;
-              if(pwalletMain->GetSaplingIncomingViewingKey(addr, ivk)) {
-                  if(pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
-                      if (pwalletMain->HaveSaplingSpendingKey(extfvk) || fIncludeWatchonly) {
+              if(pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
+                  if (pwalletMain->HaveSaplingSpendingKey(extfvk) || fIncludeWatchonly) {
 
-                          auto pt = libzcash::SaplingNotePlaintext::decrypt(
-                              wtx.vShieldedOutput[op.n].encCiphertext,ivk,wtx.vShieldedOutput[op.n].ephemeralKey,wtx.vShieldedOutput[op.n].cm);
+                      auto pt = libzcash::SaplingNotePlaintext::decrypt(
+                          wtx.vShieldedOutput[op.n].encCiphertext,ivk,wtx.vShieldedOutput[op.n].ephemeralKey,wtx.vShieldedOutput[op.n].cm);
 
-                          if (txType == 0 && pwalletMain->IsLockedNote(op))
-                              txType == 3;
+                      if (txType == 0 && pwalletMain->IsLockedNote(op))
+                          txType == 3;
 
-                          if (pt) {
-                              auto note = pt.get();
-                              string addressString = EncodePaymentAddress(addr);
-                              if (addressBalances.count(addressString) == 0)
-                                  addressBalances.insert(make_pair(addressString,txAmounts));
+                      if (pt) {
+                          auto note = pt.get();
+                          auto pa = ivk.address(note.d);
+                          auto addr = pa.get();
+                          string addressString = EncodePaymentAddress(addr);
+                          if (addressBalances.count(addressString) == 0)
+                              addressBalances.insert(make_pair(addressString,txAmounts));
 
-                              if (txType == 0) {
-                                  addressBalances.at(addressString).confirmed += note.value();
-                                  privateConfirmed += note.value();
-                              } else if (txType == 1) {
-                                  addressBalances.at(addressString).immature += note.value();
-                                  privateImmature += note.value();
-                              } else if (txType == 2) {
-                                  addressBalances.at(addressString).unconfirmed += note.value();
-                                  privateUnconfirmed += note.value();
-                              } else if (txType == 3) {
-                                  addressBalances.at(addressString).locked += note.value();
-                                  privateLocked += note.value();
-                              }
-                              addressBalances.at(addressString).spendable = pwalletMain->HaveSaplingSpendingKey(extfvk);
-                              continue;
+                          if (txType == 0) {
+                              addressBalances.at(addressString).confirmed += note.value();
+                              privateConfirmed += note.value();
+                          } else if (txType == 1) {
+                              addressBalances.at(addressString).immature += note.value();
+                              privateImmature += note.value();
+                          } else if (txType == 2) {
+                              addressBalances.at(addressString).unconfirmed += note.value();
+                              privateUnconfirmed += note.value();
+                          } else if (txType == 3) {
+                              addressBalances.at(addressString).locked += note.value();
+                              privateLocked += note.value();
                           }
+                          addressBalances.at(addressString).spendable = pwalletMain->HaveSaplingSpendingKey(extfvk);
+                          continue;
                       }
                   }
               }
@@ -2385,6 +2393,7 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
 
     //get transactions
+    uint64_t t = GetTime();
     int nCount = 200;
     UniValue trans(UniValue::VARR);
     UniValue transTime(UniValue::VARR);
@@ -2426,14 +2435,19 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
         std::map<std::pair<int,int>, uint256> sortedArchive;
         for (map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.begin(); it != pwalletMain->mapArcTxs.end(); ++it)
         {
-          uint256 txid = (*it).first;
-          ArchiveTxPoint arcTxPt = (*it).second;
-          std::pair<int,int> key;
+            uint256 txid = (*it).first;
+            ArchiveTxPoint arcTxPt = (*it).second;
+            std::pair<int,int> key;
 
-          if (!arcTxPt.hashBlock.IsNull() && mapBlockIndex[arcTxPt.hashBlock] != nullptr) {
-            key = make_pair(mapBlockIndex[arcTxPt.hashBlock]->GetHeight(), arcTxPt.nIndex);
-            sortedArchive[key] = txid;
-          }
+            if (!arcTxPt.hashBlock.IsNull() && mapBlockIndex[arcTxPt.hashBlock] != nullptr) {
+                //Exclude Transactions older that max days old
+                if (mapBlockIndex[arcTxPt.hashBlock]->GetBlockTime() < (t - (day * 60 * 60 * 24))) {
+                    continue;
+                }
+
+                key = make_pair(mapBlockIndex[arcTxPt.hashBlock]->GetHeight(), arcTxPt.nIndex);
+                sortedArchive[key] = txid;
+            }
         }
 
         //add any missing wallet transactions - unconfimred & conflicted
@@ -2441,6 +2455,21 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
         for (map<int64_t,CWalletTx>::reverse_iterator it = orderedTxs.rbegin(); it != orderedTxs.rend(); ++it) {
           CWalletTx wtx = (*it).second;
           std::pair<int,int> key;
+
+          if (!CheckFinalTx(wtx))
+              continue;
+
+          if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapSproutNoteData.size() == 0 && !wtx.IsTrusted())
+              continue;
+
+          //Excude transactions with less confirmations than required
+          if (wtx.GetDepthInMainChain() < 0 )
+              continue;
+
+          //Exclude Transactions older that max days old
+          if (wtx.GetDepthInMainChain() > 0 && mapBlockIndex[wtx.hashBlock]->GetBlockTime() < (t - (day * 60 * 60 * 24))) {
+              continue;
+          }
 
           if (wtx.GetDepthInMainChain() == 0) {
             LogPrintf("Unconfirmed Tx %s\n", wtx.GetHash().ToString());
@@ -2462,15 +2491,6 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
         }
 
-        //get Ovks for sapling decryption
-        std::vector<uint256> ovks;
-        getAllSaplingOVKs(ovks, fIncludeWatchonly);
-
-        //get Ivks for sapling decryption
-        std::vector<uint256> ivks;
-        getAllSaplingIVKs(ivks, fIncludeWatchonly);
-
-        uint64_t t = GetTime();
         for (map<std::pair<int,int>, uint256>::reverse_iterator it = sortedArchive.rbegin(); it != sortedArchive.rend(); ++it)
         {
 
@@ -2481,35 +2501,11 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
                 CWalletTx& wtx = pwalletMain->mapWallet[txid];
 
-                if (!CheckFinalTx(wtx))
-                    continue;
-
-                if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapSproutNoteData.size() == 0 && !wtx.IsTrusted())
-                    continue;
-
-                //Excude transactions with less confirmations than required
-                if (wtx.GetDepthInMainChain() < 0 )
-                    continue;
-
-                //Exclude Transactions older that max days old
-                if (wtx.GetDepthInMainChain() > 0 && mapBlockIndex[wtx.hashBlock]->GetBlockTime() < (t - (day * 60 * 60 * 24))) {
-                    continue;
-                }
-
                 getRpcArcTx(wtx, arcTx, ivks, ovks, fIncludeWatchonly);
 
             } else {
                 //Archived Transactions
                 getRpcArcTx(txid, arcTx, ivks, ovks, fIncludeWatchonly);
-
-                if (arcTx.blockHash.IsNull() || mapBlockIndex[arcTx.blockHash] == nullptr)
-                  continue;
-
-                //Exclude Transactions older that max days old
-                if (arcTx.nBlockTime < (t - (day * 60 * 60 * 24))) {
-                    continue;
-                }
-
             }
 
             UniValue txObj(UniValue::VOBJ);
