@@ -75,10 +75,14 @@ bool CWalletDB::ErasePurpose(const string& strPurpose)
 }
 
 //Begin Historical Wallet Tx
-bool CWalletDB::WriteArcTx(uint256 hash, ArchiveTxPoint arcTxPoint)
+bool CWalletDB::WriteArcTx(uint256 hash, ArchiveTxPoint arcTxPoint, bool txnProtected)
 {
     nWalletDBUpdated++;
-    return Write(std::make_pair(std::string("arctx"), hash), arcTxPoint);
+    if (txnProtected) {
+        return WriteTxn(std::make_pair(std::string("arctx"), hash), arcTxPoint, __FUNCTION__);
+    } else {
+        return Write(std::make_pair(std::string("arctx"), hash), arcTxPoint);
+    }
 }
 
 bool CWalletDB::EraseArcTx(uint256 hash)
@@ -112,10 +116,14 @@ bool CWalletDB::EraseArcSaplingOp(uint256 nullifier)
 }
 //End Historical Wallet Tx
 
-bool CWalletDB::WriteTx(uint256 hash, const CWalletTx& wtx)
+bool CWalletDB::WriteTx(uint256 hash, const CWalletTx& wtx, bool txnProtected)
 {
     nWalletDBUpdated++;
-    return Write(std::make_pair(std::string("tx"), hash), wtx);
+    if (txnProtected) {
+        return WriteTxn(std::make_pair(std::string("tx"), hash), wtx, __FUNCTION__);
+    } else {
+        return Write(std::make_pair(std::string("tx"), hash), wtx);
+    }
 }
 
 bool CWalletDB::EraseTx(uint256 hash)
@@ -477,7 +485,7 @@ DBErrors CWalletDB::ReorderTransactions(CWallet* pwallet)
 
             if (pwtx)
             {
-                if (!WriteTx(pwtx->GetHash(), *pwtx))
+                if (!WriteTx(pwtx->GetHash(), *pwtx, true))
                     return DB_LOAD_FAIL;
             }
             else
@@ -501,7 +509,7 @@ DBErrors CWalletDB::ReorderTransactions(CWallet* pwallet)
             // Since we're changing the order, write it back
             if (pwtx)
             {
-                if (!WriteTx(pwtx->GetHash(), *pwtx))
+                if (!WriteTx(pwtx->GetHash(), *pwtx, true))
                     return DB_LOAD_FAIL;
             }
             else
@@ -1183,7 +1191,7 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
         pwallet->nTimeFirstKey = 1; // 0 would be considered 'no value'
 
     BOOST_FOREACH(uint256 hash, wss.vWalletUpgrade)
-        WriteTx(hash, pwallet->mapWallet[hash]);
+        WriteTx(hash, pwallet->mapWallet[hash], true);
 
     // Rewrite encrypted wallets of versions 0.4.0 and 0.5.0rc:
     if (wss.fIsEncrypted && (wss.nFileVersion == 40000 || wss.nFileVersion == 50000))

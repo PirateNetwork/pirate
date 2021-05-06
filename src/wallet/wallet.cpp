@@ -1851,6 +1851,14 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
 
   }
 
+  //If the wallet if flagged as have failt to save a tx, we will do it here.
+  if (writeTxFailed) {
+      CWalletDB *pwalletdb = new CWalletDB(strWalletFile);
+      for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
+          wtxItem.second.WriteToDisk(pwalletdb);
+      }
+  }
+
   if (uiShown) {
       uiInterface.ShowProgress(_("Witness Cache Complete..."), 100, false);
   }
@@ -2396,7 +2404,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
         if (fInsertedNew || fUpdated) {
             AddToArcTxs(wtx, ArchiveTxPoint(wtx.hashBlock, wtx.nIndex));
             if (!wtx.WriteToDisk(pwalletdb))
-                return false;
+                writeTxFailed = true;
         }
 
         // Break debit/credit balance caches:
@@ -3524,60 +3532,13 @@ void CWalletTx::GetAccountAmounts(const string& strAccount, CAmount& nReceived,
 
 bool CWalletTx::WriteToDisk(CWalletDB *pwalletdb)
 {
-      bool txWrite = false;
-      bool arcTxWrite = false;
-      int retries = 0;
+    bool txWrite = pwalletdb->WriteTx(GetHash(), *this, true);
+    bool arcTxWrite = pwalletdb->WriteArcTx(GetHash(), ArchiveTxPoint(this->hashBlock, this->nIndex), true);
 
-      while(!txWrite || !arcTxWrite) {
+    if (!txWrite || !arcTxWrite)
+        return false;
 
-          //Writing transaction to the database
-          if(!pwalletdb->TxnBegin()) {
-              LogPrintf("WriteToDisk(): Failed to begin tx CWalletTx, will retry.\n");
-              pwalletdb->TxnAbort();
-          } else {
-              pwalletdb->TxnSetTimeout();
-              txWrite = pwalletdb->WriteTx(GetHash(), *this);
-              if (!txWrite) {
-                  LogPrintf("WriteToDisk(): Failed to write tx CWalletTx, will retry.\n");
-                  pwalletdb->TxnAbort();
-              } else {
-                  if(!pwalletdb->TxnCommit()) {
-                    LogPrintf("WriteToDisk(): Failed to commit CWalletTx, warning.\n");
-                  }
-              }
-          }
-
-          //Writing arc transaction to the database
-          if(!pwalletdb->TxnBegin()) {
-              LogPrintf("WriteToDisk(): Failed to begin ArcTx, will retry.\n");
-              pwalletdb->TxnAbort();
-          } else {
-              pwalletdb->TxnSetTimeout();
-              arcTxWrite = pwalletdb->WriteArcTx(GetHash(), ArchiveTxPoint(this->hashBlock, this->nIndex));
-              if (!arcTxWrite) {
-                  LogPrintf("WriteToDisk(): Failed to write ArcTx, will retry.\n");
-                  pwalletdb->TxnAbort();
-              } else {
-                  if(!pwalletdb->TxnCommit()) {
-                    LogPrintf("WriteToDisk(): Failed to commit ArcTx, warning.\n");
-                  }
-              }
-          }
-
-          if (!txWrite || !arcTxWrite) {
-            MilliSleep(1000);
-            txWrite = false;
-            arcTxWrite = false;
-            retries++;
-            LogPrintf("Transaction Write Failed!!! Retrying.\n");
-          }
-      }
-
-      if (retries > 0) {
-         LogPrintf("WriteToDisk complete after %d retires.\n", retries);
-      }
-
-      return true;
+    return true;
 }
 
 bool CWalletTx::WriteArcSproutOpToDisk(CWalletDB *pwalletdb, uint256 nullifier, JSOutPoint op)

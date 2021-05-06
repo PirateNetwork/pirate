@@ -903,7 +903,7 @@ protected:
                 // (i.e. are purely transparent), as well as shielding and unshielding
                 // transactions in which we only have transparent addresses involved.
                 if (!(wtx.mapSproutNoteData.empty() && wtx.mapSaplingNoteData.empty())) {
-                    if (!walletdb.WriteTx(wtxItem.first, wtx)) {
+                    if (!walletdb.WriteTx(wtxItem.first, wtx, false)) {
                         LogPrintf("SetBestChain(): Failed to write CWalletTx, aborting atomic write\n");
                         walletdb.TxnAbort();
                         return;
@@ -1061,6 +1061,7 @@ public:
     std::map<uint256, SaplingOutPoint> mapSaplingNullifiersToNotes;
 
     std::map<uint256, CWalletTx> mapWallet;
+    bool writeTxFailed = false;
 
     int64_t nOrderPosNext;
     std::map<uint256, int> mapRequestCount;
