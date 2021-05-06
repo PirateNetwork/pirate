@@ -1341,6 +1341,16 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
     if (!isTAddress && !isZcAddress && !isZsAddress)
         return ret;
 
+    //Get set of txids that the encoded address was used in
+    std::map<std::string, std::set<uint256>>::iterator ait;
+    ait = pwalletMain->mapAddressTxids.find(encodedAddress);
+    std::set<uint256> txids;
+
+    if (ait != pwalletMain->mapAddressTxids.end()) {
+        txids = ait->second;
+    } else {
+        return ret;
+    }
 
     //get Sorted Archived Transactions
     std::map<std::pair<int,int>, uint256> sortedArchive;
@@ -1349,6 +1359,12 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
       uint256 txid = (*it).first;
       ArchiveTxPoint arcTxPt = (*it).second;
       std::pair<int,int> key;
+
+      std::set<uint256>::iterator txit;
+      txit = txids.find(txid);
+      if (txit == txids.end()) {
+          continue;
+      }
 
       if (!arcTxPt.hashBlock.IsNull() && mapBlockIndex[arcTxPt.hashBlock] != nullptr) {
         key = make_pair(mapBlockIndex[arcTxPt.hashBlock]->GetHeight(), arcTxPt.nIndex);
@@ -1361,6 +1377,12 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
     for (map<uint256,CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it) {
       CWalletTx wtx = (*it).second;
       std::pair<int,int> key;
+
+      std::set<uint256>::iterator txit;
+      txit = txids.find(wtx.GetHash());
+      if (txit == txids.end()) {
+          continue;
+      }
 
       if (wtx.GetDepthInMainChain() == 0) {
         key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
@@ -1619,6 +1641,16 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
     if (!isTAddress && !isZcAddress && !isZsAddress)
         return ret;
 
+    //Get set of txids that the encoded address was used in
+    std::map<std::string, std::set<uint256>>::iterator ait;
+    ait = pwalletMain->mapAddressTxids.find(encodedAddress);
+    std::set<uint256> txids;
+    if (ait != pwalletMain->mapAddressTxids.end()) {
+        txids = ait->second;
+    } else {
+        return ret;
+    }
+
     //get Sorted Archived Transactions
     std::map<std::pair<int,int>, uint256> sortedArchive;
     for (map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.begin(); it != pwalletMain->mapArcTxs.end(); ++it)
@@ -1626,6 +1658,12 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
       uint256 txid = (*it).first;
       ArchiveTxPoint arcTxPt = (*it).second;
       std::pair<int,int> key;
+
+      std::set<uint256>::iterator txit;
+      txit = txids.find(txid);
+      if (txit == txids.end()) {
+          continue;
+      }
 
       if (!arcTxPt.hashBlock.IsNull() && mapBlockIndex[arcTxPt.hashBlock] != nullptr) {
         key = make_pair(mapBlockIndex[arcTxPt.hashBlock]->GetHeight(), arcTxPt.nIndex);
@@ -1638,6 +1676,12 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
     for (map<uint256,CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it) {
       CWalletTx wtx = (*it).second;
       std::pair<int,int> key;
+
+      std::set<uint256>::iterator txit;
+      txit = txids.find(wtx.GetHash());
+      if (txit == txids.end()) {
+          continue;
+      }
 
       if (wtx.GetDepthInMainChain() == 0) {
         key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
@@ -1896,6 +1940,17 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
     if (!isTAddress && !isZcAddress && !isZsAddress)
         return ret;
 
+    //Get set of txids that the encoded address was used in
+    std::map<std::string, std::set<uint256>>::iterator ait;
+    ait = pwalletMain->mapAddressTxids.find(encodedAddress);
+    std::set<uint256> txids;
+
+    if (ait != pwalletMain->mapAddressTxids.end()) {
+        txids = ait->second;
+    } else {
+        return ret;
+    }
+
     //get Sorted Archived Transactions
     std::map<std::pair<int,int>, uint256> sortedArchive;
     for (map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.begin(); it != pwalletMain->mapArcTxs.end(); ++it)
@@ -1903,6 +1958,12 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
       uint256 txid = (*it).first;
       ArchiveTxPoint arcTxPt = (*it).second;
       std::pair<int,int> key;
+
+      std::set<uint256>::iterator txit;
+      txit = txids.find(txid);
+      if (txit == txids.end()) {
+          continue;
+      }
 
       if (!arcTxPt.hashBlock.IsNull() && mapBlockIndex[arcTxPt.hashBlock] != nullptr) {
         key = make_pair(mapBlockIndex[arcTxPt.hashBlock]->GetHeight(), arcTxPt.nIndex);
@@ -1915,6 +1976,12 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
     for (map<uint256,CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it) {
       CWalletTx wtx = (*it).second;
       std::pair<int,int> key;
+
+      std::set<uint256>::iterator txit;
+      txit = txids.find(wtx.GetHash());
+      if (txit == txids.end()) {
+          continue;
+      }
 
       if (wtx.GetDepthInMainChain() == 0) {
         key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
