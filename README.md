@@ -3,11 +3,35 @@
 
 ## PirateChain - offline
 
-This is a development branch of the PirateChain sourcecode repository based on https://github.com/PirateNetwork/pirate.
-It contains code to implement offline transactions in the wallet.
+This is the official PirateChain sourcecode repository based on https://github.com/jl777/komodo.
+
+## Development Resources
+
+- Pirate Chain Website: [https://pirate.black](https://pirate.black/)
+- Komodo Platform: [https://komodoplatform.com](https://komodoplatform.com/)
+- Pirate Blockexplorer: [https://explorer.pirate.black](https://pirate.black/)
+- Pirate Discord: [https://pirate.black/discord](https://pirate.black/discord)
+- BTT ANN: [https://bitcointalk.org/index.php?topic=4979549.0](https://bitcointalk.org/index.php?topic=4979549.0/)
+- Mail: [marketing@pirate.black](mailto:marketing@pirate.black)
+- Support: [https://pirate.black/discord](https://pirate.black/discord)
+- API references & Dev Documentation: [https://docs.komodoplatform.com](https://docs.komodoplatform.com/)
+- Blog: [https://pirate.black/blog](https://pirate.black/blog/)
+- Whitepaper: [PirateChain Whitepaper](https://pirate.black/whitepaper)
+
+## Komodo Platform Technologies Integrated In Pirate Chain
+
+- Delayed Proof of Work (dPoW) - Additional security layer and Komodos own consensus algorithm  
+- zk-SNARKs - Komodo Platform's privacy technology for shielded transactions  
+
+
+## Tech Specification
+- Max Supply: 200 million ARRR
+- Block Time: 60s
+- Block Reward: 256 ARRR
+- Mining Algorithm: Equihash 200,9
 
 ## About this Project
-PirateChain (ARRR) is a 100% private send cryptocurrency. It uses a privacy protocol that cannot be compromised by other users activity on the network. Most privacy coins are riddled with holes created by optional privacy. PirateChain uses zk-SNARKs to shield 100% of the peer to peer transactions on the blockchain making for highly anonymous and private transactions.
+Pirate Chain (ARRR) is a 100% private send cryptocurrency. It uses a privacy protocol that cannot be compromised by other users activity on the network. Most privacy coins are riddled with holes created by optional privacy. Pirate Chain uses zk-SNARKs to shield 100% of the peer to peer transactions on the blockchain making for highly anonymous and private transactions.
 
 ## Getting started
 Build the code as described below. To see instructions on how to construct and send an offline transaction look

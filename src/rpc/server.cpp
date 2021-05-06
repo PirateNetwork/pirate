@@ -971,8 +971,8 @@ std::string HelpExampleCli(const std::string& methodname, const std::string& arg
 {
     if ( ASSETCHAINS_SYMBOL[0] == 0 ) {
         return "> komodo-cli " + methodname + " " + args + "\n";
-    } else if ((strncmp(ASSETCHAINS_SYMBOL, "HUSH3", 5) == 0) ) {
-        return "> hush-cli " + methodname + " " + args + "\n";
+    } else if ((strncmp(ASSETCHAINS_SYMBOL, "PIRATE", 6) == 0) ) {
+        return "> pirate-cli " + methodname + " " + args + "\n";
     } else {
         return "> komodo-cli -ac_name=" + strprintf("%s", ASSETCHAINS_SYMBOL) + " " + methodname + " " + args + "\n";
     }
