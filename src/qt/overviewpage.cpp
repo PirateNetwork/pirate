@@ -23,6 +23,8 @@
 #define DECORATION_SIZE 54
 #define NUM_ITEMS 5
 
+extern int nMaxConnections; //From net.h
+
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 
 class TxViewDelegate : public QAbstractItemDelegate
@@ -325,6 +327,26 @@ void OverviewPage::updateDisplayUnit()
         txdelegate->unit = walletModel->getOptionsModel()->getDisplayUnit();
 
         ui->listTransactions->update();
+
+        //Default layout if for on-line. Only alter layout for off-line mode.
+        if (nMaxConnections==0) //Off-line
+        {
+          ui->frame->setVisible(false);
+          ui->labelWalletStatus->setVisible(false);
+          ui->labelTransactionsStatus->setVisible(false);
+
+          ui->labelModeText->setText(tr("Off-line"));
+          ui->labelModeText->setToolTip(tr("The wallet is in off-line mode<br>Transaction sign requests, generated on an "
+                                           "online-wallet, can be authorised if you have the spending (private) key of "
+                                           "the address in your wallet."));
+        }
+        else
+        {
+          ui->labelModeText->setText(tr("On-line"));
+          ui->labelModeText->setToolTip(tr("The wallet is in on-line mode<br>"
+                                           "Transactions can be generated for adresses that has their spending (private) "
+                                           "key in the wallet. Sign requests can be generated for viewing-only addresses"));
+        }
     }
 }
 
@@ -336,6 +358,9 @@ void OverviewPage::updateAlerts(const QString &warnings)
 
 void OverviewPage::showOutOfSyncWarning(bool fShow)
 {
+  if (nMaxConnections>0) //On-line
+  {
     ui->labelWalletStatus->setVisible(fShow);
     ui->labelTransactionsStatus->setVisible(fShow);
+  }
 }

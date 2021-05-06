@@ -115,8 +115,9 @@ QT_FORMS_UI = \
   qt/forms/receivecoinsdialog.ui \
   qt/forms/receiverequestdialog.ui \
   qt/forms/debugwindow.ui \
-  qt/forms/sendcoinsdialog.ui \
   qt/forms/zsendcoinsdialog.ui \
+  qt/forms/zsigndialog.ui \
+  qt/forms/zsendcoinsdialog_popup.ui \
   qt/forms/sendcoinsentry.ui \
   qt/forms/signverifymessagedialog.ui \
   qt/forms/transactiondescdialog.ui \
@@ -160,8 +161,9 @@ QT_MOC_CPP = \
   qt/moc_receiverequestdialog.cpp \
   qt/moc_recentrequeststablemodel.cpp \
   qt/moc_rpcconsole.cpp \
-  qt/moc_sendcoinsdialog.cpp \
   qt/moc_zsendcoinsdialog.cpp \
+  qt/moc_zsigndialog.cpp \
+  qt/moc_zsendcoinsdialog_popup.cpp \
   qt/moc_sendcoinsentry.cpp \
   qt/moc_signverifymessagedialog.cpp \
   qt/moc_splashscreen.cpp \
@@ -245,8 +247,9 @@ KOMODO_QT_H = \
   qt/receiverequestdialog.h \
   qt/recentrequeststablemodel.h \
   qt/rpcconsole.h \
-  qt/sendcoinsdialog.h \
   qt/zsendcoinsdialog.h \
+  qt/zsigndialog.h \
+  qt/zsendcoinsdialog_popup.h \
   qt/sendcoinsentry.h \
   qt/signverifymessagedialog.h \
   qt/splashscreen.h \
@@ -364,8 +367,9 @@ KOMODO_QT_WALLET_CPP = \
   qt/receivecoinsdialog.cpp \
   qt/receiverequestdialog.cpp \
   qt/recentrequeststablemodel.cpp \
-  qt/sendcoinsdialog.cpp \
   qt/zsendcoinsdialog.cpp \
+  qt/zsigndialog.cpp \
+  qt/zsendcoinsdialog_popup.cpp \
   qt/sendcoinsentry.cpp \
   qt/signverifymessagedialog.cpp \
   qt/transactiondesc.cpp \

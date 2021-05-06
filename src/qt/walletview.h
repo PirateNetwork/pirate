@@ -16,6 +16,7 @@ class PlatformStyle;
 class ReceiveCoinsDialog;
 class SendCoinsDialog;
 class ZSendCoinsDialog;
+class ZSignDialog;
 class SendCoinsRecipient;
 class TransactionView;
 class WalletModel;
@@ -54,7 +55,7 @@ public:
     */
     void setWalletModel(WalletModel *walletModel);
 
-    bool handlePaymentRequest(const SendCoinsRecipient& recipient);
+    //bool handlePaymentRequest(const SendCoinsRecipient& recipient);
 
     void showOutOfSyncWarning(bool fShow);
 
@@ -65,8 +66,9 @@ private:
     OverviewPage *overviewPage;
     QWidget *transactionsPage;
     QWidget *receiveCoinsPage;
-    SendCoinsDialog *sendCoinsPage;
+    //SendCoinsDialog *sendCoinsPage;
     ZSendCoinsDialog *zsendCoinsPage;
+    ZSignDialog *zsignPage;
     AddressBookPage *usedSendingAddressesPage;
     AddressBookPage *usedReceivingAddressesPage;
     ZAddressBookPage *usedReceivingZAddressesPage;
@@ -88,7 +90,9 @@ public Q_SLOTS:
     /** Switch to receive coins page */
     void gotoReceiveCoinsPage();
     /** Switch to send coins page */
-    void gotoSendCoinsPage(QString addr = "");
+    //void gotoSendCoinsPage(QString addr = "");
+    /** Switch to Z-sign transaction page */
+    void gotoZSignPage();
     /** Switch to z-send coins page */
     void gotoZSendCoinsPage(QString addr = "");
 

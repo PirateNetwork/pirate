@@ -1,4 +1,3 @@
-// Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
@@ -79,6 +78,16 @@
 #include <chrono>
 #include <openssl/crypto.h>
 #include <thread>
+
+
+//shm
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <fcntl.h>
+#include <sys/shm.h>
+#include <sys/stat.h>
+//shm
 
 #include <libsnark/common/profiling.hpp>
 
@@ -916,6 +925,14 @@ static void ZC_LoadParams(
     LogPrintf("Loading Sapling (Sprout Groth16) parameters from %s\n", sprout_groth16.string().c_str());
     gettimeofday(&tv_start, 0);
 
+    printf("ZC_LoadParams(): librustzcash_init_zksnark_params()\n");
+    printf("sapling_spend: %s\n",sapling_spend_str.c_str() );
+    printf("hash: 8270785a1a0d0bc77196f000ee6d221c9c9894f55307bd9357c3f0105d31ca63991ab91324160d8f53e2bbd3c2633a6eb8bdf5205d822e7f3f73edac51b2b70c\n");
+    printf("sapling_output: %s\n",sapling_output_str.c_str() );
+    printf("hash: 657e3d38dbb5cb5e7dd2970e8b03d69b4787dd907285b5a7f0790dcc8072f60bf593b32cc2d1c030e00ff5ae64bf84c5c3beb84ddc841d48264b4a171744d028\n");
+    printf("sprout_groth16:%s\n",sprout_groth16_str.c_str() );
+    printf("hash: e9b238411bd6c0ec4791e9d04245ec350c9c5744f5610dfcce4365d5ca49dfefd5054e371842b3f88fa1b9d7e8e075249b3ebabd167fa8b0f3161292d36c180a\n");
+
     librustzcash_init_zksnark_params(
         reinterpret_cast<const codeunit*>(sapling_spend_str.c_str()),
         sapling_spend_str.length(),
@@ -993,6 +1010,24 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     } else {
         umask(077);
     }
+    
+    //Clean shared memory:
+    const char* name = "OS";
+    int shm_fd = shm_open(name, O_CREAT | O_RDWR, 0666);
+    if (shm_fd<0)
+    {
+      printf("Could not open shared memory interface");
+      return -1;
+    }  
+    /* configure the size of the shared memory object */
+    int iRet = ftruncate(shm_fd, 4096);
+    if (iRet !=0)
+    {
+      printf("Could not truncate the memory interface");
+    }
+    close(shm_fd);
+    
+    
 
     // Clean shutdown on SIGTERM
     struct sigaction sa;

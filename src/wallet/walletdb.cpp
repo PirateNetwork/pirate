@@ -665,6 +665,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         }
         else if (strType == "sapzkey")
         {
+            //FULL SPENDING KEY
             libzcash::SaplingIncomingViewingKey ivk;
             ssKey >> ivk;
             libzcash::SaplingExtendedSpendingKey key;
@@ -674,8 +675,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             {
                 strErr = "Error reading wallet database: LoadSaplingZKey failed";
                 return false;
-            }
-
+            }            
             pwallet->mapZAddressBook[key.DefaultAddress()].name = "z-sapling";
             pwallet->mapZAddressBook[key.DefaultAddress()].purpose = "unknown";
 
@@ -684,6 +684,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         }
         else if (strType == "sapextfvk")
         {
+            //EXTENDED FULL VIEWING KEY
             libzcash::SaplingExtendedFullViewingKey extfvk;
             ssKey >> extfvk;
             char fYes;
@@ -692,7 +693,6 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 pwallet->LoadSaplingFullViewingKey(extfvk);
                 pwallet->LoadSaplingWatchOnly(extfvk);
             }
-
             pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
             pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
 
@@ -833,7 +833,6 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 strErr = "Error reading wallet database: LoadCryptedSaplingZKey failed";
                 return false;
             }
-
             pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
             pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
 
@@ -894,7 +893,6 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 strErr = "Error reading wallet database: LoadSaplingPaymentAddress failed";
                 return false;
             }
-
             pwallet->mapZAddressBook[addr].name = "z-sapling";
             pwallet->mapZAddressBook[addr].purpose = "unknown";
         }

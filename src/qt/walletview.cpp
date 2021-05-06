@@ -14,9 +14,10 @@
 #include "overviewpage.h"
 #include "platformstyle.h"
 #include "receivecoinsdialog.h"
-#include "sendcoinsdialog.h"
+//#include "sendcoinsdialog.h"
 #include "zaddressbookpage.h"
 #include "zsendcoinsdialog.h"
+#include "zsigndialog.h"
 #include "signverifymessagedialog.h"
 #include "transactiontablemodel.h"
 #include "transactionview.h"
@@ -64,8 +65,9 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, QWidget *parent):
     receiveCoinsPage->setLayout(rvbox);
 
 
-    sendCoinsPage = new SendCoinsDialog(platformStyle);
+    //sendCoinsPage = new SendCoinsDialog(platformStyle);
     zsendCoinsPage = new ZSendCoinsDialog(platformStyle);
+    zsignPage      = new ZSignDialog(platformStyle);
 
     usedSendingAddressesPage = new AddressBookPage(platformStyle, AddressBookPage::ForEditing, AddressBookPage::SendingTab, this);
     usedReceivingAddressesPage = new AddressBookPage(platformStyle, AddressBookPage::ForEditing, AddressBookPage::ReceivingTab, this);
@@ -74,8 +76,9 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, QWidget *parent):
     addWidget(overviewPage);
     addWidget(transactionsPage);
     addWidget(receiveCoinsPage);
-    addWidget(sendCoinsPage);
+    //addWidget(sendCoinsPage);
     addWidget(zsendCoinsPage);
+    addWidget(zsignPage);
 
     // Clicking on a transaction on the overview pre-selects the transaction on the transaction history page
     connect(overviewPage, SIGNAL(transactionClicked(QModelIndex)), transactionView, SLOT(focusTransaction(QModelIndex)));
@@ -88,9 +91,10 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, QWidget *parent):
     connect(exportButton, SIGNAL(clicked()), transactionView, SLOT(exportClicked()));
 
     // Pass through messages from sendCoinsPage
-    connect(sendCoinsPage, SIGNAL(message(QString,QString,unsigned int)), this, SIGNAL(message(QString,QString,unsigned int)));
+    //connect(sendCoinsPage, SIGNAL(message(QString,QString,unsigned int)), this, SIGNAL(message(QString,QString,unsigned int)));
     // Pass through messages from zsendCoinsPage
     connect(zsendCoinsPage, SIGNAL(message(QString,QString,unsigned int)), this, SIGNAL(message(QString,QString,unsigned int)));
+//    connect(zsignPage,      SIGNAL(message(QString,QString,unsigned int)), this, SIGNAL(message(QString,QString,unsigned int)));
     // Pass through messages from transactionView
     connect(transactionView, SIGNAL(message(QString,QString,unsigned int)), this, SIGNAL(message(QString,QString,unsigned int)));
 }
@@ -125,8 +129,9 @@ void WalletView::setClientModel(ClientModel *_clientModel)
     this->clientModel = _clientModel;
 
     overviewPage->setClientModel(_clientModel);
-    sendCoinsPage->setClientModel(_clientModel);
+    //sendCoinsPage->setClientModel(_clientModel);
     zsendCoinsPage->setClientModel(_clientModel);
+    zsignPage->setClientModel(_clientModel);
 }
 
 void WalletView::setWalletModel(WalletModel *_walletModel)
@@ -138,8 +143,9 @@ void WalletView::setWalletModel(WalletModel *_walletModel)
     overviewPage->setWalletModel(_walletModel);
     receiveCoinsView->setModel(_walletModel->getZAddressTableModel());
     receiveCoinsView->setWalletModel(_walletModel);
-    sendCoinsPage->setModel(_walletModel);
+    //sendCoinsPage->setModel(_walletModel);
     zsendCoinsPage->setModel(_walletModel);
+    zsignPage->setModel(_walletModel);
     usedReceivingAddressesPage->setModel(_walletModel->getAddressTableModel());
     // usedReceivingZAddressesPage->setModel(_walletModel->getZAddressTableModel());
     usedSendingAddressesPage->setModel(_walletModel->getAddressTableModel());
@@ -200,7 +206,7 @@ void WalletView::gotoReceiveCoinsPage()
 {
     setCurrentWidget(receiveCoinsPage);
 }
-
+/*
 void WalletView::gotoSendCoinsPage(QString addr)
 {
     setCurrentWidget(sendCoinsPage);
@@ -208,7 +214,7 @@ void WalletView::gotoSendCoinsPage(QString addr)
     if (!addr.isEmpty())
         sendCoinsPage->setAddress(addr);
 }
-
+*/
 void WalletView::gotoZSendCoinsPage(QString addr)
 {
     setCurrentWidget(zsendCoinsPage);
@@ -217,6 +223,15 @@ void WalletView::gotoZSendCoinsPage(QString addr)
         zsendCoinsPage->setAddress(addr);
 
     zsendCoinsPage->updatePayFromList();
+    //Clear the page upon entry:
+    zsendCoinsPage->clear();
+}
+
+void WalletView::gotoZSignPage( )
+{
+    setCurrentWidget(zsignPage);
+    //Clear the page upon enter.
+    zsignPage->clear();
 }
 
 void WalletView::gotoSignMessageTab(QString addr)
@@ -242,12 +257,12 @@ void WalletView::gotoVerifyMessageTab(QString addr)
     if (!addr.isEmpty())
         signVerifyMessageDialog->setAddress_VM(addr);
 }
-
+/*
 bool WalletView::handlePaymentRequest(const SendCoinsRecipient& recipient)
 {
     return sendCoinsPage->handlePaymentRequest(recipient);
 }
-
+*/
 void WalletView::showOutOfSyncWarning(bool fShow)
 {
     overviewPage->showOutOfSyncWarning(fShow);

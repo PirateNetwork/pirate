@@ -1482,7 +1482,10 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
     {
         NSPV_broadcast((char *)params[0].get_str().c_str());
     }
-    return hashTx.GetHex();
+    
+    UniValue uReturn(UniValue::VARR);
+    uReturn.push_back( hashTx.GetHex() );
+    return uReturn;
 }
 
 UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk)

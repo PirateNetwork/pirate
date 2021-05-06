@@ -23,10 +23,11 @@ namespace Ui {
 
 QT_BEGIN_NAMESPACE
 class QUrl;
+class QSortFilterProxyModel;
 QT_END_NAMESPACE
 
 /** Dialog for sending coins */
-class ZSendCoinsDialog : public QDialog
+class ZSendCoinsDialog : public QDialog, AsyncRPCOperation
 {
     Q_OBJECT
 
@@ -35,7 +36,7 @@ public:
     ~ZSendCoinsDialog();
 
     void setClientModel(ClientModel *clientModel);
-    void setModel(WalletModel *model);
+    void setModel(WalletModel *walletModel);
 
     /** Set up the tab chain manually, as Qt messes up the tab chain by default in some cases (issue https://bugreports.qt-project.org/browse/QTBUG-10907).
      */
@@ -44,7 +45,7 @@ public:
     void setAddress(const QString &address);
     void pasteEntry(const SendCoinsRecipient &rv);
     bool handlePaymentRequest(const SendCoinsRecipient &recipient);
-    void setOperationId(const AsyncRPCOperationId& operationId);
+    void setResult(const string sHeading, const string sResult);
 
 public Q_SLOTS:
     void clear();
@@ -56,10 +57,12 @@ public Q_SLOTS:
                                      const CAmount& watchOnlyBalance, const CAmount& watchUnconfBalance, const CAmount& watchImmatureBalance,
                                      const CAmount& privateWatchBalance, const CAmount& privateBalance, const CAmount& interestBalance);
     void updatePayFromList();
+    void payFromAddressIndexChanged(int);
 
 private:
     Ui::ZSendCoinsDialog *ui;
     ClientModel *clientModel;
+
     WalletModel *model;
     bool fNewRecipientAllowed;
     const PlatformStyle *platformStyle;
@@ -82,5 +85,28 @@ Q_SIGNALS:
     // Fired when a message should be reported to the user
     void message(const QString &title, const QString &message, unsigned int style);
 };
+
+
+#define SEND_CONFIRM_DELAY   3
+
+class ZSendConfirmationDialog : public QMessageBox
+{
+    Q_OBJECT
+
+public:
+    ZSendConfirmationDialog(const QString &title, const QString &text, int secDelay = SEND_CONFIRM_DELAY, QWidget *parent = 0);
+    int exec();
+
+private Q_SLOTS:
+    void countDown();
+    void updateYesButton();
+
+private:
+    QAbstractButton *yesButton;
+    QTimer countDownTimer;
+    int secDelay;
+};
+
+
 
 #endif // KOMODO_QT_ZSENDCOINSDIALOG_H

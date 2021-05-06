@@ -82,12 +82,12 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
         boost::optional<TransactionBuilder> builder,
         CMutableTransaction contextualTx,
         std::string fromAddress,
-        std::vector<SendManyRecipient> tOutputs,
+
         std::vector<SendManyRecipient> zOutputs,
         int minDepth,
         CAmount fee,
         UniValue contextInfo) :
-        tx_(contextualTx), fromaddress_(fromAddress), t_outputs_(tOutputs), z_outputs_(zOutputs), mindepth_(minDepth), fee_(fee), contextinfo_(contextInfo)
+        tx_(contextualTx), fromaddress_(fromAddress), z_outputs_(zOutputs), mindepth_(minDepth), fee_(fee), contextinfo_(contextInfo)
 {
     assert(fee_ >= 0);
     
@@ -101,7 +101,7 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
         throw JSONRPCError(RPC_INVALID_PARAMETER, "From address parameter missing");
     }
 
-    if (tOutputs.size() == 0 && zOutputs.size() == 0) {
+    if (zOutputs.size() == 0) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "No recipients");
     }
 
@@ -133,7 +133,7 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
             if (!boost::apply_visitor(HaveSpendingKeyForPaymentAddress(pwalletMain), address)) 
             {
                 //TBD: confirm if the from addr is in our wallet. From the GUI is will be, but maybe not from CLI.                
-                //printf("AsyncRPCOperation_sendmany() The fromAddr is viewing only - Prepare offline transaction.\n"); fflush(stdout);              
+                //printf("AsyncRPCOperation_sendmany() The fromAddr is viewing only - Prepare offline transaction.\n"); fflush(stdout);
                 //Leave spendingkey_ uninitialised
                 bOfflineSpendingKey=true;
             }
@@ -264,20 +264,20 @@ bool AsyncRPCOperation_sendmany::main_impl() {
     bool isPureTaddrOnlyTx = (isfromtaddr_ && z_outputs_.size() == 0);
     CAmount minersFee = fee_;
 
-    /*    
+
     if (bOfflineSpendingKey==true)
     {
-      printf("asyncrpcoperation_sendmany.cpp main_impl() enter. bOfflineSpendingKey==true\n");
+      //printf("asyncrpcoperation_sendmany.cpp main_impl() enter. bOfflineSpendingKey==true\n");
     }
     else
     {
-      printf("asyncrpcoperation_sendmany.cpp main_impl() enter. bOfflineSpendingKey==false\n");
+      //printf("asyncrpcoperation_sendmany.cpp main_impl() enter. bOfflineSpendingKey==false\n");
     }
-    */
     
     // When spending coinbase utxos, you can only specify a single zaddr as the change must go somewhere
     // and if there are multiple zaddrs, we don't know where to send it.
     if (isfromtaddr_) {
+      /*
         if (isSingleZaddrOutput) {
             bool b = find_utxos(true);
             if (!b) {
@@ -293,6 +293,8 @@ bool AsyncRPCOperation_sendmany::main_impl() {
                 }
             }
         }
+      */
+      throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "taddr not allowed");
     }
 
     if (isfromzaddr_ && !find_unspent_notes()) 
@@ -352,6 +354,8 @@ bool AsyncRPCOperation_sendmany::main_impl() {
     bool selectedUTXOCoinbase = false;
     if (isfromtaddr_) 
     {
+      throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "taddr not allowed");
+      /*
         // Get dust threshold
         CKey secret;
         secret.MakeNewKey(true);
@@ -442,6 +446,7 @@ bool AsyncRPCOperation_sendmany::main_impl() {
             }
             tx_ = CTransaction(rawTx);
         }
+        */
     }
 
     LogPrint((isfromtaddr_) ? "zrpc" : "zrpcunsafe", "%s: spending %s to send %s with fee %s\n",
@@ -487,17 +492,17 @@ bool AsyncRPCOperation_sendmany::main_impl() {
             //iI+=1;                            
             if (sum >= targetAmount) 
             {        
-                //printf("asyncrpcoperation_sendmany.cpp main_impl() Notes exceed targetAmount: %ld>%ld\n",sum,targetAmount);            
+                //printf("asyncrpcoperation_sendmany.cpp main_impl() Notes exceed targetAmount: %ld>%ld\n",sum,targetAmount);
                 break;
             }
         }
 
         // Fetch Sapling anchor and witnesses
-        //printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses\n"); fflush(stdout);            
+        //printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses\n"); fflush(stdout);
         uint256 anchor;
         std::vector<boost::optional<SaplingWitness>> witnesses;
         {
-            //printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses - start\n"); fflush(stdout);            
+            //printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses - start\n"); fflush(stdout);
             LOCK2(cs_main, pwalletMain->cs_wallet);
             pwalletMain->GetSaplingNoteWitnesses(ops, witnesses, anchor);
             //printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses - done\n"); fflush(stdout);
@@ -537,10 +542,25 @@ bool AsyncRPCOperation_sendmany::main_impl() {
             auto value = std::get<1>(r);
             auto hexMemo = std::get<2>(r);
 
-            auto memo = get_memo_from_hex_string(hexMemo);
+            //auto memo = get_memo_from_hex_string(hexMemo);
+            std::array<unsigned char, ZC_MEMO_SIZE> memo;
+
+            //Keep the memo in hex format for off-line signing:
+            int lenMemo = strlen(hexMemo.c_str());
+            if (lenMemo >= (ZC_MEMO_SIZE-1))
+            {
+              lenMemo = ZC_MEMO_SIZE;
+            }
+
+            for (int iI = 0; iI < lenMemo; iI++) {
+                memo[iI] = hexMemo[iI];
+            }
+            memo[lenMemo]=0; //Null terminate
+
+
             //printf("asyncrpcoperation_sendmany.cpp main_impl() Output #%d: addr=%s\n",iI+1,address.c_str() );
             //printf("  value=%ld, ",value);
-            //printf("memo=%s\n"  , hexMemo.c_str() ); 
+            //printf("memo=%s\n"  , hexMemo.c_str() );
             //fflush(stdout);
             //iI+=1;
             //builder_.AddSaplingOutput_offline_transaction(ovk, address, value, memo);
@@ -548,7 +568,16 @@ bool AsyncRPCOperation_sendmany::main_impl() {
         }
 
         // Build the off-line transaction            
-        std::string sResult = builder_.Build_offline_transaction();       
+        std::string sResult = builder_.Build_offline_transaction();
+        //printf("AsyncRPCOperation_sendmany::main_impl() %s\n",sResult.c_str() );
+
+        //Send result upstream
+        //printf("AsyncRPCOperation_sendmany::main_impl() Result available\n");
+        UniValue o(UniValue::VOBJ);
+        o.push_back(Pair("Success", sResult));
+        set_result(o);
+
+        //printf("AsyncRPCOperation_sendmany::main_impl() Pushed result OBJ back. return true\n");
         return true;
     }
 
@@ -564,6 +593,8 @@ bool AsyncRPCOperation_sendmany::main_impl() {
             expsk = sk.expsk;
             ovk = expsk.full_viewing_key().ovk;
         } else {
+          throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "taddr not allowed");
+          /*
             // Sending from a t-address, which we don't have an ovk for. Instead,
             // generate a common one from the HD seed. This ensures the data is
             // recoverable, while keeping it logically separate from the ZIP 32
@@ -575,11 +606,15 @@ bool AsyncRPCOperation_sendmany::main_impl() {
                     "AsyncRPCOperation_sendmany::main_impl(): HD seed not found");
             }
             ovk = ovkForShieldingFromTaddr(seed);
+          */
+          //Send result upstream
         }
 
         // Set change address if we are using transparent funds
         // TODO: Should we just use fromtaddr_ as the change address?
         if (isfromtaddr_) {
+          throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "taddr not allowed");
+        /*
             LOCK2(cs_main, pwalletMain->cs_wallet);
 
             EnsureWalletIsUnlocked();
@@ -595,6 +630,7 @@ bool AsyncRPCOperation_sendmany::main_impl() {
 
             CTxDestination changeAddr = vchPubKey.GetID();
             assert(builder_.SendChangeTo(changeAddr));
+        */
         }
 
         // Select Sapling notes
@@ -628,7 +664,7 @@ bool AsyncRPCOperation_sendmany::main_impl() {
             assert(builder_.AddSaplingSpend(expsk, notes[i], anchor, witnesses[i].get()));
             
             //New:
-            //printf("main_impl() AddSaplingSpend2():\n"); fflush(stdout);            
+            //printf("main_impl() AddSaplingSpend2():\n"); fflush(stdout);
             //Convert witness to a char array:
             //CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
             //ss << witnesses[i].get().path();
@@ -651,12 +687,14 @@ bool AsyncRPCOperation_sendmany::main_impl() {
             auto to = boost::get<libzcash::SaplingPaymentAddress>(addr);
 
             auto memo = get_memo_from_hex_string(hexMemo);
-            //printf("process z_outputs_ address=%s, value=%ld\n", address.c_str(), value ); fflush(stdout);
+            //printf("process z_outputs_ address=%s, value=%ld, memo=%s\n", address.c_str(), value, reinterpret_cast<unsigned char*>(memo.data()) ); fflush(stdout);
             builder_.AddSaplingOutput(ovk, to, value, memo);
         }
 
         // Add transparent outputs
         for (auto r : t_outputs_) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "taddr not allowed");
+            /*
             auto outputAddress = std::get<0>(r);
             auto amount = std::get<1>(r);
 
@@ -664,8 +702,9 @@ bool AsyncRPCOperation_sendmany::main_impl() {
             if (!builder_.AddTransparentOutput(address, amount)) {
                 throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid output address, not a valid taddr.");
             }
+            */
         }
-      
+
         // Build the transaction
         //printf("asyncrpcoperation_sendmany.cpp() builder_.Build()\n");fflush(stdout);
         auto maybe_tx = builder_.Build();
@@ -681,16 +720,22 @@ bool AsyncRPCOperation_sendmany::main_impl() {
         if (!testmode) {
             UniValue params = UniValue(UniValue::VARR);
             params.push_back(signedtxn);
+            //printf("asyncrpcoperation_sendmany.cpp() builder_.Build() : sendrawtransaction enter\n");
             UniValue sendResultValue = sendrawtransaction(params, false, CPubKey());
+            //printf("asyncrpcoperation_sendmany.cpp() builder_.Build() : sendrawtransaction done. Result size: %lu\n", sendResultValue.size() );
             if (sendResultValue.isNull()) {
+                //printf("asyncrpcoperation_sendmany.cpp() builder_.Build() : sendrawtransaction exception - result is null\n");
                 throw JSONRPCError(RPC_WALLET_ERROR, "sendrawtransaction did not return an error or a txid.");
             }
 
             auto txid = sendResultValue.get_str();
 
+
             UniValue o(UniValue::VOBJ);
-            o.push_back(Pair("txid", txid));
+            o.push_back(Pair("txid", txid));            
+            //printf("asyncrpcoperation_sendmany.cpp() builder_.Build() : set_result() enter\n" );
             set_result(o);
+            //printf("asyncrpcoperation_sendmany.cpp() builder_.Build() : set_result size=%lu\n",o.size() );
         } else {
             // Test mode does not send the transaction to the network.
             UniValue o(UniValue::VOBJ);
@@ -700,6 +745,7 @@ bool AsyncRPCOperation_sendmany::main_impl() {
             set_result(o);
         }
 
+        //printf("AsyncRPCOperation_sendmany::main_impl() set_result(o) available. Return true\n");
         return true;
     }
     /**
@@ -1282,7 +1328,7 @@ bool AsyncRPCOperation_sendmany::find_unspent_notes( ) {
           //Local transaction: Require the spending key
           pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, fromaddress_, mindepth_,true,true);
         }
-        //printf("find_unspent_notes() GetFilteredNotes() done\n"); fflush(stdout);                
+        //printf("find_unspent_notes() GetFilteredNotes() done\n"); fflush(stdout);
     }
 
     // If using the TransactionBuilder, we only want Sapling notes.
@@ -1623,3 +1669,4 @@ UniValue AsyncRPCOperation_sendmany::getStatus() const {
     obj.push_back(Pair("params", contextinfo_ ));
     return obj;
 }
+

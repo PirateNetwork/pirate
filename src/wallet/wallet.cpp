@@ -454,11 +454,13 @@ bool CWallet::LoadSaplingZKeyMetadata(const libzcash::SaplingIncomingViewingKey 
 
 bool CWallet::LoadSaplingZKey(const libzcash::SaplingExtendedSpendingKey &key)
 {
+    //printf("CWallet::LoadSaplingZKey()\n");
     return CCryptoKeyStore::AddSaplingSpendingKey(key);
 }
 
 bool CWallet::LoadSaplingFullViewingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk)
 {
+    //printf("wallet.cpp LoadSaplingFullViewingKey()\n");
     return CCryptoKeyStore::AddSaplingFullViewingKey(extfvk);
 }
 
@@ -563,6 +565,7 @@ bool CWallet::LoadWatchOnly(const CScript &dest)
 
 bool CWallet::LoadSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk)
 {
+    //printf("CWallet::LoadSaplingWatchOnly()\n");
     if (CCryptoKeyStore::AddSaplingWatchOnly(extfvk)) {
         NotifyWatchonlyChanged(true);
         return true;
@@ -5210,15 +5213,18 @@ bool CWallet::SetAddressBook(const CTxDestination& address, const string& strNam
 
 bool CWallet::SetZAddressBook(const libzcash::PaymentAddress &address, const string &strName, const string &strPurpose)
 {
+    //printf("CWallet::SetZAddressBook() ");
     bool fUpdated = false;
     {
         LOCK(cs_wallet); // mapZAddressBook
         std::map<libzcash::PaymentAddress, CAddressBookData>::iterator mi = mapZAddressBook.find(address);
         fUpdated = mi != mapZAddressBook.end();
         mapZAddressBook[address].name = strName;
+        //printf("%s",strName.c_str() );
         if (!strPurpose.empty()) /* update purpose only if requested */
             mapZAddressBook[address].purpose = strPurpose;
     }
+    //printf("\n");
     NotifyZAddressBookChanged(this, address, strName, boost::apply_visitor(HaveSpendingKeyForPaymentAddress(this), address),
                               strPurpose, (fUpdated ? CT_UPDATED : CT_NEW));
     if (!fFileBacked)

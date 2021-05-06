@@ -388,7 +388,7 @@ QVariant ZAddressTableModel::headerData(int section, Qt::Orientation orientation
 }
 
 Qt::ItemFlags ZAddressTableModel::flags(const QModelIndex &index) const
-{
+{  
     if(!index.isValid())
         return 0;
     AddressTableEntry *rec = static_cast<AddressTableEntry*>(index.internalPointer());
@@ -421,14 +421,17 @@ QModelIndex ZAddressTableModel::index(int row, int column, const QModelIndex &pa
 void ZAddressTableModel::updateEntry(const QString &address,
         const QString &label, bool isMine, const QString &purpose, int status)
 {
+    printf("ZAddressTableModel::updateEntry()\n");
     // Update address book model from Pirate core
     priv->updateEntry(address, label, isMine, purpose, status);
 }
 
 QString ZAddressTableModel::addRow(const QString &type, const QString &label, const QString &address)
 {
+
     std::string strLabel; // = label.toStdString();
     std::string strAddress = address.toStdString();
+    printf("ZAddressTableModel::addRow(%s)\n",strAddress.c_str() );
 
     editStatus = OK;
 
@@ -499,6 +502,7 @@ bool ZAddressTableModel::removeRows(int row, int count, const QModelIndex &paren
  */
 QString ZAddressTableModel::labelForAddress(const QString &address) const
 {
+  printf("ZAddressTableModel::labelForAddress()\n");
     {
         LOCK(wallet->cs_wallet);
         libzcash::PaymentAddress destination = DecodePaymentAddress(address.toStdString());
@@ -513,6 +517,7 @@ QString ZAddressTableModel::labelForAddress(const QString &address) const
 
 int ZAddressTableModel::lookupAddress(const QString &address) const
 {
+    printf("ZAddressTableModel::lookupAddress()\n");
     QModelIndexList lst = match(index(0, Address, QModelIndex()),
                                 Qt::EditRole, address, 1, Qt::MatchExactly);
     if(lst.isEmpty())

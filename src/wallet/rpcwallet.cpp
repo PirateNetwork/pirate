@@ -39,6 +39,7 @@
 #include "zcash/address/zip32.h"
 #include "notaries_staked.h"
 
+#include "util.h"
 #include "utiltime.h"
 #include "asyncrpcoperation.h"
 #include "asyncrpcqueue.h"
@@ -61,6 +62,7 @@
 
 #include "komodo_defs.h"
 #include <string.h>
+#include <regex>
 
 using namespace std;
 
@@ -643,11 +645,11 @@ UniValue kvupdate(const UniValue& params, bool fHelp, const CPubKey& mypk)
     haveprivkey = 1;
     flags |= 1;
     /*for (i=0; i<32; i++)
-        printf("%02x",((uint8_t *)&privkey)[i]);
-    printf(" priv, ");
+        //printf("%02x",((uint8_t *)&privkey)[i]);
+    //printf(" priv, ");
     for (i=0; i<32; i++)
-        printf("%02x",((uint8_t *)&pubkey)[i]);
-    printf(" pubkey, privkey derived from (%s)\n",(char *)params[3].get_str().c_str());
+        //printf("%02x",((uint8_t *)&pubkey)[i]);
+    //printf(" pubkey, privkey derived from (%s)\n",(char *)params[3].get_str().c_str());
     */
     LOCK2(cs_main, pwalletMain->cs_wallet);
     if ( (keylen= (int32_t)strlen(params[0].get_str().c_str())) > 0 )
@@ -675,13 +677,13 @@ UniValue kvupdate(const UniValue& params, bool fHelp, const CPubKey& mypk)
                 if ( komodo_kvsigverify(keyvalue,keylen+refvaluesize,refpubkey,sig) < 0 )
                 {
                     ret.push_back(Pair("error",(char *)"error verifying sig, passphrase is probably wrong"));
-                    printf("VERIFY ERROR\n");
+                    //printf("VERIFY ERROR\n");
                     return ret;
-                } // else printf("verified immediately\n");
+                } // else //printf("verified immediately\n");
             }
         }
         //for (i=0; i<32; i++)
-        //    printf("%02x",((uint8_t *)&sig)[i]);
+        //    //printf("%02x",((uint8_t *)&sig)[i]);
         //printf(" sig for keylen.%d + valuesize.%d\n",keylen,refvaluesize);
         ret.push_back(Pair("coin",(char *)(ASSETCHAINS_SYMBOL[0] == 0 ? "KMD" : ASSETCHAINS_SYMBOL)));
         height = chainActive.LastTip()->GetHeight();
@@ -721,7 +723,7 @@ UniValue kvupdate(const UniValue& params, bool fHelp, const CPubKey& mypk)
         if ( (opretlen= komodo_opreturnscript(opretbuf,'K',keyvalue,coresize)) == 40 )
             opretlen++;
         //for (i=0; i<opretlen; i++)
-        //    printf("%02x",opretbuf[i]);
+        //    //printf("%02x",opretbuf[i]);
         //printf(" opretbuf keylen.%d valuesize.%d height.%d (%02x %02x %02x)\n",*(uint16_t *)&keyvalue[0],*(uint16_t *)&keyvalue[2],*(uint32_t *)&keyvalue[4],keyvalue[8],keyvalue[9],keyvalue[10]);
         EnsureWalletIsUnlocked();
         fee = komodo_kvfee(flags,opretlen,keylen);
@@ -804,8 +806,8 @@ UniValue paxwithdraw(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (!destaddress.IsValid())
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid dest Bitcoin address");
     for (i=0; i<33; i++)
-        printf("%02x",pubkey37[i]);
-    printf(" kmdheight.%d srcaddr.(%s) %s fiatoshis.%lld -> dest.(%s) komodoshis.%llu seed.%llx\n",kmdheight,(char *)params[0].get_str().c_str(),ASSETCHAINS_SYMBOL,(long long)fiatoshis,destaddr,(long long)komodoshis,(long long)seed);
+        //printf("%02x",pubkey37[i]);
+    //printf(" kmdheight.%d srcaddr.(%s) %s fiatoshis.%lld -> dest.(%s) komodoshis.%llu seed.%llx\n",kmdheight,(char *)params[0].get_str().c_str(),ASSETCHAINS_SYMBOL,(long long)fiatoshis,destaddr,(long long)komodoshis,(long long)seed);
     EnsureWalletIsUnlocked();
     uint8_t opretbuf[64]; int32_t opretlen; uint64_t fee = fiatoshis / 1000;
     if ( fee < 10000 )
@@ -3795,7 +3797,7 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
 
 UniValue z_listaddresses(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    printf("z_listaddresses() enter\n"); fflush(stdout);
+    //printf("z_listaddresses() enter\n"); fflush(stdout);
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
@@ -3842,12 +3844,12 @@ UniValue z_listaddresses(const UniValue& params, bool fHelp, const CPubKey& mypk
         {
             if (fIncludeWatchonly || HaveSpendingKeyForPaymentAddress(pwalletMain)(addr)) 
             {
-                printf("z_listaddresses() Found IncludeWatchonly || HaveSpendingKeyForPaymentAddress\n"); fflush(stdout);
+                //printf("z_listaddresses() Found IncludeWatchonly || HaveSpendingKeyForPaymentAddress\n"); fflush(stdout);
                 ret.push_back(EncodePaymentAddress(addr));
             }
             else
             {
-                printf("z_listaddresses() Doesnt have watchonly or SpendingKeyForPaymentAddr\n"); fflush(stdout);
+                //printf("z_listaddresses() Doesnt have watchonly or SpendingKeyForPaymentAddr\n"); fflush(stdout);
             }
         }
     }
@@ -4557,32 +4559,6 @@ std::array<unsigned char, ZC_MEMO_SIZE> get_memo_from_hex_string(std::string s) 
     return memo;
 }
 
-
-//pcOutput size must be at least (0.5 x iSize) +1
-bool HexToCharArray(char *pcInput, unsigned int iSize, unsigned char *pcOutput)
-{
-  unsigned int iI;
-  unsigned long int iValue;
-  char cHex[3];
- 
-  //printf("HexToCharArray: %s, length: %d\n",pcInput,iSize);
-  for(iI=0;iI<iSize;iI+=2) 
-  {
-    cHex[0]=pcInput[iI];
-    cHex[1]=pcInput[iI+1];
-    cHex[2]=0;
-    
-    //printf("Converting [%d]: 0x%c%c ->",iI,cHex[0],cHex[1]);
-    iValue =  strtoul(&cHex[0], NULL, 16);
-    pcOutput[iI/2] = (unsigned char)(iValue);
-    //printf("%u\n",pcOutput[iI/2]);
-  }
-  pcOutput[iI/2]=0;//Null terminate the string
-  
-  return true;
-}
-
-
 UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     //printf("z_sign_offline() enter 1\n"); fflush(stdout);
@@ -4623,7 +4599,7 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "10.MTX VersionGroupID      (numeric, required) Transaction: VersionGroupID\n"
             "11.MTX Version             (numeric, required) Transaction: Version\n"
             "\nResult:\n"
-            "\"send_raw_transaction\"   (string) A string containing the transaction data that must be pasted into the online wallet\n"
+            "\"sendrawtransaction\"   (string) A string containing the transaction data that must be pasted into the online wallet\n"
             "                                    to execute the transaction\n"
         );
 
@@ -4673,7 +4649,7 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
         //printf("z_sign_offline() [1] Procecess spending note #%d of %ld\n", iI, oSpendingNotes.size() );fflush(stdout);
         if (!oSpendingNote.isObject())
         {
-          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected sjpending note object");
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected spending note object");
         }
 
         // sanity check, report error if unknown key-value pairs
@@ -4755,7 +4731,7 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
         {
           throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected note_pkd in hexadecimal format.");
         }
-        //printf("z_sign_offline() [1] Have note_pkd\n");fflush(stdout);        
+        //printf("z_sign_offline() [1] Have note_pkd\n");fflush(stdout);
         
         
         UniValue oNoteR = find_value(oSpendingNote, "note_r");        
@@ -4870,10 +4846,11 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
       if (!memoValue.isNull()) 
       {
           memo = memoValue.get_str();
-          if (!IsHex(memo)) 
+          if (!IsHex(memo))
           {
-              //aparently a normal string. Attempt to convert it to hex
-              memo = HexStr( memoValue.get_str() );
+              //Appears to be plain text. Convert it to hex
+              memo = HexStr( memo );
+              //printf("Converted memo to hex: %s\n", memo.c_str() );
               if (!IsHex(memo)) 
               {
                 throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, output memo not in hexadecimal format.");
@@ -4893,16 +4870,34 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "output amount must be positive");
       }
       
+      //printf("z_outputs: address:%s amount: %ld memo:%s\n",address.c_str(), nAmount, memo.c_str()  );
       z_outputs_.push_back( SendManyRecipient(address, nAmount, memo) );
       nTotalOut += nAmount;
-      //printf("z_sign_offline() [2] Total amount: %ld\n",nTotalOut);fflush(stdout); 
+      //printf("z_sign_offline() [2] Total amount: %ld\n",nTotalOut);fflush(stdout);
       iI+=1;
     }    
 
           
     // Minimum confirmations
-    //printf("z_sign_offline() [3] Minimum confirmations\n");fflush(stdout);
-    int nMinDepth = params[3].get_int();
+    //printf("z_sign_offline() [3] Minimum confirmations: ");fflush(stdout);
+    std::string sVal;
+    int nMinDepth;
+    if (params[3].getType() == UniValue::VSTR)
+    {
+       //printf("VSTR\n");fflush(stdout);
+       sVal = params[3].get_str();
+       nMinDepth=atoi(sVal.c_str());
+    }
+    else if (params[3].getType() == UniValue::VNUM)
+    {
+       //printf("VNUM\n");fflush(stdout);
+       nMinDepth=params[3].get_int();
+    }
+    else
+    {
+       throw JSONRPCError(RPC_INVALID_PARAMETER, "Expected an integer for 'Minimum confirmations'");
+    }
+
     if (nMinDepth < 0) 
     {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Minimum number of confirmations cannot be less than 0");
@@ -4911,8 +4906,9 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     
     // Fee in Zatoshis, not currency format)
-    //printf("z_sign_offline() [4] Transaction fee\n");fflush(stdout);
-    std::string sVal = params[4].get_str(); //Why is params[6].get_int() failing?
+    //printf("z_sign_offline() [4] Transaction fee: ");fflush(stdout);
+    sVal = params[4].get_str();
+    //printf("%s\n",sVal.c_str() );fflush(stdout);
     int iFee=atoi(sVal.c_str());
     CAmount nFee=iFee;
 
@@ -4938,6 +4934,7 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
     //---------------------------------------------------------------------------------------------
     //printf("z_sign_offline() [5] Network: Next block height: ");
     std::string sNextBlockHeight = params[5].get_str(); 
+    //printf("%s\n",sNextBlockHeight.c_str() );fflush(stdout);
     int nextBlockHeight=atoi(sNextBlockHeight.c_str());
     //DEGBUG_INPUT :: Need this from the online machine
     //int nextBlockHeight= chainActive.Height() + 1; 
@@ -4948,12 +4945,14 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
     //---------------------------------------------------------------------------------------------
     //printf("z_sign_offline() [6] Network: BranchId: ");
     std::string sBranchId = params[6].get_str(); 
+    //printf("%s\n",sBranchId.c_str() );fflush(stdout);
     uint32_t branchId=atoi(sBranchId.c_str());
     //printf("%u\n", branchId);
           
     // Anchor
-    //printf("z_sign_offline() [7] Anchor\n");fflush(stdout);
+    //printf("z_sign_offline() [7] Anchor: ");fflush(stdout);
     std::string sAnchorHex = params[7].get_str();
+    //printf("%s\n",sAnchorHex.c_str() );fflush(stdout);
     if (!IsHex(sAnchorHex)) 
     {
       sAnchorHex = HexStr( sAnchorHex );
@@ -4974,7 +4973,9 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
     //printf("z_sign_offline() [7] Anchor: %s\n",sAnchorHex.c_str() );fflush(stdout);
 
     // MTX overwintered
+    //printf("z_sign_offline() [8] MTX overwintered: ");
     std::string sMTX_overwintered = params[8].get_str(); 
+    //printf("%s\n",sMTX_overwintered.c_str() );fflush(stdout);
     uint32_t iMTX_overwintered=atoi(sMTX_overwintered.c_str());
     bool bMTX_overwintered;
     if (iMTX_overwintered==0)
@@ -4985,25 +4986,29 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
     {
       bMTX_overwintered=true;
     }
-    //printf("z_sign_offline() [8] MTX overwintered: %d\n", bMTX_overwintered);fflush(stdout);
-    
+
     
     // MTX ExpiryHeight
+    //printf("z_sign_offline() [9] MTX ExpiryHeight: ");
     std::string sMTX_ExpiryHeight = params[9].get_str(); 
-    uint32_t iMTX_ExpiryHeight=atoi(sMTX_ExpiryHeight.c_str());
-    //printf("z_sign_offline() [9] MTX ExpiryHeight: %u\n", iMTX_ExpiryHeight);fflush(stdout);
+    //printf("%s\n", sMTX_ExpiryHeight.c_str() );fflush(stdout);
+    uint32_t iMTX_ExpiryHeight=atoi(sMTX_ExpiryHeight.c_str());    
         
     
     // MTX VersionGroupID
+    //printf("z_sign_offline() [10] MTX VersionGroupID: ");
     std::string sMTX_VersionGroupID = params[10].get_str(); 
+    //printf("%s\n", sMTX_VersionGroupID.c_str() );fflush(stdout);
     uint32_t iMTX_VersionGroupID=atoi(sMTX_VersionGroupID.c_str());    
-    //printf("z_sign_offline() [10] MTX VersionGroupID: %u\n", iMTX_VersionGroupID);fflush(stdout);
+
     
     
     // MTX Version
+    //printf("z_sign_offline() [11] MTX Version: ");
     std::string sMTX_Version = params[11].get_str(); 
+    //printf("%s\n", sMTX_Version.c_str() );fflush(stdout);
     int32_t iMTX_Version=atoi(sMTX_Version.c_str());        
-    //printf("z_sign_offline() [11] MTX Version: %d\n", iMTX_Version);fflush(stdout);
+
 
     
     //printf("z_sign_offline() All the inputs parsed. Build up transaction\n");fflush(stdout);
@@ -5038,7 +5043,7 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
     //printf("z_sign_offline() 8 Target amount (%ld) > SendAmount(%ld) + Fee(%ld)?\n", targetAmount,sendAmount,minersFee); fflush(stdout);
     if (z_inputs_total < targetAmount) 
     {
-        //printf("z_sign_offline() 8 Insufficient funds: have %s, need %s\n",FormatMoney(z_inputs_total).c_str(), FormatMoney(targetAmount).c_str() ); fflush(stdout);       
+        //printf("z_sign_offline() 8 Insufficient funds: have %s, need %s\n",FormatMoney(z_inputs_total).c_str(), FormatMoney(targetAmount).c_str() ); fflush(stdout);
         throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS,
             strprintf("Insufficient shielded funds, have %s, need %s",
             FormatMoney(z_inputs_total), FormatMoney(targetAmount)));
@@ -5068,31 +5073,7 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
     //printf("z_sign_offline() 11 Select sapling_input notes\n"); fflush(stdout);
     std::vector<SaplingOutPoint> ops;
     
-    //This must be removed:
-    
-    //CAmount sum = 0;
-    iI=1;
-    for (auto t : z_sapling_inputs_) 
-    {        
-        ops.push_back(t.op);        
-        //notes.push_back(t.note);
-        //sum += t.note.value();
-        ////printf("z_sign_offline() 12 for(%d) sum=%ld, target=%ld\n",iI,sum,targetAmount); fflush(stdout);
-        //iI++;
-        //if (sum >= targetAmount) 
-        //{
-        //    //printf("z_sign_offline() 12 for() Enough funds in input notes. Break\n"); fflush(stdout);
-        //    break;
-        //}
-    }   
-    //if (sum<targetAmount)
-    //{
-    //     //printf("z_sign_offline() 12 Insufficient funds: sum=%ld, target=%ld\n",sum,targetAmount); fflush(stdout);
-    //     throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS,
-    //        strprintf("Insufficient shielded funds, have %s, need %s",
-    //        sum,targetAmount));
-    //}
-    
+
     //-- Repeat exercise of notes with actual input ----------------
     CAmount sum = 0;
     iI=1;
@@ -5117,102 +5098,57 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
     //-----------------------------------------------------------
    
     //printf("z_sign_offline() 13 Get Note witnesses\n"); fflush(stdout);
-    // Fetch Sapling anchor and witnesses
-    //DEBUG_INPUT -- Need to get from online wallet
-    /*
-    uint256 anchor;
-    std::vector<boost::optional<SaplingWitness>> witnesses;
-    {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        pwalletMain->GetSaplingNoteWitnesses(ops, witnesses, anchor);
-    }
-    */
     // Add Sapling spends
-    //printf("z_sign_offline() 14 Transaction: Add spends (inputs)\n"); fflush(stdout);    
+    //printf("z_sign_offline() 14 Transaction: Add spends (inputs)\n"); fflush(stdout);
     for (size_t i = 0; i < notes.size(); i++) 
     {
         //printf("z_sign_offline() for(%ld):\n",i); fflush(stdout);
-        /*
-        if (!witnesses[i]) 
-        {
-            throw JSONRPCError(RPC_WALLET_ERROR, "Missing witness for Sapling note");
-        }
-        
-        //Orig
-        //assert(builder_.AddSaplingSpend(expsk, notes[i], anchor, witnesses[i].get()));
-        
-        //New:
-        //Convert witness to a char array:
-        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-        ss << witnesses[i].get().path();
-        std::vector<unsigned char> local_witness(ss.begin(), ss.end());
-        myCharArray_s sWitness;
-        memcpy (&sWitness.cArray[0], reinterpret_cast<unsigned char*>(local_witness.data()), sizeof(sWitness.cArray) );
-        //assert(builder.AddSaplingSpend2(expsk, notes[i], anchor, aiWitnessPosition[i], &sWitness.cArray[0] ));
-        */
-        assert(builder.AddSaplingSpend_process_offline_transaction(expsk, notes[i], anchor, aiWitnessPosition[i], &asWitnessPath[i].cArray[0] ));        
+        assert(builder.AddSaplingSpend_process_offline_transaction(expsk, notes[i], anchor, aiWitnessPosition[i], &asWitnessPath[i].cArray[0] ));
     }
-//    throw JSONRPCError(RPC_INVALID_PARAMETER, "Done for now");
     
     // Add Sapling outputs
-    //printf("z_sign_offline() 15 Transaction: Add outputs\n"); fflush(stdout);    
-    iI=0;
+    //printf("z_sign_offline() 15 Transaction: Add outputs\n"); fflush(stdout);
+    iI=1;
     for (auto r : z_outputs_) 
-    {
-        
+    {        
         auto address = std::get<0>(r);
         auto value = std::get<1>(r);
         auto hexMemo = std::get<2>(r);
+        //printf("z_sign_offline() 15 for(%d) address=%s, value=%ld, hexMemo=%s\n", iI, address.c_str(), value, hexMemo.c_str() ); fflush(stdout);
 
         auto addr = DecodePaymentAddress(address);
         assert(boost::get<libzcash::SaplingPaymentAddress>(&addr) != nullptr);
         auto to = boost::get<libzcash::SaplingPaymentAddress>(addr);
 
         auto memo = get_memo_from_hex_string(hexMemo);
-        //printf("z_sign_offline() 15 for(%d) address=%s, value=%ld\n", iI, address.c_str(), value ); fflush(stdout);
+
         iI++;
         builder.AddSaplingOutput(ovk, to, value, memo);
     }    
     
     // Build the transaction
-    //printf("z_sign_offline() 16 Build the transaction\n"); fflush(stdout);    
+    //printf("z_sign_offline() 16 Build the transaction\n"); fflush(stdout);
     auto maybe_tx = builder.Build();
     if (!maybe_tx) 
     {
-      //printf("z_sign_offline() 16 Build failed\n"); fflush(stdout);    
+      //printf("z_sign_offline() 16 Build failed\n"); fflush(stdout);
       throw JSONRPCError(RPC_WALLET_ERROR, "Failed to build transaction.");
     }
     
-    //printf("z_sign_offline() 17 Get transaction output\n"); fflush(stdout);    
+    //printf("z_sign_offline() 17 Get transaction output\n"); fflush(stdout);
     auto tx_result = maybe_tx.get();
     
-    //printf("z_sign_offline() 18 Convert to output to hex & UniValue\n"); fflush(stdout);    
+    //printf("z_sign_offline() 18 Convert to output to hex & UniValue\n"); fflush(stdout);
     auto signedtxn = EncodeHexTx(tx_result);
-    UniValue params2 = UniValue(UniValue::VARR);
-    params2.push_back(signedtxn);
 
-    //printf("z_sign_offline() 19 Command to send transaction:\n"); fflush(stdout);    
-    
-    printf("sendrawtransaction %s\n",signedtxn.c_str());
-    /*
-    UniValue sendResultValue = sendrawtransaction(params2, false, CPubKey());
-    if (sendResultValue.isNull()) 
-    {
-        //printf("z_sign_offline() 19 Send transaction failed\n"); fflush(stdout);    
-        throw JSONRPCError(RPC_WALLET_ERROR, "sendrawtransaction did not return an error or a txid.");
-    }
-    */
+    UniValue oOBJ(UniValue::VOBJ);
 
-    //printf("z_sign_offline() 20 Must format result\n"); fflush(stdout);    
-    
-    //auto txid = sendResultValue.get_str();
-    UniValue o(UniValue::VOBJ);
-    //o.push_back(Pair("txid", txid));
-    o.push_back(Pair("signed transaction: Paste into online wallet without the \"\"","sendrawtransaction "+signedtxn));
-    //set_result(o);
-    
-    //return true;
-    return o;
+    oOBJ.push_back(Pair("Instruction: Paste the contents into your on-line wallet without the \"\"",
+                        "sendrawtransaction "+signedtxn
+                  ));
+
+    return oOBJ;
+
 
 }
 
@@ -5275,6 +5211,9 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
         // Remember whether this is a Sprout or Sapling address
         fromSapling = boost::get<libzcash::SaplingPaymentAddress>(&res) != nullptr;
     }
+    else {
+      throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "From address must be a zaddr");
+    }
     // This logic will need to be updated if we add a new shielded pool
     bool fromSprout = !(fromTaddr || fromSapling);
 
@@ -5289,8 +5228,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
     // Track whether we see any Sprout addresses
     bool noSproutAddrs = !fromSprout;
 
-    // Recipients
-    std::vector<SendManyRecipient> taddrRecipients;
+    // Recipients    
     std::vector<SendManyRecipient> zaddrRecipients;
     CAmount nTotalOut = 0;
 
@@ -5378,7 +5316,8 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
         if (isZaddr) {
             zaddrRecipients.push_back( SendManyRecipient(address, nAmount, memo) );
         } else {
-            taddrRecipients.push_back( SendManyRecipient(address, nAmount, memo) );
+            //taddrRecipients.push_back( SendManyRecipient(address, nAmount, memo) );
+            throw JSONRPCError(RPC_INVALID_PARAMETER,  strprintf("Only Z-Addresses allowed"));
         }
 
         nTotalOut += nAmount;
@@ -5433,11 +5372,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
     CTransaction tx(mtx);
     txsize += GetSerializeSize(tx, SER_NETWORK, tx.nVersion);
-    if (fromTaddr) {
-        txsize += CTXIN_SPEND_DUST_SIZE;
-        txsize += CTXOUT_REGULAR_SIZE;      // There will probably be taddr change
-    }
-    txsize += CTXOUT_REGULAR_SIZE * taddrRecipients.size();
+
     if (txsize > max_tx_size) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Too many outputs, size of raw transaction would be larger than limit of %d bytes", max_tx_size ));
     }
@@ -5501,7 +5436,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     // Create operation and add to global queue
     std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
-    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(builder, contextualTx, fromaddress, taddrRecipients, zaddrRecipients, nMinDepth, nFee, contextInfo) );
+    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(builder, contextualTx, fromaddress, zaddrRecipients, nMinDepth, nFee, contextInfo) );
     q->addOperation(operation);
     AsyncRPCOperationId operationId = operation->getId();
     return operationId;
@@ -5535,13 +5470,13 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
             "    [{\n"
             "      \"address\":address  (string, required) The address is a taddr or zaddr\n"
             "      \"amount\":amount    (numeric, required) The numeric amount in KMD is the value\n"
-            "      \"memo\":memo        (string, optional) If the address is a zaddr, raw data represented in hexadecimal string format\n"
+            "      \"memo\":memo        (hex, optional) Memo represented in hexadecimal string format\n"
             "    }, ... ]\n"
             "3. minconf               (numeric, required, default=1) Only use funds confirmed at least this many times.\n"
             "4. fee                   (numeric, required, default="            
             + strprintf("%s", FormatMoney(ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE)) + ") The fee amount to attach to this transaction.\n"
             "\nResult:\n"
-            "\"z_sign_offline_transaction\" (string) The data to supply to the offline wallet. The offline wallet need to sign the prepared transaction.\n"
+            "\"z_sign_offline\" (string) The data to supply to the off-line wallet. The off-line wallet needs to sign the data to authorise the transaction.\n"
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -5626,7 +5561,6 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
     
     //printf("z_sendmany_prepare_offline() 4 Process recipients\n");fflush(stdout);
     // Recipients
-    std::vector<SendManyRecipient> taddrRecipients;
     std::vector<SendManyRecipient> zaddrRecipients;
     CAmount nTotalOut = 0;
     string sZaddrRecipients;
@@ -5718,7 +5652,7 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
                 memo = HexStr( memoValue.get_str() );
                 if (!IsHex(memo)) 
                 {
-                  printf("error. Could not convert to hex\n");fflush(stdout);
+                  //printf("error. Could not convert to hex\n");fflush(stdout);
                   throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected memo data in hexadecimal format.");
                 }
             }
@@ -5753,7 +5687,7 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
 
     int nextBlockHeight=0;
     nextBlockHeight = chainActive.Height() + 1; //Need this from the online machine
-    //printf("z_sendmany_prepare_offline() 8 prepare off-line: Next block height=%d\n",nextBlockHeight);fflush(stdout);      
+    //printf("z_sendmany_prepare_offline() 8 prepare off-line: Next block height=%d (already incremented)\n",nextBlockHeight);fflush(stdout);
     
     CMutableTransaction mtx;
     unsigned int max_tx_size = MAX_TX_SIZE_AFTER_SAPLING;    
@@ -5773,10 +5707,7 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
             mtx.fOverwintered = false;
             mtx.nVersion = 2;
         }
-
         max_tx_size = MAX_TX_SIZE_BEFORE_SAPLING;
-        
-
 
         // Check the number of zaddr outputs does not exceed the limit.
         //TBD: Test on the online machine. Sanity check on the offline?
@@ -5821,15 +5752,7 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
         }
     }
     CTransaction tx(mtx);
-    txsize += GetSerializeSize(tx, SER_NETWORK, tx.nVersion);
-    //tAddr not used:
-    if (fromTaddr) {
-        txsize += CTXIN_SPEND_DUST_SIZE;
-        txsize += CTXOUT_REGULAR_SIZE;      // There will probably be taddr change
-    }
-    txsize += CTXOUT_REGULAR_SIZE * taddrRecipients.size();
-    
-    //TBD: Test to be performed on the online-machine once the signed input is received
+    txsize += GetSerializeSize(tx, SER_NETWORK, tx.nVersion);    
     if (txsize > max_tx_size) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Too many outputs, size of raw transaction would be larger than limit of %d bytes", max_tx_size ));
     }
@@ -5915,14 +5838,15 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
 
     
     // Create operation and add to global queue
+    //printf("z_sendmany_prepare_offline() Create AsyncRPCOperation_sendmany()\n");
     std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
-    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(builder, contextualTx, fromaddress, taddrRecipients, zaddrRecipients, nMinDepth, nFee, contextInfo) );
+    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(builder, contextualTx, fromaddress, zaddrRecipients, nMinDepth, nFee, contextInfo) );
     q->addOperation(operation);
     AsyncRPCOperationId operationId = operation->getId();
-    //return operationId;
+    //printf("z_sendmany_prepare_offline() operationId returned\n");
 
     UniValue o2(UniValue::VOBJ);
-    o2.push_back(Pair("generating transaction","Please wait for the transaction builder to finish. The output is on the shell. Look for the string: z_sign_offline ..."));
+    o2.push_back(Pair("opid", operationId));
     return o2;
 }
 

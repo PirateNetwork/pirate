@@ -119,7 +119,7 @@ bool TransactionBuilder::AddSaplingSpend_process_offline_transaction(
     //printf("witness path:\n");
     //for (int iI=0; iI<sizeof(sWitness.cArray);iI++)
     //{
-    //  printf("%d ",pcWitness[iI]);
+    //  //printf("%d ",pcWitness[iI]);
     //}
     //printf("\n");
 
@@ -360,11 +360,11 @@ std::string TransactionBuilder::Build_offline_transaction()
     for (auto tIn : tIns) 
     {       
         change += tIn.value;
-        //printf("Build_offline_transaction() change+=tIn.value  Result:%ld,%ld\n",change,tIn.value); fflush(stdout);    
+        //printf("Build_offline_transaction() change+=tIn.value  Result:%ld,%ld\n",change,tIn.value); fflush(stdout);
     }
     for (auto tOut : mtx.vout) {
         change -= tOut.nValue;
-        //printf("Build_offline_transaction() change-=tOut.value  Result:%ld,%ld\n",change,tOut.nValue); fflush(stdout);    
+        //printf("Build_offline_transaction() change-=tOut.value  Result:%ld,%ld\n",change,tOut.nValue); fflush(stdout);
     }
     if (change < 0) 
     {
@@ -386,7 +386,7 @@ std::string TransactionBuilder::Build_offline_transaction()
         }
         else if (!spends.empty()) 
         {            
-            //printf("Build_offline_transaction Build() 3: Pay balance to ourselved. Amount:%ld\n", change);            
+            //printf("Build_offline_transaction Build() 3: Pay balance to ourselved. Amount:%ld\n", change);
             //auto fvk = spends[0].expsk.full_viewing_key();
             //auto note = spends[0].note;
             //libzcash::SaplingPaymentAddress changeAddr(note.d, note.pk_d);
@@ -535,7 +535,7 @@ std::string TransactionBuilder::Build_offline_transaction()
         
     //Parameter [3]: Minimum confirmations
     //printf("Build_offline_transaction() [3] Minimum confirmations %d\n",iMinConf);
-    sReturn=sReturn+strprintf("%d ",iMinConf);   
+    sReturn=sReturn+strprintf("%d ",iMinConf);
     
     
     //Parameter [4]: Miners fee
@@ -550,7 +550,7 @@ std::string TransactionBuilder::Build_offline_transaction()
     
     //Parameter [6]: BranchId (uint32_t)
     auto BranchId = CurrentEpochBranchId(nHeight, consensusParams);
-    //printf("Build_offline_transaction() [6] BranchId: %u\n", BranchId);    
+    //printf("Build_offline_transaction() [6] BranchId: %u\n", BranchId);
     sReturn=sReturn+strprintf("%u ",BranchId);
     
     
@@ -580,12 +580,12 @@ std::string TransactionBuilder::Build_offline_transaction()
     //Parameter [11]: int32_t nVersion);
     sReturn=sReturn+strprintf("%d",mtx.nVersion);
         
-    printf("\n\nPaste the full contents into the console of your offline wallet to sign the transaction:\n%s\n",sReturn.c_str());
+    //printf("\n\nPaste the full contents into the console of your offline wallet to sign the transaction:\n%s\n",sReturn.c_str());
 
     // add op_return if there is one to add
     //AddOpRetLast(); ??
 
-    //printf("Build_offline_transaction() Done\n");
+    //printf("Build_offline_transaction() %s\n",sReturn.c_str() );
     return sReturn;
 }
 
@@ -611,7 +611,7 @@ boost::optional<CTransaction> TransactionBuilder::Build()
         change -= tOut.nValue;
     }
     if (change < 0) {
-        printf("transaction_builder.cpp Build() Change < 0 - return\n"); fflush(stdout);
+        //printf("transaction_builder.cpp Build() Change < 0 - return\n"); fflush(stdout);
         return boost::none;
     }
 
@@ -671,18 +671,18 @@ boost::optional<CTransaction> TransactionBuilder::Build()
         auto nf = myNote.nullifier(spend.expsk.full_viewing_key(), lWitnessPosition);
         if (!(cm && nf)) 
         {
-            printf("transaction_builder.cpp cm && nf error\n");        
+            //printf("transaction_builder.cpp cm && nf error\n");
             librustzcash_sapling_proving_ctx_free(ctx);
             return boost::none;
         }
 /*
-        printf("transaction_builder.cpp passed (cm&&nf)\n");
+        //printf("transaction_builder.cpp passed (cm&&nf)\n");
         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-        printf("transaction_builder.cpp 1\n");
+        //printf("transaction_builder.cpp 1\n");
         ss << spend.witness.path();
-        printf("transaction_builder.cpp 2\n");
+        //printf("transaction_builder.cpp 2\n");
         std::vector<unsigned char> witness(ss.begin(), ss.end());
-        printf("transaction_builder.cpp 3\n");
+        //printf("transaction_builder.cpp 3\n");
 */
         std::vector<unsigned char> witness ( &sWitness.cArray[0], &sWitness.cArray[0] +  sizeof(myCharArray_s) );
 
@@ -705,7 +705,7 @@ boost::optional<CTransaction> TransactionBuilder::Build()
                 sdesc.rk.begin(),
                 sdesc.zkproof.data())) 
         {
-            printf("transaction_builder.cpp librustzcash_sapling_spend_proof() failed\n");
+            //printf("transaction_builder.cpp librustzcash_sapling_spend_proof() failed\n");
             librustzcash_sapling_proving_ctx_free(ctx);
             return boost::none;
         }
@@ -740,7 +740,6 @@ boost::optional<CTransaction> TransactionBuilder::Build()
             return boost::none;
         }        
 
-        //libzcash::SaplingNotePlaintext notePlaintext(output.note, output.memo);
         libzcash::SaplingNotePlaintext notePlaintext(myNote, output.memo);
 
         //auto res = notePlaintext.encrypt(output.note.pk_d);
@@ -787,12 +786,6 @@ boost::optional<CTransaction> TransactionBuilder::Build()
 
     //
     // Signatures
-    //
-    //Also send:
-    //FIXIT
-    //auto consensusBranchId = CurrentEpochBranchId(nHeight, consensusParams);
-    //auto consensusBranchId = 1991772603;
-
     // Empty output script.
     uint256 dataToBeSigned;
     CScript scriptCode;
@@ -833,6 +826,7 @@ boost::optional<CTransaction> TransactionBuilder::Build()
 
         if (!signSuccess) 
         {
+            //printf("Could not sign the message\n");
             return boost::none;
         } else {
             UpdateTransaction(mtx, nIn, sigdata);
@@ -842,6 +836,8 @@ boost::optional<CTransaction> TransactionBuilder::Build()
     maybe_tx = CTransaction(mtx);
     tx_result = maybe_tx.get();
     signedtxn = EncodeHexTx(tx_result);
-    
+    //printf("signed txn: %s\n",signedtxn.c_str() );
+
+    //printf("transaction_builder.cpp Done\n");fflush(stdout);
     return CTransaction(mtx);
 }

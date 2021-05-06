@@ -16,7 +16,7 @@
 #include "optionsmodel.h"
 #include "paymentserver.h"
 #include "recentrequeststablemodel.h"
-#include "sendcoinsdialog.h"
+//#include "sendcoinsdialog.h"
 #include "zsendcoinsdialog.h"
 #include "transactiontablemodel.h"
 #include "importkeydialog.h"
@@ -299,7 +299,7 @@ void WalletModel::importViewingKey (QString strKey) {
 }
 
 void WalletModel::pollBalanceChanged()
-{
+{  
     // Get required locks upfront. This avoids the GUI from getting stuck on
     // periodical polls if the core is holding the locks for a longer time -
     // for example, during a wallet rescan.
@@ -362,7 +362,7 @@ void WalletModel::checkBalanceChanged()
 }
 
 void WalletModel::updateTransaction()
-{
+{  
     // Balance and number of transactions might have changed
     fForceCheckBalanceChanged = true;
 }
@@ -425,7 +425,7 @@ bool WalletModel::validateMemo(const QString &memo)
       }
     return true;
 }
-
+/*
 WalletModel::SendCoinsReturn WalletModel::prepareTransaction(WalletModelTransaction &transaction, const CCoinControl& coinControl)
 {
     CAmount total = 0;
@@ -538,9 +538,9 @@ WalletModel::SendCoinsReturn WalletModel::prepareTransaction(WalletModelTransact
 
     return SendCoinsReturn(OK);
 }
-
+*/
 WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransaction &transaction, const CCoinControl& coinControl)
-{
+{    
     CAmount total = 0;
     bool fSubtractFeeFromAmount = false;
     QList<SendCoinsRecipient> recipients = transaction.getRecipients();
@@ -554,26 +554,36 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
     uint32_t branchId = CurrentEpochBranchId(chainActive.Height(), Params().GetConsensus());
 
     auto fromaddress = transaction.getFromAddress();
+    bool bIsMine     = transaction.getIsMine();
     bool fromTaddr = false;
     bool fromSapling = false;
 
     CTxDestination taddr = DecodeDestination(fromaddress.toStdString());
     fromTaddr = IsValidDestination(taddr);
-    if (!fromTaddr) {
+    if (!fromTaddr)
+    {
         auto res = DecodePaymentAddress(fromaddress.toStdString());
-        if (!IsValidPaymentAddress(res, branchId))
-        {
-            return InvalidFromAddress;
-        }
 
-        // Check that we have the spending key
-        if (!boost::apply_visitor(HaveSpendingKeyForPaymentAddress(wallet), res))
+        if (bIsMine==true)
         {
+          if (!IsValidPaymentAddress(res, branchId))
+          {
+             return InvalidFromAddress;
+          }
+
+          // Check that we have the spending key
+          if (!boost::apply_visitor(HaveSpendingKeyForPaymentAddress(wallet), res))
+          {
             return HaveNotSpendingKey;
+          }
         }
-
         // Remember whether this is a Sprout or Sapling address
         fromSapling = boost::get<libzcash::SaplingPaymentAddress>(&res) != nullptr;
+    }
+    else
+    {
+      //Only support z-sapling addresses:
+      return InvalidFromAddress;
     }
 
     // This logic will need to be updated if we add a new shielded pool
@@ -585,7 +595,7 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
     set<std::string> setAddress; // Used to detect duplicates
 
     // Recipients
-    std::vector<SendManyRecipient> taddrRecipients;
+    //std::vector<SendManyRecipient> taddrRecipients;
     std::vector<SendManyRecipient> zaddrRecipients;
 
     bool containsSproutOutput = false;
@@ -655,17 +665,19 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
             }
         }
 
-        if (isZaddr) {
+        if (isZaddr)
+        {
             zaddrRecipients.push_back( SendManyRecipient(rcp.address.toStdString(), rcp.amount, memo) );
-        } else {
-            taddrRecipients.push_back( SendManyRecipient(rcp.address.toStdString(), rcp.amount, memo) );
+        }
+        else
+        {
+            //taddr not allowed on PirateNetwork
+            return InvalidAddress;
         }
 
         total += rcp.amount;
     }
-
     CAmount nBalance = getAddressBalance(fromaddress.toStdString());
-
     if(total > nBalance)
     {
         return AmountExceedsBalance;
@@ -724,11 +736,6 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
 
     CTransaction tx(mtx);
     txsize += GetSerializeSize(tx, SER_NETWORK, tx.nVersion);
-    if (fromTaddr) {
-        txsize += CTXIN_SPEND_DUST_SIZE;
-        txsize += CTXOUT_REGULAR_SIZE;      // There will probably be taddr change
-    }
-    txsize += CTXOUT_REGULAR_SIZE * taddrRecipients.size();
     if (txsize > max_tx_size)
     {
         return LargeTransactionSize;
@@ -741,8 +748,8 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
     CAmount nFee        = ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE;
     CAmount nDefaultFee = nFee;
 
-    nFee = transaction.getTransactionFee();
 
+    nFee = transaction.getTransactionFee();    
     // Check that the user specified fee is not absurd.
     // This allows amount=0 (and all amount < nDefaultFee) transactions to use the default network fee
     // or anything less than nDefaultFee instead of being forced to use a custom fee and leak metadata
@@ -760,10 +767,9 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
         return SendCoinsReturn(AmountWithFeeExceedsBalance);
     }
 
-    // Use input parameters as the optional context info to be returned by z_getoperationstatus and z_getoperationresult.
+    // Use input parameters as the optional context info to be returned by z_getoperationstatus and z_getoperationresult.    
     UniValue o(UniValue::VOBJ);
-    o.push_back(Pair("fromaddress", fromaddress.toStdString()));
-
+    o.push_back(Pair("fromaddress", fromaddress.toStdString()));    
     UniValue o_addrs(UniValue::VOBJ);
     for (const SendCoinsRecipient &rcp : recipients)
     {
@@ -780,7 +786,8 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
 
     // Builder (used if Sapling addresses are involved)
     boost::optional<TransactionBuilder> builder;
-    if (noSproutAddrs) {
+    if (noSproutAddrs)
+    {
         builder = TransactionBuilder(Params().GetConsensus(), nextBlockHeight, wallet);
     }
 
@@ -788,13 +795,12 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
     // (used if no Sapling addresses are involved)
     CMutableTransaction contextualTx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nextBlockHeight);
     bool isShielded = !fromTaddr || zaddrRecipients.size() > 0;
-    if (contextualTx.nVersion == 1 && isShielded) {
+    if (contextualTx.nVersion == 1 && isShielded)
+    {
         contextualTx.nVersion = 2; // Tx format should support vjoinsplits
     }
-
     transaction.setBuilder(builder);
     transaction.setContextualTx(contextualTx);
-    transaction.setTaddrRecipients(taddrRecipients);
     transaction.setZaddrRecipients(zaddrRecipients);
     transaction.setContextInfo(contextInfo);
 
@@ -884,7 +890,6 @@ WalletModel::SendCoinsReturn WalletModel::zsendCoins(WalletModelZTransaction &tr
     std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(transaction.getBuilder(),
                                                                                  transaction.getContextualTx(),
                                                                                  transaction.getFromAddress().toStdString(),
-                                                                                 transaction.getTaddrRecipients(),
                                                                                  transaction.getZaddrRecipients(),
                                                                                  1,
                                                                                  transaction.getTransactionFee(),
@@ -922,13 +927,64 @@ WalletModel::SendCoinsReturn WalletModel::zsendCoins(WalletModelZTransaction &tr
 
     transaction.setOperationId(operationId);
 
+    //Poll async operation for a result:
+    //int iCount = q->getNumberOfWorkers();
+    //std::shared_ptr<AsyncRPCOperation> operation = q->getOperationForId(  currentTransaction.getOperationId()  );
+    int iCounter=0;
+    UniValue oResult;
+    string sResult;
+    while(1)
+    {
+      OperationStatus status;
+      status=operation->getState();
+      switch(status)
+      {
+        case OperationStatus::CANCELLED:
+          transaction.setZSignOfflineTransaction("Background thread was cancelled");
+          iCounter=11; //exit polling loop
+          break;
+        case OperationStatus::EXECUTING:          
+          break;
+        case OperationStatus::READY:
+          break;
+        case OperationStatus::FAILED:
+          transaction.setZSignOfflineTransaction("Background thread indicates an error occurred");
+          iCounter=11; //exit polling loop
+          break;
+        case OperationStatus::SUCCESS:
+          oResult = operation->getResult();
+          sResult = oResult[0].get_str();
+          if (sResult.find("z_sign_offline") != std::string::npos)
+          {
+            transaction.setZSignOfflineTransaction(sResult);
+          }
+          else
+          {
+            transaction.setZSignOfflineTransaction("Could not find z_sing_offline in the result: "+sResult);
+          }
+          iCounter=11; //exit polling loop
+          break;
+        default:
+          transaction.setZSignOfflineTransaction("Unknown result from the background thread");
+          iCounter=11; //exit polling loop
+          break;
+      }
+      sleep(1);
+
+      if (iCounter>10)
+      {
+        break;
+      }
+      iCounter++;
+    }
+
     Q_EMIT coinsZSent(operationId);
 
     return SendCoinsReturn(OK);
 }
 
 OptionsModel *WalletModel::getOptionsModel()
-{
+{  
     return optionsModel;
 }
 
@@ -1107,6 +1163,7 @@ WalletModel::UnlockContext::UnlockContext(WalletModel *_wallet, bool _valid, boo
         valid(_valid),
         relock(_relock)
 {
+
 }
 
 WalletModel::UnlockContext::~UnlockContext()
@@ -1271,7 +1328,6 @@ std::map<CTxDestination, CAmount> WalletModel::getTAddressBalances()
 std::map<libzcash::PaymentAddress, CAmount> WalletModel::getZAddressBalances()
 {
     std::map<libzcash::PaymentAddress, CAmount> balances;
-
     {
         LOCK2(cs_main, wallet->cs_wallet);
 
@@ -1286,6 +1342,7 @@ std::map<libzcash::PaymentAddress, CAmount> WalletModel::getZAddressBalances()
         zaddrs.insert(sproutzaddrs.begin(), sproutzaddrs.end());
         zaddrs.insert(saplingzaddrs.begin(), saplingzaddrs.end());
 
+        int iI=1;
         if (zaddrs.size() > 0)
         {
             std::vector<CSproutNotePlaintextEntry> sproutEntries;
@@ -1304,15 +1361,18 @@ std::map<libzcash::PaymentAddress, CAmount> WalletModel::getZAddressBalances()
 
             for (auto & entry : saplingEntries)
             {
+                iI++;
                 libzcash::SaplingIncomingViewingKey ivk;
                 libzcash::SaplingExtendedFullViewingKey extfvk;
                 wallet->GetSaplingIncomingViewingKey(boost::get<libzcash::SaplingPaymentAddress>(entry.address), ivk);
                 wallet->GetSaplingFullViewingKey(ivk, extfvk);
                 bool hasSaplingSpendingKey = wallet->HaveSaplingSpendingKey(extfvk);
-                if (!hasSaplingSpendingKey) continue;
+                //FIXIT: Pass parameter to scan between spending key or only viewing key:
+                //if (!hasSaplingSpendingKey) continue;
 
                 if (!balances.count(entry.address))
                     balances[entry.address] = 0;
+
                 balances[entry.address] += CAmount(entry.note.value());
             }
         }
@@ -1324,14 +1384,13 @@ std::map<libzcash::PaymentAddress, CAmount> WalletModel::getZAddressBalances()
 CAmount WalletModel::getAddressBalance(const std::string &sAddress)
 {
     bool isTaddr = false;
-
     CTxDestination taddr = DecodeDestination(sAddress);
     isTaddr = IsValidDestination(taddr);
 
     CAmount nBalance = 0;
     if (isTaddr) {
         nBalance = getBalanceTaddr(sAddress, 1, false);
-    } else {
+    } else {        
         nBalance = getBalanceZaddr(sAddress, 1, false);
     }
 

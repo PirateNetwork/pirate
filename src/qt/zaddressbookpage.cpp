@@ -68,14 +68,14 @@ ZAddressBookPage::ZAddressBookPage(const PlatformStyle *platformStyle, Mode _mod
     }
     switch(tab)
     {
-    case SendingTab:
-        ui->labelExplanation->setText(tr("These are your Pirate z-addresses for sending payments. Always check the amount and the receiving z-address before sending coins."));
-        ui->deleteAddress->setVisible(true);
-        break;
-    case ReceivingTab:
-        ui->labelExplanation->setText(tr("These are your Pirate z-addresses for receiving payments. It is recommended to use a new receiving z-address for each transaction."));
-        ui->deleteAddress->setVisible(false);
-        break;
+      case SendingTab:
+          ui->labelExplanation->setText(tr("These are your Pirate z-addresses for sending payments. Always check the amount and the receiving z-address before sending coins."));
+          ui->deleteAddress->setVisible(false);
+          break;
+      case ReceivingTab:
+          ui->labelExplanation->setText(tr("These are your Pirate z-addresses for receiving payments. Share one with somebody that wants to send ARRR to you."));
+          ui->deleteAddress->setVisible(false);
+          break;
     }
 
     //Hide close button
@@ -83,26 +83,22 @@ ZAddressBookPage::ZAddressBookPage(const PlatformStyle *platformStyle, Mode _mod
 
     // Context menu actions
     QAction *copyAddressAction = new QAction(tr("&Copy Address"), this);
-    QAction *copyLabelAction = new QAction(tr("Copy &Label"), this);
-    QAction *editAction = new QAction(tr("&Edit"), this);
-
-    QAction *copyZSendManyToAction = new QAction(tr("Copy zsendmany (to) template"), this);
-    QAction *copyZSendManyFromAction = new QAction(tr("Copy zsendmany (from) template"), this);
-
-    QAction *exportSpendingKeyAction = new QAction(tr("Export extended spending key"), this);
-    QAction *exportViewingKeyAction = new QAction(tr("Export extended viewing key"), this);
+    //QAction *copyLabelAction = new QAction(tr("Copy &Label"), this);
+    //QAction *editAction = new QAction(tr("&Edit"), this);
+    //QAction *copyZSendManyToAction = new QAction(tr("Copy zsendmany (to) template"), this);
+    //QAction *copyZSendManyFromAction = new QAction(tr("Copy zsendmany (from) template"), this);
+    QAction *exportSpendingKeyAction = new QAction(tr("Export spending key (public+private key pair) -- Dont share this!"), this);
+    QAction *exportViewingKeyAction = new QAction(tr("Export viewing key (public key only)"), this);
 
     deleteAction = new QAction(ui->deleteAddress->text(), this);
 
     // Build context menu
     contextMenu = new QMenu(this);
     contextMenu->addAction(copyAddressAction);
-    contextMenu->addAction(copyLabelAction);
-    contextMenu->addAction(editAction);
-
-    contextMenu->addAction(copyZSendManyToAction);
-    contextMenu->addAction(copyZSendManyFromAction);
-
+    //contextMenu->addAction(copyLabelAction);
+    //contextMenu->addAction(editAction);
+    //contextMenu->addAction(copyZSendManyToAction);
+    //contextMenu->addAction(copyZSendManyFromAction);
     contextMenu->addAction(exportSpendingKeyAction);
     contextMenu->addAction(exportViewingKeyAction);
 
@@ -112,13 +108,11 @@ ZAddressBookPage::ZAddressBookPage(const PlatformStyle *platformStyle, Mode _mod
 
     // Connect signals for context menu actions
     connect(copyAddressAction, SIGNAL(triggered()), this, SLOT(on_copyAddress_clicked()));
-    connect(copyLabelAction, SIGNAL(triggered()), this, SLOT(onCopyLabelAction()));
-    connect(editAction, SIGNAL(triggered()), this, SLOT(onEditAction()));
-    connect(deleteAction, SIGNAL(triggered()), this, SLOT(on_deleteAddress_clicked()));
-
-    connect(copyZSendManyToAction, SIGNAL(triggered()), this, SLOT(onCopyZSendManyToAction()));
-    connect(copyZSendManyFromAction, SIGNAL(triggered()), this, SLOT(onCopyZSendManyFromAction()));
-
+    //connect(copyLabelAction, SIGNAL(triggered()), this, SLOT(onCopyLabelAction()));
+    //connect(editAction, SIGNAL(triggered()), this, SLOT(onEditAction()));
+    //connect(deleteAction, SIGNAL(triggered()), this, SLOT(on_deleteAddress_clicked()));
+    //connect(copyZSendManyToAction, SIGNAL(triggered()), this, SLOT(onCopyZSendManyToAction()));
+    //connect(copyZSendManyFromAction, SIGNAL(triggered()), this, SLOT(onCopyZSendManyFromAction()));
     connect(exportSpendingKeyAction, SIGNAL(triggered()), this, SLOT(exportSK()));
     connect(exportViewingKeyAction, SIGNAL(triggered()), this, SLOT(exportVK()));
 
@@ -148,6 +142,7 @@ void ZAddressBookPage::setModel(ZAddressTableModel *_model)
     proxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
     proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
     proxyModel->setSortRole(Qt::EditRole);
+
 
     switch(tab)
     {
@@ -214,6 +209,7 @@ void ZAddressBookPage::exportVK()
     {
 
         QString key = walletModel->getViewingKey(selection.at(0).data(ZAddressTableModel::Address).toString());
+        printf("exportVK(): %s\n", key.toStdString().c_str());
 
         if (key != "") {
           TransactionDescDialog *dlg = new TransactionDescDialog(selection.at(0), VIEWING_KEY, key);
@@ -322,7 +318,7 @@ void ZAddressBookPage::selectionChanged()
         case SendingTab:
             // In sending tab, allow deletion of selection
             ui->deleteAddress->setEnabled(true);
-            ui->deleteAddress->setVisible(true);
+            ui->deleteAddress->setVisible(false);
             deleteAction->setEnabled(true);
             break;
         case ReceivingTab:

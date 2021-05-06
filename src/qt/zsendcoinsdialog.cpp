@@ -2,9 +2,11 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include "sendcoinsdialog.h"
+//#include "sendcoinsdialog.h"
 #include "zsendcoinsdialog.h"
 #include "ui_zsendcoinsdialog.h"
+#include "ui_zsendcoinsdialog_popup.h"
+#include "zsendcoinsdialog_popup.h"
 
 #include "addresstablemodel.h"
 #include "komodounits.h"
@@ -29,6 +31,7 @@
 #include "wallet/asyncrpcoperation_sendmany.h"
 #include "rpc/server.h"
 #include "utilmoneystr.h"
+#include "zaddresstablemodel.h"
 
 #include <QFontMetrics>
 #include <QMessageBox>
@@ -44,11 +47,10 @@ ZSendCoinsDialog::ZSendCoinsDialog(const PlatformStyle *_platformStyle, QWidget 
     model(0),
     fNewRecipientAllowed(true),
     platformStyle(_platformStyle)
-{
+{    
     ui->setupUi(this);
 
-    ui->payFromAddress->setMaxVisibleItems(10);
-    // ui->payFromAddress->setStyleSheet("QComboBox { combobox-popup: 0; }");
+    ui->payFromAddress->setMaxVisibleItems(30);
 
     if (!_platformStyle->getImagesOnButtons()) {
         ui->addButton->setIcon(QIcon());
@@ -71,7 +73,9 @@ ZSendCoinsDialog::ZSendCoinsDialog(const PlatformStyle *_platformStyle, QWidget 
     // init transaction fee section
     QSettings settings;
     ui->customFee->setValue(ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE);
-    setOperationId("");
+    //setOperationId("");
+    ui->teResult->clear();
+    ui->frameResult->hide();
 }
 
 void ZSendCoinsDialog::setClientModel(ClientModel *_clientModel)
@@ -107,7 +111,7 @@ void ZSendCoinsDialog::setModel(WalletModel *_model)
         ui->frameCoinControl->setVisible(true); // frame "coin control" should be always visible, bcz it contains PayFrom combobox
         coinControlUpdateLabels();
 
-        connect(ui->payFromAddress, SIGNAL(currentIndexChanged(int)), this, SLOT(coinControlUpdateLabels()));
+        connect(ui->payFromAddress, SIGNAL(currentIndexChanged(int)), this, SLOT(payFromAddressIndexChanged(int)));
         connect(ui->customFee, SIGNAL(valueChanged()), this, SLOT(coinControlUpdateLabels()));
         ui->customFee->setSingleStep(GetRequiredFee(1000));
     }
@@ -123,6 +127,21 @@ void ZSendCoinsDialog::on_sendButton_clicked()
     if(!model || !model->getOptionsModel())
         return;
 
+    QString fromaddress;
+    QString sIsMine;
+    bool bIsMine=false;
+    if (!ui->payFromAddress->currentText().split(' ').isEmpty())
+    {
+      fromaddress = ui->payFromAddress->currentText().split(' ').at(1);
+      //If the string format on the GUI is changed the adres might get
+      //misinterpreted here. Might have to look at a better way to identify
+      //the adres.
+      if (ui->payFromAddress->currentText().contains("Local"))
+      {
+        bIsMine=true;
+      }
+    }
+
     QList<SendCoinsRecipient> recipients;
     bool valid = true;
 
@@ -133,7 +152,14 @@ void ZSendCoinsDialog::on_sendButton_clicked()
         {
             if(entry->validate(true))
             {
-                recipients.append(entry->getValue());
+                SendCoinsRecipient recipient = entry->getValue();
+                if (recipient.memo.length()>0)
+                {
+                  //Memo must be transferred in HEX format.
+                  std::string sMemo = HexStr(recipient.memo.toStdString());
+                  recipient.memo = QString::fromStdString(sMemo);
+                }
+                recipients.append( recipient );
             }
             else
             {
@@ -147,10 +173,8 @@ void ZSendCoinsDialog::on_sendButton_clicked()
         return;
     }
 
-    QString fromaddress;
-    if (!ui->payFromAddress->currentText().split(' ').isEmpty()) fromaddress = ui->payFromAddress->currentText().split(' ').at(1);
-
-    if (fromaddress.isEmpty()) return;
+    if (fromaddress.isEmpty())
+      return;
 
     fNewRecipientAllowed = false;
     WalletModel::UnlockContext ctx(model->requestUnlock());
@@ -162,7 +186,7 @@ void ZSendCoinsDialog::on_sendButton_clicked()
     }
 
     // prepare transaction for getting txFee earlier
-    WalletModelZTransaction currentTransaction(fromaddress, recipients, ui->customFee->value());
+    WalletModelZTransaction currentTransaction(fromaddress, recipients, ui->customFee->value(), bIsMine);
     WalletModel::SendCoinsReturn prepareStatus;
 
     // Always use a CCoinControl instance, use the CoinControlDialog instance if CoinControl has been enabled
@@ -211,7 +235,15 @@ void ZSendCoinsDialog::on_sendButton_clicked()
         formatted.append(recipientElement);
     }
 
-    QString questionString = tr("Are you sure you want to send?");
+    QString questionString;
+    if (bIsMine==true)
+    {
+      questionString = tr("Are you sure you want to send?");
+    }
+    else
+    {
+      questionString = tr("Are you sure you want to prepare the transaction for off-line signing?");
+    }
     questionString.append("<br /><br />%1");
 
     if(txFee > 0)
@@ -235,16 +267,24 @@ void ZSendCoinsDialog::on_sendButton_clicked()
         if(u != model->getOptionsModel()->getDisplayUnit())
             alternativeUnits.append(KomodoUnits::formatHtmlWithUnit(u, totalAmount));
     }
-    questionString.append(tr("Total Amount %1")
+    questionString.append(tr("Total amount: %1")
         .arg(KomodoUnits::formatHtmlWithUnit(model->getOptionsModel()->getDisplayUnit(), totalAmount)));
-    questionString.append(QString("<span style='font-size:10pt;font-weight:normal;'><br />(=%2)</span>")
-        .arg(alternativeUnits.join(" " + tr("or") + "<br />")));
+    questionString.append(QString("<span><br />(=%2)</span>")
+        .arg(alternativeUnits.join(" " + tr("or") + " ")));
 
-    SendConfirmationDialog confirmationDialog(tr("Confirm send coins"),
-        questionString.arg(formatted.join("<br />")), SEND_CONFIRM_DELAY, this);
-    confirmationDialog.exec();
+    QString sHeading;
+    if (bIsMine==true)
+    {
+      sHeading="Confirm send coins";
+    }
+    else
+    {
+       sHeading="Confirm prepare off-line transaction";
+    }           
+    ZSendConfirmationDialog confirmationDialog(tr(sHeading.toStdString().c_str() ),
+      questionString.arg(formatted.join("<br />")), SEND_CONFIRM_DELAY, this);
+    confirmationDialog.exec();    
     QMessageBox::StandardButton retval = (QMessageBox::StandardButton)confirmationDialog.result();
-
     if(retval != QMessageBox::Yes)
     {
         fNewRecipientAllowed = true;
@@ -264,7 +304,71 @@ void ZSendCoinsDialog::on_sendButton_clicked()
     }
     fNewRecipientAllowed = true;
 
-    setOperationId(currentTransaction.getOperationId());
+
+    QString qsResult="";
+    string sResult="";    
+    if (bIsMine==false)
+    {
+      sResult = currentTransaction.getZSignOfflineTransaction();
+
+      ZSendCoinsDialog_popup *poPopup = new ZSendCoinsDialog_popup(platformStyle);
+      poPopup->SetUnsignedTransaction( QString::fromStdString(sResult) );
+      poPopup->exec();
+
+      bool bResult = poPopup->GetSignedTransaction(&qsResult);
+      if (bResult == true)
+      {
+        UniValue oResult;
+        UniValue osString(UniValue::VSTR);
+        try
+        {
+          UniValue params(UniValue::VARR);
+          params.push_back (qsResult.toStdString());
+          oResult = tableRPC.execute("sendrawtransaction", params );
+        }
+        catch (UniValue& objError)
+        {
+            try // Nice formatting for standard-format error
+            {
+                int code = find_value(objError, "code").get_int();
+                std::string sMessage = find_value(objError, "message").get_str();
+
+                setResult("Transaction sending failed",sMessage.c_str() );
+                return;
+            }
+            catch (const std::runtime_error&) // raised when converting to invalid type, i.e. missing code or message
+            {
+                setResult("Transaction sending failed","Could not parse the response. Please look in the log and command line output" );
+                return;
+            }
+        }
+        catch (...)
+        {
+            setResult("Transaction sending failed","Could not parse the response. Please look in the log and command line output");
+            return;
+        }
+
+        if (oResult.empty())
+        {
+          setResult("Transaction sending failed","The result is empty");
+          return;
+        }
+
+        if (oResult[0].getType() != UniValue::VSTR)
+        {
+          setResult("","Transaction sending failed. The result is empty");
+          return;
+        }
+
+        std::string sMessage = "Transaction submitted. TxID="+oResult[0].get_str();
+        setResult("",sMessage);
+      }
+    }
+    else
+    {
+      sResult="opid = " + currentTransaction.getOperationId();
+      setResult("",sResult);
+    }
 }
 
 void ZSendCoinsDialog::clear()
@@ -277,6 +381,13 @@ void ZSendCoinsDialog::clear()
     addEntry();
 
     updateTabsAndLabels();
+
+    //Select the top adress:
+    ui->payFromAddress->setCurrentIndex(0);
+
+    //Hide the result frame
+    ui->teResult->clear();
+    ui->frameResult->hide();
 }
 
 void ZSendCoinsDialog::reject()
@@ -426,9 +537,20 @@ void ZSendCoinsDialog::updateDisplayUnit()
     ui->customFee->setDisplayUnit(model->getOptionsModel()->getDisplayUnit());
 }
 
-void ZSendCoinsDialog::setOperationId(const AsyncRPCOperationId& operationId)
+void ZSendCoinsDialog::setResult(const string sHeading, const string sResult)
 {
-    ui->operationId->setText(QString::fromStdString(operationId));
+    if (sHeading.length() == 0)
+    {
+      ui->lbResult->setText("Result: ");
+    }
+    else
+    {
+      ui->lbResult->setText("Result:"+QString::fromStdString(sHeading));
+    }
+
+    ui->teResult->setText( QString::fromStdString(sResult) );
+
+    ui->frameResult->show();
 }
 
 void ZSendCoinsDialog::processSendCoinsReturn(const WalletModel::SendCoinsReturn &sendCoinsReturn, const QString &msgArg)
@@ -558,6 +680,33 @@ void ZSendCoinsDialog::updateCoinControlState(CCoinControl& ctrl)
     ctrl.m_feerate = CFeeRate(ui->customFee->value());
 }
 
+void ZSendCoinsDialog::payFromAddressIndexChanged(int iIndex)
+{
+  if (iIndex>=0)
+  {
+    bool bIsMine=false;
+    QString qsText = ui->payFromAddress->currentText();
+    if (qsText.contains("Local"))
+    {
+      bIsMine=true;
+    }
+
+    if (bIsMine==true) //Local adres
+    {
+      ui->sendButton->setText("S&end");
+    }
+    else
+    {
+      ui->sendButton->setText("Prepare off-line transaction");
+    }
+  }
+  else
+  {
+    ui->sendButton->setText("S&end");
+  }
+  coinControlUpdateLabels();
+}
+
 // Coin Control: update labels
 void ZSendCoinsDialog::coinControlUpdateLabels()
 {
@@ -593,6 +742,7 @@ void ZSendCoinsDialog::updatePayFromList()
 {
     ui->payFromAddress->clear();
 
+    /*
     typedef std::function<bool(std::pair<CTxDestination, CAmount>, std::pair<CTxDestination, CAmount>)> ComparatorT;
 
     ComparatorT compFunctorT = [](std::pair<CTxDestination, CAmount> elem1 ,std::pair<CTxDestination, CAmount> elem2)
@@ -605,6 +755,9 @@ void ZSendCoinsDialog::updatePayFromList()
         return (v1 > v2) || ( (v1 == v2) && ( a1 > a2 ) );
     };
 
+    //FIXIT: Why still scanning for TAddresses if Pirate only supports z-addresses?
+    //FIXIT: Replcace with my 'viewing only' adresses
+
     std::map<CTxDestination, CAmount> balances = model->getTAddressBalances();
 
     std::set<std::pair<CTxDestination, CAmount>, ComparatorT> balances_sorted(balances.begin(), balances.end(), compFunctorT);
@@ -615,7 +768,6 @@ void ZSendCoinsDialog::updatePayFromList()
             ui->payFromAddress->addItem(tr("(%1) %2").arg(QString::number(ValueFromAmount(item.second).get_real(),'f',8))
                                                      .arg(QString::fromStdString(EncodeDestination(item.first))));
     }
-
 
     typedef std::function<bool(std::pair<libzcash::PaymentAddress, CAmount>, std::pair<libzcash::PaymentAddress, CAmount>)> ComparatorZ;
 
@@ -628,15 +780,101 @@ void ZSendCoinsDialog::updatePayFromList()
 
         return (v1 > v2) || ( (v1 == v2) && ( a1 > a2 ) );
     };
+    */
 
-    std::map<libzcash::PaymentAddress, CAmount> zbalances = model->getZAddressBalances();
+    ZAddressTableModel *poZAddressTableModel;
+    poZAddressTableModel = model->getZAddressTableModel();
 
-    std::set<std::pair<libzcash::PaymentAddress, CAmount>, ComparatorZ> zbalances_sorted(zbalances.begin(), zbalances.end(), compFunctorZ);
+    QModelIndex oMIParent;
+    int iRowCount=poZAddressTableModel->rowCount(oMIParent);
 
-    for (const std::pair<libzcash::PaymentAddress, CAmount>& item : zbalances_sorted)
+    float fBalance;
+    typedef struct
     {
-        if (ValueFromAmount(item.second).get_real() != 0.0)
-            ui->payFromAddress->addItem(tr("(%1) %2").arg(QString::number(ValueFromAmount(item.second).get_real(),'f',8))
-                                                     .arg(QString::fromStdString(EncodePaymentAddress(item.first))));
+      bool bIsMine;
+      QString sAddres;
+    } addr_pair;
+    addr_pair oPair;
+    QMap<float, addr_pair> zbalances_offline;
+
+    for (int iI=0;iI<iRowCount;iI++)
+    {
+      //IsMine?
+      QModelIndex oIndex = poZAddressTableModel->index(iI, ZAddressTableModel::isMine, oMIParent);
+      bool bMine = poZAddressTableModel->data(oIndex, Qt::EditRole).toInt();
+
+      //Balance
+      oIndex = poZAddressTableModel->index(iI, ZAddressTableModel::Balance, oMIParent);
+      float fBalance = poZAddressTableModel->data(oIndex, Qt::EditRole).toFloat();
+
+      //Adres
+      oIndex = poZAddressTableModel->index(iI, ZAddressTableModel::Address, oMIParent);
+      QString sAdres = poZAddressTableModel->data(oIndex, Qt::EditRole).toString();
+
+      if (fBalance>0.0)
+      {
+        oPair.sAddres = sAdres;
+        oPair.bIsMine = bMine;
+        zbalances_offline.insert(fBalance, oPair);
+      }
+    }
+    //Render from max to min balance
+    QMap<float, addr_pair>::const_iterator i = zbalances_offline.constEnd();
+    while (i != zbalances_offline.constBegin())
+    {
+      --i;
+      oPair = i.value();      
+      QString sAmount;
+      sAmount.sprintf("%0.8f",i.key() );
+      if (oPair.bIsMine == 1)
+      {
+        ui->payFromAddress->addItem(tr("(%1) %2 - Local (Have spending key)").arg(sAmount).arg(oPair.sAddres.toStdString().c_str()));
+      }
+      else
+      {
+        ui->payFromAddress->addItem(tr("(%1) %2 - Off-line").arg(sAmount).arg(oPair.sAddres.toStdString().c_str()));
+      }
+    }
+}
+
+ZSendConfirmationDialog::ZSendConfirmationDialog(const QString &title, const QString &text, int _secDelay,
+    QWidget *parent) :
+    QMessageBox(QMessageBox::Question, title, text, QMessageBox::Yes | QMessageBox::Cancel, parent), secDelay(_secDelay)
+{
+    setDefaultButton(QMessageBox::Cancel);
+    yesButton = button(QMessageBox::Yes);
+    updateYesButton();
+    connect(&countDownTimer, SIGNAL(timeout()), this, SLOT(countDown()));
+}
+
+int ZSendConfirmationDialog::exec()
+{
+    updateYesButton();
+    countDownTimer.start(1000);
+    return QMessageBox::exec();
+}
+
+void ZSendConfirmationDialog::countDown()
+{
+    secDelay--;
+    updateYesButton();
+
+    if(secDelay <= 0)
+    {
+        countDownTimer.stop();
+    }
+}
+
+void ZSendConfirmationDialog::updateYesButton()
+{
+    if(secDelay > 0)
+    {
+        yesButton->setEnabled(false);
+        yesButton->setText(tr("Yes") + " (" + QString::number(secDelay) + ")");
+    }
+    else
+    {
+        yesButton->setEnabled(true);
+        yesButton->setText(tr("Yes"));
     }
 }
