@@ -94,7 +94,7 @@ bool CWalletDB::EraseArcTx(uint256 hash)
 bool CWalletDB::WriteArcSproutOp(uint256 nullifier, JSOutPoint op)
 {
     nWalletDBUpdated++;
-    return Write(std::make_pair(std::string("arczcop"), nullifier), op);
+    return WriteTxn(std::make_pair(std::string("arczcop"), nullifier), op, __FUNCTION__);
 }
 
 bool CWalletDB::EraseArcSproutOp(uint256 nullifier)
@@ -106,7 +106,7 @@ bool CWalletDB::EraseArcSproutOp(uint256 nullifier)
 bool CWalletDB::WriteArcSaplingOp(uint256 nullifier, SaplingOutPoint op)
 {
     nWalletDBUpdated++;
-    return Write(std::make_pair(std::string("arczsop"), nullifier), op);
+    return WriteTxn(std::make_pair(std::string("arczsop"), nullifier), op, __FUNCTION__);
 }
 
 bool CWalletDB::EraseArcSaplingOp(uint256 nullifier)
