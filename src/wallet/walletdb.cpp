@@ -531,6 +531,8 @@ public:
     unsigned int nCZKeys;
     unsigned int nZKeyMeta;
     unsigned int nSapZAddrs;
+    unsigned int nArcTx;
+    unsigned int nWalletTx;
     bool fIsEncrypted;
     bool fAnyUnordered;
     int nFileVersion;
@@ -538,6 +540,7 @@ public:
 
     CWalletScanState() {
         nKeys = nCKeys = nKeyMeta = nZKeys = nCZKeys = nZKeyMeta = nSapZAddrs = 0;
+        nArcTx = nWalletTx = 0;
         fIsEncrypted = false;
         fAnyUnordered = false;
         nFileVersion = 0;
@@ -607,6 +610,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (wtx.nOrderPos == -1)
                 wss.fAnyUnordered = true;
 
+            wss.nWalletTx++;
             pwallet->AddToWallet(wtx, true, NULL);
         }
         else if (strType == "arctx")
@@ -616,6 +620,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             ArchiveTxPoint ArcTxPt;
             ssValue >> ArcTxPt;
 
+            wss.nArcTx++;
             pwallet->LoadArcTxs(wtxid, ArcTxPt);
         }
         else if (strType == "arczcop")
@@ -1185,6 +1190,9 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
 
     LogPrintf("ZKeys: %u plaintext, %u encrypted, %u w/metadata, %u total\n",
            wss.nZKeys, wss.nCZKeys, wss.nZKeyMeta, wss.nZKeys + wss.nCZKeys);
+
+    LogPrintf("Sapling Addresses: %u \n",wss.nSapZAddrs);
+    LogPrintf("ZKeys: %u wallet transactions, %u archived transactions\n", wss.nWalletTx, wss.nArcTx);
 
     // nTimeFirstKey is only reliable if all keys have metadata
     if ((wss.nKeys + wss.nCKeys) != wss.nKeyMeta)
