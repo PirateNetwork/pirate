@@ -2208,25 +2208,6 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
         }
     }
 
-    //Add all Sapling addresses to map
-    std::set<libzcash::SaplingPaymentAddress> zs_addresses;
-    pwalletMain->GetSaplingPaymentAddresses(zs_addresses);
-    for (auto addr : zs_addresses) {
-        libzcash::SaplingIncomingViewingKey ivk;
-        libzcash::SaplingExtendedFullViewingKey extfvk;
-        if(pwalletMain->GetSaplingIncomingViewingKey(addr, ivk)) {
-            if(pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
-                if (pwalletMain->HaveSaplingSpendingKey(extfvk) || fIncludeWatchonly) {
-                    string addressString = EncodePaymentAddress(addr);
-                    if (addressBalances.count(addressString) == 0) {}
-                        addressBalances.insert(make_pair(addressString,txAmounts));
-
-                    addressBalances.at(addressString).spendable = pwalletMain->HaveSaplingSpendingKey(extfvk);
-                }
-            }
-        }
-    }
-
     //Add all Sprout addresses to map
     std::set<libzcash::SproutPaymentAddress> zc_addresses;
     pwalletMain->GetSproutPaymentAddresses(zc_addresses);
@@ -2325,43 +2306,39 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
               continue;
 
           //Decrypt sapling incoming commitments using IVK
-          for (int i = 0; i < ivks.size(); i++) {
-              auto ivk = SaplingIncomingViewingKey(ivks[i]);
-              libzcash::SaplingExtendedFullViewingKey extfvk;
-              if(pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
-                  if (pwalletMain->HaveSaplingSpendingKey(extfvk) || fIncludeWatchonly) {
+          auto ivk = nd.ivk;
+          libzcash::SaplingExtendedFullViewingKey extfvk;
+          if(pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
+              bool haveSpendingKey = pwalletMain->HaveSaplingSpendingKey(extfvk);
+              if (haveSpendingKey || fIncludeWatchonly) {
 
-                      auto pt = libzcash::SaplingNotePlaintext::decrypt(
-                          wtx.vShieldedOutput[op.n].encCiphertext,ivk,wtx.vShieldedOutput[op.n].ephemeralKey,wtx.vShieldedOutput[op.n].cm);
+                  auto pt = libzcash::SaplingNotePlaintext::decrypt(
+                      wtx.vShieldedOutput[op.n].encCiphertext,ivk,wtx.vShieldedOutput[op.n].ephemeralKey,wtx.vShieldedOutput[op.n].cm);
 
-                      if (txType == 0 && pwalletMain->IsLockedNote(op))
-                          txType == 3;
+                  if (txType == 0 && pwalletMain->IsLockedNote(op))
+                      txType == 3;
 
-                      if (pt) {
-                          auto note = pt.get();
-                          auto pa = ivk.address(note.d);
-                          auto addr = pa.get();
-                          string addressString = EncodePaymentAddress(addr);
-                          if (addressBalances.count(addressString) == 0)
-                              addressBalances.insert(make_pair(addressString,txAmounts));
+                  auto note = pt.get();
+                  auto pa = ivk.address(note.d);
+                  auto addr = pa.get();
+                  string addressString = EncodePaymentAddress(addr);
+                  if (addressBalances.count(addressString) == 0)
+                      addressBalances.insert(make_pair(addressString,txAmounts));
 
-                          if (txType == 0) {
-                              addressBalances.at(addressString).confirmed += note.value();
-                              privateConfirmed += note.value();
-                          } else if (txType == 1) {
-                              addressBalances.at(addressString).immature += note.value();
-                              privateImmature += note.value();
-                          } else if (txType == 2) {
-                              addressBalances.at(addressString).unconfirmed += note.value();
-                              privateUnconfirmed += note.value();
-                          } else if (txType == 3) {
-                              addressBalances.at(addressString).locked += note.value();
-                              privateLocked += note.value();
-                          }
-                          addressBalances.at(addressString).spendable = pwalletMain->HaveSaplingSpendingKey(extfvk);
-                          continue;
-                      }
+                  if (txType == 0) {
+                      addressBalances.at(addressString).confirmed += note.value();
+                      privateConfirmed += note.value();
+                  } else if (txType == 1) {
+                      addressBalances.at(addressString).immature += note.value();
+                      privateImmature += note.value();
+                  } else if (txType == 2) {
+                      addressBalances.at(addressString).unconfirmed += note.value();
+                      privateUnconfirmed += note.value();
+                  } else if (txType == 3) {
+                      addressBalances.at(addressString).locked += note.value();
+                      privateLocked += note.value();
                   }
+                  addressBalances.at(addressString).spendable = haveSpendingKey;
               }
           }
       }
