@@ -1182,19 +1182,18 @@ UniValue zs_gettransaction(const UniValue& params, bool fHelp, const CPubKey& my
     std::vector<uint256> ivks;
     getAllSaplingIVKs(ivks, true);
 
+    UniValue txObj(UniValue::VOBJ);
     RpcArcTransaction arcTx;
     if (pwalletMain->mapWallet.count(hash)) {
         CWalletTx& wtx = pwalletMain->mapWallet[hash];
         getRpcArcTx(wtx, arcTx, ivks, ovks, true);
     } else {
         getRpcArcTx(hash, arcTx, ivks, ovks, true);
+        if (arcTx.blockHash.IsNull() || mapBlockIndex[arcTx.blockHash] == nullptr) {
+            return txObj;
+        }
     }
 
-    UniValue txObj(UniValue::VOBJ);
-    if (arcTx.blockHash.IsNull() || mapBlockIndex[arcTx.blockHash] == nullptr) {
-        return txObj;
-    }
-    
     getRpcArcTxJSONHeader(arcTx, txObj);
 
     UniValue spends(UniValue::VARR);
