@@ -6433,10 +6433,8 @@ void CWallet::GetFilteredNotes(
 
             // skip notes which cannot be spent
             if (requireSpendingKey) {
-                libzcash::SaplingIncomingViewingKey ivk;
                 libzcash::SaplingExtendedFullViewingKey extfvk;
-                if (!(GetSaplingIncomingViewingKey(pa, ivk) &&
-                    GetSaplingFullViewingKey(ivk, extfvk) &&
+                if (!(GetSaplingFullViewingKey(nd.ivk, extfvk) &&
                     HaveSaplingSpendingKey(extfvk))) {
                     continue;
                 }
