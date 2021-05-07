@@ -171,10 +171,10 @@ public:
             if (!txnWrite) {
               MilliSleep(500);
               retries++;
-              LogPrintf("%s Failed!!! Retrying, attempt #%d.\n", calling, retries);
             }
 
-            if (retries > 100) {
+            if (retries > 10) {
+              LogPrintf("%s Failed!!! Retry, attempts #%d.\n", calling, retries - 1);
               return false;
             }
         }
