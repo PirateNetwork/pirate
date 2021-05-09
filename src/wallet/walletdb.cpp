@@ -615,13 +615,21 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         }
         else if (strType == "arctx")
         {
-            uint256 wtxid;
-            ssKey >> wtxid;
-            ArchiveTxPoint ArcTxPt;
-            ssValue >> ArcTxPt;
+            //The ArchiveTxPoint structure was changed. An older version will fail
+            //to deserialize and not be added to the mapArcTx, triggering a full
+            //ZapWalletTxes and Rescan.
+            try
+            {
+                uint256 wtxid;
+                ssKey >> wtxid;
+                ArchiveTxPoint ArcTxPt;
+                ssValue >> ArcTxPt;
 
-            wss.nArcTx++;
-            pwallet->LoadArcTxs(wtxid, ArcTxPt);
+                wss.nArcTx++;
+                pwallet->LoadArcTxs(wtxid, ArcTxPt);
+            }
+            catch (...) {}
+
         }
         else if (strType == "arczcop")
         {
