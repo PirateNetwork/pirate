@@ -466,6 +466,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-paytxfee=<amt>", strprintf(_("Fee (in %s/kB) to add to transactions you send (default: %s)"),
         CURRENCY_UNIT, FormatMoney(payTxFee.GetFeePerK())));
     strUsage += HelpMessageOpt("-rescan", _("Rescan the block chain for missing wallet transactions") + " " + _("on startup"));
+    strUsage += HelpMessageOpt("-rescanheight", _("Rescan the block chain from the specified height when rescan=1 on startup"));
     strUsage += HelpMessageOpt("-salvagewallet", _("Attempt to recover private keys from a corrupt wallet.dat") + " " + _("on startup"));
     strUsage += HelpMessageOpt("-sendfreetransactions", strprintf(_("Send transactions as zero-fee transactions if possible (default: %u)"), 0));
     strUsage += HelpMessageOpt("-spendzeroconfchange", strprintf(_("Spend unconfirmed change when sending transactions (default: %u)"), 1));
@@ -2163,6 +2164,15 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         {
             // pwalletMain->ClearNoteWitnessCache();
             pindexRescan = chainActive.Genesis();
+
+            int rescanHeight = GetArg("-rescanheight", 0);
+            if (rescanHeight > 0) {
+                if (rescanHeight > chainActive.Tip()->GetHeight()) {
+                    pindexRescan = chainActive.Tip();
+                } else {
+                    pindexRescan = chainActive[rescanHeight];
+                }
+            }
         }
         else
         {
