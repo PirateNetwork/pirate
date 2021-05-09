@@ -924,18 +924,16 @@ void CWallet::RunSaplingConsolidation(int blockHeight) {
 
     fConsolidationRunning = true;
 
-    int consolidateInterval = rand() % 5 + 5;
-    if (blockHeight % consolidateInterval == 0) {
-        std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
-        std::shared_ptr<AsyncRPCOperation> lastOperation = q->getOperationForId(saplingConsolidationOperationId);
-        if (lastOperation != nullptr) {
-            lastOperation->cancel();
-        }
-        pendingSaplingConsolidationTxs.clear();
-        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_saplingconsolidation(blockHeight + 5));
-        saplingConsolidationOperationId = operation->getId();
-        q->addOperation(operation);
+    std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
+    std::shared_ptr<AsyncRPCOperation> lastOperation = q->getOperationForId(saplingConsolidationOperationId);
+    if (lastOperation != nullptr) {
+        lastOperation->cancel();
     }
+    pendingSaplingConsolidationTxs.clear();
+    std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_saplingconsolidation(blockHeight + 5));
+    saplingConsolidationOperationId = operation->getId();
+    q->addOperation(operation);
+
 }
 
 void CWallet::CommitAutomatedTx(const CTransaction& tx) {
