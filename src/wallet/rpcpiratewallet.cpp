@@ -603,10 +603,12 @@ void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, bool fIncludeWatchonly
 
     if (!tx.hashBlock.IsNull() && mapBlockIndex[tx.hashBlock] != nullptr) {
         arcTx.nBlockTime = mapBlockIndex[tx.hashBlock]->GetBlockTime();
+        arcTx.nTime = arcTx.nBlockTime;
         arcTx.confirmations = komodo_dpowconfs(mapBlockIndex[tx.hashBlock]->GetHeight(), tx.GetDepthInMainChain());
     } else {
         arcTx.nBlockTime = 0;
         arcTx.confirmations = 0;
+        arcTx.nTime = tx.GetTxTime();
     }
 
     if (tx.IsCoinBase())
@@ -624,7 +626,6 @@ void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, bool fIncludeWatchonly
     }
 
     arcTx.expiryHeight = (int64_t)tx.nExpiryHeight;
-    arcTx.nTime = tx.GetTxTime();
     arcTx.size = static_cast<uint64_t>(GetSerializeSize(static_cast<CTransaction>(tx), SER_NETWORK, PROTOCOL_VERSION));
 
 
