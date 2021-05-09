@@ -3922,7 +3922,6 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
 
 
 bool CWallet::initalizeArcTx() {
-    int i = 0;
     for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
         const uint256& wtxid = (*it).first;
         const CWalletTx wtx = (*it).second;
@@ -3932,24 +3931,12 @@ bool CWallet::initalizeArcTx() {
             if (ait == mapArcTxs.end()){
                 return false;
             }
-
-            ArchiveTxPoint arcTxPt = ArchiveTxPoint(wtx.hashBlock, wtx.nIndex);
-            AddToArcTxs(wtx, arcTxPt, true);
         }
-
-        i++;
-        if (mapWallet.size() > 0)
-            uiInterface.InitMessage(_(("Validating transaction archive. Transaction " + std::to_string(i)).c_str()) + ((" " + std::to_string((i/mapWallet.size()) * 100)).c_str()) + ("%"));
     }
 
-    i=0;
     for (map<uint256, ArchiveTxPoint>::iterator it = mapArcTxs.begin(); it != mapArcTxs.end(); it++) {
         //Add to mapAddessTxids
         AddToArcTxs(it->first, it->second, false);
-        i++;
-        LogPrintf("Validattion %d of %d\n", i, mapArcTxs.size());
-        if (mapArcTxs.size() > 0)
-          uiInterface.InitMessage(_(("Building Address Txid index. Transaction " + std::to_string(i)).c_str()) + ((" " + std::to_string((i/mapArcTxs.size()) * 100)).c_str()) + ("%"));
     }
 
   return true;
