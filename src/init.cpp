@@ -2162,7 +2162,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         CBlockIndex *pindexRescan = chainActive.Tip();
         if (clearWitnessCaches || GetBoolArg("-rescan", false) || !fInitializeArcTx || useBootstrap)
         {
-            // pwalletMain->ClearNoteWitnessCache();
+            pwalletMain->ClearNoteWitnessCache();
             pindexRescan = chainActive.Genesis();
 
             int rescanHeight = GetArg("-rescanheight", 0);
