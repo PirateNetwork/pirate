@@ -196,6 +196,7 @@ bool CBasicKeyStore::AddSaplingFullViewingKey(
     LOCK(cs_SpendingKeyStore);
     auto ivk = extfvk.fvk.in_viewing_key();
     mapSaplingFullViewingKeys[ivk] = extfvk;
+    setSaplingOutgoingViewingKeys.insert(extfvk.fvk.ovk);
 
     return CBasicKeyStore::AddSaplingIncomingViewingKey(ivk, extfvk.DefaultAddress());
 }

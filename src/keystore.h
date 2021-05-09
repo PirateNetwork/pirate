@@ -142,6 +142,8 @@ typedef std::map<libzcash::SaplingIncomingViewingKey, libzcash::SaplingExtendedF
 // Only maps from default addresses to ivk, may need to be reworked when adding diversified addresses.
 typedef std::map<libzcash::SaplingPaymentAddress, libzcash::SaplingIncomingViewingKey> SaplingIncomingViewingKeyMap;
 typedef std::set<libzcash::SaplingIncomingViewingKey> SaplingIncomingViewingKeySet;
+typedef std::set<uint256> SaplingOutgoingViewingKeySet;
+
 //diversified addresses
 typedef std::pair<libzcash::SaplingIncomingViewingKey, blob88> DiversifierPath;
 typedef std::map<libzcash::SaplingPaymentAddress, DiversifierPath> SaplingPaymentAddresses;
@@ -165,6 +167,7 @@ protected:
     SaplingFullViewingKeyMap mapSaplingFullViewingKeys;
     SaplingIncomingViewingKeyMap mapSaplingIncomingViewingKeys;
     SaplingIncomingViewingKeySet setSaplingIncomingViewingKeys;
+    SaplingOutgoingViewingKeySet setSaplingOutgoingViewingKeys;
     SaplingPaymentAddresses mapSaplingPaymentAddresses;
     LastDiversifierPath mapLastDiversifierPath;
 
@@ -282,6 +285,12 @@ public:
         LOCK(cs_SpendingKeyStore);
         for (SaplingIncomingViewingKeySet::iterator it = setSaplingIncomingViewingKeys.begin(); it != setSaplingIncomingViewingKeys.end(); it++) {
             ivks.insert(*it);
+        }
+    }
+    void GetSaplingOutgoingViewingKeySet(SaplingOutgoingViewingKeySet &ovks) {
+        LOCK(cs_SpendingKeyStore);
+        for (SaplingOutgoingViewingKeySet::iterator it = setSaplingOutgoingViewingKeys.begin(); it != setSaplingOutgoingViewingKeys.end(); it++) {
+            ovks.insert(*it);
         }
     }
 

@@ -87,14 +87,6 @@ public:
         {
             LOCK2(cs_main, wallet->cs_wallet);
 
-            //get Ovks for sapling decryption
-            std::vector<uint256> ovks;
-            getAllSaplingOVKs(ovks, fIncludeWatchonly);
-
-            //get Ivks for sapling decryption
-            std::vector<uint256> ivks;
-            getAllSaplingIVKs(ivks, fIncludeWatchonly);
-
             //Get all Archived Transactions
             uint256 ut;
             std::map<std::pair<int,int>, uint256> sortedArchive;
@@ -153,11 +145,11 @@ public:
                     if (wtx.GetDepthInMainChain() < 0 )
                         continue;
 
-                    getRpcArcTx(wtx, arcTx, ivks, ovks, fIncludeWatchonly);
+                    getRpcArcTx(wtx, arcTx, fIncludeWatchonly, false);
 
                 } else {
                     //Archived Transactions
-                    getRpcArcTx(txid, arcTx, ivks, ovks, fIncludeWatchonly);
+                    getRpcArcTx(txid, arcTx, fIncludeWatchonly, false);
 
                     if (arcTx.blockHash.IsNull() || mapBlockIndex[arcTx.blockHash] == nullptr)
                       continue;
@@ -225,20 +217,12 @@ public:
                 RpcArcTransaction arcTx;
                 bool fIncludeWatchonly = true;
 
-                //get Ovks for sapling decryption
-                std::vector<uint256> ovks;
-                getAllSaplingOVKs(ovks, fIncludeWatchonly);
-
-                //get Ivks for sapling decryption
-                std::vector<uint256> ivks;
-                getAllSaplingIVKs(ivks, fIncludeWatchonly);
-
                 //Try mapWallet first
                 std::map<uint256, CWalletTx>::iterator mi = wallet->mapWallet.find(hash);
                 if(mi != wallet->mapWallet.end()) {
                     isActiveTx = true;
                     CWalletTx& wtx = wallet->mapWallet[hash];
-                    getRpcArcTx(wtx, arcTx, ivks, ovks, fIncludeWatchonly);
+                    getRpcArcTx(wtx, arcTx, fIncludeWatchonly, false);
                 }
 
                 //Try ArcTx is nor found in mapWallet
@@ -247,7 +231,7 @@ public:
                     if(ami != wallet->mapArcTxs.end()) {
                           isArchiveTx = true;
                           uint256 txid = hash;
-                          getRpcArcTx(txid, arcTx, ivks, ovks, fIncludeWatchonly);
+                          getRpcArcTx(txid, arcTx, fIncludeWatchonly, false);
                           if (arcTx.blockHash.IsNull() || mapBlockIndex[arcTx.blockHash] == nullptr) {
                               isArchiveTx = false;
                           }

@@ -1338,27 +1338,22 @@ void CWallet::AddToSaplingSpends(const uint256& nullifier, const uint256& wtxid)
 }
 
 
-void CWallet::LoadArcTxs(const uint256& wtxid, const ArchiveTxPoint& ArcTxPt)
+void CWallet::LoadArcTxs(const uint256& wtxid, const ArchiveTxPoint& arcTxPt)
 {
-    mapArcTxs[wtxid] = ArcTxPt;
+    mapArcTxs[wtxid] = arcTxPt;
 }
 
-void CWallet::AddToArcTxs(const uint256& wtxid, const ArchiveTxPoint& ArcTxPt)
+void CWallet::AddToArcTxs(const uint256& wtxid, ArchiveTxPoint& arcTxPt, bool rescan)
 {
-    mapArcTxs[wtxid] = ArcTxPt;
+    mapArcTxs[wtxid] = arcTxPt;
 
     uint256 txid = wtxid;
     RpcArcTransaction arcTx;
 
-    //Get Wallet ovks
-    std::vector<uint256> ovks;
-    getAllSaplingOVKs(ovks, true);
-
-    //Get Wallet ivks
-    std::vector<uint256> ivks;
-    getAllSaplingIVKs(ivks, true);
-
-    getRpcArcTx(txid, arcTx, ivks, ovks, true);
+    getRpcArcTx(txid, arcTx, true, rescan);
+    arcTxPt.ivks = arcTx.ivks;
+    arcTxPt.ovks = arcTx.ovks;
+    mapArcTxs[wtxid] = arcTxPt;
 
     //Update Address txid map
     for (auto it = arcTx.addresses.begin(); it != arcTx.addresses.end(); ++it) {
@@ -1379,23 +1374,18 @@ void CWallet::AddToArcTxs(const uint256& wtxid, const ArchiveTxPoint& ArcTxPt)
     }
 }
 
-void CWallet::AddToArcTxs(const CWalletTx& wtx, const ArchiveTxPoint& ArcTxPt)
+void CWallet::AddToArcTxs(const CWalletTx& wtx, ArchiveTxPoint& arcTxPt, bool rescan)
 {
-    mapArcTxs[wtx.GetHash()] = ArcTxPt;
+    mapArcTxs[wtx.GetHash()] = arcTxPt;
 
     CWalletTx tx = wtx;
-
     RpcArcTransaction arcTx;
 
-    //Get Wallet ovks
-    std::vector<uint256> ovks;
-    getAllSaplingOVKs(ovks, false);
+    getRpcArcTx(tx, arcTx, true, rescan);
 
-    //Get Wallet ivks
-    std::vector<uint256> ivks;
-    getAllSaplingIVKs(ivks, false);
-
-    getRpcArcTx(tx, arcTx, ivks, ovks, true);
+    arcTxPt.ivks = arcTx.ivks;
+    arcTxPt.ovks = arcTx.ovks;
+    mapArcTxs[wtx.GetHash()] = arcTxPt;
 
     //Update Address txid map
     for (auto it = arcTx.addresses.begin(); it != arcTx.addresses.end(); ++it) {
@@ -1854,8 +1844,9 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
   //If the wallet if flagged as have failt to save a tx, we will do it here.
   if (writeTxFailed) {
       CWalletDB *pwalletdb = new CWalletDB(strWalletFile);
+      ArchiveTxPoint arcTxPt;
       for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
-          wtxItem.second.WriteToDisk(pwalletdb);
+          wtxItem.second.WriteToDisk(pwalletdb, arcTxPt, false);
       }
   }
 
@@ -2402,8 +2393,9 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
 
         // Write to disk and update tx archive map
         if (fInsertedNew || fUpdated) {
-            AddToArcTxs(wtx, ArchiveTxPoint(wtx.hashBlock, wtx.nIndex));
-            if (!wtx.WriteToDisk(pwalletdb))
+            ArchiveTxPoint arcTxPt = ArchiveTxPoint(wtx.hashBlock, wtx.nIndex);
+            AddToArcTxs(wtx, arcTxPt, true);
+            if (!wtx.WriteToDisk(pwalletdb, arcTxPt, true))
                 writeTxFailed = true;
         }
 
@@ -3530,10 +3522,17 @@ void CWalletTx::GetAccountAmounts(const string& strAccount, CAmount& nReceived,
 }
 
 
-bool CWalletTx::WriteToDisk(CWalletDB *pwalletdb)
+bool CWalletTx::WriteToDisk(CWalletDB *pwalletdb, ArchiveTxPoint &arcTxPt, bool updateArcTxPt)
 {
     bool txWrite = pwalletdb->WriteTx(GetHash(), *this, true);
-    bool arcTxWrite = pwalletdb->WriteArcTx(GetHash(), ArchiveTxPoint(this->hashBlock, this->nIndex), true);
+    bool arcTxWrite = false;
+
+    if (updateArcTxPt) {
+        arcTxWrite = pwalletdb->WriteArcTx(GetHash(), arcTxPt, true);
+    } else {
+        arcTxWrite = true;
+    }
+
 
     if (!txWrite || !arcTxWrite)
         return false;
@@ -3662,10 +3661,11 @@ void CWallet::UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletT
 
   //Update transactions nOrderPos for transactions that changed
   CWalletDB walletdb(strWalletFile, "r+", false);
+  ArchiveTxPoint arcTxPt;
   for (map<const uint256, CWalletTx>::iterator it = mapUpdatedTxs.begin(); it != mapUpdatedTxs.end(); ++it) {
     CWalletTx wtx = it->second;
     LogPrint("deletetx","Reorder Tx - Updating Positon to %i for Tx %s\n ", wtx.nOrderPos, wtx.GetHash().ToString());
-    wtx.WriteToDisk(&walletdb);
+    wtx.WriteToDisk(&walletdb, arcTxPt, false);
     mapWallet[wtx.GetHash()].nOrderPos = wtx.nOrderPos;
   }
 
@@ -3922,7 +3922,7 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
 
 
 bool CWallet::initalizeArcTx() {
-
+    int i = 0;
     for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
         const uint256& wtxid = (*it).first;
         const CWalletTx wtx = (*it).second;
@@ -3932,15 +3932,24 @@ bool CWallet::initalizeArcTx() {
             if (ait == mapArcTxs.end()){
                 return false;
             }
+
+            ArchiveTxPoint arcTxPt = ArchiveTxPoint(wtx.hashBlock, wtx.nIndex);
+            AddToArcTxs(wtx, arcTxPt, true);
         }
 
-        //Add to mapAddessTxids
-        AddToArcTxs(wtx, ArchiveTxPoint(wtx.hashBlock, wtx.nIndex));
+        i++;
+        if (mapWallet.size() > 0)
+            uiInterface.InitMessage(_(("Validating transaction archive. Transaction " + std::to_string(i)).c_str()) + ((" " + std::to_string((i/mapWallet.size()) * 100)).c_str()) + ("%"));
     }
 
+    i=0;
     for (map<uint256, ArchiveTxPoint>::iterator it = mapArcTxs.begin(); it != mapArcTxs.end(); it++) {
         //Add to mapAddessTxids
-        AddToArcTxs(it->first, it->second);
+        AddToArcTxs(it->first, it->second, false);
+        i++;
+        LogPrintf("Validattion %d of %d\n", i, mapArcTxs.size());
+        if (mapArcTxs.size() > 0)
+          uiInterface.InitMessage(_(("Building Address Txid index. Transaction " + std::to_string(i)).c_str()) + ((" " + std::to_string((i/mapArcTxs.size()) * 100)).c_str()) + ("%"));
     }
 
   return true;

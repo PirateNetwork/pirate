@@ -642,7 +642,7 @@ public:
     bool InMempool() const;
     bool IsTrusted() const;
 
-    bool WriteToDisk(CWalletDB *pwalletdb);
+    bool WriteToDisk(CWalletDB *pwalletdb, ArchiveTxPoint &arcTxPt, bool updateArcTxPt = false);
     bool WriteArcSproutOpToDisk(CWalletDB *pwalletdb, uint256 nullifier, JSOutPoint op);
     bool WriteArcSaplingOpToDisk(CWalletDB *pwalletdb, uint256 nullifier, SaplingOutPoint op);
 
@@ -863,9 +863,9 @@ public:
 
     std::map<std::string, std::set<uint256>> mapAddressTxids;
     std::map<uint256, ArchiveTxPoint> mapArcTxs;
-    void LoadArcTxs(const uint256& wtxid, const ArchiveTxPoint& ArcTxPt);
-    void AddToArcTxs(const uint256& wtxid, const ArchiveTxPoint& ArcTxPt);
-    void AddToArcTxs(const CWalletTx& wtx, const ArchiveTxPoint& ArcTxPt);
+    void LoadArcTxs(const uint256& wtxid, const ArchiveTxPoint& arcTxPt);
+    void AddToArcTxs(const uint256& wtxid, ArchiveTxPoint& arcTxPt, bool rescan);
+    void AddToArcTxs(const CWalletTx& wtx, ArchiveTxPoint& arcTxPt, bool rescan);
 
     std::map<uint256, JSOutPoint> mapArcJSOutPoints;
     void AddToArcJSOutPoints(const uint256& nullifier, const JSOutPoint& op);

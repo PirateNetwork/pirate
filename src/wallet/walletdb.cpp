@@ -622,11 +622,11 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             {
                 uint256 wtxid;
                 ssKey >> wtxid;
-                ArchiveTxPoint ArcTxPt;
-                ssValue >> ArcTxPt;
+                ArchiveTxPoint arcTxPt;
+                ssValue >> arcTxPt;
 
                 wss.nArcTx++;
-                pwallet->LoadArcTxs(wtxid, ArcTxPt);
+                pwallet->LoadArcTxs(wtxid, arcTxPt);
             }
             catch (...) {}
 
