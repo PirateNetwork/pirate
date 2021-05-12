@@ -34,28 +34,32 @@ void getTransparentSpends(RpcTx &tx, vector<TransactionSpendT> &vSpend, CAmount 
         if (parentwtx != NULL) {
             parentOut = parentwtx->vout[txin.prevout.n];
         } else {
-            CTransaction parentctx;
-            uint256 hashBlock;
+            map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.find(txin.prevout.hash);
+            if (it != pwalletMain->mapArcTxs.end()){
 
-            // Find the block it claims to be in
-            BlockMap::iterator mi = mapBlockIndex.find(txin.prevout.hash);
-            if (mi == mapBlockIndex.end()) {
-                return;
-            }
-            CBlockIndex* pindex = (*mi).second;
-            if (!pindex || !chainActive.Contains(pindex)) {
-                return;
-            }
+                CTransaction parentctx;
+                uint256 hashBlock;
 
-            //Get Tx from block
-            CBlock block;
-            ReadBlockFromDisk(block, pindex, 1);
+                // Find the block it claims to be in
+                BlockMap::iterator mi = mapBlockIndex.find(it->second.hashBlock);
+                if (mi == mapBlockIndex.end()) {
+                    return;
+                }
+                CBlockIndex* pindex = (*mi).second;
+                if (!pindex || !chainActive.Contains(pindex)) {
+                    return;
+                }
 
-            //Get Tx
-            for (int j = 0; j < block.vtx.size(); j++) {
-                if (txin.prevout.hash == block.vtx[j].GetHash()) {
-                   parentctx = block.vtx[j];
-                   parentOut = parentctx.vout[txin.prevout.n];
+                //Get Tx from block
+                CBlock block;
+                ReadBlockFromDisk(block, pindex, 1);
+
+                //Get Tx
+                for (int j = 0; j < block.vtx.size(); j++) {
+                    if (txin.prevout.hash == block.vtx[j].GetHash()) {
+                       parentctx = block.vtx[j];
+                       parentOut = parentctx.vout[txin.prevout.n];
+                    }
                 }
             }
         }
@@ -244,10 +248,33 @@ void getSaplingSpends(RpcTx &tx, std::set<uint256> &ivks, std::set<uint256> &ivk
         if (parentwtx != NULL) {
             output = parentwtx->vShieldedOutput[op.n];
         } else {
-            CTransaction parentctx;
-            uint256 hashBlock;
-            if (GetTransaction(op.hash, parentctx, hashBlock, true)) {
-                output = parentctx.vShieldedOutput[op.n];
+            map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.find(op.hash);
+            if (it != pwalletMain->mapArcTxs.end()){
+
+                CTransaction parentctx;
+                uint256 hashBlock;
+
+                // Find the block it claims to be in
+                BlockMap::iterator mi = mapBlockIndex.find(it->second.hashBlock);
+                if (mi == mapBlockIndex.end()) {
+                    return;
+                }
+                CBlockIndex* pindex = (*mi).second;
+                if (!pindex || !chainActive.Contains(pindex)) {
+                    return;
+                }
+
+                //Get Tx from block
+                CBlock block;
+                ReadBlockFromDisk(block, pindex, 1);
+
+                //Get Tx
+                for (int j = 0; j < block.vtx.size(); j++) {
+                    if (op.hash == block.vtx[j].GetHash()) {
+                       parentctx = block.vtx[j];
+                       output = parentctx.vShieldedOutput[op.n];
+                    }
+                }
             }
         }
 
