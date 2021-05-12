@@ -36,8 +36,27 @@ void getTransparentSpends(RpcTx &tx, vector<TransactionSpendT> &vSpend, CAmount 
         } else {
             CTransaction parentctx;
             uint256 hashBlock;
-            if (GetTransaction(txin.prevout.hash, parentctx, hashBlock, true)) {
-                parentOut = parentctx.vout[txin.prevout.n];
+
+            // Find the block it claims to be in
+            BlockMap::iterator mi = mapBlockIndex.find(txin.prevout.hash);
+            if (mi == mapBlockIndex.end()) {
+                return;
+            }
+            CBlockIndex* pindex = (*mi).second;
+            if (!pindex || !chainActive.Contains(pindex)) {
+                return;
+            }
+
+            //Get Tx from block
+            CBlock block;
+            ReadBlockFromDisk(block, pindex, 1);
+
+            //Get Tx
+            for (int j = 0; j < block.vtx.size(); j++) {
+                if (txin.prevout.hash == block.vtx[j].GetHash()) {
+                   parentctx = block.vtx[j];
+                   parentOut = parentctx.vout[txin.prevout.n];
+                }
             }
         }
 
@@ -448,9 +467,6 @@ void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, bool fIncludeWatchonly
     std::set<uint256> ovks;
 
     //try to find the transaction to pull the hashblock
-    // GetTransaction(txid, tx, hashBlock, true);
-
-
     std::map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.find(txid);
     if (it != pwalletMain->mapArcTxs.end()) {
         //Get Location of tx in blockchain
@@ -520,14 +536,14 @@ void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, bool fIncludeWatchonly
 
     //Spends must be located to determine if outputs are change
     getTransparentSpends(tx, arcTx.vTSpend, arcTx.transparentValue, fIncludeWatchonly);
-    getSproutSpends(tx, arcTx.vZcSpend, arcTx.sproutValue, arcTx.sproutValueSpent, fIncludeWatchonly);
+    // getSproutSpends(tx, arcTx.vZcSpend, arcTx.sproutValue, arcTx.sproutValueSpent, fIncludeWatchonly);
     getSaplingSpends(tx, ivks, arcTx.ivks, arcTx.vZsSpend, fIncludeWatchonly);
 
     getTransparentSends(tx, arcTx.vTSend, arcTx.transparentValue);
     getSaplingSends(tx, ovks, arcTx.ovks, arcTx.vZsSend);
 
     getTransparentRecieves(tx, arcTx.vTReceived, fIncludeWatchonly);
-    getSproutReceives(tx, arcTx.vZcReceived, fIncludeWatchonly);
+    // getSproutReceives(tx, arcTx.vZcReceived, fIncludeWatchonly);
     getSaplingReceives(tx, ivks, arcTx.ivks, arcTx.vZsReceived, fIncludeWatchonly);
 
     arcTx.saplingValue = -tx.valueBalance;
@@ -631,14 +647,14 @@ void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, bool fIncludeWatchonly
 
     //Spends must be located to determine if outputs are change
     getTransparentSpends(tx, arcTx.vTSpend, arcTx.transparentValue, fIncludeWatchonly);
-    getSproutSpends(tx, arcTx.vZcSpend, arcTx.sproutValue, arcTx.sproutValueSpent, fIncludeWatchonly);
+    // getSproutSpends(tx, arcTx.vZcSpend, arcTx.sproutValue, arcTx.sproutValueSpent, fIncludeWatchonly);
     getSaplingSpends(tx, ivks, arcTx.ivks, arcTx.vZsSpend, fIncludeWatchonly);
 
     getTransparentSends(tx, arcTx.vTSend, arcTx.transparentValue);
     getSaplingSends(tx, ovks, arcTx.ovks, arcTx.vZsSend);
 
     getTransparentRecieves(tx, arcTx.vTReceived, fIncludeWatchonly);
-    getSproutReceives(tx, arcTx.vZcReceived, fIncludeWatchonly);
+    // getSproutReceives(tx, arcTx.vZcReceived, fIncludeWatchonly);
     getSaplingReceives(tx, ivks, arcTx.ivks, arcTx.vZsReceived, fIncludeWatchonly);
 
     arcTx.saplingValue = -tx.valueBalance;
@@ -2597,14 +2613,14 @@ void decrypttransaction(CTransaction &tx, RpcArcTransaction &arcTx) {
 
     //Spends must be located to determine if outputs are change
     getTransparentSpends(tx, arcTx.vTSpend, arcTx.transparentValue, true);
-    getSproutSpends(tx, arcTx.vZcSpend, arcTx.sproutValue, arcTx.sproutValueSpent, true);
+    // getSproutSpends(tx, arcTx.vZcSpend, arcTx.sproutValue, arcTx.sproutValueSpent, true);
     getSaplingSpends(tx, ivks, arcTx.ivks, arcTx.vZsSpend, true);
 
     getTransparentSends(tx, arcTx.vTSend, arcTx.transparentValue);
     getSaplingSends(tx, ovks, arcTx.ovks, arcTx.vZsSend);
 
     getTransparentRecieves(tx, arcTx.vTReceived, true);
-    getSproutReceives(tx, arcTx.vZcReceived, true);
+    // getSproutReceives(tx, arcTx.vZcReceived, true);
     getSaplingReceives(tx, ivks, arcTx.ivks, arcTx.vZsReceived, true);
 
     arcTx.saplingValue = -tx.valueBalance;
