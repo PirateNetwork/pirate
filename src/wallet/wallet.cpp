@@ -2739,6 +2739,13 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
                   if (!result) {
                       continue;
                   }
+
+                  //add address
+                  auto address = ivk.address(result.get().d);
+                  if (address && mapSaplingIncomingViewingKeys.count(address.get()) == 0) {
+                      viewingKeysToAdd[address.get()] = ivk;
+                  }
+
                   // We don't cache the nullifier here as computing it requires knowledge of the note position
                   // in the commitment tree, which can only be determined when the transaction has been mined.
                   SaplingOutPoint op {hash, i};
