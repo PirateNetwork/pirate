@@ -2718,6 +2718,12 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
                 SaplingOutPoint op {hash, i};
                 SaplingNoteData nd;
                 nd.ivk = ivk;
+
+                //Cache Address and value - in Memory Only
+                auto note = result.get();
+                nd.value = note.value();
+                nd.address = address.get();
+
                 noteData.insert(std::make_pair(op, nd));
                 found = true;
                 break;
@@ -2738,6 +2744,12 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
                   SaplingOutPoint op {hash, i};
                   SaplingNoteData nd;
                   nd.ivk = ivk;
+
+                  //Cache Address and value - in Memory Only
+                  auto note = result.get();
+                  nd.value = note.value();
+                  nd.address = address.get();
+
                   noteData.insert(std::make_pair(op, nd));
                   break;
                 }
@@ -3928,6 +3940,22 @@ bool CWallet::initalizeArcTx() {
             map<uint256, ArchiveTxPoint>::iterator ait = mapArcTxs.find(wtxid);
             if (ait == mapArcTxs.end()){
                 return false;
+            }
+        }
+
+        //Initalize in memory saplingnotedata
+        for (uint32_t i = 0; i < wtx.vShieldedOutput.size(); ++i) {
+            auto op = SaplingOutPoint(wtxid, i);
+
+            if (wtx.mapSaplingNoteData.count(op) != 0) {
+                auto nd = wtx.mapSaplingNoteData.at(op);
+                auto decrypted = wtx.DecryptSaplingNote(op);
+                if (decrypted) {
+                    nd.value = decrypted->first.value();
+                    nd.address = decrypted->second;
+                    //Set the updated Sapling Note Data
+                    it->second.mapSaplingNoteData[op] = nd;
+                }
             }
         }
     }
