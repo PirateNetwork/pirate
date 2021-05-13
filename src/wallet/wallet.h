@@ -324,9 +324,9 @@ public:
      * We initialize the height to -1 for the same reason as we do in SproutNoteData.
      * See the comment in that class for a full description.
      */
-    SaplingNoteData() : witnessHeight {-1}, nullifier(), witnessRootValidated {false} { }
-    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk) : ivk {ivk}, witnessHeight {-1}, nullifier(), witnessRootValidated {false} { }
-    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk, uint256 n) : ivk {ivk}, witnessHeight {-1}, nullifier(n), witnessRootValidated {false} { }
+    SaplingNoteData() : witnessHeight {-1}, nullifier(), witnessRootValidated {false}, value {0} { }
+    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk) : ivk {ivk}, witnessHeight {-1}, nullifier(), witnessRootValidated {false}, value {0} { }
+    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk, uint256 n) : ivk {ivk}, witnessHeight {-1}, nullifier(n), witnessRootValidated {false}, value {0} { }
 
     std::list<SaplingWitness> witnesses;
     int witnessHeight;
@@ -335,6 +335,8 @@ public:
 
     //In Memory Only
     bool witnessRootValidated;
+    CAmount value;
+    libzcash::SaplingPaymentAddress address;
 
     ADD_SERIALIZE_METHODS;
 
