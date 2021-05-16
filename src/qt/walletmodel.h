@@ -260,7 +260,8 @@ public:
 
     bool getDefaultWalletRbf() const;
     std::map<CTxDestination, CAmount> getTAddressBalances();
-    std::map<libzcash::PaymentAddress, CAmount> getZAddressBalances();
+    std::map<libzcash::PaymentAddress, CAmount> getZAddressBalances(int minDepth, bool requireSpendingKey);
+    CAmount getBalanceZaddr(std::string sAddress, int minDepth, bool requireSpendingKey) const;
     CAmount getAddressBalance(const std::string &sAddress);
 
 private:

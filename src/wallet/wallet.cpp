@@ -865,6 +865,7 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
         DecrementNoteWitnesses(pindex);
         UpdateNullifierNoteMapForBlock(pblock);
     }
+    NotifyBalanceChanged();
 }
 
 void CWallet::RunSaplingSweep(int blockHeight) {
@@ -6318,6 +6319,47 @@ bool CMerkleTx::AcceptToMemoryPool(bool fLimitFree, bool fRejectAbsurdFee)
 {
     CValidationState state;
     return ::AcceptToMemoryPool(mempool, state, *this, fLimitFree, NULL, fRejectAbsurdFee);
+}
+
+//Get Address balances for the GUI
+void CWallet::getZAddressBalances(std::map<libzcash::PaymentAddress, CAmount> &balances, int minDepth, bool requireSpendingKey)
+{
+
+    LOCK2(cs_main, cs_wallet);
+
+    for (auto & item : mapWallet) {
+        CWalletTx wtx = item.second;
+
+        // Filter the transactions before checking for notes
+        if (!CheckFinalTx(wtx) || wtx.GetBlocksToMaturity() > 0)
+            continue;
+
+        //Confirmed Balance Only
+        if (wtx.GetDepthInMainChain() < minDepth)
+            continue;
+
+        for (auto & pair : wtx.mapSaplingNoteData) {
+            SaplingOutPoint op = pair.first;
+            SaplingNoteData nd = pair.second;
+
+            if (nd.nullifier && IsSaplingSpent(*nd.nullifier)) {
+                continue;
+            }
+
+            // skip notes which cannot be spent
+            if (requireSpendingKey) {
+                libzcash::SaplingExtendedFullViewingKey extfvk;
+                if (!(GetSaplingFullViewingKey(nd.ivk, extfvk) &&
+                    HaveSaplingSpendingKey(extfvk))) {
+                    continue;
+                }
+            }
+
+            if (!balances.count(nd.address))
+                balances[nd.address] = 0;
+            balances[nd.address] += CAmount(nd.value);
+        }
+    }
 }
 
 /**
