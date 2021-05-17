@@ -594,43 +594,12 @@ bool AsyncRPCOperation_sendmany::main_impl() {
             ovk = expsk.full_viewing_key().ovk;
         } else {
           throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "taddr not allowed");
-          /*
-            // Sending from a t-address, which we don't have an ovk for. Instead,
-            // generate a common one from the HD seed. This ensures the data is
-            // recoverable, while keeping it logically separate from the ZIP 32
-            // Sapling key hierarchy, which the user might not be using.
-            HDSeed seed;
-            if (!pwalletMain->GetHDSeed(seed)) {
-                throw JSONRPCError(
-                    RPC_WALLET_ERROR,
-                    "AsyncRPCOperation_sendmany::main_impl(): HD seed not found");
-            }
-            ovk = ovkForShieldingFromTaddr(seed);
-          */
-          //Send result upstream
         }
 
         // Set change address if we are using transparent funds
         // TODO: Should we just use fromtaddr_ as the change address?
         if (isfromtaddr_) {
-          throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "taddr not allowed");
-        /*
-            LOCK2(cs_main, pwalletMain->cs_wallet);
-
-            EnsureWalletIsUnlocked();
-            CReserveKey keyChange(pwalletMain);
-            CPubKey vchPubKey;
-            bool ret = keyChange.GetReservedKey(vchPubKey);
-            if (!ret) {
-                // should never fail, as we just unlocked
-                throw JSONRPCError(
-                    RPC_WALLET_KEYPOOL_RAN_OUT,
-                    "Could not generate a taddr to use as a change address");
-            }
-
-            CTxDestination changeAddr = vchPubKey.GetID();
-            assert(builder_.SendChangeTo(changeAddr));
-        */
+          throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "taddr not allowed");        
         }
 
         // Select Sapling notes
@@ -659,19 +628,7 @@ bool AsyncRPCOperation_sendmany::main_impl() {
             if (!witnesses[i]) {
                 throw JSONRPCError(RPC_WALLET_ERROR, "Missing witness for Sapling note");
             }
-            
-            //Orig
             assert(builder_.AddSaplingSpend(expsk, notes[i], anchor, witnesses[i].get()));
-            
-            //New:
-            //printf("main_impl() AddSaplingSpend2():\n"); fflush(stdout);
-            //Convert witness to a char array:
-            //CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-            //ss << witnesses[i].get().path();
-            //std::vector<unsigned char> local_witness(ss.begin(), ss.end());
-            //myCharArray_s sWitness;
-            //memcpy (&sWitness.cArray[0], reinterpret_cast<unsigned char*>(local_witness.data()), sizeof(sWitness.cArray) );            
-            //assert(builder_.AddSaplingSpend2(expsk, notes[i], anchor, witnesses[i].get().position(), &sWitness.cArray[0] ));
         }
 
         // Add Sapling outputs
@@ -694,15 +651,6 @@ bool AsyncRPCOperation_sendmany::main_impl() {
         // Add transparent outputs
         for (auto r : t_outputs_) {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "taddr not allowed");
-            /*
-            auto outputAddress = std::get<0>(r);
-            auto amount = std::get<1>(r);
-
-            auto address = DecodeDestination(outputAddress);
-            if (!builder_.AddTransparentOutput(address, amount)) {
-                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid output address, not a valid taddr.");
-            }
-            */
         }
 
         // Build the transaction
@@ -715,7 +663,6 @@ bool AsyncRPCOperation_sendmany::main_impl() {
         tx_ = maybe_tx.get();
 
         // Send the transaction
-        // TODO: Use CWallet::CommitTransaction instead of sendrawtransaction
         auto signedtxn = EncodeHexTx(tx_);
         if (!testmode) {
             UniValue params = UniValue(UniValue::VARR);
