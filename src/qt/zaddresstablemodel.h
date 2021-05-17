@@ -17,6 +17,8 @@ class ZSendConfirmationDialog;
 
 class CWallet;
 
+struct ZAddressTableEntry;
+
 /**
    Qt model of the address book in the core. This allows views to access and modify the address book.
  */
@@ -85,19 +87,22 @@ private:
     WalletModel *walletModel;
     CWallet *wallet;
     ZAddressTablePriv *priv;
+    ZAddressTablePriv *temppriv;
     QStringList columns;
     EditStatus editStatus;
     const PlatformStyle *platformStyle;
 
     /** Notify listeners that data changed. */
     void emitDataChanged(int index);
+    void subscribeToCoreSignals();
+    void unsubscribeFromCoreSignals();
 
 public Q_SLOTS:
-    /*update address balances from the core*/
-    void updateBalances(std::map<libzcash::PaymentAddress, CAmount> balances);
     /* Update address list from core.
      */
     void updateEntry(const QString &address, const QString &label, bool isMine, const QString &purpose, int status);
+    void updateBalances();
+    // void updateBalance(const QString &address, const CAmount &balance);
 
     friend class ZAddressTablePriv;
 };

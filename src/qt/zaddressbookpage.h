@@ -24,7 +24,7 @@ QT_END_NAMESPACE
 
 /** Widget that shows a list of sending or receiving z-addresses.
   */
-class ZAddressBookPage : public QDialog
+class ZAddressBookPage : public QWidget
 {
     Q_OBJECT
 
@@ -45,28 +45,23 @@ public:
 
     void setModel(ZAddressTableModel *model);
     void setWalletModel(WalletModel *walletModel);
-    const QString &getReturnValue() const { return returnValue; }
 
 public Q_SLOTS:
-    void done(int retval);
+    // void done(int retval);
     void exportSK();
     void exportVK();
-    
+
 private:
     Ui::ZAddressBookPage *ui;
     ZAddressTableModel *model;
     WalletModel *walletModel;
     Mode mode;
     Tabs tab;
-    QString returnValue;
     QSortFilterProxyModel *proxyModel;
     QMenu *contextMenu;
-    QAction *deleteAction; // to be able to explicitly disable it
     QString newAddressToSelect;
 
 private Q_SLOTS:
-    /** Delete currently selected address entry */
-    void on_deleteAddress_clicked();
     /** Create a new address for receiving coins and / or add a new address book entry */
     void on_newAddress_clicked();
     /** Copy z_sendmany template to send funds to selected address entry to clipboard */
@@ -82,8 +77,6 @@ private Q_SLOTS:
     /** Export button clicked */
     void on_exportButton_clicked();
 
-    /** Set button states based on selected tab and selection */
-    void selectionChanged();
     /** Spawn contextual menu (right mouse menu) for address book entry */
     void contextualMenu(const QPoint &point);
     /** New entry/entries were added to address table */
