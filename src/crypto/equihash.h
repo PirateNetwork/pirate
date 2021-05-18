@@ -20,6 +20,7 @@
 #include <vector>
 
 #include <boost/static_assert.hpp>
+#include <stdexcept>  // for std::invalid_argument()
 
 typedef crypto_generichash_blake2b_state eh_HashState;
 typedef uint32_t eh_index;
