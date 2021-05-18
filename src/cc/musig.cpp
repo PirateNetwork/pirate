@@ -312,8 +312,11 @@ int32_t musig_parsepubkey(secp256k1_context *ctx,secp256k1_pubkey &spk,cJSON *it
     {
         CPubKey pk(ParseHex(hexstr));
         if ( secp256k1_ec_pubkey_parse(ctx,&spk,pk.begin(),33) > 0 )
+        {
             return(1);
-    } else return(-1);
+        }
+    } 
+    return(-1);
 }
 
 int32_t musig_msghash(uint8_t *msg,uint256 prevhash,int32_t prevn,CTxOut vout,CPubKey pk)
