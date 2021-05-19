@@ -197,7 +197,7 @@
     <item row="3" column="1">
      <widget class="QValidatedLineEdit" name="memo">
       <property name="toolTip">
-       <string>The Pirate address to send the payment to</string>
+       <string>Message that will be included as part of the transaction</string>
       </property>
       <property name="maxLength">
        <number>512</number>
