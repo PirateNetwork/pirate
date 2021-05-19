@@ -104,7 +104,6 @@ public:
         if(!lockWallet)
             return;
 
-        LogPrintf("Checking Balances Started\n");
         std::map<QString, CAmount> stringBalances;
         std::map<libzcash::PaymentAddress, CAmount> balances;
         wallet->getZAddressBalances(balances, 1, false);
@@ -142,7 +141,6 @@ public:
                   }
               }
           }
-          LogPrintf("Checking Complete\n");
     }
 
     void refreshAddressTable()
@@ -170,27 +168,26 @@ public:
                         wallet->HaveSaplingSpendingKey(extfvk)) {
                             mine = ISMINE_SPENDABLE;
                     }
+
+                  CAmount balance = 0;
+                  std::map<libzcash::PaymentAddress, CAmount>::iterator it = balances.find(zaddr);
+                  if (it != balances.end()) {
+                      balance = it->second;
+                  }
+
+                  ZAddressTableEntry::Type addressType = translateTransactionType(
+                          QString::fromStdString(item.second.purpose), mine);
+                  const std::string& strName = item.second.name;
+
+                  ZAddressTableEntry entry;
+                  entry.type = addressType;
+                  entry.label = QString::fromStdString(strName);
+                  entry.address = QString::fromStdString(EncodePaymentAddress(zaddr));
+                  entry.balance = balance;
+                  entry.mine = mine;
+                  cachedAddressTable.append(entry);
+
                 }
-
-                CAmount balance = 0;
-                std::map<libzcash::PaymentAddress, CAmount>::iterator it = balances.find(zaddr);
-                if (it != balances.end()) {
-                    balance = it->second;
-                }
-
-                ZAddressTableEntry::Type addressType = translateTransactionType(
-                        QString::fromStdString(item.second.purpose), mine);
-                const std::string& strName = item.second.name;
-
-                ZAddressTableEntry entry;
-                entry.type = addressType;
-                entry.label = QString::fromStdString(strName);
-                entry.address = QString::fromStdString(EncodePaymentAddress(zaddr));
-                entry.balance = balance;
-                entry.mine = mine;
-                cachedAddressTable.append(entry);
-
-                LogPrintf("Address %s, balance %d \n", EncodePaymentAddress(zaddr), entry.balance);
             }
         }
         // qLowerBound() and qUpperBound() require our cachedAddressTable list to be sorted in asc order
@@ -244,46 +241,46 @@ public:
                 wallet->HaveSaplingSpendingKey(extfvk)) {
                     mine = ISMINE_SPENDABLE;
             }
-        }
 
-        switch(status)
-        {
-        case CT_NEW:
-            if(inModel)
+            switch(status)
             {
-                qWarning() << "ZAddressTablePriv::updateEntry: Warning: Got CT_NEW, but entry is already in model";
-                break;
-            }
-            parent->beginInsertRows(QModelIndex(), lowerIndex, lowerIndex);
+            case CT_NEW:
+                if(inModel)
+                {
+                    qWarning() << "ZAddressTablePriv::updateEntry: Warning: Got CT_NEW, but entry is already in model";
+                    break;
+                }
+                parent->beginInsertRows(QModelIndex(), lowerIndex, lowerIndex);
 
-            newEntry.type = newEntryType;
-            newEntry.label = label;
-            newEntry.address = address;
-            newEntry.balance = 0;
-            newEntry.mine = mine;
-            cachedAddressTable.insert(lowerIndex, newEntry);
-            parent->endInsertRows();
-            break;
-        case CT_UPDATED:
-            if(!inModel)
-            {
-                qWarning() << "ZAddressTablePriv::updateEntry: Warning: Got CT_UPDATED, but entry is not in model";
+                newEntry.type = newEntryType;
+                newEntry.label = label;
+                newEntry.address = address;
+                newEntry.balance = 0;
+                newEntry.mine = mine;
+                cachedAddressTable.insert(lowerIndex, newEntry);
+                parent->endInsertRows();
+                break;
+            case CT_UPDATED:
+                if(!inModel)
+                {
+                    qWarning() << "ZAddressTablePriv::updateEntry: Warning: Got CT_UPDATED, but entry is not in model";
+                    break;
+                }
+                lower->type = newEntryType;
+                lower->label = label;
+                parent->emitDataChanged(lowerIndex);
+                break;
+            case CT_DELETED:
+                if(!inModel)
+                {
+                    qWarning() << "ZAddressTablePriv::updateEntry: Warning: Got CT_DELETED, but entry is not in model";
+                    break;
+                }
+                parent->beginRemoveRows(QModelIndex(), lowerIndex, upperIndex-1);
+                cachedAddressTable.erase(lower, upper);
+                parent->endRemoveRows();
                 break;
             }
-            lower->type = newEntryType;
-            lower->label = label;
-            parent->emitDataChanged(lowerIndex);
-            break;
-        case CT_DELETED:
-            if(!inModel)
-            {
-                qWarning() << "ZAddressTablePriv::updateEntry: Warning: Got CT_DELETED, but entry is not in model";
-                break;
-            }
-            parent->beginRemoveRows(QModelIndex(), lowerIndex, upperIndex-1);
-            cachedAddressTable.erase(lower, upper);
-            parent->endRemoveRows();
-            break;
         }
     }
 
