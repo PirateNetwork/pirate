@@ -6421,61 +6421,61 @@ void CWallet::GetFilteredNotes(
             }
         }
 
-        for (auto & pair : wtx.mapSproutNoteData) {
-            JSOutPoint jsop = pair.first;
-            SproutNoteData nd = pair.second;
-            SproutPaymentAddress pa = nd.address;
-
-            // skip notes which belong to a different payment address in the wallet
-            if (!(filterAddresses.empty() || filterAddresses.count(pa))) {
-                continue;
-            }
-
-            // skip note which has been spent
-            if (ignoreSpent && nd.nullifier && IsSproutSpent(*nd.nullifier)) {
-                continue;
-            }
-
-            // skip notes which cannot be spent
-            if (requireSpendingKey && !HaveSproutSpendingKey(pa)) {
-                continue;
-            }
-
-            // skip locked notes
-            if (ignoreLocked && IsLockedNote(jsop)) {
-                continue;
-            }
-
-            int i = jsop.js; // Index into CTransaction.vjoinsplit
-            int j = jsop.n; // Index into JSDescription.ciphertexts
-
-            // Get cached decryptor
-            ZCNoteDecryption decryptor;
-            if (!GetNoteDecryptor(pa, decryptor)) {
-                // Note decryptors are created when the wallet is loaded, so it should always exist
-                throw std::runtime_error(strprintf("Could not find note decryptor for payment address %s", EncodePaymentAddress(pa)));
-            }
-
-            // determine amount of funds in the note
-            auto hSig = wtx.vjoinsplit[i].h_sig(*pzcashParams, wtx.joinSplitPubKey);
-            try {
-                SproutNotePlaintext plaintext = SproutNotePlaintext::decrypt(
-                        decryptor,
-                        wtx.vjoinsplit[i].ciphertexts[j],
-                        wtx.vjoinsplit[i].ephemeralKey,
-                        hSig,
-                        (unsigned char) j);
-
-                sproutEntries.push_back(CSproutNotePlaintextEntry{jsop, pa, plaintext, wtx.GetDepthInMainChain()});
-
-            } catch (const note_decryption_failed &err) {
-                // Couldn't decrypt with this spending key
-                throw std::runtime_error(strprintf("Could not decrypt note for payment address %s", EncodePaymentAddress(pa)));
-            } catch (const std::exception &exc) {
-                // Unexpected failure
-                throw std::runtime_error(strprintf("Error while decrypting note for payment address %s: %s", EncodePaymentAddress(pa), exc.what()));
-            }
-        }
+        // for (auto & pair : wtx.mapSproutNoteData) {
+        //     JSOutPoint jsop = pair.first;
+        //     SproutNoteData nd = pair.second;
+        //     SproutPaymentAddress pa = nd.address;
+        //
+        //     // skip notes which belong to a different payment address in the wallet
+        //     if (!(filterAddresses.empty() || filterAddresses.count(pa))) {
+        //         continue;
+        //     }
+        //
+        //     // skip note which has been spent
+        //     if (ignoreSpent && nd.nullifier && IsSproutSpent(*nd.nullifier)) {
+        //         continue;
+        //     }
+        //
+        //     // skip notes which cannot be spent
+        //     if (requireSpendingKey && !HaveSproutSpendingKey(pa)) {
+        //         continue;
+        //     }
+        //
+        //     // skip locked notes
+        //     if (ignoreLocked && IsLockedNote(jsop)) {
+        //         continue;
+        //     }
+        //
+        //     int i = jsop.js; // Index into CTransaction.vjoinsplit
+        //     int j = jsop.n; // Index into JSDescription.ciphertexts
+        //
+        //     // Get cached decryptor
+        //     ZCNoteDecryption decryptor;
+        //     if (!GetNoteDecryptor(pa, decryptor)) {
+        //         // Note decryptors are created when the wallet is loaded, so it should always exist
+        //         throw std::runtime_error(strprintf("Could not find note decryptor for payment address %s", EncodePaymentAddress(pa)));
+        //     }
+        //
+        //     // determine amount of funds in the note
+        //     auto hSig = wtx.vjoinsplit[i].h_sig(*pzcashParams, wtx.joinSplitPubKey);
+        //     try {
+        //         SproutNotePlaintext plaintext = SproutNotePlaintext::decrypt(
+        //                 decryptor,
+        //                 wtx.vjoinsplit[i].ciphertexts[j],
+        //                 wtx.vjoinsplit[i].ephemeralKey,
+        //                 hSig,
+        //                 (unsigned char) j);
+        //
+        //         sproutEntries.push_back(CSproutNotePlaintextEntry{jsop, pa, plaintext, wtx.GetDepthInMainChain()});
+        //
+        //     } catch (const note_decryption_failed &err) {
+        //         // Couldn't decrypt with this spending key
+        //         throw std::runtime_error(strprintf("Could not decrypt note for payment address %s", EncodePaymentAddress(pa)));
+        //     } catch (const std::exception &exc) {
+        //         // Unexpected failure
+        //         throw std::runtime_error(strprintf("Error while decrypting note for payment address %s: %s", EncodePaymentAddress(pa), exc.what()));
+        //     }
+        // }
 
         for (auto & pair : wtx.mapSaplingNoteData) {
             SaplingOutPoint op = pair.first;
