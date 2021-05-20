@@ -108,25 +108,25 @@ void initalizeMapParam() {
 
     mapParams.clear();
 
-    ParamFile pkFile;
-    pkFile.name = "sprout-proving.key";
-    pkFile.URL = PK_URL;
-    pkFile.hash = PK_SHA256;
-    pkFile.verified = false;
-    pkFile.path = ZC_GetParamsDir() / "sprout-proving.key";
-    pkFile.dlnow = 0;
-    pkFile.dltotal = 0;
-    mapParams[pkFile.URL] = pkFile;
-
-    ParamFile vkFile;
-    vkFile.name = "sprout-verifying.key";
-    vkFile.URL = VK_URL;
-    vkFile.hash = VK_SHA256;
-    vkFile.verified = false;
-    vkFile.path = ZC_GetParamsDir() / "sprout-verifying.key";
-    vkFile.dlnow = 0;
-    vkFile.dltotal = 0;
-    mapParams[vkFile.URL] = vkFile;
+    // ParamFile pkFile;
+    // pkFile.name = "sprout-proving.key";
+    // pkFile.URL = PK_URL;
+    // pkFile.hash = PK_SHA256;
+    // pkFile.verified = false;
+    // pkFile.path = ZC_GetParamsDir() / "sprout-proving.key";
+    // pkFile.dlnow = 0;
+    // pkFile.dltotal = 0;
+    // mapParams[pkFile.URL] = pkFile;
+    //
+    // ParamFile vkFile;
+    // vkFile.name = "sprout-verifying.key";
+    // vkFile.URL = VK_URL;
+    // vkFile.hash = VK_SHA256;
+    // vkFile.verified = false;
+    // vkFile.path = ZC_GetParamsDir() / "sprout-verifying.key";
+    // vkFile.dlnow = 0;
+    // vkFile.dltotal = 0;
+    // mapParams[vkFile.URL] = vkFile;
 
     ParamFile spendFile;
     spendFile.name = "sapling-spend.params";

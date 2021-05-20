@@ -30,17 +30,17 @@
 #define TIMEOPT CURLINFO_TOTAL_TIME_T
 #define MINIMAL_PROGRESS_FUNCTIONALITY_INTERVAL     3000000
 
-static const std::string PK_SHA256 = "8bc20a7f013b2b58970cddd2e7ea028975c88ae7ceb9259a5344a16bc2c0eef7";
-static const std::string VK_SHA256 = "4bd498dae0aacfd8e98dc306338d017d9c08dd0918ead18172bd0aec2fc5df82";
+// static const std::string PK_SHA256 = "8bc20a7f013b2b58970cddd2e7ea028975c88ae7ceb9259a5344a16bc2c0eef7";
+// static const std::string VK_SHA256 = "4bd498dae0aacfd8e98dc306338d017d9c08dd0918ead18172bd0aec2fc5df82";
 static const std::string SAPLING_SPEND_SHA256 = "8e48ffd23abb3a5fd9c5589204f32d9c31285a04b78096ba40a79b75677efc13";
 static const std::string SAPLING_OUTPUT_SHA256 = "2f0ebbcbb9bb0bcffe95a397e7eba89c29eb4dde6191c339db88570e3f3fb0e4";
 static const std::string SPROUT_GROTH16_SHA256 = "b685d700c60328498fbde589c8c7c484c722b788b265b72af448a5bf0ee55b50";
 
-static const std::string PK_URL = "https://download.z.cash/downloads/sprout-proving.key";
-static const std::string VK_URL = "https://download.z.cash/downloads/sprout-verifying.key";
-static const std::string SAPLING_SPEND_URL = "https://download.z.cash/downloads/sapling-spend.params";
-static const std::string SAPLING_OUTPUT_URL = "https://download.z.cash/downloads/sapling-output.params";
-static const std::string SPROUT_GROTH16_URL = "https://download.z.cash/downloads/sprout-groth16.params";
+// static const std::string PK_URL = "https://bootstrap.arrr.black/downloads/sprout-proving.key";
+// static const std::string VK_URL = "https://bootstrap.arrr.black/downloads/sprout-verifying.key";
+static const std::string SAPLING_SPEND_URL = "https://bootstrap.arrr.black/downloads/sapling-spend.params";
+static const std::string SAPLING_OUTPUT_URL = "https://bootstrap.arrr.black/downloads/sapling-output.params";
+static const std::string SPROUT_GROTH16_URL = "https://bootstrap.arrr.black/downloads/sprout-groth16.params";
 
 
 
