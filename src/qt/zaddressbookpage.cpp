@@ -60,8 +60,8 @@ ZAddressBookPage::ZAddressBookPage(const PlatformStyle *platformStyle, Mode _mod
     QAction *copyLabelAction = new QAction(tr("Copy &Label"), this);
     QAction *editAction = new QAction(tr("&Edit"), this);
 
-    QAction *copyZSendManyToAction = new QAction(tr("Copy zsendmany (to) template"), this);
-    QAction *copyZSendManyFromAction = new QAction(tr("Copy zsendmany (from) template"), this);
+    // QAction *copyZSendManyToAction = new QAction(tr("Copy zsendmany (to) template"), this);
+    // QAction *copyZSendManyFromAction = new QAction(tr("Copy zsendmany (from) template"), this);
 
     QAction *exportSpendingKeyAction = new QAction(tr("Export extended spending key"), this);
     QAction *exportViewingKeyAction = new QAction(tr("Export extended viewing key"), this);
@@ -72,8 +72,8 @@ ZAddressBookPage::ZAddressBookPage(const PlatformStyle *platformStyle, Mode _mod
     contextMenu->addAction(copyLabelAction);
     contextMenu->addAction(editAction);
 
-    contextMenu->addAction(copyZSendManyToAction);
-    contextMenu->addAction(copyZSendManyFromAction);
+    // contextMenu->addAction(copyZSendManyToAction);
+    // contextMenu->addAction(copyZSendManyFromAction);
 
     contextMenu->addAction(exportSpendingKeyAction);
     contextMenu->addAction(exportViewingKeyAction);
@@ -85,8 +85,8 @@ ZAddressBookPage::ZAddressBookPage(const PlatformStyle *platformStyle, Mode _mod
     connect(copyLabelAction, SIGNAL(triggered()), this, SLOT(onCopyLabelAction()));
     connect(editAction, SIGNAL(triggered()), this, SLOT(onEditAction()));
 
-    connect(copyZSendManyToAction, SIGNAL(triggered()), this, SLOT(onCopyZSendManyToAction()));
-    connect(copyZSendManyFromAction, SIGNAL(triggered()), this, SLOT(onCopyZSendManyFromAction()));
+    // connect(copyZSendManyToAction, SIGNAL(triggered()), this, SLOT(onCopyZSendManyToAction()));
+    // connect(copyZSendManyFromAction, SIGNAL(triggered()), this, SLOT(onCopyZSendManyFromAction()));
 
     connect(exportSpendingKeyAction, SIGNAL(triggered()), this, SLOT(exportSK()));
     connect(exportViewingKeyAction, SIGNAL(triggered()), this, SLOT(exportVK()));
