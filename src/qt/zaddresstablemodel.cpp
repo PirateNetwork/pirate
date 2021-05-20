@@ -196,27 +196,6 @@ public:
         qSort(cachedAddressTable.begin(), cachedAddressTable.end(), ZAddressTableEntryLessThan());
     }
 
-    void updateBalancesv1(std::map<libzcash::PaymentAddress, CAmount> balances) {
-
-        for (std::map<libzcash::PaymentAddress, CAmount>::iterator it = balances.begin(); it != balances.end(); it++) {
-
-            const libzcash::PaymentAddress& zaddr = it->first;
-            // auto saplingAddr = boost::get<libzcash::SaplingPaymentAddress>(&zaddr);
-            QString qsZaddr = QString::fromStdString(EncodePaymentAddress(zaddr));
-
-            CAmount balance = it->second;
-
-            for (int i = 0; i < cachedAddressTable.size(); ++i) {
-                if (cachedAddressTable[i].address == qsZaddr &&
-                    cachedAddressTable[i].balance != balance) {
-                    cachedAddressTable[i].balance = balance;
-                    parent->emitDataChanged(i);
-                }
-            }
-        }
-    }
-
-
     void updateEntry(const QString &address, const QString &label, bool isMine, const QString &purpose, int status)
     {
         // Find address / label in model
