@@ -3951,6 +3951,11 @@ bool CWallet::initalizeArcTx() {
             }
         }
 
+        //Check for sporutdata and rescan if found to remove
+        if (wtx.mapSproutNoteData.size() > 0) {
+            return false;
+        }
+
         //Initalize in memory saplingnotedata
         for (uint32_t i = 0; i < wtx.vShieldedOutput.size(); ++i) {
             auto op = SaplingOutPoint(wtxid, i);
