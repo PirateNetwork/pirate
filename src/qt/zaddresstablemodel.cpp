@@ -9,6 +9,7 @@
 #include "komodounits.h"
 
 #include "guiutil.h"
+#include "guiconstants.h"
 #include "walletmodel.h"
 #include "platformstyle.h"
 
@@ -19,6 +20,7 @@
 
 #include <QFont>
 #include <QDebug>
+#include <QTimer>
 
 const QString ZAddressTableModel::Send = "S";
 const QString ZAddressTableModel::Receive = "R";
@@ -92,7 +94,7 @@ public:
     {
     }
 
-    void updateBalances()
+    void updateBalances(bool &fForceCheckBalanceChanged, int &cachedNumBlocks)
     {
         // Get required locks upfront. This avoids the GUI from getting stuck on
         // periodical polls if the core is holding the locks for a longer time -
@@ -103,6 +105,14 @@ public:
         TRY_LOCK(wallet->cs_wallet, lockWallet);
         if(!lockWallet)
             return;
+
+        //Don't run balance if nothing has changed
+        if (!fForceCheckBalanceChanged && cachedNumBlocks == chainActive.Height()) {
+            return;
+        }
+
+        fForceCheckBalanceChanged = false;
+        cachedNumBlocks = chainActive.Height();
 
         std::map<QString, CAmount> stringBalances;
         std::map<libzcash::PaymentAddress, CAmount> balances;
@@ -290,6 +300,14 @@ ZAddressTableModel::ZAddressTableModel(const PlatformStyle *_platformStyle, CWal
 {
     columns << tr("Mine") << tr("Balance") << tr("Address") << tr("Type");
     priv->refreshAddressTable();
+
+    // This timer will be fired repeatedly to update the balance
+    pollTimer = new QTimer(this);
+    connect(pollTimer, SIGNAL(timeout()), this, SLOT(runUpdate()));
+    pollTimer->start(MODEL_UPDATE_DELAY);
+    fForceCheckBalanceChanged = false;
+    cachedNumBlocks = 0;
+
     subscribeToCoreSignals();
 }
 
@@ -301,7 +319,13 @@ ZAddressTableModel::~ZAddressTableModel()
 
 void ZAddressTableModel::updateBalances()
 {
-    priv->updateBalances();
+    fForceCheckBalanceChanged = true;
+    runUpdate();
+}
+
+void ZAddressTableModel::runUpdate()
+{
+    priv->updateBalances(fForceCheckBalanceChanged, cachedNumBlocks);
 }
 
 int ZAddressTableModel::rowCount(const QModelIndex &parent) const

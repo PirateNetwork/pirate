@@ -18,6 +18,9 @@ class ZSendConfirmationDialog;
 class CWallet;
 
 struct ZAddressTableEntry;
+QT_BEGIN_NAMESPACE
+class QTimer;
+QT_END_NAMESPACE
 
 /**
    Qt model of the address book in the core. This allows views to access and modify the address book.
@@ -92,6 +95,10 @@ private:
     EditStatus editStatus;
     const PlatformStyle *platformStyle;
 
+    QTimer *pollTimer;
+    int cachedNumBlocks;
+    bool fForceCheckBalanceChanged;
+
     /** Notify listeners that data changed. */
     void emitDataChanged(int index);
     void subscribeToCoreSignals();
@@ -102,6 +109,7 @@ public Q_SLOTS:
      */
     void updateEntry(const QString &address, const QString &label, bool isMine, const QString &purpose, int status);
     void updateBalances();
+    void runUpdate();
     // void updateBalance(const QString &address, const CAmount &balance);
 
     friend class ZAddressTablePriv;

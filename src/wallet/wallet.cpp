@@ -865,7 +865,6 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
         DecrementNoteWitnesses(pindex);
         UpdateNullifierNoteMapForBlock(pblock);
     }
-    NotifyBalanceChanged();
 }
 
 void CWallet::RunSaplingSweep(int blockHeight) {
@@ -2402,9 +2401,10 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
         wtx.MarkDirty();
 
         // Notify UI of new or updated transaction
-        if (!fRescan)
+        if (!fRescan) {
             NotifyTransactionChanged(this, hash, fInsertedNew ? CT_NEW : CT_UPDATED);
-
+            NotifyBalanceChanged();
+        }
         // notify an external script when a wallet transaction comes in or is updated
         std::string strCmd = GetArg("-walletnotify", "");
 
@@ -4080,6 +4080,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
         NotifyTransactionChanged(this, *it, fInsertedNew ? CT_NEW : CT_UPDATED);
     }
 
+    NotifyBalanceChanged();
     return ret;
 }
 
@@ -5408,6 +5409,7 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
                 CWalletTx &coin = mapWallet[txin.prevout.hash];
                 coin.BindWallet(this);
                 NotifyTransactionChanged(this, coin.GetHash(), CT_UPDATED);
+                NotifyBalanceChanged();
             }
 
             if (fFileBacked)
@@ -5973,8 +5975,10 @@ void CWallet::UpdatedTransaction(const uint256 &hashTx)
         LOCK(cs_wallet);
         // Only notify UI if this transaction is in this wallet
         map<uint256, CWalletTx>::const_iterator mi = mapWallet.find(hashTx);
-        if (mi != mapWallet.end())
+        if (mi != mapWallet.end()) {
             NotifyTransactionChanged(this, hashTx, CT_UPDATED);
+            NotifyBalanceChanged();
+        }
     }
 }
 
