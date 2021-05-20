@@ -17,7 +17,6 @@ class ZSendConfirmationDialog;
 
 class CWallet;
 
-struct ZAddressTableEntry;
 QT_BEGIN_NAMESPACE
 class QTimer;
 QT_END_NAMESPACE
@@ -90,7 +89,6 @@ private:
     WalletModel *walletModel;
     CWallet *wallet;
     ZAddressTablePriv *priv;
-    ZAddressTablePriv *temppriv;
     QStringList columns;
     EditStatus editStatus;
     const PlatformStyle *platformStyle;
