@@ -45,7 +45,10 @@ const uint32_t nStakedDecemberHardforkTimestamp = 1576840000; //December 2019 ha
 const int32_t nDecemberHardforkHeight = 1670000;   //December 2019 hardfork
 
 const uint32_t nS4Timestamp = 1592146800; //dPoW Season 4 2020 hardfork Sunday, June 14th, 2020 03:00:00 PM UTC
-const int32_t nS4HardforkHeight = 1922000;   //dPoW Season 4 2020 hardfork Sunday, June 14th, 2020 
+const int32_t nS4HardforkHeight = 1922000;   //dPoW Season 4 2020 hardfork Sunday, June 14th, 2020
+
+const uint32_t nS5Timestamp = 1623682800;  //dPoW Season 5 Monday, June 14th, 2021 (03:00:00 PM UTC)
+const int32_t nS5HardforkHeight = 2437300;  //dPoW Season 5 Monday, June 14th, 2021
 
 #define _COINBASE_MATURITY 100
 int COINBASE_MATURITY = _COINBASE_MATURITY;//100;
@@ -113,12 +116,12 @@ int32_t ASSETCHAINS_STAKED;
 uint64_t ASSETCHAINS_COMMISSION,ASSETCHAINS_SUPPLY = 10,ASSETCHAINS_FOUNDERS_REWARD;
 
 uint32_t KOMODO_INITDONE;
-char KMDUSERPASS[8192+512+1],BTCUSERPASS[8192]; uint16_t KMD_PORT = 7771,BITCOIND_RPCPORT = 7771;
+char KMDUSERPASS[8192+512+1],BTCUSERPASS[8192]; uint16_t KMD_PORT = 7771,BITCOIND_RPCPORT = 7771, DEST_PORT;
 uint64_t PENDING_KOMODO_TX;
 extern int32_t KOMODO_LOADINGBLOCKS;
 unsigned int MAX_BLOCK_SIGOPS = 20000;
 
-int32_t KOMODO_TESTNODE, KOMODO_SNAPSHOT_INTERVAL; 
+int32_t KOMODO_TESTNODE, KOMODO_SNAPSHOT_INTERVAL;
 CScript KOMODO_EARLYTXID_SCRIPTPUB;
 int32_t ASSETCHAINS_EARLYTXIDCONTRACT;
 int32_t ASSETCHAINS_STAKED_SPLIT_PERCENTAGE;
@@ -175,7 +178,7 @@ uint64_t komodo_current_supply(uint32_t nHeight)
 
                 // add rewards from this era, up to nHeight
                 int64_t reward = ASSETCHAINS_REWARD[j];
-                
+
                 //fprintf(stderr,"last.%d reward %llu period %llu\n",(int32_t)ASSETCHAINS_LASTERA,(long long)reward,(long long)ASSETCHAINS_HALVING[j]);
                 if ( reward > 0 )
                 {
@@ -287,7 +290,7 @@ uint64_t komodo_current_supply(uint32_t nHeight)
                 }
             }
         }
-    }    
+    }
     if ( KOMODO_BIT63SET(cur_money) != 0 )
         return(KOMODO_MAXNVALUE);
     if ( ASSETCHAINS_COMMISSION != 0 )

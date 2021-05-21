@@ -442,6 +442,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-onlynet=<net>", _("Only connect to nodes in network <net> (ipv4, ipv6 or onion)"));
     strUsage += HelpMessageOpt("-permitbaremultisig", strprintf(_("Relay non-P2SH multisig (default: %u)"), 1));
     strUsage += HelpMessageOpt("-peerbloomfilters", strprintf(_("Support filtering of blocks and transaction with Bloom filters (default: %u)"), 1));
+    strUsage += HelpMessageOpt("-nspv_msg", strprintf(_("Enable NSPV messages processing (default: %u)"), DEFAULT_NSPV_PROCESSING));
     if (showDebug)
         strUsage += HelpMessageOpt("-enforcenodebloom", strprintf("Enforce minimum protocol version to limit use of Bloom filters (default: %u)", 0));
     strUsage += HelpMessageOpt("-port=<port>", strprintf(_("Listen for connections on <port> (default: %u or testnet: %u)"), 7770, 17770));
@@ -475,6 +476,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-paytxfee=<amt>", strprintf(_("Fee (in %s/kB) to add to transactions you send (default: %s)"),
         CURRENCY_UNIT, FormatMoney(payTxFee.GetFeePerK())));
     strUsage += HelpMessageOpt("-rescan", _("Rescan the block chain for missing wallet transactions") + " " + _("on startup"));
+    strUsage += HelpMessageOpt("-rescanheight", _("Rescan the block chain from the specified height when rescan=1 on startup"));
     strUsage += HelpMessageOpt("-salvagewallet", _("Attempt to recover private keys from a corrupt wallet.dat") + " " + _("on startup"));
     strUsage += HelpMessageOpt("-sendfreetransactions", strprintf(_("Send transactions as zero-fee transactions if possible (default: %u)"), 0));
     strUsage += HelpMessageOpt("-spendzeroconfchange", strprintf(_("Spend unconfirmed change when sending transactions (default: %u)"), 1));
@@ -868,15 +870,13 @@ static void ZC_LoadParams(
     struct timeval tv_start, tv_end;
     float elapsed;
 
-    boost::filesystem::path pk_path = ZC_GetParamsDir() / "sprout-proving.key";
-    boost::filesystem::path vk_path = ZC_GetParamsDir() / "sprout-verifying.key";
+    // boost::filesystem::path pk_path = ZC_GetParamsDir() / "sprout-proving.key";
+    // boost::filesystem::path vk_path = ZC_GetParamsDir() / "sprout-verifying.key";
     boost::filesystem::path sapling_spend = ZC_GetParamsDir() / "sapling-spend.params";
     boost::filesystem::path sapling_output = ZC_GetParamsDir() / "sapling-output.params";
     boost::filesystem::path sprout_groth16 = ZC_GetParamsDir() / "sprout-groth16.params";
 
     if (!(
-        boost::filesystem::exists(pk_path) &&
-        boost::filesystem::exists(vk_path) &&
         boost::filesystem::exists(sapling_spend) &&
         boost::filesystem::exists(sapling_output) &&
         boost::filesystem::exists(sprout_groth16)
@@ -904,14 +904,14 @@ static void ZC_LoadParams(
         }
     }
 
-    LogPrintf("Loading verifying key from %s\n", vk_path.string().c_str());
-    gettimeofday(&tv_start, 0);
-
-    pzcashParams = ZCJoinSplit::Prepared(vk_path.string(), pk_path.string());
-
-    gettimeofday(&tv_end, 0);
-    elapsed = float(tv_end.tv_sec-tv_start.tv_sec) + (tv_end.tv_usec-tv_start.tv_usec)/float(1000000);
-    LogPrintf("Loaded verifying key in %fs seconds.\n", elapsed);
+    // LogPrintf("Loading verifying key from %s\n", vk_path.string().c_str());
+    // gettimeofday(&tv_start, 0);
+    //
+    // pzcashParams = ZCJoinSplit::Prepared(vk_path.string(), pk_path.string());
+    //
+    // gettimeofday(&tv_end, 0);
+    // elapsed = float(tv_end.tv_sec-tv_start.tv_sec) + (tv_end.tv_usec-tv_start.tv_usec)/float(1000000);
+    // LogPrintf("Loaded verifying key in %fs seconds.\n", elapsed);
 
     static_assert(
         sizeof(boost::filesystem::path::value_type) == sizeof(codeunit),
@@ -2198,6 +2198,15 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         {
             pwalletMain->ClearNoteWitnessCache();
             pindexRescan = chainActive.Genesis();
+
+            int rescanHeight = GetArg("-rescanheight", 0);
+            if (rescanHeight > 0) {
+                if (rescanHeight > chainActive.Tip()->GetHeight()) {
+                    pindexRescan = chainActive.Tip();
+                } else {
+                    pindexRescan = chainActive[rescanHeight];
+                }
+            }
         }
         else
         {
@@ -2229,6 +2238,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                     std::map<uint256, CWalletTx>::iterator mi = pwalletMain->mapWallet.find(hash);
                     if (mi != pwalletMain->mapWallet.end())
                     {
+                        ArchiveTxPoint arcTxPt;
                         const CWalletTx* copyFrom = &wtxOld;
                         CWalletTx* copyTo = &mi->second;
                         copyTo->mapValue = copyFrom->mapValue;
@@ -2238,7 +2248,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                         copyTo->fFromMe = copyFrom->fFromMe;
                         copyTo->strFromAccount = copyFrom->strFromAccount;
                         copyTo->nOrderPos = copyFrom->nOrderPos;
-                        copyTo->WriteToDisk(&walletdb);
+                        copyTo->WriteToDisk(&walletdb, arcTxPt, false);
                     }
                 }
             }

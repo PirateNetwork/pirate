@@ -71,19 +71,11 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
     RpcArcTransaction arcTx;
     bool fIncludeWatchonly = true;
 
-    //get Ovks for sapling decryption
-    std::vector<uint256> ovks;
-    getAllSaplingOVKs(ovks, fIncludeWatchonly);
-
-    //get Ivks for sapling decryption
-    std::vector<uint256> ivks;
-    getAllSaplingIVKs(ivks, fIncludeWatchonly);
-
     if (wallet->mapWallet.count(txid)) {
         CWalletTx& wtx = wallet->mapWallet[txid];
-        getRpcArcTx(wtx, arcTx, ivks, ovks, fIncludeWatchonly);
+        getRpcArcTx(wtx, arcTx, fIncludeWatchonly, false);
     } else {
-        getRpcArcTx(txid, arcTx, ivks, ovks, fIncludeWatchonly);
+        getRpcArcTx(txid, arcTx, fIncludeWatchonly, false);
     }
 
     if (arcTx.blockHash.IsNull() || mapBlockIndex[arcTx.blockHash] == nullptr) {

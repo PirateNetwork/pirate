@@ -196,6 +196,7 @@ bool CBasicKeyStore::AddSaplingFullViewingKey(
     LOCK(cs_SpendingKeyStore);
     auto ivk = extfvk.fvk.in_viewing_key();
     mapSaplingFullViewingKeys[ivk] = extfvk;
+    setSaplingOutgoingViewingKeys.insert(extfvk.fvk.ovk);
 
     return CBasicKeyStore::AddSaplingIncomingViewingKey(ivk, extfvk.DefaultAddress());
 }
@@ -211,6 +212,32 @@ bool CBasicKeyStore::AddSaplingIncomingViewingKey(
 
     // Add addr -> SaplingIncomingViewing to SaplingIncomingViewingKeyMap
     mapSaplingIncomingViewingKeys[addr] = ivk;
+    setSaplingIncomingViewingKeys.insert(ivk);
+
+    return true;
+}
+
+bool CBasicKeyStore::AddSaplingDiversifiedAddess(
+    const libzcash::SaplingPaymentAddress &addr,
+    const libzcash::SaplingIncomingViewingKey &ivk,
+    const blob88 &path
+)
+{
+    LOCK(cs_SpendingKeyStore);
+    DiversifierPath dPath(ivk, path);
+
+    mapSaplingPaymentAddresses[addr] = dPath;
+
+    return true;
+}
+
+bool CBasicKeyStore::AddLastDiversifierUsed(
+    const libzcash::SaplingIncomingViewingKey &ivk,
+    const blob88 &path)
+{
+    LOCK(cs_SpendingKeyStore);
+
+    mapLastDiversifierPath[ivk] = path;
 
     return true;
 }

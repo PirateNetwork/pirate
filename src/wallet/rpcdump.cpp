@@ -777,6 +777,11 @@ UniValue z_importkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid spending key");
     }
 
+    //Prevent Sprout key from being added to the wallet
+    if (boost::get<libzcash::SproutSpendingKey>(&spendingkey) != nullptr) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid spending key, Sprout not supported");
+    }
+
     // Sapling support
     auto addResult = boost::apply_visitor(AddSpendingKeyToWallet(pwalletMain, Params().GetConsensus()), spendingkey);
     if (addResult == KeyAlreadyExists && fIgnoreExistingKey) {
@@ -875,6 +880,11 @@ UniValue z_importviewingkey(const UniValue& params, bool fHelp, const CPubKey& m
   UniValue result(UniValue::VOBJ);
   result.pushKV("type", addrInfo.first);
   result.pushKV("address", EncodePaymentAddress(addrInfo.second));
+
+  //Prevent Sprout key from being added to the wallet
+  if (boost::get<libzcash::SproutViewingKey>(&viewingkey) != nullptr) {
+      throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid viewing key, Sprout not supported");
+  }
 
   auto addResult = boost::apply_visitor(AddViewingKeyToWallet(pwalletMain), viewingkey);
   if (addResult == SpendingKeyExists) {

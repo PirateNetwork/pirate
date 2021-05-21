@@ -132,7 +132,7 @@ void ZSendCoinsDialog::on_sendButton_clicked()
     bool bIsMine=false;
     if (!ui->payFromAddress->currentText().split(' ').isEmpty())
     {
-      fromaddress = ui->payFromAddress->currentText().split(' ').at(1);
+      fromaddress = ui->payFromAddress->currentText().split(' ').at(2);
       //If the string format on the GUI is changed the adres might get
       //misinterpreted here. Might have to look at a better way to identify
       //the adres.
@@ -528,6 +528,8 @@ void ZSendCoinsDialog::setBalance(const CAmount& balance, const CAmount& unconfi
     if(model && model->getOptionsModel())
     {
         ui->labelBalance->setText(KomodoUnits::formatWithUnit(model->getOptionsModel()->getDisplayUnit(), balance));
+        ui->labelBalance->setVisible(false);
+        //ui->label->setVisible(false);
     }
 }
 
@@ -535,6 +537,7 @@ void ZSendCoinsDialog::updateDisplayUnit()
 {
     setBalance(model->getBalance(), 0, 0, 0, 0, 0, 0, 0, 0);
     ui->customFee->setDisplayUnit(model->getOptionsModel()->getDisplayUnit());
+    updatePayFromList(); 
 }
 
 void ZSendCoinsDialog::setResult(const string sHeading, const string sResult)
@@ -638,12 +641,6 @@ void ZSendCoinsDialog::processSendCoinsReturn(const WalletModel::SendCoinsReturn
 
 void ZSendCoinsDialog::useAvailableBalance(SendCoinsEntry* entry)
 {
-    // Get CCoinControl instance if CoinControl is enabled or create a new one.
-    CCoinControl coin_control;
-    // if (model->getOptionsModel()->getCoinControlFeatures()) {
-    //     coin_control = *CoinControlDialog::coinControl;
-    // }
-
     if (ui->payFromAddress->currentText().isEmpty())
     {
         entry->setAmount(0);
@@ -651,14 +648,15 @@ void ZSendCoinsDialog::useAvailableBalance(SendCoinsEntry* entry)
     }
 
     QString address;
-    if (!ui->payFromAddress->currentText().split(' ').isEmpty()) address = ui->payFromAddress->currentText().split(' ').at(1);
+    if (!ui->payFromAddress->currentText().split(' ').isEmpty()) 
+      address = ui->payFromAddress->currentText().split(' ').at(2);
 
     // Calculate available amount to send.
     CAmount amount = 0;
-
     if (!address.isEmpty())
-    {
+    {        
         amount = model->getAddressBalance(address.toStdString());
+        
         for (int i = 0; i < ui->entries->count(); ++i) {
             SendCoinsEntry* e = qobject_cast<SendCoinsEntry*>(ui->entries->itemAt(i)->widget());
             if (e && !e->isHidden() && e != entry) {
@@ -741,98 +739,24 @@ void ZSendCoinsDialog::coinControlUpdateLabels()
 void ZSendCoinsDialog::updatePayFromList()
 {
     ui->payFromAddress->clear();
+    
+    std::map<libzcash::PaymentAddress, CAmount> zbalances_All = model->getZAddressBalances(1, false);
+    std::map<libzcash::PaymentAddress, CAmount> zbalances_isMine = model->getZAddressBalances(1, true);
+    
+    auto oDisplayUnit = model->getOptionsModel()->getDisplayUnit();
+    for (auto & pair : zbalances_All) {
+      libzcash::PaymentAddress oAddress = pair.first;
+      QString sAddddress = QString::fromStdString(EncodePaymentAddress(oAddress));
+      
+      QString sAmount = KomodoUnits::formatWithUnit(oDisplayUnit, pair.second);
 
-    /*
-    typedef std::function<bool(std::pair<CTxDestination, CAmount>, std::pair<CTxDestination, CAmount>)> ComparatorT;
-
-    ComparatorT compFunctorT = [](std::pair<CTxDestination, CAmount> elem1 ,std::pair<CTxDestination, CAmount> elem2)
-    {
-        double v1 = ValueFromAmount(elem1.second).get_real();
-        double v2 = ValueFromAmount(elem2.second).get_real();
-        std::string a1 = EncodeDestination(elem1.first);
-        std::string a2 = EncodeDestination(elem2.first);
-
-        return (v1 > v2) || ( (v1 == v2) && ( a1 > a2 ) );
-    };
-
-    //FIXIT: Why still scanning for TAddresses if Pirate only supports z-addresses?
-    //FIXIT: Replcace with my 'viewing only' adresses
-
-    std::map<CTxDestination, CAmount> balances = model->getTAddressBalances();
-
-    std::set<std::pair<CTxDestination, CAmount>, ComparatorT> balances_sorted(balances.begin(), balances.end(), compFunctorT);
-
-    for (const std::pair<CTxDestination, CAmount>& item : balances_sorted)
-    {
-        if (ValueFromAmount(item.second).get_real() != 0.0)
-            ui->payFromAddress->addItem(tr("(%1) %2").arg(QString::number(ValueFromAmount(item.second).get_real(),'f',8))
-                                                     .arg(QString::fromStdString(EncodeDestination(item.first))));
-    }
-
-    typedef std::function<bool(std::pair<libzcash::PaymentAddress, CAmount>, std::pair<libzcash::PaymentAddress, CAmount>)> ComparatorZ;
-
-    ComparatorZ compFunctorZ = [](std::pair<libzcash::PaymentAddress, CAmount> elem1 ,std::pair<libzcash::PaymentAddress, CAmount> elem2)
-    {
-        double v1 = ValueFromAmount(elem1.second).get_real();
-        double v2 = ValueFromAmount(elem2.second).get_real();
-        std::string a1 = EncodePaymentAddress(elem1.first);
-        std::string a2 = EncodePaymentAddress(elem2.first);
-
-        return (v1 > v2) || ( (v1 == v2) && ( a1 > a2 ) );
-    };
-    */
-
-    ZAddressTableModel *poZAddressTableModel;
-    poZAddressTableModel = model->getZAddressTableModel();
-
-    QModelIndex oMIParent;
-    int iRowCount=poZAddressTableModel->rowCount(oMIParent);
-
-    float fBalance;
-    typedef struct
-    {
-      bool bIsMine;
-      QString sAddres;
-    } addr_pair;
-    addr_pair oPair;
-    QMap<float, addr_pair> zbalances_offline;
-
-    for (int iI=0;iI<iRowCount;iI++)
-    {
-      //IsMine?
-      QModelIndex oIndex = poZAddressTableModel->index(iI, ZAddressTableModel::isMine, oMIParent);
-      bool bMine = poZAddressTableModel->data(oIndex, Qt::EditRole).toInt();
-
-      //Balance
-      oIndex = poZAddressTableModel->index(iI, ZAddressTableModel::Balance, oMIParent);
-      float fBalance = poZAddressTableModel->data(oIndex, Qt::EditRole).toFloat();
-
-      //Adres
-      oIndex = poZAddressTableModel->index(iI, ZAddressTableModel::Address, oMIParent);
-      QString sAdres = poZAddressTableModel->data(oIndex, Qt::EditRole).toString();
-
-      if (fBalance>0.0)
-      {
-        oPair.sAddres = sAdres;
-        oPair.bIsMine = bMine;
-        zbalances_offline.insert(fBalance, oPair);
+      
+      auto search = zbalances_isMine.find( oAddress );
+      if (search != zbalances_isMine.end()) {        
+        ui->payFromAddress->addItem(tr("(%1) %2 - Local").arg(sAmount).arg(sAddddress) );
       }
-    }
-    //Render from max to min balance
-    QMap<float, addr_pair>::const_iterator i = zbalances_offline.constEnd();
-    while (i != zbalances_offline.constBegin())
-    {
-      --i;
-      oPair = i.value();      
-      QString sAmount;
-      sAmount.sprintf("%0.8f",i.key() );
-      if (oPair.bIsMine == 1)
-      {
-        ui->payFromAddress->addItem(tr("(%1) %2 - Local (Have spending key)").arg(sAmount).arg(oPair.sAddres.toStdString().c_str()));
-      }
-      else
-      {
-        ui->payFromAddress->addItem(tr("(%1) %2 - Off-line").arg(sAmount).arg(oPair.sAddres.toStdString().c_str()));
+      else {
+        ui->payFromAddress->addItem(tr("(%1) %2 - Off-line").arg(sAmount).arg(sAddddress) );
       }
     }
 }

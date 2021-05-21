@@ -1619,19 +1619,19 @@ TEST(WalletTests, WriteWitnessCache) {
         .WillRepeatedly(Return(true));
 
     // WriteTx fails
-    EXPECT_CALL(walletdb, WriteTx(wtx.GetHash(), wtx))
+    EXPECT_CALL(walletdb, WriteTx(wtx.GetHash(), wtx, true))
         .WillOnce(Return(false));
     EXPECT_CALL(walletdb, TxnAbort())
         .Times(1);
     wallet.SetBestChain(walletdb, loc);
 
     // WriteTx throws
-    EXPECT_CALL(walletdb, WriteTx(wtx.GetHash(), wtx))
+    EXPECT_CALL(walletdb, WriteTx(wtx.GetHash(), wtx, true))
         .WillOnce(ThrowLogicError());
     EXPECT_CALL(walletdb, TxnAbort())
         .Times(1);
     wallet.SetBestChain(walletdb, loc);
-    EXPECT_CALL(walletdb, WriteTx(wtx.GetHash(), wtx))
+    EXPECT_CALL(walletdb, WriteTx(wtx.GetHash(), wtx, true))
         .WillRepeatedly(Return(true));
 
     // WriteWitnessCacheSize fails
@@ -1719,11 +1719,11 @@ TEST(WalletTests, SetBestChainIgnoresTxsWithoutShieldedData) {
 
     EXPECT_CALL(walletdb, TxnBegin())
         .WillOnce(Return(true));
-    EXPECT_CALL(walletdb, WriteTx(wtxTransparent.GetHash(), wtxTransparent))
+    EXPECT_CALL(walletdb, WriteTx(wtxTransparent.GetHash(), wtxTransparent, true))
         .Times(0);
-    EXPECT_CALL(walletdb, WriteTx(wtxSprout.GetHash(), wtxSprout))
+    EXPECT_CALL(walletdb, WriteTx(wtxSprout.GetHash(), wtxSprout, true))
         .Times(1).WillOnce(Return(true));
-    EXPECT_CALL(walletdb, WriteTx(wtxSproutTransparent.GetHash(), wtxSproutTransparent))
+    EXPECT_CALL(walletdb, WriteTx(wtxSproutTransparent.GetHash(), wtxSproutTransparent, true))
         .Times(0);
     EXPECT_CALL(walletdb, WriteWitnessCacheSize(0))
         .WillOnce(Return(true));

@@ -1194,8 +1194,8 @@ UniValue cleanwallettransactions(const UniValue& params, bool fHelp, const CPubK
 
     // build return JSON for stats.
     int remaining = pwalletMain->mapWallet.size();
-    ret.push_back(Pair("total_transactons", (int)txs));
-    ret.push_back(Pair("remaining_transactons", (int)remaining));
+    ret.push_back(Pair("total_transactions", (int)txs));
+    ret.push_back(Pair("remaining_transactions", (int)remaining));
     ret.push_back(Pair("removed_transactions", (int)(txs-remaining)));
     return  (ret);
 }
@@ -3049,7 +3049,7 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "1. minconf          (numeric, optional, default=1) The minimum confirmations to filter\n"
             "2. maxconf          (numeric, optional, default=9999999) The maximum confirmations to filter\n"
             "3. includeWatchonly (bool, optional, default=false) Also include watchonly addresses (see 'z_importviewingkey')\n"
-            "4. \"addresses\"      (string) A json array of zaddrs (both Sprout and Sapling) to filter on.  Duplicate addresses not allowed.\n"
+            "4. \"addresses\"      (string) A json array of zaddrs (Sapling Only) to filter on.  Duplicate addresses not allowed.\n"
             "    [\n"
             "      \"address\"     (string) zaddr\n"
             "      ,...\n"
@@ -3102,10 +3102,14 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
         fIncludeWatchonly = params[2].get_bool();
     }
 
+    //Use all addresses by default
+    bool filterAddresses = false;
+
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     // User has supplied zaddrs to filter on
     if (params.size() > 3) {
+        filterAddresses = true;
         UniValue addresses = params[3].get_array();
         if (addresses.size()==0)
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, addresses array is empty.");
@@ -3127,62 +3131,61 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
             if (!fIncludeWatchonly && !hasSpendingKey) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, spending key for address does not belong to wallet: ") + address);
             }
-            zaddrs.insert(zaddr);
 
             if (setAddress.count(address)) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, duplicated address: ") + address);
             }
             setAddress.insert(address);
+
+            if (boost::get<libzcash::SproutPaymentAddress>(&zaddr) != nullptr) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, sprout addresses are not supported: ") + address);
+            }
+
+            zaddrs.insert(zaddr);
         }
-    }
-    else {
-        // User did not provide zaddrs, so use default i.e. all addresses
-        std::set<libzcash::SproutPaymentAddress> sproutzaddrs = {};
-        pwalletMain->GetSproutPaymentAddresses(sproutzaddrs);
-
-        // Sapling support
-        std::set<libzcash::SaplingPaymentAddress> saplingzaddrs = {};
-        pwalletMain->GetSaplingPaymentAddresses(saplingzaddrs);
-
-        zaddrs.insert(sproutzaddrs.begin(), sproutzaddrs.end());
-        zaddrs.insert(saplingzaddrs.begin(), saplingzaddrs.end());
     }
 
     UniValue results(UniValue::VARR);
 
-    if (zaddrs.size() > 0) {
-        std::vector<CSproutNotePlaintextEntry> sproutEntries;
-        std::vector<SaplingNoteEntry> saplingEntries;
-        pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, zaddrs, nMinDepth, nMaxDepth, true, !fIncludeWatchonly, false);
-        std::set<std::pair<PaymentAddress, uint256>> nullifierSet = pwalletMain->GetNullifiersForAddresses(zaddrs);
+    //Get All Notes
+    std::vector<CSproutNotePlaintextEntry> sproutEntries;
+    std::vector<SaplingNoteEntry> saplingEntries;
+    pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, zaddrs, nMinDepth, nMaxDepth, true, !fIncludeWatchonly, false);
+    std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>> mapResults;
 
-        for (auto & entry : sproutEntries) {
-            UniValue obj(UniValue::VOBJ);
-
-            int nHeight   = tx_height(entry.jsop.hash);
-            int dpowconfs = komodo_dpowconfs(nHeight, entry.confirmations);
-            // Only return notarized results when minconf>1
-            if (nMinDepth > 1 && dpowconfs == 1)
-                continue;
-
-            obj.push_back(Pair("txid", entry.jsop.hash.ToString()));
-            obj.push_back(Pair("jsindex", (int)entry.jsop.js ));
-            obj.push_back(Pair("jsoutindex", (int)entry.jsop.n));
-            obj.push_back(Pair("confirmations", dpowconfs));
-            obj.push_back(Pair("rawconfirmations", entry.confirmations));
-            bool hasSproutSpendingKey = pwalletMain->HaveSproutSpendingKey(boost::get<libzcash::SproutPaymentAddress>(entry.address));
-            obj.push_back(Pair("spendable", hasSproutSpendingKey));
-            obj.push_back(Pair("address", EncodePaymentAddress(entry.address)));
-            obj.push_back(Pair("amount", ValueFromAmount(CAmount(entry.plaintext.value()))));
-            std::string data(entry.plaintext.memo().begin(), entry.plaintext.memo().end());
-            obj.push_back(Pair("memo", HexStr(data)));
-            if (hasSproutSpendingKey) {
-                obj.push_back(Pair("change", pwalletMain->IsNoteSproutChange(nullifierSet, entry.address, entry.jsop)));
+    for (auto & entry : saplingEntries) {
+        //Only Look at notes with the filtered address or add the note address to the address set
+        if (filterAddresses) {
+            std::set<libzcash::PaymentAddress>::iterator it;
+            it = zaddrs.find(entry.address);
+            if (it == zaddrs.end()) {
+              continue;
             }
-            results.push_back(obj);
+        } else {
+            zaddrs.insert(entry.address);
         }
 
-        for (auto & entry : saplingEntries) {
+        //Map all notes by address
+        std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>>::iterator it;
+        it = mapResults.find(entry.address);
+        if (it != mapResults.end()) {
+            it->second.push_back(entry);
+        } else {
+            std::vector<SaplingNoteEntry> entries;
+            entries.push_back(entry);
+            mapResults[entry.address] = entries;
+        }
+    }
+
+    std::set<std::pair<PaymentAddress, uint256>> nullifierSet = pwalletMain->GetNullifiersForAddresses(zaddrs);
+    for (std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>>::iterator it = mapResults.begin(); it != mapResults.end(); it++) {
+
+        std::vector<SaplingNoteEntry> entries = (*it).second;
+
+        // for (std::set<SaplingNoteEntry>::iterator iit = entries.begin(); iit != entries.end(); iit++) {
+        for (int i = 0; i < entries.size(); i++) {
+            SaplingNoteEntry entry = entries[i];
+
             UniValue obj(UniValue::VOBJ);
 
             int nHeight   = tx_height(entry.op.hash);
@@ -3742,7 +3745,7 @@ UniValue zc_raw_keygen(const UniValue& params, bool fHelp, const CPubKey& mypk)
 }
 
 
-UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
+UniValue z_getnewaddresskey(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
@@ -3756,18 +3759,19 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
 
     if (fHelp || params.size() > 1)
         throw runtime_error(
-            "z_getnewaddress ( type )\n"
-            "\nReturns a new shielded address for receiving payments.\n"
-            "\nWith no arguments, returns a Sprout address.\n"
+            "z_getnewaddresskey ( type )\n"
+            "This creates a new sapling extended spending key and\n"
+            "returns a new shielded address for receiving payments.\n"
+            "\nWith no arguments, returns a Sapling address.\n"
             "\nArguments:\n"
             "1. \"type\"         (string, optional, default=\"" + defaultType + "\") The type of address. One of [\""
             + ADDR_TYPE_SPROUT + "\", \"" + ADDR_TYPE_SAPLING + "\"].\n"
             "\nResult:\n"
             "\"" + strprintf("%s",komodo_chainname()) + "_address\"    (string) The new shielded address.\n"
             "\nExamples:\n"
-            + HelpExampleCli("z_getnewaddress", "")
-            + HelpExampleCli("z_getnewaddress", ADDR_TYPE_SAPLING)
-            + HelpExampleRpc("z_getnewaddress", "")
+            + HelpExampleCli("z_getnewaddresskey", "")
+            + HelpExampleCli("z_getnewaddresskey", ADDR_TYPE_SAPLING)
+            + HelpExampleRpc("z_getnewaddresskey", "")
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -3794,6 +3798,67 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
     }
 }
 
+UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() > 0)
+        throw runtime_error(
+            "z_getnewaddress\n"
+            "\nReturns a new diversified shielded address for receiving payments.\n"
+            "\nResult:\n"
+            "\"" + strprintf("%s",komodo_chainname()) + "_address\"    (string) The new diversified shielded address.\n"
+            "\nExamples:\n"
+            + HelpExampleCli("z_getnewaddress","")
+            + HelpExampleRpc("z_getnewaddress","")
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    EnsureWalletIsUnlocked();
+
+    auto zAddress = pwalletMain->GenerateNewSaplingDiversifiedAddress();
+    pwalletMain->SetZAddressBook(zAddress, "z-sapling", "");
+    return EncodePaymentAddress(zAddress);
+
+}
+
+UniValue z_setprimaryspendingkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "z_setprimaryspendingkey\n"
+            "\nSet the primary spending key used to create diversified payment addresses.\n"
+            "\nResult: Returns True if the spending key was successfully set.\n"
+            "\nExamples:\n"
+            + HelpExampleCli("z_getnewaddress","\"secret-extended-key-.....\"")
+            + HelpExampleRpc("z_getnewaddress","\"secret-extended-key-.....\"")
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    EnsureWalletIsUnlocked();
+
+    string strSecret = params[0].get_str();
+    auto spendingkey = DecodeSpendingKey(strSecret);
+    if (!IsValidSpendingKey(spendingkey)) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid spending key!");
+    }
+
+    if (boost::get<libzcash::SaplingExtendedSpendingKey>(&spendingkey) == nullptr) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Primary key must be a Sapling Extended Spending Key!");
+    }
+
+    const libzcash::SaplingExtendedSpendingKey extsk = *(boost::get<libzcash::SaplingExtendedSpendingKey>(&spendingkey));
+    // const libzcash::SaplingExtendedSpendingKey sk = *extsk;
+
+    return pwalletMain->SetPrimarySpendingKey(extsk);
+
+}
 
 UniValue z_listaddresses(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
@@ -4094,6 +4159,91 @@ UniValue z_getbalance(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return ValueFromAmount(nBalance);
 }
 
+UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() > 1)
+        throw runtime_error(
+            "z_getbalances ( minconf includeWatchonly )\n"
+            "\nReturns array of wallet sapling addresses and balances.\n"
+            "Results are an array of Objects, each of which has:\n"
+            "{address,balance,unconfirmed,spendable}\n"
+            "\nArguments:\n"
+            "1. includeWatchonly (bool, optional, default=false) Also include watchonly addresses (see 'z_importviewingkey')\n"
+            "\nResult\n"
+            "[                             (array of json object)\n"
+            "  {\n"
+            "    \"address\" : \"address\",          (string) the transaction id \n"
+            "    \"balance\" : n             (numeric) confirmed address balance\n"
+            "    \"unconfirmed\" : n             (numeric) unconfirmed address balance\n"
+            "  }\n"
+            "  ,...\n"
+            "]\n"
+            "\nExamples\n"
+            + HelpExampleCli("z_getbalances", "")
+            + HelpExampleCli("z_getbalances", "false")
+            + HelpExampleRpc("z_getbalances", "true")
+        );
+
+    RPCTypeCheck(params, boost::assign::list_of((UniValue::VBOOL)));
+
+
+    bool fIncludeWatchonly = false;
+    if (params.size() > 0) {
+        fIncludeWatchonly = params[0].get_bool();
+    }
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    UniValue results(UniValue::VARR);
+
+    //Get All Notes
+    std::set<libzcash::PaymentAddress> zaddrs = {};
+    std::vector<CSproutNotePlaintextEntry> sproutEntries;
+    std::vector<SaplingNoteEntry> saplingEntries;
+    pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, zaddrs, 0, 99999999, true, !fIncludeWatchonly, false);
+    std::map<libzcash::SaplingPaymentAddress, std::vector<CAmount>> mapResults;
+
+    for (auto & entry : saplingEntries) {
+        //Get Note depths
+        int nHeight   = tx_height(entry.op.hash);
+        int dpowconfs = komodo_dpowconfs(nHeight, entry.confirmations);
+
+        //Map all balances by address
+        std::map<libzcash::SaplingPaymentAddress, std::vector<CAmount>>::iterator it;
+        it = mapResults.find(entry.address);
+        if (it != mapResults.end()) {
+            if (entry.confirmations > 0) {
+                it->second[0] += CAmount(entry.note.value());
+            } else {
+                it->second[1] += CAmount(entry.note.value());
+            }
+        } else {
+            std::vector<CAmount> balance;
+            if (entry.confirmations > 0) {
+                balance.push_back(CAmount(entry.note.value()));
+                balance.push_back(0);
+            } else {
+                balance.push_back(0);
+                balance.push_back(CAmount(entry.note.value()));
+            }
+            mapResults[entry.address] = balance;
+        }
+    }
+
+    for (std::map<libzcash::SaplingPaymentAddress, std::vector<CAmount>>::iterator it = mapResults.begin(); it != mapResults.end(); it++) {
+        UniValue obj(UniValue::VOBJ);
+        obj.push_back(Pair("address", EncodePaymentAddress(it->first)));
+        obj.push_back(Pair("balance", ValueFromAmount(it->second[0])));
+        obj.push_back(Pair("unconfirmed", ValueFromAmount(it->second[1])));
+        obj.push_back(Pair("spendable", HaveSpendingKeyForPaymentAddress(pwalletMain)(it->first)));
+        results.push_back(obj);
+    }
+
+    return results;
+}
 
 UniValue z_gettotalbalance(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
@@ -9658,7 +9808,9 @@ static const CRPCCommand commands[] =
     { "wallet",             "z_getoperationstatus",     &z_getoperationstatus,     true  },
     { "wallet",             "z_getoperationresult",     &z_getoperationresult,     true  },
     { "wallet",             "z_listoperationids",       &z_listoperationids,       true  },
+    { "wallet",             "z_getnewaddresskey",       &z_getnewaddresskey,       true  },
     { "wallet",             "z_getnewaddress",          &z_getnewaddress,          true  },
+    { "wallet",             "z_setprimaryspendingkey",  &z_setprimaryspendingkey,  true  },
     { "wallet",             "z_listaddresses",          &z_listaddresses,          true  },
     { "wallet",             "z_exportkey",              &z_exportkey,              true  },
     { "wallet",             "z_importkey",              &z_importkey,              true  },

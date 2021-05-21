@@ -324,9 +324,9 @@ public:
      * We initialize the height to -1 for the same reason as we do in SproutNoteData.
      * See the comment in that class for a full description.
      */
-    SaplingNoteData() : witnessHeight {-1}, nullifier(), witnessRootValidated {false} { }
-    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk) : ivk {ivk}, witnessHeight {-1}, nullifier(), witnessRootValidated {false} { }
-    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk, uint256 n) : ivk {ivk}, witnessHeight {-1}, nullifier(n), witnessRootValidated {false} { }
+    SaplingNoteData() : witnessHeight {-1}, nullifier(), witnessRootValidated {false}, value {0} { }
+    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk) : ivk {ivk}, witnessHeight {-1}, nullifier(), witnessRootValidated {false}, value {0} { }
+    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk, uint256 n) : ivk {ivk}, witnessHeight {-1}, nullifier(n), witnessRootValidated {false}, value {0} { }
 
     std::list<SaplingWitness> witnesses;
     int witnessHeight;
@@ -335,6 +335,8 @@ public:
 
     //In Memory Only
     bool witnessRootValidated;
+    CAmount value;
+    libzcash::SaplingPaymentAddress address;
 
     ADD_SERIALIZE_METHODS;
 
@@ -642,7 +644,7 @@ public:
     bool InMempool() const;
     bool IsTrusted() const;
 
-    bool WriteToDisk(CWalletDB *pwalletdb);
+    bool WriteToDisk(CWalletDB *pwalletdb, ArchiveTxPoint &arcTxPt, bool updateArcTxPt = false);
     bool WriteArcSproutOpToDisk(CWalletDB *pwalletdb, uint256 nullifier, JSOutPoint op);
     bool WriteArcSaplingOpToDisk(CWalletDB *pwalletdb, uint256 nullifier, SaplingOutPoint op);
 
@@ -861,8 +863,11 @@ public:
     int64_t NullifierCount();
     std::set<uint256> GetNullifiers();
 
+    std::map<std::string, std::set<uint256>> mapAddressTxids;
     std::map<uint256, ArchiveTxPoint> mapArcTxs;
-    void AddToArcTxs(const uint256& wtxid, const ArchiveTxPoint& ArcTxPt);
+    void LoadArcTxs(const uint256& wtxid, const ArchiveTxPoint& arcTxPt);
+    void AddToArcTxs(const uint256& wtxid, ArchiveTxPoint& arcTxPt, bool rescan);
+    void AddToArcTxs(const CWalletTx& wtx, ArchiveTxPoint& arcTxPt, bool rescan);
 
     std::map<uint256, JSOutPoint> mapArcJSOutPoints;
     void AddToArcJSOutPoints(const uint256& nullifier, const JSOutPoint& op);
@@ -900,7 +905,7 @@ protected:
                 // (i.e. are purely transparent), as well as shielding and unshielding
                 // transactions in which we only have transparent addresses involved.
                 if (!(wtx.mapSproutNoteData.empty() && wtx.mapSaplingNoteData.empty())) {
-                    if (!walletdb.WriteTx(wtxItem.first, wtx)) {
+                    if (!walletdb.WriteTx(wtxItem.first, wtx, false)) {
                         LogPrintf("SetBestChain(): Failed to write CWalletTx, aborting atomic write\n");
                         walletdb.TxnAbort();
                         return;
@@ -960,6 +965,8 @@ public:
     std::map<libzcash::SproutPaymentAddress, CKeyMetadata> mapSproutZKeyMetadata;
     std::map<libzcash::SaplingIncomingViewingKey, CKeyMetadata> mapSaplingZKeyMetadata;
 
+    //Key used to create diversified address
+    boost::optional<libzcash::SaplingExtendedSpendingKey> primarySaplingSpendingKey;
     typedef std::map<unsigned int, CMasterKey> MasterKeyMap;
     MasterKeyMap mapMasterKeys;
     unsigned int nMasterKeyMaxID;
@@ -1056,6 +1063,7 @@ public:
     std::map<uint256, SaplingOutPoint> mapSaplingNullifiersToNotes;
 
     std::map<uint256, CWalletTx> mapWallet;
+    bool writeTxFailed = false;
 
     int64_t nOrderPosNext;
     std::map<uint256, int> mapRequestCount;
@@ -1189,6 +1197,11 @@ public:
       */
     //! Generates new Sapling key
     libzcash::SaplingPaymentAddress GenerateNewSaplingZKey();
+    //! Generates new Sapling diversified payment address
+    libzcash::SaplingPaymentAddress GenerateNewSaplingDiversifiedAddress();
+    //Set Primary key for address diversification
+    bool SetPrimarySpendingKey(
+        const libzcash::SaplingExtendedSpendingKey &extsk);
     //! Adds Sapling spending key to the store, and saves it to disk
     bool AddSaplingZKey(
         const libzcash::SaplingExtendedSpendingKey &key,
@@ -1197,6 +1210,13 @@ public:
     bool AddSaplingIncomingViewingKey(
         const libzcash::SaplingIncomingViewingKey &ivk,
         const libzcash::SaplingPaymentAddress &addr);
+    bool AddSaplingDiversifiedAddess(
+        const libzcash::SaplingPaymentAddress &addr,
+        const libzcash::SaplingIncomingViewingKey &ivk,
+        const blob88 &path);
+    bool AddLastDiversifierUsed(
+        const libzcash::SaplingIncomingViewingKey &ivk,
+        const blob88 &path);
     bool AddCryptedSaplingSpendingKey(
         const libzcash::SaplingExtendedFullViewingKey &extfvk,
         const std::vector<unsigned char> &vchCryptedSecret);
@@ -1211,6 +1231,14 @@ public:
     bool LoadSaplingPaymentAddress(
         const libzcash::SaplingPaymentAddress &addr,
         const libzcash::SaplingIncomingViewingKey &ivk);
+
+    bool LoadSaplingDiversifiedAddess(
+        const libzcash::SaplingPaymentAddress &addr,
+        const libzcash::SaplingIncomingViewingKey &ivk,
+        const blob88 &path);
+    bool LoadLastDiversifierUsed(
+        const libzcash::SaplingIncomingViewingKey &ivk,
+        const blob88 &path);
     //! Adds an encrypted spending key to the store, without saving it to disk (used by LoadWallet)
     bool LoadCryptedSaplingZKey(const libzcash::SaplingExtendedFullViewingKey &extfvk,
                                 const std::vector<unsigned char> &vchCryptedSecret);
@@ -1248,7 +1276,7 @@ public:
          uint256 &final_anchor);
     void ReorderWalletTransactions(std::map<std::pair<int,int>, CWalletTx> &mapSorted, int64_t &maxOrderPos);
     void UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletTx> &mapSorted, bool resetOrder);
-    void DeleteTransactions(std::vector<uint256> &removeTxs);
+    void DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<uint256> &removeArcTxs);
     void DeleteWalletTransactions(const CBlockIndex* pindex);
     bool initalizeArcTx();
     int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false, bool fIgnoreBirthday = false);
@@ -1399,6 +1427,7 @@ public:
     boost::signals2::signal<void (CWallet *wallet, const uint256 &hashTx,
             ChangeType status)> NotifyTransactionChanged;
 
+    boost::signals2::signal<void ()> NotifyBalanceChanged;
     /** Show progress e.g. for rescan */
     boost::signals2::signal<void (const std::string &title, int nProgress)> ShowProgress;
 
@@ -1431,6 +1460,9 @@ public:
 
     /* Set the current encrypted HD seed, without saving it to disk (used by LoadWallet) */
     bool LoadCryptedHDSeed(const uint256& seedFp, const std::vector<unsigned char>& seed);
+
+    //Get Address balance for the GUI
+    void getZAddressBalances(std::map<libzcash::PaymentAddress, CAmount> &balances, int minDepth, bool requireSpendingKey);
 
     /* Find notes filtered by payment address, min depth, ability to spend */
     void GetFilteredNotes(std::vector<CSproutNotePlaintextEntry>& sproutEntries,

@@ -100,7 +100,7 @@ public:
     void CloseDb(const std::string& strFile);
     bool RemoveDb(const std::string& strFile);
 
-    DbTxn* TxnBegin(int flags = DB_TXN_WRITE_NOSYNC)
+    DbTxn* TxnBegin(int flags = DB_TXN_SYNC)
     {
         DbTxn* ptxn = NULL;
         int ret = dbenv->txn_begin(NULL, &ptxn, flags);
@@ -138,6 +138,7 @@ protected:
     template <typename K, typename T>
     bool Read(const K& key, T& value)
     {
+        LOCK(bitdb.cs_db);
         if (!pdb)
             return false;
 
@@ -172,6 +173,7 @@ protected:
     template <typename K, typename T>
     bool Write(const K& key, const T& value, bool fOverwrite = true)
     {
+        LOCK(bitdb.cs_db);
         if (!pdb)
             return false;
         if (fReadOnly)
@@ -201,6 +203,7 @@ protected:
     template <typename K>
     bool Erase(const K& key)
     {
+        LOCK(bitdb.cs_db);
         if (!pdb)
             return false;
         if (fReadOnly)
@@ -223,6 +226,7 @@ protected:
     template <typename K>
     bool Exists(const K& key)
     {
+        LOCK(bitdb.cs_db);
         if (!pdb)
             return false;
 
@@ -242,6 +246,7 @@ protected:
 
     Dbc* GetCursor()
     {
+        LOCK(bitdb.cs_db);
         if (!pdb)
             return NULL;
         Dbc* pcursor = NULL;
@@ -253,6 +258,7 @@ protected:
 
     int ReadAtCursor(Dbc* pcursor, CDataStream& ssKey, CDataStream& ssValue, unsigned int fFlags = DB_NEXT)
     {
+        LOCK(bitdb.cs_db);
         // Read at cursor
         Dbt datKey;
         if (fFlags == DB_SET || fFlags == DB_SET_RANGE || fFlags == DB_GET_BOTH || fFlags == DB_GET_BOTH_RANGE) {
@@ -298,6 +304,14 @@ public:
             return false;
         activeTxn = ptxn;
         return true;
+    }
+
+    bool TxnSetTimeout()
+    {
+        if (!pdb || !activeTxn)
+            return false;
+        int ret = activeTxn->set_timeout(10000, DB_SET_TXN_TIMEOUT);
+        return (ret == 0);
     }
 
     bool TxnCommit()

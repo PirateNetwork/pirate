@@ -144,7 +144,6 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
 
 SplashScreen::~SplashScreen()
 {
-    unsubscribeFromCoreSignals();
 }
 
 bool SplashScreen::eventFilter(QObject * obj, QEvent * ev) {
@@ -161,6 +160,7 @@ void SplashScreen::slotFinish(QWidget *mainWin)
 {
     Q_UNUSED(mainWin);
 
+    unsubscribeFromCoreSignals();
     /* If the window is minimized, hide() will be ignored. */
     /* Make sure we de-minimize the splashscreen window before hiding */
     if (isMinimized())
