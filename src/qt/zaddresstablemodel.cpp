@@ -392,7 +392,6 @@ QVariant ZAddressTableModel::data(const QModelIndex &index, int role) const
             return rec->address;
         case Balance:
             {
-                LogPrintf("Address balance %d \n", rec->balance);
                 return KomodoUnits::format(walletModel->getOptionsModel()->getDisplayUnit(), rec->balance, false, KomodoUnits::separatorStandard);
             }
         }
