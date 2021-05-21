@@ -4008,8 +4008,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
         }
         for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
         {
-            if (txListOriginal.count((*it).first))
-                txListOriginal.insert((*it).first);
+            txListOriginal.insert((*it).first);
         }
 
         // no need to read and scan block, if block was created before
