@@ -56,39 +56,6 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
             }
         }
 
-
-        CAmount sproutValueReceived = 0;
-        for (int i = 0; i < arcTx.vZcReceived.size(); i++) {
-            sproutValueReceived += arcTx.vZcReceived[i].amount;
-            auto tx = TransactionRecord();
-            tx.archiveType = arcTx.archiveType;
-            tx.hash = arcTx.txid;
-            tx.time = arcTx.nTime;
-            tx.address = arcTx.vZcReceived[i].encodedAddress;
-            tx.credit = -arcTx.vZcReceived[i].amount;
-            tx.idx = arcTx.vZcReceived[i].jsOutIndex;
-
-            bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZcReceived[i].encodedAddress) != arcTx.spentFrom.end();
-            if (change) {
-                tx.type = TransactionRecord::SendToSelf;
-                partsChange.append(tx);
-            } else {
-                tx.type = TransactionRecord::SendToAddress;
-                parts.append(tx);
-            }
-        }
-
-        if (arcTx.sproutValue - arcTx.sproutValueSpent - sproutValueReceived != 0) {
-            auto tx = TransactionRecord();
-            tx.archiveType = arcTx.archiveType;
-            tx.hash = arcTx.txid;
-            tx.time = arcTx.nTime;
-            tx.address = "Private Sprout Address";
-            tx.credit = -arcTx.sproutValue - arcTx.sproutValueSpent;
-            tx.type = TransactionRecord::SendToAddress;
-            parts.append(tx);
-        }
-
         for (int i = 0; i < arcTx.vZsSend.size(); i++) {
             auto tx = TransactionRecord();
             tx.archiveType = arcTx.archiveType;
@@ -140,26 +107,6 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
             } else {
                 tx.type = TransactionRecord::RecvWithAddress;
             }
-            parts.append(tx);
-        }
-    }
-
-
-    for (int i = 0; i < arcTx.vZcReceived.size(); i++) {
-        auto tx = TransactionRecord();
-        tx.archiveType = arcTx.archiveType;
-        tx.hash = arcTx.txid;
-        tx.time = arcTx.nTime;
-        tx.address = arcTx.vZcReceived[i].encodedAddress;
-        tx.debit = arcTx.vZcReceived[i].amount;
-        tx.idx = arcTx.vZcReceived[i].jsOutIndex;
-
-        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZcReceived[i].encodedAddress) != arcTx.spentFrom.end();
-        if (change) {
-            tx.type = TransactionRecord::SendToSelf;
-            partsChange.append(tx);
-        } else {
-            tx.type = TransactionRecord::RecvWithAddress;
             parts.append(tx);
         }
     }
