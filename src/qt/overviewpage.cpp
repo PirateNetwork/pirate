@@ -79,7 +79,21 @@ public:
         if(amount < 0)
         {
             QSettings settings;
-            if (settings.value("strTheme", "pirate").toString() == "dark") {
+            if (settings.value("strTheme", "armada").toString() == "dark") {
+                foreground = COLOR_NEGATIVE_DARK;
+            } else if (settings.value("strTheme", "armada").toString() == "pirate") {
+                foreground = COLOR_NEGATIVE;
+            } else if (settings.value("strTheme", "armada").toString() == "piratemap") {
+                foreground = COLOR_NEGATIVE_DARK;
+            } else if (settings.value("strTheme", "armada").toString() == "armada") {
+                foreground = COLOR_NEGATIVE_DARK;
+            } else if (settings.value("strTheme", "armada").toString() == "treasure") {
+                foreground = COLOR_NEGATIVE_DARK;
+            } else if (settings.value("strTheme", "armada").toString() == "treasuremap") {
+                foreground = COLOR_NEGATIVE_DARK;
+            } else if (settings.value("strTheme", "armada").toString() == "ghostship") {
+                foreground = COLOR_NEGATIVE_DARK;
+            } else if (settings.value("strTheme", "armada").toString() == "night") {
                 foreground = COLOR_NEGATIVE_DARK;
             } else {
                 foreground = COLOR_NEGATIVE;
@@ -88,9 +102,21 @@ public:
         else if(amount > 0)
         {
             QSettings settings;
-            if (settings.value("strTheme", "pirate").toString() == "dark") {
+            if (settings.value("strTheme", "armada").toString() == "dark") {
                 foreground = COLOR_POSITIVE_DARK;
-            } else if (settings.value("strTheme", "pirate").toString() == "pirate") {
+            } else if (settings.value("strTheme", "armada").toString() == "pirate") {
+                foreground = COLOR_POSITIVE_PIRATE;
+            } else if (settings.value("strTheme", "armada").toString() == "piratemap") {
+                foreground = COLOR_POSITIVE_PIRATE;
+            } else if (settings.value("strTheme", "armada").toString() == "armada") {
+                foreground = COLOR_POSITIVE_PIRATE;
+            } else if (settings.value("strTheme", "armada").toString() == "treasure") {
+                foreground = COLOR_POSITIVE_PIRATE;
+            } else if (settings.value("strTheme", "armada").toString() == "treasuremap") {
+                foreground = COLOR_POSITIVE_PIRATE;
+            } else if (settings.value("strTheme", "armada").toString() == "ghostship") {
+                foreground = COLOR_POSITIVE_PIRATE;
+            } else if (settings.value("strTheme", "armada").toString() == "night") {
                 foreground = COLOR_POSITIVE_PIRATE;
             } else {
                 foreground = COLOR_POSITIVE;

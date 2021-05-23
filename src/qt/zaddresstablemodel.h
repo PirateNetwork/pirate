@@ -8,12 +8,18 @@
 #include <QAbstractTableModel>
 #include <QStringList>
 
+#include "key_io.h"
+
 class ZAddressTablePriv;
 class WalletModel;
 class PlatformStyle;
 class ZSendConfirmationDialog;
 
 class CWallet;
+
+QT_BEGIN_NAMESPACE
+class QTimer;
+QT_END_NAMESPACE
 
 /**
    Qt model of the address book in the core. This allows views to access and modify the address book.
@@ -87,13 +93,22 @@ private:
     EditStatus editStatus;
     const PlatformStyle *platformStyle;
 
+    QTimer *pollTimer;
+    int cachedNumBlocks;
+    bool fForceCheckBalanceChanged;
+
     /** Notify listeners that data changed. */
     void emitDataChanged(int index);
+    void subscribeToCoreSignals();
+    void unsubscribeFromCoreSignals();
 
 public Q_SLOTS:
     /* Update address list from core.
      */
     void updateEntry(const QString &address, const QString &label, bool isMine, const QString &purpose, int status);
+    void updateBalances();
+    void runUpdate();
+    // void updateBalance(const QString &address, const CAmount &balance);
 
     friend class ZAddressTablePriv;
 };

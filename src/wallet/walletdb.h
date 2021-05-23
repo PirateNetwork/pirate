@@ -141,6 +141,46 @@ public:
     {
     }
 
+
+    template <typename K, typename T>
+    bool WriteTxn(const K& key, const T& value, std::string calling, bool fOverwrite = true)
+    {
+
+        LOCK(bitdb.cs_db);
+        bool txnWrite = false;
+        int retries = 0;
+
+        while(!txnWrite) {
+            //Writing transaction to the database
+            if(!TxnBegin()) {
+                LogPrintf("%s: Failed to begin txn, will retry.\n", calling);
+                TxnAbort();
+            } else {
+                TxnSetTimeout();
+                txnWrite = Write(key, value, fOverwrite);
+                if (!txnWrite) {
+                    LogPrintf("%s: Failed to write txn, will retry.\n", calling);
+                    TxnAbort();
+                } else {
+                    if(!TxnCommit()) {
+                      LogPrintf("%s: Failed to commit txn, warning.\n", calling);
+                    }
+                }
+            }
+
+            if (!txnWrite) {
+              MilliSleep(500);
+              retries++;
+            }
+
+            if (retries > 10) {
+              LogPrintf("%s Failed!!! Retry, attempts #%d.\n", calling, retries - 1);
+              return false;
+            }
+        }
+        return true;
+    }
+
     bool WriteName(const std::string& strAddress, const std::string& strName);
     bool EraseName(const std::string& strAddress);
 
@@ -148,7 +188,7 @@ public:
     bool ErasePurpose(const std::string& strAddress);
 
     //Begin Historical Wallet Tx
-    bool WriteArcTx(uint256 hash, ArchiveTxPoint arcTxPoint);
+    bool WriteArcTx(uint256 hash, ArchiveTxPoint arcTxPoint, bool txnProtected);
     bool EraseArcTx(uint256 hash);
     bool WriteArcSproutOp(uint256 nullifier, JSOutPoint op);
     bool EraseArcSproutOp(uint256 nullifier);
@@ -156,7 +196,7 @@ public:
     bool EraseArcSaplingOp(uint256 nullifier);
     //End Historical Wallet Tx
 
-    bool WriteTx(uint256 hash, const CWalletTx& wtx);
+    bool WriteTx(uint256 hash, const CWalletTx& wtx, bool txnProtected);
     bool EraseTx(uint256 hash);
 
     bool WriteKey(const CPubKey& vchPubKey, const CPrivKey& vchPrivKey, const CKeyMetadata &keyMeta);
@@ -215,6 +255,19 @@ public:
                           const CKeyMetadata  &keyMeta);
     bool WriteSaplingPaymentAddress(const libzcash::SaplingPaymentAddress &addr,
                                     const libzcash::SaplingIncomingViewingKey &ivk);
+    //Wrtie the address, ivk and path of diversified address to the wallet
+    bool WriteSaplingDiversifiedAddress(
+        const libzcash::SaplingPaymentAddress &addr,
+        const libzcash::SaplingIncomingViewingKey &ivk,
+        const blob88 &path);
+    //Write the last used diversifier and ivk used
+    bool WriteLastDiversifierUsed(
+        const libzcash::SaplingIncomingViewingKey &ivk,
+        const blob88 &path);
+    //Write the current spending key used to create diversified addresses to the wallet
+    bool WritePrimarySaplingSpendingKey(
+        const libzcash::SaplingExtendedSpendingKey &key);
+
     bool WriteCryptedZKey(const libzcash::SproutPaymentAddress & addr,
                           const libzcash::ReceivingKey & rk,
                           const std::vector<unsigned char>& vchCryptedSecret,

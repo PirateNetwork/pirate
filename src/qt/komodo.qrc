@@ -1,12 +1,24 @@
 <!DOCTYPE RCC><RCC version="1.0">
     <qresource prefix="/stylesheets">
         <file alias="pirate">res/stylesheets/pirate.css</file>
+        <file alias="armada">res/stylesheets/armada.css</file>
+        <file alias="ghostship">res/stylesheets/ghostship.css</file>
+        <file alias="night">res/stylesheets/night.css</file>
+        <file alias="piratemap">res/stylesheets/piratemap.css</file>
+        <file alias="treasure">res/stylesheets/treasure.css</file>
+        <file alias="treasuremap">res/stylesheets/treasuremap.css</file>
         <file alias="dark">res/stylesheets/dark.css</file>
         <file alias="light">res/stylesheets/light.css</file>
     </qresource>
 
     <qresource prefix="/backgrounds">
         <file alias="pirate">res/backgrounds/pirate.png</file>
+        <file alias="piratemap">res/backgrounds/piratemap.png</file>
+        <file alias="armada">res/backgrounds/armada.png</file>
+        <file alias="ghostship">res/backgrounds/ghostship.png</file>
+        <file alias="night">res/backgrounds/night.png</file>
+        <file alias="treasure">res/backgrounds/treasure.png</file>
+        <file alias="treasuremap">res/backgrounds/treasuremap.png</file>
         <file alias="splash">res/backgrounds/splash.png</file>
     </qresource>
 

@@ -417,6 +417,8 @@ void ZSendCoinsDialog::setBalance(const CAmount& balance, const CAmount& unconfi
     if(model && model->getOptionsModel())
     {
         ui->labelBalance->setText(KomodoUnits::formatWithUnit(model->getOptionsModel()->getDisplayUnit(), balance));
+        ui->labelBalance->setVisible(false);
+        ui->label->setVisible(false);
     }
 }
 
@@ -629,7 +631,7 @@ void ZSendCoinsDialog::updatePayFromList()
         return (v1 > v2) || ( (v1 == v2) && ( a1 > a2 ) );
     };
 
-    std::map<libzcash::PaymentAddress, CAmount> zbalances = model->getZAddressBalances();
+    std::map<libzcash::PaymentAddress, CAmount> zbalances = model->getZAddressBalances(1, true);
 
     std::set<std::pair<libzcash::PaymentAddress, CAmount>, ComparatorZ> zbalances_sorted(zbalances.begin(), zbalances.end(), compFunctorZ);
 

@@ -21,6 +21,7 @@
 #include "wallet/walletdb.h"
 
 #include "consensus/validation.h"
+#include "keystore.h"
 #include "key_io.h"
 #include "main.h"
 #include "protocol.h"
@@ -74,10 +75,14 @@ bool CWalletDB::ErasePurpose(const string& strPurpose)
 }
 
 //Begin Historical Wallet Tx
-bool CWalletDB::WriteArcTx(uint256 hash, ArchiveTxPoint arcTxPoint)
+bool CWalletDB::WriteArcTx(uint256 hash, ArchiveTxPoint arcTxPoint, bool txnProtected)
 {
     nWalletDBUpdated++;
-    return Write(std::make_pair(std::string("arctx"), hash), arcTxPoint);
+    if (txnProtected) {
+        return WriteTxn(std::make_pair(std::string("arctx"), hash), arcTxPoint, __FUNCTION__);
+    } else {
+        return Write(std::make_pair(std::string("arctx"), hash), arcTxPoint);
+    }
 }
 
 bool CWalletDB::EraseArcTx(uint256 hash)
@@ -89,7 +94,7 @@ bool CWalletDB::EraseArcTx(uint256 hash)
 bool CWalletDB::WriteArcSproutOp(uint256 nullifier, JSOutPoint op)
 {
     nWalletDBUpdated++;
-    return Write(std::make_pair(std::string("arczcop"), nullifier), op);
+    return WriteTxn(std::make_pair(std::string("arczcop"), nullifier), op, __FUNCTION__);
 }
 
 bool CWalletDB::EraseArcSproutOp(uint256 nullifier)
@@ -101,7 +106,7 @@ bool CWalletDB::EraseArcSproutOp(uint256 nullifier)
 bool CWalletDB::WriteArcSaplingOp(uint256 nullifier, SaplingOutPoint op)
 {
     nWalletDBUpdated++;
-    return Write(std::make_pair(std::string("arczsop"), nullifier), op);
+    return WriteTxn(std::make_pair(std::string("arczsop"), nullifier), op, __FUNCTION__);
 }
 
 bool CWalletDB::EraseArcSaplingOp(uint256 nullifier)
@@ -111,10 +116,14 @@ bool CWalletDB::EraseArcSaplingOp(uint256 nullifier)
 }
 //End Historical Wallet Tx
 
-bool CWalletDB::WriteTx(uint256 hash, const CWalletTx& wtx)
+bool CWalletDB::WriteTx(uint256 hash, const CWalletTx& wtx, bool txnProtected)
 {
     nWalletDBUpdated++;
-    return Write(std::make_pair(std::string("tx"), hash), wtx);
+    if (txnProtected) {
+        return WriteTxn(std::make_pair(std::string("tx"), hash), wtx, __FUNCTION__);
+    } else {
+        return Write(std::make_pair(std::string("tx"), hash), wtx);
+    }
 }
 
 bool CWalletDB::EraseTx(uint256 hash)
@@ -238,6 +247,32 @@ bool CWalletDB::WriteSaplingPaymentAddress(
     nWalletDBUpdated++;
 
     return Write(std::make_pair(std::string("sapzaddr"), addr), ivk, false);
+}
+
+bool CWalletDB::WriteSaplingDiversifiedAddress(
+    const libzcash::SaplingPaymentAddress &addr,
+    const libzcash::SaplingIncomingViewingKey &ivk,
+    const blob88 &path)
+{
+    nWalletDBUpdated++;
+
+    return Write(std::make_pair(std::string("sapzdivaddr"), addr), std::make_pair(ivk, path));
+}
+
+bool CWalletDB::WriteLastDiversifierUsed(
+    const libzcash::SaplingIncomingViewingKey &ivk,
+    const blob88 &path)
+{
+    nWalletDBUpdated++;
+
+    return Write(std::make_pair(std::string("sapzlastdiv"), ivk), path);
+}
+
+bool CWalletDB::WritePrimarySaplingSpendingKey(
+    const libzcash::SaplingExtendedSpendingKey &key)
+{
+    nWalletDBUpdated++;
+    return Write(std::string("pspendkey"), key);
 }
 
 bool CWalletDB::WriteSproutViewingKey(const libzcash::SproutViewingKey &vk)
@@ -450,7 +485,7 @@ DBErrors CWalletDB::ReorderTransactions(CWallet* pwallet)
 
             if (pwtx)
             {
-                if (!WriteTx(pwtx->GetHash(), *pwtx))
+                if (!WriteTx(pwtx->GetHash(), *pwtx, true))
                     return DB_LOAD_FAIL;
             }
             else
@@ -474,7 +509,7 @@ DBErrors CWalletDB::ReorderTransactions(CWallet* pwallet)
             // Since we're changing the order, write it back
             if (pwtx)
             {
-                if (!WriteTx(pwtx->GetHash(), *pwtx))
+                if (!WriteTx(pwtx->GetHash(), *pwtx, true))
                     return DB_LOAD_FAIL;
             }
             else
@@ -496,6 +531,8 @@ public:
     unsigned int nCZKeys;
     unsigned int nZKeyMeta;
     unsigned int nSapZAddrs;
+    unsigned int nArcTx;
+    unsigned int nWalletTx;
     bool fIsEncrypted;
     bool fAnyUnordered;
     int nFileVersion;
@@ -503,6 +540,7 @@ public:
 
     CWalletScanState() {
         nKeys = nCKeys = nKeyMeta = nZKeys = nCZKeys = nZKeyMeta = nSapZAddrs = 0;
+        nArcTx = nWalletTx = 0;
         fIsEncrypted = false;
         fAnyUnordered = false;
         nFileVersion = 0;
@@ -572,25 +610,35 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (wtx.nOrderPos == -1)
                 wss.fAnyUnordered = true;
 
+            wss.nWalletTx++;
             pwallet->AddToWallet(wtx, true, NULL);
         }
         else if (strType == "arctx")
         {
-            uint256 wtxid;
-            ssKey >> wtxid;
-            ArchiveTxPoint ArcTxPt;
-            ssValue >> ArcTxPt;
+            //The ArchiveTxPoint structure was changed. An older version will fail
+            //to deserialize and not be added to the mapArcTx, triggering a full
+            //ZapWalletTxes and Rescan.
+            try
+            {
+                uint256 wtxid;
+                ssKey >> wtxid;
+                ArchiveTxPoint arcTxPt;
+                ssValue >> arcTxPt;
 
-            pwallet->AddToArcTxs(wtxid, ArcTxPt);
+                wss.nArcTx++;
+                pwallet->LoadArcTxs(wtxid, arcTxPt);
+            }
+            catch (...) {}
+
         }
         else if (strType == "arczcop")
         {
-            uint256 nullifier;
-            ssKey >> nullifier;
-            JSOutPoint op;
-            ssValue >> op;
-
-            pwallet->AddToArcJSOutPoints(nullifier, op);
+            // uint256 nullifier;
+            // ssKey >> nullifier;
+            // JSOutPoint op;
+            // ssValue >> op;
+            //
+            // pwallet->AddToArcJSOutPoints(nullifier, op);
         }
         else if (strType == "arczsop")
         {
@@ -633,35 +681,35 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         }
         else if (strType == "vkey")
         {
-            libzcash::SproutViewingKey vk;
-            ssKey >> vk;
-            char fYes;
-            ssValue >> fYes;
-            if (fYes == '1') {
-                pwallet->LoadSproutViewingKey(vk);
-            }
-
-            // Viewing keys have no birthday information for now,
-            // so set the wallet birthday to the beginning of time.
-            pwallet->nTimeFirstKey = 1;
+            // libzcash::SproutViewingKey vk;
+            // ssKey >> vk;
+            // char fYes;
+            // ssValue >> fYes;
+            // if (fYes == '1') {
+            //     pwallet->LoadSproutViewingKey(vk);
+            // }
+            //
+            // // Viewing keys have no birthday information for now,
+            // // so set the wallet birthday to the beginning of time.
+            // pwallet->nTimeFirstKey = 1;
         }
         else if (strType == "zkey")
         {
-            libzcash::SproutPaymentAddress addr;
-            ssKey >> addr;
-            libzcash::SproutSpendingKey key;
-            ssValue >> key;
-
-            if (!pwallet->LoadZKey(key))
-            {
-                strErr = "Error reading wallet database: LoadZKey failed";
-                return false;
-            }
-
-            pwallet->mapZAddressBook[addr].name = "z-sprout";
-            pwallet->mapZAddressBook[addr].purpose = "unknown";
-
-            wss.nZKeys++;
+            // libzcash::SproutPaymentAddress addr;
+            // ssKey >> addr;
+            // libzcash::SproutSpendingKey key;
+            // ssValue >> key;
+            //
+            // if (!pwallet->LoadZKey(key))
+            // {
+            //     strErr = "Error reading wallet database: LoadZKey failed";
+            //     return false;
+            // }
+            //
+            // pwallet->mapZAddressBook[addr].name = "z-sprout";
+            // pwallet->mapZAddressBook[addr].purpose = "unknown";
+            //
+            // wss.nZKeys++;
         }
         else if (strType == "sapzkey")
         {
@@ -797,26 +845,26 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         }
         else if (strType == "czkey")
         {
-            libzcash::SproutPaymentAddress addr;
-            ssKey >> addr;
-            // Deserialization of a pair is just one item after another
-            uint256 rkValue;
-            ssValue >> rkValue;
-            libzcash::ReceivingKey rk(rkValue);
-            vector<unsigned char> vchCryptedSecret;
-            ssValue >> vchCryptedSecret;
-            wss.nCKeys++;
-
-            if (!pwallet->LoadCryptedZKey(addr, rk, vchCryptedSecret))
-            {
-                strErr = "Error reading wallet database: LoadCryptedZKey failed";
-                return false;
-            }
-
-            pwallet->mapZAddressBook[addr].name = "z-sprout";
-            pwallet->mapZAddressBook[addr].purpose = "unknown";
-
-            wss.fIsEncrypted = true;
+            // libzcash::SproutPaymentAddress addr;
+            // ssKey >> addr;
+            // // Deserialization of a pair is just one item after another
+            // uint256 rkValue;
+            // ssValue >> rkValue;
+            // libzcash::ReceivingKey rk(rkValue);
+            // vector<unsigned char> vchCryptedSecret;
+            // ssValue >> vchCryptedSecret;
+            // wss.nCKeys++;
+            //
+            // if (!pwallet->LoadCryptedZKey(addr, rk, vchCryptedSecret))
+            // {
+            //     strErr = "Error reading wallet database: LoadCryptedZKey failed";
+            //     return false;
+            // }
+            //
+            // pwallet->mapZAddressBook[addr].name = "z-sprout";
+            // pwallet->mapZAddressBook[addr].purpose = "unknown";
+            //
+            // wss.fIsEncrypted = true;
         }
         else if (strType == "csapzkey")
         {
@@ -856,16 +904,16 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         }
         else if (strType == "zkeymeta")
         {
-            libzcash::SproutPaymentAddress addr;
-            ssKey >> addr;
-            CKeyMetadata keyMeta;
-            ssValue >> keyMeta;
-            wss.nZKeyMeta++;
-
-            pwallet->LoadZKeyMetadata(addr, keyMeta);
-
-            pwallet->mapZAddressBook[addr].name = "z-sprout";
-            pwallet->mapZAddressBook[addr].purpose = "unknown";
+            // libzcash::SproutPaymentAddress addr;
+            // ssKey >> addr;
+            // CKeyMetadata keyMeta;
+            // ssValue >> keyMeta;
+            // wss.nZKeyMeta++;
+            //
+            // pwallet->LoadZKeyMetadata(addr, keyMeta);
+            //
+            // pwallet->mapZAddressBook[addr].name = "z-sprout";
+            // pwallet->mapZAddressBook[addr].purpose = "unknown";
 
             // ignore earliest key creation time as taddr will exist before any zaddr
         }
@@ -897,6 +945,39 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
 
             pwallet->mapZAddressBook[addr].name = "z-sapling";
             pwallet->mapZAddressBook[addr].purpose = "unknown";
+        }
+        else if (strType == "sapzdivaddr")
+        {
+            libzcash::SaplingPaymentAddress addr;
+            ssKey >> addr;
+            DiversifierPath dPath;
+            ssValue >> dPath;
+
+            if (!pwallet->LoadSaplingDiversifiedAddess(addr, dPath.first, dPath.second))
+            {
+                strErr = "Error reading wallet database: LoadSaplingPaymentAddress failed";
+                return false;
+            }
+        }
+        else if (strType == "sapzlastdiv")
+        {
+            libzcash::SaplingIncomingViewingKey ivk;
+            ssKey >> ivk;
+            blob88 path;
+            ssValue >> path;
+
+            if (!pwallet->LoadLastDiversifierUsed(ivk, path))
+            {
+                strErr = "Error reading wallet database: LoadSaplingPaymentAddress failed";
+                return false;
+            }
+        }
+        else if (strType == "pspendkey")
+        {
+            libzcash::SaplingExtendedSpendingKey key;
+            ssValue >> key;
+
+            pwallet->primarySaplingSpendingKey = key;
         }
         else if (strType == "defaultkey")
         {
@@ -1118,12 +1199,15 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
     LogPrintf("ZKeys: %u plaintext, %u encrypted, %u w/metadata, %u total\n",
            wss.nZKeys, wss.nCZKeys, wss.nZKeyMeta, wss.nZKeys + wss.nCZKeys);
 
+    LogPrintf("Sapling Addresses: %u \n",wss.nSapZAddrs);
+    LogPrintf("ZKeys: %u wallet transactions, %u archived transactions\n", wss.nWalletTx, wss.nArcTx);
+
     // nTimeFirstKey is only reliable if all keys have metadata
     if ((wss.nKeys + wss.nCKeys) != wss.nKeyMeta)
         pwallet->nTimeFirstKey = 1; // 0 would be considered 'no value'
 
     BOOST_FOREACH(uint256 hash, wss.vWalletUpgrade)
-        WriteTx(hash, pwallet->mapWallet[hash]);
+        WriteTx(hash, pwallet->mapWallet[hash], true);
 
     // Rewrite encrypted wallets of versions 0.4.0 and 0.5.0rc:
     if (wss.fIsEncrypted && (wss.nFileVersion == 40000 || wss.nFileVersion == 50000))
@@ -1281,6 +1365,12 @@ void ThreadFlushWalletDB(const string& strFile)
     {
         MilliSleep(500);
 
+        int* aborted = 0;
+        int ret = bitdb.dbenv->lock_detect(0, DB_LOCK_EXPIRE, aborted);
+        if (ret != 0) {
+            LogPrintf("DB Lock detection, %d\n", ret);
+        }
+
         if (nLastSeen != nWalletDBUpdated)
         {
             nLastSeen = nWalletDBUpdated;
@@ -1331,7 +1421,6 @@ bool BackupWallet(const CWallet& wallet, const string& strDest)
     while (true)
     {
         {
-            LOCK(bitdb.cs_db);
             if (!bitdb.mapFileUseCount.count(wallet.strWalletFile) || bitdb.mapFileUseCount[wallet.strWalletFile] == 0)
             {
                 // Flush log data to the dat file

@@ -48,7 +48,6 @@
 #include <QTimer>
 
 /* from rpcwallet.cpp */
-extern CAmount getBalanceZaddr(std::string address, int minDepth = 1, bool ignoreUnspendable=true);
 extern CAmount getBalanceTaddr(std::string transparentAddress, int minDepth=1, bool ignoreUnspendable=true);
 extern uint64_t komodo_interestsum();
 
@@ -1268,57 +1267,31 @@ std::map<CTxDestination, CAmount> WalletModel::getTAddressBalances()
     return balances;
 }
 
-std::map<libzcash::PaymentAddress, CAmount> WalletModel::getZAddressBalances()
+std::map<libzcash::PaymentAddress, CAmount> WalletModel::getZAddressBalances(int minDepth, bool requireSpendingKey)
 {
+    LOCK2(cs_main, wallet->cs_wallet);
     std::map<libzcash::PaymentAddress, CAmount> balances;
+    wallet->getZAddressBalances(balances, minDepth, requireSpendingKey);
+    return balances;
+}
 
-    {
-        LOCK2(cs_main, wallet->cs_wallet);
+CAmount WalletModel::getBalanceZaddr(std::string sAddress, int minDepth, bool requireSpendingKey) const
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    std::map<libzcash::PaymentAddress, CAmount> balances;
+    wallet->getZAddressBalances(balances, 1, true);
 
-        std::set<libzcash::PaymentAddress> zaddrs = {};
-
-        std::set<libzcash::SproutPaymentAddress> sproutzaddrs = {};
-        wallet->GetSproutPaymentAddresses(sproutzaddrs);
-
-        std::set<libzcash::SaplingPaymentAddress> saplingzaddrs = {};
-        wallet->GetSaplingPaymentAddresses(saplingzaddrs);
-
-        zaddrs.insert(sproutzaddrs.begin(), sproutzaddrs.end());
-        zaddrs.insert(saplingzaddrs.begin(), saplingzaddrs.end());
-
-        if (zaddrs.size() > 0)
-        {
-            std::vector<CSproutNotePlaintextEntry> sproutEntries;
-            std::vector<SaplingNoteEntry> saplingEntries;
-            wallet->GetFilteredNotes(sproutEntries, saplingEntries, zaddrs, 1, 9999999, true, true, false);
-
-            for (auto & entry : sproutEntries)
-            {
-                bool hasSproutSpendingKey = wallet->HaveSproutSpendingKey(boost::get<libzcash::SproutPaymentAddress>(entry.address));
-                if (!hasSproutSpendingKey) continue;
-
-                if (!balances.count(entry.address))
-                    balances[entry.address] = 0;
-                balances[entry.address] += CAmount(entry.plaintext.value());
-            }
-
-            for (auto & entry : saplingEntries)
-            {
-                libzcash::SaplingIncomingViewingKey ivk;
-                libzcash::SaplingExtendedFullViewingKey extfvk;
-                wallet->GetSaplingIncomingViewingKey(boost::get<libzcash::SaplingPaymentAddress>(entry.address), ivk);
-                wallet->GetSaplingFullViewingKey(ivk, extfvk);
-                bool hasSaplingSpendingKey = wallet->HaveSaplingSpendingKey(extfvk);
-                if (!hasSaplingSpendingKey) continue;
-
-                if (!balances.count(entry.address))
-                    balances[entry.address] = 0;
-                balances[entry.address] += CAmount(entry.note.value());
+    CAmount balance = 0;
+    for (std::map<libzcash::PaymentAddress, CAmount>::iterator it = balances.begin(); it != balances.end(); it++) {
+        if (sAddress == "") {
+           balance += it->second;
+        } else {
+            if (EncodePaymentAddress(it->first) == sAddress) {
+              balance += it->second;
             }
         }
     }
-
-    return balances;
+    return balance;
 }
 
 CAmount WalletModel::getAddressBalance(const std::string &sAddress)

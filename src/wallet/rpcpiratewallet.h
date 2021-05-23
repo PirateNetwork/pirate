@@ -132,7 +132,10 @@ public:
       CAmount sproutValueSpent = 0;
       CAmount saplingValue = 0;
       int archiveType;
+      std::set<uint256> ivks;
+      std::set<uint256> ovks;
       std::set<string> spentFrom;
+      std::set<string> addresses;
       std::vector<TransactionSpendT> vTSpend;
       std::vector<TransactionSpendZC> vZcSpend;
       std::vector<TransactionSpendZS> vZsSpend;
@@ -169,20 +172,20 @@ void getSproutReceives(RpcTx &tx, vector<TransactionReceivedZC> &vReceived, bool
 
 
 template<typename RpcTx>
-void getSaplingSends(RpcTx &tx, vector<uint256> &ovks, vector<TransactionSendZS> &vSend);
+void getSaplingSends(RpcTx &tx, std::set<uint256> &ovks, std::set<uint256> &ovksOut, vector<TransactionSendZS> &vSend);
 
 template<typename RpcTx>
-void getSaplingSpends(RpcTx &tx, vector<uint256> &ivks, vector<TransactionSpendZS> &vSpend, bool fIncludeWatchonly = false);
+void getSaplingSpends(RpcTx &tx, std::set<uint256> &ivks, std::set<uint256> &ivksOut, vector<TransactionSpendZS> &vSpend, bool fIncludeWatchonly = false);
 
 template<typename RpcTx>
-void getSaplingReceives(RpcTx &tx, vector<uint256> &ivks, vector<TransactionReceivedZS> &vReceived, bool fIncludeWatchonly = false);
+void getSaplingReceives(RpcTx &tx, std::set<uint256> &ivks, std::set<uint256> &ivksOut , vector<TransactionReceivedZS> &vReceived, bool fIncludeWatchonly = false);
 
 void getAllSproutRKs(vector<uint256> &rks);
-void getAllSaplingOVKs(vector<uint256> &ovks, bool fIncludeWatchonly = false);
-void getAllSaplingIVKs(vector<uint256> &ivks, bool fIncludeWatchonly = false);
+void getAllSaplingOVKs(std::set<uint256> &ovks, bool fIncludeWatchonly = false);
+void getAllSaplingIVKs(std::set<uint256> &ivks, bool fIncludeWatchonly = false);
 
-void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, vector<uint256> &ivks, vector<uint256> &ovks, bool fIncludeWatchonly = false);
-void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, vector<uint256> &ivks, vector<uint256> &ovks, bool fIncludeWatchonly = false);
+void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, bool fIncludeWatchonly = false, bool rescan = false);
+void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, bool fIncludeWatchonly = false, bool rescan = false);
 
 void getRpcArcTxJSONHeader(RpcArcTransaction &arcTx, UniValue& ArcTxJSON);
 void getRpcArcTxJSONSpends(RpcArcTransaction &arcTx, UniValue& ArcTxJSON, bool filterAddress = false, string addressString = "");

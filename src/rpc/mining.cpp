@@ -61,7 +61,7 @@ int32_t komodo_newStakerActive(int32_t height, uint32_t timestamp);
  * or over the difficulty averaging window if 'lookup' is nonpositive.
  * If 'height' is nonnegative, compute the estimate at the time when a given block was found.
  */
-int64_t GetNetworkHashPS(int lookup, int height) 
+int64_t GetNetworkHashPS(int lookup, int height)
 {
     CBlockIndex *pb = chainActive.LastTip();
 
@@ -229,7 +229,7 @@ UniValue generate(const UniValue& params, bool fHelp, const CPubKey& mypk)
             mapArgs["disablemining"] = "1";
             throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Mining Disabled");
         }
-        else 
+        else
         {
             mapArgs["disablemining"] = "0";
             throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Mining Enabled");
@@ -449,7 +449,7 @@ UniValue genminingCSV(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
     return(result);
 }
-                            
+
 UniValue getmininginfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (fHelp || params.size() != 0)
@@ -637,7 +637,7 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp, const CPubKey& myp
         throw JSONRPCError(RPC_METHOD_NOT_FOUND, "komodod compiled without wallet and -mineraddress not set");
 #endif
     }
-    
+
     if ( GetArg("disablemining",false) )
         throw JSONRPCError(RPC_TYPE_ERROR, "Mining is Disabled");
 
@@ -1076,12 +1076,12 @@ UniValue getblocksubsidy(const UniValue& params, bool fHelp, const CPubKey& mypk
     int nHeight = (params.size()==1) ? params[0].get_int() : chainActive.Height();
     if (nHeight < 0)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Block height out of range");
-    
+
     CAmount nFoundersReward = 0;
     CAmount nReward = GetBlockSubsidy(nHeight, Params().GetConsensus());
     UniValue result(UniValue::VOBJ);
     result.push_back(Pair("miner", ValueFromAmount(nReward)));
-    
+
     if ( strlen(ASSETCHAINS_OVERRIDE_PUBKEY.c_str()) == 66 || ASSETCHAINS_SCRIPTPUB.size() > 1 )
     {
         if ( ASSETCHAINS_FOUNDERS == 0 && ASSETCHAINS_COMMISSION != 0 )

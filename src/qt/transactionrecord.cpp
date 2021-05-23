@@ -45,6 +45,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
             tx.address = arcTx.vTSend[i].encodedAddress;
             tx.debit = arcTx.vTSend[i].amount;
             tx.idx = arcTx.vTSend[i].vout;
+            tx.involvesWatchAddress = !arcTx.vTSend[i].mine;
 
             bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vTSend[i].encodedAddress) != arcTx.spentFrom.end();
             if (change) {
@@ -56,39 +57,6 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
             }
         }
 
-
-        CAmount sproutValueReceived = 0;
-        for (int i = 0; i < arcTx.vZcReceived.size(); i++) {
-            sproutValueReceived += arcTx.vZcReceived[i].amount;
-            auto tx = TransactionRecord();
-            tx.archiveType = arcTx.archiveType;
-            tx.hash = arcTx.txid;
-            tx.time = arcTx.nTime;
-            tx.address = arcTx.vZcReceived[i].encodedAddress;
-            tx.credit = -arcTx.vZcReceived[i].amount;
-            tx.idx = arcTx.vZcReceived[i].jsOutIndex;
-
-            bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZcReceived[i].encodedAddress) != arcTx.spentFrom.end();
-            if (change) {
-                tx.type = TransactionRecord::SendToSelf;
-                partsChange.append(tx);
-            } else {
-                tx.type = TransactionRecord::SendToAddress;
-                parts.append(tx);
-            }
-        }
-
-        if (arcTx.sproutValue - arcTx.sproutValueSpent - sproutValueReceived != 0) {
-            auto tx = TransactionRecord();
-            tx.archiveType = arcTx.archiveType;
-            tx.hash = arcTx.txid;
-            tx.time = arcTx.nTime;
-            tx.address = "Private Sprout Address";
-            tx.credit = -arcTx.sproutValue - arcTx.sproutValueSpent;
-            tx.type = TransactionRecord::SendToAddress;
-            parts.append(tx);
-        }
-
         for (int i = 0; i < arcTx.vZsSend.size(); i++) {
             auto tx = TransactionRecord();
             tx.archiveType = arcTx.archiveType;
@@ -97,6 +65,8 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
             tx.address = arcTx.vZsSend[i].encodedAddress;
             tx.credit = -arcTx.vZsSend[i].amount;
             tx.idx = arcTx.vZsSend[i].shieldedOutputIndex;
+            tx.involvesWatchAddress = !arcTx.vZsSend[i].mine;
+
             if (arcTx.vZsSend[i].memoStr.length() != 0) {
                 tx.memo = arcTx.vZsSend[i].memoStr;
             }
@@ -129,6 +99,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
         tx.address = arcTx.vTReceived[i].encodedAddress;
         tx.debit = arcTx.vTReceived[i].amount;
         tx.idx = arcTx.vTReceived[i].vout;
+        tx.involvesWatchAddress = !arcTx.vTReceived[i].spendable;
 
         bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vTReceived[i].encodedAddress) != arcTx.spentFrom.end();
         if (change) {
@@ -144,26 +115,6 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
         }
     }
 
-
-    for (int i = 0; i < arcTx.vZcReceived.size(); i++) {
-        auto tx = TransactionRecord();
-        tx.archiveType = arcTx.archiveType;
-        tx.hash = arcTx.txid;
-        tx.time = arcTx.nTime;
-        tx.address = arcTx.vZcReceived[i].encodedAddress;
-        tx.debit = arcTx.vZcReceived[i].amount;
-        tx.idx = arcTx.vZcReceived[i].jsOutIndex;
-
-        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZcReceived[i].encodedAddress) != arcTx.spentFrom.end();
-        if (change) {
-            tx.type = TransactionRecord::SendToSelf;
-            partsChange.append(tx);
-        } else {
-            tx.type = TransactionRecord::RecvWithAddress;
-            parts.append(tx);
-        }
-    }
-
     for (int i = 0; i < arcTx.vZsReceived.size(); i++) {
         auto tx = TransactionRecord();
         tx.archiveType = arcTx.archiveType;
@@ -172,6 +123,8 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
         tx.address = arcTx.vZsReceived[i].encodedAddress;
         tx.debit = arcTx.vZsReceived[i].amount;
         tx.idx = arcTx.vZsReceived[i].shieldedOutputIndex;
+        tx.involvesWatchAddress = !arcTx.vZsReceived[i].spendable;
+        
         if (arcTx.vZsReceived[i].memoStr.length() != 0) {
             tx.memo = arcTx.vZsReceived[i].memoStr;
         }

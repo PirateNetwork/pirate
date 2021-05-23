@@ -397,9 +397,13 @@ class ArchiveTxPoint
 public:
     uint256 hashBlock;
     int nIndex;
+    std::set<uint256> ivks;
+    std::set<uint256> ovks;
 
     ArchiveTxPoint() { SetNull(); }
     ArchiveTxPoint(uint256 hashIn, int nIn) { hashBlock = hashIn; nIndex = nIn; }
+    ArchiveTxPoint(uint256 hashIn, int nIn, std::set<uint256> nIvks, std::set<uint256> nOvks)
+      { hashBlock = hashIn; nIndex = nIn; ivks = nIvks; ovks = nOvks;}
 
     ADD_SERIALIZE_METHODS;
 
@@ -407,10 +411,12 @@ public:
     inline void SerializationOp(Stream& s, Operation ser_action) {
         READWRITE(hashBlock);
         READWRITE(nIndex);
+        READWRITE(ivks);
+        READWRITE(ovks);
     }
 
-    void SetNull() { hashBlock.SetNull(); nIndex = -1; }
-    bool IsNull() const { return (hashBlock.IsNull() && nIndex == -1); }
+    void SetNull() { hashBlock.SetNull(); nIndex = -1; ivks.clear(); ovks.clear(); }
+    bool IsNull() const { return (hashBlock.IsNull() && nIndex == -1 && ivks.size() == 0 && ovks.size() == 0); }
 };
 
 /** An input of a transaction.  It contains the location of the previous

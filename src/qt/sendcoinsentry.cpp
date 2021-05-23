@@ -77,15 +77,15 @@ void SendCoinsEntry::on_pasteButton_clicked()
 
 void SendCoinsEntry::on_addressBookButton_clicked()
 {
-    if(!model)
-        return;
-    ZAddressBookPage dlg(platformStyle, ZAddressBookPage::ForSelection, ZAddressBookPage::SendingTab, this);
-    dlg.setModel(model->getZAddressTableModel());
-    if(dlg.exec())
-    {
-        ui->payTo->setText(dlg.getReturnValue());
-        ui->payAmount->setFocus();
-    }
+    // if(!model)
+    //     return;
+    // ZAddressBookPage dlg(platformStyle, ZAddressBookPage::ForSelection, ZAddressBookPage::SendingTab, this);
+    // dlg.setModel(model->getZAddressTableModel());
+    // if(dlg.exec())
+    // {
+    //     ui->payTo->setText(dlg.getReturnValue());
+    //     ui->payAmount->setFocus();
+    // }
 }
 
 void SendCoinsEntry::on_payTo_textChanged(const QString &address)

@@ -108,6 +108,16 @@ public:
         libzcash::SaplingIncomingViewingKey& ivkOut) const =0;
     virtual void GetSaplingPaymentAddresses(std::set<libzcash::SaplingPaymentAddress> &setAddress) const =0;
 
+    //! Sapling diversified addfresses
+    virtual bool AddSaplingDiversifiedAddess(
+        const libzcash::SaplingPaymentAddress &addr,
+        const libzcash::SaplingIncomingViewingKey &ivk,
+        const blob88 &path) =0;
+
+    virtual bool AddLastDiversifierUsed(
+        const libzcash::SaplingIncomingViewingKey &ivk,
+        const blob88 &path) =0;
+
     //! Support for Sprout viewing keys
     virtual bool AddSproutViewingKey(const libzcash::SproutViewingKey &vk) =0;
     virtual bool RemoveSproutViewingKey(const libzcash::SproutViewingKey &vk) =0;
@@ -131,6 +141,14 @@ typedef std::map<libzcash::SaplingExtendedFullViewingKey, libzcash::SaplingExten
 typedef std::map<libzcash::SaplingIncomingViewingKey, libzcash::SaplingExtendedFullViewingKey> SaplingFullViewingKeyMap;
 // Only maps from default addresses to ivk, may need to be reworked when adding diversified addresses.
 typedef std::map<libzcash::SaplingPaymentAddress, libzcash::SaplingIncomingViewingKey> SaplingIncomingViewingKeyMap;
+typedef std::set<libzcash::SaplingIncomingViewingKey> SaplingIncomingViewingKeySet;
+typedef std::set<uint256> SaplingOutgoingViewingKeySet;
+
+//diversified addresses
+typedef std::pair<libzcash::SaplingIncomingViewingKey, blob88> DiversifierPath;
+typedef std::map<libzcash::SaplingPaymentAddress, DiversifierPath> SaplingPaymentAddresses;
+
+typedef std::map<libzcash::SaplingIncomingViewingKey, blob88> LastDiversifierPath;
 
 /** Basic key store, that keeps keys in an address->secret map */
 class CBasicKeyStore : public CKeyStore
@@ -148,6 +166,10 @@ protected:
     SaplingSpendingKeyMap mapSaplingSpendingKeys;
     SaplingFullViewingKeyMap mapSaplingFullViewingKeys;
     SaplingIncomingViewingKeyMap mapSaplingIncomingViewingKeys;
+    SaplingIncomingViewingKeySet setSaplingIncomingViewingKeys;
+    SaplingOutgoingViewingKeySet setSaplingOutgoingViewingKeys;
+    SaplingPaymentAddresses mapSaplingPaymentAddresses;
+    LastDiversifierPath mapLastDiversifierPath;
 
 public:
     bool SetHDSeed(const HDSeed& seed);
@@ -259,6 +281,19 @@ public:
     }
 
     //! Sapling
+    void GetSaplingIncomingViewingKeySet(SaplingIncomingViewingKeySet &ivks) {
+        LOCK(cs_SpendingKeyStore);
+        for (SaplingIncomingViewingKeySet::iterator it = setSaplingIncomingViewingKeys.begin(); it != setSaplingIncomingViewingKeys.end(); it++) {
+            ivks.insert(*it);
+        }
+    }
+    void GetSaplingOutgoingViewingKeySet(SaplingOutgoingViewingKeySet &ovks) {
+        LOCK(cs_SpendingKeyStore);
+        for (SaplingOutgoingViewingKeySet::iterator it = setSaplingOutgoingViewingKeys.begin(); it != setSaplingOutgoingViewingKeys.end(); it++) {
+            ovks.insert(*it);
+        }
+    }
+
     bool AddSaplingSpendingKey(
         const libzcash::SaplingExtendedSpendingKey &sk);
     bool HaveSaplingSpendingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk) const
@@ -317,6 +352,16 @@ public:
             }
         }
     }
+
+    //! Sapling diversified addfresses
+    virtual bool AddSaplingDiversifiedAddess(
+        const libzcash::SaplingPaymentAddress &addr,
+        const libzcash::SaplingIncomingViewingKey &ivk,
+        const blob88 &path);
+
+    virtual bool AddLastDiversifierUsed(
+        const libzcash::SaplingIncomingViewingKey &ivk,
+        const blob88 &path);
 
     virtual bool AddSproutViewingKey(const libzcash::SproutViewingKey &vk);
     virtual bool RemoveSproutViewingKey(const libzcash::SproutViewingKey &vk);

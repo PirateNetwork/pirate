@@ -1699,9 +1699,13 @@ int8_t equihash_params_possible(uint64_t n, uint64_t k)
 void komodo_args(char *argv0)
 {
     std::string name,addn,hexstr,symbol; char *dirname,fname[512],arg0str[64],magicstr[9]; uint8_t magic[4],extrabuf[32756],disablebits[32],*extraptr=0;
-    FILE *fp; uint64_t val; uint16_t port; int32_t i,nonz=0,baseid,len,n,extralen = 0; uint64_t ccenables[256], ccEnablesHeight[512] = {0}; CTransaction earlytx; uint256 hashBlock;
+    FILE *fp; uint64_t val; uint16_t port, dest_rpc_port; int32_t i,nonz=0,baseid,len,n,extralen = 0; uint64_t ccenables[256], ccEnablesHeight[512] = {0}; CTransaction earlytx; uint256 hashBlock;
 
-    IS_KOMODO_NOTARY = GetBoolArg("-notary", false);
+    std::string ntz_dest_path;
+    ntz_dest_path = GetArg("-notary", "");
+    IS_KOMODO_NOTARY = ntz_dest_path == "" ? 0 : 1;
+
+
     IS_STAKED_NOTARY = GetArg("-stakednotary", -1);
     KOMODO_NSPV = GetArg("-nSPV",0);
     memset(ccenables,0,sizeof(ccenables));
@@ -1752,7 +1756,7 @@ void komodo_args(char *argv0)
     SoftSetArg("-ac_halving", std::string("77777"));
 
     SoftSetArg("-addnode", std::string("zero.kolo.supernet.org"));
-    vector<string> PIRATEnodes = { "136.243.58.134","209.250.227.29","195.201.230.227","159.89.45.197","67.207.94.69","178.63.77.56","94.45.155.6","195.93.180.221","51.83.3.42","45.76.232.40","139.99.208.174" };
+    vector<string> PIRATEnodes = { "explorer.pirate.black","78.63.47.105","46.4.67.239","139.99.145.129","94.130.32.156","173.212.200.221","66.248.204.186","91.206.15.138","217.69.15.197","38.91.101.236","49.12.83.114","158.69.26.155","51.81.56.52","84.38.184.139" };
     mapMultiArgs["-addnode"] = PIRATEnodes;
 		name = GetArg("-ac_name","");
     if ( argv0 != 0 )
@@ -2343,27 +2347,27 @@ fprintf(stderr,"extralen.%d before disable bits\n",extralen);
                 fname[strlen(fname)-1] = 0;
             if ( iter == 0 )
                 strcat(fname,"Komodo\\komodo.conf");
-            else strcat(fname,"Bitcoin\\bitcoin.conf");
+            else strcat(fname,ntz_dest_path.c_str());
 #else
             while ( fname[strlen(fname)-1] != '/' )
                 fname[strlen(fname)-1] = 0;
 #ifdef __APPLE__
             if ( iter == 0 )
                 strcat(fname,"Komodo/Komodo.conf");
-            else strcat(fname,"Bitcoin/Bitcoin.conf");
+            else strcat(fname,ntz_dest_path.c_str());
 #else
             if ( iter == 0 )
                 strcat(fname,".komodo/komodo.conf");
-            else strcat(fname,".bitcoin/bitcoin.conf");
+            else strcat(fname,ntz_dest_path.c_str());
 #endif
 #endif
             if ( (fp= fopen(fname,"rb")) != 0 )
             {
-                _komodo_userpass(username,password,fp);
+                dest_rpc_port = _komodo_userpass(username,password,fp);
+                DEST_PORT = iter == 1 ? dest_rpc_port : 0;
                 sprintf(iter == 0 ? KMDUSERPASS : BTCUSERPASS,"%s:%s",username,password);
                 fclose(fp);
-                //printf("KOMODO.(%s) -> userpass.(%s)\n",fname,KMDUSERPASS);
-            } //else printf("couldnt open.(%s)\n",fname);
+            } else printf("couldnt open.(%s) will not validate dest notarizations\n",fname);
             if ( IS_KOMODO_NOTARY == 0 )
                 break;
         }
@@ -2502,4 +2506,11 @@ void komodo_prefetch(FILE *fp)
         }
     }
     fseek(fp,fpos,SEEK_SET);
+}
+
+// check if block timestamp is more than S5 activation time
+// this function is to activate the ExtractDestination fix 
+bool komodo_is_vSolutionsFixActive()
+{
+    return GetLatestTimestamp(komodo_currentheight()) > nS5Timestamp;
 }

@@ -734,7 +734,7 @@ void RPCConsole::clear(bool clearHistory)
     // Set default style sheet
     QFontInfo fixedFontInfo(GUIUtil::fixedPitchFont());
     QSettings settings;
-    if (settings.value("strTheme", "pirate").toString() == "pirate") {
+    if (settings.value("strTheme", "armada").toString() == "pirate") {
         ui->messagesWidget->document()->setDefaultStyleSheet(
         QString(
         "table { }"
@@ -745,7 +745,7 @@ void RPCConsole::clear(bool clearHistory)
         ".secwarning { color: #ff4e4e; }"
         "b { color: #4cb24c; }").arg(fixedFontInfo.family(), QString("%1pt").arg(consoleFontSize))
       );
-    } else if (settings.value("strTheme", "pirate").toString() == "dark") {
+    } else if (settings.value("strTheme", "armada").toString() == "dark") {
         ui->messagesWidget->document()->setDefaultStyleSheet(
         QString(
         "table { }"

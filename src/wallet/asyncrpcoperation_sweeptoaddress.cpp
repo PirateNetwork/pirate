@@ -14,7 +14,7 @@
 
 CAmount fSweepTxFee = DEFAULT_SWEEP_FEE;
 bool fSweepMapUsed = false;
-const int SWEEP_EXPIRY_DELTA = 15;
+const int SWEEP_EXPIRY_DELTA = 40;
 boost::optional<libzcash::SaplingPaymentAddress> rpcSweepAddress;
 
 AsyncRPCOperation_sweeptoaddress::AsyncRPCOperation_sweeptoaddress(int targetHeight, bool fromRpc) : targetHeight_(targetHeight), fromRPC_(fromRpc){}
@@ -81,8 +81,8 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
 
     std::vector<CSproutNotePlaintextEntry> sproutEntries;
     std::vector<SaplingNoteEntry> saplingEntries;
-    std::set<libzcash::SaplingPaymentAddress> addresses;
     libzcash::SaplingPaymentAddress sweepAddress;
+    std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>> mapAddresses;
 
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -102,7 +102,6 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
             } else {
                 return false;
             }
-            pwalletMain->GetSaplingPaymentAddresses(addresses);
         } else {
             if (boost::get<libzcash::SaplingPaymentAddress>(&rpcSweepAddress) != nullptr) {
                 sweepAddress = boost::get<libzcash::SaplingPaymentAddress>(rpcSweepAddress);
@@ -111,8 +110,22 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
             }
         }
 
-        //List of all wallet addresses
-        pwalletMain->GetSaplingPaymentAddresses(addresses);
+        for (auto & entry : saplingEntries) {
+            //Map all notes by address
+            if (sweepAddress == entry.address) {
+                continue;
+            } else {
+                std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>>::iterator it;
+                it = mapAddresses.find(entry.address);
+                if (it != mapAddresses.end()) {
+                    it->second.push_back(entry);
+                } else {
+                    std::vector<SaplingNoteEntry> entries;
+                    entries.push_back(entry);
+                    mapAddresses[entry.address] = entries;
+                }
+            }
+        }
     }
 
     int numTxCreated = 0;
@@ -121,10 +134,9 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
     CCoinsViewCache coinsView(pcoinsTip);
     bool sweepComplete = true;
 
-    for (auto addr : addresses) {
-        if (addr == sweepAddress) {
-          continue; //Dont sweep from the sweep addresses
-        }
+    for (std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>>::iterator it = mapAddresses.begin(); it != mapAddresses.end(); it++) {
+        auto addr = (*it).first;
+        auto saplingEntries = (*it).second;
 
         libzcash::SaplingExtendedSpendingKey extsk;
         if (pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
@@ -141,7 +153,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
               libzcash::SaplingIncomingViewingKey ivk;
               pwalletMain->GetSaplingIncomingViewingKey(boost::get<libzcash::SaplingPaymentAddress>(saplingEntry.address), ivk);
 
-              if (ivk == extsk.expsk.full_viewing_key().in_viewing_key()) {
+              if (ivk == extsk.expsk.full_viewing_key().in_viewing_key() && saplingEntry.address == addr) {
                 noteCount ++;
               }
             }
@@ -160,7 +172,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
                 pwalletMain->GetSaplingIncomingViewingKey(boost::get<libzcash::SaplingPaymentAddress>(saplingEntry.address), ivk);
 
                 //Select Notes from that same address we will be sending to.
-                if (ivk == extsk.expsk.full_viewing_key().in_viewing_key()) {
+                if (ivk == extsk.expsk.full_viewing_key().in_viewing_key() && saplingEntry.address == addr) {
                   amountToSend += CAmount(saplingEntry.note.value());
                   fromNotes.push_back(saplingEntry);
                 }
@@ -180,6 +192,10 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
             }
             amountSwept += amountToSend;
             auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
+            {
+                LOCK2(cs_main, pwalletMain->cs_wallet);
+                builder.SetExpiryHeight(chainActive.Tip()->GetHeight()+ SWEEP_EXPIRY_DELTA);
+            }
             LogPrint("zrpcunsafe", "%s: Beginning creating transaction with Sapling output amount=%s\n", getId(), FormatMoney(amountToSend - fee));
 
             // Select Sapling notes
