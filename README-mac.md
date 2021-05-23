@@ -16,7 +16,7 @@ brew bundle
 or 
 
 ```shell
-brew tap discoteq/discoteq; brew install flock autoconf autogen automake gcc@6 binutils protobuf coreutils wget
+brew tap discoteq/discoteq; brew install flock autoconf autogen automake gcc@8 binutils protobuf coreutils wget
 ```
 
 Get all that installed, then run:

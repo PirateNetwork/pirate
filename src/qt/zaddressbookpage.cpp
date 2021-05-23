@@ -43,50 +43,13 @@ ZAddressBookPage::ZAddressBookPage(const PlatformStyle *platformStyle, Mode _mod
         ui->deleteAddress->setIcon(platformStyle->SingleColorIcon(":/icons/remove"));
         ui->exportButton->setIcon(platformStyle->SingleColorIcon(":/icons/export"));
     }
-/*
-<<<<<<< HEAD
-    switch(mode)
-    {
-    case ForSelection:
-        switch(tab)
-        {
-        case SendingTab: setWindowTitle(tr("Choose the z-address to send coins to")); break;
-        case ReceivingTab: setWindowTitle(tr("Choose the z-address to receive coins with")); break;
-        }
-        connect(ui->tableView, SIGNAL(doubleClicked(QModelIndex)), this, SLOT(accept()));
-        ui->tableView->setEditTriggers(QAbstractItemView::NoEditTriggers);
-        ui->tableView->setFocus();
-        ui->closeButton->setText(tr("C&hoose"));
-        ui->exportButton->hide();
-        break;
-    case ForEditing:
-        switch(tab)
-        {
-        case SendingTab: setWindowTitle(tr("Sending z-addresses")); break;
-        case ReceivingTab: setWindowTitle(tr("Receiving z-addresses")); break;
-        }
-        break;
-    }
-    switch(tab)
-    {
-      case SendingTab:
-          ui->labelExplanation->setText(tr("These are your Pirate z-addresses for sending payments. Always check the amount and the receiving z-address before sending coins."));
-          ui->deleteAddress->setVisible(false);
-          break;
-      case ReceivingTab:
-          ui->labelExplanation->setText(tr("These are your Pirate z-addresses for receiving payments. Share one with somebody that wants to send ARRR to you."));
-          ui->deleteAddress->setVisible(false);
-          break;
-    }
-=======
-*/
     ui->tableView->setEditTriggers(QAbstractItemView::NoEditTriggers);
     ui->tableView->setFocus();
 
     setWindowTitle(tr("Receiving z-addresses"));
     ui->labelExplanation->setText(tr("These are your Pirate z-addresses for receiving payments. It is recommended to use a new receiving z-address for each transaction."));
-//>>>>>>> 4966cc94daae13660d19c256a8d4d8f53ff28151
-
+    ui->labelExplanation->setVisible(false);
+    
     //Hide close button
     ui->closeButton->hide();
     ui->exportButton->hide();

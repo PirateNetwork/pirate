@@ -68,10 +68,12 @@ AddressBookPage::AddressBookPage(const PlatformStyle *platformStyle, Mode _mode,
     {
     case SendingTab:
         ui->labelExplanation->setText(tr("These are your Pirate addresses for sending payments. Always check the amount and the receiving address before sending coins."));
+        ui->labelExplanation->setVisible(false);
         ui->deleteAddress->setVisible(true);
         break;
     case ReceivingTab:
         ui->labelExplanation->setText(tr("These are your Pirate addresses for receiving payments. It is recommended to use a new receiving address for each transaction."));
+        ui->labelExplanation->setVisible(false);
         ui->deleteAddress->setVisible(false);
         break;
     }

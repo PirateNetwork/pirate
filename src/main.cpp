@@ -4691,6 +4691,13 @@ bool ActivateBestChain(bool fSkipdpow, CValidationState &state, CBlock *pblock) 
             }
             // Notify external listeners about the new tip.
             GetMainSignals().UpdatedBlockTip(pindexNewTip);
+
+            //Notify UI
+            if (pindexNewTip->GetHeight() % 100 == 0)
+            {
+                uiInterface.InitMessage(_(("Activating best chain - Currently on block " + std::to_string(pindexNewTip->GetHeight())).c_str()));
+            }
+
             //            uiInterface.NotifyBlockTip(hashNewTip);
             if (pindexFork != pindexNewTip) {
                 uiInterface.NotifyBlockTip(fInitialDownload, pindexNewTip);
