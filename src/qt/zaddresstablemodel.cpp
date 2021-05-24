@@ -116,7 +116,7 @@ public:
 
         std::map<QString, CAmount> stringBalances;
         std::map<libzcash::PaymentAddress, CAmount> balances;
-        wallet->getZAddressBalances(balances, 1, false);
+        wallet->getZAddressBalances(balances, 0, false);
 
 
         std::set<libzcash::SaplingPaymentAddress> addresses;
