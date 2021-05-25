@@ -743,6 +743,7 @@ wallet_utility_LDADD = \
 	$(BDB_LIBS) \
 	$(CRYPTO_LIBS) \
 	$(LIBZCASH) \
+	$(LIBRUSTZCASH) \
 	$(LIBSNARK) \
 	$(LIBZCASH_LIBS)\
   $(LIBCRYPTOCONDITIONS)

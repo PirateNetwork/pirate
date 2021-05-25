@@ -1358,7 +1358,7 @@ bool ContextualCheckTransaction(int32_t slowflag,const CBlock *block, CBlockInde
             if (!librustzcash_sapling_check_output(
                 ctx,
                 output.cv.begin(),
-                output.cm.begin(),
+                output.cmu.begin(),
                 output.ephemeralKey.begin(),
                 output.zkproof.begin()
             ))
@@ -3750,7 +3750,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         }
 
         BOOST_FOREACH(const OutputDescription &outputDescription, tx.vShieldedOutput) {
-            sapling_tree.append(outputDescription.cm);
+            sapling_tree.append(outputDescription.cmu);
         }
 
         vPos.push_back(std::make_pair(tx.GetHash(), pos));
@@ -4189,7 +4189,7 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
              if ( !GetBoolArg("-disablewallet", false) && KOMODO_NSPV_FULLNODE )
                  pwalletMain->EraseFromWallet(tx.GetHash());
 #endif
-        } else SyncWithWallets(tx, NULL);
+        } else SyncWithWallets(tx, NULL, pindexDelete->GetHeight());
     }
     // Update cached incremental witnesses
     GetMainSignals().ChainTip(pindexDelete, &block, newSproutTree, newSaplingTree, false);
@@ -4343,11 +4343,11 @@ bool static ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *
         // Tell wallet about transactions that went from mempool
         // to conflicted:
         BOOST_FOREACH(const CTransaction &tx, txConflicted) {
-            SyncWithWallets(tx, NULL);
+            SyncWithWallets(tx, NULL, pindexNew->GetHeight());
         }
         // ... and about transactions that got confirmed:
         BOOST_FOREACH(const CTransaction &tx, pblock->vtx) {
-            SyncWithWallets(tx, pblock);
+            SyncWithWallets(tx, pblock, pindexNew->GetHeight());
         }
     }
     // Update cached incremental witnesses
@@ -5357,7 +5357,7 @@ bool CheckBlock(int32_t *futureblockp,int32_t height,CBlockIndex *pindex,const C
 
     if (ptx)
     {
-        SyncWithWallets(*ptx, &block);
+        SyncWithWallets(*ptx, &block, pindex->GetHeight());
     }
 
     if ( ASSETCHAINS_CC != 0 )

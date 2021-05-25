@@ -1,5 +1,6 @@
 #include "chainparams.h"
 #include "consensus/params.h"
+#include "consensus/consensus.h"
 #include "consensus/validation.h"
 #include "key_io.h"
 #include "main.h"
@@ -330,6 +331,40 @@ TEST(TransactionBuilder, SetFee)
     }
 
     // Revert to default
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+    RegtestDeactivateSapling();
+}
+
+TEST(TransactionBuilder, CheckSaplingTxVersion)
+{
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    auto consensusParams = Params().GetConsensus();
+
+    auto sk = libzcash::SaplingSpendingKey::random();
+    auto expsk = sk.expanded_spending_key();
+    auto pk = sk.default_address();
+
+    // Cannot add Sapling outputs to a non-Sapling transaction
+    auto builder = TransactionBuilder(consensusParams, 1);
+    try {
+        builder.AddSaplingOutput(uint256(), pk, 12345, {});
+    } catch (std::runtime_error const & err) {
+        EXPECT_EQ(err.what(), std::string("TransactionBuilder cannot add Sapling output to pre-Sapling transaction"));
+    } catch(...) {
+        FAIL() << "Expected std::runtime_error";
+    }
+
+    // Cannot add Sapling spends to a non-Sapling transaction
+    libzcash::SaplingNote note(pk, 50000, libzcash::Zip212Enabled::BeforeZip212);
+    SaplingMerkleTree tree;
+    try {
+        builder.AddSaplingSpend(expsk, note, uint256(), tree.witness());
+    } catch (std::runtime_error const & err) {
+        EXPECT_EQ(err.what(), std::string("TransactionBuilder cannot add Sapling spend to pre-Sapling transaction"));
+    } catch(...) {
+        FAIL() << "Expected std::runtime_error";
+    }
+
+    // Revert to default
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
 }
