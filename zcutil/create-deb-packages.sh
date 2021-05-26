@@ -14,7 +14,7 @@ mkdir -p $debdir/usr/share/pixmaps/
 cp zcutil/deb/pirate.xpm           $debdir/usr/share/pixmaps/
 
 mkdir -p $debdir/usr/share/applications
-cp zcutil/deb/desktopentry    $debdir/usr/share/applications/piratewallet-lite.desktop
+cp zcutil/deb/desktopentry    $debdir/usr/share/applications/pirate-qt.desktop
 
 dpkg-deb --build $debdir >/dev/null
 cp $debdir.deb                 release/pirate-qt-ubuntu1804-v$APP_VERSION.deb
@@ -36,7 +36,7 @@ mkdir -p $debdir/usr/share/pixmaps/
 cp zcutil/deb/pirate.xpm           $debdir/usr/share/pixmaps/
 
 mkdir -p $debdir/usr/share/applications
-cp zcutil/deb/desktopentry    $debdir/usr/share/applications/piratewallet-lite.desktop
+cp zcutil/deb/desktopentry    $debdir/usr/share/applications/piratewallet-qt.desktop
 
 dpkg-deb --build $debdir >/dev/null
 cp $debdir.deb                 release/pirate-qt-aarch64-v$APP_VERSION.deb
