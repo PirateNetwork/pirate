@@ -44,7 +44,7 @@ struct ZAddressTableEntry
     QString       label;
     QString       address;
     CAmount       balance;
-    isminetype    mine;
+    bool          mine;
 
     ZAddressTableEntry() {}
 };
@@ -116,7 +116,7 @@ public:
 
         std::map<QString, CAmount> stringBalances;
         std::map<libzcash::PaymentAddress, CAmount> balances;
-        wallet->getZAddressBalances(balances, 1, false);
+        wallet->getZAddressBalances(balances, 0, false);
 
 
         std::set<libzcash::SaplingPaymentAddress> addresses;
@@ -158,7 +158,6 @@ public:
         cachedAddressTable.clear();
         {
             LOCK2(cs_main, wallet->cs_wallet);
-            isminetype mine = ISMINE_NO;
 
             std::map<libzcash::PaymentAddress, CAmount> balances;
             wallet->getZAddressBalances(balances, 1, false);
@@ -168,6 +167,7 @@ public:
             {
                 const libzcash::PaymentAddress& zaddr = item.first;
 
+                bool mine = false;
                 auto saplingAddr = boost::get<libzcash::SaplingPaymentAddress>(&zaddr);
 
                 if (saplingAddr != nullptr) {
@@ -176,7 +176,7 @@ public:
                     if (wallet->GetSaplingIncomingViewingKey(*saplingAddr, ivk) &&
                         wallet->GetSaplingFullViewingKey(ivk, extfvk) &&
                         wallet->HaveSaplingSpendingKey(extfvk)) {
-                            mine = ISMINE_SPENDABLE;
+                            mine = true;
                     }
 
                   CAmount balance = 0;
@@ -218,7 +218,7 @@ public:
         bool inModel = (lower != upper);
         ZAddressTableEntry::Type newEntryType = translateTransactionType(purpose, isMine);
 
-        isminetype mine = ISMINE_NO;
+        bool mine = false;
         ZAddressTableEntry newEntry;
         libzcash::PaymentAddress zaddr = DecodePaymentAddress(address.toStdString());
         auto saplingAddr = boost::get<libzcash::SaplingPaymentAddress>(&zaddr);
@@ -228,7 +228,7 @@ public:
             if (wallet->GetSaplingIncomingViewingKey(*saplingAddr, ivk) &&
                 wallet->GetSaplingFullViewingKey(ivk, extfvk) &&
                 wallet->HaveSaplingSpendingKey(extfvk)) {
-                    mine = ISMINE_SPENDABLE;
+                    mine = true;
             }
 
             switch(status)
@@ -346,25 +346,16 @@ QVariant ZAddressTableModel::data(const QModelIndex &index, int role) const
         return QVariant();
 
     ZAddressTableEntry *rec = static_cast<ZAddressTableEntry*>(index.internalPointer());
-    isminetype mine = ISMINE_NO;
-
-    if (role == Qt::DecorationRole || role == Qt::DisplayRole || role == Qt::EditRole)
-    {
-        if (index.column() == isMine)
-        {
-            {
-                mine = rec->mine;
-            }
-        }
-    }
-
     if (role == Qt::DecorationRole)
     {
         switch(index.column())
         {
         case isMine:
-            if (mine & ISMINE_SPENDABLE) return platformStyle->TextColorIcon(QIcon(":/icons/synced"));
-            else return platformStyle->TextColorIcon(qvariant_cast<QIcon>(QVariant()));
+            if (rec->mine) {
+                return platformStyle->TextColorIcon(QIcon(":/icons/synced"));
+            } else {
+                return platformStyle->TextColorIcon(qvariant_cast<QIcon>(QVariant()));
+            }
         }
     }
     else if ((role == Qt::EditRole) && (index.column() == isMine))
@@ -372,28 +363,34 @@ QVariant ZAddressTableModel::data(const QModelIndex &index, int role) const
         switch(index.column())
         {
         case isMine:
-            return (mine & ISMINE_SPENDABLE ? 1 : 0);
+            return (rec->mine ? 1 : 0);
         }
     }
     else if(role == Qt::DisplayRole || role == Qt::EditRole)
     {
         switch(index.column())
         {
-        case Label:
-            if(rec->label.isEmpty() && role == Qt::DisplayRole)
-            {
-                return tr("(no label)");
-            }
-            else
-            {
-                return rec->label;
-            }
-        case Address:
-            return rec->address;
-        case Balance:
-            {
-                return KomodoUnits::format(walletModel->getOptionsModel()->getDisplayUnit(), rec->balance, false, KomodoUnits::separatorStandard);
-            }
+            case isMine:
+                if (rec->mine) {
+                    return platformStyle->TextColorIcon(QIcon(":/icons/synced"));
+                } else {
+                    return platformStyle->TextColorIcon(qvariant_cast<QIcon>(QVariant()));
+                }
+            case Label:
+                if(rec->label.isEmpty() && role == Qt::DisplayRole)
+                {
+                    return tr("(no label)");
+                }
+                else
+                {
+                    return rec->label;
+                }
+            case Address:
+                return rec->address;
+            case Balance:
+                {
+                    return KomodoUnits::format(walletModel->getOptionsModel()->getDisplayUnit(), rec->balance, false, KomodoUnits::separatorStandard);
+                }
         }
     }
     else if (role == Qt::FontRole)

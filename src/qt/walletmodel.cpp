@@ -1336,7 +1336,7 @@ CAmount WalletModel::getBalanceZaddr(std::string sAddress, int minDepth, bool re
 {
     LOCK2(cs_main, wallet->cs_wallet);
     std::map<libzcash::PaymentAddress, CAmount> balances;
-    wallet->getZAddressBalances(balances, 1, requireSpendingKey);
+    wallet->getZAddressBalances(balances, minDepth, requireSpendingKey);
 
     CAmount balance = 0;
     for (std::map<libzcash::PaymentAddress, CAmount>::iterator it = balances.begin(); it != balances.end(); it++) {
