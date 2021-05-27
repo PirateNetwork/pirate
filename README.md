@@ -1,4 +1,8 @@
-![Pirate CD test releases](https://github.com/PirateNetwork/pirate/workflows/Pirate%20CD%20test%20releases/badge.svg)
+![Pirate cli build - Ubuntu 18.04](https://github.com/PirateNetwork/pirate/workflows/Pirate%20cli%20build%20-%20Ubuntu%2018.04/badge.svg)\
+![Pirate cli build - Ubuntu 20.04](https://github.com/PirateNetwork/pirate/workflows/Pirate%20cli%20build%20-%20Ubuntu%2020.04/badge.svg)\
+![Pirate cli build - Windows cross compile 18.04](https://github.com/PirateNetwork/pirate/workflows/Pirate%20cli%20build%20-%20Windows%20cross%20compile%2018.04/badge.svg)\
+![Pirate cli build - Windows cross compile 20.04](https://github.com/PirateNetwork/pirate/workflows/Pirate%20cli%20build%20-%20Windows%20cross%20compile%2020.04/badge.svg)\
+![Pirate cli build - MacOS 10.15 Catalina](https://github.com/PirateNetwork/pirate/workflows/Pirate%20cli%20build%20-%20MacOS%2010.15%20Catalina/badge.svg)\
 ![Pirate Logo](https://i.ibb.co/F7Dgnxy/Pirate-Logo-Wordmark-Gold.png "PirateChain Logo")
 
 
