@@ -65,6 +65,10 @@
 #include <QUrlQuery>
 #endif
 
+extern int nMaxConnections; //From net.h
+bool       bGUI_configured_for_online_or_offline;
+
+
 const std::string PirateOceanGUI::DEFAULT_UIPLATFORM =
 #if defined(Q_OS_MAC)
         "macosx"
@@ -96,10 +100,12 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     overviewAction(0),
     historyAction(0),
     quitAction(0),
-    sendCoinsAction(0),
+    //sendCoinsAction(0),
     zsendCoinsAction(0),
-    sendCoinsMenuAction(0),
+    zsignAction(0),
+    //sendCoinsMenuAction(0),
     zsendCoinsMenuAction(0),
+    zsignMenuAction(0),
     usedSendingAddressesAction(0),
     usedReceivingAddressesAction(0),
     usedReceivingZAddressesAction(0),
@@ -155,12 +161,6 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
 #ifdef ENABLE_WALLET
     enableWallet = WalletModel::isWalletEnabled();
 #endif // ENABLE_WALLET
-    // if(enableWallet)
-    // {
-    //     windowTitle += tr("Wallet");
-    // } else {
-    //     windowTitle += tr("Node");
-    // }
     windowTitle += " " + networkStyle->getTitleAddText();
     QApplication::setWindowIcon(networkStyle->getTrayAndWindowIcon());
     setWindowIcon(networkStyle->getTrayAndWindowIcon());
@@ -189,6 +189,7 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
          */
         setCentralWidget(rpcConsole);
     }
+    bGUI_configured_for_online_or_offline=false;
 
     // Accept D&D of URIs
     setAcceptDrops(true);
@@ -308,19 +309,31 @@ void PirateOceanGUI::createActions()
     overviewAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_1));
     tabGroup->addAction(overviewAction);
 
-    sendCoinsAction = new QAction(platformStyle->SingleColorIcon(":/icons/send"), tr("&Send"), this);
-    sendCoinsAction->setStatusTip(tr("Send coins to a Pirate address"));
-    sendCoinsAction->setToolTip(sendCoinsAction->statusTip());
-    sendCoinsAction->setCheckable(true);
-    sendCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_2));
-    tabGroup->addAction(sendCoinsAction);
+    //sendCoinsAction = new QAction(platformStyle->SingleColorIcon(":/icons/send"), tr("&Send"), this);
+    //sendCoinsAction->setStatusTip(tr("Send coins to a Pirate address"));
+    //sendCoinsAction->setToolTip(sendCoinsAction->statusTip());
+    //sendCoinsAction->setCheckable(true);
+    //sendCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_2));
+    //tabGroup->addAction(sendCoinsAction);
+    //sendCoinsMenuAction = new QAction(platformStyle->TextColorIcon(":/icons/send"), sendCoinsAction->text(), this);
+    //sendCoinsMenuAction->setStatusTip(sendCoinsAction->statusTip());
+    //sendCoinsMenuAction->setToolTip(sendCoinsMenuAction->statusTip());
 
-    sendCoinsMenuAction = new QAction(platformStyle->TextColorIcon(":/icons/send"), sendCoinsAction->text(), this);
-    sendCoinsMenuAction->setStatusTip(sendCoinsAction->statusTip());
-    sendCoinsMenuAction->setToolTip(sendCoinsMenuAction->statusTip());
+
+    //Distinguish between on-line and off-line behaviour of the wallet:
+    //If the wallet is configured to connect/sync to the PirateNetwork, then
+    //it is deemed 'on-line'. This is configured by setting
+    //'maxconnections' > 0 in ~/.komodo/PIRATE/PIRATE.conf
+    //If 'maxconnections=0', then the wallet will not sync with the PirateNetwork
+    //and essensially be 'off-line'. In that configuration state, it will only
+    //sign transactions, but will not be able to compile or send transactions.
+
+    //Note: pirateoceangui() gets run before the configuration file gets scanned
+    //      initialise both zsendCoinsAction & zsignAction and differentiate
+    //      later when the config is available.
 
     zsendCoinsAction = new QAction(platformStyle->SingleColorIcon(":/icons/z-send"), tr("&Z-Send"), this);
-    zsendCoinsAction->setStatusTip(tr("Send coins to/from z-address"));
+    zsendCoinsAction->setStatusTip(tr("Send coins to a recipient"));
     zsendCoinsAction->setToolTip(zsendCoinsAction->statusTip());
     zsendCoinsAction->setCheckable(true);
     zsendCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_3));
@@ -330,8 +343,20 @@ void PirateOceanGUI::createActions()
     zsendCoinsMenuAction->setStatusTip(zsendCoinsAction->statusTip());
     zsendCoinsMenuAction->setToolTip(zsendCoinsMenuAction->statusTip());
 
+
+    zsignAction = new QAction(platformStyle->SingleColorIcon(":/icons/z-send"), tr("&Z-Sign"), this);
+    zsignAction->setStatusTip(tr("Sign an off-line transaction"));
+    zsignAction->setToolTip(zsignAction->statusTip());
+    zsignAction->setCheckable(true);
+    zsignAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_9));
+    tabGroup->addAction(zsignAction);
+
+    zsignMenuAction = new QAction(platformStyle->TextColorIcon(":/icons/z-send"), zsignAction->text(), this);
+    zsignMenuAction->setStatusTip(zsignAction->statusTip());
+    zsignMenuAction->setToolTip(zsignMenuAction->statusTip());
+
     receiveCoinsAction = new QAction(platformStyle->SingleColorIcon(":/icons/receiving_addresses"), tr("&Receive"), this);
-    receiveCoinsAction->setStatusTip(tr("Request payments (generates QR codes and pirate: URIs)"));
+    receiveCoinsAction->setStatusTip(tr("Your addresses (To which people are sending payments)"));
     receiveCoinsAction->setToolTip(receiveCoinsAction->statusTip());
     receiveCoinsAction->setCheckable(true);
     receiveCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_4));
@@ -353,20 +378,28 @@ void PirateOceanGUI::createActions()
     // can be triggered from the tray menu, and need to show the GUI to be useful.
     connect(overviewAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(overviewAction, SIGNAL(triggered()), this, SLOT(gotoOverviewPage()));
-    connect(sendCoinsAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
-    connect(sendCoinsAction, SIGNAL(triggered()), this, SLOT(gotoSendCoinsPage()));
+
+    //connect(sendCoinsAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
+    //connect(sendCoinsAction, SIGNAL(triggered()), this, SLOT(gotoSendCoinsPage()));
+    //connect(sendCoinsMenuAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
+    //connect(sendCoinsMenuAction, SIGNAL(triggered()), this, SLOT(gotoSendCoinsPage()));
+
     connect(zsendCoinsAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(zsendCoinsAction, SIGNAL(triggered()), this, SLOT(gotoZSendCoinsPage()));
-    connect(sendCoinsMenuAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
-    connect(sendCoinsMenuAction, SIGNAL(triggered()), this, SLOT(gotoSendCoinsPage()));
     connect(zsendCoinsMenuAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(zsendCoinsMenuAction, SIGNAL(triggered()), this, SLOT(gotoZSendCoinsPage()));
+    connect(zsignAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
+    connect(zsignAction, SIGNAL(triggered()), this, SLOT(gotoZSignPage()));
+    connect(zsignMenuAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
+    connect(zsignMenuAction, SIGNAL(triggered()), this, SLOT(gotoZSignPage()));
+
     connect(receiveCoinsAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(receiveCoinsAction, SIGNAL(triggered()), this, SLOT(gotoReceiveCoinsPage()));
     connect(receiveCoinsMenuAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(receiveCoinsMenuAction, SIGNAL(triggered()), this, SLOT(gotoReceiveCoinsPage()));
     connect(historyAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(historyAction, SIGNAL(triggered()), this, SLOT(gotoHistoryPage()));
+
 #endif // ENABLE_WALLET
 
     quitAction = new QAction(platformStyle->TextColorIcon(":/icons/quit"), tr("E&xit"), this);
@@ -461,8 +494,8 @@ void PirateOceanGUI::createActions()
 
     //hide all the bits that are for t addys
     openAction->setVisible(false);
-    sendCoinsAction->setVisible(false);
-    // receiveCoinsAction->setVisible(false);
+    // sendCoinsAction->setVisible(false);
+    //receiveCoinsAction->setVisible(false);
     encryptWalletAction->setVisible(false);
     usedSendingAddressesAction->setVisible(false);
     usedReceivingAddressesAction->setVisible(false);
@@ -530,8 +563,9 @@ void PirateOceanGUI::createToolBars()
         toolbar->setMovable(false);
         toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
         toolbar->addAction(overviewAction);
-        toolbar->addAction(sendCoinsAction);
+        //toolbar->addAction(sendCoinsAction);
         toolbar->addAction(zsendCoinsAction);
+        toolbar->addAction(zsignAction);
         toolbar->addAction(receiveCoinsAction);
         toolbar->addAction(historyAction);
         overviewAction->setChecked(true);
@@ -626,10 +660,12 @@ void PirateOceanGUI::removeAllWallets()
 void PirateOceanGUI::setWalletActionsEnabled(bool enabled)
 {
     overviewAction->setEnabled(enabled);
-    sendCoinsAction->setEnabled(enabled);
+    //sendCoinsAction->setEnabled(enabled);
+    //sendCoinsMenuAction->setEnabled(enabled);
     zsendCoinsAction->setEnabled(enabled);
-    sendCoinsMenuAction->setEnabled(enabled);
     zsendCoinsMenuAction->setEnabled(enabled);
+    zsignAction->setEnabled(enabled);
+    zsignMenuAction->setEnabled(enabled);
     receiveCoinsAction->setEnabled(enabled);
     receiveCoinsMenuAction->setEnabled(enabled);
     historyAction->setEnabled(enabled);
@@ -684,12 +720,9 @@ void PirateOceanGUI::createTrayIconMenu()
     trayIconMenu->addAction(toggleHideAction);
     trayIconMenu->addSeparator();
 #endif
-    trayIconMenu->addAction(sendCoinsMenuAction);
     trayIconMenu->addAction(zsendCoinsMenuAction);
+    trayIconMenu->addAction(zsignMenuAction);
     trayIconMenu->addAction(receiveCoinsMenuAction);
-    trayIconMenu->addSeparator();
-    trayIconMenu->addAction(signMessageAction);
-    trayIconMenu->addAction(verifyMessageAction);
     trayIconMenu->addSeparator();
     trayIconMenu->addAction(optionsAction);
     trayIconMenu->addAction(openRPCConsoleAction);
@@ -783,16 +816,16 @@ void PirateOceanGUI::gotoReceiveCoinsPage()
     if (walletFrame) walletFrame->gotoReceiveCoinsPage();
 }
 
-void PirateOceanGUI::gotoSendCoinsPage(QString addr)
-{
-    sendCoinsAction->setChecked(true);
-    if (walletFrame) walletFrame->gotoSendCoinsPage(addr);
-}
-
 void PirateOceanGUI::gotoZSendCoinsPage(QString addr)
 {
     zsendCoinsAction->setChecked(true);
     if (walletFrame) walletFrame->gotoZSendCoinsPage(addr);
+}
+
+void PirateOceanGUI::gotoZSignPage()
+{
+    zsignAction->setChecked(true);
+    if (walletFrame) walletFrame->gotoZSignPage();
 }
 
 void PirateOceanGUI::gotoSignMessageTab(QString addr)
@@ -818,6 +851,24 @@ void PirateOceanGUI::gotoImportVK()
 
 void PirateOceanGUI::updateNetworkState()
 {
+    //This functions gets called after the main initialisiation is
+    //completed and before the GUI main page is displayed.
+    //Perform on-line/off-line GUI layout.
+    if (bGUI_configured_for_online_or_offline==false)
+    {
+      bGUI_configured_for_online_or_offline=true;
+      if (nMaxConnections>0)
+      {
+        //On-line. Hide transaction signing
+        zsignAction->setVisible(false);
+      }
+      else
+      {
+        //Off-line. Hide transaction sending
+        zsendCoinsAction->setVisible(false);
+      }
+    }
+
     int count = clientModel->getNumConnections();
     QString icon;
     switch(count)
@@ -878,8 +929,15 @@ void PirateOceanGUI::setNumBlocks(int count, const QDateTime& blockDate, double 
     if (!clientModel)
         return;
 
-    // Prevent orphan statusbar messages (e.g. hover Quit in main menu, wait until chain-sync starts -> garbled text)
+    // Prevent orphan statusbar messages (e.g. hover Quit in main menu, wait
+    // until chain-sync starts -> garbled text)
     statusBar()->clearMessage();
+
+    //Off-line mode: Not syncing to the network.
+    if (nMaxConnections==0)
+    {
+      return;
+    }
 
     // Acquire current block source
     enum BlockSource blockSource = clientModel->getBlockSource();
@@ -1134,18 +1192,21 @@ bool PirateOceanGUI::eventFilter(QObject *object, QEvent *event)
 }
 
 #ifdef ENABLE_WALLET
+/*
 bool PirateOceanGUI::handlePaymentRequest(const SendCoinsRecipient& recipient)
 {
     // URI has to be valid
     if (walletFrame && walletFrame->handlePaymentRequest(recipient))
     {
         showNormalIfMinimized();
-        gotoSendCoinsPage();
+        //gotoSendCoinsPage();
+        printf("handlePaymentRequest() - true");
         return true;
     }
+    printf("handlePaymentRequest() - false");
     return false;
 }
-
+*/
 void PirateOceanGUI::setHDStatus(int hdEnabled)
 {
     labelWalletHDStatusIcon->setPixmap(platformStyle->SingleColorIcon(hdEnabled ? ":/icons/hd_enabled" : ":/icons/hd_disabled").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
@@ -1302,6 +1363,8 @@ void PirateOceanGUI::unsubscribeFromCoreSignals()
 
 void PirateOceanGUI::toggleNetworkActive()
 {
+    //CORRUPT THE CHAIN STATE?
+    //printf("toggleNetworkActive MaxConnections=%d\n",nMaxConnections);
     if (clientModel) {
         clientModel->setNetworkActive(!clientModel->getNetworkActive());
     }

@@ -93,10 +93,12 @@ private:
     QAction *overviewAction;
     QAction *historyAction;
     QAction *quitAction;
-    QAction *sendCoinsAction;
+    //QAction *sendCoinsAction;
     QAction *zsendCoinsAction;
-    QAction *sendCoinsMenuAction;
+    QAction *zsignAction;
+    //QAction *sendCoinsMenuAction;
     QAction *zsendCoinsMenuAction;
+    QAction *zsignMenuAction;
     QAction *usedSendingAddressesAction;
     QAction *usedReceivingAddressesAction;
     QAction *usedReceivingZAddressesAction;
@@ -190,7 +192,7 @@ public Q_SLOTS:
      */
     void setHDStatus(int hdEnabled);
 
-    bool handlePaymentRequest(const SendCoinsRecipient& recipient);
+    //bool handlePaymentRequest(const SendCoinsRecipient& recipient);
 
     /** Show incoming transaction notification for new transactions. */
     void incomingTransaction(const QString& date, int unit, const CAmount& amount, const QString& type, const QString& address, const QString& label);
@@ -205,9 +207,11 @@ private Q_SLOTS:
     /** Switch to receive coins page */
     void gotoReceiveCoinsPage();
     /** Switch to send coins page */
-    void gotoSendCoinsPage(QString addr = "");
+    //void gotoSendCoinsPage(QString addr = "");
     /** Switch to z-send coins page */
     void gotoZSendCoinsPage(QString addr = "");
+    /** Switch to z-sign transaction page */
+    void gotoZSignPage();
 
     /** Show Sign/Verify Message dialog and switch to sign message tab */
     void gotoSignMessageTab(QString addr = "");

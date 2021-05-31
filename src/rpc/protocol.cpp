@@ -70,6 +70,8 @@ string JSONRPCReply(const UniValue& result, const UniValue& error, const UniValu
 
 UniValue JSONRPCError(int code, const string& message)
 {
+    printf("JSONRPCError(): %s\n",message.c_str() );
+
     UniValue error(UniValue::VOBJ);
     error.push_back(Pair("code", code));
     error.push_back(Pair("message", message));

@@ -196,7 +196,7 @@ public:
     };
 
     // prepare transaction for getting txfee before sending coins
-    SendCoinsReturn prepareTransaction(WalletModelTransaction &transaction, const CCoinControl& coinControl);
+    //SendCoinsReturn prepareTransaction(WalletModelTransaction &transaction, const CCoinControl& coinControl);
 
     // prepare z-transaction for getting txfee before sending coins
     SendCoinsReturn prepareZTransaction(WalletModelZTransaction &transaction, const CCoinControl& coinControl);
@@ -264,6 +264,8 @@ public:
     CAmount getBalanceZaddr(std::string sAddress, int minDepth, bool requireSpendingKey) const;
     CAmount getAddressBalance(const std::string &sAddress);
 
+
+    ZAddressTableModel *zaddressTableModel;
 private:
     CWallet *wallet;
     bool fHaveWatchOnly;
@@ -274,7 +276,7 @@ private:
     OptionsModel *optionsModel;
 
     AddressTableModel *addressTableModel;
-    ZAddressTableModel *zaddressTableModel;
+
     TransactionTableModel *transactionTableModel;
     RecentRequestsTableModel *recentRequestsTableModel;
 

@@ -1069,3 +1069,28 @@ int64_t GetStartupTime()
 {
     return nStartupTime;
 }
+
+
+//pcOutput size must be at least (0.5 x iSize) +1
+bool HexToCharArray(const char *pcInput, unsigned int iSize, unsigned char *pcOutput)
+{
+  unsigned int iI;
+  unsigned long int iValue;
+  char cHex[3];
+
+  //printf("HexToCharArray: %s, length: %d\n",pcInput,iSize);
+  for(iI=0;iI<iSize;iI+=2)
+  {
+    cHex[0]=pcInput[iI];
+    cHex[1]=pcInput[iI+1];
+    cHex[2]=0;
+
+    //printf("Converting [%d]: 0x%c%c ->",iI,cHex[0],cHex[1]);
+    iValue =  strtoul(&cHex[0], NULL, 16);
+    pcOutput[iI/2] = (unsigned char)(iValue);
+    //printf("%u\n",pcOutput[iI/2]);
+  }
+  pcOutput[iI/2]=0;//Null terminate the string
+
+  return true;
+}

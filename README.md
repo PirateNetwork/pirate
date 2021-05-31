@@ -6,7 +6,7 @@
 ![Pirate Logo](https://i.ibb.co/F7Dgnxy/Pirate-Logo-Wordmark-Gold.png "PirateChain Logo")
 
 
-## PirateChain
+## PirateChain - offline
 
 This is the official PirateChain sourcecode repository based on https://github.com/jl777/komodo.
 
@@ -39,6 +39,10 @@ This is the official PirateChain sourcecode repository based on https://github.c
 Pirate Chain (ARRR) is a 100% private send cryptocurrency. It uses a privacy protocol that cannot be compromised by other users activity on the network. Most privacy coins are riddled with holes created by optional privacy. Pirate Chain uses zk-SNARKs to shield 100% of the peer to peer transactions on the blockchain making for highly anonymous and private transactions.
 
 ## Getting started
+Build the code as described below. To see instructions on how to construct and send an offline transaction look
+at README_offline_transaction_signing.md
+
+A list of outstanding improvements is included in README_todo.md
 
 ### Dependencies
 

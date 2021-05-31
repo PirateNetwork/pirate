@@ -82,14 +82,16 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
         boost::optional<TransactionBuilder> builder,
         CMutableTransaction contextualTx,
         std::string fromAddress,
-        std::vector<SendManyRecipient> tOutputs,
+
         std::vector<SendManyRecipient> zOutputs,
         int minDepth,
         CAmount fee,
         UniValue contextInfo) :
-        tx_(contextualTx), fromaddress_(fromAddress), t_outputs_(tOutputs), z_outputs_(zOutputs), mindepth_(minDepth), fee_(fee), contextinfo_(contextInfo)
+        tx_(contextualTx), fromaddress_(fromAddress), z_outputs_(zOutputs), mindepth_(minDepth), fee_(fee), contextinfo_(contextInfo)
 {
     assert(fee_ >= 0);
+
+    //printf("AsyncRPCOperation_sendmany() enter\n"); fflush(stdout);
 
     if (minDepth < 0) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Minconf cannot be negative");
@@ -99,7 +101,7 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
         throw JSONRPCError(RPC_INVALID_PARAMETER, "From address parameter missing");
     }
 
-    if (tOutputs.size() == 0 && zOutputs.size() == 0) {
+    if (zOutputs.size() == 0) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "No recipients");
     }
 
@@ -113,20 +115,43 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
     isfromtaddr_ = IsValidDestination(fromtaddr_);
     isfromzaddr_ = false;
 
-    if (!isfromtaddr_) {
-        auto address = DecodePaymentAddress(fromAddress);
-        if (IsValidPaymentAddress(address)) {
-            // We don't need to lock on the wallet as spending key related methods are thread-safe
-            if (!boost::apply_visitor(HaveSpendingKeyForPaymentAddress(pwalletMain), address)) {
-                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, no spending key found for zaddr");
-            }
+    int ivOUT = (int)zOutputs.size();
+    //printf("AsyncRPCOperation_sendmany(): minDepth: %d, fromAddr: %s, Output size: %d\n",minDepth, fromAddress.c_str(), ivOUT ); fflush(stdout);
 
+    bOfflineSpendingKey=false;
+    if (!isfromtaddr_)
+    {
+        fromAddress_ = fromAddress;
+        auto address = DecodePaymentAddress(fromAddress);
+        if (IsValidPaymentAddress(address))
+        {
+            //printf("AsyncRPCOperation_sendmany() fromAddr is z-addr\n"); fflush(stdout);
             isfromzaddr_ = true;
             frompaymentaddress_ = address;
-            spendingkey_ = boost::apply_visitor(GetSpendingKeyForPaymentAddress(pwalletMain), address).get();
-        } else {
+
+            // We don't need to lock on the wallet as spending key related methods are thread-safe
+            if (!boost::apply_visitor(HaveSpendingKeyForPaymentAddress(pwalletMain), address))
+            {
+                //TBD: confirm if the from addr is in our wallet. From the GUI is will be, but maybe not from CLI.
+                //printf("AsyncRPCOperation_sendmany() The fromAddr is viewing only - Prepare offline transaction.\n"); fflush(stdout);
+                //Leave spendingkey_ uninitialised
+                bOfflineSpendingKey=true;
+            }
+            else
+            {
+                //printf("AsyncRPCOperation_sendmany() The fromAddr is from local wallet - Have the spending key.\n"); fflush(stdout);
+                spendingkey_ = boost::apply_visitor(GetSpendingKeyForPaymentAddress(pwalletMain), address).get();
+                bOfflineSpendingKey=false;
+            }
+        }
+        else
+        {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address");
         }
+    }
+    else
+    {
+      throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "taddr not allowed");
     }
 
     if (isfromzaddr_ && minDepth==0) {
@@ -239,9 +264,20 @@ bool AsyncRPCOperation_sendmany::main_impl() {
     bool isPureTaddrOnlyTx = (isfromtaddr_ && z_outputs_.size() == 0);
     CAmount minersFee = fee_;
 
+
+    if (bOfflineSpendingKey==true)
+    {
+      //printf("asyncrpcoperation_sendmany.cpp main_impl() enter. bOfflineSpendingKey==true\n");
+    }
+    else
+    {
+      //printf("asyncrpcoperation_sendmany.cpp main_impl() enter. bOfflineSpendingKey==false\n");
+    }
+
     // When spending coinbase utxos, you can only specify a single zaddr as the change must go somewhere
     // and if there are multiple zaddrs, we don't know where to send it.
     if (isfromtaddr_) {
+      /*
         if (isSingleZaddrOutput) {
             bool b = find_utxos(true);
             if (!b) {
@@ -257,9 +293,12 @@ bool AsyncRPCOperation_sendmany::main_impl() {
                 }
             }
         }
+      */
+      throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "taddr not allowed");
     }
 
-    if (isfromzaddr_ && !find_unspent_notes()) {
+    if (isfromzaddr_ && !find_unspent_notes())
+    {
         throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Insufficient funds, no unspent notes found for zaddr from address.");
     }
 
@@ -301,7 +340,10 @@ bool AsyncRPCOperation_sendmany::main_impl() {
             FormatMoney(t_inputs_total), FormatMoney(targetAmount)));
     }
 
-    if (isfromzaddr_ && (z_inputs_total < targetAmount)) {
+    if (isfromzaddr_ && (z_inputs_total < targetAmount))
+    {
+        //printf("main_impl() Insufficient funds\n"); fflush(stdout);
+
         throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS,
             strprintf("Insufficient shielded funds, have %s, need %s",
             FormatMoney(z_inputs_total), FormatMoney(targetAmount)));
@@ -310,7 +352,10 @@ bool AsyncRPCOperation_sendmany::main_impl() {
     // If from address is a taddr, select UTXOs to spend
     CAmount selectedUTXOAmount = 0;
     bool selectedUTXOCoinbase = false;
-    if (isfromtaddr_) {
+    if (isfromtaddr_)
+    {
+      throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "taddr not allowed");
+      /*
         // Get dust threshold
         CKey secret;
         secret.MakeNewKey(true);
@@ -401,6 +446,7 @@ bool AsyncRPCOperation_sendmany::main_impl() {
             }
             tx_ = CTransaction(rawTx);
         }
+        */
     }
 
     LogPrint((isfromtaddr_) ? "zrpc" : "zrpcunsafe", "%s: spending %s to send %s with fee %s\n",
@@ -411,16 +457,134 @@ bool AsyncRPCOperation_sendmany::main_impl() {
     LogPrint("zrpcunsafe", "%s: private output: %s\n", getId(), FormatMoney(z_outputs_total));
     LogPrint("zrpc", "%s: fee: %s\n", getId(), FormatMoney(minersFee));
 
-
     /**
      * SCENARIO #0
      *
-     * Sprout not involved, so we just use the TransactionBuilder and we're done.
-     * We added the transparent inputs to the builder earlier.
+     * z_addr -> z_addr : sign transaction offline
      */
-    if (isUsingBuilder_) {
-        builder_.SetFee(minersFee);
+    if (bOfflineSpendingKey==true)
+    {
+        /* Format the necessary data to construct a transaction that can
+         * be signed with an off-line wallet
+         */
+        if (!(isUsingBuilder_))
+        {
+            throw JSONRPCError( RPC_WALLET_ERROR,
+                                "AsyncRPCOperation_sendmany::main_impl(): Builder not available");
+            return false;
+        }
 
+        builder_.SetFee(minersFee);
+        builder_.SetMinConfirmations(1);
+
+        // Select Sapling notes that makes up the total amount to send:
+        std::vector<SaplingOutPoint> ops;
+        std::vector<SaplingNote> notes;
+        CAmount sum = 0;
+        int iI=0;
+        for (auto t : z_sapling_inputs_)
+        {
+            ops.push_back(t.op);
+            notes.push_back(t.note);
+            sum += t.note.value();
+
+            //printf("asyncrpcoperation_sendmany.cpp main_impl() Process z_sapling_inputs_ #%d Value=%ld, Sum=%ld\n",iI, t.note.value(), sum); fflush(stdout);
+            //iI+=1;
+            if (sum >= targetAmount)
+            {
+                //printf("asyncrpcoperation_sendmany.cpp main_impl() Notes exceed targetAmount: %ld>%ld\n",sum,targetAmount);
+                break;
+            }
+        }
+
+        // Fetch Sapling anchor and witnesses
+        //printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses\n"); fflush(stdout);
+        uint256 anchor;
+        std::vector<boost::optional<SaplingWitness>> witnesses;
+        {
+            //printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses - start\n"); fflush(stdout);
+            LOCK2(cs_main, pwalletMain->cs_wallet);
+            pwalletMain->GetSaplingNoteWitnesses(ops, witnesses, anchor);
+            //printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses - done\n"); fflush(stdout);
+        }
+
+        // Add Sapling spends to the transaction builder:
+        //printf("asyncrpcoperation_sendmany.cpp main_impl() Add sapling spends: #%ld\n",notes.size() ); fflush(stdout);
+
+        //Note: expsk is uninitialised - we do not have the spending key!
+        //    : fvk also garbage?
+        SaplingExpandedSpendingKey expsk;
+        auto fvk = expsk.full_viewing_key();
+        auto ovk = fvk.ovk;
+        for (size_t i = 0; i < notes.size(); i++)
+        {
+            if (!witnesses[i])
+            {
+                throw JSONRPCError(RPC_WALLET_ERROR, "Missing witness for Sapling note");
+            }
+            //printf("asyncrpcoperation_sendmany.cpp main_impl() Add sapling spend: %ld of %ld - start\n",i+1,notes.size() ); fflush(stdout);
+            //Convert witness to a char array:
+            CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+            ss << witnesses[i].get().path();
+            std::vector<unsigned char> local_witness(ss.begin(), ss.end());
+            myCharArray_s sWitness;
+            memcpy (&sWitness.cArray[0], reinterpret_cast<unsigned char*>(local_witness.data()), sizeof(sWitness.cArray) );
+            assert(builder_.AddSaplingSpend_prepare_offline_transaction(fromAddress_, notes[i], anchor, witnesses[i].get().position(), &sWitness.cArray[0] ));
+            //printf("asyncrpcoperation_sendmany.cpp main_impl() Add sapling spend: %ld of %ld - done\n",i+1,notes.size() ); fflush(stdout);
+        }
+
+        // Add Sapling outputs to the transaction builder
+        //printf("asyncrpcoperation_sendmany.cpp main_impl() Add sapling outputs\n" ); fflush(stdout);
+        iI=0;
+        for (auto r : z_outputs_)
+        {
+            auto address = std::get<0>(r);
+            auto value = std::get<1>(r);
+            auto hexMemo = std::get<2>(r);
+
+            //auto memo = get_memo_from_hex_string(hexMemo);
+            std::array<unsigned char, ZC_MEMO_SIZE> memo;
+
+            //Keep the memo in hex format for off-line signing:
+            int lenMemo = strlen(hexMemo.c_str());
+            if (lenMemo >= (ZC_MEMO_SIZE-1))
+            {
+              lenMemo = ZC_MEMO_SIZE;
+            }
+
+            for (int iI = 0; iI < lenMemo; iI++) {
+                memo[iI] = hexMemo[iI];
+            }
+            memo[lenMemo]=0; //Null terminate
+
+
+            //printf("asyncrpcoperation_sendmany.cpp main_impl() Output #%d: addr=%s\n",iI+1,address.c_str() );
+            //printf("  value=%ld, ",value);
+            //printf("memo=%s\n"  , hexMemo.c_str() );
+            //fflush(stdout);
+            //iI+=1;
+            //builder_.AddSaplingOutput_offline_transaction(ovk, address, value, memo);
+            builder_.AddSaplingOutput_offline_transaction(address, value, memo);
+        }
+
+        // Build the off-line transaction
+        std::string sResult = builder_.Build_offline_transaction();
+        //printf("AsyncRPCOperation_sendmany::main_impl() %s\n",sResult.c_str() );
+
+        //Send result upstream
+        //printf("AsyncRPCOperation_sendmany::main_impl() Result available\n");
+        UniValue o(UniValue::VOBJ);
+        o.push_back(Pair("Success", sResult));
+        set_result(o);
+
+        //printf("AsyncRPCOperation_sendmany::main_impl() Pushed result OBJ back. return true\n");
+        return true;
+    }
+
+    if (isUsingBuilder_)
+    {
+        //printf("asyncrpcoperation_sendmany.cpp main_impl() Scanario 0: Prepare online transaction\n");
+        builder_.SetFee(minersFee);
         // Get various necessary keys
         SaplingExpandedSpendingKey expsk;
         uint256 ovk;
@@ -429,37 +593,13 @@ bool AsyncRPCOperation_sendmany::main_impl() {
             expsk = sk.expsk;
             ovk = expsk.full_viewing_key().ovk;
         } else {
-            // Sending from a t-address, which we don't have an ovk for. Instead,
-            // generate a common one from the HD seed. This ensures the data is
-            // recoverable, while keeping it logically separate from the ZIP 32
-            // Sapling key hierarchy, which the user might not be using.
-            HDSeed seed;
-            if (!pwalletMain->GetHDSeed(seed)) {
-                throw JSONRPCError(
-                    RPC_WALLET_ERROR,
-                    "AsyncRPCOperation_sendmany::main_impl(): HD seed not found");
-            }
-            ovk = ovkForShieldingFromTaddr(seed);
+          throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "taddr not allowed");
         }
 
         // Set change address if we are using transparent funds
         // TODO: Should we just use fromtaddr_ as the change address?
         if (isfromtaddr_) {
-            LOCK2(cs_main, pwalletMain->cs_wallet);
-
-            EnsureWalletIsUnlocked();
-            CReserveKey keyChange(pwalletMain);
-            CPubKey vchPubKey;
-            bool ret = keyChange.GetReservedKey(vchPubKey);
-            if (!ret) {
-                // should never fail, as we just unlocked
-                throw JSONRPCError(
-                    RPC_WALLET_KEYPOOL_RAN_OUT,
-                    "Could not generate a taddr to use as a change address");
-            }
-
-            CTxDestination changeAddr = vchPubKey.GetID();
-            assert(builder_.SendChangeTo(changeAddr));
+          throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "taddr not allowed");
         }
 
         // Select Sapling notes
@@ -492,7 +632,9 @@ bool AsyncRPCOperation_sendmany::main_impl() {
         }
 
         // Add Sapling outputs
-        for (auto r : z_outputs_) {
+        for (auto r : z_outputs_)
+        {
+
             auto address = std::get<0>(r);
             auto value = std::get<1>(r);
             auto hexMemo = std::get<2>(r);
@@ -502,40 +644,39 @@ bool AsyncRPCOperation_sendmany::main_impl() {
             auto to = boost::get<libzcash::SaplingPaymentAddress>(addr);
 
             auto memo = get_memo_from_hex_string(hexMemo);
-
+            //printf("process z_outputs_ address=%s, value=%ld, memo=%s\n", address.c_str(), value, reinterpret_cast<unsigned char*>(memo.data()) ); fflush(stdout);
             builder_.AddSaplingOutput(ovk, to, value, memo);
         }
 
         // Add transparent outputs
         for (auto r : t_outputs_) {
-            auto outputAddress = std::get<0>(r);
-            auto amount = std::get<1>(r);
-
-            auto address = DecodeDestination(outputAddress);
-            if (!builder_.AddTransparentOutput(address, amount)) {
-                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid output address, not a valid taddr.");
-            }
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "taddr not allowed");
         }
 
         // Build the transaction
         tx_ = builder_.Build().GetTxOrThrow();
 
         // Send the transaction
-        // TODO: Use CWallet::CommitTransaction instead of sendrawtransaction
         auto signedtxn = EncodeHexTx(tx_);
         if (!testmode) {
             UniValue params = UniValue(UniValue::VARR);
             params.push_back(signedtxn);
+            //printf("asyncrpcoperation_sendmany.cpp() builder_.Build() : sendrawtransaction enter\n");
             UniValue sendResultValue = sendrawtransaction(params, false, CPubKey());
+            //printf("asyncrpcoperation_sendmany.cpp() builder_.Build() : sendrawtransaction done. Result size: %lu\n", sendResultValue.size() );
             if (sendResultValue.isNull()) {
+                //printf("asyncrpcoperation_sendmany.cpp() builder_.Build() : sendrawtransaction exception - result is null\n");
                 throw JSONRPCError(RPC_WALLET_ERROR, "sendrawtransaction did not return an error or a txid.");
             }
 
             auto txid = sendResultValue.get_str();
 
+
             UniValue o(UniValue::VOBJ);
             o.push_back(Pair("txid", txid));
+            //printf("asyncrpcoperation_sendmany.cpp() builder_.Build() : set_result() enter\n" );
             set_result(o);
+            //printf("asyncrpcoperation_sendmany.cpp() builder_.Build() : set_result size=%lu\n",o.size() );
         } else {
             // Test mode does not send the transaction to the network.
             UniValue o(UniValue::VOBJ);
@@ -545,6 +686,7 @@ bool AsyncRPCOperation_sendmany::main_impl() {
             set_result(o);
         }
 
+        //printf("AsyncRPCOperation_sendmany::main_impl() set_result(o) available. Return true\n");
         return true;
     }
     /**
@@ -1111,12 +1253,23 @@ bool AsyncRPCOperation_sendmany::find_utxos(bool fAcceptCoinbase=false) {
 }
 
 
-bool AsyncRPCOperation_sendmany::find_unspent_notes() {
+bool AsyncRPCOperation_sendmany::find_unspent_notes( ) {
     std::vector<CSproutNotePlaintextEntry> sproutEntries;
     std::vector<SaplingNoteEntry> saplingEntries;
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
-        pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, fromaddress_, mindepth_);
+        //printf("find_unspent_notes() enter\nfind_unspent_notes() GetFilteredNotes() start\n"); fflush(stdout);
+        if (bOfflineSpendingKey==true)
+        {
+          //Offline transaction, Does not require the spending key in this wallet
+          pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, fromaddress_, mindepth_,true,false);
+        }
+        else
+        {
+          //Local transaction: Require the spending key
+          pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, fromaddress_, mindepth_,true,true);
+        }
+        //printf("find_unspent_notes() GetFilteredNotes() done\n"); fflush(stdout);
     }
 
     // If using the TransactionBuilder, we only want Sapling notes.
@@ -1141,7 +1294,9 @@ bool AsyncRPCOperation_sendmany::find_unspent_notes() {
             );
     }
 
-    for (auto entry : saplingEntries) {
+    //printf("asyncrpcoperation_sendmany.cpp find_unspent_notes() Build up z_sapling_inputs_\n");fflush(stdout);
+    for (auto entry : saplingEntries)
+    {
         z_sapling_inputs_.push_back(entry);
         std::string data(entry.memo.begin(), entry.memo.end());
         LogPrint("zrpcunsafe", "%s: found unspent Sapling note (txid=%s, vShieldedSpend=%d, amount=%s, memo=%s)\n",
@@ -1150,6 +1305,13 @@ bool AsyncRPCOperation_sendmany::find_unspent_notes() {
             entry.op.n,
             FormatMoney(entry.note.value()),
             HexStr(data).substr(0, 10));
+        //printf("asyncrpcoperation_sendmany.cpp find_unspent_notes() Unspent note: %s\n(txid=%s, vShieldedSpend=%d, amount=%s, memo=%s)\n",
+        //    getId().c_str(),
+        //    entry.op.hash.ToString().substr(0, 10).c_str(),
+        //    entry.op.n,
+        //    FormatMoney(entry.note.value()).c_str(),
+        //    HexStr(data).substr(0, 10).c_str() );
+        //    fflush(stdout);
     }
 
     if (z_sprout_inputs_.empty() && z_sapling_inputs_.empty()) {

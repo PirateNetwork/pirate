@@ -46,10 +46,14 @@ extern int32_t KOMODO_NSPV;
 
 uint256 SIG_TXHASH;
 
-TransactionSignatureCreator::TransactionSignatureCreator(const CKeyStore* keystoreIn, const CTransaction* txToIn, unsigned int nInIn, const CAmount& amountIn, int nHashTypeIn) : BaseSignatureCreator(keystoreIn), txTo(txToIn), nIn(nInIn), nHashType(nHashTypeIn), amount(amountIn), checker(txTo, nIn, amountIn) {}
+TransactionSignatureCreator::TransactionSignatureCreator(const CKeyStore* keystoreIn, const CTransaction* txToIn, unsigned int nInIn, const CAmount& amountIn, int nHashTypeIn) : BaseSignatureCreator(keystoreIn), txTo(txToIn), nIn(nInIn), nHashType(nHashTypeIn), amount(amountIn), checker(txTo, nIn, amountIn) 
+{
+  printf("sign.cpp TransactionSignatureCreator() constructor\n");
+}
 
 bool TransactionSignatureCreator::CreateSig(std::vector<unsigned char>& vchSig, const CKeyID& address, const CScript& scriptCode, uint32_t consensusBranchId, CKey *pprivKey, void *extraData) const
 {
+    printf("TransactionSignatureCreator::CreateSig()\n");
     CKey key; uint256 hash;
     try {
         hash = SignatureHash(scriptCode, *txTo, nIn, nHashType, amount, consensusBranchId);
@@ -112,6 +116,7 @@ bool TransactionSignatureCreator::CreateSig(std::vector<unsigned char>& vchSig, 
 
 static bool Sign1(const CKeyID& address, const BaseSignatureCreator& creator, const CScript& scriptCode, std::vector<valtype>& ret, uint32_t consensusBranchId)
 {
+    printf("sign.cpp Sign1()\n");
     vector<unsigned char> vchSig;
     if (!creator.CreateSig(vchSig, address, scriptCode, consensusBranchId))
         return false;
@@ -121,6 +126,7 @@ static bool Sign1(const CKeyID& address, const BaseSignatureCreator& creator, co
 
 static bool SignN(const vector<valtype>& multisigdata, const BaseSignatureCreator& creator, const CScript& scriptCode, std::vector<valtype>& ret, uint32_t consensusBranchId)
 {
+    printf("sign.cpp SignN()\n");
     int nSigned = 0;
     int nRequired = multisigdata.front()[0];
     for (unsigned int i = 1; i < multisigdata.size()-1 && nSigned < nRequired; i++)
@@ -135,6 +141,7 @@ static bool SignN(const vector<valtype>& multisigdata, const BaseSignatureCreato
 
 CC *CCcond1of2(uint8_t evalcode,CPubKey pk1,CPubKey pk2)
 {
+    printf("CCcond1of2()\n");
     std::vector<CC*> pks;
     pks.push_back(CCNewSecp256k1(pk1));
     pks.push_back(CCNewSecp256k1(pk2));
@@ -145,6 +152,7 @@ CC *CCcond1of2(uint8_t evalcode,CPubKey pk1,CPubKey pk2)
 
 CC *CCcond1(uint8_t evalcode,CPubKey pk)
 {
+    printf("CCcond1()\n");
     std::vector<CC*> pks;
     pks.push_back(CCNewSecp256k1(pk));
     CC *condCC = CCNewEval(E_MARSHAL(ss << evalcode));
@@ -154,6 +162,7 @@ CC *CCcond1(uint8_t evalcode,CPubKey pk)
 
 std::vector<CCcontract_info> &GetCryptoConditions()
 {
+    printf("GetCryptoConditions()\n");
     static bool initialized = false;
     static std::vector<CCcontract_info> vCC = std::vector<CCcontract_info>();
     CCcontract_info C;
@@ -167,6 +176,7 @@ std::vector<CCcontract_info> &GetCryptoConditions()
 
 bool GetCCByUnspendableAddress(struct CCcontract_info *cp, char *addrstr)
 {
+    printf("GetCCByUnspendableAddress()\n");
     std::vector<CCcontract_info> &vCC = GetCryptoConditions();
     bool found = false;
     
@@ -184,6 +194,7 @@ bool GetCCByUnspendableAddress(struct CCcontract_info *cp, char *addrstr)
 
 bool CCinitLite(struct CCcontract_info *cp, uint8_t evalcode)
 {
+    printf("CCinitLite()\n");
     std::vector<CCcontract_info> &vCC = GetCryptoConditions();
     bool found = false;
     
@@ -201,6 +212,7 @@ bool CCinitLite(struct CCcontract_info *cp, uint8_t evalcode)
 
 bool _Getscriptaddress(char *destaddr, const CScript &scriptPubKey)
 {
+    printf("_Getscriptaddress()\n");
     CTxDestination address;
     txnouttype whichType;
     std::vector<std::vector<unsigned char>> vvch = std::vector<std::vector<unsigned char>>();
@@ -216,6 +228,7 @@ bool _Getscriptaddress(char *destaddr, const CScript &scriptPubKey)
 
 CScript _CCPubKey(const CC *cond)
 {
+    printf("_CCPubKey()\n");
     unsigned char buf[1000];
     size_t len = cc_conditionBinary(cond, buf);
     return CScript() << std::vector<unsigned char>(buf, buf+len) << OP_CHECKCRYPTOCONDITION;
@@ -224,6 +237,7 @@ CScript _CCPubKey(const CC *cond)
 static bool SignStepCC(const BaseSignatureCreator& creator, const CScript& scriptPubKey, vector<valtype> &vSolutions,
                        vector<valtype>& ret, uint32_t consensusBranchId)
 {
+    printf("SignStepCC()\n");
     CScript subScript;
     vector<CPubKey> vPK;
     vector<valtype> vParams = vector<valtype>();
@@ -340,6 +354,7 @@ static bool SignStepCC(const BaseSignatureCreator& creator, const CScript& scrip
 static bool SignStep(const BaseSignatureCreator& creator, const CScript& scriptPubKey,
                      std::vector<valtype>& ret, txnouttype& whichTypeRet, uint32_t consensusBranchId)
 {
+    printf("SignStep()\n");
     CScript scriptRet;
     uint160 h160;
     ret.clear();
@@ -412,6 +427,7 @@ static bool SignStep(const BaseSignatureCreator& creator, const CScript& scriptP
 
 static CScript PushAll(const vector<valtype>& values)
 {
+    printf("CScript()\n");
     CScript result;
     BOOST_FOREACH(const valtype& v, values) {
         if (v.size() == 0) {
@@ -427,6 +443,7 @@ static CScript PushAll(const vector<valtype>& values)
 
 bool ProduceSignature(const BaseSignatureCreator& creator, const CScript& fromPubKey, SignatureData& sigdata, uint32_t consensusBranchId)
 {
+    printf("sign.cpp ProduceSignature()\n");
     CScript script = fromPubKey;
     bool solved = true;
     std::vector<valtype> result;
@@ -451,6 +468,7 @@ bool ProduceSignature(const BaseSignatureCreator& creator, const CScript& fromPu
 
 SignatureData DataFromTransaction(const CMutableTransaction& tx, unsigned int nIn)
 {
+    printf("DataFromTransaction()\n");
     SignatureData data;
     assert(tx.vin.size() > nIn);
     data.scriptSig = tx.vin[nIn].scriptSig;
@@ -459,6 +477,7 @@ SignatureData DataFromTransaction(const CMutableTransaction& tx, unsigned int nI
 
 void UpdateTransaction(CMutableTransaction& tx, unsigned int nIn, const SignatureData& data)
 {
+    printf("UpdateTransaction()\n");
     assert(tx.vin.size() > nIn);
     tx.vin[nIn].scriptSig = data.scriptSig;
 }
@@ -472,6 +491,7 @@ bool SignSignature(
                    int nHashType,
                    uint32_t consensusBranchId)
 {
+    printf("SignSignature(1)\n");
     assert(nIn < txTo.vin.size());
     
     CTransaction txToConst(txTo);
@@ -491,6 +511,7 @@ bool SignSignature(
                    int nHashType,
                    uint32_t consensusBranchId)
 {
+    printf("SignSignature(2)\n");
     assert(nIn < txTo.vin.size());
     CTxIn& txin = txTo.vin[nIn];
     assert(txin.prevout.n < txFrom.vout.size());
@@ -503,6 +524,7 @@ static vector<valtype> CombineMultisig(const CScript& scriptPubKey, const BaseSi
                                        const vector<valtype>& vSolutions,
                                        const vector<valtype>& sigs1, const vector<valtype>& sigs2, uint32_t consensusBranchId)
 {
+    printf("CombineMultisig()\n");
     // Combine all the signatures we've got:
     set<valtype> allsigs;
     BOOST_FOREACH(const valtype& v, sigs1)
@@ -578,6 +600,7 @@ static Stacks CombineSignatures(const CScript& scriptPubKey, const BaseSignature
                                 const txnouttype txType, const vector<valtype>& vSolutions,
                                 Stacks sigs1, Stacks sigs2, uint32_t consensusBranchId)
 {
+    printf("CombineSignatures()\n");
     switch (txType)
     {
         case TX_NONSTANDARD:
@@ -624,6 +647,7 @@ SignatureData CombineSignatures(const CScript& scriptPubKey, const BaseSignature
                                 const SignatureData& scriptSig1, const SignatureData& scriptSig2,
                                 uint32_t consensusBranchId)
 {
+    printf("CombineSignatures()\n");
     txnouttype txType;
     vector<vector<unsigned char> > vSolutions;
     Solver(scriptPubKey, txType, vSolutions);

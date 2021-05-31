@@ -1421,6 +1421,7 @@ extern UniValue NSPV_broadcast(char *hex);
 UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (fHelp || params.size() < 1 || params.size() > 2)
+    {
         throw runtime_error(
             "sendrawtransaction \"hexstring\" ( allowhighfees )\n"
             "\nSubmits raw transaction (serialized, hex-encoded) to local node and network.\n"
@@ -1440,7 +1441,7 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
             "\nAs a json rpc call\n"
             + HelpExampleRpc("sendrawtransaction", "\"signedhex\"")
         );
-
+    }
     LOCK(cs_main);
     RPCTypeCheck(params, boost::assign::list_of(UniValue::VSTR)(UniValue::VBOOL));
 
@@ -1448,7 +1449,7 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
     CTransaction tx;
     if (!DecodeHexTx(tx, params[0].get_str()))
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
-    uint256 hashTx = tx.GetHash();
+    uint256 hashTx = tx.GetHash();    
 
     bool fOverrideFees = false;
     if (params.size() > 1)
@@ -1482,7 +1483,10 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
     {
         NSPV_broadcast((char *)params[0].get_str().c_str());
     }
-    return hashTx.GetHex();
+    
+    UniValue uReturn(UniValue::VARR);
+    uReturn.push_back( hashTx.GetHex() );
+    return uReturn;
 }
 
 UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk)

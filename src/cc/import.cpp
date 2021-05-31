@@ -218,7 +218,7 @@ std::string MakeCodaImportTx(uint64_t txfee, std::string receipt, std::string sr
     {
         sprintf(out + (i * 2), "%02x", hash[i]);
     }
-    out[65]='\0';
+    out[SHA256_DIGEST_LENGTH*1]='\0';
     LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "MakeCodaImportTx: hash=" << out << std::endl);
     codaburntxid.SetHex(out);
     LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "MakeCodaImportTx: receipt=" << receipt << " codaburntxid=" << codaburntxid.GetHex().data() << " amount=" << (double)amount / COIN  << std::endl);
@@ -302,7 +302,7 @@ int32_t CheckCODAimport(CTransaction importTx,CTransaction burnTx,std::vector<CT
     {
         sprintf(out + (i * 2), "%02x", hash[i]);
     }
-    out[65]='\0';
+    out[SHA256_DIGEST_LENGTH*2]='\0';
     codaburntxid.SetHex(out);
     result=CodaRPC(&retstr,"prove-payment","-address",srcaddr.c_str(),"-receipt-chain-hash",receipt.c_str(),"");
     if (result==0)

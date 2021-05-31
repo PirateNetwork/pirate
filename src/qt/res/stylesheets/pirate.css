@@ -302,3 +302,19 @@ QWidget#contentWidget QLabel{
     background: #303030;
     color: #ffffff;
 }
+
+QLabel#labelMode {
+    background-color: rgba(0,0,0,0.6);
+    color: #FEFEFE;
+}
+
+QLabel#labelModeText {
+    background-color: rgba(0,0,0,0.6);
+    color: #FEFEFE;
+}
+
+QLabel#labelExplanation {
+    background-color: rgba(0,0,0,0.6);
+    color: #FEFEFE;
+}
+

@@ -41,7 +41,7 @@ public:
     bool removeWallet(const QString &name);
     void removeAllWallets();
 
-    bool handlePaymentRequest(const SendCoinsRecipient& recipient);
+    //bool handlePaymentRequest(const SendCoinsRecipient& recipient);
 
     void showOutOfSyncWarning(bool fShow);
 
@@ -69,7 +69,9 @@ public Q_SLOTS:
     /** Switch to receive coins page */
     void gotoReceiveCoinsPage();
     /** Switch to send coins page */
-    void gotoSendCoinsPage(QString addr = "");
+    //void gotoSendCoinsPage(QString addr = "");
+    /** Switch to Z-sign transaction page */
+    void gotoZSignPage();
     /** Switch to z-send coins page */
     void gotoZSendCoinsPage(QString addr = "");
 

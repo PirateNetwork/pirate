@@ -71,7 +71,7 @@ public:
         boost::optional<TransactionBuilder> builder,
         CMutableTransaction contextualTx,
         std::string fromAddress,
-        std::vector<SendManyRecipient> tOutputs,
+
         std::vector<SendManyRecipient> zOutputs,
         int minDepth,
         CAmount fee = ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE,
@@ -86,7 +86,7 @@ public:
     
     virtual void main();
 
-    virtual UniValue getStatus() const;
+    virtual UniValue getStatus() const;    
 
     bool testmode = false;  // Set to true to disable sending txs and generating proofs
 
@@ -105,8 +105,10 @@ private:
     bool isfromtaddr_;
     bool isfromzaddr_;
     CTxDestination fromtaddr_;
+    std::string fromAddress_;
     PaymentAddress frompaymentaddress_;
     SpendingKey spendingkey_;
+    bool  bOfflineSpendingKey;
     
     uint256 joinSplitPubKey_;
     unsigned char joinSplitPrivKey_[crypto_sign_SECRETKEYBYTES];

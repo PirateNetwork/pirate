@@ -50,7 +50,7 @@ ZAddressBookPage::ZAddressBookPage(const PlatformStyle *platformStyle, Mode _mod
     setWindowTitle(tr("Receiving z-addresses"));
     ui->labelExplanation->setText(tr("These are your Pirate z-addresses for receiving payments. It is recommended to use a new receiving z-address for each transaction."));
     ui->labelExplanation->setVisible(false);
-    
+
     //Hide close button
     ui->closeButton->hide();
     ui->exportButton->hide();
@@ -117,6 +117,7 @@ void ZAddressBookPage::setModel(ZAddressTableModel *_model)
     proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
     proxyModel->setSortRole(Qt::EditRole);
 
+
     switch(tab)
     {
     case ReceivingTab:
@@ -171,6 +172,7 @@ void ZAddressBookPage::exportVK()
     {
 
         QString key = walletModel->getViewingKey(selection.at(0).data(ZAddressTableModel::Address).toString());
+        printf("exportVK(): %s\n", key.toStdString().c_str());
 
         if (key != "") {
           TransactionDescDialog *dlg = new TransactionDescDialog(selection.at(0), VIEWING_KEY, key);
