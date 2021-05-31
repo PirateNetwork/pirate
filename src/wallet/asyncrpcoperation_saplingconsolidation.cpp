@@ -216,14 +216,8 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
 
             builder.SetFee(fee);
             builder.AddSaplingOutput(extsk.expsk.ovk, addr, amountToSend - fee);
-            //CTransaction tx = builder.Build();
 
-            auto maybe_tx = builder.Build();
-            if (!maybe_tx) {
-                LogPrint("zrpcunsafe", "%s: Failed to build transaction.", getId());
-                break;
-            }
-            CTransaction tx = maybe_tx.get();
+            auto tx = builder.Build().GetTxOrThrow();
 
             if (isCancelled()) {
                 LogPrint("zrpcunsafe", "%s: Canceled. Stopping.\n", getId());

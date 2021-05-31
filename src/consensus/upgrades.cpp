@@ -37,7 +37,7 @@ const struct NUInfo NetworkUpgradeInfo[Consensus::MAX_NETWORK_UPGRADES] = {
     {
         /*.nBranchId =*/ 0,
         /*.strName =*/ "Sprout",
-        /*.strInfo =*/ "The Zcash network at launch",
+        /*.strInfo =*/ "The Pirate network at launch",
     },
     {
         /*.nBranchId =*/ 0x74736554,
@@ -47,12 +47,17 @@ const struct NUInfo NetworkUpgradeInfo[Consensus::MAX_NETWORK_UPGRADES] = {
     {
         /*.nBranchId =*/ 0x5ba81b19,
         /*.strName =*/ "Overwinter",
-        /*.strInfo =*/ "See https://z.cash/upgrade/overwinter.html for details.",
+        /*.strInfo =*/ "Activate Overwinter.",
     },
     {
         /*.nBranchId =*/ 0x76b809bb,
         /*.strName =*/ "Sapling",
-        /*.strInfo =*/ "See https://z.cash/upgrade/sapling.html for details.",
+        /*.strInfo =*/ "Activate Sapling.",
+    },
+    {
+        /*.nBranchId =*/ 0xe9ff75a6,
+        /*.strName =*/ "Canopy",
+        /*.strInfo =*/ "Activate Canopy.",
     }
 };
 
