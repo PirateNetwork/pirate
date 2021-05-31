@@ -1685,7 +1685,7 @@ int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex, bool witnessO
 
           // Sapling
           for (uint32_t i = 0; i < tx.vShieldedOutput.size(); i++) {
-            const uint256& note_commitment = tx.vShieldedOutput[i].cm;
+            const uint256& note_commitment = tx.vShieldedOutput[i].cmu;
 
             // Increment existing witness until the end of the block
             if (!nd->witnesses.empty()) {
@@ -1822,7 +1822,7 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
 
             for (const CTransaction& tx : block.vtx) {
               for (uint32_t i = 0; i < tx.vShieldedOutput.size(); i++) {
-                const uint256& note_commitment = tx.vShieldedOutput[i].cm;
+                const uint256& note_commitment = tx.vShieldedOutput[i].cmu;
                 nd->witnesses.front().append(note_commitment);
               }
             }
@@ -2715,7 +2715,7 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
         for (auto it = mapSaplingFullViewingKeys.begin(); it != mapSaplingFullViewingKeys.end(); ++it) {
             SaplingIncomingViewingKey ivk = it->first;
             keysTried.insert(ivk);
-            auto result = SaplingNotePlaintext::decrypt(output.encCiphertext, ivk, output.ephemeralKey, output.cm);
+            auto result = SaplingNotePlaintext::decrypt(Params().GetConsensus(), height, output.encCiphertext, ivk, output.ephemeralKey, output.cmu);
             if (result) {
                 auto address = ivk.address(result.get().d);
                 if (address && mapSaplingIncomingViewingKeys.count(address.get()) == 0) {
@@ -2743,7 +2743,7 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
                 std::set <SaplingIncomingViewingKey>::iterator kit = keysTried.find(ivk);
                 if (kit == keysTried.end()) {
                   keysTried.insert(ivk);
-                  auto result = SaplingNotePlaintext::decrypt(output.encCiphertext, ivk, output.ephemeralKey, output.cm);
+                  auto result = SaplingNotePlaintext::decrypt(Params().GetConsensus(), height, output.encCiphertext, ivk, output.ephemeralKey, output.cmu);
                   if (!result) {
                       continue;
                   }
@@ -2769,13 +2769,6 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
                   break;
                 }
             }
-            // We don't cache the nullifier here as computing it requires knowledge of the note position
-            // in the commitment tree, which can only be determined when the transaction has been mined.
-            SaplingOutPoint op {hash, i};
-            SaplingNoteData nd;
-            nd.ivk = ivk;
-            noteData.insert(std::make_pair(op, nd));
-            break;
         }
     }
 
@@ -4034,6 +4027,7 @@ bool CWallet::initalizeArcTx() {
     for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
         const uint256& wtxid = (*it).first;
         const CWalletTx wtx = (*it).second;
+        int txHeight = chainActive.Tip()->GetHeight() - wtx.GetDepthInMainChain();
 
         if (wtx.GetDepthInMainChain() > 0) {
             map<uint256, ArchiveTxPoint>::iterator ait = mapArcTxs.find(wtxid);
@@ -4053,7 +4047,7 @@ bool CWallet::initalizeArcTx() {
 
             if (wtx.mapSaplingNoteData.count(op) != 0) {
                 auto nd = wtx.mapSaplingNoteData.at(op);
-                auto decrypted = wtx.DecryptSaplingNote(op);
+                auto decrypted = wtx.DecryptSaplingNote(Params().GetConsensus(), txHeight, op);
                 if (decrypted) {
                     nd.value = decrypted->first.value();
                     nd.address = decrypted->second;
@@ -4124,9 +4118,9 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             ReadBlockFromDisk(block, pindex,1);
             BOOST_FOREACH(CTransaction& tx, block.vtx)
             {
-                if (AddToWalletIfInvolvingMe(tx, &block, pindex->nHeight, fUpdate, true)) {
+                if (AddToWalletIfInvolvingMe(tx, &block, pindex->GetHeight(), fUpdate, true)) {
                     blockInvolvesMe = true;
-                    myTxHashes.push_back(tx.GetHash());
+                    txList.insert(tx.GetHash());
                     ret++;
                 }
             }

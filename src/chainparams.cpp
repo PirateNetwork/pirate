@@ -130,6 +130,8 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170007;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
+        consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nProtocolVersion = 170007;
+        consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
 
         // The best chain should have at least this much work.
         consensus.nMinimumChainWork = uint256S("0x00000000000000000000000000000000000000000000000000281b32ff3198a1");
@@ -276,6 +278,8 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = 207500;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170007;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 280000;
+        consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nProtocolVersion = 170007;
+        consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nActivationHeight = 280500;
 
         // The best chain should have at least this much work.
         consensus.nMinimumChainWork = uint256S("0x00000000000000000000000000000000000000000000000000000001d0c4d9cd");
@@ -379,6 +383,9 @@ public:
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170006;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight =
+            Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
+        consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nProtocolVersion = 170007;
+        consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nActivationHeight =
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
 
         // The best chain should have at least this much work.
@@ -555,6 +562,13 @@ void komodo_setactivation(int32_t height)
     fprintf(stderr,"SET SAPLING ACTIVATION height.%d\n",height);
 }
 
+void komodo_setcanopy(int32_t height)
+{
+    pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nActivationHeight = height;
+    ASSETCHAINS_CANOPY = height;
+    fprintf(stderr,"SET ZIP212 ACTIVATION height.%d\n",height);
+}
+
 void *chainparams_commandline()
 {
     fprintf(stderr,"chainparams_commandline called\n");
@@ -644,6 +658,7 @@ void *chainparams_commandline()
             }
             pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = ASSETCHAINS_SAPLING;
             pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = ASSETCHAINS_OVERWINTER;
+            pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nActivationHeight = ASSETCHAINS_CANOPY;
             checkpointData = //(Checkpoints::CCheckpointData)
                     {
                             boost::assign::map_list_of

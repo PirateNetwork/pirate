@@ -156,7 +156,7 @@ void TransactionBuilder::AddSaplingOutput(
 
     libzcash::Zip212Enabled zip_212_enabled = libzcash::Zip212Enabled::BeforeZip212;
     // We use nHeight = chainActive.Height() + 1 since the output will be included in the next block
-    if (Params().GetConsensus().NetworkUpgradeActive(nHeight, Consensus::UPGRADE_CANOPY)) {
+    if (NetworkUpgradeActive(nHeight + 1, consensusParams, Consensus::UPGRADE_CANOPY)) {
         zip_212_enabled = libzcash::Zip212Enabled::AfterZip212;
     }
 

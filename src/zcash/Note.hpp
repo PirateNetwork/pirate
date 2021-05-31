@@ -57,7 +57,7 @@ inline bool plaintext_version_is_valid(const Consensus::Params& params, int heig
         // non-{0x01,0x02} received after Canopy activation and before grace period has elapsed
         return false;
     }
-    if (height >= canopyActivationHeight + ZIP212_GRACE_PERIOD && leadbyte != 0x02) {
+    if (canopyActivationHeight > 0 && height >= canopyActivationHeight + ZIP212_GRACE_PERIOD && leadbyte != 0x02) {
         // non-0x02 received past (Canopy activation height + grace period)
         return false;
     }

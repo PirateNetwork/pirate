@@ -267,7 +267,6 @@ TEST(NoteEncryption, RejectsInvalidNoteZip212Enabled)
 
     // Revert to test default
     RegtestDeactivateCanopy();
-    RegtestDeactivateHeartwood();
     RegtestDeactivateSapling();
 }
 
@@ -410,7 +409,6 @@ TEST(NoteEncryption, AcceptsValidNoteZip212Enabled)
 
     // Revert to test default
     RegtestDeactivateCanopy();
-    RegtestDeactivateHeartwood();
     RegtestDeactivateSapling();
 }
 

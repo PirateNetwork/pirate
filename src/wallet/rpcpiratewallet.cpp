@@ -234,7 +234,7 @@ void getSproutReceives(RpcTx &tx, vector<TransactionReceivedZC> &vReceived, bool
 
 
 template<typename RpcTx>
-void getSaplingSpends(RpcTx &tx, std::set<uint256> &ivks, std::set<uint256> &ivksOut, vector<TransactionSpendZS> &vSpend, bool fIncludeWatchonly) {
+void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx &tx, std::set<uint256> &ivks, std::set<uint256> &ivksOut, vector<TransactionSpendZS> &vSpend, bool fIncludeWatchonly) {
     // Sapling Inputs belonging to the wallet
     for (int i = 0; i < tx.vShieldedSpend.size(); i++) {
 
@@ -280,7 +280,9 @@ void getSaplingSpends(RpcTx &tx, std::set<uint256> &ivks, std::set<uint256> &ivk
 
         for (std::set<uint256>::iterator it = ivks.begin(); it != ivks.end(); it++) {
             auto ivk = SaplingIncomingViewingKey(*it);
-            auto pt = libzcash::SaplingNotePlaintext::decrypt(output.encCiphertext,ivk,output.ephemeralKey,output.cm);
+
+            auto pt = libzcash::SaplingNotePlaintext::decrypt(params, nHeight,
+              output.encCiphertext,ivk,output.ephemeralKey,output.cmu);
 
             if (pt) {
                 ivksOut.insert(ivk);
@@ -308,7 +310,7 @@ void getSaplingSpends(RpcTx &tx, std::set<uint256> &ivks, std::set<uint256> &ivk
 
 
 template<typename RpcTx>
-void getSaplingSends(RpcTx &tx, std::set<uint256> &ovks, std::set<uint256> &ovksOut, vector<TransactionSendZS> &vSend) {
+void getSaplingSends(const Consensus::Params& params, int nHeight, RpcTx &tx, std::set<uint256> &ovks, std::set<uint256> &ovksOut, vector<TransactionSendZS> &vSend) {
     //Outgoing Sapling Spends
     for (int i = 0; i < tx.vShieldedOutput.size(); i++) {
         const OutputDescription& outputDesc = tx.vShieldedOutput[i];
@@ -316,12 +318,12 @@ void getSaplingSends(RpcTx &tx, std::set<uint256> &ovks, std::set<uint256> &ovks
             auto ovk = *it;
             TransactionSendZS send;
             auto opt = libzcash::SaplingOutgoingPlaintext::decrypt(
-                    outputDesc.outCiphertext,ovk,outputDesc.cv,outputDesc.cm,outputDesc.ephemeralKey);
+                    outputDesc.outCiphertext,ovk,outputDesc.cv,outputDesc.cmu,outputDesc.ephemeralKey);
 
             if (opt) {
                 auto opt_unwrapped = opt.get();
-                auto pt = libzcash::SaplingNotePlaintext::decrypt(
-                        outputDesc.encCiphertext,outputDesc.ephemeralKey,opt_unwrapped.esk,opt_unwrapped.pk_d,outputDesc.cm);
+                auto pt = libzcash::SaplingNotePlaintext::decrypt(params, nHeight,
+                        outputDesc.encCiphertext,outputDesc.ephemeralKey,opt_unwrapped.esk,opt_unwrapped.pk_d,outputDesc.cmu);
 
                 if (pt) {
                     ovksOut.insert(ovk);
@@ -362,15 +364,15 @@ void getSaplingSends(RpcTx &tx, std::set<uint256> &ovks, std::set<uint256> &ovks
 }
 
 template<typename RpcTx>
-void getSaplingReceives(RpcTx &tx, std::set<uint256> &ivks, std::set<uint256> &ivksOut, vector<TransactionReceivedZS> &vReceived, bool fIncludeWatchonly) {
-
+void getSaplingReceives(const Consensus::Params& params, int nHeight, RpcTx &tx, std::set<uint256> &ivks, std::set<uint256> &ivksOut, vector<TransactionReceivedZS> &vReceived, bool fIncludeWatchonly) {
     for (int i = 0; i < tx.vShieldedOutput.size(); i++) {
         TransactionReceivedZS received;
         const OutputDescription& output = tx.vShieldedOutput[i];
 
         for (std::set<uint256>::iterator it = ivks.begin(); it != ivks.end(); it++) {
             auto ivk = SaplingIncomingViewingKey(*it);
-            auto pt = libzcash::SaplingNotePlaintext::decrypt(output.encCiphertext,ivk,output.ephemeralKey,output.cm);
+            auto pt = libzcash::SaplingNotePlaintext::decrypt(params, nHeight,
+              output.encCiphertext,ivk,output.ephemeralKey,output.cmu);
 
             if (pt) {
                 ivksOut.insert(ivk);
@@ -561,17 +563,18 @@ void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, bool fIncludeWatchonly
     arcTx.expiryHeight = 0;
     arcTx.size = static_cast<uint64_t>(GetSerializeSize(static_cast<CTransaction>(tx), SER_NETWORK, PROTOCOL_VERSION));
 
+    auto params = Params().GetConsensus();
     //Spends must be located to determine if outputs are change
     getTransparentSpends(tx, arcTx.vTSpend, arcTx.transparentValue, fIncludeWatchonly);
     // getSproutSpends(tx, arcTx.vZcSpend, arcTx.sproutValue, arcTx.sproutValueSpent, fIncludeWatchonly);
-    getSaplingSpends(tx, ivks, arcTx.ivks, arcTx.vZsSpend, fIncludeWatchonly);
+    getSaplingSpends(params, txHeight, tx, ivks, arcTx.ivks, arcTx.vZsSpend, fIncludeWatchonly);
 
     getTransparentSends(tx, arcTx.vTSend, arcTx.transparentValue);
-    getSaplingSends(tx, ovks, arcTx.ovks, arcTx.vZsSend);
+    getSaplingSends(params, txHeight, tx, ovks, arcTx.ovks, arcTx.vZsSend);
 
     getTransparentRecieves(tx, arcTx.vTReceived, fIncludeWatchonly);
     // getSproutReceives(tx, arcTx.vZcReceived, fIncludeWatchonly);
-    getSaplingReceives(tx, ivks, arcTx.ivks, arcTx.vZsReceived, fIncludeWatchonly);
+    getSaplingReceives(params, txHeight, tx, ivks, arcTx.ivks, arcTx.vZsReceived, fIncludeWatchonly);
 
     arcTx.saplingValue = -tx.valueBalance;
 
@@ -643,11 +646,13 @@ void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, bool fIncludeWatchonly
     arcTx.blockIndex = tx.nIndex;
     arcTx.blockHash = tx.hashBlock;
     arcTx.rawconfirmations = tx.GetDepthInMainChain();
+    int txHeight = chainActive.Tip()->GetHeight() + 1;
 
     if (!tx.hashBlock.IsNull() && mapBlockIndex[tx.hashBlock] != nullptr) {
         arcTx.nBlockTime = mapBlockIndex[tx.hashBlock]->GetBlockTime();
         arcTx.nTime = arcTx.nBlockTime;
         arcTx.confirmations = komodo_dpowconfs(mapBlockIndex[tx.hashBlock]->GetHeight(), tx.GetDepthInMainChain());
+        txHeight = mapBlockIndex[tx.hashBlock]->GetHeight();
     } else {
         arcTx.nBlockTime = 0;
         arcTx.confirmations = 0;
@@ -671,18 +676,18 @@ void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, bool fIncludeWatchonly
     arcTx.expiryHeight = (int64_t)tx.nExpiryHeight;
     arcTx.size = static_cast<uint64_t>(GetSerializeSize(static_cast<CTransaction>(tx), SER_NETWORK, PROTOCOL_VERSION));
 
-
+    auto params = Params().GetConsensus();
     //Spends must be located to determine if outputs are change
     getTransparentSpends(tx, arcTx.vTSpend, arcTx.transparentValue, fIncludeWatchonly);
     // getSproutSpends(tx, arcTx.vZcSpend, arcTx.sproutValue, arcTx.sproutValueSpent, fIncludeWatchonly);
-    getSaplingSpends(tx, ivks, arcTx.ivks, arcTx.vZsSpend, fIncludeWatchonly);
+    getSaplingSpends(params, txHeight, tx, ivks, arcTx.ivks, arcTx.vZsSpend, fIncludeWatchonly);
 
     getTransparentSends(tx, arcTx.vTSend, arcTx.transparentValue);
-    getSaplingSends(tx, ovks, arcTx.ovks, arcTx.vZsSend);
+    getSaplingSends(params, txHeight, tx, ovks, arcTx.ovks, arcTx.vZsSend);
 
     getTransparentRecieves(tx, arcTx.vTReceived, fIncludeWatchonly);
     // getSproutReceives(tx, arcTx.vZcReceived, fIncludeWatchonly);
-    getSaplingReceives(tx, ivks, arcTx.ivks, arcTx.vZsReceived, fIncludeWatchonly);
+    getSaplingReceives(params, txHeight, tx, ivks, arcTx.ivks, arcTx.vZsReceived, fIncludeWatchonly);
 
     arcTx.saplingValue = -tx.valueBalance;
 
@@ -2292,6 +2297,12 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
       if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapSproutNoteData.size() == 0 && !wtx.IsTrusted())
           continue;
 
+      //Get Block height of transaction
+      int txHeight = chainActive.Tip()->GetHeight() + 1;
+      if (!wtx.hashBlock.IsNull() && mapBlockIndex[wtx.hashBlock] != nullptr) {
+          txHeight = mapBlockIndex[wtx.hashBlock]->GetHeight();
+      }
+
       //Assign Immature
       if (txType == 0 && wtx.IsCoinBase() && wtx.GetBlocksToMaturity() > 0)
         txType = 1;
@@ -2360,8 +2371,8 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
               bool haveSpendingKey = pwalletMain->HaveSaplingSpendingKey(extfvk);
               if (haveSpendingKey || fIncludeWatchonly) {
 
-                  auto pt = libzcash::SaplingNotePlaintext::decrypt(
-                      wtx.vShieldedOutput[op.n].encCiphertext,ivk,wtx.vShieldedOutput[op.n].ephemeralKey,wtx.vShieldedOutput[op.n].cm);
+                  auto pt = libzcash::SaplingNotePlaintext::decrypt(Params().GetConsensus(), txHeight,
+                      wtx.vShieldedOutput[op.n].encCiphertext,ivk,wtx.vShieldedOutput[op.n].ephemeralKey,wtx.vShieldedOutput[op.n].cmu);
 
                   if (txType == 0 && pwalletMain->IsLockedNote(op))
                       txType == 3;
@@ -2629,7 +2640,7 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return returnObj;
 }
 
-void decrypttransaction(CTransaction &tx, RpcArcTransaction &arcTx) {
+void decrypttransaction(CTransaction &tx, RpcArcTransaction &arcTx, int nHeight) {
     //get Ovks for sapling decryption
     std::set<uint256> ovks;
     getAllSaplingOVKs(ovks, true);
@@ -2638,17 +2649,18 @@ void decrypttransaction(CTransaction &tx, RpcArcTransaction &arcTx) {
     std::set<uint256> ivks;
     getAllSaplingIVKs(ivks, true);
 
+    auto params = Params().GetConsensus();
     //Spends must be located to determine if outputs are change
     getTransparentSpends(tx, arcTx.vTSpend, arcTx.transparentValue, true);
     // getSproutSpends(tx, arcTx.vZcSpend, arcTx.sproutValue, arcTx.sproutValueSpent, true);
-    getSaplingSpends(tx, ivks, arcTx.ivks, arcTx.vZsSpend, true);
+    getSaplingSpends(params, nHeight, tx, ivks, arcTx.ivks, arcTx.vZsSpend, true);
 
     getTransparentSends(tx, arcTx.vTSend, arcTx.transparentValue);
-    getSaplingSends(tx, ovks, arcTx.ovks, arcTx.vZsSend);
+    getSaplingSends(params, nHeight, tx, ovks, arcTx.ovks, arcTx.vZsSend);
 
     getTransparentRecieves(tx, arcTx.vTReceived, true);
     // getSproutReceives(tx, arcTx.vZcReceived, true);
-    getSaplingReceives(tx, ivks, arcTx.ivks, arcTx.vZsReceived, true);
+    getSaplingReceives(params, nHeight, tx, ivks, arcTx.ivks, arcTx.vZsReceived, true);
 
     arcTx.saplingValue = -tx.valueBalance;
 
