@@ -857,7 +857,7 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
     // Return immediately if in warmup
     {
         LOCK(cs_rpcWarmup);
-        if (fRPCInWarmup)
+        if (fRPCInWarmup && strMethod != "help")
             throw JSONRPCError(RPC_IN_WARMUP, rpcWarmupStatus);
     }
 
