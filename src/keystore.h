@@ -49,6 +49,8 @@ public:
     virtual bool HaveHDSeed() const =0;
     //! Get the HD seed for this keystore
     virtual bool GetHDSeed(HDSeed& seedOut) const =0;
+    //! Get the Bipp-39 seed phrase
+    virtual bool GetSeedPhrase(std::string& phraseOut) const =0;
 
     //! Add a key to the store.
     virtual bool AddKeyPubKey(const CKey &key, const CPubKey &pubkey) =0;
@@ -175,6 +177,7 @@ public:
     bool SetHDSeed(const HDSeed& seed);
     bool HaveHDSeed() const;
     bool GetHDSeed(HDSeed& seedOut) const;
+    bool GetSeedPhrase(std::string& phraseOut) const;
 
     bool AddKeyPubKey(const CKey& key, const CPubKey &pubkey);
     bool HaveKey(const CKeyID &address) const

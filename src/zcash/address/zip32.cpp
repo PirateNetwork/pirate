@@ -21,10 +21,27 @@ const unsigned char ZCASH_TADDR_OVK_PERSONAL[crypto_generichash_blake2b_PERSONAL
 
 HDSeed HDSeed::Random(size_t len)
 {
-    assert(len >= 32);
+    assert(len == 32);
     RawHDSeed rawSeed(len, 0);
-    GetRandBytes(rawSeed.data(), len);
+    librustzcash_getrandom(rawSeed.data(), len);
     return HDSeed(rawSeed);
+}
+
+HDSeed HDSeed::RestoreFromPhrase(std::string &phrase)
+{
+    //Restore from Phrase
+    RawHDSeed restoredSeed(32, 0);
+    librustzcash_restore_seed_from_phase(restoredSeed.data(), 32, phrase.c_str());
+    return HDSeed(restoredSeed);
+}
+
+
+void HDSeed::GetPhrase(std::string &phrase)
+{
+    auto rawSeed = this->RawSeed();
+    char *rustPhrase = librustzcash_get_seed_phrase(rawSeed.data());
+    std::string newPhrase(rustPhrase);
+    phrase = newPhrase;
 }
 
 uint256 HDSeed::Fingerprint() const
@@ -117,10 +134,18 @@ SaplingExtendedSpendingKey SaplingExtendedSpendingKey::Master(const HDSeed& seed
 {
     auto rawSeed = seed.RawSeed();
     CSerializeData m_bytes(ZIP32_XSK_SIZE);
+
+    unsigned char* bip39_seed = librustzcash_get_bip39_seed(rawSeed.data(),rawSeed.size());
+
     librustzcash_zip32_xsk_master(
-        rawSeed.data(),
-        rawSeed.size(),
+        bip39_seed,
+        64,
         reinterpret_cast<unsigned char*>(m_bytes.data()));
+
+    // librustzcash_zip32_xsk_master(
+    //     rawSeed.data(),
+    //     rawSeed.size(),
+    //     reinterpret_cast<unsigned char*>(m_bytes.data()));
 
     CDataStream ss(m_bytes, SER_NETWORK, PROTOCOL_VERSION);
     SaplingExtendedSpendingKey xsk_m;

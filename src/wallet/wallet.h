@@ -1453,6 +1453,7 @@ public:
        caller must ensure the current wallet version is correct before calling
        this function). */
     void GenerateNewSeed();
+    void RestoreSeedFromPhrase(std::string &phrase);
 
     bool SetHDSeed(const HDSeed& seed);
     bool SetCryptedHDSeed(const uint256& seedFp, const std::vector<unsigned char> &vchCryptedSecret);

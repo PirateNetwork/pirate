@@ -36,6 +36,8 @@ zcash_history = "0.2"
 zcash_primitives = "0.5"
 zcash_proofs = "0.5"
 ed25519-zebra = "2.0.0"
+rand = "0.7.2"
+tiny-bip39 = "0.6.2"
 
 # Metrics
 hyper = { version = "=0.14.2", default-features = false, features = ["server", "tcp", "http1"] }

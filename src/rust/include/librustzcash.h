@@ -364,6 +364,23 @@ extern "C" {
         unsigned char *buf,
         size_t buf_len
     );
+
+    uint32_t librustzcash_restore_seed_from_phase(
+        unsigned char *buf,
+        size_t buf_len,
+        const char *seed_phrase
+    );
+
+    unsigned char* librustzcash_get_bip39_seed(
+        unsigned char *buf,
+        size_t buf_len
+    );
+
+    //Get phrase for 32 byte entropy
+    char* librustzcash_get_seed_phrase(
+        unsigned char *seed
+    );
+
 #ifdef __cplusplus
 }
 #endif

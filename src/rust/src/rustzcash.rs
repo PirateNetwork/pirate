@@ -31,6 +31,11 @@ use std::path::{Path, PathBuf};
 use std::slice;
 use subtle::CtOption;
 
+//Bip32 HDseed crates
+use libc::c_char;
+use bip39::{Language, Mnemonic};
+use std::ffi::{CString,CStr};
+
 #[cfg(not(target_os = "windows"))]
 use std::ffi::OsStr;
 #[cfg(not(target_os = "windows"))]
@@ -1249,4 +1254,42 @@ pub extern "system" fn librustzcash_mmr_hash_node(
 pub extern "C" fn librustzcash_getrandom(buf: *mut u8, buf_len: usize) {
     let buf = unsafe { slice::from_raw_parts_mut(buf, buf_len) };
     OsRng.fill_bytes(buf);
+}
+
+#[no_mangle]
+pub extern "C" fn librustzcash_restore_seed_from_phase(buf: *mut u8, buf_len: usize, seed_phrase: *const c_char) -> u32 {
+    let buf = unsafe { slice::from_raw_parts_mut(buf, buf_len) };
+
+    let c_str: &CStr = unsafe { CStr::from_ptr(seed_phrase)};
+    let rust_seed_phrase = c_str.to_str().unwrap().to_string();
+
+    let phrase = match Mnemonic::from_phrase(rust_seed_phrase.clone(), Language::English) {
+        Ok(p) => p,
+        Err(_) => return 1
+    };
+
+    buf.copy_from_slice(&phrase.entropy());
+    std::mem::forget(phrase);
+
+    0
+}
+
+#[no_mangle]
+pub extern "C" fn librustzcash_get_bip39_seed(buf: *mut u8, buf_len: usize) -> *const c_uchar {
+    println!{"Rust get bip39 see #1"};
+    let buf = unsafe { slice::from_raw_parts_mut(buf, buf_len) };
+    let tmp_seed = bip39::Seed::new(&Mnemonic::from_entropy(&buf, Language::English).unwrap(), "");
+    let bip39_seed = tmp_seed.as_bytes().as_ptr();
+    std::mem::forget(tmp_seed);
+    bip39_seed
+}
+
+#[no_mangle]
+pub extern "C" fn librustzcash_get_seed_phrase(seed: *const c_uchar) -> *const c_char {
+    let seed = unsafe { std::slice::from_raw_parts(seed, 32) };
+    let s = Mnemonic::from_entropy(&seed, Language::English).unwrap().phrase().to_string();
+    let c_str = CString::new(s).unwrap();
+    let phrase = c_str.as_ptr();
+    std::mem::forget(c_str);
+    phrase
 }

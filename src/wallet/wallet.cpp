@@ -3153,6 +3153,28 @@ void CWallet::GenerateNewSeed()
     SetHDChain(newHdChain, false);
 }
 
+void CWallet::RestoreSeedFromPhrase(std::string &phrase)
+{
+    LOCK(cs_wallet);
+
+    auto seed = HDSeed::RestoreFromPhrase(phrase);
+
+    int64_t nCreationTime = GetTime();
+
+    // If the wallet is encrypted and locked, this will fail.
+    if (!SetHDSeed(seed))
+        throw std::runtime_error(std::string(__func__) + ": SetHDSeed failed");
+
+    // store the key creation time together with
+    // the child index counter in the database
+    // as a hdchain object
+    CHDChain newHdChain;
+    newHdChain.nVersion = CHDChain::VERSION_HD_BASE;
+    newHdChain.seedFp = seed.Fingerprint();
+    newHdChain.nCreateTime = nCreationTime;
+    SetHDChain(newHdChain, false);
+}
+
 bool CWallet::SetHDSeed(const HDSeed& seed)
 {
     if (!CCryptoKeyStore::SetHDSeed(seed)) {

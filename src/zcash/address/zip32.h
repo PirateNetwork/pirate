@@ -27,7 +27,9 @@ public:
     HDSeed(RawHDSeed& seedIn) : seed(seedIn) {}
 
     static HDSeed Random(size_t len = 32);
+    static HDSeed RestoreFromPhrase(std::string &phrase);
     bool IsNull() const { return seed.empty(); };
+    void GetPhrase(std::string &phrase);
     uint256 Fingerprint() const;
     RawHDSeed RawSeed() const { return seed; }
 
