@@ -463,6 +463,7 @@ extern UniValue gettxoutsetinfo(const UniValue& params, bool fHelp, const CPubKe
 extern UniValue gettxout(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue verifychain(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue getchaintips(const UniValue& params, bool fHelp, const CPubKey& mypk);
+extern UniValue z_gettreestate(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue invalidateblock(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue reconsiderblock(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue getspentinfo(const UniValue& params, bool fHelp, const CPubKey& mypk);
