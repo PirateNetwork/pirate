@@ -79,6 +79,8 @@ bool fTxConflictDeleteEnabled = false;
 int fDeleteInterval = DEFAULT_TX_DELETE_INTERVAL;
 unsigned int fDeleteTransactionsAfterNBlocks = DEFAULT_TX_RETENTION_BLOCKS;
 unsigned int fKeepLastNTransactions = DEFAULT_TX_RETENTION_LASTTX;
+std::string recoverySeedPhrase = "";
+int recoveryHeight = 0;
 
 /**
  * Fees smaller than this (in satoshi) are considered zero fee (for transaction creation)
@@ -3153,9 +3155,21 @@ void CWallet::GenerateNewSeed()
     SetHDChain(newHdChain, false);
 }
 
-void CWallet::RestoreSeedFromPhrase(std::string &phrase)
+bool CWallet::IsValidPhrase(std::string &phrase)
 {
     LOCK(cs_wallet);
+
+    HDSeed checkSeed;
+    return checkSeed.IsValidPhrase(phrase);
+}
+
+bool CWallet::RestoreSeedFromPhrase(std::string &phrase)
+{
+    LOCK(cs_wallet);
+
+    if (!IsValidPhrase(phrase)) {
+        return false;
+    }
 
     auto seed = HDSeed::RestoreFromPhrase(phrase);
 
@@ -3173,6 +3187,8 @@ void CWallet::RestoreSeedFromPhrase(std::string &phrase)
     newHdChain.seedFp = seed.Fingerprint();
     newHdChain.nCreateTime = nCreationTime;
     SetHDChain(newHdChain, false);
+
+    return true;
 }
 
 bool CWallet::SetHDSeed(const HDSeed& seed)

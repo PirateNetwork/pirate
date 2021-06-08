@@ -2062,12 +2062,48 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
         if (!pwalletMain->HaveHDSeed())
         {
-            // generate a new HD seed
-            pwalletMain->GenerateNewSeed();
+            uiInterface.InitMessage(_(""));
+            uiInterface.InitCreateWallet();
+            while (pwalletMain->createType == UNSET) {
+              //wait for response from GUI
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+                if (fRequestShutdown)
+                {
+                    LogPrintf("Shutdown requested. Exiting.\n");
+                    return false;
+                }
+            }
+
+            if (pwalletMain->createType == RECOVERY) {
+                if (!pwalletMain->RestoreSeedFromPhrase(recoverySeedPhrase)) {
+                    LogPrintf("Invalid Seed Phrase - shutting down.\n");
+                    return false;
+                }
+            } else {
+              // generate a new HD seed
+                pwalletMain->GenerateNewSeed();
+                pwalletMain->GetSeedPhrase(recoverySeedPhrase);
+                uiInterface.InitShowPhrase();
+                while (pwalletMain->createType == RANDOM) {
+                  //wait for response from GUI
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    if (fRequestShutdown)
+                    {
+                        LogPrintf("Shutdown requested. Exiting.\n");
+                        return false;
+                    }
+                }
+            }
 
             // generate 1 address
             auto zAddress = pwalletMain->GenerateNewSaplingZKey();
             pwalletMain->SetZAddressBook(zAddress, "z-sapling", "");
+        }
+
+        std::string phrase = "";
+        if(pwalletMain->GetSeedPhrase(phrase)) {
+          LogPrintf("Bip-39 Seed Phrase - %s\n", phrase);
         }
 
         //Set Sapling Consolidation

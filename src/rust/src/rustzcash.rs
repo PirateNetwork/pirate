@@ -1265,18 +1265,17 @@ pub extern "C" fn librustzcash_restore_seed_from_phase(buf: *mut u8, buf_len: us
 
     let phrase = match Mnemonic::from_phrase(rust_seed_phrase.clone(), Language::English) {
         Ok(p) => p,
-        Err(_) => return 1
+        Err(_) => return 0
     };
 
     buf.copy_from_slice(&phrase.entropy());
     std::mem::forget(phrase);
 
-    0
+    1
 }
 
 #[no_mangle]
 pub extern "C" fn librustzcash_get_bip39_seed(buf: *mut u8, buf_len: usize) -> *const c_uchar {
-    println!{"Rust get bip39 see #1"};
     let buf = unsafe { slice::from_raw_parts_mut(buf, buf_len) };
     let tmp_seed = bip39::Seed::new(&Mnemonic::from_entropy(&buf, Language::English).unwrap(), "");
     let bip39_seed = tmp_seed.as_bytes().as_ptr();

@@ -16,6 +16,13 @@
 #include "ui_interface.h"
 #include "version.h"
 
+#include "newseed.h"
+#include "ui_newseed.h"
+#include "newwallet.h"
+#include "ui_newwallet.h"
+#include "restoreseed.h"
+#include "ui_restoreseed.h"
+
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
 #endif
@@ -25,6 +32,11 @@
 #include <QDesktopWidget>
 #include <QPainter>
 #include <QRadialGradient>
+#include <QStyle>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QPushButton>
+#include <QLabel>
 
 SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) :
     QWidget(0, f), curAlignment(0)
@@ -138,6 +150,106 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     setFixedSize(r.size());
     move(QApplication::desktop()->screenGeometry().center() - r.center());
 
+    //Set Main Create Wallet Widget
+    QVBoxLayout *seedLayout= new QVBoxLayout(this);
+    seed = new QWidget;
+    seed->setObjectName("seed");
+    seed->setStyleSheet( "QWidget#seed{ background-color : #000000; color: #ffffff; }" );
+    seedLayout->addWidget(seed);
+    seed->setVisible(false);
+
+    //Create Internal Layout
+    layout = new QVBoxLayout(this);
+    layout->setEnabled(false);
+
+    //Add Icon to the top
+    pirateIcon = new QLabel;
+    QPixmap pic(":/icons/komodo");
+    QSize pickSize(128,128);
+    pic = pic.scaled(pickSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    pirateIcon->setPixmap(pic);
+
+    //Center Icon Vertically
+    QVBoxLayout *viconLayout = new QVBoxLayout(this);
+    viconLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Fixed, QSizePolicy::Expanding));
+    viconLayout->addWidget(pirateIcon);
+    viconLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Fixed, QSizePolicy::Expanding));
+
+    //Center Icon Horizontally
+    QHBoxLayout *hiconLayout = new QHBoxLayout(this);
+    hiconLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Fixed));
+    hiconLayout->addLayout(viconLayout);
+    hiconLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Fixed));
+
+    //Add Icon to Internal Layout
+    layout->addLayout(hiconLayout);
+    pirateIcon->setVisible(false);
+
+    //New Wallwt Style Sheet
+    QString styleSheet = "QWidget {background-color: #303030; color: #ffffff;} QFrame#outerFrame {background-color: #282828; color: #ffffff;} QFrame#innerFrame {background-color: #303030; color: #ffffff;} QGroupBox {background-color: #282828; color: #ffffff;} QLineEdit {background-color: #303030; color: #ffffff;} QPlainTextEdit {background-color: #303030; color: #ffffff;}";
+    styleSheet = styleSheet + " QRadioButton { background-color: #303030;color: #ffffff; spacing: 5px;}";
+    styleSheet = styleSheet + " QRadioButton::indicator {background-color: #000000; color: #ffffff; width: 8px;height: 8px; border: 4px solid #000000; border-radius: 8px;}";
+    styleSheet = styleSheet + " QRadioButton::indicator:checked {background-color: rgba(25,225,25); color: #ffffff; width: 8px; height: 8px; border: 4px solid #000000; border-radius: 8px;}";
+
+    //Add Create Seed
+    newWallet = new NewWallet(networkStyle);
+    newWallet->setObjectName("newWallet");
+    newWallet->setStyleSheet(styleSheet);
+    layout->addWidget(newWallet);
+    newWallet->setVisible(false);
+
+    //Restore Seed and New Seed Style Sheet
+    styleSheet = "QWidget {background-color: #303030; color: #ffffff;} QGroupBox {background-color: #282828; color: #ffffff;} QLineEdit {background-color: #585858; color: #ffffff;} QPlainTextEdit {background-color: #585858; color: #ffffff;}";
+    styleSheet = styleSheet + " QFrame#outerFrame {background-color: #303030; color: #ffffff;} QFrame#innerFrame {background-color: #282828; color: #ffffff;}";
+    styleSheet = styleSheet + " QLabel#lblInvalid {color: #ff0000;}";
+
+    //Add Restore Seed
+    restoreSeed = new RestoreSeed(networkStyle);
+    restoreSeed->setObjectName("restoreSeed");
+    restoreSeed->setStyleSheet(styleSheet);
+    layout->addWidget(restoreSeed);
+    restoreSeed->setVisible(false);
+
+    //Add New Seed display
+    newSeed = new NewSeed(networkStyle);
+    newSeed->setObjectName("newSeed");
+    newSeed->setStyleSheet(styleSheet);
+    layout->addWidget(newSeed);
+    newSeed->setVisible(false);
+
+    //Add button layout
+    QHBoxLayout *buttonLayout = new QHBoxLayout(this);
+    buttonLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Fixed));
+
+    //Add ok button
+    btnTypeSelect = new QPushButton(this);
+    btnTypeSelect->setText(tr("ok"));
+    btnTypeSelect->setVisible(false);
+    btnTypeSelect->setObjectName("btnTypeSelected");
+    buttonLayout->addWidget(btnTypeSelect);
+
+    btnRestore = new QPushButton(this);
+    btnRestore->setText(tr("Restore"));
+    btnRestore->setVisible(false);
+    btnRestore->setObjectName("btnRestore");
+    buttonLayout->addWidget(btnRestore);
+
+    btnDone = new QPushButton(this);
+    btnDone->setText(tr("Done"));
+    btnDone->setVisible(false);
+    btnDone->setObjectName("btnDone");
+    buttonLayout->addWidget(btnDone);
+
+    layout->addLayout(buttonLayout);
+
+    //Add Layout to primary widget
+    seed->setLayout(layout);
+
+    // Connect signals for seed creation bittons
+    connect(btnTypeSelect, SIGNAL(clicked()), this, SLOT(on_btnTypeSelected_clicked()));
+    connect(btnRestore, SIGNAL(clicked()), this, SLOT(on_btnRestore_clicked()));
+    connect(btnDone, SIGNAL(clicked()), this, SLOT(on_btnDone_clicked()));
+
     subscribeToCoreSignals();
     installEventFilter(this);
 }
@@ -178,6 +290,22 @@ static void InitMessage(SplashScreen *splash, const std::string &message)
         Q_ARG(QColor, QColor(193, 157, 66)));
 }
 
+static void showCreateWallet(SplashScreen *splash)
+{
+    splash->layout->setEnabled(true);
+    splash->seed->setVisible(true);
+    splash->pirateIcon->setVisible(true);
+    splash->newWallet->setVisible(true);
+    splash->btnTypeSelect->setVisible(true);
+}
+
+static void showNewPhrase(SplashScreen *splash)
+{
+    splash->newSeed->setVisible(true);
+    splash->btnDone->setVisible(true);
+    splash->newSeed->ui->txtSeed->setPlainText(QString::fromStdString(recoverySeedPhrase));
+}
+
 static void ShowProgress(SplashScreen *splash, const std::string &title, int nProgress, bool resume_possible)
 {
 	if (splash->isVisible()) {
@@ -193,9 +321,47 @@ void SplashScreen::ConnectWallet(CWallet* wallet)
 }
 #endif
 
+void SplashScreen::on_btnTypeSelected_clicked()
+{
+    if(!this->newWallet->ui->radioNewWallet->isChecked() && !this->newWallet->ui->radioRestoreWallet->isChecked())
+        return;
+
+    this->newWallet->setVisible(false);
+    this->btnTypeSelect->setVisible(false);
+
+    if (this->newWallet->ui->radioRestoreWallet->isChecked()) {
+        this->restoreSeed->ui->lblInvalid->setVisible(false);
+        this->restoreSeed->setVisible(true);
+        this->btnRestore->setVisible(true);
+    } else {
+        pwalletMain->createType = RANDOM;
+    }
+}
+
+void SplashScreen::on_btnRestore_clicked()
+{
+      std::string phrase = this->restoreSeed->ui->txtSeed->toPlainText().toStdString();
+      recoveryHeight = this->restoreSeed->ui->txtBirthday->text().toInt();
+
+      if (pwalletMain->IsValidPhrase(phrase)) {
+          recoverySeedPhrase = phrase;
+          pwalletMain->createType = RECOVERY;
+      } else {
+          this->restoreSeed->ui->lblInvalid->setVisible(true);
+      }
+}
+
+void SplashScreen::on_btnDone_clicked()
+{
+    this->seed->setVisible(false);
+    pwalletMain->createType = COMPLETE;
+}
+
 void SplashScreen::subscribeToCoreSignals()
 {
     // Connect signals to client
+    uiInterface.InitCreateWallet.connect(boost::bind(showCreateWallet,this));
+    uiInterface.InitShowPhrase.connect(boost::bind(showNewPhrase,this));
     uiInterface.InitMessage.connect(boost::bind(InitMessage, this, _1));
     uiInterface.ShowProgress.connect(boost::bind(ShowProgress, this, _1, _2, _3));
 #ifdef ENABLE_WALLET

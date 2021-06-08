@@ -122,7 +122,10 @@ QT_FORMS_UI = \
   qt/forms/signverifymessagedialog.ui \
   qt/forms/transactiondescdialog.ui \
   qt/forms/zaddressbookpage.ui \
-  qt/forms/editzaddressdialog.ui
+  qt/forms/editzaddressdialog.ui \
+  qt/forms/newseed.ui \
+  qt/forms/newwallet.ui \
+  qt/forms/restoreseed.ui
 
 QT_MOC_CPP = \
   qt/moc_addressbookpage.cpp \
@@ -149,6 +152,9 @@ QT_MOC_CPP = \
   qt/moc_macnotificationhandler.cpp \
   qt/moc_modaloverlay.cpp \
   qt/moc_notificator.cpp \
+  qt/moc_newseed.cpp \
+  qt/moc_newwallet.cpp \
+  qt/moc_restoreseed.cpp \
   qt/moc_openuridialog.cpp \
   qt/moc_optionsdialog.cpp \
   qt/moc_optionsmodel.cpp \
@@ -232,6 +238,9 @@ KOMODO_QT_H = \
   qt/macnotificationhandler.h \
   qt/modaloverlay.h \
   qt/networkstyle.h \
+  qt/newseed.h \
+  qt/newwallet.h \
+  qt/restoreseed.h \
   qt/notificator.h \
   qt/openuridialog.h \
   qt/optionsdialog.h \
@@ -336,6 +345,9 @@ KOMODO_QT_BASE_CPP = \
   qt/intro.cpp \
   qt/modaloverlay.cpp \
   qt/networkstyle.cpp \
+  qt/newseed.cpp \
+  qt/newwallet.cpp \
+  qt/restoreseed.cpp \
   qt/notificator.cpp \
   qt/optionsdialog.cpp \
   qt/optionsmodel.cpp \

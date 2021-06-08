@@ -69,8 +69,8 @@ extern bool fTxConflictDeleteEnabled;
 extern int fDeleteInterval;
 extern unsigned int fDeleteTransactionsAfterNBlocks;
 extern unsigned int fKeepLastNTransactions;
-
-
+extern std::string recoverySeedPhrase;
+extern int recoveryHeight;
 
 //! -paytxfee default
 static const CAmount DEFAULT_TRANSACTION_FEE = 0;
@@ -131,6 +131,12 @@ enum WalletFeature
     FEATURE_LATEST = 60000
 };
 
+ enum WalletCreateType {
+      UNSET,
+      RANDOM,
+      RECOVERY,
+      COMPLETE
+ };
 
 /** A key pool entry */
 class CKeyPool
@@ -863,6 +869,7 @@ public:
     int nextSweep = 0;
     int targetSweepQty = 0;
 
+    WalletCreateType createType = UNSET;
 
     void ClearNoteWitnessCache();
 
@@ -1453,7 +1460,8 @@ public:
        caller must ensure the current wallet version is correct before calling
        this function). */
     void GenerateNewSeed();
-    void RestoreSeedFromPhrase(std::string &phrase);
+    bool IsValidPhrase(std::string &phrase);
+    bool RestoreSeedFromPhrase(std::string &phrase);
 
     bool SetHDSeed(const HDSeed& seed);
     bool SetCryptedHDSeed(const uint256& seedFp, const std::vector<unsigned char> &vchCryptedSecret);

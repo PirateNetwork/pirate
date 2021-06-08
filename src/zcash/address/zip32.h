@@ -28,6 +28,7 @@ public:
 
     static HDSeed Random(size_t len = 32);
     static HDSeed RestoreFromPhrase(std::string &phrase);
+    bool IsValidPhrase(std::string &phrase);
     bool IsNull() const { return seed.empty(); };
     void GetPhrase(std::string &phrase);
     uint256 Fingerprint() const;

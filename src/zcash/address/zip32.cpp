@@ -35,6 +35,13 @@ HDSeed HDSeed::RestoreFromPhrase(std::string &phrase)
     return HDSeed(restoredSeed);
 }
 
+bool HDSeed::IsValidPhrase(std::string &phrase)
+{
+    //Restore from Phrase
+    RawHDSeed restoredSeed(32, 0);
+    return librustzcash_restore_seed_from_phase(restoredSeed.data(), 32, phrase.c_str());
+
+}
 
 void HDSeed::GetPhrase(std::string &phrase)
 {

@@ -11,6 +11,16 @@
 class CWallet;
 class NetworkStyle;
 
+class RestoreSeed;
+class NewSeed;
+class NewWallet;
+
+QT_BEGIN_NAMESPACE
+class QPushButton;
+class QVBoxLayout;
+class QLabel;
+QT_END_NAMESPACE
+
 /** Class for the splashscreen with information of the running client.
  *
  * @note this is intentionally not a QSplashScreen. Pirate Core initialization
@@ -24,6 +34,16 @@ class SplashScreen : public QWidget
 public:
     explicit SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle);
     ~SplashScreen();
+
+    QWidget* seed;
+    QVBoxLayout* layout;
+    QLabel* pirateIcon;
+    NewWallet* newWallet;
+    RestoreSeed* restoreSeed;
+    NewSeed* newSeed;
+    QPushButton* btnTypeSelect;
+    QPushButton* btnRestore;
+    QPushButton* btnDone;
 
 protected:
     void paintEvent(QPaintEvent *event);
@@ -53,6 +73,17 @@ private:
     int curAlignment;
 
     QList<CWallet*> connectedWallets;
+
+private Q_SLOTS:
+    /** Select Random or Restore from seed while creating a new wallet */
+    void on_btnTypeSelected_clicked();
+
+    /** Restore wallet from seed, pressed when seed has been inputed into the form */
+    void on_btnRestore_clicked();
+
+    /** Press complete new random seed phrase */
+    void on_btnDone_clicked();
+
 };
 
 #endif // KOMODO_QT_SPLASHSCREEN_H
