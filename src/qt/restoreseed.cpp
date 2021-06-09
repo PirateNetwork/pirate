@@ -10,9 +10,6 @@ RestoreSeed::RestoreSeed(const NetworkStyle *networkStyle) :
     ui(new Ui::RestoreSeedForm)
 {
     ui->setupUi(this);
-
-    QRegExpValidator* rxv = new QRegExpValidator(QRegExp("[+]?\\d*"), this);
-    ui->txtBirthday->setValidator(rxv);
 }
 
 RestoreSeed::~RestoreSeed()

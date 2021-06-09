@@ -208,6 +208,10 @@ public:
     bool WriteWatchOnly(const CScript &script);
     bool EraseWatchOnly(const CScript &script);
 
+    //Height of first known transaction
+    bool WriteWalletBirthday(const int& nHeight);
+    bool ReadWalletBirthday(int& nHeight);
+
     bool WriteBestBlock(const CBlockLocator& locator);
     bool ReadBestBlock(CBlockLocator& locator);
 

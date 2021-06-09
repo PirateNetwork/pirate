@@ -950,6 +950,12 @@ void CWallet::SetBestChain(const CBlockLocator& loc)
     SetBestChainINTERNAL(walletdb, loc);
 }
 
+void CWallet::SetWalletBirthday(int nHeight)
+{
+    CWalletDB walletdb(strWalletFile);
+    walletdb.WriteWalletBirthday(nHeight);
+}
+
 std::set<std::pair<libzcash::PaymentAddress, uint256>> CWallet::GetNullifiersForAddresses(
         const std::set<libzcash::PaymentAddress> & addresses)
 {
@@ -2545,6 +2551,12 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
             if (pblock)
                 wtx.SetMerkleBranch(*pblock);
 
+            //Set Wallet Birthday on first transaction found
+            if (nBirthday > 0 && nHeight < nBirthday) {
+                nBirthday = nHeight;
+                SetWalletBirthday(nBirthday);
+            }
+
             // Do not flush the wallet here for performance reasons
             // this is safe, as in case of a crash, we rescan the necessary blocks on startup through our SetBestChain-mechanism
             CWalletDB walletdb(strWalletFile, "r+", false);
@@ -4136,7 +4148,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
         // no need to read and scan block, if block was created before
         // our wallet birthday (as adjusted for block time variability)
-        while (!fIgnoreBirthday && pindex && nTimeFirstKey && (pindex->GetBlockTime() < (nTimeFirstKey - 7200)))
+        while (!fIgnoreBirthday && pindex && nTimeFirstKey && (pindex->GetBlockTime() < (nTimeFirstKey - 7200)) && (pindex->GetHeight() < pwalletMain->nBirthday))
             pindex = chainActive.Next(pindex);
 
         uiInterface.ShowProgress(_("Rescanning..."), 0, false); // show rescan progress in GUI as dialog or on splashscreen, if -rescan on startup

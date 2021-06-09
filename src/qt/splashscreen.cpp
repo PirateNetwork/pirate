@@ -341,7 +341,6 @@ void SplashScreen::on_btnTypeSelected_clicked()
 void SplashScreen::on_btnRestore_clicked()
 {
       std::string phrase = this->restoreSeed->ui->txtSeed->toPlainText().toStdString();
-      recoveryHeight = this->restoreSeed->ui->txtBirthday->text().toInt();
 
       if (pwalletMain->IsValidPhrase(phrase)) {
           recoverySeedPhrase = phrase;

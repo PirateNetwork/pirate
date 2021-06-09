@@ -869,6 +869,9 @@ public:
     int nextSweep = 0;
     int targetSweepQty = 0;
 
+    //Wallet Birthday;
+    int nBirthday;
+
     WalletCreateType createType = UNSET;
 
     void ClearNoteWitnessCache();
@@ -1368,6 +1371,7 @@ public:
     void CommitAutomatedTx(const CTransaction& tx);
     /** Saves witness caches and best block locator to disk. */
     void SetBestChain(const CBlockLocator& loc);
+    void SetWalletBirthday(int nHeight);
     std::set<std::pair<libzcash::PaymentAddress, uint256>> GetNullifiersForAddresses(const std::set<libzcash::PaymentAddress> & addresses);
     bool IsNoteSproutChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet, const libzcash::PaymentAddress & address, const JSOutPoint & entry);
     bool IsNoteSaplingChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet, const libzcash::PaymentAddress & address, const SaplingOutPoint & entry);

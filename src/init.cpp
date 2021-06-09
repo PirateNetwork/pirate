@@ -2060,6 +2060,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             pwalletMain->SetMaxVersion(nMaxVersion);
         }
 
+        bool recoverWallet = false;
         if (!pwalletMain->HaveHDSeed())
         {
             uiInterface.InitMessage(_(""));
@@ -2080,6 +2081,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                     LogPrintf("Invalid Seed Phrase - shutting down.\n");
                     return false;
                 }
+                recoverWallet = true;
             } else {
               // generate a new HD seed
                 pwalletMain->GenerateNewSeed();
@@ -2094,6 +2096,13 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                         return false;
                     }
                 }
+            }
+
+            //Write Wallet birthday
+            {
+                pwalletMain->nBirthday = 0;
+                CWalletDB walletdb(strWalletFile);
+                walletdb.WriteWalletBirthday(pwalletMain->nBirthday);
             }
 
             // generate 1 address
@@ -2203,10 +2212,18 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         RegisterValidationInterface(pwalletMain);
 
         CBlockIndex *pindexRescan = chainActive.Tip();
+
+        //Load Wallet birthday
+        {
+            CWalletDB walletdb(strWalletFile);
+            walletdb.ReadWalletBirthday(pwalletMain->nBirthday);
+        }
+
         if (clearWitnessCaches || GetBoolArg("-rescan", false) || !fInitializeArcTx || useBootstrap)
         {
             pwalletMain->ClearNoteWitnessCache();
             pindexRescan = chainActive.Genesis();
+            pwalletMain->nBirthday = 0;
 
             int rescanHeight = GetArg("-rescanheight", 0);
             if (rescanHeight > 0) {
@@ -2226,6 +2243,11 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             else
                 pindexRescan = chainActive.Genesis();
         }
+        //Always scan from Genesis on wallet Recovery
+        if (recoverWallet) {
+            pindexRescan = chainActive.Genesis();
+        }
+
         if (chainActive.Tip() && chainActive.Tip() != pindexRescan)
         {
             uiInterface.InitMessage(_("Rescanning..."));
