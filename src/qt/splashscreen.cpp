@@ -348,6 +348,7 @@ void SplashScreen::on_btnRestore_clicked()
       } else {
           this->restoreSeed->ui->lblInvalid->setVisible(true);
       }
+      this->seed->setVisible(false);
 }
 
 void SplashScreen::on_btnDone_clicked()
