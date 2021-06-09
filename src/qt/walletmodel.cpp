@@ -1199,6 +1199,11 @@ bool WalletModel::getSeedPhrase(std::string &phrase) const
 {
     return wallet->GetSeedPhrase(phrase);
 }
+
+void WalletModel::rescan() const
+{
+    return wallet->ForceRescanWallet();
+}
 // returns a list of COutputs from COutPoints
 void WalletModel::getOutputs(const std::vector<COutPoint>& vOutpoints, std::vector<COutput>& vOutputs)
 {

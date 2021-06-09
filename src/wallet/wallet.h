@@ -1284,6 +1284,7 @@ public:
     bool AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb, bool fRescan = false);
     void EraseFromWallet(const uint256 &hash);
     void SyncTransaction(const CTransaction& tx, const CBlock* pblock, const int nHeight);
+    void ForceRescanWallet();
     void RescanWallet();
     bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, const int nHeight, bool fUpdate, bool fRescan = false);
     void WitnessNoteCommitment(

@@ -456,6 +456,9 @@ void PirateOceanGUI::createActions()
     showSeedAction = new QAction(platformStyle->TextColorIcon(":/icons/key"), tr("&Show Seed Phrase"), this);
     showSeedAction->setStatusTip(tr("Show 24 word wallet seed phrase"));
 
+    rescanAction = new QAction(platformStyle->TextColorIcon(":/icons/key"), tr("&Rescan"), this);
+    rescanAction->setStatusTip(tr("Rescan wallet"));
+
     showHelpMessageAction = new QAction(platformStyle->TextColorIcon(":/icons/info"), tr("&Command-line options"), this);
     showHelpMessageAction->setMenuRole(QAction::NoRole);
     showHelpMessageAction->setStatusTip(tr("Show the %1 help message to get a list with possible Pirate command-line options").arg(tr(PACKAGE_NAME)));
@@ -474,6 +477,8 @@ void PirateOceanGUI::createActions()
     connect(importSpendAction, SIGNAL(triggered()), this, SLOT(gotoImportSK()));
     connect(importViewAction, SIGNAL(triggered()), this, SLOT(gotoImportVK()));
     connect(showSeedAction, SIGNAL(triggered()), this, SLOT(showSeedPhrase()));
+    connect(rescanAction, SIGNAL(triggered()), this, SLOT(rescan()));
+
     // prevents an open debug window from becoming stuck/unusable on client shutdown
     connect(quitAction, SIGNAL(triggered()), rpcConsole, SLOT(hide()));
 
@@ -532,6 +537,8 @@ void PirateOceanGUI::createMenuBar()
         file->addAction(importViewAction);
         file->addSeparator();
         file->addAction(showSeedAction);
+        file->addSeparator();
+        file->addAction(rescanAction);
         file->addAction(usedSendingAddressesAction);
         file->addAction(usedReceivingAddressesAction);
         file->addAction(usedReceivingZAddressesAction);
@@ -857,6 +864,12 @@ void PirateOceanGUI::showSeedPhrase()
 {
     if (walletFrame) walletFrame->showSeedPhrase();
 }
+
+void PirateOceanGUI::rescan()
+{
+    if (walletFrame) walletFrame->rescan();
+}
+
 #endif // ENABLE_WALLET
 
 void PirateOceanGUI::updateNetworkState()

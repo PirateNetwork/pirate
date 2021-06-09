@@ -107,6 +107,8 @@ public Q_SLOTS:
     void importVK();
     /*Return 24 word seed phrase*/
     void showSeedPhrase();
+    /*Rescan Wallet*/
+    void rescan();
 
     /** Show incoming transaction notification for new transactions.
 

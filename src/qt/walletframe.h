@@ -86,6 +86,8 @@ public Q_SLOTS:
     void importVK();
     /*Show 24 word seed phrase*/
     void showSeedPhrase();
+    /*Rescan Wallet*/
+    void rescan();
     /** Encrypt the wallet */
     void encryptWallet(bool status);
     /** Backup the wallet */

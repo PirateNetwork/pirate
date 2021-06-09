@@ -2616,6 +2616,12 @@ void CWallet::EraseFromWallet(const uint256 &hash)
     return;
 }
 
+/*Rescan the whole chain for transactions*/
+void CWallet::ForceRescanWallet() {
+    CBlockIndex* pindex = chainActive.Genesis();
+    ScanForWalletTransactions(pindex, true, true);
+}
+
 void CWallet::RescanWallet()
 {
     if (needsRescan)

@@ -319,6 +319,14 @@ void WalletView::showSeedPhrase()
 
 }
 
+void WalletView::rescan()
+{
+    if(!walletModel)
+        return;
+
+    walletModel->rescan();
+}
+
 void WalletView::encryptWallet(bool status)
 {
     if(!walletModel)

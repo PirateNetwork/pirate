@@ -236,6 +236,13 @@ void WalletFrame::showSeedPhrase()
         walletView->showSeedPhrase();
 }
 
+void WalletFrame::rescan()
+{
+    WalletView *walletView = currentWalletView();
+    if (walletView)
+        walletView->rescan();
+}
+
 WalletView *WalletFrame::currentWalletView()
 {
     return qobject_cast<WalletView*>(walletStack->currentWidget());

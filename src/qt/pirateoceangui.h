@@ -119,6 +119,7 @@ private:
     QAction *importSpendAction;
     QAction *importViewAction;
     QAction *showSeedAction;
+    QAction *rescanAction;
 
     QSystemTrayIcon *trayIcon;
     QMenu *trayIconMenu;
@@ -225,6 +226,8 @@ private Q_SLOTS:
     void gotoImportVK();
     /*Show 24 word wallet seed phrase*/
     void showSeedPhrase();
+    /*Rescan Wallet*/
+    void rescan();
     /** Show open dialog */
     void openClicked();
 #endif // ENABLE_WALLET
