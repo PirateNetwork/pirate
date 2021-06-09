@@ -1195,6 +1195,10 @@ bool WalletModel::getPrivKey(const CKeyID &address, CKey& vchPrivKeyOut) const
     return wallet->GetKey(address, vchPrivKeyOut);
 }
 
+bool WalletModel::getSeedPhrase(std::string &phrase) const
+{
+    return wallet->GetSeedPhrase(phrase);
+}
 // returns a list of COutputs from COutPoints
 void WalletModel::getOutputs(const std::vector<COutPoint>& vOutpoints, std::vector<COutput>& vOutputs)
 {

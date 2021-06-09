@@ -229,6 +229,13 @@ void WalletFrame::importVK()
         walletView->importVK();
 }
 
+void WalletFrame::showSeedPhrase()
+{
+    WalletView *walletView = currentWalletView();
+    if (walletView)
+        walletView->showSeedPhrase();
+}
+
 WalletView *WalletFrame::currentWalletView()
 {
     return qobject_cast<WalletView*>(walletStack->currentWidget());

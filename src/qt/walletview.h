@@ -105,6 +105,8 @@ public Q_SLOTS:
     void importSK();
     /**Show import viewing key dialog*/
     void importVK();
+    /*Return 24 word seed phrase*/
+    void showSeedPhrase();
 
     /** Show incoming transaction notification for new transactions.
 

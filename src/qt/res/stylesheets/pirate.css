@@ -204,6 +204,11 @@ QDialog#OpenVKDialog {
     color: #ffffff;
 }
 
+QDialog#OpenPhraseDialog {
+    background-color: #202020;
+    color: #ffffff;
+}
+
 QDialog#NewZAddress {
     background-color: #202020;
     color: #ffffff;
@@ -317,4 +322,3 @@ QLabel#labelExplanation {
     background-color: rgba(0,0,0,0.6);
     color: #FEFEFE;
 }
-

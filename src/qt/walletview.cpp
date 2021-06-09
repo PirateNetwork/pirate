@@ -23,6 +23,7 @@
 #include "transactionview.h"
 #include "walletmodel.h"
 #include "importkeydialog.h"
+#include "openphrasedialog.h"
 
 #include "ui_interface.h"
 
@@ -299,6 +300,23 @@ void WalletView::importVK()
           walletModel->importViewingKey(privateKey);
     }
     dlg.close();
+}
+
+void WalletView::showSeedPhrase()
+{
+    if(!walletModel)
+        return;
+
+    QString phrase = "";
+    std::string recoverySeedPhrase = "";
+    if (walletModel->getSeedPhrase(recoverySeedPhrase)) {
+        phrase = QString::fromStdString(recoverySeedPhrase);
+    }
+
+    OpenPhraseDialog dlg(this, phrase);
+    dlg.exec();
+    dlg.close();
+
 }
 
 void WalletView::encryptWallet(bool status)
