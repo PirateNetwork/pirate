@@ -47,7 +47,7 @@ ZSendCoinsDialog::ZSendCoinsDialog(const PlatformStyle *_platformStyle, QWidget 
     model(0),
     fNewRecipientAllowed(true),
     platformStyle(_platformStyle)
-{    
+{
     ui->setupUi(this);
 
     ui->payFromAddress->setMaxVisibleItems(30);
@@ -129,16 +129,16 @@ void ZSendCoinsDialog::on_sendButton_clicked()
 
     QString fromaddress;
     QString sIsMine;
-    bool bIsMine=false;
+    bool bIsMine=true;
     if (!ui->payFromAddress->currentText().split(' ').isEmpty())
     {
       fromaddress = ui->payFromAddress->currentText().split(' ').at(2);
       //If the string format on the GUI is changed the adres might get
       //misinterpreted here. Might have to look at a better way to identify
       //the adres.
-      if (ui->payFromAddress->currentText().contains("Local"))
+      if (ui->payFromAddress->currentText().contains("Off-line"))
       {
-        bIsMine=true;
+        bIsMine=false;
       }
     }
 
@@ -280,10 +280,10 @@ void ZSendCoinsDialog::on_sendButton_clicked()
     else
     {
        sHeading="Confirm prepare off-line transaction";
-    }           
+    }
     ZSendConfirmationDialog confirmationDialog(tr(sHeading.toStdString().c_str() ),
       questionString.arg(formatted.join("<br />")), SEND_CONFIRM_DELAY, this);
-    confirmationDialog.exec();    
+    confirmationDialog.exec();
     QMessageBox::StandardButton retval = (QMessageBox::StandardButton)confirmationDialog.result();
     if(retval != QMessageBox::Yes)
     {
@@ -306,7 +306,7 @@ void ZSendCoinsDialog::on_sendButton_clicked()
 
 
     QString qsResult="";
-    string sResult="";    
+    string sResult="";
     if (bIsMine==false)
     {
       sResult = currentTransaction.getZSignOfflineTransaction();
@@ -537,7 +537,7 @@ void ZSendCoinsDialog::updateDisplayUnit()
 {
     setBalance(model->getBalance(), 0, 0, 0, 0, 0, 0, 0, 0);
     ui->customFee->setDisplayUnit(model->getOptionsModel()->getDisplayUnit());
-    updatePayFromList(); 
+    updatePayFromList();
 }
 
 void ZSendCoinsDialog::setResult(const string sHeading, const string sResult)
@@ -648,15 +648,15 @@ void ZSendCoinsDialog::useAvailableBalance(SendCoinsEntry* entry)
     }
 
     QString address;
-    if (!ui->payFromAddress->currentText().split(' ').isEmpty()) 
+    if (!ui->payFromAddress->currentText().split(' ').isEmpty())
       address = ui->payFromAddress->currentText().split(' ').at(2);
 
     // Calculate available amount to send.
     CAmount amount = 0;
     if (!address.isEmpty())
-    {        
+    {
         amount = model->getAddressBalance(address.toStdString());
-        
+
         for (int i = 0; i < ui->entries->count(); ++i) {
             SendCoinsEntry* e = qobject_cast<SendCoinsEntry*>(ui->entries->itemAt(i)->widget());
             if (e && !e->isHidden() && e != entry) {
@@ -682,11 +682,11 @@ void ZSendCoinsDialog::payFromAddressIndexChanged(int iIndex)
 {
   if (iIndex>=0)
   {
-    bool bIsMine=false;
+    bool bIsMine=true;
     QString qsText = ui->payFromAddress->currentText();
-    if (qsText.contains("Local"))
+    if (qsText.contains("Off-line"))
     {
-      bIsMine=true;
+      bIsMine=false;
     }
 
     if (bIsMine==true) //Local adres
@@ -739,26 +739,32 @@ void ZSendCoinsDialog::coinControlUpdateLabels()
 void ZSendCoinsDialog::updatePayFromList()
 {
     ui->payFromAddress->clear();
-    
+
     std::map<libzcash::PaymentAddress, CAmount> zbalances_All = model->getZAddressBalances(1, false);
     std::map<libzcash::PaymentAddress, CAmount> zbalances_isMine = model->getZAddressBalances(1, true);
-    
+
     auto oDisplayUnit = model->getOptionsModel()->getDisplayUnit();
     for (auto & pair : zbalances_All) {
       libzcash::PaymentAddress oAddress = pair.first;
       QString sAddddress = QString::fromStdString(EncodePaymentAddress(oAddress));
-      
+
       QString sAmount = KomodoUnits::formatWithUnit(oDisplayUnit, pair.second);
 
-      
+      QSettings settings;
+      bool fEnableZSigning = settings.value("fEnableZSigning").toBool();
+
       auto search = zbalances_isMine.find( oAddress );
-      if (search != zbalances_isMine.end()) {        
-        ui->payFromAddress->addItem(tr("(%1) %2 - Local").arg(sAmount).arg(sAddddress) );
+      if (search != zbalances_isMine.end()) {
+          ui->payFromAddress->addItem(tr("(%1) %2").arg(sAmount).arg(sAddddress) );
       }
       else {
-        ui->payFromAddress->addItem(tr("(%1) %2 - Off-line").arg(sAmount).arg(sAddddress) );
+          if (fEnableZSigning) {
+            ui->payFromAddress->addItem(tr("(%1) %2 - Off-line Transaction").arg(sAmount).arg(sAddddress) );
+          }
       }
     }
+
+    payFromAddressIndexChanged(ui->payFromAddress->currentIndex());
 }
 
 ZSendConfirmationDialog::ZSendConfirmationDialog(const QString &title, const QString &text, int _secDelay,

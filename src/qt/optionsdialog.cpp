@@ -187,7 +187,6 @@ void OptionsDialog::setModel(OptionsModel *_model)
     connect(ui->enableDeleteTx, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     connect(ui->saplingConsolidationEnabled, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     connect(ui->chkReindex, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
-    connect(ui->chkRescan, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     connect(ui->chkBootstrap, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     connect(ui->chkZapWalletTxes, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     /* Network */
@@ -207,10 +206,10 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->databaseCache, OptionsModel::DatabaseCache);
 
     /* Wallet */
+    mapper->addMapping(ui->enableOfflineSigning, OptionsModel::EnableZSigning);
     mapper->addMapping(ui->saplingConsolidationEnabled, OptionsModel::SaplingConsolidationEnabled);
     mapper->addMapping(ui->enableDeleteTx, OptionsModel::EnableDeleteTx);
     mapper->addMapping(ui->chkReindex, OptionsModel::EnableReindex);
-    mapper->addMapping(ui->chkRescan, OptionsModel::EnableRescan);
     mapper->addMapping(ui->chkBootstrap, OptionsModel::EnableBootstrap);
     mapper->addMapping(ui->chkZapWalletTxes, OptionsModel::ZapWalletTxes);
 

@@ -124,12 +124,8 @@ void OptionsModel::Init(bool resetSettings)
         addOverriddenOption("-reindex");
     settings.setValue("fEnableReindex", false);
 
-    if (!settings.contains("fEnableRescan"))
-        settings.setValue("fEnableRescan", false);
-    if (!SoftSetBoolArg("-rescan", settings.value("fEnableRescan").toBool()))
-        addOverriddenOption("-rescan");
-    settings.setValue("fEnableRescan", false);
-
+    if (!settings.contains("fEnableZSigning"))
+        settings.setValue("fEnableZSigning", false);
 
     if (!settings.contains("fEnableBootstrap"))
         settings.setValue("fEnableBootstrap", false);
@@ -301,8 +297,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return settings.value("fSaplingConsolidationEnabled");
         case EnableReindex:
             return settings.value("fEnableReindex");
-        case EnableRescan:
-            return settings.value("fEnableRescan");
+        case EnableZSigning:
+            return settings.value("fEnableZSigning");
         case EnableBootstrap:
             return settings.value("fEnableBootstrap");
         case ZapWalletTxes:
@@ -438,10 +434,9 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
               setRestartRequired(true);
           }
           break;
-      case EnableRescan:
-          if (settings.value("fEnableRescan") != value) {
-              settings.setValue("fEnableRescan", value);
-              setRestartRequired(true);
+      case EnableZSigning:
+          if (settings.value("fEnableZSigning") != value) {
+              settings.setValue("fEnableZSigning", value);
           }
           break;
       case EnableBootstrap:

@@ -66,8 +66,6 @@
 #endif
 
 extern int nMaxConnections; //From net.h
-bool       bGUI_configured_for_online_or_offline;
-
 
 const std::string PirateOceanGUI::DEFAULT_UIPLATFORM =
 #if defined(Q_OS_MAC)
@@ -189,7 +187,6 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
          */
         setCentralWidget(rpcConsole);
     }
-    bGUI_configured_for_online_or_offline=false;
 
     // Accept D&D of URIs
     setAcceptDrops(true);
@@ -319,15 +316,6 @@ void PirateOceanGUI::createActions()
     //sendCoinsMenuAction->setStatusTip(sendCoinsAction->statusTip());
     //sendCoinsMenuAction->setToolTip(sendCoinsMenuAction->statusTip());
 
-
-    //Distinguish between on-line and off-line behaviour of the wallet:
-    //If the wallet is configured to connect/sync to the PirateNetwork, then
-    //it is deemed 'on-line'. This is configured by setting
-    //'maxconnections' > 0 in ~/.komodo/PIRATE/PIRATE.conf
-    //If 'maxconnections=0', then the wallet will not sync with the PirateNetwork
-    //and essensially be 'off-line'. In that configuration state, it will only
-    //sign transactions, but will not be able to compile or send transactions.
-
     //Note: pirateoceangui() gets run before the configuration file gets scanned
     //      initialise both zsendCoinsAction & zsignAction and differentiate
     //      later when the config is available.
@@ -350,6 +338,15 @@ void PirateOceanGUI::createActions()
     zsignAction->setCheckable(true);
     zsignAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_9));
     tabGroup->addAction(zsignAction);
+
+    //Check Settings
+    QSettings settings;
+    bool fEnableZSigning = settings.value("fEnableZSigning").toBool();
+    if (fEnableZSigning) {
+        zsignAction->setVisible(true);
+    } else {
+        zsignAction->setVisible(false);
+    }
 
     zsignMenuAction = new QAction(platformStyle->TextColorIcon(":/icons/z-send"), zsignAction->text(), this);
     zsignMenuAction->setStatusTip(zsignAction->statusTip());
@@ -769,6 +766,19 @@ void PirateOceanGUI::optionsClicked()
     OptionsDialog dlg(this, enableWallet);
     dlg.setModel(clientModel->getOptionsModel());
     dlg.exec();
+
+    if (dlg.result() == QDialog::Accepted) {
+        QSettings settings;
+        bool fEnableZSigning = settings.value("fEnableZSigning").toBool();
+        if (fEnableZSigning) {
+            zsignAction->setVisible(true);
+        } else {
+            zsignAction->setVisible(false);
+        }
+    }
+    
+    dlg.close();
+
 }
 
 void PirateOceanGUI::aboutClicked()
@@ -874,24 +884,6 @@ void PirateOceanGUI::rescan()
 
 void PirateOceanGUI::updateNetworkState()
 {
-    //This functions gets called after the main initialisiation is
-    //completed and before the GUI main page is displayed.
-    //Perform on-line/off-line GUI layout.
-    if (bGUI_configured_for_online_or_offline==false)
-    {
-      bGUI_configured_for_online_or_offline=true;
-      if (nMaxConnections>0)
-      {
-        //On-line. Hide transaction signing
-        zsignAction->setVisible(false);
-      }
-      else
-      {
-        //Off-line. Hide transaction sending
-        zsendCoinsAction->setVisible(false);
-      }
-    }
-
     int count = clientModel->getNumConnections();
     QString icon;
     switch(count)
@@ -1387,7 +1379,6 @@ void PirateOceanGUI::unsubscribeFromCoreSignals()
 void PirateOceanGUI::toggleNetworkActive()
 {
     //CORRUPT THE CHAIN STATE?
-    //printf("toggleNetworkActive MaxConnections=%d\n",nMaxConnections);
     if (clientModel) {
         clientModel->setNetworkActive(!clientModel->getNetworkActive());
     }

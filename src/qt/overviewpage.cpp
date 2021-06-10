@@ -354,25 +354,6 @@ void OverviewPage::updateDisplayUnit()
 
         ui->listTransactions->update();
 
-        //Default layout if for on-line. Only alter layout for off-line mode.
-        if (nMaxConnections==0) //Off-line
-        {
-          ui->frame->setVisible(false);
-          ui->labelWalletStatus->setVisible(false);
-          ui->labelTransactionsStatus->setVisible(false);
-
-          ui->labelModeText->setText(tr("Off-line"));
-          ui->labelModeText->setToolTip(tr("The wallet is in off-line mode<br>Transaction sign requests, generated on an "
-                                           "online-wallet, can be authorised if you have the spending (private) key of "
-                                           "the address in your wallet."));
-        }
-        else
-        {
-          ui->labelModeText->setText(tr("On-line"));
-          ui->labelModeText->setToolTip(tr("The wallet is in on-line mode<br>"
-                                           "Transactions can be generated for adresses that have their spending (private) "
-                                           "key in the wallet.<br>Sign requests can be generated for viewing-only addresses"));
-        }
     }
 }
 

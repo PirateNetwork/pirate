@@ -46,7 +46,7 @@ public:
         Language,                       // QString
         EnableDeleteTx,                 // bool
         EnableReindex,                  // bool
-        EnableRescan,                   // bool
+        EnableZSigning,                 // bool
         EnableBootstrap,                // bool
         ZapWalletTxes,                  // bool
         ThreadsScriptVerif,             // int
