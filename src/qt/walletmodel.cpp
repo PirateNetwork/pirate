@@ -338,7 +338,7 @@ void WalletModel::checkBalanceChanged()
         newWatchOnlyBalance = getWatchBalance();
         newWatchUnconfBalance = getWatchUnconfirmedBalance();
         newWatchImmatureBalance = getWatchImmatureBalance();
-        newWatchPrivateBalance = getBalanceZaddr("", 1, false);
+        newWatchPrivateBalance = getBalanceZaddr("", 1, false) - getBalanceZaddr("", 1, true);
     }
 
     if(cachedBalance != newBalance || cachedUnconfirmedBalance != newUnconfirmedBalance || cachedImmatureBalance != newImmatureBalance ||
