@@ -34,6 +34,9 @@ class CWallet;
 #endif
 namespace Consensus { struct Params; };
 
+/***
+ * Holds data about the block under construction
+ */
 struct CBlockTemplate
 {
     CBlock block;
@@ -42,7 +45,14 @@ struct CBlockTemplate
 };
 #define KOMODO_MAXGPUCOUNT 65
 
-/** Generate a new block, without valid proof-of-work */
+/** 
+ * Generate a new block, without valid proof-of-work
+ * @param _pk
+ * @param scriptPubKeyIn
+ * @param gpucount
+ * @param isStake
+ * @returns the block template 
+ */
 CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& scriptPubKeyIn, int32_t gpucount, bool isStake = false);
 #ifdef ENABLE_WALLET
 boost::optional<CScript> GetMinerScriptPubKey(CReserveKey& reservekey);

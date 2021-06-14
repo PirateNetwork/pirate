@@ -187,6 +187,14 @@ int32_t komodo_waituntilelegible(uint32_t blocktime, int32_t stakeHeight, uint32
     return(1);
 }
 
+/** 
+ * Generate a new block, without valid proof-of-work
+ * @param _pk
+ * @param scriptPubKeyIn
+ * @param gpucount
+ * @param isStake
+ * @returns the block template 
+ */
 CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32_t gpucount, bool isStake)
 {
     CScript scriptPubKeyIn(_scriptPubKeyIn);
@@ -204,18 +212,20 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
         }
     } else pk = _pk;
 
-    uint64_t deposits,voutsum=0; int32_t isrealtime,kmdheight; uint32_t blocktime; const CChainParams& chainparams = Params();
-    bool fNotarisationBlock = false; std::vector<int8_t> NotarisationNotaries;
+    uint32_t blocktime; 
+    const CChainParams& chainparams = Params();
+    bool fNotarisationBlock = false; 
+    std::vector<int8_t> NotarisationNotaries;
     
-    //fprintf(stderr,"create new block\n");
     // Create new block
     if ( gpucount < 0 )
         gpucount = KOMODO_MAXGPUCOUNT;
+
     std::unique_ptr<CBlockTemplate> pblocktemplate(new CBlockTemplate());
-    if(!pblocktemplate.get())
+    if(pblocktemplate == nullptr)
     {
         fprintf(stderr,"pblocktemplate.get() failure\n");
-        return NULL;
+        return nullptr;
     }
     CBlock *pblock = &pblocktemplate->block; // pointer for convenience
      // -regtest only: allow overriding block.nVersion with
@@ -268,7 +278,6 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
 
         const int64_t nMedianTimePast = pindexPrev->GetMedianTimePast();
         uint32_t proposedTime = GetTime();
-        voutsum = GetBlockSubsidy(nHeight,consensusParams) + 10000*COIN; // approx fees
 
         if (proposedTime == nMedianTimePast)
         {
@@ -319,15 +328,11 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
 
             if (tx.IsCoinBase() || !IsFinalTx(tx, nHeight, nLockTimeCutoff) || IsExpiredTx(tx, nHeight))
             {
-                //fprintf(stderr,"coinbase.%d finaltx.%d expired.%d\n",tx.IsCoinBase(),IsFinalTx(tx, nHeight, nLockTimeCutoff),IsExpiredTx(tx, nHeight));
                 continue;
             }
             txvalue = tx.GetValueOut();
             if ( KOMODO_VALUETOOBIG(txvalue) != 0 )
                 continue;
-            //if ( KOMODO_VALUETOOBIG(txvalue + voutsum) != 0 ) // has been commented from main.cpp ? 
-            //    continue;
-            //voutsum += txvalue;
             if ( ASSETCHAINS_SYMBOL[0] == 0 && komodo_validate_interest(tx,nHeight,(uint32_t)pblock->nTime,0) < 0 )
             {
                 fprintf(stderr,"CreateNewBlock: komodo_validate_interest failure txid.%s nHeight.%d nTime.%u vs locktime.%u\n",tx.GetHash().ToString().c_str(),nHeight,(uint32_t)pblock->nTime,(uint32_t)tx.nLockTime);
@@ -634,13 +639,10 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
         if ( ASSETCHAINS_ADAPTIVEPOW <= 0 )
             blocktime = 1 + std::max(pindexPrev->GetMedianTimePast()+1, GetTime());
         else blocktime = 1 + std::max((int64_t)(pindexPrev->nTime+1), GetTime());
-        //pblock->nTime = blocktime + 1;
         pblock->nBits = GetNextWorkRequired(pindexPrev, pblock, Params().GetConsensus());
-        //fprintf(stderr, "nBits.%u\n",pblock->nBits);
 
         int32_t stakeHeight = chainActive.Height() + 1;
 
-        //LogPrintf("CreateNewBlock(): total size %u blocktime.%u nBits.%08x stake.%i\n", nBlockSize,blocktime,pblock->nBits,isStake);
         if ( ASSETCHAINS_SYMBOL[0] != 0 && isStake )
         {
             LEAVE_CRITICAL_SECTION(cs_main);
@@ -929,49 +931,6 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
     //fprintf(stderr,"done new block\n");
     return pblocktemplate.release();
 }
-
-/*
- #ifdef ENABLE_WALLET
- boost::optional<CScript> GetMinerScriptPubKey(CReserveKey& reservekey)
- #else
- boost::optional<CScript> GetMinerScriptPubKey()
- #endif
- {
- CKeyID keyID;
- CBitcoinAddress addr;
- if (addr.SetString(GetArg("-mineraddress", ""))) {
- addr.GetKeyID(keyID);
- } else {
- #ifdef ENABLE_WALLET
- CPubKey pubkey;
- if (!reservekey.GetReservedKey(pubkey)) {
- return boost::optional<CScript>();
- }
- keyID = pubkey.GetID();
- #else
- return boost::optional<CScript>();
- #endif
- }
-
- CScript scriptPubKey = CScript() << OP_DUP << OP_HASH160 << ToByteVector(keyID) << OP_EQUALVERIFY << OP_CHECKSIG;
- return scriptPubKey;
- }
-
- #ifdef ENABLE_WALLET
- CBlockTemplate* CreateNewBlockWithKey(CReserveKey& reservekey)
- {
- boost::optional<CScript> scriptPubKey = GetMinerScriptPubKey(reservekey);
- #else
- CBlockTemplate* CreateNewBlockWithKey()
- {
- boost::optional<CScript> scriptPubKey = GetMinerScriptPubKey();
- #endif
-
- if (!scriptPubKey) {
- return NULL;
- }
- return CreateNewBlock(*scriptPubKey);
- }*/
 
 //////////////////////////////////////////////////////////////////////////////
 //

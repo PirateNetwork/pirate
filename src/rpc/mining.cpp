@@ -795,7 +795,6 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp, const CPubKey& myp
         ENTER_CRITICAL_SECTION(cs_main);
         if (!pblocktemplate)
             throw std::runtime_error("CreateNewBlock(): create block failed");
-            //throw JSONRPCError(RPC_OUT_OF_MEMORY, "Out of memory or no available utxo for staking");
 
         // Need to update only after we know CreateNewBlockWithKey succeeded
         pindexPrev = pindexPrevNew;
