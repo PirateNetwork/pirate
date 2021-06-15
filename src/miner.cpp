@@ -300,7 +300,6 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
         }
 
         CCoinsViewCache view(pcoinsTip);
-        uint32_t expired; uint64_t commission;
         
         SaplingMerkleTree sapling_tree;
         assert(view.GetSaplingAnchorAt(view.GetBestAnchor(SAPLING), sapling_tree));
@@ -717,11 +716,7 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
         txNew.vout[0].scriptPubKey = scriptPubKeyIn;
         txNew.vout[0].nValue = GetBlockSubsidy(nHeight,consensusParams) + nFees;
         txNew.nExpiryHeight = 0;
-        //fprintf(stderr, "coinbase txid.%s\n", txNew.GetHash().ToString().c_str());
-        //fprintf(stderr, "MINER: coinbasetx.%s\n", EncodeHexTx(txNew).c_str());
-        //fprintf(stderr,"mine ht.%d with %.8f\n",nHeight,(double)txNew.vout[0].nValue/COIN);
-        
-        //if ((uint32_t)chainActive.LastTip()->nTime < ASSETCHAINS_STAKED_HF_TIMESTAMP) {
+
         if ( ASSETCHAINS_ADAPTIVEPOW <= 0 )
             txNew.nLockTime = std::max(pindexPrev->GetMedianTimePast()+1, GetTime());
         else txNew.nLockTime = std::max((int64_t)(pindexPrev->nTime+1), GetTime());        
@@ -730,6 +725,7 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
             txNew.vout[0].nValue += 5000;
         pblock->vtx[0] = txNew;
 
+        uint64_t commission;
         if ( ASSETCHAINS_MARMARA != 0 && nHeight > 0 && (nHeight & 1) == 0 )
         {
             char checkaddr[64];
@@ -741,7 +737,7 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
         }
         else if ( nHeight > 1 && ASSETCHAINS_SYMBOL[0] != 0 && (ASSETCHAINS_OVERRIDE_PUBKEY33[0] != 0 || ASSETCHAINS_SCRIPTPUB.size() > 1) && (ASSETCHAINS_COMMISSION != 0 || ASSETCHAINS_FOUNDERS_REWARD != 0)  && (commission= komodo_commission((CBlock*)&pblocktemplate->block,(int32_t)nHeight)) != 0 )
         {
-            int32_t i; uint8_t *ptr;
+            uint8_t *ptr;
             txNew.vout.resize(2);
             txNew.vout[1].nValue = commission;
             if ( ASSETCHAINS_SCRIPTPUB.size() > 1 )
@@ -752,8 +748,6 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
                     fprintf(stderr, "appended ccopreturn to ASSETCHAINS_SCRIPTPUB.%s\n", ASSETCHAINS_SCRIPTPUB.c_str());
                     didinit = true;
                 }
-                //fprintf(stderr,"mine to -ac_script\n");
-                //txNew.vout[1].scriptPubKey = CScript() << ParseHex();
                 int32_t len = strlen(ASSETCHAINS_SCRIPTPUB.c_str());
                 len >>= 1;
                 txNew.vout[1].scriptPubKey.resize(len);
@@ -765,15 +759,12 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
                 txNew.vout[1].scriptPubKey.resize(35);
                 ptr = (uint8_t *)&txNew.vout[1].scriptPubKey[0];
                 ptr[0] = 33;
-                for (i=0; i<33; i++)
+                for (int32_t i=0; i<33; i++)
                 {
                     ptr[i+1] = ASSETCHAINS_OVERRIDE_PUBKEY33[i];
-                    //fprintf(stderr,"%02x",ptr[i+1]);
                 }
                 ptr[34] = OP_CHECKSIG;
-                //fprintf(stderr," set ASSETCHAINS_OVERRIDE_PUBKEY33 into vout[1]\n");
             }
-            //printf("autocreate commision vout\n");
         }
         else if ( (uint64_t)(txNew.vout[0].nValue) >= ASSETCHAINS_TIMELOCKGTE)
         {

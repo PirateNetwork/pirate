@@ -687,18 +687,19 @@ bool komodo_dailysnapshot(int32_t height)
     uint256 notarized_hash,notarized_desttxid; int32_t prevMoMheight,notarized_height,undo_height,extraoffset;
     // NOTE: To make this 100% safe under all sync conditions, it should be using a notarized notarization, from the DB. 
     // Under heavy reorg attack, its possible `komodo_notarized_height` can return a height that can't be found on chain sync.
-    // However, the DB can reorg the last notarization. By using 2 deep, we know 100% that the previous notarization cannot be reorged by online nodes,
-    // and as such will always be notarizing the same height. May need to check heights on scan back to make sure they are confirmed in correct order.
+    // However, the DB can reorg the last notarization. By using 2 deep, we know 100% that the previous notarization cannot be 
+    // reorged by online nodes, and as such will always be notarizing the same height. May need to check heights on scan back 
+    // to make sure they are confirmed in correct order.
     if ( (extraoffset= height % KOMODO_SNAPSHOT_INTERVAL) != 0 )
     {
-        // we are on chain init, and need to scan all the way back to the correct height, other wise our node will have a diffrent snapshot to online nodes.
-        // use the notarizationsDB to scan back from the consesnus height to get the offset we need.
+        // we are on chain init, and need to scan all the way back to the correct height, other wise our node will have a 
+        // diffrent snapshot to online nodes. Use the notarizationsDB to scan back from the consesnus height to get the 
+        // offset we need.
         std::string symbol; Notarisation nota;
         symbol.assign(ASSETCHAINS_SYMBOL);
         if ( ScanNotarisationsDB(height-extraoffset, symbol, 100, nota) == 0 )
             undo_height = height-extraoffset-reorglimit; 
         else undo_height = nota.second.height;
-        //fprintf(stderr, "height.%i-extraoffset.%i = startscanfrom.%i to get undo_height.%i\n", height, extraoffset, height-extraoffset, undo_height);
     }
     else 
     {
@@ -717,7 +718,6 @@ bool komodo_dailysnapshot(int32_t height)
     // undo blocks in reverse order
     for (int32_t n = height; n > undo_height; n--) 
     {
-        //fprintf(stderr, "undoing block.%i\n",n);
         CBlockIndex *pindex; CBlock block;
         if ( (pindex= komodo_chainactive(n)) == 0 || komodo_blockload(block, pindex) != 0 ) 
             return false;
@@ -735,7 +735,6 @@ bool komodo_dailysnapshot(int32_t height)
                     addressAmounts[CBitcoinAddress(vDest).ToString()] -= out.nValue;
                     if ( addressAmounts[CBitcoinAddress(vDest).ToString()] < 1 )
                         addressAmounts.erase(CBitcoinAddress(vDest).ToString());
-                    //fprintf(stderr, "VOUT: address.%s remove_coins.%li\n",CBitcoinAddress(vDest).ToString().c_str(), out.nValue);
                 } 
             }
             // loop vins in reverse order, get prevout and return the sent balance.
@@ -748,7 +747,6 @@ bool komodo_dailysnapshot(int32_t height)
                     int vout = tx.vin[j].prevout.n;
                     if ( ExtractDestination(txin.vout[vout].scriptPubKey, vDest) )
                     {
-                        //fprintf(stderr, "VIN: address.%s add_coins.%li\n",CBitcoinAddress(vDest).ToString().c_str(), txin.vout[vout].nValue);
                         addressAmounts[CBitcoinAddress(vDest).ToString()] += txin.vout[vout].nValue;
                     }
                 }
@@ -761,8 +759,6 @@ bool komodo_dailysnapshot(int32_t height)
         vAddressSnapshot.push_back(make_pair(element.second, DecodeDestination(element.first)));
     // sort the vector by amount, highest at top.
     std::sort(vAddressSnapshot.rbegin(), vAddressSnapshot.rend());
-    //for (int j = 0; j < 50; j++) 
-    //    fprintf(stderr, "j.%i address.%s nValue.%li\n",j, CBitcoinAddress(vAddressSnapshot[j].second).ToString().c_str(), vAddressSnapshot[j].first );
     // include only top 3999 address.
     if ( vAddressSnapshot.size() > 3999 ) vAddressSnapshot.resize(3999);
     lastSnapShotHeight = undo_height; 

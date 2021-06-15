@@ -471,29 +471,6 @@ class CTransactionExceptionData
         CTransactionExceptionData() : scriptPubKey(), voutMask() {}
 };
 
-/*class CLaunchMap
-{
-    public:
-        std::unordered_map<std::string, CTransactionExceptionData> lmap;
-        CLaunchMap() : lmap()
-        {
-            //printf("txid: %s -> addr: %s\n", whitelist_ids[i], whitelist_addrs[i]);
-            CBitcoinAddress bcaddr(whitelist_address);
-            CKeyID key;
-            if (bcaddr.GetKeyID_NoCheck(key))
-            {
-                std::vector<unsigned char> address = std::vector<unsigned char>(key.begin(), key.end());
-                for (int i = 0; i < WHITELIST_COUNT; i++)
-                {
-                    std::string hash = uint256S(whitelist_ids[i]).ToString();
-                    lmap[hash].scriptPubKey << OP_DUP << OP_HASH160 << address << OP_EQUALVERIFY << OP_CHECKSIG;
-                    lmap[hash].voutMask = whitelist_masks[i];
-                }
-            }
-        }
-};
-static CLaunchMap launchMap = CLaunchMap();*/
-
 /** CCoinsView that adds a memory cache for transactions to another CCoinsView */
 class CCoinsViewCache : public CCoinsViewBacked
 {
