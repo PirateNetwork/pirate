@@ -808,14 +808,13 @@ int32_t komodo_isPoS(CBlock *pblock, int32_t height,CTxDestination *addressout)
 
 void komodo_disconnect(CBlockIndex *pindex,CBlock& block)
 {
-    char symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN]; struct komodo_state *sp;
-    //fprintf(stderr,"disconnect ht.%d\n",pindex->GetHeight());
+    char symbol[KOMODO_ASSETCHAIN_MAXLEN];
+    char dest[KOMODO_ASSETCHAIN_MAXLEN]; 
+
     komodo_init(pindex->GetHeight());
-    if ( (sp= komodo_stateptr(symbol,dest)) != 0 )
-    {
-        //sp->rewinding = pindex->GetHeight();
-        //fprintf(stderr,"-%d ",pindex->GetHeight());
-    } else printf("komodo_disconnect: ht.%d cant get komodo_state.(%s)\n",pindex->GetHeight(),ASSETCHAINS_SYMBOL);
+
+    if ( komodo_stateptr(symbol,dest) == 0 )
+        printf("komodo_disconnect: ht.%d cant get komodo_state.(%s)\n",pindex->GetHeight(),ASSETCHAINS_SYMBOL);
 }
 
 int32_t komodo_is_notarytx(const CTransaction& tx)
@@ -830,7 +829,6 @@ int32_t komodo_is_notarytx(const CTransaction& tx)
                 decode_hex(crypto777,33,(char *)CRYPTO777_PUBSECPSTR);
             if ( memcmp(ptr+1,crypto777,33) == 0 )
             {
-                //printf("found notarytx\n");
                 return(1);
             }
         }
@@ -854,22 +852,16 @@ int32_t komodo_block2height(CBlock *block)
         ptr = (uint8_t *)&block->vtx[0].vin[0].scriptSig[0];
         if ( ptr != 0 && block->vtx[0].vin[0].scriptSig.size() > 5 )
         {
-            //for (i=0; i<6; i++)
-            //    printf("%02x",ptr[i]);
             n = ptr[0];
             for (i=0; i<n; i++) // looks strange but this works
             {
                 //03bb81000101(bb 187) (81 48001) (00 12288256)  <- coinbase.6 ht.12288256
                 height += ((uint32_t)ptr[i+1] << (i*8));
-                //printf("(%02x %x %d) ",ptr[i+1],((uint32_t)ptr[i+1] << (i*8)),height);
             }
-            //printf(" <- coinbase.%d ht.%d\n",(int32_t)block->vtx[0].vin[0].scriptSig.size(),height);
         }
-        //komodo_init(height);
     }
     if ( height != height2 )
     {
-        //fprintf(stderr,"block2height height.%d vs height2.%d, match.%d mismatch.%d\n",height,height2,match,mismatch);
         mismatch++;
         if ( height2 >= 0 )
             height = height2;
@@ -877,16 +869,23 @@ int32_t komodo_block2height(CBlock *block)
     return(height);
 }
 
-int32_t komodo_block2pubkey33(uint8_t *pubkey33,CBlock *block)
+/***
+ * get the block's pubkey
+ * @param pubkey33 where to store the block's pubkey
+ * @param block the block to interrogate
+ * @returns true on success
+ */
+bool komodo_block2pubkey33(uint8_t *pubkey33,CBlock *block)
 {
-    int32_t n;
-    if ( KOMODO_LOADINGBLOCKS == 0 )
+    if ( !KOMODO_LOADINGBLOCKS )
         memset(pubkey33,0xff,33);
-    else memset(pubkey33,0,33);
+    else 
+        memset(pubkey33,0,33);
+
     if ( block->vtx[0].vout.size() > 0 )
     {
         txnouttype whichType;
-        vector<vector<unsigned char>> vch = vector<vector<unsigned char>>();
+        vector<vector<unsigned char>> vch;
         if (Solver(block->vtx[0].vout[0].scriptPubKey, whichType, vch) && whichType == TX_PUBKEY)
         {
             CPubKey pubKey(vch[0]);
@@ -895,11 +894,13 @@ int32_t komodo_block2pubkey33(uint8_t *pubkey33,CBlock *block)
                 memcpy(pubkey33,vch[0].data(),33);
                 return true;
             }
-            else memset(pubkey33,0,33);
+            else 
+                memset(pubkey33,0,33);
         }
-        else memset(pubkey33,0,33);
+        else 
+            memset(pubkey33,0,33);
     }
-    return(0);
+    return false;
 }
 
 int32_t komodo_blockload(CBlock& block,CBlockIndex *pindex)
@@ -947,47 +948,6 @@ uint32_t komodo_heightstamp(int32_t height)
     return(0);
 }
 
-/*void komodo_pindex_init(CBlockIndex *pindex,int32_t height) gets data corrupted
-{
-    int32_t i,num; uint8_t pubkeys[64][33]; CBlock block;
-    if ( pindex->didinit != 0 )
-        return;
-    //printf("pindex.%d komodo_pindex_init notary.%d from height.%d\n",pindex->GetHeight(),pindex->notaryid,height);
-    if ( pindex->didinit == 0 )
-    {
-        pindex->notaryid = -1;
-        if ( KOMODO_LOADINGBLOCKS == 0 )
-            memset(pindex->pubkey33,0xff,33);
-        else memset(pindex->pubkey33,0,33);
-        if ( komodo_blockload(block,pindex) == 0 )
-        {
-            komodo_block2pubkey33(pindex->pubkey33,&block);
-            //for (i=0; i<33; i++)
-            //    fprintf(stderr,"%02x",pindex->pubkey33[i]);
-            //fprintf(stderr," set pubkey at height %d/%d\n",pindex->GetHeight(),height);
-            //if ( pindex->pubkey33[0] == 2 || pindex->pubkey33[0] == 3 )
-            //    pindex->didinit = (KOMODO_LOADINGBLOCKS == 0);
-        } // else fprintf(stderr,"error loading block at %d/%d",pindex->GetHeight(),height);
-    }
-    if ( pindex->didinit != 0 && pindex->GetHeight() >= 0 && (num= komodo_notaries(pubkeys,(int32_t)pindex->GetHeight(),(uint32_t)pindex->nTime)) > 0 )
-    {
-        for (i=0; i<num; i++)
-        {
-            if ( memcmp(pubkeys[i],pindex->pubkey33,33) == 0 )
-            {
-                pindex->notaryid = i;
-                break;
-            }
-        }
-        if ( 0 && i == num )
-        {
-            for (i=0; i<33; i++)
-                fprintf(stderr,"%02x",pindex->pubkey33[i]);
-            fprintf(stderr," unmatched pubkey at height %d/%d\n",pindex->GetHeight(),height);
-        }
-    }
-}*/
-
 void komodo_index2pubkey33(uint8_t *pubkey33,CBlockIndex *pindex,int32_t height)
 {
     int32_t num,i; CBlock block;
@@ -998,34 +958,6 @@ void komodo_index2pubkey33(uint8_t *pubkey33,CBlockIndex *pindex,int32_t height)
             komodo_block2pubkey33(pubkey33,&block);
     }
 }
-
-/*int8_t komodo_minerid(int32_t height,uint8_t *destpubkey33)
-{
-    int32_t num,i,numnotaries; CBlockIndex *pindex; uint32_t timestamp=0; uint8_t pubkey33[33],pubkeys[64][33];
-    if ( (pindex= chainActive[height]) != 0 )
-    {
-        if ( pindex->didinit != 0 )
-        {
-            if ( destpubkey33 != 0 )
-                memcpy(destpubkey33,pindex->pubkey33,33);
-            return(pindex->notaryid);
-        }
-        komodo_index2pubkey33(pubkey33,pindex,height);
-        if ( destpubkey33 != 0 )
-            memcpy(destpubkey33,pindex->pubkey33,33);
-        if ( pindex->didinit != 0 )
-            return(pindex->notaryid);
-        timestamp = pindex->GetBlockTime();
-        if ( (num= komodo_notaries(pubkeys,height,timestamp)) > 0 )
-        {
-            for (i=0; i<num; i++)
-                if ( memcmp(pubkeys[i],pubkey33,33) == 0 )
-                    return(i);
-        }
-    }
-    fprintf(stderr,"komodo_minerid height.%d null pindex\n",height);
-    return(komodo_electednotary(&numnotaries,pubkey33,height,timestamp));
-}*/
 
 int32_t komodo_eligiblenotary(uint8_t pubkeys[66][33],int32_t *mids,uint32_t blocktimes[66],int32_t *nonzpkeysp,int32_t height)
 {
@@ -2317,7 +2249,14 @@ bool KOMODO_TEST_ASSETCHAIN_SKIP_POW = 0;
 
 int32_t komodo_checkPOW(int64_t stakeTxValue, int32_t slowflag,CBlock *pblock,int32_t height)
 {
-    uint256 hash,merkleroot; arith_uint256 bnTarget,bhash; bool fNegative,fOverflow; uint8_t *script,pubkey33[33],pubkeys[64][33]; int32_t i,scriptlen,possible,PoSperc,is_PoSblock=0,n,failed = 0,notaryid = -1; int64_t checktoshis,value; CBlockIndex *pprev;
+    uint256 hash,merkleroot; 
+    arith_uint256 bnTarget,bhash; 
+    bool fNegative,fOverflow; 
+    uint8_t *script,pubkey33[33],pubkeys[64][33]; 
+    int32_t i,scriptlen,PoSperc,is_PoSblock=0,n,failed = 0,notaryid = -1; 
+    int64_t checktoshis,value; 
+    CBlockIndex *pprev;
+
     if ( KOMODO_TEST_ASSETCHAIN_SKIP_POW == 0 && Params().NetworkIDString() == "regtest" )
         KOMODO_TEST_ASSETCHAIN_SKIP_POW = 1;
     if ( !CheckEquihashSolution(pblock, Params()) )
@@ -2328,12 +2267,12 @@ int32_t komodo_checkPOW(int64_t stakeTxValue, int32_t slowflag,CBlock *pblock,in
     hash = pblock->GetHash();
     bnTarget.SetCompact(pblock->nBits,&fNegative,&fOverflow);
     bhash = UintToArith256(hash);
-    possible = komodo_block2pubkey33(pubkey33,pblock);
+    bool possible = komodo_block2pubkey33(pubkey33,pblock);
     if ( height == 0 )
     {
         if ( slowflag != 0 )
         {
-            fprintf(stderr,"height.%d slowflag.%d possible.%d cmp.%d\n",height,slowflag,possible,bhash > bnTarget);
+            fprintf(stderr,"height.%d slowflag.%d possible.%d cmp.%d\n",height,slowflag,(int)possible,bhash > bnTarget);
             return(0);
         }
         BlockMap::const_iterator it = mapBlockIndex.find(pblock->hashPrevBlock);
@@ -2342,8 +2281,7 @@ int32_t komodo_checkPOW(int64_t stakeTxValue, int32_t slowflag,CBlock *pblock,in
         if ( height == 0 )
             return(0);
     }
-    //if ( ASSETCHAINS_ADAPTIVEPOW > 0 )
-    //    bnTarget = komodo_adaptivepow_target(height,bnTarget,pblock->nTime);
+
     if ( ASSETCHAINS_LWMAPOS != 0 && bhash > bnTarget )
     {
         // if proof of stake is active, check if this is a valid PoS block before we fail
@@ -2516,7 +2454,6 @@ int32_t komodo_checkPOW(int64_t stakeTxValue, int32_t slowflag,CBlock *pblock,in
         }
     }
 
-//fprintf(stderr,"komodo_checkPOW possible.%d slowflag.%d ht.%d notaryid.%d failed.%d\n",possible,slowflag,height,notaryid,failed);
     if ( failed != 0 && possible == 0 && notaryid < 0 )
         return(-1);
     else return(0);

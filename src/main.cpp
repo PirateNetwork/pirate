@@ -81,11 +81,12 @@ using namespace std;
 #define TMPFILE_START 100000000
 CCriticalSection cs_main;
 extern uint8_t NOTARY_PUBKEY33[33];
-extern int32_t KOMODO_LOADINGBLOCKS,KOMODO_LONGESTCHAIN,KOMODO_INSYNC;
+extern bool KOMODO_LOADINGBLOCKS;
+extern int32_t KOMODO_LONGESTCHAIN,KOMODO_INSYNC;
 extern int32_t KOMODO_CONNECTING;
 extern int32_t KOMODO_EXTRASATOSHI;
 int32_t KOMODO_NEWBLOCKS;
-int32_t komodo_block2pubkey33(uint8_t *pubkey33,CBlock *block);
+bool komodo_block2pubkey33(uint8_t *pubkey33,CBlock *block);
 //void komodo_broadcast(CBlock *pblock,int32_t limit);
 bool Getscriptaddress(char *destaddr,const CScript &scriptPubKey);
 void komodo_setactivation(int32_t height);
@@ -254,7 +255,7 @@ namespace {
      *
      * Memory used: 1.7MB
      */
-    boost::scoped_ptr<CRollingBloomFilter> recentRejects;
+    std::unique_ptr<CRollingBloomFilter> recentRejects;
     uint256 hashRecentRejectsChainTip;
 
     /** Blocks that are in flight, and that are in the queue to be downloaded. Protected by cs_main. */
@@ -643,8 +644,8 @@ CBlockIndex* FindForkInGlobalIndex(const CChain& chain, const CBlockLocator& loc
     return chain.Genesis();
 }
 
-CCoinsViewCache *pcoinsTip = NULL;
-CBlockTreeDB *pblocktree = NULL;
+CCoinsViewCache *pcoinsTip = nullptr;
+CBlockTreeDB *pblocktree = nullptr;
 
 // Komodo globals
 
@@ -658,7 +659,7 @@ UniValue komodo_snapshot(int top)
     UniValue result(UniValue::VOBJ);
 
     if (fAddressIndex) {
-	    if ( pblocktree != 0 ) {
+	    if ( pblocktree != nullptr ) {
 		result = pblocktree->Snapshot(top);
 	    } else {
 		fprintf(stderr,"null pblocktree start with -addressindex=1\n");
@@ -671,7 +672,7 @@ UniValue komodo_snapshot(int top)
 
 bool komodo_snapshot2(std::map <std::string, CAmount> &addressAmounts)
 {
-    if ( fAddressIndex && pblocktree != 0 ) 
+    if ( fAddressIndex && pblocktree != nullptr ) 
     {
 		return pblocktree->Snapshot2(addressAmounts, 0);
     }
@@ -5144,8 +5145,6 @@ bool CheckBlock(int32_t *futureblockp,int32_t height,CBlockIndex *pindex,const C
         tiptime = (uint32_t)pindex->pprev->nTime;
     if ( fCheckPOW )
     {
-        //if ( !CheckEquihashSolution(&block, Params()) )
-        //    return state.DoS(100, error("CheckBlock: Equihash solution invalid"),REJECT_INVALID, "invalid-solution");
         komodo_block2pubkey33(pubkey33,(CBlock *)&block);
         if ( !CheckProofOfWork(block,pubkey33,height,Params().GetConsensus()) )
         {
@@ -6068,8 +6067,10 @@ CBlockIndex * InsertBlockIndex(uint256 hash)
     return pindexNew;
 }
 
-//void komodo_pindex_init(CBlockIndex *pindex,int32_t height);
-
+/****
+ * Load the block index database
+ * @returns true on success
+ */
 bool static LoadBlockIndexDB()
 {
     const CChainParams& chainparams = Params();
@@ -6082,16 +6083,14 @@ bool static LoadBlockIndexDB()
     // Calculate chainPower
     vector<pair<int, CBlockIndex*> > vSortedByHeight;
     vSortedByHeight.reserve(mapBlockIndex.size());
-    BOOST_FOREACH(const PAIRTYPE(uint256, CBlockIndex*)& item, mapBlockIndex)
+    for(const auto& item : mapBlockIndex)
     {
         CBlockIndex* pindex = item.second;
         vSortedByHeight.push_back(make_pair(pindex->GetHeight(), pindex));
-        //komodo_pindex_init(pindex,(int32_t)pindex->GetHeight());
     }
-    //fprintf(stderr,"load blockindexDB paired %u\n",(uint32_t)time(NULL));
     sort(vSortedByHeight.begin(), vSortedByHeight.end());
-    //fprintf(stderr,"load blockindexDB sorted %u\n",(uint32_t)time(NULL));
-    BOOST_FOREACH(const PAIRTYPE(int, CBlockIndex*)& item, vSortedByHeight)
+
+    for(const auto& item : vSortedByHeight)
     {
         CBlockIndex* pindex = item.second;
         pindex->chainPower = (pindex->pprev ? CChainPower(pindex) + pindex->pprev->chainPower : CChainPower(pindex)) + GetBlockProof(*pindex);
@@ -6144,9 +6143,7 @@ bool static LoadBlockIndexDB()
             pindex->BuildSkip();
         if (pindex->IsValid(BLOCK_VALID_TREE) && (pindexBestHeader == NULL || CBlockIndexWorkComparator()(pindexBestHeader, pindex)))
             pindexBestHeader = pindex;
-        //komodo_pindex_init(pindex,(int32_t)pindex->GetHeight());
     }
-    //fprintf(stderr,"load blockindexDB chained %u\n",(uint32_t)time(NULL));
 
     // Load block file info
     pblocktree->ReadLastBlockFile(nLastBlockFile);
@@ -6169,14 +6166,13 @@ bool static LoadBlockIndexDB()
     // Check presence of blk files
     LogPrintf("Checking all blk files are present...\n");
     set<int> setBlkDataFiles;
-    BOOST_FOREACH(const PAIRTYPE(uint256, CBlockIndex*)& item, mapBlockIndex)
+    for(const auto& item : mapBlockIndex)
     {
         CBlockIndex* pindex = item.second;
         if (pindex->nStatus & BLOCK_HAVE_DATA) {
             setBlkDataFiles.insert(pindex->nFile);
         }
     }
-    //fprintf(stderr,"load blockindexDB %u\n",(uint32_t)time(NULL));
     for (std::set<int>::iterator it = setBlkDataFiles.begin(); it != setBlkDataFiles.end(); it++)
     {
         CDiskBlockPos pos(*it, 0);
@@ -6211,7 +6207,7 @@ bool static LoadBlockIndexDB()
     LogPrintf("%s: spent index %s\n", __func__, fSpentIndex ? "enabled" : "disabled");
 
     // Fill in-memory data
-    BOOST_FOREACH(const PAIRTYPE(uint256, CBlockIndex*)& item, mapBlockIndex)
+    for(const auto& item : mapBlockIndex)
     {
         CBlockIndex* pindex = item.second;
         // - This relationship will always be true even if pprev has multiple
@@ -6222,7 +6218,6 @@ bool static LoadBlockIndexDB()
         if (pindex->pprev) {
             pindex->pprev->hashFinalSproutRoot = pindex->hashSproutAnchor;
         }
-        //komodo_pindex_init(pindex,(int32_t)pindex->GetHeight());
     }
 
     // Load pointer to end of best chain
@@ -6357,7 +6352,14 @@ bool CVerifyDB::VerifyDB(CCoinsView *coinsview, int nCheckLevel, int nCheckDepth
     return true;
 }
 
-bool RewindBlockIndex(const CChainParams& params, bool& clearWitnessCaches)
+/**
+ * When there are blocks in the active chain with missing data (e.g. if the
+ * activation height and branch ID of a particular upgrade have been altered),
+ * rewind the chainstate and remove them from the block index.
+ * @param params the chain parameters
+ * @returns true on success
+ */
+bool RewindBlockIndex(const CChainParams& params)
 {
     LOCK(cs_main);
 
@@ -6502,6 +6504,9 @@ bool RewindBlockIndex(const CChainParams& params, bool& clearWitnessCaches)
     return true;
 }
 
+/***
+ * Clear all values related to the block index
+ */
 void UnloadBlockIndex()
 {
     LOCK(cs_main);
@@ -6527,28 +6532,38 @@ void UnloadBlockIndex()
     mapNodeState.clear();
     recentRejects.reset(NULL);
 
-    BOOST_FOREACH(BlockMap::value_type& entry, mapBlockIndex) {
+    for(BlockMap::value_type& entry : mapBlockIndex) 
+    {
         delete entry.second;
     }
     mapBlockIndex.clear();
     fHavePruned = false;
 }
 
-bool LoadBlockIndex()
+/******
+ * @brief Load the block tree and coins database from disk
+ * @param reindex true if we will be reindexing (will skip the load if we are)
+ * @returns true on success
+ */
+bool LoadBlockIndex(bool reindex)
 {
     // Load block index from databases
-    KOMODO_LOADINGBLOCKS = 1;
-    if (!fReindex && !LoadBlockIndexDB())
+    KOMODO_LOADINGBLOCKS = true;
+    if (!reindex && !LoadBlockIndexDB())
     {
-        KOMODO_LOADINGBLOCKS = 0;
+        KOMODO_LOADINGBLOCKS = false;
         return false;
     }
     fprintf(stderr,"finished loading blocks %s\n",ASSETCHAINS_SYMBOL);
     return true;
 }
 
-
-bool InitBlockIndex() {
+/** 
+ * Initialize a new block tree database + block data on disk 
+ * @returns true on success
+ */
+bool InitBlockIndex() 
+{
     const CChainParams& chainparams = Params();
     LOCK(cs_main);
     tmpBlockFiles.clear();
@@ -6608,8 +6623,6 @@ bool InitBlockIndex() {
 
     return true;
 }
-
-
 
 bool LoadExternalBlockFile(FILE* fileIn, CDiskBlockPos *dbp)
 {
