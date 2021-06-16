@@ -119,6 +119,7 @@ public:
       uint256 txid;
       bool coinbase;
       string category;
+      int64_t blockHeight;
       uint256 blockHash;
       int blockIndex;
       int64_t nBlockTime;

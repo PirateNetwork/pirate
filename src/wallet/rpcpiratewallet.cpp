@@ -481,6 +481,7 @@ void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, bool fIncludeWatchonly
     arcTx.coinbase = false;
     arcTx.category = "not found";
     arcTx.blockHash = uint256();
+    arcTx.blockHeight = 0;
     arcTx.blockIndex = 0;
     arcTx.nBlockTime = 0;
     arcTx.rawconfirmations = 0;
@@ -542,6 +543,7 @@ void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, bool fIncludeWatchonly
 
     int nHeight = chainActive.Tip()->GetHeight();
     int txHeight = mapBlockIndex[hashBlock]->GetHeight();
+    arcTx.blockHeight = txHeight;
     arcTx.rawconfirmations = nHeight - txHeight + 1;
     arcTx.confirmations = komodo_dpowconfs(txHeight, nHeight - txHeight + 1);
 
@@ -648,7 +650,9 @@ void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, bool fIncludeWatchonly
         arcTx.nBlockTime = mapBlockIndex[tx.hashBlock]->GetBlockTime();
         arcTx.nTime = arcTx.nBlockTime;
         arcTx.confirmations = komodo_dpowconfs(mapBlockIndex[tx.hashBlock]->GetHeight(), tx.GetDepthInMainChain());
+        arcTx.blockHeight = mapBlockIndex[tx.hashBlock]->GetHeight();
     } else {
+        arcTx.blockHeight = 0;
         arcTx.nBlockTime = 0;
         arcTx.confirmations = 0;
         arcTx.nTime = tx.GetTxTime();
@@ -733,6 +737,7 @@ void getRpcArcTxJSONHeader(RpcArcTransaction &arcTx, UniValue& ArcTxJSON) {
     ArcTxJSON.push_back(Pair("txid", arcTx.txid.ToString()));
     ArcTxJSON.push_back(Pair("coinbase",arcTx.coinbase));
     ArcTxJSON.push_back(Pair("category", arcTx.category));
+    ArcTxJSON.push_back(Pair("blockHeight", arcTx.blockHeight));
     ArcTxJSON.push_back(Pair("blockhash", arcTx.blockHash.ToString()));
     ArcTxJSON.push_back(Pair("blockindex", arcTx.blockIndex));
     ArcTxJSON.push_back(Pair("blocktime", arcTx.nBlockTime));
