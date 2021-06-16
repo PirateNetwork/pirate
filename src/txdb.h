@@ -53,7 +53,9 @@ static const int64_t nMaxDbCache = sizeof(void*) > 4 ? 16384 : 1024;
 //! min. -dbcache in (MiB)
 static const int64_t nMinDbCache = 4;
 
-/** CCoinsView backed by the coin database (chainstate/) */
+/** 
+ * CCoinsView backed by the coin database (chainstate/) 
+*/
 class CCoinsViewDB : public CCoinsView
 {
 protected:
@@ -65,7 +67,17 @@ public:
     bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
     bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
     bool GetNullifier(const uint256 &nf, ShieldedType type) const;
+    /***
+     * @param txid the transaction id
+     * @param coins the coins within the txid
+     * @returns true on success
+     */
     bool GetCoins(const uint256 &txid, CCoins &coins) const;
+    /****
+     * Determine if a txid exists
+     * @param txid
+     * @returns true if the txid exists in the database
+     */
     bool HaveCoins(const uint256 &txid) const;
     uint256 GetBestBlock() const;
     uint256 GetBestAnchor(ShieldedType type) const;

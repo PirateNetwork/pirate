@@ -471,7 +471,9 @@ class CTransactionExceptionData
         CTransactionExceptionData() : scriptPubKey(), voutMask() {}
 };
 
-/** CCoinsView that adds a memory cache for transactions to another CCoinsView */
+/** 
+ * CCoinsView that adds a memory cache in front of another CCoinsView 
+ */
 class CCoinsViewCache : public CCoinsViewBacked
 {
 protected:
