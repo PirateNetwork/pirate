@@ -183,9 +183,9 @@ public:
         vSeeds.push_back(CDNSSeedData("komodoseeds.com", "kmd.komodoseeds.com")); // Static contolled seeds list (Kolo)
         vSeeds.push_back(CDNSSeedData("komodoseeds.com", "dynamic.komodoseeds.com")); // Active seeds crawler (Kolo)
         // TODO: we need more seed crawlers from other community members
-        base58Prefixes[PUBKEY_ADDRESS] = {1,60};
-        base58Prefixes[SCRIPT_ADDRESS] = {1,85};
-        base58Prefixes[SECRET_KEY] =     {1,188};
+        base58Prefixes[PUBKEY_ADDRESS] = {60};
+        base58Prefixes[SCRIPT_ADDRESS] = {85};
+        base58Prefixes[SECRET_KEY] =     {188};
         base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x88, 0xb2, 0x1e};
         base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x88, 0xad, 0xe4};
         // guarantees the first two characters, when base58 encoded, are "zc"
@@ -300,9 +300,9 @@ public:
         vFixedSeeds.clear();
         vSeeds.clear();
 
-        base58Prefixes[PUBKEY_ADDRESS] = {1, 0};
-        base58Prefixes[SCRIPT_ADDRESS] = {1, 5};
-        base58Prefixes[SECRET_KEY] =     {1, 128};
+        base58Prefixes[PUBKEY_ADDRESS] = {0};
+        base58Prefixes[SCRIPT_ADDRESS] = {5};
+        base58Prefixes[SECRET_KEY] =     {128};
         base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x35, 0x87, 0xCF};
         base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
         base58Prefixes[ZCPAYMENT_ADDRRESS] = {20,81};
