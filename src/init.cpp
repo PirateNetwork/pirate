@@ -79,16 +79,6 @@
 #include <openssl/crypto.h>
 #include <thread>
 
-
-//shm
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <fcntl.h>
-#include <sys/shm.h>
-#include <sys/stat.h>
-//shm
-
 #include <libsnark/common/profiling.hpp>
 
 #if ENABLE_ZMQ
@@ -983,24 +973,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     } else {
         umask(077);
     }
-    
-    //Clean shared memory:
-    const char* name = "OS";
-    int shm_fd = shm_open(name, O_CREAT | O_RDWR, 0666);
-    if (shm_fd<0)
-    {
-      printf("Could not open shared memory interface");
-      return -1;
-    }  
-    /* configure the size of the shared memory object */
-    int iRet = ftruncate(shm_fd, 4096);
-    if (iRet !=0)
-    {
-      printf("Could not truncate the memory interface");
-    }
-    close(shm_fd);
-    
-    
 
     // Clean shutdown on SIGTERM
     struct sigaction sa;
