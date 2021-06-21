@@ -42,7 +42,7 @@ public:
     void setAddress(const QString &address);
     void setAmount(const CAmount &amount);
     void setMemo(const QString &memo);
-
+    bool getSubmitMemoAsHex();
     /** Set up the tab chain manually, as Qt messes up the tab chain by default in some cases
      *  (issue https://bugreports.qt-project.org/browse/QTBUG-10907).
      */
@@ -68,6 +68,8 @@ private Q_SLOTS:
     void on_addressBookButton_clicked();
     void on_pasteButton_clicked();
     void updateDisplayUnit();
+    void updateHexMemo();
+    void showHexError();
 
 private:
     SendCoinsRecipient recipient;

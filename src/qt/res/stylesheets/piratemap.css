@@ -13,7 +13,7 @@ QFrame#MainFrame {
 QMenuBar {
     background-color: #303030;
     color: #ffffff;
-    border:none
+    border: none;
 }
 
 QMenuBar::item:selected { /* when selected using mouse or keyboard */
@@ -27,7 +27,7 @@ QMenuBar::item:pressed {
 QMenu {
     background-color: #303030;
     color: #ffffff;
-    border:none
+    border: none;
 }
 
 QMenu::item:selected {
@@ -40,7 +40,7 @@ QMenu::item:selected {
 QToolBar {
     background-color: #303030;
     color: #ffffff;
-    border:none
+    border: none;
 }
 
 QToolButton {
@@ -306,4 +306,41 @@ QWidget#contentWidget {
 QWidget#contentWidget QLabel{
     background: #303030;
     color: #ffffff;
+}
+
+QFrame#encodingFrame {
+    background: #303030;
+    color: #ffffff;
+}
+
+QRadioButton {
+    background-color: #303030;
+    color: #ffffff;
+    spacing: 5px;
+}
+
+QRadioButton::indicator {
+    background-color: #000000;
+    color: #ffffff;
+    width: 8px;
+    height: 8px;
+    border: 4px solid #000000;
+    border-radius: 8px;
+}
+
+QRadioButton::indicator:checked {
+    background-color: rgba(25,225,25);
+    color: #ffffff;
+    width: 8px;
+    height: 8px;
+    border: 4px solid #000000;
+    border-radius: 8px;
+}
+
+QLabel#messageLabel {
+    color: #ff0000;
+}
+
+QLabel#messageTextLabel {
+    color: #ff0000;
 }

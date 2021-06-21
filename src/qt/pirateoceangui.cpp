@@ -770,11 +770,7 @@ void PirateOceanGUI::optionsClicked()
     if (dlg.result() == QDialog::Accepted) {
         QSettings settings;
         bool fEnableZSigning = settings.value("fEnableZSigning").toBool();
-        if (fEnableZSigning) {
-            zsignAction->setVisible(true);
-        } else {
-            zsignAction->setVisible(false);
-        }
+        zsignAction->setVisible(fEnableZSigning);
     }
     
     dlg.close();

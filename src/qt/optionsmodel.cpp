@@ -127,6 +127,10 @@ void OptionsModel::Init(bool resetSettings)
     if (!settings.contains("fEnableZSigning"))
         settings.setValue("fEnableZSigning", false);
 
+    if (!settings.contains("fEnableHexMemo"))
+          settings.setValue("fEnableHexMemo", false);
+    fEnableHexMemo = settings.value("fEnableHexMemo").toBool();
+
     if (!settings.contains("fEnableBootstrap"))
         settings.setValue("fEnableBootstrap", false);
     if (settings.value("fEnableBootstrap").toBool() == true) {
@@ -299,6 +303,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return settings.value("fEnableReindex");
         case EnableZSigning:
             return settings.value("fEnableZSigning");
+        case EnableHexMemo:
+            return fEnableHexMemo;
         case EnableBootstrap:
             return settings.value("fEnableBootstrap");
         case ZapWalletTxes:
@@ -439,6 +445,9 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
               settings.setValue("fEnableZSigning", value);
           }
           break;
+      case EnableHexMemo:
+          setHexMemo(value);
+          break;
       case EnableBootstrap:
           if (settings.value("fEnableBootstrap") != value) {
               settings.setValue("fEnableBootstrap", value);
@@ -511,6 +520,18 @@ void OptionsModel::setDisplayUnit(const QVariant &value)
         nDisplayUnit = value.toInt();
         settings.setValue("nDisplayUnit", nDisplayUnit);
         Q_EMIT displayUnitChanged(nDisplayUnit);
+    }
+}
+
+/** Updates current unit in memory, settings and emits displayUnitChanged(newUnit) signal */
+void OptionsModel::setHexMemo(const QVariant &value)
+{
+    if (!value.isNull())
+    {
+        QSettings settings;
+        fEnableHexMemo = value.toBool();
+        settings.setValue("fEnableHexMemo", fEnableHexMemo);
+        Q_EMIT optionHexMemo(fEnableHexMemo);
     }
 }
 

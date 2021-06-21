@@ -155,9 +155,11 @@ void ZSendCoinsDialog::on_sendButton_clicked()
                 SendCoinsRecipient recipient = entry->getValue();
                 if (recipient.memo.length()>0)
                 {
-                  //Memo must be transferred in HEX format.
-                  std::string sMemo = HexStr(recipient.memo.toStdString());
-                  recipient.memo = QString::fromStdString(sMemo);
+                    //Memo must be transferred in HEX format.
+                    if (!entry->getSubmitMemoAsHex()) {
+                        std::string sMemo = HexStr(recipient.memo.toStdString());
+                        recipient.memo = QString::fromStdString(sMemo);
+                    } 
                 }
                 recipients.append( recipient );
             }

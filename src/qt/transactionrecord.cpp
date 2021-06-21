@@ -66,6 +66,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
             tx.credit = -arcTx.vZsSend[i].amount;
             tx.idx = arcTx.vZsSend[i].shieldedOutputIndex;
             tx.involvesWatchAddress = !arcTx.vZsSend[i].mine;
+            tx.memohex = arcTx.vZsSend[i].memo;
 
             if (arcTx.vZsSend[i].memoStr.length() != 0) {
                 tx.memo = arcTx.vZsSend[i].memoStr;
@@ -124,7 +125,8 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
         tx.debit = arcTx.vZsReceived[i].amount;
         tx.idx = arcTx.vZsReceived[i].shieldedOutputIndex;
         tx.involvesWatchAddress = !arcTx.vZsReceived[i].spendable;
-        
+        tx.memohex = arcTx.vZsReceived[i].memo;
+
         if (arcTx.vZsReceived[i].memoStr.length() != 0) {
             tx.memo = arcTx.vZsReceived[i].memoStr;
         }

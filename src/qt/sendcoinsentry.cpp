@@ -62,6 +62,12 @@ SendCoinsEntry::SendCoinsEntry(const PlatformStyle *_platformStyle, QWidget *par
     connect(ui->deleteButton_is, SIGNAL(clicked()), this, SLOT(deleteClicked()));
     connect(ui->deleteButton_s, SIGNAL(clicked()), this, SLOT(deleteClicked()));
     connect(ui->useAvailableBalanceButton, SIGNAL(clicked()), this, SLOT(useAvailableBalanceClicked()));
+    connect(ui->memo,SIGNAL(textEdited()),this,SLOT(showHexError()));
+    connect(ui->radioEncodeHex,SIGNAL(clicked()),this,SLOT(showHexError()));
+    connect(ui->radioEncodeString,SIGNAL(clicked()),this,SLOT(showHexError()));
+
+    ui->messageLabel->setObjectName("messageLabel");
+    ui->messageTextLabel->setObjectName("messageTextLabel");
 }
 
 SendCoinsEntry::~SendCoinsEntry()
@@ -97,8 +103,10 @@ void SendCoinsEntry::setModel(WalletModel *_model)
 {
     this->model = _model;
 
-    if (_model && _model->getOptionsModel())
+    if (_model && _model->getOptionsModel()) {
         connect(_model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
+        connect(_model->getOptionsModel(), SIGNAL(optionHexMemo(bool)), this, SLOT(updateHexMemo()));
+    }
 
     clear();
 }
@@ -128,11 +136,42 @@ void SendCoinsEntry::clear()
 
     // update the display unit, to not use the default ("KMD")
     updateDisplayUnit();
+    updateHexMemo();
 }
 
 void SendCoinsEntry::checkSubtractFeeFromAmount()
 {
     ui->checkboxSubtractFeeFromAmount->setChecked(true);
+}
+
+bool SendCoinsEntry::getSubmitMemoAsHex() {
+    if (ui->radioEncodeHex->isChecked()) {
+        return true;
+    }
+    return false;
+}
+
+void SendCoinsEntry::showHexError()
+{
+    ui->messageLabel->setVisible(false);
+    ui->messageTextLabel->setVisible(false);
+
+    if (!ui->radioEncodeHex->isChecked()) {
+        return;
+    }
+
+    if (!model) {
+        return;
+    }
+
+    QString memo = ui->memo->text();
+    if (memo.length() > 0) {
+        if (!IsHex(memo.toStdString())) {
+            ui->messageLabel->setVisible(true);
+            ui->messageTextLabel->setVisible(true);
+            ui->messageTextLabel->setText("memo is not a valid hex string!!!");
+        }
+    }
 }
 
 void SendCoinsEntry::hideCheckboxSubtractFeeFromAmount()
@@ -175,6 +214,17 @@ bool SendCoinsEntry::validate(bool allowZAddresses)
         retval = false;
     }
 
+    //Validate memo is encoded as hex if be submitted as hex
+    if (ui->radioEncodeHex->isChecked()) {
+      QString memo = ui->memo->text();
+      if (memo.length() > 0) {
+          if (!IsHex(memo.toStdString())) {
+              retval = false;
+          }
+      }
+    }
+
+    //Validate memo
     if(!model->validateMemo(ui->memo->text())) {
         retval = false;
     }
@@ -298,6 +348,22 @@ void SendCoinsEntry::updateDisplayUnit()
         ui->payAmount->setDisplayUnit(model->getOptionsModel()->getDisplayUnit());
         ui->payAmount_is->setDisplayUnit(model->getOptionsModel()->getDisplayUnit());
         ui->payAmount_s->setDisplayUnit(model->getOptionsModel()->getDisplayUnit());
+    }
+}
+
+void SendCoinsEntry::updateHexMemo()
+{
+    if(model && model->getOptionsModel())
+    {
+        bool hexEnabled = model->getOptionsModel()->getHexMemo();
+        if (!hexEnabled) {
+              ui->radioEncodeHex->setChecked(false);
+              ui->radioEncodeString->setChecked(true);
+        }
+
+        // Update payAmount with the current unit
+        ui->encodingFrame->setVisible(hexEnabled);
+
     }
 }
 

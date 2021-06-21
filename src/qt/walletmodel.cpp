@@ -46,6 +46,7 @@
 #include <QMessageBox>
 #include <QSet>
 #include <QTimer>
+#include <QSettings>
 
 /* from rpcwallet.cpp */
 extern CAmount getBalanceTaddr(std::string transparentAddress, int minDepth=1, bool ignoreUnspendable=true);
@@ -658,10 +659,6 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
         string memo;
         if (!rcp.memo.isNull()) {
             memo = rcp.memo.toStdString();
-
-            if (!IsHex(memo)) {
-                memo = HexStr(memo);
-            }
         }
 
         if (isZaddr)

@@ -167,6 +167,13 @@
            </widget>
           </item>
           <item>
+           <widget class="QCheckBox" name="enableHexEncoding">
+            <property name="text">
+             <string>Enable Hex Memos (valid hex strings will not be re-encoded)</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QCheckBox" name="enableDeleteTx">
             <property name="toolTip">
              <string>Enable or Disable DeleteTx</string>
