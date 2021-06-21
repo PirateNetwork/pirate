@@ -1195,7 +1195,12 @@ bool WalletModel::getPrivKey(const CKeyID &address, CKey& vchPrivKeyOut) const
 
 bool WalletModel::getSeedPhrase(std::string &phrase) const
 {
-    return wallet->GetSeedPhrase(phrase);
+    if (wallet->bip39Enabled) {
+      return wallet->GetSeedPhrase(phrase);
+    }
+
+    phrase = "Bip39 is not enabled for this wallet. Bip39 can only be enabled by creating a new wallet.";
+    return true;
 }
 
 void WalletModel::rescan() const

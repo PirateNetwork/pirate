@@ -871,6 +871,7 @@ public:
 
     //Wallet Birthday;
     int nBirthday;
+    bool bip39Enabled = false;
 
     WalletCreateType createType = UNSET;
 

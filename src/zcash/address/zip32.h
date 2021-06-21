@@ -118,7 +118,7 @@ struct SaplingExtendedSpendingKey {
         READWRITE(dk);
     }
 
-    static SaplingExtendedSpendingKey Master(const HDSeed& seed);
+    static SaplingExtendedSpendingKey Master(const HDSeed& seed, bool bip39Enabled = true);
 
     SaplingExtendedSpendingKey Derive(uint32_t i) const;
 

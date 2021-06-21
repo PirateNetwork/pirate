@@ -137,22 +137,25 @@ libzcash::SaplingPaymentAddress SaplingExtendedFullViewingKey::DefaultAddress() 
     return addr.get().second;
 }
 
-SaplingExtendedSpendingKey SaplingExtendedSpendingKey::Master(const HDSeed& seed)
+SaplingExtendedSpendingKey SaplingExtendedSpendingKey::Master(const HDSeed& seed, bool bip39Enabled)
 {
     auto rawSeed = seed.RawSeed();
     CSerializeData m_bytes(ZIP32_XSK_SIZE);
 
     unsigned char* bip39_seed = librustzcash_get_bip39_seed(rawSeed.data(),rawSeed.size());
 
-    librustzcash_zip32_xsk_master(
-        bip39_seed,
-        64,
-        reinterpret_cast<unsigned char*>(m_bytes.data()));
+    if (bip39Enabled) {
+        librustzcash_zip32_xsk_master(
+            bip39_seed,
+            64,
+            reinterpret_cast<unsigned char*>(m_bytes.data()));
+    } else {
+      librustzcash_zip32_xsk_master(
+          rawSeed.data(),
+          rawSeed.size(),
+          reinterpret_cast<unsigned char*>(m_bytes.data()));
+    }
 
-    // librustzcash_zip32_xsk_master(
-    //     rawSeed.data(),
-    //     rawSeed.size(),
-    //     reinterpret_cast<unsigned char*>(m_bytes.data()));
 
     CDataStream ss(m_bytes, SER_NETWORK, PROTOCOL_VERSION);
     SaplingExtendedSpendingKey xsk_m;

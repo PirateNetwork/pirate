@@ -212,6 +212,9 @@ public:
     bool WriteWalletBirthday(const int& nHeight);
     bool ReadWalletBirthday(int& nHeight);
 
+    bool WriteWalletBip39Enabled(const bool& enabled);
+    bool ReadWalletBip39Enabled(bool& enabled);
+
     bool WriteBestBlock(const CBlockLocator& locator);
     bool ReadBestBlock(CBlockLocator& locator);
 

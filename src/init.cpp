@@ -2105,6 +2105,13 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 walletdb.WriteWalletBirthday(pwalletMain->nBirthday);
             }
 
+            //Write bip39Enabled
+            {
+                pwalletMain->bip39Enabled = true;
+                CWalletDB walletdb(strWalletFile);
+                walletdb.WriteWalletBip39Enabled(pwalletMain->bip39Enabled);
+            }
+
             // generate 1 address
             auto zAddress = pwalletMain->GenerateNewSaplingZKey();
             pwalletMain->SetZAddressBook(zAddress, "z-sapling", "");
@@ -2217,6 +2224,12 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         {
             CWalletDB walletdb(strWalletFile);
             walletdb.ReadWalletBirthday(pwalletMain->nBirthday);
+        }
+
+        //Load bip39Enabled
+        {
+            CWalletDB walletdb(strWalletFile);
+            walletdb.ReadWalletBip39Enabled(pwalletMain->bip39Enabled);
         }
 
         if (clearWitnessCaches || GetBoolArg("-rescan", false) || !fInitializeArcTx || useBootstrap)
