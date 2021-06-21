@@ -5354,9 +5354,6 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
         // Remember whether this is a Sprout or Sapling address
         fromSapling = boost::get<libzcash::SaplingPaymentAddress>(&res) != nullptr;
     }
-    else {
-      throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "From address must be a zaddr");
-    }
     // This logic will need to be updated if we add a new shielded pool
     bool fromSprout = !(fromTaddr || fromSapling);
 
@@ -5372,6 +5369,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
     bool noSproutAddrs = !fromSprout;
 
     // Recipients
+    std::vector<SendManyRecipient> taddrRecipients;
     std::vector<SendManyRecipient> zaddrRecipients;
     CAmount nTotalOut = 0;
 
@@ -5459,8 +5457,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
         if (isZaddr) {
             zaddrRecipients.push_back( SendManyRecipient(address, nAmount, memo) );
         } else {
-            //taddrRecipients.push_back( SendManyRecipient(address, nAmount, memo) );
-            throw JSONRPCError(RPC_INVALID_PARAMETER,  strprintf("Only Z-Addresses allowed"));
+            taddrRecipients.push_back( SendManyRecipient(address, nAmount, memo) );
         }
 
         nTotalOut += nAmount;
@@ -5515,7 +5512,11 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
     CTransaction tx(mtx);
     txsize += GetSerializeSize(tx, SER_NETWORK, tx.nVersion);
-
+    if (fromTaddr) {
+        txsize += CTXIN_SPEND_DUST_SIZE;
+        txsize += CTXOUT_REGULAR_SIZE;      // There will probably be taddr change
+    }
+    txsize += CTXOUT_REGULAR_SIZE * taddrRecipients.size();
     if (txsize > max_tx_size) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Too many outputs, size of raw transaction would be larger than limit of %d bytes", max_tx_size ));
     }
@@ -5579,7 +5580,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     // Create operation and add to global queue
     std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
-    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(builder, contextualTx, fromaddress, zaddrRecipients, nMinDepth, nFee, contextInfo) );
+    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(builder, contextualTx, fromaddress, taddrRecipients, zaddrRecipients, nMinDepth, nFee, contextInfo) );
     q->addOperation(operation);
     AsyncRPCOperationId operationId = operation->getId();
     return operationId;
@@ -5704,6 +5705,7 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
 
     //printf("z_sendmany_prepare_offline() 4 Process recipients\n");fflush(stdout);
     // Recipients
+    std::vector<SendManyRecipient> taddrRecipients;
     std::vector<SendManyRecipient> zaddrRecipients;
     CAmount nTotalOut = 0;
     string sZaddrRecipients;
@@ -5983,7 +5985,7 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
     // Create operation and add to global queue
     //printf("z_sendmany_prepare_offline() Create AsyncRPCOperation_sendmany()\n");
     std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
-    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(builder, contextualTx, fromaddress, zaddrRecipients, nMinDepth, nFee, contextInfo) );
+    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(builder, contextualTx, fromaddress, taddrRecipients, zaddrRecipients, nMinDepth, nFee, contextInfo) );
     q->addOperation(operation);
     AsyncRPCOperationId operationId = operation->getId();
     //printf("z_sendmany_prepare_offline() operationId returned\n");

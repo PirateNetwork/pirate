@@ -886,6 +886,7 @@ WalletModel::SendCoinsReturn WalletModel::zsendCoins(WalletModelZTransaction &tr
     std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(transaction.getBuilder(),
                                                                                  transaction.getContextualTx(),
                                                                                  transaction.getFromAddress().toStdString(),
+                                                                                 transaction.getTaddrRecipients(),
                                                                                  transaction.getZaddrRecipients(),
                                                                                  1,
                                                                                  transaction.getTransactionFee(),

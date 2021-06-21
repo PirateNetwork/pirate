@@ -67,6 +67,16 @@ void WalletModelZTransaction::setContextualTx(const CMutableTransaction& newCont
     contextualTx = newContextualTx;
 }
 
+std::vector<SendManyRecipient> WalletModelZTransaction::getTaddrRecipients() const
+{
+    return taddrRecipients;
+}
+
+void WalletModelZTransaction::setTaddrRecipients(const std::vector<SendManyRecipient>& newTaddrRecipients)
+{
+    taddrRecipients = newTaddrRecipients;
+}
+
 std::vector<SendManyRecipient> WalletModelZTransaction::getZaddrRecipients() const
 {
     return zaddrRecipients;
@@ -116,4 +126,3 @@ string WalletModelZTransaction::getZSignOfflineTransaction() const
 {
     return sZSignOfflineTransaction;
 }
-

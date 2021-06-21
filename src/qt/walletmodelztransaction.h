@@ -35,8 +35,8 @@ public:
     void setContextualTx(const CMutableTransaction& newContextualTx);
     CMutableTransaction getContextualTx() const;
 
-    //void setTaddrRecipients(const std::vector<SendManyRecipient>& newTaddrRecipients);
-    //std::vector<SendManyRecipient> getTaddrRecipients() const;
+    void setTaddrRecipients(const std::vector<SendManyRecipient>& newTaddrRecipients);
+    std::vector<SendManyRecipient> getTaddrRecipients() const;
 
     void setZaddrRecipients(const std::vector<SendManyRecipient>& newZaddrRecipients);
     std::vector<SendManyRecipient> getZaddrRecipients() const;
@@ -59,7 +59,7 @@ private:
     CAmount fee;
     boost::optional<TransactionBuilder> builder;
     CMutableTransaction contextualTx;
-    //std::vector<SendManyRecipient> taddrRecipients;
+    std::vector<SendManyRecipient> taddrRecipients;
     std::vector<SendManyRecipient> zaddrRecipients;
     UniValue contextInfo;
 

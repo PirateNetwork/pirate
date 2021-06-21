@@ -71,7 +71,7 @@ public:
         boost::optional<TransactionBuilder> builder,
         CMutableTransaction contextualTx,
         std::string fromAddress,
-
+        std::vector<SendManyRecipient> tOutputs,
         std::vector<SendManyRecipient> zOutputs,
         int minDepth,
         CAmount fee = ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE,
@@ -86,7 +86,7 @@ public:
     
     virtual void main();
 
-    virtual UniValue getStatus() const;    
+    virtual UniValue getStatus() const;
 
     bool testmode = false;  // Set to true to disable sending txs and generating proofs
 
