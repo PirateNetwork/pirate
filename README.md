@@ -3,12 +3,12 @@
 ![Pirate cli build - Windows cross compile 18.04](https://github.com/PirateNetwork/pirate/workflows/Pirate%20cli%20build%20-%20Windows%20cross%20compile%2018.04/badge.svg)\
 ![Pirate cli build - Windows cross compile 20.04](https://github.com/PirateNetwork/pirate/workflows/Pirate%20cli%20build%20-%20Windows%20cross%20compile%2020.04/badge.svg)\
 ![Pirate cli build - MacOS 10.15 Catalina](https://github.com/PirateNetwork/pirate/workflows/Pirate%20cli%20build%20-%20MacOS%2010.15%20Catalina/badge.svg)\
-![Pirate Logo](https://i.ibb.co/F7Dgnxy/Pirate-Logo-Wordmark-Gold.png "PirateChain Logo")
+![Pirate Logo](https://i.ibb.co/F7Dgnxy/Pirate-Logo-Wordmark-Gold.png "Pirate Chain Logo")
 
 
-## PirateChain - offline
+## Pirate Chain - offline
 
-This is the official PirateChain sourcecode repository based on https://github.com/jl777/komodo.
+This is the official Pirate Chain sourcecode repository based on https://github.com/jl777/komodo.
 
 ## Development Resources
 
@@ -21,7 +21,7 @@ This is the official PirateChain sourcecode repository based on https://github.c
 - Support: [https://pirate.black/discord](https://pirate.black/discord)
 - API references & Dev Documentation: [https://docs.komodoplatform.com](https://docs.komodoplatform.com/)
 - Blog: [https://pirate.black/blog](https://pirate.black/blog/)
-- Whitepaper: [PirateChain Whitepaper](https://pirate.black/whitepaper)
+- Whitepaper: [Pirate Chain Whitepaper](https://pirate.black/whitepaper)
 
 ## Komodo Platform Technologies Integrated In Pirate Chain
 
@@ -136,11 +136,11 @@ To run the Pirate GUI wallet:
 `pirate-qt-win.exe`
 
 
-To run the daemon for PirateChain:  
+To run the daemon for Pirate Chain:  
 `pirated`
 both pirated and pirate-cli are located in the src directory after successfully building  
 
-To reset the PirateChain blockchain change into the *~/.komodo/PIRATE* data directory and delete the corresponding files by running `rm -rf blocks chainstate debug.log komodostate db.log` and restart daemon
+To reset the Pirate Chain blockchain change into the *~/.komodo/PIRATE* data directory and delete the corresponding files by running `rm -rf blocks chainstate debug.log komodostate db.log` and restart daemon
 
 To initiate a bootstrap download on the GUI wallet add bootstrap=1 to the PIRATE.conf file.
 
