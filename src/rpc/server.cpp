@@ -33,6 +33,7 @@
 #include <memory>
 
 #include <univalue.h>
+#include <unistd.h>
 
 #include <boost/bind.hpp>
 #include <boost/filesystem.hpp>
