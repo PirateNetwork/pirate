@@ -205,6 +205,11 @@ QDialog#OpenVKDialog {
 }
 
 QDialog#OpenPhraseDialog {
+    background-color: #303030;
+    color: #ffffff;
+}
+
+QDialog#OpenPhraseDialog QPlainTextEdit{
     background-color: #202020;
     color: #ffffff;
 }
@@ -337,10 +342,10 @@ QRadioButton::indicator:checked {
     border-radius: 8px;
 }
 
-QLabel#messageLabel {
+QStackedWidget#SendCoinsEntry QLabel#messageLabel {
     color: red;
 }
 
-QLabel#messagetextLabel {
-    color: red;
+QStackedWidget#SendCoinsEntry QLabel#messageTextLabel {
+    color: #ffffff;
 }

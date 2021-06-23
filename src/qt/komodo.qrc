@@ -11,7 +11,6 @@
         <file alias="light">res/stylesheets/light.css</file>
     </qresource>
 
-    
     <qresource prefix="/backgrounds">
         <file alias="pirate">res/backgrounds/pirate.png</file>
         <file alias="piratemap">res/backgrounds/piratemap.png</file>
