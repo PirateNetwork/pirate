@@ -9808,6 +9808,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "z_setprimaryspendingkey",  &z_setprimaryspendingkey,  true  },
     { "wallet",             "z_listaddresses",          &z_listaddresses,          true  },
     { "wallet",             "z_exportkey",              &z_exportkey,              true  },
+    { "wallet",             "z_exportseedphrase",       &z_exportseedphrase,       true  },
     { "wallet",             "z_importkey",              &z_importkey,              true  },
     { "wallet",             "z_exportviewingkey",       &z_exportviewingkey,       true  },
     { "wallet",             "z_importviewingkey",       &z_importviewingkey,       true  },

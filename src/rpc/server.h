@@ -498,6 +498,7 @@ extern UniValue nspv_listccmoduleunspent(const UniValue& params, bool fHelp, con
 
 extern UniValue getblocksubsidy(const UniValue& params, bool fHelp, const CPubKey& mypk);
 
+extern UniValue z_exportseedphrase(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcdump.cpp
 extern UniValue z_exportkey(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcdump.cpp
 extern UniValue z_importkey(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcdump.cpp
 extern UniValue z_exportviewingkey(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcdump.cpp
