@@ -2089,11 +2089,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             pwalletMain->SetZAddressBook(zAddress, "z-sapling", "");
         }
 
-        std::string phrase = "";
-        if(pwalletMain->GetSeedPhrase(phrase)) {
-          LogPrintf("Bip-39 Seed Phrase - %s\n", phrase);
-        }
-
         //Set Sapling Consolidation
         pwalletMain->fSaplingConsolidationEnabled = GetBoolArg("-consolidation", false);
         fConsolidationTxFee  = GetArg("-consolidationtxfee", DEFAULT_CONSOLIDATION_FEE);
