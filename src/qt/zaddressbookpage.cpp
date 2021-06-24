@@ -172,7 +172,6 @@ void ZAddressBookPage::exportVK()
     {
 
         QString key = walletModel->getViewingKey(selection.at(0).data(ZAddressTableModel::Address).toString());
-        printf("exportVK(): %s\n", key.toStdString().c_str());
 
         if (key != "") {
           TransactionDescDialog *dlg = new TransactionDescDialog(selection.at(0), VIEWING_KEY, key);
