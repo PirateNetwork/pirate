@@ -19,6 +19,11 @@
 #include <QAbstractItemDelegate>
 #include <QPainter>
 #include <QSettings>
+#include <QNetworkAccessManager>
+#include <QNetworkRequest>
+#include <QUrl>
+#include <QNetworkReply>
+#include <QTimer>
 
 #define DECORATION_SIZE 54
 #define NUM_ITEMS 5
@@ -193,6 +198,16 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
     showOutOfSyncWarning(true);
     connect(ui->labelWalletStatus, SIGNAL(clicked()), this, SLOT(handleOutOfSyncWarningClicks()));
     connect(ui->labelTransactionsStatus, SIGNAL(clicked()), this, SLOT(handleOutOfSyncWarningClicks()));
+
+    timer = new QTimer(this);
+    manager = new QNetworkAccessManager(this);
+    reply = NULL;
+
+    connect(timer, SIGNAL(timeout()), SLOT(getPrice()));
+    connect(manager, SIGNAL(finished(QNetworkReply*)), this, SLOT(replyPriceFinished(QNetworkReply*)));
+    timer->setInterval(15000);
+
+    getPrice();
 }
 
 void OverviewPage::handleTransactionClicked(const QModelIndex &index)
@@ -209,6 +224,26 @@ void OverviewPage::handleOutOfSyncWarningClicks()
 OverviewPage::~OverviewPage()
 {
     delete ui;
+}
+
+void OverviewPage::getPrice()
+{
+
+    QNetworkRequest newRequest;
+    QUrl cmcURL("https://api.coingecko.com/api/v3/simple/price?ids=pirate-chain&vs_currencies=btc%2Cusd%2Ceur&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true");
+    newRequest.setUrl(cmcURL);
+    newRequest.setHeader(QNetworkRequest::ServerHeader, "application/json");
+    reply = manager->get(newRequest);
+}
+
+void OverviewPage::replyPriceFinished(QNetworkReply *reply)
+{
+    if (reply->error() == QNetworkReply::NoError) {
+        LogPrintf("Coin Gecko Price %s\n",reply->readAll().toStdString());
+    } else {
+        LogPrintf("Coin Gecko Price error %d \n", reply->error());
+    }
+
 }
 
 void OverviewPage::setBalance(const CAmount& balance, const CAmount& unconfirmedBalance, const CAmount& immatureBalance, const CAmount& watchOnlyBalance, const CAmount& watchUnconfBalance, const CAmount& watchImmatureBalance, const CAmount& privateWatchBalance, const CAmount& privateBalance, const CAmount& interestBalance)
@@ -271,6 +306,7 @@ void OverviewPage::updateWatchOnlyLabels(bool showWatchOnly)
         ui->labelWatchPending->setVisible(showWatchOnly);         // show watch-only pending balance
         ui->labelPrivateWatchBalance->setVisible(showWatchOnly);  // show watch-only private balance
         ui->labelWatchTotal->setVisible(showWatchOnly);           // show watch-only total balance
+        ui->labelWatchFiat->setVisible(showWatchOnly);            // Show watch-only fiat balance
 
         bool showTransparent = (currentBalance + currentWatchOnlyBalance) != 0;
         ui->labelBalance->setVisible(showTransparent);
@@ -290,6 +326,7 @@ void OverviewPage::updateWatchOnlyLabels(bool showWatchOnly)
         ui->labelWatchAvailable->setVisible(showWatchOnly);       // show watch-only available balance
         ui->labelWatchPending->setVisible(showWatchOnly);         // show watch-only pending balance
         ui->labelWatchTotal->setVisible(showWatchOnly);           // show watch-only total balance
+        ui->labelWatchFiat->setVisible(showWatchOnly);            // Show watch-only fiat balance
         ui->labelWatchImmature->setVisible(showWatchOnly);        // show watch-only immature balance
         ui->labelPrivateWatchBalance->setVisible(showWatchOnly);  // show watch-only private balance
     }

@@ -22,6 +22,9 @@ namespace Ui {
 
 QT_BEGIN_NAMESPACE
 class QModelIndex;
+class QTimer;
+class QNetworkAccessManager;
+class QNetworkReply;
 QT_END_NAMESPACE
 
 /** Overview ("home") page widget */
@@ -37,6 +40,7 @@ public:
     void setWalletModel(WalletModel *walletModel);
     void showOutOfSyncWarning(bool fShow);
 
+
 public Q_SLOTS:
     void setBalance(const CAmount& balance, const CAmount& unconfirmedBalance, const CAmount& immatureBalance,
                     const CAmount& watchOnlyBalance, const CAmount& watchUnconfBalance, const CAmount& watchImmatureBalance,
@@ -50,6 +54,11 @@ private:
     Ui::OverviewPage *ui;
     ClientModel *clientModel;
     WalletModel *walletModel;
+
+    QTimer *timer;
+    QNetworkAccessManager *manager;
+    QNetworkReply *reply;
+
     CAmount currentBalance;
     CAmount currentUnconfirmedBalance;
     CAmount currentImmatureBalance;
@@ -64,6 +73,8 @@ private:
     std::unique_ptr<TransactionFilterProxy> filter;
 
 private Q_SLOTS:
+    void getPrice();
+    void replyPriceFinished(QNetworkReply *reply);
     void updateDisplayUnit();
     void handleTransactionClicked(const QModelIndex &index);
     void updateAlerts(const QString &warnings);
