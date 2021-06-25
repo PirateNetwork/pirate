@@ -117,13 +117,9 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
 
     bOfflineSpendingKey=false;
     if (!isfromtaddr_) {
+        fromAddress_ = fromAddress; //Initialise private, persistant Address for the object.
         auto address = DecodePaymentAddress(fromAddress);
         if (IsValidPaymentAddress(address)) {
-            // We don't need to lock on the wallet as spending key related methods are thread-safe
-            if (!boost::apply_visitor(HaveSpendingKeyForPaymentAddress(pwalletMain), address)) {
-                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, no spending key found for zaddr");
-            }
-
             isfromzaddr_ = true;
             frompaymentaddress_ = address;
             // We don't need to lock on the wallet as spending key related methods are thread-safe
