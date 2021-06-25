@@ -62,7 +62,7 @@ SendCoinsEntry::SendCoinsEntry(const PlatformStyle *_platformStyle, QWidget *par
     connect(ui->deleteButton_is, SIGNAL(clicked()), this, SLOT(deleteClicked()));
     connect(ui->deleteButton_s, SIGNAL(clicked()), this, SLOT(deleteClicked()));
     connect(ui->useAvailableBalanceButton, SIGNAL(clicked()), this, SLOT(useAvailableBalanceClicked()));
-    connect(ui->memo,SIGNAL(textEdited()),this,SLOT(showHexError()));
+    connect(ui->memo,SIGNAL(textChanged(const QString &)), this ,SLOT(showHexError()));
     connect(ui->radioEncodeHex,SIGNAL(clicked()),this,SLOT(showHexError()));
     connect(ui->radioEncodeString,SIGNAL(clicked()),this,SLOT(showHexError()));
 
