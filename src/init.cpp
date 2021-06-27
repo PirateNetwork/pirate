@@ -1660,7 +1660,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     //Prompt on new install
     if (newInstall && !GetBoolArg("-bootstrap", false)) {
         bool fBoot = uiInterface.ThreadSafeMessageBox(
-            "\n\n" + _("New install detected.\n\nPress OK to download the blockchain bootstrap."),
+            "\n\n" + _("New install detected.\n\nPress OK to download the blockchain bootstrap (faster, less secure).\n\nPress Cancel to continue on and sync the blockchain from peer nodes (slower, more secure)."),
             "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
         if (fBoot) {
             useBootstrap = true;
@@ -1670,7 +1670,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     //Prompt GUI
     if (GetBoolArg("-bootstrap", false) && GetArg("-bootstrap", "1") != "2" && !useBootstrap) {
         bool fBoot = uiInterface.ThreadSafeMessageBox(
-            "\n\n" + _("Bootstrap option detected.\n\nPress OK to download the blockchain bootstrap."),
+            "\n\n" + _("Bootstrap option detected.\n\nPress OK to download the blockchain bootstrap (faster, less secure).\n\nPress Cancel to continue on and sync the blockchain from peer nodes (slower, more secure)."),
             "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
         if (fBoot) {
             useBootstrap = true;
