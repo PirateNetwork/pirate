@@ -24,9 +24,13 @@
 #include <QUrl>
 #include <QNetworkReply>
 #include <QTimer>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QLocale>
 
 #define DECORATION_SIZE 54
 #define NUM_ITEMS 5
+
 
 extern int nMaxConnections; //From net.h
 
@@ -205,8 +209,8 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
 
     connect(timer, SIGNAL(timeout()), SLOT(getPrice()));
     connect(manager, SIGNAL(finished(QNetworkReply*)), this, SLOT(replyPriceFinished(QNetworkReply*)));
-    timer->setInterval(15000);
-
+    timer->setInterval(300000); //Check every 5 minutes.
+    timer->start();
     getPrice();
 }
 
@@ -239,9 +243,28 @@ void OverviewPage::getPrice()
 void OverviewPage::replyPriceFinished(QNetworkReply *reply)
 {
     if (reply->error() == QNetworkReply::NoError) {
-        LogPrintf("Coin Gecko Price %s\n",reply->readAll().toStdString());
+        try {
+            QJsonDocument response = QJsonDocument::fromJson(reply->readAll());
+
+            const QJsonObject item  = response.object();
+            const QJsonObject usd  = response["pirate-chain"].toObject();
+            auto fiatValue = usd["usd"].toDouble();
+
+            double currentFiat = currentPrivateBalance * fiatValue;
+            double watchFiat = currentPrivateWatchBalance * fiatValue;
+
+            //TODO: Setup multiple currencies
+            QLocale::setDefault(QLocale(QLocale::English, QLocale::UnitedStates));
+            QLocale dollar;
+
+            ui->labelFiat->setText(dollar.toCurrencyString(currentFiat/1e8));
+            ui->labelWatchFiat->setText(dollar.toCurrencyString(watchFiat/1e8));
+
+        } catch (...) {
+            LogPrintf("Coin Gecko JSON Parsing error\n");
+        }
     } else {
-        LogPrintf("Coin Gecko Price error %d \n", reply->error());
+        LogPrintf("Coin Gecko API error number %d \n", reply->error());
     }
 
 }
