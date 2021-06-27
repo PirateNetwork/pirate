@@ -80,6 +80,7 @@ int fDeleteInterval = DEFAULT_TX_DELETE_INTERVAL;
 unsigned int fDeleteTransactionsAfterNBlocks = DEFAULT_TX_RETENTION_BLOCKS;
 unsigned int fKeepLastNTransactions = DEFAULT_TX_RETENTION_LASTTX;
 std::string recoverySeedPhrase = "";
+bool usingGUI = false;
 int recoveryHeight = 0;
 
 /**

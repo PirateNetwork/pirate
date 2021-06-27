@@ -70,6 +70,7 @@ extern int fDeleteInterval;
 extern unsigned int fDeleteTransactionsAfterNBlocks;
 extern unsigned int fKeepLastNTransactions;
 extern std::string recoverySeedPhrase;
+extern bool usingGUI;
 extern int recoveryHeight;
 
 //! -paytxfee default

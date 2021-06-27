@@ -448,6 +448,7 @@ std::string HelpMessage(HelpMessageMode mode)
 
 #ifdef ENABLE_WALLET
     strUsage += HelpMessageGroup(_("Wallet options:"));
+    strUsage += HelpMessageOpt("-seedphrase=<phrase>", _("Recover wallet from seed phrase if a wallet file does not exist."));
     strUsage += HelpMessageOpt("-disablewallet", _("Do not load the wallet and disable wallet RPC calls"));
     strUsage += HelpMessageOpt("-keypool=<n>", strprintf(_("Set key pool size to <n> (default: %u)"), 100));
     strUsage += HelpMessageOpt("-consolidation", _("Enable auto Sapling note consolidation"));
@@ -2035,18 +2036,29 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         bool recoverWallet = false;
         if (!pwalletMain->HaveHDSeed())
         {
+
             uiInterface.InitMessage(_(""));
             uiInterface.InitCreateWallet();
-            while (pwalletMain->createType == UNSET) {
-              //wait for response from GUI
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            if (usingGUI) {
+                while (pwalletMain->createType == UNSET) {
+                  //wait for response from GUI
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-                if (fRequestShutdown)
-                {
-                    LogPrintf("Shutdown requested. Exiting.\n");
-                    return false;
+                    if (fRequestShutdown)
+                    {
+                        LogPrintf("Shutdown requested. Exiting.\n");
+                        return false;
+                    }
+                }
+            } else {
+                recoverySeedPhrase  = GetArg("-seedphrase", "");
+                if (recoverySeedPhrase != "") {
+                    pwalletMain->createType = RECOVERY;
+                } else {
+                    pwalletMain->createType = RANDOM;
                 }
             }
+
 
             if (pwalletMain->createType == RECOVERY) {
                 if (!pwalletMain->RestoreSeedFromPhrase(recoverySeedPhrase)) {
@@ -2058,14 +2070,16 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
               // generate a new HD seed
                 pwalletMain->GenerateNewSeed();
                 pwalletMain->GetSeedPhrase(recoverySeedPhrase);
-                uiInterface.InitShowPhrase();
-                while (pwalletMain->createType == RANDOM) {
-                  //wait for response from GUI
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    if (fRequestShutdown)
-                    {
-                        LogPrintf("Shutdown requested. Exiting.\n");
-                        return false;
+                if (usingGUI) {
+                    uiInterface.InitShowPhrase();
+                    while (pwalletMain->createType == RANDOM) {
+                      //wait for response from GUI
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                        if (fRequestShutdown)
+                        {
+                            LogPrintf("Shutdown requested. Exiting.\n");
+                            return false;
+                        }
                     }
                 }
             }

@@ -25,6 +25,7 @@
 #ifdef ENABLE_WALLET
 #include "walletframe.h"
 #include "walletmodel.h"
+#include "wallet/wallet.h"
 #endif // ENABLE_WALLET
 
 #ifdef Q_OS_MAC
@@ -141,6 +142,10 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
 
     //Set the theme in the settings
     QString strTheme = settings.value("strTheme","armada").toString();
+
+    //Set usingGUI to true so the wallet known the GUI is active
+    LogPrintf("Setting usingGUI to true, %s\n", __func__);
+    usingGUI = true;
 
     //Set the Theme in the app
     LogPrintf("Setting Theme: %s %s\n", strTheme.toStdString(), __func__);
