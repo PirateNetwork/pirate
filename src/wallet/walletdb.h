@@ -173,7 +173,7 @@ public:
               retries++;
             }
 
-            if (retries > 10) {
+            if (retries > 3) {
               LogPrintf("%s Failed!!! Retry, attempts #%d.\n", calling, retries - 1);
               return false;
             }

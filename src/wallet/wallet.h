@@ -1082,6 +1082,7 @@ public:
 
     std::map<uint256, CWalletTx> mapWallet;
     bool writeTxFailed = false;
+    std::set<uint256> failedTxs;
 
     int64_t nOrderPosNext;
     std::map<uint256, int> mapRequestCount;
