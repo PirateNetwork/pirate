@@ -1449,7 +1449,7 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
     CTransaction tx;
     if (!DecodeHexTx(tx, params[0].get_str()))
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
-    uint256 hashTx = tx.GetHash();    
+    uint256 hashTx = tx.GetHash();
 
     bool fOverrideFees = false;
     if (params.size() > 1)
@@ -1483,10 +1483,8 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
     {
         NSPV_broadcast((char *)params[0].get_str().c_str());
     }
-    
-    UniValue uReturn(UniValue::VARR);
-    uReturn.push_back( hashTx.GetHex() );
-    return uReturn;
+
+    return hashTx.GetHex();
 }
 
 UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk)
