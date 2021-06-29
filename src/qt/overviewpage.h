@@ -55,7 +55,8 @@ private:
     ClientModel *clientModel;
     WalletModel *walletModel;
 
-    QTimer *timer;
+    QTimer *updateJSONtimer;
+    QTimer *updateGUItimer;
     QNetworkAccessManager *manager;
     QNetworkReply *reply;
 
@@ -74,7 +75,7 @@ private:
 
 private Q_SLOTS:
     void getPrice();
-    void replyPriceFinished(QNetworkReply *reply);
+    void replyPriceFinished();
     void updateDisplayUnit();
     void handleTransactionClicked(const QModelIndex &index);
     void updateAlerts(const QString &warnings);

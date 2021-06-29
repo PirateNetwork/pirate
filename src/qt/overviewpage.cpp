@@ -16,6 +16,8 @@
 #include "walletmodel.h"
 #include "util.h" // for KOMODO_ASSETCHAIN_MAXLEN
 
+#include "params.h" //curl for price check
+
 #include <QAbstractItemDelegate>
 #include <QPainter>
 #include <QSettings>
@@ -203,14 +205,20 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
     connect(ui->labelWalletStatus, SIGNAL(clicked()), this, SLOT(handleOutOfSyncWarningClicks()));
     connect(ui->labelTransactionsStatus, SIGNAL(clicked()), this, SLOT(handleOutOfSyncWarningClicks()));
 
-    timer = new QTimer(this);
+    updateJSONtimer = new QTimer(this);
+    updateGUItimer = new QTimer(this);
     manager = new QNetworkAccessManager(this);
     reply = NULL;
 
-    connect(timer, SIGNAL(timeout()), SLOT(getPrice()));
-    connect(manager, SIGNAL(finished(QNetworkReply*)), this, SLOT(replyPriceFinished(QNetworkReply*)));
-    timer->setInterval(300000); //Check every 5 minutes.
-    timer->start();
+    connect(updateJSONtimer, SIGNAL(timeout()), SLOT(getPrice()));
+    connect(updateGUItimer, SIGNAL(timeout()), SLOT(replyPriceFinished()));
+    // connect(manager, SIGNAL(finished(QNetworkReply*)), this, SLOT(replyPriceFinished(QNetworkReply*)));
+    updateJSONtimer->setInterval(300000); //Check every 5 minutes.
+    updateJSONtimer->start();
+
+    updateGUItimer->setInterval(5000); //Check every 15 seconds.
+    updateGUItimer->start();
+
     getPrice();
 }
 
@@ -232,22 +240,17 @@ OverviewPage::~OverviewPage()
 
 void OverviewPage::getPrice()
 {
-
-    QNetworkRequest newRequest;
-    QUrl cmcURL("https://api.coingecko.com/api/v3/simple/price?ids=pirate-chain&vs_currencies=btc%2Cusd%2Ceur&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true");
-    newRequest.setUrl(cmcURL);
-    newRequest.setHeader(QNetworkRequest::ServerHeader, "application/json");
-    reply = manager->get(newRequest);
+    getHttpsJson("https://api.coingecko.com/api/v3/simple/price?ids=pirate-chain&vs_currencies=btc%2Cusd%2Ceur&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true");
 }
 
-void OverviewPage::replyPriceFinished(QNetworkReply *reply)
+void OverviewPage::replyPriceFinished()
 {
-    if (reply->error() == QNetworkReply::NoError) {
+    if (downloadedJSON.failed == false && downloadedJSON.complete == true) {
         try {
-            QJsonDocument response = QJsonDocument::fromJson(reply->readAll());
+            QJsonDocument response = QJsonDocument::fromJson(downloadedJSON.response.c_str());
 
             const QJsonObject item  = response.object();
-            const QJsonObject usd  = response["pirate-chain"].toObject();
+            const QJsonObject usd  = item["pirate-chain"].toObject();
             auto fiatValue = usd["usd"].toDouble();
 
             double currentFiat = currentPrivateBalance * fiatValue;
@@ -263,10 +266,7 @@ void OverviewPage::replyPriceFinished(QNetworkReply *reply)
         } catch (...) {
             LogPrintf("Coin Gecko JSON Parsing error\n");
         }
-    } else {
-        LogPrintf("Coin Gecko API error number %d \n", reply->error());
     }
-
 }
 
 void OverviewPage::setBalance(const CAmount& balance, const CAmount& unconfirmedBalance, const CAmount& immatureBalance, const CAmount& watchOnlyBalance, const CAmount& watchUnconfBalance, const CAmount& watchImmatureBalance, const CAmount& privateWatchBalance, const CAmount& privateBalance, const CAmount& interestBalance)
