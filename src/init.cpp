@@ -1966,56 +1966,62 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 strErrors << _("Error loading wallet.dat") << "\n";
         }
 
-        uiInterface.InitMessage(_("Validating transaction archive..."));
-        bool fInitializeArcTx = pwalletMain->initalizeArcTx();
-        if(!fInitializeArcTx) {
-          //ArcTx validation failed, delete wallet point and clear vWtx
-          delete pwalletMain;
-          pwalletMain = NULL;
-          vWtx.clear();
+        bool fInitializeArcTx = true;
+        if (nLoadWalletRet == DB_LOAD_OK) {
+            uiInterface.InitMessage(_("Validating transaction archive..."));
+            bool fInitializeArcTx = pwalletMain->initalizeArcTx();
+            if(!fInitializeArcTx) {
+              //ArcTx validation failed, delete wallet point and clear vWtx
+              delete pwalletMain;
+              pwalletMain = NULL;
+              vWtx.clear();
 
-          //Zap All Transactions
-          uiInterface.InitMessage(_("Transaction archive not initalized, Zapping all transactions..."));
-          LogPrintf("Transaction archive not initalized, Zapping all transactions.\n");
-          pwalletMain = new CWallet(strWalletFile);
-          DBErrors nZapWalletRet = pwalletMain->ZapWalletTx(vWtx);
-          if (nZapWalletRet != DB_LOAD_OK) {
-              uiInterface.InitMessage(_("Error loading wallet.dat: Wallet corrupted"));
-              return false;
-          }
-
-          delete pwalletMain;
-          pwalletMain = NULL;
-
-          //Reload Wallet
-          uiInterface.InitMessage(_("Reloading wallet, set to rescan..."));
-          pwalletMain = new CWallet(strWalletFile);
-          DBErrors nLoadWalletRet = pwalletMain->LoadWallet(fFirstRun);
-          if (nLoadWalletRet != DB_LOAD_OK)
-          {
-              if (nLoadWalletRet == DB_CORRUPT)
-                  strErrors << _("Error loading wallet.dat: Wallet corrupted") << "\n";
-              else if (nLoadWalletRet == DB_NONCRITICAL_ERROR)
-              {
-                  string msg(_("Warning: error reading wallet.dat! All keys read correctly, but transaction data"
-                               " or address book entries might be missing or incorrect."));
-                  InitWarning(msg);
+              //Zap All Transactions
+              uiInterface.InitMessage(_("Transaction archive not initalized, Zapping all transactions..."));
+              LogPrintf("Transaction archive not initalized, Zapping all transactions.\n");
+              pwalletMain = new CWallet(strWalletFile);
+              DBErrors nZapWalletRet = pwalletMain->ZapWalletTx(vWtx);
+              if (nZapWalletRet != DB_LOAD_OK) {
+                  uiInterface.InitMessage(_("Error loading wallet.dat: Wallet corrupted"));
+                  return false;
               }
-              else if (nLoadWalletRet == DB_TOO_NEW)
-                  strErrors << _("Error loading wallet.dat: Wallet requires newer version of Pirate") << "\n";
 
-              else if (nLoadWalletRet == DB_NEED_REWRITE)
+              delete pwalletMain;
+              pwalletMain = NULL;
+
+              //Reload Wallet
+              uiInterface.InitMessage(_("Reloading wallet, set to rescan..."));
+              pwalletMain = new CWallet(strWalletFile);
+              DBErrors nLoadWalletRet = pwalletMain->LoadWallet(fFirstRun);
+              if (nLoadWalletRet != DB_LOAD_OK)
               {
-                  strErrors << _("Wallet needed to be rewritten: restart Pirate to complete") << "\n";
-                  LogPrintf("%s", strErrors.str());
-                  return InitError(strErrors.str());
-              }
-              else
-                  strErrors << _("Error loading wallet.dat") << "\n";
-          }
+                  if (nLoadWalletRet == DB_CORRUPT)
+                      strErrors << _("Error loading wallet.dat: Wallet corrupted") << "\n";
+                  else if (nLoadWalletRet == DB_NONCRITICAL_ERROR)
+                  {
+                      string msg(_("Warning: error reading wallet.dat! All keys read correctly, but transaction data"
+                                   " or address book entries might be missing or incorrect."));
+                      InitWarning(msg);
+                  }
+                  else if (nLoadWalletRet == DB_TOO_NEW)
+                      strErrors << _("Error loading wallet.dat: Wallet requires newer version of Pirate") << "\n";
 
+                  else if (nLoadWalletRet == DB_NEED_REWRITE)
+                  {
+                      strErrors << _("Wallet needed to be rewritten: restart Pirate to complete") << "\n";
+                      LogPrintf("%s", strErrors.str());
+                      return InitError(strErrors.str());
+                  }
+                  else
+                      strErrors << _("Error loading wallet.dat") << "\n";
+              }
+
+            }
+
+        } else {
+            string msg(_("Warning: error reading wallet.dat! Archive Transaction verification skipped!!!"));
+            InitWarning(msg);
         }
-
 
         if (GetBoolArg("-upgradewallet", fFirstRun))
         {
