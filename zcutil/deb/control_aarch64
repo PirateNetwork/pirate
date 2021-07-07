@@ -1,0 +1,9 @@
+Package: Treasure-Chest
+Version: RELEASE_VERSION
+Section: base
+Priority: optional
+Architecture: arm64
+Maintainer: Forge <cryptoforge.cc@protonmail.ch>
+Description: Treasure Chest is a full node UI wallet for Pirate.
+ Treasure Chest is a full node UI wallet for Pirate. It comes with
+ full support for shielded addresses and memos for Pirate.
