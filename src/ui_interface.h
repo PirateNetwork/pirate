@@ -83,6 +83,12 @@ public:
     /** Progress message during initialization. */
     boost::signals2::signal<void (const std::string &message)> InitMessage;
 
+    /** Notify GUI of new wallet creation. */
+    boost::signals2::signal<void ()> InitCreateWallet;
+
+    /** Notify GUI to show pass phrase after wallet creation. */
+    boost::signals2::signal<void ()> InitShowPhrase;
+
     /** Number of network connections changed. */
     boost::signals2::signal<void (int newNumConnections)> NotifyNumConnectionsChanged;
 

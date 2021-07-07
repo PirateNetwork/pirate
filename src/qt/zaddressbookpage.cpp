@@ -50,7 +50,7 @@ ZAddressBookPage::ZAddressBookPage(const PlatformStyle *platformStyle, Mode _mod
     setWindowTitle(tr("Receiving z-addresses"));
     ui->labelExplanation->setText(tr("These are your Pirate z-addresses for receiving payments. It is recommended to use a new receiving z-address for each transaction."));
     ui->labelExplanation->setVisible(false);
-    
+
     //Hide close button
     ui->closeButton->hide();
     ui->exportButton->hide();
@@ -116,6 +116,7 @@ void ZAddressBookPage::setModel(ZAddressTableModel *_model)
     proxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
     proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
     proxyModel->setSortRole(Qt::EditRole);
+
 
     switch(tab)
     {

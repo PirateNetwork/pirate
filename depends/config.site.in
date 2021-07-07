@@ -28,6 +28,9 @@ if test -z $with_gui && test -n "@no_qt@"; then
   with_gui=no
 fi
 
+RUST_TARGET="@rust_target@"
+RUST_VENDORED_SOURCES="$depends_prefix/vendored-sources"
+
 if test x@host_os@ = xdarwin; then
   BREW=no
   PORT=no

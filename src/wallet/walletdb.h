@@ -173,7 +173,7 @@ public:
               retries++;
             }
 
-            if (retries > 10) {
+            if (retries > 3) {
               LogPrintf("%s Failed!!! Retry, attempts #%d.\n", calling, retries - 1);
               return false;
             }
@@ -207,6 +207,13 @@ public:
 
     bool WriteWatchOnly(const CScript &script);
     bool EraseWatchOnly(const CScript &script);
+
+    //Height of first known transaction
+    bool WriteWalletBirthday(const int& nHeight);
+    bool ReadWalletBirthday(int& nHeight);
+
+    bool WriteWalletBip39Enabled(const bool& enabled);
+    bool ReadWalletBip39Enabled(bool& enabled);
 
     bool WriteBestBlock(const CBlockLocator& locator);
     bool ReadBestBlock(CBlockLocator& locator);

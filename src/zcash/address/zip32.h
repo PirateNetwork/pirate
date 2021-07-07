@@ -27,7 +27,10 @@ public:
     HDSeed(RawHDSeed& seedIn) : seed(seedIn) {}
 
     static HDSeed Random(size_t len = 32);
+    static HDSeed RestoreFromPhrase(std::string &phrase);
+    bool IsValidPhrase(std::string &phrase);
     bool IsNull() const { return seed.empty(); };
+    void GetPhrase(std::string &phrase);
     uint256 Fingerprint() const;
     RawHDSeed RawSeed() const { return seed; }
 
@@ -115,7 +118,7 @@ struct SaplingExtendedSpendingKey {
         READWRITE(dk);
     }
 
-    static SaplingExtendedSpendingKey Master(const HDSeed& seed);
+    static SaplingExtendedSpendingKey Master(const HDSeed& seed, bool bip39Enabled = true);
 
     SaplingExtendedSpendingKey Derive(uint32_t i) const;
 

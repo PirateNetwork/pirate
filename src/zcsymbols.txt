@@ -2833,7 +2833,7 @@ libzcash_a-Note.o:
 000000000000004d r .LC8
 0000000000000062 r .LC9
                  U librustzcash_ivk_to_pkd
-                 U librustzcash_sapling_compute_cm
+                 U librustzcash_sapling_compute_cmu
                  U librustzcash_sapling_compute_nf
                  U librustzcash_sapling_generate_r
                  U memcmp

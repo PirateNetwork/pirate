@@ -798,7 +798,7 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
     case LongDescriptionRole:
         return priv->describe(rec, walletModel->getOptionsModel()->getDisplayUnit());
     case MemoDescriptionRole:
-        return QString::fromStdString(rec->memo);
+        return QString::fromStdString("Memo:<br>" + rec->memo + "<br><br>Memo Hex:<br>" + rec->memohex);
     case AddressRole:
         return QString::fromStdString(rec->address);
     case LabelRole:

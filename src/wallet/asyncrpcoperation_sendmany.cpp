@@ -113,17 +113,24 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
     isfromtaddr_ = IsValidDestination(fromtaddr_);
     isfromzaddr_ = false;
 
+    int ivOUT = (int)zOutputs.size();
+
+    bOfflineSpendingKey=false;
     if (!isfromtaddr_) {
+        fromAddress_ = fromAddress; //Initialise private, persistant Address for the object.
         auto address = DecodePaymentAddress(fromAddress);
         if (IsValidPaymentAddress(address)) {
-            // We don't need to lock on the wallet as spending key related methods are thread-safe
-            if (!boost::apply_visitor(HaveSpendingKeyForPaymentAddress(pwalletMain), address)) {
-                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, no spending key found for zaddr");
-            }
-
             isfromzaddr_ = true;
             frompaymentaddress_ = address;
-            spendingkey_ = boost::apply_visitor(GetSpendingKeyForPaymentAddress(pwalletMain), address).get();
+            // We don't need to lock on the wallet as spending key related methods are thread-safe
+            if (!boost::apply_visitor(HaveSpendingKeyForPaymentAddress(pwalletMain), address)) {
+                //TBD: confirm if the from addr is in our wallet. From the GUI is will be, but maybe not from CLI.
+                //Leave spendingkey_ uninitialised
+                bOfflineSpendingKey=true;
+            } else {
+                spendingkey_ = boost::apply_visitor(GetSpendingKeyForPaymentAddress(pwalletMain), address).get();
+                bOfflineSpendingKey=false;
+            }
         } else {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address");
         }
@@ -411,6 +418,125 @@ bool AsyncRPCOperation_sendmany::main_impl() {
     LogPrint("zrpcunsafe", "%s: private output: %s\n", getId(), FormatMoney(z_outputs_total));
     LogPrint("zrpc", "%s: fee: %s\n", getId(), FormatMoney(minersFee));
 
+    //Offline Signing
+    if (bOfflineSpendingKey==true)
+    {
+        /* Format the necessary data to construct a transaction that can
+         * be signed with an off-line wallet
+         */
+        if (!(isUsingBuilder_))
+        {
+            throw JSONRPCError( RPC_WALLET_ERROR,
+                                "AsyncRPCOperation_sendmany::main_impl(): Builder not available");
+            return false;
+        }
+
+        builder_.SetFee(minersFee);
+        builder_.SetMinConfirmations(1);
+
+        // Select Sapling notes that makes up the total amount to send:
+        std::vector<SaplingOutPoint> ops;
+        std::vector<SaplingNote> notes;
+        CAmount sum = 0;
+        int iI=0;
+        for (auto t : z_sapling_inputs_)
+        {
+            ops.push_back(t.op);
+            notes.push_back(t.note);
+            sum += t.note.value();
+
+            //printf("asyncrpcoperation_sendmany.cpp main_impl() Process z_sapling_inputs_ #%d Value=%ld, Sum=%ld\n",iI, t.note.value(), sum); fflush(stdout);
+            //iI+=1;
+            if (sum >= targetAmount)
+            {
+                //printf("asyncrpcoperation_sendmany.cpp main_impl() Notes exceed targetAmount: %ld>%ld\n",sum,targetAmount);
+                break;
+            }
+        }
+
+        // Fetch Sapling anchor and witnesses
+        //printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses\n"); fflush(stdout);
+        uint256 anchor;
+        std::vector<boost::optional<SaplingWitness>> witnesses;
+        {
+            //printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses - start\n"); fflush(stdout);
+            LOCK2(cs_main, pwalletMain->cs_wallet);
+            pwalletMain->GetSaplingNoteWitnesses(ops, witnesses, anchor);
+            //printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses - done\n"); fflush(stdout);
+        }
+
+        // Add Sapling spends to the transaction builder:
+        //printf("asyncrpcoperation_sendmany.cpp main_impl() Add sapling spends: #%ld\n",notes.size() ); fflush(stdout);
+
+        //Note: expsk is uninitialised - we do not have the spending key!
+        //    : fvk also garbage?
+        SaplingExpandedSpendingKey expsk;
+        auto fvk = expsk.full_viewing_key();
+        auto ovk = fvk.ovk;
+        for (size_t i = 0; i < notes.size(); i++)
+        {
+            if (!witnesses[i])
+            {
+                throw JSONRPCError(RPC_WALLET_ERROR, "Missing witness for Sapling note");
+            }
+            //printf("asyncrpcoperation_sendmany.cpp main_impl() Add sapling spend: %ld of %ld - start\n",i+1,notes.size() ); fflush(stdout);
+            //Convert witness to a char array:
+            CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+            ss << witnesses[i].get().path();
+            std::vector<unsigned char> local_witness(ss.begin(), ss.end());
+            myCharArray_s sWitness;
+            memcpy (&sWitness.cArray[0], reinterpret_cast<unsigned char*>(local_witness.data()), sizeof(sWitness.cArray) );
+            assert(builder_.AddSaplingSpend_prepare_offline_transaction(fromAddress_, notes[i], anchor, witnesses[i].get().position(), &sWitness.cArray[0] ));
+            //printf("asyncrpcoperation_sendmany.cpp main_impl() Add sapling spend: %ld of %ld - done\n",i+1,notes.size() ); fflush(stdout);
+        }
+
+        // Add Sapling outputs to the transaction builder
+        //printf("asyncrpcoperation_sendmany.cpp main_impl() Add sapling outputs\n" ); fflush(stdout);
+        iI=0;
+        for (auto r : z_outputs_)
+        {
+            auto address = std::get<0>(r);
+            auto value = std::get<1>(r);
+            auto hexMemo = std::get<2>(r);
+
+            //auto memo = get_memo_from_hex_string(hexMemo);
+            std::array<unsigned char, ZC_MEMO_SIZE> memo;
+
+            //Keep the memo in hex format for off-line signing:
+            int lenMemo = strlen(hexMemo.c_str());
+            if (lenMemo >= (ZC_MEMO_SIZE-1))
+            {
+              lenMemo = ZC_MEMO_SIZE;
+            }
+
+            for (int iI = 0; iI < lenMemo; iI++) {
+                memo[iI] = hexMemo[iI];
+            }
+            memo[lenMemo]=0; //Null terminate
+
+
+            //printf("asyncrpcoperation_sendmany.cpp main_impl() Output #%d: addr=%s\n",iI+1,address.c_str() );
+            //printf("  value=%ld, ",value);
+            //printf("memo=%s\n"  , hexMemo.c_str() );
+            //fflush(stdout);
+            //iI+=1;
+            //builder_.AddSaplingOutput_offline_transaction(ovk, address, value, memo);
+            builder_.AddSaplingOutput_offline_transaction(address, value, memo);
+        }
+
+        // Build the off-line transaction
+        std::string sResult = builder_.Build_offline_transaction();
+        //printf("AsyncRPCOperation_sendmany::main_impl() %s\n",sResult.c_str() );
+
+        //Send result upstream
+        //printf("AsyncRPCOperation_sendmany::main_impl() Result available\n");
+        UniValue o(UniValue::VOBJ);
+        o.push_back(Pair("Success", sResult));
+        set_result(o);
+
+        //printf("AsyncRPCOperation_sendmany::main_impl() Pushed result OBJ back. return true\n");
+        return true;
+    }
 
     /**
      * SCENARIO #0
@@ -518,11 +644,7 @@ bool AsyncRPCOperation_sendmany::main_impl() {
         }
 
         // Build the transaction
-        auto maybe_tx = builder_.Build();
-        if (!maybe_tx) {
-            throw JSONRPCError(RPC_WALLET_ERROR, "Failed to build transaction.");
-        }
-        tx_ = maybe_tx.get();
+        tx_ = builder_.Build().GetTxOrThrow();
 
         // Send the transaction
         // TODO: Use CWallet::CommitTransaction instead of sendrawtransaction
@@ -1120,7 +1242,16 @@ bool AsyncRPCOperation_sendmany::find_unspent_notes() {
     std::vector<SaplingNoteEntry> saplingEntries;
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
-        pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, fromaddress_, mindepth_);
+        if (bOfflineSpendingKey==true)
+        {
+          //Offline transaction, Does not require the spending key in this wallet
+          pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, fromaddress_, mindepth_,true,false);
+        }
+        else
+        {
+          //Local transaction: Require the spending key
+          pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, fromaddress_, mindepth_,true,true);
+        }
     }
 
     // If using the TransactionBuilder, we only want Sapling notes.

@@ -136,7 +136,7 @@
       <attribute name="title">
        <string>W&amp;allet</string>
       </attribute>
-      <layout class="QVBoxLayout" name="verticalLayout_5">
+      <layout class="QVBoxLayout" name="verticalLayout_7">
        <item>
         <spacer name="verticalSpacer_3">
          <property name="orientation">
@@ -151,11 +151,28 @@
         </spacer>
        </item>
        <item>
-        <widget class="QGroupBox" name="groupBox">
+        <widget class="QGroupBox" name="groupBox_3">
          <property name="title">
-          <string>Automated Maintenance</string>
+          <string>Wallet Functions</string>
          </property>
-         <layout class="QVBoxLayout" name="verticalLayout_2">
+         <layout class="QVBoxLayout" name="verticalLayout_5">
+          <item>
+           <widget class="QCheckBox" name="enableOfflineSigning">
+            <property name="toolTip">
+             <string>Enable or Disable DeleteTx</string>
+            </property>
+            <property name="text">
+             <string>Enable Offline Signing</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="enableHexEncoding">
+            <property name="text">
+             <string>Enable Hex Memos (valid hex strings will not be re-encoded)</string>
+            </property>
+           </widget>
+          </item>
           <item>
            <widget class="QCheckBox" name="enableDeleteTx">
             <property name="toolTip">
@@ -205,16 +222,6 @@
             </property>
             <property name="text">
              <string>Reindex</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QCheckBox" name="chkRescan">
-            <property name="toolTip">
-             <string>Rescan the blockchain for missing transactions.</string>
-            </property>
-            <property name="text">
-             <string>Rescan</string>
             </property>
            </widget>
           </item>
@@ -647,7 +654,7 @@
          <item>
           <widget class="QValueComboBox" name="theme">
            <property name="toolTip">
-            <string>The user interface language can be set here. This setting will take effect after restarting %1.</string>
+            <string>The user interface theme can be set here</string>
            </property>
           </widget>
          </item>

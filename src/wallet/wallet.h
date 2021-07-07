@@ -69,8 +69,9 @@ extern bool fTxConflictDeleteEnabled;
 extern int fDeleteInterval;
 extern unsigned int fDeleteTransactionsAfterNBlocks;
 extern unsigned int fKeepLastNTransactions;
-
-
+extern std::string recoverySeedPhrase;
+extern bool usingGUI;
+extern int recoveryHeight;
 
 //! -paytxfee default
 static const CAmount DEFAULT_TRANSACTION_FEE = 0;
@@ -131,6 +132,12 @@ enum WalletFeature
     FEATURE_LATEST = 60000
 };
 
+ enum WalletCreateType {
+      UNSET,
+      RANDOM,
+      RECOVERY,
+      COMPLETE
+ };
 
 /** A key pool entry */
 class CKeyPool
@@ -614,12 +621,18 @@ public:
     std::pair<libzcash::SproutNotePlaintext, libzcash::SproutPaymentAddress> DecryptSproutNote(
 	JSOutPoint jsop) const;
     boost::optional<std::pair<
-	libzcash::SaplingNotePlaintext,
-	libzcash::SaplingPaymentAddress>> DecryptSaplingNote(SaplingOutPoint op) const;
+        libzcash::SaplingNotePlaintext,
+        libzcash::SaplingPaymentAddress>> DecryptSaplingNote(const Consensus::Params& params, int height, SaplingOutPoint op) const;
     boost::optional<std::pair<
-	libzcash::SaplingNotePlaintext,
-	libzcash::SaplingPaymentAddress>> RecoverSaplingNote(
+        libzcash::SaplingNotePlaintext,
+        libzcash::SaplingPaymentAddress>> DecryptSaplingNoteWithoutLeadByteCheck(SaplingOutPoint op) const;
+    boost::optional<std::pair<
+        libzcash::SaplingNotePlaintext,
+        libzcash::SaplingPaymentAddress>> RecoverSaplingNote(const Consensus::Params& params, int height,
             SaplingOutPoint op, std::set<uint256>& ovks) const;
+    boost::optional<std::pair<
+        libzcash::SaplingNotePlaintext,
+        libzcash::SaplingPaymentAddress>> RecoverSaplingNoteWithoutLeadByteCheck(SaplingOutPoint op, std::set<uint256>& ovks) const;
 
     //! filter decides which addresses will count towards the debit
     CAmount GetDebit(const isminefilter& filter) const;
@@ -857,6 +870,11 @@ public:
     int nextSweep = 0;
     int targetSweepQty = 0;
 
+    //Wallet Birthday;
+    int nBirthday;
+    bool bip39Enabled = false;
+
+    WalletCreateType createType = UNSET;
 
     void ClearNoteWitnessCache();
 
@@ -1064,6 +1082,7 @@ public:
 
     std::map<uint256, CWalletTx> mapWallet;
     bool writeTxFailed = false;
+    std::set<uint256> failedTxs;
 
     int64_t nOrderPosNext;
     std::map<uint256, int> mapRequestCount;
@@ -1267,9 +1286,10 @@ public:
     void UpdateNullifierNoteMapForBlock(const CBlock* pblock);
     bool AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb, bool fRescan = false);
     void EraseFromWallet(const uint256 &hash);
-    void SyncTransaction(const CTransaction& tx, const CBlock* pblock);
+    void SyncTransaction(const CTransaction& tx, const CBlock* pblock, const int nHeight);
+    void ForceRescanWallet();
     void RescanWallet();
-    bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, bool fUpdate, bool fRescan = false);
+    bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, const int nHeight, bool fUpdate, bool fRescan = false);
     void WitnessNoteCommitment(
          std::vector<uint256> commitments,
          std::vector<boost::optional<SproutWitness>>& witnesses,
@@ -1322,7 +1342,7 @@ public:
         const uint256& hSig,
         uint8_t n) const;
     mapSproutNoteData_t FindMySproutNotes(const CTransaction& tx) const;
-    std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> FindMySaplingNotes(const CTransaction& tx) const;
+    std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> FindMySaplingNotes(const CTransaction& tx, int height) const;
     bool IsSproutNullifierFromMe(const uint256& nullifier) const;
     bool IsSaplingNullifierFromMe(const uint256& nullifier) const;
 
@@ -1355,6 +1375,7 @@ public:
     void CommitAutomatedTx(const CTransaction& tx);
     /** Saves witness caches and best block locator to disk. */
     void SetBestChain(const CBlockLocator& loc);
+    void SetWalletBirthday(int nHeight);
     std::set<std::pair<libzcash::PaymentAddress, uint256>> GetNullifiersForAddresses(const std::set<libzcash::PaymentAddress> & addresses);
     bool IsNoteSproutChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet, const libzcash::PaymentAddress & address, const JSOutPoint & entry);
     bool IsNoteSaplingChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet, const libzcash::PaymentAddress & address, const SaplingOutPoint & entry);
@@ -1447,6 +1468,8 @@ public:
        caller must ensure the current wallet version is correct before calling
        this function). */
     void GenerateNewSeed();
+    bool IsValidPhrase(std::string &phrase);
+    bool RestoreSeedFromPhrase(std::string &phrase);
 
     bool SetHDSeed(const HDSeed& seed);
     bool SetCryptedHDSeed(const uint256& seedFp, const std::vector<unsigned char> &vchCryptedSecret);

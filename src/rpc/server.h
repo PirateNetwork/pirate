@@ -210,6 +210,7 @@ bool StartRPC();
 void InterruptRPC();
 void StopRPC();
 std::string JSONRPCExecBatch(const UniValue& vReq);
+UniValue get_async_result(UniValue oOpID);
 
 extern std::string experimentalDisabledHelpMsg(const std::string& rpc, const std::string& enableArg);
 
@@ -463,6 +464,7 @@ extern UniValue gettxoutsetinfo(const UniValue& params, bool fHelp, const CPubKe
 extern UniValue gettxout(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue verifychain(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue getchaintips(const UniValue& params, bool fHelp, const CPubKey& mypk);
+extern UniValue z_gettreestate(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue invalidateblock(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue reconsiderblock(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue getspentinfo(const UniValue& params, bool fHelp, const CPubKey& mypk);
@@ -496,6 +498,7 @@ extern UniValue nspv_listccmoduleunspent(const UniValue& params, bool fHelp, con
 
 extern UniValue getblocksubsidy(const UniValue& params, bool fHelp, const CPubKey& mypk);
 
+extern UniValue z_exportseedphrase(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcdump.cpp
 extern UniValue z_exportkey(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcdump.cpp
 extern UniValue z_importkey(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcdump.cpp
 extern UniValue z_exportviewingkey(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcdump.cpp
@@ -516,6 +519,8 @@ extern UniValue consolidationstatus(const UniValue& params, bool fHelp, const CP
 
 extern UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
+extern UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
+extern UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue z_shieldcoinbase(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue z_getoperationstatus(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue z_getoperationresult(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp

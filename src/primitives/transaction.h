@@ -118,7 +118,7 @@ class OutputDescription
 {
 public:
     uint256 cv;                     //!< A value commitment to the value of the output note.
-    uint256 cm;                     //!< The note commitment for the output note.
+    uint256 cmu;                     //!< The note commitment for the output note.
     uint256 ephemeralKey;           //!< A Jubjub public key.
     libzcash::SaplingEncCiphertext encCiphertext; //!< A ciphertext component for the encrypted output note.
     libzcash::SaplingOutCiphertext outCiphertext; //!< A ciphertext component for the encrypted output note.
@@ -131,7 +131,7 @@ public:
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action) {
         READWRITE(cv);
-        READWRITE(cm);
+        READWRITE(cmu);
         READWRITE(ephemeralKey);
         READWRITE(encCiphertext);
         READWRITE(outCiphertext);
@@ -142,7 +142,7 @@ public:
     {
         return (
             a.cv == b.cv &&
-            a.cm == b.cm &&
+            a.cmu == b.cmu &&
             a.ephemeralKey == b.ephemeralKey &&
             a.encCiphertext == b.encCiphertext &&
             a.outCiphertext == b.outCiphertext &&

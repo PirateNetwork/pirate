@@ -376,6 +376,6 @@ const UniValue& UniValue::get_obj() const
 const UniValue& UniValue::get_array() const
 {
     if (typ != VARR)
-        throw std::runtime_error("JSON value is not an array as expected");
+        throw std::runtime_error("JSON value is not an array as expected - 1");
     return *this;
 }

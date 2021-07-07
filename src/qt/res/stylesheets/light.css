@@ -380,3 +380,40 @@ QPushButton#warningIcon, QPushButton#labelWalletStatus, QPushButton#labelTransac
     background-color:#F7F9FB;
     border: none;
 }
+
+QFrame#encodingFrame {
+    background: #F7F9FB;
+    color: #687864;
+}
+
+QRadioButton {
+    background: #F7F9FB;
+    color: #687864;
+    spacing: 5px;
+}
+
+QRadioButton::indicator {
+    background-color: #8FC1E3;
+    color: #687864;
+    width: 8px;
+    height: 8px;
+    border: 4px solid #8FC1E3;
+    border-radius: 8px;
+}
+
+QRadioButton::indicator:checked {
+    background-color: #687864;
+    color: #8FC1E3;
+    width: 8px;
+    height: 8px;
+    border: 4px solid #8FC1E3;
+    border-radius: 8px;
+}
+
+QStackedWidget#SendCoinsEntry QLabel#messageLabel {
+    color: red;
+}
+
+QStackedWidget#SendCoinsEntry QLabel#messageTextLabel {
+    color:#687864;
+}

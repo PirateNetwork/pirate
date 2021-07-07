@@ -46,7 +46,8 @@ public:
         Language,                       // QString
         EnableDeleteTx,                 // bool
         EnableReindex,                  // bool
-        EnableRescan,                   // bool
+        EnableZSigning,                 // bool
+        EnableHexMemo,                  // bool
         EnableBootstrap,                // bool
         ZapWalletTxes,                  // bool
         ThreadsScriptVerif,             // int
@@ -64,12 +65,14 @@ public:
     bool setData(const QModelIndex & index, const QVariant & value, int role = Qt::EditRole);
     /** Updates current unit in memory, settings and emits displayUnitChanged(newUnit) signal */
     void setDisplayUnit(const QVariant &value);
+    void setHexMemo(const QVariant &value);
 
     /* Explicit getters */
     bool getHideTrayIcon() const { return fHideTrayIcon; }
     bool getMinimizeToTray() const { return fMinimizeToTray; }
     bool getMinimizeOnClose() const { return fMinimizeOnClose; }
     int getDisplayUnit() const { return nDisplayUnit; }
+    bool getHexMemo() const { return fEnableHexMemo; }
     QString getThirdPartyTxUrls() const { return "http://explorer.pirate.black/tx/%s"; }
     // #ifdef ENABLE_BIP70
     // bool getProxySettings(QNetworkProxy& proxy) const;
@@ -87,6 +90,7 @@ private:
     bool fMinimizeOnClose;
     QString language;
     int nDisplayUnit;
+    bool fEnableHexMemo;
     QString strThirdPartyTxUrls;
     QString strTheme;
     /* settings that were overridden by command-line */
@@ -100,6 +104,7 @@ private:
 Q_SIGNALS:
     void displayUnitChanged(int unit);
     void hideTrayIconChanged(bool);
+    void optionHexMemo(bool);
 };
 
 #endif // KOMODO_QT_OPTIONSMODEL_H

@@ -495,7 +495,7 @@ QVariant ZAddressTableModel::headerData(int section, Qt::Orientation orientation
 }
 
 Qt::ItemFlags ZAddressTableModel::flags(const QModelIndex &index) const
-{
+{  
     if(!index.isValid())
         return 0;
     ZAddressTableEntry *rec = static_cast<ZAddressTableEntry*>(index.internalPointer());
@@ -534,6 +534,7 @@ void ZAddressTableModel::updateEntry(const QString &address,
 
 QString ZAddressTableModel::addRow(const QString &type, const QString &label, const QString &address)
 {
+
     std::string strLabel; // = label.toStdString();
     std::string strAddress = address.toStdString();
 

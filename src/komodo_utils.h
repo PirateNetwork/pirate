@@ -2024,9 +2024,11 @@ void komodo_args(char *argv0)
         {
             ASSETCHAINS_LWMAPOS = 50;
         }
+				ASSETCHAINS_CANOPY = GetArg("-ac_canopy", -1);
         ASSETCHAINS_SAPLING = GetArg("-ac_sapling", -1);
         if (ASSETCHAINS_SAPLING == -1)
         {
+						ASSETCHAINS_CANOPY = -1;
             ASSETCHAINS_OVERWINTER = GetArg("-ac_overwinter", -1);
         }
         else

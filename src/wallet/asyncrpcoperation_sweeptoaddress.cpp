@@ -226,12 +226,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
             builder.SetFee(fee);
             builder.AddSaplingOutput(extsk.expsk.ovk, sweepAddress, amountToSend - fee);
 
-            auto maybe_tx = builder.Build();
-            if (!maybe_tx) {
-                LogPrint("zrpcunsafe", "%s: Failed to build transaction.", getId());
-                break;
-            }
-            CTransaction tx = maybe_tx.get();
+            auto tx = builder.Build().GetTxOrThrow();
 
             if (isCancelled()) {
                 LogPrint("zrpcunsafe", "%s: Canceled. Stopping.\n", getId());

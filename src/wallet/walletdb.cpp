@@ -319,6 +319,28 @@ bool CWalletDB::EraseWatchOnly(const CScript &dest)
     return Erase(std::make_pair(std::string("watchs"), *(const CScriptBase*)(&dest)));
 }
 
+bool CWalletDB::WriteWalletBirthday(const int& nHeight)
+{
+    nWalletDBUpdated++;
+    return Write(std::string("walletbirthday"), nHeight);
+}
+
+bool CWalletDB::ReadWalletBirthday(int& nHeight)
+{
+    return Read(std::string("walletbirthday"), nHeight);
+}
+
+bool CWalletDB::WriteWalletBip39Enabled(const bool& enabled)
+{
+    nWalletDBUpdated++;
+    return Write(std::string("walletbip39enabled"), enabled);
+}
+
+bool CWalletDB::ReadWalletBip39Enabled(bool& enabled)
+{
+    return Read(std::string("walletbip39enabled"), enabled);
+}
+
 bool CWalletDB::WriteBestBlock(const CBlockLocator& locator)
 {
     nWalletDBUpdated++;

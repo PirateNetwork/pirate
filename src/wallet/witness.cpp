@@ -83,7 +83,7 @@ UniValue getsaplingwitness(const UniValue& params, bool fHelp,  const CPubKey& m
           throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Sapling Output does not exist");
 
       for (int64_t i = 0; i < tx.vShieldedOutput.size(); i++) {
-          const uint256& note_commitment = tx.vShieldedOutput[i].cm;
+          const uint256& note_commitment = tx.vShieldedOutput[i].cmu;
           saplingTree.append(note_commitment);
 
           if (hash == ctxhash && i == nSheildedOutputIndex) {
@@ -171,7 +171,7 @@ UniValue getsaplingwitnessatheight(const UniValue& params, bool fHelp,  const CP
           throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Sapling Output does not exist");
 
       for (int64_t i = 0; i < tx.vShieldedOutput.size(); i++) {
-          const uint256& note_commitment = tx.vShieldedOutput[i].cm;
+          const uint256& note_commitment = tx.vShieldedOutput[i].cmu;
           saplingTree.append(note_commitment);
           if (hash == ctxhash && i == nSheildedOutputIndex) {
             witness = saplingTree.witness();
@@ -202,7 +202,7 @@ UniValue getsaplingwitnessatheight(const UniValue& params, bool fHelp,  const CP
     // UniValue jsontxs(UniValue::VARR);
     for (const CTransaction& tx : block.vtx) {
       for (int64_t i = 0; i < tx.vShieldedOutput.size(); i++) {
-        const uint256& note_commitment = tx.vShieldedOutput[i].cm;
+        const uint256& note_commitment = tx.vShieldedOutput[i].cmu;
         saplingTree.append(note_commitment);
         witness.append(note_commitment);
       }
@@ -289,7 +289,7 @@ UniValue getsaplingblocks(const UniValue& params, bool fHelp,  const CPubKey& my
           UniValue jsonShieldOutput(UniValue::VOBJ);
           jsonShieldOutput.push_back(Pair("sheildedoutputindex", i));
           jsonShieldOutput.push_back(Pair("cv", tx.vShieldedOutput[i].cv.ToString()));
-          jsonShieldOutput.push_back(Pair("cm", tx.vShieldedOutput[i].cm.ToString()));
+          jsonShieldOutput.push_back(Pair("cm", tx.vShieldedOutput[i].cmu.ToString()));
           jsonShieldOutput.push_back(Pair("ephemeralKey", tx.vShieldedOutput[i].ephemeralKey.ToString()));
           auto encCiphertext = tx.vShieldedOutput[i].encCiphertext;
           jsonShieldOutput.push_back(Pair("encCiphertext", HexStr(encCiphertext.begin(),encCiphertext.end())));

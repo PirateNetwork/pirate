@@ -92,7 +92,7 @@ void WalletFrame::removeAllWallets()
         walletStack->removeWidget(i.value());
     mapWalletViews.clear();
 }
-
+/*
 bool WalletFrame::handlePaymentRequest(const SendCoinsRecipient &recipient)
 {
     WalletView *walletView = currentWalletView();
@@ -101,7 +101,7 @@ bool WalletFrame::handlePaymentRequest(const SendCoinsRecipient &recipient)
 
     return walletView->handlePaymentRequest(recipient);
 }
-
+*/
 void WalletFrame::showOutOfSyncWarning(bool fShow)
 {
     bOutOfSync = fShow;
@@ -130,19 +130,26 @@ void WalletFrame::gotoReceiveCoinsPage()
     for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i)
         i.value()->gotoReceiveCoinsPage();
 }
-
+/*
 void WalletFrame::gotoSendCoinsPage(QString addr)
 {
     QMap<QString, WalletView*>::const_iterator i;
     for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i)
         i.value()->gotoSendCoinsPage(addr);
 }
-
+*/
 void WalletFrame::gotoZSendCoinsPage(QString addr)
 {
     QMap<QString, WalletView*>::const_iterator i;
     for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i)
         i.value()->gotoZSendCoinsPage(addr);
+}
+
+void WalletFrame::gotoZSignPage( )
+{
+    QMap<QString, WalletView*>::const_iterator i;
+    for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i)
+        i.value()->gotoZSignPage( );
 }
 
 void WalletFrame::gotoSignMessageTab(QString addr)
@@ -220,6 +227,20 @@ void WalletFrame::importVK()
     WalletView *walletView = currentWalletView();
     if (walletView)
         walletView->importVK();
+}
+
+void WalletFrame::showSeedPhrase()
+{
+    WalletView *walletView = currentWalletView();
+    if (walletView)
+        walletView->showSeedPhrase();
+}
+
+void WalletFrame::rescan()
+{
+    WalletView *walletView = currentWalletView();
+    if (walletView)
+        walletView->rescan();
 }
 
 WalletView *WalletFrame::currentWalletView()

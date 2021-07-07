@@ -196,7 +196,7 @@ public:
     };
 
     // prepare transaction for getting txfee before sending coins
-    SendCoinsReturn prepareTransaction(WalletModelTransaction &transaction, const CCoinControl& coinControl);
+    //SendCoinsReturn prepareTransaction(WalletModelTransaction &transaction, const CCoinControl& coinControl);
 
     // prepare z-transaction for getting txfee before sending coins
     SendCoinsReturn prepareZTransaction(WalletModelZTransaction &transaction, const CCoinControl& coinControl);
@@ -240,6 +240,8 @@ public:
     bool getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const;
     bool IsSpendable(const CTxDestination& dest) const;
     bool getPrivKey(const CKeyID &address, CKey& vchPrivKeyOut) const;
+    bool getSeedPhrase(std::string &phrase) const;
+    void rescan() const;
     void getOutputs(const std::vector<COutPoint>& vOutpoints, std::vector<COutput>& vOutputs);
     bool isSpent(const COutPoint& outpoint) const;
     void listCoins(std::map<QString, std::vector<COutput> >& mapCoins) const;
@@ -264,6 +266,8 @@ public:
     CAmount getBalanceZaddr(std::string sAddress, int minDepth, bool requireSpendingKey) const;
     CAmount getAddressBalance(const std::string &sAddress);
 
+
+    ZAddressTableModel *zaddressTableModel;
 private:
     CWallet *wallet;
     bool fHaveWatchOnly;
@@ -274,7 +278,7 @@ private:
     OptionsModel *optionsModel;
 
     AddressTableModel *addressTableModel;
-    ZAddressTableModel *zaddressTableModel;
+
     TransactionTableModel *transactionTableModel;
     RecentRequestsTableModel *recentRequestsTableModel;
 

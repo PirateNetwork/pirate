@@ -165,7 +165,7 @@ UniValue TxShieldedOutputsToJSON(const CTransaction& tx) {
     for (const OutputDescription& outputDesc : tx.vShieldedOutput) {
         UniValue obj(UniValue::VOBJ);
         obj.push_back(Pair("cv", outputDesc.cv.GetHex()));
-        obj.push_back(Pair("cmu", outputDesc.cm.GetHex()));
+        obj.push_back(Pair("cmu", outputDesc.cmu.GetHex()));
         obj.push_back(Pair("ephemeralKey", outputDesc.ephemeralKey.GetHex()));
         obj.push_back(Pair("encCiphertext", HexStr(outputDesc.encCiphertext.begin(), outputDesc.encCiphertext.end())));
         obj.push_back(Pair("outCiphertext", HexStr(outputDesc.outCiphertext.begin(), outputDesc.outCiphertext.end())));
@@ -1051,7 +1051,8 @@ UniValue decoderawtransaction(const UniValue& params, bool fHelp, const CPubKey&
         TxToJSONExpanded(tx, uint256(), result, false);
 
         RpcArcTransaction dtx;
-        decrypttransaction(tx, dtx);
+        int nHeight = chainActive.Tip()->GetHeight();
+        decrypttransaction(tx, dtx, nHeight);
 
         UniValue spends(UniValue::VARR);
         getRpcArcTxJSONSpends(dtx, spends);
@@ -1420,6 +1421,7 @@ extern UniValue NSPV_broadcast(char *hex);
 UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (fHelp || params.size() < 1 || params.size() > 2)
+    {
         throw runtime_error(
             "sendrawtransaction \"hexstring\" ( allowhighfees )\n"
             "\nSubmits raw transaction (serialized, hex-encoded) to local node and network.\n"
@@ -1439,7 +1441,7 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
             "\nAs a json rpc call\n"
             + HelpExampleRpc("sendrawtransaction", "\"signedhex\"")
         );
-
+    }
     LOCK(cs_main);
     RPCTypeCheck(params, boost::assign::list_of(UniValue::VSTR)(UniValue::VBOOL));
 
@@ -1481,6 +1483,7 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
     {
         NSPV_broadcast((char *)params[0].get_str().c_str());
     }
+
     return hashTx.GetHex();
 }
 
@@ -1523,13 +1526,13 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
   }
 
   libzcash::SaplingExtendedSpendingKey primaryKey;
-
   for (int i = 0; i < tb.rawSpends.size(); i++) {
       SaplingOutPoint op = tb.rawSpends[i].op;
       std::map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.find(op.hash);
       if (it != pwalletMain->mapWallet.end()) {
             CWalletTx wtx = (*it).second;
-            auto maybe_decrypted = wtx.DecryptSaplingNote(op);
+            int txHeight = chainActive.Tip()->GetHeight() - wtx.GetDepthInMainChain();
+            auto maybe_decrypted = wtx.DecryptSaplingNote(Params().GetConsensus(), txHeight, op);
             if (maybe_decrypted == boost::none)
                 throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Note decryption failed.");
 
@@ -1566,11 +1569,8 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
   uint256 ovk = primaryKey.ToXFVK().fvk.ovk;
   tb.ConvertRawSaplingOutput(ovk);
 
-  auto maybe_rtx = tb.Build();
-  if (maybe_rtx == boost::none)
-      throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction build failed.");
+  auto rtx = tb.Build().GetTxOrThrow();
 
-  CTransaction rtx = maybe_rtx.get();
   CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
   ssTx << rtx;
   return HexStr(ssTx.begin(), ssTx.end());
@@ -1660,7 +1660,8 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
         if (wtx != NULL) {
             SaplingOutPoint op = SaplingOutPoint(txid, nOutput);
 
-            auto maybe_decrypted = wtx->DecryptSaplingNote(op);
+            int txHeight = chainActive.Tip()->GetHeight() - wtx->GetDepthInMainChain();
+            auto maybe_decrypted = wtx->DecryptSaplingNote(Params().GetConsensus(), txHeight, op);
             if (maybe_decrypted == boost::none)
                 throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Note decryption failed.");
 

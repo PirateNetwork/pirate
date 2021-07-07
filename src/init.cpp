@@ -1,4 +1,3 @@
-// Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
@@ -449,6 +448,7 @@ std::string HelpMessage(HelpMessageMode mode)
 
 #ifdef ENABLE_WALLET
     strUsage += HelpMessageGroup(_("Wallet options:"));
+    strUsage += HelpMessageOpt("-seedphrase=<phrase>", _("Recover wallet from seed phrase if a wallet file does not exist."));
     strUsage += HelpMessageOpt("-disablewallet", _("Do not load the wallet and disable wallet RPC calls"));
     strUsage += HelpMessageOpt("-keypool=<n>", strprintf(_("Set key pool size to <n> (default: %u)"), 100));
     strUsage += HelpMessageOpt("-consolidation", _("Enable auto Sapling note consolidation"));
@@ -861,16 +861,14 @@ static void ZC_LoadParams(
     struct timeval tv_start, tv_end;
     float elapsed;
 
-    // boost::filesystem::path pk_path = ZC_GetParamsDir() / "sprout-proving.key";
-    // boost::filesystem::path vk_path = ZC_GetParamsDir() / "sprout-verifying.key";
-    boost::filesystem::path sapling_spend = ZC_GetParamsDir() / "sapling-spend.params";
-    boost::filesystem::path sapling_output = ZC_GetParamsDir() / "sapling-output.params";
-    boost::filesystem::path sprout_groth16 = ZC_GetParamsDir() / "sprout-groth16.params";
+    fs::path sapling_spend = ZC_GetParamsDir() / "sapling-spend.params";
+    fs::path sapling_output = ZC_GetParamsDir() / "sapling-output.params";
+    fs::path sprout_groth16 = ZC_GetParamsDir() / "sprout-groth16.params";
 
     if (!(
-        boost::filesystem::exists(sapling_spend) &&
-        boost::filesystem::exists(sapling_output) &&
-        boost::filesystem::exists(sprout_groth16)
+        fs::exists(sapling_spend) &&
+        fs::exists(sapling_output) &&
+        fs::exists(sprout_groth16)
     )) {
         uiInterface.ThreadSafeMessageBox(strprintf(
             _("Cannot find the Zcash network parameters in the following directory:\n"
@@ -882,30 +880,8 @@ static void ZC_LoadParams(
         return;
     }
 
-    if (!verified) {
-        if (!checkParams()) {
-          uiInterface.ThreadSafeMessageBox(strprintf(
-              _("Network parameters checksums failed:\n"
-                "%s\n"
-                "Please restart the wallet to re-download."),
-                  ZC_GetParamsDir()),
-              "", CClientUIInterface::MSG_ERROR);
-          StartShutdown();
-          return;
-        }
-    }
-
-    // LogPrintf("Loading verifying key from %s\n", vk_path.string().c_str());
-    // gettimeofday(&tv_start, 0);
-    //
-    // pzcashParams = ZCJoinSplit::Prepared(vk_path.string(), pk_path.string());
-    //
-    // gettimeofday(&tv_end, 0);
-    // elapsed = float(tv_end.tv_sec-tv_start.tv_sec) + (tv_end.tv_usec-tv_start.tv_usec)/float(1000000);
-    // LogPrintf("Loaded verifying key in %fs seconds.\n", elapsed);
-
     static_assert(
-        sizeof(boost::filesystem::path::value_type) == sizeof(codeunit),
+        sizeof(fs::path::value_type) == sizeof(codeunit),
         "librustzcash not configured correctly");
     auto sapling_spend_str = sapling_spend.native();
     auto sapling_output_str = sapling_output.native();
@@ -916,16 +892,21 @@ static void ZC_LoadParams(
     LogPrintf("Loading Sapling (Sprout Groth16) parameters from %s\n", sprout_groth16.string().c_str());
     gettimeofday(&tv_start, 0);
 
+    printf("ZC_LoadParams(): librustzcash_init_zksnark_params()\n");
+    printf("sapling_spend: %s\n",sapling_spend_str.c_str() );
+    printf("hash: 8270785a1a0d0bc77196f000ee6d221c9c9894f55307bd9357c3f0105d31ca63991ab91324160d8f53e2bbd3c2633a6eb8bdf5205d822e7f3f73edac51b2b70c\n");
+    printf("sapling_output: %s\n",sapling_output_str.c_str() );
+    printf("hash: 657e3d38dbb5cb5e7dd2970e8b03d69b4787dd907285b5a7f0790dcc8072f60bf593b32cc2d1c030e00ff5ae64bf84c5c3beb84ddc841d48264b4a171744d028\n");
+    printf("sprout_groth16:%s\n",sprout_groth16_str.c_str() );
+    printf("hash: e9b238411bd6c0ec4791e9d04245ec350c9c5744f5610dfcce4365d5ca49dfefd5054e371842b3f88fa1b9d7e8e075249b3ebabd167fa8b0f3161292d36c180a\n");
+
     librustzcash_init_zksnark_params(
         reinterpret_cast<const codeunit*>(sapling_spend_str.c_str()),
         sapling_spend_str.length(),
-        "8270785a1a0d0bc77196f000ee6d221c9c9894f55307bd9357c3f0105d31ca63991ab91324160d8f53e2bbd3c2633a6eb8bdf5205d822e7f3f73edac51b2b70c",
         reinterpret_cast<const codeunit*>(sapling_output_str.c_str()),
         sapling_output_str.length(),
-        "657e3d38dbb5cb5e7dd2970e8b03d69b4787dd907285b5a7f0790dcc8072f60bf593b32cc2d1c030e00ff5ae64bf84c5c3beb84ddc841d48264b4a171744d028",
         reinterpret_cast<const codeunit*>(sprout_groth16_str.c_str()),
-        sprout_groth16_str.length(),
-        "e9b238411bd6c0ec4791e9d04245ec350c9c5744f5610dfcce4365d5ca49dfefd5054e371842b3f88fa1b9d7e8e075249b3ebabd167fa8b0f3161292d36c180a"
+        sprout_groth16_str.length()
     );
 
     gettimeofday(&tv_end, 0);
@@ -1679,7 +1660,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     //Prompt on new install
     if (newInstall && !GetBoolArg("-bootstrap", false)) {
         bool fBoot = uiInterface.ThreadSafeMessageBox(
-            "\n\n" + _("New install detected.\n\nPress OK to download the blockchain bootstrap."),
+            "\n\n" + _("New install detected.\n\nPress OK to download the blockchain bootstrap (faster, less secure).\n\nPress Cancel to continue on and sync the blockchain from peer nodes (slower, more secure)."),
             "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
         if (fBoot) {
             useBootstrap = true;
@@ -1689,7 +1670,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     //Prompt GUI
     if (GetBoolArg("-bootstrap", false) && GetArg("-bootstrap", "1") != "2" && !useBootstrap) {
         bool fBoot = uiInterface.ThreadSafeMessageBox(
-            "\n\n" + _("Bootstrap option detected.\n\nPress OK to download the blockchain bootstrap."),
+            "\n\n" + _("Bootstrap option detected.\n\nPress OK to download the blockchain bootstrap (faster, less secure).\n\nPress Cancel to continue on and sync the blockchain from peer nodes (slower, more secure)."),
             "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
         if (fBoot) {
             useBootstrap = true;
@@ -1985,56 +1966,62 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 strErrors << _("Error loading wallet.dat") << "\n";
         }
 
-        uiInterface.InitMessage(_("Validating transaction archive..."));
-        bool fInitializeArcTx = pwalletMain->initalizeArcTx();
-        if(!fInitializeArcTx) {
-          //ArcTx validation failed, delete wallet point and clear vWtx
-          delete pwalletMain;
-          pwalletMain = NULL;
-          vWtx.clear();
+        bool fInitializeArcTx = true;
+        if (nLoadWalletRet == DB_LOAD_OK) {
+            uiInterface.InitMessage(_("Validating transaction archive..."));
+            bool fInitializeArcTx = pwalletMain->initalizeArcTx();
+            if(!fInitializeArcTx) {
+              //ArcTx validation failed, delete wallet point and clear vWtx
+              delete pwalletMain;
+              pwalletMain = NULL;
+              vWtx.clear();
 
-          //Zap All Transactions
-          uiInterface.InitMessage(_("Transaction archive not initalized, Zapping all transactions..."));
-          LogPrintf("Transaction archive not initalized, Zapping all transactions.\n");
-          pwalletMain = new CWallet(strWalletFile);
-          DBErrors nZapWalletRet = pwalletMain->ZapWalletTx(vWtx);
-          if (nZapWalletRet != DB_LOAD_OK) {
-              uiInterface.InitMessage(_("Error loading wallet.dat: Wallet corrupted"));
-              return false;
-          }
-
-          delete pwalletMain;
-          pwalletMain = NULL;
-
-          //Reload Wallet
-          uiInterface.InitMessage(_("Reloading wallet, set to rescan..."));
-          pwalletMain = new CWallet(strWalletFile);
-          DBErrors nLoadWalletRet = pwalletMain->LoadWallet(fFirstRun);
-          if (nLoadWalletRet != DB_LOAD_OK)
-          {
-              if (nLoadWalletRet == DB_CORRUPT)
-                  strErrors << _("Error loading wallet.dat: Wallet corrupted") << "\n";
-              else if (nLoadWalletRet == DB_NONCRITICAL_ERROR)
-              {
-                  string msg(_("Warning: error reading wallet.dat! All keys read correctly, but transaction data"
-                               " or address book entries might be missing or incorrect."));
-                  InitWarning(msg);
+              //Zap All Transactions
+              uiInterface.InitMessage(_("Transaction archive not initalized, Zapping all transactions..."));
+              LogPrintf("Transaction archive not initalized, Zapping all transactions.\n");
+              pwalletMain = new CWallet(strWalletFile);
+              DBErrors nZapWalletRet = pwalletMain->ZapWalletTx(vWtx);
+              if (nZapWalletRet != DB_LOAD_OK) {
+                  uiInterface.InitMessage(_("Error loading wallet.dat: Wallet corrupted"));
+                  return false;
               }
-              else if (nLoadWalletRet == DB_TOO_NEW)
-                  strErrors << _("Error loading wallet.dat: Wallet requires newer version of Pirate") << "\n";
 
-              else if (nLoadWalletRet == DB_NEED_REWRITE)
+              delete pwalletMain;
+              pwalletMain = NULL;
+
+              //Reload Wallet
+              uiInterface.InitMessage(_("Reloading wallet, set to rescan..."));
+              pwalletMain = new CWallet(strWalletFile);
+              DBErrors nLoadWalletRet = pwalletMain->LoadWallet(fFirstRun);
+              if (nLoadWalletRet != DB_LOAD_OK)
               {
-                  strErrors << _("Wallet needed to be rewritten: restart Pirate to complete") << "\n";
-                  LogPrintf("%s", strErrors.str());
-                  return InitError(strErrors.str());
-              }
-              else
-                  strErrors << _("Error loading wallet.dat") << "\n";
-          }
+                  if (nLoadWalletRet == DB_CORRUPT)
+                      strErrors << _("Error loading wallet.dat: Wallet corrupted") << "\n";
+                  else if (nLoadWalletRet == DB_NONCRITICAL_ERROR)
+                  {
+                      string msg(_("Warning: error reading wallet.dat! All keys read correctly, but transaction data"
+                                   " or address book entries might be missing or incorrect."));
+                      InitWarning(msg);
+                  }
+                  else if (nLoadWalletRet == DB_TOO_NEW)
+                      strErrors << _("Error loading wallet.dat: Wallet requires newer version of Pirate") << "\n";
 
+                  else if (nLoadWalletRet == DB_NEED_REWRITE)
+                  {
+                      strErrors << _("Wallet needed to be rewritten: restart Pirate to complete") << "\n";
+                      LogPrintf("%s", strErrors.str());
+                      return InitError(strErrors.str());
+                  }
+                  else
+                      strErrors << _("Error loading wallet.dat") << "\n";
+              }
+
+            }
+
+        } else {
+            string msg(_("Warning: error reading wallet.dat! Archive Transaction verification skipped!!!"));
+            InitWarning(msg);
         }
-
 
         if (GetBoolArg("-upgradewallet", fFirstRun))
         {
@@ -2052,10 +2039,70 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             pwalletMain->SetMaxVersion(nMaxVersion);
         }
 
+        bool recoverWallet = false;
         if (!pwalletMain->HaveHDSeed())
         {
-            // generate a new HD seed
-            pwalletMain->GenerateNewSeed();
+
+            uiInterface.InitMessage(_(""));
+            uiInterface.InitCreateWallet();
+            if (usingGUI) {
+                while (pwalletMain->createType == UNSET) {
+                  //wait for response from GUI
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+                    if (fRequestShutdown)
+                    {
+                        LogPrintf("Shutdown requested. Exiting.\n");
+                        return false;
+                    }
+                }
+            } else {
+                recoverySeedPhrase  = GetArg("-seedphrase", "");
+                if (recoverySeedPhrase != "") {
+                    pwalletMain->createType = RECOVERY;
+                } else {
+                    pwalletMain->createType = RANDOM;
+                }
+            }
+
+
+            if (pwalletMain->createType == RECOVERY) {
+                if (!pwalletMain->RestoreSeedFromPhrase(recoverySeedPhrase)) {
+                    LogPrintf("Invalid Seed Phrase - shutting down.\n");
+                    return false;
+                }
+                recoverWallet = true;
+            } else {
+              // generate a new HD seed
+                pwalletMain->GenerateNewSeed();
+                pwalletMain->GetSeedPhrase(recoverySeedPhrase);
+                if (usingGUI) {
+                    uiInterface.InitShowPhrase();
+                    while (pwalletMain->createType == RANDOM) {
+                      //wait for response from GUI
+                        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                        if (fRequestShutdown)
+                        {
+                            LogPrintf("Shutdown requested. Exiting.\n");
+                            return false;
+                        }
+                    }
+                }
+            }
+
+            //Write Wallet birthday
+            {
+                pwalletMain->nBirthday = 0;
+                CWalletDB walletdb(strWalletFile);
+                walletdb.WriteWalletBirthday(pwalletMain->nBirthday);
+            }
+
+            //Write bip39Enabled
+            {
+                pwalletMain->bip39Enabled = true;
+                CWalletDB walletdb(strWalletFile);
+                walletdb.WriteWalletBip39Enabled(pwalletMain->bip39Enabled);
+            }
 
             // generate 1 address
             auto zAddress = pwalletMain->GenerateNewSaplingZKey();
@@ -2159,10 +2206,24 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         RegisterValidationInterface(pwalletMain);
 
         CBlockIndex *pindexRescan = chainActive.Tip();
+
+        //Load Wallet birthday
+        {
+            CWalletDB walletdb(strWalletFile);
+            walletdb.ReadWalletBirthday(pwalletMain->nBirthday);
+        }
+
+        //Load bip39Enabled
+        {
+            CWalletDB walletdb(strWalletFile);
+            walletdb.ReadWalletBip39Enabled(pwalletMain->bip39Enabled);
+        }
+
         if (clearWitnessCaches || GetBoolArg("-rescan", false) || !fInitializeArcTx || useBootstrap)
         {
             pwalletMain->ClearNoteWitnessCache();
             pindexRescan = chainActive.Genesis();
+            pwalletMain->nBirthday = 0;
 
             int rescanHeight = GetArg("-rescanheight", 0);
             if (rescanHeight > 0) {
@@ -2182,6 +2243,11 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             else
                 pindexRescan = chainActive.Genesis();
         }
+        //Always scan from Genesis on wallet Recovery
+        if (recoverWallet) {
+            pindexRescan = chainActive.Genesis();
+        }
+
         if (chainActive.Tip() && chainActive.Tip() != pindexRescan)
         {
             uiInterface.InitMessage(_("Rescanning..."));

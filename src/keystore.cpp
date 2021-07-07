@@ -67,6 +67,18 @@ bool CBasicKeyStore::GetHDSeed(HDSeed& seedOut) const
     }
 }
 
+bool CBasicKeyStore::GetSeedPhrase(std::string &phraseOut) const
+{
+    LOCK(cs_SpendingKeyStore);
+    if (hdSeed.IsNull()) {
+        return false;
+    } else {
+        HDSeed seed = hdSeed;
+        seed.GetPhrase(phraseOut);
+        return true;
+    }
+}
+
 bool CBasicKeyStore::AddKeyPubKey(const CKey& key, const CPubKey &pubkey)
 {
     LOCK(cs_KeyStore);

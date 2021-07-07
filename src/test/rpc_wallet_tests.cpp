@@ -1610,7 +1610,7 @@ BOOST_AUTO_TEST_CASE(rpc_z_shieldcoinbase_internals)
     if (mtx.nVersion == 1) {
         mtx.nVersion = 2;
     }
-    
+
     // Test that option -mempooltxinputlimit is respected.
     mapArgs["-mempooltxinputlimit"] = "1";
 
@@ -1780,6 +1780,26 @@ BOOST_AUTO_TEST_CASE(rpc_z_mergetoaddress_parameters)
         BOOST_FAIL("Should have caused an error");
     } catch (const UniValue& objError) {
         BOOST_CHECK( find_error(objError, "Recipient parameter missing"));
+    }
+
+    std::vector<MergeToAddressInputSproutNote> sproutNoteInputs =
+        {MergeToAddressInputSproutNote{JSOutPoint(), SproutNote(), 0, SproutSpendingKey()}};
+    std::vector<MergeToAddressInputSaplingNote> saplingNoteInputs =
+        {MergeToAddressInputSaplingNote{SaplingOutPoint(), SaplingNote({}, uint256(), 0, uint256(), Zip212Enabled::BeforeZip212), 0, SaplingExpandedSpendingKey()}};
+
+    // Sprout and Sapling inputs -> throw
+    try {
+        auto operation = new AsyncRPCOperation_mergetoaddress(boost::none, mtx, inputs, sproutNoteInputs, saplingNoteInputs, testnetzaddr, 1);
+        BOOST_FAIL("Should have caused an error");
+    } catch (const UniValue& objError) {
+        BOOST_CHECK(find_error(objError, "Cannot send from both Sprout and Sapling addresses using z_mergetoaddress"));
+    }
+    // Sprout inputs and TransactionBuilder -> throw
+    try {
+        auto operation = new AsyncRPCOperation_mergetoaddress(TransactionBuilder(), mtx, inputs, sproutNoteInputs, {}, testnetzaddr, 1);
+        BOOST_FAIL("Should have caused an error");
+    } catch (const UniValue& objError) {
+        BOOST_CHECK(find_error(objError, "Sprout notes are not supported by the TransactionBuilder"));
     }
 
     // Testnet payment addresses begin with 'zt'.  This test detects an incorrect prefix.

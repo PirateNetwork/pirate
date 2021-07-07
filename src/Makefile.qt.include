@@ -109,19 +109,24 @@ QT_FORMS_UI = \
   qt/forms/importSKdialog.ui \
   qt/forms/importVKdialog.ui \
   qt/forms/modaloverlay.ui \
+  qt/forms/openphrasedialog.ui \
   qt/forms/openuridialog.ui \
   qt/forms/optionsdialog.ui \
   qt/forms/overviewpage.ui \
   qt/forms/receivecoinsdialog.ui \
   qt/forms/receiverequestdialog.ui \
   qt/forms/debugwindow.ui \
-  qt/forms/sendcoinsdialog.ui \
   qt/forms/zsendcoinsdialog.ui \
+  qt/forms/zsigndialog.ui \
+  qt/forms/zsendcoinsdialog_popup.ui \
   qt/forms/sendcoinsentry.ui \
   qt/forms/signverifymessagedialog.ui \
   qt/forms/transactiondescdialog.ui \
   qt/forms/zaddressbookpage.ui \
-  qt/forms/editzaddressdialog.ui
+  qt/forms/editzaddressdialog.ui \
+  qt/forms/newseed.ui \
+  qt/forms/newwallet.ui \
+  qt/forms/restoreseed.ui
 
 QT_MOC_CPP = \
   qt/moc_addressbookpage.cpp \
@@ -148,6 +153,10 @@ QT_MOC_CPP = \
   qt/moc_macnotificationhandler.cpp \
   qt/moc_modaloverlay.cpp \
   qt/moc_notificator.cpp \
+  qt/moc_newseed.cpp \
+  qt/moc_newwallet.cpp \
+  qt/moc_restoreseed.cpp \
+  qt/moc_openphrasedialog.cpp \
   qt/moc_openuridialog.cpp \
   qt/moc_optionsdialog.cpp \
   qt/moc_optionsmodel.cpp \
@@ -160,8 +169,9 @@ QT_MOC_CPP = \
   qt/moc_receiverequestdialog.cpp \
   qt/moc_recentrequeststablemodel.cpp \
   qt/moc_rpcconsole.cpp \
-  qt/moc_sendcoinsdialog.cpp \
   qt/moc_zsendcoinsdialog.cpp \
+  qt/moc_zsigndialog.cpp \
+  qt/moc_zsendcoinsdialog_popup.cpp \
   qt/moc_sendcoinsentry.cpp \
   qt/moc_signverifymessagedialog.cpp \
   qt/moc_splashscreen.cpp \
@@ -230,7 +240,11 @@ KOMODO_QT_H = \
   qt/macnotificationhandler.h \
   qt/modaloverlay.h \
   qt/networkstyle.h \
+  qt/newseed.h \
+  qt/newwallet.h \
+  qt/restoreseed.h \
   qt/notificator.h \
+  qt/openphrasedialog.h \
   qt/openuridialog.h \
   qt/optionsdialog.h \
   qt/optionsmodel.h \
@@ -245,8 +259,9 @@ KOMODO_QT_H = \
   qt/receiverequestdialog.h \
   qt/recentrequeststablemodel.h \
   qt/rpcconsole.h \
-  qt/sendcoinsdialog.h \
   qt/zsendcoinsdialog.h \
+  qt/zsigndialog.h \
+  qt/zsendcoinsdialog_popup.h \
   qt/sendcoinsentry.h \
   qt/signverifymessagedialog.h \
   qt/splashscreen.h \
@@ -333,6 +348,9 @@ KOMODO_QT_BASE_CPP = \
   qt/intro.cpp \
   qt/modaloverlay.cpp \
   qt/networkstyle.cpp \
+  qt/newseed.cpp \
+  qt/newwallet.cpp \
+  qt/restoreseed.cpp \
   qt/notificator.cpp \
   qt/optionsdialog.cpp \
   qt/optionsmodel.cpp \
@@ -358,14 +376,16 @@ KOMODO_QT_WALLET_CPP = \
   qt/editaddressdialog.cpp \
   qt/editzaddressdialog.cpp \
   qt/importkeydialog.cpp \
+  qt/openphrasedialog.cpp \
   qt/openuridialog.cpp \
   qt/overviewpage.cpp \
   qt/paymentserver.cpp \
   qt/receivecoinsdialog.cpp \
   qt/receiverequestdialog.cpp \
   qt/recentrequeststablemodel.cpp \
-  qt/sendcoinsdialog.cpp \
   qt/zsendcoinsdialog.cpp \
+  qt/zsigndialog.cpp \
+  qt/zsendcoinsdialog_popup.cpp \
   qt/sendcoinsentry.cpp \
   qt/signverifymessagedialog.cpp \
   qt/transactiondesc.cpp \
@@ -535,6 +555,7 @@ qt_komodo_qt_LDADD += \
   $(LIBVERUS_CRYPTO) \
   $(LIBVERUS_PORTABLE_CRYPTO) \
   $(LIBZCASH) \
+  $(LIBRUSTZCASH) \
   $(LIBSNARK) \
   $(LIBZCASH_LIBS) \
   $(LIBCRYPTOCONDITIONS)

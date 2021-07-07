@@ -123,6 +123,7 @@ public:
     CAmount credit;
     int archiveType;
     std::string memo;
+    std::string memohex;
     /**@}*/
 
     /** Subtransaction index, for sort key */

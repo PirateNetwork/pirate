@@ -16,12 +16,25 @@
 #include "walletmodel.h"
 #include "util.h" // for KOMODO_ASSETCHAIN_MAXLEN
 
+#include "params.h" //curl for price check
+
 #include <QAbstractItemDelegate>
 #include <QPainter>
 #include <QSettings>
+#include <QNetworkAccessManager>
+#include <QNetworkRequest>
+#include <QUrl>
+#include <QNetworkReply>
+#include <QTimer>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QLocale>
 
 #define DECORATION_SIZE 54
 #define NUM_ITEMS 5
+
+
+extern int nMaxConnections; //From net.h
 
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 
@@ -191,6 +204,22 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
     showOutOfSyncWarning(true);
     connect(ui->labelWalletStatus, SIGNAL(clicked()), this, SLOT(handleOutOfSyncWarningClicks()));
     connect(ui->labelTransactionsStatus, SIGNAL(clicked()), this, SLOT(handleOutOfSyncWarningClicks()));
+
+    updateJSONtimer = new QTimer(this);
+    updateGUItimer = new QTimer(this);
+    manager = new QNetworkAccessManager(this);
+    reply = NULL;
+
+    connect(updateJSONtimer, SIGNAL(timeout()), SLOT(getPrice()));
+    connect(updateGUItimer, SIGNAL(timeout()), SLOT(replyPriceFinished()));
+    // connect(manager, SIGNAL(finished(QNetworkReply*)), this, SLOT(replyPriceFinished(QNetworkReply*)));
+    updateJSONtimer->setInterval(300000); //Check every 5 minutes.
+    updateJSONtimer->start();
+
+    updateGUItimer->setInterval(5000); //Check every 15 seconds.
+    updateGUItimer->start();
+
+    getPrice();
 }
 
 void OverviewPage::handleTransactionClicked(const QModelIndex &index)
@@ -207,6 +236,37 @@ void OverviewPage::handleOutOfSyncWarningClicks()
 OverviewPage::~OverviewPage()
 {
     delete ui;
+}
+
+void OverviewPage::getPrice()
+{
+    getHttpsJson("https://api.coingecko.com/api/v3/simple/price?ids=pirate-chain&vs_currencies=btc%2Cusd%2Ceur&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true");
+}
+
+void OverviewPage::replyPriceFinished()
+{
+    if (downloadedJSON.failed == false && downloadedJSON.complete == true) {
+        try {
+            QJsonDocument response = QJsonDocument::fromJson(downloadedJSON.response.c_str());
+
+            const QJsonObject item  = response.object();
+            const QJsonObject usd  = item["pirate-chain"].toObject();
+            auto fiatValue = usd["usd"].toDouble();
+
+            double currentFiat = currentPrivateBalance * fiatValue;
+            double watchFiat = currentPrivateWatchBalance * fiatValue;
+
+            //TODO: Setup multiple currencies
+            QLocale::setDefault(QLocale(QLocale::English, QLocale::UnitedStates));
+            QLocale dollar;
+
+            ui->labelFiat->setText(dollar.toCurrencyString(currentFiat/1e8));
+            ui->labelWatchFiat->setText(dollar.toCurrencyString(watchFiat/1e8));
+
+        } catch (...) {
+            LogPrintf("Coin Gecko JSON Parsing error\n");
+        }
+    }
 }
 
 void OverviewPage::setBalance(const CAmount& balance, const CAmount& unconfirmedBalance, const CAmount& immatureBalance, const CAmount& watchOnlyBalance, const CAmount& watchUnconfBalance, const CAmount& watchImmatureBalance, const CAmount& privateWatchBalance, const CAmount& privateBalance, const CAmount& interestBalance)
@@ -228,7 +288,7 @@ void OverviewPage::setBalance(const CAmount& balance, const CAmount& unconfirmed
     ui->labelWatchAvailable->setText(KomodoUnits::formatWithUnit(unit, watchOnlyBalance, false, KomodoUnits::separatorAlways));
     ui->labelWatchPending->setText(KomodoUnits::formatWithUnit(unit, watchUnconfBalance, false, KomodoUnits::separatorAlways));
     ui->labelWatchImmature->setText(KomodoUnits::formatWithUnit(unit, watchImmatureBalance, false, KomodoUnits::separatorAlways));
-    ui->labelWatchTotal->setText(KomodoUnits::formatWithUnit(unit, watchOnlyBalance + watchUnconfBalance + watchImmatureBalance, false, KomodoUnits::separatorAlways));
+    ui->labelWatchTotal->setText(KomodoUnits::formatWithUnit(unit, watchOnlyBalance + watchUnconfBalance + watchImmatureBalance + privateWatchBalance, false, KomodoUnits::separatorAlways));
     ui->labelPrivateWatchBalance->setText(KomodoUnits::formatWithUnit(unit, privateWatchBalance, false, KomodoUnits::separatorAlways));
     ui->labelPrivateBalance->setText(KomodoUnits::formatWithUnit(unit, privateBalance, false, KomodoUnits::separatorAlways));
     ui->labelInterestBalance->setText(KomodoUnits::formatWithUnit(unit, interestBalance, false, KomodoUnits::separatorAlways));
@@ -269,6 +329,7 @@ void OverviewPage::updateWatchOnlyLabels(bool showWatchOnly)
         ui->labelWatchPending->setVisible(showWatchOnly);         // show watch-only pending balance
         ui->labelPrivateWatchBalance->setVisible(showWatchOnly);  // show watch-only private balance
         ui->labelWatchTotal->setVisible(showWatchOnly);           // show watch-only total balance
+        ui->labelWatchFiat->setVisible(showWatchOnly);            // Show watch-only fiat balance
 
         bool showTransparent = (currentBalance + currentWatchOnlyBalance) != 0;
         ui->labelBalance->setVisible(showTransparent);
@@ -288,6 +349,7 @@ void OverviewPage::updateWatchOnlyLabels(bool showWatchOnly)
         ui->labelWatchAvailable->setVisible(showWatchOnly);       // show watch-only available balance
         ui->labelWatchPending->setVisible(showWatchOnly);         // show watch-only pending balance
         ui->labelWatchTotal->setVisible(showWatchOnly);           // show watch-only total balance
+        ui->labelWatchFiat->setVisible(showWatchOnly);            // Show watch-only fiat balance
         ui->labelWatchImmature->setVisible(showWatchOnly);        // show watch-only immature balance
         ui->labelPrivateWatchBalance->setVisible(showWatchOnly);  // show watch-only private balance
     }
@@ -351,6 +413,7 @@ void OverviewPage::updateDisplayUnit()
         txdelegate->unit = walletModel->getOptionsModel()->getDisplayUnit();
 
         ui->listTransactions->update();
+
     }
 }
 
@@ -362,6 +425,9 @@ void OverviewPage::updateAlerts(const QString &warnings)
 
 void OverviewPage::showOutOfSyncWarning(bool fShow)
 {
+  if (nMaxConnections>0) //On-line
+  {
     ui->labelWalletStatus->setVisible(fShow);
     ui->labelTransactionsStatus->setVisible(fShow);
+  }
 }

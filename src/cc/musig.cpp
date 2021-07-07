@@ -31,7 +31,7 @@
    "txid": "5ce74037a153ee210413b48d4e88638b99825a2de1a1f1aa0d36ebf93019824c",
    "result": "success"
  }
- 
+
  sendrawtransaction of the above hex.
  ./komodo-cli -ac_name=MUSIG getrawtransaction 5ce74037a153ee210413b48d4e88638b99825a2de1a1f1aa0d36ebf93019824c 1
  "vout": [
@@ -62,25 +62,25 @@
           "RVQjvGdRbYLJ49bfH4SAFseipvwE3UdoDw"
         ]
       }
- 
+
  script: 210255c46dbce584e3751081b39d7fc054fc807100557e73fc444481618b5706afb4ac
- 
+
  sendtxid: 5ce74037a153ee210413b48d4e88638b99825a2de1a1f1aa0d36ebf93019824c
- 
+
   get the msg we need to sign:
-  
+
  ./komodo-cli -ac_name=MUSIG  cclib calcmsg 18 '["5ce74037a153ee210413b48d4e88638b99825a2de1a1f1aa0d36ebf93019824c","210255c46dbce584e3751081b39d7fc054fc807100557e73fc444481618b5706afb4ac"]'
- 
+
  {
   "msg": "f7fb85d1412814e3c2f98b990802af6ee33dad368c6ba05c2050e9e5506fcd75",
   "result": "success"
  }
- 
+
 the "msg" is what needs to be signed to create a valid spend
- 
+
  now on each signing node, a session needs to be created:
  5 args: ind, numsigners, combined_pk, pkhash, message to be signed
- 
+
  on node with pubkey: 02fb6aa0b96cad24d46b5da93eba3864c45ce07a73bba12da530ae841e140fcf28
  ./komodo-cli -ac_name=MUSIG cclib session 18 '[0,2,"03f016c348437c7422eed92d865aa9789614f75327cada463eefc566126b54785b","5cb5a225064ca6ffc1438cb2a6ac2ac65fe2d5055dc7f6c7ebffb9a231f8912b","f7fb85d1412814e3c2f98b990802af6ee33dad368c6ba05c2050e9e5506fcd75"]'
  {
@@ -98,7 +98,7 @@ the "msg" is what needs to be signed to create a valid spend
    "commitment": "c2291acb747a75b1a40014d8eb0cc90a1360f74d413f65f78e20a7de45eda851",
    "result": "success"
  }
-  
+
  now we need to get the commitment from each node to the other one. the session already put the commitment for each node into the global struct. Keep in mind there is a single global struct with session unique to each cclib session call. that means no restarting any deamon in the middle of the process on any of the nodes and only call cclib session a single time. this is an artificial restriction just to simplify the initial implementation of musig
  ./komodo-cli -ac_name=MUSIG cclib commit 18 '["5cb5a225064ca6ffc1438cb2a6ac2ac65fe2d5055dc7f6c7ebffb9a231f8912b","1","c2291acb747a75b1a40014d8eb0cc90a1360f74d413f65f78e20a7de45eda851"]'
  {
@@ -107,7 +107,7 @@ the "msg" is what needs to be signed to create a valid spend
   "nonce": "02fec7a9310c959a0a97b86bc3f8c30d392d1fb51793915898c568f73f1f70476b",
   "result": "success"
  }
- 
+
  ./komodo-cli -ac_name=MUSIG  cclib commit 18 '["5cb5a225064ca6ffc1438cb2a6ac2ac65fe2d5055dc7f6c7ebffb9a231f8912b",0,"d242cff13fa8c9b83248e4219fda459ada146b885f2171481f1b0f66c66d94ad"]'
  {
    "added_index": 0,
@@ -132,7 +132,7 @@ the "msg" is what needs to be signed to create a valid spend
   "partialsig": "4a3795e6801b355102c617390cf5a462061e082e35dc2ed8f8b1fab54cc0769e",
   "result": "success"
 }
- 
+
  Almost there! final step is to exchange the partial sigs between signers
  ./komodo-cli -ac_name=MUSIG cclib partialsig 18 '["5cb5a225064ca6ffc1438cb2a6ac2ac65fe2d5055dc7f6c7ebffb9a231f8912b","1","4a3795e6801b355102c617390cf5a462061e082e35dc2ed8f8b1fab54cc0769e"]'
  {
@@ -140,7 +140,7 @@ the "msg" is what needs to be signed to create a valid spend
    "result": "success",
    "combinedsig": "a76f2790747ed2436a281f2660bdbee21bad9ee130b9cab6e542fa618fba1512679d568359db33a008ca39b773c32134276613e93e025ec17e083553449005f9"
  }
- 
+
  ./komodo-cli -ac_name=MUSIG  cclib partialsig 18 '["5cb5a225064ca6ffc1438cb2a6ac2ac65fe2d5055dc7f6c7ebffb9a231f8912b",0,"1d65c09cd9bffe4f0604227e66cd7cd221480bbb08262fe885563a9df7cf8f5b"]'
  {
    "added_index": 0,
@@ -149,9 +149,9 @@ the "msg" is what needs to be signed to create a valid spend
  }
 
  Notice both nodes generated the same combined signature!
- 
+
  Now for a sanity test, we can use the verify call to make sure this sig will work with the msg needed for the spend:
- 
+
  ./komodo-cli -ac_name=MUSIG cclib verify 18 '["f7fb85d1412814e3c2f98b990802af6ee33dad368c6ba05c2050e9e5506fcd75","03f016c348437c7422eed92d865aa9789614f75327cada463eefc566126b54785b","a76f2790747ed2436a281f2660bdbee21bad9ee130b9cab6e542fa618fba1512679d568359db33a008ca39b773c32134276613e93e025ec17e083553449005f9"]'
  {
    "msg": "f7fb85d1412814e3c2f98b990802af6ee33dad368c6ba05c2050e9e5506fcd75",
@@ -159,9 +159,9 @@ the "msg" is what needs to be signed to create a valid spend
    "combinedsig": "a76f2790747ed2436a281f2660bdbee21bad9ee130b9cab6e542fa618fba1512679d568359db33a008ca39b773c32134276613e93e025ec17e083553449005f9",
    "result": "success"
  }
- 
+
  and finally the spend: sendtxid, scriptPubKey, musig
- 
+
  ./komodo-cli -ac_name=MUSIG cclib spend 18 '["5ce74037a153ee210413b48d4e88638b99825a2de1a1f1aa0d36ebf93019824c","210255c46dbce584e3751081b39d7fc054fc807100557e73fc444481618b5706afb4ac","a76f2790747ed2436a281f2660bdbee21bad9ee130b9cab6e542fa618fba1512679d568359db33a008ca39b773c32134276613e93e025ec17e083553449005f9"]'
 {
   "scriptpubkey": "210255c46dbce584e3751081b39d7fc054fc807100557e73fc444481618b5706afb4ac",
@@ -175,7 +175,7 @@ a10001ffffffff0200e1f5050000000023210255c46dbce584e3751081b39d7fc054fc807100557e
 00000000000000000000000000",
   "txid": "910635bf69a047fc90567a83ff12e47b753f470658b6d0855ec96e07e7349a8a",
   "result": "success"
-} 
+}
 */
 
 
@@ -312,8 +312,11 @@ int32_t musig_parsepubkey(secp256k1_context *ctx,secp256k1_pubkey &spk,cJSON *it
     {
         CPubKey pk(ParseHex(hexstr));
         if ( secp256k1_ec_pubkey_parse(ctx,&spk,pk.begin(),33) > 0 )
+        {
             return(1);
-    } else return(-1);
+        }
+    }
+    return(-1);
 }
 
 int32_t musig_msghash(uint8_t *msg,uint256 prevhash,int32_t prevn,CTxOut vout,CPubKey pk)
@@ -364,7 +367,7 @@ UniValue musig_calcmsg(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
                 }
                 str[64] = 0;
                 if ( zeros != 32 )
-                {    
+                {
                     result.push_back(Pair("msg",str));
                     result.push_back(Pair("result","success"));
                     return(result);
@@ -398,7 +401,7 @@ UniValue musig_combine(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
                     sprintf(&str[i<<1],"%02x",pkhash[i]);
                 str[64] = 0;
                 result.push_back(Pair("pkhash",str));
-                
+
                 for (i=0; i<33; i++)
                     sprintf(&str[i<<1],"%02x",((uint8_t *)pk.begin())[i]);
                 str[66] = 0;

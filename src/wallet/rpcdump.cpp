@@ -647,6 +647,19 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
         file << strprintf("# HDSeed=%s fingerprint=%s", HexStr(rawSeed.begin(), rawSeed.end()), hdSeed.Fingerprint().GetHex());
         file << "\n";
     }
+
+    //export Seed Phrase
+    {
+        std::string phrase;
+        if (pwalletMain->bip39Enabled) {
+            pwalletMain->GetSeedPhrase(phrase);
+        } else {
+            phrase = "Bip39 is not enabled for this wallet. Bip39 can only be enabled by creating a new wallet.";
+        }
+        file << strprintf("# Bip39 Seed Phrase=%s", phrase);
+        file << "\n";
+    }
+
     file << "\n";
     for (std::vector<std::pair<int64_t, CKeyID> >::const_iterator it = vKeyBirth.begin(); it != vKeyBirth.end(); it++) {
         const CKeyID &keyid = it->second;
@@ -706,6 +719,31 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
     return exportfilepath.string();
 }
 
+UniValue z_exportseedphrase(const UniValue& params, bool fHelp, const CPubKey& mypk) {
+
+  if (!EnsureWalletIsAvailable(fHelp))
+      return NullUniValue;
+
+  if (fHelp || params.size() > 0)
+      throw runtime_error(
+        "z_exportseedphrase\n"
+        "\nExports the seed phrase to your wallet.\n"
+        + HelpExampleCli("z_exportseedphrase","")
+        + HelpExampleRpc("z_exportseedphrase","")
+    );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    std::string phrase;
+    if (pwalletMain->bip39Enabled) {
+        pwalletMain->GetSeedPhrase(phrase);
+    } else {
+        phrase = "Bip39 is not enabled for this wallet. Bip39 can only be enabled by creating a new wallet.";
+    }
+
+  return phrase;
+
+}
 
 UniValue z_importkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
@@ -787,7 +825,7 @@ UniValue z_importkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (addResult == KeyAlreadyExists && fIgnoreExistingKey) {
         return NullUniValue;
     }
-    
+
     pwalletMain->MarkDirty();
     if (addResult == KeyNotAdded) {
         throw JSONRPCError(RPC_WALLET_ERROR, "Error adding spending key to wallet");

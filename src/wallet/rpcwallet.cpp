@@ -20,6 +20,7 @@
 
 #include "amount.h"
 #include "consensus/upgrades.h"
+#include "consensus/params.h"
 #include "core_io.h"
 #include "init.h"
 #include "key_io.h"
@@ -39,6 +40,7 @@
 #include "zcash/address/zip32.h"
 #include "notaries_staked.h"
 
+#include "util.h"
 #include "utiltime.h"
 #include "asyncrpcoperation.h"
 #include "asyncrpcqueue.h"
@@ -61,10 +63,13 @@
 
 #include "komodo_defs.h"
 #include <string.h>
+#include <regex>
 
 using namespace std;
 
 using namespace libzcash;
+
+extern UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk);
 
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 extern std::string ASSETCHAINS_OVERRIDE_PUBKEY;
@@ -641,11 +646,11 @@ UniValue kvupdate(const UniValue& params, bool fHelp, const CPubKey& mypk)
     haveprivkey = 1;
     flags |= 1;
     /*for (i=0; i<32; i++)
-        printf("%02x",((uint8_t *)&privkey)[i]);
-    printf(" priv, ");
+        //printf("%02x",((uint8_t *)&privkey)[i]);
+    //printf(" priv, ");
     for (i=0; i<32; i++)
-        printf("%02x",((uint8_t *)&pubkey)[i]);
-    printf(" pubkey, privkey derived from (%s)\n",(char *)params[3].get_str().c_str());
+        //printf("%02x",((uint8_t *)&pubkey)[i]);
+    //printf(" pubkey, privkey derived from (%s)\n",(char *)params[3].get_str().c_str());
     */
     LOCK2(cs_main, pwalletMain->cs_wallet);
     if ( (keylen= (int32_t)strlen(params[0].get_str().c_str())) > 0 )
@@ -673,13 +678,13 @@ UniValue kvupdate(const UniValue& params, bool fHelp, const CPubKey& mypk)
                 if ( komodo_kvsigverify(keyvalue,keylen+refvaluesize,refpubkey,sig) < 0 )
                 {
                     ret.push_back(Pair("error",(char *)"error verifying sig, passphrase is probably wrong"));
-                    printf("VERIFY ERROR\n");
+                    //printf("VERIFY ERROR\n");
                     return ret;
-                } // else printf("verified immediately\n");
+                } // else //printf("verified immediately\n");
             }
         }
         //for (i=0; i<32; i++)
-        //    printf("%02x",((uint8_t *)&sig)[i]);
+        //    //printf("%02x",((uint8_t *)&sig)[i]);
         //printf(" sig for keylen.%d + valuesize.%d\n",keylen,refvaluesize);
         ret.push_back(Pair("coin",(char *)(ASSETCHAINS_SYMBOL[0] == 0 ? "KMD" : ASSETCHAINS_SYMBOL)));
         height = chainActive.LastTip()->GetHeight();
@@ -719,7 +724,7 @@ UniValue kvupdate(const UniValue& params, bool fHelp, const CPubKey& mypk)
         if ( (opretlen= komodo_opreturnscript(opretbuf,'K',keyvalue,coresize)) == 40 )
             opretlen++;
         //for (i=0; i<opretlen; i++)
-        //    printf("%02x",opretbuf[i]);
+        //    //printf("%02x",opretbuf[i]);
         //printf(" opretbuf keylen.%d valuesize.%d height.%d (%02x %02x %02x)\n",*(uint16_t *)&keyvalue[0],*(uint16_t *)&keyvalue[2],*(uint32_t *)&keyvalue[4],keyvalue[8],keyvalue[9],keyvalue[10]);
         EnsureWalletIsUnlocked();
         fee = komodo_kvfee(flags,opretlen,keylen);
@@ -802,8 +807,8 @@ UniValue paxwithdraw(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (!destaddress.IsValid())
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid dest Bitcoin address");
     for (i=0; i<33; i++)
-        printf("%02x",pubkey37[i]);
-    printf(" kmdheight.%d srcaddr.(%s) %s fiatoshis.%lld -> dest.(%s) komodoshis.%llu seed.%llx\n",kmdheight,(char *)params[0].get_str().c_str(),ASSETCHAINS_SYMBOL,(long long)fiatoshis,destaddr,(long long)komodoshis,(long long)seed);
+        //printf("%02x",pubkey37[i]);
+    //printf(" kmdheight.%d srcaddr.(%s) %s fiatoshis.%lld -> dest.(%s) komodoshis.%llu seed.%llx\n",kmdheight,(char *)params[0].get_str().c_str(),ASSETCHAINS_SYMBOL,(long long)fiatoshis,destaddr,(long long)komodoshis,(long long)seed);
     EnsureWalletIsUnlocked();
     uint8_t opretbuf[64]; int32_t opretlen; uint64_t fee = fiatoshis / 1000;
     if ( fee < 10000 )
@@ -4434,7 +4439,9 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp, const CPubKey& my
         auto op = res->second;
         auto wtxPrev = pwalletMain->mapWallet.at(op.hash);
 
-        auto decrypted = wtxPrev.DecryptSaplingNote(op).get();
+        // We don't need to check the leadbyte here: if wtx exists in
+        // the wallet, it must have already passed the leadbyte check
+        auto decrypted = wtxPrev.DecryptSaplingNoteWithoutLeadByteCheck(op).get();
         auto notePt = decrypted.first;
         auto pa = decrypted.second;
 
@@ -4462,14 +4469,16 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp, const CPubKey& my
         SaplingPaymentAddress pa;
         bool isRecovered;
 
-        auto decrypted = wtx.DecryptSaplingNote(op);
+        // We don't need to check the leadbyte here: if wtx exists in
+        // the wallet, it must have already passed the leadbyte check
+        auto decrypted = wtx.DecryptSaplingNoteWithoutLeadByteCheck(op);
         if (decrypted) {
             notePt = decrypted->first;
             pa = decrypted->second;
             isRecovered = false;
         } else {
             // Try recovering the output
-            auto recovered = wtx.RecoverSaplingNote(op, ovks);
+            auto recovered = wtx.RecoverSaplingNoteWithoutLeadByteCheck(op, ovks);
             if (recovered) {
                 notePt = recovered->first;
                 pa = recovered->second;
@@ -4622,6 +4631,669 @@ UniValue z_getoperationstatus_IMPL(const UniValue& params, bool fRemoveFinishedO
 // transaction.h comment: spending taddr output requires CTxIn >= 148 bytes and typical taddr txout is 34 bytes
 #define CTXIN_SPEND_DUST_SIZE   148
 #define CTXOUT_REGULAR_SIZE     34
+
+
+
+
+std::vector<SaplingNoteEntry> z_sapling_inputs_;
+
+bool rpcwallet__find_unspent_notes(std::string fromaddress_,  int mindepth_)
+{
+    std::vector<CSproutNotePlaintextEntry> sproutEntries;  //Not used by us
+    std::vector<SaplingNoteEntry> saplingEntries;
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        //printf("rpcwallet__find_unspent_notes() enter\n"); fflush(stdout);
+        //Local transaction: Require the spending key
+        pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, fromaddress_, mindepth_,true,true);
+        //printf("rpcwallet__find_unspent_notes() done\n"); fflush(stdout);
+    }
+
+    //printf("rpcwallet__find_unspent_notes() Build up z_sapling_inputs_ of unspend notes\n");fflush(stdout);
+    z_sapling_inputs_.clear();
+    for (auto entry : saplingEntries)
+    {
+        z_sapling_inputs_.push_back(entry);
+        std::string data(entry.memo.begin(), entry.memo.end());
+
+        //printf("rpcwallet__find_unspent_notes() Unspent note: (txid=%s, vShieldedSpend=%d, amount=%s, memo=%s)\n",
+        //    //getId().c_str(),
+        //    entry.op.hash.ToString().substr(0, 10).c_str(),
+        //    entry.op.n,
+        //    FormatMoney(entry.note.value()).c_str(),
+        //    HexStr(data).substr(0, 10).c_str() );
+        //    fflush(stdout);
+    }
+
+    if (z_sapling_inputs_.empty())
+    {
+        return false;
+    }
+
+    // sort in descending order, so big notes appear first
+    std::sort(z_sapling_inputs_.begin(), z_sapling_inputs_.end(),
+        [](SaplingNoteEntry i, SaplingNoteEntry j) -> bool
+        {
+            return i.note.value() > j.note.value();
+        });
+
+    return true;
+}
+
+//Must get it from AsyncRPCOperation_sendmany
+std::array<unsigned char, ZC_MEMO_SIZE> get_memo_from_hex_string(std::string s) {
+    // initialize to default memo (no_memo), see section 5.5 of the protocol spec
+    std::array<unsigned char, ZC_MEMO_SIZE> memo = {{0xF6}};
+
+    std::vector<unsigned char> rawMemo = ParseHex(s.c_str());
+
+    // If ParseHex comes across a non-hex char, it will stop but still return results so far.
+    size_t slen = s.length();
+    if (slen % 2 !=0 || (slen>0 && rawMemo.size()!=slen/2)) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Memo must be in hexadecimal format");
+    }
+
+    if (rawMemo.size() > ZC_MEMO_SIZE) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Memo size of %d is too big, maximum allowed is %d", rawMemo.size(), ZC_MEMO_SIZE));
+    }
+
+    // copy vector into boost array
+    int lenMemo = rawMemo.size();
+    for (int i = 0; i < ZC_MEMO_SIZE && i < lenMemo; i++) {
+        memo[i] = rawMemo[i];
+    }
+    return memo;
+}
+
+UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    //printf("z_sign_offline() enter 1\n"); fflush(stdout);
+
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    //printf("z_sign_offline params.size=%ld\n", params.size());
+
+    if (fHelp || params.size() !=12)
+        throw runtime_error(
+            "z_sign_offline signs the transaction presented in the hex input block\n"
+            "The transaction data block is generated by an online wallet using the 'z_sendmany_prepare_offline' command\n"
+            "\nArguments:\n"
+            "0. \"from_address\"        (string, required) The taddr or zaddr to send the funds from.\n"
+            "1. \"spending notes\"      (array, required) An array of json objects representing the spending notes of the from_address.\n"
+            "    [{\n"
+            "      \"witnessposition\":position (numeric, required) spending witness blockchain position\n"
+            "      \"witnesspath\"    :path     (hex string, required) spending witness blockchain path, 2 chars/hex value\n"
+            "      \"note_d\"         :d        (hex string, required) Note d component, 2 chars/hex value\n"
+            "      \"note_pkd\"       :pkd      (hex string, required) Note pkd component, 2 chars/hex value\n"
+            "      \"note_r\"         :r        (hex string, required) Note r component, 2 chars/hex value\n"
+            "      \"value\"          :value    (numeric, required) amount stored in the note\n"
+            "    }, ... ]\n"
+            "2. \"outputs\"             (array, required) An array of json objects representing recipients and the amounts send to them.\n"
+            "    [{\n"
+            "      \"address\":address  (string, required) The address is a zaddr\n"
+            "      \"amount\":amount    (numeric, required) The numeric amount in KMD is the value\n"
+            "      \"memo\":memo        (hex string, optional) A note about the payment, 2 chars/hex value\n"
+            "    }, ... ]\n"
+            "3. minconf                 (numeric, required) Only use funds confirmed at least this many times.\n"
+            "4. fee                     (numeric, required"
+            "5. Next block height       (numeric, required) Network next block height\n"
+            "6. branch ID               (numeric, required) Network branch ID\n"
+            "7. \"anchor\"              (hex string, required) Anchor for the witnesses\n"
+            "8. MTX overwintered        (numeric, required) Transaction: Overwintered\n"
+            "9. MTX ExpiryHeight        (numeric, required) Transaction: ExpiryHeight\n"
+            "10.MTX VersionGroupID      (numeric, required) Transaction: VersionGroupID\n"
+            "11.MTX Version             (numeric, required) Transaction: Version\n"
+            "\nResult:\n"
+            "\"sendrawtransaction\"   (string) A string containing the transaction data that must be pasted into the online wallet\n"
+            "                                    to execute the transaction\n"
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    //printf("z_sign_offline() 2 From adres\n"); fflush(stdout);
+    //THROW_IF_SYNCING(KOMODO_INSYNC);
+
+
+    //[0]From adres
+    //---------------------------------------------------------------------------------------------
+    string fromAddress= params[0].get_str();
+    //printf("z_sign_offline() [0] from_address: %s", fromAddress.c_str());
+    auto fromtaddr_ = DecodeDestination(fromAddress);
+    bool isfromtaddr_ = IsValidDestination(fromtaddr_);
+    if (isfromtaddr_)
+    {
+      throw JSONRPCError(RPC_INVALID_PARAMETER, "From address must be a z-addr");
+    }
+    auto address = DecodePaymentAddress(fromAddress);
+    if (!IsValidPaymentAddress(address))
+    {
+      throw JSONRPCError(RPC_INVALID_PARAMETER, "From address must be a z-addr");
+    }
+    // We don't need to lock on the wallet as spending key related methods are thread-safe
+    if (!boost::apply_visitor(HaveSpendingKeyForPaymentAddress(pwalletMain), address))
+    {
+      throw JSONRPCError(RPC_INVALID_PARAMETER, "The spending key of the from_address is not in your wallet");
+    }
+    auto spendingkey_ = boost::apply_visitor(GetSpendingKeyForPaymentAddress(pwalletMain), address).get();
+    //printf("z_sign_offline [0] - Success: Have the spending key for the adres\n");
+
+    //[1]Spending Notes
+    //---------------------------------------------------------------------------------------------
+    std::vector<SaplingNote> notes;
+    std::vector<uint64_t> aiWitnessPosition;
+    std::vector<myCharArray_s> asWitnessPath;
+
+    UniValue oSpendingNotes = params[1].get_array();
+    if (oSpendingNotes.size()==0)
+    {
+      throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, spending notes array is empty.");
+    }
+    int iI=1;
+    for (const UniValue& oSpendingNote : oSpendingNotes.getValues())
+    {
+        //printf("z_sign_offline() [1] Procecess spending note #%d of %ld\n", iI, oSpendingNotes.size() );fflush(stdout);
+        if (!oSpendingNote.isObject())
+        {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected spending note object");
+        }
+
+        // sanity check, report error if unknown key-value pairs
+        for (const string& name_ : oSpendingNote.getKeys())
+        {
+            std::string s = name_;
+            if (s != "witnessposition" && s != "witnesspath" && s != "note_d" && s != "note_pkd" && s != "note_r" && s != "value")
+                throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid spending note parameter, unknown key: ")+s);
+        }
+
+        UniValue av = find_value(oSpendingNote, "witnessposition");
+        int64_t lPosition;
+        if (!(ParseFixedPoint(av.getValStr(), 0, &lPosition)))
+        {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, could not decode witness position");
+        }
+        if (lPosition < 0)
+        {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, witness position must be positive");
+        }
+        aiWitnessPosition.push_back( (uint64_t)lPosition);
+        //printf("z_sign_offline() [1] Witness position=%ld\n",lPosition);fflush(stdout);
+
+
+        UniValue oPath = find_value(oSpendingNote, "witnesspath");
+        if (oPath.isNull())
+        {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, did not find witness path");
+        }
+        string sPath = oPath.get_str();
+        if (sPath.length() != 2130)
+        {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Length of witness path is not 2130 bytes");
+        }
+        int iLen=2*(1 + 33 * SAPLING_TREE_DEPTH + 8);
+        if (sPath.length() != iLen)
+        {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid parameter, Length of witness path is not %d bytes",iLen) );
+        }
+        iLen = (1 + 33 * SAPLING_TREE_DEPTH + 8);
+        myCharArray_s sWitnessPath;
+        if (sizeof(sWitnessPath.cArray)< iLen)
+        {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid parameter, Length of witness path (%d) exceeds internal data buffer (%d) ",iLen, sizeof(sWitnessPath.cArray)) );
+        }
+
+        if (!IsHex(sPath))
+        {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected witness path in hexadecimal format.");
+        }
+        unsigned char cWitnessPath[ (1 + 33 * SAPLING_TREE_DEPTH + 8) + 1 ];
+        HexToCharArray( (char *)sPath.c_str(), sPath.length(), &cWitnessPath[0]);
+        memset (&sWitnessPath.cArray[0], 0, sizeof (sWitnessPath.cArray));
+        memcpy (&sWitnessPath.cArray[0], &cWitnessPath[0], (1 + 33 * SAPLING_TREE_DEPTH + 8) );
+        asWitnessPath.push_back(sWitnessPath);
+        //printf("z_sign_offline() [1] Have witness path\n");fflush(stdout);
+
+
+        UniValue oNoteD = find_value(oSpendingNote, "note_d");
+        if (oNoteD.isNull())
+        {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, did not find note_d");
+        }
+        string sNoteD = oNoteD.get_str();
+        if (!IsHex(sNoteD))
+        {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected note_d in hexadecimal format.");
+        }
+        //printf("z_sign_offline() [1] Have note_d\n");fflush(stdout);
+
+
+        UniValue oNotePKD = find_value(oSpendingNote, "note_pkd");
+        if (oNotePKD.isNull())
+        {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, did not find note_pkd");
+        }
+        string sNotePKD = oNotePKD.get_str();
+        if (!IsHex(sNotePKD))
+        {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected note_pkd in hexadecimal format.");
+        }
+        //printf("z_sign_offline() [1] Have note_pkd\n");fflush(stdout);
+
+
+        UniValue oNoteR = find_value(oSpendingNote, "note_r");
+        if (oNoteR.isNull())
+        {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, did not find note_r");
+        }
+        string sNoteR = oNoteR.get_str();
+        if (sNoteR.length() != 64)
+        {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Length of note_r is not 64 bytes");
+        }
+        if (!IsHex(sNoteR))
+        {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected note_r in hexadecimal format.");
+        }
+        //printf("z_sign_offline() [1] Have note_r\n");fflush(stdout);
+
+
+        UniValue oValue = find_value(oSpendingNote, "value");
+        if (oValue.isNull())
+        {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, did not find value");
+        }
+        uint64_t lValue = oValue.get_int();
+        //printf("z_sign_offline() [1] Have value: %ld\n",lValue );fflush(stdout);
+
+
+        //Reconstruct the Sappling Note
+        //-----------------------------
+        //d: Hex=22 bytes, char array=11
+        if (sNoteD.length() != 22)
+        {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Length of note_d is not 22 bytes");
+        }
+        libzcash::diversifier_t d;
+        unsigned char cD[ZC_DIVERSIFIER_SIZE + 1];  //One more char for the null terminating 0
+        HexToCharArray( (char *)sNoteD.c_str(), sNotePKD.length(), &cD[0]);
+        std::memcpy(&d, &cD[0], ZC_DIVERSIFIER_SIZE);
+
+
+        //pk_d: Hex=64 bytes, char array=32
+        if (sNotePKD.length() != 64)
+        {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Length of note_pkd is not 64 bytes");
+        }
+        uint256 pk_d;
+        unsigned char cPK_D[32+1];  //One more char for the null terminating 0
+        HexToCharArray( (char *)sNotePKD.c_str(), sNotePKD.length(), &cPK_D[0]);
+        std::memcpy(&pk_d, &cPK_D[0], 32);
+
+
+        //r: Hex=64 bytes, char array=32
+        if (sNoteR.length() != 64)
+        {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Length of note_pkd is not 64 bytes");
+        }
+        uint256 r;
+        unsigned char cR[32+1];  //One more char for the null terminating 0
+        HexToCharArray( (char *)sNoteR.c_str(), sNoteR.length(), &cR[0]);
+        std::memcpy(&r, &cR[0], 32);
+
+        libzcash::Zip212Enabled zip_212_enabled = libzcash::Zip212Enabled::BeforeZip212;
+        // We use nHeight = chainActive.Height() + 1 since the output will be included in the next block
+        if (NetworkUpgradeActive(chainActive.Tip()->GetHeight() + 1, Params().GetConsensus(), Consensus::UPGRADE_CANOPY)) {
+            zip_212_enabled = libzcash::Zip212Enabled::AfterZip212;
+        }
+
+        libzcash::SaplingNote oNote = libzcash::SaplingNote(d, pk_d, lValue, r, zip_212_enabled);
+        notes.push_back(oNote);
+        //printf("z_sign_offline() [1] Note #%d reconstructed\n",iI );fflush(stdout);
+        iI+=1;
+    }
+
+
+
+    //[2] Outputs
+    //Outputs: addr, value, memo , addr, value, memo
+    //printf("z_sign_offline() [2] Outputs:\n"); fflush(stdout);
+    std::vector<SendManyRecipient> z_outputs_;
+    CAmount nTotalOut = 0;
+    string sZaddrRecipients;
+
+
+    UniValue outputs = params[2].get_array();
+    if (outputs.size()==0)
+    {
+      //printf("z_sign_offline() [2] Recipients: Error: The output array is empty\n");
+      throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, output array is empty.");
+    }
+    iI=0;
+    for (const UniValue& o : outputs.getValues())
+    {
+      //printf("z_sign_offline() [2] Procecess output (recipient) #%d of %ld\n", iI, outputs.size() );fflush(stdout);
+      if (!o.isObject())
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected outputs object");
+
+      // sanity check, report error if unknown key-value pairs
+      for (const string& name_ : o.getKeys())
+      {
+          std::string s = name_;
+          if (s != "address" && s != "amount" && s!="memo")
+              throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid output parameter, unknown key: ")+s);
+      }
+
+      string address = find_value(o, "address").get_str();
+      bool isZaddr = false;
+      CTxDestination taddr = DecodeDestination(address);
+      if (IsValidDestination(taddr))
+      {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, string("output taddr not allowed "));
+      }
+
+      auto res = DecodePaymentAddress(address);
+
+      UniValue memoValue = find_value(o, "memo");
+      string memo;
+      if (!memoValue.isNull())
+      {
+          memo = memoValue.get_str();
+          if (!IsHex(memo))
+          {
+              //Appears to be plain text. Convert it to hex
+              memo = HexStr( memo );
+              //printf("Converted memo to hex: %s\n", memo.c_str() );
+              if (!IsHex(memo))
+              {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, output memo not in hexadecimal format.");
+              }
+          }
+          if (memo.length() > ZC_MEMO_SIZE*2) {
+              throw JSONRPCError(RPC_INVALID_PARAMETER,  strprintf("Invalid parameter, size of output memo is larger than maximum allowed %d", ZC_MEMO_SIZE ));
+          }
+      }
+
+
+      UniValue av = find_value(o, "amount");
+      //CAmount nAmount = AmountFromValue( av );
+      CAmount nAmount = av.get_int();
+      if (nAmount < 0)
+      {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "output amount must be positive");
+      }
+
+      //printf("z_outputs: address:%s amount: %ld memo:%s\n",address.c_str(), nAmount, memo.c_str()  );
+      z_outputs_.push_back( SendManyRecipient(address, nAmount, memo) );
+      nTotalOut += nAmount;
+      //printf("z_sign_offline() [2] Total amount: %ld\n",nTotalOut);fflush(stdout);
+      iI+=1;
+    }
+
+
+    // Minimum confirmations
+    //printf("z_sign_offline() [3] Minimum confirmations: ");fflush(stdout);
+    std::string sVal;
+    int nMinDepth;
+    if (params[3].getType() == UniValue::VSTR)
+    {
+       //printf("VSTR\n");fflush(stdout);
+       sVal = params[3].get_str();
+       nMinDepth=atoi(sVal.c_str());
+    }
+    else if (params[3].getType() == UniValue::VNUM)
+    {
+       //printf("VNUM\n");fflush(stdout);
+       nMinDepth=params[3].get_int();
+    }
+    else
+    {
+       throw JSONRPCError(RPC_INVALID_PARAMETER, "Expected an integer for 'Minimum confirmations'");
+    }
+
+    if (nMinDepth < 0)
+    {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Minimum number of confirmations cannot be less than 0");
+    }
+    //printf("z_sign_offline() [3] Minimum confirmations: %d\n",nMinDepth);fflush(stdout);
+
+
+    // Fee in Zatoshis, not currency format)
+    //printf("z_sign_offline() [4] Transaction fee: ");fflush(stdout);
+    sVal = params[4].get_str();
+    //printf("%s\n",sVal.c_str() );fflush(stdout);
+    int iFee=atoi(sVal.c_str());
+    CAmount nFee=iFee;
+
+    // Check that the user specified fee is not absurd.
+    // This allows amount=0 (and all amount < nDefaultFee) transactions to use the default network fee
+    // or anything less than nDefaultFee instead of being forced to use a custom fee and leak metadata
+    if (nTotalOut < nFee)
+    {
+      throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Small transaction amount %s has fee %s that is greater than the default fee %s", FormatMoney(nTotalOut), FormatMoney(nFee), FormatMoney(ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE)));
+    }
+    else
+    {
+      // Check that the user specified fee is not absurd.
+      if (nFee > nTotalOut)
+      {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Fee %s is greater than the sum of outputs %s", FormatMoney(nFee), FormatMoney(nTotalOut)));
+      }
+    }
+    //printf("z_sign_offline() [4] Transaction fee: %ld\n",nFee);fflush(stdout);
+
+
+    //[5]Network values: BlockHeight
+    //---------------------------------------------------------------------------------------------
+    //printf("z_sign_offline() [5] Network: Next block height: ");
+    std::string sNextBlockHeight = params[5].get_str();
+    //printf("%s\n",sNextBlockHeight.c_str() );fflush(stdout);
+    int nextBlockHeight=atoi(sNextBlockHeight.c_str());
+    //DEGBUG_INPUT :: Need this from the online machine
+    //int nextBlockHeight= chainActive.Height() + 1;
+    //printf("%d\n", nextBlockHeight);
+
+
+    //[6]Network values: Branch ID
+    //---------------------------------------------------------------------------------------------
+    //printf("z_sign_offline() [6] Network: BranchId: ");
+    std::string sBranchId = params[6].get_str();
+    //printf("%s\n",sBranchId.c_str() );fflush(stdout);
+    uint32_t branchId=atoi(sBranchId.c_str());
+    //printf("%u\n", branchId);
+
+    // Anchor
+    //printf("z_sign_offline() [7] Anchor: ");fflush(stdout);
+    std::string sAnchorHex = params[7].get_str();
+    //printf("%s\n",sAnchorHex.c_str() );fflush(stdout);
+    if (!IsHex(sAnchorHex))
+    {
+      sAnchorHex = HexStr( sAnchorHex );
+      if (!IsHex(sAnchorHex))
+      {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, anchor data must be in hexadecimal format.");
+      }
+      if (sAnchorHex.length() != 64)
+      {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, anchor data length not 64 characters");
+      }
+    }
+    //Convert HEX back to uint256
+    uint256 anchor;
+    unsigned char cAnchor[32+1];  //One more char for the null terminating 0
+    HexToCharArray( (char *)sAnchorHex.c_str(), sAnchorHex.length(), &cAnchor[0]);
+    std::memcpy(&anchor, &cAnchor[0], 32);
+    //printf("z_sign_offline() [7] Anchor: %s\n",sAnchorHex.c_str() );fflush(stdout);
+
+    // MTX overwintered
+    //printf("z_sign_offline() [8] MTX overwintered: ");
+    std::string sMTX_overwintered = params[8].get_str();
+    //printf("%s\n",sMTX_overwintered.c_str() );fflush(stdout);
+    uint32_t iMTX_overwintered=atoi(sMTX_overwintered.c_str());
+    bool bMTX_overwintered;
+    if (iMTX_overwintered==0)
+    {
+      bMTX_overwintered=false;
+    }
+    else
+    {
+      bMTX_overwintered=true;
+    }
+
+
+    // MTX ExpiryHeight
+    //printf("z_sign_offline() [9] MTX ExpiryHeight: ");
+    std::string sMTX_ExpiryHeight = params[9].get_str();
+    //printf("%s\n", sMTX_ExpiryHeight.c_str() );fflush(stdout);
+    uint32_t iMTX_ExpiryHeight=atoi(sMTX_ExpiryHeight.c_str());
+
+
+    // MTX VersionGroupID
+    //printf("z_sign_offline() [10] MTX VersionGroupID: ");
+    std::string sMTX_VersionGroupID = params[10].get_str();
+    //printf("%s\n", sMTX_VersionGroupID.c_str() );fflush(stdout);
+    uint32_t iMTX_VersionGroupID=atoi(sMTX_VersionGroupID.c_str());
+
+
+
+    // MTX Version
+    //printf("z_sign_offline() [11] MTX Version: ");
+    std::string sMTX_Version = params[11].get_str();
+    //printf("%s\n", sMTX_Version.c_str() );fflush(stdout);
+    int32_t iMTX_Version=atoi(sMTX_Version.c_str());
+
+
+
+    //printf("z_sign_offline() All the inputs parsed. Build up transaction\n");fflush(stdout);
+//------------------------------------------------------------------------------------------------------------------------
+    //AsyncRPCOperation_sendmany::main_impl
+    CAmount minersFee=nFee;
+
+    //DEBUG_INPUT :: Need to pass this along from the online machine
+    //if (!rpcwallet__find_unspent_notes(fromAddress, nMinDepth))
+    //{
+    //    //printf("z_sign_offline() 10 Insufficient funds\n"); fflush(stdout);
+    //    throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Insufficient funds, no unspent notes found for zaddr from address.");
+    //}
+    CAmount z_inputs_total = 0;
+    //for (auto t : z_sapling_inputs_)
+    //{
+    //    z_inputs_total += t.note.value();
+    //}
+    for (auto note : notes)
+    {
+        z_inputs_total += note.value();
+    }
+
+    CAmount z_outputs_total = 0;
+    for (SendManyRecipient & t : z_outputs_)
+    {
+        z_outputs_total += std::get<1>(t);
+    }
+
+    CAmount sendAmount = z_outputs_total;
+    CAmount targetAmount = sendAmount + minersFee;
+    //printf("z_sign_offline() 8 Target amount (%ld) > SendAmount(%ld) + Fee(%ld)?\n", targetAmount,sendAmount,minersFee); fflush(stdout);
+    if (z_inputs_total < targetAmount)
+    {
+        //printf("z_sign_offline() 8 Insufficient funds: have %s, need %s\n",FormatMoney(z_inputs_total).c_str(), FormatMoney(targetAmount).c_str() ); fflush(stdout);
+        throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS,
+            strprintf("Insufficient shielded funds, have %s, need %s",
+            FormatMoney(z_inputs_total), FormatMoney(targetAmount)));
+    }
+
+    //------------------------------------------------------------------------------------------------------------
+    //TransactionBuilder builder = TransactionBuilder(Params().GetConsensus(), nextBlockHeight, pwalletMain);
+    TransactionBuilder builder = TransactionBuilder(bMTX_overwintered,iMTX_ExpiryHeight,iMTX_VersionGroupID,iMTX_Version,branchId);
+
+    //SCENARIO #0
+    //printf("z_sign_offline() 9 AsyncRPCOperation_sendmany scenario 0\n"); fflush(stdout);
+    builder.SetFee(minersFee);
+
+    // Get various necessary keys
+    //printf("z_sign_offline() 10 Get SaplingExtendedSpendingKey\n"); fflush(stdout);
+    SaplingExpandedSpendingKey expsk;
+    uint256 ovk;
+    auto sk = boost::get<libzcash::SaplingExtendedSpendingKey>(spendingkey_);
+    expsk = sk.expsk;
+    ovk = expsk.full_viewing_key().ovk;
+
+
+    // Select Sapling notes
+    // Note: already prepared by the online machine. The online machine will only
+    //       send enough inputs to satisfy the transacitno.
+    //       Just double checking here again.
+    //printf("z_sign_offline() 11 Select sapling_input notes\n"); fflush(stdout);
+    std::vector<SaplingOutPoint> ops;
+
+
+    //-- Repeat exercise of notes with actual input ----------------
+    CAmount sum = 0;
+    iI=1;
+    for (auto note : notes)
+    {
+        sum += note.value();
+        //printf("z_sign_offline() 12 for(%d) sum=%ld, target=%ld\n",iI,sum,targetAmount); fflush(stdout);
+        iI++;
+        if (sum >= targetAmount)
+        {
+            //printf("z_sign_offline() 12 for() Enough funds in input notes. Break\n"); fflush(stdout);
+            break;
+        }
+    }
+    if (sum<targetAmount)
+    {
+         //printf("z_sign_offline() 12 Insufficient funds: sum=%ld, target=%ld\n",sum,targetAmount); fflush(stdout);
+         throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS,
+            strprintf("Insufficient shielded funds, have %s, need %s",
+            sum,targetAmount));
+    }
+    //-----------------------------------------------------------
+
+    //printf("z_sign_offline() 13 Get Note witnesses\n"); fflush(stdout);
+    // Add Sapling spends
+    //printf("z_sign_offline() 14 Transaction: Add spends (inputs)\n"); fflush(stdout);
+    for (size_t i = 0; i < notes.size(); i++)
+    {
+        //printf("z_sign_offline() for(%ld):\n",i); fflush(stdout);
+        assert(builder.AddSaplingSpend_process_offline_transaction(expsk, notes[i], anchor, aiWitnessPosition[i], &asWitnessPath[i].cArray[0] ));
+    }
+
+    // Add Sapling outputs
+    //printf("z_sign_offline() 15 Transaction: Add outputs\n"); fflush(stdout);
+    iI=1;
+    for (auto r : z_outputs_)
+    {
+        auto address = std::get<0>(r);
+        auto value = std::get<1>(r);
+        auto hexMemo = std::get<2>(r);
+        //printf("z_sign_offline() 15 for(%d) address=%s, value=%ld, hexMemo=%s\n", iI, address.c_str(), value, hexMemo.c_str() ); fflush(stdout);
+
+        auto addr = DecodePaymentAddress(address);
+        assert(boost::get<libzcash::SaplingPaymentAddress>(&addr) != nullptr);
+        auto to = boost::get<libzcash::SaplingPaymentAddress>(addr);
+
+        auto memo = get_memo_from_hex_string(hexMemo);
+
+        iI++;
+        builder.AddSaplingOutput(ovk, to, value, memo);
+    }
+
+    // Build the transaction
+    auto tx_result = builder.Build().GetTxOrThrow();
+
+    //printf("z_sign_offline() 18 Convert to output to hex & UniValue\n"); fflush(stdout);
+    auto signedtxn = EncodeHexTx(tx_result);
+
+    UniValue oOBJ(UniValue::VOBJ);
+
+    oOBJ.push_back(Pair("Instruction: Paste the contents into your on-line wallet without the \"\"",
+                        "sendrawtransaction "+signedtxn
+                  ));
+
+    return oOBJ;
+
+
+}
 
 UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
@@ -4912,6 +5584,415 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
     q->addOperation(operation);
     AsyncRPCOperationId operationId = operation->getId();
     return operationId;
+}
+
+
+
+
+UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    //printf("z_sendmany_prepare_offline() enter 1\n"); fflush(stdout);
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() < 2 || params.size() > 5)
+        throw runtime_error(
+            "z_sendmany_prepare_offline \"fromaddress\" [{\"address\":... ,\"amount\":...},...] ( minconf ) ( fee )\n"
+            "\nSend payment to 1 or multiple recipients in a single transaction. This fromaddress is a viewing_key_only"
+            "\nThe output generated from this command must be passed to an off-line client with the full spending key"
+            "\nof the fromaddress. The off-line client will sign the transaction. The signed output must be send"
+            "\nto the network from this on-line client."
+            "\nAmounts are decimal numbers with at most 8 digits of precision."
+            "\ntaddr are not allowed"
+            "\nChange generated from a zaddr returns to itself."
+
+            + strprintf("\nBefore Sapling activates, the maximum number of zaddr outputs is %d due to transaction size limits.\n", Z_SENDMANY_MAX_ZADDR_OUTPUTS_BEFORE_SAPLING)
+            + HelpRequiringPassphrase() + "\n"
+            "\nArguments:\n"
+            "1. \"fromaddress\"         (string, required) The taddr or zaddr to send the funds from.\n"
+            "2. \"amounts\"             (array, required) An array of json objects representing the amounts to send.\n"
+            "    [{\n"
+            "      \"address\":address  (string, required) The address is a taddr or zaddr\n"
+            "      \"amount\":amount    (numeric, required) The numeric amount in KMD is the value\n"
+            "      \"memo\":memo        (hex, optional) Memo represented in hexadecimal string format\n"
+            "    }, ... ]\n"
+            "3. minconf               (numeric, required, default=1) Only use funds confirmed at least this many times.\n"
+            "4. fee                   (numeric, required, default="
+            + strprintf("%s", FormatMoney(ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE)) + ") The fee amount to attach to this transaction.\n"
+            "\nResult:\n"
+            "\"z_sign_offline\" (string) The data to supply to the off-line wallet. The off-line wallet needs to sign the data to authorise the transaction.\n"
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    //THROW_IF_SYNCING(KOMODO_INSYNC);
+
+    // Check that the from address is valid.
+    auto fromaddress = params[0].get_str();
+    bool fromTaddr = false;
+    bool fromSapling = false;
+    uint32_t branchId;
+
+    //printf("z_sendmany_prepare_offline() 1\n"); fflush(stdout);
+    CTxDestination taddr = DecodeDestination(fromaddress);
+    fromTaddr = IsValidDestination(taddr);
+    if (fromTaddr)
+    {
+      //printf("z_sendmany_prepare_offline() enter 2\n"); fflush(stdout);
+      throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a zaddr.");
+    }
+
+    auto res = DecodePaymentAddress(fromaddress);
+    // if (!IsValidPaymentAddress(res, branchId)) //Branch ID not yet available, since we don't yet know if we're online or offline
+    //                                            //TBD: Split into 2 unique functions
+    if (!IsValidPaymentAddress(res))
+    {
+      //TBD: Do this test on the online machine?
+      // invalid
+      //printf("z_sendmany_prepare_offline() enter 2\n"); fflush(stdout);
+      throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from_address, should be a zaddr.");
+    }
+
+    // Check that we have the spending key
+    if (boost::apply_visitor(HaveSpendingKeyForPaymentAddress(pwalletMain), res))
+    {
+      //printf("z_sendmany_prepare_offline() Have full key for from_address. Must use z_sendmany instead of z_sendmany_prepare_offline\n"); fflush(stdout);
+      throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Have the full spending key of the from_address. Use z_sendmany() command to send the transaction directly to the network.");
+    }
+
+    if (!boost::apply_visitor(IncomingViewingKeyBelongsToWallet(pwalletMain), res))
+    {
+      //printf("z_sendmany_prepare_offline() Unknown from address\n");fflush(stdout);
+      throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "From address not found in the wallet.");
+    }
+
+    //Offline signing:
+    //printf("z_sendmany_prepare_offline() From_address is only a viewing key. Prepare for offline signing\n"); fflush(stdout);
+
+
+    branchId = CurrentEpochBranchId(chainActive.Height(), Params().GetConsensus());
+
+    //Test again with the branchID
+    if (!IsValidPaymentAddress(res, branchId))
+    //if (!IsValidPaymentAddress(res))
+    {
+      //printf("z_sendmany_prepare_offline() enter 2\n"); fflush(stdout);
+      throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "The from_adres is not a valid payment address");
+    }
+
+    // Remember whether this is a Sprout or Sapling address
+    fromSapling = boost::get<libzcash::SaplingPaymentAddress>(&res) != nullptr;
+    if (fromSapling == false)
+    {
+      //printf("z_sendmany_prepare_offline() The from_address is not a sapling address\n");fflush(stdout);
+      throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "From address is not a sapling address.");
+    }
+
+    //printf("z_sendmany_prepare_offline() 3\n");fflush(stdout);
+    // This logic will need to be updated if we add a new shielded pool
+    bool fromSprout = !(fromTaddr || fromSapling);
+
+    UniValue outputs = params[1].get_array();
+
+    if (outputs.size()==0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, spend (output) array is empty.");
+
+    // Keep track of addresses to spot duplicates
+    set<std::string> setAddress;
+
+    // Track whether we see any Sprout addresses
+    bool noSproutAddrs = !fromSprout;
+
+    //printf("z_sendmany_prepare_offline() 4 Process recipients\n");fflush(stdout);
+    // Recipients
+    std::vector<SendManyRecipient> taddrRecipients;
+    std::vector<SendManyRecipient> zaddrRecipients;
+    CAmount nTotalOut = 0;
+    string sZaddrRecipients;
+    char cBuf[1000];
+
+    bool containsSproutOutput = false;
+    bool containsSaplingOutput = false;
+
+    for (const UniValue& o : outputs.getValues())
+    {
+        if (!o.isObject())
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected object");
+
+        // sanity check, report error if unknown key-value pairs
+        for (const string& name_ : o.getKeys())
+        {
+            std::string s = name_;
+            if (s != "address" && s != "amount" && s!="memo")
+                throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, unknown key: ")+s);
+        }
+
+        string address = find_value(o, "address").get_str();
+        bool isZaddr = false;
+        CTxDestination taddr = DecodeDestination(address);
+        if (IsValidDestination(taddr))
+        {
+          throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid recipient address, should be a zaddr.");
+        }
+
+        auto res = DecodePaymentAddress(address);
+        if (IsValidPaymentAddress(res, branchId))
+        {
+            isZaddr = true;
+
+            bool toSapling = boost::get<libzcash::SaplingPaymentAddress>(&res) != nullptr;
+            bool toSprout = !toSapling;
+            noSproutAddrs = noSproutAddrs && toSapling;
+
+            containsSproutOutput |= toSprout;
+            containsSaplingOutput |= toSapling;
+
+            // Sending to both Sprout and Sapling is currently unsupported using z_sendmany
+            if (containsSproutOutput && containsSaplingOutput)
+            {
+                throw JSONRPCError(
+                    RPC_INVALID_PARAMETER,
+                    "Cannot send to both Sprout and Sapling addresses using z_sendmany");
+            }
+            if ( GetTime() > KOMODO_SAPLING_DEADLINE )
+            {
+                if ( fromSprout || toSprout )
+                    throw JSONRPCError(RPC_INVALID_PARAMETER,"Sprout usage has expired");
+            }
+
+            if ( toSapling && ASSETCHAINS_SYMBOL[0] == 0 )
+                throw JSONRPCError(RPC_INVALID_PARAMETER,"Sprout usage will expire soon");
+
+            // If we are sending from a shielded address, all recipient
+            // shielded addresses must be of the same type.
+            if ((fromSprout && toSapling) || (fromSapling && toSprout))
+            {
+                throw JSONRPCError(
+                    RPC_INVALID_PARAMETER,
+                                    "Cannot send between Sprout and Sapling addresses using z_sendmany");
+            }
+        }
+        else
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, unknown address format: ")+address );
+        }
+
+
+        //printf("z_sendmany_prepare_offline() 5 Recipient address: %s\n",address.c_str() );fflush(stdout);
+        setAddress.insert(address);
+
+        UniValue memoValue = find_value(o, "memo");
+        string memo;
+        if (!memoValue.isNull())
+        {
+            memo = memoValue.get_str();
+            if (!isZaddr) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Memo cannot be used with a taddr.  It can only be used with a zaddr.");
+            }
+            else if (!IsHex(memo))
+            {
+                //aparently a normal string. Attempt to convert it to hex
+                //printf("z_sendmany_prepare_offline() 5 - Convert memo to hex: %s -> ",memo.c_str() ); fflush(stdout);
+
+                memo = HexStr( memoValue.get_str() );
+                if (!IsHex(memo))
+                {
+                  //printf("error. Could not convert to hex\n");fflush(stdout);
+                  throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected memo data in hexadecimal format.");
+                }
+            }
+            if (memo.length() > ZC_MEMO_SIZE*2) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,  strprintf("Invalid parameter, size of memo is larger than maximum allowed %d", ZC_MEMO_SIZE ));
+            }
+            //printf("z_sendmany_prepare_offline() 6 Memo hex str: %s\n",memo.c_str() );fflush(stdout);
+        }
+        else
+        {
+          //printf("z_sendmany_prepare_offline() 6 No memo\n");fflush(stdout);
+        }
+
+        UniValue av = find_value(o, "amount");
+        CAmount nAmount = AmountFromValue( av );
+        //printf("z_sendmany_prepare_offline() 7 Amount=%ld\n",nAmount);fflush(stdout);
+        if (nAmount < 0)
+            //TBD: Tests to be done on the online machine. Can be repeated on the off-line machine for sanity.
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, amount must be positive");
+
+        float fAmount = (float)(nAmount) / 100000000.0;
+        snprintf(&cBuf[0],sizeof(cBuf)-1,"{\"address\":\"%s\",\"amount\":%f,\"memo\":\"%s\"}", address.c_str(),fAmount, memo.c_str());
+        string buffAsStdStr(cBuf);
+        sZaddrRecipients = sZaddrRecipients + buffAsStdStr;
+        //printf("z_sendmany_prepare_offline() Prepare for off-line recipient: %s\n",sZaddrRecipients.c_str());
+
+        zaddrRecipients.push_back( SendManyRecipient(address, nAmount, memo) );
+
+        nTotalOut += nAmount;
+        //printf("z_sendmany_prepare_offline() 7 Total amount: %ld\n",nTotalOut);fflush(stdout);
+    }
+
+    int nextBlockHeight=0;
+    nextBlockHeight = chainActive.Height() + 1; //Need this from the online machine
+    //printf("z_sendmany_prepare_offline() 8 prepare off-line: Next block height=%d (already incremented)\n",nextBlockHeight);fflush(stdout);
+
+    CMutableTransaction mtx;
+    unsigned int max_tx_size = MAX_TX_SIZE_AFTER_SAPLING;
+    mtx.fOverwintered = true;
+    mtx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
+    mtx.nVersion = SAPLING_TX_VERSION;
+
+    if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING))
+    {
+        if (NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_OVERWINTER))
+        {
+            mtx.nVersionGroupId = OVERWINTER_VERSION_GROUP_ID;
+            mtx.nVersion = OVERWINTER_TX_VERSION;
+        }
+        else
+        {
+            mtx.fOverwintered = false;
+            mtx.nVersion = 2;
+        }
+        max_tx_size = MAX_TX_SIZE_BEFORE_SAPLING;
+
+        // Check the number of zaddr outputs does not exceed the limit.
+        //TBD: Test on the online machine. Sanity check on the offline?
+        if (zaddrRecipients.size() > Z_SENDMANY_MAX_ZADDR_OUTPUTS_BEFORE_SAPLING)
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, too many zaddr outputs");
+        }
+    }
+
+    //printf("z_sendmany_prepare_offline() 9 Prepare off-line: Network parameters:  mtx.fOverwintered=%d mtx.nVersionGroupId=0x%02X mtx.nVersion=%u max_tx_size=%d nextBlockHeight=%d\n",mtx.fOverwintered,mtx.nVersionGroupId,mtx.nVersion, max_tx_size,nextBlockHeight);fflush(stdout);
+
+    // If Sapling is not active, do not allow sending from or sending to Sapling addresses.
+    if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING))
+    {
+        if (fromSapling || containsSaplingOutput)
+        {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Sapling is not activated on the network");
+        }
+    }
+
+
+    //printf("z_sendmany_prepare_offline() 10 Prepare off-line: Transaction size check\n");fflush(stdout);
+    // As a sanity check, estimate and verify that the size of the transaction will be valid.
+    // Depending on the input notes, the actual tx size may turn out to be larger and perhaps invalid.
+    size_t txsize = 0;
+    for (int i = 0; i < zaddrRecipients.size(); i++)
+    {
+        auto address = std::get<0>(zaddrRecipients[i]);
+        auto res = DecodePaymentAddress(address);
+        bool toSapling = boost::get<libzcash::SaplingPaymentAddress>(&res) != nullptr;
+        if (toSapling)
+        {
+            mtx.vShieldedOutput.push_back(OutputDescription());
+        }
+        else
+        {
+            JSDescription jsdesc;
+            if (mtx.fOverwintered && (mtx.nVersion >= SAPLING_TX_VERSION)) {
+                jsdesc.proof = GrothProof();
+            }
+            mtx.vjoinsplit.push_back(jsdesc);
+        }
+    }
+    CTransaction tx(mtx);
+    txsize += GetSerializeSize(tx, SER_NETWORK, tx.nVersion);
+    if (txsize > max_tx_size) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Too many outputs, size of raw transaction would be larger than limit of %d bytes", max_tx_size ));
+    }
+
+
+    //printf("z_sendmany_prepare_offline() 11 check further inputs\n");fflush(stdout);
+    // Minimum confirmations
+    int nMinDepth = 1;
+    if (params.size() > 2)
+    {
+        nMinDepth = params[2].get_int();
+    }
+    if (nMinDepth < 0)
+    {
+        //printf("z_sendmany_prepare_offline() 11 Minimum confirmations can't be less than 0\n");fflush(stdout);
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Minimum number of confirmations cannot be less than 0");
+    }
+    //printf("z_sendmany_prepare_offline() 11 Minimum confirmations: %d\n",nMinDepth);fflush(stdout);
+
+    // Fee in Zatoshis, not currency format)
+    //printf("z_sendmany_prepare_offline() 12 Fee\n");fflush(stdout);
+    CAmount nFee        = ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE;
+    CAmount nDefaultFee = nFee;
+
+    if (params.size() > 3)
+    {
+        if (params[3].get_real() == 0.0) {
+            nFee = 0;
+        } else {
+            nFee = AmountFromValue( params[3] );
+        }
+
+        // Check that the user specified fee is not absurd.
+        // This allows amount=0 (and all amount < nDefaultFee) transactions to use the default network fee
+        // or anything less than nDefaultFee instead of being forced to use a custom fee and leak metadata
+        if (nTotalOut < nDefaultFee)
+        {
+            if (nFee > nDefaultFee)
+            {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Small transaction amount %s has fee %s that is greater than the default fee %s", FormatMoney(nTotalOut), FormatMoney(nFee), FormatMoney(nDefaultFee)));
+            }
+        } else {
+            // Check that the user specified fee is not absurd.
+            if (nFee > nTotalOut) {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Fee %s is greater than the sum of outputs %s and also greater than the default fee", FormatMoney(nFee), FormatMoney(nTotalOut)));
+            }
+        }
+    }
+    //printf("z_sendmany_prepare_offline() 12 Fee: %ld\n",nFee);fflush(stdout);
+
+    // Use input parameters as the optional context info to be returned by z_getoperationstatus and z_getoperationresult.
+    UniValue o(UniValue::VOBJ);
+    o.push_back(Pair("fromaddress", params[0]));
+    o.push_back(Pair("amounts", params[1]));
+    o.push_back(Pair("minconf", nMinDepth));
+    o.push_back(Pair("fee", std::stod(FormatMoney(nFee))));
+    UniValue contextInfo = o;
+
+    // Builder (used if Sapling addresses are involved)
+
+    //printf("z_sendmany_prepare_offline() All input fields prepared for offline transaction:\n");fflush(stdout);
+    float fFee = (float)nFee / 100000000.0;
+    //printf("z_sendmany_prepare_offline \"%s\" '[%s]' %d %f ",fromaddress.c_str(), sZaddrRecipients.c_str(), nMinDepth, fFee);
+    //printf("%u %d 0x%02X %u %d\n",nextBlockHeight, mtx.fOverwintered,mtx.nVersionGroupId,mtx.nVersion, max_tx_size);fflush(stdout);
+    //printf("\n\n");
+
+
+    //Proceed to create and sign the off-line transaction:
+    boost::optional<TransactionBuilder> builder;
+    if (noSproutAddrs)
+    {
+        builder = TransactionBuilder(Params().GetConsensus(), nextBlockHeight, pwalletMain);
+    }
+
+    // Contextual transaction we will build on
+    // (used if no Sapling addresses are involved)
+    CMutableTransaction contextualTx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nextBlockHeight);
+    bool isShielded = !fromTaddr || zaddrRecipients.size() > 0;
+    if (contextualTx.nVersion == 1 && isShielded)
+    {
+        contextualTx.nVersion = 2; // Tx format should support vjoinsplits
+    }
+
+
+    // Create operation and add to global queue
+    //printf("z_sendmany_prepare_offline() Create AsyncRPCOperation_sendmany()\n");
+    std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
+    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(builder, contextualTx, fromaddress, taddrRecipients, zaddrRecipients, nMinDepth, nFee, contextInfo) );
+    q->addOperation(operation);
+    AsyncRPCOperationId operationId = operation->getId();
+    //printf("z_sendmany_prepare_offline() operationId returned\n");
+
+    UniValue o2(UniValue::VOBJ);
+    o2.push_back(Pair("opid", operationId));
+    return o2;
 }
 
 
@@ -8716,6 +9797,8 @@ static const CRPCCommand commands[] =
     { "wallet",             "z_gettotalbalance",        &z_gettotalbalance,        false },
     { "wallet",             "z_mergetoaddress",         &z_mergetoaddress,         false },
     { "wallet",             "z_sendmany",               &z_sendmany,               false },
+    { "wallet",             "z_sendmany_prepare_offline", &z_sendmany_prepare_offline, false },
+    { "wallet",             "z_sign_offline",             &z_sign_offline,         false },
     { "wallet",             "z_shieldcoinbase",         &z_shieldcoinbase,         false },
     { "wallet",             "z_getoperationstatus",     &z_getoperationstatus,     true  },
     { "wallet",             "z_getoperationresult",     &z_getoperationresult,     true  },
@@ -8725,6 +9808,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "z_setprimaryspendingkey",  &z_setprimaryspendingkey,  true  },
     { "wallet",             "z_listaddresses",          &z_listaddresses,          true  },
     { "wallet",             "z_exportkey",              &z_exportkey,              true  },
+    { "wallet",             "z_exportseedphrase",       &z_exportseedphrase,       true  },
     { "wallet",             "z_importkey",              &z_importkey,              true  },
     { "wallet",             "z_exportviewingkey",       &z_exportviewingkey,       true  },
     { "wallet",             "z_importviewingkey",       &z_importviewingkey,       true  },

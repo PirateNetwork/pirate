@@ -7,11 +7,14 @@
 #include "policy/policy.h"
 #include "wallet/wallet.h"
 
-WalletModelZTransaction::WalletModelZTransaction(const QString &_fromaddress, const QList<SendCoinsRecipient> &_recipients, const CAmount& _fee) :
+WalletModelZTransaction::WalletModelZTransaction(const QString &_fromaddress, const QList<SendCoinsRecipient> &_recipients, const CAmount& _fee, const bool &_bIsMine) :
     fromaddress(_fromaddress),
     recipients(_recipients),
-    fee(_fee)
+    fee(_fee),
+    bIsMine(_bIsMine)
 {
+  //Initialise private variables:
+  sZSignOfflineTransaction="";
 }
 
 WalletModelZTransaction::~WalletModelZTransaction()
@@ -22,6 +25,12 @@ QString WalletModelZTransaction::getFromAddress() const
 {
     return fromaddress;
 }
+
+bool WalletModelZTransaction::getIsMine() const
+{
+    return bIsMine;
+}
+
 
 QList<SendCoinsRecipient> WalletModelZTransaction::getRecipients() const
 {
@@ -106,4 +115,14 @@ void WalletModelZTransaction::setOperationId(const AsyncRPCOperationId& newOpera
 AsyncRPCOperationId WalletModelZTransaction::getOperationId() const
 {
     return operationId;
+}
+
+void WalletModelZTransaction::setZSignOfflineTransaction(const string& sNewTransaction)
+{
+    sZSignOfflineTransaction = sNewTransaction;
+}
+
+string WalletModelZTransaction::getZSignOfflineTransaction() const
+{
+    return sZSignOfflineTransaction;
 }
