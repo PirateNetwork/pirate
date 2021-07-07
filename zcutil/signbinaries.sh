@@ -1,5 +1,5 @@
 #!/bin/bash
-export APP_VERSION="5.1.1-1"
+export APP_VERSION="5.2.0"
 
 # Accept the variables as command line arguments as well
 POSITIONAL=()
