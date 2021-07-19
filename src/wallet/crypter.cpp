@@ -520,7 +520,7 @@ bool CCryptoKeyStore::AddCryptedSaplingSpendingKey(
         }
 
         // if SaplingFullViewingKey is not in SaplingFullViewingKeyMap, add it
-        if (!AddSaplingFullViewingKey(extfvk)) {
+        if (!CBasicKeyStore::AddSaplingFullViewingKey(extfvk)) {
             return false;
         }
 

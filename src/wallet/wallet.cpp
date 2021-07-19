@@ -1920,42 +1920,25 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         mapMasterKeys[++nMasterKeyMaxID] = kMasterKey;
         if (fFileBacked)
         {
-            assert(!pwalletdbEncryption);
-            pwalletdbEncryption = new CWalletDB(strWalletFile);
-            if (!pwalletdbEncryption->TxnBegin()) {
+            if (!pwalletdbEncryption) {
                 delete pwalletdbEncryption;
                 pwalletdbEncryption = NULL;
-                return false;
             }
+            pwalletdbEncryption = new CWalletDB(strWalletFile);
             pwalletdbEncryption->WriteMasterKey(nMasterKeyMaxID, kMasterKey);
         }
 
-        if (!EncryptKeys(vMasterKey))
-        {
-            if (fFileBacked) {
-                pwalletdbEncryption->TxnAbort();
-                delete pwalletdbEncryption;
-            }
-            // We now probably have half of our keys encrypted in memory, and half not...
-            // die and let the user reload the unencrypted wallet.
-            assert(false);
+        if (!EncryptKeys(vMasterKey)) {
+            LogPrintf("Encrypt Keys failed!!!");
+            return false;
         }
 
         // Encryption was introduced in version 0.4.0
         SetMinVersion(FEATURE_WALLETCRYPT, pwalletdbEncryption, true);
 
-        if (fFileBacked)
-        {
-            if (!pwalletdbEncryption->TxnCommit()) {
-                delete pwalletdbEncryption;
-                // We now have keys encrypted in memory, but not on disk...
-                // die to avoid confusion and let the user reload the unencrypted wallet.
-                assert(false);
-            }
+        delete pwalletdbEncryption;
+        pwalletdbEncryption = NULL;
 
-            delete pwalletdbEncryption;
-            pwalletdbEncryption = NULL;
-        }
 
         Lock();
         Unlock(strWalletPassphrase);
