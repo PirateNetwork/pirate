@@ -2616,14 +2616,38 @@ UniValue encryptwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "encryptwallet <passphrase>\n"
             "Encrypts the wallet with <passphrase>.");
 
-    if (!pwalletMain->EncryptWallet(strWalletPass))
-        throw JSONRPCError(RPC_WALLET_ENCRYPTION_FAILED, "Error: Failed to encrypt the wallet.");
+    auto nTime = GetTime();
+    std::string walletFile = pwalletMain->strWalletFile;
+    std::string fileBackup = "unencrypted_walletbackup" + std::to_string(nTime) + ".dat";
+    boost::filesystem::path pathBackup = GetDataDir() / fileBackup;
+    boost::filesystem::path pathWallet = GetDataDir() / walletFile;
 
-    // BDB seems to have a bad habit of writing old data into
-    // slack space in .dat files; that is bad if the old data is
-    // unencrypted private keys. So:
-    StartShutdown();
-    return "wallet encrypted; Komodo server stopping, restart to run with encrypted wallet. The keypool has been flushed, you need to make a new backup.";
+    bitdb.Flush(false);
+    if (!BackupWallet(*pwalletMain, pathBackup.string()))
+        throw JSONRPCError(RPC_WALLET_ERROR, "Error: Wallet backup failed!");
+
+    if (!pwalletMain->EncryptWallet(strWalletPass)) {
+        bitdb.Flush(false);
+
+        // Flush log data to the dat file
+        bitdb.CloseDb(walletFile);
+        bitdb.CheckpointLSN(walletFile);
+        bitdb.mapFileUseCount.erase(walletFile);
+
+        //replace the file with the previous backup
+        boost::filesystem::remove(pathWallet);
+        copy_file(pathBackup, pathWallet, boost::filesystem::copy_option::overwrite_if_exists);
+        boost::filesystem::remove(pathBackup);
+
+        //shutdown
+        StartShutdown();
+        return "wallet encryption failed; Pirate server stopping, restart to restore unencrypted wallet.";
+    } else {
+        // remove unneeded backup
+        boost::filesystem::remove(pathBackup);
+    }
+
+    return "wallet encrypted; The keypool has been flushed, you need to make a new backup.";
 }
 
 UniValue lockunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)

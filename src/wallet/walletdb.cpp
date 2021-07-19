@@ -136,8 +136,7 @@ bool CWalletDB::WriteKey(const CPubKey& vchPubKey, const CPrivKey& vchPrivKey, c
 {
     nWalletDBUpdated++;
 
-    if (!Write(std::make_pair(std::string("keymeta"), vchPubKey),
-               keyMeta, false))
+    if (!Write(std::make_pair(std::string("keymeta"), vchPubKey), keyMeta, false))
         return false;
 
     // hash pubkey/privkey to accelerate wallet load
@@ -156,8 +155,7 @@ bool CWalletDB::WriteCryptedKey(const CPubKey& vchPubKey,
     const bool fEraseUnencryptedKey = true;
     nWalletDBUpdated++;
 
-    if (!Write(std::make_pair(std::string("keymeta"), vchPubKey),
-            keyMeta))
+    if (!Write(std::make_pair(std::string("keymeta"), vchPubKey), keyMeta))
         return false;
 
     if (!Write(std::make_pair(std::string("ckey"), vchPubKey), vchCryptedSecret, false))
@@ -199,14 +197,18 @@ bool CWalletDB::WriteCryptedSaplingZKey(
     nWalletDBUpdated++;
     auto ivk = extfvk.fvk.in_viewing_key();
 
-    if (!Write(std::make_pair(std::string("sapzkeymeta"), ivk), keyMeta))
+    if (!WriteTxn(std::make_pair(std::string("sapzkeymeta"), ivk), keyMeta, __FUNCTION__))
         return false;
 
-    if (!Write(std::make_pair(std::string("csapzkey"), ivk), std::make_pair(extfvk, vchCryptedSecret), false))
+    if (!WriteTxn(std::make_pair(std::string("csapzkey"), ivk), std::make_pair(extfvk, vchCryptedSecret), __FUNCTION__, false))
         return false;
 
     if (fEraseUnencryptedKey)
     {
+      //Update the key to something invalid before deleting it, so any if the record ends up in the slack space it contains an invalid key
+        if (!WriteTxn(std::make_pair(std::string("sapzkey"), ivk), 0, __FUNCTION__))
+            return false;
+
         Erase(std::make_pair(std::string("sapzkey"), ivk));
     }
     return true;
@@ -215,7 +217,7 @@ bool CWalletDB::WriteCryptedSaplingZKey(
 bool CWalletDB::WriteMasterKey(unsigned int nID, const CMasterKey& kMasterKey)
 {
     nWalletDBUpdated++;
-    return Write(std::make_pair(std::string("mkey"), nID), kMasterKey, true);
+    return WriteTxn(std::make_pair(std::string("mkey"), nID), kMasterKey, __FUNCTION__, true);
 }
 
 bool CWalletDB::WriteZKey(const libzcash::SproutPaymentAddress& addr, const libzcash::SproutSpendingKey& key, const CKeyMetadata &keyMeta)
@@ -1582,7 +1584,7 @@ bool CWalletDB::WriteHDSeed(const HDSeed& seed)
 bool CWalletDB::WriteCryptedHDSeed(const uint256& seedFp, const std::vector<unsigned char>& vchCryptedSecret)
 {
     nWalletDBUpdated++;
-    return Write(std::make_pair(std::string("chdseed"), seedFp), vchCryptedSecret);
+    return WriteTxn(std::make_pair(std::string("chdseed"), seedFp), vchCryptedSecret, __FUNCTION__);
 }
 
 bool CWalletDB::WriteHDChain(const CHDChain& chain)
