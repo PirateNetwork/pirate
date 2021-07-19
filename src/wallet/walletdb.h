@@ -169,6 +169,7 @@ public:
             }
 
             if (!txnWrite) {
+              TxnAbort();
               MilliSleep(500);
               retries++;
             }
