@@ -566,12 +566,19 @@ bool CWallet::AddCryptedSaplingSpendingKey(const libzcash::SaplingExtendedFullVi
         return true;
     {
         LOCK(cs_wallet);
+
+        auto addr = EncodePaymentAddress(extfvk.DefaultAddress());
+        uint256 sha256addr;
+        CSHA256().Write((const unsigned char *)addr.c_str(), addr.length()).Finalize(sha256addr.begin());
+
         if (pwalletdbEncryption) {
             return pwalletdbEncryption->WriteCryptedSaplingZKey(extfvk,
+                                                         sha256addr,
                                                          vchCryptedSecret,
                                                          mapSaplingZKeyMetadata[extfvk.fvk.in_viewing_key()]);
         } else {
             return CWalletDB(strWalletFile).WriteCryptedSaplingZKey(extfvk,
+                                                         sha256addr,
                                                          vchCryptedSecret,
                                                          mapSaplingZKeyMetadata[extfvk.fvk.in_viewing_key()]);
         }
