@@ -662,15 +662,6 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             catch (...) {}
 
         }
-        else if (strType == "arczcop")
-        {
-            // uint256 nullifier;
-            // ssKey >> nullifier;
-            // JSOutPoint op;
-            // ssValue >> op;
-            //
-            // pwallet->AddToArcJSOutPoints(nullifier, op);
-        }
         else if (strType == "arczsop")
         {
             uint256 nullifier;
@@ -709,38 +700,6 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             // Watch-only addresses have no birthday information for now,
             // so set the wallet birthday to the beginning of time.
             pwallet->nTimeFirstKey = 1;
-        }
-        else if (strType == "vkey")
-        {
-            // libzcash::SproutViewingKey vk;
-            // ssKey >> vk;
-            // char fYes;
-            // ssValue >> fYes;
-            // if (fYes == '1') {
-            //     pwallet->LoadSproutViewingKey(vk);
-            // }
-            //
-            // // Viewing keys have no birthday information for now,
-            // // so set the wallet birthday to the beginning of time.
-            // pwallet->nTimeFirstKey = 1;
-        }
-        else if (strType == "zkey")
-        {
-            // libzcash::SproutPaymentAddress addr;
-            // ssKey >> addr;
-            // libzcash::SproutSpendingKey key;
-            // ssValue >> key;
-            //
-            // if (!pwallet->LoadZKey(key))
-            // {
-            //     strErr = "Error reading wallet database: LoadZKey failed";
-            //     return false;
-            // }
-            //
-            // pwallet->mapZAddressBook[addr].name = "z-sprout";
-            // pwallet->mapZAddressBook[addr].purpose = "unknown";
-            //
-            // wss.nZKeys++;
         }
         else if (strType == "sapzkey")
         {
@@ -859,29 +818,6 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             }
             wss.fIsEncrypted = true;
         }
-        else if (strType == "czkey")
-        {
-            // libzcash::SproutPaymentAddress addr;
-            // ssKey >> addr;
-            // // Deserialization of a pair is just one item after another
-            // uint256 rkValue;
-            // ssValue >> rkValue;
-            // libzcash::ReceivingKey rk(rkValue);
-            // vector<unsigned char> vchCryptedSecret;
-            // ssValue >> vchCryptedSecret;
-            // wss.nCKeys++;
-            //
-            // if (!pwallet->LoadCryptedZKey(addr, rk, vchCryptedSecret))
-            // {
-            //     strErr = "Error reading wallet database: LoadCryptedZKey failed";
-            //     return false;
-            // }
-            //
-            // pwallet->mapZAddressBook[addr].name = "z-sprout";
-            // pwallet->mapZAddressBook[addr].purpose = "unknown";
-            //
-            // wss.fIsEncrypted = true;
-        }
         else if (strType == "csapzkey")
         {
             libzcash::SaplingIncomingViewingKey ivk;
@@ -917,21 +853,6 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->nTimeFirstKey ||
                 (keyMeta.nCreateTime < pwallet->nTimeFirstKey))
                 pwallet->nTimeFirstKey = keyMeta.nCreateTime;
-        }
-        else if (strType == "zkeymeta")
-        {
-            // libzcash::SproutPaymentAddress addr;
-            // ssKey >> addr;
-            // CKeyMetadata keyMeta;
-            // ssValue >> keyMeta;
-            // wss.nZKeyMeta++;
-            //
-            // pwallet->LoadZKeyMetadata(addr, keyMeta);
-            //
-            // pwallet->mapZAddressBook[addr].name = "z-sprout";
-            // pwallet->mapZAddressBook[addr].purpose = "unknown";
-
-            // ignore earliest key creation time as taddr will exist before any zaddr
         }
         else if (strType == "sapzkeymeta")
         {
