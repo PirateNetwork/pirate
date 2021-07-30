@@ -322,6 +322,12 @@ bool CWalletDB::EraseWatchOnly(const CScript &dest)
     return Erase(std::make_pair(std::string("watchs"), *(const CScriptBase*)(&dest)));
 }
 
+bool CWalletDB::WriteIsCrypted(const bool &crypted)
+{
+    nWalletDBUpdated++;
+    return Write(std::string("iscrypted"), crypted);
+}
+
 bool CWalletDB::WriteWalletBirthday(const int& nHeight)
 {
     nWalletDBUpdated++;
@@ -838,21 +844,6 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 return false;
             }
         }
-        else if (strType == "mkey")
-        {
-            unsigned int nID;
-            ssKey >> nID;
-            CMasterKey kMasterKey;
-            ssValue >> kMasterKey;
-            if(pwallet->mapMasterKeys.count(nID) != 0)
-            {
-                strErr = strprintf("Error reading wallet database: duplicate CMasterKey id %u", nID);
-                return false;
-            }
-            pwallet->mapMasterKeys[nID] = kMasterKey;
-            if (pwallet->nMasterKeyMaxID < nID)
-                pwallet->nMasterKeyMaxID = nID;
-        }
         else if (strType == "ckey")
         {
             vector<unsigned char> vchPubKey;
@@ -1081,19 +1072,6 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 return false;
             }
         }
-        else if (strType == "chdseed")
-        {
-            uint256 seedFp;
-            vector<unsigned char> vchCryptedSecret;
-            ssKey >> seedFp;
-            ssValue >> vchCryptedSecret;
-            if (!pwallet->LoadCryptedHDSeed(seedFp, vchCryptedSecret))
-            {
-                strErr = "Error reading wallet database: LoadCryptedHDSeed failed";
-                return false;
-            }
-            wss.fIsEncrypted = true;
-        }
         else if (strType == "hdchain")
         {
             CHDChain chain;
@@ -1116,6 +1094,100 @@ static bool IsKeyType(string strType)
             strType == "vkey" ||
             strType == "mkey" || strType == "ckey");
 }
+
+bool ReadCryptedSeedValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
+             CWalletScanState &wss, string& strType, string& strErr)
+{
+    try {
+        // Unserialize
+        // Taking advantage of the fact that pair serialization
+        // is just the two items serialized one after the other
+        ssKey >> strType;
+        if (strType == "chdseed")
+        {
+            uint256 seedFp;
+            vector<unsigned char> vchCryptedSecret;
+            ssKey >> seedFp;
+            ssValue >> vchCryptedSecret;
+            if (!pwallet->LoadCryptedHDSeed(seedFp, vchCryptedSecret))
+            {
+                strErr = "Error reading wallet database: LoadCryptedHDSeed failed";
+                return false;
+            }
+            wss.fIsEncrypted = true;
+        }
+        else if (strType == "mkey")
+        {
+            unsigned int nID;
+            ssKey >> nID;
+            CMasterKey kMasterKey;
+            ssValue >> kMasterKey;
+            if(pwallet->mapMasterKeys.count(nID) != 0)
+            {
+                strErr = strprintf("Error reading wallet database: duplicate CMasterKey id %u", nID);
+                return false;
+            }
+            pwallet->mapMasterKeys[nID] = kMasterKey;
+            if (pwallet->nMasterKeyMaxID < nID)
+                pwallet->nMasterKeyMaxID = nID;
+        }
+    } catch (...)
+    {
+        return false;
+    }
+    return true;
+}
+
+DBErrors CWalletDB::InitalizeCryptedLoad(CWallet* pwallet) {
+    LOCK(pwallet->cs_wallet);
+    bool isCrypted = false;
+
+    if (Read((string)"iscrypted", isCrypted)) {
+        return DB_LOAD_CRYPTED;
+    }
+    return DB_LOAD_OK;
+}
+
+DBErrors CWalletDB::LoadCryptedSeedFromDB(CWallet* pwallet) {
+    LOCK(pwallet->cs_wallet);
+    CWalletScanState wss;
+
+    // Get cursor
+    Dbc* pcursor = GetCursor();
+    if (!pcursor)
+    {
+        LogPrintf("Error getting wallet database cursor\n");
+        return DB_CORRUPT;
+    }
+
+
+    while (true)
+    {
+        // Read next record
+        CDataStream ssKey(SER_DISK, CLIENT_VERSION);
+        CDataStream ssValue(SER_DISK, CLIENT_VERSION);
+        int ret = ReadAtCursor(pcursor, ssKey, ssValue);
+        if (ret == DB_NOTFOUND)
+            break;
+        else if (ret != 0)
+        {
+            LogPrintf("Error reading next record from wallet database\n");
+            return DB_CORRUPT;
+        }
+
+
+        string strType, strErr;
+        if (!ReadCryptedSeedValue(pwallet, ssKey, ssValue, wss, strType, strErr))
+        {
+            LogPrintf("DB_Corrupt reading crypted seed\n");
+            return DB_CORRUPT;
+        }
+
+    }
+    pcursor->close();
+    return DB_LOAD_OK;
+}
+
 
 DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
 {

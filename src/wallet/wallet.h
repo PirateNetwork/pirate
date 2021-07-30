@@ -1380,6 +1380,8 @@ public:
     bool IsNoteSproutChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet, const libzcash::PaymentAddress & address, const JSOutPoint & entry);
     bool IsNoteSaplingChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet, const libzcash::PaymentAddress & address, const SaplingOutPoint & entry);
 
+    DBErrors InitalizeCryptedLoad();
+    DBErrors LoadCryptedSeedFromDB();
     DBErrors LoadWallet(bool& fFirstRunRet);
     DBErrors ZapWalletTx(std::vector<CWalletTx>& vWtx);
 
@@ -1408,6 +1410,9 @@ public:
     }
 
     bool SetDefaultKey(const CPubKey &vchPubKey);
+
+    //Write crypted status to the wallet
+    bool SetWalletCrypted(CWalletDB* pwalletdb);
 
     //! signify that a particular wallet feature is now used. this may change nWalletVersion and nWalletMaxVersion if those are lower
     bool SetMinVersion(enum WalletFeature, CWalletDB* pwalletdbIn = NULL, bool fExplicit = false);

@@ -53,6 +53,7 @@ bool fBuilingWitnessCache = false;
 bool fInitWitnessesBuilt = false;
 static bool fRPCRunning = false;
 static bool fRPCInWarmup = true;
+static bool fRPCNeedUnlocked = false;
 static std::string rpcWarmupStatus("RPC server started");
 static CCriticalSection cs_rpcWarmup;
 /* Timer-creating functions */
@@ -659,6 +660,7 @@ static const CRPCCommand vRPCCommands[] =
     { "wallet",             "settxfee",               &settxfee,               true  },
     { "wallet",             "signmessage",            &signmessage,            true  },
     { "wallet",             "walletlock",             &walletlock,             true  },
+    { "wallet",             "openwallet",             &openwallet,             true  },
     { "wallet",             "walletpassphrasechange", &walletpassphrasechange, true  },
     { "wallet",             "walletpassphrase",       &walletpassphrase,       true  },
     { "wallet",             "zcbenchmark",            &zc_benchmark,           true  },
@@ -772,6 +774,12 @@ void StopRPC()
 bool IsRPCRunning()
 {
     return fRPCRunning;
+}
+
+void SetRPCNeedsUnlocked(const bool& newStatus)
+{
+    LOCK(cs_rpcWarmup);
+    fRPCNeedUnlocked = newStatus;
 }
 
 void SetRPCWarmupStatus(const std::string& newStatus)
@@ -907,26 +915,35 @@ UniValue get_async_result(std::string sOpID)
 
 UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params) const
 {
-    // Return immediately if in warmup
-    {
-        LOCK(cs_rpcWarmup);
-        if (fRPCInWarmup)
+    const CRPCCommand *pcmd = tableRPC[strMethod];
+    if (fRPCNeedUnlocked) {
+
+        if (pcmd->name != "openwallet")
             throw JSONRPCError(RPC_IN_WARMUP, rpcWarmupStatus);
+
+    } else {
+          // Return immediately if in warmup
+          {
+              LOCK(cs_rpcWarmup);
+              if (fRPCInWarmup)
+                  throw JSONRPCError(RPC_IN_WARMUP, rpcWarmupStatus);
+          }
+
+          // Find method
+          if (!pcmd)
+              throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
+
+          if (!fInitWitnessesBuilt && pcmd->name == "z_sendmany")
+              throw JSONRPCError(RPC_DISABLED_BEFORE_WITNESSES, "RPC Command disabled until witnesses are built.");
+
+          if (!fInitWitnessesBuilt && pcmd->name == "z_sendmany_prepare_offline")
+              throw JSONRPCError(RPC_DISABLED_BEFORE_WITNESSES, "RPC Command disabled until witnesses are built.");
+
+          if (fBuilingWitnessCache)
+              throw JSONRPCError(RPC_BUILDING_WITNESS_CACHE, "RPC Interface disabled while builing witness cache. Check the debug.log for progress.");
+
     }
 
-    // Find method
-    const CRPCCommand *pcmd = tableRPC[strMethod];
-    if (!pcmd)
-        throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
-
-    if (!fInitWitnessesBuilt && pcmd->name == "z_sendmany")
-        throw JSONRPCError(RPC_DISABLED_BEFORE_WITNESSES, "RPC Command disabled until witnesses are built.");
-    
-    if (!fInitWitnessesBuilt && pcmd->name == "z_sendmany_prepare_offline")
-        throw JSONRPCError(RPC_DISABLED_BEFORE_WITNESSES, "RPC Command disabled until witnesses are built.");
-    
-    if (fBuilingWitnessCache)
-        throw JSONRPCError(RPC_BUILDING_WITNESS_CACHE, "RPC Interface disabled while builing witness cache. Check the debug.log for progress.");
 
     g_rpcSignals.PreCommand(*pcmd);
 

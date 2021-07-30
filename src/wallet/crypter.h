@@ -170,6 +170,10 @@ public:
     {
     }
 
+    void SetDBCrypted() {
+      fUseCrypto = true;
+    }
+
     bool IsCrypted() const
     {
         return fUseCrypto;

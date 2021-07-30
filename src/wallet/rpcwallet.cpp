@@ -2408,6 +2408,50 @@ static void LockWallet(CWallet* pWallet)
     pWallet->Lock();
 }
 
+UniValue openwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (pwalletMain->IsCrypted() && (fHelp || params.size() != 1))
+        throw runtime_error(
+            "openwallet \"passphrase\"\n"
+            "\nStores the wallet decryption key in memory to load the wallet.\n"
+            "This is needed prior to the initial loading of the wallet" + strprintf("%s",komodo_chainname()) + "\n"
+            "\nArguments:\n"
+            "1. \"passphrase\"     (string, required) The wallet passphrase\n"
+            "\nNote:\n"
+            "\nExamples:\n"
+            + HelpExampleCli("openwallet", "\"my pass phrase\"")
+            + HelpExampleRpc("openwallet", "\"my pass phrase\"")
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    if (fHelp)
+        return true;
+    if (!pwalletMain->IsCrypted())
+        throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletpassphrase was called.");
+
+    // Note that the walletpassphrase is stored in params[0] which is not mlock()ed
+    SecureString strWalletPass;
+    strWalletPass.reserve(100);
+    // TODO: get rid of this .c_str() by implementing SecureString::operator=(std::string)
+    // Alternately, find a way to make params[0] mlock()'d to begin with.
+    strWalletPass = params[0].get_str().c_str();
+
+    if (strWalletPass.length() > 0)
+    {
+        if (!pwalletMain->Unlock(strWalletPass))
+            throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
+    }
+    else
+        throw runtime_error(
+            "openwallet <passphrase>\n");
+
+    return NullUniValue;
+}
+
 UniValue walletpassphrase(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (!EnsureWalletIsAvailable(fHelp))

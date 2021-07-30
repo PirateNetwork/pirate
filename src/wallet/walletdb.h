@@ -50,6 +50,7 @@ class JSOutPoint;
 enum DBErrors
 {
     DB_LOAD_OK,
+    DB_LOAD_CRYPTED,
     DB_CORRUPT,
     DB_NONCRITICAL_ERROR,
     DB_TOO_NEW,
@@ -209,6 +210,9 @@ public:
     bool WriteWatchOnly(const CScript &script);
     bool EraseWatchOnly(const CScript &script);
 
+    //Write crypted status of the wallet
+    bool WriteIsCrypted(const bool &crypted);
+
     //Height of first known transaction
     bool WriteWalletBirthday(const int& nHeight);
     bool ReadWalletBirthday(int& nHeight);
@@ -244,6 +248,8 @@ public:
     void ListAccountCreditDebit(const std::string& strAccount, std::list<CAccountingEntry>& acentries);
 
     DBErrors ReorderTransactions(CWallet* pwallet);
+    DBErrors InitalizeCryptedLoad(CWallet* pwallet);
+    DBErrors LoadCryptedSeedFromDB(CWallet* pwallet); 
     DBErrors LoadWallet(CWallet* pwallet);
     DBErrors FindWalletTxToZap(CWallet* pwallet, std::vector<uint256>& vTxHash, std::vector<CWalletTx>& vWtx, std::vector<uint256>& vArcHash, std::vector<uint256>& vArcSproutNullifier, std::vector<uint256>& vArcSaplingNullifier);
     DBErrors ZapWalletTx(CWallet* pwallet, std::vector<CWalletTx>& vWtx);

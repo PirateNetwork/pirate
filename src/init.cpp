@@ -1943,6 +1943,29 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         nStart = GetTimeMillis();
         bool fFirstRun = true;
         pwalletMain = new CWallet(strWalletFile);
+
+        //Check for crypted flag and wait for the wallet password if crypted
+        DBErrors nInitalizeCryptedLoad = pwalletMain->InitalizeCryptedLoad();
+        if (nInitalizeCryptedLoad == DB_LOAD_CRYPTED) {
+            pwalletMain->SetDBCrypted();
+            SetRPCNeedsUnlocked(true);
+            DBErrors nLoadCryptedSeed = pwalletMain->LoadCryptedSeedFromDB();
+            if (nLoadCryptedSeed != DB_LOAD_OK) {
+                uiInterface.InitMessage(_("Error loading wallet.dat: Wallet crypted seed corrupted"));
+                return false;
+            }
+        }
+        while (pwalletMain->IsLocked()) {
+            //wait for response from GUI
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            if (fRequestShutdown)
+            {
+                LogPrintf("Shutdown requested. Exiting.\n");
+                return false;
+            }
+        }
+        SetRPCNeedsUnlocked(false);
+
         DBErrors nLoadWalletRet = pwalletMain->LoadWallet(fFirstRun);
         if (nLoadWalletRet != DB_LOAD_OK)
         {
