@@ -71,7 +71,8 @@ bool IsRPCRunning();
 /** Get the async queue*/
 std::shared_ptr<AsyncRPCQueue> getAsyncRPCQueue();
 
-
+//Let the wallet run the openwallet RPC to set the passphrase to load encrypted data
+void SetRPCNeedsUnlocked(const bool& newStatus);
 /**
  * Set the RPC warmup status.  When this is done, all RPC calls will error out
  * immediately with RPC_IN_WARMUP.
@@ -402,6 +403,7 @@ extern UniValue listsinceblock(const UniValue& params, bool fHelp, const CPubKey
 extern UniValue gettransaction(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue backupwallet(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue keypoolrefill(const UniValue& params, bool fHelp, const CPubKey& mypk);
+extern UniValue openwallet(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue walletpassphrase(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue walletpassphrasechange(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue walletlock(const UniValue& params, bool fHelp, const CPubKey& mypk);
