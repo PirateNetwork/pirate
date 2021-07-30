@@ -1259,8 +1259,7 @@ public:
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path);
     //! Adds an encrypted spending key to the store, without saving it to disk (used by LoadWallet)
-    bool LoadCryptedSaplingZKey(const libzcash::SaplingExtendedFullViewingKey &extfvk,
-                                const std::vector<unsigned char> &vchCryptedSecret);
+    bool LoadCryptedSaplingZKey(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret);
 
     /**
      * Increment the next transaction order id

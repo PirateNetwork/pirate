@@ -249,7 +249,7 @@ public:
 
     DBErrors ReorderTransactions(CWallet* pwallet);
     DBErrors InitalizeCryptedLoad(CWallet* pwallet);
-    DBErrors LoadCryptedSeedFromDB(CWallet* pwallet); 
+    DBErrors LoadCryptedSeedFromDB(CWallet* pwallet);
     DBErrors LoadWallet(CWallet* pwallet);
     DBErrors FindWalletTxToZap(CWallet* pwallet, std::vector<uint256>& vTxHash, std::vector<CWalletTx>& vWtx, std::vector<uint256>& vArcHash, std::vector<uint256>& vArcSproutNullifier, std::vector<uint256>& vArcSaplingNullifier);
     DBErrors ZapWalletTx(CWallet* pwallet, std::vector<CWalletTx>& vWtx);
@@ -287,7 +287,6 @@ public:
                           const std::vector<unsigned char>& vchCryptedSecret,
                           const CKeyMetadata &keyMeta);
     bool WriteCryptedSaplingZKey(const libzcash::SaplingExtendedFullViewingKey &extfvk,
-                          const uint256 &sha256addr,
                           const std::vector<unsigned char>& vchCryptedSecret,
                           const CKeyMetadata &keyMeta);
 

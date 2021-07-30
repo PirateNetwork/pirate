@@ -567,18 +567,12 @@ bool CWallet::AddCryptedSaplingSpendingKey(const libzcash::SaplingExtendedFullVi
     {
         LOCK(cs_wallet);
 
-        auto addr = EncodePaymentAddress(extfvk.DefaultAddress());
-        uint256 sha256addr;
-        CSHA256().Write((const unsigned char *)addr.c_str(), addr.length()).Finalize(sha256addr.begin());
-
         if (pwalletdbEncryption) {
             return pwalletdbEncryption->WriteCryptedSaplingZKey(extfvk,
-                                                         sha256addr,
                                                          vchCryptedSecret,
                                                          mapSaplingZKeyMetadata[extfvk.fvk.in_viewing_key()]);
         } else {
             return CWalletDB(strWalletFile).WriteCryptedSaplingZKey(extfvk,
-                                                         sha256addr,
                                                          vchCryptedSecret,
                                                          mapSaplingZKeyMetadata[extfvk.fvk.in_viewing_key()]);
         }
@@ -616,11 +610,9 @@ bool CWallet::LoadCryptedZKey(const libzcash::SproutPaymentAddress &addr, const 
     return CCryptoKeyStore::AddCryptedSproutSpendingKey(addr, rk, vchCryptedSecret);
 }
 
-bool CWallet::LoadCryptedSaplingZKey(
-    const libzcash::SaplingExtendedFullViewingKey &extfvk,
-    const std::vector<unsigned char> &vchCryptedSecret)
+bool CWallet::LoadCryptedSaplingZKey(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret)
 {
-     return CCryptoKeyStore::AddCryptedSaplingSpendingKey(extfvk, vchCryptedSecret);
+     return CCryptoKeyStore::LoadCryptedSaplingSpendingKey(extfvkFinger, vchCryptedSecret);
 }
 
 bool CWallet::LoadSaplingZKeyMetadata(const libzcash::SaplingIncomingViewingKey &ivk, const CKeyMetadata &meta)

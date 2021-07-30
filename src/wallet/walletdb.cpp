@@ -190,18 +190,18 @@ bool CWalletDB::WriteCryptedZKey(const libzcash::SproutPaymentAddress & addr,
 
 bool CWalletDB::WriteCryptedSaplingZKey(
     const libzcash::SaplingExtendedFullViewingKey &extfvk,
-    const uint256 &sha256addr,
     const std::vector<unsigned char>& vchCryptedSecret,
     const CKeyMetadata &keyMeta)
 {
     const bool fEraseUnencryptedKey = true;
     nWalletDBUpdated++;
     auto ivk = extfvk.fvk.in_viewing_key();
+    uint256 extfvkFinger = extfvk.fvk.GetFingerprint();
 
-    if (!WriteTxn(std::make_pair(std::string("sapzkeymeta"), sha256addr), keyMeta, __FUNCTION__))
+    if (!WriteTxn(std::make_pair(std::string("sapzkeymeta"), extfvkFinger), keyMeta, __FUNCTION__))
         return false;
 
-    if (!WriteTxn(std::make_pair(std::string("csapzkey"), sha256addr), vchCryptedSecret, __FUNCTION__, false))
+    if (!WriteTxn(std::make_pair(std::string("csapzkey"), extfvkFinger), vchCryptedSecret, __FUNCTION__, false))
         return false;
 
     if (fEraseUnencryptedKey)
@@ -820,22 +820,20 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         }
         else if (strType == "csapzkey")
         {
-            libzcash::SaplingIncomingViewingKey ivk;
-            ssKey >> ivk;
-            libzcash::SaplingExtendedFullViewingKey extfvk;
-            ssValue >> extfvk;
+            uint256 extfvkFinger;
+            ssKey >> extfvkFinger;
             vector<unsigned char> vchCryptedSecret;
             ssValue >> vchCryptedSecret;
             wss.nCZKeys++;
 
-            if (!pwallet->LoadCryptedSaplingZKey(extfvk, vchCryptedSecret))
+            if (!pwallet->LoadCryptedSaplingZKey(extfvkFinger, vchCryptedSecret))
             {
                 strErr = "Error reading wallet database: LoadCryptedSaplingZKey failed";
                 return false;
             }
 
-            pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
-            pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
+            // pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
+            // pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
 
             wss.fIsEncrypted = true;
         }
