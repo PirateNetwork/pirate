@@ -379,11 +379,11 @@ bool CWallet::AddSaplingIncomingViewingKey(
     return true;
 }
 
-bool CWallet::AddSaplingFullViewingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk)
+bool CWallet::AddSaplingExtendedFullViewingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk)
 {
     AssertLockHeld(cs_wallet);
 
-    if (!CCryptoKeyStore::AddSaplingFullViewingKey(extfvk)) {
+    if (!CCryptoKeyStore::AddSaplingExtendedFullViewingKey(extfvk)) {
         return false;
     }
 
@@ -391,7 +391,9 @@ bool CWallet::AddSaplingFullViewingKey(const libzcash::SaplingExtendedFullViewin
         return true;
     }
 
-    return CWalletDB(strWalletFile).WriteSaplingExtendedFullViewingKey(extfvk);
+    if (!IsCrypted()) {
+        return CWalletDB(strWalletFile).WriteSaplingExtendedFullViewingKey(extfvk);
+    }
 }
 
 bool CWallet::AddSaplingDiversifiedAddess(
@@ -580,6 +582,25 @@ bool CWallet::AddCryptedSaplingSpendingKey(const libzcash::SaplingExtendedFullVi
     return false;
 }
 
+bool CWallet::AddCryptedSaplingExtendedFullViewingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk,
+                                           const std::vector<unsigned char> &vchCryptedSecret)
+{
+    if (!CCryptoKeyStore::AddCryptedSaplingExtendedFullViewingKey(extfvk, vchCryptedSecret))
+        return false;
+    if (!fFileBacked)
+        return true;
+    {
+        LOCK(cs_wallet);
+
+        if (pwalletdbEncryption) {
+            return pwalletdbEncryption->WriteCryptedSaplingExtendedFullViewingKey(extfvk, vchCryptedSecret);
+        } else {
+            return CWalletDB(strWalletFile).WriteCryptedSaplingExtendedFullViewingKey(extfvk, vchCryptedSecret);
+        }
+    }
+    return false;
+}
+
 bool CWallet::LoadKeyMetadata(const CPubKey &pubkey, const CKeyMetadata &meta)
 {
     AssertLockHeld(cs_wallet); // mapKeyMetadata
@@ -610,9 +631,14 @@ bool CWallet::LoadCryptedZKey(const libzcash::SproutPaymentAddress &addr, const 
     return CCryptoKeyStore::AddCryptedSproutSpendingKey(addr, rk, vchCryptedSecret);
 }
 
-bool CWallet::LoadCryptedSaplingZKey(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret)
+bool CWallet::LoadCryptedSaplingZKey(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret, libzcash::SaplingExtendedFullViewingKey &extfvk)
 {
-     return CCryptoKeyStore::LoadCryptedSaplingSpendingKey(extfvkFinger, vchCryptedSecret);
+     return CCryptoKeyStore::LoadCryptedSaplingSpendingKey(extfvkFinger, vchCryptedSecret, extfvk);
+}
+
+bool CWallet::LoadCryptedSaplingExtendedFullViewingKey(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret, libzcash::SaplingExtendedFullViewingKey &extfvk)
+{
+     return CCryptoKeyStore::LoadCryptedSaplingExtendedFullViewingKey(extfvkFinger, vchCryptedSecret, extfvk);
 }
 
 bool CWallet::LoadSaplingZKeyMetadata(const libzcash::SaplingIncomingViewingKey &ivk, const CKeyMetadata &meta)
@@ -636,7 +662,7 @@ bool CWallet::LoadSaplingZKey(const libzcash::SaplingExtendedSpendingKey &key)
 
 bool CWallet::LoadSaplingFullViewingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk)
 {
-    return CCryptoKeyStore::AddSaplingFullViewingKey(extfvk);
+    return CCryptoKeyStore::AddSaplingExtendedFullViewingKey(extfvk);
 }
 
 bool CWallet::LoadSaplingPaymentAddress(
@@ -6841,7 +6867,7 @@ KeyAddResult AddViewingKeyToWallet::operator()(const libzcash::SaplingExtendedFu
         return SpendingKeyExists;
     } else if (m_wallet->HaveSaplingFullViewingKey(extfvk.fvk.in_viewing_key())) {
         return KeyAlreadyExists;
-    } else if (m_wallet->AddSaplingFullViewingKey(extfvk)) {
+    } else if (m_wallet->AddSaplingExtendedFullViewingKey(extfvk)) {
         m_wallet->LoadSaplingWatchOnly(extfvk);
         return KeyAdded;
     } else {
