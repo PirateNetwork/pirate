@@ -215,6 +215,24 @@ bool CWalletDB::WriteCryptedSaplingZKey(
     return true;
 }
 
+bool CWalletDB::WriteCryptedSaplingExtendedFullViewingKey(
+    const libzcash::SaplingExtendedFullViewingKey &extfvk,
+    const std::vector<unsigned char>& vchCryptedSecret)
+{
+    const bool fEraseUnencryptedKey = true;
+    nWalletDBUpdated++;
+    uint256 extfvkFinger = extfvk.fvk.GetFingerprint();
+
+    if (!WriteTxn(std::make_pair(std::string("csapextfvk"), extfvkFinger), vchCryptedSecret, __FUNCTION__))
+      return false;
+
+    if (fEraseUnencryptedKey)
+    {
+        Erase(std::make_pair(std::string("sapextfvk"), extfvk));
+    }
+    return true;
+}
+
 bool CWalletDB::WriteMasterKey(unsigned int nID, const CMasterKey& kMasterKey)
 {
     nWalletDBUpdated++;
@@ -587,6 +605,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         // Taking advantage of the fact that pair serialization
         // is just the two items serialized one after the other
         ssKey >> strType;
+        LogPrintf("Loading %s wallet key\n", strType);
         if (strType == "name")
         {
             string strAddress;
@@ -824,18 +843,40 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             ssKey >> extfvkFinger;
             vector<unsigned char> vchCryptedSecret;
             ssValue >> vchCryptedSecret;
+            libzcash::SaplingExtendedFullViewingKey extfvk;
             wss.nCZKeys++;
 
-            if (!pwallet->LoadCryptedSaplingZKey(extfvkFinger, vchCryptedSecret))
+            if (!pwallet->LoadCryptedSaplingZKey(extfvkFinger, vchCryptedSecret, extfvk))
             {
                 strErr = "Error reading wallet database: LoadCryptedSaplingZKey failed";
                 return false;
             }
 
-            // pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
-            // pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
+            pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
+            pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
 
             wss.fIsEncrypted = true;
+        }
+        else if (strType == "csapextfvk")
+        {
+            uint256 extfvkFinger;
+            ssKey >> extfvkFinger;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+            libzcash::SaplingExtendedFullViewingKey extfvk;
+            if (!pwallet->LoadCryptedSaplingExtendedFullViewingKey(extfvkFinger, vchCryptedSecret, extfvk))
+            {
+                strErr = "Error reading wallet database: LoadCryptedSaplingExtendedFullViewingKey failed";
+                return false;
+            }
+
+            pwallet->LoadSaplingWatchOnly(extfvk);
+            pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
+            pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
+
+            // Viewing keys have no birthday information for now,
+            // so set the wallet birthday to the beginning of time.
+            pwallet->nTimeFirstKey = 1;
         }
         else if (strType == "keymeta")
         {

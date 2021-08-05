@@ -93,7 +93,7 @@ public:
     virtual bool GetSaplingSpendingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk, libzcash::SaplingExtendedSpendingKey& skOut) const =0;
 
     //! Support for Sapling full viewing keys
-    virtual bool AddSaplingFullViewingKey(
+    virtual bool AddSaplingExtendedFullViewingKey(
         const libzcash::SaplingExtendedFullViewingKey &extfvk) =0;
     virtual bool HaveSaplingFullViewingKey(const libzcash::SaplingIncomingViewingKey &ivk) const =0;
     virtual bool GetSaplingFullViewingKey(
@@ -323,7 +323,7 @@ public:
         return false;
     }
 
-    virtual bool AddSaplingFullViewingKey(
+    virtual bool AddSaplingExtendedFullViewingKey(
         const libzcash::SaplingExtendedFullViewingKey &extfvk);
     virtual bool HaveSaplingFullViewingKey(const libzcash::SaplingIncomingViewingKey &ivk) const;
     virtual bool GetSaplingFullViewingKey(

@@ -1225,7 +1225,8 @@ public:
     bool AddSaplingZKey(
         const libzcash::SaplingExtendedSpendingKey &key,
         const libzcash::SaplingPaymentAddress &defaultAddr);
-      bool AddSaplingFullViewingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk);
+    bool AddSaplingExtendedFullViewingKey(
+        const libzcash::SaplingExtendedFullViewingKey &extfvk);
     bool AddSaplingIncomingViewingKey(
         const libzcash::SaplingIncomingViewingKey &ivk,
         const libzcash::SaplingPaymentAddress &addr);
@@ -1237,6 +1238,9 @@ public:
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path);
     bool AddCryptedSaplingSpendingKey(
+        const libzcash::SaplingExtendedFullViewingKey &extfvk,
+        const std::vector<unsigned char> &vchCryptedSecret);
+    bool AddCryptedSaplingExtendedFullViewingKey(
         const libzcash::SaplingExtendedFullViewingKey &extfvk,
         const std::vector<unsigned char> &vchCryptedSecret);
     //! Adds spending key to the store, without saving it to disk (used by LoadWallet)
@@ -1259,8 +1263,14 @@ public:
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path);
     //! Adds an encrypted spending key to the store, without saving it to disk (used by LoadWallet)
-    bool LoadCryptedSaplingZKey(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret);
-
+    bool LoadCryptedSaplingZKey(
+        const uint256 &extfvkFinger,
+        const std::vector<unsigned char> &vchCryptedSecret,
+        libzcash::SaplingExtendedFullViewingKey &extfvk);
+    bool LoadCryptedSaplingExtendedFullViewingKey(
+        const uint256 &extfvkFinger,
+        const std::vector<unsigned char> &vchCryptedSecret,
+        libzcash::SaplingExtendedFullViewingKey &extfvk);
     /**
      * Increment the next transaction order id
      * @return next transaction order id
