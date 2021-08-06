@@ -1617,7 +1617,13 @@ bool CWalletDB::WriteHDSeed(const HDSeed& seed)
 bool CWalletDB::WriteCryptedHDSeed(const uint256& seedFp, const std::vector<unsigned char>& vchCryptedSecret)
 {
     nWalletDBUpdated++;
-    return WriteTxn(std::make_pair(std::string("chdseed"), seedFp), vchCryptedSecret, __FUNCTION__);
+    if (!WriteTxn(std::make_pair(std::string("chdseed"), seedFp), vchCryptedSecret, __FUNCTION__)) {
+        return false;
+    }
+
+    Erase(std::make_pair(std::string("hdseed"), seedFp));
+
+    return true;
 }
 
 bool CWalletDB::WriteHDChain(const CHDChain& chain)
