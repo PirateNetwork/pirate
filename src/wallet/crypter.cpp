@@ -503,7 +503,7 @@ bool CCryptoKeyStore::AddSaplingSpendingKey(
             return false;
         }
 
-        if (!AddCryptedSaplingSpendingKey(extfvk, vchCryptedSecret)) {
+        if (!AddCryptedSaplingSpendingKey(extfvk, vchCryptedSecret, vMasterKey)) {
             return false;
         }
     }
@@ -554,9 +554,25 @@ bool CCryptoKeyStore::AddCryptedSproutSpendingKey(
     return true;
 }
 
+bool CCryptoKeyStore::EncryptSaplingMetaData(
+    CKeyingMaterial& vMasterKeyIn,
+    const CKeyMetadata metadata,
+    const libzcash::SaplingExtendedFullViewingKey &extfvk,
+    std::vector<unsigned char> &vchCryptedSecret)
+{
+    CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << metadata;
+    CKeyingMaterial vchSecret(ss.begin(), ss.end());
+    if(!EncryptSecret(vMasterKeyIn, vchSecret, extfvk.fvk.GetFingerprint(), vchCryptedSecret)) {
+        return false;
+    }
+    return true;
+}
+
 bool CCryptoKeyStore::AddCryptedSaplingSpendingKey(
     const libzcash::SaplingExtendedFullViewingKey &extfvk,
-    const std::vector<unsigned char> &vchCryptedSecret)
+    const std::vector<unsigned char> &vchCryptedSecret,
+    CKeyingMaterial& vMasterKeyIn)
 {
     {
         LOCK(cs_SpendingKeyStore);
@@ -752,7 +768,7 @@ bool CCryptoKeyStore::EncryptKeys(CKeyingMaterial& vMasterKeyIn)
             if (!EncryptSecret(vMasterKeyIn, vchSecret, extfvk.fvk.GetFingerprint(), vchCryptedSecret)) {
                 return false;
             }
-            if (!AddCryptedSaplingSpendingKey(extfvk, vchCryptedSecret)) {
+            if (!AddCryptedSaplingSpendingKey(extfvk, vchCryptedSecret, vMasterKeyIn)) {
                 return false;
             }
         }

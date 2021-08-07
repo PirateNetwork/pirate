@@ -560,23 +560,31 @@ bool CWallet::AddCryptedSproutSpendingKey(
 }
 
 bool CWallet::AddCryptedSaplingSpendingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk,
-                                           const std::vector<unsigned char> &vchCryptedSecret)
+                                           const std::vector<unsigned char> &vchCryptedSecret,
+                                           CKeyingMaterial& vMasterKeyIn)
 {
-    if (!CCryptoKeyStore::AddCryptedSaplingSpendingKey(extfvk, vchCryptedSecret))
+    if (!CCryptoKeyStore::AddCryptedSaplingSpendingKey(extfvk, vchCryptedSecret, vMasterKeyIn))
         return false;
     if (!fFileBacked)
         return true;
     {
         LOCK(cs_wallet);
 
+        //Encrypt metadata
+        CKeyMetadata metadata = mapSaplingZKeyMetadata[extfvk.fvk.in_viewing_key()];
+        std::vector<unsigned char> vchCryptedMetaDataSecret;
+        if (!CCryptoKeyStore::EncryptSaplingMetaData(vMasterKeyIn, metadata, extfvk, vchCryptedMetaDataSecret)) {
+            return false;
+        }
+
         if (pwalletdbEncryption) {
             return pwalletdbEncryption->WriteCryptedSaplingZKey(extfvk,
                                                          vchCryptedSecret,
-                                                         mapSaplingZKeyMetadata[extfvk.fvk.in_viewing_key()]);
+                                                         vchCryptedMetaDataSecret);
         } else {
             return CWalletDB(strWalletFile).WriteCryptedSaplingZKey(extfvk,
                                                          vchCryptedSecret,
-                                                         mapSaplingZKeyMetadata[extfvk.fvk.in_viewing_key()]);
+                                                         vchCryptedMetaDataSecret);
         }
     }
     return false;
