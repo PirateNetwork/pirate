@@ -191,14 +191,14 @@ bool CWalletDB::WriteCryptedZKey(const libzcash::SproutPaymentAddress & addr,
 bool CWalletDB::WriteCryptedSaplingZKey(
     const libzcash::SaplingExtendedFullViewingKey &extfvk,
     const std::vector<unsigned char>& vchCryptedSecret,
-    const CKeyMetadata &keyMeta)
+    const std::vector<unsigned char>& vchCryptedMetaDataSecret)
 {
     const bool fEraseUnencryptedKey = true;
     nWalletDBUpdated++;
     auto ivk = extfvk.fvk.in_viewing_key();
     uint256 extfvkFinger = extfvk.fvk.GetFingerprint();
 
-    if (!WriteTxn(std::make_pair(std::string("sapzkeymeta"), extfvkFinger), keyMeta, __FUNCTION__))
+    if (!WriteTxn(std::make_pair(std::string("csapzkeymeta"), extfvkFinger), vchCryptedMetaDataSecret, __FUNCTION__))
         return false;
 
     if (!WriteTxn(std::make_pair(std::string("csapzkey"), extfvkFinger), vchCryptedSecret, __FUNCTION__, false))
@@ -211,6 +211,7 @@ bool CWalletDB::WriteCryptedSaplingZKey(
             return false;
 
         Erase(std::make_pair(std::string("sapzkey"), ivk));
+        Erase(std::make_pair(std::string("sapzkeymeta"), ivk));
     }
     return true;
 }

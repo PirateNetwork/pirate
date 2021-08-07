@@ -1239,7 +1239,8 @@ public:
         const blob88 &path);
     bool AddCryptedSaplingSpendingKey(
         const libzcash::SaplingExtendedFullViewingKey &extfvk,
-        const std::vector<unsigned char> &vchCryptedSecret);
+        const std::vector<unsigned char> &vchCryptedSecret,
+        CKeyingMaterial& vMasterKeyIn);
     bool AddCryptedSaplingExtendedFullViewingKey(
         const libzcash::SaplingExtendedFullViewingKey &extfvk,
         const std::vector<unsigned char> &vchCryptedSecret);

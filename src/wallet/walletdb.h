@@ -288,7 +288,7 @@ public:
                           const CKeyMetadata &keyMeta);
     bool WriteCryptedSaplingZKey(const libzcash::SaplingExtendedFullViewingKey &extfvk,
                           const std::vector<unsigned char>& vchCryptedSecret,
-                          const CKeyMetadata &keyMeta);
+                          const std::vector<unsigned char>& vchCryptedMetaDataSecret);
     bool WriteCryptedSaplingExtendedFullViewingKey(
                           const libzcash::SaplingExtendedFullViewingKey &extfvk,
                           const std::vector<unsigned char>& vchCryptedSecret);

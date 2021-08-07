@@ -26,6 +26,7 @@
 #include "support/allocators/secure.h"
 #include "zcash/Address.hpp"
 #include "zcash/address/zip32.h"
+#include "wallet/walletdb.h"
 
 class uint256;
 
@@ -259,9 +260,15 @@ public:
         }
     }
     //! Sapling
+    bool EncryptSaplingMetaData(
+        CKeyingMaterial& vMasterKeyIn,
+        const CKeyMetadata metadata,
+        const libzcash::SaplingExtendedFullViewingKey &extfvk,
+        std::vector<unsigned char> &vchCryptedSecret);
     virtual bool AddCryptedSaplingSpendingKey(
         const libzcash::SaplingExtendedFullViewingKey &extfvk,
-        const std::vector<unsigned char> &vchCryptedSecret);
+        const std::vector<unsigned char> &vchCryptedSecret,
+        CKeyingMaterial& vMasterKeyIn);
     virtual bool AddCryptedSaplingExtendedFullViewingKey(
         const libzcash::SaplingExtendedFullViewingKey &extfvk,
         const std::vector<unsigned char> &vchCryptedSecret);
