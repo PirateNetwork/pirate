@@ -580,6 +580,7 @@ public:
     unsigned int nZKeys;
     unsigned int nCZKeys;
     unsigned int nZKeyMeta;
+    unsigned int nCZKeyMeta;
     unsigned int nSapZAddrs;
     unsigned int nArcTx;
     unsigned int nWalletTx;
@@ -589,7 +590,7 @@ public:
     vector<uint256> vWalletUpgrade;
 
     CWalletScanState() {
-        nKeys = nCKeys = nKeyMeta = nZKeys = nCZKeys = nZKeyMeta = nSapZAddrs = 0;
+        nKeys = nCKeys = nKeyMeta = nZKeys = nCZKeys = nZKeyMeta = nCZKeyMeta = nSapZAddrs = 0;
         nArcTx = nWalletTx = 0;
         fIsEncrypted = false;
         fAnyUnordered = false;
@@ -857,6 +858,17 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
 
             wss.fIsEncrypted = true;
+        }
+        else if (strType == "csapzkeymeta")
+        {
+            uint256 extfvkFinger;
+            ssKey >> extfvkFinger;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+
+            wss.nCZKeyMeta++;
+
+            pwallet->TempHoldCryptedSaplingMetaData(extfvkFinger, vchCryptedSecret);
         }
         else if (strType == "csapextfvk")
         {
@@ -1218,6 +1230,10 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
         result = DB_CORRUPT;
     }
 
+    if(!pwallet->LoadTempHeldCryptedData()) {
+        LogPrintf("Loading Temp Held crypted data failed!!!\n");
+    }
+
     if ( !deadTxns.empty() )
     {
         // staking chains with vin-empty error is a failed staking tx.
@@ -1254,8 +1270,11 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
     LogPrintf("Keys: %u plaintext, %u encrypted, %u w/ metadata, %u total\n",
            wss.nKeys, wss.nCKeys, wss.nKeyMeta, wss.nKeys + wss.nCKeys);
 
-    LogPrintf("ZKeys: %u plaintext, %u encrypted, %u w/metadata, %u total\n",
-           wss.nZKeys, wss.nCZKeys, wss.nZKeyMeta, wss.nZKeys + wss.nCZKeys);
+    LogPrintf("ZKeys: %u plaintext, %u w/metadata\n",
+           wss.nZKeys, wss.nZKeyMeta);
+
+     LogPrintf("ZKeys: %u encrypted, %u w/encrypted metadata\n",
+           wss.nCZKeys, wss.nCZKeyMeta);
 
     LogPrintf("Sapling Addresses: %u \n",wss.nSapZAddrs);
     LogPrintf("Transactions: %u wallet transactions, %u archived transactions\n", wss.nWalletTx, wss.nArcTx);

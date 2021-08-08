@@ -569,6 +569,30 @@ bool CCryptoKeyStore::EncryptSaplingMetaData(
     return true;
 }
 
+bool CCryptoKeyStore::DecryptSaplingMetaData(
+                             const std::vector<unsigned char>& vchCryptedSecret,
+                             const uint256& extfvkFinger,
+                             CKeyMetadata& metadata)
+{
+    LOCK(cs_SpendingKeyStore);
+    if (!IsCrypted()) {
+        return false;
+    }
+
+    if (IsLocked()) {
+        return false;
+    }
+
+    CKeyingMaterial vchSecret;
+    if (!DecryptSecret(vMasterKey, vchCryptedSecret, extfvkFinger, vchSecret)) {
+        return false;
+    }
+
+    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
+    ss >> metadata;
+    return true;
+}
+
 bool CCryptoKeyStore::AddCryptedSaplingSpendingKey(
     const libzcash::SaplingExtendedFullViewingKey &extfvk,
     const std::vector<unsigned char> &vchCryptedSecret,

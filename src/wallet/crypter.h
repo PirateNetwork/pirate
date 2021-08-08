@@ -265,6 +265,10 @@ public:
         const CKeyMetadata metadata,
         const libzcash::SaplingExtendedFullViewingKey &extfvk,
         std::vector<unsigned char> &vchCryptedSecret);
+    bool DecryptSaplingMetaData(
+        const std::vector<unsigned char>& vchCryptedSecret,
+        const uint256& extfvkFinger,
+        CKeyMetadata& metadata);
     virtual bool AddCryptedSaplingSpendingKey(
         const libzcash::SaplingExtendedFullViewingKey &extfvk,
         const std::vector<unsigned char> &vchCryptedSecret,
