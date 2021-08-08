@@ -983,6 +983,9 @@ public:
     std::map<libzcash::SproutPaymentAddress, CKeyMetadata> mapSproutZKeyMetadata;
     std::map<libzcash::SaplingIncomingViewingKey, CKeyMetadata> mapSaplingZKeyMetadata;
 
+    //Temporary Holfing maps for crypted data to be loaded after all keys are loaded
+    std::map<uint256, std::vector<unsigned char>> mapTempHoldCryptedSaplingMetadata;
+
     //Key used to create diversified address
     boost::optional<libzcash::SaplingExtendedSpendingKey> primarySaplingSpendingKey;
     typedef std::map<unsigned int, CMasterKey> MasterKeyMap;
@@ -1272,6 +1275,10 @@ public:
         const uint256 &extfvkFinger,
         const std::vector<unsigned char> &vchCryptedSecret,
         libzcash::SaplingExtendedFullViewingKey &extfvk);
+    bool TempHoldCryptedSaplingMetaData(
+        const uint256 &extfvkFinger,
+        const std::vector<unsigned char> &vchCryptedSecret);
+    bool LoadTempHeldCryptedData();
     /**
      * Increment the next transaction order id
      * @return next transaction order id

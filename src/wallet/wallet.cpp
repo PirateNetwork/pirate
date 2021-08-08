@@ -649,6 +649,48 @@ bool CWallet::LoadCryptedSaplingExtendedFullViewingKey(const uint256 &extfvkFing
      return CCryptoKeyStore::LoadCryptedSaplingExtendedFullViewingKey(extfvkFinger, vchCryptedSecret, extfvk);
 }
 
+bool CWallet::TempHoldCryptedSaplingMetaData(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret)
+{
+    AssertLockHeld(cs_wallet); // mapTempHoldCryptedSaplingMetadata
+    mapTempHoldCryptedSaplingMetadata[extfvkFinger] = vchCryptedSecret;
+}
+
+bool CWallet::LoadTempHeldCryptedData()
+{
+    AssertLockHeld(cs_wallet);
+
+    std::map<uint256, libzcash::SaplingExtendedFullViewingKey> mapSaplingFingerPrints;
+
+    //Get a map of all the saplingfullviewingkey fingerprints
+    for (map<libzcash::SaplingIncomingViewingKey, libzcash::SaplingExtendedFullViewingKey>::iterator it = mapSaplingFullViewingKeys.begin(); it != mapSaplingFullViewingKeys.end(); ++it) {
+          libzcash::SaplingExtendedFullViewingKey extfvk = (*it).second;
+          mapSaplingFingerPrints[extfvk.fvk.GetFingerprint()] = extfvk;
+    }
+
+    for (map<uint256, std::vector<unsigned char>>::iterator it = mapTempHoldCryptedSaplingMetadata.begin(); it != mapTempHoldCryptedSaplingMetadata.end(); ++it) {
+        for (map<uint256, libzcash::SaplingExtendedFullViewingKey>::iterator iit = mapSaplingFingerPrints.begin(); iit != mapSaplingFingerPrints.end(); iit++) {
+            if ((*it).first == (*iit).first) {
+
+                libzcash::SaplingExtendedFullViewingKey extfvk = (*iit).second;
+                uint256 extfvkFinger = (*it).first;
+                std::vector<unsigned char> vchCryptedSecret = (*it).second;
+                CKeyMetadata metadata;
+                if(!CCryptoKeyStore::DecryptSaplingMetaData(vchCryptedSecret, extfvkFinger, metadata)) {
+                    return false;
+                }
+
+                if (!LoadSaplingZKeyMetadata(extfvk.fvk.in_viewing_key(), metadata)) {
+                    return false;
+                }
+
+                continue;
+            }
+        }
+    }
+    mapTempHoldCryptedSaplingMetadata.clear();
+    return true;
+}
+
 bool CWallet::LoadSaplingZKeyMetadata(const libzcash::SaplingIncomingViewingKey &ivk, const CKeyMetadata &meta)
 {
     AssertLockHeld(cs_wallet); // mapSaplingZKeyMetadata
