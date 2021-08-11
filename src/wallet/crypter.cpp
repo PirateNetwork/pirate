@@ -593,6 +593,27 @@ bool CCryptoKeyStore::DecryptSaplingMetaData(
     return true;
 }
 
+bool CCryptoKeyStore::EncryptSaplingPrimarySpendingKey(
+    const libzcash::SaplingExtendedSpendingKey &extsk,
+    std::vector<unsigned char> &vchCryptedSecret)
+{
+    return EncryptSaplingPrimarySpendingKey(extsk, vchCryptedSecret, vMasterKey);
+}
+
+bool CCryptoKeyStore::EncryptSaplingPrimarySpendingKey(
+    const libzcash::SaplingExtendedSpendingKey &extsk,
+    std::vector<unsigned char> &vchCryptedSecret,
+    CKeyingMaterial& vMasterKeyIn)
+{
+    CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << extsk;
+    CKeyingMaterial vchSecret(ss.begin(), ss.end());
+    if(!EncryptSecret(vMasterKeyIn, vchSecret, extsk.ToXFVK().fvk.GetFingerprint(), vchCryptedSecret)) {
+        return false;
+    }
+    return true;
+}
+
 bool CCryptoKeyStore::AddCryptedSaplingSpendingKey(
     const libzcash::SaplingExtendedFullViewingKey &extfvk,
     const std::vector<unsigned char> &vchCryptedSecret,
