@@ -320,6 +320,10 @@ bool CWallet::SetPrimarySpendingKey(
 {
       AssertLockHeld(cs_wallet); // mapSaplingZKeyMetadata
 
+      if (IsCrypted() && IsLocked()) {
+        return false;
+      }
+
       pwalletMain->primarySaplingSpendingKey = extsk;
 
       if (!fFileBacked) {
@@ -328,6 +332,14 @@ bool CWallet::SetPrimarySpendingKey(
 
       if (!IsCrypted()) {
           return CWalletDB(strWalletFile).WritePrimarySaplingSpendingKey(extsk);
+      } else {
+
+          std::vector<unsigned char> vchCryptedSecret;
+          if (!CCryptoKeyStore::EncryptSaplingPrimarySpendingKey(extsk, vchCryptedSecret)) {
+              return false;
+          }
+
+          return CWalletDB(strWalletFile).WriteCryptedPrimarySaplingSpendingKey(extsk, vchCryptedSecret);
       }
 
       return true;
@@ -2016,6 +2028,21 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         if (!EncryptKeys(vMasterKey)) {
             LogPrintf("Encrypt Keys failed!!!");
             return false;
+        }
+
+        //Encrypt Primary Spending Key for diversified addresses
+        if (primarySaplingSpendingKey != boost::none) {
+            std::vector<unsigned char> vchCryptedSecret;
+            auto extsk = primarySaplingSpendingKey.get();
+            if (!CCryptoKeyStore::EncryptSaplingPrimarySpendingKey(extsk, vchCryptedSecret, vMasterKey)) {
+                LogPrintf("Encrypting Spending key failed!!!\n");
+                return false;
+            }
+
+            if (!pwalletdbEncryption->WriteCryptedPrimarySaplingSpendingKey(extsk, vchCryptedSecret)) {
+                LogPrintf("Writing Primary Spending key failed!!!\n");
+                return false;
+            }
         }
 
         //Write Crypted statuses

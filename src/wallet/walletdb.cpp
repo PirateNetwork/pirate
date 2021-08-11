@@ -234,6 +234,22 @@ bool CWalletDB::WriteCryptedSaplingExtendedFullViewingKey(
     return true;
 }
 
+bool CWalletDB::WriteCryptedPrimarySaplingSpendingKey(
+    const libzcash::SaplingExtendedSpendingKey &extsk,
+    const std::vector<unsigned char>& vchCryptedSecret)
+{
+    nWalletDBUpdated++;
+    uint256 extfvkFinger = extsk.ToXFVK().fvk.GetFingerprint();
+
+    if (!WriteTxn(std::string("cpspendkey"), std::make_pair(extfvkFinger, vchCryptedSecret), __FUNCTION__, true)) {
+        return false;
+    }
+
+    Erase(std::string("pspendkey"));
+
+    return true;
+}
+
 bool CWalletDB::WriteMasterKey(unsigned int nID, const CMasterKey& kMasterKey)
 {
     nWalletDBUpdated++;
