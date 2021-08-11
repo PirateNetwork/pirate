@@ -661,6 +661,16 @@ bool CWallet::LoadCryptedSaplingExtendedFullViewingKey(const uint256 &extfvkFing
      return CCryptoKeyStore::LoadCryptedSaplingExtendedFullViewingKey(extfvkFinger, vchCryptedSecret, extfvk);
 }
 
+bool CWallet::LoadCryptedPrimarySaplingSpendingKey(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret)
+{
+    libzcash::SaplingExtendedSpendingKey extsk;
+    if (!CCryptoKeyStore::DecryptSaplingPrimarySpendingKey(extsk, extfvkFinger, vchCryptedSecret)) {
+        return false;
+    }
+    primarySaplingSpendingKey = extsk;
+    return true;
+}
+
 bool CWallet::TempHoldCryptedSaplingMetaData(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret)
 {
     AssertLockHeld(cs_wallet); // mapTempHoldCryptedSaplingMetadata

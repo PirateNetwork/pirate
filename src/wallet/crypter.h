@@ -276,6 +276,10 @@ public:
         const libzcash::SaplingExtendedSpendingKey &extsk,
         std::vector<unsigned char> &vchCryptedSecret,
         CKeyingMaterial& vMasterKeyIn);
+    bool DecryptSaplingPrimarySpendingKey(
+        libzcash::SaplingExtendedSpendingKey &extsk,
+        const uint256 extfvkFinger,
+        const std::vector<unsigned char> &vchCryptedSecret);
     virtual bool AddCryptedSaplingSpendingKey(
         const libzcash::SaplingExtendedFullViewingKey &extfvk,
         const std::vector<unsigned char> &vchCryptedSecret,

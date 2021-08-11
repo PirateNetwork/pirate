@@ -614,6 +614,24 @@ bool CCryptoKeyStore::EncryptSaplingPrimarySpendingKey(
     return true;
 }
 
+bool CCryptoKeyStore::DecryptSaplingPrimarySpendingKey(
+    libzcash::SaplingExtendedSpendingKey &extsk,
+    const uint256 extfvkFinger,
+    const std::vector<unsigned char> &vchCryptedSecret)
+{
+    LOCK(cs_SpendingKeyStore);
+    if (!SetCrypted()) {
+        return false;
+    }
+
+    if (IsLocked()) {
+        return false;
+    }
+
+    return DecryptSaplingSpendingKey(vMasterKey, vchCryptedSecret, extfvkFinger, extsk);
+
+}
+
 bool CCryptoKeyStore::AddCryptedSaplingSpendingKey(
     const libzcash::SaplingExtendedFullViewingKey &extfvk,
     const std::vector<unsigned char> &vchCryptedSecret,

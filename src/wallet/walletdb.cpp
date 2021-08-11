@@ -907,6 +907,18 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             // so set the wallet birthday to the beginning of time.
             pwallet->nTimeFirstKey = 1;
         }
+        else if (strType == "cpspendkey")
+        {
+            uint256 extfvkFinger;
+            ssValue >> extfvkFinger;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+
+            if (!pwallet->LoadCryptedPrimarySaplingSpendingKey(extfvkFinger, vchCryptedSecret)) {
+                strErr = "Error reading wallet database: LoadCryptedPrimarySaplingSpendingKey failed";
+                return false;
+            }
+        }
         else if (strType == "keymeta")
         {
             CPubKey vchPubKey;

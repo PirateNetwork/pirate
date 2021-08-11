@@ -1275,6 +1275,9 @@ public:
         const uint256 &extfvkFinger,
         const std::vector<unsigned char> &vchCryptedSecret,
         libzcash::SaplingExtendedFullViewingKey &extfvk);
+    bool LoadCryptedPrimarySaplingSpendingKey(
+        const uint256 &extfvkFinger,
+        const std::vector<unsigned char> &vchCryptedSecret);
     bool TempHoldCryptedSaplingMetaData(
         const uint256 &extfvkFinger,
         const std::vector<unsigned char> &vchCryptedSecret);
