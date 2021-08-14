@@ -34,7 +34,6 @@ public:
     MOCK_METHOD0(TxnAbort, bool());
 
     MOCK_METHOD2(WriteTx, bool(uint256 hash, const CWalletTx& wtx));
-    MOCK_METHOD1(WriteWitnessCacheSize, bool(int64_t nWitnessCacheSize));
     MOCK_METHOD1(WriteBestBlock, bool(const CBlockLocator& loc));
 };
 
@@ -1266,9 +1265,6 @@ TEST(WalletTests, CachedWitnessesEmptyChain) {
     EXPECT_TRUE((bool) sproutWitnesses[1]);
     EXPECT_TRUE((bool) saplingWitnesses[0]);
 
-    // Until #1302 is implemented, this should triggger an assertion
-    EXPECT_DEATH(wallet.DecrementNoteWitnesses(&index),
-                 ".*nWitnessCacheSize > 0.*");
 }
 
 TEST(WalletTests, CachedWitnessesChainTip) {
@@ -1563,12 +1559,10 @@ TEST(WalletTests, ClearNoteWitnessCache) {
     SproutMerkleTree sproutTree;
     wtx.mapSproutNoteData[jsoutpt].witnesses.push_front(sproutTree.witness());
     wtx.mapSproutNoteData[jsoutpt].witnessHeight = 1;
-    wallet.nWitnessCacheSize = 1;
 
     SaplingMerkleTree saplingTree;
     wtx.mapSaplingNoteData[saplingNotes[0]].witnesses.push_front(saplingTree.witness());
     wtx.mapSaplingNoteData[saplingNotes[0]].witnessHeight = 1;
-    wallet.nWitnessCacheSize = 2;
 
     wallet.AddToWallet(wtx, true, NULL);
 
@@ -1584,7 +1578,6 @@ TEST(WalletTests, ClearNoteWitnessCache) {
     EXPECT_FALSE((bool) saplingWitnesses[1]);
     EXPECT_EQ(1, wallet.mapWallet[hash].mapSproutNoteData[jsoutpt].witnessHeight);
     EXPECT_EQ(1, wallet.mapWallet[hash].mapSaplingNoteData[saplingNotes[0]].witnessHeight);
-    EXPECT_EQ(2, wallet.nWitnessCacheSize);
 
     // After clearing, we should not have a witness for either note
     wallet.ClearNoteWitnessCache();
@@ -1595,7 +1588,6 @@ TEST(WalletTests, ClearNoteWitnessCache) {
     EXPECT_FALSE((bool) saplingWitnesses[1]);
     EXPECT_EQ(-1, wallet.mapWallet[hash].mapSproutNoteData[jsoutpt].witnessHeight);
     EXPECT_EQ(-1, wallet.mapWallet[hash].mapSaplingNoteData[saplingNotes[0]].witnessHeight);
-    EXPECT_EQ(0, wallet.nWitnessCacheSize);
 }
 
 TEST(WalletTests, WriteWitnessCache) {
@@ -1630,22 +1622,6 @@ TEST(WalletTests, WriteWitnessCache) {
         .Times(1);
     wallet.SetBestChain(walletdb, loc);
     EXPECT_CALL(walletdb, WriteTx(wtx.GetHash(), wtx, true))
-        .WillRepeatedly(Return(true));
-
-    // WriteWitnessCacheSize fails
-    EXPECT_CALL(walletdb, WriteWitnessCacheSize(0))
-        .WillOnce(Return(false));
-    EXPECT_CALL(walletdb, TxnAbort())
-        .Times(1);
-    wallet.SetBestChain(walletdb, loc);
-
-    // WriteWitnessCacheSize throws
-    EXPECT_CALL(walletdb, WriteWitnessCacheSize(0))
-        .WillOnce(ThrowLogicError());
-    EXPECT_CALL(walletdb, TxnAbort())
-        .Times(1);
-    wallet.SetBestChain(walletdb, loc);
-    EXPECT_CALL(walletdb, WriteWitnessCacheSize(0))
         .WillRepeatedly(Return(true));
 
     // WriteBestBlock fails
@@ -1723,8 +1699,6 @@ TEST(WalletTests, SetBestChainIgnoresTxsWithoutShieldedData) {
         .Times(1).WillOnce(Return(true));
     EXPECT_CALL(walletdb, WriteTx(wtxSproutTransparent.GetHash(), wtxSproutTransparent, true))
         .Times(0);
-    EXPECT_CALL(walletdb, WriteWitnessCacheSize(0))
-        .WillOnce(Return(true));
     EXPECT_CALL(walletdb, WriteBestBlock(loc))
         .WillOnce(Return(true));
     EXPECT_CALL(walletdb, TxnCommit())

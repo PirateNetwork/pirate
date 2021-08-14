@@ -851,12 +851,7 @@ private:
     void AddToSpends(const uint256& wtxid);
 
 public:
-    /*
-     * Size of the incremental witness cache for the notes in our wallet.
-     * This will always be greater than or equal to the size of the largest
-     * incremental witness cache in any transaction in mapWallet.
-     */
-    int64_t nWitnessCacheSize;
+
     bool needsRescan = false;
     bool fSaplingConsolidationEnabled = false;
     bool fConsolidationRunning = false;
@@ -929,11 +924,6 @@ protected:
                         return;
                     }
                 }
-            }
-            if (!walletdb.WriteWitnessCacheSize(nWitnessCacheSize)) {
-                LogPrintf("SetBestChain(): Failed to write nWitnessCacheSize, aborting atomic write\n");
-                walletdb.TxnAbort();
-                return;
             }
             if (!walletdb.WriteBestBlock(loc)) {
                 LogPrintf("SetBestChain(): Failed to write best block, aborting atomic write\n");
@@ -1028,7 +1018,6 @@ public:
         nLastResend = 0;
         nTimeFirstKey = 0;
         fBroadcastTransactions = false;
-        nWitnessCacheSize = 0;
     }
 
     /**
