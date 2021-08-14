@@ -408,12 +408,6 @@ bool CWalletDB::WriteDefaultKey(const CPubKey& vchPubKey)
     return Write(std::string("defaultkey"), vchPubKey);
 }
 
-bool CWalletDB::WriteWitnessCacheSize(int64_t nWitnessCacheSize)
-{
-    nWalletDBUpdated++;
-    return Write(std::string("witnesscachesize"), nWitnessCacheSize);
-}
-
 bool CWalletDB::ReadPool(int64_t nPool, CKeyPool& keypool)
 {
     return Read(std::make_pair(std::string("pool"), nPool), keypool);
@@ -1048,10 +1042,6 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 strErr = "Error reading wallet database: LoadDestData failed";
                 return false;
             }
-        }
-        else if (strType == "witnesscachesize")
-        {
-            ssValue >> pwallet->nWitnessCacheSize;
         }
         else if (strType == "hdseed")
         {
