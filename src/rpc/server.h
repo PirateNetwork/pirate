@@ -389,7 +389,6 @@ extern UniValue cleanwallettransactions(const UniValue& params, bool fHelp, cons
 extern UniValue getbalance(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue getbalance64(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue getunconfirmedbalance(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue movecmd(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue sendfrom(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue addmultisigaddress(const UniValue& params, bool fHelp, const CPubKey& mypk);
