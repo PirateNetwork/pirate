@@ -1988,6 +1988,39 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
 
 }
 
+bool CWallet::DecryptWalletTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, CWalletTx& wtx, uint256& hash) {
+
+    CKeyingMaterial vchSecret;
+    if (!CCryptoKeyStore::DecryptWalletTransaction(chash, vchCryptedSecret, vchSecret)) {
+        LogPrintf("Decrypting CWalletTx failed!!!\n");
+        return false;
+    }
+
+    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
+    ss >> wtx;
+    hash = wtx.GetHash();
+
+    return true;
+}
+
+bool CWallet::EncryptWalletTransaction(const CWalletTx wtx, std::vector<unsigned char>& vchCryptedSecret, uint256& hash) {
+
+    uint256 txid = wtx.GetHash();
+    CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+    s << txid;
+    hash = Hash(s.begin(), s.end());
+
+    CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << wtx;
+    CKeyingMaterial vchSecret(ss.begin(), ss.end());
+
+    if (!CCryptoKeyStore::EncryptWalletTransaction(hash, wtx, vchSecret, vchCryptedSecret)) {
+        LogPrintf("Encrypting CWalletTx failed!!!\n");
+        return false;
+    }
+    return true;
+}
+
 bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
 {
     if (IsCrypted())
@@ -2053,6 +2086,33 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
                 LogPrintf("Writing Primary Spending key failed!!!\n");
                 return false;
             }
+        }
+
+        //Encrypt All wallet transactions
+        for (map<uint256,CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
+            CWalletTx wtx = (*it).second;
+
+            uint256 txid = wtx.GetHash();
+            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+            s << txid;
+            uint256 hash = Hash(s.begin(), s.end());
+
+            CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+            ss << wtx;
+            CKeyingMaterial vchSecret(ss.begin(), ss.end());
+
+            std::vector<unsigned char> vchCryptedSecret;
+            if (!CCryptoKeyStore::EncryptWalletTransaction(vMasterKey, hash, wtx, vchSecret, vchCryptedSecret)) {
+                LogPrintf("Encrypting CWalletTx failed!!!\n");
+                return false;
+            }
+
+            if (!pwalletdbEncryption->WriteCryptedTx(txid, hash, vchCryptedSecret, true)) {
+                LogPrintf("Writing Encrypted CWalletTx failed!!!\n");
+                return false;
+            }
+
+
         }
 
         //Write Crypted statuses
@@ -2731,16 +2791,29 @@ void CWallet::MarkAffectedTransactionsDirty(const CTransaction& tx)
     }
 }
 
-void CWallet::EraseFromWallet(const uint256 &hash)
+bool CWallet::EraseFromWallet(const uint256 &hash)
 {
     if (!fFileBacked)
-        return;
-    {
-        LOCK(cs_wallet);
-        if (mapWallet.erase(hash))
-            CWalletDB(strWalletFile).EraseTx(hash);
+        return false;
+
+    LOCK(cs_wallet);
+
+    if (IsCrypted()) {
+        if (!IsLocked()) {
+            if (mapWallet.erase(hash)) {
+                CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+                s << hash;
+                uint256 chash = Hash(s.begin(), s.end());
+                return CWalletDB(strWalletFile).EraseCryptedTx(chash);
+            }
+        }
+    } else {
+        if (mapWallet.erase(hash)) {
+            return CWalletDB(strWalletFile).EraseTx(hash);
+        }
     }
-    return;
+
+    return false;
 }
 
 /*Rescan the whole chain for transactions*/
@@ -3809,8 +3882,27 @@ void CWalletTx::GetAccountAmounts(const string& strAccount, CAmount& nReceived,
 
 bool CWalletTx::WriteToDisk(CWalletDB *pwalletdb, ArchiveTxPoint &arcTxPt, bool updateArcTxPt)
 {
-    bool txWrite = pwalletdb->WriteTx(GetHash(), *this, true);
+
+    bool txWrite = false;
     bool arcTxWrite = false;
+
+    if (pwalletMain->IsCrypted()) {
+
+        if (pwalletMain->IsLocked()) {
+            return false;
+        }
+
+        std::vector<unsigned char> vchCryptedSecret;
+        uint256 hash;
+        if(!pwalletMain->EncryptWalletTransaction(*this, vchCryptedSecret, hash)) {
+            return false;
+        }
+
+        txWrite = pwalletdb->WriteCryptedTx(GetHash(), hash, vchCryptedSecret, true);
+
+    } else {
+        txWrite = pwalletdb->WriteTx(GetHash(), *this, true);
+    }
 
     if (updateArcTxPt) {
         arcTxWrite = pwalletdb->WriteArcTx(GetHash(), arcTxPt, true);
@@ -3970,8 +4062,7 @@ void CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<ui
     CWalletDB walletdb(strWalletFile, "r+", false);
 
     for (int i = 0; i < removeTxs.size(); i++) {
-        if (mapWallet.erase(removeTxs[i])) {
-            walletdb.EraseTx(removeTxs[i]);
+        if (EraseFromWallet(removeTxs[i])) {
             LogPrint("deletetx","Delete Tx - Deleting tx %s, %i.\n", removeTxs[i].ToString(),i);
         } else {
             LogPrint("deletetx","Delete Tx - Deleting tx %failed.\n", removeTxs[i].ToString());

@@ -126,10 +126,39 @@ bool CWalletDB::WriteTx(uint256 hash, const CWalletTx& wtx, bool txnProtected)
     }
 }
 
+bool CWalletDB::WriteCryptedTx(
+  uint256 txid,
+  uint256 hash,
+  const std::vector<unsigned char>& vchCryptedSecret,
+  bool txnProtected)
+{
+    nWalletDBUpdated++;
+    if (txnProtected) {
+        if (!WriteTxn(std::make_pair(std::string("ctx"), hash), vchCryptedSecret, __FUNCTION__)) {
+            return false;
+        }
+    } else {
+        if (!Write(std::make_pair(std::string("ctx"), hash), vchCryptedSecret)) {
+            return false;
+        }
+    }
+
+    Erase(std::make_pair(std::string("tx"), txid));
+
+    return true;
+
+}
+
 bool CWalletDB::EraseTx(uint256 hash)
 {
     nWalletDBUpdated++;
     return Erase(std::make_pair(std::string("tx"), hash));
+}
+
+bool CWalletDB::EraseCryptedTx(uint256 hash)
+{
+    nWalletDBUpdated++;
+    return Erase(std::make_pair(std::string("ctx"), hash));
 }
 
 bool CWalletDB::WriteKey(const CPubKey& vchPubKey, const CPrivKey& vchPrivKey, const CKeyMetadata& keyMeta)
@@ -630,12 +659,28 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             ssKey >> strAddress;
             ssValue >> pwallet->mapAddressBook[DecodeDestination(strAddress)].purpose;
         }
-        else if (strType == "tx")
+        else if (strType == "tx" || strType == "ctx")
         {
+
             uint256 hash;
-            ssKey >> hash;
             CWalletTx wtx;
-            ssValue >> wtx;
+
+            if (strType == "tx") {
+                ssKey >> hash;
+                ssValue >> wtx;
+            } else {
+                uint256 chash;
+                ssKey >> chash;
+                vector<unsigned char> vchCryptedSecret;
+                ssValue >> vchCryptedSecret;
+
+                if (!pwallet->DecryptWalletTransaction(chash, vchCryptedSecret, wtx, hash))
+                {
+                    strErr = "Error reading wallet database: DecryptWalletTransaction failed";
+                    return false;
+                }
+            }
+
             CValidationState state;
             auto verifier = libzcash::ProofVerifier::Strict();
             // ac_public chains set at height like KMD and ZEX, will force a rescan if we dont ignore this error: bad-txns-acpublic-chain
@@ -1260,7 +1305,7 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
         BOOST_FOREACH (uint256& hash, deadTxns)
         {
             fprintf(stderr, "Removing possible orphaned staking transaction from wallet.%s\n", hash.ToString().c_str());
-            if (!EraseTx(hash))
+            if (!pwallet->EraseFromWallet(hash))
                 fprintf(stderr, "could not delete tx.%s\n",hash.ToString().c_str());
             uint256 blockhash; CTransaction tx; CBlockIndex* pindex;
             if ( GetTransaction(hash,tx,blockhash,false) && (pindex= komodo_blockindex(blockhash)) != 0 && chainActive.Contains(pindex) )
@@ -1317,7 +1362,7 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
     return result;
 }
 
-DBErrors CWalletDB::FindWalletTxToZap(CWallet* pwallet, vector<uint256>& vTxHash, vector<CWalletTx>& vWtx, vector<uint256>& vArcHash, vector<uint256>& vArcSproutNullifier, vector<uint256>& vArcSaplingNullifier)
+DBErrors CWalletDB::FindWalletTxToZap(CWallet* pwallet, vector<uint256>& vTxHash, vector<CWalletTx>& vWtx, vector<uint256>& vCTxHash, vector<uint256>& vArcHash, vector<uint256>& vArcSproutNullifier, vector<uint256>& vArcSaplingNullifier)
 {
     pwallet->vchDefaultKey = CPubKey();
     bool fNoncriticalErrors = false;
@@ -1375,6 +1420,10 @@ DBErrors CWalletDB::FindWalletTxToZap(CWallet* pwallet, vector<uint256>& vTxHash
                 }
 
                 vTxHash.push_back(hash);
+            } if (strType == "ctx") {
+                uint256 hash;
+                ssKey >> hash;
+                vCTxHash.push_back(hash);
             } if (strType == "arctx") {
                 uint256 hash;
                 ssKey >> hash;
@@ -1408,16 +1457,23 @@ DBErrors CWalletDB::ZapWalletTx(CWallet* pwallet, vector<CWalletTx>& vWtx)
 {
     // build list of wallet TXs
     vector<uint256> vTxHash;
+    vector<uint256> vCTxHash;
     vector<uint256> vArcTxHash;
     vector<uint256> vArcSproutNullifier;
     vector<uint256> vArcSaplingNullifier;
-    DBErrors err = FindWalletTxToZap(pwallet, vTxHash, vWtx, vArcTxHash, vArcSproutNullifier, vArcSaplingNullifier);
+    DBErrors err = FindWalletTxToZap(pwallet, vTxHash, vWtx, vCTxHash, vArcTxHash, vArcSproutNullifier, vArcSaplingNullifier);
     if (err != DB_LOAD_OK)
         return err;
 
     // erase each wallet TX
     BOOST_FOREACH (uint256& hash, vTxHash) {
         if (!EraseTx(hash))
+            return DB_CORRUPT;
+    }
+
+    // erase each crypted wallet TX
+    BOOST_FOREACH (uint256& hash, vCTxHash) {
+        if (!EraseCryptedTx(hash))
             return DB_CORRUPT;
     }
 
