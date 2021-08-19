@@ -554,6 +554,39 @@ bool CCryptoKeyStore::AddCryptedSproutSpendingKey(
     return true;
 }
 
+bool CCryptoKeyStore::DecryptWalletTransaction(
+    const uint256& chash,
+    const std::vector<unsigned char> &vchCryptedSecret,
+    CKeyingMaterial& vchSecret)
+{
+    if (!DecryptSecret(vMasterKey, vchCryptedSecret, chash, vchSecret))
+        return false;
+
+    return true;
+}
+
+bool CCryptoKeyStore::EncryptWalletTransaction(
+    const uint256& hash,
+    const CWalletTx& wtx,
+    const CKeyingMaterial vchSecret,
+    std::vector<unsigned char> &vchCryptedSecret)
+{
+      return EncryptWalletTransaction(vMasterKey, hash, wtx, vchSecret, vchCryptedSecret);
+}
+
+bool CCryptoKeyStore::EncryptWalletTransaction(
+    CKeyingMaterial& vMasterKeyIn,
+    const uint256& hash,
+    const CWalletTx& wtx,
+    const CKeyingMaterial vchSecret,
+    std::vector<unsigned char> &vchCryptedSecret)
+{
+    if(!EncryptSecret(vMasterKeyIn, vchSecret, hash, vchCryptedSecret)) {
+        return false;
+    }
+    return true;
+}
+
 bool CCryptoKeyStore::EncryptSaplingMetaData(
     CKeyingMaterial& vMasterKeyIn,
     const CKeyMetadata metadata,

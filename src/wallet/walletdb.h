@@ -201,6 +201,9 @@ public:
     bool WriteTx(uint256 hash, const CWalletTx& wtx, bool txnProtected);
     bool EraseTx(uint256 hash);
 
+    bool WriteCryptedTx(uint256 txid, uint256 hash, const std::vector<unsigned char>& vchCryptedSecret, bool txnProtected);
+    bool EraseCryptedTx(uint256 hash);
+
     bool WriteKey(const CPubKey& vchPubKey, const CPrivKey& vchPrivKey, const CKeyMetadata &keyMeta);
     bool WriteCryptedKey(const CPubKey& vchPubKey, const std::vector<unsigned char>& vchCryptedSecret, const CKeyMetadata &keyMeta);
     bool WriteMasterKey(unsigned int nID, const CMasterKey& kMasterKey);
@@ -249,7 +252,7 @@ public:
     DBErrors InitalizeCryptedLoad(CWallet* pwallet);
     DBErrors LoadCryptedSeedFromDB(CWallet* pwallet);
     DBErrors LoadWallet(CWallet* pwallet);
-    DBErrors FindWalletTxToZap(CWallet* pwallet, std::vector<uint256>& vTxHash, std::vector<CWalletTx>& vWtx, std::vector<uint256>& vArcHash, std::vector<uint256>& vArcSproutNullifier, std::vector<uint256>& vArcSaplingNullifier);
+    DBErrors FindWalletTxToZap(CWallet* pwallet, std::vector<uint256>& vTxHash, std::vector<CWalletTx>& vWtx, std::vector<uint256>& vCTxHash, std::vector<uint256>& vArcHash, std::vector<uint256>& vArcSproutNullifier, std::vector<uint256>& vArcSaplingNullifier);
     DBErrors ZapWalletTx(CWallet* pwallet, std::vector<CWalletTx>& vWtx);
     static bool Compact(CDBEnv& dbenv, const std::string& strFile);
     static bool Recover(CDBEnv& dbenv, const std::string& filename, bool fOnlyKeys);

@@ -260,6 +260,23 @@ public:
         }
     }
     //! Sapling
+    bool DecryptWalletTransaction(
+        const uint256& chash,
+        const std::vector<unsigned char> &vchCryptedSecret,
+        CKeyingMaterial& vchSecret);
+    bool EncryptWalletTransaction(
+        const uint256& hash,
+        const CWalletTx& wtx,
+        const CKeyingMaterial vchSecret,
+        std::vector<unsigned char> &vchCryptedSecret
+    );
+    bool EncryptWalletTransaction(
+        CKeyingMaterial& vMasterKeyIn,
+        const uint256& hash,
+        const CWalletTx& wtx,
+        const CKeyingMaterial vchSecret,
+        std::vector<unsigned char> &vchCryptedSecret
+    );
     bool EncryptSaplingMetaData(
         CKeyingMaterial& vMasterKeyIn,
         const CKeyMetadata metadata,

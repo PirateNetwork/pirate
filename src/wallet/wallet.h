@@ -905,30 +905,68 @@ protected:
 
     template <typename WalletDB>
     void SetBestChainINTERNAL(WalletDB& walletdb, const CBlockLocator& loc) {
+
+        LogPrintf("SetBestChain(): Calling SetBestChainINTERNAL\n");
+
         if (!walletdb.TxnBegin()) {
             // This needs to be done atomically, so don't do it at all
             LogPrintf("SetBestChain(): Couldn't start atomic write\n");
             return;
         }
         try {
-            for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
-                auto wtx = wtxItem.second;
-                // We skip transactions for which mapSproutNoteData and mapSaplingNoteData
-                // are empty. This covers transactions that have no Sprout or Sapling data
-                // (i.e. are purely transparent), as well as shielding and unshielding
-                // transactions in which we only have transparent addresses involved.
-                if (!(wtx.mapSproutNoteData.empty() && wtx.mapSaplingNoteData.empty())) {
-                    if (!walletdb.WriteTx(wtxItem.first, wtx, false)) {
-                        LogPrintf("SetBestChain(): Failed to write CWalletTx, aborting atomic write\n");
+
+            if (!IsCrypted()) {
+                for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
+                    auto wtx = wtxItem.second;
+                    // We skip transactions for which mapSproutNoteData and mapSaplingNoteData
+                    // are empty. This covers transactions that have no Sprout or Sapling data
+                    // (i.e. are purely transparent), as well as shielding and unshielding
+                    // transactions in which we only have transparent addresses involved.
+                    if (!(wtx.mapSproutNoteData.empty() && wtx.mapSaplingNoteData.empty())) {
+                        if (!walletdb.WriteTx(wtxItem.first, wtx, false)) {
+                            LogPrintf("SetBestChain(): Failed to write CWalletTx, aborting atomic write\n");
+                            walletdb.TxnAbort();
+                            return;
+                        }
+                    }
+                }
+                if (!walletdb.WriteBestBlock(loc)) {
+                    LogPrintf("SetBestChain(): Failed to write best block, aborting atomic write\n");
+                    walletdb.TxnAbort();
+                    return;
+                }
+            } else {
+                if (!IsLocked()) {
+                    LogPrintf("SetBestChain(): Wallet is unlocked");
+                    for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
+                        auto wtx = wtxItem.second;
+
+                        if (!(wtx.mapSproutNoteData.empty() && wtx.mapSaplingNoteData.empty())) {
+
+                            uint256 chash;
+                            std::vector<unsigned char> vchCryptedSecret;
+                            if(!EncryptWalletTransaction(wtx, vchCryptedSecret, chash)) {
+                                LogPrintf("SetBestChain(): Failed to encrypt CWalletTx, aborting atomic write\n");
+                                walletdb.TxnAbort();
+                                return;
+                            }
+
+                            LogPrintf("SetBestChain(): Writing crypted CWalletTx txid %s, chash %s\n", wtxItem.first.ToString(), chash.ToString());
+                            if (!walletdb.WriteCryptedTx(wtxItem.first, chash, vchCryptedSecret, false)) {
+                                LogPrintf("SetBestChain(): Failed to write crypted CWalletTx, aborting atomic write\n");
+                                walletdb.TxnAbort();
+                                return;
+                            }
+                        }
+                    }
+                    if (!walletdb.WriteBestBlock(loc)) {
+                        LogPrintf("SetBestChain(): Failed to write best block, aborting atomic write\n");
                         walletdb.TxnAbort();
                         return;
                     }
+                } else {
+                    LogPrintf("SetBestChain(): Wallet is locked");
                 }
-            }
-            if (!walletdb.WriteBestBlock(loc)) {
-                LogPrintf("SetBestChain(): Failed to write best block, aborting atomic write\n");
-                walletdb.TxnAbort();
-                return;
             }
         } catch (const std::exception &exc) {
             // Unexpected failure
@@ -1174,6 +1212,9 @@ public:
 
     bool Unlock(const SecureString& strWalletPassphrase);
     bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase);
+
+    bool DecryptWalletTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, CWalletTx& wtx, uint256& hash);
+    bool EncryptWalletTransaction(const CWalletTx wtx, std::vector<unsigned char>& vchCryptedSecret, uint256& hash);
     bool EncryptWallet(const SecureString& strWalletPassphrase);
 
     void GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const;
@@ -1294,7 +1335,7 @@ public:
     void UpdateSaplingNullifierNoteMapWithTx(CWalletTx& wtx);
     void UpdateNullifierNoteMapForBlock(const CBlock* pblock);
     bool AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb, bool fRescan = false);
-    void EraseFromWallet(const uint256 &hash);
+    bool EraseFromWallet(const uint256 &hash);
     void SyncTransaction(const CTransaction& tx, const CBlock* pblock, const int nHeight);
     void ForceRescanWallet();
     void RescanWallet();
