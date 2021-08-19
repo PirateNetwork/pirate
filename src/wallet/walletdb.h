@@ -248,7 +248,6 @@ public:
     CAmount GetAccountCreditDebit(const std::string& strAccount);
     void ListAccountCreditDebit(const std::string& strAccount, std::list<CAccountingEntry>& acentries);
 
-    DBErrors ReorderTransactions(CWallet* pwallet);
     DBErrors InitalizeCryptedLoad(CWallet* pwallet);
     DBErrors LoadCryptedSeedFromDB(CWallet* pwallet);
     DBErrors LoadWallet(CWallet* pwallet);
