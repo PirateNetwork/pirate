@@ -567,17 +567,15 @@ bool CCryptoKeyStore::DecryptWalletTransaction(
 
 bool CCryptoKeyStore::EncryptWalletTransaction(
     const uint256& hash,
-    const CWalletTx& wtx,
     const CKeyingMaterial vchSecret,
     std::vector<unsigned char> &vchCryptedSecret)
 {
-      return EncryptWalletTransaction(vMasterKey, hash, wtx, vchSecret, vchCryptedSecret);
+      return EncryptWalletTransaction(vMasterKey, hash, vchSecret, vchCryptedSecret);
 }
 
 bool CCryptoKeyStore::EncryptWalletTransaction(
     CKeyingMaterial& vMasterKeyIn,
     const uint256& hash,
-    const CWalletTx& wtx,
     const CKeyingMaterial vchSecret,
     std::vector<unsigned char> &vchCryptedSecret)
 {
