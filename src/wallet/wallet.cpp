@@ -2014,7 +2014,7 @@ bool CWallet::EncryptWalletTransaction(const CWalletTx wtx, std::vector<unsigned
     ss << wtx;
     CKeyingMaterial vchSecret(ss.begin(), ss.end());
 
-    if (!CCryptoKeyStore::EncryptWalletTransaction(hash, wtx, vchSecret, vchCryptedSecret)) {
+    if (!CCryptoKeyStore::EncryptWalletTransaction(hash, vchSecret, vchCryptedSecret)) {
         LogPrintf("Encrypting CWalletTx failed!!!\n");
         return false;
     }
@@ -2102,7 +2102,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             CKeyingMaterial vchSecret(ss.begin(), ss.end());
 
             std::vector<unsigned char> vchCryptedSecret;
-            if (!CCryptoKeyStore::EncryptWalletTransaction(vMasterKey, hash, wtx, vchSecret, vchCryptedSecret)) {
+            if (!CCryptoKeyStore::EncryptWalletTransaction(vMasterKey, hash, vchSecret, vchCryptedSecret)) {
                 LogPrintf("Encrypting CWalletTx failed!!!\n");
                 return false;
             }
