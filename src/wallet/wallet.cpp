@@ -2405,9 +2405,6 @@ void CWallet::UpdateSproutNullifierNoteMapWithTx(CWalletTx& wtx) {
                 mapArcJSOutPoints[nullifier] = item.first;
                 item.second.nullifier = nullifier;
 
-                //write the ArcOp to disk
-                CWalletDB walletdb(strWalletFile, "r+", false);
-                wtx.WriteArcSproutOpToDisk(&walletdb, nullifier, item.first);
             }
         }
     }
@@ -3915,11 +3912,6 @@ bool CWalletTx::WriteToDisk(CWalletDB *pwalletdb, ArchiveTxPoint &arcTxPt, bool 
         return false;
 
     return true;
-}
-
-bool CWalletTx::WriteArcSproutOpToDisk(CWalletDB *pwalletdb, uint256 nullifier, JSOutPoint op)
-{
-    return pwalletdb->WriteArcSproutOp(nullifier, op);
 }
 
 bool CWalletTx::WriteArcSaplingOpToDisk(CWalletDB *pwalletdb, uint256 nullifier, SaplingOutPoint op)
