@@ -658,7 +658,6 @@ public:
     bool IsTrusted() const;
 
     bool WriteToDisk(CWalletDB *pwalletdb, ArchiveTxPoint &arcTxPt, bool updateArcTxPt = false);
-    bool WriteArcSproutOpToDisk(CWalletDB *pwalletdb, uint256 nullifier, JSOutPoint op);
     bool WriteArcSaplingOpToDisk(CWalletDB *pwalletdb, uint256 nullifier, SaplingOutPoint op);
 
     int64_t GetTxTime() const;
