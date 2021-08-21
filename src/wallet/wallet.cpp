@@ -2021,6 +2021,39 @@ bool CWallet::EncryptWalletTransaction(const CWalletTx wtx, std::vector<unsigned
     return true;
 }
 
+bool CWallet::DecryptWalletArchiveTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, ArchiveTxPoint& arcTxPt, uint256& hash) {
+
+    CKeyingMaterial vchSecret;
+    if (!CCryptoKeyStore::DecryptWalletTransaction(chash, vchCryptedSecret, vchSecret)) {
+        LogPrintf("Decrypting ArchiveTxPoint failed!!!\n");
+        return false;
+    }
+
+    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
+    ss >> hash;
+    ss >> arcTxPt;
+
+    return true;
+}
+
+bool CWallet::EncryptWalletArchiveTransaction(const ArchiveTxPoint arcTxPt, const uint256 txid, std::vector<unsigned char>& vchCryptedSecret, uint256& hash) {
+
+    CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+    s << txid;
+    hash = Hash(s.begin(), s.end());
+
+    auto arcTxPair = make_pair(txid, arcTxPt);
+    CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << arcTxPair;
+    CKeyingMaterial vchSecret(ss.begin(), ss.end());
+
+    if (!CCryptoKeyStore::EncryptWalletTransaction(hash, vchSecret, vchCryptedSecret)) {
+        LogPrintf("Encrypting ArchiveTxPoint failed!!!\n");
+        return false;
+    }
+    return true;
+}
+
 bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
 {
     if (IsCrypted())
@@ -2111,8 +2144,31 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
                 LogPrintf("Writing Encrypted CWalletTx failed!!!\n");
                 return false;
             }
+        }
 
+        //Encrypt All wallet archived transactions
+        for (map<uint256, ArchiveTxPoint>::iterator it = mapArcTxs.begin(); it != mapArcTxs.end(); ++it) {
+            ArchiveTxPoint arcTxPt = (*it).second;
 
+            uint256 txid = (*it).first;
+            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+            s << txid;
+            uint256 hash = Hash(s.begin(), s.end());
+
+            CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+            ss << arcTxPt;
+            CKeyingMaterial vchSecret(ss.begin(), ss.end());
+
+            std::vector<unsigned char> vchCryptedSecret;
+            if (!CCryptoKeyStore::EncryptWalletTransaction(vMasterKey, hash, vchSecret, vchCryptedSecret)) {
+                LogPrintf("Encrypting ArchiveTxPoint failed!!!\n");
+                return false;
+            }
+
+            if (!pwalletdbEncryption->WriteCryptedArcTx(txid, hash, vchCryptedSecret, true)) {
+                LogPrintf("Writing Encrypted ArchiveTxPoint failed!!!\n");
+                return false;
+            }
         }
 
         //Write Crypted statuses
@@ -3881,7 +3937,7 @@ bool CWalletTx::WriteToDisk(CWalletDB *pwalletdb, ArchiveTxPoint &arcTxPt, bool 
 {
 
     bool txWrite = false;
-    bool arcTxWrite = false;
+    bool arcTxWrite = true;
 
     if (pwalletMain->IsCrypted()) {
 
@@ -3889,24 +3945,32 @@ bool CWalletTx::WriteToDisk(CWalletDB *pwalletdb, ArchiveTxPoint &arcTxPt, bool 
             return false;
         }
 
-        std::vector<unsigned char> vchCryptedSecret;
-        uint256 hash;
-        if(!pwalletMain->EncryptWalletTransaction(*this, vchCryptedSecret, hash)) {
+        std::vector<unsigned char> vchCryptedTx;
+        uint256 cTxhash;
+        if(!pwalletMain->EncryptWalletTransaction(*this, vchCryptedTx, cTxhash)) {
             return false;
         }
 
-        txWrite = pwalletdb->WriteCryptedTx(GetHash(), hash, vchCryptedSecret, true);
+        txWrite = pwalletdb->WriteCryptedTx(GetHash(), cTxhash, vchCryptedTx, true);
+
+        if (updateArcTxPt) {
+
+            std::vector<unsigned char> vchCryptedArcTx;
+            uint256 cArcTxhash;
+            if(!pwalletMain->EncryptWalletArchiveTransaction(arcTxPt, GetHash(), vchCryptedArcTx, cArcTxhash)) {
+                return false;
+            }
+
+            arcTxWrite = pwalletdb->WriteCryptedArcTx(GetHash(), cArcTxhash, vchCryptedArcTx, true);
+        }
 
     } else {
         txWrite = pwalletdb->WriteTx(GetHash(), *this, true);
-    }
 
-    if (updateArcTxPt) {
-        arcTxWrite = pwalletdb->WriteArcTx(GetHash(), arcTxPt, true);
-    } else {
-        arcTxWrite = true;
+        if (updateArcTxPt) {
+            arcTxWrite = pwalletdb->WriteArcTx(GetHash(), arcTxPt, true);
+        }
     }
-
 
     if (!txWrite || !arcTxWrite)
         return false;
