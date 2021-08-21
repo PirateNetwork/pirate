@@ -85,10 +85,34 @@ bool CWalletDB::WriteArcTx(uint256 hash, ArchiveTxPoint arcTxPoint, bool txnProt
     }
 }
 
+bool CWalletDB::WriteCryptedArcTx(uint256 txid, uint256 chash, const std::vector<unsigned char>& vchCryptedSecret, bool txnProtected)
+{
+    nWalletDBUpdated++;
+    if (txnProtected) {
+        if (!WriteTxn(std::make_pair(std::string("carctx"), chash), vchCryptedSecret, __FUNCTION__)) {
+            return false;
+        }
+    } else {
+        if (!Write(std::make_pair(std::string("carctx"), chash), vchCryptedSecret)) {
+            return false;
+        }
+    }
+
+    Erase(std::make_pair(std::string("arctx"), txid));
+
+    return true;
+}
+
 bool CWalletDB::EraseArcTx(uint256 hash)
 {
     nWalletDBUpdated++;
     return Erase(std::make_pair(std::string("arctx"), hash));
+}
+
+bool CWalletDB::EraseCryptedArcTx(uint256 hash)
+{
+    nWalletDBUpdated++;
+    return Erase(std::make_pair(std::string("carctx"), hash));
 }
 
 bool CWalletDB::WriteArcSaplingOp(uint256 nullifier, SaplingOutPoint op)
@@ -595,20 +619,33 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             wss.nWalletTx++;
             pwallet->AddToWallet(wtx, true, NULL);
         }
-        else if (strType == "arctx")
+        else if (strType == "arctx" || strType == "carctx")
         {
             //The ArchiveTxPoint structure was changed. An older version will fail
             //to deserialize and not be added to the mapArcTx, triggering a full
             //ZapWalletTxes and Rescan.
             try
             {
-                uint256 wtxid;
-                ssKey >> wtxid;
+                uint256 hash;
                 ArchiveTxPoint arcTxPt;
-                ssValue >> arcTxPt;
+                if (strType == "arctx") {
+                    ssKey >> hash;
+                    ssValue >> arcTxPt;
+                } else {
+                    uint256 chash;
+                    ssKey >> chash;
+                    vector<unsigned char> vchCryptedSecret;
+                    ssValue >> vchCryptedSecret;
+
+                    if (!pwallet->DecryptWalletArchiveTransaction(chash, vchCryptedSecret, arcTxPt, hash))
+                    {
+                        strErr = "Error reading wallet database: DecryptWalletTransaction failed";
+                        return false;
+                    }
+                }
 
                 wss.nArcTx++;
-                pwallet->LoadArcTxs(wtxid, arcTxPt);
+                pwallet->LoadArcTxs(hash, arcTxPt);
             }
             catch (...) {}
 
@@ -1223,7 +1260,7 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
     return result;
 }
 
-DBErrors CWalletDB::FindWalletTxToZap(CWallet* pwallet, vector<uint256>& vTxHash, vector<CWalletTx>& vWtx, vector<uint256>& vCTxHash, vector<uint256>& vArcHash, vector<uint256>& vArcSaplingNullifier)
+DBErrors CWalletDB::FindWalletTxToZap(CWallet* pwallet, vector<uint256>& vTxHash, vector<CWalletTx>& vWtx, vector<uint256>& vCTxHash, vector<uint256>& vArcHash, vector<uint256>& vCArcHash, vector<uint256>& vArcSaplingNullifier)
 {
     pwallet->vchDefaultKey = CPubKey();
     bool fNoncriticalErrors = false;
@@ -1289,6 +1326,10 @@ DBErrors CWalletDB::FindWalletTxToZap(CWallet* pwallet, vector<uint256>& vTxHash
                 uint256 hash;
                 ssKey >> hash;
                 vArcHash.push_back(hash);
+            } if (strType == "carctx") {
+                uint256 hash;
+                ssKey >> hash;
+                vCArcHash.push_back(hash);
             } if (strType == "arczsop") {
                 uint256 nullifier;
                 ssKey >> nullifier;
@@ -1316,8 +1357,9 @@ DBErrors CWalletDB::ZapWalletTx(CWallet* pwallet, vector<CWalletTx>& vWtx)
     vector<uint256> vTxHash;
     vector<uint256> vCTxHash;
     vector<uint256> vArcTxHash;
+    vector<uint256> vCArcTxHash;
     vector<uint256> vArcSaplingNullifier;
-    DBErrors err = FindWalletTxToZap(pwallet, vTxHash, vWtx, vCTxHash, vArcTxHash, vArcSaplingNullifier);
+    DBErrors err = FindWalletTxToZap(pwallet, vTxHash, vWtx, vCTxHash, vArcTxHash, vCArcTxHash, vArcSaplingNullifier);
     if (err != DB_LOAD_OK)
         return err;
 
@@ -1339,6 +1381,11 @@ DBErrors CWalletDB::ZapWalletTx(CWallet* pwallet, vector<CWalletTx>& vWtx)
             return DB_CORRUPT;
     }
 
+    // erase each crypted archive TX
+    BOOST_FOREACH (uint256& arcHash, vArcTxHash) {
+        if (!EraseCryptedArcTx(arcHash))
+            return DB_CORRUPT;
+    }
     // erase each archive Nullier SaplingOutput set
     BOOST_FOREACH (uint256& arcNullifier, vArcSaplingNullifier) {
         if (!EraseArcSaplingOp(arcNullifier))

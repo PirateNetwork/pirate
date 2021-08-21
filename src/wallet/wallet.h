@@ -917,18 +917,25 @@ protected:
             if (!IsCrypted()) {
                 for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
                     auto wtx = wtxItem.second;
-                    // We skip transactions for which mapSproutNoteData and mapSaplingNoteData
-                    // are empty. This covers transactions that have no Sprout or Sapling data
-                    // (i.e. are purely transparent), as well as shielding and unshielding
-                    // transactions in which we only have transparent addresses involved.
-                    if (!(wtx.mapSproutNoteData.empty() && wtx.mapSaplingNoteData.empty())) {
-                        if (!walletdb.WriteTx(wtxItem.first, wtx, false)) {
-                            LogPrintf("SetBestChain(): Failed to write CWalletTx, aborting atomic write\n");
-                            walletdb.TxnAbort();
-                            return;
-                        }
-                    }
+                    // Write all transactions to disk
+                      if (!walletdb.WriteTx(wtxItem.first, wtx, false)) {
+                          LogPrintf("SetBestChain(): Failed to write CWalletTx, aborting atomic write\n");
+                          walletdb.TxnAbort();
+                          return;
+                      }
                 }
+
+                for (std::pair<const uint256, ArchiveTxPoint>& arcTxPtItem : mapArcTxs) {
+                    uint256 txid = arcTxPtItem.first;
+                    ArchiveTxPoint arcTxPt = arcTxPtItem.second;
+                    // Write all archived transactions to disk
+                      if (!walletdb.WriteArcTx(txid, arcTxPt, false)) {
+                          LogPrintf("SetBestChain(): Failed to write ArchiveTxPoint, aborting atomic write\n");
+                          walletdb.TxnAbort();
+                          return;
+                      }
+                }
+
                 if (!walletdb.WriteBestBlock(loc)) {
                     LogPrintf("SetBestChain(): Failed to write best block, aborting atomic write\n");
                     walletdb.TxnAbort();
@@ -939,25 +946,45 @@ protected:
                     LogPrintf("SetBestChain(): Wallet is unlocked");
                     for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
                         auto wtx = wtxItem.second;
+                        uint256 chash;
+                        std::vector<unsigned char> vchCryptedSecret;
+                        if(!EncryptWalletTransaction(wtx, vchCryptedSecret, chash)) {
+                            LogPrintf("SetBestChain(): Failed to encrypt CWalletTx, aborting atomic write\n");
+                            walletdb.TxnAbort();
+                            return;
+                        }
 
-                        if (!(wtx.mapSproutNoteData.empty() && wtx.mapSaplingNoteData.empty())) {
-
-                            uint256 chash;
-                            std::vector<unsigned char> vchCryptedSecret;
-                            if(!EncryptWalletTransaction(wtx, vchCryptedSecret, chash)) {
-                                LogPrintf("SetBestChain(): Failed to encrypt CWalletTx, aborting atomic write\n");
-                                walletdb.TxnAbort();
-                                return;
-                            }
-
-                            LogPrintf("SetBestChain(): Writing crypted CWalletTx txid %s, chash %s\n", wtxItem.first.ToString(), chash.ToString());
-                            if (!walletdb.WriteCryptedTx(wtxItem.first, chash, vchCryptedSecret, false)) {
-                                LogPrintf("SetBestChain(): Failed to write crypted CWalletTx, aborting atomic write\n");
-                                walletdb.TxnAbort();
-                                return;
-                            }
+                        LogPrintf("SetBestChain(): Writing crypted CWalletTx txid %s, chash %s\n", wtxItem.first.ToString(), chash.ToString());
+                        if (!walletdb.WriteCryptedTx(wtxItem.first, chash, vchCryptedSecret, false)) {
+                            LogPrintf("SetBestChain(): Failed to write crypted CWalletTx, aborting atomic write\n");
+                            walletdb.TxnAbort();
+                            return;
                         }
                     }
+
+
+                    for (std::pair<const uint256, ArchiveTxPoint>& arcTxPtItem : mapArcTxs) {
+                        uint256 txid = arcTxPtItem.first;
+                        ArchiveTxPoint arcTxPt = arcTxPtItem.second;
+                        uint256 chash;
+                        std::vector<unsigned char> vchCryptedSecret;
+
+                        //Encrypt all archived transactions in memory inorder to write to disk
+                        if(!EncryptWalletArchiveTransaction(arcTxPt, txid, vchCryptedSecret, chash)) {
+                            LogPrintf("SetBestChain(): Failed to encrypt ArchiveTxPoint, aborting atomic write\n");
+                            walletdb.TxnAbort();
+                            return;
+                        }
+
+                        LogPrintf("SetBestChain(): Writing crypted ArchiveTxPoint txid %s, chash %s\n", txid.ToString(), chash.ToString());
+                        // Write all archived transactions to disk
+                          if (!walletdb.WriteCryptedArcTx(txid, chash, vchCryptedSecret, false)) {
+                              LogPrintf("SetBestChain(): Failed to write ArchiveTxPoint, aborting atomic write\n");
+                              walletdb.TxnAbort();
+                              return;
+                          }
+                    }
+
                     if (!walletdb.WriteBestBlock(loc)) {
                         LogPrintf("SetBestChain(): Failed to write best block, aborting atomic write\n");
                         walletdb.TxnAbort();
@@ -1214,6 +1241,8 @@ public:
 
     bool DecryptWalletTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, CWalletTx& wtx, uint256& hash);
     bool EncryptWalletTransaction(const CWalletTx wtx, std::vector<unsigned char>& vchCryptedSecret, uint256& hash);
+    bool DecryptWalletArchiveTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, ArchiveTxPoint& arcTxPt, uint256& hash);
+    bool EncryptWalletArchiveTransaction(const ArchiveTxPoint arcTxPt, const uint256 txid, std::vector<unsigned char>& vchCryptedSecret, uint256& hash);
     bool EncryptWallet(const SecureString& strWalletPassphrase);
 
     void GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const;
