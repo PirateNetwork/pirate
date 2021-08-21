@@ -64,8 +64,6 @@ private:
     void subscribeToCoreSignals();
     /** Disconnect core signals to splash screen */
     void unsubscribeFromCoreSignals();
-    /** Connect wallet signals to splash screen */
-    void ConnectWallet(CWallet*);
 
     QPixmap pixmap;
     QString curMessage;

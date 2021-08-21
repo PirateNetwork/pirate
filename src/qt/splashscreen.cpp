@@ -64,7 +64,6 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
 
     // create a bitmap according to device pixelratio
     QSize splashSize(640*devicePixelRatio,456*devicePixelRatio);
-    // pixmap = QPixmap(splashSize);
     pixmap.load(":/backgrounds/splash");
     pixmap = pixmap.scaled(splashSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 
@@ -74,22 +73,6 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
 #endif
 
     QPainter pixPaint(&pixmap);
-    // pixPaint.setPen(QColor(50, 50, 50));
-
-    // draw a slightly radial gradient
-    // QRadialGradient gradient(QPoint(0, 0), splashSize.width() / devicePixelRatio);
-    // gradient.setColorAt(0, Qt::white); //top left color
-    // gradient.setColorAt(1, QColor(188, 172, 94)); //bottom right color
-    // QRect rGradient(QPoint(0, 0), splashSize);
-    // pixPaint.fillRect(rGradient, gradient);
-
-    // draw the pirate.icon, expected size of PNG: 1024x1024
-    // QRect rectIcon(QPoint(20,40), QSize(160,160));
-    //
-    // const QSize requiredSize(1024,1024);
-    // QPixmap icon(networkStyle->getAppIcon().pixmap(requiredSize));
-    //
-    // pixPaint.drawPixmap(rectIcon, icon);
 
     // check font size and drawing with
     pixPaint.setPen(QColor(193, 157, 66));
@@ -103,27 +86,12 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     pixPaint.setFont(QFont(font, 60*fontFactor));
     fm = pixPaint.fontMetrics();
     titleTextWidth  = fm.width(splashTitle);
-    // pixPaint.drawText(((pixmap.width()/devicePixelRatio)/2)-(titleTextWidth/2),paddingTop,splashTitle);
-
     pixPaint.setFont(QFont(font, 25*fontFactor));
 
     // if the version string is too long, reduce size
     fm = pixPaint.fontMetrics();
     int versionTextWidth  = fm.width(versionText);
-    // if(versionTextWidth > titleTextWidth+paddingRight-10) {
-    //     pixPaint.setFont(QFont(font, 10*fontFactor));
-    //     titleVersionVSpace -= 5;
-    // }
     pixPaint.drawText(((pixmap.width()/devicePixelRatio))-(versionTextWidth)-30,((pixmap.height()/devicePixelRatio)/2)+85,versionText);
-
-    // draw copyright stuff
-    // {
-    //     pixPaint.setFont(QFont(font, 15*fontFactor));
-    //     const int x = pixmap.width()/devicePixelRatio-titleTextWidth-paddingRight;
-    //     const int y = paddingTop+titleCopyrightVSpace-10;
-    //     QRect copyrightRect(x, y, pixmap.width() + x - paddingRight + 10, pixmap.height() - y);
-    //     pixPaint.drawText(copyrightRect, Qt::AlignLeft | Qt::AlignTop, copyrightText);
-    // }
 
     fm = pixPaint.fontMetrics();
     int copyrightTextWidth  = fm.width(copyrightText);
@@ -313,14 +281,6 @@ static void ShowProgress(SplashScreen *splash, const std::string &title, int nPr
 	}
 }
 
-#ifdef ENABLE_WALLET
-void SplashScreen::ConnectWallet(CWallet* wallet)
-{
-    wallet->ShowProgress.connect(boost::bind(ShowProgress, this, _1, _2, false));
-    connectedWallets.push_back(wallet);
-}
-#endif
-
 void SplashScreen::on_btnTypeSelected_clicked()
 {
     if(!this->newWallet->ui->radioNewWallet->isChecked() && !this->newWallet->ui->radioRestoreWallet->isChecked())
@@ -364,9 +324,6 @@ void SplashScreen::subscribeToCoreSignals()
     uiInterface.InitShowPhrase.connect(boost::bind(showNewPhrase,this));
     uiInterface.InitMessage.connect(boost::bind(InitMessage, this, _1));
     uiInterface.ShowProgress.connect(boost::bind(ShowProgress, this, _1, _2, _3));
-#ifdef ENABLE_WALLET
-    uiInterface.LoadWallet.connect(boost::bind(&SplashScreen::ConnectWallet, this, _1));
-#endif
 }
 
 void SplashScreen::unsubscribeFromCoreSignals()
@@ -374,11 +331,7 @@ void SplashScreen::unsubscribeFromCoreSignals()
     // Disconnect signals from client
     uiInterface.InitMessage.disconnect(boost::bind(InitMessage, this, _1));
     uiInterface.ShowProgress.disconnect(boost::bind(ShowProgress, this, _1, _2, _3));
-#ifdef ENABLE_WALLET
-    for (CWallet* const & pwallet : connectedWallets) {
-        pwallet->ShowProgress.disconnect(boost::bind(ShowProgress, this, _1, _2, false));
-    }
-#endif
+
 }
 
 void SplashScreen::showMessage(const QString &message, int alignment, const QColor &color)
