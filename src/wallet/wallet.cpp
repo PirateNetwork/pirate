@@ -376,6 +376,10 @@ bool CWallet::AddSaplingIncomingViewingKey(
 {
     AssertLockHeld(cs_wallet); // mapSaplingZKeyMetadata
 
+    if (IsCrypted() && IsLocked()) {
+      return false;
+    }
+
     if (!CCryptoKeyStore::AddSaplingIncomingViewingKey(ivk, addr)) {
         return false;
     }
@@ -385,7 +389,12 @@ bool CWallet::AddSaplingIncomingViewingKey(
     }
 
     if (!IsCrypted()) {
-        return CWalletDB(strWalletFile).WriteSaplingPaymentAddress(addr, ivk);
+        return CWalletDB(strWalletFile).WriteSaplingPaymentAddress(ivk, addr);
+    } else {
+
+        std::vector<unsigned char> vchCryptedSecret;
+        return AddCryptedSaplingPaymentAddress(ivk, addr, vchCryptedSecret);
+
     }
 
     return true;
@@ -621,6 +630,27 @@ bool CWallet::AddCryptedSaplingExtendedFullViewingKey(const libzcash::SaplingExt
     return false;
 }
 
+bool CWallet::AddCryptedSaplingPaymentAddress(
+    const libzcash::SaplingIncomingViewingKey &ivk,
+    const libzcash::SaplingPaymentAddress &addr,
+    const std::vector<unsigned char> &vchCryptedSecret)
+{
+    if (!CCryptoKeyStore::AddCryptedSaplingPaymentAddress(ivk, addr, vchCryptedSecret))
+        return false;
+    if (!fFileBacked)
+        return true;
+    {
+        LOCK(cs_wallet);
+
+        if (pwalletdbEncryption) {
+            return pwalletdbEncryption->WriteCryptedSaplingPaymentAddress(addr, vchCryptedSecret);
+        } else {
+            return CWalletDB(strWalletFile).WriteCryptedSaplingPaymentAddress(addr, vchCryptedSecret);
+        }
+    }
+    return false;
+}
+
 bool CWallet::LoadKeyMetadata(const CPubKey &pubkey, const CKeyMetadata &meta)
 {
     AssertLockHeld(cs_wallet); // mapKeyMetadata
@@ -669,6 +699,12 @@ bool CWallet::LoadCryptedPrimarySaplingSpendingKey(const uint256 &extfvkFinger, 
     }
     primarySaplingSpendingKey = extsk;
     return true;
+}
+
+bool CWallet::LoadCryptedSaplingPaymentAddress(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret, libzcash::SaplingPaymentAddress& addr)
+{
+    libzcash::SaplingIncomingViewingKey ivk;
+    return CCryptoKeyStore::LoadCryptedSaplingPaymentAddress(ivk, addr, chash, vchCryptedSecret);
 }
 
 bool CWallet::TempHoldCryptedSaplingMetaData(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret)

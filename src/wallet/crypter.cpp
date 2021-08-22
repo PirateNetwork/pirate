@@ -663,6 +663,57 @@ bool CCryptoKeyStore::DecryptSaplingPrimarySpendingKey(
 
 }
 
+bool CCryptoKeyStore::EncryptSaplingSaplingPaymentAddress(
+    const libzcash::SaplingIncomingViewingKey &ivk,
+    const libzcash::SaplingPaymentAddress &addr,
+    std::vector<unsigned char> &vchCryptedSecret)
+{
+    return EncryptSaplingSaplingPaymentAddress(ivk, addr, vchCryptedSecret, vMasterKey);
+}
+
+bool CCryptoKeyStore::EncryptSaplingSaplingPaymentAddress(
+    const libzcash::SaplingIncomingViewingKey &ivk,
+    const libzcash::SaplingPaymentAddress &addr,
+    std::vector<unsigned char> &vchCryptedSecret,
+    CKeyingMaterial& vMasterKeyIn)
+{
+    auto addressPair = std::make_pair(ivk, addr);
+    CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << addressPair;
+    CKeyingMaterial vchSecret(ss.begin(), ss.end());
+    if(!EncryptSecret(vMasterKeyIn, vchSecret, addr.GetHash(), vchCryptedSecret)) {
+        return false;
+    }
+    return true;
+}
+
+bool CCryptoKeyStore::DecryptSaplingPaymentAddress(
+    libzcash::SaplingIncomingViewingKey &ivk,
+    libzcash::SaplingPaymentAddress &addr,
+    const uint256 chash,
+    const std::vector<unsigned char> &vchCryptedSecret)
+{
+    LOCK(cs_SpendingKeyStore);
+    if (!SetCrypted()) {
+        return false;
+    }
+
+    if (IsLocked()) {
+        return false;
+    }
+
+    CKeyingMaterial vchSecret;
+    if (!DecryptSecret(vMasterKey, vchCryptedSecret, chash, vchSecret)) {
+        return false;
+    }
+
+    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
+    ss >> ivk;
+    ss >> addr;
+
+    return true;
+}
+
 bool CCryptoKeyStore::AddCryptedSaplingSpendingKey(
     const libzcash::SaplingExtendedFullViewingKey &extfvk,
     const std::vector<unsigned char> &vchCryptedSecret,
@@ -699,6 +750,21 @@ bool CCryptoKeyStore::AddCryptedSaplingExtendedFullViewingKey(
 
     }
     return true;
+}
+
+bool CCryptoKeyStore::AddCryptedSaplingPaymentAddress(
+    const libzcash::SaplingIncomingViewingKey &ivk,
+    const libzcash::SaplingPaymentAddress &addr,
+    const std::vector<unsigned char> &vchCryptedSecret)
+{
+
+    LOCK(cs_SpendingKeyStore);
+    if (!SetCrypted()) {
+        return false;
+    }
+
+    return CBasicKeyStore::AddSaplingIncomingViewingKey(ivk, addr);
+
 }
 
 bool CCryptoKeyStore::LoadCryptedSaplingSpendingKey(
@@ -755,6 +821,36 @@ bool CCryptoKeyStore::LoadCryptedSaplingExtendedFullViewingKey(
 
         // if SaplingFullViewingKey is not in SaplingFullViewingKeyMap, add it
         if (!CBasicKeyStore::AddSaplingExtendedFullViewingKey(extfvk)) {
+            return false;
+        }
+
+    }
+    return true;
+}
+
+bool CCryptoKeyStore::LoadCryptedSaplingPaymentAddress(
+    libzcash::SaplingIncomingViewingKey &ivk,
+    libzcash::SaplingPaymentAddress &addr,
+    const uint256 chash,
+    const std::vector<unsigned char> &vchCryptedSecret)
+{
+    {
+        LOCK(cs_SpendingKeyStore);
+        if (!SetCrypted()) {
+            return false;
+        }
+
+        if (IsLocked()) {
+            return false;
+        }
+
+        if (!DecryptSaplingPaymentAddress(ivk, addr, chash, vchCryptedSecret))
+        {
+            return false;
+        }
+
+        // if SaplingFullViewingKey is not in SaplingFullViewingKeyMap, add it
+        if (!CBasicKeyStore::AddSaplingIncomingViewingKey(ivk, addr)) {
             return false;
         }
 
@@ -884,6 +980,23 @@ bool CCryptoKeyStore::EncryptKeys(CKeyingMaterial& vMasterKeyIn)
                     return false;
                 }
             }
+        }
+
+        //Encrypt Extended Full Viewing keys
+        BOOST_FOREACH(SaplingIncomingViewingKeyMap::value_type& mSaplingIncomingViewingKeys, mapSaplingIncomingViewingKeys)
+        {
+            const auto &ivk = mSaplingIncomingViewingKeys.second;
+            const auto &addr = mSaplingIncomingViewingKeys.first;
+
+            std::vector<unsigned char> vchCryptedSecret;
+            if (!EncryptSaplingSaplingPaymentAddress(ivk, addr, vchCryptedSecret, vMasterKeyIn)) {
+                return false;
+            }
+
+            if (!AddCryptedSaplingPaymentAddress(ivk, addr, vchCryptedSecret)) {
+                return false;
+            }
+
         }
 
         mapSaplingSpendingKeys.clear();
