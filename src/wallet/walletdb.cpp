@@ -320,12 +320,25 @@ bool CWalletDB::WriteSaplingZKey(const libzcash::SaplingIncomingViewingKey &ivk,
 }
 
 bool CWalletDB::WriteSaplingPaymentAddress(
-    const libzcash::SaplingPaymentAddress &addr,
-    const libzcash::SaplingIncomingViewingKey &ivk)
+    const libzcash::SaplingIncomingViewingKey &ivk,
+    const libzcash::SaplingPaymentAddress &addr)
 {
     nWalletDBUpdated++;
 
     return Write(std::make_pair(std::string("sapzaddr"), addr), ivk, false);
+}
+
+bool CWalletDB::WriteCryptedSaplingPaymentAddress(
+    const libzcash::SaplingPaymentAddress &addr,
+    const std::vector<unsigned char> &vchCryptedSecret)
+{
+    nWalletDBUpdated++;
+
+    if (!Write(std::make_pair(std::string("csapzaddr"), addr.GetHash()), vchCryptedSecret, false)) {
+        return false;
+    }
+
+    Erase(std::make_pair(std::string("sapzaddr"), addr));
 }
 
 bool CWalletDB::WriteSaplingDiversifiedAddress(
@@ -520,6 +533,7 @@ public:
     unsigned int nZKeyMeta;
     unsigned int nCZKeyMeta;
     unsigned int nSapZAddrs;
+    unsigned int nCSapZAddrs;
     unsigned int nArcTx;
     unsigned int nWalletTx;
     bool fIsEncrypted;
@@ -528,7 +542,7 @@ public:
     vector<uint256> vWalletUpgrade;
 
     CWalletScanState() {
-        nKeys = nCKeys = nKeyMeta = nZKeys = nCZKeys = nZKeyMeta = nCZKeyMeta = nSapZAddrs = 0;
+        nKeys = nCKeys = nKeyMeta = nZKeys = nCZKeys = nZKeyMeta = nCZKeyMeta = nSapZAddrs = nCSapZAddrs = 0;
         nArcTx = nWalletTx = 0;
         fIsEncrypted = false;
         fAnyUnordered = false;
@@ -840,6 +854,25 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             // Viewing keys have no birthday information for now,
             // so set the wallet birthday to the beginning of time.
             pwallet->nTimeFirstKey = 1;
+        }
+        else if (strType == "csapzaddr")
+        {
+            uint256 chash;
+            ssKey >> chash;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+            libzcash::SaplingPaymentAddress addr;
+
+            wss.nCSapZAddrs++;
+
+            if (!pwallet->LoadCryptedSaplingPaymentAddress(chash, vchCryptedSecret, addr))
+            {
+                strErr = "Error reading wallet database: LoadCryptedSaplingPaymentAddress failed";
+                return false;
+            }
+
+            pwallet->mapZAddressBook[addr].name = "z-sapling";
+            pwallet->mapZAddressBook[addr].purpose = "unknown";
         }
         else if (strType == "cpspendkey")
         {
@@ -1235,6 +1268,7 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
            wss.nCZKeys, wss.nCZKeyMeta);
 
     LogPrintf("Sapling Addresses: %u \n",wss.nSapZAddrs);
+    LogPrintf("Encrypted Sapling Addresses: %u \n",wss.nCSapZAddrs);
     LogPrintf("Transactions: %u wallet transactions, %u archived transactions\n", wss.nWalletTx, wss.nArcTx);
 
     // nTimeFirstKey is only reliable if all keys have metadata

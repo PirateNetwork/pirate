@@ -267,8 +267,14 @@ public:
     bool WriteSaplingZKey(const libzcash::SaplingIncomingViewingKey &ivk,
                           const libzcash::SaplingExtendedSpendingKey &key,
                           const CKeyMetadata  &keyMeta);
-    bool WriteSaplingPaymentAddress(const libzcash::SaplingPaymentAddress &addr,
-                                    const libzcash::SaplingIncomingViewingKey &ivk);
+
+    bool WriteSaplingPaymentAddress(
+      const libzcash::SaplingIncomingViewingKey &ivk,
+      const libzcash::SaplingPaymentAddress &addr);
+    bool WriteCryptedSaplingPaymentAddress(
+        const libzcash::SaplingPaymentAddress &addr,
+        const std::vector<unsigned char> &vchCryptedSecret);
+
     //Wrtie the address, ivk and path of diversified address to the wallet
     bool WriteSaplingDiversifiedAddress(
         const libzcash::SaplingPaymentAddress &addr,

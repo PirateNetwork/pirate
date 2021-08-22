@@ -1305,6 +1305,11 @@ public:
     bool AddCryptedSaplingExtendedFullViewingKey(
         const libzcash::SaplingExtendedFullViewingKey &extfvk,
         const std::vector<unsigned char> &vchCryptedSecret);
+    bool AddCryptedSaplingPaymentAddress(
+        const libzcash::SaplingIncomingViewingKey &ivk,
+        const libzcash::SaplingPaymentAddress &addr,
+        const std::vector<unsigned char> &vchCryptedSecret);
+
     //! Adds spending key to the store, without saving it to disk (used by LoadWallet)
     bool LoadSaplingZKey(const libzcash::SaplingExtendedSpendingKey &key);
     //! Load spending key metadata (used by LoadWallet)
@@ -1336,6 +1341,10 @@ public:
     bool LoadCryptedPrimarySaplingSpendingKey(
         const uint256 &extfvkFinger,
         const std::vector<unsigned char> &vchCryptedSecret);
+    bool LoadCryptedSaplingPaymentAddress(
+        const uint256 &chash,
+        const std::vector<unsigned char> &vchCryptedSecret,
+        libzcash::SaplingPaymentAddress& addr);
     bool TempHoldCryptedSaplingMetaData(
         const uint256 &extfvkFinger,
         const std::vector<unsigned char> &vchCryptedSecret);
