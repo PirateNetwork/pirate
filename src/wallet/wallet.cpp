@@ -2191,8 +2191,9 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             s << txid;
             uint256 hash = Hash(s.begin(), s.end());
 
+            auto arcTxPair = make_pair(txid, arcTxPt);
             CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-            ss << arcTxPt;
+            ss << arcTxPair;
             CKeyingMaterial vchSecret(ss.begin(), ss.end());
 
             std::vector<unsigned char> vchCryptedSecret;
