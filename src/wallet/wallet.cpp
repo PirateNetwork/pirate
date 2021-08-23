@@ -380,19 +380,23 @@ bool CWallet::AddSaplingIncomingViewingKey(
       return false;
     }
 
-    if (!CCryptoKeyStore::AddSaplingIncomingViewingKey(ivk, addr)) {
-        return false;
-    }
-
     if (!fFileBacked) {
         return true;
     }
 
     if (!IsCrypted()) {
+        if (!CCryptoKeyStore::AddSaplingIncomingViewingKey(ivk, addr)) {
+            return false;
+        }
+
         return CWalletDB(strWalletFile).WriteSaplingPaymentAddress(ivk, addr);
     } else {
 
         std::vector<unsigned char> vchCryptedSecret;
+        if (!CCryptoKeyStore::EncryptSaplingSaplingPaymentAddress(ivk, addr, vchCryptedSecret)) {
+            return false;
+        }
+
         return AddCryptedSaplingPaymentAddress(ivk, addr, vchCryptedSecret);
 
     }
