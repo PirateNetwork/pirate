@@ -307,8 +307,8 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingDiversifiedAddress()
     }
 
     //Add to wallet
-    if (!AddSaplingDiversifiedAddess(addr, ivk, diversifier)) {
-        throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): AddSaplingDiversifiedAddess failed");
+    if (!AddSaplingDiversifiedAddress(addr, ivk, diversifier)) {
+        throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): AddSaplingDiversifiedAddress failed");
     }
 
     // return diversified sapling payment address
@@ -393,7 +393,7 @@ bool CWallet::AddSaplingIncomingViewingKey(
     } else {
 
         std::vector<unsigned char> vchCryptedSecret;
-        if (!CCryptoKeyStore::EncryptSaplingSaplingPaymentAddress(ivk, addr, vchCryptedSecret)) {
+        if (!CCryptoKeyStore::EncryptSaplingPaymentAddress(ivk, addr, vchCryptedSecret)) {
             return false;
         }
 
@@ -421,14 +421,14 @@ bool CWallet::AddSaplingExtendedFullViewingKey(const libzcash::SaplingExtendedFu
     }
 }
 
-bool CWallet::AddSaplingDiversifiedAddess(
+bool CWallet::AddSaplingDiversifiedAddress(
     const libzcash::SaplingPaymentAddress &addr,
     const libzcash::SaplingIncomingViewingKey &ivk,
     const blob88 &path)
 {
     AssertLockHeld(cs_wallet); // mapSaplingZKeyMetadata
 
-    if (!CCryptoKeyStore::AddSaplingDiversifiedAddess(addr, ivk, path)) {
+    if (!CCryptoKeyStore::AddSaplingDiversifiedAddress(addr, ivk, path)) {
         return false;
     }
 
@@ -789,7 +789,7 @@ bool CWallet::LoadSaplingDiversifiedAddess(
     const libzcash::SaplingIncomingViewingKey &ivk,
     const blob88 &path)
 {
-    return CCryptoKeyStore::AddSaplingDiversifiedAddess(addr, ivk, path);
+    return CCryptoKeyStore::AddSaplingDiversifiedAddress(addr, ivk, path);
 }
 
 bool CWallet::LoadLastDiversifierUsed(

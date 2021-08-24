@@ -111,7 +111,7 @@ public:
     virtual void GetSaplingPaymentAddresses(std::set<libzcash::SaplingPaymentAddress> &setAddress) const =0;
 
     //! Sapling diversified addfresses
-    virtual bool AddSaplingDiversifiedAddess(
+    virtual bool AddSaplingDiversifiedAddress(
         const libzcash::SaplingPaymentAddress &addr,
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path) =0;
@@ -357,7 +357,7 @@ public:
     }
 
     //! Sapling diversified addfresses
-    virtual bool AddSaplingDiversifiedAddess(
+    virtual bool AddSaplingDiversifiedAddress(
         const libzcash::SaplingPaymentAddress &addr,
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path);
