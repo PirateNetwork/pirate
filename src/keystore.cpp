@@ -229,7 +229,7 @@ bool CBasicKeyStore::AddSaplingIncomingViewingKey(
     return true;
 }
 
-bool CBasicKeyStore::AddSaplingDiversifiedAddess(
+bool CBasicKeyStore::AddSaplingDiversifiedAddress(
     const libzcash::SaplingPaymentAddress &addr,
     const libzcash::SaplingIncomingViewingKey &ivk,
     const blob88 &path

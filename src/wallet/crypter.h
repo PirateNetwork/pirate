@@ -295,11 +295,11 @@ public:
         libzcash::SaplingExtendedSpendingKey &extsk,
         const uint256 extfvkFinger,
         const std::vector<unsigned char> &vchCryptedSecret);
-    bool EncryptSaplingSaplingPaymentAddress(
+    bool EncryptSaplingPaymentAddress(
         const libzcash::SaplingIncomingViewingKey &ivk,
         const libzcash::SaplingPaymentAddress &addr,
         std::vector<unsigned char> &vchCryptedSecret);
-    bool EncryptSaplingSaplingPaymentAddress(
+    bool EncryptSaplingPaymentAddress(
         const libzcash::SaplingIncomingViewingKey &ivk,
         const libzcash::SaplingPaymentAddress &addr,
         std::vector<unsigned char> &vchCryptedSecret,

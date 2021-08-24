@@ -663,15 +663,15 @@ bool CCryptoKeyStore::DecryptSaplingPrimarySpendingKey(
 
 }
 
-bool CCryptoKeyStore::EncryptSaplingSaplingPaymentAddress(
+bool CCryptoKeyStore::EncryptSaplingPaymentAddress(
     const libzcash::SaplingIncomingViewingKey &ivk,
     const libzcash::SaplingPaymentAddress &addr,
     std::vector<unsigned char> &vchCryptedSecret)
 {
-    return EncryptSaplingSaplingPaymentAddress(ivk, addr, vchCryptedSecret, vMasterKey);
+    return EncryptSaplingPaymentAddress(ivk, addr, vchCryptedSecret, vMasterKey);
 }
 
-bool CCryptoKeyStore::EncryptSaplingSaplingPaymentAddress(
+bool CCryptoKeyStore::EncryptSaplingPaymentAddress(
     const libzcash::SaplingIncomingViewingKey &ivk,
     const libzcash::SaplingPaymentAddress &addr,
     std::vector<unsigned char> &vchCryptedSecret,
@@ -982,14 +982,14 @@ bool CCryptoKeyStore::EncryptKeys(CKeyingMaterial& vMasterKeyIn)
             }
         }
 
-        //Encrypt Extended Full Viewing keys
+        //Encrypt SaplingPaymentAddress
         BOOST_FOREACH(SaplingIncomingViewingKeyMap::value_type& mSaplingIncomingViewingKeys, mapSaplingIncomingViewingKeys)
         {
             const auto &ivk = mSaplingIncomingViewingKeys.second;
             const auto &addr = mSaplingIncomingViewingKeys.first;
 
             std::vector<unsigned char> vchCryptedSecret;
-            if (!EncryptSaplingSaplingPaymentAddress(ivk, addr, vchCryptedSecret, vMasterKeyIn)) {
+            if (!EncryptSaplingPaymentAddress(ivk, addr, vchCryptedSecret, vMasterKeyIn)) {
                 return false;
             }
 
