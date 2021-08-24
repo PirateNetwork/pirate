@@ -253,6 +253,10 @@ bool CWalletDB::WriteCryptedSaplingZKey(
 
         Erase(std::make_pair(std::string("sapzkey"), ivk));
         Erase(std::make_pair(std::string("sapzkeymeta"), ivk));
+
+        //Erase the extended fullviewing key record when it's corresponding spending key is added
+        Erase(std::make_pair(std::string("sapextfvk"), extfvk));
+        Erase(std::make_pair(std::string("csapextfvk"), extfvkFinger));
     }
     return true;
 }
@@ -317,6 +321,9 @@ bool CWalletDB::WriteSaplingZKey(const libzcash::SaplingIncomingViewingKey &ivk,
         return false;
 
     return Write(std::make_pair(std::string("sapzkey"), ivk), key, false);
+
+    //Erase the extended full viewing key record when it's corresponding spending key is added
+    Erase(std::make_pair(std::string("sapextfvk"), key.ToXFVK()));
 }
 
 bool CWalletDB::WriteSaplingPaymentAddress(
