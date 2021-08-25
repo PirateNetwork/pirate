@@ -904,6 +904,7 @@ protected:
 
     template <typename WalletDB>
     void SetBestChainINTERNAL(WalletDB& walletdb, const CBlockLocator& loc) {
+        AssertLockHeld(cs_wallet);
 
         LogPrintf("SetBestChain(): Calling SetBestChainINTERNAL\n");
 
