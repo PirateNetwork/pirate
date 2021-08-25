@@ -310,6 +310,24 @@ public:
         const uint256 chash,
         const std::vector<unsigned char> &vchCryptedSecret);
 
+    bool EncryptSaplingDiversifiedAddress(
+        const libzcash::SaplingPaymentAddress &addr,
+        const libzcash::SaplingIncomingViewingKey &ivk,
+        const blob88 &path,
+        std::vector<unsigned char> &vchCryptedSecret);
+    bool EncryptSaplingDiversifiedAddress(
+        const libzcash::SaplingPaymentAddress &addr,
+        const libzcash::SaplingIncomingViewingKey &ivk,
+        const blob88 &path,
+        std::vector<unsigned char> &vchCryptedSecret,
+        CKeyingMaterial& vMasterKeyIn);
+    bool DecryptSaplingDiversifiedAddress(
+        libzcash::SaplingPaymentAddress &addr,
+        libzcash::SaplingIncomingViewingKey &ivk,
+        blob88 &path,
+        const uint256 chash,
+        const std::vector<unsigned char> &vchCryptedSecret);
+
     virtual bool AddCryptedSaplingSpendingKey(
         const libzcash::SaplingExtendedFullViewingKey &extfvk,
         const std::vector<unsigned char> &vchCryptedSecret,
@@ -330,10 +348,19 @@ public:
         libzcash::SaplingPaymentAddress &addr,
         const uint256 chash,
         const std::vector<unsigned char> &vchCryptedSecret);
+    virtual bool LoadCryptedSaplingDiversifiedAddress(
+        const uint256 chash,
+        const std::vector<unsigned char> &vchCryptedSecret);
     virtual bool AddCryptedSaplingPaymentAddress(
         const libzcash::SaplingIncomingViewingKey &ivk,
         const libzcash::SaplingPaymentAddress &addr,
         const std::vector<unsigned char> &vchCryptedSecret);
+    virtual bool AddCryptedSaplingDiversifiedAddress(
+        const libzcash::SaplingIncomingViewingKey &ivk,
+        const libzcash::SaplingPaymentAddress &addr,
+        const blob88 &path,
+        const std::vector<unsigned char> &vchCryptedSecret);
+
     bool AddSaplingSpendingKey(
         const libzcash::SaplingExtendedSpendingKey &sk);
     bool AddSaplingExtendedFullViewingKey(
