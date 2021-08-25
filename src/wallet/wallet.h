@@ -905,9 +905,6 @@ protected:
     template <typename WalletDB>
     void SetBestChainINTERNAL(WalletDB& walletdb, const CBlockLocator& loc) {
         AssertLockHeld(cs_wallet);
-
-        LogPrintf("SetBestChain(): Calling SetBestChainINTERNAL\n");
-
         if (!walletdb.TxnBegin()) {
             // This needs to be done atomically, so don't do it at all
             LogPrintf("SetBestChain(): Couldn't start atomic write\n");
@@ -944,7 +941,6 @@ protected:
                 }
             } else {
                 if (!IsLocked()) {
-                    LogPrintf("SetBestChain(): Wallet is unlocked");
                     for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
                         auto wtx = wtxItem.second;
                         uint256 chash;
@@ -955,7 +951,6 @@ protected:
                             return;
                         }
 
-                        LogPrintf("SetBestChain(): Writing crypted CWalletTx txid %s, chash %s\n", wtxItem.first.ToString(), chash.ToString());
                         if (!walletdb.WriteCryptedTx(wtxItem.first, chash, vchCryptedSecret, false)) {
                             LogPrintf("SetBestChain(): Failed to write crypted CWalletTx, aborting atomic write\n");
                             walletdb.TxnAbort();
@@ -977,7 +972,6 @@ protected:
                             return;
                         }
 
-                        LogPrintf("SetBestChain(): Writing crypted ArchiveTxPoint txid %s, chash %s\n", txid.ToString(), chash.ToString());
                         // Write all archived transactions to disk
                           if (!walletdb.WriteCryptedArcTx(txid, chash, vchCryptedSecret, false)) {
                               LogPrintf("SetBestChain(): Failed to write ArchiveTxPoint, aborting atomic write\n");
