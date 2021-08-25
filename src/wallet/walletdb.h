@@ -280,6 +280,10 @@ public:
         const libzcash::SaplingPaymentAddress &addr,
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path);
+    bool WriteCryptedSaplingDiversifiedAddress(
+        const libzcash::SaplingPaymentAddress &addr,
+        const std::vector<unsigned char> &vchCryptedSecret);
+
     //Write the last used diversifier and ivk used
     bool WriteLastDiversifierUsed(
         const libzcash::SaplingIncomingViewingKey &ivk,

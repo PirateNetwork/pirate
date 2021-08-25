@@ -358,6 +358,19 @@ bool CWalletDB::WriteSaplingDiversifiedAddress(
     return Write(std::make_pair(std::string("sapzdivaddr"), addr), std::make_pair(ivk, path));
 }
 
+bool CWalletDB::WriteCryptedSaplingDiversifiedAddress(
+    const libzcash::SaplingPaymentAddress &addr,
+    const std::vector<unsigned char> &vchCryptedSecret)
+{
+    nWalletDBUpdated++;
+
+    if (!Write(std::make_pair(std::string("csapzdivaddr"), addr.GetHash()), vchCryptedSecret, false)) {
+        return false;
+    }
+
+    Erase(std::make_pair(std::string("sapzdivaddr"), addr));
+}
+
 bool CWalletDB::WriteLastDiversifierUsed(
     const libzcash::SaplingIncomingViewingKey &ivk,
     const blob88 &path)
@@ -880,6 +893,19 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
 
             pwallet->mapZAddressBook[addr].name = "z-sapling";
             pwallet->mapZAddressBook[addr].purpose = "unknown";
+        }
+        else if (strType == "csapzdivaddr")
+        {
+            uint256 chash;
+            ssKey >> chash;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+
+            if (!pwallet->LoadCryptedSaplingDiversifiedAddress(chash, vchCryptedSecret))
+            {
+                strErr = "Error reading wallet database: LoadSaplingPaymentAddress failed";
+                return false;
+            }
         }
         else if (strType == "cpspendkey")
         {
