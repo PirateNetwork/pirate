@@ -1127,6 +1127,7 @@ void CWallet::CommitAutomatedTx(const CTransaction& tx) {
 
 void CWallet::SetBestChain(const CBlockLocator& loc)
 {
+    LOCK(cs_wallet);
     CWalletDB walletdb(strWalletFile);
     SetBestChainINTERNAL(walletdb, loc);
 }
