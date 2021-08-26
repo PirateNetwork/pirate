@@ -2138,6 +2138,39 @@ bool CWallet::EncryptWalletArchiveTransaction(const ArchiveTxPoint arcTxPt, cons
     return true;
 }
 
+bool CWallet::DecryptArchivedSaplingOutpoint(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, SaplingOutPoint& op, uint256& nullifier) {
+
+    CKeyingMaterial vchSecret;
+    if (!CCryptoKeyStore::DecryptWalletTransaction(chash, vchCryptedSecret, vchSecret)) {
+        LogPrintf("Decrypting Archived Sapling Outpoint failed!!!\n");
+        return false;
+    }
+
+    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
+    ss >> op;
+    ss >> nullifier;
+
+    return true;
+}
+
+bool CWallet::EncryptArchivedSaplingOutpoint(const SaplingOutPoint op, uint256 nullifier, std::vector<unsigned char>& vchCryptedSecret, uint256& chash) {
+
+    CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+    s << nullifier;
+    chash = Hash(s.begin(), s.end());
+
+    auto arcOpPair = make_pair(op, nullifier);
+    CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << arcOpPair;
+    CKeyingMaterial vchSecret(ss.begin(), ss.end());
+
+    if (!CCryptoKeyStore::EncryptWalletTransaction(chash, vchSecret, vchCryptedSecret)) {
+        LogPrintf("Encrypting Archived Sapling Outpoint failed!!!\n");
+        return false;
+    }
+    return true;
+}
+
 bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
 {
     if (IsCrypted())
@@ -2254,6 +2287,33 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
                 LogPrintf("Writing Encrypted ArchiveTxPoint failed!!!\n");
                 return false;
             }
+        }
+
+        for (map<uint256, SaplingOutPoint>::iterator it = mapArcSaplingOutPoints.begin(); it != mapArcSaplingOutPoints.end(); ++it) {
+            uint256 nullifier = (*it).first;
+            SaplingOutPoint op = (*it).second;
+
+            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+            s << nullifier;
+            uint256 chash = Hash(s.begin(), s.end());
+
+            auto arcOpPair = make_pair(op, nullifier);
+            CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+            ss << arcOpPair;
+            CKeyingMaterial vchSecret(ss.begin(), ss.end());
+
+            std::vector<unsigned char> vchCryptedSecret;
+            if (!CCryptoKeyStore::EncryptWalletTransaction(vMasterKey, chash, vchSecret, vchCryptedSecret)) {
+                LogPrintf("Encrypting Archive Sapling Outpoint failed!!!\n");
+                return false;
+            }
+
+            // Write all archived sapling outpoint
+            if (!pwalletdbEncryption->WriteCryptedArcSaplingOp(nullifier, chash, vchCryptedSecret, true)) {
+                LogPrintf("Writing Archive Sapling Outpoint failed!!!\n");
+                return false;
+            }
+
         }
 
         //Write Crypted statuses
@@ -2603,7 +2663,17 @@ void CWallet::UpdateSaplingNullifierNoteMapWithTx(CWalletTx& wtx) {
 
                 //write the ArcOp to disk
                 CWalletDB walletdb(strWalletFile, "r+", false);
-                wtx.WriteArcSaplingOpToDisk(&walletdb, nullifier, op);
+
+                if (!IsCrypted()) {
+                    wtx.WriteArcSaplingOpToDisk(&walletdb, nullifier, op);
+                } else {
+                    if (!IsLocked()) {
+                        uint256 chash;
+                        std::vector<unsigned char> vchCryptedSecret;
+                        EncryptArchivedSaplingOutpoint(op, nullifier, vchCryptedSecret, chash);
+                        walletdb.WriteCryptedArcSaplingOp(nullifier, chash, vchCryptedSecret, true);
+                    }
+                }
             }
         }
     }
@@ -4065,7 +4135,7 @@ bool CWalletTx::WriteToDisk(CWalletDB *pwalletdb, ArchiveTxPoint &arcTxPt, bool 
 
 bool CWalletTx::WriteArcSaplingOpToDisk(CWalletDB *pwalletdb, uint256 nullifier, SaplingOutPoint op)
 {
-    return pwalletdb->WriteArcSaplingOp(nullifier, op);
+    return pwalletdb->WriteArcSaplingOp(nullifier, op, true);
 }
 
 void CWallet::WitnessNoteCommitment(std::vector<uint256> commitments,
