@@ -194,8 +194,10 @@ public:
     bool EraseArcTx(uint256 hash);
     bool WriteCryptedArcTx(uint256 txid, uint256 chash, const std::vector<unsigned char>& vchCryptedSecret, bool txnProtected);
     bool EraseCryptedArcTx(uint256 hash);
-    bool WriteArcSaplingOp(uint256 nullifier, SaplingOutPoint op);
+    bool WriteArcSaplingOp(uint256 nullifier, SaplingOutPoint op, bool txnProtected);
+    bool WriteCryptedArcSaplingOp(uint256 nullifier, uint256 chash, const std::vector<unsigned char>& vchCryptedSecret, bool txnProtected);
     bool EraseArcSaplingOp(uint256 nullifier);
+    bool EraseCryptedArcSaplingOp(uint256 chash);
     //End Historical Wallet Tx
 
     bool WriteTx(uint256 hash, const CWalletTx& wtx, bool txnProtected);

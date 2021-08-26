@@ -115,16 +115,48 @@ bool CWalletDB::EraseCryptedArcTx(uint256 hash)
     return Erase(std::make_pair(std::string("carctx"), hash));
 }
 
-bool CWalletDB::WriteArcSaplingOp(uint256 nullifier, SaplingOutPoint op)
+bool CWalletDB::WriteArcSaplingOp(uint256 nullifier, SaplingOutPoint op, bool txnProtected)
 {
     nWalletDBUpdated++;
-    return WriteTxn(std::make_pair(std::string("arczsop"), nullifier), op, __FUNCTION__);
+    if (txnProtected) {
+        if (!WriteTxn(std::make_pair(std::string("arczsop"), nullifier), op, __FUNCTION__)) {
+            return false;
+        }
+    } else {
+        if (!Write(std::make_pair(std::string("arczsop"), nullifier), op)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool CWalletDB::WriteCryptedArcSaplingOp(uint256 nullifier, uint256 chash, const std::vector<unsigned char>& vchCryptedSecret, bool txnProtected)
+{
+    nWalletDBUpdated++;
+    if (txnProtected) {
+        if (!WriteTxn(std::make_pair(std::string("carczsop"), chash), vchCryptedSecret, __FUNCTION__)) {
+            return false;
+        }
+    } else {
+        if (!Write(std::make_pair(std::string("carczsop"), chash), vchCryptedSecret)) {
+            return false;
+        }
+    }
+
+    Erase(std::make_pair(std::string("arczsop"), nullifier));
+    return true;
 }
 
 bool CWalletDB::EraseArcSaplingOp(uint256 nullifier)
 {
     nWalletDBUpdated++;
     return Erase(std::make_pair(std::string("arczsop"), nullifier));
+}
+
+bool CWalletDB::EraseCryptedArcSaplingOp(uint256 chash)
+{
+    nWalletDBUpdated++;
+    return Erase(std::make_pair(std::string("carczsop"), chash));
 }
 //End Historical Wallet Tx
 
@@ -684,12 +716,26 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             catch (...) {}
 
         }
-        else if (strType == "arczsop")
+        else if (strType == "arczsop" || strType == "carczsop")
         {
             uint256 nullifier;
-            ssKey >> nullifier;
             SaplingOutPoint op;
-            ssValue >> op;
+            if (strType == "arczsop") {
+                ssKey >> nullifier;
+                ssValue >> op;
+            } else {
+                uint256 chash;
+                ssKey >> chash;
+                vector<unsigned char> vchCryptedSecret;
+                ssValue >> vchCryptedSecret;
+
+                if (!pwallet->DecryptArchivedSaplingOutpoint(chash, vchCryptedSecret, op, nullifier))
+                {
+                    strErr = "Error reading wallet database: DecryptArchivedSaplingOutpoint failed";
+                    return false;
+                }
+            }
+
 
             pwallet->AddToArcSaplingOutPoints(nullifier, op);
         }

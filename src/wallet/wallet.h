@@ -934,6 +934,19 @@ protected:
                       }
                 }
 
+                for (std::pair<const uint256, SaplingOutPoint>& opItem : mapArcSaplingOutPoints) {
+                    uint256 nullifier = opItem.first;
+                    SaplingOutPoint op = opItem.second;
+
+                    // Write all archived sapling outpoint
+                    if (!walletdb.WriteArcSaplingOp(nullifier, op, false)) {
+                        LogPrintf("SetBestChain(): Failed to write Archive Sapling Outpoint, aborting atomic write\n");
+                        walletdb.TxnAbort();
+                        return;
+                    }
+
+                }
+
                 if (!walletdb.WriteBestBlock(loc)) {
                     LogPrintf("SetBestChain(): Failed to write best block, aborting atomic write\n");
                     walletdb.TxnAbort();
@@ -978,6 +991,27 @@ protected:
                               walletdb.TxnAbort();
                               return;
                           }
+                      }
+
+                    for (std::pair<const uint256, SaplingOutPoint>& opItem : mapArcSaplingOutPoints) {
+                        uint256 nullifier = opItem.first;
+                        SaplingOutPoint op = opItem.second;
+                        uint256 chash;
+                        std::vector<unsigned char> vchCryptedSecret;
+
+                        if(!EncryptArchivedSaplingOutpoint(op, nullifier, vchCryptedSecret, chash)) {
+                            LogPrintf("SetBestChain(): Failed to encrypt Archive Sapling Outpoint, aborting atomic write\n");
+                            walletdb.TxnAbort();
+                            return;
+                        }
+
+                        // Write all archived sapling outpoint
+                        if (!walletdb.WriteCryptedArcSaplingOp(nullifier, chash, vchCryptedSecret, false)) {
+                            LogPrintf("SetBestChain(): Failed to write Archive Sapling Outpoint, aborting atomic write\n");
+                            walletdb.TxnAbort();
+                            return;
+                        }
+
                     }
 
                     if (!walletdb.WriteBestBlock(loc)) {
@@ -985,6 +1019,7 @@ protected:
                         walletdb.TxnAbort();
                         return;
                     }
+
                 } else {
                     LogPrintf("SetBestChain(): Wallet is locked");
                 }
@@ -1238,6 +1273,8 @@ public:
     bool EncryptWalletTransaction(const CWalletTx wtx, std::vector<unsigned char>& vchCryptedSecret, uint256& hash);
     bool DecryptWalletArchiveTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, ArchiveTxPoint& arcTxPt, uint256& hash);
     bool EncryptWalletArchiveTransaction(const ArchiveTxPoint arcTxPt, const uint256 txid, std::vector<unsigned char>& vchCryptedSecret, uint256& hash);
+    bool DecryptArchivedSaplingOutpoint(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, SaplingOutPoint& op, uint256& nullifier);
+    bool EncryptArchivedSaplingOutpoint(const SaplingOutPoint op, uint256 nullifier, std::vector<unsigned char>& vchCryptedSecret, uint256& chash);
     bool EncryptWallet(const SecureString& strWalletPassphrase);
 
     void GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const;
