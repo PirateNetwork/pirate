@@ -930,7 +930,7 @@ bool InvalidateBlock(CValidationState& state, CBlockIndex *pindex);
 bool ReconsiderBlock(CValidationState& state, CBlockIndex *pindex);
 
 /** The currently-connected chain of blocks (protected by cs_main). */
-extern CChain chainActive;
+extern MultithreadedCChain<CCriticalSection> chainActive;
 
 /** Global variable that points to the active CCoinsView (protected by cs_main) */
 extern CCoinsViewCache *pcoinsTip;
