@@ -328,6 +328,23 @@ public:
         const uint256 chash,
         const std::vector<unsigned char> &vchCryptedSecret);
 
+    bool EncryptSaplingLastDiversifierUsed(
+        const uint256 chash,
+        const libzcash::SaplingIncomingViewingKey &ivk,
+        const blob88 &path,
+        std::vector<unsigned char> &vchCryptedSecret);
+    bool EncryptSaplingLastDiversifierUsed(
+        const uint256 chash,
+        const libzcash::SaplingIncomingViewingKey &ivk,
+        const blob88 &path,
+        std::vector<unsigned char> &vchCryptedSecret,
+        CKeyingMaterial& vMasterKeyIn);
+  bool DecryptSaplingLastDiversifierUsed(
+      libzcash::SaplingIncomingViewingKey &ivk,
+      blob88 &path,
+      const uint256 chash,
+      const std::vector<unsigned char> &vchCryptedSecret);
+
     virtual bool AddCryptedSaplingSpendingKey(
         const libzcash::SaplingExtendedFullViewingKey &extfvk,
         const std::vector<unsigned char> &vchCryptedSecret,

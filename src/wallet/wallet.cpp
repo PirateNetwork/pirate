@@ -463,6 +463,10 @@ bool CWallet::AddLastDiversifierUsed(
 {
     AssertLockHeld(cs_wallet); // mapSaplingZKeyMetadata
 
+    if (IsCrypted() && IsLocked()) {
+      return false;
+    }
+
     if (!CCryptoKeyStore::AddLastDiversifierUsed(ivk, path)) {
         return false;
     }
@@ -473,6 +477,20 @@ bool CWallet::AddLastDiversifierUsed(
 
     if (!IsCrypted()) {
         return CWalletDB(strWalletFile).WriteLastDiversifierUsed(ivk, path);
+    }
+    else {
+
+        CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+        s << ivk;
+        uint256 chash = Hash(s.begin(), s.end());
+
+        std::vector<unsigned char> vchCryptedSecret;
+        if (!CCryptoKeyStore::EncryptSaplingLastDiversifierUsed(chash, ivk, path, vchCryptedSecret)) {
+            return false;
+        }
+
+        return CWalletDB(strWalletFile).WriteLastCryptedDiversifierUsed(chash, ivk, vchCryptedSecret);
+
     }
 
     return true;
@@ -730,6 +748,17 @@ bool CWallet::LoadCryptedSaplingZKey(const uint256 &extfvkFinger, const std::vec
 bool CWallet::LoadCryptedSaplingExtendedFullViewingKey(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret, libzcash::SaplingExtendedFullViewingKey &extfvk)
 {
      return CCryptoKeyStore::LoadCryptedSaplingExtendedFullViewingKey(extfvkFinger, vchCryptedSecret, extfvk);
+}
+
+bool CWallet::LoadLastCryptedDiversifierUsed(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret)
+{
+    libzcash::SaplingIncomingViewingKey ivk;
+    blob88 path;
+    if (!CCryptoKeyStore::DecryptSaplingLastDiversifierUsed(ivk, path, chash, vchCryptedSecret)) {
+        return false;
+    }
+
+    return LoadLastDiversifierUsed(ivk, path);
 }
 
 bool CWallet::LoadCryptedPrimarySaplingSpendingKey(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret)
@@ -2314,6 +2343,27 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
                 return false;
             }
 
+        }
+
+
+        for (map<libzcash::SaplingIncomingViewingKey, blob88>::iterator it = mapLastDiversifierPath.begin(); it != mapLastDiversifierPath.end(); ++it) {
+            libzcash::SaplingIncomingViewingKey ivk = (*it).first;
+            blob88 path = (*it).second;
+
+            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+            s << ivk;
+            uint256 chash = Hash(s.begin(), s.end());
+
+            std::vector<unsigned char> vchCryptedSecret;
+            if (!CCryptoKeyStore::EncryptSaplingLastDiversifierUsed(chash, ivk, path, vchCryptedSecret, vMasterKey)) {
+                return false;
+            }
+
+            // Write all archived sapling outpoint
+            if (!pwalletdbEncryption->WriteLastCryptedDiversifierUsed(chash, ivk, vchCryptedSecret)) {
+                LogPrintf("Writing Archive Sapling Outpoint failed!!!\n");
+                return false;
+            }
         }
 
         //Write Crypted statuses
