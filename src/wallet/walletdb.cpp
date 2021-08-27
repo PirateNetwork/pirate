@@ -1016,9 +1016,9 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             DiversifierPath dPath;
             ssValue >> dPath;
 
-            if (!pwallet->LoadSaplingDiversifiedAddess(addr, dPath.first, dPath.second))
+            if (!pwallet->LoadSaplingDiversifiedAddress(addr, dPath.first, dPath.second))
             {
-                strErr = "Error reading wallet database: LoadSaplingPaymentAddress failed";
+                strErr = "Error reading wallet database: LoadSaplingDiversifiedAddress failed";
                 return false;
             }
         }
