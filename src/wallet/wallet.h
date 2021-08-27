@@ -1359,7 +1359,7 @@ public:
         const libzcash::SaplingPaymentAddress &addr,
         const libzcash::SaplingIncomingViewingKey &ivk);
 
-    bool LoadSaplingDiversifiedAddess(
+    bool LoadSaplingDiversifiedAddress(
         const libzcash::SaplingPaymentAddress &addr,
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path);

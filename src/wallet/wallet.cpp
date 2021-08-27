@@ -827,7 +827,7 @@ bool CWallet::LoadSaplingPaymentAddress(
     return CCryptoKeyStore::AddSaplingIncomingViewingKey(ivk, addr);
 }
 
-bool CWallet::LoadSaplingDiversifiedAddess(
+bool CWallet::LoadSaplingDiversifiedAddress(
     const libzcash::SaplingPaymentAddress &addr,
     const libzcash::SaplingIncomingViewingKey &ivk,
     const blob88 &path)
