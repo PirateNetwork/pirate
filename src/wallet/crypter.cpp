@@ -769,6 +769,59 @@ bool CCryptoKeyStore::DecryptSaplingDiversifiedAddress(
     return true;
 }
 
+bool CCryptoKeyStore::EncryptSaplingLastDiversifierUsed(
+    const uint256 chash,
+    const libzcash::SaplingIncomingViewingKey &ivk,
+    const blob88 &path,
+    std::vector<unsigned char> &vchCryptedSecret)
+{
+    return EncryptSaplingLastDiversifierUsed(chash, ivk, path, vchCryptedSecret, vMasterKey);
+}
+
+bool CCryptoKeyStore::EncryptSaplingLastDiversifierUsed(
+    const uint256 chash,
+    const libzcash::SaplingIncomingViewingKey &ivk,
+    const blob88 &path,
+    std::vector<unsigned char> &vchCryptedSecret,
+    CKeyingMaterial& vMasterKeyIn)
+{
+    auto addressPair = std::make_pair(ivk ,path);
+    CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << addressPair;
+    CKeyingMaterial vchSecret(ss.begin(), ss.end());
+    if(!EncryptSecret(vMasterKeyIn, vchSecret, chash, vchCryptedSecret)) {
+        return false;
+    }
+    return true;
+}
+
+bool CCryptoKeyStore::DecryptSaplingLastDiversifierUsed(
+    libzcash::SaplingIncomingViewingKey &ivk,
+    blob88 &path,
+    const uint256 chash,
+    const std::vector<unsigned char> &vchCryptedSecret)
+{
+    LOCK(cs_SpendingKeyStore);
+    if (!SetCrypted()) {
+        return false;
+    }
+
+    if (IsLocked()) {
+        return false;
+    }
+
+    CKeyingMaterial vchSecret;
+    if (!DecryptSecret(vMasterKey, vchCryptedSecret, chash, vchSecret)) {
+        return false;
+    }
+
+    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
+    ss >> ivk;
+    ss >> path;
+
+    return true;
+}
+
 bool CCryptoKeyStore::AddCryptedSaplingSpendingKey(
     const libzcash::SaplingExtendedFullViewingKey &extfvk,
     const std::vector<unsigned char> &vchCryptedSecret,

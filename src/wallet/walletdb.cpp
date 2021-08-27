@@ -412,6 +412,21 @@ bool CWalletDB::WriteLastDiversifierUsed(
     return Write(std::make_pair(std::string("sapzlastdiv"), ivk), path);
 }
 
+bool CWalletDB::WriteLastCryptedDiversifierUsed(
+    const uint256 chash,
+    const libzcash::SaplingIncomingViewingKey &ivk,
+    const std::vector<unsigned char> &vchCryptedSecret)
+{
+    nWalletDBUpdated++;
+
+    if (!Write(std::make_pair(std::string("csapzlastdiv"), chash), vchCryptedSecret)) {
+        return false;
+    }
+
+    Erase(std::make_pair(std::string("sapzlastdiv"), ivk));
+    return true;
+}
+
 bool CWalletDB::WritePrimarySaplingSpendingKey(
     const libzcash::SaplingExtendedSpendingKey &key)
 {
@@ -1125,6 +1140,19 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             ssValue >> path;
 
             if (!pwallet->LoadLastDiversifierUsed(ivk, path))
+            {
+                strErr = "Error reading wallet database: LoadLastDiversifierUsed failed";
+                return false;
+            }
+        }
+        else if (strType == "csapzlastdiv")
+        {
+            uint256 chash;
+            ssKey >> chash;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+
+            if (!pwallet->LoadLastCryptedDiversifierUsed(chash, vchCryptedSecret))
             {
                 strErr = "Error reading wallet database: LoadLastDiversifierUsed failed";
                 return false;

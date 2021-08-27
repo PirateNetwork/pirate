@@ -290,6 +290,11 @@ public:
     bool WriteLastDiversifierUsed(
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path);
+    bool WriteLastCryptedDiversifierUsed(
+        const uint256 chash,
+        const libzcash::SaplingIncomingViewingKey &ivk,
+        const std::vector<unsigned char> &vchCryptedSecret);
+        
     //Write the current spending key used to create diversified addresses to the wallet
     bool WritePrimarySaplingSpendingKey(
         const libzcash::SaplingExtendedSpendingKey &key);

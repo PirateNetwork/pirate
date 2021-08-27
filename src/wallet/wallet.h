@@ -1375,6 +1375,9 @@ public:
         const uint256 &extfvkFinger,
         const std::vector<unsigned char> &vchCryptedSecret,
         libzcash::SaplingExtendedFullViewingKey &extfvk);
+    bool LoadLastCryptedDiversifierUsed(
+        const uint256 &chash,
+        const std::vector<unsigned char> &vchCryptedSecret);
     bool LoadCryptedPrimarySaplingSpendingKey(
         const uint256 &extfvkFinger,
         const std::vector<unsigned char> &vchCryptedSecret);
