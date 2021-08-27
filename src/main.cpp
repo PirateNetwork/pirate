@@ -354,10 +354,14 @@ namespace {
 
     int GetHeight()
     {
-        CBlockIndex *pindex;
-        if ( (pindex= chainActive.LastTip()) != 0 )
+        CBlockIndex *pindex = nullptr;
+        {
+            LOCK(cs_main);
+            pindex = chainActive.LastTip();
+        }
+        if ( pindex != nullptr )
             return pindex->GetHeight();
-        else return(0);
+        return 0;
     }
 
     void UpdatePreferredDownload(CNode* node, CNodeState* state)
@@ -4613,6 +4617,11 @@ static bool ActivateBestChainStep(bool fSkipdpow, CValidationState &state, CBloc
     return true;
 }
 
+CBlockIndex *GetTipWithLock()
+{
+    LOCK(cs_main);
+    return chainActive.Tip();
+}
 /**
  * Make the best chain active, in multiple steps. The result is either failure
  * or an activated best chain. pblock is either NULL or a pointer to a block
@@ -4650,17 +4659,23 @@ bool ActivateBestChain(bool fSkipdpow, CValidationState &state, CBlock *pblock) 
                 nBlockEstimate = Checkpoints::GetTotalBlocksEstimate(chainParams.Checkpoints());
             // Don't relay blocks if pruning -- could cause a peer to try to download, resulting
             // in a stalled download if the block file is pruned before the request.
-            if (nLocalServices & NODE_NETWORK) {
+            if (nLocalServices & NODE_NETWORK) 
+            {
+                int ht = 0;
+                {
+                    LOCK(cs_main);
+                    ht = chainActive.Height();
+                }
                 LOCK(cs_vNodes);
-                BOOST_FOREACH(CNode* pnode, vNodes)
-                if (chainActive.Height() > (pnode->nStartingHeight != -1 ? pnode->nStartingHeight - 2000 : nBlockEstimate))
-                    pnode->PushInventory(CInv(MSG_BLOCK, hashNewTip));
+                for(CNode* pnode : vNodes)
+                    if (ht > (pnode->nStartingHeight != -1 ? pnode->nStartingHeight - 2000 : nBlockEstimate))
+                        pnode->PushInventory(CInv(MSG_BLOCK, hashNewTip));
             }
             // Notify external listeners about the new tip.
             GetMainSignals().UpdatedBlockTip(pindexNewTip);
             uiInterface.NotifyBlockTip(hashNewTip);
         } //else fprintf(stderr,"initial download skips propagation\n");
-    } while(pindexMostWork != chainActive.Tip());
+    } while(pindexMostWork != GetTipWithLock());
     CheckBlockIndex();
 
     // Write changes periodically to disk, after relay.
@@ -6108,8 +6123,11 @@ bool static LoadBlockIndexDB()
 {
     const CChainParams& chainparams = Params();
     LogPrintf("%s: start loading guts\n", __func__);
-    if (!pblocktree->LoadBlockIndexGuts())
-        return false;
+    {
+        LOCK(cs_main);
+        if (!pblocktree->LoadBlockIndexGuts())
+            return false;
+    }
     LogPrintf("%s: loaded guts\n", __func__);
     boost::this_thread::interruption_point();
 
@@ -6264,6 +6282,7 @@ bool static LoadBlockIndexDB()
     if (it == mapBlockIndex.end())
         return true;
 
+    LOCK(cs_main);
     chainActive.SetTip(it->second);
 
     // Set hashFinalSproutRoot for the end of best chain

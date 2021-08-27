@@ -1446,12 +1446,16 @@ void komodo_passport_iteration()
         fprintf(stderr,"[%s] PASSPORT iteration waiting for KOMODO_INITDONE\n",ASSETCHAINS_SYMBOL);
         sleep(3);
     }
-    if ( komodo_chainactive_timestamp() > lastinterest )
+    uint32_t chainactive_timestamp = 0;
+    {
+        LOCK(cs_main);
+        chainactive_timestamp = komodo_chainactive_timestamp();
+    }
+    if ( chainactive_timestamp > lastinterest )
     {
         if ( ASSETCHAINS_SYMBOL[0] == 0 )
             komodo_interestsum();
-        //komodo_longestchain();
-        lastinterest = komodo_chainactive_timestamp();
+        lastinterest = chainactive_timestamp;
     }
     refsp = komodo_stateptr(symbol,dest);
     if ( ASSETCHAINS_SYMBOL[0] == 0 || strcmp(ASSETCHAINS_SYMBOL,"KMDCC") == 0 )
@@ -1561,7 +1565,10 @@ void komodo_passport_iteration()
             komodo_statefname(fname,baseid<32?base:(char *)"",(char *)"realtime");
             if ( (fp= fopen(fname,"wb")) != 0 )
             {
-                buf[0] = (uint32_t)chainActive.LastTip()->GetHeight();
+                {
+                    LOCK(cs_main);
+                    buf[0] = (uint32_t)chainActive.LastTip()->GetHeight();
+                }
                 buf[1] = (uint32_t)komodo_longestchain();
                 if ( buf[0] != 0 && buf[0] == buf[1] )
                 {
