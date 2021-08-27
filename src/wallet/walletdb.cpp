@@ -612,19 +612,49 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         // is just the two items serialized one after the other
         ssKey >> strType;
         LogPrintf("Loading %s wallet key\n", strType);
-        if (strType == "name")
+
+        //General Wallet Info
+        if (strType == "hdseed") // encypted type is chdseed
         {
-            string strAddress;
-            ssKey >> strAddress;
-            ssValue >> pwallet->mapAddressBook[DecodeDestination(strAddress)].name;
+            uint256 seedFp;
+            RawHDSeed rawSeed;
+            ssKey >> seedFp;
+            ssValue >> rawSeed;
+            HDSeed seed(rawSeed);
+
+            if (seed.Fingerprint() != seedFp)
+            {
+                strErr = "Error reading wallet database: HDSeed corrupt";
+                return false;
+            }
+
+            if (!pwallet->LoadHDSeed(seed))
+            {
+                strErr = "Error reading wallet database: LoadHDSeed failed";
+                return false;
+            }
         }
-        else if (strType == "purpose")
+        else if (strType == "hdchain") //no need to encrypt
         {
-            string strAddress;
-            ssKey >> strAddress;
-            ssValue >> pwallet->mapAddressBook[DecodeDestination(strAddress)].purpose;
+            CHDChain chain;
+            ssValue >> chain;
+            pwallet->SetHDChain(chain, true);
         }
-        else if (strType == "tx" || strType == "ctx")
+        else if (strType == "version") //no need to encrypt
+        {
+            ssValue >> wss.nFileVersion;
+            if (wss.nFileVersion == 10300)
+                wss.nFileVersion = 300;
+        }
+        //End general wallet data records
+
+        //Begin Transaction Data records
+        else if (strType == "orderposnext") //no need to encrypt
+        {
+            ssValue >> pwallet->nOrderPosNext;
+        }
+
+        else if (strType == "tx" || strType == "ctx") //ctx is encrypted tx
         {
 
             uint256 hash;
@@ -685,7 +715,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             wss.nWalletTx++;
             pwallet->AddToWallet(wtx, true, NULL);
         }
-        else if (strType == "arctx" || strType == "carctx")
+        else if (strType == "arctx" || strType == "carctx") //carctx is encrypted arctx
         {
             //The ArchiveTxPoint structure was changed. An older version will fail
             //to deserialize and not be added to the mapArcTx, triggering a full
@@ -705,7 +735,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
 
                     if (!pwallet->DecryptWalletArchiveTransaction(chash, vchCryptedSecret, arcTxPt, hash))
                     {
-                        strErr = "Error reading wallet database: DecryptWalletTransaction failed";
+                        strErr = "Error reading wallet database: DecryptWalletArchiveTransaction failed";
                         return false;
                     }
                 }
@@ -716,7 +746,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             catch (...) {}
 
         }
-        else if (strType == "arczsop" || strType == "carczsop")
+        else if (strType == "arczsop" || strType == "carczsop") //carczsop is encrypted arczsop
         {
             uint256 nullifier;
             SaplingOutPoint op;
@@ -736,8 +766,22 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 }
             }
 
-
             pwallet->AddToArcSaplingOutPoints(nullifier, op);
+        }
+        //End transaction data records
+
+        //Begin t-address data records
+        else if (strType == "name")
+        {
+            string strAddress;
+            ssKey >> strAddress;
+            ssValue >> pwallet->mapAddressBook[DecodeDestination(strAddress)].name;
+        }
+        else if (strType == "purpose")
+        {
+            string strAddress;
+            ssKey >> strAddress;
+            ssValue >> pwallet->mapAddressBook[DecodeDestination(strAddress)].purpose;
         }
         else if (strType == "watchs")
         {
@@ -752,45 +796,19 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             // so set the wallet birthday to the beginning of time.
             pwallet->nTimeFirstKey = 1;
         }
-        else if (strType == "sapzkey")
+        else if (strType == "cscript")
         {
-            libzcash::SaplingIncomingViewingKey ivk;
-            ssKey >> ivk;
-            libzcash::SaplingExtendedSpendingKey key;
-            ssValue >> key;
-
-            if (!pwallet->LoadSaplingZKey(key))
+            uint160 hash;
+            ssKey >> hash;
+            CScript script;
+            ssValue >> *(CScriptBase*)(&script);
+            if (!pwallet->LoadCScript(script))
             {
-                strErr = "Error reading wallet database: LoadSaplingZKey failed";
+                strErr = "Error reading wallet database: LoadCScript failed";
                 return false;
             }
-
-            pwallet->mapZAddressBook[key.DefaultAddress()].name = "z-sapling";
-            pwallet->mapZAddressBook[key.DefaultAddress()].purpose = "unknown";
-
-            //add checks for integrity
-            wss.nZKeys++;
         }
-        else if (strType == "sapextfvk")
-        {
-            libzcash::SaplingExtendedFullViewingKey extfvk;
-            ssKey >> extfvk;
-            char fYes;
-            ssValue >> fYes;
-            if (fYes == '1') {
-                pwallet->LoadSaplingFullViewingKey(extfvk);
-                pwallet->LoadSaplingWatchOnly(extfvk);
-            }
-
-            pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
-            pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
-
-            // Viewing keys have no birthday information for now,
-            // so set the wallet birthday to the beginning of time.
-            pwallet->nTimeFirstKey = 1;
-        }
-
-        else if (strType == "key" || strType == "wkey")
+        else if (strType == "key" || strType == "wkey") //encrypt type of key is ckey
         {
             CPubKey vchPubKey;
             ssKey >> vchPubKey;
@@ -854,7 +872,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 return false;
             }
         }
-        else if (strType == "ckey")
+        else if (strType == "ckey") //ckey is encrypt key (transparent)
         {
             vector<unsigned char> vchPubKey;
             ssKey >> vchPubKey;
@@ -868,6 +886,63 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 return false;
             }
             wss.fIsEncrypted = true;
+        }
+        else if (strType == "keymeta")
+        {
+            CPubKey vchPubKey;
+            ssKey >> vchPubKey;
+            CKeyMetadata keyMeta;
+            ssValue >> keyMeta;
+            wss.nKeyMeta++;
+
+            pwallet->LoadKeyMetadata(vchPubKey, keyMeta);
+
+            // find earliest key creation time, as wallet birthday
+            if (!pwallet->nTimeFirstKey ||
+                (keyMeta.nCreateTime < pwallet->nTimeFirstKey))
+                pwallet->nTimeFirstKey = keyMeta.nCreateTime;
+        }
+        else if (strType == "defaultkey")
+        {
+            ssValue >> pwallet->vchDefaultKey;
+        }
+        else if (strType == "pool")
+        {
+            int64_t nIndex;
+            ssKey >> nIndex;
+            CKeyPool keypool;
+            ssValue >> keypool;
+            pwallet->setKeyPool.insert(nIndex);
+
+            // If no metadata exists yet, create a default with the pool key's
+            // creation time. Note that this may be overwritten by actually
+            // stored metadata for that key later, which is fine.
+            CKeyID keyid = keypool.vchPubKey.GetID();
+            if (pwallet->mapKeyMetadata.count(keyid) == 0)
+                pwallet->mapKeyMetadata[keyid] = CKeyMetadata(keypool.nTime);
+        }
+        //End transparent data records
+
+
+        //Sapling Address data
+        else if (strType == "sapzkey")
+        {
+            libzcash::SaplingIncomingViewingKey ivk;
+            ssKey >> ivk;
+            libzcash::SaplingExtendedSpendingKey key;
+            ssValue >> key;
+
+            if (!pwallet->LoadSaplingZKey(key))
+            {
+                strErr = "Error reading wallet database: LoadSaplingZKey failed";
+                return false;
+            }
+
+            pwallet->mapZAddressBook[key.DefaultAddress()].name = "z-sapling";
+            pwallet->mapZAddressBook[key.DefaultAddress()].purpose = "unknown";
+
+            //add checks for integrity
+            wss.nZKeys++;
         }
         else if (strType == "csapzkey")
         {
@@ -889,16 +964,31 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
 
             wss.fIsEncrypted = true;
         }
-        else if (strType == "csapzkeymeta")
+        else if (strType == "sapextfvk")
         {
-            uint256 extfvkFinger;
-            ssKey >> extfvkFinger;
-            vector<unsigned char> vchCryptedSecret;
-            ssValue >> vchCryptedSecret;
+            libzcash::SaplingExtendedFullViewingKey extfvk;
+            ssKey >> extfvk;
+            char fYes;
+            ssValue >> fYes;
+            if (fYes == '1') {
+                if(!pwallet->LoadSaplingFullViewingKey(extfvk))
+                {
+                    strErr = "Error reading wallet database: LoadSaplingFullViewingKey failed";
+                    return false;
+                }
+                if(!pwallet->LoadSaplingWatchOnly(extfvk))
+                {
+                    strErr = "Error reading wallet database: LoadSaplingWatchOnly failed";
+                    return false;
+                }
+            }
 
-            wss.nCZKeyMeta++;
+            pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
+            pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
 
-            pwallet->TempHoldCryptedSaplingMetaData(extfvkFinger, vchCryptedSecret);
+            // Viewing keys have no birthday information for now,
+            // so set the wallet birthday to the beginning of time.
+            pwallet->nTimeFirstKey = 1;
         }
         else if (strType == "csapextfvk")
         {
@@ -921,65 +1011,6 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             // so set the wallet birthday to the beginning of time.
             pwallet->nTimeFirstKey = 1;
         }
-        else if (strType == "csapzaddr")
-        {
-            uint256 chash;
-            ssKey >> chash;
-            vector<unsigned char> vchCryptedSecret;
-            ssValue >> vchCryptedSecret;
-            libzcash::SaplingPaymentAddress addr;
-
-            wss.nCSapZAddrs++;
-
-            if (!pwallet->LoadCryptedSaplingPaymentAddress(chash, vchCryptedSecret, addr))
-            {
-                strErr = "Error reading wallet database: LoadCryptedSaplingPaymentAddress failed";
-                return false;
-            }
-
-            pwallet->mapZAddressBook[addr].name = "z-sapling";
-            pwallet->mapZAddressBook[addr].purpose = "unknown";
-        }
-        else if (strType == "csapzdivaddr")
-        {
-            uint256 chash;
-            ssKey >> chash;
-            vector<unsigned char> vchCryptedSecret;
-            ssValue >> vchCryptedSecret;
-
-            if (!pwallet->LoadCryptedSaplingDiversifiedAddress(chash, vchCryptedSecret))
-            {
-                strErr = "Error reading wallet database: LoadSaplingPaymentAddress failed";
-                return false;
-            }
-        }
-        else if (strType == "cpspendkey")
-        {
-            uint256 extfvkFinger;
-            ssValue >> extfvkFinger;
-            vector<unsigned char> vchCryptedSecret;
-            ssValue >> vchCryptedSecret;
-
-            if (!pwallet->LoadCryptedPrimarySaplingSpendingKey(extfvkFinger, vchCryptedSecret)) {
-                strErr = "Error reading wallet database: LoadCryptedPrimarySaplingSpendingKey failed";
-                return false;
-            }
-        }
-        else if (strType == "keymeta")
-        {
-            CPubKey vchPubKey;
-            ssKey >> vchPubKey;
-            CKeyMetadata keyMeta;
-            ssValue >> keyMeta;
-            wss.nKeyMeta++;
-
-            pwallet->LoadKeyMetadata(vchPubKey, keyMeta);
-
-            // find earliest key creation time, as wallet birthday
-            if (!pwallet->nTimeFirstKey ||
-                (keyMeta.nCreateTime < pwallet->nTimeFirstKey))
-                pwallet->nTimeFirstKey = keyMeta.nCreateTime;
-        }
         else if (strType == "sapzkeymeta")
         {
             libzcash::SaplingIncomingViewingKey ivk;
@@ -990,6 +1021,17 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             wss.nZKeyMeta++;
 
             pwallet->LoadSaplingZKeyMetadata(ivk, keyMeta);
+        }
+        else if (strType == "csapzkeymeta")
+        {
+            uint256 extfvkFinger;
+            ssKey >> extfvkFinger;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+
+            wss.nCZKeyMeta++;
+
+            pwallet->TempHoldCryptedSaplingMetaData(extfvkFinger, vchCryptedSecret);
         }
         else if (strType == "sapzaddr")
         {
@@ -1009,6 +1051,25 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             pwallet->mapZAddressBook[addr].name = "z-sapling";
             pwallet->mapZAddressBook[addr].purpose = "unknown";
         }
+        else if (strType == "csapzaddr")
+        {
+            uint256 chash;
+            ssKey >> chash;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+            libzcash::SaplingPaymentAddress addr;
+
+            wss.nCSapZAddrs++;
+
+            if (!pwallet->LoadCryptedSaplingPaymentAddress(chash, vchCryptedSecret, addr))
+            {
+                strErr = "Error reading wallet database: LoadCryptedSaplingPaymentAddress failed";
+                return false;
+            }
+
+            pwallet->mapZAddressBook[addr].name = "z-sapling";
+            pwallet->mapZAddressBook[addr].purpose = "unknown";
+        }
         else if (strType == "sapzdivaddr")
         {
             libzcash::SaplingPaymentAddress addr;
@@ -1022,16 +1083,16 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 return false;
             }
         }
-        else if (strType == "sapzlastdiv")
+        else if (strType == "csapzdivaddr")
         {
-            libzcash::SaplingIncomingViewingKey ivk;
-            ssKey >> ivk;
-            blob88 path;
-            ssValue >> path;
+            uint256 chash;
+            ssKey >> chash;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
 
-            if (!pwallet->LoadLastDiversifierUsed(ivk, path))
+            if (!pwallet->LoadCryptedSaplingDiversifiedAddress(chash, vchCryptedSecret))
             {
-                strErr = "Error reading wallet database: LoadSaplingPaymentAddress failed";
+                strErr = "Error reading wallet database: LoadCryptedSaplingDiversifiedAddress failed";
                 return false;
             }
         }
@@ -1042,47 +1103,35 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
 
             pwallet->primarySaplingSpendingKey = key;
         }
-        else if (strType == "defaultkey")
+        else if (strType == "cpspendkey")
         {
-            ssValue >> pwallet->vchDefaultKey;
-        }
-        else if (strType == "pool")
-        {
-            int64_t nIndex;
-            ssKey >> nIndex;
-            CKeyPool keypool;
-            ssValue >> keypool;
-            pwallet->setKeyPool.insert(nIndex);
+            uint256 extfvkFinger;
+            ssValue >> extfvkFinger;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
 
-            // If no metadata exists yet, create a default with the pool key's
-            // creation time. Note that this may be overwritten by actually
-            // stored metadata for that key later, which is fine.
-            CKeyID keyid = keypool.vchPubKey.GetID();
-            if (pwallet->mapKeyMetadata.count(keyid) == 0)
-                pwallet->mapKeyMetadata[keyid] = CKeyMetadata(keypool.nTime);
-        }
-        else if (strType == "version")
-        {
-            ssValue >> wss.nFileVersion;
-            if (wss.nFileVersion == 10300)
-                wss.nFileVersion = 300;
-        }
-        else if (strType == "cscript")
-        {
-            uint160 hash;
-            ssKey >> hash;
-            CScript script;
-            ssValue >> *(CScriptBase*)(&script);
-            if (!pwallet->LoadCScript(script))
+            if (!pwallet->LoadCryptedPrimarySaplingSpendingKey(extfvkFinger, vchCryptedSecret))
             {
-                strErr = "Error reading wallet database: LoadCScript failed";
+                strErr = "Error reading wallet database: LoadCryptedPrimarySaplingSpendingKey failed";
                 return false;
             }
         }
-        else if (strType == "orderposnext")
+
+        else if (strType == "sapzlastdiv")
         {
-            ssValue >> pwallet->nOrderPosNext;
+            libzcash::SaplingIncomingViewingKey ivk;
+            ssKey >> ivk;
+            blob88 path;
+            ssValue >> path;
+
+            if (!pwallet->LoadLastDiversifierUsed(ivk, path))
+            {
+                strErr = "Error reading wallet database: LoadLastDiversifierUsed failed";
+                return false;
+            }
         }
+
+        //TODO: Remove this record type
         else if (strType == "destdata")
         {
             std::string strAddress, strKey, strValue;
@@ -1095,32 +1144,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 return false;
             }
         }
-        else if (strType == "hdseed")
-        {
-            uint256 seedFp;
-            RawHDSeed rawSeed;
-            ssKey >> seedFp;
-            ssValue >> rawSeed;
-            HDSeed seed(rawSeed);
 
-            if (seed.Fingerprint() != seedFp)
-            {
-                strErr = "Error reading wallet database: HDSeed corrupt";
-                return false;
-            }
-
-            if (!pwallet->LoadHDSeed(seed))
-            {
-                strErr = "Error reading wallet database: LoadHDSeed failed";
-                return false;
-            }
-        }
-        else if (strType == "hdchain")
-        {
-            CHDChain chain;
-            ssValue >> chain;
-            pwallet->SetHDChain(chain, true);
-        }
     } catch (...)
     {
         return false;
