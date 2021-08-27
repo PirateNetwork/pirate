@@ -662,6 +662,7 @@ public:
     virtual const CBlockIndex *FindFork(const CBlockIndex *pindex) const;
 };
 
+#ifdef DEBUG_LOCKORDER
 /************
  * A mutex-protected version of CChain
  * Probably good for verifying locking, but no effort
@@ -691,5 +692,6 @@ private:
         
     Mutex &mutex;
 };
+#endif
 
 #endif // BITCOIN_CHAIN_H

@@ -90,7 +90,11 @@ void komodo_setactivation(int32_t height);
 void komodo_pricesupdate(int32_t height,CBlock *pblock);
 
 BlockMap mapBlockIndex;
+#ifdef DEBUG_LOCKORDER
 MultithreadedCChain<CCriticalSection> chainActive(cs_main);
+#else
+CChain chainActive;
+#endif
 CBlockIndex *pindexBestHeader = NULL;
 static int64_t nTimeBestReceived = 0;
 CWaitableCriticalSection csBestBlock;
