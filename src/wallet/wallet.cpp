@@ -4544,7 +4544,7 @@ bool CWallet::initalizeArcTx() {
     }
 
     for (map<uint256, ArchiveTxPoint>::iterator it = mapArcTxs.begin(); it != mapArcTxs.end(); it++) {
-        //Add to mapAddessTxids
+        //Add to mapAddressTxids
         AddToArcTxs(it->first, it->second, false);
     }
 
