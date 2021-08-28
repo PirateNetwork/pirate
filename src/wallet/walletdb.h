@@ -236,6 +236,7 @@ public:
     bool WriteOrderPosNext(int64_t nOrderPosNext);
 
     bool WriteDefaultKey(const CPubKey& vchPubKey);
+    bool WriteCryptedDefaultKey(const uint256 chash, const std::vector<unsigned char> &vchCryptedSecret);
 
     bool ReadPool(int64_t nPool, CKeyPool& keypool);
     bool WritePool(int64_t nPool, const CKeyPool& keypool);

@@ -656,6 +656,54 @@ bool CCryptoKeyStore::DecryptStringPair(
     return true;
 }
 
+bool CCryptoKeyStore::EncryptPublicKey(
+    const uint256 &chash,
+    const CPubKey &vchPubKey,
+    std::vector<unsigned char> &vchCryptedSecret)
+{
+    return EncryptPublicKey(chash, vchPubKey, vchCryptedSecret, vMasterKey);
+}
+
+bool CCryptoKeyStore::EncryptPublicKey(
+    const uint256 &chash,
+    const CPubKey &vchPubKey,
+    std::vector<unsigned char> &vchCryptedSecret,
+    CKeyingMaterial &vMasterKeyIn)
+{
+    CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << vchPubKey;
+    CKeyingMaterial vchSecret(ss.begin(), ss.end());
+    if(!EncryptSecret(vMasterKeyIn, vchSecret, chash, vchCryptedSecret)) {
+        return false;
+    }
+    return true;
+}
+
+bool CCryptoKeyStore::DecryptPublicKey(
+    CPubKey &vchPubKey,
+    const uint256 &chash,
+    const std::vector<unsigned char> &vchCryptedSecret)
+{
+    LOCK(cs_SpendingKeyStore);
+    if (!SetCrypted()) {
+        return false;
+    }
+
+    if (IsLocked()) {
+        return false;
+    }
+
+    CKeyingMaterial vchSecret;
+    if (!DecryptSecret(vMasterKey, vchCryptedSecret, chash, vchSecret)) {
+        return false;
+    }
+
+    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
+    ss >> vchPubKey;
+
+    return true;
+}
+
 bool CCryptoKeyStore::DecryptWalletTransaction(
     const uint256 &chash,
     const std::vector<unsigned char> &vchCryptedSecret,

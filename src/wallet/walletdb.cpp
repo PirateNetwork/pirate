@@ -576,6 +576,16 @@ bool CWalletDB::WriteDefaultKey(const CPubKey& vchPubKey)
     return Write(std::string("defaultkey"), vchPubKey);
 }
 
+bool CWalletDB::WriteCryptedDefaultKey(const uint256 chash, const std::vector<unsigned char> &vchCryptedSecret)
+{
+    nWalletDBUpdated++;
+    if (!Write(std::string("cdefaultkey"), make_pair(chash, vchCryptedSecret))) {
+        return false;
+    }
+    Erase(std::string("defaultkey"));
+    return true;
+}
+
 bool CWalletDB::ReadPool(int64_t nPool, CKeyPool& keypool)
 {
     return Read(std::make_pair(std::string("pool"), nPool), keypool);
@@ -1011,6 +1021,21 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         else if (strType == "defaultkey")
         {
             ssValue >> pwallet->vchDefaultKey;
+        }
+        else if (strType == "cdefaultkey")
+        {
+            CPubKey vchPubKey;
+            uint256 chash;
+            ssValue >> chash;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+
+            if (!pwallet->DecryptDefaultKey(chash, vchCryptedSecret, vchPubKey)) {
+              strErr = "Error reading wallet database: DecryptDefaultKey failed";
+              return false;
+            }
+
+            pwallet->vchDefaultKey = vchPubKey;
         }
         else if (strType == "pool")
         {

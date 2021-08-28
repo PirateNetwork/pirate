@@ -290,6 +290,19 @@ public:
         std::string &stringOut2,
         const uint256 &chash,
         const std::vector<unsigned char> &vchCryptedSecret);
+
+    bool EncryptPublicKey(
+        const uint256 &chash,
+        const CPubKey &vchPubKey,
+        std::vector<unsigned char> &vchCryptedSecret);
+    bool EncryptPublicKey(
+        const uint256 &chash,
+        const CPubKey &vchPubKey,
+        std::vector<unsigned char> &vchCryptedSecret,
+        CKeyingMaterial &vMasterKeyIn);
+    bool DecryptPublicKey(
+        CPubKey &vchPubKey,
+        const uint256 &chash,
         const std::vector<unsigned char> &vchCryptedSecret);
 
     bool DecryptWalletTransaction(
