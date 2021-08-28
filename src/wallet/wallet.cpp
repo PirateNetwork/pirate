@@ -2460,6 +2460,22 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             }
         }
 
+        //Encrypt DefaultKey
+        {
+            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+            s << vchDefaultKey;
+            uint256 chash = Hash(s.begin(), s.end());
+
+            std::vector<unsigned char> vchCryptedSecret;
+            if (!CCryptoKeyStore::EncryptPublicKey(chash, vchDefaultKey, vchCryptedSecret, vMasterKey)) {
+                return false;
+            }
+
+            if (!CWalletDB(strWalletFile).WriteCryptedDefaultKey(chash, vchCryptedSecret)) {
+                return false;
+            }
+        }
+
         //Write Crypted statuses
         SetWalletCrypted(pwalletdbEncryption);
         SetDBCrypted();
@@ -6413,12 +6429,43 @@ bool CWallet::DelZAddressBook(const libzcash::PaymentAddress &address)
 
 bool CWallet::SetDefaultKey(const CPubKey &vchPubKey)
 {
-    if (fFileBacked)
-    {
+    if (IsCrypted() && IsLocked()) {
+      return false;
+    }
+
+    if (!fFileBacked) {
+        return false;
+    }
+
+    if (!IsCrypted()) {
         if (!CWalletDB(strWalletFile).WriteDefaultKey(vchPubKey))
             return false;
+    } else {
+        CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+        s << EncodeDestination(vchPubKey);
+        uint256 chash = Hash(s.begin(), s.end());
+
+        std::vector<unsigned char> vchCryptedSecret;
+        if (!CCryptoKeyStore::EncryptPublicKey(chash, vchPubKey, vchCryptedSecret)) {
+            return false;
+        }
+
+        if (!CWalletDB(strWalletFile).WriteCryptedDefaultKey(chash, vchCryptedSecret)) {
+            return false;
+        }
+
     }
+
     vchDefaultKey = vchPubKey;
+    return true;
+}
+
+bool CWallet::DecryptDefaultKey(const uint256 &chash, std::vector<unsigned char> &vchCryptedSecret, CPubKey &vchPubKey)
+{
+    if (!CCryptoKeyStore::DecryptPublicKey(vchPubKey, chash, vchCryptedSecret)) {
+        return false;
+    }
+
     return true;
 }
 

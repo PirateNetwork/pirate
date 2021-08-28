@@ -1543,6 +1543,7 @@ public:
     }
 
     bool SetDefaultKey(const CPubKey &vchPubKey);
+    bool DecryptDefaultKey(const uint256 &chash, std::vector<unsigned char> &vchCryptedSecret, CPubKey &vchPubKey);
 
     //Write crypted status to the wallet
     bool SetWalletCrypted(CWalletDB* pwalletdb);
