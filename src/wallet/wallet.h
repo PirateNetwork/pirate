@@ -1247,7 +1247,7 @@ public:
     bool LoadCryptedKey(const CPubKey &vchPubKey, const std::vector<unsigned char> &vchCryptedSecret);
     bool AddCScript(const CScript& redeemScript);
     bool LoadCScript(const CScript& redeemScript);
-    bool LoadCryptedCScript(const uint256 chash, std::vector<unsigned char> vchCryptedSecret);
+    bool LoadCryptedCScript(const uint256 &chash, std::vector<unsigned char> &vchCryptedSecret);
 
     //! Adds a destination data tuple to the store, and saves it to disk
     bool AddDestData(const CTxDestination &dest, const std::string &key, const std::string &value);
