@@ -957,7 +957,7 @@ bool CWallet::LoadCScript(const CScript& redeemScript)
     return CCryptoKeyStore::AddCScript(redeemScript);
 }
 
-bool CWallet::LoadCryptedCScript(const uint256 chash, std::vector<unsigned char> vchCryptedSecret)
+bool CWallet::LoadCryptedCScript(const uint256 &chash, std::vector<unsigned char> &vchCryptedSecret)
 {
     CScript redeemScript;
     if (!CCryptoKeyStore::DecryptCScript(redeemScript, chash, vchCryptedSecret)) {
@@ -2422,7 +2422,6 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         }
 
         //Encrypt Addressbook entries
-
         for (std::map<CTxDestination, CAddressBookData>::iterator it = mapAddressBook.begin(); it != mapAddressBook.end(); ++it) {
 
             const string strAddress = EncodeDestination((*it).first);

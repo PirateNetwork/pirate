@@ -261,72 +261,71 @@ public:
     }
 
     bool EncryptCScript(
-        const uint256 chash,
-        const CScript redeemScript,
+        const uint256 &chash,
+        const CScript &redeemScript,
         std::vector<unsigned char> &vchCryptedSecret);
     bool EncryptCScript(
-        const uint256 chash,
-        const CScript redeemScript,
+        const uint256 &chash,
+        const CScript &redeemScript,
         std::vector<unsigned char> &vchCryptedSecret,
-        CKeyingMaterial& vMasterKeyIn);
+        CKeyingMaterial &vMasterKeyIn);
     bool DecryptCScript(
-        CScript redeemScript,
-        const uint256 chash,
+        CScript &redeemScript,
+        const uint256 &chash,
         const std::vector<unsigned char> &vchCryptedSecret);
 
     bool EncryptStringPair(
-        const uint256 chash,
-        const std::string stringIn1,
-        const std::string stringIn2,
+        const uint256 &chash,
+        const std::string &stringIn1,
+        const std::string &stringIn2,
         std::vector<unsigned char> &vchCryptedSecret);
     bool EncryptStringPair(
-        const uint256 chash,
-        const std::string stringIn1,
-        const std::string stringIn2,
+        const uint256 &chash,
+        const std::string &stringIn1,
+        const std::string &stringIn2,
         std::vector<unsigned char> &vchCryptedSecret,
         CKeyingMaterial& vMasterKeyIn);
     bool DecryptStringPair(
-        std::string stringOut1,
-        std::string stringOut2,
-        const uint256 chash,
+        std::string &stringOut1,
+        std::string &stringOut2,
+        const uint256 &chash,
+        const std::vector<unsigned char> &vchCryptedSecret);
         const std::vector<unsigned char> &vchCryptedSecret);
 
     bool DecryptWalletTransaction(
-        const uint256& chash,
+        const uint256 &chash,
         const std::vector<unsigned char> &vchCryptedSecret,
-        CKeyingMaterial& vchSecret);
+        CKeyingMaterial &vchSecret);
     bool EncryptWalletTransaction(
-        const uint256& hash,
-        const CKeyingMaterial vchSecret,
-        std::vector<unsigned char> &vchCryptedSecret
-    );
+        const uint256 &hash,
+        const CKeyingMaterial &vchSecret,
+        std::vector<unsigned char> &vchCryptedSecret);
     bool EncryptWalletTransaction(
-        CKeyingMaterial& vMasterKeyIn,
-        const uint256& hash,
-        const CKeyingMaterial vchSecret,
-        std::vector<unsigned char> &vchCryptedSecret
-    );
+        CKeyingMaterial &vMasterKeyIn,
+        const uint256 &hash,
+        const CKeyingMaterial &vchSecret,
+        std::vector<unsigned char> &vchCryptedSecret);
 
     //! Sapling
     bool EncryptSaplingMetaData(
-        CKeyingMaterial& vMasterKeyIn,
-        const CKeyMetadata metadata,
+        CKeyingMaterial &vMasterKeyIn,
+        const CKeyMetadata &metadata,
         const libzcash::SaplingExtendedFullViewingKey &extfvk,
         std::vector<unsigned char> &vchCryptedSecret);
     bool DecryptSaplingMetaData(
-        const std::vector<unsigned char>& vchCryptedSecret,
-        const uint256& extfvkFinger,
-        CKeyMetadata& metadata);
+        const std::vector<unsigned char> &vchCryptedSecret,
+        const uint256 &extfvkFinger,
+        CKeyMetadata &metadata);
     bool EncryptSaplingPrimarySpendingKey(
         const libzcash::SaplingExtendedSpendingKey &extsk,
         std::vector<unsigned char> &vchCryptedSecret);
     bool EncryptSaplingPrimarySpendingKey(
         const libzcash::SaplingExtendedSpendingKey &extsk,
         std::vector<unsigned char> &vchCryptedSecret,
-        CKeyingMaterial& vMasterKeyIn);
+        CKeyingMaterial &vMasterKeyIn);
     bool DecryptSaplingPrimarySpendingKey(
         libzcash::SaplingExtendedSpendingKey &extsk,
-        const uint256 extfvkFinger,
+        const uint256 &extfvkFinger,
         const std::vector<unsigned char> &vchCryptedSecret);
     bool EncryptSaplingPaymentAddress(
         const libzcash::SaplingIncomingViewingKey &ivk,
@@ -336,11 +335,11 @@ public:
         const libzcash::SaplingIncomingViewingKey &ivk,
         const libzcash::SaplingPaymentAddress &addr,
         std::vector<unsigned char> &vchCryptedSecret,
-        CKeyingMaterial& vMasterKeyIn);
+        CKeyingMaterial &vMasterKeyIn);
     bool DecryptSaplingPaymentAddress(
         libzcash::SaplingIncomingViewingKey &ivk,
         libzcash::SaplingPaymentAddress &addr,
-        const uint256 chash,
+        const uint256 &chash,
         const std::vector<unsigned char> &vchCryptedSecret);
 
     bool EncryptSaplingDiversifiedAddress(
@@ -353,30 +352,30 @@ public:
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path,
         std::vector<unsigned char> &vchCryptedSecret,
-        CKeyingMaterial& vMasterKeyIn);
+        CKeyingMaterial &vMasterKeyIn);
     bool DecryptSaplingDiversifiedAddress(
         libzcash::SaplingPaymentAddress &addr,
         libzcash::SaplingIncomingViewingKey &ivk,
         blob88 &path,
-        const uint256 chash,
+        const uint256 &chash,
         const std::vector<unsigned char> &vchCryptedSecret);
 
     bool EncryptSaplingLastDiversifierUsed(
-        const uint256 chash,
+        const uint256 &chash,
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path,
         std::vector<unsigned char> &vchCryptedSecret);
     bool EncryptSaplingLastDiversifierUsed(
-        const uint256 chash,
+        const uint256 &chash,
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path,
         std::vector<unsigned char> &vchCryptedSecret,
         CKeyingMaterial& vMasterKeyIn);
-  bool DecryptSaplingLastDiversifierUsed(
-      libzcash::SaplingIncomingViewingKey &ivk,
-      blob88 &path,
-      const uint256 chash,
-      const std::vector<unsigned char> &vchCryptedSecret);
+    bool DecryptSaplingLastDiversifierUsed(
+        libzcash::SaplingIncomingViewingKey &ivk,
+        blob88 &path,
+        const uint256 &chash,
+        const std::vector<unsigned char> &vchCryptedSecret);
 
     virtual bool AddCryptedSaplingSpendingKey(
         const libzcash::SaplingExtendedFullViewingKey &extfvk,
@@ -396,10 +395,10 @@ public:
     virtual bool LoadCryptedSaplingPaymentAddress(
         libzcash::SaplingIncomingViewingKey &ivk,
         libzcash::SaplingPaymentAddress &addr,
-        const uint256 chash,
+        const uint256 &chash,
         const std::vector<unsigned char> &vchCryptedSecret);
     virtual bool LoadCryptedSaplingDiversifiedAddress(
-        const uint256 chash,
+        const uint256 &chash,
         const std::vector<unsigned char> &vchCryptedSecret);
     virtual bool AddCryptedSaplingPaymentAddress(
         const libzcash::SaplingIncomingViewingKey &ivk,

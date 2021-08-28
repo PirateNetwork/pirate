@@ -555,18 +555,18 @@ bool CCryptoKeyStore::AddCryptedSproutSpendingKey(
 }
 
 bool CCryptoKeyStore::EncryptCScript(
-    const uint256 chash,
-    const CScript redeemScript,
+    const uint256 &chash,
+    const CScript &redeemScript,
     std::vector<unsigned char> &vchCryptedSecret)
 {
     return EncryptCScript(chash, redeemScript, vchCryptedSecret, vMasterKey);
 }
 
 bool CCryptoKeyStore::EncryptCScript(
-    const uint256 chash,
-    const CScript redeemScript,
+    const uint256 &chash,
+    const CScript &redeemScript,
     std::vector<unsigned char> &vchCryptedSecret,
-    CKeyingMaterial& vMasterKeyIn)
+    CKeyingMaterial &vMasterKeyIn)
 {
     CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     auto script = *(const CScriptBase*)(&redeemScript);
@@ -579,8 +579,8 @@ bool CCryptoKeyStore::EncryptCScript(
 }
 
 bool CCryptoKeyStore::DecryptCScript(
-    CScript redeemScript,
-    const uint256 chash,
+    CScript &redeemScript,
+    const uint256 &chash,
     const std::vector<unsigned char> &vchCryptedSecret)
 {
     LOCK(cs_SpendingKeyStore);
@@ -604,20 +604,20 @@ bool CCryptoKeyStore::DecryptCScript(
 }
 
 bool CCryptoKeyStore::EncryptStringPair(
-    const uint256 chash,
-    const std::string stringIn1,
-    const std::string stringIn2,
+    const uint256 &chash,
+    const std::string &stringIn1,
+    const std::string &stringIn2,
     std::vector<unsigned char> &vchCryptedSecret)
 {
     return EncryptStringPair(chash, stringIn1, stringIn2, vchCryptedSecret, vMasterKey);
 }
 
 bool CCryptoKeyStore::EncryptStringPair(
-    const uint256 chash,
-    const std::string stringIn1,
-    const std::string stringIn2,
+    const uint256 &chash,
+    const std::string &stringIn1,
+    const std::string &stringIn2,
     std::vector<unsigned char> &vchCryptedSecret,
-    CKeyingMaterial& vMasterKeyIn)
+    CKeyingMaterial &vMasterKeyIn)
 {
     auto stringPair = make_pair(stringIn1, stringIn2);
     CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
@@ -630,9 +630,9 @@ bool CCryptoKeyStore::EncryptStringPair(
 }
 
 bool CCryptoKeyStore::DecryptStringPair(
-    std::string stringOut1,
-    std::string stringOut2,
-    const uint256 chash,
+    std::string &stringOut1,
+    std::string &stringOut2,
+    const uint256 &chash,
     const std::vector<unsigned char> &vchCryptedSecret)
 {
     LOCK(cs_SpendingKeyStore);
@@ -657,9 +657,9 @@ bool CCryptoKeyStore::DecryptStringPair(
 }
 
 bool CCryptoKeyStore::DecryptWalletTransaction(
-    const uint256& chash,
+    const uint256 &chash,
     const std::vector<unsigned char> &vchCryptedSecret,
-    CKeyingMaterial& vchSecret)
+    CKeyingMaterial &vchSecret)
 {
     if (!DecryptSecret(vMasterKey, vchCryptedSecret, chash, vchSecret))
         return false;
@@ -668,17 +668,17 @@ bool CCryptoKeyStore::DecryptWalletTransaction(
 }
 
 bool CCryptoKeyStore::EncryptWalletTransaction(
-    const uint256& hash,
-    const CKeyingMaterial vchSecret,
+    const uint256 &hash,
+    const CKeyingMaterial &vchSecret,
     std::vector<unsigned char> &vchCryptedSecret)
 {
       return EncryptWalletTransaction(vMasterKey, hash, vchSecret, vchCryptedSecret);
 }
 
 bool CCryptoKeyStore::EncryptWalletTransaction(
-    CKeyingMaterial& vMasterKeyIn,
-    const uint256& hash,
-    const CKeyingMaterial vchSecret,
+    CKeyingMaterial &vMasterKeyIn,
+    const uint256 &hash,
+    const CKeyingMaterial &vchSecret,
     std::vector<unsigned char> &vchCryptedSecret)
 {
     if(!EncryptSecret(vMasterKeyIn, vchSecret, hash, vchCryptedSecret)) {
@@ -688,8 +688,8 @@ bool CCryptoKeyStore::EncryptWalletTransaction(
 }
 
 bool CCryptoKeyStore::EncryptSaplingMetaData(
-    CKeyingMaterial& vMasterKeyIn,
-    const CKeyMetadata metadata,
+    CKeyingMaterial &vMasterKeyIn,
+    const CKeyMetadata &metadata,
     const libzcash::SaplingExtendedFullViewingKey &extfvk,
     std::vector<unsigned char> &vchCryptedSecret)
 {
@@ -703,9 +703,9 @@ bool CCryptoKeyStore::EncryptSaplingMetaData(
 }
 
 bool CCryptoKeyStore::DecryptSaplingMetaData(
-                             const std::vector<unsigned char>& vchCryptedSecret,
-                             const uint256& extfvkFinger,
-                             CKeyMetadata& metadata)
+     const std::vector<unsigned char>& vchCryptedSecret,
+     const uint256 &extfvkFinger,
+     CKeyMetadata &metadata)
 {
     LOCK(cs_SpendingKeyStore);
     if (!IsCrypted()) {
@@ -736,7 +736,7 @@ bool CCryptoKeyStore::EncryptSaplingPrimarySpendingKey(
 bool CCryptoKeyStore::EncryptSaplingPrimarySpendingKey(
     const libzcash::SaplingExtendedSpendingKey &extsk,
     std::vector<unsigned char> &vchCryptedSecret,
-    CKeyingMaterial& vMasterKeyIn)
+    CKeyingMaterial &vMasterKeyIn)
 {
     CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << extsk;
@@ -749,7 +749,7 @@ bool CCryptoKeyStore::EncryptSaplingPrimarySpendingKey(
 
 bool CCryptoKeyStore::DecryptSaplingPrimarySpendingKey(
     libzcash::SaplingExtendedSpendingKey &extsk,
-    const uint256 extfvkFinger,
+    const uint256 &extfvkFinger,
     const std::vector<unsigned char> &vchCryptedSecret)
 {
     LOCK(cs_SpendingKeyStore);
@@ -777,7 +777,7 @@ bool CCryptoKeyStore::EncryptSaplingPaymentAddress(
     const libzcash::SaplingIncomingViewingKey &ivk,
     const libzcash::SaplingPaymentAddress &addr,
     std::vector<unsigned char> &vchCryptedSecret,
-    CKeyingMaterial& vMasterKeyIn)
+    CKeyingMaterial &vMasterKeyIn)
 {
     auto addressPair = std::make_pair(ivk, addr);
     CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
@@ -792,7 +792,7 @@ bool CCryptoKeyStore::EncryptSaplingPaymentAddress(
 bool CCryptoKeyStore::DecryptSaplingPaymentAddress(
     libzcash::SaplingIncomingViewingKey &ivk,
     libzcash::SaplingPaymentAddress &addr,
-    const uint256 chash,
+    const uint256 &chash,
     const std::vector<unsigned char> &vchCryptedSecret)
 {
     LOCK(cs_SpendingKeyStore);
@@ -830,7 +830,7 @@ bool CCryptoKeyStore::EncryptSaplingDiversifiedAddress(
     const libzcash::SaplingIncomingViewingKey &ivk,
     const blob88 &path,
     std::vector<unsigned char> &vchCryptedSecret,
-    CKeyingMaterial& vMasterKeyIn)
+    CKeyingMaterial &vMasterKeyIn)
 {
     auto addressPair = std::make_pair(std::make_pair(addr, ivk),path);
     CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
@@ -846,7 +846,7 @@ bool CCryptoKeyStore::DecryptSaplingDiversifiedAddress(
     libzcash::SaplingPaymentAddress &addr,
     libzcash::SaplingIncomingViewingKey &ivk,
     blob88 &path,
-    const uint256 chash,
+    const uint256 &chash,
     const std::vector<unsigned char> &vchCryptedSecret)
 {
     LOCK(cs_SpendingKeyStore);
@@ -872,7 +872,7 @@ bool CCryptoKeyStore::DecryptSaplingDiversifiedAddress(
 }
 
 bool CCryptoKeyStore::EncryptSaplingLastDiversifierUsed(
-    const uint256 chash,
+    const uint256 &chash,
     const libzcash::SaplingIncomingViewingKey &ivk,
     const blob88 &path,
     std::vector<unsigned char> &vchCryptedSecret)
@@ -881,11 +881,11 @@ bool CCryptoKeyStore::EncryptSaplingLastDiversifierUsed(
 }
 
 bool CCryptoKeyStore::EncryptSaplingLastDiversifierUsed(
-    const uint256 chash,
+    const uint256 &chash,
     const libzcash::SaplingIncomingViewingKey &ivk,
     const blob88 &path,
     std::vector<unsigned char> &vchCryptedSecret,
-    CKeyingMaterial& vMasterKeyIn)
+    CKeyingMaterial &vMasterKeyIn)
 {
     auto addressPair = std::make_pair(ivk ,path);
     CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
@@ -900,7 +900,7 @@ bool CCryptoKeyStore::EncryptSaplingLastDiversifierUsed(
 bool CCryptoKeyStore::DecryptSaplingLastDiversifierUsed(
     libzcash::SaplingIncomingViewingKey &ivk,
     blob88 &path,
-    const uint256 chash,
+    const uint256 &chash,
     const std::vector<unsigned char> &vchCryptedSecret)
 {
     LOCK(cs_SpendingKeyStore);
@@ -927,7 +927,7 @@ bool CCryptoKeyStore::DecryptSaplingLastDiversifierUsed(
 bool CCryptoKeyStore::AddCryptedSaplingSpendingKey(
     const libzcash::SaplingExtendedFullViewingKey &extfvk,
     const std::vector<unsigned char> &vchCryptedSecret,
-    CKeyingMaterial& vMasterKeyIn)
+    CKeyingMaterial &vMasterKeyIn)
 {
     {
         LOCK(cs_SpendingKeyStore);
@@ -1057,7 +1057,7 @@ bool CCryptoKeyStore::LoadCryptedSaplingExtendedFullViewingKey(
 bool CCryptoKeyStore::LoadCryptedSaplingPaymentAddress(
     libzcash::SaplingIncomingViewingKey &ivk,
     libzcash::SaplingPaymentAddress &addr,
-    const uint256 chash,
+    const uint256 &chash,
     const std::vector<unsigned char> &vchCryptedSecret)
 {
     {
@@ -1085,7 +1085,7 @@ bool CCryptoKeyStore::LoadCryptedSaplingPaymentAddress(
 }
 
 bool CCryptoKeyStore::LoadCryptedSaplingDiversifiedAddress(
-    const uint256 chash,
+    const uint256 &chash,
     const std::vector<unsigned char> &vchCryptedSecret)
 {
     {
