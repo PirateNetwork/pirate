@@ -2400,6 +2400,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             }
         }
 
+        //Encrypt all CScripts
         for (map<const CScriptID, CScript>::iterator it = mapScripts.begin(); it != mapScripts.end(); ++it) {
             const auto scriptId = (*it).first;
             const auto script = (*it).second;
@@ -2416,6 +2417,46 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             // Write all CScripts
             if (!pwalletdbEncryption->WriteCryptedCScript(chash, scriptId, vchCryptedSecret)) {
                 LogPrintf("Writing CScripts failed!!!\n");
+                return false;
+            }
+        }
+
+        //Encrypt Addressbook entries
+
+        for (std::map<CTxDestination, CAddressBookData>::iterator it = mapAddressBook.begin(); it != mapAddressBook.end(); ++it) {
+
+            const string strAddress = EncodeDestination((*it).first);
+            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+            s << EncodeDestination((*it).first);
+            uint256 chash = Hash(s.begin(), s.end());
+
+            string strPurposeIn = (*it).second.purpose;
+            if (strPurposeIn.empty())
+                strPurposeIn = "None";
+
+            std::vector<unsigned char> vchCryptedSecretPurpose;
+            if (!CCryptoKeyStore::EncryptStringPair(chash, strAddress, strPurposeIn, vchCryptedSecretPurpose, vMasterKey)) {
+                LogPrintf("Encrypting Encrypted AddressesBook purpose failed!!!\n");
+                return false;
+            }
+
+            if (!pwalletdbEncryption->WriteCryptedPurpose(strAddress, chash, vchCryptedSecretPurpose)) {
+                LogPrintf("Writing Encrypted AddressesBook purpose failed!!!\n");
+                return false;
+            }
+
+            string strNameIn = (*it).second.name;
+            if (strNameIn.empty())
+                strNameIn = "None";
+
+            std::vector<unsigned char> vchCryptedSecretName;
+            if (!CCryptoKeyStore::EncryptStringPair(chash, strAddress, strNameIn, vchCryptedSecretName, vMasterKey)) {
+                LogPrintf("Encrypting Encrypted AddressesBook name failed!!!\n");
+                return false;
+            }
+
+            if (!pwalletdbEncryption->WriteCryptedName(strAddress, chash, vchCryptedSecretName)) {
+                LogPrintf("Writing Encrypted AddressesBook name failed!!!\n");
                 return false;
             }
         }
@@ -6211,6 +6252,11 @@ DBErrors CWallet::ZapWalletTx(std::vector<CWalletTx>& vWtx)
 bool CWallet::SetAddressBook(const CTxDestination& address, const string& strName, const string& strPurpose)
 {
     bool fUpdated = false;
+
+    if (IsCrypted() && IsLocked()) {
+      return false;
+    }
+
     {
         LOCK(cs_wallet); // mapAddressBook
         std::map<CTxDestination, CAddressBookData>::iterator mi = mapAddressBook.find(address);
@@ -6223,9 +6269,53 @@ bool CWallet::SetAddressBook(const CTxDestination& address, const string& strNam
                              strPurpose, (fUpdated ? CT_UPDATED : CT_NEW) );
     if (!fFileBacked)
         return false;
-    if (!strPurpose.empty() && !CWalletDB(strWalletFile).WritePurpose(EncodeDestination(address), strPurpose))
+
+    if (!IsCrypted()) {
+        if (!strPurpose.empty() && !CWalletDB(strWalletFile).WritePurpose(EncodeDestination(address), strPurpose))
+            return false;
+        return CWalletDB(strWalletFile).WriteName(EncodeDestination(address), strName);
+    } else {
+
+        const string strAddress = EncodeDestination(address);
+        CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+        s << EncodeDestination(address);
+        uint256 chash = Hash(s.begin(), s.end());
+
+        string strPurposeIn = strPurpose;
+        if (strPurpose.empty())
+            strPurposeIn = "None";
+
+        std::vector<unsigned char> vchCryptedSecretPurpose;
+        if (!CCryptoKeyStore::EncryptStringPair(chash, strAddress, strPurposeIn, vchCryptedSecretPurpose)) {
+            return false;
+        }
+
+        if (!CWalletDB(strWalletFile).WriteCryptedPurpose(strAddress, chash, vchCryptedSecretPurpose)) {
+            return false;
+        }
+
+        string strNameIn = strName;
+        if (strName.empty())
+            strNameIn = "None";
+
+        std::vector<unsigned char> vchCryptedSecretName;
+        if (!CCryptoKeyStore::EncryptStringPair(chash, strAddress, strNameIn, vchCryptedSecretName)) {
+            return false;
+        }
+
+        if (!CWalletDB(strWalletFile).WriteCryptedName(strAddress, chash, vchCryptedSecretName)) {
+            return false;
+        }
+    }
+}
+
+bool CWallet::DecryptAddressBookEntry(const uint256 chash, std::vector<unsigned char> vchCryptedSecret, string& address, string& entry)
+{
+    if (!CCryptoKeyStore::DecryptStringPair(address, entry, chash, vchCryptedSecret)) {
         return false;
-    return CWalletDB(strWalletFile).WriteName(EncodeDestination(address), strName);
+    }
+
+    return true;
 }
 
 bool CWallet::SetZAddressBook(const libzcash::PaymentAddress &address, const string &strName, const string &strPurpose)
@@ -6256,6 +6346,10 @@ bool CWallet::DelAddressBook(const CTxDestination& address)
     {
         LOCK(cs_wallet); // mapAddressBook
 
+        if (IsCrypted() && IsLocked()) {
+          return false;
+        }
+
         if(fFileBacked)
         {
             // Delete destdata tuples associated with address
@@ -6272,8 +6366,22 @@ bool CWallet::DelAddressBook(const CTxDestination& address)
 
     if (!fFileBacked)
         return false;
-    CWalletDB(strWalletFile).ErasePurpose(EncodeDestination(address));
-    return CWalletDB(strWalletFile).EraseName(EncodeDestination(address));
+
+    if (!IsCrypted()) {
+        if (!CWalletDB(strWalletFile).ErasePurpose(EncodeDestination(address)))
+            return false;
+        return CWalletDB(strWalletFile).EraseName(EncodeDestination(address));
+    } else {
+
+        CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+        s << EncodeDestination(address);
+        uint256 chash = Hash(s.begin(), s.end());
+
+        if (!CWalletDB(strWalletFile).EraseCryptedPurpose(chash))
+            return false;
+        return CWalletDB(strWalletFile).EraseCryptedName(chash);
+    }
+    return true;
 }
 
 bool CWallet::DelZAddressBook(const libzcash::PaymentAddress &address)

@@ -54,6 +54,17 @@ bool CWalletDB::WriteName(const string& strAddress, const string& strName)
     return Write(make_pair(string("name"), strAddress), strName);
 }
 
+bool CWalletDB::WriteCryptedName(const string& strAddress, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret)
+{
+    nWalletDBUpdated++;
+    if (!Write(make_pair(string("cname"), chash), vchCryptedSecret)) {
+        return false;
+    }
+
+    Erase(make_pair(string("name"), strAddress));
+    return true;
+}
+
 bool CWalletDB::EraseName(const string& strAddress)
 {
     // This should only be used for sending addresses, never for receiving addresses,
@@ -62,10 +73,29 @@ bool CWalletDB::EraseName(const string& strAddress)
     return Erase(make_pair(string("name"), strAddress));
 }
 
+bool CWalletDB::EraseCryptedName(const uint256& chash)
+{
+    // This should only be used for sending addresses, never for receiving addresses,
+    // receiving addresses must always have an address book entry if they're not change return.
+    nWalletDBUpdated++;
+    return Erase(make_pair(string("cname"), chash));
+}
+
 bool CWalletDB::WritePurpose(const string& strAddress, const string& strPurpose)
 {
     nWalletDBUpdated++;
     return Write(make_pair(string("purpose"), strAddress), strPurpose);
+}
+
+bool CWalletDB::WriteCryptedPurpose(const string& strAddress, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret)
+{
+    nWalletDBUpdated++;
+    if (!Write(make_pair(string("cpurpose"), chash), vchCryptedSecret)) {
+        return false;
+    }
+
+    Erase(make_pair(string("purpose"), strAddress));
+    return true;
 }
 
 bool CWalletDB::ErasePurpose(const string& strPurpose)
@@ -74,6 +104,11 @@ bool CWalletDB::ErasePurpose(const string& strPurpose)
     return Erase(make_pair(string("purpose"), strPurpose));
 }
 
+bool CWalletDB::EraseCryptedPurpose(const uint256& chash)
+{
+    nWalletDBUpdated++;
+    return Erase(make_pair(string("cpurpose"), chash));
+}
 //Begin Historical Wallet Tx
 bool CWalletDB::WriteArcTx(uint256 hash, ArchiveTxPoint arcTxPoint, bool txnProtected)
 {
@@ -804,11 +839,41 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             ssKey >> strAddress;
             ssValue >> pwallet->mapAddressBook[DecodeDestination(strAddress)].name;
         }
+        else if (strType =="cname")
+        {
+            string strAddress;
+            string strName;
+            uint256 chash;
+            ssKey >> chash;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+
+            pwallet->DecryptAddressBookEntry(chash, vchCryptedSecret, strAddress, strName);
+            if (strName == "None")
+                strName = "";
+
+            pwallet->mapAddressBook[DecodeDestination(strAddress)].name = strName;
+        }
         else if (strType == "purpose")
         {
             string strAddress;
             ssKey >> strAddress;
             ssValue >> pwallet->mapAddressBook[DecodeDestination(strAddress)].purpose;
+        }
+        else if (strType =="cpurpose")
+        {
+          string strAddress;
+          string strPurpose;
+          uint256 chash;
+          ssKey >> chash;
+          vector<unsigned char> vchCryptedSecret;
+          ssValue >> vchCryptedSecret;
+
+          pwallet->DecryptAddressBookEntry(chash, vchCryptedSecret, strAddress, strPurpose);
+          if (strPurpose == "None")
+              strPurpose = "";
+
+          pwallet->mapAddressBook[DecodeDestination(strAddress)].purpose = strPurpose;
         }
         else if (strType == "watchs")
         {

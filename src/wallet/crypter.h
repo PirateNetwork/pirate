@@ -274,6 +274,23 @@ public:
         const uint256 chash,
         const std::vector<unsigned char> &vchCryptedSecret);
 
+    bool EncryptStringPair(
+        const uint256 chash,
+        const std::string stringIn1,
+        const std::string stringIn2,
+        std::vector<unsigned char> &vchCryptedSecret);
+    bool EncryptStringPair(
+        const uint256 chash,
+        const std::string stringIn1,
+        const std::string stringIn2,
+        std::vector<unsigned char> &vchCryptedSecret,
+        CKeyingMaterial& vMasterKeyIn);
+    bool DecryptStringPair(
+        std::string stringOut1,
+        std::string stringOut2,
+        const uint256 chash,
+        const std::vector<unsigned char> &vchCryptedSecret);
+
     bool DecryptWalletTransaction(
         const uint256& chash,
         const std::vector<unsigned char> &vchCryptedSecret,

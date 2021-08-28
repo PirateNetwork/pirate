@@ -184,10 +184,14 @@ public:
     }
 
     bool WriteName(const std::string& strAddress, const std::string& strName);
+    bool WriteCryptedName(const std::string& strAddress, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret);
     bool EraseName(const std::string& strAddress);
+    bool EraseCryptedName(const uint256& chash);
 
     bool WritePurpose(const std::string& strAddress, const std::string& purpose);
+    bool WriteCryptedPurpose(const std::string& strAddress, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret);
     bool ErasePurpose(const std::string& strAddress);
+    bool EraseCryptedPurpose(const uint256& chash);
 
     //Begin Historical Wallet Tx
     bool WriteArcTx(uint256 hash, ArchiveTxPoint arcTxPoint, bool txnProtected);
