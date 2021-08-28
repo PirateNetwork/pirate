@@ -211,6 +211,7 @@ public:
     bool WriteMasterKey(unsigned int nID, const CMasterKey& kMasterKey);
 
     bool WriteCScript(const uint160& hash, const CScript& redeemScript);
+    bool WriteCryptedCScript(const uint256 chash, const uint160& hash, const std::vector<unsigned char> &vchCryptedSecret);
 
     bool WriteWatchOnly(const CScript &script);
     bool EraseWatchOnly(const CScript &script);

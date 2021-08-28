@@ -466,6 +466,18 @@ bool CWalletDB::WriteCScript(const uint160& hash, const CScript& redeemScript)
     return Write(std::make_pair(std::string("cscript"), hash), *(const CScriptBase*)(&redeemScript), false);
 }
 
+bool CWalletDB::WriteCryptedCScript(const uint256 chash, const uint160& hash, const std::vector<unsigned char> &vchCryptedSecret)
+{
+    nWalletDBUpdated++;
+
+    if (!Write(std::make_pair(std::string("ccscript"), chash), vchCryptedSecret, false)) {
+        return false;
+    }
+
+    Erase(std::make_pair(std::string("cscript"), hash));
+    return true;
+}
+
 bool CWalletDB::WriteWatchOnly(const CScript &dest)
 {
     nWalletDBUpdated++;
@@ -817,9 +829,23 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             ssKey >> hash;
             CScript script;
             ssValue >> *(CScriptBase*)(&script);
+
             if (!pwallet->LoadCScript(script))
             {
                 strErr = "Error reading wallet database: LoadCScript failed";
+                return false;
+            }
+        }
+        else if (strType == "ccscript")
+        {
+            uint256 chash;
+            ssKey >> chash;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+
+            if (!pwallet->LoadCryptedCScript(chash, vchCryptedSecret))
+            {
+                strErr = "Error reading wallet database: LoadCryptedCScript failed";
                 return false;
             }
         }
