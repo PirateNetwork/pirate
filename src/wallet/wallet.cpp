@@ -910,11 +910,35 @@ bool CWallet::LoadSproutViewingKey(const libzcash::SproutViewingKey &vk)
 
 bool CWallet::AddCScript(const CScript& redeemScript)
 {
+    if (IsCrypted() && IsLocked()) {
+      return false;
+    }
+
     if (!CCryptoKeyStore::AddCScript(redeemScript))
         return false;
+
     if (!fFileBacked)
         return true;
-    return CWalletDB(strWalletFile).WriteCScript(Hash160(redeemScript), redeemScript);
+
+    if (!IsCrypted()) {
+        return CWalletDB(strWalletFile).WriteCScript(Hash160(redeemScript), redeemScript);
+    }
+    else {
+      uint160 scriptId = Hash160(redeemScript);
+
+      CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+      s << scriptId;
+      uint256 chash = Hash(s.begin(), s.end());
+
+      std::vector<unsigned char> vchCryptedSecret;
+      if (!CCryptoKeyStore::EncryptCScript(chash, redeemScript, vchCryptedSecret)) {
+          return false;
+      }
+
+      return CWalletDB(strWalletFile).WriteCryptedCScript(chash, scriptId, vchCryptedSecret);
+
+    }
+
 }
 
 bool CWallet::LoadCScript(const CScript& redeemScript)
@@ -931,6 +955,16 @@ bool CWallet::LoadCScript(const CScript& redeemScript)
     }
 
     return CCryptoKeyStore::AddCScript(redeemScript);
+}
+
+bool CWallet::LoadCryptedCScript(const uint256 chash, std::vector<unsigned char> vchCryptedSecret)
+{
+    CScript redeemScript;
+    if (!CCryptoKeyStore::DecryptCScript(redeemScript, chash, vchCryptedSecret)) {
+        return false;
+    }
+
+    return LoadCScript(redeemScript);
 }
 
 bool CWallet::AddWatchOnly(const CScript &dest)
@@ -2362,6 +2396,26 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             // Write all archived sapling outpoint
             if (!pwalletdbEncryption->WriteLastCryptedDiversifierUsed(chash, ivk, vchCryptedSecret)) {
                 LogPrintf("Writing Archive Sapling Outpoint failed!!!\n");
+                return false;
+            }
+        }
+
+        for (map<const CScriptID, CScript>::iterator it = mapScripts.begin(); it != mapScripts.end(); ++it) {
+            const auto scriptId = (*it).first;
+            const auto script = (*it).second;
+
+            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+            s << scriptId;
+            uint256 chash = Hash(s.begin(), s.end());
+
+            std::vector<unsigned char> vchCryptedSecret;
+            if (!CCryptoKeyStore::EncryptCScript(chash, script, vchCryptedSecret, vMasterKey)) {
+                return false;
+            }
+
+            // Write all CScripts
+            if (!pwalletdbEncryption->WriteCryptedCScript(chash, scriptId, vchCryptedSecret)) {
+                LogPrintf("Writing CScripts failed!!!\n");
                 return false;
             }
         }

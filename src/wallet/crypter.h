@@ -259,7 +259,21 @@ public:
             mi++;
         }
     }
-    //! Sapling
+
+    bool EncryptCScript(
+        const uint256 chash,
+        const CScript redeemScript,
+        std::vector<unsigned char> &vchCryptedSecret);
+    bool EncryptCScript(
+        const uint256 chash,
+        const CScript redeemScript,
+        std::vector<unsigned char> &vchCryptedSecret,
+        CKeyingMaterial& vMasterKeyIn);
+    bool DecryptCScript(
+        CScript redeemScript,
+        const uint256 chash,
+        const std::vector<unsigned char> &vchCryptedSecret);
+
     bool DecryptWalletTransaction(
         const uint256& chash,
         const std::vector<unsigned char> &vchCryptedSecret,
@@ -275,6 +289,8 @@ public:
         const CKeyingMaterial vchSecret,
         std::vector<unsigned char> &vchCryptedSecret
     );
+
+    //! Sapling
     bool EncryptSaplingMetaData(
         CKeyingMaterial& vMasterKeyIn,
         const CKeyMetadata metadata,
