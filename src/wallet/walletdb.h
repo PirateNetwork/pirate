@@ -239,7 +239,9 @@ public:
     bool WriteCryptedDefaultKey(const uint256 chash, const std::vector<unsigned char> &vchCryptedSecret);
 
     bool ReadPool(int64_t nPool, CKeyPool& keypool);
+    bool ReadCryptedPool(int64_t nPool, std::pair<uint256, std::vector<unsigned char>> &vchCryptedSecretPair);
     bool WritePool(int64_t nPool, const CKeyPool& keypool);
+    bool WriteCryptedPool(int64_t nPool, const uint256 chash, const std::vector<unsigned char> &vchCryptedSecret);
     bool ErasePool(int64_t nPool);
 
     bool WriteMinVersion(int nVersion);
