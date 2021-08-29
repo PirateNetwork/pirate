@@ -1459,7 +1459,7 @@ public:
     void ReturnKey(int64_t nIndex);
     bool GetKeyFromPool(CPubKey &key);
     int64_t GetOldestKeyPoolTime();
-    void GetAllReserveKeys(std::set<CKeyID>& setAddress) const;
+    void GetAllReserveKeys(std::set<CKeyID>& setAddress);
 
     std::set< std::set<CTxDestination> > GetAddressGroupings();
     std::map<CTxDestination, CAmount> GetAddressBalances();

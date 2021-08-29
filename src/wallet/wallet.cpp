@@ -6477,6 +6477,9 @@ bool CWallet::NewKeyPool()
 {
     {
         LOCK(cs_wallet);
+        if (IsCrypted() && IsLocked())
+            return false;
+
         CWalletDB walletdb(strWalletFile);
         BOOST_FOREACH(int64_t nIndex, setKeyPool)
             walletdb.ErasePool(nIndex);
@@ -6489,7 +6492,30 @@ bool CWallet::NewKeyPool()
         for (int i = 0; i < nKeys; i++)
         {
             int64_t nIndex = i+1;
-            walletdb.WritePool(nIndex, CKeyPool(GenerateNewKey()));
+            if (!IsCrypted()) {
+                if(!walletdb.WritePool(nIndex, CKeyPool(GenerateNewKey()))){
+                  LogPrintf("NewKeyPool(): writing generated key failed");
+                  return false;
+                }
+            } else {
+              auto keypool = CKeyPool(GenerateNewKey());
+
+              CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+              ss << keypool;
+              CKeyingMaterial vchSecret(ss.begin(), ss.end());
+              uint256 chash = Hash(ss.begin(), ss.end());
+
+              std::vector<unsigned char> vchCryptedSecret;
+              if (!EncryptKeyPool(chash, vchSecret, vchCryptedSecret)) {
+                  LogPrintf("NewKeyPool(): encrypting generated key pool failed");
+                  return false;
+              }
+
+              if (!walletdb.WriteCryptedPool(nIndex, chash, vchCryptedSecret))
+                  LogPrintf("NewKeyPool(): writing generated key failed");
+                  return false;
+            }
+
             setKeyPool.insert(nIndex);
         }
         LogPrintf("CWallet::NewKeyPool wrote %d new keys\n", nKeys);
@@ -6502,7 +6528,7 @@ bool CWallet::TopUpKeyPool(unsigned int kpSize)
     {
         LOCK(cs_wallet);
 
-        if (IsLocked())
+        if (IsCrypted() && IsLocked())
             return false;
 
         CWalletDB walletdb(strWalletFile);
@@ -6519,8 +6545,25 @@ bool CWallet::TopUpKeyPool(unsigned int kpSize)
             int64_t nEnd = 1;
             if (!setKeyPool.empty())
                 nEnd = *(--setKeyPool.end()) + 1;
-            if (!walletdb.WritePool(nEnd, CKeyPool(GenerateNewKey())))
-                throw runtime_error("TopUpKeyPool(): writing generated key failed");
+            if (!IsCrypted()) {
+                if (!walletdb.WritePool(nEnd, CKeyPool(GenerateNewKey())))
+                    throw runtime_error("TopUpKeyPool(): writing generated key failed");
+            } else {
+                auto keypool = CKeyPool(GenerateNewKey());
+
+                CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+                ss << keypool;
+                CKeyingMaterial vchSecret(ss.begin(), ss.end());
+                uint256 chash = Hash(ss.begin(), ss.end());
+
+                std::vector<unsigned char> vchCryptedSecret;
+                if (!EncryptKeyPool(chash, vchSecret, vchCryptedSecret)) {
+                    throw runtime_error("TopUpKeyPool(): encrypting generated key pool failed");
+                }
+
+                if (!walletdb.WriteCryptedPool(nEnd, chash, vchCryptedSecret))
+                    throw runtime_error("TopUpKeyPool(): writing generated key failed");
+            }
             setKeyPool.insert(nEnd);
             LogPrintf("keypool added key %d, size=%u\n", nEnd, setKeyPool.size());
         }
@@ -6535,8 +6578,11 @@ void CWallet::ReserveKeyFromKeyPool(int64_t& nIndex, CKeyPool& keypool)
     {
         LOCK(cs_wallet);
 
-        if (!IsLocked())
-            TopUpKeyPool();
+        if (IsCrypted() && IsLocked()) {
+          return;
+        }
+
+        TopUpKeyPool();
 
         // Get the oldest key
         if(setKeyPool.empty())
@@ -6546,8 +6592,28 @@ void CWallet::ReserveKeyFromKeyPool(int64_t& nIndex, CKeyPool& keypool)
 
         nIndex = *(setKeyPool.begin());
         setKeyPool.erase(setKeyPool.begin());
-        if (!walletdb.ReadPool(nIndex, keypool))
-            throw runtime_error("ReserveKeyFromKeyPool(): read failed");
+
+        if (!IsCrypted()) {
+            if (!walletdb.ReadPool(nIndex, keypool)) {
+                throw runtime_error("ReserveKeyFromKeyPool(): read failed");
+            }
+        } else {
+
+            std::pair<uint256, std::vector<unsigned char>> vchCryptedSecretPair;
+            if (!walletdb.ReadCryptedPool(nIndex, vchCryptedSecretPair)) {
+                throw runtime_error("ReserveKeyFromKeyPool(): read failed");
+            }
+
+            CKeyingMaterial vchSecret;
+            if (!CCryptoKeyStore::DecryptKeyPool(vchSecret, vchCryptedSecretPair.first, vchCryptedSecretPair.second)) {
+                throw runtime_error("ReserveKeyFromKeyPool(): DecryptKeyPool failed");
+            }
+
+            CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
+            ss >> keypool;
+        }
+
+
         if (!HaveKey(keypool.vchPubKey.GetID()))
             throw runtime_error("ReserveKeyFromKeyPool(): unknown key in key pool");
         assert(keypool.vchPubKey.IsValid());
@@ -6786,9 +6852,13 @@ void CReserveKey::ReturnKey()
     vchPubKey = CPubKey();
 }
 
-void CWallet::GetAllReserveKeys(set<CKeyID>& setAddress) const
+void CWallet::GetAllReserveKeys(set<CKeyID>& setAddress)
 {
     setAddress.clear();
+
+    if (IsCrypted() && IsLocked()) {
+      return;
+    }
 
     CWalletDB walletdb(strWalletFile);
 
@@ -6796,8 +6866,25 @@ void CWallet::GetAllReserveKeys(set<CKeyID>& setAddress) const
     BOOST_FOREACH(const int64_t& id, setKeyPool)
     {
         CKeyPool keypool;
-        if (!walletdb.ReadPool(id, keypool))
-            throw runtime_error("GetAllReserveKeyHashes(): read failed");
+        if (!IsCrypted()) {
+            if (!walletdb.ReadPool(id, keypool))
+                throw runtime_error("GetAllReserveKeyHashes(): read failed");
+        } else {
+            std::pair<uint256, std::vector<unsigned char>> vchCryptedSecretPair;
+            if (!walletdb.ReadCryptedPool(id, vchCryptedSecretPair)) {
+                throw runtime_error("ReserveKeyFromKeyPool(): read failed");
+            }
+
+            uint256 chash = vchCryptedSecretPair.first;
+            std::vector<unsigned char> vchCryptedSecret = vchCryptedSecretPair.second;
+            CKeyingMaterial vchSecret;
+            if (!CCryptoKeyStore::DecryptKeyPool(vchSecret, chash, vchCryptedSecret)) {
+                throw runtime_error("ReserveKeyFromKeyPool(): DecryptKeyPool failed");
+            }
+
+            CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
+            ss >> keypool;
+        }
         assert(keypool.vchPubKey.IsValid());
         CKeyID keyID = keypool.vchPubKey.GetID();
         if (!HaveKey(keyID))

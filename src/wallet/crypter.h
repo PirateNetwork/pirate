@@ -305,6 +305,20 @@ public:
         const uint256 &chash,
         const std::vector<unsigned char> &vchCryptedSecret);
 
+    bool EncryptKeyPool(
+        const uint256 &chash,
+        const CKeyingMaterial &vchSecret,
+        std::vector<unsigned char> &vchCryptedSecret);
+    bool EncryptKeyPool(
+        const uint256 &chash,
+        const CKeyingMaterial &vchSecret,
+        std::vector<unsigned char> &vchCryptedSecret,
+        CKeyingMaterial &vMasterKeyIn);
+    bool DecryptKeyPool(
+        CKeyingMaterial &vchSecret,
+        const uint256 &chash,
+        const std::vector<unsigned char> &vchCryptedSecret);
+
     bool DecryptWalletTransaction(
         const uint256 &chash,
         const std::vector<unsigned char> &vchCryptedSecret,

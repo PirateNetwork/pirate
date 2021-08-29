@@ -591,16 +591,38 @@ bool CWalletDB::ReadPool(int64_t nPool, CKeyPool& keypool)
     return Read(std::make_pair(std::string("pool"), nPool), keypool);
 }
 
+bool CWalletDB::ReadCryptedPool(int64_t nPool, std::pair<uint256, std::vector<unsigned char>> &vchCryptedSecretPair)
+{
+    return Read(std::make_pair(std::string("cpool"), nPool), vchCryptedSecretPair);
+}
+
 bool CWalletDB::WritePool(int64_t nPool, const CKeyPool& keypool)
 {
     nWalletDBUpdated++;
     return Write(std::make_pair(std::string("pool"), nPool), keypool);
 }
 
+bool CWalletDB::WriteCryptedPool(int64_t nPool, const uint256 chash, const std::vector<unsigned char> &vchCryptedSecret)
+{
+    nWalletDBUpdated++;
+    if (!Write(std::make_pair(std::string("cpool"), nPool), std::make_pair(chash, vchCryptedSecret))) {
+        return false;
+    }
+
+    Erase(std::make_pair(std::string("pool"), nPool));
+    return true;
+}
+
 bool CWalletDB::ErasePool(int64_t nPool)
 {
     nWalletDBUpdated++;
-    return Erase(std::make_pair(std::string("pool"), nPool));
+    if (!Erase(std::make_pair(std::string("pool"), nPool))) {
+        return false;
+    }
+    if (!Erase(std::make_pair(std::string("cpool"), nPool))) {
+        return false;
+    }
+    return true;
 }
 
 bool CWalletDB::WriteMinVersion(int nVersion)
