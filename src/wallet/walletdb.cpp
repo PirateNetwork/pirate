@@ -519,10 +519,27 @@ bool CWalletDB::WriteWatchOnly(const CScript &dest)
     return Write(std::make_pair(std::string("watchs"), *(const CScriptBase*)(&dest)), '1');
 }
 
+bool CWalletDB::WriteCryptedWatchOnly(const uint256 chash, const CScript &dest, const std::vector<unsigned char> &vchCryptedSecret)
+{
+    nWalletDBUpdated++;
+    if (!Write(std::make_pair(std::string("cwatchs"), chash), vchCryptedSecret)) {
+        return false;
+    }
+
+    Erase(std::make_pair(std::string("watchs"), *(const CScriptBase*)(&dest)));
+    return true;
+}
+
 bool CWalletDB::EraseWatchOnly(const CScript &dest)
 {
     nWalletDBUpdated++;
     return Erase(std::make_pair(std::string("watchs"), *(const CScriptBase*)(&dest)));
+}
+
+bool CWalletDB::EraseCryptedWatchOnly(const uint256 chash)
+{
+    nWalletDBUpdated++;
+    return Erase(std::make_pair(std::string("cwatchs"), chash));
 }
 
 bool CWalletDB::WriteIsCrypted(const bool &crypted)
@@ -915,6 +932,22 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             ssValue >> fYes;
             if (fYes == '1')
                 pwallet->LoadWatchOnly(script);
+
+            // Watch-only addresses have no birthday information for now,
+            // so set the wallet birthday to the beginning of time.
+            pwallet->nTimeFirstKey = 1;
+        }
+        else if (strType == "cwatchs")
+        {
+            uint256 chash;
+            ssKey >> chash;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+
+            if (!pwallet->LoadCryptedWatchOnly(chash, vchCryptedSecret)) {
+                strErr = "Error reading wallet database: LoadCryptedWatchOnly failed";
+                return false;
+            }
 
             // Watch-only addresses have no birthday information for now,
             // so set the wallet birthday to the beginning of time.
