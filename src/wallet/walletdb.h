@@ -218,7 +218,9 @@ public:
     bool WriteCryptedCScript(const uint256 chash, const uint160& hash, const std::vector<unsigned char> &vchCryptedSecret);
 
     bool WriteWatchOnly(const CScript &script);
+    bool WriteCryptedWatchOnly(const uint256 chash, const CScript &dest, const std::vector<unsigned char> &vchCryptedSecret);
     bool EraseWatchOnly(const CScript &script);
+    bool EraseCryptedWatchOnly(const uint256 chash);
 
     //Write crypted status of the wallet
     bool WriteIsCrypted(const bool &crypted);
