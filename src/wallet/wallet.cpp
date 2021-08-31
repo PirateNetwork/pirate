@@ -568,23 +568,40 @@ bool CWallet::AddKeyPubKey(const CKey& secret, const CPubKey &pubkey)
 }
 
 bool CWallet::AddCryptedKey(const CPubKey &vchPubKey,
-                            const vector<unsigned char> &vchCryptedSecret)
+                            const vector<unsigned char> &vchCryptedSecret,
+                            CKeyingMaterial& vMasterKeyIn)
 {
 
-    if (!CCryptoKeyStore::AddCryptedKey(vchPubKey, vchCryptedSecret))
+    if (!CCryptoKeyStore::AddCryptedKey(vchPubKey, vchCryptedSecret, vMasterKeyIn))
         return false;
     if (!fFileBacked)
         return true;
     {
         LOCK(cs_wallet);
+
+        //create hash of pubkey as unique wallet identifier
+        CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+        s << vchPubKey;
+        uint256 chash = Hash(s.begin(), s.end());
+
+        //Encrypt metadata
+        CKeyMetadata metadata = mapKeyMetadata[vchPubKey.GetID()];
+        std::vector<unsigned char> vchCryptedMetaDataSecret;
+        if (!CCryptoKeyStore::EncryptKeyMetaData(vMasterKeyIn, vchPubKey, metadata, chash, vchCryptedMetaDataSecret)) {
+            return false;
+        }
+
+
         if (pwalletdbEncryption)
             return pwalletdbEncryption->WriteCryptedKey(vchPubKey,
                                                         vchCryptedSecret,
-                                                        mapKeyMetadata[vchPubKey.GetID()]);
+                                                        chash,
+                                                        vchCryptedMetaDataSecret);
         else
             return CWalletDB(strWalletFile).WriteCryptedKey(vchPubKey,
                                                             vchCryptedSecret,
-                                                            mapKeyMetadata[vchPubKey.GetID()]);
+                                                            chash,
+                                                            vchCryptedMetaDataSecret);
     }
     return false;
 }
@@ -720,6 +737,16 @@ bool CWallet::LoadKeyMetadata(const CPubKey &pubkey, const CKeyMetadata &meta)
     return true;
 }
 
+bool CWallet::LoadCryptedKeyMetadata(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret, CKeyMetadata &metadata)
+{
+    CPubKey vchPubKey;
+    if (!CCryptoKeyStore::DecryptKeyMetaData(vchCryptedSecret, chash, vchPubKey, metadata)) {
+        return false;
+    }
+
+    return LoadKeyMetadata(vchPubKey, metadata);
+}
+
 bool CWallet::LoadZKeyMetadata(const SproutPaymentAddress &addr, const CKeyMetadata &meta)
 {
     AssertLockHeld(cs_wallet); // mapSproutZKeyMetadata
@@ -730,9 +757,14 @@ bool CWallet::LoadZKeyMetadata(const SproutPaymentAddress &addr, const CKeyMetad
     return true;
 }
 
+bool CWallet::DecryptCryptedKey(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret, CPubKey &vchPubKey)
+{
+    return CCryptoKeyStore::DecryptCryptedKey(chash, vchCryptedSecret, vchPubKey);
+}
+
 bool CWallet::LoadCryptedKey(const CPubKey &vchPubKey, const std::vector<unsigned char> &vchCryptedSecret)
 {
-    return CCryptoKeyStore::AddCryptedKey(vchPubKey, vchCryptedSecret);
+    return CCryptoKeyStore::LoadCryptedKey(vchPubKey, vchCryptedSecret);
 }
 
 bool CWallet::LoadCryptedZKey(const libzcash::SproutPaymentAddress &addr, const libzcash::ReceivingKey &rk, const std::vector<unsigned char> &vchCryptedSecret)

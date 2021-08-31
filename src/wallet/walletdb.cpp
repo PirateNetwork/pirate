@@ -258,20 +258,22 @@ bool CWalletDB::WriteKey(const CPubKey& vchPubKey, const CPrivKey& vchPrivKey, c
 
 bool CWalletDB::WriteCryptedKey(const CPubKey& vchPubKey,
                                 const std::vector<unsigned char>& vchCryptedSecret,
-                                const CKeyMetadata &keyMeta)
+                                const uint256 chash,
+                                const std::vector<unsigned char> &vchCryptedMetaDataSecret)
 {
     const bool fEraseUnencryptedKey = true;
     nWalletDBUpdated++;
 
-    if (!Write(std::make_pair(std::string("keymeta"), vchPubKey), keyMeta))
+    if (!Write(std::make_pair(std::string("ckeymeta"), chash), vchCryptedMetaDataSecret))
         return false;
 
-    if (!Write(std::make_pair(std::string("ckey"), vchPubKey), vchCryptedSecret, false))
+    if (!Write(std::make_pair(std::string("ckey"), chash), vchCryptedSecret, false))
         return false;
     if (fEraseUnencryptedKey)
     {
         Erase(std::make_pair(std::string("key"), vchPubKey));
         Erase(std::make_pair(std::string("wkey"), vchPubKey));
+        Erase(std::make_pair(std::string("keymeta"), vchPubKey));
     }
     return true;
 }
@@ -1045,13 +1047,19 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         }
         else if (strType == "ckey") //ckey is encrypt key (transparent)
         {
-            vector<unsigned char> vchPubKey;
-            ssKey >> vchPubKey;
-            vector<unsigned char> vchPrivKey;
-            ssValue >> vchPrivKey;
+            CPubKey vchPubKey;
+            uint256 chash;
+            ssKey >> chash;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
             wss.nCKeys++;
 
-            if (!pwallet->LoadCryptedKey(vchPubKey, vchPrivKey))
+            if (!pwallet->DecryptCryptedKey(chash, vchCryptedSecret, vchPubKey)) {
+                strErr = "Error reading wallet database: DecryptCryptedKey failed";
+                return false;
+            }
+
+            if (!pwallet->LoadCryptedKey(vchPubKey, vchCryptedSecret))
             {
                 strErr = "Error reading wallet database: LoadCryptedKey failed";
                 return false;
@@ -1073,6 +1081,25 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 (keyMeta.nCreateTime < pwallet->nTimeFirstKey))
                 pwallet->nTimeFirstKey = keyMeta.nCreateTime;
         }
+
+        else if (strType == "ckeymeta")
+        {
+            CKeyMetadata keyMeta;
+            uint256 chash;
+            ssKey >> chash;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+
+            wss.nKeyMeta++;
+
+            pwallet->LoadCryptedKeyMetadata(chash, vchCryptedSecret, keyMeta);
+
+            // find earliest key creation time, as wallet birthday
+            if (!pwallet->nTimeFirstKey ||
+                (keyMeta.nCreateTime < pwallet->nTimeFirstKey))
+                pwallet->nTimeFirstKey = keyMeta.nCreateTime;
+        }
+
         else if (strType == "defaultkey")
         {
             ssValue >> pwallet->vchDefaultKey;
