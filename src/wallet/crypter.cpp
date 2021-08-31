@@ -155,17 +155,38 @@ static bool DecryptHDSeed(
     return seed.Fingerprint() == seedFp;
 }
 
-static bool DecryptKey(const CKeyingMaterial& vMasterKey, const std::vector<unsigned char>& vchCryptedSecret, const CPubKey& vchPubKey, CKey& key)
+static bool DecryptKey(const CKeyingMaterial& vMasterKey, const std::vector<unsigned char>& vchCryptedSecret, const uint256 chash, CKey& key)
 {
     CKeyingMaterial vchSecret;
-    if (!DecryptSecret(vMasterKey, vchCryptedSecret, vchPubKey.GetHash(), vchSecret))
+    if (!DecryptSecret(vMasterKey, vchCryptedSecret, chash, vchSecret))
         return false;
 
     if (vchSecret.size() != 32)
         return false;
 
-    key.Set(vchSecret.begin(), vchSecret.end(), vchPubKey.IsCompressed());
-    return key.VerifyPubKey(vchPubKey);
+
+    {   //Try to set key with compressed public key first
+        key.Set(vchSecret.begin(), vchSecret.end(), true);
+        CPubKey vchPubkey = key.GetPubKey();
+
+        //create hash of pubkey as unique wallet identifier
+        CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+        s << vchPubkey;
+        uint256 cvhash = Hash(s.begin(), s.end());
+
+        if (cvhash == chash) {
+            return true;
+        }
+    }
+
+    key.Set(vchSecret.begin(), vchSecret.end(), false);
+    CPubKey vchPubkey = key.GetPubKey();
+
+    //create hash of pubkey as unique wallet identifier
+    CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+    s << vchPubkey;
+    uint256 cvhash = Hash(s.begin(), s.end());
+    return cvhash == chash;
 }
 
 static bool DecryptSproutSpendingKey(const CKeyingMaterial& vMasterKey,
@@ -266,9 +287,15 @@ bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn)
         for (; mi != mapCryptedKeys.end(); ++mi)
         {
             const CPubKey &vchPubKey = (*mi).second.first;
+
+            //create hash of pubkey as unique wallet identifier
+            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+            s << vchPubKey;
+            uint256 chash = Hash(s.begin(), s.end());
+
             const std::vector<unsigned char> &vchCryptedSecret = (*mi).second.second;
             CKey key;
-            if (!DecryptKey(vMasterKeyIn, vchCryptedSecret, vchPubKey, key))
+            if (!DecryptKey(vMasterKeyIn, vchCryptedSecret, chash, key))
             {
                 keyFail = true;
                 break;
@@ -398,19 +425,36 @@ bool CCryptoKeyStore::AddKeyPubKey(const CKey& key, const CPubKey &pubkey)
         if (IsLocked())
             return false;
 
+        //create hash of pubkey as unique wallet identifier
+        CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+        s << pubkey;
+        uint256 chash = Hash(s.begin(), s.end());
+
         std::vector<unsigned char> vchCryptedSecret;
         CKeyingMaterial vchSecret(key.begin(), key.end());
-        if (!EncryptSecret(vMasterKey, vchSecret, pubkey.GetHash(), vchCryptedSecret))
+        if (!EncryptSecret(vMasterKey, vchSecret, chash, vchCryptedSecret))
             return false;
 
-        if (!AddCryptedKey(pubkey, vchCryptedSecret))
+        if (!AddCryptedKey(pubkey, vchCryptedSecret, vMasterKey))
             return false;
     }
     return true;
 }
 
 
-bool CCryptoKeyStore::AddCryptedKey(const CPubKey &vchPubKey, const std::vector<unsigned char> &vchCryptedSecret)
+bool CCryptoKeyStore::AddCryptedKey(const CPubKey &vchPubKey, const std::vector<unsigned char> &vchCryptedSecret, CKeyingMaterial& vMasterKeyIn)
+{
+    {
+        LOCK(cs_KeyStore);
+        if (!SetCrypted())
+            return false;
+
+        mapCryptedKeys[vchPubKey.GetID()] = make_pair(vchPubKey, vchCryptedSecret);
+    }
+    return true;
+}
+
+bool CCryptoKeyStore::LoadCryptedKey(const CPubKey &vchPubKey, const std::vector<unsigned char> &vchCryptedSecret)
 {
     {
         LOCK(cs_KeyStore);
@@ -433,8 +477,14 @@ bool CCryptoKeyStore::GetKey(const CKeyID &address, CKey& keyOut) const
         if (mi != mapCryptedKeys.end())
         {
             const CPubKey &vchPubKey = (*mi).second.first;
+
+            //create hash of pubkey as unique wallet identifier
+            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+            s << vchPubKey;
+            uint256 chash = Hash(s.begin(), s.end());
+
             const std::vector<unsigned char> &vchCryptedSecret = (*mi).second.second;
-            return DecryptKey(vMasterKey, vchCryptedSecret, vchPubKey, keyOut);
+            return DecryptKey(vMasterKey, vchCryptedSecret, chash, keyOut);
         }
     }
     return false;
@@ -552,6 +602,20 @@ bool CCryptoKeyStore::AddCryptedSproutSpendingKey(
         mapNoteDecryptors.insert(std::make_pair(address, ZCNoteDecryption(rk)));
     }
     return true;
+}
+
+bool CCryptoKeyStore::DecryptCryptedKey(
+    const uint256 &chash,
+    const std::vector<unsigned char> &vchCryptedSecret,
+    CPubKey &vchPubKey)
+{
+      CKey keyOut;
+      if (!DecryptKey(vMasterKey, vchCryptedSecret, chash, keyOut)) {
+            return false;
+      }
+
+      vchPubKey = keyOut.GetPubKey();
+      return true;
 }
 
 bool CCryptoKeyStore::EncryptCScript(
@@ -775,6 +839,66 @@ bool CCryptoKeyStore::EncryptWalletTransaction(
         return false;
     }
     return true;
+}
+
+bool CCryptoKeyStore::EncryptKeyMetaData(
+    const CPubKey &vchPubKey,
+    const CKeyMetadata &metadata,
+    const uint256 &chash,
+    std::vector<unsigned char> &vchCryptedSecret)
+{
+    return EncryptKeyMetaData(vMasterKey, vchPubKey, metadata, chash, vchCryptedSecret);
+}
+
+bool CCryptoKeyStore::EncryptKeyMetaData(
+    CKeyingMaterial &vMasterKeyIn,
+    const CPubKey &vchPubKey,
+    const CKeyMetadata &metadata,
+    const uint256 &chash,
+    std::vector<unsigned char> &vchCryptedSecret)
+{
+    auto metadataPair = std::make_pair(vchPubKey, metadata);
+    CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << metadataPair;
+    CKeyingMaterial vchSecret(ss.begin(), ss.end());
+    if(!EncryptSecret(vMasterKeyIn, vchSecret, chash, vchCryptedSecret)) {
+        return false;
+    }
+    return true;
+}
+
+bool CCryptoKeyStore::DecryptKeyMetaData(
+     const std::vector<unsigned char>& vchCryptedSecret,
+     const uint256 &chash,
+     CPubKey &vchPubKey,
+     CKeyMetadata &metadata)
+{
+    LOCK(cs_SpendingKeyStore);
+    if (!IsCrypted()) {
+        return false;
+    }
+
+    if (IsLocked()) {
+        return false;
+    }
+
+    CKeyingMaterial vchSecret;
+    if (!DecryptSecret(vMasterKey, vchCryptedSecret, chash, vchSecret)) {
+        return false;
+    }
+
+    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
+    ss >> vchPubKey;
+    ss >> metadata;
+    return true;
+}
+
+bool CCryptoKeyStore::EncryptSaplingMetaData(
+    const CKeyMetadata &metadata,
+    const libzcash::SaplingExtendedFullViewingKey &extfvk,
+    std::vector<unsigned char> &vchCryptedSecret)
+{
+    return EncryptSaplingMetaData(vMasterKey, metadata, extfvk, vchCryptedSecret);
 }
 
 bool CCryptoKeyStore::EncryptSaplingMetaData(
@@ -1266,12 +1390,18 @@ bool CCryptoKeyStore::EncryptKeys(CKeyingMaterial& vMasterKeyIn)
         {
             const CKey &key = mKey.second;
             CPubKey vchPubKey = key.GetPubKey();
+
+            //create hash of pubkey as unique wallet identifier
+            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+            s << vchPubKey;
+            uint256 chash = Hash(s.begin(), s.end());
+
             CKeyingMaterial vchSecret(key.begin(), key.end());
             std::vector<unsigned char> vchCryptedSecret;
-            if (!EncryptSecret(vMasterKeyIn, vchSecret, vchPubKey.GetHash(), vchCryptedSecret)) {
+            if (!EncryptSecret(vMasterKeyIn, vchSecret, chash, vchCryptedSecret)) {
                 return false;
             }
-            if (!AddCryptedKey(vchPubKey, vchCryptedSecret)) {
+            if (!AddCryptedKey(vchPubKey, vchCryptedSecret, vMasterKeyIn)) {
                 return false;
             }
         }

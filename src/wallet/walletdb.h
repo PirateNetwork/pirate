@@ -211,7 +211,7 @@ public:
     bool EraseCryptedTx(uint256 hash);
 
     bool WriteKey(const CPubKey& vchPubKey, const CPrivKey& vchPrivKey, const CKeyMetadata &keyMeta);
-    bool WriteCryptedKey(const CPubKey& vchPubKey, const std::vector<unsigned char>& vchCryptedSecret, const CKeyMetadata &keyMeta);
+    bool WriteCryptedKey(const CPubKey& vchPubKey,const std::vector<unsigned char>& vchCryptedSecret,const uint256 chash,const std::vector<unsigned char> &vchCryptedMetaDataSecret);
     bool WriteMasterKey(unsigned int nID, const CMasterKey& kMasterKey);
 
     bool WriteCScript(const uint160& hash, const CScript& redeemScript);
