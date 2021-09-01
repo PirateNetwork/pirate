@@ -1030,62 +1030,6 @@ bool CCryptoKeyStore::DecryptSaplingPaymentAddress(
     return true;
 }
 
-bool CCryptoKeyStore::EncryptSaplingDiversifiedAddress(
-    const libzcash::SaplingPaymentAddress &addr,
-    const libzcash::SaplingIncomingViewingKey &ivk,
-    const blob88 &path,
-    std::vector<unsigned char> &vchCryptedSecret)
-{
-    return EncryptSaplingDiversifiedAddress(addr, ivk, path, vchCryptedSecret, vMasterKey);
-}
-
-bool CCryptoKeyStore::EncryptSaplingDiversifiedAddress(
-    const libzcash::SaplingPaymentAddress &addr,
-    const libzcash::SaplingIncomingViewingKey &ivk,
-    const blob88 &path,
-    std::vector<unsigned char> &vchCryptedSecret,
-    CKeyingMaterial &vMasterKeyIn)
-{
-    auto addressPair = std::make_pair(std::make_pair(addr, ivk),path);
-    CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-    ss << addressPair;
-    CKeyingMaterial vchSecret(ss.begin(), ss.end());
-    if(!EncryptSecret(vMasterKeyIn, vchSecret, addr.GetHash(), vchCryptedSecret)) {
-        return false;
-    }
-    return true;
-}
-
-bool CCryptoKeyStore::DecryptSaplingDiversifiedAddress(
-    libzcash::SaplingPaymentAddress &addr,
-    libzcash::SaplingIncomingViewingKey &ivk,
-    blob88 &path,
-    const uint256 &chash,
-    const std::vector<unsigned char> &vchCryptedSecret)
-{
-    LOCK(cs_SpendingKeyStore);
-    if (!SetCrypted()) {
-        return false;
-    }
-
-    if (IsLocked()) {
-        return false;
-    }
-
-    CKeyingMaterial vchSecret;
-    if (!DecryptSecret(vMasterKey, vchCryptedSecret, chash, vchSecret)) {
-        return false;
-    }
-
-    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
-    ss >> addr;
-    ss >> ivk;
-    ss >> path;
-
-    return true;
-}
-
-
 //Generalized Encryption/Decryption of serialized objects
 bool CCryptoKeyStore::EncryptSerializedSecret(
     const CKeyingMaterial &vchSecret,
@@ -1177,22 +1121,6 @@ bool CCryptoKeyStore::AddCryptedSaplingPaymentAddress(
 
 }
 
-bool CCryptoKeyStore::AddCryptedSaplingDiversifiedAddress(
-    const libzcash::SaplingIncomingViewingKey &ivk,
-    const libzcash::SaplingPaymentAddress &addr,
-    const blob88 &path,
-    const std::vector<unsigned char> &vchCryptedSecret)
-{
-
-    LOCK(cs_SpendingKeyStore);
-    if (!SetCrypted()) {
-        return false;
-    }
-
-    return CBasicKeyStore::AddSaplingDiversifiedAddress(addr, ivk, path);
-
-}
-
 bool CCryptoKeyStore::LoadCryptedSaplingSpendingKey(
     const uint256 &extfvkFinger,
     const std::vector<unsigned char> &vchCryptedSecret,
@@ -1277,36 +1205,6 @@ bool CCryptoKeyStore::LoadCryptedSaplingPaymentAddress(
 
         // if SaplingFullViewingKey is not in SaplingFullViewingKeyMap, add it
         if (!CBasicKeyStore::AddSaplingIncomingViewingKey(ivk, addr)) {
-            return false;
-        }
-
-    }
-    return true;
-}
-
-bool CCryptoKeyStore::LoadCryptedSaplingDiversifiedAddress(
-    const uint256 &chash,
-    const std::vector<unsigned char> &vchCryptedSecret)
-{
-    {
-        LOCK(cs_SpendingKeyStore);
-        if (!SetCrypted()) {
-            return false;
-        }
-
-        if (IsLocked()) {
-            return false;
-        }
-
-        libzcash::SaplingPaymentAddress addr;
-        libzcash::SaplingIncomingViewingKey ivk;
-        blob88 path;
-        if (!DecryptSaplingDiversifiedAddress(addr, ivk, path, chash, vchCryptedSecret))
-        {
-            return false;
-        }
-
-        if (!CBasicKeyStore::AddSaplingDiversifiedAddress(addr, ivk, path)) {
             return false;
         }
 
@@ -1456,25 +1354,6 @@ bool CCryptoKeyStore::EncryptKeys(CKeyingMaterial& vMasterKeyIn)
             }
 
             if (!AddCryptedSaplingPaymentAddress(ivk, addr, vchCryptedSecret)) {
-                return false;
-            }
-        }
-
-        //Encrypt SaplingPaymentAddress
-        BOOST_FOREACH(SaplingPaymentAddresses::value_type& mSaplingPaymentAddresses, mapSaplingPaymentAddresses)
-        {
-
-            const auto &dPath = mSaplingPaymentAddresses.second;
-            const auto &ivk = dPath.first;
-            const auto &path = dPath.second;
-            const auto &addr = mSaplingPaymentAddresses.first;
-
-            std::vector<unsigned char> vchCryptedSecret;
-            if (!EncryptSaplingDiversifiedAddress(addr, ivk, path, vchCryptedSecret, vMasterKeyIn)) {
-               return false;
-            }
-
-            if (!AddCryptedSaplingDiversifiedAddress(ivk, addr, path, vchCryptedSecret)) {
                 return false;
             }
         }

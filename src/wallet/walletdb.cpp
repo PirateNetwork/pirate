@@ -429,15 +429,17 @@ bool CWalletDB::WriteSaplingDiversifiedAddress(
 
 bool CWalletDB::WriteCryptedSaplingDiversifiedAddress(
     const libzcash::SaplingPaymentAddress &addr,
+    const uint256 chash,
     const std::vector<unsigned char> &vchCryptedSecret)
 {
     nWalletDBUpdated++;
 
-    if (!Write(std::make_pair(std::string("csapzdivaddr"), addr.GetHash()), vchCryptedSecret, false)) {
+    if (!Write(std::make_pair(std::string("csapzdivaddr"), chash), vchCryptedSecret, false)) {
         return false;
     }
 
     Erase(std::make_pair(std::string("sapzdivaddr"), addr));
+    return true;
 }
 
 bool CWalletDB::WriteLastDiversifierUsed(
