@@ -1287,6 +1287,25 @@ public:
     //Templates for encrypting various wallet objects to be written to disk
     template<typename WalletObject>
     uint256 HashWithFP(WalletObject &wObj);
+
+    template<typename WalletObject1>
+    CKeyingMaterial SerializeForEncryptionInput(WalletObject1 &wObj1);
+
+    template<typename WalletObject1, typename WalletObject2>
+    CKeyingMaterial SerializeForEncryptionInput(WalletObject1 &wObj1, WalletObject2 &wObj2);
+
+    template<typename WalletObject1, typename WalletObject2, typename WalletObject3>
+    CKeyingMaterial SerializeForEncryptionInput(WalletObject1 &wObj1, WalletObject2 &wObj2, WalletObject3 &wObj3);
+
+    template<typename WalletObject1>
+    void DeserializeFromDecryptionOutput(CKeyingMaterial &vchSecret, WalletObject1 &wObj1);
+
+    template<typename WalletObject1, typename WalletObject2>
+    void DeserializeFromDecryptionOutput(CKeyingMaterial &vchSecret, WalletObject1 &wObj1, WalletObject2 &wObj2);
+
+    template<typename WalletObject1, typename WalletObject2, typename WalletObject3>
+    void DeserializeFromDecryptionOutput(CKeyingMaterial &vchSecret, WalletObject1 &wObj1, WalletObject2 &wObj2, WalletObject3 &wObj3);
+
     void GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const;
 
     /**
