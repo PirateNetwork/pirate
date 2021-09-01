@@ -294,6 +294,7 @@ public:
         const blob88 &path);
     bool WriteCryptedSaplingDiversifiedAddress(
         const libzcash::SaplingPaymentAddress &addr,
+        const uint256 chash,
         const std::vector<unsigned char> &vchCryptedSecret);
 
     //Write the last used diversifier and ivk used
