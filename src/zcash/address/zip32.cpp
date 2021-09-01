@@ -13,6 +13,9 @@
 #include <librustzcash.h>
 #include <sodium.h>
 
+const unsigned char ZCASH_HD_SEED_FP_ENCRYTION[crypto_generichash_blake2b_PERSONALBYTES] =
+    {'P', 'i', 'r', 'a', 't', 'e', 'E', 'n', 'c', 'r', 'y', 'p', 't','_','F', 'P'};
+
 const unsigned char ZCASH_HD_SEED_FP_PERSONAL[crypto_generichash_blake2b_PERSONALBYTES] =
     {'Z', 'c', 'a', 's', 'h', '_', 'H', 'D', '_', 'S', 'e', 'e', 'd', '_', 'F', 'P'};
 
@@ -54,6 +57,13 @@ void HDSeed::GetPhrase(std::string &phrase)
 uint256 HDSeed::Fingerprint() const
 {
     CBLAKE2bWriter h(SER_GETHASH, 0, ZCASH_HD_SEED_FP_PERSONAL);
+    h << seed;
+    return h.GetHash();
+}
+
+uint256 HDSeed::EncryptionFingerprint() const
+{
+    CBLAKE2bWriter h(SER_GETHASH, 0, ZCASH_HD_SEED_FP_ENCRYTION);
     h << seed;
     return h.GetHash();
 }

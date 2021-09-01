@@ -32,6 +32,7 @@ public:
     bool IsNull() const { return seed.empty(); };
     void GetPhrase(std::string &phrase);
     uint256 Fingerprint() const;
+    uint256 EncryptionFingerprint() const;
     RawHDSeed RawSeed() const { return seed; }
 
     friend bool operator==(const HDSeed& a, const HDSeed& b)
