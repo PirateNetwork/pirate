@@ -867,6 +867,7 @@ public:
     //Wallet Birthday;
     int nBirthday;
     bool bip39Enabled = false;
+    uint256 seedEncyptionFP;
 
     WalletCreateType createType = UNSET;
 
