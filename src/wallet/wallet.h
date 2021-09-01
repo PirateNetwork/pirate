@@ -1284,6 +1284,9 @@ public:
     bool EncryptArchivedSaplingOutpoint(const SaplingOutPoint op, uint256 nullifier, std::vector<unsigned char>& vchCryptedSecret, uint256& chash);
     bool EncryptWallet(const SecureString& strWalletPassphrase);
 
+    //Templates for encrypting various wallet objects to be written to disk
+    template<typename WalletObject>
+    uint256 HashWithFP(WalletObject &wObj);
     void GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const;
 
     /**

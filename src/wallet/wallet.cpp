@@ -2590,6 +2590,17 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
     return true;
 }
 
+template<typename WalletObject>
+uint256 CWallet::HashWithFP(WalletObject &wObj) {
+
+    CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+    s << wObj;
+
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << seedEncyptionFP;
+
+    return Hash(s.begin(), s.end(), ss.begin(), ss.end());
+}
 int64_t CWallet::IncOrderPosNext(CWalletDB *pwalletdb)
 {
     AssertLockHeld(cs_wallet); // nOrderPosNext
