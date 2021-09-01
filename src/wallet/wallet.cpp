@@ -761,23 +761,6 @@ bool CWallet::LoadCryptedSaplingExtendedFullViewingKey(const uint256 &extfvkFing
      return CCryptoKeyStore::LoadCryptedSaplingExtendedFullViewingKey(extfvkFinger, vchCryptedSecret, extfvk);
 }
 
-bool CWallet::LoadLastCryptedDiversifierUsed(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret)
-{
-    CKeyingMaterial vchSecret;
-    if (!CCryptoKeyStore::DecryptSerializedSecret(vchCryptedSecret, chash, vchSecret)) {
-        return false;
-    }
-
-    libzcash::SaplingIncomingViewingKey ivk;
-    blob88 path;
-    DeserializeFromDecryptionOutput(vchSecret, ivk, path);
-    if (HashWithFP(ivk) != chash) {
-        return false;
-    }
-
-    return LoadLastDiversifierUsed(ivk, path);
-}
-
 bool CWallet::LoadCryptedPrimarySaplingSpendingKey(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret)
 {
     libzcash::SaplingExtendedSpendingKey extsk;
@@ -902,6 +885,23 @@ bool CWallet::LoadLastDiversifierUsed(
     const blob88 &path)
 {
     return CCryptoKeyStore::AddLastDiversifierUsed(ivk, path);
+}
+
+bool CWallet::LoadLastCryptedDiversifierUsed(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret)
+{
+    CKeyingMaterial vchSecret;
+    if (!CCryptoKeyStore::DecryptSerializedSecret(vchCryptedSecret, chash, vchSecret)) {
+        return false;
+    }
+
+    libzcash::SaplingIncomingViewingKey ivk;
+    blob88 path;
+    DeserializeFromDecryptionOutput(vchSecret, ivk, path);
+    if (HashWithFP(ivk) != chash) {
+        return false;
+    }
+
+    return LoadLastDiversifierUsed(ivk, path);
 }
 
 bool CWallet::LoadZKey(const libzcash::SproutSpendingKey &key)

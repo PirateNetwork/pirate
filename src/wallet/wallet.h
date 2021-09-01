@@ -1393,6 +1393,9 @@ public:
     bool LoadLastDiversifierUsed(
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path);
+    bool LoadLastCryptedDiversifierUsed(
+        const uint256 &chash,
+        const std::vector<unsigned char> &vchCryptedSecret);
     //! Adds an encrypted spending key to the store, without saving it to disk (used by LoadWallet)
     bool LoadCryptedSaplingZKey(
         const uint256 &extfvkFinger,
@@ -1402,9 +1405,6 @@ public:
         const uint256 &extfvkFinger,
         const std::vector<unsigned char> &vchCryptedSecret,
         libzcash::SaplingExtendedFullViewingKey &extfvk);
-    bool LoadLastCryptedDiversifierUsed(
-        const uint256 &chash,
-        const std::vector<unsigned char> &vchCryptedSecret);
     bool LoadCryptedPrimarySaplingSpendingKey(
         const uint256 &extfvkFinger,
         const std::vector<unsigned char> &vchCryptedSecret);
