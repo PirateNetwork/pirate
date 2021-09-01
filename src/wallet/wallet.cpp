@@ -480,12 +480,11 @@ bool CWallet::AddLastDiversifierUsed(
     }
     else {
 
-        CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
-        s << ivk;
-        uint256 chash = Hash(s.begin(), s.end());
-
+        uint256 chash = HashWithFP(ivk);
+        CKeyingMaterial vchSecret = SerializeForEncryptionInput(ivk,path);
         std::vector<unsigned char> vchCryptedSecret;
-        if (!CCryptoKeyStore::EncryptSaplingLastDiversifierUsed(chash, ivk, path, vchCryptedSecret)) {
+
+        if (!CCryptoKeyStore::EncryptSerializedSecret(vchSecret, chash, vchCryptedSecret)) {
             return false;
         }
 
@@ -784,9 +783,15 @@ bool CWallet::LoadCryptedSaplingExtendedFullViewingKey(const uint256 &extfvkFing
 
 bool CWallet::LoadLastCryptedDiversifierUsed(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret)
 {
+    CKeyingMaterial vchSecret;
+    if (!CCryptoKeyStore::DecryptSerializedSecret(vchCryptedSecret, chash, vchSecret)) {
+        return false;
+    }
+
     libzcash::SaplingIncomingViewingKey ivk;
     blob88 path;
-    if (!CCryptoKeyStore::DecryptSaplingLastDiversifierUsed(ivk, path, chash, vchCryptedSecret)) {
+    DeserializeFromDecryptionOutput(vchSecret, ivk, path);
+    if (HashWithFP(ivk) != chash) {
         return false;
     }
 
@@ -2444,23 +2449,23 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
 
         }
 
-
+        //Encrypt the last diversifier path used for each spendingkey
         for (map<libzcash::SaplingIncomingViewingKey, blob88>::iterator it = mapLastDiversifierPath.begin(); it != mapLastDiversifierPath.end(); ++it) {
             libzcash::SaplingIncomingViewingKey ivk = (*it).first;
             blob88 path = (*it).second;
 
-            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
-            s << ivk;
-            uint256 chash = Hash(s.begin(), s.end());
-
+            uint256 chash = HashWithFP(ivk);
+            CKeyingMaterial vchSecret = SerializeForEncryptionInput(ivk,path);
             std::vector<unsigned char> vchCryptedSecret;
-            if (!CCryptoKeyStore::EncryptSaplingLastDiversifierUsed(chash, ivk, path, vchCryptedSecret, vMasterKey)) {
+
+            if (!CCryptoKeyStore::EncryptSerializedSecret(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
+                LogPrintf("Encrypting Last Diversified Path failed!!!\n");
                 return false;
             }
 
             // Write all archived sapling outpoint
             if (!pwalletdbEncryption->WriteLastCryptedDiversifierUsed(chash, ivk, vchCryptedSecret)) {
-                LogPrintf("Writing Archive Sapling Outpoint failed!!!\n");
+                LogPrintf("Encrypting Last Diversified Path failed!!!\n");
                 return false;
             }
         }
