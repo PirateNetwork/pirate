@@ -2601,6 +2601,63 @@ uint256 CWallet::HashWithFP(WalletObject &wObj) {
 
     return Hash(s.begin(), s.end(), ss.begin(), ss.end());
 }
+
+template<typename WalletObject1>
+CKeyingMaterial CWallet::SerializeForEncryptionInput(WalletObject1 &wObj1) {
+
+    CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << wObj1;
+    CKeyingMaterial vchSecret(ss.begin(), ss.end());
+
+    return vchSecret;
+}
+
+template<typename WalletObject1, typename WalletObject2>
+CKeyingMaterial CWallet::SerializeForEncryptionInput(WalletObject1 &wObj1, WalletObject2 &wObj2) {
+
+    auto wObjs = std::make_pair(wObj1, wObj2);
+    CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << wObjs;
+    CKeyingMaterial vchSecret(ss.begin(), ss.end());
+
+    return vchSecret;
+}
+
+template<typename WalletObject1, typename WalletObject2, typename WalletObject3>
+CKeyingMaterial CWallet::SerializeForEncryptionInput(WalletObject1 &wObj1, WalletObject2 &wObj2, WalletObject3 &wObj3) {
+
+    auto wObjs = std::make_pair(std::make_pair(wObj1, wObj2), wObj3);
+    CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << wObjs;
+    CKeyingMaterial vchSecret(ss.begin(), ss.end());
+
+    return vchSecret;
+}
+
+template<typename WalletObject1>
+void CWallet::DeserializeFromDecryptionOutput(CKeyingMaterial &vchSecret, WalletObject1 &wObj1) {
+
+    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
+    ss >> wObj1;
+}
+
+template<typename WalletObject1, typename WalletObject2>
+void CWallet::DeserializeFromDecryptionOutput(CKeyingMaterial &vchSecret, WalletObject1 &wObj1, WalletObject2 &wObj2) {
+
+    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
+    ss >> wObj1;
+    ss >> wObj2;
+}
+
+template<typename WalletObject1, typename WalletObject2, typename WalletObject3>
+void CWallet::DeserializeFromDecryptionOutput(CKeyingMaterial &vchSecret, WalletObject1 &wObj1, WalletObject2 &wObj2, WalletObject3 &wObj3) {
+
+    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
+    ss >> wObj1;
+    ss >> wObj2;
+    ss >> wObj3;
+}
+
 int64_t CWallet::IncOrderPosNext(CWalletDB *pwalletdb)
 {
     AssertLockHeld(cs_wallet); // nOrderPosNext
