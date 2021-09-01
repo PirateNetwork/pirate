@@ -1138,6 +1138,44 @@ bool CCryptoKeyStore::DecryptSaplingLastDiversifierUsed(
     return true;
 }
 
+//Generalized Encryption/Decryption of serialized objects
+bool CCryptoKeyStore::EncryptSerializedSecret(
+    const CKeyingMaterial &vchSecret,
+    const uint256 chash,
+    std::vector<unsigned char> &vchCryptedSecret)
+{
+    LOCK(cs_SpendingKeyStore);
+    return EncryptSerializedSecret(vMasterKey, vchSecret, chash, vchCryptedSecret);
+}
+
+bool CCryptoKeyStore::EncryptSerializedSecret(
+    CKeyingMaterial &vMasterKeyIn,
+    const CKeyingMaterial &vchSecret,
+    const uint256 chash,
+    std::vector<unsigned char> &vchCryptedSecret)
+{
+    LOCK(cs_SpendingKeyStore);
+    return EncryptSecret(vMasterKeyIn, vchSecret, chash, vchCryptedSecret);
+}
+
+bool CCryptoKeyStore::DecryptSerializedSecret(
+     const std::vector<unsigned char>& vchCryptedSecret,
+     const uint256 chash,
+     CKeyingMaterial &vchSecret)
+{
+    LOCK(cs_SpendingKeyStore);
+    if (!IsCrypted()) {
+        return false;
+    }
+
+    if (IsLocked()) {
+        return false;
+    }
+
+    return DecryptSecret(vMasterKey, vchCryptedSecret, chash, vchSecret);
+
+}
+
 bool CCryptoKeyStore::AddCryptedSaplingSpendingKey(
     const libzcash::SaplingExtendedFullViewingKey &extfvk,
     const std::vector<unsigned char> &vchCryptedSecret,
