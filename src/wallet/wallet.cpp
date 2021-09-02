@@ -2573,16 +2573,17 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
 
         //Encrypt DefaultKey
         {
-            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
-            s << vchDefaultKey;
-            uint256 chash = Hash(s.begin(), s.end());
-
+            uint256 chash = HashWithFP(vchDefaultKey);
+            CKeyingMaterial vchSecret = SerializeForEncryptionInput(vchDefaultKey);
             std::vector<unsigned char> vchCryptedSecret;
-            if (!CCryptoKeyStore::EncryptPublicKey(chash, vchDefaultKey, vchCryptedSecret, vMasterKey)) {
+
+            if (!CCryptoKeyStore::EncryptSerializedSecret(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
+                LogPrintf("Encrypting default key failed!!!\n");
                 return false;
             }
 
-            if (!CWalletDB(strWalletFile).WriteCryptedDefaultKey(chash, vchCryptedSecret)) {
+            if (!pwalletdbEncryption->WriteCryptedDefaultKey(chash, vchCryptedSecret)) {
+                LogPrintf("Writing default key failed!!!\n");
                 return false;
             }
         }
@@ -6620,12 +6621,12 @@ bool CWallet::SetDefaultKey(const CPubKey &vchPubKey)
         if (!CWalletDB(strWalletFile).WriteDefaultKey(vchPubKey))
             return false;
     } else {
-        CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
-        s << EncodeDestination(vchPubKey);
-        uint256 chash = Hash(s.begin(), s.end());
 
+        uint256 chash = HashWithFP(vchPubKey);
+        CKeyingMaterial vchSecret = SerializeForEncryptionInput(vchPubKey);
         std::vector<unsigned char> vchCryptedSecret;
-        if (!CCryptoKeyStore::EncryptPublicKey(chash, vchPubKey, vchCryptedSecret)) {
+
+        if (!CCryptoKeyStore::EncryptSerializedSecret(vchSecret, chash, vchCryptedSecret)) {
             return false;
         }
 
@@ -6641,11 +6642,17 @@ bool CWallet::SetDefaultKey(const CPubKey &vchPubKey)
 
 bool CWallet::DecryptDefaultKey(const uint256 &chash, std::vector<unsigned char> &vchCryptedSecret, CPubKey &vchPubKey)
 {
-    if (!CCryptoKeyStore::DecryptPublicKey(vchPubKey, chash, vchCryptedSecret)) {
+    if (IsCrypted() && IsLocked()) {
+      return false;
+    }
+
+    CKeyingMaterial vchSecret;
+    if (!CCryptoKeyStore::DecryptSerializedSecret(vchCryptedSecret, chash, vchSecret)) {
         return false;
     }
 
-    return true;
+    DeserializeFromDecryptionOutput(vchSecret, vchPubKey);
+    return HashWithFP(vchPubKey) == chash;
 }
 
 /**
