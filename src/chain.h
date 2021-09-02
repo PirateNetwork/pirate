@@ -34,6 +34,10 @@ class CChainPower;
 
 #include <boost/foreach.hpp>
 
+#ifdef __clang__
+extern CCriticalSection cs_main;
+#endif
+
 static const int SPROUT_VALUE_VERSION = 1001400;
 static const int SAPLING_VALUE_VERSION = 1010100;
 extern int32_t ASSETCHAINS_LWMAPOS;
@@ -600,7 +604,7 @@ class CChain {
 protected:
     std::vector<CBlockIndex*> vChain;
     CBlockIndex *lastTip;
-    CBlockIndex *at(int nHeight) const
+    CBlockIndex *at(int nHeight) const REQUIRES(cs_main)
     {
         if (nHeight < 0 || nHeight >= (int)vChain.size())
             return NULL;
@@ -608,38 +612,38 @@ protected:
     }
 public:
     /** Returns the index entry for the genesis block of this chain, or NULL if none. */
-    virtual CBlockIndex *Genesis() const {
+    virtual CBlockIndex *Genesis() const REQUIRES(cs_main) {
         return vChain.size() > 0 ? vChain[0] : NULL;
     }
 
     /** Returns the index entry for the tip of this chain, or NULL if none. */
-    virtual CBlockIndex *Tip() const {
+    virtual CBlockIndex *Tip() const REQUIRES(cs_main) {
         return vChain.size() > 0 ? vChain[vChain.size() - 1] : NULL;
     }
     
     /** Returns the last tip of the chain, or NULL if none. */
-    virtual CBlockIndex *LastTip() const {
+    virtual CBlockIndex *LastTip() const REQUIRES(cs_main) {
         return vChain.size() > 0 ? lastTip : NULL;
     }
 
     /** Returns the index entry at a particular height in this chain, or NULL if no such height exists. */
-    virtual CBlockIndex *operator[](int nHeight) const {
+    virtual CBlockIndex *operator[](int nHeight) const REQUIRES(cs_main) {
         return at(nHeight);
     }
 
     /** Compare two chains efficiently. */
-    friend bool operator==(const CChain &a, const CChain &b) {
+    friend bool operator==(const CChain &a, const CChain &b) REQUIRES(cs_main) {
         return a.Height() == b.Height() &&
                a.LastTip() == b.LastTip();
     }
 
     /** Efficiently check whether a block is present in this chain. */
-    virtual bool Contains(const CBlockIndex *pindex) const {
+    virtual bool Contains(const CBlockIndex *pindex) const REQUIRES(cs_main) {
         return (*this)[pindex->GetHeight()] == pindex;
     }
 
     /** Find the successor of a block in this chain, or NULL if the given index is not found or is the tip. */
-    virtual CBlockIndex *Next(const CBlockIndex *pindex) const {
+    virtual CBlockIndex *Next(const CBlockIndex *pindex) const REQUIRES(cs_main) {
         if (Contains(pindex))
             return (*this)[pindex->GetHeight() + 1];
         else
@@ -647,18 +651,18 @@ public:
     }
 
     /** Return the maximal height in the chain. Is equal to chain.Tip() ? chain.Tip()->GetHeight() : -1. */
-    virtual int Height() const {
+    virtual int Height() const REQUIRES(cs_main) {
         return vChain.size() - 1;
     }
 
     /** Set/initialize a chain with a given tip. */
-    virtual void SetTip(CBlockIndex *pindex);
+    virtual void SetTip(CBlockIndex *pindex) REQUIRES(cs_main);
 
     /** Return a CBlockLocator that refers to a block in this chain (by default the tip). */
-    virtual CBlockLocator GetLocator(const CBlockIndex *pindex = NULL) const;
+    virtual CBlockLocator GetLocator(const CBlockIndex *pindex = NULL) const REQUIRES(cs_main);
 
     /** Find the last common block between this chain and a block index entry. */
-    virtual const CBlockIndex *FindFork(const CBlockIndex *pindex) const;
+    virtual const CBlockIndex *FindFork(const CBlockIndex *pindex) const REQUIRES(cs_main);
 };
 
 #ifdef DEBUG_LOCKORDER
