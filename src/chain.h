@@ -597,10 +597,9 @@ public:
 
 /** An in-memory indexed chain of blocks. */
 class CChain {
-private:
+protected:
     std::vector<CBlockIndex*> vChain;
     CBlockIndex *lastTip;
-protected:
     CBlockIndex *at(int nHeight) const
     {
         if (nHeight < 0 || nHeight >= (int)vChain.size())
@@ -676,7 +675,7 @@ public:
     CBlockIndex *Genesis() const override { AssertLockHeld(mutex); return CChain::Genesis(); }
     CBlockIndex *Tip() const override { AssertLockHeld(mutex); return CChain::Tip(); }
     CBlockIndex *LastTip() const override { AssertLockHeld(mutex); return CChain::LastTip(); }
-    CBlockIndex *operator[](int height) const { AssertLockHeld(mutex); return at(height); }
+    CBlockIndex *operator[](int height) const override { AssertLockHeld(mutex); return at(height); }
     friend bool operator==(const MultithreadedCChain &a, const MultithreadedCChain &b) { 
         return a.size() == b.size() 
                 && a.LastTip() == b.LastTip();
