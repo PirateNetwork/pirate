@@ -2305,6 +2305,16 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
     if (IsCrypted())
         return false;
 
+    HDSeed seed;
+    if (!GetHDSeed(seed)) {
+        LogPrintf("HD seed not found. Exiting.\n");
+        return false;
+    }
+
+    //Create a uniquie seedFP used to salt encryption hashes, DO NOT SAVE THIS TO THE WALLET!!!!
+    //This will be used to salt hashes of know values such as transaction ids and public addresses
+    seedEncyptionFP = seed.EncryptionFingerprint();
+
     CKeyingMaterial vMasterKey;
 
     vMasterKey.resize(WALLET_CRYPTO_KEY_SIZE);
