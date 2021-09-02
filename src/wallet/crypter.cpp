@@ -667,59 +667,6 @@ bool CCryptoKeyStore::DecryptCScript(
     return true;
 }
 
-bool CCryptoKeyStore::EncryptStringPair(
-    const uint256 &chash,
-    const std::string &stringIn1,
-    const std::string &stringIn2,
-    std::vector<unsigned char> &vchCryptedSecret)
-{
-    return EncryptStringPair(chash, stringIn1, stringIn2, vchCryptedSecret, vMasterKey);
-}
-
-bool CCryptoKeyStore::EncryptStringPair(
-    const uint256 &chash,
-    const std::string &stringIn1,
-    const std::string &stringIn2,
-    std::vector<unsigned char> &vchCryptedSecret,
-    CKeyingMaterial &vMasterKeyIn)
-{
-    auto stringPair = make_pair(stringIn1, stringIn2);
-    CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-    ss << stringPair;
-    CKeyingMaterial vchSecret(ss.begin(), ss.end());
-    if(!EncryptSecret(vMasterKeyIn, vchSecret, chash, vchCryptedSecret)) {
-        return false;
-    }
-    return true;
-}
-
-bool CCryptoKeyStore::DecryptStringPair(
-    std::string &stringOut1,
-    std::string &stringOut2,
-    const uint256 &chash,
-    const std::vector<unsigned char> &vchCryptedSecret)
-{
-    LOCK(cs_SpendingKeyStore);
-    if (!SetCrypted()) {
-        return false;
-    }
-
-    if (IsLocked()) {
-        return false;
-    }
-
-    CKeyingMaterial vchSecret;
-    if (!DecryptSecret(vMasterKey, vchCryptedSecret, chash, vchSecret)) {
-        return false;
-    }
-
-    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
-    ss >> stringOut1;
-    ss >> stringOut2;
-
-    return true;
-}
-
 bool CCryptoKeyStore::EncryptKeyPool(
     const uint256 &chash,
     const CKeyingMaterial &vchSecret,

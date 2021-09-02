@@ -2546,16 +2546,15 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         for (std::map<CTxDestination, CAddressBookData>::iterator it = mapAddressBook.begin(); it != mapAddressBook.end(); ++it) {
 
             const string strAddress = EncodeDestination((*it).first);
-            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
-            s << EncodeDestination((*it).first);
-            uint256 chash = Hash(s.begin(), s.end());
-
+            uint256 chash = HashWithFP(strAddress);
             string strPurposeIn = (*it).second.purpose;
             if (strPurposeIn.empty())
                 strPurposeIn = "None";
 
+            CKeyingMaterial vchSecretPurpose = SerializeForEncryptionInput(strAddress, strPurposeIn);
             std::vector<unsigned char> vchCryptedSecretPurpose;
-            if (!CCryptoKeyStore::EncryptStringPair(chash, strAddress, strPurposeIn, vchCryptedSecretPurpose, vMasterKey)) {
+
+            if (!CCryptoKeyStore::EncryptSerializedSecret(vMasterKey, vchSecretPurpose, chash, vchCryptedSecretPurpose)) {
                 LogPrintf("Encrypting Encrypted AddressesBook purpose failed!!!\n");
                 return false;
             }
@@ -2569,8 +2568,10 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             if (strNameIn.empty())
                 strNameIn = "None";
 
+            CKeyingMaterial vchSecretName = SerializeForEncryptionInput(strAddress, strNameIn);
             std::vector<unsigned char> vchCryptedSecretName;
-            if (!CCryptoKeyStore::EncryptStringPair(chash, strAddress, strNameIn, vchCryptedSecretName, vMasterKey)) {
+
+            if (!CCryptoKeyStore::EncryptSerializedSecret(vMasterKey, vchSecretName, chash, vchCryptedSecretName)) {
                 LogPrintf("Encrypting Encrypted AddressesBook name failed!!!\n");
                 return false;
             }
@@ -6482,16 +6483,15 @@ bool CWallet::SetAddressBook(const CTxDestination& address, const string& strNam
     } else {
 
         const string strAddress = EncodeDestination(address);
-        CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
-        s << EncodeDestination(address);
-        uint256 chash = Hash(s.begin(), s.end());
-
+        uint256 chash = HashWithFP(strAddress);
         string strPurposeIn = strPurpose;
-        if (strPurpose.empty())
+        if (strPurposeIn.empty())
             strPurposeIn = "None";
 
+        CKeyingMaterial vchSecretPurpose = SerializeForEncryptionInput(strAddress, strPurposeIn);
         std::vector<unsigned char> vchCryptedSecretPurpose;
-        if (!CCryptoKeyStore::EncryptStringPair(chash, strAddress, strPurposeIn, vchCryptedSecretPurpose)) {
+
+        if (!CCryptoKeyStore::EncryptSerializedSecret(vchSecretPurpose, chash, vchCryptedSecretPurpose)) {
             return false;
         }
 
@@ -6500,11 +6500,13 @@ bool CWallet::SetAddressBook(const CTxDestination& address, const string& strNam
         }
 
         string strNameIn = strName;
-        if (strName.empty())
+        if (strNameIn.empty())
             strNameIn = "None";
 
+        CKeyingMaterial vchSecretName = SerializeForEncryptionInput(strAddress, strNameIn);
         std::vector<unsigned char> vchCryptedSecretName;
-        if (!CCryptoKeyStore::EncryptStringPair(chash, strAddress, strNameIn, vchCryptedSecretName)) {
+
+        if (!CCryptoKeyStore::EncryptSerializedSecret(vchSecretName, chash, vchCryptedSecretName)) {
             return false;
         }
 
@@ -6516,11 +6518,18 @@ bool CWallet::SetAddressBook(const CTxDestination& address, const string& strNam
 
 bool CWallet::DecryptAddressBookEntry(const uint256 chash, std::vector<unsigned char> vchCryptedSecret, string& address, string& entry)
 {
-    if (!CCryptoKeyStore::DecryptStringPair(address, entry, chash, vchCryptedSecret)) {
+
+    if (IsCrypted() && IsLocked()) {
+      return false;
+    }
+
+    CKeyingMaterial vchSecret;
+    if (!CCryptoKeyStore::DecryptSerializedSecret(vchCryptedSecret, chash, vchSecret)) {
         return false;
     }
 
-    return true;
+    DeserializeFromDecryptionOutput(vchSecret, address, entry);
+    return HashWithFP(address) == chash;
 }
 
 bool CWallet::SetZAddressBook(const libzcash::PaymentAddress &address, const string &strName, const string &strPurpose)
