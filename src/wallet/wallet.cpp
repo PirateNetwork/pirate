@@ -1002,6 +1002,8 @@ bool CWallet::LoadCryptedCScript(const uint256 &chash, std::vector<unsigned char
 
 bool CWallet::AddWatchOnly(const CScript &dest)
 {
+
+    LOCK2(cs_wallet, cs_SpendingKeyStore);
     if (IsCrypted() && IsLocked()) {
       return false;
     }
@@ -1018,18 +1020,19 @@ bool CWallet::AddWatchOnly(const CScript &dest)
     if (!IsCrypted()) {
         return CWalletDB(strWalletFile).WriteWatchOnly(dest);
     } else {
-      uint160 scriptId = Hash160(dest);
+        uint256 chash = HashWithFP(*(const CScriptBase*)(&dest));
 
-      CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
-      s << scriptId;
-      uint256 chash = Hash(s.begin(), s.end());
+        CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+        ss << *(const CScriptBase*)(&dest);
+        CKeyingMaterial vchSecret(ss.begin(), ss.end());
 
-      std::vector<unsigned char> vchCryptedSecret;
-      if (!CCryptoKeyStore::EncryptCScript(chash, dest, vchCryptedSecret)) {
-          return false;
-      }
+        std::vector<unsigned char> vchCryptedSecret;
+        if (!CCryptoKeyStore::EncryptSerializedSecret(vchSecret, chash, vchCryptedSecret)) {
+            LogPrintf("Encrypting Watchs failed!!!\n");
+            return false;
+        }
 
-      return CWalletDB(strWalletFile).WriteCryptedWatchOnly(chash, dest, vchCryptedSecret);
+        return CWalletDB(strWalletFile).WriteCryptedWatchOnly(chash, dest, vchCryptedSecret);
 
     }
 }
@@ -1055,10 +1058,19 @@ bool CWallet::LoadWatchOnly(const CScript &dest)
 
 bool CWallet::LoadCryptedWatchOnly(const uint256 &chash, std::vector<unsigned char> &vchCryptedSecret)
 {
-    CScript dest;
-    if (!CCryptoKeyStore::DecryptCScript(dest, chash, vchCryptedSecret)) {
+    LOCK2(cs_wallet, cs_SpendingKeyStore);
+    if (IsCrypted() && IsLocked()) {
+      return false;
+    }
+
+    CKeyingMaterial vchSecret;
+    if (!DecryptSerializedSecret(vchCryptedSecret, chash, vchSecret)) {
         return false;
     }
+
+    CScript dest;
+    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
+    ss >> *(CScriptBase*)(&dest);
 
     return LoadWatchOnly(dest);
 }
@@ -2522,21 +2534,21 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         //Encrypt Watchonly addresses
         for (std::set<CScript>::iterator it = setWatchOnly.begin(); it != setWatchOnly.end(); ++it) {
             const auto dest = (*it);
+            uint256 chash = HashWithFP(*(const CScriptBase*)(&dest));
 
-            uint160 scriptId = Hash160(dest);
-
-            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
-            s << scriptId;
-            uint256 chash = Hash(s.begin(), s.end());
+            CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+            ss << *(const CScriptBase*)(&dest);
+            CKeyingMaterial vchSecret(ss.begin(), ss.end());
 
             std::vector<unsigned char> vchCryptedSecret;
-            if (!CCryptoKeyStore::EncryptCScript(chash, dest, vchCryptedSecret, vMasterKey)) {
+            if (!CCryptoKeyStore::EncryptSerializedSecret(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
+                LogPrintf("Encrypting Watchs failed!!!\n");
                 return false;
             }
 
             // Write all Watch addresses
             if (!pwalletdbEncryption->WriteCryptedWatchOnly(chash, dest, vchCryptedSecret)) {
-                LogPrintf("Writing Watchs failed failed!!!\n");
+                LogPrintf("Writing Watchs failed!!!\n");
                 return false;
             }
 
