@@ -976,11 +976,13 @@ protected:
                     for (std::pair<const uint256, ArchiveTxPoint>& arcTxPtItem : mapArcTxs) {
                         uint256 txid = arcTxPtItem.first;
                         ArchiveTxPoint arcTxPt = arcTxPtItem.second;
-                        uint256 chash;
+
                         std::vector<unsigned char> vchCryptedSecret;
+                        uint256 chash = HashWithFP(txid);
+                        CKeyingMaterial vchSecret = SerializeForEncryptionInput(txid, arcTxPt);
 
                         //Encrypt all archived transactions in memory inorder to write to disk
-                        if(!EncryptWalletArchiveTransaction(arcTxPt, txid, vchCryptedSecret, chash)) {
+                        if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
                             LogPrintf("SetBestChain(): Failed to encrypt ArchiveTxPoint, aborting atomic write\n");
                             walletdb.TxnAbort();
                             return;
@@ -1280,7 +1282,7 @@ public:
 
     bool DecryptWalletTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, CWalletTx& wtx, uint256& hash);
     bool EncryptWalletTransaction(const CWalletTx wtx, std::vector<unsigned char>& vchCryptedSecret, uint256& hash);
-    bool DecryptWalletArchiveTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, ArchiveTxPoint& arcTxPt, uint256& hash);
+    bool DecryptWalletArchiveTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& txid, ArchiveTxPoint& arcTxPt);
     bool EncryptWalletArchiveTransaction(const ArchiveTxPoint arcTxPt, const uint256 txid, std::vector<unsigned char>& vchCryptedSecret, uint256& hash);
     bool DecryptArchivedSaplingOutpoint(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& nullifier, SaplingOutPoint& op);
     bool EncryptWallet(const SecureString& strWalletPassphrase);
