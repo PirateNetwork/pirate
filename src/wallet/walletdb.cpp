@@ -837,10 +837,10 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             //ZapWalletTxes and Rescan.
             try
             {
-                uint256 hash;
+                uint256 txid;
                 ArchiveTxPoint arcTxPt;
                 if (strType == "arctx") {
-                    ssKey >> hash;
+                    ssKey >> txid;
                     ssValue >> arcTxPt;
                 } else {
                     uint256 chash;
@@ -848,7 +848,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                     vector<unsigned char> vchCryptedSecret;
                     ssValue >> vchCryptedSecret;
 
-                    if (!pwallet->DecryptWalletArchiveTransaction(chash, vchCryptedSecret, arcTxPt, hash))
+                    if (!pwallet->DecryptWalletArchiveTransaction(chash, vchCryptedSecret, txid, arcTxPt))
                     {
                         strErr = "Error reading wallet database: DecryptWalletArchiveTransaction failed";
                         return false;
@@ -856,7 +856,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 }
 
                 wss.nArcTx++;
-                pwallet->LoadArcTxs(hash, arcTxPt);
+                pwallet->LoadArcTxs(txid, arcTxPt);
             }
             catch (...) {}
 
