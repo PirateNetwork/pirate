@@ -943,6 +943,7 @@ bool CWallet::LoadSproutViewingKey(const libzcash::SproutViewingKey &vk)
 
 bool CWallet::AddCScript(const CScript& redeemScript)
 {
+    LOCK2(cs_wallet, cs_SpendingKeyStore);
     if (IsCrypted() && IsLocked()) {
       return false;
     }
@@ -959,14 +960,18 @@ bool CWallet::AddCScript(const CScript& redeemScript)
     else {
       uint160 scriptId = Hash160(redeemScript);
 
-      CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
-      s << scriptId;
-      uint256 chash = Hash(s.begin(), s.end());
+      uint256 chash = HashWithFP(*(const CScriptBase*)(&redeemScript));
+
+      CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+      ss << *(const CScriptBase*)(&redeemScript);
+      CKeyingMaterial vchSecret(ss.begin(), ss.end());
 
       std::vector<unsigned char> vchCryptedSecret;
-      if (!CCryptoKeyStore::EncryptCScript(chash, redeemScript, vchCryptedSecret)) {
+      if (!CCryptoKeyStore::EncryptSerializedSecret(vchSecret, chash, vchCryptedSecret)) {
+          LogPrintf("Encrypting CScripts  failed!!!\n");
           return false;
       }
+
 
       return CWalletDB(strWalletFile).WriteCryptedCScript(chash, scriptId, vchCryptedSecret);
 
@@ -992,10 +997,20 @@ bool CWallet::LoadCScript(const CScript& redeemScript)
 
 bool CWallet::LoadCryptedCScript(const uint256 &chash, std::vector<unsigned char> &vchCryptedSecret)
 {
-    CScript redeemScript;
-    if (!CCryptoKeyStore::DecryptCScript(redeemScript, chash, vchCryptedSecret)) {
+
+    LOCK2(cs_wallet, cs_SpendingKeyStore);
+    if (IsCrypted() && IsLocked()) {
+      return false;
+    }
+
+    CKeyingMaterial vchSecret;
+    if (!DecryptSerializedSecret(vchCryptedSecret, chash, vchSecret)) {
         return false;
     }
+
+    CScript redeemScript;
+    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
+    ss >> *(CScriptBase*)(&redeemScript);
 
     return LoadCScript(redeemScript);
 }
@@ -2515,12 +2530,15 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             const auto scriptId = (*it).first;
             const auto script = (*it).second;
 
-            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
-            s << scriptId;
-            uint256 chash = Hash(s.begin(), s.end());
+            uint256 chash = HashWithFP(*(const CScriptBase*)(&script));
+
+            CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+            ss << *(const CScriptBase*)(&script);
+            CKeyingMaterial vchSecret(ss.begin(), ss.end());
 
             std::vector<unsigned char> vchCryptedSecret;
-            if (!CCryptoKeyStore::EncryptCScript(chash, script, vchCryptedSecret, vMasterKey)) {
+            if (!CCryptoKeyStore::EncryptSerializedSecret(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
+                LogPrintf("Encrypting CScripts  failed!!!\n");
                 return false;
             }
 
@@ -6640,6 +6658,7 @@ bool CWallet::DelZAddressBook(const libzcash::PaymentAddress &address)
 
 bool CWallet::SetDefaultKey(const CPubKey &vchPubKey)
 {
+    LOCK2(cs_wallet, cs_SpendingKeyStore);
     if (IsCrypted() && IsLocked()) {
       return false;
     }
