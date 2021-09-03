@@ -997,10 +997,12 @@ protected:
                     for (std::pair<const uint256, SaplingOutPoint>& opItem : mapArcSaplingOutPoints) {
                         uint256 nullifier = opItem.first;
                         SaplingOutPoint op = opItem.second;
-                        uint256 chash;
-                        std::vector<unsigned char> vchCryptedSecret;
 
-                        if(!EncryptArchivedSaplingOutpoint(op, nullifier, vchCryptedSecret, chash)) {
+                        std::vector<unsigned char> vchCryptedSecret;
+                        uint256 chash = HashWithFP(nullifier);
+                        CKeyingMaterial vchSecret = SerializeForEncryptionInput(nullifier, op);
+
+                        if (!CCryptoKeyStore::EncryptSerializedSecret(vchSecret, chash, vchCryptedSecret)) {
                             LogPrintf("SetBestChain(): Failed to encrypt Archive Sapling Outpoint, aborting atomic write\n");
                             walletdb.TxnAbort();
                             return;
@@ -1270,7 +1272,7 @@ public:
     //! Adds a watch-only address to the store, without saving it to disk (used by LoadWallet)
     bool LoadWatchOnly(const CScript &dest);
     bool LoadCryptedWatchOnly(const uint256 &chash, std::vector<unsigned char> &vchCryptedSecret);
-    
+
     bool LoadSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk);
 
     bool Unlock(const SecureString& strWalletPassphrase);
@@ -1280,8 +1282,7 @@ public:
     bool EncryptWalletTransaction(const CWalletTx wtx, std::vector<unsigned char>& vchCryptedSecret, uint256& hash);
     bool DecryptWalletArchiveTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, ArchiveTxPoint& arcTxPt, uint256& hash);
     bool EncryptWalletArchiveTransaction(const ArchiveTxPoint arcTxPt, const uint256 txid, std::vector<unsigned char>& vchCryptedSecret, uint256& hash);
-    bool DecryptArchivedSaplingOutpoint(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, SaplingOutPoint& op, uint256& nullifier);
-    bool EncryptArchivedSaplingOutpoint(const SaplingOutPoint op, uint256 nullifier, std::vector<unsigned char>& vchCryptedSecret, uint256& chash);
+    bool DecryptArchivedSaplingOutpoint(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& nullifier, SaplingOutPoint& op);
     bool EncryptWallet(const SecureString& strWalletPassphrase);
 
     //Templates for encrypting various wallet objects to be written to disk
