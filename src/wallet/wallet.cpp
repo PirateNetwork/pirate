@@ -449,7 +449,7 @@ bool CWallet::AddSaplingDiversifiedAddress(
         uint256 chash = HashWithFP(addr);
         CKeyingMaterial vchSecret = SerializeForEncryptionInput(addr, ivk, path);
 
-        if (!CCryptoKeyStore::EncryptSerializedSecret(vchSecret, chash, vchCryptedSecret)) {
+        if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
             return false;
         }
 
@@ -487,7 +487,7 @@ bool CWallet::AddLastDiversifierUsed(
         CKeyingMaterial vchSecret = SerializeForEncryptionInput(ivk,path);
         std::vector<unsigned char> vchCryptedSecret;
 
-        if (!CCryptoKeyStore::EncryptSerializedSecret(vchSecret, chash, vchCryptedSecret)) {
+        if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
             return false;
         }
 
@@ -865,7 +865,7 @@ bool CWallet::LoadCryptedSaplingDiversifiedAddress(const uint256 &chash, const s
     }
 
     CKeyingMaterial vchSecret;
-    if (!CCryptoKeyStore::DecryptSerializedSecret(vchCryptedSecret, chash, vchSecret)) {
+    if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
         return false;
     }
 
@@ -890,7 +890,7 @@ bool CWallet::LoadLastDiversifierUsed(
 bool CWallet::LoadLastCryptedDiversifierUsed(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret)
 {
     CKeyingMaterial vchSecret;
-    if (!CCryptoKeyStore::DecryptSerializedSecret(vchCryptedSecret, chash, vchSecret)) {
+    if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
         return false;
     }
 
@@ -967,7 +967,7 @@ bool CWallet::AddCScript(const CScript& redeemScript)
       CKeyingMaterial vchSecret(ss.begin(), ss.end());
 
       std::vector<unsigned char> vchCryptedSecret;
-      if (!CCryptoKeyStore::EncryptSerializedSecret(vchSecret, chash, vchCryptedSecret)) {
+      if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
           LogPrintf("Encrypting CScripts  failed!!!\n");
           return false;
       }
@@ -1042,7 +1042,7 @@ bool CWallet::AddWatchOnly(const CScript &dest)
         CKeyingMaterial vchSecret(ss.begin(), ss.end());
 
         std::vector<unsigned char> vchCryptedSecret;
-        if (!CCryptoKeyStore::EncryptSerializedSecret(vchSecret, chash, vchCryptedSecret)) {
+        if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
             LogPrintf("Encrypting Watchs failed!!!\n");
             return false;
         }
@@ -2264,7 +2264,7 @@ bool CWallet::EncryptWalletTransaction(const CWalletTx wtx, std::vector<unsigned
 bool CWallet::DecryptWalletArchiveTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, ArchiveTxPoint& arcTxPt, uint256& hash) {
 
     CKeyingMaterial vchSecret;
-    if (!CCryptoKeyStore::DecryptWalletTransaction(chash, vchCryptedSecret, vchSecret)) {
+    if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
         LogPrintf("Decrypting ArchiveTxPoint failed!!!\n");
         return false;
     }
@@ -2302,7 +2302,7 @@ bool CWallet::DecryptArchivedSaplingOutpoint(const uint256& chash, const std::ve
     }
 
     CKeyingMaterial vchSecret;
-    if (!CCryptoKeyStore::DecryptSerializedSecret(vchCryptedSecret, chash, vchSecret)) {
+    if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
         return false;
     }
     DeserializeFromDecryptionOutput(vchSecret, nullifier, op);
@@ -2445,7 +2445,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             uint256 chash = HashWithFP(nullifier);
             CKeyingMaterial vchSecret = SerializeForEncryptionInput(nullifier, op);
 
-            if (!CCryptoKeyStore::EncryptSerializedSecret(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
+            if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
                 LogPrintf("Encrypting Archive Sapling Outpoint failed!!!\n");
                 return false;
             }
@@ -2469,7 +2469,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             uint256 chash = HashWithFP(addr);
             CKeyingMaterial vchSecret = SerializeForEncryptionInput(addr, ivk, path);
 
-            if (!CCryptoKeyStore::EncryptSerializedSecret(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
+            if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
                 LogPrintf("Encrypting Diversified Address failed!!!\n");
                 return false;
             }
@@ -2489,7 +2489,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             CKeyingMaterial vchSecret = SerializeForEncryptionInput(ivk,path);
             std::vector<unsigned char> vchCryptedSecret;
 
-            if (!CCryptoKeyStore::EncryptSerializedSecret(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
+            if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
                 LogPrintf("Encrypting Last Diversified Path failed!!!\n");
                 return false;
             }
@@ -2513,7 +2513,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             CKeyingMaterial vchSecret(ss.begin(), ss.end());
 
             std::vector<unsigned char> vchCryptedSecret;
-            if (!CCryptoKeyStore::EncryptSerializedSecret(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
+            if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
                 LogPrintf("Encrypting CScripts  failed!!!\n");
                 return false;
             }
@@ -2535,7 +2535,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             CKeyingMaterial vchSecret(ss.begin(), ss.end());
 
             std::vector<unsigned char> vchCryptedSecret;
-            if (!CCryptoKeyStore::EncryptSerializedSecret(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
+            if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
                 LogPrintf("Encrypting Watchs failed!!!\n");
                 return false;
             }
@@ -2560,7 +2560,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             CKeyingMaterial vchSecretPurpose = SerializeForEncryptionInput(strAddress, strPurposeIn);
             std::vector<unsigned char> vchCryptedSecretPurpose;
 
-            if (!CCryptoKeyStore::EncryptSerializedSecret(vMasterKey, vchSecretPurpose, chash, vchCryptedSecretPurpose)) {
+            if (!EncryptSerializedWalletObjects(vMasterKey, vchSecretPurpose, chash, vchCryptedSecretPurpose)) {
                 LogPrintf("Encrypting Encrypted AddressesBook purpose failed!!!\n");
                 return false;
             }
@@ -2577,7 +2577,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             CKeyingMaterial vchSecretName = SerializeForEncryptionInput(strAddress, strNameIn);
             std::vector<unsigned char> vchCryptedSecretName;
 
-            if (!CCryptoKeyStore::EncryptSerializedSecret(vMasterKey, vchSecretName, chash, vchCryptedSecretName)) {
+            if (!EncryptSerializedWalletObjects(vMasterKey, vchSecretName, chash, vchCryptedSecretName)) {
                 LogPrintf("Encrypting Encrypted AddressesBook name failed!!!\n");
                 return false;
             }
@@ -2594,7 +2594,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             CKeyingMaterial vchSecret = SerializeForEncryptionInput(vchDefaultKey);
             std::vector<unsigned char> vchCryptedSecret;
 
-            if (!CCryptoKeyStore::EncryptSerializedSecret(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
+            if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
                 LogPrintf("Encrypting default key failed!!!\n");
                 return false;
             }
@@ -2630,6 +2630,31 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
 
     return true;
 }
+
+bool CWallet::EncryptSerializedWalletObjects(
+    const CKeyingMaterial &vchSecret,
+    const uint256 chash,
+    std::vector<unsigned char> &vchCryptedSecret){
+
+    return CCryptoKeyStore::EncryptSerializedSecret(vchSecret, chash, vchCryptedSecret);
+}
+
+bool CWallet::EncryptSerializedWalletObjects(
+    CKeyingMaterial &vMasterKeyIn,
+    const CKeyingMaterial &vchSecret,
+    const uint256 chash,
+    std::vector<unsigned char> &vchCryptedSecret) {
+
+    return CCryptoKeyStore::EncryptSerializedSecret(vMasterKey, vchSecret, chash, vchCryptedSecret);
+}
+
+bool CWallet::DecryptSerializedWalletObjects(
+     const std::vector<unsigned char>& vchCryptedSecret,
+     const uint256 chash,
+     CKeyingMaterial &vchSecret) {
+
+    return CCryptoKeyStore::DecryptSerializedSecret(vchCryptedSecret, chash, vchSecret);
+ }
 
 template<typename WalletObject>
 uint256 CWallet::HashWithFP(WalletObject &wObj) {
@@ -6500,7 +6525,7 @@ bool CWallet::SetAddressBook(const CTxDestination& address, const string& strNam
         CKeyingMaterial vchSecretPurpose = SerializeForEncryptionInput(strAddress, strPurposeIn);
         std::vector<unsigned char> vchCryptedSecretPurpose;
 
-        if (!CCryptoKeyStore::EncryptSerializedSecret(vchSecretPurpose, chash, vchCryptedSecretPurpose)) {
+        if (!EncryptSerializedWalletObjects(vchSecretPurpose, chash, vchCryptedSecretPurpose)) {
             return false;
         }
 
@@ -6515,7 +6540,7 @@ bool CWallet::SetAddressBook(const CTxDestination& address, const string& strNam
         CKeyingMaterial vchSecretName = SerializeForEncryptionInput(strAddress, strNameIn);
         std::vector<unsigned char> vchCryptedSecretName;
 
-        if (!CCryptoKeyStore::EncryptSerializedSecret(vchSecretName, chash, vchCryptedSecretName)) {
+        if (!EncryptSerializedWalletObjects(vchSecretName, chash, vchCryptedSecretName)) {
             return false;
         }
 
@@ -6533,7 +6558,7 @@ bool CWallet::DecryptAddressBookEntry(const uint256 chash, std::vector<unsigned 
     }
 
     CKeyingMaterial vchSecret;
-    if (!CCryptoKeyStore::DecryptSerializedSecret(vchCryptedSecret, chash, vchSecret)) {
+    if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
         return false;
     }
 
@@ -6655,7 +6680,7 @@ bool CWallet::SetDefaultKey(const CPubKey &vchPubKey)
         CKeyingMaterial vchSecret = SerializeForEncryptionInput(vchPubKey);
         std::vector<unsigned char> vchCryptedSecret;
 
-        if (!CCryptoKeyStore::EncryptSerializedSecret(vchSecret, chash, vchCryptedSecret)) {
+        if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
             return false;
         }
 
@@ -6676,7 +6701,7 @@ bool CWallet::DecryptDefaultKey(const uint256 &chash, std::vector<unsigned char>
     }
 
     CKeyingMaterial vchSecret;
-    if (!CCryptoKeyStore::DecryptSerializedSecret(vchCryptedSecret, chash, vchSecret)) {
+    if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
         return false;
     }
 
