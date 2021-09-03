@@ -1002,7 +1002,7 @@ protected:
                         uint256 chash = HashWithFP(nullifier);
                         CKeyingMaterial vchSecret = SerializeForEncryptionInput(nullifier, op);
 
-                        if (!CCryptoKeyStore::EncryptSerializedSecret(vchSecret, chash, vchCryptedSecret)) {
+                        if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
                             LogPrintf("SetBestChain(): Failed to encrypt Archive Sapling Outpoint, aborting atomic write\n");
                             walletdb.TxnAbort();
                             return;
@@ -1284,6 +1284,20 @@ public:
     bool EncryptWalletArchiveTransaction(const ArchiveTxPoint arcTxPt, const uint256 txid, std::vector<unsigned char>& vchCryptedSecret, uint256& hash);
     bool DecryptArchivedSaplingOutpoint(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& nullifier, SaplingOutPoint& op);
     bool EncryptWallet(const SecureString& strWalletPassphrase);
+
+    bool EncryptSerializedWalletObjects(
+        const CKeyingMaterial &vchSecret,
+        const uint256 chash,
+        std::vector<unsigned char> &vchCryptedSecret);
+    bool EncryptSerializedWalletObjects(
+        CKeyingMaterial &vMasterKeyIn,
+        const CKeyingMaterial &vchSecret,
+        const uint256 chash,
+        std::vector<unsigned char> &vchCryptedSecret);
+    bool DecryptSerializedWalletObjects(
+         const std::vector<unsigned char>& vchCryptedSecret,
+         const uint256 chash,
+         CKeyingMaterial &vchSecret);
 
     //Templates for encrypting various wallet objects to be written to disk
     template<typename WalletObject>
