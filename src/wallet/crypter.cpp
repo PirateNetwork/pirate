@@ -618,55 +618,6 @@ bool CCryptoKeyStore::DecryptCryptedKey(
       return true;
 }
 
-bool CCryptoKeyStore::EncryptCScript(
-    const uint256 &chash,
-    const CScript &redeemScript,
-    std::vector<unsigned char> &vchCryptedSecret)
-{
-    return EncryptCScript(chash, redeemScript, vchCryptedSecret, vMasterKey);
-}
-
-bool CCryptoKeyStore::EncryptCScript(
-    const uint256 &chash,
-    const CScript &redeemScript,
-    std::vector<unsigned char> &vchCryptedSecret,
-    CKeyingMaterial &vMasterKeyIn)
-{
-    CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-    auto script = *(const CScriptBase*)(&redeemScript);
-    ss << script;
-    CKeyingMaterial vchSecret(ss.begin(), ss.end());
-    if(!EncryptSecret(vMasterKeyIn, vchSecret, chash, vchCryptedSecret)) {
-        return false;
-    }
-    return true;
-}
-
-bool CCryptoKeyStore::DecryptCScript(
-    CScript &redeemScript,
-    const uint256 &chash,
-    const std::vector<unsigned char> &vchCryptedSecret)
-{
-    LOCK(cs_SpendingKeyStore);
-    if (!SetCrypted()) {
-        return false;
-    }
-
-    if (IsLocked()) {
-        return false;
-    }
-
-    CKeyingMaterial vchSecret;
-    if (!DecryptSecret(vMasterKey, vchCryptedSecret, chash, vchSecret)) {
-        return false;
-    }
-
-    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
-    ss >> *(CScriptBase*)(&redeemScript);
-
-    return true;
-}
-
 bool CCryptoKeyStore::EncryptKeyPool(
     const uint256 &chash,
     const CKeyingMaterial &vchSecret,

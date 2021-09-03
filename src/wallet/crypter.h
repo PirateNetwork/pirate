@@ -266,20 +266,6 @@ public:
         const std::vector<unsigned char> &vchCryptedSecret,
         CPubKey &vchPubKey);
 
-    bool EncryptCScript(
-        const uint256 &chash,
-        const CScript &redeemScript,
-        std::vector<unsigned char> &vchCryptedSecret);
-    bool EncryptCScript(
-        const uint256 &chash,
-        const CScript &redeemScript,
-        std::vector<unsigned char> &vchCryptedSecret,
-        CKeyingMaterial &vMasterKeyIn);
-    bool DecryptCScript(
-        CScript &redeemScript,
-        const uint256 &chash,
-        const std::vector<unsigned char> &vchCryptedSecret);
-
     bool EncryptKeyPool(
         const uint256 &chash,
         const CKeyingMaterial &vchSecret,
