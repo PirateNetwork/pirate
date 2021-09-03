@@ -874,7 +874,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 vector<unsigned char> vchCryptedSecret;
                 ssValue >> vchCryptedSecret;
 
-                if (!pwallet->DecryptArchivedSaplingOutpoint(chash, vchCryptedSecret, op, nullifier))
+                if (!pwallet->DecryptArchivedSaplingOutpoint(chash, vchCryptedSecret, nullifier, op))
                 {
                     strErr = "Error reading wallet database: DecryptArchivedSaplingOutpoint failed";
                     return false;

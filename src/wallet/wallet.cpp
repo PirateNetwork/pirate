@@ -2294,37 +2294,19 @@ bool CWallet::EncryptWalletArchiveTransaction(const ArchiveTxPoint arcTxPt, cons
     return true;
 }
 
-bool CWallet::DecryptArchivedSaplingOutpoint(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, SaplingOutPoint& op, uint256& nullifier) {
+bool CWallet::DecryptArchivedSaplingOutpoint(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& nullifier, SaplingOutPoint& op) {
+
+    LOCK2(cs_wallet, cs_SpendingKeyStore);
+    if (IsCrypted() && IsLocked()) {
+      return false;
+    }
 
     CKeyingMaterial vchSecret;
-    if (!CCryptoKeyStore::DecryptWalletTransaction(chash, vchCryptedSecret, vchSecret)) {
-        LogPrintf("Decrypting Archived Sapling Outpoint failed!!!\n");
+    if (!CCryptoKeyStore::DecryptSerializedSecret(vchCryptedSecret, chash, vchSecret)) {
         return false;
     }
-
-    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
-    ss >> op;
-    ss >> nullifier;
-
-    return true;
-}
-
-bool CWallet::EncryptArchivedSaplingOutpoint(const SaplingOutPoint op, uint256 nullifier, std::vector<unsigned char>& vchCryptedSecret, uint256& chash) {
-
-    CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
-    s << nullifier;
-    chash = Hash(s.begin(), s.end());
-
-    auto arcOpPair = make_pair(op, nullifier);
-    CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-    ss << arcOpPair;
-    CKeyingMaterial vchSecret(ss.begin(), ss.end());
-
-    if (!CCryptoKeyStore::EncryptWalletTransaction(chash, vchSecret, vchCryptedSecret)) {
-        LogPrintf("Encrypting Archived Sapling Outpoint failed!!!\n");
-        return false;
-    }
-    return true;
+    DeserializeFromDecryptionOutput(vchSecret, nullifier, op);
+    return HashWithFP(nullifier) == chash;
 }
 
 bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
@@ -2459,17 +2441,11 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             uint256 nullifier = (*it).first;
             SaplingOutPoint op = (*it).second;
 
-            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
-            s << nullifier;
-            uint256 chash = Hash(s.begin(), s.end());
-
-            auto arcOpPair = make_pair(op, nullifier);
-            CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-            ss << arcOpPair;
-            CKeyingMaterial vchSecret(ss.begin(), ss.end());
-
             std::vector<unsigned char> vchCryptedSecret;
-            if (!CCryptoKeyStore::EncryptWalletTransaction(vMasterKey, chash, vchSecret, vchCryptedSecret)) {
+            uint256 chash = HashWithFP(nullifier);
+            CKeyingMaterial vchSecret = SerializeForEncryptionInput(nullifier, op);
+
+            if (!CCryptoKeyStore::EncryptSerializedSecret(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
                 LogPrintf("Encrypting Archive Sapling Outpoint failed!!!\n");
                 return false;
             }
@@ -3048,10 +3024,13 @@ void CWallet::UpdateSaplingNullifierNoteMapWithTx(CWalletTx& wtx) {
                 if (!IsCrypted()) {
                     wtx.WriteArcSaplingOpToDisk(&walletdb, nullifier, op);
                 } else {
+                    LOCK(cs_SpendingKeyStore);
                     if (!IsLocked()) {
-                        uint256 chash;
                         std::vector<unsigned char> vchCryptedSecret;
-                        EncryptArchivedSaplingOutpoint(op, nullifier, vchCryptedSecret, chash);
+                        uint256 chash = HashWithFP(nullifier);
+                        CKeyingMaterial vchSecret = SerializeForEncryptionInput(nullifier, op);
+
+                        CCryptoKeyStore::EncryptSerializedSecret(vchSecret, chash, vchCryptedSecret);
                         walletdb.WriteCryptedArcSaplingOp(nullifier, chash, vchCryptedSecret, true);
                     }
                 }
