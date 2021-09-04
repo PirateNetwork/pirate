@@ -887,6 +887,12 @@ bool CCryptoKeyStore::EncryptSerializedSecret(
     std::vector<unsigned char> &vchCryptedSecret)
 {
     LOCK(cs_SpendingKeyStore);
+    if (!IsCrypted()) {
+        return false;
+    }
+    if (IsLocked()) {
+        return false;
+    }
     return EncryptSerializedSecret(vMasterKey, vchSecret, chash, vchCryptedSecret);
 }
 

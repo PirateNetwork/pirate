@@ -321,7 +321,7 @@ bool CWallet::SetPrimarySpendingKey(
       AssertLockHeld(cs_wallet); // mapSaplingZKeyMetadata
 
       if (IsCrypted() && IsLocked()) {
-        return false;
+          return false;
       }
 
       pwalletMain->primarySaplingSpendingKey = extsk;
@@ -377,7 +377,7 @@ bool CWallet::AddSaplingIncomingViewingKey(
     AssertLockHeld(cs_wallet); // mapSaplingZKeyMetadata
 
     if (IsCrypted() && IsLocked()) {
-      return false;
+        return false;
     }
 
     if (!fFileBacked) {
@@ -429,7 +429,7 @@ bool CWallet::AddSaplingDiversifiedAddress(
     AssertLockHeld(cs_wallet); // mapSaplingZKeyMetadata
 
     if (IsCrypted() && IsLocked()) {
-      return false;
+        return false;
     }
 
     if (!fFileBacked) {
@@ -467,7 +467,7 @@ bool CWallet::AddLastDiversifierUsed(
     AssertLockHeld(cs_wallet); // mapSaplingZKeyMetadata
 
     if (IsCrypted() && IsLocked()) {
-      return false;
+        return false;
     }
 
     if (!CCryptoKeyStore::AddLastDiversifierUsed(ivk, path)) {
@@ -860,8 +860,8 @@ bool CWallet::LoadSaplingDiversifiedAddress(
 
 bool CWallet::LoadCryptedSaplingDiversifiedAddress(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret)
 {
-    if (IsCrypted() && IsLocked()) {
-      return false;
+    if (IsLocked()) {
+        return false;
     }
 
     CKeyingMaterial vchSecret;
@@ -943,9 +943,8 @@ bool CWallet::LoadSproutViewingKey(const libzcash::SproutViewingKey &vk)
 
 bool CWallet::AddCScript(const CScript& redeemScript)
 {
-    LOCK2(cs_wallet, cs_SpendingKeyStore);
     if (IsCrypted() && IsLocked()) {
-      return false;
+        return false;
     }
 
     if (!CCryptoKeyStore::AddCScript(redeemScript))
@@ -972,10 +971,11 @@ bool CWallet::AddCScript(const CScript& redeemScript)
           return false;
       }
 
-
       return CWalletDB(strWalletFile).WriteCryptedCScript(chash, scriptId, vchCryptedSecret);
 
     }
+
+    return true;
 
 }
 
@@ -997,10 +997,8 @@ bool CWallet::LoadCScript(const CScript& redeemScript)
 
 bool CWallet::LoadCryptedCScript(const uint256 &chash, std::vector<unsigned char> &vchCryptedSecret)
 {
-
-    LOCK2(cs_wallet, cs_SpendingKeyStore);
-    if (IsCrypted() && IsLocked()) {
-      return false;
+    if (IsLocked()) {
+        return false;
     }
 
     CKeyingMaterial vchSecret;
@@ -1017,10 +1015,8 @@ bool CWallet::LoadCryptedCScript(const uint256 &chash, std::vector<unsigned char
 
 bool CWallet::AddWatchOnly(const CScript &dest)
 {
-
-    LOCK2(cs_wallet, cs_SpendingKeyStore);
     if (IsCrypted() && IsLocked()) {
-      return false;
+        return false;
     }
 
     if (!CCryptoKeyStore::AddWatchOnly(dest))
@@ -1050,6 +1046,8 @@ bool CWallet::AddWatchOnly(const CScript &dest)
         return CWalletDB(strWalletFile).WriteCryptedWatchOnly(chash, dest, vchCryptedSecret);
 
     }
+
+    return true;
 }
 
 bool CWallet::RemoveWatchOnly(const CScript &dest)
@@ -1073,9 +1071,8 @@ bool CWallet::LoadWatchOnly(const CScript &dest)
 
 bool CWallet::LoadCryptedWatchOnly(const uint256 &chash, std::vector<unsigned char> &vchCryptedSecret)
 {
-    LOCK2(cs_wallet, cs_SpendingKeyStore);
-    if (IsCrypted() && IsLocked()) {
-      return false;
+    if (IsLocked()) {
+        return false;
     }
 
     CKeyingMaterial vchSecret;
@@ -2263,8 +2260,8 @@ bool CWallet::EncryptWalletTransaction(const CWalletTx wtx, std::vector<unsigned
 
 bool CWallet::DecryptWalletArchiveTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& txid, ArchiveTxPoint& arcTxPt) {
 
-    if (IsCrypted() && IsLocked()) {
-      return false;
+    if (IsLocked()) {
+        return false;
     }
 
     CKeyingMaterial vchSecret;
@@ -2296,9 +2293,8 @@ bool CWallet::EncryptWalletArchiveTransaction(const ArchiveTxPoint arcTxPt, cons
 
 bool CWallet::DecryptArchivedSaplingOutpoint(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& nullifier, SaplingOutPoint& op) {
 
-    LOCK2(cs_wallet, cs_SpendingKeyStore);
-    if (IsCrypted() && IsLocked()) {
-      return false;
+    if (IsLocked()) {
+        return false;
     }
 
     CKeyingMaterial vchSecret;
@@ -3043,7 +3039,6 @@ void CWallet::UpdateSaplingNullifierNoteMapWithTx(CWalletTx& wtx) {
                 if (!IsCrypted()) {
                     wtx.WriteArcSaplingOpToDisk(&walletdb, nullifier, op);
                 } else {
-                    LOCK(cs_SpendingKeyStore);
                     if (!IsLocked()) {
                         std::vector<unsigned char> vchCryptedSecret;
                         uint256 chash = HashWithFP(nullifier);
@@ -6492,7 +6487,7 @@ bool CWallet::SetAddressBook(const CTxDestination& address, const string& strNam
     bool fUpdated = false;
 
     if (IsCrypted() && IsLocked()) {
-      return false;
+        return false;
     }
 
     {
@@ -6546,13 +6541,14 @@ bool CWallet::SetAddressBook(const CTxDestination& address, const string& strNam
             return false;
         }
     }
+    return true;
 }
 
 bool CWallet::DecryptAddressBookEntry(const uint256 chash, std::vector<unsigned char> vchCryptedSecret, string& address, string& entry)
 {
 
-    if (IsCrypted() && IsLocked()) {
-      return false;
+    if (IsLocked()) {
+        return false;
     }
 
     CKeyingMaterial vchSecret;
@@ -6660,9 +6656,8 @@ bool CWallet::DelZAddressBook(const libzcash::PaymentAddress &address)
 
 bool CWallet::SetDefaultKey(const CPubKey &vchPubKey)
 {
-    LOCK2(cs_wallet, cs_SpendingKeyStore);
     if (IsCrypted() && IsLocked()) {
-      return false;
+        return false;
     }
 
     if (!fFileBacked) {
@@ -6694,8 +6689,8 @@ bool CWallet::SetDefaultKey(const CPubKey &vchPubKey)
 
 bool CWallet::DecryptDefaultKey(const uint256 &chash, std::vector<unsigned char> &vchCryptedSecret, CPubKey &vchPubKey)
 {
-    if (IsCrypted() && IsLocked()) {
-      return false;
+    if (IsLocked()) {
+        return false;
     }
 
     CKeyingMaterial vchSecret;
@@ -6715,16 +6710,15 @@ bool CWallet::NewKeyPool()
 {
     {
         LOCK(cs_wallet);
-        if (IsCrypted() && IsLocked())
+
+        if (IsCrypted() && IsLocked()) {
             return false;
+        }
 
         CWalletDB walletdb(strWalletFile);
         BOOST_FOREACH(int64_t nIndex, setKeyPool)
             walletdb.ErasePool(nIndex);
         setKeyPool.clear();
-
-        if (IsLocked())
-            return false;
 
         int64_t nKeys = max(GetArg("-keypool", 1), (int64_t)0);
         for (int i = 0; i < nKeys; i++)
@@ -6766,8 +6760,9 @@ bool CWallet::TopUpKeyPool(unsigned int kpSize)
     {
         LOCK(cs_wallet);
 
-        if (IsCrypted() && IsLocked())
+        if (IsCrypted() && IsLocked()) {
             return false;
+        }
 
         CWalletDB walletdb(strWalletFile);
 
@@ -6817,7 +6812,7 @@ void CWallet::ReserveKeyFromKeyPool(int64_t& nIndex, CKeyPool& keypool)
         LOCK(cs_wallet);
 
         if (IsCrypted() && IsLocked()) {
-          return;
+            return;
         }
 
         TopUpKeyPool();
@@ -7095,7 +7090,7 @@ void CWallet::GetAllReserveKeys(set<CKeyID>& setAddress)
     setAddress.clear();
 
     if (IsCrypted() && IsLocked()) {
-      return;
+        return;
     }
 
     CWalletDB walletdb(strWalletFile);
