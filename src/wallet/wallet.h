@@ -956,11 +956,16 @@ protected:
             } else {
                 if (!IsLocked()) {
                     for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
-                        auto wtx = wtxItem.second;
-                        uint256 chash;
+                        CWalletTx wtx = wtxItem.second;
+                        uint256 txid = wtx.GetHash();
+
                         std::vector<unsigned char> vchCryptedSecret;
-                        if(!EncryptWalletTransaction(wtx, vchCryptedSecret, chash)) {
-                            LogPrintf("SetBestChain(): Failed to encrypt CWalletTx, aborting atomic write\n");
+                        uint256 chash = HashWithFP(txid);
+                        CKeyingMaterial vchSecret = SerializeForEncryptionInput(txid, wtx);
+
+                        //Encrypt all wallet transactions in memory inorder to write to disk
+                        if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
+                            LogPrintf("SetBestChain(): Failed to encrypt ArchiveTxPoint, aborting atomic write\n");
                             walletdb.TxnAbort();
                             return;
                         }
@@ -1282,8 +1287,7 @@ public:
     bool Unlock(const SecureString& strWalletPassphrase);
     bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase);
 
-    bool DecryptWalletTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, CWalletTx& wtx, uint256& hash);
-    bool EncryptWalletTransaction(const CWalletTx wtx, std::vector<unsigned char>& vchCryptedSecret, uint256& hash);
+    bool DecryptWalletTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& hash, CWalletTx& wtx);
     bool DecryptWalletArchiveTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& txid, ArchiveTxPoint& arcTxPt);
     bool DecryptArchivedSaplingOutpoint(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& nullifier, SaplingOutPoint& op);
     bool EncryptWallet(const SecureString& strWalletPassphrase);

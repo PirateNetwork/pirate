@@ -784,7 +784,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 vector<unsigned char> vchCryptedSecret;
                 ssValue >> vchCryptedSecret;
 
-                if (!pwallet->DecryptWalletTransaction(chash, vchCryptedSecret, wtx, hash))
+                if (!pwallet->DecryptWalletTransaction(chash, vchCryptedSecret, hash, wtx))
                 {
                     strErr = "Error reading wallet database: DecryptWalletTransaction failed";
                     return false;

@@ -2225,37 +2225,19 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
 
 }
 
-bool CWallet::DecryptWalletTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, CWalletTx& wtx, uint256& hash) {
+bool CWallet::DecryptWalletTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& hash, CWalletTx& wtx) {
+
+    if (IsLocked()) {
+        return false;
+    }
 
     CKeyingMaterial vchSecret;
-    if (!CCryptoKeyStore::DecryptWalletTransaction(chash, vchCryptedSecret, vchSecret)) {
-        LogPrintf("Decrypting CWalletTx failed!!!\n");
+    if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
+        LogPrintf("Decrypting Wallet Transaction failed!!!\n");
         return false;
     }
-
-    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
-    ss >> wtx;
-    hash = wtx.GetHash();
-
-    return true;
-}
-
-bool CWallet::EncryptWalletTransaction(const CWalletTx wtx, std::vector<unsigned char>& vchCryptedSecret, uint256& hash) {
-
-    uint256 txid = wtx.GetHash();
-    CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
-    s << txid;
-    hash = Hash(s.begin(), s.end());
-
-    CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-    ss << wtx;
-    CKeyingMaterial vchSecret(ss.begin(), ss.end());
-
-    if (!CCryptoKeyStore::EncryptWalletTransaction(hash, vchSecret, vchCryptedSecret)) {
-        LogPrintf("Encrypting CWalletTx failed!!!\n");
-        return false;
-    }
-    return true;
+    DeserializeFromDecryptionOutput(vchSecret, hash, wtx);
+    return HashWithFP(hash) == chash;
 }
 
 bool CWallet::DecryptWalletArchiveTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& txid, ArchiveTxPoint& arcTxPt) {
@@ -2365,25 +2347,20 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         }
 
         //Encrypt All wallet transactions
-        for (map<uint256,CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
+        for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
             CWalletTx wtx = (*it).second;
-
             uint256 txid = wtx.GetHash();
-            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
-            s << txid;
-            uint256 hash = Hash(s.begin(), s.end());
-
-            CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-            ss << wtx;
-            CKeyingMaterial vchSecret(ss.begin(), ss.end());
 
             std::vector<unsigned char> vchCryptedSecret;
-            if (!CCryptoKeyStore::EncryptWalletTransaction(vMasterKey, hash, vchSecret, vchCryptedSecret)) {
+            uint256 chash = HashWithFP(txid);
+            CKeyingMaterial vchSecret = SerializeForEncryptionInput(txid, wtx);
+
+            if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
                 LogPrintf("Encrypting CWalletTx failed!!!\n");
                 return false;
             }
 
-            if (!pwalletdbEncryption->WriteCryptedTx(txid, hash, vchCryptedSecret, true)) {
+            if (!pwalletdbEncryption->WriteCryptedTx(txid, chash, vchCryptedSecret, true)) {
                 LogPrintf("Writing Encrypted CWalletTx failed!!!\n");
                 return false;
             }
@@ -4458,8 +4435,11 @@ bool CWalletTx::WriteToDisk(CWalletDB *pwalletdb, ArchiveTxPoint &arcTxPt, bool 
         }
 
         std::vector<unsigned char> vchCryptedTx;
-        uint256 cTxhash;
-        if(!pwalletMain->EncryptWalletTransaction(*this, vchCryptedTx, cTxhash)) {
+        uint256 cTxhash = pwalletMain->HashWithFP(txid);
+        CKeyingMaterial vchSecret = pwalletMain->SerializeForEncryptionInput(txid, *this);
+
+        if (!pwalletMain->EncryptSerializedWalletObjects(vchSecret, cTxhash, vchCryptedTx)) {
+            LogPrintf("Encrypting wallet transaction failed!!!\n");
             return false;
         }
 
