@@ -1026,7 +1026,9 @@ protected:
                     }
 
                 } else {
-                    LogPrintf("SetBestChain(): Wallet is locked");
+                    walletdb.TxnAbort();
+                    return;
+                    LogPrintf("SetBestChain(): Wallet is locked\n");
                 }
             }
         } catch (const std::exception &exc) {
