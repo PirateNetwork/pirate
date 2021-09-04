@@ -2273,24 +2273,6 @@ bool CWallet::DecryptWalletArchiveTransaction(const uint256& chash, const std::v
     return HashWithFP(txid) == chash;
 }
 
-bool CWallet::EncryptWalletArchiveTransaction(const ArchiveTxPoint arcTxPt, const uint256 txid, std::vector<unsigned char>& vchCryptedSecret, uint256& hash) {
-
-    CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
-    s << txid;
-    hash = Hash(s.begin(), s.end());
-
-    auto arcTxPair = make_pair(txid, arcTxPt);
-    CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-    ss << arcTxPair;
-    CKeyingMaterial vchSecret(ss.begin(), ss.end());
-
-    if (!CCryptoKeyStore::EncryptWalletTransaction(hash, vchSecret, vchCryptedSecret)) {
-        LogPrintf("Encrypting ArchiveTxPoint failed!!!\n");
-        return false;
-    }
-    return true;
-}
-
 bool CWallet::DecryptArchivedSaplingOutpoint(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& nullifier, SaplingOutPoint& op) {
 
     if (IsLocked()) {
