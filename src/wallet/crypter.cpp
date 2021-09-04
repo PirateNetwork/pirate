@@ -759,44 +759,6 @@ bool CCryptoKeyStore::DecryptSaplingMetaData(
     return true;
 }
 
-bool CCryptoKeyStore::EncryptSaplingPrimarySpendingKey(
-    const libzcash::SaplingExtendedSpendingKey &extsk,
-    std::vector<unsigned char> &vchCryptedSecret)
-{
-    return EncryptSaplingPrimarySpendingKey(extsk, vchCryptedSecret, vMasterKey);
-}
-
-bool CCryptoKeyStore::EncryptSaplingPrimarySpendingKey(
-    const libzcash::SaplingExtendedSpendingKey &extsk,
-    std::vector<unsigned char> &vchCryptedSecret,
-    CKeyingMaterial &vMasterKeyIn)
-{
-    CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-    ss << extsk;
-    CKeyingMaterial vchSecret(ss.begin(), ss.end());
-    if(!EncryptSecret(vMasterKeyIn, vchSecret, extsk.ToXFVK().fvk.GetFingerprint(), vchCryptedSecret)) {
-        return false;
-    }
-    return true;
-}
-
-bool CCryptoKeyStore::DecryptSaplingPrimarySpendingKey(
-    libzcash::SaplingExtendedSpendingKey &extsk,
-    const uint256 &extfvkFinger,
-    const std::vector<unsigned char> &vchCryptedSecret)
-{
-    LOCK(cs_SpendingKeyStore);
-    if (!SetCrypted()) {
-        return false;
-    }
-
-    if (IsLocked()) {
-        return false;
-    }
-
-    return DecryptSaplingSpendingKey(vMasterKey, vchCryptedSecret, extfvkFinger, extsk);
-
-}
 
 bool CCryptoKeyStore::EncryptSaplingPaymentAddress(
     const libzcash::SaplingIncomingViewingKey &ivk,

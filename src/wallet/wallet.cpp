@@ -335,7 +335,11 @@ bool CWallet::SetPrimarySpendingKey(
       } else {
 
           std::vector<unsigned char> vchCryptedSecret;
-          if (!CCryptoKeyStore::EncryptSaplingPrimarySpendingKey(extsk, vchCryptedSecret)) {
+          uint256 chash = extsk.ToXFVK().fvk.GetFingerprint();
+          CKeyingMaterial vchSecret = SerializeForEncryptionInput(extsk);
+
+          if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
+              LogPrintf("Encrypting Spending key failed!!!\n");
               return false;
           }
 
@@ -343,6 +347,26 @@ bool CWallet::SetPrimarySpendingKey(
       }
 
       return true;
+}
+
+bool CWallet::LoadCryptedPrimarySaplingSpendingKey(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret)
+{
+    CKeyingMaterial vchSecret;
+    if (!DecryptSerializedWalletObjects(vchCryptedSecret, extfvkFinger, vchSecret)) {
+        LogPrintf("Decrypting Primary Spending Key failed!!!\n");
+        return false;
+    }
+
+    libzcash::SaplingExtendedSpendingKey extsk;
+    DeserializeFromDecryptionOutput(vchSecret, extsk);
+
+    if (extsk.ToXFVK().fvk.GetFingerprint() != extfvkFinger) {
+        LogPrintf("Decrypted Primary Spending Key fingerprint is invalid!!!\n");
+        return false;
+    }
+
+    primarySaplingSpendingKey = extsk;
+    return true;
 }
 
 // Add spending key to keystore
@@ -759,16 +783,6 @@ bool CWallet::LoadCryptedSaplingZKey(const uint256 &extfvkFinger, const std::vec
 bool CWallet::LoadCryptedSaplingExtendedFullViewingKey(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret, libzcash::SaplingExtendedFullViewingKey &extfvk)
 {
      return CCryptoKeyStore::LoadCryptedSaplingExtendedFullViewingKey(extfvkFinger, vchCryptedSecret, extfvk);
-}
-
-bool CWallet::LoadCryptedPrimarySaplingSpendingKey(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret)
-{
-    libzcash::SaplingExtendedSpendingKey extsk;
-    if (!CCryptoKeyStore::DecryptSaplingPrimarySpendingKey(extsk, extfvkFinger, vchCryptedSecret)) {
-        return false;
-    }
-    primarySaplingSpendingKey = extsk;
-    return true;
 }
 
 bool CWallet::LoadCryptedSaplingPaymentAddress(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret, libzcash::SaplingPaymentAddress& addr)
@@ -2333,9 +2347,13 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
 
         //Encrypt Primary Spending Key for diversified addresses
         if (primarySaplingSpendingKey != boost::none) {
-            std::vector<unsigned char> vchCryptedSecret;
             auto extsk = primarySaplingSpendingKey.get();
-            if (!CCryptoKeyStore::EncryptSaplingPrimarySpendingKey(extsk, vchCryptedSecret, vMasterKey)) {
+
+            std::vector<unsigned char> vchCryptedSecret;
+            uint256 chash = extsk.ToXFVK().fvk.GetFingerprint();
+            CKeyingMaterial vchSecret = SerializeForEncryptionInput(extsk);
+
+            if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
                 LogPrintf("Encrypting Spending key failed!!!\n");
                 return false;
             }
