@@ -311,17 +311,7 @@ public:
         const std::vector<unsigned char> &vchCryptedSecret,
         const uint256 &extfvkFinger,
         CKeyMetadata &metadata);
-    bool EncryptSaplingPrimarySpendingKey(
-        const libzcash::SaplingExtendedSpendingKey &extsk,
-        std::vector<unsigned char> &vchCryptedSecret);
-    bool EncryptSaplingPrimarySpendingKey(
-        const libzcash::SaplingExtendedSpendingKey &extsk,
-        std::vector<unsigned char> &vchCryptedSecret,
-        CKeyingMaterial &vMasterKeyIn);
-    bool DecryptSaplingPrimarySpendingKey(
-        libzcash::SaplingExtendedSpendingKey &extsk,
-        const uint256 &extfvkFinger,
-        const std::vector<unsigned char> &vchCryptedSecret);
+
     bool EncryptSaplingPaymentAddress(
         const libzcash::SaplingIncomingViewingKey &ivk,
         const libzcash::SaplingPaymentAddress &addr,

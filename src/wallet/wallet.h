@@ -1365,6 +1365,9 @@ public:
     //Set Primary key for address diversification
     bool SetPrimarySpendingKey(
         const libzcash::SaplingExtendedSpendingKey &extsk);
+    bool LoadCryptedPrimarySaplingSpendingKey(
+        const uint256 &extfvkFinger,
+        const std::vector<unsigned char> &vchCryptedSecret);
     //! Adds Sapling spending key to the store, and saves it to disk
     bool AddSaplingZKey(
         const libzcash::SaplingExtendedSpendingKey &key,
@@ -1427,9 +1430,7 @@ public:
         const uint256 &extfvkFinger,
         const std::vector<unsigned char> &vchCryptedSecret,
         libzcash::SaplingExtendedFullViewingKey &extfvk);
-    bool LoadCryptedPrimarySaplingSpendingKey(
-        const uint256 &extfvkFinger,
-        const std::vector<unsigned char> &vchCryptedSecret);
+
     bool LoadCryptedSaplingPaymentAddress(
         const uint256 &chash,
         const std::vector<unsigned char> &vchCryptedSecret,
