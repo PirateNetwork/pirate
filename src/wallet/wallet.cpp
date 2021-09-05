@@ -3252,7 +3252,9 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
         auto saplingNoteData = saplingNoteDataAndAddressesToAdd.first;
         auto addressesToAdd = saplingNoteDataAndAddressesToAdd.second;
         for (const auto &addressToAdd : addressesToAdd) {
-            if (!AddSaplingIncomingViewingKey(addressToAdd.second, addressToAdd.first)) {
+            //Loaded into memory only
+            //This will be saved during the wallet SetBestChainINTERNAL
+            if (!CCryptoKeyStore::AddSaplingIncomingViewingKey(addressToAdd.second, addressToAdd.first)) {
                 return false;
             }
             SetZAddressBook(addressToAdd.first, "z-sapling", "");

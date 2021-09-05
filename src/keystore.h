@@ -168,6 +168,7 @@ protected:
     SaplingSpendingKeyMap mapSaplingSpendingKeys;
     SaplingFullViewingKeyMap mapSaplingFullViewingKeys;
     SaplingIncomingViewingKeyMap mapSaplingIncomingViewingKeys;
+    SaplingIncomingViewingKeyMap mapUnsavedSaplingIncomingViewingKeys;
     SaplingIncomingViewingKeySet setSaplingIncomingViewingKeys;
     SaplingOutgoingViewingKeySet setSaplingOutgoingViewingKeys;
     SaplingPaymentAddresses mapSaplingPaymentAddresses;

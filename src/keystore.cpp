@@ -226,6 +226,9 @@ bool CBasicKeyStore::AddSaplingIncomingViewingKey(
     mapSaplingIncomingViewingKeys[addr] = ivk;
     setSaplingIncomingViewingKeys.insert(ivk);
 
+    //Cleared during SetBestChainINTERNAL to capture new address ivk pairs discovered while the wallet is locked
+    mapUnsavedSaplingIncomingViewingKeys[addr] = ivk;
+
     return true;
 }
 
