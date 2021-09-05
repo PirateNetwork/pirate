@@ -371,25 +371,67 @@ bool CWallet::LoadCryptedPrimarySaplingSpendingKey(const uint256 &extfvkFinger, 
 
 // Add spending key to keystore
 bool CWallet::AddSaplingZKey(
-    const libzcash::SaplingExtendedSpendingKey &sk,
+    const libzcash::SaplingExtendedSpendingKey &extsk,
     const libzcash::SaplingPaymentAddress &defaultAddr)
 {
     AssertLockHeld(cs_wallet); // mapSaplingZKeyMetadata
 
-    if (!CCryptoKeyStore::AddSaplingSpendingKey(sk)) {
+
+    if (IsCrypted() && IsLocked()) {
         return false;
     }
 
-    nTimeFirstKey = 1; // No birthday information for viewing keys.
     if (!fFileBacked) {
         return true;
     }
 
+    auto ivk = extsk.ToXFVK().fvk.in_viewing_key();
+
     if (!IsCrypted()) {
-        auto ivk = sk.expsk.full_viewing_key().in_viewing_key();
-        return CWalletDB(strWalletFile).WriteSaplingZKey(ivk, sk, mapSaplingZKeyMetadata[ivk]);
+        if (!CCryptoKeyStore::AddSaplingSpendingKey(extsk)) {
+            LogPrintf("Adding unencrypted Sapling Spending Key failed!!!\n");
+            return false;
+        }
+
+
+        if(!CWalletDB(strWalletFile).WriteSaplingZKey(ivk, extsk, mapSaplingZKeyMetadata[ivk])) {
+            LogPrintf("Writing unencrypted Sapling Spending Key failed!!!\n");
+            return false;
+        }
+    } else {
+        //Encrypt Sapling Extended Speding Key
+        auto extfvk = extsk.ToXFVK();
+
+        std::vector<unsigned char> vchCryptedSpendingKey;
+        uint256 chash = extfvk.fvk.GetFingerprint();
+        CKeyingMaterial vchSpendingKey = SerializeForEncryptionInput(extsk);
+
+        if (!EncryptSerializedWalletObjects(vchSpendingKey, chash, vchCryptedSpendingKey)) {
+            LogPrintf("Encrypting Sapling Spending Key failed!!!\n");
+            return false;
+        }
+
+        //Encrypt metadata
+        CKeyMetadata metadata = mapSaplingZKeyMetadata[ivk];
+        std::vector<unsigned char> vchCryptedMetaData;
+        CKeyingMaterial vchMetaData = SerializeForEncryptionInput(metadata);
+        if (!EncryptSerializedWalletObjects(vchMetaData, chash, vchCryptedMetaData)) {
+            LogPrintf("Encrypting Sapling Spending Key metadata failed!!!\n");
+            return false;
+        }
+
+        if (!CCryptoKeyStore::AddCryptedSaplingSpendingKey(extfvk, vchCryptedSpendingKey)) {
+            LogPrintf("Adding encrypted Sapling Spending Key failed!!!\n");
+            return false;
+        }
+
+        if (!CWalletDB(strWalletFile).WriteCryptedSaplingZKey(extfvk, vchCryptedSpendingKey, vchCryptedMetaData)) {
+            LogPrintf("Writing encrypted Sapling Spending Key failed!!!\n");
+            return false;
+        }
     }
 
+    nTimeFirstKey = 1; // No birthday information for viewing keys.
     return true;
 }
 
@@ -680,37 +722,6 @@ bool CWallet::AddCryptedSproutSpendingKey(
     return false;
 }
 
-bool CWallet::AddCryptedSaplingSpendingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk,
-                                           const std::vector<unsigned char> &vchCryptedSecret,
-                                           CKeyingMaterial& vMasterKeyIn)
-{
-    if (!CCryptoKeyStore::AddCryptedSaplingSpendingKey(extfvk, vchCryptedSecret, vMasterKeyIn))
-        return false;
-    if (!fFileBacked)
-        return true;
-    {
-        LOCK(cs_wallet);
-
-        //Encrypt metadata
-        CKeyMetadata metadata = mapSaplingZKeyMetadata[extfvk.fvk.in_viewing_key()];
-        std::vector<unsigned char> vchCryptedMetaDataSecret;
-        if (!CCryptoKeyStore::EncryptSaplingMetaData(vMasterKeyIn, metadata, extfvk, vchCryptedMetaDataSecret)) {
-            return false;
-        }
-
-        if (pwalletdbEncryption) {
-            return pwalletdbEncryption->WriteCryptedSaplingZKey(extfvk,
-                                                         vchCryptedSecret,
-                                                         vchCryptedMetaDataSecret);
-        } else {
-            return CWalletDB(strWalletFile).WriteCryptedSaplingZKey(extfvk,
-                                                         vchCryptedSecret,
-                                                         vchCryptedMetaDataSecret);
-        }
-    }
-    return false;
-}
-
 bool CWallet::LoadKeyMetadata(const CPubKey &pubkey, const CKeyMetadata &meta)
 {
     AssertLockHeld(cs_wallet); // mapKeyMetadata
@@ -756,11 +767,6 @@ bool CWallet::LoadCryptedZKey(const libzcash::SproutPaymentAddress &addr, const 
     return CCryptoKeyStore::AddCryptedSproutSpendingKey(addr, rk, vchCryptedSecret);
 }
 
-bool CWallet::LoadCryptedSaplingZKey(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret, libzcash::SaplingExtendedFullViewingKey &extfvk)
-{
-     return CCryptoKeyStore::LoadCryptedSaplingSpendingKey(extfvkFinger, vchCryptedSecret, extfvk);
-}
-
 bool CWallet::LoadCryptedSaplingExtendedFullViewingKey(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret, libzcash::SaplingExtendedFullViewingKey &extfvk)
 {
      return CCryptoKeyStore::LoadCryptedSaplingExtendedFullViewingKey(extfvkFinger, vchCryptedSecret, extfvk);
@@ -789,12 +795,16 @@ bool CWallet::LoadTempHeldCryptedData()
             if ((*it).first == (*iit).first) {
 
                 libzcash::SaplingExtendedFullViewingKey extfvk = (*iit).second;
-                uint256 extfvkFinger = (*it).first;
+                uint256 chash = (*it).first;
                 std::vector<unsigned char> vchCryptedSecret = (*it).second;
-                CKeyMetadata metadata;
-                if(!CCryptoKeyStore::DecryptSaplingMetaData(vchCryptedSecret, extfvkFinger, metadata)) {
+
+                CKeyingMaterial vchSecret;
+                if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
                     return false;
                 }
+
+                CKeyMetadata metadata;
+                DeserializeFromDecryptionOutput(vchSecret, metadata);
 
                 if (!LoadSaplingZKeyMetadata(extfvk.fvk.in_viewing_key(), metadata)) {
                     return false;
@@ -825,6 +835,29 @@ bool CWallet::LoadSaplingZKeyMetadata(const libzcash::SaplingIncomingViewingKey 
 bool CWallet::LoadSaplingZKey(const libzcash::SaplingExtendedSpendingKey &key)
 {
     return CCryptoKeyStore::AddSaplingSpendingKey(key);
+}
+
+bool CWallet::LoadCryptedSaplingZKey(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret, libzcash::SaplingExtendedFullViewingKey &extfvk)
+{
+    AssertLockHeld(cs_wallet);
+    if (IsLocked()) {
+        return false;
+    }
+
+    CKeyingMaterial vchSecret;
+    if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
+        return false;
+    }
+
+    libzcash::SaplingExtendedSpendingKey extsk;
+    DeserializeFromDecryptionOutput(vchSecret, extsk);
+    extfvk = extsk.ToXFVK();
+
+    if(extfvk.fvk.GetFingerprint() != chash) {
+        return false;
+    }
+
+     return CCryptoKeyStore::AddCryptedSaplingSpendingKey(extfvk, vchCryptedSecret);
 }
 
 bool CWallet::LoadSaplingFullViewingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk)
@@ -2420,6 +2453,41 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
 
         }
 
+        //Encrypt Sapling Extended Spending Key
+        for (map<libzcash::SaplingExtendedFullViewingKey, libzcash::SaplingExtendedSpendingKey>::iterator it = mapSaplingSpendingKeys.begin(); it != mapSaplingSpendingKeys.end(); ++it) {
+              const auto extsk = (*it).second;
+              auto extfvk = extsk.ToXFVK();
+              auto ivk = extsk.ToXFVK().fvk.in_viewing_key();
+
+              std::vector<unsigned char> vchCryptedSpendingKey;
+              uint256 chash = extfvk.fvk.GetFingerprint();
+              CKeyingMaterial vchSpendingKey = SerializeForEncryptionInput(extsk);
+
+              if (!EncryptSerializedWalletObjects(vMasterKey, vchSpendingKey, chash, vchCryptedSpendingKey)) {
+                  LogPrintf("Encrypting Sapling Spending Key failed!!!\n");
+                  return false;
+              }
+
+              //Encrypt metadata
+              CKeyMetadata metadata = mapSaplingZKeyMetadata[ivk];
+              std::vector<unsigned char> vchCryptedMetaData;
+              CKeyingMaterial vchMetaData = SerializeForEncryptionInput(metadata);
+              if (!EncryptSerializedWalletObjects(vMasterKey, vchMetaData, chash, vchCryptedMetaData)) {
+                  LogPrintf("Encrypting Sapling Spending Key metadata failed!!!\n");
+                  return false;
+              }
+
+              if (!CCryptoKeyStore::AddCryptedSaplingSpendingKey(extfvk, vchCryptedSpendingKey)) {
+                  LogPrintf("Adding encrypted Sapling Spending Key failed!!!\n");
+                  return false;
+              }
+
+              if (!pwalletdbEncryption->WriteCryptedSaplingZKey(extfvk, vchCryptedSpendingKey, vchCryptedMetaData)) {
+                  LogPrintf("Writing encrypted Sapling Spending Key failed!!!\n");
+                  return false;
+              }
+        }
+
         //Encrypt Extended Full Viewing keys
         for (map<libzcash::SaplingIncomingViewingKey, libzcash::SaplingExtendedFullViewingKey>::iterator it = mapSaplingFullViewingKeys.begin(); it != mapSaplingFullViewingKeys.end(); ++it) {
               libzcash::SaplingExtendedFullViewingKey extfvk = (*it).second;
@@ -2607,6 +2675,9 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
                 return false;
             }
         }
+
+        //Clear All unencrypted Spending Keys
+        mapSaplingSpendingKeys.clear();
 
         //Write Crypted statuses
         SetWalletCrypted(pwalletdbEncryption);

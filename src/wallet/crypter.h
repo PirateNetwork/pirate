@@ -298,20 +298,6 @@ public:
         CKeyMetadata &metadata);
 
     //! Sapling
-    bool EncryptSaplingMetaData(
-        const CKeyMetadata &metadata,
-        const libzcash::SaplingExtendedFullViewingKey &extfvk,
-        std::vector<unsigned char> &vchCryptedSecret);
-    bool EncryptSaplingMetaData(
-        CKeyingMaterial &vMasterKeyIn,
-        const CKeyMetadata &metadata,
-        const libzcash::SaplingExtendedFullViewingKey &extfvk,
-        std::vector<unsigned char> &vchCryptedSecret);
-    bool DecryptSaplingMetaData(
-        const std::vector<unsigned char> &vchCryptedSecret,
-        const uint256 &extfvkFinger,
-        CKeyMetadata &metadata);
-
     bool EncryptSerializedSecret(
         const CKeyingMaterial &vchSecret,
         const uint256 chash,
@@ -326,21 +312,14 @@ public:
          const uint256 chash,
          CKeyingMaterial &vchSecret);
 
-    virtual bool AddCryptedSaplingSpendingKey(
+    bool AddCryptedSaplingSpendingKey(
         const libzcash::SaplingExtendedFullViewingKey &extfvk,
-        const std::vector<unsigned char> &vchCryptedSecret,
-        CKeyingMaterial& vMasterKeyIn);
-    virtual bool LoadCryptedSaplingSpendingKey(
-        const uint256 &extfvkFinger,
-        const std::vector<unsigned char> &vchCryptedSecret,
-        libzcash::SaplingExtendedFullViewingKey &extfvk);
+        const std::vector<unsigned char> &vchCryptedSecret);
+
     virtual bool LoadCryptedSaplingExtendedFullViewingKey(
         const uint256 &extfvkFinger,
         const std::vector<unsigned char> &vchCryptedSecret,
         libzcash::SaplingExtendedFullViewingKey &extfvk);
-
-    bool AddSaplingSpendingKey(
-        const libzcash::SaplingExtendedSpendingKey &sk);
 
     bool HaveSaplingSpendingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk) const
     {
