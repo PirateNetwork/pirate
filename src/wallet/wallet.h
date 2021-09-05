@@ -948,6 +948,19 @@ protected:
 
                 }
 
+                for (std::pair<const libzcash::SaplingPaymentAddress, libzcash::SaplingIncomingViewingKey>& ivkItem : mapUnsavedSaplingIncomingViewingKeys) {
+                    auto addr = ivkItem.first;
+                    auto ivk = ivkItem.second;
+
+                    // Write all archived sapling outpoint
+                    if (!walletdb.WriteSaplingPaymentAddress(ivk, addr)) {
+                        LogPrintf("SetBestChain(): Failed to write unsaved Sapling Payment address, aborting atomic write\n");
+                        walletdb.TxnAbort();
+                        return;
+                    }
+
+                }
+
                 if (!walletdb.WriteBestBlock(loc)) {
                     LogPrintf("SetBestChain(): Failed to write best block, aborting atomic write\n");
                     walletdb.TxnAbort();
@@ -1024,6 +1037,29 @@ protected:
 
                     }
 
+                    for (std::pair<const libzcash::SaplingPaymentAddress, libzcash::SaplingIncomingViewingKey>& ivkItem : mapUnsavedSaplingIncomingViewingKeys) {
+                        auto addr = ivkItem.first;
+                        auto ivk = ivkItem.second;
+
+                        std::vector<unsigned char> vchCryptedSecret;
+                        uint256 chash = HashWithFP(addr);
+                        CKeyingMaterial vchSecret = SerializeForEncryptionInput(addr, ivk);
+
+                        if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
+                            LogPrintf("SetBestChain(): Failed to encrypt unsaved Sapling Payment address, aborting atomic write\n");
+                            walletdb.TxnAbort();
+                            return;
+                        }
+
+                        // Write all unsaved Sapling Payment Addresses
+                        if (!walletdb.WriteCryptedSaplingPaymentAddress(addr, chash, vchCryptedSecret)) {
+                            LogPrintf("SetBestChain(): Failed to write unsaved Sapling Payment address, aborting atomic write\n");
+                            walletdb.TxnAbort();
+                            return;
+                        }
+
+                    }
+
                     if (!walletdb.WriteBestBlock(loc)) {
                         LogPrintf("SetBestChain(): Failed to write best block, aborting atomic write\n");
                         walletdb.TxnAbort();
@@ -1048,6 +1084,9 @@ protected:
             LogPrintf("SetBestChain(): Couldn't commit atomic write\n");
             return;
         }
+
+        //Clear Unsaved Sapling Addresses after successful TxnCommit
+        mapUnsavedSaplingIncomingViewingKeys.clear();
     }
 
 private:
