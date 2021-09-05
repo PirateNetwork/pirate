@@ -356,15 +356,6 @@ public:
         const uint256 &extfvkFinger,
         const std::vector<unsigned char> &vchCryptedSecret,
         libzcash::SaplingExtendedFullViewingKey &extfvk);
-    virtual bool LoadCryptedSaplingPaymentAddress(
-        libzcash::SaplingIncomingViewingKey &ivk,
-        libzcash::SaplingPaymentAddress &addr,
-        const uint256 &chash,
-        const std::vector<unsigned char> &vchCryptedSecret);
-    virtual bool AddCryptedSaplingPaymentAddress(
-        const libzcash::SaplingIncomingViewingKey &ivk,
-        const libzcash::SaplingPaymentAddress &addr,
-        const std::vector<unsigned char> &vchCryptedSecret);
 
     bool AddSaplingSpendingKey(
         const libzcash::SaplingExtendedSpendingKey &sk);
