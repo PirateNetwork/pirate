@@ -436,7 +436,7 @@ bool CWallet::AddSaplingExtendedFullViewingKey(const libzcash::SaplingExtendedFu
 {
     AssertLockHeld(cs_wallet);
 
-    if (!CCryptoKeyStore::AddSaplingExtendedFullViewingKey(extfvk)) {
+    if (IsCrypted() && IsLocked()) {
         return false;
     }
 
@@ -444,10 +444,27 @@ bool CWallet::AddSaplingExtendedFullViewingKey(const libzcash::SaplingExtendedFu
         return true;
     }
 
+    if (!CCryptoKeyStore::AddSaplingExtendedFullViewingKey(extfvk)) {
+        return false;
+    }
+
     if (!IsCrypted()) {
         return CWalletDB(strWalletFile).WriteSaplingExtendedFullViewingKey(extfvk);
+    } else {
+
+        std::vector<unsigned char> vchCryptedSecret;
+        uint256 chash = extfvk.fvk.GetFingerprint();
+        CKeyingMaterial vchSecret = SerializeForEncryptionInput(extfvk);
+
+        if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
+            return false;
+        }
+
+        return pwalletdbEncryption->WriteCryptedSaplingExtendedFullViewingKey(extfvk, vchCryptedSecret);
     }
 }
+
+
 
 bool CWallet::AddSaplingDiversifiedAddress(
     const libzcash::SaplingPaymentAddress &addr,
@@ -689,25 +706,6 @@ bool CWallet::AddCryptedSaplingSpendingKey(const libzcash::SaplingExtendedFullVi
             return CWalletDB(strWalletFile).WriteCryptedSaplingZKey(extfvk,
                                                          vchCryptedSecret,
                                                          vchCryptedMetaDataSecret);
-        }
-    }
-    return false;
-}
-
-bool CWallet::AddCryptedSaplingExtendedFullViewingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk,
-                                           const std::vector<unsigned char> &vchCryptedSecret)
-{
-    if (!CCryptoKeyStore::AddCryptedSaplingExtendedFullViewingKey(extfvk, vchCryptedSecret))
-        return false;
-    if (!fFileBacked)
-        return true;
-    {
-        LOCK(cs_wallet);
-
-        if (pwalletdbEncryption) {
-            return pwalletdbEncryption->WriteCryptedSaplingExtendedFullViewingKey(extfvk, vchCryptedSecret);
-        } else {
-            return CWalletDB(strWalletFile).WriteCryptedSaplingExtendedFullViewingKey(extfvk, vchCryptedSecret);
         }
     }
     return false;
@@ -2420,6 +2418,26 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
                 return false;
             }
 
+        }
+
+        //Encrypt Extended Full Viewing keys
+        for (map<libzcash::SaplingIncomingViewingKey, libzcash::SaplingExtendedFullViewingKey>::iterator it = mapSaplingFullViewingKeys.begin(); it != mapSaplingFullViewingKeys.end(); ++it) {
+              libzcash::SaplingExtendedFullViewingKey extfvk = (*it).second;
+
+              if (!HaveSaplingSpendingKey(extfvk)) {
+                  std::vector<unsigned char> vchCryptedSecret;
+                  uint256 chash = extfvk.fvk.GetFingerprint();
+                  CKeyingMaterial vchSecret = SerializeForEncryptionInput(extfvk);
+
+                  if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
+                      return false;
+                  }
+
+                  if(!pwalletdbEncryption->WriteCryptedSaplingExtendedFullViewingKey(extfvk, vchCryptedSecret)) {
+                      LogPrintf("Writing Sapling Extended Full Viewing key failed!!!\n");
+                      return false;
+                  }
+              }
         }
 
         //Encrypt SaplingPaymentAddress

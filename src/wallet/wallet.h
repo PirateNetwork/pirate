@@ -1427,9 +1427,6 @@ public:
         const libzcash::SaplingExtendedFullViewingKey &extfvk,
         const std::vector<unsigned char> &vchCryptedSecret,
         CKeyingMaterial& vMasterKeyIn);
-    bool AddCryptedSaplingExtendedFullViewingKey(
-        const libzcash::SaplingExtendedFullViewingKey &extfvk,
-        const std::vector<unsigned char> &vchCryptedSecret);
 
     //! Adds spending key to the store, without saving it to disk (used by LoadWallet)
     bool LoadSaplingZKey(const libzcash::SaplingExtendedSpendingKey &key);
