@@ -560,34 +560,6 @@ bool CCryptoKeyStore::AddSaplingSpendingKey(
     return true;
 }
 
-bool CCryptoKeyStore::AddSaplingExtendedFullViewingKey(
-    const libzcash::SaplingExtendedFullViewingKey &extfvk)
-{
-    {
-        LOCK(cs_SpendingKeyStore);
-        if (!IsCrypted()) {
-            return CBasicKeyStore::AddSaplingExtendedFullViewingKey(extfvk);
-        }
-
-        if (IsLocked()) {
-            return false;
-        }
-
-        std::vector<unsigned char> vchCryptedSecret;
-        CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-        ss << extfvk;
-        CKeyingMaterial vchSecret(ss.begin(), ss.end());
-        if (!EncryptSecret(vMasterKey, vchSecret, extfvk.fvk.GetFingerprint(), vchCryptedSecret)) {
-            return false;
-        }
-
-        if (!AddCryptedSaplingExtendedFullViewingKey(extfvk, vchCryptedSecret)) {
-            return false;
-        }
-    }
-    return true;
-}
-
 bool CCryptoKeyStore::AddCryptedSproutSpendingKey(
     const libzcash::SproutPaymentAddress &address,
     const libzcash::ReceivingKey &rk,
@@ -824,23 +796,6 @@ bool CCryptoKeyStore::AddCryptedSaplingSpendingKey(
     return true;
 }
 
-bool CCryptoKeyStore::AddCryptedSaplingExtendedFullViewingKey(
-    const libzcash::SaplingExtendedFullViewingKey &extfvk,
-    const std::vector<unsigned char> &vchCryptedSecret)
-{
-    {
-        LOCK(cs_SpendingKeyStore);
-        if (!IsCrypted()) {
-            return false;
-        }
-
-        // if SaplingFullViewingKey is not in SaplingFullViewingKeyMap, add it
-        return CBasicKeyStore::AddSaplingExtendedFullViewingKey(extfvk);
-
-    }
-    return true;
-}
-
 bool CCryptoKeyStore::LoadCryptedSaplingSpendingKey(
     const uint256 &extfvkFinger,
     const std::vector<unsigned char> &vchCryptedSecret,
@@ -1010,25 +965,6 @@ bool CCryptoKeyStore::EncryptKeys(CKeyingMaterial& vMasterKeyIn)
             }
             if (!AddCryptedSaplingSpendingKey(extfvk, vchCryptedSecret, vMasterKeyIn)) {
                 return false;
-            }
-        }
-
-        //Encrypt Extended Full Viewing keys
-        BOOST_FOREACH(SaplingFullViewingKeyMap::value_type& mSaplingFullViewingKey, mapSaplingFullViewingKeys)
-        {
-            const auto &extfvk = mSaplingFullViewingKey.second;
-            if (!HaveSaplingSpendingKey(extfvk)) {
-
-                CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-                ss << extfvk;
-                CKeyingMaterial vchSecret(ss.begin(), ss.end());
-                std::vector<unsigned char> vchCryptedSecret;
-                if (!EncryptSecret(vMasterKeyIn, vchSecret, extfvk.fvk.GetFingerprint(), vchCryptedSecret)) {
-                    return false;
-                }
-                if (!AddCryptedSaplingExtendedFullViewingKey(extfvk, vchCryptedSecret)) {
-                    return false;
-                }
             }
         }
 
