@@ -401,7 +401,7 @@ bool CWalletDB::WriteSaplingPaymentAddress(
 {
     nWalletDBUpdated++;
 
-    return Write(std::make_pair(std::string("sapzaddr"), addr), ivk, false);
+    return Write(std::make_pair(std::string("sapzaddr"), addr), ivk);
 }
 
 bool CWalletDB::WriteCryptedSaplingPaymentAddress(
@@ -411,11 +411,12 @@ bool CWalletDB::WriteCryptedSaplingPaymentAddress(
 {
     nWalletDBUpdated++;
 
-    if (!Write(std::make_pair(std::string("csapzaddr"), chash), vchCryptedSecret, false)) {
+    if (!Write(std::make_pair(std::string("csapzaddr"), chash), vchCryptedSecret)) {
         return false;
     }
 
     Erase(std::make_pair(std::string("sapzaddr"), addr));
+    return true;
 }
 
 bool CWalletDB::WriteSaplingDiversifiedAddress(
