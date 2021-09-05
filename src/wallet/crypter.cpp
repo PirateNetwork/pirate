@@ -759,58 +759,6 @@ bool CCryptoKeyStore::DecryptSaplingMetaData(
     return true;
 }
 
-
-bool CCryptoKeyStore::EncryptSaplingPaymentAddress(
-    const libzcash::SaplingIncomingViewingKey &ivk,
-    const libzcash::SaplingPaymentAddress &addr,
-    std::vector<unsigned char> &vchCryptedSecret)
-{
-    return EncryptSaplingPaymentAddress(ivk, addr, vchCryptedSecret, vMasterKey);
-}
-
-bool CCryptoKeyStore::EncryptSaplingPaymentAddress(
-    const libzcash::SaplingIncomingViewingKey &ivk,
-    const libzcash::SaplingPaymentAddress &addr,
-    std::vector<unsigned char> &vchCryptedSecret,
-    CKeyingMaterial &vMasterKeyIn)
-{
-    auto addressPair = std::make_pair(ivk, addr);
-    CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-    ss << addressPair;
-    CKeyingMaterial vchSecret(ss.begin(), ss.end());
-    if(!EncryptSecret(vMasterKeyIn, vchSecret, addr.GetHash(), vchCryptedSecret)) {
-        return false;
-    }
-    return true;
-}
-
-bool CCryptoKeyStore::DecryptSaplingPaymentAddress(
-    libzcash::SaplingIncomingViewingKey &ivk,
-    libzcash::SaplingPaymentAddress &addr,
-    const uint256 &chash,
-    const std::vector<unsigned char> &vchCryptedSecret)
-{
-    LOCK(cs_SpendingKeyStore);
-    if (!SetCrypted()) {
-        return false;
-    }
-
-    if (IsLocked()) {
-        return false;
-    }
-
-    CKeyingMaterial vchSecret;
-    if (!DecryptSecret(vMasterKey, vchCryptedSecret, chash, vchSecret)) {
-        return false;
-    }
-
-    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
-    ss >> ivk;
-    ss >> addr;
-
-    return true;
-}
-
 //Generalized Encryption/Decryption of serialized objects
 bool CCryptoKeyStore::EncryptSerializedSecret(
     const CKeyingMaterial &vchSecret,

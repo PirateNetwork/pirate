@@ -312,21 +312,6 @@ public:
         const uint256 &extfvkFinger,
         CKeyMetadata &metadata);
 
-    bool EncryptSaplingPaymentAddress(
-        const libzcash::SaplingIncomingViewingKey &ivk,
-        const libzcash::SaplingPaymentAddress &addr,
-        std::vector<unsigned char> &vchCryptedSecret);
-    bool EncryptSaplingPaymentAddress(
-        const libzcash::SaplingIncomingViewingKey &ivk,
-        const libzcash::SaplingPaymentAddress &addr,
-        std::vector<unsigned char> &vchCryptedSecret,
-        CKeyingMaterial &vMasterKeyIn);
-    bool DecryptSaplingPaymentAddress(
-        libzcash::SaplingIncomingViewingKey &ivk,
-        libzcash::SaplingPaymentAddress &addr,
-        const uint256 &chash,
-        const std::vector<unsigned char> &vchCryptedSecret);
-
     bool EncryptSerializedSecret(
         const CKeyingMaterial &vchSecret,
         const uint256 chash,
