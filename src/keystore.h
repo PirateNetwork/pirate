@@ -298,7 +298,7 @@ public:
         }
     }
 
-    bool AddSaplingSpendingKey(
+    virtual bool AddSaplingSpendingKey(
         const libzcash::SaplingExtendedSpendingKey &sk);
     bool HaveSaplingSpendingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk) const
     {
