@@ -406,11 +406,12 @@ bool CWalletDB::WriteSaplingPaymentAddress(
 
 bool CWalletDB::WriteCryptedSaplingPaymentAddress(
     const libzcash::SaplingPaymentAddress &addr,
+    const uint256 chash,
     const std::vector<unsigned char> &vchCryptedSecret)
 {
     nWalletDBUpdated++;
 
-    if (!Write(std::make_pair(std::string("csapzaddr"), addr.GetHash()), vchCryptedSecret, false)) {
+    if (!Write(std::make_pair(std::string("csapzaddr"), chash), vchCryptedSecret, false)) {
         return false;
     }
 

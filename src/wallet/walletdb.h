@@ -285,6 +285,7 @@ public:
       const libzcash::SaplingPaymentAddress &addr);
     bool WriteCryptedSaplingPaymentAddress(
         const libzcash::SaplingPaymentAddress &addr,
+        const uint256 chash,
         const std::vector<unsigned char> &vchCryptedSecret);
 
     //Wrtie the address, ivk and path of diversified address to the wallet
@@ -305,7 +306,7 @@ public:
         const uint256 chash,
         const libzcash::SaplingIncomingViewingKey &ivk,
         const std::vector<unsigned char> &vchCryptedSecret);
-        
+
     //Write the current spending key used to create diversified addresses to the wallet
     bool WritePrimarySaplingSpendingKey(
         const libzcash::SaplingExtendedSpendingKey &key);

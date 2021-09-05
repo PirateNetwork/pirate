@@ -408,20 +408,24 @@ bool CWallet::AddSaplingIncomingViewingKey(
         return true;
     }
 
-    if (!IsCrypted()) {
-        if (!CCryptoKeyStore::AddSaplingIncomingViewingKey(ivk, addr)) {
-            return false;
-        }
+    if (!CCryptoKeyStore::AddSaplingIncomingViewingKey(ivk, addr)) {
+        return false;
+    }
 
+    if (!IsCrypted()) {
         return CWalletDB(strWalletFile).WriteSaplingPaymentAddress(ivk, addr);
     } else {
 
         std::vector<unsigned char> vchCryptedSecret;
-        if (!CCryptoKeyStore::EncryptSaplingPaymentAddress(ivk, addr, vchCryptedSecret)) {
+        uint256 chash = HashWithFP(addr);
+        CKeyingMaterial vchSecret = SerializeForEncryptionInput(addr, ivk);
+
+        if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
+            LogPrintf("Encrypting Diversified Address failed!!!\n");
             return false;
         }
 
-        return AddCryptedSaplingPaymentAddress(ivk, addr, vchCryptedSecret);
+        return CWalletDB(strWalletFile).WriteCryptedSaplingPaymentAddress(addr, chash, vchCryptedSecret);
 
     }
 
@@ -709,27 +713,6 @@ bool CWallet::AddCryptedSaplingExtendedFullViewingKey(const libzcash::SaplingExt
     return false;
 }
 
-bool CWallet::AddCryptedSaplingPaymentAddress(
-    const libzcash::SaplingIncomingViewingKey &ivk,
-    const libzcash::SaplingPaymentAddress &addr,
-    const std::vector<unsigned char> &vchCryptedSecret)
-{
-    if (!CCryptoKeyStore::AddCryptedSaplingPaymentAddress(ivk, addr, vchCryptedSecret))
-        return false;
-    if (!fFileBacked)
-        return true;
-    {
-        LOCK(cs_wallet);
-
-        if (pwalletdbEncryption) {
-            return pwalletdbEncryption->WriteCryptedSaplingPaymentAddress(addr, vchCryptedSecret);
-        } else {
-            return CWalletDB(strWalletFile).WriteCryptedSaplingPaymentAddress(addr, vchCryptedSecret);
-        }
-    }
-    return false;
-}
-
 bool CWallet::LoadKeyMetadata(const CPubKey &pubkey, const CKeyMetadata &meta)
 {
     AssertLockHeld(cs_wallet); // mapKeyMetadata
@@ -783,12 +766,6 @@ bool CWallet::LoadCryptedSaplingZKey(const uint256 &extfvkFinger, const std::vec
 bool CWallet::LoadCryptedSaplingExtendedFullViewingKey(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret, libzcash::SaplingExtendedFullViewingKey &extfvk)
 {
      return CCryptoKeyStore::LoadCryptedSaplingExtendedFullViewingKey(extfvkFinger, vchCryptedSecret, extfvk);
-}
-
-bool CWallet::LoadCryptedSaplingPaymentAddress(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret, libzcash::SaplingPaymentAddress& addr)
-{
-    libzcash::SaplingIncomingViewingKey ivk;
-    return CCryptoKeyStore::LoadCryptedSaplingPaymentAddress(ivk, addr, chash, vchCryptedSecret);
 }
 
 bool CWallet::TempHoldCryptedSaplingMetaData(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret)
@@ -861,6 +838,26 @@ bool CWallet::LoadSaplingPaymentAddress(
     const libzcash::SaplingPaymentAddress &addr,
     const libzcash::SaplingIncomingViewingKey &ivk)
 {
+    return CCryptoKeyStore::AddSaplingIncomingViewingKey(ivk, addr);
+}
+
+bool CWallet::LoadCryptedSaplingPaymentAddress(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret, libzcash::SaplingPaymentAddress& addr)
+{
+    if (IsLocked()) {
+        return false;
+    }
+
+    CKeyingMaterial vchSecret;
+    if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
+        return false;
+    }
+
+    libzcash::SaplingIncomingViewingKey ivk;
+    DeserializeFromDecryptionOutput(vchSecret, addr, ivk);
+    if(HashWithFP(addr) != chash) {
+        return false;
+    }
+
     return CCryptoKeyStore::AddSaplingIncomingViewingKey(ivk, addr);
 }
 
@@ -2423,6 +2420,27 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
                 return false;
             }
 
+        }
+
+        //Encrypt SaplingPaymentAddress
+        for (map<libzcash::SaplingPaymentAddress, libzcash::SaplingIncomingViewingKey>::iterator it = mapSaplingIncomingViewingKeys.begin(); it != mapSaplingIncomingViewingKeys.end(); it++)
+        {
+            const auto &ivk = (*it).second;
+            const auto &addr = (*it).first;
+
+            std::vector<unsigned char> vchCryptedSecret;
+            uint256 chash = HashWithFP(addr);
+            CKeyingMaterial vchSecret = SerializeForEncryptionInput(addr, ivk);
+
+            if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
+                LogPrintf("Encrypting Sapling Payment Address failed!!!\n");
+                return false;
+            }
+
+            if(!pwalletdbEncryption->WriteCryptedSaplingPaymentAddress(addr, chash, vchCryptedSecret)) {
+                LogPrintf("Writing Sapling Payment Address failed!!!\n");
+                return false;
+            }
         }
 
         //Encrypt Diversified Addresses

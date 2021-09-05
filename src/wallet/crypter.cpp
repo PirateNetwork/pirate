@@ -893,21 +893,6 @@ bool CCryptoKeyStore::AddCryptedSaplingExtendedFullViewingKey(
     return true;
 }
 
-bool CCryptoKeyStore::AddCryptedSaplingPaymentAddress(
-    const libzcash::SaplingIncomingViewingKey &ivk,
-    const libzcash::SaplingPaymentAddress &addr,
-    const std::vector<unsigned char> &vchCryptedSecret)
-{
-
-    LOCK(cs_SpendingKeyStore);
-    if (!SetCrypted()) {
-        return false;
-    }
-
-    return CBasicKeyStore::AddSaplingIncomingViewingKey(ivk, addr);
-
-}
-
 bool CCryptoKeyStore::LoadCryptedSaplingSpendingKey(
     const uint256 &extfvkFinger,
     const std::vector<unsigned char> &vchCryptedSecret,
@@ -962,36 +947,6 @@ bool CCryptoKeyStore::LoadCryptedSaplingExtendedFullViewingKey(
 
         // if SaplingFullViewingKey is not in SaplingFullViewingKeyMap, add it
         if (!CBasicKeyStore::AddSaplingExtendedFullViewingKey(extfvk)) {
-            return false;
-        }
-
-    }
-    return true;
-}
-
-bool CCryptoKeyStore::LoadCryptedSaplingPaymentAddress(
-    libzcash::SaplingIncomingViewingKey &ivk,
-    libzcash::SaplingPaymentAddress &addr,
-    const uint256 &chash,
-    const std::vector<unsigned char> &vchCryptedSecret)
-{
-    {
-        LOCK(cs_SpendingKeyStore);
-        if (!SetCrypted()) {
-            return false;
-        }
-
-        if (IsLocked()) {
-            return false;
-        }
-
-        if (!DecryptSaplingPaymentAddress(ivk, addr, chash, vchCryptedSecret))
-        {
-            return false;
-        }
-
-        // if SaplingFullViewingKey is not in SaplingFullViewingKeyMap, add it
-        if (!CBasicKeyStore::AddSaplingIncomingViewingKey(ivk, addr)) {
             return false;
         }
 
@@ -1126,22 +1081,6 @@ bool CCryptoKeyStore::EncryptKeys(CKeyingMaterial& vMasterKeyIn)
                 if (!AddCryptedSaplingExtendedFullViewingKey(extfvk, vchCryptedSecret)) {
                     return false;
                 }
-            }
-        }
-
-        //Encrypt SaplingPaymentAddress
-        BOOST_FOREACH(SaplingIncomingViewingKeyMap::value_type& mSaplingIncomingViewingKeys, mapSaplingIncomingViewingKeys)
-        {
-            const auto &ivk = mSaplingIncomingViewingKeys.second;
-            const auto &addr = mSaplingIncomingViewingKeys.first;
-
-            std::vector<unsigned char> vchCryptedSecret;
-            if (!EncryptSaplingPaymentAddress(ivk, addr, vchCryptedSecret, vMasterKeyIn)) {
-                return false;
-            }
-
-            if (!AddCryptedSaplingPaymentAddress(ivk, addr, vchCryptedSecret)) {
-                return false;
             }
         }
 
