@@ -6,7 +6,7 @@
 ![Pirate Logo](https://i.ibb.co/F7Dgnxy/Pirate-Logo-Wordmark-Gold.png "Pirate Chain Logo")
 
 
-## Pirate Chain - offline
+## Pirate Chain
 
 This is the official Pirate Chain sourcecode repository based on https://github.com/jl777/komodo.
 
@@ -19,7 +19,7 @@ This is the official Pirate Chain sourcecode repository based on https://github.
 - BTT ANN: [https://bitcointalk.org/index.php?topic=4979549.0](https://bitcointalk.org/index.php?topic=4979549.0/)
 - Mail: [marketing@pirate.black](mailto:marketing@pirate.black)
 - Support: [https://pirate.black/discord](https://pirate.black/discord)
-- API references & Dev Documentation: [https://docs.komodoplatform.com](https://docs.komodoplatform.com/)
+- API references & Dev Documentation: [https://docs.pirate.black](https://docs.pirate.black/)
 - Blog: [https://pirate.black/blog](https://pirate.black/blog/)
 - Whitepaper: [Pirate Chain Whitepaper](https://pirate.black/whitepaper)
 
