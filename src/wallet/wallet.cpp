@@ -767,11 +767,6 @@ bool CWallet::LoadCryptedZKey(const libzcash::SproutPaymentAddress &addr, const 
     return CCryptoKeyStore::AddCryptedSproutSpendingKey(addr, rk, vchCryptedSecret);
 }
 
-bool CWallet::LoadCryptedSaplingExtendedFullViewingKey(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret, libzcash::SaplingExtendedFullViewingKey &extfvk)
-{
-     return CCryptoKeyStore::LoadCryptedSaplingExtendedFullViewingKey(extfvkFinger, vchCryptedSecret, extfvk);
-}
-
 bool CWallet::TempHoldCryptedSaplingMetaData(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret)
 {
     AssertLockHeld(cs_wallet); // mapTempHoldCryptedSaplingMetadata
@@ -863,6 +858,26 @@ bool CWallet::LoadCryptedSaplingZKey(const uint256 &chash, const std::vector<uns
 bool CWallet::LoadSaplingFullViewingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk)
 {
     return CCryptoKeyStore::AddSaplingExtendedFullViewingKey(extfvk);
+}
+
+bool CWallet::LoadCryptedSaplingExtendedFullViewingKey(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret, libzcash::SaplingExtendedFullViewingKey &extfvk)
+{
+
+    if (IsLocked()) {
+        return false;
+    }
+
+    CKeyingMaterial vchSecret;
+    if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
+        return false;
+    }
+
+    DeserializeFromDecryptionOutput(vchSecret, extfvk);
+    if(extfvk.fvk.GetFingerprint() != chash) {
+        return false;
+    }
+
+     return CCryptoKeyStore::AddSaplingExtendedFullViewingKey(extfvk);
 }
 
 bool CWallet::LoadSaplingPaymentAddress(
