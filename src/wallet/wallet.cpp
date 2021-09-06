@@ -502,7 +502,7 @@ bool CWallet::AddSaplingExtendedFullViewingKey(const libzcash::SaplingExtendedFu
             return false;
         }
 
-        return pwalletdbEncryption->WriteCryptedSaplingExtendedFullViewingKey(extfvk, vchCryptedSecret);
+        return CWalletDB(strWalletFile).WriteCryptedSaplingExtendedFullViewingKey(extfvk, vchCryptedSecret);
     }
 }
 
