@@ -561,48 +561,6 @@ bool CCryptoKeyStore::DecryptCryptedKey(
       return true;
 }
 
-bool CCryptoKeyStore::EncryptKeyPool(
-    const uint256 &chash,
-    const CKeyingMaterial &vchSecret,
-    std::vector<unsigned char> &vchCryptedSecret)
-{
-    return EncryptKeyPool(chash, vchSecret, vchCryptedSecret, vMasterKey);
-}
-
-bool CCryptoKeyStore::EncryptKeyPool(
-    const uint256 &chash,
-    const CKeyingMaterial &vchSecret,
-    std::vector<unsigned char> &vchCryptedSecret,
-    CKeyingMaterial &vMasterKeyIn)
-{
-    if(!EncryptSecret(vMasterKeyIn, vchSecret, chash, vchCryptedSecret)) {
-        return false;
-    }
-    return true;
-}
-
-bool CCryptoKeyStore::DecryptKeyPool(
-    CKeyingMaterial &vchSecret,
-    const uint256 &chash,
-    const std::vector<unsigned char> &vchCryptedSecret)
-{
-    LOCK(cs_SpendingKeyStore);
-    if (!SetCrypted()) {
-        return false;
-    }
-
-    if (IsLocked()) {
-        return false;
-    }
-
-    if (!DecryptSecret(vMasterKey, vchCryptedSecret, chash, vchSecret)) {
-        return false;
-    }
-
-    return true;
-}
-
-
 bool CCryptoKeyStore::EncryptKeyMetaData(
     const CPubKey &vchPubKey,
     const CKeyMetadata &metadata,
