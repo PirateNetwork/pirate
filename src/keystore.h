@@ -39,7 +39,6 @@ class CKeyStore
 {
 protected:
     mutable CCriticalSection cs_KeyStore;
-    mutable CCriticalSection cs_SpendingKeyStore;
 
 public:
     virtual ~CKeyStore() {}
@@ -233,7 +232,7 @@ public:
     {
         bool result;
         {
-            LOCK(cs_SpendingKeyStore);
+            LOCK(cs_KeyStore);
             result = (mapSproutSpendingKeys.count(address) > 0);
         }
         return result;
@@ -241,7 +240,7 @@ public:
     bool GetSproutSpendingKey(const libzcash::SproutPaymentAddress &address, libzcash::SproutSpendingKey &skOut) const
     {
         {
-            LOCK(cs_SpendingKeyStore);
+            LOCK(cs_KeyStore);
             SproutSpendingKeyMap::const_iterator mi = mapSproutSpendingKeys.find(address);
             if (mi != mapSproutSpendingKeys.end())
             {
@@ -254,7 +253,7 @@ public:
     bool GetNoteDecryptor(const libzcash::SproutPaymentAddress &address, ZCNoteDecryption &decOut) const
     {
         {
-            LOCK(cs_SpendingKeyStore);
+            LOCK(cs_KeyStore);
             NoteDecryptorMap::const_iterator mi = mapNoteDecryptors.find(address);
             if (mi != mapNoteDecryptors.end())
             {
@@ -268,7 +267,7 @@ public:
     {
         setAddress.clear();
         {
-            LOCK(cs_SpendingKeyStore);
+            LOCK(cs_KeyStore);
             SproutSpendingKeyMap::const_iterator mi = mapSproutSpendingKeys.begin();
             while (mi != mapSproutSpendingKeys.end())
             {
@@ -286,13 +285,13 @@ public:
 
     //! Sapling
     void GetSaplingIncomingViewingKeySet(SaplingIncomingViewingKeySet &ivks) {
-        LOCK(cs_SpendingKeyStore);
+        LOCK(cs_KeyStore);
         for (SaplingIncomingViewingKeySet::iterator it = setSaplingIncomingViewingKeys.begin(); it != setSaplingIncomingViewingKeys.end(); it++) {
             ivks.insert(*it);
         }
     }
     void GetSaplingOutgoingViewingKeySet(SaplingOutgoingViewingKeySet &ovks) {
-        LOCK(cs_SpendingKeyStore);
+        LOCK(cs_KeyStore);
         for (SaplingOutgoingViewingKeySet::iterator it = setSaplingOutgoingViewingKeys.begin(); it != setSaplingOutgoingViewingKeys.end(); it++) {
             ovks.insert(*it);
         }
@@ -304,7 +303,7 @@ public:
     {
         bool result;
         {
-            LOCK(cs_SpendingKeyStore);
+            LOCK(cs_KeyStore);
             result = (mapSaplingSpendingKeys.count(extfvk) > 0);
         }
         return result;
@@ -312,7 +311,7 @@ public:
     bool GetSaplingSpendingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk, libzcash::SaplingExtendedSpendingKey &skOut) const
     {
         {
-            LOCK(cs_SpendingKeyStore);
+            LOCK(cs_KeyStore);
 
             SaplingSpendingKeyMap::const_iterator mi = mapSaplingSpendingKeys.find(extfvk);
             if (mi != mapSaplingSpendingKeys.end())
@@ -347,7 +346,7 @@ public:
     {
         setAddress.clear();
         {
-            LOCK(cs_SpendingKeyStore);
+            LOCK(cs_KeyStore);
             auto mi = mapSaplingIncomingViewingKeys.begin();
             while (mi != mapSaplingIncomingViewingKeys.end())
             {
