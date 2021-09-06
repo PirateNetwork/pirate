@@ -751,23 +751,7 @@ bool CCryptoKeyStore::EncryptKeys(CKeyingMaterial& vMasterKeyIn)
             }
         }
         mapKeys.clear();
-        BOOST_FOREACH(SproutSpendingKeyMap::value_type& mSproutSpendingKey, mapSproutSpendingKeys)
-        {
-            const libzcash::SproutSpendingKey &sk = mSproutSpendingKey.second;
-            CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-            ss << sk;
-            CKeyingMaterial vchSecret(ss.begin(), ss.end());
-            libzcash::SproutPaymentAddress address = sk.address();
-            std::vector<unsigned char> vchCryptedSecret;
-            if (!EncryptSecret(vMasterKeyIn, vchSecret, address.GetHash(), vchCryptedSecret)) {
-                return false;
-            }
-            if (!AddCryptedSproutSpendingKey(address, sk.receiving_key(), vchCryptedSecret)) {
-                return false;
-            }
-        }
-        mapSproutSpendingKeys.clear();
-        //! Sapling key support
+
 
     }
     return true;
