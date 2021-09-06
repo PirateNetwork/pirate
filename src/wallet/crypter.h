@@ -161,9 +161,6 @@ private:
 protected:
     bool SetCrypted();
 
-    //! will encrypt previously unencrypted keys
-    bool EncryptKeys(CKeyingMaterial& vMasterKeyIn);
-
     bool Unlock(const CKeyingMaterial& vMasterKeyIn);
 
 public:
@@ -194,8 +191,8 @@ public:
 
     bool Lock();
 
-    virtual bool SetCryptedHDSeed(const uint256& seedFp, const std::vector<unsigned char> &vchCryptedSecret);
     bool SetHDSeed(const HDSeed& seed);
+    bool SetCryptedHDSeed(const uint256& seedFp, const std::vector<unsigned char> &vchCryptedSecret);
     bool HaveHDSeed() const;
     bool GetHDSeed(HDSeed& seedOut) const;
 

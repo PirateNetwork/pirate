@@ -1685,7 +1685,6 @@ public:
     bool RestoreSeedFromPhrase(std::string &phrase);
 
     bool SetHDSeed(const HDSeed& seed);
-    bool SetCryptedHDSeed(const uint256& seedFp, const std::vector<unsigned char> &vchCryptedSecret);
 
     /* Set the HD chain model (chain child index counters) */
     void SetHDChain(const CHDChain& chain, bool memonly);

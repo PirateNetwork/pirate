@@ -323,27 +323,13 @@ bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn)
 
 bool CCryptoKeyStore::SetHDSeed(const HDSeed& seed)
 {
-    {
-        LOCK(cs_KeyStore);
-        if (!IsCrypted()) {
-            return CBasicKeyStore::SetHDSeed(seed);
-        }
 
-        if (IsLocked())
-            return false;
-
-        std::vector<unsigned char> vchCryptedSecret;
-        // Use seed's fingerprint as IV
-        // TODO: Handle this properly when we make encryption a supported feature
-        auto seedFp = seed.Fingerprint();
-        if (!EncryptSecret(vMasterKey, seed.RawSeed(), seedFp, vchCryptedSecret))
-            return false;
-
-        // This will call into CWallet to store the crypted seed to disk
-        if (!SetCryptedHDSeed(seedFp, vchCryptedSecret))
-            return false;
+    LOCK(cs_KeyStore);
+    if (IsCrypted()) {
+        return false;
     }
-    return true;
+
+    return CBasicKeyStore::SetHDSeed(seed);
 }
 
 bool CCryptoKeyStore::SetCryptedHDSeed(
@@ -363,6 +349,9 @@ bool CCryptoKeyStore::SetCryptedHDSeed(
         }
 
         cryptedHDSeed = std::make_pair(seedFp, vchCryptedSecret);
+
+        //Clear unencrypted seed
+        hdSeed = HDSeed();
     }
     return true;
 }
@@ -564,35 +553,4 @@ bool CCryptoKeyStore::GetSaplingSpendingKey(const libzcash::SaplingExtendedFullV
         }
     }
     return false;
-}
-
-bool CCryptoKeyStore::EncryptKeys(CKeyingMaterial& vMasterKeyIn)
-{
-    {
-        LOCK(cs_KeyStore);
-        if (!mapCryptedKeys.empty() || IsCrypted())
-            return false;
-
-        fUseCrypto = true;
-        if (!hdSeed.IsNull()) {
-            {
-                std::vector<unsigned char> vchCryptedSecret;
-                // Use seed's fingerprint as IV
-                // TODO: Handle this properly when we make encryption a supported feature
-                auto seedFp = hdSeed.Fingerprint();
-                if (!EncryptSecret(vMasterKeyIn, hdSeed.RawSeed(), seedFp, vchCryptedSecret)) {
-                    return false;
-                }
-                // This will call into CWallet to store the crypted seed to disk
-                if (!SetCryptedHDSeed(seedFp, vchCryptedSecret)) {
-                    return false;
-                }
-            }
-            hdSeed = HDSeed();
-        }
-
-
-
-    }
-    return true;
 }

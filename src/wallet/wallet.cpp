@@ -2364,6 +2364,8 @@ bool CWallet::DecryptArchivedSaplingOutpoint(const uint256& chash, const std::ve
 
 bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
 {
+    LOCK2(cs_wallet, cs_KeyStore);
+
     if (IsCrypted())
         return false;
 
@@ -2407,7 +2409,6 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         return false;
 
     {
-        LOCK(cs_wallet);
         mapMasterKeys[++nMasterKeyMaxID] = kMasterKey;
         if (fFileBacked)
         {
@@ -2419,9 +2420,30 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             pwalletdbEncryption->WriteMasterKey(nMasterKeyMaxID, kMasterKey);
         }
 
-        if (!EncryptKeys(vMasterKey)) {
-            LogPrintf("Encrypt Keys failed!!!");
-            return false;
+        //Set fUseCrypto = true
+        CCryptoKeyStore::SetDBCrypted();
+
+        //Encrypt HDSeed
+        if (!seed.IsNull()) {
+            {
+                std::vector<unsigned char> vchCryptedSecret;
+                auto seedFp = seed.Fingerprint();
+
+                if (!EncryptSerializedWalletObjects(vMasterKey, seed.RawSeed(), seedFp, vchCryptedSecret)) {
+                    LogPrintf("Encrypting HDSeed failed!!!\n");
+                    return false;
+                }
+
+                if (!CCryptoKeyStore::SetCryptedHDSeed(seedFp, vchCryptedSecret)) {
+                    LogPrintf("Adding encrypted HDSeed failed!!!\n");
+                    return false;
+                }
+
+                if (!pwalletdbEncryption->WriteCryptedHDSeed(seedFp, vchCryptedSecret)) {
+                    LogPrintf("Writing encrypted HDSeed failed!!!\n");
+                    return false;
+                }
+            }
         }
 
         //Encrypt Primary Spending Key for diversified addresses
@@ -4175,7 +4197,8 @@ bool CWallet::RestoreSeedFromPhrase(std::string &phrase)
 
 bool CWallet::SetHDSeed(const HDSeed& seed)
 {
-    if (!CCryptoKeyStore::SetHDSeed(seed)) {
+
+    if (IsCrypted() && IsLocked()) {
         return false;
     }
 
@@ -4186,30 +4209,36 @@ bool CWallet::SetHDSeed(const HDSeed& seed)
     {
         LOCK(cs_wallet);
         if (!IsCrypted()) {
+
+            if (!CCryptoKeyStore::SetHDSeed(seed)) {
+                return false;
+            }
+
             return CWalletDB(strWalletFile).WriteHDSeed(seed);
+        } else {
+
+            std::vector<unsigned char> vchCryptedSecret;
+            auto seedFp = hdSeed.Fingerprint();
+
+            if (!EncryptSerializedWalletObjects(seed.RawSeed(), seedFp, vchCryptedSecret)) {
+                LogPrintf("Encrypting HDSeed failed!!!\n");
+                return false;
+            }
+
+            if (!CCryptoKeyStore::SetCryptedHDSeed(seedFp, vchCryptedSecret)) {
+                LogPrintf("Adding encrypted HDSeed failed!!!\n");
+                return false;
+            }
+
+            if (!CWalletDB(strWalletFile).WriteCryptedHDSeed(seedFp, vchCryptedSecret)) {
+                LogPrintf("Writing encrypted HDSeed failed!!!\n");
+                return false;
+            }
+            //Clear unencrypted seed
+            hdSeed = HDSeed();
         }
     }
     return true;
-}
-
-bool CWallet::SetCryptedHDSeed(const uint256& seedFp, const std::vector<unsigned char> &vchCryptedSecret)
-{
-    if (!CCryptoKeyStore::SetCryptedHDSeed(seedFp, vchCryptedSecret)) {
-        return false;
-    }
-
-    if (!fFileBacked) {
-        return true;
-    }
-
-    {
-        LOCK(cs_wallet);
-        if (pwalletdbEncryption)
-            return pwalletdbEncryption->WriteCryptedHDSeed(seedFp, vchCryptedSecret);
-        else
-            return CWalletDB(strWalletFile).WriteCryptedHDSeed(seedFp, vchCryptedSecret);
-    }
-    return false;
 }
 
 void CWallet::SetHDChain(const CHDChain& chain, bool memonly)
