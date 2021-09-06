@@ -1405,8 +1405,7 @@ public:
         const std::vector<unsigned char> &vchCryptedSecret);
     //! Adds Sapling spending key to the store, and saves it to disk
     bool AddSaplingZKey(
-        const libzcash::SaplingExtendedSpendingKey &key,
-        const libzcash::SaplingPaymentAddress &defaultAddr);
+        const libzcash::SaplingExtendedSpendingKey &key);
     bool AddSaplingExtendedFullViewingKey(
         const libzcash::SaplingExtendedFullViewingKey &extfvk);
     bool AddSaplingIncomingViewingKey(
