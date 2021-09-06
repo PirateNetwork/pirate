@@ -1051,19 +1051,13 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         }
         else if (strType == "ckey") //ckey is encrypt key (transparent)
         {
-            CPubKey vchPubKey;
             uint256 chash;
             ssKey >> chash;
             vector<unsigned char> vchCryptedSecret;
             ssValue >> vchCryptedSecret;
             wss.nCKeys++;
 
-            if (!pwallet->DecryptCryptedKey(chash, vchCryptedSecret, vchPubKey)) {
-                strErr = "Error reading wallet database: DecryptCryptedKey failed";
-                return false;
-            }
-
-            if (!pwallet->LoadCryptedKey(vchPubKey, vchCryptedSecret))
+            if (!pwallet->LoadCryptedKey(chash, vchCryptedSecret))
             {
                 strErr = "Error reading wallet database: LoadCryptedKey failed";
                 return false;
