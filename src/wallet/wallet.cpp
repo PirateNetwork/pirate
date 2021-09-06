@@ -2421,45 +2421,20 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
 
         //Set fUseCrypto = true
         CCryptoKeyStore::SetDBCrypted();
+        CCryptoKeyStore::UnlockUnchecked(vMasterKey);
 
         //Encrypt HDSeed
         if (!seed.IsNull()) {
-            {
-                std::vector<unsigned char> vchCryptedSecret;
-                auto seedFp = seed.Fingerprint();
-
-                if (!EncryptSerializedWalletObjects(vMasterKey, seed.RawSeed(), seedFp, vchCryptedSecret)) {
-                    LogPrintf("Encrypting HDSeed failed!!!\n");
-                    return false;
-                }
-
-                if (!CCryptoKeyStore::SetCryptedHDSeed(seedFp, vchCryptedSecret)) {
-                    LogPrintf("Adding encrypted HDSeed failed!!!\n");
-                    return false;
-                }
-
-                if (!pwalletdbEncryption->WriteCryptedHDSeed(seedFp, vchCryptedSecret)) {
-                    LogPrintf("Writing encrypted HDSeed failed!!!\n");
-                    return false;
-                }
+            if (!SetHDSeed(seed)) {
+                LogPrintf("Setting encrypted HDSeed failed!!!\n");
+                return false;
             }
         }
 
         //Encrypt Primary Spending Key for diversified addresses
         if (primarySaplingSpendingKey != boost::none) {
-            auto extsk = primarySaplingSpendingKey.get();
-
-            std::vector<unsigned char> vchCryptedSecret;
-            uint256 chash = extsk.ToXFVK().fvk.GetFingerprint();
-            CKeyingMaterial vchSecret = SerializeForEncryptionInput(extsk);
-
-            if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
-                LogPrintf("Encrypting Spending key failed!!!\n");
-                return false;
-            }
-
-            if (!pwalletdbEncryption->WriteCryptedPrimarySaplingSpendingKey(extsk, vchCryptedSecret)) {
-                LogPrintf("Writing Primary Spending key failed!!!\n");
+            if (!SetPrimarySpendingKey(primarySaplingSpendingKey.get())) {
+                LogPrintf("Setting encrypted primary sapling spending key failed!!!\n");
                 return false;
             }
         }
@@ -2527,98 +2502,25 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
 
         //Encrypt Transparent Keys
         for (map<CKeyID, CKey>::iterator it = mapKeys.begin(); it != mapKeys.end(); ++it) {
-            const CKey &key = (*it).second;
-            CPubKey vchPubKey = key.GetPubKey();
-
-            //Encrypt Key for memory structures
-            std::vector<unsigned char> vchCryptedSpendingKey;
-            CKeyingMaterial vchSpendingKey(key.begin(), key.end());
-            if (!EncryptSerializedWalletObjects(vMasterKey, vchSpendingKey, vchPubKey.GetHash(), vchCryptedSpendingKey)) {
-                LogPrintf("Encrypting Transparent Spending Key failed!!!\n");
-                return false;
-            }
-
-            //Add to in-memory structures
-            if (!CCryptoKeyStore::AddCryptedKey(vchPubKey, vchCryptedSpendingKey)) {
-                LogPrintf("Adding encrypted Transparent Spending Key failed!!!\n");
-                return false;
-            }
-
-            //Encrypt Key for saving to Disk
-            std::vector<unsigned char> vchCryptedSpendingKeySave;
-            uint256 chash = HashWithFP(vchPubKey);
-            CKeyingMaterial vchSpendingKeySave = SerializeForEncryptionInput(vchPubKey, vchCryptedSpendingKey);
-            if (!EncryptSerializedWalletObjects(vMasterKey, vchSpendingKeySave, chash, vchCryptedSpendingKeySave)) {
-                LogPrintf("Encrypting Transparent Spending Key for Disk failed!!!\n");
-                return false;
-            }
-
-            //Encrypt metadata
-            CKeyMetadata metadata = mapKeyMetadata[vchPubKey.GetID()];
-            std::vector<unsigned char> vchCryptedMetaData;
-            CKeyingMaterial vchMetaData = SerializeForEncryptionInput(vchPubKey, metadata);
-            if (!EncryptSerializedWalletObjects(vMasterKey, vchMetaData, chash, vchCryptedMetaData)) {
-                LogPrintf("Encrypting Transparent Spending Key metadata failed!!!\n");
-                return false;
-            }
-
-            //Write to Disk
-            if (!pwalletdbEncryption->WriteCryptedKey(vchPubKey, vchCryptedSpendingKeySave, chash, vchCryptedMetaData)) {
-                LogPrintf("Writing encrypted Transparent Sapling Spending Key failed!!!\n");
+            if (!AddKeyPubKey((*it).second, (*it).second.GetPubKey())) {
+                LogPrintf("Setting encrypted transparent spending key failed!!!\n");
                 return false;
             }
         }
 
         //Encrypt Sapling Extended Spending Key
         for (map<libzcash::SaplingExtendedFullViewingKey, libzcash::SaplingExtendedSpendingKey>::iterator it = mapSaplingSpendingKeys.begin(); it != mapSaplingSpendingKeys.end(); ++it) {
-              const auto extsk = (*it).second;
-              auto extfvk = extsk.ToXFVK();
-              auto ivk = extsk.ToXFVK().fvk.in_viewing_key();
-
-              std::vector<unsigned char> vchCryptedSpendingKey;
-              uint256 chash = extfvk.fvk.GetFingerprint();
-              CKeyingMaterial vchSpendingKey = SerializeForEncryptionInput(extsk);
-
-              if (!EncryptSerializedWalletObjects(vMasterKey, vchSpendingKey, chash, vchCryptedSpendingKey)) {
-                  LogPrintf("Encrypting Sapling Spending Key failed!!!\n");
-                  return false;
-              }
-
-              //Encrypt metadata
-              CKeyMetadata metadata = mapSaplingZKeyMetadata[ivk];
-              std::vector<unsigned char> vchCryptedMetaData;
-              CKeyingMaterial vchMetaData = SerializeForEncryptionInput(metadata);
-              if (!EncryptSerializedWalletObjects(vMasterKey, vchMetaData, chash, vchCryptedMetaData)) {
-                  LogPrintf("Encrypting Sapling Spending Key metadata failed!!!\n");
-                  return false;
-              }
-
-              if (!CCryptoKeyStore::AddCryptedSaplingSpendingKey(extfvk, vchCryptedSpendingKey)) {
-                  LogPrintf("Adding encrypted Sapling Spending Key failed!!!\n");
-                  return false;
-              }
-
-              if (!pwalletdbEncryption->WriteCryptedSaplingZKey(extfvk, vchCryptedSpendingKey, vchCryptedMetaData)) {
-                  LogPrintf("Writing encrypted Sapling Spending Key failed!!!\n");
+              if (!AddSaplingZKey((*it).second)) {
+                  LogPrintf("Setting encrypted sapling spending key failed!!!\n");
                   return false;
               }
         }
 
         //Encrypt Extended Full Viewing keys
         for (map<libzcash::SaplingIncomingViewingKey, libzcash::SaplingExtendedFullViewingKey>::iterator it = mapSaplingFullViewingKeys.begin(); it != mapSaplingFullViewingKeys.end(); ++it) {
-              libzcash::SaplingExtendedFullViewingKey extfvk = (*it).second;
-
-              if (!HaveSaplingSpendingKey(extfvk)) {
-                  std::vector<unsigned char> vchCryptedSecret;
-                  uint256 chash = extfvk.fvk.GetFingerprint();
-                  CKeyingMaterial vchSecret = SerializeForEncryptionInput(extfvk);
-
-                  if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
-                      return false;
-                  }
-
-                  if(!pwalletdbEncryption->WriteCryptedSaplingExtendedFullViewingKey(extfvk, vchCryptedSecret)) {
-                      LogPrintf("Writing Sapling Extended Full Viewing key failed!!!\n");
+              if (!HaveSaplingSpendingKey((*it).second)) {
+                  if (!AddSaplingExtendedFullViewingKey((*it).second)) {
+                      LogPrintf("Setting encrypted sapling viewing key failed!!!\n");
                       return false;
                   }
               }
@@ -2627,169 +2529,56 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         //Encrypt SaplingPaymentAddress
         for (map<libzcash::SaplingPaymentAddress, libzcash::SaplingIncomingViewingKey>::iterator it = mapSaplingIncomingViewingKeys.begin(); it != mapSaplingIncomingViewingKeys.end(); it++)
         {
-            const auto &ivk = (*it).second;
-            const auto &addr = (*it).first;
-
-            std::vector<unsigned char> vchCryptedSecret;
-            uint256 chash = HashWithFP(addr);
-            CKeyingMaterial vchSecret = SerializeForEncryptionInput(addr, ivk);
-
-            if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
-                LogPrintf("Encrypting Sapling Payment Address failed!!!\n");
-                return false;
-            }
-
-            if(!pwalletdbEncryption->WriteCryptedSaplingPaymentAddress(addr, chash, vchCryptedSecret)) {
-                LogPrintf("Writing Sapling Payment Address failed!!!\n");
+            if (!AddSaplingIncomingViewingKey((*it).second, (*it).first)) {
+                LogPrintf("Setting encrypted sapling payment address failed!!!\n");
                 return false;
             }
         }
 
         //Encrypt Diversified Addresses
         for (map<libzcash::SaplingPaymentAddress, DiversifierPath>::iterator it = mapSaplingPaymentAddresses.begin(); it != mapSaplingPaymentAddresses.end(); ++it) {
-            const auto &dPath = (*it).second;
-            const auto &ivk = dPath.first;
-            const auto &path = dPath.second;
-            const auto &addr = (*it).first;
-
-            std::vector<unsigned char> vchCryptedSecret;
-            uint256 chash = HashWithFP(addr);
-            CKeyingMaterial vchSecret = SerializeForEncryptionInput(addr, ivk, path);
-
-            if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
-                LogPrintf("Encrypting Diversified Address failed!!!\n");
-                return false;
-            }
-
-            if(!pwalletdbEncryption->WriteCryptedSaplingDiversifiedAddress(addr, chash, vchCryptedSecret)) {
-                LogPrintf("Writing Diversified Address failed!!!\n");
+            if (!AddSaplingDiversifiedAddress((*it).first, (*it).second.first, (*it).second.second)) {
+                LogPrintf("Setting encrypted sapling diversified payment address failed!!!\n");
                 return false;
             }
         }
 
         //Encrypt the last diversifier path used for each spendingkey
         for (map<libzcash::SaplingIncomingViewingKey, blob88>::iterator it = mapLastDiversifierPath.begin(); it != mapLastDiversifierPath.end(); ++it) {
-            libzcash::SaplingIncomingViewingKey ivk = (*it).first;
-            blob88 path = (*it).second;
-
-            uint256 chash = HashWithFP(ivk);
-            CKeyingMaterial vchSecret = SerializeForEncryptionInput(ivk,path);
-            std::vector<unsigned char> vchCryptedSecret;
-
-            if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
-                LogPrintf("Encrypting Last Diversified Path failed!!!\n");
-                return false;
-            }
-
-            // Write all archived sapling outpoint
-            if (!pwalletdbEncryption->WriteLastCryptedDiversifierUsed(chash, ivk, vchCryptedSecret)) {
-                LogPrintf("Encrypting Last Diversified Path failed!!!\n");
+            if (!AddLastDiversifierUsed((*it).first, (*it).second)) {
+                LogPrintf("Setting encrypted last diversified path failed!!!\n");
                 return false;
             }
         }
 
         //Encrypt all CScripts
         for (map<const CScriptID, CScript>::iterator it = mapScripts.begin(); it != mapScripts.end(); ++it) {
-            const auto scriptId = (*it).first;
-            const auto script = (*it).second;
-
-            uint256 chash = HashWithFP(*(const CScriptBase*)(&script));
-
-            CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-            ss << *(const CScriptBase*)(&script);
-            CKeyingMaterial vchSecret(ss.begin(), ss.end());
-
-            std::vector<unsigned char> vchCryptedSecret;
-            if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
-                LogPrintf("Encrypting CScripts  failed!!!\n");
-                return false;
-            }
-
-            // Write all CScripts
-            if (!pwalletdbEncryption->WriteCryptedCScript(chash, scriptId, vchCryptedSecret)) {
-                LogPrintf("Writing CScripts failed!!!\n");
+            if (!AddCScript((*it).second)) {
+                LogPrintf("Setting encrypted CScript failed!!!\n");
                 return false;
             }
         }
 
         //Encrypt Watchonly addresses
         for (std::set<CScript>::iterator it = setWatchOnly.begin(); it != setWatchOnly.end(); ++it) {
-            const auto dest = (*it);
-            uint256 chash = HashWithFP(*(const CScriptBase*)(&dest));
-
-            CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-            ss << *(const CScriptBase*)(&dest);
-            CKeyingMaterial vchSecret(ss.begin(), ss.end());
-
-            std::vector<unsigned char> vchCryptedSecret;
-            if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
-                LogPrintf("Encrypting Watchs failed!!!\n");
+            if (!AddWatchOnly(*it)) {
+                LogPrintf("Setting encrypted watch failed!!!\n");
                 return false;
             }
-
-            // Write all Watch addresses
-            if (!pwalletdbEncryption->WriteCryptedWatchOnly(chash, dest, vchCryptedSecret)) {
-                LogPrintf("Writing Watchs failed!!!\n");
-                return false;
-            }
-
         }
 
         //Encrypt Addressbook entries
         for (std::map<CTxDestination, CAddressBookData>::iterator it = mapAddressBook.begin(); it != mapAddressBook.end(); ++it) {
-
-            const string strAddress = EncodeDestination((*it).first);
-            uint256 chash = HashWithFP(strAddress);
-            string strPurposeIn = (*it).second.purpose;
-            if (strPurposeIn.empty())
-                strPurposeIn = "None";
-
-            CKeyingMaterial vchSecretPurpose = SerializeForEncryptionInput(strAddress, strPurposeIn);
-            std::vector<unsigned char> vchCryptedSecretPurpose;
-
-            if (!EncryptSerializedWalletObjects(vMasterKey, vchSecretPurpose, chash, vchCryptedSecretPurpose)) {
-                LogPrintf("Encrypting Encrypted AddressesBook purpose failed!!!\n");
-                return false;
-            }
-
-            if (!pwalletdbEncryption->WriteCryptedPurpose(strAddress, chash, vchCryptedSecretPurpose)) {
-                LogPrintf("Writing Encrypted AddressesBook purpose failed!!!\n");
-                return false;
-            }
-
-            string strNameIn = (*it).second.name;
-            if (strNameIn.empty())
-                strNameIn = "None";
-
-            CKeyingMaterial vchSecretName = SerializeForEncryptionInput(strAddress, strNameIn);
-            std::vector<unsigned char> vchCryptedSecretName;
-
-            if (!EncryptSerializedWalletObjects(vMasterKey, vchSecretName, chash, vchCryptedSecretName)) {
-                LogPrintf("Encrypting Encrypted AddressesBook name failed!!!\n");
-                return false;
-            }
-
-            if (!pwalletdbEncryption->WriteCryptedName(strAddress, chash, vchCryptedSecretName)) {
-                LogPrintf("Writing Encrypted AddressesBook name failed!!!\n");
+            if (!SetAddressBook((*it).first, (*it).second.name, (*it).second.purpose)) {
+                LogPrintf("Setting encrypted addressbook failed!!!\n");
                 return false;
             }
         }
 
         //Encrypt DefaultKey
-        {
-            uint256 chash = HashWithFP(vchDefaultKey);
-            CKeyingMaterial vchSecret = SerializeForEncryptionInput(vchDefaultKey);
-            std::vector<unsigned char> vchCryptedSecret;
-
-            if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
-                LogPrintf("Encrypting default key failed!!!\n");
-                return false;
-            }
-
-            if (!pwalletdbEncryption->WriteCryptedDefaultKey(chash, vchCryptedSecret)) {
-                LogPrintf("Writing default key failed!!!\n");
-                return false;
-            }
+        if (!SetDefaultKey(vchDefaultKey)) {
+            LogPrintf("Setting encrypted default key failed!!!\n");
+            return false;
         }
 
         //Clear All unencrypted Spending Keys
