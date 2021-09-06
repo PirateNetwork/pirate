@@ -715,35 +715,6 @@ bool CCryptoKeyStore::AddCryptedSaplingSpendingKey(
     return true;
 }
 
-bool CCryptoKeyStore::LoadCryptedSaplingExtendedFullViewingKey(
-    const uint256 &extfvkFinger,
-    const std::vector<unsigned char> &vchCryptedSecret,
-    libzcash::SaplingExtendedFullViewingKey &extfvk)
-{
-    {
-        LOCK(cs_SpendingKeyStore);
-        if (!SetCrypted()) {
-            return false;
-        }
-
-        if (IsLocked()) {
-            return false;
-        }
-
-        if (!DecryptSaplingExtendedFullViewingKey(vMasterKey, vchCryptedSecret, extfvkFinger, extfvk))
-        {
-            return false;
-        }
-
-        // if SaplingFullViewingKey is not in SaplingFullViewingKeyMap, add it
-        if (!CBasicKeyStore::AddSaplingExtendedFullViewingKey(extfvk)) {
-            return false;
-        }
-
-    }
-    return true;
-}
-
 bool CCryptoKeyStore::GetSproutSpendingKey(const libzcash::SproutPaymentAddress &address, libzcash::SproutSpendingKey &skOut) const
 {
     {
