@@ -244,6 +244,15 @@ bool CCryptoKeyStore::Lock()
     return true;
 }
 
+//Unlock the wallet without check for initial wallet encryption
+bool CCryptoKeyStore::UnlockUnchecked(const CKeyingMaterial& vMasterKeyIn) {
+    LOCK(cs_KeyStore);
+
+    vMasterKey = vMasterKeyIn;
+    NotifyStatusChanged(this);
+    return true;
+}
+
 bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn)
 {
     {
