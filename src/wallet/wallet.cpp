@@ -637,8 +637,10 @@ CPubKey CWallet::GenerateNewKey()
 bool CWallet::AddKeyPubKey(const CKey& secret, const CPubKey &pubkey)
 {
     AssertLockHeld(cs_wallet); // mapKeyMetadata
-    if (!CCryptoKeyStore::AddKeyPubKey(secret, pubkey))
+
+    if (IsCrypted() && IsLocked()) {
         return false;
+    }
 
     // check if we need to remove from watch-only
     CScript script;
@@ -648,53 +650,86 @@ bool CWallet::AddKeyPubKey(const CKey& secret, const CPubKey &pubkey)
 
     if (!fFileBacked)
         return true;
+
     if (!IsCrypted()) {
-        return CWalletDB(strWalletFile).WriteKey(pubkey,
-                                                 secret.GetPrivKey(),
-                                                 mapKeyMetadata[pubkey.GetID()]);
+        if (!CCryptoKeyStore::AddKeyPubKey(secret, pubkey)) {
+            LogPrintf("Adding Transparent Spending Key failed!!!\n");
+            return false;
+        }
+
+        if (!CWalletDB(strWalletFile).WriteKey(pubkey, secret.GetPrivKey(), mapKeyMetadata[pubkey.GetID()])) {
+            LogPrintf("Writing Transparent Spending Key failed!!!\n");
+            return false;
+        }
+    } else {
+
+        //Encrypt Key
+        std::vector<unsigned char> vchCryptedSpendingKey;
+        CKeyingMaterial vchSpendingKey(secret.begin(), secret.end());
+        if (!EncryptSerializedWalletObjects(vchSpendingKey, pubkey.GetHash(), vchCryptedSpendingKey)) {
+            LogPrintf("Encrypting Transparent Spending Key failed!!!\n");
+            return false;
+        }
+
+        //Add to in-memory structures
+        if (!CCryptoKeyStore::AddCryptedKey(pubkey, vchCryptedSpendingKey)) {
+            LogPrintf("Adding encrypted Transparent Spending Key failed!!!\n");
+            return false;
+        }
+
+        //Encrypt Key for saving to Disk
+        std::vector<unsigned char> vchCryptedSpendingKeySave;
+        uint256 chash = HashWithFP(pubkey);
+        CKeyingMaterial vchSpendingKeySave = SerializeForEncryptionInput(pubkey, vchCryptedSpendingKey);
+        if (!EncryptSerializedWalletObjects(vchSpendingKeySave, chash, vchCryptedSpendingKeySave)) {
+            LogPrintf("Encrypting Transparent Spending Key for Disk failed!!!\n");
+            return false;
+        }
+
+        //Encrypt metadata
+        CKeyMetadata metadata = mapKeyMetadata[pubkey.GetID()];
+        std::vector<unsigned char> vchCryptedMetaData;
+        CKeyingMaterial vchMetaData = SerializeForEncryptionInput(pubkey, metadata);
+        if (!EncryptSerializedWalletObjects(vchMetaData, chash, vchCryptedMetaData)) {
+            LogPrintf("Encrypting Transparent Spending Key metadata failed!!!\n");
+            return false;
+        }
+
+        //Write to Disk
+        if (!CWalletDB(strWalletFile).WriteCryptedKey(pubkey, vchCryptedSpendingKeySave, chash, vchCryptedMetaData)) {
+            LogPrintf("Writing encrypted Transparent Sapling Spending Key failed!!!\n");
+            return false;
+        }
     }
     return true;
 }
 
-bool CWallet::AddCryptedKey(const CPubKey &vchPubKey,
-                            const vector<unsigned char> &vchCryptedSecret,
-                            CKeyingMaterial& vMasterKeyIn)
+bool CWallet::LoadKey(const CKey& key, const CPubKey &pubkey)
 {
-
-    if (!CCryptoKeyStore::AddCryptedKey(vchPubKey, vchCryptedSecret, vMasterKeyIn))
-        return false;
-    if (!fFileBacked)
-        return true;
-    {
-        LOCK(cs_wallet);
-
-        //create hash of pubkey as unique wallet identifier
-        CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
-        s << vchPubKey;
-        uint256 chash = Hash(s.begin(), s.end());
-
-        //Encrypt metadata
-        CKeyMetadata metadata = mapKeyMetadata[vchPubKey.GetID()];
-        std::vector<unsigned char> vchCryptedMetaDataSecret;
-        if (!CCryptoKeyStore::EncryptKeyMetaData(vMasterKeyIn, vchPubKey, metadata, chash, vchCryptedMetaDataSecret)) {
-            return false;
-        }
-
-
-        if (pwalletdbEncryption)
-            return pwalletdbEncryption->WriteCryptedKey(vchPubKey,
-                                                        vchCryptedSecret,
-                                                        chash,
-                                                        vchCryptedMetaDataSecret);
-        else
-            return CWalletDB(strWalletFile).WriteCryptedKey(vchPubKey,
-                                                            vchCryptedSecret,
-                                                            chash,
-                                                            vchCryptedMetaDataSecret);
-    }
-    return false;
+    return CCryptoKeyStore::AddKeyPubKey(key, pubkey);
 }
 
+bool CWallet::LoadCryptedKey(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret)
+{
+    AssertLockHeld(cs_wallet);
+    if (IsLocked()) {
+        return false;
+    }
+
+    CKeyingMaterial vchSecret;
+    if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
+        return false;
+    }
+
+    CPubKey vchPubKey;
+    std::vector<unsigned char> vchCryptedSpendingKey;
+    DeserializeFromDecryptionOutput(vchSecret, vchPubKey, vchCryptedSpendingKey);
+    if (HashWithFP(vchPubKey) != chash) {
+        return false;
+    }
+
+    return CCryptoKeyStore::AddCryptedKey(vchPubKey, vchCryptedSpendingKey);
+}
 
 bool CWallet::AddCryptedSproutSpendingKey(
     const libzcash::SproutPaymentAddress &address,
@@ -734,8 +769,19 @@ bool CWallet::LoadKeyMetadata(const CPubKey &pubkey, const CKeyMetadata &meta)
 
 bool CWallet::LoadCryptedKeyMetadata(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret, CKeyMetadata &metadata)
 {
+    AssertLockHeld(cs_wallet);
+    if (IsLocked()) {
+        return false;
+    }
+
+    CKeyingMaterial vchSecret;
+    if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
+        return false;
+    }
+
     CPubKey vchPubKey;
-    if (!CCryptoKeyStore::DecryptKeyMetaData(vchCryptedSecret, chash, vchPubKey, metadata)) {
+    DeserializeFromDecryptionOutput(vchSecret, vchPubKey, metadata);
+    if (HashWithFP(vchPubKey) != chash) {
         return false;
     }
 
@@ -750,16 +796,6 @@ bool CWallet::LoadZKeyMetadata(const SproutPaymentAddress &addr, const CKeyMetad
 
     mapSproutZKeyMetadata[addr] = meta;
     return true;
-}
-
-bool CWallet::DecryptCryptedKey(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret, CPubKey &vchPubKey)
-{
-    return CCryptoKeyStore::DecryptCryptedKey(chash, vchCryptedSecret, vchPubKey);
-}
-
-bool CWallet::LoadCryptedKey(const CPubKey &vchPubKey, const std::vector<unsigned char> &vchCryptedSecret)
-{
-    return CCryptoKeyStore::LoadCryptedKey(vchPubKey, vchCryptedSecret);
 }
 
 bool CWallet::LoadCryptedZKey(const libzcash::SproutPaymentAddress &addr, const libzcash::ReceivingKey &rk, const std::vector<unsigned char> &vchCryptedSecret)
@@ -2468,6 +2504,50 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
 
         }
 
+        //Encrypt Transparent Keys
+        for (map<CKeyID, CKey>::iterator it = mapKeys.begin(); it != mapKeys.end(); ++it) {
+            const CKey &key = (*it).second;
+            CPubKey vchPubKey = key.GetPubKey();
+
+            //Encrypt Key for memory structures
+            std::vector<unsigned char> vchCryptedSpendingKey;
+            CKeyingMaterial vchSpendingKey(key.begin(), key.end());
+            if (!EncryptSerializedWalletObjects(vMasterKey, vchSpendingKey, vchPubKey.GetHash(), vchCryptedSpendingKey)) {
+                LogPrintf("Encrypting Transparent Spending Key failed!!!\n");
+                return false;
+            }
+
+            //Add to in-memory structures
+            if (!CCryptoKeyStore::AddCryptedKey(vchPubKey, vchCryptedSpendingKey)) {
+                LogPrintf("Adding encrypted Transparent Spending Key failed!!!\n");
+                return false;
+            }
+
+            //Encrypt Key for saving to Disk
+            std::vector<unsigned char> vchCryptedSpendingKeySave;
+            uint256 chash = HashWithFP(vchPubKey);
+            CKeyingMaterial vchSpendingKeySave = SerializeForEncryptionInput(vchPubKey, vchCryptedSpendingKey);
+            if (!EncryptSerializedWalletObjects(vMasterKey, vchSpendingKeySave, chash, vchCryptedSpendingKeySave)) {
+                LogPrintf("Encrypting Transparent Spending Key for Disk failed!!!\n");
+                return false;
+            }
+
+            //Encrypt metadata
+            CKeyMetadata metadata = mapKeyMetadata[vchPubKey.GetID()];
+            std::vector<unsigned char> vchCryptedMetaData;
+            CKeyingMaterial vchMetaData = SerializeForEncryptionInput(vchPubKey, metadata);
+            if (!EncryptSerializedWalletObjects(vMasterKey, vchMetaData, chash, vchCryptedMetaData)) {
+                LogPrintf("Encrypting Transparent Spending Key metadata failed!!!\n");
+                return false;
+            }
+
+            //Write to Disk
+            if (!pwalletdbEncryption->WriteCryptedKey(vchPubKey, vchCryptedSpendingKeySave, chash, vchCryptedMetaData)) {
+                LogPrintf("Writing encrypted Transparent Sapling Spending Key failed!!!\n");
+                return false;
+            }
+        }
+
         //Encrypt Sapling Extended Spending Key
         for (map<libzcash::SaplingExtendedFullViewingKey, libzcash::SaplingExtendedSpendingKey>::iterator it = mapSaplingSpendingKeys.begin(); it != mapSaplingSpendingKeys.end(); ++it) {
               const auto extsk = (*it).second;
@@ -2692,6 +2772,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         }
 
         //Clear All unencrypted Spending Keys
+        mapKeys.clear();
         mapSaplingSpendingKeys.clear();
 
         //Write Crypted statuses

@@ -199,9 +199,7 @@ public:
     bool HaveHDSeed() const;
     bool GetHDSeed(HDSeed& seedOut) const;
 
-    virtual bool AddCryptedKey(const CPubKey &vchPubKey, const std::vector<unsigned char> &vchCryptedSecret, CKeyingMaterial& vMasterKeyIn);
-    bool LoadCryptedKey(const CPubKey &vchPubKey, const std::vector<unsigned char> &vchCryptedSecret);
-    bool AddKeyPubKey(const CKey& key, const CPubKey &pubkey);
+    bool AddCryptedKey(const CPubKey &vchPubKey, const std::vector<unsigned char> &vchCryptedSecret);
     bool HaveKey(const CKeyID &address) const
     {
         {
@@ -261,29 +259,7 @@ public:
         }
     }
 
-    bool DecryptCryptedKey(
-        const uint256 &chash,
-        const std::vector<unsigned char> &vchCryptedSecret,
-        CPubKey &vchPubKey);
 
-    bool EncryptKeyMetaData(
-        const CPubKey &vchPubKey,
-        const CKeyMetadata &metadata,
-        const uint256 &chash,
-        std::vector<unsigned char> &vchCryptedSecret);
-    bool EncryptKeyMetaData(
-        CKeyingMaterial &vMasterKeyIn,
-        const CPubKey &vchPubKey,
-        const CKeyMetadata &metadata,
-        const uint256 &chash,
-        std::vector<unsigned char> &vchCryptedSecret);
-    bool DecryptKeyMetaData(
-        const std::vector<unsigned char> &vchCryptedSecret,
-        const uint256 &chash,
-        CPubKey &vchPubKey,
-        CKeyMetadata &metadata);
-
-    //! Sapling
     bool EncryptSerializedSecret(
         const CKeyingMaterial &vchSecret,
         const uint256 chash,
@@ -298,6 +274,7 @@ public:
          const uint256 chash,
          CKeyingMaterial &vchSecret);
 
+    //! Sapling
     bool AddCryptedSaplingSpendingKey(
         const libzcash::SaplingExtendedFullViewingKey &extfvk,
         const std::vector<unsigned char> &vchCryptedSecret);
