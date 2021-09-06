@@ -862,7 +862,7 @@ TEST(WalletTests, SaplingNullifierIsSpent) {
     auto tx = maybe_tx.get();
 
     CWalletTx wtx {&wallet, tx};
-    ASSERT_TRUE(wallet.AddSaplingZKey(sk, pk));
+    ASSERT_TRUE(wallet.AddSaplingZKey(sk));
     ASSERT_TRUE(wallet.HaveSaplingSpendingKey(fvk));
 
     // Manually compute the nullifier based on the known position
@@ -959,7 +959,7 @@ TEST(WalletTests, NavigateFromSaplingNullifierToNote) {
     auto tx = maybe_tx.get();
 
     CWalletTx wtx {&wallet, tx};
-    ASSERT_TRUE(wallet.AddSaplingZKey(sk, pk));
+    ASSERT_TRUE(wallet.AddSaplingZKey(sk));
     ASSERT_TRUE(wallet.HaveSaplingSpendingKey(fvk));
 
     // Manually compute the nullifier based on the expected position
@@ -1830,7 +1830,7 @@ TEST(WalletTests, UpdatedSaplingNoteData) {
 
     // Wallet contains fvk1 but not fvk2
     CWalletTx wtx {&wallet, tx};
-    ASSERT_TRUE(wallet.AddSaplingZKey(sk, pk));
+    ASSERT_TRUE(wallet.AddSaplingZKey(sk));
     ASSERT_TRUE(wallet.HaveSaplingSpendingKey(fvk));
     ASSERT_FALSE(wallet.HaveSaplingSpendingKey(fvk2));
 
@@ -1863,7 +1863,7 @@ TEST(WalletTests, UpdatedSaplingNoteData) {
     wtx = wallet.mapWallet[hash];
 
     // Now lets add key fvk2 so wallet can find the payment note sent to pk2
-    ASSERT_TRUE(wallet.AddSaplingZKey(sk2, pk2));
+    ASSERT_TRUE(wallet.AddSaplingZKey(sk2));
     ASSERT_TRUE(wallet.HaveSaplingSpendingKey(fvk2));
     CWalletTx wtx2 = wtx;
     auto saplingNoteData2 = wallet.FindMySaplingNotes(wtx2, chainActive.Height()).first;
@@ -1960,7 +1960,7 @@ TEST(WalletTests, MarkAffectedSaplingTransactionsDirty) {
     auto ivk = fvk.in_viewing_key();
     auto pk = sk.DefaultAddress();
 
-    ASSERT_TRUE(wallet.AddSaplingZKey(sk, pk));
+    ASSERT_TRUE(wallet.AddSaplingZKey(sk));
     ASSERT_TRUE(wallet.HaveSaplingSpendingKey(fvk));
 
     // Set up transparent address
