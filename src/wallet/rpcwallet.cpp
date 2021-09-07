@@ -2366,7 +2366,7 @@ UniValue openwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     if (strWalletPass.length() > 0)
     {
-        if (!pwalletMain->Unlock(strWalletPass))
+        if (!pwalletMain->OpenWallet(strWalletPass))
             throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
     }
     else

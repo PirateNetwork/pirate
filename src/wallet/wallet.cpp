@@ -1189,6 +1189,25 @@ bool CWallet::LoadSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey
     return false;
 }
 
+bool CWallet::OpenWallet(const SecureString& strWalletPassphrase)
+{
+    CCrypter crypter;
+    CKeyingMaterial vMasterKey;
+
+    {
+        LOCK(cs_wallet);
+        BOOST_FOREACH(const MasterKeyMap::value_type& pMasterKey, mapMasterKeys)
+        {
+            if(!crypter.SetKeyFromPassphrase(strWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod))
+                return false;
+            if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
+                continue; // try another master key
+            if (CCryptoKeyStore::OpenWallet(vMasterKey))
+                return true;
+        }
+    }
+    return false;
+}
 
 bool CWallet::Unlock(const SecureString& strWalletPassphrase)
 {
@@ -4018,7 +4037,18 @@ bool CWallet::SetHDSeed(const HDSeed& seed)
                 return false;
             }
 
-            if (!CWalletDB(strWalletFile).WriteCryptedHDSeed(seedFp, vchCryptedSecret)) {
+
+            //Double Encrypt seed for saving to Disk
+            std::vector<unsigned char> vchCryptedSeedPair;
+            uint256 chash = HashWithFP(seedFp);
+            CKeyingMaterial vchSeedPair = SerializeForEncryptionInput(seedFp, vchCryptedSecret);
+            if (!EncryptSerializedWalletObjects(vchSeedPair, chash, vchCryptedSeedPair)) {
+                LogPrintf("Double Encrypting seed for Disk failed!!!\n");
+                return false;
+            }
+
+
+            if (!CWalletDB(strWalletFile).WriteCryptedHDSeed(seedFp, chash, vchCryptedSeedPair)) {
                 LogPrintf("Writing encrypted HDSeed failed!!!\n");
                 return false;
             }

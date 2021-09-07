@@ -162,6 +162,7 @@ protected:
     bool SetCrypted();
 
     bool UnlockUnchecked(const CKeyingMaterial& vMasterKeyIn);
+    bool OpenWallet(const CKeyingMaterial& vMasterKeyIn);
     bool Unlock(const CKeyingMaterial& vMasterKeyIn);
 
 public:

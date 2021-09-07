@@ -253,6 +253,54 @@ bool CCryptoKeyStore::UnlockUnchecked(const CKeyingMaterial& vMasterKeyIn) {
     return true;
 }
 
+bool CCryptoKeyStore::OpenWallet(const CKeyingMaterial& vMasterKeyIn) {
+    LOCK(cs_KeyStore);
+
+    //Decrypt Double encrypted Seed to encrypted seed
+    CKeyingMaterial vchSecret;
+    if(!DecryptSecret(vMasterKeyIn, cryptedHDSeed.second, cryptedHDSeed.first, vchSecret)) {
+        LogPrintf("Initial HDSeed decryption failed!!!\n");
+        return false;
+    }
+
+    //Deserialize to encrypted seed
+    uint256 seedFp;
+    std::vector<unsigned char> vchCryptedSecret;
+    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
+    ss >> seedFp;
+    ss >> vchCryptedSecret;
+
+    //Attempt decryption to HDSeed
+    HDSeed seed;
+    if (!DecryptHDSeed(vMasterKeyIn, vchCryptedSecret, seedFp, seed)) {
+        LogPrintf("Final HDSeed decryption failed!!!\n");
+        return false;
+    }
+
+    //Verify check hash
+    CDataStream ds1(SER_NETWORK, PROTOCOL_VERSION);
+    ds1 << seedFp;
+
+    CDataStream ds2(SER_NETWORK, PROTOCOL_VERSION);
+    ds2 << seed.EncryptionFingerprint();
+
+    uint256 checkHash = Hash(ds1.begin(), ds1.end(), ds2.begin(), ds2.end());
+    if (checkHash != cryptedHDSeed.first) {
+        return false;
+    }
+
+    //Set the single encrypted seed in memory
+    cryptedHDSeed = std::make_pair(seedFp, vchCryptedSecret);
+
+    //Clear unencrypted seed
+    hdSeed = HDSeed();
+
+    //Set the masterpassword
+    vMasterKey = vMasterKeyIn;
+    NotifyStatusChanged(this);
+    return true;
+}
+
 bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn)
 {
     {
