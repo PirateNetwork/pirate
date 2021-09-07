@@ -1396,11 +1396,11 @@ bool ReadCryptedSeedValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssV
         ssKey >> strType;
         if (strType == "chdseed")
         {
-            uint256 seedFp;
+            uint256 chash;
             vector<unsigned char> vchCryptedSecret;
-            ssKey >> seedFp;
+            ssKey >> chash;
             ssValue >> vchCryptedSecret;
-            if (!pwallet->LoadCryptedHDSeed(seedFp, vchCryptedSecret))
+            if (!pwallet->LoadCryptedHDSeed(chash, vchCryptedSecret))
             {
                 strErr = "Error reading wallet database: LoadCryptedHDSeed failed";
                 return false;
@@ -1966,10 +1966,10 @@ bool CWalletDB::WriteHDSeed(const HDSeed& seed)
     return Write(std::make_pair(std::string("hdseed"), seed.Fingerprint()), seed.RawSeed());
 }
 
-bool CWalletDB::WriteCryptedHDSeed(const uint256& seedFp, const std::vector<unsigned char>& vchCryptedSecret)
+bool CWalletDB::WriteCryptedHDSeed(const uint256& seedFp, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret)
 {
     nWalletDBUpdated++;
-    if (!WriteTxn(std::make_pair(std::string("chdseed"), seedFp), vchCryptedSecret, __FUNCTION__)) {
+    if (!WriteTxn(std::make_pair(std::string("chdseed"), chash), vchCryptedSecret, __FUNCTION__)) {
         return false;
     }
 

@@ -270,7 +270,7 @@ public:
     static bool Recover(CDBEnv& dbenv, const std::string& filename);
 
     bool WriteHDSeed(const HDSeed& seed);
-    bool WriteCryptedHDSeed(const uint256& seedFp, const std::vector<unsigned char>& vchCryptedSecret);
+    bool WriteCryptedHDSeed(const uint256& seedFp, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret);
     //! write the hdchain model (external chain child index counter)
     bool WriteHDChain(const CHDChain& chain);
 

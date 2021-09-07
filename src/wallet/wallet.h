@@ -1319,6 +1319,7 @@ public:
 
     bool LoadSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk);
 
+    bool OpenWallet(const SecureString& strWalletPassphrase);
     bool Unlock(const SecureString& strWalletPassphrase);
     bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase);
 
