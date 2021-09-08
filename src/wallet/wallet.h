@@ -73,6 +73,8 @@ extern std::string recoverySeedPhrase;
 extern bool usingGUI;
 extern int recoveryHeight;
 
+extern SecureString *strOpeningWalletPassphrase;
+
 //! -paytxfee default
 static const CAmount DEFAULT_TRANSACTION_FEE = 0;
 //! -fallbackfee default

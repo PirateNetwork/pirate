@@ -2029,6 +2029,39 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
               //Reload Wallet
               uiInterface.InitMessage(_("Reloading wallet, set to rescan..."));
               pwalletMain = new CWallet(strWalletFile);
+
+              //Check for crypted flag and wait for the wallet password if crypted
+              DBErrors nInitalizeCryptedLoad = pwalletMain->InitalizeCryptedLoad();
+              if (nInitalizeCryptedLoad == DB_LOAD_CRYPTED) {
+                  pwalletMain->SetDBCrypted();
+                  SetRPCNeedsUnlocked(true);
+                  DBErrors nLoadCryptedSeed = pwalletMain->LoadCryptedSeedFromDB();
+                  if (nLoadCryptedSeed != DB_LOAD_OK) {
+                      uiInterface.InitMessage(_("Error loading wallet.dat: Wallet crypted seed corrupted"));
+                      return false;
+                  }
+              }
+
+              //Reopen the wallet
+              pwalletMain->OpenWallet(*strOpeningWalletPassphrase);
+              delete strOpeningWalletPassphrase;
+
+              SetRPCNeedsUnlocked(false);
+
+              //A Crypted wallet must have an HDSeed.
+              if (pwalletMain->IsCrypted()) {
+                  // Try to get the seed
+                  HDSeed seed;
+                  if (!pwalletMain->GetHDSeed(seed)) {
+                      LogPrintf("HD seed not found. Exiting.\n");
+                      return false;
+                  }
+
+                  //Create a uniquie seedFP used to salt encryption hashes, DO NOT SAVE THIS TO THE WALLET!!!!
+                  //This will be used to salt hashes of know values such as transaction ids and public addresses
+                  pwalletMain->seedEncyptionFP = seed.EncryptionFingerprint();
+              }
+
               DBErrors nLoadWalletRet = pwalletMain->LoadWallet(fFirstRun);
               if (nLoadWalletRet != DB_LOAD_OK)
               {
