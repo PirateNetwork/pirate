@@ -83,6 +83,8 @@ std::string recoverySeedPhrase = "";
 bool usingGUI = false;
 int recoveryHeight = 0;
 
+SecureString *strOpeningWalletPassphrase;
+
 /**
  * Fees smaller than this (in satoshi) are considered zero fee (for transaction creation)
  * Override with -mintxfee
@@ -1202,8 +1204,10 @@ bool CWallet::OpenWallet(const SecureString& strWalletPassphrase)
                 return false;
             if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
                 continue; // try another master key
-            if (CCryptoKeyStore::OpenWallet(vMasterKey))
+            if (CCryptoKeyStore::OpenWallet(vMasterKey)) {
+                strOpeningWalletPassphrase = new SecureString(strWalletPassphrase);
                 return true;
+            }
         }
     }
     return false;
