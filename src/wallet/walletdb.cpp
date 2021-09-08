@@ -1742,6 +1742,144 @@ DBErrors CWalletDB::ZapWalletTx(CWallet* pwallet, vector<CWalletTx>& vWtx)
     return DB_LOAD_OK;
 }
 
+DBErrors CWalletDB::FindOldRecordsToZap(
+  CWallet* pwallet,
+  vector<uint256>& vArcSproutNullifier,
+  vector<libzcash::SproutViewingKey>& vSproutViewingKeys,
+  vector<libzcash::SproutPaymentAddress>& vSproutPaymentAddresses,
+  vector<libzcash::SproutPaymentAddress>& vCSproutPaymentAddresses,
+  vector<libzcash::SproutPaymentAddress>& vSproutMetaData)
+{
+
+    DBErrors result = DB_LOAD_OK;
+
+    try {
+        LOCK(pwallet->cs_wallet);
+
+        // Get cursor
+        Dbc* pcursor = GetCursor();
+        if (!pcursor)
+        {
+            LogPrintf("Error getting wallet database cursor\n");
+            return DB_CORRUPT;
+        }
+
+        while (true)
+        {
+            // Read next record
+            CDataStream ssKey(SER_DISK, CLIENT_VERSION);
+            CDataStream ssValue(SER_DISK, CLIENT_VERSION);
+            int ret = ReadAtCursor(pcursor, ssKey, ssValue);
+            if (ret == DB_NOTFOUND)
+                break;
+            else if (ret != 0)
+            {
+                LogPrintf("Error reading next record from wallet database\n");
+                return DB_CORRUPT;
+            }
+
+            string strType;
+            ssKey >> strType;
+            if (strType == "arczcop") {
+                uint256 nullifier;
+                ssKey >> nullifier;
+                vArcSproutNullifier.push_back(nullifier);
+            } else if (strType == "vkey") {
+                libzcash::SproutViewingKey vk;
+                ssKey >> vk;
+                vSproutViewingKeys.push_back(vk);
+            } else if (strType == "zkey") {
+                libzcash::SproutPaymentAddress addr;
+                ssKey >> addr;
+                vSproutPaymentAddresses.push_back(addr);
+            } else if (strType == "czkey") {
+                libzcash::SproutPaymentAddress addr;
+                ssKey >> addr;
+                vCSproutPaymentAddresses.push_back(addr);
+            } else if (strType == "zkeymeta") {
+                libzcash::SproutPaymentAddress addr;
+                ssKey >> addr;
+                vCSproutPaymentAddresses.push_back(addr);
+            }
+
+
+        }
+        pcursor->close();
+    }
+    catch (const boost::thread_interrupted&) {
+        throw;
+    }
+    catch (...) {
+        result = DB_CORRUPT;
+    }
+
+    return result;
+}
+
+DBErrors CWalletDB::ZapOldRecords(CWallet* pwallet)
+{
+    // build list of obsolete records
+    vector<uint256> vArcSproutNullifier;
+    vector<libzcash::SproutViewingKey> vSproutViewingKeys;
+    vector<libzcash::SproutPaymentAddress> vSproutPaymentAddresses;
+    vector<libzcash::SproutPaymentAddress> vCSproutPaymentAddresses;
+    vector<libzcash::SproutPaymentAddress> vSproutMetaData;
+
+
+    LOCK(pwallet->cs_wallet);
+
+    DBErrors err = FindOldRecordsToZap(pwallet
+                                    , vArcSproutNullifier
+                                    , vSproutViewingKeys
+                                    , vSproutPaymentAddresses
+                                    , vCSproutPaymentAddresses
+                                    , vSproutMetaData);
+    if (err != DB_LOAD_OK)
+        return err;
+
+
+    // erase each archive Nullier Sprout Output set
+    BOOST_FOREACH (uint256& arcNullifier, vArcSproutNullifier) {
+        if (!Erase(std::make_pair(std::string("arczcop"), arcNullifier))) {
+            return DB_CORRUPT;
+        }
+    }
+
+    // erase each sprout viewing key
+    BOOST_FOREACH (libzcash::SproutViewingKey& sproutViewingKey, vSproutViewingKeys) {
+        if (!Erase(std::make_pair(std::string("vkey"), sproutViewingKey))) {
+            return DB_CORRUPT;
+        }
+    }
+
+    // erase each sprout spending key
+    BOOST_FOREACH (libzcash::SproutPaymentAddress& sproutPaymentAddress, vSproutPaymentAddresses) {
+        if (!Erase(std::make_pair(std::string("zkey"), sproutPaymentAddress))) {
+            return DB_CORRUPT;
+        }
+    }
+
+    // erase each crypted sprout spending key
+    BOOST_FOREACH (libzcash::SproutPaymentAddress& sproutPaymentAddress, vCSproutPaymentAddresses) {
+        if (!Erase(std::make_pair(std::string("czkey"), sproutPaymentAddress))) {
+            return DB_CORRUPT;
+        }
+    }
+
+    // erase each sprout spending key metadata
+    BOOST_FOREACH (libzcash::SproutPaymentAddress& sproutPaymentAddress, vSproutMetaData) {
+        if (!Erase(std::make_pair(std::string("zkeymeta"), sproutPaymentAddress))) {
+            return DB_CORRUPT;
+        }
+    }
+
+    if(!Erase(std::string("witnesscachesize"))) {
+        return DB_CORRUPT;
+    }
+
+    return DB_LOAD_OK;
+}
+
 void ThreadFlushWalletDB(const string& strFile)
 {
     // Make this thread recognisable as the wallet flushing thread

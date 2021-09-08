@@ -269,6 +269,17 @@ public:
       std::vector<uint256>& vArcHash, std::vector<uint256>& vCArcHash,
       std::vector<uint256>& vArcSaplingNullifier, std::vector<uint256>& vCArcSaplingNullifier);
     DBErrors ZapWalletTx(CWallet* pwallet, std::vector<CWalletTx>& vWtx);
+
+    //Find and Erase records that are no longer used in the wallet.
+    DBErrors FindOldRecordsToZap(
+      CWallet* pwallet,
+      std::vector<uint256>& vArcSproutNullifier,
+      std::vector<libzcash::SproutViewingKey>& vSproutViewingKeys,
+      std::vector<libzcash::SproutPaymentAddress>& vSproutPaymentAddresses,
+      std::vector<libzcash::SproutPaymentAddress>& vCSproutPaymentAddresses,
+      std::vector<libzcash::SproutPaymentAddress>& vSproutMetaData);
+    DBErrors ZapOldRecords(CWallet* pwallet);
+
     static bool Compact(CDBEnv& dbenv, const std::string& strFile);
     static bool Recover(CDBEnv& dbenv, const std::string& filename, bool fOnlyKeys);
     static bool Recover(CDBEnv& dbenv, const std::string& filename);

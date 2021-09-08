@@ -6517,6 +6517,12 @@ DBErrors CWallet::ZapWalletTx(std::vector<CWalletTx>& vWtx)
     return DB_LOAD_OK;
 }
 
+DBErrors CWallet::ZapOldRecords()
+{
+    if (!fFileBacked)
+        return DB_LOAD_OK;
+    return CWalletDB(strWalletFile,"cr+").ZapOldRecords(this);
+}
 
 bool CWallet::SetAddressBook(const CTxDestination& address, const string& strName, const string& strPurpose)
 {
