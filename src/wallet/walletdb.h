@@ -263,7 +263,11 @@ public:
     DBErrors InitalizeCryptedLoad(CWallet* pwallet);
     DBErrors LoadCryptedSeedFromDB(CWallet* pwallet);
     DBErrors LoadWallet(CWallet* pwallet);
-    DBErrors FindWalletTxToZap(CWallet* pwallet, std::vector<uint256>& vTxHash, std::vector<CWalletTx>& vWtx, std::vector<uint256>& vCTxHash, std::vector<uint256>& vArcHash, std::vector<uint256>& vCArcHash, std::vector<uint256>& vArcSaplingNullifier);
+    DBErrors FindWalletTxToZap(
+      CWallet* pwallet, std::vector<uint256>& vTxHash,
+      std::vector<CWalletTx>& vWtx, std::vector<uint256>& vCTxHash,
+      std::vector<uint256>& vArcHash, std::vector<uint256>& vCArcHash,
+      std::vector<uint256>& vArcSaplingNullifier, std::vector<uint256>& vCArcSaplingNullifier);
     DBErrors ZapWalletTx(CWallet* pwallet, std::vector<CWalletTx>& vWtx);
     static bool Compact(CDBEnv& dbenv, const std::string& strFile);
     static bool Recover(CDBEnv& dbenv, const std::string& filename, bool fOnlyKeys);
