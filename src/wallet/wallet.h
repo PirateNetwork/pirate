@@ -1591,6 +1591,7 @@ public:
     DBErrors LoadCryptedSeedFromDB();
     DBErrors LoadWallet(bool& fFirstRunRet);
     DBErrors ZapWalletTx(std::vector<CWalletTx>& vWtx);
+    DBErrors ZapOldRecords();
 
     bool SetAddressBook(const CTxDestination& address, const std::string& strName, const std::string& purpose);
     bool DecryptAddressBookEntry(const uint256 chash, std::vector<unsigned char> vchCryptedSecret, string& address, string& entry);

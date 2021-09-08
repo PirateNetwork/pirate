@@ -2086,6 +2086,12 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                       strErrors << _("Error loading wallet.dat") << "\n";
               }
 
+            } else {
+                //Wallet loaded ok and Transaction archive validated true
+                DBErrors cleanWallet = pwalletMain->ZapOldRecords();
+                if (cleanWallet != DB_LOAD_OK) {
+                    LogPrintf("Warning: Wallet cleanup of obsolete records did not complete successfully.");
+                }
             }
 
         } else {
