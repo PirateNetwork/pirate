@@ -1607,7 +1607,11 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
     return result;
 }
 
-DBErrors CWalletDB::FindWalletTxToZap(CWallet* pwallet, vector<uint256>& vTxHash, vector<CWalletTx>& vWtx, vector<uint256>& vCTxHash, vector<uint256>& vArcHash, vector<uint256>& vCArcHash, vector<uint256>& vArcSaplingNullifier)
+DBErrors CWalletDB::FindWalletTxToZap(
+  CWallet* pwallet, vector<uint256>& vTxHash,
+  vector<CWalletTx>& vWtx, vector<uint256>& vCTxHash,
+  vector<uint256>& vArcHash, vector<uint256>& vCArcHash,
+  vector<uint256>& vArcSaplingNullifier, vector<uint256>& vCArcSaplingNullifier)
 {
     pwallet->vchDefaultKey = CPubKey();
     bool fNoncriticalErrors = false;
@@ -1650,20 +1654,6 @@ DBErrors CWalletDB::FindWalletTxToZap(CWallet* pwallet, vector<uint256>& vTxHash
             if (strType == "tx") {
                 uint256 hash;
                 ssKey >> hash;
-
-                std::vector<unsigned char> txData(ssValue.begin(), ssValue.end());
-                try {
-                    CWalletTx wtx;
-                    ssValue >> wtx;
-                    vWtx.push_back(wtx);
-                } catch (...) {
-                    // Decode failure likely due to Sapling v4 transaction format change
-                    // between 2.0.0 and 2.0.1. As user is requesting deletion, log the
-                    // transaction entry and then mark it for deletion anyway.
-                    LogPrintf("Failed to decode wallet transaction; logging it here before deletion:\n");
-                    LogPrintf("txid: %s\n%s\n", hash.GetHex(), HexStr(txData));
-                }
-
                 vTxHash.push_back(hash);
             } if (strType == "ctx") {
                 uint256 hash;
@@ -1681,6 +1671,10 @@ DBErrors CWalletDB::FindWalletTxToZap(CWallet* pwallet, vector<uint256>& vTxHash
                 uint256 nullifier;
                 ssKey >> nullifier;
                 vArcSaplingNullifier.push_back(nullifier);
+            } if (strType == "carczsop") {
+                uint256 hash;
+                ssKey >> hash;
+                vCArcSaplingNullifier.push_back(hash);
             }
         }
         pcursor->close();
@@ -1706,7 +1700,8 @@ DBErrors CWalletDB::ZapWalletTx(CWallet* pwallet, vector<CWalletTx>& vWtx)
     vector<uint256> vArcTxHash;
     vector<uint256> vCArcTxHash;
     vector<uint256> vArcSaplingNullifier;
-    DBErrors err = FindWalletTxToZap(pwallet, vTxHash, vWtx, vCTxHash, vArcTxHash, vCArcTxHash, vArcSaplingNullifier);
+    vector<uint256> vCArcSaplingNullifier;
+    DBErrors err = FindWalletTxToZap(pwallet, vTxHash, vWtx, vCTxHash, vArcTxHash, vCArcTxHash, vArcSaplingNullifier, vCArcSaplingNullifier);
     if (err != DB_LOAD_OK)
         return err;
 
@@ -1729,13 +1724,19 @@ DBErrors CWalletDB::ZapWalletTx(CWallet* pwallet, vector<CWalletTx>& vWtx)
     }
 
     // erase each crypted archive TX
-    BOOST_FOREACH (uint256& arcHash, vArcTxHash) {
+    BOOST_FOREACH (uint256& arcHash, vCArcTxHash) {
         if (!EraseCryptedArcTx(arcHash))
             return DB_CORRUPT;
     }
     // erase each archive Nullier SaplingOutput set
     BOOST_FOREACH (uint256& arcNullifier, vArcSaplingNullifier) {
         if (!EraseArcSaplingOp(arcNullifier))
+            return DB_CORRUPT;
+    }
+
+    // erase each crypted archive Nullier SaplingOutput set
+    BOOST_FOREACH (uint256& arcNullifier, vCArcSaplingNullifier) {
+        if (!EraseCryptedArcSaplingOp(arcNullifier))
             return DB_CORRUPT;
     }
     return DB_LOAD_OK;
