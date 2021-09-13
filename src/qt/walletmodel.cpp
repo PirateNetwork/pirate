@@ -1035,6 +1035,10 @@ bool WalletModel::setWalletEncrypted(bool encrypted, const SecureString &passphr
     }
 }
 
+void WalletModel::setLockedLater() {
+    wallet->Lock();
+}
+
 bool WalletModel::setWalletLocked(bool locked, const SecureString &passPhrase)
 {
     if(locked)
@@ -1045,6 +1049,7 @@ bool WalletModel::setWalletLocked(bool locked, const SecureString &passPhrase)
     else
     {
         // Unlock
+        QTimer::singleShot(30000, this, SLOT(setLockedLater())); //relock after 30 seconds
         return wallet->Unlock(passPhrase);
     }
 }

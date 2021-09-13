@@ -328,6 +328,7 @@ Q_SIGNALS:
     void notifyWatchonlyChanged(bool fHaveWatchonly);
 
 public Q_SLOTS:
+    void setLockedLater();
     /*Export spending key */
     QString getSpendingKey(QString strAddress);
     /*Import spending key */
