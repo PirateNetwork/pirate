@@ -8,7 +8,7 @@
 
 extern pthread_mutex_t staked_mutex;
 
-int8_t is_STAKED(const char *chain_name) 
+uint8_t is_STAKED(const char *chain_name) 
 {
     static uint8_t STAKED,doneinit;
     if ( chain_name[0] == 0 )
