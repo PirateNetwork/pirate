@@ -162,13 +162,26 @@ void WalletModel::updateStatus()
         Q_EMIT encryptionStatusChanged(newEncryptionStatus);
 }
 
+
 QString WalletModel::getSpendingKey(QString strAddress) {
       LOCK2(cs_main, wallet->cs_wallet);
 
       QMessageBox msgBox;
       msgBox.setText("Error importing key.");
+      msgBox.setStyleSheet("QLabel{min-width: 350px;}");
       msgBox.setStandardButtons(QMessageBox::Ok);
       msgBox.setDefaultButton(QMessageBox::Ok);
+
+      if (getEncryptionStatus() == Locked){
+          requireUnlock();
+      }
+
+      if (getEncryptionStatus() == Locked) {
+        msgBox.setText("Encryption Status: Locked");
+        msgBox.setInformativeText("Keys cannot be displayed while the wallet is Locked.");
+        int ret = msgBox.exec();
+        return QString("");
+      }
 
       auto address = DecodePaymentAddress(strAddress.toStdString());
       if (!IsValidPaymentAddress(address)) {
@@ -192,6 +205,7 @@ void WalletModel::importSpendingKey(QString strKey) {
 
     QMessageBox msgBox;
     msgBox.setText("Error importing key.");
+    msgBox.setStyleSheet("QLabel{min-width: 350px;}");
     msgBox.setStandardButtons(QMessageBox::Ok);
     msgBox.setDefaultButton(QMessageBox::Ok);
 
@@ -234,8 +248,20 @@ QString WalletModel::getViewingKey(QString strAddress) {
 
       QMessageBox msgBox;
       msgBox.setText("Error importing key.");
+      msgBox.setStyleSheet("QLabel{min-width: 350px;}");
       msgBox.setStandardButtons(QMessageBox::Ok);
       msgBox.setDefaultButton(QMessageBox::Ok);
+
+      if (getEncryptionStatus() == Locked){
+          requireUnlock();
+      }
+
+      if (getEncryptionStatus() == Locked) {
+        msgBox.setText("Encryption Status: Locked");
+        msgBox.setInformativeText("Keys cannot be displayed while the wallet is Locked.");
+        int ret = msgBox.exec();
+        return QString("");
+      }
 
       auto address = DecodePaymentAddress(strAddress.toStdString());
       if (!IsValidPaymentAddress(address)) {
@@ -260,6 +286,7 @@ void WalletModel::importViewingKey (QString strKey) {
 
     QMessageBox msgBox;
     msgBox.setText("Error importing key.");
+    msgBox.setStyleSheet("QLabel{min-width: 350px;}");
     msgBox.setStandardButtons(QMessageBox::Ok);
     msgBox.setDefaultButton(QMessageBox::Ok);
 

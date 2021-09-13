@@ -278,6 +278,22 @@ void WalletView::importSK()
 {
     if(!walletModel)
         return;
+
+    if (walletModel->getEncryptionStatus() == WalletModel::Locked){
+        walletModel->requireUnlock();
+    }
+
+    if (walletModel->getEncryptionStatus() == WalletModel::Locked) {
+      QMessageBox msgBox;
+      msgBox.setText("Encryption Status: Locked");
+      msgBox.setStyleSheet("QLabel{min-width: 350px;}");
+      msgBox.setStandardButtons(QMessageBox::Ok);
+      msgBox.setDefaultButton(QMessageBox::Ok);
+      msgBox.setInformativeText("Keys cannot be imported while the wallet is Locked.");
+      int ret = msgBox.exec();
+      return;
+    }
+
     OpenSKDialog dlg(this);
     QString privateKey;
     dlg.exec();
@@ -292,6 +308,22 @@ void WalletView::importVK()
 {
     if(!walletModel)
         return;
+
+    if (walletModel->getEncryptionStatus() == WalletModel::Locked){
+        walletModel->requireUnlock();
+    }
+
+    if (walletModel->getEncryptionStatus() == WalletModel::Locked) {
+      QMessageBox msgBox;
+      msgBox.setText("Encryption Status: Locked");
+      msgBox.setStyleSheet("QLabel{min-width: 350px;}");
+      msgBox.setStandardButtons(QMessageBox::Ok);
+      msgBox.setDefaultButton(QMessageBox::Ok);
+      msgBox.setInformativeText("Keys cannot be imported while the wallet is Locked.");
+      int ret = msgBox.exec();
+      return;
+    }
+
     OpenVKDialog dlg(this);
     QString privateKey;
     dlg.exec();
@@ -306,6 +338,21 @@ void WalletView::showSeedPhrase()
 {
     if(!walletModel)
         return;
+
+    if (walletModel->getEncryptionStatus() == WalletModel::Locked){
+        walletModel->requireUnlock();
+    }
+
+    if (walletModel->getEncryptionStatus() == WalletModel::Locked) {
+      QMessageBox msgBox;
+      msgBox.setText("Encryption Status: Locked");
+      msgBox.setStyleSheet("QLabel{min-width: 350px;}");
+      msgBox.setStandardButtons(QMessageBox::Ok);
+      msgBox.setDefaultButton(QMessageBox::Ok);
+      msgBox.setInformativeText("Seed Phrase can not be displayed while the wallet is Locked.");
+      int ret = msgBox.exec();
+      return;
+    }
 
     QString phrase = "";
     std::string recoverySeedPhrase = "";
@@ -323,6 +370,21 @@ void WalletView::rescan()
 {
     if(!walletModel)
         return;
+
+    if (walletModel->getEncryptionStatus() == WalletModel::Locked){
+        walletModel->requireUnlock();
+    }
+
+    if (walletModel->getEncryptionStatus() == WalletModel::Locked) {
+      QMessageBox msgBox;
+      msgBox.setText("Encryption Status: Locked");
+      msgBox.setStyleSheet("QLabel{min-width: 350px;}");
+      msgBox.setStandardButtons(QMessageBox::Ok);
+      msgBox.setDefaultButton(QMessageBox::Ok);
+      msgBox.setInformativeText("Wallet can not be rescanned while the wallet is Locked.");
+      int ret = msgBox.exec();
+      return;
+    }
 
     walletModel->rescan();
 }
