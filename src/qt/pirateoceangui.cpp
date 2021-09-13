@@ -467,7 +467,6 @@ void PirateOceanGUI::createActions()
 
     //hide backup wallet, needs work...
     backupWalletAction->setVisible(false);
-    changePassphraseAction->setVisible(false);
 
     connect(quitAction, SIGNAL(triggered()), qApp, SLOT(quit()));
     connect(aboutAction, SIGNAL(triggered()), this, SLOT(aboutClicked()));
@@ -507,7 +506,6 @@ void PirateOceanGUI::createActions()
     openAction->setVisible(false);
     // sendCoinsAction->setVisible(false);
     //receiveCoinsAction->setVisible(false);
-    encryptWalletAction->setVisible(false);
     usedSendingAddressesAction->setVisible(false);
     usedReceivingAddressesAction->setVisible(false);
     usedReceivingZAddressesAction->setVisible(false);
