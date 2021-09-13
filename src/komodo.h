@@ -176,24 +176,9 @@ int32_t komodo_parsestatefile(struct komodo_state *sp,FILE *fp,char *symbol,char
                 errs++;
             if ( fread(&olen,1,sizeof(olen),fp) != sizeof(olen) )
                 errs++;
-            if ( olen < sizeof(opret) )
-            {
-                if ( fread(opret,1,olen,fp) != olen )
-                    errs++;
-                if ( 0 && ASSETCHAINS_SYMBOL[0] != 0 && matched != 0 )
-                {
-                    int32_t i;  for (i=0; i<olen; i++)
-                        printf("%02x",opret[i]);
-                    printf(" %s.%d load[%s] opret[%c] len.%d %.8f\n",ASSETCHAINS_SYMBOL,ht,symbol,opret[0],olen,(double)ovalue/COIN);
-                }
-                komodo_eventadd_opreturn(sp,symbol,ht,txid,ovalue,v,opret,olen); // global shared state -> global PAX
-            } else
-            {
-                int32_t i;
-                for (i=0; i<olen; i++)
-                    fgetc(fp);
-                //printf("illegal olen.%u\n",olen);
-            }
+            if ( fread(opret,1,olen,fp) != olen )
+                errs++;
+            komodo_eventadd_opreturn(sp,symbol,ht,txid,ovalue,v,opret,olen); // global shared state -> global PAX
         }
         else if ( func == 'D' )
         {
@@ -316,24 +301,9 @@ int32_t komodo_parsestatefiledata(struct komodo_state *sp,uint8_t *filedata,long
                 errs++;
             if ( memread(&olen,sizeof(olen),filedata,&fpos,datalen) != sizeof(olen) )
                 errs++;
-            if ( olen < sizeof(opret) )
-            {
-                if ( memread(opret,olen,filedata,&fpos,datalen) != olen )
-                    errs++;
-                if ( 0 && ASSETCHAINS_SYMBOL[0] != 0 && matched != 0 )
-                {
-                    int32_t i;  for (i=0; i<olen; i++)
-                        printf("%02x",opret[i]);
-                    printf(" %s.%d load[%s] opret[%c] len.%d %.8f\n",ASSETCHAINS_SYMBOL,ht,symbol,opret[0],olen,(double)ovalue/COIN);
-                }
-                komodo_eventadd_opreturn(sp,symbol,ht,txid,ovalue,v,opret,olen); // global shared state -> global PAX
-            } else
-            {
-                int32_t i;
-                for (i=0; i<olen; i++)
-                    filedata[fpos++];
-                //printf("illegal olen.%u\n",olen);
-            }
+            if ( memread(opret,olen,filedata,&fpos,datalen) != olen )
+                errs++;
+            komodo_eventadd_opreturn(sp,symbol,ht,txid,ovalue,v,opret,olen); // global shared state -> global PAX
         }
         else if ( func == 'D' )
         {
