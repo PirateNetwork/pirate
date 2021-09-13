@@ -1357,7 +1357,7 @@ bool CWallet::VerusSelectStakeOutput(CBlock *pBlock, arith_uint256 &hashResult, 
 
     pwalletMain->AvailableCoins(vecOutputs, true, NULL, false, false);
 
-    if (pastBlockIndex = komodo_chainactive(nHeight - 100))
+    if ( (pastBlockIndex = komodo_chainactive(nHeight - 100)) != nullptr)
     {
         CBlockHeader bh = pastBlockIndex->GetBlockHeader();
         uint256 pastHash = bh.GetVerusEntropyHash(nHeight - 100);

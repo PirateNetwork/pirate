@@ -2563,7 +2563,7 @@ int64_t _pairave64(int64_t valA,int64_t valB)
     else return(valB);
 }
 
-int64_t _pairdiff64(register int64_t valA,register int64_t valB)
+int64_t _pairdiff64(int64_t valA, int64_t valB)
 {
     if ( valA != 0 && valB != 0 )
         return(valA - valB);
@@ -2572,7 +2572,7 @@ int64_t _pairdiff64(register int64_t valA,register int64_t valB)
 
 int64_t balanced_ave64(int64_t buf[],int32_t i,int32_t width)
 {
-    register int32_t nonz,j; register int64_t sum,price;
+    int32_t nonz,j; int64_t sum,price;
     nonz = 0;
     sum = 0;
     for (j=-width; j<=width; j++)
@@ -2591,7 +2591,7 @@ int64_t balanced_ave64(int64_t buf[],int32_t i,int32_t width)
 
 void buf_trioave64(int64_t dest[],int64_t src[],int32_t n)
 {
-    register int32_t i,j,width = 3;
+    int32_t i,j,width = 3;
     for (i=0; i<128; i++)
         src[i] = 0;
     //for (i=n-width-1; i>width; i--)

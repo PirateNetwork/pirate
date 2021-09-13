@@ -2472,7 +2472,7 @@ int32_t komodo_checkPOW(int64_t stakeTxValue, int32_t slowflag,CBlock *pblock,in
         if ( slowflag == 0 && pblock->vtx[0].vout.size() > 1 )
         {
             // Check the notarisation tx is to the crypto address.
-            if ( !komodo_is_notarytx(pblock->vtx[1]) == 1 )
+            if ( !komodo_is_notarytx(pblock->vtx[1]) )
             {
                 fprintf(stderr, "notarisation is not to crypto address ht.%i\n",height);
                 return(-1); 
