@@ -1506,7 +1506,7 @@ public:
     void DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<uint256> &removeArcTxs);
     void DeleteWalletTransactions(const CBlockIndex* pindex);
     bool initalizeArcTx();
-    int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false, bool fIgnoreBirthday = false);
+    int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false, bool fIgnoreBirthday = false, bool LockOnFinish = false);
     void ReacceptWalletTransactions();
     void ResendWalletTransactions(int64_t nBestBlockTime);
     std::vector<uint256> ResendWalletTransactionsBefore(int64_t nTime);

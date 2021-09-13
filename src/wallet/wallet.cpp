@@ -3416,7 +3416,7 @@ bool CWallet::EraseFromWallet(const uint256 &hash)
 /*Rescan the whole chain for transactions*/
 void CWallet::ForceRescanWallet() {
     CBlockIndex* pindex = chainActive.Genesis();
-    ScanForWalletTransactions(pindex, true, true);
+    ScanForWalletTransactions(pindex, true, true, true);
 }
 
 void CWallet::RescanWallet()
@@ -4971,8 +4971,9 @@ bool CWallet::initalizeArcTx() {
  * from or to us. If fUpdate is true, found transactions that already
  * exist in the wallet will be updated.
  */
-int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, bool fIgnoreBirthday)
+int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, bool fIgnoreBirthday, bool LockOnFinish)
 {
+    LOCK2(cs_main, cs_wallet);
     int ret = 0;
     int64_t nNow = GetTime();
     const CChainParams& chainParams = Params();
@@ -4982,8 +4983,10 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
     std::set<uint256> txList;
     std::set<uint256> txListOriginal;
 
+
     {
-        LOCK2(cs_main, cs_wallet);
+        //Lock cs_keystore to prevent wallet from locking during rescan
+        LOCK(cs_KeyStore);
 
         //Get List of current list of txids
         for (map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.begin(); it != pwalletMain->mapArcTxs.end(); ++it)
@@ -5055,6 +5058,9 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
         //Update all witness caches
         BuildWitnessCache(chainActive.Tip(), false);
 
+        if (LockOnFinish && IsCrypted()) {
+            Lock();
+        }
     }
 
     for (set<uint256>::iterator it = txList.begin(); it != txList.end(); ++it)
@@ -5064,6 +5070,9 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
     }
 
     NotifyBalanceChanged();
+
+
+
     return ret;
 }
 
