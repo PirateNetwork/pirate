@@ -12,6 +12,12 @@ bit output.
 #include "crypto/common.h"
 #include "crypto/verus_hash.h"
 
+extern "C" 
+{
+#include "crypto/haraka.h"
+#include "crypto/haraka_portable.h"
+}
+
 void (*CVerusHash::haraka512Function)(unsigned char *out, const unsigned char *in);
 
 void CVerusHash::Hash(void *result, const void *data, size_t _len)

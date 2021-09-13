@@ -13,12 +13,6 @@ This provides the PoW hash function for Verus, enabling CPU mining.
 
 #include <cpuid.h>
 
-extern "C" 
-{
-#include "crypto/haraka.h"
-#include "crypto/haraka_portable.h"
-}
-
 class CVerusHash
 {
     public:
