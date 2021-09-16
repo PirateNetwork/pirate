@@ -38,7 +38,7 @@ pthread_mutex_t komodo_mutex,staked_mutex;
 
 struct pax_transaction *PAX;
 int32_t NUM_PRICES; uint32_t *PVALS;
-struct knotaries_entry *Pubkeys;
+knotaries_entry *Pubkeys; // holds all notary public keys, indexed by height
 
 struct komodo_state KOMODO_STATES[34];
 const uint32_t nStakedDecemberHardforkTimestamp = 1576840000; //December 2019 hardfork 12/20/2019 @ 11:06am (UTC)

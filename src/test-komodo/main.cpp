@@ -18,5 +18,6 @@ int main(int argc, char **argv) {
     notaryKey = vchSecret.GetKey();
 
     testing::InitGoogleTest(&argc, argv);
+    ECC_Stop();
     return RUN_ALL_TESTS();
 }

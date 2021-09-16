@@ -837,7 +837,6 @@ int32_t komodo_block2height(CBlock *block)
             }
             //printf(" <- coinbase.%d ht.%d\n",(int32_t)block->vtx[0].vin[0].scriptSig.size(),height);
         }
-        //komodo_init(height);
     }
     if ( height != height2 )
     {
