@@ -233,6 +233,7 @@ void komodo_notarysinit(int32_t origheight,uint8_t pubkeys[64][33],int32_t num)
         HASH_ADD_KEYPTR(hh,N.Notaries,kp->pubkey,33,kp);
     }
     N.numnotaries = num;
+    // If this is a new height, push notaries to all election cycles above
     for (int32_t i=htind; i<KOMODO_MAXBLOCKS / KOMODO_ELECTION_GAP; i++)
     {
         if ( Pubkeys[i].height != 0 && origheight < hwmheight )
