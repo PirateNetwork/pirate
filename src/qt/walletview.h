@@ -83,6 +83,8 @@ private:
     const PlatformStyle *platformStyle;
 
 public Q_SLOTS:
+    //Hide or Show Unlock button
+    void setUnlockButton(int status);
     /** Switch to overview (home) page */
     void gotoOverviewPage();
     /** Switch to history (transactions) page */

@@ -158,6 +158,7 @@ void WalletView::setWalletModel(WalletModel *_walletModel)
 
         // Handle changes in encryption status
         connect(_walletModel, SIGNAL(encryptionStatusChanged(int)), this, SIGNAL(encryptionStatusChanged(int)));
+        connect(_walletModel, SIGNAL(encryptionStatusChanged(int)), this, SLOT(setUnlockButton(int)));
         updateEncryptionStatus();
 
         // update HD status
@@ -191,6 +192,17 @@ void WalletView::processNewTransaction(const QModelIndex& parent, int start, int
     QString label = ttm->data(index, TransactionTableModel::LabelRole).toString();
 
     Q_EMIT incomingTransaction(date, walletModel->getOptionsModel()->getDisplayUnit(), amount, type, address, label);
+}
+
+void WalletView::setUnlockButton(int status)
+{
+    if (overviewPage) {
+        if (status == WalletModel::Locked) {
+            overviewPage->setUnlockButtonVisible(true);
+        } else {
+            overviewPage->setUnlockButtonVisible(false);
+        }
+    }
 }
 
 void WalletView::gotoOverviewPage()

@@ -205,6 +205,9 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
     connect(ui->labelWalletStatus, SIGNAL(clicked()), this, SLOT(handleOutOfSyncWarningClicks()));
     connect(ui->labelTransactionsStatus, SIGNAL(clicked()), this, SLOT(handleOutOfSyncWarningClicks()));
 
+    //connect Unlock wallet button
+    connect(ui->btnUnlock, SIGNAL(clicked()), this, SLOT(unlockWallet()));
+
     updateJSONtimer = new QTimer(this);
     updateGUItimer = new QTimer(this);
     manager = new QNetworkAccessManager(this);
@@ -430,4 +433,14 @@ void OverviewPage::showOutOfSyncWarning(bool fShow)
     ui->labelWalletStatus->setVisible(fShow);
     ui->labelTransactionsStatus->setVisible(fShow);
   }
+}
+
+void OverviewPage::setUnlockButtonVisible(bool visible) {
+    ui->btnUnlock->setVisible(visible);
+}
+
+void OverviewPage::unlockWallet() {
+    if (walletModel) {
+        walletModel->requireUnlock();
+    }
 }
