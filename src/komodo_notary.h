@@ -87,17 +87,39 @@ int32_t getacseason(uint32_t timestamp)
     return(0);
 }
 
+/****
+ * Calculate the height index (how notaries are stored) based on the height
+ * @param height the height
+ * @returns the height index
+ */
+int32_t ht_index_from_height(int32_t height)
+{
+    int32_t htind = height / KOMODO_ELECTION_GAP;
+    if ( htind >= KOMODO_MAXBLOCKS / KOMODO_ELECTION_GAP )
+        htind = (KOMODO_MAXBLOCKS / KOMODO_ELECTION_GAP) - 1;
+    return htind;
+}
+
+/***
+ * @brief Given a height or timestamp, get the appropriate notary keys
+ * @param[out] pubkeys the results
+ * @param[in] height the height
+ * @param[in] timestamp the timestamp
+ * @returns the number of notaries
+ */
 int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp)
 {
-    int32_t i,htind,n; uint64_t mask = 0; struct knotary_entry *kp,*tmp;
-    static uint8_t kmd_pubkeys[NUM_KMD_SEASONS][64][33],didinit[NUM_KMD_SEASONS];
+    static uint8_t kmd_pubkeys[NUM_KMD_SEASONS][64][33];
+    static uint8_t didinit[NUM_KMD_SEASONS];
     
-    if ( timestamp == 0 && ASSETCHAINS_SYMBOL[0] != 0 )
-        timestamp = komodo_heightstamp(height);
-    else if ( ASSETCHAINS_SYMBOL[0] == 0 )
+    // calculate timestamp if necessary (only height passed in and non-KMD chain)
+    if ( ASSETCHAINS_SYMBOL[0] == 0 )
         timestamp = 0;
+    else if ( timestamp == 0 )
+        timestamp = komodo_heightstamp(height);
 
-    // If this chain is not a staked chain, use the normal Komodo logic to determine notaries. This allows KMD to still sync and use its proper pubkeys for dPoW.
+    // If this chain is not a staked chain, use the normal Komodo logic to determine notaries. 
+    // This allows KMD to still sync and use its proper pubkeys for dPoW.
     if ( is_STAKED(ASSETCHAINS_SYMBOL) == 0 )
     {
         int32_t kmd_season = 0;
@@ -116,12 +138,12 @@ int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestam
         {
             if ( didinit[kmd_season-1] == 0 )
             {
-                for (i=0; i<NUM_KMD_NOTARIES; i++) 
+                for (int32_t i = 0; i<NUM_KMD_NOTARIES; i++) 
                     decode_hex(kmd_pubkeys[kmd_season-1][i],33,(char *)notaries_elected[kmd_season-1][i][1]);
                 if ( ASSETCHAINS_PRIVATE != 0 )
                 {
                     // this is PIRATE, we need to populate the address array for the notary exemptions. 
-                    for (i = 0; i<NUM_KMD_NOTARIES; i++)
+                    for (int32_t i = 0; i<NUM_KMD_NOTARIES; i++)
                         pubkey2addr((char *)NOTARY_ADDRESSES[kmd_season-1][i],(uint8_t *)kmd_pubkeys[kmd_season-1][i]);
                 }
                 didinit[kmd_season-1] = 1;
@@ -141,15 +163,16 @@ int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestam
         return(numSN);
     }
 
-    htind = height / KOMODO_ELECTION_GAP;
-    if ( htind >= KOMODO_MAXBLOCKS / KOMODO_ELECTION_GAP )
-        htind = (KOMODO_MAXBLOCKS / KOMODO_ELECTION_GAP) - 1;
     if ( Pubkeys == nullptr )
     {
         komodo_init(height);
     }
+    int32_t htind = ht_index_from_height(height);
     pthread_mutex_lock(&komodo_mutex);
-    n = Pubkeys[htind].numnotaries;
+    int32_t n = Pubkeys[htind].numnotaries;
+    uint64_t mask = 0;
+    knotary_entry *kp;
+    knotary_entry *tmp;
     HASH_ITER(hh,Pubkeys[htind].Notaries,kp,tmp) // for each knotary_entry in the Notaries hash table at a particular height...
     {
         if ( kp->notaryid < n )
@@ -180,10 +203,8 @@ int32_t komodo_electednotary(int32_t *numnotariesp,uint8_t *pubkey33,int32_t hei
 
 int32_t komodo_ratify_threshold(int32_t height,uint64_t signedmask)
 {
-    int32_t htind,numnotaries,i,wt = 0;
-    htind = height / KOMODO_ELECTION_GAP;
-    if ( htind >= KOMODO_MAXBLOCKS / KOMODO_ELECTION_GAP )
-        htind = (KOMODO_MAXBLOCKS / KOMODO_ELECTION_GAP) - 1;
+    int32_t numnotaries,i,wt = 0;
+    int32_t htind = ht_index_from_height(height);
     numnotaries = Pubkeys[htind].numnotaries;
     for (i=0; i<numnotaries; i++)
         if ( ((1LL << i) & signedmask) != 0 )
@@ -202,8 +223,6 @@ int32_t komodo_ratify_threshold(int32_t height,uint64_t signedmask)
 void komodo_notarysinit(int32_t origheight,uint8_t pubkeys[64][33],int32_t num)
 {
     static int32_t hwmheight = 0; // highest height ever passed to this function
-    int32_t htind; // height index (number of elections so far)
-    int32_t height; 
     knotaries_entry N;
 
     if ( Pubkeys == nullptr )
@@ -211,17 +230,14 @@ void komodo_notarysinit(int32_t origheight,uint8_t pubkeys[64][33],int32_t num)
     memset(&N,0,sizeof(N));
 
     // calculate the height
+    int32_t htind = 0; // height index (number of elections so far)
     if ( origheight > 0 )
     {
-        height = (origheight + KOMODO_ELECTION_GAP/2);
+        int32_t height = (origheight + KOMODO_ELECTION_GAP/2);
         height /= KOMODO_ELECTION_GAP;
         height = ((height + 1) * KOMODO_ELECTION_GAP);
-        htind = (height / KOMODO_ELECTION_GAP);
-        if ( htind >= KOMODO_MAXBLOCKS / KOMODO_ELECTION_GAP )
-            htind = (KOMODO_MAXBLOCKS / KOMODO_ELECTION_GAP) - 1;
+        htind = ht_index_from_height(height);
     } 
-    else 
-        htind = 0;
 
     // load in the new public keys into the N struct
     pthread_mutex_lock(&komodo_mutex);
@@ -252,7 +268,7 @@ void komodo_notarysinit(int32_t origheight,uint8_t pubkeys[64][33],int32_t num)
 int32_t komodo_chosennotary(int32_t *notaryidp,int32_t height,uint8_t *pubkey33,uint32_t timestamp)
 {
     // -1 if not notary, 0 if notary, 1 if special notary
-    struct knotary_entry *kp; int32_t numnotaries=0,htind,modval = -1;
+    struct knotary_entry *kp; int32_t numnotaries=0,modval = -1;
     *notaryidp = -1;
     if ( height < 0 )//|| height >= KOMODO_MAXBLOCKS )
     {
@@ -271,9 +287,7 @@ int32_t komodo_chosennotary(int32_t *notaryidp,int32_t height,uint8_t *pubkey33,
         return(-1);
     if ( Pubkeys == nullptr )
         komodo_init(0);
-    htind = height / KOMODO_ELECTION_GAP;
-    if ( htind >= KOMODO_MAXBLOCKS / KOMODO_ELECTION_GAP )
-        htind = (KOMODO_MAXBLOCKS / KOMODO_ELECTION_GAP) - 1;
+    int32_t htind = ht_index_from_height(height);
     pthread_mutex_lock(&komodo_mutex);
     HASH_FIND(hh,Pubkeys[htind].Notaries,pubkey33,33,kp);
     pthread_mutex_unlock(&komodo_mutex);
