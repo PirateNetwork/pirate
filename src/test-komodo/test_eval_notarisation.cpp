@@ -211,8 +211,11 @@ TEST(TestEvalNotarisation, testInvalidNotarisationInputNotCheckSig)
     ASSERT_FALSE(eval.GetNotarisationData(notary.GetHash(), data));
 }
 
-TEST(TestEvalNotarisation, testNotaryInit)
+TEST(TestEvalNotarisation, test_komodo_notarysinit)
 {
+    // Due to Pubkeys being global with no way to reset it (statics), this test can only be run once and 
+    // with no other test that relies on setting it
+
     // make an empty komodostate file
     boost::filesystem::path temp_path = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
     boost::filesystem::create_directories(temp_path);
@@ -297,6 +300,50 @@ TEST(TestEvalNotarisation, testNotaryInit)
     EXPECT_EQ(Pubkeys[2].numnotaries, 1);
     EXPECT_EQ(Pubkeys[2].Notaries->notaryid, 0);
     EXPECT_EQ(Pubkeys[2].Notaries->pubkey[0], 0x03);
+}
+
+TEST(TestEvalNotarisation, test_komodo_notaries)
+{
+    // Due to Pubkeys being global with no way to reset it (statics), this test can only be run once and 
+    // with no other test that relies on setting it
+
+    // make an empty komodostate file
+    boost::filesystem::path temp_path = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+    boost::filesystem::create_directories(temp_path);
+    mapArgs["-datadir"] = temp_path.string();
+    {
+        boost::filesystem::path file = temp_path / "komodostate";
+        std::ofstream komodostate(file.string());
+        komodostate << "0" << std::endl;
+    }
+
+    uint8_t keys[65][33];
+    EXPECT_EQ(Pubkeys, nullptr);
+    // should retrieve the genesis notaries
+    int32_t num_found = komodo_notaries(keys, 0, 0);
+    boost::filesystem::remove_all(temp_path);
+    EXPECT_EQ(num_found, 35);
+    EXPECT_EQ(keys[0][0], 0x03);
+    EXPECT_EQ(keys[0][1], 0xb7);
+    EXPECT_EQ(keys[1][0], 0x02);
+    EXPECT_EQ(keys[1][1], 0xeb);
+
+    // add a new height
+    uint8_t new_key[33] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+            0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20};
+    uint8_t new_notaries[64][33];
+    memcpy(new_notaries[0], new_key, 33);
+    komodo_notarysinit(1, new_notaries, 1); // height of 1, 1 public key
+    num_found = komodo_notaries(keys, 0, 0);
+    EXPECT_EQ(num_found, 35);
+    EXPECT_EQ(keys[0][0], 0x03);
+    EXPECT_EQ(keys[0][1], 0xb7);
+    EXPECT_EQ(keys[1][0], 0x02);
+    EXPECT_EQ(keys[1][1], 0xeb);
+    num_found = komodo_notaries(keys, KOMODO_ELECTION_GAP, 0);
+    EXPECT_EQ(num_found, 1);
+    EXPECT_EQ(keys[0][0], 0x00);
+    EXPECT_EQ(keys[0][1], 0x01);
 }
 
 

@@ -63,28 +63,38 @@ const char *Notaries_genesis[][2] =
 
 #define CRYPTO777_PUBSECPSTR "020e46e79a2a8d12b9b5d12c7a91adb4e454edfae43c0a0cb805427d2ac7613fd9"
 
+/****
+ * @brief get the kmd season based on height (used on the KMD chain)
+ * @param height the chain height
+ * @returns the KMD season (returns 0 if the height is above the range)
+ */
 int32_t getkmdseason(int32_t height)
 {
     if ( height <= KMD_SEASON_HEIGHTS[0] )
-        return(1);
+        return 1;
     for (int32_t i = 1; i < NUM_KMD_SEASONS; i++)
     {
         if ( height <= KMD_SEASON_HEIGHTS[i] && height > KMD_SEASON_HEIGHTS[i-1] )
-            return(i+1);
+            return i+1;
     }
-    return(0);
+    return 0;
 }
 
+/****
+ * @brief get the season based on timestamp (used for alternate chains)
+ * @param timestamp the time
+ * @returns the KMD season (returns 0 if timestamp is above the range)
+ */
 int32_t getacseason(uint32_t timestamp)
 {
     if ( timestamp <= KMD_SEASON_TIMESTAMPS[0] )
-        return(1);
+        return 1;
     for (int32_t i = 1; i < NUM_KMD_SEASONS; i++)
     {
         if ( timestamp <= KMD_SEASON_TIMESTAMPS[i] && timestamp > KMD_SEASON_TIMESTAMPS[i-1] )
-            return(i+1);
+            return i+1;
     }
-    return(0);
+    return 0;
 }
 
 /****
@@ -114,9 +124,9 @@ int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestam
     
     // calculate timestamp if necessary (only height passed in and non-KMD chain)
     if ( ASSETCHAINS_SYMBOL[0] == 0 )
-        timestamp = 0;
+        timestamp = 0; // For KMD, we always use height
     else if ( timestamp == 0 )
-        timestamp = komodo_heightstamp(height);
+        timestamp = komodo_heightstamp(height); // derive the timestamp from the passed-in height
 
     // If this chain is not a staked chain, use the normal Komodo logic to determine notaries. 
     // This allows KMD to still sync and use its proper pubkeys for dPoW.

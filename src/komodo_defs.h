@@ -513,7 +513,7 @@ extern std::string CCerror,ASSETCHAINS_CCLIB;
 extern uint8_t ASSETCHAINS_CCDISABLES[256];
 
 extern int32_t USE_EXTERNAL_PUBKEY;
-extern std::string NOTARY_PUBKEY,NOTARY_ADDRESS;
+extern std::string NOTARY_ADDRESS;
 extern bool IS_MODE_EXCHANGEWALLET;
 extern int32_t VERUS_MIN_STAKEAGE;
 extern std::string DONATION_PUBKEY;
