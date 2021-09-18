@@ -973,6 +973,7 @@ protected:
                     return;
                 }
             } else {
+                LogPrintf("SetBestChain(): Attmepting to SetBestChain while crypted.\n");
                 if (!IsLocked()) {
                     for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
                         CWalletTx wtx = wtxItem.second;
@@ -1074,8 +1075,8 @@ protected:
 
                 } else {
                     walletdb.TxnAbort();
-                    return;
                     LogPrintf("SetBestChain(): Wallet is locked\n");
+                    return;
                 }
             }
         } catch (const std::exception &exc) {
@@ -1093,6 +1094,7 @@ protected:
 
         //Clear Unsaved Sapling Addresses after successful TxnCommit
         mapUnsavedSaplingIncomingViewingKeys.clear();
+        LogPrintf("SetBestChain(): SetBestChain was successful\n");
     }
 
 private:
