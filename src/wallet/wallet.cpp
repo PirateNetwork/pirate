@@ -1226,8 +1226,11 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase)
                 return false;
             if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
                 continue; // try another master key
-            if (CCryptoKeyStore::Unlock(vMasterKey))
+            if (CCryptoKeyStore::Unlock(vMasterKey)) {
+                CWalletDB walletdb(strWalletFile);
+                SetBestChainINTERNAL(walletdb, currentBlock);
                 return true;
+            }
         }
     }
     return false;
@@ -1396,8 +1399,9 @@ void CWallet::CommitAutomatedTx(const CTransaction& tx) {
 void CWallet::SetBestChain(const CBlockLocator& loc)
 {
     LOCK(cs_wallet);
+    currentBlock = loc;
     CWalletDB walletdb(strWalletFile);
-    SetBestChainINTERNAL(walletdb, loc);
+    SetBestChainINTERNAL(walletdb, currentBlock);
 }
 
 void CWallet::SetWalletBirthday(int nHeight)

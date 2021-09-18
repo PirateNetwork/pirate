@@ -813,6 +813,10 @@ private:
 
     CWalletDB *pwalletdbEncryption;
 
+    //In Memory Block Locator of corresponding to wallet transactions
+    //Set in setBestChain, used passed to SetBestChainINTERNAL as const
+    CBlockLocator currentBlock;
+
     //! the current wallet version: clients below this version are not able to load the wallet
     int nWalletVersion;
 
