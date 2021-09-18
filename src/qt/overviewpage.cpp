@@ -435,8 +435,10 @@ void OverviewPage::showOutOfSyncWarning(bool fShow)
   }
 }
 
-void OverviewPage::setUnlockButtonVisible(bool visible) {
+void OverviewPage::setUiVisible(bool visible) {
     ui->btnUnlock->setVisible(visible);
+    ui->frame->setVisible(!visible);
+    ui->frame_2->setVisible(!visible);
 }
 
 void OverviewPage::unlockWallet() {

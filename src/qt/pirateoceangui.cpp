@@ -1232,6 +1232,10 @@ void PirateOceanGUI::setHDStatus(int hdEnabled)
 
 void PirateOceanGUI::setEncryptionStatus(int status)
 {
+    //Check Settings
+    QSettings settings;
+    bool fEnableZSigning = settings.value("fEnableZSigning").toBool();
+
     switch(status)
     {
     case WalletModel::Unencrypted:
@@ -1241,6 +1245,25 @@ void PirateOceanGUI::setEncryptionStatus(int status)
         encryptWalletAction->setEnabled(true);
         break;
     case WalletModel::Unlocked:
+        zsendCoinsAction->setVisible(true);
+        receiveCoinsAction->setVisible(true);
+        historyAction->setVisible(true);
+
+        if (fEnableZSigning) {
+            zsignAction->setVisible(true);
+        } else {
+            zsignAction->setVisible(false);
+        }
+
+        optionsAction->setVisible(true);
+        encryptWalletAction->setVisible(true);
+        changePassphraseAction->setVisible(true);
+        openRPCConsoleAction->setVisible(true);
+        importSpendAction->setVisible(true);
+        importViewAction->setVisible(true);
+        showSeedAction->setVisible(true);
+        rescanAction->setVisible(true);
+
         labelWalletEncryptionIcon->show();
         labelWalletEncryptionIcon->setPixmap(platformStyle->SingleColorIcon(":/icons/lock_open").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
         labelWalletEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently <b>unlocked</b>"));
@@ -1249,6 +1272,23 @@ void PirateOceanGUI::setEncryptionStatus(int status)
         encryptWalletAction->setEnabled(false); // TODO: decrypt currently not supported
         break;
     case WalletModel::Locked:
+        //Only show overview while locked
+        zsendCoinsAction->setVisible(false);
+        zsignAction->setVisible(false);
+        receiveCoinsAction->setVisible(false);
+        historyAction->setVisible(false);
+        gotoOverviewPage();
+
+        //Hide various menu option
+        optionsAction->setVisible(false);
+        encryptWalletAction->setVisible(false);
+        changePassphraseAction->setVisible(false);
+        openRPCConsoleAction->setVisible(false);
+        importSpendAction->setVisible(false);
+        importViewAction->setVisible(false);
+        showSeedAction->setVisible(false);
+        rescanAction->setVisible(false);
+
         labelWalletEncryptionIcon->show();
         labelWalletEncryptionIcon->setPixmap(platformStyle->SingleColorIcon(":/icons/lock_closed").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
         labelWalletEncryptionIcon->setToolTip(tr("Wallet is <b>encrypted</b> and currently <b>locked</b>"));

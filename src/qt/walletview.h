@@ -84,7 +84,7 @@ private:
 
 public Q_SLOTS:
     //Hide or Show Unlock button
-    void setUnlockButton(int status);
+    void setUnlockButton();
     /** Switch to overview (home) page */
     void gotoOverviewPage();
     /** Switch to history (transactions) page */
