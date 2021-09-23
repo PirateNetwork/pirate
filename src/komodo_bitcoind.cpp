@@ -2459,7 +2459,7 @@ void komodo_addutxo(std::vector<komodo_staking> &array,int32_t *maxkp,uint32_t t
         *maxkp += 1000;
         //array = (struct komodo_staking *)realloc(array,sizeof(*array) * (*maxkp));
         array.reserve(*maxkp);
-        //fprintf(stderr,"realloc max.%d array.size().%d\n",*maxkp,array.size());
+        //fprintf(stderr,"realloc max.%d array.size().%d array.capacity().%d\n", *maxkp,array.size(), array.capacity());
     }
     memset(&kp,0,sizeof(kp));
     strcpy(kp.address,address);

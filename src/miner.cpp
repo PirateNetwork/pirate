@@ -2188,7 +2188,7 @@ void static BitcoinMiner()
         if (minerThreads != NULL)
         {
             minerThreads->interrupt_all();
-            std::cout << __func__ << "Waiting for mining threads to stop..." << std::endl;
+            std::cout << "Waiting for mining threads to stop..." << std::endl;
             minerThreads->join_all();    // prevent thread overlapping   
             delete minerThreads;
             minerThreads = NULL;
