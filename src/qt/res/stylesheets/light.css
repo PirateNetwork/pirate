@@ -410,6 +410,11 @@ QRadioButton::indicator:checked {
     border-radius: 8px;
 }
 
+QWidget#OverviewPage QLabel#lockedMessage {
+    color:#687864;
+    font-weight: bold;
+}
+
 QStackedWidget#SendCoinsEntry QLabel#messageLabel {
     color: red;
 }

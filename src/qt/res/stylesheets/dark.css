@@ -382,6 +382,11 @@ QRadioButton::indicator:checked {
     border-radius: 8px;
 }
 
+QWidget#OverviewPage QLabel#lockedMessage {
+    color: white;
+    font-weight: bold;
+}
+
 QDialog#OpenPhraseDialog {
     background-color: #303030;
     color: #ffffff;

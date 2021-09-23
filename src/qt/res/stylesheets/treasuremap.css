@@ -342,6 +342,21 @@ QRadioButton::indicator:checked {
     border-radius: 8px;
 }
 
+QWidget#OverviewPage QLabel#lockedMessage {
+    color: black;
+    font-weight: bold;
+}
+
+QDialog#AskPassphraseDialog {
+    background-color: #303030;
+    color: #ffffff;
+}
+
+QDialog#AskPassphraseDialog QLineEdit{
+    background-color: #202020;
+    color: #ffffff;
+}
+
 QStackedWidget#SendCoinsEntry QLabel#messageLabel {
     color: red;
 }
