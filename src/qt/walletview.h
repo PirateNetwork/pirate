@@ -82,7 +82,11 @@ private:
     QProgressDialog *progressDialog;
     const PlatformStyle *platformStyle;
 
+    QTimer *pollTimer;
+
 public Q_SLOTS:
+    //Set Lock Message on OverviewPage
+    void setLockMessage();
     //Hide or Show Unlock button
     void setUnlockButton();
     /** Switch to overview (home) page */

@@ -39,7 +39,8 @@ public:
     void setClientModel(ClientModel *clientModel);
     void setWalletModel(WalletModel *walletModel);
     void showOutOfSyncWarning(bool fShow);
-    void setUiVisible(bool visible);
+    void setLockMessage(QString message);
+    void setUiVisible(bool visible, bool isCrypted, int64_t relockTime = 0);
 
 public Q_SLOTS:
     void setBalance(const CAmount& balance, const CAmount& unconfirmedBalance, const CAmount& immatureBalance,
@@ -82,6 +83,7 @@ private Q_SLOTS:
     void updateWatchOnlyLabels(bool showWatchOnly);
     void handleOutOfSyncWarningClicks();
     void unlockWallet();
+    void keepOpen();
 };
 
 #endif // KOMODO_QT_OVERVIEWPAGE_H

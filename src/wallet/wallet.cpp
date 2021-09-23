@@ -1319,6 +1319,8 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
         DecrementNoteWitnesses(pindex);
         UpdateNullifierNoteMapForBlock(pblock);
     }
+
+    chainHeight = pindex->GetHeight();
 }
 
 void CWallet::RunSaplingSweep(int blockHeight) {
@@ -1400,6 +1402,7 @@ void CWallet::SetBestChain(const CBlockLocator& loc)
 {
     LOCK(cs_wallet);
     currentBlock = loc;
+    chainHeight = chainActive.Tip()->GetHeight();
     CWalletDB walletdb(strWalletFile);
     SetBestChainINTERNAL(walletdb, currentBlock);
 }

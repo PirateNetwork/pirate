@@ -207,6 +207,10 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
 
     //connect Unlock wallet button
     connect(ui->btnUnlock, SIGNAL(clicked()), this, SLOT(unlockWallet()));
+    connect(ui->btnKeepOpen, SIGNAL(clicked()), this, SLOT(keepOpen()));
+
+    //set labal name to style
+    ui->lblLockedMessage->setObjectName("lockedMessage");
 
     updateJSONtimer = new QTimer(this);
     updateGUItimer = new QTimer(this);
@@ -435,14 +439,58 @@ void OverviewPage::showOutOfSyncWarning(bool fShow)
   }
 }
 
-void OverviewPage::setUiVisible(bool visible) {
-    ui->btnUnlock->setVisible(visible);
+void OverviewPage::setLockMessage(QString message) {
+    ui->lblLockedMessage->setText(message);
+}
+
+void OverviewPage::setUiVisible(bool visible, bool isCrypted, int64_t relockTime) {
+    if (!isCrypted) {
+        //Always hide on an unencrypted wallet
+        ui->lblLockedMessage->setVisible(false);
+        ui->btnUnlock->setVisible(false);
+        ui->btnKeepOpen->setVisible(false);
+        ui->frame->setVisible(false);
+        ui->frame_2->setVisible(false);
+        return;
+    }
+
+    //Alway Show on a crypted wallet
+    ui->lblLockedMessage->setVisible(true);
+    ui->btnUnlock->setVisible(true);
+
+    if (visible) {
+        ui->btnUnlock->setText("Unlock");
+    } else {
+        ui->btnUnlock->setText("Lock");
+        if (relockTime == 0) {
+            ui->btnUnlock->setVisible(false);
+            ui->btnKeepOpen->setVisible(false);
+            ui->lblLockedMessage->setText("Wallet unlocked via RPC command.");
+        } else {
+            ui->btnUnlock->setVisible(true);
+            ui->btnKeepOpen->setVisible(true);
+        }
+    }
+
+    //hide when locked
+    ui->btnKeepOpen->setVisible(!visible);
     ui->frame->setVisible(!visible);
     ui->frame_2->setVisible(!visible);
 }
 
 void OverviewPage::unlockWallet() {
     if (walletModel) {
-        walletModel->requireUnlock();
+        if (walletModel->getEncryptionStatus() == WalletModel::Locked) {
+            walletModel->requireUnlock();
+        } else {
+            walletModel->lockWallet();
+        }
+
+    }
+}
+
+void OverviewPage::keepOpen() {
+    if (walletModel) {
+        walletModel->keepOpen();
     }
 }

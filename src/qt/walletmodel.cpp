@@ -1062,8 +1062,30 @@ bool WalletModel::setWalletEncrypted(bool encrypted, const SecureString &passphr
     }
 }
 
-void WalletModel::setLockedLater() {
+void WalletModel::getWalletChainHeights(int &walletHeight, int &chainHeight) {
+    walletHeight = wallet->walletHeight;
+    chainHeight = wallet->chainHeight;
+}
+
+void WalletModel::keepOpen() {
+    if (relockTime > 0) {
+        relockTime = GetTime() + 300; //relock after 5 minutes
+    }
+}
+
+void WalletModel::lockWallet() {
     wallet->Lock();
+    relockTime = 0;
+}
+
+void WalletModel::setLockedLater() {
+    if (relockTime <= GetTime()) {
+        wallet->Lock();
+        relockTime = 0;
+        return;
+    }
+
+    QTimer::singleShot(250, this, SLOT(setLockedLater()));
 }
 
 bool WalletModel::setWalletLocked(bool locked, const SecureString &passPhrase)
@@ -1076,7 +1098,8 @@ bool WalletModel::setWalletLocked(bool locked, const SecureString &passPhrase)
     else
     {
         // Unlock
-        QTimer::singleShot(30000, this, SLOT(setLockedLater())); //relock after 30 seconds
+        relockTime = GetTime() + 300; //relock after 5 minutes
+        QTimer::singleShot(250, this, SLOT(setLockedLater()));
         return wallet->Unlock(passPhrase);
     }
 }

@@ -268,6 +268,7 @@ public:
 
 
     ZAddressTableModel *zaddressTableModel;
+    int64_t relockTime = 0;
 private:
     CWallet *wallet;
     bool fHaveWatchOnly;
@@ -328,6 +329,13 @@ Q_SIGNALS:
     void notifyWatchonlyChanged(bool fHaveWatchonly);
 
 public Q_SLOTS:
+    //Get the current wallet and chain heights
+    void getWalletChainHeights(int &walletHeight, int &chainHeight);
+    //Keep the wallet open for 5 more minutes
+    void keepOpen();
+    //Lock wallet immediately
+    void lockWallet();
+    //Check if wallet needs to be locked;
     void setLockedLater();
     /*Export spending key */
     QString getSpendingKey(QString strAddress);

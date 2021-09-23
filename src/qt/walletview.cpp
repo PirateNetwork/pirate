@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "utiltime.h"
 #include "walletview.h"
 
 #include "addressbookpage.h"
@@ -9,6 +10,7 @@
 #include "askpassphrasedialog.h"
 #include "pirateoceangui.h"
 #include "clientmodel.h"
+#include "guiconstants.h"
 #include "guiutil.h"
 #include "optionsmodel.h"
 #include "overviewpage.h"
@@ -98,6 +100,12 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, QWidget *parent):
 //    connect(zsignPage,      SIGNAL(message(QString,QString,unsigned int)), this, SIGNAL(message(QString,QString,unsigned int)));
     // Pass through messages from transactionView
     connect(transactionView, SIGNAL(message(QString,QString,unsigned int)), this, SIGNAL(message(QString,QString,unsigned int)));
+
+    // This timer will be fired repeatedly to update the balance
+    pollTimer = new QTimer(this);
+    connect(pollTimer, SIGNAL(timeout()), this, SLOT(setLockMessage()));
+    pollTimer->start(250);
+
 }
 
 WalletView::~WalletView()
@@ -161,7 +169,7 @@ void WalletView::setWalletModel(WalletModel *_walletModel)
         connect(_walletModel, SIGNAL(encryptionStatusChanged(int)), this, SLOT(setUnlockButton()));
         updateEncryptionStatus();
         setUnlockButton();
-        
+
         // update HD status
         Q_EMIT hdEnabledStatusChanged(_walletModel->hdEnabled());
 
@@ -195,14 +203,54 @@ void WalletView::processNewTransaction(const QModelIndex& parent, int start, int
     Q_EMIT incomingTransaction(date, walletModel->getOptionsModel()->getDisplayUnit(), amount, type, address, label);
 }
 
+void WalletView::setLockMessage() {
+    if (overviewPage) {
+        if (walletModel->getEncryptionStatus() == WalletModel::Unlocked) {
+            if (walletModel->relockTime > 0) {
+                std::string timeLeft = DateTimeStrFormat("%M:%S%F", walletModel->relockTime - GetTime());
+                QString message = tr("Wallet will relock in ") + QString::fromStdString(timeLeft);
+                overviewPage->setLockMessage(message);
+            } else {
+                overviewPage->setLockMessage(tr("Wallet unlocked by external RPC command."));
+            }
+        }
+
+        if (walletModel->getEncryptionStatus() == WalletModel::Locked) {
+              int walletHeight;
+              int chainHeight;
+              QString message = tr("In-Memory Wallet is synced with the chain.\n");
+              walletModel->getWalletChainHeights(walletHeight, chainHeight);
+              if (chainHeight < walletHeight + 30) { //Report in sync until the chain is at least 30 blocks higher, approx 2x setbestchain interval
+                  message = message + tr("On-Disk Wallet is syned with the chain\n");
+                  // message = message + tr("Chain Height ") + QString::number(chainHeight) + "\n";
+                  // message = message + tr("On Disk Wallet Height ") + QString::number(walletHeight) + "\n";
+                  // message = message + tr("Unlock to write to Disk.");
+              } else {
+                  message = message + tr("On-Disk Wallet is ") + QString::number(chainHeight - walletHeight) + tr(" blocks behind the chain.\n");
+                  // message = message + tr("Chain Height ") + QString::number(chainHeight) + "\n";
+                  // message = message + tr("On Disk Wallet Height ") + QString::number(walletHeight) + "\n";
+                  message = message + tr("Unlock to write to Disk.");
+              }
+              overviewPage->setLockMessage(message);
+        }
+    }
+}
+
 void WalletView::setUnlockButton()
 {
     if (overviewPage) {
-        if (walletModel->getEncryptionStatus() == WalletModel::Locked) {
-            overviewPage->setUiVisible(true);
-        } else {
-            overviewPage->setUiVisible(false);
-        }
+
+      switch (walletModel->getEncryptionStatus())
+      {
+      case WalletModel::Locked:
+          overviewPage->setUiVisible(true, true, 0);
+          break;
+      case WalletModel::Unlocked:
+          overviewPage->setUiVisible(false, true, walletModel->relockTime);
+          break;
+      default:
+          overviewPage->setUiVisible(false, false, 0);
+      }
     }
 }
 

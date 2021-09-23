@@ -856,6 +856,9 @@ private:
     void AddToSpends(const uint256& wtxid);
 
 public:
+    //Height for Lockmessage in GUI
+    int chainHeight = 0;
+    int walletHeight = 0;
 
     bool needsRescan = false;
     bool fSaplingConsolidationEnabled = false;
@@ -1094,6 +1097,7 @@ protected:
 
         //Clear Unsaved Sapling Addresses after successful TxnCommit
         mapUnsavedSaplingIncomingViewingKeys.clear();
+        walletHeight = chainHeight; //Set Wallet height to chain height.
         LogPrintf("SetBestChain(): SetBestChain was successful\n");
     }
 
