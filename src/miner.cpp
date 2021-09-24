@@ -1681,12 +1681,6 @@ void static BitcoinMiner_noeq()
 int32_t gotinvalid;
 extern int32_t getkmdseason(int32_t height);
 
-CBlockIndex * GetLastTipWithLock()
-{
-    LOCK(cs_main);
-    return chainActive.Tip();
-}
-
 #ifdef ENABLE_WALLET
 void static BitcoinMiner(CWallet *pwallet)
 #else
@@ -1776,7 +1770,11 @@ void static BitcoinMiner()
             // Create new block
             //
             unsigned int nTransactionsUpdatedLast = mempool.GetTransactionsUpdated();
-            CBlockIndex* pindexPrev = GetLastTipWithLock();
+            CBlockIndex* pindexPrev = nullptr;
+            {
+                LOCK(cs_main);
+                pindexPrev = chainActive.Tip();
+            }
             if ( Mining_height != pindexPrev->GetHeight()+1 )
             {
                 Mining_height = pindexPrev->GetHeight()+1;
@@ -1965,7 +1963,12 @@ void static BitcoinMiner()
                         while ( GetTime() < B.nTime-2 )
                         {
                             sleep(1);
-                            if ( GetLastTipWithLock()->GetHeight() >= Mining_height )
+                            CBlockIndex *tip = nullptr;
+                            {
+                                LOCK(cs_main);
+                                tip = chainActive.Tip();
+                            }
+                            if ( tip->GetHeight() >= Mining_height )
                             {
                                 fprintf(stderr,"new block arrived\n");
                                 return(false);
@@ -2123,7 +2126,12 @@ void static BitcoinMiner()
                             fprintf(stderr,"timeout, break\n");
                         break;
                     }
-                    if ( pindexPrev != GetLastTipWithLock() )
+                    CBlockIndex *tip = nullptr;
+                    {
+                        LOCK(cs_main);
+                        tip = chainActive.Tip();
+                    }
+                    if ( pindexPrev != tip )
                     {
                         break;
                     }
