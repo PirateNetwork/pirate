@@ -50,6 +50,7 @@
 #include "wallet/asyncrpcoperation_sendmany.h"
 #include "wallet/asyncrpcoperation_shieldcoinbase.h"
 #include "notaries_staked.h"
+#include "komodo_extern_globals.h"
 
 #include <cstring>
 #include <algorithm>
@@ -81,13 +82,10 @@ using namespace std;
 #define TMPFILE_START 100000000
 CCriticalSection cs_main;
 extern uint8_t NOTARY_PUBKEY33[33];
-extern bool KOMODO_LOADINGBLOCKS;
 extern int32_t KOMODO_LONGESTCHAIN,KOMODO_INSYNC;
 extern int32_t KOMODO_CONNECTING;
 extern int32_t KOMODO_EXTRASATOSHI;
 int32_t KOMODO_NEWBLOCKS;
-bool komodo_block2pubkey33(uint8_t *pubkey33,CBlock *block);
-//void komodo_broadcast(CBlock *pblock,int32_t limit);
 bool Getscriptaddress(char *destaddr,const CScript &scriptPubKey);
 void komodo_setactivation(int32_t height);
 void komodo_pricesupdate(int32_t height,CBlock *pblock);
@@ -649,7 +647,6 @@ CBlockTreeDB *pblocktree = nullptr;
 
 // Komodo globals
 
-#define KOMODO_ZCASH
 #include "komodo.h"
 
 UniValue komodo_snapshot(int top)
@@ -1157,10 +1154,6 @@ bool ContextualCheckCoinbaseTransaction(int32_t slowflag,const CBlock *block,CBl
             }
         }
         return(false);
-    }
-    else if ( ASSETCHAINS_MARMARA != 0 && nHeight > 0 && (nHeight & 1) == 0 )
-    {
-        
     }
     else if ( slowflag != 0 && ASSETCHAINS_CBOPRET != 0 && validateprices != 0 && nHeight > 0 && tx.vout.size() > 0 )
     {
@@ -3770,6 +3763,9 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     LogPrint("bench", "      - Connect %u transactions: %.2fms (%.3fms/tx, %.3fms/txin) [%.2fs]\n", (unsigned)block.vtx.size(), 0.001 * (nTime1 - nTimeStart), 0.001 * (nTime1 - nTimeStart) / block.vtx.size(), nInputs <= 1 ? 0 : 0.001 * (nTime1 - nTimeStart) / (nInputs-1), nTimeConnect * 0.000001);
 
     blockReward += nFees + sum;
+    if ( ASSETCHAINS_SYMBOL[0] == 0 && pindex->GetHeight() >= KOMODO_NOTARIES_HEIGHT2)
+        blockReward -= sum;
+
     if ( ASSETCHAINS_COMMISSION != 0 || ASSETCHAINS_FOUNDERS_REWARD != 0 ) //ASSETCHAINS_OVERRIDE_PUBKEY33[0] != 0 &&
     {
         uint64_t checktoshis;

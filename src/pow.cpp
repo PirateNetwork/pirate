@@ -29,6 +29,8 @@
 #include "streams.h"
 #include "uint256.h"
 #include "util.h"
+#include "komodo_notary.h"
+#include "komodo_extern_globals.h"
 
 #include "sodium.h"
 
@@ -790,7 +792,6 @@ bool CheckEquihashSolution(const CBlockHeader *pblock, const CChainParams& param
     return true;
 }
 
-int32_t komodo_chosennotary(int32_t *notaryidp,int32_t height,uint8_t *pubkey33,uint32_t timestamp);
 int32_t komodo_is_special(uint8_t pubkeys[66][33],int32_t mids[66],uint32_t blocktimes[66],int32_t height,uint8_t pubkey33[33],uint32_t blocktime);
 int32_t komodo_currentheight();
 void komodo_index2pubkey33(uint8_t *pubkey33,CBlockIndex *pindex,int32_t height);
@@ -801,7 +802,6 @@ extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 #define KOMODO_ELECTION_GAP 2000
 
 int32_t komodo_eligiblenotary(uint8_t pubkeys[66][33],int32_t *mids,uint32_t blocktimes[66],int32_t *nonzpkeysp,int32_t height);
-bool KOMODO_LOADINGBLOCKS = true;
 
 extern std::string NOTARY_PUBKEY;
 
