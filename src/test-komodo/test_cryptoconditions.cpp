@@ -33,10 +33,10 @@ protected:
 
 TEST_F(CCTest, testIsPayToCryptoCondition)
 {
-    CScript s = CScript() << std::vector<unsigned char>('a');
+    CScript s = CScript() << std::vector<unsigned char>({'a'});
     ASSERT_FALSE(s.IsPayToCryptoCondition());
         
-    s = CScript() << std::vector<unsigned char>('a') << OP_CHECKCRYPTOCONDITION;
+    s = CScript() << std::vector<unsigned char>({'a'}) << OP_CHECKCRYPTOCONDITION;
     ASSERT_TRUE(s.IsPayToCryptoCondition());
 
     s = CScript() << OP_CHECKCRYPTOCONDITION;
