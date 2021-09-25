@@ -2450,16 +2450,14 @@ int64_t komodo_coinsupply(int64_t *zfundsp,int64_t *sproutfundsp,int32_t height)
     return(supply);
 }
 
-void komodo_addutxo(std::vector<komodo_staking> &array,int32_t *maxkp,uint32_t txtime,uint64_t nValue,uint256 txid,int32_t vout,char *address,uint8_t *hashbuf,CScript pk)
+void komodo_addutxo(std::vector<komodo_staking> &array,uint32_t txtime,uint64_t nValue,uint256 txid,int32_t vout,char *address,uint8_t *hashbuf,CScript pk)
 {
     uint256 hash; uint32_t segid32; struct komodo_staking kp;
     segid32 = komodo_stakehash(&hash,address,hashbuf,txid,vout);
-    if ( array.size() >= *maxkp )
+    if ( array.size() >= array.capacity() )
     {
-        *maxkp += 1000;
-        //array = (struct komodo_staking *)realloc(array,sizeof(*array) * (*maxkp));
-        array.reserve(*maxkp);
-        //fprintf(stderr,"realloc max.%d array.size().%d array.capacity().%d\n", *maxkp,array.size(), array.capacity());
+        array.reserve(array.capacity() + 1000);
+        //fprintf(stderr,"%s realloc array.size().%d array.capacity().%d\n", __func__, array.size(), array.capacity());
     }
     memset(&kp,0,sizeof(kp));
     strcpy(kp.address,address);
@@ -2478,7 +2476,6 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
 {
     // use thread_local to prevent crash in case of accidental thread overlapping
     thread_local std::vector<komodo_staking> array; 
-    thread_local int32_t maxkp; 
     thread_local uint32_t lasttime;
 
     int32_t PoSperc = 0, newStakerActive; 
@@ -2523,7 +2520,6 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
         if ( array.size() != 0 )
         {
             array.clear();
-            maxkp = 0;
             lasttime = 0;
         }
         BOOST_FOREACH(const COutput& out, vecOutputs)
@@ -2549,13 +2545,13 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
                     continue;
                 if ( myGetTransaction(out.tx->GetHash(),tx,hashBlock) != 0 && (pindex= komodo_getblockindex(hashBlock)) != 0 )
                 {
-                    komodo_addutxo(array,&maxkp,(uint32_t)pindex->nTime,(uint64_t)nValue,out.tx->GetHash(),out.i,(char *)CBitcoinAddress(address).ToString().c_str(),hashbuf,(CScript)pk);
-                    //fprintf(stderr,"addutxo array.size().%d vs max.%d\n",array.size(),maxkp);
+                    komodo_addutxo(array,(uint32_t)pindex->nTime,(uint64_t)nValue,out.tx->GetHash(),out.i,(char *)CBitcoinAddress(address).ToString().c_str(),hashbuf,(CScript)pk);
+                    //fprintf(stderr,"%s array.size().%d vs array.capacity().%d\n", __func__,array.size(),array.capacity());
                 }
             }
         }
         lasttime = (uint32_t)time(NULL);
-        //fprintf(stderr,"finished kp data of utxo for staking %u ht.%d array.size().%d maxkp.%d\n",(uint32_t)time(NULL),nHeight,array.size(),maxkp);
+        //fprintf(stderr,"%s finished kp data of utxo for staking %u ht.%d array.size().%d array.capacity().%d\n", __func__,(uint32_t)time(NULL),nHeight,array.size(),array.capacity());
     }
     block_from_future_rejecttime = (uint32_t)GetTime() + ASSETCHAINS_STAKED_BLOCK_FUTURE_MAX;    
     for (i=winners=0; i<array.size(); i++)
@@ -2597,7 +2593,6 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
     if ( array.size() < 500 && array.size() != 0 )
     {
         array.clear();
-        maxkp = 0;
         lasttime = 0;
     }
     if ( earliest != 0 )
