@@ -2459,8 +2459,8 @@ void komodo_addutxo(std::vector<komodo_staking> &array,uint32_t txtime,uint64_t 
         array.reserve(array.capacity() + 1000);
         //fprintf(stderr,"%s realloc array.size().%d array.capacity().%d\n", __func__, array.size(), array.capacity());
     }
-    memset(&kp,0,sizeof(kp));
-    strcpy(kp.address,address);
+    //memset(&kp,0,sizeof(kp));
+    strcpy(kp.address, address);
     kp.txid = txid;
     kp.vout = vout;
     kp.hashval = UintToArith256(hash);
