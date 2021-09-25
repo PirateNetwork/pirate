@@ -2452,7 +2452,7 @@ int64_t komodo_coinsupply(int64_t *zfundsp,int64_t *sproutfundsp,int32_t height)
 
 void komodo_addutxo(std::vector<komodo_staking> &array,uint32_t txtime,uint64_t nValue,uint256 txid,int32_t vout,char *address,uint8_t *hashbuf,CScript pk)
 {
-    uint256 hash; uint32_t segid32; struct komodo_staking kp;
+    uint256 hash; uint32_t segid32; komodo_staking kp;
     segid32 = komodo_stakehash(&hash,address,hashbuf,txid,vout);
     if ( array.size() >= array.capacity() )
     {
@@ -2563,7 +2563,7 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
             fprintf(stderr,"[%s:%d] chain tip changed during staking loop t.%u counter.%d\n",ASSETCHAINS_SYMBOL,nHeight,(uint32_t)time(NULL),i);
             return(0);
         }
-        struct komodo_staking &kp = array[i];
+        komodo_staking &kp = array[i];
         eligible = komodo_stake(0,bnTarget,nHeight,kp.txid,kp.vout,0,(uint32_t)tipindex->nTime+ASSETCHAINS_STAKED_BLOCK_FUTURE_HALF,kp.address,PoSperc);
         if ( eligible > 0 )
         {
