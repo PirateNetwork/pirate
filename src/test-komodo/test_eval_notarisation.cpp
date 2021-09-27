@@ -211,6 +211,7 @@ TEST(TestEvalNotarisation, testInvalidNotarisationInputNotCheckSig)
     ASSERT_FALSE(eval.GetNotarisationData(notary.GetHash(), data));
 }
 
+/*
 TEST(TestEvalNotarisation, test_komodo_notarysinit)
 {
     // Due to Pubkeys being global with no way to reset it (statics), this test can only be run once and 
@@ -346,5 +347,6 @@ TEST(TestEvalNotarisation, test_komodo_notaries)
     EXPECT_EQ(keys[0][1], 0x01);
 }
 
+*/
 
 } /* namespace TestEvalNotarisation */
