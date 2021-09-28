@@ -671,8 +671,6 @@ bool SetStartOnSystemStartup(bool fAutoStart)
             TCHAR pszExePath[MAX_PATH];
             GetModuleFileName(nullptr, pszExePath, sizeof(pszExePath));
 
-            // Start client minimized
-            QString strArgs = "-min";
             // Set -testnet /-regtest options
             strArgs += QString::fromStdString(strprintf(" -testnet=%d -regtest=%d", GetBoolArg("-testnet", false), GetBoolArg("-regtest", false)));
 

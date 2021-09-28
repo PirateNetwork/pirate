@@ -573,15 +573,8 @@ void KomodoApplication::initializeResult(bool success)
         }
 #endif
 
-        // If -min option passed, start window minimized.
-        if(GetBoolArg("-min", false))
-        {
-            window->showMinimized();
-        }
-        else
-        {
-            window->show();
-        }
+        window->show();
+
         Q_EMIT splashFinished(window);
 
 #ifdef ENABLE_WALLET
@@ -795,8 +788,7 @@ int main(int argc, char *argv[])
     // Subscribe to global signals from core
     uiInterface.InitMessage.connect(InitMessage);
 
-    if (GetBoolArg("-splash", DEFAULT_SPLASHSCREEN) && !GetBoolArg("-min", false))
-        app.createSplashScreen(networkStyle.data());
+    app.createSplashScreen(networkStyle.data());
 
     SoftSetBoolArg("-server", true);
 
