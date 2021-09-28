@@ -14,6 +14,7 @@ class NetworkStyle;
 class RestoreSeed;
 class NewSeed;
 class NewWallet;
+class OpenWallet;
 
 QT_BEGIN_NAMESPACE
 class QPushButton;
@@ -41,6 +42,7 @@ public:
     NewWallet* newWallet;
     RestoreSeed* restoreSeed;
     NewSeed* newSeed;
+    OpenWallet* openWallet;
     QPushButton* btnTypeSelect;
     QPushButton* btnRestore;
     QPushButton* btnDone;
@@ -81,6 +83,12 @@ private Q_SLOTS:
 
     /** Press complete new random seed phrase */
     void on_btnDone_clicked();
+
+    /** Press open after entering password */
+    void on_btnOpen_clicked();
+
+    /** Press quit from password screen */
+    void on_btnQuit_clicked();
 
 };
 

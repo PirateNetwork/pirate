@@ -126,7 +126,8 @@ QT_FORMS_UI = \
   qt/forms/editzaddressdialog.ui \
   qt/forms/newseed.ui \
   qt/forms/newwallet.ui \
-  qt/forms/restoreseed.ui
+  qt/forms/restoreseed.ui \
+  qt/forms/openwallet.ui
 
 QT_MOC_CPP = \
   qt/moc_addressbookpage.cpp \
@@ -156,6 +157,7 @@ QT_MOC_CPP = \
   qt/moc_newseed.cpp \
   qt/moc_newwallet.cpp \
   qt/moc_restoreseed.cpp \
+  qt/moc_openwallet.cpp \
   qt/moc_openphrasedialog.cpp \
   qt/moc_openuridialog.cpp \
   qt/moc_optionsdialog.cpp \
@@ -243,6 +245,7 @@ KOMODO_QT_H = \
   qt/newseed.h \
   qt/newwallet.h \
   qt/restoreseed.h \
+  qt/openwallet.h \
   qt/notificator.h \
   qt/openphrasedialog.h \
   qt/openuridialog.h \
@@ -351,6 +354,7 @@ KOMODO_QT_BASE_CPP = \
   qt/newseed.cpp \
   qt/newwallet.cpp \
   qt/restoreseed.cpp \
+  qt/openwallet.cpp \
   qt/notificator.cpp \
   qt/optionsdialog.cpp \
   qt/optionsmodel.cpp \

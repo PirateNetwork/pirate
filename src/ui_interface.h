@@ -83,6 +83,9 @@ public:
     /** Progress message during initialization. */
     boost::signals2::signal<void (const std::string &message)> InitMessage;
 
+    /** Notify GUI a password is reuired to open the wallet. */
+    boost::signals2::signal<void ()> InitNeedUnlockWallet;
+
     /** Notify GUI of new wallet creation. */
     boost::signals2::signal<void ()> InitCreateWallet;
 

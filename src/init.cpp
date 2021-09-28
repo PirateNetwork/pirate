@@ -1954,6 +1954,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 uiInterface.InitMessage(_("Error loading wallet.dat: Wallet crypted seed corrupted"));
                 return false;
             }
+            uiInterface.InitNeedUnlockWallet();
         }
         while (pwalletMain->IsLocked()) {
             //wait for response from GUI

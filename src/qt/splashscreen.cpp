@@ -15,6 +15,7 @@
 #include "util.h"
 #include "ui_interface.h"
 #include "version.h"
+#include "guiconstants.h"
 
 #include "newseed.h"
 #include "ui_newseed.h"
@@ -22,6 +23,10 @@
 #include "ui_newwallet.h"
 #include "restoreseed.h"
 #include "ui_restoreseed.h"
+#include "openwallet.h"
+#include "ui_openwallet.h"
+
+#include "support/allocators/secure.h"
 
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
@@ -119,7 +124,8 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     move(QApplication::desktop()->screenGeometry().center() - r.center());
 
     //Set Main Create Wallet Widget
-    QVBoxLayout *seedLayout= new QVBoxLayout(this);
+    QVBoxLayout *seedLayout = new QVBoxLayout(this);
+    seedLayout->setContentsMargins(0, 0, 0, 0);
     seed = new QWidget;
     seed->setObjectName("seed");
     seed->setStyleSheet( "QWidget#seed{ background-color : #000000; color: #ffffff; }" );
@@ -128,6 +134,7 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
 
     //Create Internal Layout
     layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
     layout->setEnabled(false);
 
     //Add Icon to the top
@@ -185,6 +192,13 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     layout->addWidget(newSeed);
     newSeed->setVisible(false);
 
+    //Add Open Wallet
+    openWallet = new OpenWallet(networkStyle);
+    openWallet->setObjectName("openWallet");
+    openWallet->setStyleSheet(styleSheet);
+    layout->addWidget(openWallet);
+    openWallet->setVisible(false);
+
     //Add button layout
     QHBoxLayout *buttonLayout = new QHBoxLayout(this);
     buttonLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Fixed));
@@ -217,6 +231,8 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     connect(btnTypeSelect, SIGNAL(clicked()), this, SLOT(on_btnTypeSelected_clicked()));
     connect(btnRestore, SIGNAL(clicked()), this, SLOT(on_btnRestore_clicked()));
     connect(btnDone, SIGNAL(clicked()), this, SLOT(on_btnDone_clicked()));
+    connect(openWallet->ui->btnOpen, SIGNAL(clicked()), this, SLOT(on_btnOpen_clicked()));
+    connect(openWallet->ui->btnQuit, SIGNAL(clicked()), this, SLOT(on_btnQuit_clicked()));
 
     subscribeToCoreSignals();
     installEventFilter(this);
@@ -281,6 +297,15 @@ static void ShowProgress(SplashScreen *splash, const std::string &title, int nPr
 	}
 }
 
+static void NeedUnlockWallet(SplashScreen *splash)
+{
+    splash->layout->setEnabled(true);
+    splash->seed->setVisible(true);
+    splash->pirateIcon->setVisible(true);
+    splash->openWallet->ui->lblIncorrect->setVisible(false);
+    splash->openWallet->setVisible(true);
+}
+
 void SplashScreen::on_btnTypeSelected_clicked()
 {
     if(!this->newWallet->ui->radioNewWallet->isChecked() && !this->newWallet->ui->radioRestoreWallet->isChecked())
@@ -317,11 +342,36 @@ void SplashScreen::on_btnDone_clicked()
     pwalletMain->createType = COMPLETE;
 }
 
+void SplashScreen::on_btnOpen_clicked()
+{
+  SecureString passPhrase;
+  passPhrase.reserve(MAX_PASSPHRASE_SIZE);
+  passPhrase.assign(openWallet->ui->passPhraseEdit->text().toStdString().c_str());
+
+  // Attempt to overwrite text so that they do not linger around in memory
+  openWallet->ui->passPhraseEdit->setText(QString(" ").repeated(openWallet->ui->passPhraseEdit->text().size()));
+  openWallet->ui->passPhraseEdit->clear();
+
+  if (pwalletMain->OpenWallet(passPhrase)) {
+      seed->setVisible(false);
+      openWallet->setVisible(false);
+      return;
+  }
+
+  openWallet->ui->lblIncorrect->setVisible(true);
+}
+
+void SplashScreen::on_btnQuit_clicked()
+{
+    StartShutdown();
+}
+
 void SplashScreen::subscribeToCoreSignals()
 {
     // Connect signals to client
-    uiInterface.InitCreateWallet.connect(boost::bind(showCreateWallet,this));
-    uiInterface.InitShowPhrase.connect(boost::bind(showNewPhrase,this));
+    uiInterface.InitNeedUnlockWallet.connect(boost::bind(NeedUnlockWallet, this));
+    uiInterface.InitCreateWallet.connect(boost::bind(showCreateWallet, this));
+    uiInterface.InitShowPhrase.connect(boost::bind(showNewPhrase, this));
     uiInterface.InitMessage.connect(boost::bind(InitMessage, this, _1));
     uiInterface.ShowProgress.connect(boost::bind(ShowProgress, this, _1, _2, _3));
 }
@@ -329,6 +379,9 @@ void SplashScreen::subscribeToCoreSignals()
 void SplashScreen::unsubscribeFromCoreSignals()
 {
     // Disconnect signals from client
+    uiInterface.InitNeedUnlockWallet.disconnect(boost::bind(NeedUnlockWallet, this));
+    uiInterface.InitCreateWallet.disconnect(boost::bind(showCreateWallet, this));
+    uiInterface.InitShowPhrase.disconnect(boost::bind(showNewPhrase, this));
     uiInterface.InitMessage.disconnect(boost::bind(InitMessage, this, _1));
     uiInterface.ShowProgress.disconnect(boost::bind(ShowProgress, this, _1, _2, _3));
 
