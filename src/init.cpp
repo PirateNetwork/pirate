@@ -2332,6 +2332,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             nStart = GetTimeMillis();
             pwalletMain->ScanForWalletTransactions(pindexRescan, true);
             LogPrintf(" rescan      %15dms\n", GetTimeMillis() - nStart);
+            pwalletMain->chainHeight = chainActive.Tip()->GetHeight();
             pwalletMain->SetBestChain(chainActive.GetLocator());
             nWalletDBUpdated++;
 
