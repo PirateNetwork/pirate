@@ -230,6 +230,8 @@ void WalletModel::importSpendingKey(QString strKey) {
       return;
     }
 
+    startedRescan = true;
+
     //Add to ZAddress book
     auto zInfo = boost::apply_visitor(libzcash::AddressInfoFromSpendingKey{}, sk);
     wallet->SetZAddressBook(zInfo.second, zInfo.first, "");
@@ -310,6 +312,8 @@ void WalletModel::importViewingKey (QString strKey) {
         int ret = msgBox.exec();
         return;
     }
+
+    startedRescan = true;
 
     //Add to ZAddress book
     auto zInfo = boost::apply_visitor(libzcash::AddressInfoFromViewingKey{}, extfvk);
@@ -1034,18 +1038,20 @@ RecentRequestsTableModel *WalletModel::getRecentRequestsTableModel()
 
 WalletModel::EncryptionStatus WalletModel::getEncryptionStatus() const
 {
-    if(!wallet->IsCrypted())
-    {
-        return Unencrypted;
+
+  if (wallet) {
+        if(!wallet->IsCrypted())
+        {
+            return Unencrypted;
+        }
+        else if(wallet->IsLocked())
+        {
+            return Locked;
+        }
     }
-    else if(wallet->IsLocked())
-    {
-        return Locked;
-    }
-    else
-    {
-        return Unlocked;
-    }
+
+    return Unlocked;
+
 }
 
 bool WalletModel::setWalletEncrypted(bool encrypted, const SecureString &passphrase)
@@ -1079,7 +1085,20 @@ void WalletModel::lockWallet() {
 }
 
 void WalletModel::setLockedLater() {
-    if (relockTime <= GetTime()) {
+    //Reset if wallet is locked
+    if (wallet->IsLocked()) {
+        relockTime = 0;
+        startedRescan = false;
+        return;
+    }
+
+    //Set Relock Time to 0 if rescanning, will relock when finished
+    if (startedRescan) {
+        relockTime = 0;
+    }
+
+    //Relock if time is expired
+    if (relockTime <= GetTime() && !startedRescan) {
         wallet->Lock();
         relockTime = 0;
         return;
@@ -1175,9 +1194,15 @@ static void NotifyWatchonlyChanged(WalletModel *walletmodel, bool fHaveWatchonly
                               Q_ARG(bool, fHaveWatchonly));
 }
 
+static void NotifyRescanStarted(WalletModel *walletmodel)
+{
+    walletmodel->startedRescan;
+}
+
 void WalletModel::subscribeToCoreSignals()
 {
     // Connect signals to wallet
+    wallet->NotifyRescanStarted.connect(boost::bind(NotifyRescanStarted, this));
     wallet->NotifyStatusChanged.connect(boost::bind(&NotifyKeyStoreStatusChanged, this, _1));
     wallet->NotifyAddressBookChanged.connect(boost::bind(NotifyAddressBookChanged, this, _1, _2, _3, _4, _5, _6));
     wallet->NotifyZAddressBookChanged.connect(boost::bind(NotifyZAddressBookChanged, this, _1, _2, _3, _4, _5, _6));
@@ -1188,6 +1213,7 @@ void WalletModel::subscribeToCoreSignals()
 void WalletModel::unsubscribeFromCoreSignals()
 {
     // Disconnect signals from wallet
+    wallet->NotifyRescanStarted.disconnect(boost::bind(NotifyRescanStarted, this));
     wallet->NotifyStatusChanged.disconnect(boost::bind(&NotifyKeyStoreStatusChanged, this, _1));
     wallet->NotifyAddressBookChanged.disconnect(boost::bind(NotifyAddressBookChanged, this, _1, _2, _3, _4, _5, _6));
     wallet->NotifyZAddressBookChanged.disconnect(boost::bind(NotifyZAddressBookChanged, this, _1, _2, _3, _4, _5, _6));
@@ -1258,8 +1284,10 @@ bool WalletModel::getSeedPhrase(std::string &phrase) const
     return true;
 }
 
-void WalletModel::rescan() const
+void WalletModel::rescan()
 {
+    startedRescan = true;
+    relockTime = 0;
     return wallet->ForceRescanWallet();
 }
 // returns a list of COutputs from COutPoints

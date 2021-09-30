@@ -241,7 +241,7 @@ public:
     bool IsSpendable(const CTxDestination& dest) const;
     bool getPrivKey(const CKeyID &address, CKey& vchPrivKeyOut) const;
     bool getSeedPhrase(std::string &phrase) const;
-    void rescan() const;
+    void rescan();
     void getOutputs(const std::vector<COutPoint>& vOutpoints, std::vector<COutput>& vOutputs);
     bool isSpent(const COutPoint& outpoint) const;
     void listCoins(std::map<QString, std::vector<COutput> >& mapCoins) const;
@@ -269,6 +269,7 @@ public:
 
     ZAddressTableModel *zaddressTableModel;
     int64_t relockTime = 0;
+    bool startedRescan = false;
 private:
     CWallet *wallet;
     bool fHaveWatchOnly;

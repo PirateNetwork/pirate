@@ -210,6 +210,8 @@ void WalletView::setLockMessage() {
                 std::string timeLeft = DateTimeStrFormat("%M:%S%F", walletModel->relockTime - GetTime());
                 QString message = tr("Wallet will relock in ") + QString::fromStdString(timeLeft);
                 overviewPage->setLockMessage(message);
+            } else if (walletModel->startedRescan) {
+                overviewPage->setLockMessage(tr("Wallet will relock after rescan."));
             } else {
                 overviewPage->setLockMessage(tr("Wallet unlocked by external RPC command."));
             }

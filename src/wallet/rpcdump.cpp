@@ -237,7 +237,7 @@ UniValue importprivkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
         pwalletMain->nTimeFirstKey = 1; // 0 would be considered 'no value'
 
         if (fRescan) {
-            pwalletMain->ScanForWalletTransactions(chainActive[height], true);
+            pwalletMain->ScanForWalletTransactions(chainActive[height], true, true, true);
         }
     }
 
@@ -344,7 +344,7 @@ UniValue importaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
         if (fRescan)
         {
-            pwalletMain->ScanForWalletTransactions(chainActive.Genesis(), true);
+            pwalletMain->ScanForWalletTransactions(chainActive.Genesis(), true, true, true);
             pwalletMain->ReacceptWalletTransactions();
         }
     }
@@ -498,7 +498,7 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
         pwalletMain->nTimeFirstKey = nTimeBegin;
 
     LogPrintf("Rescanning last %i blocks\n", chainActive.Height() - pindex->GetHeight() + 1);
-    pwalletMain->ScanForWalletTransactions(pindex);
+    pwalletMain->ScanForWalletTransactions(pindex, true, true, true);
     pwalletMain->MarkDirty();
 
     if (!fGood)
@@ -840,7 +840,7 @@ UniValue z_importkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     // We want to scan for transactions and notes
     if (fRescan) {
-        pwalletMain->ScanForWalletTransactions(chainActive[nRescanHeight], true, true);
+        pwalletMain->ScanForWalletTransactions(chainActive[nRescanHeight], true, true, true);
     }
 
     return NullUniValue;
@@ -945,7 +945,7 @@ UniValue z_importviewingkey(const UniValue& params, bool fHelp, const CPubKey& m
 
   // We want to scan for transactions and notes
   if (fRescan) {
-      pwalletMain->ScanForWalletTransactions(chainActive[nRescanHeight], true, true);
+      pwalletMain->ScanForWalletTransactions(chainActive[nRescanHeight], true, true, true);
   }
 
   return result;

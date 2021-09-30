@@ -4981,6 +4981,9 @@ bool CWallet::initalizeArcTx() {
 int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, bool fIgnoreBirthday, bool LockOnFinish)
 {
     LOCK2(cs_main, cs_wallet);
+    //Notify GUI of rescan
+    NotifyRescanStarted();
+
     int ret = 0;
     int64_t nNow = GetTime();
     const CChainParams& chainParams = Params();

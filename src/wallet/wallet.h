@@ -976,7 +976,7 @@ protected:
                     return;
                 }
             } else {
-                LogPrintf("SetBestChain(): Attmepting to SetBestChain while crypted.\n");
+                LogPrintf("SetBestChain(): Attempting to SetBestChain while crypted.\n");
                 if (!IsLocked()) {
                     for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
                         CWalletTx wtx = wtxItem.second;
@@ -1677,6 +1677,7 @@ public:
     boost::signals2::signal<void ()> NotifyBalanceChanged;
     /** Show progress e.g. for rescan */
     boost::signals2::signal<void (const std::string &title, int nProgress)> ShowProgress;
+    boost::signals2::signal<void ()> NotifyRescanStarted;
 
     /** Watch-only address added */
     boost::signals2::signal<void (bool fHaveWatchOnly)> NotifyWatchonlyChanged;
