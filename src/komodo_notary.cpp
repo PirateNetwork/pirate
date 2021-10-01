@@ -57,6 +57,14 @@ const char *Notaries_genesis[][2] =
     { "titomane_SH", "035f49d7a308dd9a209e894321f010d21b7793461b0c89d6d9231a3fe5f68d9960" },
 };
 
+// statics used within this .cpp for caching purposes
+static int didinit; // see komodo_init
+static uint8_t kmd_pubkeys[NUM_KMD_SEASONS][64][33]; // see komodo_notaries
+static uint8_t didinit_notaries[NUM_KMD_SEASONS]; // see komodo_notaries
+static int32_t hwmheight; // highest height ever passed to komodo_notariesinit
+static int32_t hadnotarization; // used in komodo_dpowconfs
+
+
 /****
  * @brief get the kmd season based on height (used on the KMD chain)
  * @param height the chain height
@@ -113,9 +121,6 @@ int32_t ht_index_from_height(int32_t height)
  */
 int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp)
 {
-    static uint8_t kmd_pubkeys[NUM_KMD_SEASONS][64][33];
-    static uint8_t didinit[NUM_KMD_SEASONS];
-
     // calculate timestamp if necessary (only height passed in and non-KMD chain)
     if ( ASSETCHAINS_SYMBOL[0] == 0 )
         timestamp = 0; // For KMD, we always use height
@@ -139,7 +144,7 @@ int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestam
         }
         if ( kmd_season != 0 )
         {
-            if ( didinit[kmd_season-1] == 0 )
+            if ( didinit_notaries[kmd_season-1] == 0 )
             {
                 for (int32_t i=0; i<NUM_KMD_NOTARIES; i++) 
                     decode_hex(kmd_pubkeys[kmd_season-1][i],33,(char *)notaries_elected[kmd_season-1][i][1]);
@@ -149,7 +154,7 @@ int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestam
                     for (int32_t i = 0; i<NUM_KMD_NOTARIES; i++)
                         pubkey2addr((char *)NOTARY_ADDRESSES[kmd_season-1][i],(uint8_t *)kmd_pubkeys[kmd_season-1][i]);
                 }
-                didinit[kmd_season-1] = 1;
+                didinit_notaries[kmd_season-1] = 1;
             }
             memcpy(pubkeys,kmd_pubkeys[kmd_season-1],NUM_KMD_NOTARIES * 33);
             return(NUM_KMD_NOTARIES);
@@ -226,7 +231,6 @@ int32_t komodo_ratify_threshold(int32_t height,uint64_t signedmask)
  */
 void komodo_notarysinit(int32_t origheight,uint8_t pubkeys[64][33],int32_t num)
 {
-    static int32_t hwmheight; // highest height ever passed to this function
 
     if ( Pubkeys == 0 )
         Pubkeys = (knotaries_entry *)calloc(1 + (KOMODO_MAXBLOCKS / KOMODO_ELECTION_GAP),sizeof(*Pubkeys));
@@ -386,7 +390,6 @@ int32_t komodo_notarized_height(int32_t *prevMoMheightp,uint256 *hashp,uint256 *
 
 int32_t komodo_dpowconfs(int32_t txheight,int32_t numconfs)
 {
-    static int32_t hadnotarization;
     char symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN]; komodo_state *sp;
     if ( KOMODO_DPOWCONFS != 0 && txheight > 0 && numconfs > 0 && (sp= komodo_stateptr(symbol,dest)) != 0 )
     {
@@ -510,7 +513,6 @@ void komodo_notarized_update(komodo_state *sp,int32_t nHeight,int32_t notarized_
  */
 void komodo_init(int32_t height)
 {
-    static int didinit; 
     if ( didinit == 0 )
     {
         decode_hex(NOTARY_PUBKEY33,33,NOTARY_PUBKEY.c_str());
@@ -529,5 +531,32 @@ void komodo_init(int32_t height)
         didinit = 1;
         uint256 zero;
         komodo_stateupdate(0,0,0,0,zero,0,0,0,0,0,0,0,0,0,0,zero,0);
+    }
+}
+
+/****
+ * A nasty hack to reset statics in this file.
+ * Do not put this in komodo_notary.h, as it should only be used for testing
+ */
+void komodo_notaries_uninit()
+{
+    didinit = 0;
+    hwmheight = 0;
+    hadnotarization = 0;
+    memset(&didinit_notaries[0], 0, sizeof(uint8_t) * NUM_KMD_SEASONS);
+    memset(&kmd_pubkeys[0], 0, sizeof(uint8_t) * NUM_KMD_SEASONS * 64 * 33);
+    if (Pubkeys != nullptr)
+    {
+        // extern knotaries_entry *Pubkeys;
+        /*
+        knotaries_entry *key, *tmp;
+        HASH_ITER(hh, Pubkeys, key, *tmp)
+        {
+            HASH_DEL(Pubkeys, key);
+            free(key);
+        }
+        */
+        free(Pubkeys);
+        Pubkeys = nullptr;
     }
 }

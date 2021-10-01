@@ -22,6 +22,8 @@ int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestam
 void komodo_notarysinit(int32_t origheight,uint8_t pubkeys[64][33],int32_t num);
 void komodo_init(int32_t height);
 void komodo_statefname(char *fname,char *symbol,char *str);
+void komodo_notaries_uninit(); // gets rid of values stored in statics
+void komodo_statefile_uninit(); // closes statefile
 
 extern knotaries_entry *Pubkeys;
 extern std::map<std::string, std::string> mapArgs;
@@ -211,12 +213,8 @@ TEST(TestEvalNotarisation, testInvalidNotarisationInputNotCheckSig)
     ASSERT_FALSE(eval.GetNotarisationData(notary.GetHash(), data));
 }
 
-/*
 TEST(TestEvalNotarisation, test_komodo_notarysinit)
 {
-    // Due to Pubkeys being global with no way to reset it (statics), this test can only be run once and 
-    // with no other test that relies on setting it
-
     // make an empty komodostate file
     boost::filesystem::path temp_path = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
     boost::filesystem::create_directories(temp_path);
@@ -301,13 +299,13 @@ TEST(TestEvalNotarisation, test_komodo_notarysinit)
     EXPECT_EQ(Pubkeys[2].numnotaries, 1);
     EXPECT_EQ(Pubkeys[2].Notaries->notaryid, 0);
     EXPECT_EQ(Pubkeys[2].Notaries->pubkey[0], 0x03);
+
+    komodo_notaries_uninit();
+    komodo_statefile_uninit();
 }
 
 TEST(TestEvalNotarisation, test_komodo_notaries)
 {
-    // Due to Pubkeys being global with no way to reset it (statics), this test can only be run once and 
-    // with no other test that relies on setting it
-
     // make an empty komodostate file
     boost::filesystem::path temp_path = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
     boost::filesystem::create_directories(temp_path);
@@ -345,8 +343,9 @@ TEST(TestEvalNotarisation, test_komodo_notaries)
     EXPECT_EQ(num_found, 1);
     EXPECT_EQ(keys[0][0], 0x00);
     EXPECT_EQ(keys[0][1], 0x01);
-}
 
-*/
+    komodo_notaries_uninit();
+    komodo_statefile_uninit();
+}
 
 } /* namespace TestEvalNotarisation */
