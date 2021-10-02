@@ -172,7 +172,17 @@ QString WalletModel::getSpendingKey(QString strAddress) {
       msgBox.setStandardButtons(QMessageBox::Ok);
       msgBox.setDefaultButton(QMessageBox::Ok);
 
-      if (getEncryptionStatus() == Locked){
+      EncryptionStatus encryptionStatus = getEncryptionStatus();
+
+      if (encryptionStatus == Busy) {
+          //Should never happen
+          msgBox.setText("Encryption Status: Busy");
+          msgBox.setInformativeText("Keys cannot be displayed while the wallet is Busy, try again in a few minutes.");
+          int ret = msgBox.exec();
+          return QString("");
+      }
+
+      if (encryptionStatus == Locked) {
           requireUnlock();
       }
 
@@ -254,7 +264,17 @@ QString WalletModel::getViewingKey(QString strAddress) {
       msgBox.setStandardButtons(QMessageBox::Ok);
       msgBox.setDefaultButton(QMessageBox::Ok);
 
-      if (getEncryptionStatus() == Locked){
+      EncryptionStatus encryptionStatus = getEncryptionStatus();
+
+      if (encryptionStatus == Busy) {
+          //Should never happen
+          msgBox.setText("Encryption Status: Busy");
+          msgBox.setInformativeText("Keys cannot be displayed while the wallet is Busy, try again in a few minutes.");
+          int ret = msgBox.exec();
+          return QString("");
+      }
+
+      if (encryptionStatus == Locked) {
           requireUnlock();
       }
 
@@ -1039,6 +1059,11 @@ RecentRequestsTableModel *WalletModel::getRecentRequestsTableModel()
 WalletModel::EncryptionStatus WalletModel::getEncryptionStatus() const
 {
 
+  TRY_LOCK(wallet->cs_KeyStore, lockWallet);
+  if(!lockWallet){
+      return Busy;
+  }
+
   if (wallet) {
         if(!wallet->IsCrypted())
         {
@@ -1086,6 +1111,17 @@ void WalletModel::lockWallet() {
 
 void WalletModel::setLockedLater() {
     //Reset if wallet is locked
+
+    // Get required locks upfront. This avoids the GUI from getting stuck on
+    // periodical polls if the core is holding the locks for a longer time -
+    // for example, during a wallet rescan.
+
+    TRY_LOCK(wallet->cs_KeyStore, lockWallet);
+    if(!lockWallet){
+        QTimer::singleShot(250, this, SLOT(setLockedLater()));
+        return;
+    }
+
     if (wallet->IsLocked()) {
         relockTime = 0;
         startedRescan = false;

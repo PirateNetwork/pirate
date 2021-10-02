@@ -156,7 +156,8 @@ public:
     {
         Unencrypted,  // !wallet->IsCrypted()
         Locked,       // wallet->IsCrypted() && wallet->IsLocked()
-        Unlocked      // wallet->IsCrypted() && !wallet->IsLocked()
+        Unlocked,     // wallet->IsCrypted() && !wallet->IsLocked()
+        Busy
     };
 
     OptionsModel *getOptionsModel();

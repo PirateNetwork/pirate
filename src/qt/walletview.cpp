@@ -205,19 +205,24 @@ void WalletView::processNewTransaction(const QModelIndex& parent, int start, int
 
 void WalletView::setLockMessage() {
     if (overviewPage) {
-        if (walletModel->getEncryptionStatus() == WalletModel::Unlocked) {
+        if (walletModel->startedRescan) {
+            overviewPage->setLockMessage(tr("Wallet will relock after rescan."));
+            return;
+        }
+
+        WalletModel::EncryptionStatus encryptionStatus = walletModel->getEncryptionStatus();
+
+        if (encryptionStatus == WalletModel::Unlocked) {
             if (walletModel->relockTime > 0) {
                 std::string timeLeft = DateTimeStrFormat("%M:%S%F", walletModel->relockTime - GetTime());
                 QString message = tr("Wallet will relock in ") + QString::fromStdString(timeLeft);
                 overviewPage->setLockMessage(message);
-            } else if (walletModel->startedRescan) {
-                overviewPage->setLockMessage(tr("Wallet will relock after rescan."));
             } else {
                 overviewPage->setLockMessage(tr("Wallet unlocked by external RPC command."));
             }
         }
 
-        if (walletModel->getEncryptionStatus() == WalletModel::Locked) {
+        if (encryptionStatus == WalletModel::Locked) {
               int walletHeight;
               int chainHeight;
               QString message = tr("In-Memory Wallet is synced with the chain.\n");
@@ -342,16 +347,27 @@ void WalletView::importSK()
     if(!walletModel)
         return;
 
-    if (walletModel->getEncryptionStatus() == WalletModel::Locked){
+    WalletModel::EncryptionStatus encryptionStatus = walletModel->getEncryptionStatus();
+
+    QMessageBox msgBox;
+    msgBox.setStyleSheet("QLabel{min-width: 350px;}");
+    msgBox.setStandardButtons(QMessageBox::Ok);
+    msgBox.setDefaultButton(QMessageBox::Ok);
+
+    if (encryptionStatus == WalletModel::Busy) {
+        //Should never happen
+        msgBox.setText("Encryption Status: Busy");
+        msgBox.setInformativeText("Keys cannot be imported while the wallet is Busy, try again in a few minutes.");
+        int ret = msgBox.exec();
+        return;
+    }
+
+    if (encryptionStatus == WalletModel::Locked) {
         walletModel->requireUnlock();
     }
 
     if (walletModel->getEncryptionStatus() == WalletModel::Locked) {
-      QMessageBox msgBox;
       msgBox.setText("Encryption Status: Locked");
-      msgBox.setStyleSheet("QLabel{min-width: 350px;}");
-      msgBox.setStandardButtons(QMessageBox::Ok);
-      msgBox.setDefaultButton(QMessageBox::Ok);
       msgBox.setInformativeText("Keys cannot be imported while the wallet is Locked.");
       int ret = msgBox.exec();
       return;
@@ -372,16 +388,27 @@ void WalletView::importVK()
     if(!walletModel)
         return;
 
-    if (walletModel->getEncryptionStatus() == WalletModel::Locked){
+    WalletModel::EncryptionStatus encryptionStatus = walletModel->getEncryptionStatus();
+
+    QMessageBox msgBox;
+    msgBox.setStyleSheet("QLabel{min-width: 350px;}");
+    msgBox.setStandardButtons(QMessageBox::Ok);
+    msgBox.setDefaultButton(QMessageBox::Ok);
+
+    if (encryptionStatus == WalletModel::Busy) {
+        //Should never happen
+        msgBox.setText("Encryption Status: Busy");
+        msgBox.setInformativeText("Keys cannot be imported while the wallet is Busy, try again in a few minutes.");
+        int ret = msgBox.exec();
+        return;
+    }
+
+    if (encryptionStatus == WalletModel::Locked) {
         walletModel->requireUnlock();
     }
 
     if (walletModel->getEncryptionStatus() == WalletModel::Locked) {
-      QMessageBox msgBox;
       msgBox.setText("Encryption Status: Locked");
-      msgBox.setStyleSheet("QLabel{min-width: 350px;}");
-      msgBox.setStandardButtons(QMessageBox::Ok);
-      msgBox.setDefaultButton(QMessageBox::Ok);
       msgBox.setInformativeText("Keys cannot be imported while the wallet is Locked.");
       int ret = msgBox.exec();
       return;
@@ -402,16 +429,27 @@ void WalletView::showSeedPhrase()
     if(!walletModel)
         return;
 
-    if (walletModel->getEncryptionStatus() == WalletModel::Locked){
+    WalletModel::EncryptionStatus encryptionStatus = walletModel->getEncryptionStatus();
+
+    QMessageBox msgBox;
+    msgBox.setStyleSheet("QLabel{min-width: 350px;}");
+    msgBox.setStandardButtons(QMessageBox::Ok);
+    msgBox.setDefaultButton(QMessageBox::Ok);
+
+    if (encryptionStatus == WalletModel::Busy) {
+        //Should never happen
+        msgBox.setText("Encryption Status: Busy");
+        msgBox.setInformativeText("Seed Phrase cannot be displayed while the wallet is Busy, try again in a few minutes.");
+        int ret = msgBox.exec();
+        return;
+    }
+
+    if (encryptionStatus == WalletModel::Locked) {
         walletModel->requireUnlock();
     }
 
     if (walletModel->getEncryptionStatus() == WalletModel::Locked) {
-      QMessageBox msgBox;
       msgBox.setText("Encryption Status: Locked");
-      msgBox.setStyleSheet("QLabel{min-width: 350px;}");
-      msgBox.setStandardButtons(QMessageBox::Ok);
-      msgBox.setDefaultButton(QMessageBox::Ok);
       msgBox.setInformativeText("Seed Phrase can not be displayed while the wallet is Locked.");
       int ret = msgBox.exec();
       return;
@@ -434,16 +472,27 @@ void WalletView::rescan()
     if(!walletModel)
         return;
 
-    if (walletModel->getEncryptionStatus() == WalletModel::Locked){
+    WalletModel::EncryptionStatus encryptionStatus = walletModel->getEncryptionStatus();
+
+    QMessageBox msgBox;
+    msgBox.setStyleSheet("QLabel{min-width: 350px;}");
+    msgBox.setStandardButtons(QMessageBox::Ok);
+    msgBox.setDefaultButton(QMessageBox::Ok);
+
+    if (encryptionStatus == WalletModel::Busy) {
+        //Should never happen
+        msgBox.setText("Encryption Status: Busy");
+        msgBox.setInformativeText("Wallet can not be rescanned while the wallet is Busy, try again in a few minutes.");
+        int ret = msgBox.exec();
+        return;
+    }
+
+    if (encryptionStatus == WalletModel::Locked) {
         walletModel->requireUnlock();
     }
 
     if (walletModel->getEncryptionStatus() == WalletModel::Locked) {
-      QMessageBox msgBox;
       msgBox.setText("Encryption Status: Locked");
-      msgBox.setStyleSheet("QLabel{min-width: 350px;}");
-      msgBox.setStandardButtons(QMessageBox::Ok);
-      msgBox.setDefaultButton(QMessageBox::Ok);
       msgBox.setInformativeText("Wallet can not be rescanned while the wallet is Locked.");
       int ret = msgBox.exec();
       return;
