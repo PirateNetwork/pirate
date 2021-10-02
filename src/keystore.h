@@ -38,9 +38,11 @@
 class CKeyStore
 {
 protected:
-    mutable CCriticalSection cs_KeyStore;
+
 
 public:
+    mutable CCriticalSection cs_KeyStore;
+    
     virtual ~CKeyStore() {}
 
     //! Set the HD seed for this keystore
