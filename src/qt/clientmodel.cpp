@@ -23,6 +23,8 @@
 
 #include <QDebug>
 #include <QTimer>
+#include <QProgressDialog>
+#include <QApplication>
 
 class CBlockIndex;
 
@@ -34,6 +36,7 @@ ClientModel::ClientModel(OptionsModel *_optionsModel, QObject *parent) :
     optionsModel(_optionsModel),
     peerTableModel(0),
     banTableModel(0),
+    progressDialog(0),
     pollTimer(0)
 {
     cachedBestHeaderHeight = -1;
@@ -239,13 +242,40 @@ void ClientModel::updateBanlist()
     banTableModel->refresh();
 }
 
+void ClientModel::showProgress(const QString &title, int &nProgress)
+{
+    if (nProgress == 0)
+    {
+        progressDialog = new QProgressDialog(title, "", 0, 100);
+        progressDialog->setWindowModality(Qt::ApplicationModal);
+        progressDialog->setMinimumHeight(75);
+        progressDialog->setMinimumWidth(325);
+        progressDialog->setMinimumDuration(0);
+        progressDialog->setCancelButton(0);
+        progressDialog->setAutoClose(false);
+        progressDialog->setWindowTitle(title);
+        progressDialog->setLabelText(title);
+        progressDialog->setValue(0);
+    }
+    else if (nProgress == 100)
+    {
+        if (progressDialog)
+        {
+            progressDialog->close();
+            progressDialog->deleteLater();
+        }
+    }
+    else if (progressDialog && nProgress > 0 && nProgress < 100 ) {
+        progressDialog->setLabelText(title);
+        progressDialog->setValue(nProgress);
+    }
+    qApp->processEvents();
+}
+
 // Handlers for core signals
 static void ShowProgress(ClientModel *clientmodel, const std::string &title, int nProgress, bool fResume)
 {
-    // emits signal "showProgress"
-    QMetaObject::invokeMethod(clientmodel, "showProgress", Qt::AutoConnection,
-                              Q_ARG(QString, QString::fromStdString(title)),
-                              Q_ARG(int, nProgress));
+    clientmodel->showProgress(QString::fromStdString(title), nProgress);
 }
 
 static void NotifyNumConnectionsChanged(ClientModel *clientmodel, int newNumConnections)

@@ -48,7 +48,6 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMimeData>
-#include <QProgressDialog>
 #include <QSettings>
 #include <QShortcut>
 #include <QStackedWidget>
@@ -94,7 +93,6 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     labelBlocksIcon(0),
     progressBarLabel(0),
     progressBar(0),
-    progressDialog(0),
     appMenuBar(0),
     overviewAction(0),
     historyAction(0),
@@ -605,9 +603,8 @@ void PirateOceanGUI::setClientModel(ClientModel *_clientModel)
         // Receive and report messages from client model
         connect(_clientModel, SIGNAL(message(QString,QString,unsigned int)), this, SLOT(message(QString,QString,unsigned int)));
 
-        // Show progress dialog
-        connect(_clientModel, SIGNAL(showProgress(QString,int)), this, SLOT(showProgress(QString,int)));
         rpcConsole->setClientModel(_clientModel);
+
 #ifdef ENABLE_WALLET
         if(walletFrame)
         {
@@ -775,7 +772,7 @@ void PirateOceanGUI::optionsClicked()
         bool fEnableZSigning = settings.value("fEnableZSigning").toBool();
         zsignAction->setVisible(fEnableZSigning);
     }
-    
+
     dlg.close();
 
 }
@@ -1338,36 +1335,6 @@ void PirateOceanGUI::detectShutdown()
             rpcConsole->hide();
         qApp->quit();
     }
-}
-
-void PirateOceanGUI::showProgress(const QString &title, int nProgress)
-{
-    if (nProgress == 0)
-    {
-        progressDialog = new QProgressDialog(title, "", 0, 100);
-        progressDialog->setWindowModality(Qt::ApplicationModal);
-        progressDialog->setMinimumHeight(75);
-        progressDialog->setMinimumWidth(325);
-        progressDialog->setMinimumDuration(0);
-        progressDialog->setCancelButton(0);
-        progressDialog->setAutoClose(false);
-        progressDialog->setWindowTitle(title);
-        progressDialog->setLabelText(title);
-        progressDialog->setValue(0);
-    }
-    else if (nProgress == 100)
-    {
-        if (progressDialog)
-        {
-            progressDialog->close();
-            progressDialog->deleteLater();
-        }
-    }
-    else if (progressDialog && nProgress > 0 && nProgress < 100 ) {
-        progressDialog->setLabelText(title);
-        progressDialog->setValue(nProgress);
-    }
-    qApp->processEvents();
 }
 
 void PirateOceanGUI::setTrayIconVisible(bool fHideTrayIcon)
