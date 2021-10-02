@@ -9723,6 +9723,7 @@ extern UniValue importprivkey(const UniValue& params, bool fHelp, const CPubKey&
 extern UniValue importaddress(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue dumpwallet(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue importwallet(const UniValue& params, bool fHelp, const CPubKey& mypk);
+extern UniValue rescan(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue z_exportkey(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue z_importkey(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue z_exportviewingkey(const UniValue& params, bool fHelp, const CPubKey& mypk);
@@ -9806,6 +9807,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "z_exportwallet",           &z_exportwallet,           true  },
     { "wallet",             "z_importwallet",           &z_importwallet,           true  },
     { "wallet",             "z_viewtransaction",        &z_viewtransaction,        true  },
+    { "wallet",             "rescan",                   &rescan,                   true  },
     // TODO: rearrange into another category
     { "disclosure",         "z_getpaymentdisclosure",   &z_getpaymentdisclosure,   true  },
     { "disclosure",         "z_validatepaymentdisclosure", &z_validatepaymentdisclosure, true },

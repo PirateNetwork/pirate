@@ -745,6 +745,29 @@ UniValue z_exportseedphrase(const UniValue& params, bool fHelp, const CPubKey& m
 
 }
 
+UniValue rescan(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() > 0)
+        throw runtime_error(
+            "rescan the blockchain for transactions starting at the genesis block.\n"
+            "\nNote: This call will take several minutes to severals days complete depending on the number of keys and transactions in the wallet.\n"
+            "\nExamples:\n"
+            + HelpExampleCli("rescan", "")
+            + HelpExampleRpc("rescan", "")
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    EnsureWalletIsUnlocked();
+
+    pwalletMain->ScanForWalletTransactions(chainActive[0], true, true, true);
+
+    return NullUniValue;
+}
+
 UniValue z_importkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (!EnsureWalletIsAvailable(fHelp))
