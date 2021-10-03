@@ -2320,6 +2320,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             else
                 pindexRescan = chainActive.Genesis();
         }
+
         //Always scan from Genesis on wallet Recovery
         if (recoverWallet) {
             pindexRescan = chainActive.Genesis();
@@ -2332,9 +2333,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             nStart = GetTimeMillis();
             pwalletMain->ScanForWalletTransactions(pindexRescan, true);
             LogPrintf(" rescan      %15dms\n", GetTimeMillis() - nStart);
-            pwalletMain->chainHeight = chainActive.Tip()->GetHeight();
-            pwalletMain->SetBestChain(chainActive.GetLocator());
-            nWalletDBUpdated++;
 
             // Restore wallet transaction metadata after -zapwallettxes=1
             if (GetBoolArg("-zapwallettxes", false) && GetArg("-zapwallettxes", "1") != "2" && fInitializeArcTx)
@@ -2361,7 +2359,16 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                     }
                 }
             }
+        } else {
+          //Rescan at minimum last 1 block
+          pindexRescan = chainActive[chainActive.Tip()->GetHeight() - 1];
+          uiInterface.InitMessage(_("Rescanning..."));
+          LogPrintf("Rescanning last %i blocks (from block %i)...\n", chainActive.Height() - pindexRescan->GetHeight(), pindexRescan->GetHeight());
+          nStart = GetTimeMillis();
+          pwalletMain->ScanForWalletTransactions(pindexRescan, true);
+          LogPrintf(" rescan      %15dms\n", GetTimeMillis() - nStart);
         }
+
         pwalletMain->SetBroadcastTransactions(GetBoolArg("-walletbroadcast", true));
 
         vpwallets.push_back(pwalletMain);
