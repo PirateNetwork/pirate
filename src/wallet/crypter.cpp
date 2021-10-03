@@ -434,6 +434,22 @@ bool CCryptoKeyStore::GetHDSeed(HDSeed& seedOut) const
     return DecryptHDSeed(vMasterKey, cryptedHDSeed.second, cryptedHDSeed.first, seedOut);
 }
 
+bool CCryptoKeyStore::GetSeedPhrase(std::string &phraseOut) const
+{
+    LOCK(cs_KeyStore);
+    if (!IsCrypted())
+        return CBasicKeyStore::GetSeedPhrase(phraseOut);
+
+    if (cryptedHDSeed.second.empty())
+        return false;
+
+    HDSeed seedOut;
+    DecryptHDSeed(vMasterKey, cryptedHDSeed.second, cryptedHDSeed.first, seedOut);
+
+    seedOut.GetPhrase(phraseOut);
+    return true;
+}
+
 bool CCryptoKeyStore::AddCryptedKey(const CPubKey &vchPubKey, const std::vector<unsigned char> &vchCryptedSecret)
 {
     {
