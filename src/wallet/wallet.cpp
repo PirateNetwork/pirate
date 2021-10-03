@@ -4990,6 +4990,13 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
     CBlockIndex* pindex = pindexStart;
 
+    //Reset the wallet location to the rescan start. This will force the rescan to start over
+    //if the wallet is killed part way through
+    currentBlock = chainActive.GetLocator(pindex);
+    chainHeight = pindex->GetHeight();
+    CWalletDB walletdb(strWalletFile);
+    SetBestChainINTERNAL(walletdb, currentBlock);
+
     std::set<uint256> txList;
     std::set<uint256> txListOriginal;
 
@@ -5067,6 +5074,12 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
         //Update all witness caches
         BuildWitnessCache(chainActive.Tip(), false);
+
+        //Write everything to the wallet
+        currentBlock = chainActive.GetLocator();
+        chainHeight = chainActive.Tip()->GetHeight();
+        CWalletDB walletdb(strWalletFile);
+        SetBestChainINTERNAL(walletdb, currentBlock);
 
         if (LockOnFinish && IsCrypted()) {
             Lock();
