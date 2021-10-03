@@ -449,8 +449,8 @@ void OverviewPage::setUiVisible(bool visible, bool isCrypted, int64_t relockTime
         ui->lblLockedMessage->setVisible(false);
         ui->btnUnlock->setVisible(false);
         ui->btnKeepOpen->setVisible(false);
-        ui->frame->setVisible(false);
-        ui->frame_2->setVisible(false);
+        ui->frame->setVisible(true);
+        ui->frame_2->setVisible(true);
         return;
     }
 
