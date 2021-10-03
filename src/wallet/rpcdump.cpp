@@ -304,6 +304,8 @@ UniValue importaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
+    EnsureWalletIsUnlocked();
+
     CScript script;
 
     CTxDestination dest = DecodeDestination(params[0].get_str());
@@ -733,6 +735,8 @@ UniValue z_exportseedphrase(const UniValue& params, bool fHelp, const CPubKey& m
     );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    EnsureWalletIsUnlocked();
 
     std::string phrase;
     if (pwalletMain->bip39Enabled) {

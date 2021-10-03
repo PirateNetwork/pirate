@@ -220,6 +220,7 @@ UniValue getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
         return(result);
     }
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlocked();
 
     // Parse the account first so we don't generate a key if there's an error
     string strAccount;
@@ -299,6 +300,7 @@ UniValue getaccountaddress(const UniValue& params, bool fHelp, const CPubKey& my
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlocked();
 
     // Parse the account first so we don't generate a key if there's an error
     string strAccount = AccountFromValue(params[0]);
@@ -328,6 +330,7 @@ UniValue getrawchangeaddress(const UniValue& params, bool fHelp, const CPubKey& 
        );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlocked();
 
     if (!pwalletMain->IsLocked())
         pwalletMain->TopUpKeyPool();
@@ -363,6 +366,7 @@ UniValue setaccount(const UniValue& params, bool fHelp, const CPubKey& mypk)
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlocked();
 
     CTxDestination dest = DecodeDestination(params[0].get_str());
     if (!IsValidDestination(dest)) {
@@ -544,6 +548,7 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
         }
     }
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlocked();
 
     CTxDestination dest = DecodeDestination(params[0].get_str());
     if (!IsValidDestination(dest)) {
@@ -565,8 +570,6 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
     bool fSubtractFeeFromAmount = false;
     if (params.size() > 4)
         fSubtractFeeFromAmount = params[4].get_bool();
-
-    EnsureWalletIsUnlocked();
 
     SendMoney(dest, nAmount, fSubtractFeeFromAmount, wtx,0,0,0);
 
@@ -653,6 +656,8 @@ UniValue kvupdate(const UniValue& params, bool fHelp, const CPubKey& mypk)
     //printf(" pubkey, privkey derived from (%s)\n",(char *)params[3].get_str().c_str());
     */
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlocked();
+
     if ( (keylen= (int32_t)strlen(params[0].get_str().c_str())) > 0 )
     {
         key = (uint8_t *)params[0].get_str().c_str();
@@ -726,7 +731,7 @@ UniValue kvupdate(const UniValue& params, bool fHelp, const CPubKey& mypk)
         //for (i=0; i<opretlen; i++)
         //    //printf("%02x",opretbuf[i]);
         //printf(" opretbuf keylen.%d valuesize.%d height.%d (%02x %02x %02x)\n",*(uint16_t *)&keyvalue[0],*(uint16_t *)&keyvalue[2],*(uint32_t *)&keyvalue[4],keyvalue[8],keyvalue[9],keyvalue[10]);
-        EnsureWalletIsUnlocked();
+
         fee = komodo_kvfee(flags,opretlen,keylen);
         ret.push_back(Pair("fee",(double)fee/COIN));
         CBitcoinAddress destaddress(CRYPTO777_KMDADDR);
@@ -1124,6 +1129,8 @@ UniValue cleanwallettransactions(const UniValue& params, bool fHelp, const CPubK
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlocked();
+
     UniValue ret(UniValue::VOBJ);
     uint256 exception; int32_t txs = pwalletMain->mapWallet.size();
     std::vector<uint256> TxToRemove;
@@ -1334,6 +1341,8 @@ UniValue sendfrom(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
+    EnsureWalletIsUnlocked();
+
     std::string strAccount = AccountFromValue(params[0]);
     CTxDestination dest = DecodeDestination(params[1].get_str());
     if (!IsValidDestination(dest)) {
@@ -1352,8 +1361,6 @@ UniValue sendfrom(const UniValue& params, bool fHelp, const CPubKey& mypk)
         wtx.mapValue["comment"] = params[4].get_str();
     if (params.size() > 5 && !params[5].isNull() && !params[5].get_str().empty())
         wtx.mapValue["to"]      = params[5].get_str();
-
-    EnsureWalletIsUnlocked();
 
     // Check funds
     CAmount nBalance = GetAccountBalance(strAccount, nMinDepth, ISMINE_SPENDABLE);
@@ -1411,6 +1418,8 @@ UniValue sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
+    EnsureWalletIsUnlocked();
+
     string strAccount = AccountFromValue(params[0]);
     UniValue sendTo = params[1].get_obj();
     int nMinDepth = 1;
@@ -1457,8 +1466,6 @@ UniValue sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
         CRecipient recipient = {scriptPubKey, nAmount, fSubtractFeeFromAmount};
         vecSend.push_back(recipient);
     }
-
-    EnsureWalletIsUnlocked();
 
     // Check funds
     CAmount nBalance = GetAccountBalance(strAccount, nMinDepth, ISMINE_SPENDABLE);
@@ -1516,6 +1523,8 @@ UniValue addmultisigaddress(const UniValue& params, bool fHelp, const CPubKey& m
     }
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    EnsureWalletIsUnlocked();
 
     string strAccount;
     if (params.size() > 2)
@@ -2307,6 +2316,8 @@ UniValue keypoolrefill(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
+    EnsureWalletIsUnlocked();
+
     // 0 is interpreted by TopUpKeyPool() as the default keypool size given by -keypool
     unsigned int kpSize = 0;
     if (params.size() > 0) {
@@ -2315,7 +2326,6 @@ UniValue keypoolrefill(const UniValue& params, bool fHelp, const CPubKey& mypk)
         kpSize = (unsigned int)params[0].get_int();
     }
 
-    EnsureWalletIsUnlocked();
     pwalletMain->TopUpKeyPool(kpSize);
 
     if (pwalletMain->GetKeyPoolSize() < kpSize)
@@ -4743,6 +4753,8 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
+    EnsureWalletIsUnlocked();
+
     //printf("z_sign_offline() 2 From adres\n"); fflush(stdout);
     //THROW_IF_SYNCING(KOMODO_INSYNC);
 
@@ -5320,6 +5332,8 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
+    EnsureWalletIsUnlocked();
+
     //THROW_IF_SYNCING(KOMODO_INSYNC);
 
     // Check that the from address is valid.
@@ -5616,6 +5630,8 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    EnsureWalletIsUnlocked();
 
     //THROW_IF_SYNCING(KOMODO_INSYNC);
 
@@ -6041,6 +6057,8 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp, const CPubKey& myp
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
+    EnsureWalletIsUnlocked();
+
     //THROW_IF_SYNCING(KOMODO_INSYNC);
 
     // Validate the from address
@@ -6389,6 +6407,8 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
+    EnsureWalletIsUnlocked();
+    
     //THROW_IF_SYNCING(KOMODO_INSYNC);
 
     bool useAnyUTXO = false;
