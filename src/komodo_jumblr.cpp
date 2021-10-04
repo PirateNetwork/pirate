@@ -13,7 +13,7 @@
  *                                                                            *
  ******************************************************************************/
 #include "komodo_jumblr.h"
-#include "komodo_extern_globals.h"
+#include "komodo_globals.h"
 #include "komodo_bitcoind.h" // komodo_issuemethod
 #include "komodo_utils.h" // clonestr
 

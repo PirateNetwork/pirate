@@ -13,9 +13,11 @@
  *                                                                            *
  ******************************************************************************/
 #include "komodo_bitcoind.h"
-#include "komodo_extern_globals.h"
+#include "komodo_globals.h"
+#include "komodo.h" // komodo_voutupdate()
 #include "komodo_utils.h" // OS_milliseconds
 #include "komodo_notary.h" // komodo_chosennotary()
+#include "rpc/net.h"
 
 /************************************************************************
  *
@@ -841,7 +843,6 @@ uint32_t komodo_heightstamp(int32_t height)
     CBlockIndex *ptr;
     if ( height > 0 && (ptr= komodo_chainactive(height)) != 0 )
         return(ptr->nTime);
-    //else fprintf(stderr,"komodo_heightstamp null ptr for block.%d\n",height);
     return(0);
 }
 
@@ -1314,32 +1315,6 @@ uint32_t komodo_stakehash(uint256 *hashp,char *address,uint8_t *hashbuf,uint256 
     memcpy(&hashbuf[100+sizeof(addrhash)+sizeof(txid)],&vout,sizeof(vout));
     vcalc_sha256(0,(uint8_t *)hashp,hashbuf,100 + (int32_t)sizeof(uint256)*2 + sizeof(vout));
     return(addrhash.uints[0]);
-}
-
-arith_uint256 komodo_adaptivepow_target(int32_t height,arith_uint256 bnTarget,uint32_t nTime)
-{
-    arith_uint256 origtarget,easy; int32_t diff,tipdiff; int64_t mult; bool fNegative,fOverflow; CBlockIndex *tipindex;
-    if ( height > 10 && (tipindex= komodo_chainactive(height - 1)) != 0 ) // disable offchain diffchange
-    {
-        diff = (nTime - tipindex->GetMedianTimePast());
-        tipdiff = (nTime - tipindex->nTime);
-        if ( tipdiff > 13*ASSETCHAINS_BLOCKTIME )
-            diff = tipdiff;
-        if ( diff >= 13 * ASSETCHAINS_BLOCKTIME && (height < 30 || tipdiff > 2*ASSETCHAINS_BLOCKTIME) )
-        {
-            mult = diff - 12 * ASSETCHAINS_BLOCKTIME;
-            mult = (mult / ASSETCHAINS_BLOCKTIME) * ASSETCHAINS_BLOCKTIME + ASSETCHAINS_BLOCKTIME / 2;
-            origtarget = bnTarget;
-            bnTarget = bnTarget * arith_uint256(mult * mult);
-            easy.SetCompact(KOMODO_MINDIFF_NBITS,&fNegative,&fOverflow);
-            if ( bnTarget < origtarget || bnTarget > easy ) // deal with overflow
-            {
-                bnTarget = easy;
-                fprintf(stderr,"tipdiff.%d diff.%d height.%d miner overflowed mult.%lld, set to mindiff\n",tipdiff,diff,height,(long long)mult);
-            } else fprintf(stderr,"tipdiff.%d diff.%d height.%d miner elapsed %d, adjust by factor of %lld\n",tipdiff,diff,height,diff,(long long)mult);
-        } //else fprintf(stderr,"height.%d tipdiff.%d diff %d, vs %d\n",height,tipdiff,diff,13*ASSETCHAINS_BLOCKTIME);
-    } else fprintf(stderr,"adaptive cant find height.%d\n",height);
-    return(bnTarget);
 }
 
 arith_uint256 komodo_PoWtarget(int32_t *percPoSp,arith_uint256 target,int32_t height,int32_t goalperc,int32_t newStakerActive)
@@ -2167,8 +2142,6 @@ int32_t komodo_checkPOW(int64_t stakeTxValue, int32_t slowflag,CBlock *pblock,in
         if ( height == 0 )
             return(0);
     }
-    //if ( ASSETCHAINS_ADAPTIVEPOW > 0 )
-    //    bnTarget = komodo_adaptivepow_target(height,bnTarget,pblock->nTime);
     if ( ASSETCHAINS_LWMAPOS != 0 && bhash > bnTarget )
     {
         // if proof of stake is active, check if this is a valid PoS block before we fail

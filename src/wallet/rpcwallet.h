@@ -23,5 +23,8 @@
 class CRPCTable;
 
 void RegisterWalletRPCCommands(CRPCTable &tableRPC);
+int32_t verus_staked(CBlock *pBlock, CMutableTransaction &txNew, uint32_t &nBits, arith_uint256 &hashResult, uint8_t *utxosig, CPubKey &pk);
+int32_t komodo_notaryvin(CMutableTransaction &txNew,uint8_t *notarypub33, void *pTr);
+uint64_t komodo_interestsum();
 
 #endif //BITCOIN_WALLET_RPCWALLET_H

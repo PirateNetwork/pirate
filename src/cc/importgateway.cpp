@@ -16,6 +16,7 @@
 #include "CCImportGateway.h"
 #include "key_io.h"
 #include "../importcoin.h"
+#include "komodo_bitcoind.h"
 
 // start of consensus code
 

@@ -13,8 +13,9 @@
  *                                                                            *
  ******************************************************************************/
 #include "komodo.h"
-#include "komodo_extern_globals.h"
+#include "komodo_globals.h"
 #include "komodo_notary.h"
+#include "komodo_bitcoind.h"
 #include "mem_read.h"
 
 void komodo_currentheight_set(int32_t height)

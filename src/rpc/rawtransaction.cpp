@@ -36,6 +36,8 @@
 #include "script/standard.h"
 #include "uint256.h"
 #include "importcoin.h"
+#include "komodo_notary.h"
+#include "komodo_bitcoind.h"
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
 #endif
@@ -48,12 +50,9 @@
 
 #include <univalue.h>
 
-int32_t komodo_notarized_height(int32_t *prevMoMheightp,uint256 *hashp,uint256 *txidp);
-
 using namespace std;
 
 extern char ASSETCHAINS_SYMBOL[];
-int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
 
 void ScriptPubKeyToJSON(const CScript& scriptPubKey, UniValue& out, bool fIncludeHex)
 {
@@ -139,8 +138,6 @@ UniValue TxJoinSplitToJSON(const CTransaction& tx) {
     }
     return vjoinsplit;
 }
-
-uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight);
 
 UniValue TxShieldedSpendsToJSON(const CTransaction& tx) {
     UniValue vdesc(UniValue::VARR);

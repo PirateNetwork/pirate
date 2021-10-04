@@ -20,8 +20,9 @@
 #include "notarisationdb.h"
 #include "merkleblock.h"
 #include "hex.h"
-
+#include "komodo_bitcoind.h"
 #include "cc/CCinclude.h"
+#include "komodo_notary.h"
 
 /*
  * The crosschain workflow.
@@ -44,8 +45,6 @@
 
 
 int NOTARISATION_SCAN_LIMIT_BLOCKS = 1440;
-CBlockIndex *komodo_getblockindex(uint256 hash);
-
 
 /* On KMD */
 uint256 CalculateProofRoot(const char* symbol, uint32_t targetCCid, int kmdHeight,

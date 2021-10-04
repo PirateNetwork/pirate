@@ -16,6 +16,7 @@
 
 #include "cJSON.h"
 #include "CCinclude.h"
+#include "komodo_bitcoind.h"
 
 #define ROGUE_REGISTRATION 5
 #define ROGUE_REGISTRATIONSIZE (100 * 10000)

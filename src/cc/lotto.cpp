@@ -15,6 +15,7 @@
 
 #include "CClotto.h"
 #include "../txmempool.h"
+#include "komodo_bitcoind.h"
 
 /*
  A blockchain lotto has the problem of generating the deterministic random numbers needed to get a winner in a way that doesnt allow cheating. If we save the entropy for later publishing and display the hash of the entropy, it is true that the players wont know what the entropy value is, however the creator of the lotto funds will be able to know and simply create a winning ticket when the jackpot is large enough.

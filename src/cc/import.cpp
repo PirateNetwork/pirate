@@ -21,7 +21,7 @@
 #include "cc/CCinclude.h"
 #include <openssl/sha.h>
 #include "cc/CCtokens.h"
-
+#include "komodo_bitcoind.h"
 #include "key_io.h"
 #define CODA_BURN_ADDRESS "KPrrRoPfHOnNpZZQ6laHXdQDkSQDkVHaN0V+LizLlHxz7NaA59sBAAAA"
 /*

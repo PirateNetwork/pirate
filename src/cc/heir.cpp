@@ -15,6 +15,8 @@
 
 #include "CCHeir.h"
 #include "heir_validate.h"
+#include "komodo_bitcoind.h"
+
 #include <iomanip>
 
 class CoinHelper;

@@ -25,8 +25,6 @@
 
 #define CRYPTO777_PUBSECPSTR "020e46e79a2a8d12b9b5d12c7a91adb4e454edfae43c0a0cb805427d2ac7613fd9"
 
-int32_t getkmdseason(int32_t height);
-
 int32_t getacseason(uint32_t timestamp);
 
 int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);

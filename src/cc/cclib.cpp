@@ -27,6 +27,7 @@
 #include "core_io.h"
 #include "crosschain.h"
 #include "hex.h"
+#include "komodo_bitcoind.h"
 
 #define FAUCET2SIZE COIN
 #define EVAL_FAUCET2 EVAL_FIRSTUSER

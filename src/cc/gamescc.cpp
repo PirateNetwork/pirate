@@ -19,6 +19,8 @@
 #else
 #include "games/tetris.c"
 #endif
+#include "komodo_bitcoind.h"
+#include "miner.h" // for komodo_sendmessage
 
 int32_t GAMEDATA(struct games_player *P,void *ptr);
 

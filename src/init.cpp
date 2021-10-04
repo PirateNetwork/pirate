@@ -36,6 +36,8 @@
 #include "key.h"
 #include "notarisationdb.h"
 #include "komodo_notary.h"
+#include "komodo_gateway.h"
+#include "main.h"
 
 #ifdef ENABLE_MINING
 #include "key_io.h"
@@ -94,11 +96,9 @@
 using namespace std;
 
 #include "komodo_defs.h"
-extern void ThreadSendAlert();
-extern bool komodo_dailysnapshot(int32_t height);
+void ThreadSendAlert();
 extern int32_t KOMODO_LOADINGBLOCKS;
 extern bool VERUS_MINTBLOCKS;
-extern char ASSETCHAINS_SYMBOL[];
 extern int32_t KOMODO_SNAPSHOT_INTERVAL;
 
 ZCJoinSplit* pzcashParams = NULL;
@@ -752,10 +752,6 @@ void ThreadNotifyRecentlyAdded()
         mempool.NotifyRecentlyAdded();
     }
 }
-
-/* declarations needed for ThreadUpdateKomodoInternals */
-void komodo_passport_iteration();
-void komodo_cbopretupdate(int32_t forceflag);
 
 void ThreadUpdateKomodoInternals() {
     RenameThread("int-updater");

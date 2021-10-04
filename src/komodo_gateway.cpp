@@ -13,9 +13,12 @@
  *                                                                            *
  ******************************************************************************/
 #include "komodo.h"
-#include "komodo_extern_globals.h"
+#include "komodo_globals.h"
 #include "komodo_utils.h" // komodo_stateptrget
 #include "komodo_bitcoind.h" // komodo_checkcommission
+#include "rpc/net.h"
+#include "wallet/rpcwallet.h"
+#include "komodo_pax.h"
 
 struct komodo_extremeprice
 {
@@ -672,8 +675,6 @@ int32_t komodo_bannedset(int32_t *indallvoutsp,uint256 *array,int32_t max)
     *indallvoutsp = i-2;
     return(i);
 }
-
-void komodo_passport_iteration();
 
 int32_t komodo_check_deposit(int32_t height,const CBlock& block,uint32_t prevtime) // verify above block is valid pax pricing
 {
@@ -1418,8 +1419,6 @@ int32_t komodo_faststateinit(struct komodo_state *sp,const char *fname,char *sym
     return(-1);
 }
 
-uint64_t komodo_interestsum();
-
 void komodo_passport_iteration()
 {
     static long lastpos[34]; static char userpass[33][1024]; static uint32_t lasttime,callcounter,lastinterest;
@@ -1435,7 +1434,6 @@ void komodo_passport_iteration()
     {
         if ( ASSETCHAINS_SYMBOL[0] == 0 )
             komodo_interestsum();
-        //komodo_longestchain();
         lastinterest = komodo_chainactive_timestamp();
     }
     refsp = komodo_stateptr(symbol,dest);
@@ -2134,9 +2132,6 @@ int32_t get_btcusd(uint32_t pricebits[4])
     return(-1);
 }
 
-// komodo_cbopretupdate() obtains the external price data and encodes it into Mineropret, which will then be used by the miner and validation
-// save history, use new data to approve past rejection, where is the auto-reconsiderblock?
-
 int32_t komodo_cbopretsize(uint64_t flags)
 {
     int32_t size = 0;
@@ -2155,6 +2150,8 @@ int32_t komodo_cbopretsize(uint64_t flags)
 
 extern uint256 Queued_reconsiderblock;
 
+// komodo_cbopretupdate() obtains the external price data and encodes it into Mineropret, which will then be used by the miner and validation
+// save history, use new data to approve past rejection, where is the auto-reconsiderblock?
 void komodo_cbopretupdate(int32_t forceflag)
 {
     static uint32_t lasttime,lastbtc,pending;

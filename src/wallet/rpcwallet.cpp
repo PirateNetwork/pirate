@@ -38,6 +38,11 @@
 #include "script/interpreter.h"
 #include "zcash/zip32.h"
 #include "notaries_staked.h"
+#include "komodo.h"
+#include "komodo_bitcoind.h"
+#include "komodo_notary.h"
+#include "komodo_kv.h"
+#include "komodo_gateway.h"
 
 #include "utiltime.h"
 #include "asyncrpcoperation.h"
@@ -60,6 +65,9 @@
 #include <numeric>
 
 #include "komodo_defs.h"
+#include "komodo_bitcoind.h"
+#include "main.h"
+#include "rpc/rawtransaction.h"
 #include "hex.h"
 #include <string.h>
 
@@ -71,12 +79,7 @@ extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 extern std::string ASSETCHAINS_OVERRIDE_PUBKEY;
 const std::string ADDR_TYPE_SPROUT = "sprout";
 const std::string ADDR_TYPE_SAPLING = "sapling";
-extern UniValue TxJoinSplitToJSON(const CTransaction& tx);
 extern int32_t KOMODO_INSYNC;
-uint32_t komodo_segid32(char *coinaddr);
-int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
-int32_t komodo_isnotaryvout(char *coinaddr,uint32_t tiptime); // from ac_private chains only
-CBlockIndex *komodo_getblockindex(uint256 hash);
 
 int64_t nWalletUnlockTime;
 static CCriticalSection cs_nWalletUnlockTime;
@@ -88,8 +91,6 @@ UniValue z_getoperationstatus_IMPL(const UniValue&, bool);
 #define PLAN_NAME_MAX   8
 #define VALID_PLAN_NAME(x)  (strlen(x) <= PLAN_NAME_MAX)
 #define THROW_IF_SYNCING(INSYNC)  if (INSYNC == 0) { throw runtime_error(strprintf("%s: Chain still syncing at height %d, aborting to prevent linkability analysis!",__FUNCTION__,chainActive.Tip()->GetHeight())); }
-
-int tx_height( const uint256 &hash );
 
 std::string HelpRequiringPassphrase()
 {
@@ -133,8 +134,6 @@ void Unlock2NSPV(const CPubKey &pk)
         LEAVE_CRITICAL_SECTION(pwalletMain->cs_wallet);
     }
 }
-
-uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight);
 
 void WalletTxToJSON(const CWalletTx& wtx, UniValue& entry)
 {
@@ -582,9 +581,6 @@ extern int32_t KOMODO_PAX;
 extern uint64_t KOMODO_INTERESTSUM,KOMODO_WALLETBALANCE;
 int32_t komodo_is_issuer();
 int32_t iguana_rwnum(int32_t rwflag,uint8_t *serialized,int32_t len,void *endianedp);
-int32_t komodo_isrealtime(int32_t *kmdheightp);
-int32_t pax_fiatstatus(uint64_t *available,uint64_t *deposited,uint64_t *issued,uint64_t *withdrawn,uint64_t *approved,uint64_t *redeemed,char *base);
-int32_t komodo_kvsearch(uint256 *refpubkeyp,int32_t current_height,uint32_t *flagsp,int32_t *heightp,uint8_t value[IGUANA_MAXSCRIPTSIZE],uint8_t *key,int32_t keylen);
 int32_t komodo_kvcmp(uint8_t *refvalue,uint16_t refvaluesize,uint8_t *value,uint16_t valuesize);
 uint64_t komodo_kvfee(uint32_t flags,int32_t opretlen,int32_t keylen);
 uint256 komodo_kvsig(uint8_t *buf,int32_t len,uint256 privkey);
@@ -2852,8 +2848,6 @@ UniValue resendwallettransactions(const UniValue& params, bool fHelp, const CPub
     }
     return result;
 }
-
-extern uint32_t komodo_segid32(char *coinaddr);
 
 UniValue listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {

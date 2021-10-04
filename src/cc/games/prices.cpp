@@ -13,6 +13,7 @@
  * Removal or modification of this copyright notice is prohibited.            *
  *                                                                            *
  ******************************************************************************/
+#include "komodo_bitcoind.h"
 
 std::string MYCCLIBNAME = (char *)"prices";
 

@@ -39,6 +39,8 @@
 #include "zcash/IncrementalMerkleTree.hpp"
 #include "sodium.h"
 #include "miner.h"
+#include "komodo_notary.h"
+#include "komodo_bitcoind.h"
 
 #include <stdint.h>
 
@@ -54,12 +56,8 @@ using namespace libzcash;
 
 extern char ASSETCHAINS_SYMBOL[65];
 
-int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
-int32_t komodo_blockheight(uint256 hash);
-int tx_height( const uint256 &hash );
-bool komodo_hardfork_active(uint32_t time);
-extern UniValue signrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk);
+UniValue signrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk);
+UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk);
 
 int find_output(UniValue obj, int n) {
     UniValue outputMapValue = find_value(obj, "outputmap");

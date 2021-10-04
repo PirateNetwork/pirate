@@ -31,6 +31,7 @@
 #include "wallet/wallet.h"
 #include "zcash/Proof.hpp"
 #include "komodo_defs.h"
+#include "komodo_bitcoind.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/foreach.hpp>
@@ -41,7 +42,6 @@ using namespace std;
 
 static uint64_t nAccountingEntryNumber = 0;
 static list<uint256> deadTxns; 
-extern CBlockIndex *komodo_blockindex(uint256 hash);
 
 //
 // CWalletDB

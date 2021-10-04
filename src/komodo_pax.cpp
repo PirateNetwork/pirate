@@ -13,7 +13,7 @@
  *                                                                            *
  ******************************************************************************/
 #include "komodo_pax.h"
-#include "komodo_extern_globals.h"
+#include "komodo_globals.h"
 #include "komodo_utils.h" // iguana_rwnum
 #include "komodo.h" // KOMODO_PAXMAX
 
@@ -641,24 +641,6 @@ uint64_t komodo_paxprice(uint64_t *seedp,int32_t height,char *base,char *rel,uin
         sum /= nonz;
     //printf("-> %lld %s/%s i.%d ht.%d\n",(long long)sum,base,rel,i,height);
     return(sum);
-}
-
-int32_t komodo_paxprices(int32_t *heights,uint64_t *prices,int32_t max,char *base,char *rel)
-{
-    int32_t baseid=-1,relid=-1,i,num = 0; uint32_t *ptr;
-    if ( (baseid= komodo_baseid(base)) >= 0 && (relid= komodo_baseid(rel)) >= 0 )
-    {
-        for (i=NUM_PRICES-1; i>=0; i--)
-        {
-            ptr = &PVALS[36 * i];
-            heights[num] = *ptr;
-            prices[num] = komodo_paxcalc(*ptr,&ptr[1],baseid,relid,COIN,0,0);
-            num++;
-            if ( num >= max )
-                return(num);
-        }
-    }
-    return(num);
 }
 
 void komodo_paxpricefeed(int32_t height,uint8_t *pricefeed,int32_t opretlen)

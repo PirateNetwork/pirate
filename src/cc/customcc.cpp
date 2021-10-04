@@ -9,6 +9,8 @@
  
  The above will rebuild komodod and get it running again
  */
+#include "komodo_bitcoind.h"
+
 
 CScript custom_opret(uint8_t funcid,CPubKey pk)
 {    

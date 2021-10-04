@@ -39,6 +39,7 @@
 #include "wallet.h"
 #include "walletdb.h"
 #include "zcash/IncrementalMerkleTree.hpp"
+#include "komodo_bitcoind.h"
 
 #include <chrono>
 #include <iostream>
@@ -46,7 +47,6 @@
 #include <thread>
 
 #include "paymentdisclosuredb.h"
-int32_t komodo_blockheight(uint256 hash);
 
 using namespace libzcash;
 

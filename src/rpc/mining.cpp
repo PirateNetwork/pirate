@@ -23,6 +23,7 @@
 #include "consensus/consensus.h"
 #include "consensus/validation.h"
 #include "core_io.h"
+#include "komodo_bitcoind.h"
 #ifdef ENABLE_MINING
 #include "crypto/equihash.h"
 #endif
@@ -51,10 +52,6 @@ using namespace std;
 #include "komodo_defs.h"
 
 extern int32_t ASSETCHAINS_FOUNDERS;
-uint64_t komodo_commission(const CBlock *pblock,int32_t height);
-int32_t komodo_blockload(CBlock& block,CBlockIndex *pindex);
-arith_uint256 komodo_PoWtarget(int32_t *percPoSp,arith_uint256 target,int32_t height,int32_t goalperc,int32_t newStakerActive);
-int32_t komodo_newStakerActive(int32_t height, uint32_t timestamp);
 
 /**
  * Return average network hashes per second based on the last 'lookup' blocks,
@@ -404,7 +401,6 @@ UniValue setgenerate(const UniValue& params, bool fHelp, const CPubKey& mypk)
 }
 #endif
 
-CBlockIndex *komodo_chainactive(int32_t height);
 arith_uint256 zawy_ctB(arith_uint256 bnTarget,uint32_t solvetime);
 
 UniValue genminingCSV(const UniValue& params, bool fHelp, const CPubKey& mypk)
@@ -887,8 +883,6 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp, const CPubKey& myp
         result.push_back(Pair("ac_staked", (int64_t)ASSETCHAINS_STAKED));
         result.push_back(Pair("origtarget", hashTarget.GetHex()));
     }
-    /*else if ( ASSETCHAINS_ADAPTIVEPOW > 0 )
-        result.push_back(Pair("target",komodo_adaptivepow_target((int32_t)(pindexPrev->GetHeight()+1),hashTarget,pblock->nTime).GetHex()));*/
     else
         result.push_back(Pair("target", hashTarget.GetHex()));
     result.push_back(Pair("mintime", (int64_t)pindexPrev->GetMedianTimePast()+1));

@@ -14,6 +14,9 @@
  ******************************************************************************/
 
 #include "CCOracles.h"
+#include "komodo.h"
+#include "komodo_bitcoind.h"
+
 #include <secp256k1.h>
 
 /*
@@ -638,12 +641,6 @@ bool OraclesDataValidate(struct CCcontract_info *cp,Eval* eval,const CTransactio
     }
     else return(true);
 }
-
-/*nt32_t GetLatestTimestamp(int32_t height)
-{
-    if ( KOMODO_NSPV_SUPERLITE ) return (NSPV_blocktime(height));
-    return(komodo_heightstamp(height));
-} */
 
 bool OraclesValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, uint32_t nIn)
 {

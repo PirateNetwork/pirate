@@ -13,10 +13,11 @@
  *                                                                            *
  ******************************************************************************/
 #include "komodo_notary.h"
-#include "komodo_extern_globals.h"
+#include "komodo_globals.h"
 #include "komodo.h" // komodo_stateupdate()
 #include "komodo_structs.h" // KOMODO_NOTARIES_HARDCODED
 #include "komodo_utils.h" // komodo_stateptr
+#include "komodo_bitcoind.h"
 
 const char *Notaries_genesis[][2] =
 {

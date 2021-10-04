@@ -26,6 +26,7 @@
 #include "chain.h"
 #include "core_io.h"
 #include "crosschain.h"
+#include "komodo_notary.h"
 
 bool CClib_Dispatch(const CC *cond,Eval *eval,std::vector<uint8_t> paramsNull,const CTransaction &txTo,unsigned int nIn);
 char *CClib_name();
@@ -159,9 +160,6 @@ bool Eval::GetBlock(uint256 hash, CBlockIndex& blockIdx) const
     fprintf(stderr, "CC Eval Error: Can't get block from index\n");
     return false;
 }
-
-extern int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);
-
 
 int32_t Eval::GetNotaries(uint8_t pubkeys[64][33], int32_t height, uint32_t timestamp) const
 {

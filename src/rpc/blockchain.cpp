@@ -36,6 +36,16 @@
 #include "script/script_error.h"
 #include "script/sign.h"
 #include "script/standard.h"
+#include "komodo_defs.h"
+#include "komodo_structs.h"
+#include "komodo_globals.h"
+#include "komodo_notary.h"
+#include "komodo_bitcoind.h"
+#include "komodo_pax.h"
+#include "komodo_utils.h"
+#include "komodo_kv.h"
+#include "komodo_gateway.h"
+#include "rpc/rawtransaction.h"
 
 #include <stdint.h>
 
@@ -49,11 +59,6 @@
 using namespace std;
 
 extern int32_t KOMODO_INSYNC;
-extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
-void ScriptPubKeyToJSON(const CScript& scriptPubKey, UniValue& out, bool fIncludeHex);
-int32_t komodo_notarized_height(int32_t *prevMoMheightp,uint256 *hashp,uint256 *txidp);
-#include "komodo_defs.h"
-#include "komodo_structs.h"
 
 double GetDifficultyINTERNAL(const CBlockIndex* blockindex, bool networkDifficulty)
 {
@@ -1100,10 +1105,6 @@ UniValue notaries(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return ret;
 }
 
-int32_t komodo_pending_withdraws(char *opretstr);
-int32_t pax_fiatstatus(uint64_t *available,uint64_t *deposited,uint64_t *issued,uint64_t *withdrawn,uint64_t *approved,uint64_t *redeemed,char *base);
-extern char CURRENCIES[][8];
-
 UniValue paxpending(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     UniValue ret(UniValue::VOBJ); UniValue a(UniValue::VARR); char opretbuf[10000*2]; int32_t opretlen,baseid; uint64_t available,deposited,issued,withdrawn,approved,redeemed;
@@ -1173,42 +1174,6 @@ UniValue paxprice(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
     return ret;
 }
-// fills pricedata with raw price, correlated and smoothed values for numblock
-/*int32_t prices_extract(int64_t *pricedata,int32_t firstheight,int32_t numblocks,int32_t ind)
-{
-    int32_t height,i,n,width,numpricefeeds = -1; uint64_t seed,ignore,rngval; uint32_t rawprices[1440*6],*ptr; int64_t *tmpbuf;
-    width = numblocks+PRICES_DAYWINDOW*2+PRICES_SMOOTHWIDTH;    // need 2*PRICES_DAYWINDOW previous raw price points to calc PRICES_DAYWINDOW correlated points to calc, in turn, smoothed point
-    komodo_heightpricebits(&seed,rawprices,firstheight + numblocks - 1);
-    if ( firstheight < width )
-        return(-1);
-    for (i=0; i<width; i++)
-    {
-        if ( (n= komodo_heightpricebits(&ignore,rawprices,firstheight + numblocks - 1 - i)) < 0 )  // stores raw prices in backward order 
-            return(-1);
-        if ( numpricefeeds < 0 )
-            numpricefeeds = n;
-        if ( n != numpricefeeds )
-            return(-2);
-        ptr = (uint32_t *)&pricedata[i*3];
-        ptr[0] = rawprices[ind];
-        ptr[1] = rawprices[0]; // timestamp
-    }
-    rngval = seed;
-    for (i=0; i<numblocks+PRICES_DAYWINDOW+PRICES_SMOOTHWIDTH; i++) // calculates +PRICES_DAYWINDOW more correlated values
-    {
-        rngval = (rngval*11109 + 13849);
-        ptr = (uint32_t *)&pricedata[i*3];
-        // takes previous PRICES_DAYWINDOW raw prices and calculates correlated price value
-        if ( (pricedata[i*3+1]= komodo_pricecorrelated(rngval,ind,(uint32_t *)&pricedata[i*3],6,0,PRICES_SMOOTHWIDTH)) < 0 ) // skip is 6 == sizeof(int64_t)/sizeof(int32_t)*3 
-            return(-3);
-    }
-    tmpbuf = (int64_t *)calloc(sizeof(int64_t),2*PRICES_DAYWINDOW);
-    for (i=0; i<numblocks; i++)
-        // takes previous PRICES_DAYWINDOW correlated price values and calculates smoothed value
-        pricedata[i*3+2] = komodo_priceave(tmpbuf,&pricedata[i*3+1],3); 
-    free(tmpbuf);
-    return(0);
-}*/
 
 UniValue prices(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
@@ -1715,7 +1680,7 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp, const CPubKey& my
     if ( ASSETCHAINS_SYMBOL[0] == 0 ) {
         progress = Checkpoints::GuessVerificationProgress(Params().Checkpoints(), chainActive.LastTip());
     } else {
-        int32_t longestchain = KOMODO_LONGESTCHAIN;//komodo_longestchain();
+        int32_t longestchain = KOMODO_LONGESTCHAIN;
 	    progress = (longestchain > 0 ) ? (double) chainActive.Height() / longestchain : 1.0;
     }
     UniValue obj(UniValue::VOBJ);

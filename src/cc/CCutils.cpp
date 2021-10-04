@@ -19,6 +19,7 @@
 
 #include "CCinclude.h"
 #include "komodo_structs.h"
+#include "komodo_bitcoind.h"
 #include "key_io.h"
 
 #ifdef TESTMODE           
@@ -26,7 +27,6 @@
 #else
     #define MIN_NON_NOTARIZED_CONFIRMS 101
 #endif // TESTMODE
-int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
 struct komodo_state *komodo_stateptr(char *symbol,char *dest);
 extern uint32_t KOMODO_DPOWCONFS;
 

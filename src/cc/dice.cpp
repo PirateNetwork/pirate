@@ -14,6 +14,7 @@
  ******************************************************************************/
 #include "hex.h"
 #include "CCdice.h"
+#include "komodo_bitcoind.h"
 
 // timeout
 

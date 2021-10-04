@@ -38,6 +38,7 @@
 #include "zcash/IncrementalMerkleTree.hpp"
 #include "sodium.h"
 #include "miner.h"
+#include "komodo_globals.h"
 
 #include <array>
 #include <iostream>
@@ -51,7 +52,6 @@
 #include "paymentdisclosuredb.h"
 
 using namespace libzcash;
-extern uint64_t ASSETCHAINS_TIMELOCKGTE;
 
 static int find_output(UniValue obj, int n) {
     UniValue outputMapValue = find_value(obj, "outputmap");
