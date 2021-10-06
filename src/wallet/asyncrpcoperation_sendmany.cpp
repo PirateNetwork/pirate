@@ -41,7 +41,7 @@
 #include "miner.h"
 #include "komodo_notary.h"
 #include "komodo_bitcoind.h"
-
+#include "rpc/rawtransaction.h"
 #include <stdint.h>
 
 #include <array>
@@ -53,11 +53,6 @@
 #include "paymentdisclosuredb.h"
 
 using namespace libzcash;
-
-extern char ASSETCHAINS_SYMBOL[65];
-
-UniValue signrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk);
-UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk);
 
 int find_output(UniValue obj, int n) {
     UniValue outputMapValue = find_value(obj, "outputmap");

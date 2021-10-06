@@ -30,7 +30,7 @@
 #include "sync.h"
 #include "utilstrencodings.h"
 #include "utiltime.h"
-#include "komodo_defs.h"
+#include "komodo_globals.h"
 
 #include <stdarg.h>
 #include <sstream>
@@ -732,7 +732,6 @@ void ReadConfigFile(map<string, string>& mapSettingsRet,
     }
     // If datadir is changed in .conf file:
     ClearDatadirCache();
-    extern uint16_t BITCOIND_RPCPORT;
     BITCOIND_RPCPORT = GetArg("-rpcport",BaseParams().RPCPort());
 }
 

@@ -84,7 +84,6 @@ long komodo_indfile_update(FILE *indfp,uint32_t *prevpos100p,long lastfpos,long 
 
 int32_t komodo_faststateinit(struct komodo_state *sp,const char *fname,char *symbol,char *dest);
 
-extern std::vector<uint8_t> Mineropret; // opreturn data set by the data gathering code
 #define PRICES_ERRORRATE (COIN / 100)	  // maximum acceptable change, set at 1%
 #define PRICES_SIZEBIT0 (sizeof(uint32_t) * 4) // 4 uint32_t unixtimestamp, BTCUSD, BTCGBP and BTCEUR
 #define KOMODO_LOCALPRICE_CACHESIZE 13

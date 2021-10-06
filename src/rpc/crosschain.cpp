@@ -42,21 +42,13 @@
 #include "cc/CCImportGateway.h"
 #include "cc/CCtokens.h"
 #include "cc/import.h"
+#include "wallet/rpcwallet.h"
 
 #include <stdint.h>
 #include <univalue.h>
 #include <regex>
 
 using namespace std;
-
-extern std::string CCerror;
-extern std::string ASSETCHAINS_SELFIMPORT;
-extern uint16_t ASSETCHAINS_CODAPORT, ASSETCHAINS_BEAMPORT;
-int32_t ensure_CCrequirements(uint8_t evalcode);
-bool EnsureWalletIsAvailable(bool avoidException);
-
-
-extern std::string ASSETCHAINS_SELFIMPORT;
 
 UniValue assetchainproof(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {

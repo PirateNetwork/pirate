@@ -43,6 +43,7 @@
 #include "komodo_notary.h"
 #include "komodo_kv.h"
 #include "komodo_gateway.h"
+#include "komodo_globals.h"
 
 #include "utiltime.h"
 #include "asyncrpcoperation.h"
@@ -58,14 +59,11 @@
 #include <stdint.h>
 
 #include <boost/assign/list_of.hpp>
-//#include <utf8.h>
 
 #include <univalue.h>
 
 #include <numeric>
 
-#include "komodo_defs.h"
-#include "komodo_bitcoind.h"
 #include "main.h"
 #include "rpc/rawtransaction.h"
 #include "hex.h"
@@ -75,11 +73,8 @@ using namespace std;
 
 using namespace libzcash;
 
-extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
-extern std::string ASSETCHAINS_OVERRIDE_PUBKEY;
 const std::string ADDR_TYPE_SPROUT = "sprout";
 const std::string ADDR_TYPE_SAPLING = "sapling";
-extern int32_t KOMODO_INSYNC;
 
 int64_t nWalletUnlockTime;
 static CCriticalSection cs_nWalletUnlockTime;
@@ -568,25 +563,11 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return wtx.GetHash().GetHex();
 }
 
-#include "komodo_defs.h"
-
 #define KOMODO_KVPROTECTED 1
 #define KOMODO_KVBINARY 2
 #define KOMODO_KVDURATION 1440
 #define IGUANA_MAXSCRIPTSIZE 10001
-uint64_t PAX_fiatdest(uint64_t *seedp,int32_t tokomodo,char *destaddr,uint8_t pubkey37[37],char *coinaddr,int32_t height,char *base,int64_t fiatoshis);
-int32_t komodo_opreturnscript(uint8_t *script,uint8_t type,uint8_t *opret,int32_t opretlen);
 #define CRYPTO777_KMDADDR "RXL3YXG2ceaB6C5hfJcN4fvmLH2C34knhA"
-extern int32_t KOMODO_PAX;
-extern uint64_t KOMODO_INTERESTSUM,KOMODO_WALLETBALANCE;
-int32_t komodo_is_issuer();
-int32_t iguana_rwnum(int32_t rwflag,uint8_t *serialized,int32_t len,void *endianedp);
-int32_t komodo_kvcmp(uint8_t *refvalue,uint16_t refvaluesize,uint8_t *value,uint16_t valuesize);
-uint64_t komodo_kvfee(uint32_t flags,int32_t opretlen,int32_t keylen);
-uint256 komodo_kvsig(uint8_t *buf,int32_t len,uint256 privkey);
-int32_t komodo_kvduration(uint32_t flags);
-uint256 komodo_kvprivkey(uint256 *pubkeyp,char *passphrase);
-int32_t komodo_kvsigverify(uint8_t *buf,int32_t len,uint256 _pubkey,uint256 sig);
 
 UniValue kvupdate(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
@@ -4501,8 +4482,6 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    //THROW_IF_SYNCING(KOMODO_INSYNC);
-
     // Check that the from address is valid.
     auto fromaddress = params[0].get_str();
     bool fromTaddr = false;
@@ -4813,8 +4792,6 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp, const CPubKey& myp
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    //THROW_IF_SYNCING(KOMODO_INSYNC);
-
     // Validate the from address
     auto fromaddress = params[0].get_str();
     bool isFromWildcard = fromaddress == "*";
@@ -5074,8 +5051,6 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
     }
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    //THROW_IF_SYNCING(KOMODO_INSYNC);
 
     bool useAnyUTXO = false;
     bool useAnySprout = false;
@@ -5484,7 +5459,6 @@ UniValue z_listoperationids(const UniValue& params, bool fHelp, const CPubKey& m
 
 
 #include "script/sign.h"
-extern std::string NOTARY_PUBKEY;
 
 int32_t komodo_notaryvin(CMutableTransaction &txNew,uint8_t *notarypub33, void *pTr)
 {

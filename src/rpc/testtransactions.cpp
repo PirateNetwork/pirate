@@ -39,20 +39,15 @@
 #include "script/sign.h"
 #include "script/standard.h"
 #include "komodo_bitcoind.h"
-
-#include <stdint.h>
-
-#include <univalue.h>
-
-#include <regex>
-
-
 #include "cc/CCinclude.h"
 #include "cc/CCPrices.h"
+#include "wallet/rpcwallet.h"
+
+#include <stdint.h>
+#include <univalue.h>
+#include <regex>
 
 using namespace std;
-
-int32_t ensure_CCrequirements(uint8_t evalcode);
 
 UniValue test_ac(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {

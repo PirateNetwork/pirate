@@ -13,10 +13,9 @@
  *                                                                            *
  ******************************************************************************/
 #include "komodo_structs.h"
+#include "komodo_globals.h"
 #include "mem_read.h"
 #include <mutex>
-
-extern std::mutex komodo_mutex;
 
 /***
  * komodo_state

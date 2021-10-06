@@ -49,10 +49,6 @@
 
 using namespace std;
 
-#include "komodo_defs.h"
-
-extern int32_t ASSETCHAINS_FOUNDERS;
-
 /**
  * Return average network hashes per second based on the last 'lookup' blocks,
  * or over the difficulty averaging window if 'lookup' is nonpositive.
@@ -190,8 +186,6 @@ UniValue getgenerate(const UniValue& params, bool fHelp, const CPubKey& mypk)
     obj.push_back(Pair("numthreads",       (int64_t)KOMODO_MININGTHREADS));
     return obj;
 }
-
-extern uint8_t NOTARY_PUBKEY33[33];
 
 //Value generate(const Array& params, bool fHelp)
 UniValue generate(const UniValue& params, bool fHelp, const CPubKey& mypk)

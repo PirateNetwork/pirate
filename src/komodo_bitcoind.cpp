@@ -19,6 +19,8 @@
 #include "komodo_notary.h" // komodo_chosennotary()
 #include "rpc/net.h"
 
+extern bool fRequestShutdown; // defined in init.cpp
+
 /************************************************************************
  *
  * Initialize the string handler so that it is thread safe

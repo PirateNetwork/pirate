@@ -61,8 +61,6 @@
  */
 
 static bool fDaemon;
-extern int32_t ASSETCHAINS_BLOCKTIME;
-extern uint64_t ASSETCHAINS_CBOPRET;
 
 void WaitForShutdown(boost::thread_group* threadGroup)
 {
@@ -105,12 +103,6 @@ void WaitForShutdown(boost::thread_group* threadGroup)
 //
 // Start
 //
-extern bool IS_KOMODO_NOTARY;
-extern int32_t USE_EXTERNAL_PUBKEY;
-extern uint32_t ASSETCHAIN_INIT;
-extern std::string NOTARY_PUBKEY;
-int32_t komodo_is_issuer();
-
 bool AppInit(int argc, char* argv[])
 {
     boost::thread_group threadGroup;

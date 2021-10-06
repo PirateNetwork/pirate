@@ -1137,8 +1137,6 @@ void CWallet::IncrementNoteWitnesses(const CBlockIndex* pindex,
 template<typename NoteDataMap>
 bool DecrementNoteWitnesses(NoteDataMap& noteDataMap, int indexHeight, int64_t nWitnessCacheSize)
 {
-    extern int32_t KOMODO_REWIND;
-
     for (auto& item : noteDataMap) {
         auto* nd = &(item.second);
         // Only decrement witnesses that are not above the current height
@@ -3947,7 +3945,6 @@ bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wt
 
                         // Reserve a new key pair from key pool
                         CPubKey vchPubKey;
-                        extern int32_t USE_EXTERNAL_PUBKEY; extern std::string NOTARY_PUBKEY;
                         if ( USE_EXTERNAL_PUBKEY == 0 )
                         {
                             bool ret;

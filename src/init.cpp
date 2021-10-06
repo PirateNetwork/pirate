@@ -35,6 +35,7 @@
 #include "httprpc.h"
 #include "key.h"
 #include "notarisationdb.h"
+#include "komodo_globals.h"
 #include "komodo_notary.h"
 #include "komodo_gateway.h"
 #include "main.h"
@@ -97,9 +98,6 @@ using namespace std;
 
 #include "komodo_defs.h"
 void ThreadSendAlert();
-extern int32_t KOMODO_LOADINGBLOCKS;
-extern bool VERUS_MINTBLOCKS;
-extern int32_t KOMODO_SNAPSHOT_INTERVAL;
 
 ZCJoinSplit* pzcashParams = NULL;
 
@@ -918,8 +916,6 @@ bool AppInitServers(boost::thread_group& threadGroup)
 /** Initialize bitcoin.
  *  @pre Parameters should be parsed and config file should be read.
  */
-extern int32_t KOMODO_REWIND;
-
 bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 {
     // ********************************************************* Step 1: setup
@@ -1335,7 +1331,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     // set the hash algorithm to use for this chain
     // Again likely better solution here, than using long IF ELSE. 
-    extern uint32_t ASSETCHAINS_ALGO, ASSETCHAINS_VERUSHASH, ASSETCHAINS_VERUSHASHV1_1;
     CVerusHash::init();
     CVerusHashV2::init();
     if (ASSETCHAINS_ALGO == ASSETCHAINS_VERUSHASH)

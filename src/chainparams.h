@@ -182,5 +182,6 @@ bool SelectParamsFromCommandLine();
 void UpdateNetworkUpgradeParameters(Consensus::UpgradeIndex idx, int nActivationHeight);
 
 void komodo_setactivation(int32_t height);
+int32_t MAX_BLOCK_SIZE(int32_t height);
 
 #endif // BITCOIN_CHAINPARAMS_H

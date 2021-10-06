@@ -24,6 +24,8 @@
 #include "komodo_globals.h"
 #include "komodo_bitcoind.h"
 #include "komodo_gateway.h"
+#include "komodo_defs.h"
+#include "cc/CCinclude.h"
 #ifdef ENABLE_MINING
 #include "pow/tromp/equi_miner.h"
 #endif
@@ -142,8 +144,6 @@ void UpdateTime(CBlockHeader* pblock, const Consensus::Params& consensusParams, 
         pblock->nBits = GetNextWorkRequired(pindexPrev, pblock, consensusParams);
     }
 }
-#include "komodo_defs.h"
-#include "cc/CCinclude.h"
 
 extern CCriticalSection cs_metrics;
 uint32_t Mining_start,Mining_height;
@@ -902,49 +902,6 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
     return pblocktemplate.release();
 }
 
-/*
- #ifdef ENABLE_WALLET
- boost::optional<CScript> GetMinerScriptPubKey(CReserveKey& reservekey)
- #else
- boost::optional<CScript> GetMinerScriptPubKey()
- #endif
- {
- CKeyID keyID;
- CBitcoinAddress addr;
- if (addr.SetString(GetArg("-mineraddress", ""))) {
- addr.GetKeyID(keyID);
- } else {
- #ifdef ENABLE_WALLET
- CPubKey pubkey;
- if (!reservekey.GetReservedKey(pubkey)) {
- return boost::optional<CScript>();
- }
- keyID = pubkey.GetID();
- #else
- return boost::optional<CScript>();
- #endif
- }
-
- CScript scriptPubKey = CScript() << OP_DUP << OP_HASH160 << ToByteVector(keyID) << OP_EQUALVERIFY << OP_CHECKSIG;
- return scriptPubKey;
- }
-
- #ifdef ENABLE_WALLET
- CBlockTemplate* CreateNewBlockWithKey(CReserveKey& reservekey)
- {
- boost::optional<CScript> scriptPubKey = GetMinerScriptPubKey(reservekey);
- #else
- CBlockTemplate* CreateNewBlockWithKey()
- {
- boost::optional<CScript> scriptPubKey = GetMinerScriptPubKey();
- #endif
-
- if (!scriptPubKey) {
- return NULL;
- }
- return CreateNewBlock(*scriptPubKey);
- }*/
-
 //////////////////////////////////////////////////////////////////////////////
 //
 // Internal miner
@@ -1123,10 +1080,7 @@ static bool ProcessBlockFound(CBlock* pblock)
     return true;
 }
 
-int32_t komodo_eligiblenotary(uint8_t pubkeys[66][33],int32_t *mids,uint32_t *blocktimes,int32_t *nonzpkeysp,int32_t height);
-arith_uint256 komodo_PoWtarget(int32_t *percPoSp,arith_uint256 target,int32_t height,int32_t goalperc,int32_t newStakerActive);
 int32_t FOUND_BLOCK,KOMODO_MAYBEMINED;
-extern int32_t KOMODO_LASTMINED,KOMODO_INSYNC;
 int32_t roundrobin_delay;
 arith_uint256 HASHTarget,HASHTarget_POW;
 

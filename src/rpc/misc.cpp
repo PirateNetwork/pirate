@@ -34,6 +34,8 @@
 #include "komodo_bitcoind.h"
 #include "komodo_jumblr.h"
 #include "komodo_notary.h"
+#include "komodo_utils.h"
+#include "komodo_globals.h"
 #include "cc/CCinclude.h"
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
@@ -50,39 +52,8 @@
 
 using namespace std;
 
-/**
- * @note Do not add or change anything in the information returned by this
- * method. `getinfo` exists for backwards-compatibility only. It combines
- * information from wildly different sources in the program, which is a mess,
- * and is thus planned to be deprecated eventually.
- *
- * Based on the source of the information, new information should be added to:
- * - `getblockchaininfo`,
- * - `getnetworkinfo` or
- * - `getwalletinfo`
- *
- * Or alternatively, create a specific query method for the information.
- **/
-
-int32_t komodo_whoami(char *pubkeystr,int32_t height,uint32_t timestamp);
-extern uint64_t KOMODO_INTERESTSUM,KOMODO_WALLETBALANCE;
-extern bool IS_KOMODO_NOTARY;
-extern int32_t KOMODO_LASTMINED,JUMBLR_PAUSE,KOMODO_LONGESTCHAIN,STAKED_NOTARY_ID,STAKED_ERA,KOMODO_INSYNC;
-extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
-int64_t komodo_coinsupply(int64_t *zfundsp,int64_t *sproutfundsp,int32_t height);
-int32_t notarizedtxid_height(char *dest,char *txidstr,int32_t *kmdnotarized_heightp);
-int8_t StakedNotaryID(std::string &notaryname, char *Raddress);
-uint64_t komodo_notarypayamount(int32_t nHeight, int64_t notarycount);
-
 #define KOMODO_VERSION "0.7.1"
 #define VERUS_VERSION "0.4.0g"
-extern uint16_t ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT;
-extern uint32_t ASSETCHAINS_CC;
-extern uint32_t ASSETCHAINS_MAGIC,ASSETCHAINS_ALGO;
-extern uint64_t ASSETCHAINS_COMMISSION,ASSETCHAINS_SUPPLY;
-extern int32_t ASSETCHAINS_LWMAPOS,ASSETCHAINS_SAPLING,ASSETCHAINS_STAKED;
-extern uint64_t ASSETCHAINS_ENDSUBSIDY[],ASSETCHAINS_REWARD[],ASSETCHAINS_HALVING[],ASSETCHAINS_DECAY[],ASSETCHAINS_NOTARY_PAY[];
-extern std::string NOTARY_PUBKEY,NOTARY_ADDRESS; extern uint8_t NOTARY_PUBKEY33[];
 
 int32_t getera(int timestamp)
 {
@@ -188,6 +159,19 @@ UniValue geterablockheights(const UniValue& params, bool fHelp, const CPubKey& m
     return(ret);
 }
 
+/**
+ * @note Do not add or change anything in the information returned by this
+ * method. `getinfo` exists for backwards-compatibility only. It combines
+ * information from wildly different sources in the program, which is a mess,
+ * and is thus planned to be deprecated eventually.
+ *
+ * Based on the source of the information, new information should be added to:
+ * - `getblockchaininfo`,
+ * - `getnetworkinfo` or
+ * - `getwalletinfo`
+ *
+ * Or alternatively, create a specific query method for the information.
+ **/
 UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     uint256 notarized_hash,notarized_desttxid; int32_t prevMoMheight,notarized_height,longestchain,kmdnotarized_height,txid_height;

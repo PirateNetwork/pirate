@@ -28,6 +28,7 @@ class CChainPower;
 #include "pow.h"
 #include "tinyformat.h"
 #include "uint256.h"
+#include "komodo_defs.h"
 
 #include <vector>
 
@@ -35,13 +36,13 @@ class CChainPower;
 
 static const int SPROUT_VALUE_VERSION = 1001400;
 static const int SAPLING_VALUE_VERSION = 1010100;
-extern int32_t ASSETCHAINS_LWMAPOS;
+
+// These 5 are declared here to avoid circular dependencies
+int8_t is_STAKED(const char *chain_name); 
 extern char ASSETCHAINS_SYMBOL[65];
-extern uint64_t ASSETCHAINS_NOTARY_PAY[];
+extern uint64_t ASSETCHAINS_NOTARY_PAY[ASSETCHAINS_MAX_ERAS+1];
 extern int32_t ASSETCHAINS_STAKED;
-extern const uint32_t nStakedDecemberHardforkTimestamp; //December 2019 hardfork
-extern const int32_t nDecemberHardforkHeight;   //December 2019 hardfork
-extern int8_t is_STAKED(const char *chain_name);
+extern const uint32_t nStakedDecemberHardforkTimestamp;
 
 struct CDiskBlockPos
 {

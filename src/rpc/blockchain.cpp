@@ -58,8 +58,6 @@
 
 using namespace std;
 
-extern int32_t KOMODO_INSYNC;
-
 double GetDifficultyINTERNAL(const CBlockIndex* blockindex, bool networkDifficulty)
 {
     // Floating point number that is a multiple of the minimum difficulty,

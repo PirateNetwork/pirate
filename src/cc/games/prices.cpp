@@ -14,12 +14,12 @@
  *                                                                            *
  ******************************************************************************/
 #include "komodo_bitcoind.h"
+#include "cc/gamescc.h"
 
 std::string MYCCLIBNAME = (char *)"prices";
 
 #define PRICES_BETPERIOD 3
 UniValue games_rawtxresult(UniValue &result,std::string rawtx,int32_t broadcastflag);
-extern uint8_t ASSETCHAINS_OVERRIDE_PUBKEY33[33];
 
 #define bstr(x) ((double)((uint32_t)x) / 10000.)
 

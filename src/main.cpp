@@ -87,8 +87,6 @@ using namespace std;
 
 #define TMPFILE_START 100000000
 CCriticalSection cs_main;
-extern uint8_t NOTARY_PUBKEY33[33];
-extern int32_t KOMODO_LOADINGBLOCKS,KOMODO_LONGESTCHAIN,KOMODO_INSYNC,KOMODO_CONNECTING,KOMODO_EXTRASATOSHI;
 int32_t KOMODO_NEWBLOCKS;
 
 BlockMap mapBlockIndex;
@@ -2452,14 +2450,6 @@ bool ReadBlockFromDisk(CBlock& block, const CBlockIndex* pindex,bool checkPOW)
                      pindex->ToString(), pindex->GetBlockPos().ToString());
     return true;
 }
-
-//uint64_t komodo_moneysupply(int32_t height);
-extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
-extern uint64_t ASSETCHAINS_ENDSUBSIDY[ASSETCHAINS_MAX_ERAS+1], ASSETCHAINS_REWARD[ASSETCHAINS_MAX_ERAS+1], ASSETCHAINS_HALVING[ASSETCHAINS_MAX_ERAS+1];
-extern uint32_t ASSETCHAINS_MAGIC;
-extern uint64_t ASSETCHAINS_LINEAR,ASSETCHAINS_COMMISSION,ASSETCHAINS_SUPPLY;
-extern uint8_t ASSETCHAINS_PUBLIC,ASSETCHAINS_PRIVATE;
-extern int32_t ASSETCHAINS_STAKED;
 
 CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams)
 {

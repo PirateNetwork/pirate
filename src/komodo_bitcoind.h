@@ -22,11 +22,10 @@
 #include "komodo_defs.h"
 #include "script/standard.h"
 #include "cc/CCinclude.h"
+#include "komodo_globals.h"
 
 unsigned int lwmaGetNextPOSRequired(const CBlockIndex* pindexLast, const Consensus::Params& params);
 bool EnsureWalletIsAvailable(bool avoidException);
-extern bool fRequestShutdown;
-extern CScript KOMODO_EARLYTXID_SCRIPTPUB;
 
 uint8_t DecodeMaramaraCoinbaseOpRet(const CScript scriptPubKey,CPubKey &pk,int32_t &height,int32_t &unlockht);
 uint32_t komodo_heightstamp(int32_t height);

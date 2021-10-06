@@ -32,6 +32,7 @@
 #include "scheduler.h"
 #include "ui_interface.h"
 #include "crypto/common.h"
+#include "komodo_globals.h"
 
 #ifdef _WIN32
 #include <string.h>
@@ -73,13 +74,6 @@ namespace {
         ListenSocket(SOCKET socket, bool whitelisted) : socket(socket), whitelisted(whitelisted) {}
     };
 }
-
-//
-// Global state variables
-//
-extern uint16_t ASSETCHAINS_P2PPORT;
-extern int8_t is_STAKED(const char *chain_name);
-extern char ASSETCHAINS_SYMBOL[65];
 
 bool fDiscover = true;
 bool fListen = true;
@@ -444,7 +438,6 @@ void CNode::CloseSocketDisconnect()
         vRecvMsg.clear();
 }
 
-extern int32_t KOMODO_NSPV;
 #ifndef KOMODO_NSPV_FULLNODE
 #define KOMODO_NSPV_FULLNODE (KOMODO_NSPV <= 0)
 #endif // !KOMODO_NSPV_FULLNODE
@@ -1817,8 +1810,6 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
     Discover(threadGroup);
 
     // skip DNS seeds for staked chains.
-    extern int8_t is_STAKED(const char *chain_name);
-    extern char ASSETCHAINS_SYMBOL[65];
     if ( is_STAKED(ASSETCHAINS_SYMBOL) != 0 )
         SoftSetBoolArg("-dnsseed", false);
 

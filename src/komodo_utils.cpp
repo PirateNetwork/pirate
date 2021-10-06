@@ -2009,7 +2009,6 @@ void komodo_args(char *argv0)
         if ( ASSETCHAINS_SYMBOL[0] != 0 )
         {
             int32_t komodo_baseid(char *origbase);
-            extern int COINBASE_MATURITY;
             if ( strcmp(ASSETCHAINS_SYMBOL,"KMD") == 0 )
             {
                 fprintf(stderr,"cant have assetchain named KMD\n");

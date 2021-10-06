@@ -12,17 +12,15 @@
  * Removal or modification of this copyright notice is prohibited.            *
  *                                                                            *
  ******************************************************************************/
+#pragma once
 
-#ifndef KOMODO_DEFS_H
-#define KOMODO_DEFS_H
 #include "arith_uint256.h"
+#define ASSETCHAINS_MAX_ERAS 7 // needed by chain.h
 #include "chain.h"
 #include "komodo_nk.h"
 
 #define KOMODO_EARLYTXID_HEIGHT 100
-//#define ADAPTIVEPOW_CHANGETO_DEFAULTON 1572480000
 #define ASSETCHAINS_MINHEIGHT 128
-#define ASSETCHAINS_MAX_ERAS 7
 #define KOMODO_ELECTION_GAP 2000
 #define ROUNDROBIN_DELAY 61
 #define KOMODO_ASSETCHAIN_MAXLEN 65
@@ -474,69 +472,13 @@ static const char *notaries_elected[NUM_KMD_SEASONS][NUM_KMD_NOTARIES][2] =
 #define KOMODO_MAXNVALUE (((uint64_t)1 << 63) - 1)
 #define KOMODO_BIT63SET(x) ((x) & ((uint64_t)1 << 63))
 #define KOMODO_VALUETOOBIG(x) ((x) > (uint64_t)10000000001*COIN)
-
-//#ifndef TESTMODE
 #define PRICES_DAYWINDOW ((3600*24/ASSETCHAINS_BLOCKTIME) + 1)
-//#else
-//#define PRICES_DAYWINDOW (7)
-//#endif
-
-extern uint8_t ASSETCHAINS_TXPOW,ASSETCHAINS_PUBLIC;
-extern int8_t ASSETCHAINS_ADAPTIVEPOW;
-int32_t MAX_BLOCK_SIZE(int32_t height);
-extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
-extern uint16_t ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT;
-extern uint32_t ASSETCHAIN_INIT, ASSETCHAINS_MAGIC;
-extern int32_t VERUS_BLOCK_POSUNITS, ASSETCHAINS_LWMAPOS, ASSETCHAINS_SAPLING, ASSETCHAINS_OVERWINTER,ASSETCHAINS_BLOCKTIME;
-extern uint64_t ASSETCHAINS_SUPPLY, ASSETCHAINS_FOUNDERS_REWARD;
-
-extern uint32_t ASSETCHAINS_ALGO, ASSETCHAINS_VERUSHASH,ASSETCHAINS_EQUIHASH,KOMODO_INITDONE;
-
-extern bool IS_KOMODO_NOTARY;
-extern int32_t KOMODO_MININGTHREADS,KOMODO_LONGESTCHAIN,ASSETCHAINS_SEED,USE_EXTERNAL_PUBKEY,KOMODO_CHOSEN_ONE,KOMODO_ON_DEMAND,KOMODO_PASSPORT_INITDONE,ASSETCHAINS_STAKED,KOMODO_NSPV;
-extern uint64_t ASSETCHAINS_COMMISSION, ASSETCHAINS_LASTERA,ASSETCHAINS_CBOPRET;
-extern bool VERUS_MINTBLOCKS;
-extern uint64_t ASSETCHAINS_REWARD[ASSETCHAINS_MAX_ERAS+1], ASSETCHAINS_NOTARY_PAY[ASSETCHAINS_MAX_ERAS+1], ASSETCHAINS_NONCEMASK[],ASSETCHAINS_NK[2];
-extern const char *ASSETCHAINS_ALGORITHMS[];
-extern int32_t VERUS_MIN_STAKEAGE;
-extern uint32_t ASSETCHAINS_VERUSHASH, ASSETCHAINS_VERUSHASHV1_1, ASSETCHAINS_NONCESHIFT[], ASSETCHAINS_HASHESPERROUND[];
-extern std::string NOTARY_PUBKEY,ASSETCHAINS_OVERRIDE_PUBKEY,ASSETCHAINS_SCRIPTPUB;
-extern uint8_t NOTARY_PUBKEY33[33],ASSETCHAINS_OVERRIDE_PUBKEY33[33];
-extern std::vector<std::string> ASSETCHAINS_PRICES,ASSETCHAINS_STOCKS;
-
-extern int32_t VERUS_BLOCK_POSUNITS, VERUS_CONSECUTIVE_POS_THRESHOLD, VERUS_NOPOS_THRESHHOLD;
-extern uint256 KOMODO_EARLYTXID;
-
-extern bool IS_KOMODO_DEALERNODE;
-extern int32_t KOMODO_CONNECTING,KOMODO_CCACTIVATE;
-extern uint32_t ASSETCHAINS_CC;
-extern std::string CCerror,ASSETCHAINS_CCLIB;
-extern uint8_t ASSETCHAINS_CCDISABLES[256];
-
-extern int32_t USE_EXTERNAL_PUBKEY;
-extern std::string NOTARY_PUBKEY,NOTARY_ADDRESS;
-extern bool IS_MODE_EXCHANGEWALLET;
-extern int32_t VERUS_MIN_STAKEAGE;
-extern std::string DONATION_PUBKEY;
-extern uint8_t ASSETCHAINS_PRIVATE;
-extern int32_t USE_EXTERNAL_PUBKEY;
-extern char NOTARYADDRS[64][64];
-extern char NOTARY_ADDRESSES[NUM_KMD_SEASONS][64][64];
-extern bool IS_KOMODO_TESTNODE;
-extern int32_t KOMODO_SNAPSHOT_INTERVAL,STAKED_NOTARY_ID,STAKED_ERA;
-extern int32_t ASSETCHAINS_EARLYTXIDCONTRACT;
-extern int32_t ASSETCHAINS_STAKED_SPLIT_PERCENTAGE;
-extern std::vector<std::string> vWhiteListAddress;
-extern std::map <std::int8_t, int32_t> mapHeightEvalActivate;
-void komodo_netevent(std::vector<uint8_t> payload);
 
 #define IGUANA_MAXSCRIPTSIZE 10001
 #define KOMODO_KVDURATION 1440
 #define KOMODO_KVBINARY 2
 #define PRICES_SMOOTHWIDTH 1
 #define PRICES_MAXDATAPOINTS 8
-
-uint256 Parseuint256(const char *hexstr); // defined in cc/CCutilbits.cpp
 
 #ifndef KOMODO_NSPV_FULLNODE
 #define KOMODO_NSPV_FULLNODE (KOMODO_NSPV <= 0)
@@ -545,4 +487,85 @@ uint256 Parseuint256(const char *hexstr); // defined in cc/CCutilbits.cpp
 #define KOMODO_NSPV_SUPERLITE (KOMODO_NSPV > 0)
 #endif // !KOMODO_NSPV_SUPERLITE
 
-#endif
+extern uint8_t ASSETCHAINS_TXPOW;
+extern uint8_t ASSETCHAINS_PUBLIC;
+extern int8_t ASSETCHAINS_ADAPTIVEPOW;
+extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
+extern uint16_t ASSETCHAINS_P2PPORT;
+extern uint16_t ASSETCHAINS_RPCPORT;
+extern uint32_t ASSETCHAIN_INIT;
+extern uint32_t ASSETCHAINS_MAGIC;
+extern int32_t VERUS_BLOCK_POSUNITS;
+extern int32_t ASSETCHAINS_LWMAPOS;
+extern int32_t ASSETCHAINS_SAPLING;
+extern int32_t ASSETCHAINS_OVERWINTER;
+extern int32_t ASSETCHAINS_BLOCKTIME;
+extern uint64_t ASSETCHAINS_SUPPLY;
+extern uint64_t ASSETCHAINS_FOUNDERS_REWARD;
+extern uint32_t ASSETCHAINS_ALGO;
+extern uint32_t ASSETCHAINS_VERUSHASH;
+extern uint32_t ASSETCHAINS_EQUIHASH;
+extern uint32_t KOMODO_INITDONE;
+extern bool IS_KOMODO_NOTARY;
+extern int32_t KOMODO_MININGTHREADS;
+extern int32_t KOMODO_LONGESTCHAIN;
+extern int32_t ASSETCHAINS_SEED;
+extern int32_t KOMODO_CHOSEN_ONE;
+extern int32_t KOMODO_ON_DEMAND;
+extern int32_t KOMODO_PASSPORT_INITDONE;
+extern int32_t ASSETCHAINS_STAKED;
+extern int32_t KOMODO_NSPV;
+extern uint64_t ASSETCHAINS_COMMISSION;
+extern uint64_t ASSETCHAINS_LASTERA;
+extern uint64_t ASSETCHAINS_CBOPRET;
+extern bool VERUS_MINTBLOCKS;
+extern uint64_t ASSETCHAINS_REWARD[ASSETCHAINS_MAX_ERAS+1];
+extern uint64_t ASSETCHAINS_NOTARY_PAY[ASSETCHAINS_MAX_ERAS+1];
+extern uint64_t ASSETCHAINS_NONCEMASK[];
+extern uint64_t ASSETCHAINS_NK[2];
+extern const char *ASSETCHAINS_ALGORITHMS[];
+extern int32_t VERUS_MIN_STAKEAGE;
+extern uint32_t ASSETCHAINS_VERUSHASH;
+extern uint32_t ASSETCHAINS_VERUSHASHV1_1;
+extern uint32_t ASSETCHAINS_NONCESHIFT[];
+extern uint32_t ASSETCHAINS_HASHESPERROUND[];
+extern std::string NOTARY_PUBKEY;
+extern std::string ASSETCHAINS_OVERRIDE_PUBKEY;
+extern std::string ASSETCHAINS_SCRIPTPUB;
+extern uint8_t NOTARY_PUBKEY33[33];
+extern uint8_t ASSETCHAINS_OVERRIDE_PUBKEY33[33];
+extern std::vector<std::string> ASSETCHAINS_PRICES;
+extern std::vector<std::string> ASSETCHAINS_STOCKS;
+
+extern int32_t VERUS_BLOCK_POSUNITS;
+extern int32_t VERUS_CONSECUTIVE_POS_THRESHOLD;
+extern int32_t VERUS_NOPOS_THRESHHOLD;
+extern uint256 KOMODO_EARLYTXID;
+
+extern bool IS_KOMODO_DEALERNODE;
+extern int32_t KOMODO_CONNECTING;
+extern int32_t KOMODO_CCACTIVATE;
+extern uint32_t ASSETCHAINS_CC;
+extern std::string CCerror;
+extern std::string ASSETCHAINS_CCLIB;
+extern uint8_t ASSETCHAINS_CCDISABLES[256];
+
+extern std::string NOTARY_PUBKEY;
+extern std::string NOTARY_ADDRESS;
+extern bool IS_MODE_EXCHANGEWALLET;
+extern int32_t VERUS_MIN_STAKEAGE;
+extern std::string DONATION_PUBKEY;
+extern uint8_t ASSETCHAINS_PRIVATE;
+extern char NOTARYADDRS[64][64];
+extern char NOTARY_ADDRESSES[NUM_KMD_SEASONS][64][64];
+extern bool IS_KOMODO_TESTNODE;
+extern int32_t KOMODO_SNAPSHOT_INTERVAL;
+extern int32_t STAKED_NOTARY_ID;
+extern int32_t STAKED_ERA;
+extern int32_t ASSETCHAINS_EARLYTXIDCONTRACT;
+extern int32_t ASSETCHAINS_STAKED_SPLIT_PERCENTAGE;
+extern std::vector<std::string> vWhiteListAddress;
+extern std::map <std::int8_t, int32_t> mapHeightEvalActivate;
+
+uint256 Parseuint256(const char *hexstr); // defined in cc/CCutilbits.cpp
+void komodo_netevent(std::vector<uint8_t> payload);
