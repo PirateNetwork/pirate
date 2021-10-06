@@ -34,6 +34,7 @@ class ModalOverlay;
 QT_BEGIN_NAMESPACE
 class QAction;
 class QProgressBar;
+class QProgressDialog;
 QT_END_NAMESPACE
 
 /**
@@ -86,6 +87,7 @@ private:
     QLabel *labelBlocksIcon;
     QLabel *progressBarLabel;
     QProgressBar *progressBar;
+    QProgressDialog *progressDialog;
 
     QMenuBar *appMenuBar;
     QAction *overviewAction;
@@ -260,6 +262,8 @@ private Q_SLOTS:
     void toggleNetworkActive();
 
     void showModalOverlay();
+
+    void ShowProgress(QString title, int nProgress);
 };
 
 class UnitDisplayStatusBarControl : public QLabel

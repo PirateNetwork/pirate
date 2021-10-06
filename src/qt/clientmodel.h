@@ -20,7 +20,6 @@ class CBlockIndex;
 
 QT_BEGIN_NAMESPACE
 class QTimer;
-class QProgressDialog;
 QT_END_NAMESPACE
 
 enum BlockSource {
@@ -76,9 +75,6 @@ public:
     QString formatClientStartupTime() const;
     QString dataDir() const;
 
-    // Show progress dialog e.g. for verifychain
-    void showProgress(const QString &title, int &nProgress);
-    
     // caches for the best header
     mutable std::atomic<int> cachedBestHeaderHeight;
     mutable std::atomic<int64_t> cachedBestHeaderTime;
@@ -87,7 +83,6 @@ private:
     OptionsModel *optionsModel;
     PeerTableModel *peerTableModel;
     BanTableModel *banTableModel;
-    QProgressDialog *progressDialog;
 
     QTimer *pollTimer;
 
@@ -105,11 +100,13 @@ Q_SIGNALS:
     //! Fired when a message should be reported to the user
     void message(const QString &title, const QString &message, unsigned int style);
 
+    void showProgressDialog(QString title, int nProgress);
 
 
 public Q_SLOTS:
     void updateTimer();
     void updateNumConnections(int numConnections);
+    void updateProgressDialog(QString title, int nProgress);
     void updateNetworkActive(bool networkActive);
     void updateAlert();
     void updateBanlist();

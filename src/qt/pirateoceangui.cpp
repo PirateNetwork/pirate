@@ -41,6 +41,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QProgressDialog>
 #include <QDateTime>
 #include <QDesktopWidget>
 #include <QDragEnterEvent>
@@ -93,6 +94,7 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     labelBlocksIcon(0),
     progressBarLabel(0),
     progressBar(0),
+    progressDialog(0),
     appMenuBar(0),
     overviewAction(0),
     historyAction(0),
@@ -595,6 +597,7 @@ void PirateOceanGUI::setClientModel(ClientModel *_clientModel)
         updateNetworkState();
         connect(_clientModel, SIGNAL(numConnectionsChanged(int)), this, SLOT(setNumConnections(int)));
         connect(_clientModel, SIGNAL(networkActiveChanged(bool)), this, SLOT(setNetworkActive(bool)));
+        connect(_clientModel, SIGNAL(showProgressDialog(QString, int)), this, SLOT(ShowProgress(QString, int)));
 
         modalOverlay->setKnownBestHeight(_clientModel->getHeaderTipHeight(), QDateTime::fromTime_t(_clientModel->getHeaderTipTime()));
         setNumBlocks(_clientModel->getNumBlocks(), _clientModel->getLastBlockDate(), _clientModel->getVerificationProgress(nullptr), false);
@@ -1349,6 +1352,36 @@ void PirateOceanGUI::showModalOverlay()
 {
     if (modalOverlay && (progressBar->isVisible() || modalOverlay->isLayerVisible()))
         modalOverlay->toggleVisibility();
+}
+
+void PirateOceanGUI::ShowProgress(QString title, int nProgress)
+{
+    if (nProgress == 0)
+    {
+        progressDialog = new QProgressDialog(title, "", 0, 100);
+        progressDialog->setWindowModality(Qt::ApplicationModal);
+        progressDialog->setMinimumHeight(75);
+        progressDialog->setMinimumWidth(325);
+        progressDialog->setMinimumDuration(0);
+        progressDialog->setCancelButton(0);
+        progressDialog->setAutoClose(false);
+        progressDialog->setWindowTitle(title);
+        progressDialog->setLabelText(title);
+        progressDialog->setValue(0);
+    }
+    else if (nProgress == 100)
+    {
+        if (progressDialog)
+        {
+            progressDialog->close();
+            progressDialog->deleteLater();
+        }
+    }
+    else if (progressDialog && nProgress > 0 && nProgress < 100 ) {
+        progressDialog->setLabelText(title);
+        progressDialog->setValue(nProgress);
+    }
+    qApp->processEvents();
 }
 
 static bool ThreadSafeMessageBox(PirateOceanGUI *gui, const std::string& message, const std::string& caption, unsigned int style)
