@@ -101,7 +101,7 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, QWidget *parent):
     // Pass through messages from transactionView
     connect(transactionView, SIGNAL(message(QString,QString,unsigned int)), this, SIGNAL(message(QString,QString,unsigned int)));
 
-    // This timer will be fired repeatedly to update the balance
+    // This timer will be fired repeatedly to update the locked message
     pollTimer = new QTimer(this);
     connect(pollTimer, SIGNAL(timeout()), this, SLOT(setLockMessage()));
     pollTimer->start(250);
@@ -166,9 +166,7 @@ void WalletView::setWalletModel(WalletModel *_walletModel)
 
         // Handle changes in encryption status
         connect(_walletModel, SIGNAL(encryptionStatusChanged(int)), this, SIGNAL(encryptionStatusChanged(int)));
-        connect(_walletModel, SIGNAL(encryptionStatusChanged(int)), this, SLOT(setUnlockButton()));
         updateEncryptionStatus();
-        setUnlockButton();
 
         // update HD status
         Q_EMIT hdEnabledStatusChanged(_walletModel->hdEnabled());
@@ -211,6 +209,9 @@ void WalletView::setLockMessage() {
         }
 
         WalletModel::EncryptionStatus encryptionStatus = walletModel->getEncryptionStatus();
+
+        //update the UI based on encryption status
+        setUnlockButton();
 
         if (encryptionStatus == WalletModel::Unlocked) {
             if (walletModel->relockTime > 0) {
