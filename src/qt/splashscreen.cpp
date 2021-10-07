@@ -128,7 +128,7 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     seedLayout->setContentsMargins(0, 0, 0, 0);
     seed = new QWidget;
     seed->setObjectName("seed");
-    seed->setStyleSheet( "QWidget#seed{ background-color : #000000; color: #ffffff; }" );
+    seed->setStyleSheet( "QWidget#seed{ background-color : #202020; color: #ffffff; }" );
     seedLayout->addWidget(seed);
     seed->setVisible(false);
 
@@ -201,6 +201,7 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
 
     //Add button layout
     QHBoxLayout *buttonLayout = new QHBoxLayout(this);
+    buttonLayout->setContentsMargins(9, 0, 9, 9);
     buttonLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Fixed));
 
     //Add ok button

@@ -20,6 +20,9 @@
    <string>Form</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_3">
+   <property name="bottomMargin">
+    <number>3</number>
+   </property>
    <item>
     <widget class="QFrame" name="outerFrame">
      <property name="frameShape">
