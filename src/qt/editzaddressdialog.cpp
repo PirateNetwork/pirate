@@ -22,23 +22,31 @@ EditZAddressDialog::EditZAddressDialog(Mode _mode, QWidget *parent) :
 
     GUIUtil::setupAddressWidget(ui->addressEdit, this);
 
-    ui->labelEdit->setEnabled(false);
+    ui->labelEdit->setPlaceholderText("z-sapling");
 
     switch(mode)
     {
     case NewReceivingAddress:
         setWindowTitle(tr("New receiving z-address"));
         ui->addressEdit->setEnabled(false);
+        ui->addressEdit->setVisible(false);
+        ui->label_2->setVisible(false);
         break;
     case NewSendingAddress:
         setWindowTitle(tr("New sending z-address"));
+        ui->addressEdit->setVisible(true);
+        ui->label_2->setVisible(true);
         break;
     case EditReceivingAddress:
         setWindowTitle(tr("Edit receiving z-address"));
         ui->addressEdit->setEnabled(false);
+        ui->addressEdit->setVisible(true);
+        ui->label_2->setVisible(true);
         break;
     case EditSendingAddress:
         setWindowTitle(tr("Edit sending z-address"));
+        ui->addressEdit->setVisible(true);
+        ui->label_2->setVisible(true);
         break;
     }
 

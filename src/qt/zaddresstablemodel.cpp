@@ -298,7 +298,7 @@ ZAddressTableModel::ZAddressTableModel(const PlatformStyle *_platformStyle, CWal
     priv(new ZAddressTablePriv(wallet, this)),
     platformStyle(_platformStyle)
 {
-    columns << tr("Mine") << tr("Balance") << tr("Address") << tr("Type");
+    columns << tr("Mine") << tr("Balance") << tr("Address") << tr("Label");
     priv->refreshAddressTable();
 
     // This timer will be fired repeatedly to update the balance
@@ -495,7 +495,7 @@ QVariant ZAddressTableModel::headerData(int section, Qt::Orientation orientation
 }
 
 Qt::ItemFlags ZAddressTableModel::flags(const QModelIndex &index) const
-{  
+{
     if(!index.isValid())
         return 0;
     ZAddressTableEntry *rec = static_cast<ZAddressTableEntry*>(index.internalPointer());
@@ -535,7 +535,7 @@ void ZAddressTableModel::updateEntry(const QString &address,
 QString ZAddressTableModel::addRow(const QString &type, const QString &label, const QString &address)
 {
 
-    std::string strLabel; // = label.toStdString();
+    std::string strLabel = label.toStdString();
     std::string strAddress = address.toStdString();
 
     editStatus = OK;
@@ -564,12 +564,10 @@ QString ZAddressTableModel::addRow(const QString &type, const QString &label, co
         if ( GetTime() < KOMODO_SAPLING_ACTIVATION )
         {
             strAddress = EncodePaymentAddress(wallet->GenerateNewSproutZKey());
-            strLabel = "z-sprout";
         }
         else
         {
             strAddress = EncodePaymentAddress(wallet->GenerateNewSaplingZKey());
-            strLabel = "z-sapling";
         }
     }
     else

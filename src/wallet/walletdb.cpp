@@ -109,6 +109,70 @@ bool CWalletDB::EraseCryptedPurpose(const uint256& chash)
     nWalletDBUpdated++;
     return Erase(make_pair(string("cpurpose"), chash));
 }
+
+//Begin Sapling Address book
+bool CWalletDB::WriteSaplingName(const string& strAddress, const string& strName)
+{
+    nWalletDBUpdated++;
+    return Write(make_pair(string("zname"), strAddress), strName);
+}
+
+bool CWalletDB::WriteCryptedSaplingName(const string& strAddress, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret)
+{
+    nWalletDBUpdated++;
+    if (!Write(make_pair(string("czname"), chash), vchCryptedSecret)) {
+        return false;
+    }
+
+    Erase(make_pair(string("zname"), strAddress));
+    return true;
+}
+
+bool CWalletDB::EraseSaplingName(const string& strAddress)
+{
+    // This should only be used for sending addresses, never for receiving addresses,
+    // receiving addresses must always have an address book entry if they're not change return.
+    nWalletDBUpdated++;
+    return Erase(make_pair(string("zname"), strAddress));
+}
+
+bool CWalletDB::EraseCryptedSaplingName(const uint256& chash)
+{
+    // This should only be used for sending addresses, never for receiving addresses,
+    // receiving addresses must always have an address book entry if they're not change return.
+    nWalletDBUpdated++;
+    return Erase(make_pair(string("czname"), chash));
+}
+
+bool CWalletDB::WriteSaplingPurpose(const string& strAddress, const string& strPurpose)
+{
+    nWalletDBUpdated++;
+    return Write(make_pair(string("zpurpose"), strAddress), strPurpose);
+}
+
+bool CWalletDB::WriteCryptedSaplingPurpose(const string& strAddress, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret)
+{
+    nWalletDBUpdated++;
+    if (!Write(make_pair(string("czpurpose"), chash), vchCryptedSecret)) {
+        return false;
+    }
+
+    Erase(make_pair(string("zpurpose"), strAddress));
+    return true;
+}
+
+bool CWalletDB::EraseSaplingPurpose(const string& strPurpose)
+{
+    nWalletDBUpdated++;
+    return Erase(make_pair(string("zpurpose"), strPurpose));
+}
+
+bool CWalletDB::EraseCryptedSaplingPurpose(const uint256& chash)
+{
+    nWalletDBUpdated++;
+    return Erase(make_pair(string("czpurpose"), chash));
+}
+
 //Begin Historical Wallet Tx
 bool CWalletDB::WriteArcTx(uint256 hash, ArchiveTxPoint arcTxPoint, bool txnProtected)
 {
@@ -1136,6 +1200,48 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
 
 
         //Sapling Address data
+        else if (strType == "zname")
+        {
+            string strAddress;
+            ssKey >> strAddress;
+            ssValue >> pwallet->mapZAddressBook[DecodePaymentAddress(strAddress)].name;
+        }
+        else if (strType =="czname")
+        {
+            string strAddress;
+            string strName;
+            uint256 chash;
+            ssKey >> chash;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+
+            pwallet->DecryptAddressBookEntry(chash, vchCryptedSecret, strAddress, strName);
+            if (strName == "None")
+                strName = "";
+
+            pwallet->mapZAddressBook[DecodePaymentAddress(strAddress)].name = strName;
+        }
+        else if (strType == "zpurpose")
+        {
+            string strAddress;
+            ssKey >> strAddress;
+            ssValue >> pwallet->mapZAddressBook[DecodePaymentAddress(strAddress)].purpose;
+        }
+        else if (strType =="czpurpose")
+        {
+          string strAddress;
+          string strPurpose;
+          uint256 chash;
+          ssKey >> chash;
+          vector<unsigned char> vchCryptedSecret;
+          ssValue >> vchCryptedSecret;
+
+          pwallet->DecryptAddressBookEntry(chash, vchCryptedSecret, strAddress, strPurpose);
+          if (strPurpose == "None")
+              strPurpose = "";
+
+          pwallet->mapZAddressBook[DecodePaymentAddress(strAddress)].purpose = strPurpose;
+        }
         else if (strType == "sapzkey")
         {
             libzcash::SaplingIncomingViewingKey ivk;
@@ -1149,8 +1255,12 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 return false;
             }
 
-            pwallet->mapZAddressBook[key.DefaultAddress()].name = "z-sapling";
-            pwallet->mapZAddressBook[key.DefaultAddress()].purpose = "unknown";
+            //Insert if not found, don't overwrite if found
+            auto r = pwallet->mapZAddressBook.find(key.DefaultAddress());
+            if (r == pwallet->mapZAddressBook.end()) {
+                pwallet->mapZAddressBook[key.DefaultAddress()].name = "z-sapling";
+                pwallet->mapZAddressBook[key.DefaultAddress()].purpose = "unknown";
+            }
 
             //add checks for integrity
             wss.nZKeys++;
@@ -1170,8 +1280,12 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 return false;
             }
 
-            pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
-            pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
+            //Insert if not found, don't overwrite if found
+            auto r = pwallet->mapZAddressBook.find(extfvk.DefaultAddress());
+            if (r == pwallet->mapZAddressBook.end()) {
+                pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
+                pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
+            }
 
             wss.fIsEncrypted = true;
         }
@@ -1194,8 +1308,12 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 }
             }
 
-            pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
-            pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
+            //Insert if not found, don't overwrite if found
+            auto r = pwallet->mapZAddressBook.find(extfvk.DefaultAddress());
+            if (r == pwallet->mapZAddressBook.end()) {
+                pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
+                pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
+            }
 
             // Viewing keys have no birthday information for now,
             // so set the wallet birthday to the beginning of time.
@@ -1215,8 +1333,13 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             }
 
             pwallet->LoadSaplingWatchOnly(extfvk);
-            pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
-            pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
+
+            //Insert if not found, don't overwrite if found
+            auto r = pwallet->mapZAddressBook.find(extfvk.DefaultAddress());
+            if (r == pwallet->mapZAddressBook.end()) {
+                pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
+                pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
+            }
 
             // Viewing keys have no birthday information for now,
             // so set the wallet birthday to the beginning of time.
@@ -1259,8 +1382,12 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 return false;
             }
 
-            pwallet->mapZAddressBook[addr].name = "z-sapling";
-            pwallet->mapZAddressBook[addr].purpose = "unknown";
+            //Insert if not found, don't overwrite if found
+            auto r = pwallet->mapZAddressBook.find(addr);
+            if (r == pwallet->mapZAddressBook.end()) {
+                pwallet->mapZAddressBook[addr].name = "z-sapling";
+                pwallet->mapZAddressBook[addr].purpose = "unknown";
+            }
         }
         else if (strType == "csapzaddr")
         {
@@ -1278,8 +1405,12 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 return false;
             }
 
-            pwallet->mapZAddressBook[addr].name = "z-sapling";
-            pwallet->mapZAddressBook[addr].purpose = "unknown";
+            //Insert if not found, don't overwrite if found
+            auto r = pwallet->mapZAddressBook.find(addr);
+            if (r == pwallet->mapZAddressBook.end()) {
+                pwallet->mapZAddressBook[addr].name = "z-sapling";
+                pwallet->mapZAddressBook[addr].purpose = "unknown";
+            }
         }
         else if (strType == "sapzdivaddr")
         {

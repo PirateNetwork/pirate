@@ -193,6 +193,16 @@ public:
     bool ErasePurpose(const std::string& strAddress);
     bool EraseCryptedPurpose(const uint256& chash);
 
+    bool WriteSaplingName(const std::string& strAddress, const std::string& strName);
+    bool WriteCryptedSaplingName(const std::string& strAddress, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret);
+    bool EraseSaplingName(const std::string& strAddress);
+    bool EraseCryptedSaplingName(const uint256& chash);
+
+    bool WriteSaplingPurpose(const std::string& strAddress, const std::string& purpose);
+    bool WriteCryptedSaplingPurpose(const std::string& strAddress, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret);
+    bool EraseSaplingPurpose(const std::string& strAddress);
+    bool EraseCryptedSaplingPurpose(const uint256& chash);
+
     //Begin Historical Wallet Tx
     bool WriteArcTx(uint256 hash, ArchiveTxPoint arcTxPoint, bool txnProtected);
     bool EraseArcTx(uint256 hash);

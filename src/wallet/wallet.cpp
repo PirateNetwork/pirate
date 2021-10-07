@@ -6650,10 +6650,45 @@ bool CWallet::SetZAddressBook(const libzcash::PaymentAddress &address, const str
     if (!fFileBacked)
         return false;
 
-    //!!!!! wallet db doesn't have name and purpose for z-addresses
-    //    if (!strPurpose.empty() && !CWalletDB(strWalletFile).WritePurpose(CZCPaymentAddress(address).ToString(), strPurpose))
-    //        return false;
-    //    return CWalletDB(strWalletFile).WriteName(CZCPaymentAddress(address).ToString(), strName);
+    if (!IsCrypted()) {
+        if (!strPurpose.empty() && !CWalletDB(strWalletFile).WriteSaplingPurpose(EncodePaymentAddress(address), strPurpose))
+            return false;
+        return CWalletDB(strWalletFile).WriteSaplingName(EncodePaymentAddress(address), strName);
+    } else {
+
+        const string strAddress = EncodePaymentAddress(address);
+        uint256 chash = HashWithFP(strAddress);
+        string strPurposeIn = strPurpose;
+        if (strPurposeIn.empty())
+            strPurposeIn = "None";
+
+        CKeyingMaterial vchSecretPurpose = SerializeForEncryptionInput(strAddress, strPurposeIn);
+        std::vector<unsigned char> vchCryptedSecretPurpose;
+
+        if (!EncryptSerializedWalletObjects(vchSecretPurpose, chash, vchCryptedSecretPurpose)) {
+            return false;
+        }
+
+        if (!CWalletDB(strWalletFile).WriteCryptedSaplingPurpose(strAddress, chash, vchCryptedSecretPurpose)) {
+            return false;
+        }
+
+        string strNameIn = strName;
+        if (strNameIn.empty())
+            strNameIn = "None";
+
+        CKeyingMaterial vchSecretName = SerializeForEncryptionInput(strAddress, strNameIn);
+        std::vector<unsigned char> vchCryptedSecretName;
+
+        if (!EncryptSerializedWalletObjects(vchSecretName, chash, vchCryptedSecretName)) {
+            return false;
+        }
+
+        if (!CWalletDB(strWalletFile).WriteCryptedSaplingName(strAddress, chash, vchCryptedSecretName)) {
+            return false;
+        }
+    }
+
     return true;
 }
 
