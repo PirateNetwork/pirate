@@ -482,7 +482,7 @@ int32_t komodo_gateway_deposits(CMutableTransaction *txNew,char *base,int32_t to
     strcpy(symbol,base);
     if ( ASSETCHAINS_SYMBOL[0] != 0 && komodo_baseid(ASSETCHAINS_SYMBOL) < 0 )
         return(0);
-    PENDING_KOMODO_TX = 0;
+    uint64_t pending_komodo_tx = 0;
     for (i=0; i<3; i++)
     {
         if ( komodo_isrealtime(&ht) != 0 )
@@ -586,13 +586,13 @@ int32_t komodo_gateway_deposits(CMutableTransaction *txNew,char *base,int32_t to
                 data[len++] = ((uint8_t *)&pax->txid)[i];
             data[len++] = pax->vout & 0xff;
             data[len++] = (pax->vout >> 8) & 0xff;
-            PENDING_KOMODO_TX += pax->fiatoshis;
+            pending_komodo_tx += pax->fiatoshis;
         }
         else
         {
             len += komodo_rwapproval(1,&data[len],pax);
-            PENDING_KOMODO_TX += pax->komodoshis;
-            printf(" len.%d vout.%u DEPOSIT %.8f <- pax.%s pending ht %d %d %.8f | ",len,pax->vout,(double)txNew->vout[numvouts].nValue/COIN,symbol,pax->height,pax->otherheight,dstr(PENDING_KOMODO_TX));
+            pending_komodo_tx += pax->komodoshis;
+            printf(" len.%d vout.%u DEPOSIT %.8f <- pax.%s pending ht %d %d %.8f | ",len,pax->vout,(double)txNew->vout[numvouts].nValue/COIN,symbol,pax->height,pax->otherheight,dstr(pending_komodo_tx));
         }
         if ( numvouts++ >= 64 || sum > COIN )
             break;
@@ -615,7 +615,7 @@ int32_t komodo_gateway_deposits(CMutableTransaction *txNew,char *base,int32_t to
         memcpy(script,opret,opretlen);
         for (i=0; i<8; i++)
             printf("%02x",opret[i]);
-        printf(" <- opret, MINER deposits.%d (%s) vouts.%d %.8f opretlen.%d\n",tokomodo,ASSETCHAINS_SYMBOL,numvouts,dstr(PENDING_KOMODO_TX),opretlen);
+        printf(" <- opret, MINER deposits.%d (%s) vouts.%d %.8f opretlen.%d\n",tokomodo,ASSETCHAINS_SYMBOL,numvouts,dstr(pending_komodo_tx),opretlen);
         return(1);
     }
     return(0);

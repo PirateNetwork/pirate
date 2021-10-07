@@ -115,7 +115,6 @@ uint64_t ASSETCHAINS_COMMISSION,ASSETCHAINS_SUPPLY = 10,ASSETCHAINS_FOUNDERS_REW
 
 uint32_t KOMODO_INITDONE;
 char KMDUSERPASS[8192+512+1],BTCUSERPASS[8192]; uint16_t KMD_PORT = 7771,BITCOIND_RPCPORT = 7771, DEST_PORT;
-uint64_t PENDING_KOMODO_TX;
 unsigned int MAX_BLOCK_SIGOPS = 20000;
 
 bool IS_KOMODO_TESTNODE;
@@ -127,7 +126,7 @@ int32_t ASSETCHAINS_STAKED_SPLIT_PERCENTAGE;
 std::map <std::int8_t, int32_t> mapHeightEvalActivate;
 
 struct komodo_kv *KOMODO_KV;
-pthread_mutex_t KOMODO_KV_mutex,KOMODO_CC_mutex;
+pthread_mutex_t KOMODO_CC_mutex;
 
 char CURRENCIES[][8] = { "USD", "EUR", "JPY", "GBP", "AUD", "CAD", "CHF", "NZD", // major currencies
     "CNY", "RUB", "MXN", "BRL", "INR", "HKD", "TRY", "ZAR", "PLN", "NOK", "SEK", "DKK", "CZK", "HUF", "ILS", "KRW", "MYR", "PHP", "RON", "SGD", "THB", "BGN", "IDR", "HRK",
