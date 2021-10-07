@@ -2274,7 +2274,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                     strErrors << _("Cannot write default address") << "\n";
             }
 
-            pwalletMain->SetBestChain(chainActive.GetLocator());
+            pwalletMain->SetBestChain(chainActive.GetLocator(), chainActive.Tip()->GetHeight());
         }
 
         LogPrintf("%s", strErrors.str());

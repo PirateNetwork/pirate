@@ -58,8 +58,8 @@ public:
     void DecrementNoteWitnesses(const CBlockIndex* pindex) {
         CWallet::DecrementNoteWitnesses(pindex);
     }
-    void SetBestChain(MockWalletDB& walletdb, const CBlockLocator& loc) {
-        CWallet::SetBestChainINTERNAL(walletdb, loc);
+    void SetBestChain(MockWalletDB& walletdb, const CBlockLocator& loc, const int& height) {
+        CWallet::SetBestChainINTERNAL(walletdb, loc, int);
     }
     bool UpdatedNoteData(const CWalletTx& wtxIn, CWalletTx& wtx) {
         return CWallet::UpdatedNoteData(wtxIn, wtx);
@@ -1604,7 +1604,7 @@ TEST(WalletTests, WriteWitnessCache) {
     // TxnBegin fails
     EXPECT_CALL(walletdb, TxnBegin())
         .WillOnce(Return(false));
-    wallet.SetBestChain(walletdb, loc);
+    wallet.SetBestChain(walletdb, loc, 0);
     EXPECT_CALL(walletdb, TxnBegin())
         .WillRepeatedly(Return(true));
 
@@ -1613,14 +1613,14 @@ TEST(WalletTests, WriteWitnessCache) {
         .WillOnce(Return(false));
     EXPECT_CALL(walletdb, TxnAbort())
         .Times(1);
-    wallet.SetBestChain(walletdb, loc);
+    wallet.SetBestChain(walletdb, loc, 0);
 
     // WriteTx throws
     EXPECT_CALL(walletdb, WriteTx(wtx.GetHash(), wtx, true))
         .WillOnce(ThrowLogicError());
     EXPECT_CALL(walletdb, TxnAbort())
         .Times(1);
-    wallet.SetBestChain(walletdb, loc);
+    wallet.SetBestChain(walletdb, loc, 0);
     EXPECT_CALL(walletdb, WriteTx(wtx.GetHash(), wtx, true))
         .WillRepeatedly(Return(true));
 
@@ -1629,26 +1629,26 @@ TEST(WalletTests, WriteWitnessCache) {
         .WillOnce(Return(false));
     EXPECT_CALL(walletdb, TxnAbort())
         .Times(1);
-    wallet.SetBestChain(walletdb, loc);
+    wallet.SetBestChain(walletdb, loc, 0);
 
     // WriteBestBlock throws
     EXPECT_CALL(walletdb, WriteBestBlock(loc))
         .WillOnce(ThrowLogicError());
     EXPECT_CALL(walletdb, TxnAbort())
         .Times(1);
-    wallet.SetBestChain(walletdb, loc);
+    wallet.SetBestChain(walletdb, loc, 0);
     EXPECT_CALL(walletdb, WriteBestBlock(loc))
         .WillRepeatedly(Return(true));
 
     // TxCommit fails
     EXPECT_CALL(walletdb, TxnCommit())
         .WillOnce(Return(false));
-    wallet.SetBestChain(walletdb, loc);
+    wallet.SetBestChain(walletdb, loc, 0);
     EXPECT_CALL(walletdb, TxnCommit())
         .WillRepeatedly(Return(true));
 
     // Everything succeeds
-    wallet.SetBestChain(walletdb, loc);
+    wallet.SetBestChain(walletdb, loc, 0);
 }
 
 TEST(WalletTests, SetBestChainIgnoresTxsWithoutShieldedData) {
@@ -1703,7 +1703,7 @@ TEST(WalletTests, SetBestChainIgnoresTxsWithoutShieldedData) {
         .WillOnce(Return(true));
     EXPECT_CALL(walletdb, TxnCommit())
         .WillOnce(Return(true));
-    wallet.SetBestChain(walletdb, loc);
+    wallet.SetBestChain(walletdb, loc, 0);
 }
 
 TEST(WalletTests, UpdateSproutNullifierNoteMap) {

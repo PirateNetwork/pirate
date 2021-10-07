@@ -825,6 +825,8 @@ private:
 
     int64_t nNextResend;
     int64_t nLastResend;
+    int64_t nLastSetChain;
+    int nSetChainUpdates;
     bool fBroadcastTransactions;
 
     template <class T>
@@ -913,7 +915,7 @@ protected:
     void DecrementNoteWitnesses(const CBlockIndex* pindex);
 
     template <typename WalletDB>
-    void SetBestChainINTERNAL(WalletDB& walletdb, const CBlockLocator& loc) {
+    void SetBestChainINTERNAL(WalletDB& walletdb, const CBlockLocator& loc, const int& height) {
         AssertLockHeld(cs_wallet);
         if (!walletdb.TxnBegin()) {
             // This needs to be done atomically, so don't do it at all
@@ -1097,7 +1099,7 @@ protected:
 
         //Clear Unsaved Sapling Addresses after successful TxnCommit
         mapUnsavedSaplingIncomingViewingKeys.clear();
-        walletHeight = chainHeight; //Set Wallet height to chain height.
+        walletHeight = height; //Set Wallet height to chain height.
         LogPrintf("SetBestChain(): SetBestChain was successful\n");
     }
 
@@ -1173,6 +1175,8 @@ public:
         nOrderPosNext = 0;
         nNextResend = 0;
         nLastResend = 0;
+        nLastSetChain = 0;
+        nSetChainUpdates = 0;
         nTimeFirstKey = 0;
         fBroadcastTransactions = false;
     }
@@ -1591,7 +1595,7 @@ public:
     void RunSaplingConsolidation(int blockHeight);
     void CommitAutomatedTx(const CTransaction& tx);
     /** Saves witness caches and best block locator to disk. */
-    void SetBestChain(const CBlockLocator& loc);
+    void SetBestChain(const CBlockLocator& loc, const int& height);
     void SetWalletBirthday(int nHeight);
     std::set<std::pair<libzcash::PaymentAddress, uint256>> GetNullifiersForAddresses(const std::set<libzcash::PaymentAddress> & addresses);
     bool IsNoteSproutChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet, const libzcash::PaymentAddress & address, const JSOutPoint & entry);

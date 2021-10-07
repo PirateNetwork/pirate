@@ -1227,8 +1227,7 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase)
             if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
                 continue; // try another master key
             if (CCryptoKeyStore::Unlock(vMasterKey)) {
-                CWalletDB walletdb(strWalletFile);
-                SetBestChainINTERNAL(walletdb, currentBlock);
+                SetBestChain(currentBlock, chainHeight);
                 return true;
             }
         }
@@ -1320,7 +1319,31 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
         UpdateNullifierNoteMapForBlock(pblock);
     }
 
-    chainHeight = pindex->GetHeight();
+    // SetBestChain() can be expensive for large wallets, so do only
+    // this sometimes; the wallet state will be brought up to date
+    // during rescanning on startup.
+    {
+        // The locator must be derived from the pindex used to increment
+        // the witnesses above; pindex can be behind chainActive.Tip().
+        // set the currentBlock and chainHeight in memory even if the wallet is not flushed to Disk
+        // Needed to report to the GUI on Locked wallets
+        LOCK(cs_main);
+        currentBlock = chainActive.GetLocator(pindex);
+        chainHeight = pindex->GetHeight();
+    }
+    int64_t nNow = GetTimeMicros();
+    if (nLastSetChain == 0) {
+        // Don't flush during startup.
+        nLastSetChain = nNow;
+    }
+    if (++nSetChainUpdates >= WITNESS_WRITE_UPDATES ||
+            nLastSetChain + (int64_t)WITNESS_WRITE_INTERVAL * 1000000 < nNow) {
+        nLastSetChain = nNow;
+        nSetChainUpdates = 0;
+
+        SetBestChain(currentBlock, chainHeight);
+    }
+
 }
 
 void CWallet::RunSaplingSweep(int blockHeight) {
@@ -1398,13 +1421,11 @@ void CWallet::CommitAutomatedTx(const CTransaction& tx) {
   CommitTransaction(wtx, reservekey);
 }
 
-void CWallet::SetBestChain(const CBlockLocator& loc)
+void CWallet::SetBestChain(const CBlockLocator& loc, const int& height)
 {
     LOCK(cs_wallet);
-    currentBlock = loc;
-    chainHeight = chainActive.Tip()->GetHeight();
     CWalletDB walletdb(strWalletFile);
-    SetBestChainINTERNAL(walletdb, currentBlock);
+    SetBestChainINTERNAL(walletdb, loc, height);
 }
 
 void CWallet::SetWalletBirthday(int nHeight)
@@ -4994,8 +5015,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
     //if the wallet is killed part way through
     currentBlock = chainActive.GetLocator(pindex);
     chainHeight = pindex->GetHeight();
-    CWalletDB walletdb(strWalletFile);
-    SetBestChainINTERNAL(walletdb, currentBlock);
+    SetBestChain(currentBlock, chainHeight);
 
     std::set<uint256> txList;
     std::set<uint256> txListOriginal;
@@ -5078,8 +5098,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
         //Write everything to the wallet
         currentBlock = chainActive.GetLocator();
         chainHeight = chainActive.Tip()->GetHeight();
-        CWalletDB walletdb(strWalletFile);
-        SetBestChainINTERNAL(walletdb, currentBlock);
+        SetBestChain(currentBlock, chainHeight);
 
         if (LockOnFinish && IsCrypted()) {
             Lock();
