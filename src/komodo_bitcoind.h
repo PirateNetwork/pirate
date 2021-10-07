@@ -172,7 +172,14 @@ int32_t komodo_nextheight();
 
 int32_t komodo_isrealtime(int32_t *kmdheightp);
 
-int32_t komodo_validate_interest(const CTransaction &tx,int32_t txheight,uint32_t cmptime,int32_t dispflag);
+/*******
+ * @brief validate interest in processing a transaction
+ * @param tx the transaction
+ * @param txheight the desired chain height to evaluate
+ * @param cmptime the block time (often the median block time of a chunk of recent blocks)
+ * @returns true if tx seems okay, false if tx has been in mempool too long (currently an hour + some)
+ */
+bool komodo_validate_interest(const CTransaction &tx,int32_t txheight,uint32_t cmptime);
 
 /*
  komodo_checkPOW (fast) is called early in the process and should only refer to data immediately available. it is a filter to prevent bad blocks from going into the local DB. The more blocks we can filter out at this stage, the less junk in the local DB that will just get purged later on.
