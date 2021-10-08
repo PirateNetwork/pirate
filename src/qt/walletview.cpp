@@ -256,8 +256,11 @@ void WalletView::setUnlockButton()
       case WalletModel::Unlocked:
           overviewPage->setUiVisible(false, true, walletModel->relockTime);
           break;
-      default:
+      case WalletModel::Unencrypted:
           overviewPage->setUiVisible(false, false, 0);
+          break;
+      default:
+          break;
       }
     }
 }
