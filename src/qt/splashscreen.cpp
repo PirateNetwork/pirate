@@ -249,7 +249,14 @@ bool SplashScreen::eventFilter(QObject * obj, QEvent * ev) {
         if(keyEvent->text()[0] == 'q') {
             StartShutdown();
         }
+
+        if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
+            if (openWallet->isVisible()) {
+                on_btnOpen_clicked();
+            } 
+        }
     }
+
     return QObject::eventFilter(obj, ev);
 }
 
