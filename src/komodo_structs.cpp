@@ -23,7 +23,7 @@
 
 bool komodo_state::add_event(const std::string& symbol, const uint32_t height, std::shared_ptr<komodo::event> in)
 {
-    if (ASSETCHAINS_SYMBOL[0] != 0)
+    if (!chain.isKMD())
     {
         std::lock_guard<std::mutex> lock(komodo_mutex);
         events.push_back( in );

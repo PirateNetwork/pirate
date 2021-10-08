@@ -150,7 +150,7 @@ bool AppInit(int argc, char* argv[])
         chainparams_commandline();
 
         fprintf(stderr,"call komodo_args.(%s) NOTARY_PUBKEY.(%s)\n",argv[0],NOTARY_PUBKEY.c_str());
-        printf("initialized %s at %u\n",ASSETCHAINS_SYMBOL,(uint32_t)time(NULL));
+        printf("initialized %s at %u\n",chain.symbol().c_str(),(uint32_t)time(NULL));
         if (!boost::filesystem::is_directory(GetDataDir(false)))
         {
             fprintf(stderr, "Error: Specified data directory \"%s\" does not exist.\n", mapArgs["-datadir"].c_str());
@@ -198,7 +198,7 @@ bool AppInit(int argc, char* argv[])
         fDaemon = GetBoolArg("-daemon", false);
         if (fDaemon)
         {
-            fprintf(stdout, "Komodo %s server starting\n",ASSETCHAINS_SYMBOL);
+            fprintf(stdout, "Komodo %s server starting\n",chain.symbol().c_str());
 
             // Daemonize
             pid_t pid = fork();

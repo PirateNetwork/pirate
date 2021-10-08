@@ -1387,7 +1387,7 @@ void ThreadOpenConnections()
             static bool done = false;
             if (!done) {
                 // skip DNS seeds for staked chains.
-                if ( is_STAKED(ASSETCHAINS_SYMBOL) == 0 ) {
+                if ( is_STAKED(chain.symbol()) == 0 ) {
                     //LogPrintf("Adding fixed seed nodes as DNS doesn't seem to be available.\n");
                     LogPrintf("Adding fixed seed nodes.\n");
                     addrman.Add(convertSeed6(Params().FixedSeeds()), CNetAddr("127.0.0.1"));
@@ -1810,7 +1810,7 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
     Discover(threadGroup);
 
     // skip DNS seeds for staked chains.
-    if ( is_STAKED(ASSETCHAINS_SYMBOL) != 0 )
+    if ( is_STAKED(chain.symbol()) != 0 )
         SoftSetBoolArg("-dnsseed", false);
 
     //

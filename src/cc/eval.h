@@ -152,7 +152,7 @@ public:
 };
 
 
-extern char ASSETCHAINS_SYMBOL[65];
+extern assetchain chain;
 
 
 /*
@@ -219,7 +219,8 @@ public:
     template <typename Stream>
     bool DetectBackNotarisation(Stream& s, CSerActionUnserialize act)
     {
-        if (ASSETCHAINS_SYMBOL[0]) return 1;
+        if (!chain.isKMD()) 
+            return 1;
         if (s.size() >= 72) {
             if (strcmp("BTC", &s[68]) == 0) return 1;
             if (strcmp("KMD", &s[68]) == 0) return 1;

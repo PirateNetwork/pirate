@@ -38,7 +38,8 @@ char whoami[MAXSTR];
 #define SATOSHIDEN ((uint64_t)100000000L)
 #define dstr(x) ((double)(x) / SATOSHIDEN)
 #define KOMODO_ASSETCHAIN_MAXLEN 65
-char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN],IPADDRESS[100];
+char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
+char IPADDRESS[100];
 
 #ifdef _WIN32
 #ifdef _MSC_VER
@@ -536,7 +537,7 @@ uint16_t _komodo_userpass(char *username, char *password, FILE *fp)
     return(port);
 }
 
-uint16_t komodo_userpass(char *userpass,char *symbol)
+uint16_t komodo_userpass(char *userpass,const char *symbol)
 {
     FILE *fp; uint16_t port = 0; char fname[512],username[512],password[512],confname[KOMODO_ASSETCHAIN_MAXLEN];
     userpass[0] = 0;
@@ -549,7 +550,6 @@ uint16_t komodo_userpass(char *userpass,char *symbol)
 #endif
     }
     else sprintf(confname,"%s.conf",symbol);
-    //komodo_statefname(fname,symbol,confname);
     if ( (fp= fopen(confname,"rb")) != 0 )
     {
         port = _komodo_userpass(username,password,fp);
@@ -573,9 +573,7 @@ char *komodo_issuemethod(char *userpass,char *method,char *params,uint16_t port)
     {
         sprintf(url,(char *)"http://%s:%u",IPADDRESS,port);
         sprintf(postdata,"{\"method\":\"%s\",\"params\":%s}",method,params);
-        //printf("[%s] (%s) postdata.(%s) params.(%s) USERPASS.(%s)\n",ASSETCHAINS_SYMBOL,url,postdata,params,USERPASS);
         retstr2 = bitcoind_RPC(&retstr,(char *)"debug",url,userpass,method,params);
-        //retstr = curl_post(&cHandle,url,USERPASS,postdata,0,0,0,0);
     }
     return(retstr2);
 }

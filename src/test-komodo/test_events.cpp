@@ -156,7 +156,7 @@ bool compare_serialization(const std::string& filename, std::shared_ptr<T> in)
 TEST(TestEvents, komodo_faststateinit_test)
 {
     char symbol[] = "TST";
-    strcpy(ASSETCHAINS_SYMBOL, symbol);
+    chain = assetchain("TST");
     KOMODO_EXTERNAL_NOTARIES = 1;
 
     boost::filesystem::path temp = boost::filesystem::unique_path();
@@ -546,7 +546,7 @@ TEST(TestEvents, komodo_faststateinit_test_kmd)
     // Nothing should be added to events if this is the komodo chain
 
     char symbol[] = "KMD";
-    ASSETCHAINS_SYMBOL[0] = 0;
+    chain = assetchain();
     KOMODO_EXTERNAL_NOTARIES = 0;
 
     boost::filesystem::path temp = boost::filesystem::unique_path();

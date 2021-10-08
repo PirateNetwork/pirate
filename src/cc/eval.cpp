@@ -199,7 +199,7 @@ uint32_t Eval::GetAssetchainsCC() const
 
 std::string Eval::GetAssetchainsSymbol() const
 {
-    return std::string(ASSETCHAINS_SYMBOL);
+    return chain.symbol();
 }
 
 

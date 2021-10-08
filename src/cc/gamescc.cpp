@@ -281,8 +281,9 @@ uint8_t games_registeropretdecode(uint256 &gametxid,uint256 &tokenid,uint256 &pl
 
 CScript games_finishopret(uint8_t funcid,uint256 gametxid,int32_t regslot,CPubKey pk,std::vector<uint8_t>playerdata,std::string pname)
 {
-    CScript opret; uint8_t evalcode = EVAL_GAMES; std::string symbol(ASSETCHAINS_SYMBOL);
-    opret << OP_RETURN << E_MARSHAL(ss << evalcode << funcid << gametxid << symbol << pname << regslot << pk << playerdata );
+    CScript opret; 
+    uint8_t evalcode = EVAL_GAMES; 
+    opret << OP_RETURN << E_MARSHAL(ss << evalcode << funcid << gametxid << chain.symbol() << pname << regslot << pk << playerdata );
     return(opret);
 }
 
@@ -873,7 +874,7 @@ uint64_t games_gamefields(UniValue &obj,int64_t maxplayers,int64_t buyin,uint256
                 obj.push_back(Pair("seed",(int64_t)seed));
                 if ( games_iamregistered(maxplayers,gametxid,tx,mygamesaddr) > 0 )
                     sprintf(cmd,"cc/%s %llu %s",GAMENAME,(long long)seed,gametxid.ToString().c_str());
-                else sprintf(cmd,"./komodo-cli -ac_name=%s cclib register %d \"[%%22%s%%22]\"",ASSETCHAINS_SYMBOL,EVAL_GAMES,gametxid.ToString().c_str());
+                else sprintf(cmd,"./komodo-cli -ac_name=%s cclib register %d \"[%%22%s%%22]\"",chain.symbol().c_str(),EVAL_GAMES,gametxid.ToString().c_str());
                 obj.push_back(Pair("run",cmd));
             }
         }

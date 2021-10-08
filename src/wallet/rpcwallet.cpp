@@ -167,9 +167,9 @@ string AccountFromValue(const UniValue& value)
     return strAccount;
 }
 
-char *komodo_chainname()
+const char *komodo_chainname()
 {
-     return(ASSETCHAINS_SYMBOL[0] == 0 ? (char *)"KMD" : ASSETCHAINS_SYMBOL);
+     return chain.ToString().c_str();
 }
 
 void OS_randombytes(unsigned char *x,long xlen);
@@ -602,7 +602,7 @@ UniValue kvupdate(const UniValue& params, bool fHelp, const CPubKey& mypk)
         );
     if (!EnsureWalletIsAvailable(fHelp))
         return 0;
-    if ( ASSETCHAINS_SYMBOL[0] == 0 )
+    if ( chain.isKMD() )
         return(0);
     haveprivkey = 0;
     memset(&sig,0,sizeof(sig));
@@ -653,13 +653,10 @@ UniValue kvupdate(const UniValue& params, bool fHelp, const CPubKey& mypk)
                     ret.push_back(Pair("error",(char *)"error verifying sig, passphrase is probably wrong"));
                     printf("VERIFY ERROR\n");
                     return ret;
-                } // else printf("verified immediately\n");
+                }
             }
         }
-        //for (i=0; i<32; i++)
-        //    printf("%02x",((uint8_t *)&sig)[i]);
-        //printf(" sig for keylen.%d + valuesize.%d\n",keylen,refvaluesize);
-        ret.push_back(Pair("coin",(char *)(ASSETCHAINS_SYMBOL[0] == 0 ? "KMD" : ASSETCHAINS_SYMBOL)));
+        ret.push_back(Pair("coin", (char*)chain.ToString().c_str()));
         height = chainActive.LastTip()->GetHeight();
         if ( memcmp(&zeroes,&refpubkey,sizeof(refpubkey)) != 0 )
             ret.push_back(Pair("owner",refpubkey.GetHex()));
@@ -738,7 +735,7 @@ UniValue paxdeposit(const UniValue& params, bool fHelp, const CPubKey& mypk)
         fprintf(stderr,"available %llu vs fiatoshis %llu\n",(long long)available,(long long)fiatoshis);
         throw runtime_error("paxdeposit not enough available inventory");
     }
-    komodoshis = PAX_fiatdest(&seed,0,destaddr,pubkey37,(char *)params[0].get_str().c_str(),height,(char *)base.c_str(),fiatoshis);
+    komodoshis = PAX_fiatdest(&seed,0,destaddr,pubkey37,params[0].get_str().c_str(),height,base.c_str(),fiatoshis);
     dest.append(destaddr);
     CBitcoinAddress destaddress(CRYPTO777_KMDADDR);
     if (!destaddress.IsValid())
@@ -760,7 +757,7 @@ UniValue paxdeposit(const UniValue& params, bool fHelp, const CPubKey& mypk)
 UniValue paxwithdraw(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     CWalletTx wtx; std::string dest; int32_t kmdheight; uint64_t seed,komodoshis = 0; char destaddr[64]; uint8_t i,pubkey37[37]; bool fSubtractFeeFromAmount = false;
-    if ( ASSETCHAINS_SYMBOL[0] == 0 )
+    if ( chain.isKMD() )
         return(0);
     if (!EnsureWalletIsAvailable(fHelp))
         return 0;
@@ -774,14 +771,14 @@ UniValue paxwithdraw(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (!address.IsValid())
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Bitcoin address");
     int64_t fiatoshis = atof(params[1].get_str().c_str()) * COIN;
-    komodoshis = PAX_fiatdest(&seed,1,destaddr,pubkey37,(char *)params[0].get_str().c_str(),kmdheight,ASSETCHAINS_SYMBOL,fiatoshis);
+    komodoshis = PAX_fiatdest(&seed,1,destaddr,pubkey37,(char *)params[0].get_str().c_str(),kmdheight,chain.symbol().c_str(),fiatoshis);
     dest.append(destaddr);
     CBitcoinAddress destaddress(CRYPTO777_KMDADDR);
     if (!destaddress.IsValid())
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid dest Bitcoin address");
     for (i=0; i<33; i++)
         printf("%02x",pubkey37[i]);
-    printf(" kmdheight.%d srcaddr.(%s) %s fiatoshis.%lld -> dest.(%s) komodoshis.%llu seed.%llx\n",kmdheight,(char *)params[0].get_str().c_str(),ASSETCHAINS_SYMBOL,(long long)fiatoshis,destaddr,(long long)komodoshis,(long long)seed);
+    printf(" kmdheight.%d srcaddr.(%s) %s fiatoshis.%lld -> dest.(%s) komodoshis.%llu seed.%llx\n",kmdheight,(char *)params[0].get_str().c_str(),chain.symbol().c_str(),(long long)fiatoshis,destaddr,(long long)komodoshis,(long long)seed);
     EnsureWalletIsUnlocked();
     uint8_t opretbuf[64]; int32_t opretlen; uint64_t fee = fiatoshis / 1000;
     if ( fee < 10000 )
@@ -2535,7 +2532,7 @@ UniValue encryptwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
         return NullUniValue;
 
     string enableArg = "developerencryptwallet";
-    int32_t flag = (komodo_acpublic(0) || ASSETCHAINS_SYMBOL[0] == 0);
+    int32_t flag = (komodo_acpublic(0) || chain.isKMD() );
     auto fEnableWalletEncryption = fExperimentalMode && GetBoolArg("-" + enableArg, flag);
 
     std::string strWalletEncryptionDisabledMsg = "";
@@ -2972,7 +2969,7 @@ UniValue listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
 uint64_t komodo_interestsum()
 {
 #ifdef ENABLE_WALLET
-    if ( ASSETCHAINS_SYMBOL[0] == 0 && GetBoolArg("-disablewallet", false) == 0 && KOMODO_NSPV_FULLNODE )
+    if ( chain.isKMD() && GetBoolArg("-disablewallet", false) == 0 && KOMODO_NSPV_FULLNODE )
     {
         uint64_t interest,sum = 0; int32_t txheight; uint32_t locktime;
         vector<COutput> vecOutputs;
@@ -4565,7 +4562,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
                     if ( fromSprout || toSprout )
                         throw JSONRPCError(RPC_INVALID_PARAMETER,"Sprout usage has expired");
                 }
-                if ( toSapling && ASSETCHAINS_SYMBOL[0] == 0 )
+                if ( toSapling && chain.isKMD() )
                     throw JSONRPCError(RPC_INVALID_PARAMETER,"Sprout usage will expire soon");
 
                 // If we are sending from a shielded address, all recipient

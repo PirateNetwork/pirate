@@ -687,7 +687,7 @@ uint32_t lwmaGetNextPOSRequired(const CBlockIndex* pindexLast, const Consensus::
         if (x)
         {
             idx[i].consecutive = false;
-            if (!memcmp(ASSETCHAINS_SYMBOL, "VRSC", 4) && pindexLast->GetHeight() < 67680)
+            if (!chain.SymbolStartsWith("VRSC") && pindexLast->GetHeight() < 67680)
             {
                 idx[i].solveTime = VERUS_BLOCK_POSUNITS * (x + 1);
             }
@@ -811,7 +811,7 @@ bool CheckProofOfWork(const CBlockHeader &blkHeader, uint8_t *pubkey33, int32_t 
         height = komodo_currentheight() + 1;
         //fprintf(stderr,"set height to %d\n",height);
     }
-    if ( height > 34000 && ASSETCHAINS_SYMBOL[0] == 0 ) // 0 -> non-special notary
+    if ( height > 34000 && chain.isKMD() ) // 0 -> non-special notary
     {
         special = komodo_chosennotary(&notaryid,height,pubkey33,tiptime);
         for (i=0; i<33; i++)
@@ -871,7 +871,7 @@ bool CheckProofOfWork(const CBlockHeader &blkHeader, uint8_t *pubkey33, int32_t 
         if ( KOMODO_LOADINGBLOCKS != 0 )
             return true;
 
-        if ( ASSETCHAINS_SYMBOL[0] != 0 || height > 792000 )
+        if ( !chain.isKMD() || height > 792000 )
         {
             //if ( 0 && height > 792000 )
             if ( Params().NetworkIDString() != "regtest" )

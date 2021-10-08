@@ -37,19 +37,19 @@ struct NSPV_ntzargs
 
 int32_t NSPV_notarization_find(struct NSPV_ntzargs *args,int32_t height,int32_t dir)
 {
-    int32_t ntzheight = 0; uint256 hashBlock; CTransaction tx; Notarisation nota; char *symbol; std::vector<uint8_t> opret;
-    symbol = (ASSETCHAINS_SYMBOL[0] == 0) ? (char *)"KMD" : ASSETCHAINS_SYMBOL;
+    int32_t ntzheight = 0; uint256 hashBlock; CTransaction tx; Notarisation nota; 
+    std::vector<uint8_t> opret;
     memset(args,0,sizeof(*args));
     if ( dir > 0 )
         height += 10;
-    if ( (args->txidht= ScanNotarisationsDB(height,symbol,1440,nota)) == 0 )
+    if ( (args->txidht= ScanNotarisationsDB(height,chain.ToString(),1440,nota)) == 0 )
         return(-1);
     args->txid = nota.first;
     if ( !GetTransaction(args->txid,tx,hashBlock,false) || tx.vout.size() < 2 )
         return(-2);
     GetOpReturnData(tx.vout[1].scriptPubKey,opret);
     if ( opret.size() >= 32*2+4 )
-        args->desttxid = NSPV_opretextract(&args->ntzheight,&args->blockhash,symbol,opret,args->txid);
+        args->desttxid = NSPV_opretextract(&args->ntzheight,&args->blockhash,chain.ToString().c_str(),opret,args->txid);
     return(args->ntzheight);
 }
 
@@ -186,7 +186,7 @@ int32_t NSPV_getaddressutxos(struct NSPV_utxosresp *ptr,char *coinaddr,bool isCC
                         ptr->utxos[ind].vout = (int32_t)it->first.index;
                         ptr->utxos[ind].satoshis = it->second.satoshis;
                         ptr->utxos[ind].height = it->second.blockHeight;
-                        if ( ASSETCHAINS_SYMBOL[0] == 0 && it->second.satoshis >= 10*COIN )
+                        if ( chain.isKMD() && it->second.satoshis >= 10*COIN )
                         {
                             ptr->utxos[n].extradata = komodo_accrued_interest(&txheight,&locktime,ptr->utxos[ind].txid,ptr->utxos[ind].vout,ptr->utxos[ind].height,ptr->utxos[ind].satoshis,tipheight);
                             interest += ptr->utxos[ind].extradata;

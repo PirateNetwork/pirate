@@ -531,21 +531,15 @@ void PrintExceptionContinue(const std::exception* pex, const char* pszThread)
 boost::filesystem::path GetDefaultDataDir()
 {
     namespace fs = boost::filesystem;
-    char symbol[KOMODO_ASSETCHAIN_MAXLEN];
-    if ( ASSETCHAINS_SYMBOL[0] != 0 ){
-        strcpy(symbol,ASSETCHAINS_SYMBOL);
-    }
-    
-    else symbol[0] = 0;
     // Windows < Vista: C:\Documents and Settings\Username\Application Data\Zcash
     // Windows >= Vista: C:\Users\Username\AppData\Roaming\Zcash
     // Mac: ~/Library/Application Support/Zcash
     // Unix: ~/.zcash
 #ifdef _WIN32
     // Windows
-    if ( symbol[0] == 0 )
+    if ( chain.isKMD() )
         return GetSpecialFolderPath(CSIDL_APPDATA) / "Komodo";
-    else return GetSpecialFolderPath(CSIDL_APPDATA) / "Komodo" / symbol;
+    else return GetSpecialFolderPath(CSIDL_APPDATA) / "Komodo" / chain.symbol().c_str();
 #else
     fs::path pathRet;
     char* pszHome = getenv("HOME");
@@ -557,19 +551,19 @@ boost::filesystem::path GetDefaultDataDir()
     // Mac
     pathRet /= "Library/Application Support";
     TryCreateDirectory(pathRet);
-    if ( symbol[0] == 0 )
+    if ( chain.isKMD() )
         return pathRet / "Komodo";
     else
     {
         pathRet /= "Komodo";
         TryCreateDirectory(pathRet);
-        return pathRet / symbol;
+        return pathRet / chain.symbol().c_str();
     }
 #else
     // Unix
-    if ( symbol[0] == 0 )
+    if ( chain.isKMD() )
         return pathRet / ".komodo";
-    else return pathRet / ".komodo" / symbol;
+    return pathRet / ".komodo" / chain.symbol().c_str();
 #endif
 #endif
 }
@@ -688,8 +682,8 @@ void ClearDatadirCache()
 boost::filesystem::path GetConfigFile()
 {
     char confname[512];
-    if ( !mapArgs.count("-conf") && ASSETCHAINS_SYMBOL[0] != 0 ){
-        sprintf(confname,"%s.conf",ASSETCHAINS_SYMBOL);
+    if ( !mapArgs.count("-conf") && !chain.isKMD() ){
+        sprintf(confname,"%s.conf",chain.symbol().c_str());
     }
     else
     {

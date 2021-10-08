@@ -690,12 +690,11 @@ bool komodo_dailysnapshot(int32_t height)
     {
         // we are on chain init, and need to scan all the way back to the correct height, other wise our node will have a diffrent snapshot to online nodes.
         // use the notarizationsDB to scan back from the consesnus height to get the offset we need.
-        std::string symbol; Notarisation nota;
-        symbol.assign(ASSETCHAINS_SYMBOL);
-        if ( ScanNotarisationsDB(height-extraoffset, symbol, 100, nota) == 0 )
+        Notarisation nota;
+        if ( ScanNotarisationsDB(height-extraoffset, chain.symbol(), 100, nota) == 0 )
             undo_height = height-extraoffset-reorglimit; 
-        else undo_height = nota.second.height;
-        //fprintf(stderr, "height.%i-extraoffset.%i = startscanfrom.%i to get undo_height.%i\n", height, extraoffset, height-extraoffset, undo_height);
+        else 
+            undo_height = nota.second.height;
     }
     else 
     {
@@ -1125,7 +1124,7 @@ bool ContextualCheckCoinbaseTransaction(int32_t slowflag,const CBlock *block,CBl
 {
     // if time locks are on, ensure that this coin base is time locked exactly as it should be
     if (((uint64_t)(tx.GetValueOut()) >= ASSETCHAINS_TIMELOCKGTE) ||
-        (((nHeight >= 31680) || strcmp(ASSETCHAINS_SYMBOL, "VRSC") != 0) && komodo_ac_block_subsidy(nHeight) >= ASSETCHAINS_TIMELOCKGTE))
+        (((nHeight >= 31680) || !chain.isSymbol("VRSC") ) && komodo_ac_block_subsidy(nHeight) >= ASSETCHAINS_TIMELOCKGTE))
     {
         CScriptID scriptHash;
 
@@ -1383,7 +1382,7 @@ bool CheckTransaction(uint32_t tiptime,const CTransaction& tx, CValidationState 
     if ( *(int32_t *)&array[0] == 0 )
         numbanned = komodo_bannedset(&indallvouts,array,(int32_t)(sizeof(array)/sizeof(*array)));
     n = tx.vin.size();
-    if ( ASSETCHAINS_SYMBOL[0] == 0 )
+    if ( chain.isKMD() )
     {
         for (j=0; j<n; j++)
         {
@@ -1825,7 +1824,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
     }
 //fprintf(stderr,"addmempool 1\n");
     auto verifier = libzcash::ProofVerifier::Strict();
-    if ( ASSETCHAINS_SYMBOL[0] == 0 && komodo_validate_interest(tx,chainActive.LastTip()->GetHeight()+1,chainActive.LastTip()->GetMedianTimePast() + 777,0) < 0 )
+    if ( chain.isKMD() && komodo_validate_interest(tx,chainActive.LastTip()->GetHeight()+1,chainActive.LastTip()->GetMedianTimePast() + 777,0) < 0 )
     {
         fprintf(stderr,"AcceptToMemoryPool komodo_validate_interest failure\n");
         return error("AcceptToMemoryPool: komodo_validate_interest failed");
@@ -2454,7 +2453,7 @@ bool ReadBlockFromDisk(CBlock& block, const CBlockIndex* pindex,bool checkPOW)
 CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams)
 {
     int32_t numhalvings,i; uint64_t numerator; CAmount nSubsidy = 3 * COIN;
-    if ( ASSETCHAINS_SYMBOL[0] == 0 )
+    if ( chain.isKMD() )
     {
         if ( nHeight == 1 )
             return(100000000 * COIN); // ICO allocation
@@ -2827,7 +2826,7 @@ namespace Consensus {
                 if (fCoinbaseEnforcedProtectionEnabled &&
                     consensusParams.fCoinbaseMustBeProtected &&
                     !(tx.vout.size() == 0 || (tx.vout.size() == 1 && tx.vout[0].nValue == 0)) &&
-                    (strcmp(ASSETCHAINS_SYMBOL, "VRSC") != 0 || (nSpendHeight >= 12800 && coins->nHeight >= 12800))) {
+                    ( !chain.isSymbol("VRSC") || (nSpendHeight >= 12800 && coins->nHeight >= 12800))) {
                     return state.DoS(100,
                                      error("CheckInputs(): tried to spend coinbase with transparent outputs"),
                                      REJECT_INVALID, "bad-txns-coinbase-spend-has-transparent-outputs");
@@ -2837,7 +2836,7 @@ namespace Consensus {
             // Check for negative or overflow input values
             nValueIn += coins->vout[prevout.n].nValue;
 #ifdef KOMODO_ENABLE_INTEREST
-            if ( ASSETCHAINS_SYMBOL[0] == 0 && nSpendHeight > 60000 )//chainActive.LastTip() != 0 && chainActive.LastTip()->GetHeight() >= 60000 )
+            if ( chain.isKMD() && nSpendHeight > 60000 )//chainActive.LastTip() != 0 && chainActive.LastTip()->GetHeight() >= 60000 )
             {
                 if ( coins->vout[prevout.n].nValue >= 10*COIN )
                 {
@@ -2955,45 +2954,6 @@ bool ContextualCheckInputs(
 
     return true;
 }
-
-
-/*bool ContextualCheckInputs(const CTransaction& tx, CValidationState &state, const CCoinsViewCache &inputs, bool fScriptChecks, unsigned int flags, bool cacheStore, const Consensus::Params& consensusParams, std::vector<CScriptCheck> *pvChecks)
- {
- if (!NonContextualCheckInputs(tx, state, inputs, fScriptChecks, flags, cacheStore, consensusParams, pvChecks)) {
- fprintf(stderr,"ContextualCheckInputs failure.0\n");
- return false;
- }
-
- if (!tx.IsCoinBase())
- {
- // While checking, GetBestBlock() refers to the parent block.
- // This is also true for mempool checks.
- CBlockIndex *pindexPrev = mapBlockIndex.find(inputs.GetBestBlock())->second;
- int nSpendHeight = pindexPrev->GetHeight() + 1;
- for (unsigned int i = 0; i < tx.vin.size(); i++)
- {
- const COutPoint &prevout = tx.vin[i].prevout;
- const CCoins *coins = inputs.AccessCoins(prevout.hash);
- // Assertion is okay because NonContextualCheckInputs ensures the inputs
- // are available.
- assert(coins);
-
- // If prev is coinbase, check that it's matured
- if (coins->IsCoinBase()) {
- if ( ASSETCHAINS_SYMBOL[0] == 0 )
- COINBASE_MATURITY = _COINBASE_MATURITY;
- if (nSpendHeight - coins->nHeight < COINBASE_MATURITY) {
- fprintf(stderr,"ContextualCheckInputs failure.1 i.%d of %d\n",i,(int32_t)tx.vin.size());
-
- return state.Invalid(
- error("CheckInputs(): tried to spend coinbase at depth %d", nSpendHeight - coins->nHeight),REJECT_INVALID, "bad-txns-premature-spend-of-coinbase");
- }
- }
- }
- }
-
- return true;
- }*/
 
 namespace {
 
@@ -3715,8 +3675,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             }
         }
 
-        //if ( ASSETCHAINS_SYMBOL[0] == 0 )
-        //    komodo_earned_interest(pindex->GetHeight(),sum);
         CTxUndo undoDummy;
         if (i > 0) {
             blockundo.vtxundo.push_back(CTxUndo());
@@ -3764,7 +3722,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     LogPrint("bench", "      - Connect %u transactions: %.2fms (%.3fms/tx, %.3fms/txin) [%.2fs]\n", (unsigned)block.vtx.size(), 0.001 * (nTime1 - nTimeStart), 0.001 * (nTime1 - nTimeStart) / block.vtx.size(), nInputs <= 1 ? 0 : 0.001 * (nTime1 - nTimeStart) / (nInputs-1), nTimeConnect * 0.000001);
 
     blockReward += nFees + sum;
-    if ( ASSETCHAINS_SYMBOL[0] == 0 && pindex->GetHeight() >= KOMODO_NOTARIES_HEIGHT2)
+    if ( chain.isKMD() && pindex->GetHeight() >= KOMODO_NOTARIES_HEIGHT2)
         blockReward -= sum;
 
     if ( ASSETCHAINS_COMMISSION != 0 || ASSETCHAINS_FOUNDERS_REWARD != 0 ) //ASSETCHAINS_OVERRIDE_PUBKEY33[0] != 0 &&
@@ -3778,17 +3736,15 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                 fprintf(stderr,"checktoshis %.8f vs %.8f numvouts %d\n",dstr(checktoshis),dstr(block.vtx[0].vout[1].nValue),(int32_t)block.vtx[0].vout.size());
         }
     }
-    if (ASSETCHAINS_SYMBOL[0] != 0 && pindex->GetHeight() == 1 && block.vtx[0].GetValueOut() != blockReward)
+    if ( !chain.isKMD() && pindex->GetHeight() == 1 && block.vtx[0].GetValueOut() != blockReward)
     {
         return state.DoS(100, error("ConnectBlock(): coinbase for block 1 pays wrong amount (actual=%d vs correct=%d)", block.vtx[0].GetValueOut(), blockReward),
                             REJECT_INVALID, "bad-cb-amount");
     }
     if ( block.vtx[0].GetValueOut() > blockReward+KOMODO_EXTRASATOSHI )
     {
-        if ( ASSETCHAINS_SYMBOL[0] != 0 || pindex->GetHeight() >= KOMODO_NOTARIES_HEIGHT1 || block.vtx[0].vout[0].nValue > blockReward )
+        if ( !chain.isKMD() || pindex->GetHeight() >= KOMODO_NOTARIES_HEIGHT1 || block.vtx[0].vout[0].nValue > blockReward )
         {
-            //fprintf(stderr, "coinbase pays too much\n");
-            //sleepflag = true;
             return state.DoS(100,
                              error("ConnectBlock(): coinbase pays too much (actual=%d vs limit=%d)",
                                    block.vtx[0].GetValueOut(), blockReward),
@@ -3805,7 +3761,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         return true;
 
     // Write undo information to disk
-    //fprintf(stderr,"nFile.%d isNull %d vs isvalid %d nStatus %x\n",(int32_t)pindex->nFile,pindex->GetUndoPos().IsNull(),pindex->IsValid(BLOCK_VALID_SCRIPTS),(uint32_t)pindex->nStatus);
     if (pindex->GetUndoPos().IsNull() || !pindex->IsValid(BLOCK_VALID_SCRIPTS))
     {
         if (pindex->GetUndoPos().IsNull())
@@ -4035,7 +3990,7 @@ void static UpdateTip(CBlockIndex *pindexNew) {
     mempool.AddTransactionsUpdated(1);
     KOMODO_NEWBLOCKS++;
     double progress;
-    if ( ASSETCHAINS_SYMBOL[0] == 0 ) {
+    if ( chain.isKMD() ) {
         progress = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.LastTip());
     } else {
 	int32_t longestchain = komodo_longestchain();
@@ -4091,7 +4046,6 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
     CBlock block;
     if (!ReadBlockFromDisk(block, pindexDelete,1))
         return AbortNode(state, "Failed to read block");
-    //if ( ASSETCHAINS_SYMBOL[0] != 0 || pindexDelete->GetHeight() > 1400000 )
     {
         int32_t notarizedht,prevMoMheight; uint256 notarizedhash,txid;
         notarizedht = komodo_notarized_height(&prevMoMheight,&notarizedhash,&txid);
@@ -4227,7 +4181,7 @@ int32_t komodo_activate_sapling(CBlockIndex *pindex)
             if ( prevtime <= KOMODO_SAPLING_ACTIVATION && blocktime > KOMODO_SAPLING_ACTIVATION )
             {
                 activation = height + 60;
-                fprintf(stderr,"%s transition at %d (%d, %u) -> (%d, %u)\n",ASSETCHAINS_SYMBOL,height,prevht,prevtime,height,blocktime);
+                fprintf(stderr,"%s transition at %d (%d, %u) -> (%d, %u)\n",chain.symbol().c_str(),height,prevht,prevtime,height,blocktime);
             }
             if ( prevtime < KOMODO_SAPLING_ACTIVATION-3600*24 )
                 break;
@@ -4239,7 +4193,7 @@ int32_t komodo_activate_sapling(CBlockIndex *pindex)
     if ( activation != 0 )
     {
         komodo_setactivation(activation);
-        fprintf(stderr,"%s sapling activation at %d\n",ASSETCHAINS_SYMBOL,activation);
+        fprintf(stderr,"%s sapling activation at %d\n",chain.symbol().c_str(),activation);
         ASSETCHAINS_SAPLING = activation;
     }
     return activation;
@@ -4268,7 +4222,7 @@ bool static ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *
         pblock = &block;
     }
     KOMODO_CONNECTING = (int32_t)pindexNew->GetHeight();
-    //fprintf(stderr,"%s connecting ht.%d maxsize.%d vs %d\n",ASSETCHAINS_SYMBOL,(int32_t)pindexNew->GetHeight(),MAX_BLOCK_SIZE(pindexNew->GetHeight()),(int32_t)::GetSerializeSize(*pblock, SER_NETWORK, PROTOCOL_VERSION));
+    //fprintf(stderr,"%s connecting ht.%d maxsize.%d vs %d\n",chain.symbol().c_str(),(int32_t)pindexNew->GetHeight(),MAX_BLOCK_SIZE(pindexNew->GetHeight()),(int32_t)::GetSerializeSize(*pblock, SER_NETWORK, PROTOCOL_VERSION));
     // Get the current commitment tree
     SproutMerkleTree oldSproutTree;
     SaplingMerkleTree oldSaplingTree;
@@ -4346,11 +4300,6 @@ bool static ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *
     if ( KOMODO_LONGESTCHAIN != 0 && (pindexNew->GetHeight() == KOMODO_LONGESTCHAIN || pindexNew->GetHeight() == KOMODO_LONGESTCHAIN+1) )
         KOMODO_INSYNC = (int32_t)pindexNew->GetHeight();
     else KOMODO_INSYNC = 0;
-    //fprintf(stderr,"connect.%d insync.%d ASSETCHAINS_SAPLING.%d\n",(int32_t)pindexNew->GetHeight(),KOMODO_INSYNC,ASSETCHAINS_SAPLING);
-    /*if ( KOMODO_INSYNC != 0 ) //ASSETCHAINS_SYMBOL[0] == 0 &&
-        komodo_broadcast(pblock,8);
-    else if ( ASSETCHAINS_SYMBOL[0] != 0 )
-        komodo_broadcast(pblock,4);*/
     if ( KOMODO_NSPV_FULLNODE )
     {
         if ( ASSETCHAINS_CBOPRET != 0 )
@@ -4509,7 +4458,7 @@ static bool ActivateBestChainStep(bool fSkipdpow, CValidationState &state, CBloc
                          pindexMostWork->phashBlock->GetHex(), pindexMostWork->GetHeight(), pindexMostWork->chainPower.chainWork.GetHex(),
                          pindexMostWork->chainPower.chainStake.GetHex()) + "\n" +
         "- " + strprintf(_("Fork point:  %s %s, height %d"),
-                         ASSETCHAINS_SYMBOL,pindexFork->phashBlock->GetHex(), pindexFork->GetHeight()) + "\n\n" +
+                         chain.symbol().c_str(),pindexFork->phashBlock->GetHex(), pindexFork->GetHeight()) + "\n\n" +
         _("Please help, human!");
         LogPrintf("*** %s\nif you launch with -maxreorg=%d it might be able to resolve this automatically", msg,reorgLength+10);
         fprintf(stderr,"*** %s\nif you launch with -maxreorg=%d it might be able to resolve this automatically", msg.c_str(),reorgLength+10);
@@ -4538,7 +4487,7 @@ static bool ActivateBestChainStep(bool fSkipdpow, CValidationState &state, CBloc
             if ( !DisconnectTip(state) )
                 break;
         }
-        fprintf(stderr,"reached rewind.%d, best to do: ./komodo-cli -ac_name=%s stop\n",KOMODO_REWIND,ASSETCHAINS_SYMBOL);
+        fprintf(stderr,"reached rewind.%d, best to do: ./komodo-cli -ac_name=%s stop\n",KOMODO_REWIND,chain.symbol().c_str());
         sleep(20);
         fprintf(stderr,"resuming normal operations\n");
         KOMODO_REWIND = 0;
@@ -5156,7 +5105,7 @@ bool CheckBlock(int32_t *futureblockp,int32_t height,CBlockIndex *pindex,const C
         if ( ASSETCHAINS_STAKED == 0 && komodo_checkPOW(0,1,(CBlock *)&block,height) < 0 ) // checks Equihash
             return state.DoS(100, error("CheckBlock: failed slow_checkPOW"),REJECT_INVALID, "failed-slow_checkPOW");
     }
-    if ( height > nDecemberHardforkHeight && ASSETCHAINS_SYMBOL[0] == 0 ) // December 2019 hardfork
+    if ( height > nDecemberHardforkHeight && chain.isKMD() ) // December 2019 hardfork
     {
         int32_t notaryid;
         int32_t special = komodo_chosennotary(&notaryid,height,pubkey33,tiptime);
@@ -5192,7 +5141,7 @@ bool CheckBlock(int32_t *futureblockp,int32_t height,CBlockIndex *pindex,const C
     // because we receive the wrong transactions for it.
 
     // Size limits
-    //fprintf(stderr,"%s checkblock %d -> %d vs blocksize.%d\n",ASSETCHAINS_SYMBOL,height,MAX_BLOCK_SIZE(height),(int32_t)::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION));
+    //fprintf(stderr,"%s checkblock %d -> %d vs blocksize.%d\n",chain.symbol().c_str(),height,MAX_BLOCK_SIZE(height),(int32_t)::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION));
     if (block.vtx.empty() || block.vtx.size() > MAX_BLOCK_SIZE(height) || ::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION) > MAX_BLOCK_SIZE(height))
         return state.DoS(100, error("CheckBlock: size limits failed"),
                          REJECT_INVALID, "bad-blk-length");
@@ -5337,7 +5286,7 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
     int nHeight = pindexPrev->GetHeight()+1;
 
     // Check proof of work
-    if ( (ASSETCHAINS_SYMBOL[0] != 0 || nHeight < 235300 || nHeight > 236000) && block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams))
+    if ( (!chain.isKMD() || nHeight < 235300 || nHeight > 236000) && block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams))
     {
         cout << block.nBits << " block.nBits vs. calc " << GetNextWorkRequired(pindexPrev, &block, consensusParams) <<
                                " for block #" << nHeight << endl;
@@ -5804,20 +5753,13 @@ bool ProcessNewBlock(bool from_miner,int32_t height,CValidationState &state, CNo
         CheckBlockIndex();
         if (!ret && futureblock == 0)
         {
-            /*if ( ASSETCHAINS_SYMBOL[0] == 0 )
-            {
-                //fprintf(stderr,"request headers from failed process block peer\n");
-                pfrom->PushMessage("getheaders", chainActive.GetLocator(chainActive.LastTip()), uint256());
-            }*/
             komodo_longestchain();
             return error("%s: AcceptBlock FAILED", __func__);
         }
-        //else fprintf(stderr,"added block %s %p\n",pindex->GetBlockHash().ToString().c_str(),pindex->pprev);
     }
 
     if (futureblock == 0 && !ActivateBestChain(false, state, pblock))
         return error("%s: ActivateBestChain failed", __func__);
-    //fprintf(stderr,"finished ProcessBlock %d\n",(int32_t)chainActive.LastTip()->GetHeight());
 
     return true;
 }
@@ -6262,7 +6204,7 @@ bool static LoadBlockIndexDB()
     PruneBlockIndexCandidates();
 
     double progress;
-    if ( ASSETCHAINS_SYMBOL[0] == 0 ) {
+    if ( chain.isKMD() ) {
         progress = Checkpoints::GuessVerificationProgress(chainparams.Checkpoints(), chainActive.LastTip());
     } else {
         int32_t longestchain = komodo_longestchain();
@@ -6571,7 +6513,7 @@ bool LoadBlockIndex()
         KOMODO_LOADINGBLOCKS = 0;
         return false;
     }
-    fprintf(stderr,"finished loading blocks %s\n",ASSETCHAINS_SYMBOL);
+    fprintf(stderr,"finished loading blocks %s\n",chain.symbol().c_str());
     return true;
 }
 
@@ -7214,7 +7156,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         uint64_t nNonce = 1;
         int nVersion;           // use temporary for version, don't set version number until validated as connected
         int minVersion = MIN_PEER_PROTO_VERSION;
-        if ( is_STAKED(ASSETCHAINS_SYMBOL) != 0 )
+        if ( is_STAKED(chain.symbol()) != 0 )
             minVersion = STAKEDMIN_PEER_PROTO_VERSION;
         vRecv >> nVersion >> pfrom->nServices >> nTime >> addrMe;
         if (nVersion == 10300)
@@ -7913,7 +7855,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         // only KMD have checkpoints in sources, so, using IsInitialBlockDownload() here is
         // not applicable for assetchains (!)
-        if (GetBoolArg("-fixibd", false) && ASSETCHAINS_SYMBOL[0] == 0 && IsInitialBlockDownload()) {
+        if (GetBoolArg("-fixibd", false) && chain.isKMD() && IsInitialBlockDownload()) {
 
             /**
              * This is experimental feature avaliable only for KMD during initial block download running with

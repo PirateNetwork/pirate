@@ -179,7 +179,7 @@ int32_t komodo_MoMoMdata(char *hexstr,int32_t hexsize,struct komodo_ccdataMoMoM 
 void komodo_purge_ccdata(int32_t height)
 {
     struct komodo_ccdata *ccdata,*tmpptr;
-    if ( ASSETCHAINS_SYMBOL[0] == 0 )
+    if ( chain.isKMD() )
     {
         portable_mutex_lock(&KOMODO_CC_mutex);
         DL_FOREACH_SAFE(CC_data,ccdata,tmpptr)
@@ -200,7 +200,7 @@ void komodo_purge_ccdata(int32_t height)
 }
 
 // this is just a demo of ccdata processing to create example data for the MoMoM and allMoMs calls
-int32_t komodo_rwccdata(char *thischain,int32_t rwflag,struct komodo_ccdata *ccdata,struct komodo_ccdataMoMoM *MoMoMdata)
+int32_t komodo_rwccdata(const char *thischain,int32_t rwflag,struct komodo_ccdata *ccdata,struct komodo_ccdataMoMoM *MoMoMdata)
 {
     uint256 hash,zero; bits256 tmp; int32_t i,nonz; struct komodo_ccdata *ptr; struct notarized_checkpoint *np;
     return(0); // disable this path as libscott method is much better
@@ -222,8 +222,7 @@ int32_t komodo_rwccdata(char *thischain,int32_t rwflag,struct komodo_ccdata *ccd
     if ( nonz == 0 )
         return(0);
     memcpy(&hash,&tmp,sizeof(hash));
-    //fprintf(stderr,"[%s] ccdata.%s id.%d notarized_ht.%d MoM.%s height.%d/t%d\n",ASSETCHAINS_SYMBOL,ccdata->symbol,ccdata->CCid,ccdata->MoMdata.notarized_height,hash.ToString().c_str(),ccdata->MoMdata.height,ccdata->MoMdata.txi);
-    if ( ASSETCHAINS_SYMBOL[0] == 0 )
+    if ( chain.isKMD() )
     {
         if ( CC_data != 0 && (CC_data->MoMdata.height > ccdata->MoMdata.height || (CC_data->MoMdata.height == ccdata->MoMdata.height && CC_data->MoMdata.txi >= ccdata->MoMdata.txi)) )
         {

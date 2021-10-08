@@ -1,3 +1,4 @@
+#pragma once
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -12,18 +13,40 @@
  * Removal or modification of this copyright notice is prohibited.            *
  *                                                                            *
  ******************************************************************************/
-#pragma once
-#include "komodo.h"
+#include <string>
 
-uint256 komodo_calcMoM(int32_t height,int32_t MoMdepth);
-
-struct komodo_ccdata_entry *komodo_allMoMs(int32_t *nump,uint256 *MoMoMp,int32_t kmdstarti,int32_t kmdendi);
-
-int32_t komodo_addpair(struct komodo_ccdataMoMoM *mdata,int32_t notarized_height,int32_t offset,int32_t maxpairs);
-
-int32_t komodo_MoMoMdata(char *hexstr,int32_t hexsize,struct komodo_ccdataMoMoM *mdata,char *symbol,int32_t kmdheight,int32_t notarized_height);
-
-void komodo_purge_ccdata(int32_t height);
-
-// this is just a demo of ccdata processing to create example data for the MoMoM and allMoMs calls
-int32_t komodo_rwccdata(const char *thischain,int32_t rwflag,struct komodo_ccdata *ccdata,struct komodo_ccdataMoMoM *MoMoMdata);
+class assetchain
+{
+public:
+    assetchain() {}
+    assetchain(const std::string& symbol) : symbol_(symbol)
+    {
+        if (symbol_.size() > 64)
+            symbol_ = symbol_.substr(0, 64);
+    }
+    /*****
+     * @returns true if the chain is Komodo
+     */
+    bool isKMD() { return symbol_.empty(); }
+    /****
+     * @param in the symbol to compare
+     * @returns true if this chain's symbol matches
+     */
+    bool isSymbol(const std::string& in) { return in == symbol_; }
+    /****
+     * @returns this chain's symbol (will be empty for KMD)
+     */
+    std::string symbol() { return symbol_; }
+    /****
+     * @returns this chain's symbol, "KMD" in the case of Komodo
+     */
+    std::string ToString() 
+    { 
+        if (symbol_.empty()) 
+            return "KMD"; 
+        return symbol_; 
+    }
+    bool SymbolStartsWith(const std::string& in) { return symbol_.find(in) == 0; }
+private:
+    std::string symbol_;
+};

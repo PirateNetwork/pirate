@@ -72,3 +72,4 @@ extern pax_transaction *PAX; // the global pax struct see komodo_gateway.cpp
 extern knotaries_entry *Pubkeys; // notary pubkeys
 extern komodo_state KOMODO_STATES[34]; // array of chain states for different chains
 extern CScript KOMODO_EARLYTXID_SCRIPTPUB; // used mainly in cc/prices.cpp
+extern assetchain chain;

@@ -85,4 +85,4 @@ uint64_t komodo_paxprice(uint64_t *seedp,int32_t height,char *base,char *rel,uin
 
 void komodo_paxpricefeed(int32_t height,uint8_t *pricefeed,int32_t opretlen);
 
-uint64_t PAX_fiatdest(uint64_t *seedp,int32_t tokomodo,char *destaddr,uint8_t pubkey33[33],char *coinaddr,int32_t height,char *origbase,int64_t fiatoshis);
+uint64_t PAX_fiatdest(uint64_t *seedp,int32_t tokomodo,char *destaddr,uint8_t pubkey33[33],const char *coinaddr,int32_t height,const char *origbase,int64_t fiatoshis);

@@ -84,7 +84,7 @@ int32_t NSPV_gettransaction(int32_t skipvalidation,int32_t vout,uint256 txid,int
         retval = -2001;
     else if ( skipvalidation == 0 && ptr->unspentvalue <= 0 )
         retval = -2002;
-    else if ( ASSETCHAINS_SYMBOL[0] == 0 && tiptime != 0 )
+    else if ( chain.isKMD() && tiptime != 0 )
     {
         rewards = komodo_interestnew(height,tx.vout[vout].nValue,tx.nLockTime,tiptime);
         if ( rewards != extradata )
@@ -389,7 +389,7 @@ UniValue NSPV_spend(char *srcaddr,char *destaddr,int64_t satoshis) // what its a
     mtx.nExpiryHeight = 0;
     mtx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
     mtx.nVersion = SAPLING_TX_VERSION;
-    if ( ASSETCHAINS_SYMBOL[0] == 0 ) {
+    if ( chain.isKMD() ) {
         if ( !komodo_hardfork_active((uint32_t)chainActive.LastTip()->nTime) )
             mtx.nLockTime = (uint32_t)time(NULL) - 777;
         else
@@ -408,7 +408,7 @@ UniValue NSPV_spend(char *srcaddr,char *destaddr,int64_t satoshis) // what its a
             return(result);
         }
         hex = NSPV_signtx(rewardsum,interestsum,retcodes,mtx,txfee,opret,used);
-        if ( ASSETCHAINS_SYMBOL[0] == 0 )
+        if ( chain.isKMD() )
         {
             char numstr[64];
             sprintf(numstr,"%.8f",(double)interestsum/COIN);

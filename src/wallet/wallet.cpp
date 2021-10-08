@@ -3420,7 +3420,7 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
                     if ( !IS_MODE_EXCHANGEWALLET )
                     {
                         uint32_t locktime; int32_t txheight; CBlockIndex *tipindex;
-                        if ( ASSETCHAINS_SYMBOL[0] == 0 && chainActive.LastTip() != 0 && chainActive.LastTip()->GetHeight() >= 60000 )
+                        if ( chain.isKMD() && chainActive.LastTip() != 0 && chainActive.LastTip()->GetHeight() >= 60000 )
                         {
                             if ( pcoin->vout[i].nValue >= 10*COIN )
                             {
@@ -3428,17 +3428,13 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
                                 {
                                     komodo_accrued_interest(&txheight,&locktime,wtxid,i,0,pcoin->vout[i].nValue,(int32_t)tipindex->GetHeight());
                                     interest = komodo_interestnew(txheight,pcoin->vout[i].nValue,locktime,tipindex->nTime);
-                                } else interest = 0;
-                                //interest = komodo_interestnew(chainActive.LastTip()->GetHeight()+1,pcoin->vout[i].nValue,pcoin->nLockTime,chainActive.LastTip()->nTime);
+                                } 
+                                else 
+                                    interest = 0;
                                 if ( interest != 0 )
                                 {
-                                    //printf("wallet nValueRet %.8f += interest %.8f ht.%d lock.%u/%u tip.%u\n",(double)pcoin->vout[i].nValue/COIN,(double)interest/COIN,txheight,locktime,pcoin->nLockTime,tipindex->nTime);
-                                    //fprintf(stderr,"wallet nValueRet %.8f += interest %.8f ht.%d lock.%u tip.%u\n",(double)pcoin->vout[i].nValue/COIN,(double)interest/COIN,chainActive.LastTip()->GetHeight()+1,pcoin->nLockTime,chainActive.LastTip()->nTime);
-                                    //ptr = (uint64_t *)&pcoin->vout[i].nValue;
-                                    //(*ptr) += interest;
                                     ptr = (uint64_t *)&pcoin->vout[i].interest;
                                     (*ptr) = interest;
-                                    //pcoin->vout[i].nValue += interest;
                                 }
                                 else
                                 {
@@ -3898,7 +3894,7 @@ bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wt
                     //a chance at a free transaction.
                     //But mempool inputs might still be in the mempool, so their age stays 0
                     //fprintf(stderr,"nCredit %.8f interest %.8f\n",(double)nCredit/COIN,(double)pcoin.first->vout[pcoin.second].interest/COIN);
-                    if ( !IS_MODE_EXCHANGEWALLET && ASSETCHAINS_SYMBOL[0] == 0 )
+                    if ( !IS_MODE_EXCHANGEWALLET && chain.isKMD() )
                     {
                         interest2 += pcoin.first->vout[pcoin.second].interest;
                         //fprintf(stderr,"%.8f ",(double)pcoin.first->vout[pcoin.second].interest/COIN);
@@ -3908,7 +3904,7 @@ bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wt
                         age += 1;
                     dPriority += (double)nCredit * age;
                 }
-                if ( ASSETCHAINS_SYMBOL[0] == 0 && DONATION_PUBKEY.size() == 66 && interest2 > 5000 )
+                if ( chain.isKMD() && DONATION_PUBKEY.size() == 66 && interest2 > 5000 )
                 {
                     CScript scriptDonation = CScript() << ParseHex(DONATION_PUBKEY) << OP_CHECKSIG;
                     CTxOut newTxOut(interest2,scriptDonation);
@@ -4966,7 +4962,7 @@ int CMerkleTx::GetDepthInMainChain(const CBlockIndex* &pindexRet) const
 
 int CMerkleTx::GetBlocksToMaturity() const
 {
-    if ( ASSETCHAINS_SYMBOL[0] == 0 )
+    if ( chain.isKMD() )
         COINBASE_MATURITY = _COINBASE_MATURITY;
     if (!IsCoinBase())
         return 0;

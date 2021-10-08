@@ -19,16 +19,17 @@
 
 #include "hash.h"
 #include "nonce.h"
+#include "assetchain.h"
 #include <cstring>
 
-extern char ASSETCHAINS_SYMBOL[65];
+extern assetchain chain;
 
 arith_uint256 CPOSNonce::entropyMask = UintToArith256(uint256S("00000000000000000000000000000000ffffffffffffffffffffffff00000000"));
 arith_uint256 CPOSNonce::posDiffMask = UintToArith256(uint256S("00000000000000000000000000000000000000000000000000000000ffffffff"));
 
 bool CPOSNonce::NewPOSActive(int32_t height)
 {
-    if ((strcmp(ASSETCHAINS_SYMBOL, "VRSC") == 0) && (height < (96480 + 100)))
+    if ( chain.isSymbol("VRSC") && (height < (96480 + 100)))
         return false;
     else
         return true;
@@ -36,7 +37,7 @@ bool CPOSNonce::NewPOSActive(int32_t height)
 
 bool CPOSNonce::NewNonceActive(int32_t height)
 {
-    if ((strcmp(ASSETCHAINS_SYMBOL, "VRSC") == 0) && (height < 96480))
+    if ( chain.isSymbol("VRSC") && (height < 96480))
         return false;
     else
         return true;

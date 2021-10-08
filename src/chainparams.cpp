@@ -565,8 +565,7 @@ void *chainparams_commandline()
 {
     fprintf(stderr,"chainparams_commandline called\n");
     CChainParams::CCheckpointData checkpointData;
-    //fprintf(stderr,">>>>>>>> port.%u\n",ASSETCHAINS_P2PPORT);
-    if ( ASSETCHAINS_SYMBOL[0] != 0 )
+    if ( !chain.isKMD() )
     {
         if ( ASSETCHAINS_BLOCKTIME != 60 )
         {
@@ -588,7 +587,7 @@ void *chainparams_commandline()
         pCurrentParams->pchMessageStart[1] = (ASSETCHAINS_MAGIC >> 8) & 0xff;
         pCurrentParams->pchMessageStart[2] = (ASSETCHAINS_MAGIC >> 16) & 0xff;
         pCurrentParams->pchMessageStart[3] = (ASSETCHAINS_MAGIC >> 24) & 0xff;
-        fprintf(stderr,">>>>>>>>>> %s: p2p.%u rpc.%u magic.%08x %u %u coins\n",ASSETCHAINS_SYMBOL,ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT,ASSETCHAINS_MAGIC,ASSETCHAINS_MAGIC,(uint32_t)ASSETCHAINS_SUPPLY);
+        fprintf(stderr,">>>>>>>>>> %s: p2p.%u rpc.%u magic.%08x %u %u coins\n",chain.symbol().c_str(),ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT,ASSETCHAINS_MAGIC,ASSETCHAINS_MAGIC,(uint32_t)ASSETCHAINS_SUPPLY);
         if (ASSETCHAINS_ALGO == ASSETCHAINS_VERUSHASH)
         {
             // this is only good for 60 second blocks with an averaging window of 45. for other parameters, use:
@@ -619,7 +618,7 @@ void *chainparams_commandline()
         }
 
         // only require coinbase protection on Verus from the Komodo family of coins
-        if (strcmp(ASSETCHAINS_SYMBOL,"VRSC") == 0)
+        if ( chain.isSymbol("VRSC") )
         {
             pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 227520;
             pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = 227520;
@@ -644,7 +643,7 @@ void *chainparams_commandline()
         }
         else
         {
-            if (strcmp(ASSETCHAINS_SYMBOL,"VRSCTEST") == 0 || strcmp(ASSETCHAINS_SYMBOL,"VERUSTEST") == 0)
+            if ( chain.symbol() == "VRSCTEST" || chain.symbol() == "VERUSTEST" )
             {
                 pCurrentParams->consensus.nMinimumChainWork = uint256S("0x0000000000000000000000000000000000000000000000000000000000001f7e");
             }

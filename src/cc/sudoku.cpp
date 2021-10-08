@@ -2969,7 +2969,7 @@ bool sudoku_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const 
                                     strcpy(laststr,str);
                                     fprintf(stderr,"%s\n",str);
                                 }
-                                if ( strcmp(ASSETCHAINS_SYMBOL,"SUDOKU") != 0 || height > 2000 )
+                                if ( !chain.isSymbol("SUDOKU") || height > 2000 )
                                     return eval->Invalid("mismatched sudoku value vs score");
                                 else return(true);
                             } else return(true);
@@ -3001,41 +3001,24 @@ bool sudoku_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const 
                                     {
                                         if ( dispflag != 0 )
                                             fprintf(stderr,"ht.%d errflag.%d %s\n",height,errflag,unsolved);
-                                        if ( (height != 1220 && height != 1383) || strcmp(ASSETCHAINS_SYMBOL,"SUDOKU") != 0  )
+                                        if ( (height != 1220 && height != 1383) || !chain.isSymbol("SUDOKU")  )
                                             return eval->Invalid("invalid timestamp vs unsolved");
                                     }
                                     if ( dupree_solver(0,&score,unsolved) != 1 )
                                     {
                                         if ( dispflag != 0 )
                                             fprintf(stderr,"non-unique sudoku at ht.%d\n",height);
-                                        if ( strcmp(ASSETCHAINS_SYMBOL,"SUDOKU") != 0 )
+                                        if ( !chain.isSymbol("SUDOKU") )
                                             return eval->Invalid("invalid sudoku with multiple solutions");
                                     }
                                     if ( dispflag != 0 )
                                         fprintf(stderr,"%s score.%d %s\n",solution,score,unsolved);
                                     if ( sudoku_captcha(dispflag,timestamps,height) < 0 )
                                         return eval->Invalid("failed captcha");
-                                    /*for (i=lasttime=0; i<81; i++)
-                                    {
-                                        if ( (ind= sudoku_minval(timestamps)) >= 0 )
-                                        {
-                                            unsolved[ind] = solution[ind];
-                                            if ( lasttime == 0 )
-                                                lasttime = timestamps[ind];
-                                            if ( dupree_solver(0,&score,unsolved) != 1 )
-                                                fprintf(stderr,"i.%d ind.%d non-unique\n",i,ind);
-                                            if ( dispflag != 0 )
-                                                fprintf(stderr,"%d.%d ",score,timestamps[ind]-lasttime);
-                                            lasttime = timestamps[ind];
-                                            timestamps[ind] = 0;
-                                        } else break;
-                                    }
-                                    if ( dispflag != 0 )
-                                        fprintf(stderr,"scores convergence\n");*/
                                     return(true);
                                 } else return eval->Invalid("invalid solution opret");
                             }
-                            else if ( strcmp(ASSETCHAINS_SYMBOL,"SUDOKU") == 0 && height == 236 )
+                            else if ( chain.isSymbol("SUDOKU") && height == 236 )
                                 return(true);
                             else return eval->Invalid("invalid solution vin");
                         }
