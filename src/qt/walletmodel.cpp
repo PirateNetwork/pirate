@@ -1059,12 +1059,13 @@ RecentRequestsTableModel *WalletModel::getRecentRequestsTableModel()
 WalletModel::EncryptionStatus WalletModel::getEncryptionStatus() const
 {
 
-  TRY_LOCK(wallet->cs_KeyStore, lockWallet);
-  if(!lockWallet){
-      return Busy;
-  }
+    if (wallet) {
 
-  if (wallet) {
+        TRY_LOCK(wallet->cs_KeyStore, lockWallet);
+        if(!lockWallet){
+            return Busy;
+        }
+
         if(!wallet->IsCrypted())
         {
             return Unencrypted;
