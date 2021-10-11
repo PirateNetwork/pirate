@@ -1731,7 +1731,7 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
 
     //Sort Transactions by block and block index, then reorder
     int64_t maxOrderPos = 0;
-    std::map<std::pair<int,int>, CWalletTx> mapSorted;
+    std::map<std::pair<int,int>, CWalletTx*> mapSorted;
     pwallet->ReorderWalletTransactions(mapSorted, maxOrderPos);
     pwallet->UpdateWalletTransactionOrder(mapSorted, true);
 
