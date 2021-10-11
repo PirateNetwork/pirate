@@ -18,7 +18,7 @@
 class assetchain
 {
 public:
-    assetchain() {}
+    assetchain() : symbol_("") {}
     assetchain(const std::string& symbol) : symbol_(symbol)
     {
         if (symbol_.size() > 64)

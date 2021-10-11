@@ -1427,7 +1427,7 @@ int8_t equihash_params_possible(uint64_t n, uint64_t k)
 
 void komodo_args(char *argv0)
 {
-    std::string name,addn,hexstr,symbol; char *dirname,fname[512],arg0str[64],magicstr[9]; uint8_t magic[4],extrabuf[32756],disablebits[32],*extraptr=0;
+    std::string addn,hexstr,symbol; char *dirname,fname[512],arg0str[64],magicstr[9]; uint8_t magic[4],extrabuf[32756],disablebits[32],*extraptr=0;
     FILE *fp; uint64_t val; uint16_t port, dest_rpc_port; int32_t i,nonz=0,baseid,len,n,extralen = 0; uint64_t ccenables[256], ccEnablesHeight[512] = {0}; CTransaction earlytx; uint256 hashBlock;
 
     std::string ntz_dest_path;
@@ -1476,7 +1476,7 @@ void komodo_args(char *argv0)
         fprintf(stderr, "Cannot be STAKED and KMD notary at the same time!\n");
         StartShutdown();
     }
-	name = GetArg("-ac_name","");
+	std::string name = GetArg("-ac_name","");
     if ( argv0 != 0 )
     {
         len = (int32_t)strlen(argv0);
@@ -1491,6 +1491,7 @@ void komodo_args(char *argv0)
             }
         }
     }
+    chain = assetchain(name);
     KOMODO_STOPAT = GetArg("-stopat",0);
     MAX_REORG_LENGTH = GetArg("-maxreorg",MAX_REORG_LENGTH);
     WITNESS_CACHE_SIZE = MAX_REORG_LENGTH+10;
@@ -1530,7 +1531,8 @@ void komodo_args(char *argv0)
     }
     KOMODO_EARLYTXID = Parseuint256(GetArg("-earlytxid","0").c_str());    
     ASSETCHAINS_EARLYTXIDCONTRACT = GetArg("-ac_earlytxidcontract",0);
-    if ( name.c_str()[0] != 0 )
+
+    if ( !chain.isKMD() )
     {
         std::string selectedAlgo = GetArg("-ac_algo", std::string(ASSETCHAINS_ALGORITHMS[0]));
 
@@ -1951,8 +1953,6 @@ void komodo_args(char *argv0)
         addn = GetArg("-seednode","");
         if ( strlen(addn.c_str()) > 0 )
             ASSETCHAINS_SEED = 1;
-
-        chain = assetchain(name);
 
         MAX_MONEY = komodo_max_money();
 

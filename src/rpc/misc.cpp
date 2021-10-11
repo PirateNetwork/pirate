@@ -287,7 +287,7 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
     if ( ASSETCHAINS_CC != 0 )
         obj.push_back(Pair("CCid",        (int)ASSETCHAINS_CC));
-    obj.push_back(Pair("name", (char*)chain.ToString().c_str()));
+    obj.push_back(Pair("name", chain.ToString()));
 
     obj.push_back(Pair("p2pport",        ASSETCHAINS_P2PPORT));
     obj.push_back(Pair("rpcport",        ASSETCHAINS_RPCPORT));
@@ -427,7 +427,7 @@ UniValue coinsupply(const UniValue& params, bool fHelp, const CPubKey& mypk)
         if ( (supply= komodo_coinsupply(&zfunds,&sproutfunds,height)) > 0 )
         {
             result.push_back(Pair("result", "success"));
-            result.push_back(Pair("coin", (char*)chain.ToString().c_str()));
+            result.push_back(Pair("coin", chain.ToString()));
             result.push_back(Pair("height", (int)height));
             result.push_back(Pair("supply", ValueFromAmount(supply)));
             result.push_back(Pair("zfunds", ValueFromAmount(zfunds)));

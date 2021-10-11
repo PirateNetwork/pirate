@@ -92,7 +92,7 @@ UniValue height_MoM(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
     //fprintf(stderr,"height_MoM height.%d\n",height);
     depth = komodo_MoM(&notarized_height,&MoM,&kmdtxid,height,&MoMoM,&MoMoMoffset,&MoMoMdepth,&kmdstarti,&kmdendi);
-    ret.push_back(Pair("coin", (char*)chain.ToString().c_str()));
+    ret.push_back(Pair("coin", chain.ToString()));
     ret.push_back(Pair("height",height));
     ret.push_back(Pair("timestamp",(uint64_t)timestamp));
     if ( depth > 0 )
@@ -153,7 +153,7 @@ UniValue calc_MoM(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("calc_MoM illegal height or MoMdepth\n");
     //fprintf(stderr,"height_MoM height.%d\n",height);
     MoM = komodo_calcMoM(height,MoMdepth);
-    ret.push_back(Pair("coin", (char*)chain.ToString().c_str()));
+    ret.push_back(Pair("coin", chain.ToString()));
     ret.push_back(Pair("height",height));
     ret.push_back(Pair("MoMdepth",MoMdepth));
     ret.push_back(Pair("MoM",MoM.GetHex()));
