@@ -1685,30 +1685,39 @@ void CWallet::SyncMetaData(pair<typename TxSpendMap<T>::iterator, typename TxSpe
     for (typename TxSpendMap<T>::iterator it = range.first; it != range.second; ++it)
     {
         const uint256& hash = it->second;
-        int n = mapWallet[hash].nOrderPos;
-        if (n < nMinOrderPos)
-        {
-            nMinOrderPos = n;
-            copyFrom = &mapWallet[hash];
+
+        const auto itmw = mapWallet.find(hash);
+        if (itmw != mapWallet.end()) {
+            int n = itmw->second.nOrderPos;
+            if (n < nMinOrderPos)
+            {
+                nMinOrderPos = n;
+                copyFrom = &(itmw->second);
+            }
         }
     }
     // Now copy data from copyFrom to rest:
     for (typename TxSpendMap<T>::iterator it = range.first; it != range.second; ++it)
     {
         const uint256& hash = it->second;
-        CWalletTx* copyTo = &mapWallet[hash];
-        if (copyFrom == copyTo) continue;
-        copyTo->mapValue = copyFrom->mapValue;
-        // mapSproutNoteData and mapSaplingNoteData not copied on purpose
-        // (it is always set correctly for each CWalletTx)
-        copyTo->vOrderForm = copyFrom->vOrderForm;
-        // fTimeReceivedIsTxTime not copied on purpose
-        // nTimeReceived not copied on purpose
-        copyTo->nTimeSmart = copyFrom->nTimeSmart;
-        copyTo->fFromMe = copyFrom->fFromMe;
-        copyTo->strFromAccount = copyFrom->strFromAccount;
-        // nOrderPos not copied on purpose
-        // cached members not copied on purpose
+
+        const auto itmw = mapWallet.find(hash);
+        if (itmw != mapWallet.end()) {
+
+            CWalletTx* copyTo = &(itmw->second);
+            if (copyFrom == copyTo) continue;
+            copyTo->mapValue = copyFrom->mapValue;
+            // mapSproutNoteData and mapSaplingNoteData not copied on purpose
+            // (it is always set correctly for each CWalletTx)
+            copyTo->vOrderForm = copyFrom->vOrderForm;
+            // fTimeReceivedIsTxTime not copied on purpose
+            // nTimeReceived not copied on purpose
+            copyTo->nTimeSmart = copyFrom->nTimeSmart;
+            copyTo->fFromMe = copyFrom->fFromMe;
+            copyTo->strFromAccount = copyFrom->strFromAccount;
+            // nOrderPos not copied on purpose
+            // cached members not copied on purpose
+        }
     }
 }
 
