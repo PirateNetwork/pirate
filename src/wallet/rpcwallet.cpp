@@ -4906,7 +4906,7 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
         {
           throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, did not find value");
         }
-        uint64_t lValue = oValue.get_int();
+        uint64_t lValue = oValue.get_int64();
         //printf("z_sign_offline() [1] Have value: %ld\n",lValue );fflush(stdout);
 
 
@@ -5020,7 +5020,7 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
       UniValue av = find_value(o, "amount");
       //CAmount nAmount = AmountFromValue( av );
-      CAmount nAmount = av.get_int();
+      CAmount nAmount = av.get_int64();
       if (nAmount < 0)
       {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "output amount must be positive");
