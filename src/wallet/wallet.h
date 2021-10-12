@@ -856,6 +856,10 @@ private:
     void AddToSproutSpends(const uint256& nullifier, const uint256& wtxid);
     void AddToSaplingSpends(const uint256& nullifier, const uint256& wtxid);
     void AddToSpends(const uint256& wtxid);
+    void RemoveFromTransparentSpends(const uint256& wtxid);
+    void RemoveFromSproutSpends(const uint256& wtxid);
+    void RemoveFromSaplingSpends(const uint256& wtxid);
+    void RemoveFromSpends(const uint256& wtxid);
 
 public:
     //Height for Lockmessage in GUI

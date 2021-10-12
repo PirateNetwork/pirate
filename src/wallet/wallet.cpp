@@ -1844,6 +1844,69 @@ void CWallet::AddToSaplingSpends(const uint256& nullifier, const uint256& wtxid)
     SyncMetaData<uint256>(range);
 }
 
+void CWallet::RemoveFromSpends(const uint256& wtxid)
+{
+    RemoveFromTransparentSpends(wtxid);
+    RemoveFromSproutSpends(wtxid);
+    RemoveFromSaplingSpends(wtxid);
+}
+
+void CWallet::RemoveFromTransparentSpends(const uint256& wtxid)
+{
+    if (mapTxSpends.size() > 0)
+    {
+        std::multimap<COutPoint, uint256>::const_iterator itr = mapTxSpends.cbegin();
+        while (itr != mapTxSpends.cend())
+        {
+            if (itr->second == wtxid)
+            {
+                itr = mapTxSpends.erase(itr);
+            }
+            else
+            {
+                ++itr;
+            }
+        }
+    }
+}
+
+void CWallet::RemoveFromSproutSpends(const uint256& wtxid)
+{
+    if (mapTxSproutNullifiers.size() > 0)
+    {
+        std::multimap<uint256, uint256>::const_iterator itr = mapTxSproutNullifiers.cbegin();
+        while (itr != mapTxSproutNullifiers.cend())
+        {
+            if (itr->second == wtxid)
+            {
+                itr = mapTxSproutNullifiers.erase(itr);
+            }
+            else
+            {
+                ++itr;
+            }
+        }
+    }
+}
+
+void CWallet::RemoveFromSaplingSpends(const uint256& wtxid)
+{
+    if (mapTxSaplingNullifiers.size() > 0)
+    {
+        std::multimap<uint256, uint256>::const_iterator itr = mapTxSaplingNullifiers.cbegin();
+        while (itr != mapTxSaplingNullifiers.cend())
+        {
+            if (itr->second == wtxid)
+            {
+                itr = mapTxSaplingNullifiers.erase(itr);
+            }
+            else
+            {
+                ++itr;
+            }
+        }
+    }
+}
 
 void CWallet::LoadArcTxs(const uint256& wtxid, const ArchiveTxPoint& arcTxPt)
 {
@@ -4731,7 +4794,11 @@ void CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<ui
     CWalletDB walletdb(strWalletFile, "r+", false);
 
     for (int i = 0; i < removeTxs.size(); i++) {
+        bool fRemoveFromSpends = !(mapWallet.at(removeTxs[i]).IsCoinBase());
         if (EraseFromWallet(removeTxs[i])) {
+            if (fRemoveFromSpends) {
+                RemoveFromSpends(removeTxs[i]);
+            }
             LogPrint("deletetx","Delete Tx - Deleting tx %s, %i.\n", removeTxs[i].ToString(),i);
         } else {
             LogPrint("deletetx","Delete Tx - Deleting tx %failed.\n", removeTxs[i].ToString());
