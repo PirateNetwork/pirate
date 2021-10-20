@@ -1341,7 +1341,7 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
         nLastSetChain = nNow;
     }
     if (++nSetChainUpdates >= WITNESS_WRITE_UPDATES ||
-            nLastSetChain + (int64_t)WITNESS_WRITE_INTERVAL * 1000000 < nNow) {
+            nLastSetChain + (int64_t)WITNESS_WRITE_INTERVAL * 1000000 < nNow || writeTxFailed) {
         nLastSetChain = nNow;
         nSetChainUpdates = 0;
 
@@ -2411,30 +2411,6 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
 
   }
 
-  //If the wallet is flagged as having failed to save a tx, we will do it here.
-  if (writeTxFailed && failedTxs.size() > 0) {
-      writeTxFailed = false;
-      CWalletDB *pwalletdb = new CWalletDB(strWalletFile);
-      for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
-          if (failedTxs.size() == 0) {
-            break;
-          }
-
-          for (std::set<uint256>::iterator it = failedTxs.begin(); it != failedTxs.end(); it++) {
-              uint256 hash = *it;
-              if (hash == wtxItem.second.GetHash()) {
-                  ArchiveTxPoint arcTxPt = ArchiveTxPoint(wtxItem.second.hashBlock, wtxItem.second.nIndex);
-                  if (wtxItem.second.WriteToDisk(pwalletdb, arcTxPt, true)) {
-                      failedTxs.erase(it);
-                  } else {
-                      writeTxFailed = true;
-                  }
-                  break;
-              }
-          }
-      }
-  }
-
   if (uiShown) {
       uiInterface.ShowProgress(_("Witness Cache Complete..."), 100, false);
   }
@@ -3293,7 +3269,6 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
             ArchiveTxPoint arcTxPt = ArchiveTxPoint(wtx.hashBlock, wtx.nIndex);
             AddToArcTxs(wtx, arcTxPt, true);
             if (!wtx.WriteToDisk(pwalletdb, arcTxPt, true)) {
-                failedTxs.insert(wtx.GetHash());
                 writeTxFailed = true;
             }
         }

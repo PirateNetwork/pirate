@@ -1103,6 +1103,7 @@ protected:
 
         //Clear Unsaved Sapling Addresses after successful TxnCommit
         mapUnsavedSaplingIncomingViewingKeys.clear();
+        writeTxFailed = false;
         walletHeight = height; //Set Wallet height to chain height.
         LogPrintf("SetBestChain(): SetBestChain was successful\n");
     }
@@ -1239,7 +1240,6 @@ public:
 
     std::map<uint256, CWalletTx> mapWallet;
     bool writeTxFailed = false;
-    std::set<uint256> failedTxs;
 
     int64_t nOrderPosNext;
     std::map<uint256, int> mapRequestCount;
