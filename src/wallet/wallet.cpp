@@ -2309,7 +2309,6 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
       fBuilingWitnessCache = true;
   }
 
-  uint256 sproutRoot;
   uint256 saplingRoot;
   CBlockIndex* pblockindex = chainActive[startHeight];
   int height = chainActive.Height();
@@ -2337,10 +2336,6 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
       uiInterface.InitMessage(_(("Building Witnesses for block " + std::to_string(pblockindex->GetHeight())).c_str()) + ((" " + std::to_string(scanperc)).c_str()) + ("%"));
     }
 
-    SproutMerkleTree sproutTree;
-    sproutRoot = pblockindex->pprev->hashFinalSproutRoot;
-    pcoinsTip->GetSproutAnchorAt(sproutRoot, sproutTree);
-
     SaplingMerkleTree saplingTree;
     saplingRoot = pblockindex->pprev->hashFinalSaplingRoot;
     pcoinsTip->GetSaplingAnchorAt(saplingRoot, saplingTree);
@@ -2348,38 +2343,6 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
     //Cycle through blocks and transactions building sapling tree until the commitment needed is reached
     CBlock block;
     ReadBlockFromDisk(block, pblockindex, 1);
-
-    for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
-
-      if (wtxItem.second.mapSproutNoteData.empty() && wtxItem.second.mapSaplingNoteData.empty())
-        continue;
-
-      if (wtxItem.second.GetDepthInMainChain() > 0) {
-
-        //Sprout
-        for (mapSproutNoteData_t::value_type& item : wtxItem.second.mapSproutNoteData) {
-          auto* nd = &(item.second);
-          if (nd->nullifier && nd->witnessHeight == pblockindex->GetHeight() - 1
-              && GetSproutSpendDepth(*item.second.nullifier) <= WITNESS_CACHE_SIZE) {
-
-
-            nd->witnesses.push_front(nd->witnesses.front());
-            while (nd->witnesses.size() > WITNESS_CACHE_SIZE) {
-                nd->witnesses.pop_back();
-            }
-
-            for (const CTransaction& tx : block.vtx) {
-              for (size_t i = 0; i < tx.vjoinsplit.size(); i++) {
-                const JSDescription& jsdesc = tx.vjoinsplit[i];
-                for (uint8_t j = 0; j < jsdesc.commitments.size(); j++) {
-                  const uint256& note_commitment = jsdesc.commitments[j];
-                  nd->witnesses.front().append(note_commitment);
-                }
-              }
-            }
-            nd->witnessHeight = pblockindex->GetHeight();
-          }
-        }
 
         //Sapling
         for (mapSaplingNoteData_t::value_type& item : wtxItem.second.mapSaplingNoteData) {
