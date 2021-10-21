@@ -3557,6 +3557,31 @@ mapSproutNoteData_t CWallet::FindMySproutNotes(const CTransaction &tx) const
  * the result of FindMySaplingNotes (for the addresses available at the time) will
  * already have been cached in CWalletTx.mapSaplingNoteData.
  */
+
+static void FindMySaplingNote(const CWallet *wallet, const SaplingIncomingViewingKey &ivk, OutputDescription &output, const int &height, mapSaplingNoteData_t *noteData, const uint256 hash, const uint32_t &i, SaplingIncomingViewingKeyMap *viewingKeysToAdd)
+{
+
+    auto result = SaplingNotePlaintext::decrypt(Params().GetConsensus(), height, output.encCiphertext, ivk, output.ephemeralKey, output.cmu);
+    if (result) {
+        LOCK(wallet->cs_wallet_threadedfunction);
+        auto address = ivk.address(result.get().d);
+        viewingKeysToAdd->insert(make_pair(address.get(),ivk));
+
+        // We don't cache the nullifier here as computing it requires knowledge of the note position
+        // in the commitment tree, which can only be determined when the transaction has been mined.
+        SaplingOutPoint op {hash, i};
+        SaplingNoteData nd;
+        nd.ivk = ivk;
+
+        //Cache Address and value - in Memory Only
+        auto note = result.get();
+        nd.value = note.value();
+        nd.address = address.get();
+
+        noteData->insert(std::make_pair(op, nd));
+    }
+}
+
 std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySaplingNotes(const CTransaction &tx, int height) const
 {
     LOCK(cs_KeyStore);
@@ -3565,69 +3590,21 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
     mapSaplingNoteData_t noteData;
     SaplingIncomingViewingKeyMap viewingKeysToAdd;
 
-    std::set <SaplingIncomingViewingKey> keysTried;
-
     // Protocol Spec: 4.19 Block Chain Scanning (Sapling)
     for (uint32_t i = 0; i < tx.vShieldedOutput.size(); ++i) {
         const OutputDescription output = tx.vShieldedOutput[i];
-        bool found = false;
-        for (auto it = mapSaplingFullViewingKeys.begin(); it != mapSaplingFullViewingKeys.end(); ++it) {
-            SaplingIncomingViewingKey ivk = it->first;
-            keysTried.insert(ivk);
-            auto result = SaplingNotePlaintext::decrypt(Params().GetConsensus(), height, output.encCiphertext, ivk, output.ephemeralKey, output.cmu);
-            if (result) {
-                auto address = ivk.address(result.get().d);
-                if (address && mapSaplingIncomingViewingKeys.count(address.get()) == 0) {
-                    viewingKeysToAdd[address.get()] = ivk;
-                }
-                // We don't cache the nullifier here as computing it requires knowledge of the note position
-                // in the commitment tree, which can only be determined when the transaction has been mined.
-                SaplingOutPoint op {hash, i};
-                SaplingNoteData nd;
-                nd.ivk = ivk;
+        std::vector<boost::thread*> decryptionThreads;
 
-                //Cache Address and value - in Memory Only
-                auto note = result.get();
-                nd.value = note.value();
-                nd.address = address.get();
-
-                noteData.insert(std::make_pair(op, nd));
-                found = true;
-                break;
-            }
+        //Create 1 thread per key
+        for (auto it = setSaplingIncomingViewingKeys.begin(); it != setSaplingIncomingViewingKeys.end(); ++it) {
+            SaplingIncomingViewingKey ivk = *it;
+            decryptionThreads.emplace_back(new boost::thread(FindMySaplingNote, this, ivk, output, height, &noteData, hash, i, &viewingKeysToAdd));
         }
-        if (!found) {
-            for (auto it = setSaplingIncomingViewingKeys.begin(); it != setSaplingIncomingViewingKeys.end(); ++it) {
-                SaplingIncomingViewingKey ivk = *it;
-                std::set <SaplingIncomingViewingKey>::iterator kit = keysTried.find(ivk);
-                if (kit == keysTried.end()) {
-                  keysTried.insert(ivk);
-                  auto result = SaplingNotePlaintext::decrypt(Params().GetConsensus(), height, output.encCiphertext, ivk, output.ephemeralKey, output.cmu);
-                  if (!result) {
-                      continue;
-                  }
 
-                  //add address
-                  auto address = ivk.address(result.get().d);
-                  if (address && mapSaplingIncomingViewingKeys.count(address.get()) == 0) {
-                      viewingKeysToAdd[address.get()] = ivk;
-                  }
-
-                  // We don't cache the nullifier here as computing it requires knowledge of the note position
-                  // in the commitment tree, which can only be determined when the transaction has been mined.
-                  SaplingOutPoint op {hash, i};
-                  SaplingNoteData nd;
-                  nd.ivk = ivk;
-
-                  //Cache Address and value - in Memory Only
-                  auto note = result.get();
-                  nd.value = note.value();
-                  nd.address = address.get();
-
-                  noteData.insert(std::make_pair(op, nd));
-                  break;
-                }
-            }
+        // Cleanup
+        for (auto dthread : decryptionThreads) {
+            dthread->join();
+            delete dthread;
         }
     }
 
