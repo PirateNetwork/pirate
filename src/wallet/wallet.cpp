@@ -5088,6 +5088,11 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
         double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.LastTip(), false);
         while (pindex)
         {
+            //exit loop if trying to shutdown
+            if (ShutdownRequested()) {
+                break;
+            }
+
             if (pindex->GetHeight() % 100 == 0 && dProgressTip - dProgressStart > 0.0)
             {
                 scanperc = (int)((Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pindex, false) - dProgressStart) / (dProgressTip - dProgressStart) * 100);
@@ -5135,12 +5140,15 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
         uiInterface.ShowProgress(_("Rescanning..."), 100, false); // hide progress dialog in GUI
 
+        //Write all transactions ant block loacator to the wallet
+        currentBlock = chainActive.GetLocator();
+        chainHeight = chainActive.Tip()->GetHeight();
+        SetBestChain(currentBlock, chainHeight);
+
         //Update all witness caches
         BuildWitnessCache(chainActive.Tip(), false);
 
         //Write everything to the wallet
-        currentBlock = chainActive.GetLocator();
-        chainHeight = chainActive.Tip()->GetHeight();
         SetBestChain(currentBlock, chainHeight);
 
         if (LockOnFinish && IsCrypted()) {
