@@ -321,7 +321,6 @@ libbitcoin_server_a_SOURCES = \
   checkpoints.cpp \
   fs.cpp \
   crosschain.cpp \
-  crosschain_authority.cpp \
   crypto/haraka.h \
   crypto/haraka_portable.h \
   crypto/verus_hash.h \

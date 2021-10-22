@@ -74,7 +74,7 @@ UniValue assetchainproof(const UniValue& params, bool fHelp, const CPubKey& mypk
 
     hash = uint256S(params[0].get_str());
     CTransaction tx;
-    auto proof = GetAssetchainProof(hash,tx);
+    auto proof = CrossChain::GetAssetchainProof(hash,tx);
     auto proofData = E_MARSHAL(ss << proof);
     return HexStr(proofData);
 }
@@ -142,7 +142,7 @@ UniValue MoMoMdata(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     uint256 destNotarisationTxid;
     std::vector<uint256> moms;
-    uint256 MoMoM = CalculateProofRoot(symbol, ccid, kmdheight-5, moms, destNotarisationTxid);
+    uint256 MoMoM = CrossChain::CalculateProofRoot(symbol, ccid, kmdheight-5, moms, destNotarisationTxid);
 
     UniValue valMoms(UniValue::VARR);
     for (int i=0; i<moms.size(); i++) valMoms.push_back(moms[i].GetHex());
@@ -571,7 +571,7 @@ UniValue migrate_createimporttransaction(const UniValue& params, bool fHelp, con
     ImportProof importProof;
     if (params.size() == 2) {  // standard MoMoM based notarization
         // get MoM import proof
-        importProof = ImportProof(GetAssetchainProof(burnTx.GetHash(), burnTx));
+        importProof = ImportProof(CrossChain::GetAssetchainProof(burnTx.GetHash(), burnTx));
     }
     else   {  // notarization by manual operators notary tx
         UniValue info(UniValue::VOBJ);
@@ -615,7 +615,7 @@ UniValue migrate_completeimporttransaction(const UniValue& params, bool fHelp, c
     if ( params.size() == 2 )
         offset = params[1].get_int();
 
-    CompleteImportTransaction(importTx, offset);
+    CrossChain::CompleteImportTransaction(importTx, offset);
 
     std::string importTxHex = HexStr(E_MARSHAL(ss << importTx));
     UniValue ret(UniValue::VOBJ);

@@ -620,11 +620,9 @@ bool CheckMigration(Eval *eval, const CTransaction &importTx, const CTransaction
             return eval->Invalid("import-tx-token-params-incorrect");
     }
 
-
     // Check burntx shows correct outputs hash
-//    if (payoutsHash != SerializeHash(payouts))  // done in ImportCoin
-//        return eval->Invalid("wrong-payouts");
-
+    //    if (payoutsHash != SerializeHash(payouts))  // done in ImportCoin
+    //        return eval->Invalid("wrong-payouts");
 
     TxProof merkleBranchProof;
     std::vector<uint256> notaryTxids;
@@ -633,13 +631,13 @@ bool CheckMigration(Eval *eval, const CTransaction &importTx, const CTransaction
     if (proof.IsMerkleBranch(merkleBranchProof)) {
         uint256 target = merkleBranchProof.second.Exec(burnTx.GetHash());
         LOGSTREAM("importcoin", CCLOG_DEBUG2, stream << "Eval::ImportCoin() momom target=" << target.GetHex() << " merkleBranchProof.first=" << merkleBranchProof.first.GetHex() << std::endl);
-        if (!CheckMoMoM(merkleBranchProof.first, target)) {
+        if (!CrossChain::CheckMoMoM(merkleBranchProof.first, target)) {
             LOGSTREAM("importcoin", CCLOG_INFO, stream << "MoMoM check failed for importtx=" << importTx.GetHash().GetHex() << std::endl);
             return eval->Invalid("momom-check-fail");
         }
     }
     else if (proof.IsNotaryTxids(notaryTxids)) {
-        if (!CheckNotariesApproval(burnTx.GetHash(), notaryTxids)) {
+        if (!CrossChain::CheckNotariesApproval(burnTx.GetHash(), notaryTxids)) {
             return eval->Invalid("notaries-approval-check-fail");
         }
     }
