@@ -1303,12 +1303,12 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
             BuildWitnessCache(pindex, false);
             RunSaplingConsolidation(pindex->GetHeight());
             RunSaplingSweep(pindex->GetHeight());
-            DeleteWalletTransactions(pindex);
+            DeleteWalletTransactions(pindex, false);
         } else {
             //Build intial witnesses on every block
             BuildWitnessCache(pindex, true);
             if (initialDownloadCheck && pindex->GetHeight() % fDeleteInterval == 0) {
-                DeleteWalletTransactions(pindex);
+                DeleteWalletTransactions(pindex, false);
             }
 
             //Build full witness cache 1 hour before IsInitialBlockDownload() unlocks
@@ -4644,7 +4644,7 @@ void CWallet::UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletT
 /**
  * Delete transactions from the Wallet
  */
-void CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<uint256> &removeArcTxs) {
+void CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<uint256> &removeArcTxs, bool fRescan) {
     LOCK(cs_wallet);
 
     CWalletDB walletdb(strWalletFile, "r+", false);
@@ -4667,7 +4667,9 @@ void CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<ui
         if (mapArcTxs.erase(removeArcTxs[i])) {
             walletdb.EraseArcTx(removeArcTxs[i]);
             //remove conflicted transactions from GUI
-            NotifyTransactionChanged(this, removeArcTxs[i], CT_DELETED);
+            if (!fRescan) {
+                NotifyTransactionChanged(this, removeArcTxs[i], CT_DELETED);
+            }
             LogPrint("deletetx","Delete Tx - Deleting Arc tx %s, %i.\n", removeArcTxs[i].ToString(),i);
         } else {
             LogPrint("deletetx","Delete Tx - Deleting Arc tx %failed.\n", removeArcTxs[i].ToString());
@@ -4681,7 +4683,7 @@ void CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<ui
     #endif
 }
 
-void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
+void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) {
 
       LOCK2(cs_main, cs_wallet);
 
@@ -4885,7 +4887,7 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex) {
         LogPrint("deletetx","Delete Tx - Time to Select %s\n", DateTimeStrFormat("%H:%M:%S", selectTime - reorderTime));
 
         //Delete Transactions from wallet
-        DeleteTransactions(removeTxs, removeArcTxs);
+        DeleteTransactions(removeTxs, removeArcTxs, fRescan);
 
         auto deleteTime = GetTime();
         LogPrint("deletetx","Delete Tx - Time to Delete %s\n", DateTimeStrFormat("%H:%M:%S", deleteTime - selectTime));
@@ -5039,7 +5041,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
             //Delete Transactions
             if (pindex->GetHeight() % fDeleteInterval == 0)
-                DeleteWalletTransactions(pindex);
+                DeleteWalletTransactions(pindex, true);
 
             if (GetTime() >= nNow + 60) {
                 nNow = GetTime();
