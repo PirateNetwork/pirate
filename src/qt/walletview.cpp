@@ -229,14 +229,9 @@ void WalletView::setLockMessage() {
               QString message = tr("In-Memory Wallet is synced with the chain.\n");
               walletModel->getWalletChainHeights(walletHeight, chainHeight);
               if (chainHeight < walletHeight + 30) { //Report in sync until the chain is at least 30 blocks higher, approx 2x setbestchain interval
-                  message = message + tr("On-Disk Wallet is syned with the chain\n");
-                  // message = message + tr("Chain Height ") + QString::number(chainHeight) + "\n";
-                  // message = message + tr("On Disk Wallet Height ") + QString::number(walletHeight) + "\n";
-                  // message = message + tr("Unlock to write to Disk.");
+                  message = message + tr("On-Disk Wallet is synced with the chain\n");
               } else {
                   message = message + tr("On-Disk Wallet is ") + QString::number(chainHeight - walletHeight) + tr(" blocks behind the chain.\n");
-                  // message = message + tr("Chain Height ") + QString::number(chainHeight) + "\n";
-                  // message = message + tr("On Disk Wallet Height ") + QString::number(walletHeight) + "\n";
                   message = message + tr("Unlock to write to Disk.");
               }
               overviewPage->setLockMessage(message);
