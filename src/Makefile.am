@@ -576,6 +576,7 @@ libbitcoin_common_a_SOURCES = \
   script/script_error.cpp \
   script/sign.cpp \
   script/standard.cpp \
+	sync.cpp \
   transaction_builder.cpp \
   cc/CCtokenutils.cpp \
   cc/CCutilbits.cpp \
@@ -597,7 +598,6 @@ libbitcoin_util_a_SOURCES = \
   random.cpp \
   rpc/protocol.cpp \
   support/cleanse.cpp \
-  sync.cpp \
   uint256.cpp \
   util.cpp \
   utilmoneystr.cpp \
