@@ -78,7 +78,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
         getRpcArcTx(txid, arcTx, fIncludeWatchonly, false);
     }
 
-    if (arcTx.blockHash.IsNull() || mapBlockIndex[arcTx.blockHash] == nullptr) {
+    if (arcTx.blockHash.IsNull() || mapBlockIndex.count(arcTx.blockHash) == 0) {
         strHTML += "</font></html>";
         return strHTML;
     }

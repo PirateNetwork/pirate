@@ -189,6 +189,9 @@ UniValue getsaplingwitnessatheight(const UniValue& params, bool fHelp,  const CP
 
     uint256 hash(uint256S(strHash));
 
+    if (mapBlockIndex.count(hash) == 0)
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Can't find block in block index");
+
     CBlock block;
     CBlockIndex* pblockindex = mapBlockIndex[hash];
 
@@ -264,6 +267,9 @@ UniValue getsaplingblocks(const UniValue& params, bool fHelp,  const CPubKey& my
       std::string strHash = chainActive[nHeight + i]->GetBlockHash().GetHex();
 
       uint256 hash(uint256S(strHash));
+
+      if (mapBlockIndex.count(hash) == 0)
+          throw JSONRPCError(RPC_INTERNAL_ERROR, "Can't find block in block index");
 
       CBlock block;
       CBlockIndex* pblockindex = mapBlockIndex[hash];

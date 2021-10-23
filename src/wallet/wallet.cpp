@@ -2102,6 +2102,9 @@ int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex, bool witnessO
     if (wtxItem.second.mapSproutNoteData.empty() && wtxItem.second.mapSaplingNoteData.empty())
       continue;
 
+    if (mapBlockIndex.count(wtxItem.second.hashBlock) == 0)
+      continue;
+
     if (wtxItem.second.GetDepthInMainChain() > 0) {
       walletHasNotes = true;
       auto wtxHash = wtxItem.second.GetHash();
@@ -4584,10 +4587,9 @@ void CWallet::ReorderWalletTransactions(std::map<std::pair<int,int>, CWalletTx*>
     for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
     {
         CWalletTx* pwtx = &(it->second);
-        int confirms = pwtx->GetDepthInMainChain();
         maxOrderPos = max(maxOrderPos, pwtx->nOrderPos);
 
-        if (confirms > 0) {
+        if (mapBlockIndex.count(pwtx->hashBlock) > 0) {
             int wtxHeight = mapBlockIndex[pwtx->hashBlock]->GetHeight();
             auto key = std::make_pair(wtxHeight, pwtx->nIndex);
             mapSorted.insert(make_pair(key, pwtx));

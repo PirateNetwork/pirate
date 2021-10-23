@@ -96,7 +96,7 @@ public:
                 ArchiveTxPoint arcTxPt = (*it).second;
                 std::pair<int,int> key;
 
-                if (!arcTxPt.hashBlock.IsNull() && mapBlockIndex[arcTxPt.hashBlock] != nullptr) {
+                if (!arcTxPt.hashBlock.IsNull() && mapBlockIndex.count(arcTxPt.hashBlock) > 0) {
                     key = make_pair(mapBlockIndex[arcTxPt.hashBlock]->GetHeight(), arcTxPt.nIndex);
                     sortedArchive[key] = txid;
                 }
@@ -113,7 +113,7 @@ public:
                     key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
                     sortedArchive[key] = wtx.GetHash();
                     nPosUnconfirmed++;
-                } else if (!wtx.hashBlock.IsNull() && mapBlockIndex[wtx.hashBlock] != nullptr) {
+                } else if (!wtx.hashBlock.IsNull() && mapBlockIndex.count(wtx.hashBlock) > 0) {
                     key = make_pair(mapBlockIndex[wtx.hashBlock]->GetHeight(), wtx.nIndex);
                     sortedArchive[key] = wtx.GetHash();
                 } else {
@@ -151,7 +151,7 @@ public:
                     //Archived Transactions
                     getRpcArcTx(txid, arcTx, fIncludeWatchonly, false);
 
-                    if (arcTx.blockHash.IsNull() || mapBlockIndex[arcTx.blockHash] == nullptr)
+                    if (arcTx.blockHash.IsNull() || mapBlockIndex.count(arcTx.blockHash) == 0)
                       continue;
 
                 }
@@ -232,7 +232,7 @@ public:
                           isArchiveTx = true;
                           uint256 txid = hash;
                           getRpcArcTx(txid, arcTx, fIncludeWatchonly, false);
-                          if (arcTx.blockHash.IsNull() || mapBlockIndex[arcTx.blockHash] == nullptr) {
+                          if (arcTx.blockHash.IsNull() || mapBlockIndex.count(arcTx.blockHash) == 0) {
                               isArchiveTx = false;
                           }
                     }
