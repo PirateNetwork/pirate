@@ -1291,6 +1291,7 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
                        SaplingMerkleTree saplingTree,
                        bool added)
 {
+    LOCK2(cs_main, cs_wallet);
 
     if (added) {
         // Prevent witness cache building && consolidation transactions
@@ -1331,7 +1332,6 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
         // the witnesses above; pindex can be behind chainActive.Tip().
         // set the currentBlock and chainHeight in memory even if the wallet is not flushed to Disk
         // Needed to report to the GUI on Locked wallets
-        LOCK(cs_main);
         currentBlock = chainActive.GetLocator(pindex);
         chainHeight = pindex->GetHeight();
     }
@@ -1354,7 +1354,7 @@ void CWallet::RunSaplingSweep(int blockHeight) {
     if (!NetworkUpgradeActive(blockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
         return;
     }
-    LOCK(cs_wallet);
+    AssertLockHeld(cs_wallet);
     if (!fSaplingSweepEnabled) {
         return;
     }
@@ -1391,7 +1391,7 @@ void CWallet::RunSaplingConsolidation(int blockHeight) {
     if (!NetworkUpgradeActive(blockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
         return;
     }
-    LOCK(cs_wallet);
+    AssertLockHeld(cs_wallet);
     if (!fSaplingConsolidationEnabled) {
         return;
     }
@@ -1427,7 +1427,7 @@ void CWallet::CommitAutomatedTx(const CTransaction& tx) {
 
 void CWallet::SetBestChain(const CBlockLocator& loc, const int& height)
 {
-    LOCK(cs_wallet);
+    AssertLockHeld(cs_wallet);
     CWalletDB walletdb(strWalletFile);
     SetBestChainINTERNAL(walletdb, loc, height);
 }
@@ -2022,7 +2022,7 @@ void CWallet::ClearNoteWitnessCache()
 
 void CWallet::DecrementNoteWitnesses(const CBlockIndex* pindex)
 {
-    LOCK(cs_wallet);
+    AssertLockHeld(cs_wallet);
 
     extern int32_t KOMODO_REWIND;
 
@@ -2087,7 +2087,8 @@ int CWallet::SaplingWitnessMinimumHeight(const uint256& nullifier, int nWitnessH
 
 int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex, bool witnessOnly)
 {
-  LOCK2(cs_main, cs_wallet);
+  AssertLockHeld(cs_main);
+  AssertLockHeld(cs_wallet);
 
   int nWitnessTxIncrement = 0;
   int nWitnessTotalTxCount = mapWallet.size();
@@ -2241,7 +2242,8 @@ static void BuildSingleSaplingWitness(CWallet *wallet, CWalletTx *ptx, const CBl
 
 void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
 {
-  LOCK2(cs_main, cs_wallet);
+  AssertLockHeld(cs_main);
+  AssertLockHeld(cs_wallet);
 
   //Verifiy current witnesses again the SaplingHashRoot and/or set new initial witness
   int startHeight = VerifyAndSetInitialWitness(pindex, witnessOnly) + 1;
@@ -3451,7 +3453,7 @@ boost::optional<uint256> CWallet::GetSproutNoteNullifier(const JSDescription &js
  */
 mapSproutNoteData_t CWallet::FindMySproutNotes(const CTransaction &tx) const
 {
-    LOCK(cs_KeyStore);
+    LOCK(cs_wallet);
     uint256 hash = tx.GetHash();
 
     mapSproutNoteData_t noteData;
@@ -3524,7 +3526,7 @@ static void FindMySaplingNote(const CWallet *wallet, const SaplingIncomingViewin
 
 std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySaplingNotes(const CTransaction &tx, int height) const
 {
-    LOCK(cs_KeyStore);
+    LOCK(cs_wallet);
     uint256 hash = tx.GetHash();
 
     mapSaplingNoteData_t noteData;
@@ -4574,7 +4576,8 @@ void CWallet::WitnessNoteCommitment(std::vector<uint256> commitments,
  */
 
 void CWallet::ReorderWalletTransactions(std::map<std::pair<int,int>, CWalletTx*> &mapSorted, int64_t &maxOrderPos) {
-    LOCK2(cs_main, cs_wallet);
+    AssertLockHeld(cs_main);
+    AssertLockHeld(cs_wallet);
 
     int maxSortNumber = chainActive.Tip()->GetHeight() + 1;
 
@@ -4600,7 +4603,8 @@ void CWallet::ReorderWalletTransactions(std::map<std::pair<int,int>, CWalletTx*>
  */
 
 void CWallet::UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletTx*> &mapSorted, bool resetOrder) {
-   LOCK2(cs_main, cs_wallet);
+    AssertLockHeld(cs_main);
+    AssertLockHeld(cs_wallet);
 
    int64_t previousPosition = 0;
    std::map<const uint256, CWalletTx*> mapUpdatedTxs;
@@ -4644,7 +4648,7 @@ void CWallet::UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletT
  * Delete transactions from the Wallet
  */
 void CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<uint256> &removeArcTxs, bool fRescan) {
-    LOCK(cs_wallet);
+    AssertLockHeld(cs_wallet);
 
     CWalletDB walletdb(strWalletFile, "r+", false);
 
@@ -4684,7 +4688,8 @@ void CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<ui
 
 void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) {
 
-      LOCK2(cs_main, cs_wallet);
+      AssertLockHeld(cs_main);
+      AssertLockHeld(cs_wallet);
 
       int nDeleteAfter = (int)fDeleteTransactionsAfterNBlocks;
       bool runCompact = false;

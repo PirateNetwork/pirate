@@ -1599,13 +1599,13 @@ DBErrors CWalletDB::LoadCryptedSeedFromDB(CWallet* pwallet) {
 
 DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
 {
+    LOCK2(cs_main, pwallet->cs_wallet);
     pwallet->vchDefaultKey = CPubKey();
     CWalletScanState wss;
     bool fNoncriticalErrors = false;
     DBErrors result = DB_LOAD_OK;
 
     try {
-        LOCK(pwallet->cs_wallet);
         int nMinVersion = 0;
         if (Read((string)"minversion", nMinVersion))
         {

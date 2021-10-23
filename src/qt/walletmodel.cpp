@@ -1061,8 +1061,13 @@ WalletModel::EncryptionStatus WalletModel::getEncryptionStatus() const
 
     if (wallet) {
 
-        TRY_LOCK(wallet->cs_KeyStore, lockWallet);
+        TRY_LOCK(wallet->cs_wallet, lockWallet);
         if(!lockWallet){
+            return Busy;
+        }
+
+        TRY_LOCK(wallet->cs_KeyStore, lockKeystore);
+        if(!lockKeystore){
             return Busy;
         }
 
@@ -1116,9 +1121,14 @@ void WalletModel::setLockedLater() {
     // Get required locks upfront. This avoids the GUI from getting stuck on
     // periodical polls if the core is holding the locks for a longer time -
     // for example, during a wallet rescan.
-
-    TRY_LOCK(wallet->cs_KeyStore, lockWallet);
+    TRY_LOCK(wallet->cs_wallet, lockWallet);
     if(!lockWallet){
+        QTimer::singleShot(250, this, SLOT(setLockedLater()));
+        return;
+    }
+
+    TRY_LOCK(wallet->cs_KeyStore, lockKeystore);
+    if(!lockKeystore){
         QTimer::singleShot(250, this, SLOT(setLockedLater()));
         return;
     }

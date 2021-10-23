@@ -2182,6 +2182,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             }
 
             // generate 1 address
+            LOCK(pwalletMain->cs_wallet);
             auto zAddress = pwalletMain->GenerateNewSaplingZKey();
             pwalletMain->SetZAddressBook(zAddress, "z-sapling", "");
         }
@@ -2274,6 +2275,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                     strErrors << _("Cannot write default address") << "\n";
             }
 
+            LOCK(pwalletMain->cs_wallet);
             pwalletMain->SetBestChain(chainActive.GetLocator(), chainActive.Tip()->GetHeight());
         }
 

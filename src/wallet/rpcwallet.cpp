@@ -2337,7 +2337,7 @@ UniValue keypoolrefill(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
 static void LockWallet(CWallet* pWallet)
 {
-    LOCK(cs_nWalletUnlockTime);
+    LOCK2(pWallet->cs_wallet, cs_nWalletUnlockTime);
     nWalletUnlockTime = 0;
     pWallet->Lock();
 }
@@ -6408,7 +6408,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     EnsureWalletIsUnlocked();
-    
+
     //THROW_IF_SYNCING(KOMODO_INSYNC);
 
     bool useAnyUTXO = false;
