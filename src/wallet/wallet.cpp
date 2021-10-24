@@ -2209,37 +2209,25 @@ int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex, bool witnessO
   return nMinimumHeight;
 }
 
-static void BuildSingleSaplingWitness(CWallet *wallet, CWalletTx *ptx, const CBlock *pblock, const int &nHeight)
+static void BuildSingleSaplingWitness(CWallet* wallet, SaplingNoteData* pnd, const CBlock *pblock, const int &nHeight)
 {
 
-    if (ptx->mapSproutNoteData.empty() && ptx->mapSaplingNoteData.empty())
-        return;
+    if (pnd->witnessHeight == nHeight - 1) {
 
-    if (ptx->GetDepthInMainChain() > 0) {
-        for (mapSaplingNoteData_t::value_type& item : ptx->mapSaplingNoteData) {
-            auto* nd = &(item.second);
-
-            if (nd->nullifier && nd->witnessHeight == nHeight - 1
-                && wallet->GetSaplingSpendDepth(nd->nullifier.value()) <= WITNESS_CACHE_SIZE) {
-
-                    SaplingWitness witness = nd->witnesses.front();
-                    for (const CTransaction& ctx : pblock->vtx) {
-                        for (const OutputDescription &outdesc : ctx.vShieldedOutput) {
-                            witness.append(outdesc.cmu);
-                        }
-                    }
-
-                    {
-                        LOCK(wallet->cs_wallet_threadedfunction);
-                        nd->witnesses.push_front(witness);
-                        while (nd->witnesses.size() > WITNESS_CACHE_SIZE) {
-                            nd->witnesses.pop_back();
-                        }
-                        nd->witnessHeight = nHeight;
-                    }
-
-
+        SaplingWitness witness = pnd->witnesses.front();
+        for (const CTransaction& ctx : pblock->vtx) {
+            for (const OutputDescription &outdesc : ctx.vShieldedOutput) {
+                witness.append(outdesc.cmu);
             }
+        }
+
+        {
+            LOCK(wallet->cs_wallet_threadedfunction);
+            pnd->witnesses.push_front(witness);
+            while (pnd->witnesses.size() > WITNESS_CACHE_SIZE) {
+                pnd->witnesses.pop_back();
+            }
+            pnd->witnessHeight = nHeight;
         }
     }
 }
@@ -2271,11 +2259,32 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
   double dProgressStart = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false);
   double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.LastTip(), false);
 
-  //Create a map of wallet transaction pointers to pass to the boost::threads
-  map<uint256, CWalletTx*> pMapWallet;
+  //Create a map of SaplingNoteData that needs to be updated to pass to the boost::threads
+  //Prepare this before going into the blockindex loop to prevent rechecking on each loop
+  std::map<std::pair<uint256, int>, SaplingNoteData*> pMapNoteData;
   for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
       CWalletTx* pwtx = &(it->second);
-      pMapWallet.insert(std::make_pair((*it).first, pwtx));
+      if (pwtx->mapSaplingNoteData.empty()) {
+          continue;
+      }
+
+      if (pwtx->GetDepthInMainChain() > 0) {
+          int i = 0;
+          for (mapSaplingNoteData_t::value_type& item : pwtx->mapSaplingNoteData) {
+              auto* pnd = &(item.second);
+
+              if (pnd->nullifier && GetSaplingSpendDepth(pnd->nullifier.value()) <= WITNESS_CACHE_SIZE) {
+                  pMapNoteData.insert(std::make_pair(std::make_pair(pwtx->GetHash(), i), pnd));
+              } else {
+                  //remove all but the last witness to save disk space once the note has been spent
+                  //and is deep enough to not be affected by chain reorg
+                  while (pnd->witnesses.size() > 1) {
+                      pnd->witnesses.pop_back();
+                  }
+              }
+              i++;
+          }
+      }
   }
 
   while (pblockindex) {
@@ -2303,8 +2312,8 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
 
     //Create 1 thread per transaction and increment the witnesses
     std::vector<boost::thread*> witnessThreads;
-    for (auto ptx : pMapWallet) {
-        witnessThreads.emplace_back(new boost::thread(BuildSingleSaplingWitness, this, ptx.second, pblock, witnessHeight));
+    for (auto pnd : pMapNoteData) {
+        witnessThreads.emplace_back(new boost::thread(BuildSingleSaplingWitness, this, pnd.second, pblock, witnessHeight));
     }
 
     // Cleanup
