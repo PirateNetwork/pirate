@@ -1913,7 +1913,7 @@ void CWallet::LoadArcTxs(const uint256& wtxid, const ArchiveTxPoint& arcTxPt)
     mapArcTxs[wtxid] = arcTxPt;
 }
 
-void CWallet::AddToArcTxs(const uint256& wtxid, ArchiveTxPoint& arcTxPt, bool rescan)
+void CWallet::AddToArcTxs(const uint256& wtxid, ArchiveTxPoint& arcTxPt)
 {
     mapArcTxs[wtxid] = arcTxPt;
 
@@ -1921,6 +1921,7 @@ void CWallet::AddToArcTxs(const uint256& wtxid, ArchiveTxPoint& arcTxPt, bool re
     RpcArcTransaction arcTx;
 
     getRpcArcTx(txid, arcTx, true, rescan);
+
     arcTxPt.ivks = arcTx.ivks;
     arcTxPt.ovks = arcTx.ovks;
     mapArcTxs[wtxid] = arcTxPt;
@@ -1944,14 +1945,14 @@ void CWallet::AddToArcTxs(const uint256& wtxid, ArchiveTxPoint& arcTxPt, bool re
     }
 }
 
-void CWallet::AddToArcTxs(const CWalletTx& wtx, ArchiveTxPoint& arcTxPt, bool rescan)
+void CWallet::AddToArcTxs(const CWalletTx& wtx, int txHeight, ArchiveTxPoint& arcTxPt)
 {
     mapArcTxs[wtx.GetHash()] = arcTxPt;
 
     CWalletTx tx = wtx;
     RpcArcTransaction arcTx;
 
-    getRpcArcTx(tx, arcTx, true, rescan);
+    getRpcArcTxSaplingKeys(wtx, txHeight, arcTx, true);
 
     arcTxPt.ivks = arcTx.ivks;
     arcTxPt.ovks = arcTx.ovks;
@@ -3071,7 +3072,7 @@ void CWallet::UpdateNullifierNoteMapForBlock(const CBlock *pblock) {
     }
 }
 
-bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb, bool fRescan)
+bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb, int nHeight, bool fRescan)
 {
     uint256 hash = wtxIn.GetHash();
 
@@ -3175,7 +3176,10 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
         // Write to disk and update tx archive map
         if (fInsertedNew || fUpdated) {
             ArchiveTxPoint arcTxPt = ArchiveTxPoint(wtx.hashBlock, wtx.nIndex);
-            AddToArcTxs(wtx, arcTxPt, true);
+
+            if (nHeight > 0) {
+              AddToArcTxs(wtx, nHeight, arcTxPt);
+            }
             if (!wtx.WriteToDisk(pwalletdb, arcTxPt, true)) {
                 writeTxFailed = true;
             }
@@ -3332,7 +3336,7 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
             // this is safe, as in case of a crash, we rescan the necessary blocks on startup through our SetBestChain-mechanism
             CWalletDB walletdb(strWalletFile, "r+", false);
 
-            return AddToWallet(wtx, false, &walletdb, fRescan);
+            return AddToWallet(wtx, false, &walletdb, nHeight, fRescan);
         }
     }
     return false;
@@ -4912,6 +4916,9 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
 
 
 bool CWallet::initalizeArcTx() {
+    AssertLockHeld(cs_main);
+    AssertLockHeld(cs_wallet);
+
     for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
         const uint256& wtxid = (*it).first;
         const CWalletTx wtx = (*it).second;
@@ -4948,7 +4955,7 @@ bool CWallet::initalizeArcTx() {
 
     for (map<uint256, ArchiveTxPoint>::iterator it = mapArcTxs.begin(); it != mapArcTxs.end(); it++) {
         //Add to mapAddressTxids
-        AddToArcTxs(it->first, it->second, false);
+        AddToArcTxs(it->first, it->second);
     }
 
   return true;
@@ -6400,7 +6407,7 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
 
             // Add tx to wallet, because if it has change it's also ours,
             // otherwise just for transaction history.
-            AddToWallet(wtxNew, false, pwalletdb);
+            AddToWallet(wtxNew, false, pwalletdb, chainActive.Tip()->GetHeight());
 
             // Notify that old coins are spent
             set<CWalletTx*> setCoins;

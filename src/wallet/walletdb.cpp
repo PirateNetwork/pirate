@@ -894,7 +894,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 wss.fAnyUnordered = true;
 
             wss.nWalletTx++;
-            pwallet->AddToWallet(wtx, true, NULL);
+            pwallet->AddToWallet(wtx, true, NULL, 0);
         }
         else if (strType == "arctx" || strType == "carctx") //carctx is encrypted arctx
         {
@@ -1683,7 +1683,7 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
             if ( GetTransaction(hash,tx,blockhash,false) && (pindex= komodo_blockindex(blockhash)) != 0 && chainActive.Contains(pindex) )
             {
                 CWalletTx wtx(pwallet,tx);
-                pwallet->AddToWallet(wtx, true, NULL);
+                pwallet->AddToWallet(wtx, true, NULL, 0);
                 reAdded++;
             }
         }

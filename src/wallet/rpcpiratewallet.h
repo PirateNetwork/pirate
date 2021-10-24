@@ -185,6 +185,7 @@ void getAllSproutRKs(vector<uint256> &rks);
 void getAllSaplingOVKs(std::set<uint256> &ovks, bool fIncludeWatchonly = false);
 void getAllSaplingIVKs(std::set<uint256> &ivks, bool fIncludeWatchonly = false);
 
+void getRpcArcTxSaplingKeys(const CWalletTx &tx, int txHeight, RpcArcTransaction &arcTx, bool fIncludeWatchonly = false);
 void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, bool fIncludeWatchonly = false, bool rescan = false);
 void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, bool fIncludeWatchonly = false, bool rescan = false);
 

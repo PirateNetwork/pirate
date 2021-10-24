@@ -319,7 +319,7 @@ double benchmark_increment_note_witnesses(size_t nTxs)
         noteData[jsoutpt] = nd;
 
         wtx.SetSproutNoteData(noteData);
-        wallet.AddToWallet(wtx, true, NULL);
+        wallet.AddToWallet(wtx, true, NULL, 0);
         block1.vtx.push_back(wtx);
     }
     CBlockIndex index1(block1);
@@ -342,7 +342,7 @@ double benchmark_increment_note_witnesses(size_t nTxs)
         noteData[jsoutpt] = nd;
 
         wtx.SetSproutNoteData(noteData);
-        wallet.AddToWallet(wtx, true, NULL);
+        wallet.AddToWallet(wtx, true, NULL, 0);
         block2.vtx.push_back(wtx);
     }
     CBlockIndex index2(block2);

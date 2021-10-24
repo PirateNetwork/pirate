@@ -472,10 +472,36 @@ void getAllSaplingIVKs(std::set<uint256> &ivks, bool fIncludeWatchonly) {
     }
 }
 
+void getRpcArcTxSaplingKeys(const CWalletTx &tx, int txHeight, RpcArcTransaction &arcTx, bool fIncludeWatchonly) {
+    AssertLockHeld(pwalletMain->cs_wallet);
+
+    std::set<uint256> ivks;
+    std::set<uint256> ovks;
+
+    getAllSaplingOVKs(ovks, fIncludeWatchonly);
+    getAllSaplingIVKs(ivks, fIncludeWatchonly);
+
+    auto params = Params().GetConsensus();
+    getSaplingSpends(params, txHeight, tx, ivks, arcTx.ivks, arcTx.vZsSpend, fIncludeWatchonly);
+    getSaplingSends(params, txHeight, tx, ovks, arcTx.ovks, arcTx.vZsSend);
+    getSaplingReceives(params, txHeight, tx, ivks, arcTx.ivks, arcTx.vZsReceived, fIncludeWatchonly);
+
+    //Create Set of wallet address the belong to the wallet for this tx
+    for (int i = 0; i < arcTx.vZsSpend.size(); i++) {
+        arcTx.addresses.insert(arcTx.vZsSpend[i].encodedAddress);
+    }
+    for (int i = 0; i < arcTx.vZsSend.size(); i++) {
+        arcTx.addresses.insert(arcTx.vZsSend[i].encodedAddress);
+    }
+    for(int i = 0; i < arcTx.vZsReceived.size(); i++) {
+        arcTx.addresses.insert(arcTx.vZsReceived[i].encodedAddress);
+    }
+}
 
 void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, bool fIncludeWatchonly, bool rescan) {
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    AssertLockHeld(cs_main);
+    AssertLockHeld(pwalletMain->cs_wallet);
 
     //set defaults
     arcTx.archiveType = ARCHIVED;
@@ -621,7 +647,8 @@ void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, bool fIncludeWatchonly
 
 void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, bool fIncludeWatchonly, bool rescan) {
 
-    LOCK(pwalletMain->cs_wallet);
+    AssertLockHeld(cs_main);
+    AssertLockHeld(pwalletMain->cs_wallet);
 
     std::set<uint256> ivks;
     std::set<uint256> ovks;

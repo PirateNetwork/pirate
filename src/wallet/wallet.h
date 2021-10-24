@@ -894,8 +894,8 @@ public:
     std::map<std::string, std::set<uint256>> mapAddressTxids;
     std::map<uint256, ArchiveTxPoint> mapArcTxs;
     void LoadArcTxs(const uint256& wtxid, const ArchiveTxPoint& arcTxPt);
-    void AddToArcTxs(const uint256& wtxid, ArchiveTxPoint& arcTxPt, bool rescan);
-    void AddToArcTxs(const CWalletTx& wtx, ArchiveTxPoint& arcTxPt, bool rescan);
+    void AddToArcTxs(const uint256& wtxid, ArchiveTxPoint& arcTxPt);
+    void AddToArcTxs(const CWalletTx& wtx, int txHeight, ArchiveTxPoint& arcTxPt);
 
     std::map<uint256, JSOutPoint> mapArcJSOutPoints;
     void AddToArcJSOutPoints(const uint256& nullifier, const JSOutPoint& op);
@@ -1510,7 +1510,7 @@ public:
     void UpdateSproutNullifierNoteMapWithTx(CWalletTx& wtx);
     void UpdateSaplingNullifierNoteMapWithTx(CWalletTx& wtx);
     void UpdateNullifierNoteMapForBlock(const CBlock* pblock);
-    bool AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb, bool fRescan = false);
+    bool AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb, int nHeight, bool fRescan = false);
     bool EraseFromWallet(const uint256 &hash);
     void SyncTransaction(const CTransaction& tx, const CBlock* pblock, const int nHeight);
     void ForceRescanWallet();

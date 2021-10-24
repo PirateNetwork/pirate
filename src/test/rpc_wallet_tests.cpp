@@ -1275,7 +1275,7 @@ BOOST_AUTO_TEST_CASE(rpc_z_sendmany_taddr_to_sapling)
     CScript scriptPubKey = CScript() << OP_DUP << OP_HASH160 << ToByteVector(taddr) << OP_EQUALVERIFY << OP_CHECKSIG;
     mtx.vout.push_back(CTxOut(5 * COIN, scriptPubKey));
     CWalletTx wtx(pwalletMain, mtx);
-    pwalletMain->AddToWallet(wtx, true, NULL);
+    pwalletMain->AddToWallet(wtx, true, NULL, 0);
 
     // Fake-mine the transaction
     BOOST_CHECK_EQUAL(0, chainActive.Height());
@@ -1291,7 +1291,7 @@ BOOST_AUTO_TEST_CASE(rpc_z_sendmany_taddr_to_sapling)
     BOOST_CHECK(chainActive.Contains(&fakeIndex));
     BOOST_CHECK_EQUAL(1, chainActive.Height());
     wtx.SetMerkleBranch(block);
-    pwalletMain->AddToWallet(wtx, true, NULL);
+    pwalletMain->AddToWallet(wtx, true, NULL, 0);
 
     // Context that z_sendmany requires
     auto builder = TransactionBuilder(consensusParams, nextBlockHeight, pwalletMain);
