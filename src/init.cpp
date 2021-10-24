@@ -2007,7 +2007,11 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         bool fInitializeArcTx = true;
         if (nLoadWalletRet == DB_LOAD_OK) {
             uiInterface.InitMessage(_("Validating transaction archive..."));
-            bool fInitializeArcTx = pwalletMain->initalizeArcTx();
+            bool fInitializeArcTx = false;
+            {
+              LOCK2(cs_main, pwalletMain->cs_wallet);
+              fInitializeArcTx = pwalletMain->initalizeArcTx();
+            }
             if(!fInitializeArcTx) {
               //ArcTx validation failed, delete wallet point and clear vWtx
               delete pwalletMain;
