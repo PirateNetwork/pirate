@@ -1515,7 +1515,7 @@ public:
     void SyncTransaction(const CTransaction& tx, const CBlock* pblock, const int nHeight);
     void ForceRescanWallet();
     void RescanWallet();
-    bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, const int nHeight, bool fUpdate, bool fRescan = false);
+    bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, const int nHeight, bool fUpdate, std::set<libzcash::SaplingPaymentAddress>& addressesFound, bool fRescan = false);
     void WitnessNoteCommitment(
          std::vector<uint256> commitments,
          std::vector<boost::optional<SproutWitness>>& witnesses,
@@ -1615,7 +1615,7 @@ public:
     bool SetAddressBook(const CTxDestination& address, const std::string& strName, const std::string& purpose);
     bool DecryptAddressBookEntry(const uint256 chash, std::vector<unsigned char> vchCryptedSecret, string& address, string& entry);
 
-    bool SetZAddressBook(const libzcash::PaymentAddress& address, const std::string& strName, const std::string& purpose);
+    bool SetZAddressBook(const libzcash::PaymentAddress& address, const std::string& strName, const std::string& purpose, bool fInTransaction = false);
 
     bool DelAddressBook(const CTxDestination& address);
     bool DelZAddressBook(const libzcash::PaymentAddress& address);

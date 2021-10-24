@@ -3257,7 +3257,7 @@ bool CWallet::UpdatedNoteData(const CWalletTx& wtxIn, CWalletTx& wtx)
  * pblock is optional, but should be provided if the transaction is known to be in a block.
  * If fUpdate is true, existing transactions will be updated.
  */
-bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, const int nHeight, bool fUpdate, bool fRescan)
+bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, const int nHeight, bool fUpdate, std::set<SaplingPaymentAddress>& addressesFound, bool fRescan)
 {
     {
         AssertLockHeld(cs_wallet);
@@ -3275,7 +3275,8 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
             if (!CCryptoKeyStore::AddSaplingIncomingViewingKey(addressToAdd.second, addressToAdd.first)) {
                 return false;
             }
-            SetZAddressBook(addressToAdd.first, "z-sapling", "");
+            //Store addresses to notify GUI later
+            addressesFound.insert(addressToAdd.first);
         }
         if (fExisted || IsMine(tx) || IsFromMe(tx) || sproutNoteData.size() > 0 || saplingNoteData.size() > 0)
         {
@@ -3354,8 +3355,13 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
 void CWallet::SyncTransaction(const CTransaction& tx, const CBlock* pblock, const int nHeight)
 {
     LOCK(cs_wallet);
-    if (!AddToWalletIfInvolvingMe(tx, pblock, nHeight, true))
+    std::set<SaplingPaymentAddress> addressesFound;
+    if (!AddToWalletIfInvolvingMe(tx, pblock, nHeight, true, addressesFound, false))
         return; // Not one of ours
+
+    for (std::set<SaplingPaymentAddress>::iterator it = addressesFound.begin(); it != addressesFound.end(); it++) {
+        SetZAddressBook(*it, "z-sapling", "", true);
+    }
 
     MarkAffectedTransactionsDirty(tx);
 }
@@ -4997,6 +5003,8 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
     std::set<uint256> txList;
     std::set<uint256> txListOriginal;
 
+    //Collect Sapling Addresses to notify GUI after rescan
+    std::set<SaplingPaymentAddress> addressesFound;
 
     {
         //Lock cs_keystore to prevent wallet from locking during rescan
@@ -5038,7 +5046,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             ReadBlockFromDisk(block, pindex,1);
             BOOST_FOREACH(CTransaction& tx, block.vtx)
             {
-                if (AddToWalletIfInvolvingMe(tx, &block, pindex->GetHeight(), fUpdate, true)) {
+                if (AddToWalletIfInvolvingMe(tx, &block, pindex->GetHeight(), fUpdate, addressesFound, true)) {
                     blockInvolvesMe = true;
                     txList.insert(tx.GetHash());
                     ret++;
@@ -5089,12 +5097,19 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
         }
     }
 
+    //Notfiy GUI of all new addresses found
+    for (std::set<SaplingPaymentAddress>::iterator it = addressesFound.begin(); it != addressesFound.end(); it++) {
+        SetZAddressBook(*it, "z-sapling", "", true);
+    }
+
+    //Notify GUI of all new transactions found
     for (set<uint256>::iterator it = txList.begin(); it != txList.end(); ++it)
     {
         bool fInsertedNew = (txListOriginal.count(*it) == 0);
         NotifyTransactionChanged(this, *it, fInsertedNew ? CT_NEW : CT_UPDATED);
     }
 
+    //Notify GUI of changes in balances
     NotifyBalanceChanged();
 
     return ret;
@@ -6635,12 +6650,17 @@ bool CWallet::DecryptAddressBookEntry(const uint256 chash, std::vector<unsigned 
     return HashWithFP(address) == chash;
 }
 
-bool CWallet::SetZAddressBook(const libzcash::PaymentAddress &address, const string &strName, const string &strPurpose)
+bool CWallet::SetZAddressBook(const libzcash::PaymentAddress &address, const string &strName, const string &strPurpose, bool fInTransaction)
 {
     bool fUpdated = false;
     {
         LOCK(cs_wallet); // mapZAddressBook
         std::map<libzcash::PaymentAddress, CAddressBookData>::iterator mi = mapZAddressBook.find(address);
+
+        //Address found in a transaction is already present in the address book, no need to go further.
+        if (fInTransaction && mi != mapZAddressBook.end())
+            return true;
+
         fUpdated = mi != mapZAddressBook.end();
         mapZAddressBook[address].name = strName;
         if (!strPurpose.empty()) /* update purpose only if requested */
