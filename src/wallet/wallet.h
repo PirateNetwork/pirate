@@ -1687,6 +1687,7 @@ public:
     /** Show progress e.g. for rescan */
     boost::signals2::signal<void (const std::string &title, int nProgress)> ShowProgress;
     boost::signals2::signal<void ()> NotifyRescanStarted;
+    boost::signals2::signal<void ()> NotifyRescanComplete;
 
     /** Watch-only address added */
     boost::signals2::signal<void (bool fHaveWatchOnly)> NotifyWatchonlyChanged;

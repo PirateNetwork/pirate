@@ -1243,13 +1243,19 @@ static void NotifyWatchonlyChanged(WalletModel *walletmodel, bool fHaveWatchonly
 
 static void NotifyRescanStarted(WalletModel *walletmodel)
 {
-    walletmodel->startedRescan;
+    walletmodel->startedRescan = true;
+}
+
+static void NotifyRescanComplete(WalletModel *walletmodel)
+{
+    walletmodel->startedRescan = false;
 }
 
 void WalletModel::subscribeToCoreSignals()
 {
     // Connect signals to wallet
     wallet->NotifyRescanStarted.connect(boost::bind(NotifyRescanStarted, this));
+    wallet->NotifyRescanComplete.connect(boost::bind(NotifyRescanStarted, this));
     wallet->NotifyStatusChanged.connect(boost::bind(&NotifyKeyStoreStatusChanged, this, _1));
     wallet->NotifyAddressBookChanged.connect(boost::bind(NotifyAddressBookChanged, this, _1, _2, _3, _4, _5, _6));
     wallet->NotifyZAddressBookChanged.connect(boost::bind(NotifyZAddressBookChanged, this, _1, _2, _3, _4, _5, _6));
@@ -1261,6 +1267,7 @@ void WalletModel::unsubscribeFromCoreSignals()
 {
     // Disconnect signals from wallet
     wallet->NotifyRescanStarted.disconnect(boost::bind(NotifyRescanStarted, this));
+    wallet->NotifyRescanComplete.disconnect(boost::bind(NotifyRescanStarted, this));
     wallet->NotifyStatusChanged.disconnect(boost::bind(&NotifyKeyStoreStatusChanged, this, _1));
     wallet->NotifyAddressBookChanged.disconnect(boost::bind(NotifyAddressBookChanged, this, _1, _2, _3, _4, _5, _6));
     wallet->NotifyZAddressBookChanged.disconnect(boost::bind(NotifyZAddressBookChanged, this, _1, _2, _3, _4, _5, _6));

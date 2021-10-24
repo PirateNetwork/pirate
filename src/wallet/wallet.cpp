@@ -5112,6 +5112,9 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
     //Notify GUI of changes in balances
     NotifyBalanceChanged();
 
+    //Notify GUI Rescan is complete
+    NotifyRescanComplete();
+
     return ret;
 }
 
