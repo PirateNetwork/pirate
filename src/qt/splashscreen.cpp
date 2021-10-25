@@ -133,9 +133,14 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     seed->setVisible(false);
 
     //Create Internal Layout
-    layout = new QVBoxLayout(this);
+    //QWidget *splashControls = new QWidget;
+    layout = new QVBoxLayout();
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setEnabled(false);
+    //splashControls->setLayout(layout);
+
+    //Add Layout to primary widget
+    seed->setLayout(layout);
 
     //Add Icon to the top
     pirateIcon = new QLabel;
@@ -145,19 +150,25 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     pirateIcon->setPixmap(pic);
 
     //Center Icon Vertically
-    QVBoxLayout *viconLayout = new QVBoxLayout(this);
+    QWidget *vicon = new QWidget;
+    QVBoxLayout *viconLayout = new QVBoxLayout();
+    vicon->setLayout(viconLayout);
     viconLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Fixed, QSizePolicy::Expanding));
     viconLayout->addWidget(pirateIcon);
     viconLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Fixed, QSizePolicy::Expanding));
 
+
     //Center Icon Horizontally
+    QWidget *hicon = new QWidget;
     QHBoxLayout *hiconLayout = new QHBoxLayout(this);
+    hicon->setLayout(hiconLayout);
     hiconLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Fixed));
-    hiconLayout->addLayout(viconLayout);
+    hiconLayout->addWidget(vicon);
     hiconLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Fixed));
 
+
     //Add Icon to Internal Layout
-    layout->addLayout(hiconLayout);
+    layout->addWidget(hicon);
     pirateIcon->setVisible(false);
 
     //New Wallwt Style Sheet
@@ -200,9 +211,11 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     openWallet->setVisible(false);
 
     //Add button layout
-    QHBoxLayout *buttonLayout = new QHBoxLayout(this);
+    QWidget *buttons = new QWidget;
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
     buttonLayout->setContentsMargins(9, 0, 9, 9);
     buttonLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Fixed));
+    buttons->setLayout(buttonLayout);
 
     //Add ok button
     btnTypeSelect = new QPushButton(this);
@@ -223,10 +236,8 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     btnDone->setObjectName("btnDone");
     buttonLayout->addWidget(btnDone);
 
-    layout->addLayout(buttonLayout);
+    layout->addWidget(buttons);
 
-    //Add Layout to primary widget
-    seed->setLayout(layout);
 
     // Connect signals for seed creation bittons
     connect(btnTypeSelect, SIGNAL(clicked()), this, SLOT(on_btnTypeSelected_clicked()));
@@ -253,7 +264,7 @@ bool SplashScreen::eventFilter(QObject * obj, QEvent * ev) {
         if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
             if (openWallet->isVisible()) {
                 on_btnOpen_clicked();
-            } 
+            }
         }
     }
 
