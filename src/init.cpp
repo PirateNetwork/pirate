@@ -2010,9 +2010,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             bool fInitializeArcTx = false;
             {
               LOCK2(cs_main, pwalletMain->cs_wallet);
-              fInitializeArcTx = pwalletMain->initalizeArcTx();
+              if (chainActive.Tip())
+                  fInitializeArcTx = pwalletMain->initalizeArcTx();
             }
-            if(!fInitializeArcTx) {
+            if(!fInitializeArcTx && chainActive.Tip()) {
               //ArcTx validation failed, delete wallet point and clear vWtx
               delete pwalletMain;
               pwalletMain = NULL;
@@ -2278,9 +2279,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 if (!pwalletMain->SetAddressBook(pwalletMain->vchDefaultKey.GetID(), "", "receive"))
                     strErrors << _("Cannot write default address") << "\n";
             }
-
-            LOCK(pwalletMain->cs_wallet);
-            pwalletMain->SetBestChain(chainActive.GetLocator(), chainActive.Tip()->GetHeight());
         }
 
         LogPrintf("%s", strErrors.str());
@@ -2321,7 +2319,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             pwalletMain->nBirthday = 0;
 
             int rescanHeight = GetArg("-rescanheight", 0);
-            if (rescanHeight > 0) {
+            if (chainActive.Tip() && rescanHeight > 0) {
                 if (rescanHeight > chainActive.Tip()->GetHeight()) {
                     pindexRescan = chainActive.Tip();
                 } else {
@@ -2378,13 +2376,15 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 }
             }
         } else {
-          //Rescan at minimum last 1 block
-          pindexRescan = chainActive[chainActive.Tip()->GetHeight() - 1];
-          uiInterface.InitMessage(_("Rescanning..."));
-          LogPrintf("Rescanning last %i blocks (from block %i)...\n", chainActive.Height() - pindexRescan->GetHeight(), pindexRescan->GetHeight());
-          nStart = GetTimeMillis();
-          pwalletMain->ScanForWalletTransactions(pindexRescan, true);
-          LogPrintf(" rescan      %15dms\n", GetTimeMillis() - nStart);
+            //Rescan at minimum last 1 block
+            if (chainActive.Tip()) {
+                pindexRescan = chainActive[chainActive.Tip()->GetHeight() - 1];
+                uiInterface.InitMessage(_("Rescanning..."));
+                LogPrintf("Rescanning last %i blocks (from block %i)...\n", chainActive.Height() - pindexRescan->GetHeight(), pindexRescan->GetHeight());
+                nStart = GetTimeMillis();
+                pwalletMain->ScanForWalletTransactions(pindexRescan, true);
+                LogPrintf(" rescan      %15dms\n", GetTimeMillis() - nStart);
+            }
         }
 
         pwalletMain->SetBroadcastTransactions(GetBoolArg("-walletbroadcast", true));
