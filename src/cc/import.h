@@ -19,7 +19,16 @@
 #include "importcoin.h" // ImportProof
 #include <cstdint>
 
-std::string MakeCodaImportTx(uint64_t txfee, std::string receipt, std::string srcaddr, std::vector<CTxOut> vouts);
+/****
+ * @brief make import tx with burntx and dual daemon
+ * @param txfee fee
+ * @param receipt
+ * @param srcaddr source address
+ * @param vouts collection of vouts
+ * @returns the hex string of the import transaction
+ */
+std::string MakeCodaImportTx(uint64_t txfee, const std::string& receipt, 
+        const std::string& srcaddr, const std::vector<CTxOut>& vouts);
 
 /******
  * @brief make sure vin is signed by a particular key
