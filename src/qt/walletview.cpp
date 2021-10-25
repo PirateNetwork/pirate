@@ -203,15 +203,15 @@ void WalletView::processNewTransaction(const QModelIndex& parent, int start, int
 
 void WalletView::setLockMessage() {
     if (overviewPage) {
-        if (walletModel->startedRescan) {
-            overviewPage->setLockMessage(tr("Wallet will relock after rescan."));
-            return;
-        }
-
         WalletModel::EncryptionStatus encryptionStatus = walletModel->getEncryptionStatus();
 
         //update the UI based on encryption status
         setUnlockButton();
+        
+        if (walletModel->startedRescan) {
+            overviewPage->setLockMessage(tr("Wallet will relock after rescan."));
+            return;
+        }
 
         if (encryptionStatus == WalletModel::Unlocked) {
             if (walletModel->relockTime > 0) {

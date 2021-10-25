@@ -465,7 +465,6 @@ void OverviewPage::setUiVisible(bool visible, bool isCrypted, int64_t relockTime
         if (relockTime == 0) {
             ui->btnUnlock->setVisible(false);
             ui->btnKeepOpen->setVisible(false);
-            ui->lblLockedMessage->setText("Wallet unlocked via RPC command.");
         } else {
             ui->btnUnlock->setVisible(true);
             ui->btnKeepOpen->setVisible(true);
