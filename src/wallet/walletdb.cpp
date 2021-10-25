@@ -1599,7 +1599,7 @@ DBErrors CWalletDB::LoadCryptedSeedFromDB(CWallet* pwallet) {
 
 DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
 {
-    LOCK2(cs_main, pwallet->cs_wallet);
+    LOCK(pwallet->cs_wallet);
     pwallet->vchDefaultKey = CPubKey();
     CWalletScanState wss;
     bool fNoncriticalErrors = false;
@@ -1728,12 +1728,6 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
 
     if (wss.nFileVersion < CLIENT_VERSION) // Update
         WriteVersion(CLIENT_VERSION);
-
-    //Sort Transactions by block and block index, then reorder
-    int64_t maxOrderPos = 0;
-    std::map<std::pair<int,int>, CWalletTx*> mapSorted;
-    pwallet->ReorderWalletTransactions(mapSorted, maxOrderPos);
-    pwallet->UpdateWalletTransactionOrder(mapSorted, true);
 
     return result;
 }

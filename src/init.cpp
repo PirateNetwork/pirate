@@ -2302,6 +2302,18 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             walletdb.ReadWalletBip39Enabled(pwalletMain->bip39Enabled);
         }
 
+        {
+            //Sort Transactions by block and block index, then reorder
+            LOCK2(cs_main, pwalletMain->cs_wallet);
+            if (chainActive.Tip()) {
+                LogPrintf("Runnning transaction reorder\n");
+                int64_t maxOrderPos = 0;
+                std::map<std::pair<int,int>, CWalletTx*> mapSorted;
+                pwalletMain->ReorderWalletTransactions(mapSorted, maxOrderPos);
+                pwalletMain->UpdateWalletTransactionOrder(mapSorted, true);
+            }
+        }
+        
         if (clearWitnessCaches || GetBoolArg("-rescan", false) || !fInitializeArcTx || useBootstrap)
         {
             pwalletMain->ClearNoteWitnessCache();
