@@ -39,6 +39,7 @@
 #include "key_io.h"
 #include "cc/CCImportGateway.h"
 #include "cc/CCtokens.h"
+#include "cc/import.h"
 
 #include <stdint.h>
 #include <univalue.h>
@@ -59,10 +60,6 @@ struct komodo_ccdata_entry *komodo_allMoMs(int32_t *nump,uint256 *MoMoMp,int32_t
 uint256 komodo_calcMoM(int32_t height,int32_t MoMdepth);
 int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);
 extern std::string ASSETCHAINS_SELFIMPORT;
-
-//std::string MakeSelfImportSourceTx(CTxDestination &dest, int64_t amount, CMutableTransaction &mtx);
-//int32_t GetSelfimportProof(std::string source, CMutableTransaction &mtx, CScript &scriptPubKey, TxProof &proof, std::string rawsourcetx, int32_t &ivout, uint256 sourcetxid, uint64_t burnAmount);
-std::string MakeCodaImportTx(uint64_t txfee, std::string receipt, std::string srcaddr, std::vector<CTxOut> vouts);
 
 UniValue assetchainproof(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
@@ -764,7 +761,7 @@ UniValue selfimport(const UniValue& params, bool fHelp, const CPubKey& mypk)
         
         CMutableTransaction templateMtx;
         // prepare self-import 'quasi-burn' tx and also create vout for import tx (in mtx.vout):
-        if (GetSelfimportProof(sourceMtx, templateMtx, proofNull) < 0)
+        if ( !GetSelfimportProof(sourceMtx, templateMtx, proofNull) )
             throw std::runtime_error("Failed creating selfimport template tx");
 
         vouts = templateMtx.vout;

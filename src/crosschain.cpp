@@ -21,6 +21,7 @@
 #include "hex.h"
 #include "notarisationdb.h"
 #include "cc/CCinclude.h"
+#include "cc/import.h"
 
 /*
  * The crosschain workflow.

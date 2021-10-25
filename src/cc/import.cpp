@@ -12,7 +12,7 @@
  * Removal or modification of this copyright notice is prohibited.            *
  *                                                                            *
  ******************************************************************************/
-
+#include "cc/import.h"
 #include "cc/eval.h"
 #include "cc/utils.h"
 #include "importcoin.h"
@@ -67,134 +67,6 @@ cJSON* CodaRPC(char **retstr,char const *arg0,char const *arg1,char const *arg2,
         else free(jsonstr);
     }
     return(retjson);    
-}
-
-// makes source tx for self import tx
-CMutableTransaction MakeSelfImportSourceTx(CTxDestination &dest, int64_t amount)
-{
-    const int64_t txfee = 10000;
-    int64_t inputs, change;
-    CPubKey myPubKey = Mypubkey();
-    struct CCcontract_info *cpDummy, C;
-
-    cpDummy = CCinit(&C, EVAL_TOKENS);  // this is just for FinalizeCCTx to work
-
-    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
-
-    if (AddNormalinputs(mtx, myPubKey, 2 * txfee, 4) == 0) {
-        LOGSTREAM("importcoin", CCLOG_INFO, stream << "MakeSelfImportSourceTx() warning: cannot find normal inputs for txfee" << std::endl);
-    }
-    
-    CScript scriptPubKey = GetScriptForDestination(dest);
-    mtx.vout.push_back(CTxOut(txfee, scriptPubKey));
-
-    //make opret with 'burned' amount:
-    FinalizeCCTx(0, cpDummy, mtx, myPubKey, txfee, CScript() << OP_RETURN << E_MARSHAL(ss << (uint8_t)EVAL_IMPORTCOIN << (uint8_t)'A' << amount));
-    return mtx;
-}
-
-// make sure vin is signed by pubkey33
-bool CheckVinPubKey(const CTransaction &sourcetx, int32_t i, uint8_t pubkey33[33])
-{
-    CTransaction vintx;
-    uint256 blockHash;
-    char destaddr[64], pkaddr[64];
-
-    if (i < 0 || i >= sourcetx.vin.size())
-        return false;
-
-    if( !myGetTransaction(sourcetx.vin[i].prevout.hash, vintx, blockHash) ) {
-        LOGSTREAM("importcoin", CCLOG_INFO, stream << "CheckVinPubKey() could not load vintx" << sourcetx.vin[i].prevout.hash.GetHex() << std::endl);
-        return false;
-    }
-    if( sourcetx.vin[i].prevout.n < vintx.vout.size() && Getscriptaddress(destaddr, vintx.vout[sourcetx.vin[i].prevout.n].scriptPubKey) != 0 )
-    {
-        pubkey2addr(pkaddr, pubkey33);
-        if (strcmp(pkaddr, destaddr) == 0) {
-            return true;
-        }
-        LOGSTREAM("importcoin", CCLOG_INFO, stream << "CheckVinPubKey() mismatched vin[" << i << "].prevout.n=" << sourcetx.vin[i].prevout.n << " -> destaddr=" << destaddr << " vs pkaddr=" << pkaddr << std::endl);
-    }
-    return false;
-}
-
-// ac_import=PUBKEY support:
-// prepare a tx for creating import tx and quasi-burn tx
-int32_t GetSelfimportProof(const CMutableTransaction sourceMtx, CMutableTransaction &templateMtx, ImportProof &proofNull) // find burnTx with hash from "other" daemon
-{
-    MerkleBranch newBranch; 
-    CMutableTransaction tmpmtx; 
-    //CTransaction sourcetx; 
-
-    tmpmtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
-
-    /*
-    if (!E_UNMARSHAL(ParseHex(rawsourcetx), ss >> sourcetx)) {
-        LOGSTREAM("importcoin", CCLOG_INFO, stream << "GetSelfimportProof: could not unmarshal source tx" << std::endl);
-        return(-1);
-    }
-
-    if (sourcetx.vout.size() == 0) {
-        LOGSTREAM("importcoin", CCLOG_INFO, stream << "GetSelfimportProof: vout size is 0" << std::endl);
-        return -1;
-    } */
-
-	/*if (ivout < 0) {  // "ivout < 0" means "find"  
-		// try to find vout
-		CPubKey myPubkey = Mypubkey();
-		ivout = 0;
-		// skip change:
-		if (sourcetx.vout[ivout].scriptPubKey == (CScript() << ParseHex(HexStr(myPubkey)) << OP_CHECKSIG))
-			ivout++;
-	}
-
-    if (ivout >= sourcetx.vout.size()) {
-        LOGSTREAM("importcoin", CCLOG_INFO, stream << "GetSelfimportProof: needed vout not found" << std::endl);
-        return -1;
-    } */
-
-    int32_t ivout = 0;
-
-	// LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "GetSelfimportProof: using vout[" << ivout << "] of the passed rawtx" << std::endl);
-
-    CScript scriptPubKey = sourceMtx.vout[ivout].scriptPubKey;
-
-	//mtx is template for import tx
-    templateMtx = sourceMtx;
-    templateMtx.fOverwintered = tmpmtx.fOverwintered;
-    
-    //malleability fix for burn tx:
-    //mtx.nExpiryHeight = tmpmtx.nExpiryHeight;
-    templateMtx.nExpiryHeight = sourceMtx.nExpiryHeight;
-
-    templateMtx.nVersionGroupId = tmpmtx.nVersionGroupId;
-    templateMtx.nVersion = tmpmtx.nVersion;
-    templateMtx.vout.clear();
-    templateMtx.vout.resize(1);
-
-    uint8_t evalCode, funcId;
-    int64_t burnAmount;
-    vscript_t vopret;
-    if( !GetOpReturnData(sourceMtx.vout.back().scriptPubKey, vopret) ||
-        !E_UNMARSHAL(vopret, ss >> evalCode; ss >> funcId; ss >> burnAmount)) {
-        LOGSTREAM("importcoin", CCLOG_INFO, stream << "GetSelfimportProof() could not unmarshal source tx opret" << std::endl);
-        return -1;
-    }
-    templateMtx.vout[0].nValue = burnAmount;
-    templateMtx.vout[0].scriptPubKey = scriptPubKey;
-
-    // not sure we need this now as we create sourcetx ourselves:
-    /*if (sourcetx.GetHash() != sourcetxid) {
-        LOGSTREAM("importcoin", CCLOG_INFO, stream << "GetSelfimportProof: passed source txid incorrect" << std::endl);
-        return(-1);
-    }*/
-
-    // check ac_pubkey:
-    if (!CheckVinPubKey(sourceMtx, 0, ASSETCHAINS_OVERRIDE_PUBKEY33)) {
-        return -1;
-    }
-    proofNull = ImportProof(std::make_pair(sourceMtx.GetHash(), newBranch));
-    return 0;
 }
 
 // make import tx with burntx and dual daemon
@@ -761,4 +633,117 @@ bool Eval::ImportCoin(const std::vector<uint8_t> params, const CTransaction &imp
     LOGSTREAM("importcoin", CCLOG_DEBUG2, stream << "Valid import tx! txid=" << importTx.GetHash().GetHex() << std::endl);
        
     return Valid();
+}
+
+/*****
+ * @brief makes source tx for self import tx
+ * @param dest the tx destination
+ * @param amount the amount
+ * @returns a transaction based on the inputs
+ */
+CMutableTransaction MakeSelfImportSourceTx(const CTxDestination &dest, int64_t amount)
+{
+    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
+
+    const int64_t txfee = 10000;
+    CPubKey myPubKey = Mypubkey();
+    if (AddNormalinputs(mtx, myPubKey, 2 * txfee, 4) == 0) {
+        LOGSTREAM("importcoin", CCLOG_INFO, stream 
+                << "MakeSelfImportSourceTx() warning: cannot find normal inputs for txfee" << std::endl);
+    }
+    
+    CScript scriptPubKey = GetScriptForDestination(dest);
+    mtx.vout.push_back(CTxOut(txfee, scriptPubKey));
+
+    //make opret with 'burned' amount:
+    CCcontract_info *cpDummy;
+    CCcontract_info C;
+    cpDummy = CCinit(&C, EVAL_TOKENS);  // this is just for FinalizeCCTx to work
+    FinalizeCCTx(0, cpDummy, mtx, myPubKey, txfee, CScript() 
+            << OP_RETURN 
+            << E_MARSHAL(ss << (uint8_t)EVAL_IMPORTCOIN << (uint8_t)'A' << amount));
+    return mtx;
+}
+
+/******
+ * @brief make sure vin is signed by a particular key
+ * @param sourcetx the source transaction
+ * @param i the index of the input to check
+ * @param pubkey33 the key
+ * @returns true if the vin of i was signed by the given key
+ */
+bool CheckVinPubKey(const CTransaction &sourcetx, int32_t i, uint8_t pubkey33[33])
+{
+    CTransaction vintx;
+    uint256 blockHash;
+    char destaddr[64], pkaddr[64];
+
+    if (i < 0 || i >= sourcetx.vin.size())
+        return false;
+
+    if( !myGetTransaction(sourcetx.vin[i].prevout.hash, vintx, blockHash) ) {
+        LOGSTREAM("importcoin", CCLOG_INFO, stream << "CheckVinPubKey() could not load vintx" << sourcetx.vin[i].prevout.hash.GetHex() << std::endl);
+        return false;
+    }
+    if( sourcetx.vin[i].prevout.n < vintx.vout.size() && Getscriptaddress(destaddr, vintx.vout[sourcetx.vin[i].prevout.n].scriptPubKey) != 0 )
+    {
+        pubkey2addr(pkaddr, pubkey33);
+        if (strcmp(pkaddr, destaddr) == 0) {
+            return true;
+        }
+        LOGSTREAM("importcoin", CCLOG_INFO, stream << "CheckVinPubKey() mismatched vin[" << i << "].prevout.n=" << sourcetx.vin[i].prevout.n << " -> destaddr=" << destaddr << " vs pkaddr=" << pkaddr << std::endl);
+    }
+    return false;
+}
+
+/*****
+ * @brief generate a self import proof
+ * @note this prepares a tx for creating an import tx and quasi-burn tx
+ * @note find burnTx with hash from "other" daemon
+ * @param[in] sourceMtx the original transaction
+ * @param[out] templateMtx the resultant transaction
+ * @param[out] proofNull the import proof
+ * @returns true on success
+ */
+bool GetSelfimportProof(const CMutableTransaction sourceMtx, CMutableTransaction &templateMtx, 
+        ImportProof &proofNull)
+{
+
+    CMutableTransaction tmpmtx = CreateNewContextualCMutableTransaction(
+            Params().GetConsensus(), komodo_nextheight());
+
+    CScript scriptPubKey = sourceMtx.vout[0].scriptPubKey;
+
+	//mtx is template for import tx
+    templateMtx = sourceMtx;
+    templateMtx.fOverwintered = tmpmtx.fOverwintered;
+    
+    //malleability fix for burn tx:
+    //mtx.nExpiryHeight = tmpmtx.nExpiryHeight;
+    templateMtx.nExpiryHeight = sourceMtx.nExpiryHeight;
+
+    templateMtx.nVersionGroupId = tmpmtx.nVersionGroupId;
+    templateMtx.nVersion = tmpmtx.nVersion;
+    templateMtx.vout.clear();
+    templateMtx.vout.resize(1);
+
+    uint8_t evalCode, funcId;
+    int64_t burnAmount;
+    vscript_t vopret;
+    if( !GetOpReturnData(sourceMtx.vout.back().scriptPubKey, vopret) ||
+        !E_UNMARSHAL(vopret, ss >> evalCode; ss >> funcId; ss >> burnAmount)) {
+        LOGSTREAM("importcoin", CCLOG_INFO, stream << "GetSelfimportProof() could not unmarshal source tx opret" << std::endl);
+        return false;
+    }
+    templateMtx.vout[0].nValue = burnAmount;
+    templateMtx.vout[0].scriptPubKey = scriptPubKey;
+
+    // check ac_pubkey:
+    if (!CheckVinPubKey(sourceMtx, 0, ASSETCHAINS_OVERRIDE_PUBKEY33)) {
+        return false;
+    }
+
+    MerkleBranch newBranch; 
+    proofNull = ImportProof(std::make_pair(sourceMtx.GetHash(), newBranch));
+    return true;
 }
