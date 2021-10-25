@@ -18,13 +18,9 @@
  ******************************************************************************/
 
 #include "checkpoints.h"
-
-#include "chainparams.h"
 #include "main.h"
-#include "uint256.h"
 
 #include <stdint.h>
-
 #include <boost/foreach.hpp>
 
 namespace Checkpoints {
@@ -38,17 +34,33 @@ namespace Checkpoints {
      * fast multicore CPU, it won't be much higher than 1.
      */
     static const double SIGCHECK_VERIFICATION_FACTOR = 5.0;
+
+    /******
+     * @param data the collection of checkpoints
+     * @param nHeight the height
+     * @param hash the expected hash at nHight
+     * @returns true if the checkpoint at nHeight is not found or hash matches the found checkpoint
+     */
     bool CheckBlock(const CChainParams::CCheckpointData& data, int nHeight, const uint256& hash)
     {
         const MapCheckpoints& checkpoints = data.mapCheckpoints;
         
         MapCheckpoints::const_iterator i = checkpoints.find(nHeight);
-        if (i == checkpoints.end()) return true;
+        if (i == checkpoints.end()) 
+            return true;
         return hash == i->second;
     }
 
-    //! Guess how far we are in the verification process at the given block index
-    double GuessVerificationProgress(const CChainParams::CCheckpointData& data, CBlockIndex *pindex, bool fSigchecks) {
+    /******
+     * @brief Guess how far we are in the verification process at the given block index
+     * @param data the checkpoint collection
+     * @param pindex the block index
+     * @param fsigchecks true to include signature checks in the calculation
+     * @returns
+     */
+    double GuessVerificationProgress(const CChainParams::CCheckpointData& data, 
+            CBlockIndex *pindex, bool fSigchecks) 
+    {
         if (pindex==NULL)
             return 0.0;
 
@@ -77,6 +89,11 @@ namespace Checkpoints {
         return std::min(fWorkBefore / (fWorkBefore + fWorkAfter), 1.0);
     }
 
+    /*****
+     * @brief Return conservative estimate of total number of blocks, 0 if unknown
+     * @param data the collection of checkpoints
+     * @returns the number of blocks
+     */
     int GetTotalBlocksEstimate(const CChainParams::CCheckpointData& data)
     {
         const MapCheckpoints& checkpoints = data.mapCheckpoints;
@@ -87,6 +104,10 @@ namespace Checkpoints {
         return checkpoints.rbegin()->first;
     }
 
+    /******
+     * @param data the collection of checkpoints
+     * @returns last CBlockIndex* in mapBlockIndex that is a checkpoint (can be nullptr)
+     */
     CBlockIndex* GetLastCheckpoint(const CChainParams::CCheckpointData& data)
     {
         const MapCheckpoints& checkpoints = data.mapCheckpoints;
@@ -98,7 +119,7 @@ namespace Checkpoints {
             if (t != mapBlockIndex.end())
                 return t->second;
         }
-        return NULL;
+        return nullptr;
     }
 
 } // namespace Checkpoints

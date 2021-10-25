@@ -1,3 +1,4 @@
+#pragma once
 // Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
@@ -16,17 +17,9 @@
  * Removal or modification of this copyright notice is prohibited.            *
  *                                                                            *
  ******************************************************************************/
-
-#ifndef BITCOIN_CHECKPOINTS_H
-#define BITCOIN_CHECKPOINTS_H
-
 #include "uint256.h"
 #include "chainparams.h"
-
-#include <map>
-
-class CBlockIndex;
-struct CCheckpointData;
+#include "chain.h" // CBlockIndex
 
 /**
  * Block-chain checkpoints are compiled-in sanity checks.
@@ -34,26 +27,34 @@ struct CCheckpointData;
  */
 namespace Checkpoints
 {
-
-    typedef std::map<int, uint256> MapCheckpoints;
-
-struct CCheckpointData {
-    MapCheckpoints mapCheckpoints;
-    int64_t nTimeLastCheckpoint;
-    int64_t nTransactionsLastCheckpoint;
-    double fTransactionsPerDay;
-};
+    /******
+     * @param data the collection of checkpoints
+     * @param nHeight the height
+     * @param hash the expected hash at nHight
+     * @returns true if the checkpoint at nHeight is not found or hash matches the found checkpoint
+     */
     bool CheckBlock(const CChainParams::CCheckpointData& data, int nHeight, const uint256& hash);
 
-    
-//! Return conservative estimate of total number of blocks, 0 if unknown
+    /*****
+     * @brief Return conservative estimate of total number of blocks, 0 if unknown
+     * @param data the collection of checkpoints
+     * @returns the total number of blocks
+     */
     int GetTotalBlocksEstimate(const CChainParams::CCheckpointData& data);
 
-//! Returns last CBlockIndex* in mapBlockIndex that is a checkpoint
+    /******
+     * @param data the collection of checkpoints
+     * @returns last CBlockIndex* in mapBlockIndex that is a checkpoint (can be nullptr)
+     */
     CBlockIndex* GetLastCheckpoint(const CChainParams::CCheckpointData& data);
 
-double GuessVerificationProgress(const CChainParams::CCheckpointData& data, CBlockIndex* pindex, bool fSigchecks = true);
+    /******
+     * @brief Guess how far we are in the verification process at the given block index
+     * @param data the checkpoint collection
+     * @param pindex the block index
+     * @param fsigchecks true to include signature checks in the calculation
+     * @returns
+     */
+    double GuessVerificationProgress(const CChainParams::CCheckpointData& data, CBlockIndex* pindex, bool fSigchecks = true);
 
-} //namespace Checkpoints
-
-#endif // BITCOIN_CHECKPOINTS_H
+} // namespace Checkpoints
