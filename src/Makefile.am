@@ -815,6 +815,6 @@ endif
 
 if ENABLE_TESTS
 include Makefile.ktest.include
-#include Makefile.test.include
-#include Makefile.gtest.include
+#include Makefile.test.include # bitcoin tests
+#include Makefile.gtest.include # zcash tests
 endif
