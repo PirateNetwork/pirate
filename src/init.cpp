@@ -2279,6 +2279,11 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 if (!pwalletMain->SetAddressBook(pwalletMain->vchDefaultKey.GetID(), "", "receive"))
                     strErrors << _("Cannot write default address") << "\n";
             }
+
+            if (chainActive.Tip()) {
+                LOCK(pwalletMain->cs_wallet);
+                pwalletMain->SetBestChain(chainActive.GetLocator(), chainActive.Tip()->GetHeight());
+            }
         }
 
         LogPrintf("%s", strErrors.str());
