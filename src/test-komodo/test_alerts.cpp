@@ -89,7 +89,7 @@ public:
     }
     ~TestAlerts()
     {
-        // TODO: Delete temp_directory and everything in it
+        boost::filesystem::remove(binary_file);
     }
     CKey key;
     CPubKey pubKey;
@@ -243,20 +243,19 @@ public:
 
 
 // macro to assist with log messages
-#define GTEST_COUT std::cerr << "[          ] [ INFO ]"
+#define GTEST_COUT std::cerr << "[          ] [ INFO ] "
 
 TEST_F(TestAlerts, AlertApplies)
 {
     SetMockTime(11);
-    CPubKey pubKey = key.GetPubKey();
-    std::vector<unsigned char> alertKey{pubKey.begin(), std::next(pubKey.begin())};
+    std::vector<unsigned char> alertKey{pubKey.begin(), pubKey.end()};
 
     for(const CAlert& alert : alerts)
     {
         EXPECT_TRUE(alert.CheckSignature(alertKey));
     }
 
-    EXPECT_EQ(alerts.size(), 3);
+    EXPECT_GE(alerts.size(), 3);
 
     // Matches:
     EXPECT_TRUE(alerts[0].AppliesTo(1, ""));
@@ -290,14 +289,14 @@ TEST_F(TestAlerts, AlertApplies)
 TEST_F(TestAlerts, AlertNotify)
 {
     SetMockTime(11);
-    const std::vector<unsigned char>& alertKey = Params(CBaseChainParams::MAIN).AlertKey();
+    const std::vector<unsigned char>& alertKey{pubKey.begin(), pubKey.end()};
 
     boost::filesystem::path temp = GetTempPath() /
         boost::filesystem::unique_path("alertnotify-%%%%.txt");
 
     // Put all alerts into a temp file
     mapArgs["-alertnotify"] = std::string("echo %s >> ") + temp.string();
-    BOOST_FOREACH(CAlert alert, alerts)
+    for(CAlert alert : alerts)
         alert.ProcessAlert(alertKey, false);
 
     std::vector<std::string> r = ReadLines(temp);
@@ -321,7 +320,7 @@ TEST_F(TestAlerts, AlertNotify)
     EXPECT_EQ(r[4], "'Alert 4, reenables RPC' "); // dashes should be removed
     EXPECT_EQ(r[5], "'Evil Alert; /bin/ls; echo ' ");
 #endif
-    boost::filesystem::remove(temp);
+    EXPECT_TRUE(boost::filesystem::remove(temp));
 
     SetMockTime(0);
     mapAlerts.clear();
@@ -330,7 +329,7 @@ TEST_F(TestAlerts, AlertNotify)
 TEST_F(TestAlerts, AlertDisablesRPC)
 {
     SetMockTime(11);
-    const std::vector<unsigned char>& alertKey = Params(CBaseChainParams::MAIN).AlertKey();
+    const std::vector<unsigned char>& alertKey{pubKey.begin(), pubKey.end()};
 
     // Command should work before alerts
     EXPECT_EQ(GetWarnings("rpc"), "");
@@ -355,34 +354,37 @@ TEST_F(TestAlerts, PartitionAlert)
 {
     // Test PartitionCheck
     CCriticalSection csDummy;
-    CBlockIndex indexDummy[400];
     CChainParams& params = Params(CBaseChainParams::MAIN);
-    int64_t nPowTargetSpacing = params.GetConsensus().nPowTargetSpacing;
+    int64_t nPowTargetSpacing = params.GetConsensus().nPowTargetSpacing; // for komodo mainnet, currently 60
+    int64_t normalBlocksPerDay = 86400 / nPowTargetSpacing;
+    CBlockIndex indexDummy[86400 / 60]; // hard coded to avoid compiler warnings about variable length buffer
 
     // Generate fake blockchain timestamps relative to
     // an arbitrary time:
     int64_t now = 1427379054;
     SetMockTime(now);
-    for (int i = 0; i < 400; i++)
+    for (int i = 0; i < normalBlocksPerDay; i++)
     {
-        indexDummy[i].phashBlock = NULL;
-        if (i == 0) indexDummy[i].pprev = NULL;
-        else indexDummy[i].pprev = &indexDummy[i-1];
+        indexDummy[i].phashBlock = nullptr;
+        if (i == 0) 
+            indexDummy[i].pprev = nullptr;
+        else 
+            indexDummy[i].pprev = &indexDummy[i-1];
         indexDummy[i].SetHeight(i);
-        indexDummy[i].nTime = now - (400-i)*nPowTargetSpacing;
+        indexDummy[i].nTime = now - (normalBlocksPerDay-i)*nPowTargetSpacing;
         // Other members don't matter, the partition check code doesn't
         // use them
     }
 
     // Test 1: chain with blocks every nPowTargetSpacing seconds,
     // as normal, no worries:
-    PartitionCheck(falseFunc, csDummy, &indexDummy[399], nPowTargetSpacing);
+    PartitionCheck(falseFunc, csDummy, &indexDummy[normalBlocksPerDay - 1], nPowTargetSpacing);
     EXPECT_TRUE(strMiscWarning.empty());
 
     // Test 2: go 3.5 hours without a block, expect a warning:
     now += 3*60*60+30*60;
     SetMockTime(now);
-    PartitionCheck(falseFunc, csDummy, &indexDummy[399], nPowTargetSpacing);
+    PartitionCheck(falseFunc, csDummy, &indexDummy[normalBlocksPerDay - 1], nPowTargetSpacing);
     EXPECT_TRUE(!strMiscWarning.empty());
     GTEST_COUT << "Got alert text: " << strMiscWarning << std::endl;
     strMiscWarning = "";
@@ -391,16 +393,16 @@ TEST_F(TestAlerts, PartitionAlert)
     // code:
     now += 60*10;
     SetMockTime(now);
-    PartitionCheck(falseFunc, csDummy, &indexDummy[399], nPowTargetSpacing);
+    PartitionCheck(falseFunc, csDummy, &indexDummy[normalBlocksPerDay - 1], nPowTargetSpacing);
     EXPECT_TRUE(strMiscWarning.empty());
 
     // Test 4: get 2.5 times as many blocks as expected:
     now += 60*60*24; // Pretend it is a day later
     SetMockTime(now);
     int64_t quickSpacing = nPowTargetSpacing*2/5;
-    for (int i = 0; i < 400; i++) // Tweak chain timestamps:
-        indexDummy[i].nTime = now - (400-i)*quickSpacing;
-    PartitionCheck(falseFunc, csDummy, &indexDummy[399], nPowTargetSpacing);
+    for (int i = 0; i < normalBlocksPerDay; i++) // Tweak chain timestamps:
+        indexDummy[i].nTime = now - (normalBlocksPerDay-i)*quickSpacing;
+    PartitionCheck(falseFunc, csDummy, &indexDummy[normalBlocksPerDay - 1], nPowTargetSpacing);
     EXPECT_TRUE(!strMiscWarning.empty());
     GTEST_COUT << "Got alert text: " << strMiscWarning << std::endl;
     strMiscWarning = "";
