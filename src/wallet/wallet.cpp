@@ -3527,9 +3527,8 @@ static void FindMySaplingNote(const CWallet *wallet, const SaplingIncomingViewin
 
     auto result = SaplingNotePlaintext::decrypt(Params().GetConsensus(), height, output.encCiphertext, ivk, output.ephemeralKey, output.cmu);
     if (result) {
-        LOCK(wallet->cs_wallet_threadedfunction);
+
         auto address = ivk.address(result.get().d);
-        viewingKeysToAdd->insert(make_pair(address.get(),ivk));
 
         // We don't cache the nullifier here as computing it requires knowledge of the note position
         // in the commitment tree, which can only be determined when the transaction has been mined.
@@ -3542,7 +3541,11 @@ static void FindMySaplingNote(const CWallet *wallet, const SaplingIncomingViewin
         nd.value = note.value();
         nd.address = address.get();
 
-        noteData->insert(std::make_pair(op, nd));
+        {
+            LOCK(wallet->cs_wallet_threadedfunction);
+            viewingKeysToAdd->insert(make_pair(address.get(),ivk));
+            noteData->insert(std::make_pair(op, nd));
+        }
     }
 }
 
