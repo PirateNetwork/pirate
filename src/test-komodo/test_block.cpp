@@ -2,12 +2,13 @@
 
 #include "primitives/block.h"
 
-
 TEST(block_tests, header_size_is_expected) {
-    // Dummy header with an empty Equihash solution.
+    // Header with an empty Equihash solution.
     CBlockHeader header;
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << header;
 
-    ASSERT_EQ(ss.size(), CBlockHeader::HEADER_SIZE);
+    auto stream_size = CBlockHeader::HEADER_SIZE + 1;
+    // ss.size is +1 due to data stream header of 1 byte
+    EXPECT_EQ(ss.size(), stream_size);
 }
