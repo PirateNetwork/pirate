@@ -43,6 +43,10 @@ public:
      * ctor to create a chain
      */
     TestChain();
+    /***
+     * dtor to release resources
+     */
+    ~TestChain();
     /**
      * Generate a block
      * @returns the block generated
@@ -71,6 +75,7 @@ public:
     std::shared_ptr<TestWallet> AddWallet();
 private:
     std::vector<std::shared_ptr<TestWallet>> toBeNotified;
+    boost::filesystem::path dataDir;
 };
 
 /***

@@ -53,11 +53,6 @@ void setupChain()
 
     // Init blockchain
     ClearDatadirCache();
-    auto pathTemp = GetTempPath() / strprintf("test_komodo_%li_%i", GetTime(), GetRand(100000));
-    if (ASSETCHAINS_SYMBOL[0])
-        pathTemp = pathTemp / strprintf("_%s", ASSETCHAINS_SYMBOL);
-    boost::filesystem::create_directories(pathTemp);
-    mapArgs["-datadir"] = pathTemp.string();
     pblocktree = new CBlockTreeDB(1 << 20, true);
     CCoinsViewDB *pcoinsdbview = new CCoinsViewDB(1 << 23, true);
     pcoinsTip = new CCoinsViewCache(pcoinsdbview);
@@ -167,10 +162,21 @@ CTransaction getInputTx(CScript scriptPubKey)
 
 TestChain::TestChain()
 {
+    dataDir = GetTempPath() / strprintf("test_komodo_%li_%i", GetTime(), GetRand(100000));
+    if (ASSETCHAINS_SYMBOL[0])
+        dataDir = dataDir / strprintf("_%s", ASSETCHAINS_SYMBOL);
+    boost::filesystem::create_directories(dataDir);
+    mapArgs["-datadir"] = dataDir.string();
+
     setupChain();
     CBitcoinSecret vchSecret;
     vchSecret.SetString(notarySecret); // this returns false due to network prefix mismatch but works anyway
     notaryKey = vchSecret.GetKey();
+}
+
+TestChain::~TestChain()
+{
+    boost::filesystem::remove_all(dataDir);
 }
 
 CBlock TestChain::generateBlock()
