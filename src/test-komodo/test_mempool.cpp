@@ -10,8 +10,53 @@
 #include "policy/fees.h"
 #include "util.h"
 
-// Implementation is in test_checktransaction.cpp
-extern CMutableTransaction GetValidTransaction();
+void CreateJoinSplitSignature(CMutableTransaction& mtx, uint32_t consensusBranchId) {
+    // Generate an ephemeral keypair.
+    uint256 joinSplitPubKey;
+    unsigned char joinSplitPrivKey[crypto_sign_SECRETKEYBYTES];
+    crypto_sign_keypair(joinSplitPubKey.begin(), joinSplitPrivKey);
+    mtx.joinSplitPubKey = joinSplitPubKey;
+
+    // Compute the correct hSig.
+    // TODO: #966.
+    static const uint256 one(uint256S("0000000000000000000000000000000000000000000000000000000000000001"));
+    // Empty output script.
+    CScript scriptCode;
+    CTransaction signTx(mtx);
+    uint256 dataToBeSigned = SignatureHash(scriptCode, signTx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId);
+    if (dataToBeSigned == one) {
+        throw std::runtime_error("SignatureHash failed");
+    }
+
+    // Add the signature
+    assert(crypto_sign_detached(&mtx.joinSplitSig[0], NULL,
+                         dataToBeSigned.begin(), 32,
+                         joinSplitPrivKey
+                        ) == 0);
+}
+
+CMutableTransaction GetValidTransaction() {
+    uint32_t consensusBranchId = SPROUT_BRANCH_ID;
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(2);
+    mtx.vin[0].prevout.hash = uint256S("0000000000000000000000000000000000000000000000000000000000000001");
+    mtx.vin[0].prevout.n = 0;
+    mtx.vin[1].prevout.hash = uint256S("0000000000000000000000000000000000000000000000000000000000000002");
+    mtx.vin[1].prevout.n = 0;
+    mtx.vout.resize(2);
+    // mtx.vout[0].scriptPubKey = 
+    mtx.vout[0].nValue = 0;
+    mtx.vout[1].nValue = 0;
+    mtx.vjoinsplit.resize(2);
+    mtx.vjoinsplit[0].nullifiers.at(0) = uint256S("0000000000000000000000000000000000000000000000000000000000000000");
+    mtx.vjoinsplit[0].nullifiers.at(1) = uint256S("0000000000000000000000000000000000000000000000000000000000000001");
+    mtx.vjoinsplit[1].nullifiers.at(0) = uint256S("0000000000000000000000000000000000000000000000000000000000000002");
+    mtx.vjoinsplit[1].nullifiers.at(1) = uint256S("0000000000000000000000000000000000000000000000000000000000000003");
+
+    CreateJoinSplitSignature(mtx, consensusBranchId);
+    return mtx;
+}
 
 // Fake the input of transaction 5295156213414ed77f6e538e7e8ebe14492156906b9fe995b242477818789364
 // - 532639cc6bebed47c1c69ae36dd498c68a012e74ad12729adbd3dbb56f8f3f4a, 0
