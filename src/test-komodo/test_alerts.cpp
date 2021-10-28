@@ -10,7 +10,6 @@
 #include "chain.h"
 #include "chainparams.h"
 #include "clientversion.h"
-#include "test/data/alertTests.raw.h"
 
 #include "main.h"
 #include "rpc/protocol.h"
