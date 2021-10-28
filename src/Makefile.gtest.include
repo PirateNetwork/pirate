@@ -23,7 +23,6 @@ endif
 zcash_gtest_SOURCES += \
 	gtest/test_tautology.cpp \
 	gtest/test_deprecation.cpp \
-	gtest/test_equihash.cpp \
 	gtest/test_httprpc.cpp \
 	gtest/test_joinsplit.cpp \
 	gtest/test_keys.cpp \
@@ -34,7 +33,6 @@ zcash_gtest_SOURCES += \
 	gtest/test_metrics.cpp \
 	gtest/test_miner.cpp \
 	gtest/test_pow.cpp \
-	gtest/test_random.cpp \
 	gtest/test_rpc.cpp \
 	gtest/test_sapling_note.cpp \
 	gtest/test_transaction.cpp \

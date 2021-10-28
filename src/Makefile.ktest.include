@@ -17,7 +17,9 @@ komodo_test_SOURCES = \
 	test-komodo/test_netbase_tests.cpp \
     test-komodo/test_events.cpp \
     test-komodo/test_hex.cpp \
-    test-komodo/test_alerts.cpp
+    test-komodo/test_alerts.cpp \
+    test-komodo/test_equihash.cpp \
+    test-komodo/test_random.cpp
 
 komodo_test_CPPFLAGS = $(komodod_CPPFLAGS)
 
