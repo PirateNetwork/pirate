@@ -123,7 +123,7 @@ TEST(PoW, MinDifficultyRules) {
             bnRes.GetCompact());
 
     // diffuculty should never decrease below minimum
-    arith_uint256 minWork = UintToArith256(params.nMinimumChainWork);
+    arith_uint256 minWork = UintToArith256(params.powLimit);
     for (int i = 0; i <= lastBlk; i++) {
         blocks[i].nBits = minWork.GetCompact();
         blocks[i].chainPower.chainWork = i ? blocks[i - 1].chainPower.chainWork 

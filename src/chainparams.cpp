@@ -131,9 +131,6 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170007;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
 
-        // The best chain should have at least this much work.
-        consensus.nMinimumChainWork = uint256S("0x00000000000000000000000000000000000000000000000000281b32ff3198a1");
-
         /**
          * The message start string is designed to be unlikely to occur in normal data.
          * The characters are rarely used upper ASCII, not valid as UTF-8, and produce
@@ -285,9 +282,6 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170007;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 280000;
 
-        // The best chain should have at least this much work.
-        consensus.nMinimumChainWork = uint256S("0x00000000000000000000000000000000000000000000000000000001d0c4d9cd");
-
         pchMessageStart[0] = 0x5A;
         pchMessageStart[1] = 0x1F;
         pchMessageStart[2] = 0x7E;
@@ -387,9 +381,6 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170006;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight =
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
-
-        // The best chain should have at least this much work.
-        consensus.nMinimumChainWork = uint256S("0x00");
 
         pchMessageStart[0] = 0xaa;
         pchMessageStart[1] = 0x8e;
@@ -639,15 +630,9 @@ void *chainparams_commandline()
                             (double)2777            // * estimated number of transactions per day after checkpoint
                             //   total number of tx / (checkpoint block height / (24 * 24))
                     };
-
-            pCurrentParams->consensus.nMinimumChainWork = uint256S("0x000000000000000000000000000000000000000000000001a8f4f23f8b2d1f7e");
         }
         else
         {
-            if (strcmp(ASSETCHAINS_SYMBOL,"VRSCTEST") == 0 || strcmp(ASSETCHAINS_SYMBOL,"VERUSTEST") == 0)
-            {
-                pCurrentParams->consensus.nMinimumChainWork = uint256S("0x0000000000000000000000000000000000000000000000000000000000001f7e");
-            }
             pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = ASSETCHAINS_SAPLING;
             pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = ASSETCHAINS_OVERWINTER;
             checkpointData = //(Checkpoints::CCheckpointData)
