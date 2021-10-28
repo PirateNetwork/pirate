@@ -389,7 +389,9 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
     if (pindexFirst == NULL)
         return nProofOfWorkLimit;
 
-    bool fNegative,fOverflow; int32_t zawyflag = 0; arith_uint256 easy,origtarget,bnAvg {bnTot / params.nPowAveragingWindow};
+    bool fNegative,fOverflow; int32_t zawyflag = 0; 
+    arith_uint256 easy,origtarget;
+    arith_uint256 bnAvg{bnTot / params.nPowAveragingWindow}; // average number of bits in the lookback window
     nbits = CalculateNextWorkRequired(bnAvg, pindexLast->GetMedianTimePast(), pindexFirst->GetMedianTimePast(), params);
     if ( ASSETCHAINS_ADAPTIVEPOW > 0 )
     {
@@ -503,9 +505,16 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
     return(nbits);
 }
 
+/****
+ * @brief calculate the nBits value (work required) for the next block
+ * @param bnAvg the average nBits value (work required) across the lookback window
+ * @param nLastBlockTime the time of the most recent block in the lookback window
+ * @param nFirstBlockTime the time of the first block in the lookback window
+ * @param params the chain's consensus parameters
+ * @return the nBits value for the next block
+ */
 unsigned int CalculateNextWorkRequired(arith_uint256 bnAvg,
-                                       int64_t nLastBlockTime, int64_t nFirstBlockTime,
-                                       const Consensus::Params& params)
+        int64_t nLastBlockTime, int64_t nFirstBlockTime, const Consensus::Params& params)
 {
     // Limit adjustment step
     // Use medians to prevent time-warp attacks
@@ -528,7 +537,7 @@ unsigned int CalculateNextWorkRequired(arith_uint256 bnAvg,
     else
         bnLimit = UintToArith256(params.powAlternate);
 
-    const arith_uint256 bnPowLimit = bnLimit; //UintToArith256(params.powLimit);
+    const arith_uint256 bnPowLimit = bnLimit;
     arith_uint256 bnNew {bnAvg};
     bnNew /= params.AveragingWindowTimespan();
     bnNew *= nActualTimespan;
