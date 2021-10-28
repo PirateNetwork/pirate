@@ -421,7 +421,7 @@ TEST_F(TestAlerts, PartitionAlert)
 
     SetMockTime(0);
     // PartitionCheck adds records to the alertnotify file asynchronously. 
-    // To remove the file, we need to wait briefly
+    // To remove the file, we need to wait briefly for it to be closed.
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 }
 
