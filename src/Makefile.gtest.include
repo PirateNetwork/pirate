@@ -39,7 +39,6 @@ zcash_gtest_SOURCES += \
 	gtest/test_upgrades.cpp \
 	gtest/test_validation.cpp \
 	gtest/test_circuit.cpp \
-	gtest/test_txid.cpp \
 	gtest/test_libzcash_utils.cpp \
 	gtest/test_proofs.cpp \
 	gtest/test_paymentdisclosure.cpp \
