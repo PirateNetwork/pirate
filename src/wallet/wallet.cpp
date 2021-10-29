@@ -2214,19 +2214,22 @@ static void BuildSingleSaplingWitness(CWallet* wallet, SaplingNoteData* pnd, con
 
     if (pnd->witnessHeight == nHeight - 1) {
 
-        SaplingWitness witness = pnd->witnesses.front();
+        auto nd = *pnd;
+        SaplingWitness witness = nd.witnesses.front();
         for (const CTransaction& ctx : pblock->vtx) {
             for (const OutputDescription &outdesc : ctx.vShieldedOutput) {
                 witness.append(outdesc.cmu);
             }
         }
 
+        nd.witnesses.push_front(witness);
+        while (nd.witnesses.size() > WITNESS_CACHE_SIZE) {
+            nd.witnesses.pop_back();
+        }
+
         {
             LOCK(wallet->cs_wallet_threadedfunction);
-            pnd->witnesses.push_front(witness);
-            while (pnd->witnesses.size() > WITNESS_CACHE_SIZE) {
-                pnd->witnesses.pop_back();
-            }
+            pnd->witnesses = nd.witnesses;
             pnd->witnessHeight = nHeight;
         }
     }
