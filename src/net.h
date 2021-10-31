@@ -47,6 +47,10 @@
 #include <boost/foreach.hpp>
 #include <boost/signals2/signal.hpp>
 
+// Enable OpenSSL Support
+#include <openssl/bio.h>
+#include <openssl/ssl.h>
+
 class CAddrMan;
 class CBlockIndex;
 class CScheduler;
@@ -97,6 +101,19 @@ bool BindListenPort(const CService &bindAddr, std::string& strError, bool fWhite
 void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler);
 bool StopNode();
 void SocketSendData(CNode *pnode);
+SSL_CTX* create_context(bool server_side);
+EVP_PKEY *generate_key();
+X509 *generate_x509(EVP_PKEY *pkey);
+bool write_to_disk(EVP_PKEY *pkey, X509 *x509);
+void configure_context(SSL_CTX *ctx, bool server_side);
+static boost::filesystem::path tlsKeyPath;
+static boost::filesystem::path tlsCertPath;
+
+// OpenSSL related variables for metrics.cpp
+static std::string routingsecrecy;
+static std::string cipherdescription;
+static std::string securitylevel;
+static std::string validationdescription;
 
 void GetBanned(banmap_t &banmap);
 void SetBanned(const banmap_t &banmap);
@@ -206,10 +223,14 @@ extern CCriticalSection cs_nLastNodeId;
 /** Subversion as sent to the P2P network in `version` messages */
 extern std::string strSubVersion;
 
+extern SSL_CTX *tls_ctx_server;
+extern SSL_CTX *tls_ctx_client;
+
 struct LocalServiceInfo {
     int nScore;
     int nPort;
 };
+
 
 extern CCriticalSection cs_mapLocalHost;
 extern std::map<CNetAddr, LocalServiceInfo> mapLocalHost;
@@ -219,6 +240,7 @@ class CNodeStats
 public:
     NodeId nodeid;
     uint64_t nServices;
+    bool fTLSEstablished;
     int64_t nLastSend;
     int64_t nLastRecv;
     int64_t nTimeConnected;
@@ -291,9 +313,13 @@ public:
 class CNode
 {
 public:
+    // OpenSSL
+    SSL *ssl;
+
     // socket
     uint64_t nServices;
     SOCKET hSocket;
+    CCriticalSection cs_hSocket;
     CDataStream ssSend;
     size_t nSendSize; // total size of all vSendMsg entries
     size_t nSendOffset; // offset inside the first vSendMsg already sent
@@ -387,7 +413,7 @@ public:
     // Whether a ping is requested.
     bool fPingQueued;
 
-    CNode(SOCKET hSocketIn, const CAddress &addrIn, const std::string &addrNameIn = "", bool fInboundIn = false);
+    CNode(SOCKET hSocketIn, const CAddress &addrIn, const std::string &addrNameIn = "", bool fInboundIn = false, SSL *sslIn = NULL);
     ~CNode();
 
 private:
