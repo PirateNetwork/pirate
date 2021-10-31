@@ -35,6 +35,7 @@
 #include "key.h"
 #include "notarisationdb.h"
 #include "params.h"
+#include "komodo_notary.h"
 
 #ifdef ENABLE_MINING
 #include "key_io.h"
@@ -100,8 +101,6 @@ extern int32_t KOMODO_LOADINGBLOCKS;
 extern bool VERUS_MINTBLOCKS;
 extern char ASSETCHAINS_SYMBOL[];
 extern int32_t KOMODO_SNAPSHOT_INTERVAL;
-
-extern void komodo_init(int32_t height);
 
 ZCJoinSplit* pzcashParams = NULL;
 
@@ -2316,7 +2315,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 pwalletMain->UpdateWalletTransactionOrder(mapSorted, true);
             }
         }
-        
+
         if (clearWitnessCaches || GetBoolArg("-rescan", false) || !fInitializeArcTx || useBootstrap)
         {
             pwalletMain->ClearNoteWitnessCache();

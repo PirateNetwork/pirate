@@ -1,20 +1,11 @@
 [
   {
-    "ac_name": "AXO",
-    "ac_supply": "200000000",
-    "ac_ccactivate": "130000"
-  },
-  {
     "ac_name": "BET",
     "ac_supply": "999999"
   },
   {
     "ac_name": "BOTS",
     "ac_supply": "999999"
-  },
-  {
-    "ac_name": "BTCH",
-    "ac_supply": "20998641"
   },
   {
     "ac_name": "CCL",
@@ -24,16 +15,6 @@
     "addressindex": "1",
     "spentindex": "1",
     "addnode": ["142.93.136.89", "195.201.22.89"]
-  },
-  {
-    "ac_name": "COQUICASH",
-    "ac_supply": "72000000",
-    "ac_reward": "7200000000",
-    "ac_staked": "50",
-    "ac_halving": "420000",
-    "ac_cc": "2",
-    "ac_ccenable": "227,235,236,241",
-    "addnode": ["78.47.108.168"]
   },
   {
     "ac_name": "CRYPTO",
@@ -95,12 +76,6 @@
     "ac_supply": "100000000"
   },
   {
-    "ac_name": "OOT",
-    "ac_supply": "216000000",
-    "ac_sapling": "5000000",
-    "addnode": ["88.99.212.81"]
-  },
-  {
     "ac_name": "PANGEA",
     "ac_supply": "999999"
   },
@@ -146,23 +121,9 @@
     "addnode": ["157.230.45.184", "165.22.52.123"]
   },
   {
-    "ac_name": "WLC21",
-    "ac_supply": "21000000",
-    "ac_reward": "190258751",
-    "ac_staked": "90",
-    "ac_public": "1",
-    "addnode": ["37.187.225.231", "51.38.38.134"]
-  },
-  {
     "ac_name": "ZILLA",
     "ac_supply": "11000000",
     "ac_sapling": "5000000",
     "addnode": ["51.68.215.104"]
-  },
-  {
-    "ac_name": "VOTE2021",
-    "ac_supply": "129848152",
-    "ac_public": "1",
-    "addnode": ["77.74.197.115"]
   }
 ]

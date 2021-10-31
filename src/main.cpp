@@ -51,6 +51,7 @@
 #include "wallet/asyncrpcoperation_shieldcoinbase.h"
 #include "policy/fees.h"
 #include "notaries_staked.h"
+#include "komodo_extern_globals.h"
 
 #include <cstring>
 #include <algorithm>
@@ -652,7 +653,6 @@ CBlockTreeDB *pblocktree = NULL;
 
 // Komodo globals
 
-#define KOMODO_ZCASH
 #include "komodo.h"
 
 UniValue komodo_snapshot(int top)
@@ -1164,10 +1164,6 @@ bool ContextualCheckCoinbaseTransaction(int32_t slowflag,const CBlock *block,CBl
             }
         }
         return(false);
-    }
-    else if ( ASSETCHAINS_MARMARA != 0 && nHeight > 0 && (nHeight & 1) == 0 )
-    {
-
     }
     else if ( slowflag != 0 && ASSETCHAINS_CBOPRET != 0 && validateprices != 0 && nHeight > 0 && tx.vout.size() > 0 )
     {
@@ -3783,6 +3779,9 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     LogPrint("bench", "      - Connect %u transactions: %.2fms (%.3fms/tx, %.3fms/txin) [%.2fs]\n", (unsigned)block.vtx.size(), 0.001 * (nTime1 - nTimeStart), 0.001 * (nTime1 - nTimeStart) / block.vtx.size(), nInputs <= 1 ? 0 : 0.001 * (nTime1 - nTimeStart) / (nInputs-1), nTimeConnect * 0.000001);
 
     blockReward += nFees + sum;
+    if ( ASSETCHAINS_SYMBOL[0] == 0 && pindex->GetHeight() >= KOMODO_NOTARIES_HEIGHT2)
+        blockReward -= sum;
+
     if ( ASSETCHAINS_COMMISSION != 0 || ASSETCHAINS_FOUNDERS_REWARD != 0 ) //ASSETCHAINS_OVERRIDE_PUBKEY33[0] != 0 &&
     {
         uint64_t checktoshis;
@@ -3809,7 +3808,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                              error("ConnectBlock(): coinbase pays too much (actual=%d vs limit=%d)",
                                    block.vtx[0].GetValueOut(), blockReward),
                              REJECT_INVALID, "bad-cb-amount");
-        } else if ( IS_KOMODO_NOTARY != 0 )
+        } else if ( IS_KOMODO_NOTARY )
             fprintf(stderr,"allow nHeight.%d coinbase %.8f vs %.8f interest %.8f\n",(int32_t)pindex->GetHeight(),dstr(block.vtx[0].GetValueOut()),dstr(blockReward),dstr(sum));
     }
     if (!control.Wait())
@@ -6120,6 +6119,13 @@ bool CheckDiskSpace(uint64_t nAdditionalBytes)
     return true;
 }
 
+/****
+ * Open a file
+ * @param pos where to position for the next read
+ * @param prefix the type of file (i.e. "blk", "rev", etc.
+ * @param fReadOnly open in read only mode
+ * @returns the file pointer or NULL on error
+ */
 FILE* OpenDiskFile(const CDiskBlockPos &pos, const char *prefix, bool fReadOnly)
 {
     static int32_t didinit[256];
@@ -6127,9 +6133,9 @@ FILE* OpenDiskFile(const CDiskBlockPos &pos, const char *prefix, bool fReadOnly)
         return NULL;
     boost::filesystem::path path = GetBlockPosFilename(pos, prefix);
     boost::filesystem::create_directories(path.parent_path());
-    FILE* file = fopen(path.string().c_str(), "rb+");
+    FILE* file = fopen(path.string().c_str(), "rb+"); // open existing file for reading and writing
     if (!file && !fReadOnly)
-        file = fopen(path.string().c_str(), "wb+");
+        file = fopen(path.string().c_str(), "wb+"); // create an empty file for reading and writing
     if (!file) {
         LogPrintf("Unable to open file %s\n", path.string());
         return NULL;
@@ -6149,14 +6155,32 @@ FILE* OpenDiskFile(const CDiskBlockPos &pos, const char *prefix, bool fReadOnly)
     return file;
 }
 
+/***
+ * Open a block file
+ * @param pos where to position for the next read
+ * @param fReadOnly true to open the file in read only mode
+ * @returns the file pointer or NULL on error
+ */
 FILE* OpenBlockFile(const CDiskBlockPos &pos, bool fReadOnly) {
     return OpenDiskFile(pos, "blk", fReadOnly);
 }
 
+/***
+ * Open an undo ("rev") file
+ * @param pos where to position for the next read
+ * @param fReadOnly true to open the file in read only mode
+ * @returns the file pointer or NULL on error
+ */
 FILE* OpenUndoFile(const CDiskBlockPos &pos, bool fReadOnly) {
     return OpenDiskFile(pos, "rev", fReadOnly);
 }
 
+/***
+ * Get the full filename (including path) or a specific .dat file
+ * @param pos the block position
+ * @param prefix the prefix (i.e. "blk" or "rev")
+ * @returns the filename with the complete path
+ */
 boost::filesystem::path GetBlockPosFilename(const CDiskBlockPos &pos, const char *prefix)
 {
     return GetDataDir() / "blocks" / strprintf("%s%05u.dat", prefix, pos.nFile);
@@ -6670,6 +6694,10 @@ void UnloadBlockIndex()
     fHavePruned = false;
 }
 
+/***
+ * Load block index
+ * @returns true on success
+ */
 bool LoadBlockIndex()
 {
     // Load block index from databases
@@ -7869,12 +7897,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
             pfrom->PushMessage("headers", vHeaders);
         }
-        /*else if ( IS_KOMODO_NOTARY != 0 )
-        {
-            static uint32_t counter;
-            if ( counter++ < 3 )
-                fprintf(stderr,"you can ignore redundant getheaders from peer.%d %d prev.%d\n",(int32_t)pfrom->id,(int32_t)(pindex ? pindex->GetHeight() : -1),pfrom->lasthdrsreq);
-        }*/
     }
 
 
