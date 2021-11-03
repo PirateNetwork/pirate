@@ -179,6 +179,24 @@ TestChain::~TestChain()
     boost::filesystem::remove_all(dataDir);
 }
 
+/***
+ * Get the block index at the specified height
+ * @param height the height (0 indicates current height)
+ * @returns the block index
+ */
+CBlockIndex *TestChain::GetIndex(uint32_t height)
+{
+    if (height == 0)
+        return chainActive.LastTip();
+    return chainActive[height];
+
+}
+
+CCoinsViewCache *TestChain::GetCoinsViewCache()
+{
+    return pcoinsTip;
+}
+
 CBlock TestChain::generateBlock()
 {
     CBlock block;

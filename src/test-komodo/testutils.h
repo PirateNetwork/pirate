@@ -47,6 +47,17 @@ public:
      * dtor to release resources
      */
     ~TestChain();
+    /***
+     * Get the block index at the specified height
+     * @param height the height (0 indicates current height
+     * @returns the block index
+     */
+    CBlockIndex *GetIndex(uint32_t height = 0);
+    /***
+     * Get this chains view of the state of the chain
+     * @returns the view
+     */
+    CCoinsViewCache *GetCoinsViewCache();
     /**
      * Generate a block
      * @returns the block generated

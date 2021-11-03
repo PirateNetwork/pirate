@@ -1,9 +1,12 @@
-#include <gtest/gtest.h>
 
 #include "chain.h"
 #include "chainparams.h"
 #include "pow.h"
 #include "random.h"
+#include "testutils.h"
+#include "komodo_extern_globals.h"
+#include "consensus/validation.h"
+#include <gtest/gtest.h>
 
 TEST(PoW, DifficultyAveraging) {
     SelectParams(CBaseChainParams::MAIN);
@@ -145,4 +148,18 @@ TEST(PoW, MinDifficultyRules) {
     EXPECT_LT(GetNextWorkRequired(&blocks[lastBlk], &next, params),
             bnRes.GetCompact());
 
+}
+
+TEST(PoW, TestStopAt)
+{
+    TestChain chain;
+    auto notary = chain.AddWallet(chain.getNotaryKey());
+    CBlock lastBlock = chain.generateBlock(); // genesis block
+    ASSERT_GT( chain.GetIndex()->GetHeight(), 0 );
+    lastBlock = chain.generateBlock(); // now we should be above 1
+    ASSERT_GT( chain.GetIndex()->GetHeight(), 1);
+    CBlock block;
+    CValidationState state;
+    KOMODO_STOPAT = 1;
+    EXPECT_FALSE( ConnectBlock(block, state, chain.GetIndex(), *chain.GetCoinsViewCache(), false, true) );
 }
