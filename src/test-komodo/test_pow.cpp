@@ -163,3 +163,16 @@ TEST(PoW, TestStopAt)
     KOMODO_STOPAT = 1;
     EXPECT_FALSE( ConnectBlock(block, state, chain.GetIndex(), *chain.GetCoinsViewCache(), false, true) );
 }
+
+
+TEST(PoW, TestNormalConnect)
+{
+    TestChain chain;
+    auto notary = chain.AddWallet(chain.getNotaryKey());
+    CBlock lastBlock = chain.generateBlock(); // genesis block
+    ASSERT_GT( chain.GetIndex()->GetHeight(), 0 );
+    CBlock block;
+    CValidationState state;
+    EXPECT_TRUE( ConnectBlock(block, state, chain.GetIndex(), *chain.GetCoinsViewCache(), false, true) );
+    EXPECT_TRUE( state.IsValid() );
+}

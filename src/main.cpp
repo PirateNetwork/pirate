@@ -3416,6 +3416,16 @@ static int64_t nTimeTotal = 0;
 bool FindBlockPos(int32_t tmpflag,CValidationState &state, CDiskBlockPos &pos, unsigned int nAddSize, unsigned int nHeight, uint64_t nTime, bool fKnown = false);
 bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBlockIndex *pindexNew, const CDiskBlockPos& pos);
 
+/*****
+ * @brief Apply the effects of this block (with given index) on the UTXO set represented by coins
+ * @param block the block to add
+ * @param state the result status
+ * @param pindex where to insert the block
+ * @param view the chain
+ * @param fJustCheck do not actually modify, only do checks
+ * @param fcheckPOW
+ * @returns true on success
+ */
 bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pindex, CCoinsViewCache& view, bool fJustCheck,bool fCheckPOW)
 {
     CDiskBlockPos blockPos;
@@ -3424,7 +3434,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         return(true);
     if ( KOMODO_STOPAT != 0 && pindex->GetHeight() > KOMODO_STOPAT )
         return(false);
-    //fprintf(stderr,"connectblock ht.%d\n",(int32_t)pindex->GetHeight());
     AssertLockHeld(cs_main);
     bool fExpensiveChecks = true;
     if (fCheckpointsEnabled) {
@@ -3442,7 +3451,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     // Check it again to verify JoinSplit proofs, and in case a previous version let a bad block in
     if ( !CheckBlock(&futureblock,pindex->GetHeight(),pindex,block, state, fExpensiveChecks ? verifier : disabledVerifier, fCheckPOW, !fJustCheck) || futureblock != 0 )
     {
-        //fprintf(stderr,"checkblock failure in connectblock futureblock.%d\n",futureblock);
         return false;
     }
     if ( fCheckPOW != 0 && (pindex->nStatus & BLOCK_VALID_CONTEXT) != BLOCK_VALID_CONTEXT ) // Activate Jan 15th, 2019
@@ -3477,7 +3485,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                                 REJECT_INVALID, "bad-cb-amount");
             // calculate the notaries compensation and validate the amounts and pubkeys are correct.
             notarypaycheque = komodo_checknotarypay((CBlock *)&block,(int32_t)pindex->GetHeight());
-            //fprintf(stderr, "notarypaycheque.%lu\n", notarypaycheque);
             if ( notarypaycheque > 0 )
                 blockReward += notarypaycheque;
             else
@@ -3499,7 +3506,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         if (!ReceivedBlockTransactions(block, state, pindex, blockPos))
             return error("AcceptBlock(): ReceivedBlockTransactions failed");
         setDirtyFileInfo.insert(blockPos.nFile);
-        //fprintf(stderr,"added ht.%d copy of tmpfile to %d.%d\n",pindex->GetHeight(),blockPos.nFile,blockPos.nPos);
     }
     // verify that the view's current state corresponds to the previous block
     uint256 hashPrevBlock = pindex->pprev == NULL ? uint256() : pindex->pprev->GetBlockHash();
@@ -3526,8 +3532,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     }
 
     bool fScriptChecks = (!fCheckpointsEnabled || pindex->GetHeight() >= Checkpoints::GetTotalBlocksEstimate(chainparams.Checkpoints()));
-    //if ( KOMODO_TESTNET_EXPIRATION != 0 && pindex->GetHeight() > KOMODO_TESTNET_EXPIRATION ) // "testnet"
-    //    return(false);
     // Do not allow blocks that contain transactions which 'overwrite' older transactions,
     // unless those are already completely spent.
     BOOST_FOREACH(const CTransaction& tx, block.vtx) {
@@ -3603,7 +3607,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         if (nSigOps > MAX_BLOCK_SIGOPS)
             return state.DoS(100, error("ConnectBlock(): too many sigops"),
                              REJECT_INVALID, "bad-blk-sigops");
-        //fprintf(stderr,"ht.%d vout0 t%u\n",pindex->GetHeight(),tx.nLockTime);
         if (!tx.IsMint())
         {
             if (!view.HaveInputs(tx))
@@ -3667,21 +3670,10 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             fprintf(stderr,"valueout %.8f too big\n",(double)valueout/COIN);
             return state.DoS(100, error("ConnectBlock(): GetValueOut too big"),REJECT_INVALID,"tx valueout is too big");
         }
-        //prevsum = voutsum;
-        //voutsum += valueout;
-        /*if ( KOMODO_VALUETOOBIG(voutsum) != 0 )
-        {
-            fprintf(stderr,"voutsum %.8f too big\n",(double)voutsum/COIN);
-            return state.DoS(100, error("ConnectBlock(): voutsum too big"),REJECT_INVALID,"tx valueout is too big");
-        }
-        else
-            if ( voutsum < prevsum ) // PRLPAY overflows this and it isnt a conclusive test anyway
-            return state.DoS(100, error("ConnectBlock(): voutsum less after adding valueout"),REJECT_INVALID,"tx valueout is too big");*/
         if (!tx.IsCoinBase())
         {
             nFees += (stakeTxValue= view.GetValueIn(chainActive.LastTip()->GetHeight(),&interest,tx,chainActive.LastTip()->nTime) - valueout);
             sum += interest;
-            //fprintf(stderr, "tx.%s nFees.%li interest.%li\n", tx.GetHash().ToString().c_str(), stakeTxValue, interest);
 
             std::vector<CScriptCheck> vChecks;
             if (!ContextualCheckInputs(tx, state, view, fExpensiveChecks, flags, false, txdata[i], chainparams.GetConsensus(), consensusBranchId, nScriptCheckThreads ? &vChecks : NULL))
@@ -3714,8 +3706,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             }
         }
 
-        //if ( ASSETCHAINS_SYMBOL[0] == 0 )
-        //    komodo_earned_interest(pindex->GetHeight(),sum);
         CTxUndo undoDummy;
         if (i > 0) {
             blockundo.vtxundo.push_back(CTxUndo());
@@ -3725,7 +3715,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         BOOST_FOREACH(const JSDescription &joinsplit, tx.vjoinsplit) {
             BOOST_FOREACH(const uint256 &note_commitment, joinsplit.commitments) {
                 // Insert the note commitments into our temporary tree.
-
                 sprout_tree.append(note_commitment);
             }
         }
@@ -3739,7 +3728,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     }
     
     // This is moved from CheckBlock for staking chains, so we can enforce the staking tx value was indeed paid to the coinbase.
-    //fprintf(stderr, "blockReward.%li stakeTxValue.%li sum.%li\n",blockReward,stakeTxValue,sum);
     if ( ASSETCHAINS_STAKED != 0 && fCheckPOW && komodo_checkPOW(blockReward+stakeTxValue-notarypaycheque,1,(CBlock *)&block,pindex->GetHeight()) < 0 ) 
         return state.DoS(100, error("ConnectBlock: ac_staked chain failed slow komodo_checkPOW"),REJECT_INVALID, "failed-slow_checkPOW");
 
@@ -3786,8 +3774,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     {
         if ( ASSETCHAINS_SYMBOL[0] != 0 || pindex->GetHeight() >= KOMODO_NOTARIES_HEIGHT1 || block.vtx[0].vout[0].nValue > blockReward )
         {
-            //fprintf(stderr, "coinbase pays too much\n");
-            //sleepflag = true;
             return state.DoS(100,
                              error("ConnectBlock(): coinbase pays too much (actual=%d vs limit=%d)",
                                    block.vtx[0].GetValueOut(), blockReward),
@@ -3804,7 +3790,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         return true;
 
     // Write undo information to disk
-    //fprintf(stderr,"nFile.%d isNull %d vs isvalid %d nStatus %x\n",(int32_t)pindex->nFile,pindex->GetUndoPos().IsNull(),pindex->IsValid(BLOCK_VALID_SCRIPTS),(uint32_t)pindex->nStatus);
     if (pindex->GetUndoPos().IsNull() || !pindex->IsValid(BLOCK_VALID_SCRIPTS))
     {
         if (pindex->GetUndoPos().IsNull())
@@ -3891,13 +3876,11 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     int64_t nTime4 = GetTimeMicros(); nTimeCallbacks += nTime4 - nTime3;
     LogPrint("bench", "    - Callbacks: %.2fms [%.2fs]\n", 0.001 * (nTime4 - nTime3), nTimeCallbacks * 0.000001);
 
-    //FlushStateToDisk();
     komodo_connectblock(false,pindex,*(CBlock *)&block);  // dPoW state update.
     if ( ASSETCHAINS_NOTARY_PAY[0] != 0 )
     {
       // Update the notary pay with the latest payment.
       pindex->nNotaryPay = pindex->pprev->nNotaryPay + notarypaycheque;
-      //fprintf(stderr, "total notary pay.%li\n", pindex->nNotaryPay);
     }
     return true;
 }

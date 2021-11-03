@@ -820,7 +820,16 @@ bool PruneOneBlockFile(bool tempfile, const int fileNumber);
  *  of problems. Note that in any case, coins may be modified. */
 bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex, CCoinsViewCache& coins, bool* pfClean = NULL);
 
-/** Apply the effects of this block (with given index) on the UTXO set represented by coins */
+/*****
+ * @brief Apply the effects of this block (with given index) on the UTXO set represented by coins
+ * @param block the block to add
+ * @param state the result status
+ * @param pindex where to insert the block
+ * @param view the chain
+ * @param fJustCheck do not actually modify, only do checks
+ * @param fcheckPOW
+ * @returns true on success
+ */
 bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pindex, CCoinsViewCache& coins, bool fJustCheck = false,bool fCheckPOW = false);
 
 /** Context-independent validity checks */

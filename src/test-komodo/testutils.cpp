@@ -36,6 +36,8 @@ int64_t nMockTime;
 extern uint32_t USE_EXTERNAL_PUBKEY;
 extern std::string NOTARY_PUBKEY;
 
+void adjust_hwmheight(int32_t in); // in komodo.cpp
+
 void setupChain()
 {
     SelectParams(CBaseChainParams::REGTEST);
@@ -177,6 +179,7 @@ TestChain::TestChain()
 
 TestChain::~TestChain()
 {
+    adjust_hwmheight(0); // hwmheight can get skewed if komodo_connectblock not called (which some tests do)
     boost::filesystem::remove_all(dataDir);
     if (previousNetwork == "main")
         SelectParams(CBaseChainParams::MAIN);
