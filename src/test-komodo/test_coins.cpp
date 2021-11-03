@@ -896,7 +896,7 @@ TEST(TestCoins, coins_coinbase_spends)
 
     {
         CTransaction tx2(mtx2);
-        EXPECT_TRUE(!Consensus::CheckTxInputs(tx2, state, cache, 100+COINBASE_MATURITY, Params().GetConsensus()));
+        EXPECT_FALSE(Consensus::CheckTxInputs(tx2, state, cache, 100+COINBASE_MATURITY, Params().GetConsensus()));
         EXPECT_TRUE(state.GetRejectReason() == "bad-txns-coinbase-spend-has-transparent-outputs");
     }
 }

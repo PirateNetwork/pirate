@@ -162,6 +162,7 @@ CTransaction getInputTx(CScript scriptPubKey)
 
 TestChain::TestChain()
 {
+    previousNetwork = Params().NetworkIDString();
     dataDir = GetTempPath() / strprintf("test_komodo_%li_%i", GetTime(), GetRand(100000));
     if (ASSETCHAINS_SYMBOL[0])
         dataDir = dataDir / strprintf("_%s", ASSETCHAINS_SYMBOL);
@@ -177,6 +178,13 @@ TestChain::TestChain()
 TestChain::~TestChain()
 {
     boost::filesystem::remove_all(dataDir);
+    if (previousNetwork == "main")
+        SelectParams(CBaseChainParams::MAIN);
+    if (previousNetwork == "regtest")
+        SelectParams(CBaseChainParams::REGTEST);
+    if (previousNetwork == "test")
+        SelectParams(CBaseChainParams::TESTNET);
+
 }
 
 /***
