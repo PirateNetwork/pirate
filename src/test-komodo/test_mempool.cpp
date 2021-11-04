@@ -141,8 +141,8 @@ TEST(Mempool, PriorityStatsDoNotCrash) {
 
     CTxMemPoolEntry entry(tx, nFees, nTime, dPriority, nHeight, true, false, SPROUT_BRANCH_ID);
 
-    // Check it does not crash (ie. the death test fails)
-    EXPECT_NONFATAL_FAILURE(EXPECT_DEATH(testPool.addUnchecked(tx.GetHash(), entry), ""), "");
+    // This should not crash
+    EXPECT_TRUE(testPool.addUnchecked(tx.GetHash(), entry));
 
     EXPECT_EQ(dPriority, MAX_PRIORITY);
 }
