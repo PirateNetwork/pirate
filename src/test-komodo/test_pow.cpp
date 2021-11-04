@@ -165,14 +165,126 @@ TEST(PoW, TestStopAt)
 }
 
 
-TEST(PoW, TestNormalConnect)
+TEST(PoW, TestConnectWithoutChecks)
 {
     TestChain chain;
     auto notary = chain.AddWallet(chain.getNotaryKey());
+    auto alice = chain.AddWallet();
     CBlock lastBlock = chain.generateBlock(); // genesis block
     ASSERT_GT( chain.GetIndex()->GetHeight(), 0 );
+    // Add some transaction to a block
+    int32_t newHeight = chain.GetIndex()->GetHeight() + 1;
+    auto notaryPrevOut = notary->GetAvailable(100000);
+    ASSERT_TRUE(notaryPrevOut.first.vout.size() > 0);
+    CMutableTransaction tx;
+    CTxIn notaryIn;
+    notaryIn.prevout.hash = notaryPrevOut.first.GetHash();
+    notaryIn.prevout.n = notaryPrevOut.second;
+    tx.vin.push_back(notaryIn);
+    CTxOut aliceOut;
+    aliceOut.scriptPubKey = GetScriptForDestination(alice->GetPubKey());
+    aliceOut.nValue = 100000;
+    tx.vout.push_back(aliceOut);
+    CTxOut notaryOut;
+    notaryOut.scriptPubKey = GetScriptForDestination(notary->GetPubKey());
+    notaryOut.nValue = notaryPrevOut.first.vout[notaryPrevOut.second].nValue - 100000;
+    tx.vout.push_back(notaryOut);
+    // sign it
+    uint256 hash = SignatureHash(notaryPrevOut.first.vout[notaryPrevOut.second].scriptPubKey, tx, 0, SIGHASH_ALL, 0, 0);
+    tx.vin[0].scriptSig << notary->Sign(hash, SIGHASH_ALL);
+    CTransaction fundAlice(tx);
+    // construct the block
     CBlock block;
+    // first a coinbase tx
+    auto consensusParams = Params().GetConsensus();
+    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(consensusParams, newHeight);
+    txNew.vin.resize(1);
+    txNew.vin[0].prevout.SetNull();
+    txNew.vin[0].scriptSig = (CScript() << newHeight << CScriptNum(1)) + COINBASE_FLAGS;
+    txNew.vout.resize(1);
+    txNew.vout[0].nValue = GetBlockSubsidy(newHeight,consensusParams);
+    txNew.nExpiryHeight = 0;
+    block.vtx.push_back(CTransaction(txNew));
+    // then the actual tx
+    block.vtx.push_back(fundAlice);
     CValidationState state;
-    EXPECT_TRUE( ConnectBlock(block, state, chain.GetIndex(), *chain.GetCoinsViewCache(), false, true) );
-    EXPECT_TRUE( state.IsValid() );
+    // create a new CBlockIndex to forward to ConnectBlock
+    auto view = chain.GetCoinsViewCache();
+    auto index = chain.GetIndex();
+    CBlockIndex newIndex;
+    newIndex.pprev = index;
+    EXPECT_TRUE( ConnectBlock(block, state, &newIndex, *chain.GetCoinsViewCache(), true, false) );
+    if (!state.IsValid() )
+        FAIL() << state.GetRejectReason();
+}
+
+TEST(PoW, TestSpendInSameBlock)
+{
+    TestChain chain;
+    auto notary = chain.AddWallet(chain.getNotaryKey());
+    auto alice = chain.AddWallet();
+    auto bob = chain.AddWallet();
+    CBlock lastBlock = chain.generateBlock(); // genesis block
+    ASSERT_GT( chain.GetIndex()->GetHeight(), 0 );
+    // Add some transaction to a block
+    int32_t newHeight = chain.GetIndex()->GetHeight() + 1;
+    auto notaryPrevOut = notary->GetAvailable(100000);
+    ASSERT_TRUE(notaryPrevOut.first.vout.size() > 0);
+    CMutableTransaction tx;
+    CTxIn notaryIn;
+    notaryIn.prevout.hash = notaryPrevOut.first.GetHash();
+    notaryIn.prevout.n = notaryPrevOut.second;
+    tx.vin.push_back(notaryIn);
+    CTxOut aliceOut;
+    aliceOut.scriptPubKey = GetScriptForDestination(alice->GetPubKey());
+    aliceOut.nValue = 100000;
+    tx.vout.push_back(aliceOut);
+    CTxOut notaryOut;
+    notaryOut.scriptPubKey = GetScriptForDestination(notary->GetPubKey());
+    notaryOut.nValue = notaryPrevOut.first.vout[notaryPrevOut.second].nValue - 100000;
+    tx.vout.push_back(notaryOut);
+    // sign it
+    uint256 hash = SignatureHash(notaryPrevOut.first.vout[notaryPrevOut.second].scriptPubKey, tx, 0, SIGHASH_ALL, 0, 0);
+    tx.vin[0].scriptSig << notary->Sign(hash, SIGHASH_ALL);
+    CTransaction fundAlice(tx);
+    // now have Alice move some funds to Bob in the same block
+    CMutableTransaction aliceToBobMutable;
+    CTxIn aliceIn;
+    aliceIn.prevout.hash = fundAlice.GetHash();
+    aliceIn.prevout.n = 0;
+    aliceToBobMutable.vin.push_back(aliceIn);
+    CTxOut bobOut;
+    bobOut.scriptPubKey = GetScriptForDestination(bob->GetPubKey());
+    bobOut.nValue = 10000;
+    aliceToBobMutable.vout.push_back(bobOut);
+    CTxOut aliceRemainder;
+    aliceRemainder.scriptPubKey = GetScriptForDestination(alice->GetPubKey());
+    aliceRemainder.nValue = aliceOut.nValue - 10000;
+    aliceToBobMutable.vout.push_back(aliceRemainder);
+    hash = SignatureHash(fundAlice.vout[0].scriptPubKey, aliceToBobMutable, 0, SIGHASH_ALL, 0, 0);
+    aliceToBobMutable.vin[0].scriptSig << alice->Sign(hash, SIGHASH_ALL);
+    CTransaction aliceToBobTx(aliceToBobMutable);
+    // construct the block
+    CBlock block;
+    // first a coinbase tx
+    auto consensusParams = Params().GetConsensus();
+    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(consensusParams, newHeight);
+    txNew.vin.resize(1);
+    txNew.vin[0].prevout.SetNull();
+    txNew.vin[0].scriptSig = (CScript() << newHeight << CScriptNum(1)) + COINBASE_FLAGS;
+    txNew.vout.resize(1);
+    txNew.vout[0].nValue = GetBlockSubsidy(newHeight,consensusParams);
+    txNew.nExpiryHeight = 0;
+    block.vtx.push_back(CTransaction(txNew));
+    // then the actual txs
+    block.vtx.push_back(fundAlice);
+    block.vtx.push_back(aliceToBobTx);
+    CValidationState state;
+    // create a new CBlockIndex to forward to ConnectBlock
+    auto index = chain.GetIndex();
+    CBlockIndex newIndex;
+    newIndex.pprev = index;
+    EXPECT_TRUE( ConnectBlock(block, state, &newIndex, *chain.GetCoinsViewCache(), true, false) );
+    if (!state.IsValid() )
+        FAIL() << state.GetRejectReason();
 }
