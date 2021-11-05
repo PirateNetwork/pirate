@@ -628,7 +628,7 @@ CAmount CCoinsViewCache::GetValueIn(int32_t nHeight,int64_t &interestp,const CTr
                 int32_t txheight; 
                 uint32_t locktime;
                 interest = komodo_accrued_interest(&txheight,&locktime,tx.vin[i].prevout.hash,
-                        tx.vin[i].prevout.n,0,value,(int32_t)nHeight);
+                        tx.vin[i].prevout.n,0,value,nHeight);
                 nResult += interest;
                 interestp += interest;
             }
