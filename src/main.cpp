@@ -353,20 +353,12 @@ namespace {
         return &it->second;
     }
 
-    int GetChainHeight()
+    int GetHeight()
     {
         CBlockIndex *pindex;
         if ( (pindex= chainActive.LastTip()) != 0 )
             return pindex->GetHeight();
         else return(0);
-    }
-    
-    unsigned int GetChainTime()
-    {
-        CBlockIndex *pIndex = chainActive.LastTip();
-        if (pIndex == nullptr)
-            return 0;
-        return pIndex->nTime;
     }
 
     void UpdatePreferredDownload(CNode* node, CNodeState* state)
@@ -616,7 +608,7 @@ bool GetNodeStateStats(NodeId nodeid, CNodeStateStats &stats) {
 
 void RegisterNodeSignals(CNodeSignals& nodeSignals)
 {
-    nodeSignals.GetHeight.connect(&GetChainHeight);
+    nodeSignals.GetHeight.connect(&GetHeight);
     nodeSignals.ProcessMessages.connect(&ProcessMessages);
     nodeSignals.SendMessages.connect(&SendMessages);
     nodeSignals.InitializeNode.connect(&InitializeNode);
@@ -625,7 +617,7 @@ void RegisterNodeSignals(CNodeSignals& nodeSignals)
 
 void UnregisterNodeSignals(CNodeSignals& nodeSignals)
 {
-    nodeSignals.GetHeight.disconnect(&GetChainHeight);
+    nodeSignals.GetHeight.disconnect(&GetHeight);
     nodeSignals.ProcessMessages.disconnect(&ProcessMessages);
     nodeSignals.SendMessages.disconnect(&SendMessages);
     nodeSignals.InitializeNode.disconnect(&InitializeNode);
@@ -1974,7 +1966,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
             // Bring the best block into scope
             view.GetBestBlock();
             
-            nValueIn = view.GetValueIn(GetChainHeight(),&interest,tx,GetChainTime());
+            nValueIn = view.GetValueIn(GetHeight(),interest,tx);
             // we have all inputs cached now, so switch back to dummy, so we don't need to keep lock on mempool
             view.SetBackend(dummy);
         }
@@ -3680,7 +3672,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         }
         if (!tx.IsCoinBase())
         {
-            nFees += (stakeTxValue= view.GetValueIn(chainActive.LastTip()->GetHeight(),&interest,tx,chainActive.LastTip()->nTime) - valueout);
+            nFees += (stakeTxValue= view.GetValueIn(chainActive.LastTip()->GetHeight(),interest,tx) - valueout);
             sum += interest;
 
             std::vector<CScriptCheck> vChecks;
@@ -7221,7 +7213,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         // Reject incoming connections from nodes that don't know about the current epoch
         const Consensus::Params& params = Params().GetConsensus();
-        auto currentEpoch = CurrentEpoch(GetChainHeight(), params);
+        auto currentEpoch = CurrentEpoch(GetHeight(), params);
         if (nVersion < params.vUpgrades[currentEpoch].nProtocolVersion)
         {
             LogPrintf("peer=%d using obsolete version %i; disconnecting\n", pfrom->id, nVersion);
@@ -7371,14 +7363,14 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     // 1. The version message has been received
     // 2. Peer version is below the minimum version for the current epoch
     else if (pfrom->nVersion < chainparams.GetConsensus().vUpgrades[
-        CurrentEpoch(GetChainHeight(), chainparams.GetConsensus())].nProtocolVersion)
+        CurrentEpoch(GetHeight(), chainparams.GetConsensus())].nProtocolVersion)
     {
         LogPrintf("peer=%d using obsolete version %i vs %d; disconnecting\n", 
                 pfrom->id, pfrom->nVersion,(int32_t)chainparams.GetConsensus().vUpgrades[
-                CurrentEpoch(GetChainHeight(), chainparams.GetConsensus())].nProtocolVersion);
+                CurrentEpoch(GetHeight(), chainparams.GetConsensus())].nProtocolVersion);
         pfrom->PushMessage("reject", strCommand, REJECT_OBSOLETE,
                 strprintf("Version must be %d or greater", chainparams.GetConsensus().vUpgrades[
-                CurrentEpoch(GetChainHeight(), chainparams.GetConsensus())].nProtocolVersion));
+                CurrentEpoch(GetHeight(), chainparams.GetConsensus())].nProtocolVersion));
         pfrom->fDisconnect = true;
         return false;
     }
