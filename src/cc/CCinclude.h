@@ -266,10 +266,13 @@ static uint256 ignoretxid;
 static int32_t ignorevin;
 /// \endcond
 
-/// myGetTransaction is non-locking version of GetTransaction
-/// @param hash hash of transaction to get (txid)
-/// @param[out] txOut returned transaction object
-/// @param[out] hashBlock hash of the block where the tx resides
+/*****
+ * @brief get a transaction by its hash (without locks)
+ * @param[in] hash what to look for
+ * @param[out] txOut the found transaction
+ * @param[out] hashBlock the hash of the block (all zeros if still in mempool)
+ * @returns true if found
+ */
 bool myGetTransaction(const uint256 &hash, CTransaction &txOut, uint256 &hashBlock);
 
 /// NSPV_myGetTransaction is called in NSPV mode
@@ -290,7 +293,14 @@ int64_t CCgettxout(uint256 txid,int32_t vout,int32_t mempoolflag,int32_t lockfla
 
 /// \cond INTERNAL
 bool myIsutxo_spentinmempool(uint256 &spenttxid,int32_t &spentvini,uint256 txid,int32_t vout);
-bool myAddtomempool(CTransaction &tx, CValidationState *pstate = NULL, bool fSkipExpiry = false);
+/****
+ * @brief add a transaction to the mempool
+ * @param[in] tx the transaction
+ * @param pstate where to store any error (can be nullptr)
+ * @param fSkipExpiry
+ * @returns true on success
+ */
+bool myAddtomempool(CTransaction &tx, CValidationState *pstate = nullptr, bool fSkipExpiry = false);
 bool mytxid_inmempool(uint256 txid);
 int32_t myIsutxo_spent(uint256 &spenttxid,uint256 txid,int32_t vout);
 int32_t myGet_mempool_txs(std::vector<CTransaction> &txs,uint8_t evalcode,uint8_t funcid);
