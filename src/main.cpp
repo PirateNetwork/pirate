@@ -4549,7 +4549,7 @@ static bool ActivateBestChainStep(bool fSkipdpow, CValidationState &state, CBloc
         nHeight = nTargetHeight;
 
         // Connect new blocks.
-        for(CBlockIndex *pindexConnect : vpindexToConnect) 
+        BOOST_REVERSE_FOREACH(CBlockIndex *pindexConnect, vpindexToConnect) 
         {
             if (!ConnectTip(state, pindexConnect, pindexConnect == pindexMostWork ? pblock : NULL)) 
             {
