@@ -127,6 +127,21 @@ void OptionsModel::Init(bool resetSettings)
     if (!settings.contains("fEnableZSigning"))
         settings.setValue("fEnableZSigning", false);
 
+    bool fEnableZSigning = settings.value("fEnableZSigning").toBool();
+    if (fEnableZSigning==false) {
+      settings.setValue("fEnableZSigning_ModeSpend",  false);
+      settings.setValue("fEnableZSigning_ModeSign",  false);
+    } else {
+      if (!settings.contains("fEnableZSigning_ModeSpend"))
+      {
+        settings.setValue("fEnableZSigning_ModeSpend",  true);        
+      }
+      if (!settings.contains("fEnableZSigning_ModeSign"))
+      {
+        settings.setValue("fEnableZSigning_ModeSign",  false);        
+      }
+    }
+    
     if (!settings.contains("fEnableHexMemo"))
           settings.setValue("fEnableHexMemo", false);
     fEnableHexMemo = settings.value("fEnableHexMemo").toBool();
@@ -314,7 +329,14 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case EnableReindex:
             return settings.value("fEnableReindex");
         case EnableZSigning:
+            //Enable offline transactions in the wallet:
             return settings.value("fEnableZSigning");
+        case EnableZSigning_Spend:
+            //  Offline transaction role: Create offline transactions for 'viewing only' addresses
+            return settings.value("fEnableZSigning_Spend");
+        case EnableZSigning_Sign:
+            //  Offline transaction role: Sign offline transactions
+            return settings.value("fEnableZSigning_Sign");
         case EnableHexMemo:
             return fEnableHexMemo;
         case EnableBootstrap:
@@ -457,6 +479,16 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
       case EnableZSigning:
           if (settings.value("fEnableZSigning") != value) {
               settings.setValue("fEnableZSigning", value);
+          }
+          break;          
+      case EnableZSigning_Sign:
+          if (settings.value("fEnableZSigning_Sign") != value) {
+              settings.setValue("fEnableZSigning_Sign", value);
+          }
+          break;
+      case EnableZSigning_Spend:
+          if (settings.value("fEnableZSigning_Spend") != value) {
+              settings.setValue("fEnableZSigning_Spend", value);
           }
           break;
       case EnableHexMemo:

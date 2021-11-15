@@ -737,7 +737,7 @@ void ZSendCoinsDialog::coinControlUpdateLabels()
         CoinControlDialog::updateLabels(model, this);
     }
 }
-
+ 
 void ZSendCoinsDialog::updatePayFromList()
 {
     ui->payFromAddress->clear();
@@ -753,14 +753,38 @@ void ZSendCoinsDialog::updatePayFromList()
       QString sAmount = KomodoUnits::formatWithUnit(oDisplayUnit, pair.second);
 
       QSettings settings;
-      bool fEnableZSigning = settings.value("fEnableZSigning").toBool();
+      bool fEnableZSigning      = settings.value("fEnableZSigning").toBool();
+      bool fEnableZSigning_Spend = false;
+      
+      if (fEnableZSigning==true) { 
+        //Off-line transaction signing is enabled.
+        
+        //Determine if the wallet is running in 'on-line' mode which
+        //allows the creation of spend transactions:
+        fEnableZSigning_Spend = settings.value("fEnableZSigning_Spend").toBool();
+      }
 
       auto search = zbalances_isMine.find( oAddress );
       if (search != zbalances_isMine.end()) {
-          ui->payFromAddress->addItem(tr("(%1) %2").arg(sAmount).arg(sAddddress) );
+          //If Off-line transaction signing is enabled:
+          //  If we filter on (fEnableZSigning==false), then only adresses for
+          //  which we have the viewing key will be shown in the address drop down
+          
+          //  If we do not filter on (fEnableZSigning==false), then all address
+          //  will be shown in Off-line transaction signing:
+          //    Those with spending key will be a normal Spend
+          //    Those with only the viewing key will be 'prepare off-line transaction
+
+          //if (fEnableZSigning==false) {
+            ui->payFromAddress->addItem(tr("(%1) %2").arg(sAmount).arg(sAddddress) );
+          //}          
       }
       else {
-          if (fEnableZSigning) {
+          if (fEnableZSigning_Spend) {
+            // If off-line transaction signing is enabled and the 'on-line' role is
+            // selected:
+            //   Show addressed for which we have the viewing key only
+            //   in order to be able to 'prepare off-line transactions'
             ui->payFromAddress->addItem(tr("(%1) %2 - Off-line Transaction").arg(sAmount).arg(sAddddress) );
           }
       }

@@ -54,6 +54,7 @@ private Q_SLOTS:
     void on_hideTrayIcon_stateChanged(int fState);
 
     void setTheme();
+    void evaluateOfflineSigning(bool bChecked);
     void showRestartWarning(bool fPersistent = false);
     void clearStatusLabel();
     void updateProxyValidationState();

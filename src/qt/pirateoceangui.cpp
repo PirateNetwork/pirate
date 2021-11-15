@@ -347,9 +347,24 @@ void PirateOceanGUI::createActions()
     //Check Settings
     QSettings settings;
     bool fEnableZSigning = settings.value("fEnableZSigning").toBool();
-    if (fEnableZSigning) {
-        zsignAction->setVisible(true);
-    } else {
+    if (fEnableZSigning==true) {
+        //Off-line signing enabled.        
+        // Evaluate if this is the on-line role (prepare spend transactions)
+        // or the off-line role (signs the transactions)
+        //
+        // For the on-line role, filter the addressbook only to show addresses
+        // for which we have the viewing-key only, thus requiring the off-line
+        // partner wallet to perform the signing
+        bool fEnableZSigning_Spend = settings.value("fEnableZSigning_Spend").toBool();
+        bool fEnableZSigning_Sign  = settings.value("fEnableZSigning_Sign").toBool();
+          
+        zsendCoinsAction->setVisible( fEnableZSigning_Spend );
+        zsignAction->setVisible( fEnableZSigning_Sign );
+    } else {        
+        //Offline signing disabled. 
+        //  Don't allow transaction creationg (spend) of 'viewing only' addresses. 
+        //  Only display addresses for which we have the full spending key
+        zsendCoinsAction->setVisible(true);
         zsignAction->setVisible(false);
     }
 
@@ -772,8 +787,35 @@ void PirateOceanGUI::optionsClicked()
 
     if (dlg.result() == QDialog::Accepted) {
         QSettings settings;
+
         bool fEnableZSigning = settings.value("fEnableZSigning").toBool();
-        zsignAction->setVisible(fEnableZSigning);
+        if (fEnableZSigning) {
+          //Off-line signing enabled.
+          // Evaluate if this is the on-line role (prepare spend transactions)
+          // or the off-line role (signs the transactions)
+          bool fEnableZSigning_Spend = settings.value("fEnableZSigning_Spend").toBool();
+          bool fEnableZSigning_Sign  = settings.value("fEnableZSigning_Sign").toBool();
+          
+          zsendCoinsAction->setVisible( fEnableZSigning_Spend );
+          zsignAction->setVisible( fEnableZSigning_Sign );
+        } else {        
+          //Offline signing disabled. 
+          zsendCoinsAction->setVisible(true);
+          zsignAction->setVisible(false);
+        }
+        
+        if (zsendCoinsAction->isVisible()) {
+          if (zsendCoinsAction->isChecked() || zsignAction->isChecked())
+          {
+            gotoZSendCoinsPage("");
+          }
+        }
+        if (zsignAction->isVisible()) {
+          if (zsendCoinsAction->isChecked() || zsignAction->isChecked())
+          {
+            gotoZSignPage();
+          }
+        }        
     }
 
     dlg.close();
