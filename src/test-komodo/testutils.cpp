@@ -203,6 +203,11 @@ CBlockIndex *TestChain::GetIndex(uint32_t height)
 
 }
 
+void TestChain::IncrementChainTime()
+{
+    SetMockTime(nMockTime += 100);
+}
+
 CCoinsViewCache *TestChain::GetCoinsViewCache()
 {
     return pcoinsTip;
@@ -354,6 +359,12 @@ void TestWallet::AddOut(CTransaction tx, uint32_t n)
  */
 CValidationState TestWallet::Transfer(std::shared_ptr<TestWallet> to, CAmount amount, CAmount fee)
 {
+    CTransaction fundTo(CreateSpendTransaction(to, amount, fee));
+    return chain->acceptTx(fundTo);
+}
+
+CTransaction TestWallet::CreateSpendTransaction(std::shared_ptr<TestWallet> to, CAmount amount, CAmount fee)
+{
     std::pair<CTransaction, uint32_t> available = GetAvailable(amount + fee);
     CMutableTransaction tx;
     CTxIn incoming;
@@ -364,7 +375,7 @@ CValidationState TestWallet::Transfer(std::shared_ptr<TestWallet> to, CAmount am
     out1.scriptPubKey = GetScriptForDestination(to->GetPubKey());
     out1.nValue = amount;
     tx.vout.push_back(out1);
-    // give the rest back to the notary
+    // give the rest back to wallet owner
     CTxOut out2;
     out2.scriptPubKey = GetScriptForDestination(key.GetPubKey());
     out2.nValue = available.first.vout[available.second].nValue - amount - fee;
@@ -373,6 +384,5 @@ CValidationState TestWallet::Transfer(std::shared_ptr<TestWallet> to, CAmount am
     uint256 hash = SignatureHash(available.first.vout[available.second].scriptPubKey, tx, 0, SIGHASH_ALL, 0, 0);
     tx.vin[0].scriptSig << Sign(hash, SIGHASH_ALL);
 
-    CTransaction fundTo(tx);
-    return chain->acceptTx(fundTo);
+    return CTransaction(tx);
 }

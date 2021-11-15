@@ -186,7 +186,15 @@ int32_t komodo_waituntilelegible(uint32_t blocktime, int32_t stakeHeight, uint32
     return(1);
 }
 
-CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32_t gpucount, bool isStake)
+/*****
+ * @breif Generate a new block based on mempool txs, without valid proof-of-work 
+ * @param _pk the public key
+ * @param _scriptPubKeyIn the script for the public key
+ * @param gpucount assists in calculating the block's nTime
+ * @param isStake
+ * @returns the block template
+ */
+CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn, int32_t gpucount, bool isStake)
 {
     CScript scriptPubKeyIn(_scriptPubKeyIn);
 
@@ -916,49 +924,6 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
     return pblocktemplate.release();
 }
 
-/*
- #ifdef ENABLE_WALLET
- boost::optional<CScript> GetMinerScriptPubKey(CReserveKey& reservekey)
- #else
- boost::optional<CScript> GetMinerScriptPubKey()
- #endif
- {
- CKeyID keyID;
- CBitcoinAddress addr;
- if (addr.SetString(GetArg("-mineraddress", ""))) {
- addr.GetKeyID(keyID);
- } else {
- #ifdef ENABLE_WALLET
- CPubKey pubkey;
- if (!reservekey.GetReservedKey(pubkey)) {
- return boost::optional<CScript>();
- }
- keyID = pubkey.GetID();
- #else
- return boost::optional<CScript>();
- #endif
- }
-
- CScript scriptPubKey = CScript() << OP_DUP << OP_HASH160 << ToByteVector(keyID) << OP_EQUALVERIFY << OP_CHECKSIG;
- return scriptPubKey;
- }
-
- #ifdef ENABLE_WALLET
- CBlockTemplate* CreateNewBlockWithKey(CReserveKey& reservekey)
- {
- boost::optional<CScript> scriptPubKey = GetMinerScriptPubKey(reservekey);
- #else
- CBlockTemplate* CreateNewBlockWithKey()
- {
- boost::optional<CScript> scriptPubKey = GetMinerScriptPubKey();
- #endif
-
- if (!scriptPubKey) {
- return NULL;
- }
- return CreateNewBlock(*scriptPubKey);
- }*/
-
 //////////////////////////////////////////////////////////////////////////////
 //
 // Internal miner
@@ -991,6 +956,14 @@ void IncrementExtraNonce(CBlock* pblock, CBlockIndex* pindexPrev, unsigned int& 
 // Internal miner
 //
 
+/*****
+ * Create a new block
+ * @param reserveKey
+ * @param nHeight
+ * @param gpucount
+ * @param isStake
+ * @returns the block template
+ */
 CBlockTemplate* CreateNewBlockWithKey(CReserveKey& reservekey, int32_t nHeight, int32_t gpucount, bool isStake)
 {
     CPubKey pubkey; CScript scriptPubKey; uint8_t *script,*ptr; int32_t i,len;
@@ -1012,30 +985,26 @@ CBlockTemplate* CreateNewBlockWithKey(CReserveKey& reservekey, int32_t nHeight, 
     }
     else if ( USE_EXTERNAL_PUBKEY != 0 )
     {
-        //fprintf(stderr,"use notary pubkey\n");
         pubkey = ParseHex(NOTARY_PUBKEY);
         scriptPubKey = CScript() << ParseHex(HexStr(pubkey)) << OP_CHECKSIG;
     }
     else
     {
-        //if ( !isStake || ASSETCHAINS_STAKED != 0 )
-        {
-            if (!GetBoolArg("-disablewallet", false)) {
-                // wallet enabled
-                if (!reservekey.GetReservedKey(pubkey))
-                    return NULL;
-                scriptPubKey.clear();
-                scriptPubKey = CScript() << ToByteVector(pubkey) << OP_CHECKSIG;
-            } else {
-                // wallet disabled
-                CTxDestination dest = DecodeDestination(GetArg("-mineraddress", ""));
-                if (IsValidDestination(dest)) {
-                    // CKeyID keyID = boost::get<CKeyID>(dest);
-                    // scriptPubKey = CScript() << OP_DUP << OP_HASH160 << ToByteVector(keyID) << OP_EQUALVERIFY << OP_CHECKSIG;
-                    scriptPubKey = GetScriptForDestination(dest);
-                } else
-                    return NULL;
-            }
+        if (!GetBoolArg("-disablewallet", false)) {
+            // wallet enabled
+            if (!reservekey.GetReservedKey(pubkey))
+                return NULL;
+            scriptPubKey.clear();
+            scriptPubKey = CScript() << ToByteVector(pubkey) << OP_CHECKSIG;
+        } else {
+            // wallet disabled
+            CTxDestination dest = DecodeDestination(GetArg("-mineraddress", ""));
+            if (IsValidDestination(dest)) {
+                // CKeyID keyID = boost::get<CKeyID>(dest);
+                // scriptPubKey = CScript() << OP_DUP << OP_HASH160 << ToByteVector(keyID) << OP_EQUALVERIFY << OP_CHECKSIG;
+                scriptPubKey = GetScriptForDestination(dest);
+            } else
+                return NULL;
         }
     }
     return CreateNewBlock(pubkey, scriptPubKey, gpucount, isStake);

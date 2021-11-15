@@ -5218,25 +5218,29 @@ bool CheckBlock(int32_t *futureblockp, int32_t height, CBlockIndex *pindex, cons
     CTransaction sTx;
     CTransaction *ptx = nullptr;
 
-    if ( ASSETCHAINS_CC != 0 ) // CC contracts might refer to transactions in the current block, from a CC spend within the same block and out of order
+    // CC contracts might refer to transactions in the current block, from a 
+    // CC spend within the same block and out of order
+    if ( ASSETCHAINS_CC != 0 ) 
     {
         int32_t i,j,rejects=0,lastrejects=0;
-        // Copy all non Z-txs in mempool to temporary mempool because there can be tx in local mempool that make the block invalid.
+        // Copy all non Z-txs in mempool to temporary mempool because there can 
+        // be tx in local mempool that make the block invalid.
         LOCK2(cs_main,mempool.cs);
         list<CTransaction> transactionsToRemove;
-        BOOST_FOREACH(const CTxMemPoolEntry& e, mempool.mapTx) {
+        for(const CTxMemPoolEntry& e : mempool.mapTx) 
+        {
             const CTransaction &tx = e.GetTx();
-            const uint256 &hash = tx.GetHash();
-            if ( tx.vjoinsplit.empty() && tx.vShieldedSpend.empty()) {
+            if ( tx.vjoinsplit.empty() && tx.vShieldedSpend.empty()) 
+            {
                 transactionsToRemove.push_back(tx);
-                tmpmempool.addUnchecked(hash,e,true);
+                tmpmempool.addUnchecked(tx.GetHash(),e,true);
             }
         }
-        BOOST_FOREACH(const CTransaction& tx, transactionsToRemove) {
+        for(const CTransaction& tx : transactionsToRemove) {
             list<CTransaction> removed;
             mempool.remove(tx, removed, false);
         }
-        // add all the txs in the block to the empty mempool.
+        // add all the txs in the block to the (somewhat) empty mempool.
         // CC validation shouldn't (can't) depend on the state of mempool!
         while ( true )
         {
@@ -5249,8 +5253,10 @@ bool CheckBlock(int32_t *futureblockp, int32_t height, CBlockIndex *pindex, cons
                         || (i == block.vtx.size()-1 && komodo_isPoS((CBlock *)&block,height,0) != 0) )
                     continue;
                 Tx = tx;
-                if ( myAddtomempool(Tx, &state, true) == false ) // happens with out of order tx in block on resync
+                if ( myAddtomempool(Tx, &state, true) == false ) 
                 {
+                    // This happens with out of order tx in block on resync.
+
                     // take advantage of other checks, but if we were only rejected because it is a valid 
                     // staking transaction, sync with wallets and don't mark as a reject
                     if (i == (block.vtx.size() - 1) && ASSETCHAINS_LWMAPOS && block.IsVerusPOSBlock() 
@@ -5267,8 +5273,6 @@ bool CheckBlock(int32_t *futureblockp, int32_t height, CBlockIndex *pindex, cons
             }
             if ( rejects == 0 || rejects == lastrejects )
             {
-                if ( 0 && lastrejects != 0 )
-                    fprintf(stderr,"lastrejects.%d -> all tx in mempool\n",lastrejects);
                 break;
             }
             lastrejects = rejects;
@@ -5289,7 +5293,7 @@ bool CheckBlock(int32_t *futureblockp, int32_t height, CBlockIndex *pindex, cons
     }
 
     unsigned int nSigOps = 0;
-    BOOST_FOREACH(const CTransaction& tx, block.vtx)
+    for(const CTransaction& tx : block.vtx)
     {
         nSigOps += GetLegacySigOpCount(tx);
     }
@@ -5298,9 +5302,6 @@ bool CheckBlock(int32_t *futureblockp, int32_t height, CBlockIndex *pindex, cons
                          REJECT_INVALID, "bad-blk-sigops", true);
     if ( fCheckPOW && komodo_check_deposit(height,block,(pindex==0||pindex->pprev==0)?0:pindex->pprev->nTime) < 0 )
     {
-        //static uint32_t counter;
-        //if ( counter++ < 100 && ASSETCHAINS_STAKED == 0 )
-        //    fprintf(stderr,"check deposit rejection\n");
         LogPrintf("CheckBlockHeader komodo_check_deposit error");
         return(false);
     }
@@ -5314,13 +5315,12 @@ bool CheckBlock(int32_t *futureblockp, int32_t height, CBlockIndex *pindex, cons
     {
         LOCK2(cs_main,mempool.cs);
         // here we add back all txs from the temp mempool to the main mempool.
-        BOOST_FOREACH(const CTxMemPoolEntry& e, tmpmempool.mapTx)
+        for(const CTxMemPoolEntry& e : tmpmempool.mapTx)
         {
             const CTransaction &tx = e.GetTx();
             const uint256 &hash = tx.GetHash();
             mempool.addUnchecked(hash,e,true);
         }
-        //fprintf(stderr, "finished adding back. mempoolsize.%ld\n",mempool.size());
         // empty the temp mempool for next time.
         tmpmempool.clear();
     }
@@ -5556,7 +5556,18 @@ bool AcceptBlockHeader(int32_t *futureblockp,const CBlockHeader& block, CValidat
 
 uint256 Queued_reconsiderblock;
 
-bool AcceptBlock(int32_t *futureblockp,CBlock& block, CValidationState& state, CBlockIndex** ppindex, bool fRequested, CDiskBlockPos* dbp)
+/*****
+ * @brief
+ * @param futureblockp
+ * @param block
+ * @param state
+ * @param ppindex
+ * @param fRequested
+ * @param dbp
+ * @returns true if block accepted
+ */
+bool AcceptBlock(int32_t *futureblockp,CBlock& block, CValidationState& state, CBlockIndex** ppindex, 
+        bool fRequested, CDiskBlockPos* dbp)
 {
     const CChainParams& chainparams = Params();
     AssertLockHeld(cs_main);
@@ -5576,7 +5587,6 @@ bool AcceptBlock(int32_t *futureblockp,CBlock& block, CValidationState& state, C
         *futureblockp = true;
         return false;
     }
-    //fprintf(stderr,"acceptblockheader passed\n");
     // Try to process all requested blocks that we don't have, but only
     // process an unrequested block if it's new and has enough work to
     // advance our tip, and isn't too many blocks ahead.
@@ -5815,12 +5825,12 @@ bool ProcessNewBlock(bool from_miner, int32_t height, CValidationState &state, C
         // Store to disk
         CBlockIndex *pindex = NULL;
 
-        bool ret = AcceptBlock(&futureblock,*pblock, state, &pindex, fRequested, dbp);
+        bool accepted = AcceptBlock(&futureblock,*pblock, state, &pindex, fRequested, dbp);
         if (pindex && pfrom) {
             mapBlockSource[pindex->GetBlockHash()] = pfrom->GetId();
         }
         CheckBlockIndex();
-        if (!ret && futureblock == 0)
+        if (!accepted && futureblock == 0)
         {
             komodo_longestchain();
             return error("%s: AcceptBlock FAILED", __func__);

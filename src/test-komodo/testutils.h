@@ -63,6 +63,12 @@ public:
      * @returns the block generated
      */
     CBlock generateBlock();
+    /****
+     * @brief set the chain time to something reasonable
+     * @note must be called after generateBlock if you
+     * want to produce another block
+     */
+    void IncrementChainTime();
     /***
      * @returns the notary's key
      */
@@ -139,8 +145,16 @@ public:
      * @param n the n value of the vout
      */
     void AddOut(CTransaction tx, uint32_t n);
+    /*****
+     * @brief create a transaction with 1 recipient (signed)
+     * @param to who to send funds to
+     * @param amount
+     * @param fee
+     * @returns the transaction
+     */
+    CTransaction CreateSpendTransaction(std::shared_ptr<TestWallet> to, CAmount amount, CAmount fee = 0);
     /***
-     * Transfer to another user
+     * Transfer to another user (sends to mempool)
      * @param to who to transfer to
      * @param amount the amount
      * @returns the results
