@@ -165,6 +165,18 @@ void OptionsModel::Init(bool resetSettings)
     if (!SoftSetBoolArg("-listen", settings.value("fListen").toBool()))
         addOverriddenOption("-listen");
 
+    if (!settings.contains("fEncrypted"))
+        settings.setValue("fEncrypted", false);
+    if (settings.value("fEncrypted").toBool() == true) {
+        if (!SoftSetArg("-tls", "only")) {
+            addOverriddenOption("-tls");
+        }
+    } else {
+        if (!SoftSetArg("-tls", std::string("1"))) {
+            addOverriddenOption("-tls");
+        }
+    }
+
     if (!settings.contains("fUseProxy"))
         settings.setValue("fUseProxy", false);
     if (!settings.contains("addrProxy") || !settings.value("addrProxy").toString().contains(':'))
@@ -324,6 +336,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return settings.value("nThreadsScriptVerif");
         case Listen:
             return settings.value("fListen");
+        case EncryptedP2P:
+            return settings.value("fEncrypted");
         default:
             return QVariant();
         }
@@ -498,6 +512,12 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case Listen:
             if (settings.value("fListen") != value) {
                 settings.setValue("fListen", value);
+                setRestartRequired(true);
+            }
+            break;
+        case EncryptedP2P:
+            if (settings.value("fEncrypted") != value) {
+                settings.setValue("fEncrypted", value);
                 setRestartRequired(true);
             }
             break;

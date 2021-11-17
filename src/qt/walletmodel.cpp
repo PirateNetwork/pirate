@@ -21,6 +21,7 @@
 #include "transactiontablemodel.h"
 #include "importkeydialog.h"
 
+#include "init.h"
 #include "base58.h"
 #include "chain.h"
 #include "keystore.h"
@@ -1058,6 +1059,8 @@ RecentRequestsTableModel *WalletModel::getRecentRequestsTableModel()
 
 WalletModel::EncryptionStatus WalletModel::getEncryptionStatus() const
 {
+    if (ShutdownRequested())
+        return Unlocked;
 
     if (wallet) {
 

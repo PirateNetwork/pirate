@@ -54,6 +54,7 @@ public:
         DatabaseCache,                  // int
         SaplingConsolidationEnabled,    // bool
         Listen,                         // bool
+        EncryptedP2P,                   // bool
         OptionIDRowCount,
     };
 
