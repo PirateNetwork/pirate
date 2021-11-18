@@ -3265,7 +3265,6 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
             return false;
         bool fExisted = mapWallet.count(tx.GetHash()) != 0;
         if (fExisted && !fUpdate) return false;
-        auto sproutNoteData = FindMySproutNotes(tx);
         auto saplingNoteDataAndAddressesToAdd = FindMySaplingNotes(tx, nHeight);
         auto saplingNoteData = saplingNoteDataAndAddressesToAdd.first;
         auto addressesToAdd = saplingNoteDataAndAddressesToAdd.second;
@@ -3278,7 +3277,7 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
             //Store addresses to notify GUI later
             addressesFound.insert(addressToAdd.first);
         }
-        if (fExisted || IsMine(tx) || IsFromMe(tx) || sproutNoteData.size() > 0 || saplingNoteData.size() > 0)
+        if (fExisted || IsMine(tx) || IsFromMe(tx) || saplingNoteData.size() > 0)
         {
             /**
              * New implementation of wallet filter code.
@@ -3323,10 +3322,6 @@ bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pbl
             }
 
             CWalletTx wtx(this,tx);
-
-            if (sproutNoteData.size() > 0) {
-                wtx.SetSproutNoteData(sproutNoteData);
-            }
 
             if (saplingNoteData.size() > 0) {
                 wtx.SetSaplingNoteData(saplingNoteData);
