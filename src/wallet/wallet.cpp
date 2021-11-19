@@ -808,12 +808,6 @@ bool CWallet::LoadCryptedZKey(const libzcash::SproutPaymentAddress &addr, const 
     return CCryptoKeyStore::AddCryptedSproutSpendingKey(addr, rk, vchCryptedSecret);
 }
 
-bool CWallet::TempHoldCryptedSaplingMetaData(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret)
-{
-    AssertLockHeld(cs_wallet); // mapTempHoldCryptedSaplingMetadata
-    mapTempHoldCryptedSaplingMetadata[extfvkFinger] = vchCryptedSecret;
-}
-
 bool CWallet::LoadTempHeldCryptedData()
 {
     AssertLockHeld(cs_wallet);
