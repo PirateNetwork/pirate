@@ -224,11 +224,11 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleCli("getinfo", "")
             + HelpExampleRpc("getinfo", "")
         );
-    //#ifdef ENABLE_WALLET
-    //    LOCK2(cs_main, pwalletMain ? &pwalletMain->cs_wallet : NULL);
-    //#else
-    LOCK(cs_main);
-    //#endif
+    #ifdef ENABLE_WALLET
+       LOCK2(cs_main, pwalletMain ? &pwalletMain->cs_wallet : NULL);
+    #else
+        LOCK(cs_main);
+    #endif
 
     proxyType proxy;
     GetProxy(NET_IPV4, proxy);
