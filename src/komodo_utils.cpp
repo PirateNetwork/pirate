@@ -1332,9 +1332,9 @@ void komodo_args(char *argv0)
     SoftSetArg("-ac_private", std::string("1"));
     SoftSetArg("-ac_halving", std::string("77777"));
 
-    SoftSetArg("-addnode", std::string("zero.kolo.supernet.org"));
-    vector<string> PIRATEnodes = { "explorer.pirate.black","78.63.47.105","46.4.67.239","139.99.145.129","94.130.32.156","173.212.200.221","66.248.204.186","91.206.15.138","217.69.15.197","38.91.101.236","49.12.83.114","158.69.26.155","51.81.56.52","84.38.184.139" };
-    mapMultiArgs["-addnode"] = PIRATEnodes;
+    // SoftSetArg("-addnode", std::string("zero.kolo.supernet.org"));
+    // vector<string> PIRATEnodes = {"explorer.pirate.black","78.63.47.105","46.4.67.239","139.99.145.129","94.130.32.156","173.212.200.221","66.248.204.186","91.206.15.138","217.69.15.197","38.91.101.236","49.12.83.114","158.69.26.155","51.81.56.52","84.38.184.139" };
+    // mapMultiArgs["-addnode"] = PIRATEnodes;
 	  name = GetArg("-ac_name","");
     if ( argv0 != 0 )
     {

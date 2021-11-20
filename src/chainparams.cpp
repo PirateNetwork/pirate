@@ -185,15 +185,10 @@ public:
         vFixedSeeds.clear();
         vSeeds.clear();
 
-        vSeeds.push_back(CDNSSeedData("komodoseeds.org", "kmd.komodoseeds.org")); // decker
-        vSeeds.push_back(CDNSSeedData("kmd.sh", "seeds1.kmd.sh")); // decker
-        vSeeds.push_back(CDNSSeedData("cipig.net", "kmdseed.cipig.net")); // cipig
-        vSeeds.push_back(CDNSSeedData("lordofthechains.com", "kmdseeds.lordofthechains.com")); // gcharang
-
-        /*
-        vSeeds.push_back(CDNSSeedData("komodoseeds.com", "kmd.komodoseeds.com"));
-        vSeeds.push_back(CDNSSeedData("komodoseeds.com", "dynamic.komodoseeds.com"));
-        */
+        vSeeds.push_back(CDNSSeedData("Forge1", "pirate1.cryptoforge.cc")); // Forge
+        vSeeds.push_back(CDNSSeedData("Forge2", "pirate2.cryptoforge.cc")); // Forge
+        vSeeds.push_back(CDNSSeedData("Forge3", "pirate3.cryptoforge.cc")); // Forge
+        vSeeds.push_back(CDNSSeedData("Explorer","explorer.pirate.black")); // Explorer
 
         // TODO: we need more seed crawlers from other community members
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,60);
