@@ -267,8 +267,12 @@ void OverviewPage::replyPriceFinished()
             QLocale::setDefault(QLocale(QLocale::English, QLocale::UnitedStates));
             QLocale dollar;
 
-            ui->labelFiat->setText(dollar.toCurrencyString(currentFiat/1e8));
-            ui->labelWatchFiat->setText(dollar.toCurrencyString(watchFiat/1e8));
+            //Set Total Value
+            ui->labelFiatTotal->setText(dollar.toCurrencyString(currentFiat/1e8));
+            ui->labelWatchFiatTotal->setText(dollar.toCurrencyString(watchFiat/1e8));
+
+            //Set Exchange Rate
+            ui->labelFiat->setText(dollar.toCurrencyString(fiatValue));
 
         } catch (...) {
             LogPrintf("Coin Gecko JSON Parsing error\n");
@@ -333,10 +337,11 @@ void OverviewPage::updateWatchOnlyLabels(bool showWatchOnly)
         ui->labelSpendable->setVisible(showWatchOnly);            // show spendable label (only when watch-only is active)
         ui->labelWatchonly->setVisible(showWatchOnly);            // show watch-only label
         ui->lineWatchBalance->setVisible(showWatchOnly);          // show watch-only balance separator line
+        ui->lineWatchFiat->setVisible(showWatchOnly);             // show watch-only fiat separator line
         ui->labelWatchPending->setVisible(showWatchOnly);         // show watch-only pending balance
         ui->labelPrivateWatchBalance->setVisible(showWatchOnly);  // show watch-only private balance
         ui->labelWatchTotal->setVisible(showWatchOnly);           // show watch-only total balance
-        ui->labelWatchFiat->setVisible(showWatchOnly);            // Show watch-only fiat balance
+        ui->labelWatchFiatTotal->setVisible(showWatchOnly);            // Show watch-only fiat balance
 
         bool showTransparent = (currentBalance + currentWatchOnlyBalance) != 0;
         ui->labelBalance->setVisible(showTransparent);
@@ -353,10 +358,11 @@ void OverviewPage::updateWatchOnlyLabels(bool showWatchOnly)
         ui->labelSpendable->setVisible(showWatchOnly);            // show spendable label (only when watch-only is active)
         ui->labelWatchonly->setVisible(showWatchOnly);            // show watch-only label
         ui->lineWatchBalance->setVisible(showWatchOnly);          // show watch-only balance separator line
+        ui->lineWatchFiat->setVisible(showWatchOnly);          // show watch-only fiat separator line
         ui->labelWatchAvailable->setVisible(showWatchOnly);       // show watch-only available balance
         ui->labelWatchPending->setVisible(showWatchOnly);         // show watch-only pending balance
         ui->labelWatchTotal->setVisible(showWatchOnly);           // show watch-only total balance
-        ui->labelWatchFiat->setVisible(showWatchOnly);            // Show watch-only fiat balance
+        ui->labelWatchFiatTotal->setVisible(showWatchOnly);            // Show watch-only fiat balance
         ui->labelWatchImmature->setVisible(showWatchOnly);        // show watch-only immature balance
         ui->labelPrivateWatchBalance->setVisible(showWatchOnly);  // show watch-only private balance
     }
