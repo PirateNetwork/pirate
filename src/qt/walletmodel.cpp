@@ -168,7 +168,7 @@ QString WalletModel::getSpendingKey(QString strAddress) {
       LOCK2(cs_main, wallet->cs_wallet);
 
       QMessageBox msgBox;
-      msgBox.setText("Error importing key.");
+      msgBox.setText("Error exporting key.");
       msgBox.setStyleSheet("QLabel{min-width: 350px;}");
       msgBox.setStandardButtons(QMessageBox::Ok);
       msgBox.setDefaultButton(QMessageBox::Ok);
@@ -260,7 +260,7 @@ QString WalletModel::getViewingKey(QString strAddress) {
       LOCK2(cs_main, wallet->cs_wallet);
 
       QMessageBox msgBox;
-      msgBox.setText("Error importing key.");
+      msgBox.setText("Error exporting key.");
       msgBox.setStyleSheet("QLabel{min-width: 350px;}");
       msgBox.setStandardButtons(QMessageBox::Ok);
       msgBox.setDefaultButton(QMessageBox::Ok);
