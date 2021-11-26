@@ -188,6 +188,7 @@ public:
         vSeeds.push_back(CDNSSeedData("Forge1", "pirate1.cryptoforge.cc")); // Forge
         vSeeds.push_back(CDNSSeedData("Forge2", "pirate2.cryptoforge.cc")); // Forge
         vSeeds.push_back(CDNSSeedData("Forge3", "pirate3.cryptoforge.cc")); // Forge
+        vSeeds.push_back(CDNSSeedData("ForgeExporer", "explorer.cryptoforge.cc")); // Forge
         vSeeds.push_back(CDNSSeedData("Explorer","explorer.pirate.black")); // Explorer
 
         // TODO: we need more seed crawlers from other community members
