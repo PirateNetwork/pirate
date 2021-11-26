@@ -23,6 +23,7 @@ EditZAddressDialog::EditZAddressDialog(Mode _mode, QWidget *parent) :
     GUIUtil::setupAddressWidget(ui->addressEdit, this);
 
     ui->labelEdit->setPlaceholderText("z-sapling");
+    ui->labelOriginal->setPlaceholderText("z-sapling");
 
     switch(mode)
     {
@@ -52,6 +53,10 @@ EditZAddressDialog::EditZAddressDialog(Mode _mode, QWidget *parent) :
 
     mapper = new QDataWidgetMapper(this);
     mapper->setSubmitPolicy(QDataWidgetMapper::ManualSubmit);
+
+    //Hide mapped elements
+    ui->labelOriginal->setVisible(false);
+    ui->addressOriginal->setVisible(false);
 }
 
 EditZAddressDialog::~EditZAddressDialog()
@@ -66,19 +71,27 @@ void EditZAddressDialog::setModel(ZAddressTableModel *_model)
         return;
 
     mapper->setModel(_model);
-    mapper->addMapping(ui->labelEdit, ZAddressTableModel::Label);
-    mapper->addMapping(ui->addressEdit, ZAddressTableModel::Address);
+    mapper->addMapping(ui->labelOriginal, ZAddressTableModel::Label);
+    mapper->addMapping(ui->addressOriginal, ZAddressTableModel::Address);
 }
 
 void EditZAddressDialog::loadRow(int row)
 {
     mapper->setCurrentIndex(row);
+
+    //Set editable elements to mapped elements
+    ui->labelEdit->setText(ui->labelOriginal->text());
+    ui->addressEdit->setText(ui->addressOriginal->text());
 }
 
 bool EditZAddressDialog::saveCurrentRow()
 {
     if(!model)
         return false;
+
+    //Set mapped elements to final values
+    ui->labelOriginal->setText(ui->labelEdit->text());
+    ui->addressOriginal->setText(ui->addressEdit->text());
 
     switch(mode)
     {
@@ -104,6 +117,10 @@ void EditZAddressDialog::accept()
 {
     if(!model)
         return;
+
+    //Set mapped elements to final values
+    ui->labelOriginal->setText(ui->labelEdit->text());
+    ui->addressOriginal->setText(ui->addressEdit->text());
 
     if(!saveCurrentRow())
     {
@@ -151,4 +168,5 @@ void EditZAddressDialog::setAddress(const QString &_address)
 {
     this->address = _address;
     ui->addressEdit->setText(_address);
+    ui->addressOriginal->setText(_address);
 }
