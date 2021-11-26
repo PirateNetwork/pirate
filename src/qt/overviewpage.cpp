@@ -268,11 +268,12 @@ void OverviewPage::replyPriceFinished()
             QLocale dollar;
 
             //Set Total Value
-            ui->labelFiatTotal->setText(dollar.toCurrencyString(currentFiat/1e8));
-            ui->labelWatchFiatTotal->setText(dollar.toCurrencyString(watchFiat/1e8));
+            ui->labelFiat->setText(dollar.toCurrencyString(currentFiat/1e8));
+            ui->labelWatchFiat->setText(dollar.toCurrencyString(watchFiat/1e8));
+            ui->labelFiatTotal->setText(dollar.toCurrencyString((currentFiat+watchFiat)/1e8));
 
             //Set Exchange Rate
-            ui->labelFiat->setText(dollar.toCurrencyString(fiatValue));
+            ui->labelExchange->setText(dollar.toCurrencyString(fiatValue));
 
         } catch (...) {
             LogPrintf("Coin Gecko JSON Parsing error\n");
@@ -303,6 +304,7 @@ void OverviewPage::setBalance(const CAmount& balance, const CAmount& unconfirmed
     ui->labelPrivateWatchBalance->setText(KomodoUnits::formatWithUnit(unit, privateWatchBalance, false, KomodoUnits::separatorAlways));
     ui->labelPrivateBalance->setText(KomodoUnits::formatWithUnit(unit, privateBalance, false, KomodoUnits::separatorAlways));
     ui->labelInterestBalance->setText(KomodoUnits::formatWithUnit(unit, interestBalance, false, KomodoUnits::separatorAlways));
+    ui->labelWalletTotal->setText(KomodoUnits::formatWithUnit(unit, balance + unconfirmedBalance + immatureBalance + privateBalance + interestBalance +watchOnlyBalance + watchUnconfBalance + watchImmatureBalance + privateWatchBalance , false, KomodoUnits::separatorAlways));
 
     // only show immature (newly mined) balance if it's non-zero, so as not to complicate things
     // for the non-mining users
@@ -341,7 +343,15 @@ void OverviewPage::updateWatchOnlyLabels(bool showWatchOnly)
         ui->labelWatchPending->setVisible(showWatchOnly);         // show watch-only pending balance
         ui->labelPrivateWatchBalance->setVisible(showWatchOnly);  // show watch-only private balance
         ui->labelWatchTotal->setVisible(showWatchOnly);           // show watch-only total balance
-        ui->labelWatchFiatTotal->setVisible(showWatchOnly);            // Show watch-only fiat balance
+        ui->labelWatchFiat->setVisible(showWatchOnly);            // Show watch-only fiat balance
+
+        ui->labelFiatTotalText->setVisible(showWatchOnly);
+        ui->labelWalletTotalText->setVisible(showWatchOnly);
+        ui->labelFiatTotal->setVisible(showWatchOnly);
+        ui->labelWalletTotal->setVisible(showWatchOnly);
+
+        ui->verticalSpacerCombined->changeSize(10, 10, QSizePolicy::Fixed, QSizePolicy::Fixed);
+        ui->labelCombinedText->setVisible(showWatchOnly);
 
         bool showTransparent = (currentBalance + currentWatchOnlyBalance) != 0;
         ui->labelBalance->setVisible(showTransparent);
@@ -362,11 +372,21 @@ void OverviewPage::updateWatchOnlyLabels(bool showWatchOnly)
         ui->labelWatchAvailable->setVisible(showWatchOnly);       // show watch-only available balance
         ui->labelWatchPending->setVisible(showWatchOnly);         // show watch-only pending balance
         ui->labelWatchTotal->setVisible(showWatchOnly);           // show watch-only total balance
-        ui->labelWatchFiatTotal->setVisible(showWatchOnly);            // Show watch-only fiat balance
+        ui->labelWatchFiat->setVisible(showWatchOnly);            // Show watch-only fiat balance
         ui->labelWatchImmature->setVisible(showWatchOnly);        // show watch-only immature balance
         ui->labelPrivateWatchBalance->setVisible(showWatchOnly);  // show watch-only private balance
+
+        ui->labelFiatTotalText->setVisible(showWatchOnly);
+        ui->labelWalletTotalText->setVisible(showWatchOnly);
+        ui->labelFiatTotal->setVisible(showWatchOnly);
+        ui->labelWalletTotal->setVisible(showWatchOnly);
+
+        ui->verticalSpacerCombined->changeSize(0, 0, QSizePolicy::Fixed, QSizePolicy::Fixed);
+        ui->labelCombinedText->setVisible(showWatchOnly);
     }
 
+    ui->lineWatchFiat->setVisible(false);
+    ui->lineFiat->setVisible(false);
 }
 
 void OverviewPage::setClientModel(ClientModel *model)
