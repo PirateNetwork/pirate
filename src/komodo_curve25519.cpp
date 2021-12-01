@@ -47,7 +47,7 @@ bits320 fexpand(bits256 basepoint)
     return(out);
 }
 
-#if __amd64__
+#if __amd64__ || __aarch64__
 // Multiply two numbers: output = in2 * in
 // output must be distinct to both inputs. The inputs are reduced coefficient form, the output is not.
 // Assumes that in[i] < 2**55 and likewise for in2. On return, output[i] < 2**52
