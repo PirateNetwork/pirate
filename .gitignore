@@ -125,6 +125,7 @@ src/wallet-utility.exe
 pirate-qt-win.exe
 pirate-qt-linux
 pirate-qt-mac
+pirate-qt-arm
 src/qt/komodo-qt
 
 #QT Files
