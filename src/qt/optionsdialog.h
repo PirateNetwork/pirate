@@ -42,6 +42,10 @@ public:
 
     void setModel(OptionsModel *model);
     void setMapper();
+    
+private:
+    void evaluateOfflineSigning(bool bChecked);
+    bool restartPrompt(QString sHeading);
 
 private Q_SLOTS:
     /* set OK button state (enabled / disabled) */
@@ -54,7 +58,7 @@ private Q_SLOTS:
     void on_hideTrayIcon_stateChanged(int fState);
 
     void setTheme();
-    void evaluateOfflineSigning(bool bChecked);
+    void enableOfflineSigningClick(bool bChecked);
     void showRestartWarning(bool fPersistent = false);
     void clearStatusLabel();
     void updateProxyValidationState();

@@ -149,8 +149,9 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
     connect(ui->proxyPortTor, SIGNAL(textChanged(const QString&)), this, SLOT(updateProxyValidationState()));
 
     /* Offline signing */
-    connect(ui->enableOfflineSigning, SIGNAL(clicked(bool)), this, SLOT(evaluateOfflineSigning(bool)));
-
+    connect(ui->enableOfflineSigning,  SIGNAL(clicked(bool)), this, SLOT(enableOfflineSigningClick(bool)));
+    connect(ui->rbOfflineSigning_Sign, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->rbOfflineSigning_Spend,SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
 }
 
 OptionsDialog::~OptionsDialog()
@@ -204,7 +205,6 @@ void OptionsDialog::setModel(OptionsModel *_model)
     /* Display */
     connect(ui->lang, SIGNAL(valueChanged()), this, SLOT(showRestartWarning()));
     connect(ui->thirdPartyTxUrls, SIGNAL(textChanged(const QString &)), this, SLOT(showRestartWarning()));
-
 
 }
 
@@ -261,18 +261,38 @@ void OptionsDialog::setOkButtonState(bool fState)
     ui->okButton->setEnabled(fState);
 }
 
-void OptionsDialog::on_resetButton_clicked()
+bool OptionsDialog::restartPrompt(QString sHeading)
 {
     if(model)
     {
         // confirmation dialog
-        QMessageBox::StandardButton btnRetVal = QMessageBox::question(this, tr("Confirm options reset"),
+        QMessageBox::StandardButton btnRetVal = QMessageBox::question(this, tr(sHeading.toStdString().c_str() ),
             tr("Client restart required to activate changes.") + "<br><br>" + tr("Client will be shut down. Do you want to proceed?"),
             QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
 
         if(btnRetVal == QMessageBox::Cancel)
-            return;
+        {
+            return false;
+        }
+        else
+        {
+            return true;
+        }
+    }
+    else
+    {
+        return false;
+    }
 
+}
+
+void OptionsDialog::on_resetButton_clicked()
+{
+    bool bResult;
+    bResult = restartPrompt("Confirm options reset");
+
+    if (bResult==true)
+    {
         /* reset all options and close GUI */
         model->Reset();
         QApplication::quit();
@@ -293,9 +313,25 @@ void OptionsDialog::on_openKomodoConfButton_clicked()
 
 void OptionsDialog::on_okButton_clicked()
 {
+    bool bResult=false;
+    if (model->isRestartRequired())
+    {
+        bResult = restartPrompt("Confirm options change");
+        if (bResult == false) {
+          /* Restart is required, but user does not want to continue. */
+          /* Return to the options dialog. User must select 'cancel' to */
+          /* then close the options dialog without applying the changes */
+          return;
+        }
+    }
+
     mapper->submit();
     accept();
     updateDefaultProxyNets();
+
+    if (bResult == true) {
+        QApplication::quit();
+    }
 }
 
 void OptionsDialog::on_cancelButton_clicked()
@@ -316,15 +352,17 @@ void OptionsDialog::on_hideTrayIcon_stateChanged(int fState)
     }
 }
 
+void OptionsDialog::enableOfflineSigningClick(bool bChecked)
+{
+  showRestartWarning(false);
+  evaluateOfflineSigning(bChecked);
+}
+
 void OptionsDialog::evaluateOfflineSigning(bool bChecked)
 {
   if (bChecked==true)
   {
     ui->frameOfflineSigning->setVisible(true);
-    //ui->rbOfflineSigning_Sign->setVisible(true);
-    //ui->rbOfflineSigning_Spend->setVisible(true);
-    //ui->hsOfflineSigning1->setVisible(true);
-    //ui->hsOfflineSigning2->setVisible(true);
     if (
        (ui->rbOfflineSigning_Sign->isChecked()==false) &&
        (ui->rbOfflineSigning_Spend->isChecked()==false)
@@ -336,10 +374,6 @@ void OptionsDialog::evaluateOfflineSigning(bool bChecked)
   else
   {
     ui->frameOfflineSigning->setVisible(false);
-    //ui->rbOfflineSigning_Sign->setVisible(false);
-    //ui->rbOfflineSigning_Spend->setVisible(false);
-    //ui->hsOfflineSigning1->setVisible(false);
-    //ui->hsOfflineSigning2->setVisible(false);
   }
 }
 

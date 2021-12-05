@@ -1118,6 +1118,11 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         return InitError(_("Not enough file descriptors available."));
     if (nFD - MIN_CORE_FILEDESCRIPTORS < nMaxConnections)
         nMaxConnections = nFD - MIN_CORE_FILEDESCRIPTORS;
+    if (bOverrideMaxConnections==true)
+    {
+        fprintf(stderr,"init: GUI config override maxconnections=%d\n",nMaxConnections);
+        nMaxConnections=0;
+    }        
     fprintf(stderr,"nMaxConnections %d\n",nMaxConnections);
     // if using block pruning, then disable txindex
     // also disable the wallet (for now, until SPV support is implemented in wallet)

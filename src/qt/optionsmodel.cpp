@@ -479,16 +479,22 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
       case EnableZSigning:
           if (settings.value("fEnableZSigning") != value) {
               settings.setValue("fEnableZSigning", value);
+              setRestartRequired(true);
+              printf("EnableZSigning: restart required\n");              
           }
           break;
       case EnableZSigning_Sign:
           if (settings.value("fEnableZSigning_Sign") != value) {
               settings.setValue("fEnableZSigning_Sign", value);
+              setRestartRequired(true);
+              printf("EnableZSigning_Sign: restart required\n");
           }
           break;
       case EnableZSigning_Spend:
           if (settings.value("fEnableZSigning_Spend") != value) {
               settings.setValue("fEnableZSigning_Spend", value);
+              setRestartRequired(true);
+              printf("EnableZSigning_Spend: restart required\n");              
           }
           break;
       case EnableHexMemo:
@@ -617,6 +623,7 @@ void OptionsModel::setRestartRequired(bool fRequired)
 bool OptionsModel::isRestartRequired() const
 {
     QSettings settings;
+    printf("RestartRequired:%d\n", settings.value("fRestartRequired", false).toBool() );
     return settings.value("fRestartRequired", false).toBool();
 }
 

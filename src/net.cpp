@@ -107,6 +107,7 @@ uint64_t nLocalHostNonce = 0;
 static std::vector<ListenSocket> vhListenSocket;
 CAddrMan addrman;
 int nMaxConnections = DEFAULT_MAX_PEER_CONNECTIONS;
+bool bOverrideMaxConnections=false;
 bool fAddressesInitialized = false;
 TLSManager tlsmanager = TLSManager();
 std::atomic<bool> fNetworkActive = { true };
