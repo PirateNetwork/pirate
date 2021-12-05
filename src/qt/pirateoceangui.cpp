@@ -66,7 +66,8 @@
 #include <QUrlQuery>
 #endif
 
-extern int nMaxConnections; //From net.h
+extern int nMaxConnections;   //From net.h
+extern bool bOverrideMaxConnections; 
 
 const std::string PirateOceanGUI::DEFAULT_UIPLATFORM =
 #if defined(Q_OS_MAC)
@@ -352,17 +353,28 @@ void PirateOceanGUI::createActions()
         // Evaluate if this is the on-line role (prepare spend transactions)
         // or the off-line role (signs the transactions)
         //
-        // For the on-line role, filter the addressbook only to show addresses
-        // for which we have the viewing-key only, thus requiring the off-line
-        // partner wallet to perform the signing
+        // For the on-line role, 
+        //   For addresses for which we have the viewing key only, perform authorisation
+        //   (signing) with the off-line partner wallet.
+        //   For addresses for which we have the spending key, allow spending, the
+        //   same when ZSigning==false
         bool fEnableZSigning_Spend = settings.value("fEnableZSigning_Spend").toBool();
         bool fEnableZSigning_Sign  = settings.value("fEnableZSigning_Sign").toBool();
           
         zsendCoinsAction->setVisible( fEnableZSigning_Spend );
         zsignAction->setVisible( fEnableZSigning_Sign );
+        
+        //If the off-line role is enabled, the wallet shouldn't have internet access,
+        //for security reasons. The wallet should not attempt to sync with the blockchain.
+        // This can be accomplished by editing PIRATE.conf and setting maxconnections=0.
+        //Alternatively, the number of connections are override here when "Signing"
+        //is enabled:
+        if (fEnableZSigning_Sign==true) {
+          bOverrideMaxConnections=true;
+          nMaxConnections=0;                    
+        }
     } else {        
         //Offline signing disabled. 
-        //  Don't allow transaction creationg (spend) of 'viewing only' addresses. 
         //  Only display addresses for which we have the full spending key
         zsendCoinsAction->setVisible(true);
         zsignAction->setVisible(false);
@@ -804,6 +816,7 @@ void PirateOceanGUI::optionsClicked()
           zsignAction->setVisible(false);
         }
         
+        //Update GUI to accommodate new configuration:
         if (zsendCoinsAction->isVisible()) {
           if (zsendCoinsAction->isChecked() || zsignAction->isChecked())
           {

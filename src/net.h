@@ -206,6 +206,7 @@ extern uint64_t nLocalHostNonce;
 extern CAddrMan addrman;
 /** Maximum number of connections to simultaneously allow (aka connection slots) */
 extern int nMaxConnections;
+extern bool bOverrideMaxConnections;
 
 extern std::vector<CNode*> vNodes;
 extern CCriticalSection cs_vNodes;
