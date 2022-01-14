@@ -821,7 +821,7 @@ int32_t komodo_blockload(CBlock& block,CBlockIndex *pindex)
 uint32_t komodo_chainactive_timestamp()
 {
     AssertLockHeld(cs_main);
-    CBlockIndex *index = chainActive.LastTip();
+    CBlockIndex *index = chainActive.Tip();
     if ( index != nullptr )
         return((uint32_t)index->GetBlockTime());
     return 0;
@@ -830,7 +830,7 @@ uint32_t komodo_chainactive_timestamp()
 CBlockIndex *komodo_chainactive(int32_t height)
 {
     AssertLockHeld(cs_main);
-    CBlockIndex *index = chainActive.LastTip();
+    CBlockIndex *index = chainActive.Tip();
     if ( index != nullptr )
     {
         if ( height <= index->GetHeight() )
@@ -1027,7 +1027,7 @@ int32_t komodo_checkpoint(int32_t *notarized_heightp,int32_t nHeight,uint256 has
 {
     AssertLockHeld(cs_main);
     int32_t notarized_height,MoMdepth; uint256 MoM,notarized_hash,notarized_desttxid; CBlockIndex *notary,*pindex;
-    if ( (pindex= chainActive.LastTip()) == 0 )
+    if ( (pindex= chainActive.Tip()) == 0 )
         return(-1);
     notarized_height = komodo_notarizeddata(pindex->GetHeight(),&notarized_hash,&notarized_desttxid);
     *notarized_heightp = notarized_height;
@@ -1070,7 +1070,7 @@ uint32_t komodo_interest_args(uint32_t *txheighttimep,int32_t *txheightp,uint32_
             *valuep = tx.vout[n].nValue;
             *txheightp = pindex->GetHeight();
             *txheighttimep = pindex->nTime;
-            if ( *tiptimep == 0 && (tipindex= chainActive.LastTip()) != 0 )
+            if ( *tiptimep == 0 && (tipindex= chainActive.Tip()) != 0 )
                 *tiptimep = (uint32_t)tipindex->nTime;
             locktime = tx.nLockTime;
             //fprintf(stderr,"tx locktime.%u %.8f height.%d | tiptime.%u\n",locktime,(double)*valuep/COIN,*txheightp,*tiptimep);
@@ -1102,7 +1102,7 @@ int32_t komodo_nextheight()
 {
     AssertLockHeld(cs_main);
     CBlockIndex *pindex; int32_t ht;
-    if ( (pindex= chainActive.LastTip()) != 0 && (ht= pindex->GetHeight()) > 0 )
+    if ( (pindex= chainActive.Tip()) != 0 && (ht= pindex->GetHeight()) > 0 )
         return(ht+1);
     else return(komodo_longestchain() + 1);
 }
@@ -1114,7 +1114,7 @@ int32_t komodo_isrealtime(int32_t *kmdheightp)
     if ( (sp= komodo_stateptrget((char *)"KMD")) != 0 )
         *kmdheightp = sp->CURRENT_HEIGHT;
     else *kmdheightp = 0;
-    if ( (pindex= chainActive.LastTip()) != 0 && pindex->GetHeight() >= (int32_t)komodo_longestchain() )
+    if ( (pindex= chainActive.Tip()) != 0 && pindex->GetHeight() >= (int32_t)komodo_longestchain() )
         return(1);
     else return(0);
 }
@@ -2362,7 +2362,7 @@ int32_t komodo_acpublic(uint32_t tiptime)
         if ( tiptime == 0 )
         {
             AssertLockHeld(cs_main);
-            if ( (pindex= chainActive.LastTip()) != 0 )
+            if ( (pindex= chainActive.Tip()) != 0 )
                 tiptime = pindex->nTime;
         }
         if ( (ASSETCHAINS_SYMBOL[0] == 0 || strcmp(ASSETCHAINS_SYMBOL,"ZEX") == 0) && tiptime >= KOMODO_SAPLING_DEADLINE )
@@ -2502,7 +2502,7 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
         LOCK(cs_main);
         tipindex = chainActive.Tip();
     }
-    if ( (tipindex= chainActive.Tip()) == 0 )
+    if ( tipindex == nullptr )
         return(0);
     nHeight = tipindex->GetHeight() + 1;
     if ( (minage= nHeight*3) > 6000 ) // about 100 blocks

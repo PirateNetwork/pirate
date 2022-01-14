@@ -26,7 +26,6 @@ using namespace std;
  * CChain implementation
  */
 void CChain::SetTip(CBlockIndex *pindex) {
-    lastTip = pindex;
     if (pindex == NULL) {
         vChain.clear();
         return;

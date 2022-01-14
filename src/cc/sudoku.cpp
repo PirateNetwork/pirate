@@ -2537,7 +2537,7 @@ int32_t sudoku_captcha(int32_t dispflag,uint32_t timestamps[81],int32_t height)
             printf("list[0] %u vs list[%d-1] %u\n",list[0],n,list[n-1]);
             retval = -1;
         }
-        else if ( list[n-1] > chainActive.LastTip()->nTime+200 )
+        else if ( list[n-1] > chainActive.Tip()->nTime+200 )
             retval = -2;
         else if ( solvetime >= 777 )
             retval = 0;
@@ -2658,7 +2658,7 @@ UniValue sudoku_generate(uint64_t txfee,struct CCcontract_info *cp,cJSON *params
     result.push_back(Pair("result","success"));
     result.push_back(Pair("name","sudoku"));
     result.push_back(Pair("method","gen"));
-    hash = chainActive.LastTip()->GetBlockHash();
+    hash = chainActive.Tip()->GetBlockHash();
     memcpy(&srandi,&hash,sizeof(srandi));
     srandi ^= (uint32_t)time(NULL);
     while ( 1 )

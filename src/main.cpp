@@ -362,7 +362,7 @@ namespace {
         CBlockIndex *pindex = nullptr;
         {
             LOCK(cs_main);
-            pindex = chainActive.LastTip();
+            pindex = chainActive.Tip();
         }
         if ( pindex != nullptr )
             return pindex->GetHeight();
@@ -1282,7 +1282,7 @@ bool ContextualCheckTransaction(int32_t slowflag,const CBlock *block, CBlockInde
     // Rules that apply before Sapling:
     if (!saplingActive) {
         // Size limits
-        //BOOST_STATIC_ASSERT(MAX_BLOCK_SIZE(chainActive.LastTip()->GetHeight()+1) > MAX_TX_SIZE_BEFORE_SAPLING); // sanity
+        //BOOST_STATIC_ASSERT(MAX_BLOCK_SIZE(chainActive.Tip()->GetHeight()+1) > MAX_TX_SIZE_BEFORE_SAPLING); // sanity
         if (::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION) > MAX_TX_SIZE_BEFORE_SAPLING)
             return state.DoS(100, error("ContextualCheckTransaction(): size limits failed"),
                             REJECT_INVALID, "bad-txns-oversize");
@@ -1521,7 +1521,7 @@ bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransactio
                          REJECT_INVALID, "bad-txns-vout-empty");
 
     // Size limits
-    //BOOST_STATIC_ASSERT(MAX_BLOCK_SIZE(chainActive.LastTip()->GetHeight()+1) >= MAX_TX_SIZE_AFTER_SAPLING); // sanity
+    //BOOST_STATIC_ASSERT(MAX_BLOCK_SIZE(chainActive.Tip()->GetHeight()+1) >= MAX_TX_SIZE_AFTER_SAPLING); // sanity
     BOOST_STATIC_ASSERT(MAX_TX_SIZE_AFTER_SAPLING > MAX_TX_SIZE_BEFORE_SAPLING); // sanity
     if (::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION) > MAX_TX_SIZE_AFTER_SAPLING)
         return state.DoS(100, error("CheckTransaction(): size limits failed"),
@@ -1815,9 +1815,9 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
     uint32_t tiptime;
     int flag=0,nextBlockHeight = chainActive.Height() + 1;
     auto consensusBranchId = CurrentEpochBranchId(nextBlockHeight, Params().GetConsensus());
-    if ( nextBlockHeight <= 1 || chainActive.LastTip() == 0 )
+    if ( nextBlockHeight <= 1 || chainActive.Tip() == 0 )
         tiptime = (uint32_t)time(NULL);
-    else tiptime = (uint32_t)chainActive.LastTip()->nTime;
+    else tiptime = (uint32_t)chainActive.Tip()->nTime;
 //fprintf(stderr,"addmempool 0\n");
     // Node operator can choose to reject tx by number of transparent inputs
     static_assert(std::numeric_limits<size_t>::max() >= std::numeric_limits<int64_t>::max(), "size_t too small");
@@ -1834,7 +1834,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
     }
 //fprintf(stderr,"addmempool 1\n");
     auto verifier = libzcash::ProofVerifier::Strict();
-    if ( ASSETCHAINS_SYMBOL[0] == 0 && komodo_validate_interest(tx,chainActive.LastTip()->GetHeight()+1,chainActive.LastTip()->GetMedianTimePast() + 777,0) < 0 )
+    if ( ASSETCHAINS_SYMBOL[0] == 0 && komodo_validate_interest(tx,chainActive.Tip()->GetHeight()+1,chainActive.Tip()->GetMedianTimePast() + 777,0) < 0 )
     {
         fprintf(stderr,"AcceptToMemoryPool komodo_validate_interest failure\n");
         return error("AcceptToMemoryPool: komodo_validate_interest failed");
@@ -1972,7 +1972,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
             // Bring the best block into scope
             view.GetBestBlock();
             
-            nValueIn = view.GetValueIn(chainActive.LastTip()->GetHeight(),&interest,tx,chainActive.LastTip()->nTime);
+            nValueIn = view.GetValueIn(chainActive.Tip()->GetHeight(),&interest,tx,chainActive.Tip()->nTime);
             if ( 0 && interest != 0 )
                 fprintf(stderr,"add interest %.8f\n",(double)interest/COIN);
             // we have all inputs cached now, so switch back to dummy, so we don't need to keep lock on mempool
@@ -2096,10 +2096,10 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         // invalid blocks, however allowing such transactions into the mempool
         // can be exploited as a DoS attack.
         // XXX: is this neccesary for CryptoConditions?
-        if ( KOMODO_CONNECTING <= 0 && chainActive.LastTip() != 0 )
+        if ( KOMODO_CONNECTING <= 0 && chainActive.Tip() != 0 )
         {
             flag = 1;
-            KOMODO_CONNECTING = (1<<30) + (int32_t)chainActive.LastTip()->GetHeight() + 1;
+            KOMODO_CONNECTING = (1<<30) + (int32_t)chainActive.Tip()->GetHeight() + 1;
         }
 //fprintf(stderr,"addmempool 7\n");
 
@@ -2615,7 +2615,7 @@ void CheckForkWarningConditions()
     if (pindexBestForkTip && chainActive.Height() - pindexBestForkTip->GetHeight() >= 288)
         pindexBestForkTip = NULL;
 
-    if (pindexBestForkTip || (pindexBestInvalid && pindexBestInvalid->chainPower > (chainActive.LastTip()->chainPower + (GetBlockProof(*chainActive.LastTip()) * 6))))
+    if (pindexBestForkTip || (pindexBestInvalid && pindexBestInvalid->chainPower > (chainActive.Tip()->chainPower + (GetBlockProof(*chainActive.Tip()) * 6))))
     {
         if (!fLargeWorkForkFound && pindexBestForkBase)
         {
@@ -2650,7 +2650,7 @@ void CheckForkWarningConditionsOnNewFork(CBlockIndex* pindexNewForkTip)
     AssertLockHeld(cs_main);
     // If we are on a fork that is sufficiently large, set a warning flag
     CBlockIndex* pfork = pindexNewForkTip;
-    CBlockIndex* plonger = chainActive.LastTip();
+    CBlockIndex* plonger = chainActive.Tip();
     while (pfork && pfork != plonger)
     {
         while (plonger && plonger->GetHeight() > pfork->GetHeight())
@@ -2708,7 +2708,7 @@ void static InvalidChainFound(CBlockIndex* pindexNew)
               log(pindexNew->chainPower.chainWork.getdouble())/log(2.0),
               log(pindexNew->chainPower.chainStake.getdouble())/log(2.0),
               DateTimeStrFormat("%Y-%m-%d %H:%M:%S", pindexNew->GetBlockTime()));
-    CBlockIndex *tip = chainActive.LastTip();
+    CBlockIndex *tip = chainActive.Tip();
     assert (tip);
     LogPrintf("%s:  current best=%s  height=%d  log2_work=%.8g  log2_stake=%.8g  date=%s\n", __func__,
               tip->GetBlockHash().ToString(), chainActive.Height(),
@@ -2854,14 +2854,14 @@ namespace Consensus {
             // Check for negative or overflow input values
             nValueIn += coins->vout[prevout.n].nValue;
 #ifdef KOMODO_ENABLE_INTEREST
-            if ( ASSETCHAINS_SYMBOL[0] == 0 && nSpendHeight > 60000 )//chainActive.LastTip() != 0 && chainActive.LastTip()->GetHeight() >= 60000 )
+            if ( ASSETCHAINS_SYMBOL[0] == 0 && nSpendHeight > 60000 )//chainActive.Tip() != 0 && chainActive.Tip()->GetHeight() >= 60000 )
             {
                 if ( coins->vout[prevout.n].nValue >= 10*COIN )
                 {
                     int64_t interest; int32_t txheight; uint32_t locktime;
                     if ( (interest= komodo_accrued_interest(&txheight,&locktime,prevout.hash,prevout.n,0,coins->vout[prevout.n].nValue,(int32_t)nSpendHeight-1)) != 0 )
                     {
-                        //fprintf(stderr,"checkResult %.8f += val %.8f interest %.8f ht.%d lock.%u tip.%u\n",(double)nValueIn/COIN,(double)coins->vout[prevout.n].nValue/COIN,(double)interest/COIN,txheight,locktime,chainActive.LastTip()->nTime);
+                        //fprintf(stderr,"checkResult %.8f += val %.8f interest %.8f ht.%d lock.%u tip.%u\n",(double)nValueIn/COIN,(double)coins->vout[prevout.n].nValue/COIN,(double)interest/COIN,txheight,locktime,chainActive.Tip()->nTime);
                         nValueIn += interest;
                     }
                 }
@@ -3697,7 +3697,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             return state.DoS(100, error("ConnectBlock(): voutsum less after adding valueout"),REJECT_INVALID,"tx valueout is too big");*/
         if (!tx.IsCoinBase())
         {
-            nFees += (stakeTxValue= view.GetValueIn(chainActive.LastTip()->GetHeight(),&interest,tx,chainActive.LastTip()->nTime) - valueout);
+            nFees += (stakeTxValue= view.GetValueIn(chainActive.Tip()->GetHeight(),&interest,tx,chainActive.Tip()->nTime) - valueout);
             sum += interest;
             //fprintf(stderr, "tx.%s nFees.%li interest.%li\n", tx.GetHash().ToString().c_str(), stakeTxValue, interest);
 
@@ -4053,18 +4053,18 @@ void static UpdateTip(CBlockIndex *pindexNew) {
     KOMODO_NEWBLOCKS++;
     double progress;
     if ( ASSETCHAINS_SYMBOL[0] == 0 ) {
-        progress = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.LastTip());
+        progress = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.Tip());
     } else {
 	int32_t longestchain = komodo_longestchain();
 	progress = (longestchain > 0 ) ? (double) chainActive.Height() / longestchain : 1.0;
     }
 
     LogPrintf("%s: new best=%s  height=%d  log2_work=%.8g  log2_stake=%.8g  tx=%lu  date=%s progress=%f  cache=%.1fMiB(%utx)\n", __func__,
-              chainActive.LastTip()->GetBlockHash().ToString(), chainActive.Height(),
+              chainActive.Tip()->GetBlockHash().ToString(), chainActive.Height(),
               log(chainActive.Tip()->chainPower.chainWork.getdouble())/log(2.0),
               log(chainActive.Tip()->chainPower.chainStake.getdouble())/log(2.0),
-              (unsigned long)chainActive.LastTip()->nChainTx,
-              DateTimeStrFormat("%Y-%m-%d %H:%M:%S", chainActive.LastTip()->GetBlockTime()), progress,
+              (unsigned long)chainActive.Tip()->nChainTx,
+              DateTimeStrFormat("%Y-%m-%d %H:%M:%S", chainActive.Tip()->GetBlockTime()), progress,
               pcoinsTip->DynamicMemoryUsage() * (1.0 / (1<<20)), pcoinsTip->GetCacheSize());
 
     cvBlockChange.notify_all();
@@ -4451,7 +4451,7 @@ static void PruneBlockIndexCandidates() {
     // Note that we can't delete the current block itself, as we may need to return to it later in case a
     // reorganization to a better block fails.
     std::set<CBlockIndex*, CBlockIndexWorkComparator>::iterator it = setBlockIndexCandidates.begin();
-    while (it != setBlockIndexCandidates.end() && setBlockIndexCandidates.value_comp()(*it, chainActive.LastTip())) {
+    while (it != setBlockIndexCandidates.end() && setBlockIndexCandidates.value_comp()(*it, chainActive.Tip())) {
         setBlockIndexCandidates.erase(it++);
     }
     // Either the current tip or a successor of it we're working towards is left in setBlockIndexCandidates.
@@ -4546,8 +4546,8 @@ static bool ActivateBestChainStep(bool fSkipdpow, CValidationState &state, CBloc
     if ( KOMODO_REWIND != 0 )
     {
         CBlockIndex *tipindex;
-        fprintf(stderr,">>>>>>>>>>> rewind start ht.%d -> KOMODO_REWIND.%d\n",chainActive.LastTip()->GetHeight(),KOMODO_REWIND);
-        while ( KOMODO_REWIND > 0 && (tipindex= chainActive.LastTip()) != 0 && tipindex->GetHeight() > KOMODO_REWIND )
+        fprintf(stderr,">>>>>>>>>>> rewind start ht.%d -> KOMODO_REWIND.%d\n",chainActive.Tip()->GetHeight(),KOMODO_REWIND);
+        while ( KOMODO_REWIND > 0 && (tipindex= chainActive.Tip()) != 0 && tipindex->GetHeight() > KOMODO_REWIND )
         {
             fBlocksDisconnected = true;
             fprintf(stderr,"%d ",(int32_t)tipindex->GetHeight());
@@ -4620,11 +4620,6 @@ static bool ActivateBestChainStep(bool fSkipdpow, CValidationState &state, CBloc
     return true;
 }
 
-CBlockIndex *GetTipWithLock()
-{
-    LOCK(cs_main);
-    return chainActive.Tip();
-}
 /**
  * Make the best chain active, in multiple steps. The result is either failure
  * or an activated best chain. pblock is either NULL or a pointer to a block
@@ -4678,7 +4673,7 @@ bool ActivateBestChain(bool fSkipdpow, CValidationState &state, CBlock *pblock) 
             GetMainSignals().UpdatedBlockTip(pindexNewTip);
             uiInterface.NotifyBlockTip(hashNewTip);
         } //else fprintf(stderr,"initial download skips propagation\n");
-    } while(pindexMostWork != GetTipWithLock());
+    } while(pindexMostWork != pindexNewTip);
     CheckBlockIndex();
 
     // Write changes periodically to disk, after relay.
@@ -5095,9 +5090,9 @@ bool CheckBlockHeader(int32_t *futureblockp,int32_t height,CBlockIndex *pindex, 
         for (i=31; i>=0; i--)
             fprintf(stderr,"%02x",((uint8_t *)&hash)[i]);
         fprintf(stderr," <- CheckBlockHeader\n");
-        if ( chainActive.LastTip() != 0 )
+        if ( chainActive.Tip() != 0 )
         {
-            hash = chainActive.LastTip()->GetBlockHash();
+            hash = chainActive.Tip()->GetBlockHash();
             for (i=31; i>=0; i--)
                 fprintf(stderr,"%02x",((uint8_t *)&hash)[i]);
             fprintf(stderr," <- chainTip\n");
@@ -5416,7 +5411,7 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
         // Don't accept any forks from the main chain prior to last checkpoint
         CBlockIndex* pcheckpoint = Checkpoints::GetLastCheckpoint(chainParams.Checkpoints());
         int32_t notarized_height;
-        if ( nHeight == 1 && chainActive.LastTip() != 0 && chainActive.LastTip()->GetHeight() > 1 )
+        if ( nHeight == 1 && chainActive.Tip() != 0 && chainActive.Tip()->GetHeight() > 1 )
         {
             CBlockIndex *heightblock = chainActive[nHeight];
             if ( heightblock != 0 && heightblock->GetBlockHash() == hash )
@@ -5636,7 +5631,7 @@ bool AcceptBlock(int32_t *futureblockp,CBlock& block, CValidationState& state, C
         if ( saplinght < 0 )
             *futureblockp = 1;
         // the problem is when a future sapling block comes in before we detected saplinght
-        if ( saplinght > 0 && (tmpptr= chainActive.LastTip()) != 0 )
+        if ( saplinght > 0 && (tmpptr= chainActive.Tip()) != 0 )
         {
             fprintf(stderr,"saplinght.%d tipht.%d blockht.%d cmp.%d\n",saplinght,(int32_t)tmpptr->GetHeight(),pindex->GetHeight(),pindex->GetHeight() < 0 || (pindex->GetHeight() >= saplinght && pindex->GetHeight() < saplinght+50000) || (tmpptr->GetHeight() > saplinght-720 && tmpptr->GetHeight() < saplinght+720));
             if ( pindex->GetHeight() < 0 || (pindex->GetHeight() >= saplinght && pindex->GetHeight() < saplinght+50000) || (tmpptr->GetHeight() > saplinght-720 && tmpptr->GetHeight() < saplinght+720) )
@@ -5801,11 +5796,11 @@ bool ProcessNewBlock(bool from_miner,int32_t height,CValidationState &state, CNo
     bool checked; uint256 hash; int32_t futureblock=0;
     auto verifier = libzcash::ProofVerifier::Disabled();
     hash = pblock->GetHash();
-    //fprintf(stderr,"ProcessBlock %d\n",(int32_t)chainActive.LastTip()->GetHeight());
+    //fprintf(stderr,"ProcessBlock %d\n",(int32_t)chainActive.Tip()->GetHeight());
     {
         LOCK(cs_main);
-        if ( chainActive.LastTip() != 0 )
-            komodo_currentheight_set(chainActive.LastTip()->GetHeight());
+        if ( chainActive.Tip() != 0 )
+            komodo_currentheight_set(chainActive.Tip()->GetHeight());
         checked = CheckBlock(&futureblock,height!=0?height:komodo_block2height(pblock),0,*pblock, state, verifier,0);
         bool fRequested = MarkBlockAsReceived(hash);
         fRequested |= fForceProcessing;
@@ -5835,7 +5830,7 @@ bool ProcessNewBlock(bool from_miner,int32_t height,CValidationState &state, CNo
             /*if ( ASSETCHAINS_SYMBOL[0] == 0 )
             {
                 //fprintf(stderr,"request headers from failed process block peer\n");
-                pfrom->PushMessage("getheaders", chainActive.GetLocator(chainActive.LastTip()), uint256());
+                pfrom->PushMessage("getheaders", chainActive.GetLocator(chainActive.Tip()), uint256());
             }*/
             komodo_longestchain();
             return error("%s: AcceptBlock FAILED", __func__);
@@ -5845,7 +5840,7 @@ bool ProcessNewBlock(bool from_miner,int32_t height,CValidationState &state, CNo
 
     if (futureblock == 0 && !ActivateBestChain(false, state, pblock))
         return error("%s: ActivateBestChain failed", __func__);
-    //fprintf(stderr,"finished ProcessBlock %d\n",(int32_t)chainActive.LastTip()->GetHeight());
+    //fprintf(stderr,"finished ProcessBlock %d\n",(int32_t)chainActive.Tip()->GetHeight());
 
     return true;
 }
@@ -6295,7 +6290,7 @@ bool static LoadBlockIndexDB()
 
     double progress;
     if ( ASSETCHAINS_SYMBOL[0] == 0 ) {
-        progress = Checkpoints::GuessVerificationProgress(chainparams.Checkpoints(), chainActive.LastTip());
+        progress = Checkpoints::GuessVerificationProgress(chainparams.Checkpoints(), chainActive.Tip());
     } else {
         int32_t longestchain = komodo_longestchain();
         // TODO: komodo_longestchain does not have the data it needs at the time LoadBlockIndexDB
@@ -6303,13 +6298,13 @@ bool static LoadBlockIndexDB()
         progress = (longestchain > 0 ) ? (double) chainActive.Height() / longestchain : 0.5;
     }
     LogPrintf("%s: hashBestChain=%s height=%d date=%s progress=%f\n", __func__,
-              chainActive.LastTip()->GetBlockHash().ToString(), chainActive.Height(),
-              DateTimeStrFormat("%Y-%m-%d %H:%M:%S", chainActive.LastTip()->GetBlockTime()),
+              chainActive.Tip()->GetBlockHash().ToString(), chainActive.Height(),
+              DateTimeStrFormat("%Y-%m-%d %H:%M:%S", chainActive.Tip()->GetBlockTime()),
 	      progress);
 
     EnforceNodeDeprecation(chainActive.Height(), true);
     CBlockIndex *pindex;
-    if ( (pindex= chainActive.LastTip()) != 0 )
+    if ( (pindex= chainActive.Tip()) != 0 )
     {
         if ( ASSETCHAINS_SAPLING <= 0 )
         {
@@ -7736,7 +7731,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         LOCK(cs_main);
 
-        if (chainActive.LastTip() != 0 && chainActive.LastTip()->GetHeight() > 100000 && IsInitialBlockDownload())
+        if (chainActive.Tip() != 0 && chainActive.Tip()->GetHeight() > 100000 && IsInitialBlockDownload())
         {
             //fprintf(stderr,"dont process getheaders during initial download\n");
             return true;

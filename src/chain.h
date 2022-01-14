@@ -603,7 +603,6 @@ public:
 class CChain {
 protected:
     std::vector<CBlockIndex*> vChain;
-    CBlockIndex *lastTip;
     CBlockIndex *at(int nHeight) const REQUIRES(cs_main)
     {
         if (nHeight < 0 || nHeight >= (int)vChain.size())
@@ -621,11 +620,6 @@ public:
         return vChain.size() > 0 ? vChain[vChain.size() - 1] : NULL;
     }
     
-    /** Returns the last tip of the chain, or NULL if none. */
-    virtual CBlockIndex *LastTip() const REQUIRES(cs_main) {
-        return vChain.size() > 0 ? lastTip : NULL;
-    }
-
     /** Returns the index entry at a particular height in this chain, or NULL if no such height exists. */
     virtual CBlockIndex *operator[](int nHeight) const REQUIRES(cs_main) {
         return at(nHeight);
@@ -634,7 +628,7 @@ public:
     /** Compare two chains efficiently. */
     friend bool operator==(const CChain &a, const CChain &b) REQUIRES(cs_main) {
         return a.Height() == b.Height() &&
-               a.LastTip() == b.LastTip();
+               a.Tip() == b.Tip();
     }
 
     /** Efficiently check whether a block is present in this chain. */
@@ -678,11 +672,10 @@ public:
     MultithreadedCChain(Mutex &mutex) : CChain(), mutex(mutex) {}
     CBlockIndex *Genesis() const override { AssertLockHeld(mutex); return CChain::Genesis(); }
     CBlockIndex *Tip() const override { AssertLockHeld(mutex); return CChain::Tip(); }
-    CBlockIndex *LastTip() const override { AssertLockHeld(mutex); return CChain::LastTip(); }
     CBlockIndex *operator[](int height) const override { AssertLockHeld(mutex); return at(height); }
     friend bool operator==(const MultithreadedCChain &a, const MultithreadedCChain &b) { 
         return a.size() == b.size() 
-                && a.LastTip() == b.LastTip();
+                && a.Tip() == b.Tip();
     }
     bool Contains(const CBlockIndex *pindex) const override { AssertLockHeld(mutex); return CChain::Contains(pindex); }
     CBlockIndex *Next(const CBlockIndex *pindex) const override { AssertLockHeld(mutex); return CChain::Next(pindex); }

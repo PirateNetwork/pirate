@@ -534,7 +534,7 @@ int64_t CCduration(int32_t &numblocks,uint256 txid)
         fprintf(stderr,"CCduration no txtime %u or txheight.%d %p for txid %s\n",txtime,txheight,pindex,uint256_str(str,txid));
         return(0);
     }
-    else if ( (pindex= chainActive.LastTip()) == 0 || pindex->nTime < txtime || pindex->GetHeight() <= txheight )
+    else if ( (pindex= chainActive.Tip()) == 0 || pindex->nTime < txtime || pindex->GetHeight() <= txheight )
     {
         if ( pindex->nTime < txtime )
             fprintf(stderr,"CCduration backwards timestamps %u %u for txid %s hts.(%d %d)\n",(uint32_t)pindex->nTime,txtime,uint256_str(str,txid),txheight,(int32_t)pindex->GetHeight());
@@ -672,7 +672,7 @@ int32_t komodo_get_current_height()
     {
         return (NSPV_inforesult.height);
     }
-    else return chainActive.LastTip()->GetHeight();
+    else return chainActive.Tip()->GetHeight();
 }
 
 bool komodo_txnotarizedconfirmed(uint256 txid)
@@ -720,7 +720,7 @@ bool komodo_txnotarizedconfirmed(uint256 txid)
             fprintf(stderr,"komodo_txnotarizedconfirmed no txheight.%d %p for txid %s\n",txheight,pindex,txid.ToString().c_str());
             return(0);
         }
-        else if ( (pindex= chainActive.LastTip()) == 0 || pindex->GetHeight() < txheight )
+        else if ( (pindex= chainActive.Tip()) == 0 || pindex->GetHeight() < txheight )
         {
             fprintf(stderr,"komodo_txnotarizedconfirmed backwards heights for txid %s hts.(%d %d)\n",txid.ToString().c_str(),txheight,(int32_t)pindex->GetHeight());
             return(0);

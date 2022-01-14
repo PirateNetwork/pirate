@@ -1548,7 +1548,7 @@ void komodo_passport_iteration()
             {
                 {
                     LOCK(cs_main);
-                    buf[0] = (uint32_t)chainActive.LastTip()->GetHeight();
+                    buf[0] = (uint32_t)chainActive.Tip()->GetHeight();
                 }
                 buf[1] = (uint32_t)komodo_longestchain();
                 if ( buf[0] != 0 && buf[0] == buf[1] )

@@ -520,7 +520,7 @@ void CTxMemPool::removeExpired(unsigned int nBlockHeight)
     for (indexed_transaction_set::const_iterator it = mapTx.begin(); it != mapTx.end(); it++)
     {
         const CTransaction& tx = it->GetTx();
-        tipindex = chainActive.LastTip();
+        tipindex = chainActive.Tip();
 
         bool fInterestNotValidated = ASSETCHAINS_SYMBOL[0] == 0 && tipindex != 0 && komodo_validate_interest(tx,tipindex->GetHeight()+1,tipindex->GetMedianTimePast() + 777,0) < 0;
         if (IsExpiredTx(tx, nBlockHeight) || fInterestNotValidated)

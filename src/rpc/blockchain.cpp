@@ -61,10 +61,10 @@ double GetDifficultyINTERNAL(const CBlockIndex* blockindex, bool networkDifficul
     // minimum difficulty = 1.0.
     if (blockindex == NULL)
     {
-        if (chainActive.LastTip() == NULL)
+        if (chainActive.Tip() == NULL)
             return 1.0;
         else
-            blockindex = chainActive.LastTip();
+            blockindex = chainActive.Tip();
     }
 
     uint32_t bits;
@@ -370,7 +370,7 @@ UniValue getbestblockhash(const UniValue& params, bool fHelp, const CPubKey& myp
         );
 
     LOCK(cs_main);
-    return chainActive.LastTip()->GetBlockHash().GetHex();
+    return chainActive.Tip()->GetBlockHash().GetHex();
 }
 
 UniValue getdifficulty(const UniValue& params, bool fHelp, const CPubKey& mypk)
@@ -960,13 +960,13 @@ UniValue kvsearch(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if ( (keylen= (int32_t)strlen(params[0].get_str().c_str())) > 0 )
     {
         ret.push_back(Pair("coin",(char *)(ASSETCHAINS_SYMBOL[0] == 0 ? "KMD" : ASSETCHAINS_SYMBOL)));
-        ret.push_back(Pair("currentheight", (int64_t)chainActive.LastTip()->GetHeight()));
+        ret.push_back(Pair("currentheight", (int64_t)chainActive.Tip()->GetHeight()));
         ret.push_back(Pair("key",params[0].get_str()));
         ret.push_back(Pair("keylen",keylen));
         if ( keylen < sizeof(key) )
         {
             memcpy(key,params[0].get_str().c_str(),keylen);
-            if ( (valuesize= komodo_kvsearch(&refpubkey,chainActive.LastTip()->GetHeight(),&flags,&height,value,key,keylen)) >= 0 )
+            if ( (valuesize= komodo_kvsearch(&refpubkey,chainActive.Tip()->GetHeight(),&flags,&height,value,key,keylen)) >= 0 )
             {
                 std::string val; char *valuestr;
                 val.resize(valuesize);
@@ -994,7 +994,7 @@ UniValue minerids(const UniValue& params, bool fHelp, const CPubKey& mypk)
     LOCK(cs_main);
     int32_t height = atoi(params[0].get_str().c_str());
     if ( height <= 0 )
-        height = chainActive.LastTip()->GetHeight();
+        height = chainActive.Tip()->GetHeight();
     else
     {
         CBlockIndex *pblockindex = chainActive[height];
@@ -1056,8 +1056,8 @@ UniValue notaries(const UniValue& params, bool fHelp, const CPubKey& mypk)
     else timestamp = (uint32_t)time(NULL);
     if ( height < 0 )
     {
-        height = chainActive.LastTip()->GetHeight();
-        timestamp = chainActive.LastTip()->GetBlockTime();
+        height = chainActive.Tip()->GetHeight();
+        timestamp = chainActive.Tip()->GetBlockTime();
     }
     else if ( params.size() < 2 )
     {
@@ -1145,7 +1145,7 @@ UniValue paxprice(const UniValue& params, bool fHelp, const CPubKey& mypk)
     std::string rel = params[1].get_str();
     int32_t height;
     if ( params.size() == 2 )
-        height = chainActive.LastTip()->GetHeight();
+        height = chainActive.Tip()->GetHeight();
     else height = atoi(params[2].get_str().c_str());
     //if ( params.size() == 3 || (basevolume= COIN * atof(params[3].get_str().c_str())) == 0 )
         basevolume = 100000;
@@ -1713,7 +1713,7 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp, const CPubKey& my
     LOCK(cs_main);
     double progress;
     if ( ASSETCHAINS_SYMBOL[0] == 0 ) {
-        progress = Checkpoints::GuessVerificationProgress(Params().Checkpoints(), chainActive.LastTip());
+        progress = Checkpoints::GuessVerificationProgress(Params().Checkpoints(), chainActive.Tip());
     } else {
         int32_t longestchain = KOMODO_LONGESTCHAIN;//komodo_longestchain();
 	    progress = (longestchain > 0 ) ? (double) chainActive.Height() / longestchain : 1.0;
@@ -1723,13 +1723,13 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp, const CPubKey& my
     obj.push_back(Pair("blocks",                (int)chainActive.Height()));
     obj.push_back(Pair("synced",                KOMODO_INSYNC!=0));
     obj.push_back(Pair("headers",               pindexBestHeader ? pindexBestHeader->GetHeight() : -1));
-    obj.push_back(Pair("bestblockhash",         chainActive.LastTip()->GetBlockHash().GetHex()));
+    obj.push_back(Pair("bestblockhash",         chainActive.Tip()->GetBlockHash().GetHex()));
     obj.push_back(Pair("difficulty",            (double)GetNetworkDifficulty()));
     obj.push_back(Pair("verificationprogress",  progress));
-    obj.push_back(Pair("chainwork",             chainActive.LastTip()->chainPower.chainWork.GetHex()));
+    obj.push_back(Pair("chainwork",             chainActive.Tip()->chainPower.chainWork.GetHex()));
     if (ASSETCHAINS_LWMAPOS)
     {
-        obj.push_back(Pair("chainstake",        chainActive.LastTip()->chainPower.chainStake.GetHex()));
+        obj.push_back(Pair("chainstake",        chainActive.Tip()->chainPower.chainStake.GetHex()));
     }
     obj.push_back(Pair("pruned",                fPruneMode));
 
@@ -1737,7 +1737,7 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp, const CPubKey& my
     pcoinsTip->GetSproutAnchorAt(pcoinsTip->GetBestAnchor(SPROUT), tree);
     obj.push_back(Pair("commitments",           static_cast<uint64_t>(tree.size())));
 
-    CBlockIndex* tip = chainActive.LastTip();
+    CBlockIndex* tip = chainActive.Tip();
     UniValue valuePools(UniValue::VARR);
     valuePools.push_back(ValuePoolDesc("sprout", tip->nChainSproutValue, boost::none));
     valuePools.push_back(ValuePoolDesc("sapling", tip->nChainSaplingValue, boost::none));
@@ -1763,7 +1763,7 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp, const CPubKey& my
 
     if (fPruneMode)
     {
-        CBlockIndex *block = chainActive.LastTip();
+        CBlockIndex *block = chainActive.Tip();
         while (block && block->pprev && (block->pprev->nStatus & BLOCK_HAVE_DATA))
             block = block->pprev;
 
@@ -1856,7 +1856,7 @@ UniValue getchaintips(const UniValue& params, bool fHelp, const CPubKey& mypk)
     //pthread_mutex_unlock(&mutex);
 
     // Always report the currently active tip.
-    setTips.insert(chainActive.LastTip());
+    setTips.insert(chainActive.Tip());
 
     /* Construct the output array.  */
     UniValue res(UniValue::VARR); const CBlockIndex *forked;
