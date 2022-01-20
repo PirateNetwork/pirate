@@ -1896,7 +1896,7 @@ void komodo_args(char *argv0)
     else
     {
         char fname[512],username[512],password[4096]; int32_t iter; FILE *fp;
-        ASSETCHAINS_P2PPORT = 7770;
+        ASSETCHAINS_P2PPORT = Params().GetDefaultPort();
         ASSETCHAINS_RPCPORT = 7771;
         for (iter=0; iter<2; iter++)
         {
