@@ -196,6 +196,58 @@ UniValue getgenerate(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
 extern uint8_t NOTARY_PUBKEY33[33];
 
+/*****
+ * Calculate the PoW value for a block
+ * @param pblock the block to work on
+ * @returns true when the PoW is completed
+ */
+bool CalcPoW(CBlock *pblock)
+{
+    unsigned int n = Params().EquihashN();
+    unsigned int k = Params().EquihashK();
+    // Hash state
+    crypto_generichash_blake2b_state eh_state;
+    EhInitialiseState(n, k, eh_state);
+
+    // I = the block header minus nonce and solution.
+    CEquihashInput I{*pblock};
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << I;
+
+    // H(I||...
+    crypto_generichash_blake2b_update(&eh_state, (unsigned char*)&ss[0], ss.size());
+
+    while (true) {
+        // Yes, there is a chance every nonce could fail to satisfy the -regtest
+        // target -- 1 in 2^(2^256). That ain't gonna happen
+        pblock->nNonce = ArithToUint256(UintToArith256(pblock->nNonce) + 1);
+
+        // H(I||V||...
+        crypto_generichash_blake2b_state curr_state;
+        curr_state = eh_state;
+        crypto_generichash_blake2b_update(&curr_state,
+                                            pblock->nNonce.begin(),
+                                            pblock->nNonce.size());
+
+        // (x_1, x_2, ...) = A(I, V, n, k)
+        std::function<bool(std::vector<unsigned char>)> validBlock =
+                [&pblock](std::vector<unsigned char> soln)
+        {
+            LOCK(cs_main);
+            pblock->nSolution = soln;
+            solutionTargetChecks.increment();
+            return CheckProofOfWork(*pblock,NOTARY_PUBKEY33,chainActive.Height(),Params().GetConsensus());
+        };
+        bool found = EhBasicSolveUncancellable(n, k, curr_state, validBlock);
+        ehSolverRuns.increment();
+        if (found) {
+            return true;
+        }
+    }
+    // this should never get hit
+    return false;
+}
+
 //Value generate(const Array& params, bool fHelp)
 UniValue generate(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
@@ -252,8 +304,6 @@ UniValue generate(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
     unsigned int nExtraNonce = 0;
     UniValue blockHashes(UniValue::VARR);
-    unsigned int n = Params().EquihashN();
-    unsigned int k = Params().EquihashK();
     uint64_t lastTime = 0;
     while (nHeight < nHeightEnd)
     {
@@ -274,46 +324,7 @@ UniValue generate(const UniValue& params, bool fHelp, const CPubKey& mypk)
             IncrementExtraNonce(pblock, chainActive.LastTip(), nExtraNonce);
         }
 
-        // Hash state
-        crypto_generichash_blake2b_state eh_state;
-        EhInitialiseState(n, k, eh_state);
-
-        // I = the block header minus nonce and solution.
-        CEquihashInput I{*pblock};
-        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-        ss << I;
-
-        // H(I||...
-        crypto_generichash_blake2b_update(&eh_state, (unsigned char*)&ss[0], ss.size());
-
-        while (true) {
-            // Yes, there is a chance every nonce could fail to satisfy the -regtest
-            // target -- 1 in 2^(2^256). That ain't gonna happen
-            pblock->nNonce = ArithToUint256(UintToArith256(pblock->nNonce) + 1);
-
-            // H(I||V||...
-            crypto_generichash_blake2b_state curr_state;
-            curr_state = eh_state;
-            crypto_generichash_blake2b_update(&curr_state,
-                                              pblock->nNonce.begin(),
-                                              pblock->nNonce.size());
-
-            // (x_1, x_2, ...) = A(I, V, n, k)
-            std::function<bool(std::vector<unsigned char>)> validBlock =
-                    [&pblock](std::vector<unsigned char> soln)
-            {
-                LOCK(cs_main);
-                pblock->nSolution = soln;
-                solutionTargetChecks.increment();
-                return CheckProofOfWork(*pblock,NOTARY_PUBKEY33,chainActive.Height(),Params().GetConsensus());
-            };
-            bool found = EhBasicSolveUncancellable(n, k, curr_state, validBlock);
-            ehSolverRuns.increment();
-            if (found) {
-                goto endloop;
-            }
-        }
-endloop:
+        CalcPoW(pblock);
         CValidationState state;
         if (!ProcessNewBlock(1,chainActive.LastTip()->GetHeight()+1,state, NULL, pblock, true, NULL))
             throw JSONRPCError(RPC_INTERNAL_ERROR, "ProcessNewBlock, block not accepted");

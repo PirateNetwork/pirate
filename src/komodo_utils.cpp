@@ -1916,7 +1916,7 @@ void komodo_args(char *argv0)
             else strcat(fname,ntz_dest_path.c_str());
 #else
             if ( iter == 0 )
-                strcat(fname,".komodo/komodo.conf");
+                strcat(fname,"komodo.conf");
             else strcat(fname,ntz_dest_path.c_str());
 #endif
 #endif
