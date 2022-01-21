@@ -662,8 +662,9 @@ void *chainparams_commandline()
     }
     else
     {
-        checkpointData = // (Checkpoints::CCheckpointData)
-            {
+        if ( Params().NetworkIDString() == "main" )
+        {
+            checkpointData = { // (Checkpoints::CCheckpointData)
                 boost::assign::map_list_of
 
                 (0, pCurrentParams->consensus.hashGenesisBlock)
@@ -721,6 +722,11 @@ void *chainparams_commandline()
                 2777            // * estimated number of transactions per day after checkpoint
                                 //   total number of tx / (checkpoint block height / (24 * 24))
             };
+        }
+        else
+        {
+            checkpointData = CChainParams::CCheckpointData();
+        }
     }
 
     pCurrentParams->SetCheckpointData(checkpointData);
