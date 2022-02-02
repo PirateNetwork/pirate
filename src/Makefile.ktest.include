@@ -22,6 +22,7 @@ komodo_test_SOURCES = \
     test-komodo/test_random.cpp \
     test-komodo/test_block.cpp \
     test-komodo/test_mempool.cpp \
+    test-komodo/test_notary.cpp \
     test-komodo/test_pow.cpp \
     test-komodo/test_txid.cpp \
     test-komodo/test_coins.cpp \

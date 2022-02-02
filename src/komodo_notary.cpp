@@ -81,17 +81,43 @@ int32_t getacseason(uint32_t timestamp)
     return(0);
 }
 
+/***
+ * Static variables to tell if something has been initialized
+ */
+static bool didinit_NOTARIES[NUM_KMD_SEASONS]; // komodo_notaries()
+static int32_t hwmheight = 0; // komodo_notariesinit()
+static bool didinit = false; // komodo_init()
+
+/*****
+ * 2 Helpers for unit tests that reset statics (among other things)
+ * DO NOT USE for anything other than unit tests
+ */
+void undo_init_STAKED(); // see notaries_staked.cpp
+void undo_init_notaries()
+{
+    undo_init_STAKED();
+    memset(didinit_NOTARIES, 0, NUM_KMD_SEASONS * sizeof(bool) );
+    if (Pubkeys != nullptr)
+    {
+        free(Pubkeys);
+        Pubkeys = nullptr;
+    }
+    hwmheight = 0;
+    didinit = false;
+}
+
 int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp)
 {
     int32_t i,htind,n; uint64_t mask = 0; struct knotary_entry *kp,*tmp;
-    static uint8_t kmd_pubkeys[NUM_KMD_SEASONS][64][33],didinit[NUM_KMD_SEASONS];
+    static uint8_t kmd_pubkeys[NUM_KMD_SEASONS][64][33];
     
     if ( timestamp == 0 && ASSETCHAINS_SYMBOL[0] != 0 )
         timestamp = komodo_heightstamp(height);
     else if ( ASSETCHAINS_SYMBOL[0] == 0 )
         timestamp = 0;
 
-    // If this chain is not a staked chain, use the normal Komodo logic to determine notaries. This allows KMD to still sync and use its proper pubkeys for dPoW.
+    // If this chain is not a staked chain, use the normal Komodo logic to determine notaries. 
+    // This allows KMD to still sync and use its proper pubkeys for dPoW.
     if ( is_STAKED(ASSETCHAINS_SYMBOL) == 0 )
     {
         int32_t kmd_season = 0;
@@ -108,7 +134,7 @@ int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestam
         }
         if ( kmd_season != 0 )
         {
-            if ( didinit[kmd_season-1] == 0 )
+            if ( !didinit_NOTARIES[kmd_season-1] )
             {
                 for (i=0; i<NUM_KMD_NOTARIES; i++) 
                     decode_hex(kmd_pubkeys[kmd_season-1][i],33,(char *)notaries_elected[kmd_season-1][i][1]);
@@ -118,7 +144,7 @@ int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestam
                     for (i = 0; i<NUM_KMD_NOTARIES; i++)
                         pubkey2addr((char *)NOTARY_ADDRESSES[kmd_season-1][i],(uint8_t *)kmd_pubkeys[kmd_season-1][i]);
                 }
-                didinit[kmd_season-1] = 1;
+                didinit_NOTARIES[kmd_season-1] = true;
             }
             memcpy(pubkeys,kmd_pubkeys[kmd_season-1],NUM_KMD_NOTARIES * 33);
             return(NUM_KMD_NOTARIES);
@@ -193,7 +219,6 @@ int32_t komodo_ratify_threshold(int32_t height,uint64_t signedmask)
 
 void komodo_notarysinit(int32_t origheight,uint8_t pubkeys[64][33],int32_t num)
 {
-    static int32_t hwmheight;
     int32_t k,i,htind,height; struct knotary_entry *kp; struct knotaries_entry N;
     if ( Pubkeys == 0 )
         Pubkeys = (struct knotaries_entry *)calloc(1 + (KOMODO_MAXBLOCKS / KOMODO_ELECTION_GAP),sizeof(*Pubkeys));
@@ -480,12 +505,11 @@ void komodo_notarized_update(struct komodo_state *sp,int32_t nHeight,int32_t not
 
 void komodo_init(int32_t height)
 {
-    static int didinit; 
     uint256 zero; 
     int32_t k,n; 
     uint8_t pubkeys[64][33];
     memset(&zero,0,sizeof(zero));
-    if ( didinit == 0 )
+    if ( !didinit )
     {
         decode_hex(NOTARY_PUBKEY33,33,NOTARY_PUBKEY.c_str());
         if ( height >= 0 )
@@ -499,7 +523,7 @@ void komodo_init(int32_t height)
             }
             komodo_notarysinit(0,pubkeys,k);
         }
-        didinit = 1;
+        didinit = true;
         komodo_stateupdate(0,0,0,0,zero,0,0,0,0,0,0,0,0,0,0,zero,0);
     }
 }
