@@ -441,8 +441,10 @@ int32_t NSPV_rwremoterpcresp(int32_t rwflag,uint8_t *serialized,struct NSPV_remo
 
 void NSPV_remoterpc_purge(struct NSPV_remoterpcresp *ptr)
 {
-    if ( ptr != 0 )
+    if ( ptr != 0 )  {
+        if (ptr->json) free (ptr->json);
         memset(ptr,0,sizeof(*ptr));
+    }
 }
 
 // useful utility functions

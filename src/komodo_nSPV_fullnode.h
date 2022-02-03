@@ -688,6 +688,7 @@ int32_t NSPV_remoterpc(struct NSPV_remoterpcresp *ptr,char *json,int n)
         {
             rpc_result = JSONRPCReplyObj(result, NullUniValue, jreq.id);
             response=rpc_result.write();
+            ptr->json = (char*)malloc(response.size());
             memcpy(ptr->json,response.c_str(),response.size());
             len+=response.size();
             return (len);
@@ -709,6 +710,7 @@ int32_t NSPV_remoterpc(struct NSPV_remoterpcresp *ptr,char *json,int n)
         rpc_result = JSONRPCReplyObj(NullUniValue,JSONRPCError(RPC_PARSE_ERROR, e.what()), jreq.id);
         response=rpc_result.write();
     }
+    ptr->json = (char*)malloc(response.size());
     memcpy(ptr->json,response.c_str(),response.size());
     len+=response.size();
     return (len);
