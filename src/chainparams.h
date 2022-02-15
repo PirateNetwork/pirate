@@ -109,6 +109,7 @@ public:
     const std::vector<unsigned char>& Base58Prefix(Base58Type type) const { return base58Prefixes[type]; }
     const std::string& Bech32HRP(Bech32Type type) const { return bech32HRPs[type]; }
     const std::vector<SeedSpec6>& FixedSeeds() const { return vFixedSeeds; }
+    const std::vector<std::pair<std::string, std::string> > GenesisNotaries() const { return genesisNotaries; }
     const CCheckpointData& Checkpoints() const { return checkpointData; }
     /** Return the founder's reward address and script for a given block height */
     std::string GetFoundersRewardAddressAtHeight(int height) const;
@@ -156,6 +157,7 @@ protected:
     bool fTestnetToBeDeprecatedFieldRPC = false;
     CCheckpointData checkpointData;
     std::vector<std::string> vFoundersRewardAddress;
+    std::vector< std::pair<std::string, std::string> > genesisNotaries;
 };
 
 /**

@@ -17,7 +17,6 @@
 #include "komodo.h" // komodo_stateupdate()
 #include "komodo_structs.h" // KOMODO_NOTARIES_HARDCODED
 #include "komodo_utils.h" // komodo_stateptr
-#include "komodo_genesis.h" // Notaries_genesis
 
 int32_t getkmdseason(int32_t height)
 {
@@ -444,7 +443,6 @@ void komodo_init(int32_t height)
 {
     static int didinit; 
     uint256 zero; 
-    int32_t k,n; 
     uint8_t pubkeys[64][33];
     memset(&zero,0,sizeof(zero));
     if ( didinit == 0 )
@@ -452,14 +450,15 @@ void komodo_init(int32_t height)
         decode_hex(NOTARY_PUBKEY33,33,NOTARY_PUBKEY.c_str());
         if ( height >= 0 )
         {
-            n = (int32_t)(sizeof(Notaries_genesis)/sizeof(*Notaries_genesis));
-            for (k=0; k<n; k++)
+            int32_t count = 0;
+            for( auto pair : Params().GenesisNotaries() )
             {
-                if ( Notaries_genesis[k][0] == 0 || Notaries_genesis[k][1] == 0 || Notaries_genesis[k][0][0] == 0 || Notaries_genesis[k][1][0] == 0 )
+                if (pair.first.empty() || pair.second.empty() )
                     break;
-                decode_hex(pubkeys[k],33,(char *)Notaries_genesis[k][1]);
+                decode_hex(pubkeys[count],33,(char *)pair.second.c_str());
+                ++count;
             }
-            komodo_notarysinit(0,pubkeys,k);
+            komodo_notarysinit(0,pubkeys,count);
         }
         didinit = 1;
         komodo_stateupdate(0,0,0,0,zero,0,0,0,0,0,0,0,0,0,0,zero,0);
