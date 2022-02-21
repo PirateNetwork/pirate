@@ -1041,7 +1041,8 @@ bool komodo_checkpoint(int32_t *notarized_heightp, int32_t nHeight, uint256 hash
             else if ( nHeight == notarized_height && memcmp(&hash,&notarized_hash,sizeof(hash)) != 0 )
             {
                 // the height matches, but the hash they passed us does not match the notarized_hash we found
-                fprintf(stderr,"[%s] nHeight.%d == NOTARIZED_HEIGHT.%d, diff hash\n", chain.symbol().c_str(),nHeight,notarized_height);
+                fprintf(stderr,"[%s] nHeight.%d == NOTARIZED_HEIGHT.%d, diff hash\n", 
+                        chain.symbol().c_str(),nHeight,notarized_height);
                 return false;
             }
         }

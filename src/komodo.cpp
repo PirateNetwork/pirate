@@ -323,7 +323,8 @@ int32_t komodo_validate_chain(uint256 srchash,int32_t notarized_height)
             if ( last_rewind != 0 )
             {
                 fprintf(stderr,"%s FORK detected. notarized.%d %s not in this chain! last notarization %d -> rewindtarget.%d\n",
-                        chain.symbol().c_str(),notarized_height,srchash.ToString().c_str(),sp->LastNotarizedHeight(),rewindtarget);
+                        chain.symbol().c_str(),notarized_height,srchash.ToString().c_str(),
+                        sp->LastNotarizedHeight(),rewindtarget);
             }
             last_rewind = rewindtarget;
         }
@@ -537,9 +538,9 @@ int32_t komodo_voutupdate(bool fJustCheck,int32_t *isratificationp,int32_t notar
                 }
             } else if ( opretlen != 149 && height > 600000 && matched != 0 )
                 printf("%s validated.%d notarized.%d %llx reject ht.%d NOTARIZED.%d prev.%d %s.%s DESTTXID.%s len.%d opretlen.%d\n",
-                        ccdata.symbol,validated,notarized,(long long)signedmask,height,*notarizedheightp,
-                        sp->LastNotarizedHeight(),chain.ToString().c_str(),srchash.ToString().c_str(),
-                        desttxid.ToString().c_str(),len,opretlen);
+                        ccdata.symbol,validated,notarized,(long long)signedmask,height,
+                        *notarizedheightp, sp->LastNotarizedHeight(),chain.ToString().c_str(),
+                        srchash.ToString().c_str(), desttxid.ToString().c_str(),len,opretlen);
         }
         else if ( matched != 0 && i == 0 && j == 1 && opretlen == 149 )
         {
