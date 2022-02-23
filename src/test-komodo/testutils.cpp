@@ -18,6 +18,7 @@
 #include "primitives/transaction.h"
 #include "script/cc.h"
 #include "script/interpreter.h"
+#include "komodo_extern_globals.h"
 
 #include "testutils.h"
 
@@ -164,6 +165,7 @@ CTransaction getInputTx(CScript scriptPubKey)
 
 TestChain::TestChain()
 {
+    CleanGlobals();
     previousNetwork = Params().NetworkIDString();
     dataDir = GetTempPath() / strprintf("test_komodo_%li_%i", GetTime(), GetRand(100000));
     if (ASSETCHAINS_SYMBOL[0])
@@ -179,7 +181,7 @@ TestChain::TestChain()
 
 TestChain::~TestChain()
 {
-    adjust_hwmheight(0); // hwmheight can get skewed if komodo_connectblock not called (which some tests do)
+    CleanGlobals();
     boost::filesystem::remove_all(dataDir);
     if (previousNetwork == "main")
         SelectParams(CBaseChainParams::MAIN);
@@ -188,6 +190,18 @@ TestChain::~TestChain()
     if (previousNetwork == "test")
         SelectParams(CBaseChainParams::TESTNET);
 
+}
+
+void TestChain::CleanGlobals()
+{
+    // hwmheight can get skewed if komodo_connectblock not called (which some tests do)
+    adjust_hwmheight(0);
+    for(int i = 0; i < 33; ++i)
+    {
+        komodo_state s = KOMODO_STATES[i];
+        s.events.clear();
+        // TODO: clean notarization points
+    }
 }
 
 /***
