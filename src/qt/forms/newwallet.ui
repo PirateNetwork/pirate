@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>400</width>
+    <width>474</width>
     <height>300</height>
    </rect>
   </property>
@@ -92,7 +92,7 @@
          <item>
           <widget class="QLabel" name="label_2">
            <property name="text">
-            <string>Create a new wallet with a randomly generated seed.</string>
+            <string>Create a new wallet with a randomly generated 24 word seed.</string>
            </property>
            <property name="wordWrap">
             <bool>true</bool>
@@ -122,7 +122,7 @@
          <item>
           <widget class="QLabel" name="label_3">
            <property name="text">
-            <string>Restore an existing wallet, using the 24-word seed. </string>
+            <string>Restore an existing wallet, using a 12, 18 or 24 word seed. </string>
            </property>
            <property name="wordWrap">
             <bool>true</bool>

@@ -1262,10 +1262,10 @@ pub extern "C" fn librustzcash_restore_seed_from_phase(buf: *mut u8, buf_len: us
 
     let c_str: &CStr = unsafe { CStr::from_ptr(seed_phrase)};
     let rust_seed_phrase = c_str.to_str().unwrap().to_string();
-
+    
     let phrase = match Mnemonic::from_phrase(rust_seed_phrase.clone(), Language::English) {
-        Ok(p) => p,
-        Err(_) => return 0
+        Ok(p) =>   p ,
+        Err(_) =>  return 0
     };
 
     buf.copy_from_slice(&phrase.entropy());
@@ -1277,18 +1277,35 @@ pub extern "C" fn librustzcash_restore_seed_from_phase(buf: *mut u8, buf_len: us
 #[no_mangle]
 pub extern "C" fn librustzcash_get_bip39_seed(buf: *mut u8, buf_len: usize) -> *const c_uchar {
     let buf = unsafe { slice::from_raw_parts_mut(buf, buf_len) };
+    
     let tmp_seed = bip39::Seed::new(&Mnemonic::from_entropy(&buf, Language::English).unwrap(), "");
     let bip39_seed = tmp_seed.as_bytes().as_ptr();
     std::mem::forget(tmp_seed);
     bip39_seed
 }
-
+ 
 #[no_mangle]
-pub extern "C" fn librustzcash_get_seed_phrase(seed: *const c_uchar) -> *const c_char {
-    let seed = unsafe { std::slice::from_raw_parts(seed, 32) };
-    let s = Mnemonic::from_entropy(&seed, Language::English).unwrap().phrase().to_string();
+pub extern "C" fn librustzcash_get_seed_phrase(seed: *const c_uchar, length: u8) -> *const c_char {
+    //16 byte = 12 word mnemonic
+    //24 byte = 18 word mnemonic
+    //32 byte = 24 word mnemonic (default for PirateChain)
+    if (length!=16) && (length!=24) && (length!=32) {
+      let result="Internal error: The HDseed length is invalid.";
+      let c_str = CString::new(result).unwrap();
+      let phrase = c_str.as_ptr();
+      std::mem::forget(c_str);
+      return phrase;
+    }
+
+    let seed = unsafe { std::slice::from_raw_parts(seed, length.into()) };
+
+    
+    let s_mnemonic = Mnemonic::from_entropy(&seed, Language::English).unwrap();
+    
+    let s = s_mnemonic.phrase().to_string();
     let c_str = CString::new(s).unwrap();
     let phrase = c_str.as_ptr();
+
     std::mem::forget(c_str);
     phrase
 }

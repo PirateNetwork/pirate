@@ -42,6 +42,7 @@
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QLabel>
+#include <QMessageBox>
 
 SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) :
     QWidget(0, f), curAlignment(0)
@@ -344,15 +345,39 @@ void SplashScreen::on_btnTypeSelected_clicked()
 
 void SplashScreen::on_btnRestore_clicked()
 {
-      std::string phrase = this->restoreSeed->ui->txtSeed->toPlainText().toStdString();
+      //Remove multiple white spaces between the words and remove any white spaces at the beginning & end
+      QString qPhrase = this->restoreSeed->ui->txtSeed->toPlainText().simplified().trimmed();
+      std::string phrase = qPhrase.toStdString();
+      
+      std::stringstream stream(phrase);
+      unsigned int iCount = std::distance(std::istream_iterator<std::string>(stream), std::istream_iterator<std::string>());
+      if (
+         (iCount != 12) && 
+         (iCount != 18) && 
+         (iCount != 24)
+         ) {
+        QMessageBox msgBox;
+        msgBox.setStyleSheet("QLabel{min-width: 350px;}");
+        msgBox.setStandardButtons(QMessageBox::Ok);
+        msgBox.setDefaultButton(QMessageBox::Ok);
+
+        msgBox.setText("Invalid length");
+        msgBox.setInformativeText("The seed phrase must consist of 12, 18 or 24 words.");
+        int ret = msgBox.exec();
+        return;
+      }
+
 
       if (pwalletMain->IsValidPhrase(phrase)) {
           recoverySeedPhrase = phrase;
           pwalletMain->createType = RECOVERY;
+          this->restoreSeed->ui->lblInvalid->setVisible(false);
+          //Hide the dialog. The program execution will continue
+          this->seed->setVisible(false);
       } else {
+          //Keep the dialog on the screen, to give the user another attempt at entering a valid seed.
           this->restoreSeed->ui->lblInvalid->setVisible(true);
-      }
-      this->seed->setVisible(false);
+      }      
 }
 
 void SplashScreen::on_btnDone_clicked()

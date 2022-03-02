@@ -376,9 +376,11 @@ extern "C" {
         size_t buf_len
     );
 
-    //Get phrase for 32 byte entropy
+    //Get phrase for 16,24 or 32 byte entropy,
+    //which corresponds to a 12, 18 or 24 word mnemonic
     char* librustzcash_get_seed_phrase(
-        unsigned char *seed
+        unsigned char *seed,
+        unsigned char length
     );
 
 #ifdef __cplusplus

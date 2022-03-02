@@ -37,7 +37,7 @@ class CValidationInterface {
 protected:
     virtual void UpdatedBlockTip(const CBlockIndex *pindex) {}
     virtual void SyncTransaction(const CTransaction &tx, const CBlock *pblock, const int nHeight) {}
-    virtual bool EraseFromWallet(const uint256 &hash) {}
+    virtual bool EraseFromWallet(const uint256 &hash) { return true; }
     virtual void RescanWallet() {}
     virtual void ChainTip(const CBlockIndex *pindex, const CBlock *pblock, SproutMerkleTree sproutTree, SaplingMerkleTree saplingTree, bool added) {}
     virtual void UpdatedTransaction(const uint256 &hash) {}

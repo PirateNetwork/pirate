@@ -35,7 +35,7 @@
       <item>
        <widget class="QLabel" name="label">
         <property name="text">
-         <string>Please enter your 24-word seed below</string>
+         <string>Please enter your 12, 18 or 24 word seed below.</string>
         </property>
         <property name="wordWrap">
          <bool>true</bool>

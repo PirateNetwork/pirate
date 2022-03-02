@@ -32,25 +32,83 @@ HDSeed HDSeed::Random(size_t len)
 
 HDSeed HDSeed::RestoreFromPhrase(std::string &phrase)
 {
-    //Restore from Phrase
-    RawHDSeed restoredSeed(32, 0);
-    librustzcash_restore_seed_from_phase(restoredSeed.data(), 32, phrase.c_str());
-    return HDSeed(restoredSeed);
+    bool bResult;
+    
+    //Count the nr of words in the phrase:
+    std::stringstream stream( phrase );
+    unsigned int iCount = std::distance(std::istream_iterator<std::string>(stream), std::istream_iterator<std::string>());
+    
+    if (iCount==12) //12 word mnemonic: 16 byte entropy
+    {
+      RawHDSeed restoredSeed(16, 0);
+      bResult = librustzcash_restore_seed_from_phase(restoredSeed.data(), 16, phrase.c_str());
+      if (bResult==false)
+      {
+        printf("librustzcash_restore_seed_from_phase() Restpre failed\n");
+        throw std::runtime_error("librustzcash_restore_seed_from_phase() Restore failed");        
+      }
+      
+      return HDSeed(restoredSeed);      
+    }
+    else if (iCount==18) //18 word mnemonic : 24 byte entropy
+    {
+      RawHDSeed restoredSeed(24, 0);
+      bResult = librustzcash_restore_seed_from_phase(restoredSeed.data(), 24, phrase.c_str());
+      if (bResult==false)
+      {
+        printf("librustzcash_restore_seed_from_phase() Retore failed\n");
+        throw std::runtime_error("librustzcash_restore_seed_from_phase() Restore failed");
+      }      
+      return HDSeed(restoredSeed);      
+    }
+    else //24 word mnemonic: 32 byte entropy
+    {
+      //Restore from Phrase
+      RawHDSeed restoredSeed(32, 0);
+      bResult = librustzcash_restore_seed_from_phase(restoredSeed.data(), 32, phrase.c_str());
+      if (bResult==false)
+      {
+        printf("librustzcash_restore_seed_from_phase() Restore failed\n");
+        throw std::runtime_error("librustzcash_restore_seed_from_phase() Restore failed");
+      }      
+      return HDSeed(restoredSeed);      
+    }
 }
 
 bool HDSeed::IsValidPhrase(std::string &phrase)
 {
-    //Restore from Phrase
-    RawHDSeed restoredSeed(32, 0);
-    return librustzcash_restore_seed_from_phase(restoredSeed.data(), 32, phrase.c_str());
-
+    //Count the nr of words in the phrase:
+    std::stringstream stream(phrase);
+    unsigned int iCount = std::distance(std::istream_iterator<std::string>(stream), std::istream_iterator<std::string>());
+    
+    if (iCount==12) //12 word mnemonic: 16 byte entropy    
+    {
+      RawHDSeed restoredSeed(16, 0);
+      return librustzcash_restore_seed_from_phase(restoredSeed.data(), 16, phrase.c_str());
+    }
+    else if (iCount==18) //18 word mnemonic : 24 byte entropy
+    {
+      RawHDSeed restoredSeed(24, 0);
+      return librustzcash_restore_seed_from_phase(restoredSeed.data(), 24, phrase.c_str());
+    }
+    else if (iCount==24) //24 word mnemonic: 32 byte entropy
+    {
+      //Restore from Phrase
+      RawHDSeed restoredSeed(32, 0);
+      return librustzcash_restore_seed_from_phase(restoredSeed.data(), 32, phrase.c_str());
+    }
+    else
+    {
+      printf("Invalid number of words in the phrase\n");
+      return false;
+    }
 }
 
 void HDSeed::GetPhrase(std::string &phrase)
 {
     auto rawSeed = this->RawSeed();
-    char *rustPhrase = librustzcash_get_seed_phrase(rawSeed.data());
-    std::string newPhrase(rustPhrase);
+    char *rustPhrase = librustzcash_get_seed_phrase(rawSeed.data(), rawSeed.size() );
+    std::string newPhrase(rustPhrase);    
     phrase = newPhrase;
 }
 
