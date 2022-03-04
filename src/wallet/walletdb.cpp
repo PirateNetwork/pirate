@@ -1365,7 +1365,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
 
             wss.nCZKeyMeta++;
 
-            pwallet->TempHoldCryptedSaplingMetaData(extfvkFinger, vchCryptedSecret);
+            pwallet->mapTempHoldCryptedSaplingMetadata[extfvkFinger] = vchCryptedSecret;
         }
         else if (strType == "sapzaddr")
         {

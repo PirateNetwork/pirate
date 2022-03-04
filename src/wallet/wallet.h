@@ -1483,10 +1483,6 @@ public:
         libzcash::SaplingExtendedFullViewingKey &extfvk);
 
 
-
-    bool TempHoldCryptedSaplingMetaData(
-        const uint256 &extfvkFinger,
-        const std::vector<unsigned char> &vchCryptedSecret);
     bool LoadTempHeldCryptedData();
     /**
      * Increment the next transaction order id
