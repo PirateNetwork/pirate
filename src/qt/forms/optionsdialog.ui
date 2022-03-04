@@ -152,28 +152,44 @@
        </item>
        <item>
         <widget class="QGroupBox" name="groupBox_3">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>200</height>
+          </size>
+         </property>
          <property name="title">
           <string>Wallet Functions</string>
          </property>
-         <layout class="QVBoxLayout" name="verticalLayout_5">
-          <item>
-           <widget class="QCheckBox" name="enableOfflineSigning">
+         <layout class="QGridLayout" name="gridLayout_5">
+          <item row="6" column="0">
+           <widget class="QCheckBox" name="saplingConsolidationEnabled">
             <property name="toolTip">
-             <string>Enable or Disable DeleteTx</string>
+             <string>Enable automatic creation of consolidation transactions to reduce walle size and number of active notes.</string>
             </property>
             <property name="text">
-             <string>Enable Offline Signing</string>
+             <string>&amp;Enable Consolidation</string>
             </property>
            </widget>
           </item>
-          <item>
+          <item row="4" column="0">
            <widget class="QCheckBox" name="enableHexEncoding">
             <property name="text">
              <string>Enable Hex Memos (valid hex strings will not be re-encoded)</string>
             </property>
            </widget>
           </item>
-          <item>
+          <item row="0" column="0">
+           <widget class="QCheckBox" name="enableOfflineSigning">
+            <property name="toolTip">
+             <string>Allow the creation and authorisation of transactions to be split. Authorisation occurrs on a machine that is not connected to the internet</string>
+            </property>
+            <property name="text">
+             <string>Enable Offline Signing</string>
+            </property>
+           </widget>
+          </item>
+          <item row="5" column="0">
            <widget class="QCheckBox" name="enableDeleteTx">
             <property name="toolTip">
              <string>Enable or Disable DeleteTx</string>
@@ -183,14 +199,61 @@
             </property>
            </widget>
           </item>
-          <item>
-           <widget class="QCheckBox" name="saplingConsolidationEnabled">
-            <property name="toolTip">
-             <string>Enable automatic creation of consolidation transactions to reduce walle size and number of active notes.</string>
-            </property>
-            <property name="text">
-             <string>&amp;Enable Consolidation</string>
-            </property>
+          <item row="1" column="0" colspan="2">
+           <widget class="QFrame" name="frameOfflineSigning">
+            <layout class="QGridLayout" name="gridLayout">
+             <item row="0" column="1">
+              <widget class="QRadioButton" name="rbOfflineSigning_Spend">
+               <property name="toolTip">
+                <string>This wallet acts as the online participant that creates the transaction. The (extended) viewing key of the spending address is required. Access to the blockchain is required via an internet connection.</string>
+               </property>
+               <property name="text">
+                <string>Spend
+(Online mode)</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="3">
+              <spacer name="hsOfflineSigning2">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>0</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item row="0" column="0">
+              <spacer name="hsOfflineSigning1">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeType">
+                <enum>QSizePolicy::Fixed</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>40</width>
+                 <height>0</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item row="0" column="2">
+              <widget class="QRadioButton" name="rbOfflineSigning_Sign">
+               <property name="toolTip">
+                <string>This wallet acts as the offline participant that signs the transaction. The (extended) spending key of the spending address is required. Access to the blockchain is not required.</string>
+               </property>
+               <property name="text">
+                <string>Sign
+(Offline mode)</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </widget>
           </item>
          </layout>

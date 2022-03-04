@@ -147,6 +147,10 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
     connect(ui->proxyIpTor, SIGNAL(validationDidChange(QValidatedLineEdit *)), this, SLOT(updateProxyValidationState()));
     connect(ui->proxyPort, SIGNAL(textChanged(const QString&)), this, SLOT(updateProxyValidationState()));
     connect(ui->proxyPortTor, SIGNAL(textChanged(const QString&)), this, SLOT(updateProxyValidationState()));
+    
+    /* Offline signing */
+    connect(ui->enableOfflineSigning, SIGNAL(clicked(bool)), this, SLOT(evaluateOfflineSigning(bool)));
+
 }
 
 OptionsDialog::~OptionsDialog()
@@ -156,6 +160,7 @@ OptionsDialog::~OptionsDialog()
 
 void OptionsDialog::setModel(OptionsModel *_model)
 {
+
     this->model = _model;
 
     if(_model)
@@ -174,6 +179,8 @@ void OptionsDialog::setModel(OptionsModel *_model)
         mapper->toFirst();
 
         updateDefaultProxyNets();
+        
+        evaluateOfflineSigning( ui->enableOfflineSigning->isChecked() );
     }
     /* Change without restarting */
     connect(ui->theme, SIGNAL(valueChanged()), this, SLOT(setTheme()));
@@ -196,6 +203,8 @@ void OptionsDialog::setModel(OptionsModel *_model)
     /* Display */
     connect(ui->lang, SIGNAL(valueChanged()), this, SLOT(showRestartWarning()));
     connect(ui->thirdPartyTxUrls, SIGNAL(textChanged(const QString &)), this, SLOT(showRestartWarning()));
+
+
 }
 
 void OptionsDialog::setMapper()
@@ -206,7 +215,10 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->databaseCache, OptionsModel::DatabaseCache);
 
     /* Wallet */
-    mapper->addMapping(ui->enableOfflineSigning, OptionsModel::EnableZSigning);
+    mapper->addMapping(ui->enableOfflineSigning,   OptionsModel::EnableZSigning);
+    mapper->addMapping(ui->rbOfflineSigning_Spend, OptionsModel::EnableZSigning_Spend);
+    mapper->addMapping(ui->rbOfflineSigning_Sign,  OptionsModel::EnableZSigning_Sign);
+
     mapper->addMapping(ui->saplingConsolidationEnabled, OptionsModel::SaplingConsolidationEnabled);
     mapper->addMapping(ui->enableDeleteTx, OptionsModel::EnableDeleteTx);
     mapper->addMapping(ui->chkReindex, OptionsModel::EnableReindex);
@@ -238,6 +250,8 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->enableHexEncoding, OptionsModel::EnableHexMemo);
     mapper->addMapping(ui->theme, OptionsModel::Theme);
     mapper->addMapping(ui->thirdPartyTxUrls, OptionsModel::ThirdPartyTxUrls);
+    
+
 }
 
 void OptionsDialog::setOkButtonState(bool fState)
@@ -298,6 +312,33 @@ void OptionsDialog::on_hideTrayIcon_stateChanged(int fState)
     {
         ui->minimizeToTray->setEnabled(true);
     }
+}
+
+void OptionsDialog::evaluateOfflineSigning(bool bChecked)
+{
+  if (bChecked==true)
+  {
+    ui->frameOfflineSigning->setVisible(true);
+    //ui->rbOfflineSigning_Sign->setVisible(true);
+    //ui->rbOfflineSigning_Spend->setVisible(true);
+    //ui->hsOfflineSigning1->setVisible(true);
+    //ui->hsOfflineSigning2->setVisible(true);
+    if (
+       (ui->rbOfflineSigning_Sign->isChecked()==false) &&
+       (ui->rbOfflineSigning_Spend->isChecked()==false)
+       )
+    {
+      ui->rbOfflineSigning_Sign->setChecked(true);
+    }
+  }
+  else
+  {
+    ui->frameOfflineSigning->setVisible(false);
+    //ui->rbOfflineSigning_Sign->setVisible(false);
+    //ui->rbOfflineSigning_Spend->setVisible(false);      
+    //ui->hsOfflineSigning1->setVisible(false);
+    //ui->hsOfflineSigning2->setVisible(false);    
+  }      
 }
 
 void OptionsDialog::setTheme()
