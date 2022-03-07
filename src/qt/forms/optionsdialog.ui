@@ -20,7 +20,7 @@
    <item>
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
-      <number>0</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="tabMain">
       <attribute name="title">
@@ -330,7 +330,17 @@
       <attribute name="title">
        <string>&amp;Network</string>
       </attribute>
-      <layout class="QVBoxLayout" name="verticalLayout_Network">
+      <layout class="QVBoxLayout" name="verticalLayout_2">
+       <item>
+        <widget class="QCheckBox" name="requireTLS">
+         <property name="toolTip">
+          <string>Accept connections from outside.</string>
+         </property>
+         <property name="text">
+          <string>Only connect to encrypted peers</string>
+         </property>
+        </widget>
+       </item>
        <item>
         <widget class="QCheckBox" name="mapPortUpnp">
          <property name="toolTip">

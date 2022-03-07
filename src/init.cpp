@@ -441,6 +441,13 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-timeout=<n>", strprintf(_("Specify connection timeout in milliseconds (minimum: 1, default: %d)"), DEFAULT_CONNECT_TIMEOUT));
     strUsage += HelpMessageOpt("-torcontrol=<ip>:<port>", strprintf(_("Tor control port to use if onion listening enabled (default: %s)"), DEFAULT_TOR_CONTROL));
     strUsage += HelpMessageOpt("-torpassword=<pass>", _("Tor control port password (default: empty)"));
+    strUsage += HelpMessageOpt("-tlsenforcement=<0 or 1>", _("Only connect to TLS compatible peers. (default: 0)"));
+    strUsage += HelpMessageOpt("-tlsfallbacknontls=<0 or 1>", _("If a TLS connection fails, the next connection attempt of the same peer (based on IP address) takes place without TLS (default: 1)"));
+    strUsage += HelpMessageOpt("-tlsvalidate=<0 or 1>", _("Connect to peers only with valid certificates (default: 0)"));
+    strUsage += HelpMessageOpt("-tlskeypath=<path>", _("Full path to a private key"));
+    strUsage += HelpMessageOpt("-tlskeypwd=<password>", _("Password for a private key encryption (default: not set, i.e. private key will be stored unencrypted)"));
+    strUsage += HelpMessageOpt("-tlscertpath=<path>", _("Full path to a certificate"));
+    strUsage += HelpMessageOpt("-tlstrustdir=<path>", _("Full path to a trusted certificates directory"));
     strUsage += HelpMessageOpt("-whitebind=<addr>", _("Bind to given address and whitelist peers connecting to it. Use [host]:port notation for IPv6"));
     strUsage += HelpMessageOpt("-whitelist=<netmask>", _("Whitelist peers connecting from the given netmask or IP address. Can be specified multiple times.") +
         " " + _("Whitelisted peers cannot be DoS banned and their transactions are always relayed, even if they are already in the mempool, useful e.g. for a gateway"));
@@ -1611,6 +1618,24 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     BOOST_FOREACH(const std::string& strDest, mapMultiArgs["-seednode"])
         AddOneShot(strDest);
+
+        if (mapArgs.count("-tlskeypath")) {
+        boost::filesystem::path pathTLSKey(GetArg("-tlskeypath", ""));
+    if (!boost::filesystem::exists(pathTLSKey))
+         return InitError(strprintf(_("Cannot find TLS key file: '%s'"), pathTLSKey.string()));
+    }
+
+    if (mapArgs.count("-tlscertpath")) {
+        boost::filesystem::path pathTLSCert(GetArg("-tlscertpath", ""));
+    if (!boost::filesystem::exists(pathTLSCert))
+        return InitError(strprintf(_("Cannot find TLS cert file: '%s'"), pathTLSCert.string()));
+    }
+
+    if (mapArgs.count("-tlstrustdir")) {
+        boost::filesystem::path pathTLSTrustredDir(GetArg("-tlstrustdir", ""));
+        if (!boost::filesystem::exists(pathTLSTrustredDir))
+            return InitError(strprintf(_("Cannot find trusted certificates directory: '%s'"), pathTLSTrustredDir.string()));
+    }
 
 #if ENABLE_ZMQ
     pzmqNotificationInterface = CZMQNotificationInterface::CreateWithArguments(mapArgs);

@@ -134,14 +134,14 @@ void OptionsModel::Init(bool resetSettings)
     } else {
       if (!settings.contains("fEnableZSigning_ModeSpend"))
       {
-        settings.setValue("fEnableZSigning_ModeSpend",  true);        
+        settings.setValue("fEnableZSigning_ModeSpend",  true);
       }
       if (!settings.contains("fEnableZSigning_ModeSign"))
       {
-        settings.setValue("fEnableZSigning_ModeSign",  false);        
+        settings.setValue("fEnableZSigning_ModeSign",  false);
       }
     }
-    
+
     if (!settings.contains("fEnableHexMemo"))
           settings.setValue("fEnableHexMemo", false);
     fEnableHexMemo = settings.value("fEnableHexMemo").toBool();
@@ -179,6 +179,18 @@ void OptionsModel::Init(bool resetSettings)
         settings.setValue("fListen", DEFAULT_LISTEN);
     if (!SoftSetBoolArg("-listen", settings.value("fListen").toBool()))
         addOverriddenOption("-listen");
+
+    if (!settings.contains("fEncrypted"))
+        settings.setValue("fEncrypted", false);
+    if (settings.value("fEncrypted").toBool() == true) {
+        if (!SoftSetArg("-tlsenforcement", std::string("1"))) {
+            addOverriddenOption("-tlsenforcement");
+        }
+    } else {
+        if (!SoftSetArg("-tlsenforcement", std::string("0"))) {
+            addOverriddenOption("-tlsenforcement");
+        }
+    }
 
     if (!settings.contains("fUseProxy"))
         settings.setValue("fUseProxy", false);
@@ -346,6 +358,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return settings.value("nThreadsScriptVerif");
         case Listen:
             return settings.value("fListen");
+        case EncryptedP2P:
+            return settings.value("fEncrypted");
         default:
             return QVariant();
         }
@@ -466,7 +480,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
           if (settings.value("fEnableZSigning") != value) {
               settings.setValue("fEnableZSigning", value);
           }
-          break;          
+          break;
       case EnableZSigning_Sign:
           if (settings.value("fEnableZSigning_Sign") != value) {
               settings.setValue("fEnableZSigning_Sign", value);
@@ -533,6 +547,13 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
                 setRestartRequired(true);
             }
             break;
+        case EncryptedP2P:
+            if (settings.value("fEncrypted") != value) {
+                settings.setValue("fEncrypted", value);
+                setRestartRequired(true);
+            }
+            break;
+
         default:
             break;
         }

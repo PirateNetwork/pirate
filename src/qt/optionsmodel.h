@@ -47,8 +47,8 @@ public:
         EnableDeleteTx,                 // bool
         EnableReindex,                  // bool
         EnableZSigning,                 // bool
-        EnableZSigning_Spend,           // bool                
-        EnableZSigning_Sign,            // bool        
+        EnableZSigning_Spend,           // bool
+        EnableZSigning_Sign,            // bool
         EnableHexMemo,                  // bool
         EnableBootstrap,                // bool
         ZapWalletTxes,                  // bool
@@ -56,6 +56,7 @@ public:
         DatabaseCache,                  // int
         SaplingConsolidationEnabled,    // bool
         Listen,                         // bool
+        EncryptedP2P,                   // bool
         OptionIDRowCount,
     };
 

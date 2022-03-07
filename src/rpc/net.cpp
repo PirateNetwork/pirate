@@ -28,6 +28,7 @@
 #include "util.h"
 #include "version.h"
 #include "deprecation.h"
+#include "tls/utiltls.h"
 
 #include <boost/foreach.hpp>
 
@@ -89,6 +90,8 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "    \"addr\":\"host:port\",      (string) The ip address and port of the peer\n"
             "    \"addrlocal\":\"ip:port\",   (string) local address\n"
             "    \"services\":\"xxxxxxxxxxxxxxxx\",   (string) The services offered\n"
+            "    \"tls_established\": true|false,        (boolean) status of TLS connection\n"
+            "    \"tls_verified\": true|false,           (boolean) status of peer certificate. True if the chain of trust of a peer certificate can be verified using the OS certificate store\n"
             "    \"lastsend\": ttt,           (numeric) The time in seconds since epoch (Jan 1 1970 GMT) of the last send\n"
             "    \"lastrecv\": ttt,           (numeric) The time in seconds since epoch (Jan 1 1970 GMT) of the last receive\n"
             "    \"bytessent\": n,            (numeric) The total bytes sent\n"
@@ -137,6 +140,8 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             obj.push_back(Pair("mapped_as", uint64_t(stats.m_mapped_as)));
         }
         obj.push_back(Pair("services", strprintf("%016x", stats.nServices)));
+        obj.push_back(Pair("tls_established", stats.fTLSEstablished));
+        obj.push_back(Pair("tls_verified", stats.fTLSVerified));
         obj.push_back(Pair("lastsend", stats.nLastSend));
         obj.push_back(Pair("lastrecv", stats.nLastRecv));
         obj.push_back(Pair("bytessent", stats.nSendBytes));

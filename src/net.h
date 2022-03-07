@@ -47,6 +47,10 @@
 #include <boost/foreach.hpp>
 #include <boost/signals2/signal.hpp>
 
+// Enable OpenSSL Support for Zen
+#include <openssl/bio.h>
+#include <openssl/ssl.h>
+
 class CAddrMan;
 class CBlockIndex;
 class CScheduler;
@@ -97,6 +101,17 @@ bool BindListenPort(const CService &bindAddr, std::string& strError, bool fWhite
 void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler);
 bool StopNode();
 void SocketSendData(CNode *pnode);
+SSL_CTX* create_context(bool server_side);
+EVP_PKEY *generate_key();
+X509 *generate_x509(EVP_PKEY *pkey);
+bool write_to_disk(EVP_PKEY *pkey, X509 *x509);
+void configure_context(SSL_CTX *ctx, bool server_side);
+
+// OpenSSL related variables for metrics.cpp
+static std::string routingsecrecy;
+static std::string cipherdescription;
+static std::string securitylevel;
+static std::string validationdescription;
 
 void GetBanned(banmap_t &banmap);
 void SetBanned(const banmap_t &banmap);
@@ -203,6 +218,9 @@ extern CCriticalSection cs_vAddedNodes;
 extern NodeId nLastNodeId;
 extern CCriticalSection cs_nLastNodeId;
 
+extern SSL_CTX *tls_ctx_server;
+extern SSL_CTX *tls_ctx_client;
+
 /** Subversion as sent to the P2P network in `version` messages */
 extern std::string strSubVersion;
 
@@ -219,6 +237,8 @@ class CNodeStats
 public:
     NodeId nodeid;
     uint64_t nServices;
+    bool fTLSEstablished;
+    bool fTLSVerified;
     int64_t nLastSend;
     int64_t nLastRecv;
     int64_t nTimeConnected;
@@ -291,9 +311,13 @@ public:
 class CNode
 {
 public:
+    // OpenSSL
+    SSL *ssl;
+
     // socket
     uint64_t nServices;
     SOCKET hSocket;
+    CCriticalSection cs_hSocket;
     CDataStream ssSend;
     size_t nSendSize; // total size of all vSendMsg entries
     size_t nSendOffset; // offset inside the first vSendMsg already sent
@@ -358,6 +382,14 @@ protected:
     // Basic fuzz-testing
     void Fuzz(int nChance); // modifies ssSend
 
+    enum class eTlsOption {
+        FALLBACK_UNSET = 0,
+        FALLBACK_FALSE = 1,
+        FALLBACK_TRUE = 2
+    };
+    static eTlsOption tlsFallbackNonTls;
+    static eTlsOption tlsValidate;
+
 public:
     uint256 hashContinue;
     int nStartingHeight;
@@ -387,7 +419,7 @@ public:
     // Whether a ping is requested.
     bool fPingQueued;
 
-    CNode(SOCKET hSocketIn, const CAddress &addrIn, const std::string &addrNameIn = "", bool fInboundIn = false);
+    CNode(SOCKET hSocketIn, const CAddress &addrIn, const std::string &addrNameIn = "", bool fInboundIn = false, SSL *sslIn = NULL);
     ~CNode();
 
 private:
@@ -692,6 +724,10 @@ public:
 
     static uint64_t GetTotalBytesRecv();
     static uint64_t GetTotalBytesSent();
+
+    // returns the value of the tlsfallbacknontls and tlsvalidate flags set at zend startup (see init.cpp)
+    static bool GetTlsFallbackNonTls();
+    static bool GetTlsValidate();
 };
 
 

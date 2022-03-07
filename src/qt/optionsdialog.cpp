@@ -147,7 +147,7 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
     connect(ui->proxyIpTor, SIGNAL(validationDidChange(QValidatedLineEdit *)), this, SLOT(updateProxyValidationState()));
     connect(ui->proxyPort, SIGNAL(textChanged(const QString&)), this, SLOT(updateProxyValidationState()));
     connect(ui->proxyPortTor, SIGNAL(textChanged(const QString&)), this, SLOT(updateProxyValidationState()));
-    
+
     /* Offline signing */
     connect(ui->enableOfflineSigning, SIGNAL(clicked(bool)), this, SLOT(evaluateOfflineSigning(bool)));
 
@@ -179,7 +179,7 @@ void OptionsDialog::setModel(OptionsModel *_model)
         mapper->toFirst();
 
         updateDefaultProxyNets();
-        
+
         evaluateOfflineSigning( ui->enableOfflineSigning->isChecked() );
     }
     /* Change without restarting */
@@ -198,6 +198,7 @@ void OptionsDialog::setModel(OptionsModel *_model)
     connect(ui->chkZapWalletTxes, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     /* Network */
     connect(ui->allowIncoming, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->requireTLS, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     connect(ui->connectSocks, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     connect(ui->connectSocksTor, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     /* Display */
@@ -228,6 +229,7 @@ void OptionsDialog::setMapper()
     /* Network */
     mapper->addMapping(ui->mapPortUpnp, OptionsModel::MapPortUPnP);
     mapper->addMapping(ui->allowIncoming, OptionsModel::Listen);
+    mapper->addMapping(ui->requireTLS, OptionsModel::EncryptedP2P);
 
     mapper->addMapping(ui->connectSocks, OptionsModel::ProxyUse);
     mapper->addMapping(ui->proxyIp, OptionsModel::ProxyIP);
@@ -250,7 +252,7 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->enableHexEncoding, OptionsModel::EnableHexMemo);
     mapper->addMapping(ui->theme, OptionsModel::Theme);
     mapper->addMapping(ui->thirdPartyTxUrls, OptionsModel::ThirdPartyTxUrls);
-    
+
 
 }
 
@@ -335,10 +337,10 @@ void OptionsDialog::evaluateOfflineSigning(bool bChecked)
   {
     ui->frameOfflineSigning->setVisible(false);
     //ui->rbOfflineSigning_Sign->setVisible(false);
-    //ui->rbOfflineSigning_Spend->setVisible(false);      
+    //ui->rbOfflineSigning_Spend->setVisible(false);
     //ui->hsOfflineSigning1->setVisible(false);
-    //ui->hsOfflineSigning2->setVisible(false);    
-  }      
+    //ui->hsOfflineSigning2->setVisible(false);
+  }
 }
 
 void OptionsDialog::setTheme()
