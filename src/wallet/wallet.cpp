@@ -4873,7 +4873,7 @@ void CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
 
         auto deleteTime = GetTime();
         LogPrint("deletetx","Delete Tx - Time to Delete %s\n", DateTimeStrFormat("%H:%M:%S", deleteTime - selectTime));
-        LogPrintf("Delete Tx - Total Transaction Count %i, Transactions Deleted %i\n ", txCount, int(removeTxs.size()));
+        LogPrintf("Delete Tx - Total Transaction Count %i, Transactions Deleted %i\n", txCount, int(removeTxs.size()));
 
         if (runCompact) {
           CWalletDB::Compact(bitdb,strWalletFile);
