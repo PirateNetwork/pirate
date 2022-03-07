@@ -3212,9 +3212,8 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
             obj.push_back(Pair("address", EncodePaymentAddress(entry.address)));
             obj.push_back(Pair("amount", ValueFromAmount(CAmount(entry.note.value())))); // note.value() is equivalent to plaintext.value()
             obj.push_back(Pair("memo", HexStr(entry.memo)));
-            if (hasSaplingSpendingKey) {
-                obj.push_back(Pair("change", pwalletMain->IsNoteSaplingChange(nullifierSet, entry.address, entry.op)));
-            }
+            obj.push_back(Pair("change", pwalletMain->IsNoteSaplingChange(nullifierSet, entry.address, entry.op)));
+
             results.push_back(obj);
         }
     }
@@ -4064,9 +4063,7 @@ UniValue z_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubK
             obj.push_back(Pair("jsoutindex", entry.jsop.n));
             obj.push_back(Pair("rawconfirmations", entry.confirmations));
             obj.push_back(Pair("confirmations", dpowconfs));
-            if (hasSpendingKey) {
-                obj.push_back(Pair("change", pwalletMain->IsNoteSproutChange(nullifierSet, entry.address, entry.jsop)));
-            }
+            obj.push_back(Pair("change", pwalletMain->IsNoteSproutChange(nullifierSet, entry.address, entry.jsop)));
             result.push_back(obj);
         }
     } else if (boost::get<libzcash::SaplingPaymentAddress>(&zaddr) != nullptr) {
@@ -4085,9 +4082,7 @@ UniValue z_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubK
             obj.push_back(Pair("outindex", (int)entry.op.n));
             obj.push_back(Pair("rawconfirmations", entry.confirmations));
             obj.push_back(Pair("confirmations", dpowconfs));
-            if (hasSpendingKey) {
-              obj.push_back(Pair("change", pwalletMain->IsNoteSaplingChange(nullifierSet, entry.address, entry.op)));
-            }
+            obj.push_back(Pair("change", pwalletMain->IsNoteSaplingChange(nullifierSet, entry.address, entry.op)));
             result.push_back(obj);
         }
     }
