@@ -3208,11 +3208,17 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
             pwalletMain->GetSaplingIncomingViewingKey(boost::get<libzcash::SaplingPaymentAddress>(entry.address), ivk);
             pwalletMain->GetSaplingFullViewingKey(ivk, extfvk);
             bool hasSaplingSpendingKey = pwalletMain->HaveSaplingSpendingKey(extfvk);
+            bool hasSaplingFullViewingKey = pwalletMain->HaveSaplingFullViewingKey(ivk);
+
             obj.push_back(Pair("spendable", hasSaplingSpendingKey));
             obj.push_back(Pair("address", EncodePaymentAddress(entry.address)));
             obj.push_back(Pair("amount", ValueFromAmount(CAmount(entry.note.value())))); // note.value() is equivalent to plaintext.value()
             obj.push_back(Pair("memo", HexStr(entry.memo)));
-            obj.push_back(Pair("change", pwalletMain->IsNoteSaplingChange(nullifierSet, entry.address, entry.op)));
+            if (hasSaplingFullViewingKey) {
+                obj.push_back(Pair("change", pwalletMain->IsNoteSaplingChange(nullifierSet, entry.address, entry.op)));
+            } else {
+                obj.push_back(Pair("change", false));
+            }
 
             results.push_back(obj);
         }
@@ -4040,33 +4046,13 @@ UniValue z_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubK
     std::vector<SaplingNoteEntry> saplingEntries;
     pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, fromaddress, nMinDepth, false, false);
 
-    std::set<std::pair<PaymentAddress, uint256>> nullifierSet;
-    auto hasSpendingKey = boost::apply_visitor(HaveSpendingKeyForPaymentAddress(pwalletMain), zaddr);
-    if (hasSpendingKey) {
-        nullifierSet = pwalletMain->GetNullifiersForAddresses({zaddr});
-    }
+    if (boost::get<libzcash::SaplingPaymentAddress>(&zaddr) != nullptr) {
 
-    if (boost::get<libzcash::SproutPaymentAddress>(&zaddr) != nullptr) {
-        for (CSproutNotePlaintextEntry & entry : sproutEntries) {
-            UniValue obj(UniValue::VOBJ);
-            int nHeight   = tx_height(entry.jsop.hash);
-            int dpowconfs = komodo_dpowconfs(nHeight, entry.confirmations);
-            // Only return notarized results when minconf>1
-            if (nMinDepth > 1 && dpowconfs == 1)
-                continue;
+        std::set<std::pair<PaymentAddress, uint256>> nullifierSet = pwalletMain->GetNullifiersForAddresses({zaddr});
+        libzcash::SaplingIncomingViewingKey ivk;
+        pwalletMain->GetSaplingIncomingViewingKey(boost::get<libzcash::SaplingPaymentAddress>(zaddr), ivk);
+        bool hasSaplingFullViewingKey = pwalletMain->HaveSaplingFullViewingKey(ivk);
 
-            obj.push_back(Pair("txid", entry.jsop.hash.ToString()));
-            obj.push_back(Pair("amount", ValueFromAmount(CAmount(entry.plaintext.value()))));
-            std::string data(entry.plaintext.memo().begin(), entry.plaintext.memo().end());
-            obj.push_back(Pair("memo", HexStr(data)));
-            obj.push_back(Pair("jsindex", entry.jsop.js));
-            obj.push_back(Pair("jsoutindex", entry.jsop.n));
-            obj.push_back(Pair("rawconfirmations", entry.confirmations));
-            obj.push_back(Pair("confirmations", dpowconfs));
-            obj.push_back(Pair("change", pwalletMain->IsNoteSproutChange(nullifierSet, entry.address, entry.jsop)));
-            result.push_back(obj);
-        }
-    } else if (boost::get<libzcash::SaplingPaymentAddress>(&zaddr) != nullptr) {
         for (SaplingNoteEntry & entry : saplingEntries) {
             UniValue obj(UniValue::VOBJ);
 
@@ -4082,7 +4068,11 @@ UniValue z_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubK
             obj.push_back(Pair("outindex", (int)entry.op.n));
             obj.push_back(Pair("rawconfirmations", entry.confirmations));
             obj.push_back(Pair("confirmations", dpowconfs));
-            obj.push_back(Pair("change", pwalletMain->IsNoteSaplingChange(nullifierSet, entry.address, entry.op)));
+            if (hasSaplingFullViewingKey) {
+                obj.push_back(Pair("change", pwalletMain->IsNoteSaplingChange(nullifierSet, entry.address, entry.op)));
+            } else {
+                obj.push_back(Pair("change", false));
+            }
             result.push_back(obj);
         }
     }
