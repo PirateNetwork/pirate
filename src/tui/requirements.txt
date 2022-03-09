@@ -1,5 +1,5 @@
 configobj==5.0.6
-pip==19.2
+pip==21.1
 pycurl==7.43.0.2
 setuptools==39.0.1
 six==1.12.0
