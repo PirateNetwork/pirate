@@ -635,6 +635,42 @@ void *chainparams_commandline()
             pCurrentParams->consensus.nLwmaPOSAjustedWeight = 46531;
         }
 
+        if (strcmp(ASSETCHAINS_SYMBOL,"PIRATE") == 0)
+        {
+            checkpointData = //(Checkpoints::CCheckpointData)
+                    {
+                            boost::assign::map_list_of
+                                    (0, pCurrentParams->consensus.hashGenesisBlock)
+                                    (10000, uint256S("0x000001361458d9514816fcaed16c8dfd007f57012e7be6ff8ee6bebec1cb3679"))
+                                    (100000, uint256S("0x0000000085ba91a4ef72274aa1e549399e9cda0c3f7070ea612d2a45007bdfe7"))
+                                    (200000, uint256S("0x0000000097934aab530005e99148224c3c863f2c785e4934645972dd7c611f70"))
+                                    (300000, uint256S("0x000000001598dc03f64b36169a482dfa3d85a10d42cde06aa6cc6a75707389b2"))
+                                    (400000, uint256S("0x000000001352818dcd2bc7e348492b3e56cb271c916f1b66a8a90ceda3d9fbe9"))
+                                    (500000, uint256S("0x000000004a7eeb2b19dc893030a233e27be847597a274f65eab9a3234d296b81"))
+                                    (600000, uint256S("0x00000000b260ab44b2f41b1bb759ae8b1b20022bd43a1c1240bb6bd3c83ee2e6"))
+                                    (700000, uint256S("0x000000002db31fb7f11a33614ef482797cb3102d1e262aeda13b1de548a7eace"))
+                                    (800000, uint256S("0x00000000c9a88eb08320fb87edd6e4bf3bfe94f51b0580e36229c781c50c8d4b"))
+                                    (900000, uint256S("0x00000000df520299974b31272c8f3d8730a4bbc937ceead899fa97d0ce47282a"))
+                                    (1000000, uint256S("0x000000005ba1dab60631d4215aaf814151b20a38f33fde0dca014fefcc2c85d4"))
+                                    (1100000, uint256S("0x000000007fef990ae987b44d35bce4daae6a67d021bf853a38ecc4560cffd10c"))
+                                    (1200000, uint256S("0x0000000015d119c13493372848b3ffbaeb8de486d6f28cd5040cea5af2cd3675"))
+                                    (1300000, uint256S("0x000000001428f2e99327a47761b0da3d3b7a8921ca57765329bbad011348ec0e"))
+                                    (1400000, uint256S("0x0000000000a011d156e423a6e9dcc96705c5b7157cc0efef12120ad26370f22a"))
+                                    (1500000, uint256S("0x0000000003966e23bb72162a84d2ba0bd4ca5dbf12c4201e79629719725bc05e"))
+                                    (1600000, uint256S("0x0000000002838d76f769cd7bb87bb196ebe0556750fb14b038eb149a31b5aeb3"))
+                                    (1700000, uint256S("0x000000000a6999bede4901e9d07de66fafbd5a81c18b038d205960887b0b522a"))
+                                    (1800000, uint256S("0x000000000e69ec04a4c9ebaba913f844d159c7f308da85626804f8ff295a7c74"))
+                                    (1818566, uint256S("0x00000000019cb9c0055cd52e49a1f7343aa3fbf49f4617b2a4ff51670392b8ca")),
+                            (int64_t)1647422931,    // * UNIX timestamp of last checkpoint block
+                            (int64_t)3428216,         // * total number of transactions between genesis and last checkpoint
+                            //   (the tx=... number in the SetBestChain debug.log lines)
+                            (double)1086           // * estimated number of transactions per day after checkpoint
+                            //   total number of tx / (checkpoint block height / (24 * 24))
+                    };
+
+            pCurrentParams->consensus.nMinimumChainWork = uint256S("0x000000000000000000000000000000000000000000000000009506e173957ddb");
+        }
+
         // only require coinbase protection on Verus from the Komodo family of coins
         if (strcmp(ASSETCHAINS_SYMBOL,"VRSC") == 0)
         {
