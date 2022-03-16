@@ -4060,6 +4060,9 @@ void static UpdateTip(CBlockIndex *pindexNew) {
               DateTimeStrFormat("%Y-%m-%d %H:%M:%S", chainActive.LastTip()->GetBlockTime()), progress,
               pcoinsTip->DynamicMemoryUsage() * (1.0 / (1<<20)), pcoinsTip->GetCacheSize());
 
+
+    LogPrintf("%s: Chainwork %s\n", __func__, chainActive.Tip()->chainPower.chainWork.GetHex());
+
     cvBlockChange.notify_all();
 
     /*
