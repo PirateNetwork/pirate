@@ -101,6 +101,113 @@ UniValue getsaplingwitness(const UniValue& params, bool fHelp,  const CPubKey& m
 
 }
 
+UniValue iostree(const UniValue& params, bool fHelp,  const CPubKey& mypk)
+{
+  if (!EnsureWalletIsAvailable(fHelp))
+      return NullUniValue;
+
+  if (fHelp || params.size() > 0)
+      throw runtime_error(
+          "iostree\n"
+          + HelpExampleCli("iostree","")
+          + HelpExampleRpc("iostree","")
+      );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    EnsureWalletIsUnlocked();
+
+    boost::filesystem::path exportdir;
+    try {
+        exportdir = GetExportDir();
+    } catch (const std::runtime_error& e) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, e.what());
+    }
+    if (exportdir.empty()) {
+        throw JSONRPCError(RPC_WALLET_ERROR, "Cannot export wallet until the pirated -exportdir option has been set");
+    }
+
+    boost::filesystem::path exportfilepath = exportdir / "iostree.txt";
+
+    if (boost::filesystem::exists(exportfilepath)) {
+        boost::filesystem::remove(exportfilepath);
+    }
+
+    ofstream file;
+    file.open(exportfilepath.string().c_str());
+    if (!file.is_open())
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot open iostree file");
+
+
+    //Get the blocckindex of the previous block
+    CBlockIndex* pblockindex = chainActive[152855];
+
+    //Get the sapling tree as of the previous block
+    SaplingMerkleTree saplingTree;
+    pcoinsTip->GetSaplingAnchorAt(pblockindex->pprev->hashFinalSaplingRoot, saplingTree);
+
+    {
+        CDataStream iss(SER_NETWORK, PROTOCOL_VERSION);
+        iss << saplingTree;
+
+        file << strprintf("\n");
+        file << strprintf("    case BlockHeight.min ..< 200_000:\n");
+        file << strprintf("      return WalletBirthday(\n");
+        file << strprintf("        height: 152_855,\n");
+        file << strprintf("        hash: \"%s\",\n",pblockindex->GetBlockHash().GetHex());
+        file << strprintf("        time: %s,\n", pblockindex->GetBlockTime());
+        file << strprintf("        tree: %s,\n", HexStr(iss.begin(), iss.end()));
+        file << strprintf("      )\n");
+    }
+
+    int tipHeight = chainActive.Tip()->GetHeight();
+    int i;
+    for (i = 0;((i*10000) + 200000) <= tipHeight ; i++) {
+
+      int height = (i*10000) + 200000;
+      pblockindex = chainActive[height];
+      pcoinsTip->GetSaplingAnchorAt(pblockindex->pprev->hashFinalSaplingRoot, saplingTree);
+
+      CDataStream iss(SER_NETWORK, PROTOCOL_VERSION);
+      iss << saplingTree;
+
+      int nextCheckPoint = i+21;
+      string nextStr;
+      int n = nextCheckPoint/100;
+      int j = nextCheckPoint - (n * 100);
+      if (nextCheckPoint >= 100) {
+          nextStr = std::to_string(n) + "_" + std::to_string(j) + "0_000";
+      } else {
+          nextStr = std::to_string(j) + "0_000";
+      }
+
+      int currentCheckPoint = i+20;
+      string currentStr;
+      n = currentCheckPoint/100;
+      j = currentCheckPoint - (n * 100);
+      if (currentCheckPoint >= 100) {
+          currentStr = std::to_string(n) + "_" + std::to_string(j) + "0_000";
+      } else {
+          currentStr = std::to_string(j) + "0_000";
+      }
+
+
+      file << strprintf("\n");
+      file << strprintf("    case %s ..< %s:\n", currentStr, nextStr);
+      file << strprintf("      return WalletBirthday(\n");
+      file << strprintf("        height: %s,\n", currentStr);
+      file << strprintf("        hash: \"%s\",\n",pblockindex->GetBlockHash().GetHex());
+      file << strprintf("        time: %s,\n", pblockindex->GetBlockTime());
+      file << strprintf("        tree: %s,\n", HexStr(iss.begin(), iss.end()));
+      file << strprintf("      )\n");
+
+
+    }
+
+    file.close();
+
+    return exportfilepath.string();
+}
 
 UniValue getsaplingwitnessatheight(const UniValue& params, bool fHelp,  const CPubKey& mypk) {
 
@@ -331,9 +438,10 @@ UniValue getsaplingblocks(const UniValue& params, bool fHelp,  const CPubKey& my
 static const CRPCCommand commands[] =
 {   //  category              name                            actor (function)              okSafeMode
     //  --------------------- ------------------------        -----------------------       ----------
-    {   "zero Experimental",     "getsaplingwitness",         &getsaplingwitness,           true },
-    {   "zero Experimental",     "getsaplingwitnessatheight", &getsaplingwitnessatheight,   true },
-    {   "zero Experimental",     "getsaplingblocks",          &getsaplingblocks,            true },
+    {   "pirate Experimental",     "iostree",                   &iostree,                     true },
+    {   "pirate Experimental",     "getsaplingwitness",         &getsaplingwitness,           true },
+    {   "pirate Experimental",     "getsaplingwitnessatheight", &getsaplingwitnessatheight,   true },
+    {   "pirate Experimental",     "getsaplingblocks",          &getsaplingblocks,            true },
 
 };
 
