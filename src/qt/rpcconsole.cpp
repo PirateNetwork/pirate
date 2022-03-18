@@ -1196,7 +1196,8 @@ void RPCConsole::unbanSelectedNode()
     {
         // Get currently selected ban address
         QString strNode = nodes.at(i).data().toString();
-        CSubNet possibleSubnet(strNode.toStdString());
+        CSubNet possibleSubnet;
+        LookupSubNet(strNode.toStdString().c_str(), possibleSubnet);
 
         if (possibleSubnet.IsValid())
         {

@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 #include <vector>
+#include <crypto/common.h>
 
 uint32_t Interpret(const std::vector<bool> &asmap, const std::vector<bool> &ip);
 

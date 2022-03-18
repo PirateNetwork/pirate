@@ -5,7 +5,7 @@
 #include <map>
 #include <vector>
 #include <assert.h>
-#include <crypto/common.h>
+#include <util/asmap.h>
 
 namespace {
 

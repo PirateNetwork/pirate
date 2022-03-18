@@ -4,6 +4,8 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "torcontrol.h"
+
+#include "chainparams.h"
 #include "utilstrencodings.h"
 #include "net.h"
 #include "util.h"
@@ -459,7 +461,7 @@ void TorController::add_onion_cb(TorControlConnection& conn, const TorControlRep
             return;
         }
 
-        service = CService(service_id+".onion", GetListenPort(), false);
+        LookupNumeric(std::string(service_id+".onion").c_str(), service, GetListenPort());
         LogPrintf("tor: Got service ID %s, advertizing service %s\n", service_id, service.ToString());
         if (WriteBinaryFile(GetPrivateKeyFile(), private_key)) {
             LogPrint("tor", "tor: Cached service private key to %s\n", GetPrivateKeyFile());
@@ -483,7 +485,9 @@ void TorController::auth_cb(TorControlConnection& conn, const TorControlReply& r
         // Now that we know Tor is running setup the proxy for onion addresses
         // if -onion isn't set to something else.
         if (GetArg("-onion", "") == "") {
-            proxyType addrOnion = proxyType(CService("127.0.0.1", 9050), true);
+            CService resolved;
+            assert(LookupNumeric("127.0.0.1", resolved, 9050));
+            proxyType addrOnion = proxyType(resolved, true);
             SetProxy(NET_ONION, addrOnion);
             SetLimited(NET_ONION, false);
         }
