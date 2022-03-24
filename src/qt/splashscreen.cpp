@@ -44,6 +44,8 @@
 #include <QLabel>
 #include <QMessageBox>
 
+namespace ph = std::placeholders;
+
 SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) :
     QWidget(0, f), curAlignment(0)
 {
@@ -416,8 +418,8 @@ void SplashScreen::subscribeToCoreSignals()
     uiInterface.InitNeedUnlockWallet.connect(boost::bind(NeedUnlockWallet, this));
     uiInterface.InitCreateWallet.connect(boost::bind(showCreateWallet, this));
     uiInterface.InitShowPhrase.connect(boost::bind(showNewPhrase, this));
-    uiInterface.InitMessage.connect(boost::bind(InitMessage, this, _1));
-    uiInterface.ShowProgress.connect(boost::bind(ShowProgress, this, _1, _2, _3));
+    uiInterface.InitMessage.connect(boost::bind(InitMessage, this, ph::_1));
+    uiInterface.ShowProgress.connect(boost::bind(ShowProgress, this, ph::_1, ph::_2, ph::_3));
 }
 
 void SplashScreen::unsubscribeFromCoreSignals()
@@ -426,8 +428,8 @@ void SplashScreen::unsubscribeFromCoreSignals()
     uiInterface.InitNeedUnlockWallet.disconnect(boost::bind(NeedUnlockWallet, this));
     uiInterface.InitCreateWallet.disconnect(boost::bind(showCreateWallet, this));
     uiInterface.InitShowPhrase.disconnect(boost::bind(showNewPhrase, this));
-    uiInterface.InitMessage.disconnect(boost::bind(InitMessage, this, _1));
-    uiInterface.ShowProgress.disconnect(boost::bind(ShowProgress, this, _1, _2, _3));
+    uiInterface.InitMessage.disconnect(boost::bind(InitMessage, this, ph::_1));
+    uiInterface.ShowProgress.disconnect(boost::bind(ShowProgress, this, ph::_1, ph::_2, ph::_3));
 
 }
 

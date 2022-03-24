@@ -68,6 +68,7 @@
 
 extern int nMaxConnections;   //From net.h
 extern bool bOverrideMaxConnections; 
+namespace ph = std::placeholders;
 
 const std::string PirateOceanGUI::DEFAULT_UIPLATFORM =
 #if defined(Q_OS_MAC)
@@ -1459,15 +1460,15 @@ static bool ThreadSafeMessageBox(PirateOceanGUI *gui, const std::string& message
 void PirateOceanGUI::subscribeToCoreSignals()
 {
     // Connect signals to client
-    uiInterface.ThreadSafeMessageBox.connect(boost::bind(ThreadSafeMessageBox, this, _1, _2, _3));
-    uiInterface.ThreadSafeQuestion.connect(boost::bind(ThreadSafeMessageBox, this, _1, _3, _4));
+    uiInterface.ThreadSafeMessageBox.connect(boost::bind(ThreadSafeMessageBox, this, ph::_1, ph::_2, ph::_3));
+    uiInterface.ThreadSafeQuestion.connect(boost::bind(ThreadSafeMessageBox, this, ph::_1, ph::_3, ph::_4));
 }
 
 void PirateOceanGUI::unsubscribeFromCoreSignals()
 {
     // Disconnect signals from client
-    uiInterface.ThreadSafeMessageBox.disconnect(boost::bind(ThreadSafeMessageBox, this, _1, _2, _3));
-    uiInterface.ThreadSafeQuestion.disconnect(boost::bind(ThreadSafeMessageBox, this, _1, _3, _4));
+    uiInterface.ThreadSafeMessageBox.disconnect(boost::bind(ThreadSafeMessageBox, this, ph::_1, ph::_2, ph::_3));
+    uiInterface.ThreadSafeQuestion.disconnect(boost::bind(ThreadSafeMessageBox, this, ph::_1, ph::_3, ph::_4));
 }
 
 void PirateOceanGUI::toggleNetworkActive()

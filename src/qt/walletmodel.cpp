@@ -48,6 +48,8 @@
 #include <QTimer>
 #include <QSettings>
 
+namespace ph = std::placeholders;
+
 /* from rpcwallet.cpp */
 extern CAmount getBalanceTaddr(std::string transparentAddress, int minDepth=1, bool ignoreUnspendable=true);
 extern uint64_t komodo_interestsum();
@@ -1256,11 +1258,11 @@ void WalletModel::subscribeToCoreSignals()
     // Connect signals to wallet
     wallet->NotifyRescanStarted.connect(boost::bind(NotifyRescanStarted, this));
     wallet->NotifyRescanComplete.connect(boost::bind(NotifyRescanStarted, this));
-    wallet->NotifyStatusChanged.connect(boost::bind(&NotifyKeyStoreStatusChanged, this, _1));
-    wallet->NotifyAddressBookChanged.connect(boost::bind(NotifyAddressBookChanged, this, _1, _2, _3, _4, _5, _6));
-    wallet->NotifyZAddressBookChanged.connect(boost::bind(NotifyZAddressBookChanged, this, _1, _2, _3, _4, _5, _6));
-    wallet->NotifyTransactionChanged.connect(boost::bind(NotifyTransactionChanged, this, _1, _2, _3));
-    wallet->NotifyWatchonlyChanged.connect(boost::bind(NotifyWatchonlyChanged, this, _1));
+    wallet->NotifyStatusChanged.connect(boost::bind(&NotifyKeyStoreStatusChanged, this, ph::_1));
+    wallet->NotifyAddressBookChanged.connect(boost::bind(NotifyAddressBookChanged, this, ph::_1, ph::_2, ph::_3, ph::_4, ph::_5, ph::_6));
+    wallet->NotifyZAddressBookChanged.connect(boost::bind(NotifyZAddressBookChanged, this, ph::_1, ph::_2, ph::_3, ph::_4, ph::_5, ph::_6));
+    wallet->NotifyTransactionChanged.connect(boost::bind(NotifyTransactionChanged, this, ph::_1, ph::_2, ph::_3));
+    wallet->NotifyWatchonlyChanged.connect(boost::bind(NotifyWatchonlyChanged, this, ph::_1));
 }
 
 void WalletModel::unsubscribeFromCoreSignals()
@@ -1268,11 +1270,11 @@ void WalletModel::unsubscribeFromCoreSignals()
     // Disconnect signals from wallet
     wallet->NotifyRescanStarted.disconnect(boost::bind(NotifyRescanStarted, this));
     wallet->NotifyRescanComplete.disconnect(boost::bind(NotifyRescanStarted, this));
-    wallet->NotifyStatusChanged.disconnect(boost::bind(&NotifyKeyStoreStatusChanged, this, _1));
-    wallet->NotifyAddressBookChanged.disconnect(boost::bind(NotifyAddressBookChanged, this, _1, _2, _3, _4, _5, _6));
-    wallet->NotifyZAddressBookChanged.disconnect(boost::bind(NotifyZAddressBookChanged, this, _1, _2, _3, _4, _5, _6));
-    wallet->NotifyTransactionChanged.disconnect(boost::bind(NotifyTransactionChanged, this, _1, _2, _3));
-    wallet->NotifyWatchonlyChanged.disconnect(boost::bind(NotifyWatchonlyChanged, this, _1));
+    wallet->NotifyStatusChanged.disconnect(boost::bind(&NotifyKeyStoreStatusChanged, this, ph::_1));
+    wallet->NotifyAddressBookChanged.disconnect(boost::bind(NotifyAddressBookChanged, this, ph::_1, ph::_2, ph::_3, ph::_4, ph::_5, ph::_6));
+    wallet->NotifyZAddressBookChanged.disconnect(boost::bind(NotifyZAddressBookChanged, this, ph::_1, ph::_2, ph::_3, ph::_4, ph::_5, ph::_6));
+    wallet->NotifyTransactionChanged.disconnect(boost::bind(NotifyTransactionChanged, this, ph::_1, ph::_2, ph::_3));
+    wallet->NotifyWatchonlyChanged.disconnect(boost::bind(NotifyWatchonlyChanged, this, ph::_1));
 }
 
 // WalletModel::UnlockContext implementation
