@@ -683,11 +683,6 @@ std::string CService::ToString() const
     return ToStringIPPort();
 }
 
-void CService::SetPort(unsigned short portIn)
-{
-    port = portIn;
-}
-
 CSubNet::CSubNet():
     valid(false)
 {
