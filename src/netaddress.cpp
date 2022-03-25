@@ -563,8 +563,9 @@ std::vector<unsigned char> CNetAddr::GetGroup(const std::vector<bool> &asmap) co
         // for he.net, use /36 groups
         nBits = 36;
     // for the rest of the IPv6 network, use /32 groups
-    else
+    } else {
         nBits = 32;
+    }
 
     vchRet.push_back(nClass);
 
