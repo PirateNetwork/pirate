@@ -406,7 +406,7 @@ CNode* FindNode(const std::string& addrName)
 {
     LOCK(cs_vNodes);
     for (CNode* pnode : vNodes) {
-        if (pnode->GetAddrName() == addrName) {
+        if (pnode->addrName == addrName) {
             return pnode;
         }
     }
@@ -1942,7 +1942,7 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
 
     if (!pszDest) {
         if (IsLocal(addrConnect) ||
-            FindNode(static_cast<CNetAddr>(addrConnect)) || IsBanned(addrConnect) ||
+            FindNode(static_cast<CNetAddr>(addrConnect)) || CNode::IsBanned(addrConnect) ||
             FindNode(addrConnect.ToStringIPPort()))
             return false;
     } else if (FindNode(std::string(pszDest)))
