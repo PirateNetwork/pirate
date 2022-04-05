@@ -18,6 +18,7 @@ $(package)_rust_target_x86_64-w64-mingw32=x86_64-pc-windows-gnu
 $(package)_rust_std_sha256_hash_aarch64-unknown-linux-gnu=a6ed4abe59dfaf2119e2803f67fd8aef757a622ae3ac9a040946af2b02f4c269
 $(package)_rust_std_sha256_hash_x86_64-apple-darwin=2856bc46d3624ae2658897c15388c0c353bea916963a2fc5991c23b920d5678c
 $(package)_rust_std_sha256_hash_x86_64-pc-windows-gnu=55f871bdaf361a26280ca5396297cc7c67237cd86d4ebfe3cbdf9fac14ce0327
+$(package)_rust_std_sha256_hash_x86_64-unknown-linux-gnu=5e7738090baf6dc12c3ed62fb02cf51f80af2403f6df85feae0ebf157e2d8d35
 
 define rust_target
 $(if $($(1)_rust_target_$(2)),$($(1)_rust_target_$(2)),$(if $(findstring darwin,$(3)),x86_64-apple-darwin,$(if $(findstring freebsd,$(3)),x86_64-unknown-freebsd,$(2))))
