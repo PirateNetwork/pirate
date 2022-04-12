@@ -381,7 +381,7 @@ TEST_F(TestAlerts, PartitionAlert)
             indexDummy[i].pprev = nullptr;
         else 
             indexDummy[i].pprev = &indexDummy[i-1];
-        indexDummy[i].SetHeight(i);
+        indexDummy[i].nHeight = i;
         indexDummy[i].nTime = now - (normalBlocksPerDay-i)*nPowTargetSpacing;
         // Other members don't matter, the partition check code doesn't
         // use them

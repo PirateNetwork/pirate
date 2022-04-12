@@ -15,10 +15,10 @@ TEST(PoW, DifficultyAveraging) {
     std::vector<CBlockIndex> blocks(lastBlk+1);
     for (int i = 0; i <= lastBlk; i++) {
         blocks[i].pprev = i ? &blocks[i - 1] : nullptr;
-        blocks[i].SetHeight(i);
+        blocks[i].nHeight = i;
         blocks[i].nTime = 1269211443 + i * params.nPowTargetSpacing;
         blocks[i].nBits = 0x1e7fffff; /* target 0x007fffff000... */
-        blocks[i].chainPower = i ? (CChainPower(&blocks[i]) + blocks[i - 1].chainPower) + GetBlockProof(blocks[i - 1]) : CChainPower(&blocks[i]);
+        blocks[i].nChainWork = i ? blocks[i - 1].nChainWork + GetBlockProof(blocks[i - 1]) : arith_uint256(0);
     }
 
     // Result should be the same as if last difficulty was used
@@ -81,11 +81,11 @@ TEST(PoW, MinDifficultyRules) {
     for (int i = 0; i <= lastBlk; i++) {
         nextTime = nextTime + params.nPowTargetSpacing;
         blocks[i].pprev = i ? &blocks[i - 1] : nullptr;
-        blocks[i].SetHeight(params.nPowAllowMinDifficultyBlocksAfterHeight.get() + i);
+        blocks[i].nHeight = params.nPowAllowMinDifficultyBlocksAfterHeight.get() + i;
         blocks[i].nTime = nextTime;
         blocks[i].nBits = 0x1e7fffff; /* target 0x007fffff000... */
-        blocks[i].chainPower.chainWork = i ? blocks[i - 1].chainPower.chainWork 
-                + GetBlockProof(blocks[i - 1]).chainWork : arith_uint256(0);
+        blocks[i].nChainWork = i ? blocks[i - 1].nChainWork 
+                + GetBlockProof(blocks[i - 1]) : arith_uint256(0);
     }
 
     // Create a new block at the target spacing
@@ -114,8 +114,8 @@ TEST(PoW, MinDifficultyRules) {
     for (int i = 0; i <= lastBlk; i++) {
         nextTime = nextTime + ( params.MaxActualTimespan() / params.nPowAveragingWindow + 1);
         blocks[i].nTime = nextTime;
-        blocks[i].chainPower.chainWork = i ? blocks[i - 1].chainPower.chainWork 
-                + GetBlockProof(blocks[i - 1]).chainWork : arith_uint256(0);
+        blocks[i].nChainWork = i ? blocks[i - 1].nChainWork 
+                + GetBlockProof(blocks[i - 1]) : arith_uint256(0);
     }
 
     // difficulty should have decreased ( nBits increased )
@@ -126,8 +126,8 @@ TEST(PoW, MinDifficultyRules) {
     arith_uint256 minWork = UintToArith256(params.powLimit);
     for (int i = 0; i <= lastBlk; i++) {
         blocks[i].nBits = minWork.GetCompact();
-        blocks[i].chainPower.chainWork = i ? blocks[i - 1].chainPower.chainWork 
-                + GetBlockProof(blocks[i - 1]).chainWork : arith_uint256(0);
+        blocks[i].nChainWork = i ? blocks[i - 1].nChainWork 
+                + GetBlockProof(blocks[i - 1]) : arith_uint256(0);
     }
     EXPECT_EQ(GetNextWorkRequired(&blocks[lastBlk], &next, params), minWork.GetCompact());
 
@@ -137,8 +137,8 @@ TEST(PoW, MinDifficultyRules) {
         nextTime = nextTime + (params.MinActualTimespan() / params.nPowAveragingWindow - 1);
         blocks[i].nTime = nextTime;
         blocks[i].nBits = 0x1e7fffff; /* target 0x007fffff000... */
-        blocks[i].chainPower.chainWork = i ? blocks[i - 1].chainPower.chainWork 
-                + GetBlockProof(blocks[i - 1]).chainWork : arith_uint256(0);
+        blocks[i].nChainWork = i ? blocks[i - 1].nChainWork 
+                + GetBlockProof(blocks[i - 1]) : arith_uint256(0);
     }
 
     // difficulty should have increased ( nBits decreased )

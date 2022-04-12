@@ -34,7 +34,7 @@ CKey notaryKey;
  */
 int64_t nMockTime;
 
-extern uint32_t USE_EXTERNAL_PUBKEY;
+extern int32_t USE_EXTERNAL_PUBKEY;
 extern std::string NOTARY_PUBKEY;
 
 void adjust_hwmheight(int32_t in); // in komodo.cpp

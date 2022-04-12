@@ -23,9 +23,9 @@ TEST(block_tests, TestStopAt)
     TestChain chain;
     auto notary = chain.AddWallet(chain.getNotaryKey());
     CBlock lastBlock = chain.generateBlock(); // genesis block
-    ASSERT_GT( chain.GetIndex()->GetHeight(), 0 );
+    ASSERT_GT( chain.GetIndex()->nHeight, 0 );
     lastBlock = chain.generateBlock(); // now we should be above 1
-    ASSERT_GT( chain.GetIndex()->GetHeight(), 1);
+    ASSERT_GT( chain.GetIndex()->nHeight, 1);
     CBlock block;
     CValidationState state;
     KOMODO_STOPAT = 1;
@@ -39,9 +39,9 @@ TEST(block_tests, TestConnectWithoutChecks)
     auto notary = chain.AddWallet(chain.getNotaryKey());
     auto alice = chain.AddWallet();
     CBlock lastBlock = chain.generateBlock(); // genesis block
-    ASSERT_GT( chain.GetIndex()->GetHeight(), 0 );
+    ASSERT_GT( chain.GetIndex()->nHeight, 0 );
     // Add some transaction to a block
-    int32_t newHeight = chain.GetIndex()->GetHeight() + 1;
+    int32_t newHeight = chain.GetIndex()->nHeight + 1;
     CTransaction fundAlice = notary->CreateSpendTransaction(alice, 100000);
     // construct the block
     CBlock block;
@@ -75,9 +75,9 @@ TEST(block_tests, TestSpendInSameBlock)
     auto alice = chain.AddWallet();
     auto bob = chain.AddWallet();
     CBlock lastBlock = chain.generateBlock(); // genesis block
-    ASSERT_GT( chain.GetIndex()->GetHeight(), 0 );
+    ASSERT_GT( chain.GetIndex()->nHeight, 0 );
     // Start to build a block
-    int32_t newHeight = chain.GetIndex()->GetHeight() + 1;
+    int32_t newHeight = chain.GetIndex()->nHeight + 1;
     CTransaction fundAlice = notary->CreateSpendTransaction(alice, 100000);
     // now have Alice move some funds to Bob in the same block
     CMutableTransaction aliceToBobMutable;
@@ -129,9 +129,9 @@ TEST(block_tests, TestDoubleSpendInSameBlock)
     auto bob = chain.AddWallet();
     auto charlie = chain.AddWallet();
     CBlock lastBlock = chain.generateBlock(); // genesis block
-    ASSERT_GT( chain.GetIndex()->GetHeight(), 0 );
+    ASSERT_GT( chain.GetIndex()->nHeight, 0 );
     // Start to build a block
-    int32_t newHeight = chain.GetIndex()->GetHeight() + 1;
+    int32_t newHeight = chain.GetIndex()->nHeight + 1;
     CTransaction fundAlice = notary->CreateSpendTransaction(alice, 100000);
     // now have Alice move some funds to Bob in the same block
     CMutableTransaction aliceToBobMutable;
@@ -197,13 +197,13 @@ bool CalcPoW(CBlock *pblock);
 TEST(block_tests, TestProcessBlock)
 {
     TestChain chain;
-    EXPECT_EQ(chain.GetIndex()->GetHeight(), 0);
+    EXPECT_EQ(chain.GetIndex()->nHeight, 0);
     auto notary = chain.AddWallet(chain.getNotaryKey());
     auto alice = chain.AddWallet();
     auto bob = chain.AddWallet();
     auto charlie = chain.AddWallet();
     CBlock lastBlock = chain.generateBlock(); // gives notary everything
-    EXPECT_EQ(chain.GetIndex()->GetHeight(), 1);
+    EXPECT_EQ(chain.GetIndex()->nHeight, 1);
     chain.IncrementChainTime();
     auto notaryPrevOut = notary->GetAvailable(100000);
     // add a transaction to the mempool
@@ -211,12 +211,12 @@ TEST(block_tests, TestProcessBlock)
     EXPECT_TRUE( chain.acceptTx(fundAlice).IsValid() );
     // construct the block
     CBlock block;
-    int32_t newHeight = chain.GetIndex()->GetHeight() + 1;
+    int32_t newHeight = chain.GetIndex()->nHeight + 1;
     CValidationState state;
     // no transactions
     EXPECT_FALSE( ProcessNewBlock(false, newHeight, state, nullptr, &block, false, nullptr) );
     EXPECT_EQ(state.GetRejectReason(), "bad-blk-length");
-    EXPECT_EQ(chain.GetIndex()->GetHeight(), 1);
+    EXPECT_EQ(chain.GetIndex()->nHeight, 1);
     // add first a coinbase tx
     auto consensusParams = Params().GetConsensus();
     CMutableTransaction txNew = CreateNewContextualCMutableTransaction(consensusParams, newHeight);
@@ -261,7 +261,7 @@ TEST(block_tests, TestProcessBadBlock)
     EXPECT_TRUE( chain.acceptTx(fundAlice).IsValid() );
     // construct the block
     CBlock block;
-    int32_t newHeight = chain.GetIndex()->GetHeight() + 1;
+    int32_t newHeight = chain.GetIndex()->nHeight + 1;
     CValidationState state;
     // no transactions
     EXPECT_FALSE( ProcessNewBlock(false, newHeight, state, nullptr, &block, false, nullptr) );
