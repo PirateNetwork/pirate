@@ -251,7 +251,7 @@ CNode *NSPV_req(CNode *pnode,uint8_t *msg,int32_t len,uint64_t mask,int32_t ind)
         memcpy(&request[0],msg,len);
         if ( (0) && KOMODO_NSPV_SUPERLITE )
             fprintf(stderr,"pushmessage [%d] len.%d\n",msg[0],len);
-        pnode->PushMessage("getnSPV",request);
+        pnode->PushMessage(NetMsgType::GETNSPV,request);
         pnode->prevtimes[ind] = timestamp;
         return(pnode);
     } else fprintf(stderr,"no pnodes\n");

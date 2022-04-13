@@ -36,6 +36,93 @@ static const char* ppszTypeName[] =
     "filtered block"
 };
 
+namespace NetMsgType {
+const char *VERSION="version"; //used
+const char *VERACK="verack"; //used
+const char *ADDR="addr"; //used
+const char *ADDRV2="addrv2"; //used
+const char *SENDADDRV2="sendaddrv2";
+const char *INV="inv"; //used
+const char *GETDATA="getdata"; //used
+const char *MERKLEBLOCK="merkleblock";
+const char *GETBLOCKS="getblocks"; //used
+const char *GETHEADERS="getheaders"; //used
+const char *TX="tx"; //used
+const char *HEADERS="headers"; //used
+const char *BLOCK="block"; //used
+const char *GETADDR="getaddr"; //used
+const char *MEMPOOL="mempool"; //used
+const char *PING="ping"; //used
+const char *PONG="pong"; //used
+const char *NOTFOUND="notfound"; //used
+const char *FILTERLOAD="filterload"; //used
+const char *FILTERADD="filteradd"; //used
+const char *FILTERCLEAR="filterclear"; //used
+const char *SENDHEADERS="sendheaders";
+const char *FEEFILTER="feefilter";
+const char *SENDCMPCT="sendcmpct";
+const char *CMPCTBLOCK="cmpctblock";
+const char *GETBLOCKTXN="getblocktxn";
+const char *BLOCKTXN="blocktxn";
+const char *GETCFILTERS="getcfilters";
+const char *CFILTER="cfilter";
+const char *GETCFHEADERS="getcfheaders";
+const char *CFHEADERS="cfheaders";
+const char *GETCFCHECKPT="getcfcheckpt";
+const char *CFCHECKPT="cfcheckpt";
+const char *WTXIDRELAY="wtxidrelay";
+const char *EVENTS="events"; //used
+const char *GETNSPV="getnSPV"; //used
+const char *NSPV="nSPV"; //used
+const char *ALERT="alert"; //used
+const char *REJECT="reject"; //used
+} // namespace NetMsgType
+
+/** All known message types. Keep this in the same order as the list of
+ * messages above and in protocol.h.
+ */
+const static std::string allNetMessageTypes[] = {
+    NetMsgType::VERSION,
+    NetMsgType::VERACK,
+    NetMsgType::ADDR,
+    NetMsgType::ADDRV2,
+    NetMsgType::SENDADDRV2,
+    NetMsgType::INV,
+    NetMsgType::GETDATA,
+    NetMsgType::MERKLEBLOCK,
+    NetMsgType::GETBLOCKS,
+    NetMsgType::GETHEADERS,
+    NetMsgType::TX,
+    NetMsgType::HEADERS,
+    NetMsgType::BLOCK,
+    NetMsgType::GETADDR,
+    NetMsgType::MEMPOOL,
+    NetMsgType::PING,
+    NetMsgType::PONG,
+    NetMsgType::NOTFOUND,
+    NetMsgType::FILTERLOAD,
+    NetMsgType::FILTERADD,
+    NetMsgType::FILTERCLEAR,
+    NetMsgType::SENDHEADERS,
+    NetMsgType::FEEFILTER,
+    NetMsgType::SENDCMPCT,
+    NetMsgType::CMPCTBLOCK,
+    NetMsgType::GETBLOCKTXN,
+    NetMsgType::BLOCKTXN,
+    NetMsgType::GETCFILTERS,
+    NetMsgType::CFILTER,
+    NetMsgType::GETCFHEADERS,
+    NetMsgType::CFHEADERS,
+    NetMsgType::GETCFCHECKPT,
+    NetMsgType::CFCHECKPT,
+    NetMsgType::WTXIDRELAY,
+    NetMsgType::EVENTS,
+    NetMsgType::GETNSPV,
+    NetMsgType::NSPV,
+    NetMsgType::ALERT,
+    NetMsgType::REJECT,
+};
+
 CMessageHeader::CMessageHeader(const MessageStartChars& pchMessageStartIn)
 {
     memcpy(pchMessageStart, pchMessageStartIn, MESSAGE_START_SIZE);

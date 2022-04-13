@@ -1073,7 +1073,7 @@ void komodo_broadcast(CBlock *pblock,int32_t limit)
                 continue;
             if ( (rand() % n) == 0 )
             {
-                pnode->PushMessage("block", *pblock);
+                pnode->PushMessage(NetMsgType::BLOCK, *pblock);
                 if ( n++ > limit )
                     break;
             }

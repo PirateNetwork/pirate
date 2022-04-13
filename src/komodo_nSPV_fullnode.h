@@ -898,7 +898,7 @@ void komodo_nSPVreq(CNode *pfrom,std::vector<uint8_t> request) // received a req
                     if ( NSPV_rwinforesp(1,&response[1],&I) == slen )
                     {
                         //fprintf(stderr,"send info resp to id %d\n",(int32_t)pfrom->id);
-                        pfrom->PushMessage("nSPV",response);
+                        pfrom->PushMessage(NetMsgType::NSPV,response);
                         pfrom->prevtimes[ind] = timestamp;
                     }
                     NSPV_inforesp_purge(&I);
@@ -938,7 +938,7 @@ void komodo_nSPVreq(CNode *pfrom,std::vector<uint8_t> request) // received a req
                         response[0] = NSPV_UTXOSRESP;
                         if ( NSPV_rwutxosresp(1,&response[1],&U) == slen )
                         {
-                            pfrom->PushMessage("nSPV",response);
+                            pfrom->PushMessage(NetMsgType::NSPV,response);
                             pfrom->prevtimes[ind] = timestamp;
                         }
                         NSPV_utxosresp_purge(&U);
@@ -979,7 +979,7 @@ void komodo_nSPVreq(CNode *pfrom,std::vector<uint8_t> request) // received a req
                         response[0] = NSPV_TXIDSRESP;
                         if ( NSPV_rwtxidsresp(1,&response[1],&T) == slen )
                         {
-                            pfrom->PushMessage("nSPV",response);
+                            pfrom->PushMessage(NetMsgType::NSPV,response);
                             pfrom->prevtimes[ind] = timestamp;
                         }
                         NSPV_txidsresp_purge(&T);
@@ -1015,7 +1015,7 @@ void komodo_nSPVreq(CNode *pfrom,std::vector<uint8_t> request) // received a req
                             response[0] = NSPV_MEMPOOLRESP;
                             if ( NSPV_rwmempoolresp(1,&response[1],&M) == slen )
                             {
-                                pfrom->PushMessage("nSPV",response);
+                                pfrom->PushMessage(NetMsgType::NSPV,response);
                                 pfrom->prevtimes[ind] = timestamp;
                             }
                             NSPV_mempoolresp_purge(&M);
@@ -1039,7 +1039,7 @@ void komodo_nSPVreq(CNode *pfrom,std::vector<uint8_t> request) // received a req
                         response[0] = NSPV_NTZSRESP;
                         if ( NSPV_rwntzsresp(1,&response[1],&N) == slen )
                         {
-                            pfrom->PushMessage("nSPV",response);
+                            pfrom->PushMessage(NetMsgType::NSPV,response);
                             pfrom->prevtimes[ind] = timestamp;
                         }
                         NSPV_ntzsresp_purge(&N);
@@ -1064,7 +1064,7 @@ void komodo_nSPVreq(CNode *pfrom,std::vector<uint8_t> request) // received a req
                         response[0] = NSPV_NTZSPROOFRESP;
                         if ( NSPV_rwntzsproofresp(1,&response[1],&P) == slen )
                         {
-                            pfrom->PushMessage("nSPV",response);
+                            pfrom->PushMessage(NetMsgType::NSPV,response);
                             pfrom->prevtimes[ind] = timestamp;
                         }
                         NSPV_ntzsproofresp_purge(&P);
@@ -1092,7 +1092,7 @@ void komodo_nSPVreq(CNode *pfrom,std::vector<uint8_t> request) // received a req
                         if ( NSPV_rwtxproof(1,&response[1],&P) == slen )
                         {
                             //fprintf(stderr,"send response\n");
-                            pfrom->PushMessage("nSPV",response);
+                            pfrom->PushMessage(NetMsgType::NSPV,response);
                             pfrom->prevtimes[ind] = timestamp;
                         }
                         NSPV_txproof_purge(&P);
@@ -1116,7 +1116,7 @@ void komodo_nSPVreq(CNode *pfrom,std::vector<uint8_t> request) // received a req
                         response[0] = NSPV_SPENTINFORESP;
                         if ( NSPV_rwspentinfo(1,&response[1],&S) == slen )
                         {
-                            pfrom->PushMessage("nSPV",response);
+                            pfrom->PushMessage(NetMsgType::NSPV,response);
                             pfrom->prevtimes[ind] = timestamp;
                         }
                         NSPV_spentinfo_purge(&S);
@@ -1141,7 +1141,7 @@ void komodo_nSPVreq(CNode *pfrom,std::vector<uint8_t> request) // received a req
                         response[0] = NSPV_BROADCASTRESP;
                         if ( NSPV_rwbroadcastresp(1,&response[1],&B) == slen )
                         {
-                            pfrom->PushMessage("nSPV",response);
+                            pfrom->PushMessage(NetMsgType::NSPV,response);
                             pfrom->prevtimes[ind] = timestamp;
                         }
                         NSPV_broadcast_purge(&B);
@@ -1162,7 +1162,7 @@ void komodo_nSPVreq(CNode *pfrom,std::vector<uint8_t> request) // received a req
                     response.resize(1 + slen);
                     response[0] = NSPV_REMOTERPCRESP;
                     NSPV_rwremoterpcresp(1,&response[1],&R,slen);
-                    pfrom->PushMessage("nSPV",response);
+                    pfrom->PushMessage(NetMsgType::NSPV,response);
                     pfrom->prevtimes[ind] = timestamp;
                     NSPV_remoterpc_purge(&R);
                 }                
@@ -1216,7 +1216,7 @@ void komodo_nSPVreq(CNode *pfrom,std::vector<uint8_t> request) // received a req
                                 response[0] = NSPV_CCMODULEUTXOSRESP;
                                 if (NSPV_rwutxosresp(1, &response[1], &U) == slen)
                                 {
-                                    pfrom->PushMessage("nSPV", response);
+                                    pfrom->PushMessage(NetMsgType::NSPV, response);
                                     pfrom->prevtimes[ind] = timestamp;
                                     std::cerr << __func__ << " " << "returned nSPV response" << std::endl;
                                 }

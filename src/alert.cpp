@@ -154,7 +154,7 @@ bool CAlert::RelayTo(CNode* pnode) const
             AppliesToMe() ||
             GetTime() < nRelayUntil)
         {
-            pnode->PushMessage("alert", *this);
+            pnode->PushMessage(NetMsgType::ALERT, *this);
             return true;
         }
     }
