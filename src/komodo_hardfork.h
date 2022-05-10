@@ -1,8 +1,8 @@
 #pragma once
-
-#include "komodo_defs.h"
-
 #include <cstdint>
+
+#define NUM_KMD_SEASONS 6
+#define NUM_KMD_NOTARIES 64
 
 extern const uint32_t nStakedDecemberHardforkTimestamp; //December 2019 hardfork
 extern const int32_t nDecemberHardforkHeight;   //December 2019 hardfork
