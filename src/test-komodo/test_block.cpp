@@ -29,7 +29,7 @@ TEST(block_tests, TestStopAt)
     CBlock block;
     CValidationState state;
     KOMODO_STOPAT = 1;
-    EXPECT_FALSE( ConnectBlock(block, state, chain.GetIndex(), *chain.GetCoinsViewCache(), false, true) );
+    EXPECT_FALSE( chain.ConnectBlock(block, state, chain.GetIndex(), false, true) );
     KOMODO_STOPAT = 0; // to not stop other tests
 }
 
@@ -59,11 +59,10 @@ TEST(block_tests, TestConnectWithoutChecks)
     block.vtx.push_back(fundAlice);
     CValidationState state;
     // create a new CBlockIndex to forward to ConnectBlock
-    auto view = chain.GetCoinsViewCache();
     auto index = chain.GetIndex();
     CBlockIndex newIndex;
     newIndex.pprev = index;
-    EXPECT_TRUE( ConnectBlock(block, state, &newIndex, *chain.GetCoinsViewCache(), true, false) );
+    EXPECT_TRUE( chain.ConnectBlock(block, state, &newIndex, true, false) );
     if (!state.IsValid() )
         FAIL() << state.GetRejectReason();
 }
@@ -116,7 +115,7 @@ TEST(block_tests, TestSpendInSameBlock)
     auto index = chain.GetIndex();
     CBlockIndex newIndex;
     newIndex.pprev = index;
-    EXPECT_TRUE( ConnectBlock(block, state, &newIndex, *chain.GetCoinsViewCache(), true, false) );
+    EXPECT_TRUE( chain.ConnectBlock(block, state, &newIndex, true, false) );
     if (!state.IsValid() )
         FAIL() << state.GetRejectReason();
 }
@@ -188,7 +187,7 @@ TEST(block_tests, TestDoubleSpendInSameBlock)
     auto index = chain.GetIndex();
     CBlockIndex newIndex;
     newIndex.pprev = index;
-    EXPECT_FALSE( ConnectBlock(block, state, &newIndex, *chain.GetCoinsViewCache(), true, false) );
+    EXPECT_FALSE( chain.ConnectBlock(block, state, &newIndex, true, false) );
     EXPECT_EQ(state.GetRejectReason(), "bad-txns-inputs-missingorspent");
 }
 

@@ -90,6 +90,17 @@ public:
      * @returns the wallet
      */
     std::shared_ptr<TestWallet> AddWallet();
+    /****
+     * @brief attempt to connect a block to the chain
+     * @param block the block to connect
+     * @param state where to hold the results
+     * @param pindex the new chain index
+     * @param justCheck whether or not to do all checks
+     * @param checkPOW true to check PoW
+     * @returns true on success
+     */
+    bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pindex,
+            bool fJustCheck = false,bool fCheckPOW = false);
 private:
     std::vector<std::shared_ptr<TestWallet>> toBeNotified;
     boost::filesystem::path dataDir;

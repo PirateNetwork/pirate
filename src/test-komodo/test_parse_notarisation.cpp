@@ -406,8 +406,13 @@ TEST(TestParseNotarisation, test_notarizeddata)
     EXPECT_EQ(txid, expected_txid);
  }
 
-TEST(TestParseNotarisation, OldVsNew)
+TEST(TestParseNotarisation, DISABLED_OldVsNew)
 {
+    /***
+     * This test requires a binary file of notarization data
+     * as well as a long time to run. Re-enable this test to check
+     * the notarization checkpoints.
+     */
     ASSETCHAINS_SYMBOL[0] = 0;
     char symbol[4] = { 0 };
     char dest[4] = { 0 };

@@ -3398,6 +3398,15 @@ bool FindBlockPos(int32_t tmpflag,CValidationState &state, CDiskBlockPos &pos, u
 bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBlockIndex *pindexNew, const CDiskBlockPos& pos);
 
 /*****
+ * Only for testing, DO NOT USE
+ * @returns the cs_main mutex
+ */
+CCriticalSection& get_cs_main()
+{
+    return cs_main;
+}
+
+/*****
  * @brief Apply the effects of this block (with given index) on the UTXO set represented by coins
  * @param block the block to add
  * @param state the result status

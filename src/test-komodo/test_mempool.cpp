@@ -147,6 +147,8 @@ TEST(Mempool, PriorityStatsDoNotCrash) {
     EXPECT_EQ(dPriority, MAX_PRIORITY);
 }
 
+CCriticalSection& get_cs_main(); // in main.cpp
+
 TEST(Mempool, TxInputLimit) {
     SelectParams(CBaseChainParams::REGTEST);
 
@@ -164,6 +166,7 @@ TEST(Mempool, TxInputLimit) {
     // Check it fails as expected
     CValidationState state1;
     CTransaction tx1(mtx);
+    LOCK( get_cs_main() );
     EXPECT_FALSE(AcceptToMemoryPool(pool, state1, tx1, false, &missingInputs));
     EXPECT_EQ(state1.GetRejectReason(), "bad-txns-version-too-low");
 
@@ -227,6 +230,7 @@ TEST(Mempool, OverwinterNotActiveYet) {
     CValidationState state1;
 
     CTransaction tx1(mtx);
+    LOCK( get_cs_main() );
     EXPECT_FALSE(AcceptToMemoryPool(pool, state1, tx1, false, &missingInputs));
     EXPECT_EQ(state1.GetRejectReason(), "tx-overwinter-not-active");
 
@@ -251,6 +255,7 @@ TEST(Mempool, SproutV3TxFailsAsExpected) {
     CValidationState state1;
     CTransaction tx1(mtx);
 
+    LOCK( get_cs_main() );
     EXPECT_FALSE(AcceptToMemoryPool(pool, state1, tx1, false, &missingInputs));
     EXPECT_EQ(state1.GetRejectReason(), "version");
 }
@@ -272,6 +277,7 @@ TEST(Mempool, SproutV3TxWhenOverwinterActive) {
     CValidationState state1;
     CTransaction tx1(mtx);
 
+    LOCK( get_cs_main() );
     EXPECT_FALSE(AcceptToMemoryPool(pool, state1, tx1, false, &missingInputs));
     EXPECT_EQ(state1.GetRejectReason(), "tx-overwinter-flag-not-set");
 
@@ -292,6 +298,8 @@ TEST(Mempool, SproutNegativeVersionTxWhenOverwinterActive) {
     CMutableTransaction mtx = GetValidTransaction();
     mtx.vjoinsplit.resize(0); // no joinsplits
     mtx.fOverwintered = false;
+
+    LOCK( get_cs_main() );
 
     // A Sprout transaction with version -3 is created using Sprout code (as found in zcashd <= 1.0.14).
     // First four bytes of transaction, parsed as an uint32_t, has the value: 0xfffffffd
