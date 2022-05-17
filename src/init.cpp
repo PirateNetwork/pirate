@@ -2421,7 +2421,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             }
         } else {
             //Rescan at minimum last 1 block
-            if (chainActive.Tip()) {
+            if (chainActive.Tip() && chainActive.Height() > 0) {
                 pindexRescan = chainActive[chainActive.Tip()->GetHeight() - 1];
                 uiInterface.InitMessage(_("Rescanning..."));
                 LogPrintf("Rescanning last %i blocks (from block %i)...\n", chainActive.Height() - pindexRescan->GetHeight(), pindexRescan->GetHeight());
