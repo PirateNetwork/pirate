@@ -259,6 +259,7 @@ BITCOIN_CORE_H = \
   net.h \
   netbase.h \
 	netaddress.h \
+	netmessagemaker.h \
   notaries_staked.h \
   noui.h \
 	params.h \

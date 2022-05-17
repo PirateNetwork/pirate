@@ -144,6 +144,18 @@ void SetNetworkActive(bool active);
 class CNodeStats;
 void CopyNodeStats(std::vector<CNodeStats>& vstats);
 
+struct CSerializedNetMsg
+{
+    CSerializedNetMsg() = default;
+    CSerializedNetMsg(CSerializedNetMsg&&) = default;
+    CSerializedNetMsg& operator=(CSerializedNetMsg&&) = default;
+    // No copying, only moves.
+    CSerializedNetMsg(const CSerializedNetMsg& msg) = delete;
+    CSerializedNetMsg& operator=(const CSerializedNetMsg&) = delete;
+
+    std::vector<unsigned char> data;
+    std::string m_type;
+};
 
 struct CombinerAll
 {
@@ -239,6 +251,8 @@ struct LocalServiceInfo {
 extern CCriticalSection cs_mapLocalHost;
 extern std::map<CNetAddr, LocalServiceInfo> mapLocalHost;
 
+typedef std::map<std::string, uint64_t> mapMsgCmdSize; //command, total bytes
+
 class CNodeStats
 {
 public:
@@ -267,6 +281,12 @@ public:
     // Bind address of our side of the connection
     // CAddress addrBind; // https://github.com/bitcoin/bitcoin/commit/a7e3c2814c8e49197889a4679461be42254e5c51
     uint32_t m_mapped_as;
+
+    /**
+     * Whether the peer has signaled support for receiving ADDRv2 (BIP155)
+     * messages, implying a preference to receive ADDRv2 instead of ADDR ones.
+     */
+    bool m_wants_addrv2;
 };
 
 
@@ -311,7 +331,19 @@ public:
 };
 
 
+/** The TransportSerializer prepares messages for the network transport
+ */
+class TransportSerializer {
+public:
+    // prepare message for transport (header construction, error-correction computation, payload encryption, etc.)
+    virtual void prepareForTransport(CSerializedNetMsg& msg, std::vector<unsigned char>& header) = 0;
+    virtual ~TransportSerializer() {}
+};
 
+class V1TransportSerializer  : public TransportSerializer {
+public:
+    void prepareForTransport(CSerializedNetMsg& msg, std::vector<unsigned char>& header) override;
+};
 
 
 /** Information about a peer */
@@ -320,6 +352,9 @@ class CNode
 public:
     // OpenSSL
     SSL *ssl;
+
+    //Message Transport Serializer
+    std::unique_ptr<TransportSerializer> m_serializer;
 
     // socket
     uint64_t nServices;
@@ -374,6 +409,13 @@ public:
     CBloomFilter* pfilter;
     int nRefCount;
     NodeId id;
+
+    /**
+     * Whether the peer has signaled support for receiving ADDRv2 (BIP155)
+     * messages, implying a preference to receive ADDRv2 instead of ADDR ones.
+     */
+    bool m_wants_addrv2{false};
+
 protected:
 
     // Denial-of-service detection/prevention
@@ -439,6 +481,8 @@ private:
     CNode(const CNode&);
     void operator=(const CNode&);
 
+    mapMsgCmdSize mapSendBytesPerMsgCmd GUARDED_BY(cs_vSend);
+
 public:
 
     NodeId GetId() const {
@@ -491,10 +535,15 @@ public:
 
     void PushAddress(const CAddress& _addr)
     {
+        // Whether the peer supports the address in `_addr`. For example,
+        // nodes that do not implement BIP155 cannot receive Tor v3 addresses
+        // because they require ADDRv2 (BIP155) encoding.
+        const bool addr_format_supported = m_wants_addrv2 || _addr.IsAddrV1Compatible();
+
         // Known checking here is only to save space from duplicates.
         // SendMessages will filter it again for knowns that were added
         // after addresses were pushed.
-        if (_addr.IsValid() && !addrKnown.contains(_addr.GetKey())) {
+        if (_addr.IsValid() && !addrKnown.contains(_addr.GetKey()) && addr_format_supported) {
             if (vAddrToSend.size() >= MAX_ADDR_TO_SEND) {
                 vAddrToSend[insecure_rand() % vAddrToSend.size()] = _addr;
             } else {
@@ -531,6 +580,8 @@ public:
 
     // TODO: Document the precondition of this function.  Is cs_vSend locked?
     void EndMessage() UNLOCK_FUNCTION(cs_vSend);
+
+    void PushAddrMessage(CSerializedNetMsg&& msg);
 
     void PushVersion();
 

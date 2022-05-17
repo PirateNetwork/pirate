@@ -868,6 +868,8 @@ void CNode::copyStats(CNodeStats &stats, const std::vector<bool> &m_asmap)
         stats.fTLSEstablished = (ssl != NULL) && (SSL_get_state(ssl) == TLS_ST_OK);
         stats.fTLSVerified = (ssl != NULL) && ValidatePeerCertificate(ssl);
     }
+
+    stats.m_wants_addrv2 = m_wants_addrv2;
 }
 
 // requires LOCK(cs_vRecvMsg)
@@ -907,6 +909,20 @@ bool CNode::ReceiveMsgBytes(const char *pch, unsigned int nBytes)
     }
 
     return true;
+}
+
+
+void V1TransportSerializer::prepareForTransport(CSerializedNetMsg& msg, std::vector<unsigned char>& header) {
+    // create dbl-sha256 checksum
+    uint256 hash = Hash(msg.data.begin(), msg.data.end());
+
+    // create header
+    CMessageHeader hdr(Params().MessageStart(), msg.m_type.c_str(), msg.data.size());
+    // memcpy(hdr.nChecksum, hash.begin(), CMessageHeader::CHECKSUM_SIZE);
+    memcpy(&hdr.nChecksum, hash.begin(), CMessageHeader::CHECKSUM_SIZE);
+    // serialize header
+    header.reserve(CMessageHeader::HEADER_SIZE);
+    CVectorWriter{SER_NETWORK, INIT_PROTO_VERSION, header, 0, hdr};
 }
 
 int CNetMessage::readHeader(const char *pch, unsigned int nBytes)
@@ -2595,6 +2611,8 @@ CNode::CNode(SOCKET hSocketIn, const CAddress& addrIn, const std::string& addrNa
         PushVersion();
 
     GetNodeSignals().InitializeNode(GetId(), this);
+
+    m_serializer = std::unique_ptr<V1TransportSerializer>(new V1TransportSerializer());
 }
 
 bool CNode::GetTlsFallbackNonTls()
@@ -2756,6 +2774,38 @@ void CNode::EndMessage() UNLOCK_FUNCTION(cs_vSend)
         SocketSendData(this);
 
     LEAVE_CRITICAL_SECTION(cs_vSend);
+}
+
+void CNode::PushAddrMessage(CSerializedNetMsg&& msg)
+{
+    size_t nMessageSize = msg.data.size();
+    LogPrint("net", "sending %s (%d bytes) peer=%d\n",  SanitizeString(msg.m_type), nMessageSize, GetId());
+
+    // make sure we use the appropriate network transport format
+    std::vector<unsigned char> serializedHeader;
+    m_serializer->prepareForTransport(msg, serializedHeader);
+    size_t nTotalSize = nMessageSize + serializedHeader.size();
+    {
+        LOCK(cs_vSend);
+        //log total amount of bytes per message type
+        mapSendBytesPerMsgCmd[msg.m_type] += nTotalSize;
+        nSendSize += nTotalSize;
+
+        // if (nSendSize > nSendBufferMaxSize) fPauseSend = true;
+
+        //Add Header
+        std::deque<CSerializeData>::iterator it = vSendMsg.insert(vSendMsg.end(), CSerializeData());
+        CSerializeData &d = *it;
+        d.insert(d.end(), serializedHeader.begin(), serializedHeader.end());
+
+        //Add Message
+        if (nMessageSize) {
+          d.insert(d.end(), msg.data.begin(), msg.data.end());
+        }
+
+        if (it == vSendMsg.begin())
+            SocketSendData(this);
+    }
 }
 
 size_t GetNodeCount(NumConnections flags)

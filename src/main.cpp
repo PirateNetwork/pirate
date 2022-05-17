@@ -38,6 +38,7 @@
 #include "metrics.h"
 #include "notarisationdb.h"
 #include "net.h"
+#include "netmessagemaker.h"
 #include "pow.h"
 #include "script/interpreter.h"
 #include "txdb.h"
@@ -7433,6 +7434,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // Potentially mark this peer as a preferred download peer.
         UpdatePreferredDownload(pfrom, State(pfrom->GetId()));
 
+        //Ask for Address Format Version 2
+        pfrom->PushMessage(NetMsgType::SENDADDRV2);
+
         // Change version
         pfrom->PushMessage(NetMsgType::VERACK);
         pfrom->ssSend.SetVersion(min(pfrom->nVersion, PROTOCOL_VERSION));
@@ -7546,10 +7550,26 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         return false;
     }
 
-    else if (strCommand == NetMsgType::ADDR)
+    else if (strCommand == NetMsgType::SENDADDRV2) {
+        pfrom->m_wants_addrv2 = true;
+        return true;
+    }
+
+    else if (strCommand == NetMsgType::ADDR || strCommand == NetMsgType::ADDRV2)
     {
+        int stream_version = vRecv.GetVersion();
+        int tempStream_version = vRecv.GetVersion();
+        tempStream_version |= ADDRV2_FORMAT;
+
+        if (strCommand == NetMsgType::ADDRV2) {
+            // Add ADDRV2_FORMAT to the version so that the CNetAddr and CAddress
+            // unserialize methods know that an address in v2 format is coming.
+            stream_version |= ADDRV2_FORMAT;
+        }
+
+        OverrideStream<CDataStream> s(&vRecv, vRecv.GetType(), stream_version);
         vector<CAddress> vAddr;
-        vRecv >> vAddr;
+        s >> vAddr;
 
         // Don't want addr from older versions unless seeding
         if (pfrom->nVersion < CADDR_TIME_VERSION && addrman.size() > 1000)
@@ -7557,7 +7577,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (vAddr.size() > 1000)
         {
             Misbehaving(pfrom->GetId(), 20);
-            return error("message addr size() = %u", vAddr.size());
+            return error("%s message size() = %u", strCommand, vAddr.size());
         }
 
         // Store the new addresses
@@ -8513,17 +8533,29 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 {
                     pto->addrKnown.insert(addr.GetKey());
                     vAddr.push_back(addr);
-                    // receiver rejects addr messages larger than 1000
-                    if (vAddr.size() >= 1000)
+
+                    if (vAddr.size() >= MAX_ADDR_TO_SEND)
                     {
-                        pto->PushMessage(NetMsgType::ADDR, vAddr);
-                        vAddr.clear();
+                      // Should be impossible since we always check size before adding to
+                      // vAddrToSend. Recover by trimming the vector.
+                      vAddr.resize(MAX_ADDR_TO_SEND);
                     }
+                    const char* msg_type;
+                    int make_flags;
+                    if (pto->m_wants_addrv2) {
+                        msg_type = NetMsgType::ADDRV2;
+                        make_flags = ADDRV2_FORMAT;
+                    } else {
+                        msg_type = NetMsgType::ADDR;
+                        make_flags = 0;
+                    }
+                    pto->PushAddrMessage(CNetMsgMaker(std::min(pto->nVersion, PROTOCOL_VERSION)).Make(make_flags, msg_type, pto->vAddrToSend));
+
                 }
             }
+
             pto->vAddrToSend.clear();
-            if (!vAddr.empty())
-                pto->PushMessage(NetMsgType::ADDR, vAddr);
+            vAddr.clear();
         }
 
         CNodeState &state = *State(pto->GetId());
