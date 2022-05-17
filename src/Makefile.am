@@ -900,8 +900,10 @@ clean-local:
 	-$(MAKE) -C secp256k1 clean
 	-$(MAKE) -C snark clean
 	-$(MAKE) -C univalue clean
-	rm -f leveldb/*/*.gcno leveldb/helpers/memenv/*.gcno
+	-rm -f leveldb/*/*.gcno leveldb/helpers/memenv/*.gcno
 	-rm -f config.h
+	-rm -f *.a
+	-rm -f *.so
 
 .rc.o:
 	@test -f $(WINDRES)
