@@ -1020,7 +1020,7 @@ CBlockTemplate* CreateNewBlockWithKey(CReserveKey& reservekey, int32_t nHeight, 
     {
         //if ( !isStake || ASSETCHAINS_STAKED != 0 )
         {
-            if (!GetBoolArg("-disablewallet", false)) {
+            if (!GetBoolArg("-disablewallet", false) && GetArg("-mineraddress", "") == "") {
                 // wallet enabled
                 if (!reservekey.GetReservedKey(pubkey))
                     return NULL;
