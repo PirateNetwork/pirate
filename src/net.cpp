@@ -198,8 +198,8 @@ bool GetLocal(CService& addr, const CNetAddr *paddrPeer)
     return nBestScore >= 0;
 }
 
-//! Convert the pnSeeds6 array into usable address objects.
-static std::vector<CAddress> convertSeed6(const std::vector<SeedSpec6> &vSeedsIn)
+//! Convert the serialized seeds into usable address objects.
+static std::vector<CAddress> ConvertSeeds(const std::vector<uint8_t> &vSeedsIn)
 {
     // It'll only connect to one or two seed nodes because once it connects,
     // it'll get a pile of addresses with newer timestamps.
@@ -207,13 +207,13 @@ static std::vector<CAddress> convertSeed6(const std::vector<SeedSpec6> &vSeedsIn
     // weeks ago.
     const int64_t nOneWeek = 7*24*60*60;
     std::vector<CAddress> vSeedsOut;
-    vSeedsOut.reserve(vSeedsIn.size());
-    for (std::vector<SeedSpec6>::const_iterator i(vSeedsIn.begin()); i != vSeedsIn.end(); ++i)
-    {
-        struct in6_addr ip;
-        memcpy(&ip, i->addr, sizeof(ip));
-        CAddress addr(CService(ip, i->port));
-        addr.nTime = GetTime() - GetRand(nOneWeek) - nOneWeek;
+    CDataStream s(vSeedsIn, SER_NETWORK, PROTOCOL_VERSION | ADDRV2_FORMAT);
+    while (!s.eof()) {
+        CService endpoint;
+        s >> endpoint;
+        CAddress addr{endpoint, NODE_NETWORK};
+        addr.nTime = GetTime() - nOneWeek;
+        LogPrint("net", "Added hardcoded seed: %s\n", addr.ToString());
         vSeedsOut.push_back(addr);
     }
     return vSeedsOut;
@@ -1805,8 +1805,8 @@ void ThreadOpenConnections()
             if (!done) {
                 LogPrintf("Adding fixed seed nodes as DNS doesn't seem to be available.\n");
                 CNetAddr local;
-                LookupHost("127.0.0.1", local, false);
-                addrman.Add(convertSeed6(Params().FixedSeeds()), local);
+                local.SetInternal("fixedseeds");
+                addrman.Add(ConvertSeeds(Params().FixedSeeds()), local);
                 done = true;
             }
         }

@@ -35,11 +35,6 @@ struct CDNSSeedData {
     CDNSSeedData(const std::string &strName, const std::string &strHost) : name(strName), host(strHost) {}
 };
 
-struct SeedSpec6 {
-    uint8_t addr[16];
-    uint16_t port;
-};
-
 typedef std::map<int, uint256> MapCheckpoints;
 
 
@@ -109,7 +104,7 @@ public:
     const std::vector<CDNSSeedData>& DNSSeeds() const { return vSeeds; }
     const std::vector<unsigned char>& Base58Prefix(Base58Type type) const { return base58Prefixes[type]; }
     const std::string& Bech32HRP(Bech32Type type) const { return bech32HRPs[type]; }
-    const std::vector<SeedSpec6>& FixedSeeds() const { return vFixedSeeds; }
+    const std::vector<uint8_t>& FixedSeeds() const { return vFixedSeeds; }
     const CCheckpointData& Checkpoints() const { return checkpointData; }
     /** Return the founder's reward address and script for a given block height */
     std::string GetFoundersRewardAddressAtHeight(int height) const;
@@ -149,7 +144,7 @@ protected:
     std::string strCurrencyUnits;
     uint32_t bip44CoinType;
     CBlock genesis;
-    std::vector<SeedSpec6> vFixedSeeds;
+    std::vector<uint8_t> vFixedSeeds;
     bool fMiningRequiresPeers = false;
     bool fDefaultConsistencyChecks = false;
     bool fRequireStandard = false;
