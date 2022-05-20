@@ -381,6 +381,8 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170006;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight =
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
+        originalCoinbaseMaturity = 1;
+        coinbaseMaturity = 1;
 
         pchMessageStart[0] = 0xaa;
         pchMessageStart[1] = 0x8e;

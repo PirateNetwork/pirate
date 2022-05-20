@@ -1796,7 +1796,6 @@ void komodo_args(char *argv0)
         if ( ASSETCHAINS_SYMBOL[0] != 0 )
         {
             int32_t komodo_baseid(char *origbase);
-            extern int COINBASE_MATURITY;
             if ( strcmp(ASSETCHAINS_SYMBOL,"KMD") == 0 )
             {
                 fprintf(stderr,"cant have assetchain named KMD\n");
@@ -1807,10 +1806,10 @@ void komodo_args(char *argv0)
             else komodo_configfile(ASSETCHAINS_SYMBOL,ASSETCHAINS_P2PPORT + 1);
 
             if (ASSETCHAINS_CBMATURITY != 0)
-                COINBASE_MATURITY = ASSETCHAINS_CBMATURITY;
+                Params().SetCoinbaseMaturity(ASSETCHAINS_CBMATURITY);
             else if (ASSETCHAINS_LASTERA == 0 || is_STAKED(ASSETCHAINS_SYMBOL) != 0)
-                COINBASE_MATURITY = 1;
-            if (COINBASE_MATURITY < 1)
+                Params().SetCoinbaseMaturity(1);
+            if (Params().CoinbaseMaturity() < 1)
             {
                 fprintf(stderr,"ac_cbmaturity must be >0, shutting down\n");
                 StartShutdown();
