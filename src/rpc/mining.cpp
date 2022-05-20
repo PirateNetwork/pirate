@@ -247,6 +247,43 @@ bool CalcPoW(CBlock *pblock)
     return false;
 }
 
+/****
+ * @brief Generate 1 block
+ * @param wallet the wallet that should be used
+ * @returns the block created or nullptr if there was a problem
+ */
+std::shared_ptr<CBlock> generateBlock(CWallet* wallet, CValidationState* validationState)
+{
+    CReserveKey reservekey(wallet);
+    int nHeight;
+
+    {   // Don't keep cs_main locked
+        LOCK(cs_main);
+        nHeight = chainActive.Height();
+    }
+
+    std::unique_ptr<CBlockTemplate> pblocktemplate(CreateNewBlockWithKey(reservekey,nHeight,KOMODO_MAXGPUCOUNT));
+    if (pblocktemplate == nullptr)
+        return nullptr;
+
+    CBlock *pblock = &pblocktemplate->block;
+    {
+        unsigned int nExtraNonce = 0;
+        LOCK(cs_main);
+        IncrementExtraNonce(pblock, chainActive.LastTip(), nExtraNonce);
+    }
+
+    CalcPoW(pblock); // add PoW
+    CValidationState state;
+    if (!ProcessNewBlock(1,chainActive.LastTip()->nHeight+1,state, NULL, pblock, true, NULL))
+    {
+        if (validationState != nullptr)
+            (*validationState) = state;
+        return nullptr;
+    }
+    return std::shared_ptr<CBlock>( new CBlock(*pblock) );
+}
+
 //Value generate(const Array& params, bool fHelp)
 UniValue generate(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {

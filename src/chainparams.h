@@ -122,6 +122,9 @@ public:
     void SetNValue(uint64_t n) { nEquihashN = n; }
     void SetKValue(uint64_t k) { nEquihashK = k; }
     void SetMiningRequiresPeers(bool flag) { fMiningRequiresPeers = flag; }
+    uint32_t CoinbaseMaturity() const { return coinbaseMaturity; }
+    void SetCoinbaseMaturity(uint32_t in) const { coinbaseMaturity = in; }
+    void ResetCoinbaseMaturity() const { coinbaseMaturity = originalCoinbaseMaturity; }
 
     //void setnonce(uint32_t nonce) { memcpy(&genesis.nNonce,&nonce,sizeof(nonce)); }
     //void settimestamp(uint32_t timestamp) { genesis.nTime = timestamp; }
@@ -156,6 +159,8 @@ protected:
     bool fTestnetToBeDeprecatedFieldRPC = false;
     CCheckpointData checkpointData;
     std::vector<std::string> vFoundersRewardAddress;
+    mutable uint32_t coinbaseMaturity = 100;
+    uint32_t originalCoinbaseMaturity = 100;
 };
 
 /**

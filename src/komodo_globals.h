@@ -43,9 +43,7 @@ struct knotaries_entry *Pubkeys;
 
 struct komodo_state KOMODO_STATES[34];
 
-#define _COINBASE_MATURITY 100
-int COINBASE_MATURITY = _COINBASE_MATURITY;//100;
-unsigned int WITNESS_CACHE_SIZE = _COINBASE_MATURITY+10;
+unsigned int WITNESS_CACHE_SIZE = 100+10; // coinbase maturity plus 10
 uint256 KOMODO_EARLYTXID;
 
 bool IS_KOMODO_NOTARY;

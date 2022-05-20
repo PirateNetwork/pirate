@@ -53,7 +53,7 @@ void pre_wallet_load()
     UnregisterValidationInterface(pwalletMain);
     delete pwalletMain;
     pwalletMain = NULL;
-    bitdb.Reset();
+    bitdb->Reset();
     RegisterNodeSignals(GetNodeSignals());
     LogPrintf("%s: done\n", __func__);
 }
