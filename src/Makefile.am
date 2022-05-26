@@ -244,6 +244,7 @@ BITCOIN_CORE_H = \
   hash.h \
   httprpc.h \
   httpserver.h \
+	i2p.h \
   init.h \
   key.h \
   key_io.h \
@@ -310,6 +311,8 @@ BITCOIN_CORE_H = \
   undo.h \
   util.h \
   utilmoneystr.h \
+	util/sock.h \
+	util/spanparsing.h \
   util/strencodings.h \
 	util/string.h \
   utiltime.h \
@@ -391,6 +394,7 @@ libbitcoin_server_a_SOURCES = \
   deprecation.cpp \
   httprpc.cpp \
   httpserver.cpp \
+	i2p.cpp \
   init.cpp \
   dbwrapper.cpp \
   main.cpp \
@@ -632,6 +636,8 @@ libbitcoin_util_a_SOURCES = \
   uint256.cpp \
   util.cpp \
   utilmoneystr.cpp \
+	util/sock.cpp \
+	util/spanparsing.cpp \
   util/strencodings.cpp \
 	util/string.cpp \
 	utiltime.cpp \

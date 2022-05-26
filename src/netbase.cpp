@@ -15,6 +15,7 @@
 #include "random.h"
 #include "util.h"
 #include "util/strencodings.h"
+#include "utiltime.h"
 
 #ifdef HAVE_GETADDRINFO_A
 #include <netdb.h>
@@ -49,6 +50,7 @@ enum Network ParseNetwork(std::string net) {
     boost::to_lower(net);
     if (net == "ipv4") return NET_IPV4;
     if (net == "ipv6") return NET_IPV6;
+    if (net == "i2p") return NET_I2P;
     if (net == "tor" || net == "onion")  return NET_ONION;
     return NET_UNROUTABLE;
 }
@@ -58,6 +60,7 @@ std::string GetNetworkName(enum Network net) {
     {
     case NET_IPV4: return "ipv4";
     case NET_IPV6: return "ipv6";
+    case NET_I2P: return "i2p";
     case NET_ONION: return "onion";
     default: return "";
     }
@@ -179,14 +182,6 @@ CService LookupNumeric(const char *pszName, int portDefault)
     if(!Lookup(pszName, addr, portDefault, false))
         addr = CService();
     return addr;
-}
-
-struct timeval MillisToTimeval(int64_t nTimeout)
-{
-    struct timeval timeout;
-    timeout.tv_sec  = nTimeout / 1000;
-    timeout.tv_usec = (nTimeout % 1000) * 1000;
-    return timeout;
 }
 
 /**
@@ -387,7 +382,116 @@ static bool Socks5(const std::string& strDest, int port, const ProxyCredentials 
     return true;
 }
 
-bool static ConnectSocketDirectly(const CService &addrConnect, SOCKET& hSocketRet, int nTimeout)
+std::unique_ptr<Sock> CreateSockTCP(const CService& address_family)
+{
+    // Create a sockaddr from the specified service.
+    struct sockaddr_storage sockaddr;
+    socklen_t len = sizeof(sockaddr);
+    if (!address_family.GetSockAddr((struct sockaddr*)&sockaddr, &len)) {
+        LogPrintf("Cannot create socket for %s: unsupported network\n", address_family.ToString());
+        return nullptr;
+    }
+
+    // Create a TCP socket in the address family of the specified service.
+    SOCKET hSocket = socket(((struct sockaddr*)&sockaddr)->sa_family, SOCK_STREAM, IPPROTO_TCP);
+    if (hSocket == INVALID_SOCKET) {
+        return nullptr;
+    }
+
+    // Ensure that waiting for I/O on this socket won't result in undefined
+    // behavior.
+    if (!IsSelectableSocket(hSocket)) {
+        CloseSocket(hSocket);
+        LogPrintf("Cannot create connection: non-selectable socket created (fd >= FD_SETSIZE ?)\n");
+        return nullptr;
+    }
+
+#ifdef SO_NOSIGPIPE
+    int set = 1;
+    // Set the no-sigpipe option on the socket for BSD systems, other UNIXes
+    // should use the MSG_NOSIGNAL flag for every send.
+    setsockopt(hSocket, SOL_SOCKET, SO_NOSIGPIPE, (void*)&set, sizeof(int));
+#endif
+
+    // Set the no-delay option (disable Nagle's algorithm) on the TCP socket.
+    SetSocketNoDelay(hSocket);
+
+    // Set the non-blocking option on the socket.
+    if (!SetSocketNonBlocking(hSocket, true)) {
+        CloseSocket(hSocket);
+        LogPrintf("Error setting socket to non-blocking: %s\n", NetworkErrorString(WSAGetLastError()));
+        return nullptr;
+    }
+    return std::unique_ptr<Sock>(new Sock(hSocket));
+}
+
+std::function<std::unique_ptr<Sock>(const CService&)> CreateSock = CreateSockTCP;
+
+bool ConnectSocketDirectly(const CService &addrConnect, const Sock& sock, int nTimeout)
+{
+    // Create a sockaddr from the specified service.
+    struct sockaddr_storage sockaddr;
+    socklen_t len = sizeof(sockaddr);
+    if (sock.Get() == INVALID_SOCKET) {
+        LogPrintf("Cannot connect to %s: invalid socket\n", addrConnect.ToString());
+        return false;
+    }
+    if (!addrConnect.GetSockAddr((struct sockaddr*)&sockaddr, &len)) {
+        LogPrintf("Cannot connect to %s: unsupported network\n", addrConnect.ToString());
+        return false;
+    }
+
+    // Connect to the addrConnect service on the hSocket socket.
+    if (sock.Connect(reinterpret_cast<struct sockaddr*>(&sockaddr), len) == SOCKET_ERROR) {
+        int nErr = WSAGetLastError();
+        // WSAEINVAL is here because some legacy version of winsock uses it
+        if (nErr == WSAEINPROGRESS || nErr == WSAEWOULDBLOCK || nErr == WSAEINVAL)
+        {
+            // Connection didn't actually fail, but is being established
+            // asynchronously. Thus, use async I/O api (select/poll)
+            // synchronously to check for successful connection with a timeout.
+            const Sock::Event requested = Sock::RECV | Sock::SEND;
+            Sock::Event occurred;
+            if (!sock.Wait(std::chrono::milliseconds{nTimeout}, requested, &occurred)) {
+                LogPrintf("wait for connect to %s failed: %s\n",
+                          addrConnect.ToString(),
+                          NetworkErrorString(WSAGetLastError()));
+                return false;
+            } else if (occurred == 0) {
+                LogPrint("net", "connection attempt to %s timed out\n", addrConnect.ToString());
+                return false;
+            }
+
+            // Even if the wait was successful, the connect might not
+            // have been successful. The reason for this failure is hidden away
+            // in the SO_ERROR for the socket in modern systems. We read it into
+            // sockerr here.
+            int sockerr;
+            socklen_t sockerr_len = sizeof(sockerr);
+            if (sock.GetSockOpt(SOL_SOCKET, SO_ERROR, (sockopt_arg_type)&sockerr, &sockerr_len) ==
+                SOCKET_ERROR) {
+                LogPrintf("getsockopt() for %s failed\n", addrConnect.ToString());
+                return false;
+            }
+            if (sockerr != 0) {
+                LogPrint("net", "connect() to %s failed", addrConnect.ToString());
+                return false;
+            }
+        }
+#ifdef WIN32
+        else if (WSAGetLastError() != WSAEISCONN)
+#else
+        else
+#endif
+        {
+            LogPrint("net", "connect() to %s failed", addrConnect.ToString());
+            return false;
+        }
+    }
+    return true;
+}
+
+bool ConnectSocketDirectly(const CService &addrConnect, SOCKET& hSocketRet, int nTimeout)
 {
     hSocketRet = INVALID_SOCKET;
 
@@ -622,53 +726,6 @@ bool LookupSubNet(const char* pszName, CSubNet& ret)
     return false;
 }
 
-#ifdef WIN32
-std::string NetworkErrorString(int err)
-{
-    char buf[256];
-    buf[0] = 0;
-    if(FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS | FORMAT_MESSAGE_MAX_WIDTH_MASK,
-            NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-            buf, sizeof(buf), NULL))
-    {
-        return strprintf("%s (%d)", buf, err);
-    }
-    else
-    {
-        return strprintf("Unknown error (%d)", err);
-    }
-}
-#else
-std::string NetworkErrorString(int err)
-{
-    char buf[256];
-    const char *s = buf;
-    buf[0] = 0;
-    /* Too bad there are two incompatible implementations of the
-     * thread-safe strerror. */
-#ifdef STRERROR_R_CHAR_P /* GNU variant can return a pointer outside the passed buffer */
-    s = strerror_r(err, buf, sizeof(buf));
-#else /* POSIX variant always returns message in buffer */
-    if (strerror_r(err, buf, sizeof(buf)))
-        buf[0] = 0;
-#endif
-    return strprintf("%s (%d)", s, err);
-}
-#endif
-
-bool CloseSocket(SOCKET& hSocket)
-{
-    if (hSocket == INVALID_SOCKET)
-        return false;
-#ifdef WIN32
-    int ret = closesocket(hSocket);
-#else
-    int ret = close(hSocket);
-#endif
-    hSocket = INVALID_SOCKET;
-    return ret != SOCKET_ERROR;
-}
-
 bool SetSocketNonBlocking(SOCKET& hSocket, bool fNonBlocking)
 {
     if (fNonBlocking) {
@@ -696,4 +753,11 @@ bool SetSocketNonBlocking(SOCKET& hSocket, bool fNonBlocking)
     }
 
     return true;
+}
+
+bool SetSocketNoDelay(const SOCKET& hSocket)
+{
+    int set = 1;
+    int rc = setsockopt(hSocket, IPPROTO_TCP, TCP_NODELAY, (const char*)&set, sizeof(int));
+    return rc == 0;
 }

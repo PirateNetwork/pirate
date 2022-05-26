@@ -428,6 +428,8 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-maxreceivebuffer=<n>", strprintf(_("Maximum per-connection receive buffer, <n>*1000 bytes (default: %u)"), 5000));
     strUsage += HelpMessageOpt("-maxsendbuffer=<n>", strprintf(_("Maximum per-connection send buffer, <n>*1000 bytes (default: %u)"), 1000));
     strUsage += HelpMessageOpt("-onion=<ip:port>", strprintf(_("Use separate SOCKS5 proxy to reach peers via Tor hidden services (default: %s)"), "-proxy"));
+    strUsage += HelpMessageOpt("-i2psam=<ip:port>", strprintf(_("I2P SAM proxy to reach I2P peers and accept I2P connections (default: none)")));
+    strUsage += HelpMessageOpt("-i2pacceptincoming", strprintf(_("If set and -i2psam is also set then incoming I2P connections are accepted via the SAM proxy. If this is not set but -i2psam is set then only outgoing connections will be made to the I2P network. Ignored if -i2psam is not set. Listening for incoming I2P connections is done through the SAM proxy, not by binding to a local address and port (default: 1)")));
     strUsage += HelpMessageOpt("-onlynet=<net>", _("Only connect to nodes in network <net> (ipv4, ipv6 or onion)"));
     strUsage += HelpMessageOpt("-permitbaremultisig", strprintf(_("Relay non-P2SH multisig (default: %u)"), 1));
     strUsage += HelpMessageOpt("-peerbloomfilters", strprintf(_("Support filtering of blocks and transaction with Bloom filters (default: %u)"), 1));
@@ -1547,6 +1549,23 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         }
     }
 
+    if (mapArgs.count("-onlynet")) {
+        std::set<enum Network> nets;
+        BOOST_FOREACH(const std::string& snet, mapMultiArgs["-onlynet"]) {
+            enum Network net = ParseNetwork(snet);
+            if (net == NET_UNROUTABLE)
+                return InitError(strprintf(_("Unknown network specified in -onlynet: '%s'"), snet));
+            nets.insert(net);
+        }
+        for (int n = 0; n < NET_MAX; n++) {
+            enum Network net = (enum Network)n;
+            if (!nets.count(net)) {
+                SetReachable(net, false);
+            }
+        }
+    }
+
+
     bool proxyRandomize = GetBoolArg("-proxyrandomize", true);
     // -proxy sets a proxy for all outgoing network traffic
     // -noproxy (or -proxy=0) as well as the empty string can be used to not set a proxy, this is the default
@@ -1563,6 +1582,18 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         SetProxy(NET_ONION, addrProxy);
         SetNameProxy(addrProxy);
         SetLimited(NET_ONION, false); // by default, -proxy sets onion as reachable, unless -noonion later
+    }
+
+    const std::string& i2psam_arg = GetArg("-i2psam", "");
+    if (!i2psam_arg.empty()) {
+        CService addr;
+        if (!Lookup(i2psam_arg.c_str(), addr, 7656, fNameLookup) || !addr.IsValid()) {
+            return InitError(strprintf(_("Invalid -i2psam address or hostname: '%s'"), i2psam_arg));
+        }
+        SetReachable(NET_I2P, true);
+        SetProxy(NET_I2P, proxyType{addr});
+    } else {
+        SetReachable(NET_I2P, false);
     }
 
     // -onion can be used to set only a proxy for .onion, or override normal proxy for .onion addresses

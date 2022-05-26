@@ -24,6 +24,21 @@ int64_t GetTime()
     return time(NULL);
 }
 
+template <typename T>
+T GetTime()
+{
+    const std::chrono::seconds mocktime{nMockTime};
+
+    return std::chrono::duration_cast<T>(
+        mocktime.count() ?
+            mocktime :
+            std::chrono::microseconds{GetTimeMicros()});
+}
+template std::chrono::seconds GetTime();
+template std::chrono::milliseconds GetTime();
+template std::chrono::microseconds GetTime();
+
+
 void SetMockTime(int64_t nMockTimeIn)
 {
     nMockTime = nMockTimeIn;
@@ -59,4 +74,12 @@ std::string DateTimeStrFormat(const char* pszFormat, int64_t nTime)
     ss.imbue(loc);
     ss << boost::posix_time::from_time_t(nTime);
     return ss.str();
+}
+
+struct timeval MillisToTimeval(int64_t nTimeout)
+{
+    struct timeval timeout;
+    timeout.tv_sec  = nTimeout / 1000;
+    timeout.tv_usec = (nTimeout % 1000) * 1000;
+    return timeout;
 }

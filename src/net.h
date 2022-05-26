@@ -25,6 +25,7 @@
 #include "bloom.h"
 #include "compat.h"
 #include "hash.h"
+#include "i2p.h"
 #include "limitedmap.h"
 #include "mruset.h"
 #include "netbase.h"
@@ -208,6 +209,11 @@ bool RemoveLocal(const CService& addr);
 bool SeenLocal(const CService& addr);
 bool IsLocal(const CService& addr);
 bool GetLocal(CService &addr, const CNetAddr *paddrPeer = NULL);
+/**
+ * Mark a network as reachable or unreachable (no automatic connects to it)
+ * @note Networks are reachable by default
+ */
+void SetReachable(enum Network net, bool reachable);
 /** @returns true if the network is reachable, false otherwise */
 bool IsReachable(enum Network net);
 /** @returns true if the address is in a reachable network, false otherwise */
@@ -239,6 +245,8 @@ extern CCriticalSection cs_nLastNodeId;
 
 extern SSL_CTX *tls_ctx_server;
 extern SSL_CTX *tls_ctx_client;
+
+extern std::unique_ptr<i2p::sam::Session> m_i2p_sam_session;
 
 /** Subversion as sent to the P2P network in `version` messages */
 extern std::string strSubVersion;

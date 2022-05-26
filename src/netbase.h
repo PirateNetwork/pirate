@@ -12,6 +12,7 @@
 #include "compat.h"
 #include "netaddress.h"
 #include "serialize.h"
+#include "util/sock.h"
 
 #include <stdint.h>
 #include <string>
@@ -50,17 +51,40 @@ bool Lookup(const char *pszName, CService& addr, int portDefault, bool fAllowLoo
 bool Lookup(const char *pszName, std::vector<CService>& vAddr, int portDefault, bool fAllowLookup, unsigned int nMaxSolutions);
 CService LookupNumeric(const char *pszName, int portDefault = 0);
 bool LookupSubNet(const char *pszName, CSubNet& subnet);
+
+/**
+ * Create a TCP socket in the given address family.
+ * @param[in] address_family The socket is created in the same address family as this address.
+ * @return pointer to the created Sock object or unique_ptr that owns nothing in case of failure
+ */
+std::unique_ptr<Sock> CreateSockTCP(const CService& address_family);
+
+/**
+ * Socket factory. Defaults to `CreateSockTCP()`, but can be overridden by unit tests.
+ */
+extern std::function<std::unique_ptr<Sock>(const CService&)> CreateSock;
+
+/**
+ * Try to connect to the specified service on the specified socket.
+ *
+ * @param addrConnect The service to which to connect.
+ * @param sock The socket on which to connect.
+ * @param nTimeout Wait this many milliseconds for the connection to be
+ *                 established.
+ * @param manual_connection Whether or not the connection was manually requested
+ *                          (e.g. through the addnode RPC)
+ *
+ * @returns Whether or not a connection was successfully made.
+ */
+bool ConnectSocketDirectly(const CService &addrConnect, const Sock& sock, int nTimeout);
+
+
+
 bool ConnectSocket(const CService &addr, SOCKET& hSocketRet, int nTimeout, bool *outProxyConnectionFailed = 0);
 bool ConnectSocketByName(CService &addr, SOCKET& hSocketRet, const char *pszDest, int portDefault, int nTimeout, bool *outProxyConnectionFailed = 0);
-/** Return readable error string for a network error code */
-std::string NetworkErrorString(int err);
-/** Close socket and set hSocket to INVALID_SOCKET */
-bool CloseSocket(SOCKET& hSocket);
-/** Disable or enable blocking-mode for a socket */
+
 bool SetSocketNonBlocking(SOCKET& hSocket, bool fNonBlocking);
-/**
- * Convert milliseconds to a struct timeval for e.g. select.
- */
-struct timeval MillisToTimeval(int64_t nTimeout);
+/** Set the TCP_NODELAY flag on a socket */
+bool SetSocketNoDelay(const SOCKET& hSocket);
 
 #endif // BITCOIN_NETBASE_H

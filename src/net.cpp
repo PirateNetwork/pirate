@@ -116,6 +116,12 @@ bool GetNetworkActive() { return fNetworkActive; };
 
 std::string strSubVersion;
 
+/**
+ * I2P SAM session.
+ * Used to accept incoming and make outgoing I2P connections.
+ */
+std::unique_ptr<i2p::sam::Session> m_i2p_sam_session;
+
 vector<CNode*> vNodes;
 CCriticalSection cs_vNodes;
 map<CInv, CDataStream> mapRelay;
@@ -353,6 +359,14 @@ bool IsLocal(const CService& addr)
     return mapLocalHost.count(addr) > 0;
 }
 
+void SetReachable(enum Network net, bool reachable)
+{
+    if (net == NET_UNROUTABLE || net == NET_INTERNAL)
+        return;
+    LOCK(cs_mapLocalHost);
+    vfLimited[net] = !reachable;
+}
+
 /** check whether a given network is one we can probably connect to */
 bool IsReachable(enum Network net)
 {
@@ -460,8 +474,27 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
     // Connect
     SOCKET hSocket;
     bool proxyConnectionFailed = false;
-    if (pszDest ? ConnectSocketByName(addrConnect, hSocket, pszDest, Params().GetDefaultPort(), nConnectTimeout, &proxyConnectionFailed) :
-                  ConnectSocket(addrConnect, hSocket, nConnectTimeout, &proxyConnectionFailed))
+    bool connected = false;
+    std::unique_ptr<Sock> sock;
+    // CAddress addr_bind;
+    // assert(!addr_bind.IsValid());
+
+    if (addrConnect.GetNetwork() == NET_I2P && m_i2p_sam_session.get() != nullptr) {
+            i2p::Connection conn;
+            if (m_i2p_sam_session->Connect(addrConnect, conn, proxyConnectionFailed)) {
+                connected = true;
+                sock = std::move(conn.sock);
+                hSocket = sock->Release();
+                // addr_bind = CAddress{conn.me, NODE_NONE};
+            }
+    } else if (pszDest) {
+        connected = ConnectSocketByName(addrConnect, hSocket, pszDest, Params().GetDefaultPort(), nConnectTimeout, &proxyConnectionFailed);
+    }  else {
+        connected = ConnectSocket(addrConnect, hSocket, nConnectTimeout, &proxyConnectionFailed);
+    }
+
+
+    if (connected)
     {
         if (!IsSelectableSocket(hSocket)) {
             LogPrintf("Cannot create connection: non-selectable socket created (fd >= FD_SETSIZE ?)\n");
@@ -2071,6 +2104,47 @@ void ThreadMessageHandler()
     }
 }
 
+void ThreadI2PAcceptIncoming()
+{
+    const int64_t err_wait_begin = 1000;
+    const int64_t err_wait_cap = 1000 * 60 * 5;
+    auto err_wait = err_wait_begin;
+
+    bool advertising_listen_addr = false;
+    i2p::Connection conn;
+
+    while (true) {
+
+        boost::this_thread::interruption_point();
+
+        if (!m_i2p_sam_session->Listen(conn)) {
+            if (advertising_listen_addr && conn.me.IsValid()) {
+                RemoveLocal(conn.me);
+                advertising_listen_addr = false;
+            }
+
+            MilliSleep(err_wait);
+
+            if (err_wait < err_wait_cap) {
+                err_wait *= 2;
+            }
+
+            continue;
+        }
+
+        if (!advertising_listen_addr) {
+            AddLocal(conn.me, LOCAL_MANUAL);
+            advertising_listen_addr = true;
+        }
+
+        if (!m_i2p_sam_session->Accept(conn)) {
+            continue;
+        }
+
+        CreateNodeFromAcceptedSocket(conn.sock->Release(), false,
+                                     CAddress{conn.me, NODE_NETWORK}, CAddress{conn.peer, NODE_NETWORK});
+    }
+}
 
 bool BindListenPort(const CService &addrBind, string& strError, bool fWhitelisted)
 {
@@ -2219,6 +2293,12 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
         LogPrintf("NSPV messages processing enabled\n");
     }
 
+    proxyType i2p_sam;
+    if (GetProxy(NET_I2P, i2p_sam)) {
+        m_i2p_sam_session = std::unique_ptr<i2p::sam::Session>(new i2p::sam::Session(GetDataDir() / "i2p_private_key",
+                                                                i2p_sam.proxy));
+    }
+
     uiInterface.InitMessage(_("Loading addresses..."));
     // Load addresses for peers.dat
     int64_t nStart = GetTimeMillis();
@@ -2285,6 +2365,10 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     // Initiate outbound connections
     threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "opencon", &ThreadOpenConnections));
+
+    if (GetBoolArg("-i2pacceptincoming", true) && m_i2p_sam_session.get() != nullptr) {
+        threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "i2paccept", &ThreadI2PAcceptIncoming));
+    }
 
     // Process messages
     threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "msghand", &ThreadMessageHandler));
