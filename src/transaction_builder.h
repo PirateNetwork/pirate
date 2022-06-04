@@ -196,7 +196,8 @@ public:
     void SetFee(CAmount fee);
     void SetMinConfirmations(int iMinConf);
 
-    void SetExpiryHeight(int nHeight);
+    void SetHeight(const Consensus::Params& consensusParams, int nHeight);
+    void SetExpiryHeight(int expHeight);
 
     CTransaction getTransaction() {return mtx;}
 

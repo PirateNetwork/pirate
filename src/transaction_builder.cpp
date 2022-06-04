@@ -166,7 +166,7 @@ bool TransactionBuilder::AddSaplingSpend(
     memcpy (&sWitness.cArray[0], reinterpret_cast<unsigned char*>(local_witness.data()), sizeof(sWitness.cArray) );
     asWitness.emplace_back(sWitness);
 
-    alWitnessPosition.emplace_back( witness.position() );
+    alWitnessPosition.emplace_back(witness.position());
 
     mtx.valueBalance += note.value();
 
@@ -401,9 +401,15 @@ void TransactionBuilder::SetMinConfirmations(int iMinConf)
   this->iMinConf=iMinConf;
 }
 
-void TransactionBuilder::SetExpiryHeight(int nHeight)
+void TransactionBuilder::SetHeight(const Consensus::Params& consensusParams, int nHeight)
 {
-    this->mtx.nExpiryHeight = nHeight;
+    this->nHeight = nHeight;
+    consensusBranchId = CurrentEpochBranchId(nHeight, consensusParams);
+}
+
+void TransactionBuilder::SetExpiryHeight(int expHeight)
+{
+    this->mtx.nExpiryHeight = expHeight;
 }
 
 void TransactionBuilder::SendChangeTo(libzcash::SaplingPaymentAddress changeAddr, uint256 ovk)

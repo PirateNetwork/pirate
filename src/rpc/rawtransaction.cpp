@@ -1525,6 +1525,8 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
       throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
   }
 
+  tb.SetHeight(Params().GetConsensus(), chainActive.Tip()->GetHeight());
+
   libzcash::SaplingExtendedSpendingKey primaryKey;
   for (int i = 0; i < tb.rawSpends.size(); i++) {
       SaplingOutPoint op = tb.rawSpends[i].op;
@@ -1598,7 +1600,7 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
           "       {\n"
           "         \"address\":address     (string, required) Pirate zaddr\n"
           "         \"amount\":amount       (numeric, required) The numeric amount in ARRR\n"
-          "         \"memo\": \"string\"    (string, optional) String memo in UTF8 ro Hexidecimal format\n"
+          "         \"memo\": \"string\"    (string, optional) String memo in UTF8 or Hexidecimal format\n"
           "         ,...\n"
           "       }\n"
           "     ]\n"
@@ -1608,7 +1610,7 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
           "\"transaction\"            (string) hex string of the transaction\n"
 
 
-          + HelpExampleCli("z_createbuildinstructions", "\"[{\\\"txid\\\":\\\"myid\\\",\\\"index\\\":0\\\"type\\\":\\\"sapling\\\"},...]\"")
+          + HelpExampleCli("z_createbuildinstructions", "\"[{\\\"txid\\\":\\\"myid\\\",\\\"index\\\":0},...]\" \"[{\\\"address\\\":\\\"sendtoaddress\\\",\\\"amount\\\":1.0000,\\\"memo\\\":\\\"memostring\\\"},...]\" 0.0001 200")
       );
 
     LOCK(cs_main);
@@ -1620,8 +1622,8 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
     UniValue outputs = params[1].get_array();
 
     CAmount total = 0;
-    TransactionBuilder tx = TransactionBuilder(Params().GetConsensus(), chainActive.Tip()->GetHeight() + 1, pwalletMain);
-
+    int nHeight = chainActive.Tip()->GetHeight();
+    TransactionBuilder tx = TransactionBuilder(Params().GetConsensus(), nHeight + 1, pwalletMain);
 
     CAmount nFee = 10000;
     if (!params[2].isNull()) {
@@ -1634,11 +1636,11 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
     total -= nFee;
 
     if (!params[3].isNull()) {
-      int nHeight = params[3].get_int();
-      if (nHeight < 0)
+      int expHeight = params[3].get_int();
+      if (expHeight < 0)
           throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expiry height must be positive");
 
-      tx.SetExpiryHeight(nHeight);
+      tx.SetExpiryHeight(nHeight + expHeight);
     }
 
     for (size_t idx = 0; idx < inputs.size(); idx++) {
