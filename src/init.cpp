@@ -1642,6 +1642,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             return InitError(strprintf(_("Cannot find trusted certificates directory: '%s'"), pathTLSTrustredDir.string()));
     }
 
+    if (!usingGUI) {
+        SoftSetArg("-tlsenforcement", std::string("0"));
+    }
+
 #if ENABLE_ZMQ
     pzmqNotificationInterface = CZMQNotificationInterface::CreateWithArguments(mapArgs);
 

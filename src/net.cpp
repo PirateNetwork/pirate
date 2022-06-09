@@ -464,7 +464,7 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
                 NODE_ADDR nodeAddr(addrConnect.ToStringIP());
 
                 bool bTlsEnforcement = (GetBoolArg("-tlsenforcement", true) || GetArg("-tlsenforcement", "") == "1");
-                bool bUseTLS = bTlsEnforcement && (find(vNonTLSNodesOutbound.begin(),
+                bool bUseTLS = (find(vNonTLSNodesOutbound.begin(),
                                      vNonTLSNodesOutbound.end(),
                                      nodeAddr) == vNonTLSNodesOutbound.end());
                 unsigned long err_code = 0;
@@ -1316,7 +1316,7 @@ if (CNode::GetTlsFallbackNonTls())
     NODE_ADDR nodeAddr(addr.ToStringIP());
 
     bool bTlsEnforcement = (GetBoolArg("-tlsenforcement", true) || GetArg("-tlsenforcement", "") == "1");
-    bool bUseTLS = bTlsEnforcement && (find(vNonTLSNodesInbound.begin(),
+    bool bUseTLS = (find(vNonTLSNodesInbound.begin(),
                          vNonTLSNodesInbound.end(),
                          nodeAddr) == vNonTLSNodesInbound.end());
     unsigned long err_code = 0;
