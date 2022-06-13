@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <memory>
 #include <cstdio>
 #include <cstdlib>
 #include <iterator>
@@ -8,6 +9,7 @@
 int32_t komodo_faststateinit(struct komodo_state *sp,const char *fname,char *symbol,char *dest);
 struct komodo_state *komodo_stateptrget(char *base);
 extern int32_t KOMODO_EXTERNAL_NOTARIES;
+size_t write_event(std::shared_ptr<komodo::event> evt, FILE *fp);
 
 namespace TestEvents {
 
@@ -19,6 +21,17 @@ void write_p_record(std::FILE* fp)
     memset(&data[39], 2, 33); // 2nd key is all 2s
     std::fwrite(data, sizeof(data), 1, fp);
 }
+
+void write_p_record_new(std::FILE* fp)
+{
+    std::shared_ptr<komodo::event_pubkeys> evt = std::make_shared<komodo::event_pubkeys>();
+    evt->height = 1;
+    evt->num = 2;
+    memset(&evt->pubkeys[0], 1, 33);
+    memset(&evt->pubkeys[1], 2, 33);
+    write_event(evt, fp);
+}
+
 void write_n_record(std::FILE* fp)
 {
     // a notarized record has
@@ -147,6 +160,33 @@ bool compare_serialization(const std::string& filename, std::shared_ptr<T> in)
     return retval;
 }
 
+bool compare_files(const std::string& file1, const std::string& file2)
+{
+  std::ifstream f1(file1, std::ifstream::binary|std::ifstream::ate);
+  std::ifstream f2(file2, std::ifstream::binary|std::ifstream::ate);
+
+  if (f1.fail() || f2.fail()) {
+    return false; //file problem
+  }
+
+  if (f1.tellg() != f2.tellg()) {
+    return false; //size mismatch
+  }
+
+  //seek back to beginning and use std::equal to compare contents
+  f1.seekg(0, std::ifstream::beg);
+  f2.seekg(0, std::ifstream::beg);
+  return std::equal(std::istreambuf_iterator<char>(f1.rdbuf()),
+                    std::istreambuf_iterator<char>(),
+                    std::istreambuf_iterator<char>(f2.rdbuf()));
+}
+
+void clear_state(const char* symbol)
+{
+    komodo_state* state = komodo_stateptrget((char*)symbol);
+    EXPECT_NE(state, nullptr);
+    state->events.clear();
+}
 /****
  * The main purpose of this test is to verify that
  * state files created continue to be readable despite logic
@@ -158,6 +198,8 @@ TEST(TestEvents, komodo_faststateinit_test)
     char symbol[] = "TST";
     strcpy(ASSETCHAINS_SYMBOL, symbol);
     KOMODO_EXTERNAL_NOTARIES = 1;
+
+    clear_state(symbol);
 
     boost::filesystem::path temp = boost::filesystem::unique_path();
     boost::filesystem::create_directories(temp);
@@ -549,6 +591,8 @@ TEST(TestEvents, komodo_faststateinit_test_kmd)
     ASSETCHAINS_SYMBOL[0] = 0;
     KOMODO_EXTERNAL_NOTARIES = 0;
 
+    clear_state(symbol);
+
     boost::filesystem::path temp = boost::filesystem::unique_path();
     boost::filesystem::create_directories(temp);
     try
@@ -754,6 +798,60 @@ TEST(TestEvents, komodo_faststateinit_test_kmd)
             EXPECT_EQ(state->events.size(), 0);
         }
     } 
+    catch(...)
+    {
+        FAIL() << "Exception thrown";
+    }
+    boost::filesystem::remove_all(temp);
+}
+
+TEST(test_events, write_test)
+{
+    char symbol[] = "TST";
+    strcpy(ASSETCHAINS_SYMBOL, symbol);
+    KOMODO_EXTERNAL_NOTARIES = 1;
+
+    clear_state(symbol);
+
+    boost::filesystem::path temp = boost::filesystem::unique_path();
+    boost::filesystem::create_directories(temp);
+
+    const std::string full_filename = (temp / "kstate.tmp").string();
+    const std::string full_filename2 = (temp / "kstate2.tmp").string();
+    try
+    {
+        {
+            // old way
+            std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
+            EXPECT_NE(fp, nullptr);
+            write_p_record(fp);
+            std::fclose(fp);
+            // verify files still exists
+            EXPECT_TRUE(boost::filesystem::exists(full_filename));
+            // attempt to read the file
+            komodo_state* state = komodo_stateptrget((char*)symbol);
+            EXPECT_NE(state, nullptr);
+            char* dest = nullptr;
+            int32_t result = komodo_faststateinit( state, full_filename.c_str(), symbol, dest);
+            // compare results
+            EXPECT_EQ(result, 1);
+            // check that the new way is the same
+            EXPECT_EQ(state->events.size(), 1);
+            std::shared_ptr<komodo::event_pubkeys> ev = std::dynamic_pointer_cast<komodo::event_pubkeys>( state->events.front() );
+            EXPECT_EQ(ev->height, 1);
+            EXPECT_EQ(ev->type, komodo::komodo_event_type::EVENT_PUBKEYS);
+        }
+        {
+            // new way
+            std::FILE* fp = std::fopen(full_filename2.c_str(), "wb+");
+            EXPECT_NE(fp, nullptr);
+            write_p_record_new(fp);
+            std::fclose(fp);
+            EXPECT_TRUE(boost::filesystem::exists(full_filename2));
+            // the two files should be binarily equal
+            EXPECT_TRUE( compare_files(full_filename, full_filename2) );
+        }
+    }
     catch(...)
     {
         FAIL() << "Exception thrown";
