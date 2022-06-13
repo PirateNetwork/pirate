@@ -184,7 +184,55 @@ int32_t komodo_parsestatefiledata(struct komodo_state *sp,uint8_t *filedata,long
 size_t write_event(std::shared_ptr<komodo::event> evt, FILE *fp)
 {
     std::stringstream ss;
-    ss << evt;
+    if (evt == nullptr)
+        return 0;
+    switch (evt->type)
+    {
+        case(komodo::komodo_event_type::EVENT_PUBKEYS):
+        {
+            komodo::event_pubkeys* tmp = dynamic_cast<komodo::event_pubkeys*>(evt.get());
+            ss << *tmp;
+            break;
+        }
+        case(komodo::komodo_event_type::EVENT_NOTARIZED):
+        {
+            komodo::event_notarized* tmp = dynamic_cast<komodo::event_notarized*>(evt.get());
+            ss << *tmp;
+            break;
+        }
+        case(komodo::komodo_event_type::EVENT_U):
+        {
+            komodo::event_u* tmp = dynamic_cast<komodo::event_u*>(evt.get());
+            ss << *tmp;
+            break;
+        }
+        case(komodo::komodo_event_type::EVENT_KMDHEIGHT):
+        {
+            komodo::event_kmdheight* tmp = dynamic_cast<komodo::event_kmdheight*>(evt.get());
+            ss << *tmp;
+            break;
+        }
+        case(komodo::komodo_event_type::EVENT_OPRETURN):
+        {
+            komodo::event_opreturn* tmp = dynamic_cast<komodo::event_opreturn*>(evt.get());
+            ss << *tmp;
+            break;
+        }
+        case(komodo::komodo_event_type::EVENT_PRICEFEED):
+        {
+            komodo::event_pricefeed* tmp = dynamic_cast<komodo::event_pricefeed*>(evt.get());
+            ss << *tmp;
+            break;
+        }
+        case(komodo::komodo_event_type::EVENT_REWIND):
+        {
+            komodo::event_rewind* tmp = dynamic_cast<komodo::event_rewind*>(evt.get());
+            ss << *tmp;
+            break;
+        }
+        default:
+            fprintf(stderr, "Invalid event type: %d\n", (int)evt->type);
+    }
     std::string buf = ss.str();
     return fwrite(buf.c_str(), buf.size(), 1, fp);
 }
