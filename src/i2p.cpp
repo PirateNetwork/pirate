@@ -346,6 +346,8 @@ Binary Session::MyDestination() const
 
 void Session::CreateIfNotCreatedAlready()
 {
+    LOCK(cs_i2p);
+
     std::string errmsg;
     if (m_control_sock->IsConnected(errmsg)) {
         return;
