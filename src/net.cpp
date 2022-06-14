@@ -590,7 +590,7 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
     return NULL;
 }
 
-void CNode::CloseSocketDisconnect()
+void CNode::CloseSocketDisconnect(bool sendShutDownSSL)
 {
     fDisconnect = true;
 
@@ -601,6 +601,17 @@ void CNode::CloseSocketDisconnect()
         {
             try
             {
+                if (ssl)
+                {
+                    unsigned long err_code = 0;
+                    if (sendShutDownSSL)
+                    {
+                        tlsmanager.waitFor(SSL_SHUTDOWN, hSocket, ssl, (DEFAULT_CONNECT_TIMEOUT / 1000), err_code);
+                    }
+                    SSL_free(ssl);
+                    ssl = NULL;
+                }
+                CloseSocket(hSocket);
                 LogPrint("net", "disconnecting peer=%d\n", id);
             }
             catch(std::bad_alloc&)
@@ -609,15 +620,6 @@ void CNode::CloseSocketDisconnect()
                 // std::bad_alloc exception when instantiating internal objs for handling log category
                 LogPrintf("(node is probably shutting down) disconnecting peer=%d\n", id);
             }
-
-            if (ssl)
-            {
-                unsigned long err_code = 0;
-                tlsmanager.waitFor(SSL_SHUTDOWN, hSocket, ssl, (DEFAULT_CONNECT_TIMEOUT / 1000), err_code);
-                SSL_free(ssl);
-                ssl = NULL;
-            }
-            CloseSocket(hSocket);
         }
     }
 

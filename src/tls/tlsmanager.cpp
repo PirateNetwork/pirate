@@ -680,8 +680,13 @@ int TLSManager::threadSocketHandler(CNode* pnode, fd_set& fdsetRecv, fd_set& fds
                 }
 
                 if (nBytes > 0) {
-                    if (!pnode->ReceiveMsgBytes(pchBuf, nBytes))
-                        pnode->CloseSocketDisconnect();
+                    if (!pnode->ReceiveMsgBytes(pchBuf, nBytes)) {
+                        if (nRet == SSL_ERROR_SYSCALL || nRet == SSL_ERROR_SSL) {
+                            pnode->CloseSocketDisconnect(false);
+                        } else {
+                            pnode->CloseSocketDisconnect(true);
+                        }
+                    }
                     pnode->nLastRecv = GetTime();
                     pnode->nRecvBytes += nBytes;
                     pnode->RecordBytesRecv(nBytes);
@@ -697,7 +702,12 @@ int TLSManager::threadSocketHandler(CNode* pnode, fd_set& fdsetRecv, fd_set& fds
                     //
                     if (!pnode->fDisconnect)
                         LogPrint("tls", "socket closed (%s)\n", pnode->addr.ToString());
-                    pnode->CloseSocketDisconnect();
+
+                    if (nRet == SSL_ERROR_SYSCALL || nRet == SSL_ERROR_SSL) {
+                        pnode->CloseSocketDisconnect(false);
+                    } else {
+                        pnode->CloseSocketDisconnect(true);
+                    }
 
 
                 } else if (nBytes < 0) {
@@ -708,7 +718,12 @@ int TLSManager::threadSocketHandler(CNode* pnode, fd_set& fdsetRecv, fd_set& fds
                         {
                             if (!pnode->fDisconnect)
                                 LogPrintf("TSL: ERROR: SSL_read %s\n", ERR_error_string(nRet, NULL));
-                            pnode->CloseSocketDisconnect();
+
+                            if (nRet == SSL_ERROR_SYSCALL || nRet == SSL_ERROR_SSL) {
+                                pnode->CloseSocketDisconnect(false);
+                            } else {
+                                pnode->CloseSocketDisconnect(true);
+                            }
 
                             unsigned long error = ERR_get_error();
                             const char* error_str = ERR_error_string(error, NULL);
@@ -724,7 +739,12 @@ int TLSManager::threadSocketHandler(CNode* pnode, fd_set& fdsetRecv, fd_set& fds
                         if (nRet != WSAEWOULDBLOCK && nRet != WSAEMSGSIZE && nRet != WSAEINTR && nRet != WSAEINPROGRESS) {
                             if (!pnode->fDisconnect)
                                 LogPrint("tls","TSL: ERROR: socket recv %s\n", NetworkErrorString(nRet));
-                            pnode->CloseSocketDisconnect();
+
+                            if (nRet == SSL_ERROR_SYSCALL || nRet == SSL_ERROR_SSL) {
+                                pnode->CloseSocketDisconnect(false);
+                            } else {
+                                pnode->CloseSocketDisconnect(true);
+                            }
                         }
                     }
                 }

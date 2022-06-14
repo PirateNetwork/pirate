@@ -751,7 +751,7 @@ public:
         }
     }
 
-    void CloseSocketDisconnect();
+    void CloseSocketDisconnect(bool sendShutDownSSL = true);
 
     // Denial-of-service detection/prevention
     // The idea is to detect peers that are behaving
