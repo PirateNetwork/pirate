@@ -999,7 +999,12 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     sigaction(SIGHUP, &sa_hup, NULL);
 
     // Ignore SIGPIPE, otherwise it will bring the daemon down if the client closes unexpectedly
-    signal(SIGPIPE, SIG_IGN);
+    struct sigaction sa_pipe;
+    sa_pipe.sa_handler = SIG_IGN;
+    sigemptyset(&sa_pipe.sa_mask);
+    sa_pipe.sa_flags = 0;
+    sigaction(SIGPIPE, &sa_pipe, NULL);
+
 #endif
 
     std::set_new_handler(new_handler_terminate);
