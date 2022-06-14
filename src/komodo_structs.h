@@ -120,8 +120,6 @@ struct event_notarized : public event
     }
     event_notarized(uint8_t* data, long &pos, long data_len, int32_t height, const char* _dest, bool includeMoM = false);
     event_notarized(FILE* fp, int32_t ht, const char* _dest, bool includeMoM = false);
-    //event_notarized(const event_notarized& orig);
-    //event_notarized& operator=(const event_notarized& orig);
     uint256 blockhash;
     uint256 desttxid;
     uint256 MoM; 
@@ -152,8 +150,6 @@ struct event_pubkeys : public event
      */
     event_pubkeys(uint8_t* data, long &pos, long data_len, int32_t height);
     event_pubkeys(FILE* fp, int32_t height);
-    //event_pubkeys(const event_pubkeys& orig);
-    //event_pubkeys& operator=(const event_pubkeys& orig);
     uint8_t num = 0; 
     uint8_t pubkeys[64][33]; 
 };
