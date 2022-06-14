@@ -862,29 +862,4 @@ TEST(test_events, write_test)
     boost::filesystem::remove_all(temp);
 }
 
-TEST(test_events, event_copy)
-{
-    // make an object
-    komodo::event_pubkeys pk1(1);
-    pk1.num = 2;
-    memset(pk1.pubkeys[0], 1, 33);
-    memset(pk1.pubkeys[1], 2, 33);
-    // make a copy
-    std::vector<std::shared_ptr<komodo::event>> events;
-    events.push_back( std::make_shared<komodo::event_pubkeys>(pk1) );
-    komodo::event_pubkeys& pk2 = static_cast<komodo::event_pubkeys&>(*events.front());
-    // are they equal?
-    EXPECT_EQ(pk1.height, pk2.height);
-    EXPECT_EQ(pk1.num, pk2.num);
-    for(uint8_t i = 0; i < pk1.num; ++i)
-    {
-        for(uint8_t j = 0; j < 33; ++j)
-        {
-            if (pk1.pubkeys[i][j] != pk2.pubkeys[i][j])
-                FAIL() << "Error at " << (int)i << " " << (int)j;
-        }
-    }
-
-}
-
 } // namespace test_events
