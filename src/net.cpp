@@ -459,6 +459,14 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
     // CAddress addr_bind;
     // assert(!addr_bind.IsValid());
 
+    if (!addrConnect.IsValid()) {
+        return NULL;
+    }
+
+    if (!IsReachable(addrConnect)) {
+        return NULL;
+    }
+
     if (addrConnect.GetNetwork() == NET_I2P && m_i2p_sam_session.get() != nullptr) {
             i2p::Connection conn;
             if (m_i2p_sam_session->Connect(addrConnect, conn, proxyConnectionFailed)) {
@@ -1342,6 +1350,12 @@ void CreateNodeFromAcceptedSocket(SOCKET hSocket,
     if (CNode::IsBanned(addr) && !whitelisted)
     {
         LogPrintf("connection from %s dropped (banned)\n", addr.ToString());
+        CloseSocket(hSocket);
+        return;
+    }
+
+    if (!IsReachable(addr))
+    {
         CloseSocket(hSocket);
         return;
     }
