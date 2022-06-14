@@ -254,7 +254,7 @@ int GetnScore(const CService& addr)
 bool IsPeerAddrLocalGood(CNode *pnode)
 {
     return fDiscover && pnode->addr.IsRoutable() && pnode->addrLocal.IsRoutable() &&
-           !IsLimited(pnode->addrLocal.GetNetwork());
+           IsReachable(pnode->addrLocal.GetNetwork());
 }
 
 // pushes our own address to a peer
@@ -288,7 +288,7 @@ bool AddLocal(const CService& addr, int nScore)
     if (!fDiscover && nScore < LOCAL_MANUAL)
         return false;
 
-    if (IsLimited(addr))
+    if (!IsReachable(addr))
         return false;
 
     LogPrintf("AddLocal(%s,%i)\n", addr.ToString(), nScore);
@@ -317,26 +317,6 @@ bool RemoveLocal(const CService& addr)
     LogPrintf("RemoveLocal(%s)\n", addr.ToString());
     mapLocalHost.erase(addr);
     return true;
-}
-
-/** Make a particular network entirely off-limits (no automatic connects to it) */
-void SetLimited(enum Network net, bool fLimited)
-{
-    if (net == NET_UNROUTABLE || net == NET_INTERNAL)
-        return;
-    LOCK(cs_mapLocalHost);
-    vfLimited[net] = fLimited;
-}
-
-bool IsLimited(enum Network net)
-{
-    LOCK(cs_mapLocalHost);
-    return vfLimited[net];
-}
-
-bool IsLimited(const CNetAddr &addr)
-{
-    return IsLimited(addr.GetNetwork());
 }
 
 /** vote for a local address */
@@ -1882,8 +1862,9 @@ void ThreadOpenConnections()
             if (nTries > 100)
                 break;
 
-            if (IsLimited(addr))
+            if (!IsReachable(addr)) {
                 continue;
+            }
 
             // only consider very recently tried nodes after 30 failed attempts
             if (nANow - addr.nLastTry < 600 && nTries < 30)
@@ -1986,6 +1967,10 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
     //
     boost::this_thread::interruption_point();
     if (!fNetworkActive) {
+        return false;
+    }
+
+    if (!IsReachable(addrConnect)) {
         return false;
     }
 

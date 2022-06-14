@@ -489,7 +489,7 @@ void TorController::auth_cb(TorControlConnection& conn, const TorControlReply& r
             CService resolved(LookupNumeric("127.0.0.1", 9050));
             proxyType addrOnion = proxyType(resolved, true);
             SetProxy(NET_ONION, addrOnion);
-            SetLimited(NET_ONION, false);
+            SetReachable(NET_ONION, true);
         }
 
         // Finally - now create the service
