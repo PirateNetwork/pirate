@@ -401,15 +401,27 @@ std::unique_ptr<Sock> Session::StreamAccept()
 
 void Session::Disconnect()
 {
-    if (m_control_sock->Get() != INVALID_SOCKET) {
-        if (m_session_id.empty()) {
-            LogPrint("i2p","I2P: Destroying incomplete session\n");
-        } else {
-            LogPrint("i2p","I2P: Destroying session %s\n", m_session_id);
+    LOCK(cs_i2p);
+    try
+    {
+        if (m_control_sock->Get() != INVALID_SOCKET) {
+            if (m_session_id.empty()) {
+                LogPrint("i2p","I2P: Destroying incomplete session\n");
+            } else {
+                LogPrint("i2p","I2P: Destroying session %s\n", m_session_id);
+            }
         }
+        m_control_sock->Reset();
+        m_session_id.clear();
     }
-    m_control_sock->Reset();
-    m_session_id.clear();
+    catch(std::bad_alloc&)
+    {
+        // when the node is shutting down, the call above might use invalid memory resulting in a
+        // std::bad_alloc exception when instantiating internal objs for handling log category
+        LogPrintf("(node is probably shutting down) Destroying session=%d\n", m_session_id);
+    }
+
+
 }
 } // namespace sam
 } // namespace i2p
