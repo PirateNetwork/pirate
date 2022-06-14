@@ -78,8 +78,8 @@ std::ostream& operator<<(std::ostream& os, const event& in)
             break;
         case(EVENT_NOTARIZED):
         {
-            event_notarized* tmp = dynamic_cast<event_notarized*>(const_cast<event*>(&in));
-            if (tmp->MoMdepth == 0)
+            const event_notarized& tmp = static_cast<const event_notarized&>(in);
+            if (tmp.MoMdepth == 0)
                 os << "N";
             else
                 os << "M";
@@ -90,8 +90,8 @@ std::ostream& operator<<(std::ostream& os, const event& in)
             break;
         case(EVENT_KMDHEIGHT):
         {
-            event_kmdheight* tmp = dynamic_cast<event_kmdheight*>(const_cast<event*>(&in));
-            if (tmp->timestamp == 0)
+            const event_kmdheight& tmp = static_cast<const event_kmdheight&>(in);
+            if (tmp.timestamp == 0)
                 os << "K";
             else
                 os << "T";
@@ -132,31 +132,14 @@ event_pubkeys::event_pubkeys(FILE* fp, int32_t height) : event(EVENT_PUBKEYS, he
         throw parse_error("Illegal number of keys: " + std::to_string(num));
 }
 
-/*
-event_pubkeys::event_pubkeys(const event_pubkeys& orig) : event(EVENT_PUBKEYS, orig.height)
-{
-    this->num = orig.num;
-    memcpy(this->pubkeys, orig.pubkeys, sizeof(uint8_t) * 64 * 33);
-}
-
-event_pubkeys& event_pubkeys::operator=(const event_pubkeys& orig)
-{
-    if (this == &orig)
-        return *this;
-
-    this->num = orig.num;
-    memcpy(this->pubkeys, orig.pubkeys, sizeof(uint8_t) * 64 * 33);
-    return *this;
-}
-*/
-
 std::ostream& operator<<(std::ostream& os, const event_pubkeys& in)
 {
-    const event& e = dynamic_cast<const event&>(in);
+    const event& e = static_cast<const event&>(in);
     os << e;
     os << in.num;
-    for(uint8_t i = 0; i < in.num-1; ++i)
-        os << in.pubkeys[i];
+    for(uint8_t i = 0; i < in.num; ++i)
+        for(uint8_t j = 0; j < 33; ++j)
+            os << in.pubkeys[i][j];
     return os;
 }
 
@@ -166,7 +149,7 @@ event_rewind::event_rewind(uint8_t *data, long &pos, long data_len, int32_t heig
 }
 std::ostream& operator<<(std::ostream& os, const event_rewind& in)
 {
-    const event& e = dynamic_cast<const event&>(in);
+    const event& e = static_cast<const event&>(in);
     os << e;
     return os;
 }
@@ -212,7 +195,7 @@ event_notarized::event_notarized(FILE* fp, int32_t height, const char* _dest, bo
 
 std::ostream& operator<<(std::ostream& os, const event_notarized& in)
 {
-    const event& e = dynamic_cast<const event&>(in);
+    const event& e = static_cast<const event&>(in);
     os << e;
     os << serializable<int32_t>(in.notarizedheight);
     os << serializable<uint256>(in.blockhash);
@@ -247,7 +230,7 @@ event_u::event_u(FILE *fp, int32_t height) : event(EVENT_U, height)
 
 std::ostream& operator<<(std::ostream& os, const event_u& in)
 {
-    const event& e = dynamic_cast<const event&>(in);
+    const event& e = static_cast<const event&>(in);
     os << e;
     os << in.n << in.nid;
     os.write((const char*)in.mask, 8);
@@ -275,7 +258,7 @@ event_kmdheight::event_kmdheight(FILE *fp, int32_t height, bool includeTimestamp
 
 std::ostream& operator<<(std::ostream& os, const event_kmdheight& in)
 {
-    const event& e = dynamic_cast<const event&>(in);
+    const event& e = static_cast<const event&>(in);
     os << e << serializable<int32_t>(in.kheight);
     if (in.timestamp > 0)
         os << serializable<int32_t>(in.timestamp);
@@ -314,7 +297,7 @@ event_opreturn::event_opreturn(FILE* fp, int32_t height) : event(EVENT_OPRETURN,
 
 std::ostream& operator<<(std::ostream& os, const event_opreturn& in)
 {
-    const event& e = dynamic_cast<const event&>(in);
+    const event& e = static_cast<const event&>(in);
     os << e 
         << serializable<uint256>(in.txid)
         << serializable<uint16_t>(in.vout)
@@ -344,7 +327,7 @@ event_pricefeed::event_pricefeed(FILE* fp, int32_t height) : event(EVENT_PRICEFE
 
 std::ostream& operator<<(std::ostream& os, const event_pricefeed& in)
 {
-    const event& e = dynamic_cast<const event&>(in);
+    const event& e = static_cast<const event&>(in);
     os << e << (uint8_t)in.num;
     os.write((const char*)in.prices, in.num * sizeof(uint32_t));
     return os;
