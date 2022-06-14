@@ -121,8 +121,6 @@ Session::Session(const fs::path& private_key_file,
 
 Session::~Session()
 {
-    LOCK(cs_i2p);
-    Disconnect();
 }
 
 bool Session::Listen(Connection& conn)
@@ -145,9 +143,12 @@ bool Session::Accept(Connection& conn)
     try {
         while (true) {
 
+            // boost::this_thread::interruption_point();
             if (ShutdownRequested()) {
-                break;
+                Disconnect();
+                return false;
             }
+
 
             Sock::Event occurred;
             if (!conn.sock->Wait(std::chrono::milliseconds{MAX_WAIT_FOR_IO}, Sock::RECV, &occurred)) {
@@ -161,6 +162,11 @@ bool Session::Accept(Connection& conn)
 
             const std::string& peer_dest =
                 conn.sock->RecvUntilTerminator('\n', std::chrono::milliseconds{MAX_WAIT_FOR_IO}, MAX_MSG_SIZE);
+
+            if (ShutdownRequested()) {
+                Disconnect();
+                return false;
+            }
 
             conn.peer = CService(DestB64ToAddr(peer_dest), Params().GetDefaultPort());
             return true;
