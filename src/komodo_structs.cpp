@@ -14,24 +14,6 @@
  ******************************************************************************/
 #include "komodo_structs.h"
 #include "mem_read.h"
-#include <mutex>
-
-extern std::mutex komodo_mutex;
-
-/***
- * komodo_state
- */
-
-bool komodo_state::add_event(const std::string& symbol, const uint32_t height, std::shared_ptr<komodo::event> in)
-{
-    if (ASSETCHAINS_SYMBOL[0] != 0)
-    {
-        std::lock_guard<std::mutex> lock(komodo_mutex);
-        events.push_back( in );
-        return true;
-    }
-    return false;
-}
 
 namespace komodo {
 
@@ -149,6 +131,24 @@ event_pubkeys::event_pubkeys(FILE* fp, int32_t height) : event(EVENT_PUBKEYS, he
     if ( fread(pubkeys,33,num,fp) != num )
         throw parse_error("Illegal number of keys: " + std::to_string(num));
 }
+
+/*
+event_pubkeys::event_pubkeys(const event_pubkeys& orig) : event(EVENT_PUBKEYS, orig.height)
+{
+    this->num = orig.num;
+    memcpy(this->pubkeys, orig.pubkeys, sizeof(uint8_t) * 64 * 33);
+}
+
+event_pubkeys& event_pubkeys::operator=(const event_pubkeys& orig)
+{
+    if (this == &orig)
+        return *this;
+
+    this->num = orig.num;
+    memcpy(this->pubkeys, orig.pubkeys, sizeof(uint8_t) * 64 * 33);
+    return *this;
+}
+*/
 
 std::ostream& operator<<(std::ostream& os, const event_pubkeys& in)
 {

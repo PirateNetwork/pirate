@@ -45,6 +45,9 @@
 #define KOMODO_ASSETCHAIN_MAXLEN 65
 
 #include "bits256.h"
+#include <mutex>
+
+extern std::mutex komodo_mutex;
 
 // structs prior to refactor
 struct komodo_kv { UT_hash_handle hh; bits256 pubkey; uint8_t *key,*value; int32_t height; uint32_t flags; uint16_t keylen,valuesize; };
@@ -117,6 +120,8 @@ struct event_notarized : public event
     }
     event_notarized(uint8_t* data, long &pos, long data_len, int32_t height, const char* _dest, bool includeMoM = false);
     event_notarized(FILE* fp, int32_t ht, const char* _dest, bool includeMoM = false);
+    //event_notarized(const event_notarized& orig);
+    //event_notarized& operator=(const event_notarized& orig);
     uint256 blockhash;
     uint256 desttxid;
     uint256 MoM; 
@@ -147,6 +152,8 @@ struct event_pubkeys : public event
      */
     event_pubkeys(uint8_t* data, long &pos, long data_len, int32_t height);
     event_pubkeys(FILE* fp, int32_t height);
+    //event_pubkeys(const event_pubkeys& orig);
+    //event_pubkeys& operator=(const event_pubkeys& orig);
     uint8_t num = 0; 
     uint8_t pubkeys[64][33]; 
 };
@@ -291,7 +298,19 @@ public:
     uint64_t shorted;
     std::list<std::shared_ptr<komodo::event>> events;
     uint32_t RTbufs[64][3]; uint64_t RTmask;
-    bool add_event(const std::string& symbol, const uint32_t height, std::shared_ptr<komodo::event> in);
+    template<class T>
+    bool add_event(const std::string& symbol, const uint32_t height, T& in)
+    {
+        if (ASSETCHAINS_SYMBOL[0] != 0)
+        {
+            std::shared_ptr<T> ptr = std::make_shared<T>( in );
+            std::lock_guard<std::mutex> lock(komodo_mutex);
+            events.push_back( ptr );
+            return true;
+        }
+        return false;
+    }
+
 protected:
     /***
      * @brief clear the checkpoints collection
