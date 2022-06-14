@@ -2361,15 +2361,15 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
     // Send and receive from sockets, accept connections
     threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "net", &ThreadSocketHandler));
 
+    if (GetBoolArg("-i2pacceptincoming", true) && m_i2p_sam_session.get() != nullptr) {
+        threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "i2paccept", &ThreadI2PAcceptIncoming));
+    }
+
     // Initiate outbound connections from -addnode
     threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "addcon", &ThreadOpenAddedConnections));
 
     // Initiate outbound connections
     threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "opencon", &ThreadOpenConnections));
-
-    if (GetBoolArg("-i2pacceptincoming", true) && m_i2p_sam_session.get() != nullptr) {
-        threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "i2paccept", &ThreadI2PAcceptIncoming));
-    }
 
     // Process messages
     threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "msghand", &ThreadMessageHandler));
