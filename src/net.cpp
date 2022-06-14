@@ -456,8 +456,6 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
     bool proxyConnectionFailed = false;
     bool connected = false;
     std::unique_ptr<Sock> sock;
-    // CAddress addr_bind;
-    // assert(!addr_bind.IsValid());
 
     if (!addrConnect.IsValid()) {
         return NULL;
