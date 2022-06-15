@@ -129,8 +129,6 @@ uint256 komodo_calcmerkleroot(CBlock *pblock, uint256 prevBlockHash, int32_t nHe
 
 int32_t komodo_isPoS(CBlock *pblock, int32_t height,CTxDestination *addressout);
 
-void komodo_disconnect(CBlockIndex *pindex,CBlock& block);
-
 int32_t komodo_is_notarytx(const CTransaction& tx);
 
 int32_t komodo_block2height(CBlock *block);
