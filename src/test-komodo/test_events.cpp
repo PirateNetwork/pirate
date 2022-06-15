@@ -13,6 +13,14 @@ size_t write_event(std::shared_ptr<komodo::event> evt, FILE *fp);
 
 namespace TestEvents {
 
+uint256 fill_hash(uint8_t val)
+{
+    std::vector<uint8_t> bin(32);
+    for(uint8_t i = 0; i < 32; ++i)
+        bin[i] = val;
+    return uint256(bin);
+}
+
 void write_p_record(std::FILE* fp)
 {
     // a pubkey record with 2 keys
@@ -44,6 +52,16 @@ void write_n_record(std::FILE* fp)
     memset(&data[41], 2, 32); // desttxid
     std::fwrite(data, sizeof(data), 1, fp);
 }
+void write_n_record_new(std::FILE* fp)
+{
+    std::shared_ptr<komodo::event_notarized> evt = std::make_shared<komodo::event_notarized>();
+    evt->height = 1;
+    evt->notarizedheight = 2;
+    evt->blockhash = fill_hash(1);
+    evt->desttxid = fill_hash(2);
+    write_event(evt, fp);
+}
+
 void write_m_record(std::FILE* fp)
 {
     // a notarized M record has
@@ -60,6 +78,20 @@ void write_m_record(std::FILE* fp)
     memset(&data[105], 4, 4); // MoMdepth
     std::fwrite(data, sizeof(data), 1, fp);
 }
+void write_m_record_new(std::FILE* fp)
+{
+    std::shared_ptr<komodo::event_notarized> evt =
+            std::make_shared<komodo::event_notarized>();
+    evt->height = 1;
+    evt->notarizedheight = 3;
+    std::vector<unsigned char> bin(32);
+    evt->blockhash = fill_hash(1);
+    evt->desttxid = fill_hash(2);
+    evt->MoM = fill_hash(3);
+    evt->MoMdepth = 0x04040404;
+    write_event(evt, fp);
+}
+
 void write_u_record(std::FILE* fp)
 {
     // a U record has
@@ -72,6 +104,16 @@ void write_u_record(std::FILE* fp)
     memset(&data[15], 2, 32); // hash
     std::fwrite(data, sizeof(data), 1, fp);
 }
+void write_u_record_new(std::FILE* fp)
+{
+    std::shared_ptr<komodo::event_u> evt = std::make_shared<komodo::event_u>(1);
+    evt->n = 'N';
+    evt->nid = 'I';
+    memset(&evt->mask[0], 1, 8);
+    memset(&evt->hash[0], 2, 32);
+    write_event(evt, fp);
+}
+
 void write_k_record(std::FILE* fp)
 {
     // a K record has
@@ -81,6 +123,13 @@ void write_k_record(std::FILE* fp)
     memset(&data[5], 1, 4); // height
     std::fwrite(data, sizeof(data), 1, fp);
 }
+void write_k_record_new(std::FILE* fp)
+{
+    std::shared_ptr<komodo::event_kmdheight> evt = std::make_shared<komodo::event_kmdheight>(1);
+    evt->kheight = 0x01010101;
+    write_event(evt, fp);
+}
+
 void write_t_record(std::FILE* fp)
 {
     // a T record has
@@ -92,6 +141,14 @@ void write_t_record(std::FILE* fp)
     memset(&data[9], 2, 4); // timestamp
     std::fwrite(data, sizeof(data), 1, fp);
 }
+void write_t_record_new(std::FILE* fp)
+{
+    std::shared_ptr<komodo::event_kmdheight> evt = std::make_shared<komodo::event_kmdheight>(1);
+    evt->kheight = 0x01010101;
+    evt->timestamp = 0x02020202;
+    write_event(evt, fp);
+}
+
 void write_r_record(std::FILE* fp)
 {
     // an R record has
@@ -110,6 +167,16 @@ void write_r_record(std::FILE* fp)
     memset(&data[49], 4, 1);
     std::fwrite(data, sizeof(data), 1, fp);
 }
+void write_r_record_new(std::FILE* fp)
+{
+    std::shared_ptr<komodo::event_opreturn> evt = std::make_shared<komodo::event_opreturn>(1);
+    evt->txid = fill_hash(1);
+    evt->vout = 0x0202; 
+    evt->value = 0x0303030303030303;
+    evt->opret = std::vector<uint8_t>{ 0x04 };
+    write_event(evt, fp);
+}
+
 void write_v_record(std::FILE* fp)
 {
     // a V record has
@@ -121,11 +188,25 @@ void write_v_record(std::FILE* fp)
     memset(&data[6], 1, 140); // data
     std::fwrite(data, sizeof(data), 1, fp);
 }
+void write_v_record_new(std::FILE* fp)
+{
+    std::shared_ptr<komodo::event_pricefeed> evt = std::make_shared<komodo::event_pricefeed>(1);
+    evt->num = 35;
+    memset(&evt->prices[0], 1, 140);
+    write_event(evt, fp);
+}
+
 void write_b_record(std::FILE* fp)
 {
     char data[] = {'B', 1, 0, 0, 0};
     std::fwrite(data, sizeof(data), 1, fp);
 }
+void write_b_record_new(std::FILE* fp)
+{
+    std::shared_ptr<komodo::event_rewind> evt = std::make_shared<komodo::event_rewind>(1);
+    write_event(evt, fp);
+}
+
 template<class T>
 bool compare_serialization(const std::string& filename, std::shared_ptr<T> in)
 {
@@ -162,23 +243,35 @@ bool compare_serialization(const std::string& filename, std::shared_ptr<T> in)
 
 bool compare_files(const std::string& file1, const std::string& file2)
 {
-  std::ifstream f1(file1, std::ifstream::binary|std::ifstream::ate);
-  std::ifstream f2(file2, std::ifstream::binary|std::ifstream::ate);
+    std::ifstream f1(file1, std::ifstream::binary|std::ifstream::ate);
+    std::ifstream f2(file2, std::ifstream::binary|std::ifstream::ate);
 
-  if (f1.fail() || f2.fail()) {
-    return false; //file problem
-  }
+    if (f1.fail() || f2.fail()) {
+        std::cerr << "Unable to open file\n";
+        return false; //file problem
+    }
 
-  if (f1.tellg() != f2.tellg()) {
-    return false; //size mismatch
-  }
+    if (f1.tellg() != f2.tellg()) {
+        std::cerr << "Files not the same size\n";
+        return false; //size mismatch
+    }
 
-  //seek back to beginning and use std::equal to compare contents
-  f1.seekg(0, std::ifstream::beg);
-  f2.seekg(0, std::ifstream::beg);
-  return std::equal(std::istreambuf_iterator<char>(f1.rdbuf()),
-                    std::istreambuf_iterator<char>(),
-                    std::istreambuf_iterator<char>(f2.rdbuf()));
+    size_t sz = f1.tellg();
+    f1.seekg(0, std::ifstream::beg);
+    f2.seekg(0, std::ifstream::beg);
+    for(size_t i = 0; i < sz; ++i)
+    {
+        char a;
+        f1.read(&a, 1);
+        char b;
+        f2.read(&b, 1);
+        if (a != b)
+        {
+            std::cerr << "Data mismatch at position " << i << std::endl;
+            return false;
+        }
+    }
+    return true;
 }
 
 void clear_state(const char* symbol)
@@ -807,6 +900,7 @@ TEST(TestEvents, komodo_faststateinit_test_kmd)
 
 TEST(test_events, write_test)
 {
+    // test serialization of the different event records
     char symbol[] = "TST";
     strcpy(ASSETCHAINS_SYMBOL, symbol);
     KOMODO_EXTERNAL_NOTARIES = 1;
@@ -824,28 +918,32 @@ TEST(test_events, write_test)
             // old way
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
             EXPECT_NE(fp, nullptr);
+            write_b_record(fp);
+            write_k_record(fp);
+            write_m_record(fp);
+            write_n_record(fp);
             write_p_record(fp);
+            write_r_record(fp);
+            write_t_record(fp);
+            write_u_record(fp);
+            write_v_record(fp);
             std::fclose(fp);
             // verify files still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
-            // attempt to read the file
-            komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
-            char* dest = nullptr;
-            int32_t result = komodo_faststateinit( state, full_filename.c_str(), symbol, dest);
-            // compare results
-            EXPECT_EQ(result, 1);
-            // check that the new way is the same
-            EXPECT_EQ(state->events.size(), 1);
-            std::shared_ptr<komodo::event_pubkeys> ev = std::dynamic_pointer_cast<komodo::event_pubkeys>( state->events.front() );
-            EXPECT_EQ(ev->height, 1);
-            EXPECT_EQ(ev->type, komodo::komodo_event_type::EVENT_PUBKEYS);
         }
         {
             // new way
             std::FILE* fp = std::fopen(full_filename2.c_str(), "wb+");
             EXPECT_NE(fp, nullptr);
+            write_b_record_new(fp);
+            write_k_record_new(fp);
+            write_m_record_new(fp);
+            write_n_record_new(fp);
             write_p_record_new(fp);
+            write_r_record_new(fp);
+            write_t_record_new(fp);
+            write_u_record_new(fp);
+            write_v_record_new(fp);
             std::fclose(fp);
             EXPECT_TRUE(boost::filesystem::exists(full_filename2));
             // the two files should be binarily equal
@@ -857,6 +955,7 @@ TEST(test_events, write_test)
         FAIL() << "Exception thrown";
     }
     boost::filesystem::remove_all(temp);
+    //std::cout << full_filename << " " << full_filename2 << "\n";
 }
 
 } // namespace TestEvents
