@@ -482,60 +482,76 @@ public:
         nTried -= nLost;
 
         // Store positions in the new table buckets to apply later (if possible).
-        std::map<int, int> entryToBucket; // Represents which entry belonged to which bucket when serializing
+        // An entry may appear in up to ADDRMAN_NEW_BUCKETS_PER_ADDRESS buckets,
+        // so we store all bucket-entry_index pairs to iterate through later.
+        std::vector<std::pair<int, int>> bucket_entries;
 
-        for (int bucket = 0; bucket < nUBuckets; bucket++) {
-            int nSize = 0;
-            s >> nSize;
-            for (int n = 0; n < nSize; n++) {
-                int nIndex = 0;
-                s >> nIndex;
-                if (nIndex >= 0 && nIndex < nNew) {
-                    entryToBucket[nIndex] = bucket;
+        for (int bucket = 0; bucket < nUBuckets; ++bucket) {
+            int num_entries{0};
+            s >> num_entries;
+            for (int n = 0; n < num_entries; ++n) {
+                int entry_index{0};
+                s >> entry_index;
+                if (entry_index >= 0 && entry_index < nNew) {
+                    bucket_entries.emplace_back(bucket, entry_index);
                 }
             }
         }
 
-        uint256 supplied_asmap_version;
+        // If the bucket count and asmap checksum haven't changed, then attempt
+        // to restore the entries to the buckets/positions they were in before
+        // serialization.
+        uint256 supplied_asmap_checksum;
         if (m_asmap.size() != 0) {
-            supplied_asmap_version = SerializeHash(m_asmap);
+            supplied_asmap_checksum = SerializeHash(m_asmap);
         }
-        uint256 serialized_asmap_version;
+        uint256 serialized_asmap_checksum;
         if (format >= Format::V2_ASMAP) {
-            s >> serialized_asmap_version;
+            s >> serialized_asmap_checksum;
+        }
+        const bool restore_bucketing{nUBuckets == ADDRMAN_NEW_BUCKET_COUNT &&
+                                     serialized_asmap_checksum == supplied_asmap_checksum};
+
+        if (!restore_bucketing) {
+            LogPrint("addrman", "Bucketing method was updated, re-bucketing addrman entries from disk\n");
         }
 
-        for (int n = 0; n < nNew; n++) {
-            CAddrInfo &info = mapInfo[n];
-            int bucket = entryToBucket[n];
-                    int nUBucketPos = info.GetBucketPosition(nKey, true, bucket);
-            if (format >= Format::V2_ASMAP && nUBuckets == ADDRMAN_NEW_BUCKET_COUNT && vvNew[bucket][nUBucketPos] == -1 &&
-                info.nRefCount < ADDRMAN_NEW_BUCKETS_PER_ADDRESS && serialized_asmap_version == supplied_asmap_version) {
+        for (auto bucket_entry : bucket_entries) {
+            int bucket{bucket_entry.first};
+            const int entry_index{bucket_entry.second};
+            CAddrInfo& info = mapInfo[entry_index];
+
+            // The entry shouldn't appear in more than
+            // ADDRMAN_NEW_BUCKETS_PER_ADDRESS. If it has already, just skip
+            // this bucket_entry.
+            if (info.nRefCount >= ADDRMAN_NEW_BUCKETS_PER_ADDRESS) continue;
+
+            int bucket_position = info.GetBucketPosition(nKey, true, bucket);
+            if (restore_bucketing && vvNew[bucket][bucket_position] == -1) {
                 // Bucketing has not changed, using existing bucket positions for the new table
-                vvNew[bucket][nUBucketPos] = n;
-                        info.nRefCount++;
+                vvNew[bucket][bucket_position] = entry_index;
+                ++info.nRefCount;
             } else {
-                // In case the new table data cannot be used (nVersion unknown, bucket count wrong or new asmap),
+                // In case the new table data cannot be used (bucket count wrong or new asmap),
                 // try to give them a reference based on their primary source address.
-                LogPrint("addrman", "Bucketing method was updated, re-bucketing addrman entries from disk\n");
                 bucket = info.GetNewBucket(nKey, m_asmap);
-                nUBucketPos = info.GetBucketPosition(nKey, true, bucket);
-                if (vvNew[bucket][nUBucketPos] == -1) {
-                    vvNew[bucket][nUBucketPos] = n;
-                    info.nRefCount++;
+                bucket_position = info.GetBucketPosition(nKey, true, bucket);
+                if (vvNew[bucket][bucket_position] == -1) {
+                    vvNew[bucket][bucket_position] = entry_index;
+                    ++info.nRefCount;
                 }
             }
         }
 
         // Prune new entries with refcount 0 (as a result of collisions).
         int nLostUnk = 0;
-        for (std::map<int, CAddrInfo>::const_iterator it = mapInfo.begin(); it != mapInfo.end(); ) {
+        for (auto it = mapInfo.cbegin(); it != mapInfo.cend(); ) {
             if (it->second.fInTried == false && it->second.nRefCount == 0) {
-                std::map<int, CAddrInfo>::const_iterator itCopy = it++;
+                const auto itCopy = it++;
                 Delete(itCopy->first);
-                nLostUnk++;
+                ++nLostUnk;
             } else {
-                it++;
+                ++it;
             }
         }
         if (nLost + nLostUnk > 0) {
