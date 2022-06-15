@@ -117,7 +117,7 @@ TEST(TestNotary, KomodoNotaries)
     EXPECT_EQ( getacseason(1), 1);
     EXPECT_EQ( getacseason(1525132800), 1);
     EXPECT_EQ( getacseason(1525132801), 2);
-    EXPECT_EQ( getacseason(1751328000), 6);
+    EXPECT_EQ( getacseason(1751328000), 7);
     EXPECT_EQ( getacseason(1751328001), 0);
 
     // cleanup
