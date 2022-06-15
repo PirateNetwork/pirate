@@ -73,11 +73,6 @@ static const unsigned int DEFAULT_TX_CONFIRM_TARGET = 2;
 static const CAmount nHighTransactionMaxFeeWarning = 100 * nHighTransactionFeeWarning;
 //! Largest (in bytes) free transaction we're willing to create
 static const unsigned int MAX_FREE_TRANSACTION_CREATE_SIZE = 1000;
-//! Size of witness cache
-//  Should be large enough that we can expect not to reorg beyond our cache
-//  unless there is some exceptional network disruption.
-extern unsigned int WITNESS_CACHE_SIZE;
-
 //! Size of HD seed in bytes
 static const size_t HD_WALLET_SEED_LENGTH = 32;
 
@@ -749,6 +744,10 @@ class CWallet : public CCryptoKeyStore, public CValidationInterface
 {
 protected:
     bool fBroadcastTransactions;
+    //! Size of witness cache
+    //  Should be large enough that we can expect not to reorg beyond our cache
+    //  unless there is some exceptional network disruption.
+    int64_t maxWitnessCacheSize;
 private:
     bool SelectCoins(const CAmount& nTargetValue, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet, bool& fOnlyCoinbaseCoinsRet, bool& fNeedCoinbaseCoinsRet, const CCoinControl *coinControl = NULL) const;
 
@@ -888,15 +887,13 @@ public:
     MasterKeyMap mapMasterKeys;
     unsigned int nMasterKeyMaxID;
 
-    CWallet()
+    CWallet(int64_t witnessCacheSize = MAX_REORG_LENGTH + 10) : maxWitnessCacheSize(witnessCacheSize)
     {
         SetNull();
     }
 
-    CWallet(const std::string& strWalletFileIn)
+    CWallet(const std::string& strWalletFileIn, int64_t witnessCacheSize = MAX_REORG_LENGTH + 10) : CWallet(witnessCacheSize)
     {
-        SetNull();
-
         strWalletFile = strWalletFileIn;
         fFileBacked = true;
     }

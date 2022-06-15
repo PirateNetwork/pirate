@@ -378,8 +378,6 @@ uint64_t komodo_ac_block_subsidy(int nHeight);
 
 int8_t equihash_params_possible(uint64_t n, uint64_t k);
 
-void komodo_args(char *argv0);
-
 void komodo_nameset(char *symbol,char *dest,char *source);
 
 struct komodo_state *komodo_stateptrget(char *base);

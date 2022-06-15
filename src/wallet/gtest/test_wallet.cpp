@@ -1477,7 +1477,7 @@ TEST(WalletTests, CachedWitnessesCleanIndex) {
     wallet.AddSproutSpendingKey(sk);
 
     // Generate a chain
-    size_t numBlocks = WITNESS_CACHE_SIZE + 10;
+    size_t numBlocks = MAX_REORG_LENGTH + 10;
     blocks.resize(numBlocks);
     indices.resize(numBlocks);
     for (size_t i = 0; i < numBlocks; i++) {
