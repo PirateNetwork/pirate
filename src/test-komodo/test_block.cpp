@@ -78,13 +78,16 @@ TEST(test_block, TestSpendInSameBlock)
     auto alice = std::make_shared<TestWallet>("alice");
     alice->SetBroadcastTransactions(true);
     auto bob = std::make_shared<TestWallet>("bob");
+    auto miner = std::make_shared<TestWallet>("miner");
     std::shared_ptr<CBlock> lastBlock = chain.generateBlock(notary); // genesis block
     ASSERT_GT( chain.GetIndex()->nHeight, 0 );
+    CAmount notaryBalance = notary->GetBalance();
     // delay just a second to help with locktime
     std::this_thread::sleep_for(std::chrono::seconds(1));
     // Start to build a block
     int32_t newHeight = chain.GetIndex()->nHeight + 1;
-    TransactionInProcess fundAlice = notary->CreateSpendTransaction(alice, 100000, 0, true);
+    TransactionInProcess fundAlice = notary->CreateSpendTransaction(alice, 100000, 5000, true);
+    notaryBalance -= 105000; // transfer + fee  
     // now have Alice move some funds to Bob in the same block
     CCoinControl useThisTransaction;
     COutPoint tx(fundAlice.transaction.GetHash(), 1);
@@ -93,11 +96,11 @@ TEST(test_block, TestSpendInSameBlock)
     EXPECT_TRUE( alice->CommitTransaction(aliceToBob.transaction, aliceToBob.reserveKey) );
     std::this_thread::sleep_for(std::chrono::seconds(1));
     // see if everything worked
-    lastBlock = chain.generateBlock(notary);
+    lastBlock = chain.generateBlock(miner);
     EXPECT_TRUE( lastBlock != nullptr);
     // balances should be correct
     EXPECT_EQ( bob->GetBalance() + bob->GetUnconfirmedBalance() + bob->GetImmatureBalance(), CAmount(50000));
-    EXPECT_EQ( notary->GetBalance(), CAmount(10000000299905000));
+    EXPECT_EQ( notary->GetBalance(), notaryBalance);
     EXPECT_EQ( alice->GetBalance() + alice->GetUnconfirmedBalance() + alice->GetImmatureBalance(), CAmount(45000));
 }
 
@@ -111,10 +114,11 @@ TEST(test_block, TestDoubleSpendInSameBlock)
     auto bob = std::make_shared<TestWallet>("bob");
     auto charlie = std::make_shared<TestWallet>("charlie");
     std::shared_ptr<CBlock> lastBlock = chain.generateBlock(notary); // genesis block
+    CAmount notaryBalance = notary->GetBalance();
     ASSERT_GT( chain.GetIndex()->nHeight, 0 );
     // Start to build a block
     int32_t newHeight = chain.GetIndex()->nHeight + 1;
-    TransactionInProcess fundAlice = notary->CreateSpendTransaction(alice, 100000, 0, true);
+    TransactionInProcess fundAlice = notary->CreateSpendTransaction(alice, 100000, 5000, true);
     EXPECT_EQ(mempool.size(), 1);
     // now have Alice move some funds to Bob in the same block
     {
