@@ -1825,15 +1825,19 @@ void ThreadOpenConnections()
         CSemaphoreGrant grant(*semOutbound);
         boost::this_thread::interruption_point();
 
-        // Add seed nodes if DNS seeds are all down (an infrastructure attack?).
-        // if (addrman.size() == 0 && (GetTime() - nStart > 60)) {
+        // Add known valid seed at the time this release
         if (GetTime() - nStart > 60) {
             static bool done = false;
             if (!done) {
                 LogPrintf("Adding fixed seed nodes as DNS doesn't seem to be available.\n");
-                CNetAddr local;
-                local.SetInternal("fixedseeds");
-                addrman.Add(ConvertSeeds(Params().FixedSeeds()), local);
+                std::vector<CAddress> vFixedSeeds = ConvertSeeds(Params().FixedSeeds());
+                BOOST_FOREACH(CAddress fixedSeed, vFixedSeeds) {
+                    std::vector<CAddress> vFixedSeed;
+                    vFixedSeed.push_back(fixedSeed);
+                    CService seedSource;
+                    Lookup(fixedSeed.ToString().c_str(), seedSource, Params().GetDefaultPort(), false);
+                    addrman.Add(vFixedSeed, seedSource);
+                }
                 done = true;
             }
         }
