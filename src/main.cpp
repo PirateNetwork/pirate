@@ -51,6 +51,7 @@
 #include "wallet/asyncrpcoperation_shieldcoinbase.h"
 #include "notaries_staked.h"
 #include "komodo_extern_globals.h"
+#include "komodo_gateway.h" // komodo_checkvout()
 
 #include <cstring>
 #include <algorithm>
@@ -1372,7 +1373,7 @@ bool CheckTransaction(uint32_t tiptime,const CTransaction& tx, CValidationState 
         {
             for (k=0; k<numbanned; k++)
             {
-                if ( tx.vin[j].prevout.hash == array[k] && komodo_checkvout(tx.vin[j].prevout.n,k,indallvouts) != 0 ) //(tx.vin[j].prevout.n == 1 || k >= indallvouts) )
+                if ( tx.vin[j].prevout.hash == array[k] && komodo_checkvout(tx.vin[j].prevout.n,k,indallvouts) != 0 )
                 {
                     static uint32_t counter;
                     if ( counter++ < 100 )
@@ -5272,9 +5273,6 @@ bool CheckBlock(int32_t *futureblockp,int32_t height,CBlockIndex *pindex,const C
                          REJECT_INVALID, "bad-blk-sigops", true);
     if ( fCheckPOW && komodo_check_deposit(height,block,(pindex==0||pindex->pprev==0)?0:pindex->pprev->nTime) < 0 )
     {
-        //static uint32_t counter;
-        //if ( counter++ < 100 && ASSETCHAINS_STAKED == 0 )
-        //    fprintf(stderr,"check deposit rejection\n");
         LogPrintf("CheckBlockHeader komodo_check_deposit error");
         return(false);
     }

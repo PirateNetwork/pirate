@@ -515,11 +515,6 @@ extern UniValue notaries(const UniValue& params, bool fHelp, const CPubKey& mypk
 extern UniValue minerids(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue kvsearch(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue kvupdate(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue paxprice(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue paxpending(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue paxprices(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue paxdeposit(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue paxwithdraw(const UniValue& params, bool fHelp, const CPubKey& mypk);
 
 extern UniValue prices(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue pricesbet(const UniValue& params, bool fHelp, const CPubKey& mypk);

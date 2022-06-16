@@ -36,6 +36,7 @@
 #include "script/script_error.h"
 #include "script/sign.h"
 #include "script/standard.h"
+#include "../komodo_gateway.h"
 
 #include <stdint.h>
 
@@ -1100,115 +1101,7 @@ UniValue notaries(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return ret;
 }
 
-int32_t komodo_pending_withdraws(char *opretstr);
-int32_t pax_fiatstatus(uint64_t *available,uint64_t *deposited,uint64_t *issued,uint64_t *withdrawn,uint64_t *approved,uint64_t *redeemed,char *base);
 extern char CURRENCIES[][8];
-
-UniValue paxpending(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    UniValue ret(UniValue::VOBJ); UniValue a(UniValue::VARR); char opretbuf[10000*2]; int32_t opretlen,baseid; uint64_t available,deposited,issued,withdrawn,approved,redeemed;
-    if ( fHelp || params.size() != 0 )
-        throw runtime_error("paxpending needs no args\n");
-    LOCK(cs_main);
-    if ( (opretlen= komodo_pending_withdraws(opretbuf)) > 0 )
-        ret.push_back(Pair("withdraws", opretbuf));
-    else ret.push_back(Pair("withdraws", (char *)""));
-    for (baseid=0; baseid<32; baseid++)
-    {
-        UniValue item(UniValue::VOBJ); UniValue obj(UniValue::VOBJ);
-        if ( pax_fiatstatus(&available,&deposited,&issued,&withdrawn,&approved,&redeemed,CURRENCIES[baseid]) == 0 )
-        {
-            if ( deposited != 0 || issued != 0 || withdrawn != 0 || approved != 0 || redeemed != 0 )
-            {
-                item.push_back(Pair("available", ValueFromAmount(available)));
-                item.push_back(Pair("deposited", ValueFromAmount(deposited)));
-                item.push_back(Pair("issued", ValueFromAmount(issued)));
-                item.push_back(Pair("withdrawn", ValueFromAmount(withdrawn)));
-                item.push_back(Pair("approved", ValueFromAmount(approved)));
-                item.push_back(Pair("redeemed", ValueFromAmount(redeemed)));
-                obj.push_back(Pair(CURRENCIES[baseid],item));
-                a.push_back(obj);
-            }
-        }
-    }
-    ret.push_back(Pair("fiatstatus", a));
-    return ret;
-}
-
-UniValue paxprice(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    if ( fHelp || params.size() > 4 || params.size() < 2 )
-        throw runtime_error("paxprice \"base\" \"rel\" height\n");
-    LOCK(cs_main);
-    UniValue ret(UniValue::VOBJ); uint64_t basevolume=0,relvolume,seed;
-    std::string base = params[0].get_str();
-    std::string rel = params[1].get_str();
-    int32_t height;
-    if ( params.size() == 2 )
-        height = chainActive.LastTip()->nHeight;
-    else height = atoi(params[2].get_str().c_str());
-    //if ( params.size() == 3 || (basevolume= COIN * atof(params[3].get_str().c_str())) == 0 )
-        basevolume = 100000;
-    relvolume = komodo_paxprice(&seed,height,(char *)base.c_str(),(char *)rel.c_str(),basevolume);
-    ret.push_back(Pair("base", base));
-    ret.push_back(Pair("rel", rel));
-    ret.push_back(Pair("height", height));
-    char seedstr[32];
-    sprintf(seedstr,"%llu",(long long)seed);
-    ret.push_back(Pair("seed", seedstr));
-    if ( height < 0 || height > chainActive.Height() )
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Block height out of range");
-    else
-    {
-        CBlockIndex *pblockindex = chainActive[height];
-        if ( pblockindex != 0 )
-            ret.push_back(Pair("timestamp", (int64_t)pblockindex->nTime));
-        if ( basevolume != 0 && relvolume != 0 )
-        {
-            ret.push_back(Pair("price",((double)relvolume / (double)basevolume)));
-            ret.push_back(Pair("invprice",((double)basevolume / (double)relvolume)));
-            ret.push_back(Pair("basevolume",ValueFromAmount(basevolume)));
-            ret.push_back(Pair("relvolume",ValueFromAmount(relvolume)));
-        } else ret.push_back(Pair("error", "overflow or error in one or more of parameters"));
-    }
-    return ret;
-}
-// fills pricedata with raw price, correlated and smoothed values for numblock
-/*int32_t prices_extract(int64_t *pricedata,int32_t firstheight,int32_t numblocks,int32_t ind)
-{
-    int32_t height,i,n,width,numpricefeeds = -1; uint64_t seed,ignore,rngval; uint32_t rawprices[1440*6],*ptr; int64_t *tmpbuf;
-    width = numblocks+PRICES_DAYWINDOW*2+PRICES_SMOOTHWIDTH;    // need 2*PRICES_DAYWINDOW previous raw price points to calc PRICES_DAYWINDOW correlated points to calc, in turn, smoothed point
-    komodo_heightpricebits(&seed,rawprices,firstheight + numblocks - 1);
-    if ( firstheight < width )
-        return(-1);
-    for (i=0; i<width; i++)
-    {
-        if ( (n= komodo_heightpricebits(&ignore,rawprices,firstheight + numblocks - 1 - i)) < 0 )  // stores raw prices in backward order 
-            return(-1);
-        if ( numpricefeeds < 0 )
-            numpricefeeds = n;
-        if ( n != numpricefeeds )
-            return(-2);
-        ptr = (uint32_t *)&pricedata[i*3];
-        ptr[0] = rawprices[ind];
-        ptr[1] = rawprices[0]; // timestamp
-    }
-    rngval = seed;
-    for (i=0; i<numblocks+PRICES_DAYWINDOW+PRICES_SMOOTHWIDTH; i++) // calculates +PRICES_DAYWINDOW more correlated values
-    {
-        rngval = (rngval*11109 + 13849);
-        ptr = (uint32_t *)&pricedata[i*3];
-        // takes previous PRICES_DAYWINDOW raw prices and calculates correlated price value
-        if ( (pricedata[i*3+1]= komodo_pricecorrelated(rngval,ind,(uint32_t *)&pricedata[i*3],6,0,PRICES_SMOOTHWIDTH)) < 0 ) // skip is 6 == sizeof(int64_t)/sizeof(int32_t)*3 
-            return(-3);
-    }
-    tmpbuf = (int64_t *)calloc(sizeof(int64_t),2*PRICES_DAYWINDOW);
-    for (i=0; i<numblocks; i++)
-        // takes previous PRICES_DAYWINDOW correlated price values and calculates smoothed value
-        pricedata[i*3+2] = komodo_priceave(tmpbuf,&pricedata[i*3+1],3); 
-    free(tmpbuf);
-    return(0);
-}*/
 
 UniValue prices(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {

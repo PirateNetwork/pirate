@@ -71,6 +71,7 @@ GetKomodoEarlytxidScriptPub is on line #2080 of komodo_bitcoind.h
 
 #include "CCassets.h"
 #include "CCPrices.h"
+#include "../komodo_gateway.h" // komodo_priceind()
 
 #include <cstdlib>
 #include <gmp.h>
@@ -1002,18 +1003,6 @@ int64_t prices_syntheticprice(std::vector<uint16_t> vec, int32_t height, int32_t
             pricestack[depth] = 0;
             if (komodo_priceget(pricedata, value, height, 1) >= 0)
             {
-                //std::cerr << "prices_syntheticprice" << " pricedata[0]=" << pricedata[0] << " pricedata[1]=" << pricedata[1] << " pricedata[2]=" << pricedata[2] << std::endl;
-                // push price to the prices stack
-                /*if (!minmax)
-                    pricestack[depth] = pricedata[2];   // use smoothed value if we are over 24h
-                else
-                {
-                    // if we are within 24h use min or max price
-                    if (leverage > 0)
-                        pricestack[depth] = (pricedata[1] > pricedata[2]) ? pricedata[1] : pricedata[2]; // MAX
-                    else
-                        pricestack[depth] = (pricedata[1] < pricedata[2]) ? pricedata[1] : pricedata[2]; // MIN
-                }*/
                 pricestack[depth] = pricedata[2];
             }
             else
