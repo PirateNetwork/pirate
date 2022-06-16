@@ -2930,7 +2930,6 @@ uint64_t komodo_interestsum()
                 if ( pindex != 0 && (tipindex= chainActive.LastTip()) != 0 )
                 {
                     interest = komodo_accrued_interest(&txheight,&locktime,out.tx->GetHash(),out.i,0,nValue,(int32_t)tipindex->nHeight);
-                    //interest = komodo_interest(pindex->nHeight,nValue,out.tx->nLockTime,tipindex->nTime);
                     sum += interest;
                 }
             }
@@ -5497,10 +5496,8 @@ int32_t komodo_notaryvin(CMutableTransaction &txNew, uint8_t *notarypub33, const
 #include "../cc/CCchannels.h"
 #include "../cc/CCOracles.h"
 #include "../cc/CCGateways.h"
-#include "../cc/CCPrices.h"
 #include "../cc/CCHeir.h"
 #include "../cc/CCPayments.h"
-#include "../cc/CCPegs.h"
 
 int32_t ensure_CCrequirements(uint8_t evalcode)
 {
@@ -5934,43 +5931,6 @@ UniValue oraclesaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if ( params.size() == 1 )
         pubkey = ParseHex(params[0].get_str().c_str());
     return(CCaddress(cp,(char *)"Oracles",pubkey));
-}
-
-UniValue pricesaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    UniValue result(UniValue::VOBJ); struct CCcontract_info *cp,C,*assetscp,C2; std::vector<unsigned char> pubkey; CPubKey pk,planpk,pricespk; char myaddr[64],houseaddr[64],exposureaddr[64];
-    cp = CCinit(&C,EVAL_PRICES);
-    assetscp = CCinit(&C2,EVAL_PRICES);
-    if ( fHelp || params.size() > 1 )
-        throw runtime_error("pricesaddress [pubkey]\n");
-    if ( ensure_CCrequirements(cp->evalcode) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    if ( params.size() == 1 )
-        pubkey = ParseHex(params[0].get_str().c_str());
-    result = CCaddress(cp,(char *)"Prices",pubkey);
-    if (mypk.IsValid()) pk=mypk;
-    else pk = pubkey2pk(Mypubkey());
-    pricespk = GetUnspendable(cp,0);
-    GetCCaddress(assetscp,myaddr,pk);
-    GetCCaddress1of2(assetscp,houseaddr,pricespk,planpk);
-    GetCCaddress1of2(assetscp,exposureaddr,pricespk,pricespk);
-    result.push_back(Pair("myaddr",myaddr)); // for holding my asssets
-    result.push_back(Pair("houseaddr",houseaddr)); // globally accessible house assets
-    result.push_back(Pair("exposureaddr",exposureaddr)); // tracking of exposure
-    return(result);
-}
-
-UniValue pegsaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    struct CCcontract_info *cp,C; std::vector<unsigned char> pubkey;
-    cp = CCinit(&C,EVAL_PEGS);
-    if ( fHelp || params.size() > 1 )
-        throw runtime_error("pegssaddress [pubkey]\n");
-    if ( ensure_CCrequirements(cp->evalcode) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    if ( params.size() == 1 )
-        pubkey = ParseHex(params[0].get_str().c_str());
-    return(CCaddress(cp,(char *)"Pegs",pubkey));
 }
 
 UniValue paymentsaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
@@ -6996,65 +6956,6 @@ UniValue faucetget(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return(result);
 }
 
-uint32_t pricesGetParam(UniValue param) {
-    uint32_t filter = 0;
-    if (STR_TOLOWER(param.get_str()) == "all")
-        filter = 0;
-    else if (STR_TOLOWER(param.get_str()) == "open")
-        filter = 1;
-    else if (STR_TOLOWER(param.get_str()) == "closed")
-        filter = 2;
-    else
-        throw runtime_error("incorrect parameter\n");
-    return filter;
-}
-
-UniValue priceslist(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    if ( fHelp || params.size() != 0 && params.size() != 1)
-        throw runtime_error("priceslist [all|open|closed]\n");
-    if ( ensure_CCrequirements(EVAL_PRICES) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    uint32_t filter = 0;
-    if (params.size() == 1) 
-        filter = pricesGetParam(params[0]);
-    
-    CPubKey emptypk;
-
-    return(PricesList(filter, emptypk));
-}
-
-UniValue mypriceslist(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    if (fHelp || params.size() != 0 && params.size() != 1)
-        throw runtime_error("mypriceslist [all|open|closed]\n");
-    if (ensure_CCrequirements(EVAL_PRICES) < 0)
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-
-    uint32_t filter = 0;
-    if (params.size() == 1)
-        filter = pricesGetParam(params[0]);
-    CPubKey pk;
-    if (mypk.IsValid()) pk=mypk;
-    else pk = pubkey2pk(Mypubkey());
-
-    return(PricesList(filter, pk));
-}
-
-UniValue pricesinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    uint256 bettxid; int32_t height;
-    if ( fHelp || params.size() != 1 && params.size() != 2)
-        throw runtime_error("pricesinfo bettxid [height]\n");
-    if ( ensure_CCrequirements(EVAL_PRICES) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    bettxid = Parseuint256((char *)params[0].get_str().c_str());
-    height = 0;
-    if (params.size() == 2)
-        height = atoi(params[1].get_str().c_str());
-    return(PricesInfo(bettxid, height));
-}
-
 UniValue dicefund(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     UniValue result(UniValue::VOBJ); int64_t funds,minbet,maxbet,maxodds,timeoutblocks; std::string hex; char *name;
@@ -7923,192 +7824,6 @@ UniValue heirlist(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if ( ensure_CCrequirements(EVAL_HEIR) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
 	return (HeirList());
-}
-
-UniValue pegscreate(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    UniValue result(UniValue::VOBJ); int32_t i; std::vector<uint256> txids;
-    uint8_t N; uint256 txid; int64_t amount;
-
-    if ( fHelp || params.size()<3)
-        throw runtime_error("pegscreate amount N bindtxid1 [bindtxid2 ...]\n");
-    if ( ensure_CCrequirements(EVAL_PEGS) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    Lock2NSPV(mypk);
-    amount = atof((char *)params[0].get_str().c_str()) * COIN + 0.00000000499999;
-    N = atoi((char *)params[1].get_str().c_str());
-    if ( params.size() < N+1 )
-    {
-        Unlock2NSPV(mypk);
-        throw runtime_error("not enough parameters for N pegscreate\n");
-    }
-    for (i=0; i<N; i++)
-    {       
-        txid = Parseuint256(params[i+2].get_str().c_str());
-        txids.push_back(txid);
-    }
-    result = PegsCreate(mypk,0,amount,txids);
-    if ( result[JSON_HEXTX].getValStr().size() > 0  )
-    {
-        result.push_back(Pair("result", "success"));
-    }
-    Unlock2NSPV(mypk);
-    return(result);
-}
-
-UniValue pegsfund(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    UniValue result(UniValue::VOBJ); uint256 pegstxid,tokenid; int64_t amount;
-
-
-    if ( fHelp || params.size()!=3)
-        throw runtime_error("pegsfund pegstxid tokenid amount\n");
-    if ( ensure_CCrequirements(EVAL_PEGS) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    Lock2NSPV(mypk);
-    pegstxid = Parseuint256(params[0].get_str().c_str());
-    tokenid = Parseuint256(params[1].get_str().c_str());
-    amount = atof((char *)params[2].get_str().c_str()) * COIN + 0.00000000499999;
-    result = PegsFund(mypk,0,pegstxid,tokenid,amount);
-    if ( result[JSON_HEXTX].getValStr().size() > 0  )
-    {
-        result.push_back(Pair("result", "success"));
-    }
-    Unlock2NSPV(mypk);
-    return(result);
-}
-
-UniValue pegsget(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    UniValue result(UniValue::VOBJ); uint256 pegstxid,tokenid; int64_t amount;
-
-    if ( fHelp || params.size()!=3)
-        throw runtime_error("pegsget pegstxid tokenid amount\n");
-    if ( ensure_CCrequirements(EVAL_PEGS) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
-    pegstxid = Parseuint256(params[0].get_str().c_str());
-    tokenid = Parseuint256(params[1].get_str().c_str());
-    amount = atof((char *)params[2].get_str().c_str()) * COIN + 0.00000000499999;
-    result = PegsGet(mypk,0,pegstxid,tokenid,amount);
-    if ( result[JSON_HEXTX].getValStr().size() > 0  )
-    {
-        result.push_back(Pair("result", "success"));
-    }
-    Unlock2NSPV(mypk);
-    return(result);
-}
-
-UniValue pegsredeem(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    UniValue result(UniValue::VOBJ); uint256 pegstxid,tokenid; int64_t amount;
-
-    if ( fHelp || params.size()!=2)
-        throw runtime_error("pegsredeem pegstxid tokenid\n");
-    if ( ensure_CCrequirements(EVAL_PEGS) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
-    pegstxid = Parseuint256(params[0].get_str().c_str());
-    tokenid = Parseuint256(params[1].get_str().c_str());
-    result = PegsRedeem(mypk,0,pegstxid,tokenid);
-    if ( result[JSON_HEXTX].getValStr().size() > 0  )
-    {
-        result.push_back(Pair("result", "success"));
-    }
-    Unlock2NSPV(mypk);
-    return(result);
-}
-
-UniValue pegsliquidate(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    UniValue result(UniValue::VOBJ); uint256 pegstxid,tokenid,accounttxid;
-
-    if ( fHelp || params.size()!=3)
-        throw runtime_error("pegsliquidate pegstxid tokenid accounttxid\n");
-    if ( ensure_CCrequirements(EVAL_PEGS) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
-    pegstxid = Parseuint256(params[0].get_str().c_str());
-    tokenid = Parseuint256(params[1].get_str().c_str());
-    accounttxid = Parseuint256(params[2].get_str().c_str());
-    result = PegsLiquidate(mypk,0,pegstxid,tokenid,accounttxid);
-    if ( result[JSON_HEXTX].getValStr().size() > 0  )
-    {
-        result.push_back(Pair("result", "success"));
-    }
-    Unlock2NSPV(mypk);
-    return(result);
-}
-
-UniValue pegsexchange(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    UniValue result(UniValue::VOBJ); uint256 pegstxid,tokenid,accounttxid; int64_t amount;
-
-    if ( fHelp || params.size()!=3)
-        throw runtime_error("pegsexchange pegstxid tokenid amount\n");
-    if ( ensure_CCrequirements(EVAL_PEGS) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
-    pegstxid = Parseuint256(params[0].get_str().c_str());
-    tokenid = Parseuint256(params[1].get_str().c_str());
-    amount = atof((char *)params[2].get_str().c_str()) * COIN + 0.00000000499999;
-    result = PegsExchange(mypk,0,pegstxid,tokenid,amount);
-    if ( result[JSON_HEXTX].getValStr().size() > 0  )
-    {
-        result.push_back(Pair("result", "success"));
-    }
-    Unlock2NSPV(mypk);
-    return(result);
-}
-
-UniValue pegsaccounthistory(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    uint256 pegstxid;
-
-    if ( fHelp || params.size() != 1 )
-        throw runtime_error("pegsaccounthistory pegstxid\n");
-    if ( ensure_CCrequirements(EVAL_GATEWAYS) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    pegstxid = Parseuint256((char *)params[0].get_str().c_str());
-    return(PegsAccountHistory(mypk,pegstxid));
-}
-
-UniValue pegsaccountinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    uint256 pegstxid;
-
-    if ( fHelp || params.size() != 1 )
-        throw runtime_error("pegsaccountinfo pegstxid\n");
-    if ( ensure_CCrequirements(EVAL_GATEWAYS) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    pegstxid = Parseuint256((char *)params[0].get_str().c_str());
-    return(PegsAccountInfo(mypk,pegstxid));
-}
-
-UniValue pegsworstaccounts(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    uint256 pegstxid;
-
-    if ( fHelp || params.size() != 1 )
-        throw runtime_error("pegsworstaccounts pegstxid\n");
-    if ( ensure_CCrequirements(EVAL_GATEWAYS) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    pegstxid = Parseuint256((char *)params[0].get_str().c_str());
-    return(PegsWorstAccounts(pegstxid));
-}
-
-UniValue pegsinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    uint256 pegstxid;
-
-    if ( fHelp || params.size() != 1 )
-        throw runtime_error("pegsinfo pegstxid\n");
-    if ( ensure_CCrequirements(EVAL_GATEWAYS) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    pegstxid = Parseuint256((char *)params[0].get_str().c_str());
-    return(PegsInfo(pegstxid));
 }
 
 extern UniValue dumpprivkey(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcdump.cpp

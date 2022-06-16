@@ -79,7 +79,6 @@ extern uint64_t ASSETCHAINS_NOTARY_PAY[ASSETCHAINS_MAX_ERAS+1];
 extern uint64_t ASSETCHAINS_PEGSCCPARAMS[3];
 extern uint64_t ASSETCHAINS_TIMEUNLOCKFROM;
 extern uint64_t ASSETCHAINS_TIMEUNLOCKTO;
-extern uint64_t ASSETCHAINS_CBOPRET;
 
 extern std::mutex komodo_mutex;
 extern std::vector<uint8_t> Mineropret;

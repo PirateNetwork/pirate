@@ -47,7 +47,6 @@
 
 
 #include "cc/CCinclude.h"
-#include "cc/CCPrices.h"
 
 using namespace std;
 
@@ -221,34 +220,6 @@ UniValue test_proof(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return result;
 }
 
-extern CScript prices_costbasisopret(uint256 bettxid, CPubKey mypk, int32_t height, int64_t costbasis);
-UniValue test_pricesmarker(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    // make fake token tx: 
-    struct CCcontract_info *cp, C;
-
-    if (fHelp || (params.size() != 1))
-        throw runtime_error("incorrect params\n");
-    if (ensure_CCrequirements(EVAL_PRICES) < 0)
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-
-    uint256 bettxid = Parseuint256((char *)params[0].get_str().c_str());
-
-    cp = CCinit(&C, EVAL_PRICES);
-    CPubKey myPubkey = pubkey2pk(Mypubkey());
-    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
-
-    int64_t normalInputs = AddNormalinputs(mtx, myPubkey, 10000, 60);
-    if (normalInputs < 10000)
-        throw runtime_error("not enough normals\n");
-
-    mtx.vin.push_back(CTxIn(bettxid, 1));
-    mtx.vout.push_back(CTxOut(1000, CScript() << ParseHex(HexStr(myPubkey)) << OP_CHECKSIG));
-
-    return(FinalizeCCTx(0, cp, mtx, myPubkey, 10000, prices_costbasisopret(bettxid, myPubkey, 100, 100)));
-}
-
-
 static const CRPCCommand commands[] =
 { //  category              name                      actor (function)         okSafeMode
   //  --------------------- ------------------------  -----------------------  ----------
@@ -257,8 +228,7 @@ static const CRPCCommand commands[] =
     { "hidden",             "test_ac",                &test_ac,                 true },
     { "hidden",             "test_heirmarker",        &test_heirmarker,         true },
     { "hidden",             "test_proof",             &test_proof,              true },
-    { "hidden",             "test_burntx",            &test_burntx,             true },
-    { "hidden",             "test_pricesmarker",      &test_pricesmarker,       true }
+    { "hidden",             "test_burntx",            &test_burntx,             true }
 };
 
 void RegisterTesttransactionsRPCCommands(CRPCTable &tableRPC)

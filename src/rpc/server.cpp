@@ -475,23 +475,6 @@ static const CRPCCommand vRPCCommands[] =
     { "oracles",       "oraclessample",   &oraclessample,     true },
     { "oracles",       "oraclessamples",   &oraclessamples,     true },
 
-    // Prices
-    { "prices",       "prices",      &prices,      true },
-    { "prices",       "pricesaddress",      &pricesaddress,      true },
-    { "prices",       "priceslist",         &priceslist,         true },
-    { "prices",       "mypriceslist",         &mypriceslist,         true },
-    { "prices",       "pricesinfo",         &pricesinfo,         true },
-    { "prices",       "pricesbet",         &pricesbet,         true },
-    { "prices",       "pricessetcostbasis",         &pricessetcostbasis,         true },
-    { "prices",       "pricescashout",         &pricescashout,         true },
-    { "prices",       "pricesrekt",         &pricesrekt,         true },
-    { "prices",       "pricesaddfunding",         &pricesaddfunding,         true },
-    { "prices",       "pricesgetorderbook",         &pricesgetorderbook,         true },
-    { "prices",       "pricesrefillfund",         &pricesrefillfund,         true },
-
-    // Pegs
-    { "pegs",       "pegsaddress",   &pegsaddress,      true },
-
     // Payments
     { "payments",       "paymentsaddress",   &paymentsaddress,       true },
     { "payments",       "paymentstxidopret", &payments_txidopret,    true },
@@ -555,17 +538,6 @@ static const CRPCCommand vRPCCommands[] =
     //{ "tokens",       "tokenfillswap",    &tokenfillswap,     true },
     { "tokens",       "tokenconvert", &tokenconvert, true },
 
-    // pegs
-    { "pegs",       "pegscreate",     &pegscreate,      true },
-    { "pegs",       "pegsfund",         &pegsfund,      true },
-    { "pegs",       "pegsget",         &pegsget,        true },
-    { "pegs",       "pegsredeem",         &pegsredeem,        true },
-    { "pegs",       "pegsliquidate",         &pegsliquidate,        true },
-    { "pegs",       "pegsexchange",         &pegsexchange,        true },
-    { "pegs",       "pegsaccounthistory", &pegsaccounthistory,      true },
-    { "pegs",       "pegsaccountinfo", &pegsaccountinfo,      true },
-    { "pegs",       "pegsworstaccounts",         &pegsworstaccounts,      true },
-    { "pegs",       "pegsinfo",         &pegsinfo,      true },
 
     /* Address index */
     { "addressindex",       "getaddressmempool",      &getaddressmempool,      true  },

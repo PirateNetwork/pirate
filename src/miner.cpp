@@ -46,7 +46,6 @@
 #include "util.h"
 #include "utilmoneystr.h"
 #include "hex.h"
-#include "komodo_gateway.h" // komodo_mineropret()
 
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
@@ -796,14 +795,6 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
                 }
                 //fprintf(stderr, "Created notary payment coinbase totalsat.%lu\n",totalsats);    
             } else fprintf(stderr, "vout 2 of notarisation is not OP_RETURN scriptlen.%i\n", scriptlen);
-        }
-        if ( ASSETCHAINS_CBOPRET != 0 )
-        {
-            int32_t numv = (int32_t)txNew.vout.size();
-            txNew.vout.resize(numv+1);
-            txNew.vout[numv].nValue = 0;
-            txNew.vout[numv].scriptPubKey = komodo_mineropret(nHeight);
-            //printf("autocreate commision/cbopret.%lld vout[%d]\n",(long long)ASSETCHAINS_CBOPRET,(int32_t)txNew.vout.size());
         }
         pblock->vtx[0] = txNew;
         pblocktemplate->vTxFees[0] = -nFees;

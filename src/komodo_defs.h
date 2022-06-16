@@ -75,7 +75,7 @@ extern uint32_t ASSETCHAINS_ALGO, ASSETCHAINS_EQUIHASH,KOMODO_INITDONE;
 
 extern bool IS_KOMODO_NOTARY;
 extern int32_t KOMODO_MININGTHREADS,KOMODO_LONGESTCHAIN,ASSETCHAINS_SEED,USE_EXTERNAL_PUBKEY,KOMODO_ON_DEMAND,KOMODO_PASSPORT_INITDONE,ASSETCHAINS_STAKED,KOMODO_NSPV;
-extern uint64_t ASSETCHAINS_COMMISSION, ASSETCHAINS_LASTERA,ASSETCHAINS_CBOPRET;
+extern uint64_t ASSETCHAINS_COMMISSION, ASSETCHAINS_LASTERA;
 extern uint64_t ASSETCHAINS_REWARD[ASSETCHAINS_MAX_ERAS+1], ASSETCHAINS_NOTARY_PAY[ASSETCHAINS_MAX_ERAS+1], ASSETCHAINS_TIMELOCKGTE, ASSETCHAINS_NONCEMASK[],ASSETCHAINS_NK[2];
 extern const char *ASSETCHAINS_ALGORITHMS[];
 extern uint32_t ASSETCHAINS_NONCESHIFT[], ASSETCHAINS_HASHESPERROUND[];
@@ -122,8 +122,6 @@ uint32_t komodo_blocktime(uint256 hash);
 int32_t komodo_longestchain();
 int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
 int8_t komodo_segid(int32_t nocache,int32_t height);
-int32_t komodo_heightpricebits(uint64_t *seedp,uint32_t *heightbits,int32_t nHeight);
-int64_t komodo_priceave(int64_t *tmpbuf,int64_t *correlated,int32_t cskip);
 int32_t komodo_nextheight();
 uint32_t komodo_heightstamp(int32_t height);
 uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight);

@@ -274,11 +274,6 @@ extern UniValue oraclessubscribe(const UniValue& params, bool fHelp, const CPubK
 extern UniValue oraclesdata(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue oraclessample(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue oraclessamples(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue pricesaddress(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue priceslist(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue mypriceslist(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue pricesinfo(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue pegsaddress(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue paymentsaddress(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue payments_release(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue payments_fund(const UniValue& params, bool fHelp, const CPubKey& mypk);
@@ -340,16 +335,6 @@ extern UniValue FSMcreate(const UniValue& params, bool fHelp, const CPubKey& myp
 extern UniValue FSMlist(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue FSMinfo(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue auctionaddress(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue pegscreate(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue pegsfund(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue pegsget(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue pegsredeem(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue pegsliquidate(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue pegsexchange(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue pegsaccounthistory(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue pegsaccountinfo(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue pegsworstaccounts(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue pegsinfo(const UniValue& params, bool fHelp, const CPubKey& mypk);
 
 extern UniValue getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 //extern UniValue getnewaddress64(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
@@ -515,16 +500,5 @@ extern UniValue notaries(const UniValue& params, bool fHelp, const CPubKey& mypk
 extern UniValue minerids(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue kvsearch(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue kvupdate(const UniValue& params, bool fHelp, const CPubKey& mypk);
-
-extern UniValue prices(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue pricesbet(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue pricessetcostbasis(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue pricescashout(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue pricesrekt(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue pricesaddfunding(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue pricesgetorderbook(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue pricesrefillfund(const UniValue& params, bool fHelp, const CPubKey& mypk);
-
-
 
 #endif // BITCOIN_RPCSERVER_H

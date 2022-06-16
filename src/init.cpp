@@ -751,7 +751,6 @@ void ThreadNotifyRecentlyAdded()
 
 /* declarations needed for ThreadUpdateKomodoInternals */
 void komodo_passport_iteration();
-void komodo_cbopretupdate(int32_t forceflag);
 
 void ThreadUpdateKomodoInternals() {
     RenameThread("int-updater");
@@ -789,19 +788,11 @@ void ThreadUpdateKomodoInternals() {
                         komodo_passport_iteration(); // call komodo_interestsum() inside (possible locks)
                         auto finish = std::chrono::high_resolution_clock::now();
                         std::chrono::duration<double, std::milli> elapsed = finish - start;
-                        // std::cerr << DateTimeStrFormat("%Y-%m-%d %H:%M:%S", GetTime()) << " " << __FUNCTION__ << ": komodo_passport_iteration -> Elapsed Time: " << elapsed.count() << " ms" << std::endl;
                     }
-                }
-            else
-                {
-                    if ( ASSETCHAINS_CBOPRET != 0 )
-                        komodo_cbopretupdate(0);
                 }
         }
     }
     catch (const boost::thread_interrupted&) {
-        // std::cerr << "ThreadUpdateKomodoInternals() interrupted" << std::endl;
-        // c.disconnect();
         throw;
     }
     catch (const std::exception& e) {

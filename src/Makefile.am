@@ -302,8 +302,6 @@ libbitcoin_server_a_SOURCES = \
   cc/fsm.cpp \
   cc/heir.cpp \
   cc/oracles.cpp \
-  cc/prices.cpp \
-  cc/pegs.cpp \
   cc/payments.cpp \
   cc/gateways.cpp \
   cc/channels.cpp \
@@ -467,7 +465,6 @@ libbitcoin_common_a_SOURCES = \
   komodo_jumblr.cpp \
   komodo_kv.cpp \
   komodo_notary.cpp \
-  komodo_pax.cpp \
   komodo_utils.cpp \  
   netbase.cpp \
   metrics.cpp \

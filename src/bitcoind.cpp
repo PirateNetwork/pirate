@@ -57,12 +57,8 @@
 
 static bool fDaemon;
 #include "komodo_defs.h"
-#include "komodo_gateway.h" // komodo_pricesinit()
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 extern int32_t ASSETCHAINS_BLOCKTIME;
-extern uint64_t ASSETCHAINS_CBOPRET;
-void komodo_passport_iteration();
-uint64_t komodo_interestsum();
 int32_t komodo_longestchain();
 CBlockIndex *komodo_chainactive(int32_t height);
 
@@ -76,10 +72,8 @@ void WaitForShutdown(boost::thread_group* threadGroup)
         fprintf(stderr,"error: earlytx must be before block height %d or tx does not exist\n",KOMODO_EARLYTXID_HEIGHT);
         StartShutdown();
     }
-    if ( ASSETCHAINS_CBOPRET != 0 )
-        komodo_pricesinit();
     /*
-        komodo_passport_iteration and komodo_cbopretupdate moved to a separate thread
+        komodo_passport_iteration moved to a separate thread
         ThreadUpdateKomodoInternals fired every second (see init.cpp), original wait
         for shutdown loop restored.
     */
@@ -104,7 +98,6 @@ extern int32_t USE_EXTERNAL_PUBKEY;
 extern uint32_t ASSETCHAIN_INIT;
 extern std::string NOTARY_PUBKEY;
 int32_t komodo_is_issuer();
-void komodo_passport_iteration();
 
 bool AppInit(int argc, char* argv[])
 {
