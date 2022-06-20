@@ -509,147 +509,27 @@ int32_t komodo_faststateinit(struct komodo_state *sp,const char *fname,char *sym
     return -1;
 }
 
-uint64_t komodo_interestsum();
+uint64_t komodo_interestsum(); // in wallet/rpcwallet.cpp
 
-void komodo_passport_iteration()
+/***
+ * @brief update wallet balance / interest
+ * @note called only on KMD chain every 10 seconds ( see ThreadUpdateKomodoInternals() )
+ */
+void komodo_update_interest()
 {
-    static long lastpos[34]; // last file position for each coin
-    static bool firstCall = true;
-    int32_t maxseconds = 10;
-    FILE *fp; 
-    uint8_t *filedata; 
-    long lastfpos; 
-    int32_t limit,refid;
-    char fname[512],*base,symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN];
-    uint32_t buf[3]; 
-    bool hasExpired = false;
-
     static uint32_t lastinterest; // prevent needless komodo_interestsum calls
-    if (ASSETCHAINS_SYMBOL[0] == 0 && komodo_chainactive_timestamp() > lastinterest)
+    if (komodo_chainactive_timestamp() > lastinterest)
     {
         komodo_interestsum();
         lastinterest = komodo_chainactive_timestamp();
     }
 
-    komodo_state *refsp = komodo_stateptr(symbol,dest);
-    if ( ASSETCHAINS_SYMBOL[0] == 0 || strcmp(ASSETCHAINS_SYMBOL,"KMDCC") == 0 )
+    static bool first_call = true;
+    if ( first_call )
     {
-        // for KMD (or KMDCC), the refid is beyond the end of the CURRENCY array
-        refid = 33;
-        limit = 10000000;
-        jumblr_iteration();
-    }
-    else
-    {
-        limit = 10000000;
-        refid = komodo_baseid(ASSETCHAINS_SYMBOL)+1;
-        if ( refid == 0 )
-        {
-            // the ASSETCHAINS_SYMBOL was not found in the CURRENCIES array
-            KOMODO_PASSPORT_INITDONE = 1;
-            return;
-        }
-    }
-    uint32_t starttime = (uint32_t)time(NULL);
-    if ( firstCall )
-    {
-        limit = 10000; // use a lower limit the first time around
-        firstCall = false;
-    }
-    for (int32_t baseid=32; baseid>=0; baseid--) // work backwards throught the CURRENCIES array, starting with KMD
-    {
-        if ( time(NULL) >= starttime+maxseconds )
-            break;
-        base = (char *)CURRENCIES[baseid]; // the currency we will be working with through this iteration
-        if ( baseid+1 != refid ) // only need to import state from a different coin
-        {
-            if ( baseid == 32 ) // only care about KMD's state
-            {
-                komodo_statefname(fname,baseid<32?base:(char *)"",(char *)"komodostate");
-                komodo_nameset(symbol,dest,base);
-                komodo_state *sp = komodo_stateptrget(symbol);
-                long datalen = 0;
-                if ( lastpos[baseid] == 0 && (filedata= OS_fileptr(&datalen,fname)) != 0 )
-                {
-                    // first time through the komodostate file
-                    long fpos = 0;
-                    fprintf(stderr,"%s processing %s %ldKB\n",ASSETCHAINS_SYMBOL,fname,datalen/1024);
-                    while ( komodo_parsestatefiledata(sp,filedata,&fpos,datalen,symbol,dest) >= 0 )
-                        lastfpos = fpos;
-                    fprintf(stderr,"%s took %d seconds to process %s %ldKB\n",ASSETCHAINS_SYMBOL,(int32_t)(time(NULL)-starttime),fname,datalen/1024);
-                    lastpos[baseid] = lastfpos;
-                    free(filedata), filedata = 0;
-                    datalen = 0;
-                }
-                else if ( (fp= fopen(fname,"rb")) != 0 && sp != 0 )
-                {
-                    // process newly added records in the komodostate file
-                    fseek(fp,0,SEEK_END);
-                    if ( ftell(fp) > lastpos[baseid] )
-                    {
-                        if ( ASSETCHAINS_SYMBOL[0] != 0 )
-                            printf("%s passport refid.%d %s fname.(%s) base.%s %ld %ld\n",ASSETCHAINS_SYMBOL,refid,symbol,fname,base,ftell(fp),lastpos[baseid]);
-                        fseek(fp,lastpos[baseid],SEEK_SET);
-                        int32_t n = 0; // number of lines of state file processed
-                        while ( komodo_parsestatefile(sp,fp,symbol,dest) >= 0 && n < limit )
-                        {
-                            if ( n == limit-1 )
-                            {
-                                if ( time(NULL) < starttime+maxseconds )
-                                {
-                                    // we have processed the limit of lines, but we still have time
-                                    // left, process another chunk of lines...
-                                    n = 0;
-                                }
-                                else
-                                {
-                                    hasExpired = true;
-                                }
-                            }
-                            n++;
-                        }
-                        lastpos[baseid] = ftell(fp);
-                    }
-                    fclose(fp);
-                } 
-                else 
-                    fprintf(stderr,"load error.(%s) %p\n",fname,sp);
-
-                komodo_statefname(fname,baseid<32?base:(char *)"",(char *)"realtime");
-                if ( (fp= fopen(fname,"rb")) != 0 )
-                {
-                    if ( fread(buf,1,sizeof(buf),fp) == sizeof(buf) )
-                    {
-                        sp->CURRENT_HEIGHT = buf[0];
-                    }
-                    fclose(fp);
-                }
-            }
-        }
-        else
-        {
-            // write the real time in the "realtime" file for this chain
-            komodo_statefname(fname,baseid<32?base:(char *)"",(char *)"realtime");
-            if ( (fp= fopen(fname,"wb")) != 0 )
-            {
-                buf[0] = (uint32_t)chainActive.LastTip()->nHeight;
-                buf[1] = (uint32_t)komodo_longestchain();
-                if ( buf[0] != 0 && buf[0] == buf[1] )
-                {
-                    buf[2] = (uint32_t)time(NULL);
-                }
-                if ( fwrite(buf,1,sizeof(buf),fp) != sizeof(buf) )
-                    fprintf(stderr,"[%s] %s error writing realtime\n",ASSETCHAINS_SYMBOL,base);
-                fclose(fp);
-            } 
-            else 
-                fprintf(stderr,"%s create error RT\n",base);
-        }
-    }
-    if ( !hasExpired && KOMODO_PASSPORT_INITDONE == 0 )
-    {
-        KOMODO_PASSPORT_INITDONE = 1;
-        printf("READY for %s RPC calls at %u! done PASSPORT %s refid.%d\n",ASSETCHAINS_SYMBOL,(uint32_t)time(NULL),ASSETCHAINS_SYMBOL,refid);
+        first_call = false;
+        printf("READY for %s RPC calls at %u! done PASSPORT %s\n",
+                ASSETCHAINS_SYMBOL, (uint32_t)time(NULL), ASSETCHAINS_SYMBOL);
     }
 }
 

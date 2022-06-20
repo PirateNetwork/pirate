@@ -73,7 +73,6 @@ void WaitForShutdown(boost::thread_group* threadGroup)
         StartShutdown();
     }
     /*
-        komodo_passport_iteration moved to a separate thread
         ThreadUpdateKomodoInternals fired every second (see init.cpp), original wait
         for shutdown loop restored.
     */

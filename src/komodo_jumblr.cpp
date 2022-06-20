@@ -595,11 +595,22 @@ uint64_t jumblr_increment(uint8_t r,int32_t height,uint64_t total,uint64_t bigge
     return(0);
 }
 
+/***
+ * No longer used
+ */
 void jumblr_iteration()
 {
-    static int32_t lastheight; static uint32_t lasttime;
-    char *zaddr,*addr,*retstr=0,secretaddr[64]; cJSON *array; int32_t i,iter,height,acpublic,counter,chosen_one,n; uint64_t smallest,medium,biggest,amount=0,total=0; double fee; struct jumblr_item *ptr,*tmp; uint16_t r,s;
-    acpublic = ASSETCHAINS_PUBLIC;
+    static int32_t lastheight; 
+    static uint32_t lasttime;
+    char *zaddr,*addr,*retstr=0,secretaddr[64]; 
+    cJSON *array; 
+    int32_t i,iter,height,counter,chosen_one,n; 
+    uint64_t smallest,medium,biggest,amount=0,total=0; 
+    double fee; 
+    struct jumblr_item *ptr,*tmp; 
+    uint16_t r,s;
+    
+    int32_t acpublic = ASSETCHAINS_PUBLIC;
     if ( ASSETCHAINS_SYMBOL[0] == 0 && GetTime() >= KOMODO_SAPLING_DEADLINE )
         acpublic = 1;
     if ( JUMBLR_PAUSE != 0 || acpublic != 0 )
@@ -635,7 +646,6 @@ void jumblr_iteration()
     biggest = SATOSHIDEN * ((JUMBLR_INCR + 3*fee)*777 + 3*JUMBLR_TXFEE);
     OS_randombytes((uint8_t *)&r,sizeof(r));
     s = (r % 3);
-    //printf("jumblr_iteration r.%u s.%u\n",r,s);
     switch ( s )
     {
         case 0: // t -> z

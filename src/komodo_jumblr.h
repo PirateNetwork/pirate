@@ -108,5 +108,3 @@ void jumblr_zaddrinit(char *zaddr);
 void jumblr_opidsupdate();
 
 uint64_t jumblr_increment(uint8_t r,int32_t height,uint64_t total,uint64_t biggest,uint64_t medium, uint64_t smallest);
-
-void jumblr_iteration();

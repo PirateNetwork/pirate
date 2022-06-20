@@ -34,7 +34,11 @@ bool komodo_checkvout(int32_t vout,int32_t k,int32_t indallvouts);
  */
 int32_t komodo_bannedset(int32_t *indallvoutsp,uint256 *array,int32_t max);
 
-void komodo_passport_iteration();
+/***
+ * @brief update wallet balance / interest
+ * @note called only on KMD chain every 10 seconds ( see ThreadUpdateKomodoInternals() )
+ */
+void komodo_update_interest();
 
 /***
  * @brief  verify block is valid pax pricing

@@ -94,6 +94,7 @@
 using namespace std;
 
 #include "komodo_defs.h"
+#include "komodo_gateway.h"
 extern void ThreadSendAlert();
 extern bool komodo_dailysnapshot(int32_t height);
 extern int32_t KOMODO_LOADINGBLOCKS;
@@ -749,24 +750,18 @@ void ThreadNotifyRecentlyAdded()
     }
 }
 
-/* declarations needed for ThreadUpdateKomodoInternals */
-void komodo_passport_iteration();
-
+/**
+ * @brief periodically (every 10 secs) update internal structures
+ * @note this does nothing on asset chains, only the kmd chain
+ */
 void ThreadUpdateKomodoInternals() {
     RenameThread("int-updater");
-
-    // boost::signals2::connection c = uiInterface.NotifyBlockTip.connect(
-    //     [](const uint256& hashNewTip) mutable {
-    //         CBlockIndex* pblockindex = mapBlockIndex[hashNewTip];
-    //         std::cerr << __FUNCTION__ << ": NotifyBlockTip " << hashNewTip.ToString() << " - " << pblockindex->nHeight << std::endl;
-    //     }
-    //     );
 
     int fireDelaySeconds = 10;
 
     try {
-        while (true) {
-
+        while (true) 
+        {
             if ( ASSETCHAINS_SYMBOL[0] == 0 )
                 fireDelaySeconds = 10;
             else
@@ -781,15 +776,8 @@ void ThreadUpdateKomodoInternals() {
 
             boost::this_thread::interruption_point();
 
-            if ( ASSETCHAINS_SYMBOL[0] == 0 )
-                {
-                    if ( KOMODO_NSPV_FULLNODE ) {
-                        auto start = std::chrono::high_resolution_clock::now();
-                        komodo_passport_iteration(); // call komodo_interestsum() inside (possible locks)
-                        auto finish = std::chrono::high_resolution_clock::now();
-                        std::chrono::duration<double, std::milli> elapsed = finish - start;
-                    }
-                }
+            if ( ASSETCHAINS_SYMBOL[0] == 0 && KOMODO_NSPV_FULLNODE )
+                komodo_update_interest();
         }
     }
     catch (const boost::thread_interrupted&) {

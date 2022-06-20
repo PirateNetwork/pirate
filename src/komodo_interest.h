@@ -12,8 +12,8 @@
  * Removal or modification of this copyright notice is prohibited.            *
  *                                                                            *
  ******************************************************************************/
-
-#include "komodo_defs.h"
+#include "uint256.h"
+#include <cstdint>
 
 // each era of this many blocks reduces block reward from 3 to 2 to 1
 #define KOMODO_ENDOFERA 7777777
