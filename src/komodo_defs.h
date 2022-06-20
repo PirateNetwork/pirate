@@ -111,7 +111,6 @@ int32_t getkmdseason(int32_t height);
 #define IGUANA_MAXSCRIPTSIZE 10001
 #define KOMODO_KVDURATION 1440
 #define KOMODO_KVBINARY 2
-#define PRICES_SMOOTHWIDTH 1
 #define PRICES_MAXDATAPOINTS 8
 int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);
 char *bitcoin_address(char *coinaddr,uint8_t addrtype,uint8_t *pubkey_or_rmd160,int32_t len);
@@ -124,7 +123,6 @@ int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
 int8_t komodo_segid(int32_t nocache,int32_t height);
 int32_t komodo_nextheight();
 uint32_t komodo_heightstamp(int32_t height);
-uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight);
 int32_t komodo_currentheight();
 int32_t komodo_notarized_bracket(struct notarized_checkpoint *nps[2],int32_t height);
 arith_uint256 komodo_adaptivepow_target(int32_t height,arith_uint256 bnTarget,uint32_t nTime);

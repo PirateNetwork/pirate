@@ -40,6 +40,7 @@
 #include "zcash/zip32.h"
 #include "cc/CCinclude.h"
 #include "komodo_utils.h"
+#include "komodo_interest.h"
 
 #include <assert.h>
 
@@ -3282,9 +3283,6 @@ CAmount CWallet::GetImmatureWatchOnlyBalance() const
 /**
  * populate vCoins with vector of available COutputs.
  */
-uint64_t komodo_interestnew(int32_t txheight,uint64_t nValue,uint32_t nLockTime,uint32_t tiptime);
-uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight);
-
 void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const CCoinControl *coinControl, bool fIncludeZeroValue, bool fIncludeCoinBase) const
 {
     uint64_t interest,*ptr;
@@ -3332,16 +3330,10 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
                                     komodo_accrued_interest(&txheight,&locktime,wtxid,i,0,pcoin->vout[i].nValue,(int32_t)tipindex->nHeight);
                                     interest = komodo_interestnew(txheight,pcoin->vout[i].nValue,locktime,tipindex->nTime);
                                 } else interest = 0;
-                                //interest = komodo_interestnew(chainActive.LastTip()->nHeight+1,pcoin->vout[i].nValue,pcoin->nLockTime,chainActive.LastTip()->nTime);
                                 if ( interest != 0 )
                                 {
-                                    //printf("wallet nValueRet %.8f += interest %.8f ht.%d lock.%u/%u tip.%u\n",(double)pcoin->vout[i].nValue/COIN,(double)interest/COIN,txheight,locktime,pcoin->nLockTime,tipindex->nTime);
-                                    //fprintf(stderr,"wallet nValueRet %.8f += interest %.8f ht.%d lock.%u tip.%u\n",(double)pcoin->vout[i].nValue/COIN,(double)interest/COIN,chainActive.LastTip()->nHeight+1,pcoin->nLockTime,chainActive.LastTip()->nTime);
-                                    //ptr = (uint64_t *)&pcoin->vout[i].nValue;
-                                    //(*ptr) += interest;
                                     ptr = (uint64_t *)&pcoin->vout[i].interest;
                                     (*ptr) = interest;
-                                    //pcoin->vout[i].nValue += interest;
                                 }
                                 else
                                 {

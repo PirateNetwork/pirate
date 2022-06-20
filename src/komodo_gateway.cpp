@@ -51,55 +51,71 @@ const char *banned_txids[] =
     //"ce567928b5490a17244167af161b1d8dd6ff753fef222fe6855d95b2278a35b3", // missed
 };
 
-int32_t komodo_checkvout(int32_t vout,int32_t k,int32_t indallvouts)
+/****
+ * @brief Check if the n of the vout matches one that is banned
+ * @param vout the "n" of the vout
+ * @param k the index in the array of banned txids
+ * @param indallvouts the index at which all "n"s are banned
+ * @returns true if vout is banned
+ */
+bool komodo_checkvout(int32_t vout,int32_t k,int32_t indallvouts)
 {
-    if ( k < indallvouts )
+    if ( k < indallvouts ) // most banned txids are vout 1
         return vout == 1;
-    else if ( k == indallvouts || k == indallvouts+1 )
-        return 1;
-    return vout == 0;
+    else if ( k == indallvouts || k == indallvouts+1 ) // all vouts are banned for the last 2 txids
+        return true;
+    return vout == 0; // unsure when this might get executed - JMJ
 }
 
+/****
+ * @brief retrieve list of banned txids
+ * @param[out] indallvoutsp lowest index where all txid "n"s are banned, not just vout 1
+ * @param[out] array of txids
+ * @param[in] max the max size of the array
+ * @returns the number of txids placed into the array
+ */
 int32_t komodo_bannedset(int32_t *indallvoutsp,uint256 *array,int32_t max)
 {
-    int32_t i;
     if ( sizeof(banned_txids)/sizeof(*banned_txids) > max )
     {
         fprintf(stderr,"komodo_bannedset: buffer too small %d vs %d\n",(int32_t)(sizeof(banned_txids)/sizeof(*banned_txids)),max);
         StartShutdown();
     }
+    int32_t i;
     for (i=0; i<sizeof(banned_txids)/sizeof(*banned_txids); i++)
         array[i] = uint256S(banned_txids[i]);
     *indallvoutsp = i-2;
     return(i);
 }
 
-int32_t komodo_check_deposit(int32_t height,const CBlock& block,uint32_t prevtime) // verify above block is valid pax pricing
+/***
+ * @brief  verify block is valid pax pricing
+ * @param height the height of the block
+ * @param block the block to check
+ * @returns <0 on error, 0 on success
+ */
+int32_t komodo_check_deposit(int32_t height,const CBlock& block)
 {
-    static uint256 array[64]; static int32_t numbanned,indallvouts;
-    int32_t i,j,k,n,ht,baseid,txn_count,activation,num,opretlen,offset=1,errs=0,notmatched=0,matched=0,kmdheights[256],otherheights[256]; uint256 hash,txids[256]; char symbol[KOMODO_ASSETCHAIN_MAXLEN],base[KOMODO_ASSETCHAIN_MAXLEN]; uint16_t vouts[256]; int8_t baseids[256]; uint8_t *script,opcode,rmd160s[256*20]; uint64_t total,subsidy,available,deposited,issued,withdrawn,approved,redeemed,seed; int64_t checktoshis,values[256],srcvalues[256]; struct pax_transaction *pax; struct komodo_state *sp; CTransaction tx;
-    activation = 235300;
-    if ( *(int32_t *)&array[0] == 0 )
-        numbanned = komodo_bannedset(&indallvouts,array,(int32_t)(sizeof(array)/sizeof(*array)));
-    memset(baseids,0xff,sizeof(baseids));
-    memset(values,0,sizeof(values));
-    memset(srcvalues,0,sizeof(srcvalues));
-    memset(rmd160s,0,sizeof(rmd160s));
-    memset(kmdheights,0,sizeof(kmdheights));
-    memset(otherheights,0,sizeof(otherheights));
-    txn_count = block.vtx.size();
+    int32_t notmatched=0; 
+    int32_t activation = 235300;
     if ( ASSETCHAINS_SYMBOL[0] == 0 )
     {
-        for (i=0; i<txn_count; i++)
+        // initialize the array of banned txids
+        static uint256 array[64];
+        static int32_t numbanned,indallvouts;
+        if ( *(int32_t *)&array[0] == 0 )
+            numbanned = komodo_bannedset(&indallvouts,array,(int32_t)(sizeof(array)/sizeof(*array)));
+
+        int32_t txn_count = block.vtx.size();
+        for (int32_t i=0; i<txn_count; i++)
         {
-            if ( i == 0 && txn_count > 1 && block.vtx[txn_count-1].vout.size() > 0 && block.vtx[txn_count-1].vout[0].nValue == 5000 )
+            if ( i == 0 && txn_count > 1 && block.vtx[txn_count-1].vout.size() > 0 
+                    && block.vtx[txn_count-1].vout[0].nValue == 5000 )
             {
-                /*
-                if ( block.vtx[txn_count-1].vin.size() == 1 && GetTransaction(block.vtx[txn_count-1].vin[0].prevout.hash,tx,hash,false) && block.vtx[0].vout[0].scriptPubKey == tx.vout[block.vtx[txn_count-1].vin[0].prevout.n].scriptPubKey )
-                    notmatched = 1;
-                */
                 if ( block.vtx[txn_count-1].vin.size() == 1 ) {
                     uint256 hashNotaryProofVin = block.vtx[txn_count-1].vin[0].prevout.hash;
+                    CTransaction tx;
+                    uint256 hash;
                     int fNotaryProofVinTxFound = GetTransaction(hashNotaryProofVin,tx,hash,false);
                     if (!fNotaryProofVinTxFound) {
                         // try to search in the same block
@@ -112,18 +128,20 @@ int32_t komodo_check_deposit(int32_t height,const CBlock& block,uint32_t prevtim
                             }
                         }
                     }
-                    if ( fNotaryProofVinTxFound && block.vtx[0].vout[0].scriptPubKey == tx.vout[block.vtx[txn_count-1].vin[0].prevout.n].scriptPubKey )
-                        {
-                            notmatched = 1;
-                        }
+                    if ( fNotaryProofVinTxFound 
+                            && block.vtx[0].vout[0].scriptPubKey == tx.vout[block.vtx[txn_count-1].vin[0].prevout.n].scriptPubKey )
+                    {
+                        notmatched = 1;
+                    }
                 }  
             }
-            n = block.vtx[i].vin.size();
-            for (j=0; j<n; j++)
+            int32_t n = block.vtx[i].vin.size();
+            for (int32_t j=0; j<n; j++) // for each vin
             {
-                for (k=0; k<numbanned; k++)
+                for (int32_t k=0; k<numbanned; k++) // for each banned txid
                 {
-                    if ( block.vtx[i].vin[j].prevout.hash == array[k] && komodo_checkvout(block.vtx[i].vin[j].prevout.n,k,indallvouts) != 0 )
+                    if ( block.vtx[i].vin[j].prevout.hash == array[k] 
+                            && komodo_checkvout(block.vtx[i].vin[j].prevout.n,k,indallvouts) )
                     {
                         printf("banned tx.%d being used at ht.%d txi.%d vini.%d\n",k,height,i,j);
                         return(-1);
@@ -137,12 +155,12 @@ int32_t komodo_check_deposit(int32_t height,const CBlock& block,uint32_t prevtim
          ((ASSETCHAINS_COMMISSION != 0 || ASSETCHAINS_FOUNDERS_REWARD) && height > 1) ||
          NetworkUpgradeActive(height, Params().GetConsensus(), Consensus::UPGRADE_SAPLING) )
     {
-        n = block.vtx[0].vout.size();
+        int32_t n = block.vtx[0].vout.size();
         int64_t val,prevtotal = 0; int32_t strangeout=0,overflow = 0;
-        total = 0;
-        for (i=1; i<n; i++)
+        uint64_t total = 0;
+        for (int32_t i=1; i<n; i++)
         {
-            script = (uint8_t *)&block.vtx[0].vout[i].scriptPubKey[0];
+            uint8_t *script = (uint8_t *)&block.vtx[0].vout[i].scriptPubKey[0];
             if ( (val= block.vtx[0].vout[i].nValue) < 0 || val >= MAX_MONEY )
             {
                 overflow = 1;
@@ -184,18 +202,14 @@ int32_t komodo_check_deposit(int32_t height,const CBlock& block,uint32_t prevtim
             }
             else if ( height > 814000 )
             {
-                script = (uint8_t *)&block.vtx[0].vout[0].scriptPubKey[0];
-                //int32_t notary = komodo_electednotary(&num,script+1,height,0);
-                //if ( (-1 * (komodo_electednotary(&num,script+1,height,0) >= 0) * (height > 1000000)) < 0 )
-                //    fprintf(stderr, ">>>>>>> FAILED BLOCK.%d notary.%d insync.%d\n",height,notary,KOMODO_INSYNC);
-                //else
-                //    fprintf(stderr, "<<<<<<< VALID BLOCK.%d notary.%d insync.%d\n",height,notary,KOMODO_INSYNC);
+                uint8_t *script = (uint8_t *)&block.vtx[0].vout[0].scriptPubKey[0];
+                int32_t num;
                 return(-1 * (komodo_electednotary(&num,script+1,height,0) >= 0) * (height > 1000000));
             }
         }
         else
         {
-            checktoshis = 0;
+            int64_t checktoshis = 0;
             if ( (ASSETCHAINS_COMMISSION != 0 || ASSETCHAINS_FOUNDERS_REWARD) && height > 1 )
             {
                 if ( (checktoshis= komodo_checkcommission((CBlock *)&block,height)) < 0 )
@@ -222,8 +236,14 @@ int32_t komodo_check_deposit(int32_t height,const CBlock& block,uint32_t prevtim
     return(0);
 }
 
-const char *komodo_opreturn(int32_t height,uint64_t value,uint8_t *opretbuf,int32_t opretlen,
-        uint256 txid,uint16_t vout,char *source)
+/***
+ * @brief handle an incoming opreturn
+ * @param value 
+ * @param opretbuf the opreturn
+ * @param opretlen the length of opreturn
+ * @returns "assetchain", "kv", or "unknown"
+ */
+const char *komodo_opreturn(uint64_t value,uint8_t *opretbuf,int32_t opretlen)
 {
     int32_t tokomodo;
     const char *typestr = "unknown";
@@ -493,8 +513,8 @@ uint64_t komodo_interestsum();
 
 void komodo_passport_iteration()
 {
-    static long lastpos[34];
-    static uint32_t callcounter,lastinterest;
+    static long lastpos[34]; // last file position for each coin
+    static bool firstCall = true;
     int32_t maxseconds = 10;
     FILE *fp; 
     uint8_t *filedata; 
@@ -503,12 +523,14 @@ void komodo_passport_iteration()
     char fname[512],*base,symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN];
     uint32_t buf[3]; 
     bool hasExpired = false;
-    if ( komodo_chainactive_timestamp() > lastinterest )
+
+    static uint32_t lastinterest; // prevent needless komodo_interestsum calls
+    if (ASSETCHAINS_SYMBOL[0] == 0 && komodo_chainactive_timestamp() > lastinterest)
     {
-        if ( ASSETCHAINS_SYMBOL[0] == 0 )
-            komodo_interestsum();
+        komodo_interestsum();
         lastinterest = komodo_chainactive_timestamp();
     }
+
     komodo_state *refsp = komodo_stateptr(symbol,dest);
     if ( ASSETCHAINS_SYMBOL[0] == 0 || strcmp(ASSETCHAINS_SYMBOL,"KMDCC") == 0 )
     {
@@ -529,25 +551,27 @@ void komodo_passport_iteration()
         }
     }
     uint32_t starttime = (uint32_t)time(NULL);
-    if ( callcounter++ < 1 ) // use a smaller limit the first time around
-        limit = 10000;
+    if ( firstCall )
+    {
+        limit = 10000; // use a lower limit the first time around
+        firstCall = false;
+    }
     for (int32_t baseid=32; baseid>=0; baseid--) // work backwards throught the CURRENCIES array, starting with KMD
     {
         if ( time(NULL) >= starttime+maxseconds )
             break;
         base = (char *)CURRENCIES[baseid]; // the currency we will be working with through this iteration
-        komodo_state *sp = nullptr;
         if ( baseid+1 != refid ) // only need to import state from a different coin
         {
             if ( baseid == 32 ) // only care about KMD's state
             {
                 komodo_statefname(fname,baseid<32?base:(char *)"",(char *)"komodostate");
                 komodo_nameset(symbol,dest,base);
-                sp = komodo_stateptrget(symbol);
-                int32_t n = 0;
+                komodo_state *sp = komodo_stateptrget(symbol);
                 long datalen = 0;
                 if ( lastpos[baseid] == 0 && (filedata= OS_fileptr(&datalen,fname)) != 0 )
                 {
+                    // first time through the komodostate file
                     long fpos = 0;
                     fprintf(stderr,"%s processing %s %ldKB\n",ASSETCHAINS_SYMBOL,fname,datalen/1024);
                     while ( komodo_parsestatefiledata(sp,filedata,&fpos,datalen,symbol,dest) >= 0 )
@@ -559,18 +583,24 @@ void komodo_passport_iteration()
                 }
                 else if ( (fp= fopen(fname,"rb")) != 0 && sp != 0 )
                 {
+                    // process newly added records in the komodostate file
                     fseek(fp,0,SEEK_END);
                     if ( ftell(fp) > lastpos[baseid] )
                     {
                         if ( ASSETCHAINS_SYMBOL[0] != 0 )
                             printf("%s passport refid.%d %s fname.(%s) base.%s %ld %ld\n",ASSETCHAINS_SYMBOL,refid,symbol,fname,base,ftell(fp),lastpos[baseid]);
                         fseek(fp,lastpos[baseid],SEEK_SET);
+                        int32_t n = 0; // number of lines of state file processed
                         while ( komodo_parsestatefile(sp,fp,symbol,dest) >= 0 && n < limit )
                         {
                             if ( n == limit-1 )
                             {
                                 if ( time(NULL) < starttime+maxseconds )
+                                {
+                                    // we have processed the limit of lines, but we still have time
+                                    // left, process another chunk of lines...
                                     n = 0;
+                                }
                                 else
                                 {
                                     hasExpired = true;
@@ -598,7 +628,6 @@ void komodo_passport_iteration()
         }
         else
         {
-            // baseid+1 == refid
             // write the real time in the "realtime" file for this chain
             komodo_statefname(fname,baseid<32?base:(char *)"",(char *)"realtime");
             if ( (fp= fopen(fname,"wb")) != 0 )
@@ -612,7 +641,9 @@ void komodo_passport_iteration()
                 if ( fwrite(buf,1,sizeof(buf),fp) != sizeof(buf) )
                     fprintf(stderr,"[%s] %s error writing realtime\n",ASSETCHAINS_SYMBOL,base);
                 fclose(fp);
-            } else fprintf(stderr,"%s create error RT\n",base);
+            } 
+            else 
+                fprintf(stderr,"%s create error RT\n",base);
         }
     }
     if ( !hasExpired && KOMODO_PASSPORT_INITDONE == 0 )

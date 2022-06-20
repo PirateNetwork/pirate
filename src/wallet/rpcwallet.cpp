@@ -60,6 +60,7 @@
 #include <numeric>
 
 #include "komodo_defs.h"
+#include "komodo_interest.h"
 #include "hex.h"
 #include <string.h>
 
@@ -133,8 +134,6 @@ void Unlock2NSPV(const CPubKey &pk)
         LEAVE_CRITICAL_SECTION(pwalletMain->cs_wallet);
     }
 }
-
-uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight);
 
 void WalletTxToJSON(const CWalletTx& wtx, UniValue& entry)
 {
@@ -2908,12 +2907,18 @@ UniValue listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return results;
 }
 
+/****
+ * @note also sets globals KOMODO_INTERESTSUM and KOMODO_WALLETBALANCE used for the getinfo RPC call
+ * @returns amount of accrued interest in this wallet
+ */
 uint64_t komodo_interestsum()
 {
 #ifdef ENABLE_WALLET
     if ( ASSETCHAINS_SYMBOL[0] == 0 && GetBoolArg("-disablewallet", false) == 0 && KOMODO_NSPV_FULLNODE )
     {
-        uint64_t interest,sum = 0; int32_t txheight; uint32_t locktime;
+        uint64_t interest,sum = 0; 
+        int32_t txheight; 
+        uint32_t locktime;
         vector<COutput> vecOutputs;
         assert(pwalletMain != NULL);
         LOCK2(cs_main, pwalletMain->cs_wallet);

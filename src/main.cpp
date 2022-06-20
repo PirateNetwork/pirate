@@ -1355,28 +1355,32 @@ bool ContextualCheckTransaction(int32_t slowflag,const CBlock *block, CBlockInde
 bool CheckTransaction(uint32_t tiptime,const CTransaction& tx, CValidationState &state,
                       libzcash::ProofVerifier& verifier,int32_t txIndex, int32_t numTxs)
 {
-    static uint256 array[64]; static int32_t numbanned,indallvouts; int32_t j,k,n; uint256 merkleroot;
-    if ( *(int32_t *)&array[0] == 0 )
-        numbanned = komodo_bannedset(&indallvouts,array,(int32_t)(sizeof(array)/sizeof(*array)));
-    n = tx.vin.size();
     if ( ASSETCHAINS_SYMBOL[0] == 0 )
     {
-        for (j=0; j<n; j++)
+        // check for banned transaction ids
+        static uint256 array[64]; 
+        static int32_t numbanned;
+        static int32_t indallvouts;
+        if ( *(int32_t *)&array[0] == 0 )
+            numbanned = komodo_bannedset(&indallvouts,array,(int32_t)(sizeof(array)/sizeof(*array)));
+
+        for (size_t j=0; j< tx.vin.size(); j++) // for every tx.vin
         {
-            for (k=0; k<numbanned; k++)
+            for (int32_t k=0; k<numbanned; k++) // go through the array of banned txids
             {
-                if ( tx.vin[j].prevout.hash == array[k] && komodo_checkvout(tx.vin[j].prevout.n,k,indallvouts) != 0 )
+                if ( tx.vin[j].prevout.hash == array[k] && komodo_checkvout(tx.vin[j].prevout.n,k,indallvouts) )
                 {
+                    // hash matches and the vout.n matches
                     static uint32_t counter;
                     if ( counter++ < 100 )
-                        printf("MEMPOOL: banned tx.%d being used at ht.%d vout.%d\n",k,(int32_t)chainActive.Tip()->nHeight,j);
-                    return(false);
+                        printf("MEMPOOL: banned tx.%d being used at ht.%d vout.%ld\n",k,(int32_t)chainActive.Tip()->nHeight,j);
+                    return false;
                 }
             }
         }
     }
     
-    
+    uint256 merkleroot;
     if ( ASSETCHAINS_STAKED != 0 && komodo_newStakerActive(0, tiptime) != 0 && tx.vout.size() == 2 && DecodeStakingOpRet(tx.vout[1].scriptPubKey, merkleroot) != 0 )
     {
         if ( numTxs == 0 || txIndex != numTxs-1 ) 
@@ -2824,7 +2828,6 @@ namespace Consensus {
                     int64_t interest; int32_t txheight; uint32_t locktime;
                     if ( (interest= komodo_accrued_interest(&txheight,&locktime,prevout.hash,prevout.n,0,coins->vout[prevout.n].nValue,(int32_t)nSpendHeight-1)) != 0 )
                     {
-                        //fprintf(stderr,"checkResult %.8f += val %.8f interest %.8f ht.%d lock.%u tip.%u\n",(double)nValueIn/COIN,(double)coins->vout[prevout.n].nValue/COIN,(double)interest/COIN,txheight,locktime,chainActive.LastTip()->nTime);
                         nValueIn += interest;
                     }
                 }
@@ -5215,7 +5218,7 @@ bool CheckBlock(int32_t *futureblockp,int32_t height,CBlockIndex *pindex,const C
     if (nSigOps > MAX_BLOCK_SIGOPS)
         return state.DoS(100, error("CheckBlock: out-of-bounds SigOpCount"),
                          REJECT_INVALID, "bad-blk-sigops", true);
-    if ( fCheckPOW && komodo_check_deposit(height,block,(pindex==0||pindex->pprev==0)?0:pindex->pprev->nTime) < 0 )
+    if ( fCheckPOW && komodo_check_deposit(height,block) < 0 )
     {
         LogPrintf("CheckBlockHeader komodo_check_deposit error");
         return(false);

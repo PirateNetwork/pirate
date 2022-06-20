@@ -170,10 +170,6 @@ uint32_t komodo_blocktime(uint256 hash);
  */
 bool komodo_checkpoint(int32_t *notarized_heightp,int32_t nHeight,uint256 hash);
 
-uint32_t komodo_interest_args(uint32_t *txheighttimep,int32_t *txheightp,uint32_t *tiptimep,uint64_t *valuep,uint256 hash,int32_t n);
-
-uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight);
-
 int32_t komodo_nextheight();
 
 int32_t komodo_isrealtime(int32_t *kmdheightp);

@@ -16,7 +16,7 @@
 #include "komodo_extern_globals.h"
 #include "komodo_bitcoind.h" // komodo_verifynotarization
 #include "komodo_notary.h" // komodo_notarized_update
-#include "komodo_gateway.h" // komodo_opreturn
+#include "komodo_gateway.h"
 
 /*****
  * Add a notarized event to the collection
@@ -91,7 +91,7 @@ void komodo_eventadd_opreturn( komodo_state *sp, char *symbol, int32_t height, s
     if ( sp != nullptr && ASSETCHAINS_SYMBOL[0] != 0)
     {
         sp->add_event(symbol, height, opret);
-        komodo_opreturn(height, opret->value, opret->opret.data(), opret->opret.size(), opret->txid, opret->vout, symbol);
+        komodo_opreturn(opret->value, opret->opret.data(), opret->opret.size());
     }
 }
 

@@ -1061,49 +1061,6 @@ bool komodo_checkpoint(int32_t *notarized_heightp, int32_t nHeight, uint256 hash
     return true;
 }
 
-uint32_t komodo_interest_args(uint32_t *txheighttimep,int32_t *txheightp,uint32_t *tiptimep,uint64_t *valuep,uint256 hash,int32_t n)
-{
-    LOCK(cs_main);
-    CTransaction tx; uint256 hashBlock; CBlockIndex *pindex,*tipindex;
-    *txheighttimep = *txheightp = *tiptimep = 0;
-    *valuep = 0;
-    if ( !GetTransaction(hash,tx,hashBlock,true) )
-        return(0);
-    uint32_t locktime = 0;
-    if ( n < tx.vout.size() )
-    {
-        if ( (pindex= komodo_getblockindex(hashBlock)) != 0 )
-        {
-            *valuep = tx.vout[n].nValue;
-            *txheightp = pindex->nHeight;
-            *txheighttimep = pindex->nTime;
-            if ( *tiptimep == 0 && (tipindex= chainActive.LastTip()) != 0 )
-                *tiptimep = (uint32_t)tipindex->nTime;
-            locktime = tx.nLockTime;
-            //fprintf(stderr,"tx locktime.%u %.8f height.%d | tiptime.%u\n",locktime,(double)*valuep/COIN,*txheightp,*tiptimep);
-        }
-    }
-    return(locktime);
-}
-
-uint64_t komodo_interest(int32_t txheight,uint64_t nValue,uint32_t nLockTime,uint32_t tiptime);
-
-uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight)
-{
-    uint64_t value; uint32_t tiptime=0,txheighttimep; CBlockIndex *pindex;
-    if ( (pindex= chainActive[tipheight]) != 0 )
-        tiptime = (uint32_t)pindex->nTime;
-    else fprintf(stderr,"cant find height[%d]\n",tipheight);
-    if ( (*locktimep= komodo_interest_args(&txheighttimep,txheightp,&tiptime,&value,hash,n)) != 0 )
-    {
-        if ( (checkvalue == 0 || value == checkvalue) && (checkheight == 0 || *txheightp == checkheight) )
-            return(komodo_interest(*txheightp,value,*locktimep,tiptime));
-        //fprintf(stderr,"nValue %llu lock.%u:%u nTime.%u -> %llu\n",(long long)coins.vout[n].nValue,coins.nLockTime,timestamp,pindex->nTime,(long long)interest);
-        else fprintf(stderr,"komodo_accrued_interest value mismatch %llu vs %llu or height mismatch %d vs %d\n",(long long)value,(long long)checkvalue,*txheightp,checkheight);
-    }
-    return(0);
-}
-
 int32_t komodo_nextheight()
 {
     CBlockIndex *pindex; int32_t ht;
