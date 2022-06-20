@@ -1762,10 +1762,8 @@ void komodo_args(char *argv0)
             boost::this_thread::sleep(boost::posix_time::milliseconds(3000));
 #endif
         }
-        //fprintf(stderr,"Got datadir.(%s)\n",dirname);
         if ( ASSETCHAINS_SYMBOL[0] != 0 )
         {
-            int32_t komodo_baseid(char *origbase);
             extern int COINBASE_MATURITY;
             if ( strcmp(ASSETCHAINS_SYMBOL,"KMD") == 0 )
             {
@@ -1785,12 +1783,9 @@ void komodo_args(char *argv0)
                 fprintf(stderr,"ac_cbmaturity must be >0, shutting down\n");
                 StartShutdown();
             }
-            //fprintf(stderr,"ASSETCHAINS_RPCPORT (%s) %u\n",ASSETCHAINS_SYMBOL,ASSETCHAINS_RPCPORT);
         }
         if ( ASSETCHAINS_RPCPORT == 0 )
             ASSETCHAINS_RPCPORT = ASSETCHAINS_P2PPORT + 1;
-        //ASSETCHAINS_NOTARIES = GetArg("-ac_notaries","");
-        //komodo_assetchain_pubkeys((char *)ASSETCHAINS_NOTARIES.c_str());
         iguana_rwnum(1,magic,sizeof(ASSETCHAINS_MAGIC),(void *)&ASSETCHAINS_MAGIC);
         for (i=0; i<4; i++)
             sprintf(&magicstr[i<<1],"%02x",magic[i]);
@@ -1956,41 +1951,61 @@ void komodo_nameset(char *symbol,char *dest,char *source)
     }
 }
 
-struct komodo_state *komodo_stateptrget(char *base)
+/****
+ * @brief get the right komodo_state
+ * @param[in] base what to search for (nullptr == "KMD")
+ * @returns the correct komodo_state object
+ */
+komodo_state *komodo_stateptrget(char *base)
 {
-    int32_t baseid;
+    // "KMD" case
     if ( base == 0 || base[0] == 0 || strcmp(base,(char *)"KMD") == 0 )
-        return(&KOMODO_STATES[33]);
-    else if ( (baseid= komodo_baseid(base)) >= 0 )
-        return(&KOMODO_STATES[baseid+1]);
-    else return(&KOMODO_STATES[0]);
+        return &KOMODO_STATES[33];
+
+    // found in CURRENCIES array
+    int32_t baseid = komodo_baseid(base);
+    if ( baseid >= 0 )
+        return &KOMODO_STATES[baseid+1];
+
+    // evidently this asset chain
+    return &KOMODO_STATES[0];
 }
 
-struct komodo_state *komodo_stateptr(char *symbol,char *dest)
+/****
+ * @brief get the symbol and dest based on this chain's ASSETCHAINS_SYMBOL
+ * @param[out] symbol this chain ("KMD" if ASSETCHAINS_SYMBOL is nullptr)
+ * @param[out] dest the destination chain ("BTC" in the case of KMD, otherwise "KMD")
+ * @returns the komodo_state object for symbol
+ */
+komodo_state *komodo_stateptr(char *symbol,char *dest)
 {
-    int32_t baseid;
     komodo_nameset(symbol,dest,ASSETCHAINS_SYMBOL);
-    return(komodo_stateptrget(symbol));
+    return komodo_stateptrget(symbol);
 }
 
+/***
+ * @brief prefetch file contents, leave next read position where it started
+ * @param fp the file to read
+ */
 void komodo_prefetch(FILE *fp)
 {
-    long fsize,fpos; int32_t incr = 16*1024*1024;
-    fpos = ftell(fp);
+    // I am not sure why we do this, perhaps looking for disk errors or
+    // disk caching? - JMJ
+    int32_t incr = 16*1024*1024;
+    long fpos = ftell(fp); // store the current position
     fseek(fp,0,SEEK_END);
-    fsize = ftell(fp);
-    if ( fsize > incr )
+    if ( ftell(fp) > incr ) // if the file is greater than 16MB
     {
         char *ignore = (char *)malloc(incr);
         if ( ignore != 0 )
         {
-            rewind(fp);
-            while ( fread(ignore,1,incr,fp) == incr ) // prefetch
+            rewind(fp); // go back to the beginning
+            while ( fread(ignore,1,incr,fp) == incr ) // prefetch in 16MB blocks
                 fprintf(stderr,".");
             free(ignore);
         }
     }
-    fseek(fp,fpos,SEEK_SET);
+    fseek(fp,fpos,SEEK_SET); // go to where we were when this function was called
 }
 
 // check if block timestamp is more than S5 activation time

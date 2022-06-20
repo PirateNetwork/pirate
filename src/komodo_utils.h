@@ -380,8 +380,20 @@ int8_t equihash_params_possible(uint64_t n, uint64_t k);
 
 void komodo_args(char *argv0);
 
+/***
+ * @brief given a source, calculate the symbol and dest
+ * @note if source == nullptr, the results will be KMD/BTC, otherwise source/KMD
+ * @param[out] symbol the symbol (i.e. "KMD")
+ * @param[out] dest the destination (i.e. "BTC")
+ * @param[in] source the source (i.e. "KMD")
+ */
 void komodo_nameset(char *symbol,char *dest,char *source);
 
+/****
+ * @brief get the right komodo_state
+ * @param[in] base what to search for (nullptr == "KMD")
+ * @returns the correct komodo_state object
+ */
 struct komodo_state *komodo_stateptrget(char *base);
 
 struct komodo_state *komodo_stateptr(char *symbol,char *dest);

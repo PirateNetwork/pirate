@@ -18,13 +18,11 @@
 #include "komodo_hardfork.h"
 #include "komodo_structs.h"
 
-void komodo_prefetch(FILE *fp);
 uint32_t komodo_heightstamp(int32_t height);
 void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotaries,uint8_t notaryid,uint256 txhash,uint64_t voutmask,uint8_t numvouts,uint32_t *pvals,uint8_t numpvals,int32_t kheight,uint32_t ktime,uint64_t opretvalue,uint8_t *opretbuf,uint16_t opretlen,uint16_t vout,uint256 MoM,int32_t MoMdepth);
 int32_t komodo_MoMdata(int32_t *notarized_htp,uint256 *MoMp,uint256 *kmdtxidp,int32_t nHeight,uint256 *MoMoMp,int32_t *MoMoMoffsetp,int32_t *MoMoMdepthp,int32_t *kmdstartip,int32_t *kmdendip);
 int32_t komodo_notarizeddata(int32_t nHeight,uint256 *notarized_hashp,uint256 *notarized_desttxidp);
 char *komodo_issuemethod(char *userpass,char *method,char *params,uint16_t port);
-int32_t komodo_isrealtime(int32_t *kmdheightp);
 int32_t komodo_longestchain();
 
 std::mutex komodo_mutex;
@@ -37,7 +35,7 @@ struct pax_transaction *PAX;
 uint32_t *PVALS;
 struct knotaries_entry *Pubkeys;
 
-struct komodo_state KOMODO_STATES[34];
+komodo_state KOMODO_STATES[34]; // 0 == asset chain, 33 == KMD, others correspond to the CURRENCIES array
 const uint32_t nStakedDecemberHardforkTimestamp = 1576840000; //December 2019 hardfork 12/20/2019 @ 11:06am (UTC)
 const int32_t nDecemberHardforkHeight = 1670000;   //December 2019 hardfork
 
@@ -129,10 +127,19 @@ struct komodo_kv *KOMODO_KV;
 pthread_mutex_t KOMODO_KV_mutex,KOMODO_CC_mutex;
 
 #define MAX_CURRENCIES 32
-char CURRENCIES[][8] = { "USD", "EUR", "JPY", "GBP", "AUD", "CAD", "CHF", "NZD", // major currencies
-    "CNY", "RUB", "MXN", "BRL", "INR", "HKD", "TRY", "ZAR", "PLN", "NOK", "SEK", "DKK", "CZK", "HUF", "ILS", "KRW", "MYR", "PHP", "RON", "SGD", "THB", "BGN", "IDR", "HRK",
-    "KMD" };
+char CURRENCIES[][8] = { 
+    "USD", "EUR", "JPY", "GBP", "AUD", "CAD", "CHF", "NZD", // major currencies
+    "CNY", "RUB", "MXN", "BRL", "INR", "HKD", "TRY", "ZAR", 
+    "PLN", "NOK", "SEK", "DKK", "CZK", "HUF", "ILS", "KRW", 
+    "MYR", "PHP", "RON", "SGD", "THB", "BGN", "IDR", "HRK",
+    "KMD" }; // <- KMD occupies position 32
 
+/**
+ * @brief Given a currency name, return the index in the CURRENCIES array
+ * 
+ * @param origbase the currency name to look for
+ * @return the index in the array, or -1
+ */
 int32_t komodo_baseid(char *origbase);
 
 uint64_t komodo_current_supply(uint32_t nHeight);

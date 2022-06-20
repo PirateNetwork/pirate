@@ -97,7 +97,6 @@ extern bool IS_KOMODO_NOTARY;
 extern int32_t USE_EXTERNAL_PUBKEY;
 extern uint32_t ASSETCHAIN_INIT;
 extern std::string NOTARY_PUBKEY;
-int32_t komodo_is_issuer();
 
 bool AppInit(int argc, char* argv[])
 {

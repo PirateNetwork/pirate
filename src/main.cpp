@@ -2936,45 +2936,6 @@ bool ContextualCheckInputs(
     return true;
 }
 
-
-/*bool ContextualCheckInputs(const CTransaction& tx, CValidationState &state, const CCoinsViewCache &inputs, bool fScriptChecks, unsigned int flags, bool cacheStore, const Consensus::Params& consensusParams, std::vector<CScriptCheck> *pvChecks)
- {
- if (!NonContextualCheckInputs(tx, state, inputs, fScriptChecks, flags, cacheStore, consensusParams, pvChecks)) {
- fprintf(stderr,"ContextualCheckInputs failure.0\n");
- return false;
- }
-
- if (!tx.IsCoinBase())
- {
- // While checking, GetBestBlock() refers to the parent block.
- // This is also true for mempool checks.
- CBlockIndex *pindexPrev = mapBlockIndex.find(inputs.GetBestBlock())->second;
- int nSpendHeight = pindexPrev->nHeight + 1;
- for (unsigned int i = 0; i < tx.vin.size(); i++)
- {
- const COutPoint &prevout = tx.vin[i].prevout;
- const CCoins *coins = inputs.AccessCoins(prevout.hash);
- // Assertion is okay because NonContextualCheckInputs ensures the inputs
- // are available.
- assert(coins);
-
- // If prev is coinbase, check that it's matured
- if (coins->IsCoinBase()) {
- if ( ASSETCHAINS_SYMBOL[0] == 0 )
- COINBASE_MATURITY = _COINBASE_MATURITY;
- if (nSpendHeight - coins->nHeight < COINBASE_MATURITY) {
- fprintf(stderr,"ContextualCheckInputs failure.1 i.%d of %d\n",i,(int32_t)tx.vin.size());
-
- return state.Invalid(
- error("CheckInputs(): tried to spend coinbase at depth %d", nSpendHeight - coins->nHeight),REJECT_INVALID, "bad-txns-premature-spend-of-coinbase");
- }
- }
- }
- }
-
- return true;
- }*/
-
 namespace {
 
     bool UndoWriteToDisk(const CBlockUndo& blockundo, CDiskBlockPos& pos, const uint256& hashBlock, const CMessageHeader::MessageStartChars& messageStart)
@@ -3000,7 +2961,6 @@ namespace {
         hasher << hashBlock;
         hasher << blockundo;
         fileout << hasher.GetHash();
-//fprintf(stderr,"hashBlock.%s hasher.%s\n",hashBlock.GetHex().c_str(),hasher.GetHash().GetHex().c_str());
         return true;
     }
 
@@ -5977,30 +5937,35 @@ bool CheckDiskSpace(uint64_t nAdditionalBytes)
 /****
  * Open a file
  * @param pos where to position for the next read
- * @param prefix the type of file (i.e. "blk", "rev", etc.
+ * @param prefix the type of file ("blk" or "rev")
  * @param fReadOnly open in read only mode
- * @returns the file pointer or NULL on error
+ * @returns the file pointer with the position set to pos.nPos, or NULL on error
  */
 FILE* OpenDiskFile(const CDiskBlockPos &pos, const char *prefix, bool fReadOnly)
 {
-    static int32_t didinit[256];
+    static int32_t didinit[256]; // keeps track of which files have been initialized
     if (pos.IsNull())
         return NULL;
     boost::filesystem::path path = GetBlockPosFilename(pos, prefix);
-    boost::filesystem::create_directories(path.parent_path());
+    boost::filesystem::create_directories(path.parent_path()); // create directory if necessary
     FILE* file = fopen(path.string().c_str(), "rb+"); // open existing file for reading and writing
-    if (!file && !fReadOnly)
+    if (!file && !fReadOnly) // problem. Try opening read only if that is what was requested
         file = fopen(path.string().c_str(), "wb+"); // create an empty file for reading and writing
     if (!file) {
         LogPrintf("Unable to open file %s\n", path.string());
         return NULL;
     }
-    if ( pos.nFile < sizeof(didinit)/sizeof(*didinit) && didinit[pos.nFile] == 0 && strcmp(prefix,(char *)"blk") == 0 )
+    // the file was successfully opened
+    if ( pos.nFile < sizeof(didinit)/sizeof(*didinit) // if pos.nFile doesn't go beyond our array
+            && didinit[pos.nFile] == 0 // we have not initialized this file
+            && strcmp(prefix,(char *)"blk") == 0 ) // we are attempting to read a block file
     {
         komodo_prefetch(file);
         didinit[pos.nFile] = 1;
     }
-    if (pos.nPos) {
+
+    if (pos.nPos) // it has been asked to move to a specific location within the file
+    {
         if (fseek(file, pos.nPos, SEEK_SET)) {
             LogPrintf("Unable to seek to position %u of %s\n", pos.nPos, path.string());
             fclose(file);

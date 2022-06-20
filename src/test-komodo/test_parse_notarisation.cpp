@@ -45,7 +45,6 @@ namespace old_space {
         uint64_t deposited,issued,withdrawn,approved,redeemed,shorted;
         struct notarized_checkpoint *NPOINTS; int32_t NUM_NPOINTS,last_NPOINTSi;
         //std::list<std::shared_ptr<komodo::event>> events;
-        uint32_t RTbufs[64][3]; uint64_t RTmask;
         //bool add_event(const std::string& symbol, const uint32_t height, std::shared_ptr<komodo::event> in);
     };
 
@@ -84,7 +83,6 @@ namespace old_space {
         int32_t i; 
         struct komodo_state *sp; 
         struct notarized_checkpoint *np = 0;
-        //if ( (sp= komodo_stateptr(symbol,dest)) != 0 )
         sp = &old_space::ks_old;
 
         {
@@ -111,7 +109,6 @@ namespace old_space {
     struct notarized_checkpoint *komodo_npptr_at(int idx)
     {
         char symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN]; struct komodo_state *sp;
-        //if ( (sp= komodo_stateptr(symbol,dest)) != 0 )
         sp = &old_space::ks_old;
 
             if (idx < sp->NUM_NPOINTS)
@@ -125,7 +122,6 @@ namespace old_space {
         zero.SetNull();
 
         char symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN]; int32_t i; struct komodo_state *sp; struct notarized_checkpoint *np = 0;
-        //if ( (sp= komodo_stateptr(symbol,dest)) != 0 )
         sp = &old_space::ks_old;
         {
             for (i=sp->NUM_NPOINTS-1; i>=0; i--)
@@ -145,7 +141,6 @@ namespace old_space {
         char symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN];
         struct komodo_state *sp;
 
-        //if ( (sp= komodo_stateptr(symbol,dest)) != 0 )
         sp = &old_space::ks_old;
         {
             if ( sp->NUM_NPOINTS > 0 )

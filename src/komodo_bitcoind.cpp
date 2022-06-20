@@ -1112,15 +1112,23 @@ int32_t komodo_nextheight()
     else return(komodo_longestchain() + 1);
 }
 
+/**
+ * @brief get the KMD chain height
+ * 
+ * @param kmdheightp the chain height of KMD
+ * @return 1 if this chain's height >= komodo_longestchain(), otherwise 0
+ */
 int32_t komodo_isrealtime(int32_t *kmdheightp)
 {
-    struct komodo_state *sp; CBlockIndex *pindex;
-    if ( (sp= komodo_stateptrget((char *)"KMD")) != 0 )
+    komodo_state *sp = komodo_stateptrget( (char*)"KMD");
+    if ( sp != nullptr )
         *kmdheightp = sp->CURRENT_HEIGHT;
-    else *kmdheightp = 0;
-    if ( (pindex= chainActive.LastTip()) != 0 && pindex->nHeight >= (int32_t)komodo_longestchain() )
-        return(1);
-    else return(0);
+    else 
+        *kmdheightp = 0;
+    CBlockIndex *pindex = chainActive.LastTip();
+    if ( pindex != nullptr && pindex->nHeight >= (int32_t)komodo_longestchain() )
+        return 1;
+    return 0;
 }
 
 int32_t komodo_validate_interest(const CTransaction &tx,int32_t txheight,uint32_t cmptime,int32_t dispflag)

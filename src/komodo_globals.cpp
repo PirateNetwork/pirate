@@ -14,17 +14,22 @@
  ******************************************************************************/
 #include "komodo_globals.h"
 
+/**
+ * @brief Given a currency name, return the index in the CURRENCIES array
+ * 
+ * @param origbase the currency name to look for
+ * @return the index in the array, or -1
+ */
 int32_t komodo_baseid(char *origbase)
 {
-    int32_t i; char base[64];
-    for (i=0; origbase[i]!=0&&i<sizeof(base); i++)
-        base[i] = toupper((int32_t)(origbase[i] & 0xff));
-    base[i] = 0;
-    for (i=0; i<=MAX_CURRENCIES; i++)
-        if ( strcmp(CURRENCIES[i],base) == 0 )
-            return(i);
-    //printf("illegal base.(%s) %s\n",origbase,base);
-    return(-1);
+    // convert to upper case
+    std::string base(origbase);
+    std::transform(base.begin(),base.end(),base.begin(),[](char s){return toupper(s & 0xff);});
+    // find the entry
+    for (int32_t i=0; i<=MAX_CURRENCIES; i++)
+        if ( base == CURRENCIES[i] )
+            return i;
+    return -1;
 }
 
 #ifndef SATOSHIDEN

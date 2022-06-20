@@ -290,7 +290,6 @@ public:
     uint64_t redeemed;
     uint64_t shorted;
     std::list<std::shared_ptr<komodo::event>> events;
-    uint32_t RTbufs[64][3]; uint64_t RTmask;
     bool add_event(const std::string& symbol, const uint32_t height, std::shared_ptr<komodo::event> in);
 protected:
     /***
