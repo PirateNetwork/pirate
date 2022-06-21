@@ -83,7 +83,8 @@ int32_t getacseason(uint32_t timestamp)
 
 int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp)
 {
-    int32_t i,htind,n; uint64_t mask = 0; struct knotary_entry *kp,*tmp;
+    int32_t i,htind,n; uint64_t mask = 0;
+    knotary_entry *kp,*tmp;
     static uint8_t kmd_pubkeys[NUM_KMD_SEASONS][64][33],didinit[NUM_KMD_SEASONS];
     
     if ( timestamp == 0 && ASSETCHAINS_SYMBOL[0] != 0 )
@@ -194,9 +195,11 @@ int32_t komodo_ratify_threshold(int32_t height,uint64_t signedmask)
 void komodo_notarysinit(int32_t origheight,uint8_t pubkeys[64][33],int32_t num)
 {
     static int32_t hwmheight;
-    int32_t k,i,htind,height; struct knotary_entry *kp; struct knotaries_entry N;
+    int32_t k,i,htind,height;
+    knotary_entry *kp;
+    knotaries_entry N;
     if ( Pubkeys == 0 )
-        Pubkeys = (struct knotaries_entry *)calloc(1 + (KOMODO_MAXBLOCKS / KOMODO_ELECTION_GAP),sizeof(*Pubkeys));
+        Pubkeys = (knotaries_entry *)calloc(1 + (KOMODO_MAXBLOCKS / KOMODO_ELECTION_GAP),sizeof(*Pubkeys));
     memset(&N,0,sizeof(N));
     if ( origheight > 0 )
     {
@@ -212,7 +215,7 @@ void komodo_notarysinit(int32_t origheight,uint8_t pubkeys[64][33],int32_t num)
         std::lock_guard<std::mutex> lock(komodo_mutex);
         for (k=0; k<num; k++)
         {
-            kp = (struct knotary_entry *)calloc(1,sizeof(*kp));
+            kp = (knotary_entry *)calloc(1,sizeof(*kp));
             memcpy(kp->pubkey,pubkeys[k],33);
             kp->notaryid = k;
             HASH_ADD_KEYPTR(hh,N.Notaries,kp->pubkey,33,kp);
@@ -242,7 +245,7 @@ void komodo_notarysinit(int32_t origheight,uint8_t pubkeys[64][33],int32_t num)
 int32_t komodo_chosennotary(int32_t *notaryidp,int32_t height,uint8_t *pubkey33,uint32_t timestamp)
 {
     // -1 if not notary, 0 if notary, 1 if special notary
-    struct knotary_entry *kp; int32_t numnotaries=0,htind,modval = -1;
+    knotary_entry *kp; int32_t numnotaries=0,htind,modval = -1;
     *notaryidp = -1;
     if ( height < 0 )//|| height >= KOMODO_MAXBLOCKS )
     {

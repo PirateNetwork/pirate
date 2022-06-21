@@ -30,9 +30,7 @@ pthread_mutex_t staked_mutex;
 #define KOMODO_ELECTION_GAP 2000    //((ASSETCHAINS_SYMBOL[0] == 0) ? 2000 : 100)
 #define KOMODO_ASSETCHAIN_MAXLEN 65
 
-struct pax_transaction *PAX;
-uint32_t *PVALS;
-struct knotaries_entry *Pubkeys;
+knotaries_entry *Pubkeys;
 
 komodo_state KOMODO_STATES[34]; // 0 == asset chain, 33 == KMD, others correspond to the CURRENCIES array
 const uint32_t nStakedDecemberHardforkTimestamp = 1576840000; //December 2019 hardfork 12/20/2019 @ 11:06am (UTC)
@@ -121,8 +119,7 @@ int32_t ASSETCHAINS_STAKED_SPLIT_PERCENTAGE;
 
 std::map <std::int8_t, int32_t> mapHeightEvalActivate;
 
-struct komodo_kv *KOMODO_KV;
-pthread_mutex_t KOMODO_KV_mutex,KOMODO_CC_mutex;
+pthread_mutex_t KOMODO_CC_mutex;
 
 #define MAX_CURRENCIES 32
 char CURRENCIES[][8] = { 

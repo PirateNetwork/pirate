@@ -204,7 +204,6 @@ void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotar
 
     if ( didinit == 0 )
     {
-        portable_mutex_init(&KOMODO_KV_mutex);
         portable_mutex_init(&KOMODO_CC_mutex);
         didinit = 1;
     }

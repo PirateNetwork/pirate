@@ -60,7 +60,6 @@ extern int32_t ASSETCHAINS_FOUNDERS;
 extern int32_t ASSETCHAINS_CBMATURITY;
 extern int32_t KOMODO_NSPV;
 extern int32_t KOMODO_LOADINGBLOCKS; // not actually in komodo_globals.h, but used in several places
-extern uint32_t *PVALS;
 extern uint32_t ASSETCHAINS_CC;
 extern uint32_t KOMODO_STOPAT;
 extern uint32_t KOMODO_DPOWCONFS;
@@ -80,10 +79,7 @@ extern uint64_t ASSETCHAINS_TIMEUNLOCKFROM;
 extern uint64_t ASSETCHAINS_TIMEUNLOCKTO;
 
 extern std::mutex komodo_mutex;
-extern pthread_mutex_t KOMODO_KV_mutex;
 extern pthread_mutex_t KOMODO_CC_mutex;
-extern komodo_kv *KOMODO_KV;
-extern pax_transaction *PAX;
 extern knotaries_entry *Pubkeys;
 extern komodo_state KOMODO_STATES[34];
 

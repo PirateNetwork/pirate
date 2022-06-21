@@ -18,6 +18,13 @@
 #include "komodo_notary.h" // komodo_notarized_update
 #include "komodo_gateway.h"
 
+#define KOMODO_EVENT_RATIFY 'P'
+#define KOMODO_EVENT_NOTARIZED 'N'
+#define KOMODO_EVENT_KMDHEIGHT 'K'
+#define KOMODO_EVENT_REWIND 'B'
+#define KOMODO_EVENT_PRICEFEED 'V'
+#define KOMODO_EVENT_OPRETURN 'R'
+
 /*****
  * Add a notarized event to the collection
  * @param sp the state to add to

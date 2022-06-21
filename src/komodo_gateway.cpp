@@ -241,7 +241,7 @@ int32_t komodo_check_deposit(int32_t height,const CBlock& block)
  * @param value 
  * @param opretbuf the opreturn
  * @param opretlen the length of opreturn
- * @returns "assetchain", "kv", or "unknown"
+ * @returns "assetchain", "kv", or "unknown" (unused by any caller to date)
  */
 const char *komodo_opreturn(uint64_t value,uint8_t *opretbuf,int32_t opretlen)
 {

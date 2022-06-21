@@ -20,7 +20,6 @@
 #include "komodo_nk.h"
 
 #define KOMODO_EARLYTXID_HEIGHT 100
-//#define ADAPTIVEPOW_CHANGETO_DEFAULTON 1572480000
 #define ASSETCHAINS_MINHEIGHT 128
 #define ASSETCHAINS_MAX_ERAS 7
 #define KOMODO_ELECTION_GAP 2000
@@ -38,15 +37,6 @@
 #define _COINBASE_MATURITY 100
 #define _ASSETCHAINS_TIMELOCKOFF 0xffffffffffffffff
 
-// KMD Notary Seasons 
-// 1: May 1st 2018 1530921600
-// 2: July 15th 2019 1563148800 -> estimated height 1444000
-// 3: 3rd season ending isnt known, so use very far times in future.
-    // 1751328000 = dummy timestamp, 1 July 2025!
-    // 7113400 = 5x current KMD blockheight. 
-// to add 4th season, change NUM_KMD_SEASONS to 4, and add timestamp and height of activation to these arrays. 
-
-
 #define SETBIT(bits,bitoffset) (((uint8_t *)bits)[(bitoffset) >> 3] |= (1 << ((bitoffset) & 7)))
 #define GETBIT(bits,bitoffset) (((uint8_t *)bits)[(bitoffset) >> 3] & (1 << ((bitoffset) & 7)))
 #define CLEARBIT(bits,bitoffset) (((uint8_t *)bits)[(bitoffset) >> 3] &= ~(1 << ((bitoffset) & 7)))
@@ -55,11 +45,7 @@
 #define KOMODO_BIT63SET(x) ((x) & ((uint64_t)1 << 63))
 #define KOMODO_VALUETOOBIG(x) ((x) > (uint64_t)10000000001*COIN)
 
-//#ifndef TESTMODE
 #define PRICES_DAYWINDOW ((3600*24/ASSETCHAINS_BLOCKTIME) + 1)
-//#else
-//#define PRICES_DAYWINDOW (7)
-//#endif
 
 extern uint8_t ASSETCHAINS_TXPOW,ASSETCHAINS_PUBLIC;
 extern int8_t ASSETCHAINS_ADAPTIVEPOW;
@@ -110,7 +96,7 @@ int32_t getkmdseason(int32_t height);
 
 #define IGUANA_MAXSCRIPTSIZE 10001
 #define KOMODO_KVDURATION 1440
-#define KOMODO_KVBINARY 2
+#define KOMODO_KVPROTECTED 1
 #define PRICES_MAXDATAPOINTS 8
 int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);
 char *bitcoin_address(char *coinaddr,uint8_t addrtype,uint8_t *pubkey_or_rmd160,int32_t len);
