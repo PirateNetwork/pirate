@@ -478,64 +478,6 @@ UniValue coinsupply(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return(result);
 }
 
-UniValue jumblr_deposit(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    int32_t retval; UniValue result(UniValue::VOBJ);
-    if (fHelp || params.size() != 1)
-        throw runtime_error("jumblr_deposit \"depositaddress\"\n");
-    CBitcoinAddress address(params[0].get_str());
-    bool isValid = address.IsValid();
-    if ( isValid != 0 )
-    {
-        string addr = params[0].get_str();
-        if ( (retval= Jumblr_depositaddradd((char *)addr.c_str())) >= 0 )
-        {
-            result.push_back(Pair("result", retval));
-            JUMBLR_PAUSE = 0;
-        }
-        else result.push_back(Pair("error", retval));
-    } else result.push_back(Pair("error", "invalid address"));
-    return(result);
-}
-
-UniValue jumblr_secret(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    int32_t retval; UniValue result(UniValue::VOBJ);
-    if (fHelp || params.size() != 1)
-        throw runtime_error("jumblr_secret \"secretaddress\"\n");
-    CBitcoinAddress address(params[0].get_str());
-    bool isValid = address.IsValid();
-    if ( isValid != 0 )
-    {
-        string addr = params[0].get_str();
-        retval = Jumblr_secretaddradd((char *)addr.c_str());
-        result.push_back(Pair("result", "success"));
-        result.push_back(Pair("num", retval));
-        JUMBLR_PAUSE = 0;
-    } else result.push_back(Pair("error", "invalid address"));
-    return(result);
-}
-
-UniValue jumblr_pause(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    int32_t retval; UniValue result(UniValue::VOBJ);
-    if (fHelp )
-        throw runtime_error("jumblr_pause\n");
-    JUMBLR_PAUSE = 1;
-    result.push_back(Pair("result", "paused"));
-    return(result);
-}
-
-UniValue jumblr_resume(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    int32_t retval; UniValue result(UniValue::VOBJ);
-    if (fHelp )
-        throw runtime_error("jumblr_resume\n");
-    JUMBLR_PAUSE = 0;
-    result.push_back(Pair("result", "resumed"));
-    return(result);
-}
-
 UniValue validateaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (fHelp || params.size() != 1)
