@@ -529,8 +529,14 @@ void PrintExceptionContinue(const std::exception* pex, const char* pszThread)
 }
 
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
-//int64_t MAX_MONEY = 200000000 * 100000000LL;
 
+/****
+ * @brief get the OS-specific default data directory
+ * @note Windows: be "C:\Users\[username]\AppData\Roaming\Komodo"
+ * @note Mac: ~/Library/Application Support/Komodo
+ * @note Unix: ~/.komodo
+ * @returns the default path to the Komodo data directory
+ */
 boost::filesystem::path GetDefaultDataDir()
 {
     namespace fs = boost::filesystem;
@@ -649,7 +655,13 @@ const boost::filesystem::path GetExportDir()
     return path;
 }
 
-
+/****
+ * @brief determine the data directory
+ * @note looks at the -datadir command-line parameter or OS-specific defaults
+ * @note creates the directory if it does not already exist
+ * @param fNetSpecific if true, adds network-specific subdirectory (i.e. "regtest" or "testnet3")
+ * @returns the full OS-specific data directory including Komodo (i.e. "~/.komodo")
+ */
 const boost::filesystem::path &GetDataDir(bool fNetSpecific)
 {
     namespace fs = boost::filesystem;
@@ -677,8 +689,6 @@ const boost::filesystem::path &GetDataDir(bool fNetSpecific)
         path /= BaseParams().DataDir();
 
     fs::create_directories(path);
-    //std::string assetpath = path + "/assets";
-    //boost::filesystem::create_directory(assetpath);
     return path;
 }
 

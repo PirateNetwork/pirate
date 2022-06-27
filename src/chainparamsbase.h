@@ -38,6 +38,10 @@ public:
         MAX_NETWORK_TYPES
     };
 
+    /***
+     * @brief returns the subdirectory for the network
+     * @return the data subdirectory ( nothing, or "testnet3" or "regtest" )
+     */
     const std::string& DataDir() const { return strDataDir; }
     int RPCPort() const { return nRPCPort; }
 

@@ -116,7 +116,9 @@ int32_t ASSETCHAINS_STAKED;
 uint64_t ASSETCHAINS_COMMISSION,ASSETCHAINS_SUPPLY = 10,ASSETCHAINS_FOUNDERS_REWARD;
 
 uint32_t KOMODO_INITDONE;
-char KMDUSERPASS[8192+512+1],BTCUSERPASS[8192]; uint16_t KMD_PORT = 7771,BITCOIND_RPCPORT = 7771, DEST_PORT;
+char KMDUSERPASS[8192+512+1],BTCUSERPASS[8192]; 
+uint16_t KMD_PORT = 7771,BITCOIND_RPCPORT = 7771;
+uint16_t DEST_PORT = 0; // port to communicate with LTC for notarization verification
 uint64_t PENDING_KOMODO_TX;
 extern int32_t KOMODO_LOADINGBLOCKS; // defined in pow.cpp, boolean, 1 if currently loading the block index, 0 if not
 unsigned int MAX_BLOCK_SIGOPS = 20000;
