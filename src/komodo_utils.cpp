@@ -867,37 +867,51 @@ void iguana_initQ(queue_t *Q,char *name)
         free(item);
 }
 
+/**
+ * @brief Get the username, password, and port from a file
+ * @param[out] username the username found in the config file 
+ * @param[out] password the password found in the config file
+ * @param[in] fp the file to be read
+ * @return the RPC port
+ */
 uint16_t _komodo_userpass(char *username,char *password,FILE *fp)
 {
-    char *rpcuser,*rpcpassword,*str,line[8192]; uint16_t port = 0;
-    rpcuser = rpcpassword = 0;
-    username[0] = password[0] = 0;
+    uint16_t port = 0;
+    char *rpcuser = nullptr;
+    char *rpcpassword = nullptr;
+    char line[8192];
+
+    username[0] = 0;
+    password[0] = 0;
+
     while ( fgets(line,sizeof(line),fp) != 0 )
     {
+        char *str = nullptr;
         if ( line[0] == '#' )
             continue;
-        //printf("line.(%s) %p %p\n",line,strstr(line,(char *)"rpcuser"),strstr(line,(char *)"rpcpassword"));
-        if ( (str= strstr(line,(char *)"rpcuser")) != 0 )
+        if ( (str= strstr(line,(char *)"rpcuser")) != nullptr )
+        {
             rpcuser = parse_conf_line(str,(char *)"rpcuser");
-        else if ( (str= strstr(line,(char *)"rpcpassword")) != 0 )
+        }
+        else if ( (str= strstr(line,(char *)"rpcpassword")) != nullptr )
+        {
             rpcpassword = parse_conf_line(str,(char *)"rpcpassword");
-        else if ( (str= strstr(line,(char *)"rpcport")) != 0 )
+        }
+        else if ( (str= strstr(line,(char *)"rpcport")) != nullptr )
         {
             port = atoi(parse_conf_line(str,(char *)"rpcport"));
-            //fprintf(stderr,"rpcport.%u in file\n",port);
         }
     }
-    if ( rpcuser != 0 && rpcpassword != 0 )
+    if ( rpcuser != nullptr && rpcpassword != nullptr )
     {
         strcpy(username,rpcuser);
         strcpy(password,rpcpassword);
     }
-    //printf("rpcuser.(%s) rpcpassword.(%s) KMDUSERPASS.(%s) %u\n",rpcuser,rpcpassword,KMDUSERPASS,port);
-    if ( rpcuser != 0 )
+    if ( rpcuser != nullptr )
         free(rpcuser);
-    if ( rpcpassword != 0 )
+    if ( rpcpassword != nullptr )
         free(rpcpassword);
-    return(port);
+    return port;
 }
 
 void komodo_statefname(char *fname,char *symbol,char *str)
@@ -1239,10 +1253,35 @@ int8_t equihash_params_possible(uint64_t n, uint64_t k)
     return(-1);
 }
 
+/***
+ * @brief get username, password, and port from a config file
+ * @param[in] path the path to the data directory
+ * @param[in] filename the filename of the config file (without directory)
+ * @param[out] userpass the username and password from the config file (colon separated)
+ * @param[out] port the RPC port found in the config file
+ */
+void get_userpass_and_port(const boost::filesystem::path& path, const std::string& filename, 
+        std::string userpass, uint16_t& port)
+{
+    boost::filesystem::path datadir_path = path;
+    datadir_path /= filename;
+    FILE* fp = fopen(datadir_path.c_str(), "rb");
+    if ( fp != nullptr )
+    {
+        char username[512];
+        char password[4096];
+        port = _komodo_userpass(username,password,fp);
+        userpass = std::string(username) + ":" + std::string(password);
+        fclose(fp);
+    } 
+    else 
+        printf("couldnt open.(%s) will not validate dest notarizations\n", datadir_path.c_str());
+}
+
 void komodo_args(char *argv0)
 {
     std::string name,addn,hexstr,symbol; char *dirname,fname[512],arg0str[64],magicstr[9]; uint8_t magic[4],extrabuf[32756],disablebits[32],*extraptr=0;
-    FILE *fp; uint64_t val; uint16_t port, dest_rpc_port; int32_t i,nonz=0,baseid,len,n,extralen = 0; uint64_t ccenables[256], ccEnablesHeight[512] = {0}; CTransaction earlytx; uint256 hashBlock;
+    FILE *fp; uint64_t val; uint16_t port; int32_t i,nonz=0,baseid,len,n,extralen = 0; uint64_t ccenables[256], ccEnablesHeight[512] = {0}; CTransaction earlytx; uint256 hashBlock;
 
     std::string ntz_dest_path;
     ntz_dest_path = GetArg("-notary", "");
@@ -1851,41 +1890,20 @@ void komodo_args(char *argv0)
     }
     else
     {
-        char fname[512],username[512],password[4096]; int32_t iter; FILE *fp;
-        ASSETCHAINS_P2PPORT = 7770;
-        ASSETCHAINS_RPCPORT = 7771;
-        for (iter=0; iter<2; iter++)
-        {
-            strcpy(fname,GetDataDir().string().c_str());
-#ifdef _WIN32
-            while ( fname[strlen(fname)-1] != '\\' )
-                fname[strlen(fname)-1] = 0;
-            if ( iter == 0 )
-                strcat(fname,"Komodo\\komodo.conf");
-            else strcat(fname,ntz_dest_path.c_str());
-#else
-            while ( fname[strlen(fname)-1] != '/' )
-                fname[strlen(fname)-1] = 0;
+        // -ac_name not passed, we are on the KMD chain
+        ASSETCHAINS_P2PPORT = 7770; // default port for P2P
+        ASSETCHAINS_RPCPORT = 7771; // default port for RPC
 #ifdef __APPLE__
-            if ( iter == 0 )
-                strcat(fname,"Komodo/Komodo.conf");
-            else strcat(fname,ntz_dest_path.c_str());
+        std::string filename = "Komodo.conf";
 #else
-            if ( iter == 0 )
-                strcat(fname,".komodo/komodo.conf");
-            else strcat(fname,ntz_dest_path.c_str());
+        std::string filename = "komodo.conf";
 #endif
-#endif
-            if ( (fp= fopen(fname,"rb")) != 0 )
-            {
-                dest_rpc_port = _komodo_userpass(username,password,fp);
-                DEST_PORT = iter == 1 ? dest_rpc_port : 0;
-                sprintf(iter == 0 ? KMDUSERPASS : BTCUSERPASS,"%s:%s",username,password);
-                fclose(fp);
-            } else printf("couldnt open.(%s) will not validate dest notarizations\n",fname);
-            if ( !IS_KOMODO_NOTARY )
-                break;
-        }
+
+        auto datadir_path = GetDataDir();
+        uint16_t ignore;
+        get_userpass_and_port(datadir_path, filename, KMDUSERPASS, ignore);
+        if (IS_KOMODO_NOTARY)
+            get_userpass_and_port(datadir_path, ntz_dest_path, BTCUSERPASS, DEST_PORT);
     }
     int32_t dpowconfs = KOMODO_DPOWCONFS;
     if ( ASSETCHAINS_SYMBOL[0] != 0 )

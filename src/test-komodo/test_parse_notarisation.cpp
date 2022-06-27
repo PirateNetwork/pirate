@@ -7,6 +7,7 @@
 #include "komodo_structs.h"
 #include "test_parse_notarisation.h"
 
+#include <boost/filesystem.hpp>
 #include <fstream>
 
 komodo_state *komodo_stateptr(char *symbol,char *dest);
@@ -15,6 +16,9 @@ void komodo_notarized_update(struct komodo_state *sp,int32_t nHeight,int32_t not
 const notarized_checkpoint *komodo_npptr(int32_t height);
 int32_t komodo_prevMoMheight();
 int32_t komodo_notarizeddata(int32_t nHeight,uint256 *notarized_hashp,uint256 *notarized_desttxidp);
+// method in komodo_utils.cpp:
+void get_userpass_and_port(const boost::filesystem::path& path, const std::string& filename, 
+        std::string userpass, uint16_t& port);
 
 class komodo_state_accessor : public komodo_state
 {
@@ -525,4 +529,56 @@ TEST(TestParseNotarisation, DISABLED_OldVsNew)
 
 // for l in `g 'parse notarisation' ~/.komodo/debug.log | pyline 'l.split()[8]'`; do hoek decodeTx '{"hex":"'`src/komodo-cli getrawtransaction "$l"`'"}' | jq '.outputs[1].script.op_return' | pyline 'import base64; print base64.b64decode(l).encode("hex")'; done
 
+TEST(TestParseNotarisation, FilePaths)
+{
+    // helper for home directory
+    class MockHomeDirectory
+    {
+        public:
+        MockHomeDirectory()
+        {
+            data_path = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+            boost::filesystem::create_directories(data_path);
+            orig_home = getenv("HOME");
+            setenv("HOME", data_path.c_str(), true);
+
+        }
+        ~MockHomeDirectory()
+        {
+            boost::filesystem::remove_all(data_path);
+            setenv("HOME", orig_home.c_str(), true);
+        }
+        bool create_komodo_config()
+        {
+            std::string filename = (data_path /= "komodo.conf").string();
+            std::ofstream komodo(filename);
+            komodo << "username:test1\n"
+                    << "password=my_password\n"
+                    << "rpcport=1234";
+            return true;
+        }
+        boost::filesystem::path data_path;
+        std::string orig_home;
+    };
+    {
+        // default
+        MockHomeDirectory home;
+        mapArgs["-datadir"] = "";
+        mapArgs["-notary"] = "";
+        home.create_komodo_config();
+        std::string userpass;
+        std::string expected("test1:my_password");
+        uint16_t port;
+        get_userpass_and_port(home.data_path, "komodo.conf", userpass, port);
+        EXPECT_EQ(userpass, expected);
+        EXPECT_EQ(port, 1234);
+    }
+    {
+        // with -datadir
+    }
+    {
+        // with -notary
+    }
 }
+
+} // namespace TestParseNotarisation
