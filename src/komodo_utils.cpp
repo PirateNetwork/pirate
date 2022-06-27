@@ -1261,8 +1261,10 @@ int8_t equihash_params_possible(uint64_t n, uint64_t k)
  * @param[out] port the RPC port found in the config file
  */
 void get_userpass_and_port(const boost::filesystem::path& path, const std::string& filename, 
-        std::string userpass, uint16_t& port)
+        std::string& userpass, uint16_t& port)
 {
+    userpass = "";
+    port = 0;
     boost::filesystem::path datadir_path = path;
     datadir_path /= filename;
     FILE* fp = fopen(datadir_path.c_str(), "rb");
@@ -1271,28 +1273,59 @@ void get_userpass_and_port(const boost::filesystem::path& path, const std::strin
         char username[512];
         char password[4096];
         port = _komodo_userpass(username,password,fp);
-        userpass = std::string(username) + ":" + std::string(password);
+        if ( username[0] != 0 && password[0] != 0 )
+            userpass = std::string(username) + ":" + std::string(password);
         fclose(fp);
     } 
     else 
         printf("couldnt open.(%s) will not validate dest notarizations\n", datadir_path.c_str());
 }
 
+/****
+ * @brief set ports and usernames/passwords from command line and/or config files
+ * @note modifies ASSETCHAINS_P2PPORT, ASSETCHAINS_RPCPORT, KMDUSERPASS, BTCUSERPASS, DESTPORT
+ * @note IS_KOMODO_NOTARY should already be set
+ * @param ltc_config_filename configuration file for ltc (via -notary command line parameter)
+ */
+void set_kmd_user_password_port(const std::string& ltc_config_filename)
+{
+        ASSETCHAINS_P2PPORT = 7770; // default port for P2P
+        ASSETCHAINS_RPCPORT = 7771; // default port for RPC
+#ifdef __APPLE__
+        std::string filename = "Komodo.conf";
+#else
+        std::string filename = "komodo.conf";
+#endif
+
+        auto datadir_path = GetDataDir();
+        uint16_t ignore;
+        std::string userpass;
+        get_userpass_and_port(datadir_path, filename, userpass, ignore);
+        if (!userpass.empty())
+            strncpy(KMDUSERPASS, userpass.c_str(), 8705);
+        if (IS_KOMODO_NOTARY)
+        {
+            get_userpass_and_port(datadir_path, ltc_config_filename, userpass, DEST_PORT);
+            if (!userpass.empty())
+                strncpy(BTCUSERPASS, userpass.c_str(), 8192);
+        }
+}
+
 void komodo_args(char *argv0)
 {
-    std::string name,addn,hexstr,symbol; char *dirname,fname[512],arg0str[64],magicstr[9]; uint8_t magic[4],extrabuf[32756],disablebits[32],*extraptr=0;
-    FILE *fp; uint64_t val; uint16_t port; int32_t i,nonz=0,baseid,len,n,extralen = 0; uint64_t ccenables[256], ccEnablesHeight[512] = {0}; CTransaction earlytx; uint256 hashBlock;
+    std::string name; // -ac_name
+    char *dirname; 
+    uint8_t disablebits[32],*extraptr=0;
+    FILE *fp; 
+    int32_t i,nonz=0,n; 
 
-    std::string ntz_dest_path;
-    ntz_dest_path = GetArg("-notary", "");
+    const std::string ntz_dest_path = GetArg("-notary", "");
     IS_KOMODO_NOTARY = ntz_dest_path == "" ? 0 : 1;
 
 
     STAKED_NOTARY_ID = GetArg("-stakednotary", -1);
     KOMODO_NSPV = GetArg("-nSPV",0);
-    memset(ccenables,0,sizeof(ccenables));
     memset(disablebits,0,sizeof(disablebits));
-    memset(ccEnablesHeight,0,sizeof(ccEnablesHeight));
     if ( GetBoolArg("-gen", false) != 0 )
     {
         KOMODO_MININGTHREADS = GetArg("-genproclimit",-1);
@@ -1333,7 +1366,7 @@ void komodo_args(char *argv0)
 	name = GetArg("-ac_name","");
     if ( argv0 != 0 )
     {
-        len = (int32_t)strlen(argv0);
+        int32_t len = (int32_t)strlen(argv0);
         for (i=0; i<sizeof(argv0suffix)/sizeof(*argv0suffix); i++)
         {
             n = (int32_t)strlen(argv0suffix[i]);
@@ -1356,6 +1389,8 @@ void komodo_args(char *argv0)
     Split(GetArg("-ac_nk",""), sizeof(ASSETCHAINS_NK)/sizeof(*ASSETCHAINS_NK), ASSETCHAINS_NK, 0);
     
     // -ac_ccactivateht=evalcode,height,evalcode,height,evalcode,height....
+    uint64_t ccEnablesHeight[512];
+    memset(ccEnablesHeight, 0, sizeof(ccEnablesHeight));
     Split(GetArg("-ac_ccactivateht",""), sizeof(ccEnablesHeight)/sizeof(*ccEnablesHeight), ccEnablesHeight, 0);
     // fill map with all eval codes and activation height of 0.
     for ( int i = 0; i < 256; i++ )
@@ -1486,7 +1521,7 @@ void komodo_args(char *argv0)
                 fprintf(stderr,"%s ",ASSETCHAINS_STOCKS[i].c_str());
             fprintf(stderr,"%d -ac_stocks\n",(int32_t)ASSETCHAINS_STOCKS.size());
         }
-        hexstr = GetArg("-ac_mineropret","");
+        const std::string hexstr = GetArg("-ac_mineropret","");
         if ( hexstr.size() != 0 )
         {
             Mineropret.resize(hexstr.size()/2);
@@ -1504,6 +1539,8 @@ void komodo_args(char *argv0)
         {
             uint8_t prevCCi = 0;
             ASSETCHAINS_CCLIB = GetArg("-ac_cclib","");
+            uint64_t ccenables[256];
+            memset(ccenables, 0, sizeof(ccenables) );
             Split(GetArg("-ac_ccenable",""), sizeof(ccenables)/sizeof(*ccenables),  ccenables, 0);
             for (i=nonz=0; i<0x100; i++)
             {
@@ -1529,14 +1566,6 @@ void komodo_args(char *argv0)
                 }
                 CLEARBIT(disablebits,0);
             }
-            /*if ( ASSETCHAINS_CCLIB.size() > 0 )
-            {
-                for (i=first; i<=last; i++)
-                {
-                    CLEARBIT(disablebits,i);
-                    ASSETCHAINS_CCDISABLES[i] = 0;
-                }
-            }*/
         }
         if ( ASSETCHAINS_BEAMPORT != 0 )
         {
@@ -1645,8 +1674,10 @@ void komodo_args(char *argv0)
                 printf("ASSETCHAINS_FOUNDERS needs an ASSETCHAINS_OVERRIDE_PUBKEY or ASSETCHAINS_SCRIPTPUB\n");
             }
         }
+        int32_t extralen = 0;
         if ( ASSETCHAINS_ENDSUBSIDY[0] != 0 || ASSETCHAINS_REWARD[0] != 0 || ASSETCHAINS_HALVING[0] != 0 || ASSETCHAINS_DECAY[0] != 0 || ASSETCHAINS_COMMISSION != 0 || ASSETCHAINS_PUBLIC != 0 || ASSETCHAINS_PRIVATE != 0 || ASSETCHAINS_TXPOW != 0 || ASSETCHAINS_FOUNDERS != 0 || ASSETCHAINS_SCRIPTPUB.size() > 1 || ASSETCHAINS_SELFIMPORT.size() > 0 || ASSETCHAINS_OVERRIDE_PUBKEY33[0] != 0 || ASSETCHAINS_TIMELOCKGTE != _ASSETCHAINS_TIMELOCKOFF|| ASSETCHAINS_ALGO != ASSETCHAINS_EQUIHASH || ASSETCHAINS_LASTERA > 0 || ASSETCHAINS_BEAMPORT != 0 || ASSETCHAINS_CODAPORT != 0 || nonz > 0 || ASSETCHAINS_CCLIB.size() > 0 || ASSETCHAINS_FOUNDERS_REWARD != 0 || ASSETCHAINS_NOTARY_PAY[0] != 0 || ASSETCHAINS_BLOCKTIME != 60 || ASSETCHAINS_CBOPRET != 0 || Mineropret.size() != 0 || (ASSETCHAINS_NK[0] != 0 && ASSETCHAINS_NK[1] != 0) || KOMODO_SNAPSHOT_INTERVAL != 0 || ASSETCHAINS_EARLYTXIDCONTRACT != 0 || ASSETCHAINS_CBMATURITY != 0 || ASSETCHAINS_ADAPTIVEPOW != 0 )
         {
+            uint8_t extrabuf[32756];
             fprintf(stderr,"perc %.4f%% ac_pub=[%02x%02x%02x...] acsize.%d\n",dstr(ASSETCHAINS_COMMISSION)*100,ASSETCHAINS_OVERRIDE_PUBKEY33[0],ASSETCHAINS_OVERRIDE_PUBKEY33[1],ASSETCHAINS_OVERRIDE_PUBKEY33[2],(int32_t)ASSETCHAINS_SCRIPTPUB.size());
             extraptr = extrabuf;
             memcpy(extraptr,ASSETCHAINS_OVERRIDE_PUBKEY33,33), extralen = 33;
@@ -1689,7 +1720,7 @@ void komodo_args(char *argv0)
                 extralen += iguana_rwnum(1,&extraptr[extralen],sizeof(ASSETCHAINS_ALGO),(void *)&ASSETCHAINS_ALGO);
             }
 
-            val = ASSETCHAINS_COMMISSION | (((int64_t)ASSETCHAINS_STAKED & 0xff) << 32) | (((uint64_t)ASSETCHAINS_CC & 0xffff) << 40) | ((ASSETCHAINS_PUBLIC != 0) << 7) | ((ASSETCHAINS_PRIVATE != 0) << 6) | ASSETCHAINS_TXPOW;
+            uint64_t val = ASSETCHAINS_COMMISSION | (((int64_t)ASSETCHAINS_STAKED & 0xff) << 32) | (((uint64_t)ASSETCHAINS_CC & 0xffff) << 40) | ((ASSETCHAINS_PUBLIC != 0) << 7) | ((ASSETCHAINS_PRIVATE != 0) << 6) | ASSETCHAINS_TXPOW;
             extralen += iguana_rwnum(1,&extraptr[extralen],sizeof(val),(void *)&val);
             
             if ( ASSETCHAINS_FOUNDERS != 0 )
@@ -1708,7 +1739,6 @@ void komodo_args(char *argv0)
             {
                 decode_hex(&extraptr[extralen],ASSETCHAINS_SCRIPTPUB.size()/2,(char *)ASSETCHAINS_SCRIPTPUB.c_str());
                 extralen += ASSETCHAINS_SCRIPTPUB.size()/2;
-                //extralen += iguana_rwnum(1,&extraptr[extralen],(int32_t)ASSETCHAINS_SCRIPTPUB.size(),(void *)ASSETCHAINS_SCRIPTPUB.c_str());
                 fprintf(stderr,"append ac_script %s\n",ASSETCHAINS_SCRIPTPUB.c_str());
             }
             if ( ASSETCHAINS_SELFIMPORT.size() > 0 )
@@ -1752,7 +1782,7 @@ void komodo_args(char *argv0)
                 {
                     for (i=0; i<ASSETCHAINS_PRICES.size(); i++)
                     {
-                        symbol = ASSETCHAINS_PRICES[i];
+                        std::string symbol = ASSETCHAINS_PRICES[i];
                         memcpy(&extraptr[extralen],(char *)symbol.c_str(),symbol.size());
                         extralen += symbol.size();
                     }
@@ -1761,12 +1791,11 @@ void komodo_args(char *argv0)
                 {
                     for (i=0; i<ASSETCHAINS_STOCKS.size(); i++)
                     {
-                        symbol = ASSETCHAINS_STOCKS[i];
+                        std::string symbol = ASSETCHAINS_STOCKS[i];
                         memcpy(&extraptr[extralen],(char *)symbol.c_str(),symbol.size());
                         extralen += symbol.size();
                     }
                 }
-                //komodo_pricesinit();
                 komodo_cbopretupdate(1); // will set Mineropret
                 fprintf(stderr,"This blockchain uses data produced from CoinDesk Bitcoin Price Index\n");
             }
@@ -1791,8 +1820,8 @@ void komodo_args(char *argv0)
                 extraptr[extralen++] = ASSETCHAINS_ADAPTIVEPOW;
         }
         
-        addn = GetArg("-seednode","");
-        if ( strlen(addn.c_str()) > 0 )
+        const std::string addn = GetArg("-seednode","");
+        if ( addn.size() > 0 )
             ASSETCHAINS_SEED = 1;
 
         strncpy(ASSETCHAINS_SYMBOL,name.c_str(),sizeof(ASSETCHAINS_SYMBOL)-1);
@@ -1802,9 +1831,9 @@ void komodo_args(char *argv0)
 
         MAX_MONEY = komodo_max_money();
 
-        if ( (baseid = komodo_baseid(ASSETCHAINS_SYMBOL)) >= 0 && baseid < 32 )
+        int32_t baseid = komodo_baseid(ASSETCHAINS_SYMBOL);
+        if ( baseid >= 0 && baseid < 32 )
         {
-            //komodo_maxallowed(baseid);
             printf("baseid.%d MAX_MONEY.%s %.8f\n",baseid,ASSETCHAINS_SYMBOL,(double)MAX_MONEY/SATOSHIDEN);
         }
 
@@ -1813,7 +1842,6 @@ void komodo_args(char *argv0)
         if ( KOMODO_BIT63SET(MAX_MONEY) != 0 )
             MAX_MONEY = KOMODO_MAXNVALUE;
         fprintf(stderr,"MAX_MONEY %llu %.8f\n",(long long)MAX_MONEY,(double)MAX_MONEY/SATOSHIDEN);
-        //printf("baseid.%d MAX_MONEY.%s %.8f\n",baseid,ASSETCHAINS_SYMBOL,(double)MAX_MONEY/SATOSHIDEN);
         uint16_t tmpport = komodo_port(ASSETCHAINS_SYMBOL,ASSETCHAINS_SUPPLY,&ASSETCHAINS_MAGIC,extraptr,extralen);
         if ( GetArg("-port",0) != 0 )
         {
@@ -1830,7 +1858,6 @@ void komodo_args(char *argv0)
             boost::this_thread::sleep(boost::posix_time::milliseconds(3000));
 #endif
         }
-        //fprintf(stderr,"Got datadir.(%s)\n",dirname);
         if ( ASSETCHAINS_SYMBOL[0] != 0 )
         {
             int32_t komodo_baseid(char *origbase);
@@ -1839,7 +1866,8 @@ void komodo_args(char *argv0)
                 fprintf(stderr,"cant have assetchain named KMD\n");
                 StartShutdown();
             }
-            if ( (port= komodo_userpass(ASSETCHAINS_USERPASS,ASSETCHAINS_SYMBOL)) != 0 )
+            uint16_t port = komodo_userpass(ASSETCHAINS_USERPASS,ASSETCHAINS_SYMBOL);
+            if ( port != 0 )
                 ASSETCHAINS_RPCPORT = port;
             else komodo_configfile(ASSETCHAINS_SYMBOL,ASSETCHAINS_P2PPORT + 1);
 
@@ -1852,17 +1880,18 @@ void komodo_args(char *argv0)
                 fprintf(stderr,"ac_cbmaturity must be >0, shutting down\n");
                 StartShutdown();
             }
-            //fprintf(stderr,"ASSETCHAINS_RPCPORT (%s) %u\n",ASSETCHAINS_SYMBOL,ASSETCHAINS_RPCPORT);
         }
         if ( ASSETCHAINS_RPCPORT == 0 )
             ASSETCHAINS_RPCPORT = ASSETCHAINS_P2PPORT + 1;
-        //ASSETCHAINS_NOTARIES = GetArg("-ac_notaries","");
-        //komodo_assetchain_pubkeys((char *)ASSETCHAINS_NOTARIES.c_str());
+
+        uint8_t magic[4];
         iguana_rwnum(1,magic,sizeof(ASSETCHAINS_MAGIC),(void *)&ASSETCHAINS_MAGIC);
+        char magicstr[9];
         for (i=0; i<4; i++)
             sprintf(&magicstr[i<<1],"%02x",magic[i]);
         magicstr[8] = 0;
 #ifndef FROM_CLI
+        char fname[512];
         sprintf(fname,"%s_7776",ASSETCHAINS_SYMBOL);
         if ( (fp= fopen(fname,"wb")) != 0 )
         {
@@ -1871,7 +1900,6 @@ void komodo_args(char *argv0)
                 notarypay = 1;
             fprintf(fp,iguanafmtstr,name.c_str(),name.c_str(),name.c_str(),name.c_str(),magicstr,ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT,"78.47.196.146",notarypay);
             fclose(fp);
-            //printf("created (%s)\n",fname);
         } else printf("error creating (%s)\n",fname);
 #endif
         if ( ASSETCHAINS_CC < 2 )
@@ -1891,25 +1919,12 @@ void komodo_args(char *argv0)
     else
     {
         // -ac_name not passed, we are on the KMD chain
-        ASSETCHAINS_P2PPORT = 7770; // default port for P2P
-        ASSETCHAINS_RPCPORT = 7771; // default port for RPC
-#ifdef __APPLE__
-        std::string filename = "Komodo.conf";
-#else
-        std::string filename = "komodo.conf";
-#endif
-
-        auto datadir_path = GetDataDir();
-        uint16_t ignore;
-        get_userpass_and_port(datadir_path, filename, KMDUSERPASS, ignore);
-        if (IS_KOMODO_NOTARY)
-            get_userpass_and_port(datadir_path, ntz_dest_path, BTCUSERPASS, DEST_PORT);
+        set_kmd_user_password_port(ntz_dest_path);
     }
     int32_t dpowconfs = KOMODO_DPOWCONFS;
     if ( ASSETCHAINS_SYMBOL[0] != 0 )
     {
         BITCOIND_RPCPORT = GetArg("-rpcport", ASSETCHAINS_RPCPORT);
-        //fprintf(stderr,"(%s) port.%u chain params initialized\n",ASSETCHAINS_SYMBOL,BITCOIND_RPCPORT);
         if ( strcmp("PIRATE",ASSETCHAINS_SYMBOL) == 0 && ASSETCHAINS_HALVING[0] == 77777 )
         {
             ASSETCHAINS_HALVING[0] *= 5;

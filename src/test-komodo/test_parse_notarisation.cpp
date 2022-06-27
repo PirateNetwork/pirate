@@ -17,8 +17,10 @@ const notarized_checkpoint *komodo_npptr(int32_t height);
 int32_t komodo_prevMoMheight();
 int32_t komodo_notarizeddata(int32_t nHeight,uint256 *notarized_hashp,uint256 *notarized_desttxidp);
 // method in komodo_utils.cpp:
-void get_userpass_and_port(const boost::filesystem::path& path, const std::string& filename, 
-        std::string userpass, uint16_t& port);
+void set_kmd_user_password_port(const std::string& ltc_config_filename);
+extern char KMDUSERPASS[8705];
+extern char BTCUSERPASS[8192];
+extern uint16_t DEST_PORT;
 
 class komodo_state_accessor : public komodo_state
 {
@@ -532,29 +534,32 @@ TEST(TestParseNotarisation, DISABLED_OldVsNew)
 TEST(TestParseNotarisation, FilePaths)
 {
     // helper for home directory
-    class MockHomeDirectory
+    class MockDataDirectory
     {
         public:
-        MockHomeDirectory()
+        MockDataDirectory()
         {
+            ClearDatadirCache();
             data_path = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
-            boost::filesystem::create_directories(data_path);
+            auto komodo_path = data_path / ".komodo" / "regtest";
+            boost::filesystem::create_directories(komodo_path);
             orig_home = getenv("HOME");
             setenv("HOME", data_path.c_str(), true);
-
         }
-        ~MockHomeDirectory()
+        ~MockDataDirectory()
         {
             boost::filesystem::remove_all(data_path);
             setenv("HOME", orig_home.c_str(), true);
+            ClearDatadirCache();
         }
-        bool create_komodo_config()
+        bool create_config(const std::string& filename, const std::string& user,
+                const std::string& pass, uint16_t port)
         {
-            std::string filename = (data_path /= "komodo.conf").string();
-            std::ofstream komodo(filename);
-            komodo << "username:test1\n"
-                    << "password=my_password\n"
-                    << "rpcport=1234";
+            std::string file = (data_path / ".komodo" / "regtest" / filename).string();
+            std::ofstream komodo(file);
+            komodo << "rpcuser=" << user << "\n"
+                    << "rpcpassword=" << pass << "\n"
+                    << "rpcport=" << std::to_string(port) << "\n";
             return true;
         }
         boost::filesystem::path data_path;
@@ -562,22 +567,62 @@ TEST(TestParseNotarisation, FilePaths)
     };
     {
         // default
-        MockHomeDirectory home;
-        mapArgs["-datadir"] = "";
-        mapArgs["-notary"] = "";
-        home.create_komodo_config();
-        std::string userpass;
-        std::string expected("test1:my_password");
-        uint16_t port;
-        get_userpass_and_port(home.data_path, "komodo.conf", userpass, port);
-        EXPECT_EQ(userpass, expected);
-        EXPECT_EQ(port, 1234);
+        MockDataDirectory home;
+        mapArgs.erase("-datadir");
+        ASSETCHAINS_P2PPORT = 0;
+        ASSETCHAINS_RPCPORT = 0;
+        memset(KMDUSERPASS, 0, sizeof(KMDUSERPASS) );
+        memset(BTCUSERPASS, 0, sizeof(BTCUSERPASS) );
+        DEST_PORT=0;
+        IS_KOMODO_NOTARY = 0;
+        home.create_config("komodo.conf", "test1", "my_password", 1234);
+        home.create_config("ltc.conf", "test2", "ltc_password", 5678);
+        set_kmd_user_password_port("ltc.conf");
+        EXPECT_EQ( std::string(KMDUSERPASS), std::string("test1:my_password") );
+        EXPECT_EQ( std::string(BTCUSERPASS), std::string(""));
+        EXPECT_EQ(DEST_PORT, 0);
+        EXPECT_EQ(ASSETCHAINS_P2PPORT, 7770);
+        EXPECT_EQ(ASSETCHAINS_RPCPORT, 7771);
     }
     {
         // with -datadir
+        MockDataDirectory home;
+        mapArgs["-datadir"] = home.data_path.string() + "/.komodo";
+        ASSETCHAINS_P2PPORT = 0;
+        ASSETCHAINS_RPCPORT = 0;
+        memset(KMDUSERPASS, 0, sizeof(KMDUSERPASS) );
+        memset(BTCUSERPASS, 0, sizeof(BTCUSERPASS) );
+        DEST_PORT=0;
+        IS_KOMODO_NOTARY = 0;
+        std::string expected_kmd("test1:my_password");
+        home.create_config("komodo.conf", "test1", "my_password", 1234);
+        home.create_config("ltc.conf", "test2", "ltc_password", 5678);
+        set_kmd_user_password_port("ltc.conf");
+        EXPECT_EQ( std::string(KMDUSERPASS), std::string("test1:my_password") );
+        EXPECT_EQ( std::string(BTCUSERPASS), std::string(""));
+        EXPECT_EQ(DEST_PORT, 0);
+        EXPECT_EQ(ASSETCHAINS_P2PPORT, 7770);
+        EXPECT_EQ(ASSETCHAINS_RPCPORT, 7771);
     }
     {
         // with -notary
+        MockDataDirectory home;
+        mapArgs["-datadir"] = home.data_path.string() + "/.komodo";
+        ASSETCHAINS_P2PPORT = 0;
+        ASSETCHAINS_RPCPORT = 0;
+        memset(KMDUSERPASS, 0, sizeof(KMDUSERPASS) );
+        memset(BTCUSERPASS, 0, sizeof(BTCUSERPASS) );
+        DEST_PORT=0;
+        IS_KOMODO_NOTARY = 1;
+        std::string expected_kmd("test1:my_password");
+        home.create_config("komodo.conf", "test1", "my_password", 1234);
+        home.create_config("ltc.conf", "test2", "ltc_password", 5678);
+        set_kmd_user_password_port("ltc.conf");
+        EXPECT_EQ(std::string(KMDUSERPASS), std::string("test1:my_password"));
+        EXPECT_EQ(std::string(BTCUSERPASS), std::string("test2:ltc_password"));
+        EXPECT_EQ(DEST_PORT, 5678);
+        EXPECT_EQ(ASSETCHAINS_P2PPORT, 7770);
+        EXPECT_EQ(ASSETCHAINS_RPCPORT, 7771);
     }
 }
 
