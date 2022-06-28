@@ -16,6 +16,230 @@
 #include "komodo_extern_globals.h"
 #include "komodo_notary.h"
 
+struct sha256_vstate { uint64_t length; uint32_t state[8],curlen; uint8_t buf[64]; };
+
+// following is ported from libtom
+
+#define STORE32L(x, y)                                                                     \
+{ (y)[3] = (uint8_t)(((x)>>24)&255); (y)[2] = (uint8_t)(((x)>>16)&255);   \
+(y)[1] = (uint8_t)(((x)>>8)&255); (y)[0] = (uint8_t)((x)&255); }
+
+#define LOAD32L(x, y)                            \
+{ x = (uint32_t)(((uint64_t)((y)[3] & 255)<<24) | \
+((uint32_t)((y)[2] & 255)<<16) | \
+((uint32_t)((y)[1] & 255)<<8)  | \
+((uint32_t)((y)[0] & 255))); }
+
+#define STORE64L(x, y)                                                                     \
+{ (y)[7] = (uint8_t)(((x)>>56)&255); (y)[6] = (uint8_t)(((x)>>48)&255);   \
+(y)[5] = (uint8_t)(((x)>>40)&255); (y)[4] = (uint8_t)(((x)>>32)&255);   \
+(y)[3] = (uint8_t)(((x)>>24)&255); (y)[2] = (uint8_t)(((x)>>16)&255);   \
+(y)[1] = (uint8_t)(((x)>>8)&255); (y)[0] = (uint8_t)((x)&255); }
+
+#define LOAD64L(x, y)                                                       \
+{ x = (((uint64_t)((y)[7] & 255))<<56)|(((uint64_t)((y)[6] & 255))<<48)| \
+(((uint64_t)((y)[5] & 255))<<40)|(((uint64_t)((y)[4] & 255))<<32)| \
+(((uint64_t)((y)[3] & 255))<<24)|(((uint64_t)((y)[2] & 255))<<16)| \
+(((uint64_t)((y)[1] & 255))<<8)|(((uint64_t)((y)[0] & 255))); }
+
+#define STORE32H(x, y)                                                                     \
+{ (y)[0] = (uint8_t)(((x)>>24)&255); (y)[1] = (uint8_t)(((x)>>16)&255);   \
+(y)[2] = (uint8_t)(((x)>>8)&255); (y)[3] = (uint8_t)((x)&255); }
+
+#define LOAD32H(x, y)                            \
+{ x = (uint32_t)(((uint64_t)((y)[0] & 255)<<24) | \
+((uint32_t)((y)[1] & 255)<<16) | \
+((uint32_t)((y)[2] & 255)<<8)  | \
+((uint32_t)((y)[3] & 255))); }
+
+#define STORE64H(x, y)                                                                     \
+{ (y)[0] = (uint8_t)(((x)>>56)&255); (y)[1] = (uint8_t)(((x)>>48)&255);     \
+(y)[2] = (uint8_t)(((x)>>40)&255); (y)[3] = (uint8_t)(((x)>>32)&255);     \
+(y)[4] = (uint8_t)(((x)>>24)&255); (y)[5] = (uint8_t)(((x)>>16)&255);     \
+(y)[6] = (uint8_t)(((x)>>8)&255); (y)[7] = (uint8_t)((x)&255); }
+
+#define LOAD64H(x, y)                                                      \
+{ x = (((uint64_t)((y)[0] & 255))<<56)|(((uint64_t)((y)[1] & 255))<<48) | \
+(((uint64_t)((y)[2] & 255))<<40)|(((uint64_t)((y)[3] & 255))<<32) | \
+(((uint64_t)((y)[4] & 255))<<24)|(((uint64_t)((y)[5] & 255))<<16) | \
+(((uint64_t)((y)[6] & 255))<<8)|(((uint64_t)((y)[7] & 255))); }
+
+// Various logical functions
+#define RORc(x, y) ( ((((uint32_t)(x)&0xFFFFFFFFUL)>>(uint32_t)((y)&31)) | ((uint32_t)(x)<<(uint32_t)(32-((y)&31)))) & 0xFFFFFFFFUL)
+#define Ch(x,y,z)       (z ^ (x & (y ^ z)))
+#define Maj(x,y,z)      (((x | y) & z) | (x & y))
+#define S(x, n)         RORc((x),(n))
+#define R(x, n)         (((x)&0xFFFFFFFFUL)>>(n))
+#define Sigma0(x)       (S(x, 2) ^ S(x, 13) ^ S(x, 22))
+#define Sigma1(x)       (S(x, 6) ^ S(x, 11) ^ S(x, 25))
+#define Gamma0(x)       (S(x, 7) ^ S(x, 18) ^ R(x, 3))
+#define Gamma1(x)       (S(x, 17) ^ S(x, 19) ^ R(x, 10))
+#define MIN(x, y) ( ((x)<(y))?(x):(y) )
+
+static inline int32_t sha256_vcompress(struct sha256_vstate * md,uint8_t *buf)
+{
+    uint32_t S[8],W[64],t0,t1,i;
+    for (i=0; i<8; i++) // copy state into S
+        S[i] = md->state[i];
+    for (i=0; i<16; i++) // copy the state into 512-bits into W[0..15]
+        LOAD32H(W[i],buf + (4*i));
+    for (i=16; i<64; i++) // fill W[16..63]
+        W[i] = Gamma1(W[i - 2]) + W[i - 7] + Gamma0(W[i - 15]) + W[i - 16];
+
+#define RND(a,b,c,d,e,f,g,h,i,ki)                    \
+t0 = h + Sigma1(e) + Ch(e, f, g) + ki + W[i];   \
+t1 = Sigma0(a) + Maj(a, b, c);                  \
+d += t0;                                        \
+h  = t0 + t1;
+
+    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],0,0x428a2f98);
+    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],1,0x71374491);
+    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],2,0xb5c0fbcf);
+    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],3,0xe9b5dba5);
+    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],4,0x3956c25b);
+    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],5,0x59f111f1);
+    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],6,0x923f82a4);
+    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],7,0xab1c5ed5);
+    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],8,0xd807aa98);
+    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],9,0x12835b01);
+    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],10,0x243185be);
+    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],11,0x550c7dc3);
+    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],12,0x72be5d74);
+    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],13,0x80deb1fe);
+    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],14,0x9bdc06a7);
+    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],15,0xc19bf174);
+    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],16,0xe49b69c1);
+    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],17,0xefbe4786);
+    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],18,0x0fc19dc6);
+    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],19,0x240ca1cc);
+    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],20,0x2de92c6f);
+    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],21,0x4a7484aa);
+    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],22,0x5cb0a9dc);
+    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],23,0x76f988da);
+    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],24,0x983e5152);
+    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],25,0xa831c66d);
+    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],26,0xb00327c8);
+    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],27,0xbf597fc7);
+    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],28,0xc6e00bf3);
+    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],29,0xd5a79147);
+    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],30,0x06ca6351);
+    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],31,0x14292967);
+    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],32,0x27b70a85);
+    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],33,0x2e1b2138);
+    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],34,0x4d2c6dfc);
+    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],35,0x53380d13);
+    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],36,0x650a7354);
+    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],37,0x766a0abb);
+    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],38,0x81c2c92e);
+    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],39,0x92722c85);
+    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],40,0xa2bfe8a1);
+    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],41,0xa81a664b);
+    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],42,0xc24b8b70);
+    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],43,0xc76c51a3);
+    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],44,0xd192e819);
+    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],45,0xd6990624);
+    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],46,0xf40e3585);
+    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],47,0x106aa070);
+    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],48,0x19a4c116);
+    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],49,0x1e376c08);
+    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],50,0x2748774c);
+    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],51,0x34b0bcb5);
+    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],52,0x391c0cb3);
+    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],53,0x4ed8aa4a);
+    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],54,0x5b9cca4f);
+    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],55,0x682e6ff3);
+    RND(S[0],S[1],S[2],S[3],S[4],S[5],S[6],S[7],56,0x748f82ee);
+    RND(S[7],S[0],S[1],S[2],S[3],S[4],S[5],S[6],57,0x78a5636f);
+    RND(S[6],S[7],S[0],S[1],S[2],S[3],S[4],S[5],58,0x84c87814);
+    RND(S[5],S[6],S[7],S[0],S[1],S[2],S[3],S[4],59,0x8cc70208);
+    RND(S[4],S[5],S[6],S[7],S[0],S[1],S[2],S[3],60,0x90befffa);
+    RND(S[3],S[4],S[5],S[6],S[7],S[0],S[1],S[2],61,0xa4506ceb);
+    RND(S[2],S[3],S[4],S[5],S[6],S[7],S[0],S[1],62,0xbef9a3f7);
+    RND(S[1],S[2],S[3],S[4],S[5],S[6],S[7],S[0],63,0xc67178f2);
+#undef RND
+    for (i=0; i<8; i++) // feedback
+        md->state[i] = md->state[i] + S[i];
+    return(0);
+}
+
+#undef RORc
+#undef Ch
+#undef Maj
+#undef S
+#undef R
+#undef Sigma0
+#undef Sigma1
+#undef Gamma0
+#undef Gamma1
+
+static inline int32_t sha256_vdone(struct sha256_vstate *md,uint8_t *out)
+{
+    int32_t i;
+    if ( md->curlen >= sizeof(md->buf) )
+        return(-1);
+    md->length += md->curlen * 8; // increase the length of the message
+    md->buf[md->curlen++] = (uint8_t)0x80; // append the '1' bit
+    // if len > 56 bytes we append zeros then compress.  Then we can fall back to padding zeros and length encoding like normal.
+    if ( md->curlen > 56 )
+    {
+        while ( md->curlen < 64 )
+            md->buf[md->curlen++] = (uint8_t)0;
+        sha256_vcompress(md,md->buf);
+        md->curlen = 0;
+    }
+    while ( md->curlen < 56 ) // pad upto 56 bytes of zeroes
+        md->buf[md->curlen++] = (uint8_t)0;
+    STORE64H(md->length,md->buf+56); // store length
+    sha256_vcompress(md,md->buf);
+    for (i=0; i<8; i++) // copy output
+        STORE32H(md->state[i],out+(4*i));
+    return(0);
+}
+
+static inline int32_t sha256_vprocess(struct sha256_vstate *md,const uint8_t *in,uint64_t inlen)
+{
+    uint64_t n; int32_t err;
+    if ( md->curlen > sizeof(md->buf) )
+        return(-1);
+    while ( inlen > 0 )
+    {
+        if ( md->curlen == 0 && inlen >= 64 )
+        {
+            if ( (err= sha256_vcompress(md,(uint8_t *)in)) != 0 )
+                return(err);
+            md->length += 64 * 8, in += 64, inlen -= 64;
+        }
+        else
+        {
+            n = MIN(inlen,64 - md->curlen);
+            memcpy(md->buf + md->curlen,in,(size_t)n);
+            md->curlen += n, in += n, inlen -= n;
+            if ( md->curlen == 64 )
+            {
+                if ( (err= sha256_vcompress(md,md->buf)) != 0 )
+                    return(err);
+                md->length += 8*64;
+                md->curlen = 0;
+            }
+        }
+    }
+    return(0);
+}
+
+static inline void sha256_vinit(struct sha256_vstate * md)
+{
+    md->curlen = 0;
+    md->length = 0;
+    md->state[0] = 0x6A09E667UL;
+    md->state[1] = 0xBB67AE85UL;
+    md->state[2] = 0x3C6EF372UL;
+    md->state[3] = 0xA54FF53AUL;
+    md->state[4] = 0x510E527FUL;
+    md->state[5] = 0x9B05688CUL;
+    md->state[6] = 0x1F83D9ABUL;
+    md->state[7] = 0x5BE0CD19UL;
+}
+
 void vcalc_sha256(char deprecated[(256 >> 3) * 2 + 1],uint8_t hash[256 >> 3],uint8_t *src,int32_t len)
 {
     struct sha256_vstate md;
@@ -611,25 +835,6 @@ int32_t iguana_rwbignum(int32_t rwflag,uint8_t *serialized,int32_t len,uint8_t *
     return(len);
 }
 
-int32_t komodo_scriptitemlen(int32_t *opretlenp,uint8_t *script)
-{
-    int32_t opretlen,len = 0;
-    if ( (opretlen= script[len++]) >= 0x4c )
-    {
-        if ( opretlen == 0x4c )
-            opretlen = script[len++];
-        else if ( opretlen == 0x4d )
-        {
-            opretlen = script[len] + (script[len+1] << 8);
-            len += 2;
-            //opretlen = script[len++];
-            //opretlen = (opretlen << 8) | script[len++];
-        }
-    }
-    *opretlenp = opretlen;
-    return(len);
-}
-
 int32_t komodo_opreturnscript(uint8_t *script,uint8_t type,uint8_t *opret,int32_t opretlen)
 {
     int32_t offset = 0;
@@ -748,124 +953,6 @@ void OS_randombytes(unsigned char *x,long xlen)
     }
 }
 #endif
-
-void lock_queue(queue_t *queue)
-{
-    if ( queue->initflag == 0 )
-    {
-        portable_mutex_init(&queue->mutex);
-        queue->initflag = 1;
-    }
-	portable_mutex_lock(&queue->mutex);
-}
-
-void queue_enqueue(char *name,queue_t *queue,struct queueitem *item)
-{
-    if ( queue->name[0] == 0 && name != 0 && name[0] != 0 )
-        strcpy(queue->name,name);
-    if ( item == 0 )
-    {
-        printf("FATAL type error: queueing empty value\n");
-        return;
-    }
-    lock_queue(queue);
-    DL_APPEND(queue->list,item);
-    portable_mutex_unlock(&queue->mutex);
-}
-
-struct queueitem *queue_dequeue(queue_t *queue)
-{
-    struct queueitem *item = 0;
-    lock_queue(queue);
-    if ( queue->list != 0 )
-    {
-        item = queue->list;
-        DL_DELETE(queue->list,item);
-    }
-	portable_mutex_unlock(&queue->mutex);
-    return(item);
-}
-
-void *queue_delete(queue_t *queue,struct queueitem *copy,int32_t copysize)
-{
-    struct queueitem *item = 0;
-    lock_queue(queue);
-    if ( queue->list != 0 )
-    {
-        DL_FOREACH(queue->list,item)
-        {
-						#ifdef _WIN32
-						if ( item == copy || (item->allocsize == copysize && memcmp((void *)((intptr_t)item + sizeof(struct queueitem)),(void *)((intptr_t)copy + sizeof(struct queueitem)),copysize) == 0) )
-						#else
-            if ( item == copy || (item->allocsize == copysize && memcmp((void *)((long)item + sizeof(struct queueitem)),(void *)((long)copy + sizeof(struct queueitem)),copysize) == 0) )
-						#endif
-            {
-                DL_DELETE(queue->list,item);
-                portable_mutex_unlock(&queue->mutex);
-                printf("name.(%s) deleted item.%p list.%p\n",queue->name,item,queue->list);
-                return(item);
-            }
-        }
-    }
-	portable_mutex_unlock(&queue->mutex);
-    return(0);
-}
-
-void *queue_free(queue_t *queue)
-{
-    struct queueitem *item = 0;
-    lock_queue(queue);
-    if ( queue->list != 0 )
-    {
-        DL_FOREACH(queue->list,item)
-        {
-            DL_DELETE(queue->list,item);
-            free(item);
-        }
-        //printf("name.(%s) dequeue.%p list.%p\n",queue->name,item,queue->list);
-    }
-	portable_mutex_unlock(&queue->mutex);
-    return(0);
-}
-
-void *queue_clone(queue_t *clone,queue_t *queue,int32_t size)
-{
-    struct queueitem *ptr,*item = 0;
-    lock_queue(queue);
-    if ( queue->list != 0 )
-    {
-        DL_FOREACH(queue->list,item)
-        {
-            ptr = (struct queueitem *)calloc(1,sizeof(*ptr));
-            memcpy(ptr,item,size);
-            queue_enqueue(queue->name,clone,ptr);
-        }
-        //printf("name.(%s) dequeue.%p list.%p\n",queue->name,item,queue->list);
-    }
-	portable_mutex_unlock(&queue->mutex);
-    return(0);
-}
-
-int32_t queue_size(queue_t *queue)
-{
-    int32_t count = 0;
-    struct queueitem *tmp;
-    lock_queue(queue);
-    DL_COUNT(queue->list,tmp,count);
-    portable_mutex_unlock(&queue->mutex);
-	return count;
-}
-
-void iguana_initQ(queue_t *Q,char *name)
-{
-    struct queueitem *item,*I;
-    memset(Q,0,sizeof(*Q));
-    I = (struct queueitem *)calloc(1,sizeof(*I));
-    strcpy(Q->name,name);
-    queue_enqueue(name,Q,I);
-    if ( (item= queue_dequeue(Q)) != 0 )
-        free(item);
-}
 
 /**
  * @brief Get the username, password, and port from a file
@@ -1053,58 +1140,77 @@ uint16_t komodo_userpass(char *userpass,char *symbol)
     return(port);
 }
 
+/**
+ * @brief Compute the magic number
+ * 
+ * @param symbol the chain symbol
+ * @param supply max supply
+ * @param extraptr details of chain parameters
+ * @param extralen length of extraptr
+ * @return the magic number
+ */
 uint32_t komodo_assetmagic(char *symbol,uint64_t supply,uint8_t *extraptr,int32_t extralen)
 {
-    uint8_t buf[512]; uint32_t crc0=0; int32_t len = 0; bits256 hash;
+    uint8_t buf[512]; 
+    uint32_t crc0=0; 
+    int32_t len = 0; 
+
     if ( strcmp(symbol,"KMD") == 0 )
-        return(0x8de4eef9);
+        return 0x8de4eef9;
+
     len = iguana_rwnum(1,&buf[len],sizeof(supply),(void *)&supply);
     strcpy((char *)&buf[len],symbol);
     len += strlen(symbol);
+
     if ( extraptr != 0 && extralen != 0 )
     {
+        bits256 hash;
         vcalc_sha256(0,hash.bytes,extraptr,extralen);
         crc0 = hash.uints[0];
-        int32_t i; for (i=0; i<extralen; i++)
+        for (int32_t i=0; i<extralen; i++)
             fprintf(stderr,"%02x",extraptr[i]);
         fprintf(stderr," extralen.%d crc0.%x\n",extralen,crc0);
     }
-    return(calc_crc32(crc0,buf,len));
+
+    return calc_crc32(crc0,buf,len);
 }
 
+/**
+ * @brief Compute the default port
+ * 
+ * @param magic the magic number
+ * @param extralen length of extra chain parameters
+ * @return the default port
+ */
 uint16_t komodo_assetport(uint32_t magic,int32_t extralen)
 {
     if ( magic == 0x8de4eef9 )
-        return(7770);
+        return 7770;
     else if ( extralen == 0 )
-        return(8000 + (magic % 7777));
-    else return(16000 + (magic % 49500));
+        return 8000 + (magic % 7777);
+    return 16000 + (magic % 49500);
 }
 
+/**
+ * @brief get the magicp and port for this chain
+ * 
+ * @param symbol chain symbol
+ * @param supply max supply
+ * @param[out] magicp the magicp for this chain
+ * @param extraptr details of chain
+ * @param extralen length of extraptr
+ * @return the default port for this chain
+ */
 uint16_t komodo_port(char *symbol,uint64_t supply,uint32_t *magicp,uint8_t *extraptr,int32_t extralen)
 {
     if ( symbol == 0 || symbol[0] == 0 || strcmp("KMD",symbol) == 0 )
     {
         *magicp = 0x8de4eef9;
-        return(7770);
+        return 7770;
     }
     *magicp = komodo_assetmagic(symbol,supply,extraptr,extralen);
-    return(komodo_assetport(*magicp,extralen));
+    return komodo_assetport(*magicp,extralen);
 }
-
-/*void komodo_ports(uint16_t ports[MAX_CURRENCIES])
-{
-    int32_t i; uint32_t magic;
-    for (i=0; i<MAX_CURRENCIES; i++)
-    {
-        ports[i] = komodo_port(CURRENCIES[i],10,&magic);
-        printf("%u ",ports[i]);
-    }
-    printf("ports\n");
-}*/
-
-char *iguanafmtstr = (char *)"curl --url \"http://127.0.0.1:7776\" --data \"{\\\"conf\\\":\\\"%s.conf\\\",\\\"path\\\":\\\"${HOME#\"/\"}/.komodo/%s\\\",\\\"unitval\\\":\\\"20\\\",\\\"zcash\\\":1,\\\"RELAY\\\":-1,\\\"VALIDATE\\\":0,\\\"prefetchlag\\\":-1,\\\"poll\\\":100,\\\"active\\\":1,\\\"agent\\\":\\\"iguana\\\",\\\"method\\\":\\\"addcoin\\\",\\\"startpend\\\":4,\\\"endpend\\\":4,\\\"services\\\":129,\\\"maxpeers\\\":8,\\\"newcoin\\\":\\\"%s\\\",\\\"name\\\":\\\"%s\\\",\\\"hasheaders\\\":1,\\\"useaddmultisig\\\":0,\\\"netmagic\\\":\\\"%s\\\",\\\"p2p\\\":%u,\\\"rpc\\\":%u,\\\"pubval\\\":60,\\\"p2shval\\\":85,\\\"wifval\\\":188,\\\"txfee_satoshis\\\":\\\"10000\\\",\\\"isPoS\\\":0,\\\"minoutput\\\":10000,\\\"minconfirms\\\":2,\\\"genesishash\\\":\\\"027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71\\\",\\\"protover\\\":170002,\\\"genesisblock\\\":\\\"0100000000000000000000000000000000000000000000000000000000000000000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4a000000000000000000000000000000000000000000000000000000000000000029ab5f490f0f0f200b00000000000000000000000000000000000000000000000000000000000000fd4005000d5ba7cda5d473947263bf194285317179d2b0d307119c2e7cc4bd8ac456f0774bd52b0cd9249be9d40718b6397a4c7bbd8f2b3272fed2823cd2af4bd1632200ba4bf796727d6347b225f670f292343274cc35099466f5fb5f0cd1c105121b28213d15db2ed7bdba490b4cedc69742a57b7c25af24485e523aadbb77a0144fc76f79ef73bd8530d42b9f3b9bed1c135ad1fe152923fafe98f95f76f1615e64c4abb1137f4c31b218ba2782bc15534788dda2cc08a0ee2987c8b27ff41bd4e31cd5fb5643dfe862c9a02ca9f90c8c51a6671d681d04ad47e4b53b1518d4befafefe8cadfb912f3d03051b1efbf1dfe37b56e93a741d8dfd80d576ca250bee55fab1311fc7b3255977558cdda6f7d6f875306e43a14413facdaed2f46093e0ef1e8f8a963e1632dcbeebd8e49fd16b57d49b08f9762de89157c65233f60c8e38a1f503a48c555f8ec45dedecd574a37601323c27be597b956343107f8bd80f3a925afaf30811df83c402116bb9c1e5231c70fff899a7c82f73c902ba54da53cc459b7bf1113db65cc8f6914d3618560ea69abd13658fa7b6af92d374d6eca9529f8bd565166e4fcbf2a8dfb3c9b69539d4d2ee2e9321b85b331925df195915f2757637c2805e1d4131e1ad9ef9bc1bb1c732d8dba4738716d351ab30c996c8657bab39567ee3b29c6d054b711495c0d52e1cd5d8e55b4f0f0325b97369280755b46a02afd54be4ddd9f77c22272b8bbb17ff5118fedbae2564524e797bd28b5f74f7079d532ccc059807989f94d267f47e724b3f1ecfe00ec9e6541c961080d8891251b84b4480bc292f6a180bea089fef5bbda56e1e41390d7c0e85ba0ef530f7177413481a226465a36ef6afe1e2bca69d2078712b3912bba1a99b1fbff0d355d6ffe726d2bb6fbc103c4ac5756e5bee6e47e17424ebcbf1b63d8cb90ce2e40198b4f4198689daea254307e52a25562f4c1455340f0ffeb10f9d8e914775e37d0edca019fb1b9c6ef81255ed86bc51c5391e0591480f66e2d88c5f4fd7277697968656a9b113ab97f874fdd5f2465e5559533e01ba13ef4a8f7a21d02c30c8ded68e8c54603ab9c8084ef6d9eb4e92c75b078539e2ae786ebab6dab73a09e0aa9ac575bcefb29e930ae656e58bcb513f7e3c17e079dce4f05b5dbc18c2a872b22509740ebe6a3903e00ad1abc55076441862643f93606e3dc35e8d9f2caef3ee6be14d513b2e062b21d0061de3bd56881713a1a5c17f5ace05e1ec09da53f99442df175a49bd154aa96e4949decd52fed79ccf7ccbce32941419c314e374e4a396ac553e17b5340336a1a25c22f9e42a243ba5404450b650acfc826a6e432971ace776e15719515e1634ceb9a4a35061b668c74998d3dfb5827f6238ec015377e6f9c94f38108768cf6e5c8b132e0303fb5a200368f845ad9d46343035a6ff94031df8d8309415bb3f6cd5ede9c135fdabcc030599858d803c0f85be7661c88984d88faa3d26fb0e9aac0056a53f1b5d0baed713c853c4a2726869a0a124a8a5bbc0fc0ef80c8ae4cb53636aa02503b86a1eb9836fcc259823e2692d921d88e1ffc1e6cb2bde43939ceb3f32a611686f539f8f7c9f0bf00381f743607d40960f06d347d1cd8ac8a51969c25e37150efdf7aa4c2037a2fd0516fb444525ab157a0ed0a7412b2fa69b217fe397263153782c0f64351fbdf2678fa0dc8569912dcd8e3ccad38f34f23bbbce14c6a26ac24911b308b82c7e43062d180baeac4ba7153858365c72c63dcf5f6a5b08070b730adb017aeae925b7d0439979e2679f45ed2f25a7edcfd2fb77a8794630285ccb0a071f5cce410b46dbf9750b0354aae8b65574501cc69efb5b6a43444074fee116641bb29da56c2b4a7f456991fc92b2\\\",\\\"debug\\\":0,\\\"seedipaddr\\\":\\\"%s\\\",\\\"sapling\\\":1,\\\"notarypay\\\":%i}\"";
-
 
 
 int32_t komodo_whoami(char *pubkeystr,int32_t height,uint32_t timestamp)
@@ -1314,10 +1420,10 @@ void set_kmd_user_password_port(const std::string& ltc_config_filename)
 void komodo_args(char *argv0)
 {
     std::string name; // -ac_name
-    char *dirname; 
-    uint8_t disablebits[32],*extraptr=0;
+    uint8_t disablebits[32];
+    uint8_t *extraptr=0;
     FILE *fp; 
-    int32_t i,nonz=0,n; 
+    uint16_t nonz=0; // keep track of # CCs enabled
 
     const std::string ntz_dest_path = GetArg("-notary", "");
     IS_KOMODO_NOTARY = ntz_dest_path == "" ? 0 : 1;
@@ -1325,7 +1431,7 @@ void komodo_args(char *argv0)
 
     STAKED_NOTARY_ID = GetArg("-stakednotary", -1);
     KOMODO_NSPV = GetArg("-nSPV",0);
-    memset(disablebits,0,sizeof(disablebits));
+    memset(disablebits,0,sizeof(disablebits)); // everything enabled
     if ( GetBoolArg("-gen", false) != 0 )
     {
         KOMODO_MININGTHREADS = GetArg("-genproclimit",-1);
@@ -1345,7 +1451,7 @@ void komodo_args(char *argv0)
             // We dont have any chain data yet, so use system clock to guess. 
             // I think on season change should reccomend notaries to use -notary to avoid needing this. 
             int32_t kmd_season = getacseason(time(NULL));
-            for (i=0; i<64; i++)
+            for (uint16_t i=0; i<64; i++)
             {
                 if ( strcmp(NOTARY_PUBKEY.c_str(),notaries_elected[kmd_season-1][i][1]) == 0 )
                 {
@@ -1367,9 +1473,9 @@ void komodo_args(char *argv0)
     if ( argv0 != 0 )
     {
         int32_t len = (int32_t)strlen(argv0);
-        for (i=0; i<sizeof(argv0suffix)/sizeof(*argv0suffix); i++)
+        for (unsigned long i=0; i<sizeof(argv0suffix)/sizeof(*argv0suffix); i++)
         {
-            n = (int32_t)strlen(argv0suffix[i]);
+            int32_t n = (int32_t)strlen(argv0suffix[i]);
             if ( strcmp(&argv0[len - n],argv0suffix[i]) == 0 )
             {
                 //printf("ARGV0.(%s) -> matches suffix (%s) -> ac_name.(%s)\n",argv0,argv0suffix[i],argv0names[i]);
@@ -1423,7 +1529,8 @@ void komodo_args(char *argv0)
     {
         std::string selectedAlgo = GetArg("-ac_algo", std::string(ASSETCHAINS_ALGORITHMS[0]));
 
-        for ( int i = 0; i < ASSETCHAINS_NUMALGOS; i++ )
+        uint32_t i;
+        for ( i = 0; i < ASSETCHAINS_NUMALGOS; i++ )
         {
             if (std::string(ASSETCHAINS_ALGORITHMS[i]) == selectedAlgo)
             {
@@ -1515,10 +1622,10 @@ void komodo_args(char *argv0)
             SplitStr(GetArg("-ac_stocks",""),  ASSETCHAINS_STOCKS);
             if ( ASSETCHAINS_STOCKS.size() > 0 )
                 ASSETCHAINS_CBOPRET |= 8;
-            for (i=0; i<ASSETCHAINS_PRICES.size(); i++)
+            for (size_t i=0; i<ASSETCHAINS_PRICES.size(); i++)
                 fprintf(stderr,"%s ",ASSETCHAINS_PRICES[i].c_str());
             fprintf(stderr,"%d -ac_prices\n",(int32_t)ASSETCHAINS_PRICES.size());
-            for (i=0; i<ASSETCHAINS_STOCKS.size(); i++)
+            for (size_t i=0; i<ASSETCHAINS_STOCKS.size(); i++)
                 fprintf(stderr,"%s ",ASSETCHAINS_STOCKS[i].c_str());
             fprintf(stderr,"%d -ac_stocks\n",(int32_t)ASSETCHAINS_STOCKS.size());
         }
@@ -1527,7 +1634,7 @@ void komodo_args(char *argv0)
         {
             Mineropret.resize(hexstr.size()/2);
             decode_hex(Mineropret.data(),hexstr.size()/2,(char *)hexstr.c_str());
-            for (i=0; i<Mineropret.size(); i++)
+            for (size_t i=0; i<Mineropret.size(); i++)
                 fprintf(stderr,"%02x",Mineropret[i]);
             fprintf(stderr," Mineropret\n");
         }
@@ -1543,7 +1650,7 @@ void komodo_args(char *argv0)
             uint64_t ccenables[256];
             memset(ccenables, 0, sizeof(ccenables) );
             Split(GetArg("-ac_ccenable",""), sizeof(ccenables)/sizeof(*ccenables),  ccenables, 0);
-            for (i=nonz=0; i<0x100; i++)
+            for (uint16_t i=0; i<256; i++)
             {
                 if ( ccenables[i] != prevCCi && ccenables[i] != 0 )
                 {
@@ -1555,17 +1662,19 @@ void komodo_args(char *argv0)
             fprintf(stderr,"nonz.%d ccenables[]\n",nonz);
             if ( nonz > 0 )
             {
-                for (i=0; i<256; i++)
+                // disable all CCs
+                for (uint16_t i=0; i<256; i++)
                 {
                     ASSETCHAINS_CCDISABLES[i] = 1;
                     SETBIT(disablebits,i);
                 }
-                for (i=0; i<nonz; i++)
+                // enable chosen CCs
+                for (uint16_t i=0; i<nonz; i++)
                 {
                     CLEARBIT(disablebits,(ccenables[i] & 0xff));
                     ASSETCHAINS_CCDISABLES[ccenables[i] & 0xff] = 0;
                 }
-                CLEARBIT(disablebits,0);
+                CLEARBIT(disablebits,0); // always enable contract 0. Why is this here? -JMJ
             }
         }
         if ( ASSETCHAINS_BEAMPORT != 0 )
@@ -1676,7 +1785,21 @@ void komodo_args(char *argv0)
             }
         }
         int32_t extralen = 0;
-        if ( ASSETCHAINS_ENDSUBSIDY[0] != 0 || ASSETCHAINS_REWARD[0] != 0 || ASSETCHAINS_HALVING[0] != 0 || ASSETCHAINS_DECAY[0] != 0 || ASSETCHAINS_COMMISSION != 0 || ASSETCHAINS_PUBLIC != 0 || ASSETCHAINS_PRIVATE != 0 || ASSETCHAINS_TXPOW != 0 || ASSETCHAINS_FOUNDERS != 0 || ASSETCHAINS_SCRIPTPUB.size() > 1 || ASSETCHAINS_SELFIMPORT.size() > 0 || ASSETCHAINS_OVERRIDE_PUBKEY33[0] != 0 || ASSETCHAINS_TIMELOCKGTE != _ASSETCHAINS_TIMELOCKOFF|| ASSETCHAINS_ALGO != ASSETCHAINS_EQUIHASH || ASSETCHAINS_LASTERA > 0 || ASSETCHAINS_BEAMPORT != 0 || ASSETCHAINS_CODAPORT != 0 || nonz > 0 || ASSETCHAINS_CCLIB.size() > 0 || ASSETCHAINS_FOUNDERS_REWARD != 0 || ASSETCHAINS_NOTARY_PAY[0] != 0 || ASSETCHAINS_BLOCKTIME != 60 || ASSETCHAINS_CBOPRET != 0 || Mineropret.size() != 0 || (ASSETCHAINS_NK[0] != 0 && ASSETCHAINS_NK[1] != 0) || KOMODO_SNAPSHOT_INTERVAL != 0 || ASSETCHAINS_EARLYTXIDCONTRACT != 0 || ASSETCHAINS_CBMATURITY != 0 || ASSETCHAINS_ADAPTIVEPOW != 0 )
+        if ( ASSETCHAINS_ENDSUBSIDY[0] != 0 || ASSETCHAINS_REWARD[0] != 0 
+                || ASSETCHAINS_HALVING[0] != 0 || ASSETCHAINS_DECAY[0] != 0 
+                || ASSETCHAINS_COMMISSION != 0 || ASSETCHAINS_PUBLIC != 0 
+                || ASSETCHAINS_PRIVATE != 0 || ASSETCHAINS_TXPOW != 0 
+                || ASSETCHAINS_FOUNDERS != 0 || ASSETCHAINS_SCRIPTPUB.size() > 1 
+                || ASSETCHAINS_SELFIMPORT.size() > 0 || ASSETCHAINS_OVERRIDE_PUBKEY33[0] != 0 
+                || ASSETCHAINS_TIMELOCKGTE != _ASSETCHAINS_TIMELOCKOFF
+                || ASSETCHAINS_ALGO != ASSETCHAINS_EQUIHASH || ASSETCHAINS_LASTERA > 0 
+                || ASSETCHAINS_BEAMPORT != 0 || ASSETCHAINS_CODAPORT != 0 
+                || nonz > 0 || ASSETCHAINS_CCLIB.size() > 0 
+                || ASSETCHAINS_FOUNDERS_REWARD != 0 || ASSETCHAINS_NOTARY_PAY[0] != 0 
+                || ASSETCHAINS_BLOCKTIME != 60 || ASSETCHAINS_CBOPRET != 0 
+                || Mineropret.size() != 0 || (ASSETCHAINS_NK[0] != 0 && ASSETCHAINS_NK[1] != 0) 
+                || KOMODO_SNAPSHOT_INTERVAL != 0 || ASSETCHAINS_EARLYTXIDCONTRACT != 0 
+                || ASSETCHAINS_CBMATURITY != 0 || ASSETCHAINS_ADAPTIVEPOW != 0 )
         {
             uint8_t extrabuf[32756];
             fprintf(stderr,"perc %.4f%% ac_pub=[%02x%02x%02x...] acsize.%d\n",dstr(ASSETCHAINS_COMMISSION)*100,ASSETCHAINS_OVERRIDE_PUBKEY33[0],ASSETCHAINS_OVERRIDE_PUBKEY33[1],ASSETCHAINS_OVERRIDE_PUBKEY33[2],(int32_t)ASSETCHAINS_SCRIPTPUB.size());
@@ -1745,7 +1868,7 @@ void komodo_args(char *argv0)
             if ( ASSETCHAINS_SELFIMPORT.size() > 0 )
             {
                 memcpy(&extraptr[extralen],(char *)ASSETCHAINS_SELFIMPORT.c_str(),ASSETCHAINS_SELFIMPORT.size());
-                for (i=0; i<ASSETCHAINS_SELFIMPORT.size(); i++)
+                for (size_t i=0; i<ASSETCHAINS_SELFIMPORT.size(); i++)
                     fprintf(stderr,"%c",extraptr[extralen+i]);
                 fprintf(stderr," selfimport\n");
                 extralen += ASSETCHAINS_SELFIMPORT.size();
@@ -1762,7 +1885,7 @@ void komodo_args(char *argv0)
             }
             if ( ASSETCHAINS_CCLIB.size() > 1 )
             {
-                for (i=0; i<ASSETCHAINS_CCLIB.size(); i++)
+                for (size_t i=0; i<ASSETCHAINS_CCLIB.size(); i++)
                 {
                     extraptr[extralen++] = ASSETCHAINS_CCLIB[i];
                     fprintf(stderr,"%c",ASSETCHAINS_CCLIB[i]);
@@ -1773,7 +1896,7 @@ void komodo_args(char *argv0)
                 extralen += iguana_rwnum(1,&extraptr[extralen],sizeof(ASSETCHAINS_BLOCKTIME),(void *)&ASSETCHAINS_BLOCKTIME);
             if ( Mineropret.size() != 0 )
             {
-                for (i=0; i<Mineropret.size(); i++)
+                for (size_t i=0; i<Mineropret.size(); i++)
                     extraptr[extralen++] = Mineropret[i];
             }
             if ( ASSETCHAINS_CBOPRET != 0 )
@@ -1781,7 +1904,7 @@ void komodo_args(char *argv0)
                 extralen += iguana_rwnum(1,&extraptr[extralen],sizeof(ASSETCHAINS_CBOPRET),(void *)&ASSETCHAINS_CBOPRET);
                 if ( ASSETCHAINS_PRICES.size() != 0 )
                 {
-                    for (i=0; i<ASSETCHAINS_PRICES.size(); i++)
+                    for (size_t i=0; i<ASSETCHAINS_PRICES.size(); i++)
                     {
                         std::string symbol = ASSETCHAINS_PRICES[i];
                         memcpy(&extraptr[extralen],(char *)symbol.c_str(),symbol.size());
@@ -1790,7 +1913,7 @@ void komodo_args(char *argv0)
                 }
                 if ( ASSETCHAINS_STOCKS.size() != 0 )
                 {
-                    for (i=0; i<ASSETCHAINS_STOCKS.size(); i++)
+                    for (size_t i=0; i<ASSETCHAINS_STOCKS.size(); i++)
                     {
                         std::string symbol = ASSETCHAINS_STOCKS[i];
                         memcpy(&extraptr[extralen],(char *)symbol.c_str(),symbol.size());
@@ -1843,13 +1966,17 @@ void komodo_args(char *argv0)
         if ( KOMODO_BIT63SET(MAX_MONEY) != 0 )
             MAX_MONEY = KOMODO_MAXNVALUE;
         fprintf(stderr,"MAX_MONEY %llu %.8f\n",(long long)MAX_MONEY,(double)MAX_MONEY/SATOSHIDEN);
-        uint16_t tmpport = komodo_port(ASSETCHAINS_SYMBOL,ASSETCHAINS_SUPPLY,&ASSETCHAINS_MAGIC,extraptr,extralen);
+        uint16_t tmpport = komodo_port(ASSETCHAINS_SYMBOL,ASSETCHAINS_SUPPLY,
+                &ASSETCHAINS_MAGIC,extraptr,extralen);
         if ( GetArg("-port",0) != 0 )
         {
             ASSETCHAINS_P2PPORT = GetArg("-port",0);
             fprintf(stderr,"set p2pport.%u\n",ASSETCHAINS_P2PPORT);
-        } else ASSETCHAINS_P2PPORT = tmpport;
+        } 
+        else 
+            ASSETCHAINS_P2PPORT = tmpport;
 
+        char* dirname = nullptr;
         while ( (dirname= (char *)GetDataDir(false).string().c_str()) == 0 || dirname[0] == 0 )
         {
             fprintf(stderr,"waiting for datadir (%s)\n",dirname);
@@ -1871,7 +1998,8 @@ void komodo_args(char *argv0)
             uint16_t port = komodo_userpass(ASSETCHAINS_USERPASS,ASSETCHAINS_SYMBOL);
             if ( port != 0 )
                 ASSETCHAINS_RPCPORT = port;
-            else komodo_configfile(ASSETCHAINS_SYMBOL,ASSETCHAINS_P2PPORT + 1);
+            else 
+                komodo_configfile(ASSETCHAINS_SYMBOL,ASSETCHAINS_P2PPORT + 1);
 
             if (ASSETCHAINS_CBMATURITY != 0)
                 COINBASE_MATURITY = ASSETCHAINS_CBMATURITY;
@@ -1889,7 +2017,7 @@ void komodo_args(char *argv0)
         uint8_t magic[4];
         iguana_rwnum(1,magic,sizeof(ASSETCHAINS_MAGIC),(void *)&ASSETCHAINS_MAGIC);
         char magicstr[9];
-        for (i=0; i<4; i++)
+        for (uint16_t i=0; i<4; i++)
             sprintf(&magicstr[i<<1],"%02x",magic[i]);
         magicstr[8] = 0;
 #ifndef FROM_CLI
@@ -1900,9 +2028,12 @@ void komodo_args(char *argv0)
             int8_t notarypay = 0;
             if ( ASSETCHAINS_NOTARY_PAY[0] != 0 )
                 notarypay = 1;
+            char *iguanafmtstr = (char *)"curl --url \"http://127.0.0.1:7776\" --data \"{\\\"conf\\\":\\\"%s.conf\\\",\\\"path\\\":\\\"${HOME#\"/\"}/.komodo/%s\\\",\\\"unitval\\\":\\\"20\\\",\\\"zcash\\\":1,\\\"RELAY\\\":-1,\\\"VALIDATE\\\":0,\\\"prefetchlag\\\":-1,\\\"poll\\\":100,\\\"active\\\":1,\\\"agent\\\":\\\"iguana\\\",\\\"method\\\":\\\"addcoin\\\",\\\"startpend\\\":4,\\\"endpend\\\":4,\\\"services\\\":129,\\\"maxpeers\\\":8,\\\"newcoin\\\":\\\"%s\\\",\\\"name\\\":\\\"%s\\\",\\\"hasheaders\\\":1,\\\"useaddmultisig\\\":0,\\\"netmagic\\\":\\\"%s\\\",\\\"p2p\\\":%u,\\\"rpc\\\":%u,\\\"pubval\\\":60,\\\"p2shval\\\":85,\\\"wifval\\\":188,\\\"txfee_satoshis\\\":\\\"10000\\\",\\\"isPoS\\\":0,\\\"minoutput\\\":10000,\\\"minconfirms\\\":2,\\\"genesishash\\\":\\\"027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71\\\",\\\"protover\\\":170002,\\\"genesisblock\\\":\\\"0100000000000000000000000000000000000000000000000000000000000000000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4a000000000000000000000000000000000000000000000000000000000000000029ab5f490f0f0f200b00000000000000000000000000000000000000000000000000000000000000fd4005000d5ba7cda5d473947263bf194285317179d2b0d307119c2e7cc4bd8ac456f0774bd52b0cd9249be9d40718b6397a4c7bbd8f2b3272fed2823cd2af4bd1632200ba4bf796727d6347b225f670f292343274cc35099466f5fb5f0cd1c105121b28213d15db2ed7bdba490b4cedc69742a57b7c25af24485e523aadbb77a0144fc76f79ef73bd8530d42b9f3b9bed1c135ad1fe152923fafe98f95f76f1615e64c4abb1137f4c31b218ba2782bc15534788dda2cc08a0ee2987c8b27ff41bd4e31cd5fb5643dfe862c9a02ca9f90c8c51a6671d681d04ad47e4b53b1518d4befafefe8cadfb912f3d03051b1efbf1dfe37b56e93a741d8dfd80d576ca250bee55fab1311fc7b3255977558cdda6f7d6f875306e43a14413facdaed2f46093e0ef1e8f8a963e1632dcbeebd8e49fd16b57d49b08f9762de89157c65233f60c8e38a1f503a48c555f8ec45dedecd574a37601323c27be597b956343107f8bd80f3a925afaf30811df83c402116bb9c1e5231c70fff899a7c82f73c902ba54da53cc459b7bf1113db65cc8f6914d3618560ea69abd13658fa7b6af92d374d6eca9529f8bd565166e4fcbf2a8dfb3c9b69539d4d2ee2e9321b85b331925df195915f2757637c2805e1d4131e1ad9ef9bc1bb1c732d8dba4738716d351ab30c996c8657bab39567ee3b29c6d054b711495c0d52e1cd5d8e55b4f0f0325b97369280755b46a02afd54be4ddd9f77c22272b8bbb17ff5118fedbae2564524e797bd28b5f74f7079d532ccc059807989f94d267f47e724b3f1ecfe00ec9e6541c961080d8891251b84b4480bc292f6a180bea089fef5bbda56e1e41390d7c0e85ba0ef530f7177413481a226465a36ef6afe1e2bca69d2078712b3912bba1a99b1fbff0d355d6ffe726d2bb6fbc103c4ac5756e5bee6e47e17424ebcbf1b63d8cb90ce2e40198b4f4198689daea254307e52a25562f4c1455340f0ffeb10f9d8e914775e37d0edca019fb1b9c6ef81255ed86bc51c5391e0591480f66e2d88c5f4fd7277697968656a9b113ab97f874fdd5f2465e5559533e01ba13ef4a8f7a21d02c30c8ded68e8c54603ab9c8084ef6d9eb4e92c75b078539e2ae786ebab6dab73a09e0aa9ac575bcefb29e930ae656e58bcb513f7e3c17e079dce4f05b5dbc18c2a872b22509740ebe6a3903e00ad1abc55076441862643f93606e3dc35e8d9f2caef3ee6be14d513b2e062b21d0061de3bd56881713a1a5c17f5ace05e1ec09da53f99442df175a49bd154aa96e4949decd52fed79ccf7ccbce32941419c314e374e4a396ac553e17b5340336a1a25c22f9e42a243ba5404450b650acfc826a6e432971ace776e15719515e1634ceb9a4a35061b668c74998d3dfb5827f6238ec015377e6f9c94f38108768cf6e5c8b132e0303fb5a200368f845ad9d46343035a6ff94031df8d8309415bb3f6cd5ede9c135fdabcc030599858d803c0f85be7661c88984d88faa3d26fb0e9aac0056a53f1b5d0baed713c853c4a2726869a0a124a8a5bbc0fc0ef80c8ae4cb53636aa02503b86a1eb9836fcc259823e2692d921d88e1ffc1e6cb2bde43939ceb3f32a611686f539f8f7c9f0bf00381f743607d40960f06d347d1cd8ac8a51969c25e37150efdf7aa4c2037a2fd0516fb444525ab157a0ed0a7412b2fa69b217fe397263153782c0f64351fbdf2678fa0dc8569912dcd8e3ccad38f34f23bbbce14c6a26ac24911b308b82c7e43062d180baeac4ba7153858365c72c63dcf5f6a5b08070b730adb017aeae925b7d0439979e2679f45ed2f25a7edcfd2fb77a8794630285ccb0a071f5cce410b46dbf9750b0354aae8b65574501cc69efb5b6a43444074fee116641bb29da56c2b4a7f456991fc92b2\\\",\\\"debug\\\":0,\\\"seedipaddr\\\":\\\"%s\\\",\\\"sapling\\\":1,\\\"notarypay\\\":%i}\"";
             fprintf(fp,iguanafmtstr,name.c_str(),name.c_str(),name.c_str(),name.c_str(),magicstr,ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT,"78.47.196.146",notarypay);
             fclose(fp);
-        } else printf("error creating (%s)\n",fname);
+        } 
+        else 
+            printf("error creating (%s)\n",fname);
 #endif
         if ( ASSETCHAINS_CC < 2 )
         {
