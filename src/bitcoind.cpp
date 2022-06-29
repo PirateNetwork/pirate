@@ -58,9 +58,10 @@
 
 static bool fDaemon;
 #include "komodo_defs.h"
+#include "komodo_bitcoind.h"
+
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 extern int32_t ASSETCHAINS_BLOCKTIME;
-int32_t komodo_longestchain();
 CBlockIndex *komodo_chainactive(int32_t height);
 
 void WaitForShutdown(boost::thread_group* threadGroup)

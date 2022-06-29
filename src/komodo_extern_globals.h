@@ -83,5 +83,12 @@ extern pthread_mutex_t KOMODO_CC_mutex;
 extern knotaries_entry *Pubkeys;
 extern komodo_state KOMODO_STATES[34];
 
+/**
+ * @brief Given a currency name, return the index in the CURRENCIES array
+ * 
+ * @param origbase the currency name to look for
+ * @return the index in the array, or -1
+ */
 int32_t komodo_baseid(char *origbase);
+
 uint64_t komodo_current_supply(uint32_t nHeight);

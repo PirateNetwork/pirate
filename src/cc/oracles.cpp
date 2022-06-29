@@ -640,12 +640,6 @@ bool OraclesDataValidate(struct CCcontract_info *cp,Eval* eval,const CTransactio
     else return(true);
 }
 
-/*nt32_t GetLatestTimestamp(int32_t height)
-{
-    if ( KOMODO_NSPV_SUPERLITE ) return (NSPV_blocktime(height));
-    return(komodo_heightstamp(height));
-} */
-
 bool OraclesValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, uint32_t nIn)
 {
     uint256 oracletxid,batontxid,txid; uint64_t txfee=10000; int32_t numvins,numvouts,preventCCvins,preventCCvouts; int64_t amount; uint256 hashblock;

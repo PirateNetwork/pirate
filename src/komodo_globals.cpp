@@ -41,9 +41,6 @@ uint64_t komodo_current_supply(uint32_t nHeight)
     uint64_t cur_money;
     int32_t baseid;
 
-    //if ( (baseid = komodo_baseid(ASSETCHAINS_SYMBOL)) >= 0 && baseid < 32 )
-    //    cur_money = ASSETCHAINS_GENESISTXVAL + ASSETCHAINS_SUPPLY + nHeight * ASSETCHAINS_REWARD[0] / SATOSHIDEN;
-    //else
     {
         // figure out max_money by adding up supply to a maximum of 10,000,000 blocks
         cur_money = (ASSETCHAINS_SUPPLY+1) * SATOSHIDEN + (ASSETCHAINS_MAGIC & 0xffffff) + ASSETCHAINS_GENESISTXVAL;

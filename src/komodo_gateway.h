@@ -13,9 +13,10 @@
  *                                                                            *
  ******************************************************************************/
 #pragma once
-#include "komodo_defs.h"
+#include <cstdint>
 
 struct komodo_state;
+class CBlock;
 
 /****
  * @brief Check if the n of the vout matches one that is banned

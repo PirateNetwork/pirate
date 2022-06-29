@@ -1331,7 +1331,7 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp, const CPubKey& my
     if ( ASSETCHAINS_SYMBOL[0] == 0 ) {
         progress = Checkpoints::GuessVerificationProgress(Params().Checkpoints(), chainActive.LastTip());
     } else {
-        int32_t longestchain = KOMODO_LONGESTCHAIN;//komodo_longestchain();
+        int32_t longestchain = KOMODO_LONGESTCHAIN;
 	    progress = (longestchain > 0 ) ? (double) chainActive.Height() / longestchain : 1.0;
     }
     UniValue obj(UniValue::VOBJ);

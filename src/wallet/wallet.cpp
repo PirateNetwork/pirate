@@ -41,6 +41,7 @@
 #include "cc/CCinclude.h"
 #include "komodo_utils.h"
 #include "komodo_interest.h"
+#include "komodo_bitcoind.h"
 
 #include <assert.h>
 
@@ -65,7 +66,6 @@ bool fPayAtLeastCustomFee = true;
 CBlockIndex *komodo_chainactive(int32_t height);
 extern std::string DONATION_PUBKEY;
 int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
-int tx_height( const uint256 &hash );
 
 /**
  * Fees smaller than this (in satoshi) are considered zero fee (for transaction creation)

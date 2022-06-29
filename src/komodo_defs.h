@@ -87,10 +87,8 @@ extern bool IS_KOMODO_TESTNODE;
 extern int32_t KOMODO_SNAPSHOT_INTERVAL,STAKED_NOTARY_ID,STAKED_ERA;
 extern int32_t ASSETCHAINS_EARLYTXIDCONTRACT;
 extern int32_t ASSETCHAINS_STAKED_SPLIT_PERCENTAGE;
-int tx_height( const uint256 &hash );
 extern std::vector<std::string> vWhiteListAddress;
 extern std::map <std::int8_t, int32_t> mapHeightEvalActivate;
-void komodo_netevent(std::vector<uint8_t> payload);
 int32_t getacseason(uint32_t timestamp);
 int32_t getkmdseason(int32_t height);
 
@@ -104,11 +102,9 @@ int32_t komodo_minerids(uint8_t *minerids,int32_t height,int32_t width);
 int32_t komodo_kvsearch(uint256 *refpubkeyp,int32_t current_height,uint32_t *flagsp,int32_t *heightp,uint8_t value[IGUANA_MAXSCRIPTSIZE],uint8_t *key,int32_t keylen);
 
 uint32_t komodo_blocktime(uint256 hash);
-int32_t komodo_longestchain();
 int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
 int8_t komodo_segid(int32_t nocache,int32_t height);
 int32_t komodo_nextheight();
-uint32_t komodo_heightstamp(int32_t height);
 int32_t komodo_notarized_bracket(struct notarized_checkpoint *nps[2],int32_t height);
 arith_uint256 komodo_adaptivepow_target(int32_t height,arith_uint256 bnTarget,uint32_t nTime);
 bool komodo_hardfork_active(uint32_t time);

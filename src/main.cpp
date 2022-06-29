@@ -58,6 +58,7 @@
 #include "komodo_utils.h"
 #include "komodo_bitcoind.h"
 #include "komodo_interest.h"
+#include "rpc/net.h"
 
 #include <cstring>
 #include <algorithm>
@@ -5741,20 +5742,13 @@ bool ProcessNewBlock(bool from_miner,int32_t height,CValidationState &state, CNo
         CheckBlockIndex();
         if (!ret && futureblock == 0)
         {
-            /*if ( ASSETCHAINS_SYMBOL[0] == 0 )
-            {
-                //fprintf(stderr,"request headers from failed process block peer\n");
-                pfrom->PushMessage("getheaders", chainActive.GetLocator(chainActive.LastTip()), uint256());
-            }*/
             komodo_longestchain();
             return error("%s: AcceptBlock FAILED", __func__);
         }
-        //else fprintf(stderr,"added block %s %p\n",pindex->GetBlockHash().ToString().c_str(),pindex->pprev);
     }
 
     if (futureblock == 0 && !ActivateBestChain(false, state, pblock))
         return error("%s: ActivateBestChain failed", __func__);
-    //fprintf(stderr,"finished ProcessBlock %d\n",(int32_t)chainActive.LastTip()->nHeight);
 
     return true;
 }
@@ -7123,6 +7117,8 @@ void static ProcessGetData(CNode* pfrom)
 #include "komodo_nSPV_fullnode.h"   // nSPV fullnode handling of the getnSPV request messages
 #include "komodo_nSPV_superlite.h"  // nSPV superlite client, issuing requests and handling nSPV responses
 #include "komodo_nSPV_wallet.h"     // nSPV_send and support functions, really all the rest is to support this
+
+void komodo_netevent(std::vector<uint8_t> payload);
 
 bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, int64_t nTimeReceived)
 {

@@ -18,12 +18,6 @@
 #include "komodo_hardfork.h"
 #include "komodo_structs.h"
 
-uint32_t komodo_heightstamp(int32_t height);
-int32_t komodo_MoMdata(int32_t *notarized_htp,uint256 *MoMp,uint256 *kmdtxidp,int32_t nHeight,uint256 *MoMoMp,int32_t *MoMoMoffsetp,int32_t *MoMoMdepthp,int32_t *kmdstartip,int32_t *kmdendip);
-int32_t komodo_notarizeddata(int32_t nHeight,uint256 *notarized_hashp,uint256 *notarized_desttxidp);
-char *komodo_issuemethod(char *userpass,char *method,char *params,uint16_t port);
-int32_t komodo_longestchain();
-
 std::mutex komodo_mutex;
 pthread_mutex_t staked_mutex;
 
@@ -128,13 +122,3 @@ char CURRENCIES[][8] = {
     "PLN", "NOK", "SEK", "DKK", "CZK", "HUF", "ILS", "KRW", 
     "MYR", "PHP", "RON", "SGD", "THB", "BGN", "IDR", "HRK",
     "KMD" }; // <- KMD occupies position 32
-
-/**
- * @brief Given a currency name, return the index in the CURRENCIES array
- * 
- * @param origbase the currency name to look for
- * @return the index in the array, or -1
- */
-int32_t komodo_baseid(char *origbase);
-
-uint64_t komodo_current_supply(uint32_t nHeight);

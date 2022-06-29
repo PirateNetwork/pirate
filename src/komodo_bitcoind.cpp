@@ -15,8 +15,9 @@
 #include "komodo_bitcoind.h"
 #include "komodo_extern_globals.h"
 #include "komodo_utils.h" // OS_milliseconds
-#include "komodo_notary.h" // komodo_chosennotary()
+#include "komodo_notary.h"
 #include "komodo.h"
+#include "rpc/net.h"
 
 /************************************************************************
  *
@@ -36,7 +37,8 @@ void init_string(struct return_string *s)
     s->ptr[0] = '\0';
 }
 
-int tx_height( const uint256 &hash ){
+int tx_height( const uint256 &hash )
+{
     int nHeight = 0;
     CTransaction tx;
     uint256 hashBlock;
@@ -842,7 +844,6 @@ uint32_t komodo_heightstamp(int32_t height)
     CBlockIndex *ptr;
     if ( height > 0 && (ptr= komodo_chainactive(height)) != 0 )
         return(ptr->nTime);
-    //else fprintf(stderr,"komodo_heightstamp null ptr for block.%d\n",height);
     return(0);
 }
 
