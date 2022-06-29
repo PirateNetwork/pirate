@@ -404,6 +404,7 @@ void TransactionBuilder::SetMinConfirmations(int iMinConf)
 void TransactionBuilder::SetHeight(const Consensus::Params& consensusParams, int nHeight)
 {
     this->nHeight = nHeight;
+    this->consensusParams = consensusParams;
     consensusBranchId = CurrentEpochBranchId(nHeight, consensusParams);
 }
 
