@@ -38,6 +38,7 @@
 #include "script/interpreter.h"
 #include "zcash/zip32.h"
 #include "notaries_staked.h"
+#include "komodo.h"
 
 #include "utiltime.h"
 #include "asyncrpcoperation.h"

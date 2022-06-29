@@ -27,6 +27,7 @@
 #include "util.h"
 #include "httpserver.h"
 #include "httprpc.h"
+#include "komodo.h"
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>

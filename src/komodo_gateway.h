@@ -14,7 +14,8 @@
  ******************************************************************************/
 #pragma once
 #include "komodo_defs.h"
-#include "komodo_cJSON.h"
+
+struct komodo_state;
 
 /****
  * @brief Check if the n of the vout matches one that is banned
@@ -49,26 +50,11 @@ void komodo_update_interest();
 int32_t komodo_check_deposit(int32_t height,const CBlock& block);
 
 /***
- * @brief handle an incoming opreturn
- * @param value 
- * @param opretbuf the opreturn
- * @param opretlen the length of opreturn
- * @returns "assetchain", "kv", or "unknown"
+ * @brief read the komodostate file
+ * @param sp the komodo_state struct
+ * @param fname the filename
+ * @param symbol the chain symbol
+ * @param dest the "parent" chain
+ * @return true on success
  */
-const char *komodo_opreturn(uint64_t value,uint8_t *opretbuf,int32_t opretlen);
-
-void *OS_loadfile(char *fname,uint8_t **bufp,long *lenp,long *allocsizep);
-
-uint8_t *OS_fileptr(long *allocsizep,const char *fname);
-
-int32_t komodo_faststateinit(struct komodo_state *sp,const char *fname,char *symbol,char *dest);
-
-#define issue_curl(cmdstr) bitcoind_RPC(0,(char *)"CBCOINBASE",cmdstr,0,0,0)
-
-char *nonportable_path(char *str);
-
-char *portable_path(char *str);
-
-void *loadfile(char *fname,uint8_t **bufp,long *lenp,long *allocsizep);
-
-void *filestr(long *allocsizep,char *_fname);
+bool komodo_faststateinit(komodo_state *sp,const char *fname,char *symbol,char *dest);

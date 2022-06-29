@@ -14,7 +14,7 @@
  ******************************************************************************/
 #include "komodo_notary.h"
 #include "komodo_extern_globals.h"
-#include "komodo.h" // komodo_stateupdate()
+#include "komodo.h"
 #include "komodo_structs.h" // KOMODO_NOTARIES_HARDCODED
 #include "komodo_utils.h" // komodo_stateptr
 

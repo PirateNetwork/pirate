@@ -52,6 +52,12 @@
 #include "notaries_staked.h"
 #include "komodo_extern_globals.h"
 #include "komodo_gateway.h"
+#include "komodo.h"
+#include "komodo_notary.h"
+#include "key_io.h"
+#include "komodo_utils.h"
+#include "komodo_bitcoind.h"
+#include "komodo_interest.h"
 
 #include <cstring>
 #include <algorithm>
@@ -5617,8 +5623,6 @@ static bool IsSuperMajority(int minVersion, const CBlockIndex* pstart, unsigned 
     }
     return (nFound >= nRequired);
 }
-
-void komodo_currentheight_set(int32_t height);
 
 CBlockIndex *komodo_ensure(CBlock *pblock, uint256 hash)
 {

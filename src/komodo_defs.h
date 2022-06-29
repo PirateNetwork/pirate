@@ -109,7 +109,6 @@ int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
 int8_t komodo_segid(int32_t nocache,int32_t height);
 int32_t komodo_nextheight();
 uint32_t komodo_heightstamp(int32_t height);
-int32_t komodo_currentheight();
 int32_t komodo_notarized_bracket(struct notarized_checkpoint *nps[2],int32_t height);
 arith_uint256 komodo_adaptivepow_target(int32_t height,arith_uint256 bnTarget,uint32_t nTime);
 bool komodo_hardfork_active(uint32_t time);

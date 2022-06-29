@@ -15,6 +15,7 @@
 #include "komodo_utils.h"
 #include "komodo_extern_globals.h"
 #include "komodo_notary.h"
+#include "komodo.h"
 
 void vcalc_sha256(char deprecated[(256 >> 3) * 2 + 1],uint8_t hash[256 >> 3],uint8_t *src,int32_t len)
 {
@@ -542,13 +543,6 @@ char *bitcoin_address(char *coinaddr,uint8_t addrtype,uint8_t *pubkey_or_rmd160,
         //    printf("checkaddr.(%s) vs coinaddr.(%s) %02x vs [%02x] memcmp.%d\n",checkaddr,coinaddr,addrtype,checktype,memcmp(rmd160,data+1,20));
     }
     return(coinaddr);
-}
-
-int32_t komodo_is_issuer()
-{
-    if ( ASSETCHAINS_SYMBOL[0] != 0 && komodo_baseid(ASSETCHAINS_SYMBOL) >= 0 )
-        return(1);
-    else return(0);
 }
 
 int32_t bitweight(uint64_t x)

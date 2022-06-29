@@ -14,6 +14,7 @@
  ******************************************************************************/
 #pragma once
 #include "komodo_defs.h"
+#include "komodo_structs.h"
 #include "hex.h"
 #include "key_io.h"
 #include "cc/CCinclude.h"
@@ -313,8 +314,6 @@ int32_t bitcoin_addr2rmd160(uint8_t *addrtypep,uint8_t rmd160[20],char *coinaddr
 
 char *bitcoin_address(char *coinaddr,uint8_t addrtype,uint8_t *pubkey_or_rmd160,int32_t len);
 
-int32_t komodo_is_issuer();
-
 int32_t bitweight(uint64_t x);
 
 char *bits256_str(char hexstr[65],bits256 x);
@@ -394,9 +393,9 @@ void komodo_nameset(char *symbol,char *dest,char *source);
  * @param[in] base what to search for (nullptr == "KMD")
  * @returns the correct komodo_state object
  */
-struct komodo_state *komodo_stateptrget(char *base);
+komodo_state *komodo_stateptrget(char *base);
 
-struct komodo_state *komodo_stateptr(char *symbol,char *dest);
+komodo_state *komodo_stateptr(char *symbol,char *dest);
 
 void komodo_prefetch(FILE *fp);
 

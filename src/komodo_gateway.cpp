@@ -16,6 +16,7 @@
 #include "komodo_extern_globals.h"
 #include "komodo_utils.h" // komodo_stateptrget
 #include "komodo_bitcoind.h" // komodo_checkcommission
+#include "komodo_notary.h"
 
 extern char CURRENCIES[][8]; // in komodo_globals.h
 
@@ -236,31 +237,6 @@ int32_t komodo_check_deposit(int32_t height,const CBlock& block)
     return(0);
 }
 
-/***
- * @brief handle an incoming opreturn
- * @param value 
- * @param opretbuf the opreturn
- * @param opretlen the length of opreturn
- * @returns "assetchain", "kv", or "unknown" (unused by any caller to date)
- */
-const char *komodo_opreturn(uint64_t value,uint8_t *opretbuf,int32_t opretlen)
-{
-    int32_t tokomodo;
-    const char *typestr = "unknown";
-
-    if ( ASSETCHAINS_SYMBOL[0] != 0 && komodo_baseid(ASSETCHAINS_SYMBOL) < 0 && opretbuf[0] != 'K' )
-    {
-        return("assetchain");
-    }
-    tokomodo = (komodo_is_issuer() == 0);
-    if ( opretbuf[0] == 'K' && opretlen != 40 )
-    {
-        komodo_kvupdate(opretbuf,opretlen,value);
-        return("kv");
-    }
-    return typestr;
-}
-
 void komodo_stateind_set(struct komodo_state *sp,uint32_t *inds,int32_t n,uint8_t *filedata,long datalen,char *symbol,char *dest)
 {
     uint8_t func; long lastK,lastT,lastN,lastV,fpos,lastfpos; int32_t i,count,doissue,iter,numn,numv,numN,numV,numR; uint32_t tmp,prevpos100,offset;
@@ -405,16 +381,16 @@ uint8_t *OS_fileptr(long *allocsizep,const char *fname)
  * @param dest 
  * @return -1 on error
  */
-long komodo_stateind_validate(struct komodo_state *sp,char *indfname,uint8_t *filedata,long datalen,
+long komodo_stateind_validate(struct komodo_state *sp,const std::string& indfname,uint8_t *filedata,long datalen,
         uint32_t *prevpos100p,uint32_t *indcounterp,char *symbol,char *dest)
 {
     *indcounterp = *prevpos100p = 0;
     long fsize;
     uint8_t *inds;
-    if ( (inds= OS_fileptr(&fsize,indfname)) != 0 )
+    if ( (inds= OS_fileptr(&fsize,indfname.c_str())) != 0 )
     {
         long lastfpos = 0;
-        fprintf(stderr,"inds.%p validate %s fsize.%ld datalen.%ld n.%d lastfpos.%ld\n",inds,indfname,fsize,datalen,(int32_t)(fsize / sizeof(uint32_t)),lastfpos);
+        fprintf(stderr,"inds.%p validate %s fsize.%ld datalen.%ld n.%d lastfpos.%ld\n",inds,indfname.c_str(),fsize,datalen,(int32_t)(fsize / sizeof(uint32_t)),lastfpos);
         if ( (fsize % sizeof(uint32_t)) == 0 )
         {
             int32_t n = (int32_t)(fsize / sizeof(uint32_t));
@@ -447,7 +423,7 @@ long komodo_stateind_validate(struct komodo_state *sp,char *indfname,uint8_t *fi
             return fpos;
         } 
         else 
-            printf("wrong filesize %s %ld\n",indfname,fsize);
+            printf("wrong filesize %s %ld\n",indfname.c_str(),fsize);
     }
     free(inds);
     fprintf(stderr,"indvalidate return -1\n");
@@ -471,13 +447,19 @@ long komodo_indfile_update(FILE *indfp,uint32_t *prevpos100p,long lastfpos,long 
     return newfpos;
 }
 
-int32_t komodo_faststateinit(struct komodo_state *sp,const char *fname,char *symbol,char *dest)
+/***
+ * @brief read the komodostate file
+ * @param sp the komodo_state struct
+ * @param fname the filename
+ * @param symbol the chain symbol
+ * @param dest the "parent" chain
+ * @return true on success
+ */
+bool komodo_faststateinit(komodo_state *sp,const char *fname,char *symbol,char *dest)
 {
     uint32_t starttime = (uint32_t)time(NULL);
-    char indfname[1024]; 
-    safecopy(indfname,fname,sizeof(indfname)-4);
-    strcat(indfname,".ind");
-    uint8_t *filedata;
+
+    uint8_t *filedata = nullptr;
     long datalen;
     if ( (filedata= OS_fileptr(&datalen,fname)) != 0 )
     {
@@ -485,28 +467,32 @@ int32_t komodo_faststateinit(struct komodo_state *sp,const char *fname,char *sym
         long lastfpos = 0;
         uint32_t indcounter = 0;
         uint32_t prevpos100 = 0;
-        FILE *indfp;
-        if ( (indfp= fopen(indfname,"wb")) != 0 )
+
+        std::string indfname(fname);
+        indfname += ".ind";
+        FILE *indfp = fopen(indfname.c_str(), "wb");
+        if ( indfp != nullptr )
             fwrite(&prevpos100,1,sizeof(prevpos100),indfp), indcounter++;
+
         fprintf(stderr,"processing %s %ldKB, validated.%d\n",fname,datalen/1024,-1);
         int32_t func;
         while ( (func= komodo_parsestatefiledata(sp,filedata,&fpos,datalen,symbol,dest)) >= 0 )
         {
             lastfpos = komodo_indfile_update(indfp,&prevpos100,lastfpos,fpos,func,&indcounter);
         }
-        if ( indfp != 0 )
+        if ( indfp != nullptr )
         {
             fclose(indfp);
             if ( (fpos= komodo_stateind_validate(0,indfname,filedata,datalen,&prevpos100,&indcounter,symbol,dest)) < 0 )
-                printf("unexpected komodostate.ind validate failure %s datalen.%ld\n",indfname,datalen);
+                printf("unexpected komodostate.ind validate failure %s datalen.%ld\n",indfname.c_str(),datalen);
             else 
-                printf("%s validated fpos.%ld\n",indfname,fpos);
+                printf("%s validated fpos.%ld\n",indfname.c_str(),fpos);
         }
         fprintf(stderr,"took %d seconds to process %s %ldKB\n",(int32_t)(time(NULL)-starttime),fname,datalen/1024);
         free(filedata);
-        return 1;
+        return true;
     }
-    return -1;
+    return false;
 }
 
 uint64_t komodo_interestsum(); // in wallet/rpcwallet.cpp
@@ -531,84 +517,4 @@ void komodo_update_interest()
         printf("READY for %s RPC calls at %u! done PASSPORT %s\n",
                 ASSETCHAINS_SYMBOL, (uint32_t)time(NULL), ASSETCHAINS_SYMBOL);
     }
-}
-
-char *nonportable_path(char *str)
-{
-    int32_t i;
-    for (i=0; str[i]!=0; i++)
-        if ( str[i] == '/' )
-            str[i] = '\\';
-    return(str);
-}
-
-char *portable_path(char *str)
-{
-#ifdef _WIN32
-    return(nonportable_path(str));
-#else
-#ifdef __PNACL
-    /*int32_t i,n;
-     if ( str[0] == '/' )
-     return(str);
-     else
-     {
-     n = (int32_t)strlen(str);
-     for (i=n; i>0; i--)
-     str[i] = str[i-1];
-     str[0] = '/';
-     str[n+1] = 0;
-     }*/
-#endif
-    return(str);
-#endif
-}
-
-void *loadfile(char *fname,uint8_t **bufp,long *lenp,long *allocsizep)
-{
-    FILE *fp;
-    long  filesize,buflen = *allocsizep;
-    uint8_t *buf = *bufp;
-    *lenp = 0;
-    if ( (fp= fopen(portable_path(fname),"rb")) != 0 )
-    {
-        fseek(fp,0,SEEK_END);
-        filesize = ftell(fp);
-        if ( filesize == 0 )
-        {
-            fclose(fp);
-            *lenp = 0;
-            //printf("loadfile null size.(%s)\n",fname);
-            return(0);
-        }
-        if ( filesize > buflen )
-        {
-            *allocsizep = filesize;
-            *bufp = buf = (uint8_t *)realloc(buf,(long)*allocsizep+64);
-        }
-        rewind(fp);
-        if ( buf == 0 )
-            printf("Null buf ???\n");
-        else
-        {
-            if ( fread(buf,1,(long)filesize,fp) != (unsigned long)filesize )
-                printf("error reading filesize.%ld\n",(long)filesize);
-            buf[filesize] = 0;
-        }
-        fclose(fp);
-        *lenp = filesize;
-        //printf("loaded.(%s)\n",buf);
-    } //else printf("OS_loadfile couldnt load.(%s)\n",fname);
-    return(buf);
-}
-
-void *filestr(long *allocsizep,char *_fname)
-{
-    long filesize = 0; char *fname,*buf = 0; void *retptr;
-    *allocsizep = 0;
-    fname = (char *)malloc(strlen(_fname)+1);
-    strcpy(fname,_fname);
-    retptr = loadfile(fname,(uint8_t **)&buf,&filesize,allocsizep);
-    free(fname);
-    return(retptr);
 }

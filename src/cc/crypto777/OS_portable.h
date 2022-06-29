@@ -130,7 +130,6 @@ int32_t hseek(HUFF *hp,int32_t offset,int32_t mode);
 #define portable_mutex_unlock pthread_mutex_unlock
 #define OS_thread_create pthread_create
 
-#define issue_curl(cmdstr) bitcoind_RPC(0,"curl",cmdstr,0,0,0,0)
 #define issue_curlt(cmdstr,timeout) bitcoind_RPC(0,"curl",cmdstr,0,0,0,timeout)
 
 struct allocitem { uint32_t allocsize,type; } PACKED;

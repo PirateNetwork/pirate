@@ -14,8 +14,12 @@
  ******************************************************************************/
 #include "komodo.h"
 #include "komodo_extern_globals.h"
+#include "komodo_utils.h"
 #include "komodo_notary.h"
 #include "mem_read.h"
+#include "komodo_gateway.h"
+#include "komodo_events.h"
+#include "komodo_ccdata.h"
 
 void komodo_currentheight_set(int32_t height)
 {
@@ -199,7 +203,7 @@ void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotar
     static uint256 zero;
     struct komodo_state *sp; 
     char fname[512],symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN]; 
-    int32_t retval,ht,func; 
+    int32_t ht,func;
     uint8_t num,pubkeys[64][33];
 
     if ( didinit == 0 )
@@ -215,18 +219,23 @@ void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotar
     }
     if ( fp == 0 )
     {
+        // we have not successfully opened the komodostate file before
         komodo_statefname(fname,ASSETCHAINS_SYMBOL,(char *)"komodostate");
-        if ( (fp= fopen(fname,"rb+")) != 0 )
+        fp = fopen(fname, "rb+");
+        if ( fp != nullptr )
         {
-            if ( (retval= komodo_faststateinit(sp,fname,symbol,dest)) > 0 )
+            if ( komodo_faststateinit(sp, fname, symbol, dest) )
                 fseek(fp,0,SEEK_END);
             else
             {
-                fprintf(stderr,"komodo_faststateinit retval.%d\n",retval);
+                // unable to use faststateinit, so try again only slower
+                fprintf(stderr,"komodo_faststateinit retval.-1\n");
                 while ( komodo_parsestatefile(sp,fp,symbol,dest) >= 0 )
                     ;
             }
-        } else fp = fopen(fname,"wb+");
+        } 
+        else 
+            fp = fopen(fname,"wb+"); // the state file probably did not exist, create it.
         KOMODO_INITDONE = (uint32_t)time(NULL);
     }
     if ( height <= 0 )
@@ -579,7 +588,24 @@ int32_t komodo_voutupdate(bool fJustCheck,int32_t *isratificationp,int32_t notar
 // if txi == 0 && 2 outputs and 2nd OP_RETURN, len == 32*2+4 -> notarized, 1st byte 'P' -> pricefeed
 // OP_RETURN: 'D' -> deposit, 'W' -> withdraw
 
-int32_t gettxout_scriptPubKey(uint8_t *scriptPubKey,int32_t maxsize,uint256 txid,int32_t n);
+int32_t gettxout_scriptPubKey(uint8_t *scriptPubKey,int32_t maxsize,uint256 txid,int32_t n)
+{
+    int32_t i,m; uint8_t *ptr;
+    LOCK(cs_main);
+    CTransaction tx;
+    uint256 hashBlock;
+    if ( GetTransaction(txid,tx,hashBlock,false) == 0 )
+        return(-1);
+    else if ( n < tx.vout.size() )
+    {
+        ptr = (uint8_t *)&tx.vout[n].scriptPubKey[0];
+        m = tx.vout[n].scriptPubKey.size();
+        for (i=0; i<maxsize&&i<m; i++)
+            scriptPubKey[i] = ptr[i];
+        return(i);
+    }
+    return(-1);
+}
 
 int32_t komodo_notarycmp(uint8_t *scriptPubKey,int32_t scriptlen,uint8_t pubkeys[64][33],int32_t numnotaries,uint8_t rmd160[20])
 {
