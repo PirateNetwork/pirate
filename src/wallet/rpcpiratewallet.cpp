@@ -1461,8 +1461,6 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
 
     if (ait != pwalletMain->mapAddressTxids.end()) {
         txids = ait->second;
-    } else {
-        return ret;
     }
 
     //get Sorted Archived Transactions
@@ -1490,12 +1488,6 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
     for (map<uint256,CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it) {
       CWalletTx wtx = (*it).second;
       std::pair<int,int> key;
-
-      std::set<uint256>::iterator txit;
-      txit = txids.find(wtx.GetHash());
-      if (txit == txids.end()) {
-          continue;
-      }
 
       if (wtx.GetDepthInMainChain() == 0) {
         key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
@@ -1754,8 +1746,6 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
     std::set<uint256> txids;
     if (ait != pwalletMain->mapAddressTxids.end()) {
         txids = ait->second;
-    } else {
-        return ret;
     }
 
     //get Sorted Archived Transactions
@@ -1783,12 +1773,6 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
     for (map<uint256,CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it) {
       CWalletTx wtx = (*it).second;
       std::pair<int,int> key;
-
-      std::set<uint256>::iterator txit;
-      txit = txids.find(wtx.GetHash());
-      if (txit == txids.end()) {
-          continue;
-      }
 
       if (wtx.GetDepthInMainChain() == 0) {
         key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
@@ -2049,8 +2033,6 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
 
     if (ait != pwalletMain->mapAddressTxids.end()) {
         txids = ait->second;
-    } else {
-        return ret;
     }
 
     //get Sorted Archived Transactions
@@ -2078,12 +2060,6 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
     for (map<uint256,CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it) {
       CWalletTx wtx = (*it).second;
       std::pair<int,int> key;
-
-      std::set<uint256>::iterator txit;
-      txit = txids.find(wtx.GetHash());
-      if (txit == txids.end()) {
-          continue;
-      }
 
       if (wtx.GetDepthInMainChain() == 0) {
         key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
