@@ -635,6 +635,20 @@ void *chainparams_commandline()
             pCurrentParams->consensus.nLwmaPOSAjustedWeight = 46531;
         }
 
+
+        pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = ASSETCHAINS_SAPLING;
+        pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = ASSETCHAINS_OVERWINTER;
+        pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nActivationHeight = ASSETCHAINS_CANOPY;
+        checkpointData = //(Checkpoints::CCheckpointData)
+                {
+                        boost::assign::map_list_of
+                                (0, pCurrentParams->consensus.hashGenesisBlock),
+                        (int64_t)1231006505,
+                        (int64_t)1,
+                        (double)2777            // * estimated number of transactions per day after checkpoint
+                        //   total number of tx / (checkpoint block height / (24 * 24))
+                };
+
         if (strcmp(ASSETCHAINS_SYMBOL,"PIRATE") == 0)
         {
             checkpointData = //(Checkpoints::CCheckpointData)
@@ -660,15 +674,18 @@ void *chainparams_commandline()
                                     (1600000, uint256S("0x0000000002838d76f769cd7bb87bb196ebe0556750fb14b038eb149a31b5aeb3"))
                                     (1700000, uint256S("0x000000000a6999bede4901e9d07de66fafbd5a81c18b038d205960887b0b522a"))
                                     (1800000, uint256S("0x000000000e69ec04a4c9ebaba913f844d159c7f308da85626804f8ff295a7c74"))
-                                    (1818566, uint256S("0x00000000019cb9c0055cd52e49a1f7343aa3fbf49f4617b2a4ff51670392b8ca")),
-                            (int64_t)1647422931,    // * UNIX timestamp of last checkpoint block
-                            (int64_t)3428216,         // * total number of transactions between genesis and last checkpoint
+                                    (1957724, uint256S("0x0000000024c58297dce1eca08c01f62b97b3498350dfbee594cc61894c23bf17")) //Season 6 1st Notary transaction
+                                    (1957729, uint256S("0x0000000047acfc56790048dc85d18018324d74ec80ad2e7a7ad4aed2904a1c18")) //Season 6
+                                    (1962459, uint256S("0x000000000782c7fff1a310acc4344c76b0401fe90735cd295ac67add4b92141c")),
+                            (int64_t)1656372561,    // * UNIX timestamp of last checkpoint block
+                            (int64_t)3845409,         // * total number of transactions between genesis and last checkpoint
                             //   (the tx=... number in the SetBestChain debug.log lines)
                             (double)1086           // * estimated number of transactions per day after checkpoint
                             //   total number of tx / (checkpoint block height / (24 * 24))
                     };
 
-            pCurrentParams->consensus.nMinimumChainWork = uint256S("0x000000000000000000000000000000000000000000000000009506e173957ddb");
+            pCurrentParams->consensus.nMinimumChainWork = uint256S("0x00000000000000000000000000000000000000000000000000aab050b8e07b8b");
+
         }
 
         // only require coinbase protection on Verus from the Komodo family of coins
@@ -695,25 +712,14 @@ void *chainparams_commandline()
 
             pCurrentParams->consensus.nMinimumChainWork = uint256S("0x000000000000000000000000000000000000000000000001a8f4f23f8b2d1f7e");
         }
-        else
+
+
+        if (strcmp(ASSETCHAINS_SYMBOL,"VRSCTEST") == 0 || strcmp(ASSETCHAINS_SYMBOL,"VERUSTEST") == 0)
         {
-            if (strcmp(ASSETCHAINS_SYMBOL,"VRSCTEST") == 0 || strcmp(ASSETCHAINS_SYMBOL,"VERUSTEST") == 0)
-            {
-                pCurrentParams->consensus.nMinimumChainWork = uint256S("0x0000000000000000000000000000000000000000000000000000000000001f7e");
-            }
-            pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = ASSETCHAINS_SAPLING;
-            pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = ASSETCHAINS_OVERWINTER;
-            pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nActivationHeight = ASSETCHAINS_CANOPY;
-            checkpointData = //(Checkpoints::CCheckpointData)
-                    {
-                            boost::assign::map_list_of
-                                    (0, pCurrentParams->consensus.hashGenesisBlock),
-                            (int64_t)1231006505,
-                            (int64_t)1,
-                            (double)2777            // * estimated number of transactions per day after checkpoint
-                            //   total number of tx / (checkpoint block height / (24 * 24))
-                    };
+            pCurrentParams->consensus.nMinimumChainWork = uint256S("0x0000000000000000000000000000000000000000000000000000000000001f7e");
         }
+
+
     }
     else
     {
