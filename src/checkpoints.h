@@ -1,4 +1,3 @@
-#pragma once
 // Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
@@ -17,9 +16,17 @@
  * Removal or modification of this copyright notice is prohibited.            *
  *                                                                            *
  ******************************************************************************/
+
+#ifndef BITCOIN_CHECKPOINTS_H
+#define BITCOIN_CHECKPOINTS_H
+
 #include "uint256.h"
 #include "chainparams.h"
-#include "chain.h" // CBlockIndex
+
+#include <map>
+
+class CBlockIndex;
+struct CCheckpointData;
 
 /**
  * Block-chain checkpoints are compiled-in sanity checks.
@@ -58,3 +65,5 @@ namespace Checkpoints
     double GuessVerificationProgress(const CChainParams::CCheckpointData& data, CBlockIndex* pindex, bool fSigchecks = true);
 
 } // namespace Checkpoints
+
+#endif // BITCOIN_CHECKPOINTS_H
