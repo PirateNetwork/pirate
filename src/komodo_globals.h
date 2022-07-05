@@ -26,7 +26,7 @@ pthread_mutex_t staked_mutex;
 
 knotaries_entry *Pubkeys;
 
-komodo_state KOMODO_STATES[34]; // 0 == asset chain, 33 == KMD, others correspond to the CURRENCIES array
+komodo_state KOMODO_STATES[2]; // 0 == asset chain, 1 == KMD
 const uint32_t nStakedDecemberHardforkTimestamp = 1576840000; //December 2019 hardfork 12/20/2019 @ 11:06am (UTC)
 const int32_t nDecemberHardforkHeight = 1670000;   //December 2019 hardfork
 
@@ -114,11 +114,3 @@ int32_t ASSETCHAINS_STAKED_SPLIT_PERCENTAGE;
 std::map <std::int8_t, int32_t> mapHeightEvalActivate;
 
 pthread_mutex_t KOMODO_CC_mutex;
-
-#define MAX_CURRENCIES 32
-char CURRENCIES[][8] = { 
-    "USD", "EUR", "JPY", "GBP", "AUD", "CAD", "CHF", "NZD", // major currencies
-    "CNY", "RUB", "MXN", "BRL", "INR", "HKD", "TRY", "ZAR", 
-    "PLN", "NOK", "SEK", "DKK", "CZK", "HUF", "ILS", "KRW", 
-    "MYR", "PHP", "RON", "SGD", "THB", "BGN", "IDR", "HRK",
-    "KMD" }; // <- KMD occupies position 32

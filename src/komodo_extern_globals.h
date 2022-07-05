@@ -81,10 +81,10 @@ extern uint64_t ASSETCHAINS_TIMEUNLOCKTO;
 extern std::mutex komodo_mutex;
 extern pthread_mutex_t KOMODO_CC_mutex;
 extern knotaries_entry *Pubkeys;
-extern komodo_state KOMODO_STATES[34];
+extern komodo_state KOMODO_STATES[2];
 
 /**
- * @brief Given a currency name, return the index in the CURRENCIES array
+ * @brief Given a currency name, return the index in the KOMODO_STATES array
  * 
  * @param origbase the currency name to look for
  * @return the index in the array, or -1

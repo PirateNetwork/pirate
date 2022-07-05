@@ -18,8 +18,6 @@
 #include "komodo_bitcoind.h" // komodo_checkcommission
 #include "komodo_notary.h"
 
-extern char CURRENCIES[][8]; // in komodo_globals.h
-
 const char *banned_txids[] =
 {
     "78cb4e21245c26b015b888b14c4f5096e18137d2741a6de9734d62b07014dfca", // vout1 only 233559

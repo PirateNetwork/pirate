@@ -248,6 +248,7 @@ struct komodo_ccdata
 class komodo_state
 {
 public:
+    std::string symbol;
     int32_t SAVEDHEIGHT;
     int32_t CURRENT_HEIGHT;
     uint32_t SAVEDTIMESTAMP;

@@ -1222,7 +1222,7 @@ int8_t equihash_params_possible(uint64_t n, uint64_t k)
 void komodo_args(char *argv0)
 {
     std::string name,addn,hexstr,symbol; char *dirname,fname[512],arg0str[64],magicstr[9]; uint8_t magic[4],extrabuf[32756],disablebits[32],*extraptr=0;
-    FILE *fp; uint64_t val; uint16_t port, dest_rpc_port; int32_t i,nonz=0,baseid,len,n,extralen = 0; uint64_t ccenables[256], ccEnablesHeight[512] = {0}; CTransaction earlytx; uint256 hashBlock;
+    FILE *fp; uint64_t val; uint16_t port, dest_rpc_port; int32_t i,nonz=0,len,n,extralen = 0; uint64_t ccenables[256], ccEnablesHeight[512] = {0}; CTransaction earlytx; uint256 hashBlock;
     std::vector<uint8_t> Mineropret;
 
     std::string ntz_dest_path;
@@ -1724,23 +1724,20 @@ void komodo_args(char *argv0)
             ASSETCHAINS_SEED = 1;
 
         strncpy(ASSETCHAINS_SYMBOL,name.c_str(),sizeof(ASSETCHAINS_SYMBOL)-1);
+        KOMODO_STATES[0].symbol = ASSETCHAINS_SYMBOL;
 
         /* VRSC chain is incompatible with Komodo daemon */
         assert(strcmp(ASSETCHAINS_SYMBOL, "VRSC") != 0);
 
         MAX_MONEY = komodo_max_money();
 
-        if ( (baseid = komodo_baseid(ASSETCHAINS_SYMBOL)) >= 0 && baseid < 32 )
-        {
-            printf("baseid.%d MAX_MONEY.%s %.8f\n",baseid,ASSETCHAINS_SYMBOL,(double)MAX_MONEY/SATOSHIDEN);
-        }
+        printf("baseid.%d MAX_MONEY.%s %.8f\n",0,ASSETCHAINS_SYMBOL,(double)MAX_MONEY/SATOSHIDEN);
 
         if ( ASSETCHAINS_CC >= KOMODO_FIRSTFUNGIBLEID && MAX_MONEY < 1000000LL*SATOSHIDEN )
             MAX_MONEY = 1000000LL*SATOSHIDEN;
         if ( KOMODO_BIT63SET(MAX_MONEY) != 0 )
             MAX_MONEY = KOMODO_MAXNVALUE;
         fprintf(stderr,"MAX_MONEY %llu %.8f\n",(long long)MAX_MONEY,(double)MAX_MONEY/SATOSHIDEN);
-        //printf("baseid.%d MAX_MONEY.%s %.8f\n",baseid,ASSETCHAINS_SYMBOL,(double)MAX_MONEY/SATOSHIDEN);
         uint16_t tmpport = komodo_port(ASSETCHAINS_SYMBOL,ASSETCHAINS_SUPPLY,&ASSETCHAINS_MAGIC,extraptr,extralen);
         if ( GetArg("-port",0) != 0 )
         {
@@ -1955,12 +1952,7 @@ komodo_state *komodo_stateptrget(char *base)
 {
     // "KMD" case
     if ( base == 0 || base[0] == 0 || strcmp(base,(char *)"KMD") == 0 )
-        return &KOMODO_STATES[33];
-
-    // found in CURRENCIES array
-    int32_t baseid = komodo_baseid(base);
-    if ( baseid >= 0 )
-        return &KOMODO_STATES[baseid+1];
+        return &KOMODO_STATES[1];
 
     // evidently this asset chain
     return &KOMODO_STATES[0];

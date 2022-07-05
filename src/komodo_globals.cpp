@@ -15,20 +15,21 @@
 #include "komodo_globals.h"
 
 /**
- * @brief Given a currency name, return the index in the CURRENCIES array
+ * @brief Given a currency name, return the index in the KOMODO_STATES array
  * 
  * @param origbase the currency name to look for
- * @return the index in the array, or -1
+ * @return 0 for an asset chain, 1 for KMD, or -1
  */
 int32_t komodo_baseid(char *origbase)
 {
     // convert to upper case
     std::string base(origbase);
     std::transform(base.begin(),base.end(),base.begin(),[](char s){return toupper(s & 0xff);});
-    // find the entry
-    for (int32_t i=0; i<=MAX_CURRENCIES; i++)
-        if ( base == CURRENCIES[i] )
+    for(size_t i = 0; i < sizeof(KOMODO_STATES) / sizeof(komodo_state); ++i)
+    {
+        if (KOMODO_STATES[i].symbol == base)
             return i;
+    }
     return -1;
 }
 
