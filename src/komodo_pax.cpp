@@ -17,6 +17,9 @@
 #include "komodo_utils.h" // iguana_rwnum
 #include "komodo.h" // KOMODO_PAXMAX
 
+uint32_t *PVALS;
+int32_t NUM_PRICES;
+
 uint64_t M1SUPPLY[] = { 3317900000000, 6991604000000, 667780000000000, 1616854000000, 331000000000, 861909000000, 584629000000, 46530000000, // major currencies
     45434000000000, 16827000000000, 3473357229000, 306435000000, 27139000000000, 2150641000000, 347724099000, 1469583000000, 749543000000, 1826110000000, 2400434000000, 1123925000000, 3125276000000, 13975000000000, 317657000000, 759706000000000, 354902000000, 2797061000000, 162189000000, 163745000000, 1712000000000, 39093000000, 1135490000000000, 80317000000,
     100000000 };
@@ -593,13 +596,13 @@ uint64_t komodo_paxpriceB(uint64_t seed,int32_t height,char *base,char *rel,uint
 uint64_t komodo_paxprice(uint64_t *seedp,int32_t height,char *base,char *rel,uint64_t basevolume)
 {
     int32_t i,nonz=0; int64_t diff; uint64_t price,seed,sum = 0;
-    if ( ASSETCHAINS_SYMBOL[0] == 0 && chainActive.LastTip() != 0 && height > chainActive.LastTip()->GetHeight() )
+    if ( ASSETCHAINS_SYMBOL[0] == 0 && chainActive.LastTip() != 0 && height > chainActive.LastTip()->nHeight )
     {
         if ( height < 100000000 )
         {
             static uint32_t counter;
             if ( counter++ < 3 )
-                printf("komodo_paxprice height.%d vs tip.%d\n",height,chainActive.LastTip()->GetHeight());
+                printf("komodo_paxprice height.%d vs tip.%d\n",height,chainActive.LastTip()->nHeight);
         }
         return(0);
     }

@@ -1438,7 +1438,7 @@ int64_t prices_enumaddedbets(uint256 &batontxid, std::vector<OneBetData> &bets, 
 
             addedBetsTotal += amount;
             added.positionsize = amount;
-            added.firstheight = blockIdx.GetHeight();  //TODO: check if this is correct (to get height from the block not from the opret)
+            added.firstheight = blockIdx.nHeight;  //TODO: check if this is correct (to get height from the block not from the opret)
             bets.push_back(added);
             //std::cerr << "prices_batontxid() added amount=" << amount << std::endl;
         }
@@ -1756,7 +1756,7 @@ int32_t prices_getbetinfo(uint256 bettxid, BetInfo &betinfo)
 
         // TODO: forget old tx
         //CBlockIndex *bi = komodo_getblockindex(hashBlock);
-        //if (bi && bi->GetHeight() < 5342)
+        //if (bi && bi->nHeight < 5342)
         //    return -5;
 
         OneBetData bet1;
@@ -2158,7 +2158,7 @@ UniValue PricesList(uint32_t filter, CPubKey mypk)
 
             // TODO: forget old tx
             //CBlockIndex *bi = komodo_getblockindex(hashBlock);
-            //if (bi && bi->GetHeight() < 5342)
+            //if (bi && bi->nHeight < 5342)
             //    return;
 
             bool bAppend = false;

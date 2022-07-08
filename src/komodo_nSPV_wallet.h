@@ -237,6 +237,8 @@ int64_t NSPV_addinputs(struct NSPV_utxoresp *used,CMutableTransaction &mtx,int64
     return(0);
 }
 
+#define NSPV_BRANCHID 0x76b809bb
+
 bool NSPV_SignTx(CMutableTransaction &mtx,int32_t vini,int64_t utxovalue,const CScript scriptPubKey,uint32_t nTime)
 {
     CTransaction txNewConst(mtx); SignatureData sigdata; CBasicKeyStore keystore; int64_t branchid = NSPV_BRANCHID;

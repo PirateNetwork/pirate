@@ -19,6 +19,7 @@
 
 #include <mutex>
 
+struct komodo_kv *KOMODO_KV;
 std::mutex KOMODO_KV_mutex;
 
 int32_t komodo_kvcmp(uint8_t *refvalue,uint16_t refvaluesize,uint8_t *value,uint16_t valuesize)

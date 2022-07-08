@@ -20,6 +20,9 @@
 #include "wallet/rpcwallet.h"
 #include "komodo_pax.h"
 
+int32_t KOMODO_PASSPORT_INITDONE = 0;
+struct pax_transaction *PAX;
+
 struct komodo_extremeprice
 {
     uint256 blockhash;
@@ -131,10 +134,6 @@ void komodo_paxdelete(struct pax_transaction *pax)
 void komodo_gateway_deposit(char *coinaddr,uint64_t value,char *symbol,uint64_t fiatoshis,uint8_t *rmd160,uint256 txid,uint16_t vout,uint8_t type,int32_t height,int32_t otherheight,char *source,int32_t approved) // assetchain context
 {
     struct pax_transaction *pax; uint8_t buf[35]; int32_t addflag = 0; struct komodo_state *sp; char str[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN],*s;
-    //if ( KOMODO_PAX == 0 )
-    //    return;
-    //if ( strcmp(symbol,ASSETCHAINS_SYMBOL) != 0 )
-    //    return;
     sp = komodo_stateptr(str,dest);
     {
         std::lock_guard<std::mutex> lock(komodo_mutex);
@@ -224,18 +223,8 @@ int32_t komodo_rwapproval(int32_t rwflag,uint8_t *opretbuf,struct pax_transactio
 int32_t komodo_issued_opreturn(char *base,uint256 *txids,uint16_t *vouts,int64_t *values,int64_t *srcvalues,int32_t *kmdheights,int32_t *otherheights,int8_t *baseids,uint8_t *rmd160s,uint8_t *opretbuf,int32_t opretlen,int32_t iskomodo)
 {
     struct pax_transaction p,*pax; int32_t i,n=0,j,len=0,incr,height,otherheight; uint8_t type,rmd160[20]; uint64_t fiatoshis; char symbol[KOMODO_ASSETCHAIN_MAXLEN];
-    //if ( KOMODO_PAX == 0 )
-    //    return(0);
     incr = 34 + (iskomodo * (2*sizeof(fiatoshis) + 2*sizeof(height) + 20 + 4));
-    //41e77b91cb68dc2aa02fa88550eae6b6d44db676a7e935337b6d1392d9718f03cb0200305c90660400000000fbcbeb1f000000bde801006201000058e7945ad08ddba1eac9c9b6c8e1e97e8016a2d152
 
-    // 41e94d736ec69d88c08b5d238abeeca609c02357a8317e0d56c328bcb1c259be5d0200485bc80200000000404b4c000000000059470200b80b000061f22ba7d19fe29ac3baebd839af8b7127d1f9075553440046bb4cc7a3b5cd39dffe7206507a3482a00780e617f68b273cce9817ed69298d02001069ca1b0000000080f0fa02000000005b470200b90b000061f22ba7d19fe29ac3baebd839af8b7127d1f90755
-
-    //for (i=0; i<opretlen; i++)
-    //    printf("%02x",opretbuf[i]);
-    //printf(" opretlen.%d (%s)\n",opretlen,base);
-    //printf(" opretlen.%d vs %d incr.%d (%d)\n",opretlen,(int32_t)(2*sizeof(fiatoshis) + 2*sizeof(height) + 20 + 2),incr,opretlen/incr);
-    //if ( ASSETCHAINS_SYMBOL[0] == 0 || strncmp(ASSETCHAINS_SYMBOL,base,strlen(base)) == 0 )
     {
         type = opretbuf[0];
         opretbuf++, opretlen--;
@@ -317,7 +306,7 @@ int32_t komodo_paxcmp(char *symbol,int32_t kmdheight,uint64_t value,uint64_t che
 uint64_t komodo_paxtotal()
 {
     struct pax_transaction *pax,*pax2,*tmp,*tmp2; char symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN],*str; int32_t i,ht; int64_t checktoshis; uint64_t seed,total = 0; struct komodo_state *basesp;
-    if ( KOMODO_PASSPORT_INITDONE == 0 ) //KOMODO_PAX == 0 ||
+    if ( KOMODO_PASSPORT_INITDONE == 0 )
         return(0);
     if ( komodo_isrealtime(&ht) == 0 )
         return(0);
@@ -475,7 +464,7 @@ int32_t komodo_pending_withdraws(char *opretstr) // todo: enforce deterministic 
 int32_t komodo_gateway_deposits(CMutableTransaction *txNew,char *base,int32_t tokomodo)
 {
     struct pax_transaction *pax,*tmp; char symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN]; uint8_t *script,opcode,opret[16384*4],data[16384*4]; int32_t i,baseid,ht,len=0,opretlen=0,numvouts=1; struct komodo_state *sp; uint64_t available,deposited,issued,withdrawn,approved,redeemed,mask,sum = 0;
-    if ( KOMODO_PASSPORT_INITDONE == 0 )//KOMODO_PAX == 0 ||
+    if ( KOMODO_PASSPORT_INITDONE == 0 )
         return(0);
     struct komodo_state *kmdsp = komodo_stateptrget((char *)"KMD");
     sp = komodo_stateptr(symbol,dest);
@@ -513,14 +502,14 @@ int32_t komodo_gateway_deposits(CMutableTransaction *txNew,char *base,int32_t to
 #ifdef KOMODO_ASSETCHAINS_WAITNOTARIZE
             if ( pax->height > 236000 )
             {
-                if ( kmdsp != 0 && kmdsp->NOTARIZED_HEIGHT >= pax->height )
+                if ( kmdsp != 0 && kmdsp->LastNotarizedHeight() >= pax->height )
                     pax->validated = pax->komodoshis;
                 else if ( kmdsp->CURRENT_HEIGHT > pax->height+30 )
                     pax->validated = pax->ready = 0;
             }
             else
             {
-                if ( kmdsp != 0 && (kmdsp->NOTARIZED_HEIGHT >= pax->height || kmdsp->CURRENT_HEIGHT > pax->height+30) ) // assumes same chain as notarize
+                if ( kmdsp != 0 && (kmdsp->LastNotarizedHeight() >= pax->height || kmdsp->CURRENT_HEIGHT > pax->height+30) ) // assumes same chain as notarize
                     pax->validated = pax->komodoshis;
                 else pax->validated = pax->ready = 0;
             }
@@ -1425,11 +1414,6 @@ void komodo_passport_iteration()
     int32_t maxseconds = 10;
     FILE *fp; uint8_t *filedata; long fpos,datalen,lastfpos; int32_t baseid,limit,n,ht,isrealtime,expired,refid,blocks,longest; struct komodo_state *sp,*refsp; char *retstr,fname[512],*base,symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN]; uint32_t buf[3],starttime; uint64_t RTmask = 0; //CBlockIndex *pindex;
     expired = 0;
-    while ( 0 && KOMODO_INITDONE == 0 )
-    {
-        fprintf(stderr,"[%s] PASSPORT iteration waiting for KOMODO_INITDONE\n",ASSETCHAINS_SYMBOL);
-        sleep(3);
-    }
     if ( komodo_chainactive_timestamp() > lastinterest )
     {
         if ( ASSETCHAINS_SYMBOL[0] == 0 )
@@ -1453,11 +1437,6 @@ void komodo_passport_iteration()
             return;
         }
     }
-    /*if ( KOMODO_PAX == 0 )
-    {
-        KOMODO_PASSPORT_INITDONE = 1;
-        return;
-    }*/
     starttime = (uint32_t)time(NULL);
     if ( callcounter++ < 1 )
         limit = 10000;
@@ -1544,7 +1523,7 @@ void komodo_passport_iteration()
             komodo_statefname(fname,baseid<32?base:(char *)"",(char *)"realtime");
             if ( (fp= fopen(fname,"wb")) != 0 )
             {
-                buf[0] = (uint32_t)chainActive.LastTip()->GetHeight();
+                buf[0] = (uint32_t)chainActive.LastTip()->nHeight;
                 buf[1] = (uint32_t)komodo_longestchain();
                 if ( buf[0] != 0 && buf[0] == buf[1] )
                 {

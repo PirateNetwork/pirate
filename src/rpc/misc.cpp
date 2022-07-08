@@ -52,8 +52,47 @@
 
 using namespace std;
 
-#define KOMODO_VERSION "0.7.1"
-#define VERUS_VERSION "0.4.0g"
+/**
+ * @note Do not add or change anything in the information returned by this
+ * method. `getinfo` exists for backwards-compatibility only. It combines
+ * information from wildly different sources in the program, which is a mess,
+ * and is thus planned to be deprecated eventually.
+ *
+ * Based on the source of the information, new information should be added to:
+ * - `getblockchaininfo`,
+ * - `getnetworkinfo` or
+ * - `getwalletinfo`
+ *
+ * Or alternatively, create a specific query method for the information.
+ **/
+
+int32_t Jumblr_depositaddradd(char *depositaddr);
+int32_t Jumblr_secretaddradd(char *secretaddr);
+uint64_t komodo_interestsum();
+int32_t komodo_longestchain();
+int32_t komodo_notarized_height(int32_t *prevMoMheightp,uint256 *hashp,uint256 *txidp);
+bool komodo_txnotarizedconfirmed(uint256 txid);
+uint32_t komodo_chainactive_timestamp();
+int32_t komodo_whoami(char *pubkeystr,int32_t height,uint32_t timestamp);
+extern uint64_t KOMODO_INTERESTSUM,KOMODO_WALLETBALANCE;
+extern bool IS_KOMODO_NOTARY;
+extern int32_t KOMODO_LASTMINED,JUMBLR_PAUSE,KOMODO_LONGESTCHAIN,STAKED_NOTARY_ID,STAKED_ERA,KOMODO_INSYNC;
+extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
+uint32_t komodo_segid32(char *coinaddr);
+int64_t komodo_coinsupply(int64_t *zfundsp,int64_t *sproutfundsp,int32_t height);
+int32_t notarizedtxid_height(char *dest,char *txidstr,int32_t *kmdnotarized_heightp);
+int8_t StakedNotaryID(std::string &notaryname, char *Raddress);
+uint64_t komodo_notarypayamount(int32_t nHeight, int64_t notarycount);
+int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);
+
+#define KOMODO_VERSION "0.7.2"
+extern uint16_t ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT;
+extern uint32_t ASSETCHAINS_CC;
+extern uint32_t ASSETCHAINS_MAGIC,ASSETCHAINS_ALGO;
+extern uint64_t ASSETCHAINS_COMMISSION,ASSETCHAINS_SUPPLY;
+extern int32_t ASSETCHAINS_SAPLING,ASSETCHAINS_STAKED;
+extern uint64_t ASSETCHAINS_ENDSUBSIDY[],ASSETCHAINS_REWARD[],ASSETCHAINS_HALVING[],ASSETCHAINS_DECAY[],ASSETCHAINS_NOTARY_PAY[];
+extern std::string NOTARY_PUBKEY,NOTARY_ADDRESS; extern uint8_t NOTARY_PUBKEY33[];
 
 int32_t getera(int timestamp)
 {
@@ -143,7 +182,7 @@ UniValue geterablockheights(const UniValue& params, bool fHelp, const CPubKey& m
       
     CBlockIndex *pindex; int8_t lastera,era = 0; UniValue ret(UniValue::VOBJ);
 
-    for (size_t i = 1; i < chainActive.LastTip()->GetHeight(); i++)
+    for (size_t i = 1; i < chainActive.LastTip()->nHeight; i++)
     {
         pindex = chainActive[i];
         era = getera(pindex->nTime)+1;
@@ -218,7 +257,6 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
     obj.push_back(Pair("protocolversion", PROTOCOL_VERSION));
     obj.push_back(Pair("KMDversion", KOMODO_VERSION));
     obj.push_back(Pair("synced", KOMODO_INSYNC!=0));
-    //obj.push_back(Pair("VRSCversion", VERUS_VERSION));
     obj.push_back(Pair("notarized", notarized_height));
     obj.push_back(Pair("prevMoMheight", prevMoMheight));
     obj.push_back(Pair("notarizedhash", notarized_hash.ToString()));
@@ -278,7 +316,7 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
         if ( (notaryid= StakedNotaryID(notaryname, (char *)NOTARY_ADDRESS.c_str())) != -1 ) {
             obj.push_back(Pair("notaryid",        notaryid));
             obj.push_back(Pair("notaryname",      notaryname));
-        } else if( (notaryid= komodo_whoami(pubkeystr,(int32_t)chainActive.LastTip()->GetHeight(),komodo_chainactive_timestamp())) >= 0 )  {
+        } else if( (notaryid= komodo_whoami(pubkeystr,(int32_t)chainActive.LastTip()->nHeight,komodo_chainactive_timestamp())) >= 0 )  {
             obj.push_back(Pair("notaryid",        notaryid));
             if ( KOMODO_LASTMINED != 0 )
                 obj.push_back(Pair("lastmined", KOMODO_LASTMINED));
@@ -334,8 +372,6 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             obj.push_back(Pair("commission",        ASSETCHAINS_COMMISSION));
         if ( ASSETCHAINS_STAKED != 0 )
             obj.push_back(Pair("staked",        ASSETCHAINS_STAKED));
-        if ( ASSETCHAINS_LWMAPOS != 0 )
-            obj.push_back(Pair("veruspos", ASSETCHAINS_LWMAPOS));
         if ( ASSETCHAINS_ALGO != ASSETCHAINS_EQUIHASH )
             obj.push_back(Pair("algo",ASSETCHAINS_ALGORITHMS[ASSETCHAINS_ALGO]));
     }
@@ -1220,7 +1256,7 @@ CAmount checkburnaddress(CAmount &received, int64_t &nNotaryPay, int32_t &height
             // Get notary pay from current chain tip
             CBlockIndex* pindex = chainActive.LastTip();
             nNotaryPay = pindex->nNotaryPay;
-            height = pindex->GetHeight();
+            height = pindex->nHeight;
         }
     }
     return balance;

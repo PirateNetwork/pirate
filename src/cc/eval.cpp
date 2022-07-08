@@ -26,7 +26,9 @@
 #include "chain.h"
 #include "core_io.h"
 #include "crosschain.h"
+#include "komodo_structs.h"
 #include "komodo_notary.h"
+#include "komodo_globals.h"
 
 bool CClib_Dispatch(const CC *cond,Eval *eval,std::vector<uint8_t> paramsNull,const CTransaction &txTo,unsigned int nIn);
 char *CClib_name();
@@ -185,7 +187,7 @@ bool Eval::GetNotarisationData(const uint256 notaryHash, NotarisationData &data)
     CTransaction notarisationTx;
     CBlockIndex block;
     if (!GetTxConfirmed(notaryHash, notarisationTx, block)) return false;
-    if (!CheckNotaryInputs(notarisationTx, block.GetHeight(), block.nTime)) return false;
+    if (!CheckNotaryInputs(notarisationTx, block.nHeight, block.nTime)) return false;
     if (!ParseNotarisationOpReturn(notarisationTx, data)) return false;
     return true;
 }
