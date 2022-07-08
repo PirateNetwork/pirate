@@ -15,7 +15,6 @@
 #pragma once
 #include <mutex>
 #include "komodo_defs.h"
-#include "komodo_hardfork.h"
 #include "komodo_structs.h"
 
 #define KOMODO_ELECTION_GAP 2000    //((ASSETCHAINS_SYMBOL[0] == 0) ? 2000 : 100)

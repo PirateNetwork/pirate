@@ -19,6 +19,7 @@
 #include "rpc/net.h"
 #include "wallet/rpcwallet.h"
 #include "komodo_pax.h"
+#include "komodo_notary.h"
 
 int32_t KOMODO_PASSPORT_INITDONE = 0;
 struct pax_transaction *PAX;
