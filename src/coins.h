@@ -39,7 +39,6 @@
 #include <boost/foreach.hpp>
 #include <boost/unordered_map.hpp>
 #include "zcash/IncrementalMerkleTree.hpp"
-//#include "veruslaunch.h"
 
 /** 
  * Pruned version of CTransaction: only retains metadata and unspent transaction outputs
@@ -501,7 +500,6 @@ public:
     ~CCoinsViewCache();
 
     // Standard CCoinsView methods
-    //static CLaunchMap &LaunchMap() { return launchMap; }
     bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
     bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
     bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
