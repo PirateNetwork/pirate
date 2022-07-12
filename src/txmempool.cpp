@@ -523,14 +523,14 @@ void CTxMemPool::removeExpired(unsigned int nBlockHeight)
 
         bool fInterestNotValidated = ASSETCHAINS_SYMBOL[0] == 0 // KMD
                 && tipindex != 0 // chain has blocs on it
-                && !komodo_validate_interest(tx,tipindex->GetHeight()+1,
+                && !komodo_validate_interest(tx,tipindex->nHeight+1,
                         tipindex->GetMedianTimePast() + 777);
 
         if (IsExpiredTx(tx, nBlockHeight) || fInterestNotValidated)
         {
             if (fInterestNotValidated && tipindex != 0)
                 LogPrintf("Removing interest violate txid.%s nHeight.%d nTime.%u vs locktime.%u\n",
-                        tx.GetHash().ToString(),tipindex->GetHeight()+1,
+                        tx.GetHash().ToString(),tipindex->nHeight+1,
                         tipindex->GetMedianTimePast() + 777,tx.nLockTime);
             transactionsToRemove.push_back(tx);
         }
