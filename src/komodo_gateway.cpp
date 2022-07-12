@@ -510,14 +510,14 @@ int32_t komodo_gateway_deposits(CMutableTransaction *txNew,char *base,int32_t to
 #ifdef KOMODO_ASSETCHAINS_WAITNOTARIZE
             if ( pax->height > 236000 )
             {
-                if ( kmdsp != 0 && kmdsp->NOTARIZED_HEIGHT >= pax->height )
+                if ( kmdsp != 0 && kmdsp->LastNotarizedHeight() >= pax->height )
                     pax->validated = pax->komodoshis;
                 else if ( kmdsp->CURRENT_HEIGHT > pax->height+30 )
                     pax->validated = pax->ready = 0;
             }
             else
             {
-                if ( kmdsp != 0 && (kmdsp->NOTARIZED_HEIGHT >= pax->height || kmdsp->CURRENT_HEIGHT > pax->height+30) ) // assumes same chain as notarize
+                if ( kmdsp != 0 && (kmdsp->LastNotarizedHeight() >= pax->height || kmdsp->CURRENT_HEIGHT > pax->height+30) ) // assumes same chain as notarize
                     pax->validated = pax->komodoshis;
                 else pax->validated = pax->ready = 0;
             }
@@ -1548,7 +1548,7 @@ void komodo_passport_iteration()
             {
                 {
                     LOCK(cs_main);
-                    buf[0] = (uint32_t)chainActive.Tip()->GetHeight();
+                    buf[0] = (uint32_t)chainActive.Tip()->nHeight;
                 }
                 buf[1] = (uint32_t)komodo_longestchain();
                 if ( buf[0] != 0 && buf[0] == buf[1] )
