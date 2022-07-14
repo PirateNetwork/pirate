@@ -185,6 +185,7 @@ struct NSPV_CCmtxinfo
 
 struct NSPV_remoterpcresp
 {
+    NSPV_remoterpcresp() { method[0] = '\0'; json = nullptr; }
     char method[64];
     char *json;
 };
