@@ -181,7 +181,8 @@ int32_t komodo_waituntilelegible(uint32_t blocktime, int32_t stakeHeight, uint32
         }
         if( !GetBoolArg("-gen",false) ) 
             return(0);
-        sleep(1);
+        //sleep(1);
+        boost::this_thread::sleep_for(boost::chrono::seconds(1)); // allow to interrupt
         adjustedtime = (int64_t)GetTime();
     } 
     return(1);
@@ -277,7 +278,8 @@ CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& _scriptPubKeyIn, int32
             {
                 proposedTime = GetTime();
                 if (proposedTime == nMedianTimePast)
-                    MilliSleep(10);
+                    //MilliSleep(10);
+                    boost::this_thread::sleep_for(boost::chrono::milliseconds(10)); // allow to interrupt
             }
         }
         pblock->nTime = GetTime();
@@ -1163,7 +1165,8 @@ void waitForPeers(const CChainParams &chainparams)
             do {
                 if (fvNodesEmpty)
                 {
-                    MilliSleep(1000 + rand() % 4000);
+                    //MilliSleep(1000 + rand() % 4000);
+                    boost::this_thread::sleep_for(boost::chrono::milliseconds(1000 + rand() % 4000)); // allow to interrupt
                     boost::this_thread::interruption_point();
                     LOCK(cs_vNodes);
                     fvNodesEmpty = vNodes.empty();
@@ -1180,13 +1183,15 @@ void waitForPeers(const CChainParams &chainparams)
                     {
                         if (++loops <= 10)
                         {
-                            MilliSleep(1000);
+                            //MilliSleep(1000);
+                            boost::this_thread::sleep_for(boost::chrono::milliseconds(1000)); // allow to interrupt
                         }
                         else break;
                     }
                 }
             } while (fvNodesEmpty || IsNotInSync());
-            MilliSleep(100 + rand() % 400);
+            //MilliSleep(100 + rand() % 400);
+            boost::this_thread::sleep_for(boost::chrono::milliseconds(100 + rand() % 400)); // allow to interrupt
         }
     }
 }
@@ -1394,7 +1399,8 @@ void static BitcoinMiner_noeq()
 
     while ( (ASSETCHAIN_INIT == 0 || KOMODO_INITDONE == 0) ) //chainActive.Tip()->GetHeight() != 235300 &&
     {
-        sleep(1);
+        //sleep(1);
+        boost::this_thread::sleep_for(boost::chrono::seconds(1)); // allow to interrupt
         if ( komodo_baseid(ASSETCHAINS_SYMBOL) < 0 )
             break;
     }
@@ -1405,7 +1411,8 @@ void static BitcoinMiner_noeq()
     CBlockIndex *pindexPrev, *pindexCur;
     do {
         pindexPrev = chainActive.LastTip();
-        MilliSleep(5000 + rand() % 5000);
+        //MilliSleep(5000 + rand() % 5000);
+        boost::this_thread::sleep_for(boost::chrono::milliseconds(5000 + rand() % 5000)); // allow to interrupt
         waitForPeers(chainparams);
         pindexCur = chainActive.LastTip();
     } while (pindexPrev != pindexCur);
@@ -1424,14 +1431,16 @@ void static BitcoinMiner_noeq()
             waitForPeers(chainparams);
 
             pindexPrev = chainActive.LastTip();
-            sleep(1);
+            //sleep(1);
+            boost::this_thread::sleep_for(boost::chrono::seconds(1)); // allow to interrupt
 
             // prevent forking on startup before the diff algorithm kicks in
             if (pindexPrev->GetHeight() < 50 || pindexPrev != chainActive.LastTip())
             {
                 do {
                     pindexPrev = chainActive.LastTip();
-                    MilliSleep(5000 + rand() % 5000);
+                    //MilliSleep(5000 + rand() % 5000);
+                    boost::this_thread::sleep_for(boost::chrono::milliseconds(5000 + rand() % 5000)); // allow to interrupt
                 } while (pindexPrev != chainActive.LastTip());
             }
 
@@ -1486,7 +1495,8 @@ void static BitcoinMiner_noeq()
                         static uint32_t counter;
                         if ( counter++ < 10 )
                             fprintf(stderr,"skip generating %s on-demand block, no tx avail\n",ASSETCHAINS_SYMBOL);
-                        sleep(10);
+                        //sleep(10);
+                        boost::this_thread::sleep_for(boost::chrono::seconds(10)); // allow to interrupt
                         continue;
                     } else fprintf(stderr,"%s vouts.%d mining.%d vs %d\n",ASSETCHAINS_SYMBOL,(int32_t)pblock->vtx[0].vout.size(),Mining_height,ASSETCHAINS_MINHEIGHT);
                 }
@@ -1514,7 +1524,8 @@ void static BitcoinMiner_noeq()
                     lastChainTipPrinted = chainActive.LastTip();
                     printf("Block %d added to chain\n", lastChainTipPrinted->GetHeight());
                 }
-                MilliSleep(250);
+                //MilliSleep(250);
+                boost::this_thread::sleep_for(boost::chrono::milliseconds(250)); // allow to interrupt
                 continue;
             }
 
@@ -1577,7 +1588,8 @@ void static BitcoinMiner_noeq()
                         if (pblock->nSolution.size() != 1344)
                         {
                             LogPrintf("ERROR: Block solution is not 1344 bytes as it should be");
-                            sleep(5);
+                            //sleep(5);
+                            boost::this_thread::sleep_for(boost::chrono::seconds(5)); // allow to interrupt
                             break;
                         }
 
@@ -1706,7 +1718,8 @@ void static BitcoinMiner()
     uint8_t *script; uint64_t total; int32_t i,j,gpucount=KOMODO_MAXGPUCOUNT,notaryid = -1;
     while ( (ASSETCHAIN_INIT == 0 || KOMODO_INITDONE == 0) )
     {
-        sleep(1);
+        //sleep(1);
+        boost::this_thread::sleep_for(boost::chrono::seconds(1)); // allow to interrupt
         if ( komodo_baseid(ASSETCHAINS_SYMBOL) < 0 )
             break;
     }
@@ -1753,7 +1766,8 @@ void static BitcoinMiner()
                     }
                     if (!fvNodesEmpty )//&& !IsInitialBlockDownload())
                         break;
-                    MilliSleep(15000);
+                    //MilliSleep(15000);
+                    boost::this_thread::sleep_for(boost::chrono::milliseconds(15000)); // allow to interrupt
                     //fprintf(stderr,"fvNodesEmpty %d IsInitialBlockDownload(%s) %d\n",(int32_t)fvNodesEmpty,ASSETCHAINS_SYMBOL,(int32_t)IsInitialBlockDownload());
 
                 } while (true);
@@ -1794,7 +1808,8 @@ void static BitcoinMiner()
                 static uint32_t counter;
                 if ( counter++ < 10 && ASSETCHAINS_STAKED == 0 )
                     fprintf(stderr,"created illegal blockB, retry\n");
-                sleep(1);
+                //sleep(1);
+                boost::this_thread::sleep_for(boost::chrono::seconds(1)); // allow to interrupt
                 continue;
             }
             //fprintf(stderr,"get template\n");
@@ -1819,7 +1834,8 @@ void static BitcoinMiner()
                         static uint32_t counter;
                         if ( counter++ < 10 )
                             fprintf(stderr,"skip generating %s on-demand block, no tx avail\n",ASSETCHAINS_SYMBOL);
-                        sleep(10);
+                        //sleep(10);
+                        boost::this_thread::sleep_for(boost::chrono::seconds(10)); // allow to interrupt
                         continue;
                     } else fprintf(stderr,"%s vouts.%d mining.%d vs %d\n",ASSETCHAINS_SYMBOL,(int32_t)pblock->vtx[0].vout.size(),Mining_height,ASSETCHAINS_MINHEIGHT);
                 }
@@ -1969,7 +1985,8 @@ void static BitcoinMiner()
                         //fprintf(stderr,"need to wait %d seconds to submit block\n",(int32_t)(B.nTime - GetAdjustedTime()));
                         while ( GetTime() < B.nTime-2 )
                         {
-                            sleep(1);
+                            //sleep(1);
+                            boost::this_thread::sleep_for(boost::chrono::seconds(1)); // allow to interrupt
                             if ( chainActive.LastTip()->GetHeight() >= Mining_height )
                             {
                                 fprintf(stderr,"new block arrived\n");
@@ -1983,7 +2000,8 @@ void static BitcoinMiner()
                         {
                             int32_t r;
                             if ( (r= ((Mining_height + NOTARY_PUBKEY33[16]) % 64) / 8) > 0 )
-                                MilliSleep((rand() % (r * 1000)) + 1000);
+                                //MilliSleep((rand() % (r * 1000)) + 1000);
+                                boost::this_thread::sleep_for(boost::chrono::milliseconds((rand() % (r * 1000)) + 1000)); // allow to interrupt                                
                         }
                     }
                     else
