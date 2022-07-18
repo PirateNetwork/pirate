@@ -1617,7 +1617,8 @@ void static BitcoinMiner()
                         ehSolverRuns.increment();
 
                         // Convert solution indices to byte array (decompress) and pass it to validBlock method.
-                        for (size_t s = 0; s < eq.nsols; s++) {
+                        for (size_t s = 0; s < std::min(eq.nsols, MAXSOLS); s++) 
+                        {
                             LogPrint("pow", "Checking solution %d\n", s+1);
                             std::vector<eh_index> index_vector(PROOFSIZE);
                             for (size_t i = 0; i < PROOFSIZE; i++) {
