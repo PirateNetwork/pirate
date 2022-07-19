@@ -1373,7 +1373,7 @@ void get_userpass_and_port(const boost::filesystem::path& path, const std::strin
     port = 0;
     boost::filesystem::path datadir_path = path;
     datadir_path /= filename;
-    FILE* fp = fopen(datadir_path.c_str(), "rb");
+    FILE* fp = fopen(datadir_path.string().c_str(), "rb");
     if ( fp != nullptr )
     {
         char username[512];
@@ -1384,7 +1384,7 @@ void get_userpass_and_port(const boost::filesystem::path& path, const std::strin
         fclose(fp);
     } 
     else 
-        printf("couldnt open.(%s) will not validate dest notarizations\n", datadir_path.c_str());
+        printf("couldnt open.(%s) will not validate dest notarizations\n", datadir_path.string().c_str());
 }
 
 /****
