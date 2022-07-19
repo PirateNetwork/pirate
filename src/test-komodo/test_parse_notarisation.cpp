@@ -621,7 +621,11 @@ TEST(TestParseNotarisation, FilePaths)
 #ifdef __WINDOWS__
         const std::string os_dir = "AppData/Roaming/Komodo";
 #else
+#ifdef __APPLE__
+        const std::string os_dir = "Library/Application Support/Komodo";
+#else
         const std::string os_dir = ".komodo";
+#endif
 #endif
     };
 #ifdef __WINDOWS__
@@ -641,7 +645,11 @@ TEST(TestParseNotarisation, FilePaths)
         memset(BTCUSERPASS, 0, sizeof(BTCUSERPASS) );
         DEST_PORT=0;
         IS_KOMODO_NOTARY = 0;
+#ifdef __APPLE__
+        home.create_config("Komodo.conf", "test1", "my_password", 1234);
+#else
         home.create_config("komodo.conf", "test1", "my_password", 1234);
+#endif
         home.create_config("ltc.conf", "test2", "ltc_password", 5678);
         set_kmd_user_password_port("ltc.conf");
         EXPECT_EQ( std::string(KMDUSERPASS), std::string("test1:my_password") );

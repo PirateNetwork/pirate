@@ -564,16 +564,20 @@ boost::filesystem::path GetDefaultDataDir()
         pathRet = fs::path(pszHome);
 #ifdef MAC_OSX
     // Mac
-    pathRet /= "Library/Application Support";
+    pathRet /= "Library";
+    TryCreateDirectory(pathRet);
+    pathRet /= "Application Support";
     TryCreateDirectory(pathRet);
     if ( symbol[0] == 0 )
-        return pathRet / "Komodo";
+        pathRet /= "Komodo";
     else
     {
         pathRet /= "Komodo";
         TryCreateDirectory(pathRet);
-        return pathRet / symbol;
+        pathRet /= symbol;
+        TryCreateDirectory(pathRet);
     }
+    return pathRet;
 #else
     // Unix
     if ( symbol[0] == 0 )
