@@ -18,7 +18,8 @@ bin_PROGRAMS += komodo-test
     test-komodo/test_netbase_tests.cpp \
     test-komodo/test_events.cpp \
     test-komodo/test_hex.cpp \
-    test-komodo/test_haraka_removal.cpp
+    test-komodo/test_haraka_removal.cpp \
+    test-komodo/test_miner.cpp
 
 komodo_test_CPPFLAGS = $(komodod_CPPFLAGS)
 
