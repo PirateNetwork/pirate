@@ -212,7 +212,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "zs_listspentbyaddress", 4},
     { "zs_listspentbyaddress", 5},
 
-    { "iostree", 0},
+    { "exportsaplingtree", 0},
     { "getsaplingwitness", 1},
     { "getsaplingwitness", 2},
     { "getsaplingwitnessatheight", 1},
