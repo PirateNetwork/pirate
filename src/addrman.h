@@ -438,7 +438,7 @@ public:
         s >> nTried;
         int nUBuckets = 0;
         s >> nUBuckets;
-        if (format != Format::V1_DETERMINISTIC) {
+        if (format >= Format::V1_DETERMINISTIC) {
             nUBuckets ^= (1 << 30);
         }
 
