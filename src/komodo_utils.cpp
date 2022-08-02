@@ -1411,7 +1411,8 @@ void set_kmd_user_password_port(const std::string& ltc_config_filename)
             strncpy(KMDUSERPASS, userpass.c_str(), 8705);
         if (IS_KOMODO_NOTARY)
         {
-            get_userpass_and_port(datadir_path, ltc_config_filename, userpass, DEST_PORT);
+            auto approot_path = datadir_path / "..";  // go to home dir
+            get_userpass_and_port(approot_path, ltc_config_filename, userpass, DEST_PORT);
             if (!userpass.empty())
                 strncpy(BTCUSERPASS, userpass.c_str(), 8192);
         }
