@@ -2,8 +2,8 @@ package=openssl
 $(package)_download_path=https://github.com/openssl/$(package)/archive
 $(package)_file_name=$(package)-$($(package)_git_commit).tar.gz
 $(package)_download_file=$($(package)_git_commit).tar.gz
-$(package)_sha256_hash=681d1a3502811e704c3fbab07fae6abf5308ecabb8a60a22ee986887fa2bb760
-$(package)_git_commit=fd78df59b0f656aefe96e39533130454aa957c00
+$(package)_sha256_hash=71065723cb413b66f0d8de248b02607fc0a87bb4190aa4dfc0164357c56175ce
+$(package)_git_commit=29708a562a1887a91de0fa6ca668c71871accde9
 
 define $(package)_set_vars
 $(package)_config_env=AR="$($(package)_ar)" RANLIB="$($(package)_ranlib)" CC="$($(package)_cc)"
