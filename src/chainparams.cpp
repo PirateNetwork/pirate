@@ -651,6 +651,8 @@ void *chainparams_commandline()
 
         if (strcmp(ASSETCHAINS_SYMBOL,"PIRATE") == 0)
         {
+            pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 152855;
+            pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = 152855;
             checkpointData = //(Checkpoints::CCheckpointData)
                     {
                             boost::assign::map_list_of
