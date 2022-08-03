@@ -58,14 +58,27 @@ CDBWrapper::CDBWrapper(const boost::filesystem::path& path, size_t nCacheSize, b
 
 CDBWrapper::~CDBWrapper()
 {
-    delete pdb;
-    pdb = NULL;
-    delete options.filter_policy;
-    options.filter_policy = NULL;
-    delete options.block_cache;
-    options.block_cache = NULL;
-    delete penv;
-    options.env = NULL;
+    //Test if object was created before deinitialising it now
+    if (pdb!=NULL)
+    {
+        delete pdb;
+        pdb = NULL;
+    }
+    if (options.filter_policy!=NULL)
+    {
+        delete options.filter_policy;
+        options.filter_policy = NULL;
+    }
+    if (options.block_cache!=NULL)
+    {
+        delete options.block_cache;
+        options.block_cache = NULL;
+    }    
+    if (penv!=NULL)
+    {
+        delete penv;
+        options.env = NULL;
+    }
 }
 
 bool CDBWrapper::WriteBatch(CDBBatch& batch, bool fSync)

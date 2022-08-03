@@ -3,6 +3,7 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "walletframe.h"
+#include "util.h"
 
 #include "pirateoceangui.h"
 #include "walletview.h"
@@ -12,6 +13,7 @@
 
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QSettings>
 
 WalletFrame::WalletFrame(const PlatformStyle *_platformStyle, PirateOceanGUI *_gui) :
     QFrame(_gui),
@@ -41,6 +43,9 @@ void WalletFrame::setClientModel(ClientModel *_clientModel)
 
 bool WalletFrame::addWallet(const QString& name, WalletModel *walletModel)
 {
+    extern int nMaxConnections;          // from net.cpp
+    extern bool bOverrideMaxConnections; // from net.cpp
+    
     if (!gui || !clientModel || !walletModel || mapWalletViews.count(name) > 0)
         return false;
 
@@ -59,6 +64,35 @@ bool WalletFrame::addWallet(const QString& name, WalletModel *walletModel)
     connect(walletView, SIGNAL(showNormalIfMinimized()), gui, SLOT(showNormalIfMinimized()));
 
     connect(walletView, SIGNAL(outOfSyncWarningClicked()), this, SLOT(outOfSyncWarningClicked()));
+
+
+    //Cold storage offline mode:
+    bool newInstall = GetBoolArg("-setup_cold_storage", false);
+    if (newInstall == true)
+    {
+        //This is the first run of the new wallet
+        if (nMaxConnections==0)
+        {
+            // Default configuration files for the QT GUI & server (PIRATE.conf)
+            // was already created prior to reaching this point.
+        
+            //In init.cpp a dialog asked if an online or cold storage offline
+            //wallet should be created. The code in init.cpp cannot access the
+            //QT GUI to update the configuration data to the selected option.
+        
+            //Creation of a new seed phrase or restore of the seed phrase is
+            //the first GUI interaction. 
+   
+            // Use this spot to update the config files:
+            QSettings settings;
+            settings.setValue("fEnableZSigning", true);
+            settings.setValue("fEnableZSigning_ModeSpend", false);
+            settings.setValue("fEnableZSigning_ModeSign", true);
+        }
+    }
+            
+    //Setup GUI to desired mode
+    gui->setColdStorageLayout();
 
     return true;
 }

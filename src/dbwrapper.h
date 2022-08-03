@@ -158,7 +158,7 @@ class CDBWrapper
 {
 private:
     //! custom environment this database is using (may be NULL in case of default environment)
-    leveldb::Env* penv;
+    leveldb::Env* penv=NULL;
 
     //! database options used
     leveldb::Options options;
@@ -176,7 +176,7 @@ private:
     leveldb::WriteOptions syncoptions;
 
     //! the database itself
-    leveldb::DB* pdb;
+    leveldb::DB* pdb=NULL;
 
 public:
     /**

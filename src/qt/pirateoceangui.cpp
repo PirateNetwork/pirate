@@ -66,8 +66,8 @@
 #include <QUrlQuery>
 #endif
 
-extern int nMaxConnections;   //From net.h
-extern bool bOverrideMaxConnections; 
+extern int nMaxConnections;          //From net.cpp
+extern bool bOverrideMaxConnections; //From net.cpp
 
 const std::string PirateOceanGUI::DEFAULT_UIPLATFORM =
 #if defined(Q_OS_MAC)
@@ -133,6 +133,7 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     spinnerFrame(0),
     platformStyle(_platformStyle)
 {
+
     QSettings settings;
     if (!restoreGeometry(settings.value("MainWindowGeometry").toByteArray())) {
         // Restore failed (perhaps missing setting), center the window
@@ -322,8 +323,8 @@ void PirateOceanGUI::createActions()
     //sendCoinsMenuAction->setStatusTip(sendCoinsAction->statusTip());
     //sendCoinsMenuAction->setToolTip(sendCoinsMenuAction->statusTip());
 
-    //Note: pirateoceangui() gets run before the configuration file gets scanned
-    //      initialise both zsendCoinsAction & zsignAction and differentiate
+    //Note: pirateoceangui() gets run before the configuration file is scanned.
+    //      Initialise both zsendCoinsAction & zsignAction and differentiate
     //      later when the config is available.
 
     zsendCoinsAction = new QAction(platformStyle->SingleColorIcon(":/icons/z-send"), tr("&Z-Send"), this);
@@ -345,39 +346,16 @@ void PirateOceanGUI::createActions()
     zsignAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_9));
     tabGroup->addAction(zsignAction);
 
-    //Check Settings
+    //Startup: Pull GUI config back to the server side during startup
     QSettings settings;
     bool fEnableZSigning = settings.value("fEnableZSigning").toBool();
     if (fEnableZSigning==true) {
-        //Off-line signing enabled.        
-        // Evaluate if this is the on-line role (prepare spend transactions)
-        // or the off-line role (signs the transactions)
-        //
-        // For the on-line role, 
-        //   For addresses for which we have the viewing key only, perform authorisation
-        //   (signing) with the off-line partner wallet.
-        //   For addresses for which we have the spending key, allow spending, the
-        //   same when ZSigning==false
-        bool fEnableZSigning_Spend = settings.value("fEnableZSigning_Spend").toBool();
-        bool fEnableZSigning_Sign  = settings.value("fEnableZSigning_Sign").toBool();
-          
-        zsendCoinsAction->setVisible( fEnableZSigning_Spend );
-        zsignAction->setVisible( fEnableZSigning_Sign );
+        bool fEnableZSigning_ModeSign  = settings.value("fEnableZSigning_ModeSign").toBool();
         
-        //If the off-line role is enabled, the wallet shouldn't have internet access,
-        //for security reasons. The wallet should not attempt to sync with the blockchain.
-        // This can be accomplished by editing PIRATE.conf and setting maxconnections=0.
-        //Alternatively, the number of connections are override here when "Signing"
-        //is enabled:
-        if (fEnableZSigning_Sign==true) {
+        if (fEnableZSigning_ModeSign==true) {
           bOverrideMaxConnections=true;
           nMaxConnections=0;                    
         }
-    } else {        
-        //Offline signing disabled. 
-        //  Only display addresses for which we have the full spending key
-        zsendCoinsAction->setVisible(true);
-        zsignAction->setVisible(false);
     }
 
     zsignMenuAction = new QAction(platformStyle->TextColorIcon(":/icons/z-send"), zsignAction->text(), this);
@@ -611,6 +589,56 @@ void PirateOceanGUI::createToolBars()
     }
 }
 
+void PirateOceanGUI::setColdStorageLayout( )
+{
+    QSettings settings;
+    bool fEnableZSigning = settings.value("fEnableZSigning").toBool();
+    if (fEnableZSigning==true) 
+    {
+        //Cold storage enabled.        
+        // Evaluate if this is the online role (prepare spend transactions)
+        // or the offline role (signs the transactions)
+        //
+        // For the online role, 
+        //   For addresses for which we have the viewing key only, perform authorisation
+        //   (signing) with the off-line partner wallet.
+        //   For addresses for which we have the spending key, allow spending, the
+        //   same when ZSigning==false
+        bool fEnableZSigning_ModeSpend = settings.value("fEnableZSigning_ModeSpend").toBool();
+        bool fEnableZSigning_ModeSign  = settings.value("fEnableZSigning_ModeSign").toBool();
+          
+        zsendCoinsAction->setVisible( fEnableZSigning_ModeSpend );
+        zsignAction->setVisible( fEnableZSigning_ModeSign );
+        
+        //If the offline role is enabled, the wallet shouldn't have internet access,
+        //for security reasons. The wallet should not attempt to sync with the blockchain.
+        // This can be accomplished by editing PIRATE.conf and setting maxconnections=0.
+        //Alternatively, the number of connections are override here when "Signing"
+        //is enabled:
+        if (fEnableZSigning_ModeSign==true) {
+          bOverrideMaxConnections=true;
+          nMaxConnections=0;                    
+        }
+
+        //History not available for the cold storage offline mode.        
+        historyAction->setVisible( fEnableZSigning_ModeSpend );
+        
+        //Hide the Rescan function. No blockchain to use it with
+        rescanAction->setVisible(false);        
+    }
+    else
+    {
+        //Cold storage disabled. 
+        //  Only display addresses for which we have the full spending key
+        zsendCoinsAction->setVisible(true);
+        zsignAction->setVisible(false);
+        historyAction->setVisible(true);        
+        
+        rescanAction->setVisible(true);
+    }
+    receiveCoinsAction->setVisible(true);
+}
+
 void PirateOceanGUI::setClientModel(ClientModel *_clientModel)
 {
     this->clientModel = _clientModel;
@@ -805,11 +833,11 @@ void PirateOceanGUI::optionsClicked()
           //Off-line signing enabled.
           // Evaluate if this is the on-line role (prepare spend transactions)
           // or the off-line role (signs the transactions)
-          bool fEnableZSigning_Spend = settings.value("fEnableZSigning_Spend").toBool();
-          bool fEnableZSigning_Sign  = settings.value("fEnableZSigning_Sign").toBool();
+          bool fEnableZSigning_ModeSpend = settings.value("fEnableZSigning_ModeSpend").toBool();
+          bool fEnableZSigning_ModeSign  = settings.value("fEnableZSigning_ModeSign").toBool();
           
-          zsendCoinsAction->setVisible( fEnableZSigning_Spend );
-          zsignAction->setVisible( fEnableZSigning_Sign );
+          zsendCoinsAction->setVisible( fEnableZSigning_ModeSpend );
+          zsignAction->setVisible( fEnableZSigning_ModeSign );
         } else {        
           //Offline signing disabled. 
           zsendCoinsAction->setVisible(true);
@@ -1103,7 +1131,7 @@ void PirateOceanGUI::setNumBlocks(int count, const QDateTime& blockDate, double 
     progressBar->setToolTip(tooltip);
 }
 
-void PirateOceanGUI::message(const QString &title, const QString &message, unsigned int style, bool *ret)
+void PirateOceanGUI::message(const QString &title, const QString &message, unsigned int style, int *ret)
 {
     QString strTitle = tr("Pirate"); // default title
     // Default to information icon
@@ -1150,16 +1178,20 @@ void PirateOceanGUI::message(const QString &title, const QString &message, unsig
         // Check for buttons, use OK as default, if none was supplied
         QMessageBox::StandardButton buttons;
         if (!(buttons = (QMessageBox::StandardButton)(style & CClientUIInterface::BTN_MASK)))
+        {
             buttons = QMessageBox::Ok;
+        }
 
         showNormalIfMinimized();
-        QMessageBox mBox(static_cast<QMessageBox::Icon>(nMBoxIcon), strTitle, message, buttons, this);
+        QMessageBox mBox((QMessageBox::Icon)nMBoxIcon, strTitle, message, buttons, this);
         int r = mBox.exec();
         if (ret != nullptr)
-            *ret = r == QMessageBox::Ok;
+        {   
+           *ret = r;
+        }
     }
     else
-        notificator->notify(static_cast<Notificator::Class>(nNotifyIcon), strTitle, message);
+        notificator->notify((Notificator::Class)nNotifyIcon, strTitle, message);
 }
 
 void PirateOceanGUI::changeEvent(QEvent *e)
@@ -1300,15 +1332,9 @@ void PirateOceanGUI::setEncryptionStatus(int status)
         encryptWalletAction->setEnabled(true);
         break;
     case WalletModel::Unlocked:
-        zsendCoinsAction->setVisible(true);
-        receiveCoinsAction->setVisible(true);
-        historyAction->setVisible(true);
-
-        if (fEnableZSigning) {
-            zsignAction->setVisible(true);
-        } else {
-            zsignAction->setVisible(false);
-        }
+        //Update GUI to reflect the current cold storage
+        //state: online or offline mode         
+        setColdStorageLayout();
 
         optionsAction->setVisible(true);
         encryptWalletAction->setVisible(true);
@@ -1317,7 +1343,7 @@ void PirateOceanGUI::setEncryptionStatus(int status)
         importSpendAction->setVisible(true);
         importViewAction->setVisible(true);
         showSeedAction->setVisible(true);
-        rescanAction->setVisible(true);
+
 
         labelWalletEncryptionIcon->show();
         labelWalletEncryptionIcon->setPixmap(platformStyle->SingleColorIcon(":/icons/lock_open").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));
@@ -1439,20 +1465,24 @@ void PirateOceanGUI::ShowProgress(QString title, int nProgress)
     qApp->processEvents();
 }
 
-static bool ThreadSafeMessageBox(PirateOceanGUI *gui, const std::string& message, const std::string& caption, unsigned int style)
+// Return code is one of the BTN_MASK items:
+//   (BTN_OK | BTN_YES | BTN_NO | BTN_ABORT | BTN_RETRY | BTN_IGNORE |
+//   BTN_CLOSE | BTN_CANCEL | BTN_DISCARD | BTN_HELP | BTN_APPLY | BTN_RESET)
+// Default: BTN_CANCEL
+static int ThreadSafeMessageBox(PirateOceanGUI *gui, const std::string& message, const std::string& caption, unsigned int style)
 {
     bool modal = (style & CClientUIInterface::MODAL);
     // The SECURE flag has no effect in the Qt GUI.
     // bool secure = (style & CClientUIInterface::SECURE);
     style &= ~CClientUIInterface::SECURE;
-    bool ret = false;
+    int ret = CClientUIInterface::BTN_CANCEL;
     // In case of modal message, use blocking connection to wait for user to click a button
     QMetaObject::invokeMethod(gui, "message",
                                modal ? GUIUtil::blockingGUIThreadConnection() : Qt::QueuedConnection,
                                Q_ARG(QString, QString::fromStdString(caption)),
                                Q_ARG(QString, QString::fromStdString(message)),
                                Q_ARG(unsigned int, style),
-                               Q_ARG(bool*, &ret));
+                               Q_ARG(int*, &ret));
     return ret;
 }
 

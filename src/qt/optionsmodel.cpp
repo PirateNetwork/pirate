@@ -129,7 +129,7 @@ void OptionsModel::Init(bool resetSettings)
 
     bool fEnableZSigning = settings.value("fEnableZSigning").toBool();
     if (fEnableZSigning==false) {
-      settings.setValue("fEnableZSigning_ModeSpend",  false);
+      settings.setValue("fEnableZSigning_ModeSpend", false);
       settings.setValue("fEnableZSigning_ModeSign",  false);
     } else {
       if (!settings.contains("fEnableZSigning_ModeSpend"))
@@ -333,10 +333,10 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return settings.value("fEnableZSigning");
         case EnableZSigning_Spend:
             //  Offline transaction role: Create offline transactions for 'viewing only' addresses
-            return settings.value("fEnableZSigning_Spend");
+            return settings.value("fEnableZSigning_ModeSpend");
         case EnableZSigning_Sign:
             //  Offline transaction role: Sign offline transactions
-            return settings.value("fEnableZSigning_Sign");
+            return settings.value("fEnableZSigning_ModeSign");
         case EnableHexMemo:
             return fEnableHexMemo;
         case EnableBootstrap:
@@ -480,21 +480,18 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
           if (settings.value("fEnableZSigning") != value) {
               settings.setValue("fEnableZSigning", value);
               setRestartRequired(true);
-              printf("EnableZSigning: restart required\n");              
           }
           break;
       case EnableZSigning_Sign:
-          if (settings.value("fEnableZSigning_Sign") != value) {
-              settings.setValue("fEnableZSigning_Sign", value);
+          if (settings.value("fEnableZSigning_ModeSign") != value) {
+              settings.setValue("fEnableZSigning_ModeSign", value);
               setRestartRequired(true);
-              printf("EnableZSigning_Sign: restart required\n");
           }
           break;
       case EnableZSigning_Spend:
-          if (settings.value("fEnableZSigning_Spend") != value) {
-              settings.setValue("fEnableZSigning_Spend", value);
+          if (settings.value("fEnableZSigning_ModeSpend") != value) {
+              settings.setValue("fEnableZSigning_ModeSpend", value);
               setRestartRequired(true);
-              printf("EnableZSigning_Spend: restart required\n");              
           }
           break;
       case EnableHexMemo:
@@ -614,16 +611,23 @@ void OptionsModel::setHexMemo(const QVariant &value)
 // }
 // #endif
 
+//Note: setRestartRequired only called while the settings are
+//      evaluated & updated in ::setData(). 
+//      This is too late to provide a user prompt to cancel/
+//      prevent the update.
 void OptionsModel::setRestartRequired(bool fRequired)
-{
+{    
     QSettings settings;
-    return settings.setValue("fRestartRequired", fRequired);
+    settings.setValue("fRestartRequired", fRequired);
+    return;
 }
 
+//Note: Calling isRestartRequired() before applying the
+//      changes will not give a correct result while
+//      editing the options.
 bool OptionsModel::isRestartRequired() const
 {
     QSettings settings;
-    printf("RestartRequired:%d\n", settings.value("fRestartRequired", false).toBool() );
     return settings.value("fRestartRequired", false).toBool();
 }
 

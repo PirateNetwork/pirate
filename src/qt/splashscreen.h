@@ -73,6 +73,8 @@ private:
     int curAlignment;
 
     QList<CWallet*> connectedWallets;
+    
+    bool bProcessedInitialColdStorageSetup;
 
 private Q_SLOTS:
     /** Select Random or Restore from seed while creating a new wallet */

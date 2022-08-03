@@ -102,6 +102,9 @@ extern bool VERUS_MINTBLOCKS;
 extern char ASSETCHAINS_SYMBOL[];
 extern int32_t KOMODO_SNAPSHOT_INTERVAL;
 
+extern int nMaxConnections;          // from net.cpp
+extern bool bOverrideMaxConnections; // from net.cpp
+
 ZCJoinSplit* pzcashParams = NULL;
 
 #ifdef ENABLE_WALLET
@@ -264,14 +267,22 @@ void Shutdown()
         if (pcoinsTip != NULL) {
             FlushStateToDisk();
         }
-        delete pcoinsTip;
-        pcoinsTip = NULL;
-        delete pcoinscatcher;
-        pcoinscatcher = NULL;
-        delete pcoinsdbview;
-        pcoinsdbview = NULL;
-        delete pblocktree;
-        pblocktree = NULL;
+        if (pcoinsTip != NULL) {
+            delete pcoinsTip;
+            pcoinsTip = NULL;
+        }
+        if (pcoinscatcher != NULL) {
+            delete pcoinscatcher;
+            pcoinscatcher = NULL;
+        }
+        if (pcoinsdbview != NULL) {
+            delete pcoinsdbview;
+            pcoinsdbview = NULL;
+        }
+        if (pblocktree != NULL) {
+            delete pblocktree;
+            pblocktree = NULL;
+        }
     }
 #ifdef ENABLE_WALLET
     if (pwalletMain)
@@ -708,6 +719,12 @@ void CleanupBlockRevFiles()
 
 void ThreadImport(std::vector<boost::filesystem::path> vImportFiles)
 {
+    if (nMaxConnections==0) {
+        //Cold storage: Offline mode. Skip ThreadImport
+        return;
+    }
+    
+    // Online mode. Start ThreadImport
     RenameThread("zcash-loadblk");
     // -reindex
     if (fReindex) {
@@ -1117,7 +1134,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     // Make sure enough file descriptors are available
     int nBind = std::max((int)mapArgs.count("-bind") + (int)mapArgs.count("-whitebind"), 1);
     nMaxConnections = GetArg("-maxconnections", DEFAULT_MAX_PEER_CONNECTIONS);
-    //fprintf(stderr,"nMaxConnections %d\n",nMaxConnections);
+    //fprintf(stderr,"nMaxConnections %d\n",nMaxConnections);    
     nMaxConnections = std::max(std::min(nMaxConnections, (int)(FD_SETSIZE - nBind - MIN_CORE_FILEDESCRIPTORS)), 0);
     int nFD = RaiseFileDescriptorLimit(nMaxConnections + MIN_CORE_FILEDESCRIPTORS);
     //fprintf(stderr,"nMaxConnections %d FD_SETSIZE.%d nBind.%d expr.%d \n",nMaxConnections,FD_SETSIZE,nBind,(int)(FD_SETSIZE - nBind - MIN_CORE_FILEDESCRIPTORS));
@@ -1127,7 +1144,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         nMaxConnections = nFD - MIN_CORE_FILEDESCRIPTORS;
     if (bOverrideMaxConnections==true)
     {
-        fprintf(stderr,"init: GUI config override maxconnections=%d\n",nMaxConnections);
+        //fprintf(stderr,"init: GUI config override maxconnections=%d\n",nMaxConnections);
         nMaxConnections=0;
     }
     fprintf(stderr,"nMaxConnections %d\n",nMaxConnections);
@@ -1727,65 +1744,93 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     fReindex = GetBoolArg("-reindex", false);
 
+    
+    
+
     bool useBootstrap = false;
-    bool newInstall = GetBoolArg("-bootstrapinstall", false);
-    if (!boost::filesystem::exists(GetDataDir() / "blocks") || !boost::filesystem::exists(GetDataDir() / "chainstate"))
-        newInstall = true;
+    bool newInstall = false;
+    
 
-    //Prompt on new install
-    if (newInstall && !GetBoolArg("-bootstrap", false)) {
-        bool fBoot = uiInterface.ThreadSafeMessageBox(
-            "\n\n" + _("New install detected.\n\nPress OK to download the blockchain bootstrap (faster, less secure).\n\nPress Cancel to continue on and sync the blockchain from peer nodes (slower, more secure)."),
-            "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
-        if (fBoot) {
-            useBootstrap = true;
+    //Parameter set on initial creation of PIRATE.conf.
+    newInstall = GetBoolArg("-setup_cold_storage", false);    
+    
+    //Prompt on new install: Cold storage or normal operation? 
+    if (newInstall && !IsArgSet("maxconnections")) {
+        int fColdStorage_Offline = uiInterface.ThreadSafeMessageBox(
+            "\n\n" + _("New install detected.\n\nPress YES to setup this wallet in the tradional online mode, i.e. a full function wallet that can create, authorise (sign) and send transactions.\n\nPress No to setup this instance as a cold storage offline wallet which only authorise (sign) transactions"),
+            "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_YES | CClientUIInterface::BTN_NO );
+        if (fColdStorage_Offline==CClientUIInterface::BTN_NO) {
+            //Cold storage offline mode
+            nMaxConnections=0;
+            useBootstrap = false;
+            
+            //Note: By this time the GUI configuration files: 'Pirate Chain/Treasure\ Chest.conf' and
+            //      PIRATE.conf is already created. We'll have to update the GUI configuration from
+            //      the UI code
         }
-    }
+    } 
 
-    //Prompt GUI
-    if (GetBoolArg("-bootstrap", false) && GetArg("-bootstrap", "1") != "2" && !useBootstrap) {
-        bool fBoot = uiInterface.ThreadSafeMessageBox(
-            "\n\n" + _("Bootstrap option detected.\n\nPress OK to download the blockchain bootstrap (faster, less secure).\n\nPress Cancel to continue on and sync the blockchain from peer nodes (slower, more secure)."),
-            "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
-        if (fBoot) {
-            useBootstrap = true;
-        }
-    }
+    if (nMaxConnections>0) //Online mode
+    {
+        //Note: 'bootstrapinstall' also set when PIRATE.conf is created
+        newInstall = GetBoolArg("-bootstrapinstall", false);
+        if (!boost::filesystem::exists(GetDataDir() / "blocks") || !boost::filesystem::exists(GetDataDir() / "chainstate"))
+            newInstall = true;
 
-    //Force Download- used for CLI
-    if (GetBoolArg("-bootstrap", false) && GetArg("-bootstrap", "1") == "2") {
-        useBootstrap = true;
-    }
-
-    if (useBootstrap) {
-        fReindex = false;
-        //wipe transactions from wallet to create a clean slate
-        OverrideSetArg("-zappwallettxes","2");
-        boost::filesystem::remove_all(GetDataDir() / "blocks");
-        boost::filesystem::remove_all(GetDataDir() / "chainstate");
-        boost::filesystem::remove_all(GetDataDir() / "notarisations");
-        boost::filesystem::remove(GetDataDir() / "komodostate");
-        boost::filesystem::remove(GetDataDir() / "signedmasks");
-        boost::filesystem::remove(GetDataDir() / "komodostate.ind");
-        if (!getBootstrap() && !fRequestShutdown ) {
-            bool keepRunning = uiInterface.ThreadSafeMessageBox(
-                "\n\n" + _("Bootstrap download failed!!!\n\nPress OK to continue and sync from the network."),
+        //Prompt on new install
+        if (newInstall && !GetBoolArg("-bootstrap", false)) {
+            int fBoot = uiInterface.ThreadSafeMessageBox(
+                "\n\n" + _("New install detected.\n\nPress OK to download the blockchain bootstrap (faster, less secure).\n\nPress Cancel to continue on and sync the blockchain from peer nodes (slower, more secure)."),
                 "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
-
-            if (!keepRunning) {
-                fRequestShutdown = true;
+            if (fBoot==CClientUIInterface::BTN_OK) {
+                useBootstrap = true;
             }
         }
+
+        //Prompt GUI
+        if (GetBoolArg("-bootstrap", false) && GetArg("-bootstrap", "1") != "2" && !useBootstrap) {
+            int fBoot = uiInterface.ThreadSafeMessageBox(
+                "\n\n" + _("Bootstrap option detected.\n\nPress OK to download the blockchain bootstrap (faster, less secure).\n\nPress Cancel to continue on and sync the blockchain from peer nodes (slower, more secure)."),
+                "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
+            if (fBoot==CClientUIInterface::BTN_OK) {
+                useBootstrap = true;
+            }
+        }
+
+        //Force Download- used for CLI
+        if (GetBoolArg("-bootstrap", false) && GetArg("-bootstrap", "1") == "2") {
+            useBootstrap = true;
+        }
+
+        if (useBootstrap) {
+            fReindex = false;
+            //wipe transactions from wallet to create a clean slate
+            OverrideSetArg("-zappwallettxes","2");
+            boost::filesystem::remove_all(GetDataDir() / "blocks");
+            boost::filesystem::remove_all(GetDataDir() / "chainstate");
+            boost::filesystem::remove_all(GetDataDir() / "notarisations");
+            boost::filesystem::remove(GetDataDir() / "komodostate");
+            boost::filesystem::remove(GetDataDir() / "signedmasks");
+            boost::filesystem::remove(GetDataDir() / "komodostate.ind");
+            if (!getBootstrap() && !fRequestShutdown ) {
+                int keepRunning = uiInterface.ThreadSafeMessageBox(
+                    "\n\n" + _("Bootstrap download failed!!!\n\nPress OK to continue and sync from the network."),
+                    "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
+
+                if (!keepRunning==CClientUIInterface::BTN_CANCEL) {
+                    fRequestShutdown = true;
+                }
+            }
+        }
+
+        if (fRequestShutdown)
+        {
+            LogPrintf("Shutdown requested. Exiting.\n");
+            return false;
+        }
+
+        boost::filesystem::create_directories(GetDataDir() / "blocks");
     }
-
-    if (fRequestShutdown)
-    {
-        LogPrintf("Shutdown requested. Exiting.\n");
-        return false;
-    }
-
-    boost::filesystem::create_directories(GetDataDir() / "blocks");
-
     // block tree db settings
     int dbMaxOpenFiles = GetArg("-dbmaxopenfiles", DEFAULT_DB_MAX_OPEN_FILES);
     bool dbCompression = GetBoolArg("-dbcompression", DEFAULT_DB_COMPRESSION);
@@ -1820,37 +1865,56 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     if ( fReindex == 0 )
     {
-        bool checkval,fAddressIndex,fSpentIndex;
-        pblocktree = new CBlockTreeDB(nBlockTreeDBCache, false, fReindex, dbCompression, dbMaxOpenFiles);
-        fAddressIndex = GetBoolArg("-addressindex", DEFAULT_ADDRESSINDEX);
-        pblocktree->ReadFlag("addressindex", checkval);
-        if ( checkval != fAddressIndex && fAddressIndex != 0 )
+        if (nMaxConnections > 0) //Online mode
         {
-            pblocktree->WriteFlag("addressindex", fAddressIndex);
-            fprintf(stderr,"set addressindex, will reindex. could take a while.\n");
-            fReindex = true;
-        }
-        fSpentIndex = GetBoolArg("-spentindex", DEFAULT_SPENTINDEX);
-        pblocktree->ReadFlag("spentindex", checkval);
-        if ( checkval != fSpentIndex && fSpentIndex != 0 )
-        {
-            pblocktree->WriteFlag("spentindex", fSpentIndex);
-            fprintf(stderr,"set spentindex, will reindex. could take a while.\n");
-            fReindex = true;
-        }
-        //One time reindex to enable transaction archiving.
-        pblocktree->ReadFlag("archiverule", checkval);
-        if (checkval != fArchive)
-        {
-            pblocktree->WriteFlag("archiverule", fArchive);
-            LogPrintf("Transaction archive not set, will reindex. could take a while.\n");
-            fReindex = true;
+            bool checkval,fAddressIndex,fSpentIndex;
+            pblocktree = new CBlockTreeDB(nBlockTreeDBCache, false, fReindex, dbCompression, dbMaxOpenFiles);
+            fAddressIndex = GetBoolArg("-addressindex", DEFAULT_ADDRESSINDEX);
+            pblocktree->ReadFlag("addressindex", checkval);
+            if ( checkval != fAddressIndex && fAddressIndex != 0 )
+            {
+                pblocktree->WriteFlag("addressindex", fAddressIndex);
+                fprintf(stderr,"set addressindex, will reindex. could take a while.\n");
+                fReindex = true;
+            }
+            fSpentIndex = GetBoolArg("-spentindex", DEFAULT_SPENTINDEX);
+            pblocktree->ReadFlag("spentindex", checkval);
+            if ( checkval != fSpentIndex && fSpentIndex != 0 )
+            {
+                pblocktree->WriteFlag("spentindex", fSpentIndex);
+                fprintf(stderr,"set spentindex, will reindex. could take a while.\n");
+                fReindex = true;
+            }
+            //One time reindex to enable transaction archiving.
+            pblocktree->ReadFlag("archiverule", checkval);
+            if (checkval != fArchive)
+            {
+                pblocktree->WriteFlag("archiverule", fArchive);
+                LogPrintf("Transaction archive not set, will reindex. could take a while.\n");
+                fReindex = true;
+            }
         }
     }
 
     bool clearWitnessCaches = false;
 
     bool fLoaded = false;
+    if (nMaxConnections==0) {
+        //Offline mode: delete unused objects
+        try {
+            UnloadBlockIndex();
+            delete pcoinsTip;
+            delete pcoinsdbview;
+            delete pcoinscatcher;
+            delete pblocktree;
+            delete pnotarisations;
+        } catch (const std::exception& e) {
+            if (fDebug) LogPrintf("%s\n", e.what());
+        }
+        //Offline mode: skip loading of blockchain blocks
+        fLoaded = true;
+    }
+
     while (!fLoaded) {
         bool fReset = fReindex;
         std::string strLoadError;
@@ -1954,10 +2018,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         if (!fLoaded) {
             // first suggest a reindex
             if (!fReset) {
-                bool fRet = uiInterface.ThreadSafeMessageBox(
+                int fRet = uiInterface.ThreadSafeMessageBox(
                     strLoadError + ".\n\n" + _("error in HDD data, might just need to update to latest, if that doesnt work, then you need to resync"),
-                    "", CClientUIInterface::MSG_ERROR | CClientUIInterface::BTN_ABORT);
-                if (fRet) {
+                    "", CClientUIInterface::MSG_ERROR | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_ABORT);
+                if (fRet==CClientUIInterface::BTN_OK) {
                     fReindex = true;
                     fRequestShutdown = false;
                 } else {
@@ -1981,12 +2045,22 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     }
     LogPrintf(" block index %15dms\n", GetTimeMillis() - nStart);
 
-    boost::filesystem::path est_path = GetDataDir() / FEE_ESTIMATES_FILENAME;
-    CAutoFile est_filein(fopen(est_path.string().c_str(), "rb"), SER_DISK, CLIENT_VERSION);
-    // Allowed to fail as this file IS missing on first startup.
-    if (!est_filein.IsNull())
-        mempool.ReadFeeEstimates(est_filein);
-    fFeeEstimatesInitialized = true;
+    if (nMaxConnections>0)
+    {
+        boost::filesystem::path est_path = GetDataDir() / FEE_ESTIMATES_FILENAME;
+        CAutoFile est_filein(fopen(est_path.string().c_str(), "rb"), SER_DISK, CLIENT_VERSION);
+        // Allowed to fail as this file IS missing on first startup.
+        if (!est_filein.IsNull())
+            mempool.ReadFeeEstimates(est_filein);
+        fFeeEstimatesInitialized = true;
+    }
+    else
+    {
+        //Finalise offline mode variable values
+        fFeeEstimatesInitialized = false;
+        fReindex = 0;
+        KOMODO_REWIND = 0;
+    }
 
 
     // ********************************************************* Step 8: load wallet
@@ -2539,11 +2613,15 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         BOOST_FOREACH(const std::string& strFile, mapMultiArgs["-loadblock"])
             vImportFiles.push_back(strFile);
     }
-    threadGroup.create_thread(boost::bind(&ThreadImport, vImportFiles));
-    if (chainActive.Tip() == NULL) {
-        LogPrintf("Waiting for genesis block to be imported...\n");
-        while (!fRequestShutdown && chainActive.Tip() == NULL)
-            MilliSleep(10);
+    if (nMaxConnections>0)
+    {
+        //Online mode: start ThreadImport
+        threadGroup.create_thread(boost::bind(&ThreadImport, vImportFiles));
+        if (chainActive.Tip() == NULL) {
+            LogPrintf("Waiting for genesis block to be imported...\n");
+            while (!fRequestShutdown && chainActive.Tip() == NULL)
+                MilliSleep(10);
+        }
     }
 
     // ********************************************************* Step 11: start node

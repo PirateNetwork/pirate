@@ -1009,8 +1009,9 @@ void komodo_configfile(char *symbol,uint16_t rpcport)
             {
                 fprintf(fp,"rpcuser=user%u\nrpcpassword=pass%s\nrpcport=%u\nserver=1\ntxindex=1\nrpcworkqueue=256\nrpcallowip=127.0.0.1\nrpcbind=127.0.0.1\n",crc,password,rpcport);
                 fclose(fp);
-                printf("Created (%s)\n",fname);
+                printf("Created (%s).\n",fname);
                 SoftSetArg("-bootstrapinstall", std::string("1"));
+                SoftSetArg("-setup_cold_storage", std::string("1"));
             } else printf("Couldnt create (%s)\n",fname);
 #endif
         }

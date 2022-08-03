@@ -56,6 +56,10 @@ public:
         The client model represents the part of the core that communicates with the P2P network, and is wallet-agnostic.
     */
     void setClientModel(ClientModel *clientModel);
+    
+    // Set the main screen menus based on the main role: Online or Cold storage offline
+    void setColdStorageLayout();
+    
 
 #ifdef ENABLE_WALLET
     /** Set the wallet model.
@@ -175,9 +179,9 @@ public Q_SLOTS:
        @param[in] message   the displayed text
        @param[in] style     modality and style definitions (icon and used buttons - buttons only for message boxes)
                             @see CClientUIInterface::MessageBoxFlags
-       @param[in] ret       pointer to a bool that will be modified to whether Ok was clicked (modal only)
+       @param[in] ret       pointer to an int that will be modified to contain one of the BTN_MASK values, i.e. OK, Yes, No, Cancel (modal only)
     */
-    void message(const QString &title, const QString &message, unsigned int style, bool *ret = nullptr);
+    void message(const QString &title, const QString &message, unsigned int style, int *ret = nullptr);
 
 #ifdef ENABLE_WALLET
     /** Set the encryption status as shown in the UI.

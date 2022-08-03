@@ -53,6 +53,7 @@ extern CAmount getBalanceTaddr(std::string transparentAddress, int minDepth=1, b
 extern uint64_t komodo_interestsum();
 
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
+extern int nMaxConnections;          // from net.cpp
 
 // JSDescription size depends on the transaction version
 #define V3_JS_DESCRIPTION_SIZE    (GetSerializeSize(JSDescription(), SER_NETWORK, (OVERWINTER_TX_VERSION | (1 << 31))))
@@ -376,6 +377,11 @@ void WalletModel::pollBalanceChanged()
 
 void WalletModel::checkBalanceChanged()
 {
+    if (nMaxConnections==0) {
+        //Don't check balances in cold storage offline mode
+        return;
+    }
+    
     CAmount newBalance = getBalance();
     CAmount newUnconfirmedBalance = getUnconfirmedBalance();
     CAmount newImmatureBalance = getImmatureBalance();
@@ -1058,31 +1064,35 @@ RecentRequestsTableModel *WalletModel::getRecentRequestsTableModel()
 
 WalletModel::EncryptionStatus WalletModel::getEncryptionStatus() const
 {
+    try {
+        if (wallet) {
 
-    if (wallet) {
+            TRY_LOCK(wallet->cs_wallet, lockWallet);
+            if(!lockWallet){
+                return Busy;
+                }
 
-        TRY_LOCK(wallet->cs_wallet, lockWallet);
-        if(!lockWallet){
-            return Busy;
-        }
+            TRY_LOCK(wallet->cs_KeyStore, lockKeystore);
+            if(!lockKeystore){
+                return Busy;
+            }
 
-        TRY_LOCK(wallet->cs_KeyStore, lockKeystore);
-        if(!lockKeystore){
-            return Busy;
+            if(!wallet->IsCrypted())
+            {
+                return Unencrypted;
+            }
+            else if(wallet->IsLocked())
+            {
+                return Locked;
+            }
         }
-
-        if(!wallet->IsCrypted())
-        {
-            return Unencrypted;
-        }
-        else if(wallet->IsLocked())
-        {
-            return Locked;
-        }
+    }
+    catch(const std::runtime_error& e) 
+    {
+        LogPrintf("Exception: WalletModel::getEncryptionStatus: %s\n", e.what());
     }
 
     return Unlocked;
-
 }
 
 bool WalletModel::setWalletEncrypted(bool encrypted, const SecureString &passphrase)

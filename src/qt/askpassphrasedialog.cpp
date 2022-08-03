@@ -111,7 +111,10 @@ void AskPassphraseDialog::accept()
             break;
         }
         QMessageBox::StandardButton retval = QMessageBox::question(this, tr("Confirm wallet encryption"),
-                 tr("Warning: If you encrypt your wallet and lose your passphrase, you will <b>LOSE ALL OF YOUR COINS</b>!") + "<br><br>" + tr("Are you sure you wish to encrypt your wallet?"),
+                 tr("Warning: If you encrypt your wallet and lose your passphrase you will not be able to unlock the wallet.")+
+                 tr("If you also loose your seed phrase (mnemonic) you will not be able to restore your addresses in a new wallet to regain access to your coins.")+
+                 tr("Always backup your seed phrase safely or <b>YOU WILL LOSE ALL OF YOUR COINS</b>!") + "<br><br>" + 
+                 tr("Are you sure you wish to encrypt your wallet?"),
                  QMessageBox::Yes|QMessageBox::Cancel,
                  QMessageBox::Cancel);
         if(retval == QMessageBox::Yes)
@@ -126,10 +129,9 @@ void AskPassphraseDialog::accept()
                                          "your coins from being stolen by malware infecting your computer.").arg(tr(PACKAGE_NAME)) +
                                          "<br><br><b>" +
                                          tr("IMPORTANT: Any previous backups you have made of your wallet file "
-                                         "should be replaced with the newly generated, encrypted wallet file. "
-                                         "For security reasons, previous backups of the unencrypted wallet file "
-                                         "will become useless as soon as you start using the new, encrypted wallet.") +
-                                         "</b></qt>");
+                                         "should be destroyed. If somebody gains access to an unencrypted wallet "
+                                         "file they can spend your coins from it. "
+                                         "</b></qt>"));
                 }
                 else
                 {

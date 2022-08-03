@@ -1421,9 +1421,13 @@ void CWallet::CommitAutomatedTx(const CTransaction& tx) {
 
 void CWallet::SetBestChain(const CBlockLocator& loc, const int& height)
 {
-    AssertLockHeld(cs_wallet);
-    CWalletDB walletdb(strWalletFile);
-    SetBestChainINTERNAL(walletdb, loc, height);
+    //Only execute in online mode, otherwise ignore this function 
+    //for cold storage offline mode
+    if (nMaxConnections > 0 ) {
+        AssertLockHeld(cs_wallet);
+        CWalletDB walletdb(strWalletFile);
+        SetBestChainINTERNAL(walletdb, loc, height);
+    }
 }
 
 void CWallet::SetWalletBirthday(int nHeight)
@@ -4941,6 +4945,10 @@ bool CWallet::initalizeArcTx() {
  */
 int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, bool fIgnoreBirthday, bool LockOnFinish)
 {
+    if (nMaxConnections == 0) {
+        //Ignore function for cold storage offline mode
+        return false;
+    }
     LOCK2(cs_main, cs_wallet);
     //Notify GUI of rescan
     NotifyRescanStarted();

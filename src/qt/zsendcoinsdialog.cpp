@@ -754,37 +754,35 @@ void ZSendCoinsDialog::updatePayFromList()
 
       QSettings settings;
       bool fEnableZSigning      = settings.value("fEnableZSigning").toBool();
-      bool fEnableZSigning_Spend = false;
+      bool fEnableZSigning_ModeSpend = false;
       
       if (fEnableZSigning==true) { 
-        //Off-line transaction signing is enabled.
-        
-        //Determine if the wallet is running in 'on-line' mode which
-        //allows the creation of spend transactions:
-        fEnableZSigning_Spend = settings.value("fEnableZSigning_Spend").toBool();
+        //Cold storage is enabled.        
+        //Determine if the wallet is running in 'offline' mode,
+        //which allows for the authentication (signing) of transactions:
+        fEnableZSigning_ModeSpend = settings.value("fEnableZSigning_ModeSpend").toBool();
       }
 
       auto search = zbalances_isMine.find( oAddress );
       if (search != zbalances_isMine.end()) {
-          //If Off-line transaction signing is enabled:
-          //  If we filter on (fEnableZSigning==false), then only adresses for
-          //  which we have the viewing key will be shown in the address drop down
+          //If we filter for 'cold storage enabled':
+          //    Only adresses for which we have the viewing key will be shown in 
+          //    the address drop down
           
-          //  If we do not filter on (fEnableZSigning==false), then all address
-          //  will be shown in Off-line transaction signing:
-          //    Those with spending key will be a normal Spend
-          //    Those with only the viewing key will be 'prepare off-line transaction
+          //else 
+          //    All address will be shown:
+          //    Those with spending key will be a normal Spend and
+          //    those with only the viewing key will be 'prepare on offline transaction'
 
           //if (fEnableZSigning==false) {
             ui->payFromAddress->addItem(tr("(%1) %2").arg(sAmount).arg(sAddddress) );
           //}          
       }
       else {
-          if (fEnableZSigning_Spend) {
-            // If off-line transaction signing is enabled and the 'on-line' role is
-            // selected:
+          if (fEnableZSigning_ModeSpend) {
+            // Cold storage online mode:
             //   Show addressed for which we have the viewing key only
-            //   in order to be able to 'prepare off-line transactions'
+            //   in order to be able to 'prepare an offline transaction'
             ui->payFromAddress->addItem(tr("(%1) %2 - Off-line Transaction").arg(sAmount).arg(sAddddress) );
           }
       }

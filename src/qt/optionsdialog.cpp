@@ -412,14 +412,26 @@ void OptionsDialog::showRestartWarning(bool fPersistent)
         // Todo: should perhaps be a class attribute, if we extend the use of statusLabel
         QTimer::singleShot(10000, this, SLOT(clearStatusLabel()));
     }
+    
+    //Items that require restart-on-change were connected to showRestartWarning() in ::setModel()
+    //Note: The model implementation is misleading: RestartRequired is not evaluated with every
+    //      item change. Therefore isRestartRequired always returns false while you're busy
+    //      editing the options.
+    //      The model only runs setData(), which updates the model to the new values. If a data
+    //      change requires a restart then the variable is updated, but its way too late in the
+    //      process to do anything usefull with it. The internal data of the model is already
+    //      updated. So, selecting Cancel at this point won't 'undo' the changes
+    //
+    //      A quick fix is to force the restart when a relevant item is changed, regardless if
+    //      the user sets it back to its original value, which should actually have to 'undo'
+    //      the forced restart.
+    model->setRestartRequired(true);
+    
 }
 
 void OptionsDialog::clearStatusLabel()
 {
     ui->statusLabel->clear();
-    if (model && model->isRestartRequired()) {
-        showRestartWarning(true);
-    }
 }
 
 void OptionsDialog::updateProxyValidationState()

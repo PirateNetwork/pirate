@@ -201,9 +201,12 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
     connect(ui->listTransactions, SIGNAL(clicked(QModelIndex)), this, SLOT(handleTransactionClicked(QModelIndex)));
 
     // start with displaying the "out of sync" warnings
-    showOutOfSyncWarning(true);
-    connect(ui->labelWalletStatus, SIGNAL(clicked()), this, SLOT(handleOutOfSyncWarningClicks()));
-    connect(ui->labelTransactionsStatus, SIGNAL(clicked()), this, SLOT(handleOutOfSyncWarningClicks()));
+    if (nMaxConnections>0) //On-line
+    {
+        showOutOfSyncWarning(true);
+        connect(ui->labelWalletStatus, SIGNAL(clicked()), this, SLOT(handleOutOfSyncWarningClicks()));
+        connect(ui->labelTransactionsStatus, SIGNAL(clicked()), this, SLOT(handleOutOfSyncWarningClicks()));
+    }
 
     //connect Unlock wallet button
     connect(ui->btnUnlock, SIGNAL(clicked()), this, SLOT(unlockWallet()));
@@ -475,8 +478,21 @@ void OverviewPage::setUiVisible(bool visible, bool isCrypted, int64_t relockTime
         ui->lblLockedMessage->setVisible(false);
         ui->btnUnlock->setVisible(false);
         ui->btnKeepOpen->setVisible(false);
-        ui->frame->setVisible(true);
-        ui->frame_2->setVisible(true);
+        if (nMaxConnections>0) //On-line
+        {
+            ui->frame->setVisible(true);
+            ui->frame_2->setVisible(true);
+        }
+        else
+        {
+            //Hide the balances frame.
+            ui->frame->setVisible(false);
+            //Let the user know in the 'transaction' frame that they are
+            //in cold storage offline mode.            
+            ui->frame_2->setVisible(true);
+            ui->label_4->setText("Cold storage offline mode");
+            ui->labelTransactionsStatus->setVisible(false);            
+        }
         return;
     }
 
@@ -486,6 +502,8 @@ void OverviewPage::setUiVisible(bool visible, bool isCrypted, int64_t relockTime
 
     if (visible) {
         ui->btnUnlock->setText("Unlock");
+        ui->frame->setVisible(false);
+        ui->frame_2->setVisible(false);        
     } else {
         ui->btnUnlock->setText("Lock");
         if (relockTime == 0) {
@@ -495,12 +513,26 @@ void OverviewPage::setUiVisible(bool visible, bool isCrypted, int64_t relockTime
             ui->btnUnlock->setVisible(true);
             ui->btnKeepOpen->setVisible(true);
         }
+        
+        if (nMaxConnections>0) //Online
+        {
+            ui->frame->setVisible(true);
+            ui->frame_2->setVisible(true);        
+        }
+        else //Cold storagage offline
+        {
+            //Hide the balances frame.
+            ui->frame->setVisible(false);
+            //Let the user know in the 'transaction' frame that they are
+            //in cold storage offline mode.
+            ui->frame_2->setVisible(true);
+            ui->label_4->setText("Cold storage offline mode");
+            ui->labelTransactionsStatus->setVisible(false);                    
+        }        
     }
 
     //hide when locked
     ui->btnKeepOpen->setVisible(!visible);
-    ui->frame->setVisible(!visible);
-    ui->frame_2->setVisible(!visible);
 }
 
 void OverviewPage::unlockWallet() {

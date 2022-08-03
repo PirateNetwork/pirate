@@ -181,7 +181,7 @@ void TriggerRefresh()
     MilliSleep(200);
 }
 
-static bool metrics_ThreadSafeMessageBox(const std::string& message,
+static int metrics_ThreadSafeMessageBox(const std::string& message,
                                       const std::string& caption,
                                       unsigned int style)
 {
@@ -211,10 +211,10 @@ static bool metrics_ThreadSafeMessageBox(const std::string& message,
     }
 
     TriggerRefresh();
-    return false;
+    return CClientUIInterface::BTN_CANCEL;
 }
 
-static bool metrics_ThreadSafeQuestion(const std::string& /* ignored interactive message */, const std::string& message, const std::string& caption, unsigned int style)
+static int metrics_ThreadSafeQuestion(const std::string& /* ignored interactive message */, const std::string& message, const std::string& caption, unsigned int style)
 {
     return metrics_ThreadSafeMessageBox(message, caption, style);
 }
