@@ -215,9 +215,6 @@ private:
     //! @note Don't increment this. Increment `lowest_compatible` in `Serialize()` instead.
     static constexpr uint8_t INCOMPATIBILITY_BASE = 32;
 
-    //! last used nId
-    int nIdCount;
-
     //! table with information about all nIds
     std::map<int, CAddrInfo> mapInfo;
 
@@ -452,13 +449,13 @@ public:
 
         // Deserialize entries from the new table.
         for (int n = 0; n < nNew; n++) {
-            CAddrInfo &info = mapInfo[n];
+            int nIdCount = vRandom.size();
+            CAddrInfo &info = mapInfo[nIdCount];
             s >> info;
-            mapAddr[info] = n;
-            info.nRandomPos = vRandom.size();
+            mapAddr[info] = nIdCount;
+            info.nRandomPos = nIdCount;
             vRandom.push_back(n);
         }
-        nIdCount = nNew;
 
         // Deserialize entries from the tried table.
         int nLost = 0;
@@ -468,13 +465,13 @@ public:
             int nKBucket = info.GetTriedBucket(nKey, m_asmap);
             int nKBucketPos = info.GetBucketPosition(nKey, false, nKBucket);
             if (vvTried[nKBucket][nKBucketPos] == -1) {
-                info.nRandomPos = vRandom.size();
+                int nIdCount = vRandom.size();
+                info.nRandomPos = nIdCount;
                 info.fInTried = true;
                 vRandom.push_back(nIdCount);
                 mapInfo[nIdCount] = info;
                 mapAddr[info] = nIdCount;
                 vvTried[nKBucket][nKBucketPos] = nIdCount;
-                nIdCount++;
             } else {
                 nLost++;
             }
@@ -577,7 +574,6 @@ public:
             }
         }
 
-        nIdCount = 0;
         nTried = 0;
         nNew = 0;
         mapInfo.clear();

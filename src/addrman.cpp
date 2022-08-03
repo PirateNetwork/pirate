@@ -107,10 +107,10 @@ CAddrInfo* CAddrMan::Find(const CNetAddr& addr, int* pnId)
 
 CAddrInfo* CAddrMan::Create(const CAddress& addr, const CNetAddr& addrSource, int* pnId)
 {
-    int nId = nIdCount++;
+    int nId = vRandom.size();
     mapInfo[nId] = CAddrInfo(addr, addrSource);
     mapAddr[addr] = nId;
-    mapInfo[nId].nRandomPos = vRandom.size();
+    mapInfo[nId].nRandomPos = nId;
     vRandom.push_back(nId);
     if (pnId)
         *pnId = nId;
