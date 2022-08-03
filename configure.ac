@@ -367,6 +367,7 @@ case $host in
      ;;
   *darwin*)
      TARGET_OS=darwin
+     LEVELDB_TARGET_FLAGS="-DOS_MACOSX"
      if  test x$cross_compiling != xyes; then
        BUILD_OS=darwin
        AC_CHECK_PROG([PORT],port, port)
