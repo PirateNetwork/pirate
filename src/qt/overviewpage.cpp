@@ -478,20 +478,19 @@ void OverviewPage::setUiVisible(bool visible, bool isCrypted, int64_t relockTime
         ui->lblLockedMessage->setVisible(false);
         ui->btnUnlock->setVisible(false);
         ui->btnKeepOpen->setVisible(false);
-        if (nMaxConnections>0) //On-line
+        if (nMaxConnections>0) 	//Online
         {
             ui->frame->setVisible(true);
             ui->frame_2->setVisible(true);
         }
-        else
+        else			//Offline
         {
             //Hide the balances frame.
             ui->frame->setVisible(false);
-            //Let the user know in the 'transaction' frame that they are
-            //in cold storage offline mode.            
-            ui->frame_2->setVisible(true);
-            ui->label_4->setText("Cold storage offline mode");
-            ui->labelTransactionsStatus->setVisible(false);            
+            //Hide the transaction summary frame
+            ui->frame_2->setVisible(false);
+            //Give a message on the empty page that we're in offline mode
+            OverviewPage::updateAlerts("<b>Cold storage offline mode");
         }
         return;
     }
@@ -523,11 +522,10 @@ void OverviewPage::setUiVisible(bool visible, bool isCrypted, int64_t relockTime
         {
             //Hide the balances frame.
             ui->frame->setVisible(false);
-            //Let the user know in the 'transaction' frame that they are
-            //in cold storage offline mode.
-            ui->frame_2->setVisible(true);
-            ui->label_4->setText("Cold storage offline mode");
-            ui->labelTransactionsStatus->setVisible(false);                    
+            //Hide the transaction summary frame
+            ui->frame_2->setVisible(false);
+            //Give a message on the empty page that we're in offline mode
+            OverviewPage::updateAlerts("<b>Cold storage offline mode");
         }        
     }
 

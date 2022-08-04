@@ -52,6 +52,8 @@
 #include <QUrlQuery>
 #endif
 
+extern int nMaxConnections;          // from net.cpp
+
 const int KOMODO_IPC_CONNECT_TIMEOUT = 1000; // milliseconds
 const QString KOMODO_IPC_PREFIX("pirate:");
 
@@ -212,6 +214,12 @@ static QList<QString> savedPaymentRequests;
 //
 void PaymentServer::ipcParseCommandLine(int argc, char* argv[])
 {
+    if (nMaxConnections==0)
+    {
+        //No network functionality in cold storage offline mode
+        return;
+    }
+
     for (int i = 1; i < argc; i++)
     {
         QString arg(argv[i]);
@@ -278,6 +286,14 @@ void PaymentServer::ipcParseCommandLine(int argc, char* argv[])
 bool PaymentServer::ipcSendCommandLine()
 {
     bool fResult = false;
+
+    if (nMaxConnections==0)
+    {
+        //No network functionality in cold storage offline mode
+        return fResult;
+    }
+    
+    
     for (const QString& r : savedPaymentRequests)
     {
         QLocalSocket* socket = new QLocalSocket();
@@ -322,6 +338,12 @@ PaymentServer::PaymentServer(QObject* parent, bool startLocalServer) :
     // // compatible with the version of the headers we compiled against.
     // GOOGLE_PROTOBUF_VERIFY_VERSION;
     // #endif
+    
+    if (nMaxConnections==0)
+    {
+        //No network functionality in cold storage offline mode
+        return;
+    }
 
     // Install global event filter to catch QFileOpenEvents
     // on Mac: sent when you click pirate: links
@@ -366,16 +388,19 @@ PaymentServer::~PaymentServer()
 //
 bool PaymentServer::eventFilter(QObject *object, QEvent *event)
 {
-    if (event->type() == QEvent::FileOpen) {
-        QFileOpenEvent *fileEvent = static_cast<QFileOpenEvent*>(event);
-        if (!fileEvent->file().isEmpty())
-            handleURIOrFile(fileEvent->file());
-        else if (!fileEvent->url().isEmpty())
-            handleURIOrFile(fileEvent->url().toString());
+    if (nMaxConnections>0)
+    {
+        //Note: No network functionality in cold storage offline mode
 
-        return true;
+        if (event->type() == QEvent::FileOpen) {
+            QFileOpenEvent *fileEvent = static_cast<QFileOpenEvent*>(event);
+            if (!fileEvent->file().isEmpty())
+                handleURIOrFile(fileEvent->file());
+            else if (!fileEvent->url().isEmpty())
+                handleURIOrFile(fileEvent->url().toString());                
+            return true;
+            }
     }
-
     return QObject::eventFilter(object, event);
 }
 
@@ -413,6 +438,13 @@ void PaymentServer::uiReady()
     // #ifdef ENABLE_BIP70
     // initNetManager();
     // #endif
+    
+    if (nMaxConnections==0)
+    {
+        //No network functionality in cold storage offline mode
+        return;
+    }
+    
 
     saveURIs = false;
     for (const QString& s : savedPaymentRequests)
@@ -424,6 +456,12 @@ void PaymentServer::uiReady()
 
 void PaymentServer::handleURIOrFile(const QString& s)
 {
+    if (nMaxConnections==0)
+    {
+        //No network functionality in cold storage offline mode
+        return;
+    }
+
     if (saveURIs)
     {
         savedPaymentRequests.append(s);
@@ -507,6 +545,13 @@ void PaymentServer::handleURIOrFile(const QString& s)
 
 void PaymentServer::handleURIConnection()
 {
+    if (nMaxConnections==0)
+    {
+        //No network functionality in cold storage offline mode
+        return;
+    }
+
+
     QLocalSocket *clientConnection = uriServer->nextPendingConnection();
 
     while (clientConnection->bytesAvailable() < (int)sizeof(quint32))

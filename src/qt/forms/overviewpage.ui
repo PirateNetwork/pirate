@@ -7,20 +7,23 @@
     <x>0</x>
     <y>0</y>
     <width>646</width>
-    <height>557</height>
+    <height>572</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Form</string>
   </property>
   <layout class="QGridLayout" name="gridLayout_3">
-   <item row="0" column="0">
+   <item row="0" column="0" colspan="2">
     <widget class="QLabel" name="labelAlerts">
      <property name="visible">
       <bool>true</bool>
      </property>
      <property name="styleSheet">
       <string notr="true">QLabel { background-color: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0, stop:0 #F0D0A0, stop:1 #F8D488); color:#000000; }</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignCenter</set>
      </property>
      <property name="wordWrap">
       <bool>true</bool>

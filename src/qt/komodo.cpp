@@ -264,8 +264,8 @@ private:
     PirateOceanGUI *window;
     QTimer *pollShutdownTimer;
 #ifdef ENABLE_WALLET
-    PaymentServer* paymentServer;
-    WalletModel *walletModel;
+    PaymentServer* paymentServer=NULL;
+    WalletModel *walletModel=NULL;
 #endif
     int returnValue;
     const PlatformStyle *platformStyle;
@@ -751,22 +751,7 @@ int main(int argc, char *argv[])
     // Re-initialize translations after changing application name (language in network-specific settings can be different)
     initTranslations(qtTranslatorBase, qtTranslator, translatorBase, translator);
 
-#ifdef ENABLE_WALLET
-    /// 8. URI IPC sending
-    // - Do this early as we don't want to bother initializing if we are just calling IPC
-    // - Do this *after* setting up the data directory, as the data directory hash is used in the name
-    // of the server.
-    // - Do this after creating app and setting up translations, so errors are
-    // translated properly.
-    if (PaymentServer::ipcSendCommandLine())
-        exit(EXIT_SUCCESS);
-
-    // Start up the payment server early, too, so impatient users that click on
-    // pirate: links repeatedly have their payment requests routed to this process:
-    app.createPaymentServer();
-#endif
-
-    /// 9. Main GUI initialization
+    /// 8. Main GUI initialization
     // Install global event filter that makes sure that long tooltips can be word-wrapped
     app.installEventFilter(new GUIUtil::ToolTipToRichTextFilter(TOOLTIP_WRAP_THRESHOLD, &app));
 #if QT_VERSION < 0x050000
@@ -791,11 +776,32 @@ int main(int argc, char *argv[])
     app.createSplashScreen(networkStyle.data());
 
     SoftSetBoolArg("-server", true);
-
     int rv = EXIT_SUCCESS;
     try
     {
+        //The GUI config file gets read as part of the PirateOceanGUI 
+        //initialisation in createActions(). This is required to know
+        //if the wallet runs in online mode (default) or cold storage
+        //offline mode. While in offline mode all classes performing
+        //network access are disabled.
         app.createWindow(networkStyle.data());
+        
+        #ifdef ENABLE_WALLET
+            /// URI IPC sending
+            // - Do this early as we don't want to bother initializing if we are just calling IPC
+            // - Do this *after* setting up the data directory, as the data directory hash is used in the name
+            // of the server.
+            // - Do this after creating app and setting up translations, so errors are
+            // translated properly.
+            if (PaymentServer::ipcSendCommandLine())
+                exit(EXIT_SUCCESS);
+
+            // Start up the payment server early, too, so impatient users that click on
+            // pirate: links repeatedly have their payment requests routed to this process:
+            app.createPaymentServer();
+        #endif        
+        
+        
         // Perform base initialization before spinning up initialization/shutdown thread
         // This is acceptable because this function only contains steps that are quick to execute,
         // so the GUI thread won't be held up.

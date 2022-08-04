@@ -1147,7 +1147,14 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         //fprintf(stderr,"init: GUI config override maxconnections=%d\n",nMaxConnections);
         nMaxConnections=0;
     }
-    fprintf(stderr,"nMaxConnections %d\n",nMaxConnections);
+    if (nMaxConnections==0)
+    {
+        fprintf(stderr,"nMaxConnections=0 (Offline mode)\n");
+    }
+    else
+    {
+        fprintf(stderr,"nMaxConnections=%d (Online mode)\n",nMaxConnections);    
+    }
     // if using block pruning, then disable txindex
     // also disable the wallet (for now, until SPV support is implemented in wallet)
 //     if (GetArg("-prune", 0)) {

@@ -44,7 +44,6 @@ void WalletFrame::setClientModel(ClientModel *_clientModel)
 bool WalletFrame::addWallet(const QString& name, WalletModel *walletModel)
 {
     extern int nMaxConnections;          // from net.cpp
-    extern bool bOverrideMaxConnections; // from net.cpp
     
     if (!gui || !clientModel || !walletModel || mapWalletViews.count(name) > 0)
         return false;
