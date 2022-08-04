@@ -140,7 +140,7 @@ void AllocateFileRange(FILE *file, unsigned int offset, unsigned int length);
 bool RenameOver(boost::filesystem::path src, boost::filesystem::path dest);
 bool TryCreateDirectory(const boost::filesystem::path& p);
 /****
- * @brief get the OS-specific default data directory
+ * @brief get the OS-specific default komodod data directory
  * @note Windows: be "C:\Users\[username]\AppData\Roaming\Komodo"
  * @note Mac: ~/Library/Application Support/Komodo
  * @note Unix: ~/.komodo
@@ -155,6 +155,15 @@ boost::filesystem::path GetDefaultDataDir();
  * @returns the full OS-specific data directory including Komodo (i.e. "~/.komodo")
  */
 const boost::filesystem::path &GetDataDir(bool fNetSpecific = true);
+/**
+ * @brief get the OS-specific default application data directory
+ * @note Windows: be "C:\Users\[username]\AppData\Roaming"
+ * @note Mac: ~/Library/Application Support
+ * @note Unix: ~/
+ * @returns the default path to the application data directory
+ */
+boost::filesystem::path GetAppDir();
+
 void ClearDatadirCache();
 boost::filesystem::path GetConfigFile();
 #ifndef _WIN32

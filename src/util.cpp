@@ -529,9 +529,46 @@ void PrintExceptionContinue(const std::exception* pex, const char* pszThread)
 }
 
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
+namespace fs = boost::filesystem;
+
+/**
+ * @brief get the OS-specific default application data directory
+ * @note Windows: be "C:\Users\[username]\AppData\Roaming"
+ * @note Mac: ~/Library/Application Support
+ * @note Unix: ~/
+ * @returns the default path to the application data directory
+ */
+boost::filesystem::path GetAppDir()
+{
+    // Windows < Vista: C:\Documents and Settings\Username\Application Data
+    // Windows >= Vista: C:\Users\Username\AppData\Roaming
+    // Mac: ~/Library/Application Support
+    // Unix: ~
+    fs::path pathRet;
+
+#ifdef _WIN32
+    // Windows
+    pathRet = GetSpecialFolderPath(CSIDL_APPDATA);
+#else
+    // Linux or Mac
+    char* pszHome = getenv("HOME");
+    if (pszHome == NULL || strlen(pszHome) == 0)
+        pathRet = fs::path("/");
+    else
+        pathRet = fs::path(pszHome);
+  #ifdef MAC_OSX
+    // Mac
+    pathRet /= "Library";
+    TryCreateDirectory(pathRet);
+    pathRet /= "Application Support";
+    TryCreateDirectory(pathRet);  // not sure why this is needed as GetDataDir will create the whole path
+  #endif
+#endif
+    return pathRet;
+}
 
 /****
- * @brief get the OS-specific default data directory
+ * @brief get the OS-specific default komodod data directory
  * @note Windows: be "C:\Users\[username]\AppData\Roaming\Komodo"
  * @note Mac: ~/Library/Application Support/Komodo
  * @note Unix: ~/.komodo
@@ -539,51 +576,33 @@ extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
  */
 boost::filesystem::path GetDefaultDataDir()
 {
-    namespace fs = boost::filesystem;
     char symbol[KOMODO_ASSETCHAIN_MAXLEN];
     if ( ASSETCHAINS_SYMBOL[0] != 0 ){
-        strcpy(symbol,ASSETCHAINS_SYMBOL);
+        strcpy(symbol, ASSETCHAINS_SYMBOL);
     }
+    else 
+        symbol[0] = 0;
     
-    else symbol[0] = 0;
-    // Windows < Vista: C:\Documents and Settings\Username\Application Data\Zcash
-    // Windows >= Vista: C:\Users\Username\AppData\Roaming\Zcash
-    // Mac: ~/Library/Application Support/Zcash
-    // Unix: ~/.zcash
-#ifdef _WIN32
-    // Windows
+    fs::path pathRet = GetAppDir();
+
+#if defined(_WIN32) || defined(MAC_OSX)
     if ( symbol[0] == 0 )
-        return GetSpecialFolderPath(CSIDL_APPDATA) / "Komodo";
-    else return GetSpecialFolderPath(CSIDL_APPDATA) / "Komodo" / symbol;
-#else
-    fs::path pathRet;
-    char* pszHome = getenv("HOME");
-    if (pszHome == NULL || strlen(pszHome) == 0)
-        pathRet = fs::path("/");
-    else
-        pathRet = fs::path(pszHome);
-#ifdef MAC_OSX
-    // Mac
-    pathRet /= "Library";
-    TryCreateDirectory(pathRet);
-    pathRet /= "Application Support";
-    TryCreateDirectory(pathRet);
-    if ( symbol[0] == 0 )
+    {
         pathRet /= "Komodo";
+    }
     else
     {
         pathRet /= "Komodo";
         TryCreateDirectory(pathRet);
         pathRet /= symbol;
-        TryCreateDirectory(pathRet);
     }
     return pathRet;
 #else
     // Unix
-    if ( symbol[0] == 0 )
+    if (symbol[0] == 0)
         return pathRet / ".komodo";
-    else return pathRet / ".komodo" / symbol;
-#endif
+    else 
+        return pathRet / ".komodo" / symbol;
 #endif
 }
 
