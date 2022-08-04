@@ -110,7 +110,6 @@ namespace old_space {
         uint64_t deposited,issued,withdrawn,approved,redeemed,shorted;
         struct notarized_checkpoint *NPOINTS; int32_t NUM_NPOINTS,last_NPOINTSi;
         //std::list<std::shared_ptr<komodo::event>> events;
-        uint32_t RTbufs[64][3]; uint64_t RTmask;
         //bool add_event(const std::string& symbol, const uint32_t height, std::shared_ptr<komodo::event> in);
     };
 
@@ -149,7 +148,6 @@ namespace old_space {
         int32_t i; 
         struct komodo_state *sp; 
         struct notarized_checkpoint *np = 0;
-        //if ( (sp= komodo_stateptr(symbol,dest)) != 0 )
         sp = &old_space::ks_old;
 
         {
@@ -176,7 +174,6 @@ namespace old_space {
     struct notarized_checkpoint *komodo_npptr_at(int idx)
     {
         char symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN]; struct komodo_state *sp;
-        //if ( (sp= komodo_stateptr(symbol,dest)) != 0 )
         sp = &old_space::ks_old;
 
             if (idx < sp->NUM_NPOINTS)
@@ -190,7 +187,6 @@ namespace old_space {
         zero.SetNull();
 
         char symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN]; int32_t i; struct komodo_state *sp; struct notarized_checkpoint *np = 0;
-        //if ( (sp= komodo_stateptr(symbol,dest)) != 0 )
         sp = &old_space::ks_old;
         {
             for (i=sp->NUM_NPOINTS-1; i>=0; i--)
@@ -210,7 +206,6 @@ namespace old_space {
         char symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN];
         struct komodo_state *sp;
 
-        //if ( (sp= komodo_stateptr(symbol,dest)) != 0 )
         sp = &old_space::ks_old;
         {
             if ( sp->NUM_NPOINTS > 0 )
@@ -595,8 +590,10 @@ TEST(TestParseNotarisation, FilePaths)
         {
             ClearDatadirCache();
             data_path = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
-            auto komodo_path = data_path / os_dir / "regtest";
+            auto komodo_path = data_path / os_dir / kmd_dir / "regtest";
+            auto ltc_path = data_path / os_dir / ltc_dir / "regtest";
             boost::filesystem::create_directories(komodo_path);
+            boost::filesystem::create_directories(ltc_path);
             orig_home = get_home();
             set_home(data_path.string().c_str());
         }
@@ -606,10 +603,10 @@ TEST(TestParseNotarisation, FilePaths)
             set_home(orig_home.c_str());
             ClearDatadirCache();
         }
-        bool create_config(const std::string& filename, const std::string& user,
+        bool create_config(const boost::filesystem::path& filesubpath, const std::string& user,
                 const std::string& pass, uint16_t port)
         {
-            std::string file = (data_path / os_dir / "regtest" / filename).string();
+            std::string file = (data_path / os_dir / filesubpath).string();
             std::ofstream komodo(file);
             komodo << "rpcuser=" << user << "\n"
                     << "rpcpassword=" << pass << "\n"
@@ -618,16 +615,25 @@ TEST(TestParseNotarisation, FilePaths)
         }
         boost::filesystem::path data_path;
         std::string orig_home;
+
 #ifdef __WINDOWS__
-        const std::string os_dir = "AppData/Roaming/Komodo";
+        const boost::filesystem::path os_dir = "AppData/Roaming";
+        const boost::filesystem::path kmd_dir = "Komodo";
+        const boost::filesystem::path ltc_dir = "Litecoin";
 #else
 #ifdef __APPLE__
-        const std::string os_dir = "Library/Application Support/Komodo";
+        const boost::filesystem::path os_dir = "Library/Application Support";
+        const boost::filesystem::path kmd_dir = "Komodo";
+        const boost::filesystem::path ltc_dir = "Litecoin";
 #else
-        const std::string os_dir = ".komodo";
+        const boost::filesystem::path os_dir = "";
+        const boost::filesystem::path kmd_dir = ".komodo";
+        const boost::filesystem::path ltc_dir = ".litecoin";
 #endif
 #endif
     };
+
+
 #ifdef __WINDOWS__
     // test directory parsing
     auto pair = parse_drive("C:\\TestPath\\TestSubDir");
@@ -645,23 +651,23 @@ TEST(TestParseNotarisation, FilePaths)
         memset(BTCUSERPASS, 0, sizeof(BTCUSERPASS) );
         DEST_PORT=0;
         IS_KOMODO_NOTARY = 0;
-#ifdef __APPLE__
-        home.create_config("Komodo.conf", "test1", "my_password", 1234);
+#if defined(__APPLE__) || defined(__WINDOWS__)
+        home.create_config(home.kmd_dir / "regtest" / "Komodo.conf", "test1", "my_password", 1234);
 #else
-        home.create_config("komodo.conf", "test1", "my_password", 1234);
+        home.create_config(home.kmd_dir / "regtest" / "komodo.conf", "test1", "my_password", 1234);
 #endif
-        home.create_config("ltc.conf", "test2", "ltc_password", 5678);
-        set_kmd_user_password_port("ltc.conf");
+        //home.create_config("ltc.conf", "test2", "ltc_password", 5678);  // not used
+        set_kmd_user_password_port("");
         EXPECT_EQ( std::string(KMDUSERPASS), std::string("test1:my_password") );
         EXPECT_EQ( std::string(BTCUSERPASS), std::string(""));
-        EXPECT_EQ(DEST_PORT, 0);
+        EXPECT_EQ(DEST_PORT, 0); // not set if not a notary
         EXPECT_EQ(ASSETCHAINS_P2PPORT, 7770);
         EXPECT_EQ(ASSETCHAINS_RPCPORT, 7771);
     }
     {
         // with -datadir
         MockDataDirectory home;
-        mapArgs["-datadir"] = home.data_path.string() + "/" + home.os_dir;
+        mapArgs["-datadir"] = (home.data_path / home.os_dir / home.kmd_dir).string();
         ASSETCHAINS_P2PPORT = 0;
         ASSETCHAINS_RPCPORT = 0;
         memset(KMDUSERPASS, 0, sizeof(KMDUSERPASS) );
@@ -669,32 +675,32 @@ TEST(TestParseNotarisation, FilePaths)
         DEST_PORT=0;
         IS_KOMODO_NOTARY = 0;
         std::string expected_kmd("test1:my_password");
-        home.create_config("komodo.conf", "test1", "my_password", 1234);
-        home.create_config("ltc.conf", "test2", "ltc_password", 5678);
-        set_kmd_user_password_port("ltc.conf");
+        home.create_config(home.kmd_dir / "regtest" / "komodo.conf", "test1", "my_password", 1234);
+        //home.create_config("ltc.conf", "test2", "ltc_password", 5678); // not used if not notary
+        set_kmd_user_password_port("");
         EXPECT_EQ( std::string(KMDUSERPASS), std::string("test1:my_password") );
         EXPECT_EQ( std::string(BTCUSERPASS), std::string(""));
-        EXPECT_EQ(DEST_PORT, 0);
+        EXPECT_EQ(DEST_PORT, 0);  // not set if not a notary
         EXPECT_EQ(ASSETCHAINS_P2PPORT, 7770);
         EXPECT_EQ(ASSETCHAINS_RPCPORT, 7771);
     }
     {
         // with -notary
         MockDataDirectory home;
-        mapArgs["-datadir"] = home.data_path.string() + "/" + home.os_dir;
+        mapArgs["-datadir"] = (home.data_path / home.os_dir / home.kmd_dir).string();
         ASSETCHAINS_P2PPORT = 0;
         ASSETCHAINS_RPCPORT = 0;
         memset(KMDUSERPASS, 0, sizeof(KMDUSERPASS) );
         memset(BTCUSERPASS, 0, sizeof(BTCUSERPASS) );
         DEST_PORT=0;
-        IS_KOMODO_NOTARY = 1;
+        IS_KOMODO_NOTARY = 1; // this is a notary
         std::string expected_kmd("test1:my_password");
-        home.create_config("komodo.conf", "test1", "my_password", 1234);
-        home.create_config("ltc.conf", "test2", "ltc_password", 5678);
-        set_kmd_user_password_port("ltc.conf");
+        home.create_config(home.kmd_dir / "regtest" / "komodo.conf", "test1", "my_password", 1234);
+        home.create_config(home.ltc_dir / "regtest" / "ltc.conf", "test2", "ltc_password", 5678);  // created 
+        set_kmd_user_password_port((home.ltc_dir / "regtest" / "ltc.conf").string());
         EXPECT_EQ(std::string(KMDUSERPASS), std::string("test1:my_password"));
         EXPECT_EQ(std::string(BTCUSERPASS), std::string("test2:ltc_password"));
-        EXPECT_EQ(DEST_PORT, 5678);
+        EXPECT_EQ(DEST_PORT, 5678); // set if it is a notary
         EXPECT_EQ(ASSETCHAINS_P2PPORT, 7770);
         EXPECT_EQ(ASSETCHAINS_RPCPORT, 7771);
         IS_KOMODO_NOTARY=0;
