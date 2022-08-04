@@ -222,6 +222,7 @@ extern UniValue getaddressdeltas(const UniValue& params, bool fHelp, const CPubK
 extern UniValue getaddresstxids(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue getsnapshot(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue getaddressbalance(const UniValue& params, bool fHelp, const CPubKey& mypk);
+extern UniValue getpeerlist(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue getpeerinfo(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue checknotarization(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue getnotarypayinfo(const UniValue& params, bool fHelp, const CPubKey& mypk);
