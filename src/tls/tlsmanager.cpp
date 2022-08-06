@@ -11,6 +11,7 @@
 
 #include "tlsmanager.h"
 #include "utiltls.h"
+#include "random.h"
 
 using namespace std;
 namespace tls
@@ -414,7 +415,11 @@ SSL_CTX* TLSManager::initCtx(
         LogPrintf("TLS: %s: %s():%d - setting cipher list\n", __FILE__, __func__, __LINE__);
         // default v1.3 list "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256"
         SSL_CTX_set_cipher_list(tlsCtx, ""); // removes all ciphers
-        SSL_CTX_set_ciphersuites(tlsCtx, "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256");
+        if (GetRandInt(100) >= 50) {
+            SSL_CTX_set_ciphersuites(tlsCtx, "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256");
+        } else {
+            SSL_CTX_set_ciphersuites(tlsCtx, "TLS_CHACHA20_POLY1305_SHA256:TLS_AES_256_GCM_SHA384");
+        }
 
         STACK_OF(SSL_CIPHER) *sk = SSL_CTX_get_ciphers(tlsCtx);
 
