@@ -446,252 +446,361 @@ bool CharArrayToHex(unsigned char *pcInput, unsigned int iSize, char *pcOutput)
 
 std::string TransactionBuilder::Build_offline_transaction()
 {
-    //printf("transaction_builder.cpp Build_offline_transaction() enter\n");fflush(stdout);
-    //
-    // Consistency checks
-    //
     std::string sReturn="";
-
-    if (spends.size()<=0)
+    std::string sTmp;
+    
+    try
     {
-      //printf("Build_offline_transaction() No spends? - return\n"); fflush(stdout);
-      return "Error: No spends specified";
-    }
+        std::string sChecksumInput="";
+        //printf("transaction_builder.cpp Build_offline_transaction() enter\n");fflush(stdout);
+        //
+        // Consistency checks
+        //
 
-    // Valid change
-    CAmount change = mtx.valueBalance - fee;
+        unsigned int iChecksum=0;
+        unsigned int iI;
 
-    //printf("Build_offline_transaction() change = balance - fee : %ld=%ld-%ld\n",change,mtx.valueBalance,fee); fflush(stdout);
-    for (auto tIn : tIns)
-    {
-        change += tIn.value;
-        //printf("Build_offline_transaction() change+=tIn.value  Result:%ld,%ld\n",change,tIn.value); fflush(stdout);
-    }
-    for (auto tOut : mtx.vout) {
-        change -= tOut.nValue;
-        //printf("Build_offline_transaction() change-=tOut.value  Result:%ld,%ld\n",change,tOut.nValue); fflush(stdout);
-    }
-    if (change < 0)
-    {
-        //printf("Build_offline_transaction() Change < 0 - return\n"); fflush(stdout);
-        return "Error: Change < 0";
-    }
-
-    //
-    // Change output
-    //
-    if (change > 0)
-    {
-        // Send change to the specified change address. If no change address
-        // was set, send change to the first Sapling address given as input.
-        if (zChangeAddr)
+        if (spends.size()<=0)
         {
-            //printf("Build_offline_transaction Build() 1\n");
-            AddSaplingOutput(zChangeAddr->first, zChangeAddr->second, change);
+          return "Error: No spends specified";
         }
-        else if (!spends.empty())
+
+        // Valid change
+        CAmount change = mtx.valueBalance - fee;
+
+        //printf("Build_offline_transaction() change = balance - fee : %ld=%ld-%ld\n",change,mtx.valueBalance,fee); fflush(stdout);
+        for (auto tIn : tIns)
         {
-            //printf("Build_offline_transaction Build() 3: Pay balance to ourselved. Amount:%ld\n", change);
-            //auto fvk = spends[0].expsk.full_viewing_key();
-            //auto note = spends[0].note;
-            //libzcash::SaplingPaymentAddress changeAddr(note.d, note.pk_d);
-            //AddSaplingOutput(fvk.ovk, changeAddr,   change);
-            std::array<unsigned char, ZC_MEMO_SIZE> memo;
-            memo[0]=0;
+            change += tIn.value;
+            //printf("Build_offline_transaction() change+=tIn.value  Result:%ld,%ld\n",change,tIn.value); fflush(stdout);
+        }
+        for (auto tOut : mtx.vout) {
+            change -= tOut.nValue;
+            //printf("Build_offline_transaction() change-=tOut.value  Result:%ld,%ld\n",change,tOut.nValue); fflush(stdout);
+        }
+        if (change < 0)
+        {
+            //printf("Build_offline_transaction() Change < 0 - return\n"); fflush(stdout);
+            return "Error: Change < 0";
+        }
 
-            AddSaplingOutput_offline_transaction(fromAddress_, change, memo);
+        //
+        // Change output
+        //
+        if (change > 0)
+        {
+            // Send change to the specified change address. If no change address
+            // was set, send change to the first Sapling address given as input.
+            if (zChangeAddr)
+            {
+                //printf("Build_offline_transaction Build() 1\n");
+                AddSaplingOutput(zChangeAddr->first, zChangeAddr->second, change);
+            }
+            else if (!spends.empty())
+            {
+                //printf("Build_offline_transaction Build() 3: Pay balance to ourselved. Amount:%ld\n", change);
+                //auto fvk = spends[0].expsk.full_viewing_key();
+                //auto note = spends[0].note;
+                //libzcash::SaplingPaymentAddress changeAddr(note.d, note.pk_d);
+                //AddSaplingOutput(fvk.ovk, changeAddr,   change);
+                std::array<unsigned char, ZC_MEMO_SIZE> memo;
+                memo[0]=0;
 
+                AddSaplingOutput_offline_transaction(fromAddress_, change, memo);
+
+            }
+            else
+            {
+                //printf("Build_offline_transaction() Could not calculate change amount\n");
+                return "Error: Could not calculate the amount of change";
+            }
+        }
+
+        //Parameter [0]: Version - Layout of the command fields
+        // Version 1: [1] Pay from address
+        //            [2] Array of spending notes, which contains the funds of the 'pay from address'. Zip212 supported
+        //            [3] Array of recipient: address, amount, memo
+        //            [4]..[12] Blockchain parameters
+        //            [13] Checksum of all the characters in the command.
+        std::string sVersion="1";
+
+        sReturn="z_sign_offline "+sVersion+" ";
+        sChecksumInput=sVersion+" ";        
+
+
+        //Parameter [1]: Pay from address:
+        sReturn += "\"" + fromAddress_ + "\" ";
+        sChecksumInput+=fromAddress_+" ";
+
+
+        //Parameter [2]: Spending notes '[{"witnessposition":number,"witnesspath":hex,"note_d":hex,"note_pkd":hex,"note_r":hex,"value":number},{...},{...}]'
+        if (spends.size() <= 0)
+        {
+          sReturn="Error:No spends";
+          return sReturn;
+        }
+        
+        sChecksumInput+="spending notes: ";
+        unsigned char cAnchor[32];
+        sReturn=sReturn+"'[";
+        for (size_t i = 0; i < spends.size(); i++)
+        {
+            //printf("transaction_builder.cpp process spends-for(%ld)\n",i);
+            auto spend = spends[i];
+            uint64_t      lWitnessPosition = alWitnessPosition[i];
+            myCharArray_s sWitness         = asWitness[i];
+            char cWitnessPathHex[ 2*(1 + 33 * SAPLING_TREE_DEPTH + 8) + 1 ];
+            cWitnessPathHex[2*(1 + 33 * SAPLING_TREE_DEPTH + 8)]=0; //null terminate
+            CharArrayToHex(&sWitness.cArray[0], sizeof(myCharArray_s), &cWitnessPathHex[0]);
+
+            libzcash::diversifier_t d     = spend.note.d;
+            uint256       pk_d            = spend.note.pk_d;
+            uint256       rcm             = spend.note.rcm();
+            uint64_t      lValue          = spend.note.value();
+            char          cZip212_enabled;    
+            libzcash::Zip212Enabled zip_212_enabled = spend.note.get_zip_212_enabled();
+            
+            //Convert zip_212_enabled to a value that can transmitted in the transaction communication
+            if (zip_212_enabled == libzcash::Zip212Enabled::BeforeZip212)
+            {
+                cZip212_enabled=0;
+            }
+            else if (zip_212_enabled == libzcash::Zip212Enabled::AfterZip212)
+            {
+                cZip212_enabled=1;
+            }
+            else
+            {
+                sReturn="Internal error: Unknown value for note.zip_212_enabled. Expected BeforeZip212 or AfterZip212";
+                return sReturn;            
+            }        
+
+            unsigned char cD[ZC_DIVERSIFIER_SIZE];
+            char          cDHex[2*ZC_DIVERSIFIER_SIZE+1];
+            std::memcpy(&cD[0], &d, ZC_DIVERSIFIER_SIZE);
+            CharArrayToHex(&cD[0], ZC_DIVERSIFIER_SIZE, &cDHex[0]);
+
+            unsigned char cPK_D[32];
+            char          cPK_DHex[2*32+1];
+            std::memcpy(&cPK_D[0], &pk_d, 32);
+            CharArrayToHex(&cPK_D[0], 32, &cPK_DHex[0]);
+
+            unsigned char cR[32];
+            char          cRHex[2*32+1];
+            std::memcpy(&cR[0], &rcm, 32);
+            CharArrayToHex(&cR[0], 32, &cRHex[0]);
+
+            char cHex[ 20+ 2*(1 + 33 * SAPLING_TREE_DEPTH + 8) + 1];        
+            //20                        14                8            11             9            8              9              2
+            //{"witnessposition":number,"witnesspath":hex,"note_d":hex,"note_pkd":hex,"note_r":hex,"value":number,"zip212":number},{...},{...}]'
+            snprintf(&cHex[0],sizeof(cHex),"{\"witnessposition\":\"%ld\",",lWitnessPosition);
+            sReturn=sReturn+cHex;                        
+            sTmp = strprintf("%u ", lWitnessPosition);            
+            sChecksumInput+=sTmp; 
+
+
+            snprintf(&cHex[0],sizeof(cHex),"\"witnesspath\":\"%s\",", &cWitnessPathHex[0]);
+            sReturn=sReturn+cHex;            
+            sTmp = strprintf("%s ",&cWitnessPathHex[0]);
+            sChecksumInput+=sTmp;
+
+
+            snprintf(&cHex[0],sizeof(cHex),"\"note_d\":\"%s\",", &cDHex[0]);
+            sReturn=sReturn+cHex;
+            sTmp = strprintf("%s ",&cDHex[0]);
+            sChecksumInput+=sTmp;
+
+
+            snprintf(&cHex[0],sizeof(cHex),"\"note_pkd\":\"%s\",", &cPK_DHex[0]);
+            sReturn=sReturn+cHex;
+            sTmp = strprintf("%s ",&cPK_DHex[0]);
+            sChecksumInput+=sTmp;
+
+
+            snprintf(&cHex[0],sizeof(cHex),"\"note_r\":\"%s\",", &cRHex[0]);
+            sReturn=sReturn+cHex;
+            sTmp = strprintf("%s ",&cRHex[0]);            
+            sChecksumInput+=sTmp;
+
+
+            snprintf(&cHex[0],sizeof(cHex),"\"value\":%ld,", lValue);
+            sReturn=sReturn+cHex;
+            sTmp = strprintf("%ld ",lValue);            
+            sChecksumInput+=sTmp;
+
+
+            snprintf(&cHex[0],sizeof(cHex),"\"zip212\":%u}", cZip212_enabled);
+            sReturn=sReturn+cHex;
+            if (cZip212_enabled==0)
+            {
+                sTmp="0 ";
+            }
+            else
+            {
+                sTmp="1 ";
+            }
+            sChecksumInput+=sTmp;
+
+            //Last entry: Must close the array with ]'
+            //otherwide start the next entry with a ,
+            if (i == spends.size()-1)
+            {
+              sReturn=sReturn+"]' ";
+            }
+            else
+            {
+              sReturn=sReturn+",";
+            }
+            std::memcpy(&cAnchor[0], &spend.anchor, 32);
+        }
+
+
+        //Parameter [3]: Outputs (recipients)
+        //printf("Build_offline_transaction() [3] Outputs: Total=%ld\n\n", outputs.size());
+        if (sOutputRecipients.size() != outputs.size())
+        {
+          //printf("Build_offline_transaction() [3] Internal error: sOutputRecipients.size(%ld) != outputs.size(%ld)\n\n",sOutputRecipients.size(), outputs.size());
+          sReturn="Internal error: sOutputRecipients.size() != outputs.size()";
+          return sReturn;
+        }
+        sChecksumInput+="outputs: ";    
+        sReturn=sReturn+"'[";
+        for (size_t i = 0; i < outputs.size(); i++)
+        {
+            std::string sMemo;
+            auto output = outputs[i];
+
+            sReturn=sReturn+strprintf("{\"address\":\"%s\",\"amount\":%ld",sOutputRecipients[i].c_str(), output.note.value() );
+            size_t iStrLen = strlen( reinterpret_cast<char*>(output.memo.data()) );
+            if (iStrLen > 0)
+            {
+              //printf("transaction_builder.cpp process outputs-for(%ld). Adres=%s Amount=%ld Memo=%s\n\n",i, sOutputRecipients[i].c_str(), output.note.value(), reinterpret_cast<unsigned char*>(output.memo.data()) );
+              sMemo = strprintf("%s",reinterpret_cast<unsigned char*>(output.memo.data()) );
+              sReturn=sReturn+ ",\"memo\":\""+sMemo+"\"}";
+            }
+            else
+            {
+              sReturn=sReturn+strprintf("}");
+              //printf("transaction_builder.cpp process outputs-for(%ld). Adres=%s Amount=%ld No memo\n\n",i, sOutputRecipients[i].c_str(), output.note.value() );
+            }            
+
+            if (i==(outputs.size()-1))
+            {
+              sReturn=sReturn+"]' ";
+            }
+            else
+            {
+              sReturn=sReturn+",";
+            }
+
+            //sChecksumInput+=sOutputRecipients[i] +"\n"+ std::to_string(output.note.value() ) +"\n"+ sMemo +"\n";
+            sTmp = strprintf("%s ",sOutputRecipients[i].c_str() );
+            sChecksumInput+=sTmp;
+            sTmp = strprintf("%ld ",output.note.value() );
+            sChecksumInput+=sTmp;
+            sTmp = strprintf("%s ",sMemo.c_str() );
+            sChecksumInput+=sTmp;
+        }
+
+
+        //Parameter [4]: Minimum confirmations
+        //printf("Build_offline_transaction() [4] Minimum confirmations %d\n\n",iMinConf);
+        sReturn=sReturn+strprintf("%d ",iMinConf);
+        sTmp = strprintf("%d ",iMinConf);            
+        sChecksumInput+=sTmp;
+
+
+        //Parameter [5]: Miners fee
+        //printf("Build_offline_transaction() [5] Miners fee %ld\n\n",fee);
+        sReturn=sReturn+strprintf("%ld ",fee);
+        sTmp = strprintf("%ld ",fee);
+        sChecksumInput+=sTmp;        
+
+
+        //Parameter [6]: Next block height
+        //printf("Build_offline_transaction() [6] Next block height: '%d'\n\n", nHeight);
+        sReturn=sReturn+strprintf("%d ",nHeight);
+        sTmp = strprintf("%d ",nHeight);
+        sChecksumInput+=sTmp;
+
+
+        //Parameter [7]: BranchId (uint32_t)
+        auto BranchId = CurrentEpochBranchId(nHeight, consensusParams);
+        //printf("Build_offline_transaction() [7] BranchId: '%u'\n\n", BranchId);
+        sReturn=sReturn+strprintf("%u ",BranchId);
+        sTmp = strprintf("%u ",BranchId);
+        sChecksumInput+=sTmp;        
+
+
+        //Parameter [8]: Anchor
+        //printf("Build_offline_transaction() [8] Anchor\n");
+        char          cAnchorHex[2*32+1];
+        CharArrayToHex(&cAnchor[0], 32, &cAnchorHex[0]);
+        sReturn=sReturn+"\""+cAnchorHex+"\" ";
+        sTmp = strprintf("%s ",&cAnchorHex[0]);
+        sChecksumInput+=sTmp;        
+
+
+        //Parameter [9] : bool fOverwintered
+        if (mtx.fOverwintered == true)
+        {
+          sReturn=sReturn+"1 ";
+          sChecksumInput += "1 ";
         }
         else
         {
-            //printf("Build_offline_transaction() Could not calculate change amount\n");
-            return "Error: Could not calculate the amount of change";
+          sReturn=sReturn+"0 ";
+          sChecksumInput += "0 ";
         }
-    }
-
-    //Parameter [0]: From address:
-    sReturn="z_sign_offline \"" + fromAddress_ + "\" ";
 
 
-    // Create Sapling SpendDescriptions
-    //for (auto spend : spends)
-    //int iTotalSpends = (int)spends.size();
-    //char cTotal[50];
-    //snprintf(&cTotal[0],sizeof(cTotal),"0x%02X|",iTotalSpends);
+
+        //Parameter [10] : uint32_t nExpiryHeight
+        sReturn=sReturn+strprintf("%u ",mtx.nExpiryHeight);
+        sTmp = strprintf("%u ",mtx.nExpiryHeight);
+        sChecksumInput+=sTmp;        
 
 
-    //Parameter [1]: Spending notes '[{"witnessposition":number,"witnesspath":hex,"note_d":hex,"note_pkd":hex,"note_r":hex,"value":number},{...},{...}]'
-    if (spends.size() <= 0)
-    {
-      //printf("Error:No spends");
-      sReturn="Error:No spends";
-      return sReturn;
-    }
-
-    unsigned char cAnchor[32];
-    sReturn=sReturn+"'[";
-    for (size_t i = 0; i < spends.size(); i++)
-    {
-        //printf("transaction_builder.cpp process spends-for(%ld)\n",i);
-
-        auto spend = spends[i];
-        uint64_t      lWitnessPosition = alWitnessPosition[i];
-        myCharArray_s sWitness         = asWitness[i];
-        char cWitnessPathHex[ 2*(1 + 33 * SAPLING_TREE_DEPTH + 8) + 1 ];
-        cWitnessPathHex[2*(1 + 33 * SAPLING_TREE_DEPTH + 8)]=0; //null terminate
-        CharArrayToHex(&sWitness.cArray[0], sizeof(myCharArray_s), &cWitnessPathHex[0]);
-
-        libzcash::diversifier_t d     = spend.note.d;
-        uint256       pk_d            = spend.note.pk_d;
-        uint256       rcm             = spend.note.rcm();
-        uint64_t      lValue          = spend.note.value();
-
-        unsigned char cD[ZC_DIVERSIFIER_SIZE];
-        char          cDHex[2*ZC_DIVERSIFIER_SIZE+1];
-        std::memcpy(&cD[0], &d, ZC_DIVERSIFIER_SIZE);
-        CharArrayToHex(&cD[0], ZC_DIVERSIFIER_SIZE, &cDHex[0]);
-
-        unsigned char cPK_D[32];
-        char          cPK_DHex[2*32+1];
-        std::memcpy(&cPK_D[0], &pk_d, 32);
-        CharArrayToHex(&cPK_D[0], 32, &cPK_DHex[0]);
-
-        unsigned char cR[32];
-        char          cRHex[2*32+1];
-        std::memcpy(&cR[0], &rcm, 32);
-        CharArrayToHex(&cR[0], 32, &cRHex[0]);
+        //Parameter [11]: uint32_t nVersionGroupId
+        sReturn=sReturn+strprintf("%u ",mtx.nVersionGroupId);
+        sTmp = strprintf("%u ",mtx.nVersionGroupId);
+        sChecksumInput+=sTmp;        
 
 
-        char cHex[ 20+ 2*(1 + 33 * SAPLING_TREE_DEPTH + 8) + 1];
-        //20                        14                8            11             9            8             2
-        //{"witnessposition":number,"witnesspath":hex,"note_d":hex,"note_pkd":hex,"note_r":hex,"value":number},{...},{...}]'
-        snprintf(&cHex[0],sizeof(cHex),"{\"witnessposition\":\"%ld\",",lWitnessPosition);
-        sReturn=sReturn+cHex;
+        //Parameter [12]: int32_t nVersion);
+        sReturn=sReturn+strprintf("%d ",mtx.nVersion);
+        sTmp = strprintf("%d ",mtx.nVersion);
+        sChecksumInput+=sTmp;         
 
-        snprintf(&cHex[0],sizeof(cHex),"\"witnesspath\":\"%s\",", &cWitnessPathHex[0]);
-        sReturn=sReturn+cHex;
 
-        snprintf(&cHex[0],sizeof(cHex),"\"note_d\":\"%s\",", &cDHex[0]);
-        sReturn=sReturn+cHex;
-
-        snprintf(&cHex[0],sizeof(cHex),"\"note_pkd\":\"%s\",", &cPK_DHex[0]);
-        sReturn=sReturn+cHex;
-
-        snprintf(&cHex[0],sizeof(cHex),"\"note_r\":\"%s\",", &cRHex[0]);
-        sReturn=sReturn+cHex;
-
-        snprintf(&cHex[0],sizeof(cHex),"\"value\":%ld}", lValue);
-        sReturn=sReturn+cHex;
-
-        //Last entry: Must close the array with ]'
-        //otherwide start the next entry with a ,
-        if (i == spends.size()-1)
+        //Parameter [13]: checksum
+        //A simple checksum of the full string, to detect copy/paste errors between the wallets
+        //The checksum equals the sum of the ASCII values of all the characters in the string:   
+        //printf("sChecksumInput:\n%s\n\n",sChecksumInput.c_str() );        
+        iChecksum=0x01;
+        for (iI=0;iI<sChecksumInput.length();iI++)
         {
-          sReturn=sReturn+"]' ";
+          unsigned int iVal = (int)sChecksumInput.at(iI);
+          iChecksum = iChecksum + iVal;
         }
-        else
-        {
-          sReturn=sReturn+",";
-        }
+        sTmp = strprintf("%u",iChecksum);
+        //printf("Calculated checksum: %s\n",sTmp.c_str() );
+        //Append the checksum to the protocol data:
+        sReturn+=sTmp;
 
-        std::memcpy(&cAnchor[0], &spend.anchor, 32);
-    }
-
-
-    //Parameter [2]: Outputs (recipients)
-    //printf("Build_offline_transaction() [2] Outputs: Total=%ld\n", outputs.size());
-    if (sOutputRecipients.size() != outputs.size())
+        //printf("\n\nPaste the full contents into the console of your offline wallet to sign the transaction:\n%s\n\n",sReturn.c_str());
+        // add op_return if there is one to add
+        //AddOpRetLast(); ??
+        //printf("Build_offline_transaction() %s\n\n",sReturn.c_str() );
+        return sReturn;
+    } 
+    catch (const char* pcError) 
     {
-      //printf("Build_offline_transaction() [2] Internal error: sOutputRecipients.size(%ld) != outputs.size(%ld)\n",sOutputRecipients.size(), outputs.size());
-      sReturn="Internal error: sOutputRecipients.size() != outputs.size()";
-      return sReturn;
+        sReturn = "Exception occurred: ";
+        sReturn.assign(pcError);
+        printf("%s\n\n",sReturn.c_str() );        
+        return sReturn;
     }
-
-    sReturn=sReturn+"'[";
-    for (size_t i = 0; i < outputs.size(); i++)
-    {
-        auto output = outputs[i];
-
-        sReturn=sReturn+strprintf("{\"address\":\"%s\",\"amount\":%ld",sOutputRecipients[i].c_str(), output.note.value() );
-
-        size_t iStrLen = strlen( reinterpret_cast<char*>(output.memo.data()) );
-        if (iStrLen > 0)
-        {
-
-          //printf("transaction_builder.cpp process outputs-for(%ld). Adres=%s Amount=%ld Memo=%s\n",i, sOutputRecipients[i].c_str(), output.note.value(), reinterpret_cast<unsigned char*>(output.memo.data()) );
-          sReturn=sReturn+strprintf(",\"memo\":\"%s\"}", reinterpret_cast<unsigned char*>(output.memo.data()) );
-        }
-        else
-        {
-          sReturn=sReturn+strprintf("}");
-          //printf("transaction_builder.cpp process outputs-for(%ld). Adres=%s Amount=%ld No memo\n",i, sOutputRecipients[i].c_str(), output.note.value() );
-        }
-
-        if (i==(outputs.size()-1))
-        {
-          sReturn=sReturn+"]' ";
-        }
-        else
-        {
-          sReturn=sReturn+",";
-        }
-    }
-
-
-    //Parameter [3]: Minimum confirmations
-    //printf("Build_offline_transaction() [3] Minimum confirmations %d\n",iMinConf);
-    sReturn=sReturn+strprintf("%d ",iMinConf);
-
-
-    //Parameter [4]: Miners fee
-    //printf("Build_offline_transaction() [4] Miners fee %ld\n",fee);
-    sReturn=sReturn+strprintf("%ld ",fee);
-
-
-    //Parameter [5]: Next block height
-    //printf("Build_offline_transaction() [5] Next block height: %d\n", nHeight);
-    sReturn=sReturn+strprintf("%d ",nHeight);
-
-
-    //Parameter [6]: BranchId (uint32_t)
-    auto BranchId = CurrentEpochBranchId(nHeight, consensusParams);
-    //printf("Build_offline_transaction() [6] BranchId: %u\n", BranchId);
-    sReturn=sReturn+strprintf("%u ",BranchId);
-
-
-    //Parameter [7]: Anchor
-    //printf("Build_offline_transaction() [7] Anchor\n");
-    char          cAnchorHex[2*32+1];
-    CharArrayToHex(&cAnchor[0], 32, &cAnchorHex[0]);
-    sReturn=sReturn+"\""+cAnchorHex+"\" ";
-
-
-    //Parameter [8] : bool fOverwintered
-    if (mtx.fOverwintered == true)
-    {
-      sReturn=sReturn+"1 ";
-    }
-    else
-    {
-      sReturn=sReturn+"0 ";
-    }
-
-    //Parameter [9] : uint32_t nExpiryHeight
-    sReturn=sReturn+strprintf("%u ",mtx.nExpiryHeight);
-
-    //Parameter [10]: uint32_t nVersionGroupId
-    sReturn=sReturn+strprintf("%u ",mtx.nVersionGroupId);
-
-    //Parameter [11]: int32_t nVersion);
-    sReturn=sReturn+strprintf("%d",mtx.nVersion);
-
-    //printf("\n\nPaste the full contents into the console of your offline wallet to sign the transaction:\n%s\n",sReturn.c_str());
-
-    // add op_return if there is one to add
-    //AddOpRetLast(); ??
-
-    //printf("Build_offline_transaction() %s\n",sReturn.c_str() );
-    return sReturn;
 }
 
 TransactionBuilderResult TransactionBuilder::Build()
@@ -701,7 +810,7 @@ TransactionBuilderResult TransactionBuilder::Build()
     boost::optional<CTransaction> maybe_tx = CTransaction(mtx);
     auto tx_result = maybe_tx.get();
     auto signedtxn = EncodeHexTx(tx_result);
-    //printf("transaction_builder.cpp Raw transaction @ startup: %s\n",signedtxn.c_str());
+    //printf("transaction_builder.cpp Raw transaction @ startup: %s\n\n",signedtxn.c_str());
 
     //
     // Consistency checks
@@ -876,7 +985,7 @@ TransactionBuilderResult TransactionBuilder::Build()
     maybe_tx = CTransaction(mtx);
     tx_result = maybe_tx.get();
     signedtxn = EncodeHexTx(tx_result);
-    //printf("signed txn: %s\n",signedtxn.c_str() );
+    //printf("signed txn: %s\n\n",signedtxn.c_str() );
 
     //printf("transaction_builder.cpp Done\n");fflush(stdout);
     return CTransaction(mtx);

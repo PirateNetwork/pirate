@@ -612,19 +612,25 @@ void PirateOceanGUI::setColdStorageLayout( )
         
         //If the offline role is enabled, the wallet shouldn't have internet access,
         //for security reasons. The wallet should not attempt to sync with the blockchain.
-        // This can be accomplished by editing PIRATE.conf and setting maxconnections=0.
+        //This can be accomplished by editing PIRATE.conf and setting maxconnections=0.
         //Alternatively, the number of connections are override here when "Signing"
         //is enabled:
-        if (fEnableZSigning_ModeSign==true) {
-          bOverrideMaxConnections=true;
-          nMaxConnections=0;                    
-        }
-
-        //History not available for the cold storage offline mode.        
-        historyAction->setVisible( fEnableZSigning_ModeSpend );
+        if (fEnableZSigning_ModeSign==true) 
+        {
+            bOverrideMaxConnections=true;
+            nMaxConnections=0;                   
+          
+            //History not available for the cold storage offline mode.        
+            historyAction->setVisible( fEnableZSigning_ModeSpend );
         
-        //Hide the Rescan function. No blockchain to use it with
-        rescanAction->setVisible(false);        
+            //Hide the Rescan function. No blockchain to use it with
+            rescanAction->setVisible(false);         
+        }
+        else
+        {
+            historyAction->setVisible(true);                
+            rescanAction->setVisible(true);          
+        }
     }
     else
     {
@@ -632,8 +638,8 @@ void PirateOceanGUI::setColdStorageLayout( )
         //  Only display addresses for which we have the full spending key
         zsendCoinsAction->setVisible(true);
         zsignAction->setVisible(false);
-        historyAction->setVisible(true);        
         
+        historyAction->setVisible(true);                
         rescanAction->setVisible(true);
     }
     receiveCoinsAction->setVisible(true);
