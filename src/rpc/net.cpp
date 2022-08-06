@@ -77,6 +77,40 @@ UniValue ping(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return NullUniValue;
 }
 
+UniValue getpeerlist(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "getpeerlist\n"
+            "\nReturns a list of connected network node addresses as a json array of objects.\n"
+            "\nbResult:\n"
+            "[\n"
+            "  \"addr\":\"host:port\",      (string) The ip address and port of the peer\n"
+            "]\n"
+            "\nExamples:\n"
+            + HelpExampleCli("getpeerlist", "")
+            + HelpExampleRpc("getpeerlist", "")
+        );
+
+    LOCK(cs_main);
+
+    vector<CNodeStats> vstats;
+    CopyNodeStats(vstats);
+
+    UniValue ret(UniValue::VARR);
+
+    BOOST_FOREACH(const CNodeStats& stats, vstats) {
+        // UniValue obj(UniValue::VOBJ);
+        CNodeStateStats statestats;
+        bool fStateStats = GetNodeStateStats(stats.nodeid, statestats);
+
+        // obj.push_back(stats.addrName);
+        ret.push_back(stats.addrName);
+    }
+
+    return ret;
+}
+
 UniValue getpeerinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (fHelp || params.size() != 0)
@@ -685,6 +719,7 @@ static const CRPCCommand commands[] =
     { "network",            "getconnectioncount",     &getconnectioncount,     true  },
     { "network",            "getdeprecationinfo",     &getdeprecationinfo,     true  },
     { "network",            "ping",                   &ping,                   true  },
+    { "network",            "getpeerlist",            &getpeerlist,            true  },
     { "network",            "getpeerinfo",            &getpeerinfo,            true  },
     { "network",            "addnode",                &addnode,                true  },
     { "network",            "disconnectnode",         &disconnectnode,         true  },
