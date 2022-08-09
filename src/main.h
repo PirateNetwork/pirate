@@ -227,11 +227,20 @@ FILE* OpenUndoFile(const CDiskBlockPos &pos, bool fReadOnly = false);
 boost::filesystem::path GetBlockPosFilename(const CDiskBlockPos &pos, const char *prefix);
 /** Import blocks from an external file */
 bool LoadExternalBlockFile(FILE* fileIn, CDiskBlockPos *dbp = NULL);
-/** Initialize a new block tree database + block data on disk */
+/** 
+ * Initialize a new block tree database + block data on disk 
+ * @returns true on success
+ */
 bool InitBlockIndex();
-/** Load the block tree and coins database from disk */
-bool LoadBlockIndex();
-/** Unload database information */
+/******
+ * @brief Load the block tree and coins database from disk
+ * @param reindex true if we will be reindexing (will skip the load if we are)
+ * @returns true on success
+ */
+bool LoadBlockIndex(bool reindex);
+/***
+ * Clear all values related to the block index
+ */
 void UnloadBlockIndex();
 /** Process protocol messages received from a given node */
 bool ProcessMessages(CNode* pfrom);
@@ -874,17 +883,14 @@ bool TestBlockValidity(CValidationState &state, const CBlock& block, CBlockIndex
 bool AcceptBlock(int32_t *futureblockp,CBlock& block, CValidationState& state, CBlockIndex **pindex, bool fRequested, CDiskBlockPos* dbp);
 bool AcceptBlockHeader(int32_t *futureblockp,const CBlockHeader& block, CValidationState& state, CBlockIndex **ppindex= NULL);
 
-
-
 /**
  * When there are blocks in the active chain with missing data (e.g. if the
  * activation height and branch ID of a particular upgrade have been altered),
  * rewind the chainstate and remove them from the block index.
- *
- * clearWitnessCaches is an output parameter that will be set to true iff
- * witness caches should be cleared in order to handle an intended long rewind.
+ * @param params the chain parameters
+ * @returns true on success
  */
-bool RewindBlockIndex(const CChainParams& params, bool& clearWitnessCaches);
+bool RewindBlockIndex(const CChainParams& params);
 
 class CBlockFileInfo
 {

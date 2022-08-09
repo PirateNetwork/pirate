@@ -30,6 +30,7 @@
 #include "uint256.h"
 #include "util.h"
 #include "komodo_notary.h"
+#include "komodo_extern_globals.h"
 
 #include "sodium.h"
 
@@ -593,7 +594,6 @@ extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 #define KOMODO_ELECTION_GAP 2000
 
 int32_t komodo_eligiblenotary(uint8_t pubkeys[66][33],int32_t *mids,uint32_t blocktimes[66],int32_t *nonzpkeysp,int32_t height);
-int32_t KOMODO_LOADINGBLOCKS = 1;
 
 extern std::string NOTARY_PUBKEY;
 
@@ -619,7 +619,6 @@ bool isSecondBlockAllowed(int32_t notaryid, uint32_t blocktime, uint32_t thresho
 
 bool CheckProofOfWork(const CBlockHeader &blkHeader, uint8_t *pubkey33, int32_t height, const Consensus::Params& params)
 {
-    extern int32_t KOMODO_REWIND;
     uint256 hash;
     bool fNegative,fOverflow; uint8_t origpubkey33[33]; int32_t i,nonzpkeys=0,nonz=0,special=0,special2=0,notaryid=-1,flag = 0, mids[66]; uint32_t tiptime,blocktimes[66];
     arith_uint256 bnTarget; uint8_t pubkeys[66][33];
@@ -738,15 +737,6 @@ bool CheckProofOfWork(const CBlockHeader &blkHeader, uint8_t *pubkey33, int32_t 
             if ( (flag != 0 || special2 > 0) && special2 != -2 )
             {
                 bnTarget.SetCompact(KOMODO_MINDIFF_NBITS,&fNegative,&fOverflow);
-                /*
-                const void* pblock = &blkHeader;
-                CScript merkleroot = CScript();
-                if ( height > nDecemberHardforkHeight && !komodo_checkopret((CBlock*)pblock, merkleroot) ) // December 2019 hardfork
-                {
-                    fprintf(stderr, "failed or missing expected.%s != %s\n", komodo_makeopret((CBlock*)pblock, false).ToString().c_str(), merkleroot.ToString().c_str());
-                    return false;
-                }
-                */
             }
         }
     }
@@ -758,12 +748,11 @@ bool CheckProofOfWork(const CBlockHeader &blkHeader, uint8_t *pubkey33, int32_t 
         arith_uint256 bnMaxPoSdiff;
         bnTarget.SetCompact(KOMODO_MINDIFF_NBITS,&fNegative,&fOverflow);
     }
-    //else if ( ASSETCHAINS_ADAPTIVEPOW > 0 && ASSETCHAINS_STAKED == 0 )
-    //    bnTarget = komodo_adaptivepow_target(height,bnTarget,blkHeader.nTime);
+
     // Check proof of work matches claimed amount
     if ( UintToArith256(hash = blkHeader.GetHash()) > bnTarget )
     {
-        if ( KOMODO_LOADINGBLOCKS != 0 )
+        if ( KOMODO_LOADINGBLOCKS )
             return true;
 
         if ( ASSETCHAINS_SYMBOL[0] != 0 || height > 792000 )
@@ -787,12 +776,7 @@ bool CheckProofOfWork(const CBlockHeader &blkHeader, uint8_t *pubkey33, int32_t 
             return false;
         }
     }
-    /*for (i=31; i>=0; i--)
-     fprintf(stderr,"%02x",((uint8_t *)&hash)[i]);
-     fprintf(stderr," hash vs ");
-     for (i=31; i>=0; i--)
-     fprintf(stderr,"%02x",((uint8_t *)&bnTarget)[i]);
-     fprintf(stderr," height.%d notaryid.%d PoW valid\n",height,notaryid);*/
+
     return true;
 }
 

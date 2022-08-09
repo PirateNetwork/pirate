@@ -34,6 +34,9 @@ class CWallet;
 #endif
 namespace Consensus { struct Params; };
 
+/***
+ * Holds data about the block under construction
+ */
 struct CBlockTemplate
 {
     CBlock block;

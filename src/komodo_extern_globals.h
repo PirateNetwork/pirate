@@ -62,7 +62,7 @@ extern int32_t KOMODO_EXTRASATOSHI;
 extern int32_t ASSETCHAINS_FOUNDERS;
 extern int32_t ASSETCHAINS_CBMATURITY;
 extern int32_t KOMODO_NSPV;
-extern int32_t KOMODO_LOADINGBLOCKS; // not actually in komodo_globals.h, but used in several places
+extern bool KOMODO_LOADINGBLOCKS;
 extern uint32_t *PVALS;
 extern uint32_t ASSETCHAINS_CC;
 extern uint32_t KOMODO_STOPAT;

@@ -763,7 +763,7 @@ int32_t komodo_block2height(CBlock *block)
     return(height);
 }
 
-int32_t komodo_block2pubkey33(uint8_t *pubkey33,CBlock *block)
+bool komodo_block2pubkey33(uint8_t *pubkey33,CBlock *block)
 {
     int32_t n;
     if ( KOMODO_LOADINGBLOCKS == 0 )
@@ -785,7 +785,7 @@ int32_t komodo_block2pubkey33(uint8_t *pubkey33,CBlock *block)
         }
         else memset(pubkey33,0,33);
     }
-    return(0);
+    return false;
 }
 
 int32_t komodo_blockload(CBlock& block,CBlockIndex *pindex)
