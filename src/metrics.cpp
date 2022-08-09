@@ -365,7 +365,7 @@ int printMetrics(size_t cols, bool mining)
                         subsidy -= subsidy/5;
                     }
 
-                    if ((std::max(0, COINBASE_MATURITY - (tipHeight - height)) > 0) ||
+                    if ((std::max( 0U, Params().CoinbaseMaturity() - (tipHeight - height)) > 0) ||
                         (tipHeight < komodo_block_unlocktime(height) && subsidy >= ASSETCHAINS_TIMELOCKGTE)) {
                         immature += subsidy;
                     } else {

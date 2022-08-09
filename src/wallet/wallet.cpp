@@ -771,12 +771,12 @@ set<uint256> CWallet::GetConflicts(const uint256& txid) const
 
 void CWallet::Flush(bool shutdown)
 {
-    bitdb.Flush(shutdown);
+    bitdb->Flush(shutdown);
 }
 
 bool CWallet::Verify(const string& walletFile, string& warningString, string& errorString)
 {
-    if (!bitdb.Open(GetDataDir()))
+    if (!bitdb->Open(GetDataDir()))
     {
         // try moving the database env out of the way
         boost::filesystem::path pathDatabase = GetDataDir() / "database";
@@ -789,7 +789,7 @@ bool CWallet::Verify(const string& walletFile, string& warningString, string& er
         }
 
         // try again
-        if (!bitdb.Open(GetDataDir())) {
+        if (!bitdb->Open(GetDataDir())) {
             // if it still fails, it probably means we can't even create the database env
             string msg = strprintf(_("Error initializing wallet database environment %s!"), GetDataDir());
             errorString += msg;
@@ -800,13 +800,13 @@ bool CWallet::Verify(const string& walletFile, string& warningString, string& er
     if (GetBoolArg("-salvagewallet", false))
     {
         // Recover readable keypairs:
-        if (!CWalletDB::Recover(bitdb, walletFile, true))
+        if (!CWalletDB::Recover(*bitdb, walletFile, true))
             return false;
     }
 
     if (boost::filesystem::exists(GetDataDir() / walletFile))
     {
-        CDBEnv::VerifyResult r = bitdb.Verify(walletFile, CWalletDB::Recover);
+        CDBEnv::VerifyResult r = bitdb->Verify(walletFile, CWalletDB::Recover);
         if (r == CDBEnv::RECOVER_OK)
         {
             warningString += strprintf(_("Warning: wallet.dat corrupt, data salvaged!"
@@ -977,7 +977,7 @@ void CWallet::ClearNoteWitnessCache()
 }
 
 template<typename NoteDataMap>
-void CopyPreviousWitnesses(NoteDataMap& noteDataMap, int indexHeight, int64_t nWitnessCacheSize)
+void CopyPreviousWitnesses(NoteDataMap& noteDataMap, int indexHeight, int64_t nWitnessCacheSize, int64_t maxWitnessCacheSize)
 {
     for (auto& item : noteDataMap) {
         auto* nd = &(item.second);
@@ -996,7 +996,7 @@ void CopyPreviousWitnesses(NoteDataMap& noteDataMap, int indexHeight, int64_t nW
             if (nd->witnesses.size() > 0) {
                 nd->witnesses.push_front(nd->witnesses.front());
             }
-            if (nd->witnesses.size() > WITNESS_CACHE_SIZE) {
+            if (nd->witnesses.size() > maxWitnessCacheSize) {
                 nd->witnesses.pop_back();
             }
         }
@@ -1069,11 +1069,11 @@ void CWallet::IncrementNoteWitnesses(const CBlockIndex* pindex,
 {
     LOCK(cs_wallet);
     for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
-       ::CopyPreviousWitnesses(wtxItem.second.mapSproutNoteData, pindex->nHeight, nWitnessCacheSize);
-       ::CopyPreviousWitnesses(wtxItem.second.mapSaplingNoteData, pindex->nHeight, nWitnessCacheSize);
+       ::CopyPreviousWitnesses(wtxItem.second.mapSproutNoteData, pindex->nHeight, nWitnessCacheSize, maxWitnessCacheSize);
+       ::CopyPreviousWitnesses(wtxItem.second.mapSaplingNoteData, pindex->nHeight, nWitnessCacheSize, maxWitnessCacheSize);
     }
 
-    if (nWitnessCacheSize < WITNESS_CACHE_SIZE) {
+    if (nWitnessCacheSize < maxWitnessCacheSize) {
         nWitnessCacheSize += 1;
     }
 
@@ -1136,7 +1136,7 @@ void CWallet::IncrementNoteWitnesses(const CBlockIndex* pindex,
 }
 
 template<typename NoteDataMap>
-bool DecrementNoteWitnesses(NoteDataMap& noteDataMap, int indexHeight, int64_t nWitnessCacheSize)
+bool DecrementNoteWitnesses(NoteDataMap& noteDataMap, int indexHeight, int64_t nWitnessCacheSize, int64_t maxWitnessCacheSize)
 {
     extern int32_t KOMODO_REWIND;
 
@@ -1179,7 +1179,7 @@ bool DecrementNoteWitnesses(NoteDataMap& noteDataMap, int indexHeight, int64_t n
             assert((nWitnessCacheSize - 1) >= nd->witnesses.size());
         }
     }
-    assert(KOMODO_REWIND != 0 || nWitnessCacheSize > 0 || WITNESS_CACHE_SIZE != _COINBASE_MATURITY+10);
+    assert(KOMODO_REWIND != 0 || nWitnessCacheSize > 0 || maxWitnessCacheSize != Params().CoinbaseMaturity()+10);
     return true;
 }
 
@@ -1188,12 +1188,12 @@ void CWallet::DecrementNoteWitnesses(const CBlockIndex* pindex)
 {
     LOCK(cs_wallet);
     for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
-        if (!::DecrementNoteWitnesses(wtxItem.second.mapSproutNoteData, pindex->nHeight, nWitnessCacheSize))
+        if (!::DecrementNoteWitnesses(wtxItem.second.mapSproutNoteData, pindex->nHeight, nWitnessCacheSize, maxWitnessCacheSize))
             needsRescan = true;
-        if (!::DecrementNoteWitnesses(wtxItem.second.mapSaplingNoteData, pindex->nHeight, nWitnessCacheSize))
+        if (!::DecrementNoteWitnesses(wtxItem.second.mapSaplingNoteData, pindex->nHeight, nWitnessCacheSize, maxWitnessCacheSize))
             needsRescan = true;
     }
-    if ( WITNESS_CACHE_SIZE == _COINBASE_MATURITY+10 )
+    if ( maxWitnessCacheSize == Params().CoinbaseMaturity()+10 )
     {
         nWitnessCacheSize -= 1;
         // TODO: If nWitnessCache is zero, we need to regenerate the caches (#1302)
@@ -3517,7 +3517,9 @@ bool CWallet::SelectCoinsMinConf(const CAmount& nTargetValue, int nConfMine, int
     return true;
 }
 
-bool CWallet::SelectCoins(const CAmount& nTargetValue, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet,  bool& fOnlyCoinbaseCoinsRet, bool& fNeedCoinbaseCoinsRet, const CCoinControl* coinControl) const
+bool CWallet::SelectCoins(const CAmount& nTargetValue, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, 
+        CAmount& nValueRet,  bool& fOnlyCoinbaseCoinsRet, bool& fNeedCoinbaseCoinsRet, 
+        const CCoinControl* coinControl) const
 {
     // Output parameter fOnlyCoinbaseCoinsRet is set to true when the only available coins are coinbase utxos.
     uint64_t tmp; int32_t retval;
@@ -3614,7 +3616,16 @@ bool CWallet::SelectCoins(const CAmount& nTargetValue, set<pair<const CWalletTx*
     return retval;
 }
 
-bool CWallet::FundTransaction(CMutableTransaction& tx, CAmount &nFeeRet, int& nChangePosRet, std::string& strFailReason)
+/****
+ * @brief add vIns to transaction
+ * @param tx the transaction with vouts
+ * @param nFeeRet
+ * @param nChangePosRet
+ * @param strFailReason
+ * @returns true on success
+ */
+bool CWallet::FundTransaction(CMutableTransaction& tx, CAmount &nFeeRet, int& nChangePosRet, 
+        std::string& strFailReason)
 {
     vector<CRecipient> vecSend;
 
@@ -3658,8 +3669,20 @@ bool CWallet::FundTransaction(CMutableTransaction& tx, CAmount &nFeeRet, int& nC
     return true;
 }
 
-bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey, CAmount& nFeeRet,
-                                int& nChangePosRet, std::string& strFailReason, const CCoinControl* coinControl, bool sign)
+/*****
+ * @brief create a transaction
+ * @param vecSend who to send to
+ * @param wtxNew wallet transaction
+ * @param reservekey
+ * @param nFeeRet
+ * @param nChangePosRet
+ * @param strFailReason
+ * @param coinControl
+ * @param sign true to sign inputs
+ */
+bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
+        CAmount& nFeeRet, int& nChangePosRet, std::string& strFailReason, const CCoinControl* coinControl,
+        bool sign)
 {
     uint64_t interest2 = 0; CAmount nValue = 0; unsigned int nSubtractFeeFromAmount = 0;
     BOOST_FOREACH (const CRecipient& recipient, vecSend)
@@ -4876,14 +4899,14 @@ int CMerkleTx::GetDepthInMainChain(const CBlockIndex* &pindexRet) const
 int CMerkleTx::GetBlocksToMaturity() const
 {
     if ( ASSETCHAINS_SYMBOL[0] == 0 )
-        COINBASE_MATURITY = _COINBASE_MATURITY;
+        Params().ResetCoinbaseMaturity();
     if (!IsCoinBase())
         return 0;
     int32_t depth = GetDepthInMainChain();
     int32_t ut = UnlockTime(0);
     int32_t toMaturity = (ut - chainActive.Height()) < 0 ? 0 : ut - chainActive.Height();
     //printf("depth.%i, unlockTime.%i, toMaturity.%i\n", depth, ut, toMaturity);
-    ut = (COINBASE_MATURITY - depth) < 0 ? 0 : COINBASE_MATURITY - depth;
+    ut = (Params().CoinbaseMaturity() - depth) < 0 ? 0 : Params().CoinbaseMaturity() - depth;
     return(ut < toMaturity ? toMaturity : ut);
 }
 

@@ -581,11 +581,19 @@ const CScript &CCoinsViewCache::GetSpendFor(const CTxIn& input) const
     return GetSpendFor(coins, input);
 }
 
-CAmount CCoinsViewCache::GetValueIn(int32_t nHeight,int64_t *interestp,const CTransaction& tx,uint32_t tiptime) const
+/** 
+ * @brief get amount of bitcoins coming in to a transaction
+ * @note lightweight clients may not know anything besides the hash of previous transactions,
+ * so may not be able to calculate this.
+ * @param[in] nHeight the chain height
+ * @param[out] interestp the interest found
+ * @param[in] tx transaction for which we are checking input total
+ * @returns Sum of value of all inputs (scriptSigs), (positive valueBalance or zero) and JoinSplit vpub_new
+ */
+CAmount CCoinsViewCache::GetValueIn(int32_t nHeight,int64_t &interestp,const CTransaction& tx) const
 {
     CAmount value,nResult = 0;
-    if ( interestp != 0 )
-        *interestp = 0;
+    interestp = 0;
     if ( tx.IsCoinImport() )
         return GetCoinImportValue(tx);
     if ( tx.IsCoinBase() != 0 )
@@ -604,12 +612,13 @@ CAmount CCoinsViewCache::GetValueIn(int32_t nHeight,int64_t *interestp,const CTr
         {
             if ( value >= 10*COIN )
             {
-                int64_t interest; int32_t txheight; uint32_t locktime;
-                interest = komodo_accrued_interest(&txheight,&locktime,tx.vin[i].prevout.hash,tx.vin[i].prevout.n,0,value,(int32_t)nHeight);
-                //printf("nResult %.8f += val %.8f interest %.8f ht.%d lock.%u tip.%u\n",(double)nResult/COIN,(double)value/COIN,(double)interest/COIN,txheight,locktime,tiptime);
-                //fprintf(stderr,"nResult %.8f += val %.8f interest %.8f ht.%d lock.%u tip.%u\n",(double)nResult/COIN,(double)value/COIN,(double)interest/COIN,txheight,locktime,tiptime);
+                int64_t interest; 
+                int32_t txheight; 
+                uint32_t locktime;
+                interest = komodo_accrued_interest(&txheight,&locktime,tx.vin[i].prevout.hash,
+                        tx.vin[i].prevout.n,0,value,nHeight);
                 nResult += interest;
-                (*interestp) += interest;
+                interestp += interest;
             }
         }
 #endif

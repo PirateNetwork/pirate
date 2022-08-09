@@ -14,24 +14,6 @@
  ******************************************************************************/
 #include "komodo_structs.h"
 #include "mem_read.h"
-#include <mutex>
-
-extern std::mutex komodo_mutex;
-
-/***
- * komodo_state
- */
-
-bool komodo_state::add_event(const std::string& symbol, const uint32_t height, std::shared_ptr<komodo::event> in)
-{
-    if (ASSETCHAINS_SYMBOL[0] != 0)
-    {
-        std::lock_guard<std::mutex> lock(komodo_mutex);
-        events.push_back( in );
-        return true;
-    }
-    return false;
-}
 
 namespace komodo {
 
@@ -96,8 +78,8 @@ std::ostream& operator<<(std::ostream& os, const event& in)
             break;
         case(EVENT_NOTARIZED):
         {
-            event_notarized* tmp = dynamic_cast<event_notarized*>(const_cast<event*>(&in));
-            if (tmp->MoMdepth == 0)
+            const event_notarized& tmp = static_cast<const event_notarized&>(in);
+            if (tmp.MoMdepth == 0)
                 os << "N";
             else
                 os << "M";
@@ -108,8 +90,8 @@ std::ostream& operator<<(std::ostream& os, const event& in)
             break;
         case(EVENT_KMDHEIGHT):
         {
-            event_kmdheight* tmp = dynamic_cast<event_kmdheight*>(const_cast<event*>(&in));
-            if (tmp->timestamp == 0)
+            const event_kmdheight& tmp = static_cast<const event_kmdheight&>(in);
+            if (tmp.timestamp == 0)
                 os << "K";
             else
                 os << "T";
@@ -152,11 +134,12 @@ event_pubkeys::event_pubkeys(FILE* fp, int32_t height) : event(EVENT_PUBKEYS, he
 
 std::ostream& operator<<(std::ostream& os, const event_pubkeys& in)
 {
-    const event& e = dynamic_cast<const event&>(in);
+    const event& e = static_cast<const event&>(in);
     os << e;
     os << in.num;
-    for(uint8_t i = 0; i < in.num-1; ++i)
-        os << in.pubkeys[i];
+    for(uint8_t i = 0; i < in.num; ++i)
+        for(uint8_t j = 0; j < 33; ++j)
+            os << in.pubkeys[i][j];
     return os;
 }
 
@@ -166,7 +149,7 @@ event_rewind::event_rewind(uint8_t *data, long &pos, long data_len, int32_t heig
 }
 std::ostream& operator<<(std::ostream& os, const event_rewind& in)
 {
-    const event& e = dynamic_cast<const event&>(in);
+    const event& e = static_cast<const event&>(in);
     os << e;
     return os;
 }
@@ -174,7 +157,8 @@ std::ostream& operator<<(std::ostream& os, const event_rewind& in)
 event_notarized::event_notarized(uint8_t *data, long &pos, long data_len, int32_t height, const char* _dest, bool includeMoM)
         : event(EVENT_NOTARIZED, height), MoMdepth(0)
 {
-    strncpy(this->dest, _dest, sizeof(this->dest)-1);
+    if (_dest != nullptr)
+        strncpy(this->dest, _dest, sizeof(this->dest)-1);
     this->dest[sizeof(this->dest)-1] = 0;
     MoM.SetNull();
     mem_read(this->notarizedheight, data, pos, data_len);
@@ -190,7 +174,8 @@ event_notarized::event_notarized(uint8_t *data, long &pos, long data_len, int32_
 event_notarized::event_notarized(FILE* fp, int32_t height, const char* _dest, bool includeMoM)
         : event(EVENT_NOTARIZED, height), MoMdepth(0)
 {
-    strncpy(this->dest, _dest, sizeof(this->dest)-1);
+    if (_dest != nullptr)
+        strncpy(this->dest, _dest, sizeof(this->dest)-1);
     this->dest[sizeof(this->dest)-1] = 0;
     MoM.SetNull();
     if ( fread(&notarizedheight,1,sizeof(notarizedheight),fp) != sizeof(notarizedheight) )
@@ -210,7 +195,7 @@ event_notarized::event_notarized(FILE* fp, int32_t height, const char* _dest, bo
 
 std::ostream& operator<<(std::ostream& os, const event_notarized& in)
 {
-    const event& e = dynamic_cast<const event&>(in);
+    const event& e = static_cast<const event&>(in);
     os << e;
     os << serializable<int32_t>(in.notarizedheight);
     os << serializable<uint256>(in.blockhash);
@@ -245,7 +230,7 @@ event_u::event_u(FILE *fp, int32_t height) : event(EVENT_U, height)
 
 std::ostream& operator<<(std::ostream& os, const event_u& in)
 {
-    const event& e = dynamic_cast<const event&>(in);
+    const event& e = static_cast<const event&>(in);
     os << e;
     os << in.n << in.nid;
     os.write((const char*)in.mask, 8);
@@ -273,7 +258,7 @@ event_kmdheight::event_kmdheight(FILE *fp, int32_t height, bool includeTimestamp
 
 std::ostream& operator<<(std::ostream& os, const event_kmdheight& in)
 {
-    const event& e = dynamic_cast<const event&>(in);
+    const event& e = static_cast<const event&>(in);
     os << e << serializable<int32_t>(in.kheight);
     if (in.timestamp > 0)
         os << serializable<int32_t>(in.timestamp);
@@ -312,7 +297,7 @@ event_opreturn::event_opreturn(FILE* fp, int32_t height) : event(EVENT_OPRETURN,
 
 std::ostream& operator<<(std::ostream& os, const event_opreturn& in)
 {
-    const event& e = dynamic_cast<const event&>(in);
+    const event& e = static_cast<const event&>(in);
     os << e 
         << serializable<uint256>(in.txid)
         << serializable<uint16_t>(in.vout)
@@ -342,7 +327,7 @@ event_pricefeed::event_pricefeed(FILE* fp, int32_t height) : event(EVENT_PRICEFE
 
 std::ostream& operator<<(std::ostream& os, const event_pricefeed& in)
 {
-    const event& e = dynamic_cast<const event&>(in);
+    const event& e = static_cast<const event&>(in);
     os << e << (uint8_t)in.num;
     os.write((const char*)in.prices, in.num * sizeof(uint32_t));
     return os;

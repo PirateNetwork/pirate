@@ -45,6 +45,9 @@
 #define KOMODO_ASSETCHAIN_MAXLEN 65
 
 #include "bits256.h"
+#include <mutex>
+
+extern std::mutex komodo_mutex;
 
 // structs prior to refactor
 struct komodo_kv { UT_hash_handle hh; bits256 pubkey; uint8_t *key,*value; int32_t height; uint32_t flags; uint16_t keylen,valuesize; };
@@ -291,7 +294,19 @@ public:
     uint64_t shorted;
     std::list<std::shared_ptr<komodo::event>> events;
     uint32_t RTbufs[64][3]; uint64_t RTmask;
-    bool add_event(const std::string& symbol, const uint32_t height, std::shared_ptr<komodo::event> in);
+    template<class T>
+    bool add_event(const std::string& symbol, const uint32_t height, T& in)
+    {
+        if (ASSETCHAINS_SYMBOL[0] != 0)
+        {
+            std::shared_ptr<T> ptr = std::make_shared<T>( in );
+            std::lock_guard<std::mutex> lock(komodo_mutex);
+            events.push_back( ptr );
+            return true;
+        }
+        return false;
+    }
+
 protected:
     /***
      * @brief clear the checkpoints collection

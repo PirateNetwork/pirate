@@ -57,7 +57,7 @@ int32_t komodo_parsestatefile(struct komodo_state *sp,FILE *fp,char *symbol,char
                 throw komodo::parse_error("Unable to read height from file");
             if ( func == 'P' )
             {
-                std::shared_ptr<komodo::event_pubkeys> pk = std::make_shared<komodo::event_pubkeys>(fp, ht);
+                komodo::event_pubkeys pk(fp, ht);
                 if ( (KOMODO_EXTERNAL_NOTARIES && matched ) || (strcmp(symbol,"KMD") == 0 && !KOMODO_EXTERNAL_NOTARIES) )
                 {
                     komodo_eventadd_pubkeys(sp, symbol, ht, pk);
@@ -65,23 +65,23 @@ int32_t komodo_parsestatefile(struct komodo_state *sp,FILE *fp,char *symbol,char
             }
             else if ( func == 'N' || func == 'M' )
             {
-                std::shared_ptr<komodo::event_notarized> evt = std::make_shared<komodo::event_notarized>(fp, ht, dest, func == 'M');
+                komodo::event_notarized evt(fp, ht, dest, func == 'M');
                 komodo_eventadd_notarized(sp, symbol, ht, evt);
             }
             else if ( func == 'U' ) // deprecated
             {
-                std::shared_ptr<komodo::event_u> evt = std::make_shared<komodo::event_u>(fp, ht);
+                komodo::event_u evt(fp, ht);
             }
             else if ( func == 'K' || func == 'T')
             {
-                std::shared_ptr<komodo::event_kmdheight> evt = std::make_shared<komodo::event_kmdheight>(fp, ht, func == 'T');
+                komodo::event_kmdheight evt(fp, ht, func == 'T');
                 komodo_eventadd_kmdheight(sp, symbol, ht, evt);
             }
             else if ( func == 'R' )
             {
-                std::shared_ptr<komodo::event_opreturn> evt = std::make_shared<komodo::event_opreturn>(fp, ht);
+                komodo::event_opreturn evt(fp, ht);
                 // check for oversized opret
-                if ( evt->opret.size() < 16384*4 )
+                if ( evt.opret.size() < 16384*4 )
                     komodo_eventadd_opreturn(sp, symbol, ht, evt);
             }
             else if ( func == 'D' )
@@ -90,7 +90,7 @@ int32_t komodo_parsestatefile(struct komodo_state *sp,FILE *fp,char *symbol,char
             }
             else if ( func == 'V' )
             {
-                std::shared_ptr<komodo::event_pricefeed> evt = std::make_shared<komodo::event_pricefeed>(fp, ht);
+                komodo::event_pricefeed evt(fp, ht);
                 komodo_eventadd_pricefeed(sp, symbol, ht, evt);
             }
         } // retrieved the func
@@ -125,7 +125,7 @@ int32_t komodo_parsestatefiledata(struct komodo_state *sp,uint8_t *filedata,long
                 throw komodo::parse_error("Unable to parse height from file data");
             if ( func == 'P' )
             {
-                std::shared_ptr<komodo::event_pubkeys> pk = std::make_shared<komodo::event_pubkeys>(filedata, fpos, datalen, ht);
+                komodo::event_pubkeys pk(filedata, fpos, datalen, ht);
                 if ( (KOMODO_EXTERNAL_NOTARIES && matched ) || (strcmp(symbol,"KMD") == 0 && !KOMODO_EXTERNAL_NOTARIES) )
                 {
                     komodo_eventadd_pubkeys(sp, symbol, ht, pk);
@@ -133,25 +133,21 @@ int32_t komodo_parsestatefiledata(struct komodo_state *sp,uint8_t *filedata,long
             }
             else if ( func == 'N' || func == 'M' )
             {
-                std::shared_ptr<komodo::event_notarized> ntz = 
-                        std::make_shared<komodo::event_notarized>(filedata, fpos, datalen, ht, dest, func == 'M');
+                komodo::event_notarized ntz(filedata, fpos, datalen, ht, dest, func == 'M');
                 komodo_eventadd_notarized(sp, symbol, ht, ntz);
             }
             else if ( func == 'U' ) // deprecated
             {
-                std::shared_ptr<komodo::event_u> u = 
-                        std::make_shared<komodo::event_u>(filedata, fpos, datalen, ht);
+                komodo::event_u u(filedata, fpos, datalen, ht);
             }
             else if ( func == 'K' || func == 'T' )
             {
-                std::shared_ptr<komodo::event_kmdheight> kmd_ht = 
-                        std::make_shared<komodo::event_kmdheight>(filedata, fpos, datalen, ht, func == 'T');
+                komodo::event_kmdheight kmd_ht(filedata, fpos, datalen, ht, func == 'T');
                 komodo_eventadd_kmdheight(sp, symbol, ht, kmd_ht);
             }
             else if ( func == 'R' )
             {
-                std::shared_ptr<komodo::event_opreturn> opret = 
-                        std::make_shared<komodo::event_opreturn>(filedata, fpos, datalen, ht);
+                komodo::event_opreturn opret(filedata, fpos, datalen, ht);
                 komodo_eventadd_opreturn(sp, symbol, ht, opret);
             }
             else if ( func == 'D' )
@@ -160,8 +156,7 @@ int32_t komodo_parsestatefiledata(struct komodo_state *sp,uint8_t *filedata,long
             }
             else if ( func == 'V' )
             {
-                std::shared_ptr<komodo::event_pricefeed> pf = 
-                        std::make_shared<komodo::event_pricefeed>(filedata, fpos, datalen, ht);
+                komodo::event_pricefeed pf(filedata, fpos, datalen, ht);
                 komodo_eventadd_pricefeed(sp, symbol, ht, pf);
             }
             *fposp = fpos;
@@ -181,7 +176,8 @@ int32_t komodo_parsestatefiledata(struct komodo_state *sp,uint8_t *filedata,long
  * @param fp the file
  * @returns the number of bytes written
  */
-size_t write_event(std::shared_ptr<komodo::event> evt, FILE *fp)
+template<class T>
+size_t write_event(T& evt, FILE *fp)
 {
     std::stringstream ss;
     ss << evt;
@@ -238,38 +234,38 @@ void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotar
     {
         if ( KMDheight != 0 )
         {
-            std::shared_ptr<komodo::event_kmdheight> kmd_ht = std::make_shared<komodo::event_kmdheight>(height);
-            kmd_ht->kheight = KMDheight;
-            kmd_ht->timestamp = KMDtimestamp;
+            komodo::event_kmdheight kmd_ht(height);
+            kmd_ht.kheight = KMDheight;
+            kmd_ht.timestamp = KMDtimestamp;
             write_event(kmd_ht, fp);
             komodo_eventadd_kmdheight(sp,symbol,height,kmd_ht);
         }
         else if ( opretbuf != 0 && opretlen > 0 )
         {
-            std::shared_ptr<komodo::event_opreturn> evt = std::make_shared<komodo::event_opreturn>(height);
-            evt->txid = txhash;
-            evt->vout = vout;
-            evt->value = opretvalue;
+            komodo::event_opreturn evt(height);
+            evt.txid = txhash;
+            evt.vout = vout;
+            evt.value = opretvalue;
             for(uint16_t i = 0; i < opretlen; ++i)
-                evt->opret.push_back(opretbuf[i]);
+                evt.opret.push_back(opretbuf[i]);
             write_event(evt, fp);
             komodo_eventadd_opreturn(sp,symbol,height,evt);
         }
         else if ( notarypubs != 0 && numnotaries > 0 )
         {
-            std::shared_ptr<komodo::event_pubkeys> pk = std::make_shared<komodo::event_pubkeys>(height);
-            pk->num = numnotaries;
-            memcpy(pk->pubkeys, notarypubs, 33 * 64);
+            komodo::event_pubkeys pk(height);
+            pk.num = numnotaries;
+            memcpy(pk.pubkeys, notarypubs, 33 * 64);
             write_event(pk, fp);
             komodo_eventadd_pubkeys(sp,symbol,height,pk);
         }
         else if ( voutmask != 0 && numvouts > 0 )
         {
-            std::shared_ptr<komodo::event_u> evt = std::make_shared<komodo::event_u>(height);
-            evt->n = numvouts;
-            evt->nid = notaryid;
-            memcpy(evt->mask, &voutmask, sizeof(voutmask));
-            memcpy(evt->hash, &txhash, sizeof(txhash));
+            komodo::event_u evt(height);
+            evt.n = numvouts;
+            evt.nid = notaryid;
+            memcpy(evt.mask, &voutmask, sizeof(voutmask));
+            memcpy(evt.hash, &txhash, sizeof(txhash));
            write_event(evt, fp);
         }
         else if ( pvals != 0 && numpvals > 0 )
@@ -280,10 +276,10 @@ void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotar
                     nonz++;
             if ( nonz >= 32 )
             {
-                std::shared_ptr<komodo::event_pricefeed> evt = std::make_shared<komodo::event_pricefeed>(height);
-                evt->num = numpvals;
-                for( uint8_t i = 0; i < evt->num; ++i)
-                    evt->prices[i] = pvals[i];
+                komodo::event_pricefeed evt(height);
+                evt.num = numpvals;
+                for( uint8_t i = 0; i < evt.num; ++i)
+                    evt.prices[i] = pvals[i];
                 write_event(evt, fp);
                 komodo_eventadd_pricefeed(sp,symbol,height,evt);
             }
@@ -292,12 +288,12 @@ void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotar
         {
             if ( sp != nullptr )
             {
-                std::shared_ptr<komodo::event_notarized> evt = std::make_shared<komodo::event_notarized>(height, dest);
-                evt->blockhash = sp->LastNotarizedHash();
-                evt->desttxid = sp->LastNotarizedDestTxId();
-                evt->notarizedheight = sp->LastNotarizedHeight();
-                evt->MoM = sp->LastNotarizedMoM();
-                evt->MoMdepth = sp->LastNotarizedMoMDepth();
+                komodo::event_notarized evt(height, dest);
+                evt.blockhash = sp->LastNotarizedHash();
+                evt.desttxid = sp->LastNotarizedDestTxId();
+                evt.notarizedheight = sp->LastNotarizedHeight();
+                evt.MoM = sp->LastNotarizedMoM();
+                evt.MoMdepth = sp->LastNotarizedMoMDepth();
                 write_event(evt, fp);
                 komodo_eventadd_notarized(sp,symbol,height,evt);
             }
@@ -601,9 +597,16 @@ int32_t komodo_notarycmp(uint8_t *scriptPubKey,int32_t scriptlen,uint8_t pubkeys
 /*
     read blackjok3rtt comments in main.cpp 
 */
+/* 
+    JMJ: Moved hwmheight out of komodo_connectblock to allow testing. 
+    Adjusting this should only be done by komodo_connectblock or a unit test
+*/
+static int32_t hwmheight;
+
+void adjust_hwmheight(int32_t newHeight) { hwmheight = newHeight; }
+
 int32_t komodo_connectblock(bool fJustCheck, CBlockIndex *pindex,CBlock& block)
 {
-    static int32_t hwmheight;
     int32_t staked_era; static int32_t lastStakedEra;
     std::vector<int32_t> notarisations;
     uint64_t signedmask,voutmask; char symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN]; struct komodo_state *sp;

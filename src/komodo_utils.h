@@ -356,6 +356,13 @@ int32_t queue_size(queue_t *queue);
 
 void iguana_initQ(queue_t *Q,char *name);
 
+/**
+ * @brief Get the username, password, and port from a file
+ * @param[out] username the username found in the config file 
+ * @param[out] password the password found in the config file
+ * @param[in] fp the file to be read
+ * @return the RPC port
+ */
 uint16_t _komodo_userpass(char *username,char *password,FILE *fp);
 
 void komodo_statefname(char *fname,char *symbol,char *str);
@@ -377,8 +384,6 @@ uint64_t komodo_max_money();
 uint64_t komodo_ac_block_subsidy(int nHeight);
 
 int8_t equihash_params_possible(uint64_t n, uint64_t k);
-
-void komodo_args(char *argv0);
 
 void komodo_nameset(char *symbol,char *dest,char *source);
 

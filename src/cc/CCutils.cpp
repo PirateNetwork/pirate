@@ -160,7 +160,7 @@ bool CheckTxFee(const CTransaction &tx, uint64_t txfee, uint32_t height, uint64_
     int64_t interest; uint64_t valuein;
     CCoinsViewMemPool viewMemPool(pcoinsTip, mempool);
     view.SetBackend(viewMemPool);
-    valuein = view.GetValueIn(height,&interest,tx,blocktime);
+    valuein = view.GetValueIn(height,interest,tx);
     actualtxfee = valuein-tx.GetValueOut();
     if ( actualtxfee > txfee )
     {

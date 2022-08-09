@@ -19,6 +19,8 @@
 #include "chain.h"
 #include "komodo_nk.h"
 
+#define NUM_KMD_NOTARIES 64
+
 #define KOMODO_EARLYTXID_HEIGHT 100
 //#define ADAPTIVEPOW_CHANGETO_DEFAULTON 1572480000
 #define ASSETCHAINS_MINHEIGHT 128
@@ -35,7 +37,6 @@
 #define ASSETCHAINS_STAKED_BLOCK_FUTURE_MAX 57
 #define ASSETCHAINS_STAKED_BLOCK_FUTURE_HALF 27
 #define ASSETCHAINS_STAKED_MIN_POW_DIFF 536900000 // 537000000 537300000
-#define _COINBASE_MATURITY 100
 #define _ASSETCHAINS_TIMELOCKOFF 0xffffffffffffffff
 
 // KMD Notary Seasons 
@@ -45,7 +46,6 @@
     // 1751328000 = dummy timestamp, 1 July 2025!
     // 7113400 = 5x current KMD blockheight. 
 // to add 4th season, change NUM_KMD_SEASONS to 4, and add timestamp and height of activation to these arrays. 
-
 
 #define SETBIT(bits,bitoffset) (((uint8_t *)bits)[(bitoffset) >> 3] |= (1 << ((bitoffset) & 7)))
 #define GETBIT(bits,bitoffset) (((uint8_t *)bits)[(bitoffset) >> 3] & (1 << ((bitoffset) & 7)))
@@ -85,6 +85,7 @@ extern std::vector<std::string> ASSETCHAINS_PRICES,ASSETCHAINS_STOCKS;
 
 extern uint256 KOMODO_EARLYTXID;
 
+extern bool IS_KOMODO_TESTNODE;
 extern bool IS_KOMODO_DEALERNODE;
 extern int32_t KOMODO_CONNECTING,KOMODO_CCACTIVATE;
 extern uint32_t ASSETCHAINS_CC;

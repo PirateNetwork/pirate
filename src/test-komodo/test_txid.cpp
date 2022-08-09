@@ -8,7 +8,7 @@
 #include "utilstrencodings.h"
 
 /*
- Test that removing #1144 succeeded by verifying the hash of a transaction is over the entire serialized form.
+ Verify the hash of a transaction is over the entire serialized form.
  */
 TEST(txid_tests, check_txid_and_hash_are_same) {
     // Random zcash transaction aacaa62d40fcdd9192ed35ea9df31660ccf7f6c60566530faaa444fb5d0d410e

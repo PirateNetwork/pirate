@@ -16,17 +16,15 @@
 #include "komodo_defs.h"
 #include "komodo_structs.h"
 
-void komodo_eventadd_notarized(komodo_state *sp,char *symbol,int32_t height, std::shared_ptr<komodo::event_notarized> ntz);
+void komodo_eventadd_notarized(komodo_state *sp,char *symbol,int32_t height, komodo::event_notarized& ntz);
 
-void komodo_eventadd_pubkeys(komodo_state *sp,char *symbol,int32_t height, std::shared_ptr<komodo::event_pubkeys> pk);
+void komodo_eventadd_pubkeys(komodo_state *sp,char *symbol,int32_t height, komodo::event_pubkeys& pk);
 
-void komodo_eventadd_pricefeed(komodo_state *sp,char *symbol,int32_t height, std::shared_ptr<komodo::event_pricefeed> pf);
+void komodo_eventadd_pricefeed(komodo_state *sp,char *symbol,int32_t height, komodo::event_pricefeed& pf);
 
-void komodo_eventadd_opreturn(komodo_state *sp,char *symbol,int32_t height, std::shared_ptr<komodo::event_opreturn> opret);
+void komodo_eventadd_opreturn(komodo_state *sp,char *symbol,int32_t height, komodo::event_opreturn& opret);
 
-void komodo_eventadd_kmdheight(komodo_state *sp,char *symbol,int32_t height,std::shared_ptr<komodo::event_kmdheight> kmd_ht);
-
-void komodo_event_undo(komodo_state *sp, std::shared_ptr<komodo::event> ep);
+void komodo_eventadd_kmdheight(komodo_state *sp,char *symbol,int32_t height, komodo::event_kmdheight& kmd_ht);
 
 void komodo_event_rewind(komodo_state *sp,char *symbol,int32_t height);
 
