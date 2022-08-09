@@ -215,6 +215,9 @@ private:
     //! @note Don't increment this. Increment `lowest_compatible` in `Serialize()` instead.
     static constexpr uint8_t INCOMPATIBILITY_BASE = 32;
 
+    //! last used nId
+    int nIdCount GUARDED_BY(cs){0};
+
     //! table with information about all nIds
     std::map<int, CAddrInfo> mapInfo;
 
@@ -449,13 +452,13 @@ public:
 
         // Deserialize entries from the new table.
         for (int n = 0; n < nNew; n++) {
-            int nIdCount = vRandom.size();
-            CAddrInfo &info = mapInfo[nIdCount];
+            CAddrInfo& info = mapInfo[n];
             s >> info;
-            mapAddr[info] = nIdCount;
-            info.nRandomPos = nIdCount;
+            mapAddr[info] = n;
+            info.nRandomPos = vRandom.size();
             vRandom.push_back(n);
         }
+        nIdCount = nNew;
 
         // Deserialize entries from the tried table.
         int nLost = 0;
@@ -464,14 +467,14 @@ public:
             s >> info;
             int nKBucket = info.GetTriedBucket(nKey, m_asmap);
             int nKBucketPos = info.GetBucketPosition(nKey, false, nKBucket);
-            if (vvTried[nKBucket][nKBucketPos] == -1) {
-                int nIdCount = vRandom.size();
-                info.nRandomPos = nIdCount;
+            if (info.IsValid() && vvTried[nKBucket][nKBucketPos] == -1) {
+                info.nRandomPos = vRandom.size();
                 info.fInTried = true;
                 vRandom.push_back(nIdCount);
                 mapInfo[nIdCount] = info;
                 mapAddr[info] = nIdCount;
                 vvTried[nKBucket][nKBucketPos] = nIdCount;
+                nIdCount++;
             } else {
                 nLost++;
             }
@@ -516,26 +519,34 @@ public:
         for (auto bucket_entry : bucket_entries) {
             int bucket{bucket_entry.first};
             const int entry_index{bucket_entry.second};
-            CAddrInfo& info = mapInfo[entry_index];
+            // CAddrInfo& info = mapInfo[entry_index];
 
-            // The entry shouldn't appear in more than
-            // ADDRMAN_NEW_BUCKETS_PER_ADDRESS. If it has already, just skip
-            // this bucket_entry.
-            if (info.nRefCount >= ADDRMAN_NEW_BUCKETS_PER_ADDRESS) continue;
+            const auto it{mapInfo.find(entry_index)};
+            if (it != mapInfo.end()) {
+                CAddrInfo& info = (*it).second;
 
-            int bucket_position = info.GetBucketPosition(nKey, true, bucket);
-            if (restore_bucketing && vvNew[bucket][bucket_position] == -1) {
-                // Bucketing has not changed, using existing bucket positions for the new table
-                vvNew[bucket][bucket_position] = entry_index;
-                ++info.nRefCount;
-            } else {
-                // In case the new table data cannot be used (bucket count wrong or new asmap),
-                // try to give them a reference based on their primary source address.
-                bucket = info.GetNewBucket(nKey, m_asmap);
-                bucket_position = info.GetBucketPosition(nKey, true, bucket);
-                if (vvNew[bucket][bucket_position] == -1) {
+                // Don't store the entry in the new bucket if it's not a valid address for our addrman
+                if (!info.IsValid()) continue;
+
+                // The entry shouldn't appear in more than
+                // ADDRMAN_NEW_BUCKETS_PER_ADDRESS. If it has already, just skip
+                // this bucket_entry.
+                if (info.nRefCount >= ADDRMAN_NEW_BUCKETS_PER_ADDRESS) continue;
+
+                int bucket_position = info.GetBucketPosition(nKey, true, bucket);
+                if (restore_bucketing && vvNew[bucket][bucket_position] == -1) {
+                    // Bucketing has not changed, using existing bucket positions for the new table
                     vvNew[bucket][bucket_position] = entry_index;
                     ++info.nRefCount;
+                } else {
+                    // In case the new table data cannot be used (bucket count wrong or new asmap),
+                    // try to give them a reference based on their primary source address.
+                    bucket = info.GetNewBucket(nKey, m_asmap);
+                    bucket_position = info.GetBucketPosition(nKey, true, bucket);
+                    if (vvNew[bucket][bucket_position] == -1) {
+                        vvNew[bucket][bucket_position] = entry_index;
+                        ++info.nRefCount;
+                    }
                 }
             }
         }

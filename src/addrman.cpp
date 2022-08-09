@@ -94,31 +94,40 @@ double CAddrInfo::GetChance(int64_t nNow) const
 
 CAddrInfo* CAddrMan::Find(const CNetAddr& addr, int* pnId)
 {
-    std::map<CNetAddr, int>::iterator it = mapAddr.find(addr);
+    AssertLockHeld(cs);
+
+    const auto it = mapAddr.find(addr);
     if (it == mapAddr.end())
-        return NULL;
+        return nullptr;
     if (pnId)
         *pnId = (*it).second;
-    std::map<int, CAddrInfo>::iterator it2 = mapInfo.find((*it).second);
+    const auto it2 = mapInfo.find((*it).second);
     if (it2 != mapInfo.end())
         return &(*it2).second;
-    return NULL;
+    return nullptr;
 }
 
 CAddrInfo* CAddrMan::Create(const CAddress& addr, const CNetAddr& addrSource, int* pnId)
 {
-    int nId = vRandom.size();
+    AssertLockHeld(cs);
+
+    int nId = nIdCount;
     mapInfo[nId] = CAddrInfo(addr, addrSource);
     mapAddr[addr] = nId;
-    mapInfo[nId].nRandomPos = nId;
+    mapInfo[nId].nRandomPos = vRandom.size();
     vRandom.push_back(nId);
+    nNew++;
+    nIdCount++;
     if (pnId)
         *pnId = nId;
+
     return &mapInfo[nId];
 }
 
 void CAddrMan::SwapRandom(unsigned int nRndPos1, unsigned int nRndPos2)
 {
+    AssertLockHeld(cs);
+
     if (nRndPos1 == nRndPos2)
         return;
 
@@ -127,11 +136,13 @@ void CAddrMan::SwapRandom(unsigned int nRndPos1, unsigned int nRndPos2)
     int nId1 = vRandom[nRndPos1];
     int nId2 = vRandom[nRndPos2];
 
-    assert(mapInfo.count(nId1) == 1);
-    assert(mapInfo.count(nId2) == 1);
+    const auto it_1{mapInfo.find(nId1)};
+    const auto it_2{mapInfo.find(nId2)};
+    assert(it_1 != mapInfo.end());
+    assert(it_2 != mapInfo.end());
 
-    mapInfo[nId1].nRandomPos = nRndPos2;
-    mapInfo[nId2].nRandomPos = nRndPos1;
+    it_1->second.nRandomPos = nRndPos2;
+    it_2->second.nRandomPos = nRndPos1;
 
     vRandom[nRndPos1] = nId2;
     vRandom[nRndPos2] = nId1;
@@ -139,41 +150,57 @@ void CAddrMan::SwapRandom(unsigned int nRndPos1, unsigned int nRndPos2)
 
 void CAddrMan::Delete(int nId)
 {
-    assert(mapInfo.count(nId) != 0);
-    CAddrInfo& info = mapInfo[nId];
-    assert(!info.fInTried);
-    assert(info.nRefCount == 0);
+    AssertLockHeld(cs);
 
-    SwapRandom(info.nRandomPos, vRandom.size() - 1);
-    vRandom.pop_back();
-    mapAddr.erase(info);
-    mapInfo.erase(nId);
-    nNew--;
+    const auto it{mapInfo.find(nId)};
+    if (it != mapInfo.end()) {
+        CAddrInfo& info = (*it).second;
+        assert(!info.fInTried);
+        assert(info.nRefCount == 0);
+
+        SwapRandom(info.nRandomPos, vRandom.size() - 1);
+        vRandom.pop_back();
+        mapAddr.erase(info);
+        mapInfo.erase(nId);
+        nNew--;
+    }
+
 }
 
 void CAddrMan::ClearNew(int nUBucket, int nUBucketPos)
 {
+    AssertLockHeld(cs);
+
     // if there is an entry in the specified bucket, delete it.
     if (vvNew[nUBucket][nUBucketPos] != -1) {
         int nIdDelete = vvNew[nUBucket][nUBucketPos];
-        CAddrInfo& infoDelete = mapInfo[nIdDelete];
-        assert(infoDelete.nRefCount > 0);
-        infoDelete.nRefCount--;
-        vvNew[nUBucket][nUBucketPos] = -1;
-        if (infoDelete.nRefCount == 0) {
-            Delete(nIdDelete);
+        const auto it{mapInfo.find(nIdDelete)};
+        if (it != mapInfo.end()) {
+            CAddrInfo& infoDelete = (*it).second;
+            assert(infoDelete.nRefCount > 0);
+            infoDelete.nRefCount--;
+            vvNew[nUBucket][nUBucketPos] = -1;
+            if (infoDelete.nRefCount == 0) {
+                Delete(nIdDelete);
+            }
         }
     }
+
 }
 
 void CAddrMan::MakeTried(CAddrInfo& info, int nId)
 {
+    AssertLockHeld(cs);
+
     // remove the entry from all new buckets
-    for (int bucket = 0; bucket < ADDRMAN_NEW_BUCKET_COUNT; bucket++) {
-        int pos = info.GetBucketPosition(nKey, true, bucket);
+    const int start_bucket{info.GetNewBucket(nKey, m_asmap)};
+    for (int n = 0; n < ADDRMAN_NEW_BUCKET_COUNT; ++n) {
+        const int bucket{(start_bucket + n) % ADDRMAN_NEW_BUCKET_COUNT};
+        const int pos{info.GetBucketPosition(nKey, true, bucket)};
         if (vvNew[bucket][pos] == nId) {
             vvNew[bucket][pos] = -1;
             info.nRefCount--;
+            if (info.nRefCount == 0) break;
         }
     }
     nNew--;
@@ -268,7 +295,6 @@ bool CAddrMan::Add_(const CAddress& addr, const CNetAddr& source, int64_t nTimeP
     if (!addr.IsRoutable())
         return false;
 
-    bool fNew = false;
     int nId;
     CAddrInfo* pinfo = Find(addr, &nId);
 
@@ -303,19 +329,20 @@ bool CAddrMan::Add_(const CAddress& addr, const CNetAddr& source, int64_t nTimeP
     } else {
         pinfo = Create(addr, source, &nId);
         pinfo->nTime = std::max((int64_t)0, (int64_t)pinfo->nTime - nTimePenalty);
-        nNew++;
-        fNew = true;
     }
 
     int nUBucket = pinfo->GetNewBucket(nKey, source, m_asmap);
     int nUBucketPos = pinfo->GetBucketPosition(nKey, true, nUBucket);
+    bool fInsert = vvNew[nUBucket][nUBucketPos] == -1;
     if (vvNew[nUBucket][nUBucketPos] != nId) {
-        bool fInsert = vvNew[nUBucket][nUBucketPos] == -1;
         if (!fInsert) {
-            CAddrInfo& infoExisting = mapInfo[vvNew[nUBucket][nUBucketPos]];
-            if (infoExisting.IsTerrible() || (infoExisting.nRefCount > 1 && pinfo->nRefCount == 0)) {
-                // Overwrite the existing new table entry.
-                fInsert = true;
+            const auto it{mapInfo.find(vvNew[nUBucket][nUBucketPos])};
+            if (it != mapInfo.end()) {
+                CAddrInfo& infoExisting = (*it).second;
+                if (infoExisting.IsTerrible() || (infoExisting.nRefCount > 1 && pinfo->nRefCount == 0)) {
+                    // Overwrite the existing new table entry.
+                    fInsert = true;
+                }
             }
         }
         if (fInsert) {
@@ -328,7 +355,7 @@ bool CAddrMan::Add_(const CAddress& addr, const CNetAddr& source, int64_t nTimeP
             }
         }
     }
-    return fNew;
+    return fInsert;
 }
 
 void CAddrMan::Attempt_(const CService& addr, int64_t nTime)
