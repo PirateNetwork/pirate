@@ -673,8 +673,6 @@ int32_t komodo_bannedset(int32_t *indallvoutsp,uint256 *array,int32_t max)
     return(i);
 }
 
-void komodo_passport_iteration();
-
 int32_t komodo_check_deposit(int32_t height,const CBlock& block,uint32_t prevtime) // verify above block is valid pax pricing
 {
     static uint256 array[64]; static int32_t numbanned,indallvouts;
@@ -1418,8 +1416,6 @@ int32_t komodo_faststateinit(struct komodo_state *sp,const char *fname,char *sym
     return(-1);
 }
 
-uint64_t komodo_interestsum();
-
 void komodo_passport_iteration()
 {
     static long lastpos[34]; static char userpass[33][1024]; static uint32_t lasttime,callcounter,lastinterest;
@@ -1431,12 +1427,16 @@ void komodo_passport_iteration()
         fprintf(stderr,"[%s] PASSPORT iteration waiting for KOMODO_INITDONE\n",ASSETCHAINS_SYMBOL);
         sleep(3);
     }
-    if ( komodo_chainactive_timestamp() > lastinterest )
+    uint32_t chainactive_timestamp = 0;
+    {
+        LOCK(cs_main);
+        chainactive_timestamp = komodo_chainactive_timestamp();
+    }
+    if ( chainactive_timestamp > lastinterest )
     {
         if ( ASSETCHAINS_SYMBOL[0] == 0 )
             komodo_interestsum();
-        //komodo_longestchain();
-        lastinterest = komodo_chainactive_timestamp();
+        lastinterest = chainactive_timestamp;
     }
     refsp = komodo_stateptr(symbol,dest);
     if ( ASSETCHAINS_SYMBOL[0] == 0 || strcmp(ASSETCHAINS_SYMBOL,"KMDCC") == 0 )
@@ -1546,7 +1546,10 @@ void komodo_passport_iteration()
             komodo_statefname(fname,baseid<32?base:(char *)"",(char *)"realtime");
             if ( (fp= fopen(fname,"wb")) != 0 )
             {
-                buf[0] = (uint32_t)chainActive.LastTip()->nHeight;
+                {
+                    LOCK(cs_main);
+                    buf[0] = (uint32_t)chainActive.Tip()->nHeight;
+                }
                 buf[1] = (uint32_t)komodo_longestchain();
                 if ( buf[0] != 0 && buf[0] == buf[1] )
                 {

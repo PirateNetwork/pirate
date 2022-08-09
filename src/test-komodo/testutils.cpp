@@ -256,7 +256,7 @@ void TestChain::CleanGlobals()
 CBlockIndex *TestChain::GetIndex(uint32_t height)
 {
     if (height == 0)
-        return chainActive.LastTip();
+        return chainActive.Tip();
     return chainActive[height];
 
 }
@@ -534,8 +534,8 @@ bool TestWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWall
         txNew.nLockTime = 0;
     else
     {
-        if ( !komodo_hardfork_active((uint32_t)chainActive.LastTip()->nTime) )
-            txNew.nLockTime = (uint32_t)chainActive.LastTip()->nTime + 1; // set to a time close to now
+        if ( !komodo_hardfork_active((uint32_t)chainActive.Tip()->nTime) )
+            txNew.nLockTime = (uint32_t)chainActive.Tip()->nTime + 1; // set to a time close to now
         else
             txNew.nLockTime = (uint32_t)chainActive.Tip()->GetMedianTimePast();
     }

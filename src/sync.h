@@ -68,20 +68,20 @@ LEAVE_CRITICAL_SECTION(mutex); // no RAII
  * annotations to a subset of the mutex API.
  */
 template <typename PARENT>
-class LOCKABLE AnnotatedMixin : public PARENT
+class CAPABILITY("mutex") AnnotatedMixin : public PARENT
 {
 public:
-    void lock() EXCLUSIVE_LOCK_FUNCTION()
+    void lock() ACQUIRE()
     {
         PARENT::lock();
     }
 
-    void unlock() UNLOCK_FUNCTION()
+    void unlock() RELEASE()
     {
         PARENT::unlock();
     }
 
-    bool try_lock() EXCLUSIVE_TRYLOCK_FUNCTION(true)
+    bool try_lock() TRY_ACQUIRE(true)
     {
         return PARENT::try_lock();
     }
@@ -117,7 +117,7 @@ void PrintLockContention(const char* pszName, const char* pszFile, int nLine);
 
 /** Wrapper around boost::unique_lock<Mutex> */
 template <typename Mutex>
-class SCOPED_LOCKABLE CMutexLock
+class SCOPED_CAPABILITY CMutexLock
 {
 private:
     boost::unique_lock<Mutex> lock;
@@ -145,7 +145,7 @@ private:
     }
 
 public:
-    CMutexLock(Mutex& mutexIn, const char* pszName, const char* pszFile, int nLine, bool fTry = false) EXCLUSIVE_LOCK_FUNCTION(mutexIn) : lock(mutexIn, boost::defer_lock)
+    CMutexLock(Mutex& mutexIn, const char* pszName, const char* pszFile, int nLine, bool fTry = false) ACQUIRE(mutexIn) : lock(mutexIn, boost::defer_lock)
     {
         if (fTry)
             TryEnter(pszName, pszFile, nLine);
@@ -153,7 +153,7 @@ public:
             Enter(pszName, pszFile, nLine);
     }
 
-    CMutexLock(Mutex* pmutexIn, const char* pszName, const char* pszFile, int nLine, bool fTry = false) EXCLUSIVE_LOCK_FUNCTION(pmutexIn)
+    CMutexLock(Mutex* pmutexIn, const char* pszName, const char* pszFile, int nLine, bool fTry = false) ACQUIRE(pmutexIn)
     {
         if (!pmutexIn) return;
 
@@ -164,7 +164,7 @@ public:
             Enter(pszName, pszFile, nLine);
     }
 
-    ~CMutexLock() UNLOCK_FUNCTION()
+    ~CMutexLock() RELEASE()
     {
         if (lock.owns_lock())
             LeaveCritical();

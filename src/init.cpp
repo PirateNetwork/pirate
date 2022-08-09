@@ -1931,6 +1931,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
         RegisterValidationInterface(pwalletMain);
 
+        LOCK(cs_main);
         CBlockIndex *pindexRescan = chainActive.Tip();
         if (GetBoolArg("-rescan", false))
         {
@@ -2052,10 +2053,21 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             vImportFiles.push_back(strFile);
     }
     threadGroup.create_thread(boost::bind(&ThreadImport, vImportFiles));
-    if (chainActive.Tip() == NULL) {
-        LogPrintf("Waiting for genesis block to be imported...\n");
-        while (!fRequestShutdown && chainActive.Tip() == NULL)
-            MilliSleep(10);
+    {
+        CBlockIndex *tip = nullptr;
+        {
+            LOCK(cs_main);
+            tip = chainActive.Tip();
+        }
+        if (tip == nullptr) {
+            LogPrintf("Waiting for genesis block to be imported...\n");
+            while (!fRequestShutdown && tip == nullptr)
+            {
+                MilliSleep(10);
+                LOCK(cs_main);
+                tip = chainActive.Tip();
+            }
+        }
     }
 
     // ********************************************************* Step 11: start node
@@ -2068,7 +2080,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     //// debug print
     LogPrintf("mapBlockIndex.size() = %u\n",   mapBlockIndex.size());
-    LogPrintf("nBestHeight = %d\n",                   chainActive.Height());
+    {
+        LOCK(cs_main);
+        LogPrintf("nBestHeight = %d\n",                   chainActive.Height());
+    }
 #ifdef ENABLE_WALLET
     RescanWallets();
 

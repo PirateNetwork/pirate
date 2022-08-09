@@ -181,7 +181,13 @@ std::string LocksHeld()
 
 void AssertLockHeldInternal(const char* pszName, const char* pszFile, int nLine, void* cs)
 {
-    BOOST_FOREACH (const PAIRTYPE(void*, CLockLocation) & i, *lockstack)
+    if ( lockstack.get() == nullptr)
+    {
+        fprintf(stderr, "Assertion failed: Thread does not have a lockstack. Method: %s in file %s Line %d\n",
+                pszName, pszFile, nLine);
+        abort();
+    }
+    for (const auto &i : *lockstack)
         if (i.first == cs)
             return;
     fprintf(stderr, "Assertion failed: lock %s not held in %s:%i; locks held:\n%s", pszName, pszFile, nLine, LocksHeld().c_str());

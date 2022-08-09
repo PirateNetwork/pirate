@@ -2202,7 +2202,7 @@ void CNode::AskFor(const CInv& inv)
     mapAskFor.insert(std::make_pair(nRequestTime, inv));
 }
 
-void CNode::BeginMessage(const char* pszCommand) EXCLUSIVE_LOCK_FUNCTION(cs_vSend)
+void CNode::BeginMessage(const char* pszCommand) ACQUIRE(cs_vSend)
 {
     ENTER_CRITICAL_SECTION(cs_vSend);
     assert(ssSend.size() == 0);
@@ -2210,7 +2210,7 @@ void CNode::BeginMessage(const char* pszCommand) EXCLUSIVE_LOCK_FUNCTION(cs_vSen
     LogPrint("net", "sending: %s ", SanitizeString(pszCommand));
 }
 
-void CNode::AbortMessage() UNLOCK_FUNCTION(cs_vSend)
+void CNode::AbortMessage() RELEASE(cs_vSend)
 {
     ssSend.clear();
 
@@ -2219,7 +2219,7 @@ void CNode::AbortMessage() UNLOCK_FUNCTION(cs_vSend)
     LogPrint("net", "(aborted)\n");
 }
 
-void CNode::EndMessage() UNLOCK_FUNCTION(cs_vSend)
+void CNode::EndMessage() RELEASE(cs_vSend)
 {
     // The -*messagestest options are intentionally not documented in the help message,
     // since they are only used during development to debug the networking code and are

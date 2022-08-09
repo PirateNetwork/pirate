@@ -643,6 +643,7 @@ bool komodo_checkopret(CBlock *pblock, CScript &merkleroot)
 
 bool komodo_hardfork_active(uint32_t time)
 {
+    AssertLockHeld(cs_main);
     return ( (ASSETCHAINS_SYMBOL[0] == 0 && chainActive.Height() > nDecemberHardforkHeight) || (ASSETCHAINS_SYMBOL[0] != 0 && time > nStakedDecemberHardforkTimestamp) ); //December 2019 hardfork
 }
 
@@ -807,30 +808,31 @@ int32_t komodo_blockload(CBlock& block,CBlockIndex *pindex)
 
 uint32_t komodo_chainactive_timestamp()
 {
-    if ( chainActive.LastTip() != 0 )
-        return((uint32_t)chainActive.LastTip()->GetBlockTime());
-    else return(0);
+    AssertLockHeld(cs_main);
+    CBlockIndex *index = chainActive.Tip();
+    if ( index != nullptr )
+        return((uint32_t)index->GetBlockTime());
+    return 0;
 }
 
 CBlockIndex *komodo_chainactive(int32_t height)
 {
-    if ( chainActive.LastTip() != 0 )
+    AssertLockHeld(cs_main);
+    CBlockIndex *index = chainActive.Tip();
+    if ( index != nullptr )
     {
-        if ( height <= chainActive.LastTip()->nHeight )
+        if ( height <= index->nHeight )
             return(chainActive[height]);
-        // else fprintf(stderr,"komodo_chainactive height %d > active.%d\n",height,chainActive.LastTip()->nHeight);
     }
-    //fprintf(stderr,"komodo_chainactive null chainActive.LastTip() height %d\n",height);
-    return(0);
+    return 0;
 }
 
 uint32_t komodo_heightstamp(int32_t height)
 {
     CBlockIndex *ptr;
-    if ( height > 0 && (ptr= komodo_chainactive(height)) != 0 )
+    if ( height > 0 && (ptr= komodo_chainactive(height)) != nullptr )
         return(ptr->nTime);
-    //else fprintf(stderr,"komodo_heightstamp null ptr for block.%d\n",height);
-    return(0);
+    return 0;
 }
 
 void komodo_index2pubkey33(uint8_t *pubkey33,CBlockIndex *pindex,int32_t height)
@@ -1019,7 +1021,7 @@ uint32_t komodo_blocktime(uint256 hash)
 bool komodo_checkpoint(int32_t *notarized_heightp, int32_t nHeight, uint256 hash)
 {
     CBlockIndex *pindex;
-    if ( (pindex= chainActive.LastTip()) == 0 )
+    if ( (pindex= chainActive.Tip()) == 0 )
         return false;
 
     // get the most recent (highest) notarized_checkpointdata
@@ -1065,7 +1067,7 @@ uint32_t komodo_interest_args(uint32_t *txheighttimep,int32_t *txheightp,uint32_
             *valuep = tx.vout[n].nValue;
             *txheightp = pindex->nHeight;
             *txheighttimep = pindex->nTime;
-            if ( *tiptimep == 0 && (tipindex= chainActive.LastTip()) != 0 )
+            if ( *tiptimep == 0 && (tipindex= chainActive.Tip()) != 0 )
                 *tiptimep = (uint32_t)tipindex->nTime;
             locktime = tx.nLockTime;
             //fprintf(stderr,"tx locktime.%u %.8f height.%d | tiptime.%u\n",locktime,(double)*valuep/COIN,*txheightp,*tiptimep);
@@ -1078,6 +1080,7 @@ uint64_t komodo_interest(int32_t txheight,uint64_t nValue,uint32_t nLockTime,uin
 
 uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight)
 {
+    AssertLockHeld(cs_main);
     uint64_t value; uint32_t tiptime=0,txheighttimep; CBlockIndex *pindex;
     if ( (pindex= chainActive[tipheight]) != 0 )
         tiptime = (uint32_t)pindex->nTime;
@@ -1094,8 +1097,9 @@ uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 
 
 int32_t komodo_nextheight()
 {
+    AssertLockHeld(cs_main);
     CBlockIndex *pindex; int32_t ht;
-    if ( (pindex= chainActive.LastTip()) != 0 && (ht= pindex->nHeight) > 0 )
+    if ( (pindex= chainActive.Tip()) != 0 && (ht= pindex->nHeight) > 0 )
         return(ht+1);
     else return(komodo_longestchain() + 1);
 }
@@ -1103,10 +1107,11 @@ int32_t komodo_nextheight()
 int32_t komodo_isrealtime(int32_t *kmdheightp)
 {
     struct komodo_state *sp; CBlockIndex *pindex;
+    AssertLockHeld(cs_main);
     if ( (sp= komodo_stateptrget((char *)"KMD")) != 0 )
         *kmdheightp = sp->CURRENT_HEIGHT;
     else *kmdheightp = 0;
-    if ( (pindex= chainActive.LastTip()) != 0 && pindex->nHeight >= (int32_t)komodo_longestchain() )
+    if ( (pindex= chainActive.Tip()) != 0 && pindex->nHeight >= (int32_t)komodo_longestchain() )
         return(1);
     else return(0);
 }
@@ -1831,6 +1836,7 @@ bool komodo_appendACscriptpub()
 
 void GetKomodoEarlytxidScriptPub()
 {
+    AssertLockHeld(cs_main);
     if ( KOMODO_EARLYTXID == zeroid )
     {
         fprintf(stderr, "Restart deamon with -earlytxid.\n");
@@ -2139,7 +2145,8 @@ int32_t komodo_acpublic(uint32_t tiptime)
     {
         if ( tiptime == 0 )
         {
-            if ( (pindex= chainActive.LastTip()) != 0 )
+            AssertLockHeld(cs_main);
+            if ( (pindex= chainActive.Tip()) != 0 )
                 tiptime = pindex->nTime;
         }
         if ( (ASSETCHAINS_SYMBOL[0] == 0 || strcmp(ASSETCHAINS_SYMBOL,"ZEX") == 0) && tiptime >= KOMODO_SAPLING_DEADLINE )
@@ -2263,7 +2270,7 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
 {
     static struct komodo_staking *array; static int32_t numkp,maxkp; static uint32_t lasttime;
     int32_t PoSperc = 0, newStakerActive; 
-    std::set<CBitcoinAddress> setAddress; struct komodo_staking *kp; int32_t winners,segid,minage,nHeight,counter=0,i,m,siglen=0,nMinDepth = 1,nMaxDepth = 99999999; std::vector<COutput> vecOutputs; uint32_t block_from_future_rejecttime,besttime,eligible,earliest = 0; CScript best_scriptPubKey; arith_uint256 mindiff,ratio,bnTarget,tmpTarget; CBlockIndex *tipindex,*pindex; CTxDestination address; bool fNegative,fOverflow; uint8_t hashbuf[256]; CTransaction tx; uint256 hashBlock;
+    std::set<CBitcoinAddress> setAddress; struct komodo_staking *kp; int32_t winners,segid,minage,nHeight,counter=0,i,m,siglen=0,nMinDepth = 1,nMaxDepth = 99999999; std::vector<COutput> vecOutputs; uint32_t block_from_future_rejecttime,besttime,eligible,earliest = 0; CScript best_scriptPubKey; arith_uint256 mindiff,ratio,bnTarget,tmpTarget; CBlockIndex *pindex; CTxDestination address; bool fNegative,fOverflow; uint8_t hashbuf[256]; CTransaction tx; uint256 hashBlock;
     uint64_t cbPerc = *utxovaluep, tocoinbase = 0;
     if (!EnsureWalletIsAvailable(0))
         return 0;
@@ -2274,7 +2281,12 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
     memset(utxotxidp,0,sizeof(*utxotxidp));
     memset(utxovoutp,0,sizeof(*utxovoutp));
     memset(utxosig,0,72);
-    if ( (tipindex= chainActive.Tip()) == 0 )
+    CBlockIndex *tipindex = nullptr;
+    {
+        LOCK(cs_main);
+        tipindex = chainActive.Tip();
+    }
+    if ( tipindex == nullptr )
         return(0);
     nHeight = tipindex->nHeight + 1;
     if ( (minage= nHeight*3) > 6000 ) // about 100 blocks
@@ -2344,10 +2356,14 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
     {
         if ( fRequestShutdown || !GetBoolArg("-gen",false) )
             return(0);
-        if ( (tipindex= chainActive.Tip()) == 0 || tipindex->nHeight+1 > nHeight )
+        {
+            LOCK(cs_main);
+            tipindex = chainActive.Tip();
+        }
+        if ( tipindex == nullptr || tipindex->nHeight+1 > nHeight )
         {
             fprintf(stderr,"[%s:%d] chain tip changed during staking loop t.%u counter.%d\n",ASSETCHAINS_SYMBOL,nHeight,(uint32_t)time(NULL),i);
-            return(0);
+            return 0;
         }
         kp = &array[i];
         eligible = komodo_stake(0,bnTarget,nHeight,kp->txid,kp->vout,0,(uint32_t)tipindex->nTime+ASSETCHAINS_STAKED_BLOCK_FUTURE_HALF,kp->address,PoSperc);
@@ -2386,7 +2402,12 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
     if ( earliest != 0 )
     {
         bool signSuccess; SignatureData sigdata; uint64_t txfee; uint8_t *ptr; uint256 revtxid,utxotxid;
-        auto consensusBranchId = CurrentEpochBranchId(chainActive.Height() + 1, Params().GetConsensus());
+        int newHeight = 0;
+        {
+            LOCK(cs_main);
+            newHeight = chainActive.Height() + 1;
+        }
+        auto consensusBranchId = CurrentEpochBranchId(newHeight, Params().GetConsensus());
         const CKeyStore& keystore = *pwalletMain;
         txNew.vin.resize(1);
         txNew.vout.resize(1);

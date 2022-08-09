@@ -458,13 +458,13 @@ public:
     void AskFor(const CInv& inv);
 
     // TODO: Document the postcondition of this function.  Is cs_vSend locked?
-    void BeginMessage(const char* pszCommand) EXCLUSIVE_LOCK_FUNCTION(cs_vSend);
+    void BeginMessage(const char* pszCommand) ACQUIRE(cs_vSend);
 
     // TODO: Document the precondition of this function.  Is cs_vSend locked?
-    void AbortMessage() UNLOCK_FUNCTION(cs_vSend);
+    void AbortMessage() RELEASE(cs_vSend);
 
     // TODO: Document the precondition of this function.  Is cs_vSend locked?
-    void EndMessage() UNLOCK_FUNCTION(cs_vSend);
+    void EndMessage() RELEASE(cs_vSend);
 
     void PushVersion();
 
