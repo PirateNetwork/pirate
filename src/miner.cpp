@@ -166,6 +166,7 @@ int32_t komodo_waituntilelegible(uint32_t blocktime, int32_t stakeHeight, uint32
     int64_t adjustedtime = (int64_t)GetTime();
     while ( (int64_t)blocktime-ASSETCHAINS_STAKED_BLOCK_FUTURE_MAX > adjustedtime )
     {
+        boost::this_thread::interruption_point(); // allow to interrupt
         int64_t secToElegible = (int64_t)blocktime-ASSETCHAINS_STAKED_BLOCK_FUTURE_MAX-adjustedtime;
         if ( delay <= ASSETCHAINS_STAKED_BLOCK_FUTURE_HALF && secToElegible <= ASSETCHAINS_STAKED_BLOCK_FUTURE_HALF )
             break;
@@ -178,7 +179,8 @@ int32_t komodo_waituntilelegible(uint32_t blocktime, int32_t stakeHeight, uint32
         }
         if( !GetBoolArg("-gen",false) ) 
             return(0);
-        sleep(1);
+        //sleep(1);
+        boost::this_thread::sleep_for(boost::chrono::seconds(1)); // allow to interrupt
         adjustedtime = (int64_t)GetTime();
     } 
     return(1);
@@ -278,7 +280,7 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
             {
                 proposedTime = GetTime();
                 if (proposedTime == nMedianTimePast)
-                    MilliSleep(10);
+                    MilliSleep(10); // allow to interrupt
             }
         }
         pblock->nTime = GetTime();
@@ -1100,7 +1102,7 @@ void waitForPeers(const CChainParams &chainparams)
             do {
                 if (fvNodesEmpty)
                 {
-                    MilliSleep(1000 + rand() % 4000);
+                    MilliSleep(1000 + rand() % 4000); // allow to interrupt
                     boost::this_thread::interruption_point();
                     LOCK(cs_vNodes);
                     fvNodesEmpty = vNodes.empty();
@@ -1117,13 +1119,13 @@ void waitForPeers(const CChainParams &chainparams)
                     {
                         if (++loops <= 10)
                         {
-                            MilliSleep(1000);
+                            MilliSleep(1000); // allow to interrupt
                         }
                         else break;
                     }
                 }
             } while (fvNodesEmpty || IsNotInSync());
-            MilliSleep(100 + rand() % 400);
+            MilliSleep(100 + rand() % 400); // allow to interrupt
         }
     }
 }
@@ -1172,7 +1174,8 @@ void static BitcoinMiner()
     uint8_t *script; uint64_t total; int32_t i,j,gpucount=KOMODO_MAXGPUCOUNT,notaryid = -1;
     while ( (ASSETCHAIN_INIT == 0 || KOMODO_INITDONE == 0) )
     {
-        sleep(1);
+        //sleep(1);
+        boost::this_thread::sleep_for(boost::chrono::seconds(1)); // allow to interrupt
         if ( komodo_baseid(ASSETCHAINS_SYMBOL) < 0 )
             break;
     }
@@ -1226,7 +1229,7 @@ void static BitcoinMiner()
                     }
                     if (!fvNodesEmpty )//&& !IsInitialBlockDownload())
                         break;
-                    MilliSleep(15000);
+                    MilliSleep(15000); // allow to interrupt
                     //fprintf(stderr,"fvNodesEmpty %d IsInitialBlockDownload(%s) %d\n",(int32_t)fvNodesEmpty,ASSETCHAINS_SYMBOL,(int32_t)IsInitialBlockDownload());
 
                 } while (true);
@@ -1266,7 +1269,8 @@ void static BitcoinMiner()
                 static uint32_t counter;
                 if ( counter++ < 10 && ASSETCHAINS_STAKED == 0 )
                     fprintf(stderr,"created illegal blockB, retry\n");
-                sleep(1);
+                //sleep(1);
+                boost::this_thread::sleep_for(boost::chrono::seconds(1)); // allow to interrupt
                 continue;
             }
             //fprintf(stderr,"get template\n");
@@ -1291,7 +1295,8 @@ void static BitcoinMiner()
                         static uint32_t counter;
                         if ( counter++ < 10 )
                             fprintf(stderr,"skip generating %s on-demand block, no tx avail\n",ASSETCHAINS_SYMBOL);
-                        sleep(10);
+                        //sleep(10);
+                        boost::this_thread::sleep_for(boost::chrono::seconds(10)); // allow to interrupt
                         continue;
                     } else fprintf(stderr,"%s vouts.%d mining.%d vs %d\n",ASSETCHAINS_SYMBOL,(int32_t)pblock->vtx[0].vout.size(),Mining_height,ASSETCHAINS_MINHEIGHT);
                 }
@@ -1473,7 +1478,7 @@ void static BitcoinMiner()
                     {
                         while ( GetTime() < B.nTime-2 )
                         {
-                            sleep(1);
+                            boost::this_thread::sleep_for(boost::chrono::seconds(1)); // allow to interrupt
                             CBlockIndex *tip = nullptr;
                             {
                                 LOCK(cs_main);
@@ -1492,7 +1497,7 @@ void static BitcoinMiner()
                         {
                             int32_t r;
                             if ( (r= ((Mining_height + NOTARY_PUBKEY33[16]) % 64) / 8) > 0 )
-                                MilliSleep((rand() % (r * 1000)) + 1000);
+                                MilliSleep((rand() % (r * 1000)) + 1000); // allow to interrupt                                
                         }
                     }
                     else
@@ -1691,6 +1696,8 @@ void static BitcoinMiner()
         if (minerThreads != NULL)
         {
             minerThreads->interrupt_all();
+            // std::cout << "Waiting for mining threads to stop..." << std::endl;
+            minerThreads->join_all();    // prevent thread overlapping   
             delete minerThreads;
             minerThreads = NULL;
         }
