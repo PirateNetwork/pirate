@@ -275,7 +275,12 @@ std::shared_ptr<CBlock> generateBlock(CWallet* wallet, CValidationState* validat
 
     CalcPoW(pblock); // add PoW
     CValidationState state;
-    if (!ProcessNewBlock(1,chainActive.Tip()->nHeight+1,state, NULL, pblock, true, NULL))
+    CBlockIndex *tipindex = nullptr;
+    {
+        LOCK(cs_main);
+        tipindex = chainActive.Tip();
+    }
+    if (!ProcessNewBlock(1,tipindex->nHeight+1,state, NULL, pblock, true, NULL))
     {
         if (validationState != nullptr)
             (*validationState) = state;

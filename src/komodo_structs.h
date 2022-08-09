@@ -25,7 +25,7 @@
 
 #define GENESIS_NBITS 0x1f00ffff
 #define KOMODO_MINRATIFY ((height < 90000) ? 7 : 11)
-#define KOMODO_NOTARIES_HARDCODED 180000 // DONT CHANGE
+#define KOMODO_NOTARIES_HARDCODED 180000 // DONT CHANGE Below this height notaries were hardcoded
 #define KOMODO_MAXBLOCKS 250000 // DONT CHANGE
 
 #define KOMODO_EVENT_RATIFY 'P'
@@ -236,8 +236,12 @@ struct pax_transaction
 };
 
 struct knotary_entry { UT_hash_handle hh; uint8_t pubkey[33],notaryid; };
-struct knotaries_entry { int32_t height,numnotaries; struct knotary_entry *Notaries; };
-
+struct knotaries_entry 
+{ 
+    int32_t height;
+    int32_t numnotaries; // The number of notaries stored in Notaries
+    knotary_entry *Notaries; // A hashtable of notary ID/public key
+};
 struct notarized_checkpoint
 {
     uint256 notarized_hash;

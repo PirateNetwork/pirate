@@ -19,7 +19,11 @@ void undo_init_STAKED()
     doneinit_STAKED = false;
 }
 
-
+/****
+ * @brief given the chan name, determine the type of chain
+ * @param chain_name the chain name
+ * @returns 0=kmd, 1=LABS, 2=LABSxxx, 3=CFEK, 4=TEST, 255=banned
+ */
 uint8_t is_STAKED(const char *chain_name) 
 {
     static uint8_t STAKED;
@@ -28,6 +32,7 @@ uint8_t is_STAKED(const char *chain_name)
     if (doneinit_STAKED && ASSETCHAINS_SYMBOL[0] != 0)
         return(STAKED);
     else STAKED = 0;
+
     if ( (strcmp(chain_name, "LABS") == 0) ) 
         STAKED = 1; // These chains are allowed coin emissions.
     else if ( (strncmp(chain_name, "LABS", 4) == 0) ) 

@@ -17,6 +17,8 @@
 #include "komodo_notary.h"
 #include "mem_read.h"
 
+static FILE *fp; // for stateupdate
+
 void komodo_currentheight_set(int32_t height)
 {
     char symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN]; struct komodo_state *sp;
@@ -190,7 +192,6 @@ void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotar
         uint8_t numpvals,int32_t KMDheight,uint32_t KMDtimestamp,uint64_t opretvalue,
         uint8_t *opretbuf,uint16_t opretlen,uint16_t vout,uint256 MoM,int32_t MoMdepth)
 {
-    static FILE *fp; 
     static int32_t errs,didinit; 
     static uint256 zero;
     struct komodo_state *sp; 
@@ -815,4 +816,13 @@ int32_t komodo_connectblock(bool fJustCheck, CBlockIndex *pindex,CBlock& block)
         return(-1); 
     }
     else return(0);
+}
+
+void komodo_statefile_uninit()
+{
+    if (fp != nullptr)
+    {
+        fclose(fp);
+        fp = nullptr;
+    }
 }

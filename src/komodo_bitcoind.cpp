@@ -1097,7 +1097,8 @@ uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 
 
 int32_t komodo_nextheight()
 {
-    AssertLockHeld(cs_main);
+    //AssertLockHeld(cs_main);
+    LOCK(cs_main); // assume usually called without lock 
     CBlockIndex *pindex; int32_t ht;
     if ( (pindex= chainActive.Tip()) != 0 && (ht= pindex->nHeight) > 0 )
         return(ht+1);
