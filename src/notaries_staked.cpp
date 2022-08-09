@@ -20,9 +20,9 @@ void undo_init_STAKED()
 }
 
 
-int8_t is_STAKED(const char *chain_name) 
+uint8_t is_STAKED(const char *chain_name) 
 {
-    static int8_t STAKED;
+    static uint8_t STAKED;
     if ( chain_name[0] == 0 )
         return(0);
     if (doneinit_STAKED && ASSETCHAINS_SYMBOL[0] != 0)

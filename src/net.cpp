@@ -78,7 +78,7 @@ namespace {
 // Global state variables
 //
 extern uint16_t ASSETCHAINS_P2PPORT;
-extern int8_t is_STAKED(const char *chain_name);
+uint8_t is_STAKED(const char *chain_name);
 extern char ASSETCHAINS_SYMBOL[65];
 
 bool fDiscover = true;
@@ -1817,7 +1817,6 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
     Discover(threadGroup);
 
     // skip DNS seeds for staked chains.
-    extern int8_t is_STAKED(const char *chain_name);
     extern char ASSETCHAINS_SYMBOL[65];
     if ( is_STAKED(ASSETCHAINS_SYMBOL) != 0 )
         SoftSetBoolArg("-dnsseed", false);

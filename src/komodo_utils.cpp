@@ -1473,7 +1473,7 @@ void komodo_args(char *argv0)
 
         for ( int i = 0; i < ASSETCHAINS_MAX_ERAS; i++ )
         {
-            if ( ASSETCHAINS_DECAY[i] == 100000000 && ASSETCHAINS_ENDSUBSIDY == 0 )
+            if ( ASSETCHAINS_DECAY[i] == 100000000 && ASSETCHAINS_ENDSUBSIDY[i] == 0 )
             {
                 ASSETCHAINS_DECAY[i] = 0;
                 printf("ERA%u: ASSETCHAINS_DECAY of 100000000 means linear and that needs ASSETCHAINS_ENDSUBSIDY\n", i);

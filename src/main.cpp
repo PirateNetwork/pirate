@@ -5906,7 +5906,7 @@ bool PruneOneBlockFile(bool tempfile, const int fileNumber)
         CBlockIndex* pindex = it->second;
         if (pindex && pindex->nFile == fileNumber) 
         {
-            if ( tempfile && (pindex->nStatus & BLOCK_IN_TMPFILE != 0) )
+            if ( tempfile && ( (pindex->nStatus & BLOCK_IN_TMPFILE) != 0) )
             {    
                 if ( chainActive.Contains(pindex) )
                 {

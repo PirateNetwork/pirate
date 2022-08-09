@@ -43,7 +43,7 @@ extern uint64_t ASSETCHAINS_NOTARY_PAY[];
 extern int32_t ASSETCHAINS_STAKED;
 extern const uint32_t nStakedDecemberHardforkTimestamp; //December 2019 hardfork
 extern const int32_t nDecemberHardforkHeight;   //December 2019 hardfork
-extern int8_t is_STAKED(const char *chain_name);
+uint8_t is_STAKED(const char *chain_name);
 
 struct CDiskBlockPos
 {

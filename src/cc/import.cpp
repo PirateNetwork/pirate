@@ -197,28 +197,34 @@ int32_t GetSelfimportProof(const CMutableTransaction sourceMtx, CMutableTransact
     return 0;
 }
 
+void sha256_hash_and_stringify(const std::string& data, char results[SHA256_DIGEST_LENGTH*2+1])
+{
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256_CTX ctx;
+    SHA256_Init(&ctx);
+    SHA256_Update(&ctx, data.c_str(), data.size());
+    SHA256_Final(hash, &ctx);
+
+    for( int i = 0; i < SHA256_DIGEST_LENGTH; ++i)
+        sprintf(results + (i * 2), "%02x", hash[i]);
+    results[SHA256_DIGEST_LENGTH*2] = 0;
+    return;
+}
+
 // make import tx with burntx and dual daemon
 std::string MakeCodaImportTx(uint64_t txfee, std::string receipt, std::string srcaddr, std::vector<CTxOut> vouts)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()),burntx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk; uint256 codaburntxid; std::vector<unsigned char> dummyproof;
     int32_t i,numvouts,n,m; std::string coin,error; struct CCcontract_info *cp, C;
-    cJSON *result,*tmp,*tmp1; unsigned char hash[SHA256_DIGEST_LENGTH+1];
+    cJSON *result,*tmp,*tmp1;
     char out[SHA256_DIGEST_LENGTH*2+1],*retstr,*destaddr,*receiver; TxProof txProof; uint64_t amount;
 
     cp = CCinit(&C, EVAL_GATEWAYS);
     if (txfee == 0)
         txfee = 10000;
     mypk = pubkey2pk(Mypubkey());
-    SHA256_CTX sha256;
-    SHA256_Init(&sha256);
-    SHA256_Update(&sha256, receipt.c_str(), receipt.size());
-    SHA256_Final(hash, &sha256);
-    for(i = 0; i < SHA256_DIGEST_LENGTH; i++)
-    {
-        sprintf(out + (i * 2), "%02x", hash[i]);
-    }
-    out[65]='\0';
+    sha256_hash_and_stringify(receipt, out);
     LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "MakeCodaImportTx: hash=" << out << std::endl);
     codaburntxid.SetHex(out);
     LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "MakeCodaImportTx: receipt=" << receipt << " codaburntxid=" << codaburntxid.GetHex().data() << " amount=" << (double)amount / COIN  << std::endl);
@@ -291,18 +297,11 @@ int32_t CheckBEAMimport(TxProof proof,std::vector<uint8_t> rawproof,CTransaction
 
 int32_t CheckCODAimport(CTransaction importTx,CTransaction burnTx,std::vector<CTxOut> payouts,std::string srcaddr,std::string receipt)
 {
-    cJSON *result,*tmp,*tmp1; char *retstr,out[SHA256_DIGEST_LENGTH*2+1]; unsigned char hash[SHA256_DIGEST_LENGTH+1]; int i,n,m;
-    SHA256_CTX sha256; uint256 codaburntxid; char *destaddr,*receiver; uint64_t amount;
+    cJSON *result,*tmp,*tmp1; char *retstr,out[SHA256_DIGEST_LENGTH*2+1]; int i,n,m;
+    uint256 codaburntxid; char *destaddr,*receiver; uint64_t amount;
 
     // check with dual-CODA daemon via ASSETCHAINS_CODAPORT for validity of burnTx
-    SHA256_Init(&sha256);
-    SHA256_Update(&sha256, receipt.c_str(), receipt.size());
-    SHA256_Final(hash, &sha256);
-    for(i = 0; i < SHA256_DIGEST_LENGTH; i++)
-    {
-        sprintf(out + (i * 2), "%02x", hash[i]);
-    }
-    out[65]='\0';
+    sha256_hash_and_stringify(receipt, out);
     codaburntxid.SetHex(out);
     result=CodaRPC(&retstr,"prove-payment","-address",srcaddr.c_str(),"-receipt-chain-hash",receipt.c_str(),"");
     if (result==0)
@@ -322,7 +321,7 @@ int32_t CheckCODAimport(CTransaction importTx,CTransaction burnTx,std::vector<CT
         }
         CTxDestination dest = DecodeDestination(destaddr);
         CScript scriptPubKey = GetScriptForDestination(dest);
-        if (payouts[0]!=CTxOut(amount*COIN,scriptPubKey));
+        if (payouts[0]!=CTxOut(amount*COIN,scriptPubKey))
         {
             LOGSTREAM("importcoin", CCLOG_INFO, stream << "Destination address in burn tx does not match destination in import tx" << std::endl);
             free(result);
