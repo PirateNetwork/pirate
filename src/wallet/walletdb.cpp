@@ -837,116 +837,122 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         else if (strType == "tx" || strType == "ctx") //ctx is encrypted tx
         {
 
-            uint256 hash;
-            CWalletTx wtx;
+            if (nMaxConnections > 0) {
+                uint256 hash;
+                CWalletTx wtx;
 
-            if (strType == "tx") {
-                ssKey >> hash;
-                ssValue >> wtx;
-            } else {
-                uint256 chash;
-                ssKey >> chash;
-                vector<unsigned char> vchCryptedSecret;
-                ssValue >> vchCryptedSecret;
-
-                if (!pwallet->DecryptWalletTransaction(chash, vchCryptedSecret, hash, wtx))
-                {
-                    strErr = "Error reading wallet database: DecryptWalletTransaction failed";
-                    return false;
-                }
-            }
-
-            CValidationState state;
-            auto verifier = libzcash::ProofVerifier::Strict();
-            // ac_public chains set at height like KMD and ZEX, will force a rescan if we dont ignore this error: bad-txns-acpublic-chain
-            // there cannot be any ztx in the wallet on ac_public chains that started from block 1, so this wont affect those.
-            // PIRATE fails this check for notary nodes, need exception. Triggers full rescan without it.
-            if ( !(CheckTransaction(0,wtx, state, verifier, 0, 0) && (wtx.GetHash() == hash) && state.IsValid()) && (state.GetRejectReason() != "bad-txns-acpublic-chain" && state.GetRejectReason() != "bad-txns-acprivacy-chain" && state.GetRejectReason() != "bad-txns-stakingtx") )
-            {
-                //fprintf(stderr, "tx failed: %s rejectreason.%s\n", wtx.GetHash().GetHex().c_str(), state.GetRejectReason().c_str());
-                // vin-empty on staking chains is error relating to a failed staking tx, that for some unknown reason did not fully erase. save them here to erase and re-add later on.
-                if ( ASSETCHAINS_STAKED != 0 && state.GetRejectReason() == "bad-txns-vin-empty" )
-                    deadTxns.push_back(hash);
-                return false;
-            }
-            // Undo serialize changes in 31600
-            if (31404 <= wtx.fTimeReceivedIsTxTime && wtx.fTimeReceivedIsTxTime <= 31703)
-            {
-                if (!ssValue.empty())
-                {
-                    char fTmp;
-                    char fUnused;
-                    ssValue >> fTmp >> fUnused >> wtx.strFromAccount;
-                    strErr = strprintf("LoadWallet() upgrading tx ver=%d %d '%s' %s",
-                                       wtx.fTimeReceivedIsTxTime, fTmp, wtx.strFromAccount, hash.ToString());
-                    wtx.fTimeReceivedIsTxTime = fTmp;
-                }
-                else
-                {
-                    strErr = strprintf("LoadWallet() repairing tx ver=%d %s", wtx.fTimeReceivedIsTxTime, hash.ToString());
-                    wtx.fTimeReceivedIsTxTime = 0;
-                }
-                wss.vWalletUpgrade.push_back(hash);
-            }
-
-            if (wtx.nOrderPos == -1)
-                wss.fAnyUnordered = true;
-
-            wss.nWalletTx++;
-            pwallet->AddToWallet(wtx, true, NULL, 0);
-        }
-        else if (strType == "arctx" || strType == "carctx") //carctx is encrypted arctx
-        {
-            //The ArchiveTxPoint structure was changed. An older version will fail
-            //to deserialize and not be added to the mapArcTx, triggering a full
-            //ZapWalletTxes and Rescan.
-            try
-            {
-                uint256 txid;
-                ArchiveTxPoint arcTxPt;
-                if (strType == "arctx") {
-                    ssKey >> txid;
-                    ssValue >> arcTxPt;
+                if (strType == "tx") {
+                    ssKey >> hash;
+                    ssValue >> wtx;
                 } else {
                     uint256 chash;
                     ssKey >> chash;
                     vector<unsigned char> vchCryptedSecret;
                     ssValue >> vchCryptedSecret;
 
-                    if (!pwallet->DecryptWalletArchiveTransaction(chash, vchCryptedSecret, txid, arcTxPt))
+                    if (!pwallet->DecryptWalletTransaction(chash, vchCryptedSecret, hash, wtx))
                     {
-                        strErr = "Error reading wallet database: DecryptWalletArchiveTransaction failed";
+                        strErr = "Error reading wallet database: DecryptWalletTransaction failed";
                         return false;
                     }
                 }
 
-                wss.nArcTx++;
-                pwallet->LoadArcTxs(txid, arcTxPt);
+                CValidationState state;
+                auto verifier = libzcash::ProofVerifier::Strict();
+                // ac_public chains set at height like KMD and ZEX, will force a rescan if we dont ignore this error: bad-txns-acpublic-chain
+                // there cannot be any ztx in the wallet on ac_public chains that started from block 1, so this wont affect those.
+                // PIRATE fails this check for notary nodes, need exception. Triggers full rescan without it.
+                if ( !(CheckTransaction(0,wtx, state, verifier, 0, 0) && (wtx.GetHash() == hash) && state.IsValid()) && (state.GetRejectReason() != "bad-txns-acpublic-chain" && state.GetRejectReason() != "bad-txns-acprivacy-chain" && state.GetRejectReason() != "bad-txns-stakingtx") )
+                {
+                    //fprintf(stderr, "tx failed: %s rejectreason.%s\n", wtx.GetHash().GetHex().c_str(), state.GetRejectReason().c_str());
+                    // vin-empty on staking chains is error relating to a failed staking tx, that for some unknown reason did not fully erase. save them here to erase and re-add later on.
+                    if ( ASSETCHAINS_STAKED != 0 && state.GetRejectReason() == "bad-txns-vin-empty" )
+                        deadTxns.push_back(hash);
+                    return false;
+                }
+                // Undo serialize changes in 31600
+                if (31404 <= wtx.fTimeReceivedIsTxTime && wtx.fTimeReceivedIsTxTime <= 31703)
+                {
+                    if (!ssValue.empty())
+                    {
+                        char fTmp;
+                        char fUnused;
+                        ssValue >> fTmp >> fUnused >> wtx.strFromAccount;
+                        strErr = strprintf("LoadWallet() upgrading tx ver=%d %d '%s' %s",
+                                           wtx.fTimeReceivedIsTxTime, fTmp, wtx.strFromAccount, hash.ToString());
+                        wtx.fTimeReceivedIsTxTime = fTmp;
+                    }
+                    else
+                    {
+                        strErr = strprintf("LoadWallet() repairing tx ver=%d %s", wtx.fTimeReceivedIsTxTime, hash.ToString());
+                        wtx.fTimeReceivedIsTxTime = 0;
+                    }
+                    wss.vWalletUpgrade.push_back(hash);
+                }
+
+                if (wtx.nOrderPos == -1)
+                    wss.fAnyUnordered = true;
+
+                wss.nWalletTx++;
+                pwallet->AddToWallet(wtx, true, NULL, 0);
             }
-            catch (...) {}
+        }
+        else if (strType == "arctx" || strType == "carctx") //carctx is encrypted arctx
+        {
+            //The ArchiveTxPoint structure was changed. An older version will fail
+            //to deserialize and not be added to the mapArcTx, triggering a full
+            //ZapWalletTxes and Rescan.
+            if (nMaxConnections > 0) {
+                try
+                {
+                    uint256 txid;
+                    ArchiveTxPoint arcTxPt;
+                    if (strType == "arctx") {
+                        ssKey >> txid;
+                        ssValue >> arcTxPt;
+                    } else {
+                        uint256 chash;
+                        ssKey >> chash;
+                        vector<unsigned char> vchCryptedSecret;
+                        ssValue >> vchCryptedSecret;
+
+                        if (!pwallet->DecryptWalletArchiveTransaction(chash, vchCryptedSecret, txid, arcTxPt))
+                        {
+                            strErr = "Error reading wallet database: DecryptWalletArchiveTransaction failed";
+                            return false;
+                        }
+                    }
+
+                    wss.nArcTx++;
+                    pwallet->LoadArcTxs(txid, arcTxPt);
+                }
+                catch (...) {}
+            }
 
         }
         else if (strType == "arczsop" || strType == "carczsop") //carczsop is encrypted arczsop
         {
-            uint256 nullifier;
-            SaplingOutPoint op;
-            if (strType == "arczsop") {
-                ssKey >> nullifier;
-                ssValue >> op;
-            } else {
-                uint256 chash;
-                ssKey >> chash;
-                vector<unsigned char> vchCryptedSecret;
-                ssValue >> vchCryptedSecret;
+            if (nMaxConnections > 0) {
+                uint256 nullifier;
+                SaplingOutPoint op;
+                if (strType == "arczsop") {
+                    ssKey >> nullifier;
+                    ssValue >> op;
+                } else {
+                    uint256 chash;
+                    ssKey >> chash;
+                    vector<unsigned char> vchCryptedSecret;
+                    ssValue >> vchCryptedSecret;
 
-                if (!pwallet->DecryptArchivedSaplingOutpoint(chash, vchCryptedSecret, nullifier, op))
-                {
-                    strErr = "Error reading wallet database: DecryptArchivedSaplingOutpoint failed";
-                    return false;
+                    if (!pwallet->DecryptArchivedSaplingOutpoint(chash, vchCryptedSecret, nullifier, op))
+                    {
+                        strErr = "Error reading wallet database: DecryptArchivedSaplingOutpoint failed";
+                        return false;
+                    }
                 }
-            }
 
-            pwallet->AddToArcSaplingOutPoints(nullifier, op);
+                pwallet->AddToArcSaplingOutPoints(nullifier, op);
+            }
         }
         //End transaction data records
 
