@@ -4,13 +4,16 @@
 #include "core_io.h"
 #include "key.h"
 #include "testutils.h"
+#include "komodo_utils.h"
+#include "komodo_notary.h"
 #include "komodo_structs.h"
+#include "komodo_extern_globals.h"
 #include "test_parse_notarisation.h"
 
 #include <boost/filesystem.hpp>
 #include <fstream>
 
-komodo_state *komodo_stateptr(char *symbol,char *dest);
+/*komodo_state *komodo_stateptr(char *symbol,char *dest);
 void komodo_notarized_update(struct komodo_state *sp,int32_t nHeight,int32_t notarized_height,
         uint256 notarized_hash,uint256 notarized_desttxid,uint256 MoM,int32_t MoMdepth);
 const notarized_checkpoint *komodo_npptr(int32_t height);
@@ -20,7 +23,7 @@ int32_t komodo_notarizeddata(int32_t nHeight,uint256 *notarized_hashp,uint256 *n
 void set_kmd_user_password_port(const std::string& ltc_config_filename);
 extern char KMDUSERPASS[8705];
 extern char BTCUSERPASS[8192];
-extern uint16_t DEST_PORT;
+extern uint16_t DEST_PORT;*/
 
 class komodo_state_accessor : public komodo_state
 {

@@ -15,6 +15,7 @@
 
 #include "CCauction.h"
 #include "../txmempool.h"
+#include "komodo_bitcoind.h"
 
 /*
 */

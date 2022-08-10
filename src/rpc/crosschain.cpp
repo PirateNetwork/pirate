@@ -35,34 +35,20 @@
 #include "script/sign.h"
 #include "script/standard.h"
 #include "notaries_staked.h"
-
+#include "komodo_notary.h"
+#include "komodo_bitcoind.h"
+#include "komodo_ccdata.h"
 #include "key_io.h"
 #include "cc/CCImportGateway.h"
 #include "cc/CCtokens.h"
+#include "cc/import.h"
+#include "wallet/rpcwallet.h"
 
 #include <stdint.h>
 #include <univalue.h>
 #include <regex>
 
 using namespace std;
-
-extern std::string CCerror;
-extern std::string ASSETCHAINS_SELFIMPORT;
-extern uint16_t ASSETCHAINS_CODAPORT, ASSETCHAINS_BEAMPORT;
-int32_t ensure_CCrequirements(uint8_t evalcode);
-bool EnsureWalletIsAvailable(bool avoidException);
-
-
-int32_t komodo_MoM(int32_t *notarized_htp,uint256 *MoMp,uint256 *kmdtxidp,int32_t nHeight,uint256 *MoMoMp,int32_t *MoMoMoffsetp,int32_t *MoMoMdepthp,int32_t *kmdstartip,int32_t *kmdendip);
-int32_t komodo_MoMoMdata(char *hexstr,int32_t hexsize,struct komodo_ccdataMoMoM *mdata,char *symbol,int32_t kmdheight,int32_t notarized_height);
-struct komodo_ccdata_entry *komodo_allMoMs(int32_t *nump,uint256 *MoMoMp,int32_t kmdstarti,int32_t kmdendi);
-uint256 komodo_calcMoM(int32_t height,int32_t MoMdepth);
-int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);
-extern std::string ASSETCHAINS_SELFIMPORT;
-
-//std::string MakeSelfImportSourceTx(CTxDestination &dest, int64_t amount, CMutableTransaction &mtx);
-//int32_t GetSelfimportProof(std::string source, CMutableTransaction &mtx, CScript &scriptPubKey, TxProof &proof, std::string rawsourcetx, int32_t &ivout, uint256 sourcetxid, uint64_t burnAmount);
-std::string MakeCodaImportTx(uint64_t txfee, std::string receipt, std::string srcaddr, std::vector<CTxOut> vouts);
 
 UniValue assetchainproof(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {

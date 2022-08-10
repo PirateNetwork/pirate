@@ -50,7 +50,13 @@
 #include "wallet/asyncrpcoperation_sendmany.h"
 #include "wallet/asyncrpcoperation_shieldcoinbase.h"
 #include "notaries_staked.h"
-#include "komodo_extern_globals.h"
+#include "komodo_globals.h"
+#include "komodo_utils.h"
+#include "rpc/net.h"
+#include "komodo_gateway.h"
+#include "komodo_bitcoind.h"
+#include "komodo_notary.h"
+#include "cc/CCinclude.h"
 
 #include <cstring>
 #include <algorithm>
@@ -81,14 +87,7 @@ using namespace std;
 
 #define TMPFILE_START 100000000
 CCriticalSection cs_main;
-extern uint8_t NOTARY_PUBKEY33[33];
-extern int32_t KOMODO_LONGESTCHAIN,KOMODO_INSYNC;
-extern int32_t KOMODO_CONNECTING;
-extern int32_t KOMODO_EXTRASATOSHI;
 int32_t KOMODO_NEWBLOCKS;
-bool Getscriptaddress(char *destaddr,const CScript &scriptPubKey);
-void komodo_setactivation(int32_t height);
-void komodo_pricesupdate(int32_t height,CBlock *pblock);
 
 BlockMap mapBlockIndex;
 #ifdef DEBUG_LOCKORDER
@@ -1414,28 +1413,6 @@ bool CheckTransaction(uint32_t tiptime,const CTransaction& tx, CValidationState 
     }
 }
 
-// ARRR notary exception
-int32_t komodo_isnotaryvout(char *coinaddr,uint32_t tiptime) // from ac_private chains only
-{
-    int32_t season = getacseason(tiptime);
-    if ( NOTARY_ADDRESSES[season-1][0][0] == 0 )
-    {
-        uint8_t pubkeys[64][33];
-        komodo_notaries(pubkeys,0,tiptime);
-    }
-    if ( strcmp(coinaddr,CRYPTO777_KMDADDR) == 0 )
-        return(1);
-    for (int32_t i = 0; i < NUM_KMD_NOTARIES; i++) 
-    {
-        if ( strcmp(coinaddr,NOTARY_ADDRESSES[season-1][i]) == 0 )
-        {
-            //fprintf(stderr, "coinaddr.%s notaryaddress[%i].%s\n",coinaddr,i,NOTARY_ADDRESSES[season-1][i]);
-            return(1);
-        }
-    }
-    return(0);
-}
-
 int32_t komodo_acpublic(uint32_t tiptime);
 
 bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransaction& tx, CValidationState &state)
@@ -2436,14 +2413,6 @@ bool ReadBlockFromDisk(CBlock& block, const CBlockIndex* pindex,bool checkPOW)
                      pindex->ToString(), pindex->GetBlockPos().ToString());
     return true;
 }
-
-//uint64_t komodo_moneysupply(int32_t height);
-extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
-extern uint64_t ASSETCHAINS_ENDSUBSIDY[ASSETCHAINS_MAX_ERAS+1], ASSETCHAINS_REWARD[ASSETCHAINS_MAX_ERAS+1], ASSETCHAINS_HALVING[ASSETCHAINS_MAX_ERAS+1];
-extern uint32_t ASSETCHAINS_MAGIC;
-extern uint64_t ASSETCHAINS_LINEAR,ASSETCHAINS_COMMISSION,ASSETCHAINS_SUPPLY;
-extern uint8_t ASSETCHAINS_PUBLIC,ASSETCHAINS_PRIVATE;
-extern int32_t ASSETCHAINS_STAKED;
 
 CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams)
 {

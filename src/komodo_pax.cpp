@@ -13,9 +13,12 @@
  *                                                                            *
  ******************************************************************************/
 #include "komodo_pax.h"
-#include "komodo_extern_globals.h"
+#include "komodo_globals.h"
 #include "komodo_utils.h" // iguana_rwnum
 #include "komodo.h" // KOMODO_PAXMAX
+
+uint32_t *PVALS;
+int32_t NUM_PRICES;
 
 uint64_t M1SUPPLY[] = { 3317900000000, 6991604000000, 667780000000000, 1616854000000, 331000000000, 861909000000, 584629000000, 46530000000, // major currencies
     45434000000000, 16827000000000, 3473357229000, 306435000000, 27139000000000, 2150641000000, 347724099000, 1469583000000, 749543000000, 1826110000000, 2400434000000, 1123925000000, 3125276000000, 13975000000000, 317657000000, 759706000000000, 354902000000, 2797061000000, 162189000000, 163745000000, 1712000000000, 39093000000, 1135490000000000, 80317000000,
@@ -641,24 +644,6 @@ uint64_t komodo_paxprice(uint64_t *seedp,int32_t height,char *base,char *rel,uin
         sum /= nonz;
     //printf("-> %lld %s/%s i.%d ht.%d\n",(long long)sum,base,rel,i,height);
     return(sum);
-}
-
-int32_t komodo_paxprices(int32_t *heights,uint64_t *prices,int32_t max,char *base,char *rel)
-{
-    int32_t baseid=-1,relid=-1,i,num = 0; uint32_t *ptr;
-    if ( (baseid= komodo_baseid(base)) >= 0 && (relid= komodo_baseid(rel)) >= 0 )
-    {
-        for (i=NUM_PRICES-1; i>=0; i--)
-        {
-            ptr = &PVALS[36 * i];
-            heights[num] = *ptr;
-            prices[num] = komodo_paxcalc(*ptr,&ptr[1],baseid,relid,COIN,0,0);
-            num++;
-            if ( num >= max )
-                return(num);
-        }
-    }
-    return(num);
 }
 
 void komodo_paxpricefeed(int32_t height,uint8_t *pricefeed,int32_t opretlen)

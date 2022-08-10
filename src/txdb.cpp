@@ -26,6 +26,7 @@
 #include "pow.h"
 #include "uint256.h"
 #include "core_io.h"
+#include "komodo_bitcoind.h"
 
 #include <stdint.h>
 
@@ -446,7 +447,6 @@ bool CBlockTreeDB::ReadAddressIndex(uint160 addressHash, int type,
 }
 
 bool getAddressFromIndex(const int &type, const uint160 &hash, std::string &address);
-uint32_t komodo_segid32(char *coinaddr);
 
 #define DECLARE_IGNORELIST std::map <std::string,int> ignoredMap = { \
     {"RReUxSs5hGE39ELU23DfydX8riUuzdrHAE", 1}, \

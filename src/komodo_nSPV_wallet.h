@@ -18,7 +18,8 @@
 #define KOMODO_NSPVWALLET_H
 
 // nSPV wallet uses superlite functions (and some komodod built in functions) to implement nSPV_spend
-extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
+#include "komodo_bitcoind.h"
+#include "rpc/rawtransaction.h"
 
 int32_t NSPV_validatehdrs(struct NSPV_ntzsproofresp *ptr)
 {
@@ -235,6 +236,8 @@ int64_t NSPV_addinputs(struct NSPV_utxoresp *used,CMutableTransaction &mtx,int64
         return(totalinputs);
     return(0);
 }
+
+#define NSPV_BRANCHID 0x76b809bb
 
 bool NSPV_SignTx(CMutableTransaction &mtx,int32_t vini,int64_t utxovalue,const CScript scriptPubKey,uint32_t nTime)
 {

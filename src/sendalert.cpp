@@ -53,7 +53,6 @@ the bad alert.
 
 */
 
-#include "main.h"
 #include "net.h"
 #include "alert.h"
 #include "init.h"

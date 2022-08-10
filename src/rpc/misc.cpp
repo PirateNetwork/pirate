@@ -31,6 +31,12 @@
 #include "cc/eval.h"
 #include "cc/CCinclude.h"
 #include "hex.h"
+#include "komodo_bitcoind.h"
+#include "komodo_jumblr.h"
+#include "komodo_notary.h"
+#include "komodo_utils.h"
+#include "komodo_globals.h"
+#include "cc/CCinclude.h"
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
@@ -192,6 +198,19 @@ UniValue geterablockheights(const UniValue& params, bool fHelp, const CPubKey& m
     return(ret);
 }
 
+/**
+ * @note Do not add or change anything in the information returned by this
+ * method. `getinfo` exists for backwards-compatibility only. It combines
+ * information from wildly different sources in the program, which is a mess,
+ * and is thus planned to be deprecated eventually.
+ *
+ * Based on the source of the information, new information should be added to:
+ * - `getblockchaininfo`,
+ * - `getnetworkinfo` or
+ * - `getwalletinfo`
+ *
+ * Or alternatively, create a specific query method for the information.
+ **/
 UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     uint256 notarized_hash,notarized_desttxid; int32_t prevMoMheight,notarized_height,longestchain,kmdnotarized_height,txid_height;

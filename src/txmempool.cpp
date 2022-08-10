@@ -31,6 +31,9 @@
 #include "utilmoneystr.h"
 #include "validationinterface.h"
 #include "version.h"
+#include "komodo_globals.h"
+#include "komodo_utils.h"
+#include "komodo_bitcoind.h"
 
 using namespace std;
 
@@ -390,13 +393,9 @@ void CTxMemPool::remove(const CTransaction &origTx, std::list<CTransaction>& rem
     }
 }
 
-extern uint64_t ASSETCHAINS_TIMELOCKGTE;
-int64_t komodo_block_unlocktime(uint32_t nHeight);
-
 void CTxMemPool::removeForReorg(const CCoinsViewCache *pcoins, unsigned int nMemPoolHeight, int flags)
 {
     // Remove transactions spending a coinbase which are now immature
-    extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
     if ( ASSETCHAINS_SYMBOL[0] == 0 )
         Params().ResetCoinbaseMaturity();
     // Remove transactions spending a coinbase which are now immature and no-longer-final transactions
@@ -506,9 +505,6 @@ void CTxMemPool::removeConflicts(const CTransaction &tx, std::list<CTransaction>
         }
     }
 }
-
-int32_t komodo_validate_interest(const CTransaction &tx,int32_t txheight,uint32_t nTime,int32_t dispflag);
-extern char ASSETCHAINS_SYMBOL[];
 
 void CTxMemPool::removeExpired(unsigned int nBlockHeight)
 {

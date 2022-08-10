@@ -15,7 +15,7 @@
 
 #include "CCassets.h"
 #include "CCtokens.h"
-
+#include "komodo_bitcoind.h"
 
 UniValue AssetOrders(uint256 refassetid, CPubKey pk, uint8_t additionalEvalCode)
 {

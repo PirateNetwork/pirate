@@ -28,7 +28,7 @@
 #include "util.h"
 #include "utiltime.h"
 #include "wallet.h"
-
+#include "komodo_nSPV_defs.h"
 #include <fstream>
 #include <stdint.h>
 
@@ -1007,13 +1007,6 @@ UniValue z_exportviewingkey(const UniValue& params, bool fHelp, const CPubKey& m
     return EncodeViewingKey(vk);
 }
 
-extern int32_t KOMODO_NSPV;
-#ifndef KOMODO_NSPV_FULLNODE
-#define KOMODO_NSPV_FULLNODE (KOMODO_NSPV <= 0)
-#endif // !KOMODO_NSPV_FULLNODE
-#ifndef KOMODO_NSPV_SUPERLITE
-#define KOMODO_NSPV_SUPERLITE (KOMODO_NSPV > 0)
-#endif // !KOMODO_NSPV_SUPERLITE
 uint256 zeroid;
 UniValue NSPV_getinfo_req(int32_t reqht);
 UniValue NSPV_login(char *wifstr);

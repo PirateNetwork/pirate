@@ -23,10 +23,9 @@
 #include "core_io.h"
 #include "script/sign.h"
 #include "wallet/wallet.h"
-
 #include "cc/CCinclude.h"
+#include "komodo_bitcoind.h"
 
-int32_t komodo_nextheight();
 
 // makes import tx for either coins or tokens
 CTransaction MakeImportCoinTransaction(const ImportProof proof, const CTransaction burnTx, const std::vector<CTxOut> payouts, uint32_t nExpiryHeightOverride)

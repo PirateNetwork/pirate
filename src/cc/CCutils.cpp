@@ -19,6 +19,8 @@
 
 #include "CCinclude.h"
 #include "komodo_structs.h"
+#include "komodo_bitcoind.h"
+#include "komodo_utils.h"
 #include "key_io.h"
 
 #ifdef TESTMODE           
@@ -26,9 +28,6 @@
 #else
     #define MIN_NON_NOTARIZED_CONFIRMS 101
 #endif // TESTMODE
-int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
-struct komodo_state *komodo_stateptr(char *symbol,char *dest);
-extern uint32_t KOMODO_DPOWCONFS;
 
 void endiancpy(uint8_t *dest,uint8_t *src,int32_t len)
 {
@@ -434,7 +433,6 @@ bool priv2addr(char *coinaddr,uint8_t *buf33,uint8_t priv32[32])
 
 std::vector<uint8_t> Mypubkey()
 {
-    extern uint8_t NOTARY_PUBKEY33[33];
     std::vector<uint8_t> pubkey; int32_t i; uint8_t *dest,*pubkey33;
     pubkey33 = NOTARY_PUBKEY33;
     pubkey.resize(33);
@@ -444,8 +442,6 @@ std::vector<uint8_t> Mypubkey()
     return(pubkey);
 }
 
-extern char NSPV_wifstr[],NSPV_pubkeystr[];
-extern uint32_t NSPV_logintime;
 #define NSPV_AUTOLOGOUT 777
 
 bool Myprivkey(uint8_t myprivkey[])
@@ -453,16 +449,15 @@ bool Myprivkey(uint8_t myprivkey[])
     char coinaddr[64],checkaddr[64]; std::string strAddress; char *dest; int32_t i,n; CBitcoinAddress address; CKeyID keyID; CKey vchSecret; uint8_t buf33[33];
     if ( KOMODO_NSPV_SUPERLITE )
     {
+        extern uint32_t NSPV_logintime;
         if ( NSPV_logintime == 0 || time(NULL) > NSPV_logintime+NSPV_AUTOLOGOUT )
         {
             fprintf(stderr,"need to be logged in to get myprivkey\n");
             return false;
         }
+        extern char *NSPV_wifstr;
         vchSecret = DecodeSecret(NSPV_wifstr);
         memcpy(myprivkey,vchSecret.begin(),32);
-        //for (i=0; i<32; i++)
-        //    fprintf(stderr,"%02x",myprivkey[i]);
-        //fprintf(stderr," myprivkey %s\n",NSPV_wifstr);
         memset((uint8_t *)vchSecret.begin(),0,32);
         return true;
     }

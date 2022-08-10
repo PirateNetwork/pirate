@@ -17,12 +17,11 @@
 #ifndef CC_PRICES_H
 #define CC_PRICES_H
 
-#include "komodo_defs.h"
+#include "komodo_globals.h"
+#include "komodo_gateway.h"
 #include "CCinclude.h"
 
-int32_t komodo_priceget(int64_t *buf64,int32_t ind,int32_t height,int32_t numblocks);
 extern void GetKomodoEarlytxidScriptPub();
-extern CScript KOMODO_EARLYTXID_SCRIPTPUB;
 
 // #define PRICES_DAYWINDOW ((3600*24/ASSETCHAINS_BLOCKTIME) + 1) // defined in komodo_defs.h
 #define PRICES_TXFEE 10000
@@ -59,5 +58,7 @@ UniValue PricesList(uint32_t filter, CPubKey mypk);
 UniValue PricesGetOrderbook();
 UniValue PricesRefillFund(int64_t amount);
 
+int32_t prices_syntheticvec(std::vector<uint16_t> &vec, std::vector<std::string> synthetic);
+int64_t prices_syntheticprice(std::vector<uint16_t> vec, int32_t height, int32_t minmax, int16_t leverage);
 
 #endif

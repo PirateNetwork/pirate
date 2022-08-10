@@ -1,5 +1,6 @@
+#pragma once
 /******************************************************************************
- * Copyright © 2014-2019 The SuperNET Developers.                             *
+ * Copyright © 2021 Komodo Core Developers.                                   *
  *                                                                            *
  * See the AUTHORS, DEVELOPER-AGREEMENT and LICENSE files at                  *
  * the top-level directory of this distribution for the individual copyright  *
@@ -13,22 +14,7 @@
  *                                                                            *
  ******************************************************************************/
 
-
-#ifndef CC_REWARDS_H
-#define CC_REWARDS_H
-
-#include "CCinclude.h"
-
-#define EVAL_REWARDS 0xe5
-#define REWARDSCC_MAXAPR (COIN * 25)
-
-bool RewardsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, uint32_t nIn);
-UniValue RewardsInfo(uint256 rewardid);
-UniValue RewardsList();
-
-std::string RewardsCreateFunding(uint64_t txfee,char *planstr,int64_t funds,int64_t APR,int64_t minseconds,int64_t maxseconds,int64_t mindeposit);
-std::string RewardsAddfunding(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t amount);
-std::string RewardsLock(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t amount);
-std::string RewardsUnlock(uint64_t txfee,char *planstr,uint256 fundingtxid,uint256 locktxid);
-
-#endif
+UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool txDetails = false);
+UniValue mempoolInfoToJSON();
+UniValue mempoolToJSON(bool fVerbose = false);
+UniValue blockheaderToJSON(const CBlockIndex* blockindex);

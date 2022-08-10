@@ -71,6 +71,8 @@ GetKomodoEarlytxidScriptPub is on line #2080 of komodo_bitcoind.h
 
 #include "CCassets.h"
 #include "CCPrices.h"
+#include "komodo_gateway.h"
+#include "komodo_bitcoind.h"
 
 #include <cstdlib>
 #include <gmp.h>

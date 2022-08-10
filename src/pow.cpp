@@ -29,15 +29,16 @@
 #include "streams.h"
 #include "uint256.h"
 #include "util.h"
+#include "komodo.h"
 #include "komodo_notary.h"
 #include "komodo_extern_globals.h"
+#include "komodo_bitcoind.h"
 
 #include "sodium.h"
 
 #ifdef ENABLE_RUST
 #include "librustzcash.h"
 #endif // ENABLE_RUST
-uint32_t komodo_chainactive_timestamp();
 
 #include "komodo_defs.h"
 
@@ -748,7 +749,6 @@ bool CheckProofOfWork(const CBlockHeader &blkHeader, uint8_t *pubkey33, int32_t 
         arith_uint256 bnMaxPoSdiff;
         bnTarget.SetCompact(KOMODO_MINDIFF_NBITS,&fNegative,&fOverflow);
     }
-
     // Check proof of work matches claimed amount
     if ( UintToArith256(hash = blkHeader.GetHash()) > bnTarget )
     {

@@ -21,7 +21,7 @@
 #include "key_io.h"
 #include "main.h"
 #include "crypto/equihash.h"
-
+#include "komodo_globals.h"
 #include "util.h"
 #include "utilstrencodings.h"
 

@@ -35,7 +35,10 @@
 #include "httprpc.h"
 #include "key.h"
 #include "notarisationdb.h"
+#include "komodo_globals.h"
 #include "komodo_notary.h"
+#include "komodo_gateway.h"
+#include "main.h"
 
 #ifdef ENABLE_MINING
 #include "key_io.h"
@@ -752,10 +755,6 @@ void ThreadNotifyRecentlyAdded()
     }
 }
 
-/* declarations needed for ThreadUpdateKomodoInternals */
-void komodo_passport_iteration();
-void komodo_cbopretupdate(int32_t forceflag);
-
 void ThreadUpdateKomodoInternals() {
     RenameThread("int-updater");
 
@@ -918,7 +917,7 @@ bool AppInitServers(boost::thread_group& threadGroup)
     return true;
 }
 
-extern int32_t KOMODO_REWIND;
+//extern int32_t KOMODO_REWIND;
 
 class InvalidGenesisException : public std::runtime_error
 {

@@ -13,7 +13,8 @@
  *                                                                            *
  ******************************************************************************/
 #include "komodo_ccdata.h"
-#include "komodo_extern_globals.h"
+#include "komodo_globals.h"
+#include "komodo_bitcoind.h"
 
 struct komodo_ccdata *CC_data;
 int32_t CC_firstheight;

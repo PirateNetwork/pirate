@@ -20,6 +20,8 @@
 #include "script/cc.h"
 #include "script/interpreter.h"
 #include "komodo_extern_globals.h"
+#include "komodo_globals.h"
+#include "komodo_bitcoind.h"
 #include "utilmoneystr.h"
 #include "testutils.h"
 #include "coincontrol.h"

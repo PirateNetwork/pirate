@@ -74,5 +74,6 @@ void GenerateBitcoins(bool fGenerate, int nThreads);
 #endif
 
 void UpdateTime(CBlockHeader* pblock, const Consensus::Params& consensusParams, const CBlockIndex* pindexPrev);
+void komodo_sendmessage(int32_t minpeers,int32_t maxpeers,const char *message,std::vector<uint8_t> payload);
 
 #endif // BITCOIN_MINER_H

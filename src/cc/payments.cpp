@@ -14,6 +14,8 @@
  ******************************************************************************/
 #include "hex.h"
 #include "CCPayments.h"
+#include "komodo_bitcoind.h"
+#include <gmp.h>
 
 /* 
  0) txidopret <- allocation, scriptPubKey, opret

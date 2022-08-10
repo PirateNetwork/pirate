@@ -13,10 +13,13 @@
  *                                                                            *
  ******************************************************************************/
 #include "komodo_notary.h"
-#include "komodo_extern_globals.h"
+#include "komodo_globals.h"
 #include "komodo.h" // komodo_stateupdate()
 #include "komodo_structs.h" // KOMODO_NOTARIES_HARDCODED
 #include "komodo_utils.h" // komodo_stateptr
+#include "komodo_bitcoind.h"
+
+struct knotaries_entry *Pubkeys;
 
 const char *Notaries_genesis[][2] =
 {
@@ -128,6 +131,31 @@ int32_t ht_index_from_height(int32_t height)
     if ( htind >= KOMODO_MAXBLOCKS / KOMODO_ELECTION_GAP )
         htind = (KOMODO_MAXBLOCKS / KOMODO_ELECTION_GAP) - 1;
     return htind;
+}
+
+
+char NOTARY_ADDRESSES[NUM_KMD_SEASONS][64][64];
+
+// ARRR notary exception
+int32_t komodo_isnotaryvout(char *coinaddr,uint32_t tiptime) // from ac_private chains only
+{
+    int32_t season = getacseason(tiptime);
+    if ( NOTARY_ADDRESSES[season-1][0][0] == 0 )
+    {
+        uint8_t pubkeys[64][33];
+        komodo_notaries(pubkeys,0,tiptime);
+    }
+    if ( strcmp(coinaddr,CRYPTO777_KMDADDR) == 0 )
+        return(1);
+    for (int32_t i = 0; i < NUM_KMD_NOTARIES; i++) 
+    {
+        if ( strcmp(coinaddr,NOTARY_ADDRESSES[season-1][i]) == 0 )
+        {
+            //fprintf(stderr, "coinaddr.%s notaryaddress[%i].%s\n",coinaddr,i,NOTARY_ADDRESSES[season-1][i]);
+            return(1);
+        }
+    }
+    return(0);
 }
 
 /***

@@ -118,13 +118,11 @@ struct Params {
     int64_t nPowMaxAdjustDown; // max percentage difficulty level should be lowered
     int64_t nPowMaxAdjustUp; // max percentage difficulty level should be raised
     int64_t nPowTargetSpacing; // the target block production speed (in seconds)
-    int64_t nLwmaAjustedWeight; // k value for work calculation (for non-staked, non-equihash chains)
 
     /* Proof of stake parameters */
     uint256 posLimit;
     int64_t nPOSAveragingWindow;    // can be completely different than POW and initially trying a relatively large number, like 100
     int64_t nPOSTargetSpacing;      // spacing is 1000 units per block to get better resolution, (100 % = 1000, 50% = 2000, 10% = 10000)
-    int64_t nLwmaPOSAjustedWeight;
 
     /* applied to all block times */
     int64_t nMaxFutureBlockTime;

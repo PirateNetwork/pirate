@@ -15,6 +15,7 @@
 #pragma once
 // paxdeposit equivalent in reverse makes opreturn and KMD does the same in reverse
 #include "komodo_defs.h"
+#include "komodo_structs.h"
 #include "komodo_cJSON.h"
 
 int32_t pax_fiatstatus(uint64_t *available,uint64_t *deposited,uint64_t *issued,uint64_t *withdrawn,uint64_t *approved,uint64_t *redeemed,char *base);
@@ -83,11 +84,6 @@ long komodo_indfile_update(FILE *indfp,uint32_t *prevpos100p,long lastfpos,long 
 
 int32_t komodo_faststateinit(struct komodo_state *sp,const char *fname,char *symbol,char *dest);
 
-uint64_t komodo_interestsum();
-
-void komodo_passport_iteration();
-
-extern std::vector<uint8_t> Mineropret; // opreturn data set by the data gathering code
 #define PRICES_ERRORRATE (COIN / 100)	  // maximum acceptable change, set at 1%
 #define PRICES_SIZEBIT0 (sizeof(uint32_t) * 4) // 4 uint32_t unixtimestamp, BTCUSD, BTCGBP and BTCEUR
 #define KOMODO_LOCALPRICE_CACHESIZE 13
@@ -168,11 +164,10 @@ int32_t get_cryptoprices(uint32_t *prices,const char *list[],int32_t n,std::vect
 
 int32_t get_btcusd(uint32_t pricebits[4]);
 
-// komodo_cbopretupdate() obtains the external price data and encodes it into Mineropret, which will then be used by the miner and validation
-// save history, use new data to approve past rejection, where is the auto-reconsiderblock?
-
 int32_t komodo_cbopretsize(uint64_t flags);
 
+// komodo_cbopretupdate() obtains the external price data and encodes it into Mineropret, which will then be used by the miner and validation
+// save history, use new data to approve past rejection, where is the auto-reconsiderblock?
 void komodo_cbopretupdate(int32_t forceflag);
 
 int64_t komodo_pricemult(int32_t ind);

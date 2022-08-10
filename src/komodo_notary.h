@@ -70,15 +70,6 @@ void komodo_notarysinit(int32_t origheight,uint8_t pubkeys[64][33],int32_t num);
 
 int32_t komodo_chosennotary(int32_t *notaryidp,int32_t height,uint8_t *pubkey33,uint32_t timestamp);
 
-/******
- * @brief Search the notarized checkpoints for a particular height
- * @note Finding a mach does include other criteria other than height
- *      such that the checkpoint includes the desired hight
- * @param height the key
- * @returns the checkpoint or nullptr
- */
-const notarized_checkpoint *komodo_npptr(int32_t height);
-
 /****
  * Search for the last (chronological) MoM notarized height
  * @returns the last notarized height that has a MoM

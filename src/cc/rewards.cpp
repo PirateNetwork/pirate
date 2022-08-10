@@ -14,6 +14,8 @@
  ******************************************************************************/
 
 #include "CCrewards.h"
+#include "komodo_bitcoind.h"
+#include <gmp.h>
 
 /*
  The rewards CC contract is initially for OOT, which needs this functionality. However, many of the attributes can be parameterized to allow different rewards programs to run. Multiple rewards plans could even run on the same blockchain, though the user would need to choose which one to lock funds into.
@@ -68,11 +70,11 @@
  
 /// the following are compatible with windows
 /// mpz_set_lli sets a long long singed int to a big num mpz_t for very large integer math
-extern void mpz_set_lli( mpz_t rop, long long op );
+void mpz_set_lli( mpz_t rop, long long op );
 // mpz_get_si2 gets a mpz_t and returns a signed long long int
-extern int64_t mpz_get_si2( mpz_t op );
+int64_t mpz_get_si2( mpz_t op );
 // mpz_get_ui2 gets a mpz_t and returns a unsigned long long int
-extern uint64_t mpz_get_ui2( mpz_t op );
+uint64_t mpz_get_ui2( mpz_t op );
  
 uint64_t RewardsCalc(int64_t amount, uint256 txid, int64_t APR, int64_t minseconds, int64_t maxseconds, uint32_t timestamp)
 {

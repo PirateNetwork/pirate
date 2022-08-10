@@ -13,11 +13,13 @@
  *                                                                            *
  ******************************************************************************/
 #include "komodo.h"
-#include "komodo_extern_globals.h"
+#include "komodo_globals.h"
 #include "komodo_notary.h"
+#include "komodo_bitcoind.h"
 #include "mem_read.h"
 
 static FILE *fp; // for stateupdate
+int32_t KOMODO_EXTERNAL_NOTARIES = 0;
 
 void komodo_currentheight_set(int32_t height)
 {
@@ -201,7 +203,6 @@ void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotar
 
     if ( didinit == 0 )
     {
-        portable_mutex_init(&KOMODO_KV_mutex);
         portable_mutex_init(&KOMODO_CC_mutex);
         didinit = 1;
     }
@@ -798,8 +799,6 @@ int32_t komodo_connectblock(bool fJustCheck, CBlockIndex *pindex,CBlock& block)
     } 
     else 
         { fprintf(stderr,"komodo_connectblock: unexpected null pindex\n"); return(0); }
-    //KOMODO_INITDONE = (uint32_t)time(NULL);
-    //fprintf(stderr,"%s end connect.%d\n",ASSETCHAINS_SYMBOL,pindex->nHeight);
     if (fJustCheck)
     {
         if ( notarisations.size() == 0 )

@@ -27,6 +27,8 @@
 #include "utiltime.h"
 #include "utilmoneystr.h"
 #include "utilstrencodings.h"
+#include "komodo_utils.h"
+#include "komodo_globals.h"
 
 #include <boost/thread.hpp>
 #include <boost/thread/synchronized_value.hpp>
@@ -40,7 +42,6 @@
 #include <unistd.h>
 
 #include "komodo_defs.h"
-int64_t komodo_block_unlocktime(uint32_t nHeight);
 
 void AtomicTimer::start()
 {

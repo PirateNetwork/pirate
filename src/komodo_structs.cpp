@@ -13,6 +13,8 @@
  *                                                                            *
  ******************************************************************************/
 #include "komodo_structs.h"
+#include "komodo_globals.h"
+#include "komodo_bitcoind.h"
 #include "mem_read.h"
 
 namespace komodo {

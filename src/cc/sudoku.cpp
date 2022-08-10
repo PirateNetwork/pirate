@@ -200,6 +200,7 @@
 /* 1.11   2006-03-23  WD        More simple speed optimizations, cleanup, bug fixes */
 /*                                                                                  */
 /************************************************************************************/
+#include "komodo_bitcoind.h"
 
 #include <stdio.h>
 #include <stdlib.h>

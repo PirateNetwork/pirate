@@ -13,9 +13,14 @@
  *                                                                            *
  ******************************************************************************/
 #include "komodo_kv.h"
-#include "komodo_extern_globals.h"
+#include "komodo_globals.h"
 #include "komodo_utils.h" // portable_mutex_lock
 #include "komodo_curve25519.h" // komodo_kvsigverify
+
+#include <mutex>
+
+struct komodo_kv *KOMODO_KV;
+std::mutex KOMODO_KV_mutex;
 
 int32_t komodo_kvcmp(uint8_t *refvalue,uint16_t refvaluesize,uint8_t *value,uint16_t valuesize)
 {
@@ -58,7 +63,7 @@ int32_t komodo_kvsearch(uint256 *pubkeyp,int32_t current_height,uint32_t *flagsp
     *heightp = -1;
     *flagsp = 0;
     memset(pubkeyp,0,sizeof(*pubkeyp));
-    portable_mutex_lock(&KOMODO_KV_mutex);
+    std::lock_guard<std::mutex> lock(KOMODO_KV_mutex);
     HASH_FIND(hh,KOMODO_KV,key,keylen,ptr);
     if ( ptr != 0 )
     {
@@ -88,7 +93,6 @@ int32_t komodo_kvsearch(uint256 *pubkeyp,int32_t current_height,uint32_t *flagsp
                 memcpy(value,ptr->value,retval);
         }
     } //else fprintf(stderr,"couldnt find (%s)\n",(char *)key);
-    portable_mutex_unlock(&KOMODO_KV_mutex);
     if ( retval < 0 )
     {
         // search rawmempool
@@ -146,7 +150,7 @@ void komodo_kvupdate(uint8_t *opretbuf,int32_t opretlen,uint64_t value)
                     }
                 }
             }
-            portable_mutex_lock(&KOMODO_KV_mutex);
+            std::lock_guard<std::mutex> lock(KOMODO_KV_mutex);
             HASH_FIND(hh,KOMODO_KV,key,keylen,ptr);
             if ( ptr != 0 )
             {
@@ -192,7 +196,8 @@ void komodo_kvupdate(uint8_t *opretbuf,int32_t opretlen,uint64_t value)
             memcpy(&ptr->pubkey,&pubkey,sizeof(ptr->pubkey));
             ptr->height = height;
             ptr->flags = flags; // jl777 used to or in KVPROTECTED
-            portable_mutex_unlock(&KOMODO_KV_mutex);
-        } else fprintf(stderr,"KV update size mismatch %d vs %d\n",opretlen,coresize);
+        } 
+        else 
+            fprintf(stderr,"KV update size mismatch %d vs %d\n",opretlen,coresize);
     } else fprintf(stderr,"not enough fee\n");
 }

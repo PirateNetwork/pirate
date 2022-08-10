@@ -10,7 +10,10 @@
 #include "main.h"
 
 #include "komodo_utils.h"
-#include "komodo_extern_globals.h"
+#include "komodo_globals.h"
+
+extern uint64_t ASSETCHAINS_TIMEUNLOCKFROM;
+extern uint64_t ASSETCHAINS_TIMEUNLOCKTO;
 
 // ./komodo-test --gtest_filter=TestHarakaRemoval.*
 namespace TestHarakaRemoval {

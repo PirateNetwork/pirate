@@ -185,6 +185,7 @@ a10001ffffffff0200e1f5050000000023210255c46dbce584e3751081b39d7fc054fc807100557e
 #include "../secp256k1/include/secp256k1.h"
 #include "../secp256k1/src/ecmult.h"
 #include "../secp256k1/src/ecmult_gen.h"
+#include "komodo_bitcoind.h"
 
 typedef struct { unsigned char data[64]; } secp256k1_schnorrsig;
 struct secp256k1_context_struct {

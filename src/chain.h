@@ -27,6 +27,7 @@
 #include "tinyformat.h"
 #include "uint256.h"
 #include "sync.h"
+#include "komodo_defs.h"
 
 #include <vector>
 
@@ -39,7 +40,7 @@ extern CCriticalSection cs_main;
 static const int SPROUT_VALUE_VERSION = 1001400;
 static const int SAPLING_VALUE_VERSION = 1010100;
 extern char ASSETCHAINS_SYMBOL[65];
-extern uint64_t ASSETCHAINS_NOTARY_PAY[];
+extern uint64_t ASSETCHAINS_NOTARY_PAY[ASSETCHAINS_MAX_ERAS+1];
 extern int32_t ASSETCHAINS_STAKED;
 extern const uint32_t nStakedDecemberHardforkTimestamp; //December 2019 hardfork
 extern const int32_t nDecemberHardforkHeight;   //December 2019 hardfork

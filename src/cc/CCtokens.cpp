@@ -15,6 +15,7 @@
 
 #include "CCtokens.h"
 #include "importcoin.h"
+#include "komodo_bitcoind.h"
 
 /* TODO: correct this:
 -----------------------------

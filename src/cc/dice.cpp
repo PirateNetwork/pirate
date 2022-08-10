@@ -14,6 +14,7 @@
  ******************************************************************************/
 #include "hex.h"
 #include "CCdice.h"
+#include "komodo_bitcoind.h"
 
 // timeout
 
@@ -99,7 +100,6 @@ What is needed is for the dealer node to track the entropy tx that was already b
 
 #define MAX_ENTROPYUSED 8192
 #define DICE_MINUTXOS 15000
-extern int32_t KOMODO_INSYNC;
 
 pthread_mutex_t DICE_MUTEX,DICEREVEALED_MUTEX;
 

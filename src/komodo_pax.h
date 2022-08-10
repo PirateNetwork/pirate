@@ -51,9 +51,6 @@
 #define IDR 30
 #define HRK 31
 
-#define MAX_CURRENCIES 32
-extern char CURRENCIES[][8];
-
 uint64_t komodo_maxallowed(int32_t baseid);
 
 uint64_t komodo_paxvol(uint64_t volume,uint64_t price);
@@ -85,8 +82,6 @@ uint64_t _komodo_paxpriceB(uint64_t seed,int32_t height,char *base,char *rel,uin
 uint64_t komodo_paxpriceB(uint64_t seed,int32_t height,char *base,char *rel,uint64_t basevolume);
 
 uint64_t komodo_paxprice(uint64_t *seedp,int32_t height,char *base,char *rel,uint64_t basevolume);
-
-int32_t komodo_paxprices(int32_t *heights,uint64_t *prices,int32_t max,char *base,char *rel);
 
 void komodo_paxpricefeed(int32_t height,uint8_t *pricefeed,int32_t opretlen);
 
