@@ -774,6 +774,9 @@ bool IsFinalTx(const CTransaction &tx, int nBlockHeight, int64_t nBlockTime);
 /**
  * Check if transaction is expired and can be included in a block with the
  * specified height. Consensus critical.
+ * @param tx the transaction
+ * @param nBlockHeight the current block height
+ * @returns true if transaction is expired (mainly tx.expiryHeight > nBlockHeight)
  */
 bool IsExpiredTx(const CTransaction &tx, int nBlockHeight);
 

@@ -508,20 +508,24 @@ void CTxMemPool::removeConflicts(const CTransaction &tx, std::list<CTransaction>
 
 void CTxMemPool::removeExpired(unsigned int nBlockHeight)
 {
-    CBlockIndex *tipindex;
+    std::list<CTransaction> transactionsToRemove;
     // Remove expired txs from the mempool
     LOCK(cs);
-    list<CTransaction> transactionsToRemove;
     for (indexed_transaction_set::const_iterator it = mapTx.begin(); it != mapTx.end(); it++)
     {
         const CTransaction& tx = it->GetTx();
-        tipindex = chainActive.Tip();
+        CBlockIndex *tipindex = chainActive.Tip();  // TODO: should be under cs_main lock?
 
-        bool fInterestNotValidated = ASSETCHAINS_SYMBOL[0] == 0 && tipindex != 0 && komodo_validate_interest(tx,tipindex->nHeight+1,tipindex->GetMedianTimePast() + 777,0) < 0;
+        bool fInterestNotValidated = ASSETCHAINS_SYMBOL[0] == 0 // KMD
+                && tipindex != 0 // chain has blocs on it
+                && !komodo_validate_interest(tx, tipindex->nHeight + 1, tipindex->GetMedianTimePast() + 777);
+
         if (IsExpiredTx(tx, nBlockHeight) || fInterestNotValidated)
         {
             if (fInterestNotValidated && tipindex != 0)
-                LogPrintf("Removing interest violate txid.%s nHeight.%d nTime.%u vs locktime.%u\n",tx.GetHash().ToString(),tipindex->nHeight+1,tipindex->GetMedianTimePast() + 777,tx.nLockTime);
+                LogPrintf("Removing interest violate txid.%s nHeight.%d nTime.%u vs locktime.%u\n",
+                        tx.GetHash().ToString(),tipindex->nHeight+1,
+                        tipindex->GetMedianTimePast() + 777,tx.nLockTime);
             transactionsToRemove.push_back(tx);
         }
     }

@@ -317,12 +317,19 @@ public:
 
     enum { nMedianTimeSpan=11 };
 
+    /***
+     * @note times are stored as a 4 byte int. Although this returns int64_t, it will be at
+     * 32 bit resolution.
+     * @note storing this as 32 bits can cause a "Year 2038" problem.
+     * @returns the median time (uinx epoch) of the last nMedianTimeSpan (currently 11) blocks
+     */
     int64_t GetMedianTimePast() const
     {
         int64_t pmedian[nMedianTimeSpan];
         int64_t* pbegin = &pmedian[nMedianTimeSpan];
         int64_t* pend = &pmedian[nMedianTimeSpan];
 
+        // grab the times of the last 11 blocks
         const CBlockIndex* pindex = this;
         for (int i = 0; i < nMedianTimeSpan && pindex; i++, pindex = pindex->pprev)
             *(--pbegin) = pindex->GetBlockTime();

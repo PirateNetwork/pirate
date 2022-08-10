@@ -959,6 +959,13 @@ bool IsFinalTx(const CTransaction &tx, int nBlockHeight, int64_t nBlockTime)
     return true;
 }
 
+/**
+ * Check if transaction is expired and can be included in a block with the
+ * specified height. Consensus critical.
+ * @param tx the transaction
+ * @param nBlockHeight the current block height
+ * @returns true if transaction is expired (mainly tx.expiryHeight > nBlockHeight)
+ */
 bool IsExpiredTx(const CTransaction &tx, int nBlockHeight)
 {
     if (tx.nExpiryHeight == 0 || tx.IsCoinBase()) {
@@ -1779,7 +1786,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
     auto consensusBranchId = CurrentEpochBranchId(nextBlockHeight, Params().GetConsensus());
     if ( nextBlockHeight <= 1 || chainActive.Tip() == 0 )
         tiptime = (uint32_t)time(NULL);
-    else tiptime = (uint32_t)chainActive.Tip()->nTime;
+    else 
+        tiptime = (uint32_t)chainActive.Tip()->nTime;
 //fprintf(stderr,"addmempool 0\n");
     // Node operator can choose to reject tx by number of transparent inputs
     static_assert(std::numeric_limits<size_t>::max() >= std::numeric_limits<int64_t>::max(), "size_t too small");
@@ -1795,9 +1803,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         }
     }
     auto verifier = libzcash::ProofVerifier::Strict();
-    if ( ASSETCHAINS_SYMBOL[0] == 0 && chainActive.Tip() != nullptr
-            && komodo_validate_interest(tx,chainActive.Tip()->nHeight+1,
-            chainActive.Tip()->GetMedianTimePast() + 777,0) < 0 )
+    if (ASSETCHAINS_SYMBOL[0] == 0 && chainActive.Tip() != nullptr
+            && komodo_validate_interest(tx, chainActive.Tip()->nHeight + 1, chainActive.Tip()->GetMedianTimePast() + 777) < 0)
     {
         return error("%s: komodo_validate_interest failed txid.%s", __func__, tx.GetHash().ToString());
     }
@@ -4222,9 +4229,10 @@ bool ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *pblock)
         assert(pcoinsTip->GetSaplingAnchorAt(pcoinsTip->GetBestAnchor(SAPLING), oldSaplingTree));
     }
     // Apply the block atomically to the chain state.
-    int64_t nTime2 = GetTimeMicros(); nTimeReadFromDisk += nTime2 - nTime1;
-    int64_t nTime3;
+    int64_t nTime2 = GetTimeMicros(); 
+    nTimeReadFromDisk += nTime2 - nTime1;
     LogPrint("bench", "  - Load block from disk: %.2fms [%.2fs]\n", (nTime2 - nTime1) * 0.001, nTimeReadFromDisk * 0.000001);
+    int64_t nTime3;
     {
         CCoinsViewCache view(pcoinsTip);
         bool rv = ConnectBlock(*pblock, state, pindexNew, view, false, true);
@@ -4234,11 +4242,6 @@ bool ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *pblock)
             if (state.IsInvalid())
             {
                 InvalidBlockFound(pindexNew, state);
-                /*if ( ASSETCHAINS_CBOPRET != 0 )
-                {
-                    pindexNew->nStatus &= ~BLOCK_FAILED_MASK;
-                    fprintf(stderr,"reconsiderblock %d\n",(int32_t)pindexNew->nHeight);
-                }*/
             }
             return error("ConnectTip(): ConnectBlock %s failed", pindexNew->GetBlockHash().ToString());
         }
@@ -4290,11 +4293,6 @@ bool ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *pblock)
     if ( KOMODO_LONGESTCHAIN != 0 && (pindexNew->nHeight == KOMODO_LONGESTCHAIN || pindexNew->nHeight == KOMODO_LONGESTCHAIN+1) )
         KOMODO_INSYNC = (int32_t)pindexNew->nHeight;
     else KOMODO_INSYNC = 0;
-    //fprintf(stderr,"connect.%d insync.%d ASSETCHAINS_SAPLING.%d\n",(int32_t)pindexNew->nHeight,KOMODO_INSYNC,ASSETCHAINS_SAPLING);
-    /*if ( KOMODO_INSYNC != 0 ) //ASSETCHAINS_SYMBOL[0] == 0 &&
-        komodo_broadcast(pblock,8);
-    else if ( ASSETCHAINS_SYMBOL[0] != 0 )
-        komodo_broadcast(pblock,4);*/
     if ( KOMODO_NSPV_FULLNODE )
     {
         if ( ASSETCHAINS_CBOPRET != 0 )
@@ -5236,7 +5234,6 @@ bool CheckBlock(int32_t *futureblockp, int32_t height, CBlockIndex *pindex, cons
     for (uint32_t i = 0; i < block.vtx.size(); i++)
     {
         const CTransaction& tx = block.vtx[i];
-
         if (!CheckTransaction(tiptime,tx, state, verifier, i, (int32_t)block.vtx.size()))
             return error("CheckBlock: CheckTransaction failed");
     }
@@ -5397,7 +5394,7 @@ bool ContextualCheckBlock(int32_t slowflag,const CBlock& block, CValidationState
         const CTransaction& tx = block.vtx[i];
 
         // Interest validation
-        if (komodo_validate_interest(tx, txheight, cmptime, 0) < 0)
+        if (komodo_validate_interest(tx, txheight, cmptime) < 0)
         {
             fprintf(stderr, "validate intrest failed for txnum.%i tx.%s\n", i, tx.ToString().c_str());
             return error("%s: komodo_validate_interest failed", __func__);
