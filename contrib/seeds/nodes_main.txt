@@ -8,6 +8,5 @@
 
 #torv3 support
 
+
 #i2p support
-rgbb7arwjhxpqjcz6rouxzn2q25knkn47npl6vmmniwvm3dulaaa.b32.i2p:45452
-kbfxfrzeuogshesopxdgzueve2dbhy7pwzyov7vegvqcsfkbjbla.b32.i2p:45452
