@@ -363,6 +363,7 @@ bool IsReachable(const CNetAddr& addr)
 
 void AddressCurrentlyConnected(const CService& addr)
 {
+    addrman.Add(CAddress(addr),addr); //Add address if not alread in addrman (picks up addnodes)
     addrman.Connected(addr);
 }
 
