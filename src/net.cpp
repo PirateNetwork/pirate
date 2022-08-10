@@ -291,6 +291,10 @@ bool AddLocal(const CService& addr, int nScore)
     if (!IsReachable(addr))
         return false;
 
+    //Add our local addresses to addrman to distribute to other nodes
+    addrman.Add(CAddress(addr), addr);
+    addrman.Connected(addr);
+
     LogPrintf("AddLocal(%s,%i)\n", addr.ToString(), nScore);
 
     {
