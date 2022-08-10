@@ -564,6 +564,14 @@ int CAddrMan::RandomInt(int nMax){
     return GetRandInt(nMax);
 }
 
+void CAddrMan::GetAllPeers(std::map<std::string, int64_t> &info) {
+
+    for(std::map<int, CAddrInfo>::iterator it = mapInfo.begin(); it != mapInfo.end(); it++) {
+        info[(*it).second.ToStringIPPort()] = (*it).second.GetLastSuccess();
+    }
+    return;
+}
+
 std::vector<bool> CAddrMan::DecodeAsmap(fs::path path)
 {
     std::vector<bool> bits;

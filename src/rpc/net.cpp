@@ -22,6 +22,7 @@
 #include "clientversion.h"
 #include "main.h"
 #include "net.h"
+#include "addrman.h"
 #include "netbase.h"
 #include "protocol.h"
 #include "sync.h"
@@ -82,10 +83,11 @@ UniValue getpeerlist(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "getpeerlist\n"
-            "\nReturns a list of connected network node addresses as a json array of objects.\n"
+            "\nReturns a list of connected network node addresses that have connected to the\n"
+            "in the last 30 days as a json array of objects.\n"
             "\nbResult:\n"
             "[\n"
-            "  \"addr\":\"host:port\",      (string) The ip address and port of the peer\n"
+            "  \"host:port\",      (string) The ip address and port of the peer\n"
             "]\n"
             "\nExamples:\n"
             + HelpExampleCli("getpeerlist", "")
@@ -94,18 +96,13 @@ UniValue getpeerlist(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     LOCK(cs_main);
 
-    vector<CNodeStats> vstats;
-    CopyNodeStats(vstats);
-
     UniValue ret(UniValue::VARR);
-
-    BOOST_FOREACH(const CNodeStats& stats, vstats) {
-        // UniValue obj(UniValue::VOBJ);
-        CNodeStateStats statestats;
-        bool fStateStats = GetNodeStateStats(stats.nodeid, statestats);
-
-        // obj.push_back(stats.addrName);
-        ret.push_back(stats.addrName);
+    std::map<std::string, int64_t> info;
+    addrman.GetAllPeers(info);
+    int64_t nCutOff = GetTime() - (60 * 60 * 24 * 30); //Connected within last 30 days.
+    for (std::map<std::string, int64_t>::iterator it = info.begin(); it != info.end(); it++) {
+        if ((*it).second >= nCutOff)
+            ret.push_back((*it).first);
     }
 
     return ret;

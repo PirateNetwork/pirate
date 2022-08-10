@@ -119,6 +119,9 @@ public:
     //! Calculate the relative chance this entry should be given when selecting nodes to connect to
     double GetChance(int64_t nNow = GetTime()) const;
 
+    //Returns the last successful connection
+    int64_t GetLastSuccess() {return nTime;}
+
 };
 
 /** Stochastic address manager
@@ -289,6 +292,7 @@ protected:
     void Connected_(const CService &addr, int64_t nTime);
 
 public:
+    void GetAllPeers(std::map<std::string, int64_t> &info);
     // Compressed IP->ASN mapping, loaded from a file when a node starts.
     // Should be always empty if no file was provided.
     // This mapping is then used for bucketing nodes in Addrman.
