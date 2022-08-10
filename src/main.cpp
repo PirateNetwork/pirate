@@ -7530,6 +7530,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (pfrom->fNetworkNode) {
             LOCK(cs_main);
             State(pfrom->GetId())->fCurrentlyConnected = true;
+            AddressCurrentlyConnected(State(pfrom->GetId())->address);
         }
     }
 
