@@ -24,6 +24,8 @@
 #include "cc/CCImportGateway.h"
 #include "komodo_bitcoind.h"
 #include "komodo_gateway.h"
+#include "notaries_staked.h"
+
 #include "key_io.h"
 #define CODA_BURN_ADDRESS "KPrrRoPfHOnNpZZQ6laHXdQDkSQDkVHaN0V+LizLlHxz7NaA59sBAAAA"
 /*
@@ -520,7 +522,7 @@ bool CheckMigration(Eval *eval, const CTransaction &importTx, const CTransaction
 
     uint256 tokenid = zeroid;
     if (vimportOpret.begin()[0] == EVAL_TOKENS) { // for tokens (new opret with tokens)
-        if ( is_STAKED(ASSETCHAINS_SYMBOL) == 1 )
+        if ( is_STAKED(chainName.symbol()) == 1 )
             return eval->Invalid("no-tokens-migrate-on-LABS");
         struct CCcontract_info *cpTokens, CCtokens_info;
         std::vector<std::pair<uint8_t, vscript_t>>  oprets;
@@ -656,7 +658,7 @@ bool Eval::ImportCoin(const std::vector<uint8_t> params, const CTransaction &imp
 
     LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "Validating import tx..., txid=" << importTx.GetHash().GetHex() << std::endl);
 
-    if (strcmp(ASSETCHAINS_SYMBOL, "CFEKDIMXY6") == 0 && chainActive.Height() <= 44693)
+    if ( chainName.isSymbol("CFEKDIMXY6") && chainActive.Height() <= 44693)
         return true;
 
     if (importTx.vout.size() < 2)

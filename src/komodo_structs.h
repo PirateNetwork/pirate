@@ -301,7 +301,7 @@ public:
     template<class T>
     bool add_event(const std::string& symbol, const uint32_t height, T& in)
     {
-        if (ASSETCHAINS_SYMBOL[0] != 0)
+        if (!chainName.isKMD())
         {
             std::shared_ptr<T> ptr = std::make_shared<T>( in );
             std::lock_guard<std::mutex> lock(komodo_mutex);

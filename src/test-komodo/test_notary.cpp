@@ -48,8 +48,8 @@ bool operator==(const my_key& lhs, const my_key& rhs)
 TEST(TestNotary, KomodoNotaries)
 {
     // Test komodo_notaries(), getkmdseason()
-    ASSETCHAINS_SYMBOL[0] = 0;
-        komodo_notaries_uninit();
+    chainName = assetchain("");
+    komodo_notaries_uninit();
     uint8_t pubkeys[64][33];
     int32_t height = 0;
     uint32_t timestamp = 0;
@@ -89,7 +89,7 @@ TEST(TestNotary, KomodoNotaries)
     height = 0;
     timestamp = 1;
     komodo_notaries_uninit();
-    strcpy(ASSETCHAINS_SYMBOL, "LABS");
+    chainName = assetchain("LABS");
     // we should be in era 1 now
     result = komodo_notaries(pubkeys, height, timestamp);
     EXPECT_EQ(result, 22);
@@ -142,7 +142,7 @@ TEST(TestNotary, ElectedNotary)
     uint32_t timestamp = 0;
 
     // check the KMD chain, first era
-    ASSETCHAINS_SYMBOL[0] = 0;
+    chainName = assetchain();
     int32_t result = komodo_electednotary(&numnotaries, pubkey, height, timestamp);
     EXPECT_EQ(result, 1);
     EXPECT_EQ( numnotaries, 35);

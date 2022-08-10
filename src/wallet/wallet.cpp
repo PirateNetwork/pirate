@@ -3317,7 +3317,7 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
                     if ( !IS_MODE_EXCHANGEWALLET )
                     {
                         uint32_t locktime; int32_t txheight; CBlockIndex *tipindex;
-                        if ( ASSETCHAINS_SYMBOL[0] == 0 && chainActive.Tip() != 0 && chainActive.Tip()->nHeight >= 60000 )
+                        if ( chainName.isKMD() && chainActive.Tip() != 0 && chainActive.Tip()->nHeight >= 60000 )
                         {
                             if ( pcoin->vout[i].nValue >= 10*COIN )
                             {
@@ -3325,7 +3325,9 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
                                 {
                                     komodo_accrued_interest(&txheight,&locktime,wtxid,i,0,pcoin->vout[i].nValue,(int32_t)tipindex->nHeight);
                                     interest = komodo_interestnew(txheight,pcoin->vout[i].nValue,locktime,tipindex->nTime);
-                                } else interest = 0;
+                                } 
+                                else 
+                                    interest = 0;
                                 if ( interest != 0 )
                                 {
                                     ptr = (uint64_t *)&pcoin->vout[i].interest;
@@ -3697,7 +3699,7 @@ bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wt
     int nextBlockHeight = chainActive.Height() + 1;
     CMutableTransaction txNew = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nextBlockHeight);
 
-    if (IS_MODE_EXCHANGEWALLET && ASSETCHAINS_SYMBOL[0] == 0) 
+    if (IS_MODE_EXCHANGEWALLET && chainName.isKMD()) 
         txNew.nLockTime = 0;
     else
     {
@@ -3816,7 +3818,7 @@ bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wt
                     //a chance at a free transaction.
                     //But mempool inputs might still be in the mempool, so their age stays 0
                     //fprintf(stderr,"nCredit %.8f interest %.8f\n",(double)nCredit/COIN,(double)pcoin.first->vout[pcoin.second].interest/COIN);
-                    if ( !IS_MODE_EXCHANGEWALLET && ASSETCHAINS_SYMBOL[0] == 0 )
+                    if ( !IS_MODE_EXCHANGEWALLET && chainName.isKMD() )
                     {
                         interest2 += pcoin.first->vout[pcoin.second].interest;
                         //fprintf(stderr,"%.8f ",(double)pcoin.first->vout[pcoin.second].interest/COIN);
@@ -3826,7 +3828,7 @@ bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wt
                         age += 1;
                     dPriority += (double)nCredit * age;
                 }
-                if ( ASSETCHAINS_SYMBOL[0] == 0 && DONATION_PUBKEY.size() == 66 && interest2 > 5000 )
+                if ( chainName.isKMD() && DONATION_PUBKEY.size() == 66 && interest2 > 5000 )
                 {
                     CScript scriptDonation = CScript() << ParseHex(DONATION_PUBKEY) << OP_CHECKSIG;
                     CTxOut newTxOut(interest2,scriptDonation);
@@ -4883,7 +4885,7 @@ int CMerkleTx::GetDepthInMainChain(const CBlockIndex* &pindexRet) const
 
 int CMerkleTx::GetBlocksToMaturity() const
 {
-    if ( ASSETCHAINS_SYMBOL[0] == 0 )
+    if ( chainName.isKMD() )
         Params().ResetCoinbaseMaturity();
     if (!IsCoinBase())
         return 0;

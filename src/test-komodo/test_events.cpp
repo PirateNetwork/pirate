@@ -197,7 +197,7 @@ void clear_state(const char* symbol)
 TEST(test_events, komodo_faststateinit_test)
 {
     char symbol[] = "TST";
-    strcpy(ASSETCHAINS_SYMBOL, symbol);
+    chainName = assetchain("TST");
     KOMODO_EXTERNAL_NOTARIES = 1;
 
     clear_state(symbol);
@@ -591,7 +591,7 @@ TEST(test_events, komodo_faststateinit_test_kmd)
     // Nothing should be added to events if this is the komodo chain
 
     char symbol[] = "KMD";
-    ASSETCHAINS_SYMBOL[0] = 0;
+    chainName = assetchain();
     KOMODO_EXTERNAL_NOTARIES = 0;
 
     clear_state(symbol);
@@ -811,7 +811,7 @@ TEST(test_events, komodo_faststateinit_test_kmd)
 TEST(test_events, write_test)
 {
     char symbol[] = "TST";
-    strcpy(ASSETCHAINS_SYMBOL, symbol);
+    chainName = assetchain(symbol);
     KOMODO_EXTERNAL_NOTARIES = 1;
 
     clear_state(symbol);

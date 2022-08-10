@@ -29,6 +29,7 @@
 #include "util.h"
 #include "utilstrencodings.h"
 #include "asyncrpcqueue.h"
+#include "assetchain.h"
 
 #include <memory>
 
@@ -255,8 +256,6 @@ UniValue help(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return tableRPC.help(strCommand);
 }
 
-extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
-
 #ifdef ENABLE_WALLET
 void GenerateBitcoins(bool b, CWallet *pw, int t);
 #else
@@ -281,7 +280,7 @@ UniValue stop(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     // Shutdown will take long enough that the response should get back
     StartShutdown();
-    sprintf(buf,"%s server stopping",ASSETCHAINS_SYMBOL[0] != 0 ? ASSETCHAINS_SYMBOL : "Komodo");
+    sprintf(buf,"%s server stopping", !chainName.isKMD() ? chainName.symbol().c_str() : "Komodo");
     return buf;
 }
 
@@ -874,12 +873,12 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
 
 std::string HelpExampleCli(const std::string& methodname, const std::string& args)
 {
-    if ( ASSETCHAINS_SYMBOL[0] == 0 ) {
+    if ( chainName.isKMD() ) {
         return "> komodo-cli " + methodname + " " + args + "\n";
-    } else if ((strncmp(ASSETCHAINS_SYMBOL, "HUSH3", 5) == 0) ) {
+    } else if ( chainName.SymbolStartsWith("HUSH3") ) {
         return "> hush-cli " + methodname + " " + args + "\n";
     } else {
-        return "> komodo-cli -ac_name=" + strprintf("%s", ASSETCHAINS_SYMBOL) + " " + methodname + " " + args + "\n";
+        return "> komodo-cli -ac_name=" + strprintf("%s", chainName.symbol().c_str()) + " " + methodname + " " + args + "\n";
     }
 }
 
@@ -891,8 +890,8 @@ std::string HelpExampleRpc(const std::string& methodname, const std::string& arg
 
 string experimentalDisabledHelpMsg(const string& rpc, const string& enableArg)
 {
-    string daemon = ASSETCHAINS_SYMBOL[0] == 0 ? "komodod" : "hushd";
-    string ticker = ASSETCHAINS_SYMBOL[0] == 0 ? "komodo" : ASSETCHAINS_SYMBOL;
+    string daemon = chainName.isKMD() ? "komodod" : "hushd";
+    string ticker = chainName.isKMD() ? "komodo" : chainName.symbol();
 
     return "\nWARNING: " + rpc + " is disabled.\n"
         "To enable it, restart " + daemon + " with the -experimentalfeatures and\n"

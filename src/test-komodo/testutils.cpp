@@ -209,8 +209,8 @@ TestChain::TestChain()
     CleanGlobals();
     previousNetwork = Params().NetworkIDString();
     dataDir = GetTempPath() / strprintf("test_komodo_%li_%i", GetTime(), GetRand(100000));
-    if (ASSETCHAINS_SYMBOL[0])
-        dataDir = dataDir / strprintf("_%s", ASSETCHAINS_SYMBOL);
+    if (!chainName.isKMD())
+        dataDir = dataDir / strprintf("_%s", chainName.symbol().c_str());
     boost::filesystem::create_directories(dataDir);
     mapArgs["-datadir"] = dataDir.string();
 
@@ -532,7 +532,7 @@ bool TestWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWall
     int nextBlockHeight = chainActive.Height() + 1;
     CMutableTransaction txNew = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nextBlockHeight);
 
-    if (IS_MODE_EXCHANGEWALLET && ASSETCHAINS_SYMBOL[0] == 0) 
+    if (IS_MODE_EXCHANGEWALLET && chainName.isKMD()) 
         txNew.nLockTime = 0;
     else
     {
@@ -648,7 +648,7 @@ bool TestWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWall
                     //reflecting an assumption the user would accept a bit more delay for
                     //a chance at a free transaction.
                     //But mempool inputs might still be in the mempool, so their age stays 0
-                    if ( !IS_MODE_EXCHANGEWALLET && ASSETCHAINS_SYMBOL[0] == 0 )
+                    if ( !IS_MODE_EXCHANGEWALLET && chainName.isKMD())
                     {
                         interest2 += pcoin.first.vout[pcoin.second].interest;
                     }
@@ -657,7 +657,7 @@ bool TestWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWall
                         age += 1;
                     dPriority += (double)nCredit * age;
                 }
-                if ( ASSETCHAINS_SYMBOL[0] == 0 && DONATION_PUBKEY.size() == 66 && interest2 > 5000 )
+                if ( chainName.isKMD() && DONATION_PUBKEY.size() == 66 && interest2 > 5000 )
                 {
                     CScript scriptDonation = CScript() << ParseHex(DONATION_PUBKEY) << OP_CHECKSIG;
                     CTxOut newTxOut(interest2,scriptDonation);

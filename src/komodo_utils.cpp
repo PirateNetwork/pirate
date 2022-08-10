@@ -18,6 +18,8 @@
 #include "komodo_globals.h"
 #include "komodo_notary.h"
 #include "komodo_gateway.h"
+#include "notaries_staked.h"
+
 #include "cc/CCinclude.h"
 
 struct komodo_state KOMODO_STATES[34];
@@ -500,7 +502,7 @@ void calc_rmd160_sha256(uint8_t rmd160[20],uint8_t *data,int32_t datalen)
     calc_rmd160(0,rmd160,hash.bytes,sizeof(hash));
 }
 
-int32_t bitcoin_addr2rmd160(uint8_t *addrtypep,uint8_t rmd160[20],char *coinaddr)
+int32_t bitcoin_addr2rmd160(uint8_t *addrtypep,uint8_t rmd160[20],const char *coinaddr)
 {
     bits256 hash; uint8_t *buf,_buf[25]; int32_t len;
     memset(rmd160,0,20);
@@ -534,27 +536,22 @@ int32_t bitcoin_addr2rmd160(uint8_t *addrtypep,uint8_t rmd160[20],char *coinaddr
 
 char *bitcoin_address(char *coinaddr,uint8_t addrtype,uint8_t *pubkey_or_rmd160,int32_t len)
 {
-    int32_t i; uint8_t data[25]; bits256 hash;// char checkaddr[65];
+    int32_t i; 
+    uint8_t data[25]; 
+    bits256 hash;
     if ( len != 20 )
         calc_rmd160_sha256(data+1,pubkey_or_rmd160,len);
-    else memcpy(data+1,pubkey_or_rmd160,20);
-    //btc_convrmd160(checkaddr,addrtype,data+1);
+    else 
+        memcpy(data+1,pubkey_or_rmd160,20);
     data[0] = addrtype;
     hash = bits256_doublesha256(0,data,21);
     for (i=0; i<4; i++)
         data[21+i] = hash.bytes[31-i];
-    if ( (coinaddr= bitcoin_base58encode(coinaddr,data,25)) != 0 )
-    {
-        //uint8_t checktype,rmd160[20];
-        //bitcoin_addr2rmd160(&checktype,rmd160,coinaddr);
-        //if ( strcmp(checkaddr,coinaddr) != 0 )
-        //    printf("checkaddr.(%s) vs coinaddr.(%s) %02x vs [%02x] memcmp.%d\n",checkaddr,coinaddr,addrtype,checktype,memcmp(rmd160,data+1,20));
-    }
-    return(coinaddr);
+    return bitcoin_base58encode(coinaddr,data,25);
 }
 
 
-int32_t komodo_baseid(char *origbase)
+int32_t komodo_baseid(const char *origbase)
 {
     int32_t i; char base[64];
     for (i=0; origbase[i]!=0&&i<sizeof(base); i++)
@@ -568,7 +565,7 @@ int32_t komodo_baseid(char *origbase)
 
 int32_t komodo_is_issuer()
 {
-    if ( ASSETCHAINS_SYMBOL[0] != 0 && komodo_baseid(ASSETCHAINS_SYMBOL) >= 0 )
+    if ( !chainName.isKMD() && komodo_baseid(chainName.symbol().c_str()) >= 0 )
         return(1);
     else return(0);
 }
@@ -936,20 +933,20 @@ uint16_t _komodo_userpass(char *username,char *password,FILE *fp)
     return port;
 }
 
-void komodo_statefname(char *fname,char *symbol,char *str)
+void komodo_statefname(char *fname,const char *symbol,char *str)
 {
     int32_t n,len;
     sprintf(fname,"%s",GetDataDir(false).string().c_str());
-    if ( (n= (int32_t)strlen(ASSETCHAINS_SYMBOL)) != 0 )
+    if ( (n= (int32_t)chainName.symbol().size()) != 0 )
     {
         len = (int32_t)strlen(fname);
-        if ( !mapArgs.count("-datadir") && strcmp(ASSETCHAINS_SYMBOL,&fname[len - n]) == 0 )
+        if ( !mapArgs.count("-datadir") && strcmp(chainName.symbol().c_str(),&fname[len - n]) == 0 )
             fname[len - n] = 0;
         else if(mapArgs.count("-datadir")) printf("DEBUG - komodo_utils:1363: custom datadir\n");
         else
         {
             if ( strcmp(symbol,"REGTEST") != 0 )
-                printf("unexpected fname.(%s) vs %s [%s] n.%d len.%d (%s)\n",fname,symbol,ASSETCHAINS_SYMBOL,n,len,&fname[len - n]);
+                printf("unexpected fname.(%s) vs %s [%s] n.%d len.%d (%s)\n",fname,symbol,chainName.symbol().c_str(),n,len,&fname[len - n]);
             return;
         }
     }
@@ -964,7 +961,6 @@ void komodo_statefname(char *fname,char *symbol,char *str)
     if ( symbol != 0 && symbol[0] != 0 && strcmp("KMD",symbol) != 0 )
     {
         if(!mapArgs.count("-datadir")) strcat(fname,symbol);
-        //printf("statefname.(%s) -> (%s)\n",symbol,fname);
 #ifdef _WIN32
         strcat(fname,"\\");
 #else
@@ -972,10 +968,9 @@ void komodo_statefname(char *fname,char *symbol,char *str)
 #endif
     }
     strcat(fname,str);
-    //printf("test.(%s) -> [%s] statename.(%s) %s\n",test,ASSETCHAINS_SYMBOL,symbol,fname);
 }
 
-void komodo_configfile(char *symbol,uint16_t rpcport)
+void komodo_configfile(const char *symbol,uint16_t rpcport)
 {
     static char myusername[512],mypassword[8192];
     FILE *fp; uint16_t kmdport; uint8_t buf2[33]; char fname[512],buf[128],username[512],password[8192]; uint32_t crc,r,r2,i;
@@ -1043,11 +1038,10 @@ void komodo_configfile(char *symbol,uint16_t rpcport)
             KMD_PORT = kmdport;
         sprintf(KMDUSERPASS,"%s:%s",username,password);
         fclose(fp);
-//printf("KOMODO.(%s) -> userpass.(%s)\n",fname,KMDUSERPASS);
-    } //else printf("couldnt open.(%s)\n",fname);
+    }
 }
 
-uint16_t komodo_userpass(char *userpass,char *symbol)
+uint16_t komodo_userpass(char *userpass,const char *symbol)
 {
     FILE *fp; uint16_t port = 0; char fname[512],username[512],password[512],confname[KOMODO_ASSETCHAIN_MAXLEN];
     userpass[0] = 0;
@@ -1068,16 +1062,19 @@ uint16_t komodo_userpass(char *userpass,char *symbol)
     {
         port = _komodo_userpass(username,password,fp);
         sprintf(userpass,"%s:%s",username,password);
-        if ( strcmp(symbol,ASSETCHAINS_SYMBOL) == 0 )
+        if ( chainName.isSymbol(symbol) )
             strcpy(ASSETCHAINS_USERPASS,userpass);
         fclose(fp);
     }
     return(port);
 }
 
-uint32_t komodo_assetmagic(char *symbol,uint64_t supply,uint8_t *extraptr,int32_t extralen)
+uint32_t komodo_assetmagic(const char *symbol,uint64_t supply,uint8_t *extraptr,int32_t extralen)
 {
-    uint8_t buf[512]; uint32_t crc0=0; int32_t len = 0; bits256 hash;
+    uint8_t buf[512]; 
+    uint32_t crc0=0; 
+    int32_t len = 0; 
+    bits256 hash;
     if ( strcmp(symbol,"KMD") == 0 )
         return(0x8de4eef9);
     len = iguana_rwnum(1,&buf[len],sizeof(supply),(void *)&supply);
@@ -1087,9 +1084,6 @@ uint32_t komodo_assetmagic(char *symbol,uint64_t supply,uint8_t *extraptr,int32_
     {
         vcalc_sha256(0,hash.bytes,extraptr,extralen);
         crc0 = hash.uints[0];
-        int32_t i; for (i=0; i<extralen; i++)
-            fprintf(stderr,"%02x",extraptr[i]);
-        fprintf(stderr," extralen.%d crc0.%x\n",extralen,crc0);
     }
     return(calc_crc32(crc0,buf,len));
 }
@@ -1103,7 +1097,7 @@ uint16_t komodo_assetport(uint32_t magic,int32_t extralen)
     else return(16000 + (magic % 49500));
 }
 
-uint16_t komodo_port(char *symbol,uint64_t supply,uint32_t *magicp,uint8_t *extraptr,int32_t extralen)
+uint16_t komodo_port(const char *symbol,uint64_t supply,uint32_t *magicp,uint8_t *extraptr,int32_t extralen)
 {
     if ( symbol == 0 || symbol[0] == 0 || strcmp("KMD",symbol) == 0 )
     {
@@ -1113,17 +1107,6 @@ uint16_t komodo_port(char *symbol,uint64_t supply,uint32_t *magicp,uint8_t *extr
     *magicp = komodo_assetmagic(symbol,supply,extraptr,extralen);
     return(komodo_assetport(*magicp,extralen));
 }
-
-/*void komodo_ports(uint16_t ports[MAX_CURRENCIES])
-{
-    int32_t i; uint32_t magic;
-    for (i=0; i<MAX_CURRENCIES; i++)
-    {
-        ports[i] = komodo_port(CURRENCIES[i],10,&magic);
-        printf("%u ",ports[i]);
-    }
-    printf("ports\n");
-}*/
 
 char *iguanafmtstr = (char *)"curl --url \"http://127.0.0.1:7776\" --data \"{\\\"conf\\\":\\\"%s.conf\\\",\\\"path\\\":\\\"${HOME#\"/\"}/.komodo/%s\\\",\\\"unitval\\\":\\\"20\\\",\\\"zcash\\\":1,\\\"RELAY\\\":-1,\\\"VALIDATE\\\":0,\\\"prefetchlag\\\":-1,\\\"poll\\\":100,\\\"active\\\":1,\\\"agent\\\":\\\"iguana\\\",\\\"method\\\":\\\"addcoin\\\",\\\"startpend\\\":4,\\\"endpend\\\":4,\\\"services\\\":129,\\\"maxpeers\\\":8,\\\"newcoin\\\":\\\"%s\\\",\\\"name\\\":\\\"%s\\\",\\\"hasheaders\\\":1,\\\"useaddmultisig\\\":0,\\\"netmagic\\\":\\\"%s\\\",\\\"p2p\\\":%u,\\\"rpc\\\":%u,\\\"pubval\\\":60,\\\"p2shval\\\":85,\\\"wifval\\\":188,\\\"txfee_satoshis\\\":\\\"10000\\\",\\\"isPoS\\\":0,\\\"minoutput\\\":10000,\\\"minconfirms\\\":2,\\\"genesishash\\\":\\\"027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71\\\",\\\"protover\\\":170002,\\\"genesisblock\\\":\\\"0100000000000000000000000000000000000000000000000000000000000000000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4a000000000000000000000000000000000000000000000000000000000000000029ab5f490f0f0f200b00000000000000000000000000000000000000000000000000000000000000fd4005000d5ba7cda5d473947263bf194285317179d2b0d307119c2e7cc4bd8ac456f0774bd52b0cd9249be9d40718b6397a4c7bbd8f2b3272fed2823cd2af4bd1632200ba4bf796727d6347b225f670f292343274cc35099466f5fb5f0cd1c105121b28213d15db2ed7bdba490b4cedc69742a57b7c25af24485e523aadbb77a0144fc76f79ef73bd8530d42b9f3b9bed1c135ad1fe152923fafe98f95f76f1615e64c4abb1137f4c31b218ba2782bc15534788dda2cc08a0ee2987c8b27ff41bd4e31cd5fb5643dfe862c9a02ca9f90c8c51a6671d681d04ad47e4b53b1518d4befafefe8cadfb912f3d03051b1efbf1dfe37b56e93a741d8dfd80d576ca250bee55fab1311fc7b3255977558cdda6f7d6f875306e43a14413facdaed2f46093e0ef1e8f8a963e1632dcbeebd8e49fd16b57d49b08f9762de89157c65233f60c8e38a1f503a48c555f8ec45dedecd574a37601323c27be597b956343107f8bd80f3a925afaf30811df83c402116bb9c1e5231c70fff899a7c82f73c902ba54da53cc459b7bf1113db65cc8f6914d3618560ea69abd13658fa7b6af92d374d6eca9529f8bd565166e4fcbf2a8dfb3c9b69539d4d2ee2e9321b85b331925df195915f2757637c2805e1d4131e1ad9ef9bc1bb1c732d8dba4738716d351ab30c996c8657bab39567ee3b29c6d054b711495c0d52e1cd5d8e55b4f0f0325b97369280755b46a02afd54be4ddd9f77c22272b8bbb17ff5118fedbae2564524e797bd28b5f74f7079d532ccc059807989f94d267f47e724b3f1ecfe00ec9e6541c961080d8891251b84b4480bc292f6a180bea089fef5bbda56e1e41390d7c0e85ba0ef530f7177413481a226465a36ef6afe1e2bca69d2078712b3912bba1a99b1fbff0d355d6ffe726d2bb6fbc103c4ac5756e5bee6e47e17424ebcbf1b63d8cb90ce2e40198b4f4198689daea254307e52a25562f4c1455340f0ffeb10f9d8e914775e37d0edca019fb1b9c6ef81255ed86bc51c5391e0591480f66e2d88c5f4fd7277697968656a9b113ab97f874fdd5f2465e5559533e01ba13ef4a8f7a21d02c30c8ded68e8c54603ab9c8084ef6d9eb4e92c75b078539e2ae786ebab6dab73a09e0aa9ac575bcefb29e930ae656e58bcb513f7e3c17e079dce4f05b5dbc18c2a872b22509740ebe6a3903e00ad1abc55076441862643f93606e3dc35e8d9f2caef3ee6be14d513b2e062b21d0061de3bd56881713a1a5c17f5ace05e1ec09da53f99442df175a49bd154aa96e4949decd52fed79ccf7ccbce32941419c314e374e4a396ac553e17b5340336a1a25c22f9e42a243ba5404450b650acfc826a6e432971ace776e15719515e1634ceb9a4a35061b668c74998d3dfb5827f6238ec015377e6f9c94f38108768cf6e5c8b132e0303fb5a200368f845ad9d46343035a6ff94031df8d8309415bb3f6cd5ede9c135fdabcc030599858d803c0f85be7661c88984d88faa3d26fb0e9aac0056a53f1b5d0baed713c853c4a2726869a0a124a8a5bbc0fc0ef80c8ae4cb53636aa02503b86a1eb9836fcc259823e2692d921d88e1ffc1e6cb2bde43939ceb3f32a611686f539f8f7c9f0bf00381f743607d40960f06d347d1cd8ac8a51969c25e37150efdf7aa4c2037a2fd0516fb444525ab157a0ed0a7412b2fa69b217fe397263153782c0f64351fbdf2678fa0dc8569912dcd8e3ccad38f34f23bbbce14c6a26ac24911b308b82c7e43062d180baeac4ba7153858365c72c63dcf5f6a5b08070b730adb017aeae925b7d0439979e2679f45ed2f25a7edcfd2fb77a8794630285ccb0a071f5cce410b46dbf9750b0354aae8b65574501cc69efb5b6a43444074fee116641bb29da56c2b4a7f456991fc92b2\\\",\\\"debug\\\":0,\\\"seedipaddr\\\":\\\"%s\\\",\\\"sapling\\\":1,\\\"notarypay\\\":%i}\"";
 
@@ -1398,7 +1381,7 @@ uint64_t komodo_ac_block_subsidy(int nHeight)
         else
             subsidy += ASSETCHAINS_SUPPLY * SATOSHIDEN + magicExtra;
     }
-    else if ( is_STAKED(ASSETCHAINS_SYMBOL) == 2 )
+    else if ( is_STAKED(chainName.symbol()) == 2 )
         return(0);
     // LABS fungible chains, cannot have any block reward!
     return(subsidy);
@@ -1488,7 +1471,6 @@ void set_kmd_user_password_port(const std::string& ltc_config_filename)
 
 void komodo_args(char *argv0)
 {
-    std::string name; // -ac_name
     char *dirname; 
     uint8_t disablebits[32],*extraptr=0;
     FILE *fp; 
@@ -1538,7 +1520,7 @@ void komodo_args(char *argv0)
         fprintf(stderr, "Cannot be STAKED and KMD notary at the same time!\n");
         StartShutdown();
     }
-	name = GetArg("-ac_name","");
+	std::string name = GetArg("-ac_name","");
     if ( argv0 != 0 )
     {
         int32_t len = (int32_t)strlen(argv0);
@@ -1553,6 +1535,7 @@ void komodo_args(char *argv0)
             }
         }
     }
+    chainName = assetchain(name);
     KOMODO_STOPAT = GetArg("-stopat",0);
     MAX_REORG_LENGTH = GetArg("-maxreorg",MAX_REORG_LENGTH);
     ASSETCHAINS_CC = GetArg("-ac_cc",0);
@@ -1593,7 +1576,8 @@ void komodo_args(char *argv0)
     }
     KOMODO_EARLYTXID = Parseuint256(GetArg("-earlytxid","0").c_str());    
     ASSETCHAINS_EARLYTXIDCONTRACT = GetArg("-ac_earlytxidcontract",0);
-    if ( name.c_str()[0] != 0 )
+
+    if ( !chainName.isKMD() )
     {
         std::string selectedAlgo = GetArg("-ac_algo", std::string(ASSETCHAINS_ALGORITHMS[0]));
 
@@ -1995,17 +1979,15 @@ void komodo_args(char *argv0)
                 extraptr[extralen++] = ASSETCHAINS_ADAPTIVEPOW;
         }
         
-        strncpy(ASSETCHAINS_SYMBOL,name.c_str(),sizeof(ASSETCHAINS_SYMBOL)-1);
-
-        /* VRSC chain is incompatible with Komodo daemon */
-        assert(strcmp(ASSETCHAINS_SYMBOL, "VRSC") != 0);
+        //addn = GetArg("-seednode","");
+        //if ( strlen(addn.c_str()) > 0 )
+        //    ASSETCHAINS_SEED = 1;
 
         MAX_MONEY = komodo_max_money();
-
-        int32_t baseid = komodo_baseid(ASSETCHAINS_SYMBOL);
-        if ( baseid >= 0 && baseid < 32 )
+        int32_t baseid;
+        if ( (baseid = komodo_baseid(chainName.symbol().c_str())) >= 0 && baseid < 32 )
         {
-            printf("baseid.%d MAX_MONEY.%s %.8f\n",baseid,ASSETCHAINS_SYMBOL,(double)MAX_MONEY/SATOSHIDEN);
+            printf("baseid.%d MAX_MONEY.%s %.8f\n",baseid,chainName.symbol().c_str(),(double)MAX_MONEY/SATOSHIDEN);
         }
 
         if ( ASSETCHAINS_CC >= KOMODO_FIRSTFUNGIBLEID && MAX_MONEY < 1000000LL*SATOSHIDEN )
@@ -2013,7 +1995,7 @@ void komodo_args(char *argv0)
         if ( KOMODO_BIT63SET(MAX_MONEY) != 0 )
             MAX_MONEY = KOMODO_MAXNVALUE;
         fprintf(stderr,"MAX_MONEY %llu %.8f\n",(long long)MAX_MONEY,(double)MAX_MONEY/SATOSHIDEN);
-        uint16_t tmpport = komodo_port(ASSETCHAINS_SYMBOL,ASSETCHAINS_SUPPLY,&ASSETCHAINS_MAGIC,extraptr,extralen);
+        uint16_t tmpport = komodo_port(chainName.symbol().c_str(),ASSETCHAINS_SUPPLY,&ASSETCHAINS_MAGIC,extraptr,extralen);
         if ( GetArg("-port",0) != 0 )
         {
             ASSETCHAINS_P2PPORT = GetArg("-port",0);
@@ -2029,22 +2011,21 @@ void komodo_args(char *argv0)
             boost::this_thread::sleep(boost::posix_time::milliseconds(3000));
 #endif
         }
-        if ( ASSETCHAINS_SYMBOL[0] != 0 )
+        if ( !chainName.isKMD() )
         {
-            int32_t komodo_baseid(char *origbase);
-            if ( strcmp(ASSETCHAINS_SYMBOL,"KMD") == 0 )
+            if ( chainName.isSymbol("KMD") )
             {
-                fprintf(stderr,"cant have assetchain named KMD\n");
+                fprintf(stderr,"can't have assetchain named KMD\n");
                 StartShutdown();
             }
-            uint16_t port = komodo_userpass(ASSETCHAINS_USERPASS,ASSETCHAINS_SYMBOL);
-            if ( port != 0 )
+            uint16_t port;
+            if ( (port= komodo_userpass(ASSETCHAINS_USERPASS,chainName.symbol().c_str())) != 0 )
                 ASSETCHAINS_RPCPORT = port;
-            else komodo_configfile(ASSETCHAINS_SYMBOL,ASSETCHAINS_P2PPORT + 1);
+            else komodo_configfile(chainName.symbol().c_str(),ASSETCHAINS_P2PPORT + 1);
 
             if (ASSETCHAINS_CBMATURITY != 0)
                 Params().SetCoinbaseMaturity(ASSETCHAINS_CBMATURITY);
-            else if (ASSETCHAINS_LASTERA == 0 || is_STAKED(ASSETCHAINS_SYMBOL) != 0)
+            else if (ASSETCHAINS_LASTERA == 0 || is_STAKED(chainName.symbol()) != 0)
                 Params().SetCoinbaseMaturity(1);
             if (Params().CoinbaseMaturity() < 1)
             {
@@ -2062,7 +2043,7 @@ void komodo_args(char *argv0)
         magicstr[8] = 0;
 #ifndef FROM_CLI
         char fname[512];
-        sprintf(fname,"%s_7776",ASSETCHAINS_SYMBOL);
+        sprintf(fname,"%s_7776",chainName.symbol().c_str());
         if ( (fp= fopen(fname,"wb")) != 0 )
         {
             int8_t notarypay = 0;
@@ -2092,10 +2073,11 @@ void komodo_args(char *argv0)
         set_kmd_user_password_port(ntz_dest_path);
     }
     int32_t dpowconfs = KOMODO_DPOWCONFS;
-    if ( ASSETCHAINS_SYMBOL[0] != 0 )
+    if ( !chainName.isKMD() )
     {
         BITCOIND_RPCPORT = GetArg("-rpcport", ASSETCHAINS_RPCPORT);
-        if ( strcmp("PIRATE",ASSETCHAINS_SYMBOL) == 0 && ASSETCHAINS_HALVING[0] == 77777 )
+        //fprintf(stderr,"(%s) port.%u chain params initialized\n",chainName.symbol().c_str(),BITCOIND_RPCPORT);
+        if ( chainName.isSymbol("PIRATE") && ASSETCHAINS_HALVING[0] == 77777 )
         {
             ASSETCHAINS_HALVING[0] *= 5;
             fprintf(stderr,"PIRATE halving changed to %d %.1f days ASSETCHAINS_LASTERA.%llu\n",(int32_t)ASSETCHAINS_HALVING[0],(double)ASSETCHAINS_HALVING[0]/1440,(long long)ASSETCHAINS_LASTERA);
@@ -2106,19 +2088,19 @@ void komodo_args(char *argv0)
             StartShutdown();
         }
         // Set cc enables for all existing ac_cc chains here. 
-        if ( strcmp("AXO",ASSETCHAINS_SYMBOL) == 0 )
+        if ( chainName.isSymbol("AXO") )
         {
             // No CCs used on this chain yet.
             CCDISABLEALL;
         }
-        if ( strcmp("CCL",ASSETCHAINS_SYMBOL) == 0 )
+        if ( chainName.isSymbol("CCL") )
         {
             // No CCs used on this chain yet. 
             CCDISABLEALL;
             CCENABLE(EVAL_TOKENS);
             CCENABLE(EVAL_HEIR);
         }
-        if ( strcmp("COQUI",ASSETCHAINS_SYMBOL) == 0 )
+        if ( chainName.isSymbol("COQUI") )
         {
             CCDISABLEALL;
             CCENABLE(EVAL_DICE);
@@ -2127,53 +2109,60 @@ void komodo_args(char *argv0)
             CCENABLE(EVAL_ASSETS);
             CCENABLE(EVAL_TOKENS);
         }
-        if ( strcmp("DION",ASSETCHAINS_SYMBOL) == 0 )
+        if ( chainName.isSymbol("DION") )
         {
             // No CCs used on this chain yet. 
             CCDISABLEALL;
         }
         
-        if ( strcmp("EQL",ASSETCHAINS_SYMBOL) == 0 )
+        if ( chainName.isSymbol("EQL") )
         {
             // No CCs used on this chain yet. 
             CCDISABLEALL;
         }
-        if ( strcmp("ILN",ASSETCHAINS_SYMBOL) == 0 )
+        if ( chainName.isSymbol("ILN") )
         {
             // No CCs used on this chain yet. 
             CCDISABLEALL;
         }
-        if ( strcmp("OUR",ASSETCHAINS_SYMBOL) == 0 )
+        if ( chainName.isSymbol("OUR") )
         {
             // No CCs used on this chain yet. 
             CCDISABLEALL;
         }
-        if ( strcmp("ZEXO",ASSETCHAINS_SYMBOL) == 0 )
+        if ( chainName.isSymbol("ZEXO") )
         {
             // No CCs used on this chain yet. 
             CCDISABLEALL;
         }
-        if ( strcmp("SEC",ASSETCHAINS_SYMBOL) == 0 )
+        if ( chainName.isSymbol("SEC") )
         {
             CCDISABLEALL;
             CCENABLE(EVAL_ASSETS);
             CCENABLE(EVAL_TOKENS);
             CCENABLE(EVAL_ORACLES);
         }
-        if ( strcmp("KMDICE",ASSETCHAINS_SYMBOL) == 0 )
+        if ( chainName.isSymbol("KMDICE") )
         {
             CCDISABLEALL;
             CCENABLE(EVAL_FAUCET);
             CCENABLE(EVAL_DICE);
             CCENABLE(EVAL_ORACLES);
         }
-    } else BITCOIND_RPCPORT = GetArg("-rpcport", BaseParams().RPCPort());
+    } 
+    else 
+        BITCOIND_RPCPORT = GetArg("-rpcport", BaseParams().RPCPort());
     KOMODO_DPOWCONFS = GetArg("-dpowconfs",dpowconfs);
-    if ( ASSETCHAINS_SYMBOL[0] == 0 || strcmp(ASSETCHAINS_SYMBOL,"SUPERNET") == 0 || strcmp(ASSETCHAINS_SYMBOL,"DEX") == 0 || strcmp(ASSETCHAINS_SYMBOL,"COQUI") == 0 || strcmp(ASSETCHAINS_SYMBOL,"PIRATE") == 0 || strcmp(ASSETCHAINS_SYMBOL,"KMDICE") == 0 )
+    if ( chainName.isKMD() 
+            || chainName.isSymbol("SUPERNET") 
+            || chainName.isSymbol("DEX") 
+            || chainName.isSymbol("COQUI") 
+            || chainName.isSymbol("PIRATE") 
+            || chainName.isSymbol("KMDICE") )
         KOMODO_EXTRASATOSHI = 1;
 }
 
-void komodo_nameset(char *symbol,char *dest,char *source)
+void komodo_nameset(char *symbol,char *dest,const char *source)
 {
     if ( source[0] == 0 )
     {
@@ -2200,7 +2189,7 @@ struct komodo_state *komodo_stateptrget(char *base)
 struct komodo_state *komodo_stateptr(char *symbol,char *dest)
 {
     int32_t baseid;
-    komodo_nameset(symbol,dest,ASSETCHAINS_SYMBOL);
+    komodo_nameset(symbol,dest,chainName.symbol().c_str());
     return(komodo_stateptrget(symbol));
 }
 

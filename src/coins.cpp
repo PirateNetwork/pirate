@@ -606,7 +606,7 @@ CAmount CCoinsViewCache::GetValueIn(int32_t nHeight,int64_t &interestp,const CTr
         value = GetOutputFor(tx.vin[i]).nValue;
         nResult += value;
 #ifdef KOMODO_ENABLE_INTEREST
-        if ( ASSETCHAINS_SYMBOL[0] == 0 && nHeight >= 60000 )
+        if ( chainName.isKMD() && nHeight >= 60000 )
         {
             if ( value >= 10*COIN )
             {

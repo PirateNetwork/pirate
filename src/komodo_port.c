@@ -12,12 +12,12 @@
  * Removal or modification of this copyright notice is prohibited.            *
  *                                                                            *
  ******************************************************************************/
-
+#include "bits256.h"
+#include "komodo_utils.h" // for komodo_port
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <memory.h>
-#include "bits256.h"
 
 uint64_t ASSETCHAINS_COMMISSION;
 uint32_t ASSETCHAINS_MAGIC = 2387029918;
@@ -761,22 +761,6 @@ int32_t iguana_rwnum(int32_t rwflag,uint8_t *serialized,int32_t len,void *endian
     return(len);
 }
 
-uint32_t komodo_assetmagic(char *symbol,uint64_t supply,uint8_t *extraptr,int32_t extralen)
-{
-    uint8_t buf[512]; uint32_t crc0=0; int32_t len = 0; bits256 hash;
-    if ( strcmp(symbol,"KMD") == 0 )
-        return(0x8de4eef9);
-    len = iguana_rwnum(1,&buf[len],sizeof(supply),(void *)&supply);
-    strcpy((char *)&buf[len],symbol);
-    len += strlen(symbol);
-    if ( extraptr != 0 && extralen != 0 )
-    {
-        vcalc_sha256(0,hash.bytes,extraptr,extralen);
-        crc0 = hash.uints[0];
-    }
-    return(calc_crc32(crc0,buf,len));
-}
-
 uint16_t komodo_assetport(uint32_t magic,int32_t extralen)
 {
     if ( magic == 0x8de4eef9 )
@@ -784,17 +768,6 @@ uint16_t komodo_assetport(uint32_t magic,int32_t extralen)
     else if ( extralen == 0 )
         return(8000 + (magic % 7777));
     else return(16000 + (magic % 49500));
-}
-
-uint16_t komodo_port(char *symbol,uint64_t supply,uint32_t *magicp,uint8_t *extraptr,int32_t extralen)
-{
-    if ( symbol == 0 || symbol[0] == 0 || strcmp("KMD",symbol) == 0 )
-    {
-        *magicp = 0x8de4eef9;
-        return(7770);
-    }
-    *magicp = komodo_assetmagic(symbol,supply,extraptr,extralen);
-    return(komodo_assetport(*magicp,extralen));
 }
 
 uint16_t komodo_calcport(char *name,uint64_t supply,uint64_t endsubsidy,uint64_t reward,uint64_t halving,uint64_t decay,uint64_t commission,uint8_t staked,int32_t cc)

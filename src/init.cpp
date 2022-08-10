@@ -101,7 +101,6 @@ using namespace std;
 
 extern void ThreadSendAlert();
 extern bool komodo_dailysnapshot(int32_t height);
-extern char ASSETCHAINS_SYMBOL[];
 extern int32_t KOMODO_SNAPSHOT_INTERVAL;
 
 ZCJoinSplit* pzcashParams = NULL;
@@ -226,7 +225,8 @@ void Shutdown()
     /// Be sure that anything that writes files or flushes caches only does this if the respective
     /// module was initialized.
     static char shutoffstr[128];
-    sprintf(shutoffstr,"%s-shutoff",ASSETCHAINS_SYMBOL);
+    sprintf(shutoffstr,"%s-shutoff",chainName.symbol().c_str());
+    //RenameThread("verus-shutoff");
     RenameThread(shutoffstr);
     mempool.AddTransactionsUpdated(1);
 
@@ -770,7 +770,7 @@ void ThreadUpdateKomodoInternals() {
     try {
         while (true) {
 
-            if ( ASSETCHAINS_SYMBOL[0] == 0 )
+            if ( chainName.isKMD() )
                 fireDelaySeconds = 10;
             else
                 fireDelaySeconds = ASSETCHAINS_BLOCKTIME/5 + 1;
@@ -784,7 +784,7 @@ void ThreadUpdateKomodoInternals() {
 
             boost::this_thread::interruption_point();
 
-            if ( ASSETCHAINS_SYMBOL[0] == 0 )
+            if ( chainName.isKMD() )
                 {
                     if ( KOMODO_NSPV_FULLNODE ) {
                         auto start = std::chrono::high_resolution_clock::now();

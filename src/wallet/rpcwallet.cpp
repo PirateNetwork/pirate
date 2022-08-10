@@ -159,17 +159,9 @@ void WalletTxToJSON(const CWalletTx& wtx, UniValue& entry)
     entry.push_back(Pair("vjoinsplit", TxJoinSplitToJSON(wtx)));
 }
 
-string AccountFromValue(const UniValue& value)
+const std::string AccountFromValue(const UniValue& value)
 {
-    string strAccount = value.get_str();
-    //if (strAccount != "")
-    //    throw JSONRPCError(RPC_WALLET_ACCOUNTS_UNSUPPORTED, "Accounts are unsupported");
-    return strAccount;
-}
-
-char *komodo_chainname()
-{
-     return(ASSETCHAINS_SYMBOL[0] == 0 ? (char *)"KMD" : ASSETCHAINS_SYMBOL);
+    return value.get_str();
 }
 
 void OS_randombytes(unsigned char *x,long xlen);
@@ -182,11 +174,11 @@ UniValue getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (fHelp || params.size() > 1)
         throw runtime_error(
             "getnewaddress ( \"account\" )\n"
-            "\nReturns a new " + strprintf("%s",komodo_chainname()) + " address for receiving payments.\n"
+            "\nReturns a new " + chainName.ToString() + " address for receiving payments.\n"
             "\nArguments:\n"
             "1. \"account\"        (string, optional) DEPRECATED. If provided, it MUST be set to the empty string \"\" to represent the default account. Passing any other string will result in an error.\n"
             "\nResult:\n"
-            "\"" + strprintf("%s",komodo_chainname()) + "_address\"    (string) The new " + strprintf("%s",komodo_chainname()) + " address\n"
+            "\"" + chainName.ToString() + "_address\"    (string) The new " + chainName.ToString() + " address\n"
             "\nExamples:\n"
             + HelpExampleCli("getnewaddress", "")
             + HelpExampleRpc("getnewaddress", "")
@@ -276,11 +268,11 @@ UniValue getaccountaddress(const UniValue& params, bool fHelp, const CPubKey& my
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "getaccountaddress \"account\"\n"
-            "\nDEPRECATED. Returns the current " + strprintf("%s",komodo_chainname()) + " address for receiving payments to this account.\n"
+            "\nDEPRECATED. Returns the current " + chainName.ToString() + " address for receiving payments to this account.\n"
             "\nArguments:\n"
             "1. \"account\"       (string, required) MUST be set to the empty string \"\" to represent the default account. Passing any other string will result in an error.\n"
             "\nResult:\n"
-            "\"" + strprintf("%s",komodo_chainname()) + "_address\"   (string) The account " + strprintf("%s",komodo_chainname()) + " address\n"
+            "\"" + chainName.ToString() + "_address\"   (string) The account " + chainName.ToString() + " address\n"
             "\nExamples:\n"
             + HelpExampleCli("getaccountaddress", "")
             + HelpExampleCli("getaccountaddress", "\"\"")
@@ -308,7 +300,7 @@ UniValue getrawchangeaddress(const UniValue& params, bool fHelp, const CPubKey& 
     if (fHelp || params.size() > 1)
         throw runtime_error(
             "getrawchangeaddress\n"
-            "\nReturns a new " + strprintf("%s",komodo_chainname()) + " address, for receiving change.\n"
+            "\nReturns a new " + chainName.ToString() + " address, for receiving change.\n"
             "This is for use with raw transactions, NOT normal use.\n"
             "\nResult:\n"
             "\"address\"    (string) The address\n"
@@ -342,10 +334,10 @@ UniValue setaccount(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
-            "setaccount \"" + strprintf("%s",komodo_chainname()) + "_address\" \"account\"\n"
+            "setaccount \"" + chainName.ToString() + "_address\" \"account\"\n"
             "\nDEPRECATED. Sets the account associated with the given address.\n"
             "\nArguments:\n"
-            "1. \"" + strprintf("%s",komodo_chainname()) + "_address\"  (string, required) The " + strprintf("%s",komodo_chainname()) + " address to be associated with an account.\n"
+            "1. \"" + chainName.ToString() + "_address\"  (string, required) The " + chainName.ToString() + " address to be associated with an account.\n"
             "2. \"account\"         (string, required) MUST be set to the empty string \"\" to represent the default account. Passing any other string will result in an error.\n"
             "\nExamples:\n"
             + HelpExampleCli("setaccount", "\"RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPV\" \"tabby\"")
@@ -388,10 +380,10 @@ UniValue getaccount(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     if (fHelp || params.size() != 1)
         throw runtime_error(
-            "getaccount \"" + strprintf("%s",komodo_chainname()) + "_address\"\n"
+            "getaccount \"" + chainName.ToString() + "_address\"\n"
             "\nDEPRECATED. Returns the account associated with the given address.\n"
             "\nArguments:\n"
-            "1. \"" + strprintf("%s",komodo_chainname()) + "_address\"  (string, required) The " + strprintf("%s",komodo_chainname()) + " address for account lookup.\n"
+            "1. \"" + chainName.ToString() + "_address\"  (string, required) The " + chainName.ToString() + " address for account lookup.\n"
             "\nResult:\n"
             "\"accountname\"        (string) the account address\n"
             "\nExamples:\n"
@@ -428,7 +420,7 @@ UniValue getaddressesbyaccount(const UniValue& params, bool fHelp, const CPubKey
             "1. \"account\"  (string, required) MUST be set to the empty string \"\" to represent the default account. Passing any other string will result in an error.\n"
             "\nResult:\n"
             "[                     (json array of string)\n"
-            "  \"" + strprintf("%s",komodo_chainname()) + "_address\"  (string) a " + strprintf("%s",komodo_chainname()) + " address associated with the given account\n"
+            "  \"" + chainName.ToString() + "_address\"  (string) a " + chainName.ToString() + " address associated with the given account\n"
             "  ,...\n"
             "]\n"
             "\nExamples:\n"
@@ -504,19 +496,19 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     if (fHelp || params.size() < 2 || params.size() > 5)
         throw runtime_error(
-            "sendtoaddress \"" + strprintf("%s",komodo_chainname()) + "_address\" amount ( \"comment\" \"comment-to\" subtractfeefromamount )\n"
+            "sendtoaddress \"" + chainName.ToString() + "_address\" amount ( \"comment\" \"comment-to\" subtractfeefromamount )\n"
             "\nSend an amount to a given address. The amount is a real and is rounded to the nearest 0.00000001\n"
             + HelpRequiringPassphrase() +
             "\nArguments:\n"
-            "1. \"" + strprintf("%s",komodo_chainname()) + "_address\"  (string, required) The " + strprintf("%s",komodo_chainname()) + " address to send to.\n"
-            "2. \"amount\"      (numeric, required) The amount in " + strprintf("%s",komodo_chainname()) + " to send. eg 0.1\n"
+            "1. \"" + chainName.ToString() + "_address\"  (string, required) The " + chainName.ToString() + " address to send to.\n"
+            "2. \"amount\"      (numeric, required) The amount in " + chainName.ToString() + " to send. eg 0.1\n"
             "3. \"comment\"     (string, optional) A comment used to store what the transaction is for. \n"
             "                             This is not part of the transaction, just kept in your wallet.\n"
             "4. \"comment-to\"  (string, optional) A comment to store the name of the person or organization \n"
             "                             to which you're sending the transaction. This is not part of the \n"
             "                             transaction, just kept in your wallet.\n"
             "5. subtractfeefromamount  (boolean, optional, default=false) The fee will be deducted from the amount being sent.\n"
-            "                             The recipient will receive less " + strprintf("%s",komodo_chainname()) + " than you enter in the amount field.\n"
+            "                             The recipient will receive less " + chainName.ToString() + " than you enter in the amount field.\n"
             "\nResult:\n"
             "\"transactionid\"  (string) The transaction id.\n"
             "\nExamples:\n"
@@ -530,7 +522,7 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
     {
         if ( komodo_isnotaryvout((char *)params[0].get_str().c_str(),chainActive.Tip()->nTime) == 0 )
         {
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid " + strprintf("%s",komodo_chainname()) + " address");
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid " + chainName.ToString() + " address");
         }
     }
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -602,7 +594,7 @@ UniValue kvupdate(const UniValue& params, bool fHelp, const CPubKey& mypk)
         );
     if (!EnsureWalletIsAvailable(fHelp))
         return 0;
-    if ( ASSETCHAINS_SYMBOL[0] == 0 )
+    if ( chainName.isKMD() )
         return(0);
     haveprivkey = 0;
     memset(&sig,0,sizeof(sig));
@@ -653,13 +645,10 @@ UniValue kvupdate(const UniValue& params, bool fHelp, const CPubKey& mypk)
                     ret.push_back(Pair("error",(char *)"error verifying sig, passphrase is probably wrong"));
                     printf("VERIFY ERROR\n");
                     return ret;
-                } // else printf("verified immediately\n");
+                }
             }
         }
-        //for (i=0; i<32; i++)
-        //    printf("%02x",((uint8_t *)&sig)[i]);
-        //printf(" sig for keylen.%d + valuesize.%d\n",keylen,refvaluesize);
-        ret.push_back(Pair("coin",(char *)(ASSETCHAINS_SYMBOL[0] == 0 ? "KMD" : ASSETCHAINS_SYMBOL)));
+        ret.push_back(Pair("coin", chainName.ToString()));
         height = chainActive.Tip()->nHeight;
         if ( memcmp(&zeroes,&refpubkey,sizeof(refpubkey)) != 0 )
             ret.push_back(Pair("owner",refpubkey.GetHex()));
@@ -738,7 +727,7 @@ UniValue paxdeposit(const UniValue& params, bool fHelp, const CPubKey& mypk)
         fprintf(stderr,"available %llu vs fiatoshis %llu\n",(long long)available,(long long)fiatoshis);
         throw runtime_error("paxdeposit not enough available inventory");
     }
-    komodoshis = PAX_fiatdest(&seed,0,destaddr,pubkey37,(char *)params[0].get_str().c_str(),height,(char *)base.c_str(),fiatoshis);
+    komodoshis = PAX_fiatdest(&seed,0,destaddr,pubkey37,params[0].get_str().c_str(),height,base.c_str(),fiatoshis);
     dest.append(destaddr);
     CBitcoinAddress destaddress(CRYPTO777_KMDADDR);
     if (!destaddress.IsValid())
@@ -760,7 +749,7 @@ UniValue paxdeposit(const UniValue& params, bool fHelp, const CPubKey& mypk)
 UniValue paxwithdraw(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     CWalletTx wtx; std::string dest; int32_t kmdheight; uint64_t seed,komodoshis = 0; char destaddr[64]; uint8_t i,pubkey37[37]; bool fSubtractFeeFromAmount = false;
-    if ( ASSETCHAINS_SYMBOL[0] == 0 )
+    if ( chainName.isKMD() )
         return(0);
     if (!EnsureWalletIsAvailable(fHelp))
         return 0;
@@ -774,14 +763,14 @@ UniValue paxwithdraw(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (!address.IsValid())
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Bitcoin address");
     int64_t fiatoshis = atof(params[1].get_str().c_str()) * COIN;
-    komodoshis = PAX_fiatdest(&seed,1,destaddr,pubkey37,(char *)params[0].get_str().c_str(),kmdheight,ASSETCHAINS_SYMBOL,fiatoshis);
+    komodoshis = PAX_fiatdest(&seed,1,destaddr,pubkey37,(char *)params[0].get_str().c_str(),kmdheight,chainName.symbol().c_str(),fiatoshis);
     dest.append(destaddr);
     CBitcoinAddress destaddress(CRYPTO777_KMDADDR);
     if (!destaddress.IsValid())
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid dest Bitcoin address");
     for (i=0; i<33; i++)
         printf("%02x",pubkey37[i]);
-    printf(" kmdheight.%d srcaddr.(%s) %s fiatoshis.%lld -> dest.(%s) komodoshis.%llu seed.%llx\n",kmdheight,(char *)params[0].get_str().c_str(),ASSETCHAINS_SYMBOL,(long long)fiatoshis,destaddr,(long long)komodoshis,(long long)seed);
+    printf(" kmdheight.%d srcaddr.(%s) %s fiatoshis.%lld -> dest.(%s) komodoshis.%llu seed.%llx\n",kmdheight,(char *)params[0].get_str().c_str(),chainName.symbol().c_str(),(long long)fiatoshis,destaddr,(long long)komodoshis,(long long)seed);
     EnsureWalletIsUnlocked();
     uint8_t opretbuf[64]; int32_t opretlen; uint64_t fee = fiatoshis / 1000;
     if ( fee < 10000 )
@@ -807,8 +796,8 @@ UniValue listaddressgroupings(const UniValue& params, bool fHelp, const CPubKey&
             "[\n"
             "  [\n"
             "    [\n"
-            "      \"" + strprintf("%s",komodo_chainname()) + " address\",     (string) The " + strprintf("%s",komodo_chainname()) + " address\n"
-            "      amount,                 (numeric) The amount in " + strprintf("%s",komodo_chainname()) + "\n"
+            "      \"" + chainName.ToString() + " address\",     (string) The " + chainName.ToString() + " address\n"
+            "      amount,                 (numeric) The amount in " + chainName.ToString() + "\n"
             "      \"account\"             (string, optional) The account (DEPRECATED)\n"
             "    ]\n"
             "    ,...\n"
@@ -909,13 +898,13 @@ UniValue getreceivedbyaddress(const UniValue& params, bool fHelp, const CPubKey&
 
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
-            "getreceivedbyaddress \"" + strprintf("%s",komodo_chainname()) + "_address\" ( minconf )\n"
-            "\nReturns the total amount received by the given " + strprintf("%s",komodo_chainname()) + " address in transactions with at least minconf confirmations.\n"
+            "getreceivedbyaddress \"" + chainName.ToString() + "_address\" ( minconf )\n"
+            "\nReturns the total amount received by the given " + chainName.ToString() + " address in transactions with at least minconf confirmations.\n"
             "\nArguments:\n"
-            "1. \"" + strprintf("%s",komodo_chainname()) + "_address\"  (string, required) The " + strprintf("%s",komodo_chainname()) + " address for transactions.\n"
+            "1. \"" + chainName.ToString() + "_address\"  (string, required) The " + chainName.ToString() + " address for transactions.\n"
             "2. minconf             (numeric, optional, default=1) Only include transactions confirmed at least this many times.\n"
             "\nResult:\n"
-            "amount   (numeric) The total amount in " + strprintf("%s",komodo_chainname()) + " received at this address.\n"
+            "amount   (numeric) The total amount in " + chainName.ToString() + " received at this address.\n"
             "\nExamples:\n"
             "\nThe amount from transactions with at least 1 confirmation\n"
             + HelpExampleCli("getreceivedbyaddress", "\"RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPV\"") +
@@ -986,7 +975,7 @@ UniValue getreceivedbyaccount(const UniValue& params, bool fHelp, const CPubKey&
             "1. \"account\"      (string, required) MUST be set to the empty string \"\" to represent the default account. Passing any other string will result in an error.\n"
             "2. minconf          (numeric, optional, default=1) Only include transactions confirmed at least this many times.\n"
             "\nResult:\n"
-            "amount              (numeric) The total amount in " + strprintf("%s",komodo_chainname()) + " received for this account.\n"
+            "amount              (numeric) The total amount in " + chainName.ToString() + " received for this account.\n"
             "\nExamples:\n"
             "\nAmount received by the default account with at least 1 confirmation\n"
             + HelpExampleCli("getreceivedbyaccount", "\"\"") +
@@ -1085,7 +1074,7 @@ UniValue cleanwallettransactions(const UniValue& params, bool fHelp, const CPubK
             "1. \"txid\"    (string, optional) The transaction id to keep.\n"
             "\nResult:\n"
             "{\n"
-            "  \"total_transactions\" : n,         (numeric) Transactions in wallet of " + strprintf("%s",komodo_chainname()) + "\n"
+            "  \"total_transactions\" : n,         (numeric) Transactions in wallet of " + chainName.ToString() + "\n"
             "  \"remaining_transactions\" : n,     (numeric) Transactions in wallet after clean.\n"
             "  \"removed_transactions\" : n,       (numeric) The number of transactions removed.\n"
             "}\n"
@@ -1188,7 +1177,7 @@ UniValue getbalance(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "2. minconf          (numeric, optional, default=1) Only include transactions confirmed at least this many times.\n"
             "3. includeWatchonly (bool, optional, default=false) Also include balance in watchonly addresses (see 'importaddress')\n"
             "\nResult:\n"
-            "amount              (numeric) The total amount in " + strprintf("%s",komodo_chainname()) + " received for this account.\n"
+            "amount              (numeric) The total amount in " + chainName.ToString() + " received for this account.\n"
             "\nExamples:\n"
             "\nThe total amount in the wallet\n"
             + HelpExampleCli("getbalance", "") +
@@ -1284,15 +1273,15 @@ UniValue movecmd(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "\nArguments:\n"
             "1. \"fromaccount\"   (string, required) MUST be set to the empty string \"\" to represent the default account. Passing any other string will result in an error.\n"
             "2. \"toaccount\"     (string, required) MUST be set to the empty string \"\" to represent the default account. Passing any other string will result in an error.\n"
-            "3. amount            (numeric) Quantity of " + strprintf("%s",komodo_chainname()) + " to move between accounts.\n"
+            "3. amount            (numeric) Quantity of " + chainName.ToString() + " to move between accounts.\n"
             "4. minconf           (numeric, optional, default=1) Only use funds with at least this many confirmations.\n"
             "5. \"comment\"       (string, optional) An optional comment, stored in the wallet only.\n"
             "\nResult:\n"
             "true|false           (boolean) true if successful.\n"
             "\nExamples:\n"
-            "\nMove 0.01 " + strprintf("%s",komodo_chainname()) + " from the default account to the account named tabby\n"
+            "\nMove 0.01 " + chainName.ToString() + " from the default account to the account named tabby\n"
             + HelpExampleCli("move", "\"\" \"tabby\" 0.01") +
-            "\nMove 0.01 " + strprintf("%s",komodo_chainname()) + " timotei to akiko with a comment and funds have 6 confirmations\n"
+            "\nMove 0.01 " + chainName.ToString() + " timotei to akiko with a comment and funds have 6 confirmations\n"
             + HelpExampleCli("move", "\"timotei\" \"akiko\" 0.01 6 \"happy birthday!\"") +
             "\nAs a json rpc call\n"
             + HelpExampleRpc("move", "\"timotei\", \"akiko\", 0.01, 6, \"happy birthday!\"")
@@ -1354,14 +1343,14 @@ UniValue sendfrom(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     if (fHelp || params.size() < 3 || params.size() > 6)
         throw runtime_error(
-            "sendfrom \"fromaccount\" \"to" + strprintf("%s",komodo_chainname()) + "address\" amount ( minconf \"comment\" \"comment-to\" )\n"
-            "\nDEPRECATED (use sendtoaddress). Sent an amount from an account to a " + strprintf("%s",komodo_chainname()) + " address.\n"
+            "sendfrom \"fromaccount\" \"to" + chainName.ToString() + "address\" amount ( minconf \"comment\" \"comment-to\" )\n"
+            "\nDEPRECATED (use sendtoaddress). Sent an amount from an account to a " + chainName.ToString() + " address.\n"
             "The amount is a real and is rounded to the nearest 0.00000001."
             + HelpRequiringPassphrase() + "\n"
             "\nArguments:\n"
             "1. \"fromaccount\"       (string, required) MUST be set to the empty string \"\" to represent the default account. Passing any other string will result in an error.\n"
-            "2. \"to" + strprintf("%s",komodo_chainname()) + "address\"  (string, required) The " + strprintf("%s",komodo_chainname()) + " address to send funds to.\n"
-            "3. amount                (numeric, required) The amount in " + strprintf("%s",komodo_chainname()) + " (transaction fee is added on top).\n"
+            "2. \"to" + chainName.ToString() + "address\"  (string, required) The " + chainName.ToString() + " address to send funds to.\n"
+            "3. amount                (numeric, required) The amount in " + chainName.ToString() + " (transaction fee is added on top).\n"
             "4. minconf               (numeric, optional, default=1) Only use funds with at least this many confirmations.\n"
             "5. \"comment\"           (string, optional) A comment used to store what the transaction is for. \n"
             "                                     This is not part of the transaction, just kept in your wallet.\n"
@@ -1371,7 +1360,7 @@ UniValue sendfrom(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "\nResult:\n"
             "\"transactionid\"        (string) The transaction id.\n"
             "\nExamples:\n"
-            "\nSend 0.01 " + strprintf("%s",komodo_chainname()) + " from the default account to the address, must have at least 1 confirmation\n"
+            "\nSend 0.01 " + chainName.ToString() + " from the default account to the address, must have at least 1 confirmation\n"
             + HelpExampleCli("sendfrom", "\"\" \"RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPV\" 0.01") +
             "\nSend 0.01 from the tabby account to the given address, funds must have at least 6 confirmations\n"
             + HelpExampleCli("sendfrom", "\"tabby\" \"RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPV\" 0.01 6 \"donation\" \"seans outpost\"") +
@@ -1429,14 +1418,14 @@ UniValue sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "1. \"fromaccount\"         (string, required) MUST be set to the empty string \"\" to represent the default account. Passing any other string will result in an error.\n"
             "2. \"amounts\"             (string, required) A json object with addresses and amounts\n"
             "    {\n"
-            "      \"address\":amount   (numeric) The " + strprintf("%s",komodo_chainname()) + " address is the key, the numeric amount in " + strprintf("%s",komodo_chainname()) + " is the value\n"
+            "      \"address\":amount   (numeric) The " + chainName.ToString() + " address is the key, the numeric amount in " + chainName.ToString() + " is the value\n"
             "      ,...\n"
             "    }\n"
             "3. minconf                 (numeric, optional, default=1) Only use the balance confirmed at least this many times.\n"
             "4. \"comment\"             (string, optional) A comment\n"
             "5. subtractfeefromamount   (string, optional) A json array with addresses.\n"
             "                           The fee will be equally deducted from the amount of each selected address.\n"
-            "                           Those recipients will receive less " + strprintf("%s",komodo_chainname()) + " than you enter in their corresponding amount field.\n"
+            "                           Those recipients will receive less " + chainName.ToString() + " than you enter in their corresponding amount field.\n"
             "                           If no addresses are specified here, the sender pays the fee.\n"
             "    [\n"
             "      \"address\"            (string) Subtract fee from this address\n"
@@ -1540,20 +1529,20 @@ UniValue addmultisigaddress(const UniValue& params, bool fHelp, const CPubKey& m
     {
         string msg = "addmultisigaddress nrequired [\"key\",...] ( \"account\" )\n"
             "\nAdd a nrequired-to-sign multisignature address to the wallet.\n"
-            "Each key is a " + strprintf("%s",komodo_chainname()) + " address or hex-encoded public key.\n"
+            "Each key is a " + chainName.ToString() + " address or hex-encoded public key.\n"
             "If 'account' is specified (DEPRECATED), assign address to that account.\n"
 
             "\nArguments:\n"
             "1. nrequired        (numeric, required) The number of required signatures out of the n keys or addresses.\n"
-            "2. \"keysobject\"   (string, required) A json array of " + strprintf("%s",komodo_chainname()) + " addresses or hex-encoded public keys\n"
+            "2. \"keysobject\"   (string, required) A json array of " + chainName.ToString() + " addresses or hex-encoded public keys\n"
             "     [\n"
-            "       \"address\"  (string) " + strprintf("%s",komodo_chainname()) + " address or hex-encoded public key\n"
+            "       \"address\"  (string) " + chainName.ToString() + " address or hex-encoded public key\n"
             "       ...,\n"
             "     ]\n"
             "3. \"account\"      (string, optional) DEPRECATED. If provided, MUST be set to the empty string \"\" to represent the default account. Passing any other string will result in an error.\n"
 
             "\nResult:\n"
-            "\"" + strprintf("%s",komodo_chainname()) + "_address\"  (string) A " + strprintf("%s",komodo_chainname()) + " address associated with the keys.\n"
+            "\"" + chainName.ToString() + "_address\"  (string) A " + chainName.ToString() + " address associated with the keys.\n"
 
             "\nExamples:\n"
             "\nAdd a multisig address from 2 addresses\n"
@@ -1746,7 +1735,7 @@ UniValue listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubKey
             "    \"involvesWatchonly\" : true,        (bool) Only returned if imported addresses were involved in transaction\n"
             "    \"address\" : \"receivingaddress\",  (string) The receiving address\n"
             "    \"account\" : \"accountname\",       (string) DEPRECATED. The account of the receiving address. The default account is \"\".\n"
-            "    \"amount\" : x.xxx,                  (numeric) The total amount in " + strprintf("%s",komodo_chainname()) + " received by the address\n"
+            "    \"amount\" : x.xxx,                  (numeric) The total amount in " + chainName.ToString() + " received by the address\n"
             "    \"confirmations\" : n                (numeric) The number of confirmations of the most recent transaction included\n"
             "  }\n"
             "  ,...\n"
@@ -1928,17 +1917,17 @@ UniValue listtransactions(const UniValue& params, bool fHelp, const CPubKey& myp
             "  {\n"
             "    \"account\":\"accountname\",       (string) DEPRECATED. The account name associated with the transaction. \n"
             "                                                It will be \"\" for the default account.\n"
-            "    \"address\":\"" + strprintf("%s",komodo_chainname()) + "_address\",    (string) The " + strprintf("%s",komodo_chainname()) + " address of the transaction. Not present for \n"
+            "    \"address\":\"" + chainName.ToString() + "_address\",    (string) The " + chainName.ToString() + " address of the transaction. Not present for \n"
             "                                                move transactions (category = move).\n"
             "    \"category\":\"send|receive|move\", (string) The transaction category. 'move' is a local (off blockchain)\n"
             "                                                transaction between accounts, and not associated with an address,\n"
             "                                                transaction id or block. 'send' and 'receive' transactions are \n"
             "                                                associated with an address, transaction id and block details\n"
-            "    \"amount\": x.xxx,          (numeric) The amount in " + strprintf("%s",komodo_chainname()) + ". This is negative for the 'send' category, and for the\n"
+            "    \"amount\": x.xxx,          (numeric) The amount in " + chainName.ToString() + ". This is negative for the 'send' category, and for the\n"
             "                                         'move' category for moves outbound. It is positive for the 'receive' category,\n"
             "                                         and for the 'move' category for inbound funds.\n"
             "    \"vout\" : n,               (numeric) the vout value\n"
-            "    \"fee\": x.xxx,             (numeric) The amount of the fee in " + strprintf("%s",komodo_chainname()) + ". This is negative and only available for the \n"
+            "    \"fee\": x.xxx,             (numeric) The amount of the fee in " + chainName.ToString() + ". This is negative and only available for the \n"
             "                                         'send' category of transactions.\n"
             "    \"confirmations\": n,       (numeric) The number of confirmations for the transaction. Available for 'send' and \n"
             "                                         'receive' category of transactions.\n"
@@ -2131,12 +2120,12 @@ UniValue listsinceblock(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "{\n"
             "  \"transactions\": [\n"
             "    \"account\":\"accountname\",       (string) DEPRECATED. The account name associated with the transaction. Will be \"\" for the default account.\n"
-            "    \"address\":\"" + strprintf("%s",komodo_chainname()) + "_address\",    (string) The " + strprintf("%s",komodo_chainname()) + " address of the transaction. Not present for move transactions (category = move).\n"
+            "    \"address\":\"" + chainName.ToString() + "_address\",    (string) The " + chainName.ToString() + " address of the transaction. Not present for move transactions (category = move).\n"
             "    \"category\":\"send|receive\",     (string) The transaction category. 'send' has negative amounts, 'receive' has positive amounts.\n"
-            "    \"amount\": x.xxx,          (numeric) The amount in " + strprintf("%s",komodo_chainname()) + ". This is negative for the 'send' category, and for the 'move' category for moves \n"
+            "    \"amount\": x.xxx,          (numeric) The amount in " + chainName.ToString() + ". This is negative for the 'send' category, and for the 'move' category for moves \n"
             "                                          outbound. It is positive for the 'receive' category, and for the 'move' category for inbound funds.\n"
             "    \"vout\" : n,               (numeric) the vout value\n"
-            "    \"fee\": x.xxx,             (numeric) The amount of the fee in " + strprintf("%s",komodo_chainname()) + ". This is negative and only available for the 'send' category of transactions.\n"
+            "    \"fee\": x.xxx,             (numeric) The amount of the fee in " + chainName.ToString() + ". This is negative and only available for the 'send' category of transactions.\n"
             "    \"confirmations\": n,       (numeric) The number of confirmations for the transaction. Available for 'send' and 'receive' category of transactions.\n"
             "    \"blockhash\": \"hashvalue\",     (string) The block hash containing the transaction. Available for 'send' and 'receive' category of transactions.\n"
             "    \"blockindex\": n,          (numeric) The block index containing the transaction. Available for 'send' and 'receive' category of transactions.\n"
@@ -2219,7 +2208,7 @@ UniValue gettransaction(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "2. \"includeWatchonly\"    (bool, optional, default=false) Whether to include watchonly addresses in balance calculation and details[]\n"
             "\nResult:\n"
             "{\n"
-            "  \"amount\" : x.xxx,        (numeric) The transaction amount in " + strprintf("%s",komodo_chainname()) + "\n"
+            "  \"amount\" : x.xxx,        (numeric) The transaction amount in " + chainName.ToString() + "\n"
             "  \"confirmations\" : n,     (numeric) The number of confirmations\n"
             "  \"blockhash\" : \"hash\",  (string) The block hash\n"
             "  \"blockindex\" : xx,       (numeric) The block index\n"
@@ -2230,9 +2219,9 @@ UniValue gettransaction(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "  \"details\" : [\n"
             "    {\n"
             "      \"account\" : \"accountname\",  (string) DEPRECATED. The account name involved in the transaction, can be \"\" for the default account.\n"
-            "      \"address\" : \"" + strprintf("%s",komodo_chainname()) + "_address\",   (string) The " + strprintf("%s",komodo_chainname()) + " address involved in the transaction\n"
+            "      \"address\" : \"" + chainName.ToString() + "_address\",   (string) The " + chainName.ToString() + " address involved in the transaction\n"
             "      \"category\" : \"send|receive\",    (string) The category, either 'send' or 'receive'\n"
-            "      \"amount\" : x.xxx                  (numeric) The amount in " + strprintf("%s",komodo_chainname()) + "\n"
+            "      \"amount\" : x.xxx                  (numeric) The amount in " + chainName.ToString() + "\n"
             "      \"vout\" : n,                       (numeric) the vout value\n"
             "    }\n"
             "    ,...\n"
@@ -2390,7 +2379,7 @@ UniValue walletpassphrase(const UniValue& params, bool fHelp, const CPubKey& myp
         throw runtime_error(
             "walletpassphrase \"passphrase\" timeout\n"
             "\nStores the wallet decryption key in memory for 'timeout' seconds.\n"
-            "This is needed prior to performing transactions related to private keys such as sending " + strprintf("%s",komodo_chainname()) + "\n"
+            "This is needed prior to performing transactions related to private keys such as sending " + chainName.ToString() + "\n"
             "\nArguments:\n"
             "1. \"passphrase\"     (string, required) The wallet passphrase\n"
             "2. timeout            (numeric, required) The time to keep the decryption key in seconds.\n"
@@ -2535,7 +2524,7 @@ UniValue encryptwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
         return NullUniValue;
 
     string enableArg = "developerencryptwallet";
-    int32_t flag = (komodo_acpublic(0) || ASSETCHAINS_SYMBOL[0] == 0);
+    int32_t flag = (komodo_acpublic(0) || chainName.isKMD() );
     auto fEnableWalletEncryption = fExperimentalMode && GetBoolArg("-" + enableArg, flag);
 
     std::string strWalletEncryptionDisabledMsg = "";
@@ -2558,10 +2547,10 @@ UniValue encryptwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "\nExamples:\n"
             "\nEncrypt you wallet\n"
             + HelpExampleCli("encryptwallet", "\"my pass phrase\"") +
-            "\nNow set the passphrase to use the wallet, such as for signing or sending " + strprintf("%s",komodo_chainname()) + "\n"
+            "\nNow set the passphrase to use the wallet, such as for signing or sending " + chainName.ToString() + "\n"
             + HelpExampleCli("walletpassphrase", "\"my pass phrase\"") +
             "\nNow we can so something like sign\n"
-            + HelpExampleCli("signmessage", "\"" + strprintf("%s",komodo_chainname()) + "_address\" \"test message\"") +
+            + HelpExampleCli("signmessage", "\"" + chainName.ToString() + "_address\" \"test message\"") +
             "\nNow lock the wallet again by removing the passphrase\n"
             + HelpExampleCli("walletlock", "") +
             "\nAs a json rpc call\n"
@@ -2609,7 +2598,7 @@ UniValue lockunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "lockunspent unlock [{\"txid\":\"txid\",\"vout\":n},...]\n"
             "\nUpdates list of temporarily unspendable outputs.\n"
             "Temporarily lock (unlock=false) or unlock (unlock=true) specified transaction outputs.\n"
-            "A locked transaction output will not be chosen by automatic coin selection, when spending " + strprintf("%s",komodo_chainname()) + ".\n"
+            "A locked transaction output will not be chosen by automatic coin selection, when spending " + chainName.ToString() + ".\n"
             "Locks are stored in memory only. Nodes start with zero locked outputs, and the locked output list\n"
             "is always cleared (by virtue of process exit) when a node stops or fails.\n"
             "Also see the listunspent call\n"
@@ -2742,7 +2731,7 @@ UniValue settxfee(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "settxfee amount\n"
             "\nSet the transaction fee per kB.\n"
             "\nArguments:\n"
-            "1. amount         (numeric, required) The transaction fee in " + strprintf("%s",komodo_chainname()) + "/kB rounded to the nearest 0.00000001\n"
+            "1. amount         (numeric, required) The transaction fee in " + chainName.ToString() + "/kB rounded to the nearest 0.00000001\n"
             "\nResult\n"
             "true|false        (boolean) Returns true if successful\n"
             "\nExamples:\n"
@@ -2771,9 +2760,9 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "\nResult:\n"
             "{\n"
             "  \"walletversion\": xxxxx,     (numeric) the wallet version\n"
-            "  \"balance\": xxxxxxx,         (numeric) the total confirmed balance of the wallet in " + strprintf("%s",komodo_chainname()) + "\n"
-            "  \"unconfirmed_balance\": xxx, (numeric) the total unconfirmed balance of the wallet in " + strprintf("%s",komodo_chainname()) + "\n"
-            "  \"immature_balance\": xxxxxx, (numeric) the total immature balance of the wallet in " + strprintf("%s",komodo_chainname()) + "\n"
+            "  \"balance\": xxxxxxx,         (numeric) the total confirmed balance of the wallet in " + chainName.ToString() + "\n"
+            "  \"unconfirmed_balance\": xxx, (numeric) the total unconfirmed balance of the wallet in " + chainName.ToString() + "\n"
+            "  \"immature_balance\": xxxxxx, (numeric) the total immature balance of the wallet in " + chainName.ToString() + "\n"
             "  \"txcount\": xxxxxxx,         (numeric) the total number of transactions in the wallet\n"
             "  \"keypoololdest\": xxxxxx,    (numeric) the timestamp (seconds since GMT epoch) of the oldest pre-generated key in the key pool\n"
             "  \"keypoolsize\": xxxx,        (numeric) how many new keys are pre-generated\n"
@@ -2846,9 +2835,9 @@ UniValue listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "\nArguments:\n"
             "1. minconf          (numeric, optional, default=1) The minimum confirmations to filter\n"
             "2. maxconf          (numeric, optional, default=9999999) The maximum confirmations to filter\n"
-            "3. \"addresses\"    (string) A json array of " + strprintf("%s",komodo_chainname()) + " addresses to filter\n"
+            "3. \"addresses\"    (string) A json array of " + chainName.ToString() + " addresses to filter\n"
             "    [\n"
-            "      \"address\"   (string) " + strprintf("%s",komodo_chainname()) + " address\n"
+            "      \"address\"   (string) " + chainName.ToString() + " address\n"
             "      ,...\n"
             "    ]\n"
             "\nResult\n"
@@ -2971,7 +2960,7 @@ UniValue listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
 uint64_t komodo_interestsum()
 {
 #ifdef ENABLE_WALLET
-    if ( ASSETCHAINS_SYMBOL[0] == 0 && GetBoolArg("-disablewallet", false) == 0 && KOMODO_NSPV_FULLNODE )
+    if ( chainName.isKMD() && GetBoolArg("-disablewallet", false) == 0 && KOMODO_NSPV_FULLNODE )
     {
         uint64_t interest,sum = 0; int32_t txheight; uint32_t locktime;
         vector<COutput> vecOutputs;
@@ -3734,7 +3723,7 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
             "1. \"type\"         (string, optional, default=\"" + defaultType + "\") The type of address. One of [\""
             + ADDR_TYPE_SPROUT + "\", \"" + ADDR_TYPE_SAPLING + "\"].\n"
             "\nResult:\n"
-            "\"" + strprintf("%s",komodo_chainname()) + "_address\"    (string) The new shielded address.\n"
+            "\"" + chainName.ToString() + "_address\"    (string) The new shielded address.\n"
             "\nExamples:\n"
             + HelpExampleCli("z_getnewaddress", "")
             + HelpExampleCli("z_getnewaddress", ADDR_TYPE_SAPLING)
@@ -4564,7 +4553,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
                     if ( fromSprout || toSprout )
                         throw JSONRPCError(RPC_INVALID_PARAMETER,"Sprout usage has expired");
                 }
-                if ( toSapling && ASSETCHAINS_SYMBOL[0] == 0 )
+                if ( toSapling && chainName.isKMD() )
                     throw JSONRPCError(RPC_INVALID_PARAMETER,"Sprout usage will expire soon");
 
                 // If we are sending from a shielded address, all recipient

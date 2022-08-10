@@ -66,7 +66,7 @@ namespace TestHarakaRemoval {
     //#define PRG_VALUES_BEFORE_PR 1
     TEST(TestHarakaRemoval, test_block_prg) {
 
-        EXPECT_EQ(ASSETCHAINS_SYMBOL[0], 0);
+        chainName = assetchain(); //EXPECT_EQ(ASSETCHAINS_SYMBOL[0], 0);
 
         // ASSETCHAINS_TIMEUNLOCKFROM = GetArg("-ac_timeunlockfrom", 0) -> 129600
         ASSETCHAINS_TIMEUNLOCKFROM = 129600;

@@ -962,7 +962,7 @@ UniValue kvsearch(const UniValue& params, bool fHelp, const CPubKey& mypk)
     LOCK(cs_main);
     if ( (keylen= (int32_t)strlen(params[0].get_str().c_str())) > 0 )
     {
-        ret.push_back(Pair("coin",(char *)(ASSETCHAINS_SYMBOL[0] == 0 ? "KMD" : ASSETCHAINS_SYMBOL)));
+        ret.push_back(Pair("coin",chainName.ToString()));
         ret.push_back(Pair("currentheight", (int64_t)chainActive.Tip()->nHeight));
         ret.push_back(Pair("key",params[0].get_str()));
         ret.push_back(Pair("keylen",keylen));
@@ -1675,7 +1675,7 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp, const CPubKey& my
 
     LOCK(cs_main);
     double progress;
-    if ( ASSETCHAINS_SYMBOL[0] == 0 ) {
+    if ( chainName.isKMD() ) {
         progress = Checkpoints::GuessVerificationProgress(Params().Checkpoints(), chainActive.Tip());
     } else {
         int32_t longestchain = KOMODO_LONGESTCHAIN;

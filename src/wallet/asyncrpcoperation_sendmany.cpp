@@ -367,7 +367,7 @@ bool AsyncRPCOperation_sendmany::main_impl() {
             }
             // for Komodo, set lock time to accure interest, for other chains, set
             // locktime to spend time locked coinbases
-            if (ASSETCHAINS_SYMBOL[0] == 0)
+            if (chainName.isKMD())
             {
                 //if ((uint32_t)chainActive.Tip()->nTime < ASSETCHAINS_STAKED_HF_TIMESTAMP)
                 if ( !komodo_hardfork_active((uint32_t)chainActive.Tip()->nTime) )
@@ -384,7 +384,7 @@ bool AsyncRPCOperation_sendmany::main_impl() {
                 CTxIn in(COutPoint(txid, vout));
                 rawTx.vin.push_back(in);
             }
-            if (ASSETCHAINS_SYMBOL[0] == 0)
+            if (chainName.isKMD())
             {
                 //if ((uint32_t)chainActive.Tip()->nTime < ASSETCHAINS_STAKED_HF_TIMESTAMP)
                 if ( !komodo_hardfork_active((uint32_t)chainActive.Tip()->nTime) )

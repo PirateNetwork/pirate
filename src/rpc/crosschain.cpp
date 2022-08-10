@@ -38,6 +38,8 @@
 #include "komodo_notary.h"
 #include "komodo_bitcoind.h"
 #include "komodo_ccdata.h"
+#include "notaries_staked.h"
+
 #include "key_io.h"
 #include "cc/CCImportGateway.h"
 #include "cc/CCtokens.h"
@@ -92,7 +94,7 @@ UniValue height_MoM(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
     //fprintf(stderr,"height_MoM height.%d\n",height);
     depth = komodo_MoM(&notarized_height,&MoM,&kmdtxid,height,&MoMoM,&MoMoMoffset,&MoMoMdepth,&kmdstarti,&kmdendi);
-    ret.push_back(Pair("coin",(char *)(ASSETCHAINS_SYMBOL[0] == 0 ? "KMD" : ASSETCHAINS_SYMBOL)));
+    ret.push_back(Pair("coin", chainName.ToString()));
     ret.push_back(Pair("height",height));
     ret.push_back(Pair("timestamp",(uint64_t)timestamp));
     if ( depth > 0 )
@@ -101,7 +103,7 @@ UniValue height_MoM(const UniValue& params, bool fHelp, const CPubKey& mypk)
         ret.push_back(Pair("notarized_height",notarized_height));
         ret.push_back(Pair("MoM",MoM.GetHex()));
         ret.push_back(Pair("kmdtxid",kmdtxid.GetHex()));
-        if ( ASSETCHAINS_SYMBOL[0] != 0 )
+        if ( !chainName.isKMD() )
         {
             ret.push_back(Pair("MoMoM",MoMoM.GetHex()));
             ret.push_back(Pair("MoMoMoffset",MoMoMoffset));
@@ -153,7 +155,7 @@ UniValue calc_MoM(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("calc_MoM illegal height or MoMdepth\n");
     //fprintf(stderr,"height_MoM height.%d\n",height);
     MoM = komodo_calcMoM(height,MoMdepth);
-    ret.push_back(Pair("coin",(char *)(ASSETCHAINS_SYMBOL[0] == 0 ? "KMD" : ASSETCHAINS_SYMBOL)));
+    ret.push_back(Pair("coin", chainName.ToString()));
     ret.push_back(Pair("height",height));
     ret.push_back(Pair("MoMdepth",MoMdepth));
     ret.push_back(Pair("MoM",MoM.GetHex()));
@@ -178,7 +180,7 @@ UniValue migrate_converttoexport(const UniValue& params, bool fHelp, const CPubK
     if (ASSETCHAINS_CC < KOMODO_FIRSTFUNGIBLEID)
         throw runtime_error("-ac_cc < KOMODO_FIRSTFUNGIBLEID");
 
-    if (ASSETCHAINS_SYMBOL[0] == 0)
+    if ( chainName.isKMD() )
         throw runtime_error("Must be called on assetchain");
 
     vector<uint8_t> txData(ParseHexV(params[0], "argument 1"));
@@ -190,7 +192,7 @@ UniValue migrate_converttoexport(const UniValue& params, bool fHelp, const CPubK
     if (targetSymbol.size() == 0 || targetSymbol.size() > 32)
         throw runtime_error("targetSymbol length must be >0 and <=32");
 
-    if (strcmp(ASSETCHAINS_SYMBOL,targetSymbol.c_str()) == 0)
+    if ( chainName.isSymbol( targetSymbol) )
         throw runtime_error("cant send a coin to the same chain");
     
     /// Tested 44 vins p2pkh inputs as working. Set this at 25, but its a tx size limit. 
@@ -208,13 +210,7 @@ UniValue migrate_converttoexport(const UniValue& params, bool fHelp, const CPubK
     if (burnAmount > 1000000LL*COIN)
         throw JSONRPCError(RPC_TYPE_ERROR, "Cannot export more than 1 million coins per export.");
 
-    /* note: we marshal to rawproof in a different way (to be able to add other objects)
-    rawproof.resize(strlen(ASSETCHAINS_SYMBOL));
-    ptr = rawproof.data();
-    for (i=0; i<rawproof.size(); i++)
-        ptr[i] = ASSETCHAINS_SYMBOL[i]; */
-    const std::string chainSymbol(ASSETCHAINS_SYMBOL);
-    rawproof = E_MARSHAL(ss << chainSymbol); // add src chain name 
+    rawproof = E_MARSHAL(ss << chainName.symbol()); // add src chain name 
 
     CTxOut burnOut = MakeBurnOutput(burnAmount+txfee, ccid, targetSymbol, tx.vout,rawproof);
     UniValue ret(UniValue::VOBJ);
@@ -252,7 +248,7 @@ UniValue migrate_createburntransaction(const UniValue& params, bool fHelp, const
     if (ASSETCHAINS_CC < KOMODO_FIRSTFUNGIBLEID)
         throw runtime_error("-ac_cc < KOMODO_FIRSTFUNGIBLEID");
 
-    if (ASSETCHAINS_SYMBOL[0] == 0)
+    if (chainName.isKMD())
         throw runtime_error("Must be called on assetchain");
 
     // if -pubkey not set it sends change to null pubkey. 
@@ -264,7 +260,7 @@ UniValue migrate_createburntransaction(const UniValue& params, bool fHelp, const
     if (targetSymbol.size() == 0 || targetSymbol.size() > 32)
         throw runtime_error("targetSymbol length must be >0 and <=32");
 
-    if (strcmp(ASSETCHAINS_SYMBOL, targetSymbol.c_str()) == 0)
+    if ( chainName.isSymbol(targetSymbol) )
         throw runtime_error("cant send a coin to the same chain");
 
     std::string dest_addr_or_pubkey = params[1].get_str();
@@ -293,8 +289,7 @@ UniValue migrate_createburntransaction(const UniValue& params, bool fHelp, const
 
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
 
-    const std::string chainSymbol(ASSETCHAINS_SYMBOL);
-    std::vector<uint8_t> rawproof; //(chainSymbol.begin(), chainSymbol.end());
+    std::vector<uint8_t> rawproof;
 
     if (tokenid.IsNull()) {        // coins
         int64_t inputs;
@@ -310,7 +305,7 @@ UniValue migrate_createburntransaction(const UniValue& params, bool fHelp, const
         mtx.vout.push_back(CTxOut(burnAmount, scriptPubKey));               // 'model' vout
         ret.push_back(Pair("payouts", HexStr(E_MARSHAL(ss << mtx.vout))));  // save 'model' vout
 
-        rawproof = E_MARSHAL(ss << chainSymbol); // add src chain name 
+        rawproof = E_MARSHAL(ss << chainName.symbol()); // add src chain name 
 
         CTxOut burnOut = MakeBurnOutput(burnAmount+txfee, ccid, targetSymbol, mtx.vout, rawproof);  //make opret with burned amount
 
@@ -379,7 +374,7 @@ UniValue migrate_createburntransaction(const UniValue& params, bool fHelp, const
         mtx.vout.push_back(CTxOut((CAmount)0, EncodeTokenCreateOpRet('c', vorigpubkey, name, description, voprets)));  // make token import opret
         ret.push_back(Pair("payouts", HexStr(E_MARSHAL(ss << mtx.vout))));  // save payouts for import tx
 
-        rawproof = E_MARSHAL(ss << chainSymbol << tokenbasetx); // add src chain name and token creation tx
+        rawproof = E_MARSHAL(ss << chainName.symbol() << tokenbasetx); // add src chain name and token creation tx
 
         CTxOut burnOut = MakeBurnOutput(0, ccid, targetSymbol, mtx.vout, rawproof);  //make opret with amount=0 because tokens are burned, not coins (see next vout) 
         mtx.vout.clear();  // remove payouts
@@ -488,13 +483,13 @@ void CheckBurnTxSource(uint256 burntxid, UniValue &info) {
         throw std::runtime_error("No opreturn in burn tx");
     
 
-    if (sourceSymbol != ASSETCHAINS_SYMBOL)
+    if ( !chainName.isSymbol(sourceSymbol) )
         throw std::runtime_error("Incorrect source chain in rawproof");
 
     if (targetCCid != ASSETCHAINS_CC)
         throw std::runtime_error("Incorrect CCid in burn tx");
 
-    if (targetSymbol == ASSETCHAINS_SYMBOL)
+    if ( chainName.isSymbol(targetSymbol) )
         throw std::runtime_error("Must not be called on the destination chain");
 
     // fill info to return for the notary operator (if manual notarization) or user
@@ -534,7 +529,7 @@ UniValue migrate_createimporttransaction(const UniValue& params, bool fHelp, con
     if (ASSETCHAINS_CC < KOMODO_FIRSTFUNGIBLEID)
         throw runtime_error("-ac_cc < KOMODO_FIRSTFUNGIBLEID");
 
-    if (ASSETCHAINS_SYMBOL[0] == 0)
+    if ( chainName.isKMD() )
         throw runtime_error("Must be called on assetchain");
 
     vector<uint8_t> txData(ParseHexV(params[0], "argument 1"));
@@ -590,7 +585,7 @@ UniValue migrate_completeimporttransaction(const UniValue& params, bool fHelp, c
                 "and extends proof to target chain proof root\n"
                 "offset is optional, use it to increase the used KMD height, use when import fails.");
 
-    if (ASSETCHAINS_SYMBOL[0] != 0)
+    if ( !chainName.isKMD() )
         throw runtime_error("Must be called on KMD");
 
     CTransaction importTx;
@@ -630,7 +625,7 @@ UniValue migrate_checkburntransactionsource(const UniValue& params, bool fHelp, 
         throw runtime_error("migrate_checkburntransactionsource burntxid\n\n"
             "checks if params stored in the burn tx match to its tx chain");
 
-    if (ASSETCHAINS_SYMBOL[0] == 0)
+    if (chainName.isKMD())
         throw runtime_error("Must be called on asset chain");
 
     uint256 burntxid = Parseuint256(params[0].get_str().c_str());
@@ -658,7 +653,7 @@ UniValue migrate_createnotaryapprovaltransaction(const UniValue& params, bool fH
             "Creates a tx for destination chain with burn tx proof\n"
             "txoutproof should be retrieved by komodo-cli migrate_checkburntransactionsource call on the source chain\n" );
 
-    if (ASSETCHAINS_SYMBOL[0] == 0)
+    if (chainName.isKMD())
         throw runtime_error("Must be called on asset chain");
 
     uint256 burntxid = Parseuint256(params[0].get_str().c_str());

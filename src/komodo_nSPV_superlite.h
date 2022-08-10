@@ -23,7 +23,7 @@
 
 
 CAmount AmountFromValue(const UniValue& value);
-int32_t bitcoin_base58decode(uint8_t *data,char *coinaddr);
+int32_t bitcoin_base58decode(uint8_t *data,const char *coinaddr);
 
 uint32_t NSPV_lastinfo,NSPV_logintime,NSPV_tiptime;
 CKey NSPV_key;
@@ -391,7 +391,7 @@ UniValue NSPV_utxoresp_json(struct NSPV_utxoresp *utxos,int32_t numutxos)
         item.push_back(Pair("txid",utxos[i].txid.GetHex()));
         item.push_back(Pair("vout",(int64_t)utxos[i].vout));
         item.push_back(Pair("value",(double)utxos[i].satoshis/COIN));
-        if ( ASSETCHAINS_SYMBOL[0] == 0 )
+        if ( chainName.isKMD() )
             item.push_back(Pair("interest",(double)utxos[i].extradata/COIN));
         array.push_back(item);
     }
@@ -408,7 +408,7 @@ UniValue NSPV_utxosresp_json(struct NSPV_utxosresp *ptr)
     result.push_back(Pair("height",(int64_t)ptr->nodeheight));
     result.push_back(Pair("numutxos",(int64_t)ptr->numutxos));
     result.push_back(Pair("balance",(double)ptr->total/COIN));
-    if ( ASSETCHAINS_SYMBOL[0] == 0 )
+    if ( chainName.isKMD() )
         result.push_back(Pair("interest",(double)ptr->interest/COIN));
     result.push_back(Pair("filter",(int64_t)ptr->filter));
     result.push_back(Pair("lastpeer",NSPV_lastpeer));

@@ -309,7 +309,7 @@ uint32_t calc_crc32(uint32_t crc,const void *buf,size_t size);
 
 void calc_rmd160_sha256(uint8_t rmd160[20],uint8_t *data,int32_t datalen);
 
-int32_t bitcoin_addr2rmd160(uint8_t *addrtypep,uint8_t rmd160[20],char *coinaddr);
+int32_t bitcoin_addr2rmd160(uint8_t *addrtypep,uint8_t rmd160[20],const char *coinaddr);
 
 char *bitcoin_address(char *coinaddr,uint8_t addrtype,uint8_t *pubkey_or_rmd160,int32_t len);
 
@@ -365,17 +365,15 @@ void iguana_initQ(queue_t *Q,char *name);
  */
 uint16_t _komodo_userpass(char *username,char *password,FILE *fp);
 
-void komodo_statefname(char *fname,char *symbol,char *str);
+void komodo_statefname(char *fname,const char *symbol,char *str);
 
-void komodo_configfile(char *symbol,uint16_t rpcport);
+void komodo_configfile(const char *symbol,uint16_t rpcport);
 
-uint16_t komodo_userpass(char *userpass,char *symbol);
-
-uint32_t komodo_assetmagic(char *symbol,uint64_t supply,uint8_t *extraptr,int32_t extralen);
+uint16_t komodo_userpass(char *userpass,const char *symbol);
 
 uint16_t komodo_assetport(uint32_t magic,int32_t extralen);
 
-uint16_t komodo_port(char *symbol,uint64_t supply,uint32_t *magicp,uint8_t *extraptr,int32_t extralen);
+uint16_t komodo_port(const char *symbol,uint64_t supply,uint32_t *magicp,uint8_t *extraptr,int32_t extralen);
 
 int32_t komodo_whoami(char *pubkeystr,int32_t height,uint32_t timestamp);
 
@@ -385,7 +383,9 @@ uint64_t komodo_ac_block_subsidy(int nHeight);
 
 int8_t equihash_params_possible(uint64_t n, uint64_t k);
 
-void komodo_nameset(char *symbol,char *dest,char *source);
+void komodo_args(char *argv0);
+
+void komodo_nameset(char *symbol,char *dest,const char *source);
 
 struct komodo_state *komodo_stateptrget(char *base);
 
@@ -397,7 +397,6 @@ void komodo_prefetch(FILE *fp);
 // this function is to activate the ExtractDestination fix 
 bool komodo_is_vSolutionsFixActive();
 
-int32_t komodo_baseid(char *origbase);
+int32_t komodo_baseid(const char *origbase);
 
 void set_kmd_user_password_port(const std::string& ltc_config_filename);
-

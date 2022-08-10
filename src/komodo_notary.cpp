@@ -169,17 +169,17 @@ int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestam
 {
     // calculate timestamp if necessary (only height passed in and non-KMD chain)
     // TODO: check if this logic changed okay 
-    if ( ASSETCHAINS_SYMBOL[0] == 0 )   
+    if ( chainName.isKMD() )   
         timestamp = 0; // For KMD, we always use height
     else if ( timestamp == 0 )
         timestamp = komodo_heightstamp(height); // derive the timestamp from the passed-in height
 
     // If this chain is not a staked chain, use the normal Komodo logic to determine notaries. 
     // This allows KMD to still sync and use its proper pubkeys for dPoW.
-    if ( is_STAKED(ASSETCHAINS_SYMBOL) == 0 )
+    if ( is_STAKED(chainName.symbol()) == 0 )
     {
         int32_t kmd_season = 0;
-        if ( ASSETCHAINS_SYMBOL[0] == 0 )
+        if ( chainName.isKMD() )
         {
             // This is KMD, use block heights to determine the KMD notary season.. 
             if ( height >= KOMODO_NOTARIES_HARDCODED )
@@ -330,7 +330,7 @@ int32_t komodo_chosennotary(int32_t *notaryidp,int32_t height,uint8_t *pubkey33,
         printf("komodo_chosennotary ht.%d illegal\n",height);
         return(-1);
     }
-    if ( height >= KOMODO_NOTARIES_HARDCODED || ASSETCHAINS_SYMBOL[0] != 0 )
+    if ( height >= KOMODO_NOTARIES_HARDCODED || !chainName.isKMD() )
     {
         if ( (*notaryidp= komodo_electednotary(&numnotaries,pubkey33,height,timestamp)) >= 0 && numnotaries != 0 )
         {

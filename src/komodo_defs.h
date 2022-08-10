@@ -17,6 +17,7 @@
 #include "arith_uint256.h"
 #define ASSETCHAINS_MAX_ERAS 7 // needed by chain.h
 #include "chain.h"
+#include "assetchain.h"
 #include "komodo_nk.h"
 
 #define NUM_KMD_NOTARIES 64

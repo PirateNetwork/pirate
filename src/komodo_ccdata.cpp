@@ -179,7 +179,7 @@ int32_t komodo_MoMoMdata(char *hexstr,int32_t hexsize,struct komodo_ccdataMoMoM 
 void komodo_purge_ccdata(int32_t height)
 {
     struct komodo_ccdata *ccdata,*tmpptr;
-    if ( ASSETCHAINS_SYMBOL[0] == 0 )
+    if ( chainName.isKMD() )
     {
         portable_mutex_lock(&KOMODO_CC_mutex);
         DL_FOREACH_SAFE(CC_data,ccdata,tmpptr)

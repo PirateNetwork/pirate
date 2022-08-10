@@ -4,6 +4,7 @@
 #include "core_io.h"
 #include "key.h"
 #include "testutils.h"
+#include "assetchain.h"
 #include "komodo_utils.h"
 #include "komodo_notary.h"
 #include "komodo_structs.h"
@@ -72,8 +73,6 @@ namespace old_space {
             fprintf(stderr,"komodo_notarized_update REJECT notarized_height %d > %d nHeight\n",notarized_height,nHeight);
             return;
         }
-        if ( 0 && ASSETCHAINS_SYMBOL[0] != 0 )
-            fprintf(stderr,"[%s] komodo_notarized_update nHeight.%d notarized_height.%d\n",ASSETCHAINS_SYMBOL,nHeight,notarized_height);
         portable_mutex_lock(&komodo_mutex);
         sp->NPOINTS = (struct notarized_checkpoint *)realloc(sp->NPOINTS,(sp->NUM_NPOINTS+1) * sizeof(*sp->NPOINTS));
         np = &sp->NPOINTS[sp->NUM_NPOINTS++];
@@ -422,7 +421,7 @@ TEST(TestParseNotarisation, DISABLED_OldVsNew)
      * as well as a long time to run. Re-enable this test to check
      * the notarization checkpoints.
      */
-    ASSETCHAINS_SYMBOL[0] = 0;
+    chainName = assetchain("");
     char symbol[4] = { 0 };
     char dest[4] = { 0 };
 

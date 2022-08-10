@@ -438,7 +438,7 @@ UniValue genminingCSV(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (fHelp || params.size() != 0 )
         throw runtime_error("genminingCSV\n");
     LOCK(cs_main);
-    sprintf(fname,"%s_mining.csv",ASSETCHAINS_SYMBOL[0] == 0 ? "KMD" : ASSETCHAINS_SYMBOL);
+    sprintf(fname,"%s_mining.csv",chainName.ToString().c_str());
     if ( (fp= fopen(fname,"wb")) != 0 )
     {
         fprintf(fp,"height,nTime,nBits,bnTarget,bnTargetB,diff,solvetime\n");
@@ -737,7 +737,7 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp, const CPubKey& myp
     }
 
     // currently we have checkpoints only in KMD chain, so we checking IsInitialBlockDownload only for KMD itself
-    if (ASSETCHAINS_SYMBOL[0] == 0 && IsInitialBlockDownload()) {
+    if (chainName.isKMD() && IsInitialBlockDownload()) {
         throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Komodo is downloading blocks...");
     }
 

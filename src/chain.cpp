@@ -19,6 +19,10 @@
  ******************************************************************************/
 
 #include "chain.h"
+#include "komodo_defs.h"
+#include "komodo_globals.h"
+#include "notaries_staked.h"
+#include "komodo_hardfork.h"
 
 using namespace std;
 
@@ -125,4 +129,14 @@ void CBlockIndex::BuildSkip()
 {
     if (pprev)
         pskip = pprev->GetAncestor(GetSkipHeight(nHeight));
+}
+
+bool CDiskBlockIndex::isStakedAndNotaryPay() const
+{
+    return is_STAKED(chainName.symbol()) != 0 && ASSETCHAINS_NOTARY_PAY[0] != 0;
+}
+
+bool CDiskBlockIndex::isStakedAndAfterDec2019(unsigned int nTime) const
+{
+    return ASSETCHAINS_STAKED != 0 && (nTime > nStakedDecemberHardforkTimestamp || is_STAKED(chainName.symbol()) != 0);
 }

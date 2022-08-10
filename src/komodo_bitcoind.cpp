@@ -352,11 +352,8 @@ char *komodo_issuemethod(char *userpass,char *method,char *params,uint16_t port)
     {
         sprintf(url,(char *)"http://127.0.0.1:%u",port);
         sprintf(postdata,"{\"method\":\"%s\",\"params\":%s}",method,params);
-        // printf("[%s] (%s) postdata.(%s) params.(%s) USERPASS.(%s)\n",ASSETCHAINS_SYMBOL,url,postdata,params,KMDUSERPASS);
         retstr2 = bitcoind_RPC(&retstr,(char *)"debug",url,userpass,method,params);
-        //retstr = curl_post(&cHandle,url,USERPASS,postdata,0,0,0,0);
     }
-    // fprintf(stderr, "RPC RESP: %s\n", retstr2);
     return(retstr2);
 }
 
@@ -444,7 +441,7 @@ int32_t komodo_verifynotarizedscript(int32_t height,uint8_t *script,int32_t len,
     printf(" notarized, ");
     for (i=0; i<32; i++)
         printf("%02x",((uint8_t *)&hash)[i]);
-    printf(" opreturn from [%s] ht.%d MISMATCHED\n",ASSETCHAINS_SYMBOL,height);
+    printf(" opreturn from [%s] ht.%d MISMATCHED\n",chainName.symbol().c_str(),height);
     return(-1);
 }
 
@@ -464,21 +461,14 @@ int32_t komodo_verifynotarization(char *symbol,char *dest,int32_t height,int32_t
 {
     char params[256],*jsonstr,*hexstr; uint8_t *script,_script[8192]; int32_t n,len,retval = -1; cJSON *json,*txjson,*vouts,*vout,*skey;
     script = _script;
-    /*params[0] = '[';
-     params[1] = '"';
-     for (i=0; i<32; i++)
-     sprintf(&params[i*2 + 2],"%02x",((uint8_t *)&NOTARIZED_DESTTXID)[31-i]);
-     strcat(params,"\", 1]");*/
     sprintf(params,"[\"%s\", 1]",NOTARIZED_DESTTXID.ToString().c_str());
-    if ( strcmp(symbol,ASSETCHAINS_SYMBOL[0]==0?(char *)"KMD":ASSETCHAINS_SYMBOL) != 0 )
+    if ( strcmp(symbol, chainName.ToString().c_str()) != 0 )
         return(0);
-    if ( 0 && ASSETCHAINS_SYMBOL[0] != 0 )
-        printf("[%s] src.%s dest.%s params.[%s] ht.%d notarized.%d\n",ASSETCHAINS_SYMBOL,symbol,dest,params,height,NOTARIZED_HEIGHT);
     if ( strcmp(dest,"KMD") == 0 )
     {
         if ( KMDUSERPASS[0] != 0 )
         {
-            if ( ASSETCHAINS_SYMBOL[0] != 0 )
+            if ( !chainName.isKMD() )
             {
                 jsonstr = komodo_issuemethod(KMDUSERPASS,(char *)"getrawtransaction",params,KMD_PORT);
                 //printf("userpass.(%s) got (%s)\n",KMDUSERPASS,jsonstr);
@@ -497,7 +487,7 @@ int32_t komodo_verifynotarization(char *symbol,char *dest,int32_t height,int32_t
     }
     else
     {
-        printf("[%s] verifynotarization error unexpected dest.(%s)\n",ASSETCHAINS_SYMBOL,dest);
+        printf("[%s] verifynotarization error unexpected dest.(%s)\n",chainName.symbol().c_str(),dest);
         return(-1);
     }
     if ( jsonstr != 0 )
@@ -507,8 +497,6 @@ int32_t komodo_verifynotarization(char *symbol,char *dest,int32_t height,int32_t
             if ( (txjson= jobj(json,(char *)"result")) != 0 && (vouts= jarray(&n,txjson,(char *)"vout")) != nullptr )
             {
                 vout = jitem(vouts,n-1);
-                if ( 0 && ASSETCHAINS_SYMBOL[0] != 0 )
-                    printf("vout.(%s)\n",jprint(vout,0));
                 if ( (skey= jobj(vout,(char *)"scriptPubKey")) != 0 )
                 {
                     if ( (hexstr= jstr(skey,(char *)"hex")) != 0 )
@@ -647,8 +635,8 @@ bool komodo_checkopret(CBlock *pblock, CScript &merkleroot)
 
 bool komodo_hardfork_active(uint32_t time)
 {
-    AssertLockHeld(cs_main);
-    return ( (ASSETCHAINS_SYMBOL[0] == 0 && chainActive.Height() > nDecemberHardforkHeight) || (ASSETCHAINS_SYMBOL[0] != 0 && time > nStakedDecemberHardforkTimestamp) ); //December 2019 hardfork
+    return ( (chainName.isKMD() && chainActive.Height() > nDecemberHardforkHeight) 
+            || ( !chainName.isKMD() && time > nStakedDecemberHardforkTimestamp) ); //December 2019 hardfork
 }
 
 uint256 komodo_calcmerkleroot(CBlock *pblock, uint256 prevBlockHash, int32_t nHeight, bool fNew, CScript scriptPubKey)
@@ -1047,7 +1035,8 @@ bool komodo_checkpoint(int32_t *notarized_heightp, int32_t nHeight, uint256 hash
             else if ( nHeight == notarized_height && memcmp(&hash,&notarized_hash,sizeof(hash)) != 0 )
             {
                 // the height matches, but the hash they passed us does not match the notarized_hash we found
-                fprintf(stderr,"[%s] nHeight.%d == NOTARIZED_HEIGHT.%d, diff hash\n",ASSETCHAINS_SYMBOL,nHeight,notarized_height);
+                fprintf(stderr,"[%s] nHeight.%d == NOTARIZED_HEIGHT.%d, diff hash\n", 
+                        chainName.symbol().c_str(),nHeight,notarized_height);
                 return false;
             }
         }
@@ -1130,9 +1119,7 @@ int32_t komodo_isrealtime(int32_t *kmdheightp)
  */
 bool komodo_validate_interest(const CTransaction &tx,int32_t txheight,uint32_t cmptime)
 {
-    if ( KOMODO_REWIND == 0 
-            && ASSETCHAINS_SYMBOL[0] == 0 
-            && (int64_t)tx.nLockTime >= LOCKTIME_THRESHOLD )
+    if ( KOMODO_REWIND == 0 && chainName.isKMD() && (int64_t)tx.nLockTime >= LOCKTIME_THRESHOLD ) //1473793441 )
     {
         if ( txheight > 246748 ) // a long time ago
         {
@@ -1167,11 +1154,11 @@ uint64_t komodo_commission(const CBlock *pblock,int32_t height)
 {
     static bool didinit = false,ishush3 = false;
     // LABS fungible chains, cannot have any block reward!
-    if ( is_STAKED(ASSETCHAINS_SYMBOL) == 2 )
+    if ( is_STAKED(chainName.symbol()) == 2 )
         return(0);
 
     if (!didinit) {
-        ishush3 = strncmp(ASSETCHAINS_SYMBOL, "HUSH3",5) == 0 ? true : false;
+        ishush3 = chainName.SymbolStartsWith("HUSH3");
         didinit = true;
     }
 
@@ -1582,7 +1569,7 @@ int32_t komodo_is_PoSblock(int32_t slowflag,int32_t height,CBlock *pblock,arith_
                 */
                 if ( ASSETCHAINS_STAKED < 100 && bhash < POWTarget )
                 {
-                    fprintf(stderr,"[%s:%i] isPoS but meets PoW diff nBits.%u < target.%u\n", ASSETCHAINS_SYMBOL, height, bhash.GetCompact(), POWTarget.GetCompact());
+                    fprintf(stderr,"[%s:%i] isPoS but meets PoW diff nBits.%u < target.%u\n", chainName.symbol().c_str(), height, bhash.GetCompact(), POWTarget.GetCompact());
                     isPoS = 0;
                 }
             }
@@ -1951,11 +1938,10 @@ int32_t komodo_checkPOW(int64_t stakeTxValue, int32_t slowflag,CBlock *pblock,in
         if ( height == 0 )
             return(0);
     }
-
-    if ( (ASSETCHAINS_SYMBOL[0] != 0 || height > 792000) && bhash > bnTarget )
+    if ( ( !chainName.isKMD() || height > 792000) && bhash > bnTarget )
     {
         failed = 1;
-        if ( height > 0 && ASSETCHAINS_SYMBOL[0] == 0 ) // for the fast case
+        if ( height > 0 && chainName.isKMD() ) // for the fast case
         {
             if ( (n= komodo_notaries(pubkeys,height,pblock->nTime)) > 0 )
             {
@@ -1967,7 +1953,7 @@ int32_t komodo_checkPOW(int64_t stakeTxValue, int32_t slowflag,CBlock *pblock,in
                     }
             }
         }
-        else if ( possible == 0 || ASSETCHAINS_SYMBOL[0] != 0 )
+        else if ( possible == 0 || !chainName.isKMD() )
         {
             if ( KOMODO_TEST_ASSETCHAIN_SKIP_POW )
                 return(0);
@@ -2008,7 +1994,7 @@ int32_t komodo_checkPOW(int64_t stakeTxValue, int32_t slowflag,CBlock *pblock,in
                         // PoW fake blocks will be rejected here. If a staking tx is included in a block that meets PoW min diff after block 100, then this will reject it. 
                         if ( pblock->vtx.size() > 1 && pblock->vtx[pblock->vtx.size()-1].vout.size() == 2 && DecodeStakingOpRet(pblock->vtx[pblock->vtx.size()-1].vout[1].scriptPubKey, merkleroot) != 0 )
                         {
-                            fprintf(stderr, "[%s:%d] staking tx in PoW block, nBits.%u < target.%u\n", ASSETCHAINS_SYMBOL,height,bhash.GetCompact(),bnTarget.GetCompact());
+                            fprintf(stderr, "[%s:%d] staking tx in PoW block, nBits.%u < target.%u\n", chainName.symbol().c_str(),height,bhash.GetCompact(),bnTarget.GetCompact());
                             return(-1);
                         }
                         // set the pindex->segid as this is now fully validated to be a PoW block. 
@@ -2024,7 +2010,7 @@ int32_t komodo_checkPOW(int64_t stakeTxValue, int32_t slowflag,CBlock *pblock,in
         }
         else if ( is_PoSblock < 0 )
         {
-            fprintf(stderr,"[%s:%d] unexpected negative is_PoSblock.%d\n",ASSETCHAINS_SYMBOL,height,is_PoSblock);
+            fprintf(stderr,"[%s:%d] unexpected negative is_PoSblock.%d\n",chainName.symbol().c_str(),height,is_PoSblock);
             return(-1);
         }
         else 
@@ -2036,12 +2022,12 @@ int32_t komodo_checkPOW(int64_t stakeTxValue, int32_t slowflag,CBlock *pblock,in
                 // the coinbase must pay the fees from the last transaction and the block reward at a minimum.
                 if ( pblock->vtx.size() < 1 || pblock->vtx[0].vout.size() < 1 )
                 {
-                    fprintf(stderr, "[%s:%d] missing coinbase.\n", ASSETCHAINS_SYMBOL, height);
+                    fprintf(stderr, "[%s:%d] missing coinbase.\n", chainName.symbol().c_str(), height);
                     return(-1);
                 }
                 else if ( pblock->vtx[0].vout[0].nValue < stakeTxValue )
                 {
-                    fprintf(stderr, "[%s:%d] coinbase vout0.%lld < blockreward+stakingtxfee.%lld\n", ASSETCHAINS_SYMBOL, height, (long long)pblock->vtx[0].vout[0].nValue, (long long)stakeTxValue);
+                    fprintf(stderr, "[%s:%d] coinbase vout0.%lld < blockreward+stakingtxfee.%lld\n", chainName.symbol().c_str(), height, (long long)pblock->vtx[0].vout[0].nValue, (long long)stakeTxValue);
                     return(-1);
                 }
                 // set the pindex->segid as this is now fully validated to be a PoS block. 
@@ -2133,7 +2119,7 @@ int32_t komodo_acpublic(uint32_t tiptime)
             if ( (pindex= chainActive.Tip()) != 0 )
                 tiptime = pindex->nTime;
         }
-        if ( (ASSETCHAINS_SYMBOL[0] == 0 || strcmp(ASSETCHAINS_SYMBOL,"ZEX") == 0) && tiptime >= KOMODO_SAPLING_DEADLINE )
+        if ( (chainName.isKMD() || chainName.isSymbol("ZEX")) && tiptime >= KOMODO_SAPLING_DEADLINE )
             acpublic = 1;
     }
     return(acpublic);
@@ -2188,7 +2174,7 @@ int64_t komodo_newcoins(int64_t *zfundsp,int64_t *sproutfundsp,int32_t nHeight,C
     }
     *zfundsp = zfunds;
     *sproutfundsp = sproutfunds;
-    if ( ASSETCHAINS_SYMBOL[0] == 0 && (voutsum-vinsum) == 100003*SATOSHIDEN ) // 15 times
+    if ( chainName.isKMD() && (voutsum-vinsum) == 100003*SATOSHIDEN ) // 15 times
         return(3 * SATOSHIDEN);
     //if ( voutsum-vinsum+zfunds > 100000*SATOSHIDEN || voutsum-vinsum+zfunds < 0 )
     //.    fprintf(stderr,"ht.%d vins %.8f, vouts %.8f -> %.8f zfunds %.8f\n",nHeight,dstr(vinsum),dstr(voutsum),dstr(voutsum)-dstr(vinsum),dstr(zfunds));
@@ -2290,7 +2276,7 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
         if ( ReadBlockFromDisk(block, pblockindex, 1) && komodo_isPoS(&block, nHeight, &addressout) != 0 && IsMine(*pwalletMain,addressout) != 0 )
         {
               resetstaker = true;
-              fprintf(stderr, "[%s:%d] Reset ram staker after mining a block!\n",ASSETCHAINS_SYMBOL,nHeight);
+              fprintf(stderr, "[%s:%d] Reset ram staker after mining a block!\n",chainName.symbol().c_str(),nHeight);
         }
     }
 
@@ -2307,7 +2293,7 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
         {
             if ( (tipindex= chainActive.Tip()) == 0 || tipindex->nHeight+1 > nHeight )
             {
-                fprintf(stderr,"[%s:%d] chain tip changed during staking loop t.%u counter.%d\n",ASSETCHAINS_SYMBOL,nHeight,(uint32_t)time(NULL),counter);
+                fprintf(stderr,"[%s:%d] chain tip changed during staking loop t.%u counter.%d\n",chainName.symbol().c_str(),nHeight,(uint32_t)time(NULL),counter);
                 return(0);
             }
             counter++;
@@ -2345,7 +2331,7 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
         }
         if ( tipindex == nullptr || tipindex->nHeight+1 > nHeight )
         {
-            fprintf(stderr,"[%s:%d] chain tip changed during staking loop t.%u counter.%d\n",ASSETCHAINS_SYMBOL,nHeight,(uint32_t)time(NULL),i);
+            fprintf(stderr,"[%s:%d] chain tip changed during staking loop t.%u counter.%d\n",chainName.symbol().c_str(),nHeight,(uint32_t)time(NULL),i);
             return 0;
         }
         komodo_staking &kp = array[i];

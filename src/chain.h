@@ -27,8 +27,8 @@
 #include "tinyformat.h"
 #include "uint256.h"
 #include "sync.h"
-#include "komodo_defs.h"
 
+#include "assetchain.h"
 #include <vector>
 
 #include <boost/foreach.hpp>
@@ -39,12 +39,15 @@ extern CCriticalSection cs_main;
 
 static const int SPROUT_VALUE_VERSION = 1001400;
 static const int SAPLING_VALUE_VERSION = 1010100;
-extern char ASSETCHAINS_SYMBOL[65];
+
+// These 5 are declared here to avoid circular dependencies
+// code used this moved into .cpp
+/*extern assetchain chainName;
 extern uint64_t ASSETCHAINS_NOTARY_PAY[ASSETCHAINS_MAX_ERAS+1];
 extern int32_t ASSETCHAINS_STAKED;
 extern const uint32_t nStakedDecemberHardforkTimestamp; //December 2019 hardfork
 extern const int32_t nDecemberHardforkHeight;   //December 2019 hardfork
-uint8_t is_STAKED(const char *chain_name);
+uint8_t is_STAKED(const std::string& symbol);*/
 
 struct CDiskBlockPos
 {
@@ -445,22 +448,20 @@ public:
         }
         
         // leave the existing LABS exemption here for segid and notary pay, but also add a timestamp activated segid for non LABS PoS64 chains.
-        if ( (s.GetType() & SER_DISK) && is_STAKED(ASSETCHAINS_SYMBOL) != 0 && ASSETCHAINS_NOTARY_PAY[0] != 0 )
+        if ( (s.GetType() & SER_DISK) && isStakedAndNotaryPay() /*is_STAKED(chainName.symbol()) != 0 && ASSETCHAINS_NOTARY_PAY[0] != 0*/ )
         {
             READWRITE(nNotaryPay);
         }
-        if ( (s.GetType() & SER_DISK) && ASSETCHAINS_STAKED != 0 && (nTime > nStakedDecemberHardforkTimestamp || is_STAKED(ASSETCHAINS_SYMBOL) != 0) ) //December 2019 hardfork
+        if ( (s.GetType() & SER_DISK) && isStakedAndAfterDec2019(nTime) /*ASSETCHAINS_STAKED != 0 && (nTime > nStakedDecemberHardforkTimestamp || is_STAKED(chainName.symbol()) != 0)*/ ) //December 2019 hardfork
         {
             READWRITE(segid);
         }
-        
-        /*if ( (s.GetType() & SER_DISK) && (is_STAKED(ASSETCHAINS_SYMBOL) != 0) && ASSETCHAINS_NOTARY_PAY[0] != 0 )
-        {
-            READWRITE(nNotaryPay);
-            READWRITE(segid);
-        }*/
     }
+private:
+    bool isStakedAndNotaryPay() const;
+    bool isStakedAndAfterDec2019(unsigned int nTime) const;
 
+public:
     uint256 GetBlockHash() const
     {
         CBlockHeader block;

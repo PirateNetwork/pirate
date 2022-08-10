@@ -396,7 +396,7 @@ void CTxMemPool::remove(const CTransaction &origTx, std::list<CTransaction>& rem
 void CTxMemPool::removeForReorg(const CCoinsViewCache *pcoins, unsigned int nMemPoolHeight, int flags)
 {
     // Remove transactions spending a coinbase which are now immature
-    if ( ASSETCHAINS_SYMBOL[0] == 0 )
+    if ( chainName.isKMD() )
         Params().ResetCoinbaseMaturity();
     // Remove transactions spending a coinbase which are now immature and no-longer-final transactions
     LOCK(cs);
@@ -516,9 +516,9 @@ void CTxMemPool::removeExpired(unsigned int nBlockHeight)
         const CTransaction& tx = it->GetTx();
         CBlockIndex *tipindex = chainActive.Tip();  // TODO: should be under cs_main lock?
 
-        bool fInterestNotValidated = ASSETCHAINS_SYMBOL[0] == 0 // KMD
-                && tipindex != 0 // chain has blocs on it
-                && !komodo_validate_interest(tx, tipindex->nHeight + 1, tipindex->GetMedianTimePast() + 777);
+        bool fInterestNotValidated = chainName.isKMD() // KMD
+                && tipindex != nullptr // chain has blocks on it
+                && !komodo_validate_interest(tx, tipindex->nHeight + 1, tipindex->GetMedianTimePast() + 777);  // TODO: should not we use nBlockHeight instead of tipindex?
 
         if (IsExpiredTx(tx, nBlockHeight) || fInterestNotValidated)
         {

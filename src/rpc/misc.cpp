@@ -77,7 +77,6 @@ int32_t komodo_whoami(char *pubkeystr,int32_t height,uint32_t timestamp);
 extern uint64_t KOMODO_INTERESTSUM,KOMODO_WALLETBALANCE;
 extern bool IS_KOMODO_NOTARY;
 extern int32_t KOMODO_LASTMINED,JUMBLR_PAUSE,KOMODO_LONGESTCHAIN,STAKED_NOTARY_ID,STAKED_ERA,KOMODO_INSYNC;
-extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 uint32_t komodo_segid32(char *coinaddr);
 int64_t komodo_coinsupply(int64_t *zfundsp,int64_t *sproutfundsp,int32_t height);
 int32_t notarizedtxid_height(char *dest,char *txidstr,int32_t *kmdnotarized_heightp);
@@ -263,18 +262,18 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
     obj.push_back(Pair("notarizedtxid", notarized_desttxid.ToString()));
     if ( KOMODO_NSPV_FULLNODE )
     {
-        txid_height = notarizedtxid_height(ASSETCHAINS_SYMBOL[0] != 0 ? (char *)"KMD" : (char *)"BTC",(char *)notarized_desttxid.ToString().c_str(),&kmdnotarized_height);
+        txid_height = notarizedtxid_height(!chainName.isKMD() ? (char *)"KMD" : (char *)"BTC",(char *)notarized_desttxid.ToString().c_str(),&kmdnotarized_height);
         if ( txid_height > 0 )
             obj.push_back(Pair("notarizedtxid_height", txid_height));
         else obj.push_back(Pair("notarizedtxid_height", "mempool"));
-        if ( ASSETCHAINS_SYMBOL[0] != 0 )
+        if ( !chainName.isKMD() )
             obj.push_back(Pair("KMDnotarized_height", kmdnotarized_height));
         obj.push_back(Pair("notarized_confirms", txid_height < kmdnotarized_height ? (kmdnotarized_height - txid_height + 1) : 0));
         //fprintf(stderr,"after notarized_confirms %u\n",(uint32_t)time(NULL));
 #ifdef ENABLE_WALLET
         if (pwalletMain) {
             obj.push_back(Pair("walletversion", pwalletMain->GetVersion()));
-            if ( ASSETCHAINS_SYMBOL[0] == 0 )
+            if ( chainName.isKMD() )
             {
                 obj.push_back(Pair("interest",       ValueFromAmount(KOMODO_INTERESTSUM)));
                 obj.push_back(Pair("balance",       ValueFromAmount(KOMODO_WALLETBALANCE))); //pwalletMain->GetBalance()
@@ -325,15 +324,14 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
     if ( ASSETCHAINS_CC != 0 )
         obj.push_back(Pair("CCid",        (int)ASSETCHAINS_CC));
-    obj.push_back(Pair("name",        ASSETCHAINS_SYMBOL[0] == 0 ? "KMD" : ASSETCHAINS_SYMBOL));
+    obj.push_back(Pair("name", chainName.ToString()));
 
     obj.push_back(Pair("p2pport",        ASSETCHAINS_P2PPORT));
     obj.push_back(Pair("rpcport",        ASSETCHAINS_RPCPORT));
-    if ( ASSETCHAINS_SYMBOL[0] != 0 )
+    if ( !chainName.isKMD() )
     {
-        if ( is_STAKED(ASSETCHAINS_SYMBOL) != 0 )
+        if ( is_STAKED(chainName.symbol()) != 0 )
             obj.push_back(Pair("StakedEra",        STAKED_ERA));
-        //obj.push_back(Pair("name",        ASSETCHAINS_SYMBOL));
         obj.push_back(Pair("magic",        (int)ASSETCHAINS_MAGIC));
         obj.push_back(Pair("premine",        ASSETCHAINS_SUPPLY));
 
@@ -464,7 +462,7 @@ UniValue coinsupply(const UniValue& params, bool fHelp, const CPubKey& mypk)
         if ( (supply= komodo_coinsupply(&zfunds,&sproutfunds,height)) > 0 )
         {
             result.push_back(Pair("result", "success"));
-            result.push_back(Pair("coin", ASSETCHAINS_SYMBOL[0] == 0 ? "KMD" : ASSETCHAINS_SYMBOL));
+            result.push_back(Pair("coin", chainName.ToString()));
             result.push_back(Pair("height", (int)height));
             result.push_back(Pair("supply", ValueFromAmount(supply)));
             result.push_back(Pair("zfunds", ValueFromAmount(zfunds)));

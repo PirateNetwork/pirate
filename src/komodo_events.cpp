@@ -28,22 +28,20 @@
  */
 void komodo_eventadd_notarized( komodo_state *sp, char *symbol, int32_t height, komodo::event_notarized& ntz)
 {
-    char *coin = (ASSETCHAINS_SYMBOL[0] == 0) ? (char *)"KMD" : ASSETCHAINS_SYMBOL;
-
     if ( IS_KOMODO_NOTARY 
             && komodo_verifynotarization(symbol,ntz.dest,height,ntz.notarizedheight,ntz.blockhash, ntz.desttxid) < 0 )
     {
         static uint32_t counter;
         if ( counter++ < 100 )
             printf("[%s] error validating notarization ht.%d notarized_height.%d, if on a pruned %s node this can be ignored\n",
-                    ASSETCHAINS_SYMBOL,height,ntz.notarizedheight, ntz.dest);
+                    chainName.symbol().c_str(), height, ntz.notarizedheight, ntz.dest);
     }
-    else if ( strcmp(symbol,coin) == 0 )
+    else if ( chainName.isSymbol(symbol) )
     {
         if ( sp != nullptr )
         {
             sp->add_event(symbol, height, ntz);
-            komodo_notarized_update(sp,height, ntz.notarizedheight, ntz.blockhash, ntz.desttxid, ntz.MoM, ntz.MoMdepth);
+            komodo_notarized_update(sp, height, ntz.notarizedheight, ntz.blockhash, ntz.desttxid, ntz.MoM, ntz.MoMdepth);
         }
     }
 }
@@ -89,7 +87,7 @@ void komodo_eventadd_pricefeed( komodo_state *sp, char *symbol, int32_t height, 
  */
 void komodo_eventadd_opreturn( komodo_state *sp, char *symbol, int32_t height, komodo::event_opreturn& opret)
 {
-    if ( sp != nullptr && ASSETCHAINS_SYMBOL[0] != 0)
+    if ( sp != nullptr && !chainName.isKMD() )
     {
         sp->add_event(symbol, height, opret);
         komodo_opreturn(height, opret.value, opret.opret.data(), opret.opret.size(), opret.txid, opret.vout, symbol);
@@ -120,7 +118,7 @@ void komodo_event_rewind(komodo_state *sp, char *symbol, int32_t height)
 {
     if ( sp != nullptr )
     {
-        if ( ASSETCHAINS_SYMBOL[0] == 0 && height <= KOMODO_LASTMINED && prevKOMODO_LASTMINED != 0 )
+        if ( chainName.isKMD() && height <= KOMODO_LASTMINED && prevKOMODO_LASTMINED != 0 )
         {
             printf("undo KOMODO_LASTMINED %d <- %d\n",KOMODO_LASTMINED,prevKOMODO_LASTMINED);
             KOMODO_LASTMINED = prevKOMODO_LASTMINED;

@@ -252,7 +252,7 @@ void CompleteImportTransaction(CTransaction &importTx, int32_t offset)
 }
 
 bool IsSameAssetChain(const Notarisation &nota) {
-    return strcmp(nota.second.symbol, ASSETCHAINS_SYMBOL) == 0;
+    return chainName.isSymbol(nota.second.symbol);
 };
 
 

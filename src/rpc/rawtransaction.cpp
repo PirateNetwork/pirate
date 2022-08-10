@@ -43,6 +43,7 @@
 #endif
 
 #include "komodo_defs.h"
+#include "assetchain.h"
 
 #include <stdint.h>
 
@@ -51,8 +52,6 @@
 #include <univalue.h>
 
 using namespace std;
-
-extern char ASSETCHAINS_SYMBOL[];
 
 void ScriptPubKeyToJSON(const CScript& scriptPubKey, UniValue& out, bool fIncludeHex)
 {
@@ -269,7 +268,7 @@ void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue&
         const CTxOut& txout = tx.vout[i];
         UniValue out(UniValue::VOBJ);
         out.push_back(Pair("value", ValueFromAmount(txout.nValue)));
-        if ( ASSETCHAINS_SYMBOL[0] == 0 && pindex != 0 && tx.nLockTime >= 500000000 && (tipindex= chainActive.Tip()) != 0 )
+        if ( chainName.isKMD() && pindex != 0 && tx.nLockTime >= 500000000 && (tipindex= chainActive.Tip()) != 0 )
         {
             int64_t interest; int32_t txheight; uint32_t locktime;
             interest = komodo_accrued_interest(&txheight,&locktime,tx.GetHash(),i,0,txout.nValue,(int32_t)tipindex->nHeight);
@@ -371,7 +370,7 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
         const CTxOut& txout = tx.vout[i];
         UniValue out(UniValue::VOBJ);
         out.push_back(Pair("value", ValueFromAmount(txout.nValue)));
-        if ( KOMODO_NSPV_FULLNODE && ASSETCHAINS_SYMBOL[0] == 0 && tx.nLockTime >= 500000000 && (tipindex= chainActive.Tip()) != 0 )
+        if ( KOMODO_NSPV_FULLNODE && chainName.isKMD() && tx.nLockTime >= 500000000 && (tipindex= chainActive.Tip()) != 0 )
         {
             int64_t interest; int32_t txheight; uint32_t locktime;
             interest = komodo_accrued_interest(&txheight,&locktime,tx.GetHash(),i,0,txout.nValue,(int32_t)tipindex->nHeight);
