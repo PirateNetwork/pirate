@@ -194,8 +194,9 @@ struct NSPV_CCmtxinfo
 
 struct NSPV_remoterpcresp
 {
+    NSPV_remoterpcresp() { method[0] = '\0'; json = nullptr; }
     char method[64];
-    char json[11000];
+    char *json;
 };
 
 #endif // KOMODO_NSPV_DEFSH
