@@ -176,7 +176,7 @@ bool Eval::CheckNotaryInputs(const CTransaction &tx, uint32_t height, uint32_t t
     auth.requiredSigs = 11;
     auth.size = GetNotaries(auth.notaries, height, timestamp);
 
-    return CheckTxAuthority(tx, auth);
+    return CrossChain::CheckTxAuthority(tx, auth);
 }
 
 /*

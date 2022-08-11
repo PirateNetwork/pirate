@@ -12,7 +12,7 @@
  * Removal or modification of this copyright notice is prohibited.            *
  *                                                                            *
  ******************************************************************************/
-
+#include "cc/import.h"
 #include "cc/eval.h"
 #include "cc/utils.h"
 #include "importcoin.h"
@@ -57,188 +57,82 @@ cJSON* CodaRPC(char **retstr,char const *arg0,char const *arg1,char const *arg2,
     return(retjson);    
 }
 
-// makes source tx for self import tx
-CMutableTransaction MakeSelfImportSourceTx(CTxDestination &dest, int64_t amount)
+/****
+ * @brief make import tx with burntx and dual daemon
+ * @param txfee fee
+ * @param receipt
+ * @param srcaddr source address
+ * @param vouts collection of vouts
+ * @returns the hex string of the import transaction
+ */
+std::string MakeCodaImportTx(uint64_t txfee, const std::string& receipt, const std::string& srcaddr, 
+        const std::vector<CTxOut>& vouts)
 {
-    const int64_t txfee = 10000;
-    int64_t inputs, change;
-    CPubKey myPubKey = Mypubkey();
-    struct CCcontract_info *cpDummy, C;
+    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(
+            Params().GetConsensus(), komodo_nextheight());
+    CMutableTransaction burntx = CreateNewContextualCMutableTransaction(
+            Params().GetConsensus(), komodo_nextheight());
 
-    cpDummy = CCinit(&C, EVAL_TOKENS);  // this is just for FinalizeCCTx to work
-
-    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
-
-    if (AddNormalinputs(mtx, myPubKey, 2 * txfee, 4) == 0) {
-        LOGSTREAM("importcoin", CCLOG_INFO, stream << "MakeSelfImportSourceTx() warning: cannot find normal inputs for txfee" << std::endl);
-    }
-    
-    CScript scriptPubKey = GetScriptForDestination(dest);
-    mtx.vout.push_back(CTxOut(txfee, scriptPubKey));
-
-    //make opret with 'burned' amount:
-    FinalizeCCTx(0, cpDummy, mtx, myPubKey, txfee, CScript() << OP_RETURN << E_MARSHAL(ss << (uint8_t)EVAL_IMPORTCOIN << (uint8_t)'A' << amount));
-    return mtx;
-}
-
-// make sure vin is signed by pubkey33
-bool CheckVinPubKey(const CTransaction &sourcetx, int32_t i, uint8_t pubkey33[33])
-{
-    CTransaction vintx;
-    uint256 blockHash;
-    char destaddr[64], pkaddr[64];
-
-    if (i < 0 || i >= sourcetx.vin.size())
-        return false;
-
-    if( !myGetTransaction(sourcetx.vin[i].prevout.hash, vintx, blockHash) ) {
-        LOGSTREAM("importcoin", CCLOG_INFO, stream << "CheckVinPubKey() could not load vintx" << sourcetx.vin[i].prevout.hash.GetHex() << std::endl);
-        return false;
-    }
-    if( sourcetx.vin[i].prevout.n < vintx.vout.size() && Getscriptaddress(destaddr, vintx.vout[sourcetx.vin[i].prevout.n].scriptPubKey) != 0 )
-    {
-        pubkey2addr(pkaddr, pubkey33);
-        if (strcmp(pkaddr, destaddr) == 0) {
-            return true;
-        }
-        LOGSTREAM("importcoin", CCLOG_INFO, stream << "CheckVinPubKey() mismatched vin[" << i << "].prevout.n=" << sourcetx.vin[i].prevout.n << " -> destaddr=" << destaddr << " vs pkaddr=" << pkaddr << std::endl);
-    }
-    return false;
-}
-
-// ac_import=PUBKEY support:
-// prepare a tx for creating import tx and quasi-burn tx
-int32_t GetSelfimportProof(const CMutableTransaction sourceMtx, CMutableTransaction &templateMtx, ImportProof &proofNull) // find burnTx with hash from "other" daemon
-{
-    MerkleBranch newBranch; 
-    CMutableTransaction tmpmtx; 
-    //CTransaction sourcetx; 
-
-    tmpmtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
-
-    /*
-    if (!E_UNMARSHAL(ParseHex(rawsourcetx), ss >> sourcetx)) {
-        LOGSTREAM("importcoin", CCLOG_INFO, stream << "GetSelfimportProof: could not unmarshal source tx" << std::endl);
-        return(-1);
-    }
-
-    if (sourcetx.vout.size() == 0) {
-        LOGSTREAM("importcoin", CCLOG_INFO, stream << "GetSelfimportProof: vout size is 0" << std::endl);
-        return -1;
-    } */
-
-	/*if (ivout < 0) {  // "ivout < 0" means "find"  
-		// try to find vout
-		CPubKey myPubkey = Mypubkey();
-		ivout = 0;
-		// skip change:
-		if (sourcetx.vout[ivout].scriptPubKey == (CScript() << ParseHex(HexStr(myPubkey)) << OP_CHECKSIG))
-			ivout++;
-	}
-
-    if (ivout >= sourcetx.vout.size()) {
-        LOGSTREAM("importcoin", CCLOG_INFO, stream << "GetSelfimportProof: needed vout not found" << std::endl);
-        return -1;
-    } */
-
-    int32_t ivout = 0;
-
-	// LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "GetSelfimportProof: using vout[" << ivout << "] of the passed rawtx" << std::endl);
-
-    CScript scriptPubKey = sourceMtx.vout[ivout].scriptPubKey;
-
-	//mtx is template for import tx
-    templateMtx = sourceMtx;
-    templateMtx.fOverwintered = tmpmtx.fOverwintered;
-    
-    //malleability fix for burn tx:
-    //mtx.nExpiryHeight = tmpmtx.nExpiryHeight;
-    templateMtx.nExpiryHeight = sourceMtx.nExpiryHeight;
-
-    templateMtx.nVersionGroupId = tmpmtx.nVersionGroupId;
-    templateMtx.nVersion = tmpmtx.nVersion;
-    templateMtx.vout.clear();
-    templateMtx.vout.resize(1);
-
-    uint8_t evalCode, funcId;
-    int64_t burnAmount;
-    vscript_t vopret;
-    if( !GetOpReturnData(sourceMtx.vout.back().scriptPubKey, vopret) ||
-        !E_UNMARSHAL(vopret, ss >> evalCode; ss >> funcId; ss >> burnAmount)) {
-        LOGSTREAM("importcoin", CCLOG_INFO, stream << "GetSelfimportProof() could not unmarshal source tx opret" << std::endl);
-        return -1;
-    }
-    templateMtx.vout[0].nValue = burnAmount;
-    templateMtx.vout[0].scriptPubKey = scriptPubKey;
-
-    // not sure we need this now as we create sourcetx ourselves:
-    /*if (sourcetx.GetHash() != sourcetxid) {
-        LOGSTREAM("importcoin", CCLOG_INFO, stream << "GetSelfimportProof: passed source txid incorrect" << std::endl);
-        return(-1);
-    }*/
-
-    // check ac_pubkey:
-    if (!CheckVinPubKey(sourceMtx, 0, ASSETCHAINS_OVERRIDE_PUBKEY33)) {
-        return -1;
-    }
-    proofNull = ImportProof(std::make_pair(sourceMtx.GetHash(), newBranch));
-    return 0;
-}
-
-void sha256_hash_and_stringify(const std::string& data, char results[SHA256_DIGEST_LENGTH*2+1])
-{
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256_CTX ctx;
-    SHA256_Init(&ctx);
-    SHA256_Update(&ctx, data.c_str(), data.size());
-    SHA256_Final(hash, &ctx);
-
-    for( int i = 0; i < SHA256_DIGEST_LENGTH; ++i)
-        sprintf(results + (i * 2), "%02x", hash[i]);
-    results[SHA256_DIGEST_LENGTH*2] = 0;
-    return;
-}
-
-// make import tx with burntx and dual daemon
-std::string MakeCodaImportTx(uint64_t txfee, std::string receipt, std::string srcaddr, std::vector<CTxOut> vouts)
-{
-    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()),burntx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
-    CPubKey mypk; uint256 codaburntxid; std::vector<unsigned char> dummyproof;
-    int32_t i,numvouts,n,m; std::string coin,error; struct CCcontract_info *cp, C;
-    cJSON *result,*tmp,*tmp1;
-    char out[SHA256_DIGEST_LENGTH*2+1],*retstr,*destaddr,*receiver; TxProof txProof; uint64_t amount;
-
+    CCcontract_info *cp;
+    CCcontract_info C;
     cp = CCinit(&C, EVAL_GATEWAYS);
+
     if (txfee == 0)
         txfee = 10000;
-    mypk = pubkey2pk(Mypubkey());
-    sha256_hash_and_stringify(receipt, out);
-    LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "MakeCodaImportTx: hash=" << out << std::endl);
-    codaburntxid.SetHex(out);
-    LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "MakeCodaImportTx: receipt=" << receipt << " codaburntxid=" << codaburntxid.GetHex().data() << " amount=" << (double)amount / COIN  << std::endl);
-    result=CodaRPC(&retstr,"prove-payment","-address",srcaddr.c_str(),"-receipt-chain-hash",receipt.c_str(),"");
-    if (result==0)
+    CPubKey mypk = pubkey2pk(Mypubkey());
+
+    SHA256_CTX sha256;
+    SHA256_Init(&sha256);
+    SHA256_Update(&sha256, receipt.c_str(), receipt.size());
+    unsigned char hash[SHA256_DIGEST_LENGTH+1];
+    SHA256_Final(hash, &sha256);
+    char out[SHA256_DIGEST_LENGTH*2+1];
+    for(int32_t i = 0; i < SHA256_DIGEST_LENGTH; i++)
     {
-        if (retstr!=0)
+        sprintf(out + (i * 2), "%02x", hash[i]);
+    }
+    out[SHA256_DIGEST_LENGTH*2]='\0';
+    LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "MakeCodaImportTx: hash=" << out << std::endl);
+    uint256 codaburntxid;
+    codaburntxid.SetHex(out);
+    LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "MakeCodaImportTx: receipt=" 
+            << receipt << " codaburntxid=" << codaburntxid.GetHex().data() 
+            << std::endl);
+
+    char *retstr;
+    cJSON *result = CodaRPC(&retstr,"prove-payment","-address",srcaddr.c_str(),
+            "-receipt-chain-hash",receipt.c_str(),"");
+    if (result == nullptr)
+    {
+        if (retstr != nullptr)
         {            
-            CCerror=std::string("CodaRPC: ")+retstr;
+            CCerror = std::string("CodaRPC: ") + retstr;
             free(retstr);
         }
-        return("");
+        return "";
     }
     else
     {
-        if ((tmp=jobj(jitem(jarray(&n,result,(char *)"payments"),0),(char *)"payload"))!=0 && (destaddr=jstr(jobj(tmp,(char *)"common"),(char *)"memo"))!=0 &&
-            (receiver=jstr(jitem(jarray(&m,tmp,(char *)"body"),1),(char *)"receiver"))!=0 && (amount=j64bits(jitem(jarray(&m,tmp,(char *)"body"),1),(char *)"amount"))!=0) 
+        int32_t n;
+        int32_t m;
+        cJSON *tmp = jobj(jitem(jarray(&n,result,(char *)"payments"),0),(char *)"payload");
+        char *destaddr;
+        char *receiver; 
+        uint64_t amount;
+        if ( tmp != nullptr 
+                && (destaddr=jstr(jobj(tmp,(char *)"common"),(char *)"memo")) != nullptr 
+                && (receiver=jstr(jitem(jarray(&m,tmp,(char *)"body"),1),(char *)"receiver")) != nullptr 
+                && (amount=j64bits(jitem(jarray(&m,tmp,(char *)"body"),1),(char *)"amount")) != 0 ) 
         {
-            LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "MakeCodaImportTx: receiver=" << receiver << " destaddr=" << destaddr << " amount=" << amount << std::endl);
+            LOGSTREAM("importcoin", CCLOG_DEBUG1, stream << "MakeCodaImportTx: receiver=" 
+                    << receiver << " destaddr=" << destaddr << " amount=" << amount << std::endl);
             if (strcmp(receiver,CODA_BURN_ADDRESS)!=0)
             {
                 CCerror="MakeCodaImportTx: invalid burn address, coins do not go to predefined burn address - ";
                 CCerror+=CODA_BURN_ADDRESS;
                 LOGSTREAM("importcoin", CCLOG_INFO, stream << CCerror << std::endl);
                 free(result);
-                return("");
+                return "";
             }
             CTxDestination dest = DecodeDestination(destaddr);
             CScript scriptPubKey = GetScriptForDestination(dest);
@@ -247,17 +141,20 @@ std::string MakeCodaImportTx(uint64_t txfee, std::string receipt, std::string sr
                 CCerror="MakeCodaImportTx: invalid destination address, burnTx memo!=importTx destination";
                 LOGSTREAM("importcoin", CCLOG_INFO, stream << CCerror << std::endl);
                 free(result);
-                return("");
+                return "";
             }
             if (amount*COIN!=vouts[0].nValue)
             {
                 CCerror="MakeCodaImportTx: invalid amount, burnTx amount!=importTx amount";
                 LOGSTREAM("importcoin", CCLOG_INFO, stream << CCerror << std::endl);
                 free(result);
-                return("");
+                return "";
             }
             burntx.vin.push_back(CTxIn(codaburntxid,0,CScript()));
+            std::vector<unsigned char> dummyproof;
             burntx.vout.push_back(MakeBurnOutput(amount*COIN,0xffffffff,"CODA",vouts,dummyproof,srcaddr,receipt));
+
+            TxProof txProof; 
             return HexStr(E_MARSHAL(ss << MakeImportCoinTransaction(txProof,burntx,vouts)));
         }
         else
@@ -265,7 +162,7 @@ std::string MakeCodaImportTx(uint64_t txfee, std::string receipt, std::string sr
             CCerror="MakeCodaImportTx: invalid Coda burn tx";
             LOGSTREAM("importcoin", CCLOG_INFO, stream << CCerror << std::endl);
             free(result);
-            return("");
+            return "";
         }
         
     }
@@ -287,9 +184,18 @@ int32_t CheckCODAimport(CTransaction importTx,CTransaction burnTx,std::vector<CT
 {
     cJSON *result,*tmp,*tmp1; char *retstr,out[SHA256_DIGEST_LENGTH*2+1]; int i,n,m;
     uint256 codaburntxid; char *destaddr,*receiver; uint64_t amount;
+    unsigned char hash[SHA256_DIGEST_LENGTH+1];
+    SHA256_CTX sha256;
 
     // check with dual-CODA daemon via ASSETCHAINS_CODAPORT for validity of burnTx
-    sha256_hash_and_stringify(receipt, out);
+    SHA256_Init(&sha256);
+    SHA256_Update(&sha256, receipt.c_str(), receipt.size());
+    SHA256_Final(hash, &sha256);
+    for(i = 0; i < SHA256_DIGEST_LENGTH; i++)
+    {
+        sprintf(out + (i * 2), "%02x", hash[i]);
+    }
+    out[65]='\0';
     codaburntxid.SetHex(out);
     result=CodaRPC(&retstr,"prove-payment","-address",srcaddr.c_str(),"-receipt-chain-hash",receipt.c_str(),"");
     if (result==0)
@@ -607,11 +513,9 @@ bool CheckMigration(Eval *eval, const CTransaction &importTx, const CTransaction
             return eval->Invalid("import-tx-token-params-incorrect");
     }
 
-
     // Check burntx shows correct outputs hash
-//    if (payoutsHash != SerializeHash(payouts))  // done in ImportCoin
-//        return eval->Invalid("wrong-payouts");
-
+    //    if (payoutsHash != SerializeHash(payouts))  // done in ImportCoin
+    //        return eval->Invalid("wrong-payouts");
 
     TxProof merkleBranchProof;
     std::vector<uint256> notaryTxids;
@@ -620,13 +524,13 @@ bool CheckMigration(Eval *eval, const CTransaction &importTx, const CTransaction
     if (proof.IsMerkleBranch(merkleBranchProof)) {
         uint256 target = merkleBranchProof.second.Exec(burnTx.GetHash());
         LOGSTREAM("importcoin", CCLOG_DEBUG2, stream << "Eval::ImportCoin() momom target=" << target.GetHex() << " merkleBranchProof.first=" << merkleBranchProof.first.GetHex() << std::endl);
-        if (!CheckMoMoM(merkleBranchProof.first, target)) {
+        if (!CrossChain::CheckMoMoM(merkleBranchProof.first, target)) {
             LOGSTREAM("importcoin", CCLOG_INFO, stream << "MoMoM check failed for importtx=" << importTx.GetHash().GetHex() << std::endl);
             return eval->Invalid("momom-check-fail");
         }
     }
     else if (proof.IsNotaryTxids(notaryTxids)) {
-        if (!CheckNotariesApproval(burnTx.GetHash(), notaryTxids)) {
+        if (!CrossChain::CheckNotariesApproval(burnTx.GetHash(), notaryTxids)) {
             return eval->Invalid("notaries-approval-check-fail");
         }
     }
@@ -750,4 +654,117 @@ bool Eval::ImportCoin(const std::vector<uint8_t> params, const CTransaction &imp
     LOGSTREAM("importcoin", CCLOG_DEBUG2, stream << "Valid import tx! txid=" << importTx.GetHash().GetHex() << std::endl);
        
     return Valid();
+}
+
+/*****
+ * @brief makes source tx for self import tx
+ * @param dest the tx destination
+ * @param amount the amount
+ * @returns a transaction based on the inputs
+ */
+CMutableTransaction MakeSelfImportSourceTx(const CTxDestination &dest, int64_t amount)
+{
+    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
+
+    const int64_t txfee = 10000;
+    CPubKey myPubKey = Mypubkey();
+    if (AddNormalinputs(mtx, myPubKey, 2 * txfee, 4) == 0) {
+        LOGSTREAM("importcoin", CCLOG_INFO, stream 
+                << "MakeSelfImportSourceTx() warning: cannot find normal inputs for txfee" << std::endl);
+    }
+    
+    CScript scriptPubKey = GetScriptForDestination(dest);
+    mtx.vout.push_back(CTxOut(txfee, scriptPubKey));
+
+    //make opret with 'burned' amount:
+    CCcontract_info *cpDummy;
+    CCcontract_info C;
+    cpDummy = CCinit(&C, EVAL_TOKENS);  // this is just for FinalizeCCTx to work
+    FinalizeCCTx(0, cpDummy, mtx, myPubKey, txfee, CScript() 
+            << OP_RETURN 
+            << E_MARSHAL(ss << (uint8_t)EVAL_IMPORTCOIN << (uint8_t)'A' << amount));
+    return mtx;
+}
+
+/******
+ * @brief make sure vin is signed by a particular key
+ * @param sourcetx the source transaction
+ * @param i the index of the input to check
+ * @param pubkey33 the key
+ * @returns true if the vin of i was signed by the given key
+ */
+bool CheckVinPubKey(const CTransaction &sourcetx, int32_t i, uint8_t pubkey33[33])
+{
+    CTransaction vintx;
+    uint256 blockHash;
+    char destaddr[64], pkaddr[64];
+
+    if (i < 0 || i >= sourcetx.vin.size())
+        return false;
+
+    if( !myGetTransaction(sourcetx.vin[i].prevout.hash, vintx, blockHash) ) {
+        LOGSTREAM("importcoin", CCLOG_INFO, stream << "CheckVinPubKey() could not load vintx" << sourcetx.vin[i].prevout.hash.GetHex() << std::endl);
+        return false;
+    }
+    if( sourcetx.vin[i].prevout.n < vintx.vout.size() && Getscriptaddress(destaddr, vintx.vout[sourcetx.vin[i].prevout.n].scriptPubKey) != 0 )
+    {
+        pubkey2addr(pkaddr, pubkey33);
+        if (strcmp(pkaddr, destaddr) == 0) {
+            return true;
+        }
+        LOGSTREAM("importcoin", CCLOG_INFO, stream << "CheckVinPubKey() mismatched vin[" << i << "].prevout.n=" << sourcetx.vin[i].prevout.n << " -> destaddr=" << destaddr << " vs pkaddr=" << pkaddr << std::endl);
+    }
+    return false;
+}
+
+/*****
+ * @brief generate a self import proof
+ * @note this prepares a tx for creating an import tx and quasi-burn tx
+ * @note find burnTx with hash from "other" daemon
+ * @param[in] sourceMtx the original transaction
+ * @param[out] templateMtx the resultant transaction
+ * @param[out] proofNull the import proof
+ * @returns true on success
+ */
+bool GetSelfimportProof(const CMutableTransaction sourceMtx, CMutableTransaction &templateMtx, 
+        ImportProof &proofNull)
+{
+
+    CMutableTransaction tmpmtx = CreateNewContextualCMutableTransaction(
+            Params().GetConsensus(), komodo_nextheight());
+
+    CScript scriptPubKey = sourceMtx.vout[0].scriptPubKey;
+
+	//mtx is template for import tx
+    templateMtx = sourceMtx;
+    templateMtx.fOverwintered = tmpmtx.fOverwintered;
+    
+    //malleability fix for burn tx:
+    //mtx.nExpiryHeight = tmpmtx.nExpiryHeight;
+    templateMtx.nExpiryHeight = sourceMtx.nExpiryHeight;
+
+    templateMtx.nVersionGroupId = tmpmtx.nVersionGroupId;
+    templateMtx.nVersion = tmpmtx.nVersion;
+    templateMtx.vout.clear();
+    templateMtx.vout.resize(1);
+
+    uint8_t evalCode, funcId;
+    int64_t burnAmount;
+    vscript_t vopret;
+    if( !GetOpReturnData(sourceMtx.vout.back().scriptPubKey, vopret) ||
+        !E_UNMARSHAL(vopret, ss >> evalCode; ss >> funcId; ss >> burnAmount)) {
+        LOGSTREAM("importcoin", CCLOG_INFO, stream << "GetSelfimportProof() could not unmarshal source tx opret" << std::endl);
+        return false;
+    }
+    templateMtx.vout[0].nValue = burnAmount;
+    templateMtx.vout[0].scriptPubKey = scriptPubKey;
+
+    // check ac_pubkey:
+    if (!CheckVinPubKey(sourceMtx, 0, ASSETCHAINS_OVERRIDE_PUBKEY33)) {
+        return false;
+    }
+
+    MerkleBranch newBranch; 
+    proofNull = ImportProof(std::make_pair(sourceMtx.GetHash(), newBranch));
+    return true;
 }

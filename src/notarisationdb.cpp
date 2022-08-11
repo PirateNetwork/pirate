@@ -36,7 +36,8 @@ NotarisationsInBlock ScanBlockNotarisations(const CBlock &block, int nHeight)
         if (strlen(data.symbol) == 0)
           continue;
 
-        int authority = GetSymbolAuthority(data.symbol);
+        //printf("Checked notarisation data for %s \n",data.symbol);
+        CrosschainType authority = CrossChain::GetSymbolAuthority(data.symbol);
 
         if (authority == CROSSCHAIN_KOMODO) {
             if (!eval->CheckNotaryInputs(tx, nHeight, block.nTime))
@@ -54,7 +55,7 @@ NotarisationsInBlock ScanBlockNotarisations(const CBlock &block, int nHeight)
               // pass era slection off to notaries_staked.cpp file
               auth_STAKED = Choose_auth_STAKED(staked_era);
             }
-            if (!CheckTxAuthority(tx, auth_STAKED))
+            if (!CrossChain::CheckTxAuthority(tx, auth_STAKED))
                 continue;
         }
 
