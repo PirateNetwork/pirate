@@ -1538,7 +1538,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             return InitError(_("Unable to start HTTP server. See debug log for details."));
     }
 
-    int64_t nStart;
+    int64_t nStart = GetTimeMillis();
 
     // ********************************************************* Step 5: verify wallet database integrity
 #ifdef ENABLE_WALLET
