@@ -39,14 +39,6 @@
 #define _ASSETCHAINS_TIMELOCKOFF 0xffffffffffffffff
 #define MAX_CURRENCIES 32
 
-// KMD Notary Seasons 
-// 1: May 1st 2018 1530921600
-// 2: July 15th 2019 1563148800 -> estimated height 1444000
-// 3: 3rd season ending isnt known, so use very far times in future.
-    // 1751328000 = dummy timestamp, 1 July 2025!
-    // 7113400 = 5x current KMD blockheight. 
-// to add 4th season, change NUM_KMD_SEASONS to 4, and add timestamp and height of activation to these arrays. 
-
 #define SETBIT(bits,bitoffset) (((uint8_t *)bits)[(bitoffset) >> 3] |= (1 << ((bitoffset) & 7)))
 #define GETBIT(bits,bitoffset) (((uint8_t *)bits)[(bitoffset) >> 3] & (1 << ((bitoffset) & 7)))
 #define CLEARBIT(bits,bitoffset) (((uint8_t *)bits)[(bitoffset) >> 3] &= ~(1 << ((bitoffset) & 7)))

@@ -179,9 +179,7 @@ public:
      * @returns hard-coded IPv6 addresses of seed nodes
      */
     const std::vector<SeedSpec6>& FixedSeeds() const { return vFixedSeeds; }
-    /***
-     * @returns data on checkpoints
-     */
+    const std::vector<std::pair<std::string, std::string> > GenesisNotaries() const { return genesisNotaries; }
     const CCheckpointData& Checkpoints() const { return checkpointData; }
     /** 
      * @returns the founder's reward address for a given block height 
@@ -256,6 +254,7 @@ protected:
     std::vector<std::string> vFoundersRewardAddress;
     mutable uint32_t coinbaseMaturity = 100;
     uint32_t originalCoinbaseMaturity = 100;
+    std::vector< std::pair<std::string, std::string> > genesisNotaries;
 };
 
 /**
