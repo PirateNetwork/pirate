@@ -119,7 +119,7 @@ std::ostream& operator<<(std::ostream& os, const event& in)
  * @param pos the starting position (will advance)
  * @param data_len full length of data
  */
-event_pubkeys::event_pubkeys(uint8_t* data, long& pos, long data_len, int32_t height) : event(EVENT_PUBKEYS, height)
+event_pubkeys::event_pubkeys(uint8_t* data, long& pos, long data_len, int32_t height) : event_pubkeys(height)
 {
     num = data[pos++];
     if (num > 64)
@@ -127,7 +127,7 @@ event_pubkeys::event_pubkeys(uint8_t* data, long& pos, long data_len, int32_t he
     mem_nread(pubkeys, num, data, pos, data_len);
 }
 
-event_pubkeys::event_pubkeys(FILE* fp, int32_t height) : event(EVENT_PUBKEYS, height)
+event_pubkeys::event_pubkeys(FILE* fp, int32_t height) : event_pubkeys(height)
 {
     num = fgetc(fp);
     if ( fread(pubkeys,33,num,fp) != num )
@@ -145,7 +145,7 @@ std::ostream& operator<<(std::ostream& os, const event_pubkeys& in)
     return os;
 }
 
-event_rewind::event_rewind(uint8_t *data, long &pos, long data_len, int32_t height) : event(EVENT_REWIND, height)
+event_rewind::event_rewind(uint8_t *data, long &pos, long data_len, int32_t height) : event_rewind(height)
 {
     // nothing to do
 }
@@ -156,12 +156,14 @@ std::ostream& operator<<(std::ostream& os, const event_rewind& in)
     return os;
 }
 
-event_notarized::event_notarized(uint8_t *data, long &pos, long data_len, int32_t height, const char* _dest, bool includeMoM)
-        : event(EVENT_NOTARIZED, height), MoMdepth(0)
+event_notarized::event_notarized(uint8_t *data, long &pos, long data_len, int32_t height, 
+        const char* _dest, bool includeMoM)
+        : event_notarized(height, _dest)
 {
-    if (_dest != nullptr)
-        strncpy(this->dest, _dest, sizeof(this->dest)-1);
-    this->dest[sizeof(this->dest)-1] = 0;
+    // init via event_notarized(height, dest)
+    //if (_dest != nullptr)
+    //    strncpy(this->dest, _dest, sizeof(this->dest)-1);
+    //this->dest[sizeof(this->dest)-1] = 0;   
     MoM.SetNull();
     mem_read(this->notarizedheight, data, pos, data_len);
     mem_read(this->blockhash, data, pos, data_len);
@@ -174,11 +176,12 @@ event_notarized::event_notarized(uint8_t *data, long &pos, long data_len, int32_
 }
 
 event_notarized::event_notarized(FILE* fp, int32_t height, const char* _dest, bool includeMoM)
-        : event(EVENT_NOTARIZED, height), MoMdepth(0)
+        : event_notarized(height, _dest)
 {
-    if (_dest != nullptr)
-        strncpy(this->dest, _dest, sizeof(this->dest)-1);
-    this->dest[sizeof(this->dest)-1] = 0;
+    // init via event_notarized(height, dest)
+    //if (_dest != nullptr)
+    //    strncpy(this->dest, _dest, sizeof(this->dest)-1);
+    //this->dest[sizeof(this->dest)-1] = 0;
     MoM.SetNull();
     if ( fread(&notarizedheight,1,sizeof(notarizedheight),fp) != sizeof(notarizedheight) )
         throw parse_error("Invalid notarization height");
@@ -210,7 +213,7 @@ std::ostream& operator<<(std::ostream& os, const event_notarized& in)
     return os;
 }
 
-event_u::event_u(uint8_t *data, long &pos, long data_len, int32_t height) : event(EVENT_U, height)
+event_u::event_u(uint8_t *data, long &pos, long data_len, int32_t height) : event_u(height)
 {
     mem_read(this->n, data, pos, data_len);
     mem_read(this->nid, data, pos, data_len);
@@ -218,7 +221,7 @@ event_u::event_u(uint8_t *data, long &pos, long data_len, int32_t height) : even
     mem_read(this->hash, data, pos, data_len);
 }
 
-event_u::event_u(FILE *fp, int32_t height) : event(EVENT_U, height)
+event_u::event_u(FILE *fp, int32_t height) : event_u(height)
 {
     if (fread(&n, 1, sizeof(n), fp) != sizeof(n))
         throw parse_error("Unable to read n of event U from file");
@@ -240,14 +243,16 @@ std::ostream& operator<<(std::ostream& os, const event_u& in)
     return os;
 }
 
-event_kmdheight::event_kmdheight(uint8_t* data, long &pos, long data_len, int32_t height, bool includeTimestamp) : event(EVENT_KMDHEIGHT, height)
+event_kmdheight::event_kmdheight(uint8_t* data, long &pos, long data_len, int32_t height, 
+        bool includeTimestamp) : event_kmdheight(height)
 {
     mem_read(this->kheight, data, pos, data_len);
     if (includeTimestamp)
         mem_read(this->timestamp, data, pos, data_len);
 }
 
-event_kmdheight::event_kmdheight(FILE *fp, int32_t height, bool includeTimestamp) : event(EVENT_KMDHEIGHT, height)
+event_kmdheight::event_kmdheight(FILE *fp, int32_t height, bool includeTimestamp) 
+        : event_kmdheight(height)
 {
     if ( fread(&kheight,1,sizeof(kheight),fp) != sizeof(kheight) )
         throw parse_error("Unable to parse KMD height");
@@ -267,7 +272,8 @@ std::ostream& operator<<(std::ostream& os, const event_kmdheight& in)
     return os;
 }
 
-event_opreturn::event_opreturn(uint8_t *data, long &pos, long data_len, int32_t height) : event(EVENT_OPRETURN, height)
+event_opreturn::event_opreturn(uint8_t *data, long &pos, long data_len, int32_t height) 
+        : event_opreturn(height)
 {
     mem_read(this->txid, data, pos, data_len);
     mem_read(this->vout, data, pos, data_len);
@@ -281,7 +287,7 @@ event_opreturn::event_opreturn(uint8_t *data, long &pos, long data_len, int32_t 
     }
 }
 
-event_opreturn::event_opreturn(FILE* fp, int32_t height) : event(EVENT_OPRETURN, height)
+event_opreturn::event_opreturn(FILE* fp, int32_t height) : event_opreturn(height)
 {
     if ( fread(&txid,1,sizeof(txid),fp) != sizeof(txid) )
         throw parse_error("Unable to parse txid of opreturn record");
@@ -309,7 +315,8 @@ std::ostream& operator<<(std::ostream& os, const event_opreturn& in)
     return os;
 }
 
-event_pricefeed::event_pricefeed(uint8_t *data, long &pos, long data_len, int32_t height) : event(EVENT_PRICEFEED, height)
+event_pricefeed::event_pricefeed(uint8_t *data, long &pos, long data_len, int32_t height) 
+        : event_pricefeed(height)
 {
     mem_read(this->num, data, pos, data_len);
     // we're only interested if there are 35 prices. 
@@ -320,7 +327,8 @@ event_pricefeed::event_pricefeed(uint8_t *data, long &pos, long data_len, int32_
         pos += num * sizeof(uint32_t);
 }
 
-event_pricefeed::event_pricefeed(FILE* fp, int32_t height) : event(EVENT_PRICEFEED, height)
+event_pricefeed::event_pricefeed(FILE* fp, int32_t height) 
+        : event_pricefeed(height)
 {
     num = fgetc(fp);
     if ( num * sizeof(uint32_t) <= sizeof(prices) && fread(prices,sizeof(uint32_t),num,fp) != num )
