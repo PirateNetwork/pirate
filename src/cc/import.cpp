@@ -597,7 +597,9 @@ bool Eval::ImportCoin(const std::vector<uint8_t> params, const CTransaction &imp
         return Invalid("wrong-payouts");
     if (targetCcid < KOMODO_FIRSTFUNGIBLEID)
         return Invalid("chain-not-fungible");
-
+    if (targetSymbol.empty())
+        return Invalid("target-chain-not-specified");
+        
     if ( targetCcid != 0xffffffff )
     {
 
