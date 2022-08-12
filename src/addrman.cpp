@@ -528,11 +528,12 @@ void CAddrMan::GetAddr_(std::vector<CAddress>& vAddr, bool wants_addrv2)
     if (nNodes > ADDRMAN_GETADDR_MAX)
         nNodes = ADDRMAN_GETADDR_MAX;
 
-    int addrv2Nodes = nNodes/4;
+    int addrv2Nodes = nNodes/5;
     int ipv4Nodes = 0;
     int ipv6Nodes = 0;
     int torNodes = 0;
     int i2pNodes = 0;
+    int cjdnsNodes = 0;
 
     // Randomize Nodes
     for (unsigned int n = 0; n < vRandom.size(); n++) {
@@ -559,6 +560,10 @@ void CAddrMan::GetAddr_(std::vector<CAddress>& vAddr, bool wants_addrv2)
                 if (ai.IsIPv6() && ipv6Nodes <= addrv2Nodes) {
                     vAddr.push_back(ai);
                     ipv6Nodes++;
+                }
+                if (ai.IsCJDNS() && cjdnsNodes <= addrv2Nodes) {
+                    vAddr.push_back(ai);
+                    cjdnsNodes++;
                 }
                 if (ai.IsTor() && torNodes <= addrv2Nodes) {
                     vAddr.push_back(ai);
