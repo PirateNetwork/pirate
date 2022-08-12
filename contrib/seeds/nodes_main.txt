@@ -1,12 +1,23 @@
 #ivp4 ipv4support
-157.245.86.39:45452
-139.59.175.6:45452
+178.62.115.144:45452
+137.184.0.170:45452
+143.244.145.109:45452
+159.65.2.51:45452
 
 #ivp6 support
-[2a03:b0c0:1:d0::cc2:e001]:45452
-[2604:a880:400:d0::215a:1001]:45452
+[2a03:b0c0:1:d0::11c5:1001]:45452
+[2604:a880:4:1d0::614:2000]:45452
+[2604:a880:400:d0::2382:a001]:45452
+[2400:6180:0:d0::1130:1001]:45452
 
 #torv3 support
-
+dfxfjk5jc5lll56unty6r2skgruiperjkbpd7k2p5dizyjnon7z2bsqd.onion:45452
+ngcbnjlxj7va4icjyr5xkinze6cj65n7oc76jg5ukq5sdjlidyawqjad.onion:45452
+p57klorjcxp5cvdwk6e4qvd6bwwhdeehy6ahbndkrstz463dqpjfd3id.onion:45452
+2yejgueuxntoshcrawhlx7ccro6lgjitzzq6elr3nrgdcxcexw4rpbad.onion:45452
 
 #i2p support
+ansfkubmxiq4sf5fhccoyp7m7ixeb7vgbnpy5k6lo4m5hhhvd6oq.b32.i2p:45452
+cayqxq2k2kqa3ie25dann3lef5xaxo536o4n5hanimzdkzuqziha.b32.i2p:45452
+gtyy5vxzlg6eks2ca7jcj5dvq5styrkcfwvajntg7bfihxqyxkea.b32.i2p:45452
+nwtdqzp5lirzwrg7ightad42iwnvw4unuxglwekx6wibasg2uibq.b32.i2p:45452
