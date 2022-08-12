@@ -522,24 +522,54 @@ int CAddrMan::Check_()
 }
 #endif
 
-void CAddrMan::GetAddr_(std::vector<CAddress>& vAddr)
+void CAddrMan::GetAddr_(std::vector<CAddress>& vAddr, bool wants_addrv2)
 {
     unsigned int nNodes = ADDRMAN_GETADDR_MAX_PCT * vRandom.size() / 100;
     if (nNodes > ADDRMAN_GETADDR_MAX)
         nNodes = ADDRMAN_GETADDR_MAX;
+
+    int addrv2Nodes = nNodes/4;
+    int ipv4Nodes = 0;
+    int ipv6Nodes = 0;
+    int torNodes = 0;
+    int i2pNodes = 0;
+
+    // Randomize Nodes
+    for (unsigned int n = 0; n < vRandom.size(); n++) {
+        int nRndPos = RandomInt(vRandom.size() - n) + n;
+        SwapRandom(n, nRndPos);
+    }
 
     // gather a list of random nodes, skipping those of low quality
     for (unsigned int n = 0; n < vRandom.size(); n++) {
         if (vAddr.size() >= nNodes)
             break;
 
-        int nRndPos = RandomInt(vRandom.size() - n) + n;
-        SwapRandom(n, nRndPos);
         assert(mapInfo.count(vRandom[n]) == 1);
-
         const CAddrInfo& ai = mapInfo[vRandom[n]];
-        if (!ai.IsTerrible())
-            vAddr.push_back(ai);
+
+        if (!ai.IsTerrible()) {
+            if (!wants_addrv2) {
+                vAddr.push_back(ai);
+            } else {
+                if (ai.IsIPv4() && ipv4Nodes <= addrv2Nodes) {
+                    vAddr.push_back(ai);
+                    ipv4Nodes++;
+                }
+                if (ai.IsIPv6() && ipv6Nodes <= addrv2Nodes) {
+                    vAddr.push_back(ai);
+                    ipv6Nodes++;
+                }
+                if (ai.IsTor() && torNodes <= addrv2Nodes) {
+                    vAddr.push_back(ai);
+                    torNodes++;
+                }
+                if (ai.IsI2P() && i2pNodes <= addrv2Nodes) {
+                    vAddr.push_back(ai);
+                    i2pNodes++;
+                }
+            }
+        }
     }
 }
 

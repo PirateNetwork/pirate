@@ -290,7 +290,7 @@ protected:
 #endif
 
     //! Select several addresses at once.
-    void GetAddr_(std::vector<CAddress> &vAddr);
+    void GetAddr_(std::vector<CAddress> &vAddr, bool wants_addrv2);
 
     //! Mark an entry as currently-connected-to.
     void Connected_(const CService &addr, int64_t nTime);
@@ -700,13 +700,13 @@ public:
     }
 
     //! Return a bunch of addresses, selected at random.
-    std::vector<CAddress> GetAddr()
+    std::vector<CAddress> GetAddr(bool wants_addrv2 = false)
     {
         Check();
         std::vector<CAddress> vAddr;
         {
             LOCK(cs);
-            GetAddr_(vAddr);
+            GetAddr_(vAddr, wants_addrv2);
         }
         Check();
         return vAddr;
