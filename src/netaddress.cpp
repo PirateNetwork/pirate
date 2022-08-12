@@ -8,6 +8,7 @@
 #endif
 
 #include "netaddress.h"
+#include "net.h"
 
 #include "crypto/common.h"
 #include "crypto/sha3.h"
@@ -27,6 +28,12 @@
 
 constexpr size_t CNetAddr::V1_SERIALIZATION_SIZE;
 constexpr size_t CNetAddr::MAX_ADDRV2_SIZE;
+
+/** check whether a given address is in a network we can probably connect to */
+bool CNetAddr::IsReachableNetwork() {
+    const CNetAddr& addr = *this;
+    return IsReachable(addr);
+}
 
 CNetAddr::BIP155Network CNetAddr::GetBIP155Network() const
 {

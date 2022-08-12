@@ -147,6 +147,8 @@ class CNetAddr
         void SetLegacyIPv6(Span<const uint8_t> ipv6);
 
     public:
+        /** check whether a given address is in a network we can probably connect to */
+        bool IsReachableNetwork();
         bool SetInternal(const std::string& name);
 
         bool SetSpecial(const std::string &strName); // for Tor addresses

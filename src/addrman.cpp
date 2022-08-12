@@ -413,7 +413,7 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
             int nId = vvTried[nKBucket][nKBucketPos];
             assert(mapInfo.count(nId) == 1);
             CAddrInfo& info = mapInfo[nId];
-            if (RandomInt(1 << 30) < fChanceFactor * info.GetChance() * (1 << 30))
+            if (RandomInt(1 << 30) < fChanceFactor * info.GetChance() * (1 << 30) && info.IsReachableNetwork())
                 return info;
             fChanceFactor *= 1.2;
         }
@@ -435,7 +435,7 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
             int nId = vvNew[nUBucket][nUBucketPos];
             assert(mapInfo.count(nId) == 1);
             CAddrInfo& info = mapInfo[nId];
-            if (RandomInt(1 << 30) < fChanceFactor * info.GetChance() * (1 << 30))
+            if (RandomInt(1 << 30) < fChanceFactor * info.GetChance() * (1 << 30) && info.IsReachableNetwork())
                 return info;
             fChanceFactor *= 1.2;
         }
