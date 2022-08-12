@@ -68,6 +68,9 @@ private:
     //! position in vRandom
     int nRandomPos;
 
+    //! Address is local
+    bool fLocal;
+
     friend class CAddrMan;
 
 public:
@@ -86,6 +89,7 @@ public:
         nRefCount = 0;
         fInTried = false;
         nRandomPos = -1;
+        fLocal = false;
     }
 
     CAddrInfo(const CAddress &addrIn, const CNetAddr &addrSource) : CAddress(addrIn), source(addrSource)
@@ -290,6 +294,9 @@ protected:
 
     //! Mark an entry as currently-connected-to.
     void Connected_(const CService &addr, int64_t nTime);
+
+    //! Mark an entry as local
+    void SetLocal_(const CService &addr);
 
 public:
     void GetAllPeers(std::map<std::string, int64_t> &info);
@@ -712,6 +719,17 @@ public:
             LOCK(cs);
             Check();
             Connected_(addr, nTime);
+            Check();
+        }
+    }
+
+    //! Mark an entry as currently-connected-to.
+    void SetLocal(const CService &addr)
+    {
+        {
+            LOCK(cs);
+            Check();
+            SetLocal_(addr);
             Check();
         }
     }

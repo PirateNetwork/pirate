@@ -52,6 +52,9 @@ int CAddrInfo::GetBucketPosition(const uint256 &nKey, bool fNew, int nBucket) co
 
 bool CAddrInfo::IsTerrible(int64_t nNow) const
 {
+    if (fLocal) //never remove local addresses
+        return false;
+
     if (nLastTry && nLastTry >= nNow - 60) // never remove things tried in the last minute
         return false;
 
@@ -558,6 +561,24 @@ void CAddrMan::Connected_(const CService& addr, int64_t nTime)
     int64_t nUpdateInterval = 20 * 60;
     if (nTime - info.nTime > nUpdateInterval)
         info.nTime = nTime;
+}
+
+void CAddrMan::SetLocal_(const CService& addr)
+{
+    CAddrInfo* pinfo = Find(addr);
+
+    // if not found, bail out
+    if (!pinfo)
+        return;
+
+    CAddrInfo& info = *pinfo;
+
+    // check whether we are talking about the exact same CService (including same port)
+    if (info != addr)
+        return;
+
+    // update info
+    info.fLocal = true;
 }
 
 int CAddrMan::RandomInt(int nMax){

@@ -294,6 +294,7 @@ bool AddLocal(const CService& addr, int nScore)
     //Add our local addresses to addrman to distribute to other nodes
     addrman.Add(CAddress(addr), addr);
     addrman.Connected(addr);
+    addrman.SetLocal(addr);
 
     LogPrintf("AddLocal(%s,%i)\n", addr.ToString(), nScore);
 
