@@ -18,6 +18,8 @@
 #include "komodo_defs.h"
 
 #ifdef _WIN32
+#include <winsock2.h>
+#include <windows.h>
 #include <wincrypt.h>
 #endif
 

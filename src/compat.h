@@ -70,7 +70,6 @@ typedef u_int SOCKET;
 #define WSAEINVAL           EINVAL
 #define WSAEALREADY         EALREADY
 #define WSAEWOULDBLOCK      EWOULDBLOCK
-#define WSAEAGAIN           EAGAIN
 #define WSAEMSGSIZE         EMSGSIZE
 #define WSAEINTR            EINTR
 #define WSAEINPROGRESS      EINPROGRESS
@@ -79,6 +78,8 @@ typedef u_int SOCKET;
 #define INVALID_SOCKET      (SOCKET)(~0)
 #define SOCKET_ERROR        -1
 #endif
+
+#define WSAEAGAIN           EAGAIN
 
 #ifdef _WIN32
 #ifndef S_IRUSR
