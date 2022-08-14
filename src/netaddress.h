@@ -92,26 +92,26 @@ static const std::array<uint8_t, 6> INTERNAL_IN_IPV6_PREFIX{
 };
 
 /// Size of IPv4 address (in bytes).
-static constexpr size_t ADDR_IPV4_SIZE = 4;
+static constexpr uint64_t ADDR_IPV4_SIZE = 4;
 
 /// Size of IPv6 address (in bytes).
-static constexpr size_t ADDR_IPV6_SIZE = 16;
+static constexpr uint64_t ADDR_IPV6_SIZE = 16;
 
 /// Size of TORv2 address (in bytes).
-static constexpr size_t ADDR_TORV2_SIZE = 10;
+static constexpr uint64_t ADDR_TORV2_SIZE = 10;
 
 /// Size of TORv3 address (in bytes). This is the length of just the address
 /// as used in BIP155, without the checksum and the version byte.
-static constexpr size_t ADDR_TORV3_SIZE = 32;
+static constexpr uint64_t ADDR_TORV3_SIZE = 32;
 
 /// Size of I2P address (in bytes).
-static constexpr size_t ADDR_I2P_SIZE = 32;
+static constexpr uint64_t ADDR_I2P_SIZE = 32;
 
 /// Size of CJDNS address (in bytes).
-static constexpr size_t ADDR_CJDNS_SIZE = 16;
+static constexpr uint64_t ADDR_CJDNS_SIZE = 16;
 
 /// Size of "internal" (NET_INTERNAL) address (in bytes).
-static constexpr size_t ADDR_INTERNAL_SIZE = 10;
+static constexpr uint64_t ADDR_INTERNAL_SIZE = 10;
 
 /**
  * Network address.
@@ -273,14 +273,14 @@ class CNetAddr
         /**
          * Size of CNetAddr when serialized as ADDRv1 (pre-BIP155) (in bytes).
          */
-        static constexpr size_t V1_SERIALIZATION_SIZE = ADDR_IPV6_SIZE;
+        static constexpr uint64_t V1_SERIALIZATION_SIZE = ADDR_IPV6_SIZE;
 
         /**
          * Maximum size of an address as defined in BIP155 (in bytes).
          * This is only the size of the address, not the entire CNetAddr object
          * when serialized.
          */
-        static constexpr size_t MAX_ADDRV2_SIZE = 512;
+        static constexpr uint64_t MAX_ADDRV2_SIZE = 512;
 
         /**
          * Get the BIP155 network id of this address.
@@ -296,14 +296,14 @@ class CNetAddr
          * @throws std::ios_base::failure if the network is one of the BIP155 founding
          * networks (id 1..6) with wrong address size.
          */
-        bool SetNetFromBIP155Network(uint8_t possible_bip155_net, size_t address_size);
+        bool SetNetFromBIP155Network(uint8_t possible_bip155_net, uint64_t address_size);
 
         /**
          * Serialize in pre-ADDRv2/BIP155 format to an array.
          */
         void SerializeV1Array(uint8_t (&arr)[V1_SERIALIZATION_SIZE]) const
         {
-            size_t prefix_size;
+            uint64_t prefix_size;
 
             switch (m_net) {
             case NET_IPV6:
@@ -408,7 +408,7 @@ class CNetAddr
             uint8_t bip155_net;
             s >> bip155_net;
 
-            size_t address_size;
+            uint64_t address_size;
             s >> COMPACTSIZE(address_size);
 
             if (address_size > MAX_ADDRV2_SIZE) {

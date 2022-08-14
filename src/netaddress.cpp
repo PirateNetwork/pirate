@@ -26,8 +26,8 @@
 #include <iterator>
 #include <tuple>
 
-constexpr size_t CNetAddr::V1_SERIALIZATION_SIZE;
-constexpr size_t CNetAddr::MAX_ADDRV2_SIZE;
+constexpr uint64_t CNetAddr::V1_SERIALIZATION_SIZE;
+constexpr uint64_t CNetAddr::MAX_ADDRV2_SIZE;
 
 /** check whether a given address is in a network we can probably connect to */
 bool CNetAddr::IsReachableNetwork() {
@@ -64,7 +64,7 @@ CNetAddr::BIP155Network CNetAddr::GetBIP155Network() const
     assert(false);
 }
 
-bool CNetAddr::SetNetFromBIP155Network(uint8_t possible_bip155_net, size_t address_size)
+bool CNetAddr::SetNetFromBIP155Network(uint8_t possible_bip155_net, uint64_t address_size)
 {
     switch (possible_bip155_net) {
     case BIP155Network::IPV4:
@@ -165,7 +165,7 @@ void CNetAddr::SetLegacyIPv6(Span<const uint8_t> ipv6)
 {
     assert(ipv6.size() == ADDR_IPV6_SIZE);
 
-    size_t skip{0};
+    uint64_t skip{0};
 
     if (HasPrefix(ipv6, IPV4_IN_IPV6_PREFIX)) {
         // IPv4-in-IPv6
@@ -207,15 +207,15 @@ bool CNetAddr::SetInternal(const std::string &name)
 
 namespace torv3 {
 // https://gitweb.torproject.org/torspec.git/tree/rend-spec-v3.txt#n2135
-static constexpr size_t CHECKSUM_LEN = 2;
+static constexpr uint64_t CHECKSUM_LEN = 2;
 static const unsigned char VERSION[] = {3};
-static constexpr size_t TOTAL_LEN = ADDR_TORV3_SIZE + CHECKSUM_LEN + sizeof(VERSION);
+static constexpr uint64_t TOTAL_LEN = ADDR_TORV3_SIZE + CHECKSUM_LEN + sizeof(VERSION);
 
 static void Checksum(Span<const uint8_t> addr_pubkey, uint8_t (&checksum)[CHECKSUM_LEN])
 {
     // TORv3 CHECKSUM = H(".onion checksum" | PUBKEY | VERSION)[:2]
     static const unsigned char prefix[] = ".onion checksum";
-    static constexpr size_t prefix_len = 15;
+    static constexpr uint64_t prefix_len = 15;
 
     SHA3_256 hasher;
 
@@ -252,7 +252,7 @@ bool CNetAddr::SetSpecial(const std::string& addr)
 bool CNetAddr::SetTor(const std::string& addr)
 {
     static const char* suffix{".onion"};
-    static constexpr size_t suffix_len{6};
+    static constexpr uint64_t suffix_len{6};
 
     if (addr.size() <= suffix_len || addr.substr(addr.size() - suffix_len) != suffix) {
         return false;
@@ -292,9 +292,9 @@ bool CNetAddr::SetTor(const std::string& addr)
 bool CNetAddr::SetI2P(const std::string& addr)
 {
     // I2P addresses that we support consist of 52 base32 characters + ".b32.i2p".
-    static constexpr size_t b32_len{52};
+    static constexpr uint64_t b32_len{52};
     static const char* suffix{".b32.i2p"};
-    static constexpr size_t suffix_len{8};
+    static constexpr uint64_t suffix_len{8};
 
     if (addr.size() != b32_len + suffix_len || ToLower(addr.substr(b32_len)) != suffix) {
         return false;
