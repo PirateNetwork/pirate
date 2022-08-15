@@ -769,7 +769,7 @@ UniValue selfimport(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return result;
 }
 
-bool GetNotarisationNotaries(uint8_t notarypubkeys[64][33], int8_t &numNN, const std::vector<CTxIn> &vin, std::vector<int8_t> &NotarisationNotaries);
+///bool GetNotarisationNotaries(uint8_t notarypubkeys[64][33], int8_t &numNN, const std::vector<CTxIn> &vin, std::vector<int8_t> &NotarisationNotaries);
 
 
 UniValue importdual(const UniValue& params, bool fHelp, const CPubKey& mypk)

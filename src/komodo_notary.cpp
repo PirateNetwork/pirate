@@ -67,7 +67,7 @@ int32_t getacseason(uint32_t timestamp)
  * 2 Helpers for unit tests that reset statics (among other things)
  * DO NOT USE for anything other than unit tests
  */
-void undo_init_STAKED(); // see notaries_staked.cpp
+//void undo_init_STAKED(); // see notaries_staked.cpp
 /*void undo_init_notaries()
 {
     undo_init_STAKED();

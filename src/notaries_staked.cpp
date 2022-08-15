@@ -10,15 +10,15 @@
 
 pthread_mutex_t staked_mutex;
 
-static bool doneinit_STAKED = false;
+//static bool doneinit_STAKED = false;
 
 /*****
  * Reset the doneinit static (for unit testing)
  */
-void undo_init_STAKED()
+/*void undo_init_STAKED()
 {
     doneinit_STAKED = false;
-}
+}*/
 
 /****
  * @brief given the chan name, determine the type of chain
@@ -27,12 +27,14 @@ void undo_init_STAKED()
  */
 uint8_t is_STAKED(const std::string& symbol) 
 {
-    static uint8_t STAKED;
+    // let's not use static vars:
+    /* static uint8_t STAKED;
     if (symbol.empty())
         return(0);
     if (doneinit_STAKED && !chainName.isKMD())
         return(STAKED);
-    else STAKED = 0;
+    else STAKED = 0;*/
+    uint8_t STAKED = 0;
 
     if ( symbol == "LABS" ) 
         STAKED = 1; // These chains are allowed coin emissions.
@@ -44,7 +46,7 @@ uint8_t is_STAKED(const std::string& symbol)
         STAKED = 4; // These chains are for testing consensus to create a chain etc. Not meant to be actually used for anything important.
     else if ( symbol == "THIS_CHAIN_IS_BANNED" )
         STAKED = 255; // Any chain added to this group is banned, no notarisations are valid, as a consensus rule. Can be used to remove a chain from cluster if needed.
-    doneinit_STAKED = true;
+    //doneinit_STAKED = true;
     return(STAKED);
 };
 

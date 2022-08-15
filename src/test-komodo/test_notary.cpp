@@ -49,7 +49,9 @@ TEST(TestNotary, KomodoNotaries)
 {
     // Test komodo_notaries(), getkmdseason()
     chainName = assetchain("");
+    SelectParams(CBaseChainParams::MAIN);
     komodo_notaries_uninit();
+    //undo_init_STAKED();
     uint8_t pubkeys[64][33];
     int32_t height = 0;
     uint32_t timestamp = 0;
@@ -65,6 +67,7 @@ TEST(TestNotary, KomodoNotaries)
         EXPECT_EQ(result, 35);
         EXPECT_EQ( getkmdseason(height), 1);
         EXPECT_EQ( my_key(pubkeys[1]), my_key("02ebfc784a4ba768aad88d44d1045d240d47b26e248cafaf1c5169a42d7a61d344"));
+        if (result != 35 || getkmdseason(height) != 1) break; // cancel long test
     }
     EXPECT_EQ(height, 180000);
     // at 180000 we start using notaries_elected(komodo_defs.h) instead of Notaries_genesis(komodo_notary.cpp)
@@ -74,6 +77,7 @@ TEST(TestNotary, KomodoNotaries)
         EXPECT_EQ(result, 64);
         EXPECT_EQ( getkmdseason(height), 1);
         EXPECT_EQ( my_key(pubkeys[1]), my_key("02ebfc784a4ba768aad88d44d1045d240d47b26e248cafaf1c5169a42d7a61d344"));
+        if (result != 64 || getkmdseason(height) != 1) break; // cancel long test
     }
     // make sure the era changes when it was supposed to, and we have a new key
     EXPECT_EQ(height, 814001);
@@ -89,6 +93,7 @@ TEST(TestNotary, KomodoNotaries)
     height = 0;
     timestamp = 1;
     komodo_notaries_uninit();
+    //undo_init_STAKED();
     chainName = assetchain("LABS");
     // we should be in era 1 now
     result = komodo_notaries(pubkeys, height, timestamp);
@@ -130,8 +135,10 @@ TEST(TestNotary, ElectedNotary)
 {
     // exercise the routine that checks to see if a particular public key is a notary at the current height
 
+    SelectParams(CBaseChainParams::MAIN);
     // setup
     komodo_notaries_uninit();
+    //undo_init_STAKED();
     my_key first_era("02ebfc784a4ba768aad88d44d1045d240d47b26e248cafaf1c5169a42d7a61d344");
     my_key second_era("030f34af4b908fb8eb2099accb56b8d157d49f6cfb691baa80fdd34f385efed961");
 

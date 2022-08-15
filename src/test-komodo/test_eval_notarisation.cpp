@@ -14,18 +14,12 @@
 
 #include "testutils.h"
 
+#include "komodo_extern_globals.h"
 #include "komodo_structs.h"
+#include "komodo_notary.h"
 
 #include <boost/filesystem.hpp>
 
-int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);
-void komodo_notarysinit(int32_t origheight,uint8_t pubkeys[64][33],int32_t num);
-void komodo_init(int32_t height);
-void komodo_statefname(char *fname,char *symbol,char *str);
-void komodo_notaries_uninit(); // gets rid of values stored in statics
-void komodo_statefile_uninit(); // closes statefile
-
-extern knotaries_entry *Pubkeys;
 extern std::map<std::string, std::string> mapArgs;
 
 namespace TestEvalNotarisation {
@@ -226,6 +220,7 @@ TEST(TestEvalNotarisation, test_komodo_notarysinit)
     }
     // now we can get to testing. Load up the notaries from genesis
     EXPECT_EQ(Pubkeys, nullptr);
+    SelectParams(CBaseChainParams::MAIN);
     komodo_init(0);
     boost::filesystem::remove_all(temp_path);
     EXPECT_NE(Pubkeys, nullptr);
@@ -302,6 +297,7 @@ TEST(TestEvalNotarisation, test_komodo_notarysinit)
 
     komodo_notaries_uninit();
     komodo_statefile_uninit();
+    //undo_init_STAKED();
 }
 
 TEST(TestEvalNotarisation, test_komodo_notaries)
@@ -318,6 +314,7 @@ TEST(TestEvalNotarisation, test_komodo_notaries)
 
     uint8_t keys[65][33];
     EXPECT_EQ(Pubkeys, nullptr);
+    SelectParams(CBaseChainParams::MAIN);
     // should retrieve the genesis notaries
     int32_t num_found = komodo_notaries(keys, 0, 0);
     boost::filesystem::remove_all(temp_path);
@@ -346,6 +343,7 @@ TEST(TestEvalNotarisation, test_komodo_notaries)
 
     komodo_notaries_uninit();
     komodo_statefile_uninit();
+    //undo_init_STAKED();
 }
 
 } /* namespace TestEvalNotarisation */

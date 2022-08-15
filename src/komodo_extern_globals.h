@@ -52,7 +52,6 @@ extern int32_t USE_EXTERNAL_PUBKEY;
 extern int32_t KOMODO_ON_DEMAND;
 extern int32_t KOMODO_EXTERNAL_NOTARIES;
 extern int32_t KOMODO_PASSPORT_INITDONE;
-extern int32_t KOMODO_EXTERNAL_NOTARIES;
 extern int32_t KOMODO_PAX;
 extern int32_t KOMODO_REWIND;
 extern int32_t STAKED_ERA;

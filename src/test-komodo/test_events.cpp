@@ -4,13 +4,10 @@
 #include <cstdlib>
 #include <iterator>
 #include <boost/filesystem.hpp>
-#include <komodo_structs.h>
-
-int32_t komodo_faststateinit(struct komodo_state *sp,const char *fname,char *symbol,char *dest);
-struct komodo_state *komodo_stateptrget(char *base);
-extern int32_t KOMODO_EXTERNAL_NOTARIES;
-template<class T>
-size_t write_event(T& evt, FILE *fp);
+#include "komodo.h"
+#include "komodo_structs.h"
+#include "komodo_gateway.h"
+#include "komodo_extern_globals.h"
 
 namespace test_events {
 
@@ -199,6 +196,7 @@ TEST(test_events, komodo_faststateinit_test)
     char symbol[] = "TST";
     chainName = assetchain("TST");
     KOMODO_EXTERNAL_NOTARIES = 1;
+    IS_KOMODO_NOTARY = false;
 
     clear_state(symbol);
 
@@ -593,6 +591,7 @@ TEST(test_events, komodo_faststateinit_test_kmd)
     char symbol[] = "KMD";
     chainName = assetchain();
     KOMODO_EXTERNAL_NOTARIES = 0;
+    IS_KOMODO_NOTARY = false;
 
     clear_state(symbol);
 

@@ -117,3 +117,11 @@ void komodo_notarized_update(struct komodo_state *sp,int32_t nHeight,int32_t not
  * @param height the current height (not used other than to stop initialization if less than zero)
  */
 void komodo_init(int32_t height);
+
+
+int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);
+void komodo_notarysinit(int32_t origheight,uint8_t pubkeys[64][33],int32_t num);
+void komodo_statefname(char *fname,char *symbol,char *str);
+void komodo_notaries_uninit(); // gets rid of values stored in statics
+void komodo_statefile_uninit(); // closes statefile
+
