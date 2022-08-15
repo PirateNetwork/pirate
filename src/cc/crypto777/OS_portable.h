@@ -115,10 +115,10 @@ int32_t hseek(HUFF *hp,int32_t offset,int32_t mode);
 #define GENESIS_PRIVKEYSTR "88a71671a6edd987ad9e9097428fc3f169decba3ac8f10da7b24e0ca16803b70"
 #define GENESIS_SECRET "It was a bright cold day in April, and the clocks were striking thirteen."
 
-#define SATOSHIDEN ((uint64_t)100000000L)
-#define dstr(x) ((double)(x) / SATOSHIDEN)
+//#define SATOSHIDEN ((uint64_t)100000000L)
+//#define dstr(x) ((double)(x) / SATOSHIDEN)
 
-#define SMALLVAL 0.000000000000001
+//#define SMALLVAL 0.000000000000001
 
 #define SETBIT(bits,bitoffset) (((uint8_t *)bits)[(bitoffset) >> 3] |= (1 << ((bitoffset) & 7)))
 #define GETBIT(bits,bitoffset) (((uint8_t *)bits)[(bitoffset) >> 3] & (1 << ((bitoffset) & 7)))
@@ -130,7 +130,6 @@ int32_t hseek(HUFF *hp,int32_t offset,int32_t mode);
 #define portable_mutex_unlock pthread_mutex_unlock
 #define OS_thread_create pthread_create
 
-#define issue_curl(cmdstr) bitcoind_RPC(0,"curl",cmdstr,0,0,0,0)
 #define issue_curlt(cmdstr,timeout) bitcoind_RPC(0,"curl",cmdstr,0,0,0,timeout)
 
 struct allocitem { uint32_t allocsize,type; } PACKED;

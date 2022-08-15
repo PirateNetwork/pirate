@@ -32,7 +32,6 @@
 #include "cc/CCinclude.h"
 #include "hex.h"
 #include "komodo_bitcoind.h"
-#include "komodo_jumblr.h"
 #include "komodo_notary.h"
 #include "komodo_utils.h"
 #include "komodo_globals.h"
@@ -66,10 +65,8 @@ using namespace std;
  * Or alternatively, create a specific query method for the information.
  **/
 
-int32_t Jumblr_depositaddradd(char *depositaddr);
+/*int32_t Jumblr_depositaddradd(char *depositaddr);
 int32_t Jumblr_secretaddradd(char *secretaddr);
-uint64_t komodo_interestsum();
-int32_t komodo_longestchain();
 int32_t komodo_notarized_height(int32_t *prevMoMheightp,uint256 *hashp,uint256 *txidp);
 bool komodo_txnotarizedconfirmed(uint256 txid);
 uint32_t komodo_chainactive_timestamp();
@@ -82,7 +79,7 @@ int64_t komodo_coinsupply(int64_t *zfundsp,int64_t *sproutfundsp,int32_t height)
 int32_t notarizedtxid_height(char *dest,char *txidstr,int32_t *kmdnotarized_heightp);
 int8_t StakedNotaryID(std::string &notaryname, char *Raddress);
 uint64_t komodo_notarypayamount(int32_t nHeight, int64_t notarycount);
-int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);
+int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);*/
 
 #define KOMODO_VERSION "0.7.2"
 extern uint16_t ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT;
@@ -493,64 +490,6 @@ UniValue coinsupply(const UniValue& params, bool fHelp, const CPubKey& mypk)
     } else {
         result.push_back(Pair("error", "invalid height"));
     }
-    return(result);
-}
-
-UniValue jumblr_deposit(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    int32_t retval; UniValue result(UniValue::VOBJ);
-    if (fHelp || params.size() != 1)
-        throw runtime_error("jumblr_deposit \"depositaddress\"\n");
-    CBitcoinAddress address(params[0].get_str());
-    bool isValid = address.IsValid();
-    if ( isValid != 0 )
-    {
-        string addr = params[0].get_str();
-        if ( (retval= Jumblr_depositaddradd((char *)addr.c_str())) >= 0 )
-        {
-            result.push_back(Pair("result", retval));
-            JUMBLR_PAUSE = 0;
-        }
-        else result.push_back(Pair("error", retval));
-    } else result.push_back(Pair("error", "invalid address"));
-    return(result);
-}
-
-UniValue jumblr_secret(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    int32_t retval; UniValue result(UniValue::VOBJ);
-    if (fHelp || params.size() != 1)
-        throw runtime_error("jumblr_secret \"secretaddress\"\n");
-    CBitcoinAddress address(params[0].get_str());
-    bool isValid = address.IsValid();
-    if ( isValid != 0 )
-    {
-        string addr = params[0].get_str();
-        retval = Jumblr_secretaddradd((char *)addr.c_str());
-        result.push_back(Pair("result", "success"));
-        result.push_back(Pair("num", retval));
-        JUMBLR_PAUSE = 0;
-    } else result.push_back(Pair("error", "invalid address"));
-    return(result);
-}
-
-UniValue jumblr_pause(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    int32_t retval; UniValue result(UniValue::VOBJ);
-    if (fHelp )
-        throw runtime_error("jumblr_pause\n");
-    JUMBLR_PAUSE = 1;
-    result.push_back(Pair("result", "paused"));
-    return(result);
-}
-
-UniValue jumblr_resume(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    int32_t retval; UniValue result(UniValue::VOBJ);
-    if (fHelp )
-        throw runtime_error("jumblr_resume\n");
-    JUMBLR_PAUSE = 0;
-    result.push_back(Pair("result", "resumed"));
     return(result);
 }
 

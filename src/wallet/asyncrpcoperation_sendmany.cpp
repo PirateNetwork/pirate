@@ -42,6 +42,8 @@
 #include "komodo_notary.h"
 #include "komodo_bitcoind.h"
 #include "rpc/rawtransaction.h"
+#include "komodo_bitcoind.h"
+
 #include <stdint.h>
 
 #include <array>

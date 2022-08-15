@@ -22,10 +22,11 @@
 
 #include "cc/CCinclude.h"
 
-struct komodo_state KOMODO_STATES[34];
-int32_t ASSETCHAINS_CBMATURITY;
-uint64_t ASSETCHAINS_TIMEUNLOCKFROM = 0;
-uint64_t ASSETCHAINS_TIMEUNLOCKTO = 0;
+// todo remove
+//struct komodo_state KOMODO_STATES[34];
+//int32_t ASSETCHAINS_CBMATURITY;
+//uint64_t ASSETCHAINS_TIMEUNLOCKFROM = 0;
+//uint64_t ASSETCHAINS_TIMEUNLOCKTO = 0;
 
 void vcalc_sha256(char deprecated[(256 >> 3) * 2 + 1],uint8_t hash[256 >> 3],uint8_t *src,int32_t len)
 {
@@ -551,7 +552,7 @@ char *bitcoin_address(char *coinaddr,uint8_t addrtype,uint8_t *pubkey_or_rmd160,
 }
 
 
-int32_t komodo_baseid(const char *origbase)
+/*int32_t komodo_baseid(const char *origbase)
 {
     int32_t i; char base[64];
     for (i=0; origbase[i]!=0&&i<sizeof(base); i++)
@@ -561,14 +562,7 @@ int32_t komodo_baseid(const char *origbase)
         if ( strcmp(CURRENCIES[i],base) == 0 )
             return(i);
     return(-1);
-}
-
-int32_t komodo_is_issuer()
-{
-    if ( !chainName.isKMD() && komodo_baseid(chainName.symbol().c_str()) >= 0 )
-        return(1);
-    else return(0);
-}
+}*/
 
 int32_t bitweight(uint64_t x)
 {
@@ -1110,8 +1104,6 @@ uint16_t komodo_port(const char *symbol,uint64_t supply,uint32_t *magicp,uint8_t
 
 char *iguanafmtstr = (char *)"curl --url \"http://127.0.0.1:7776\" --data \"{\\\"conf\\\":\\\"%s.conf\\\",\\\"path\\\":\\\"${HOME#\"/\"}/.komodo/%s\\\",\\\"unitval\\\":\\\"20\\\",\\\"zcash\\\":1,\\\"RELAY\\\":-1,\\\"VALIDATE\\\":0,\\\"prefetchlag\\\":-1,\\\"poll\\\":100,\\\"active\\\":1,\\\"agent\\\":\\\"iguana\\\",\\\"method\\\":\\\"addcoin\\\",\\\"startpend\\\":4,\\\"endpend\\\":4,\\\"services\\\":129,\\\"maxpeers\\\":8,\\\"newcoin\\\":\\\"%s\\\",\\\"name\\\":\\\"%s\\\",\\\"hasheaders\\\":1,\\\"useaddmultisig\\\":0,\\\"netmagic\\\":\\\"%s\\\",\\\"p2p\\\":%u,\\\"rpc\\\":%u,\\\"pubval\\\":60,\\\"p2shval\\\":85,\\\"wifval\\\":188,\\\"txfee_satoshis\\\":\\\"10000\\\",\\\"isPoS\\\":0,\\\"minoutput\\\":10000,\\\"minconfirms\\\":2,\\\"genesishash\\\":\\\"027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71\\\",\\\"protover\\\":170002,\\\"genesisblock\\\":\\\"0100000000000000000000000000000000000000000000000000000000000000000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4a000000000000000000000000000000000000000000000000000000000000000029ab5f490f0f0f200b00000000000000000000000000000000000000000000000000000000000000fd4005000d5ba7cda5d473947263bf194285317179d2b0d307119c2e7cc4bd8ac456f0774bd52b0cd9249be9d40718b6397a4c7bbd8f2b3272fed2823cd2af4bd1632200ba4bf796727d6347b225f670f292343274cc35099466f5fb5f0cd1c105121b28213d15db2ed7bdba490b4cedc69742a57b7c25af24485e523aadbb77a0144fc76f79ef73bd8530d42b9f3b9bed1c135ad1fe152923fafe98f95f76f1615e64c4abb1137f4c31b218ba2782bc15534788dda2cc08a0ee2987c8b27ff41bd4e31cd5fb5643dfe862c9a02ca9f90c8c51a6671d681d04ad47e4b53b1518d4befafefe8cadfb912f3d03051b1efbf1dfe37b56e93a741d8dfd80d576ca250bee55fab1311fc7b3255977558cdda6f7d6f875306e43a14413facdaed2f46093e0ef1e8f8a963e1632dcbeebd8e49fd16b57d49b08f9762de89157c65233f60c8e38a1f503a48c555f8ec45dedecd574a37601323c27be597b956343107f8bd80f3a925afaf30811df83c402116bb9c1e5231c70fff899a7c82f73c902ba54da53cc459b7bf1113db65cc8f6914d3618560ea69abd13658fa7b6af92d374d6eca9529f8bd565166e4fcbf2a8dfb3c9b69539d4d2ee2e9321b85b331925df195915f2757637c2805e1d4131e1ad9ef9bc1bb1c732d8dba4738716d351ab30c996c8657bab39567ee3b29c6d054b711495c0d52e1cd5d8e55b4f0f0325b97369280755b46a02afd54be4ddd9f77c22272b8bbb17ff5118fedbae2564524e797bd28b5f74f7079d532ccc059807989f94d267f47e724b3f1ecfe00ec9e6541c961080d8891251b84b4480bc292f6a180bea089fef5bbda56e1e41390d7c0e85ba0ef530f7177413481a226465a36ef6afe1e2bca69d2078712b3912bba1a99b1fbff0d355d6ffe726d2bb6fbc103c4ac5756e5bee6e47e17424ebcbf1b63d8cb90ce2e40198b4f4198689daea254307e52a25562f4c1455340f0ffeb10f9d8e914775e37d0edca019fb1b9c6ef81255ed86bc51c5391e0591480f66e2d88c5f4fd7277697968656a9b113ab97f874fdd5f2465e5559533e01ba13ef4a8f7a21d02c30c8ded68e8c54603ab9c8084ef6d9eb4e92c75b078539e2ae786ebab6dab73a09e0aa9ac575bcefb29e930ae656e58bcb513f7e3c17e079dce4f05b5dbc18c2a872b22509740ebe6a3903e00ad1abc55076441862643f93606e3dc35e8d9f2caef3ee6be14d513b2e062b21d0061de3bd56881713a1a5c17f5ace05e1ec09da53f99442df175a49bd154aa96e4949decd52fed79ccf7ccbce32941419c314e374e4a396ac553e17b5340336a1a25c22f9e42a243ba5404450b650acfc826a6e432971ace776e15719515e1634ceb9a4a35061b668c74998d3dfb5827f6238ec015377e6f9c94f38108768cf6e5c8b132e0303fb5a200368f845ad9d46343035a6ff94031df8d8309415bb3f6cd5ede9c135fdabcc030599858d803c0f85be7661c88984d88faa3d26fb0e9aac0056a53f1b5d0baed713c853c4a2726869a0a124a8a5bbc0fc0ef80c8ae4cb53636aa02503b86a1eb9836fcc259823e2692d921d88e1ffc1e6cb2bde43939ceb3f32a611686f539f8f7c9f0bf00381f743607d40960f06d347d1cd8ac8a51969c25e37150efdf7aa4c2037a2fd0516fb444525ab157a0ed0a7412b2fa69b217fe397263153782c0f64351fbdf2678fa0dc8569912dcd8e3ccad38f34f23bbbce14c6a26ac24911b308b82c7e43062d180baeac4ba7153858365c72c63dcf5f6a5b08070b730adb017aeae925b7d0439979e2679f45ed2f25a7edcfd2fb77a8794630285ccb0a071f5cce410b46dbf9750b0354aae8b65574501cc69efb5b6a43444074fee116641bb29da56c2b4a7f456991fc92b2\\\",\\\"debug\\\":0,\\\"seedipaddr\\\":\\\"%s\\\",\\\"sapling\\\":1,\\\"notarypay\\\":%i}\"";
 
-
-
 int32_t komodo_whoami(char *pubkeystr,int32_t height,uint32_t timestamp)
 {
     int32_t i,notaryid;
@@ -1132,9 +1124,10 @@ char *argv0names[] =
     (char *)"MNZ", (char *)"MNZ", (char *)"MNZ", (char *)"MNZ", (char *)"BTCH", (char *)"BTCH", (char *)"BTCH", (char *)"BTCH"
 };
 
-#ifndef SATOSHIDEN
-#define SATOSHIDEN ((uint64_t)100000000L)
-#endif
+// todo remove
+//#ifndef SATOSHIDEN
+//#define SATOSHIDEN ((uint64_t)100000000L)
+//#endif
 
 uint64_t komodo_current_supply(uint32_t nHeight)
 {
@@ -1387,7 +1380,7 @@ uint64_t komodo_ac_block_subsidy(int nHeight)
     return(subsidy);
 }
 
-void SplitStr(const std::string& strVal, std::vector<std::string> &outVals);
+//void SplitStr(const std::string& strVal, std::vector<std::string> &outVals);
 
 int8_t equihash_params_possible(uint64_t n, uint64_t k)
 {
@@ -1476,6 +1469,7 @@ void komodo_args(char *argv0)
     uint8_t disablebits[32],*extraptr=0;
     FILE *fp; 
     int32_t i,nonz=0,n; 
+    int32_t extralen = 0;
 
     const std::string ntz_dest_path = GetArg("-notary", "");
     IS_KOMODO_NOTARY = ntz_dest_path == "" ? 0 : 1;
@@ -1662,26 +1656,10 @@ void komodo_args(char *argv0)
         ASSETCHAINS_SCRIPTPUB = GetArg("-ac_script","");
         ASSETCHAINS_BEAMPORT = GetArg("-ac_beam",0);
         ASSETCHAINS_CODAPORT = GetArg("-ac_coda",0);
-        ASSETCHAINS_CBOPRET = GetArg("-ac_cbopret",0);
         ASSETCHAINS_CBMATURITY = GetArg("-ac_cbmaturity",0);
         ASSETCHAINS_ADAPTIVEPOW = GetArg("-ac_adaptivepow",0);
-        //fprintf(stderr,"ASSETCHAINS_CBOPRET.%llx\n",(long long)ASSETCHAINS_CBOPRET);
-        if ( ASSETCHAINS_CBOPRET != 0 )
-        {
-            SplitStr(GetArg("-ac_prices",""),  ASSETCHAINS_PRICES);
-            if ( ASSETCHAINS_PRICES.size() > 0 )
-                ASSETCHAINS_CBOPRET |= 4;
-            SplitStr(GetArg("-ac_stocks",""),  ASSETCHAINS_STOCKS);
-            if ( ASSETCHAINS_STOCKS.size() > 0 )
-                ASSETCHAINS_CBOPRET |= 8;
-            for (i=0; i<ASSETCHAINS_PRICES.size(); i++)
-                fprintf(stderr,"%s ",ASSETCHAINS_PRICES[i].c_str());
-            fprintf(stderr,"%d -ac_prices\n",(int32_t)ASSETCHAINS_PRICES.size());
-            for (i=0; i<ASSETCHAINS_STOCKS.size(); i++)
-                fprintf(stderr,"%s ",ASSETCHAINS_STOCKS[i].c_str());
-            fprintf(stderr,"%d -ac_stocks\n",(int32_t)ASSETCHAINS_STOCKS.size());
-        }
-        const std::string hexstr = GetArg("-ac_mineropret","");
+        std::string hexstr = GetArg("-ac_mineropret","");
+        std::vector<uint8_t> Mineropret;
         if ( hexstr.size() != 0 )
         {
             Mineropret.resize(hexstr.size()/2);
@@ -1834,8 +1812,34 @@ void komodo_args(char *argv0)
                 printf("ASSETCHAINS_FOUNDERS needs an ASSETCHAINS_OVERRIDE_PUBKEY or ASSETCHAINS_SCRIPTPUB\n");
             }
         }
-        int32_t extralen = 0;
-        if ( ASSETCHAINS_ENDSUBSIDY[0] != 0 || ASSETCHAINS_REWARD[0] != 0 || ASSETCHAINS_HALVING[0] != 0 || ASSETCHAINS_DECAY[0] != 0 || ASSETCHAINS_COMMISSION != 0 || ASSETCHAINS_PUBLIC != 0 || ASSETCHAINS_PRIVATE != 0 || ASSETCHAINS_TXPOW != 0 || ASSETCHAINS_FOUNDERS != 0 || ASSETCHAINS_SCRIPTPUB.size() > 1 || ASSETCHAINS_SELFIMPORT.size() > 0 || ASSETCHAINS_OVERRIDE_PUBKEY33[0] != 0 || ASSETCHAINS_TIMELOCKGTE != _ASSETCHAINS_TIMELOCKOFF|| ASSETCHAINS_ALGO != ASSETCHAINS_EQUIHASH || ASSETCHAINS_LASTERA > 0 || ASSETCHAINS_BEAMPORT != 0 || ASSETCHAINS_CODAPORT != 0 || nonz > 0 || ASSETCHAINS_CCLIB.size() > 0 || ASSETCHAINS_FOUNDERS_REWARD != 0 || ASSETCHAINS_NOTARY_PAY[0] != 0 || ASSETCHAINS_BLOCKTIME != 60 || ASSETCHAINS_CBOPRET != 0 || Mineropret.size() != 0 || (ASSETCHAINS_NK[0] != 0 && ASSETCHAINS_NK[1] != 0) || KOMODO_SNAPSHOT_INTERVAL != 0 || ASSETCHAINS_EARLYTXIDCONTRACT != 0 || ASSETCHAINS_CBMATURITY != 0 || ASSETCHAINS_ADAPTIVEPOW != 0 )
+        if ( ASSETCHAINS_ENDSUBSIDY[0] != 0 
+                || ASSETCHAINS_REWARD[0] != 0 
+                || ASSETCHAINS_HALVING[0] != 0 
+                || ASSETCHAINS_DECAY[0] != 0 
+                || ASSETCHAINS_COMMISSION != 0 
+                || ASSETCHAINS_PUBLIC != 0 
+                || ASSETCHAINS_PRIVATE != 0 
+                || ASSETCHAINS_TXPOW != 0 
+                || ASSETCHAINS_FOUNDERS != 0 
+                || ASSETCHAINS_SCRIPTPUB.size() > 1 
+                || ASSETCHAINS_SELFIMPORT.size() > 0 
+                || ASSETCHAINS_OVERRIDE_PUBKEY33[0] != 0 
+                || ASSETCHAINS_TIMELOCKGTE != _ASSETCHAINS_TIMELOCKOFF
+                || ASSETCHAINS_ALGO != ASSETCHAINS_EQUIHASH 
+                || ASSETCHAINS_LASTERA > 0 
+                || ASSETCHAINS_BEAMPORT != 0 
+                || ASSETCHAINS_CODAPORT != 0 
+                || nonz > 0 
+                || ASSETCHAINS_CCLIB.size() > 0 
+                || ASSETCHAINS_FOUNDERS_REWARD != 0 
+                || ASSETCHAINS_NOTARY_PAY[0] != 0 
+                || ASSETCHAINS_BLOCKTIME != 60 
+                || Mineropret.size() != 0 
+                || (ASSETCHAINS_NK[0] != 0 && ASSETCHAINS_NK[1] != 0) 
+                || KOMODO_SNAPSHOT_INTERVAL != 0 
+                || ASSETCHAINS_EARLYTXIDCONTRACT != 0 
+                || ASSETCHAINS_CBMATURITY != 0 
+                || ASSETCHAINS_ADAPTIVEPOW != 0 )
         {
             uint8_t extrabuf[32756];
             fprintf(stderr,"perc %.4f%% ac_pub=[%02x%02x%02x...] acsize.%d\n",dstr(ASSETCHAINS_COMMISSION)*100,ASSETCHAINS_OVERRIDE_PUBKEY33[0],ASSETCHAINS_OVERRIDE_PUBKEY33[1],ASSETCHAINS_OVERRIDE_PUBKEY33[2],(int32_t)ASSETCHAINS_SCRIPTPUB.size());
@@ -1934,30 +1938,6 @@ void komodo_args(char *argv0)
             {
                 for (i=0; i<Mineropret.size(); i++)
                     extraptr[extralen++] = Mineropret[i];
-            }
-            if ( ASSETCHAINS_CBOPRET != 0 )
-            {
-                extralen += iguana_rwnum(1,&extraptr[extralen],sizeof(ASSETCHAINS_CBOPRET),(void *)&ASSETCHAINS_CBOPRET);
-                if ( ASSETCHAINS_PRICES.size() != 0 )
-                {
-                    for (i=0; i<ASSETCHAINS_PRICES.size(); i++)
-                    {
-                        std::string symbol = ASSETCHAINS_PRICES[i];
-                        memcpy(&extraptr[extralen],(char *)symbol.c_str(),symbol.size());
-                        extralen += symbol.size();
-                    }
-                }
-                if ( ASSETCHAINS_STOCKS.size() != 0 )
-                {
-                    for (i=0; i<ASSETCHAINS_STOCKS.size(); i++)
-                    {
-                        std::string symbol = ASSETCHAINS_STOCKS[i];
-                        memcpy(&extraptr[extralen],(char *)symbol.c_str(),symbol.size());
-                        extralen += symbol.size();
-                    }
-                }
-                komodo_cbopretupdate(1); // will set Mineropret
-                fprintf(stderr,"This blockchain uses data produced from CoinDesk Bitcoin Price Index\n");
             }
             if ( ASSETCHAINS_NK[0] != 0 && ASSETCHAINS_NK[1] != 0 )
             {
@@ -2177,41 +2157,57 @@ void komodo_nameset(char *symbol,char *dest,const char *source)
     }
 }
 
-struct komodo_state *komodo_stateptrget(char *base)
+/****
+ * @brief get the right komodo_state
+ * @param[in] base what to search for (nullptr == "KMD")
+ * @returns the correct komodo_state object
+ */
+komodo_state *komodo_stateptrget(char *base)
 {
-    int32_t baseid;
+    // "KMD" case
     if ( base == 0 || base[0] == 0 || strcmp(base,(char *)"KMD") == 0 )
-        return(&KOMODO_STATES[33]);
-    else if ( (baseid= komodo_baseid(base)) >= 0 )
-        return(&KOMODO_STATES[baseid+1]);
-    else return(&KOMODO_STATES[0]);
+        return &KOMODO_STATES[1];
+
+    // evidently this asset chain
+    return &KOMODO_STATES[0];
 }
 
-struct komodo_state *komodo_stateptr(char *symbol,char *dest)
+/****
+ * @brief get the symbol and dest based on this chain's ASSETCHAINS_SYMBOL
+ * @param[out] symbol this chain ("KMD" if ASSETCHAINS_SYMBOL is nullptr)
+ * @param[out] dest the destination chain ("BTC" in the case of KMD, otherwise "KMD")
+ * @returns the komodo_state object for symbol
+ */
+komodo_state *komodo_stateptr(char *symbol,char *dest)
 {
     int32_t baseid;
     komodo_nameset(symbol,dest,chainName.symbol().c_str());
     return(komodo_stateptrget(symbol));
 }
 
+/***
+ * @brief prefetch file contents, leave next read position where it started
+ * @param fp the file to read
+ */
 void komodo_prefetch(FILE *fp)
 {
-    long fsize,fpos; int32_t incr = 16*1024*1024;
-    fpos = ftell(fp);
+    // I am not sure why we do this, perhaps looking for disk errors or
+    // disk caching? - JMJ
+    int32_t incr = 16*1024*1024;
+    long fpos = ftell(fp); // store the current position
     fseek(fp,0,SEEK_END);
-    fsize = ftell(fp);
-    if ( fsize > incr )
+    if ( ftell(fp) > incr ) // if the file is greater than 16MB
     {
         char *ignore = (char *)malloc(incr);
         if ( ignore != 0 )
         {
-            rewind(fp);
-            while ( fread(ignore,1,incr,fp) == incr ) // prefetch
+            rewind(fp); // go back to the beginning
+            while ( fread(ignore,1,incr,fp) == incr ) // prefetch in 16MB blocks
                 fprintf(stderr,".");
             free(ignore);
         }
     }
-    fseek(fp,fpos,SEEK_SET);
+    fseek(fp,fpos,SEEK_SET); // go to where we were when this function was called
 }
 
 // check if block timestamp is more than S5 activation time

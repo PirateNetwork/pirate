@@ -27,6 +27,7 @@
 #include "importcoin.h"
 #include "komodo_utils.h"
 #include "komodo_bitcoind.h"
+#include "komodo_interest.h"
 
 #include <assert.h>
 

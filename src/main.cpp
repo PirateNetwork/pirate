@@ -50,12 +50,15 @@
 #include "wallet/asyncrpcoperation_sendmany.h"
 #include "wallet/asyncrpcoperation_shieldcoinbase.h"
 #include "notaries_staked.h"
-#include "komodo_globals.h"
-#include "komodo_utils.h"
-#include "rpc/net.h"
+#include "komodo_extern_globals.h"
 #include "komodo_gateway.h"
-#include "komodo_bitcoind.h"
+#include "komodo.h"
 #include "komodo_notary.h"
+#include "key_io.h"
+#include "komodo_utils.h"
+#include "komodo_bitcoind.h"
+#include "komodo_interest.h"
+#include "rpc/net.h"
 #include "cc/CCinclude.h"
 
 #include <cstring>
@@ -527,8 +530,6 @@ namespace {
         // Never fetch further than the best block we know the peer has, or more than BLOCK_DOWNLOAD_WINDOW + 1 beyond the last
         // linked block we have in common with this peer. The +1 is so we can detect stalling, namely if we would be able to
         // download that next block if the window were 1 larger.
-        if ( ASSETCHAINS_CBOPRET != 0 && IsInitialBlockDownload() == 0 )
-            BLOCK_DOWNLOAD_WINDOW = 1;
         int nWindowEnd = state->pindexLastCommonBlock->nHeight + BLOCK_DOWNLOAD_WINDOW;
         int nMaxHeight = std::min<int>(state->pindexBestKnownBlock->nHeight, nWindowEnd + 1);
         NodeId waitingfor = -1;
@@ -1149,11 +1150,6 @@ bool ContextualCheckCoinbaseTransaction(int32_t slowflag,const CBlock *block,CBl
         }
         return(false);
     }
-    else if ( slowflag != 0 && ASSETCHAINS_CBOPRET != 0 && validateprices != 0 && nHeight > 0 && tx.vout.size() > 0 )
-    {
-        if ( komodo_opretvalidate(block,previndex,nHeight,tx.vout[tx.vout.size()-1].scriptPubKey) < 0 )
-            return(false);
-    }
     return(true);
 }
 
@@ -1369,28 +1365,32 @@ bool ContextualCheckTransaction(int32_t slowflag,const CBlock *block, CBlockInde
 bool CheckTransaction(uint32_t tiptime,const CTransaction& tx, CValidationState &state,
                       libzcash::ProofVerifier& verifier,int32_t txIndex, int32_t numTxs)
 {
-    static uint256 array[64]; static int32_t numbanned,indallvouts; int32_t j,k,n; uint256 merkleroot;
-    if ( *(int32_t *)&array[0] == 0 )
-        numbanned = komodo_bannedset(&indallvouts,array,(int32_t)(sizeof(array)/sizeof(*array)));
-    n = tx.vin.size();
-    if ( chainName.isKMD() )
+    if (chainName.isKMD())
     {
-        for (j=0; j<n; j++)
+        // check for banned transaction ids
+        static uint256 array[64]; 
+        static int32_t numbanned;
+        static int32_t indallvouts;
+        if ( *(int32_t *)&array[0] == 0 )
+            numbanned = komodo_bannedset(&indallvouts,array,(int32_t)(sizeof(array)/sizeof(*array)));
+
+        for (size_t j=0; j< tx.vin.size(); j++) // for every tx.vin
         {
-            for (k=0; k<numbanned; k++)
+            for (int32_t k=0; k<numbanned; k++) // go through the array of banned txids
             {
-                if ( tx.vin[j].prevout.hash == array[k] && komodo_checkvout(tx.vin[j].prevout.n,k,indallvouts) != 0 ) //(tx.vin[j].prevout.n == 1 || k >= indallvouts) )
+                if ( tx.vin[j].prevout.hash == array[k] && komodo_checkvout(tx.vin[j].prevout.n,k,indallvouts) )
                 {
+                    // hash matches and the vout.n matches
                     static uint32_t counter;
                     if ( counter++ < 100 )
-                        printf("MEMPOOL: banned tx.%d being used at ht.%d vout.%d\n",k,(int32_t)chainActive.Tip()->nHeight,j);
-                    return(false);
+                        printf("MEMPOOL: banned tx.%d being used at ht.%d vout.%ld\n",k,(int32_t)chainActive.Tip()->nHeight,j);
+                    return false;
                 }
             }
         }
     }
     
-    
+    uint256 merkleroot;
     if ( ASSETCHAINS_STAKED != 0 && komodo_newStakerActive(0, tiptime) != 0 && tx.vout.size() == 2 && DecodeStakingOpRet(tx.vout[1].scriptPubKey, merkleroot) != 0 )
     {
         if ( numTxs == 0 || txIndex != numTxs-1 ) 
@@ -2794,14 +2794,13 @@ namespace Consensus {
             // Check for negative or overflow input values
             nValueIn += coins->vout[prevout.n].nValue;
 #ifdef KOMODO_ENABLE_INTEREST
-            if ( chainName.isKMD() && nSpendHeight > 60000 )//chainActive.LastTip() != 0 && chainActive.LastTip()->GetHeight() >= 60000 )
+            if ( chainName.isKMD() && nSpendHeight > 60000 )//chainActive.Tip() != 0 && chainActive.Tip()->nHeight >= 60000 )
             {
                 if ( coins->vout[prevout.n].nValue >= 10*COIN )
                 {
                     int64_t interest; int32_t txheight; uint32_t locktime;
                     if ( (interest= komodo_accrued_interest(&txheight,&locktime,prevout.hash,prevout.n,0,coins->vout[prevout.n].nValue,(int32_t)nSpendHeight-1)) != 0 )
                     {
-                        //fprintf(stderr,"checkResult %.8f += val %.8f interest %.8f ht.%d lock.%u tip.%u\n",(double)nValueIn/COIN,(double)coins->vout[prevout.n].nValue/COIN,(double)interest/COIN,txheight,locktime,chainActive.Tip()->nTime);
                         nValueIn += interest;
                     }
                 }
@@ -2938,7 +2937,6 @@ namespace {
         hasher << hashBlock;
         hasher << blockundo;
         fileout << hasher.GetHash();
-//fprintf(stderr,"hashBlock.%s hasher.%s\n",hashBlock.GetHex().c_str(),hasher.GetHash().GetHex().c_str());
         return true;
     }
 
@@ -4254,8 +4252,6 @@ bool ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *pblock)
     else KOMODO_INSYNC = 0;
     if ( KOMODO_NSPV_FULLNODE )
     {
-        if ( ASSETCHAINS_CBOPRET != 0 )
-            komodo_pricesupdate(pindexNew->nHeight,pblock);
         if ( ASSETCHAINS_SAPLING <= 0 && pindexNew->nTime > KOMODO_SAPLING_ACTIVATION - 24*3600 )
             komodo_activate_sapling(pindexNew);
         if ( ASSETCHAINS_CC != 0 && KOMODO_SNAPSHOT_INTERVAL != 0 && (pindexNew->nHeight % KOMODO_SNAPSHOT_INTERVAL) == 0 && pindexNew->nHeight >= KOMODO_SNAPSHOT_INTERVAL )
@@ -5027,7 +5023,6 @@ bool CheckBlockHeader(int32_t *futureblockp,int32_t height,CBlockIndex *pindex, 
     return true;
 }
 
-int32_t komodo_check_deposit(int32_t height,const CBlock& block,uint32_t prevtime);
 int32_t komodo_checkPOW(int64_t stakeTxValue,int32_t slowflag,CBlock *pblock,int32_t height);
 
 /****
@@ -5205,7 +5200,7 @@ bool CheckBlock(int32_t *futureblockp, int32_t height, CBlockIndex *pindex, cons
     if (nSigOps > MAX_BLOCK_SIGOPS)
         return state.DoS(100, error("CheckBlock: out-of-bounds SigOpCount"),
                          REJECT_INVALID, "bad-blk-sigops", true);
-    if ( fCheckPOW && komodo_check_deposit(height,block,(pindex==0||pindex->pprev==0)?0:pindex->pprev->nTime) < 0 )
+    if ( fCheckPOW && komodo_check_deposit(height,block) < 0 )
     {
         LogPrintf("CheckBlockHeader komodo_check_deposit error");
         return(false);
@@ -5554,18 +5549,6 @@ bool AcceptBlock(int32_t *futureblockp,CBlock& block, CValidationState& state, C
             fprintf(stderr,"saplinght.%d tipht.%d blockht.%d cmp.%d\n",saplinght,(int32_t)tmpptr->nHeight,pindex->nHeight,pindex->nHeight < 0 || (pindex->nHeight >= saplinght && pindex->nHeight < saplinght+50000) || (tmpptr->nHeight > saplinght-720 && tmpptr->nHeight < saplinght+720));
             if ( pindex->nHeight < 0 || (pindex->nHeight >= saplinght && pindex->nHeight < saplinght+50000) || (tmpptr->nHeight > saplinght-720 && tmpptr->nHeight < saplinght+720) )
                 *futureblockp = 1;
-            if ( ASSETCHAINS_CBOPRET != 0 )
-            {
-                CValidationState tmpstate; CBlockIndex *tmpindex; int32_t ht,longest;
-                ht = (int32_t)pindex->nHeight;
-                longest = komodo_longestchain();
-                if ( (longest == 0 || ht < longest-6) && (tmpindex=komodo_chainactive(ht)) != 0 )
-                {
-                    fprintf(stderr,"reconsider height.%d, longest.%d\n",(int32_t)ht,longest);
-                    if ( Queued_reconsiderblock == zeroid )
-                        Queued_reconsiderblock = pindex->GetBlockHash();
-                }
-            }
         }
         if ( *futureblockp == 0 )
         {
@@ -5625,8 +5608,6 @@ static bool IsSuperMajority(int minVersion, const CBlockIndex* pstart, unsigned 
     }
     return (nFound >= nRequired);
 }
-
-void komodo_currentheight_set(int32_t height);
 
 CBlockIndex *komodo_ensure(CBlock *pblock, uint256 hash)
 {
@@ -5952,30 +5933,35 @@ bool CheckDiskSpace(uint64_t nAdditionalBytes)
 /****
  * Open a file
  * @param pos where to position for the next read
- * @param prefix the type of file (i.e. "blk", "rev", etc.
+ * @param prefix the type of file ("blk" or "rev")
  * @param fReadOnly open in read only mode
- * @returns the file pointer or NULL on error
+ * @returns the file pointer with the position set to pos.nPos, or NULL on error
  */
 FILE* OpenDiskFile(const CDiskBlockPos &pos, const char *prefix, bool fReadOnly)
 {
-    static int32_t didinit[256];
+    static int32_t didinit[256]; // keeps track of which files have been initialized
     if (pos.IsNull())
         return NULL;
     boost::filesystem::path path = GetBlockPosFilename(pos, prefix);
-    boost::filesystem::create_directories(path.parent_path());
+    boost::filesystem::create_directories(path.parent_path()); // create directory if necessary
     FILE* file = fopen(path.string().c_str(), "rb+"); // open existing file for reading and writing
-    if (!file && !fReadOnly)
+    if (!file && !fReadOnly) // problem. Try opening read only if that is what was requested
         file = fopen(path.string().c_str(), "wb+"); // create an empty file for reading and writing
     if (!file) {
         LogPrintf("Unable to open file %s\n", path.string());
         return NULL;
     }
-    if ( pos.nFile < sizeof(didinit)/sizeof(*didinit) && didinit[pos.nFile] == 0 && strcmp(prefix,(char *)"blk") == 0 )
+    // the file was successfully opened
+    if ( pos.nFile < sizeof(didinit)/sizeof(*didinit) // if pos.nFile doesn't go beyond our array
+            && didinit[pos.nFile] == 0 // we have not initialized this file
+            && strcmp(prefix,(char *)"blk") == 0 ) // we are attempting to read a block file
     {
         komodo_prefetch(file);
         didinit[pos.nFile] = 1;
     }
-    if (pos.nPos) {
+
+    if (pos.nPos) // it has been asked to move to a specific location within the file
+    {
         if (fseek(file, pos.nPos, SEEK_SET)) {
             LogPrintf("Unable to seek to position %u of %s\n", pos.nPos, path.string());
             fclose(file);
@@ -7140,6 +7126,8 @@ void static ProcessGetData(CNode* pfrom)
 #include "komodo_nSPV_fullnode.h"   // nSPV fullnode handling of the getnSPV request messages
 #include "komodo_nSPV_superlite.h"  // nSPV superlite client, issuing requests and handling nSPV responses
 #include "komodo_nSPV_wallet.h"     // nSPV_send and support functions, really all the rest is to support this
+
+void komodo_netevent(std::vector<uint8_t> payload);
 
 bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, int64_t nTimeReceived)
 {

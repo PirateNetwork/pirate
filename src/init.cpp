@@ -98,12 +98,16 @@ using namespace std;
 
 #include "komodo_defs.h"
 #include "komodo_extern_globals.h"
+#include "assetchain.h"
 
+#include "komodo_gateway.h"
 extern void ThreadSendAlert();
-extern bool komodo_dailysnapshot(int32_t height);
-extern int32_t KOMODO_SNAPSHOT_INTERVAL;
+//extern bool komodo_dailysnapshot(int32_t height);  //todo remove
+//extern int32_t KOMODO_SNAPSHOT_INTERVAL;
 
 ZCJoinSplit* pzcashParams = NULL;
+
+assetchain chainName;
 
 #ifdef ENABLE_WALLET
 CWallet* pwalletMain = NULL;
@@ -755,15 +759,12 @@ void ThreadNotifyRecentlyAdded()
     }
 }
 
+/**
+ * @brief periodically (every 10 secs) update internal structures
+ * @note this does nothing on asset chains, only the kmd chain
+ */
 void ThreadUpdateKomodoInternals() {
     RenameThread("int-updater");
-
-    // boost::signals2::connection c = uiInterface.NotifyBlockTip.connect(
-    //     [](const uint256& hashNewTip) mutable {
-    //         CBlockIndex* pblockindex = mapBlockIndex[hashNewTip];
-    //         std::cerr << __FUNCTION__ << ": NotifyBlockTip " << hashNewTip.ToString() << " - " << pblockindex->nHeight << std::endl;
-    //     }
-    //     );
 
     int fireDelaySeconds = 10;
 
@@ -784,26 +785,11 @@ void ThreadUpdateKomodoInternals() {
 
             boost::this_thread::interruption_point();
 
-            if ( chainName.isKMD() )
-                {
-                    if ( KOMODO_NSPV_FULLNODE ) {
-                        auto start = std::chrono::high_resolution_clock::now();
-                        komodo_passport_iteration(); // call komodo_interestsum() inside (possible locks)
-                        auto finish = std::chrono::high_resolution_clock::now();
-                        std::chrono::duration<double, std::milli> elapsed = finish - start;
-                        // std::cerr << DateTimeStrFormat("%Y-%m-%d %H:%M:%S", GetTime()) << " " << __FUNCTION__ << ": komodo_passport_iteration -> Elapsed Time: " << elapsed.count() << " ms" << std::endl;
-                    }
-                }
-            else
-                {
-                    if ( ASSETCHAINS_CBOPRET != 0 )
-                        komodo_cbopretupdate(0);
-                }
+            if (chainName.isKMD() && KOMODO_NSPV_FULLNODE)
+                komodo_update_interest();
         }
     }
     catch (const boost::thread_interrupted&) {
-        // std::cerr << "ThreadUpdateKomodoInternals() interrupted" << std::endl;
-        // c.disconnect();
         throw;
     }
     catch (const std::exception& e) {

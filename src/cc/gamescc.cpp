@@ -167,11 +167,7 @@ int32_t games_replay2(uint8_t *newdata,uint64_t seed,gamesevent *keystrokes,int3
 }
 
 #ifndef STANDALONE
-#ifdef BUILD_PRICES
-#include "games/prices.cpp"
-#else
 #include "games/tetris.cpp"
-#endif
 
 void GAMEJSON(UniValue &obj,struct games_player *P);
 

@@ -37,6 +37,68 @@
  ##### 0xffffffff is a special CCid for single chain/dual daemon imports
  */
 
+/*extern std::string ASSETCHAINS_SELFIMPORT;
+extern uint16_t ASSETCHAINS_CODAPORT,ASSETCHAINS_BEAMPORT;
+extern uint8_t ASSETCHAINS_OVERRIDE_PUBKEY33[33];
+extern uint256 KOMODO_EARLYTXID;
+
+// utilities from gateways.cpp
+uint256 BitcoinGetProofMerkleRoot(const std::vector<uint8_t> &proofData, std::vector<uint256> &txids);
+uint8_t DecodeImportGatewayBindOpRet(char *burnaddr,const CScript &scriptPubKey,std::string &coin,uint256 &oracletxid,uint8_t &M,uint8_t &N,std::vector<CPubKey> &importgatewaypubkeys,uint8_t &taddr,uint8_t &prefix,uint8_t &prefix2,uint8_t &wiftype);
+int64_t ImportGatewayVerify(char *refburnaddr,uint256 oracletxid,int32_t claimvout,std::string refcoin,uint256 burntxid,const std::string deposithex,std::vector<uint8_t>proof,uint256 merkleroot,CPubKey destpub,uint8_t taddr,uint8_t prefix,uint8_t prefix2);
+*/
+/**
+ * @brief For Windows, convert / to \ in paths
+ * 
+ * @param str the input
+ * @return the modified str
+ */
+std::string portable_path(std::string str)
+{
+#ifdef _WIN32
+    for(size_t i = 0; i < str.size(); ++i)
+        if ( str[i] == '/' )
+            str[i] = '\\';
+#endif
+    return str;
+}
+
+
+/**
+ * @brief load a file into memory
+ * 
+ * @param[out] allocsizep the memory buffer size
+ * @param _fname the file name
+ * @return the pointer to the allocated buffer
+ */
+void *filestr(long *allocsizep, std::string fname)
+{
+    FILE *fp = fopen( portable_path(fname).c_str(), "rb");
+    if ( fp != nullptr )
+    {
+        fseek(fp,0,SEEK_END);
+        size_t filesize = ftell(fp);
+        if ( filesize == 0 )
+        {
+            fclose(fp);
+            *allocsizep = 0;
+            return nullptr;
+        }
+        uint8_t *buf = (uint8_t *)malloc(filesize);
+        rewind(fp);
+        if ( buf == 0 )
+            printf("Null buf ???\n");
+        else
+        {
+            if ( fread(buf,1,filesize,fp) != filesize )
+                printf("error reading filesize.%ld\n",(long)filesize);
+        }
+        fclose(fp);
+        return buf;
+    }
+    return nullptr;
+}
+
 cJSON* CodaRPC(char **retstr,char const *arg0,char const *arg1,char const *arg2,char const *arg3,char const *arg4,char const *arg5)
 {
     char cmdstr[5000],fname[256],*jsonstr;

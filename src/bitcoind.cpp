@@ -72,10 +72,7 @@ void WaitForShutdown(boost::thread_group* threadGroup)
         fprintf(stderr,"error: earlytx must be before block height %d or tx does not exist\n",KOMODO_EARLYTXID_HEIGHT);
         StartShutdown();
     }
-    if ( ASSETCHAINS_CBOPRET != 0 )
-        komodo_pricesinit();
     /*
-        komodo_passport_iteration and komodo_cbopretupdate moved to a separate thread
         ThreadUpdateKomodoInternals fired every second (see init.cpp), original wait
         for shutdown loop restored.
     */

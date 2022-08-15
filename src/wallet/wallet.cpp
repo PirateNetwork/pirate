@@ -65,6 +65,11 @@ bool fSendFreeTransactions = false;
 bool fPayAtLeastCustomFee = true;
 #include "komodo_defs.h"
 
+// TODO: remove
+//CBlockIndex *komodo_chainactive(int32_t height);
+//extern std::string DONATION_PUBKEY;
+//int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
+
 /**
  * Fees smaller than this (in satoshi) are considered zero fee (for transaction creation)
  * Override with -mintxfee
@@ -4103,25 +4108,12 @@ CAmount CWallet::GetMinimumFee(unsigned int nTxBytes, unsigned int nConfirmTarge
     return nFeeNeeded;
 }
 
-
 DBErrors CWallet::LoadWallet(bool& fFirstRunRet)
 {
     if (!fFileBacked)
         return DB_LOAD_OK;
     fFirstRunRet = false;
-    if ( 0 ) // doesnt help
-    {
-        fprintf(stderr,"loading wallet %s %u\n",strWalletFile.c_str(),(uint32_t)time(NULL));
-        FILE *fp;
-        if ( (fp= fopen(strWalletFile.c_str(),"rb")) != 0 )
-        {
-            komodo_prefetch(fp);
-            fclose(fp);
-        }
-    }
-    //fprintf(stderr,"prefetched wallet %s %u\n",strWalletFile.c_str(),(uint32_t)time(NULL));
     DBErrors nLoadWalletRet = CWalletDB(strWalletFile,"cr+").LoadWallet(this);
-    //fprintf(stderr,"loaded wallet %s %u\n",strWalletFile.c_str(),(uint32_t)time(NULL));
     if (nLoadWalletRet == DB_NEED_REWRITE)
     {
         if (CDB::Rewrite(strWalletFile, "\x04pool"))

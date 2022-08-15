@@ -203,7 +203,6 @@ int32_t komodo_longestchain()
         }
         BOOST_FOREACH(const CNodeStats& stats, vstats)
         {
-            //fprintf(stderr,"komodo_longestchain iter.%d\n",n);
             CNodeStateStats statestats;
             bool fStateStats = GetNodeStateStats(stats.nodeid,statestats);
             if ( statestats.nSyncHeight < 0 )

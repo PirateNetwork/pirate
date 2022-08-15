@@ -65,7 +65,7 @@
 #include "notaries_staked.h"
 #include "komodo_notary.h"
 #include "komodo_bitcoind.h"
-#include "komodo_pax.h"
+#include "komodo_extern_globals.h"
 
 #include <boost/thread.hpp>
 #include <boost/tuple/tuple.hpp>
@@ -202,6 +202,9 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
     const CChainParams& chainparams = Params();
     bool fNotarisationBlock = false; 
     std::vector<int8_t> NotarisationNotaries;
+    // TODO: remove
+    //uint64_t deposits; int32_t kmdheight; uint32_t blocktime; const CChainParams& chainparams = Params();
+    //bool fNotarisationBlock = false; std::vector<int8_t> NotarisationNotaries;
     
     // Create new block
     if ( gpucount < 0 )
@@ -787,14 +790,6 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
                 }
                 //fprintf(stderr, "Created notary payment coinbase totalsat.%lu\n",totalsats);    
             } else fprintf(stderr, "vout 2 of notarisation is not OP_RETURN scriptlen.%i\n", scriptlen);
-        }
-        if ( ASSETCHAINS_CBOPRET != 0 )
-        {
-            int32_t numv = (int32_t)txNew.vout.size();
-            txNew.vout.resize(numv+1);
-            txNew.vout[numv].nValue = 0;
-            txNew.vout[numv].scriptPubKey = komodo_mineropret(nHeight);
-            //printf("autocreate commision/cbopret.%lld vout[%d]\n",(long long)ASSETCHAINS_CBOPRET,(int32_t)txNew.vout.size());
         }
         pblock->vtx[0] = txNew;
         pblocktemplate->vTxFees[0] = -nFees;

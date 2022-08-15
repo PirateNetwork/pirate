@@ -15,11 +15,14 @@
 #include "komodo_ccdata.h"
 #include "komodo_globals.h"
 #include "komodo_bitcoind.h"
+#include "komodo_extern_globals.h"
+#include "komodo_utils.h"
 
 struct komodo_ccdata *CC_data;
-int32_t CC_firstheight;
+//int32_t CC_firstheight;
+pthread_mutex_t KOMODO_CC_mutex; 
 
-uint256 BuildMerkleTree(bool* fMutated, const std::vector<uint256> leaves, std::vector<uint256> &vMerkleTree);
+//uint256 BuildMerkleTree(bool* fMutated, const std::vector<uint256> leaves, std::vector<uint256> &vMerkleTree);
 
 uint256 komodo_calcMoM(int32_t height,int32_t MoMdepth)
 {

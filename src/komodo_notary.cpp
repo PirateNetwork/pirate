@@ -14,12 +14,13 @@
  ******************************************************************************/
 #include "komodo_notary.h"
 #include "komodo_globals.h"
+#include "komodo_extern_globals.h"
 #include "komodo.h" // komodo_stateupdate()
 #include "komodo_structs.h" // KOMODO_NOTARIES_HARDCODED
 #include "komodo_utils.h" // komodo_stateptr
 #include "komodo_bitcoind.h"
 
-struct knotaries_entry *Pubkeys;
+//struct knotaries_entry *Pubkeys;  // todo remove
 
 // statics used within this .cpp for caching purposes
 static int didinit; // see komodo_init
@@ -95,7 +96,7 @@ int32_t ht_index_from_height(int32_t height)
 }
 
 
-char NOTARY_ADDRESSES[NUM_KMD_SEASONS][64][64];
+//char NOTARY_ADDRESSES[NUM_KMD_SEASONS][64][64]; //todo remove
 
 // ARRR notary exception
 int32_t komodo_isnotaryvout(char *coinaddr,uint32_t tiptime) // from ac_private chains only

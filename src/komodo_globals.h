@@ -15,6 +15,7 @@
 #pragma once
 #include <mutex>
 #include "komodo_defs.h"
+#include "komodo_hardfork.h"
 #include "komodo_structs.h"
 
 #define KOMODO_ELECTION_GAP 2000    //((ASSETCHAINS_SYMBOL[0] == 0) ? 2000 : 100)
@@ -90,7 +91,6 @@ extern uint16_t KMD_PORT;
 extern uint16_t BITCOIND_RPCPORT;
 extern uint16_t DEST_PORT;
 
-extern bool KOMODO_LOADINGBLOCKS; // defined in pow.cpp, boolean, 1 if currently loading the block index, 0 if not
 extern uint32_t ASSETCHAINS_CC; // set by -ac_cc, normally 0/1
 extern uint32_t KOMODO_STOPAT; // set by -stopat, will not add more blocks after specified height
 extern uint32_t KOMODO_DPOWCONFS; // set by -dpowconfs, normally 0/1
@@ -107,6 +107,16 @@ extern uint64_t KOMODO_WALLETBALANCE; // pwalletmain->GetBalance(), returned in 
 extern int64_t ASSETCHAINS_GENESISTXVAL; // used in calculating money supply
 extern int64_t MAX_MONEY; // consensus related sanity check. Not max supply.
 extern std::mutex komodo_mutex; // seems to protect PAX values and Pubkey array
-extern std::vector<uint8_t> Mineropret; // previous miner values
+//extern std::vector<uint8_t> Mineropret; // previous miner values
 extern pthread_mutex_t KOMODO_CC_mutex; // mutex to help with CryptoConditions
 extern CScript KOMODO_EARLYTXID_SCRIPTPUB; // used mainly in cc/prices.cpp
+
+
+#define KOMODO_ELECTION_GAP 2000    //((ASSETCHAINS_SYMBOL[0] == 0) ? 2000 : 100)
+#define KOMODO_ASSETCHAIN_MAXLEN 65
+
+#define _COINBASE_MATURITY 100  // defauly maturity
+
+#define _ASSETCHAINS_TIMELOCKOFF 0xffffffffffffffff
+
+#define _ASSETCHAINS_EQUIHASH 0

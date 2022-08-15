@@ -19,6 +19,7 @@
 #include <cstdint>
 
 #include "komodo_defs.h"
+#include "komodo_extern_globals.h"
 
 #include "uthash.h"
 #include "utlist.h"
@@ -28,34 +29,12 @@
 #define KOMODO_NOTARIES_HARDCODED 180000 // DONT CHANGE Below this height notaries were hardcoded
 #define KOMODO_MAXBLOCKS 250000 // DONT CHANGE
 
-#define KOMODO_EVENT_RATIFY 'P'
-#define KOMODO_EVENT_NOTARIZED 'N'
-#define KOMODO_EVENT_KMDHEIGHT 'K'
-#define KOMODO_EVENT_REWIND 'B'
-#define KOMODO_EVENT_PRICEFEED 'V'
-#define KOMODO_EVENT_OPRETURN 'R'
-#define KOMODO_OPRETURN_DEPOSIT 'D'
-#define KOMODO_OPRETURN_ISSUED 'I' // assetchain
-#define KOMODO_OPRETURN_WITHDRAW 'W' // assetchain
-#define KOMODO_OPRETURN_REDEEMED 'X'
-
-#define KOMODO_KVPROTECTED 1
-#define KOMODO_KVBINARY 2
-#define KOMODO_KVDURATION 1440
 #define KOMODO_ASSETCHAIN_MAXLEN 65
 
 #include "bits256.h"
 #include <mutex>
 
-extern std::mutex komodo_mutex;
-
-// structs prior to refactor
-struct komodo_kv { UT_hash_handle hh; bits256 pubkey; uint8_t *key,*value; int32_t height; uint32_t flags; uint16_t keylen,valuesize; };
-
-struct komodo_event_notarized { uint256 blockhash,desttxid,MoM; int32_t notarizedheight,MoMdepth; char dest[16]; };
-struct komodo_event_pubkeys { uint8_t num; uint8_t pubkeys[64][33]; };
-struct komodo_event_opreturn { uint256 txid; uint64_t value; uint16_t vout,oplen; uint8_t opret[]; };
-struct komodo_event_pricefeed { uint8_t num; uint32_t prices[35]; };
+//extern std::mutex komodo_mutex;  //todo remove
 
 struct komodo_event
 {
@@ -240,16 +219,6 @@ std::ostream& operator<<(std::ostream& os, const event_pricefeed& in);
 
 } // namespace komodo
 
-struct pax_transaction
-{
-    UT_hash_handle hh;
-    uint256 txid;
-    uint64_t komodoshis,fiatoshis,validated;
-    int32_t marked,height,otherheight,approved,didstats,ready;
-    uint16_t vout;
-    char symbol[KOMODO_ASSETCHAIN_MAXLEN],source[KOMODO_ASSETCHAIN_MAXLEN],coinaddr[64]; uint8_t rmd160[20],type,buf[35];
-};
-
 struct knotary_entry { UT_hash_handle hh; uint8_t pubkey[33],notaryid; };
 struct knotaries_entry 
 { 
@@ -302,6 +271,7 @@ struct komodo_ccdata
 class komodo_state
 {
 public:
+    std::string symbol;
     int32_t SAVEDHEIGHT;
     int32_t CURRENT_HEIGHT;
     uint32_t SAVEDTIMESTAMP;

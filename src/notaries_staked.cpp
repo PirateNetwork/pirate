@@ -8,7 +8,7 @@
 #include "hex.h"
 #include <cstring>
 
-pthread_mutex_t staked_mutex;
+pthread_mutex_t staked_mutex; // todo remove
 
 //static bool doneinit_STAKED = false;
 
@@ -64,7 +64,7 @@ int32_t STAKED_era(int timestamp)
   return(0);
 };
 
-char NOTARYADDRS[64][64];
+//char NOTARYADDRS[64][64];  // todo remove
 
 int8_t StakedNotaryID(std::string &notaryname, char *Raddress) {
     if ( STAKED_ERA != 0 )

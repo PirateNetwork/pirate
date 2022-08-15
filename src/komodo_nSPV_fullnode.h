@@ -520,7 +520,7 @@ int32_t NSPV_mempoolfuncs(bits256 *satoshisp,int32_t *vindexp,std::vector<uint25
                     {
                         switch (eval)
                         {
-                            case EVAL_CHANNELS:EVAL_PEGS:EVAL_ORACLES:EVAL_GAMES:EVAL_IMPORTGATEWAY:EVAL_ROGUE:
+                            case EVAL_CHANNELS:EVAL_ORACLES:EVAL_GAMES:EVAL_IMPORTGATEWAY:EVAL_ROGUE:
                                 E_UNMARSHAL(vopret,ss >> e; ss >> f; ss >> tmp_txid;);
                                 if (e!=eval || (txid!=zeroid && txid!=tmp_txid) || (func!=0 && f!=func)) continue;
                                 break;

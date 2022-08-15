@@ -21,6 +21,7 @@
 #include "script/interpreter.h"
 #include "komodo_extern_globals.h"
 #include "komodo_globals.h"
+#include "komodo_notary.h"
 #include "komodo_bitcoind.h"
 #include "utilmoneystr.h"
 #include "testutils.h"
@@ -242,7 +243,7 @@ void TestChain::CleanGlobals()
 {
     // hwmheight can get skewed if komodo_connectblock not called (which some tests do)
     adjust_hwmheight(0);
-    for(int i = 0; i < 33; ++i)
+    for(int i = 0; i < KOMODO_STATES_NUMBER; ++i)
     {
         komodo_state s = KOMODO_STATES[i];
         s.events.clear();

@@ -66,6 +66,8 @@
 
 #include "main.h"
 #include "rpc/rawtransaction.h"
+#include "komodo_defs.h"
+#include "komodo_interest.h"
 #include "hex.h"
 #include <string.h>
 
@@ -555,17 +557,39 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return wtx.GetHash().GetHex();
 }
 
+/* TODO: remove
 #define KOMODO_KVPROTECTED 1
 #define KOMODO_KVBINARY 2
 #define KOMODO_KVDURATION 1440
 #define IGUANA_MAXSCRIPTSIZE 10001
 #define CRYPTO777_KMDADDR "RXL3YXG2ceaB6C5hfJcN4fvmLH2C34knhA"
+#include "komodo_defs.h"*/
+
+/*
+#define IGUANA_MAXSCRIPTSIZE 10001
+int32_t komodo_opreturnscript(uint8_t *script,uint8_t type,uint8_t *opret,int32_t opretlen);
+#define CRYPTO777_KMDADDR "RXL3YXG2ceaB6C5hfJcN4fvmLH2C34knhA"
+extern uint64_t KOMODO_INTERESTSUM,KOMODO_WALLETBALANCE;
+int32_t iguana_rwnum(int32_t rwflag,uint8_t *serialized,int32_t len,void *endianedp);
+int32_t komodo_kvsearch(uint256 *refpubkeyp,int32_t current_height,uint32_t *flagsp,int32_t *heightp,uint8_t value[IGUANA_MAXSCRIPTSIZE],uint8_t *key,int32_t keylen);
+uint64_t komodo_kvfee(uint32_t flags,int32_t opretlen,int32_t keylen);
+uint256 komodo_kvsig(uint8_t *buf,int32_t len,uint256 privkey);
+int32_t komodo_kvduration(uint32_t flags);
+uint256 komodo_kvprivkey(uint256 *pubkeyp,char *passphrase);
+int32_t komodo_kvsigverify(uint8_t *buf,int32_t len,uint256 _pubkey,uint256 sig);
+*/
 
 UniValue kvupdate(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     static uint256 zeroes;
     CWalletTx wtx; UniValue ret(UniValue::VOBJ);
-    uint8_t keyvalue[IGUANA_MAXSCRIPTSIZE*8],opretbuf[IGUANA_MAXSCRIPTSIZE*8]; int32_t i,coresize,haveprivkey,duration,opretlen,height; uint16_t keylen=0,valuesize=0,refvaluesize=0; uint8_t *key,*value=0; uint32_t flags,tmpflags,n; struct komodo_kv *ptr; uint64_t fee; uint256 privkey,pubkey,refpubkey,sig;
+    uint8_t keyvalue[IGUANA_MAXSCRIPTSIZE*8],opretbuf[IGUANA_MAXSCRIPTSIZE*8]; 
+    int32_t i,coresize,haveprivkey,duration,opretlen,height; 
+    uint16_t keylen=0,valuesize=0,refvaluesize=0; 
+    uint8_t *key,*value=0; 
+    uint32_t flags,tmpflags,n; 
+    uint64_t fee; 
+    uint256 privkey,pubkey,refpubkey,sig;
     if (fHelp || params.size() < 3 )
         throw runtime_error(
             "kvupdate key \"value\" days passphrase\n"
@@ -698,87 +722,6 @@ UniValue kvupdate(const UniValue& params, bool fHelp, const CPubKey& mypk)
         ret.push_back(Pair("txid",wtx.GetHash().GetHex()));
     } else ret.push_back(Pair("error",(char *)"null key"));
     return ret;
-}
-
-UniValue paxdeposit(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    uint64_t available,deposited,issued,withdrawn,approved,redeemed,seed,komodoshis = 0; int32_t height; char destaddr[64]; uint8_t i,pubkey37[33];
-    bool fSubtractFeeFromAmount = false;
-    if ( KOMODO_PAX == 0 )
-    {
-        throw runtime_error("paxdeposit disabled without -pax");
-    }
-    if ( komodo_is_issuer() != 0 )
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "paxdeposit only from KMD");
-    if (!EnsureWalletIsAvailable(fHelp))
-        throw runtime_error("paxdeposit needs wallet"); //return Value::null;
-    if (fHelp || params.size() != 3)
-        throw runtime_error("paxdeposit address fiatoshis base");
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    CBitcoinAddress address(params[0].get_str());
-    if (!address.IsValid())
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Bitcoin address");
-    int64_t fiatoshis = atof(params[1].get_str().c_str()) * COIN;
-    std::string base = params[2].get_str();
-    std::string dest;
-    height = chainActive.Tip()->nHeight;
-    if ( pax_fiatstatus(&available,&deposited,&issued,&withdrawn,&approved,&redeemed,(char *)base.c_str()) != 0 || available < fiatoshis )
-    {
-        fprintf(stderr,"available %llu vs fiatoshis %llu\n",(long long)available,(long long)fiatoshis);
-        throw runtime_error("paxdeposit not enough available inventory");
-    }
-    komodoshis = PAX_fiatdest(&seed,0,destaddr,pubkey37,params[0].get_str().c_str(),height,base.c_str(),fiatoshis);
-    dest.append(destaddr);
-    CBitcoinAddress destaddress(CRYPTO777_KMDADDR);
-    if (!destaddress.IsValid())
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid dest Bitcoin address");
-    for (i=0; i<33; i++)
-        fprintf(stderr,"%02x",pubkey37[i]);
-    fprintf(stderr," ht.%d srcaddr.(%s) %s fiatoshis.%lld -> dest.(%s) komodoshis.%llu seed.%llx\n",height,(char *)params[0].get_str().c_str(),(char *)base.c_str(),(long long)fiatoshis,destaddr,(long long)komodoshis,(long long)seed);
-    EnsureWalletIsUnlocked();
-    CWalletTx wtx;
-    uint8_t opretbuf[64]; int32_t opretlen; uint64_t fee = komodoshis / 1000;
-    if ( fee < 10000 )
-        fee = 10000;
-    iguana_rwnum(1,&pubkey37[33],sizeof(height),&height);
-    opretlen = komodo_opreturnscript(opretbuf,'D',pubkey37,37);
-    SendMoney(address.Get(),fee,fSubtractFeeFromAmount,wtx,opretbuf,opretlen,komodoshis);
-    return wtx.GetHash().GetHex();
-}
-
-UniValue paxwithdraw(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    CWalletTx wtx; std::string dest; int32_t kmdheight; uint64_t seed,komodoshis = 0; char destaddr[64]; uint8_t i,pubkey37[37]; bool fSubtractFeeFromAmount = false;
-    if ( chainName.isKMD() )
-        return(0);
-    if (!EnsureWalletIsAvailable(fHelp))
-        return 0;
-    throw runtime_error("paxwithdraw deprecated");
-    if (fHelp || params.size() != 2)
-        throw runtime_error("paxwithdraw address fiatamount");
-    if ( komodo_isrealtime(&kmdheight) == 0 )
-        return(0);
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    CBitcoinAddress address(params[0].get_str());
-    if (!address.IsValid())
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Bitcoin address");
-    int64_t fiatoshis = atof(params[1].get_str().c_str()) * COIN;
-    komodoshis = PAX_fiatdest(&seed,1,destaddr,pubkey37,(char *)params[0].get_str().c_str(),kmdheight,chainName.symbol().c_str(),fiatoshis);
-    dest.append(destaddr);
-    CBitcoinAddress destaddress(CRYPTO777_KMDADDR);
-    if (!destaddress.IsValid())
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid dest Bitcoin address");
-    for (i=0; i<33; i++)
-        printf("%02x",pubkey37[i]);
-    printf(" kmdheight.%d srcaddr.(%s) %s fiatoshis.%lld -> dest.(%s) komodoshis.%llu seed.%llx\n",kmdheight,(char *)params[0].get_str().c_str(),chainName.symbol().c_str(),(long long)fiatoshis,destaddr,(long long)komodoshis,(long long)seed);
-    EnsureWalletIsUnlocked();
-    uint8_t opretbuf[64]; int32_t opretlen; uint64_t fee = fiatoshis / 1000;
-    if ( fee < 10000 )
-        fee = 10000;
-    iguana_rwnum(1,&pubkey37[33],sizeof(kmdheight),&kmdheight);
-    opretlen = komodo_opreturnscript(opretbuf,'W',pubkey37,37);
-    SendMoney(destaddress.Get(),fee,fSubtractFeeFromAmount,wtx,opretbuf,opretlen,fiatoshis);
-    return wtx.GetHash().GetHex();
 }
 
 UniValue listaddressgroupings(const UniValue& params, bool fHelp, const CPubKey& mypk)
@@ -2957,12 +2900,18 @@ UniValue listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return results;
 }
 
+/****
+ * @note also sets globals KOMODO_INTERESTSUM and KOMODO_WALLETBALANCE used for the getinfo RPC call
+ * @returns amount of accrued interest in this wallet
+ */
 uint64_t komodo_interestsum()
 {
 #ifdef ENABLE_WALLET
     if ( chainName.isKMD() && GetBoolArg("-disablewallet", false) == 0 && KOMODO_NSPV_FULLNODE )
     {
-        uint64_t interest,sum = 0; int32_t txheight; uint32_t locktime;
+        uint64_t interest,sum = 0; 
+        int32_t txheight; 
+        uint32_t locktime;
         vector<COutput> vecOutputs;
         assert(pwalletMain != NULL);
         LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -2977,7 +2926,6 @@ uint64_t komodo_interestsum()
                 if ( pindex != 0 && (tipindex= chainActive.Tip()) != 0 )
                 {
                     interest = komodo_accrued_interest(&txheight,&locktime,out.tx->GetHash(),out.i,0,nValue,(int32_t)tipindex->nHeight);
-                    //interest = komodo_interest(pindex->nHeight,nValue,out.tx->nLockTime,tipindex->nTime);
                     sum += interest;
                 }
             }
@@ -5537,10 +5485,8 @@ int32_t komodo_notaryvin(CMutableTransaction &txNew, uint8_t *notarypub33, const
 #include "../cc/CCchannels.h"
 #include "../cc/CCOracles.h"
 #include "../cc/CCGateways.h"
-#include "../cc/CCPrices.h"
 #include "../cc/CCHeir.h"
 #include "../cc/CCPayments.h"
-#include "../cc/CCPegs.h"
 
 int32_t ensure_CCrequirements(uint8_t evalcode)
 {
@@ -5974,43 +5920,6 @@ UniValue oraclesaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if ( params.size() == 1 )
         pubkey = ParseHex(params[0].get_str().c_str());
     return(CCaddress(cp,(char *)"Oracles",pubkey));
-}
-
-UniValue pricesaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    UniValue result(UniValue::VOBJ); struct CCcontract_info *cp,C,*assetscp,C2; std::vector<unsigned char> pubkey; CPubKey pk,planpk,pricespk; char myaddr[64],houseaddr[64],exposureaddr[64];
-    cp = CCinit(&C,EVAL_PRICES);
-    assetscp = CCinit(&C2,EVAL_PRICES);
-    if ( fHelp || params.size() > 1 )
-        throw runtime_error("pricesaddress [pubkey]\n");
-    if ( ensure_CCrequirements(cp->evalcode) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    if ( params.size() == 1 )
-        pubkey = ParseHex(params[0].get_str().c_str());
-    result = CCaddress(cp,(char *)"Prices",pubkey);
-    if (mypk.IsValid()) pk=mypk;
-    else pk = pubkey2pk(Mypubkey());
-    pricespk = GetUnspendable(cp,0);
-    GetCCaddress(assetscp,myaddr,pk);
-    GetCCaddress1of2(assetscp,houseaddr,pricespk,planpk);
-    GetCCaddress1of2(assetscp,exposureaddr,pricespk,pricespk);
-    result.push_back(Pair("myaddr",myaddr)); // for holding my asssets
-    result.push_back(Pair("houseaddr",houseaddr)); // globally accessible house assets
-    result.push_back(Pair("exposureaddr",exposureaddr)); // tracking of exposure
-    return(result);
-}
-
-UniValue pegsaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    struct CCcontract_info *cp,C; std::vector<unsigned char> pubkey;
-    cp = CCinit(&C,EVAL_PEGS);
-    if ( fHelp || params.size() > 1 )
-        throw runtime_error("pegssaddress [pubkey]\n");
-    if ( ensure_CCrequirements(cp->evalcode) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    if ( params.size() == 1 )
-        pubkey = ParseHex(params[0].get_str().c_str());
-    return(CCaddress(cp,(char *)"Pegs",pubkey));
 }
 
 UniValue paymentsaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
@@ -7036,65 +6945,6 @@ UniValue faucetget(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return(result);
 }
 
-uint32_t pricesGetParam(UniValue param) {
-    uint32_t filter = 0;
-    if (STR_TOLOWER(param.get_str()) == "all")
-        filter = 0;
-    else if (STR_TOLOWER(param.get_str()) == "open")
-        filter = 1;
-    else if (STR_TOLOWER(param.get_str()) == "closed")
-        filter = 2;
-    else
-        throw runtime_error("incorrect parameter\n");
-    return filter;
-}
-
-UniValue priceslist(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    if ( fHelp || params.size() != 0 && params.size() != 1)
-        throw runtime_error("priceslist [all|open|closed]\n");
-    if ( ensure_CCrequirements(EVAL_PRICES) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    uint32_t filter = 0;
-    if (params.size() == 1) 
-        filter = pricesGetParam(params[0]);
-    
-    CPubKey emptypk;
-
-    return(PricesList(filter, emptypk));
-}
-
-UniValue mypriceslist(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    if (fHelp || params.size() != 0 && params.size() != 1)
-        throw runtime_error("mypriceslist [all|open|closed]\n");
-    if (ensure_CCrequirements(EVAL_PRICES) < 0)
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-
-    uint32_t filter = 0;
-    if (params.size() == 1)
-        filter = pricesGetParam(params[0]);
-    CPubKey pk;
-    if (mypk.IsValid()) pk=mypk;
-    else pk = pubkey2pk(Mypubkey());
-
-    return(PricesList(filter, pk));
-}
-
-UniValue pricesinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    uint256 bettxid; int32_t height;
-    if ( fHelp || params.size() != 1 && params.size() != 2)
-        throw runtime_error("pricesinfo bettxid [height]\n");
-    if ( ensure_CCrequirements(EVAL_PRICES) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    bettxid = Parseuint256((char *)params[0].get_str().c_str());
-    height = 0;
-    if (params.size() == 2)
-        height = atoi(params[1].get_str().c_str());
-    return(PricesInfo(bettxid, height));
-}
-
 UniValue dicefund(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     UniValue result(UniValue::VOBJ); int64_t funds,minbet,maxbet,maxodds,timeoutblocks; std::string hex; char *name;
@@ -7963,192 +7813,6 @@ UniValue heirlist(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if ( ensure_CCrequirements(EVAL_HEIR) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
 	return (HeirList());
-}
-
-UniValue pegscreate(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    UniValue result(UniValue::VOBJ); int32_t i; std::vector<uint256> txids;
-    uint8_t N; uint256 txid; int64_t amount;
-
-    if ( fHelp || params.size()<3)
-        throw runtime_error("pegscreate amount N bindtxid1 [bindtxid2 ...]\n");
-    if ( ensure_CCrequirements(EVAL_PEGS) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    Lock2NSPV(mypk);
-    amount = atof((char *)params[0].get_str().c_str()) * COIN + 0.00000000499999;
-    N = atoi((char *)params[1].get_str().c_str());
-    if ( params.size() < N+1 )
-    {
-        Unlock2NSPV(mypk);
-        throw runtime_error("not enough parameters for N pegscreate\n");
-    }
-    for (i=0; i<N; i++)
-    {       
-        txid = Parseuint256(params[i+2].get_str().c_str());
-        txids.push_back(txid);
-    }
-    result = PegsCreate(mypk,0,amount,txids);
-    if ( result[JSON_HEXTX].getValStr().size() > 0  )
-    {
-        result.push_back(Pair("result", "success"));
-    }
-    Unlock2NSPV(mypk);
-    return(result);
-}
-
-UniValue pegsfund(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    UniValue result(UniValue::VOBJ); uint256 pegstxid,tokenid; int64_t amount;
-
-
-    if ( fHelp || params.size()!=3)
-        throw runtime_error("pegsfund pegstxid tokenid amount\n");
-    if ( ensure_CCrequirements(EVAL_PEGS) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    Lock2NSPV(mypk);
-    pegstxid = Parseuint256(params[0].get_str().c_str());
-    tokenid = Parseuint256(params[1].get_str().c_str());
-    amount = atof((char *)params[2].get_str().c_str()) * COIN + 0.00000000499999;
-    result = PegsFund(mypk,0,pegstxid,tokenid,amount);
-    if ( result[JSON_HEXTX].getValStr().size() > 0  )
-    {
-        result.push_back(Pair("result", "success"));
-    }
-    Unlock2NSPV(mypk);
-    return(result);
-}
-
-UniValue pegsget(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    UniValue result(UniValue::VOBJ); uint256 pegstxid,tokenid; int64_t amount;
-
-    if ( fHelp || params.size()!=3)
-        throw runtime_error("pegsget pegstxid tokenid amount\n");
-    if ( ensure_CCrequirements(EVAL_PEGS) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
-    pegstxid = Parseuint256(params[0].get_str().c_str());
-    tokenid = Parseuint256(params[1].get_str().c_str());
-    amount = atof((char *)params[2].get_str().c_str()) * COIN + 0.00000000499999;
-    result = PegsGet(mypk,0,pegstxid,tokenid,amount);
-    if ( result[JSON_HEXTX].getValStr().size() > 0  )
-    {
-        result.push_back(Pair("result", "success"));
-    }
-    Unlock2NSPV(mypk);
-    return(result);
-}
-
-UniValue pegsredeem(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    UniValue result(UniValue::VOBJ); uint256 pegstxid,tokenid; int64_t amount;
-
-    if ( fHelp || params.size()!=2)
-        throw runtime_error("pegsredeem pegstxid tokenid\n");
-    if ( ensure_CCrequirements(EVAL_PEGS) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
-    pegstxid = Parseuint256(params[0].get_str().c_str());
-    tokenid = Parseuint256(params[1].get_str().c_str());
-    result = PegsRedeem(mypk,0,pegstxid,tokenid);
-    if ( result[JSON_HEXTX].getValStr().size() > 0  )
-    {
-        result.push_back(Pair("result", "success"));
-    }
-    Unlock2NSPV(mypk);
-    return(result);
-}
-
-UniValue pegsliquidate(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    UniValue result(UniValue::VOBJ); uint256 pegstxid,tokenid,accounttxid;
-
-    if ( fHelp || params.size()!=3)
-        throw runtime_error("pegsliquidate pegstxid tokenid accounttxid\n");
-    if ( ensure_CCrequirements(EVAL_PEGS) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
-    pegstxid = Parseuint256(params[0].get_str().c_str());
-    tokenid = Parseuint256(params[1].get_str().c_str());
-    accounttxid = Parseuint256(params[2].get_str().c_str());
-    result = PegsLiquidate(mypk,0,pegstxid,tokenid,accounttxid);
-    if ( result[JSON_HEXTX].getValStr().size() > 0  )
-    {
-        result.push_back(Pair("result", "success"));
-    }
-    Unlock2NSPV(mypk);
-    return(result);
-}
-
-UniValue pegsexchange(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    UniValue result(UniValue::VOBJ); uint256 pegstxid,tokenid,accounttxid; int64_t amount;
-
-    if ( fHelp || params.size()!=3)
-        throw runtime_error("pegsexchange pegstxid tokenid amount\n");
-    if ( ensure_CCrequirements(EVAL_PEGS) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
-    pegstxid = Parseuint256(params[0].get_str().c_str());
-    tokenid = Parseuint256(params[1].get_str().c_str());
-    amount = atof((char *)params[2].get_str().c_str()) * COIN + 0.00000000499999;
-    result = PegsExchange(mypk,0,pegstxid,tokenid,amount);
-    if ( result[JSON_HEXTX].getValStr().size() > 0  )
-    {
-        result.push_back(Pair("result", "success"));
-    }
-    Unlock2NSPV(mypk);
-    return(result);
-}
-
-UniValue pegsaccounthistory(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    uint256 pegstxid;
-
-    if ( fHelp || params.size() != 1 )
-        throw runtime_error("pegsaccounthistory pegstxid\n");
-    if ( ensure_CCrequirements(EVAL_GATEWAYS) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    pegstxid = Parseuint256((char *)params[0].get_str().c_str());
-    return(PegsAccountHistory(mypk,pegstxid));
-}
-
-UniValue pegsaccountinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    uint256 pegstxid;
-
-    if ( fHelp || params.size() != 1 )
-        throw runtime_error("pegsaccountinfo pegstxid\n");
-    if ( ensure_CCrequirements(EVAL_GATEWAYS) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    pegstxid = Parseuint256((char *)params[0].get_str().c_str());
-    return(PegsAccountInfo(mypk,pegstxid));
-}
-
-UniValue pegsworstaccounts(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    uint256 pegstxid;
-
-    if ( fHelp || params.size() != 1 )
-        throw runtime_error("pegsworstaccounts pegstxid\n");
-    if ( ensure_CCrequirements(EVAL_GATEWAYS) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    pegstxid = Parseuint256((char *)params[0].get_str().c_str());
-    return(PegsWorstAccounts(pegstxid));
-}
-
-UniValue pegsinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    uint256 pegstxid;
-
-    if ( fHelp || params.size() != 1 )
-        throw runtime_error("pegsinfo pegstxid\n");
-    if ( ensure_CCrequirements(EVAL_GATEWAYS) < 0 )
-        throw runtime_error(CC_REQUIREMENTS_MSG);
-    pegstxid = Parseuint256((char *)params[0].get_str().c_str());
-    return(PegsInfo(pegstxid));
 }
 
 extern UniValue dumpprivkey(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcdump.cpp

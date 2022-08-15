@@ -28,8 +28,6 @@ bool EnsureWalletIsAvailable(bool avoidException);
 uint8_t DecodeMaramaraCoinbaseOpRet(const CScript scriptPubKey,CPubKey &pk,int32_t &height,int32_t &unlockht);
 uint32_t komodo_heightstamp(int32_t height);
 
-//#define issue_curl(cmdstr) bitcoind_RPC(0,(char *)"curl",(char *)"http://127.0.0.1:7776",0,0,(char *)(cmdstr))
-
 struct MemoryStruct { char *memory; size_t size; };
 struct return_string { char *ptr; size_t len; };
 
@@ -160,10 +158,6 @@ uint32_t komodo_blocktime(uint256 hash);
  * @returns true on success
  */
 bool komodo_checkpoint(int32_t *notarized_heightp,int32_t nHeight,uint256 hash);
-
-uint32_t komodo_interest_args(uint32_t *txheighttimep,int32_t *txheightp,uint32_t *tiptimep,uint64_t *valuep,uint256 hash,int32_t n);
-
-uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight);
 
 int32_t komodo_nextheight();
 

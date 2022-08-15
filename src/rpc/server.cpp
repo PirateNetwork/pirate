@@ -332,9 +332,6 @@ static const CRPCCommand vRPCCommands[] =
     { "blockchain",         "gettxoutsetinfo",        &gettxoutsetinfo,        true  },
     { "blockchain",         "verifychain",            &verifychain,            true  },
     { "blockchain",         "getspentinfo",           &getspentinfo,           false },
-    //{ "blockchain",         "paxprice",               &paxprice,               true  },
-    //{ "blockchain",         "paxpending",             &paxpending,             true  },
-    //{ "blockchain",         "paxprices",              &paxprices,              true  },
     { "blockchain",         "notaries",               &notaries,               true  },
     //{ "blockchain",         "height_MoM",             &height_MoM,             true  },
     //{ "blockchain",         "txMoMproof",             &txMoMproof,             true  },
@@ -477,23 +474,6 @@ static const CRPCCommand vRPCCommands[] =
     { "oracles",       "oraclessample",   &oraclessample,     true },
     { "oracles",       "oraclessamples",   &oraclessamples,     true },
 
-    // Prices
-    { "prices",       "prices",      &prices,      true },
-    { "prices",       "pricesaddress",      &pricesaddress,      true },
-    { "prices",       "priceslist",         &priceslist,         true },
-    { "prices",       "mypriceslist",         &mypriceslist,         true },
-    { "prices",       "pricesinfo",         &pricesinfo,         true },
-    { "prices",       "pricesbet",         &pricesbet,         true },
-    { "prices",       "pricessetcostbasis",         &pricessetcostbasis,         true },
-    { "prices",       "pricescashout",         &pricescashout,         true },
-    { "prices",       "pricesrekt",         &pricesrekt,         true },
-    { "prices",       "pricesaddfunding",         &pricesaddfunding,         true },
-    { "prices",       "pricesgetorderbook",         &pricesgetorderbook,         true },
-    { "prices",       "pricesrefillfund",         &pricesrefillfund,         true },
-
-    // Pegs
-    { "pegs",       "pegsaddress",   &pegsaddress,      true },
-
     // Payments
     { "payments",       "paymentsaddress",   &paymentsaddress,       true },
     { "payments",       "paymentstxidopret", &payments_txidopret,    true },
@@ -557,17 +537,6 @@ static const CRPCCommand vRPCCommands[] =
     //{ "tokens",       "tokenfillswap",    &tokenfillswap,     true },
     { "tokens",       "tokenconvert", &tokenconvert, true },
 
-    // pegs
-    { "pegs",       "pegscreate",     &pegscreate,      true },
-    { "pegs",       "pegsfund",         &pegsfund,      true },
-    { "pegs",       "pegsget",         &pegsget,        true },
-    { "pegs",       "pegsredeem",         &pegsredeem,        true },
-    { "pegs",       "pegsliquidate",         &pegsliquidate,        true },
-    { "pegs",       "pegsexchange",         &pegsexchange,        true },
-    { "pegs",       "pegsaccounthistory", &pegsaccounthistory,      true },
-    { "pegs",       "pegsaccountinfo", &pegsaccountinfo,      true },
-    { "pegs",       "pegsworstaccounts",         &pegsworstaccounts,      true },
-    { "pegs",       "pegsinfo",         &pegsinfo,      true },
 
     /* Address index */
     { "addressindex",       "getaddressmempool",      &getaddressmempool,      true  },
@@ -588,10 +557,6 @@ static const CRPCCommand vRPCCommands[] =
     { "util",               "estimatefee",            &estimatefee,            true  },
     { "util",               "estimatepriority",       &estimatepriority,       true  },
     { "util",               "z_validateaddress",      &z_validateaddress,      true  }, /* uses wallet if enabled */
-    { "util",               "jumblr_deposit",       &jumblr_deposit,       true  },
-    { "util",               "jumblr_secret",        &jumblr_secret,       true  },
-    { "util",               "jumblr_pause",        &jumblr_pause,       true  },
-    { "util",               "jumblr_resume",        &jumblr_resume,       true  },
 
     { "util",             "invalidateblock",        &invalidateblock,        true  },
     { "util",             "reconsiderblock",        &reconsiderblock,        true  },

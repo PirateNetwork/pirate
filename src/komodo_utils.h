@@ -14,6 +14,7 @@
  ******************************************************************************/
 #pragma once
 #include "komodo_defs.h"
+#include "komodo_structs.h"
 #include "hex.h"
 #include "key_io.h"
 #include "cc/CCinclude.h"
@@ -25,8 +26,8 @@
 #include <boost/thread.hpp>
 #endif
 
-#define SATOSHIDEN ((uint64_t)100000000L)
-#define dstr(x) ((double)(x) / SATOSHIDEN)
+//#define SATOSHIDEN ((uint64_t)100000000L)
+//#define dstr(x) ((double)(x) / SATOSHIDEN)
 #define portable_mutex_t pthread_mutex_t
 #define portable_mutex_init(ptr) pthread_mutex_init(ptr,NULL)
 #define portable_mutex_lock pthread_mutex_lock
@@ -313,8 +314,6 @@ int32_t bitcoin_addr2rmd160(uint8_t *addrtypep,uint8_t rmd160[20],const char *co
 
 char *bitcoin_address(char *coinaddr,uint8_t addrtype,uint8_t *pubkey_or_rmd160,int32_t len);
 
-int32_t komodo_is_issuer();
-
 int32_t bitweight(uint64_t x);
 
 char *bits256_str(char hexstr[65],bits256 x);
@@ -385,18 +384,28 @@ int8_t equihash_params_possible(uint64_t n, uint64_t k);
 
 void komodo_args(char *argv0);
 
+/***
+ * @brief given a source, calculate the symbol and dest
+ * @note if source == nullptr, the results will be KMD/BTC, otherwise source/KMD
+ * @param[out] symbol the symbol (i.e. "KMD")
+ * @param[out] dest the destination (i.e. "BTC")
+ * @param[in] source the source (i.e. "KMD")
+ */
 void komodo_nameset(char *symbol,char *dest,const char *source);
 
-struct komodo_state *komodo_stateptrget(char *base);
+/****
+ * @brief get the right komodo_state
+ * @param[in] base what to search for (nullptr == "KMD")
+ * @returns the correct komodo_state object
+ */
+komodo_state *komodo_stateptrget(char *base);
 
-struct komodo_state *komodo_stateptr(char *symbol,char *dest);
+komodo_state *komodo_stateptr(char *symbol,char *dest);
 
 void komodo_prefetch(FILE *fp);
 
 // check if block timestamp is more than S5 activation time
 // this function is to activate the ExtractDestination fix 
 bool komodo_is_vSolutionsFixActive();
-
-int32_t komodo_baseid(const char *origbase);
 
 void set_kmd_user_password_port(const std::string& ltc_config_filename);

@@ -17,7 +17,7 @@
  * This file provides extern access to variables in komodo_globals.h
  * Please think twice before adding to this list. Can it be done with a better scope?
  */
-#include "komodo_structs.h"
+#include "komodo_defs.h"
 #include <mutex>
 #include <cstdint>
 
@@ -44,15 +44,12 @@ extern int32_t KOMODO_LASTMINED;
 extern int32_t prevKOMODO_LASTMINED;
 extern int32_t KOMODO_CCACTIVATE;
 extern int32_t JUMBLR_PAUSE;
-extern int32_t NUM_PRICES; 
 extern int32_t KOMODO_MININGTHREADS;
 extern int32_t STAKED_NOTARY_ID;
 extern int32_t USE_EXTERNAL_PUBKEY;
 //extern int32_t ASSETCHAINS_SEED;
 extern int32_t KOMODO_ON_DEMAND;
 extern int32_t KOMODO_EXTERNAL_NOTARIES;
-extern int32_t KOMODO_PASSPORT_INITDONE;
-extern int32_t KOMODO_PAX;
 extern int32_t KOMODO_REWIND;
 extern int32_t STAKED_ERA;
 extern int32_t KOMODO_CONNECTING;
@@ -61,7 +58,6 @@ extern int32_t ASSETCHAINS_FOUNDERS;
 extern int32_t ASSETCHAINS_CBMATURITY;
 extern int32_t KOMODO_NSPV;
 extern bool KOMODO_LOADINGBLOCKS;
-extern uint32_t *PVALS;
 extern uint32_t ASSETCHAINS_CC;
 extern uint32_t KOMODO_STOPAT;
 extern uint32_t KOMODO_DPOWCONFS;
@@ -79,16 +75,16 @@ extern uint64_t ASSETCHAINS_NOTARY_PAY[ASSETCHAINS_MAX_ERAS+1];
 extern uint64_t ASSETCHAINS_PEGSCCPARAMS[3];
 extern uint64_t ASSETCHAINS_TIMEUNLOCKFROM;
 extern uint64_t ASSETCHAINS_TIMEUNLOCKTO;
-extern uint64_t ASSETCHAINS_CBOPRET;
 
 extern std::mutex komodo_mutex;
-extern std::vector<uint8_t> Mineropret;
-extern pthread_mutex_t KOMODO_KV_mutex;
 extern pthread_mutex_t KOMODO_CC_mutex;
-extern komodo_kv *KOMODO_KV;
-extern pax_transaction *PAX;
-extern knotaries_entry *Pubkeys;
-extern komodo_state KOMODO_STATES[34];
 
-int32_t komodo_baseid(char *origbase);
+/**
+ * @brief Given a currency name, return the index in the KOMODO_STATES array
+ * 
+ * @param origbase the currency name to look for
+ * @return the index in the array, or -1
+ */
+int32_t komodo_baseid(const char *origbase);
+
 uint64_t komodo_current_supply(uint32_t nHeight);

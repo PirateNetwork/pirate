@@ -54,6 +54,10 @@
 
 #define MAX_JSON_FIELD 4096 // on the big side
 
+#ifndef DBL_EPSILON
+#define DBL_EPSILON 2.2204460492503131E-16
+#endif
+
 #ifdef __cplusplus
 extern "C"
 {

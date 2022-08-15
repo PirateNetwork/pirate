@@ -124,3 +124,6 @@ void komodo_notarysinit(int32_t origheight,uint8_t pubkeys[64][33],int32_t num);
 void komodo_notaries_uninit(); // gets rid of values stored in statics
 void komodo_statefile_uninit(); // closes statefile
 
+extern struct knotaries_entry *Pubkeys;
+#define KOMODO_STATES_NUMBER 2
+extern struct komodo_state KOMODO_STATES[];

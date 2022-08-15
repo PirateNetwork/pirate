@@ -16,8 +16,14 @@
 #include "komodo_globals.h"
 #include "komodo_bitcoind.h" // komodo_verifynotarization
 #include "komodo_notary.h" // komodo_notarized_update
-#include "komodo_pax.h" // komodo_pvals
-#include "komodo_gateway.h" // komodo_opreturn
+#include "komodo_kv.h"
+
+#define KOMODO_EVENT_RATIFY 'P'
+#define KOMODO_EVENT_NOTARIZED 'N'
+#define KOMODO_EVENT_KMDHEIGHT 'K'
+#define KOMODO_EVENT_REWIND 'B'
+#define KOMODO_EVENT_PRICEFEED 'V'
+#define KOMODO_EVENT_OPRETURN 'R'
 
 /*****
  * Add a notarized event to the collection
@@ -64,6 +70,7 @@ void komodo_eventadd_pubkeys(komodo_state *sp, char *symbol, int32_t height, kom
 
 /********
  * Add a pricefeed event to the collection
+ * @note was for PAX, deprecated
  * @param sp where to add
  * @param symbol
  * @param height
@@ -74,7 +81,6 @@ void komodo_eventadd_pricefeed( komodo_state *sp, char *symbol, int32_t height, 
     if (sp != nullptr)
     {
         sp->add_event(symbol, height, pf);
-        komodo_pvals(height,pf.prices, pf.num);
     }
 }
 
@@ -90,7 +96,10 @@ void komodo_eventadd_opreturn( komodo_state *sp, char *symbol, int32_t height, k
     if ( sp != nullptr && !chainName.isKMD() )
     {
         sp->add_event(symbol, height, opret);
-        komodo_opreturn(height, opret.value, opret.opret.data(), opret.opret.size(), opret.txid, opret.vout, symbol);
+        if ( opret.opret.data()[0] == 'K' && opret.opret.size() != 40 )
+        {
+            komodo_kvupdate(opret.opret.data(), opret.opret.size(), opret.value);
+        }
     }
 }
 

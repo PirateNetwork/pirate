@@ -16,10 +16,11 @@
 #include "komodo_globals.h"
 #include "komodo.h" // komodo_voutupdate()
 #include "komodo_utils.h" // OS_milliseconds
-#include "komodo_notary.h" // komodo_chosennotary()
+#include "komodo_notary.h"
+#include "komodo.h"
 #include "rpc/net.h"
+#include "init.h"
 
-extern bool fRequestShutdown; // defined in init.cpp
 
 /************************************************************************
  *
@@ -39,7 +40,8 @@ void init_string(struct return_string *s)
     s->ptr[0] = '\0';
 }
 
-int tx_height( const uint256 &hash ){
+int tx_height( const uint256 &hash )
+{
     int nHeight = 0;
     CTransaction tx;
     uint256 hashBlock;
@@ -1044,50 +1046,6 @@ bool komodo_checkpoint(int32_t *notarized_heightp, int32_t nHeight, uint256 hash
     return true;
 }
 
-uint32_t komodo_interest_args(uint32_t *txheighttimep,int32_t *txheightp,uint32_t *tiptimep,uint64_t *valuep,uint256 hash,int32_t n)
-{
-    LOCK(cs_main);
-    CTransaction tx; uint256 hashBlock; CBlockIndex *pindex,*tipindex;
-    *txheighttimep = *txheightp = *tiptimep = 0;
-    *valuep = 0;
-    if ( !GetTransaction(hash,tx,hashBlock,true) )
-        return(0);
-    uint32_t locktime = 0;
-    if ( n < tx.vout.size() )
-    {
-        if ( (pindex= komodo_getblockindex(hashBlock)) != 0 )
-        {
-            *valuep = tx.vout[n].nValue;
-            *txheightp = pindex->nHeight;
-            *txheighttimep = pindex->nTime;
-            if ( *tiptimep == 0 && (tipindex= chainActive.Tip()) != 0 )
-                *tiptimep = (uint32_t)tipindex->nTime;
-            locktime = tx.nLockTime;
-            //fprintf(stderr,"tx locktime.%u %.8f height.%d | tiptime.%u\n",locktime,(double)*valuep/COIN,*txheightp,*tiptimep);
-        }
-    }
-    return(locktime);
-}
-
-uint64_t komodo_interest(int32_t txheight,uint64_t nValue,uint32_t nLockTime,uint32_t tiptime);
-
-uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight)
-{
-    AssertLockHeld(cs_main);
-    uint64_t value; uint32_t tiptime=0,txheighttimep; CBlockIndex *pindex;
-    if ( (pindex= chainActive[tipheight]) != 0 )
-        tiptime = (uint32_t)pindex->nTime;
-    else fprintf(stderr,"cant find height[%d]\n",tipheight);
-    if ( (*locktimep= komodo_interest_args(&txheighttimep,txheightp,&tiptime,&value,hash,n)) != 0 )
-    {
-        if ( (checkvalue == 0 || value == checkvalue) && (checkheight == 0 || *txheightp == checkheight) )
-            return(komodo_interest(*txheightp,value,*locktimep,tiptime));
-        //fprintf(stderr,"nValue %llu lock.%u:%u nTime.%u -> %llu\n",(long long)coins.vout[n].nValue,coins.nLockTime,timestamp,pindex->nTime,(long long)interest);
-        else fprintf(stderr,"komodo_accrued_interest value mismatch %llu vs %llu or height mismatch %d vs %d\n",(long long)value,(long long)checkvalue,*txheightp,checkheight);
-    }
-    return(0);
-}
-
 int32_t komodo_nextheight()
 {
     //AssertLockHeld(cs_main);
@@ -1098,16 +1056,25 @@ int32_t komodo_nextheight()
     else return(komodo_longestchain() + 1);
 }
 
+/**
+ * @brief get the KMD chain height
+ * 
+ * @param kmdheightp the chain height of KMD
+ * @return 1 if this chain's height >= komodo_longestchain(), otherwise 0
+ */
 int32_t komodo_isrealtime(int32_t *kmdheightp)
 {
-    struct komodo_state *sp; CBlockIndex *pindex;
     AssertLockHeld(cs_main);
-    if ( (sp= komodo_stateptrget((char *)"KMD")) != 0 )
+
+    komodo_state *sp = komodo_stateptrget( (char*)"KMD");
+    if ( sp != nullptr )
         *kmdheightp = sp->CURRENT_HEIGHT;
-    else *kmdheightp = 0;
-    if ( (pindex= chainActive.Tip()) != 0 && pindex->nHeight >= (int32_t)komodo_longestchain() )
-        return(1);
-    else return(0);
+    else 
+        *kmdheightp = 0;
+    CBlockIndex *pindex = chainActive.Tip();
+    if ( pindex != nullptr && pindex->nHeight >= (int32_t)komodo_longestchain() )
+        return 1;
+    return 0;
 }
 
 /*******
@@ -1813,12 +1780,6 @@ void GetKomodoEarlytxidScriptPub()
     if ( KOMODO_EARLYTXID == zeroid )
     {
         fprintf(stderr, "Restart deamon with -earlytxid.\n");
-        StartShutdown();
-        return;
-    }
-    if ( ASSETCHAINS_EARLYTXIDCONTRACT == EVAL_PRICES && KOMODO_SNAPSHOT_INTERVAL == 0 )
-    {
-        fprintf(stderr, "Prices->paymentsCC contract must have -ac_snapshot enabled to pay out.\n");
         StartShutdown();
         return;
     }

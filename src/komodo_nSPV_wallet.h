@@ -17,6 +17,8 @@
 #ifndef KOMODO_NSPVWALLET_H
 #define KOMODO_NSPVWALLET_H
 
+#include "komodo_interest.h"
+
 // nSPV wallet uses superlite functions (and some komodod built in functions) to implement nSPV_spend
 #include "komodo_bitcoind.h"
 #include "rpc/rawtransaction.h"

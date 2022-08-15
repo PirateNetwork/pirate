@@ -291,8 +291,6 @@ libbitcoin_server_a_SOURCES = \
   cc/fsm.cpp \
   cc/heir.cpp \
   cc/oracles.cpp \
-  cc/prices.cpp \
-  cc/pegs.cpp \
   cc/payments.cpp \
   cc/gateways.cpp \
   cc/channels.cpp \
@@ -458,11 +456,9 @@ libbitcoin_common_a_SOURCES = \
   komodo_globals.cpp \
   komodo_hardfork.cpp \
   komodo_interest.cpp \
-  komodo_jumblr.cpp \
   komodo_kv.cpp \
   komodo_notary.cpp \
-  komodo_pax.cpp \
-  komodo_utils.cpp \
+  komodo_utils.cpp \  
   netbase.cpp \
   metrics.cpp \
   primitives/block.cpp \
@@ -510,10 +506,6 @@ libbitcoin_util_a_SOURCES = \
 
 if GLIBC_BACK_COMPAT
 libbitcoin_util_a_SOURCES += compat/glibc_compat.cpp
-endif
-
-if ENABLE_TESTS
-libbitcoin_server_a_SOURCES += rpc/testtransactions.cpp
 endif
 
 

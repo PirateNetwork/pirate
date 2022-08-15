@@ -81,9 +81,9 @@ Details.
 #define CC_MAXVINS 1024
 #define CC_REQUIREMENTS_MSG (KOMODO_NSPV_SUPERLITE?"to use CC contracts you need to nspv_login first\n":"to use CC contracts, you need to launch daemon with valid -pubkey= for an address in your wallet\n")
 
-#define SMALLVAL 0.000000000000001
-#define SATOSHIDEN ((uint64_t)100000000L)
-#define dstr(x) ((double)(x) / SATOSHIDEN)
+//#define SMALLVAL 0.000000000000001
+//#define SATOSHIDEN ((uint64_t)100000000L)
+//#define dstr(x) ((double)(x) / SATOSHIDEN)
 #define CCDISABLEALL memset(ASSETCHAINS_CCDISABLES,1,sizeof(ASSETCHAINS_CCDISABLES))
 #define CCENABLE(x) ASSETCHAINS_CCDISABLES[((uint8_t)x)] = 0
 

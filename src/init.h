@@ -58,4 +58,6 @@ enum HelpMessageMode {
 /** Help for options shared between UI and daemon (for -help) */
 std::string HelpMessage(HelpMessageMode mode);
 
+extern std::atomic<bool> fRequestShutdown;
+
 #endif // BITCOIN_INIT_H

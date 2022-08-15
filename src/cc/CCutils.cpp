@@ -22,6 +22,7 @@
 #include "komodo_bitcoind.h"
 #include "komodo_utils.h"
 #include "key_io.h"
+#include "komodo_bitcoind.h"
 
 #ifdef TESTMODE           
     #define MIN_NON_NOTARIZED_CONFIRMS 2
@@ -173,7 +174,7 @@ uint32_t GetLatestTimestamp(int32_t height)
 {
     if ( KOMODO_NSPV_SUPERLITE ) return ((uint32_t)NSPV_blocktime(height));
     return(komodo_heightstamp(height));
-} // :P
+}
 
 void CCaddr2set(struct CCcontract_info *cp,uint8_t evalcode,CPubKey pk,uint8_t *priv,char *coinaddr)
 {

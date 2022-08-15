@@ -440,6 +440,7 @@ void CNode::CloseSocketDisconnect()
         vRecvMsg.clear();
 }
 
+/* TODO remove
 #ifndef KOMODO_NSPV_FULLNODE
 #define KOMODO_NSPV_FULLNODE (KOMODO_NSPV <= 0)
 #endif // !KOMODO_NSPV_FULLNODE
@@ -447,6 +448,7 @@ void CNode::CloseSocketDisconnect()
 #ifndef KOMODO_NSPV_SUPERLITE
 #define KOMODO_NSPV_SUPERLITE (KOMODO_NSPV > 0)
 #endif // !KOMODO_NSPV_SUPERLITE
+*/
 
 void CNode::PushVersion()
 {
