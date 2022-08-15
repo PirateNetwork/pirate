@@ -528,50 +528,74 @@ void PrintExceptionContinue(const std::exception* pex, const char* pszThread)
     strMiscWarning = message;
 }
 
+
+namespace fs = boost::filesystem;
+
+/**
+ * @brief get the OS-specific default application data directory
+ * @note Windows: be "C:\Users\[username]\AppData\Roaming"
+ * @note Mac: ~/Library/Application Support
+ * @note Unix: ~/
+ * @returns the default path to the application data directory
+ */
+boost::filesystem::path GetAppDir()
+{
+    // Windows < Vista: C:\Documents and Settings\Username\Application Data
+    // Windows >= Vista: C:\Users\Username\AppData\Roaming
+    // Mac: ~/Library/Application Support
+    // Unix: ~
+    fs::path pathRet;
+
+#ifdef _WIN32
+    // Windows
+    pathRet = GetSpecialFolderPath(CSIDL_APPDATA);
+#else
+    // Linux or Mac
+    char* pszHome = getenv("HOME");
+    if (pszHome == NULL || strlen(pszHome) == 0)
+        pathRet = fs::path("/");
+    else
+        pathRet = fs::path(pszHome);
+  #ifdef MAC_OSX
+    // Mac
+    pathRet /= "Library";
+    TryCreateDirectory(pathRet);
+    pathRet /= "Application Support";
+    TryCreateDirectory(pathRet);  // not sure why this is needed as GetDataDir will create the whole path
+  #endif
+#endif
+    return pathRet;
+}
+
 /****
- * @brief get the OS-specific default data directory
+ * @brief get the OS-specific default komodod data directory
  * @note Windows: be "C:\Users\[username]\AppData\Roaming\Komodo"
  * @note Mac: ~/Library/Application Support/Komodo
  * @note Unix: ~/.komodo
  * @returns the default path to the Komodo data directory
  */
 boost::filesystem::path GetDefaultDataDir()
-{
-    namespace fs = boost::filesystem;
-    // Windows < Vista: C:\Documents and Settings\Username\Application Data\Zcash
-    // Windows >= Vista: C:\Users\Username\AppData\Roaming\Zcash
-    // Mac: ~/Library/Application Support/Zcash
-    // Unix: ~/.zcash
-#ifdef _WIN32
-    // Windows
-    if ( chainName.isKMD() )
-        return GetSpecialFolderPath(CSIDL_APPDATA) / "Komodo";
-    else return GetSpecialFolderPath(CSIDL_APPDATA) / "Komodo" / chainName.symbol().c_str();
-#else
-    fs::path pathRet;
-    char* pszHome = getenv("HOME");
-    if (pszHome == NULL || strlen(pszHome) == 0)
-        pathRet = fs::path("/");
-    else
-        pathRet = fs::path(pszHome);
-#ifdef MAC_OSX
-    // Mac
-    pathRet /= "Library/Application Support";
-    TryCreateDirectory(pathRet);
-    if ( chainName.isKMD() )
-        return pathRet / "Komodo";
+{    
+    fs::path pathRet = GetAppDir();
+
+#if defined(_WIN32) || defined(MAC_OSX)
+    if (chainName.isKMD())
+    {
+        pathRet /= "Komodo";
+    }
     else
     {
         pathRet /= "Komodo";
         TryCreateDirectory(pathRet);
-        return pathRet / chainName.symbol().c_str();
+        pathRet /= chainName.symbol();
     }
+    return pathRet;
 #else
     // Unix
-    if ( chainName.isKMD() )
+    if (chainName.isKMD())
         return pathRet / ".komodo";
-    return pathRet / ".komodo" / chainName.symbol().c_str();
-#endif
+    else 
+        return pathRet / ".komodo" / chainName.symbol();
 #endif
 }
 

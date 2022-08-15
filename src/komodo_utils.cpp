@@ -1447,26 +1447,27 @@ void get_userpass_and_port(const boost::filesystem::path& path, const std::strin
  */
 void set_kmd_user_password_port(const std::string& ltc_config_filename)
 {
-        ASSETCHAINS_P2PPORT = 7770; // default port for P2P
-        ASSETCHAINS_RPCPORT = 7771; // default port for RPC
+    ASSETCHAINS_P2PPORT = 7770; // default port for P2P
+    ASSETCHAINS_RPCPORT = 7771; // default port for RPC
 #ifdef __APPLE__
-        std::string filename = "Komodo.conf";
+    std::string filename = "Komodo.conf";
 #else
-        std::string filename = "komodo.conf";
+    std::string filename = "komodo.conf";
 #endif
 
-        auto datadir_path = GetDataDir();
-        uint16_t ignore;
-        std::string userpass;
-        get_userpass_and_port(datadir_path, filename, userpass, ignore);
+    auto datadir_path = GetDataDir();
+    uint16_t ignore;
+    std::string userpass;
+    get_userpass_and_port(datadir_path, filename, userpass, ignore);
+    if (!userpass.empty())
+        strncpy(KMDUSERPASS, userpass.c_str(), 8705);
+    if (IS_KOMODO_NOTARY)
+    {
+        auto approot_path = GetAppDir();  // go to app root dir
+        get_userpass_and_port(approot_path, ltc_config_filename, userpass, DEST_PORT);
         if (!userpass.empty())
-            strncpy(KMDUSERPASS, userpass.c_str(), 8705);
-        if (IS_KOMODO_NOTARY)
-        {
-            get_userpass_and_port(datadir_path, ltc_config_filename, userpass, DEST_PORT);
-            if (!userpass.empty())
-                strncpy(BTCUSERPASS, userpass.c_str(), 8192);
-        }
+            strncpy(BTCUSERPASS, userpass.c_str(), 8192);
+    }
 }
 
 void komodo_args(char *argv0)
