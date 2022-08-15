@@ -506,7 +506,7 @@ void komodo_init(int32_t height)
             komodo_notarysinit(0,pubkeys,count);
         }
         didinit = true;
-        komodo_stateupdate(0,0,0,0,zero,0,0,0,0,0,0,0,0,0,0,zero,0);
+        komodo_stateupdate(0,0,0,0,zero,0,0,0,0,0,0,0,0,zero,0);
     }
 }
 

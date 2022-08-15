@@ -175,23 +175,8 @@ int32_t komodo_parsestatefiledata(struct komodo_state *sp,uint8_t *filedata,long
     return func;
 }
 
-/***
- * @brief persist event to file stream
- * @param evt the event
- * @param fp the file
- * @returns the number of bytes written
- */
-template<class T>
-size_t write_event(T& evt, FILE *fp)
-{
-    std::stringstream ss;
-    ss << evt;
-    std::string buf = ss.str();
-    return fwrite(buf.c_str(), buf.size(), 1, fp);
-}
-
 void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotaries,
-        uint8_t notaryid,uint256 txhash,uint64_t voutmask,uint8_t numvouts,uint32_t *pvals,
+        uint8_t notaryid,uint256 txhash,uint32_t *pvals,
         uint8_t numpvals,int32_t KMDheight,uint32_t KMDtimestamp,uint64_t opretvalue,
         uint8_t *opretbuf,uint16_t opretlen,uint16_t vout,uint256 MoM,int32_t MoMdepth)
 {
@@ -262,6 +247,7 @@ void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotar
             write_event(pk, fp);
             komodo_eventadd_pubkeys(sp,symbol,height,pk);
         }
+        /* TODO: why is this removed in jmj_event_fix3?
         else if ( voutmask != 0 && numvouts > 0 )
         {
             komodo::event_u evt(height);
@@ -270,7 +256,7 @@ void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotar
             memcpy(evt.mask, &voutmask, sizeof(voutmask));
             memcpy(evt.hash, &txhash, sizeof(txhash));
            write_event(evt, fp);
-        }
+        } */
         else if ( pvals != 0 && numpvals > 0 )
         {
             int32_t i,nonz = 0;
@@ -402,7 +388,7 @@ int32_t komodo_voutupdate(bool fJustCheck,int32_t *isratificationp,int32_t notar
             if ( scriptbuf[len] == 'K' )
             {
                 //fprintf(stderr,"i.%d j.%d KV OPRET len.%d %.8f\n",i,j,opretlen,dstr(value));
-                komodo_stateupdate(height,0,0,0,txhash,0,0,0,0,0,0,value,&scriptbuf[len],opretlen,j,zero,0);
+                komodo_stateupdate(height,0,0,0,txhash,0,0,0,0,value,&scriptbuf[len],opretlen,j,zero,0);
                 return(-1);
             }
             if ( strcmp(chainName.symbol().c_str(),(char *)&scriptbuf[len+32*2+4]) == 0 )
@@ -502,8 +488,7 @@ int32_t komodo_voutupdate(bool fJustCheck,int32_t *isratificationp,int32_t notar
                         sp->SetLastNotarizedMoM(MoM);
                         sp->SetLastNotarizedMoMDepth(MoMdepth);
                     }
-                    komodo_stateupdate(height,0,0,0,zero,0,0,0,0,0,0,0,0,0,0,
-                            sp->LastNotarizedMoM(),sp->LastNotarizedMoMDepth());
+                    komodo_stateupdate(height,0,0,0,zero,0,0,0,0,0,0,0,0,sp->LastNotarizedMoM(),sp->LastNotarizedMoMDepth());
                     printf("[%s] ht.%d NOTARIZED.%d %s.%s %sTXID.%s lens.(%d %d) MoM.%s %d\n",
                             chainName.symbol().c_str(),height,sp->LastNotarizedHeight(),
                             chainName.ToString().c_str(),srchash.ToString().c_str(),
@@ -531,7 +516,7 @@ int32_t komodo_voutupdate(bool fJustCheck,int32_t *isratificationp,int32_t notar
                             //for (i=0; i<opretlen-len; i++)
                             //    printf("%02x",scriptbuf[len+i]);
                             //printf(" Found extradata.[%d] %d - %d\n",opretlen-len,opretlen,len);
-                            komodo_stateupdate(height,0,0,0,txhash,0,0,0,0,0,0,value,&scriptbuf[len],opretlen-len+4+3+(scriptbuf[1] == 0x4d),j,zero,0);
+                            komodo_stateupdate(height,0,0,0,txhash,0,0,0,0,value,&scriptbuf[len],opretlen-len+4+3+(scriptbuf[1] == 0x4d),j,zero,0);
                         }
                     }
                 }
@@ -561,7 +546,7 @@ int32_t komodo_voutupdate(bool fJustCheck,int32_t *isratificationp,int32_t notar
             }
 
             if ( *isratificationp == 0 && (signedmask != 0 || (scriptbuf[len] != 'X' && scriptbuf[len] != 'A')) ) // && scriptbuf[len] != 'I')
-                komodo_stateupdate(height,0,0,0,txhash,0,0,0,0,0,0,value,&scriptbuf[len],opretlen,j,zero,0);
+                komodo_stateupdate(height,0,0,0,txhash,0,0,0,0,value,&scriptbuf[len],opretlen,j,zero,0);
         }
     }
     return(notaryid);
@@ -649,7 +634,7 @@ int32_t komodo_connectblock(bool fJustCheck, CBlockIndex *pindex,CBlock& block)
         if (!fJustCheck)
         {
             komodo_event_rewind(sp,symbol,pindex->nHeight);
-            komodo_stateupdate(pindex->nHeight,0,0,0,zero,0,0,0,0,-pindex->nHeight,pindex->nTime,0,0,0,0,zero,0);
+            komodo_stateupdate(pindex->nHeight,0,0,0,zero,0,0,-pindex->nHeight,pindex->nTime,0,0,0,0,zero,0);
         }
     }
     komodo_currentheight_set(chainActive.Tip()->nHeight);
@@ -776,7 +761,7 @@ int32_t komodo_connectblock(bool fJustCheck, CBlockIndex *pindex,CBlock& block)
                         if ( ((signedmask & 1) != 0 && numvalid >= KOMODO_MINRATIFY) || bitweight(signedmask) > (numnotaries/3) )
                         {
                             memset(&txhash,0,sizeof(txhash));
-                            komodo_stateupdate(height,pubkeys,numvalid,0,txhash,0,0,0,0,0,0,0,0,0,0,zero,0);
+                            komodo_stateupdate(height,pubkeys,numvalid,0,txhash,0,0,0,0,0,0,0,0,zero,0);
                             printf("RATIFIED! >>>>>>>>>> new notaries.%d newheight.%d from height.%d\n",numvalid,(((height+KOMODO_ELECTION_GAP/2)/KOMODO_ELECTION_GAP)+1)*KOMODO_ELECTION_GAP,height);
                         } else printf("signedmask.%llx numvalid.%d wt.%d numnotaries.%d\n",(long long)signedmask,numvalid,bitweight(signedmask),numnotaries);
                     }
@@ -786,7 +771,7 @@ int32_t komodo_connectblock(bool fJustCheck, CBlockIndex *pindex,CBlock& block)
         if ( !fJustCheck && IS_KOMODO_NOTARY && chainName.isKMD() )
             printf("%s ht.%d\n",chainName.ToString().c_str(),height);
         if ( !fJustCheck && pindex->nHeight == hwmheight )
-            komodo_stateupdate(height,0,0,0,zero,0,0,0,0,height,(uint32_t)pindex->nTime,0,0,0,0,zero,0);
+            komodo_stateupdate(height,0,0,0,zero,0,0,height,(uint32_t)pindex->nTime,0,0,0,0,zero,0);
     } 
     else 
         { fprintf(stderr,"komodo_connectblock: unexpected null pindex\n"); return(0); }

@@ -67,6 +67,21 @@ struct komodo_event
     uint8_t space[];
 };
 
+/***
+ * @brief persist event to file stream
+ * @param evt the event
+ * @param fp the file
+ * @returns the number of bytes written
+ */
+template<class T>
+size_t write_event(T& evt, FILE *fp)
+{
+    std::stringstream ss;
+    ss << evt;
+    std::string buf = ss.str();
+    return fwrite(buf.c_str(), buf.size(), 1, fp);
+}
+
 namespace komodo {
 
 enum komodo_event_type
