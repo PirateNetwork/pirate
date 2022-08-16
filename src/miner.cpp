@@ -1132,6 +1132,27 @@ CBlockIndex *get_chainactive(int32_t height)
 
 int32_t gotinvalid;
 
+bool check_tromp_solution(equi &eq, std::function<bool(std::vector<unsigned char>)> validBlock)
+{
+    // Convert solution indices to byte array (decompress) and pass it to validBlock method.
+    for (size_t s = 0; s < std::min(MAXSOLS, eq.nsols); s++) 
+    {
+        LogPrint("pow", "Checking solution %d\n", s+1);
+        std::vector<eh_index> index_vector(PROOFSIZE);
+        for (size_t i = 0; i < PROOFSIZE; i++) {
+            index_vector[i] = eq.sols[s][i];
+        }
+        std::vector<unsigned char> sol_char = GetMinimalFromIndices(index_vector, DIGITBITS);
+
+        if (validBlock(sol_char)) {
+            // If we find a POW solution, do not try other solutions
+            // because they become invalid as we created a new block in blockchain.
+            return true;
+        }
+    }
+    return false;
+}
+
 #ifdef ENABLE_WALLET
 void static BitcoinMiner(CWallet *pwallet)
 #else
@@ -1555,21 +1576,8 @@ void static BitcoinMiner()
                         eq.digitK(0);
                         ehSolverRuns.increment();
 
-                        // Convert solution indices to byte array (decompress) and pass it to validBlock method.
-                        for (size_t s = 0; s < eq.nsols; s++) {
-                            LogPrint("pow", "Checking solution %d\n", s+1);
-                            std::vector<eh_index> index_vector(PROOFSIZE);
-                            for (size_t i = 0; i < PROOFSIZE; i++) {
-                                index_vector[i] = eq.sols[s][i];
-                            }
-                            std::vector<unsigned char> sol_char = GetMinimalFromIndices(index_vector, DIGITBITS);
-
-                            if (validBlock(sol_char)) {
-                                // If we find a POW solution, do not try other solutions
-                                // because they become invalid as we created a new block in blockchain.
-                                break;
-                            }
-                        }
+                        check_tromp_solution(eq, validBlock);
+                        
                     } else {
                         try {
                             // If we find a valid block, we rebuild
@@ -1698,3 +1706,57 @@ void static BitcoinMiner()
     }
 
 #endif // ENABLE_MINING
+
+/****
+ * This should only be called from a unit test, as the equihash code
+ * can only be included once (no separation of implementation from declaration).
+ * This verifies that std::min(MAXSOLS, eq.nsols) prevents a SIGSEGV.
+ */
+bool test_tromp_equihash()
+{
+    // get the sols to be less than nsols
+
+    // create a context
+    CBlock block;
+    const CChainParams& params = Params();
+
+    crypto_generichash_blake2b_state state;
+    EhInitialiseState(params.EquihashN(), params.EquihashK(), state);
+    // I = the block header minus nonce and solution.
+    CEquihashInput I{block};
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << I;
+    // H(I||...
+    crypto_generichash_blake2b_update(&state, (unsigned char*)&ss[0], ss.size());
+    // H(I||V||...
+    crypto_generichash_blake2b_state curr_state;
+    curr_state = state;
+    crypto_generichash_blake2b_update(&state,block.nNonce.begin(),block.nNonce.size());
+
+    // Create solver and initialize it.
+    equi eq(1);
+    eq.setstate(&curr_state);
+
+    // Initialization done, start algo driver.
+    eq.digit0(0);
+    eq.xfull = eq.bfull = eq.hfull = 0;
+    eq.showbsizes(0);
+    for (u32 r = 1; r < WK; r++) {
+        (r&1) ? eq.digitodd(r, 0) : eq.digiteven(r, 0);
+        eq.xfull = eq.bfull = eq.hfull = 0;
+        eq.showbsizes(r);
+    }
+    eq.digitK(0);
+
+    // force nsols to be more than MAXSOLS (8)
+    while (eq.nsols <= MAXSOLS * 800)
+    {
+        tree t(1);
+        eq.candidate(t);
+    }
+
+    auto func = [](std::vector<unsigned char>) { return false; };   
+
+    // this used to throw a SIGSEGV
+    return check_tromp_solution(eq, func);
+}

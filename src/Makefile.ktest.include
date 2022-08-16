@@ -28,7 +28,7 @@ bin_PROGRAMS += komodo-test
     test-komodo/test_txid.cpp \
     test-komodo/test_coins.cpp \
     test-komodo/test_haraka_removal.cpp \
-    main.cpp
+    test-komodo/test_miner.cpp
 
 komodo_test_CPPFLAGS = $(komodod_CPPFLAGS)
 
