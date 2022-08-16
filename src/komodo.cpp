@@ -188,7 +188,7 @@ void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotar
     static int32_t errs,didinit; 
     static uint256 zero;
     struct komodo_state *sp; 
-    char fname[512],symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN]; 
+    char fname[MAX_STATEFNAME+1],symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN]; 
     int32_t ht,func;
     uint8_t num,pubkeys[64][33];
 
@@ -507,7 +507,7 @@ int32_t komodo_voutupdate(bool fJustCheck,int32_t *isratificationp,int32_t notar
                     {
                         if ( signedfp == 0 )
                         {
-                            char fname[512];
+                            char fname[MAX_STATEFNAME+1];
                             komodo_statefname(fname,chainName.symbol().c_str(),(char *)"signedmasks");
                             if ( (signedfp= fopen(fname,"rb+")) == 0 )
                                 signedfp = fopen(fname,"wb");
@@ -709,7 +709,7 @@ int32_t komodo_connectblock(bool fJustCheck, CBlockIndex *pindex,CBlock& block)
                     static FILE *signedfp;
                     if ( signedfp == 0 )
                     {
-                        char fname[512];
+                        char fname[MAX_STATEFNAME+1];
                         komodo_statefname(fname,chainName.symbol().c_str(),(char *)"signedmasks");
                         if ( (signedfp= fopen(fname,"rb+")) == 0 )
                             signedfp = fopen(fname,"wb");

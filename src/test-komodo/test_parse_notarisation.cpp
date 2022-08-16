@@ -10,10 +10,12 @@
 #include "komodo_structs.h"
 #include "komodo_extern_globals.h"
 #include "test_parse_notarisation.h"
+#include "chainparamsbase.h"
 
 #include <boost/filesystem.hpp>
 #include <fstream>
 
+// todo remove
 /*komodo_state *komodo_stateptr(char *symbol,char *dest);
 void komodo_notarized_update(struct komodo_state *sp,int32_t nHeight,int32_t notarized_height,
         uint256 notarized_hash,uint256 notarized_desttxid,uint256 MoM,int32_t MoMdepth);
@@ -25,6 +27,64 @@ void set_kmd_user_password_port(const std::string& ltc_config_filename);
 extern char KMDUSERPASS[8705];
 extern char BTCUSERPASS[8192];
 extern uint16_t DEST_PORT;*/
+
+#ifdef __WINDOWS__
+// for when HOMEDRIVE and HOMEPATH is used...
+std::pair<std::string, std::string> parse_drive(const std::string& in)
+{
+    size_t pos = in.find(":");
+    std::string drive;
+    std::string path;
+    if (pos < 3 && pos != 0)
+    {
+        drive = in.substr(0, pos+1);
+        path = in.substr(pos + 1);
+    }
+    return {drive, path};
+}
+
+char concat[1024];
+bool set_home(const std::string& in)
+{
+    const char* profile = getenv("USERPROFILE");
+    if (profile == nullptr)
+    {
+        // divide homedrive and homepath
+        auto pair = parse_drive(in);
+        std::string val = "HOMEDRIVE=" + pair.first;
+        _putenv(val.c_str());
+        val = "HOMEPATH=" + pair.second;
+        _putenv(val.c_str());
+        return true;
+    }
+    std::string val = "USERPROFILE=" + in;
+    _putenv(val.c_str());
+    return true;
+}
+
+const char* get_home()
+{
+    concat[0] = 0;
+    const char* profile = getenv("USERPROFILE");
+    if (profile == nullptr)
+    {
+        strcpy(concat, getenv("HOMEDRIVE"));
+        strcat(concat, getenv("HOMEPATH") );
+        return concat;
+    }
+    return profile;
+}
+#else
+const char* get_home()
+{
+    return getenv("HOME");
+}
+bool set_home(const std::string& in)
+{
+    setenv("HOME", in.c_str(), true);
+    return true;
+}
+#endif
 
 class komodo_state_accessor : public komodo_state
 {
@@ -549,13 +609,13 @@ TEST(TestParseNotarisation, FilePaths)
             auto ltc_path = data_path / os_dir / ltc_dir / "regtest";
             boost::filesystem::create_directories(komodo_path);
             boost::filesystem::create_directories(ltc_path);
-            orig_home = getenv("HOME");
-            setenv("HOME", data_path.c_str(), true);
+            orig_home = get_home();
+            set_home(data_path.string().c_str());
         }
         ~MockDataDirectory()
         {
             boost::filesystem::remove_all(data_path);
-            setenv("HOME", orig_home.c_str(), true);
+            set_home(orig_home.string().c_str());
             ClearDatadirCache();
         }
         bool create_config(const boost::filesystem::path& filesubpath, const std::string& user,
@@ -569,7 +629,7 @@ TEST(TestParseNotarisation, FilePaths)
             return true;
         }
         boost::filesystem::path data_path;
-        std::string orig_home;
+        boost::filesystem::path orig_home;
 #ifdef __WINDOWS__
         const boost::filesystem::path os_dir = "AppData/Roaming";
         const boost::filesystem::path kmd_dir = "Komodo";
