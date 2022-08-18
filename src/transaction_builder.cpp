@@ -119,7 +119,7 @@ TransactionBuilder::TransactionBuilder(
     uint32_t nVersionGroupId,
     int32_t nVersion,
     uint32_t branchId,
-    uint8_t  cZip12Enabled)
+    uint8_t  cZip212Enabled)
 {
     mtx.fOverwintered   = fOverwintered;
     mtx.nExpiryHeight   = nExpiryHeight;

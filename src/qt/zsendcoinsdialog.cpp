@@ -666,6 +666,13 @@ void ZSendCoinsDialog::useAvailableBalance(SendCoinsEntry* entry)
             }
         }
     }
+    
+    //Leave enough funds in the sender address for the
+    //transaction fee
+    if (ui->customFee->value()>0)
+    {
+      amount -= ui->customFee->value();
+    }
 
     if (amount > 0) {
       entry->checkSubtractFeeFromAmount();
