@@ -160,9 +160,19 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "z_sendmany_prepare_offline", 1},
     { "z_sendmany_prepare_offline", 2},
     { "z_sendmany_prepare_offline", 3},    
-    { "z_sign_offline", 1},
-    { "z_sign_offline", 2},
-    { "z_sign_offline", 3},
+    { "z_sign_offline", 0},  //version
+    { "z_sign_offline", 2},  //spending notes
+    { "z_sign_offline", 3},  //outputs    
+    { "z_sign_offline", 4},  //minconf    
+    { "z_sign_offline", 5},  //fee
+    { "z_sign_offline", 6},  //next block height
+    { "z_sign_offline", 7},  //branch ID
+    { "z_sign_offline", 9},  //MTX overwintered
+    { "z_sign_offline", 10}, //MTX expiry height
+    { "z_sign_offline", 11}, //MTX version groupID    
+    { "z_sign_offline", 12}, //MTX version    
+    { "z_sign_offline", 13}, //zip212 enabled    
+    { "z_sign_offline", 14}, //checksum    
     { "z_shieldcoinbase", 2},
     { "z_shieldcoinbase", 3},
     { "z_getoperationstatus", 0},

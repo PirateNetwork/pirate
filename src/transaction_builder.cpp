@@ -118,14 +118,16 @@ TransactionBuilder::TransactionBuilder(
     uint32_t nExpiryHeight,
     uint32_t nVersionGroupId,
     int32_t nVersion,
-    uint32_t branchId)
+    uint32_t branchId,
+    uint8_t  cZip12Enabled)
 {
     mtx.fOverwintered   = fOverwintered;
     mtx.nExpiryHeight   = nExpiryHeight;
     mtx.nVersionGroupId = nVersionGroupId;
     mtx.nVersion        = nVersion;
     consensusBranchId   = branchId;
-
+    cZip212_enabled     = cZip212Enabled;
+    
     //printf("TransactionBuilder::TransactionBuilder(offline) values: fOverwintered=%u nExpiryHeight=%u nVersionGroupId=%u nVersion=%d\n",
     //mtx.fOverwintered,
     //mtx.nExpiryHeight,
@@ -277,15 +279,33 @@ void TransactionBuilder::AddSaplingOutput(
     CAmount value,
     std::array<unsigned char, ZC_MEMO_SIZE> memo)
 {
+    libzcash::Zip212Enabled zip_212_enabled;
+    
     // Sanity check: cannot add Sapling output to pre-Sapling transaction
     if (mtx.nVersion < SAPLING_TX_VERSION) {
         throw std::runtime_error("TransactionBuilder cannot add Sapling output to pre-Sapling transaction");
     }
 
-    libzcash::Zip212Enabled zip_212_enabled = libzcash::Zip212Enabled::BeforeZip212;
-    // We use nHeight = chainActive.Height() + 1 since the output will be included in the next block
-    if (NetworkUpgradeActive(nHeight + 1, consensusParams, Consensus::UPGRADE_CANOPY)) {
-        zip_212_enabled = libzcash::Zip212Enabled::AfterZip212;
+    if (nMaxConnections>0)
+    {
+        //Online
+        zip_212_enabled = libzcash::Zip212Enabled::BeforeZip212;
+        // We use nHeight = chainActive.Height() + 1 since the output will be included in the next block
+        if (NetworkUpgradeActive(nHeight + 1, consensusParams, Consensus::UPGRADE_CANOPY)) {
+            zip_212_enabled = libzcash::Zip212Enabled::AfterZip212;
+        }
+    }
+    else
+    {
+        //Offline
+        if (cZip212_enabled==0)
+        {
+             zip_212_enabled = libzcash::Zip212Enabled::BeforeZip212;   
+        }
+        else
+        {
+            zip_212_enabled = libzcash::Zip212Enabled::AfterZip212;
+        }
     }
 
     auto note = libzcash::SaplingNote(to, value, zip_212_enabled);
@@ -294,7 +314,6 @@ void TransactionBuilder::AddSaplingOutput(
 }
 
 void TransactionBuilder::AddSaplingOutput_offline_transaction(
-    //uint256 ovk,
     std::string address,
     CAmount value,
     std::array<unsigned char, ZC_MEMO_SIZE> memo)
@@ -311,7 +330,7 @@ void TransactionBuilder::AddSaplingOutput_offline_transaction(
 
     auto note = libzcash::SaplingNote(to, value, zip_212_enabled);
 
-    //Spending key not available when creating the transaction to be signed offline
+    //Spending key not available when creating the transaction which will be signed offline
     //The offline transaction builder is not using the ovk field.
     uint256 ovk;
     outputs.emplace_back(ovk, note, memo);
@@ -516,12 +535,12 @@ std::string TransactionBuilder::Build_offline_transaction()
             }
         }
 
-        //Parameter [0]: Version - Layout of the command fields
+        //Parameter   [0]: Version - Layout of the command fields
         // Version 1: [1] Pay from address
         //            [2] Array of spending notes, which contains the funds of the 'pay from address'. Zip212 supported
         //            [3] Array of recipient: address, amount, memo
-        //            [4]..[12] Blockchain parameters
-        //            [13] Checksum of all the characters in the command.
+        //            [4]..[13] Blockchain parameters
+        //            [14] Checksum of all the characters in the command.
         std::string sVersion="1";
 
         sReturn="z_sign_offline "+sVersion+" ";
@@ -532,8 +551,9 @@ std::string TransactionBuilder::Build_offline_transaction()
         sReturn += "\"" + fromAddress_ + "\" ";
         sChecksumInput+=fromAddress_+" ";
 
+        
 
-        //Parameter [2]: Spending notes '[{"witnessposition":number,"witnesspath":hex,"note_d":hex,"note_pkd":hex,"note_r":hex,"value":number},{...},{...}]'
+        //Parameter [2]: Spending notes '[{"witnessposition":number,"witnesspath":hex,"note_d":hex,"note_pkd":hex,"note_r":hex,"value":number,"zip212":number},{...},{...}]'
         if (spends.size() <= 0)
         {
           sReturn="Error:No spends";
@@ -629,6 +649,7 @@ std::string TransactionBuilder::Build_offline_transaction()
             sChecksumInput+=sTmp;
 
 
+            //Zip212 enabled for the specific note
             snprintf(&cHex[0],sizeof(cHex),"\"zip212\":%u}", cZip212_enabled);
             sReturn=sReturn+cHex;
             if (cZip212_enabled==0)
@@ -640,6 +661,7 @@ std::string TransactionBuilder::Build_offline_transaction()
                 sTmp="1 ";
             }
             sChecksumInput+=sTmp;
+
 
             //Last entry: Must close the array with ]'
             //otherwide start the next entry with a ,
@@ -654,6 +676,7 @@ std::string TransactionBuilder::Build_offline_transaction()
             std::memcpy(&cAnchor[0], &spend.anchor, 32);
         }
 
+        
 
         //Parameter [3]: Outputs (recipients)
         //printf("Build_offline_transaction() [3] Outputs: Total=%ld\n\n", outputs.size());
@@ -754,7 +777,6 @@ std::string TransactionBuilder::Build_offline_transaction()
         }
 
 
-
         //Parameter [10] : uint32_t nExpiryHeight
         sReturn=sReturn+strprintf("%u ",mtx.nExpiryHeight);
         sTmp = strprintf("%u ",mtx.nExpiryHeight);
@@ -772,8 +794,16 @@ std::string TransactionBuilder::Build_offline_transaction()
         sTmp = strprintf("%d ",mtx.nVersion);
         sChecksumInput+=sTmp;         
 
+        //Parameter [13]: Zip212 enabled: Used for the outputs
+        std::string sZip212_enabled = "0";
+        // We use nHeight = chainActive.Height() + 1 since the output will be included in the next block
+        if (NetworkUpgradeActive(nHeight + 1, consensusParams, Consensus::UPGRADE_CANOPY)) {
+            sZip212_enabled = "1";
+        }
+        sReturn+= sZip212_enabled+" ";
+        sChecksumInput+=sZip212_enabled+" ";
 
-        //Parameter [13]: checksum
+        //Parameter [14]: checksum
         //A simple checksum of the full string, to detect copy/paste errors between the wallets
         //The checksum equals the sum of the ASCII values of all the characters in the string:   
         //printf("sChecksumInput:\n%s\n\n",sChecksumInput.c_str() );        

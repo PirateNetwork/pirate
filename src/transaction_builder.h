@@ -146,6 +146,7 @@ private:
     CAmount fee = 10000;
     int iMinConf = 1;
     uint32_t consensusBranchId;
+    uint8_t cZip212_enabled;
 
     std::string fromAddress_;
     typedef struct
@@ -180,7 +181,7 @@ public:
     TransactionBuilder() {}
     TransactionBuilder(const Consensus::Params& consensusParams, int nHeight, CKeyStore* keyStore = nullptr);
     //For signing offline transactions:
-    TransactionBuilder(bool fOverwintered, uint32_t nExpiryHeight, uint32_t nVersionGroupId, int32_t nVersion, uint32_t branchId);
+    TransactionBuilder(bool fOverwintered, uint32_t nExpiryHeight, uint32_t nVersionGroupId, int32_t nVersion, uint32_t branchId, uint8_t cZip212Enabled);
 
     ADD_SERIALIZE_METHODS;
 

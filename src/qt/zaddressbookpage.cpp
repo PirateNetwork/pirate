@@ -148,6 +148,12 @@ void ZAddressBookPage::setModel(ZAddressTableModel *_model)
     // Select row for newly created address
     connect(_model, SIGNAL(rowsInserted(QModelIndex,int,int)), this, SLOT(selectNewAddress(QModelIndex,int,int)));
 
+    if (nMaxConnections==0)
+    {
+        //The balances are not updated in the offline wallet.
+        //Hide the column.
+        ui->tableView->setColumnHidden(ZAddressTableModel::Balance, true);
+    }
 }
 
 void ZAddressBookPage::exportSK()
