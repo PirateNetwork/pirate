@@ -1531,6 +1531,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     RegisterNodeSignals(GetNodeSignals());
 
+    //Load peers from peers.dat
+    LoadPeers();
+
     // sanitize comments per BIP-0014, format user agent and check total size
     std::vector<string> uacomments;
     BOOST_FOREACH(string cmt, mapMultiArgs["-uacomment"])
