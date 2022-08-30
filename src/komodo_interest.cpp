@@ -13,6 +13,8 @@
  *                                                                            *
  ******************************************************************************/
 #include "komodo_interest.h"
+#include "script/script.h"
+#include "coins.h"
 
 uint64_t _komodo_interestnew(int32_t txheight,uint64_t nValue,uint32_t nLockTime,uint32_t tiptime)
 {

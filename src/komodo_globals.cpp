@@ -13,6 +13,7 @@
  *                                                                            *
  ******************************************************************************/
 #include "komodo_globals.h"
+#include "amount.h"
 
 int32_t komodo_baseid(char *origbase)
 {

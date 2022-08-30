@@ -24,10 +24,12 @@
 class CChainPower;
 
 #include "arith_uint256.h"
+#include "komodo_defs.h"
 #include "primitives/block.h"
 #include "pow.h"
 #include "tinyformat.h"
 #include "uint256.h"
+
 
 #include <vector>
 
@@ -39,8 +41,6 @@ extern int32_t ASSETCHAINS_LWMAPOS;
 extern char ASSETCHAINS_SYMBOL[65];
 extern uint64_t ASSETCHAINS_NOTARY_PAY[];
 extern int32_t ASSETCHAINS_STAKED;
-extern const uint32_t nStakedDecemberHardforkTimestamp; //December 2019 hardfork
-extern const int32_t nDecemberHardforkHeight;   //December 2019 hardfork
 extern int8_t is_STAKED(const char *chain_name);
 
 struct CDiskBlockPos

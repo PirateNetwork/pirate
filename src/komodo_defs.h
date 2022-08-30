@@ -16,8 +16,9 @@
 #ifndef KOMODO_DEFS_H
 #define KOMODO_DEFS_H
 #include "arith_uint256.h"
-#include "chain.h"
 #include "komodo_nk.h"
+#include <map>
+#include "uint256.h"
 
 #define KOMODO_EARLYTXID_HEIGHT 100
 //#define ADAPTIVEPOW_CHANGETO_DEFAULTON 1572480000
@@ -51,17 +52,17 @@
 #define NUM_KMD_SEASONS 7
 #define NUM_KMD_NOTARIES 64
 
-extern const uint32_t nStakedDecemberHardforkTimestamp; //December 2019 hardfork
-extern const int32_t nDecemberHardforkHeight;   //December 2019 hardfork
+#define nStakedDecemberHardforkTimestamp 1576840000   //December 2019 hardfork 12/20/2019 @ 11:06am (UTC)
+#define nDecemberHardforkHeight 1670000   //December 2019 hardfork
 
-extern const uint32_t nS4Timestamp; //dPoW Season 4 2020 hardfork
-extern const int32_t nS4HardforkHeight;   //dPoW Season 4 2020 hardfork
+#define nS4Timestamp 1592146800    //dPoW Season 4 2020 hardfork 
+#define nS4HardforkHeight 1922000  //dPoW Season 4 2020 hardfork Sunday, June 14th, 2020
 
-extern const uint32_t nS5Timestamp; //dPoW Season 5 June 14th, 2021 hardfork (03:00:00 PM UTC) (defined in komodo_globals.h)
-extern const int32_t nS5HardforkHeight;   //dPoW Season 5 June 14th, 2021 hardfork estimated block height (defined in komodo_globals.h)
+#define nS5Timestamp 1623682800    //dPoW Season 5 Monday, June 14th, 2021 (03:00:00 PM UTC)
+#define nS5HardforkHeight 2437300  //dPoW Season 5 Monday, June 14th, 2021
 
-extern const uint32_t nS6Timestamp; // dPoW Season 6 Fri Jun 24 2022 13:37:33 GMT+0000
-extern const int32_t nS6HardforkHeight; // estimated June 24 2022
+#define nS6Timestamp 1656077853    // dPoW Season 6 Fri Jun 24 2022 13:37:33 GMT+0000
+#define nS6HardforkHeight 2963330  // estimated June 24 2022
 
 static const uint32_t KMD_SEASON_TIMESTAMPS[NUM_KMD_SEASONS] = {1525132800, 1563148800, nStakedDecemberHardforkTimestamp, nS4Timestamp, nS5Timestamp, nS6Timestamp, 1751328000};
 static const int32_t KMD_SEASON_HEIGHTS[NUM_KMD_SEASONS] = {814000, 1444000, nDecemberHardforkHeight, nS4HardforkHeight, nS5HardforkHeight, nS6HardforkHeight, 7113400};
@@ -639,13 +640,9 @@ int32_t komodo_newStakerActive(int32_t height, uint32_t timestamp);
 
 uint256 Parseuint256(const char *hexstr);
 void komodo_sendmessage(int32_t minpeers, int32_t maxpeers, const char *message, std::vector<uint8_t> payload);
-CBlockIndex *komodo_getblockindex(uint256 hash);
 int32_t komodo_nextheight();
-CBlockIndex *komodo_blockindex(uint256 hash);
-CBlockIndex *komodo_chainactive(int32_t height);
 int32_t komodo_blockheight(uint256 hash);
 bool komodo_txnotarizedconfirmed(uint256 txid);
-int32_t komodo_blockload(CBlock& block, CBlockIndex *pindex);
 uint32_t komodo_chainactive_timestamp();
 uint32_t GetLatestTimestamp(int32_t height);
 

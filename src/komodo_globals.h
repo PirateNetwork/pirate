@@ -16,6 +16,7 @@
 #include <mutex>
 #include "komodo_defs.h"
 #include "komodo_structs.h"
+#include "script/script.h" //for CScript
 
 void komodo_prefetch(FILE *fp);
 uint32_t komodo_heightstamp(int32_t height);
@@ -41,17 +42,6 @@ int32_t NUM_PRICES; uint32_t *PVALS;
 struct knotaries_entry *Pubkeys;
 
 struct komodo_state KOMODO_STATES[34];
-const uint32_t nStakedDecemberHardforkTimestamp = 1576840000; //December 2019 hardfork 12/20/2019 @ 11:06am (UTC)
-const int32_t nDecemberHardforkHeight = 1670000;   //December 2019 hardfork
-
-const uint32_t nS4Timestamp = 1592146800; //dPoW Season 4 2020 hardfork Sunday, June 14th, 2020 03:00:00 PM UTC
-const int32_t nS4HardforkHeight = 1922000;   //dPoW Season 4 2020 hardfork Sunday, June 14th, 2020
-
-const uint32_t nS5Timestamp = 1623682800;  //dPoW Season 5 Monday, June 14th, 2021 (03:00:00 PM UTC)
-const int32_t nS5HardforkHeight = 2437300;  //dPoW Season 5 Monday, June 14th, 2021
-
-const uint32_t nS6Timestamp = 1656077853;  // dPoW Season 6 Fri Jun 24 2022 13:37:33 GMT+0000
-const int32_t nS6HardforkHeight = 2963330; // estimated June 24 2022
 
 #define _COINBASE_MATURITY 100
 int COINBASE_MATURITY = _COINBASE_MATURITY;//100;

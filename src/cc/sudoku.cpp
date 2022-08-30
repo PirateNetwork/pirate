@@ -214,6 +214,8 @@
 #define PUZZLE_DIM (PUZZLE_ORDER*PUZZLE_ORDER)
 #define PUZZLE_CELLS (PUZZLE_DIM*PUZZLE_DIM)
 
+CBlockIndex *komodo_blockindex(uint256 hash);
+
 /* Command line options */
 #ifdef EXPLAIN
 #define OPTIONS "?1acdef:Ggmno:p:r:s"
@@ -226,6 +228,7 @@ extern int optind, opterr, optopt;
 static char *myname;    /* Name that we were invoked under */
 
 static FILE *solnfile, *rejects;
+
 
 /* This is the list of cell coordinates specified on a row basis */
 

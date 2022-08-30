@@ -26,6 +26,9 @@
 #else
     #define MIN_NON_NOTARIZED_CONFIRMS 101
 #endif // TESTMODE
+CBlockIndex *komodo_blockindex(uint256 hash);
+CBlockIndex *komodo_getblockindex(uint256 hash);
+
 int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
 struct komodo_state *komodo_stateptr(char *symbol,char *dest);
 extern uint32_t KOMODO_DPOWCONFS;

@@ -15,6 +15,7 @@
 #include "komodo_structs.h"
 #include "mem_read.h"
 #include <mutex>
+#include <iostream>
 
 extern std::mutex komodo_mutex;
 

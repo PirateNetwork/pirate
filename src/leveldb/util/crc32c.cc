@@ -6,7 +6,6 @@
 // four bytes at a time.
 
 #include "util/crc32c.h"
-
 #include <stdint.h>
 
 #include "port/port.h"
@@ -288,6 +287,7 @@ static inline uint32_t LE_LOAD32(const uint8_t *p) {
 // Determine if the CPU running this program can accelerate the CRC32C
 // calculation.
 static bool CanAccelerateCRC32C() {
+/*
   if (!port::HasAcceleratedCRC32C())
     return false;
 
@@ -298,6 +298,8 @@ static bool CanAccelerateCRC32C() {
   static const uint32_t kTestCRCValue = 0xdcbc59fa;
 
   return port::AcceleratedCRC32C(0, kTestCRCBuffer, kBufSize) == kTestCRCValue;
+*/
+  return false;  
 }
 
 uint32_t Extend(uint32_t crc, const char* buf, size_t size) {

@@ -16,6 +16,7 @@
 #include "komodo_extern_globals.h"
 #include "komodo_utils.h" // OS_milliseconds
 #include "komodo_notary.h" // komodo_chosennotary()
+#include "komodo_defs.h" // for nStakedDecemberHardforkTimestamp
 
 /************************************************************************
  *

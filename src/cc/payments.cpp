@@ -15,6 +15,8 @@
 #include "hex.h"
 #include "CCPayments.h"
 
+CBlockIndex *komodo_blockindex(uint256 hash);
+
 /* 
  0) txidopret <- allocation, scriptPubKey, opret
  1) create <-  locked_blocks, minrelease, list of txidopret

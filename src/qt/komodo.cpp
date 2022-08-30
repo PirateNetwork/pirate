@@ -8,6 +8,7 @@
 
 #include "pirateoceangui.h"
 #include "komodo_defs.h"
+#include "pow.h"  //for CBlockIndex
 
 #define KOMODO_ASSETCHAIN_MAXLEN 65
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
@@ -18,6 +19,7 @@ void komodo_cbopretupdate(int32_t forceflag);
 CBlockIndex *komodo_chainactive(int32_t height);
 
 //#include "chainparams.h"
+#include "chain.h"
 #include "clientmodel.h"
 #include "fs.h"
 #include "guiconstants.h"
