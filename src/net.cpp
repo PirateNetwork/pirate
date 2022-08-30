@@ -2294,6 +2294,22 @@ void static Discover(boost::thread_group& threadGroup)
 #endif
 }
 
+void LoadPeers() {
+      uiInterface.InitMessage(_("Loading addresses..."));
+      // Load addresses for peers.dat
+      int64_t nStart = GetTimeMillis();
+      {
+          CAddrDB adb;
+          if (!adb.Read(addrman)) {
+              addrman.Clear();
+              LogPrintf("Invalid or missing peers.dat; recreating\n");
+          }
+      }
+      LogPrintf("Loaded %i addresses from peers.dat  %dms\n",
+             addrman.size(), GetTimeMillis() - nStart);
+      fAddressesInitialized = true;
+}
+
 void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
 {
 
@@ -2307,20 +2323,6 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
         m_i2p_sam_session = std::unique_ptr<i2p::sam::Session>(new i2p::sam::Session(GetDataDir() / "i2p_private_key",
                                                                 i2p_sam.proxy));
     }
-
-    uiInterface.InitMessage(_("Loading addresses..."));
-    // Load addresses for peers.dat
-    int64_t nStart = GetTimeMillis();
-    {
-        CAddrDB adb;
-        if (!adb.Read(addrman)) {
-            addrman.Clear();
-            LogPrintf("Invalid or missing peers.dat; recreating\n");
-        }
-    }
-    LogPrintf("Loaded %i addresses from peers.dat  %dms\n",
-           addrman.size(), GetTimeMillis() - nStart);
-    fAddressesInitialized = true;
 
     if (semOutbound == NULL) {
         // initialize semaphore
