@@ -2284,7 +2284,7 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
     block_from_future_rejecttime = (uint32_t)GetTime() + ASSETCHAINS_STAKED_BLOCK_FUTURE_MAX;    
     for (i=winners=0; i<array.size(); i++)
     {
-        if ( fRequestShutdown || !GetBoolArg("-gen",false) )
+        if ( ShutdownRequested() || !GetBoolArg("-gen",false) )
             return(0);
         {
             LOCK(cs_main);

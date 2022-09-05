@@ -1703,7 +1703,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         SetRPCWarmupFinished();
         uiInterface.InitMessage(_("Done loading"));
         pwalletMain = new CWallet("tmptmp.wallet");
-        return !fRequestShutdown;
+        return !ShutdownRequested();
     }
     // ********************************************************* Step 7: load block chain
 
@@ -2051,12 +2051,13 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         }
         if (tip == nullptr) {
             LogPrintf("Waiting for genesis block to be imported...\n");
-            while (!fRequestShutdown && tip == nullptr)
+            while (!ShutdownRequested() && tip == nullptr)
             {
                 MilliSleep(10);
                 LOCK(cs_main);
                 tip = chainActive.Tip();
             }
+            if (ShutdownRequested()) return false;
         }
     }
 
@@ -2122,5 +2123,5 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     // SENDALERT
     threadGroup.create_thread(boost::bind(ThreadSendAlert));
 
-    return !fRequestShutdown;
+    return !ShutdownRequested();
 }
