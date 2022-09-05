@@ -26,7 +26,7 @@ uint256 fill_hash(uint8_t val)
 void write_p_record(std::FILE* fp)
 {
     // a pubkey record with 2 keys
-    char data[5+1+(33*2)] = {'P', 10, 0, 0, 0, 2}; // public key record identifier with height of 1 plus number of keys plus keys themselves
+    char data[5+1+(33*2)] = {'P', 10, 0, 0, 0, 2}; // public key record identifier with height of 10 plus number of keys plus keys themselves
     memset(&data[6], 1, 33); // 1st key is all 1s
     memset(&data[39], 2, 33); // 2nd key is all 2s
     std::fwrite(data, sizeof(data), 1, fp);
@@ -278,9 +278,10 @@ bool compare_files(const std::string& file1, const std::string& file2)
 void clear_state(const char* symbol)
 {
     komodo_state* state = komodo_stateptrget((char*)symbol);
-    EXPECT_NE(state, nullptr);
+    ASSERT_TRUE(state != nullptr);
     state->events.clear();
 }
+
 /****
  * The main purpose of this test is to verify that
  * state files created continue to be readable despite logic
@@ -296,7 +297,7 @@ TEST(test_events, komodo_faststateinit_test)
 
     clear_state(symbol);
 
-    boost::filesystem::path temp = boost::filesystem::unique_path();
+    boost::filesystem::path temp = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
     boost::filesystem::create_directories(temp);
     try
     {
@@ -308,14 +309,14 @@ TEST(test_events, komodo_faststateinit_test)
             // create a binary file that should be readable by komodo
             const std::string full_filename = (temp / "kstate.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_p_record(fp);
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state != nullptr);
             char* dest = nullptr;
             // attempt to read the file
             int32_t result = komodo_faststateinit( state, full_filename.c_str(), symbol, dest);
@@ -328,6 +329,7 @@ TEST(test_events, komodo_faststateinit_test)
             EXPECT_EQ(ev1->height, 1);
             EXPECT_EQ(ev1->type, 'P');
             */
+            ASSERT_TRUE(state->events.size() != 0); // prevent test crash
             // check that the new way is the same
             EXPECT_EQ(state->events.size(), 1);
             komodo::event_pubkeys& ev2 = 
@@ -341,14 +343,14 @@ TEST(test_events, komodo_faststateinit_test)
         {
             const std::string full_filename = (temp / "notarized.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_n_record(fp);
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state != nullptr);
             char* dest = (char*)"123456789012345";
             // attempt to read the file
             int32_t result = komodo_faststateinit( state, full_filename.c_str(), symbol, dest);
@@ -360,6 +362,7 @@ TEST(test_events, komodo_faststateinit_test)
             EXPECT_EQ(ev->height, 1);
             EXPECT_EQ(ev->type, 'N');
             */
+            ASSERT_TRUE(state->events.size() != 0); // prevent test crash
             // check that the new way is the same
             EXPECT_EQ(state->events.size(), 2);
             komodo::event_notarized& ev2 = 
@@ -373,14 +376,14 @@ TEST(test_events, komodo_faststateinit_test)
         {
             const std::string full_filename = (temp / "notarized.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_m_record_new(fp); // write_m_record(fp); (test writing too)
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state != nullptr);
             char* dest = (char*)"123456789012345";
             // attempt to read the file
             int32_t result = komodo_faststateinit(state, full_filename.c_str(), symbol, dest);
@@ -392,8 +395,10 @@ TEST(test_events, komodo_faststateinit_test)
             EXPECT_EQ(ev->height, 1);
             EXPECT_EQ(ev->type, 'N'); // code converts "M" to "N"
             */
+            ASSERT_TRUE(state->events.size() != 0); // prevent test crash
             // check that the new way is the same
             EXPECT_EQ(state->events.size(), 3);
+
             auto itr = state->events.begin();
             std::advance(itr, 2);
             komodo::event_notarized& ev2 = static_cast<komodo::event_notarized&>( *(*(itr)) );
@@ -406,14 +411,14 @@ TEST(test_events, komodo_faststateinit_test)
         {
             const std::string full_filename = (temp / "type_u.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_u_record(fp);
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state != nullptr);
             char* dest = (char*)"123456789012345";
             // attempt to read the file
             int32_t result = komodo_faststateinit(state, full_filename.c_str(), symbol, dest);
@@ -422,6 +427,7 @@ TEST(test_events, komodo_faststateinit_test)
             /* old way
             EXPECT_EQ(state->Komodo_numevents, 3); // does not get added to state
             */
+            ASSERT_TRUE(state->events.size() != 0); // prevent test crash
             // check that the new way is the same
             EXPECT_EQ(state->events.size(), 3);
             auto itr = state->events.begin();
@@ -439,14 +445,14 @@ TEST(test_events, komodo_faststateinit_test)
         {
             const std::string full_filename = (temp / "kmdtype.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_k_record(fp);
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state != nullptr);
             char* dest = (char*)"123456789012345";
             // attempt to read the file
             int32_t result = komodo_faststateinit(state, full_filename.c_str(), symbol, dest);
@@ -458,6 +464,7 @@ TEST(test_events, komodo_faststateinit_test)
             EXPECT_EQ(ev->height, 1);
             EXPECT_EQ(ev->type, 'K');            
             */
+            ASSERT_TRUE(state->events.size() != 0); // prevent test crash
             // check that the new way is the same
             EXPECT_EQ(state->events.size(), 4);
             auto itr = state->events.begin();
@@ -472,14 +479,14 @@ TEST(test_events, komodo_faststateinit_test)
         {
             const std::string full_filename = (temp / "kmdtypet.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_t_record(fp);
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state != nullptr);
             char* dest = (char*)"123456789012345";
             // attempt to read the file
             int32_t result = komodo_faststateinit(state, full_filename.c_str(), symbol, dest);
@@ -491,6 +498,7 @@ TEST(test_events, komodo_faststateinit_test)
             EXPECT_EQ(ev->height, 1);
             EXPECT_EQ(ev->type, 'K'); // changed from T to K
             */
+            ASSERT_TRUE(state->events.size() != 0); // prevent test crash
             // check that the new way is the same
             EXPECT_EQ(state->events.size(), 5);
             auto itr = state->events.begin();
@@ -505,14 +513,14 @@ TEST(test_events, komodo_faststateinit_test)
         {
             const std::string full_filename = (temp / "kmdtypet.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_r_record(fp);
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state !=nullptr);
             char* dest = (char*)"123456789012345";
             // attempt to read the file
             int32_t result = komodo_faststateinit(state, full_filename.c_str(), symbol, dest);
@@ -524,6 +532,7 @@ TEST(test_events, komodo_faststateinit_test)
             EXPECT_EQ(ev->height, 1);
             EXPECT_EQ(ev->type, 'R');
             */
+            ASSERT_TRUE(state->events.size() != 0); // prevent test crash
             // check that the new way is the same
             EXPECT_EQ(state->events.size(), 6);
             auto itr = state->events.begin();
@@ -538,14 +547,14 @@ TEST(test_events, komodo_faststateinit_test)
         {
             const std::string full_filename = (temp / "kmdtypet.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_v_record(fp);
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state != nullptr);
             char* dest = (char*)"123456789012345";
             // attempt to read the file
             int32_t result = komodo_faststateinit(state, full_filename.c_str(), symbol, dest);
@@ -557,6 +566,7 @@ TEST(test_events, komodo_faststateinit_test)
             EXPECT_EQ(ev->height, 1);
             EXPECT_EQ(ev->type, 'V');
             */
+            ASSERT_TRUE(state->events.size() != 0); // prevent test crash
             // check that the new way is the same
             EXPECT_EQ(state->events.size(), 7);
             auto itr = state->events.begin();
@@ -571,14 +581,14 @@ TEST(test_events, komodo_faststateinit_test)
         {
             const std::string full_filename = (temp / "kmdtypeb.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_b_record(fp);
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state != nullptr);
             char* dest = (char*)"123456789012345";
             // attempt to read the file
             // NOTE: B records are not read in. Unsure if this is on purpose or an oversight
@@ -591,6 +601,7 @@ TEST(test_events, komodo_faststateinit_test)
             EXPECT_EQ(ev->height, 1);
             EXPECT_EQ(ev->type, 'B');
             */
+            ASSERT_TRUE(state->events.size() != 0); // prevent test crash
             // check that the new way is the same
             EXPECT_EQ(state->events.size(), 7);
             /*
@@ -608,7 +619,7 @@ TEST(test_events, komodo_faststateinit_test)
         {
             const std::string full_filename = (temp / "combined_state.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_p_record(fp);
             write_n_record(fp);
             write_m_record(fp);
@@ -620,7 +631,7 @@ TEST(test_events, komodo_faststateinit_test)
             std::fclose(fp);
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state != nullptr);
             char* dest = (char*)"123456789012345";
             // attempt to read the file
             int32_t result = komodo_faststateinit( state, full_filename.c_str(), symbol, dest);
@@ -632,6 +643,8 @@ TEST(test_events, komodo_faststateinit_test)
             EXPECT_EQ(ev1->height, 1);
             EXPECT_EQ(ev1->type, 'P');
             */
+            ASSERT_TRUE(state->events.size() != 0); // prevent test crash
+
             // check that the new way is the same
             EXPECT_EQ(state->events.size(), 14);
             auto itr = state->events.begin();
@@ -691,9 +704,7 @@ TEST(test_events, komodo_faststateinit_test_kmd)
 
     clear_state(symbol);
 
-    clear_state(symbol);
-
-    boost::filesystem::path temp = boost::filesystem::unique_path();
+    boost::filesystem::path temp = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
     boost::filesystem::create_directories(temp);
     try
     {
@@ -705,14 +716,14 @@ TEST(test_events, komodo_faststateinit_test_kmd)
             // create a binary file that should be readable by komodo
             const std::string full_filename = (temp / "kstate.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_p_record(fp);
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state != nullptr);
             char* dest = nullptr;
             // attempt to read the file
             int32_t result = komodo_faststateinit( state, full_filename.c_str(), symbol, dest);
@@ -724,14 +735,14 @@ TEST(test_events, komodo_faststateinit_test_kmd)
         {
             const std::string full_filename = (temp / "notarized.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_n_record(fp);
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state != nullptr);
             char* dest = (char*)"123456789012345";
             // attempt to read the file
             int32_t result = komodo_faststateinit( state, full_filename.c_str(), symbol, dest);
@@ -743,14 +754,14 @@ TEST(test_events, komodo_faststateinit_test_kmd)
         {
             const std::string full_filename = (temp / "notarized.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_m_record(fp);
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state != nullptr);
             char* dest = (char*)"123456789012345";
             // attempt to read the file
             int32_t result = komodo_faststateinit(state, full_filename.c_str(), symbol, dest);
@@ -762,14 +773,14 @@ TEST(test_events, komodo_faststateinit_test_kmd)
         {
             const std::string full_filename = (temp / "type_u.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_u_record(fp);
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state != nullptr);
             char* dest = (char*)"123456789012345";
             // attempt to read the file
             int32_t result = komodo_faststateinit(state, full_filename.c_str(), symbol, dest);
@@ -781,14 +792,14 @@ TEST(test_events, komodo_faststateinit_test_kmd)
         {
             const std::string full_filename = (temp / "kmdtype.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_k_record(fp);
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state != nullptr);
             char* dest = (char*)"123456789012345";
             // attempt to read the file
             int32_t result = komodo_faststateinit(state, full_filename.c_str(), symbol, dest);
@@ -800,14 +811,14 @@ TEST(test_events, komodo_faststateinit_test_kmd)
         {
             const std::string full_filename = (temp / "kmdtypet.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_t_record(fp);
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state != nullptr);
             char* dest = (char*)"123456789012345";
             // attempt to read the file
             int32_t result = komodo_faststateinit(state, full_filename.c_str(), symbol, dest);
@@ -819,14 +830,14 @@ TEST(test_events, komodo_faststateinit_test_kmd)
         {
             const std::string full_filename = (temp / "kmdtypet.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_r_record(fp);
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state != nullptr);
             char* dest = (char*)"123456789012345";
             // attempt to read the file
             int32_t result = komodo_faststateinit(state, full_filename.c_str(), symbol, dest);
@@ -838,14 +849,14 @@ TEST(test_events, komodo_faststateinit_test_kmd)
         {
             const std::string full_filename = (temp / "kmdtypet.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_v_record(fp);
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state != nullptr);
             char* dest = (char*)"123456789012345";
             // attempt to read the file
             int32_t result = komodo_faststateinit(state, full_filename.c_str(), symbol, dest);
@@ -857,14 +868,14 @@ TEST(test_events, komodo_faststateinit_test_kmd)
         {
             const std::string full_filename = (temp / "kmdtypeb.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_b_record(fp);
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state != nullptr);
             char* dest = (char*)"123456789012345";
             // attempt to read the file
             // NOTE: B records are not read in. Unsure if this is on purpose or an oversight
@@ -877,7 +888,7 @@ TEST(test_events, komodo_faststateinit_test_kmd)
         {
             const std::string full_filename = (temp / "combined_state.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_p_record(fp);
             write_n_record(fp);
             write_m_record(fp);
@@ -889,7 +900,7 @@ TEST(test_events, komodo_faststateinit_test_kmd)
             std::fclose(fp);
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state != nullptr);
             char* dest = (char*)"123456789012345";
             // attempt to read the file
             int32_t result = komodo_faststateinit( state, full_filename.c_str(), symbol, dest);
@@ -913,7 +924,7 @@ TEST(test_events, write_test) // test from dev branch from S6 season
 
     clear_state(symbol);
 
-    boost::filesystem::path temp = boost::filesystem::unique_path();
+    boost::filesystem::path temp = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
     boost::filesystem::create_directories(temp);
 
     const std::string full_filename = (temp / "kstate.tmp").string();
@@ -923,18 +934,19 @@ TEST(test_events, write_test) // test from dev branch from S6 season
         {
             // old way
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_p_record(fp);
             std::fclose(fp);
             // verify files still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
-            EXPECT_NE(state, nullptr);
+            ASSERT_TRUE(state != nullptr);
             char* dest = nullptr;
             int32_t result = komodo_faststateinit( state, full_filename.c_str(), symbol, dest);
             // compare results
             EXPECT_EQ(result, 1);
+            ASSERT_TRUE(state->events.size() != 0); // prevent test crash
             // check that the new way is the same
             EXPECT_EQ(state->events.size(), 1);
             komodo::event_pubkeys& ev = static_cast<komodo::event_pubkeys&>( *state->events.front() );
@@ -961,7 +973,7 @@ TEST(test_events, write_test_event_fix3)  // same test from jmj_event_fix3
 
     clear_state(symbol);
 
-    boost::filesystem::path temp = boost::filesystem::unique_path();
+    boost::filesystem::path temp = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
     boost::filesystem::create_directories(temp);
 
     const std::string full_filename = (temp / "kstate.tmp").string();
@@ -971,7 +983,7 @@ TEST(test_events, write_test_event_fix3)  // same test from jmj_event_fix3
         {
             // old way
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_b_record(fp);
             write_k_record(fp);
             write_m_record(fp);
@@ -988,7 +1000,7 @@ TEST(test_events, write_test_event_fix3)  // same test from jmj_event_fix3
         {
             // new way
             std::FILE* fp = std::fopen(full_filename2.c_str(), "wb+");
-            EXPECT_NE(fp, nullptr);
+            ASSERT_TRUE(fp != nullptr);
             write_b_record_new(fp);
             write_k_record_new(fp);
             write_m_record_new(fp);
