@@ -81,10 +81,10 @@ std::ostream& operator<<(std::ostream& os, const event& in)
         case(EVENT_NOTARIZED):
         {
             const event_notarized& tmp = static_cast<const event_notarized&>(in);
-            if (tmp.MoMdepth == 0)
-                os << "N";
-            else
+            if (tmp.MoMdepth != 0 && !tmp.MoM.IsNull())
                 os << "M";
+            else
+                os << "N";
             break;
         }
         case(EVENT_U):
@@ -205,7 +205,7 @@ std::ostream& operator<<(std::ostream& os, const event_notarized& in)
     os << serializable<int32_t>(in.notarizedheight);
     os << serializable<uint256>(in.blockhash);
     os << serializable<uint256>(in.desttxid);
-    if (in.MoMdepth > 0)
+    if (in.MoMdepth != 0 && !in.MoM.IsNull())
     {
         os << serializable<uint256>(in.MoM);
         os << serializable<int32_t>(in.MoMdepth);

@@ -958,6 +958,8 @@ bool AttemptDatabaseOpen(size_t nBlockTreeDBCache, bool dbCompression, size_t db
         if (!mapBlockIndex.empty() && mapBlockIndex.count(chainparams.GetConsensus().hashGenesisBlock) == 0)
             throw InvalidGenesisException(_("Incorrect or no genesis block found. Wrong datadir for network?"));
         komodo_init(1);
+        if (ShutdownRequested()) return false;
+        
         // Initialize the block index (no-op if non-empty database was already loaded)
         if (!InitBlockIndex()) {
             strLoadError = _("Error initializing block database");

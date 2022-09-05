@@ -65,6 +65,7 @@ int32_t komodo_parsestatefile(struct komodo_state *sp,FILE *fp,char *symbol,char
             int32_t ht;
             if ( fread(&ht,1,sizeof(ht),fp) != sizeof(ht) )
                 throw komodo::parse_error("Unable to read height from file");
+            std::cerr << "parsestatefile func=" << (char)func << " ";
             if ( func == 'P' )
             {
                 komodo::event_pubkeys pk(fp, ht);
@@ -103,11 +104,17 @@ int32_t komodo_parsestatefile(struct komodo_state *sp,FILE *fp,char *symbol,char
                 komodo::event_pricefeed evt(fp, ht);
                 komodo_eventadd_pricefeed(sp, symbol, ht, evt);
             }
+            else {
+                throw komodo::parse_error("Unable to parse state file: unknown event");
+            }
         } // retrieved the func
     }
     catch(const komodo::parse_error& pe)
     {
         LogPrintf("Error occurred in parsestatefile: %s\n", pe.what());
+        LogPrintf("komodostate file is invalid. Komodod will be stopped. Please remove komodostate and komodostate.ind files and start the daemon");
+        std::cerr << std::endl << " Error in komodostate file: unknown event, exiting. Please remove komodostate and komodostate.ind files and start the daemon" << std::endl << std::endl;
+        StartShutdown();            
         func = -1;
     }
     return func;
@@ -133,6 +140,7 @@ int32_t komodo_parsestatefiledata(struct komodo_state *sp,uint8_t *filedata,long
             int32_t ht;
             if ( mem_read(ht, filedata, fpos, datalen) != sizeof(ht) )
                 throw komodo::parse_error("Unable to parse height from file data");
+            std::cerr << "parsestatefiledata func=" << (char)func << " ";
             if ( func == 'P' )
             {
                 komodo::event_pubkeys pk(filedata, fpos, datalen, ht);
@@ -169,12 +177,18 @@ int32_t komodo_parsestatefiledata(struct komodo_state *sp,uint8_t *filedata,long
                 komodo::event_pricefeed pf(filedata, fpos, datalen, ht);
                 komodo_eventadd_pricefeed(sp, symbol, ht, pf);
             }
+            else {
+                throw komodo::parse_error("Unable to parse file data: unknown event");
+            }
             *fposp = fpos;
         }
     }
     catch( const komodo::parse_error& pe)
     {
         LogPrintf("Unable to parse state file data. Error: %s\n", pe.what());
+        LogPrintf("komodostate file is invalid. Komodod will be stopped. Please remove komodostate and komodostate.ind files and start the daemon");
+        std::cerr << std::endl << " Error in komodostate file: unknown event, exiting. Please remove komodostate and komodostate.ind files and start the daemon" << std::endl << std::endl;
+        StartShutdown();
         func = -1;
     }
     return func;
@@ -214,12 +228,15 @@ void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotar
             {
                 // unable to use faststateinit, so try again only slower
                 fprintf(stderr,"komodo_faststateinit retval.-1\n");
-                while ( komodo_parsestatefile(sp,fp,symbol,dest) >= 0 )
+                while (!ShutdownRequested() && komodo_parsestatefile(sp,fp,symbol,dest) >= 0)
                     ;
             }
         } 
         else 
             fp = fopen(fname,"wb+"); // the state file probably did not exist, create it.
+
+        if (ShutdownRequested()) { fclose(fp); return; }
+        
         KOMODO_INITDONE = (uint32_t)time(NULL);
     }
     if ( height <= 0 )

@@ -474,10 +474,11 @@ bool komodo_faststateinit(komodo_state *sp,const char *fname,char *symbol,char *
 
         fprintf(stderr,"processing %s %ldKB, validated.%d\n",fname,datalen/1024,-1);
         int32_t func;
-        while ( (func= komodo_parsestatefiledata(sp,filedata,&fpos,datalen,symbol,dest)) >= 0 )
+        while (!ShutdownRequested() && (func= komodo_parsestatefiledata(sp,filedata,&fpos,datalen,symbol,dest)) >= 0)
         {
             lastfpos = komodo_indfile_update(indfp,&prevpos100,lastfpos,fpos,func,&indcounter);
         }
+        if (ShutdownRequested()) { fclose(indfp); return false; }
         if ( indfp != nullptr )
         {
             fclose(indfp);
