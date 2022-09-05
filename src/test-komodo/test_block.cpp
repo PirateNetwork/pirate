@@ -104,6 +104,7 @@ TEST(test_block, TestSpendInSameBlock)
     EXPECT_EQ( alice->GetBalance() + alice->GetUnconfirmedBalance() + alice->GetImmatureBalance(), CAmount(45000));
 }
 
+// Note: long delays during this test occur in reservekey.GetReservedKey(vchPubKey) call 
 TEST(test_block, TestDoubleSpendInSameBlock)
 {
     TestChain chain;
