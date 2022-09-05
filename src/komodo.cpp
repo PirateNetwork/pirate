@@ -103,6 +103,9 @@ int32_t komodo_parsestatefile(struct komodo_state *sp,FILE *fp,char *symbol,char
                 komodo::event_pricefeed evt(fp, ht);
                 komodo_eventadd_pricefeed(sp, symbol, ht, evt);
             }
+            else if ( func == 'B' ) {
+                // can be written but not processed on read
+            }
             else {
                 throw komodo::parse_error("Unable to parse state file: unknown event");
             }
@@ -112,7 +115,7 @@ int32_t komodo_parsestatefile(struct komodo_state *sp,FILE *fp,char *symbol,char
     {
         LogPrintf("Error occurred in parsestatefile: %s\n", pe.what());
         LogPrintf("komodostate file is invalid. Komodod will be stopped. Please remove komodostate and komodostate.ind files and start the daemon");
-        std::cerr << std::endl << " Error in komodostate file: unknown event, exiting. Please remove komodostate and komodostate.ind files and start the daemon" << std::endl << std::endl;
+        std::cerr << std::endl << " Error in komodostate file: unknown event " << (char)func << ", exiting. Please remove komodostate and komodostate.ind files and start the daemon" << std::endl << std::endl;
         StartShutdown();            
         func = -1;
     }
@@ -175,6 +178,9 @@ int32_t komodo_parsestatefiledata(struct komodo_state *sp,uint8_t *filedata,long
                 komodo::event_pricefeed pf(filedata, fpos, datalen, ht);
                 komodo_eventadd_pricefeed(sp, symbol, ht, pf);
             }
+            else if ( func == 'B' ) {
+                // can be written but not processed on read
+            }
             else {
                 throw komodo::parse_error("Unable to parse file data: unknown event");
             }
@@ -185,7 +191,7 @@ int32_t komodo_parsestatefiledata(struct komodo_state *sp,uint8_t *filedata,long
     {
         LogPrintf("Unable to parse state file data. Error: %s\n", pe.what());
         LogPrintf("komodostate file is invalid. Komodod will be stopped. Please remove komodostate and komodostate.ind files and start the daemon");
-        std::cerr << std::endl << " Error in komodostate file: unknown event, exiting. Please remove komodostate and komodostate.ind files and start the daemon" << std::endl << std::endl;
+        std::cerr << std::endl << " Error in komodostate file: unknown event " << (char)func << ", exiting. Please remove komodostate and komodostate.ind files and start the daemon" << std::endl << std::endl;
         StartShutdown();
         func = -1;
     }
