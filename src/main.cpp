@@ -93,11 +93,7 @@ CCriticalSection cs_main;
 int32_t KOMODO_NEWBLOCKS;
 
 BlockMap mapBlockIndex;
-#ifdef DEBUG_LOCKORDER
-MultithreadedCChain<CCriticalSection> chainActive(cs_main);
-#else
 CChain chainActive;
-#endif
 CBlockIndex *pindexBestHeader = NULL;
 static int64_t nTimeBestReceived = 0;
 CWaitableCriticalSection csBestBlock;

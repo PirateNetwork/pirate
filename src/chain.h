@@ -33,9 +33,7 @@
 
 #include <boost/foreach.hpp>
 
-#ifdef __clang__
 extern CCriticalSection cs_main;
-#endif
 
 static const int SPROUT_VALUE_VERSION = 1001400;
 static const int SAPLING_VALUE_VERSION = 1010100;
@@ -501,32 +499,38 @@ protected:
 public:
     /** Returns the index entry for the genesis block of this chain, or NULL if none. */
     virtual CBlockIndex *Genesis() const REQUIRES(cs_main) {
+        AssertLockHeld(cs_main);
         return vChain.size() > 0 ? vChain[0] : NULL;
     }
 
     /** Returns the index entry for the tip of this chain, or NULL if none. */
     virtual CBlockIndex *Tip() const REQUIRES(cs_main) {
+        AssertLockHeld(cs_main);
         return vChain.size() > 0 ? vChain[vChain.size() - 1] : nullptr;
     }
     
     /** Returns the index entry at a particular height in this chain, or NULL if no such height exists. */
     virtual CBlockIndex *operator[](int nHeight) const REQUIRES(cs_main) {
+        AssertLockHeld(cs_main);
         return at(nHeight);
     }
 
     /** Compare two chains efficiently. */
     friend bool operator==(const CChain &a, const CChain &b) REQUIRES(cs_main) {
+        AssertLockHeld(cs_main);
         return a.Height() == b.Height() &&
                a.Tip() == b.Tip();
     }
 
     /** Efficiently check whether a block is present in this chain. */
     virtual bool Contains(const CBlockIndex *pindex) const REQUIRES(cs_main) {
+        AssertLockHeld(cs_main);
         return (*this)[pindex->nHeight] == pindex;
     }
 
     /** Find the successor of a block in this chain, or NULL if the given index is not found or is the tip. */
     virtual CBlockIndex *Next(const CBlockIndex *pindex) const REQUIRES(cs_main) {
+        AssertLockHeld(cs_main);
         if (Contains(pindex))
             return (*this)[pindex->nHeight + 1];
         else
@@ -535,6 +539,7 @@ public:
 
     /** Return the maximal height in the chain. Is equal to chain.Tip() ? chain.Tip()->nHeight : -1. */
     virtual int Height() const REQUIRES(cs_main) {
+        AssertLockHeld(cs_main);
         return vChain.size() - 1;
     }
 
@@ -547,36 +552,5 @@ public:
     /** Find the last common block between this chain and a block index entry. */
     virtual const CBlockIndex *FindFork(const CBlockIndex *pindex) const REQUIRES(cs_main);
 };
-
-#ifdef DEBUG_LOCKORDER
-/************
- * A mutex-protected version of CChain
- * Probably good for verifying locking, but no effort
- * was made to examine efficiency
- */
-template<class Mutex>
-class MultithreadedCChain : public CChain
-{
-public:
-    MultithreadedCChain(Mutex &mutex) : CChain(), mutex(mutex) {}
-    CBlockIndex *Genesis() const override { AssertLockHeld(mutex); return CChain::Genesis(); }
-    CBlockIndex *Tip() const override { AssertLockHeld(mutex); return CChain::Tip(); }
-    CBlockIndex *operator[](int height) const override { AssertLockHeld(mutex); return at(height); }
-    friend bool operator==(const MultithreadedCChain &a, const MultithreadedCChain &b) { 
-        return a.size() == b.size() 
-                && a.Tip() == b.Tip();
-    }
-    bool Contains(const CBlockIndex *pindex) const override { AssertLockHeld(mutex); return CChain::Contains(pindex); }
-    CBlockIndex *Next(const CBlockIndex *pindex) const override { AssertLockHeld(mutex); return CChain::Next(pindex); }
-    int Height() const override { AssertLockHeld(mutex); return CChain::Height(); }
-    void SetTip(CBlockIndex *pindex) override { AssertLockHeld(mutex); CChain::SetTip(pindex); }
-    CBlockLocator GetLocator(const CBlockIndex *pindex = nullptr) const override { AssertLockHeld(mutex); return CChain::GetLocator(pindex); }
-    const CBlockIndex *FindFork(const CBlockIndex *pindex) const override { AssertLockHeld(mutex); return CChain::FindFork(pindex); }
-private:
-    size_t size() { AssertLockHeld(mutex); return vChain.size(); }
-        
-    Mutex &mutex;
-};
-#endif
 
 #endif // BITCOIN_CHAIN_H

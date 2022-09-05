@@ -30,6 +30,7 @@ using namespace std;
  * CChain implementation
  */
 void CChain::SetTip(CBlockIndex *pindex) {
+    AssertLockHeld(cs_main);
     if (pindex == NULL) {
         vChain.clear();
         return;
@@ -42,6 +43,7 @@ void CChain::SetTip(CBlockIndex *pindex) {
 }
 
 CBlockLocator CChain::GetLocator(const CBlockIndex *pindex) const {
+    AssertLockHeld(cs_main);
     int nStep = 1;
     std::vector<uint256> vHave;
     vHave.reserve(32);
@@ -70,6 +72,7 @@ CBlockLocator CChain::GetLocator(const CBlockIndex *pindex) const {
 }
 
 const CBlockIndex *CChain::FindFork(const CBlockIndex *pindex) const {
+    AssertLockHeld(cs_main);
     if ( pindex == 0 )
         return(0);
     if (pindex->nHeight > Height())
