@@ -222,7 +222,6 @@ public:
     void SetMiningRequiresPeers(bool flag) { fMiningRequiresPeers = flag; }
     uint32_t CoinbaseMaturity() const { return coinbaseMaturity; }
     void SetCoinbaseMaturity(uint32_t in) const { coinbaseMaturity = in; }
-    void ResetCoinbaseMaturity() const { coinbaseMaturity = originalCoinbaseMaturity; }
 
     CMessageHeader::MessageStartChars pchMessageStart; // message header start bytes
     Consensus::Params consensus; // parameters that influence consensus
@@ -252,8 +251,7 @@ protected:
     bool fTestnetToBeDeprecatedFieldRPC = false;
     CCheckpointData checkpointData;
     std::vector<std::string> vFoundersRewardAddress;
-    mutable uint32_t coinbaseMaturity = 100;
-    uint32_t originalCoinbaseMaturity = 100;
+    mutable uint32_t coinbaseMaturity = 100; // allow to modify by -ac_cbmaturity
     std::vector< std::pair<std::string, std::string> > genesisNotaries;
 };
 

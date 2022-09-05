@@ -4877,8 +4877,6 @@ int CMerkleTx::GetDepthInMainChain(const CBlockIndex* &pindexRet) const
 
 int CMerkleTx::GetBlocksToMaturity() const
 {
-    if ( chainName.isKMD() )
-        Params().ResetCoinbaseMaturity();
     if (!IsCoinBase())
         return 0;
     int32_t depth = GetDepthInMainChain();

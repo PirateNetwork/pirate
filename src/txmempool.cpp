@@ -395,9 +395,6 @@ void CTxMemPool::remove(const CTransaction &origTx, std::list<CTransaction>& rem
 
 void CTxMemPool::removeForReorg(const CCoinsViewCache *pcoins, unsigned int nMemPoolHeight, int flags)
 {
-    // Remove transactions spending a coinbase which are now immature
-    if ( chainName.isKMD() )
-        Params().ResetCoinbaseMaturity();
     // Remove transactions spending a coinbase which are now immature and no-longer-final transactions
     LOCK(cs);
     list<CTransaction> transactionsToRemove;
