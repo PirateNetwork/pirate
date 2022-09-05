@@ -207,16 +207,26 @@ TEST(TestEvalNotarisation, testInvalidNotarisationInputNotCheckSig)
     ASSERT_FALSE(eval.GetNotarisationData(notary.GetHash(), data));
 }
 
+static void write_t_record_new(std::FILE* fp)
+{
+    komodo::event_kmdheight evt(10);
+    evt.kheight = 0x01010101;
+    evt.timestamp = 0x02020202;
+    write_event(evt, fp);
+}
+
 TEST(TestEvalNotarisation, test_komodo_notarysinit)
 {
     // make an empty komodostate file
     boost::filesystem::path temp_path = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
     boost::filesystem::create_directories(temp_path);
+
     mapArgs["-datadir"] = temp_path.string();
     {
         boost::filesystem::path file = temp_path / "komodostate";
-        std::ofstream komodostate(file.string());
-        komodostate << "0" << std::endl;
+        std::FILE* fp = std::fopen(file.string().c_str(), "wb+");
+        write_t_record_new(fp); // write some record to init komodostate for reading in komodo_init()
+        fclose(fp);
     }
     // now we can get to testing. Load up the notaries from genesis
     EXPECT_EQ(Pubkeys, nullptr);
@@ -308,8 +318,9 @@ TEST(TestEvalNotarisation, test_komodo_notaries)
     mapArgs["-datadir"] = temp_path.string();
     {
         boost::filesystem::path file = temp_path / "komodostate";
-        std::ofstream komodostate(file.string());
-        komodostate << "0" << std::endl;
+        std::FILE* fp = std::fopen(file.string().c_str(), "wb+");
+        write_t_record_new(fp);  // write some record to init komodostate for reading in komodo_init()
+        fclose(fp);
     }
 
     uint8_t keys[65][33];
