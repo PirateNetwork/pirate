@@ -513,7 +513,7 @@ void komodo_update_interest()
     if ( first_call )
     {
         first_call = false;
-        printf("READY for %s RPC calls at %u! done PASSPORT %s\n",
-                chainName.ToString().c_str(), (uint32_t)time(NULL), chainName.ToString().c_str());
+        printf("READY for %s RPC calls at %u\n",
+                chainName.ToString().c_str(), (uint32_t)time(NULL));
     }
 }
