@@ -101,6 +101,7 @@ using namespace std;
 #include "assetchain.h"
 
 #include "komodo_gateway.h"
+#include "rpc/net.h"
 extern void ThreadSendAlert();
 //extern bool komodo_dailysnapshot(int32_t height);  //todo remove
 //extern int32_t KOMODO_SNAPSHOT_INTERVAL;
@@ -785,8 +786,10 @@ void ThreadUpdateKomodoInternals() {
 
             boost::this_thread::interruption_point();
 
-            if (chainName.isKMD() && KOMODO_NSPV_FULLNODE)
+            if (chainName.isKMD() && KOMODO_NSPV_FULLNODE) {
                 komodo_update_interest();
+                komodo_longestchain();
+            }
         }
     }
     catch (const boost::thread_interrupted&) {
