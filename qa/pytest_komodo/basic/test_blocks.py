@@ -309,56 +309,6 @@ class TestBlockchainMethods:
         res = rpc.gettxoutsetinfo()
         validate_template(res, schema)
 
-    def test_kvupdate(self, test_params):
-        test_values = {
-            'v_key': 'valid_key',
-            'value': 'test+value',
-            'days': '2',
-            'pass': 'secret',
-            'n_key': 'invalid_key',
-            'keylen': 9
-        }
-        rpc = test_params.get('node1').get('rpc')
-        res = rpc.kvupdate(test_values['v_key'], test_values['value'], test_values['days'], test_values['pass'])
-        assert res.get('key') == test_values['v_key']
-        assert res.get('keylen') == test_values['keylen']
-        assert res.get('value') == test_values['value']
-
-    def test_getrawmempool(self, test_params):
-        test_values = {
-            'key': 'mempool_key',
-            'value': 'key_value',
-            'days': '1',
-            'pass': 'secret'
-        }  # to get info into mempool, we need to create tx, kvupdate call creates one for us
-        rpc = test_params.get('node1').get('rpc')
-        res = rpc.kvupdate(test_values['key'], test_values['value'], test_values['days'], test_values['pass'])
-        txid = res.get('txid')
-        kvheight = res.get('height')
-        res = rpc.getrawmempool()
-        assert txid in res
-        res = rpc.getrawmempool(False)  # False is default value, res should be same as in call above
-        assert txid in res
-        res = rpc.getrawmempool(True)
-        assert res.get(txid).get('height') == kvheight
-
-    def test_kvsearch(self, test_params):
-        test_values = {
-            'key': 'search_key',
-            'value': 'search_value',
-            'days': '1',
-            'pass': 'secret'
-        }
-        rpc = test_params.get('node1').get('rpc')
-        res = rpc.kvupdate(test_values['key'], test_values['value'], test_values['days'], test_values['pass'])
-        txid = res.get('txid')
-        keylen = res.get('keylen')
-        validate_transaction(rpc, txid, 1)  # wait for block
-        res = rpc.kvsearch(test_values['key'])
-        assert res.get('key') == test_values['key']
-        assert res.get('keylen') == keylen
-        assert res.get('value') == test_values['value']
-
     def test_notaries(self, test_params):
         rpc = test_params.get('node1').get('rpc')
         res = rpc.notaries('1')
