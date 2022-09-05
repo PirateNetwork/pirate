@@ -26,7 +26,7 @@ uint256 fill_hash(uint8_t val)
 void write_p_record(std::FILE* fp)
 {
     // a pubkey record with 2 keys
-    char data[5+1+(33*2)] = {'P', 1, 0, 0, 0, 2}; // public key record identifier with height of 1 plus number of keys plus keys themselves
+    char data[5+1+(33*2)] = {'P', 10, 0, 0, 0, 2}; // public key record identifier with height of 1 plus number of keys plus keys themselves
     memset(&data[6], 1, 33); // 1st key is all 1s
     memset(&data[39], 2, 33); // 2nd key is all 2s
     std::fwrite(data, sizeof(data), 1, fp);
@@ -35,7 +35,7 @@ void write_p_record(std::FILE* fp)
 void write_p_record_new(std::FILE* fp)
 {
     komodo::event_pubkeys evt;
-    evt.height = 1;
+    evt.height = 10;
     evt.num = 2;
     memset(&evt.pubkeys[0], 1, 33);
     memset(&evt.pubkeys[1], 2, 33);
@@ -49,7 +49,7 @@ void write_n_record(std::FILE* fp)
     // 4 bytes notarized_height
     // 32 bytes notarized hash( blockhash)
     // 32 bytes desttxid
-    char data[73] = {'N', 1, 0, 0, 0, 2, 0, 0, 0};
+    char data[73] = {'N', 10, 0, 0, 0, 2, 0, 0, 0};
     memset(&data[9], 1, 32); // notarized hash
     memset(&data[41], 2, 32); // desttxid
     std::fwrite(data, sizeof(data), 1, fp);
@@ -57,7 +57,7 @@ void write_n_record(std::FILE* fp)
 void write_n_record_new(std::FILE* fp)
 {
     komodo::event_notarized evt;
-    evt.height = 1;
+    evt.height = 10;
     evt.notarizedheight = 2;
     evt.blockhash = fill_hash(1);
     evt.desttxid = fill_hash(2);
@@ -73,7 +73,7 @@ void write_m_record(std::FILE* fp)
     // 32 bytes desttxid
     // 32 bytes MoM
     // 4 bytes MoMdepth
-    char data[109] = {'M', 1, 0, 0, 0, 3, 0, 0, 0};
+    char data[109] = {'M', 10, 0, 0, 0, 3, 0, 0, 0};
     memset(&data[9], 1, 32); // notarized hash
     memset(&data[41], 2, 32); // desttxid
     memset(&data[73], 3, 32); // MoM
@@ -83,7 +83,7 @@ void write_m_record(std::FILE* fp)
 void write_m_record_new(std::FILE* fp)
 {
     komodo::event_notarized evt;
-    evt.height = 1;
+    evt.height = 10;
     evt.notarizedheight = 3;
     std::vector<unsigned char> bin(32);
     evt.blockhash = fill_hash(1);
@@ -100,14 +100,14 @@ void write_u_record(std::FILE* fp)
     // 1 byte n and 1 byte nid
     // 8 bytes mask
     // 32 bytes hash
-    char data[47] = {'U', 1, 0, 0, 0, 'N', 'I'};
+    char data[47] = {'U', 10, 0, 0, 0, 'N', 'I'};
     memset(&data[7], 1, 8); // mask
     memset(&data[15], 2, 32); // hash
     std::fwrite(data, sizeof(data), 1, fp);
 }
 void write_u_record_new(std::FILE* fp)
 {
-    komodo::event_u evt(1);
+    komodo::event_u evt(10);
     evt.n = 'N';
     evt.nid = 'I';
     memset(&evt.mask[0], 1, 8);
@@ -120,13 +120,13 @@ void write_k_record(std::FILE* fp)
     // a K record has
     // 5 byte header 
     // 4 bytes height
-    char data[9] = {'K', 1, 0, 0, 0 };
+    char data[9] = {'K', 10, 0, 0, 0 };
     memset(&data[5], 1, 4); // height
     std::fwrite(data, sizeof(data), 1, fp);
 }
 void write_k_record_new(std::FILE* fp)
 {
-    komodo::event_kmdheight evt(1);
+    komodo::event_kmdheight evt(10);
     evt.kheight = 0x01010101;
     write_event(evt, fp);
 }
@@ -137,14 +137,14 @@ void write_t_record(std::FILE* fp)
     // 5 byte header 
     // 4 bytes height
     // 4 bytes timestamp
-    char data[13] = {'T', 1, 0, 0, 0 };
+    char data[13] = {'T', 10, 0, 0, 0 };
     memset(&data[5], 1, 4); // height
     memset(&data[9], 2, 4); // timestamp
     std::fwrite(data, sizeof(data), 1, fp);
 }
 void write_t_record_new(std::FILE* fp)
 {
-    komodo::event_kmdheight evt(1);
+    komodo::event_kmdheight evt(10);
     evt.kheight = 0x01010101;
     evt.timestamp = 0x02020202;
     write_event(evt, fp);
@@ -159,7 +159,7 @@ void write_r_record(std::FILE* fp)
     // 8 byte ovalue
     // 2 byte olen
     // olen bytes of data
-    char data[50] = {'R', 1, 0, 0, 0 };
+    char data[50] = {'R', 10, 0, 0, 0 };
     memset(&data[5], 1, 32); // txid
     memset(&data[37], 2, 2); // v
     memset(&data[39], 3, 8); // ovalue
@@ -170,7 +170,7 @@ void write_r_record(std::FILE* fp)
 }
 void write_r_record_new(std::FILE* fp)
 {
-    komodo::event_opreturn evt(1);
+    komodo::event_opreturn evt(10);
     evt.txid = fill_hash(1);
     evt.vout = 0x0202; 
     evt.value = 0x0303030303030303;
@@ -184,14 +184,14 @@ void write_v_record(std::FILE* fp)
     // 5 byte header 
     // 1 byte counter
     // counter * 4 bytes of data
-    char data[146] = {'V', 1, 0, 0, 0};
+    char data[146] = {'V', 10, 0, 0, 0};
     memset(&data[5], 35, 1); // counter
     memset(&data[6], 1, 140); // data
     std::fwrite(data, sizeof(data), 1, fp);
 }
 void write_v_record_new(std::FILE* fp)
 {
-    komodo::event_pricefeed evt(1);
+    komodo::event_pricefeed evt(10);
     evt.num = 35;
     memset(&evt.prices[0], 1, 140);
     write_event(evt, fp);
@@ -199,12 +199,12 @@ void write_v_record_new(std::FILE* fp)
 
 void write_b_record(std::FILE* fp)
 {
-    char data[] = {'B', 1, 0, 0, 0};
+    char data[] = {'B', 10, 0, 0, 0};
     std::fwrite(data, sizeof(data), 1, fp);
 }
 void write_b_record_new(std::FILE* fp)
 {
-    komodo::event_rewind evt(1);
+    komodo::event_rewind evt(10);
     write_event(evt, fp);
 }
 
@@ -296,8 +296,6 @@ TEST(test_events, komodo_faststateinit_test)
 
     clear_state(symbol);
 
-    clear_state(symbol);
-
     boost::filesystem::path temp = boost::filesystem::unique_path();
     boost::filesystem::create_directories(temp);
     try
@@ -334,7 +332,7 @@ TEST(test_events, komodo_faststateinit_test)
             EXPECT_EQ(state->events.size(), 1);
             komodo::event_pubkeys& ev2 = 
                     static_cast<komodo::event_pubkeys&>( *state->events.front() );
-            EXPECT_EQ(ev2.height, 1);
+            EXPECT_EQ(ev2.height, 10);
             EXPECT_EQ(ev2.type, komodo::komodo_event_type::EVENT_PUBKEYS);
             // the serialized version should match the input
             EXPECT_TRUE(compare_serialization(full_filename, ev2));
@@ -366,7 +364,7 @@ TEST(test_events, komodo_faststateinit_test)
             EXPECT_EQ(state->events.size(), 2);
             komodo::event_notarized& ev2 = 
                     static_cast<komodo::event_notarized&>( *(*(++state->events.begin())) );
-            EXPECT_EQ(ev2.height, 1);
+            EXPECT_EQ(ev2.height, 10);
             EXPECT_EQ(ev2.type, komodo::komodo_event_type::EVENT_NOTARIZED);
             // the serialized version should match the input
             EXPECT_TRUE(compare_serialization(full_filename, ev2));
@@ -376,7 +374,7 @@ TEST(test_events, komodo_faststateinit_test)
             const std::string full_filename = (temp / "notarized.tmp").string();
             std::FILE* fp = std::fopen(full_filename.c_str(), "wb+");
             EXPECT_NE(fp, nullptr);
-            write_m_record(fp);
+            write_m_record_new(fp); // write_m_record(fp); (test writing too)
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
@@ -399,7 +397,7 @@ TEST(test_events, komodo_faststateinit_test)
             auto itr = state->events.begin();
             std::advance(itr, 2);
             komodo::event_notarized& ev2 = static_cast<komodo::event_notarized&>( *(*(itr)) );
-            EXPECT_EQ(ev2.height, 1);
+            EXPECT_EQ(ev2.height, 10);
             EXPECT_EQ(ev2.type, komodo::komodo_event_type::EVENT_NOTARIZED);
             // the serialized version should match the input
             EXPECT_TRUE(compare_serialization(full_filename, ev2));
@@ -430,7 +428,7 @@ TEST(test_events, komodo_faststateinit_test)
             // this does not get added to state, so we need to serialize the object just
             // to verify serialization works as expected
             komodo::event_u ev2;
-            ev2.height = 1;
+            ev2.height = 10;
             ev2.n = 'N';
             ev2.nid = 'I';
             memset(ev2.mask, 1, 8);
@@ -465,7 +463,7 @@ TEST(test_events, komodo_faststateinit_test)
             auto itr = state->events.begin();
             std::advance(itr, 3);
             komodo::event_kmdheight& ev2 = static_cast<komodo::event_kmdheight&>( *(*(itr)) );
-            EXPECT_EQ(ev2.height, 1);
+            EXPECT_EQ(ev2.height, 10);
             EXPECT_EQ(ev2.type, komodo::komodo_event_type::EVENT_KMDHEIGHT);
             // the serialized version should match the input
             EXPECT_TRUE(compare_serialization(full_filename, ev2));
@@ -498,7 +496,7 @@ TEST(test_events, komodo_faststateinit_test)
             auto itr = state->events.begin();
             std::advance(itr, 4);
             komodo::event_kmdheight& ev2 = static_cast<komodo::event_kmdheight&>( *(*(itr)) );
-            EXPECT_EQ(ev2.height, 1);
+            EXPECT_EQ(ev2.height, 10);
             EXPECT_EQ(ev2.type, komodo::komodo_event_type::EVENT_KMDHEIGHT);
             // the serialized version should match the input
             EXPECT_TRUE(compare_serialization(full_filename, ev2));
@@ -531,7 +529,7 @@ TEST(test_events, komodo_faststateinit_test)
             auto itr = state->events.begin();
             std::advance(itr, 5);
             komodo::event_opreturn& ev2 = static_cast<komodo::event_opreturn&>( *(*(itr)) );
-            EXPECT_EQ(ev2.height, 1);
+            EXPECT_EQ(ev2.height, 10);
             EXPECT_EQ(ev2.type, komodo::komodo_event_type::EVENT_OPRETURN);
             // the serialized version should match the input
             EXPECT_TRUE(compare_serialization(full_filename, ev2));
@@ -564,7 +562,7 @@ TEST(test_events, komodo_faststateinit_test)
             auto itr = state->events.begin();
             std::advance(itr, 6);
             komodo::event_pricefeed& ev2 = static_cast<komodo::event_pricefeed&>( *(*(itr)) );
-            EXPECT_EQ(ev2.height, 1);
+            EXPECT_EQ(ev2.height, 10);
             EXPECT_EQ(ev2.type, komodo::komodo_event_type::EVENT_PRICEFEED);
             // the serialized version should match the input
             EXPECT_TRUE(compare_serialization(full_filename, ev2));
@@ -639,37 +637,37 @@ TEST(test_events, komodo_faststateinit_test)
             auto itr = state->events.begin();
             std::advance(itr, 7);
             {
-                EXPECT_EQ( (**itr).height, 1);
+                EXPECT_EQ( (**itr).height, 10);
                 EXPECT_EQ( (**itr).type, komodo::komodo_event_type::EVENT_PUBKEYS);
                 itr++;
             }
             {
-                EXPECT_EQ( (**itr).height, 1);
+                EXPECT_EQ( (**itr).height, 10);
                 EXPECT_EQ( (**itr).type, komodo::komodo_event_type::EVENT_NOTARIZED);
                 itr++;
             }
             {
-                EXPECT_EQ( (**itr).height, 1);
+                EXPECT_EQ( (**itr).height, 10);
                 EXPECT_EQ( (**itr).type, komodo::komodo_event_type::EVENT_NOTARIZED);
                 itr++;
             }
             {
-                EXPECT_EQ( (**itr).height, 1);
+                EXPECT_EQ( (**itr).height, 10);
                 EXPECT_EQ( (**itr).type, komodo::komodo_event_type::EVENT_KMDHEIGHT);
                 itr++;
             }
             {
-                EXPECT_EQ( (**itr).height, 1);
+                EXPECT_EQ( (**itr).height, 10);
                 EXPECT_EQ( (**itr).type, komodo::komodo_event_type::EVENT_KMDHEIGHT);
                 itr++;
             }
             {
-                EXPECT_EQ( (**itr).height, 1);
+                EXPECT_EQ( (**itr).height, 10);
                 EXPECT_EQ( (**itr).type, komodo::komodo_event_type::EVENT_OPRETURN);
                 itr++;
             }
             {
-                EXPECT_EQ( (**itr).height, 1);
+                EXPECT_EQ( (**itr).height, 10);
                 EXPECT_EQ( (**itr).type, komodo::komodo_event_type::EVENT_PRICEFEED);
                 itr++;
             }
@@ -940,7 +938,7 @@ TEST(test_events, write_test) // test from dev branch from S6 season
             // check that the new way is the same
             EXPECT_EQ(state->events.size(), 1);
             komodo::event_pubkeys& ev = static_cast<komodo::event_pubkeys&>( *state->events.front() );
-            EXPECT_EQ(ev.height, 1);
+            EXPECT_EQ(ev.height, 10);
             EXPECT_EQ(ev.type, komodo::komodo_event_type::EVENT_PUBKEYS);
             std::fclose(fp);
             // verify files still exists
