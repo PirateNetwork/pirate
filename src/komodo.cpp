@@ -65,7 +65,6 @@ int32_t komodo_parsestatefile(struct komodo_state *sp,FILE *fp,char *symbol,char
             int32_t ht;
             if ( fread(&ht,1,sizeof(ht),fp) != sizeof(ht) )
                 throw komodo::parse_error("Unable to read height from file");
-            std::cerr << "parsestatefile func=" << (char)func << " ";
             if ( func == 'P' )
             {
                 komodo::event_pubkeys pk(fp, ht);
@@ -140,7 +139,6 @@ int32_t komodo_parsestatefiledata(struct komodo_state *sp,uint8_t *filedata,long
             int32_t ht;
             if ( mem_read(ht, filedata, fpos, datalen) != sizeof(ht) )
                 throw komodo::parse_error("Unable to parse height from file data");
-            std::cerr << "parsestatefiledata func=" << (char)func << " ";
             if ( func == 'P' )
             {
                 komodo::event_pubkeys pk(filedata, fpos, datalen, ht);
