@@ -498,19 +498,19 @@ protected:
     }
 public:
     /** Returns the index entry for the genesis block of this chain, or NULL if none. */
-    virtual CBlockIndex *Genesis() const REQUIRES(cs_main) {
+    CBlockIndex *Genesis() const REQUIRES(cs_main) {
         AssertLockHeld(cs_main);
         return vChain.size() > 0 ? vChain[0] : NULL;
     }
 
     /** Returns the index entry for the tip of this chain, or NULL if none. */
-    virtual CBlockIndex *Tip() const REQUIRES(cs_main) {
+    CBlockIndex *Tip() const REQUIRES(cs_main) {
         AssertLockHeld(cs_main);
         return vChain.size() > 0 ? vChain[vChain.size() - 1] : nullptr;
     }
     
     /** Returns the index entry at a particular height in this chain, or NULL if no such height exists. */
-    virtual CBlockIndex *operator[](int nHeight) const REQUIRES(cs_main) {
+    CBlockIndex *operator[](int nHeight) const REQUIRES(cs_main) {
         AssertLockHeld(cs_main);
         return at(nHeight);
     }
@@ -523,13 +523,13 @@ public:
     }
 
     /** Efficiently check whether a block is present in this chain. */
-    virtual bool Contains(const CBlockIndex *pindex) const REQUIRES(cs_main) {
+    bool Contains(const CBlockIndex *pindex) const REQUIRES(cs_main) {
         AssertLockHeld(cs_main);
         return (*this)[pindex->nHeight] == pindex;
     }
 
     /** Find the successor of a block in this chain, or NULL if the given index is not found or is the tip. */
-    virtual CBlockIndex *Next(const CBlockIndex *pindex) const REQUIRES(cs_main) {
+    CBlockIndex *Next(const CBlockIndex *pindex) const REQUIRES(cs_main) {
         AssertLockHeld(cs_main);
         if (Contains(pindex))
             return (*this)[pindex->nHeight + 1];
@@ -538,19 +538,19 @@ public:
     }
 
     /** Return the maximal height in the chain. Is equal to chain.Tip() ? chain.Tip()->nHeight : -1. */
-    virtual int Height() const REQUIRES(cs_main) {
+    int Height() const REQUIRES(cs_main) {
         AssertLockHeld(cs_main);
         return vChain.size() - 1;
     }
 
     /** Set/initialize a chain with a given tip. */
-    virtual void SetTip(CBlockIndex *pindex) REQUIRES(cs_main);
+    void SetTip(CBlockIndex *pindex) REQUIRES(cs_main);
 
     /** Return a CBlockLocator that refers to a block in this chain (by default the tip). */
-    virtual CBlockLocator GetLocator(const CBlockIndex *pindex = NULL) const REQUIRES(cs_main);
+    CBlockLocator GetLocator(const CBlockIndex *pindex = NULL) const REQUIRES(cs_main);
 
     /** Find the last common block between this chain and a block index entry. */
-    virtual const CBlockIndex *FindFork(const CBlockIndex *pindex) const REQUIRES(cs_main);
+    const CBlockIndex *FindFork(const CBlockIndex *pindex) const REQUIRES(cs_main);
 };
 
 #endif // BITCOIN_CHAIN_H
