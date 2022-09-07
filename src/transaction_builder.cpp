@@ -810,7 +810,7 @@ std::string TransactionBuilder::Build_offline_transaction()
         iChecksum=0x01;
         for (iI=0;iI<sChecksumInput.length();iI++)
         {
-          unsigned int iVal = (int)sChecksumInput.at(iI);
+          unsigned int iVal = (unsigned int)sChecksumInput.at(iI);
           iChecksum = iChecksum + iVal;
         }
         sTmp = strprintf("%u",iChecksum);
