@@ -5055,24 +5055,32 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
         auto res = DecodePaymentAddress(address);
 
         UniValue memoValue = find_value(o, "memo");
-        string memo;
+        string strHexMemo="";
         if (!memoValue.isNull())
         {
-            memo = memoValue.get_str();
-            if (!IsHex(memo))
+            //Note: transaction builder expectes memo in
+            //      ASCII encoding, not as a hex string,
+            //      however, SendManyRecipient() first 
+            //      expects the string in hex format.        
+            
+            strHexMemo = memoValue.get_str();            
+                        
+            if (!IsHex(strHexMemo))
             {
-                //Appears to be plain text. Convert it to hex
-                memo = HexStr( memo );
-                //printf("Converted memo to hex: %s\n", memo.c_str() );
-                if (!IsHex(memo))
-                {
-                    throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, output memo not in hexadecimal format.");
-                }
+                throw JSONRPCError(RPC_INVALID_PARAMETER,  strprintf("Invalid parameter, memo always encoded as a hex string for offline transactions"));
             }
-            if (memo.length() > ZC_MEMO_SIZE*2) {
-                throw JSONRPCError(RPC_INVALID_PARAMETER,  strprintf("Invalid parameter, size of output memo is larger than maximum allowed %d", ZC_MEMO_SIZE ));
+            
+            if (strHexMemo.length() > (ZC_MEMO_SIZE*2) ) 
+            {
+              throw JSONRPCError(RPC_INVALID_PARAMETER,  strprintf("Invalid parameter, size of hex encoded memo is larger than maximum allowed %d", (ZC_MEMO_SIZE*2) ));
             }
+            //printf("z_sendmany_prepare_offline() 6 Hex memo: %s\n",strHexMemo.c_str() );fflush(stdout);
         }
+        else
+        {
+          //printf("z_sendmany_prepare_offline() 6 No memo\n");fflush(stdout);
+        }
+
 
         UniValue av = find_value(o, "amount");
         //CAmount nAmount = AmountFromValue( av );
@@ -5086,11 +5094,11 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
         sChecksumInput+=sTmp;
         sTmp = strprintf("%ld ",nAmount );
         sChecksumInput+=sTmp;
-        sTmp = strprintf("%s ",memo.c_str() );
+        sTmp = strprintf("%s ",strHexMemo.c_str() );
         sChecksumInput+=sTmp;
 
         //printf("z_outputs: address:%s amount: %ld memo:%s\n",address.c_str(), nAmount, memo.c_str()  );
-        z_outputs_.push_back( SendManyRecipient(address, nAmount, memo) );
+        z_outputs_.push_back( SendManyRecipient(address, nAmount, strHexMemo) );
         nTotalOut += nAmount;
         //printf("z_sign_offline() [3] Total amount: %ld\n",nTotalOut);fflush(stdout);
         iI+=1;
@@ -5722,13 +5730,13 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
             "      \"amount\":amount    (numeric, required) The numeric amount in KMD is the value\n"
             "      \"memo\":\"memo\"    (hex, optional) Memo represented in hexadecimal string format\n"
             "    }, ... ]'\n"
-            "3. minconf               (numeric, required, default=1) Only use funds confirmed at least this many times.\n"
-            "4. fee                   (numeric, required, default="
+            "3. minconf               (numeric, default=1) Only use funds confirmed at least this many times.\n"
+            "4. fee                   (numeric, default="
             + strprintf("%s", FormatMoney(ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE)) + ") The fee amount to attach to this transaction.\n"
             "\nResult:\n"
             "\"z_sign_offline\" (string) The data to supply to the off-line wallet. The off-line wallet needs to sign the data to authorise the transaction.\n"
             "\nExamples:\n"
-            + HelpExampleCli("z_sendmany_prepare_offline", "\"zs1uumz94syjyh08gyqr53nvfzllrkdufejshj2y925xj5pnmnlmg2rck78x9p5sd4m8nvj4ef0pzl\" '[{\"address\": \"zs14d8tc0hl9q0vg5l28uec5vk6sk34fkj2n8s7jalvw5fxpy6v39yn4s2ga082lymrkjk0x2nqg37\", \"amount\": 5.0, \"memo\":\"596F75722070726976617465206D656D6F\"}]'")
+            + HelpExampleCli("z_sendmany_prepare_offline", "\"zs1uumz94syjyh08gyqr53nvfzllrkdufejshj2y925xj5pnmnlmg2rck78x9p5sd4m8nvj4ef0pzl\" '[{\"address\": \"zs14d8tc0hl9q0vg5l28uec5vk6sk34fkj2n8s7jalvw5fxpy6v39yn4s2ga082lymrkjk0x2nqg37\", \"amount\": 5.0, \"memo\":\"596F75722070726976617465206D656D6F\"}]' 1 0.0001")
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -5892,29 +5900,31 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
         setAddress.insert(address);
 
         UniValue memoValue = find_value(o, "memo");
-        string memo;
+        string strMemo="";
         if (!memoValue.isNull())
         {
-            memo = memoValue.get_str();
+            strMemo = memoValue.get_str();            
             if (!isZaddr) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER, "Memo cannot be used with a taddr.  It can only be used with a zaddr.");
             }
-            else if (!IsHex(memo))
-            {
-                //aparently a normal string. Attempt to convert it to hex
-                //printf("z_sendmany_prepare_offline() 5 - Convert memo to hex: %s -> ",memo.c_str() ); fflush(stdout);
-
-                memo = HexStr( memoValue.get_str() );
-                if (!IsHex(memo))
-                {
-                  //printf("error. Could not convert to hex\n");fflush(stdout);
-                  throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected memo data in hexadecimal format.");
-                }
-            }
-            if (memo.length() > ZC_MEMO_SIZE*2) {
+            if (strMemo.length() > ZC_MEMO_SIZE) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER,  strprintf("Invalid parameter, size of memo is larger than maximum allowed %d", ZC_MEMO_SIZE ));
+            }            
+            
+            if (IsHex(strMemo))
+            {
+              //Note: transaction builder expectes memo in
+              //      ASCII encoding, not as a hex string.
+              auto caMemo = get_memo_from_hex_string(strMemo);
+              strMemo="";
+              unsigned char cByte;              
+              for (int iI=0;iI<strMemo.length()/2;iI++)
+              {
+                cByte = caMemo[iI];
+                strMemo+=cByte;
+              }              
             }
-            //printf("z_sendmany_prepare_offline() 6 Memo hex str: %s\n",memo.c_str() );fflush(stdout);
+            printf("z_sendmany_prepare_offline() 6 Memo str: %s\n",strMemo.c_str() );fflush(stdout);
         }
         else
         {
@@ -5929,12 +5939,8 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, amount must be positive");
 
         float fAmount = (float)(nAmount) / 100000000.0;
-        snprintf(&cBuf[0],sizeof(cBuf)-1,"{\"address\":\"%s\",\"amount\":%f,\"memo\":\"%s\"}", address.c_str(),fAmount, memo.c_str());
-        string buffAsStdStr(cBuf);
-        sZaddrRecipients = sZaddrRecipients + buffAsStdStr;
-        //printf("z_sendmany_prepare_offline() Prepare for off-line recipient: %s\n",sZaddrRecipients.c_str());
 
-        zaddrRecipients.push_back( SendManyRecipient(address, nAmount, memo) );
+        zaddrRecipients.push_back( SendManyRecipient(address, nAmount, strMemo) );
 
         nTotalOut += nAmount;
         //printf("z_sendmany_prepare_offline() 7 Total amount: %ld\n",nTotalOut);fflush(stdout);

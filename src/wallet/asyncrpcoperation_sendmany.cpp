@@ -497,31 +497,57 @@ bool AsyncRPCOperation_sendmany::main_impl() {
         {
             auto address = std::get<0>(r);
             auto value = std::get<1>(r);
-            auto hexMemo = std::get<2>(r);
+            auto strMemo = std::get<2>(r);
 
-            //auto memo = get_memo_from_hex_string(hexMemo);
-            std::array<unsigned char, ZC_MEMO_SIZE> memo;
 
-            //Keep the memo in hex format for off-line signing:
-            int lenMemo = strlen(hexMemo.c_str());
-            if (lenMemo >= (ZC_MEMO_SIZE-1))
+            
+            //Note: transaction builder expectes memo in
+            //      ASCII encoding, not as a hex string.
+            std::array<unsigned char, ZC_MEMO_SIZE> caMemo = {0x00};
+            if (IsHex(strMemo))
+            {            
+                if (strMemo.length() > (ZC_MEMO_SIZE*2)) 
+                {
+                    printf("asyncrpcoperation_sendmany.cpp main_impl() Hex encoded memo is larger than maximum allowed %d\n", (ZC_MEMO_SIZE*2) );
+                    
+                    UniValue o(UniValue::VOBJ);
+                    o.push_back(Pair("Failure", "Memo is too long"));
+                    set_result(o);
+                    
+                    return false;
+                }            
+                caMemo = get_memo_from_hex_string(strMemo);
+            }
+            else
             {
-              lenMemo = ZC_MEMO_SIZE;
+                int iLength = strMemo.length();
+              
+                if (strMemo.length() > ZC_MEMO_SIZE) 
+                {
+                    printf("asyncrpcoperation_sendmany.cpp main_impl() Memo is larger than maximum allowed %d\n",ZC_MEMO_SIZE);
+                    
+                    UniValue o(UniValue::VOBJ);
+                    o.push_back(Pair("Failure", "Memo is too long"));
+                    set_result(o);
+                    
+                    return false;
+                }              
+                            
+                unsigned char cByte;
+                for (int iI=0;iI<iLength;iI++)
+                {
+                    cByte = (unsigned char)strMemo[iI];
+                    caMemo[iI] = cByte;
+                }                          
             }
-
-            for (int iI = 0; iI < lenMemo; iI++) {
-                memo[iI] = hexMemo[iI];
-            }
-            memo[lenMemo]=0; //Null terminate
-
-
-            //printf("asyncrpcoperation_sendmany.cpp main_impl() Output #%d: addr=%s\n",iI+1,address.c_str() );
-            //printf("  value=%ld, ",value);
-            //printf("memo=%s\n"  , hexMemo.c_str() );
+            
+            //printf("asyncrpcoperation_sendmany.cpp main_impl() Output #%d:\n  addr=%s, ",iI+1,address.c_str() );
+            //printf("value=%ld\n",value);
+            //printf("memo=%s\n"  , strMemo.c_str() );
             //fflush(stdout);
-            //iI+=1;
+            iI+=1;
             //builder_.AddSaplingOutput_offline_transaction(ovk, address, value, memo);
-            builder_.AddSaplingOutput_offline_transaction(address, value, memo);
+            builder_.AddSaplingOutput_offline_transaction(address, value, caMemo);
         }
 
         // Build the off-line transaction

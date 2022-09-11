@@ -363,8 +363,35 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
             }
         } else {
             std::string zaddr = std::get<0>(recipient_);
-            std::string memo = std::get<1>(recipient_);
-            std::array<unsigned char, ZC_MEMO_SIZE> hexMemo = get_memo_from_hex_string(memo);
+            std::string strMemo = std::get<1>(recipient_);
+                        
+            //Note: transaction builder expectes memo in
+            //      ASCII encoding, not as a hex string.
+            std::array<unsigned char, ZC_MEMO_SIZE> caMemo = {0x00};
+            if (IsHex(strMemo))
+            {
+              if (strMemo.length() > (ZC_MEMO_SIZE*2)) 
+              {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,  strprintf("Invalid parameter, size of hex encoded memo is larger than maximum allowed %d", (ZC_MEMO_SIZE*2) ));
+              }            
+              caMemo = get_memo_from_hex_string(strMemo);
+            }
+            else
+            {
+              if (strMemo.length() > ZC_MEMO_SIZE) 
+              {
+                throw JSONRPCError(RPC_INVALID_PARAMETER,  strprintf("Invalid parameter, size of memo is larger than maximum allowed %d", ZC_MEMO_SIZE ));
+              }            
+              
+              int iLength = strMemo.length();
+              unsigned char cByte;
+              for (int iI=0;iI<iLength;iI++)
+              {
+                cByte = (unsigned char)strMemo[iI];
+                caMemo[iI] = cByte;
+              }                          
+            }
+
             auto saplingPaymentAddress = boost::get<libzcash::SaplingPaymentAddress>(&toPaymentAddress_);
             if (saplingPaymentAddress == nullptr) {
                 // This should never happen as we have already determined that the payment is to sapling
@@ -386,7 +413,8 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
             if (!ovk) {
                 throw JSONRPCError(RPC_WALLET_ERROR, "Sending to a Sapling address requires an ovk.");
             }
-            builder_.AddSaplingOutput(ovk.get(), *saplingPaymentAddress, sendAmount, hexMemo);
+            
+            builder_.AddSaplingOutput(ovk.get(), *saplingPaymentAddress, sendAmount, caMemo);
         }
 
 

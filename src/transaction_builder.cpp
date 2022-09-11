@@ -522,11 +522,8 @@ std::string TransactionBuilder::Build_offline_transaction()
                 //auto note = spends[0].note;
                 //libzcash::SaplingPaymentAddress changeAddr(note.d, note.pk_d);
                 //AddSaplingOutput(fvk.ovk, changeAddr,   change);
-                std::array<unsigned char, ZC_MEMO_SIZE> memo;
-                memo[0]=0;
-
+                std::array<unsigned char, ZC_MEMO_SIZE> memo = {0x00};
                 AddSaplingOutput_offline_transaction(fromAddress_, change, memo);
-
             }
             else
             {
@@ -690,16 +687,32 @@ std::string TransactionBuilder::Build_offline_transaction()
         sReturn=sReturn+"'[";
         for (size_t i = 0; i < outputs.size(); i++)
         {
-            std::string sMemo;
+            std::string sHexMemo;
             auto output = outputs[i];
 
             sReturn=sReturn+strprintf("{\"address\":\"%s\",\"amount\":%ld",sOutputRecipients[i].c_str(), output.note.value() );
-            size_t iStrLen = strlen( reinterpret_cast<char*>(output.memo.data()) );
+            
+            //Set length to maximum.
+            size_t iStrLen = ZC_MEMO_SIZE;
+            if (output.memo.data()[ (ZC_MEMO_SIZE-1) ] == 0)
+            {           
+              //If the string is null terminated, evaluate its length to see
+              //if its shorter:
+              iStrLen = strlen( reinterpret_cast<char*>(output.memo.data()) );
+            }
+            
             if (iStrLen > 0)
             {
-              //printf("transaction_builder.cpp process outputs-for(%ld). Adres=%s Amount=%ld Memo=%s\n\n",i, sOutputRecipients[i].c_str(), output.note.value(), reinterpret_cast<unsigned char*>(output.memo.data()) );
-              sMemo = strprintf("%s",reinterpret_cast<unsigned char*>(output.memo.data()) );
-              sReturn=sReturn+ ",\"memo\":\""+sMemo+"\"}";
+              //Note: Memo is ASCII encoded character array of max. ZC_MEMO_SIZE characters.
+              //    : The array is not null terminated if all 512 chars are populated!
+              //    : Convert to hex encoded string for offline transaction:
+              char caHexMemo[ZC_MEMO_SIZE*2+1];
+              memset(&caHexMemo[0], 0, sizeof(caHexMemo));
+              CharArrayToHex(output.memo.data(), iStrLen, (char *)&caHexMemo[0]);                           
+              sHexMemo = strprintf("%s", &caHexMemo[0]);
+              sReturn=sReturn+ ",\"memo\":\""+sHexMemo+"\"}";
+              
+              //printf("transaction_builder.cpp process outputs-for(%ld). Adres=%s Amount=%ld Memo=%s\n\n",i, sOutputRecipients[i].c_str(), output.note.value(), sHexMemo.c_str() );
             }
             else
             {
@@ -716,12 +729,12 @@ std::string TransactionBuilder::Build_offline_transaction()
               sReturn=sReturn+",";
             }
 
-            //sChecksumInput+=sOutputRecipients[i] +"\n"+ std::to_string(output.note.value() ) +"\n"+ sMemo +"\n";
+            //sChecksumInput+=sOutputRecipients[i] +"\n"+ std::to_string(output.note.value() ) +"\n"+ sHexMemo +"\n";
             sTmp = strprintf("%s ",sOutputRecipients[i].c_str() );
             sChecksumInput+=sTmp;
             sTmp = strprintf("%ld ",output.note.value() );
             sChecksumInput+=sTmp;
-            sTmp = strprintf("%s ",sMemo.c_str() );
+            sTmp = strprintf("%s ",sHexMemo.c_str() );
             sChecksumInput+=sTmp;
         }
 
