@@ -1652,6 +1652,7 @@ void komodo_args(char *argv0)
     chainName = assetchain(name);
     KOMODO_STOPAT = GetArg("-stopat",0);
     MAX_REORG_LENGTH = GetArg("-maxreorg",MAX_REORG_LENGTH);
+    WITNESS_CACHE_SIZE = MAX_REORG_LENGTH+10;
     ASSETCHAINS_CC = GetArg("-ac_cc",0);
     KOMODO_CCACTIVATE = GetArg("-ac_ccactivate",0);
     ASSETCHAINS_BLOCKTIME = GetArg("-ac_blocktime",60);
