@@ -35,7 +35,6 @@ extern bool IS_KOMODO_DEALERNODE;
 extern int32_t KOMODO_MININGTHREADS;
 extern int32_t STAKED_NOTARY_ID;
 extern int32_t USE_EXTERNAL_PUBKEY;
-extern int32_t KOMODO_PAX;
 extern int32_t KOMODO_REWIND;
 extern int32_t STAKED_ERA;
 extern int32_t KOMODO_CONNECTING;
