@@ -1518,8 +1518,8 @@ public:
          uint256 &final_anchor);
     void ReorderWalletTransactions(std::map<std::pair<int,int>, CWalletTx*> &mapSorted, int64_t &maxOrderPos);
     void UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletTx*> &mapSorted, bool resetOrder);
-    void DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<uint256> &removeArcTxs, bool fRescan = false);
-    void DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan = false);
+    bool DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<uint256> &removeArcTxs, bool fRescan = false);
+    bool DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan = false);
     bool initalizeArcTx();
     int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false, bool fIgnoreBirthday = false, bool LockOnFinish = false);
     void ReacceptWalletTransactions();
