@@ -115,7 +115,8 @@ int32_t komodo_parsestatefile(struct komodo_state *sp,FILE *fp,char *symbol,char
     {
         LogPrintf("Error occurred in parsestatefile: %s\n", pe.what());
         LogPrintf("komodostate file is invalid. Komodod will be stopped. Please remove komodostate and komodostate.ind files and start the daemon");
-        std::cerr << std::endl << " Error in komodostate file: unknown event " << (char)func << ", exiting. Please remove komodostate and komodostate.ind files and start the daemon" << std::endl << std::endl;
+        //std::cerr << std::endl << " Error in komodostate file: unknown event " << (char)func << ", exiting. Please remove komodostate and komodostate.ind files and start the daemon" << std::endl << std::endl;
+        uiInterface.ThreadSafeMessageBox(_("Please remove komodostate and komodostate.ind files and restart"), "", CClientUIInterface::MSG_ERROR);
         StartShutdown();            
         func = -1;
     }
@@ -191,7 +192,8 @@ int32_t komodo_parsestatefiledata(struct komodo_state *sp,uint8_t *filedata,long
     {
         LogPrintf("Unable to parse state file data. Error: %s\n", pe.what());
         LogPrintf("komodostate file is invalid. Komodod will be stopped. Please remove komodostate and komodostate.ind files and start the daemon");
-        std::cerr << std::endl << " Error in komodostate file: unknown event " << (char)func << ", exiting. Please remove komodostate and komodostate.ind files and start the daemon" << std::endl << std::endl;
+        //std::cerr << std::endl << " Error in komodostate file: unknown event " << (char)func << ", exiting. Please remove komodostate and komodostate.ind files and start the daemon" << std::endl << std::endl;
+        uiInterface.ThreadSafeMessageBox(_("Please remove komodostate and komodostate.ind files and restart"), "", CClientUIInterface::MSG_ERROR);
         StartShutdown();
         func = -1;
     }
