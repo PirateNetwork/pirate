@@ -916,7 +916,7 @@ TEST(test_events, komodo_faststateinit_test_kmd)
     boost::filesystem::remove_all(temp);
 }
 
-TEST(test_events, write_test) // test from dev branch from S6 season
+TEST(test_events, DISABLED_write_test) // test from dev branch from S6 season
 {
     char symbol[] = "TST";
     chainName = assetchain(symbol);
