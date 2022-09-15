@@ -64,7 +64,8 @@ static bool fDaemon;
 
 void WaitForShutdown(boost::thread_group* threadGroup)
 {
-    int32_t i,height; CBlockIndex *pindex; const uint256 zeroid;
+    int32_t i,height; CBlockIndex *pindex;
+    static const uint256 zeroid; //!< null uint256 constant
     bool fShutdown = ShutdownRequested();
     // Tell the main threads to shutdown.
     if (komodo_currentheight()>KOMODO_EARLYTXID_HEIGHT && KOMODO_EARLYTXID!=zeroid && ((height=tx_height(KOMODO_EARLYTXID))==0 || height>KOMODO_EARLYTXID_HEIGHT))

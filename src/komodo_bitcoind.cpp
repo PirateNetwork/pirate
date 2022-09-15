@@ -461,7 +461,9 @@ void komodo_reconsiderblock(uint256 blockhash)
 
 int32_t komodo_verifynotarization(char *symbol,char *dest,int32_t height,int32_t NOTARIZED_HEIGHT,uint256 NOTARIZED_HASH,uint256 NOTARIZED_DESTTXID)
 {
-    char params[256],*jsonstr,*hexstr; uint8_t *script,_script[8192]; int32_t n,len,retval = -1; cJSON *json,*txjson,*vouts,*vout,*skey;
+    char params[256];
+    char *jsonstr = nullptr;
+    char *hexstr; uint8_t *script,_script[8192]; int32_t n,len,retval = -1; cJSON *json,*txjson,*vouts,*vout,*skey;
     script = _script;
     sprintf(params,"[\"%s\", 1]",NOTARIZED_DESTTXID.ToString().c_str());
     if ( strcmp(symbol, chainName.ToString().c_str()) != 0 )
@@ -1129,7 +1131,10 @@ uint64_t komodo_commission(const CBlock *pblock,int32_t height)
         didinit = true;
     }
 
-    int32_t i,j,n=0,txn_count; int64_t nSubsidy; uint64_t commission,total = 0;
+    int32_t i,j,n=0,txn_count; int64_t nSubsidy;
+    uint64_t commission = 0;
+    uint64_t total = 0;
+
     if ( ASSETCHAINS_FOUNDERS != 0 )
     {
         nSubsidy = GetBlockSubsidy(height,Params().GetConsensus());

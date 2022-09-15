@@ -271,7 +271,7 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
         {
             // too fast or stuck, this addresses the too fast issue, while moving
             // forward as quickly as possible
-            for (int i; i < 100; i++)
+            for (int i = 0; i < 100; i++)
             {
                 proposedTime = GetTime();
                 if (proposedTime == nMedianTimePast)
@@ -333,7 +333,7 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
                 LogPrint("hfnet","%s[%d]: ht.%ld\n", __func__, __LINE__, nHeight);
             }
 
-            if (chainName.isKMD() && komodo_validate_interest(tx, nHeight, cmptime) < 0)
+            if (chainName.isKMD() && !komodo_validate_interest(tx, nHeight, cmptime))
             {
                 LogPrintf("%s: komodo_validate_interest failure txid.%s nHeight.%d nTime.%u vs locktime.%u (cmptime.%lu)\n", __func__, tx.GetHash().ToString(), nHeight, (uint32_t)pblock->nTime, (uint32_t)tx.nLockTime, cmptime);
                 continue;
