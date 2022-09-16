@@ -1232,15 +1232,6 @@ void komodo_args(char *argv0)
                 StartShutdown();
             }
         }
-        else if ( ASSETCHAINS_SELFIMPORT == "PEGSCC")
-        {
-            Split(GetArg("-ac_pegsccparams",""), sizeof(ASSETCHAINS_PEGSCCPARAMS)/sizeof(*ASSETCHAINS_PEGSCCPARAMS), ASSETCHAINS_PEGSCCPARAMS, 0);
-            if (ASSETCHAINS_ENDSUBSIDY[0]!=1 || ASSETCHAINS_COMMISSION!=0)
-            {
-                fprintf(stderr,"when using import for pegsCC these must be set: -ac_end=1 -ac_perc=0\n");
-                StartShutdown();
-            }
-        }
         // else it can be gateway coin
         else if (!ASSETCHAINS_SELFIMPORT.empty() && (ASSETCHAINS_ENDSUBSIDY[0]!=1 || ASSETCHAINS_SUPPLY>0 || ASSETCHAINS_COMMISSION!=0))
         {

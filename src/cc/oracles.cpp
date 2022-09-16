@@ -1125,7 +1125,7 @@ UniValue OracleDataSamples(uint256 reforacletxid,char* batonaddr,int32_t num)
             }
         }
         else
-            CCERR_RESULT("pegscc",CCLOG_INFO, stream << "invalid oracletxid " << oracletxid.GetHex());
+            CCERR_RESULT("oraclescc",CCLOG_INFO, stream << "invalid oracletxid " << oracletxid.GetHex());
     }
     else
         CCERR_RESULT("oraclescc",CCLOG_INFO, stream << "cant find oracletxid " << oracletxid.GetHex());
@@ -1200,7 +1200,7 @@ UniValue OracleInfo(uint256 origtxid)
             result.push_back(Pair("registered",a));
         }
         else
-            CCERR_RESULT("pegscc",CCLOG_INFO, stream << "invalid oracletxid " << oracletxid.GetHex());
+            CCERR_RESULT("oraclescc",CCLOG_INFO, stream << "invalid oracletxid " << oracletxid.GetHex());
     }
     else
         CCERR_RESULT("oraclescc",CCLOG_INFO, stream << "cant find oracletxid " << oracletxid.GetHex());

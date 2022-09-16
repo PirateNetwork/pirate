@@ -731,10 +731,6 @@ UniValue selfimport(const UniValue& params, bool fHelp, const CPubKey& mypk)
         // return(0);
         return -1;
     }
-    else if (source == "PEGSCC")
-    {
-        return -1;
-    }
     else if (source == "PUBKEY")
     {
         ImportProof proofNull;
@@ -813,10 +809,6 @@ UniValue importdual(const UniValue& params, bool fHelp, const CPubKey& mypk)
         hex=MakeCodaImportTx(0,burntxid,sourceaddr,vouts);
         // confirm via ASSETCHAINS_CODAPORT that burnTx/hash is a valid CODA burn
         // return(0);
-    }
-    else if (source == "PEGSCC")
-    {
-        return -1;
     }
     RETURN_IF_ERROR(CCerror);
     if ( hex.size() > 0 )

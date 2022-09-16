@@ -100,7 +100,6 @@ extern uint64_t ASSETCHAINS_TIMELOCKGTE; // set by -ac_timelockgte or consensus
 extern uint64_t ASSETCHAINS_ENDSUBSIDY[ASSETCHAINS_MAX_ERAS+1]; // can be set by -ac_end, array of heights indexed by era
 extern uint64_t ASSETCHAINS_HALVING[ASSETCHAINS_MAX_ERAS+1]; // can be set by -ac_halving
 extern uint64_t ASSETCHAINS_DECAY[ASSETCHAINS_MAX_ERAS+1]; // can be set by -ac_decay
-extern uint64_t ASSETCHAINS_PEGSCCPARAMS[3]; // set by -ac_pegsccparams, used in pegs.cpp
 extern uint64_t KOMODO_INTERESTSUM; // calculated value, returned in getinfo() RPC call
 extern uint64_t KOMODO_WALLETBALANCE; // pwalletmain->GetBalance(), returned in getinfo() RPC call
 extern int64_t ASSETCHAINS_GENESISTXVAL; // used in calculating money supply

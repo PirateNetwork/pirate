@@ -139,16 +139,6 @@ CAmount GetCoinImportValue(const CTransaction &tx);
  */
 CTransaction MakeImportCoinTransaction(const ImportProof proof, const CTransaction burnTx, const std::vector<CTxOut> payouts, uint32_t nExpiryHeightOverride = 0);
 
-/*****
- * @brief makes import tx for pegs cc
- * @param proof the proof
- * @param burnTx the inputs
- * @param payouts the outputs 
- * @param nExpiryHeighOverride if an actual height (!= 0) makes a tx for validating int import tx
- * @returns the transaction including spending markers for pegs CC
- */
-CTransaction MakePegsImportCoinTransaction(const ImportProof proof, const CTransaction burnTx, const std::vector<CTxOut> payouts, uint32_t nExpiryHeightOverride = 0);
-
 /******
  * @brief make a burn output
  * @param value the amount
@@ -199,24 +189,6 @@ CTxOut MakeBurnOutput(CAmount value, uint32_t targetCCid, const std::string& tar
         const std::vector<CTxOut> payouts,std::vector<uint8_t> rawproof, const std::string& srcaddr,
         const std::string& receipt);
 
-/******
- * @brief make a burn output
- * @param value the amount
- * @param targetCCid the ccid
- * @param targetSymbol
- * @param payouts the outputs
- * @param rawproof the proof in binary form
- * @param pegstxid
- * @param tokenid
- * @param srcpub
- * @param amount
- * @param account
- * @returns the txout
- */
-CTxOut MakeBurnOutput(CAmount value,uint32_t targetCCid,const std::string& targetSymbol,
-        const std::vector<CTxOut> payouts,std::vector<uint8_t> rawproof,uint256 pegstxid,
-        uint256 tokenid,CPubKey srcpub,int64_t amount,std::pair<int64_t,int64_t> account);
-
 /****
  * @brief break a serialized burn tx into its components
  * @param[in] burnTx the transaction
@@ -255,19 +227,6 @@ bool UnmarshalBurnTx(const CTransaction burnTx, std::string &srcaddr, std::strin
 bool UnmarshalBurnTx(const CTransaction burnTx,uint256 &bindtxid,std::vector<CPubKey> &publishers,
         std::vector<uint256> &txids,uint256& burntxid,int32_t &height,int32_t &burnvout,
         std::string &rawburntx,CPubKey &destpub, int64_t &amount);
-
-/****
- * @brief break a serialized burn tx into its components
- * @param[in] burnTx the transaction
- * @param[out] pegstxid
- * @param[out] tokenid
- * @param[out] srcpub
- * @param[out] amount
- * @param[out] account
- * @returns true on success
- */
-bool UnmarshalBurnTx(const CTransaction burnTx,uint256 &pegstxid,uint256 &tokenid,CPubKey &srcpub,
-        int64_t &amount,std::pair<int64_t,int64_t> &account);
 
 /****
  * @brief break a serialized import tx into its components
