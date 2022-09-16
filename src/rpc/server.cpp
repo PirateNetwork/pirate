@@ -1,6 +1,5 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
-// Copyright (c) 2019 The Hush developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -840,8 +839,6 @@ std::string HelpExampleCli(const std::string& methodname, const std::string& arg
 {
     if ( chainName.isKMD() ) {
         return "> komodo-cli " + methodname + " " + args + "\n";
-    } else if ( chainName.SymbolStartsWith("HUSH3") ) {
-        return "> hush-cli " + methodname + " " + args + "\n";
     } else {
         return "> komodo-cli -ac_name=" + strprintf("%s", chainName.symbol().c_str()) + " " + methodname + " " + args + "\n";
     }
@@ -855,7 +852,7 @@ std::string HelpExampleRpc(const std::string& methodname, const std::string& arg
 
 string experimentalDisabledHelpMsg(const string& rpc, const string& enableArg)
 {
-    string daemon = chainName.isKMD() ? "komodod" : "hushd";
+    string daemon = "komodod";
     string ticker = chainName.isKMD() ? "komodo" : chainName.symbol();
 
     return "\nWARNING: " + rpc + " is disabled.\n"
