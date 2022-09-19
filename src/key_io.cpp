@@ -434,3 +434,70 @@ libzcash::SpendingKey DecodeSpendingKey(const std::string& str)
     memory_cleanse(data.data(), data.size());
     return libzcash::InvalidEncoding();
 }
+
+std::string EncodeSaplingDiversifiedExtendedSpendingKey(const libzcash::SaplingDiversifiedExtendedSpendingKey& zkey)
+{
+    const CChainParams& params = Params();
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << zkey;
+    // ConvertBits requires unsigned char, but CDataStream uses char
+    std::vector<unsigned char> serkey(ss.begin(), ss.end());
+    std::vector<unsigned char> data;
+    // See calculation comment below
+    data.reserve((serkey.size() * 8 + 4) / 5);
+    ConvertBits<8, 5, true>([&](unsigned char c) { data.push_back(c); }, serkey.begin(), serkey.end());
+    std::string ret = bech32::Encode(params.Bech32HRP(CChainParams::SAPLING_DIVERSIFIED_EXTENDED_SPEND_KEY), data);
+    memory_cleanse(serkey.data(), serkey.size());
+    memory_cleanse(data.data(), data.size());
+    return ret;
+}
+
+libzcash::SaplingDiversifiedExtendedSpendingKey DecodeSaplingDiversifiedExtendedSpendingKey(const std::string& str)
+{
+    std::vector<unsigned char> data;;
+    auto bech = bech32::Decode(str);
+
+      // Bech32 decoding
+    data.reserve((bech.second.size() * 5) / 8);
+    ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bech.second.begin(), bech.second.end());
+    CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
+    libzcash::SaplingDiversifiedExtendedSpendingKey ret;
+    ss >> ret;
+    memory_cleanse(data.data(), data.size());
+    return ret;
+
+}
+
+
+std::string EncodeSaplingDiversifiedExtendedFullViewingKey(const libzcash::SaplingDiversifiedExtendedFullViewingKey& zkey)
+{
+    const CChainParams& params = Params();
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << zkey;
+    // ConvertBits requires unsigned char, but CDataStream uses char
+    std::vector<unsigned char> serkey(ss.begin(), ss.end());
+    std::vector<unsigned char> data;
+    // See calculation comment below
+    data.reserve((serkey.size() * 8 + 4) / 5);
+    ConvertBits<8, 5, true>([&](unsigned char c) { data.push_back(c); }, serkey.begin(), serkey.end());
+    std::string ret = bech32::Encode(params.Bech32HRP(CChainParams::SAPLING_DIVERSIFIED_EXTENDED_FVK), data);
+    memory_cleanse(serkey.data(), serkey.size());
+    memory_cleanse(data.data(), data.size());
+    return ret;
+}
+
+libzcash::SaplingDiversifiedExtendedFullViewingKey DecodeSaplingDiversifiedExtendedFullViewingKey(const std::string& str)
+{
+    std::vector<unsigned char> data;;
+    auto bech = bech32::Decode(str);
+
+      // Bech32 decoding
+    data.reserve((bech.second.size() * 5) / 8);
+    ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bech.second.begin(), bech.second.end());
+    CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
+    libzcash::SaplingDiversifiedExtendedFullViewingKey ret;
+    ss >> ret;
+    memory_cleanse(data.data(), data.size());
+    return ret;
+
+}
