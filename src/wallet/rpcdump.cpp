@@ -680,41 +680,83 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
     }
     file << "\n";
 
+    LogPrintf("Starting Spending keys\n");
     if (fDumpZKeys) {
-        std::set<libzcash::SproutPaymentAddress> sproutAddresses;
-        pwalletMain->GetSproutPaymentAddresses(sproutAddresses);
-        file << "\n";
-        file << "# Zkeys\n";
-        file << "\n";
-        for (auto addr : sproutAddresses) {
-            libzcash::SproutSpendingKey key;
-            if (pwalletMain->GetSproutSpendingKey(addr, key)) {
-                std::string strTime = EncodeDumpTime(pwalletMain->mapSproutZKeyMetadata[addr].nCreateTime);
-                file << strprintf("%s %s # zaddr=%s\n", EncodeSpendingKey(key), strTime, EncodePaymentAddress(addr));
-            }
-        }
         std::set<libzcash::SaplingPaymentAddress> saplingAddresses;
         pwalletMain->GetSaplingPaymentAddresses(saplingAddresses);
+
         file << "\n";
-        file << "# Sapling keys\n";
+        file << "# Sapling Extended Spending keys\n";
         file << "\n";
         for (auto addr : saplingAddresses) {
             libzcash::SaplingExtendedSpendingKey extsk;
             if (pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
-                auto ivk = extsk.expsk.full_viewing_key().in_viewing_key();
-                CKeyMetadata keyMeta = pwalletMain->mapSaplingZKeyMetadata[ivk];
-                std::string strTime = EncodeDumpTime(keyMeta.nCreateTime);
-                // Keys imported with z_importkey do not have zip32 metadata
-                if (keyMeta.hdKeypath.empty() || keyMeta.seedFp.IsNull()) {
-                    file << strprintf("%s %s # zaddr=%s\n", EncodeSpendingKey(extsk), strTime, EncodePaymentAddress(addr));
-                } else {
-                    file << strprintf("%s %s %s %s # zaddr=%s\n", EncodeSpendingKey(extsk), strTime, keyMeta.hdKeypath, keyMeta.seedFp.GetHex(), EncodePaymentAddress(addr));
+                if (EncodePaymentAddress(addr) == EncodePaymentAddress(extsk.DefaultAddress())) {
+                    auto ivk = extsk.expsk.full_viewing_key().in_viewing_key();
+                    CKeyMetadata keyMeta = pwalletMain->mapSaplingZKeyMetadata[ivk];
+                    std::string strTime = EncodeDumpTime(keyMeta.nCreateTime);
+                    // Keys imported with z_importkey do not have zip32 metadata
+                    if (keyMeta.hdKeypath.empty() || keyMeta.seedFp.IsNull()) {
+                        file << strprintf("%s %s # zaddr=%s\n", EncodeSpendingKey(extsk), strTime, EncodePaymentAddress(addr));
+                    } else {
+                        file << strprintf("%s %s %s %s # zaddr=%s\n", EncodeSpendingKey(extsk), strTime, keyMeta.hdKeypath, keyMeta.seedFp.GetHex(), EncodePaymentAddress(addr));
+                    }
                 }
             }
         }
+
         file << "\n";
+        file << "# Sapling Diversified Extended Spending Keys\n";
+        file << "\n";
+        for (auto addr : saplingAddresses) {
+            libzcash::SaplingExtendedSpendingKey extsk;
+            if (pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
+                if (EncodePaymentAddress(addr) != EncodePaymentAddress(extsk.DefaultAddress())) {
+                    libzcash::SaplingDiversifiedExtendedSpendingKey newKey;
+                    newKey.extsk = extsk;
+                    newKey.d = addr.d;
+                    file << strprintf("%s # zaddr=%s\n", EncodeSaplingDiversifiedExtendedSpendingKey(newKey), EncodePaymentAddress(addr));
+                }
+            }
+        }
+
+        file << "\n";
+        file << "# Sapling Extended Full Viewing keys\n";
+        file << "\n";
+        for (auto addr : saplingAddresses) {
+            libzcash::SaplingExtendedSpendingKey extsk;
+            if (!pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
+                libzcash::SaplingIncomingViewingKey ivk;
+                libzcash::SaplingExtendedFullViewingKey extfvk;
+                pwalletMain->GetSaplingIncomingViewingKey(addr, ivk);
+                pwalletMain->GetSaplingFullViewingKey(ivk,extfvk);
+                if (EncodePaymentAddress(addr) == EncodePaymentAddress(extfvk.DefaultAddress())) {
+                    file << strprintf("%s # zaddr=%s\n", EncodeViewingKey(extfvk), EncodePaymentAddress(addr));
+                }
+            }
+        }
+
+        file << "\n";
+        file << "# Sapling Diversified Extended Full Viewing Keys\n";
+        file << "\n";
+        for (auto addr : saplingAddresses) {
+            libzcash::SaplingExtendedSpendingKey extsk;
+            if (!pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
+                libzcash::SaplingIncomingViewingKey ivk;
+                libzcash::SaplingExtendedFullViewingKey extfvk;
+                pwalletMain->GetSaplingIncomingViewingKey(addr, ivk);
+                pwalletMain->GetSaplingFullViewingKey(ivk,extfvk);
+                if (EncodePaymentAddress(addr) != EncodePaymentAddress(extfvk.DefaultAddress())) {
+                    libzcash::SaplingDiversifiedExtendedFullViewingKey newKey;
+                    newKey.extfvk = extfvk;
+                    newKey.d = addr.d;
+                    file << strprintf("%s # zaddr=%s\n", EncodeSaplingDiversifiedExtendedFullViewingKey(newKey), EncodePaymentAddress(addr));
+                }
+            }
+        }
     }
 
+    file << "\n";
     file << "# End of dump\n";
     file.close();
 

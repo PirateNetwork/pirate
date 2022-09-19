@@ -99,6 +99,19 @@ struct SaplingExtendedFullViewingKey {
     }
 };
 
+struct SaplingDiversifiedExtendedFullViewingKey {
+    SaplingExtendedFullViewingKey extfvk;
+    diversifier_t d;
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(extfvk);
+        READWRITE(d);
+    }
+};
+
 struct SaplingExtendedSpendingKey {
     uint8_t depth;
     uint32_t parentFVKTag;
@@ -135,6 +148,19 @@ struct SaplingExtendedSpendingKey {
             a.chaincode == b.chaincode &&
             a.expsk == b.expsk &&
             a.dk == b.dk;
+    }
+};
+
+struct SaplingDiversifiedExtendedSpendingKey {
+    SaplingExtendedSpendingKey extsk;
+    diversifier_t d;
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(extsk);
+        READWRITE(d);
     }
 };
 
