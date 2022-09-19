@@ -81,25 +81,6 @@ CTransaction MakeImportCoinTransaction(const ImportProof proof, const CTransacti
     return CTransaction(mtx);
 }
 
-/*****
- * @brief makes import tx that includes spending markers to track account state
- * @param proof
- * @param burnTx
- * @param payouts
- * @param nExpiryHeighOverride
- * @returns the transaction
- */
-CTransaction MakePegsImportCoinTransaction(const ImportProof proof, const CTransaction burnTx, 
-        const std::vector<CTxOut> payouts, uint32_t nExpiryHeightOverride)
-{
-    CMutableTransaction mtx=MakeImportCoinTransaction(proof,burnTx,payouts);
-    // for spending markers in import tx - to track account state
-    uint256 accounttxid = burnTx.vin[0].prevout.hash;    
-    mtx.vin.push_back(CTxIn(accounttxid,0,CScript()));
-    mtx.vin.push_back(CTxIn(accounttxid,1,CScript()));
-    return (mtx);
-}
-
 /******
  * @brief make a burn output
  * @param value the amount
@@ -189,38 +170,6 @@ CTxOut MakeBurnOutput(CAmount value, uint32_t targetCCid, const std::string& tar
     return CTxOut(value, CScript() << OP_RETURN << opret);
 }
 
-/******
- * @brief make a burn output
- * @param value the amount
- * @param targetCCid the ccid
- * @param targetSymbol
- * @param payouts the outputs
- * @param rawproof the proof in binary form
- * @param pegstxid
- * @param tokenid
- * @param srcpub
- * @param amount
- * @param account
- * @returns the txout
- */
-CTxOut MakeBurnOutput(CAmount value,uint32_t targetCCid, const std::string& targetSymbol,
-        const std::vector<CTxOut> payouts,std::vector<uint8_t> rawproof,uint256 pegstxid,
-        uint256 tokenid,CPubKey srcpub,int64_t amount, std::pair<int64_t,int64_t> account)
-{
-    std::vector<uint8_t> opret;
-    opret = E_MARSHAL(ss << (uint8_t)EVAL_IMPORTCOIN;
-                      ss << VARINT(targetCCid);
-                      ss << targetSymbol;
-                      ss << SerializeHash(payouts);
-                      ss << rawproof;
-                      ss << pegstxid;
-                      ss << tokenid;
-                      ss << srcpub;
-                      ss << amount;
-                      ss << account);
-    return CTxOut(value, CScript() << OP_RETURN << opret);
-}
-
 /****
  * @brief break a serialized import tx into its components
  * @param[in] importTx the transaction
@@ -235,7 +184,7 @@ bool UnmarshalImportTx(const CTransaction importTx, ImportProof &proof, CTransac
     if (importTx.vout.size() < 1) 
         return false;
     
-    if ((!importTx.IsPegsImport() && importTx.vin.size() != 1) || importTx.vin[0].scriptSig != (CScript() << E_MARSHAL(ss << EVAL_IMPORTCOIN))) {
+    if (importTx.vin.size() != 1 || importTx.vin[0].scriptSig != (CScript() << E_MARSHAL(ss << EVAL_IMPORTCOIN))) {
         LOGSTREAM("importcoin", CCLOG_INFO, stream << "UnmarshalImportTx() incorrect import tx vin" << std::endl);
         return false;
     }
@@ -410,38 +359,6 @@ bool UnmarshalBurnTx(const CTransaction burnTx,uint256 &bindtxid,
                     ss >> rawburntx;                      
                     ss >> destpub;
                     ss >> amount));
-}
-
-/****
- * @brief break a serialized burn tx into its components
- * @param[in] burnTx the transaction
- * @param[out] pegstxid
- * @param[out] tokenid
- * @param[out] srcpub
- * @param[out] amount
- * @param[out] account
- * @returns true on success
- */
-bool UnmarshalBurnTx(const CTransaction burnTx,uint256 &pegstxid,uint256 &tokenid,CPubKey &srcpub, 
-        int64_t &amount,std::pair<int64_t,int64_t> &account)
-{
-    std::vector<uint8_t> burnOpret,rawproof; bool isEof=true;
-    uint32_t targetCCid; uint256 payoutsHash; std::string targetSymbol;
-    uint8_t evalCode;
-
-
-    if (burnTx.vout.size() == 0) return false;
-    GetOpReturnData(burnTx.vout.back().scriptPubKey, burnOpret);
-    return (E_UNMARSHAL(burnOpret, ss >> evalCode;
-                    ss >> VARINT(targetCCid);
-                    ss >> targetSymbol;
-                    ss >> payoutsHash;
-                    ss >> rawproof;
-                    ss >> pegstxid;
-                    ss >> tokenid;
-                    ss >> srcpub;
-                    ss >> amount;
-                    ss >> account));
 }
 
 /******

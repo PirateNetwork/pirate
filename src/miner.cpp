@@ -358,13 +358,6 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
 
                 BOOST_FOREACH(const CTxIn& txin, tx.vin)
                 {
-                    if (tx.IsPegsImport() && txin.prevout.n==10e8)
-                    {
-                        CAmount nValueIn = GetCoinImportValue(tx); // burn amount
-                        nTotalIn += nValueIn;
-                        dPriority += (double)nValueIn * 1000;  // flat multiplier... max = 1e16.
-                        continue;
-                    }
                     // Read prev transaction
                     if (!view.HaveCoins(txin.prevout.hash))
                     {

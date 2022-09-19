@@ -100,7 +100,6 @@ enum opretid : uint8_t {
     OPRETID_CHANNELSDATA = 0x14,    //!< channels contract data id
     OPRETID_HEIRDATA = 0x15,        //!< heir contract data id
     OPRETID_ROGUEGAMEDATA = 0x16,   //!< rogue contract data id
-    OPRETID_PEGSDATA = 0x17,        //!< pegs contract data id
 
     /*! \cond INTERNAL */
     // non cc contract data:
