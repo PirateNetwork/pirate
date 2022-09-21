@@ -103,6 +103,7 @@ protected:
         UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
         UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
         KOMODO_REWIND = 0;
+        chainActive.SetTip(nullptr);
     }
 
     virtual void TearDown() {
