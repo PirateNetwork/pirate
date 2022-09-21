@@ -458,7 +458,7 @@ libbitcoin_common_a_SOURCES = \
   komodo_interest.cpp \
   komodo_kv.cpp \
   komodo_notary.cpp \
-  komodo_utils.cpp \  
+  komodo_utils.cpp \
   netbase.cpp \
   metrics.cpp \
   primitives/block.cpp \
