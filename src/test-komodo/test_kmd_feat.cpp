@@ -96,6 +96,7 @@ class KomodoFeatures : public ::testing::Test {
 protected:
     virtual void SetUp() {
         SelectParams(CBaseChainParams::MAIN);
+        fPrintToConsoleOld = fPrintToConsole;
         fPrintToConsole = true; // TODO save and restore 
 
         chainName = assetchain(); // ensure KMD
@@ -110,7 +111,9 @@ protected:
         // Revert to test default. No-op on mainnet params.
         UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
         UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        fPrintToConsole = fPrintToConsoleOld;
     }
+    bool fPrintToConsoleOld;
 };
 
 // some komodo consensus extensions
