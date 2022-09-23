@@ -14,6 +14,7 @@
 
 #include "komodo_defs.h"
 #include "komodo_globals.h"
+#include "komodo_interest.h"
 #include "cc/CCinclude.h"
 
 
@@ -32,7 +33,6 @@ public:
     FakeCoinsViewDB2() {}
 
     bool GetCoins(const uint256 &txid, CCoins &coins) const {
-        //std::cerr << __func__ << " txid=" << txid.GetHex() << std::endl;
         if (txid == testPrevHash)  {
             CTxOut txOut;
             txOut.nValue = COIN;
@@ -48,7 +48,6 @@ public:
     }
 
     bool HaveCoins(const uint256 &txid) const {
-        //std::cerr << __func__ << " txid=" << txid.GetHex() << std::endl;
         if (txid == testPrevHash)  
             return true;
         return false;
@@ -117,7 +116,7 @@ protected:
 };
 
 // some komodo consensus extensions
-TEST_F(KomodoFeatures, Interest) {
+TEST_F(KomodoFeatures, komodo_interest_validate) {
 
     // Add a fake transaction to the wallet
     CMutableTransaction mtx0 = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_interest_height-1);
@@ -173,16 +172,14 @@ TEST_F(KomodoFeatures, Interest) {
     {
         // check invalid interest in mempool
 
-        mtxSpend.nLockTime = chainActive.Tip()->GetMedianTimePast() + 777 - KOMODO_MAXMEMPOOLTIME - 1; // too long time to add into mempool (prevent incorrect interest)
+        mtxSpend.nLockTime = chainActive.Tip()->GetMedianTimePast() + 777 - 3600 - 1; // too long time to add into mempool (prevent incorrect interest)
         EXPECT_TRUE(TestSignTx(tempKeystore, mtxSpend, 0, mtx0.vout[0].nValue, mtx0.vout[0].scriptPubKey));
-        //std::cerr << __func__ << " vin0=" << mtxSpend.vin[0].scriptSig.ToString() << std::endl;
 
         CValidationState state1;
         CTransaction tx1(mtxSpend);
 
         LOCK( get_cs_main() );
         EXPECT_FALSE(AcceptToMemoryPool(pool, state1, tx1, false, &missingInputs));
-        //std::cerr << __func__ << " state1.GetRejectReason()=" << state1.GetRejectReason() << " missingInputs=" << missingInputs << std::endl;
         EXPECT_EQ(state1.GetRejectReason(), "komodo-interest-invalid");
     }
     {
@@ -191,7 +188,7 @@ TEST_F(KomodoFeatures, Interest) {
         CBlock block;
         block.vtx.push_back(txcb);
 
-        mtxSpend.nLockTime = chainActive.Tip()->GetMedianTimePast() - KOMODO_MAXMEMPOOLTIME - 1; // too long time staying in mempool (a bit longer than when adding )
+        mtxSpend.nLockTime = chainActive.Tip()->GetMedianTimePast() - 3600 - 1; // too long time staying in mempool (a bit longer than when adding )
         mtxSpend.vin[0].scriptSig.clear();
         EXPECT_TRUE(TestSignTx(tempKeystore, mtxSpend, 0, mtx0.vout[0].nValue, mtx0.vout[0].scriptPubKey));
         CTransaction tx1(mtxSpend);
@@ -206,7 +203,7 @@ TEST_F(KomodoFeatures, Interest) {
     {
         // check valid interest in mempool
 
-        mtxSpend.nLockTime = chainActive.Tip()->GetMedianTimePast() + 777 - KOMODO_MAXMEMPOOLTIME; // not too long time to add into mempool
+        mtxSpend.nLockTime = chainActive.Tip()->GetMedianTimePast() + 777 - 3600; // not too long time to add into mempool
         EXPECT_TRUE(TestSignTx(tempKeystore, mtxSpend, 0, mtx0.vout[0].nValue, mtx0.vout[0].scriptPubKey));
 
         CValidationState state1;
@@ -219,7 +216,7 @@ TEST_F(KomodoFeatures, Interest) {
     {
         // check valid interest in block
 
-        mtxSpend.nLockTime = chainActive.Tip()->GetMedianTimePast() - KOMODO_MAXMEMPOOLTIME; // not too long time in mempool
+        mtxSpend.nLockTime = chainActive.Tip()->GetMedianTimePast() - 3600; // not too long time in mempool
         mtxSpend.vin[0].scriptSig.clear();
         EXPECT_TRUE(TestSignTx(tempKeystore, mtxSpend, 0, mtx0.vout[0].nValue, mtx0.vout[0].scriptPubKey));
 
@@ -231,7 +228,143 @@ TEST_F(KomodoFeatures, Interest) {
 
         CValidationState state1;
         EXPECT_TRUE(ContextualCheckBlock(false, block, state1, pfakeIndex));
-        //std::cerr << __func__ << " state1.GetRejectReason()=" << state1.GetRejectReason() << std::endl;
     }
 }
 
+// check komodo_interestnew calculations
+TEST_F(KomodoFeatures, komodo_interestnew) {
+
+    // some not working values
+    EXPECT_EQ(komodo_interestnew(1, 1000LL, 1, 1), 0LL); 
+    // time lower than cut off month time limit
+    EXPECT_EQ(komodo_interestnew(1000000, 10LL*COIN, 1663839248, 1663839248 + (31 * 24 * 60 - 1) * 60 + 3600 /*KOMODO_MAXMEMPOOLTIME*/), 10LL*COIN/10512000 * (31*24*60 - 59)); 
+
+    // end of interest era
+    EXPECT_EQ(komodo_interestnew(7777777-1, 10LL*COIN, 1663839248, 1663839248 + (31 * 24 * 60 - 1) * 60 + 3600), 10LL*COIN/10512000 * (31*24*60 - 59)); 
+    EXPECT_EQ(komodo_interestnew(7777777, 10LL*COIN, 1663839248, 1663839248 + (31 * 24 * 60 - 1) * 60 + 3600), 0LL); 
+
+    // value less than limit
+    EXPECT_EQ(komodo_interestnew(1000000, 10LL*COIN-1, 1663839248, 1663839248 + (31 * 24 * 60 - 1) * 60 + 3600), 0); 
+    // tip less than nLockTime
+    EXPECT_EQ(komodo_interestnew(1000000, 10LL*COIN-1, 1663839248, 1663839248 - 1), 0); 
+    // not timestamp value
+    EXPECT_EQ(komodo_interestnew(1000000, 10LL*COIN-1, 400000000U, 400000000U + 30 * 24 * 60 * 60 + 3600), 0); 
+
+    // too small period
+    EXPECT_EQ(komodo_interestnew(1000000, 10LL*COIN, 1663839248, 1663839248 + 3600 - 1), 0); 
+    // time over cut off month time limit
+    EXPECT_EQ(komodo_interestnew(1000000, 10LL*COIN, 1663839248, 1663839248 + 31 * 24 * 60 * 60 + 3600+1), 10LL*COIN/10512000 * (31*24*60 - 59)); 
+    EXPECT_EQ(komodo_interestnew(1000000, 10LL*COIN, 1663839248, 1663839248 + 32 * 24 * 60 * 60 + 3600), 10LL*COIN/10512000 * (31*24*60 - 59)); 
+
+    // time close to cut off year time limit 
+    EXPECT_EQ(komodo_interestnew(1000000-1, 10LL*COIN, 1663839248, 1663839248 + (365 * 24 * 60 - 1) * 60 + 3600), 10LL*COIN/10512000 * (365*24*60 - 59)); 
+    // time over cut off year time limit 
+    EXPECT_EQ(komodo_interestnew(1000000-1, 10LL*COIN, 1663839248, 1663839248 + (365 * 24 * 60 - 1) * 60 + 3600 + 60), 10LL*COIN/10512000 * (365*24*60 - 59)); 
+    EXPECT_EQ(komodo_interestnew(1000000-1, 10LL*COIN, 1663839248, 1663839248 + (365 * 24 * 60 - 1) * 60 + 3600 + 30 * 24 * 60), 10LL*COIN/10512000 * (365*24*60 - 59)); 
+}
+
+// check komodo_interest calculations
+TEST_F(KomodoFeatures, komodo_interest) {
+
+    const uint32_t activation = 1491350400;  // 1491350400 5th April
+
+    {
+        // some not working values should produce 0LL
+        EXPECT_EQ(komodo_interest(1, 1000LL, 1, 1), 0LL); 
+    }
+    {
+        // nValue <= 25000LL*COIN and nValue >= 25000LL*COIN
+        // txheight >= 1000000 
+        // should be routed to komodo_interestnew
+
+        for (CAmount nValue : { 10LL*COIN, 25001LL*COIN })
+        {
+            // time lower than cut off month time limit
+            EXPECT_EQ(komodo_interest(1000000, nValue, 1663839248, 1663839248 + (31 * 24 * 60 - 1) * 60 + 3600), nValue/10512000 * (31*24*60 - 59)); 
+
+            // end of interest era
+            EXPECT_EQ(komodo_interest(7777777-1, nValue, 1663839248, 1663839248 + (31 * 24 * 60 - 1) * 60 + 3600), nValue/10512000 * (31*24*60 - 59)); 
+            EXPECT_EQ(komodo_interest(7777777 /*KOMODO_ENDOFERA*/, nValue, 1663839248, 1663839248 + (31 * 24 * 60 - 1) * 60 + 3600), 0LL); 
+
+            // tip less than nLockTime
+            EXPECT_EQ(komodo_interest(1000000, nValue-1, 1663839248, 1663839248 - 1), 0); 
+            // not timestamp value
+            EXPECT_EQ(komodo_interest(1000000, nValue-1, 400000000U, 400000000U + 30 * 24 * 60 * 60 + 3600), 0); 
+
+            // too small period
+            EXPECT_EQ(komodo_interest(1000000, nValue, 1663839248, 1663839248 + 3600 - 1), 0); 
+            // time over cut off month time limit
+            EXPECT_EQ(komodo_interest(1000000, nValue, 1663839248, 1663839248 + 31 * 24 * 60 * 60 + 3600+1), nValue/10512000 * (31*24*60 - 59)); 
+            EXPECT_EQ(komodo_interest(1000000, nValue, 1663839248, 1663839248 + 32 * 24 * 60 * 60 + 3600), nValue/10512000 * (31*24*60 - 59)); 
+        }
+        // value less than limit
+        EXPECT_EQ(komodo_interest(1000000, 10LL*COIN-1, 1663839248, 1663839248 + (31 * 24 * 60 - 1) * 60 + 3600), 0); 
+    }
+
+    for (auto days : { 1, 10, 365, 365*2, 365*3 })
+    {
+        std::cerr << "running komodo_interest test for days=" << days << "..." << std::endl;
+        int32_t minutes = days * 24 * 60;
+        if (minutes > 365 * 24 * 60)
+            minutes = 365 * 24 * 60;
+        {
+            // nValue <= 25000LL*COIN
+            // txheight < 1000000 
+
+            uint64_t numerator = (10LL*COIN / 20); // assumes 5%!
+            EXPECT_EQ(komodo_interest(1000000-1, 10LL*COIN, 1663839248, 1663839248 + minutes * 60), numerator * (minutes - 59) / (365ULL * 24 * 60)); 
+        }
+        {
+            // nValue <= 25000LL*COIN
+            // txheight < 250000 
+
+            uint64_t numerator = (10LL*COIN * 5000000 /*KOMODO_INTEREST*/);
+            uint32_t locktime = activation - 2 * days * 24 * 60 * 60;
+            uint32_t tiptime = locktime + minutes * 60;
+            ASSERT_TRUE(tiptime < activation);
+            uint64_t denominator = (365LL * 24 * 60) / minutes;
+            denominator = (denominator == 0LL) ? 1LL : denominator;
+            EXPECT_EQ(komodo_interest(250000-1, 10LL*COIN, locktime, tiptime), numerator / denominator / COIN); 
+        }
+        {
+            // !exception
+            // nValue > 25000LL*COIN
+            // txheight < 250000 
+
+            uint64_t numerator = (25000LL*COIN+1) / 20; // assumes 5%!
+            uint64_t denominator = (365LL * 24 * 60) / minutes; // no minutes-59 adjustment
+            denominator = (denominator == 0LL) ? 1LL : denominator;
+            EXPECT_EQ(komodo_interest(250000-1, 25000LL*COIN+1, 1663839248, 1663839248 + minutes * 60), numerator / denominator); 
+        }
+        {
+            // !exception
+            // nValue > 25000LL*COIN
+            // txheight < 1000000 
+
+            uint64_t numerator = (25000LL*COIN+1) / 20; // assumes 5%!
+            int32_t minutes_adj = minutes - 59; // adjusted since ht=250000
+            EXPECT_EQ(komodo_interest(1000000-1, 25000LL*COIN+1, 1663839248, 1663839248 + minutes * 60), numerator * minutes_adj / (365LL * 24 * 60)); 
+        }
+        {
+            // exception
+            // nValue > 25000LL*COIN
+            // txheight < 1000000 
+
+            for (const auto htval : std::vector<std::pair<int32_t, CAmount>>{ {116607, 2502721100000LL}, {126891, 2879650000000LL}, {129510, 3000000000000LL}, {141549, 3500000000000LL}, {154473, 3983399350000LL}, {154736, 3983406748175LL}, {155013, 3983414006565LL}, {155492, 3983427592291LL}, {155613, 9997409999999797LL}, {157927, 9997410667451072LL}, {155613, 2590000000000LL}, {155949, 4000000000000LL} })
+            {
+                int32_t txheight = htval.first;
+                CAmount nValue = htval.second;
+                uint64_t numerator = (static_cast<uint64_t>(nValue) * 5000000 /*KOMODO_INTEREST*/);  // NOTE: uint64_t (for CAmount it is an overflow here for some exceptions)
+                uint32_t locktime = 1484490069; // close to real tx locktime
+                // uint32_t locktime = 1663839248;
+                uint32_t tiptime = locktime + minutes * 60;
+                // uint32_t tiptime = 1663920715; // test writing time
+                // int32_t minutes = (tiptime - locktime) / 60;
+                uint64_t denominator = (365LL * 24 * 60) / minutes;
+                denominator = (denominator == 0LL) ? 1LL : denominator;
+                if (txheight < 155949)
+                    EXPECT_EQ(komodo_interest(txheight, nValue, locktime, tiptime), numerator / denominator / COIN); 
+            }
+        }
+    }
+}
