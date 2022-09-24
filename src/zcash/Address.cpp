@@ -11,6 +11,7 @@ const uint32_t SAPLING_BRANCH_ID = 0x76b809bb;
 
 namespace libzcash {
 
+  //Spending Keys
   std::pair<std::string, PaymentAddress> AddressInfoFromSpendingKey::operator()(const SproutSpendingKey &sk) const {
       return std::make_pair("z-sprout", sk.address());
   }
@@ -21,6 +22,16 @@ namespace libzcash {
       throw std::invalid_argument("Cannot derive default address from invalid spending key");
   }
 
+  //Diversifid SpendingKeys
+  std::pair<std::string, PaymentAddress> AddressInfoFromDiversifiedSpendingKey::operator()(const SaplingDiversifiedExtendedSpendingKey &dsk) const {
+      SaplingPaymentAddress addr = dsk.extsk.ToXFVK().fvk.in_viewing_key().address(dsk.d).get();
+      return std::make_pair("z-sapling", addr);
+  }
+  std::pair<std::string, PaymentAddress> AddressInfoFromDiversifiedSpendingKey::operator()(const InvalidEncoding&) const {
+      throw std::invalid_argument("Cannot derive default address from invalid spending key");
+  }
+
+  //Viewing Keys
   std::pair<std::string, PaymentAddress> AddressInfoFromViewingKey::operator()(const SproutViewingKey &sk) const {
       return std::make_pair("z-sprout", sk.address());
   }
@@ -29,6 +40,15 @@ namespace libzcash {
   }
   std::pair<std::string, PaymentAddress> AddressInfoFromViewingKey::operator()(const InvalidEncoding&) const {
       throw std::invalid_argument("Cannot derive default address from invalid viewing key");
+  }
+
+  //Diversified Viewing Keys
+  std::pair<std::string, PaymentAddress> AddressInfoFromDiversifiedViewingKey::operator()(const SaplingDiversifiedExtendedFullViewingKey &dvk) const {
+      SaplingPaymentAddress addr = dvk.extfvk.fvk.in_viewing_key().address(dvk.d).get();
+      return std::make_pair("z-sapling", addr);
+  }
+  std::pair<std::string, PaymentAddress> AddressInfoFromDiversifiedViewingKey::operator()(const InvalidEncoding&) const {
+      throw std::invalid_argument("Cannot derive address from invalid viewing key");
   }
 
 }
@@ -63,6 +83,14 @@ bool IsValidViewingKey(const libzcash::ViewingKey& vk) {
     return vk.which() != 0;
 }
 
+bool IsValidDiversifiedViewingKey(const libzcash::DiversifiedViewingKey& vk) {
+    return vk.which() != 0;
+}
+
 bool IsValidSpendingKey(const libzcash::SpendingKey& zkey) {
+    return zkey.which() != 0;
+}
+
+bool IsValidDiversifiedSpendingKey(const libzcash::DiversifiedSpendingKey& zkey) {
     return zkey.which() != 0;
 }

@@ -15,6 +15,8 @@
 const uint32_t ZIP32_HARDENED_KEY_LIMIT = 0x80000000;
 const size_t ZIP32_XFVK_SIZE = 169;
 const size_t ZIP32_XSK_SIZE = 169;
+const size_t ZIP32_DXFVK_SIZE = 180;
+const size_t ZIP32_DXSK_SIZE = 180;
 
 typedef std::vector<unsigned char, secure_allocator<unsigned char>> RawHDSeed;
 

@@ -41,10 +41,10 @@ libzcash::ViewingKey DecodeViewingKey(const std::string& str);
 std::string EncodeSpendingKey(const libzcash::SpendingKey& zkey);
 libzcash::SpendingKey DecodeSpendingKey(const std::string& str);
 
-std::string EncodeSaplingDiversifiedExtendedSpendingKey(const libzcash::SaplingDiversifiedExtendedSpendingKey& zkey);
-libzcash::SaplingDiversifiedExtendedSpendingKey DecodeSaplingDiversifiedExtendedSpendingKey(const std::string& str);
+std::string EncodeDiversifiedSpendingKey(const libzcash::DiversifiedSpendingKey& zkey);
+libzcash::DiversifiedSpendingKey DecodeDiversifiedSpendingKey(const std::string& str);
 
-std::string EncodeSaplingDiversifiedExtendedFullViewingKey(const libzcash::SaplingDiversifiedExtendedFullViewingKey& zkey);
-libzcash::SaplingDiversifiedExtendedFullViewingKey DecodeSaplingDiversifiedExtendedFullViewingKey(const std::string& str);
+std::string EncodeDiversifiedViewingKey(const libzcash::DiversifiedViewingKey& zkey);
+libzcash::DiversifiedViewingKey DecodeDiversifiedViewingKey(const std::string& str);
 
 #endif // BITCOIN_KEYIO_H

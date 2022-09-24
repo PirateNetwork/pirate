@@ -699,7 +699,7 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
                     if (keyMeta.hdKeypath.empty() || keyMeta.seedFp.IsNull()) {
                         file << strprintf("%s %s # zaddr=%s\n", EncodeSpendingKey(extsk), strTime, EncodePaymentAddress(addr));
                     } else {
-                        file << strprintf("%s %s %s %s # zaddr=%s\n", EncodeSpendingKey(extsk), strTime, keyMeta.hdKeypath, keyMeta.seedFp.GetHex(), EncodePaymentAddress(addr));
+                        file << strprintf("%s %s %s %s #zaddr=%s\n", EncodeSpendingKey(extsk), strTime, keyMeta.hdKeypath, keyMeta.seedFp.GetHex(), EncodePaymentAddress(addr));
                     }
                 }
             }
@@ -715,7 +715,7 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
                     libzcash::SaplingDiversifiedExtendedSpendingKey newKey;
                     newKey.extsk = extsk;
                     newKey.d = addr.d;
-                    file << strprintf("%s # zaddr=%s\n", EncodeSaplingDiversifiedExtendedSpendingKey(newKey), EncodePaymentAddress(addr));
+                    file << strprintf("%s #zaddr=%s\n", EncodeDiversifiedSpendingKey(newKey), EncodePaymentAddress(addr));
                 }
             }
         }
@@ -731,7 +731,7 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
                 pwalletMain->GetSaplingIncomingViewingKey(addr, ivk);
                 pwalletMain->GetSaplingFullViewingKey(ivk,extfvk);
                 if (EncodePaymentAddress(addr) == EncodePaymentAddress(extfvk.DefaultAddress())) {
-                    file << strprintf("%s # zaddr=%s\n", EncodeViewingKey(extfvk), EncodePaymentAddress(addr));
+                    file << strprintf("%s #zaddr=%s\n", EncodeViewingKey(extfvk), EncodePaymentAddress(addr));
                 }
             }
         }
@@ -750,7 +750,7 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
                     libzcash::SaplingDiversifiedExtendedFullViewingKey newKey;
                     newKey.extfvk = extfvk;
                     newKey.d = addr.d;
-                    file << strprintf("%s # zaddr=%s\n", EncodeSaplingDiversifiedExtendedFullViewingKey(newKey), EncodePaymentAddress(addr));
+                    file << strprintf("%s #zaddr=%s\n", EncodeDiversifiedViewingKey(newKey), EncodePaymentAddress(addr));
                 }
             }
         }
