@@ -30,7 +30,6 @@ class FakeCoinsViewDB2 : public CCoinsView { // change name to FakeCoinsViewDB2 
 public:
     FakeCoinsViewDB2() {
         // allowed mtx0 txids
-        sAllowedTxIn.insert(uint256S("01f1fde483c591ae81bee34f3dfc26ca4d6f061bc4ca15806ae15e07befedce9")); // 1 * COIN , nLockTime = 0
         sAllowedTxIn.insert(uint256S("c8ff545cdc5e921cdbbd24555a462340fc1092e09977944ec687c5bf3ef9c30b")); // 10 * COIN, nLockTime = 0
         sAllowedTxIn.insert(uint256S("529d8dcec041465fdf6c1f873ef1055eec106db5f02ae222814d3764bb8e6660")); // 10 * COIN, nLockTime = 1663755146
         sAllowedTxIn.insert(uint256S("3533600e69a22776afb765305a0ec46bcb06e1942f36a113d73733190092f9d5")); // 10 * COIN, nLockTime = 1663755147
