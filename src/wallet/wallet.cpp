@@ -7927,6 +7927,44 @@ KeyAddResult AddViewingKeyToWallet::operator()(const libzcash::InvalidEncoding& 
     throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid viewing key");
 }
 
+KeyAddResult AddDiversifiedViewingKeyToWallet::operator()(const libzcash::SaplingDiversifiedExtendedFullViewingKey &extdfvk) const {
+    auto extfvk = extdfvk.extfvk;
+    auto ivk = extfvk.fvk.in_viewing_key();
+    auto addr = ivk.address(extdfvk.d).get();
+    KeyAddResult result = KeyNotAdded;
+
+    if (m_wallet->HaveSaplingSpendingKey(extfvk)) {
+        result = SpendingKeyExists;
+    } else if (m_wallet->HaveSaplingFullViewingKey(ivk)) {
+        result = KeyAlreadyExists;
+    } else if (m_wallet->AddSaplingExtendedFullViewingKey(extfvk)) {
+        m_wallet->LoadSaplingWatchOnly(extfvk);
+        result = KeyAdded;
+    } else {
+        return KeyNotAdded;
+    }
+
+
+    if (m_wallet->AddSaplingIncomingViewingKey(ivk, addr)) {
+        if (result == SpendingKeyExists || result == KeyAlreadyExists) {
+            return KeyExistsAddressAdded;
+        } else {
+            return KeyAddedAddressAdded;
+        }
+    }
+
+    if (result == SpendingKeyExists || result == KeyAlreadyExists) {
+        return KeyExistsAddressNotAdded;
+    }
+
+    return KeyAddedAddressNotAdded;
+
+}
+
+KeyAddResult AddDiversifiedViewingKeyToWallet::operator()(const libzcash::InvalidEncoding& no) const {
+    throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid diversified viewing key");
+}
+
 KeyAddResult AddSpendingKeyToWallet::operator()(const libzcash::SproutSpendingKey &sk) const {
     auto addr = sk.address();
     if (log){
@@ -7980,4 +8018,41 @@ KeyAddResult AddSpendingKeyToWallet::operator()(const libzcash::SaplingExtendedS
 
 KeyAddResult AddSpendingKeyToWallet::operator()(const libzcash::InvalidEncoding& no) const {
     throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid spending key");
+}
+
+KeyAddResult AddDiversifiedSpendingKeyToWallet::operator()(const libzcash::SaplingDiversifiedExtendedSpendingKey &extdsk) const {
+    auto extfvk = extdsk.extsk.ToXFVK();
+    auto ivk = extfvk.fvk.in_viewing_key();
+    auto addr = ivk.address(extdsk.d).get();
+    KeyAddResult result = KeyNotAdded;
+
+
+    // Don't throw error in case a key is already there
+    if (m_wallet->HaveSaplingSpendingKey(extfvk)) {
+        result = KeyAlreadyExists;
+    } else {
+        if (!m_wallet-> AddSaplingZKey(extdsk.extsk)) {
+            return KeyNotAdded;
+        }
+        result = KeyAdded;
+    }
+
+    if (m_wallet->AddSaplingIncomingViewingKey(ivk,addr)) {
+        if (result == KeyAlreadyExists) {
+            return KeyExistsAddressAdded;
+        } else {
+            return KeyAddedAddressAdded;
+        }
+    }
+
+    if (result == KeyAlreadyExists) {
+        return KeyExistsAddressNotAdded;
+    }
+
+    return KeyAddedAddressNotAdded;
+
+}
+
+KeyAddResult AddDiversifiedSpendingKeyToWallet::operator()(const libzcash::InvalidEncoding& no) const {
+    throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid diversified viewing key");
 }
