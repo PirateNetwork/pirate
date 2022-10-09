@@ -15,6 +15,8 @@
 const uint32_t ZIP32_HARDENED_KEY_LIMIT = 0x80000000;
 const size_t ZIP32_XFVK_SIZE = 169;
 const size_t ZIP32_XSK_SIZE = 169;
+const size_t ZIP32_DXFVK_SIZE = 180;
+const size_t ZIP32_DXSK_SIZE = 180;
 
 typedef std::vector<unsigned char, secure_allocator<unsigned char>> RawHDSeed;
 
@@ -99,6 +101,19 @@ struct SaplingExtendedFullViewingKey {
     }
 };
 
+struct SaplingDiversifiedExtendedFullViewingKey {
+    SaplingExtendedFullViewingKey extfvk;
+    diversifier_t d;
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(extfvk);
+        READWRITE(d);
+    }
+};
+
 struct SaplingExtendedSpendingKey {
     uint8_t depth;
     uint32_t parentFVKTag;
@@ -135,6 +150,19 @@ struct SaplingExtendedSpendingKey {
             a.chaincode == b.chaincode &&
             a.expsk == b.expsk &&
             a.dk == b.dk;
+    }
+};
+
+struct SaplingDiversifiedExtendedSpendingKey {
+    SaplingExtendedSpendingKey extsk;
+    diversifier_t d;
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(extsk);
+        READWRITE(d);
     }
 };
 

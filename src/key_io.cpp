@@ -147,6 +147,33 @@ public:
     std::string operator()(const libzcash::InvalidEncoding& no) const { return {}; }
 };
 
+class DiversifiedViewingKeyEncoder : public boost::static_visitor<std::string>
+{
+private:
+    const CChainParams& m_params;
+
+public:
+    DiversifiedViewingKeyEncoder(const CChainParams& params) : m_params(params) {}
+
+    std::string operator()(const libzcash::SaplingDiversifiedExtendedFullViewingKey& extfvk) const
+    {
+        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+        ss << extfvk;
+        // ConvertBits requires unsigned char, but CDataStream uses char
+        std::vector<unsigned char> serkey(ss.begin(), ss.end());
+        std::vector<unsigned char> data;
+        // See calculation comment below
+        data.reserve((serkey.size() * 8 + 4) / 5);
+        ConvertBits<8, 5, true>([&](unsigned char c) { data.push_back(c); }, serkey.begin(), serkey.end());
+        std::string ret = bech32::Encode(m_params.Bech32HRP(CChainParams::SAPLING_DIVERSIFIED_EXTENDED_FVK), data);
+        memory_cleanse(serkey.data(), serkey.size());
+        memory_cleanse(data.data(), data.size());
+        return ret;
+    }
+
+    std::string operator()(const libzcash::InvalidEncoding& no) const { return {}; }
+};
+
 class SpendingKeyEncoder : public boost::static_visitor<std::string>
 {
 private:
@@ -185,13 +212,42 @@ public:
     std::string operator()(const libzcash::InvalidEncoding& no) const { return {}; }
 };
 
+class DiversifiedSpendingKeyEncoder : public boost::static_visitor<std::string>
+{
+private:
+    const CChainParams& m_params;
+
+public:
+    DiversifiedSpendingKeyEncoder(const CChainParams& params) : m_params(params) {}
+
+    std::string operator()(const libzcash::SaplingDiversifiedExtendedSpendingKey& zkey) const
+    {
+        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+        ss << zkey;
+        // ConvertBits requires unsigned char, but CDataStream uses char
+        std::vector<unsigned char> serkey(ss.begin(), ss.end());
+        std::vector<unsigned char> data;
+        // See calculation comment below
+        data.reserve((serkey.size() * 8 + 4) / 5);
+        ConvertBits<8, 5, true>([&](unsigned char c) { data.push_back(c); }, serkey.begin(), serkey.end());
+        std::string ret = bech32::Encode(m_params.Bech32HRP(CChainParams::SAPLING_DIVERSIFIED_EXTENDED_SPEND_KEY), data);
+        memory_cleanse(serkey.data(), serkey.size());
+        memory_cleanse(data.data(), data.size());
+        return ret;
+    }
+
+    std::string operator()(const libzcash::InvalidEncoding& no) const { return {}; }
+};
+
 // Sizes of SaplingPaymentAddress and SaplingSpendingKey after
 // ConvertBits<8, 5, true>(). The calculations below take the
 // regular serialized size in bytes, convert to bits, and then
 // perform ceiling division to get the number of 5-bit clusters.
 const size_t ConvertedSaplingPaymentAddressSize = ((32 + 11) * 8 + 4) / 5;
 const size_t ConvertedSaplingExtendedFullViewingKeySize = (ZIP32_XFVK_SIZE * 8 + 4) / 5;
+const size_t ConvertedSaplingDiversifiedExtendedFullViewingKeySize = (ZIP32_DXFVK_SIZE * 8 + 4) / 5;
 const size_t ConvertedSaplingExtendedSpendingKeySize = (ZIP32_XSK_SIZE * 8 + 4) / 5;
+const size_t ConvertedSaplingDiversifiedExtendedSpendingKeySize = (ZIP32_DXSK_SIZE * 8 + 4) / 5;
 const size_t ConvertedSaplingIncomingViewingKeySize = (32 * 8 + 4) / 5;
 } // namespace
 
@@ -426,6 +482,56 @@ libzcash::SpendingKey DecodeSpendingKey(const std::string& str)
         if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bech.second.begin(), bech.second.end())) {
             CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
             libzcash::SaplingExtendedSpendingKey ret;
+            ss >> ret;
+            memory_cleanse(data.data(), data.size());
+            return ret;
+        }
+    }
+    memory_cleanse(data.data(), data.size());
+    return libzcash::InvalidEncoding();
+}
+
+std::string EncodeDiversifiedSpendingKey(const libzcash::DiversifiedSpendingKey& zkey)
+{
+    return boost::apply_visitor(DiversifiedSpendingKeyEncoder(Params()), zkey);
+}
+
+libzcash::DiversifiedSpendingKey DecodeDiversifiedSpendingKey(const std::string& str)
+{
+    std::vector<unsigned char> data;;
+    auto bech = bech32::Decode(str);
+    if (bech.first == Params().Bech32HRP(CChainParams::SAPLING_DIVERSIFIED_EXTENDED_SPEND_KEY) &&
+        bech.second.size() == ConvertedSaplingDiversifiedExtendedSpendingKeySize) {
+        // Bech32 decoding
+        data.reserve((bech.second.size() * 5) / 8);
+        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bech.second.begin(), bech.second.end())) {
+            CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
+            libzcash::SaplingDiversifiedExtendedSpendingKey ret;
+            ss >> ret;
+            memory_cleanse(data.data(), data.size());
+            return ret;
+        }
+    }
+    memory_cleanse(data.data(), data.size());
+    return libzcash::InvalidEncoding();
+}
+
+std::string EncodeDiversifiedViewingKey(const libzcash::DiversifiedViewingKey& zkey)
+{
+    return boost::apply_visitor(DiversifiedViewingKeyEncoder(Params()), zkey);
+}
+
+libzcash::DiversifiedViewingKey DecodeDiversifiedViewingKey(const std::string& str)
+{
+    std::vector<unsigned char> data;;
+    auto bech = bech32::Decode(str);
+    if (bech.first == Params().Bech32HRP(CChainParams::SAPLING_DIVERSIFIED_EXTENDED_FVK) &&
+        bech.second.size() == ConvertedSaplingDiversifiedExtendedFullViewingKeySize) {
+        // Bech32 decoding
+        data.reserve((bech.second.size() * 5) / 8);
+        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bech.second.begin(), bech.second.end())) {
+            CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
+            libzcash::SaplingDiversifiedExtendedFullViewingKey ret;
             ss >> ret;
             memory_cleanse(data.data(), data.size());
             return ret;

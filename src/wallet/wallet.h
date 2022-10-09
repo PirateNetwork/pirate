@@ -1909,6 +1909,10 @@ enum KeyAddResult {
     KeyAlreadyExists,
     KeyAdded,
     KeyNotAdded,
+    KeyAddedAddressAdded,
+    KeyAddedAddressNotAdded,
+    KeyExistsAddressAdded,
+    KeyExistsAddressNotAdded,
 };
 
 class AddViewingKeyToWallet : public boost::static_visitor<KeyAddResult>
@@ -1920,6 +1924,17 @@ public:
 
     KeyAddResult operator()(const libzcash::SproutViewingKey &sk) const;
     KeyAddResult operator()(const libzcash::SaplingExtendedFullViewingKey &sk) const;
+    KeyAddResult operator()(const libzcash::InvalidEncoding& no) const;
+};
+
+class AddDiversifiedViewingKeyToWallet : public boost::static_visitor<KeyAddResult>
+{
+private:
+    CWallet *m_wallet;
+public:
+    AddDiversifiedViewingKeyToWallet(CWallet *wallet) : m_wallet(wallet) {}
+
+    KeyAddResult operator()(const libzcash::SaplingDiversifiedExtendedFullViewingKey &sk) const;
     KeyAddResult operator()(const libzcash::InvalidEncoding& no) const;
 };
 
@@ -1947,6 +1962,17 @@ public:
 
     KeyAddResult operator()(const libzcash::SproutSpendingKey &sk) const;
     KeyAddResult operator()(const libzcash::SaplingExtendedSpendingKey &sk) const;
+    KeyAddResult operator()(const libzcash::InvalidEncoding& no) const;
+};
+
+class AddDiversifiedSpendingKeyToWallet : public boost::static_visitor<KeyAddResult>
+{
+private:
+    CWallet *m_wallet;
+public:
+    AddDiversifiedSpendingKeyToWallet(CWallet *wallet) : m_wallet(wallet) {}
+
+    KeyAddResult operator()(const libzcash::SaplingDiversifiedExtendedSpendingKey &sk) const;
     KeyAddResult operator()(const libzcash::InvalidEncoding& no) const;
 };
 
