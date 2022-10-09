@@ -532,25 +532,26 @@ std::string TransactionBuilder::Build_offline_transaction()
             }
         }
 
-        //Parameter   [0]: Version - Layout of the command fields
-        // Version 1: [1] Pay from address
-        //            [2] Array of spending notes, which contains the funds of the 'pay from address'. Zip212 supported
-        //            [3] Array of recipient: address, amount, memo
-        //            [4]..[13] Blockchain parameters
-        //            [14] Checksum of all the characters in the command.
+        //Parameter   [0]: Project - Pirate Chain='arrr'
+        //            [1]: Version - Layout of the command fields
+        // Version 1: [2] Pay from address
+        //            [3] Array of spending notes, which contains the funds of the 'pay from address'. Zip212 supported
+        //            [4] Array of recipient: address, amount, memo
+        //            [5]..[13] Blockchain parameters
+        //            [15] Checksum of all the characters in the command.
         std::string sVersion="1";
 
-        sReturn="z_sign_offline "+sVersion+" ";
-        sChecksumInput=sVersion+" ";        
+        sReturn="z_sign_offline arrr "+sVersion+" ";
+        sChecksumInput="arrr "+sVersion+" ";
 
 
-        //Parameter [1]: Pay from address:
+        //Parameter [2]: Pay from address:
         sReturn += "\"" + fromAddress_ + "\" ";
         sChecksumInput+=fromAddress_+" ";
 
         
 
-        //Parameter [2]: Spending notes '[{"witnessposition":number,"witnesspath":hex,"note_d":hex,"note_pkd":hex,"note_r":hex,"value":number,"zip212":number},{...},{...}]'
+        //Parameter [3]: Spending notes '[{"witnessposition":number,"witnesspath":hex,"note_d":hex,"note_pkd":hex,"note_r":hex,"value":number,"zip212":number},{...},{...}]'
         if (spends.size() <= 0)
         {
           sReturn="Error:No spends";
@@ -675,11 +676,11 @@ std::string TransactionBuilder::Build_offline_transaction()
 
         
 
-        //Parameter [3]: Outputs (recipients)
-        //printf("Build_offline_transaction() [3] Outputs: Total=%ld\n\n", outputs.size());
+        //Parameter [4]: Outputs (recipients)
+        //printf("Build_offline_transaction() [4] Outputs: Total=%ld\n\n", outputs.size());
         if (sOutputRecipients.size() != outputs.size())
         {
-          //printf("Build_offline_transaction() [3] Internal error: sOutputRecipients.size(%ld) != outputs.size(%ld)\n\n",sOutputRecipients.size(), outputs.size());
+          //printf("Build_offline_transaction() [4] Internal error: sOutputRecipients.size(%ld) != outputs.size(%ld)\n\n",sOutputRecipients.size(), outputs.size());
           sReturn="Internal error: sOutputRecipients.size() != outputs.size()";
           return sReturn;
         }
@@ -739,37 +740,37 @@ std::string TransactionBuilder::Build_offline_transaction()
         }
 
 
-        //Parameter [4]: Minimum confirmations
-        //printf("Build_offline_transaction() [4] Minimum confirmations %d\n\n",iMinConf);
+        //Parameter [5]: Minimum confirmations
+        //printf("Build_offline_transaction() [5] Minimum confirmations %d\n\n",iMinConf);
         sReturn=sReturn+strprintf("%d ",iMinConf);
         sTmp = strprintf("%d ",iMinConf);            
         sChecksumInput+=sTmp;
 
 
-        //Parameter [5]: Miners fee
-        //printf("Build_offline_transaction() [5] Miners fee %ld\n\n",fee);
+        //Parameter [6]: Miners fee
+        //printf("Build_offline_transaction() [6] Miners fee %ld\n\n",fee);
         sReturn=sReturn+strprintf("%ld ",fee);
         sTmp = strprintf("%ld ",fee);
         sChecksumInput+=sTmp;        
 
 
-        //Parameter [6]: Next block height
-        //printf("Build_offline_transaction() [6] Next block height: '%d'\n\n", nHeight);
+        //Parameter [7]: Next block height
+        //printf("Build_offline_transaction() [7] Next block height: '%d'\n\n", nHeight);
         sReturn=sReturn+strprintf("%d ",nHeight);
         sTmp = strprintf("%d ",nHeight);
         sChecksumInput+=sTmp;
 
 
-        //Parameter [7]: BranchId (uint32_t)
+        //Parameter [8]: BranchId (uint32_t)
         auto BranchId = CurrentEpochBranchId(nHeight, consensusParams);
-        //printf("Build_offline_transaction() [7] BranchId: '%u'\n\n", BranchId);
+        //printf("Build_offline_transaction() [8] BranchId: '%u'\n\n", BranchId);
         sReturn=sReturn+strprintf("%u ",BranchId);
         sTmp = strprintf("%u ",BranchId);
         sChecksumInput+=sTmp;        
 
 
-        //Parameter [8]: Anchor
-        //printf("Build_offline_transaction() [8] Anchor\n");
+        //Parameter [9]: Anchor
+        //printf("Build_offline_transaction() [9] Anchor\n");
         char          cAnchorHex[2*32+1];
         CharArrayToHex(&cAnchor[0], 32, &cAnchorHex[0]);
         sReturn=sReturn+"\""+cAnchorHex+"\" ";
@@ -777,7 +778,7 @@ std::string TransactionBuilder::Build_offline_transaction()
         sChecksumInput+=sTmp;        
 
 
-        //Parameter [9] : bool fOverwintered
+        //Parameter [10] : bool fOverwintered
         if (mtx.fOverwintered == true)
         {
           sReturn=sReturn+"1 ";
@@ -790,24 +791,24 @@ std::string TransactionBuilder::Build_offline_transaction()
         }
 
 
-        //Parameter [10] : uint32_t nExpiryHeight
+        //Parameter [11] : uint32_t nExpiryHeight
         sReturn=sReturn+strprintf("%u ",mtx.nExpiryHeight);
         sTmp = strprintf("%u ",mtx.nExpiryHeight);
         sChecksumInput+=sTmp;        
 
 
-        //Parameter [11]: uint32_t nVersionGroupId
+        //Parameter [12]: uint32_t nVersionGroupId
         sReturn=sReturn+strprintf("%u ",mtx.nVersionGroupId);
         sTmp = strprintf("%u ",mtx.nVersionGroupId);
         sChecksumInput+=sTmp;        
 
 
-        //Parameter [12]: int32_t nVersion);
+        //Parameter [13]: int32_t nVersion);
         sReturn=sReturn+strprintf("%d ",mtx.nVersion);
         sTmp = strprintf("%d ",mtx.nVersion);
         sChecksumInput+=sTmp;         
 
-        //Parameter [13]: Zip212 enabled: Used for the outputs
+        //Parameter [14]: Zip212 enabled: Used for the outputs
         std::string sZip212_enabled = "0";
         // We use nHeight = chainActive.Height() + 1 since the output will be included in the next block
         if (NetworkUpgradeActive(nHeight + 1, consensusParams, Consensus::UPGRADE_CANOPY)) {
@@ -816,7 +817,7 @@ std::string TransactionBuilder::Build_offline_transaction()
         sReturn+= sZip212_enabled+" ";
         sChecksumInput+=sZip212_enabled+" ";
 
-        //Parameter [14]: checksum
+        //Parameter [15]: checksum
         //A simple checksum of the full string, to detect copy/paste errors between the wallets
         //The checksum equals the sum of the ASCII values of all the characters in the string:   
         //printf("sChecksumInput:\n%s\n\n",sChecksumInput.c_str() );        
