@@ -1,48 +1,332 @@
 ## Sign a transaction in an offline wallet
 This README matches the behaviour of Treasure Chest v5.6
 
-## Setup
-1. Two wallets are required: One running on a PC with internet access. This we'll
-   call the 'online wallet'. The other on a PC without internet or network access,
-   called the 'offline wallet'. The internet & network disconnected machine will
-   offer a physical barrier so that attackers cannot access the spending keys (private
-   keys) in your wallet.
-
-2. Start up the Pirate treasure chest wallet on the online machine. Let it finish
-   synchronising with the network over the internet.
-   The process can be speed up by first downloading the ARRR_bootstrap file and
-   extracting it into the data directory of the application.
-   On Linux its located in $HOME/.komodo/PIRATE under 'blocks' and 'chainstate'
-
-   zcash parameters: approx 1.6 GB
-   block chain: approx 14 GB
-
-3. Copy the zcash parameters from the online PC to the
-   offline machine. On linux its located in $HOME/.zcash-params
-
-4. First run of the offline wallet
-   Launch the application. With no config files in the project home  
-   directory the application will ask a couple of setup questions:
-   A popup appears with the title: New installation is detected.
-   The dialog asks if you want to run in online mode or offline mode.
-   Press 'No' to select offline mode.
-
-   The next page asks about the Wallet setup. 
-   If you have a BIP39 mnemonic seed phrase you'd like to use, select
-   the 'Restore wallet from seed' option.
-   If you'd like to create a new master key and its derived mnemonic
-   seed, select 'Create a new wallet'.
+## Introduction
+The problem with traditional wallets and how Pirate.black addresses these
+shortfalls:
+1. How traditional wallets work
+   A file called 'wallet.dat' stores your addresses. Each address consists of a public
+   and private part. The public part is what you share with people, so they can make
+   payments to you. The private part (key) is required to unlock and spend the
+   funds associated with that address. 
    
-   Note: All your addresses, with their private keys, are derived
-   from this single seed phrase. Do not use this mnemonic in your
-   online wallet, since all the addresses from it will be available
-   to an attacker.
-   Even though the online wallet will also prompt you to create a 
-   wallet with a new master key, we're not going to use those 
-   addresses. If they get compromised there should be no funds in
-   them and no material loss to you.
+2. Risk associated with traditional wallets
+   If somebody obtains your private key they can spend your funds. The network will
+   process the transaction if the cryptographic signature is correct. The network
+   doesn't validate who sent the transaction or from where.
+   An attacker will aim to obtain your wallet file in order to steal your private 
+   keys, and per extension, your funds. Malware hidden in applications is an easy
+   way for hackers to scout your hard drive for wallet files, which they send to
+   themselves over your internet link.
    
-5. Change from previous Treasure Chest version
+   Apart from the risk of loosing your funds to an attacker it's also much more likely
+   you'll loose your wallet file due to neglect. There are countless horror stories
+   of people who have lost billions (yes, with a 'B') worth of Bitcoin due to
+   hard drive crashes, hard drives that were formatted to make room for a new
+   O/S or game installation or simply old machines that were thrown away.   
+   
+   If you were diligent and made a backup of the wallet file, you have to remember
+   which addresses it contains. Each time you create a new addresses it is not 
+   automatically added to the backup copy. 
+   Upon restoring of an old backup you might discover that it doesn't contain all 
+   the new addresses created since the backup. Access to those funds are lost forever. 
+   
+3. BIP39: Mnemonic phrase improvement
+   The problem of loosing addresses and their private keys were mitigated with the
+   implementation of BIP39 mnemonic seed phrases. A single master key is created.
+   All the addresses in that wallet are derived from the master key. To the user
+   the master key is presented as a random 24 word English phrase, called a mnemonic.
+   
+   When the wallet is created this phrase must be written down and stored in a secure
+   manner. The storage medium must protect against fire and moisture damage.
+   
+   Do not use your phone to take a picture of the phrase. Synchronisation software 
+   could upload your images to the 'cloud' where it can be intercepted in transit
+   or on the remote storage. Do not print it out either. In rare cases malware in
+   printer firmware has been found to recognise these seed phrases and send it of
+   to the hackers.
+   
+   Paranoia regarding protection of your seed phrase is not unwarrented.
+   
+   When it's time to restore your addresses in a new wallet all you have to do is
+   to type in the mnemonic. The application will convert it to the master key.
+   No software backup of the wallet file is required. By initialising the wallet
+   with a valid seed phrase all the addresses derived from it can be recreated.
+   
+   If you have funds in a traditional wallet thats not based on BIP39, you can
+   setup a second wallet that uses the BIP39 technology. You can pay the funds
+   from the old wallet addresses to the new wallet, thereby transferring the 
+   funds to the new wallet.
+   
+4. Encrypted wallets
+   As seen above, BIP39 guards against loosing access to your individual addresses.
+   It however does not provide additional protection of loosing the actual wallet
+   file to an attacker. 
+   On Treasure Chest the wallet file can be encrypted too. If an attacker obtains
+   the wallet file, they will not be able to open it to get the master seed or 
+   any of the address data.
+   This file is password protected. Your security is based on choosing a long secure 
+   password which can withstand a brute force attack. 
+      
+5. Offline cold storage
+   Two computers are required for this setup. One is connected to the internet
+   while the other has no network connectivity. 
+
+   The machine without network access is called the offline machine. On it you
+   setup an encrypted wallet with mnemonic seed phrase. The machine doesn't have
+   a copy of the blockchain.
+
+   The machine with internet access is called the online machine. You set up an
+   encrypted wallet with a different mnemonic seed phrase on this machine. You
+   won't use any of the addresses derived from its  mnemonic. This machine is
+   synchronised with the blockchain.
+   
+   This process adds two levels of complexity:
+   *  How do you view the transactions & balance of an offline address?
+   *  How do you spend the funds in an offline address?
+   
+   Pirate's Treasure Chest wallet overcomes these obstacles as follow:
+
+   Viewing the transaction history
+   -------------------------------
+   The Pirate blockchain is encrypted. None of the transaction data is visible on
+   the blockchain. You can't import the public address into the online wallet and
+   view the activity that occurred on that address.
+
+   To overcome the limitation imposed by the encrypted blockchain, Pirate splits 
+   the public part of the address in two:
+   Spending address: (Starts with 'zs1') This is what you share with somebody to pay you.
+                   The sender can not obtain further information regarding the balance
+                   of that address or the transaction history of the address.
+   Extended viewing key: (Starts with 'zxviews') The extended viewing key contains the
+                   spending address and additional information enabling an online wallet
+                   to reconstruct the balance of the address and the transaction history.
+                   You normally reserve this functionality for private use or to share
+                   the address data with a partner or accountant.
+   
+   The viewing keys are generated by the offline wallet. The viewing keys of selected
+   addresses are imported in the online wallet. By analysing the blockchain the online
+   wallet can reconstruct the transaction history and balance of the address.
+   
+   If the online wallet is somehow stolen it's (almost) no deal - information
+   is leaked regarding the balance & transaction history of your addresses. This is
+   clearly not a desireable thing, but at least the attacker will not be able to spend
+   the funds, like they would have if the wallet contained the spending (private)
+   key of the address as well.
+   
+   Spend the funds of an extended viewing key
+   ------------------------------------------
+   In Treasure Chest the online wallet can construct a transaction with only the viewing
+   key of the address. All the required blockchain inputs are contained in this transaction 
+   request. With a memory stick the data is transferred to the offline machine. There the
+   private key of the address authorises (signs) the transaction. The authorised
+   transaction is transferred back to the online wallet and submitted to the blockchain
+   for processing.
+   
+6. Communicatin
+   The Treasure Chest wallet supports encryption between the wallet application and the 
+   network miner nodes. Your ISP and other information gatherers on the internet won't
+   be able to figure out that you're transacting in Pirate coin with your neighbour or
+   somebody on the otherside of the globe. In an age of unpresidented survailence Pirate
+   offers superior annonymity when a transaction is executed and leaves no visible 
+   trace for analytics on the blockchain as a historic record.
+   
+7. Summary
+   Pirate's Treasure Chest wallet gives you access to these features today:
+   * BIP39 master seed 
+   * Split addresses between two wallets. The offline contains the private keys
+     and the online the viewing and spending keys.
+   * Encrypted storage of the wallet on disk and encrypted communication
+   * All running on an encrypted blockchain   
+
+## Software setup
+1. You require two PCs, preferrably Intel i5 or faster. The online machine requires
+   30GB of hard drive space. The internet link should run at 10mbps or faster. 
+   The machines can run Linux, Mac OS X or MS Windows. For this tutorial Linux is used.
+   
+2. You can obtain the software from the official Pirate website, Pirate.black:
+   https://pirate.black/wallets/treasure-chest or a source copy from GitHUB at
+   https://github.com/PirateNetwork/pirate 
+   
+   Furthermore, if you do not have a copy of the blockchain, you can download a 
+   bootstrap file from the website too. At the time of writing (September 2022)
+   the file approached 14GB. The wallet software itself has an option to download
+   this file, but if the transfer gets interrupted you'll have to start from the 
+   beginning again. With a utility like 'wget' you can use the resume option (-c) 
+   to continue downloading. On a 10mbps link it takes about 4 hours to download.
+   Filename: ARRR-bootstrap.tar.gz
+        
+4 Online machine
+4.1 Installation
+   Now that you've got the Treasure chest software and blockchain bootstrap, 
+   lets continue setting up the online machine
+   
+   If you've downloaded the Debian Linux install archive, install it as root user:
+   # dpkg -i pirate-qt-ubuntu1804-v5.5.1.deb
+   The application binary is installed in /usr/local/bin/pirate-qt
+   
+  Treasure chest will create two sub directories in your $HOME directory where all 
+  the data is stored:
+      ~/.zcash-params  -- Contains ZKsnark network parameters
+      ~/.komodo/PIRATE -- Contains your wallet and the blockchain
+      
+  Note: Significant improvements were made in version 5.6, that is not compatible
+        with 5.5 or older. As soon as it's out of 'dev' and officially released we
+        recommend that you upgrade to it. Version 5.6 is avalible in the github
+        'dev' branch
+
+4.2 First run
+    From a terminal console, launch the application: pirate-qt
+    The wallet will immediately start to download the zk-SNARKs network parameters.
+    The download is 750mb and will be located in $HOME/.zcash-params
+    On a 10mbps link it takes about 10 minutes to download.
+    
+    With no files present in the ~/.komodo/PIRATE directory the application will ask
+    a couple of setup questions:
+    1. A popup appears with the title: New installation is detected.
+       The dialog asks if you want to run in online mode or offline mode.
+       Press 'Yes' to select online mode.
+    2. A popup appears with the title: New installation is detected.
+       The dialog asks if you want to download the blockchain bootstrap file
+       or synchronise directy from the network peers nodes.
+       Select 'Cancel' to synchronise the blockchain from peer nodes. 
+       We'll use the ARRR-bootstrap.tar.gz in the following steps.
+       
+    3. The mnemonic setup dialog appears. It asks how to initialise the mnemonic
+       master seed of the wallet. Select 'Create new wallet'. 
+       For secuirty reasons we do not use the addresses from the online wallet.
+       For the online wallet you can discard the mnemonic that is generated and
+       shown to you. If these addresses are compromised there shouldn't be any
+       funds in them and no material loss to you.
+       
+    4. The main application window appears, indicating that the configuration
+       was completed. The network synchronisation dialog shows that we're
+       catching up with the latest data in the blockchain. Press the hide
+       button to minimise the dialog.
+       
+       Navigate to Settings, Encrypt wallet
+       Enter a long secure password to encrypt your wallet. You'll need to
+       enter this password each time you launch Treasure Chest. Make sure it's
+       something thats still practical for you to type.
+       
+       The display is locked. Press the unlock button and enter your password.
+
+       Navigate to Settings->Options...
+         Select the Wallet tab.
+         Under Wallet Functions, make sure these radio button are checked:
+           * Enable offline signing
+             * Spend (Online mode)
+         Select the Network tab
+         Make sure these radio button are checked:
+           * Only connect to encrypted peers.
+       Press OK to apply the configuration. If any of the options were changed
+       the application will shutdown, otherwise select File, Exit
+             
+       Always shutdown the application properly to prevent corruption of the 
+       blockchain files. The blockchain files are created but does not yet
+       contain any data.
+
+4.3 Blockchain bootstrap
+    On a terminal console, navigate to $HOME/.komodo/PIRATE.
+         $ cd ~
+         $ cd .komodo/PIRATE
+    Remove the newly created blockchain files
+         $ rm -rf blocks
+         $ rm -rf chainstate
+    Extract the bootstrap archive, assuming that it's located in your ~/Downloads 
+    directory:
+         $ tar -xvzf ~/Download/ARRR-bootstrap.tar.gz
+    The 14GB archive takes about 3 minutes to extract. The extracted files and
+    archive together takes up about 30 GB of harddrive space. Do not let your PC
+    run out of HDD space while Treasure Chest is running, or the blockchain files
+    will be corrupted.
+
+4.4 Second run
+    From a terminal console, run the application: pirate-qt
+    The main splash screen will show the verifications done on the blockchain data 
+    as it loads it: 
+      Loading guts
+      Loading block index Db
+      Checking all blk files are present 
+     
+    Since the wallet contains a new seedphrase, the application will still scan 
+    the blockchain to see if there are any transactions associated with the addresses 
+    in the wallet:
+      Rescanning: Currently on block xxxxx
+      This takes about 25 minutes to complete on an Intel i5 machine.
+      
+    On the main application window the synchronisation dialog will show that you're 
+    a couple of days behind, depending on how old the bootstrap file was. The 
+    synchronisation should complete fairly quickly by bringing you up to date with
+    the network.
+      
+5 Offline machine
+5.1 Installation
+   The Treasure Chest wallet requires the ZKsnark network parameters.
+   
+   From the online machine, transfer the Treasure Chest installation archive and
+   ~/.zcash-params to the offline machine using a memory stick.
+
+   Copy the zcash parameters to ~/.zcash-params on the offline machine
+   
+   If you've downloaded the Debian Linux install archive, install it as root user:
+   # dpkg -i pirate-qt-ubuntu1804-v5.5.1.deb
+   The application binary is installed in /usr/local/bin/pirate-qt
+  
+5.2 First run
+    From a terminal console, run the application: pirate-qt
+    The application will load the provided ZKsnark network parameters.
+    
+    With no config files in the ~/.komodo/PIRATE directory the application will ask
+    a couple of setup questions:
+    1. A popup appears with the title: New installation is detected.
+       The dialog asks if you want to run in online mode or offline mode.
+       Press 'No' to select offline mode.    
+       
+    2. The wallet setup dialog appears. 
+       If you have a BIP39 mnemonic seed phrase you'd like to use, select
+       the 'Restore wallet from seed' option.
+       If you'd like to create a new mnemonic seed phrase, select 'Create
+       a new wallet'.
+   
+       As discussed in the introduction, if you create a new mnemonic it
+       is very important that you store the words in a way that is physically
+       secure and not use digital equipment that can expose your data to a
+       remote attack.
+       
+       Note: All your addresses, with their private keys, are derived
+             from this master seed phrase. Do not use this mnemonic in your
+             online wallet, since all the addresses derived from it could
+             be available to an attacker.
+             
+    3. The main application window appears, indicating that the configuration
+       was completed. Notice that the network synchronisation dialog is 
+       not shown, since we're running in offline mode.
+
+       Navigate to Settings, Encrypt wallet
+       Enter a long secure password to encrypt your wallet. You'll need to
+       enter this password each time you launch Treasure Chest. Make sure it's
+       something that's still practical for you to type.
+       
+       The display is locked. Press the unlock button and enter your password.       
+       
+       Navigate to Settings->Options...
+         Select the Wallet tab.
+         Under Wallet Functions, make sure these radio button are checked:
+           * Enable offline signing
+             * Sign (Offline mode)
+       If the config options were changed the application needs to restart
+       to apply the new configuration.
+       
+6. Backups
+   To backup your current setup, shut down Treasure Chest. Then proceed to backup
+   the ~/.zcash-params and ~/.komodo directories.
+   If you ever extract these directories again and launch Treasure Chest you'll be
+   precisely at the state as when the backup was made. Then you'll just have to
+   wait for Treasure Chest to resynchronise with the blockchain and you're ready
+   to make transactions again.
+   
+7. Changes from the previous Treasure Chest version
    Previously you had to manually edit the PIRATE.conf file in the
    project home directory to enable the 'offline mode' of the 
    application. This was accomplished by setting the config entry:
@@ -51,107 +335,54 @@ This README matches the behaviour of Treasure Chest v5.6
    The config option is accessible from the Settings->Options menu,
    under the Wallet tab.
    
-## Adreses
-1. The philosophy of an offline transaction
-   Each address consists of a public and private part. The public part is what you share
-   with people, so that they can make payments to you. The private part is required to
-   spend the funds in that address. This should be kept private at all times. If somebody
-   obtains your private key they can spend your funds. The network will process the
-   transaction if the cryptographic signature is correct, regardless of where the
-   transaction was send from. Your wallet.dat file stores your addresses. An attacker
-   will try to obtain your wallet file in order to steal your private keys, and per
-   extension, your funds. To prevent somebody from launching a remote attack on your
-   computer over the internet or with mallware on your PC, we split up the keys.
+## Address exchange    
+1. Create an address in the offline wallet
+   Click the 'Receive' button. The public addresses, starting with z x 1 are
+   display. People use this address to send funds to you. The 'Mine' column
+   should have a check mark next to each address, which indicates that the
+   wallet has the private key of that address.
+   
+   During the first run of the application an address is generated automatically.
+   If you require another address you can click the 'New' button at the bottom
+   of the window. A popup will appear that prompt for a label for the address.
+   The labels can help you to organise your addresses, for instance, to whom
+   you've given this address in order to receive a payment. 
+   Click OK to complete the operation. The labels will not be restored if you
+   restore the wallet from a BIP39 seed phrase.
 
-   Apart from the risk of loosing your funds to an attacker its also much more likely
-   that you'll loose your wallet.dat file due to neglect. There are countless horror
-   stories of people who have lost billions (yes, with a 'B') worth of Bitcoin due to
-   hard drive crashes, hard drives that were formatted to make room for a new
-   O/S installation or simply old machines that were thrown away.
-
-   This problem was mitigated with the implementation of BIP39 mnemonic seed phrases.
-   A 2048 bit random key is created and broken up into 24 pieces. Each piece is 
-   mapped to a natural language English dictionary. You end up with a random 24 word
-   phrase that represents this master key. By initialising the wallet with a valid
-   seed phrase all the addresses associated with that seed phrase can be recreated 
-   (derived). So now you only need to write down or remember this mnemonic seed 
-   phrase to restore you addresses on any wallet installation. Read up on the internet
-   on best practices on storing the BIP39 seed phrase securely.
-
-   On PirateNetwork there is a further distinction for the public part of the address.
-   Public address: (Starts with 'zs') This is what you share with somebody to pay you.
-                   They can not obtain further information regarding the balance of that
-                   address or the transaction history of the address.
-   Extended viewing key: (Starts with 'zxviews') The extended viewing key contains the
-                   public address and additional information enabling the wallet to show
-                   you the current balance of the address and the transaction history of
-                   the address. You use the extended viewing key in your own online
-                   wallet to view its balance and transaction history. To make a payment
-                   from the address you'll generate an offline sign request. More detail
-                   of this in the further secions.
-                   You do not normally share the extended viewing key with somebody, just
-                   like the private key.
-
-   The wallet on the offline PC contains the full address, i.e. viewing (public) &
-   spending (private). The wallet on the online PC only contains the viewing key.
-   If the wallet with the viewing key is stolen its (almost) no deal - information
-   is leaked regarding the balance & transaction history of your addresses. This is
-   clearly not a desireable thing, but at least they will not be able to spend that
-   balance, like they would have if the wallet contained the spending (private) part
-   of the address as well.
-
-2. Create an address in the offline wallet
-   Launch the offline wallet. The zcash parameters are verified first. The
-   overview page will show that it's running in 'Cold storage offline mode'.
-   If its not running as such, select Settings->Options and from the Wallet
-   tab: Enable offline signing and Sign (Offilne mode). The wallet will
-   restart to apply the configuration.
-
-   Click the 'Receive' button. The addresses on which you can receive funds will
-   be displayed. The 'Mine' column should have a check mark next to it, which
-   indicates that the wallet has the spending key (private key) of that address.
-   During the first run of the application it will automatically create a
-   wallet.dat file and generate one address.
-   If you require a new address to be generated, you can click the 'New' button
-   at the bottom of the window. A popup will appear that prompt for a label
-   for the address. The labels can help you to organise your addresses, for
-   instance, to whom you've given this address for a payment. Click OK to 
-   complete the operation. The labels will not be restored if you restore
-   the wallet from a BIP39 seed phrase.
-
-   The offline PC cannot scan the blockchain to see the transactions that were
-   send to its addresses. You'll use the online PC to view the balance of your
+   The offline PC cannot scan the  blockchain to see the transactions that were
+   send to it's addresses. You'll use the online PC to view the balance of your
    addresses.
 
-3. Exporting an address to the online wallet
+2. Export an address to the online wallet
    You need to export the extended viewing key of the address from your offline wallet
-   to the online wallet. To perform this task, click on the 'Receive' botton to
-   display all your addresses. Righ click on the desired address and select 'export
-   extended viewing key'. A window with about 4 lines of text will be displayed,
-   starting with 'zxviews....' Click with the mouse pointer on the text and press
-   Ctrl+a to select all the text. Then copy and paste it into a text editor. Save the
-   text file and transport it to the online PC. Since the offline machine is
-   disconnected from all networks for security concerns, you'll probably use a
-   USB memory stick to transport the file to the online machine.
+   to the online wallet. To perform this task, click on the 'Receive' button. Righ
+   click on the desired address and select 'export extended viewing key'. A window
+   with about 4 lines of text will be displayed, starting with 'zxviews....'
+   Click with the mouse pointer on the text and press Ctrl+a to select all the text.
+   Then copy and paste it into a text editor. Save the text file and transport it
+   to the online PC. Since the offline machine is disconnected from all networks,
+   for security concerns, you'll probably use a USB memory stick to transport the
+   file to the online machine.
 
-   Note: The process contains more data than only the public address. You share
+   Note: The viewing key contains more data than only the public address. You share
    the public address, starting with 'zs1...', with people so that they can send
    pirate coins to you. You use the extended viewing key to monitor the balance 
    and transaction history of the address and to request offline transaction 
-   signing for that address when you want to spend its funds. This will only be 
+   signing for that address when you want to spend it's funds. This will only be 
    used in your online wallet.
 
-4. Import extended viewing key in the online wallet
+3. Import extended viewing key in the online wallet
    On the online PC, open the file containing the extended viewing key.
    Copy the text of the viewing key. Launch the Treasure Chest application.
    Once it is operational, select File->Import viewing key
    A popup window will appear. Paste the text in the edit box and select OK
    The whole blockchain is scanned by the application to see if there were any funds
-   send to that address in the past. This can take up to an hour on a PC with an Intel
-   i5 processor. Once completed, click on the 'Receive' button. The address should be 
+   send to that address in the past. This takes approx. 25 minuts on a PC with an Intel
+   i5 processor. Once completed, click on the 'Receive' button. The new address should be 
    visible in the list. Note that there is no checkmark in the 'Mine' column. It indicates
    that you are only viewing the activity on the address and that the online wallet doesn't
-   have the spending key (private key) to authorise transaction for that address. This is
+   have the spending key (private key) to authorise a transaction for that address. This is
    exactly what we want to accomplish with the split wallet (online & offline) philosophy.
 
    Even though all the addresses are derived from the BIP39 seed phrase in the 
@@ -162,11 +393,11 @@ This README matches the behaviour of Treasure Chest v5.6
 ## Transactions   
                                        ATTENTION
    For this demonstration, please use very small amounts, like 2 or 3 milliArrr
-   at a time. In the event that something goes wrong its not a big deal in terms
+   at a time. In the event that something goes wrong it's not a big deal in terms
    of lost funds. As you get more comfortable with the process you can increase
    the amount. Make especially sure that you can spend the funds that you've 
-   received again. Its no use haveing a big balance on an address and the
-   funds happended to be locked in it.
+   received again. It's no use having a big balance on an address with the funds
+   locked in it.
 
 1. Fund the new address
    You'll first need some funds on the address before we can illustrate how you
@@ -188,11 +419,11 @@ This README matches the behaviour of Treasure Chest v5.6
    transaction is processed.
 
    If you're withdrawing the coins from an exchange, the exchange will prompt you
-   to enter the address where you want the coins to be send to and how many of 
-   your coins on the exchange you want to transfer to the new address. Enter all
-   the required information and submit the transaction. The exchange will provide
-   you with the transaction id (txid) once the transaction is submitted to the 
-   network for processing.
+   to enter an address. Enter one of your public address into the field. Decide
+   how many of your coins on the exchange you want to transfer to the new address.
+   Enter all the required information and submit the transaction. The exchange will
+   provide you with the transaction id (txid) once the transaction is submitted
+   to the network for processing.
 
    On your online wallet, click the 'Transactions' button. Once the network has
    processed the transaction and recorded it in the blockchain you'll see the
