@@ -61,6 +61,10 @@ public:
         ProxyUseI2P,                    // bool
         ProxyIPI2P,                     // QString
         ProxyPortI2P,                   // int
+        IPv4Only,                       // bool
+        IPv6Only,                       // bool
+        TorOnly,                        // bool
+        I2POnly,                        // bool
         OptionIDRowCount,
     };
 

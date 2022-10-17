@@ -217,6 +217,11 @@ void OptionsDialog::setModel(OptionsModel *_model)
     connect(ui->connectSocksTor, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     connect(ui->connectSocksI2P, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     connect(ui->allowIncomingI2P, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->Ipv4Only, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->Ipv6Only, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->TorOnly, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->I2pOnly, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+
     /* Display */
     connect(ui->lang, SIGNAL(valueChanged()), this, SLOT(showRestartWarning()));
     connect(ui->thirdPartyTxUrls, SIGNAL(textChanged(const QString &)), this, SLOT(showRestartWarning()));
@@ -258,6 +263,11 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->connectSocksI2P, OptionsModel::ProxyUseI2P);
     mapper->addMapping(ui->proxyIpI2P, OptionsModel::ProxyIPI2P);
     mapper->addMapping(ui->proxyPortI2P, OptionsModel::ProxyPortI2P);
+
+    mapper->addMapping(ui->Ipv4Only, OptionsModel::IPv4Only);
+    mapper->addMapping(ui->Ipv6Only, OptionsModel::IPv6Only);
+    mapper->addMapping(ui->TorOnly, OptionsModel::TorOnly);
+    mapper->addMapping(ui->I2pOnly, OptionsModel::I2POnly);
 
     /* Window */
 #ifndef Q_OS_MAC

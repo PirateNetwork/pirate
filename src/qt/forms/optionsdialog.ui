@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>587</width>
-    <height>569</height>
+    <height>649</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -772,6 +772,53 @@
           </spacer>
          </item>
         </layout>
+       </item>
+       <item>
+        <widget class="Line" name="line_4">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="Ipv4Only">
+         <property name="toolTip">
+          <string>Connect only to ipv4 networks</string>
+         </property>
+         <property name="text">
+          <string>Connect to IPV4 networks only</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="Ipv6Only">
+         <property name="toolTip">
+          <string>Connect only to ipv6 networks</string>
+         </property>
+         <property name="text">
+          <string>Connect to IPV6 networks only</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="TorOnly">
+         <property name="toolTip">
+          <string>Connect only to Tor networks</string>
+         </property>
+         <property name="text">
+          <string>Connect to Tor networks only</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="I2pOnly">
+         <property name="toolTip">
+          <string>Connect only to I2P networks</string>
+         </property>
+         <property name="text">
+          <string>Connect to I2P networks only</string>
+         </property>
+        </widget>
        </item>
        <item>
         <spacer name="verticalSpacer_Network">

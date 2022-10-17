@@ -231,7 +231,31 @@ void OptionsModel::Init(bool resetSettings)
     else if(!settings.value("fIncomingI2P").toBool() && !SoftSetArg("-i2pacceptincoming", std::string("0")))
         addOverriddenOption("-i2pacceptincoming");
 
-    LogPrintf("GUI Options set\n");
+    //Only nets
+    if (!settings.contains("fIPv4Only"))
+        settings.setValue("fIPv4Only", false);
+
+    if (settings.value("fIPv4Only").toBool())
+        SoftSetBoolArg("-onlynet", "ipv4");
+
+    if (!settings.contains("fIPv6Only"))
+        settings.setValue("fIPv6Only", false);
+
+    if (settings.value("fIPv6Only").toBool())
+        SoftSetBoolArg("-onlynet", "ipv6");
+
+    if (!settings.contains("fTorOnly"))
+        settings.setValue("fTorOnly", false);
+
+    if (settings.value("fTorOnly").toBool())
+        SoftSetBoolArg("-onlynet", "tor");
+
+    if (!settings.contains("fI2POnly"))
+        settings.setValue("fI2POnly", false);
+
+    if (settings.value("fI2POnly").toBool())
+        SoftSetBoolArg("-onlynet", "i2p");
+
 
     // Display
     if (!settings.contains("language"))
@@ -357,6 +381,16 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             QStringList strlIpPort = settings.value("addrProxyI2P").toString().split(":", QString::SkipEmptyParts);
             return strlIpPort.at(1);
         }
+
+        // Only Nets
+        case IPv4Only:
+            return settings.value("fIPv4Only");
+        case IPv6Only:
+            return settings.value("fIPv6Only");
+        case TorOnly:
+            return settings.value("fTorOnly");
+        case I2POnly:
+            return settings.value("fI2POnly");
 
 #ifdef ENABLE_WALLET
         case EnableDeleteTx:
@@ -535,6 +569,35 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
                     settings.setValue("addrProxyI2P", strNewValue);
                     setRestartRequired(true);
                 }
+            }
+            break;
+
+        //Only Nets
+        case IPv4Only:
+            if (settings.value("fIPv4Only") != value) {
+                settings.setValue("fIPv4Only", value);
+                setRestartRequired(true);
+            }
+            break;
+
+        case IPv6Only:
+            if (settings.value("fIPv6Only") != value) {
+                settings.setValue("fIPv6Only", value);
+                setRestartRequired(true);
+            }
+            break;
+
+        case TorOnly:
+            if (settings.value("fTorOnly") != value) {
+                settings.setValue("fTorOnly", value);
+                setRestartRequired(true);
+            }
+            break;
+
+        case I2POnly:
+            if (settings.value("fI2POnly") != value) {
+                settings.setValue("fI2POnly", value);
+                setRestartRequired(true);
             }
             break;
 
