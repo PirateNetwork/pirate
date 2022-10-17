@@ -24,6 +24,7 @@
 
 #include "main.h"
 #include "net.h"
+#include "init.h"
 
 #include "addrman.h"
 #include "chainparams.h"
@@ -1824,12 +1825,14 @@ void ThreadOpenConnections()
     int64_t nStart = GetTime();
     while (true)
     {
+        if (ShutdownRequested())
+            break;
+
         ProcessOneShot();
 
         MilliSleep(500);
 
         CSemaphoreGrant grant(*semOutbound);
-        boost::this_thread::interruption_point();
 
         // Add known valid seed at the time this release
         if (GetTime() - nStart > 60) {
@@ -1873,6 +1876,9 @@ void ThreadOpenConnections()
         int nTries = 0;
         while (true)
         {
+            if (ShutdownRequested())
+                break;
+
             CAddrInfo addr = addrman.Select();
 
             // if we selected an invalid address, restart

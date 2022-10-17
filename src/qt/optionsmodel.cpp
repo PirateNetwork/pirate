@@ -212,6 +212,51 @@ void OptionsModel::Init(bool resetSettings)
     else if(!settings.value("fUseSeparateProxyTor").toBool() && !GetArg("-onion", "").empty())
         addOverriddenOption("-onion");
 
+    if (!settings.contains("fUseProxyI2P"))
+        settings.setValue("fUseProxyI2P", false);
+
+    if (!settings.contains("addrProxyI2P") || !settings.value("addrProxyI2P").toString().contains(':'))
+        settings.setValue("addrProxyI2P", "127.0.0.1:7656");
+    // Only try to set -i2psam, if user has enabled fUseProxyI2P
+    if (settings.value("fUseProxyI2P").toBool() && !SoftSetArg("-i2psam", settings.value("addrProxyI2P").toString().toStdString()))
+        addOverriddenOption("-i2psam");
+    else if(!settings.value("fUseProxyI2P").toBool() && !GetArg("-i2psam", "").empty())
+        addOverriddenOption("-i2psam");
+
+    if (!settings.contains("fIncomingI2P"))
+        settings.setValue("fIncomingI2P", false);
+
+    if (settings.value("fIncomingI2P").toBool() && !SoftSetArg("-i2pacceptincoming", std::string("1")))
+        addOverriddenOption("-i2pacceptincoming");
+    else if(!settings.value("fIncomingI2P").toBool() && !SoftSetArg("-i2pacceptincoming", std::string("0")))
+        addOverriddenOption("-i2pacceptincoming");
+
+    //Only nets
+    if (!settings.contains("fIPv4Only"))
+        settings.setValue("fIPv4Only", false);
+
+    if (settings.value("fIPv4Only").toBool())
+        SoftSetBoolArg("-onlynet", "ipv4");
+
+    if (!settings.contains("fIPv6Only"))
+        settings.setValue("fIPv6Only", false);
+
+    if (settings.value("fIPv6Only").toBool())
+        SoftSetBoolArg("-onlynet", "ipv6");
+
+    if (!settings.contains("fTorOnly"))
+        settings.setValue("fTorOnly", false);
+
+    if (settings.value("fTorOnly").toBool())
+        SoftSetBoolArg("-onlynet", "tor");
+
+    if (!settings.contains("fI2POnly"))
+        settings.setValue("fI2POnly", false);
+
+    if (settings.value("fI2POnly").toBool())
+        SoftSetBoolArg("-onlynet", "i2p");
+
+
     // Display
     if (!settings.contains("language"))
         settings.setValue("language", "");
@@ -295,7 +340,7 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
 
         // default proxy
         case ProxyUse:
-            return settings.value("fUseProxy", false);
+            return settings.value("fUseProxy");
         case ProxyIP: {
             // contains IP at index 0 and port at index 1
             QStringList strlIpPort = settings.value("addrProxy").toString().split(":", QString::SkipEmptyParts);
@@ -309,7 +354,7 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
 
         // separate Tor proxy
         case ProxyUseTor:
-            return settings.value("fUseSeparateProxyTor", false);
+            return settings.value("fUseSeparateProxyTor");
         case ProxyIPTor: {
             // contains IP at index 0 and port at index 1
             QStringList strlIpPort = settings.value("addrSeparateProxyTor").toString().split(":", QString::SkipEmptyParts);
@@ -320,6 +365,32 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             QStringList strlIpPort = settings.value("addrSeparateProxyTor").toString().split(":", QString::SkipEmptyParts);
             return strlIpPort.at(1);
         }
+
+        // I2P proxy
+        case ProxyUseI2P:
+            return settings.value("fUseProxyI2P");
+        case IncomingI2P:
+            return settings.value("fIncomingI2P");
+        case ProxyIPI2P: {
+            // contains IP at index 0 and port at index 1
+            QStringList strlIpPort = settings.value("addrProxyI2P").toString().split(":", QString::SkipEmptyParts);
+            return strlIpPort.at(0);
+        }
+        case ProxyPortI2P: {
+            // contains IP at index 0 and port at index 1
+            QStringList strlIpPort = settings.value("addrProxyI2P").toString().split(":", QString::SkipEmptyParts);
+            return strlIpPort.at(1);
+        }
+
+        // Only Nets
+        case IPv4Only:
+            return settings.value("fIPv4Only");
+        case IPv6Only:
+            return settings.value("fIPv6Only");
+        case TorOnly:
+            return settings.value("fTorOnly");
+        case I2POnly:
+            return settings.value("fI2POnly");
 
 #ifdef ENABLE_WALLET
         case EnableDeleteTx:
@@ -396,66 +467,139 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         // default proxy
         case ProxyUse:
             if (settings.value("fUseProxy") != value) {
-                settings.setValue("fUseProxy", value.toBool());
+                settings.setValue("fUseProxy", value);
                 setRestartRequired(true);
             }
             break;
-        case ProxyIP: {
-            // contains current IP at index 0 and current port at index 1
-            QStringList strlIpPort = settings.value("addrProxy").toString().split(":", QString::SkipEmptyParts);
-            // if that key doesn't exist or has a changed IP
-            if (!settings.contains("addrProxy") || strlIpPort.at(0) != value.toString()) {
-                // construct new value from new IP and current port
-                QString strNewValue = value.toString() + ":" + strlIpPort.at(1);
-                settings.setValue("addrProxy", strNewValue);
-                setRestartRequired(true);
+        case ProxyIP:
+            {
+                // contains current IP at index 0 and current port at index 1
+                QStringList strlIpPort = settings.value("addrProxy").toString().split(":", QString::SkipEmptyParts);
+                // if that key doesn't exist or has a changed IP
+                if (!settings.contains("addrProxy") || strlIpPort.at(0) != value.toString()) {
+                    // construct new value from new IP and current port
+                    QString strNewValue = value.toString() + ":" + strlIpPort.at(1);
+                    settings.setValue("addrProxy", strNewValue);
+                    setRestartRequired(true);
+                }
             }
-        }
-        break;
-        case ProxyPort: {
-            // contains current IP at index 0 and current port at index 1
-            QStringList strlIpPort = settings.value("addrProxy").toString().split(":", QString::SkipEmptyParts);
-            // if that key doesn't exist or has a changed port
-            if (!settings.contains("addrProxy") || strlIpPort.at(1) != value.toString()) {
-                // construct new value from current IP and new port
-                QString strNewValue = strlIpPort.at(0) + ":" + value.toString();
-                settings.setValue("addrProxy", strNewValue);
-                setRestartRequired(true);
+            break;
+        case ProxyPort:
+            {
+                // contains current IP at index 0 and current port at index 1
+                QStringList strlIpPort = settings.value("addrProxy").toString().split(":", QString::SkipEmptyParts);
+                // if that key doesn't exist or has a changed port
+                if (!settings.contains("addrProxy") || strlIpPort.at(1) != value.toString()) {
+                    // construct new value from current IP and new port
+                    QString strNewValue = strlIpPort.at(0) + ":" + value.toString();
+                    settings.setValue("addrProxy", strNewValue);
+                    setRestartRequired(true);
+                }
             }
-        }
-        break;
+            break;
 
         // separate Tor proxy
         case ProxyUseTor:
             if (settings.value("fUseSeparateProxyTor") != value) {
-                settings.setValue("fUseSeparateProxyTor", value.toBool());
+                settings.setValue("fUseSeparateProxyTor", value);
                 setRestartRequired(true);
             }
             break;
-        case ProxyIPTor: {
-            // contains current IP at index 0 and current port at index 1
-            QStringList strlIpPort = settings.value("addrSeparateProxyTor").toString().split(":", QString::SkipEmptyParts);
-            // if that key doesn't exist or has a changed IP
-            if (!settings.contains("addrSeparateProxyTor") || strlIpPort.at(0) != value.toString()) {
-                // construct new value from new IP and current port
-                QString strNewValue = value.toString() + ":" + strlIpPort.at(1);
-                settings.setValue("addrSeparateProxyTor", strNewValue);
+        case ProxyIPTor:
+            {
+                // contains current IP at index 0 and current port at index 1
+                QStringList strlIpPort = settings.value("addrSeparateProxyTor").toString().split(":", QString::SkipEmptyParts);
+                // if that key doesn't exist or has a changed IP
+                if (!settings.contains("addrSeparateProxyTor") || strlIpPort.at(0) != value.toString()) {
+                    // construct new value from new IP and current port
+                    QString strNewValue = value.toString() + ":" + strlIpPort.at(1);
+                    settings.setValue("addrSeparateProxyTor", strNewValue);
+                    setRestartRequired(true);
+                }
+            }
+            break;
+        case ProxyPortTor:
+            {
+                // contains current IP at index 0 and current port at index 1
+                QStringList strlIpPort = settings.value("addrSeparateProxyTor").toString().split(":", QString::SkipEmptyParts);
+                // if that key doesn't exist or has a changed port
+                if (!settings.contains("addrSeparateProxyTor") || strlIpPort.at(1) != value.toString()) {
+                    // construct new value from current IP and new port
+                    QString strNewValue = strlIpPort.at(0) + ":" + value.toString();
+                    settings.setValue("addrSeparateProxyTor", strNewValue);
+                    setRestartRequired(true);
+                }
+            }
+            break;
+
+        // I2P proxy
+        case ProxyUseI2P:
+            if (settings.value("fUseProxyI2P") != value) {
+                settings.setValue("fUseProxyI2P", value);
                 setRestartRequired(true);
             }
-        }
-        break;
-        case ProxyPortTor: {
-            // contains current IP at index 0 and current port at index 1
-            QStringList strlIpPort = settings.value("addrSeparateProxyTor").toString().split(":", QString::SkipEmptyParts);
-            // if that key doesn't exist or has a changed port
-            if (!settings.contains("addrSeparateProxyTor") || strlIpPort.at(1) != value.toString()) {
-                // construct new value from current IP and new port
-                QString strNewValue = strlIpPort.at(0) + ":" + value.toString();
-                settings.setValue("addrSeparateProxyTor", strNewValue);
+            break;
+        case IncomingI2P:
+            if (settings.value("fIncomingI2P") != value) {
+                settings.setValue("fIncomingI2P", value);
                 setRestartRequired(true);
             }
-        }
-        break;
+            break;
+        case ProxyIPI2P:
+            {
+                // contains current IP at index 0 and current port at index 1
+                QStringList strlIpPort = settings.value("addrProxyI2P").toString().split(":", QString::SkipEmptyParts);
+                // if that key doesn't exist or has a changed IP
+                if (!settings.contains("addrProxyI2P") || strlIpPort.at(0) != value.toString()) {
+                    // construct new value from new IP and current port
+                    QString strNewValue = value.toString() + ":" + strlIpPort.at(1);
+                    settings.setValue("addrProxyI2P", strNewValue);
+                    setRestartRequired(true);
+                }
+            }
+            break;
+        case ProxyPortI2P:
+            {
+                // contains current IP at index 0 and current port at index 1
+                QStringList strlIpPort = settings.value("addrProxyI2P").toString().split(":", QString::SkipEmptyParts);
+                // if that key doesn't exist or has a changed port
+                if (!settings.contains("addrProxyI2P") || strlIpPort.at(1) != value.toString()) {
+                    // construct new value from current IP and new port
+                    QString strNewValue = strlIpPort.at(0) + ":" + value.toString();
+                    settings.setValue("addrProxyI2P", strNewValue);
+                    setRestartRequired(true);
+                }
+            }
+            break;
+
+        //Only Nets
+        case IPv4Only:
+            if (settings.value("fIPv4Only") != value) {
+                settings.setValue("fIPv4Only", value);
+                setRestartRequired(true);
+            }
+            break;
+
+        case IPv6Only:
+            if (settings.value("fIPv6Only") != value) {
+                settings.setValue("fIPv6Only", value);
+                setRestartRequired(true);
+            }
+            break;
+
+        case TorOnly:
+            if (settings.value("fTorOnly") != value) {
+                settings.setValue("fTorOnly", value);
+                setRestartRequired(true);
+            }
+            break;
+
+        case I2POnly:
+            if (settings.value("fI2POnly") != value) {
+                settings.setValue("fI2POnly", value);
+                setRestartRequired(true);
+            }
+            break;
 
 #ifdef ENABLE_WALLET
         case EnableDeleteTx:
@@ -470,45 +614,45 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
                 setRestartRequired(true);
             }
             break;
-      case EnableReindex:
-          if (settings.value("fEnableReindex") != value) {
-              settings.setValue("fEnableReindex", value);
-              setRestartRequired(true);
-          }
-          break;
-      case EnableZSigning:
-          if (settings.value("fEnableZSigning") != value) {
-              settings.setValue("fEnableZSigning", value);
-              setRestartRequired(true);
-          }
-          break;
-      case EnableZSigning_Sign:
-          if (settings.value("fEnableZSigning_ModeSign") != value) {
-              settings.setValue("fEnableZSigning_ModeSign", value);
-              setRestartRequired(true);
-          }
-          break;
-      case EnableZSigning_Spend:
-          if (settings.value("fEnableZSigning_ModeSpend") != value) {
-              settings.setValue("fEnableZSigning_ModeSpend", value);
-              setRestartRequired(true);
-          }
-          break;
-      case EnableHexMemo:
-          setHexMemo(value);
-          break;
-      case EnableBootstrap:
-          if (settings.value("fEnableBootstrap") != value) {
-              settings.setValue("fEnableBootstrap", value);
-              setRestartRequired(true);
-          }
-          break;
-      case ZapWalletTxes:
-          if (settings.value("fZapWalletTxes") != value) {
-              settings.setValue("fZapWalletTxes", value);
-              setRestartRequired(true);
-          }
-          break;
+        case EnableReindex:
+            if (settings.value("fEnableReindex") != value) {
+                settings.setValue("fEnableReindex", value);
+                setRestartRequired(true);
+            }
+            break;
+        case EnableZSigning:
+            if (settings.value("fEnableZSigning") != value) {
+                settings.setValue("fEnableZSigning", value);
+                setRestartRequired(true);
+            }
+            break;
+        case EnableZSigning_Sign:
+            if (settings.value("fEnableZSigning_ModeSign") != value) {
+                settings.setValue("fEnableZSigning_ModeSign", value);
+                setRestartRequired(true);
+            }
+            break;
+        case EnableZSigning_Spend:
+            if (settings.value("fEnableZSigning_ModeSpend") != value) {
+                settings.setValue("fEnableZSigning_ModeSpend", value);
+                setRestartRequired(true);
+            }
+            break;
+        case EnableHexMemo:
+            setHexMemo(value);
+            break;
+        case EnableBootstrap:
+            if (settings.value("fEnableBootstrap") != value) {
+                settings.setValue("fEnableBootstrap", value);
+                setRestartRequired(true);
+            }
+            break;
+        case ZapWalletTxes:
+            if (settings.value("fZapWalletTxes") != value) {
+                settings.setValue("fZapWalletTxes", value);
+                setRestartRequired(true);
+            }
+            break;
 #endif
         case DisplayUnit:
             setDisplayUnit(value);
@@ -612,11 +756,11 @@ void OptionsModel::setHexMemo(const QVariant &value)
 // #endif
 
 //Note: setRestartRequired only called while the settings are
-//      evaluated & updated in ::setData(). 
+//      evaluated & updated in ::setData().
 //      This is too late to provide a user prompt to cancel/
 //      prevent the update.
 void OptionsModel::setRestartRequired(bool fRequired)
-{    
+{
     QSettings settings;
     settings.setValue("fRestartRequired", fRequired);
     return;
