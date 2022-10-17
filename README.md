@@ -50,6 +50,9 @@ A list of outstanding improvements is included in README_todo.md
 #The following packages are needed:
 sudo apt-get update && sudo apt-get upgrade -y
 sudo apt-get install build-essential pkg-config libc6-dev m4 g++-multilib autoconf libtool libncurses-dev unzip git python zlib1g-dev wget bsdmainutils automake libboost-all-dev libssl-dev libprotobuf-dev protobuf-compiler libqrencode-dev libdb++-dev ntp ntpdate nano software-properties-common curl libevent-dev libcurl4-gnutls-dev cmake clang libsodium-dev -y
+
+On newer Linux distributions, like Ubuntu 22.04, the following additional packages are required:
+sudo apt-get install liblz4-dev libbrotli-dev
 ```
 
 ### Build Pirate
@@ -73,6 +76,17 @@ cd pirate
 
 #For qt GUI binaries
 ./zcutil/build-qt-linux.sh -j8.
+
+#If you get this compile error:
+qt/moc_addressbookpage.cpp:142:1: error: ‘QT_INIT_METAOBJECT’ does not name a type
+  142 | QT_INIT_METAOBJECT const QMetaObject AddressBookPage::staticMetaObject = { {
+      | ^~~~~~~~~~~~~~~~~~
+  146 | QT_INIT_METAOBJECT const QMetaObject ZAddressBookPage::staticMetaObject = { {
+      | ^~~~~~~~~~~~~~~~~~
+
+Qt is incompatible with the libgl library.
+Remove library: sudo apt-get remove libgl-dev
+Install libraries: sudo apt-get install mesa-common-dev libglu1-mesa-dev
 ```
 
 #### OSX
