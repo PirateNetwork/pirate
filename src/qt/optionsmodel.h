@@ -57,6 +57,10 @@ public:
         SaplingConsolidationEnabled,    // bool
         Listen,                         // bool
         EncryptedP2P,                   // bool
+        IncomingI2P,                    // bool
+        ProxyUseI2P,                    // bool
+        ProxyIPI2P,                     // QString
+        ProxyPortI2P,                   // int
         OptionIDRowCount,
     };
 

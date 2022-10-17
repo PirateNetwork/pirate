@@ -59,6 +59,10 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
     ui->proxyPortTor->setEnabled(false);
     ui->proxyPortTor->setValidator(new QIntValidator(1, 65535, this));
 
+    ui->proxyIpI2P->setEnabled(false);
+    ui->proxyPortI2P->setEnabled(false);
+    ui->proxyPortI2P->setValidator(new QIntValidator(1, 65535, this));
+
     connect(ui->connectSocks, SIGNAL(toggled(bool)), ui->proxyIp, SLOT(setEnabled(bool)));
     connect(ui->connectSocks, SIGNAL(toggled(bool)), ui->proxyPort, SLOT(setEnabled(bool)));
     connect(ui->connectSocks, SIGNAL(toggled(bool)), this, SLOT(updateProxyValidationState()));
@@ -66,6 +70,10 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
     connect(ui->connectSocksTor, SIGNAL(toggled(bool)), ui->proxyIpTor, SLOT(setEnabled(bool)));
     connect(ui->connectSocksTor, SIGNAL(toggled(bool)), ui->proxyPortTor, SLOT(setEnabled(bool)));
     connect(ui->connectSocksTor, SIGNAL(toggled(bool)), this, SLOT(updateProxyValidationState()));
+
+    connect(ui->connectSocksI2P, SIGNAL(toggled(bool)), ui->proxyIpI2P, SLOT(setEnabled(bool)));
+    connect(ui->connectSocksI2P, SIGNAL(toggled(bool)), ui->proxyPortI2P, SLOT(setEnabled(bool)));
+    connect(ui->connectSocksI2P, SIGNAL(toggled(bool)), this, SLOT(updateProxyValidationStateI2P()));
 
     /* Window elements init */
 #ifdef Q_OS_MAC
@@ -143,10 +151,15 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
     /* setup/change UI elements when proxy IPs are invalid/valid */
     ui->proxyIp->setCheckValidator(new ProxyAddressValidator(parent));
     ui->proxyIpTor->setCheckValidator(new ProxyAddressValidator(parent));
+    ui->proxyIpI2P->setCheckValidator(new ProxyAddressValidatorI2P(parent));
+
     connect(ui->proxyIp, SIGNAL(validationDidChange(QValidatedLineEdit *)), this, SLOT(updateProxyValidationState()));
     connect(ui->proxyIpTor, SIGNAL(validationDidChange(QValidatedLineEdit *)), this, SLOT(updateProxyValidationState()));
+    connect(ui->proxyIpI2P, SIGNAL(validationDidChange(QValidatedLineEdit *)), this, SLOT(updateProxyValidationStateI2P()));
+
     connect(ui->proxyPort, SIGNAL(textChanged(const QString&)), this, SLOT(updateProxyValidationState()));
     connect(ui->proxyPortTor, SIGNAL(textChanged(const QString&)), this, SLOT(updateProxyValidationState()));
+    connect(ui->proxyPortI2P, SIGNAL(textChanged(const QString&)), this, SLOT(updateProxyValidationStateI2P()));
 
     /* Offline signing */
     connect(ui->enableOfflineSigning,  SIGNAL(clicked(bool)), this, SLOT(enableOfflineSigningClick(bool)));
@@ -202,6 +215,8 @@ void OptionsDialog::setModel(OptionsModel *_model)
     connect(ui->requireTLS, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     connect(ui->connectSocks, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     connect(ui->connectSocksTor, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->connectSocksI2P, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->allowIncomingI2P, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     /* Display */
     connect(ui->lang, SIGNAL(valueChanged()), this, SLOT(showRestartWarning()));
     connect(ui->thirdPartyTxUrls, SIGNAL(textChanged(const QString &)), this, SLOT(showRestartWarning()));
@@ -238,6 +253,11 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->connectSocksTor, OptionsModel::ProxyUseTor);
     mapper->addMapping(ui->proxyIpTor, OptionsModel::ProxyIPTor);
     mapper->addMapping(ui->proxyPortTor, OptionsModel::ProxyPortTor);
+
+    mapper->addMapping(ui->allowIncomingI2P, OptionsModel::IncomingI2P);
+    mapper->addMapping(ui->connectSocksI2P, OptionsModel::ProxyUseI2P);
+    mapper->addMapping(ui->proxyIpI2P, OptionsModel::ProxyIPI2P);
+    mapper->addMapping(ui->proxyPortI2P, OptionsModel::ProxyPortI2P);
 
     /* Window */
 #ifndef Q_OS_MAC
@@ -412,7 +432,7 @@ void OptionsDialog::showRestartWarning(bool fPersistent)
         // Todo: should perhaps be a class attribute, if we extend the use of statusLabel
         QTimer::singleShot(10000, this, SLOT(clearStatusLabel()));
     }
-    
+
     //Items that require restart-on-change were connected to showRestartWarning() in ::setModel()
     //Note: The model implementation is misleading: RestartRequired is not evaluated with every
     //      item change. Therefore isRestartRequired always returns false while you're busy
@@ -426,7 +446,7 @@ void OptionsDialog::showRestartWarning(bool fPersistent)
     //      the user sets it back to its original value, which should actually have to 'undo'
     //      the forced restart.
     model->setRestartRequired(true);
-    
+
 }
 
 void OptionsDialog::clearStatusLabel()
@@ -448,6 +468,22 @@ void OptionsDialog::updateProxyValidationState()
         setOkButtonState(false);
         ui->statusLabel->setStyleSheet("QLabel { color: red; }");
         ui->statusLabel->setText(tr("The supplied proxy address is invalid."));
+    }
+}
+
+void OptionsDialog::updateProxyValidationStateI2P()
+{
+    QValidatedLineEdit *pUiProxyIp = ui->proxyIpI2P;
+    if (pUiProxyIp->isValid() && (!ui->proxyPortI2P->isEnabled() || ui->proxyPortI2P->text().toInt() > 0))
+    {
+        setOkButtonState(true);
+        clearStatusLabel();
+    }
+    else
+    {
+        setOkButtonState(false);
+        ui->statusLabel->setStyleSheet("QLabel { color: red; }");
+        ui->statusLabel->setText(tr("The supplied I2P sam address is invalid."));
     }
 }
 
@@ -483,6 +519,23 @@ QValidator::State ProxyAddressValidator::validate(QString &input, int &pos) cons
     Q_UNUSED(pos);
     // Validate the proxy
     CService serv(LookupNumeric(input.toStdString().c_str(), 9050));
+    proxyType addrProxy = proxyType(serv, true);
+    if (addrProxy.IsValid())
+        return QValidator::Acceptable;
+
+    return QValidator::Invalid;
+}
+
+ProxyAddressValidatorI2P::ProxyAddressValidatorI2P(QObject *parent) :
+QValidator(parent)
+{
+}
+
+QValidator::State ProxyAddressValidatorI2P::validate(QString &input, int &pos) const
+{
+    Q_UNUSED(pos);
+    // Validate the proxy
+    CService serv(LookupNumeric(input.toStdString().c_str(), 7656));
     proxyType addrProxy = proxyType(serv, true);
     if (addrProxy.IsValid())
         return QValidator::Acceptable;

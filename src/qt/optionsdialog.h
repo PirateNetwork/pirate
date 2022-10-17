@@ -31,6 +31,18 @@ public:
     State validate(QString &input, int &pos) const;
 };
 
+/** Proxy address widget validator, checks for a valid proxy address.
+ */
+class ProxyAddressValidatorI2P : public QValidator
+{
+    Q_OBJECT
+
+public:
+    explicit ProxyAddressValidatorI2P(QObject *parent);
+
+    State validate(QString &input, int &pos) const;
+};
+
 /** Preferences dialog. */
 class OptionsDialog : public QDialog
 {
@@ -42,7 +54,7 @@ public:
 
     void setModel(OptionsModel *model);
     void setMapper();
-    
+
 private:
     void evaluateOfflineSigning(bool bChecked);
     bool restartPrompt(QString sHeading);
@@ -62,6 +74,7 @@ private Q_SLOTS:
     void showRestartWarning(bool fPersistent = false);
     void clearStatusLabel();
     void updateProxyValidationState();
+    void updateProxyValidationStateI2P();
     /* query the networks, for which the default proxy is used */
     void updateDefaultProxyNets();
 
