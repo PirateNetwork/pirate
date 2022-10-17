@@ -22,6 +22,7 @@
 #include "hash.h"
 #include "serialize.h"
 #include "streams.h"
+#include "init.h"
 
 int CAddrInfo::GetTriedBucket(const uint256& nKey, const std::vector<bool> &asmap) const
 {
@@ -399,6 +400,9 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
         // use a tried node
         double fChanceFactor = 1.0;
         while (1) {
+            if (ShutdownRequested()) //break loop on shutdown request
+                return CAddrInfo();
+
             int i = 0;
             int nKBucket = RandomInt(ADDRMAN_TRIED_BUCKET_COUNT);
             int nKBucketPos = RandomInt(ADDRMAN_BUCKET_SIZE);
@@ -421,6 +425,9 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
         // use a new node
         double fChanceFactor = 1.0;
         while (1) {
+            if (ShutdownRequested()) //break loop on shutdown request
+                return CAddrInfo();
+
             int i = 0;
             int nUBucket = RandomInt(ADDRMAN_NEW_BUCKET_COUNT);
             int nUBucketPos = RandomInt(ADDRMAN_BUCKET_SIZE);
