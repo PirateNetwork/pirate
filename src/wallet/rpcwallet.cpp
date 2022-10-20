@@ -5158,9 +5158,12 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
     // Check that the user specified fee is not absurd.
     // This allows amount=0 (and all amount < nDefaultFee) transactions to use the default network fee
     // or anything less than nDefaultFee instead of being forced to use a custom fee and leak metadata
-    if (nTotalOut < nFee)
+    if (nTotalOut < ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE) // Per comment above: (all amount < nDefaultFee)
     {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Small transaction amount %s has fee %s that is greater than the default fee %s", FormatMoney(nTotalOut), FormatMoney(nFee), FormatMoney(ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE)));
+        if (nFee > ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE)  // Per comment above: (network fee <= nDefaultFee)
+        {                                                   // Conclusion: If (TotalOut < defaultFee) then (fee must also be <= defaultFee)
+          throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Small transaction amount %s has fee %s that is greater than the default fee %s", FormatMoney(nTotalOut), FormatMoney(nFee), FormatMoney(ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE)));
+        }
     }
     else
     {
