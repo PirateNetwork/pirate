@@ -723,7 +723,7 @@ void ThreadImport(std::vector<boost::filesystem::path> vImportFiles)
         //Cold storage: Offline mode. Skip ThreadImport
         return;
     }
-    
+
     // Online mode. Start ThreadImport
     RenameThread("zcash-loadblk");
     // -reindex
@@ -1134,7 +1134,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     // Make sure enough file descriptors are available
     int nBind = std::max((int)mapArgs.count("-bind") + (int)mapArgs.count("-whitebind"), 1);
     nMaxConnections = GetArg("-maxconnections", DEFAULT_MAX_PEER_CONNECTIONS);
-    //fprintf(stderr,"nMaxConnections %d\n",nMaxConnections);    
+    //fprintf(stderr,"nMaxConnections %d\n",nMaxConnections);
     nMaxConnections = std::max(std::min(nMaxConnections, (int)(FD_SETSIZE - nBind - MIN_CORE_FILEDESCRIPTORS)), 0);
     int nFD = RaiseFileDescriptorLimit(nMaxConnections + MIN_CORE_FILEDESCRIPTORS);
     //fprintf(stderr,"nMaxConnections %d FD_SETSIZE.%d nBind.%d expr.%d \n",nMaxConnections,FD_SETSIZE,nBind,(int)(FD_SETSIZE - nBind - MIN_CORE_FILEDESCRIPTORS));
@@ -1548,21 +1548,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             strSubVersion.size(), MAX_SUBVERSION_LENGTH));
     }
 
-    if (mapArgs.count("-onlynet")) {
-        std::set<enum Network> nets;
-        BOOST_FOREACH(const std::string& snet, mapMultiArgs["-onlynet"]) {
-            enum Network net = ParseNetwork(snet);
-            if (net == NET_UNROUTABLE)
-                return InitError(strprintf(_("Unknown network specified in -onlynet: '%s'"), snet));
-            nets.insert(net);
-        }
-        for (int n = 0; n < NET_MAX; n++) {
-            enum Network net = (enum Network)n;
-            if (!nets.count(net))
-                SetReachable(net,false);
-        }
-    }
-
     if (mapArgs.count("-whitelist")) {
         BOOST_FOREACH(const std::string& net, mapMultiArgs["-whitelist"]) {
             CSubNet subnet;
@@ -1746,17 +1731,17 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     fReindex = GetBoolArg("-reindex", false);
 
-    
-    
+
+
 
     bool useBootstrap = false;
     bool newInstall = false;
-    
+
 
     //Parameter set on initial creation of PIRATE.conf.
-    newInstall = GetBoolArg("-setup_cold_storage", false);    
-    
-    //Prompt on new install: Cold storage or normal operation? 
+    newInstall = GetBoolArg("-setup_cold_storage", false);
+
+    //Prompt on new install: Cold storage or normal operation?
     if (newInstall && !IsArgSet("maxconnections")) {
         int fColdStorage_Offline = uiInterface.ThreadSafeMessageBox(
             "\n\n" + _("New install detected.\n\nPress YES to setup this wallet in the tradional online mode, i.e. a full function wallet that can create, authorise (sign) and send transactions.\n\nPress No to setup this instance as a cold storage offline wallet which only authorise (sign) transactions"),
@@ -1765,12 +1750,12 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             //Cold storage offline mode
             nMaxConnections=0;
             useBootstrap = false;
-            
+
             //Note: By this time the GUI configuration files: 'Pirate Chain/Treasure\ Chest.conf' and
             //      PIRATE.conf is already created. We'll have to update the GUI configuration from
             //      the UI code
         }
-    } 
+    }
 
     if (nMaxConnections>0) //Online mode
     {
