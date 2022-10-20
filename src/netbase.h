@@ -22,7 +22,7 @@ extern int nConnectTimeout;
 extern bool fNameLookup;
 
 //! -timeout default
-static const int DEFAULT_CONNECT_TIMEOUT = 15000;
+static const int DEFAULT_CONNECT_TIMEOUT = 60000;
 //! -dns default
 static const int DEFAULT_NAME_LOOKUP = true;
 
