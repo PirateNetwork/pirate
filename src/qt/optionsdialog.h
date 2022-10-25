@@ -72,6 +72,7 @@ private Q_SLOTS:
     void setTheme();
     void enableOfflineSigningClick(bool bChecked);
     void showRestartWarning(bool fPersistent = false);
+    void enableProxyTypes();
     void clearStatusLabel();
     void updateProxyValidationState();
     void updateProxyValidationStateI2P();

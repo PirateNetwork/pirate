@@ -75,6 +75,16 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
     connect(ui->connectSocksI2P, SIGNAL(toggled(bool)), ui->proxyPortI2P, SLOT(setEnabled(bool)));
     connect(ui->connectSocksI2P, SIGNAL(toggled(bool)), this, SLOT(updateProxyValidationStateI2P()));
 
+    ui->i2pLink->setText("<a href=\"https://github.com/PirateNetwork/pirate/blob/dev/doc/i2p.md/\">I2P Guide</a>");
+    ui->i2pLink->setTextFormat(Qt::RichText);
+    ui->i2pLink->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    ui->i2pLink->setOpenExternalLinks(true);
+
+    ui->torLink->setText("<a href=\"https://github.com/PirateNetwork/pirate/blob/dev/doc/tor.md/\">TOR Guide</a>");
+    ui->torLink->setTextFormat(Qt::RichText);
+    ui->torLink->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    ui->torLink->setOpenExternalLinks(true);
+
     /* Window elements init */
 #ifdef Q_OS_MAC
     /* remove Window tab on Mac */
@@ -214,13 +224,12 @@ void OptionsDialog::setModel(OptionsModel *_model)
     connect(ui->allowIncoming, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     connect(ui->requireTLS, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     connect(ui->connectSocks, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->connectSocks, SIGNAL(clicked(bool)), this, SLOT(enableProxyTypes()));
     connect(ui->connectSocksTor, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     connect(ui->connectSocksI2P, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     connect(ui->allowIncomingI2P, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
-    connect(ui->Ipv4Only, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
-    connect(ui->Ipv6Only, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
-    connect(ui->TorOnly, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
-    connect(ui->I2pOnly, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->Ipv4Disable, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->Ipv6Disable, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
 
     /* Display */
     connect(ui->lang, SIGNAL(valueChanged()), this, SLOT(showRestartWarning()));
@@ -264,10 +273,8 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->proxyIpI2P, OptionsModel::ProxyIPI2P);
     mapper->addMapping(ui->proxyPortI2P, OptionsModel::ProxyPortI2P);
 
-    mapper->addMapping(ui->Ipv4Only, OptionsModel::IPv4Only);
-    mapper->addMapping(ui->Ipv6Only, OptionsModel::IPv6Only);
-    mapper->addMapping(ui->TorOnly, OptionsModel::TorOnly);
-    mapper->addMapping(ui->I2pOnly, OptionsModel::I2POnly);
+    mapper->addMapping(ui->Ipv4Disable, OptionsModel::IPv4Disable);
+    mapper->addMapping(ui->Ipv6Disable, OptionsModel::IPv6Disable);
 
     /* Window */
 #ifndef Q_OS_MAC
@@ -425,6 +432,19 @@ void OptionsDialog::setTheme()
       newPal.setColor(QPalette::Link, COLOR_POSITIVE_DARK);
       newPal.setColor(QPalette::LinkVisited, COLOR_NEGATIVE_DARK);
       qApp->setPalette(newPal);
+}
+
+void OptionsDialog::enableProxyTypes()
+{
+      if (ui->connectSocks->isEnabled()) {
+          ui->proxyReachIPv4->setEnabled(true);
+          ui->proxyReachIPv6->setEnabled(true);
+          ui->proxyReachTor->setEnabled(true);
+      } else {
+          ui->proxyReachIPv4->setEnabled(true);
+          ui->proxyReachIPv6->setEnabled(true);
+          ui->proxyReachTor->setEnabled(true);
+      }
 }
 
 void OptionsDialog::showRestartWarning(bool fPersistent)

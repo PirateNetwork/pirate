@@ -362,225 +362,27 @@
         </widget>
        </item>
        <item>
+        <widget class="QCheckBox" name="Ipv4Disable">
+         <property name="toolTip">
+          <string>Disable ipv4 networks</string>
+         </property>
+         <property name="text">
+          <string>Disable IPV4 networks</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="Ipv6Disable">
+         <property name="toolTip">
+          <string>Disable ipv6 networks</string>
+         </property>
+         <property name="text">
+          <string>Disable IPV6 networks</string>
+         </property>
+        </widget>
+       </item>
+       <item>
         <widget class="Line" name="line">
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QCheckBox" name="connectSocksTor">
-         <property name="toolTip">
-          <string>Connect to the Pirate network through a separate SOCKS5 proxy for Tor hidden services.</string>
-         </property>
-         <property name="text">
-          <string>Use separate SOCKS&amp;5 proxy to reach peers via Tor hidden services:</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_3_Network">
-         <item>
-          <widget class="QLabel" name="proxyIpTorLabel">
-           <property name="text">
-            <string>Tor Proxy &amp;IP:</string>
-           </property>
-           <property name="textFormat">
-            <enum>Qt::PlainText</enum>
-           </property>
-           <property name="buddy">
-            <cstring>proxyIpTor</cstring>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QValidatedLineEdit" name="proxyIpTor">
-           <property name="minimumSize">
-            <size>
-             <width>140</width>
-             <height>0</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>140</width>
-             <height>16777215</height>
-            </size>
-           </property>
-           <property name="toolTip">
-            <string>IP address of the proxy (e.g. IPv4: 127.0.0.1 / IPv6: ::1)</string>
-           </property>
-           <property name="placeholderText">
-            <string>127.0.0.1</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QLabel" name="proxyPortTorLabel">
-           <property name="text">
-            <string>&amp;Port:</string>
-           </property>
-           <property name="textFormat">
-            <enum>Qt::PlainText</enum>
-           </property>
-           <property name="buddy">
-            <cstring>proxyPortTor</cstring>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QLineEdit" name="proxyPortTor">
-           <property name="minimumSize">
-            <size>
-             <width>55</width>
-             <height>0</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>55</width>
-             <height>16777215</height>
-            </size>
-           </property>
-           <property name="toolTip">
-            <string>Port of the proxy (e.g. 9050)</string>
-           </property>
-           <property name="placeholderText">
-            <string>9050</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <spacer name="horizontalSpacer_4_Network">
-           <property name="orientation">
-            <enum>Qt::Horizontal</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>40</width>
-             <height>20</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-        </layout>
-       </item>
-       <item>
-        <widget class="Line" name="line_2">
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QCheckBox" name="connectSocksI2P">
-         <property name="toolTip">
-          <string>Connect to the Pirate network through a SOCKS5 proxy.</string>
-         </property>
-         <property name="text">
-          <string>&amp;Connect through I2P using SAM Proxy</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QCheckBox" name="allowIncomingI2P">
-         <property name="toolTip">
-          <string>Accept I2P connections from outside.</string>
-         </property>
-         <property name="text">
-          <string>Allow incomin&amp;g I2P connections</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_3_Network_2">
-         <item>
-          <widget class="QLabel" name="proxyIpI2PLabel">
-           <property name="text">
-            <string>I2P SAM &amp;IP:</string>
-           </property>
-           <property name="textFormat">
-            <enum>Qt::PlainText</enum>
-           </property>
-           <property name="buddy">
-            <cstring>proxyIpTor</cstring>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QValidatedLineEdit" name="proxyIpI2P">
-           <property name="minimumSize">
-            <size>
-             <width>140</width>
-             <height>0</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>140</width>
-             <height>16777215</height>
-            </size>
-           </property>
-           <property name="toolTip">
-            <string>IP address of the proxy (e.g. IPv4: 127.0.0.1 / IPv6: ::1)</string>
-           </property>
-           <property name="placeholderText">
-            <string>127.0.0.1</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QLabel" name="proxyPortI2PLabel">
-           <property name="text">
-            <string>&amp;Port:</string>
-           </property>
-           <property name="textFormat">
-            <enum>Qt::PlainText</enum>
-           </property>
-           <property name="buddy">
-            <cstring>proxyPortTor</cstring>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QLineEdit" name="proxyPortI2P">
-           <property name="minimumSize">
-            <size>
-             <width>55</width>
-             <height>0</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>55</width>
-             <height>16777215</height>
-            </size>
-           </property>
-           <property name="toolTip">
-            <string>Port of the proxy (e.g. 7656)</string>
-           </property>
-           <property name="placeholderText">
-            <string>7656</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <spacer name="horizontalSpacer_4_Network_2">
-           <property name="orientation">
-            <enum>Qt::Horizontal</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>40</width>
-             <height>20</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-        </layout>
-       </item>
-       <item>
-        <widget class="Line" name="line_3">
          <property name="orientation">
           <enum>Qt::Horizontal</enum>
          </property>
@@ -781,46 +583,6 @@
         </widget>
        </item>
        <item>
-        <widget class="QCheckBox" name="Ipv4Only">
-         <property name="toolTip">
-          <string>Connect only to ipv4 networks</string>
-         </property>
-         <property name="text">
-          <string>Connect to IPV4 networks only</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QCheckBox" name="Ipv6Only">
-         <property name="toolTip">
-          <string>Connect only to ipv6 networks</string>
-         </property>
-         <property name="text">
-          <string>Connect to IPV6 networks only</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QCheckBox" name="TorOnly">
-         <property name="toolTip">
-          <string>Connect only to Tor networks</string>
-         </property>
-         <property name="text">
-          <string>Connect to Tor networks only</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QCheckBox" name="I2pOnly">
-         <property name="toolTip">
-          <string>Connect only to I2P networks</string>
-         </property>
-         <property name="text">
-          <string>Connect to I2P networks only</string>
-         </property>
-        </widget>
-       </item>
-       <item>
         <spacer name="verticalSpacer_Network">
          <property name="orientation">
           <enum>Qt::Vertical</enum>
@@ -829,6 +591,446 @@
           <size>
            <width>20</width>
            <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="tab">
+      <attribute name="title">
+       <string>Hidden Services</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="verticalLayout_5">
+       <item>
+        <widget class="QLabel" name="I2PHeading">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>I2P Network Settings</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="connectSocksI2P">
+         <property name="toolTip">
+          <string>Connect to the Pirate network through a SOCKS5 proxy.</string>
+         </property>
+         <property name="text">
+          <string>&amp;Connect through I2P using SAM Proxy</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="allowIncomingI2P">
+         <property name="toolTip">
+          <string>Accept I2P connections from outside.</string>
+         </property>
+         <property name="text">
+          <string>Allow incomin&amp;g I2P connections</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_3_Network_2">
+         <item>
+          <widget class="QLabel" name="proxyIpI2PLabel">
+           <property name="text">
+            <string>I2P SAM &amp;IP:</string>
+           </property>
+           <property name="textFormat">
+            <enum>Qt::PlainText</enum>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QValidatedLineEdit" name="proxyIpI2P">
+           <property name="minimumSize">
+            <size>
+             <width>140</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>140</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>IP address of the proxy (e.g. IPv4: 127.0.0.1 / IPv6: ::1)</string>
+           </property>
+           <property name="placeholderText">
+            <string>127.0.0.1</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="proxyPortI2PLabel">
+           <property name="text">
+            <string>&amp;Port:</string>
+           </property>
+           <property name="textFormat">
+            <enum>Qt::PlainText</enum>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLineEdit" name="proxyPortI2P">
+           <property name="minimumSize">
+            <size>
+             <width>55</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>55</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>Port of the proxy (e.g. 7656)</string>
+           </property>
+           <property name="placeholderText">
+            <string>7656</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer_4_Network_2">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <spacer name="verticalSpacer_7">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeType">
+          <enum>QSizePolicy::Minimum</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>5</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QLabel" name="i2pLink">
+         <property name="text">
+          <string>TextLabel</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="Line" name="line_2">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="TorHeading">
+         <property name="font">
+          <font>
+           <pointsize>12</pointsize>
+          </font>
+         </property>
+         <property name="text">
+          <string>Tor Network Settings</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="connectSocksTor">
+         <property name="toolTip">
+          <string>Connect to the Pirate network through a separate proxy for Tor hidden services.</string>
+         </property>
+         <property name="text">
+          <string>Use separate proxy to reach peers via Tor hidden services:</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_3_Network">
+         <item>
+          <widget class="QLabel" name="proxyIpTorLabel">
+           <property name="text">
+            <string>Tor Proxy &amp;IP:</string>
+           </property>
+           <property name="textFormat">
+            <enum>Qt::PlainText</enum>
+           </property>
+           <property name="buddy">
+            <cstring>proxyIpTor</cstring>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QValidatedLineEdit" name="proxyIpTor">
+           <property name="minimumSize">
+            <size>
+             <width>140</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>140</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>IP address of the proxy (e.g. IPv4: 127.0.0.1 / IPv6: ::1)</string>
+           </property>
+           <property name="placeholderText">
+            <string>127.0.0.1</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="proxyPortTorLabel">
+           <property name="text">
+            <string>&amp;Port:</string>
+           </property>
+           <property name="textFormat">
+            <enum>Qt::PlainText</enum>
+           </property>
+           <property name="buddy">
+            <cstring>proxyPortTor</cstring>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLineEdit" name="proxyPortTor">
+           <property name="minimumSize">
+            <size>
+             <width>55</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>55</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>Port of the proxy (e.g. 9050)</string>
+           </property>
+           <property name="placeholderText">
+            <string>9050</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer_4_Network">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_3_Network_3">
+         <item>
+          <widget class="QLabel" name="controlIpTorLabel">
+           <property name="text">
+            <string>Tor Control &amp;IP:</string>
+           </property>
+           <property name="textFormat">
+            <enum>Qt::PlainText</enum>
+           </property>
+           <property name="buddy">
+            <cstring>proxyIpTor</cstring>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QValidatedLineEdit" name="controlIpTor">
+           <property name="minimumSize">
+            <size>
+             <width>140</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>140</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>IP address of the control (e.g. IPv4: 127.0.0.1 / IPv6: ::1)</string>
+           </property>
+           <property name="placeholderText">
+            <string>127.0.0.1</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="controlPortTorLabel">
+           <property name="text">
+            <string>&amp;Port:</string>
+           </property>
+           <property name="textFormat">
+            <enum>Qt::PlainText</enum>
+           </property>
+           <property name="buddy">
+            <cstring>proxyPortTor</cstring>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLineEdit" name="controlPortTor">
+           <property name="minimumSize">
+            <size>
+             <width>55</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>55</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>Port of the tor control (e.g. 9051)</string>
+           </property>
+           <property name="placeholderText">
+            <string>9051</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer_4_Network_3">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_3_Network_4">
+         <item>
+          <widget class="QLabel" name="controlPasswordTorLabel">
+           <property name="text">
+            <string>Tor Control Password:</string>
+           </property>
+           <property name="textFormat">
+            <enum>Qt::PlainText</enum>
+           </property>
+           <property name="buddy">
+            <cstring></cstring>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QValidatedLineEdit" name="controlPasswordTor">
+           <property name="minimumSize">
+            <size>
+             <width>140</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>140</width>
+             <height>16777215</height>
+            </size>
+           </property>
+           <property name="toolTip">
+            <string>Tor control port password</string>
+           </property>
+           <property name="inputMask">
+            <string/>
+           </property>
+           <property name="echoMode">
+            <enum>QLineEdit::Password</enum>
+           </property>
+           <property name="placeholderText">
+            <string/>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer_4_Network_4">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <spacer name="verticalSpacer_6">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeType">
+          <enum>QSizePolicy::Minimum</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>5</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QLabel" name="torLink">
+         <property name="text">
+          <string>TextLabel</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer_5">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>56</height>
           </size>
          </property>
         </spacer>

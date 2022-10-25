@@ -175,6 +175,7 @@ void OptionsModel::Init(bool resetSettings)
 #endif
 
     // Network
+
     if (!settings.contains("fListen"))
         settings.setValue("fListen", DEFAULT_LISTEN);
     if (!SoftSetBoolArg("-listen", settings.value("fListen").toBool()))
@@ -231,31 +232,22 @@ void OptionsModel::Init(bool resetSettings)
     else if(!settings.value("fIncomingI2P").toBool() && !SoftSetArg("-i2pacceptincoming", std::string("0")))
         addOverriddenOption("-i2pacceptincoming");
 
-    //Only nets
-    if (!settings.contains("fIPv4Only"))
-        settings.setValue("fIPv4Only", false);
+    // Disable ivp4 and/or ipv6
+    if (!settings.contains("fIPv4Disable"))
+        settings.setValue("fIPv4Disable", false);
 
-    if (settings.value("fIPv4Only").toBool())
-        SoftSetBoolArg("-onlynet", "ipv4");
+    if (settings.value("fIPv4Disable").toBool() && !SoftSetArg("-disableipv4", std::string("1")))
+        addOverriddenOption("-disableipv4");
+    else if(!settings.value("fIPv4Disable").toBool() && !SoftSetArg("-disableipv4g", std::string("0")))
+        addOverriddenOption("-disableipv4");
 
-    if (!settings.contains("fIPv6Only"))
-        settings.setValue("fIPv6Only", false);
+    if (!settings.contains("fIPv6Disable"))
+        settings.setValue("fIPv6Disable", false);
 
-    if (settings.value("fIPv6Only").toBool())
-        SoftSetBoolArg("-onlynet", "ipv6");
-
-    if (!settings.contains("fTorOnly"))
-        settings.setValue("fTorOnly", false);
-
-    if (settings.value("fTorOnly").toBool())
-        SoftSetBoolArg("-onlynet", "tor");
-
-    if (!settings.contains("fI2POnly"))
-        settings.setValue("fI2POnly", false);
-
-    if (settings.value("fI2POnly").toBool())
-        SoftSetBoolArg("-onlynet", "i2p");
-
+    if (settings.value("fIPv6Disable").toBool() && !SoftSetArg("-disableipv4", std::string("1")))
+        addOverriddenOption("-disableipv6");
+    else if(!settings.value("fIPv4Disable").toBool() && !SoftSetArg("-disableipv4", std::string("0")))
+        addOverriddenOption("-disableipv6");
 
     // Display
     if (!settings.contains("language"))
@@ -382,15 +374,12 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return strlIpPort.at(1);
         }
 
-        // Only Nets
-        case IPv4Only:
-            return settings.value("fIPv4Only");
-        case IPv6Only:
-            return settings.value("fIPv6Only");
-        case TorOnly:
-            return settings.value("fTorOnly");
-        case I2POnly:
-            return settings.value("fI2POnly");
+        // Disable ivp4 and/or ipv6
+        case IPv4Disable:
+            return settings.value("fIPv4Disable");
+        case IPv6Disable:
+            return settings.value("fIPv6Disable");
+
 
 #ifdef ENABLE_WALLET
         case EnableDeleteTx:
@@ -572,31 +561,17 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             }
             break;
 
-        //Only Nets
-        case IPv4Only:
-            if (settings.value("fIPv4Only") != value) {
-                settings.setValue("fIPv4Only", value);
+        // Disable ivp4 and/or ipv6
+        case IPv4Disable:
+            if (settings.value("fIPv4Disable") != value) {
+                settings.setValue("fIPv4Disable", value);
                 setRestartRequired(true);
             }
             break;
 
-        case IPv6Only:
-            if (settings.value("fIPv6Only") != value) {
-                settings.setValue("fIPv6Only", value);
-                setRestartRequired(true);
-            }
-            break;
-
-        case TorOnly:
-            if (settings.value("fTorOnly") != value) {
-                settings.setValue("fTorOnly", value);
-                setRestartRequired(true);
-            }
-            break;
-
-        case I2POnly:
-            if (settings.value("fI2POnly") != value) {
-                settings.setValue("fI2POnly", value);
+        case IPv6Disable:
+            if (settings.value("fIPv6Disable") != value) {
+                settings.setValue("fIPv6Disable", value);
                 setRestartRequired(true);
             }
             break;
