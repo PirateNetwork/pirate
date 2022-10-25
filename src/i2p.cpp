@@ -123,6 +123,19 @@ Session::~Session()
 {
 }
 
+bool Session::Check()
+{
+    try {
+        LOCK(cs_i2p);
+        CreateIfNotCreatedAlready();
+        return true;
+    } catch (const std::runtime_error& e) {
+        LogPrint("i2p","I2P: Error Checking Session: %s\n", e.what());
+        CheckControlSock();
+    }
+    return false;
+}
+
 bool Session::Listen(Connection& conn)
 {
     try {

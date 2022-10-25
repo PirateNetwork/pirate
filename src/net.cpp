@@ -2119,6 +2119,35 @@ void ThreadMessageHandler()
     }
 }
 
+void ThreadI2PCheck()
+{
+    const int64_t wait_time = 5000;
+    const int64_t err_wait_cap = wait_time * 60;
+    auto err_wait = wait_time;
+
+    bool advertising_listen_addr = false;
+    i2p::Connection conn;
+
+    while (true) {
+
+        MilliSleep(wait_time);
+
+        boost::this_thread::interruption_point();
+
+        if (!m_i2p_sam_session->Check()) {
+
+            MilliSleep(err_wait);
+
+            if (err_wait < err_wait_cap) {
+                err_wait *= 2;
+            }
+
+        } else {
+            err_wait = wait_time;
+        }
+    }
+}
+
 void ThreadI2PAcceptIncoming()
 {
     const int64_t err_wait_begin = 1000;
@@ -2379,10 +2408,14 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
     // Send and receive from sockets, accept connections
     threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "net", &ThreadSocketHandler));
 
-    if (GetBoolArg("-i2pacceptincoming", true) && m_i2p_sam_session.get() != nullptr) {
-        threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "i2paccept", &ThreadI2PAcceptIncoming));
+    //Listen for I2P connections, or periodically check the i2p control port.
+    if (m_i2p_sam_session.get() != nullptr) {
+        if (GetBoolArg("-i2pacceptincoming", true) ) {
+            threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "i2paccept", &ThreadI2PAcceptIncoming));
+        } else {
+            threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "i2pcheck", &ThreadI2PCheck));
+        }
     }
-
     // Initiate outbound connections from -addnode
     threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "addcon", &ThreadOpenAddedConnections));
 

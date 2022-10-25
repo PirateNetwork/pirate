@@ -73,6 +73,11 @@ public:
     ~Session();
 
     /**
+     * Check the control sock and restart if needed
+     */
+    bool Check();
+
+    /**
      * Start listening for an incoming connection.
      * @param[out] conn Upon successful completion the `sock` and `me` members will be set
      * to the listening socket and address.
