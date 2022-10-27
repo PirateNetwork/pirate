@@ -433,11 +433,11 @@ bool ConnectSocketDirectly(const CService &addrConnect, const Sock& sock, int nT
     struct sockaddr_storage sockaddr;
     socklen_t len = sizeof(sockaddr);
     if (sock.Get() == INVALID_SOCKET) {
-        LogPrintf("Cannot connect to %s: invalid socket\n", addrConnect.ToString());
+        LogPrint("net","Cannot connect to %s: invalid socket\n", addrConnect.ToString());
         return false;
     }
     if (!addrConnect.GetSockAddr((struct sockaddr*)&sockaddr, &len)) {
-        LogPrintf("Cannot connect to %s: unsupported network\n", addrConnect.ToString());
+        LogPrint("net","Cannot connect to %s: unsupported network\n", addrConnect.ToString());
         return false;
     }
 
@@ -453,7 +453,7 @@ bool ConnectSocketDirectly(const CService &addrConnect, const Sock& sock, int nT
             const Sock::Event requested = Sock::RECV | Sock::SEND;
             Sock::Event occurred;
             if (!sock.Wait(std::chrono::milliseconds{nTimeout}, requested, &occurred)) {
-                LogPrintf("wait for connect to %s failed: %s\n",
+                LogPrint("net","wait for connect to %s failed: %s\n",
                           addrConnect.ToString(),
                           NetworkErrorString(WSAGetLastError()));
                 return false;
@@ -470,7 +470,7 @@ bool ConnectSocketDirectly(const CService &addrConnect, const Sock& sock, int nT
             socklen_t sockerr_len = sizeof(sockerr);
             if (sock.GetSockOpt(SOL_SOCKET, SO_ERROR, (sockopt_arg_type)&sockerr, &sockerr_len) ==
                 SOCKET_ERROR) {
-                LogPrintf("getsockopt() for %s failed\n", addrConnect.ToString());
+                LogPrint("net","getsockopt() for %s failed\n", addrConnect.ToString());
                 return false;
             }
             if (sockerr != 0) {
@@ -498,7 +498,7 @@ bool ConnectSocketDirectly(const CService &addrConnect, SOCKET& hSocketRet, int 
     struct sockaddr_storage sockaddr;
     socklen_t len = sizeof(sockaddr);
     if (!addrConnect.GetSockAddr((struct sockaddr*)&sockaddr, &len)) {
-        LogPrintf("Cannot connect to %s: unsupported network\n", addrConnect.ToString());
+        LogPrint("net","Cannot connect to %s: unsupported network\n", addrConnect.ToString());
         return false;
     }
 
@@ -542,20 +542,20 @@ bool ConnectSocketDirectly(const CService &addrConnect, SOCKET& hSocketRet, int 
             }
             if (nRet == SOCKET_ERROR)
             {
-                LogPrintf("select() for %s failed: %s\n", addrConnect.ToString(), NetworkErrorString(WSAGetLastError()));
+                LogPrint("net","select() for %s failed: %s\n", addrConnect.ToString(), NetworkErrorString(WSAGetLastError()));
                 CloseSocket(hSocket);
                 return false;
             }
             socklen_t nRetSize = sizeof(nRet);
             if (getsockopt(hSocket, SOL_SOCKET, SO_ERROR, (sockopt_arg_type)&nRet, &nRetSize) == SOCKET_ERROR)
             {
-                LogPrintf("getsockopt() for %s failed: %s\n", addrConnect.ToString(), NetworkErrorString(WSAGetLastError()));
+                LogPrint("net","getsockopt() for %s failed: %s\n", addrConnect.ToString(), NetworkErrorString(WSAGetLastError()));
                 CloseSocket(hSocket);
                 return false;
             }
             if (nRet != 0)
             {
-                LogPrintf("connect() to %s failed after select(): %s\n", addrConnect.ToString(), NetworkErrorString(nRet));
+                LogPrint("net","connect() to %s failed after select(): %s\n", addrConnect.ToString(), NetworkErrorString(nRet));
                 CloseSocket(hSocket);
                 return false;
             }
@@ -566,7 +566,7 @@ bool ConnectSocketDirectly(const CService &addrConnect, SOCKET& hSocketRet, int 
         else
 #endif
         {
-            LogPrintf("connect() to %s failed: %s\n", addrConnect.ToString(), NetworkErrorString(WSAGetLastError()));
+            LogPrint("net","connect() to %s failed: %s\n", addrConnect.ToString(), NetworkErrorString(WSAGetLastError()));
             CloseSocket(hSocket);
             return false;
         }
