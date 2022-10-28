@@ -10,6 +10,7 @@ $(package)_config_opts_darwin=--disable-bsdtar --disable-bsdcpio --disable-share
 $(package)_sha256_hash=fcf87f3ad8db2e4f74f32526dee62dd1fb9894782b0a503a89c9d7a70a235191
 $(package)_cflags_darwin=-mmacosx-version-min=10.9
 $(package)_conf_tool=./configure
+$(package)_patches=0001-libarchive-Do-not-include-sys-mount_h-when-linux-fs_h.patch
 
 $(package)_dependencies=zlib
 
@@ -25,6 +26,9 @@ define $(package)_set_vars
 endef
 endif
 
+define $(package)_preprocess_cmds
+	patch -p1 -i $($(package)_patch_dir)/0001-libarchive-Do-not-include-sys-mount_h-when-linux-fs_h.patch
+endef
 
 define $(package)_config_cmds
   echo '=== config for $(package):' && \
