@@ -165,10 +165,12 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
 
     connect(ui->proxyIp, SIGNAL(validationDidChange(QValidatedLineEdit *)), this, SLOT(updateProxyValidationState()));
     connect(ui->proxyIpTor, SIGNAL(validationDidChange(QValidatedLineEdit *)), this, SLOT(updateProxyValidationState()));
+    connect(ui->controlIpTor, SIGNAL(validationDidChange(QValidatedLineEdit *)), this, SLOT(updateProxyValidationState()));
     connect(ui->proxyIpI2P, SIGNAL(validationDidChange(QValidatedLineEdit *)), this, SLOT(updateProxyValidationStateI2P()));
 
     connect(ui->proxyPort, SIGNAL(textChanged(const QString&)), this, SLOT(updateProxyValidationState()));
     connect(ui->proxyPortTor, SIGNAL(textChanged(const QString&)), this, SLOT(updateProxyValidationState()));
+    connect(ui->controlPortTor, SIGNAL(textChanged(const QString&)), this, SLOT(updateProxyValidationState()));
     connect(ui->proxyPortI2P, SIGNAL(textChanged(const QString&)), this, SLOT(updateProxyValidationStateI2P()));
 
     /* Offline signing */
@@ -226,6 +228,7 @@ void OptionsDialog::setModel(OptionsModel *_model)
     connect(ui->connectSocks, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     connect(ui->connectSocks, SIGNAL(clicked(bool)), this, SLOT(enableProxyTypes()));
     connect(ui->connectSocksTor, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->controlPasswordTor, SIGNAL(textChanged(const QString &)), this, SLOT(showRestartWarning()));
     connect(ui->connectSocksI2P, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     connect(ui->allowIncomingI2P, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     connect(ui->Ipv4Disable, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
@@ -267,6 +270,10 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->connectSocksTor, OptionsModel::ProxyUseTor);
     mapper->addMapping(ui->proxyIpTor, OptionsModel::ProxyIPTor);
     mapper->addMapping(ui->proxyPortTor, OptionsModel::ProxyPortTor);
+
+    mapper->addMapping(ui->controlIpTor, OptionsModel::ControlIPTor);
+    mapper->addMapping(ui->controlPortTor, OptionsModel::ControlPortTor);
+    mapper->addMapping(ui->controlPasswordTor, OptionsModel::ControlPasswordTor);
 
     mapper->addMapping(ui->allowIncomingI2P, OptionsModel::IncomingI2P);
     mapper->addMapping(ui->connectSocksI2P, OptionsModel::ProxyUseI2P);
@@ -488,7 +495,10 @@ void OptionsDialog::updateProxyValidationState()
 {
     QValidatedLineEdit *pUiProxyIp = ui->proxyIp;
     QValidatedLineEdit *otherProxyWidget = (pUiProxyIp == ui->proxyIpTor) ? ui->proxyIp : ui->proxyIpTor;
-    if (pUiProxyIp->isValid() && (!ui->proxyPort->isEnabled() || ui->proxyPort->text().toInt() > 0) && (!ui->proxyPortTor->isEnabled() || ui->proxyPortTor->text().toInt() > 0))
+    if (pUiProxyIp->isValid()
+        && (!ui->proxyPort->isEnabled() || ui->proxyPort->text().toInt() > 0)
+        && (!ui->proxyPortTor->isEnabled() || ui->proxyPortTor->text().toInt() > 0)
+        && ((ui->connectSocksTor->isChecked() && ui->controlIpTor->isValid() && ui->proxyPortTor->text().toInt() > 0) || !ui->connectSocksTor->isChecked()))
     {
         setOkButtonState(otherProxyWidget->isValid()); //only enable ok button if both proxys are valid
         clearStatusLabel();

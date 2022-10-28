@@ -207,6 +207,23 @@ void OptionsModel::Init(bool resetSettings)
         settings.setValue("fUseSeparateProxyTor", false);
     if (!settings.contains("addrSeparateProxyTor") || !settings.value("addrSeparateProxyTor").toString().contains(':'))
         settings.setValue("addrSeparateProxyTor", "127.0.0.1:9050");
+
+    if (!settings.contains("controlIpTor") || !settings.value("controlIpTor").toString().contains(':'))
+        settings.setValue("controlIpTor", "127.0.0.1:9051");
+    // Only try to set -torcontrol, if user has enabled fUseSeparateProxyTor
+    if (settings.value("fUseSeparateProxyTor").toBool() && !SoftSetArg("-torcontrol", settings.value("controlIpTor").toString().toStdString()))
+        addOverriddenOption("-torcontrol");
+    else if(!settings.value("fUseSeparateProxyTor").toBool() && !GetArg("-torcontrol", "").empty())
+        addOverriddenOption("-torcontrol");
+
+    if (!settings.contains("controlPasswordTor"))
+        settings.setValue("controlPasswordTor", "");
+    // Only try to set -torcontrol, if user has enabled fUseSeparateProxyTor
+    if (settings.value("fUseSeparateProxyTor").toBool() && !SoftSetArg("-torpassword", settings.value("controlPasswordTor").toString().toStdString()))
+        addOverriddenOption("-torpassword");
+    else if(!settings.value("fUseSeparateProxyTor").toBool() && !GetArg("-torpassword", "").empty())
+        addOverriddenOption("-torpassword");
+
     // Only try to set -onion, if user has enabled fUseSeparateProxyTor
     if (settings.value("fUseSeparateProxyTor").toBool() && !SoftSetArg("-onion", settings.value("addrSeparateProxyTor").toString().toStdString()))
         addOverriddenOption("-onion");
@@ -356,6 +373,20 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             // contains IP at index 0 and port at index 1
             QStringList strlIpPort = settings.value("addrSeparateProxyTor").toString().split(":", QString::SkipEmptyParts);
             return strlIpPort.at(1);
+        }
+
+        case ControlIPTor: {
+            // contains IP at index 0 and port at index 1
+            QStringList strlIpPort = settings.value("controlIpTor").toString().split(":", QString::SkipEmptyParts);
+            return strlIpPort.at(0);
+        }
+        case ControlPortTor: {
+            // contains IP at index 0 and port at index 1
+            QStringList strlIpPort = settings.value("controlIpTor").toString().split(":", QString::SkipEmptyParts);
+            return strlIpPort.at(1);
+        }
+        case ControlPasswordTor: {
+            return settings.value("controlPasswordTor").toString();
         }
 
         // I2P proxy
@@ -520,6 +551,39 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
                 }
             }
             break;
+        case ControlIPTor:
+            {
+                // contains current IP at index 0 and current port at index 1
+                QStringList strlIpPort = settings.value("controlIpTor").toString().split(":", QString::SkipEmptyParts);
+                // if that key doesn't exist or has a changed IP
+                if (!settings.contains("controlIpTor") || strlIpPort.at(0) != value.toString()) {
+                    // construct new value from new IP and current port
+                    QString strNewValue = value.toString() + ":" + strlIpPort.at(1);
+                    settings.setValue("controlIpTor", strNewValue);
+                    setRestartRequired(true);
+                }
+            }
+            break;
+        case ControlPortTor:
+            {
+                // contains current IP at index 0 and current port at index 1
+                QStringList strlIpPort = settings.value("controlIpTor").toString().split(":", QString::SkipEmptyParts);
+                // if that key doesn't exist or has a changed port
+                if (!settings.contains("controlIpTor") || strlIpPort.at(1) != value.toString()) {
+                    // construct new value from current IP and new port
+                    QString strNewValue = strlIpPort.at(0) + ":" + value.toString();
+                    settings.setValue("controlIpTor", strNewValue);
+                    setRestartRequired(true);
+                }
+            }
+            break;
+        case ControlPasswordTor:
+            if (settings.value("controlPasswordTor") != value) {
+                settings.setValue("controlPasswordTor", value);
+                setRestartRequired(true);
+            }
+            break;
+
 
         // I2P proxy
         case ProxyUseI2P:

@@ -40,6 +40,9 @@ public:
         ProxyUseTor,                    // bool
         ProxyIPTor,                     // QString
         ProxyPortTor,                   // int
+        ControlIPTor,                   // QString
+        ControlPortTor,                 // int
+        ControlPasswordTor,             // QString
         DisplayUnit,                    // KomodoUnits::Unit
         Theme,                          // QString
         ThirdPartyTxUrls,               // QString
