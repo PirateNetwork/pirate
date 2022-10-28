@@ -238,15 +238,15 @@ void OptionsModel::Init(bool resetSettings)
 
     if (settings.value("fIPv4Disable").toBool() && !SoftSetArg("-disableipv4", std::string("1")))
         addOverriddenOption("-disableipv4");
-    else if(!settings.value("fIPv4Disable").toBool() && !SoftSetArg("-disableipv4g", std::string("0")))
+    else if(!settings.value("fIPv4Disable").toBool() && !SoftSetArg("-disableipv4", std::string("0")))
         addOverriddenOption("-disableipv4");
 
     if (!settings.contains("fIPv6Disable"))
         settings.setValue("fIPv6Disable", false);
 
-    if (settings.value("fIPv6Disable").toBool() && !SoftSetArg("-disableipv4", std::string("1")))
+    if (settings.value("fIPv6Disable").toBool() && !SoftSetArg("-disableipv6", std::string("1")))
         addOverriddenOption("-disableipv6");
-    else if(!settings.value("fIPv4Disable").toBool() && !SoftSetArg("-disableipv4", std::string("0")))
+    else if(!settings.value("fIPv4Disable").toBool() && !SoftSetArg("-disableipv6", std::string("0")))
         addOverriddenOption("-disableipv6");
 
     // Display
