@@ -44,7 +44,7 @@ at README_offline_transaction_signing.md
 
 A list of outstanding improvements is included in README_todo.md
 
-### Dependencies
+### Dependencies Ubuntu
 
 ```shell
 #The following packages are needed:
@@ -55,6 +55,11 @@ On newer Linux distributions, like Ubuntu 22.04, the following additional packag
 sudo apt-get install liblz4-dev libbrotli-dev
 ```
 
+### Dependencies Manjaro
+```shell
+#The following packages are needed:
+pacman -Syu base-devel pkg-config glibc m4 gcc autoconf libtool ncurses unzip git python python-pyzmq zlib wget libcurl-gnutls automake curl cmake mingw-w64
+```
 ### Build Pirate
 
 This software is based on zcash and considered experimental and is continuously undergoing heavy development.
