@@ -396,9 +396,10 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
 
     // Use a 50% chance for choosing between tried and new table entries.
     if (!newOnly &&
-       (nTried > 0 && (nNew == 0 || RandomInt(2) == 0))) { 
+       (nTried > 0 && (nNew == 0 || RandomInt(2) == 0))) {
         // use a tried node
         double fChanceFactor = 1.0;
+        double fReachableFactor = 1.0;
         while (1) {
             if (ShutdownRequested()) //break loop on shutdown request
                 return CAddrInfo();
@@ -417,13 +418,18 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
             int nId = vvTried[nKBucket][nKBucketPos];
             assert(mapInfo.count(nId) == 1);
             CAddrInfo& info = mapInfo[nId];
-            if (RandomInt(1 << 30) < fChanceFactor * info.GetChance() * (1 << 30) && info.IsReachableNetwork())
+            if (info.IsReachableNetwork()) {
+                //deprioritize unreachable networks
+                fReachableFactor = 0.25;
+            }
+            if (RandomInt(1 << 30) < fChanceFactor * fReachableFactor * info.GetChance() * (1 << 30))
                 return info;
             fChanceFactor *= 1.2;
         }
     } else {
         // use a new node
         double fChanceFactor = 1.0;
+        double fReachableFactor = 1.0;
         while (1) {
             if (ShutdownRequested()) //break loop on shutdown request
                 return CAddrInfo();
@@ -442,12 +448,16 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
             int nId = vvNew[nUBucket][nUBucketPos];
             assert(mapInfo.count(nId) == 1);
             CAddrInfo& info = mapInfo[nId];
-            if (RandomInt(1 << 30) < fChanceFactor * info.GetChance() * (1 << 30) && info.IsReachableNetwork())
+            if (info.IsReachableNetwork()) {
+                //deprioritize unreachable networks
+                fReachableFactor = 0.25;
+            }
+            if (RandomInt(1 << 30) < fChanceFactor * fReachableFactor * info.GetChance() * (1 << 30))
                 return info;
             fChanceFactor *= 1.2;
         }
     }
-    
+
     return CAddrInfo();
 }
 
