@@ -7714,6 +7714,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
         if (bPingFinished) {
             pfrom->nPingNonceSent = 0;
+            pfrom->nPingRetry = 0;
         }
     }
 
@@ -8484,10 +8485,15 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
             // RPC ping request by user
             pingSend = true;
         }
-        if (pto->nPingNonceSent == 0 && pto->nPingUsecStart + PING_INTERVAL * 1000000 < GetTimeMicros()) {
+        if (pto->nPingUsecStart + PING_INTERVAL * 1000000 < GetTimeMicros()) {
             // Ping automatically sent as a latency probe & keepalive.
             pingSend = true;
+            if (pto->nPingNonceSent != 0) {
+                pto->nPingRetry++;
+            }
+
         }
+
         if (pingSend) {
             uint64_t nonce = 0;
             while (nonce == 0) {
@@ -8498,10 +8504,6 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
             if (pto->nVersion > BIP0031_VERSION) {
                 pto->nPingNonceSent = nonce;
                 pto->PushMessage(NetMsgType::PING, nonce);
-            } else {
-                // Peer is too old to support ping command with nonce, pong will never arrive.
-                pto->nPingNonceSent = 0;
-                pto->PushMessage(NetMsgType::PING);
             }
         }
 

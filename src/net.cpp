@@ -1705,9 +1705,9 @@ void ThreadSocketHandler()
                     LogPrintf("socket receive timeout: %is\n", nTime - pnode->nLastRecv);
                     pnode->fDisconnect = true;
                 }
-                else if (pnode->nPingNonceSent && pnode->nPingUsecStart + TIMEOUT_INTERVAL * 1000000 < GetTimeMicros())
+                else if (pnode->nPingRetry > MAX_PING_RETRY)
                 {
-                    LogPrintf("ping timeout: %fs\n", 0.000001 * (GetTimeMicros() - pnode->nPingUsecStart));
+                    LogPrintf("ping max retry exceeded, disconnecting node %i\n", pnode->id);
                     pnode->fDisconnect = true;
                 }
             }
@@ -2730,6 +2730,7 @@ CNode::CNode(SOCKET hSocketIn, const CAddress& addrIn, const std::string& addrNa
     nPingUsecStart = 0;
     nPingUsecTime = 0;
     fPingQueued = false;
+    nPingRetry = 0;
     nMinPingUsecTime = std::numeric_limits<int64_t>::max();
 
     {
