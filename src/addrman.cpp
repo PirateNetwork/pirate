@@ -74,6 +74,14 @@ bool CAddrInfo::IsTerrible(int64_t nNow) const
     return false;
 }
 
+bool CAddrInfo::IsJustTried(int64_t nNow) const
+{
+    if (nLastTry && nLastTry >= nNow - 60)
+        return true;
+
+    return false;
+}
+
 double CAddrInfo::GetChance(int64_t nNow) const
 {
     double fChance = 1.0;
@@ -400,6 +408,7 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
         // use a tried node
         double fChanceFactor = 1.0;
         double fReachableFactor = 1.0;
+        double fJustTried = 1.0;
         while (1) {
             if (ShutdownRequested()) //break loop on shutdown request
                 return CAddrInfo();
@@ -422,7 +431,11 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
                 //deprioritize unreachable networks
                 fReachableFactor = 0.25;
             }
-            if (RandomInt(1 << 30) < fChanceFactor * fReachableFactor * info.GetChance() * (1 << 30))
+            if (info.IsJustTried()) {
+                //deprioritize entries just tried
+                fJustTried = 0.10;
+            }
+            if (RandomInt(1 << 30) < fChanceFactor * fReachableFactor * fJustTried * info.GetChance() * (1 << 30))
                 return info;
             fChanceFactor *= 1.2;
         }
@@ -430,6 +443,7 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
         // use a new node
         double fChanceFactor = 1.0;
         double fReachableFactor = 1.0;
+        double fJustTried = 1.0;
         while (1) {
             if (ShutdownRequested()) //break loop on shutdown request
                 return CAddrInfo();
@@ -452,7 +466,11 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
                 //deprioritize unreachable networks
                 fReachableFactor = 0.25;
             }
-            if (RandomInt(1 << 30) < fChanceFactor * fReachableFactor * info.GetChance() * (1 << 30))
+            if (info.IsJustTried()) {
+                //deprioritize entries just tried
+                fJustTried = 0.10;
+            }
+            if (RandomInt(1 << 30) < fChanceFactor * fReachableFactor * fJustTried * info.GetChance() * (1 << 30))
                 return info;
             fChanceFactor *= 1.2;
         }

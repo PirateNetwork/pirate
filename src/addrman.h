@@ -120,6 +120,9 @@ public:
     //! Determine whether the statistics about this entry are bad enough so that it can just be deleted
     bool IsTerrible(int64_t nNow = GetTime()) const;
 
+    //Determine if this entry was just tried
+    bool IsJustTried(int64_t nNow = GetTime()) const;
+
     //! Calculate the relative chance this entry should be given when selecting nodes to connect to
     double GetChance(int64_t nNow = GetTime()) const;
 
