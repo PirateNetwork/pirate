@@ -63,6 +63,11 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
     ui->proxyPortI2P->setEnabled(false);
     ui->proxyPortI2P->setValidator(new QIntValidator(1, 65535, this));
 
+    //diable tor with default proxy in GUI
+    ui->proxyReachTor->setEnabled(false);
+    ui->proxyReachTor->setVisible(false);
+    ui->proxyReachTorLabel->setVisible(false);
+
     connect(ui->connectSocks, SIGNAL(toggled(bool)), ui->proxyIp, SLOT(setEnabled(bool)));
     connect(ui->connectSocks, SIGNAL(toggled(bool)), ui->proxyPort, SLOT(setEnabled(bool)));
     connect(ui->connectSocks, SIGNAL(toggled(bool)), this, SLOT(updateProxyValidationState()));
@@ -446,12 +451,15 @@ void OptionsDialog::enableProxyTypes()
       if (ui->connectSocks->isEnabled()) {
           ui->proxyReachIPv4->setEnabled(true);
           ui->proxyReachIPv6->setEnabled(true);
-          ui->proxyReachTor->setEnabled(true);
       } else {
           ui->proxyReachIPv4->setEnabled(true);
           ui->proxyReachIPv6->setEnabled(true);
-          ui->proxyReachTor->setEnabled(true);
       }
+
+      //disable default proxy tor
+      ui->proxyReachTor->setEnabled(false);
+      ui->proxyReachTor->setVisible(false);
+      ui->proxyReachTorLabel->setVisible(false);
 }
 
 void OptionsDialog::showRestartWarning(bool fPersistent)
