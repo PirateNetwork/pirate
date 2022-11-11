@@ -80,12 +80,12 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
     connect(ui->connectSocksI2P, SIGNAL(toggled(bool)), ui->proxyPortI2P, SLOT(setEnabled(bool)));
     connect(ui->connectSocksI2P, SIGNAL(toggled(bool)), this, SLOT(updateProxyValidationStateI2P()));
 
-    ui->i2pLink->setText("<a href=\"https://github.com/PirateNetwork/pirate/blob/dev/doc/i2p.md/\">I2P Guide</a>");
+    ui->i2pLink->setText("<a href=\"https://github.com/PirateNetwork/pirate/blob/master/doc/i2p.md/\">I2P Guide</a>");
     ui->i2pLink->setTextFormat(Qt::RichText);
     ui->i2pLink->setTextInteractionFlags(Qt::TextBrowserInteraction);
     ui->i2pLink->setOpenExternalLinks(true);
 
-    ui->torLink->setText("<a href=\"https://github.com/PirateNetwork/pirate/blob/dev/doc/tor.md/\">TOR Guide</a>");
+    ui->torLink->setText("<a href=\"https://github.com/PirateNetwork/pirate/blob/master/doc/tor.md/\">TOR Guide</a>");
     ui->torLink->setTextFormat(Qt::RichText);
     ui->torLink->setTextInteractionFlags(Qt::TextBrowserInteraction);
     ui->torLink->setOpenExternalLinks(true);
