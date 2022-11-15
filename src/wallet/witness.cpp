@@ -145,7 +145,7 @@ UniValue exportsaplingtree(const UniValue& params, bool fHelp,  const CPubKey& m
 
     //Get the sapling tree as of the previous block
     SaplingMerkleTree saplingTree;
-    pcoinsTip->GetSaplingAnchorAt(pblockindex->pprev->hashFinalSaplingRoot, saplingTree);
+    pcoinsTip->GetSaplingAnchorAt(pblockindex->hashFinalSaplingRoot, saplingTree);
 
     {
         CDataStream iss(SER_NETWORK, PROTOCOL_VERSION);
@@ -180,7 +180,7 @@ UniValue exportsaplingtree(const UniValue& params, bool fHelp,  const CPubKey& m
 
       int height = (i*10000) + 200000;
       pblockindex = chainActive[height];
-      pcoinsTip->GetSaplingAnchorAt(pblockindex->pprev->hashFinalSaplingRoot, saplingTree);
+      pcoinsTip->GetSaplingAnchorAt(pblockindex->hashFinalSaplingRoot, saplingTree);
 
       CDataStream iss(SER_NETWORK, PROTOCOL_VERSION);
       iss << saplingTree;
