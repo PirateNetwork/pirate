@@ -140,7 +140,7 @@ static CNetAddr ResolveIP(const std::string& ip)
 {
         vector<CNetAddr> vIPs;
         CNetAddr addr;
-        if (LookupHost(ip.c_str(), vIPs)) {
+        if (LookupHost(ip.c_str(), vIPs, 256, false)) {
                 addr = vIPs[0];
         } else
         {
@@ -187,15 +187,18 @@ namespace TestAddrmanTests {
         // Set addrman addr placement to be deterministic.
         addrman.MakeDeterministic();
 
-        CNetAddr source = CNetAddr("252.2.2.2");
+        CNetAddr source;
+        LookupHost("252.2.2.2", source, false);
 
+        CNetAddr test_addr;
         // Test 1: Does Addrman respond correctly when empty.
         ASSERT_TRUE(addrman.size() == 0);
         CAddrInfo addr_null = addrman.Select();
         ASSERT_TRUE(addr_null.ToString() == "[::]:0");
 
         // Test 2: Does Addrman::Add work as expected.
-        CService addr1 = CService("250.1.1.1", 8333);
+        LookupHost("252.1.1.1", test_addr, false);
+        CService addr1 = CService(test_addr, 8333);
         addrman.Add(CAddress(addr1, NODE_NONE), source);
         ASSERT_TRUE(addrman.size() == 1);
         CAddrInfo addr_ret1 = addrman.Select();
@@ -203,13 +206,15 @@ namespace TestAddrmanTests {
 
         // Test 3: Does IP address deduplication work correctly.
         //  Expected dup IP should not be added.
-        CService addr1_dup = CService("250.1.1.1", 8333);
+        LookupHost("250.1.1.1", test_addr, false);
+        CService addr1_dup = CService(test_addr, 8333);
         addrman.Add(CAddress(addr1_dup, NODE_NONE), source);
         ASSERT_TRUE(addrman.size() == 1);
 
         // Test 5: New table has one addr and we add a diff addr we should
         //  have two addrs.
-        CService addr2 = CService("250.1.1.2", 8333);
+        LookupHost("250.1.1.2", test_addr, false);
+        CService addr2 = CService(test_addr, 8333);
         addrman.Add(CAddress(addr2, NODE_NONE), source);
         ASSERT_TRUE(addrman.size() == 2);
 
@@ -227,16 +232,20 @@ namespace TestAddrmanTests {
         // Set addrman addr placement to be deterministic.
         addrman.MakeDeterministic();
 
-        CNetAddr source = CNetAddr("252.2.2.2");
+        CNetAddr source;
+        LookupHost("252.2.2.2", source, false);
 
         ASSERT_TRUE(addrman.size() == 0);
 
+        CNetAddr test_addr;
         // Test 7; Addr with same IP but diff port does not replace existing addr.
-        CService addr1 = CService("250.1.1.1", 8333);
+        LookupHost("250.1.1.1", test_addr, false);
+        CService addr1 = CService(test_addr, 8333);
         addrman.Add(CAddress(addr1, NODE_NONE), source);
         ASSERT_TRUE(addrman.size() == 1);
 
-        CService addr1_port = CService("250.1.1.1", 8334);
+        LookupHost("250.1.1.1", test_addr, false);
+        CService addr1_port = CService(test_addr, 8334);
         addrman.Add(CAddress(addr1_port, NODE_NONE), source);
         ASSERT_TRUE(addrman.size() == 1);
         CAddrInfo addr_ret2 = addrman.Select();
@@ -258,10 +267,13 @@ namespace TestAddrmanTests {
         // Set addrman addr placement to be deterministic.
         addrman.MakeDeterministic();
 
-        CNetAddr source = CNetAddr("252.2.2.2");
+        CNetAddr source;
+        LookupHost("252.2.2.2", source, false);
 
+        CNetAddr test_addr;
         // Test 9: Select from new with 1 addr in new.
-        CService addr1 = CService("250.1.1.1", 8333);
+        LookupHost("250.1.1.1", test_addr, false);
+        CService addr1 = CService(test_addr, 8333);
         addrman.Add(CAddress(addr1, NODE_NONE), source);
         ASSERT_TRUE(addrman.size() == 1);
 
@@ -282,24 +294,36 @@ namespace TestAddrmanTests {
 
 
         // Add three addresses to new table.
-        CService addr2 = CService("250.3.1.1", 8333);
-        CService addr3 = CService("250.3.2.2", 9999);
-        CService addr4 = CService("250.3.3.3", 9999);
+        LookupHost("250.3.1.1", test_addr, false);
+        CService addr2 = CService(test_addr, 8333);
+        LookupHost("250.3.2.2", test_addr, false);
+        CService addr3 = CService(test_addr, 9999);
+        LookupHost("250.3.3.3", test_addr, false);
+        CService addr4 = CService(test_addr, 9999);
 
-        addrman.Add(CAddress(addr2, NODE_NONE), CService("250.3.1.1", 8333));
-        addrman.Add(CAddress(addr3, NODE_NONE), CService("250.3.1.1", 8333));
-        addrman.Add(CAddress(addr4, NODE_NONE), CService("250.4.1.1", 8333));
+        LookupHost("250.3.1.1", test_addr, false);
+        addrman.Add(CAddress(addr2, NODE_NONE), CService(test_addr, 8333));
+        LookupHost("250.3.1.1", test_addr, false);
+        addrman.Add(CAddress(addr3, NODE_NONE), CService(test_addr, 8333));
+        LookupHost("250.4.1.1", test_addr, false);
+        addrman.Add(CAddress(addr4, NODE_NONE), CService(test_addr, 8333));
 
         // Add three addresses to tried table.
-        CService addr5 = CService("250.4.4.4", 8333);
-        CService addr6 = CService("250.4.5.5", 7777);
-        CService addr7 = CService("250.4.6.6", 8333);
+        LookupHost("250.4.4.4", test_addr, false);
+        CService addr5 = CService(test_addr, 8333);
+        LookupHost("250.4.5.5", test_addr, false);
+        CService addr6 = CService(test_addr, 7777);
+        LookupHost("250.4.6.6", test_addr, false);
+        CService addr7 = CService(test_addr, 8333);
 
-        addrman.Add(CAddress(addr5, NODE_NONE), CService("250.3.1.1", 8333));
+        LookupHost("250.3.1.1", test_addr, false);
+        addrman.Add(CAddress(addr5, NODE_NONE), CService(test_addr, 8333));
         addrman.Good(CAddress(addr5, NODE_NONE));
-        addrman.Add(CAddress(addr6, NODE_NONE), CService("250.3.1.1", 8333));
+        LookupHost("250.3.1.1", test_addr, false);
+        addrman.Add(CAddress(addr6, NODE_NONE), CService(test_addr, 8333));
         addrman.Good(CAddress(addr6, NODE_NONE));
-        addrman.Add(CAddress(addr7, NODE_NONE), CService("250.1.1.3", 8333));
+        LookupHost("250.1.1.3", test_addr, false);
+        addrman.Add(CAddress(addr7, NODE_NONE), CService(test_addr, 8333));
         addrman.Good(CAddress(addr7, NODE_NONE));
 
         // Test 11: 6 addrs + 1 addr from last test = 7.
@@ -320,23 +344,29 @@ namespace TestAddrmanTests {
         // Set addrman addr placement to be deterministic.
         addrman.MakeDeterministic();
 
-        CNetAddr source = CNetAddr("252.2.2.2");
+        CNetAddr source;
+        LookupHost("252.2.2.2", source, false);
 
         ASSERT_TRUE(addrman.size() == 0);
 
+        CNetAddr test_addr;
+
         for (unsigned int i = 1; i < 18; i++) {
-            CService addr = CService("250.1.1." + boost::to_string(i));
+            LookupHost(("250.1.1." + boost::to_string(i)).c_str(), test_addr, false);
+            CService addr = CService(test_addr, 8333);
             addrman.Add(CAddress(addr, NODE_NONE), source);
             //Test 13: No collision in new table yet.
             ASSERT_TRUE(addrman.size() == i);
         }
 
         //Test 14: new table collision!
-        CService addr1 = CService("250.1.1.18");
+        LookupHost("250.1.1.18", test_addr, false);
+        CService addr1 = CService(test_addr, 8333);
         addrman.Add(CAddress(addr1, NODE_NONE), source);
         ASSERT_TRUE(addrman.size() == 17);
 
-        CService addr2 = CService("250.1.1.19");
+        LookupHost("250.1.1.19", test_addr, false);
+        CService addr2 = CService(test_addr, 8333);
         addrman.Add(CAddress(addr2, NODE_NONE), source);
         ASSERT_TRUE(addrman.size() == 18);
     }
@@ -348,12 +378,16 @@ namespace TestAddrmanTests {
         // Set addrman addr placement to be deterministic.
         addrman.MakeDeterministic();
 
-        CNetAddr source = CNetAddr("252.2.2.2");
+        CNetAddr source;
+        LookupHost("252.2.2.2", source, false);
 
         ASSERT_TRUE(addrman.size() == 0);
 
+        CNetAddr test_addr;
+
         for (unsigned int i = 1; i < 80; i++) {
-            CService addr = CService("250.1.1." + boost::to_string(i));
+            LookupHost(("250.1.1." + boost::to_string(i)).c_str(), test_addr, false);
+            CService addr = CService(test_addr, 8333);
             addrman.Add(CAddress(addr, NODE_NONE), source);
             addrman.Good(CAddress(addr, NODE_NONE));
 
@@ -363,11 +397,13 @@ namespace TestAddrmanTests {
         }
 
         //Test 16: tried table collision!
-        CService addr1 = CService("250.1.1.80");
+        LookupHost("250.1.1.80", test_addr, false);
+        CService addr1 = CService(test_addr, 8333);
         addrman.Add(CAddress(addr1, NODE_NONE), source);
         ASSERT_TRUE(addrman.size() == 79);
 
-        CService addr2 = CService("250.1.1.81");
+        LookupHost("250.1.1.81", test_addr, false);
+        CService addr2 = CService(test_addr, 8333);
         addrman.Add(CAddress(addr2, NODE_NONE), source);
         ASSERT_TRUE(addrman.size() == 80);
     }
@@ -381,12 +417,19 @@ namespace TestAddrmanTests {
 
         ASSERT_TRUE(addrman.size() == 0);
 
-        CAddress addr1 = CAddress(CService("250.1.2.1", 8333), NODE_NONE);
-        CAddress addr2 = CAddress(CService("250.1.2.1", 9999), NODE_NONE);
-        CAddress addr3 = CAddress(CService("251.255.2.1", 8333), NODE_NONE);
+        CNetAddr test_addr;
+        LookupHost("250.1.2.1", test_addr, false);
+        CAddress addr1 = CAddress(CService(test_addr, 8333), NODE_NONE);
+        LookupHost("250.1.2.1", test_addr, false);
+        CAddress addr2 = CAddress(CService(test_addr, 9999), NODE_NONE);
+        LookupHost("250.255.2.1", test_addr, false);
+        CAddress addr3 = CAddress(CService(test_addr, 8333), NODE_NONE);
 
-        CNetAddr source1 = CNetAddr("250.1.2.1");
-        CNetAddr source2 = CNetAddr("250.1.2.2");
+        CNetAddr source1;
+        LookupHost("252.2.2.1", source1, false);
+
+        CNetAddr source2;
+        LookupHost("252.2.2.2", source2, false);
 
         addrman.Add(addr1, source1);
         addrman.Add(addr2, source2);
@@ -420,8 +463,12 @@ namespace TestAddrmanTests {
 
         ASSERT_TRUE(addrman.size() == 0);
 
-        CAddress addr1 = CAddress(CService("250.1.2.1", 8333), NODE_NONE);
-        CNetAddr source1 = CNetAddr("250.1.2.1");
+        CNetAddr test_addr;
+        LookupHost("250.1.2.1", test_addr, false);
+        CAddress addr1 = CAddress(CService(test_addr, 8333), NODE_NONE);
+
+        CNetAddr source1;
+        LookupHost("252.1.2.1", source1, false);
 
         int nId;
         CAddrInfo* pinfo = addrman.Create(addr1, source1, &nId);
@@ -443,8 +490,12 @@ namespace TestAddrmanTests {
 
         ASSERT_TRUE(addrman.size() == 0);
 
-        CAddress addr1 = CAddress(CService("250.1.2.1", 8333), NODE_NONE);
-        CNetAddr source1 = CNetAddr("250.1.2.1");
+        CNetAddr test_addr;
+        LookupHost("250.1.2.1", test_addr, false);
+        CAddress addr1 = CAddress(CService(test_addr, 8333), NODE_NONE);
+
+        CNetAddr source1;
+        LookupHost("252.1.2.1", source1, false);
 
         int nId;
         addrman.Create(addr1, source1, &nId);
@@ -470,18 +521,28 @@ namespace TestAddrmanTests {
         vector<CAddress> vAddr1 = addrman.GetAddr();
         ASSERT_TRUE(vAddr1.size() == 0);
 
-        CAddress addr1 = CAddress(CService("250.250.2.1", 8333), NODE_NONE);
+        CNetAddr test_addr;
+
+        LookupHost("250.250.2.1", test_addr, false);
+        CAddress addr1 = CAddress(CService(test_addr, 8333), NODE_NONE);
         addr1.nTime = GetTime(); // Set time so isTerrible = false
-        CAddress addr2 = CAddress(CService("250.251.2.2", 9999), NODE_NONE);
+        LookupHost("250.251.2.2", test_addr, false);
+        CAddress addr2 = CAddress(CService(test_addr, 9999), NODE_NONE);
         addr2.nTime = GetTime();
-        CAddress addr3 = CAddress(CService("251.252.2.3", 8333), NODE_NONE);
+        LookupHost("250.251.2.3", test_addr, false);
+        CAddress addr3 = CAddress(CService(test_addr, 8333), NODE_NONE);
         addr3.nTime = GetTime();
-        CAddress addr4 = CAddress(CService("252.253.3.4", 8333), NODE_NONE);
+        LookupHost("250.251.2.4", test_addr, false);
+        CAddress addr4 = CAddress(CService(test_addr, 8333), NODE_NONE);
         addr4.nTime = GetTime();
-        CAddress addr5 = CAddress(CService("252.254.4.5", 8333), NODE_NONE);
+        LookupHost("250.251.2.5", test_addr, false);
+        CAddress addr5 = CAddress(CService(test_addr, 8333), NODE_NONE);
         addr5.nTime = GetTime();
-        CNetAddr source1 = CNetAddr("250.1.2.1");
-        CNetAddr source2 = CNetAddr("250.2.3.3");
+
+        CNetAddr source1;
+        LookupHost("252.1.2.1", source1, false);
+        CNetAddr source2;
+        LookupHost("252.2.3.3", source2, false);
 
         // Test 23: Ensure GetAddr works with new addresses.
         addrman.Add(addr1, source1);
@@ -504,11 +565,17 @@ namespace TestAddrmanTests {
             int octet2 = (i / 256) % 256;
             int octet3 = (i / (256 * 2)) % 256;
             string strAddr = boost::to_string(octet1) + "." + boost::to_string(octet2) + "." + boost::to_string(octet3) + ".23";
-            CAddress addr = CAddress(CService(strAddr), NODE_NONE);
+
+            LookupHost(strAddr.c_str(), test_addr, false);
+            CAddress addr = CAddress(CService(test_addr, 8333), NODE_NONE);
 
             // Ensure that for all addrs in addrman, isTerrible == false.
             addr.nTime = GetTime();
-            addrman.Add(addr, CNetAddr(strAddr));
+
+            CNetAddr source;
+            LookupHost(strAddr.c_str(), source, false);
+            addrman.Add(addr, source);
+
             if (i % 8 == 0)
                 addrman.Good(addr);
         }

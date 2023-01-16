@@ -42,7 +42,7 @@ static CNetAddr ResolveIP(const std::string& ip)
 {
         vector<CNetAddr> vIPs;
         CNetAddr addr;
-        if (LookupHost(ip.c_str(), vIPs)) {
+        if (LookupHost(ip.c_str(), vIPs, 256, false)) {
                 addr = vIPs[0];
         } else
         {

@@ -146,33 +146,67 @@ BOOST_AUTO_TEST_CASE(embedded_test)
 
 BOOST_AUTO_TEST_CASE(subnet_test)
 {
+    CNetAddr addr;
     BOOST_CHECK(CSubNet("1.2.3.0/24") == CSubNet("1.2.3.0/255.255.255.0"));
     BOOST_CHECK(CSubNet("1.2.3.0/24") != CSubNet("1.2.4.0/255.255.255.0"));
-    BOOST_CHECK(CSubNet("1.2.3.0/24").Match(CNetAddr("1.2.3.4")));
-    BOOST_CHECK(!CSubNet("1.2.2.0/24").Match(CNetAddr("1.2.3.4")));
-    BOOST_CHECK(CSubNet("1.2.3.4").Match(CNetAddr("1.2.3.4")));
-    BOOST_CHECK(CSubNet("1.2.3.4/32").Match(CNetAddr("1.2.3.4")));
-    BOOST_CHECK(!CSubNet("1.2.3.4").Match(CNetAddr("5.6.7.8")));
-    BOOST_CHECK(!CSubNet("1.2.3.4/32").Match(CNetAddr("5.6.7.8")));
-    BOOST_CHECK(CSubNet("::ffff:127.0.0.1").Match(CNetAddr("127.0.0.1")));
-    BOOST_CHECK(CSubNet("1:2:3:4:5:6:7:8").Match(CNetAddr("1:2:3:4:5:6:7:8")));
-    BOOST_CHECK(!CSubNet("1:2:3:4:5:6:7:8").Match(CNetAddr("1:2:3:4:5:6:7:9")));
-    BOOST_CHECK(CSubNet("1:2:3:4:5:6:7:0/112").Match(CNetAddr("1:2:3:4:5:6:7:1234")));
-    BOOST_CHECK(CSubNet("192.168.0.1/24").Match(CNetAddr("192.168.0.2")));
-    BOOST_CHECK(CSubNet("192.168.0.20/29").Match(CNetAddr("192.168.0.18")));
-    BOOST_CHECK(CSubNet("1.2.2.1/24").Match(CNetAddr("1.2.2.4")));
-    BOOST_CHECK(CSubNet("1.2.2.110/31").Match(CNetAddr("1.2.2.111")));
-    BOOST_CHECK(CSubNet("1.2.2.20/26").Match(CNetAddr("1.2.2.63")));
+
+    LookupHost("1.2.3.4", addr, false);
+    BOOST_CHECK(CSubNet("1.2.3.0/24").Match(addr));
+    BOOST_CHECK(!CSubNet("1.2.2.0/24").Match(addr));
+    BOOST_CHECK(CSubNet("1.2.3.4").Match(addr));
+    BOOST_CHECK(CSubNet("1.2.3.4/32").Match(addr));
+
+    LookupHost("5.6.7.8", addr, false);
+    BOOST_CHECK(!CSubNet("1.2.3.4").Match(addr));
+    BOOST_CHECK(!CSubNet("1.2.3.4/32").Match(addr));
+
+    LookupHost("127.0.0.1", addr, false);
+    BOOST_CHECK(CSubNet("::ffff:127.0.0.1").Match(addr));
+
+    LookupHost("1:2:3:4:5:6:7:8", addr, false);
+    BOOST_CHECK(CSubNet("1:2:3:4:5:6:7:8").Match(addr));
+
+    LookupHost("1:2:3:4:5:6:7:9", addr, false);
+    BOOST_CHECK(!CSubNet("1:2:3:4:5:6:7:8").Match(addr));
+
+    LookupHost("1:2:3:4:5:6:7:1234", addr, false);
+    BOOST_CHECK(CSubNet("1:2:3:4:5:6:7:0/112").Match(addr));
+
+    LookupHost("192.168.0.2", addr, false);
+    BOOST_CHECK(CSubNet("192.168.0.1/24").Match(addr));
+
+    LookupHost("192.168.0.18", addr, false);
+    BOOST_CHECK(CSubNet("192.168.0.20/29").Match(addr));
+
+    LookupHost("1.2.2.4", addr, false);
+    BOOST_CHECK(CSubNet("1.2.2.1/24").Match(addr));
+
+    LookupHost("1.2.2.111", addr, false);
+    BOOST_CHECK(CSubNet("1.2.2.110/31").Match(addr));
+
+    LookupHost("1.2.2.63", addr, false);
+    BOOST_CHECK(CSubNet("1.2.2.20/26").Match(addr));
+
     // All-Matching IPv6 Matches arbitrary IPv4 and IPv6
-    BOOST_CHECK(CSubNet("::/0").Match(CNetAddr("1:2:3:4:5:6:7:1234")));
-    BOOST_CHECK(CSubNet("::/0").Match(CNetAddr("1.2.3.4")));
+    LookupHost("1:2:3:4:5:6:7:1234", addr, false);
+    BOOST_CHECK(CSubNet("::/0").Match(addr));
+
+    LookupHost("1.2.3.4", addr, false);
+    BOOST_CHECK(CSubNet("::/0").Match(addr));
+
     // All-Matching IPv4 does not Match IPv6
-    BOOST_CHECK(!CSubNet("0.0.0.0/0").Match(CNetAddr("1:2:3:4:5:6:7:1234")));
+    LookupHost("1:2:3:4:5:6:7:1234", addr, false);
+    BOOST_CHECK(!CSubNet("0.0.0.0/0").Match(addr));
+
     // Invalid subnets Match nothing (not even invalid addresses)
-    BOOST_CHECK(!CSubNet().Match(CNetAddr("1.2.3.4")));
-    BOOST_CHECK(!CSubNet("").Match(CNetAddr("4.5.6.7")));
-    BOOST_CHECK(!CSubNet("bloop").Match(CNetAddr("0.0.0.0")));
-    BOOST_CHECK(!CSubNet("bloop").Match(CNetAddr("hab")));
+    LookupHost("1.2.3.4", addr, false);
+    BOOST_CHECK(!CSubNet().Match(addr));
+    LookupHost("4.5.6.7", addr, false);
+    BOOST_CHECK(!CSubNet("").Match(addr));
+    LookupHost("0.0.0.0", addr, false);
+    BOOST_CHECK(!CSubNet("bloop").Match(addr));
+    LookupHost("hab", addr, false);
+    BOOST_CHECK(!CSubNet("bloop").Match(addr));
     // Check valid/invalid
     BOOST_CHECK(ResolveSubNet("1.2.3.0/0").IsValid());
     BOOST_CHECK(!ResolveSubNet("1.2.3.0/-1").IsValid());
