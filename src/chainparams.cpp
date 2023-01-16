@@ -189,7 +189,6 @@ public:
         vSeeds.push_back(CDNSSeedData("Forge2", "pirate2.cryptoforge.cc")); // Forge
         vSeeds.push_back(CDNSSeedData("Forge3", "pirate3.cryptoforge.cc")); // Forge
         vSeeds.push_back(CDNSSeedData("ForgeExporer", "explorer.cryptoforge.cc")); // Forge
-        vSeeds.push_back(CDNSSeedData("Explorer","explorer.pirate.black")); // Explorer
         vSeeds.push_back(CDNSSeedData("Explorer","explorer.pirate.black")); // Explorer tls enabled chmex
         vSeeds.push_back(CDNSSeedData("Dexstats","seed.dexstats.info")); // Dexstats chmex
         vSeeds.push_back(CDNSSeedData("Komodostats","seed.komodostats.com")); // komodostats webworker01
