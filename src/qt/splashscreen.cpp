@@ -161,7 +161,7 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
 
     //Center Icon Horizontally
     QWidget *hicon = new QWidget;
-    QHBoxLayout *hiconLayout = new QHBoxLayout(this);
+    QHBoxLayout *hiconLayout = new QHBoxLayout();
     hicon->setLayout(hiconLayout);
     hiconLayout->addItem(new QSpacerItem(0, 0, QSizePolicy::Expanding, QSizePolicy::Fixed));
     hiconLayout->addWidget(vicon);
