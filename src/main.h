@@ -66,7 +66,6 @@ class PrecomputedTransactionData;
 
 struct CNodeStateStats;
 #define DEFAULT_MEMPOOL_EXPIRY 1
-#define _COINBASE_MATURITY 100
 
 /** Default for -blockmaxsize and -blockminsize, which control the range of sizes the mining code will create **/
 static const unsigned int DEFAULT_BLOCK_MAX_SIZE = 2000000;//MAX_BLOCK_SIZE;
@@ -78,7 +77,7 @@ static const bool DEFAULT_ALERTS = true;
 /** Minimum alert priority for enabling safe mode. */
 static const int ALERT_PRIORITY_SAFE_MODE = 4000;
 /** Maximum reorg length we will accept before we shut down and alert the user. */
-static unsigned int MAX_REORG_LENGTH = _COINBASE_MATURITY - 1;
+static unsigned int MAX_REORG_LENGTH = 100 - 1; // based on COINBASE_MATURITY
 /** Maximum number of signature check operations in an IsStandard() P2SH script */
 static const unsigned int MAX_P2SH_SIGOPS = 15;
 /** The maximum number of sigops we're willing to relay/mine in a single tx */
@@ -202,17 +201,20 @@ void RegisterNodeSignals(CNodeSignals& nodeSignals);
 /** Unregister a network node */
 void UnregisterNodeSignals(CNodeSignals& nodeSignals);
 
-/**
- * Process an incoming block. This only returns after the best known valid
+/*****
+ * @brief Process a new block
+ * @note can come from the network or locally mined
+ * @note This only returns after the best known valid
  * block is made active. Note that it does not, however, guarantee that the
  * specific block passed to it has been checked for validity!
- *
- * @param[out]  state   This may be set to an Error state if any error occurred processing it, including during validation/connection/etc of otherwise unrelated blocks during reorganisation; or it may be set to an Invalid state if pblock is itself invalid (but this is not guaranteed even when the block is checked). If you want to *possibly* get feedback on whether pblock is valid, you must also install a CValidationInterface (see validationinterface.h) - this will have its BlockChecked method called whenever *any* block completes validation.
- * @param[in]   pfrom   The node which we are receiving the block from; it is added to mapBlockSource and may be penalised if the block is invalid.
- * @param[in]   pblock  The block we want to process.
- * @param[in]   fForceProcessing Process this block even if unrequested; used for non-network block sources and whitelisted peers.
- * @param[out]  dbp     If pblock is stored to disk (or already there), this will be set to its location.
- * @return True if state.IsValid()
+ * @param from_miner no longer used
+ * @param height the new height
+ * @param[out] state the results
+ * @param pfrom the node that produced the block (nullptr for local)
+ * @param pblock the block to process
+ * @param fForceProcessing Process this block even if unrequested; used for non-network block sources and whitelisted peers.
+ * @param[out] dbp set to position on disk for block
+ * @returns true on success
  */
 bool ProcessNewBlock(bool from_miner,int32_t height,CValidationState &state, CNode* pfrom, CBlock* pblock, bool fForceProcessing, CDiskBlockPos *dbp);
 /** Check whether enough disk space is available for an incoming block */
@@ -225,11 +227,20 @@ FILE* OpenUndoFile(const CDiskBlockPos &pos, bool fReadOnly = false);
 boost::filesystem::path GetBlockPosFilename(const CDiskBlockPos &pos, const char *prefix);
 /** Import blocks from an external file */
 bool LoadExternalBlockFile(FILE* fileIn, CDiskBlockPos *dbp = NULL);
-/** Initialize a new block tree database + block data on disk */
+/** 
+ * Initialize a new block tree database + block data on disk 
+ * @returns true on success
+ */
 bool InitBlockIndex();
-/** Load the block tree and coins database from disk */
-bool LoadBlockIndex();
-/** Unload database information */
+/******
+ * @brief Load the block tree and coins database from disk
+ * @param reindex true if we will be reindexing (will skip the load if we are)
+ * @returns true on success
+ */
+bool LoadBlockIndex(bool reindex);
+/***
+ * Clear all values related to the block index
+ */
 void UnloadBlockIndex();
 /** Process protocol messages received from a given node */
 bool ProcessMessages(CNode* pfrom);
@@ -252,7 +263,14 @@ bool IsInitialBlockDownload();
 int IsNotInSync();
 /** Format a string that describes several potential problems detected by the core */
 std::string GetWarnings(const std::string& strFor);
-/** Retrieve a transaction (from memory pool, or from disk, if possible) */
+/** 
+ * @brief Find a transaction (uses locks)
+ * @param[in] hash the transaction to look for
+ * @param[out] txOut the transaction found
+ * @param[out] hashBlock the block where the transaction was found (all zeros if found in mempool)
+ * @param[in] fAllowSlow true to continue searching even if there are no transaction indexes
+ * @returns true if found
+ */
 bool GetTransaction(const uint256 &hash, CTransaction &tx, uint256 &hashBlock, bool fAllowSlow = false);
 /** Find the best known block, and make it the tip of the block chain */
 bool ActivateBestChain(bool fSkipdpow, CValidationState &state, CBlock *pblock = NULL);
@@ -291,7 +309,17 @@ void FlushStateToDisk();
 /** Prune block files and flush state to disk. */
 void PruneAndFlush();
 
-/** (try to) add transaction to memory pool **/
+/**
+ * @brief Try to add transaction to memory pool 
+ * @param pool
+ * @param state
+ * @param tx
+ * @param fLimitFree
+ * @param pfMissingInputs
+ * @param fRejectAbsurdFee
+ * @param dosLevel
+ * @returns true on success
+ */
 bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransaction &tx, bool fLimitFree,
                         bool* pfMissingInputs, bool fRejectAbsurdFee=false, int dosLevel=-1);
 
@@ -746,6 +774,9 @@ bool IsFinalTx(const CTransaction &tx, int nBlockHeight, int64_t nBlockTime);
 /**
  * Check if transaction is expired and can be included in a block with the
  * specified height. Consensus critical.
+ * @param tx the transaction
+ * @param nBlockHeight the current block height
+ * @returns true if transaction is expired (mainly tx.expiryHeight > nBlockHeight)
  */
 bool IsExpiredTx(const CTransaction &tx, int nBlockHeight);
 
@@ -820,7 +851,16 @@ bool PruneOneBlockFile(bool tempfile, const int fileNumber);
  *  of problems. Note that in any case, coins may be modified. */
 bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex, CCoinsViewCache& coins, bool* pfClean = NULL);
 
-/** Apply the effects of this block (with given index) on the UTXO set represented by coins */
+/*****
+ * @brief Apply the effects of this block (with given index) on the UTXO set represented by coins
+ * @param block the block to add
+ * @param state the result status
+ * @param pindex where to insert the block
+ * @param view the chain
+ * @param fJustCheck do not actually modify, only do checks
+ * @param fcheckPOW
+ * @returns true on success
+ */
 bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pindex, CCoinsViewCache& coins, bool fJustCheck = false,bool fCheckPOW = false);
 
 /** Context-independent validity checks */
@@ -846,17 +886,14 @@ bool TestBlockValidity(CValidationState &state, const CBlock& block, CBlockIndex
 bool AcceptBlock(int32_t *futureblockp,CBlock& block, CValidationState& state, CBlockIndex **pindex, bool fRequested, CDiskBlockPos* dbp);
 bool AcceptBlockHeader(int32_t *futureblockp,const CBlockHeader& block, CValidationState& state, CBlockIndex **ppindex= NULL);
 
-
-
 /**
  * When there are blocks in the active chain with missing data (e.g. if the
  * activation height and branch ID of a particular upgrade have been altered),
  * rewind the chainstate and remove them from the block index.
- *
- * clearWitnessCaches is an output parameter that will be set to true iff
- * witness caches should be cleared in order to handle an intended long rewind.
+ * @param params the chain parameters
+ * @returns true on success
  */
-bool RewindBlockIndex(const CChainParams& params, bool& clearWitnessCaches);
+bool RewindBlockIndex(const CChainParams& params);
 
 class CBlockFileInfo
 {
@@ -930,7 +967,11 @@ bool InvalidateBlock(CValidationState& state, CBlockIndex *pindex);
 bool ReconsiderBlock(CValidationState& state, CBlockIndex *pindex);
 
 /** The currently-connected chain of blocks (protected by cs_main). */
+#ifdef DEBUG_LOCKORDER
+extern MultithreadedCChain<CCriticalSection> chainActive;
+#else
 extern CChain chainActive;
+#endif
 
 /** Global variable that points to the active CCoinsView (protected by cs_main) */
 extern CCoinsViewCache *pcoinsTip;
@@ -949,5 +990,8 @@ uint64_t CalculateCurrentUsage();
 
 /** Return a CMutableTransaction with contextual default values based on set of consensus rules at height */
 CMutableTransaction CreateNewContextualCMutableTransaction(const Consensus::Params& consensusParams, int nHeight);
+
+int32_t komodo_isnotaryvout(char *coinaddr,uint32_t tiptime); // from ac_private chains only
+bool komodo_dailysnapshot(int32_t height);
 
 #endif // BITCOIN_MAIN_H

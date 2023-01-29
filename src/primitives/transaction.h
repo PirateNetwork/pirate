@@ -711,11 +711,6 @@ public:
         return (vin.size() == 1 && vin[0].prevout.n == 10e8);
     }
 
-    bool IsPegsImport() const
-    {
-        return (ASSETCHAINS_SELFIMPORT=="PEGSCC" && vin[0].prevout.n == 10e8);
-    }
-
     friend bool operator==(const CTransaction& a, const CTransaction& b)
     {
         return a.hash == b.hash;

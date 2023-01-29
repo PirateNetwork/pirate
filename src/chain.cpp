@@ -19,6 +19,10 @@
  ******************************************************************************/
 
 #include "chain.h"
+#include "komodo_defs.h"
+#include "komodo_globals.h"
+#include "notaries_staked.h"
+#include "komodo_hardfork.h"
 
 using namespace std;
 
@@ -26,7 +30,7 @@ using namespace std;
  * CChain implementation
  */
 void CChain::SetTip(CBlockIndex *pindex) {
-    lastTip = pindex;
+    AssertLockHeld(cs_main);
     if (pindex == NULL) {
         vChain.clear();
         return;
@@ -39,6 +43,7 @@ void CChain::SetTip(CBlockIndex *pindex) {
 }
 
 CBlockLocator CChain::GetLocator(const CBlockIndex *pindex) const {
+    AssertLockHeld(cs_main);
     int nStep = 1;
     std::vector<uint256> vHave;
     vHave.reserve(32);
@@ -67,6 +72,7 @@ CBlockLocator CChain::GetLocator(const CBlockIndex *pindex) const {
 }
 
 const CBlockIndex *CChain::FindFork(const CBlockIndex *pindex) const {
+    AssertLockHeld(cs_main);
     if ( pindex == 0 )
         return(0);
     if (pindex->nHeight > Height())
@@ -126,4 +132,14 @@ void CBlockIndex::BuildSkip()
 {
     if (pprev)
         pskip = pprev->GetAncestor(GetSkipHeight(nHeight));
+}
+
+bool CDiskBlockIndex::isStakedAndNotaryPay() const
+{
+    return is_STAKED(chainName.symbol()) != 0 && ASSETCHAINS_NOTARY_PAY[0] != 0;
+}
+
+bool CDiskBlockIndex::isStakedAndAfterDec2019(unsigned int nTime) const
+{
+    return ASSETCHAINS_STAKED != 0 && (nTime > nStakedDecemberHardforkTimestamp || is_STAKED(chainName.symbol()) != 0);
 }

@@ -60,7 +60,7 @@ private:
 
 public:
     mutable CCriticalSection cs_db;
-    DbEnv *dbenv;
+    DbEnv *dbenv = nullptr;
     std::map<std::string, int> mapFileUseCount;
     std::map<std::string, Db*> mapDb;
 
@@ -109,7 +109,7 @@ public:
     }
 };
 
-extern CDBEnv bitdb;
+extern std::shared_ptr<CDBEnv> bitdb;
 
 
 /** RAII class that provides access to a Berkeley database */
@@ -292,7 +292,7 @@ public:
     {
         if (!pdb || activeTxn)
             return false;
-        DbTxn* ptxn = bitdb.TxnBegin();
+        DbTxn* ptxn = bitdb->TxnBegin();
         if (!ptxn)
             return false;
         activeTxn = ptxn;

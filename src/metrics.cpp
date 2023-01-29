@@ -27,6 +27,8 @@
 #include "utiltime.h"
 #include "utilmoneystr.h"
 #include "utilstrencodings.h"
+#include "komodo_utils.h"
+#include "komodo_globals.h"
 
 #include <boost/thread.hpp>
 #include <boost/thread/synchronized_value.hpp>
@@ -40,7 +42,6 @@
 #include <unistd.h>
 
 #include "komodo_defs.h"
-int64_t komodo_block_unlocktime(uint32_t nHeight);
 
 void AtomicTimer::start()
 {
@@ -240,7 +241,7 @@ int printStats(bool mining)
     {
         LOCK2(cs_main, cs_vNodes);
         height = chainActive.Height();
-        tipmediantime = chainActive.LastTip()->GetMedianTimePast();
+        tipmediantime = chainActive.Tip()->GetMedianTimePast();
         connections = vNodes.size();
         netsolps = GetNetworkHashPS(120, -1);
     }
@@ -365,7 +366,7 @@ int printMetrics(size_t cols, bool mining)
                         subsidy -= subsidy/5;
                     }
 
-                    if ((std::max(0, COINBASE_MATURITY - (tipHeight - height)) > 0) ||
+                    if ((std::max( 0U, Params().CoinbaseMaturity() - (tipHeight - height)) > 0) ||
                         (tipHeight < komodo_block_unlocktime(height) && subsidy >= ASSETCHAINS_TIMELOCKGTE)) {
                         immature += subsidy;
                     } else {

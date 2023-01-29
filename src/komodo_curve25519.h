@@ -765,9 +765,3 @@ bits256 curve25519_shared(bits256 privkey,bits256 otherpub);
 int32_t curve25519_donna(uint8_t *mypublic,const uint8_t *secret,const uint8_t *basepoint);
 
 uint64_t conv_NXTpassword(unsigned char *mysecret,unsigned char *mypublic,uint8_t *pass,int32_t passlen);
-
-uint256 komodo_kvprivkey(uint256 *pubkeyp,char *passphrase);
-
-uint256 komodo_kvsig(uint8_t *buf,int32_t len,uint256 _privkey);
-
-int32_t komodo_kvsigverify(uint8_t *buf,int32_t len,uint256 _pubkey,uint256 sig);

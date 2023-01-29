@@ -15,6 +15,7 @@
 
 #include "CCGateways.h"
 #include "key_io.h"
+#include "komodo_bitcoind.h"
 
 /*
  prevent duplicate bindtxid via mempool scan

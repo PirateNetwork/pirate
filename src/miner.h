@@ -34,6 +34,9 @@ class CWallet;
 #endif
 namespace Consensus { struct Params; };
 
+/***
+ * Holds data about the block under construction
+ */
 struct CBlockTemplate
 {
     CBlock block;
@@ -42,8 +45,15 @@ struct CBlockTemplate
 };
 #define KOMODO_MAXGPUCOUNT 65
 
-/** Generate a new block, without valid proof-of-work */
-CBlockTemplate* CreateNewBlock(CPubKey _pk,const CScript& scriptPubKeyIn, int32_t gpucount, bool isStake = false);
+/*****
+ * @breif Generate a new block based on mempool txs, without valid proof-of-work 
+ * @param _pk the public key
+ * @param _scriptPubKeyIn the script for the public key
+ * @param gpucount assists in calculating the block's nTime
+ * @param isStake
+ * @returns the block template
+ */
+CBlockTemplate* CreateNewBlock(const CPubKey _pk,const CScript& _scriptPubKeyIn, int32_t gpucount, bool isStake = false);
 #ifdef ENABLE_WALLET
 boost::optional<CScript> GetMinerScriptPubKey(CReserveKey& reservekey);
 CBlockTemplate* CreateNewBlockWithKey(CReserveKey& reservekey, int32_t nHeight, int32_t gpucount, bool isStake = false);
@@ -64,5 +74,6 @@ void GenerateBitcoins(bool fGenerate, int nThreads);
 #endif
 
 void UpdateTime(CBlockHeader* pblock, const Consensus::Params& consensusParams, const CBlockIndex* pindexPrev);
+void komodo_sendmessage(int32_t minpeers,int32_t maxpeers,const char *message,std::vector<uint8_t> payload);
 
 #endif // BITCOIN_MINER_H

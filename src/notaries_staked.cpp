@@ -3,31 +3,50 @@
 #include "crosschain.h"
 #include "cc/CCinclude.h"
 #include "komodo_defs.h"
+#include "komodo_globals.h"
 #include "komodo_hardfork.h"
 #include "hex.h"
 #include <cstring>
 
-extern pthread_mutex_t staked_mutex;
+pthread_mutex_t staked_mutex; // todo remove
 
-int8_t is_STAKED(const char *chain_name) 
+//static bool doneinit_STAKED = false;
+
+/*****
+ * Reset the doneinit static (for unit testing)
+ */
+/*void undo_init_STAKED()
 {
-    static int8_t STAKED,doneinit;
-    if ( chain_name[0] == 0 )
+    doneinit_STAKED = false;
+}*/
+
+/****
+ * @brief given the chan name, determine the type of chain
+ * @param chain_name the chain name
+ * @returns 0=kmd, 1=LABS, 2=LABSxxx, 3=CFEK, 4=TEST, 255=banned
+ */
+uint8_t is_STAKED(const std::string& symbol) 
+{
+    // let's not use static vars:
+    /* static uint8_t STAKED;
+    if (symbol.empty())
         return(0);
-    if (doneinit == 1 && ASSETCHAINS_SYMBOL[0] != 0)
+    if (doneinit_STAKED && !chainName.isKMD())
         return(STAKED);
-    else STAKED = 0;
-    if ( (strcmp(chain_name, "LABS") == 0) ) 
+    else STAKED = 0;*/
+    uint8_t STAKED = 0;
+
+    if ( symbol == "LABS" ) 
         STAKED = 1; // These chains are allowed coin emissions.
-    else if ( (strncmp(chain_name, "LABS", 4) == 0) ) 
+    else if ( symbol.find("LABS") == 0 ) 
         STAKED = 2; // These chains have no coin emission, block subsidy is always 0, and comission is 0. Notary pay is allowed.
-    else if ( (strcmp(chain_name, "CFEK") == 0) || (strncmp(chain_name, "CFEK", 4) == 0) )
+    else if ( symbol == "CFEK" || symbol.find("CFEK") == 0 )
         STAKED = 3; // These chains have no speical rules at all.
-    else if ( (strcmp(chain_name, "TEST") == 0) || (strncmp(chain_name, "TEST", 4) == 0) )
+    else if ( symbol == "TEST" || symbol.find("TEST") == 0 )
         STAKED = 4; // These chains are for testing consensus to create a chain etc. Not meant to be actually used for anything important.
-    else if ( (strcmp(chain_name, "THIS_CHAIN_IS_BANNED") == 0) )
+    else if ( symbol == "THIS_CHAIN_IS_BANNED" )
         STAKED = 255; // Any chain added to this group is banned, no notarisations are valid, as a consensus rule. Can be used to remove a chain from cluster if needed.
-    doneinit = 1;
+    //doneinit_STAKED = true;
     return(STAKED);
 };
 
@@ -44,6 +63,8 @@ int32_t STAKED_era(int timestamp)
   // if we are in a gap, return era 0, this allows to invalidate notarizations when in GAP.
   return(0);
 };
+
+//char NOTARYADDRS[64][64];  // todo remove
 
 int8_t StakedNotaryID(std::string &notaryname, char *Raddress) {
     if ( STAKED_ERA != 0 )
@@ -65,10 +86,7 @@ int8_t numStakedNotaries(uint8_t pubkeys[64][33],int8_t era) {
 
     if ( ChainName[0] == 0 )
     {
-        if ( ASSETCHAINS_SYMBOL[0] == 0 )
-            strcpy(ChainName,"KMD");
-        else
-            strcpy(ChainName,ASSETCHAINS_SYMBOL);
+        strcpy(ChainName, chainName.ToString().c_str());
     }
 
     if ( era == 0 )

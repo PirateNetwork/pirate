@@ -15,6 +15,7 @@
 #include "hex.h"
 #include "CCfaucet.h"
 #include "../txmempool.h"
+#include "komodo_bitcoind.h"
 
 /*
  This file implements a simple CC faucet as an example of how to make a new CC contract. It wont have any fancy sybil protection but will serve the purpose of a fully automated faucet.

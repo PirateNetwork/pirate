@@ -21,12 +21,11 @@
 #include "key_io.h"
 #include "main.h"
 #include "crypto/equihash.h"
-
+#include "komodo_globals.h"
 #include "util.h"
 #include "utilstrencodings.h"
 
 #include <assert.h>
-
 #include <boost/assign/list_of.hpp>
 
 #include "chainparamsseeds.h"
@@ -134,9 +133,6 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170007;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
 
-        // The best chain should have at least this much work.
-        consensus.nMinimumChainWork = uint256S("0x00000000000000000000000000000000000000000000000000281b32ff3198a1");
-
         /**
          * The message start string is designed to be unlikely to occur in normal data.
          * The characters are rarely used upper ASCII, not valid as UTF-8, and produce
@@ -197,11 +193,11 @@ public:
         */
 
         // TODO: we need more seed crawlers from other community members
-        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,60);
-        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,85);
-        base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,188);
-        base58Prefixes[EXT_PUBLIC_KEY] = boost::assign::list_of(0x04)(0x88)(0xB2)(0x1E).convert_to_container<std::vector<unsigned char> >();
-        base58Prefixes[EXT_SECRET_KEY] = boost::assign::list_of(0x04)(0x88)(0xAD)(0xE4).convert_to_container<std::vector<unsigned char> >();
+        base58Prefixes[PUBKEY_ADDRESS] = {60};
+        base58Prefixes[SCRIPT_ADDRESS] = {85};
+        base58Prefixes[SECRET_KEY] =     {188};
+        base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x88, 0xb2, 0x1e};
+        base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x88, 0xad, 0xe4};
         // guarantees the first two characters, when base58 encoded, are "zc"
         base58Prefixes[ZCPAYMENT_ADDRRESS] = {22,154};
         // guarantees the first 4 characters, when base58 encoded, are "ZiVK"
@@ -221,7 +217,105 @@ public:
         fRequireStandard = true;
         fMineBlocksOnDemand = false;
         fTestnetToBeDeprecatedFieldRPC = false;
-    }
+
+        checkpointData = {
+            boost::assign::map_list_of
+
+            (0, consensus.hashGenesisBlock)
+            (	50000,	uint256S("0x00076e16d3fa5194da559c17cf9cf285e21d1f13154ae4f7c7b87919549345aa"))
+            (	100000,	uint256S("0x0f02eb1f3a4b89df9909fec81a4bd7d023e32e24e1f5262d9fc2cc36a715be6f"))
+            (	150000,	uint256S("0x0a817f15b9da636f453a7a01835cfc534ed1a55ce7f08c566471d167678bedce"))
+            (	200000,	uint256S("0x000001763a9337328651ca57ac487cc0507087be5838fb74ca4165ff19f0e84f"))
+            (	250000,	uint256S("0x0dd54ef5f816c7fde9d2b1c8c1a26412b3c761cc5dd3901fa5c4cd1900892fba"))
+            (	300000,	uint256S("0x000000fa5efd1998959926047727519ed7de06dcf9f2cd92a4f71e907e1312dc"))
+            (	350000,	uint256S("0x0000000228ef321323f81dae00c98d7960fc7486fb2d881007fee60d1e34653f"))
+            (	400000,	uint256S("0x036d294c5be96f4c0efb28e652eb3968231e87204a823991a85c5fdab3c43ae6"))
+            (	450000,	uint256S("0x0906ef1e8dc194f1f03bd4ce1ac8c6992fd721ef2c5ccbf4871ec8cdbb456c18"))
+            (	500000,	uint256S("0x0bebdb417f7a51fe0c36fcf94e2ed29895a9a862eaa61601272866a7ecd6391b"))
+            (	550000,	uint256S("0x06df52fc5f9ba03ccc3a7673b01ab47990bd5c4947f6e1bc0ba14d21cd5bcccd"))
+            (	600000,	uint256S("0x00000005080d5689c3b4466e551cd1986e5d2024a62a79b1335afe12c42779e4"))
+            (	650000,	uint256S("0x039a3cb760cc6e564974caf69e8ae621c14567f3a36e4991f77fd869294b1d52"))
+            (	700000,	uint256S("0x00002285be912b2b887a5bb42d2f1aa011428c565b0ffc908129c47b5ce87585"))
+            (	750000,	uint256S("0x04cff4c26d185d591bed3613ce15e1d15d9c91dd8b98a6729f89c58ce4bd1fd6"))
+            (	800000,	uint256S("0x0000000617574d402fca8e6570f0845bd5fe449398b318b4e1f65bc69cdd6606"))
+            (	850000,	uint256S("0x044199301f37194f20ba7b498fc72ed742f6c0ba6e476f28d6c81d225e58d5ce"))
+            (	900000,	uint256S("0x08bdbe4de2a65ac89fd2913192d05362c900e3af476a0c99d9f311875067451e"))
+            (	950000,	uint256S("0x0000000aa9a44b593e6138f247bfae75bd43b9396ef9ff0a6a3ebd852f131806"))
+            (	1000000,	uint256S("0x0cb1d2457eaa58af5028e86e27ac54578fa09558206e7b868ebd35e7005ed8bb"))
+            (	1050000,	uint256S("0x044d49bbc3bd9d32b6288b768d4f7e0afe3cbeda606f3ac3579a076e4bddf6ae"))
+            (	1100000,	uint256S("0x000000050cad04887e170059dd2556d85bbd20390b04afb9b07fb62cafd647b4"))
+            (	1150000,	uint256S("0x0c85501c759d957dd1ccc5f7fdfcc415c89c7f2a26471fffc75b75f79e63c16a"))
+            (	1200000,	uint256S("0x0763cbf43ed7227988081c29d9e9fc7ab2450216e6d0354cc4596c86689702d4"))
+            (	1250000,	uint256S("0x0489640207f8c343a56a10e45d987516059ea82a3c6859a771b3a9cf94f5c3bb"))
+            (	1300000,	uint256S("0x000000012a01709b254b4f75e2b9ed772d8fe558655c8c859892ca8c9d625e87"))
+            (	1350000,	uint256S("0x075a1a5c66a68b47d9848ca6986687ed2665b1852457051bf142208e62f98a60"))
+            (	1400000,	uint256S("0x055f73dd9b20650c3d6e6dbb606af8d9479e4c81d89430867abff5329f167bb2"))
+            (	1450000,	uint256S("0x014c2926e07e9712211c5e82f05df1b802c59cc8bc24e3cc9b09942017080f2d"))
+            (	1500000,	uint256S("0x0791f892210ce3c513ab607d689cd1e8907a27f3dfeb58dec21ae299b7981cb7"))
+            (	1550000,	uint256S("0x08fcbaffb7164b161a25efc6dd5c70b679498ee637d663fe201a55c7decc37a3"))
+            (	1600000,	uint256S("0x0e577dcd49319a67fe2acbb39ae6d46afccd3009d3ba9d1bcf6c624708e12bac"))
+            (	1650000,	uint256S("0x091ac57a0f786a9526b2224a10b62f1f464b9ffc0afc2240d86264439e6ad3d0"))
+            (	1700000,	uint256S("0x0d0be6ab4a5083ce9d2a7ea2549b03cfc9770427b7d51c0bf0c603399a60d037"))
+            (	1750000,	uint256S("0x0a019d830157db596eeb678787279908093fd273a4e022b5e052f3a9f95714ca"))
+            (	1800000,	uint256S("0x0390779f6c615620391f9dd7df7f3f4947523bd6350b26625c0315571c616076"))
+            (	1850000,	uint256S("0x000000007ca2de1bd9cb7b52fe0accca4874143822521d955e58c73e304279e0"))
+            (	1900000,	uint256S("0x04c6589d5703f8237bf215c4e3e881c1c77063ef079cea5dc132a0e7f7a0cbd9"))
+            (	1950000,	uint256S("0x00000000386795b9fa21f14782ee1b9176763d6a544d7e0511d1860c62d540aa"))
+            (	2000000,	uint256S("0x0b0403fbe3c5742bbd0e3fc643049534e50c4a49bbc4a3b284fc0ecedf15c044"))
+            (	2050000,	uint256S("0x0c7923957469864d49a0be56b5ffbee7f21c1b6d00acc7374f60f1c1c7b87e14"))
+            (	2100000,	uint256S("0x05725ed166ae796529096ac2a42e85a3bdd0d69dbb2f69e620c08219fda1130a"))
+            (	2150000,	uint256S("0x0edb94f5a5501fc8dd72a455cdaccf0af0215b914dd3d8d4ae5d644e27ef562c"))
+            (	2200000,	uint256S("0x08b92203aa4a3b09001a75e8eebe8e64434259ae7ed7a31384203924d1ab03b8"))
+            (	2250000,	uint256S("0x0127d1ed5cd6f261631423275b6b17728c392583177e1151a6e638a4b0dea985"))
+            (	2300000,	uint256S("0x07df8af646bc30c71d068b146d9ea2c8b25b27a180e9537d5aef859efcfc41f7"))
+            (	2350000,	uint256S("0x0b8028dbfcd92fe34496953872cba2d256923e3e52b4abbdcbe9911071e929e5"))
+            (	2395555,	uint256S("0x0a09f16d886ed8152aaa2e2fcdf6ab4bb142ff8ce5abac131c5eda385a5d712f")),
+            1621188001,     // * UNIX timestamp of last checkpoint block
+            13903562,         // * total number of transactions between genesis and last checkpoint
+                            //   (the tx=... number in the SetBestChain debug.log lines)
+            2777            // * estimated number of transactions per day after checkpoint
+                            //   total number of tx / (checkpoint block height / (24 * 24))
+        };
+
+        genesisNotaries = { 
+            { "jl777_testA", "03b7621b44118017a16043f19b30cc8a4cfe068ac4e42417bae16ba460c80f3828" },
+            { "jl777_testB", "02ebfc784a4ba768aad88d44d1045d240d47b26e248cafaf1c5169a42d7a61d344" },
+            { "pondsea_SH", "02209073bc0943451498de57f802650311b1f12aa6deffcd893da198a544c04f36" },
+            { "crackers_EU", "0340c66cf2c41c41efb420af57867baa765e8468c12aa996bfd816e1e07e410728" },
+            { "pondsea_EU", "0225aa6f6f19e543180b31153d9e6d55d41bc7ec2ba191fd29f19a2f973544e29d" },
+            { "locomb_EU", "025c6d26649b9d397e63323d96db42a9d3caad82e1d6076970efe5056c00c0779b" },
+            { "fullmoon_AE", "0204a908350b8142698fdb6fabefc97fe0e04f537adc7522ba7a1e8f3bec003d4a" },
+            { "movecrypto_EU", "021ab53bc6cf2c46b8a5456759f9d608966eff87384c2b52c0ac4cc8dd51e9cc42" },
+            { "badass_EU", "0209d48554768dd8dada988b98aca23405057ac4b5b46838a9378b95c3e79b9b9e" },
+            { "crackers_NA", "029e1c01131974f4cd3f564cc0c00eb87a0f9721043fbc1ca60f9bd0a1f73f64a1" },
+            { "proto_EU", "03681ffdf17c8f4f0008cefb7fa0779c5e888339cdf932f0974483787a4d6747c1" }, // 10
+            { "jeezy_EU", "023cb3e593fb85c5659688528e9a4f1c4c7f19206edc7e517d20f794ba686fd6d6" },
+            { "farl4web_EU", "035caa40684ace968677dca3f09098aa02b70e533da32390a7654c626e0cf908e1" },
+            { "nxtswe_EU", "032fb104e5eaa704a38a52c126af8f67e870d70f82977e5b2f093d5c1c21ae5899" },
+            { "traderbill_EU", "03196e8de3e2e5d872f31d79d6a859c8704a2198baf0af9c7b21e29656a7eb455f" },
+            { "vanbreuk_EU", "024f3cad7601d2399c131fd070e797d9cd8533868685ddbe515daa53c2e26004c3" }, // 15
+            { "titomane_EU", "03517fcac101fed480ae4f2caf775560065957930d8c1facc83e30077e45bdd199" },
+            { "supernet_AE", "029d93ef78197dc93892d2a30e5a54865f41e0ca3ab7eb8e3dcbc59c8756b6e355" },
+            { "supernet_EU", "02061c6278b91fd4ac5cab4401100ffa3b2d5a277e8f71db23401cc071b3665546" },
+            { "supernet_NA", "033c073366152b6b01535e15dd966a3a8039169584d06e27d92a69889b720d44e1" },
+            { "yassin_EU", "033fb7231bb66484081952890d9a03f91164fb27d392d9152ec41336b71b15fbd0" }, // 20
+            { "durerus_EU", "02bcbd287670bdca2c31e5d50130adb5dea1b53198f18abeec7211825f47485d57" },
+            { "badass_SH", "026b49dd3923b78a592c1b475f208e23698d3f085c4c3b4906a59faf659fd9530b" },
+            { "badass_NA", "02afa1a9f948e1634a29dc718d218e9d150c531cfa852843a1643a02184a63c1a7" },
+            { "pondsea_NA", "031bcfdbb62268e2ff8dfffeb9ddff7fe95fca46778c77eebff9c3829dfa1bb411" },
+            { "rnr_EU", "0287aa4b73988ba26cf6565d815786caf0d2c4af704d7883d163ee89cd9977edec" },
+            { "crackers_SH", "02313d72f9a16055737e14cfc528dcd5d0ef094cfce23d0348fe974b6b1a32e5f0" },
+            { "grewal_SH", "03212a73f5d38a675ee3cdc6e82542a96c38c3d1c79d25a1ed2e42fcf6a8be4e68" },
+            { "polycryptoblock_NA", "02708dcda7c45fb54b78469673c2587bfdd126e381654819c4c23df0e00b679622" },
+            { "titomane_NA", "0387046d9745414fb58a0fa3599078af5073e10347e4657ef7259a99cb4f10ad47" },
+            { "titomane_AE", "03cda6ca5c2d02db201488a54a548dbfc10533bdc275d5ea11928e8d6ab33c2185" },
+            { "kolo_EU", "03f5c08dadffa0ffcafb8dd7ffc38c22887bd02702a6c9ac3440deddcf2837692b" },
+            { "artik_NA", "0224e31f93eff0cc30eaf0b2389fbc591085c0e122c4d11862c1729d090106c842" },
+            { "eclips_EU", "0339369c1f5a2028d44be7be6f8ec3b907fdec814f87d2dead97cab4edb71a42e9" },
+            { "titomane_SH", "035f49d7a308dd9a209e894321f010d21b7793461b0c89d6d9231a3fe5f68d9960" },
+        };
+
+    } // ctor
 };
 
 static CMainParams mainParams;
@@ -256,7 +350,7 @@ class CTestNetParams : public CChainParams {
 public:
     CTestNetParams() {
         strNetworkID = "test";
-        strCurrencyUnits = "TAZ";
+        strCurrencyUnits = "TKMD";
         bip44CoinType = 1;
         consensus.fCoinbaseMustBeProtected = true;
         consensus.nSubsidySlowStartInterval = 20000;
@@ -264,8 +358,8 @@ public:
         consensus.nMajorityEnforceBlockUpgrade = 51;
         consensus.nMajorityRejectBlockOutdated = 75;
         consensus.nMajorityWindow = 400;
-        consensus.powLimit = uint256S("07ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-        consensus.powAlternate = uint256S("07ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+        consensus.powLimit = uint256S("0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f");
+        consensus.powAlternate = uint256S("0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f");
         consensus.nPowAveragingWindow = 17;
         assert(maxUint/UintToArith256(consensus.powLimit) >= consensus.nPowAveragingWindow);
         consensus.nMaxFutureBlockTime = 7 * 60;
@@ -291,9 +385,6 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170007;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 280000;
 
-        // The best chain should have at least this much work.
-        consensus.nMinimumChainWork = uint256S("0x00000000000000000000000000000000000000000000000000000001d0c4d9cd");
-
         pchMessageStart[0] = 0x5A;
         pchMessageStart[1] = 0x1F;
         pchMessageStart[2] = 0x7E;
@@ -308,22 +399,20 @@ public:
         nEquihashK = K;
 
         //! Modify the testnet genesis block so the timestamp is valid for a later start.
-        genesis.nTime = 1296688602;
-        genesis.nBits = KOMODO_MINDIFF_NBITS;
-        genesis.nNonce = uint256S("0x0000000000000000000000000000000000000000000000000000000000000009");
-        genesis.nSolution = ParseHex("003423da3e41f916bf3ff0ee770eb844a240361abe08a8c9d46bd30226e2ad411a4047b6ddc230d173c60537e470e24f764120f5a2778b2a1285b0727bf79a0b085ad67e6266fb38fd72ef17f827315c42f921720248c983d4100e6ebd1c4b5e8762a973bac3bec7f7153b93752ebbb465f0fc9520bcfc30f9abfe303627338fed6ede9cf1b9173a736cf270cf4d9c6999ff4c3a301a78fd50dab6ccca67a0c5c2e41f216a1f3efd049a74bbe6252f9773bc309d3f9e554d996913ce8e1cec672a1fa4ea59726b61ea9e75d5ce9aa5dbfa96179a293810e02787f26de324fe7c88376ff57e29574a55faff7c2946f3e40e451861c32bf67da7377de3136858a18f34fab1bc8da37726ca2c25fc7b312a5427554ec944da81c7e27255d6c94ade9987ff7daedc2d1cc63d7d4cf93e691d13326fb1c7ee72ccdc0b134eb665fc6a9821e6fef6a6d45e4aac6dca6b505a0100ad56ea4f6fa4cdc2f0d1b65f730104a515172e34163bdb422f99d083e6eb860cf6b3f66642c4dbaf0d0fa1dca1b6166f1d1ffaa55a9d6d6df628afbdd14f1622c1c8303259299521a253bc28fcc93676723158067270fc710a09155a1e50c533e9b79ed5edba4ab70a08a9a2fc0eef0ddae050d75776a9804f8d6ad7e30ccb66c6a98d86710ca7a4dfb4feb159484796b9a015c5764aa3509051c87f729b9877ea41f8b470898c01388ed9098b1e006d3c30fc6e7c781072fa3f75d918505ee8ca75840fc62f67c57060666aa42578a2dd022eda62e3f1e447d7364074d34fd60ad9b138f60422afa6cfcb913fd6c213b496144dbfda7bfc7c24540cfe40ad0c0fd5a8c0902127f53d3178ba1b2a87bf1224d53d3a15e49ccdf121ae872a011c996d1b9793153cdcd4c0a7e99f8a35669788551cca2b62769eda24b6b55e2f4e0ac0d30aa50ecf33c6cdb24adfc922006a7bf434ced800fefe814c94c6fc8caa37b372d5088bb31d2f6b11a7a67ad3f70abbac0d5c256b637828de6cc525978cf151a2e50798e0c591787639a030291272c9ced3ab7d682e03f8c7db51f60163baa85315789666ea8c5cd6f789a7f4a5de4f8a9dfefce20f353cec606492fde8eab3e3b487b3a3a57434f8cf252a4b643fc125c8a5948b06744f5dc306aa587bdc85364c7488235c6edddd78763675e50a9637181519be06dd30c4ba0d845f9ba320d01706fd6dd64d1aa3cd4211a4a7d1d3f2c1ef2766d27d5d2cdf8e7f5e3ea309d4f149bb737305df1373a7f5313abe5986f4aa620bec4b0065d48aafac3631de3771f5c4d2f6eec67b09d9c70a3c1969fecdb014cb3c69832b63cc9d6efa378bff0ef95ffacdeb1675bb326e698f022c1a3a2e1c2b0f05e1492a6d2b7552388eca7ee8a2467ef5d4207f65d4e2ae7e33f13eb473954f249d7c20158ae703e1accddd4ea899f026618695ed2949715678a32a153df32c08922fafad68b1895e3b10e143e712940104b3b352369f4fe79bd1f1dbe03ea9909dbcf5862d1f15b3d1557a6191f54c891513cdb3c729bb9ab08c0d4c35a3ed67d517ffe1e2b7a798521aed15ff9822169c0ec860d7b897340bc2ef4c37f7eb73bd7dafef12c4fd4e6f5dd3690305257ae14ed03df5e3327b68467775a90993e613173fa6650ffa2a26e84b3ce79606bf234eda9f4053307f344099e3b10308d3785b8726fd02d8e94c2759bebd05748c3fe7d5fe087dc63608fb77f29708ab167a13f32da251e249a544124ed50c270cfc6986d9d1814273d2f0510d0d2ea335817207db6a4a23ae9b079967b63b25cb3ceea7001b65b879263f5009ac84ab89738a5b8b71fd032beb9f297326f1f5afa630a5198d684514e242f315a4d95fa6802e82799a525bb653b80b4518ec610a5996403b1391");
+        genesis = CreateGenesisBlock(1296688602, 
+                uint256S("0x000000000000000000000000000000000000000000000000000000000000000a"),
+                ParseHex("008b6bd48ca3ef23bfa3d34885483158e089ad887539fd33950f2d78d5720e39769165aa7b2c679b65060e209249f54e3279e8bf31ec13781184b109aaee6e3db57260b466ce8182122b564ce43ca77b011ea1fa038f0139e98e923b0eb1929a80b622cdb72cd5505f275b7cf0e89892ff37f53b010f5ba1fb78bedead4a0c4d39f8319605d358e36a0a0e5e5cdb25a2ffff9320f57569f7270857e2d87287fa71c24d36611b2ac502ffffdbbe425ca71b09b1f0255a66f26356fae7f210227d79e3ea9fe99f7d5e5b05febdf3a54dfec02507bdb85ff409773ce56441191734059a11d9d4c481554fbe6c93b1a93be2cfc707d146e4c28966de5ced066fc85f548fd146c9cd086fafdbf982c3c099394e0a25a5e4670dea2673e84886f5fa765a8a5f1ff3a307680a20e520b1f3d21714eb3efca769f182106a6d193aae881461a64b55d98668eb7f7b92c3527eb75b044d01ffff427d9157c301e5b69fa09776009f53c30551484020fabbb3d664c106d72844b540c133bc67048ad4ca0082ad42848e146dac76b55e3ba51937c412c817034e1e67fb3d909347d42d198599f28df8ee0fa9bd9c180beb0fad03f265a8bbbfb6ce1bff1d8223c9ea28748983393fbf1b8364e449d331b8ffb8363dfab5728c5f34b1e4cd03e3a758c3e5280994a44a47fed5f84b13bc67df9074dac4b7288d927e1b8ef50a7afc01ea4b798d6025415f26d15dc506c96896b530af775fb3648ddf983f59bb10536e1e74a6bee4640ed3275bbdceb79520ec81618ac7087e06baba12432671e185b6e1706523edd26d07435bf5289c5f703f0b6703fbfc56e46b421ca9ca325e281387353daa33274925b44ea4a7c939ef13ec6f38941ed13c7a9ae5253dba2119a0b8b1401f73d503e2c7252dd9507d305cf9dcb5f3db29214bb6c7be8b5654421baefbdc7701408f5ab4d652879d54e4e4ad6dc3c1b49835ae7e2ca806e302d33657ada2c8b86b716a239d409fafdb05a547952f6aafd5d9dd60f76070b0ee12605815ad36fca1c3bc231b15428ce6412fd37d2f27255eb19b060aadf47e0c1b67b0911459505bc9fdfd1875fdac31362dd434ab4e297b9478b74f5efdaac35e7b3deb07b2125aaf07483dd104d6e43161506a0e1b14fd7a13b729f771ca5e2a5e53c2d6eb96f66a66a4581c87018fa98856630ab1dead01afbe62c280c697d96e6d056afb94a4cca2e6d63bc866f5dceb9a5d2a38b3bb11e109de75d17e6116aad2514b5ababe09f99ddf2c130cdd7866129fa103cdb2ec9d2a44853c8bf9c31201ec1b89cca7f31542da558f57645c4e897e9e9d1038be3a796eaf1cafa8f6d69897426c5e7b8f3933c004eb3113898ac5295fb31245494b63fdf5227ece5714a13469fd86ec944b8b9924cc67ab86561f73fdb3060c8acf9a255ca96834038ef1383f69733876bc7f2524ebe92eb01049bc6863835220a555e496bb17e7067d3427f209fb00a46e48082a549af2fdd23cc7cc0b96923fd695642389a1db1a457ac5874f7c5c62e407ba7a7248f04807c516c0ba5c08194d3f1b1fa78f0841f062529d5d9354091d8fb9fecb777df7bd3508174f66a13f1d7d272cd4145762b25841ae9c3e9351209ac43d2dcb542d4ccd64b19367b56d7772fed9b00630fe9567036fd4bb1d67d2665c12c2547fd4a112128512ea4bf1d9d1f68d421c3bde90d8c22cde1aa40a257a8a0089b9b4e8aff50fb2d41cf152be7ecc892ffaa22d162a50e1f24be74207756c46370531cf9f07094d789c8758f9260214cbe6463376cc6f5fb26211740a59a68a97d27bb7e152f91d0ff8f431d3569e08420d79e957df36d4e2c601406046df386abf944f19730acd2b4bbd715cd321c7f54c8e61bf2cf73019"),
+                KOMODO_MINDIFF_NBITS, 1, COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        //assert(consensus.hashGenesisBlock == uint256S("0x05a60a92d99d85997cce3b87616c089f6124d7342af37106edc76126334a2c38"));
 
         vFixedSeeds.clear();
         vSeeds.clear();
-        //vSeeds.push_back(CDNSSeedData("z.cash", "dns.testnet.z.cash")); // Komodo
 
-        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,0);
-        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,5);
-        base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,128);
-        base58Prefixes[EXT_PUBLIC_KEY] = boost::assign::list_of(0x04)(0x35)(0x87)(0xCF).convert_to_container<std::vector<unsigned char> >();
-        base58Prefixes[EXT_SECRET_KEY] = boost::assign::list_of(0x04)(0x35)(0x83)(0x94).convert_to_container<std::vector<unsigned char> >();
+        base58Prefixes[PUBKEY_ADDRESS] = {0};
+        base58Prefixes[SCRIPT_ADDRESS] = {5};
+        base58Prefixes[SECRET_KEY] =     {128};
+        base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x35, 0x87, 0xCF};
+        base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
         base58Prefixes[ZCPAYMENT_ADDRRESS] = {20,81};
         // guarantees the first 4 characters, when base58 encoded, are "ZiVt"
         base58Prefixes[ZCVIEWING_KEY]  = {0xA8,0xAC,0x0C};
@@ -343,15 +432,8 @@ public:
         fMineBlocksOnDemand = false;
         fTestnetToBeDeprecatedFieldRPC = true;
 
-
-        checkpointData = (CCheckpointData) {
-            boost::assign::map_list_of
-            (0, consensus.hashGenesisBlock)
-            (38000, uint256S("0x001e9a2d2e2892b88e9998cf7b079b41d59dd085423a921fe8386cecc42287b8")),
-            1486897419,  // * UNIX timestamp of last checkpoint block
-            47163,       // * total number of transactions between genesis and last checkpoint
-                         //   (the tx=... number in the SetBestChain debug.log lines)
-            715          //   total number of tx / (checkpoint block height / (24 * 24))
+        genesisNotaries = { 
+                { "jmj_testA",   "037c032430fd231b5797cb4a637dae3eadf87b10274fd84be31670bd2a02c4fbc5" }
         };
     }
 };
@@ -396,9 +478,7 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170006;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight =
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
-
-        // The best chain should have at least this much work.
-        consensus.nMinimumChainWork = uint256S("0x00");
+        coinbaseMaturity = 1;
 
         pchMessageStart[0] = 0xaa;
         pchMessageStart[1] = 0x8e;
@@ -416,8 +496,6 @@ public:
             1296688602,
             uint256S("0x0000000000000000000000000000000000000000000000000000000000000009"),
             ParseHex("01936b7db1eb4ac39f151b8704642d0a8bda13ec547d54cd5e43ba142fc6d8877cab07b3"),
-
-
             KOMODO_MINDIFF_NBITS, 4, 0);
         consensus.hashGenesisBlock = genesis.GetHash();
         assert(consensus.hashGenesisBlock == uint256S("0x029f11d80ef9765602235e1bc9727e3eb6ba20839319f761fee920d63401e327"));
@@ -436,8 +514,9 @@ public:
         fTestnetToBeDeprecatedFieldRPC = false;
 
         checkpointData = (CCheckpointData){
-            boost::assign::map_list_of
-            ( 0, uint256S("0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206")),
+            MapCheckpoints {
+                    {0, uint256S("0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206")}
+                },
             0,
             0,
             0
@@ -572,10 +651,8 @@ void komodo_setactivation(int32_t height)
 
 void *chainparams_commandline()
 {
-    fprintf(stderr,"chainparams_commandline called\n");
     CChainParams::CCheckpointData checkpointData;
-    //fprintf(stderr,">>>>>>>> port.%u\n",ASSETCHAINS_P2PPORT);
-    if ( ASSETCHAINS_SYMBOL[0] != 0 )
+    if ( !chainName.isKMD() )
     {
         if ( ASSETCHAINS_BLOCKTIME != 60 )
         {
@@ -585,7 +662,6 @@ void *chainparams_commandline()
         pCurrentParams->SetDefaultPort(ASSETCHAINS_P2PPORT);
         if ( ASSETCHAINS_NK[0] != 0 && ASSETCHAINS_NK[1] != 0 )
         {
-            //BOOST_STATIC_ASSERT(equihash_parameters_acceptable(ASSETCHAINS_NK[0], ASSETCHAINS_NK[1]));
             pCurrentParams->SetNValue(ASSETCHAINS_NK[0]);
             pCurrentParams->SetKValue(ASSETCHAINS_NK[1]);
         }
@@ -597,82 +673,25 @@ void *chainparams_commandline()
         pCurrentParams->pchMessageStart[1] = (ASSETCHAINS_MAGIC >> 8) & 0xff;
         pCurrentParams->pchMessageStart[2] = (ASSETCHAINS_MAGIC >> 16) & 0xff;
         pCurrentParams->pchMessageStart[3] = (ASSETCHAINS_MAGIC >> 24) & 0xff;
-        fprintf(stderr,">>>>>>>>>> %s: p2p.%u rpc.%u magic.%08x %u %u coins\n",ASSETCHAINS_SYMBOL,ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT,ASSETCHAINS_MAGIC,ASSETCHAINS_MAGIC,(uint32_t)ASSETCHAINS_SUPPLY);
+        fprintf(stderr,">>>>>>>>>> %s: p2p.%u rpc.%u magic.%08x %u %u coins\n",chainName.symbol().c_str(),ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT,ASSETCHAINS_MAGIC,ASSETCHAINS_MAGIC,(uint32_t)ASSETCHAINS_SUPPLY);
 
         pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = ASSETCHAINS_SAPLING;
         pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = ASSETCHAINS_OVERWINTER;
-        checkpointData = //(Checkpoints::CCheckpointData)
+        checkpointData =
                 {
-                        boost::assign::map_list_of
-                                (0, pCurrentParams->consensus.hashGenesisBlock),
+                        MapCheckpoints {
+                                { 0, pCurrentParams->consensus.hashGenesisBlock }
+                        },
                         (int64_t)1231006505,
                         (int64_t)1,
-                        (double)2777            // * estimated number of transactions per day after checkpoint
+                        (double)2777 // * estimated number of transactions per day after checkpoint
                         //   total number of tx / (checkpoint block height / (24 * 24))
                 };
 
     }
     else
     {
-        checkpointData = // (Checkpoints::CCheckpointData)
-            {
-                boost::assign::map_list_of
-
-                (0, pCurrentParams->consensus.hashGenesisBlock)
-                (	50000,	uint256S("0x00076e16d3fa5194da559c17cf9cf285e21d1f13154ae4f7c7b87919549345aa"))
-                (	100000,	uint256S("0x0f02eb1f3a4b89df9909fec81a4bd7d023e32e24e1f5262d9fc2cc36a715be6f"))
-                (	150000,	uint256S("0x0a817f15b9da636f453a7a01835cfc534ed1a55ce7f08c566471d167678bedce"))
-                (	200000,	uint256S("0x000001763a9337328651ca57ac487cc0507087be5838fb74ca4165ff19f0e84f"))
-                (	250000,	uint256S("0x0dd54ef5f816c7fde9d2b1c8c1a26412b3c761cc5dd3901fa5c4cd1900892fba"))
-                (	300000,	uint256S("0x000000fa5efd1998959926047727519ed7de06dcf9f2cd92a4f71e907e1312dc"))
-                (	350000,	uint256S("0x0000000228ef321323f81dae00c98d7960fc7486fb2d881007fee60d1e34653f"))
-                (	400000,	uint256S("0x036d294c5be96f4c0efb28e652eb3968231e87204a823991a85c5fdab3c43ae6"))
-                (	450000,	uint256S("0x0906ef1e8dc194f1f03bd4ce1ac8c6992fd721ef2c5ccbf4871ec8cdbb456c18"))
-                (	500000,	uint256S("0x0bebdb417f7a51fe0c36fcf94e2ed29895a9a862eaa61601272866a7ecd6391b"))
-                (	550000,	uint256S("0x06df52fc5f9ba03ccc3a7673b01ab47990bd5c4947f6e1bc0ba14d21cd5bcccd"))
-                (	600000,	uint256S("0x00000005080d5689c3b4466e551cd1986e5d2024a62a79b1335afe12c42779e4"))
-                (	650000,	uint256S("0x039a3cb760cc6e564974caf69e8ae621c14567f3a36e4991f77fd869294b1d52"))
-                (	700000,	uint256S("0x00002285be912b2b887a5bb42d2f1aa011428c565b0ffc908129c47b5ce87585"))
-                (	750000,	uint256S("0x04cff4c26d185d591bed3613ce15e1d15d9c91dd8b98a6729f89c58ce4bd1fd6"))
-                (	800000,	uint256S("0x0000000617574d402fca8e6570f0845bd5fe449398b318b4e1f65bc69cdd6606"))
-                (	850000,	uint256S("0x044199301f37194f20ba7b498fc72ed742f6c0ba6e476f28d6c81d225e58d5ce"))
-                (	900000,	uint256S("0x08bdbe4de2a65ac89fd2913192d05362c900e3af476a0c99d9f311875067451e"))
-                (	950000,	uint256S("0x0000000aa9a44b593e6138f247bfae75bd43b9396ef9ff0a6a3ebd852f131806"))
-                (	1000000,	uint256S("0x0cb1d2457eaa58af5028e86e27ac54578fa09558206e7b868ebd35e7005ed8bb"))
-                (	1050000,	uint256S("0x044d49bbc3bd9d32b6288b768d4f7e0afe3cbeda606f3ac3579a076e4bddf6ae"))
-                (	1100000,	uint256S("0x000000050cad04887e170059dd2556d85bbd20390b04afb9b07fb62cafd647b4"))
-                (	1150000,	uint256S("0x0c85501c759d957dd1ccc5f7fdfcc415c89c7f2a26471fffc75b75f79e63c16a"))
-                (	1200000,	uint256S("0x0763cbf43ed7227988081c29d9e9fc7ab2450216e6d0354cc4596c86689702d4"))
-                (	1250000,	uint256S("0x0489640207f8c343a56a10e45d987516059ea82a3c6859a771b3a9cf94f5c3bb"))
-                (	1300000,	uint256S("0x000000012a01709b254b4f75e2b9ed772d8fe558655c8c859892ca8c9d625e87"))
-                (	1350000,	uint256S("0x075a1a5c66a68b47d9848ca6986687ed2665b1852457051bf142208e62f98a60"))
-                (	1400000,	uint256S("0x055f73dd9b20650c3d6e6dbb606af8d9479e4c81d89430867abff5329f167bb2"))
-                (	1450000,	uint256S("0x014c2926e07e9712211c5e82f05df1b802c59cc8bc24e3cc9b09942017080f2d"))
-                (	1500000,	uint256S("0x0791f892210ce3c513ab607d689cd1e8907a27f3dfeb58dec21ae299b7981cb7"))
-                (	1550000,	uint256S("0x08fcbaffb7164b161a25efc6dd5c70b679498ee637d663fe201a55c7decc37a3"))
-                (	1600000,	uint256S("0x0e577dcd49319a67fe2acbb39ae6d46afccd3009d3ba9d1bcf6c624708e12bac"))
-                (	1650000,	uint256S("0x091ac57a0f786a9526b2224a10b62f1f464b9ffc0afc2240d86264439e6ad3d0"))
-                (	1700000,	uint256S("0x0d0be6ab4a5083ce9d2a7ea2549b03cfc9770427b7d51c0bf0c603399a60d037"))
-                (	1750000,	uint256S("0x0a019d830157db596eeb678787279908093fd273a4e022b5e052f3a9f95714ca"))
-                (	1800000,	uint256S("0x0390779f6c615620391f9dd7df7f3f4947523bd6350b26625c0315571c616076"))
-                (	1850000,	uint256S("0x000000007ca2de1bd9cb7b52fe0accca4874143822521d955e58c73e304279e0"))
-                (	1900000,	uint256S("0x04c6589d5703f8237bf215c4e3e881c1c77063ef079cea5dc132a0e7f7a0cbd9"))
-                (	1950000,	uint256S("0x00000000386795b9fa21f14782ee1b9176763d6a544d7e0511d1860c62d540aa"))
-                (	2000000,	uint256S("0x0b0403fbe3c5742bbd0e3fc643049534e50c4a49bbc4a3b284fc0ecedf15c044"))
-                (	2050000,	uint256S("0x0c7923957469864d49a0be56b5ffbee7f21c1b6d00acc7374f60f1c1c7b87e14"))
-                (	2100000,	uint256S("0x05725ed166ae796529096ac2a42e85a3bdd0d69dbb2f69e620c08219fda1130a"))
-                (	2150000,	uint256S("0x0edb94f5a5501fc8dd72a455cdaccf0af0215b914dd3d8d4ae5d644e27ef562c"))
-                (	2200000,	uint256S("0x08b92203aa4a3b09001a75e8eebe8e64434259ae7ed7a31384203924d1ab03b8"))
-                (	2250000,	uint256S("0x0127d1ed5cd6f261631423275b6b17728c392583177e1151a6e638a4b0dea985"))
-                (	2300000,	uint256S("0x07df8af646bc30c71d068b146d9ea2c8b25b27a180e9537d5aef859efcfc41f7"))
-                (	2350000,	uint256S("0x0b8028dbfcd92fe34496953872cba2d256923e3e52b4abbdcbe9911071e929e5"))
-                (	2395555,	uint256S("0x0a09f16d886ed8152aaa2e2fcdf6ab4bb142ff8ce5abac131c5eda385a5d712f")),
-                1621188001,     // * UNIX timestamp of last checkpoint block
-                13903562,         // * total number of transactions between genesis and last checkpoint
-                                //   (the tx=... number in the SetBestChain debug.log lines)
-                2777            // * estimated number of transactions per day after checkpoint
-                                //   total number of tx / (checkpoint block height / (24 * 24))
-            };
+        checkpointData = pCurrentParams->Checkpoints();
     }
 
     pCurrentParams->SetCheckpointData(checkpointData);

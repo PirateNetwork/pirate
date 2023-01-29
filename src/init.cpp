@@ -35,7 +35,10 @@
 #include "httprpc.h"
 #include "key.h"
 #include "notarisationdb.h"
+#include "komodo_globals.h"
 #include "komodo_notary.h"
+#include "komodo_gateway.h"
+#include "main.h"
 
 #ifdef ENABLE_MINING
 #include "key_io.h"
@@ -94,13 +97,18 @@
 using namespace std;
 
 #include "komodo_defs.h"
+#include "komodo_extern_globals.h"
+#include "assetchain.h"
+
+#include "komodo_gateway.h"
+#include "rpc/net.h"
 extern void ThreadSendAlert();
-extern bool komodo_dailysnapshot(int32_t height);
-extern int32_t KOMODO_LOADINGBLOCKS;
-extern char ASSETCHAINS_SYMBOL[];
-extern int32_t KOMODO_SNAPSHOT_INTERVAL;
+//extern bool komodo_dailysnapshot(int32_t height);  //todo remove
+//extern int32_t KOMODO_SNAPSHOT_INTERVAL;
 
 ZCJoinSplit* pzcashParams = NULL;
+
+assetchain chainName;
 
 #ifdef ENABLE_WALLET
 CWallet* pwalletMain = NULL;
@@ -222,7 +230,8 @@ void Shutdown()
     /// Be sure that anything that writes files or flushes caches only does this if the respective
     /// module was initialized.
     static char shutoffstr[128];
-    sprintf(shutoffstr,"%s-shutoff",ASSETCHAINS_SYMBOL);
+    sprintf(shutoffstr,"%s-shutoff",chainName.symbol().c_str());
+    //RenameThread("verus-shutoff");
     RenameThread(shutoffstr);
     mempool.AddTransactionsUpdated(1);
 
@@ -268,7 +277,7 @@ void Shutdown()
         delete pcoinsdbview;
         pcoinsdbview = NULL;
         delete pblocktree;
-        pblocktree = NULL;
+        pblocktree = nullptr;
         delete pnotarisations;
         pnotarisations = nullptr;
     }
@@ -699,7 +708,7 @@ void ThreadImport(std::vector<boost::filesystem::path> vImportFiles)
         LogPrintf("Reindexing finished\n");
         // To avoid ending up in a situation without genesis block, re-try initializing (no-op if reindexing worked):
         InitBlockIndex();
-        KOMODO_LOADINGBLOCKS = 0;
+        KOMODO_LOADINGBLOCKS = false;
     }
 
     // hardcoded $DATADIR/bootstrap.dat
@@ -751,26 +760,19 @@ void ThreadNotifyRecentlyAdded()
     }
 }
 
-/* declarations needed for ThreadUpdateKomodoInternals */
-void komodo_passport_iteration();
-void komodo_cbopretupdate(int32_t forceflag);
-
+/**
+ * @brief periodically (every 10 secs) update internal structures
+ * @note this does nothing on asset chains, only the kmd chain
+ */
 void ThreadUpdateKomodoInternals() {
     RenameThread("int-updater");
-
-    // boost::signals2::connection c = uiInterface.NotifyBlockTip.connect(
-    //     [](const uint256& hashNewTip) mutable {
-    //         CBlockIndex* pblockindex = mapBlockIndex[hashNewTip];
-    //         std::cerr << __FUNCTION__ << ": NotifyBlockTip " << hashNewTip.ToString() << " - " << pblockindex->nHeight << std::endl;
-    //     }
-    //     );
 
     int fireDelaySeconds = 10;
 
     try {
         while (true) {
 
-            if ( ASSETCHAINS_SYMBOL[0] == 0 )
+            if ( chainName.isKMD() )
                 fireDelaySeconds = 10;
             else
                 fireDelaySeconds = ASSETCHAINS_BLOCKTIME/5 + 1;
@@ -784,26 +786,13 @@ void ThreadUpdateKomodoInternals() {
 
             boost::this_thread::interruption_point();
 
-            if ( ASSETCHAINS_SYMBOL[0] == 0 )
-                {
-                    if ( KOMODO_NSPV_FULLNODE ) {
-                        auto start = std::chrono::high_resolution_clock::now();
-                        komodo_passport_iteration(); // call komodo_interestsum() inside (possible locks)
-                        auto finish = std::chrono::high_resolution_clock::now();
-                        std::chrono::duration<double, std::milli> elapsed = finish - start;
-                        // std::cerr << DateTimeStrFormat("%Y-%m-%d %H:%M:%S", GetTime()) << " " << __FUNCTION__ << ": komodo_passport_iteration -> Elapsed Time: " << elapsed.count() << " ms" << std::endl;
-                    }
-                }
-            else
-                {
-                    if ( ASSETCHAINS_CBOPRET != 0 )
-                        komodo_cbopretupdate(0);
-                }
+            if (chainName.isKMD() && KOMODO_NSPV_FULLNODE) {
+                komodo_update_interest();
+                komodo_longestchain();
+            }
         }
     }
     catch (const boost::thread_interrupted&) {
-        // std::cerr << "ThreadUpdateKomodoInternals() interrupted" << std::endl;
-        // c.disconnect();
         throw;
     }
     catch (const std::exception& e) {
@@ -917,11 +906,128 @@ bool AppInitServers(boost::thread_group& threadGroup)
     return true;
 }
 
-/** Initialize bitcoin.
- *  @pre Parameters should be parsed and config file should be read.
- */
-extern int32_t KOMODO_REWIND;
+//extern int32_t KOMODO_REWIND;
 
+class InvalidGenesisException : public std::runtime_error
+{
+public:
+    InvalidGenesisException(const std::string& msg) : std::runtime_error(msg) {}
+};
+
+/****
+ * Attempt to open the databases
+ * @param[in] nBlockTreeDBCache size of cache for block tree db
+ * @param[in] dbCompression true to compress block tree db files
+ * @param[in] dbMaxOpenFiles max number of open files for block tree db
+ * @param[in] nCoinDBCache size of cache for coin db
+ * @param[out] strLoadError error message
+ * @returns true on success
+ * @throws InvalidGenesisException if data directory is incorrect
+ */
+bool AttemptDatabaseOpen(size_t nBlockTreeDBCache, bool dbCompression, size_t dbMaxOpenFiles, size_t nCoinDBCache, 
+        std::string &strLoadError)
+{
+    try {
+        UnloadBlockIndex();
+        delete pcoinsTip;
+        delete pcoinsdbview;
+        delete pcoinscatcher;
+        delete pblocktree;
+        delete pnotarisations;
+
+        pblocktree = new CBlockTreeDB(nBlockTreeDBCache, false, fReindex, dbCompression, dbMaxOpenFiles);
+        pcoinsdbview = new CCoinsViewDB(nCoinDBCache, false, fReindex);
+        pcoinscatcher = new CCoinsViewErrorCatcher(pcoinsdbview);
+        pcoinsTip = new CCoinsViewCache(pcoinscatcher);
+        pnotarisations = new NotarisationDB(100*1024*1024, false, fReindex);
+
+        if (fReindex) {
+            boost::filesystem::remove(GetDataDir() / "komodostate");
+            boost::filesystem::remove(GetDataDir() / "signedmasks");
+            pblocktree->WriteReindexing(true);
+            //If we're reindexing in prune mode, wipe away unusable block files and all undo data files
+            if (fPruneMode)
+                CleanupBlockRevFiles();
+        }
+
+        if (!LoadBlockIndex(fReindex)) {
+            strLoadError = _("Error loading block database");
+            return false;
+        }
+
+        const CChainParams& chainparams = Params();
+        // If the loaded chain has a wrong genesis, bail out immediately
+        // (we're likely using a testnet datadir, or the other way around).
+        if (!mapBlockIndex.empty() && mapBlockIndex.count(chainparams.GetConsensus().hashGenesisBlock) == 0)
+            throw InvalidGenesisException(_("Incorrect or no genesis block found. Wrong datadir for network?"));
+        komodo_init(1);
+        if (ShutdownRequested()) return false;
+        
+        // Initialize the block index (no-op if non-empty database was already loaded)
+        if (!InitBlockIndex()) {
+            strLoadError = _("Error initializing block database");
+            return false;
+        }
+        KOMODO_LOADINGBLOCKS = false;
+        // Check for changed -txindex state
+        if (fTxIndex != GetBoolArg("-txindex", true)) {
+            strLoadError = _("You need to rebuild the database using -reindex to change -txindex");
+            return false;
+        }
+
+        // Check for changed -prune state.  What we are concerned about is a user who has pruned blocks
+        // in the past, but is now trying to run unpruned.
+        if (fHavePruned && !fPruneMode) {
+            strLoadError = _("You need to rebuild the database using -reindex to go back to unpruned mode.  This will redownload the entire blockchain");
+            return false;
+        }
+        
+        if ( ASSETCHAINS_CC != 0 && KOMODO_SNAPSHOT_INTERVAL != 0 && chainActive.Height() >= KOMODO_SNAPSHOT_INTERVAL )
+        {
+            if ( !komodo_dailysnapshot(chainActive.Height()) )
+            {
+                strLoadError = _("daily snapshot failed, please reindex your chain.");
+                return false;
+            }
+        }
+
+        if (!fReindex) {
+            uiInterface.InitMessage(_("Rewinding blocks if needed..."));
+            if (!RewindBlockIndex(chainparams)) {
+                strLoadError = _("Unable to rewind the database to a pre-upgrade state. You will need to redownload the blockchain");
+                return false;
+            }
+        }
+
+        uiInterface.InitMessage(_("Verifying blocks..."));
+        if (fHavePruned && GetArg("-checkblocks", 288) > MIN_BLOCKS_TO_KEEP) {
+            LogPrintf("Prune: pruned datadir may not have more than %d blocks; -checkblocks=%d may fail\n",
+                MIN_BLOCKS_TO_KEEP, GetArg("-checkblocks", 288));
+        }
+        if ( KOMODO_REWIND == 0 )
+        {
+            if (!CVerifyDB().VerifyDB(pcoinsdbview, GetArg("-checklevel", 3),
+                                        GetArg("-checkblocks", 288))) {
+                strLoadError = _("Corrupted block database detected");
+                return false;
+            }
+        }
+    } catch (const std::exception& e) {
+        if (fDebug) LogPrintf("%s\n", e.what());
+        strLoadError = _("Error opening block database");
+        return false;
+    }
+
+    return true;
+}
+
+/***
+ * Initialize everything and fire up the services
+ * @pre Parameters should be parsed and config file should be read
+ * @param threadGroup
+ * @param scheduler
+ * @returns true on success
+ */
 bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 {
     // ********************************************************* Step 1: setup
@@ -1423,7 +1529,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             return InitError(_("Unable to start HTTP server. See debug log for details."));
     }
 
-    int64_t nStart;
+    int64_t nStart = GetTimeMillis();
 
     // ********************************************************* Step 5: verify wallet database integrity
 #ifdef ENABLE_WALLET
@@ -1597,7 +1703,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         SetRPCWarmupFinished();
         uiInterface.InitMessage(_("Done loading"));
         pwalletMain = new CWallet("tmptmp.wallet");
-        return !fRequestShutdown;
+        return !ShutdownRequested();
     }
     // ********************************************************* Step 7: load block chain
 
@@ -1637,11 +1743,11 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     LogPrintf("* Using %.1fMiB for chain state database\n", nCoinDBCache * (1.0 / 1024 / 1024));
     LogPrintf("* Using %.1fMiB for in-memory UTXO set\n", nCoinCacheUsage * (1.0 / 1024 / 1024));
 
-    if ( fReindex == 0 )
+    if ( !fReindex )
     {
-        bool checkval,fAddressIndex,fSpentIndex;
         pblocktree = new CBlockTreeDB(nBlockTreeDBCache, false, fReindex, dbCompression, dbMaxOpenFiles);
-        fAddressIndex = GetBoolArg("-addressindex", DEFAULT_ADDRESSINDEX);
+        bool fAddressIndex = GetBoolArg("-addressindex", DEFAULT_ADDRESSINDEX);
+        bool checkval;
         pblocktree->ReadFlag("addressindex", checkval);
         if ( checkval != fAddressIndex && fAddressIndex != 0 )
         {
@@ -1649,7 +1755,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             fprintf(stderr,"set addressindex, will reindex. could take a while.\n");
             fReindex = true;
         }
-        fSpentIndex = GetBoolArg("-spentindex", DEFAULT_SPENTINDEX);
+        bool fSpentIndex = GetBoolArg("-spentindex", DEFAULT_SPENTINDEX);
         pblocktree->ReadFlag("spentindex", checkval);
         if ( checkval != fSpentIndex && fSpentIndex != 0 )
         {
@@ -1659,116 +1765,33 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         }
     }
 
-    bool clearWitnessCaches = false;
+    // ************
+    // Now we're finally able to open the database
+    // Results can be:
+    // - everything opens fine (AttemptDatabaseOpen == true)
+    // - It looks like we are trying to open a database that belongs to another chain (AttemptDatabaseOpen throws)
+    // - Some error that is recoverable, perhaps just reindex? If user agrees, reindex and try again
+    // 
+    // AttemptDatabaseOpen is tried until
+    // -- returns true
+    // -- returns false but user opts out
+    // -- throws exception
+    // ************
 
-    bool fLoaded = false;
-    while (!fLoaded) {
+    try
+    {
         bool fReset = fReindex;
         std::string strLoadError;
-
-        uiInterface.InitMessage(_("Loading block index..."));
-
-        nStart = GetTimeMillis();
-        do {
-            try {
-                UnloadBlockIndex();
-                delete pcoinsTip;
-                delete pcoinsdbview;
-                delete pcoinscatcher;
-                delete pblocktree;
-                delete pnotarisations;
-
-                pblocktree = new CBlockTreeDB(nBlockTreeDBCache, false, fReindex, dbCompression, dbMaxOpenFiles);
-                pcoinsdbview = new CCoinsViewDB(nCoinDBCache, false, fReindex);
-                pcoinscatcher = new CCoinsViewErrorCatcher(pcoinsdbview);
-                pcoinsTip = new CCoinsViewCache(pcoinscatcher);
-                pnotarisations = new NotarisationDB(100*1024*1024, false, fReindex);
-
-
-                if (fReindex) {
-                    boost::filesystem::remove(GetDataDir() / "komodostate");
-                    boost::filesystem::remove(GetDataDir() / "signedmasks");
-                    pblocktree->WriteReindexing(true);
-                    //If we're reindexing in prune mode, wipe away unusable block files and all undo data files
-                    if (fPruneMode)
-                        CleanupBlockRevFiles();
-                }
-
-                if (!LoadBlockIndex()) {
-                    strLoadError = _("Error loading block database");
-                    break;
-                }
-
-                // If the loaded chain has a wrong genesis, bail out immediately
-                // (we're likely using a testnet datadir, or the other way around).
-                if (!mapBlockIndex.empty() && mapBlockIndex.count(chainparams.GetConsensus().hashGenesisBlock) == 0)
-                    return InitError(_("Incorrect or no genesis block found. Wrong datadir for network?"));
-                komodo_init(1);
-                // Initialize the block index (no-op if non-empty database was already loaded)
-                if (!InitBlockIndex()) {
-                    strLoadError = _("Error initializing block database");
-                    break;
-                }
-                KOMODO_LOADINGBLOCKS = 0;
-                // Check for changed -txindex state
-                if (fTxIndex != GetBoolArg("-txindex", true)) {
-                    strLoadError = _("You need to rebuild the database using -reindex to change -txindex");
-                    break;
-                }
-
-                // Check for changed -prune state.  What we are concerned about is a user who has pruned blocks
-                // in the past, but is now trying to run unpruned.
-                if (fHavePruned && !fPruneMode) {
-                    strLoadError = _("You need to rebuild the database using -reindex to go back to unpruned mode.  This will redownload the entire blockchain");
-                    break;
-                }
-                
-                if ( ASSETCHAINS_CC != 0 && KOMODO_SNAPSHOT_INTERVAL != 0 && chainActive.Height() >= KOMODO_SNAPSHOT_INTERVAL )
-                {
-                    if ( !komodo_dailysnapshot(chainActive.Height()) )
-                    {
-                        strLoadError = _("daily snapshot failed, please reindex your chain.");
-                        break;
-                    }
-                }
-
-                if (!fReindex) {
-                    uiInterface.InitMessage(_("Rewinding blocks if needed..."));
-                    if (!RewindBlockIndex(chainparams, clearWitnessCaches)) {
-                        strLoadError = _("Unable to rewind the database to a pre-upgrade state. You will need to redownload the blockchain");
-                        break;
-                    }
-                }
-
-                uiInterface.InitMessage(_("Verifying blocks..."));
-                if (fHavePruned && GetArg("-checkblocks", 288) > MIN_BLOCKS_TO_KEEP) {
-                    LogPrintf("Prune: pruned datadir may not have more than %d blocks; -checkblocks=%d may fail\n",
-                        MIN_BLOCKS_TO_KEEP, GetArg("-checkblocks", 288));
-                }
-                if ( KOMODO_REWIND == 0 )
-                {
-                    if (!CVerifyDB().VerifyDB(pcoinsdbview, GetArg("-checklevel", 3),
-                                              GetArg("-checkblocks", 288))) {
-                        strLoadError = _("Corrupted block database detected");
-                        break;
-                    }
-                }
-            } catch (const std::exception& e) {
-                if (fDebug) LogPrintf("%s\n", e.what());
-                strLoadError = _("Error opening block database");
-                break;
-            }
-
-            fLoaded = true;
-        } while(false);
-
-        if (!fLoaded) {
-            // first suggest a reindex
-            if (!fReset) {
+        while(!AttemptDatabaseOpen(nBlockTreeDBCache, dbCompression, dbMaxOpenFiles, nCoinDBCache, strLoadError))
+        {
+            if (!fReset) // suggest a reindex if we haven't already
+            {
                 bool fRet = uiInterface.ThreadSafeMessageBox(
                     strLoadError + ".\n\n" + _("error in HDD data, might just need to update to latest, if that doesnt work, then you need to resync"),
                     "", CClientUIInterface::MSG_ERROR | CClientUIInterface::BTN_ABORT);
-                if (fRet) {
+                if (fRet) 
+                {
+                    // we should try again, but this time reindex
                     fReindex = true;
                     fRequestShutdown = false;
                 } else {
@@ -1778,9 +1801,15 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             } else {
                 return InitError(strLoadError);
             }
+
         }
     }
-    KOMODO_LOADINGBLOCKS = 0;
+    catch(const InvalidGenesisException& ex)
+    {
+        // We're probably pointing to the wrong data directory
+        return InitError(ex.what());
+    }
+    KOMODO_LOADINGBLOCKS = false;
 
     // As LoadBlockIndex can take several minutes, it's possible the user
     // requested to kill the GUI during the last operation. If so, exit.
@@ -1892,8 +1921,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
         RegisterValidationInterface(pwalletMain);
 
+        LOCK(cs_main);
         CBlockIndex *pindexRescan = chainActive.Tip();
-        if (clearWitnessCaches || GetBoolArg("-rescan", false))
+        if (GetBoolArg("-rescan", false))
         {
             pwalletMain->ClearNoteWitnessCache();
             pindexRescan = chainActive.Genesis();
@@ -2013,10 +2043,22 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             vImportFiles.push_back(strFile);
     }
     threadGroup.create_thread(boost::bind(&ThreadImport, vImportFiles));
-    if (chainActive.Tip() == NULL) {
-        LogPrintf("Waiting for genesis block to be imported...\n");
-        while (!fRequestShutdown && chainActive.Tip() == NULL)
-            MilliSleep(10);
+    {
+        CBlockIndex *tip = nullptr;
+        {
+            LOCK(cs_main);
+            tip = chainActive.Tip();
+        }
+        if (tip == nullptr) {
+            LogPrintf("Waiting for genesis block to be imported...\n");
+            while (!ShutdownRequested() && tip == nullptr)
+            {
+                MilliSleep(10);
+                LOCK(cs_main);
+                tip = chainActive.Tip();
+            }
+            if (ShutdownRequested()) return false;
+        }
     }
 
     // ********************************************************* Step 11: start node
@@ -2029,7 +2071,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     //// debug print
     LogPrintf("mapBlockIndex.size() = %u\n",   mapBlockIndex.size());
-    LogPrintf("nBestHeight = %d\n",                   chainActive.Height());
+    {
+        LOCK(cs_main);
+        LogPrintf("nBestHeight = %d\n",                   chainActive.Height());
+    }
 #ifdef ENABLE_WALLET
     RescanWallets();
 
@@ -2078,5 +2123,5 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     // SENDALERT
     threadGroup.create_thread(boost::bind(ThreadSendAlert));
 
-    return !fRequestShutdown;
+    return !ShutdownRequested();
 }

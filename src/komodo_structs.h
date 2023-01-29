@@ -19,40 +19,22 @@
 #include <cstdint>
 
 #include "komodo_defs.h"
+#include "komodo_extern_globals.h"
 
 #include "uthash.h"
 #include "utlist.h"
 
 #define GENESIS_NBITS 0x1f00ffff
 #define KOMODO_MINRATIFY ((height < 90000) ? 7 : 11)
-#define KOMODO_NOTARIES_HARDCODED 180000 // DONT CHANGE
+#define KOMODO_NOTARIES_HARDCODED 180000 // DONT CHANGE Below this height notaries were hardcoded
 #define KOMODO_MAXBLOCKS 250000 // DONT CHANGE
 
-#define KOMODO_EVENT_RATIFY 'P'
-#define KOMODO_EVENT_NOTARIZED 'N'
-#define KOMODO_EVENT_KMDHEIGHT 'K'
-#define KOMODO_EVENT_REWIND 'B'
-#define KOMODO_EVENT_PRICEFEED 'V'
-#define KOMODO_EVENT_OPRETURN 'R'
-#define KOMODO_OPRETURN_DEPOSIT 'D'
-#define KOMODO_OPRETURN_ISSUED 'I' // assetchain
-#define KOMODO_OPRETURN_WITHDRAW 'W' // assetchain
-#define KOMODO_OPRETURN_REDEEMED 'X'
-
-#define KOMODO_KVPROTECTED 1
-#define KOMODO_KVBINARY 2
-#define KOMODO_KVDURATION 1440
 #define KOMODO_ASSETCHAIN_MAXLEN 65
 
 #include "bits256.h"
+#include <mutex>
 
-// structs prior to refactor
-struct komodo_kv { UT_hash_handle hh; bits256 pubkey; uint8_t *key,*value; int32_t height; uint32_t flags; uint16_t keylen,valuesize; };
-
-struct komodo_event_notarized { uint256 blockhash,desttxid,MoM; int32_t notarizedheight,MoMdepth; char dest[16]; };
-struct komodo_event_pubkeys { uint8_t num; uint8_t pubkeys[64][33]; };
-struct komodo_event_opreturn { uint256 txid; uint64_t value; uint16_t vout,oplen; uint8_t opret[]; };
-struct komodo_event_pricefeed { uint8_t num; uint32_t prices[35]; };
+//extern std::mutex komodo_mutex;  //todo remove
 
 struct komodo_event
 {
@@ -63,6 +45,21 @@ struct komodo_event
     char symbol[KOMODO_ASSETCHAIN_MAXLEN];
     uint8_t space[];
 };
+
+/***
+ * @brief persist event to file stream
+ * @param evt the event
+ * @param fp the file
+ * @returns the number of bytes written
+ */
+template<class T>
+size_t write_event(T& evt, FILE *fp)
+{
+    std::stringstream ss;
+    ss << evt;
+    std::string buf = ss.str();
+    return fwrite(buf.c_str(), buf.size(), 1, fp);
+}
 
 namespace komodo {
 
@@ -112,7 +109,7 @@ struct event_notarized : public event
     event_notarized() : event(komodo_event_type::EVENT_NOTARIZED, 0), notarizedheight(0), MoMdepth(0) {
         memset(this->dest, 0, sizeof(this->dest));
     }
-    event_notarized(int32_t ht, const char* _dest) : event(EVENT_NOTARIZED, ht), notarizedheight(0), MoMdepth(0) {
+    event_notarized(int32_t ht, const char* _dest) : event(komodo_event_type::EVENT_NOTARIZED, ht), notarizedheight(0), MoMdepth(0) {
         strncpy(this->dest, _dest, sizeof(this->dest)-1); this->dest[sizeof(this->dest)-1] = 0;
     }
     event_notarized(uint8_t* data, long &pos, long data_len, int32_t height, const char* _dest, bool includeMoM = false);
@@ -222,19 +219,13 @@ std::ostream& operator<<(std::ostream& os, const event_pricefeed& in);
 
 } // namespace komodo
 
-struct pax_transaction
-{
-    UT_hash_handle hh;
-    uint256 txid;
-    uint64_t komodoshis,fiatoshis,validated;
-    int32_t marked,height,otherheight,approved,didstats,ready;
-    uint16_t vout;
-    char symbol[KOMODO_ASSETCHAIN_MAXLEN],source[KOMODO_ASSETCHAIN_MAXLEN],coinaddr[64]; uint8_t rmd160[20],type,buf[35];
-};
-
 struct knotary_entry { UT_hash_handle hh; uint8_t pubkey[33],notaryid; };
-struct knotaries_entry { int32_t height,numnotaries; struct knotary_entry *Notaries; };
-
+struct knotaries_entry 
+{ 
+    int32_t height;
+    int32_t numnotaries; // The number of notaries stored in Notaries
+    knotary_entry *Notaries; // A hashtable of notary ID/public key
+};
 struct notarized_checkpoint
 {
     uint256 notarized_hash;
@@ -280,6 +271,7 @@ struct komodo_ccdata
 class komodo_state
 {
 public:
+    std::string symbol;
     int32_t SAVEDHEIGHT;
     int32_t CURRENT_HEIGHT;
     uint32_t SAVEDTIMESTAMP;
@@ -291,7 +283,19 @@ public:
     uint64_t shorted;
     std::list<std::shared_ptr<komodo::event>> events;
     uint32_t RTbufs[64][3]; uint64_t RTmask;
-    bool add_event(const std::string& symbol, const uint32_t height, std::shared_ptr<komodo::event> in);
+    template<class T>
+    bool add_event(const std::string& symbol, const uint32_t height, T& in)
+    {
+        if (!chainName.isKMD())
+        {
+            std::shared_ptr<T> ptr = std::make_shared<T>( in );
+            std::lock_guard<std::mutex> lock(komodo_mutex);
+            events.push_back( ptr );
+            return true;
+        }
+        return false;
+    }
+
 protected:
     /***
      * @brief clear the checkpoints collection

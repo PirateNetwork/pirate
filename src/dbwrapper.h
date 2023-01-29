@@ -154,6 +154,9 @@ public:
 
 };
 
+/****
+ * A wrapper around the leveldb database
+ */
 class CDBWrapper
 {
 private:
@@ -184,10 +187,19 @@ public:
      * @param[in] nCacheSize  Configures various leveldb cache settings.
      * @param[in] fMemory     If true, use leveldb's memory environment.
      * @param[in] fWipe       If true, remove all existing data.
+     * @param[in] compression
+     * @param[in] maxOpenFiles
      */
-    CDBWrapper(const boost::filesystem::path& path, size_t nCacheSize, bool fMemory = false, bool fWipe = false, bool compression = false, int maxOpenFiles = 64);
+    CDBWrapper(const boost::filesystem::path& path, size_t nCacheSize, bool fMemory = false, 
+            bool fWipe = false, bool compression = false, int maxOpenFiles = 64);
     ~CDBWrapper();
 
+    /****
+     * Retrieve the value for the given key
+     * @param key the key
+     * @param value where the results will be stored
+     * @returns true on success
+     */
     template <typename K, typename V>
     bool Read(const K& key, V& value) const
     {
@@ -213,6 +225,13 @@ public:
         return true;
     }
 
+    /****
+     * Write a value to a key
+     * @param key the key
+     * @param value the value
+     * @param fSync true to use sync option instead of just write
+     * @returns true on success
+     */
     template <typename K, typename V>
     bool Write(const K& key, const V& value, bool fSync = false)
     {
@@ -221,6 +240,11 @@ public:
         return WriteBatch(batch, fSync);
     }
 
+    /***
+     * Check to see if a key exists
+     * @param key the key
+     * @returns true if key exists
+     */
     template <typename K>
     bool Exists(const K& key) const
     {
@@ -240,6 +264,12 @@ public:
         return true;
     }
 
+    /***
+     * Erase a key from the db
+     * @param key the key
+     * @param fSync true to use sync option instead of just write
+     * @returns true on success
+     */
     template <typename K>
     bool Erase(const K& key, bool fSync = false)
     {
@@ -248,27 +278,45 @@ public:
         return WriteBatch(batch, fSync);
     }
 
+    /***
+     * Write a batch of transactions to the db
+     * @param batch the transactions
+     * @param fSync true to use sync option instead of just write
+     * @returns true on success
+     */
     bool WriteBatch(CDBBatch& batch, bool fSync = false);
 
-    // not available for LevelDB; provide for compatibility with BDB
+    /****
+     * not available for LevelDB; provided for compatibility with BDB
+     * @returns true always
+     */
     bool Flush()
     {
         return true;
     }
 
+    /****
+     * Synchronize the db
+     * @returns true on success
+     */
     bool Sync()
     {
         CDBBatch batch(*this);
         return WriteBatch(batch, true);
     }
 
+    /***
+     * Get a new iterator
+     * NOTE: you are responsible for deletion of the returned iterator
+     * @returns an iterator
+     */
     CDBIterator *NewIterator()
     {
         return new CDBIterator(*this, pdb->NewIterator(iteroptions));
     }
 
     /**
-     * Return true if the database managed by this class contains no entries.
+     * @returns true if the database managed by this class contains no entries.
      */
     bool IsEmpty();
 };

@@ -14,6 +14,8 @@
  ******************************************************************************/
 #include "hex.h"
 #include "CCPayments.h"
+#include "komodo_bitcoind.h"
+#include <gmp.h>
 
 /* 
  0) txidopret <- allocation, scriptPubKey, opret
@@ -350,8 +352,7 @@ bool PaymentsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &
             Paymentspk = GetUnspendable(cp,0);
             txidpk = CCtxidaddr(txidaddr,createtxid);
             GetCCaddress1of2(cp,txidaddr,Paymentspk,txidpk);
-            //fprintf(stderr, "lockedblocks.%i minrelease.%i totalallocations.%i txidopret1.%s txidopret2.%s\n",lockedblocks, minrelease, totalallocations, txidoprets[0].ToString().c_str(), txidoprets[1].ToString().c_str() );
-            if ( !CheckTxFee(tx, PAYMENTS_TXFEE+1, chainActive.LastTip()->nHeight, chainActive.LastTip()->nTime, actualtxfee) )
+            if ( !CheckTxFee(tx, PAYMENTS_TXFEE+1, chainActive.Tip()->nHeight, chainActive.Tip()->nTime, actualtxfee) )
                 return eval->Invalid("txfee is too high");
             // Check that the change vout is playing the txid address. 
             if ( IsPaymentsvout(cp,tx,0,txidaddr,ccopret) == 0 )

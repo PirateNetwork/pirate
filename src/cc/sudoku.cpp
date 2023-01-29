@@ -200,6 +200,7 @@
 /* 1.11   2006-03-23  WD        More simple speed optimizations, cleanup, bug fixes */
 /*                                                                                  */
 /************************************************************************************/
+#include "komodo_bitcoind.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -2537,7 +2538,7 @@ int32_t sudoku_captcha(int32_t dispflag,uint32_t timestamps[81],int32_t height)
             printf("list[0] %u vs list[%d-1] %u\n",list[0],n,list[n-1]);
             retval = -1;
         }
-        else if ( list[n-1] > chainActive.LastTip()->nTime+200 )
+        else if ( list[n-1] > chainActive.Tip()->nTime+200 )
             retval = -2;
         else if ( solvetime >= 777 )
             retval = 0;
@@ -2658,7 +2659,7 @@ UniValue sudoku_generate(uint64_t txfee,struct CCcontract_info *cp,cJSON *params
     result.push_back(Pair("result","success"));
     result.push_back(Pair("name","sudoku"));
     result.push_back(Pair("method","gen"));
-    hash = chainActive.LastTip()->GetBlockHash();
+    hash = chainActive.Tip()->GetBlockHash();
     memcpy(&srandi,&hash,sizeof(srandi));
     srandi ^= (uint32_t)time(NULL);
     while ( 1 )
@@ -2968,7 +2969,7 @@ bool sudoku_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const 
                                     strcpy(laststr,str);
                                     fprintf(stderr,"%s\n",str);
                                 }
-                                if ( strcmp(ASSETCHAINS_SYMBOL,"SUDOKU") != 0 || height > 2000 )
+                                if ( !chainName.isSymbol("SUDOKU") || height > 2000 )
                                     return eval->Invalid("mismatched sudoku value vs score");
                                 else return(true);
                             } else return(true);
@@ -3000,41 +3001,24 @@ bool sudoku_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const 
                                     {
                                         if ( dispflag != 0 )
                                             fprintf(stderr,"ht.%d errflag.%d %s\n",height,errflag,unsolved);
-                                        if ( (height != 1220 && height != 1383) || strcmp(ASSETCHAINS_SYMBOL,"SUDOKU") != 0  )
+                                        if ( (height != 1220 && height != 1383) || !chainName.isSymbol("SUDOKU")  )
                                             return eval->Invalid("invalid timestamp vs unsolved");
                                     }
                                     if ( dupree_solver(0,&score,unsolved) != 1 )
                                     {
                                         if ( dispflag != 0 )
                                             fprintf(stderr,"non-unique sudoku at ht.%d\n",height);
-                                        if ( strcmp(ASSETCHAINS_SYMBOL,"SUDOKU") != 0 )
+                                        if ( !chainName.isSymbol("SUDOKU") )
                                             return eval->Invalid("invalid sudoku with multiple solutions");
                                     }
                                     if ( dispflag != 0 )
                                         fprintf(stderr,"%s score.%d %s\n",solution,score,unsolved);
                                     if ( sudoku_captcha(dispflag,timestamps,height) < 0 )
                                         return eval->Invalid("failed captcha");
-                                    /*for (i=lasttime=0; i<81; i++)
-                                    {
-                                        if ( (ind= sudoku_minval(timestamps)) >= 0 )
-                                        {
-                                            unsolved[ind] = solution[ind];
-                                            if ( lasttime == 0 )
-                                                lasttime = timestamps[ind];
-                                            if ( dupree_solver(0,&score,unsolved) != 1 )
-                                                fprintf(stderr,"i.%d ind.%d non-unique\n",i,ind);
-                                            if ( dispflag != 0 )
-                                                fprintf(stderr,"%d.%d ",score,timestamps[ind]-lasttime);
-                                            lasttime = timestamps[ind];
-                                            timestamps[ind] = 0;
-                                        } else break;
-                                    }
-                                    if ( dispflag != 0 )
-                                        fprintf(stderr,"scores convergence\n");*/
                                     return(true);
                                 } else return eval->Invalid("invalid solution opret");
                             }
-                            else if ( strcmp(ASSETCHAINS_SYMBOL,"SUDOKU") == 0 && height == 236 )
+                            else if ( chainName.isSymbol("SUDOKU") && height == 236 )
                                 return(true);
                             else return eval->Invalid("invalid solution vin");
                         }

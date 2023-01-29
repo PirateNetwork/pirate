@@ -1,6 +1,5 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
-// Copyright (c) 2019 The Hush developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -29,6 +28,7 @@
 #include "util.h"
 #include "utilstrencodings.h"
 #include "asyncrpcqueue.h"
+#include "assetchain.h"
 
 #include <memory>
 
@@ -255,8 +255,6 @@ UniValue help(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return tableRPC.help(strCommand);
 }
 
-extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
-
 #ifdef ENABLE_WALLET
 void GenerateBitcoins(bool b, CWallet *pw, int t);
 #else
@@ -281,7 +279,7 @@ UniValue stop(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     // Shutdown will take long enough that the response should get back
     StartShutdown();
-    sprintf(buf,"%s server stopping",ASSETCHAINS_SYMBOL[0] != 0 ? ASSETCHAINS_SYMBOL : "Komodo");
+    sprintf(buf,"%s server stopping", !chainName.isKMD() ? chainName.symbol().c_str() : "Komodo");
     return buf;
 }
 
@@ -333,9 +331,6 @@ static const CRPCCommand vRPCCommands[] =
     { "blockchain",         "gettxoutsetinfo",        &gettxoutsetinfo,        true  },
     { "blockchain",         "verifychain",            &verifychain,            true  },
     { "blockchain",         "getspentinfo",           &getspentinfo,           false },
-    //{ "blockchain",         "paxprice",               &paxprice,               true  },
-    //{ "blockchain",         "paxpending",             &paxpending,             true  },
-    //{ "blockchain",         "paxprices",              &paxprices,              true  },
     { "blockchain",         "notaries",               &notaries,               true  },
     //{ "blockchain",         "height_MoM",             &height_MoM,             true  },
     //{ "blockchain",         "txMoMproof",             &txMoMproof,             true  },
@@ -478,23 +473,6 @@ static const CRPCCommand vRPCCommands[] =
     { "oracles",       "oraclessample",   &oraclessample,     true },
     { "oracles",       "oraclessamples",   &oraclessamples,     true },
 
-    // Prices
-    { "prices",       "prices",      &prices,      true },
-    { "prices",       "pricesaddress",      &pricesaddress,      true },
-    { "prices",       "priceslist",         &priceslist,         true },
-    { "prices",       "mypriceslist",         &mypriceslist,         true },
-    { "prices",       "pricesinfo",         &pricesinfo,         true },
-    { "prices",       "pricesbet",         &pricesbet,         true },
-    { "prices",       "pricessetcostbasis",         &pricessetcostbasis,         true },
-    { "prices",       "pricescashout",         &pricescashout,         true },
-    { "prices",       "pricesrekt",         &pricesrekt,         true },
-    { "prices",       "pricesaddfunding",         &pricesaddfunding,         true },
-    { "prices",       "pricesgetorderbook",         &pricesgetorderbook,         true },
-    { "prices",       "pricesrefillfund",         &pricesrefillfund,         true },
-
-    // Pegs
-    { "pegs",       "pegsaddress",   &pegsaddress,      true },
-
     // Payments
     { "payments",       "paymentsaddress",   &paymentsaddress,       true },
     { "payments",       "paymentstxidopret", &payments_txidopret,    true },
@@ -558,17 +536,6 @@ static const CRPCCommand vRPCCommands[] =
     //{ "tokens",       "tokenfillswap",    &tokenfillswap,     true },
     { "tokens",       "tokenconvert", &tokenconvert, true },
 
-    // pegs
-    { "pegs",       "pegscreate",     &pegscreate,      true },
-    { "pegs",       "pegsfund",         &pegsfund,      true },
-    { "pegs",       "pegsget",         &pegsget,        true },
-    { "pegs",       "pegsredeem",         &pegsredeem,        true },
-    { "pegs",       "pegsliquidate",         &pegsliquidate,        true },
-    { "pegs",       "pegsexchange",         &pegsexchange,        true },
-    { "pegs",       "pegsaccounthistory", &pegsaccounthistory,      true },
-    { "pegs",       "pegsaccountinfo", &pegsaccountinfo,      true },
-    { "pegs",       "pegsworstaccounts",         &pegsworstaccounts,      true },
-    { "pegs",       "pegsinfo",         &pegsinfo,      true },
 
     /* Address index */
     { "addressindex",       "getaddressmempool",      &getaddressmempool,      true  },
@@ -589,10 +556,6 @@ static const CRPCCommand vRPCCommands[] =
     { "util",               "estimatefee",            &estimatefee,            true  },
     { "util",               "estimatepriority",       &estimatepriority,       true  },
     { "util",               "z_validateaddress",      &z_validateaddress,      true  }, /* uses wallet if enabled */
-    { "util",               "jumblr_deposit",       &jumblr_deposit,       true  },
-    { "util",               "jumblr_secret",        &jumblr_secret,       true  },
-    { "util",               "jumblr_pause",        &jumblr_pause,       true  },
-    { "util",               "jumblr_resume",        &jumblr_resume,       true  },
 
     { "util",             "invalidateblock",        &invalidateblock,        true  },
     { "util",             "reconsiderblock",        &reconsiderblock,        true  },
@@ -846,7 +809,7 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
     // Return immediately if in warmup
     {
         LOCK(cs_rpcWarmup);
-        if (fRPCInWarmup)
+        if (fRPCInWarmup && strMethod != "help")
             throw JSONRPCError(RPC_IN_WARMUP, rpcWarmupStatus);
     }
 
@@ -874,12 +837,10 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
 
 std::string HelpExampleCli(const std::string& methodname, const std::string& args)
 {
-    if ( ASSETCHAINS_SYMBOL[0] == 0 ) {
+    if ( chainName.isKMD() ) {
         return "> komodo-cli " + methodname + " " + args + "\n";
-    } else if ((strncmp(ASSETCHAINS_SYMBOL, "HUSH3", 5) == 0) ) {
-        return "> hush-cli " + methodname + " " + args + "\n";
     } else {
-        return "> komodo-cli -ac_name=" + strprintf("%s", ASSETCHAINS_SYMBOL) + " " + methodname + " " + args + "\n";
+        return "> komodo-cli -ac_name=" + strprintf("%s", chainName.symbol().c_str()) + " " + methodname + " " + args + "\n";
     }
 }
 
@@ -891,8 +852,8 @@ std::string HelpExampleRpc(const std::string& methodname, const std::string& arg
 
 string experimentalDisabledHelpMsg(const string& rpc, const string& enableArg)
 {
-    string daemon = ASSETCHAINS_SYMBOL[0] == 0 ? "komodod" : "hushd";
-    string ticker = ASSETCHAINS_SYMBOL[0] == 0 ? "komodo" : ASSETCHAINS_SYMBOL;
+    string daemon = "komodod";
+    string ticker = chainName.isKMD() ? "komodo" : chainName.symbol();
 
     return "\nWARNING: " + rpc + " is disabled.\n"
         "To enable it, restart " + daemon + " with the -experimentalfeatures and\n"

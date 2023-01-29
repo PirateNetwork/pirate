@@ -31,6 +31,11 @@
 #include "cc/eval.h"
 #include "cc/CCinclude.h"
 #include "hex.h"
+#include "komodo_bitcoind.h"
+#include "komodo_notary.h"
+#include "komodo_utils.h"
+#include "komodo_globals.h"
+#include "cc/CCinclude.h"
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
@@ -60,10 +65,8 @@ using namespace std;
  * Or alternatively, create a specific query method for the information.
  **/
 
-int32_t Jumblr_depositaddradd(char *depositaddr);
+/*int32_t Jumblr_depositaddradd(char *depositaddr);
 int32_t Jumblr_secretaddradd(char *secretaddr);
-uint64_t komodo_interestsum();
-int32_t komodo_longestchain();
 int32_t komodo_notarized_height(int32_t *prevMoMheightp,uint256 *hashp,uint256 *txidp);
 bool komodo_txnotarizedconfirmed(uint256 txid);
 uint32_t komodo_chainactive_timestamp();
@@ -71,13 +74,12 @@ int32_t komodo_whoami(char *pubkeystr,int32_t height,uint32_t timestamp);
 extern uint64_t KOMODO_INTERESTSUM,KOMODO_WALLETBALANCE;
 extern bool IS_KOMODO_NOTARY;
 extern int32_t KOMODO_LASTMINED,JUMBLR_PAUSE,KOMODO_LONGESTCHAIN,STAKED_NOTARY_ID,STAKED_ERA,KOMODO_INSYNC;
-extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 uint32_t komodo_segid32(char *coinaddr);
 int64_t komodo_coinsupply(int64_t *zfundsp,int64_t *sproutfundsp,int32_t height);
 int32_t notarizedtxid_height(char *dest,char *txidstr,int32_t *kmdnotarized_heightp);
 int8_t StakedNotaryID(std::string &notaryname, char *Raddress);
 uint64_t komodo_notarypayamount(int32_t nHeight, int64_t notarycount);
-int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);
+int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);*/
 
 #define KOMODO_VERSION "0.7.2"
 extern uint16_t ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT;
@@ -176,7 +178,7 @@ UniValue geterablockheights(const UniValue& params, bool fHelp, const CPubKey& m
       
     CBlockIndex *pindex; int8_t lastera,era = 0; UniValue ret(UniValue::VOBJ);
 
-    for (size_t i = 1; i < chainActive.LastTip()->nHeight; i++)
+    for (size_t i = 1; i < chainActive.Tip()->nHeight; i++)
     {
         pindex = chainActive[i];
         era = getera(pindex->nTime)+1;
@@ -192,6 +194,19 @@ UniValue geterablockheights(const UniValue& params, bool fHelp, const CPubKey& m
     return(ret);
 }
 
+/**
+ * @note Do not add or change anything in the information returned by this
+ * method. `getinfo` exists for backwards-compatibility only. It combines
+ * information from wildly different sources in the program, which is a mess,
+ * and is thus planned to be deprecated eventually.
+ *
+ * Based on the source of the information, new information should be added to:
+ * - `getblockchaininfo`,
+ * - `getnetworkinfo` or
+ * - `getwalletinfo`
+ *
+ * Or alternatively, create a specific query method for the information.
+ **/
 UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     uint256 notarized_hash,notarized_desttxid; int32_t prevMoMheight,notarized_height,longestchain,kmdnotarized_height,txid_height;
@@ -244,18 +259,18 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
     obj.push_back(Pair("notarizedtxid", notarized_desttxid.ToString()));
     if ( KOMODO_NSPV_FULLNODE )
     {
-        txid_height = notarizedtxid_height(ASSETCHAINS_SYMBOL[0] != 0 ? (char *)"KMD" : (char *)"BTC",(char *)notarized_desttxid.ToString().c_str(),&kmdnotarized_height);
+        txid_height = notarizedtxid_height(!chainName.isKMD() ? (char *)"KMD" : (char *)"BTC",(char *)notarized_desttxid.ToString().c_str(),&kmdnotarized_height);
         if ( txid_height > 0 )
             obj.push_back(Pair("notarizedtxid_height", txid_height));
         else obj.push_back(Pair("notarizedtxid_height", "mempool"));
-        if ( ASSETCHAINS_SYMBOL[0] != 0 )
+        if ( !chainName.isKMD() )
             obj.push_back(Pair("KMDnotarized_height", kmdnotarized_height));
         obj.push_back(Pair("notarized_confirms", txid_height < kmdnotarized_height ? (kmdnotarized_height - txid_height + 1) : 0));
         //fprintf(stderr,"after notarized_confirms %u\n",(uint32_t)time(NULL));
 #ifdef ENABLE_WALLET
         if (pwalletMain) {
             obj.push_back(Pair("walletversion", pwalletMain->GetVersion()));
-            if ( ASSETCHAINS_SYMBOL[0] == 0 )
+            if ( chainName.isKMD() )
             {
                 obj.push_back(Pair("interest",       ValueFromAmount(KOMODO_INTERESTSUM)));
                 obj.push_back(Pair("balance",       ValueFromAmount(KOMODO_WALLETBALANCE))); //pwalletMain->GetBalance()
@@ -272,8 +287,8 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             longestchain = chainActive.Height();
         //fprintf(stderr,"after longestchain %u\n",(uint32_t)time(NULL));
         obj.push_back(Pair("longestchain",        longestchain));
-        if ( chainActive.LastTip() != 0 )
-            obj.push_back(Pair("tiptime", (int)chainActive.LastTip()->nTime));
+        if ( chainActive.Tip() != 0 )
+            obj.push_back(Pair("tiptime", (int)chainActive.Tip()->nTime));
         obj.push_back(Pair("difficulty",    (double)GetDifficulty()));
 #ifdef ENABLE_WALLET
         if (pwalletMain) {
@@ -297,7 +312,7 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
         if ( (notaryid= StakedNotaryID(notaryname, (char *)NOTARY_ADDRESS.c_str())) != -1 ) {
             obj.push_back(Pair("notaryid",        notaryid));
             obj.push_back(Pair("notaryname",      notaryname));
-        } else if( (notaryid= komodo_whoami(pubkeystr,(int32_t)chainActive.LastTip()->nHeight,komodo_chainactive_timestamp())) >= 0 )  {
+        } else if( (notaryid= komodo_whoami(pubkeystr,(int32_t)chainActive.Tip()->nHeight,komodo_chainactive_timestamp())) >= 0 )  {
             obj.push_back(Pair("notaryid",        notaryid));
             if ( KOMODO_LASTMINED != 0 )
                 obj.push_back(Pair("lastmined", KOMODO_LASTMINED));
@@ -306,15 +321,14 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
     if ( ASSETCHAINS_CC != 0 )
         obj.push_back(Pair("CCid",        (int)ASSETCHAINS_CC));
-    obj.push_back(Pair("name",        ASSETCHAINS_SYMBOL[0] == 0 ? "KMD" : ASSETCHAINS_SYMBOL));
+    obj.push_back(Pair("name", chainName.ToString()));
 
     obj.push_back(Pair("p2pport",        ASSETCHAINS_P2PPORT));
     obj.push_back(Pair("rpcport",        ASSETCHAINS_RPCPORT));
-    if ( ASSETCHAINS_SYMBOL[0] != 0 )
+    if ( !chainName.isKMD() )
     {
-        if ( is_STAKED(ASSETCHAINS_SYMBOL) != 0 )
+        if ( is_STAKED(chainName.symbol()) != 0 )
             obj.push_back(Pair("StakedEra",        STAKED_ERA));
-        //obj.push_back(Pair("name",        ASSETCHAINS_SYMBOL));
         obj.push_back(Pair("magic",        (int)ASSETCHAINS_MAGIC));
         obj.push_back(Pair("premine",        ASSETCHAINS_SUPPLY));
 
@@ -445,7 +459,7 @@ UniValue coinsupply(const UniValue& params, bool fHelp, const CPubKey& mypk)
         if ( (supply= komodo_coinsupply(&zfunds,&sproutfunds,height)) > 0 )
         {
             result.push_back(Pair("result", "success"));
-            result.push_back(Pair("coin", ASSETCHAINS_SYMBOL[0] == 0 ? "KMD" : ASSETCHAINS_SYMBOL));
+            result.push_back(Pair("coin", chainName.ToString()));
             result.push_back(Pair("height", (int)height));
             result.push_back(Pair("supply", ValueFromAmount(supply)));
             result.push_back(Pair("zfunds", ValueFromAmount(zfunds)));
@@ -476,64 +490,6 @@ UniValue coinsupply(const UniValue& params, bool fHelp, const CPubKey& mypk)
     } else {
         result.push_back(Pair("error", "invalid height"));
     }
-    return(result);
-}
-
-UniValue jumblr_deposit(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    int32_t retval; UniValue result(UniValue::VOBJ);
-    if (fHelp || params.size() != 1)
-        throw runtime_error("jumblr_deposit \"depositaddress\"\n");
-    CBitcoinAddress address(params[0].get_str());
-    bool isValid = address.IsValid();
-    if ( isValid != 0 )
-    {
-        string addr = params[0].get_str();
-        if ( (retval= Jumblr_depositaddradd((char *)addr.c_str())) >= 0 )
-        {
-            result.push_back(Pair("result", retval));
-            JUMBLR_PAUSE = 0;
-        }
-        else result.push_back(Pair("error", retval));
-    } else result.push_back(Pair("error", "invalid address"));
-    return(result);
-}
-
-UniValue jumblr_secret(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    int32_t retval; UniValue result(UniValue::VOBJ);
-    if (fHelp || params.size() != 1)
-        throw runtime_error("jumblr_secret \"secretaddress\"\n");
-    CBitcoinAddress address(params[0].get_str());
-    bool isValid = address.IsValid();
-    if ( isValid != 0 )
-    {
-        string addr = params[0].get_str();
-        retval = Jumblr_secretaddradd((char *)addr.c_str());
-        result.push_back(Pair("result", "success"));
-        result.push_back(Pair("num", retval));
-        JUMBLR_PAUSE = 0;
-    } else result.push_back(Pair("error", "invalid address"));
-    return(result);
-}
-
-UniValue jumblr_pause(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    int32_t retval; UniValue result(UniValue::VOBJ);
-    if (fHelp )
-        throw runtime_error("jumblr_pause\n");
-    JUMBLR_PAUSE = 1;
-    result.push_back(Pair("result", "paused"));
-    return(result);
-}
-
-UniValue jumblr_resume(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    int32_t retval; UniValue result(UniValue::VOBJ);
-    if (fHelp )
-        throw runtime_error("jumblr_resume\n");
-    JUMBLR_PAUSE = 0;
-    result.push_back(Pair("result", "resumed"));
     return(result);
 }
 
@@ -1085,7 +1041,7 @@ UniValue getaddressutxos(const UniValue& params, bool fHelp, const CPubKey& mypk
         result.push_back(Pair("utxos", utxos));
 
         LOCK(cs_main);
-        result.push_back(Pair("hash", chainActive.LastTip()->GetBlockHash().GetHex()));
+        result.push_back(Pair("hash", chainActive.Tip()->GetBlockHash().GetHex()));
         result.push_back(Pair("height", (int)chainActive.Height()));
         return result;
     } else {
@@ -1235,7 +1191,7 @@ CAmount checkburnaddress(CAmount &received, int64_t &nNotaryPay, int32_t &height
                 balance += it->second;
             }
             // Get notary pay from current chain tip
-            CBlockIndex* pindex = chainActive.LastTip();
+            CBlockIndex* pindex = chainActive.Tip();
             nNotaryPay = pindex->nNotaryPay;
             height = pindex->nHeight;
         }

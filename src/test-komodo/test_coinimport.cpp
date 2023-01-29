@@ -19,6 +19,8 @@
 
 extern Eval* EVAL_TEST;
 
+std::shared_ptr<TestChain> testChain;
+
 namespace TestCoinImport {
 
 
@@ -54,7 +56,9 @@ public:
 
 
 protected:
-    static void SetUpTestCase() { setupChain(); }
+    static void SetUpTestCase() { testChain = std::make_shared<TestChain>(); }
+    static void TearDownTestCase() { testChain = nullptr;   };
+
     virtual void SetUp() {
         ASSETCHAINS_CC = 1;
         EVAL_TEST = this;

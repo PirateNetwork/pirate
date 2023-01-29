@@ -28,6 +28,7 @@
 #include "util.h"
 #include "version.h"
 #include "deprecation.h"
+#include "komodo_defs.h"
 
 #include <boost/foreach.hpp>
 
@@ -202,7 +203,6 @@ int32_t komodo_longestchain()
         }
         BOOST_FOREACH(const CNodeStats& stats, vstats)
         {
-            //fprintf(stderr,"komodo_longestchain iter.%d\n",n);
             CNodeStateStats statestats;
             bool fStateStats = GetNodeStateStats(stats.nodeid,statestats);
             if ( statestats.nSyncHeight < 0 )
@@ -225,7 +225,7 @@ int32_t komodo_longestchain()
         if ( num > (n >> 1) )
         {
             if ( 0 && height != KOMODO_LONGESTCHAIN )
-                fprintf(stderr,"set %s KOMODO_LONGESTCHAIN <- %d\n",ASSETCHAINS_SYMBOL,height);
+                fprintf(stderr,"set %s KOMODO_LONGESTCHAIN <- %d\n",chainName.symbol().c_str(),height);
             KOMODO_LONGESTCHAIN = height;
             return(height);
         }

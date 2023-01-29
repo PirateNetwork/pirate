@@ -12,19 +12,42 @@
  * Removal or modification of this copyright notice is prohibited.            *
  *                                                                            *
  ******************************************************************************/
+#include "uint256.h"
+#include <cstdint>
 
-#include "komodo_defs.h"
-
-#define SATOSHIDEN ((uint64_t)100000000L)
-#define dstr(x) ((double)(x) / SATOSHIDEN)
-
+// each era of this many blocks reduces block reward from 3 to 2 to 1
 #define KOMODO_ENDOFERA 7777777
-#define KOMODO_INTEREST ((uint64_t)5000000) //((uint64_t)(0.05 * COIN))   // 5%
-extern int64_t MAX_MONEY;
-extern uint8_t NOTARY_PUBKEY33[];
 
-uint64_t _komodo_interestnew(int32_t txheight,uint64_t nValue,uint32_t nLockTime,uint32_t tiptime);
-
+/****
+ * @brief evidently a new way to calculate interest
+ * @param txheight
+ * @param nValue
+ * @param nLockTime
+ * @param tiptime
+ * @return interest calculated
+ */
 uint64_t komodo_interestnew(int32_t txheight,uint64_t nValue,uint32_t nLockTime,uint32_t tiptime);
 
+/****
+ * @brief calculate interest
+ * @param txheight
+ * @param nValue
+ * @param nLockTime
+ * @param tiptime
+ * @returns the interest
+ */
 uint64_t komodo_interest(int32_t txheight,uint64_t nValue,uint32_t nLockTime,uint32_t tiptime);
+
+/****
+ * @brief get accrued interest
+ * @param[out] txheightp
+ * @param[out] locktimep
+ * @param[in] hash
+ * @param[in] n
+ * @param[in] checkheight
+ * @param[in] checkvalue
+ * @param[in] tipheight
+ * @return the interest calculated
+ */
+uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,
+        int32_t checkheight,uint64_t checkvalue,int32_t tipheight);

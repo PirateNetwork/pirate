@@ -68,6 +68,7 @@ UniValue games_extract(uint64_t txfee,struct CCcontract_info *cp,cJSON *params);
 UniValue games_register(uint64_t txfee,struct CCcontract_info *cp,cJSON *params);
 UniValue games_bet(uint64_t txfee,struct CCcontract_info *cp,cJSON *params);
 UniValue games_settle(uint64_t txfee,struct CCcontract_info *cp,cJSON *params);
+UniValue games_rawtxresult(UniValue &result,std::string rawtx,int32_t broadcastflag);
 
 #define CUSTOM_DISPATCH \
 if ( cp->evalcode == EVAL_GAMES ) \

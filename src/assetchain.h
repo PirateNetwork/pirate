@@ -1,3 +1,4 @@
+#pragma once
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -12,25 +13,42 @@
  * Removal or modification of this copyright notice is prohibited.            *
  *                                                                            *
  ******************************************************************************/
+#include <string>
 
+class assetchain
+{
+public:
+    assetchain() : symbol_("") {}
+    assetchain(const std::string& symbol) : symbol_(symbol)
+    {
+        if (symbol_.size() > 64)
+            symbol_ = symbol_.substr(0, 64);
+    }
+    /*****
+     * @returns true if the chain is Komodo
+     */
+    bool isKMD() { return symbol_.empty(); }
+    /****
+     * @param in the symbol to compare
+     * @returns true if this chain's symbol matches
+     */
+    bool isSymbol(const std::string& in) { return in == symbol_; }
+    /****
+     * @returns this chain's symbol (will be empty for KMD)
+     */
+    std::string symbol() { return symbol_; }
+    /****
+     * @returns this chain's symbol, "KMD" in the case of Komodo
+     */
+    std::string ToString() 
+    { 
+        if (symbol_.empty()) 
+            return "KMD"; 
+        return symbol_; 
+    }
+    bool SymbolStartsWith(const std::string& in) { return symbol_.find(in) == 0; }
+private:
+    std::string symbol_;
+};
 
-#ifndef CC_PEGS_H
-#define CC_PEGS_H
-
-#include "CCinclude.h"
-
-bool PegsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, uint32_t nIn);
-
-// CCcustom
-UniValue PegsCreate(const CPubKey& pk,uint64_t txfee,int64_t amount,std::vector<uint256> bindtxids);
-UniValue PegsFund(const CPubKey& pk,uint64_t txfee,uint256 pegstxid, uint256 tokenid, int64_t amount);
-UniValue PegsGet(const CPubKey& pk,uint64_t txfee,uint256 pegstxid, uint256 tokenid, int64_t amount);
-UniValue PegsRedeem(const CPubKey& pk,uint64_t txfee,uint256 pegstxid, uint256 tokenid);
-UniValue PegsLiquidate(const CPubKey& pk,uint64_t txfee,uint256 pegstxid, uint256 tokenid, uint256 liquidatetxid);
-UniValue PegsExchange(const CPubKey& pk,uint64_t txfee,uint256 pegstxid, uint256 tokenid, int64_t amount);
-UniValue PegsAccountHistory(const CPubKey& pk,uint256 pegstxid);
-UniValue PegsAccountInfo(const CPubKey& pk,uint256 pegstxid);
-UniValue PegsWorstAccounts(uint256 pegstxid);
-UniValue PegsInfo(uint256 pegstxid);
-
-#endif
+extern assetchain chainName;

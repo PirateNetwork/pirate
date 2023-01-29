@@ -25,6 +25,9 @@
 #include "policy/fees.h"
 #include "komodo_defs.h"
 #include "importcoin.h"
+#include "komodo_utils.h"
+#include "komodo_bitcoind.h"
+#include "komodo_interest.h"
 
 #include <assert.h>
 
@@ -565,10 +568,6 @@ const CTxOut &CCoinsViewCache::GetOutputFor(const CTxIn& input) const
     return coins->vout[input.prevout.n];
 }
 
-//uint64_t komodo_interest(int32_t txheight,uint64_t nValue,uint32_t nLockTime,uint32_t tiptime);
-uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight);
-extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
-
 const CScript &CCoinsViewCache::GetSpendFor(const CCoins *coins, const CTxIn& input)
 {
     assert(coins);
@@ -581,35 +580,39 @@ const CScript &CCoinsViewCache::GetSpendFor(const CTxIn& input) const
     return GetSpendFor(coins, input);
 }
 
-CAmount CCoinsViewCache::GetValueIn(int32_t nHeight,int64_t *interestp,const CTransaction& tx,uint32_t tiptime) const
+/** 
+ * @brief get amount of bitcoins coming in to a transaction
+ * @note lightweight clients may not know anything besides the hash of previous transactions,
+ * so may not be able to calculate this.
+ * @param[in] nHeight the chain height
+ * @param[out] interestp the interest found
+ * @param[in] tx transaction for which we are checking input total
+ * @returns Sum of value of all inputs (scriptSigs), (positive valueBalance or zero) and JoinSplit vpub_new
+ */
+CAmount CCoinsViewCache::GetValueIn(int32_t nHeight,int64_t &interestp,const CTransaction& tx) const
 {
     CAmount value,nResult = 0;
-    if ( interestp != 0 )
-        *interestp = 0;
+    interestp = 0;
     if ( tx.IsCoinImport() )
         return GetCoinImportValue(tx);
     if ( tx.IsCoinBase() != 0 )
         return 0;
     for (unsigned int i = 0; i < tx.vin.size(); i++)
     {
-        if (tx.IsPegsImport() && i==0)
-        {
-            nResult = GetCoinImportValue(tx);
-            continue;
-        } 
         value = GetOutputFor(tx.vin[i]).nValue;
         nResult += value;
 #ifdef KOMODO_ENABLE_INTEREST
-        if ( ASSETCHAINS_SYMBOL[0] == 0 && nHeight >= 60000 )
+        if ( chainName.isKMD() && nHeight >= 60000 )
         {
             if ( value >= 10*COIN )
             {
-                int64_t interest; int32_t txheight; uint32_t locktime;
-                interest = komodo_accrued_interest(&txheight,&locktime,tx.vin[i].prevout.hash,tx.vin[i].prevout.n,0,value,(int32_t)nHeight);
-                //printf("nResult %.8f += val %.8f interest %.8f ht.%d lock.%u tip.%u\n",(double)nResult/COIN,(double)value/COIN,(double)interest/COIN,txheight,locktime,tiptime);
-                //fprintf(stderr,"nResult %.8f += val %.8f interest %.8f ht.%d lock.%u tip.%u\n",(double)nResult/COIN,(double)value/COIN,(double)interest/COIN,txheight,locktime,tiptime);
+                int64_t interest; 
+                int32_t txheight; 
+                uint32_t locktime;
+                interest = komodo_accrued_interest(&txheight,&locktime,tx.vin[i].prevout.hash,
+                        tx.vin[i].prevout.n,0,value,nHeight);
                 nResult += interest;
-                (*interestp) += interest;
+                interestp += interest;
             }
         }
 #endif
@@ -668,7 +671,6 @@ bool CCoinsViewCache::HaveInputs(const CTransaction& tx) const
 {
     if (!tx.IsMint()) {
         for (unsigned int i = 0; i < tx.vin.size(); i++) {
-            if (tx.IsPegsImport() && i==0) continue;
             const COutPoint &prevout = tx.vin[i].prevout;
             const CCoins* coins = AccessCoins(prevout.hash);
             if (!coins || !coins->IsAvailable(prevout.n)) {
@@ -690,7 +692,7 @@ double CCoinsViewCache::GetPriority(const CTransaction &tx, int nHeight) const
     // use the maximum priority for all (partially or fully) shielded transactions.
     // (Note that coinbase transactions cannot contain JoinSplits, or Sapling shielded Spends or Outputs.)
 
-    if (tx.vjoinsplit.size() > 0 || tx.vShieldedSpend.size() > 0 || tx.vShieldedOutput.size() > 0 || tx.IsCoinImport() || tx.IsPegsImport()) {
+    if (tx.vjoinsplit.size() > 0 || tx.vShieldedSpend.size() > 0 || tx.vShieldedOutput.size() > 0 || tx.IsCoinImport()) {
         return MAX_PRIORITY;
     }
 

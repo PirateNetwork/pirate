@@ -15,6 +15,7 @@
 
 #include "CCfsm.h"
 #include "../txmempool.h"
+#include "komodo_bitcoind.h"
 
 /*
  FSM CC is a highlevel CC contract that mostly uses other CC contracts. A finite state machine is defined, which combines triggers, payments and whatever other events/actions into a state machine

@@ -28,7 +28,7 @@
 #include "util.h"
 #include "utiltime.h"
 #include "wallet.h"
-
+#include "komodo_nSPV_defs.h"
 #include <fstream>
 #include <stdint.h>
 
@@ -409,7 +409,7 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
     if (!file.is_open())
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot open wallet dump file");
 
-    int64_t nTimeBegin = chainActive.LastTip()->GetBlockTime();
+    int64_t nTimeBegin = chainActive.Tip()->GetBlockTime();
 
     bool fGood = true;
 
@@ -490,7 +490,7 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
     file.close();
     pwalletMain->ShowProgress("", 100); // hide progress dialog in GUI
 
-    CBlockIndex *pindex = chainActive.LastTip();
+    CBlockIndex *pindex = chainActive.Tip();
     while (pindex && pindex->pprev && pindex->GetBlockTime() > nTimeBegin - 7200)
         pindex = pindex->pprev;
 
@@ -1007,13 +1007,6 @@ UniValue z_exportviewingkey(const UniValue& params, bool fHelp, const CPubKey& m
     return EncodeViewingKey(vk);
 }
 
-extern int32_t KOMODO_NSPV;
-#ifndef KOMODO_NSPV_FULLNODE
-#define KOMODO_NSPV_FULLNODE (KOMODO_NSPV <= 0)
-#endif // !KOMODO_NSPV_FULLNODE
-#ifndef KOMODO_NSPV_SUPERLITE
-#define KOMODO_NSPV_SUPERLITE (KOMODO_NSPV > 0)
-#endif // !KOMODO_NSPV_SUPERLITE
 uint256 zeroid;
 UniValue NSPV_getinfo_req(int32_t reqht);
 UniValue NSPV_login(char *wifstr);

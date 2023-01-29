@@ -16,6 +16,7 @@
 #include "CCImportGateway.h"
 #include "key_io.h"
 #include "../importcoin.h"
+#include "komodo_bitcoind.h"
 
 // start of consensus code
 
@@ -24,8 +25,6 @@
 #define KMD_WIFTYPE 188
 #define KMD_TADDR 0
 #define CC_MARKER_VALUE 10000
-
-extern uint256 KOMODO_EARLYTXID;
 
 CScript EncodeImportGatewayBindOpRet(uint8_t funcid,std::string coin,uint256 oracletxid,uint8_t M,uint8_t N,std::vector<CPubKey> importgatewaypubkeys,uint8_t taddr,uint8_t prefix,uint8_t prefix2,uint8_t wiftype)
 {

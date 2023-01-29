@@ -36,11 +36,15 @@
 #include "script/standard.h"
 #include "uint256.h"
 #include "importcoin.h"
+#include "komodo_notary.h"
+#include "komodo_bitcoind.h"
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
 #endif
 
 #include "komodo_defs.h"
+#include "assetchain.h"
+#include "komodo_interest.h"
 
 #include <stdint.h>
 
@@ -48,12 +52,7 @@
 
 #include <univalue.h>
 
-int32_t komodo_notarized_height(int32_t *prevMoMheightp,uint256 *hashp,uint256 *txidp);
-
 using namespace std;
-
-extern char ASSETCHAINS_SYMBOL[];
-int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
 
 void ScriptPubKeyToJSON(const CScript& scriptPubKey, UniValue& out, bool fIncludeHex)
 {
@@ -139,8 +138,6 @@ UniValue TxJoinSplitToJSON(const CTransaction& tx) {
     }
     return vjoinsplit;
 }
-
-uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight);
 
 UniValue TxShieldedSpendsToJSON(const CTransaction& tx) {
     UniValue vdesc(UniValue::VARR);
@@ -272,7 +269,7 @@ void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue&
         const CTxOut& txout = tx.vout[i];
         UniValue out(UniValue::VOBJ);
         out.push_back(Pair("value", ValueFromAmount(txout.nValue)));
-        if ( ASSETCHAINS_SYMBOL[0] == 0 && pindex != 0 && tx.nLockTime >= 500000000 && (tipindex= chainActive.LastTip()) != 0 )
+        if ( chainName.isKMD() && pindex != 0 && tx.nLockTime >= 500000000 && (tipindex= chainActive.Tip()) != 0 )
         {
             int64_t interest; int32_t txheight; uint32_t locktime;
             interest = komodo_accrued_interest(&txheight,&locktime,tx.GetHash(),i,0,txout.nValue,(int32_t)tipindex->nHeight);
@@ -374,7 +371,7 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
         const CTxOut& txout = tx.vout[i];
         UniValue out(UniValue::VOBJ);
         out.push_back(Pair("value", ValueFromAmount(txout.nValue)));
-        if ( KOMODO_NSPV_FULLNODE && ASSETCHAINS_SYMBOL[0] == 0 && tx.nLockTime >= 500000000 && (tipindex= chainActive.LastTip()) != 0 )
+        if ( KOMODO_NSPV_FULLNODE && chainName.isKMD() && tx.nLockTime >= 500000000 && (tipindex= chainActive.Tip()) != 0 )
         {
             int64_t interest; int32_t txheight; uint32_t locktime;
             interest = komodo_accrued_interest(&txheight,&locktime,tx.GetHash(),i,0,txout.nValue,(int32_t)tipindex->nHeight);
@@ -559,56 +556,6 @@ UniValue getrawtransaction(const UniValue& params, bool fHelp, const CPubKey& my
     result.push_back(Pair("hex", strHex));
     TxToJSONExpanded(tx, hashBlock, result, nHeight, nConfirmations, nBlockTime);
     return result;
-}
-
-int32_t gettxout_scriptPubKey(uint8_t *scriptPubKey,int32_t maxsize,uint256 txid,int32_t n)
-{
-    int32_t i,m; uint8_t *ptr;
-    LOCK(cs_main);
-    /*CCoins coins;
-     for (iter=0; iter<2; iter++)
-     {
-     if ( iter == 0 )
-     {
-     LOCK(mempool.cs);
-     CCoinsViewMemPool view(pcoinsTip,mempool);
-     if ( view.GetCoins(txid,coins) == 0 )
-     {
-     //fprintf(stderr,"cant get view\n");
-     continue;
-     }
-     mempool.pruneSpent(txid, coins); // TODO: this should be done by the CCoinsViewMemPool
-     }
-     else if ( pcoinsTip->GetCoins(txid,coins) == 0 )
-     {
-     //fprintf(stderr,"cant get pcoinsTip->GetCoins\n");
-     continue;
-     }
-     if ( n < 0 || (unsigned int)n >= coins.vout.size() || coins.vout[n].IsNull() )
-     {
-     fprintf(stderr,"iter.%d n.%d vs voutsize.%d\n",iter,n,(int32_t)coins.vout.size());
-     continue;
-     }
-     ptr = (uint8_t *)coins.vout[n].scriptPubKey.data();
-     m = coins.vout[n].scriptPubKey.size();
-     for (i=0; i<maxsize&&i<m; i++)
-     scriptPubKey[i] = ptr[i];
-     return(i);
-     }*/
-    CTransaction tx;
-    uint256 hashBlock;
-    if ( GetTransaction(txid,tx,hashBlock,false) == 0 )
-        return(-1);
-    else if ( n < tx.vout.size() )
-    {
-        ptr = (uint8_t *)&tx.vout[n].scriptPubKey[0];
-        m = tx.vout[n].scriptPubKey.size();
-        for (i=0; i<maxsize&&i<m; i++)
-            scriptPubKey[i] = ptr[i];
-        //fprintf(stderr,"got scriptPubKey via rawtransaction\n");
-        return(i);
-    }
-    return(-1);
 }
 
 UniValue gettxoutproof(const UniValue& params, bool fHelp, const CPubKey& mypk)

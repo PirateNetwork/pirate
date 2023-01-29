@@ -10,8 +10,53 @@
 #include "policy/fees.h"
 #include "util.h"
 
-// Implementation is in test_checktransaction.cpp
-extern CMutableTransaction GetValidTransaction();
+void CreateJoinSplitSignature(CMutableTransaction& mtx, uint32_t consensusBranchId) {
+    // Generate an ephemeral keypair.
+    uint256 joinSplitPubKey;
+    unsigned char joinSplitPrivKey[crypto_sign_SECRETKEYBYTES];
+    crypto_sign_keypair(joinSplitPubKey.begin(), joinSplitPrivKey);
+    mtx.joinSplitPubKey = joinSplitPubKey;
+
+    // Compute the correct hSig.
+    // TODO: #966.
+    static const uint256 one(uint256S("0000000000000000000000000000000000000000000000000000000000000001"));
+    // Empty output script.
+    CScript scriptCode;
+    CTransaction signTx(mtx);
+    uint256 dataToBeSigned = SignatureHash(scriptCode, signTx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId);
+    if (dataToBeSigned == one) {
+        throw std::runtime_error("SignatureHash failed");
+    }
+
+    // Add the signature
+    assert(crypto_sign_detached(&mtx.joinSplitSig[0], NULL,
+                         dataToBeSigned.begin(), 32,
+                         joinSplitPrivKey
+                        ) == 0);
+}
+
+CMutableTransaction GetValidTransaction() {
+    uint32_t consensusBranchId = SPROUT_BRANCH_ID;
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(2);
+    mtx.vin[0].prevout.hash = uint256S("0000000000000000000000000000000000000000000000000000000000000001");
+    mtx.vin[0].prevout.n = 0;
+    mtx.vin[1].prevout.hash = uint256S("0000000000000000000000000000000000000000000000000000000000000002");
+    mtx.vin[1].prevout.n = 0;
+    mtx.vout.resize(2);
+    // mtx.vout[0].scriptPubKey = 
+    mtx.vout[0].nValue = 0;
+    mtx.vout[1].nValue = 0;
+    mtx.vjoinsplit.resize(2);
+    mtx.vjoinsplit[0].nullifiers.at(0) = uint256S("0000000000000000000000000000000000000000000000000000000000000000");
+    mtx.vjoinsplit[0].nullifiers.at(1) = uint256S("0000000000000000000000000000000000000000000000000000000000000001");
+    mtx.vjoinsplit[1].nullifiers.at(0) = uint256S("0000000000000000000000000000000000000000000000000000000000000002");
+    mtx.vjoinsplit[1].nullifiers.at(1) = uint256S("0000000000000000000000000000000000000000000000000000000000000003");
+
+    CreateJoinSplitSignature(mtx, consensusBranchId);
+    return mtx;
+}
 
 // Fake the input of transaction 5295156213414ed77f6e538e7e8ebe14492156906b9fe995b242477818789364
 // - 532639cc6bebed47c1c69ae36dd498c68a012e74ad12729adbd3dbb56f8f3f4a, 0
@@ -96,11 +141,13 @@ TEST(Mempool, PriorityStatsDoNotCrash) {
 
     CTxMemPoolEntry entry(tx, nFees, nTime, dPriority, nHeight, true, false, SPROUT_BRANCH_ID);
 
-    // Check it does not crash (ie. the death test fails)
-    EXPECT_NONFATAL_FAILURE(EXPECT_DEATH(testPool.addUnchecked(tx.GetHash(), entry), ""), "");
+    // This should not crash
+    EXPECT_TRUE(testPool.addUnchecked(tx.GetHash(), entry));
 
     EXPECT_EQ(dPriority, MAX_PRIORITY);
 }
+
+CCriticalSection& get_cs_main(); // in main.cpp
 
 TEST(Mempool, TxInputLimit) {
     SelectParams(CBaseChainParams::REGTEST);
@@ -119,6 +166,7 @@ TEST(Mempool, TxInputLimit) {
     // Check it fails as expected
     CValidationState state1;
     CTransaction tx1(mtx);
+    LOCK( get_cs_main() );
     EXPECT_FALSE(AcceptToMemoryPool(pool, state1, tx1, false, &missingInputs));
     EXPECT_EQ(state1.GetRejectReason(), "bad-txns-version-too-low");
 
@@ -182,6 +230,7 @@ TEST(Mempool, OverwinterNotActiveYet) {
     CValidationState state1;
 
     CTransaction tx1(mtx);
+    LOCK( get_cs_main() );
     EXPECT_FALSE(AcceptToMemoryPool(pool, state1, tx1, false, &missingInputs));
     EXPECT_EQ(state1.GetRejectReason(), "tx-overwinter-not-active");
 
@@ -206,6 +255,7 @@ TEST(Mempool, SproutV3TxFailsAsExpected) {
     CValidationState state1;
     CTransaction tx1(mtx);
 
+    LOCK( get_cs_main() );
     EXPECT_FALSE(AcceptToMemoryPool(pool, state1, tx1, false, &missingInputs));
     EXPECT_EQ(state1.GetRejectReason(), "version");
 }
@@ -227,6 +277,7 @@ TEST(Mempool, SproutV3TxWhenOverwinterActive) {
     CValidationState state1;
     CTransaction tx1(mtx);
 
+    LOCK( get_cs_main() );
     EXPECT_FALSE(AcceptToMemoryPool(pool, state1, tx1, false, &missingInputs));
     EXPECT_EQ(state1.GetRejectReason(), "tx-overwinter-flag-not-set");
 
@@ -247,6 +298,8 @@ TEST(Mempool, SproutNegativeVersionTxWhenOverwinterActive) {
     CMutableTransaction mtx = GetValidTransaction();
     mtx.vjoinsplit.resize(0); // no joinsplits
     mtx.fOverwintered = false;
+
+    LOCK( get_cs_main() );
 
     // A Sprout transaction with version -3 is created using Sprout code (as found in zcashd <= 1.0.14).
     // First four bytes of transaction, parsed as an uint32_t, has the value: 0xfffffffd

@@ -16,6 +16,7 @@
 
 #include "cJSON.h"
 #include "CCinclude.h"
+#include "komodo_bitcoind.h"
 
 #define ROGUE_REGISTRATION 5
 #define ROGUE_REGISTRATIONSIZE (100 * 10000)
@@ -162,8 +163,8 @@ CScript rogue_keystrokesopret(uint256 gametxid,uint256 batontxid,CPubKey pk,std:
 
 CScript rogue_highlanderopret(uint8_t funcid,uint256 gametxid,int32_t regslot,CPubKey pk,std::vector<uint8_t>playerdata,std::string pname)
 {
-    CScript opret; uint8_t evalcode = EVAL_ROGUE; std::string symbol(ASSETCHAINS_SYMBOL);
-    opret << OP_RETURN << E_MARSHAL(ss << evalcode << funcid << gametxid << symbol << pname << regslot << pk << playerdata );
+    CScript opret; uint8_t evalcode = EVAL_ROGUE; 
+    opret << OP_RETURN << E_MARSHAL(ss << evalcode << funcid << gametxid << chainName.symbol() << pname << regslot << pk << playerdata );
     return(opret);
 }
 
@@ -701,7 +702,7 @@ uint64_t rogue_gamefields(UniValue &obj,int64_t maxplayers,int64_t buyin,uint256
                 obj.push_back(Pair("seed",(int64_t)seed));
                 if ( rogue_iamregistered(maxplayers,gametxid,tx,myrogueaddr) > 0 )
                     sprintf(cmd,"cc/rogue/rogue %llu %s",(long long)seed,gametxid.ToString().c_str());
-                else sprintf(cmd,"./komodo-cli -ac_name=%s cclib register %d \"[%%22%s%%22]\"",ASSETCHAINS_SYMBOL,EVAL_ROGUE,gametxid.ToString().c_str());
+                else sprintf(cmd,"./komodo-cli -ac_name=%s cclib register %d \"[%%22%s%%22]\"",chainName.symbol().c_str(),EVAL_ROGUE,gametxid.ToString().c_str());
                 obj.push_back(Pair("run",cmd));
             }
         }
@@ -1513,7 +1514,7 @@ UniValue rogue_setname(uint64_t txfee,struct CCcontract_info *cp,cJSON *params)
 bool rogue_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const CTransaction tx)
 {
     CScript scriptPubKey; std::vector<uint8_t> vopret; uint8_t *script,e,f,funcid,tokentx=0; int32_t i,maxplayers,enabled = 0,decoded=0,regslot,ind,err,dispflag,gameheight,score,numvouts; CTransaction vintx,gametx; CPubKey pk; uint256 hashBlock,gametxid,txid,tokenid,batontxid,playertxid,ptxid; int64_t buyin,cashout; std::vector<uint8_t> playerdata,keystrokes; std::string symbol,pname;
-    if ( strcmp(ASSETCHAINS_SYMBOL,"ROGUE") == 0 )
+    if ( chainName.isSymbol("ROGUE") )
     {
         if (height < 21274 )
             return(true);

@@ -51,8 +51,6 @@
         EVAL(EVAL_HEIR, 0xea) \
         EVAL(EVAL_CHANNELS, 0xeb) \
         EVAL(EVAL_ORACLES, 0xec) \
-        EVAL(EVAL_PRICES, 0xed) \
-        EVAL(EVAL_PEGS, 0xee) \
         EVAL(EVAL_PAYMENTS, 0xf0) \
         EVAL(EVAL_GATEWAYS, 0xf1) \
 		EVAL(EVAL_TOKENS, 0xf2) \
@@ -152,8 +150,6 @@ public:
 };
 
 
-extern char ASSETCHAINS_SYMBOL[65];
-
 
 /*
  * Data from notarisation OP_RETURN from chain being notarised
@@ -219,7 +215,8 @@ public:
     template <typename Stream>
     bool DetectBackNotarisation(Stream& s, CSerActionUnserialize act)
     {
-        if (ASSETCHAINS_SYMBOL[0]) return 1;
+        if (!chainName.isKMD()) 
+            return 1;
         if (s.size() >= 72) {
             if (strcmp("BTC", &s[68]) == 0) return 1;
             if (strcmp("KMD", &s[68]) == 0) return 1;

@@ -109,33 +109,40 @@ struct Params {
     NetworkUpgrade vUpgrades[MAX_NETWORK_UPGRADES];
 
     /** Proof of work parameters */
-    uint256 powLimit;
-    uint256 powAlternate;
+    uint256 powLimit; // minimum dificulty limit if EQUIHASH used
+    uint256 powAlternate; // minimum dificulty limit if EQUIHASH not used
     boost::optional<uint32_t> nPowAllowMinDifficultyBlocksAfterHeight;
     boost::optional<uint32_t> nHF22Height;
     uint32_t nHF22NotariesPriorityRotateDelta;
-    int64_t nPowAveragingWindow;
-    int64_t nPowMaxAdjustDown;
-    int64_t nPowMaxAdjustUp;
-    int64_t nPowTargetSpacing;
-    int64_t nLwmaAjustedWeight;
+    int64_t nPowAveragingWindow; // lookback window to determine block production speed averages
+    int64_t nPowMaxAdjustDown; // max percentage difficulty level should be lowered
+    int64_t nPowMaxAdjustUp; // max percentage difficulty level should be raised
+    int64_t nPowTargetSpacing; // the target block production speed (in seconds)
 
     /* Proof of stake parameters */
     uint256 posLimit;
     int64_t nPOSAveragingWindow;    // can be completely different than POW and initially trying a relatively large number, like 100
     int64_t nPOSTargetSpacing;      // spacing is 1000 units per block to get better resolution, (100 % = 1000, 50% = 2000, 10% = 10000)
-    int64_t nLwmaPOSAjustedWeight;
 
     /* applied to all block times */
     int64_t nMaxFutureBlockTime;
 
+    /*****
+     * @returns How long the entire lookback window should take given target values
+     */
     int64_t AveragingWindowTimespan() const { return nPowAveragingWindow * nPowTargetSpacing; }
+    /****
+     * @returns the minimum time the lookback window should take before difficulty should be raised
+     */
     int64_t MinActualTimespan() const { return (AveragingWindowTimespan() * (100 - nPowMaxAdjustUp  )) / 100; }
+    /*****
+     * @returns the maximum time the lookback window should take before the difficulty should be lowered
+     */
     int64_t MaxActualTimespan() const { return (AveragingWindowTimespan() * (100 + nPowMaxAdjustDown)) / 100; }
     void SetSaplingHeight(int32_t height) { vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = height; }
     void SetOverwinterHeight(int32_t height) { vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = height; }
-    uint256 nMinimumChainWork;
 };
+
 } // namespace Consensus
 
 #endif // BITCOIN_CONSENSUS_PARAMS_H

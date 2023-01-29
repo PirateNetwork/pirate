@@ -18,7 +18,19 @@ bin_PROGRAMS += komodo-test
     test-komodo/test_netbase_tests.cpp \
     test-komodo/test_events.cpp \
     test-komodo/test_hex.cpp \
-    test-komodo/test_haraka_removal.cpp
+    test-komodo/test_alerts.cpp \
+    test-komodo/test_equihash.cpp \
+    test-komodo/test_random.cpp \
+    test-komodo/test_block.cpp \
+    test-komodo/test_mempool.cpp \
+    test-komodo/test_notary.cpp \
+    test-komodo/test_pow.cpp \
+    test-komodo/test_txid.cpp \
+    test-komodo/test_coins.cpp \
+    test-komodo/test_haraka_removal.cpp \
+    test-komodo/test_miner.cpp \
+    test-komodo/test_oldhash_removal.cpp \
+    test-komodo/test_kmd_feat.cpp
 
 komodo_test_CPPFLAGS = $(komodod_CPPFLAGS)
 

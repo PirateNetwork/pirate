@@ -15,6 +15,8 @@
 
 #include "CCHeir.h"
 #include "heir_validate.h"
+#include "komodo_bitcoind.h"
+
 #include <iomanip>
 
 class CoinHelper;
@@ -335,7 +337,7 @@ uint8_t _DecodeHeirEitherOpRet(CScript scriptPubKey, uint256 &tokenid, CPubKey& 
         /* if (vopretExtra.size() > 1) {
             // restore the second opret:
 
-            /* unmarshalled in DecodeTokenOpRet:
+            // unmarshalled in DecodeTokenOpRet:
             if (!E_UNMARSHAL(vopretExtra, { ss >> vopretStripped; })) {  //strip string size
                 if (!noLogging) std::cerr << "_DecodeHeirEitherOpret() could not unmarshal vopretStripped" << std::endl;
                 return (uint8_t)0;

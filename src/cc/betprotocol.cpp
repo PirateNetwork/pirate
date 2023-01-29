@@ -24,8 +24,7 @@
 #include "cc/eval.h"
 #include "cc/utils.h"
 #include "primitives/transaction.h"
-
-int32_t komodo_nextheight();
+#include "komodo_bitcoind.h"
 
 std::vector<CC*> BetProtocol::PlayerConditions()
 {
