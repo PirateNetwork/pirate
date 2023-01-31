@@ -629,6 +629,37 @@ UniValue getblockhashes(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return result;
 }
 
+//! Sanity-check a height argument and interpret negative values.
+int interpretHeightArg(int nHeight, int currentHeight)
+{
+    if (nHeight < 0) {
+        nHeight += currentHeight + 1;
+    }
+    if (nHeight < 0 || nHeight > currentHeight) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Block height out of range");
+    }
+    return nHeight;
+}
+
+//! Parse and sanity-check a height argument, return its integer representation.
+int parseHeightArg(const std::string& strHeight, int currentHeight)
+{
+    // std::stoi allows (locale-dependent) whitespace and optional '+' sign,
+    // whereas we want to be strict.
+    regex r("(?:(-?)[1-9][0-9]*|[0-9]+)");
+    if (!regex_match(strHeight, r)) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block height parameter");
+    }
+    int nHeight;
+    try {
+        nHeight = std::stoi(strHeight);
+    }
+    catch (const std::exception &e) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid block height parameter");
+    }
+    return interpretHeightArg(nHeight, currentHeight);
+}
+
 UniValue getblockhash(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (fHelp || params.size() != 1)
@@ -1520,6 +1551,121 @@ UniValue getchaintips(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return res;
 }
 
+UniValue z_gettreestate(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "z_gettreestate \"hash|height\"\n"
+            "Return information about the given block's tree state.\n"
+            "\nArguments:\n"
+            "1. \"hash|height\"          (string, required) The block hash or height. Height can be negative where -1 is the last known valid block\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"hash\": \"hash\",         (string) hex block hash\n"
+            "  \"height\": n,              (numeric) block height\n"
+            "  \"time\": n,                (numeric) block time: UTC seconds since the Unix 1970-01-01 epoch\n"
+            "  \"sprout\": {\n"
+            "    \"skipHash\": \"hash\",   (string) hash of most recent block with more information\n"
+            "    \"commitments\": {\n"
+            "      \"finalRoot\": \"hex\", (string)\n"
+            "      \"finalState\": \"hex\" (string)\n"
+            "    }\n"
+            "  },\n"
+            "  \"sapling\": {\n"
+            "    \"skipHash\": \"hash\",   (string) hash of most recent block with more information\n"
+            "    \"commitments\": {\n"
+            "      \"finalRoot\": \"hex\", (string)\n"
+            "      \"finalState\": \"hex\" (string)\n"
+            "    }\n"
+            "  }\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("z_gettreestate", "\"00000000febc373a1da2bd9f887b105ad79ddc26ac26c2b28652d64e5207c5b5\"")
+            + HelpExampleRpc("z_gettreestate", "\"00000000febc373a1da2bd9f887b105ad79ddc26ac26c2b28652d64e5207c5b5\"")
+            + HelpExampleCli("z_gettreestate", "12800")
+            + HelpExampleRpc("z_gettreestate", "12800")
+        );
+
+    LOCK(cs_main);
+
+    std::string strHash = params[0].get_str();
+
+    // If height is supplied, find the hash
+    if (strHash.size() < (2 * sizeof(uint256))) {
+        strHash = chainActive[parseHeightArg(strHash, chainActive.Height())]->GetBlockHash().GetHex();
+    }
+    uint256 hash(uint256S(strHash));
+
+    if (mapBlockIndex.count(hash) == 0)
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
+    const CBlockIndex* const pindex = mapBlockIndex[hash];
+    if (!chainActive.Contains(pindex)) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Requested block is not part of the main chain");
+    }
+
+    UniValue res(UniValue::VOBJ);
+    res.pushKV("hash", pindex->GetBlockHash().GetHex());
+    res.pushKV("height", pindex->nHeight);
+    res.pushKV("time", int64_t(pindex->nTime));
+
+    // sprout
+    {
+        UniValue sprout_result(UniValue::VOBJ);
+        UniValue sprout_commitments(UniValue::VOBJ);
+        sprout_commitments.pushKV("finalRoot", pindex->hashFinalSproutRoot.GetHex());
+        SproutMerkleTree tree;
+        if (pcoinsTip->GetSproutAnchorAt(pindex->hashFinalSproutRoot, tree)) {
+            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+            s << tree;
+            sprout_commitments.pushKV("finalState", HexStr(s.begin(), s.end()));
+        } else {
+            // Set skipHash to the most recent block that has a finalState.
+            const CBlockIndex* pindex_skip = pindex->pprev;
+            while (pindex_skip && !pcoinsTip->GetSproutAnchorAt(pindex_skip->hashFinalSproutRoot, tree)) {
+                pindex_skip = pindex_skip->pprev;
+            }
+            if (pindex_skip) {
+                sprout_result.pushKV("skipHash", pindex_skip->GetBlockHash().GetHex());
+            }
+        }
+        sprout_result.pushKV("commitments", sprout_commitments);
+        res.pushKV("sprout", sprout_result);
+    }
+
+    // sapling
+    int sapling_activation_height = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight; /* ASSETCHAINS_SAPLING */
+    if (sapling_activation_height > Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT)
+    {
+        UniValue sapling_result(UniValue::VOBJ);
+        UniValue sapling_commitments(UniValue::VOBJ);
+        sapling_commitments.pushKV("finalRoot", pindex->hashFinalSaplingRoot.GetHex());
+        bool need_skiphash = false;
+        SaplingMerkleTree tree;
+        if (pcoinsTip->GetSaplingAnchorAt(pindex->hashFinalSaplingRoot, tree)) {
+            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+            s << tree;
+            sapling_commitments.pushKV("finalState", HexStr(s.begin(), s.end()));
+        } else {
+            // Set skipHash to the most recent block that has a finalState.
+            const CBlockIndex* pindex_skip = pindex->pprev;
+            auto saplingActive = [&](const CBlockIndex* pindex_cur) -> bool {
+                return pindex_cur && pindex_cur->nHeight >= sapling_activation_height;
+            };
+            while (saplingActive(pindex_skip) && !pcoinsTip->GetSaplingAnchorAt(pindex_skip->hashFinalSaplingRoot, tree)) {
+                pindex_skip = pindex_skip->pprev;
+            }
+            if (saplingActive(pindex_skip)) {
+                sapling_result.pushKV("skipHash", pindex_skip->GetBlockHash().GetHex());
+            }
+        }
+        sapling_result.pushKV("commitments", sapling_commitments);
+        res.pushKV("sapling", sapling_result);
+    }
+
+    return res;
+}
+
+
 UniValue mempoolInfoToJSON()
 {
     UniValue ret(UniValue::VOBJ);
@@ -1722,6 +1868,7 @@ static const CRPCCommand commands[] =
     { "blockchain",         "getblockhash",           &getblockhash,           true  },
     { "blockchain",         "getblockheader",         &getblockheader,         true  },
     { "blockchain",         "getchaintips",           &getchaintips,           true  },
+    { "blockchain",         "z_gettreestate",         &z_gettreestate,         true  },
     { "blockchain",         "getchaintxstats",        &getchaintxstats,        true  },
     { "blockchain",         "getdifficulty",          &getdifficulty,          true  },
     { "blockchain",         "getmempoolinfo",         &getmempoolinfo,         true  },
