@@ -33,13 +33,15 @@
 //#include "komodo_ccdata.h"
 #include <cstdint>
 
-int32_t komodo_parsestatefile(struct komodo_state *sp,FILE *fp,char *symbol,char *dest);
+const char KOMODO_STATE_FILENAME[] = "komodoevents";
+
+int32_t komodo_parsestatefile(struct komodo_state *sp,FILE *fp,char *symbol, const char *dest);
 
 void komodo_currentheight_set(int32_t height);
 
 int32_t komodo_currentheight();
 
-int32_t komodo_parsestatefiledata(struct komodo_state *sp,uint8_t *filedata,long *fposp,long datalen,char *symbol,char *dest);
+int32_t komodo_parsestatefiledata(struct komodo_state *sp,uint8_t *filedata,long *fposp,long datalen,const char *symbol, const char *dest);
 
 void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotaries,uint8_t notaryid,
         uint256 txhash,uint32_t *pvals,uint8_t numpvals,int32_t KMDheight,uint32_t KMDtimestamp,
