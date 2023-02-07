@@ -480,7 +480,7 @@ int32_t komodo_verifynotarization(const char *symbol,const char *dest,int32_t he
         }//else jsonstr = _dex_getrawtransaction();
         else return(0); // need universal way to issue DEX* API, since notaries mine most blocks, this ok
     }
-    else if ( strcmp(dest,"BTC") == 0 )
+    else if ( strcmp(dest,"BTC") == 0 )     // Note: this should work for LTC too (BTC is used as an alias for LTC)
     {
         if ( BTCUSERPASS[0] != 0 )
         {

@@ -34,21 +34,30 @@
  */
 void komodo_eventadd_notarized( komodo_state *sp, const char *symbol, int32_t height, komodo::event_notarized& ntz)
 {
-    if ( IS_KOMODO_NOTARY 
-            && komodo_verifynotarization(symbol,ntz.dest,height,ntz.notarizedheight,ntz.blockhash, ntz.desttxid) < 0 )
-    {
-        static uint32_t counter;
-        if ( counter++ < 100 )
-            printf("[%s] error validating notarization ht.%d notarized_height.%d, if on a pruned %s node this can be ignored\n",
-                    chainName.symbol().c_str(), height, ntz.notarizedheight, ntz.dest);
+    if (IS_KOMODO_NOTARY)   {
+        int32_t ntz_verify = komodo_verifynotarization(symbol, ntz.dest, height, ntz.notarizedheight, ntz.blockhash, ntz.desttxid);
+        LogPrint("notarisation", "komodo_verifynotarization result %d\n", ntz_verify);
+
+        if (ntz_verify < 0)    {
+            static uint32_t counter;
+            if ( counter++ < 100 )
+                printf("[%s] error validating notarization ht.%d notarized_height.%d, if on a pruned %s node this can be ignored\n",
+                        chainName.symbol().c_str(), height, ntz.notarizedheight, ntz.dest);
+            return;
+        }
     }
-    else if ( chainName.isSymbol(symbol) )
+    
+    if (chainName.isSymbol(symbol) || chainName.isKMD() && std::string(symbol) == "KMD" /*special case for KMD*/)
     {
-        if ( sp != nullptr )
+        if (sp != nullptr)
         {
             sp->add_event(symbol, height, ntz);
             komodo_notarized_update(sp, height, ntz.notarizedheight, ntz.blockhash, ntz.desttxid, ntz.MoM, ntz.MoMdepth);
+        } else {
+            LogPrintf("could not update notarisation event: komodo_state is null");
         }
+    } else {
+        LogPrintf("could not update notarisation event: invalid symbol %s", symbol);
     }
 }
 
