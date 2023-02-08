@@ -7,11 +7,8 @@
 #include "komodo.h"
 #include "komodo_structs.h"
 #include "komodo_gateway.h"
+#include "komodo_notary.h"
 #include "komodo_extern_globals.h"
-
-//int32_t komodo_faststateinit(struct komodo_state *sp,const char *fname,char *symbol,char *dest);
-//struct komodo_state *komodo_stateptrget(char *base);
-//extern int32_t KOMODO_EXTERNAL_NOTARIES;
 
 namespace test_events {
 
@@ -293,7 +290,7 @@ TEST(test_events, komodo_faststateinit_test)
     char symbol[] = "TST";
     chainName = assetchain("TST");
     KOMODO_EXTERNAL_NOTARIES = 1;
-    IS_KOMODO_NOTARY = false;
+    IS_KOMODO_NOTARY = false;   // avoid calling komodo_verifynotarization
 
     clear_state(symbol);
 
@@ -314,10 +311,11 @@ TEST(test_events, komodo_faststateinit_test)
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state != nullptr);
-            char* dest = nullptr;
+            char* dest = nullptr;   // not used for 'P'
             // attempt to read the file
             int32_t result = komodo_faststateinit( state, full_filename.c_str(), symbol, dest);
             // compare results
@@ -348,6 +346,7 @@ TEST(test_events, komodo_faststateinit_test)
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state != nullptr);
@@ -364,13 +363,17 @@ TEST(test_events, komodo_faststateinit_test)
             */
             ASSERT_TRUE(state->events.size() != 0); // prevent test crash
             // check that the new way is the same
-            EXPECT_EQ(state->events.size(), 2);
+            ASSERT_EQ(state->events.size(), 1);
             komodo::event_notarized& ev2 = 
-                    static_cast<komodo::event_notarized&>( *(*(++state->events.begin())) );
+                    static_cast<komodo::event_notarized&>( *state->events.front() );
             EXPECT_EQ(ev2.height, 10);
             EXPECT_EQ(ev2.type, komodo::komodo_event_type::EVENT_NOTARIZED);
             // the serialized version should match the input
             EXPECT_TRUE(compare_serialization(full_filename, ev2));
+
+            // check last nota read from komodo state:
+            EXPECT_EQ(state->LastNotarizedHeight(), 2);
+            EXPECT_EQ(state->LastNotarizedHash(), uint256S("0101010101010101010101010101010101010101010101010101010101010101"));
         }
         // notarized M record
         {
@@ -381,6 +384,7 @@ TEST(test_events, komodo_faststateinit_test)
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state != nullptr);
@@ -397,15 +401,19 @@ TEST(test_events, komodo_faststateinit_test)
             */
             ASSERT_TRUE(state->events.size() != 0); // prevent test crash
             // check that the new way is the same
-            EXPECT_EQ(state->events.size(), 3);
+            EXPECT_EQ(state->events.size(), 1);
 
-            auto itr = state->events.begin();
-            std::advance(itr, 2);
-            komodo::event_notarized& ev2 = static_cast<komodo::event_notarized&>( *(*(itr)) );
+            //auto itr = state->events.begin();
+            //std::advance(itr, 2);
+            komodo::event_notarized& ev2 = static_cast<komodo::event_notarized&>( *state->events.front() );
             EXPECT_EQ(ev2.height, 10);
             EXPECT_EQ(ev2.type, komodo::komodo_event_type::EVENT_NOTARIZED);
             // the serialized version should match the input
             EXPECT_TRUE(compare_serialization(full_filename, ev2));
+
+            // check last nota read from komodo state:
+            EXPECT_EQ(state->LastNotarizedHeight(), 3);
+            EXPECT_EQ(state->LastNotarizedHash(), uint256S("0101010101010101010101010101010101010101010101010101010101010101"));
         }
         // record type "U" (deprecated)
         {
@@ -416,6 +424,7 @@ TEST(test_events, komodo_faststateinit_test)
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state != nullptr);
@@ -427,19 +436,7 @@ TEST(test_events, komodo_faststateinit_test)
             /* old way
             EXPECT_EQ(state->Komodo_numevents, 3); // does not get added to state
             */
-            ASSERT_TRUE(state->events.size() != 0); // prevent test crash
-            // check that the new way is the same
-            EXPECT_EQ(state->events.size(), 3);
-            auto itr = state->events.begin();
-            // this does not get added to state, so we need to serialize the object just
-            // to verify serialization works as expected
-            komodo::event_u ev2;
-            ev2.height = 10;
-            ev2.n = 'N';
-            ev2.nid = 'I';
-            memset(ev2.mask, 1, 8);
-            memset(ev2.hash, 2, 32);
-            EXPECT_TRUE(compare_serialization(full_filename, ev2));
+            ASSERT_TRUE(state->events.size() == 0); // U not used    
         }
         // record type K (KMD height)
         {
@@ -450,6 +447,7 @@ TEST(test_events, komodo_faststateinit_test)
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state != nullptr);
@@ -466,10 +464,10 @@ TEST(test_events, komodo_faststateinit_test)
             */
             ASSERT_TRUE(state->events.size() != 0); // prevent test crash
             // check that the new way is the same
-            EXPECT_EQ(state->events.size(), 4);
-            auto itr = state->events.begin();
-            std::advance(itr, 3);
-            komodo::event_kmdheight& ev2 = static_cast<komodo::event_kmdheight&>( *(*(itr)) );
+            EXPECT_EQ(state->events.size(), 1);
+            //auto itr = state->events.begin();
+            //std::advance(itr, 3);
+            komodo::event_kmdheight& ev2 = static_cast<komodo::event_kmdheight&>( *state->events.front() );
             EXPECT_EQ(ev2.height, 10);
             EXPECT_EQ(ev2.type, komodo::komodo_event_type::EVENT_KMDHEIGHT);
             // the serialized version should match the input
@@ -484,6 +482,7 @@ TEST(test_events, komodo_faststateinit_test)
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state != nullptr);
@@ -500,10 +499,10 @@ TEST(test_events, komodo_faststateinit_test)
             */
             ASSERT_TRUE(state->events.size() != 0); // prevent test crash
             // check that the new way is the same
-            EXPECT_EQ(state->events.size(), 5);
+            EXPECT_EQ(state->events.size(), 1);
             auto itr = state->events.begin();
             std::advance(itr, 4);
-            komodo::event_kmdheight& ev2 = static_cast<komodo::event_kmdheight&>( *(*(itr)) );
+            komodo::event_kmdheight& ev2 = static_cast<komodo::event_kmdheight&>( *state->events.front() );
             EXPECT_EQ(ev2.height, 10);
             EXPECT_EQ(ev2.type, komodo::komodo_event_type::EVENT_KMDHEIGHT);
             // the serialized version should match the input
@@ -518,6 +517,7 @@ TEST(test_events, komodo_faststateinit_test)
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state !=nullptr);
@@ -534,10 +534,10 @@ TEST(test_events, komodo_faststateinit_test)
             */
             ASSERT_TRUE(state->events.size() != 0); // prevent test crash
             // check that the new way is the same
-            EXPECT_EQ(state->events.size(), 6);
+            EXPECT_EQ(state->events.size(), 1);
             auto itr = state->events.begin();
             std::advance(itr, 5);
-            komodo::event_opreturn& ev2 = static_cast<komodo::event_opreturn&>( *(*(itr)) );
+            komodo::event_opreturn& ev2 = static_cast<komodo::event_opreturn&>( *state->events.front() );
             EXPECT_EQ(ev2.height, 10);
             EXPECT_EQ(ev2.type, komodo::komodo_event_type::EVENT_OPRETURN);
             // the serialized version should match the input
@@ -552,6 +552,7 @@ TEST(test_events, komodo_faststateinit_test)
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state != nullptr);
@@ -568,10 +569,10 @@ TEST(test_events, komodo_faststateinit_test)
             */
             ASSERT_TRUE(state->events.size() != 0); // prevent test crash
             // check that the new way is the same
-            EXPECT_EQ(state->events.size(), 7);
-            auto itr = state->events.begin();
-            std::advance(itr, 6);
-            komodo::event_pricefeed& ev2 = static_cast<komodo::event_pricefeed&>( *(*(itr)) );
+            EXPECT_EQ(state->events.size(), 1);
+            //auto itr = state->events.begin();
+            // std::advance(itr, 6);
+            komodo::event_pricefeed& ev2 = static_cast<komodo::event_pricefeed&>( *state->events.front() );
             EXPECT_EQ(ev2.height, 10);
             EXPECT_EQ(ev2.type, komodo::komodo_event_type::EVENT_PRICEFEED);
             // the serialized version should match the input
@@ -586,6 +587,7 @@ TEST(test_events, komodo_faststateinit_test)
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state != nullptr);
@@ -601,19 +603,8 @@ TEST(test_events, komodo_faststateinit_test)
             EXPECT_EQ(ev->height, 1);
             EXPECT_EQ(ev->type, 'B');
             */
-            ASSERT_TRUE(state->events.size() != 0); // prevent test crash
+            ASSERT_TRUE(state->events.size() == 0); // 'B' not read
             // check that the new way is the same
-            EXPECT_EQ(state->events.size(), 7);
-            /*
-            auto itr = state->events.begin();
-            std::advance(itr, 6);
-            std::shared_ptr<komodo::event_rewind> ev2 = std::dynamic_pointer_cast<komodo::event_rewind>( *(itr) );
-            EXPECT_NE(ev2, nullptr);
-            EXPECT_EQ(ev2->height, 1);
-            EXPECT_EQ(ev2->type, komodo::komodo_event_type::EVENT_REWIND);
-            // the serialized version should match the input
-            EXPECT_TRUE(compare_serialization(full_filename, ev2));
-            */
         }        
         // all together in 1 file
         {
@@ -629,6 +620,7 @@ TEST(test_events, komodo_faststateinit_test)
             write_r_record(fp);
             write_v_record(fp);
             std::fclose(fp);
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state != nullptr);
@@ -646,9 +638,9 @@ TEST(test_events, komodo_faststateinit_test)
             ASSERT_TRUE(state->events.size() != 0); // prevent test crash
 
             // check that the new way is the same
-            EXPECT_EQ(state->events.size(), 14);
+            EXPECT_EQ(state->events.size(), 7); // 7 is because u-record is not read
             auto itr = state->events.begin();
-            std::advance(itr, 7);
+            std::advance(itr, 0);
             {
                 EXPECT_EQ( (**itr).height, 10);
                 EXPECT_EQ( (**itr).type, komodo::komodo_event_type::EVENT_PUBKEYS);
@@ -693,6 +685,7 @@ TEST(test_events, komodo_faststateinit_test)
     boost::filesystem::remove_all(temp);
 }
 
+// same test for KMD
 TEST(test_events, komodo_faststateinit_test_kmd)
 {
     // Nothing should be added to events if this is the komodo chain
@@ -700,7 +693,7 @@ TEST(test_events, komodo_faststateinit_test_kmd)
     char symbol[] = "KMD";
     chainName = assetchain();
     KOMODO_EXTERNAL_NOTARIES = 0;
-    IS_KOMODO_NOTARY = false;
+    IS_KOMODO_NOTARY = false;   // avoid calling komodo_verifynotarization
 
     clear_state(symbol);
 
@@ -721,10 +714,11 @@ TEST(test_events, komodo_faststateinit_test_kmd)
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state != nullptr);
-            char* dest = nullptr;
+            char* dest = nullptr;   // not used for 'P'
             // attempt to read the file
             int32_t result = komodo_faststateinit( state, full_filename.c_str(), symbol, dest);
             // compare results
@@ -740,6 +734,7 @@ TEST(test_events, komodo_faststateinit_test_kmd)
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state != nullptr);
@@ -748,7 +743,9 @@ TEST(test_events, komodo_faststateinit_test_kmd)
             int32_t result = komodo_faststateinit( state, full_filename.c_str(), symbol, dest);
             // compare results
             EXPECT_EQ(result, 1);
-            EXPECT_EQ(state->events.size(), 0);
+            EXPECT_EQ(state->events.size(), 0); // events is empty for KMD
+            EXPECT_EQ(state->LastNotarizedHeight(), 2);
+            EXPECT_EQ(state->LastNotarizedHash(), uint256S("0101010101010101010101010101010101010101010101010101010101010101"));
         }
         // notarized M record
         {
@@ -759,6 +756,7 @@ TEST(test_events, komodo_faststateinit_test_kmd)
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state != nullptr);
@@ -768,6 +766,10 @@ TEST(test_events, komodo_faststateinit_test_kmd)
             // compare results
             EXPECT_EQ(result, 1);
             EXPECT_EQ(state->events.size(), 0);
+
+            // check last nota:
+            EXPECT_EQ(state->LastNotarizedHeight(), 3);
+            EXPECT_EQ(state->LastNotarizedHash(), uint256S("0101010101010101010101010101010101010101010101010101010101010101"));
         }
         // record type "U" (deprecated)
         {
@@ -778,6 +780,7 @@ TEST(test_events, komodo_faststateinit_test_kmd)
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state != nullptr);
@@ -797,6 +800,7 @@ TEST(test_events, komodo_faststateinit_test_kmd)
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state != nullptr);
@@ -816,6 +820,7 @@ TEST(test_events, komodo_faststateinit_test_kmd)
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state != nullptr);
@@ -835,6 +840,7 @@ TEST(test_events, komodo_faststateinit_test_kmd)
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state != nullptr);
@@ -854,6 +860,7 @@ TEST(test_events, komodo_faststateinit_test_kmd)
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state != nullptr);
@@ -873,6 +880,7 @@ TEST(test_events, komodo_faststateinit_test_kmd)
             std::fclose(fp);
             // verify file still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state != nullptr);
@@ -898,6 +906,7 @@ TEST(test_events, komodo_faststateinit_test_kmd)
             write_r_record(fp);
             write_v_record(fp);
             std::fclose(fp);
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state != nullptr);
@@ -939,6 +948,7 @@ TEST(test_events, DISABLED_write_test) // test from dev branch from S6 season
             std::fclose(fp);
             // verify files still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
+            clear_state(symbol); // clear komodo_state*
             // attempt to read the file
             komodo_state* state = komodo_stateptrget((char*)symbol);
             ASSERT_TRUE(state != nullptr);
