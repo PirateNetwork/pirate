@@ -582,8 +582,8 @@ void KomodoApplication::initializeResult(bool success)
 #ifdef ENABLE_WALLET
         // Now that initialization/startup is done, process any command-line
         // pirate: URIs or payment requests:
-        connect(paymentServer, SIGNAL(receivedPaymentRequest(SendCoinsRecipient)),
-                         window, SLOT(handlePaymentRequest(SendCoinsRecipient)));
+        // connect(paymentServer, SIGNAL(receivedPaymentRequest(SendCoinsRecipient)),
+                         // window, SLOT(handlePaymentRequest(SendCoinsRecipient)));
         /*connect(paymentServer, SIGNAL(receivedZPaymentRequest(SendCoinsRecipient)),
                          window, SLOT(handleZPaymentRequest(SendCoinsRecipient)));*/
         connect(window, SIGNAL(receivedURI(QString)),
