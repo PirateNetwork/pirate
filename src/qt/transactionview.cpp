@@ -203,6 +203,31 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     connect(editLabelAction, SIGNAL(triggered()), this, SLOT(editLabel()));
     connect(showMemoAction, SIGNAL(triggered()), this, SLOT(showMemo()));
     connect(showDetailsAction, SIGNAL(triggered()), this, SLOT(showDetails()));
+
+    // Connect actions to reset lock timer
+    connect(mapperThirdPartyTxUrls, SIGNAL(mapped(QString)), this, SLOT(sendResetUnlockSignal()));
+    connect(dateWidget, SIGNAL(activated(int)), this, SLOT(sendResetUnlockSignal()));
+    connect(typeWidget, SIGNAL(activated(int)), this, SLOT(sendResetUnlockSignal()));
+    connect(watchOnlyWidget, SIGNAL(activated(int)), this, SLOT(sendResetUnlockSignal()));
+    connect(amountWidget, SIGNAL(textChanged(QString)), this, SLOT(sendResetUnlockSignal()));
+    connect(amount_typing_delay, SIGNAL(timeout()), this, SLOT(sendResetUnlockSignal()));
+    connect(addressWidget, SIGNAL(textChanged(QString)), this, SLOT(sendResetUnlockSignal()));
+    connect(prefix_typing_delay, SIGNAL(timeout()), this, SLOT(sendResetUnlockSignal()));
+    connect(view, SIGNAL(doubleClicked(QModelIndex)), this, SLOT(sendResetUnlockSignal()));
+    connect(view, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(sendResetUnlockSignal()));
+    connect(copyAddressAction, SIGNAL(triggered()), this, SLOT(sendResetUnlockSignal()));
+    connect(copyLabelAction, SIGNAL(triggered()), this, SLOT(sendResetUnlockSignal()));
+    connect(copyAmountAction, SIGNAL(triggered()), this, SLOT(sendResetUnlockSignal()));
+    connect(copyTxIDAction, SIGNAL(triggered()), this, SLOT(sendResetUnlockSignal()));
+    connect(copyTxHexAction, SIGNAL(triggered()), this, SLOT(sendResetUnlockSignal()));
+    connect(copyTxPlainText, SIGNAL(triggered()), this, SLOT(sendResetUnlockSignal()));
+    connect(editLabelAction, SIGNAL(triggered()), this, SLOT(sendResetUnlockSignal()));
+    connect(showMemoAction, SIGNAL(triggered()), this, SLOT(sendResetUnlockSignal()));
+    connect(showDetailsAction, SIGNAL(triggered()), this, SLOT(sendResetUnlockSignal()));
+}
+
+void TransactionView::sendResetUnlockSignal() {
+    Q_EMIT resetUnlockTimerEvent();
 }
 
 void TransactionView::setModel(WalletModel *_model)

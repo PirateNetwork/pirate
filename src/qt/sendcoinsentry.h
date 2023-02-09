@@ -54,12 +54,15 @@ public Q_SLOTS:
     void clear();
     void checkSubtractFeeFromAmount();
     void hideCheckboxSubtractFeeFromAmount();
+    void sendResetUnlockSignal();
 
 Q_SIGNALS:
     void removeEntry(SendCoinsEntry *entry);
     void useAvailableBalance(SendCoinsEntry* entry);
     void payAmountChanged();
     void subtractFeeFromAmountChanged();
+    //Reset the timer to 5 minutes on activity
+    void resetUnlockTimerEvent();
 
 private Q_SLOTS:
     void deleteClicked();

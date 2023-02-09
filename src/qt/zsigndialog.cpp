@@ -64,6 +64,14 @@ ZSignDialog::ZSignDialog(const PlatformStyle *_platformStyle, QWidget *parent) :
 
     connect(ui->clearButton, SIGNAL(clicked()), this, SLOT(clear()));
 
+    connect(ui->clearButton, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->signButton, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
+
+    connect(ui->teInput, SIGNAL(textChanged()), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->teResult, SIGNAL(textChanged()), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->teInput, SIGNAL(cursorPositionChanged()), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->teResult, SIGNAL(cursorPositionChanged()), this, SLOT(sendResetUnlockSignal()));
+
     //Reset the GUI
     ui->teInput->clear();
     ui->lbResult->setText("Signed transaction output:");
@@ -73,6 +81,10 @@ ZSignDialog::ZSignDialog(const PlatformStyle *_platformStyle, QWidget *parent) :
 ZSignDialog::~ZSignDialog()
 {
     delete ui;
+}
+
+void ZSignDialog::sendResetUnlockSignal() {
+    Q_EMIT resetUnlockTimerEvent();
 }
 
 void ZSignDialog::setClientModel(ClientModel *_clientModel)

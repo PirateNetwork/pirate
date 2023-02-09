@@ -82,6 +82,7 @@ private Q_SLOTS:
     void showOrHideBanTableIfRequired();
     /** clear the selected node */
     void clearSelectedNode();
+    void sendResetUnlockSignal();
 
 public Q_SLOTS:
     void clear(bool clearHistory = true);
@@ -121,6 +122,8 @@ Q_SIGNALS:
     // For RPC command executor
     void stopExecutor();
     void cmdRequest(const QString &command);
+    /** Activity detected in the GUI, reset the lock timer */
+    void resetUnlockTimerEvent();
 
 private:
     static QString FormatBytes(quint64 bytes);

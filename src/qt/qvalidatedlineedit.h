@@ -34,10 +34,13 @@ public Q_SLOTS:
 
 Q_SIGNALS:
     void validationDidChange(QValidatedLineEdit *validatedLineEdit);
+    //Reset the timer to 5 minutes on activity
+    void resetUnlockTimerEvent();
 
 private Q_SLOTS:
     void markValid();
     void checkValidity();
+    void sendResetUnlockSignal();
 };
 
 #endif // KOMODO_QT_QVALIDATEDLINEEDIT_H

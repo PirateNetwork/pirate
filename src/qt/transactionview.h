@@ -98,12 +98,16 @@ private Q_SLOTS:
     void copyTxPlainText();
     void openThirdPartyTxUrl(QString url);
     void updateWatchOnlyColumn(bool fHaveWatchOnly);
+    void sendResetUnlockSignal();
 
 Q_SIGNALS:
     void doubleClicked(const QModelIndex&);
 
     /**  Fired when a message should be reported to the user */
     void message(const QString &title, const QString &message, unsigned int style);
+
+    /** Activity detected in the GUI, reset the lock timer */
+    void resetUnlockTimerEvent();
 
 public Q_SLOTS:
     void chooseDate(int idx);

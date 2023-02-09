@@ -456,6 +456,14 @@ RPCConsole::RPCConsole(const PlatformStyle *_platformStyle, QWidget *parent) :
     connect(ui->fontSmallerButton, SIGNAL(clicked()), this, SLOT(fontSmaller()));
     connect(ui->btnClearTrafficGraph, SIGNAL(clicked()), ui->trafficGraph, SLOT(clear()));
 
+    connect(ui->clearButton, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->fontBiggerButton, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->fontSmallerButton, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->btnClearTrafficGraph, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->openDebugLogfileButton, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->lineEdit, SIGNAL(textChanged(QString)), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->lineEdit, SIGNAL(cursorPositionChanged(int, int)), this, SLOT(sendResetUnlockSignal()));
+
     // set library version labels
 #ifdef ENABLE_WALLET
     ui->berkeleyDBVersion->setText(DbEnv::version(0, 0, 0));
@@ -485,6 +493,10 @@ RPCConsole::~RPCConsole()
     RPCUnregisterTimerInterface(rpcTimerInterface);
     delete rpcTimerInterface;
     delete ui;
+}
+
+void RPCConsole::sendResetUnlockSignal() {
+    Q_EMIT resetUnlockTimerEvent();
 }
 
 bool RPCConsole::eventFilter(QObject* obj, QEvent *event)
@@ -854,6 +866,8 @@ void RPCConsole::setMempoolSize(long numberOfTxs, size_t dynUsage)
 
 void RPCConsole::on_lineEdit_returnPressed()
 {
+    resetUnlockTimerEvent();
+
     QString cmd = ui->lineEdit->text();
 
     if(!cmd.isEmpty())
@@ -896,6 +910,8 @@ void RPCConsole::on_lineEdit_returnPressed()
 
 void RPCConsole::browseHistory(int offset)
 {
+    resetUnlockTimerEvent();
+
     // store current text when start browsing through the history
     if (historyPtr == history.size()) {
         cmdBeforeBrowsing = ui->lineEdit->text();
@@ -917,6 +933,8 @@ void RPCConsole::browseHistory(int offset)
 
 void RPCConsole::startExecutor()
 {
+    resetUnlockTimerEvent();
+
     RPCExecutor *executor = new RPCExecutor();
     executor->moveToThread(&thread);
 
@@ -938,6 +956,8 @@ void RPCConsole::startExecutor()
 
 void RPCConsole::on_tabWidget_currentChanged(int index)
 {
+    resetUnlockTimerEvent();
+
     if (ui->tabWidget->widget(index) == ui->tab_console)
         ui->lineEdit->setFocus();
     else if (ui->tabWidget->widget(index) != ui->tab_peers)
@@ -951,12 +971,16 @@ void RPCConsole::on_openDebugLogfileButton_clicked()
 
 void RPCConsole::scrollToEnd()
 {
+    resetUnlockTimerEvent();
+
     QScrollBar *scrollbar = ui->messagesWidget->verticalScrollBar();
     scrollbar->setValue(scrollbar->maximum());
 }
 
 void RPCConsole::on_sldGraphRange_valueChanged(int value)
 {
+    resetUnlockTimerEvent();
+
     const int multiplier = 5; // each position on the slider represents 5 min
     int mins = value * multiplier;
     setTrafficGraphRange(mins);
@@ -976,6 +1000,8 @@ QString RPCConsole::FormatBytes(quint64 bytes)
 
 void RPCConsole::setTrafficGraphRange(int mins)
 {
+    resetUnlockTimerEvent();
+
     ui->trafficGraph->setGraphRangeMins(mins);
     ui->lblGraphRange->setText(GUIUtil::formatDurationStr(mins * 60));
 }
@@ -989,6 +1015,7 @@ void RPCConsole::updateTrafficStats(quint64 totalBytesIn, quint64 totalBytesOut)
 void RPCConsole::peerSelected(const QItemSelection &selected, const QItemSelection &deselected)
 {
     Q_UNUSED(deselected);
+    resetUnlockTimerEvent();
 
     if (!clientModel || !clientModel->getPeerTableModel() || selected.indexes().isEmpty())
         return;
@@ -1115,11 +1142,13 @@ void RPCConsole::updateNodeDetail(const CNodeCombinedStats *stats)
 
 void RPCConsole::resizeEvent(QResizeEvent *event)
 {
+    resetUnlockTimerEvent();
     QWidget::resizeEvent(event);
 }
 
 void RPCConsole::showEvent(QShowEvent *event)
 {
+    resetUnlockTimerEvent();
     QWidget::showEvent(event);
 
     if (!clientModel || !clientModel->getPeerTableModel())
@@ -1131,6 +1160,7 @@ void RPCConsole::showEvent(QShowEvent *event)
 
 void RPCConsole::hideEvent(QHideEvent *event)
 {
+    resetUnlockTimerEvent();
     QWidget::hideEvent(event);
 
     if (!clientModel || !clientModel->getPeerTableModel())
@@ -1142,6 +1172,7 @@ void RPCConsole::hideEvent(QHideEvent *event)
 
 void RPCConsole::showPeersTableContextMenu(const QPoint& point)
 {
+    resetUnlockTimerEvent();
     QModelIndex index = ui->peerWidget->indexAt(point);
     if (index.isValid())
         peersTableContextMenu->exec(QCursor::pos());
@@ -1149,6 +1180,7 @@ void RPCConsole::showPeersTableContextMenu(const QPoint& point)
 
 void RPCConsole::showBanTableContextMenu(const QPoint& point)
 {
+    resetUnlockTimerEvent();
     QModelIndex index = ui->banlistWidget->indexAt(point);
     if (index.isValid())
         banTableContextMenu->exec(QCursor::pos());
@@ -1156,6 +1188,8 @@ void RPCConsole::showBanTableContextMenu(const QPoint& point)
 
 void RPCConsole::disconnectSelectedNode()
 {
+    resetUnlockTimerEvent();
+
     // Get selected peer addresses
     QList<QModelIndex> nodes = GUIUtil::getEntryData(ui->peerWidget, PeerTableModel::Address);
     for(int i = 0; i < nodes.count(); i++)
@@ -1170,6 +1204,8 @@ void RPCConsole::disconnectSelectedNode()
 
 void RPCConsole::banSelectedNode(int bantime)
 {
+    resetUnlockTimerEvent();
+
     if (!clientModel)
         return;
 
@@ -1187,6 +1223,8 @@ void RPCConsole::banSelectedNode(int bantime)
 
 void RPCConsole::unbanSelectedNode()
 {
+    resetUnlockTimerEvent();
+
     if (!clientModel)
         return;
 
@@ -1209,6 +1247,7 @@ void RPCConsole::unbanSelectedNode()
 
 void RPCConsole::clearSelectedNode()
 {
+    resetUnlockTimerEvent();
     ui->peerWidget->selectionModel()->clearSelection();
     cachedNodeids.clear();
     ui->detailWidget->hide();
@@ -1217,6 +1256,7 @@ void RPCConsole::clearSelectedNode()
 
 void RPCConsole::showOrHideBanTableIfRequired()
 {
+    resetUnlockTimerEvent();
     if (!clientModel)
         return;
 
@@ -1227,5 +1267,6 @@ void RPCConsole::showOrHideBanTableIfRequired()
 
 void RPCConsole::setTabFocus(enum TabTypes tabType)
 {
+    resetUnlockTimerEvent();
     ui->tabWidget->setCurrentIndex(tabType);
 }

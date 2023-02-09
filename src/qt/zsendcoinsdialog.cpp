@@ -70,6 +70,14 @@ ZSendCoinsDialog::ZSendCoinsDialog(const PlatformStyle *_platformStyle, QWidget 
     connect(ui->clearButton, SIGNAL(clicked()), this, SLOT(clear()));
     connect(ui->refreshPayFrom, SIGNAL(clicked()), this, SLOT(updatePayFromList()));
 
+    //Detect UI activity
+    connect(ui->addButton, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->clearButton, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->refreshPayFrom, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->customFee, SIGNAL(valueChanged()), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->payFromAddress, SIGNAL(highlighted(int)), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->sendButton, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
+
     // init transaction fee section
     QSettings settings;
     ui->customFee->setValue(ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE);
@@ -120,6 +128,10 @@ void ZSendCoinsDialog::setModel(WalletModel *_model)
 ZSendCoinsDialog::~ZSendCoinsDialog()
 {
     delete ui;
+}
+
+void ZSendCoinsDialog::sendResetUnlockSignal() {
+    Q_EMIT resetUnlockTimerEvent();
 }
 
 void ZSendCoinsDialog::on_sendButton_clicked()
@@ -411,6 +423,8 @@ SendCoinsEntry *ZSendCoinsDialog::addEntry()
     connect(entry, SIGNAL(useAvailableBalance(SendCoinsEntry*)), this, SLOT(useAvailableBalance(SendCoinsEntry*)));
     connect(entry, SIGNAL(payAmountChanged()), this, SLOT(coinControlUpdateLabels()));
     connect(entry, SIGNAL(subtractFeeFromAmountChanged()), this, SLOT(coinControlUpdateLabels()));
+
+    connect(entry, SIGNAL(resetUnlockTimerEvent()), this, SLOT(sendResetUnlockSignal()));
 
     // Focus the field, so that entry can start immediately
     entry->clear();

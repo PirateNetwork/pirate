@@ -101,6 +101,13 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, QWidget *parent):
     // Pass through messages from transactionView
     connect(transactionView, SIGNAL(message(QString,QString,unsigned int)), this, SIGNAL(message(QString,QString,unsigned int)));
 
+    // Detect Activity and reset unlock timer
+    connect(overviewPage, SIGNAL(resetUnlockTimerEvent()), this, SLOT(resetUnlockTimer()));
+    connect(zsendCoinsPage, SIGNAL(resetUnlockTimerEvent()), this, SLOT(resetUnlockTimer()));
+    connect(zsignPage, SIGNAL(resetUnlockTimerEvent()), this, SLOT(resetUnlockTimer()));
+    connect(transactionView, SIGNAL(resetUnlockTimerEvent()), this, SLOT(resetUnlockTimer()));
+    connect(receiveCoinsView, SIGNAL(resetUnlockTimerEvent()), this, SLOT(resetUnlockTimer()));
+
     // This timer will be fired repeatedly to update the locked message
     pollTimer = new QTimer(this);
     connect(pollTimer, SIGNAL(timeout()), this, SLOT(setLockMessage()));
@@ -547,6 +554,16 @@ void WalletView::unlockWallet()
         AskPassphraseDialog dlg(AskPassphraseDialog::Unlock, this);
         dlg.setModel(walletModel);
         dlg.exec();
+    }
+}
+
+void WalletView::resetUnlockTimer() {
+    if(!walletModel)
+        return;
+
+    if (walletModel->getEncryptionStatus() == WalletModel::Unlocked)
+    {
+        walletModel->relockTime = GetTime() + 300; //relock after 5 minutes
     }
 }
 

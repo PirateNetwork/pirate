@@ -129,6 +129,8 @@ public Q_SLOTS:
     void changePassphrase();
     /** Ask for passphrase to unlock wallet temporarily */
     void unlockWallet();
+    //Reset the timer to 5 minutes on activity
+    void resetUnlockTimer();
     /** Show used sending addresses */
     void usedSendingAddresses();
     /** Show used receiving addresses */

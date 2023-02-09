@@ -84,6 +84,8 @@ private Q_SLOTS:
 
 Q_SIGNALS:
     void sendCoins(QString addr);
+    /** Activity detected in the GUI, reset the lock timer */
+    void resetUnlockTimerEvent();
 };
 
 #endif // KOMODO_QT_ZADDRESSBOOKPAGE_H

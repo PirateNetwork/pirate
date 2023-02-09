@@ -156,6 +156,13 @@ void WalletFrame::showOutOfSyncWarning(bool fShow)
         i.value()->showOutOfSyncWarning(fShow);
 }
 
+void WalletFrame::resetUnlockTimer()
+{
+    QMap<QString, WalletView*>::const_iterator i;
+    for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i)
+        i.value()->resetUnlockTimer();
+}
+
 void WalletFrame::gotoOverviewPage()
 {
     QMap<QString, WalletView*>::const_iterator i;

@@ -62,6 +62,8 @@ private:
     WalletView *currentWalletView();
 
 public Q_SLOTS:
+    //Reset the timer to 5 minutes on activity
+    void resetUnlockTimer();
     /** Switch to overview (home) page */
     void gotoOverviewPage();
     /** Switch to history (transactions) page */

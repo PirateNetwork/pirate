@@ -204,6 +204,8 @@ public Q_SLOTS:
 
 private Q_SLOTS:
 #ifdef ENABLE_WALLET
+    // //Reset the timer to 5 minutes on activity
+    void resetUnlockTimer();
     /** Switch to overview (home) page */
     void gotoOverviewPage();
     /** Switch to history (transactions) page */

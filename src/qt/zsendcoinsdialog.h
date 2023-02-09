@@ -80,10 +80,13 @@ private Q_SLOTS:
     void useAvailableBalance(SendCoinsEntry* entry);
     void updateDisplayUnit();
     void coinControlUpdateLabels();
+    void sendResetUnlockSignal();
 
 Q_SIGNALS:
     // Fired when a message should be reported to the user
     void message(const QString &title, const QString &message, unsigned int style);
+    /** Activity detected in the GUI, reset the lock timer */
+    void resetUnlockTimerEvent();
 };
 
 

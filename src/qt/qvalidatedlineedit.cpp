@@ -13,6 +13,12 @@ QValidatedLineEdit::QValidatedLineEdit(QWidget *parent) :
     checkValidator(0)
 {
     connect(this, SIGNAL(textChanged(QString)), this, SLOT(markValid()));
+    connect(this, SIGNAL(textChanged(QString)), this, SLOT(sendResetUnlockSignal()));
+    connect(this, SIGNAL(cursorPositionChanged(int, int)), this, SLOT(sendResetUnlockSignal()));
+}
+
+void QValidatedLineEdit::sendResetUnlockSignal() {
+    Q_EMIT resetUnlockTimerEvent();
 }
 
 void QValidatedLineEdit::setValid(bool _valid)

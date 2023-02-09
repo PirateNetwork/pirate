@@ -66,6 +66,25 @@ SendCoinsEntry::SendCoinsEntry(const PlatformStyle *_platformStyle, QWidget *par
     connect(ui->radioEncodeHex,SIGNAL(clicked()),this,SLOT(showHexError()));
     connect(ui->radioEncodeString,SIGNAL(clicked()),this,SLOT(showHexError()));
 
+
+    connect(ui->payTo, SIGNAL(resetUnlockTimerEvent()), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->payAmount, SIGNAL(valueChanged()), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->memo, SIGNAL(resetUnlockTimerEvent()), this, SLOT(sendResetUnlockSignal()));
+
+    connect(ui->addAsLabel, SIGNAL(textChanged(QString)), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->addAsLabel, SIGNAL(cursorPositionChanged(int, int)), this, SLOT(sendResetUnlockSignal()));
+
+    connect(ui->addressBookButton, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->pasteButton, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->deleteButton, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
+
+    connect(ui->checkboxSubtractFeeFromAmount, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->useAvailableBalanceButton, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
+
+    connect(ui->radioEncodeString, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->radioEncodeHex, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
+
+
     ui->messageLabel->setObjectName("messageLabel");
     ui->messageTextLabel->setObjectName("messageTextLabel");
 }
@@ -177,6 +196,10 @@ void SendCoinsEntry::showHexError()
 void SendCoinsEntry::hideCheckboxSubtractFeeFromAmount()
 {
     ui->checkboxSubtractFeeFromAmount->hide();
+}
+
+void SendCoinsEntry::sendResetUnlockSignal() {
+    Q_EMIT resetUnlockTimerEvent();
 }
 
 void SendCoinsEntry::deleteClicked()

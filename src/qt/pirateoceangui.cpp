@@ -178,6 +178,8 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
 #endif
 
     rpcConsole = new RPCConsole(_platformStyle, 0);
+    connect(rpcConsole, SIGNAL(resetUnlockTimerEvent()), this, SLOT(resetUnlockTimer()));
+    connect(rpcConsole, SIGNAL(cmdRequest(QString)), this, SLOT(resetUnlockTimer()));
     helpMessageDialog = new HelpMessageDialog(this, false);
 #ifdef ENABLE_WALLET
     if(enableWallet)
@@ -827,6 +829,8 @@ void PirateOceanGUI::optionsClicked()
     if(!clientModel || !clientModel->getOptionsModel())
         return;
 
+    if (walletFrame) walletFrame->resetUnlockTimer();
+
     OptionsDialog dlg(this, enableWallet);
     dlg.setModel(clientModel->getOptionsModel());
     dlg.exec();
@@ -874,12 +878,16 @@ void PirateOceanGUI::aboutClicked()
     if(!clientModel)
         return;
 
+    if (walletFrame) walletFrame->resetUnlockTimer();
+
     HelpMessageDialog dlg(this, true);
     dlg.exec();
 }
 
 void PirateOceanGUI::showDebugWindow()
 {
+    if (walletFrame) walletFrame->resetUnlockTimer();
+
     rpcConsole->showNormal();
     rpcConsole->show();
     rpcConsole->raise();
@@ -889,18 +897,21 @@ void PirateOceanGUI::showDebugWindow()
 
 void PirateOceanGUI::showDebugWindowActivateConsole()
 {
+    if (walletFrame) walletFrame->resetUnlockTimer();
     rpcConsole->setTabFocus(RPCConsole::TAB_CONSOLE);
     showDebugWindow();
 }
 
 void PirateOceanGUI::showHelpMessageClicked()
 {
+    if (walletFrame) walletFrame->resetUnlockTimer();
     helpMessageDialog->show();
 }
 
 #ifdef ENABLE_WALLET
 void PirateOceanGUI::openClicked()
 {
+    if (walletFrame) walletFrame->resetUnlockTimer();
     OpenURIDialog dlg(this);
     if(dlg.exec())
     {
@@ -908,63 +919,89 @@ void PirateOceanGUI::openClicked()
     }
 }
 
+void PirateOceanGUI::resetUnlockTimer() {
+    if (walletFrame) walletFrame->resetUnlockTimer();
+}
+
 void PirateOceanGUI::gotoOverviewPage()
 {
+    if (walletFrame) walletFrame->resetUnlockTimer();
+
     overviewAction->setChecked(true);
     if (walletFrame) walletFrame->gotoOverviewPage();
 }
 
 void PirateOceanGUI::gotoHistoryPage()
 {
+    if (walletFrame) walletFrame->resetUnlockTimer();
+
     historyAction->setChecked(true);
     if (walletFrame) walletFrame->gotoHistoryPage();
 }
 
 void PirateOceanGUI::gotoReceiveCoinsPage()
 {
+    if (walletFrame) walletFrame->resetUnlockTimer();
+
     receiveCoinsAction->setChecked(true);
     if (walletFrame) walletFrame->gotoReceiveCoinsPage();
 }
 
 void PirateOceanGUI::gotoZSendCoinsPage(QString addr)
 {
+    if (walletFrame) walletFrame->resetUnlockTimer();
+
     zsendCoinsAction->setChecked(true);
     if (walletFrame) walletFrame->gotoZSendCoinsPage(addr);
 }
 
 void PirateOceanGUI::gotoZSignPage()
 {
+    if (walletFrame) walletFrame->resetUnlockTimer();
+
     zsignAction->setChecked(true);
     if (walletFrame) walletFrame->gotoZSignPage();
 }
 
 void PirateOceanGUI::gotoSignMessageTab(QString addr)
 {
+    if (walletFrame) walletFrame->resetUnlockTimer();
+
     if (walletFrame) walletFrame->gotoSignMessageTab(addr);
 }
 
 void PirateOceanGUI::gotoVerifyMessageTab(QString addr)
 {
+    if (walletFrame) walletFrame->resetUnlockTimer();
+
     if (walletFrame) walletFrame->gotoVerifyMessageTab(addr);
 }
 
 void PirateOceanGUI::gotoImportSK()
 {
+    if (walletFrame) walletFrame->resetUnlockTimer();
+
     if (walletFrame) walletFrame->importSK();
 }
 
 void PirateOceanGUI::gotoImportVK()
 {
+    if (walletFrame) walletFrame->resetUnlockTimer();
+
     if (walletFrame) walletFrame->importVK();
 }
 
 void PirateOceanGUI::showSeedPhrase()
 {
+    if (walletFrame) walletFrame->resetUnlockTimer();
+
     if (walletFrame) walletFrame->showSeedPhrase();
 }
 
 void PirateOceanGUI::rescan()
 {
+    if (walletFrame) walletFrame->resetUnlockTimer();
+
     if (walletFrame) walletFrame->rescan();
 }
 
@@ -1294,6 +1331,10 @@ bool PirateOceanGUI::eventFilter(QObject *object, QEvent *event)
         // Prevent adding text from setStatusTip(), if we currently use the status bar for displaying other stuff
         if (progressBarLabel->isVisible() || progressBar->isVisible())
             return true;
+    }
+
+    if (event->type() == QEvent::MouseButtonPress) {
+       resetUnlockTimer();
     }
     return QMainWindow::eventFilter(object, event);
 }

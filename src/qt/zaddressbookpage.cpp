@@ -169,6 +169,8 @@ void ZAddressBookPage::exportSK()
             dlg->show();
         }
     }
+
+    Q_EMIT resetUnlockTimerEvent();
 }
 
 void ZAddressBookPage::exportVK()
@@ -185,6 +187,8 @@ void ZAddressBookPage::exportVK()
           dlg->show();
         }
     }
+
+    Q_EMIT resetUnlockTimerEvent();
 }
 
 
@@ -208,16 +212,22 @@ void ZAddressBookPage::onCopyZSendManyToAction()
         commandTemplate = QString("z_sendmany %1 '[{\"address\":\"%2\",\"amount\":\"%3\"}]'").arg(QString("YOUR_Z_ADDRESS_FROM"),selection.at(0).data(Qt::DisplayRole).toString(),QString::number(0,'f',8));
         GUIUtil::setClipboard(commandTemplate);
     }
+
+    Q_EMIT resetUnlockTimerEvent();
 }
 
 void ZAddressBookPage::on_copyAddress_clicked()
 {
     GUIUtil::copyEntryData(ui->tableView, ZAddressTableModel::Address);
+
+    Q_EMIT resetUnlockTimerEvent();
 }
 
 void ZAddressBookPage::onCopyLabelAction()
 {
     GUIUtil::copyEntryData(ui->tableView, ZAddressTableModel::Label);
+
+    Q_EMIT resetUnlockTimerEvent();
 }
 
 void ZAddressBookPage::onEditAction()
@@ -237,6 +247,8 @@ void ZAddressBookPage::onEditAction()
     QModelIndex origIndex = proxyModel->mapToSource(indexes.at(0));
     dlg.loadRow(origIndex.row());
     dlg.exec();
+
+    Q_EMIT resetUnlockTimerEvent();
 }
 
 void ZAddressBookPage::on_newAddress_clicked()
@@ -251,6 +263,8 @@ void ZAddressBookPage::on_newAddress_clicked()
     {
         newAddressToSelect = dlg.getAddress();
     }
+
+    Q_EMIT resetUnlockTimerEvent();
 }
 
 void ZAddressBookPage::on_exportButton_clicked()
@@ -274,6 +288,8 @@ void ZAddressBookPage::on_exportButton_clicked()
         QMessageBox::critical(this, tr("Exporting Failed"),
             tr("There was an error trying to save the z-address list to %1. Please try again.").arg(filename));
     }
+
+    Q_EMIT resetUnlockTimerEvent();
 }
 
 void ZAddressBookPage::contextualMenu(const QPoint &point)
@@ -283,6 +299,8 @@ void ZAddressBookPage::contextualMenu(const QPoint &point)
     {
         contextMenu->exec(QCursor::pos());
     }
+
+    Q_EMIT resetUnlockTimerEvent();
 }
 
 void ZAddressBookPage::selectNewAddress(const QModelIndex &parent, int begin, int /*end*/)
@@ -295,4 +313,6 @@ void ZAddressBookPage::selectNewAddress(const QModelIndex &parent, int begin, in
         ui->tableView->selectRow(idx.row());
         newAddressToSelect.clear();
     }
+
+    Q_EMIT resetUnlockTimerEvent();
 }

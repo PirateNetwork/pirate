@@ -50,6 +50,8 @@ public Q_SLOTS:
 Q_SIGNALS:
     void transactionClicked(const QModelIndex &index);
     void outOfSyncWarningClicked();
+    /** Activity detected in the GUI, reset the lock timer */
+    void resetUnlockTimerEvent();
 
 private:
     Ui::OverviewPage *ui;

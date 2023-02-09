@@ -234,6 +234,8 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
 
 void OverviewPage::handleTransactionClicked(const QModelIndex &index)
 {
+    Q_EMIT resetUnlockTimerEvent();
+    
     if(filter)
         Q_EMIT transactionClicked(filter->mapToSource(index));
 }
