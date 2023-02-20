@@ -85,7 +85,6 @@ private Q_SLOTS:
     void updateWatchOnlyLabels(bool showWatchOnly);
     void handleOutOfSyncWarningClicks();
     void unlockWallet();
-    void keepOpen();
 };
 
 #endif // KOMODO_QT_OVERVIEWPAGE_H

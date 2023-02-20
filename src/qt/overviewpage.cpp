@@ -210,7 +210,6 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
 
     //connect Unlock wallet button
     connect(ui->btnUnlock, SIGNAL(clicked()), this, SLOT(unlockWallet()));
-    connect(ui->btnKeepOpen, SIGNAL(clicked()), this, SLOT(keepOpen()));
 
     //set labal name to style
     ui->lblLockedMessage->setObjectName("lockedMessage");
@@ -235,7 +234,7 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
 void OverviewPage::handleTransactionClicked(const QModelIndex &index)
 {
     Q_EMIT resetUnlockTimerEvent();
-    
+
     if(filter)
         Q_EMIT transactionClicked(filter->mapToSource(index));
 }
@@ -479,7 +478,6 @@ void OverviewPage::setUiVisible(bool visible, bool isCrypted, int64_t relockTime
         //Always hide on an unencrypted wallet
         ui->lblLockedMessage->setVisible(false);
         ui->btnUnlock->setVisible(false);
-        ui->btnKeepOpen->setVisible(false);
         if (nMaxConnections>0) 	//Online
         {
             ui->frame->setVisible(true);
@@ -498,27 +496,18 @@ void OverviewPage::setUiVisible(bool visible, bool isCrypted, int64_t relockTime
     }
 
     //Alway Show on a crypted wallet
-    ui->lblLockedMessage->setVisible(true);
     ui->btnUnlock->setVisible(true);
 
     if (visible) {
         ui->btnUnlock->setText("Unlock");
         ui->frame->setVisible(false);
-        ui->frame_2->setVisible(false);        
+        ui->frame_2->setVisible(false);
     } else {
         ui->btnUnlock->setText("Lock");
-        if (relockTime == 0) {
-            ui->btnUnlock->setVisible(false);
-            ui->btnKeepOpen->setVisible(false);
-        } else {
-            ui->btnUnlock->setVisible(true);
-            ui->btnKeepOpen->setVisible(true);
-        }
-        
         if (nMaxConnections>0) //Online
         {
             ui->frame->setVisible(true);
-            ui->frame_2->setVisible(true);        
+            ui->frame_2->setVisible(true);
         }
         else //Cold storagage offline
         {
@@ -528,11 +517,11 @@ void OverviewPage::setUiVisible(bool visible, bool isCrypted, int64_t relockTime
             ui->frame_2->setVisible(false);
             //Give a message on the empty page that we're in offline mode
             OverviewPage::updateAlerts("<b>Cold storage offline mode");
-        }        
+        }
     }
 
-    //hide when locked
-    ui->btnKeepOpen->setVisible(!visible);
+    ui->lblLockedMessage->setVisible(visible);
+
 }
 
 void OverviewPage::unlockWallet() {
@@ -543,11 +532,5 @@ void OverviewPage::unlockWallet() {
             walletModel->lockWallet();
         }
 
-    }
-}
-
-void OverviewPage::keepOpen() {
-    if (walletModel) {
-        walletModel->keepOpen();
     }
 }

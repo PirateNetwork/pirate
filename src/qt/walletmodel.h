@@ -333,8 +333,6 @@ Q_SIGNALS:
 public Q_SLOTS:
     //Get the current wallet and chain heights
     void getWalletChainHeights(int &walletHeight, int &chainHeight);
-    //Keep the wallet open for 5 more minutes
-    void keepOpen();
     //Lock wallet immediately
     void lockWallet();
     //Check if wallet needs to be locked;

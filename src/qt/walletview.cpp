@@ -26,6 +26,7 @@
 #include "walletmodel.h"
 #include "importkeydialog.h"
 #include "openphrasedialog.h"
+#include "unlocktimerdialog.h"
 
 #include "ui_interface.h"
 
@@ -111,6 +112,7 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, QWidget *parent):
     // This timer will be fired repeatedly to update the locked message
     pollTimer = new QTimer(this);
     connect(pollTimer, SIGNAL(timeout()), this, SLOT(setLockMessage()));
+    connect(pollTimer, SIGNAL(timeout()), this, SLOT(openUnlockTimerDialog()));
     pollTimer->start(250);
 
 }
@@ -214,7 +216,7 @@ void WalletView::setLockMessage() {
 
         //update the UI based on encryption status
         setUnlockButton();
-        
+
         if (walletModel->startedRescan) {
             overviewPage->setLockMessage(tr("Wallet will relock after rescan."));
             return;
@@ -600,4 +602,25 @@ void WalletView::usedReceivingZAddresses()
 void WalletView::requestedSyncWarningInfo()
 {
     Q_EMIT outOfSyncWarningClicked();
+}
+
+void WalletView::openUnlockTimerDialog() {
+
+    if (!fUnlocking
+        && this->walletModel->relockTime < GetTime() + 31
+        && this->walletModel->relockTime > 0 ) {
+        fUnlocking = true;
+        UnlockTimerDialog dlg(this);
+        dlg.exec();
+        if (dlg.result() == QDialog::Accepted) {
+            // Keep Unlocked
+            this->walletModel->relockTime = GetTime() + 300; //relock after 5 minutes
+        } else {
+            this->walletModel->lockWallet();
+        }
+        dlg.close();
+        fUnlocking = false;
+
+    }
+
 }

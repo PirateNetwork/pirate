@@ -865,20 +865,13 @@
      </property>
      <layout class="QGridLayout" name="gridLayout_2">
       <item row="0" column="1">
-       <widget class="QPushButton" name="btnKeepOpen">
-        <property name="text">
-         <string>Keep Open</string>
-        </property>
-       </widget>
-      </item>
-      <item row="1" column="1">
        <widget class="QPushButton" name="btnUnlock">
         <property name="text">
          <string>Unlock</string>
         </property>
        </widget>
       </item>
-      <item row="1" column="0">
+      <item row="0" column="0">
        <spacer name="horizontalSpacer_3">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>

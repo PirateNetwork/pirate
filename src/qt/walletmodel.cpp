@@ -382,7 +382,7 @@ void WalletModel::checkBalanceChanged()
         //Don't check balances in cold storage offline mode
         return;
     }
-    
+
     CAmount newBalance = getBalance();
     CAmount newUnconfirmedBalance = getUnconfirmedBalance();
     CAmount newImmatureBalance = getImmatureBalance();
@@ -1092,7 +1092,7 @@ WalletModel::EncryptionStatus WalletModel::getEncryptionStatus() const
             }
         }
     }
-    catch(const std::runtime_error& e) 
+    catch(const std::runtime_error& e)
     {
         LogPrintf("Exception: WalletModel::getEncryptionStatus: %s\n", e.what());
     }
@@ -1117,12 +1117,6 @@ bool WalletModel::setWalletEncrypted(bool encrypted, const SecureString &passphr
 void WalletModel::getWalletChainHeights(int &walletHeight, int &chainHeight) {
     walletHeight = wallet->walletHeight;
     chainHeight = wallet->chainHeight;
-}
-
-void WalletModel::keepOpen() {
-    if (relockTime > 0) {
-        relockTime = GetTime() + 300; //relock after 5 minutes
-    }
 }
 
 void WalletModel::lockWallet() {

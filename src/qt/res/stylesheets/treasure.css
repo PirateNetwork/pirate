@@ -204,6 +204,11 @@ QDialog#OpenVKDialog {
     color: #ffffff;
 }
 
+QDialog#UnlockTimerDialog {
+    background-color: #202020;
+    color: #ffffff;
+}
+
 QDialog#OpenPhraseDialog {
     background-color: #303030;
     color: #ffffff;

@@ -83,6 +83,7 @@ private:
     const PlatformStyle *platformStyle;
 
     QTimer *pollTimer;
+    bool fUnlocking = false;
 
 public Q_SLOTS:
     //Set Lock Message on OverviewPage
@@ -143,6 +144,8 @@ public Q_SLOTS:
 
     /** User has requested more information about the out of sync state */
     void requestedSyncWarningInfo();
+
+    void openUnlockTimerDialog();
 
 Q_SIGNALS:
     /** Signal that we want to show the main window */

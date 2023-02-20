@@ -387,6 +387,11 @@ QWidget#OverviewPage QLabel#lockedMessage {
     font-weight: bold;
 }
 
+QDialog#UnlockTimerDialog {
+    background-color: #303030;
+    color: #ffffff;
+}
+
 QDialog#OpenPhraseDialog {
     background-color: #303030;
     color: #ffffff;
