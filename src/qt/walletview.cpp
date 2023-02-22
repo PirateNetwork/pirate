@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "init.h"
 #include "utiltime.h"
 #include "walletview.h"
 
@@ -605,6 +606,9 @@ void WalletView::requestedSyncWarningInfo()
 }
 
 void WalletView::openUnlockTimerDialog() {
+    if (ShutdownRequested) {
+        return;
+    }
 
     if (!fUnlocking
         && this->walletModel->relockTime < GetTime() + 31

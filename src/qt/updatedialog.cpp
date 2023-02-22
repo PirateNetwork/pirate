@@ -5,6 +5,8 @@
 #include "updatedialog.h"
 #include "ui_updatedialog.h"
 
+#include "init.h"
+
 #include "guiutil.h"
 #include "ui_interface.h"
 
@@ -38,4 +40,8 @@ void UpdateDialog::setMessage()
     message = message + tr(".\n\nWould you like to visit the releases page? ");
 
     ui->message->setText(message);
+
+    if (ShutdownRequested) {
+        QDialog::reject();
+    }
 }
