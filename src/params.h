@@ -67,6 +67,12 @@ struct ParamFile {
     CurlProgress prog;
 };
 
+enum JsonDownloadHeaders {
+    STANDARD_HEADERS,
+    CMC_HEADERS,
+    GITHUB_HEADERS
+};
+
 struct JsonDownload {
     std::string URL = "";
     std::string response = "";
@@ -78,7 +84,6 @@ struct JsonDownload {
 
 
 extern std::map<std::string, ParamFile> mapParams;
-extern JsonDownload downloadedJSON;
 
 extern bool checkParams();
 extern void initalizeMapParamBootstrap();
@@ -86,7 +91,7 @@ extern void initalizeMapParam();
 static size_t writer(char *in, size_t size, size_t nmemb, std::string *out);
 static size_t write_data(void *ptr, size_t size, size_t nmemb, void *stream);
 extern bool downloadFiles(std::string title);
-extern void getHttpsJson(std::string url);
+extern void getHttpsJson(std::string url, JsonDownload *reply, int headerType);
 extern bool getBootstrap();
 static bool extract(boost::filesystem::path filename);
 static int copy_data(struct archive *ar, struct archive *aw);

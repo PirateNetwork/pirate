@@ -6,6 +6,7 @@
 #define KOMODO_QT_OVERVIEWPAGE_H
 
 #include "amount.h"
+#include "params.h"
 
 #include <QWidget>
 #include <memory>
@@ -60,6 +61,8 @@ private:
 
     QTimer *updateJSONtimer;
     QTimer *updateGUItimer;
+    QTimer *gitJSONtimer;
+    QTimer *gitGUItimer;
     QNetworkAccessManager *manager;
     QNetworkReply *reply;
 
@@ -73,10 +76,15 @@ private:
     CAmount currentPrivateBalance;
     CAmount currentInterestBalance;
 
+    JsonDownload *gitReply;
+    JsonDownload *cmcReply;
+
     TxViewDelegate *txdelegate;
     std::unique_ptr<TransactionFilterProxy> filter;
 
 private Q_SLOTS:
+    void getGitRelease();
+    void replyGitRelease();
     void getPrice();
     void replyPriceFinished();
     void updateDisplayUnit();

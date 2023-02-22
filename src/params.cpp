@@ -3,7 +3,6 @@
 #include "ui_interface.h"
 
 std::map<std::string, ParamFile> mapParams;
-JsonDownload downloadedJSON;
 static const int K_READ_BUF_SIZE{ 1024 * 16 };
 
 std::string CalcSha256(std::string filename)
@@ -361,16 +360,12 @@ static size_t writer(char *in, size_t size, size_t nmemb, std::string *out)
       return size * nmemb;
 }
 
-void getHttpsJson(std::string url)
+void getHttpsJson(std::string url, JsonDownload *reply, int headerType)
 {
-    {
-        JsonDownload newDownload;
-        downloadedJSON = newDownload;
-    }
 
-    downloadedJSON.failed = false;
-    downloadedJSON.complete = false;
-    downloadedJSON.URL = url;
+    reply->failed = false;
+    reply->complete = false;
+    reply->URL = url;
     std::string response_string;
 
     curl_global_init(CURL_GLOBAL_ALL);
@@ -378,15 +373,26 @@ void getHttpsJson(std::string url)
     CURLcode res;
 
     struct curl_slist *headers=NULL; // init to NULL is important
+    switch(headerType) {
+      case STANDARD_HEADERS:
+          headers = curl_slist_append(headers, "Accept: application/json");
+          break;
+      case CMC_HEADERS:
+          headers = curl_slist_append(headers, "Accept: application/json");
+          break;
+      case GITHUB_HEADERS:
+          headers = curl_slist_append(headers, "Accept: application/vnd.github+json");
+          headers = curl_slist_append(headers, "User-Agent: Pirate");
+          break;
+    }
 
-    headers = curl_slist_append(headers, "Accept: application/json");
     headers = curl_slist_append(headers, "Content-Type: application/json");
     headers = curl_slist_append(headers, "charset: utf-8");
 
     curl = curl_easy_init();
     if(curl) {
 
-        curl_easy_setopt(curl, CURLOPT_URL, downloadedJSON.URL.c_str());
+        curl_easy_setopt(curl, CURLOPT_URL, reply->URL.c_str());
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
         curl_easy_setopt(curl, CURLOPT_HTTPGET, 1);
@@ -400,14 +406,14 @@ void getHttpsJson(std::string url)
             /* ask for the content-type */
             res = curl_easy_getinfo(curl, CURLINFO_CONTENT_TYPE, &ct);
             if((CURLE_OK == res) && ct) {
-                downloadedJSON.response = response_string;
-                downloadedJSON.failed = false;
-                downloadedJSON.complete = true;
+                reply->response = response_string;
+                reply->failed = false;
+                reply->complete = true;
             }
         } else {
-          downloadedJSON.response = "";
-          downloadedJSON.failed = false;
-          downloadedJSON.complete = false;
+          reply->response = "";
+          reply->failed = false;
+          reply->complete = false;
         }
     }
     /* always cleanup */

@@ -153,3 +153,8 @@ std::string FormatSubVersion(const std::string& name, int nClientVersion, const 
     ss << "/";
     return ss.str();
 }
+
+std::string FormatGitVersion()
+{
+    return strprintf("%d.%d.%d", CLIENT_VERSION / 1000000, (CLIENT_VERSION / 10000) % 100, (CLIENT_VERSION / 100) % 100);
+}

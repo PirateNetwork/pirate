@@ -7,6 +7,7 @@
 
 #include "komodounits.h"
 #include "clientmodel.h"
+#include "clientversion.h"
 #include "guiconstants.h"
 #include "guiutil.h"
 #include "optionsmodel.h"
@@ -14,6 +15,7 @@
 #include "transactionfilterproxy.h"
 #include "transactiontablemodel.h"
 #include "walletmodel.h"
+#include "updatedialog.h"
 #include "util.h" // for KOMODO_ASSETCHAIN_MAXLEN
 
 #include "params.h" //curl for price check
@@ -21,14 +23,14 @@
 #include <QAbstractItemDelegate>
 #include <QPainter>
 #include <QSettings>
-#include <QNetworkAccessManager>
-#include <QNetworkRequest>
-#include <QUrl>
-#include <QNetworkReply>
 #include <QTimer>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QLocale>
+#include <QDesktopServices>
+#include <QUrl>
+#include <QVersionNumber>
 
 #define DECORATION_SIZE 54
 #define NUM_ITEMS 5
@@ -216,18 +218,30 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
 
     updateJSONtimer = new QTimer(this);
     updateGUItimer = new QTimer(this);
-    manager = new QNetworkAccessManager(this);
-    reply = NULL;
+    gitJSONtimer = new QTimer(this);
+    gitGUItimer = new QTimer(this);
+
+    gitReply = new JsonDownload;
+    cmcReply = new JsonDownload;
 
     connect(updateJSONtimer, SIGNAL(timeout()), SLOT(getPrice()));
     connect(updateGUItimer, SIGNAL(timeout()), SLOT(replyPriceFinished()));
-    // connect(manager, SIGNAL(finished(QNetworkReply*)), this, SLOT(replyPriceFinished(QNetworkReply*)));
+    connect(gitJSONtimer, SIGNAL(timeout()), SLOT(getGitRelease()));
+    connect(gitGUItimer, SIGNAL(timeout()), SLOT(replyGitRelease()));
+
     updateJSONtimer->setInterval(300000); //Check every 5 minutes.
     updateJSONtimer->start();
 
     updateGUItimer->setInterval(5000); //Check every 15 seconds.
     updateGUItimer->start();
 
+    gitJSONtimer->setInterval(21600000); //Check every 6 hours.
+    gitJSONtimer->start();
+
+    gitGUItimer->setInterval(5000); //Check every 15 seconds.
+    gitGUItimer->start();
+
+    getGitRelease();
     getPrice();
 }
 
@@ -249,16 +263,76 @@ OverviewPage::~OverviewPage()
     delete ui;
 }
 
+void OverviewPage::getGitRelease()
+{
+    getHttpsJson("https://api.github.com/repos/PirateNetwork/Pirate/releases", gitReply, GITHUB_HEADERS);
+}
+
+void OverviewPage::replyGitRelease()
+{
+    if (gitReply->failed == false && gitReply->complete == true) {
+        try {
+            QJsonDocument response = QJsonDocument::fromJson(gitReply->response.c_str());
+            const QJsonArray responseArray  = response.array();
+            const QJsonObject firstRecord  = responseArray[0].toObject();
+            QString gitStrVersion = firstRecord["tag_name"].toString();
+
+            if (gitStrVersion.startsWith("v"))
+                gitStrVersion = gitStrVersion.right(gitStrVersion.length() - 1);
+
+            QVersionNumber gitVersion = QVersionNumber::fromString(gitStrVersion);
+
+            QVersionNumber clientVersion = QVersionNumber::fromString(QString::fromStdString(FormatGitVersion()));
+
+            if (gitVersion > clientVersion) {
+
+                  // Check Setting for update ignore, only ignore update notification for 1 week.
+                  QSettings settings;
+                  uint64_t ignoreTime = settings.value("timeIgnoreVersion", "0").toULongLong();
+                  uint64_t currentTime = GetTime();
+                  QString strIgnoreVersion = "0.0.0";
+
+                  if (currentTime - ignoreTime < 604800) {
+                      //Get ignored version if ignored time is less than 7 days
+                      strIgnoreVersion = settings.value("strIgnoreVersion", "0.0.0").toString();
+                  }
+
+                  QVersionNumber ignoreVersion = QVersionNumber::fromString(strIgnoreVersion);
+
+                  if (gitVersion > ignoreVersion) {
+                      //Open Update Dialog
+                      UpdateDialog dlg(this, clientVersion, gitVersion);
+                      dlg.exec();
+                      if (dlg.result() == QDialog::Accepted) {
+                          //Open Pirate Github release page
+                          QDesktopServices::openUrl(QUrl("https://github.com/Piratenetwork/Pirate/releases"));
+                      }
+                      // Set IgnoreVersion
+                      qint64 newIgnoreTime = GetTime();
+                      settings.setValue("strIgnoreVersion", gitVersion.toString());
+                      settings.setValue("timeIgnoreVersion", QString::number(newIgnoreTime));
+                      dlg.close();
+
+                  }
+
+            }
+
+        } catch (...) {
+            LogPrintf("Github Releases JSON Parsing error\n");
+        }
+    }
+}
+
 void OverviewPage::getPrice()
 {
-    getHttpsJson("https://api.coingecko.com/api/v3/simple/price?ids=pirate-chain&vs_currencies=btc%2Cusd%2Ceur&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true");
+    getHttpsJson("https://api.coingecko.com/api/v3/simple/price?ids=pirate-chain&vs_currencies=btc%2Cusd%2Ceur&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true", cmcReply, CMC_HEADERS);
 }
 
 void OverviewPage::replyPriceFinished()
 {
-    if (downloadedJSON.failed == false && downloadedJSON.complete == true) {
+    if (cmcReply->failed == false && cmcReply->complete == true) {
         try {
-            QJsonDocument response = QJsonDocument::fromJson(downloadedJSON.response.c_str());
+            QJsonDocument response = QJsonDocument::fromJson(cmcReply->response.c_str());
 
             const QJsonObject item  = response.object();
             const QJsonObject usd  = item["pirate-chain"].toObject();
