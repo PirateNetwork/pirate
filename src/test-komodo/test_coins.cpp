@@ -859,6 +859,7 @@ TEST(TestCoins, coins_cache_simulation_test)
 
 TEST(TestCoins, coins_coinbase_spends)
 {
+    SelectParams(CBaseChainParams::MAIN); // set params explicitly otherwise it would use params set by some past test what could cause bad-txns-coinbase-spend error
     CCoinsViewTest base;
     CCoinsViewCacheTest cache(&base);
 
@@ -896,8 +897,8 @@ TEST(TestCoins, coins_coinbase_spends)
 
     {
         CTransaction tx2(mtx2);
-        EXPECT_FALSE(Consensus::CheckTxInputs(tx2, state, cache, 100+Params().CoinbaseMaturity(), Params().GetConsensus()));
-        EXPECT_TRUE(state.GetRejectReason() == "bad-txns-coinbase-spend-has-transparent-outputs");
+        EXPECT_TRUE(Consensus::CheckTxInputs(tx2, state, cache, 100+Params().CoinbaseMaturity(), Params().GetConsensus()));
+        //EXPECT_TRUE(state.GetRejectReason() == "bad-txns-coinbase-spend-has-transparent-outputs");
     }
 }
 

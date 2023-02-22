@@ -32,6 +32,10 @@ bin_PROGRAMS += komodo-test
     test-komodo/test_oldhash_removal.cpp \
     test-komodo/test_kmd_feat.cpp
 
+if TARGET_WINDOWS
+komodo_test_SOURCES += test-komodo/komodo-test-res.rc
+endif
+
 komodo_test_CPPFLAGS = $(komodod_CPPFLAGS)
 
 komodo_test_LDADD = -lgtest $(komodod_LDADD)
