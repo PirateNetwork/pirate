@@ -32,7 +32,7 @@ jobs:
                              libncurses-dev \
                              unzip  \
                              git \
-                             python \
+                             python3 \
                              zlib1g-dev \
                              wget \
                              bsdmainutils \
