@@ -1,4 +1,4 @@
-export APP_VERSION="5.6.0"
+export APP_VERSION="5.6.1"
 
 echo -n "Building amd64 deb..........."
 debdir=bin/pirate-qt-ubuntu1804-v$APP_VERSION
