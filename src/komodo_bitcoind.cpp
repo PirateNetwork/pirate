@@ -459,7 +459,7 @@ void komodo_reconsiderblock(uint256 blockhash)
     //fprintf(stderr,"komodo_reconsiderblock.(%s) (%s %u) -> NULL\n",params,ASSETCHAINS_USERPASS,ASSETCHAINS_RPCPORT);
 }
 
-int32_t komodo_verifynotarization(char *symbol,char *dest,int32_t height,int32_t NOTARIZED_HEIGHT,uint256 NOTARIZED_HASH,uint256 NOTARIZED_DESTTXID)
+int32_t komodo_verifynotarization(const char *symbol,const char *dest,int32_t height,int32_t NOTARIZED_HEIGHT,uint256 NOTARIZED_HASH,uint256 NOTARIZED_DESTTXID)
 {
     char params[256];
     char *jsonstr = nullptr;
@@ -480,7 +480,7 @@ int32_t komodo_verifynotarization(char *symbol,char *dest,int32_t height,int32_t
         }//else jsonstr = _dex_getrawtransaction();
         else return(0); // need universal way to issue DEX* API, since notaries mine most blocks, this ok
     }
-    else if ( strcmp(dest,"BTC") == 0 )
+    else if ( strcmp(dest,"BTC") == 0 )     // Note: this should work for LTC too (BTC is used as an alias for LTC)
     {
         if ( BTCUSERPASS[0] != 0 )
         {

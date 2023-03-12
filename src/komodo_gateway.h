@@ -58,4 +58,4 @@ int32_t komodo_check_deposit(int32_t height,const CBlock& block);
  * @param dest the "parent" chain
  * @return true on success
  */
-bool komodo_faststateinit(komodo_state *sp,const char *fname,char *symbol,char *dest);
+bool komodo_faststateinit(komodo_state *sp,const char *fname,char *symbol, const char *dest);

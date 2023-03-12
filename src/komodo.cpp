@@ -48,7 +48,7 @@ int32_t komodo_currentheight()
     else return(0);
 }
 
-int32_t komodo_parsestatefile(struct komodo_state *sp,FILE *fp,char *symbol,char *dest)
+int32_t komodo_parsestatefile(struct komodo_state *sp,FILE *fp,char *symbol, const char *dest)
 {
     int32_t func;
 
@@ -114,16 +114,15 @@ int32_t komodo_parsestatefile(struct komodo_state *sp,FILE *fp,char *symbol,char
     catch(const komodo::parse_error& pe)
     {
         LogPrintf("Error occurred in parsestatefile: %s\n", pe.what());
-        LogPrintf("komodostate file is invalid. Komodod will be stopped. Please remove komodostate and komodostate.ind files and start the daemon");
-        //std::cerr << std::endl << " Error in komodostate file: unknown event " << (char)func << ", exiting. Please remove komodostate and komodostate.ind files and start the daemon" << std::endl << std::endl;
-        uiInterface.ThreadSafeMessageBox(_("Please remove komodostate and komodostate.ind files and restart"), "", CClientUIInterface::MSG_ERROR);
+        LogPrintf("%s file is invalid. Komodod will be stopped. Please remove %s and %s.ind files and start the daemon\n", KOMODO_STATE_FILENAME, KOMODO_STATE_FILENAME, KOMODO_STATE_FILENAME);
+        uiInterface.ThreadSafeMessageBox(strprintf("Please remove %s and %s.ind files and restart", KOMODO_STATE_FILENAME, KOMODO_STATE_FILENAME), "", CClientUIInterface::MSG_ERROR);
         StartShutdown();            
         func = -1;
     }
     return func;
 }
 
-int32_t komodo_parsestatefiledata(struct komodo_state *sp,uint8_t *filedata,long *fposp,long datalen,char *symbol,char *dest)
+int32_t komodo_parsestatefiledata(struct komodo_state *sp,uint8_t *filedata,long *fposp,long datalen,const char *symbol, const char *dest)
 {
     int32_t func = -1;
 
@@ -191,9 +190,8 @@ int32_t komodo_parsestatefiledata(struct komodo_state *sp,uint8_t *filedata,long
     catch( const komodo::parse_error& pe)
     {
         LogPrintf("Unable to parse state file data. Error: %s\n", pe.what());
-        LogPrintf("komodostate file is invalid. Komodod will be stopped. Please remove komodostate and komodostate.ind files and start the daemon");
-        //std::cerr << std::endl << " Error in komodostate file: unknown event " << (char)func << ", exiting. Please remove komodostate and komodostate.ind files and start the daemon" << std::endl << std::endl;
-        uiInterface.ThreadSafeMessageBox(_("Please remove komodostate and komodostate.ind files and restart"), "", CClientUIInterface::MSG_ERROR);
+        LogPrintf("%s file is invalid. Komodod will be stopped. Please remove %s and %s.ind files and start the daemon\n", KOMODO_STATE_FILENAME, KOMODO_STATE_FILENAME, KOMODO_STATE_FILENAME);
+        uiInterface.ThreadSafeMessageBox(strprintf("Please remove %s and %s.ind files and restart", KOMODO_STATE_FILENAME, KOMODO_STATE_FILENAME), "", CClientUIInterface::MSG_ERROR);
         StartShutdown();
         func = -1;
     }
@@ -225,7 +223,7 @@ void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotar
     }
     if ( fp == 0 )
     {
-        komodo_statefname(fname,chainName.symbol().c_str(),(char *)"komodostate");
+        komodo_statefname(fname, chainName.symbol().c_str(), KOMODO_STATE_FILENAME);
         if ( (fp= fopen(fname,"rb+")) != nullptr )
         {
             if ( komodo_faststateinit(sp, fname, symbol, dest) )
@@ -237,6 +235,7 @@ void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotar
                 while (!ShutdownRequested() && komodo_parsestatefile(sp,fp,symbol,dest) >= 0)
                     ;
             }
+            LogPrintf("komodo read last notarised height %d from %s\n", sp->LastNotarizedHeight(), KOMODO_STATE_FILENAME);
         } 
         else 
             fp = fopen(fname,"wb+"); // the state file probably did not exist, create it.

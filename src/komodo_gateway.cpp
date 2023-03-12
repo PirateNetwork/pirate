@@ -235,7 +235,7 @@ int32_t komodo_check_deposit(int32_t height,const CBlock& block)
     return(0);
 }
 
-void komodo_stateind_set(struct komodo_state *sp,uint32_t *inds,int32_t n,uint8_t *filedata,long datalen,char *symbol,char *dest)
+void komodo_stateind_set(struct komodo_state *sp,uint32_t *inds,int32_t n,uint8_t *filedata,long datalen,const char *symbol,const char *dest)
 {
     uint8_t func; long lastK,lastT,lastN,lastV,fpos,lastfpos; int32_t i,count,doissue,iter,numn,numv,numN,numV,numR; uint32_t tmp,prevpos100,offset;
     count = numR = numN = numV = numn = numv = 0;
@@ -380,7 +380,7 @@ uint8_t *OS_fileptr(long *allocsizep,const char *fname)
  * @return -1 on error
  */
 long komodo_stateind_validate(struct komodo_state *sp,const std::string& indfname,uint8_t *filedata,long datalen,
-        uint32_t *prevpos100p,uint32_t *indcounterp,char *symbol,char *dest)
+        uint32_t *prevpos100p,uint32_t *indcounterp,const char *symbol,const char *dest)
 {
     *indcounterp = *prevpos100p = 0;
     long fsize;
@@ -453,7 +453,7 @@ long komodo_indfile_update(FILE *indfp,uint32_t *prevpos100p,long lastfpos,long 
  * @param dest the "parent" chain
  * @return true on success
  */
-bool komodo_faststateinit(komodo_state *sp,const char *fname,char *symbol,char *dest)
+bool komodo_faststateinit(komodo_state *sp,const char *fname,char *symbol, const char *dest)
 {
     uint32_t starttime = (uint32_t)time(NULL);
 

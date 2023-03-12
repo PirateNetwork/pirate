@@ -93,7 +93,7 @@ int32_t komodo_verifynotarizedscript(int32_t height,uint8_t *script,int32_t len,
 
 void komodo_reconsiderblock(uint256 blockhash);
 
-int32_t komodo_verifynotarization(char *symbol,char *dest,int32_t height,int32_t NOTARIZED_HEIGHT,uint256 NOTARIZED_HASH,uint256 NOTARIZED_DESTTXID);
+int32_t komodo_verifynotarization(const char *symbol, const char *dest,int32_t height,int32_t NOTARIZED_HEIGHT,uint256 NOTARIZED_HASH,uint256 NOTARIZED_DESTTXID);
 
 CScript komodo_makeopret(CBlock *pblock, bool fNew);
 

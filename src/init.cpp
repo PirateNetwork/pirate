@@ -35,6 +35,7 @@
 #include "httprpc.h"
 #include "key.h"
 #include "notarisationdb.h"
+#include "komodo.h"
 #include "komodo_globals.h"
 #include "komodo_notary.h"
 #include "komodo_gateway.h"
@@ -667,7 +668,7 @@ void CleanupBlockRevFiles()
                 remove(it->path());
         }
     }
-    path komodostate = GetDataDir() / "komodostate";
+    path komodostate = GetDataDir() / KOMODO_STATE_FILENAME;
     remove(komodostate);
     path minerids = GetDataDir() / "minerids";
     remove(minerids);
@@ -942,7 +943,7 @@ bool AttemptDatabaseOpen(size_t nBlockTreeDBCache, bool dbCompression, size_t db
         pnotarisations = new NotarisationDB(100*1024*1024, false, fReindex);
 
         if (fReindex) {
-            boost::filesystem::remove(GetDataDir() / "komodostate");
+            boost::filesystem::remove(GetDataDir() / KOMODO_STATE_FILENAME);
             boost::filesystem::remove(GetDataDir() / "signedmasks");
             pblocktree->WriteReindexing(true);
             //If we're reindexing in prune mode, wipe away unusable block files and all undo data files
