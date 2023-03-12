@@ -644,6 +644,8 @@ TEST(TestParseNotarisation, FilePaths)
         const boost::filesystem::path ltc_dir = ".litecoin";
 #endif
     };
+
+#ifndef __WINDOWS__ // we cannot use temp path on windows due to implementation of GetAppDir()
     SelectParams(CBaseChainParams::REGTEST);
     {
         // default
@@ -702,6 +704,7 @@ TEST(TestParseNotarisation, FilePaths)
         EXPECT_EQ(ASSETCHAINS_P2PPORT, 7770);
         EXPECT_EQ(ASSETCHAINS_RPCPORT, 7771);
     }
+#endif // #ifndef __WINDOWS__
 }
 
 } // namespace TestParseNotarisation

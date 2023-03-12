@@ -73,6 +73,7 @@ TEST(test_block, TestSpendInSameBlock)
 {
     //setConsoleDebugging(true);
     TestChain chain;
+    chainName = assetchain("TST"); // use not KMD to ensure komodo_hardfork_active() is true for tx nLockTime to be handled: both tx nLocktime and nBlockTime are set to the MTP
     auto notary = std::make_shared<TestWallet>(chain.getNotaryKey(), "notary");
     notary->SetBroadcastTransactions(true);
     auto alice = std::make_shared<TestWallet>("alice");
@@ -94,7 +95,7 @@ TEST(test_block, TestSpendInSameBlock)
     useThisTransaction.Select(tx);
     TransactionInProcess aliceToBob = alice->CreateSpendTransaction(bob, 50000, 5000, useThisTransaction);
     EXPECT_TRUE( alice->CommitTransaction(aliceToBob.transaction, aliceToBob.reserveKey) );
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    // std::this_thread::sleep_for(std::chrono::seconds(1)); 
     // see if everything worked
     lastBlock = chain.generateBlock(miner);
     EXPECT_TRUE( lastBlock != nullptr);

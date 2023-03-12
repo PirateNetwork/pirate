@@ -86,6 +86,9 @@ namespace TestEvalNotarisation {
             eval.blocks[notary.GetHash()].nTime = 1522946781;
         }
 
+    void CleanupEval() {
+        komodo_notaries_uninit(); // clear genesis notaries 'Pubkeys'
+    }
 
     // https://kmd.explorer.supernet.org/tx/5b8055d37cff745a404d1ae45e21ffdba62da7b28ed6533c67468d7379b20bae
     // inputs have been dropped
@@ -142,6 +145,7 @@ TEST(TestEvalNotarisation, testInvalidNotarisationBadOpReturn)
 
     NotarisationData data(0);
     ASSERT_FALSE(eval.GetNotarisationData(notary.GetHash(), data));
+    CleanupEval();
 }
 
 
@@ -157,6 +161,7 @@ TEST(TestEvalNotarisation, testInvalidNotarisationTxNotEnoughSigs)
 
     NotarisationData data(0);
     ASSERT_FALSE(eval.GetNotarisationData(notary.GetHash(), data));
+    CleanupEval();
 }
 
 
@@ -170,6 +175,7 @@ TEST(TestEvalNotarisation, testInvalidNotarisationTxDoesntExist)
 
     NotarisationData data(0);
     ASSERT_FALSE(eval.GetNotarisationData(uint256(), data));
+    CleanupEval();
 }
 
 
@@ -185,6 +191,7 @@ TEST(TestEvalNotarisation, testInvalidNotarisationDupeNotary)
 
     NotarisationData data(0);
     ASSERT_FALSE(eval.GetNotarisationData(notary.GetHash(), data));
+    CleanupEval();
 }
 
 
@@ -205,6 +212,7 @@ TEST(TestEvalNotarisation, testInvalidNotarisationInputNotCheckSig)
 
     NotarisationData data(0);
     ASSERT_FALSE(eval.GetNotarisationData(notary.GetHash(), data));
+    CleanupEval();
 }
 
 static void write_t_record_new(std::FILE* fp)
@@ -312,6 +320,7 @@ TEST(TestEvalNotarisation, test_komodo_notarysinit)
 
 TEST(TestEvalNotarisation, test_komodo_notaries)
 {
+    chainName = assetchain();
     // make an empty komodostate file
     boost::filesystem::path temp_path = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
     boost::filesystem::create_directories(temp_path);
@@ -327,8 +336,12 @@ TEST(TestEvalNotarisation, test_komodo_notaries)
     EXPECT_EQ(Pubkeys, nullptr);
     SelectParams(CBaseChainParams::MAIN);
     // should retrieve the genesis notaries
-    int32_t num_found = komodo_notaries(keys, 0, 0);
-    boost::filesystem::remove_all(temp_path);
+    int32_t num_found = komodo_notaries(keys, 0, 0); // note: will open komodostate
+    
+    komodo_statefile_uninit(); // close komodostate
+    try {
+        boost::filesystem::remove_all(temp_path);
+    } catch(boost::filesystem::filesystem_error &ex) {}
     EXPECT_EQ(num_found, 35);
     EXPECT_EQ(keys[0][0], 0x03);
     EXPECT_EQ(keys[0][1], 0xb7);

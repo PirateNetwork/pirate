@@ -227,7 +227,9 @@ TestChain::~TestChain()
     CleanGlobals();
     // cruel and crude, but cleans up any wallet dbs so subsequent tests run.
     bitdb = std::shared_ptr<CDBEnv>(new CDBEnv{});
-    boost::filesystem::remove_all(dataDir);
+    try {
+        boost::filesystem::remove_all(dataDir);
+    } catch(boost::filesystem::filesystem_error &ex) {} // throws exception on windows due to db.log being busy (apparently it is not closed)
     if (previousNetwork == "main")
         SelectParams(CBaseChainParams::MAIN);
     if (previousNetwork == "regtest")

@@ -588,6 +588,10 @@ wallet_utility_SOURCES = wallet-utility.cpp
 wallet_utility_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 wallet_utility_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 wallet_utility_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
+
+if TARGET_WINDOWS
+wallet_utility_SOURCES += wallet-utility-res.rc
+endif
 endif
 
 if TARGET_WINDOWS
