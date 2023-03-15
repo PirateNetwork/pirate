@@ -7353,6 +7353,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
         pfrom->m_addr_token_timestamp = current_time;
 
+        uint64_t num_proc = 0; /* nProcessedAddrs */
+        uint64_t num_rate_limit = 0; /* nRatelimitedAddrs */
         random_shuffle(vAddr.begin(), vAddr.end(), GetRandInt);
 
         BOOST_FOREACH(CAddress& addr, vAddr)
@@ -7360,14 +7362,19 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             boost::this_thread::interruption_point();
 
             // Apply rate limiting if the address is not whitelisted
-            if (!pfrom->IsWhitelistedRange(addr)) {
-                if (pfrom->m_addr_token_bucket < 1.0) break;
+            if (pfrom->m_addr_token_bucket < 1.0) {
+                if (!pfrom->IsWhitelistedRange(addr)) {
+                    ++num_rate_limit;
+                    continue;
+                }
+            } else {
                 pfrom->m_addr_token_bucket -= 1.0;
             }
 
             if (addr.nTime <= 100000000 || addr.nTime > nNow + 10 * 60)
                 addr.nTime = nNow - 5 * 24 * 60 * 60;
             pfrom->AddAddressKnown(addr);
+            ++num_proc;
             bool fReachable = IsReachable(addr);
             if (addr.nTime > nSince && !pfrom->fGetAddr && vAddr.size() <= 10 && addr.IsRoutable())
             {
@@ -7401,6 +7408,14 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             // Do not store addresses outside our network
             if (fReachable)
                 vAddrOk.push_back(addr);
+            pfrom->m_addr_processed += num_proc;
+            pfrom->m_addr_rate_limited += num_rate_limit;
+            LogPrint("net", "ProcessMessage: Received addr: %u addresses (%u processed, %u rate-limited) from peer=%d%s\n",
+                    vAddr.size(),
+                    num_proc,
+                    num_rate_limit,
+                    pfrom->GetId(),
+                    fLogIPs ? ", peeraddr=" + pfrom->addr.ToString() : "");
         }
         addrman.Add(vAddrOk, pfrom->addr, 2 * 60 * 60);
         if (vAddr.size() < 1000)
