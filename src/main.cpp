@@ -7353,6 +7353,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
         pfrom->m_addr_token_timestamp = current_time;
 
+        random_shuffle(vAddr.begin(), vAddr.end(), GetRandInt);
+
         BOOST_FOREACH(CAddress& addr, vAddr)
         {
             boost::this_thread::interruption_point();
