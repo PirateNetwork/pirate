@@ -7410,14 +7410,18 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                 vAddrOk.push_back(addr);
             pfrom->m_addr_processed += num_proc;
             pfrom->m_addr_rate_limited += num_rate_limit;
-            LogPrint("net", "ProcessMessage: Received addr: %u addresses (%u processed, %u rate-limited) from peer=%d%s\n",
-                    vAddr.size(),
-                    num_proc,
-                    num_rate_limit,
-                    pfrom->GetId(),
-                    fLogIPs ? ", peeraddr=" + pfrom->addr.ToString() : "");
         }
+
+        LogPrint("net", "ProcessMessage: Received addr: %u addresses (%u processed, %u rate-limited) from peer=%d%s\n",
+            vAddr.size(),
+            num_proc,
+            num_rate_limit,
+            pfrom->GetId(),
+            fLogIPs ? ", peeraddr=" + pfrom->addr.ToString() : ""
+        );
+
         addrman.Add(vAddrOk, pfrom->addr, 2 * 60 * 60);
+
         if (vAddr.size() < 1000)
             pfrom->fGetAddr = false;
         if (pfrom->fOneShot)
