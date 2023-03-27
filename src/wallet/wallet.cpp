@@ -1315,10 +1315,9 @@ int64_t CWallet::IncOrderPosNext(CWalletDB *pwalletdb)
     return nRet;
 }
 
-CWallet::TxItems CWallet::OrderedTxItems(std::list<CAccountingEntry>& acentries, std::string strAccount)
+CWallet::TxItems CWallet::OrderedTxItems(std::list<CAccountingEntry>& acentries, std::string strAccount, CWalletDB *pwalletdbIn)
 {
     AssertLockHeld(cs_wallet); // mapWallet
-    CWalletDB walletdb(strWalletFile);
 
     // First: get all CWalletTx and CAccountingEntry into a sorted-by-order multimap.
     TxItems txOrdered;
@@ -1331,12 +1330,15 @@ CWallet::TxItems CWallet::OrderedTxItems(std::list<CAccountingEntry>& acentries,
         txOrdered.insert(make_pair(wtx->nOrderPos, TxPair(wtx, (CAccountingEntry*)0)));
         //fprintf(stderr,"ordered iter.%d %s\n",(int32_t)wtx->nOrderPos,wtx->GetHash().GetHex().c_str());
     }
+
+    CWalletDB* pwalletdb = pwalletdbIn ? pwalletdbIn : new CWalletDB(strWalletFile);
     acentries.clear();
-    walletdb.ListAccountCreditDebit(strAccount, acentries);
+    pwalletdb->ListAccountCreditDebit(strAccount, acentries);
     BOOST_FOREACH(CAccountingEntry& entry, acentries)
     {
         txOrdered.insert(make_pair(entry.nOrderPos, TxPair((CWalletTx*)0, &entry)));
     }
+    if (!pwalletdbIn) delete pwalletdb;
 
     return txOrdered;
 }
@@ -1509,7 +1511,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
                         // Tolerate times up to the last timestamp in the wallet not more than 5 minutes into the future
                         int64_t latestTolerated = latestNow + 300;
                         std::list<CAccountingEntry> acentries;
-                        TxItems txOrdered = OrderedTxItems(acentries);
+                        TxItems txOrdered = OrderedTxItems(acentries, "", pwalletdb);
                         for (TxItems::reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it)
                         {
                             CWalletTx *const pwtx = (*it).second.first;
