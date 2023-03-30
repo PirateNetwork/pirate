@@ -46,6 +46,7 @@ struct CTimestampBlockIndexValue;
 struct CSpentIndexKey;
 struct CSpentIndexValue;
 class uint256;
+class CDiskBlockIndex;
 
 //! -dbcache default (MiB)
 static const int64_t nDefaultDbCache = 450;
