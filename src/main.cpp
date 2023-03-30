@@ -1,7 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
-// Copyright (c) 2015-2020 The Zcash developers
-// Copyright (c) 2015-2020 The Komodo Platform developers
+// Copyright (c) 2015-2022 The Zcash developers
+// Copyright (c) 2015-2023 The Komodo Platform developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
