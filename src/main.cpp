@@ -3864,7 +3864,7 @@ bool static FlushStateToDisk(CValidationState &state, FlushStateMode mode) {
                         vFiles.push_back(make_pair(*it, &vinfoBlockFile[*it]));
                     setDirtyFileInfo.erase(it++);
                 }
-                std::vector<const CBlockIndex*> vBlocks;
+                std::vector<CBlockIndex*> vBlocks;
                 vBlocks.reserve(setDirtyBlockIndex.size());
                 for (set<CBlockIndex*>::iterator it = setDirtyBlockIndex.begin(); it != setDirtyBlockIndex.end(); ) {
                     vBlocks.push_back(*it);
@@ -3872,6 +3872,12 @@ bool static FlushStateToDisk(CValidationState &state, FlushStateMode mode) {
                 }
                 if (!pblocktree->WriteBatchSync(vFiles, nLastBlockFile, vBlocks)) {
                     return AbortNode(state, "Files to write to block index database");
+                }
+                // Now that we have written the block indices to the database, we do not
+                // need to store solutions for these CBlockIndex objects in memory.
+                // cs_main must be held here.
+                for (CBlockIndex *pblockindex : vBlocks) {
+                    pblockindex->TrimSolution();
                 }
             }
             // Finally remove any pruned files

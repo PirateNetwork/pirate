@@ -129,7 +129,7 @@ public:
      * @returns true on success
      */
     bool WriteBatchSync(const std::vector<std::pair<int, const CBlockFileInfo*> >& fileInfo, int nLastFile, 
-            const std::vector<const CBlockIndex*>& blockinfo);
+            const std::vector<CBlockIndex*>& blockinfo);
     /***
      * Erase a batch of block index records and sync
      * @param blockinfo the records
@@ -161,6 +161,8 @@ public:
      * @returns true on success
      */
     bool ReadReindexing(bool &fReindex);
+
+    bool ReadDiskBlockIndex(const uint256 &blockhash, CDiskBlockIndex &dbindex);
     /***
      * Retrieve the location of a particular transaction index value
      * @param txid what to look for

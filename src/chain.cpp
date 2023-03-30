@@ -24,6 +24,9 @@
 #include "notaries_staked.h"
 #include "komodo_hardfork.h"
 
+#include "main.h"
+#include "txdb.h"
+
 using namespace std;
 
 /**
@@ -80,6 +83,45 @@ const CBlockIndex *CChain::FindFork(const CBlockIndex *pindex) const {
     while (pindex && !Contains(pindex))
         pindex = pindex->pprev;
     return pindex;
+}
+
+void CBlockIndex::TrimSolution()
+{
+    AssertLockHeld(cs_main);
+
+    // We can correctly trim a solution as soon as the block index entry has been added
+    // to leveldb. Updates to the block index entry (to update validity status) will be
+    // handled by re-reading the solution from the existing db entry. It does not help to
+    // try to avoid these reads by gating trimming on the validity status: the re-reads are
+    // efficient anyway because of caching in leveldb, and most of them are unavoidable.
+    if (HasSolution()) {
+        std::vector<unsigned char> empty;
+        nSolution.swap(empty);
+    }
+}
+
+CBlockHeader CBlockIndex::GetBlockHeader() const
+{
+    AssertLockHeld(cs_main);
+
+    CBlockHeader header;
+    header.nVersion             = nVersion;
+    if (pprev) {
+        header.hashPrevBlock    = pprev->GetBlockHash();
+    }
+    header.hashMerkleRoot       = hashMerkleRoot;
+    header.hashFinalSaplingRoot = hashFinalSaplingRoot;
+    header.nTime                = nTime;
+    header.nBits                = nBits;
+    header.nNonce               = nNonce;
+    if (HasSolution()) {
+        header.nSolution        = nSolution;
+    } else {
+        CDiskBlockIndex dbindex;
+        assert(pblocktree->ReadDiskBlockIndex(GetBlockHash(), dbindex));
+        header.nSolution        = dbindex.GetSolution();
+    }
+    return header;
 }
 
 /** Turn the lowest '1' bit in the binary representation of a number into a '0'. */
