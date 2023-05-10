@@ -53,7 +53,7 @@ UniValue getsaplingwitness(const UniValue& params, bool fHelp,  const CPubKey& m
       if (mi != mapBlockIndex.end() && (*mi).second) {
           CBlockIndex* pindex = (*mi).second;
           if (chainActive.Contains(pindex)) {
-              nHeight = pindex->GetHeight();
+              nHeight = pindex->nHeight;
           } else {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "transaction not found in valid block");
           }
@@ -134,7 +134,7 @@ UniValue exportsaplingtree(const UniValue& params, bool fHelp,  const CPubKey& m
         for (fs::directory_iterator end_dir_it, it(exportFolder); it!=end_dir_it; ++it) {
           fs::remove_all(it->path());
         }
-      
+
         boost::filesystem::remove(exportFolder);
     }
     boost::filesystem::create_directory(exportFolder);
@@ -174,7 +174,7 @@ UniValue exportsaplingtree(const UniValue& params, bool fHelp,  const CPubKey& m
         file.close();
     }
 
-    int tipHeight = chainActive.Tip()->GetHeight();
+    int tipHeight = chainActive.Tip()->nHeight;
     int i;
     for (i = 0;((i*10000) + 200000) <= tipHeight ; i++) {
 
@@ -251,7 +251,7 @@ UniValue getsaplingwitnessatheight(const UniValue& params, bool fHelp,  const CP
       if (mi != mapBlockIndex.end() && (*mi).second) {
           CBlockIndex* pindex = (*mi).second;
           if (chainActive.Contains(pindex)) {
-              nHeight = pindex->GetHeight();
+              nHeight = pindex->nHeight;
           } else {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "transaction not found in valid block");
           }
@@ -393,7 +393,7 @@ UniValue getsaplingblocks(const UniValue& params, bool fHelp,  const CPubKey& my
 
       jsonblock.push_back(Pair("hash", block.GetHash().GetHex()));
       jsonblock.push_back(Pair("previousblockhash", pblockindex->pprev->GetBlockHash().GetHex()));
-      jsonblock.push_back(Pair("height", pblockindex->GetHeight()));
+      jsonblock.push_back(Pair("height", pblockindex->nHeight));
       jsonblock.push_back(Pair("finalsaplingroot", block.hashFinalSaplingRoot.GetHex()));
 
       UniValue jsontxs(UniValue::VARR);

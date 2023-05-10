@@ -565,8 +565,6 @@ qt_komodo_qt_LIBTOOLFLAGS = --tag CXX
 
 qt_komodo_qt_LDADD += \
   $(LIBCJSON) \
-  $(LIBVERUS_CRYPTO) \
-  $(LIBVERUS_PORTABLE_CRYPTO) \
   $(LIBZCASH) \
   $(LIBTLS) \
   $(LIBRUSTZCASH) \

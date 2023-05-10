@@ -280,7 +280,7 @@ void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue&
         if ( ASSETCHAINS_SYMBOL[0] == 0 && pindex != 0 && tx.nLockTime >= 500000000 && (tipindex= chainActive.LastTip()) != 0 )
         {
             int64_t interest; int32_t txheight; uint32_t locktime;
-            interest = komodo_accrued_interest(&txheight,&locktime,tx.GetHash(),i,0,txout.nValue,(int32_t)tipindex->GetHeight());
+            interest = komodo_accrued_interest(&txheight,&locktime,tx.GetHash(),i,0,txout.nValue,(int32_t)tipindex->nHeight);
             out.push_back(Pair("interest", ValueFromAmount(interest)));
         }
         out.push_back(Pair("valueSat", txout.nValue)); // [+] Decker
@@ -384,7 +384,7 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
         if ( KOMODO_NSPV_FULLNODE && ASSETCHAINS_SYMBOL[0] == 0 && tx.nLockTime >= 500000000 && (tipindex= chainActive.LastTip()) != 0 )
         {
             int64_t interest; int32_t txheight; uint32_t locktime;
-            interest = komodo_accrued_interest(&txheight,&locktime,tx.GetHash(),i,0,txout.nValue,(int32_t)tipindex->GetHeight());
+            interest = komodo_accrued_interest(&txheight,&locktime,tx.GetHash(),i,0,txout.nValue,(int32_t)tipindex->nHeight);
             out.push_back(Pair("interest", ValueFromAmount(interest)));
         }
         out.push_back(Pair("valueZat", txout.nValue));
@@ -416,9 +416,9 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
         if (mi != mapBlockIndex.end() && (*mi).second) {
             CBlockIndex* pindex = (*mi).second;
             if (chainActive.Contains(pindex)) {
-                entry.push_back(Pair("height", pindex->GetHeight()));
-                entry.push_back(Pair("rawconfirmations", 1 + chainActive.Height() - pindex->GetHeight()));
-                entry.push_back(Pair("confirmations", komodo_dpowconfs(pindex->GetHeight(),1 + chainActive.Height() - pindex->GetHeight())));
+                entry.push_back(Pair("height", pindex->nHeight));
+                entry.push_back(Pair("rawconfirmations", 1 + chainActive.Height() - pindex->nHeight));
+                entry.push_back(Pair("confirmations", komodo_dpowconfs(pindex->nHeight,1 + chainActive.Height() - pindex->nHeight)));
                 entry.push_back(Pair("time", pindex->GetBlockTime()));
                 entry.push_back(Pair("blocktime", pindex->GetBlockTime()));
             } else {
@@ -546,8 +546,8 @@ UniValue getrawtransaction(const UniValue& params, bool fHelp, const CPubKey& my
         if (mi != mapBlockIndex.end() && (*mi).second) {
             CBlockIndex* pindex = (*mi).second;
             if (chainActive.Contains(pindex)) {
-                nHeight = pindex->GetHeight();
-                nConfirmations = 1 + chainActive.Height() - pindex->GetHeight();
+                nHeight = pindex->nHeight;
+                nConfirmations = 1 + chainActive.Height() - pindex->nHeight;
                 nBlockTime = pindex->GetBlockTime();
             } else {
                 nHeight = -1;
@@ -1051,7 +1051,7 @@ UniValue decoderawtransaction(const UniValue& params, bool fHelp, const CPubKey&
         TxToJSONExpanded(tx, uint256(), result, false);
 
         RpcArcTransaction dtx;
-        int nHeight = chainActive.Tip()->GetHeight();
+        int nHeight = chainActive.Tip()->nHeight;
         decrypttransaction(tx, dtx, nHeight);
 
         UniValue spends(UniValue::VARR);
@@ -1525,7 +1525,7 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
       throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
   }
 
-  tb.SetHeight(Params().GetConsensus(), chainActive.Tip()->GetHeight());
+  tb.SetHeight(Params().GetConsensus(), chainActive.Tip()->nHeight);
 
   libzcash::SaplingExtendedSpendingKey primaryKey;
   for (int i = 0; i < tb.rawSpends.size(); i++) {
@@ -1533,7 +1533,7 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
       std::map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.find(op.hash);
       if (it != pwalletMain->mapWallet.end()) {
             CWalletTx wtx = (*it).second;
-            int txHeight = chainActive.Tip()->GetHeight() - wtx.GetDepthInMainChain();
+            int txHeight = chainActive.Tip()->nHeight - wtx.GetDepthInMainChain();
             auto maybe_decrypted = wtx.DecryptSaplingNote(Params().GetConsensus(), txHeight, op);
             if (maybe_decrypted == boost::none)
                 throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Note decryption failed.");
@@ -1622,7 +1622,7 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
     UniValue outputs = params[1].get_array();
 
     CAmount total = 0;
-    int nHeight = chainActive.Tip()->GetHeight();
+    int nHeight = chainActive.Tip()->nHeight;
     TransactionBuilder tx = TransactionBuilder(Params().GetConsensus(), nHeight + 1, pwalletMain);
 
     CAmount nFee = 10000;
@@ -1662,7 +1662,7 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
         if (wtx != NULL) {
             SaplingOutPoint op = SaplingOutPoint(txid, nOutput);
 
-            int txHeight = chainActive.Tip()->GetHeight() - wtx->GetDepthInMainChain();
+            int txHeight = chainActive.Tip()->nHeight - wtx->GetDepthInMainChain();
             auto maybe_decrypted = wtx->DecryptSaplingNote(Params().GetConsensus(), txHeight, op);
             if (maybe_decrypted == boost::none)
                 throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Note decryption failed.");

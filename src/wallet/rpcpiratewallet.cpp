@@ -569,8 +569,8 @@ void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, bool fIncludeWatchonly
 
     arcTx.blockHash = hashBlock;
 
-    int nHeight = chainActive.Tip()->GetHeight();
-    int txHeight = mapBlockIndex[hashBlock]->GetHeight();
+    int nHeight = chainActive.Tip()->nHeight;
+    int txHeight = mapBlockIndex[hashBlock]->nHeight;
     arcTx.blockHeight = txHeight;
     arcTx.rawconfirmations = nHeight - txHeight + 1;
     arcTx.confirmations = komodo_dpowconfs(txHeight, nHeight - txHeight + 1);
@@ -675,13 +675,13 @@ void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, bool fIncludeWatchonly
     arcTx.blockIndex = tx.nIndex;
     arcTx.blockHash = tx.hashBlock;
     arcTx.rawconfirmations = tx.GetDepthInMainChain();
-    int txHeight = chainActive.Tip()->GetHeight() + 1;
+    int txHeight = chainActive.Tip()->nHeight + 1;
 
     if (!tx.hashBlock.IsNull() && mapBlockIndex.count(tx.hashBlock) > 0) {
         arcTx.nBlockTime = mapBlockIndex[tx.hashBlock]->GetBlockTime();
         arcTx.nTime = arcTx.nBlockTime;
-        arcTx.confirmations = komodo_dpowconfs(mapBlockIndex[tx.hashBlock]->GetHeight(), tx.GetDepthInMainChain());
-        txHeight = mapBlockIndex[tx.hashBlock]->GetHeight();
+        arcTx.confirmations = komodo_dpowconfs(mapBlockIndex[tx.hashBlock]->nHeight, tx.GetDepthInMainChain());
+        txHeight = mapBlockIndex[tx.hashBlock]->nHeight;
         arcTx.blockHeight = txHeight;
     } else {
         arcTx.blockHeight = 0;
@@ -1092,7 +1092,7 @@ UniValue zs_listtransactions(const UniValue& params, bool fHelp, const CPubKey& 
       std::pair<int,int> key;
 
       if (!arcTxPt.hashBlock.IsNull() && mapBlockIndex.count(arcTxPt.hashBlock) > 0) {
-        key = make_pair(mapBlockIndex[arcTxPt.hashBlock]->GetHeight(), arcTxPt.nIndex);
+        key = make_pair(mapBlockIndex[arcTxPt.hashBlock]->nHeight, arcTxPt.nIndex);
         sortedArchive[key] = txid;
       }
     }
@@ -1104,14 +1104,14 @@ UniValue zs_listtransactions(const UniValue& params, bool fHelp, const CPubKey& 
       std::pair<int,int> key;
 
       if (wtx.GetDepthInMainChain() == 0) {
-        key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
+        key = make_pair(chainActive.Tip()->nHeight + 1,  nPosUnconfirmed);
         sortedArchive[key] = wtx.GetHash();
         nPosUnconfirmed++;
       } else if (!wtx.hashBlock.IsNull() && mapBlockIndex.count(wtx.hashBlock) > 0) {
-        key = make_pair(mapBlockIndex[wtx.hashBlock]->GetHeight(), wtx.nIndex);
+        key = make_pair(mapBlockIndex[wtx.hashBlock]->nHeight, wtx.nIndex);
         sortedArchive[key] = wtx.GetHash();
       } else {
-        key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
+        key = make_pair(chainActive.Tip()->nHeight + 1,  nPosUnconfirmed);
         sortedArchive[key] = wtx.GetHash();
         nPosUnconfirmed++;
       }
@@ -1119,7 +1119,7 @@ UniValue zs_listtransactions(const UniValue& params, bool fHelp, const CPubKey& 
     }
 
     uint64_t t = GetTime();
-    int chainHeight = chainActive.Tip()->GetHeight();
+    int chainHeight = chainActive.Tip()->nHeight;
     //Reverse Iterate thru transactions
     for (map<std::pair<int,int>, uint256>::reverse_iterator it = sortedArchive.rbegin(); it != sortedArchive.rend(); ++it)
     {
@@ -1478,7 +1478,7 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
       }
 
       if (!arcTxPt.hashBlock.IsNull() && mapBlockIndex.count(arcTxPt.hashBlock) > 0) {
-        key = make_pair(mapBlockIndex[arcTxPt.hashBlock]->GetHeight(), arcTxPt.nIndex);
+        key = make_pair(mapBlockIndex[arcTxPt.hashBlock]->nHeight, arcTxPt.nIndex);
         sortedArchive[key] = txid;
       }
     }
@@ -1490,14 +1490,14 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
       std::pair<int,int> key;
 
       if (wtx.GetDepthInMainChain() == 0) {
-        key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
+        key = make_pair(chainActive.Tip()->nHeight + 1,  nPosUnconfirmed);
         sortedArchive[key] = wtx.GetHash();
         nPosUnconfirmed++;
       } else if (!wtx.hashBlock.IsNull() && mapBlockIndex.count(wtx.hashBlock) > 0) {
-        key = make_pair(mapBlockIndex[wtx.hashBlock]->GetHeight(), wtx.nIndex);
+        key = make_pair(mapBlockIndex[wtx.hashBlock]->nHeight, wtx.nIndex);
         sortedArchive[key] = wtx.GetHash();
       } else {
-        key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
+        key = make_pair(chainActive.Tip()->nHeight + 1,  nPosUnconfirmed);
         sortedArchive[key] = wtx.GetHash();
         nPosUnconfirmed++;
       }
@@ -1505,7 +1505,7 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
     }
 
     uint64_t t = GetTime();
-    int chainHeight = chainActive.Tip()->GetHeight();
+    int chainHeight = chainActive.Tip()->nHeight;
     //Reverse Iterate thru transactions
     for (map<std::pair<int,int>, uint256>::reverse_iterator it = sortedArchive.rbegin(); it != sortedArchive.rend(); ++it)
     {
@@ -1763,7 +1763,7 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
       }
 
       if (!arcTxPt.hashBlock.IsNull() && mapBlockIndex.count(arcTxPt.hashBlock) > 0) {
-        key = make_pair(mapBlockIndex[arcTxPt.hashBlock]->GetHeight(), arcTxPt.nIndex);
+        key = make_pair(mapBlockIndex[arcTxPt.hashBlock]->nHeight, arcTxPt.nIndex);
         sortedArchive[key] = txid;
       }
     }
@@ -1775,14 +1775,14 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
       std::pair<int,int> key;
 
       if (wtx.GetDepthInMainChain() == 0) {
-        key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
+        key = make_pair(chainActive.Tip()->nHeight + 1,  nPosUnconfirmed);
         sortedArchive[key] = wtx.GetHash();
         nPosUnconfirmed++;
       } else if (!wtx.hashBlock.IsNull() && mapBlockIndex.count(wtx.hashBlock) > 0) {
-        key = make_pair(mapBlockIndex[wtx.hashBlock]->GetHeight(), wtx.nIndex);
+        key = make_pair(mapBlockIndex[wtx.hashBlock]->nHeight, wtx.nIndex);
         sortedArchive[key] = wtx.GetHash();
       } else {
-        key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
+        key = make_pair(chainActive.Tip()->nHeight + 1,  nPosUnconfirmed);
         sortedArchive[key] = wtx.GetHash();
         nPosUnconfirmed++;
       }
@@ -1790,7 +1790,7 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
     }
 
     uint64_t t = GetTime();
-    int chainHeight = chainActive.Tip()->GetHeight();
+    int chainHeight = chainActive.Tip()->nHeight;
     //Reverse Iterate thru transactions
     for (map<std::pair<int,int>, uint256>::reverse_iterator it = sortedArchive.rbegin(); it != sortedArchive.rend(); ++it)
     {
@@ -2050,7 +2050,7 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
       }
 
       if (!arcTxPt.hashBlock.IsNull() && mapBlockIndex.count(arcTxPt.hashBlock) > 0) {
-        key = make_pair(mapBlockIndex[arcTxPt.hashBlock]->GetHeight(), arcTxPt.nIndex);
+        key = make_pair(mapBlockIndex[arcTxPt.hashBlock]->nHeight, arcTxPt.nIndex);
         sortedArchive[key] = txid;
       }
     }
@@ -2062,14 +2062,14 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
       std::pair<int,int> key;
 
       if (wtx.GetDepthInMainChain() == 0) {
-        key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
+        key = make_pair(chainActive.Tip()->nHeight + 1,  nPosUnconfirmed);
         sortedArchive[key] = wtx.GetHash();
         nPosUnconfirmed++;
       } else if (!wtx.hashBlock.IsNull() && mapBlockIndex.count(wtx.hashBlock) > 0) {
-        key = make_pair(mapBlockIndex[wtx.hashBlock]->GetHeight(), wtx.nIndex);
+        key = make_pair(mapBlockIndex[wtx.hashBlock]->nHeight, wtx.nIndex);
         sortedArchive[key] = wtx.GetHash();
       } else {
-        key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
+        key = make_pair(chainActive.Tip()->nHeight + 1,  nPosUnconfirmed);
         sortedArchive[key] = wtx.GetHash();
         nPosUnconfirmed++;
       }
@@ -2077,7 +2077,7 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
     }
 
     uint64_t t = GetTime();
-    int chainHeight = chainActive.Tip()->GetHeight();
+    int chainHeight = chainActive.Tip()->nHeight;
     //Reverse Iterate thru transactions
     for (map<std::pair<int,int>, uint256>::reverse_iterator it = sortedArchive.rbegin(); it != sortedArchive.rend(); ++it)
     {
@@ -2318,9 +2318,9 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
           continue;
 
       //Get Block height of transaction
-      int txHeight = chainActive.Tip()->GetHeight() + 1;
+      int txHeight = chainActive.Tip()->nHeight + 1;
       if (!wtx.hashBlock.IsNull() && mapBlockIndex.count(wtx.hashBlock) > 0) {
-          txHeight = mapBlockIndex[wtx.hashBlock]->GetHeight();
+          txHeight = mapBlockIndex[wtx.hashBlock]->nHeight;
       }
 
       //Assign Immature
@@ -2568,7 +2568,7 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
                     continue;
                 }
 
-                key = make_pair(mapBlockIndex[arcTxPt.hashBlock]->GetHeight(), arcTxPt.nIndex);
+                key = make_pair(mapBlockIndex[arcTxPt.hashBlock]->nHeight, arcTxPt.nIndex);
                 sortedArchive[key] = txid;
             }
         }
@@ -2598,14 +2598,14 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
           if (wtx.GetDepthInMainChain() == 0) {
             ut = wtx.GetHash();
-            key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
+            key = make_pair(chainActive.Tip()->nHeight + 1,  nPosUnconfirmed);
             sortedArchive[key] = wtx.GetHash();
             nPosUnconfirmed++;
           } else if (!wtx.hashBlock.IsNull() && mapBlockIndex.count(wtx.hashBlock) > 0) {
-            key = make_pair(mapBlockIndex[wtx.hashBlock]->GetHeight(), wtx.nIndex);
+            key = make_pair(mapBlockIndex[wtx.hashBlock]->nHeight, wtx.nIndex);
             sortedArchive[key] = wtx.GetHash();
           } else {
-            key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
+            key = make_pair(chainActive.Tip()->nHeight + 1,  nPosUnconfirmed);
             sortedArchive[key] = wtx.GetHash();
             nPosUnconfirmed++;
           }

@@ -10,13 +10,15 @@ pirate_test_SOURCES = \
 	test-komodo/test_eval_bet.cpp \
 	test-komodo/test_eval_notarisation.cpp \
 	test-komodo/test_parse_notarisation.cpp \
+	test-komodo/test_parse_notarisation_data.cpp \
 	test-komodo/test_buffered_file.cpp \
 	test-komodo/test_sha256_crypto.cpp \
 	test-komodo/test_script_standard_tests.cpp \
 	test-komodo/test_addrman.cpp \
 	test-komodo/test_netbase_tests.cpp \
     test-komodo/test_events.cpp \
-    test-komodo/test_hex.cpp
+    test-komodo/test_hex.cpp \
+    test-komodo/test_haraka_removal.cpp
 
 pirate_test_CPPFLAGS = $(pirated_CPPFLAGS)
 

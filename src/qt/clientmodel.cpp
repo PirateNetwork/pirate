@@ -79,7 +79,7 @@ int ClientModel::getHeaderTipHeight() const
         // otherwise we need to wait for a tip update
         LOCK(cs_main);
         if (pindexBestHeader) {
-            cachedBestHeaderHeight = pindexBestHeader->GetHeight();
+            cachedBestHeaderHeight = pindexBestHeader->nHeight;
             cachedBestHeaderTime = pindexBestHeader->GetBlockTime();
         }
     }
@@ -91,7 +91,7 @@ int64_t ClientModel::getHeaderTipTime() const
     if (cachedBestHeaderTime == -1) {
         LOCK(cs_main);
         if (pindexBestHeader) {
-            cachedBestHeaderHeight = pindexBestHeader->GetHeight();
+            cachedBestHeaderHeight = pindexBestHeader->nHeight;
             cachedBestHeaderTime = pindexBestHeader->GetBlockTime();
         }
     }
@@ -290,14 +290,14 @@ static void BlockTipChanged(ClientModel *clientmodel, bool initialSync, const CB
 
     if (fHeader) {
         // cache best headers time and height to reduce future cs_main locks
-        clientmodel->cachedBestHeaderHeight = pIndex->GetHeight();
+        clientmodel->cachedBestHeaderHeight = pIndex->nHeight;
         clientmodel->cachedBestHeaderTime = pIndex->GetBlockTime();
     }
     // if we are in-sync, update the UI regardless of last update time
     if (!initialSync || now - nLastUpdateNotification > MODEL_UPDATE_DELAY) {
         //pass an async signal to the UI thread
         QMetaObject::invokeMethod(clientmodel, "numBlocksChanged", Qt::QueuedConnection,
-                                  Q_ARG(int, pIndex->GetHeight()),
+                                  Q_ARG(int, pIndex->nHeight),
                                   Q_ARG(QDateTime, QDateTime::fromTime_t(pIndex->GetBlockTime())),
                                   Q_ARG(double, clientmodel->getVerificationProgress(pIndex)),
                                   Q_ARG(bool, fHeader));

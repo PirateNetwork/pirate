@@ -184,7 +184,7 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
             auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
             {
                 LOCK2(cs_main, pwalletMain->cs_wallet);
-                builder.SetExpiryHeight(chainActive.Tip()->GetHeight()+ CONSOLIDATION_EXPIRY_DELTA);
+                builder.SetExpiryHeight(chainActive.Tip()->nHeight+ CONSOLIDATION_EXPIRY_DELTA);
             }
             LogPrint("zrpcunsafe", "%s: Beginning creating transaction with Sapling output amount=%s\n", getId(), FormatMoney(amountToSend - fee));
 
@@ -233,7 +233,7 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
     }
 
     if (consolidationComplete) {
-        pwalletMain->nextConsolidation = pwalletMain->initializeConsolidationInterval + chainActive.Tip()->GetHeight();
+        pwalletMain->nextConsolidation = pwalletMain->initializeConsolidationInterval + chainActive.Tip()->nHeight;
         pwalletMain->fConsolidationRunning = false;
     }
 

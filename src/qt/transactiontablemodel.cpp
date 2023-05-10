@@ -97,7 +97,7 @@ public:
                 std::pair<int,int> key;
 
                 if (!arcTxPt.hashBlock.IsNull() && mapBlockIndex.count(arcTxPt.hashBlock) > 0) {
-                    key = make_pair(mapBlockIndex[arcTxPt.hashBlock]->GetHeight(), arcTxPt.nIndex);
+                    key = make_pair(mapBlockIndex[arcTxPt.hashBlock]->nHeight, arcTxPt.nIndex);
                     sortedArchive[key] = txid;
                 }
             }
@@ -110,14 +110,14 @@ public:
 
                 if (wtx.GetDepthInMainChain() == 0) {
                     ut = wtx.GetHash();
-                    key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
+                    key = make_pair(chainActive.Tip()->nHeight + 1,  nPosUnconfirmed);
                     sortedArchive[key] = wtx.GetHash();
                     nPosUnconfirmed++;
                 } else if (!wtx.hashBlock.IsNull() && mapBlockIndex.count(wtx.hashBlock) > 0) {
-                    key = make_pair(mapBlockIndex[wtx.hashBlock]->GetHeight(), wtx.nIndex);
+                    key = make_pair(mapBlockIndex[wtx.hashBlock]->nHeight, wtx.nIndex);
                     sortedArchive[key] = wtx.GetHash();
                 } else {
-                    key = make_pair(chainActive.Tip()->GetHeight() + 1,  nPosUnconfirmed);
+                    key = make_pair(chainActive.Tip()->nHeight + 1,  nPosUnconfirmed);
                     sortedArchive[key] = wtx.GetHash();
                     nPosUnconfirmed++;
                 }

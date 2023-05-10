@@ -194,7 +194,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
             auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
             {
                 LOCK2(cs_main, pwalletMain->cs_wallet);
-                builder.SetExpiryHeight(chainActive.Tip()->GetHeight()+ SWEEP_EXPIRY_DELTA);
+                builder.SetExpiryHeight(chainActive.Tip()->nHeight+ SWEEP_EXPIRY_DELTA);
             }
             LogPrint("zrpcunsafe", "%s: Beginning creating transaction with Sapling output amount=%s\n", getId(), FormatMoney(amountToSend - fee));
 
@@ -242,7 +242,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
     }
 
     if (sweepComplete) {
-        pwalletMain->nextSweep = pwalletMain->sweepInterval + chainActive.Tip()->GetHeight();
+        pwalletMain->nextSweep = pwalletMain->sweepInterval + chainActive.Tip()->nHeight;
         pwalletMain->fSweepRunning = false;
     }
 

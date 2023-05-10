@@ -21,10 +21,7 @@
 #ifndef BITCOIN_CHAIN_H
 #define BITCOIN_CHAIN_H
 
-class CChainPower;
-
 #include "arith_uint256.h"
-#include "komodo_defs.h"
 #include "primitives/block.h"
 #include "pow.h"
 #include "tinyformat.h"
@@ -37,10 +34,11 @@ class CChainPower;
 
 static const int SPROUT_VALUE_VERSION = 1001400;
 static const int SAPLING_VALUE_VERSION = 1010100;
-extern int32_t ASSETCHAINS_LWMAPOS;
 extern char ASSETCHAINS_SYMBOL[65];
 extern uint64_t ASSETCHAINS_NOTARY_PAY[];
 extern int32_t ASSETCHAINS_STAKED;
+extern const uint32_t nStakedDecemberHardforkTimestamp; //December 2019 hardfork
+extern const int32_t nDecemberHardforkHeight;   //December 2019 hardfork
 extern int8_t is_STAKED(const char *chain_name);
 
 struct CDiskBlockPos
@@ -108,9 +106,9 @@ enum BlockStatus: uint32_t {
     //! Scripts & signatures ok. Implies all parents are also at least SCRIPTS.
     BLOCK_VALID_SCRIPTS      =    5,
 
-    // flag to check if contextual check block has passed in Accept block, if it has not check at connect block. 
+    // flag to check if contextual check block has passed in Accept block, if it has not check at connect block.
     BLOCK_VALID_CONTEXT      =    6,
-    
+
     //! All validity bits.
     BLOCK_VALID_MASK         =   BLOCK_VALID_HEADER | BLOCK_VALID_TREE | BLOCK_VALID_TRANSACTIONS |
                                  BLOCK_VALID_CHAIN | BLOCK_VALID_SCRIPTS,
@@ -124,107 +122,12 @@ enum BlockStatus: uint32_t {
     BLOCK_FAILED_MASK        =   BLOCK_FAILED_VALID | BLOCK_FAILED_CHILD,
 
     BLOCK_ACTIVATES_UPGRADE  =   128, //! block activates a network upgrade
-    BLOCK_IN_TMPFILE         =   256 
+    BLOCK_IN_TMPFILE         =   256
 };
 
 //! Short-hand for the highest consensus validity we implement.
 //! Blocks with this validity are assumed to satisfy all consensus rules.
 static const BlockStatus BLOCK_VALID_CONSENSUS = BLOCK_VALID_SCRIPTS;
-
-class CBlockIndex;
-
-// This class provides an accumulator for both the chainwork and the chainPOS value
-// CChainPower's can be compared, and the comparison ensures that work and proof of stake power
-// are both used equally to determine which chain has the most work. This makes an attack
-// that involves mining in secret completely ineffective, even before dPOW, unless a large part 
-// of the staking supply is also controlled. It also enables a faster deterministic convergence, 
-// aided by both POS and POW.
-class CChainPower
-{
-    public:
-        arith_uint256 chainWork;
-        arith_uint256 chainStake;
-        int32_t nHeight;
-
-        CChainPower() : nHeight(0), chainStake(0), chainWork(0) {}
-        CChainPower(CBlockIndex *pblockIndex);
-        CChainPower(CBlockIndex *pblockIndex, const arith_uint256 &stake, const arith_uint256 &work);
-        CChainPower(int32_t height) : nHeight(height), chainStake(0), chainWork(0) {}
-        CChainPower(int32_t height, const arith_uint256 &stake, const arith_uint256 &work) : 
-                    nHeight(height), chainStake(stake), chainWork(work) {}
-
-        CChainPower &operator=(const CChainPower &chainPower)
-        {
-            chainWork = chainPower.chainWork;
-            chainStake = chainPower.chainStake;
-            nHeight = chainPower.nHeight;
-            return *this;
-        }
-
-        CChainPower &operator+=(const CChainPower &chainPower)
-        {
-            this->chainWork += chainPower.chainWork;
-            this->chainStake += chainPower.chainStake;
-            return *this;
-        }
-
-        friend CChainPower operator+(const CChainPower &chainPowerA, const CChainPower &chainPowerB)
-        {
-            CChainPower result = CChainPower(chainPowerA);
-            result.chainWork += chainPowerB.chainWork;
-            result.chainStake += chainPowerB.chainStake;
-            return result;
-        }
-
-        friend CChainPower operator-(const CChainPower &chainPowerA, const CChainPower &chainPowerB)
-        {
-            CChainPower result = CChainPower(chainPowerA);
-            result.chainWork -= chainPowerB.chainWork;
-            result.chainStake -= chainPowerB.chainStake;
-            return result;
-        }
-
-        friend CChainPower operator*(const CChainPower &chainPower, int32_t x)
-        {
-            CChainPower result = CChainPower(chainPower);
-            result.chainWork *= x;
-            result.chainStake *= x;
-            return result;
-        }
-
-        CChainPower &addStake(const arith_uint256 &nChainStake)
-        {
-            chainStake += nChainStake;
-            return *this;
-        }
-
-        CChainPower &addWork(const arith_uint256 &nChainWork)
-        {
-            chainWork += nChainWork;
-            return *this;
-        }
-
-        friend bool operator==(const CChainPower &p1, const CChainPower &p2);
-
-        friend bool operator!=(const CChainPower &p1, const CChainPower &p2)
-        {
-            return !(p1 == p2);
-        }
-
-        friend bool operator<(const CChainPower &p1, const CChainPower &p2);
-
-        friend bool operator<=(const CChainPower &p1, const CChainPower &p2);
-
-        friend bool operator>(const CChainPower &p1, const CChainPower &p2)
-        {
-            return !(p1 <= p2);
-        }
-
-        friend bool operator>=(const CChainPower &p1, const CChainPower &p2)
-        {
-            return !(p1 < p2);
-        }
-};
 
 /** The block chain is a tree shaped structure starting with the
  * genesis block at the root, with each block potentially having multiple
@@ -244,6 +147,8 @@ public:
     CBlockIndex* pskip;
 
     //! height of the entry in the chain. The genesis block has height 0
+    int nHeight;
+
     int64_t newcoins,zfunds,sproutfunds,nNotaryPay; int8_t segid; // jl777 fields
     //! Which # file this block is stored in (blk?????.dat)
     int nFile;
@@ -255,7 +160,7 @@ public:
     unsigned int nUndoPos;
 
     //! (memory only) Total amount of work (expected number of hashes) in the chain up to and including this block
-    CChainPower chainPower;
+    arith_uint256 nChainWork;
 
     //! Number of transactions in this block.
     //! Note: in a potential headers-first mode, this number cannot be relied upon
@@ -309,7 +214,7 @@ public:
 
     //! (memory only) Sequential id assigned to distinguish order in which blocks are received.
     uint32_t nSequenceId;
-    
+
     void SetNull()
     {
         phashBlock = NULL;
@@ -318,10 +223,11 @@ public:
         nNotaryPay = 0;
         pprev = NULL;
         pskip = NULL;
+        nHeight = 0;
         nFile = 0;
         nDataPos = 0;
         nUndoPos = 0;
-        chainPower = CChainPower();
+        nChainWork = arith_uint256();
         nTx = 0;
         nChainTx = 0;
         nStatus = 0;
@@ -359,16 +265,6 @@ public:
         nBits          = block.nBits;
         nNonce         = block.nNonce;
         nSolution      = block.nSolution;
-    }
-
-    void SetHeight(int32_t height)
-    {
-        this->chainPower.nHeight = height;
-    }
-
-    inline int32_t GetHeight() const
-    {
-        return this->chainPower.nHeight;
     }
 
     CDiskBlockPos GetBlockPos() const {
@@ -433,7 +329,7 @@ public:
     std::string ToString() const
     {
         return strprintf("CBlockIndex(pprev=%p, nHeight=%d, merkle=%s, hashBlock=%s)",
-            pprev, this->chainPower.nHeight,
+            pprev, nHeight,
             hashMerkleRoot.ToString(),
             GetBlockHash().ToString());
     }
@@ -467,18 +363,6 @@ public:
     //! Efficiently find an ancestor of this block.
     CBlockIndex* GetAncestor(int height);
     const CBlockIndex* GetAncestor(int height) const;
-
-    int32_t GetVerusPOSTarget() const
-    {
-        return GetBlockHeader().GetVerusPOSTarget();
-    }
-
-    bool IsVerusPOSBlock() const
-    {
-        if ( ASSETCHAINS_LWMAPOS != 0 )
-            return GetBlockHeader().IsVerusPOSBlock();
-        else return(0);
-    }
 };
 
 /** Used to marshal pointers into hashes for db storage. */
@@ -503,10 +387,7 @@ public:
         if (!(s.GetType() & SER_GETHASH))
             READWRITE(VARINT(nVersion));
 
-        if (ser_action.ForRead()) {
-            chainPower = CChainPower();
-        }
-        READWRITE(VARINT(chainPower.nHeight));
+        READWRITE(VARINT(nHeight));
         READWRITE(VARINT(nStatus));
         READWRITE(VARINT(nTx));
         if (nStatus & (BLOCK_HAVE_DATA | BLOCK_HAVE_UNDO))
@@ -550,7 +431,7 @@ public:
         if ((s.GetType() & SER_DISK) && (nVersion >= SAPLING_VALUE_VERSION)) {
             READWRITE(nSaplingValue);
         }
-        
+
         // leave the existing LABS exemption here for segid and notary pay, but also add a timestamp activated segid for non LABS PoS64 chains.
         if ( (s.GetType() & SER_DISK) && is_STAKED(ASSETCHAINS_SYMBOL) != 0 && ASSETCHAINS_NOTARY_PAY[0] != 0 )
         {
@@ -560,7 +441,7 @@ public:
         {
             READWRITE(segid);
         }
-        
+
         /*if ( (s.GetType() & SER_DISK) && (is_STAKED(ASSETCHAINS_SYMBOL) != 0) && ASSETCHAINS_NOTARY_PAY[0] != 0 )
         {
             READWRITE(nNotaryPay);
@@ -610,7 +491,7 @@ public:
     CBlockIndex *Tip() const {
         return vChain.size() > 0 ? vChain[vChain.size() - 1] : NULL;
     }
-    
+
     /** Returns the last tip of the chain, or NULL if none. */
     CBlockIndex *LastTip() const {
         return vChain.size() > 0 ? lastTip : NULL;
@@ -631,18 +512,18 @@ public:
 
     /** Efficiently check whether a block is present in this chain. */
     bool Contains(const CBlockIndex *pindex) const {
-        return (*this)[pindex->GetHeight()] == pindex;
+        return (*this)[pindex->nHeight] == pindex;
     }
 
     /** Find the successor of a block in this chain, or NULL if the given index is not found or is the tip. */
     CBlockIndex *Next(const CBlockIndex *pindex) const {
         if (Contains(pindex))
-            return (*this)[pindex->GetHeight() + 1];
+            return (*this)[pindex->nHeight + 1];
         else
             return NULL;
     }
 
-    /** Return the maximal height in the chain. Is equal to chain.Tip() ? chain.Tip()->GetHeight() : -1. */
+    /** Return the maximal height in the chain. Is equal to chain.Tip() ? chain.Tip()->nHeight : -1. */
     int Height() const {
         return vChain.size() - 1;
     }
