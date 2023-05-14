@@ -18,12 +18,11 @@
 #define CC_PAYMENTS_H
 
 #include "CCinclude.h"
-#include <gmp.h>
 #include <key_io.h>
 
 #define PAYMENTS_TXFEE 10000
 #define PAYMENTS_MERGEOFSET 60 // 1H extra. 
-extern std::vector <std::pair<CAmount, CTxDestination>> vAddressSnapshot;
+extern std::vector <std::pair<CAmount, CTxDestination>> vAddressSnapshot; // daily snapshot
 extern int32_t lastSnapShotHeight;
 
 bool PaymentsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, uint32_t nIn);

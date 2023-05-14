@@ -26,20 +26,26 @@
 #include "pow.h"
 #include "tinyformat.h"
 #include "uint256.h"
+#include "sync.h"
 
-
+#include "assetchain.h"
 #include <vector>
 
 #include <boost/foreach.hpp>
 
+extern CCriticalSection cs_main;
+
 static const int SPROUT_VALUE_VERSION = 1001400;
 static const int SAPLING_VALUE_VERSION = 1010100;
-extern char ASSETCHAINS_SYMBOL[65];
-extern uint64_t ASSETCHAINS_NOTARY_PAY[];
+
+// These 5 are declared here to avoid circular dependencies
+// code used this moved into .cpp
+/*extern assetchain chainName;
+extern uint64_t ASSETCHAINS_NOTARY_PAY[ASSETCHAINS_MAX_ERAS+1];
 extern int32_t ASSETCHAINS_STAKED;
 extern const uint32_t nStakedDecemberHardforkTimestamp; //December 2019 hardfork
 extern const int32_t nDecemberHardforkHeight;   //December 2019 hardfork
-extern int8_t is_STAKED(const char *chain_name);
+uint8_t is_STAKED(const std::string& symbol);*/
 
 struct CDiskBlockPos
 {
@@ -312,12 +318,19 @@ public:
 
     enum { nMedianTimeSpan=11 };
 
+    /***
+     * @note times are stored as a 4 byte int. Although this returns int64_t, it will be at
+     * 32 bit resolution.
+     * @note storing this as 32 bits can cause a "Year 2038" problem.
+     * @returns the median time (uinx epoch) of the last nMedianTimeSpan (currently 11) blocks
+     */
     int64_t GetMedianTimePast() const
     {
         int64_t pmedian[nMedianTimeSpan];
         int64_t* pbegin = &pmedian[nMedianTimeSpan];
         int64_t* pend = &pmedian[nMedianTimeSpan];
 
+        // grab the times of the last 11 blocks
         const CBlockIndex* pindex = this;
         for (int i = 0; i < nMedianTimeSpan && pindex; i++, pindex = pindex->pprev)
             *(--pbegin) = pindex->GetBlockTime();
@@ -433,22 +446,20 @@ public:
         }
 
         // leave the existing LABS exemption here for segid and notary pay, but also add a timestamp activated segid for non LABS PoS64 chains.
-        if ( (s.GetType() & SER_DISK) && is_STAKED(ASSETCHAINS_SYMBOL) != 0 && ASSETCHAINS_NOTARY_PAY[0] != 0 )
+        if ( (s.GetType() & SER_DISK) && isStakedAndNotaryPay() /*is_STAKED(chainName.symbol()) != 0 && ASSETCHAINS_NOTARY_PAY[0] != 0*/ )
         {
             READWRITE(nNotaryPay);
         }
-        if ( (s.GetType() & SER_DISK) && ASSETCHAINS_STAKED != 0 && (nTime > nStakedDecemberHardforkTimestamp || is_STAKED(ASSETCHAINS_SYMBOL) != 0) ) //December 2019 hardfork
+        if ( (s.GetType() & SER_DISK) && isStakedAndAfterDec2019(nTime) /*ASSETCHAINS_STAKED != 0 && (nTime > nStakedDecemberHardforkTimestamp || is_STAKED(chainName.symbol()) != 0)*/ ) //December 2019 hardfork
         {
             READWRITE(segid);
         }
-
-        /*if ( (s.GetType() & SER_DISK) && (is_STAKED(ASSETCHAINS_SYMBOL) != 0) && ASSETCHAINS_NOTARY_PAY[0] != 0 )
-        {
-            READWRITE(nNotaryPay);
-            READWRITE(segid);
-        }*/
     }
+private:
+    bool isStakedAndNotaryPay() const;
+    bool isStakedAndAfterDec2019(unsigned int nTime) const;
 
+public:
     uint256 GetBlockHash() const
     {
         CBlockHeader block;
@@ -477,46 +488,49 @@ public:
 
 /** An in-memory indexed chain of blocks. */
 class CChain {
-private:
+protected:
     std::vector<CBlockIndex*> vChain;
-    CBlockIndex *lastTip;
-
-public:
-    /** Returns the index entry for the genesis block of this chain, or NULL if none. */
-    CBlockIndex *Genesis() const {
-        return vChain.size() > 0 ? vChain[0] : NULL;
-    }
-
-    /** Returns the index entry for the tip of this chain, or NULL if none. */
-    CBlockIndex *Tip() const {
-        return vChain.size() > 0 ? vChain[vChain.size() - 1] : NULL;
-    }
-
-    /** Returns the last tip of the chain, or NULL if none. */
-    CBlockIndex *LastTip() const {
-        return vChain.size() > 0 ? lastTip : NULL;
-    }
-
-    /** Returns the index entry at a particular height in this chain, or NULL if no such height exists. */
-    CBlockIndex *operator[](int nHeight) const {
+    CBlockIndex *at(int nHeight) const REQUIRES(cs_main)
+    {
         if (nHeight < 0 || nHeight >= (int)vChain.size())
             return NULL;
         return vChain[nHeight];
     }
+public:
+    /** Returns the index entry for the genesis block of this chain, or NULL if none. */
+    CBlockIndex *Genesis() const REQUIRES(cs_main) {
+        AssertLockHeld(cs_main);
+        return vChain.size() > 0 ? vChain[0] : NULL;
+    }
+
+    /** Returns the index entry for the tip of this chain, or NULL if none. */
+    CBlockIndex *Tip() const REQUIRES(cs_main) {
+        AssertLockHeld(cs_main);
+        return vChain.size() > 0 ? vChain[vChain.size() - 1] : nullptr;
+    }
+    
+    /** Returns the index entry at a particular height in this chain, or NULL if no such height exists. */
+    CBlockIndex *operator[](int nHeight) const REQUIRES(cs_main) {
+        AssertLockHeld(cs_main);
+        return at(nHeight);
+    }
 
     /** Compare two chains efficiently. */
-    friend bool operator==(const CChain &a, const CChain &b) {
-        return a.vChain.size() == b.vChain.size() &&
-               a.vChain[a.vChain.size() - 1] == b.vChain[b.vChain.size() - 1];
+    friend bool operator==(const CChain &a, const CChain &b) REQUIRES(cs_main) {
+        AssertLockHeld(cs_main);
+        return a.Height() == b.Height() &&
+               a.Tip() == b.Tip();
     }
 
     /** Efficiently check whether a block is present in this chain. */
-    bool Contains(const CBlockIndex *pindex) const {
+    bool Contains(const CBlockIndex *pindex) const REQUIRES(cs_main) {
+        AssertLockHeld(cs_main);
         return (*this)[pindex->nHeight] == pindex;
     }
 
     /** Find the successor of a block in this chain, or NULL if the given index is not found or is the tip. */
-    CBlockIndex *Next(const CBlockIndex *pindex) const {
+    CBlockIndex *Next(const CBlockIndex *pindex) const REQUIRES(cs_main) {
+        AssertLockHeld(cs_main);
         if (Contains(pindex))
             return (*this)[pindex->nHeight + 1];
         else
@@ -524,18 +538,19 @@ public:
     }
 
     /** Return the maximal height in the chain. Is equal to chain.Tip() ? chain.Tip()->nHeight : -1. */
-    int Height() const {
+    int Height() const REQUIRES(cs_main) {
+        AssertLockHeld(cs_main);
         return vChain.size() - 1;
     }
 
     /** Set/initialize a chain with a given tip. */
-    void SetTip(CBlockIndex *pindex);
+    void SetTip(CBlockIndex *pindex) REQUIRES(cs_main);
 
     /** Return a CBlockLocator that refers to a block in this chain (by default the tip). */
-    CBlockLocator GetLocator(const CBlockIndex *pindex = NULL) const;
+    CBlockLocator GetLocator(const CBlockIndex *pindex = NULL) const REQUIRES(cs_main);
 
     /** Find the last common block between this chain and a block index entry. */
-    const CBlockIndex *FindFork(const CBlockIndex *pindex) const;
+    const CBlockIndex *FindFork(const CBlockIndex *pindex) const REQUIRES(cs_main);
 };
 
 #endif // BITCOIN_CHAIN_H

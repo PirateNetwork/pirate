@@ -38,7 +38,14 @@ public:
         MAX_NETWORK_TYPES
     };
 
+    /***
+     * @brief returns the subdirectory for the network
+     * @return the data subdirectory ( nothing, or "testnet3" or "regtest" )
+     */
     const std::string& DataDir() const { return strDataDir; }
+    /****
+     * @returns the port used for RPC calls
+     */
     int RPCPort() const { return nRPCPort; }
 
 protected:
@@ -49,29 +56,31 @@ protected:
 };
 
 /**
- * Return the currently selected parameters. This won't change after app
- * startup, except for unit tests.
+ * NOTE: These params should not change after startup (except for unit tests)
+ * @returns the currently selected parameters
  */
 const CBaseChainParams& BaseParams();
 
-/** Sets the params returned by Params() to those for the given network. */
+/** 
+ * Sets the params returned by Params() to those for the given network. 
+ * @param network the network you wish to use
+ */
 void SelectBaseParams(CBaseChainParams::Network network);
 
 /**
  * Looks for -regtest or -testnet and returns the appropriate Network ID.
- * Returns MAX_NETWORK_TYPES if an invalid combination is given.
+ * @returns Network ID or MAX_NETWORK_TYPES if an invalid combination is given
  */
 CBaseChainParams::Network NetworkIdFromCommandLine();
 
 /**
  * Calls NetworkIdFromCommandLine() and then calls SelectParams as appropriate.
- * Returns false if an invalid combination is given.
+ * @returns false if an invalid combination is given.
  */
 bool SelectBaseParamsFromCommandLine();
 
 /**
- * Return true if SelectBaseParamsFromCommandLine() has been called to select
- * a network.
+ * @returns true if SelectBaseParamsFromCommandLine() has been called
  */
 bool AreBaseParamsConfigured();
 

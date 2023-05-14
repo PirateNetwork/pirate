@@ -115,10 +115,10 @@ int32_t hseek(HUFF *hp,int32_t offset,int32_t mode);
 #define GENESIS_PRIVKEYSTR "88a71671a6edd987ad9e9097428fc3f169decba3ac8f10da7b24e0ca16803b70"
 #define GENESIS_SECRET "It was a bright cold day in April, and the clocks were striking thirteen."
 
-#define SATOSHIDEN ((uint64_t)100000000L)
-#define dstr(x) ((double)(x) / SATOSHIDEN)
+//#define SATOSHIDEN ((uint64_t)100000000L)
+//#define dstr(x) ((double)(x) / SATOSHIDEN)
 
-#define SMALLVAL 0.000000000000001
+//#define SMALLVAL 0.000000000000001
 
 #define SETBIT(bits,bitoffset) (((uint8_t *)bits)[(bitoffset) >> 3] |= (1 << ((bitoffset) & 7)))
 #define GETBIT(bits,bitoffset) (((uint8_t *)bits)[(bitoffset) >> 3] & (1 << ((bitoffset) & 7)))
@@ -130,19 +130,7 @@ int32_t hseek(HUFF *hp,int32_t offset,int32_t mode);
 #define portable_mutex_unlock pthread_mutex_unlock
 #define OS_thread_create pthread_create
 
-#define issue_curl(cmdstr) bitcoind_RPC(0,"curl",cmdstr,0,0,0,0)
 #define issue_curlt(cmdstr,timeout) bitcoind_RPC(0,"curl",cmdstr,0,0,0,timeout)
-
-struct allocitem { uint32_t allocsize,type; } PACKED;
-struct queueitem { struct queueitem *next,*prev; uint32_t allocsize,type;  } PACKED;
-struct stritem { struct queueitem DL; void **retptrp; uint32_t expiration; char str[]; };
-
-typedef struct queue
-{
-	struct queueitem *list;
-	portable_mutex_t mutex;
-    char name[64],initflag;
-} queue_t;
 
 struct rpcrequest_info
 {
@@ -270,13 +258,6 @@ void *myrealloc(uint8_t type,void *oldptr,long oldsize,long newsize);
 void *myaligned_alloc(uint64_t allocsize);
 int32_t myaligned_free(void *ptr,long size);
 
-struct queueitem *queueitem(char *str);
-void queue_enqueue(char *name,queue_t *queue,struct queueitem *origitem);//,int32_t offsetflag);
-void *queue_dequeue(queue_t *queue);//,int32_t offsetflag);
-void *queue_delete(queue_t *queue,struct queueitem *copy,int32_t copysize,int32_t freeitem);
-void *queue_free(queue_t *queue);
-void *queue_clone(queue_t *clone,queue_t *queue,int32_t size);
-int32_t queue_size(queue_t *queue);
 char *mbstr(char *str,double n);
 
 void iguana_memreset(struct OS_memspace *mem);
@@ -336,7 +317,6 @@ void calc_sha224(char *hexstr,uint8_t *buf,uint8_t *msg,int32_t len);
 void calc_sha384(char *hexstr,uint8_t *buf,uint8_t *msg,int32_t len);
 void calc_sha512(char *hexstr,uint8_t *buf,uint8_t *msg,int32_t len);
 void calc_sha224(char *hexstr,uint8_t *buf,uint8_t *msg,int32_t len);
-void calc_rmd160(char *hexstr,uint8_t *buf,uint8_t *msg,int32_t len);
 void calc_rmd128(char *hexstr,uint8_t *buf,uint8_t *msg,int32_t len);
 void calc_rmd256(char *hexstr,uint8_t *buf,uint8_t *msg,int32_t len);
 void calc_rmd320(char *hexstr,uint8_t *buf,uint8_t *msg,int32_t len);

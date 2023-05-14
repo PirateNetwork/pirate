@@ -22,7 +22,6 @@
 #define NSPV_POLLMICROS 50000
 #define NSPV_MAXVINS 64
 #define NSPV_AUTOLOGOUT 777
-#define NSPV_BRANCHID 0x76b809bb
 
 // nSPV defines and struct definitions with serialization and purge functions
 
@@ -54,6 +53,16 @@
 #define NSPV_CC_TXIDS 16
 #define NSPV_REMOTERPC 0x14
 #define NSPV_REMOTERPCRESP 0x15
+
+extern int32_t KOMODO_NSPV;
+
+#ifndef KOMODO_NSPV_FULLNODE
+#define KOMODO_NSPV_FULLNODE (KOMODO_NSPV <= 0)
+#endif
+
+#ifndef KOMODO_NSPV_SUPERLITE
+#define KOMODO_NSPV_SUPERLITE (KOMODO_NSPV > 0)
+#endif
 
 int32_t NSPV_gettransaction(int32_t skipvalidation,int32_t vout,uint256 txid,int32_t height,CTransaction &tx,uint256 &hashblock,int32_t &txheight,int32_t &currentheight,int64_t extradata,uint32_t tiptime,int64_t &rewardsum);
 UniValue NSPV_spend(char *srcaddr,char *destaddr,int64_t satoshis);
@@ -185,8 +194,9 @@ struct NSPV_CCmtxinfo
 
 struct NSPV_remoterpcresp
 {
+    NSPV_remoterpcresp() { method[0] = '\0'; json = nullptr; }
     char method[64];
-    char json[11000];
+    char *json;
 };
 
 #endif // KOMODO_NSPV_DEFSH

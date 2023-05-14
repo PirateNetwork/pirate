@@ -34,4 +34,8 @@ UniValue ImportGatewayExternalAddress(uint256 bindtxid,CPubKey pubkey);
 UniValue ImportGatewayDumpPrivKey(uint256 bindtxid,CKey key);
 UniValue ImportGatewayList();
 UniValue ImportGatewayInfo(uint256 bindtxid);
+
+uint8_t DecodeImportGatewayBindOpRet(char *burnaddr,const CScript &scriptPubKey,std::string &coin,uint256 &oracletxid,uint8_t &M,uint8_t &N,std::vector<CPubKey> &importgatewaypubkeys,uint8_t &taddr,uint8_t &prefix,uint8_t &prefix2,uint8_t &wiftype);
+int64_t ImportGatewayVerify(char *refburnaddr,uint256 oracletxid,int32_t claimvout,std::string refcoin,uint256 burntxid,const std::string deposithex,std::vector<uint8_t>proof,uint256 merkleroot,CPubKey destpub,uint8_t taddr,uint8_t prefix,uint8_t prefix2);
+
 #endif

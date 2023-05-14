@@ -51,7 +51,14 @@ A list of outstanding improvements is included in README_todo.md
 sudo apt-get update && sudo apt-get upgrade -y
 sudo apt-get install build-essential pkg-config libc6-dev m4 g++-multilib autoconf libtool libncurses-dev unzip git python zlib1g-dev wget bsdmainutils automake libboost-all-dev libssl-dev libprotobuf-dev protobuf-compiler libqrencode-dev libdb++-dev ntp ntpdate nano software-properties-common curl libevent-dev libcurl4-gnutls-dev cmake clang libsodium-dev -y
 
-On newer Linux distributions, like Ubuntu 22.04, the following additional packages are required:
+
+### Dependencies (Ubuntu 20.04)
+```shell
+#The following packages are needed:
+sudo apt-get install build-essential pkg-config libc6-dev m4 g++-multilib autoconf libtool ncurses-dev unzip git python3 python3-zmq zlib1g-dev wget libcurl4-gnutls-dev bsdmainutils automake curl libsodium-dev
+
+```shell
+#On newer Linux distributions, like Ubuntu 22.04, the following additional packages are required:
 sudo apt-get install liblz4-dev libbrotli-dev
 ```
 

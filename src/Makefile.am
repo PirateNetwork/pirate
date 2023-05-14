@@ -1,5 +1,5 @@
-DIST_SUBDIRS = secp256k1 univalue cryptoconditions
-
+DIST_SUBDIRS = secp256k1 univalue
+SUBDIRS = cryptoconditions
 AM_LDFLAGS = $(PTHREAD_CFLAGS) $(LIBTOOL_LDFLAGS) $(SAN_LDFLAGS) $(HARDENED_LDFLAGS)
 AM_CXXFLAGS = $(SAN_CXXFLAGS) $(HARDENED_CXXFLAGS) $(ERROR_CXXFLAGS)
 AM_CPPFLAGS = $(HARDENED_CPPFLAGS)
@@ -9,6 +9,21 @@ if ARCH_ARM
 PLATFORM_VARIANT = armv8.1-a+crypto
 else
 PLATFORM_VARIANT = x86-64
+endif
+
+if EMBEDDED_LEVELDB
+LEVELDB_CPPFLAGS += -I$(srcdir)/leveldb/include
+LEVELDB_CPPFLAGS += -I$(srcdir)/leveldb/helpers/memenv
+LIBLEVELDB += $(builddir)/leveldb/libleveldb.a
+LIBMEMENV  += $(builddir)/leveldb/libmemenv.a
+
+# NOTE: This dependency is not strictly necessary, but without it make may try to build both in parallel, which breaks the LevelDB build system in a race
+$(LIBLEVELDB): $(LIBMEMENV)
+
+$(LIBLEVELDB) $(LIBMEMENV):
+	$(AM_V_at)$(MAKE) -C $(@D) $(@F) CXX="$(CXX)" \
+	  CC="$(CC)" PLATFORM=$(TARGET_OS) AR="$(AR)" $(LEVELDB_TARGET_FLAGS) \
+          OPT="$(AM_CXXFLAGS) $(PIE_FLAGS) $(CXXFLAGS) $(AM_CPPFLAGS) $(CPPFLAGS) -D__STDC_LIMIT_MACROS"
 endif
 
 
@@ -47,9 +62,10 @@ LIBBITCOIN_CRYPTO=crypto/libbitcoin_crypto.a
 LIBBITCOINQT=qt/libkomodoqt.a
 LIBRUSTZCASH=$(top_builddir)/target/$(RUST_TARGET)/release/librustzcash.a
 LIBSECP256K1=secp256k1/libsecp256k1.la
-LIBCRYPTOCONDITIONS=cryptoconditions/libcryptoconditions_core.la
+LIBCRYPTOCONDITIONS=cryptoconditions/libcryptoconditions_core.a
 LIBSNARK=snark/libsnark.a
 LIBUNIVALUE=univalue/libunivalue.la
+LIBCC=libcc.a
 LIBZCASH=libzcash.a
 LIBTLS=libtls.a
 LIBCJSON=libcjson.a
@@ -63,9 +79,9 @@ endif
 if BUILD_BITCOIN_LIBS
 LIBZCASH_CONSENSUS=libzcashconsensus.la
 endif
-if ENABLE_WALLET
-LIBBITCOIN_WALLET=libbitcoin_wallet.a
-endif
+# if ENABLE_WALLET
+# LIBBITCOIN_WALLET=libbitcoin_wallet.a
+# endif
 
 
 RUST_ENV_VARS = RUSTC="$(RUSTC)" TERM=dumb
@@ -158,7 +174,7 @@ if ENABLE_PROTON
 EXTRA_LIBRARIES += $(LIBBITCOIN_PROTON)
 endif
 
-lib_LTLIBRARIES = $(LIBZCASH_CONSENSUS)
+lib_LTLIBRARIES = $(LIBZCASH_CONSENSUS) $(LIBCC)
 
 bin_PROGRAMS =
 noinst_PROGRAMS =
@@ -367,8 +383,6 @@ libbitcoin_server_a_SOURCES = \
   cc/fsm.cpp \
   cc/heir.cpp \
   cc/oracles.cpp \
-  cc/prices.cpp \
-  cc/pegs.cpp \
   cc/payments.cpp \
   cc/gateways.cpp \
   cc/channels.cpp \
@@ -378,7 +392,6 @@ libbitcoin_server_a_SOURCES = \
   checkpoints.cpp \
   fs.cpp \
   crosschain.cpp \
-  crosschain_authority.cpp \
   deprecation.cpp \
   httprpc.cpp \
   httpserver.cpp \
@@ -390,6 +403,8 @@ libbitcoin_server_a_SOURCES = \
   metrics.h \
   miner.cpp \
   net.cpp \
+	netbase.cpp \
+	netaddress.cpp \
   notaries_staked.cpp \
   noui.cpp \
   notarisationdb.cpp \
@@ -472,6 +487,11 @@ libbitcoin_wallet_a_SOURCES = \
   $(BITCOIN_CORE_H) \
   $(LIBZCASH_H)
 
+# a shared library for cryptoconditions
+libcc_a_SOURCES = cc/cclib.cpp
+libcc_a_CXXFLAGS = -DBUILD_CUSTOMCC -I../secp256k1/include -I../depends/$(shell echo `../depends/config.guess`/include) -I./univalue/include -I./cryptoconditions/include -I./cryptoconditions/src -I./cryptoconditions/src/asn -I. -I./cc
+libcc_a_LDFLAGS = -version-info 0:0:0
+
 # crypto primitives library
 crypto_libbitcoin_crypto_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_CONFIG_INCLUDES)
 crypto_libbitcoin_crypto_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
@@ -539,14 +559,11 @@ libbitcoin_common_a_SOURCES = \
   komodo_events.cpp \
   komodo_gateway.cpp \
   komodo_globals.cpp \
+  komodo_hardfork.cpp \
   komodo_interest.cpp \
-  komodo_jumblr.cpp \
   komodo_kv.cpp \
   komodo_notary.cpp \
-  komodo_pax.cpp \
   komodo_utils.cpp \
-	netaddress.cpp \
-  netbase.cpp \
   metrics.cpp \
   primitives/block.cpp \
   primitives/transaction.cpp \
@@ -597,10 +614,6 @@ libbitcoin_util_a_SOURCES = \
 
 if GLIBC_BACK_COMPAT
 libbitcoin_util_a_SOURCES += compat/glibc_compat.cpp
-endif
-
-if ENABLE_TESTS
-libbitcoin_server_a_SOURCES += rpc/testtransactions.cpp
 endif
 
 
@@ -695,6 +708,11 @@ wallet_utility_SOURCES = wallet-utility.cpp
 wallet_utility_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 wallet_utility_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 wallet_utility_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
+
+if TARGET_WINDOWS
+wallet_utility_SOURCES += wallet-utility-res.rc
+endif
+
 endif
 
 if TARGET_WINDOWS
@@ -779,12 +797,11 @@ libzcash_a_SOURCES = \
 	zcash/circuit/prfs.tcc \
 	zcash/circuit/utils.tcc
 
-libzcash_a_CPPFLAGS = -DMULTICORE -fopenmp -fPIC -DBINARY_OUTPUT -DCURVE_ALT_BN128 -DBOOST_SPIRIT_THREADSAFE -DHAVE_BUILD_INFO -D__STDC_FORMAT_MACROS $(HARDENED_CPPFLAGS) $(HARDENED_CXXFLAGS) $(HARDENED_LDFLAGS) -pipe $(SAN_LDFLAGS) -O1 -g -Wstack-protector $(SAN_CXXFLAGS) -fstack-protector-all -fPIE -fvisibility=hidden -DSTATIC $(BITCOIN_INCLUDES)
-
-#libzcash_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-#libzcash_a_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
-#libzcash_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) -DMONTGOMERY_OUTPUT
-
+libzcash_a_CPPFLAGS = -DMULTICORE -fopenmp -fPIC -DBINARY_OUTPUT -DCURVE_ALT_BN128 \
+	-DBOOST_SPIRIT_THREADSAFE -DHAVE_BUILD_INFO -D__STDC_FORMAT_MACROS $(HARDENED_CPPFLAGS) \
+	$(HARDENED_CXXFLAGS) $(HARDENED_LDFLAGS) -pipe $(SAN_LDFLAGS) \
+	-Wstack-protector $(SAN_CXXFLAGS) -fstack-protector-all -fPIE -fvisibility=hidden \
+	-DSTATIC $(BITCOIN_INCLUDES)
 libzcash_a_CXXFLAGS = $(SAN_CXXFLAGS) $(HARDENED_CXXFLAGS) -fwrapv -fno-strict-aliasing
 libzcash_a_LDFLAGS = $(SAN_LDFLAGS) $(HARDENED_LDFLAGS)
 libzcash_a_CPPFLAGS += -DMONTGOMERY_OUTPUT
@@ -846,8 +863,13 @@ clean-local:
 	-$(MAKE) -C univalue clean
 	-rm -f leveldb/*/*.gcno leveldb/helpers/memenv/*.gcno
 	-rm -f config.h
-	-rm -f *.a
-	-rm -f *.so
+	-$(RM) *.a
+	-$(RM) crypto/*.a
+	-$(RM) cryptoconditions/.libs/*.a
+
+clean-all: clean-local
+	-$(MAKE) -C snark clean-all
+	-$(MAKE) -C univalue clean-all
 
 .rc.o:
 	@test -f $(WINDRES)
@@ -873,14 +895,14 @@ endif
 	@test -f $(PROTOC)
 	$(AM_V_GEN) $(PROTOC) --cpp_out=$(@D) --proto_path=$(abspath $(<D) $<)
 
-if EMBEDDED_LEVELDB
-include Makefile.leveldb.include
-endif
+#if EMBEDDED_LEVELDB
+#include Makefile.leveldb.include
+#endif
 
 if ENABLE_TESTS
 include Makefile.ktest.include
-#include Makefile.test.include
-#include Makefile.gtest.include
+#include Makefile.test.include # bitcoin tests
+#include Makefile.gtest.include # zcash tests
 endif
 
 

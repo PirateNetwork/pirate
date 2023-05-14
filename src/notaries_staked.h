@@ -89,7 +89,9 @@ static const char *notaries_STAKED[NUM_STAKED_ERAS][64][2] =
     }
 };
 
-int8_t is_STAKED(const char *chain_name);
+//void undo_init_STAKED();
+
+uint8_t is_STAKED(const std::string& symbol);
 int32_t STAKED_era(int timestamp);
 int8_t numStakedNotaries(uint8_t pubkeys[64][33],int8_t era);
 int8_t StakedNotaryID(std::string &notaryname, char *Raddress);

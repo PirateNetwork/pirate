@@ -1204,6 +1204,17 @@ SigVersion SignatureHashVersion(const CTransaction& txTo)
     }
 }
 
+/*****
+ * Generate a signature hash 
+ * @param scriptCode the scriptPubKey
+ * @param txTo the transaction we are trying to create
+ * @param nIn the index of the vIn that has the data to sign
+ * @param nHashType the hash type (i.e. SIGHASH_ALL)
+ * @param amount the amount (for hidden txs)
+ * @param consensusBranchId the branch id
+ * @param cache additional data
+ * @returns the signature
+ */
 uint256 SignatureHash(
     const CScript& scriptCode,
     const CTransaction& txTo,

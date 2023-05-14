@@ -149,7 +149,7 @@ public:
     bool WriteTxn(const K& key, const T& value, std::string calling, bool fOverwrite = true)
     {
 
-        LOCK(bitdb.cs_db);
+        LOCK(bitdb->cs_db);
         bool txnWrite = false;
         int retries = 0;
 

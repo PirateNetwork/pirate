@@ -162,7 +162,7 @@ private:
      * @return a connected socket
      * @throws std::runtime_error if an error occurs
      */
-    std::unique_ptr<Sock> Hello() const EXCLUSIVE_LOCKS_REQUIRED(cs_i2p);
+    std::unique_ptr<Sock> Hello() const REQUIRES(cs_i2p);
 
     /**
      * Check the control socket for errors and possibly disconnect.
@@ -174,7 +174,7 @@ private:
      * @param[in] sock Socket to use for talking to the SAM proxy.
      * @throws std::runtime_error if an error occurs
      */
-    void DestGenerate(const Sock& sock) EXCLUSIVE_LOCKS_REQUIRED(cs_i2p);
+    void DestGenerate(const Sock& sock) REQUIRES(cs_i2p);
 
     /**
      * Generate a new destination with the SAM proxy, set `m_private_key` to it and save
@@ -182,21 +182,21 @@ private:
      * @param[in] sock Socket to use for talking to the SAM proxy.
      * @throws std::runtime_error if an error occurs
      */
-    void GenerateAndSavePrivateKey(const Sock& sock) EXCLUSIVE_LOCKS_REQUIRED(cs_i2p);
+    void GenerateAndSavePrivateKey(const Sock& sock) REQUIRES(cs_i2p);
 
     /**
      * Derive own destination from `m_private_key`.
      * @see https://geti2p.net/spec/common-structures#destination
      * @return an I2P destination
      */
-    Binary MyDestination() const EXCLUSIVE_LOCKS_REQUIRED(cs_i2p);
+    Binary MyDestination() const REQUIRES(cs_i2p);
 
     /**
      * Create the session if not already created. Reads the private key file and connects to the
      * SAM proxy.
      * @throws std::runtime_error if an error occurs
      */
-    void CreateIfNotCreatedAlready() EXCLUSIVE_LOCKS_REQUIRED(cs_i2p);
+    void CreateIfNotCreatedAlready() REQUIRES(cs_i2p);
 
     /**
      * Open a new connection to the SAM proxy and issue "STREAM ACCEPT" request using the existing
@@ -204,12 +204,12 @@ private:
      * @return the idle socket that is waiting for a peer to connect to us
      * @throws std::runtime_error if an error occurs
      */
-    std::unique_ptr<Sock> StreamAccept() EXCLUSIVE_LOCKS_REQUIRED(cs_i2p);
+    std::unique_ptr<Sock> StreamAccept() REQUIRES(cs_i2p);
 
     /**
      * Destroy the session, closing the internally used sockets.
      */
-    void Disconnect() EXCLUSIVE_LOCKS_REQUIRED(cs_i2p);
+    void Disconnect() REQUIRES(cs_i2p);
 
     /**
      * The name of the file where this peer's private key is stored (in binary).

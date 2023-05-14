@@ -204,7 +204,13 @@ static bool MatchMultisig(const CScript& script, unsigned int& required, std::ve
     return (it + 1 == script.end());
 }
 
-
+/****
+ * @brief interrogate a script
+ * @param[in] scriptPubKey what to examine
+ * @param[out] typeRet the type of transaction
+ * @param[out] vSolutionsRet results
+ * @returns true on success
+ */
 bool Solver(const CScript& scriptPubKey, txnouttype& typeRet, std::vector<std::vector<unsigned char> >& vSolutionsRet)
 {
     vSolutionsRet.clear();

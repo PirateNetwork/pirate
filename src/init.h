@@ -41,6 +41,13 @@ bool ShutdownRequested();
 /** Interrupt threads */
 void Interrupt(boost::thread_group& threadGroup);
 void Shutdown();
+/***
+ * Initialize everything and fire up the services
+ * @pre Parameters should be parsed and config file should be read
+ * @param threadGroup
+ * @param scheduler
+ * @returns true on success
+ */
 bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler);
 
 /** The help message mode determines what help message to show */

@@ -14,6 +14,9 @@
  ******************************************************************************/
 
 #include "CCOracles.h"
+#include "komodo.h"
+#include "komodo_bitcoind.h"
+
 #include <secp256k1.h>
 
 /*
@@ -639,12 +642,6 @@ bool OraclesDataValidate(struct CCcontract_info *cp,Eval* eval,const CTransactio
     else return(true);
 }
 
-/*nt32_t GetLatestTimestamp(int32_t height)
-{
-    if ( KOMODO_NSPV_SUPERLITE ) return (NSPV_blocktime(height));
-    return(komodo_heightstamp(height));
-} */
-
 bool OraclesValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, uint32_t nIn)
 {
     uint256 oracletxid,batontxid,txid; uint64_t txfee=10000; int32_t numvins,numvouts,preventCCvins,preventCCvouts; int64_t amount; uint256 hashblock;
@@ -1128,7 +1125,7 @@ UniValue OracleDataSamples(uint256 reforacletxid,char* batonaddr,int32_t num)
             }
         }
         else
-            CCERR_RESULT("pegscc",CCLOG_INFO, stream << "invalid oracletxid " << oracletxid.GetHex());
+            CCERR_RESULT("oraclescc",CCLOG_INFO, stream << "invalid oracletxid " << oracletxid.GetHex());
     }
     else
         CCERR_RESULT("oraclescc",CCLOG_INFO, stream << "cant find oracletxid " << oracletxid.GetHex());
@@ -1203,7 +1200,7 @@ UniValue OracleInfo(uint256 origtxid)
             result.push_back(Pair("registered",a));
         }
         else
-            CCERR_RESULT("pegscc",CCLOG_INFO, stream << "invalid oracletxid " << oracletxid.GetHex());
+            CCERR_RESULT("oraclescc",CCLOG_INFO, stream << "invalid oracletxid " << oracletxid.GetHex());
     }
     else
         CCERR_RESULT("oraclescc",CCLOG_INFO, stream << "cant find oracletxid " << oracletxid.GetHex());

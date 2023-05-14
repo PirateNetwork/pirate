@@ -287,6 +287,33 @@ protected:
     //! Wraps GetRandInt to allow tests to override RandomInt and make it deterministic.
     virtual int RandomInt(int nMax);
 
+    /***
+     * @brief Clears the internal collections and fills them again
+     * @note the mutex should be held before this method is called
+     * @note the constructor calls this directly with no lock
+     */
+    void Clear_()
+    {
+        std::vector<int>().swap(vRandom);
+        nKey = GetRandHash();
+        for (size_t bucket = 0; bucket < ADDRMAN_NEW_BUCKET_COUNT; bucket++) {
+            for (size_t entry = 0; entry < ADDRMAN_BUCKET_SIZE; entry++) {
+                vvNew[bucket][entry] = -1;
+            }
+        }
+        for (size_t bucket = 0; bucket < ADDRMAN_TRIED_BUCKET_COUNT; bucket++) {
+            for (size_t entry = 0; entry < ADDRMAN_BUCKET_SIZE; entry++) {
+                vvTried[bucket][entry] = -1;
+            }
+        }
+
+        nIdCount = 0;
+        nTried = 0;
+        nNew = 0;
+        mapInfo.clear();
+        mapAddr.clear();
+    }
+
 #ifdef DEBUG_ADDRMAN
     //! Perform consistency check. Returns an error code or zero.
     int Check_();
@@ -354,7 +381,7 @@ public:
      */
         template<typename Stream>
         void Serialize(Stream &s_) const
-            EXCLUSIVE_LOCKS_REQUIRED(!cs)
+            REQUIRES(!cs)
     {
         LOCK(cs);
 
@@ -586,28 +613,12 @@ public:
     void Clear()
     {
         LOCK(cs);
-        std::vector<int>().swap(vRandom);
-        nKey = GetRandHash();
-        for (size_t bucket = 0; bucket < ADDRMAN_NEW_BUCKET_COUNT; bucket++) {
-            for (size_t entry = 0; entry < ADDRMAN_BUCKET_SIZE; entry++) {
-                vvNew[bucket][entry] = -1;
-            }
-        }
-        for (size_t bucket = 0; bucket < ADDRMAN_TRIED_BUCKET_COUNT; bucket++) {
-            for (size_t entry = 0; entry < ADDRMAN_BUCKET_SIZE; entry++) {
-                vvTried[bucket][entry] = -1;
-            }
-        }
-
-        nTried = 0;
-        nNew = 0;
-        mapInfo.clear();
-        mapAddr.clear();
+        Clear_();
     }
 
     CAddrMan()
     {
-        Clear();
+        Clear_();
     }
 
     ~CAddrMan()

@@ -81,9 +81,9 @@ Details.
 #define CC_MAXVINS 1024
 #define CC_REQUIREMENTS_MSG (KOMODO_NSPV_SUPERLITE?"to use CC contracts you need to nspv_login first\n":"to use CC contracts, you need to launch daemon with valid -pubkey= for an address in your wallet\n")
 
-#define SMALLVAL 0.000000000000001
-#define SATOSHIDEN ((uint64_t)100000000L)
-#define dstr(x) ((double)(x) / SATOSHIDEN)
+//#define SMALLVAL 0.000000000000001
+//#define SATOSHIDEN ((uint64_t)100000000L)
+//#define dstr(x) ((double)(x) / SATOSHIDEN)
 #define CCDISABLEALL memset(ASSETCHAINS_CCDISABLES,1,sizeof(ASSETCHAINS_CCDISABLES))
 #define CCENABLE(x) ASSETCHAINS_CCDISABLES[((uint8_t)x)] = 0
 
@@ -100,7 +100,6 @@ enum opretid : uint8_t {
     OPRETID_CHANNELSDATA = 0x14,    //!< channels contract data id
     OPRETID_HEIRDATA = 0x15,        //!< heir contract data id
     OPRETID_ROGUEGAMEDATA = 0x16,   //!< rogue contract data id
-    OPRETID_PEGSDATA = 0x17,        //!< pegs contract data id
 
     /*! \cond INTERNAL */
     // non cc contract data:
@@ -237,8 +236,6 @@ extern CWallet* pwalletMain;  //!< global wallet object pointer to access wallet
 
 /// @private seems old-style
 bool GetAddressUnspent(uint160 addressHash, int type,std::vector<std::pair<CAddressUnspentKey,CAddressUnspentValue> > &unspentOutputs);
-//CBlockIndex *komodo_getblockindex(uint256 hash);  //moved to komodo_def.h
-//int32_t komodo_nextheight();  //moved to komodo_def.h
 
 /// CCgetspenttxid finds the txid of the transaction which spends a transaction output. The function does this without loading transactions from the chain, by using spent index
 /// @param[out] spenttxid transaction id of the spending transaction
@@ -254,11 +251,6 @@ void CCclearvars(struct CCcontract_info *cp);
 UniValue CClib(struct CCcontract_info *cp,char *method,char *jsonstr);
 UniValue CClib_info(struct CCcontract_info *cp);
 
-//CBlockIndex *komodo_blockindex(uint256 hash); //moved to komodo_def.h
-//CBlockIndex *komodo_chainactive(int32_t height); //moved to komodo_def.h
-//int32_t komodo_blockheight(uint256 hash); //moved to komodo_def.h
-//void StartShutdown();
-
 static const uint256 zeroid;  //!< null uint256 constant
 
 /// \cond INTERNAL
@@ -266,10 +258,13 @@ static uint256 ignoretxid;
 static int32_t ignorevin;
 /// \endcond
 
-/// myGetTransaction is non-locking version of GetTransaction
-/// @param hash hash of transaction to get (txid)
-/// @param[out] txOut returned transaction object
-/// @param[out] hashBlock hash of the block where the tx resides
+/*****
+ * @brief get a transaction by its hash (without locks)
+ * @param[in] hash what to look for
+ * @param[out] txOut the found transaction
+ * @param[out] hashBlock the hash of the block (all zeros if still in mempool)
+ * @returns true if found
+ */
 bool myGetTransaction(const uint256 &hash, CTransaction &txOut, uint256 &hashBlock);
 
 /// NSPV_myGetTransaction is called in NSPV mode
@@ -290,7 +285,14 @@ int64_t CCgettxout(uint256 txid,int32_t vout,int32_t mempoolflag,int32_t lockfla
 
 /// \cond INTERNAL
 bool myIsutxo_spentinmempool(uint256 &spenttxid,int32_t &spentvini,uint256 txid,int32_t vout);
-bool myAddtomempool(CTransaction &tx, CValidationState *pstate = NULL, bool fSkipExpiry = false);
+/****
+ * @brief add a transaction to the mempool
+ * @param[in] tx the transaction
+ * @param pstate where to store any error (can be nullptr)
+ * @param fSkipExpiry
+ * @returns true on success
+ */
+bool myAddtomempool(const CTransaction &tx, CValidationState *pstate = nullptr, bool fSkipExpiry = false);
 bool mytxid_inmempool(uint256 txid);
 int32_t myIsutxo_spent(uint256 &spenttxid,uint256 txid,int32_t vout);
 int32_t myGet_mempool_txs(std::vector<CTransaction> &txs,uint8_t evalcode,uint8_t funcid);
@@ -370,11 +372,8 @@ int64_t IsTokensvout(bool goDeeper, bool checkPubkeys, struct CCcontract_info *c
 /// returns true if success
 bool DecodeHexTx(CTransaction& tx, const std::string& strHexTx);
 
-//void komodo_sendmessage(int32_t minpeers,int32_t maxpeers,const char *message,std::vector<uint8_t> payload); // moved to komodo_defs.h
-
 /// @private
 int32_t payments_parsehexdata(std::vector<uint8_t> &hexdata,cJSON *item,int32_t len);
-// int32_t komodo_blockload(CBlock& block,CBlockIndex *pindex); // this def in komodo_defs.h
 
 /// Makes opreturn scriptPubKey for token creation transaction. Normally this function is called internally by the tokencreate rpc. You might need to call this function to create a customized token.
 /// The total opreturn length should not exceed 10001 byte
@@ -691,7 +690,6 @@ uint64_t stringbits(char *str);
 uint256 revuint256(uint256 txid);
 char *uint256_str(char *dest,uint256 txid);
 char *pubkey33_str(char *dest,uint8_t *pubkey33);
-//uint256 Parseuint256(const char *hexstr); // located in komodo_defs
 /// \endcond
 
 /// converts public key as array of uint8_t to normal address
@@ -784,8 +782,6 @@ int32_t CCCointxidExists(char const *logcategory,uint256 cointxid);
 
 /// @private
 uint256 BitcoinGetProofMerkleRoot(const std::vector<uint8_t> &proofData, std::vector<uint256> &txids);
-
-// bool komodo_txnotarizedconfirmed(uint256 txid); //moved to komodo_defs.h
 
 /// @private
 CPubKey check_signing_pubkey(CScript scriptSig);
@@ -989,6 +985,9 @@ UniValue report_ccerror(const char *category, int level, T print_to_stream)
     CCLogPrintStr(category, level, stream.str());
     return err;
 }
+
+bool komodo_txnotarizedconfirmed(uint256 txid);
+uint32_t GetLatestTimestamp(int32_t height);
 
 /// @private
 #define CCERR_RESULT(category,level,logoperator) return report_ccerror(category, level, [=](std::ostringstream &stream) {logoperator;})

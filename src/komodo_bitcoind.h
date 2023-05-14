@@ -21,19 +21,11 @@
 #include "komodo_defs.h"
 #include "script/standard.h"
 #include "cc/CCinclude.h"
+#include "komodo_globals.h"
 
-int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);
-int32_t komodo_electednotary(int32_t *numnotariesp,uint8_t *pubkey33,int32_t height,uint32_t timestamp);
-int32_t komodo_voutupdate(bool fJustCheck,int32_t *isratificationp,int32_t notaryid,uint8_t *scriptbuf,int32_t scriptlen,int32_t height,uint256 txhash,int32_t i,int32_t j,uint64_t *voutmaskp,int32_t *specialtxp,int32_t *notarizedheightp,uint64_t value,int32_t notarized,uint64_t signedmask,uint32_t timestamp);
-unsigned int lwmaGetNextPOSRequired(const CBlockIndex* pindexLast, const Consensus::Params& params);
 bool EnsureWalletIsAvailable(bool avoidException);
-extern bool fRequestShutdown;
-extern CScript KOMODO_EARLYTXID_SCRIPTPUB;
 
-uint8_t DecodeMaramaraCoinbaseOpRet(const CScript scriptPubKey,CPubKey &pk,int32_t &height,int32_t &unlockht);
 uint32_t komodo_heightstamp(int32_t height);
-
-//#define issue_curl(cmdstr) bitcoind_RPC(0,(char *)"curl",(char *)"http://127.0.0.1:7776",0,0,(char *)(cmdstr))
 
 struct MemoryStruct { char *memory; size_t size; };
 struct return_string { char *ptr; size_t len; };
@@ -101,7 +93,7 @@ int32_t komodo_verifynotarizedscript(int32_t height,uint8_t *script,int32_t len,
 
 void komodo_reconsiderblock(uint256 blockhash);
 
-int32_t komodo_verifynotarization(char *symbol,char *dest,int32_t height,int32_t NOTARIZED_HEIGHT,uint256 NOTARIZED_HASH,uint256 NOTARIZED_DESTTXID);
+int32_t komodo_verifynotarization(const char *symbol, const char *dest,int32_t height,int32_t NOTARIZED_HEIGHT,uint256 NOTARIZED_HASH,uint256 NOTARIZED_DESTTXID);
 
 CScript komodo_makeopret(CBlock *pblock, bool fNew);
 
@@ -129,21 +121,17 @@ uint256 komodo_calcmerkleroot(CBlock *pblock, uint256 prevBlockHash, int32_t nHe
 
 int32_t komodo_isPoS(CBlock *pblock, int32_t height,CTxDestination *addressout);
 
-void komodo_disconnect(CBlockIndex *pindex,CBlock& block);
-
 int32_t komodo_is_notarytx(const CTransaction& tx);
 
 int32_t komodo_block2height(CBlock *block);
 
-int32_t komodo_block2pubkey33(uint8_t *pubkey33,CBlock *block);
+bool komodo_block2pubkey33(uint8_t *pubkey33,CBlock *block);
 
 int32_t komodo_blockload(CBlock& block,CBlockIndex *pindex);
 
 uint32_t komodo_chainactive_timestamp();
 
 CBlockIndex *komodo_chainactive(int32_t height);
-
-uint32_t komodo_heightstamp(int32_t height);
 
 void komodo_index2pubkey33(uint8_t *pubkey33,CBlockIndex *pindex,int32_t height);
 
@@ -170,15 +158,18 @@ uint32_t komodo_blocktime(uint256 hash);
  */
 bool komodo_checkpoint(int32_t *notarized_heightp,int32_t nHeight,uint256 hash);
 
-uint32_t komodo_interest_args(uint32_t *txheighttimep,int32_t *txheightp,uint32_t *tiptimep,uint64_t *valuep,uint256 hash,int32_t n);
-
-uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight);
-
 int32_t komodo_nextheight();
 
 int32_t komodo_isrealtime(int32_t *kmdheightp);
 
-int32_t komodo_validate_interest(const CTransaction &tx,int32_t txheight,uint32_t cmptime,int32_t dispflag);
+/*******
+ * @brief validate interest in processing a transaction
+ * @param tx the transaction
+ * @param txheight the desired chain height to evaluate
+ * @param cmptime the block time (often the median block time of a chunk of recent blocks)
+ * @returns true if tx seems okay, false if tx has been in mempool too long (currently an hour + some)
+ */
+bool komodo_validate_interest(const CTransaction &tx,int32_t txheight,uint32_t cmptime);
 
 /*
  komodo_checkPOW (fast) is called early in the process and should only refer to data immediately available. it is a filter to prevent bad blocks from going into the local DB. The more blocks we can filter out at this stage, the less junk in the local DB that will just get purged later on.
@@ -198,8 +189,6 @@ int8_t komodo_segid(int32_t nocache,int32_t height);
 void komodo_segids(uint8_t *hashbuf,int32_t height,int32_t n);
 
 uint32_t komodo_stakehash(uint256 *hashp,char *address,uint8_t *hashbuf,uint256 txid,int32_t vout);
-
-arith_uint256 komodo_adaptivepow_target(int32_t height,arith_uint256 bnTarget,uint32_t nTime);
 
 arith_uint256 komodo_PoWtarget(int32_t *percPoSp,arith_uint256 target,int32_t height,int32_t goalperc,int32_t newStakerActive);
 
@@ -244,6 +233,6 @@ struct komodo_staking
     CScript scriptPubKey;
 };
 
-struct komodo_staking *komodo_addutxo(struct komodo_staking *array,int32_t *numkp,int32_t *maxkp,uint32_t txtime,uint64_t nValue,uint256 txid,int32_t vout,char *address,uint8_t *hashbuf,CScript pk);
+void komodo_addutxo(std::vector<komodo_staking> &array,uint32_t txtime,uint64_t nValue,uint256 txid,int32_t vout,char *address,uint8_t *hashbuf,CScript pk);
 
 int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blocktimep,uint32_t *txtimep,uint256 *utxotxidp,int32_t *utxovoutp,uint64_t *utxovaluep,uint8_t *utxosig, uint256 merkleroot);

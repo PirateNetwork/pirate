@@ -8,7 +8,6 @@
 
 #include "libsnark/common/profiling.hpp"
 #include "komodo_defs.h"
-char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 uint16_t BITCOIND_RPCPORT = 7771;
 uint32_t ASSETCHAINS_CC = 0;
 

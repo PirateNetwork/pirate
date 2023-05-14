@@ -1,3 +1,4 @@
+#pragma once
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -12,10 +13,6 @@
  * Removal or modification of this copyright notice is prohibited.            *
  *                                                                            *
  ******************************************************************************/
-
-#ifndef IMPORTCOIN_H
-#define IMPORTCOIN_H
-
 #include "cc/eval.h"
 #include "coins.h"
 #include "primitives/transaction.h"
@@ -29,6 +26,12 @@ enum ProofKind : uint8_t {
     PROOF_MERKLEBLOCK = 0x13
 };
 
+/*****
+ * Holds the proof. This can be one of 3 types:
+ *  - Merkle branch
+ *  - Notary TXIDs
+ *  - Merkle block
+ */
 class ImportProof {
 
 private:
@@ -38,13 +41,28 @@ private:
     std::vector<uint8_t> proofBlock;
 
 public:
+    /****
+     * @brief Default ctor
+     */
     ImportProof() { proofKind = PROOF_NONE; }
+    /****
+     * @brief Merkle branch proof ctor
+     * @param _proofBranch the Merkle branch
+     */
     ImportProof(const TxProof &_proofBranch) {
         proofKind = PROOF_MERKLEBRANCH; proofBranch = _proofBranch;
     }
+    /****
+     * @brief Notary TXID proof ctor
+     * @param _notaryTxids the collection of txids
+     */
     ImportProof(const std::vector<uint256> &_notaryTxids) {
         proofKind = PROOF_NOTARYTXIDS; notaryTxids = _notaryTxids;
     }
+    /*****
+     * @brief Merkle block proof ctor
+     * @param _proofBlock the Merkle block
+     */
     ImportProof(const std::vector<uint8_t> &_proofBlock) {
         proofKind = PROOF_MERKLEBLOCK; proofBlock = _proofBlock;
     }
@@ -64,6 +82,10 @@ public:
             proofKind = PROOF_NONE;  // if we have read some trash
     }
 
+    /*****
+     * @param _proofBranch the merkle branch to store
+     * @returns true if this object is a Merkle branch ImportProof
+     */
     bool IsMerkleBranch(TxProof &_proofBranch) const {
         if (proofKind == PROOF_MERKLEBRANCH) {
             _proofBranch = proofBranch;
@@ -72,6 +94,11 @@ public:
         else
             return false;
     }
+
+    /*****
+     * @param _notaryTxids the txids to store
+     * @returns true if this object is a Notary TXID ImportProof
+     */
     bool IsNotaryTxids(std::vector<uint256> &_notaryTxids) const {
         if (proofKind == PROOF_NOTARYTXIDS) {
             _notaryTxids = notaryTxids;
@@ -80,6 +107,11 @@ public:
         else
             return false;
     }
+
+    /*****
+     * @param _proofBlock the block to store
+     * @returns true if this object is a Merkle Block ImportProof
+     */
     bool IsMerkleBlock(std::vector<uint8_t> &_proofBlock) const {
         if (proofKind == PROOF_MERKLEBLOCK) {
             _proofBlock = proofBlock;
@@ -90,36 +122,153 @@ public:
     }
 };
 
-
-
+/******
+ * @brief get the value of the transaction
+ * @param tx the transaction
+ * @returns the burned value within tx
+ */
 CAmount GetCoinImportValue(const CTransaction &tx);
 
+/******
+ * @brief makes import tx for either coins or tokens
+ * @param proof the proof
+ * @param burnTx the inputs
+ * @param payouts the outputs
+ * @param nExpiryHeightOverride if an actual height (!= 0) makes a tx for validating int import tx
+ * @returns the generated import transaction
+ */
 CTransaction MakeImportCoinTransaction(const ImportProof proof, const CTransaction burnTx, const std::vector<CTxOut> payouts, uint32_t nExpiryHeightOverride = 0);
-CTransaction MakePegsImportCoinTransaction(const ImportProof proof, const CTransaction burnTx, const std::vector<CTxOut> payouts, uint32_t nExpiryHeightOverride = 0);
 
-CTxOut MakeBurnOutput(CAmount value, uint32_t targetCCid, const std::string targetSymbol, const std::vector<CTxOut> payouts, const std::vector<uint8_t> rawproof);
-CTxOut MakeBurnOutput(CAmount value, uint32_t targetCCid, std::string targetSymbol, const std::vector<CTxOut> payouts,std::vector<uint8_t> rawproof,
-                        uint256 bindtxid,std::vector<CPubKey> publishers,std::vector<uint256>txids,uint256 burntxid,int32_t height,int32_t burnvout,std::string rawburntx,CPubKey destpub, int64_t amount);
-CTxOut MakeBurnOutput(CAmount value, uint32_t targetCCid, std::string targetSymbol, const std::vector<CTxOut> payouts,std::vector<uint8_t> rawproof,std::string srcaddr,
-                        std::string receipt);
-CTxOut MakeBurnOutput(CAmount value,uint32_t targetCCid,std::string targetSymbol,const std::vector<CTxOut> payouts,std::vector<uint8_t> rawproof,uint256 pegstxid,
-                        uint256 tokenid,CPubKey srcpub,int64_t amount,std::pair<int64_t,int64_t> account);
+/******
+ * @brief make a burn output
+ * @param value the amount
+ * @param targetCCid the ccid
+ * @param targetSymbol
+ * @param payouts the outputs
+ * @param rawproof
+ * @returns the txout
+ */
+CTxOut MakeBurnOutput(CAmount value, uint32_t targetCCid, const std::string& targetSymbol, 
+        const std::vector<CTxOut> payouts, const std::vector<uint8_t> rawproof);
 
-bool UnmarshalBurnTx(const CTransaction burnTx, std::string &targetSymbol, uint32_t *targetCCid, uint256 &payoutsHash,std::vector<uint8_t> &rawproof);
+/******
+ * @brief make a burn output
+ * @param value 
+ * @param targetCCid the target ccid
+ * @param targetSymbol the target symbol
+ * @param payouts the outputs
+ * @param rawproof the proof in binary form
+ * @param bindtxid
+ * @param publishers
+ * @param txids
+ * @param burntxid
+ * @param height
+ * @param burnvout
+ * @param rawburntx
+ * @param destpub
+ * @param amount
+ * @returns the txout
+ */
+CTxOut MakeBurnOutput(CAmount value, uint32_t targetCCid, const std::string& targetSymbol, 
+        const std::vector<CTxOut> payouts,std::vector<uint8_t> rawproof, uint256 bindtxid,
+        std::vector<CPubKey> publishers,std::vector<uint256>txids,uint256 burntxid,int32_t height,
+        int32_t burnvout,const std::string& rawburntx,CPubKey destpub, int64_t amount);
+
+/******
+ * @brief make a burn output
+ * @param value the amount
+ * @param targetCCid the ccid
+ * @param targetSymbol
+ * @param payouts the outputs
+ * @param rawproof the proof in binary form
+ * @param srcaddr the source address
+ * @param receipt
+ * @returns the txout
+ */
+CTxOut MakeBurnOutput(CAmount value, uint32_t targetCCid, const std::string& targetSymbol, 
+        const std::vector<CTxOut> payouts,std::vector<uint8_t> rawproof, const std::string& srcaddr,
+        const std::string& receipt);
+
+/****
+ * @brief break a serialized burn tx into its components
+ * @param[in] burnTx the transaction
+ * @param[out] targetSymbol the symbol
+ * @param[out] targetCCid the target ccid
+ * @param[out] payoutsHash the hash of the payouts
+ * @param[out] rawproof the bytes of the proof
+ * @returns true on success
+ */
+bool UnmarshalBurnTx(const CTransaction burnTx, std::string &targetSymbol, uint32_t *targetCCid, 
+        uint256 &payoutsHash,std::vector<uint8_t> &rawproof);
+
+/****
+ * @brief break a serialized burn tx into its components
+ * @param[in] burnTx the transaction
+ * @param[out] srcaddr the source address
+ * @param[out] receipt
+ * @returns true on success
+ */
 bool UnmarshalBurnTx(const CTransaction burnTx, std::string &srcaddr, std::string &receipt);
-bool UnmarshalBurnTx(const CTransaction burnTx,uint256 &bindtxid,std::vector<CPubKey> &publishers,std::vector<uint256> &txids,uint256& burntxid,int32_t &height,int32_t &burnvout,std::string &rawburntx,CPubKey &destpub, int64_t &amount);
-bool UnmarshalBurnTx(const CTransaction burnTx,uint256 &pegstxid,uint256 &tokenid,CPubKey &srcpub,int64_t &amount,std::pair<int64_t,int64_t> &account);
-bool UnmarshalImportTx(const CTransaction importTx, ImportProof &proof, CTransaction &burnTx,std::vector<CTxOut> &payouts);
 
+/****
+ * @brief break a serialized burn tx into its components
+ * @param[in] burnTx the transaction
+ * @param[out] bindtxid
+ * @param[out] publishers
+ * @param[out] txids
+ * @param[out] burntxid
+ * @param[out] height
+ * @param[out] burnvout
+ * @param[out] rawburntx
+ * @param[out] destpub
+ * @param[out] amount
+ * @returns true on success
+ */
+bool UnmarshalBurnTx(const CTransaction burnTx,uint256 &bindtxid,std::vector<CPubKey> &publishers,
+        std::vector<uint256> &txids,uint256& burntxid,int32_t &height,int32_t &burnvout,
+        std::string &rawburntx,CPubKey &destpub, int64_t &amount);
+
+/****
+ * @brief break a serialized import tx into its components
+ * @param[in] importTx the transaction
+ * @param[out] proof the proof
+ * @param[out] burnTx the burn transaction
+ * @param[out] payouts the collection of tx outs
+ * @returns true on success
+ */
+bool UnmarshalImportTx(const CTransaction importTx, ImportProof &proof, 
+        CTransaction &burnTx,std::vector<CTxOut> &payouts);
+
+/*****
+ * @brief verify a coin import signature
+ * @note CoinImport is different enough from normal script execution that it's not worth 
+ * making all the mods neccesary in the interpreter to do the dispatch correctly.
+ * @param[in] scriptSig the signature
+ * @param[in] checker the checker to use
+ * @param[out] state the error state
+ * @returns true on success, `state` will contain the reason if false
+ */
 bool VerifyCoinImport(const CScript& scriptSig, TransactionSignatureChecker& checker, CValidationState &state);
 
+/****
+ * @brief add an import tombstone
+ * @param importTx the transaction
+ * @param inputs the inputs to be modified
+ * @param nHeight the height
+ */
 void AddImportTombstone(const CTransaction &importTx, CCoinsViewCache &inputs, int nHeight);
+
+/*****
+ * @brief remove an import tombstone from inputs
+ * @param importTx the transaction
+ * @param inputs what to modify
+ */
 void RemoveImportTombstone(const CTransaction &importTx, CCoinsViewCache &inputs);
-int ExistsImportTombstone(const CTransaction &importTx, const CCoinsViewCache &inputs);
 
-bool CheckVinPubKey(const CTransaction &sourcetx, int32_t i, uint8_t pubkey33[33]);
-
-CMutableTransaction MakeSelfImportSourceTx(CTxDestination &dest, int64_t amount);
-int32_t GetSelfimportProof(const CMutableTransaction sourceMtx, CMutableTransaction &templateMtx, ImportProof &proofNull);
-
-#endif /* IMPORTCOIN_H */
+/*****
+ * @brief See if a tombstone exists
+ * @param importTx the transaction
+ * @param inputs
+ * @returns true if the transaction is a tombstone
+ */
+bool ExistsImportTombstone(const CTransaction &importTx, const CCoinsViewCache &inputs);

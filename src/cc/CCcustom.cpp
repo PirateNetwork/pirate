@@ -25,8 +25,6 @@
 #include "CCHeir.h"
 #include "CCchannels.h"
 #include "CCOracles.h"
-#include "CCPrices.h"
-#include "CCPegs.h"
 #include "CCPayments.h"
 #include "CCGateways.h"
 #include "CCtokens.h"
@@ -162,28 +160,6 @@ const char *OraclesCCaddr = "REt2C4ZMnX8YYX1DRpffNA4hECZTFm39e3";
 const char *OraclesNormaladdr = "RHkFKzn1csxA3fWzAsxsLWohoCgBbirXb5";
 char OraclesCChexstr[67] = { "038c1d42db6a45a57eccb8981b078fb7857b9b496293fe299d2b8d120ac5b5691a" };
 uint8_t OraclesCCpriv[32] = { 0xf7, 0x4b, 0x5b, 0xa2, 0x7a, 0x5e, 0x9c, 0xda, 0x89, 0xb1, 0xcb, 0xb9, 0xe6, 0x9c, 0x2c, 0x70, 0x85, 0x37, 0xdd, 0x00, 0x7a, 0x67, 0xff, 0x7c, 0x62, 0x1b, 0xe2, 0xfb, 0x04, 0x8f, 0x85, 0xbf };
-#include "CCcustom.inc"
-#undef FUNCNAME
-#undef EVALCODE
-
-// Prices
-#define FUNCNAME IsPricesInput
-#define EVALCODE EVAL_PRICES
-const char *PricesCCaddr = "RAL5Vh8NXmFqEKJRKrk1KjKaUckK7mM1iS";
-const char *PricesNormaladdr = "RBunXCsMHk5NPd6q8SQfmpgre3x133rSwZ";
-char PricesCChexstr[67] = { "039894cb054c0032e99e65e715b03799607aa91212a16648d391b6fa2cc52ed0cf" };
-uint8_t PricesCCpriv[32] = { 0x0a, 0x3b, 0xe7, 0x5d, 0xce, 0x06, 0xed, 0xb7, 0xc0, 0xb1, 0xbe, 0xe8, 0x7b, 0x5a, 0xd4, 0x99, 0xb8, 0x8d, 0xde, 0xac, 0xb2, 0x7e, 0x7a, 0x52, 0x96, 0x15, 0xd2, 0xa0, 0xc6, 0xb9, 0x89, 0x61 };
-#include "CCcustom.inc"
-#undef FUNCNAME
-#undef EVALCODE
-
-// Pegs
-#define FUNCNAME IsPegsInput
-#define EVALCODE EVAL_PEGS
-const char *PegsCCaddr = "RHnkVb7vHuHnjEjhkCF1bS6xxLLNZPv5fd";
-const char *PegsNormaladdr = "RMcCZtX6dHf1fz3gpLQhUEMQ8cVZ6Rzaro";
-char PegsCChexstr[67] = { "03c75c1de29a35e41606363b430c08be1c2dd93cf7a468229a082cc79c7b77eece" };
-uint8_t PegsCCpriv[32] = { 0x52, 0x56, 0x4c, 0x78, 0x87, 0xf7, 0xa2, 0x39, 0xb0, 0x90, 0xb7, 0xb8, 0x62, 0x80, 0x0f, 0x83, 0x18, 0x9d, 0xf4, 0xf4, 0xbd, 0x28, 0x09, 0xa9, 0x9b, 0x85, 0x54, 0x16, 0x0f, 0x3f, 0xfb, 0x65 };
 #include "CCcustom.inc"
 #undef FUNCNAME
 #undef EVALCODE
@@ -373,22 +349,6 @@ struct CCcontract_info *CCinit(struct CCcontract_info *cp, uint8_t evalcode)
             memcpy(cp->CCpriv,OraclesCCpriv,32);
             cp->validate = OraclesValidate;
             cp->ismyvin = IsOraclesInput;
-            break;
-        case EVAL_PRICES:
-            strcpy(cp->unspendableCCaddr,PricesCCaddr);
-            strcpy(cp->normaladdr,PricesNormaladdr);
-            strcpy(cp->CChexstr,PricesCChexstr);
-            memcpy(cp->CCpriv,PricesCCpriv,32);
-            cp->validate = PricesValidate;
-            cp->ismyvin = IsPricesInput;
-            break;
-        case EVAL_PEGS:
-            strcpy(cp->unspendableCCaddr,PegsCCaddr);
-            strcpy(cp->normaladdr,PegsNormaladdr);
-            strcpy(cp->CChexstr,PegsCChexstr);
-            memcpy(cp->CCpriv,PegsCCpriv,32);
-            cp->validate = PegsValidate;
-            cp->ismyvin = IsPegsInput;
             break;
         case EVAL_PAYMENTS:
             strcpy(cp->unspendableCCaddr,PaymentsCCaddr);

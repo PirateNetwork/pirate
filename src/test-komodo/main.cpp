@@ -10,7 +10,9 @@ int main(int argc, char **argv) {
     assert(init_and_check_sodium() != -1);
     ECC_Start();
     ECCVerifyHandle handle;  // Inits secp256k1 verify context
+    SetupNetworking();
     SelectParams(CBaseChainParams::REGTEST);
+    chainName = assetchain(); // KMD by default
 
     CBitcoinSecret vchSecret;
     // this returns false due to network prefix mismatch but works anyway
@@ -18,5 +20,7 @@ int main(int argc, char **argv) {
     notaryKey = vchSecret.GetKey();
 
     testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
+    auto retval = RUN_ALL_TESTS();
+    ECC_Stop();
+    return retval;
 }

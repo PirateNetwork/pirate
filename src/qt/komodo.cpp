@@ -7,15 +7,18 @@
 #endif
 
 #include "pirateoceangui.h"
+#include "komodo.h"
+#include "komodo_bitcoind.h"
 #include "komodo_defs.h"
+#include "komodo_globals.h"
 #include "pow.h"  //for CBlockIndex
 
 #define KOMODO_ASSETCHAIN_MAXLEN 65
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 extern uint32_t ASSETCHAIN_INIT;
 extern std::string NOTARY_PUBKEY;
-void komodo_passport_iteration();
-void komodo_cbopretupdate(int32_t forceflag);
+// void komodo_passport_iteration();
+// void komodo_cbopretupdate(int32_t forceflag);
 CBlockIndex *komodo_chainactive(int32_t height);
 
 //#include "chainparams.h"
@@ -350,24 +353,24 @@ void KomodoCore::shutdown()
             StartShutdown();
         }
 
-        if ( ASSETCHAINS_CBOPRET != 0 )
-            komodo_pricesinit();
+        // if ( ASSETCHAINS_CBOPRET != 0 )
+        //     komodo_pricesinit();
 
         while (!fShutdown)
         {
             if ( ASSETCHAINS_SYMBOL[0] == 0 )
             {
                 //if (!ShutdownRequested()) komodo_passport_iteration();
-                if ( KOMODO_NSPV_FULLNODE )
-                    komodo_passport_iteration();
+                // if ( KOMODO_NSPV_FULLNODE )
+                //     komodo_passport_iteration();
                 MilliSleep(1000);
             }
             else
             {
                 //komodo_interestsum();
                 //komodo_longestchain();
-                if ( ASSETCHAINS_CBOPRET != 0 )
-                    komodo_cbopretupdate(0);
+                // if ( ASSETCHAINS_CBOPRET != 0 )
+                //     komodo_cbopretupdate(0);
                 for (i=0; i<=ASSETCHAINS_BLOCKTIME/5; i++)
                 {
                     fShutdown = ShutdownRequested();
@@ -781,13 +784,13 @@ int main(int argc, char *argv[])
     int rv = EXIT_SUCCESS;
     try
     {
-        //The GUI config file gets read as part of the PirateOceanGUI 
+        //The GUI config file gets read as part of the PirateOceanGUI
         //initialisation in createActions(). This is required to know
         //if the wallet runs in online mode (default) or cold storage
         //offline mode. While in offline mode all classes performing
         //network access are disabled.
         app.createWindow(networkStyle.data());
-        
+
         #ifdef ENABLE_WALLET
             /// URI IPC sending
             // - Do this early as we don't want to bother initializing if we are just calling IPC
@@ -801,9 +804,9 @@ int main(int argc, char *argv[])
             // Start up the payment server early, too, so impatient users that click on
             // pirate: links repeatedly have their payment requests routed to this process:
             app.createPaymentServer();
-        #endif        
-        
-        
+        #endif
+
+
         // Perform base initialization before spinning up initialization/shutdown thread
         // This is acceptable because this function only contains steps that are quick to execute,
         // so the GUI thread won't be held up.

@@ -44,6 +44,12 @@
 #include "zcash/address/zip32.h"
 #include "cc/CCinclude.h"
 #include "rpcpiratewallet.h"
+#include "komodo_utils.h"
+#include "komodo_bitcoind.h"
+#include "komodo_notary.h"
+#include "komodo_interest.h"
+#include "komodo_globals.h"
+#include "komodo_defs.h"
 
 #include <assert.h>
 
@@ -69,14 +75,14 @@ unsigned int nTxConfirmTarget = DEFAULT_TX_CONFIRM_TARGET;
 bool bSpendZeroConfChange = true;
 bool fSendFreeTransactions = false;
 bool fPayAtLeastCustomFee = true;
-#include "komodo_defs.h"
+
 
 bool fWalletRbf = DEFAULT_WALLET_RBF;
-
-CBlockIndex *komodo_chainactive(int32_t height);
-extern std::string DONATION_PUBKEY;
-int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
-int tx_height( const uint256 &hash );
+//
+// CBlockIndex *komodo_chainactive(int32_t height);
+// extern std::string DONATION_PUBKEY;
+// int32_t komodo_dpowconfs(int32_t height,int32_t numconfs);
+// int tx_height( const uint256 &hash );
 int scanperc;
 bool fTxDeleteEnabled = false;
 bool fTxConflictDeleteEnabled = false;
@@ -1621,12 +1627,12 @@ set<uint256> CWallet::GetConflicts(const uint256& txid) const
 
 void CWallet::Flush(bool shutdown)
 {
-    bitdb.Flush(shutdown);
+    bitdb->Flush(shutdown);
 }
 
 bool CWallet::Verify(const string& walletFile, string& warningString, string& errorString)
 {
-    if (!bitdb.Open(GetDataDir()))
+    if (!bitdb->Open(GetDataDir()))
     {
         // try moving the database env out of the way
         boost::filesystem::path pathDatabase = GetDataDir() / "database";
@@ -1639,7 +1645,7 @@ bool CWallet::Verify(const string& walletFile, string& warningString, string& er
         }
 
         // try again
-        if (!bitdb.Open(GetDataDir())) {
+        if (!bitdb->Open(GetDataDir())) {
             // if it still fails, it probably means we can't even create the database env
             string msg = strprintf(_("Error initializing wallet database environment %s!"), GetDataDir());
             errorString += msg;
@@ -1650,13 +1656,13 @@ bool CWallet::Verify(const string& walletFile, string& warningString, string& er
     if (GetBoolArg("-salvagewallet", false))
     {
         // Recover readable keypairs:
-        if (!CWalletDB::Recover(bitdb, walletFile, true))
+        if (!CWalletDB::Recover(*bitdb, walletFile, true))
             return false;
     }
 
     if (boost::filesystem::exists(GetDataDir() / walletFile))
     {
-        CDBEnv::VerifyResult r = bitdb.Verify(walletFile, CWalletDB::Recover);
+        CDBEnv::VerifyResult r = bitdb->Verify(walletFile, CWalletDB::Recover);
         if (r == CDBEnv::RECOVER_OK)
         {
             warningString += strprintf(_("Warning: wallet.dat corrupt, data salvaged!"
@@ -2255,7 +2261,7 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
   bool uiShown = false;
   const CChainParams& chainParams = Params();
   double dProgressStart = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false);
-  double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.LastTip(), false);
+  double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.Tip(), false);
 
   //Create a map of SaplingNoteData that needs to be updated to pass to the boost::threads
   //Prepare this before going into the blockindex loop to prevent rechecking on each loop
@@ -4134,45 +4140,6 @@ int64_t CWalletTx::GetTxTime() const
     return n ? n : nTimeReceived;
 }
 
-int CWalletTx::GetRequestCount() const
-{
-    // Returns -1 if it wasn't being tracked
-    int nRequests = -1;
-    {
-        LOCK(pwallet->cs_wallet);
-        if (IsCoinBase())
-        {
-            // Generated block
-            if (!hashBlock.IsNull())
-            {
-                map<uint256, int>::const_iterator mi = pwallet->mapRequestCount.find(hashBlock);
-                if (mi != pwallet->mapRequestCount.end())
-                    nRequests = (*mi).second;
-            }
-        }
-        else
-        {
-            // Did anyone request this transaction?
-            map<uint256, int>::const_iterator mi = pwallet->mapRequestCount.find(GetHash());
-            if (mi != pwallet->mapRequestCount.end())
-            {
-                nRequests = (*mi).second;
-
-                // How about the block it's in?
-                if (nRequests == 0 && !hashBlock.IsNull())
-                {
-                    map<uint256, int>::const_iterator mi = pwallet->mapRequestCount.find(hashBlock);
-                    if (mi != pwallet->mapRequestCount.end())
-                        nRequests = (*mi).second;
-                    else
-                        nRequests = 1; // If it's in someone else's block it must have got out
-                }
-            }
-        }
-    }
-    return nRequests;
-}
-
 // GetAmounts will determine the transparent debits and credits for a given wallet tx.
 void CWalletTx::GetAmounts(list<COutputEntry>& listReceived,
                            list<COutputEntry>& listSent, CAmount& nFee, string& strSentAccount, const isminefilter& filter) const
@@ -4785,7 +4752,7 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
         LogPrintf("Delete Tx - Total Transaction Count %i, Transactions Deleted %i\n", txCount, int(removeTxs.size()));
 
         if (runCompact) {
-          CWalletDB::Compact(bitdb,strWalletFile);
+          CWalletDB::Compact(*bitdb,strWalletFile);
         }
 
         auto totalTime = GetTime();
@@ -4897,7 +4864,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
         uiInterface.ShowProgress(_("Rescanning..."), 0, false); // show rescan progress in GUI as dialog or on splashscreen, if -rescan on startup
         double dProgressStart = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pindex, false);
-        double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.LastTip(), false);
+        double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.Tip(), false);
         while (pindex)
         {
             //exit loop if trying to shutdown
@@ -5454,9 +5421,6 @@ CAmount CWallet::GetAvailableBalance(const CCoinControl *coinControl) const
 /**
  * populate vCoins with vector of available COutputs.
  */
-uint64_t komodo_interestnew(int32_t txheight,uint64_t nValue,uint32_t nLockTime,uint32_t tiptime);
-uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight);
-
 void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const CCoinControl *coinControl, bool fIncludeZeroValue, bool fIncludeCoinBase) const
 {
     uint64_t interest,*ptr;
@@ -5495,25 +5459,21 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
                     if ( !IS_MODE_EXCHANGEWALLET )
                     {
                         uint32_t locktime; int32_t txheight; CBlockIndex *tipindex;
-                        if ( ASSETCHAINS_SYMBOL[0] == 0 && chainActive.LastTip() != 0 && chainActive.LastTip()->nHeight >= 60000 )
+                        if ( chainName.isKMD() && chainActive.Tip() != 0 && chainActive.Tip()->nHeight >= 60000 )
                         {
                             if ( pcoin->vout[i].nValue >= 10*COIN )
                             {
-                                if ( (tipindex= chainActive.LastTip()) != 0 )
+                                if ( (tipindex= chainActive.Tip()) != 0 )
                                 {
                                     komodo_accrued_interest(&txheight,&locktime,wtxid,i,0,pcoin->vout[i].nValue,(int32_t)tipindex->nHeight);
                                     interest = komodo_interestnew(txheight,pcoin->vout[i].nValue,locktime,tipindex->nTime);
-                                } else interest = 0;
-                                //interest = komodo_interestnew(chainActive.LastTip()->nHeight+1,pcoin->vout[i].nValue,pcoin->nLockTime,chainActive.LastTip()->nTime);
+                                }
+                                else
+                                    interest = 0;
                                 if ( interest != 0 )
                                 {
-                                    //printf("wallet nValueRet %.8f += interest %.8f ht.%d lock.%u/%u tip.%u\n",(double)pcoin->vout[i].nValue/COIN,(double)interest/COIN,txheight,locktime,pcoin->nLockTime,tipindex->nTime);
-                                    //fprintf(stderr,"wallet nValueRet %.8f += interest %.8f ht.%d lock.%u tip.%u\n",(double)pcoin->vout[i].nValue/COIN,(double)interest/COIN,chainActive.LastTip()->nHeight+1,pcoin->nLockTime,chainActive.LastTip()->nTime);
-                                    //ptr = (uint64_t *)&pcoin->vout[i].nValue;
-                                    //(*ptr) += interest;
                                     ptr = (uint64_t *)&pcoin->vout[i].interest;
                                     (*ptr) = interest;
-                                    //pcoin->vout[i].nValue += interest;
                                 }
                                 else
                                 {
@@ -5762,7 +5722,9 @@ bool CWallet::SelectCoinsMinConf(const CAmount& nTargetValue, int nConfMine, int
     return true;
 }
 
-bool CWallet::SelectCoins(const CAmount& nTargetValue, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet,  bool& fOnlyCoinbaseCoinsRet, bool& fNeedCoinbaseCoinsRet, const CCoinControl* coinControl) const
+bool CWallet::SelectCoins(const CAmount& nTargetValue, set<pair<const CWalletTx*,unsigned int> >& setCoinsRet,
+        CAmount& nValueRet,  bool& fOnlyCoinbaseCoinsRet, bool& fNeedCoinbaseCoinsRet,
+        const CCoinControl* coinControl) const
 {
     // Output parameter fOnlyCoinbaseCoinsRet is set to true when the only available coins are coinbase utxos.
     uint64_t tmp; int32_t retval;
@@ -5859,7 +5821,16 @@ bool CWallet::SelectCoins(const CAmount& nTargetValue, set<pair<const CWalletTx*
     return retval;
 }
 
-bool CWallet::FundTransaction(CMutableTransaction& tx, CAmount &nFeeRet, int& nChangePosRet, std::string& strFailReason)
+/****
+ * @brief add vIns to transaction
+ * @param tx the transaction with vouts
+ * @param nFeeRet
+ * @param nChangePosRet
+ * @param strFailReason
+ * @returns true on success
+ */
+bool CWallet::FundTransaction(CMutableTransaction& tx, CAmount &nFeeRet, int& nChangePosRet,
+        std::string& strFailReason)
 {
     vector<CRecipient> vecSend;
 
@@ -5903,8 +5874,20 @@ bool CWallet::FundTransaction(CMutableTransaction& tx, CAmount &nFeeRet, int& nC
     return true;
 }
 
-bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey, CAmount& nFeeRet,
-                                int& nChangePosRet, std::string& strFailReason, const CCoinControl* coinControl, bool sign)
+/*****
+ * @brief create a transaction
+ * @param vecSend who to send to
+ * @param wtxNew wallet transaction
+ * @param reservekey
+ * @param nFeeRet
+ * @param nChangePosRet
+ * @param strFailReason
+ * @param coinControl
+ * @param sign true to sign inputs
+ */
+bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
+        CAmount& nFeeRet, int& nChangePosRet, std::string& strFailReason, const CCoinControl* coinControl,
+        bool sign)
 {
     uint64_t interest2 = 0; CAmount nValue = 0; unsigned int nSubtractFeeFromAmount = 0;
     BOOST_FOREACH (const CRecipient& recipient, vecSend)
@@ -5930,12 +5913,12 @@ bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wt
     int nextBlockHeight = chainActive.Height() + 1;
     CMutableTransaction txNew = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nextBlockHeight);
 
-    if (IS_MODE_EXCHANGEWALLET && ASSETCHAINS_SYMBOL[0] == 0)
+    if (IS_MODE_EXCHANGEWALLET && chainName.isKMD())
         txNew.nLockTime = 0;
     else
     {
-        if ( !komodo_hardfork_active((uint32_t)chainActive.LastTip()->nTime) )
-            txNew.nLockTime = (uint32_t)chainActive.LastTip()->nTime + 1; // set to a time close to now
+        if ( !komodo_hardfork_active((uint32_t)chainActive.Tip()->nTime) )
+            txNew.nLockTime = (uint32_t)chainActive.Tip()->nTime + 1; // set to a time close to now
         else
             txNew.nLockTime = (uint32_t)chainActive.Tip()->GetMedianTimePast();
     }
@@ -6051,7 +6034,7 @@ bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wt
                     //a chance at a free transaction.
                     //But mempool inputs might still be in the mempool, so their age stays 0
                     //fprintf(stderr,"nCredit %.8f interest %.8f\n",(double)nCredit/COIN,(double)pcoin.first->vout[pcoin.second].interest/COIN);
-                    if ( !IS_MODE_EXCHANGEWALLET && ASSETCHAINS_SYMBOL[0] == 0 )
+                    if ( !IS_MODE_EXCHANGEWALLET && chainName.isKMD() )
                     {
                         interest2 += pcoin.first->vout[pcoin.second].interest;
                         //fprintf(stderr,"%.8f ",(double)pcoin.first->vout[pcoin.second].interest/COIN);
@@ -6061,7 +6044,7 @@ bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wt
                         age += 1;
                     dPriority += (double)nCredit * age;
                 }
-                if ( ASSETCHAINS_SYMBOL[0] == 0 && DONATION_PUBKEY.size() == 66 && interest2 > 5000 )
+                if ( chainName.isKMD() && DONATION_PUBKEY.size() == 66 && interest2 > 5000 )
                 {
                     CScript scriptDonation = CScript() << ParseHex(DONATION_PUBKEY) << OP_CHECKSIG;
                     CTxOut newTxOut(interest2,scriptDonation);
@@ -6098,7 +6081,6 @@ bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wt
 
                         // Reserve a new key pair from key pool
                         CPubKey vchPubKey;
-                        extern int32_t USE_EXTERNAL_PUBKEY; extern std::string NOTARY_PUBKEY;
                         if ( USE_EXTERNAL_PUBKEY == 0 )
                         {
                             bool ret;
@@ -6297,9 +6279,6 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
                 delete pwalletdb;
         }
 
-        // Track how many getdata requests our transaction gets
-        mapRequestCount[wtxNew.GetHash()] = 0;
-
         if (fBroadcastTransactions)
         {
             // Broadcast
@@ -6340,7 +6319,7 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
 // }
 
 
-void komodo_prefetch(FILE *fp);
+//void komodo_prefetch(FILE *fp);
 
 DBErrors CWallet::InitalizeCryptedLoad()
 {
@@ -6357,19 +6336,7 @@ DBErrors CWallet::LoadWallet(bool& fFirstRunRet)
     if (!fFileBacked)
         return DB_LOAD_OK;
     fFirstRunRet = false;
-    if ( 0 ) // doesnt help
-    {
-        fprintf(stderr,"loading wallet %s %u\n",strWalletFile.c_str(),(uint32_t)time(NULL));
-        FILE *fp;
-        if ( (fp= fopen(strWalletFile.c_str(),"rb")) != 0 )
-        {
-            komodo_prefetch(fp);
-            fclose(fp);
-        }
-    }
-    //fprintf(stderr,"prefetched wallet %s %u\n",strWalletFile.c_str(),(uint32_t)time(NULL));
     DBErrors nLoadWalletRet = CWalletDB(strWalletFile,"cr+").LoadWallet(this);
-    //fprintf(stderr,"loaded wallet %s %u\n",strWalletFile.c_str(),(uint32_t)time(NULL));
     if (nLoadWalletRet == DB_NEED_REWRITE)
     {
         if (CDB::Rewrite(strWalletFile, "\x04pool"))
@@ -7450,15 +7417,13 @@ int CMerkleTx::GetDepthInMainChain(const CBlockIndex* &pindexRet) const
 
 int CMerkleTx::GetBlocksToMaturity() const
 {
-    if ( ASSETCHAINS_SYMBOL[0] == 0 )
-        COINBASE_MATURITY = _COINBASE_MATURITY;
     if (!IsCoinBase())
         return 0;
     int32_t depth = GetDepthInMainChain();
     int32_t ut = UnlockTime(0);
     int32_t toMaturity = (ut - chainActive.Height()) < 0 ? 0 : ut - chainActive.Height();
     //printf("depth.%i, unlockTime.%i, toMaturity.%i\n", depth, ut, toMaturity);
-    ut = (COINBASE_MATURITY - depth) < 0 ? 0 : COINBASE_MATURITY - depth;
+    ut = (Params().CoinbaseMaturity() - depth) < 0 ? 0 : Params().CoinbaseMaturity() - depth;
     return(ut < toMaturity ? toMaturity : ut);
 }
 

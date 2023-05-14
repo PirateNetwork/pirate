@@ -1,4 +1,10 @@
+
+#include "komodo_utils.h"
+#include "komodo_notary.h"
 #include "komodo_structs.h"
+#include "komodo_globals.h"
+#include "komodo_extern_globals.h"
+
 #include <vector>
 #include <fstream>
 

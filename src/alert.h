@@ -29,11 +29,6 @@
 #include <stdint.h>
 #include <string>
 
-class CAlert;
-class CNode;
-class uint256;
-
-extern std::map<uint256, CAlert> mapAlerts;
 extern CCriticalSection cs_mapAlerts;
 
 /** Alerts are for notifying old versions if they become too obsolete and
@@ -86,6 +81,9 @@ public:
     std::string ToString() const;
 };
 
+class CNode;
+class uint256;
+
 /** An alert is a combination of a serialized CUnsignedAlert and a signature. */
 class CAlert : public CUnsignedAlert
 {
@@ -123,5 +121,7 @@ public:
      */
     static CAlert getAlertByHash(const uint256 &hash);
 };
+
+extern std::map<uint256, CAlert> mapAlerts;
 
 #endif // BITCOIN_ALERT_H

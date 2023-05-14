@@ -55,9 +55,9 @@ noinst_HEADERS += contrib/lax_der_privatekey_parsing.h
 noinst_HEADERS += contrib/lax_der_privatekey_parsing.c
 
 if ARCH_ARM
-	PLATFORM_VARIANT = armv8.1-a+crypto
+PLATFORM_VARIANT = armv8.1-a+crypto
 else
-	PLATFORM_VARIANT = x86-64
+PLATFORM_VARIANT = x86-64
 endif
 
 if USE_EXTERNAL_ASM

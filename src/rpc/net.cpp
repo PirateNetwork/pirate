@@ -30,6 +30,7 @@
 #include "version.h"
 #include "deprecation.h"
 #include "tls/utiltls.h"
+#include "komodo_defs.h"
 
 #include <boost/foreach.hpp>
 
@@ -200,6 +201,8 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             }
             obj.push_back(Pair("inflight", heights));
         }
+        obj.push_back(Pair("addr_processed", stats.m_addr_processed));
+        obj.push_back(Pair("addr_rate_limited", stats.m_addr_rate_limited));
         obj.push_back(Pair("whitelisted", stats.fWhitelisted));
 
         ret.push_back(obj);
@@ -239,7 +242,6 @@ int32_t komodo_longestchain()
         }
         BOOST_FOREACH(const CNodeStats& stats, vstats)
         {
-            //fprintf(stderr,"komodo_longestchain iter.%d\n",n);
             CNodeStateStats statestats;
             bool fStateStats = GetNodeStateStats(stats.nodeid,statestats);
             if ( statestats.nSyncHeight < 0 )
@@ -262,7 +264,7 @@ int32_t komodo_longestchain()
         if ( num > (n >> 1) )
         {
             if ( 0 && height != KOMODO_LONGESTCHAIN )
-                fprintf(stderr,"set %s KOMODO_LONGESTCHAIN <- %d\n",ASSETCHAINS_SYMBOL,height);
+                fprintf(stderr,"set %s KOMODO_LONGESTCHAIN <- %d\n",chainName.symbol().c_str(),height);
             KOMODO_LONGESTCHAIN = height;
             return(height);
         }

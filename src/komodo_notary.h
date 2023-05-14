@@ -26,28 +26,49 @@
 
 #define CRYPTO777_PUBSECPSTR "020e46e79a2a8d12b9b5d12c7a91adb4e454edfae43c0a0cb805427d2ac7613fd9"
 
+/****
+ * @brief get the kmd season based on height (used on the KMD chain)
+ * @param height the chain height
+ * @returns the KMD season (returns 0 if the height is above the range)
+ */
 int32_t getkmdseason(int32_t height);
 
+/****
+ * @brief get the season based on timestamp (used for alternate chains)
+ * @param timestamp the time
+ * @returns the KMD season (returns 0 if timestamp is above the range)
+ */
 int32_t getacseason(uint32_t timestamp);
 
+/****
+ * Calculate the height index (how notaries are stored) based on the height
+ * @param height the height
+ * @returns the height index
+ */
+int32_t ht_index_from_height(int32_t height);
+
+/***
+ * @brief Given a height or timestamp, get the appropriate notary keys
+ * @param[out] pubkeys the results
+ * @param[in] height the height
+ * @param[in] timestamp the timestamp
+ * @returns the number of notaries
+ */
 int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);
 
 int32_t komodo_electednotary(int32_t *numnotariesp,uint8_t *pubkey33,int32_t height,uint32_t timestamp);
 
 int32_t komodo_ratify_threshold(int32_t height,uint64_t signedmask);
 
+/*****
+ * Push keys into the notary collection
+ * @param origheight the height where these notaries begin
+ * @param pubkeys the notaries' public keys
+ * @param num the number of keys in pubkeys
+ */
 void komodo_notarysinit(int32_t origheight,uint8_t pubkeys[64][33],int32_t num);
 
 int32_t komodo_chosennotary(int32_t *notaryidp,int32_t height,uint8_t *pubkey33,uint32_t timestamp);
-
-/******
- * @brief Search the notarized checkpoints for a particular height
- * @note Finding a mach does include other criteria other than height
- *      such that the checkpoint includes the desired hight
- * @param height the key
- * @returns the checkpoint or nullptr
- */
-const notarized_checkpoint *komodo_npptr(int32_t height);
 
 /****
  * Search for the last (chronological) MoM notarized height
@@ -90,4 +111,19 @@ int32_t komodo_notarizeddata(int32_t nHeight,uint256 *notarized_hashp,uint256 *n
 void komodo_notarized_update(struct komodo_state *sp,int32_t nHeight,int32_t notarized_height,
         uint256 notarized_hash,uint256 notarized_desttxid,uint256 MoM,int32_t MoMdepth);
 
+/****
+ * @brief Initialize genesis notaries into memory
+ * @note After a successful run, subsequent calls do nothing
+ * @param height the current height (not used other than to stop initialization if less than zero)
+ */
 void komodo_init(int32_t height);
+
+
+int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);
+void komodo_notarysinit(int32_t origheight,uint8_t pubkeys[64][33],int32_t num);
+void komodo_notaries_uninit(); // gets rid of values stored in statics
+void komodo_statefile_uninit(); // closes statefile
+
+extern struct knotaries_entry *Pubkeys;
+#define KOMODO_STATES_NUMBER 2
+extern struct komodo_state KOMODO_STATES[];

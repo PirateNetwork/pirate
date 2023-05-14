@@ -470,7 +470,9 @@ class CTransactionExceptionData
         CTransactionExceptionData() : scriptPubKey(), voutMask() {}
 };
 
-/** CCoinsView that adds a memory cache for transactions to another CCoinsView */
+/** 
+ * CCoinsView that adds a memory cache in front of another CCoinsView 
+ */
 class CCoinsViewCache : public CCoinsViewBacked
 {
 protected:
@@ -555,14 +557,15 @@ public:
     size_t DynamicMemoryUsage() const;
 
     /** 
-     * Amount of bitcoins coming in to a transaction
-     * Note that lightweight clients may not know anything besides the hash of previous transactions,
+     * @brief get amount of bitcoins coming in to a transaction
+     * @note lightweight clients may not know anything besides the hash of previous transactions,
      * so may not be able to calculate this.
-     *
-     * @param[in] tx	transaction for which we are checking input total
-     * @return	Sum of value of all inputs (scriptSigs), (positive valueBalance or zero) and JoinSplit vpub_new
+     * @param[in] nHeight the chain height
+     * @param[out] interestp the interest found
+     * @param[in] tx transaction for which we are checking input total
+     * @returns Sum of value of all inputs (scriptSigs), (positive valueBalance or zero) and JoinSplit vpub_new
      */
-    CAmount GetValueIn(int32_t nHeight,int64_t *interestp,const CTransaction& tx,uint32_t prevblocktime) const;
+    CAmount GetValueIn(int32_t nHeight,int64_t &interestp,const CTransaction& tx) const;
 
     //! Check whether all prevouts of the transaction are present in the UTXO set represented by this view
     bool HaveInputs(const CTransaction& tx) const;

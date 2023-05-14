@@ -26,6 +26,7 @@
 #include "pow.h"
 #include "uint256.h"
 #include "core_io.h"
+#include "komodo_bitcoind.h"
 
 #include "ui_interface.h"
 #include "init.h"
@@ -217,7 +218,8 @@ bool CCoinsViewDB::BatchWrite(CCoinsMap &mapCoins,
     return db.WriteBatch(batch);
 }
 
-CBlockTreeDB::CBlockTreeDB(size_t nCacheSize, bool fMemory, bool fWipe, bool compression, int maxOpenFiles) : CDBWrapper(GetDataDir() / "blocks" / "index", nCacheSize, fMemory, fWipe, compression, maxOpenFiles) {
+CBlockTreeDB::CBlockTreeDB(size_t nCacheSize, bool fMemory, bool fWipe, bool compression, int maxOpenFiles)
+        : CDBWrapper(GetDataDir() / "blocks" / "index", nCacheSize, fMemory, fWipe, compression, maxOpenFiles) {
 }
 
 bool CBlockTreeDB::ReadBlockFileInfo(int nFile, CBlockFileInfo &info) {
@@ -286,7 +288,16 @@ bool CCoinsViewDB::GetStats(CCoinsStats &stats) const {
     return true;
 }
 
-bool CBlockTreeDB::WriteBatchSync(const std::vector<std::pair<int, const CBlockFileInfo*> >& fileInfo, int nLastFile, const std::vector<const CBlockIndex*>& blockinfo) {
+/***
+ * Write a batch of records and sync
+ * @param fileInfo the records to write
+ * @param nLastFile the value for DB_LAST_BLOCK
+ * @param blockinfo the index records to write
+ * @returns true on success
+ */
+bool CBlockTreeDB::WriteBatchSync(const std::vector<std::pair<int, const CBlockFileInfo*> >& fileInfo, int nLastFile,
+        const std::vector<const CBlockIndex*>& blockinfo)
+{
     CDBBatch batch(*this);
     for (std::vector<std::pair<int, const CBlockFileInfo*> >::const_iterator it=fileInfo.begin(); it != fileInfo.end(); it++) {
         batch.Write(make_pair(DB_BLOCK_FILES, it->first), *it->second);
@@ -439,7 +450,6 @@ bool CBlockTreeDB::ReadAddressIndex(uint160 addressHash, int type,
 }
 
 bool getAddressFromIndex(const int &type, const uint160 &hash, std::string &address);
-uint32_t komodo_segid32(char *coinaddr);
 
 #define DECLARE_IGNORELIST std::map <std::string,int> ignoredMap = { \
     {"RReUxSs5hGE39ELU23DfydX8riUuzdrHAE", 1}, \
@@ -467,7 +477,7 @@ bool CBlockTreeDB::Snapshot2(std::map <std::string, CAmount> &addressAmounts, Un
     int64_t utxos = 0; int64_t ignoredAddresses = 0, cryptoConditionsUTXOs = 0, cryptoConditionsTotals = 0;
     DECLARE_IGNORELIST
     boost::scoped_ptr<CDBIterator> iter(NewIterator());
-    //std::map <std::string, CAmount> addressAmounts;
+
     for (iter->SeekToLast(); iter->Valid(); iter->Prev())
     {
         boost::this_thread::interruption_point();
@@ -478,7 +488,7 @@ bool CBlockTreeDB::Snapshot2(std::map <std::string, CAmount> &addressAmounts, Un
             iter->GetKey(keyObj);
             char chType = keyObj.first;
             CAddressIndexIteratorKey indexKey = keyObj.second;
-            //fprintf(stderr, "chType=%d\n", chType);
+
             if (chType == DB_ADDRESSUNSPENTINDEX)
             {
                 try {
@@ -505,18 +515,14 @@ bool CBlockTreeDB::Snapshot2(std::map <std::string, CAmount> &addressAmounts, Un
                     if ( pos == addressAmounts.end() )
                     {
                         // insert new address + utxo amount
-                        //fprintf(stderr, "inserting new address %s with amount %li\n", address.c_str(), nValue);
                         addressAmounts[address] = nValue;
                         totalAddresses++;
                     }
                     else
                     {
                         // update unspent tally for this address
-                        //fprintf(stderr, "updating address %s with new utxo amount %li\n", address.c_str(), nValue);
                         addressAmounts[address] += nValue;
                     }
-                    //fprintf(stderr,"{\"%s\", %.8f},\n",address.c_str(),(double)nValue/COIN);
-                    // total += nValue;
                     utxos++;
                     total += nValue;
                 }
@@ -560,17 +566,16 @@ bool CBlockTreeDB::Snapshot2(std::map <std::string, CAmount> &addressAmounts, Un
     return true;
 }
 
-extern std::vector <std::pair<CAmount, CTxDestination>> vAddressSnapshot;
+extern std::vector <std::pair<CAmount, CTxDestination>> vAddressSnapshot; // daily snapshot
 
 UniValue CBlockTreeDB::Snapshot(int top)
 {
-    int topN = 0;
     std::vector <std::pair<CAmount, std::string>> vaddr;
-    //std::vector <std::vector <std::pair<CAmount, CScript>>> tokenids;
     std::map <std::string, CAmount> addressAmounts;
     UniValue result(UniValue::VOBJ);
     UniValue addressesSorted(UniValue::VARR);
     result.push_back(Pair("start_time", (int) time(NULL)));
+
     if ( (vAddressSnapshot.size() > 0 && top < 0) || (Snapshot2(addressAmounts,&result) && top >= 0) )
     {
         if ( top > -1 )
@@ -740,7 +745,6 @@ bool CBlockTreeDB::LoadBlockIndexGuts()
                 pindexNew->nSaplingValue  = diskindex.nSaplingValue;
                 pindexNew->segid          = diskindex.segid;
                 pindexNew->nNotaryPay     = diskindex.nNotaryPay;
-//fprintf(stderr,"loadguts ht.%d\n",pindexNew->nHeight);
                 // Consistency checks
                 auto header = pindexNew->GetBlockHeader();
                 if (header.GetHash() != pindexNew->GetBlockHash())

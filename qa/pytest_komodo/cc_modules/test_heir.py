@@ -68,8 +68,8 @@ def test_heir(test_params):
     # TODO: we have non insta blocks now so should set inactivity time more than blocktime to proper test it
     # assert result["IsHeirSpendingAllowed"] == "false"
 
-    # waiting for 11 seconds to be sure that needed time passed for heir claiming
-    time.sleep(11)
+    # waiting for 20 seconds to be sure that needed time passed for heir claiming
+    time.sleep(20)
     wait_some_blocks(rpc, 1)
     result = rpc.heirinfo(heir_fund_txid)
     assert result["lifetime"] == "1000.00000000"

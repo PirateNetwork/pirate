@@ -441,8 +441,10 @@ int32_t NSPV_rwremoterpcresp(int32_t rwflag,uint8_t *serialized,struct NSPV_remo
 
 void NSPV_remoterpc_purge(struct NSPV_remoterpcresp *ptr)
 {
-    if ( ptr != 0 )
+    if ( ptr != 0 )  {
+        if (ptr->json) free (ptr->json);
         memset(ptr,0,sizeof(*ptr));
+    }
 }
 
 // useful utility functions
@@ -559,7 +561,7 @@ int32_t NSPV_notariescount(CTransaction tx,uint8_t elected[64][33])
     return(numsigs);
 }
 
-uint256 NSPV_opretextract(int32_t *heightp,uint256 *blockhashp,char *symbol,std::vector<uint8_t> opret,uint256 txid)
+uint256 NSPV_opretextract(int32_t *heightp,uint256 *blockhashp,const char *symbol,std::vector<uint8_t> opret,uint256 txid)
 {
     uint256 desttxid; int32_t i;
     iguana_rwnum(0,&opret[32],sizeof(*heightp),heightp);
@@ -574,15 +576,14 @@ uint256 NSPV_opretextract(int32_t *heightp,uint256 *blockhashp,char *symbol,std:
 
 int32_t NSPV_notarizationextract(int32_t verifyntz,int32_t *ntzheightp,uint256 *blockhashp,uint256 *desttxidp,CTransaction tx)
 {
-    int32_t numsigs=0; uint8_t elected[64][33]; char *symbol; std::vector<uint8_t> opret; uint32_t nTime;
+    int32_t numsigs=0; uint8_t elected[64][33]; std::vector<uint8_t> opret; uint32_t nTime;
     if ( tx.vout.size() >= 2 )
     {
-        symbol = (ASSETCHAINS_SYMBOL[0] == 0) ? (char *)"KMD" : ASSETCHAINS_SYMBOL;
         GetOpReturnData(tx.vout[1].scriptPubKey,opret);
         if ( opret.size() >= 32*2+4 )
         {
             //sleep(1); // needed to avoid no pnodes error
-            *desttxidp = NSPV_opretextract(ntzheightp,blockhashp,symbol,opret,tx.GetHash());
+            *desttxidp = NSPV_opretextract(ntzheightp,blockhashp,chainName.ToString().c_str(),opret,tx.GetHash());
             nTime = NSPV_blocktime(*ntzheightp);
             komodo_notaries(elected,*ntzheightp,nTime);
             if ( verifyntz != 0 && (numsigs= NSPV_fastnotariescount(tx,elected,nTime)) < 12 )

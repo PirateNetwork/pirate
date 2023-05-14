@@ -11,7 +11,7 @@
 #define DBENCH_STOP(arg)
 
 #include "dilithium.h"
-
+#include "komodo_bitcoind.h"
 
 #define NROUNDS 24
 #define ROL(a, offset) ((a << offset) ^ (a >> (64-offset)))

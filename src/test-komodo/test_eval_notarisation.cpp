@@ -14,9 +14,13 @@
 
 #include "testutils.h"
 
+#include "komodo_extern_globals.h"
+#include "komodo_structs.h"
+#include "komodo_notary.h"
 
-extern int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestamp);
+#include <boost/filesystem.hpp>
 
+extern std::map<std::string, std::string> mapArgs;
 
 namespace TestEvalNotarisation {
 
@@ -82,6 +86,9 @@ namespace TestEvalNotarisation {
             eval.blocks[notary.GetHash()].nTime = 1522946781;
         }
 
+    void CleanupEval() {
+        komodo_notaries_uninit(); // clear genesis notaries 'Pubkeys'
+    }
 
     // https://kmd.explorer.supernet.org/tx/5b8055d37cff745a404d1ae45e21ffdba62da7b28ed6533c67468d7379b20bae
     // inputs have been dropped
@@ -138,6 +145,7 @@ TEST(TestEvalNotarisation, testInvalidNotarisationBadOpReturn)
 
     NotarisationData data(0);
     ASSERT_FALSE(eval.GetNotarisationData(notary.GetHash(), data));
+    CleanupEval();
 }
 
 
@@ -153,6 +161,7 @@ TEST(TestEvalNotarisation, testInvalidNotarisationTxNotEnoughSigs)
 
     NotarisationData data(0);
     ASSERT_FALSE(eval.GetNotarisationData(notary.GetHash(), data));
+    CleanupEval();
 }
 
 
@@ -166,6 +175,7 @@ TEST(TestEvalNotarisation, testInvalidNotarisationTxDoesntExist)
 
     NotarisationData data(0);
     ASSERT_FALSE(eval.GetNotarisationData(uint256(), data));
+    CleanupEval();
 }
 
 
@@ -181,6 +191,7 @@ TEST(TestEvalNotarisation, testInvalidNotarisationDupeNotary)
 
     NotarisationData data(0);
     ASSERT_FALSE(eval.GetNotarisationData(notary.GetHash(), data));
+    CleanupEval();
 }
 
 
@@ -201,8 +212,162 @@ TEST(TestEvalNotarisation, testInvalidNotarisationInputNotCheckSig)
 
     NotarisationData data(0);
     ASSERT_FALSE(eval.GetNotarisationData(notary.GetHash(), data));
+    CleanupEval();
 }
 
+static void write_t_record_new(std::FILE* fp)
+{
+    komodo::event_kmdheight evt(10);
+    evt.kheight = 0x01010101;
+    evt.timestamp = 0x02020202;
+    write_event(evt, fp);
+}
 
+TEST(TestEvalNotarisation, test_komodo_notarysinit)
+{
+    // make an empty komodostate file
+    boost::filesystem::path temp_path = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+    boost::filesystem::create_directories(temp_path);
+
+    mapArgs["-datadir"] = temp_path.string();
+    {
+        boost::filesystem::path file = temp_path / "komodostate";
+        std::FILE* fp = std::fopen(file.string().c_str(), "wb+");
+        write_t_record_new(fp); // write some record to init komodostate for reading in komodo_init()
+        fclose(fp);
+    }
+    // now we can get to testing. Load up the notaries from genesis
+    EXPECT_EQ(Pubkeys, nullptr);
+    SelectParams(CBaseChainParams::MAIN);
+    komodo_init(0);
+    boost::filesystem::remove_all(temp_path);
+    EXPECT_NE(Pubkeys, nullptr);
+    EXPECT_EQ(Pubkeys[0].height, 0);
+    EXPECT_EQ(Pubkeys[0].numnotaries, 35);
+
+    uint8_t new_key[33] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+            0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20};
+    uint8_t new_notaries[64][33];
+    memcpy(new_notaries[0], new_key, 33);
+
+    // attempt to update with 1 key to an existing height
+    komodo_notarysinit(0, new_notaries, 1);
+    EXPECT_EQ(Pubkeys[0].height, 0);
+    EXPECT_EQ(Pubkeys[0].numnotaries, 1);
+    EXPECT_EQ(Pubkeys[0].Notaries->notaryid, 0);
+    EXPECT_EQ(Pubkeys[0].Notaries->pubkey[0], 0x00);
+    // that should push these keys to all heights above
+    EXPECT_EQ(Pubkeys[1].Notaries->pubkey[0], 0x00);
+    EXPECT_EQ(Pubkeys[2].Notaries->pubkey[0], 0x00);
+    EXPECT_EQ(Pubkeys[3].Notaries->pubkey[0], 0x00);
+
+    // add a new height with only 1 notary
+    new_key[0] = 0x01;
+    memcpy(new_notaries[0], new_key, 33);
+    komodo_notarysinit(1, new_notaries, 1); // height of 1, 1 public key
+    EXPECT_EQ(Pubkeys[1].height, KOMODO_ELECTION_GAP); // smart enough to bump the height to the next election cycle
+    EXPECT_EQ(Pubkeys[1].numnotaries, 1);
+    EXPECT_EQ(Pubkeys[1].Notaries->notaryid, 0);
+    EXPECT_EQ(Pubkeys[1].Notaries->pubkey[0], 0x01);
+    // that should push these keys to all heights above (but not below)
+    EXPECT_EQ(Pubkeys[0].Notaries->pubkey[0], 0x00);
+    EXPECT_EQ(Pubkeys[2].Notaries->pubkey[0], 0x01);
+    EXPECT_EQ(Pubkeys[3].Notaries->pubkey[0], 0x01);
+    EXPECT_EQ(Pubkeys[4].Notaries->pubkey[0], 0x01);
+
+    // attempt to update with 1 key to a previous height
+    new_key[0] = 0x02;
+    memcpy(new_notaries[0], new_key, 33);
+    komodo_notarysinit(0, new_notaries, 1);
+    EXPECT_EQ(Pubkeys[0].height, 0);
+    EXPECT_EQ(Pubkeys[0].numnotaries, 1);
+    EXPECT_EQ(Pubkeys[0].Notaries->notaryid, 0);
+    EXPECT_EQ(Pubkeys[0].Notaries->pubkey[0], 0x02);
+    // that should not have changed anything above
+    EXPECT_EQ(Pubkeys[1].numnotaries, 1);
+    EXPECT_EQ(Pubkeys[1].Notaries->notaryid, 0);
+    EXPECT_EQ(Pubkeys[1].Notaries->pubkey[0], 0x01);
+
+    // add a new height with only 1 notary
+    new_key[0] = 0x03;
+    memcpy(new_notaries[0], new_key, 33);
+    komodo_notarysinit(KOMODO_ELECTION_GAP + 1, new_notaries, 1); // height of 2001, 1 public key
+    EXPECT_EQ(Pubkeys[2].height, KOMODO_ELECTION_GAP * 2); // smart enough to bump the height to the next election cycle
+    EXPECT_EQ(Pubkeys[2].numnotaries, 1);
+    EXPECT_EQ(Pubkeys[2].Notaries->notaryid, 0);
+    EXPECT_EQ(Pubkeys[2].Notaries->pubkey[0], 0x03);
+    EXPECT_EQ(Pubkeys[3].Notaries->pubkey[0], 0x03);
+    EXPECT_EQ(Pubkeys[4].Notaries->pubkey[0], 0x03);
+
+    // attempt to update with 1 key to a previous height. This should only change 1 key.
+    new_key[0] = 0x04;
+    memcpy(new_notaries[0], new_key, 33);
+    komodo_notarysinit(0, new_notaries, 1);
+    EXPECT_EQ(Pubkeys[0].height, 0);
+    EXPECT_EQ(Pubkeys[0].numnotaries, 1);
+    EXPECT_EQ(Pubkeys[0].Notaries->notaryid, 0);
+    EXPECT_EQ(Pubkeys[0].Notaries->pubkey[0], 0x04);
+    EXPECT_EQ(Pubkeys[1].Notaries->pubkey[0], 0x01);
+    // that should not have changed the next height index
+    EXPECT_EQ(Pubkeys[2].numnotaries, 1);
+    EXPECT_EQ(Pubkeys[2].Notaries->notaryid, 0);
+    EXPECT_EQ(Pubkeys[2].Notaries->pubkey[0], 0x03);
+
+    komodo_notaries_uninit();
+    komodo_statefile_uninit();
+    //undo_init_STAKED();
+}
+
+TEST(TestEvalNotarisation, test_komodo_notaries)
+{
+    chainName = assetchain();
+    // make an empty komodostate file
+    boost::filesystem::path temp_path = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+    boost::filesystem::create_directories(temp_path);
+    mapArgs["-datadir"] = temp_path.string();
+    {
+        boost::filesystem::path file = temp_path / "komodostate";
+        std::FILE* fp = std::fopen(file.string().c_str(), "wb+");
+        write_t_record_new(fp);  // write some record to init komodostate for reading in komodo_init()
+        fclose(fp);
+    }
+
+    uint8_t keys[65][33];
+    EXPECT_EQ(Pubkeys, nullptr);
+    SelectParams(CBaseChainParams::MAIN);
+    // should retrieve the genesis notaries
+    int32_t num_found = komodo_notaries(keys, 0, 0); // note: will open komodostate
+    
+    komodo_statefile_uninit(); // close komodostate
+    try {
+        boost::filesystem::remove_all(temp_path);
+    } catch(boost::filesystem::filesystem_error &ex) {}
+    EXPECT_EQ(num_found, 35);
+    EXPECT_EQ(keys[0][0], 0x03);
+    EXPECT_EQ(keys[0][1], 0xb7);
+    EXPECT_EQ(keys[1][0], 0x02);
+    EXPECT_EQ(keys[1][1], 0xeb);
+
+    // add a new height
+    uint8_t new_key[33] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+            0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20};
+    uint8_t new_notaries[64][33];
+    memcpy(new_notaries[0], new_key, 33);
+    komodo_notarysinit(1, new_notaries, 1); // height of 1, 1 public key
+    num_found = komodo_notaries(keys, 0, 0);
+    EXPECT_EQ(num_found, 35);
+    EXPECT_EQ(keys[0][0], 0x03);
+    EXPECT_EQ(keys[0][1], 0xb7);
+    EXPECT_EQ(keys[1][0], 0x02);
+    EXPECT_EQ(keys[1][1], 0xeb);
+    num_found = komodo_notaries(keys, KOMODO_ELECTION_GAP, 0);
+    EXPECT_EQ(num_found, 1);
+    EXPECT_EQ(keys[0][0], 0x00);
+    EXPECT_EQ(keys[0][1], 0x01);
+
+    komodo_notaries_uninit();
+    komodo_statefile_uninit();
+    //undo_init_STAKED();
+}
 
 } /* namespace TestEvalNotarisation */

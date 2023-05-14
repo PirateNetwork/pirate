@@ -34,26 +34,36 @@ struct CCheckpointData;
  */
 namespace Checkpoints
 {
-
-    typedef std::map<int, uint256> MapCheckpoints;
-
-struct CCheckpointData {
-    MapCheckpoints mapCheckpoints;
-    int64_t nTimeLastCheckpoint;
-    int64_t nTransactionsLastCheckpoint;
-    double fTransactionsPerDay;
-};
+    /******
+     * @param data the collection of checkpoints
+     * @param nHeight the height
+     * @param hash the expected hash at nHight
+     * @returns true if the checkpoint at nHeight is not found or hash matches the found checkpoint
+     */
     bool CheckBlock(const CChainParams::CCheckpointData& data, int nHeight, const uint256& hash);
 
-    
-//! Return conservative estimate of total number of blocks, 0 if unknown
+    /*****
+     * @brief Return conservative estimate of total number of blocks, 0 if unknown
+     * @param data the collection of checkpoints
+     * @returns the total number of blocks
+     */
     int GetTotalBlocksEstimate(const CChainParams::CCheckpointData& data);
 
-//! Returns last CBlockIndex* in mapBlockIndex that is a checkpoint
+    /******
+     * @param data the collection of checkpoints
+     * @returns last CBlockIndex* in mapBlockIndex that is a checkpoint (can be nullptr)
+     */
     CBlockIndex* GetLastCheckpoint(const CChainParams::CCheckpointData& data);
 
-double GuessVerificationProgress(const CChainParams::CCheckpointData& data, CBlockIndex* pindex, bool fSigchecks = true);
+    /******
+     * @brief Guess how far we are in the verification process at the given block index
+     * @param data the checkpoint collection
+     * @param pindex the block index
+     * @param fsigchecks true to include signature checks in the calculation
+     * @returns
+     */
+    double GuessVerificationProgress(const CChainParams::CCheckpointData& data, CBlockIndex* pindex, bool fSigchecks = true);
 
-} //namespace Checkpoints
+} // namespace Checkpoints
 
 #endif // BITCOIN_CHECKPOINTS_H

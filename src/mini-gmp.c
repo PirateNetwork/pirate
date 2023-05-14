@@ -4374,7 +4374,7 @@ char *bitcoin_base58encode(char *coinaddr,uint8_t *data,int32_t datalen)
     return(coinaddr);
 }
 
-int32_t bitcoin_base58decode(uint8_t *data,char *coinaddr)
+int32_t bitcoin_base58decode(uint8_t *data,const char *coinaddr)
 {
  	uint32_t zeroes,be_sz=0; size_t count; const char *p,*p1; mpz_t bn58,bn;
     mpz_init_set_ui(bn58,58);

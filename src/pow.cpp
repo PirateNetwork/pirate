@@ -29,14 +29,16 @@
 #include "streams.h"
 #include "uint256.h"
 #include "util.h"
+#include "komodo.h"
 #include "komodo_notary.h"
+#include "komodo_extern_globals.h"
+#include "komodo_bitcoind.h"
 
 #include "sodium.h"
 
 #ifdef ENABLE_RUST
 #include "librustzcash.h"
 #endif // ENABLE_RUST
-uint32_t komodo_chainactive_timestamp();
 
 #include "komodo_defs.h"
 
@@ -383,7 +385,9 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
     if (pindexFirst == NULL)
         return nProofOfWorkLimit;
 
-    bool fNegative,fOverflow; int32_t zawyflag = 0; arith_uint256 easy,origtarget,bnAvg {bnTot / params.nPowAveragingWindow};
+    bool fNegative,fOverflow; int32_t zawyflag = 0; 
+    arith_uint256 easy,origtarget;
+    arith_uint256 bnAvg{bnTot / params.nPowAveragingWindow}; // average number of bits in the lookback window
     nbits = CalculateNextWorkRequired(bnAvg, pindexLast->GetMedianTimePast(), pindexFirst->GetMedianTimePast(), params);
     if ( ASSETCHAINS_ADAPTIVEPOW > 0 )
     {
@@ -497,9 +501,16 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
     return(nbits);
 }
 
+/****
+ * @brief calculate the nBits value (work required) for the next block
+ * @param bnAvg the average nBits value (work required) across the lookback window
+ * @param nLastBlockTime the time of the most recent block in the lookback window
+ * @param nFirstBlockTime the time of the first block in the lookback window
+ * @param params the chain's consensus parameters
+ * @return the nBits value for the next block
+ */
 unsigned int CalculateNextWorkRequired(arith_uint256 bnAvg,
-                                       int64_t nLastBlockTime, int64_t nFirstBlockTime,
-                                       const Consensus::Params& params)
+        int64_t nLastBlockTime, int64_t nFirstBlockTime, const Consensus::Params& params)
 {
     // Limit adjustment step
     // Use medians to prevent time-warp attacks
@@ -522,7 +533,7 @@ unsigned int CalculateNextWorkRequired(arith_uint256 bnAvg,
     else
         bnLimit = UintToArith256(params.powAlternate);
 
-    const arith_uint256 bnPowLimit = bnLimit; //UintToArith256(params.powLimit);
+    const arith_uint256 bnPowLimit = bnLimit;
     arith_uint256 bnNew {bnAvg};
     bnNew /= params.AveragingWindowTimespan();
     bnNew *= nActualTimespan;
@@ -580,18 +591,34 @@ int32_t komodo_currentheight();
 void komodo_index2pubkey33(uint8_t *pubkey33,CBlockIndex *pindex,int32_t height);
 bool komodo_checkopret(CBlock *pblock, CScript &merkleroot);
 CScript komodo_makeopret(CBlock *pblock, bool fNew);
-extern int32_t KOMODO_CHOSEN_ONE;
-extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 #define KOMODO_ELECTION_GAP 2000
 
 int32_t komodo_eligiblenotary(uint8_t pubkeys[66][33],int32_t *mids,uint32_t blocktimes[66],int32_t *nonzpkeysp,int32_t height);
-int32_t KOMODO_LOADINGBLOCKS = 1;
 
 extern std::string NOTARY_PUBKEY;
 
+bool isSecondBlockAllowed(int32_t notaryid, uint32_t blocktime, uint32_t threshold, uint32_t delta, const std::vector<int32_t> &vPriorityList)
+{
+
+    if (blocktime >= threshold && delta > 0 &&
+        vPriorityList.size() == 64 && notaryid >= 0)
+    {
+        size_t nPos = ((blocktime - threshold) / delta);
+
+        if (nPos < vPriorityList.size())
+        {
+            // if nodeid found in current range of priority -> allow it
+            if (std::count(vPriorityList.begin(), vPriorityList.begin() + nPos + 1, notaryid) > 0)
+                return true;
+        }
+        else
+            return true; // if time is bigger than the biggest range -> all nodes allowed
+    }
+    return false;
+}
+
 bool CheckProofOfWork(const CBlockHeader &blkHeader, uint8_t *pubkey33, int32_t height, const Consensus::Params& params)
 {
-    extern int32_t KOMODO_REWIND;
     uint256 hash;
     bool fNegative,fOverflow; uint8_t origpubkey33[33]; int32_t i,nonzpkeys=0,nonz=0,special=0,special2=0,notaryid=-1,flag = 0, mids[66]; uint32_t tiptime,blocktimes[66];
     arith_uint256 bnTarget; uint8_t pubkeys[66][33];
@@ -607,7 +634,7 @@ bool CheckProofOfWork(const CBlockHeader &blkHeader, uint8_t *pubkey33, int32_t 
         height = komodo_currentheight() + 1;
         //fprintf(stderr,"set height to %d\n",height);
     }
-    if ( height > 34000 && ASSETCHAINS_SYMBOL[0] == 0 ) // 0 -> non-special notary
+    if ( height > 34000 && chainName.isKMD() ) // 0 -> non-special notary
     {
         special = komodo_chosennotary(&notaryid,height,pubkey33,tiptime);
         for (i=0; i<33; i++)
@@ -638,18 +665,78 @@ bool CheckProofOfWork(const CBlockHeader &blkHeader, uint8_t *pubkey33, int32_t 
                     flag = 0;
                 else fprintf(stderr,"ht.%d notaryid.%d special.%d flag.%d special2.%d\n",height,notaryid,special,flag,special2);
             }
+
+            /* hf22 rule applied to stale blocks */
+            if (params.nHF22Height != boost::none) {
+
+                const uint32_t nHeightAfterGAPSecondBlockAllowed = params.nHF22Height.get();
+                const uint32_t nMaxGAPAllowed = params.nMaxFutureBlockTime + 1;
+
+                /*  in KMD chain after nHeightAfterGAPSecondBlockAllowed height we should allow
+                    notary nodes to mine a second block if nMaxGAPAllowed since last block passed
+                */
+                if (chainName.isKMD() && height > nHeightAfterGAPSecondBlockAllowed)
+                {
+                    const uint32_t &blocktime = blkHeader.nTime;
+                    if (blocktime /* upcoming block time */ >= tiptime /* last block in chain time */ + nMaxGAPAllowed &&
+                        tiptime == blocktimes[1] /* just for ensure that all is correct */ )
+                    {
+                        assert(notaryid >= 0); /* assume to be notary */
+
+                        /* here special2 is:
+                                -2 - if it's notary but 57 seconds from last block is not passed
+                                -1 - notary repeat in mids[1..65], i.e. in last 65 blocks
+                                 0 - non-notary
+                                 1 - notary
+                                 2 - notary with easy diff allowed, bcz of "after gap"
+                        */
+
+                        LogPrint("hfnet","%s[%d]: time.(%lu >= %lu), special2.%ld, notaryid.%ld\n", __func__, __LINE__, blocktime, tiptime, special2, notaryid);
+
+                        /* build priority list */
+                        std::vector<int32_t> vPriorityList(64);
+                        // fill the priority list by notaries numbers, 0..63
+                        int id = 0;
+                        std::generate(vPriorityList.begin(), vPriorityList.end(), [&id] { return id++; }); // std::iota
+                        // move the notaries participated in last 65 to the end of priority list
+                        std::vector<int32_t>::iterator it;
+                        for (size_t i = sizeof(mids)/sizeof(mids[0]) - 1; i > 0; --i) { // ! mids[0] is not included
+                            if (mids[i] != -1 ) {
+                                it = std::find(vPriorityList.begin(), vPriorityList.end(), mids[i]);
+                                if (it != vPriorityList.end() && std::next(it) != vPriorityList.end()) {
+                                    std::rotate(it, std::next(it), vPriorityList.end());
+                                }
+                            }
+                        }
+
+                        LogPrint("hfnet","%s[%d]: vPriorityList = \n    [ ", __func__, __LINE__);
+                        for (const auto &id : vPriorityList) {
+                            LogPrint("hfnet", "%ld ", id);
+                        }
+                        LogPrint("hfnet", "]\n");
+
+                        /* reconsider special2 if allowed */
+                        if ((-1 == special2 || 1 == special2) &&
+                            isSecondBlockAllowed(notaryid, blocktime, tiptime + nMaxGAPAllowed, params.nHF22NotariesPriorityRotateDelta, vPriorityList))
+                        {
+                            special2 = 2;
+                            LogPrint("hfnet", "%s[%d]: special2.%ld, notaryid.%ld, ht.%ld, hash.%s\n", __func__, __LINE__, special2, notaryid, height, blkHeader.GetHash().ToString());
+                        }
+
+                        LogPrint("hfnet","%s[%d]: Allowed to mine: \n    [ ", __func__, __LINE__);
+                        for (int i = 0; i < 64; i++) {
+                            if (isSecondBlockAllowed(i, blocktime, tiptime + nMaxGAPAllowed, params.nHF22NotariesPriorityRotateDelta, vPriorityList))
+                                LogPrint("hfnet", "%d ", i);
+                        }
+                        LogPrint("hfnet", "]\n");
+
+                    }
+                }
+            }
+
             if ( (flag != 0 || special2 > 0) && special2 != -2 )
             {
                 bnTarget.SetCompact(KOMODO_MINDIFF_NBITS,&fNegative,&fOverflow);
-                /*
-                const void* pblock = &blkHeader;
-                CScript merkleroot = CScript();
-                if ( height > nDecemberHardforkHeight && !komodo_checkopret((CBlock*)pblock, merkleroot) ) // December 2019 hardfork
-                {
-                    fprintf(stderr, "failed or missing expected.%s != %s\n", komodo_makeopret((CBlock*)pblock, false).ToString().c_str(), merkleroot.ToString().c_str());
-                    return false;
-                }
-                */
             }
         }
     }
@@ -661,15 +748,13 @@ bool CheckProofOfWork(const CBlockHeader &blkHeader, uint8_t *pubkey33, int32_t 
         arith_uint256 bnMaxPoSdiff;
         bnTarget.SetCompact(KOMODO_MINDIFF_NBITS,&fNegative,&fOverflow);
     }
-    //else if ( ASSETCHAINS_ADAPTIVEPOW > 0 && ASSETCHAINS_STAKED == 0 )
-    //    bnTarget = komodo_adaptivepow_target(height,bnTarget,blkHeader.nTime);
     // Check proof of work matches claimed amount
     if ( UintToArith256(hash = blkHeader.GetHash()) > bnTarget )
     {
-        if ( KOMODO_LOADINGBLOCKS != 0 )
+        if ( KOMODO_LOADINGBLOCKS )
             return true;
 
-        if ( ASSETCHAINS_SYMBOL[0] != 0 || height > 792000 )
+        if ( !chainName.isKMD() || height > 792000 )
         {
             //if ( 0 && height > 792000 )
             if ( Params().NetworkIDString() != "regtest" )
@@ -690,12 +775,7 @@ bool CheckProofOfWork(const CBlockHeader &blkHeader, uint8_t *pubkey33, int32_t 
             return false;
         }
     }
-    /*for (i=31; i>=0; i--)
-     fprintf(stderr,"%02x",((uint8_t *)&hash)[i]);
-     fprintf(stderr," hash vs ");
-     for (i=31; i>=0; i--)
-     fprintf(stderr,"%02x",((uint8_t *)&bnTarget)[i]);
-     fprintf(stderr," height.%d notaryid.%d PoW valid\n",height,notaryid);*/
+
     return true;
 }
 

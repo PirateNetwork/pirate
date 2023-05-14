@@ -17,8 +17,11 @@
 #ifndef KOMODO_NSPVWALLET_H
 #define KOMODO_NSPVWALLET_H
 
+#include "komodo_interest.h"
+
 // nSPV wallet uses superlite functions (and some komodod built in functions) to implement nSPV_spend
-extern void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry);
+#include "komodo_bitcoind.h"
+#include "rpc/rawtransaction.h"
 
 int32_t NSPV_validatehdrs(struct NSPV_ntzsproofresp *ptr)
 {
@@ -83,7 +86,7 @@ int32_t NSPV_gettransaction(int32_t skipvalidation,int32_t vout,uint256 txid,int
         retval = -2001;
     else if ( skipvalidation == 0 && ptr->unspentvalue <= 0 )
         retval = -2002;
-    else if ( ASSETCHAINS_SYMBOL[0] == 0 && tiptime != 0 )
+    else if ( chainName.isKMD() && tiptime != 0 )
     {
         rewards = komodo_interestnew(height,tx.vout[vout].nValue,tx.nLockTime,tiptime);
         if ( rewards != extradata )
@@ -235,6 +238,8 @@ int64_t NSPV_addinputs(struct NSPV_utxoresp *used,CMutableTransaction &mtx,int64
         return(totalinputs);
     return(0);
 }
+
+#define NSPV_BRANCHID 0x76b809bb
 
 bool NSPV_SignTx(CMutableTransaction &mtx,int32_t vini,int64_t utxovalue,const CScript scriptPubKey,uint32_t nTime)
 {
@@ -388,8 +393,8 @@ UniValue NSPV_spend(char *srcaddr,char *destaddr,int64_t satoshis) // what its a
     mtx.nExpiryHeight = 0;
     mtx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
     mtx.nVersion = SAPLING_TX_VERSION;
-    if ( ASSETCHAINS_SYMBOL[0] == 0 ) {
-        if ( !komodo_hardfork_active((uint32_t)chainActive.LastTip()->nTime) )
+    if ( chainName.isKMD() ) {
+        if ( !komodo_hardfork_active((uint32_t)chainActive.Tip()->nTime) )
             mtx.nLockTime = (uint32_t)time(NULL) - 777;
         else
             mtx.nLockTime = (uint32_t)chainActive.Tip()->GetMedianTimePast();
@@ -407,7 +412,7 @@ UniValue NSPV_spend(char *srcaddr,char *destaddr,int64_t satoshis) // what its a
             return(result);
         }
         hex = NSPV_signtx(rewardsum,interestsum,retcodes,mtx,txfee,opret,used);
-        if ( ASSETCHAINS_SYMBOL[0] == 0 )
+        if ( chainName.isKMD() )
         {
             char numstr[64];
             sprintf(numstr,"%.8f",(double)interestsum/COIN);

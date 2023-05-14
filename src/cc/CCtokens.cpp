@@ -15,6 +15,7 @@
 
 #include "CCtokens.h"
 #include "importcoin.h"
+#include "komodo_bitcoind.h"
 
 /* TODO: correct this:
 -----------------------------
@@ -56,7 +57,7 @@ bool TokensValidate(struct CCcontract_info *cp, Eval* eval, const CTransaction &
 	char destaddr[64], origaddr[64], CCaddr[64];
 	std::vector<CPubKey> voutTokenPubkeys, vinTokenPubkeys;
 
-    if (strcmp(ASSETCHAINS_SYMBOL, "ROGUE") == 0 && chainActive.Height() <= 12500)
+    if ( chainName.isSymbol("ROGUE") && chainActive.Height() <= 12500)
         return true;
 
 	numvins = tx.vin.size();
@@ -401,15 +402,11 @@ int64_t IsTokensvout(bool goDeeper, bool checkPubkeys /*<--not used, always true
                 struct CCcontract_info *cpEvalCode1,CEvalCode1;
                 cpEvalCode1 = CCinit(&CEvalCode1,evalCode1);
                 CPubKey pk=GetUnspendable(cpEvalCode1,0);
-                testVouts.push_back( std::make_pair(MakeTokensCC1of2vout(evalCode1, tx.vout[v].nValue, voutPubkeys[0], pk), std::string("dual-eval1 pegscc cc1of2 pk[0] globalccpk")) ); 
-                if (voutPubkeys.size() == 2) testVouts.push_back( std::make_pair(MakeTokensCC1of2vout(evalCode1, tx.vout[v].nValue, voutPubkeys[1], pk), std::string("dual-eval1 pegscc cc1of2 pk[1] globalccpk")) );
                 if (evalCode2!=0)
                 {
                     struct CCcontract_info *cpEvalCode2,CEvalCode2;
                     cpEvalCode2 = CCinit(&CEvalCode2,evalCode2);
                     CPubKey pk=GetUnspendable(cpEvalCode2,0);
-                    testVouts.push_back( std::make_pair(MakeTokensCC1of2vout(evalCode2, tx.vout[v].nValue, voutPubkeys[0], pk), std::string("dual-eval2 pegscc cc1of2 pk[0] globalccpk")) ); 
-                    if (voutPubkeys.size() == 2) testVouts.push_back( std::make_pair(MakeTokensCC1of2vout(evalCode2, tx.vout[v].nValue, voutPubkeys[1], pk), std::string("dual-eval2 pegscc cc1of2 pk[1] globalccpk")) );
                 }
 
 				// maybe it is single-eval or dual/three-eval token change?

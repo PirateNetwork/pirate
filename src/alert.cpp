@@ -261,8 +261,7 @@ bool CAlert::ProcessAlert(const std::vector<unsigned char>& alertKey, bool fThre
     return true;
 }
 
-void
-CAlert::Notify(const std::string& strMessage, bool fThread)
+void CAlert::Notify(const std::string& strMessage, bool fThread)
 {
     std::string strCmd = GetArg("-alertnotify", "");
     if (strCmd.empty()) return;

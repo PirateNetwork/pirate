@@ -91,7 +91,7 @@ TestingSetup::TestingSetup()
         // instead of unit tests, but for now we need these here.
         RegisterAllCoreRPCCommands(tableRPC);
 #ifdef ENABLE_WALLET
-        bitdb.MakeMock();
+        bitdb->MakeMock();
         RegisterWalletRPCCommands(tableRPC);
 #endif
         ClearDatadirCache();
@@ -129,8 +129,8 @@ TestingSetup::~TestingSetup()
         delete pcoinsdbview;
         delete pblocktree;
 #ifdef ENABLE_WALLET
-        bitdb.Flush(true);
-        bitdb.Reset();
+        bitdb->Flush(true);
+        bitdb->Reset();
 #endif
         boost::filesystem::remove_all(pathTemp);
 }
