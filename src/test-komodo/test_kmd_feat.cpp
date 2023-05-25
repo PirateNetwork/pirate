@@ -16,6 +16,7 @@
 #include "komodo_globals.h"
 #include "komodo_interest.h"
 #include "cc/CCinclude.h"
+#include "komodo_hardfork.h"
 
 
 CCriticalSection& get_cs_main(); // in main.cpp
@@ -262,7 +263,7 @@ TEST_F(KomodoFeatures, komodo_interest_validate) {
         assert(nMaxTipTimes == nMaxInterestCollected);
 
         const int testHeights[] = {
-            247205 + 1, 333332, 3000000, 7113401 /*nS7HardforkHeight + 1*/};
+            247205 + 1, 333332, 3000000, nS7HardforkHeight + 1};
 
         CValidationState state;
 

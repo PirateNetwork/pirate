@@ -15,6 +15,7 @@
 #include "komodo_interest.h"
 #include "komodo_bitcoind.h"
 #include "komodo_utils.h" // dstr()
+#include "komodo_hardfork.h"
 
 #define KOMODO_INTEREST ((uint64_t)5000000) //((uint64_t)(0.05 * COIN))   // 5%
 
@@ -31,7 +32,7 @@ uint64_t _komodo_interestnew(int32_t txheight,uint64_t nValue,uint32_t nLockTime
             minutes = 31 * 24 * 60;
         minutes -= ((KOMODO_MAXMEMPOOLTIME/60) - 1);
         uint64_t res = (nValue / 10512000) * minutes;
-        if (txheight >= 7113400 /*nS7HardforkHeight*/)
+        if (txheight >= nS7HardforkHeight)
             res /= 500; // KIP-0001 implementation, reduce AUR from 5% to 0.01%
         return res;
     }
