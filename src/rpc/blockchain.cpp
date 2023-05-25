@@ -809,15 +809,18 @@ UniValue getblockheader(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     CBlockIndex* pblockindex = mapBlockIndex[hash];
 
-    if (!fVerbose)
-    {
+    try {
+        if (!fVerbose) {
         CDataStream ssBlock(SER_NETWORK, PROTOCOL_VERSION);
         ssBlock << pblockindex->GetBlockHeader();
         std::string strHex = HexStr(ssBlock.begin(), ssBlock.end());
         return strHex;
-    }
-
+        } else {
     return blockheaderToJSON(pblockindex);
+        }
+    } catch (const runtime_error&) {
+        throw JSONRPCError(RPC_DATABASE_ERROR, "Failed to read index entry");
+    }
 }
 
 UniValue getblock(const UniValue& params, bool fHelp, const CPubKey& mypk)

@@ -307,6 +307,7 @@ public:
 
     uint256 GetBlockHash() const
     {
+        assert(phashBlock);
         return *phashBlock;
     }
 
