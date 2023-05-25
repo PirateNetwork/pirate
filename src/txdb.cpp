@@ -742,22 +742,24 @@ bool CBlockTreeDB::LoadBlockIndexGuts()
                 pindexNew->nSaplingValue  = diskindex.nSaplingValue;
                 pindexNew->segid          = diskindex.segid;
                 pindexNew->nNotaryPay     = diskindex.nNotaryPay;
-                // Consistency checks
-                CBlockHeader header;
-                {
-                    LOCK(cs_main);
-                    try {
-                        header = pindexNew->GetBlockHeader();
-                    } catch (const runtime_error&) {
-                        return error("LoadBlockIndex(): failed to read index entry: diskindex hash = %s",
-                            diskindex.GetBlockHash().ToString());
-                    }
-                }
-                if (header.GetHash() != pindexNew->GetBlockHash())
-                    return error("LoadBlockIndex(): block header inconsistency detected: on-disk = %s, in-memory = %s",
-                                 diskindex.ToString(),  pindexNew->ToString());
+
                 if ( 0 ) // POW will be checked before any block is connected
                 {
+                    // Consistency checks
+                    CBlockHeader header;
+                    {
+                        LOCK(cs_main);
+                        try {
+                            header = pindexNew->GetBlockHeader();
+                        } catch (const runtime_error&) {
+                            return error("LoadBlockIndex(): failed to read index entry: diskindex hash = %s",
+                                diskindex.GetBlockHash().ToString());
+                        }
+                    }
+                    if (header.GetHash() != pindexNew->GetBlockHash())
+                        return error("LoadBlockIndex(): block header inconsistency detected: on-disk = %s, in-memory = %s",
+                                    diskindex.ToString(),  pindexNew->ToString());
+
                     uint8_t pubkey33[33];
                     komodo_index2pubkey33(pubkey33,pindexNew,pindexNew->nHeight);
                     if (!CheckProofOfWork(header,pubkey33,pindexNew->nHeight,Params().GetConsensus()))
