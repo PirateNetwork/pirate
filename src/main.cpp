@@ -6814,7 +6814,11 @@ void static CheckBlockIndex()
                 }
             }
         }
+        // try {
         // assert(pindex->GetBlockHash() == pindex->GetBlockHeader().GetHash()); // Perhaps too slow
+        // } catch (const runtime_error&) {
+        //     assert(!"Failed to read index entry");
+        // }
         // End: actual consistency checks.
 
         // Try descending into the first subnode.

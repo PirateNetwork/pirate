@@ -161,11 +161,15 @@ static bool rest_headers(HTTPRequest* req,
                 break;
             pindex = chainActive.Next(pindex);
         }
-    }
 
     if (rf == RF_BINARY || rf == RF_HEX) {
+            try {
         for (const CBlockIndex *pindex : headers) {
             ssHeader << pindex->GetBlockHeader();
+                }
+            } catch (const std::runtime_error&) {
+                return RESTERR(req, HTTP_INTERNAL_SERVER_ERROR, "Failed to read index entry");
+            }
         }
     }
 
