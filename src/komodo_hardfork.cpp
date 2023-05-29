@@ -499,7 +499,7 @@ const char *notaries_elected[NUM_KMD_SEASONS][NUM_KMD_NOTARIES][2] =
         {"artem.pikulin_AR", "026a8ed1e4eeeb023cfb8e003e1c1de6a2b771f37e112745ffb8b6e375a9cbfdec"}, // 10
         {"batman_AR", "02cc9eb0281628256a743570c57b2cedd54333ec79a97a681207b240cab84119fe"},
         {"blackice2_AR", "03d224790d17b881db560759cc9cc73fe5c865136a88af471ea156b7eb6d88ce32"},
-        {"ca333_EU", "02ac1ae0537043c331cb59f19b9f96b7ebe3c3a1d49aecf2ac13941747aeb85f75"},
+        {"ca333_EU", "0335492a24c73844b29b8c724e709b8082424e6296baa1fab4ef86c73f233ccf27"},
         {"caglarkaya_EU", "035667a7e5594095f7b3d392e61da8dd7d0dda610bf8731e7831993a8201d1feea"},
         {"chmex_AR", "036c856ea778ea105b93c0be187004d4e51161eda32888aa307b8f72d490884005"},
         {"chmex_EU", "025b7209ba37df8d9695a23ea706ea2594863ab09055ca6bf485855937f3321d1d"},
