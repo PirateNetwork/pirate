@@ -197,7 +197,7 @@ namespace TestAddrmanTests {
         ASSERT_TRUE(addr_null.ToString() == "[::]:0");
 
         // Test 2: Does Addrman::Add work as expected.
-        LookupHost("252.1.1.1", test_addr, false);
+        LookupHost("250.1.1.1", test_addr, false);
         CService addr1 = CService(test_addr, 8333);
         addrman.Add(CAddress(addr1, NODE_NONE), source);
         ASSERT_TRUE(addrman.size() == 1);
@@ -301,39 +301,64 @@ namespace TestAddrmanTests {
         LookupHost("250.3.3.3", test_addr, false);
         CService addr4 = CService(test_addr, 9999);
 
-        LookupHost("250.3.1.1", test_addr, false);
-        addrman.Add(CAddress(addr2, NODE_NONE), CService(test_addr, 8333));
-        LookupHost("250.3.1.1", test_addr, false);
-        addrman.Add(CAddress(addr3, NODE_NONE), CService(test_addr, 8333));
         LookupHost("250.4.1.1", test_addr, false);
+        addrman.Add(CAddress(addr2, NODE_NONE), CService(test_addr, 8333));
+        LookupHost("250.4.2.2", test_addr, false);
+        addrman.Add(CAddress(addr3, NODE_NONE), CService(test_addr, 8333));
+        LookupHost("250.4.3.3", test_addr, false);
         addrman.Add(CAddress(addr4, NODE_NONE), CService(test_addr, 8333));
 
         // Add three addresses to tried table.
-        LookupHost("250.4.4.4", test_addr, false);
+        LookupHost("250.3.4.4", test_addr, false);
         CService addr5 = CService(test_addr, 8333);
-        LookupHost("250.4.5.5", test_addr, false);
+        LookupHost("250.3.5.5", test_addr, false);
         CService addr6 = CService(test_addr, 7777);
-        LookupHost("250.4.6.6", test_addr, false);
+        LookupHost("250.3.6.6", test_addr, false);
         CService addr7 = CService(test_addr, 8333);
 
-        LookupHost("250.3.1.1", test_addr, false);
+        LookupHost("250.4.4.4", test_addr, false);
         addrman.Add(CAddress(addr5, NODE_NONE), CService(test_addr, 8333));
         addrman.Good(CAddress(addr5, NODE_NONE));
-        LookupHost("250.3.1.1", test_addr, false);
+        LookupHost("250.4.5.5", test_addr, false);
         addrman.Add(CAddress(addr6, NODE_NONE), CService(test_addr, 8333));
         addrman.Good(CAddress(addr6, NODE_NONE));
-        LookupHost("250.1.1.3", test_addr, false);
+        LookupHost("250.4.6.6", test_addr, false);
         addrman.Add(CAddress(addr7, NODE_NONE), CService(test_addr, 8333));
         addrman.Good(CAddress(addr7, NODE_NONE));
 
         // Test 11: 6 addrs + 1 addr from last test = 7.
         ASSERT_TRUE(addrman.size() == 7);
 
+        int triedAddr = 0;
+        int newAddr = 0;
+        for (int i = 0; i<1000; i++) {
+            auto addr = addrman.Select().ToString();
+
+            if (addr == "250.3.1.1:8333")
+                newAddr++;
+            if (addr == "250.3.2.2:9999")
+                newAddr++;
+            if (addr == "250.3.3.3:9999")
+                newAddr++;
+            if (addr == "250.1.1.1:8333")
+                triedAddr++;
+            if (addr == "250.3.4.4:8333")
+                triedAddr++;
+            if (addr == "250.3.5.5:7777")
+                triedAddr++;
+            if (addr == "250.3.6.6:8333")
+                triedAddr++;
+        }
+
+        if (triedAddr > 400) triedAddr = 400;
+        if (newAddr > 400) newAddr = 400;
+
         // Test 12: Select pulls from new and tried regardless of port number.
-        ASSERT_TRUE(addrman.Select().ToString() == "250.4.6.6:8333");
-        ASSERT_TRUE(addrman.Select().ToString() == "250.3.2.2:9999");
-        ASSERT_TRUE(addrman.Select().ToString() == "250.3.3.3:9999");
-        ASSERT_TRUE(addrman.Select().ToString() == "250.4.4.4:8333");
+        // addrman.Select should pull 50% from tried and 50% from new
+        // triedAddr and newAddr should be close to 500 each but using 400 to allow
+        // for random chance
+        ASSERT_TRUE(triedAddr == 400);
+        ASSERT_TRUE(newAddr == 400);
 
     }
 
@@ -351,24 +376,37 @@ namespace TestAddrmanTests {
 
         CNetAddr test_addr;
 
-        for (unsigned int i = 1; i < 18; i++) {
-            LookupHost(("250.1.1." + boost::to_string(i)).c_str(), test_addr, false);
-            CService addr = CService(test_addr, 8333);
-            addrman.Add(CAddress(addr, NODE_NONE), source);
+        int addrSize = 0;
+        for (int i = 1; i < 18; i++) {
+
+            LookupHost(("250.1.2." + std::to_string(i)).c_str(), test_addr, false);
+            // CService addr = CService(test_addr, 8333);
+            CAddress addr = CAddress(CService(test_addr, 8333), NODE_NONE);
+            addr.nTime = GetTime();
+
+
+            bool added = addrman.Add(addr, source);
+            addrSize++;
             //Test 13: No collision in new table yet.
-            ASSERT_TRUE(addrman.size() == i);
+            if (i == 12) {
+              addrSize--;
+            } //asmap bucket position collision at 250.1.2.12
+
+            ASSERT_TRUE(addrman.size() == addrSize);
         }
 
+        ASSERT_TRUE(addrman.size() == 16);
+
         //Test 14: new table collision!
-        LookupHost("250.1.1.18", test_addr, false);
+        LookupHost("250.1.2.17", test_addr, false);
         CService addr1 = CService(test_addr, 8333);
         addrman.Add(CAddress(addr1, NODE_NONE), source);
-        ASSERT_TRUE(addrman.size() == 17);
+        ASSERT_TRUE(addrman.size() == 16);
 
-        LookupHost("250.1.1.19", test_addr, false);
+        LookupHost("250.1.2.18", test_addr, false);
         CService addr2 = CService(test_addr, 8333);
         addrman.Add(CAddress(addr2, NODE_NONE), source);
-        ASSERT_TRUE(addrman.size() == 18);
+        ASSERT_TRUE(addrman.size() == 17);
     }
 
     TEST(TestAddrmanTests, addrman_tried_collisions)
@@ -397,12 +435,12 @@ namespace TestAddrmanTests {
         }
 
         //Test 16: tried table collision!
-        LookupHost("250.1.1.80", test_addr, false);
+        LookupHost("250.1.1.79", test_addr, false);
         CService addr1 = CService(test_addr, 8333);
         addrman.Add(CAddress(addr1, NODE_NONE), source);
         ASSERT_TRUE(addrman.size() == 79);
 
-        LookupHost("250.1.1.81", test_addr, false);
+        LookupHost("250.1.1.80", test_addr, false);
         CService addr2 = CService(test_addr, 8333);
         addrman.Add(CAddress(addr2, NODE_NONE), source);
         ASSERT_TRUE(addrman.size() == 80);
@@ -451,7 +489,7 @@ namespace TestAddrmanTests {
         CAddrInfo* info3 = addrman.Find(addr3);
         ASSERT_TRUE(info3);
         if (info3)
-            ASSERT_TRUE(info3->ToString() == "251.255.2.1:8333");
+            ASSERT_TRUE(info3->ToString() == "250.255.2.1:8333");
     }
 
     TEST(TestAddrmanTests, addrman_create)
@@ -583,9 +621,9 @@ namespace TestAddrmanTests {
 
         size_t percent23 = (addrman.size() * 23) / 100;
         ASSERT_TRUE(vAddr.size() == percent23);
-        ASSERT_TRUE(vAddr.size() == 461);
+        ASSERT_TRUE(vAddr.size() == 460);
         // (Addrman.size() < number of addresses added) due to address collisons.
-        ASSERT_TRUE(addrman.size() == 2007);
+        ASSERT_TRUE(addrman.size() == 2001);
     }
 
     TEST(TestAddrmanTests, caddrinfo_get_tried_bucket_legacy)
