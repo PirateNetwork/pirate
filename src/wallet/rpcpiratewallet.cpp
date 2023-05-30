@@ -424,6 +424,9 @@ void getAllSproutRKs(vector<uint256> &rks) {
 
 void getAllSaplingOVKs(std::set<uint256> &ovks, bool fIncludeWatchonly) {
 
+    //exit if pwalletMain is not set
+    if (pwalletMain == nullptr)
+        return;
 
     //get ovks for all spending keys
       if (fIncludeWatchonly) {
@@ -451,6 +454,10 @@ void getAllSaplingOVKs(std::set<uint256> &ovks, bool fIncludeWatchonly) {
 }
 
 void getAllSaplingIVKs(std::set<uint256> &ivks, bool fIncludeWatchonly) {
+
+    //exit if pwalletMain is not set
+    if (pwalletMain == nullptr)
+        return;
 
     std::set<libzcash::SaplingIncomingViewingKey> setIvks;
     pwalletMain->GetSaplingIncomingViewingKeySet(setIvks);

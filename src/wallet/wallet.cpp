@@ -4309,6 +4309,10 @@ bool CWalletTx::WriteToDisk(CWalletDB *pwalletdb, ArchiveTxPoint &arcTxPt, bool 
     bool arcTxWrite = true;
     uint256 txid = GetHash();
 
+    if (pwalletMain == nullptr) {
+        return false;
+    }
+
     if (pwalletMain->IsCrypted()) {
 
         if (pwalletMain->IsLocked()) {
