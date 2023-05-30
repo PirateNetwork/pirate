@@ -48,7 +48,7 @@ bool operator==(const my_key& lhs, const my_key& rhs)
 TEST(TestNotary, KomodoNotaries)
 {
     // Test komodo_notaries(), getkmdseason()
-    chainName = assetchain("");
+    chainName = assetchain(""); // set as KMD
     SelectParams(CBaseChainParams::MAIN);
     komodo_notaries_uninit();
     //undo_init_STAKED();
@@ -124,11 +124,6 @@ TEST(TestNotary, KomodoNotaries)
     EXPECT_EQ( getacseason(1), 1);
     EXPECT_EQ( getacseason(1525132800), 1);
     EXPECT_EQ( getacseason(1525132801), 2);
-    EXPECT_EQ( getacseason(1751328000), 7);
-    EXPECT_EQ( getacseason(1751328001), 0);
-
-    // cleanup
-    komodo_notaries_uninit();
 }
 
 TEST(TestNotary, ElectedNotary)
@@ -169,6 +164,39 @@ TEST(TestNotary, ElectedNotary)
     result = komodo_electednotary(&numnotaries, pubkey, height, timestamp);
     EXPECT_EQ(result, -1);
     EXPECT_EQ(numnotaries, 64);
+}
+
+// season 7 tests:
+TEST(TestNotary, KomodoNotaries_S7)
+{
+    uint8_t pubkeys[64][33];
+
+    SelectParams(CBaseChainParams::MAIN);
+    komodo_notaries_uninit();
+    chainName = assetchain(""); // set as KMD
+
+    EXPECT_EQ( getkmdseason(3484958+1), 8);
+    EXPECT_EQ( getkmdseason(8113400), 8);
+    EXPECT_EQ( getkmdseason(8113400+1), 0);
+    int32_t result = komodo_notaries(pubkeys, 3484958+1, 0);
+    EXPECT_EQ( my_key(pubkeys[0]), my_key("03955c7999538cee313bf196a7df59db208c651f6a5a1b0eed94732ba753b4f3f4"));
+    EXPECT_EQ( my_key(pubkeys[63]), my_key("02f9a7b49282885cd03969f1f5478287497bc8edfceee9eac676053c107c5fcdaf"));
+
+    // this should work for KMD net
+    EXPECT_EQ( getacseason(1951328000), 8);
+    EXPECT_EQ( getacseason(1951328001), 0);
+
+    // try wrong pubkey
+    int32_t numnotaries;
+    my_key wrong_pk("02ebfc784a4ba768aad88d44d1045d240d47b26e248cafaf1c5169a42d7a61d344");
+    uint8_t pubkey[33];
+    wrong_pk.fill(pubkey);
+    result = komodo_electednotary(&numnotaries, pubkey, 3484958+1, 0);
+    EXPECT_EQ(result, -1);
+    EXPECT_EQ(numnotaries, 64);
+
+    // cleanup
+    komodo_notaries_uninit();
 }
 
 } // namespace TestNotary
