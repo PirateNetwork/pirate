@@ -180,8 +180,8 @@ public:
      * @param outputControl the tx to spend
      * @returns true on success
      */
-    bool CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletTx& wtxNew, 
-            CReserveKey& reservekey, std::string& strFailReason, CCoinControl* coinControl);
+    bool CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletTx& wtxNew,
+            CReserveKey& reservekey, std::string& strFailReason, CAmount nMinFeeOverride, CCoinControl* coinControl);
     using CWallet::CommitTransaction;
     bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey, CValidationState& state);
     /***

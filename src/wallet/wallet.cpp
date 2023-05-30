@@ -5849,7 +5849,8 @@ bool CWallet::FundTransaction(CMutableTransaction& tx, CAmount &nFeeRet, int& nC
     CReserveKey reservekey(this);
     CWalletTx wtx;
 
-    if (!CreateTransaction(vecSend, wtx, reservekey, nFeeRet, nChangePosRet, strFailReason, &coinControl, false))
+    CAmount nMinFeeOverride = 0;
+    if (!CreateTransaction(vecSend, wtx, reservekey, nFeeRet, nChangePosRet, strFailReason, nMinFeeOverride, &coinControl, false))
         return false;
 
     if (nChangePosRet != -1)
@@ -5886,7 +5887,7 @@ bool CWallet::FundTransaction(CMutableTransaction& tx, CAmount &nFeeRet, int& nC
  * @param sign true to sign inputs
  */
 bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wtxNew, CReserveKey& reservekey,
-        CAmount& nFeeRet, int& nChangePosRet, std::string& strFailReason, const CCoinControl* coinControl,
+        CAmount& nFeeRet, int& nChangePosRet, std::string& strFailReason, CAmount& nMinFeeOverride, const CCoinControl* coinControl,
         bool sign)
 {
     uint64_t interest2 = 0; CAmount nValue = 0; unsigned int nSubtractFeeFromAmount = 0;
@@ -6220,8 +6221,8 @@ bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wt
 
                 CAmount nFeeNeeded = GetMinimumFee(nBytes, coinControl, ::mempool, ::feeEstimator, &feeCalc);
                 // CAmount nFeeNeeded = GetMinimumFee(nBytes, nTxConfirmTarget, mempool);
-                // if ( nFeeNeeded < 5000 )
-                //     nFeeNeeded = 5000;
+                if ( nFeeNeeded < nMinFeeOverride )
+                    nFeeNeeded = nMinFeeOverride;
 
                 // If we made it here and we aren't even able to meet the relay fee on the next pass, give up
                 // because we must be at the maximum allowed fee.

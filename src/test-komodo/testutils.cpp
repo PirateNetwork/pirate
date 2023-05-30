@@ -424,12 +424,12 @@ TransactionInProcess TestWallet::CreateSpendTransaction(std::shared_ptr<TestWall
     CRecipient recipient = {GetScriptForDestination(to->GetPubKey()), amount, fSubtractFeeFromAmount};
     vecSend.push_back(recipient);
     // other items needed for transaction creation call
-    CAmount nFeeRequired;
+    CAmount nFeeRequired = 0;
     std::string strError;
     int nChangePosRet = -1;
     TransactionInProcess retVal(this);
     if (!CWallet::CreateTransaction(vecSend, retVal.transaction, retVal.reserveKey, nFeeRequired,
-            nChangePosRet, strError))
+            nChangePosRet, strError, fee))
     {
         if (!fSubtractFeeFromAmount && amount + nFeeRequired > GetBalance())
             strError = strprintf("Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds!",
@@ -484,7 +484,7 @@ TransactionInProcess TestWallet::CreateSpendTransaction(std::shared_ptr<TestWall
     std::string strError;
     int nChangePosRet = -1;
     TransactionInProcess retVal(this);
-    if (!CreateTransaction(vecSend, retVal.transaction, retVal.reserveKey, strError, &coinControl))
+    if (!CreateTransaction(vecSend, retVal.transaction, retVal.reserveKey, strError, fee, &coinControl))
     {
         if (!fSubtractFeeFromAmount && amount + nFeeRequired > curBalance)
             strError = strprintf("Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds!",
@@ -505,7 +505,7 @@ TransactionInProcess TestWallet::CreateSpendTransaction(std::shared_ptr<TestWall
  * @returns true on success
  */
 bool TestWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWalletTx& wtxNew,
-        CReserveKey& reservekey, std::string& strFailReason, CCoinControl* coinControl)
+        CReserveKey& reservekey, std::string& strFailReason, CAmount nMinFeeOverride, CCoinControl* coinControl)
 {
     bool sign = true;
     int nChangePosRet = 0;
@@ -832,8 +832,8 @@ bool TestWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWall
 
                 CAmount nFeeNeeded = GetMinimumFee(nBytes, coinControl, ::mempool, ::feeEstimator, &feeCalc);
                 // CAmount nFeeNeeded = GetMinimumFee(nBytes, nTxConfirmTarget, mempool);
-                // if ( nFeeNeeded < 5000 )
-                //     nFeeNeeded = 5000;
+                if ( nFeeNeeded < nMinFeeOverride )
+                    nFeeNeeded = nMinFeeOverride;
 
                 // If we made it here and we aren't even able to meet the relay fee on the next pass, give up
                 // because we must be at the maximum allowed fee.

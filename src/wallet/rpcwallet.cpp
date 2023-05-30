@@ -492,7 +492,8 @@ static void SendMoney(const CTxDestination &address, CAmount nValue, bool fSubtr
         CRecipient opret = { opretpubkey, opretValue, false };
         vecSend.push_back(opret);
     }
-    if (!pwalletMain->CreateTransaction(vecSend, wtxNew, reservekey, nFeeRequired, nChangePosRet, strError)) {
+    CAmount nMinFeeOverride = 0;
+    if (!pwalletMain->CreateTransaction(vecSend, wtxNew, reservekey, nFeeRequired, nChangePosRet, strError, nMinFeeOverride)) {
         if (!fSubtractFeeFromAmount && nValue + nFeeRequired > pwalletMain->GetBalance())
             strError = strprintf("Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds!", FormatMoney(nFeeRequired));
         throw JSONRPCError(RPC_WALLET_ERROR, strError);
@@ -1463,9 +1464,10 @@ UniValue sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
     // Send
     CReserveKey keyChange(pwalletMain);
     CAmount nFeeRequired = 0;
+    CAmount nMinFeeOverride = 0;
     int nChangePosRet = -1;
     string strFailReason;
-    bool fCreated = pwalletMain->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, nChangePosRet, strFailReason);
+    bool fCreated = pwalletMain->CreateTransaction(vecSend, wtx, keyChange, nFeeRequired, nChangePosRet, strFailReason, nMinFeeOverride);
     if (!fCreated)
         throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, strFailReason);
     if (!pwalletMain->CommitTransaction(wtx, keyChange))
