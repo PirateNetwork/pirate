@@ -16,6 +16,7 @@
 #include "komodo_globals.h"
 #include "komodo_interest.h"
 #include "cc/CCinclude.h"
+#include "komodo_hardfork.h"
 
 
 CCriticalSection& get_cs_main(); // in main.cpp
@@ -252,6 +253,8 @@ TEST_F(KomodoFeatures, komodo_interest_validate) {
         const CAmount interestCollectedBefore1M[] = {0, 5802, 4252378, 24663337, 49320871, 49994387};
         /* komodo_interest_height = 3000000 */
         const CAmount interestCollected[] = {0, 5795, 4235195, 4235195, 4235195, 4235195};
+        /* komodo_interest_height = 7113400 */
+        const CAmount interestCollectedAfterS7[] = {0, 5795 / 500, 4235195 / 500, 4235195 / 500, 4235195 / 500, 4235195 / 500};
 
         /* check collected interest */
 
@@ -260,7 +263,7 @@ TEST_F(KomodoFeatures, komodo_interest_validate) {
         assert(nMaxTipTimes == nMaxInterestCollected);
 
         const int testHeights[] = {
-            247205 + 1, 333332, 3000000};
+            247205 + 1, 333332, 3000000, nS7HardforkHeight + 1};
 
         CValidationState state;
 
@@ -320,8 +323,11 @@ TEST_F(KomodoFeatures, komodo_interest_validate) {
                 case 333332:
                     ASSERT_EQ(interest, interestCollectedBefore1M[idx]);
                     break;
-                default:
+                case 3000000:
                     ASSERT_EQ(interest, interestCollected[idx]);
+                    break;
+                default:
+                    ASSERT_EQ(interest, interestCollectedAfterS7[idx]);
                     break;
                 }
 
@@ -339,8 +345,9 @@ TEST_F(KomodoFeatures, komodo_interestnew) {
     // time lower than cut off month time limit
     EXPECT_EQ(komodo_interestnew(1000000, 10LL*COIN, 1663839248, 1663839248 + (31 * 24 * 60 - 1) * 60 + 3600 /*KOMODO_MAXMEMPOOLTIME*/), 10LL*COIN/10512000 * (31*24*60 - 59)); 
 
+    // since 7th season, according to KIP0001 AUR should be reduced from 5% to 0.01%, i.e. div by 500
+    EXPECT_EQ(komodo_interestnew(7777777-1, 10LL*COIN, 1663839248, 1663839248 + (31 * 24 * 60 - 1) * 60 + 3600), 10LL*COIN/10512000 * (31*24*60 - 59) / 500);
     // end of interest era
-    EXPECT_EQ(komodo_interestnew(7777777-1, 10LL*COIN, 1663839248, 1663839248 + (31 * 24 * 60 - 1) * 60 + 3600), 10LL*COIN/10512000 * (31*24*60 - 59)); 
     EXPECT_EQ(komodo_interestnew(7777777, 10LL*COIN, 1663839248, 1663839248 + (31 * 24 * 60 - 1) * 60 + 3600), 0LL); 
 
     // value less than limit
@@ -382,8 +389,9 @@ TEST_F(KomodoFeatures, komodo_interest) {
             // time lower than cut off month time limit
             EXPECT_EQ(komodo_interest(1000000, nValue, 1663839248, 1663839248 + (31 * 24 * 60 - 1) * 60 + 3600), nValue/10512000 * (31*24*60 - 59)); 
 
+            // since 7th season, according to KIP0001 AUR should be reduced from 5% to 0.01%, i.e. div by 500
+            EXPECT_EQ(komodo_interest(7777777-1, nValue, 1663839248, 1663839248 + (31 * 24 * 60 - 1) * 60 + 3600), nValue/10512000 * (31*24*60 - 59) / 500);
             // end of interest era
-            EXPECT_EQ(komodo_interest(7777777-1, nValue, 1663839248, 1663839248 + (31 * 24 * 60 - 1) * 60 + 3600), nValue/10512000 * (31*24*60 - 59)); 
             EXPECT_EQ(komodo_interest(7777777 /*KOMODO_ENDOFERA*/, nValue, 1663839248, 1663839248 + (31 * 24 * 60 - 1) * 60 + 3600), 0LL); 
 
             // tip less than nLockTime
