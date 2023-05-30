@@ -76,6 +76,6 @@ CAmount GetRequiredFee(unsigned int nTxBytes);
  * Estimate the minimum fee considering user set parameters
  * and the required fee
  */
-CAmount GetMinimumFee(unsigned int nTxBytes, const CCoinControl& coin_control, const CTxMemPool& pool, const CBlockPolicyEstimator& estimator, FeeCalculation *feeCalc);
+CAmount GetMinimumFee(unsigned int nTxBytes, const CCoinControl* coin_control, const CTxMemPool& pool, const CBlockPolicyEstimator& estimator, FeeCalculation *feeCalc);
 
 #endif // KOMODO_WALLET_FEES_H

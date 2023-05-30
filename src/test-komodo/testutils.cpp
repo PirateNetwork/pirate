@@ -830,7 +830,7 @@ bool TestWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWall
                         break;
                 }
 
-                CAmount nFeeNeeded = GetMinimumFee(nBytes, *coinControl, ::mempool, ::feeEstimator, &feeCalc);
+                CAmount nFeeNeeded = GetMinimumFee(nBytes, coinControl, ::mempool, ::feeEstimator, &feeCalc);
                 // CAmount nFeeNeeded = GetMinimumFee(nBytes, nTxConfirmTarget, mempool);
                 // if ( nFeeNeeded < 5000 )
                 //     nFeeNeeded = 5000;
