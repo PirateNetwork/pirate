@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2016-2022 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -45,6 +46,7 @@ struct CTimestampBlockIndexValue;
 struct CSpentIndexKey;
 struct CSpentIndexValue;
 class uint256;
+class CDiskBlockIndex;
 
 //! -dbcache default (MiB)
 static const int64_t nDefaultDbCache = 450;
@@ -129,7 +131,7 @@ public:
      * @returns true on success
      */
     bool WriteBatchSync(const std::vector<std::pair<int, const CBlockFileInfo*> >& fileInfo, int nLastFile, 
-            const std::vector<const CBlockIndex*>& blockinfo);
+            const std::vector<CBlockIndex*>& blockinfo);
     /***
      * Erase a batch of block index records and sync
      * @param blockinfo the records
@@ -142,13 +144,13 @@ public:
      * @param fileinfo where to store the results
      * @returns true on success
      */
-    bool ReadBlockFileInfo(int nFile, CBlockFileInfo &fileinfo);
+    bool ReadBlockFileInfo(int nFile, CBlockFileInfo &fileinfo) const;
     /****
      * Read the value of DB_LAST_BLOCK
      * @param nFile where to store the results
      * @returns true on success
      */
-    bool ReadLastBlockFile(int &nFile);
+    bool ReadLastBlockFile(int &nFile) const;
     /***
      * Write to the DB_REINDEX_FLAG
      * @param fReindex true to set DB_REINDEX_FLAG, false to erase the key
@@ -160,14 +162,16 @@ public:
      * @param fReindex true if DB_REINDEX_FLAG exists
      * @returns true on success
      */
-    bool ReadReindexing(bool &fReindex);
+    bool ReadReindexing(bool &fReindex) const;
+
+    bool ReadDiskBlockIndex(const uint256 &blockhash, CDiskBlockIndex &dbindex) const;
     /***
      * Retrieve the location of a particular transaction index value
      * @param txid what to look for
      * @param pos the results
      * @returns true on success
      */
-    bool ReadTxIndex(const uint256 &txid, CDiskTxPos &pos);
+    bool ReadTxIndex(const uint256 &txid, CDiskTxPos &pos) const;
     /****
      * Write transaction index records
      * @param list the records to write
@@ -180,7 +184,7 @@ public:
      * @param value the value
      * @returns true on success
      */
-    bool ReadSpentIndex(CSpentIndexKey &key, CSpentIndexValue &value);
+    bool ReadSpentIndex(CSpentIndexKey &key, CSpentIndexValue &value) const;
     /****
      * Update a batch of spent index entries
      * @param vect the entries to add/update
@@ -255,7 +259,7 @@ public:
      * @param logicalTS the timestamp (the value)
      * @returns true on success
      */
-    bool ReadTimestampBlockIndex(const uint256 &hash, unsigned int &logicalTS);
+    bool ReadTimestampBlockIndex(const uint256 &hash, unsigned int &logicalTS) const;
     /***
      * Store a flag value in the DB
      * @param name the key
@@ -269,7 +273,7 @@ public:
      * @param fValue the value
      * @returns true on success
      */
-    bool ReadFlag(const std::string &name, bool &fValue);
+    bool ReadFlag(const std::string &name, bool &fValue) const;
     /****
      * Load the block headers from disk
      * NOTE: this does no consistency check beyond verifying records exist

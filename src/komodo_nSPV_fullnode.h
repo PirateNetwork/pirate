@@ -124,7 +124,7 @@ int32_t NSPV_setequihdr(struct NSPV_equihdr *hdr,int32_t height)
         hdr->nTime = pindex->nTime;
         hdr->nBits = pindex->nBits;
         hdr->nNonce = pindex->nNonce;
-        memcpy(hdr->nSolution,&pindex->nSolution[0],sizeof(hdr->nSolution));
+        memcpy(hdr->nSolution,&pindex->GetBlockHeader().nSolution[0],sizeof(hdr->nSolution));
         return(sizeof(*hdr));
     }
     return(-1);

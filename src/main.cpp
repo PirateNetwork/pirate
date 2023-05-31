@@ -1,7 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
-// Copyright (c) 2015-2020 The Zcash developers
-// Copyright (c) 2015-2020 The Komodo Platform developers
+// Copyright (c) 2015-2022 The Zcash developers
+// Copyright (c) 2015-2023 The Komodo Platform developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -3870,7 +3870,7 @@ bool static FlushStateToDisk(CValidationState &state, FlushStateMode mode) {
                         vFiles.push_back(make_pair(*it, &vinfoBlockFile[*it]));
                     setDirtyFileInfo.erase(it++);
                 }
-                std::vector<const CBlockIndex*> vBlocks;
+                std::vector<CBlockIndex*> vBlocks;
                 vBlocks.reserve(setDirtyBlockIndex.size());
                 for (set<CBlockIndex*>::iterator it = setDirtyBlockIndex.begin(); it != setDirtyBlockIndex.end(); ) {
                     vBlocks.push_back(*it);
@@ -3878,6 +3878,12 @@ bool static FlushStateToDisk(CValidationState &state, FlushStateMode mode) {
                 }
                 if (!pblocktree->WriteBatchSync(vFiles, nLastBlockFile, vBlocks)) {
                     return AbortNode(state, "Files to write to block index database");
+                }
+                // Now that we have written the block indices to the database, we do not
+                // need to store solutions for these CBlockIndex objects in memory.
+                // cs_main must be held here.
+                for (CBlockIndex *pblockindex : vBlocks) {
+                    pblockindex->TrimSolution();
                 }
             }
             // Finally remove any pruned files
@@ -6946,7 +6952,11 @@ void static CheckBlockIndex()
                 }
             }
         }
+        // try {
         // assert(pindex->GetBlockHash() == pindex->GetBlockHeader().GetHash()); // Perhaps too slow
+        // } catch (const runtime_error&) {
+        //     assert(!"Failed to read index entry");
+        // }
         // End: actual consistency checks.
 
         // Try descending into the first subnode.
