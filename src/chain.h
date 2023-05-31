@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2016-2022 The Zcash developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -32,6 +33,7 @@
 #include <vector>
 
 #include <boost/foreach.hpp>
+
 
 extern CCriticalSection cs_main;
 
@@ -216,8 +218,14 @@ public:
     unsigned int nTime;
     unsigned int nBits;
     uint256 nNonce;
+
+protected:
+    // The Equihash solution, if it is stored. Once we know that the block index
+    // entry is present in leveldb, this field can be cleared via the TrimSolution
+    // method to save memory.
     std::vector<unsigned char> nSolution;
 
+public:
     //! (memory only) Sequential id assigned to distinguish order in which blocks are received.
     uint32_t nSequenceId;
     
@@ -291,23 +299,15 @@ public:
         return ret;
     }
 
-    CBlockHeader GetBlockHeader() const
-    {
-        CBlockHeader block;
-        block.nVersion       = nVersion;
-        if (pprev)
-            block.hashPrevBlock = pprev->GetBlockHash();
-        block.hashMerkleRoot = hashMerkleRoot;
-        block.hashFinalSaplingRoot   = hashFinalSaplingRoot;
-        block.nTime          = nTime;
-        block.nBits          = nBits;
-        block.nNonce         = nNonce;
-        block.nSolution      = nSolution;
-        return block;
-    }
+    //! Get the block header for this block index. Requires cs_main.
+    CBlockHeader GetBlockHeader() const;
+
+    //! Clear the Equihash solution to save memory. Requires cs_main.
+    void TrimSolution();
 
     uint256 GetBlockHash() const
     {
+        assert(phashBlock);
         return *phashBlock;
     }
 
@@ -341,10 +341,11 @@ public:
 
     std::string ToString() const
     {
-        return strprintf("CBlockIndex(pprev=%p, nHeight=%d, merkle=%s, hashBlock=%s)",
+        return strprintf("CBlockIndex(pprev=%p, nHeight=%d, merkle=%s, hashBlock=%s, HasSolution=%s)",
             pprev, nHeight,
             hashMerkleRoot.ToString(),
-            GetBlockHash().ToString());
+            phashBlock ? GetBlockHash().ToString() : "(nil)",
+            HasSolution());
     }
 
     //! Check whether this block index entry is valid up to the passed validity level.
@@ -354,6 +355,12 @@ public:
         if (nStatus & BLOCK_FAILED_MASK)
             return false;
         return ((nStatus & BLOCK_VALID_MASK) >= nUpTo);
+    }
+
+    //! Is the Equihash solution stored?
+    bool HasSolution() const
+    {
+        return !nSolution.empty();
     }
 
     //! Raise the validity level of this block index entry.
@@ -388,8 +395,11 @@ public:
         hashPrev = uint256();
     }
 
-    explicit CDiskBlockIndex(const CBlockIndex* pindex) : CBlockIndex(*pindex) {
+    explicit CDiskBlockIndex(const CBlockIndex* pindex, std::function<std::vector<unsigned char>()> getSolution) : CBlockIndex(*pindex) {
         hashPrev = (pprev ? pprev->GetBlockHash() : uint256());
+        if (!HasSolution()) {
+            nSolution = getSolution();
+        }
     }
 
     ADD_SERIALIZE_METHODS;
@@ -459,21 +469,38 @@ private:
     bool isStakedAndNotaryPay() const;
     bool isStakedAndAfterDec2019(unsigned int nTime) const;
 
+    //! This method should not be called on a CDiskBlockIndex.
+    void TrimSolution()
+    {
+        assert(!"called CDiskBlockIndex::TrimSolution");
+    }
+
 public:
     uint256 GetBlockHash() const
     {
-        CBlockHeader block;
-        block.nVersion        = nVersion;
-        block.hashPrevBlock   = hashPrev;
-        block.hashMerkleRoot  = hashMerkleRoot;
-        block.hashFinalSaplingRoot    = hashFinalSaplingRoot;
-        block.nTime           = nTime;
-        block.nBits           = nBits;
-        block.nNonce          = nNonce;
-        block.nSolution       = nSolution;
-        return block.GetHash();
+        return GetBlockHeader().GetHash();
     }
 
+    //! Get the block header for this block index.
+    CBlockHeader GetBlockHeader() const
+    {
+        CBlockHeader header;
+        header.nVersion             = nVersion;
+        header.hashPrevBlock        = hashPrev;
+        header.hashMerkleRoot       = hashMerkleRoot;
+        header.hashFinalSaplingRoot = hashFinalSaplingRoot;
+        header.nTime                = nTime;
+        header.nBits                = nBits;
+        header.nNonce               = nNonce;
+        header.nSolution            = nSolution;
+        return header;
+    }
+
+    std::vector<unsigned char> GetSolution() const
+    {
+        assert(HasSolution());
+        return nSolution;
+    }
 
     std::string ToString() const
     {

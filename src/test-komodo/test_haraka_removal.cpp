@@ -55,7 +55,7 @@ namespace TestHarakaRemoval {
         EXPECT_TRUE(chainActive.Contains(&fakeIndex));
         EXPECT_EQ(0, chainActive.Height());
 
-        CDiskBlockIndex diskindex {&fakeIndex};
+        CDiskBlockIndex diskindex(&fakeIndex, [](){ return std::vector<unsigned char>(); });
         ss.clear();
         ss << diskindex;
         // VARINT(PROTOCOL_VERSION==170010) - 89af1b
