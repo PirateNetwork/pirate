@@ -322,14 +322,14 @@ TEST_F(TestAlerts, AlertNotify)
     EXPECT_EQ(r[1], "Alert 2, cancels 1");
     EXPECT_EQ(r[2], "Alert 2, cancels 1");
     EXPECT_EQ(r[3], "Alert 3, disables RPC");
-    EXPECT_EQ(r[4], "Alert 4, reenables RPC"); // dashes should be removed
+    EXPECT_EQ(r[4], "Alert 4, re-enables RPC");
     EXPECT_EQ(r[5], "Evil Alert; /bin/ls; echo "); // single-quotes should be removed
 #else
     EXPECT_EQ(r[0], "'Alert 1' ");
     EXPECT_EQ(r[1], "'Alert 2, cancels 1' ");
     EXPECT_EQ(r[2], "'Alert 2, cancels 1' ");
     EXPECT_EQ(r[3], "'Alert 3, disables RPC' ");
-    EXPECT_EQ(r[4], "'Alert 4, reenables RPC' "); // dashes should be removed
+    EXPECT_EQ(r[4], "'Alert 4, re-enables RPC' ");
     EXPECT_EQ(r[5], "'Evil Alert; /bin/ls; echo ' ");
 #endif
 
