@@ -751,17 +751,21 @@ void *chainparams_commandline()
                                     (1600000, uint256S("0x0000000002838d76f769cd7bb87bb196ebe0556750fb14b038eb149a31b5aeb3"))
                                     (1700000, uint256S("0x000000000a6999bede4901e9d07de66fafbd5a81c18b038d205960887b0b522a"))
                                     (1800000, uint256S("0x000000000e69ec04a4c9ebaba913f844d159c7f308da85626804f8ff295a7c74"))
-                                    (1957724, uint256S("0x0000000024c58297dce1eca08c01f62b97b3498350dfbee594cc61894c23bf17")) //Season 6 1st Notary transaction
-                                    (1957729, uint256S("0x0000000047acfc56790048dc85d18018324d74ec80ad2e7a7ad4aed2904a1c18")) //Season 6
-                                    (1962459, uint256S("0x000000000782c7fff1a310acc4344c76b0401fe90735cd295ac67add4b92141c")),
-                            (int64_t)1656372561,    // * UNIX timestamp of last checkpoint block
-                            (int64_t)3845409,         // * total number of transactions between genesis and last checkpoint
+                                    (1900000, uint256S("0x00000000176a6f8ebd5d3833345b0b9e68a389e2f1077071a72383b73b7f7944"))
+                                    (2000000, uint256S("0x000000000c56ec1237cb98457510ee3144120e0af977d39ded7b34dd0c22f5ab"))
+                                    (2100000, uint256S("0x00000000189c3d02a97c9ed45c194d5ae9a7723598af640f268cfdbf59a69cbb"))
+                                    (2200000, uint256S("0x00000000215d10231183f53550314c915d3119bb3782ae717fca498f97c3b1e4"))
+                                    (2300000, uint256S("0x000000002f81899792792c294ae4e313bd9e07b8522df23d5d49e6c13c8ca7d4"))
+                                    (2400000, uint256S("0x0000000038f671599a462b3faa16e597b6bfd4f7e0dd78aa4707b0a0e828f70b"))
+                                    (2425507, uint256S("0x0000000006fb46756ed935c8f8cd5399a3cfab8f27fa4eb237a50fb53cc25805")),
+                            (int64_t)1685836388,    // * UNIX timestamp of last checkpoint block
+                            (int64_t)4963910,         // * total number of transactions between genesis and last checkpoint
                             //   (the tx=... number in the SetBestChain debug.log lines)
-                            (double)1086           // * estimated number of transactions per day after checkpoint
+                            (double)1179           // * estimated number of transactions per day after checkpoint
                             //   total number of tx / (checkpoint block height / (24 * 24))
                     };
 
-            pCurrentParams->consensus.nMinimumChainWork = uint256S("0x00000000000000000000000000000000000000000000000000aab050b8e07b8b");
+            pCurrentParams->consensus.nMinimumChainWork = uint256S("0x00000000000000000000000000000000000000000000000000c46a0c07176634");
 
         }
 
