@@ -659,9 +659,6 @@ public:
     bool InMempool() const;
     bool IsTrusted() const;
 
-    bool WriteToDisk(CWalletDB *pwalletdb, ArchiveTxPoint &arcTxPt, bool updateArcTxPt = false);
-    bool WriteArcSaplingOpToDisk(CWalletDB *pwalletdb, uint256 nullifier, SaplingOutPoint op);
-
     int64_t GetTxTime() const;
 
     bool RelayWalletTransaction();
@@ -1103,7 +1100,7 @@ protected:
 
         //Clear Unsaved Sapling Addresses after successful TxnCommit
         mapUnsavedSaplingIncomingViewingKeys.clear();
-        writeTxFailed = false;
+        fRunSetBestChain = false;
         walletHeight = height; //Set Wallet height to chain height.
         LogPrintf("SetBestChain(): SetBestChain was successful\n");
     }
@@ -1240,7 +1237,7 @@ public:
     std::map<uint256, SaplingOutPoint> mapSaplingNullifiersToNotes;
 
     std::map<uint256, CWalletTx> mapWallet;
-    bool writeTxFailed = false;
+    bool fRunSetBestChain = false;
 
     int64_t nOrderPosNext;
 

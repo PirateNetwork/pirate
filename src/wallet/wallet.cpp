@@ -1341,7 +1341,7 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
         nLastSetChain = nNow;
     }
     if (++nSetChainUpdates >= WITNESS_WRITE_UPDATES ||
-            nLastSetChain + (int64_t)WITNESS_WRITE_INTERVAL * 1000000 < nNow || writeTxFailed) {
+            nLastSetChain + (int64_t)WITNESS_WRITE_INTERVAL * 1000000 < nNow || fRunSetBestChain) {
         nLastSetChain = nNow;
         nSetChainUpdates = 0;
 
@@ -2932,22 +2932,6 @@ void CWallet::UpdateSaplingNullifierNoteMapWithTx(CWalletTx& wtx) {
                 mapSaplingNullifiersToNotes[nullifier] = op;
                 mapArcSaplingOutPoints[nullifier] = op;
                 item.second.nullifier = nullifier;
-
-                //write the ArcOp to disk
-                CWalletDB walletdb(strWalletFile, "r+", false);
-
-                if (!IsCrypted()) {
-                    wtx.WriteArcSaplingOpToDisk(&walletdb, nullifier, op);
-                } else {
-                    if (!IsLocked()) {
-                        std::vector<unsigned char> vchCryptedSecret;
-                        uint256 chash = HashWithFP(nullifier);
-                        CKeyingMaterial vchSecret = SerializeForEncryptionInput(nullifier, op);
-
-                        CCryptoKeyStore::EncryptSerializedSecret(vchSecret, chash, vchCryptedSecret);
-                        walletdb.WriteCryptedArcSaplingOp(nullifier, chash, vchCryptedSecret, true);
-                    }
-                }
             }
         }
     }
@@ -3042,9 +3026,6 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
 
             if (nHeight > 0) {
               AddToArcTxs(wtx, nHeight, arcTxPt);
-            }
-            if (!wtx.WriteToDisk(pwalletdb, arcTxPt, true)) {
-                writeTxFailed = true;
             }
         }
 
@@ -4301,68 +4282,6 @@ void CWalletTx::GetAccountAmounts(const string& strAccount, CAmount& nReceived,
     }
 }
 
-
-bool CWalletTx::WriteToDisk(CWalletDB *pwalletdb, ArchiveTxPoint &arcTxPt, bool updateArcTxPt)
-{
-
-    bool txWrite = false;
-    bool arcTxWrite = true;
-    uint256 txid = GetHash();
-
-    if (pwalletMain == nullptr) {
-        return false;
-    }
-
-    if (pwalletMain->IsCrypted()) {
-
-        if (pwalletMain->IsLocked()) {
-            return false;
-        }
-
-        std::vector<unsigned char> vchCryptedTx;
-        uint256 cTxhash = pwalletMain->HashWithFP(txid);
-        CKeyingMaterial vchSecret = pwalletMain->SerializeForEncryptionInput(txid, *this);
-
-        if (!pwalletMain->EncryptSerializedWalletObjects(vchSecret, cTxhash, vchCryptedTx)) {
-            LogPrintf("Encrypting wallet transaction failed!!!\n");
-            return false;
-        }
-
-        txWrite = pwalletdb->WriteCryptedTx(txid, cTxhash, vchCryptedTx, true);
-
-        if (updateArcTxPt) {
-
-            std::vector<unsigned char> vchCryptedArcTx;
-            uint256 cArcTxhash = pwalletMain->HashWithFP(txid);
-            CKeyingMaterial vchSecret = pwalletMain->SerializeForEncryptionInput(txid, arcTxPt);
-
-            if (!pwalletMain->EncryptSerializedWalletObjects(vchSecret, cArcTxhash, vchCryptedArcTx)) {
-                LogPrintf("Encrypting ArchiveTxPoint failed!!!\n");
-                return false;
-            }
-
-            arcTxWrite = pwalletdb->WriteCryptedArcTx(txid, cArcTxhash, vchCryptedArcTx, true);
-        }
-
-    } else {
-        txWrite = pwalletdb->WriteTx(txid, *this, true);
-
-        if (updateArcTxPt) {
-            arcTxWrite = pwalletdb->WriteArcTx(txid, arcTxPt, true);
-        }
-    }
-
-    if (!txWrite || !arcTxWrite)
-        return false;
-
-    return true;
-}
-
-bool CWalletTx::WriteArcSaplingOpToDisk(CWalletDB *pwalletdb, uint256 nullifier, SaplingOutPoint op)
-{
-    return pwalletdb->WriteArcSaplingOp(nullifier, op, true);
-}
-
 void CWallet::WitnessNoteCommitment(std::vector<uint256> commitments,
                                     std::vector<boost::optional<SproutWitness>>& witnesses,
                                     uint256 &final_anchor)
@@ -4479,7 +4398,6 @@ void CWallet::UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletT
   for (map<const uint256, CWalletTx*>::iterator it = mapUpdatedTxs.begin(); it != mapUpdatedTxs.end(); ++it) {
       CWalletTx* pwtx = it->second;
       LogPrint("deletetx","Reorder Tx - Updating Positon to %i for Tx %s\n ", pwtx->nOrderPos, pwtx->GetHash().ToString());;
-      pwtx->WriteToDisk(&walletdb, arcTxPt, false);
       const auto itmw = mapWallet.find(pwtx->GetHash());
       if (itmw != mapWallet.end()) {
           mapWallet[pwtx->GetHash()].nOrderPos = pwtx->nOrderPos;
@@ -4763,6 +4681,7 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
         LogPrint("deletetx","Delete Tx - Time to Run Total Function %s\n", DateTimeStrFormat("%H:%M:%S", totalTime - startTime));
       }
 
+      fRunSetBestChain = deletedTransactions;
       return deletedTransactions;
 }
 
