@@ -4088,6 +4088,10 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
     }
     // Update cached incremental witnesses
     GetMainSignals().ChainTip(pindexDelete, &block, newSproutTree, newSaplingTree, false);
+
+    //update UI of new tip
+    uiInterface.NotifyBlockTip(true, pindexDelete);
+
     return true;
 }
 
@@ -4310,6 +4314,9 @@ bool ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *pblock)
     GetMainSignals().ChainTip(pindexNew, pblock, oldSproutTree, oldSaplingTree, true);
 
     EnforceNodeDeprecation(pindexNew->nHeight);
+
+    //Notify UI of new block
+    uiInterface.NotifyBlockTip(true, pindexNew);
 
     int64_t nTime6 = GetTimeMicros(); nTimePostConnect += nTime6 - nTime5; nTimeTotal += nTime6 - nTime1;
     LogPrint("bench", "  - Connect postprocess: %.2fms [%.2fs]\n", (nTime6 - nTime5) * 0.001, nTimePostConnect * 0.000001);
