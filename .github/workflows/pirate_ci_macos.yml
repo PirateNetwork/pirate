@@ -1,6 +1,6 @@
 # we are using separate workflow because CI producing test binaries with CPPFLAGS=-DTESTMODE
 
-name: Pirate cli build - MacOS 10.15 Catalina
+name: Pirate cli build - MacOS
 
 
 on:
@@ -14,13 +14,13 @@ jobs:
 
   osx-build:
     name: OSX Build
-    runs-on: macos-10.15
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v2
       - name: Install deps (macOS)
         run: |
           brew update
-          brew upgrade
+          brew upgrade || true
           brew tap discoteq/discoteq; brew install flock
           brew install autoconf autogen automake
           brew install gcc@8
@@ -29,6 +29,8 @@ jobs:
           brew install coreutils
           brew install wget
           brew install python3
+          brew install gmp
+
       - name: Build (macOS)
         run: |
           ./zcutil/build-mac.sh -j4
