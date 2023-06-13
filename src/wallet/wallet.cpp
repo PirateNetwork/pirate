@@ -3352,31 +3352,36 @@ mapSproutNoteData_t CWallet::FindMySproutNotes(const CTransaction &tx) const
  * already have been cached in CWalletTx.mapSaplingNoteData.
  */
 
-static void FindMySaplingNote(const CWallet *wallet, const SaplingIncomingViewingKey &ivk, OutputDescription &output, const int &height, mapSaplingNoteData_t *noteData, const uint256 hash, const uint32_t &i, SaplingIncomingViewingKeyMap *viewingKeysToAdd)
+static std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> DecryptSaplingNoteWorker(const SaplingIncomingViewingKey &ivk, const OutputDescription &outdesc, const int &height, const uint256 &hash, const uint32_t &i)
 {
+    mapSaplingNoteData_t noteData;
+    SaplingIncomingViewingKeyMap viewingKeysToAdd;
 
-    auto result = SaplingNotePlaintext::decrypt(Params().GetConsensus(), height, output.encCiphertext, ivk, output.ephemeralKey, output.cmu);
-    if (result) {
-
-        auto address = ivk.address(result.get().d);
+    auto result = SaplingNotePlaintext::decrypt(Params().GetConsensus(), height, outdesc.encCiphertext, ivk, outdesc.ephemeralKey, outdesc.cmu);
+    if (result)
+    {
 
         // We don't cache the nullifier here as computing it requires knowledge of the note position
         // in the commitment tree, which can only be determined when the transaction has been mined.
         SaplingOutPoint op {hash, i};
         SaplingNoteData nd;
-        nd.ivk = ivk;
+
+        //Get Address
+        auto address = ivk.address(result.value().d);
 
         //Cache Address and value - in Memory Only
         auto note = result.get();
         nd.value = note.value();
         nd.address = address.get();
+        nd.ivk = ivk;
 
-        {
-            LOCK(wallet->cs_wallet_threadedfunction);
-            viewingKeysToAdd->insert(make_pair(address.get(),ivk));
-            noteData->insert(std::make_pair(op, nd));
-        }
+        //set data to be returned
+        viewingKeysToAdd.insert(make_pair(address.get(), ivk));
+        noteData.insert(std::make_pair(op, nd));
+
     }
+
+    return std::make_pair(noteData, viewingKeysToAdd);
 }
 
 std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySaplingNotes(const CTransaction &tx, int height) const
@@ -3387,21 +3392,27 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
     mapSaplingNoteData_t noteData;
     SaplingIncomingViewingKeyMap viewingKeysToAdd;
 
+    //Create a Vector of futures to be collected later
+    std::vector<std::future<std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap>>> vDecryptFutures;
+
     // Protocol Spec: 4.19 Block Chain Scanning (Sapling)
     for (uint32_t i = 0; i < tx.vShieldedOutput.size(); ++i) {
         const OutputDescription output = tx.vShieldedOutput[i];
-        std::vector<boost::thread*> decryptionThreads;
-
-        //Create 1 thread per key
+        //Create 1 thread per key per output
         for (auto it = setSaplingIncomingViewingKeys.begin(); it != setSaplingIncomingViewingKeys.end(); ++it) {
             SaplingIncomingViewingKey ivk = *it;
-            decryptionThreads.emplace_back(new boost::thread(FindMySaplingNote, this, ivk, output, height, &noteData, hash, i, &viewingKeysToAdd));
+            vDecryptFutures.emplace_back(std::async(std::launch::async, DecryptSaplingNoteWorker, ivk, output, height, hash, i));
         }
+    }
 
-        // Cleanup
-        for (auto dthread : decryptionThreads) {
-            dthread->join();
-            delete dthread;
+    //Collect the async results
+    for (auto &fut : vDecryptFutures) {
+        auto result_pair = fut.get();
+        if (!result_pair.first.empty()) {
+            noteData.insert(result_pair.first.begin(), result_pair.first.end());
+            for (auto itt = result_pair.second.begin(); itt != result_pair.second.end(); ++itt) {
+                viewingKeysToAdd[(*itt).first] = (*itt).second;
+            }
         }
     }
 
