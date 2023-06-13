@@ -404,8 +404,10 @@ bool ValidatePeerCertificate(SSL *ssl)
         long errCode = SSL_get_verify_result(ssl);
         if (errCode != X509_V_OK)
         {
-            LogPrint("tls", "TLS: %s: %s():%d - Certificate Verification ERROR=%d: [%s]\n",
-                __FILE__, __func__, __LINE__, errCode, X509_verify_cert_error_string(errCode));
+            if (errCode != 18) {
+                LogPrint("tls", "TLS: %s: %s():%d - Certificate Verification ERROR=%d: [%s]\n",
+                    __FILE__, __func__, __LINE__, errCode, X509_verify_cert_error_string(errCode));
+            }
         }
         else
         {
