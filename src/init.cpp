@@ -475,6 +475,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-tlskeypwd=<password>", _("Password for a private key encryption (default: not set, i.e. private key will be stored unencrypted)"));
     strUsage += HelpMessageOpt("-tlscertpath=<path>", _("Full path to a certificate"));
     strUsage += HelpMessageOpt("-tlstrustdir=<path>", _("Full path to a trusted certificates directory"));
+    strUsage += HelpMessageOpt("-plaintextpeer=<ip>", _("Bypass the TLS connection and allow an unencrypted connection for this ip. Overrides tlsenforcement for this ip."));
     strUsage += HelpMessageOpt("-whitebind=<addr>", _("Bind to given address and whitelist peers connecting to it. Use [host]:port notation for IPv6"));
     strUsage += HelpMessageOpt("-whitelist=<netmask>", _("Whitelist peers connecting from the given netmask or IP address. Can be specified multiple times.") +
         " " + _("Whitelisted peers cannot be DoS banned and their transactions are always relayed, even if they are already in the mempool, useful e.g. for a gateway"));
@@ -1163,6 +1164,22 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     // when specifying an explicit binding address, you want to listen on it
     // even when -connect or -proxy is specified
+
+    // Check plaintext peers
+
+    if (mapMultiArgs.count("-plaintextpeer")) {
+        const std::vector<std::string>& vAllow = mapMultiArgs["-plaintextpeer"];
+        BOOST_FOREACH (std::string strAllow, vAllow) {
+            CSubNet subnet;
+            LookupSubNet(strAllow.c_str(), subnet);
+            if (!subnet.IsValid()) {
+                return InitError(strprintf(_("Invalid -plaintextpeer %s."), strAllow));
+            } else {
+                LogPrintf("Whitelisting unencrypted p2p connection for %s\n", strAllow);
+            }
+        }
+    }
+
     if (mapArgs.count("-bind")) {
         if (SoftSetBoolArg("-listen", true))
             LogPrintf("%s: parameter interaction: -bind set -> setting -listen=1\n", __func__);
