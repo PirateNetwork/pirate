@@ -1537,8 +1537,6 @@ public:
     static CFeeRate minTxFee;
     static CFeeRate fallbackFee;
 
-    // static CAmount GetMinimumFee(unsigned int nTxBytes, unsigned int nConfirmTarget, const CTxMemPool& pool);
-
     bool NewKeyPool();
     bool TopUpKeyPool(unsigned int kpSize = 0);
     void ReserveKeyFromKeyPool(int64_t& nIndex, CKeyPool& keypool);

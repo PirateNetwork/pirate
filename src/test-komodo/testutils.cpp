@@ -582,7 +582,7 @@ bool TestWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWall
 
     {
         FeeCalculation feeCalc;
-        
+
         LOCK2(cs_main, cs_wallet);
         {
             CAmount nFeeRet = 0;
@@ -831,7 +831,7 @@ bool TestWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWall
                 }
 
                 CAmount nFeeNeeded = GetMinimumFee(nBytes, coinControl, ::mempool, ::feeEstimator, &feeCalc);
-                // CAmount nFeeNeeded = GetMinimumFee(nBytes, nTxConfirmTarget, mempool);
+
                 if ( nFeeNeeded < nMinFeeOverride )
                     nFeeNeeded = nMinFeeOverride;
 
