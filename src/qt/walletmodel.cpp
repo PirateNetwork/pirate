@@ -130,7 +130,7 @@ CAmount WalletModel::getPrivateWatchBalance() const
 
 CAmount WalletModel::getInterestBalance() const
 {
-    return (ASSETCHAINS_SYMBOL[0] == 0) ? komodo_interestsum() : 0;
+    return (chainName.isKMD()) ? komodo_interestsum() : 0;
 }
 
 bool WalletModel::haveWatchOnly() const
@@ -391,7 +391,7 @@ void WalletModel::checkBalanceChanged()
     CAmount newWatchImmatureBalance = 0;
     CAmount newWatchPrivateBalance = 0;
     CAmount newprivateBalance = getBalanceZaddr("", 1, true);
-    CAmount newinterestBalance = (ASSETCHAINS_SYMBOL[0] == 0) ? komodo_interestsum() : 0;
+    CAmount newinterestBalance = (chainName.isKMD()) ? komodo_interestsum() : 0;
     if (haveWatchOnly())
     {
         newWatchOnlyBalance = getWatchBalance();
@@ -690,7 +690,7 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
                     if ( fromSprout || toSprout )
                         return SproutUsageExpired;
                 }
-                if ( toSapling && ASSETCHAINS_SYMBOL[0] == 0 )
+                if ( toSapling && chainName.isKMD() )
                     return SproutUsageWillExpireSoon;
 
                 // If we are sending from a shielded address, all recipient

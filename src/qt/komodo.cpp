@@ -358,7 +358,7 @@ void KomodoCore::shutdown()
 
         while (!fShutdown)
         {
-            if ( ASSETCHAINS_SYMBOL[0] == 0 )
+            if (chainName.isKMD())
             {
                 //if (!ShutdownRequested()) komodo_passport_iteration();
                 // if ( KOMODO_NSPV_FULLNODE )

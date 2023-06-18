@@ -388,7 +388,7 @@ void OverviewPage::setBalance(const CAmount& balance, const CAmount& unconfirmed
     // for the non-mining users
     bool showImmature = immatureBalance != 0;
     bool showWatchOnlyImmature = watchImmatureBalance != 0;
-    bool showInterest = (ASSETCHAINS_SYMBOL[0] == 0);
+    bool showInterest = (chainName.isKMD());
 
     bool showTransparent = balance !=0;
     bool showWatchOnlyTransaparent = watchOnlyBalance != 0;
