@@ -4089,9 +4089,6 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
     // Update cached incremental witnesses
     GetMainSignals().ChainTip(pindexDelete, &block, newSproutTree, newSaplingTree, false);
 
-    //update UI of new tip
-    uiInterface.NotifyBlockTip(true, pindexDelete);
-
     return true;
 }
 
@@ -4314,9 +4311,6 @@ bool ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *pblock)
     GetMainSignals().ChainTip(pindexNew, pblock, oldSproutTree, oldSaplingTree, true);
 
     EnforceNodeDeprecation(pindexNew->nHeight);
-
-    //Notify UI of new block
-    uiInterface.NotifyBlockTip(true, pindexNew);
 
     int64_t nTime6 = GetTimeMicros(); nTimePostConnect += nTime6 - nTime5; nTimeTotal += nTime6 - nTime1;
     LogPrint("bench", "  - Connect postprocess: %.2fms [%.2fs]\n", (nTime6 - nTime5) * 0.001, nTimePostConnect * 0.000001);
@@ -4656,14 +4650,16 @@ bool ActivateBestChain(bool fSkipdpow, CValidationState &state, CBlock *pblock) 
             // Notify external listeners about the new tip.
             GetMainSignals().UpdatedBlockTip(pindexNewTip);
 
-            //Notify UI
+            //Notify UI Startup screen
             if (pindexNewTip->nHeight % 100 == 0)
             {
                 uiInterface.InitMessage(_(("Activating best chain - Currently on block " + std::to_string(pindexNewTip->nHeight)).c_str()));
             }
+        }
 
-            uiInterface.NotifyBlockTip(true, pindexNewTip);
-        } //else fprintf(stderr,"initial download skips propagation\n");
+        //Notify UI
+        uiInterface.NotifyBlockTip(fInitialDownload, pindexNewTip);
+
     } while(pindexMostWork != pindexNewTip);
     CheckBlockIndex();
 
@@ -5393,7 +5389,7 @@ bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationState& sta
         {
             return state.DoS(100, error("%s: rejected by checkpoint lock-in at %d", __func__, nHeight),REJECT_CHECKPOINT, "checkpoint mismatch");
         }
-        
+
         // Don't accept any forks from the main chain prior to last checkpoint
         CBlockIndex* pcheckpoint = Checkpoints::GetLastCheckpoint(chainParams.Checkpoints());
         int32_t notarized_height;
