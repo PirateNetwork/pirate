@@ -747,6 +747,26 @@ bool ContextualCheckInputs(const CTransaction& tx, CValidationState &state, cons
 /** Check a transaction contextually against a set of consensus rules */
 bool ContextualCheckTransaction(int32_t slowflag,const CBlock *block, CBlockIndex * const pindexPrev,const CTransaction& tx, CValidationState &state, int nHeight, int dosLevel,
                                 bool (*isInitBlockDownload)() = IsInitialBlockDownload,int32_t validateprices=1);
+struct CheckTransationResults
+{
+    bool validationPassed = true;
+    int dosLevel = 0;
+    std::string errorString = "";
+    std::string reasonString = "";
+};
+
+//Validate a batch of transactions
+CheckTransationResults ContextualCheckTransactionSingleThreaded(const CTransaction tx, const int nHeight, const int dosLevel, const bool isInitialBlockDownload, const uint32_t threadNumber);
+//Validate a batch of transactions
+CheckTransationResults ContextualCheckTransactionBindingSigWorker(const std::vector<const CTransaction*> vtx, const std::vector<uint256> vTxSig, const uint32_t threadNumber);
+//Validate a batch of Sapling spend descriptions
+CheckTransationResults ContextualCheckTransactionSaplingSpendWorker(const std::vector<const SpendDescription*> vSpend, const std::vector<uint256> vSpendSig, const uint32_t threadNumber);
+//Validate a batch of Sapling output descriptions
+CheckTransationResults ContextualCheckTransactionSaplingOutputWorker(const std::vector<const OutputDescription*> vOutput, const uint32_t threadNumber);
+/** Check a transaction contextually against a set of consensus rules */
+bool ContextualCheckTransactionMultithreaded(int32_t slowflag,const CBlock *block, CBlockIndex * const pindexPrev, CValidationState &state, int nHeight, int dosLevel,
+                                bool (*isInitBlockDownload)() = IsInitialBlockDownload,int32_t validateprices=1);
+
 
 /** Apply the effects of this transaction on the UTXO set represented by view */
 void UpdateCoins(const CTransaction& tx, CCoinsViewCache& inputs, int nHeight);
