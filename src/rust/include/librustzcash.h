@@ -158,6 +158,16 @@ extern "C" {
     /// when you're done.
     void * librustzcash_sapling_verification_ctx_init();
 
+    //add sapling spend to proving context without validating proof
+    bool librustzcash_add_sapling_spend_to_context(
+        void *ctx,
+        const unsigned char *cv);
+    
+    //add sapling output to proving context without validating proof
+    bool librustzcash_add_sapling_output_to_context(
+        void *ctx,
+        const unsigned char *cv);
+
     /// Check the validity of a Sapling Spend description,
     /// accumulating the value commitment into the context.
     bool librustzcash_sapling_check_spend(

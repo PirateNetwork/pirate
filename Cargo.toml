@@ -50,6 +50,15 @@ tokio = { version = "1.8", features = ["rt", "net", "time", "macros"] }
 # Temporary workaround for https://github.com/myrrlyn/funty/issues/3
 funty = "=1.1.0"
 
+[patch.crates-io]
+zcash_proofs = { git = "https://github.com/piratenetwork/librustzcash", rev = "80b634f5606e274fbcae67f68cc129b1c8eda3d2", features = ["multicore"]}
+zcash_primitives = { git = "https://github.com/piratenetwork/librustzcash", rev = "80b634f5606e274fbcae67f68cc129b1c8eda3d2", features = ["transparent-inputs"]}
+
+#Test local changes to librustzcash
+#zcash_primitives = { path = '../librustzcash/zcash_primitives' , features = ["transparent-inputs"] }
+#zcash_proofs = { path = '../librustzcash/zcash_proofs' , features = ["multicore"]}
+
+
 [dependencies.tracing-subscriber]
 version = "0.2.12"
 default-features = false

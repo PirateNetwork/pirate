@@ -1152,6 +1152,471 @@ bool ContextualCheckCoinbaseTransaction(int32_t slowflag,const CBlock *block,CBl
     return(true);
 }
 
+CheckTransationResults ContextualCheckTransactionSingleThreaded(
+    const CTransaction tx,
+    const int nHeight,
+    const int dosLevel,
+    const bool isInitialBlockDownload,
+    const uint32_t threadNumber) {
+
+    //Results to be returned
+    CheckTransationResults txResults;
+
+    //Set Chain parameters to check against
+    bool overwinterActive = NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_OVERWINTER);
+    bool saplingActive = NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING);
+    bool isSprout = !overwinterActive;
+
+    // If Sprout rules apply, reject transactions which are intended for Overwinter and beyond
+    if (isSprout && tx.fOverwintered) {
+        int32_t ht = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight;
+        if (ht < 0 || nHeight < ht) {
+            txResults.dosLevel = 0;
+        } else {
+            txResults.dosLevel = dosLevel;
+        }
+        txResults.validationPassed = false;
+        txResults.errorString = strprintf("ContextualCheckTransaction(): ht.%d activates.%d dosLevel.%d overwinter is not active yet",nHeight, Params().GetConsensus().vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight, txResults.dosLevel);
+        txResults.reasonString = strprintf("tx-overwinter-not-active");
+        return txResults;
+    }
+
+    //If Salping rules apply
+    if (saplingActive) {
+        // Reject transactions with valid version but missing overwintered flag
+        if (tx.nVersion >= SAPLING_MIN_TX_VERSION && !tx.fOverwintered) {
+            txResults.validationPassed = false;
+            txResults.dosLevel = dosLevel;
+            txResults.errorString = strprintf("ContextualCheckTransaction(): overwintered flag must be set");
+            txResults.reasonString = strprintf("tx-overwintered-flag-not-set");
+            return txResults;
+        }
+
+        // Reject transactions with non-Sapling version group ID
+        if (tx.fOverwintered && tx.nVersionGroupId != SAPLING_VERSION_GROUP_ID) {
+            if (isInitialBlockDownload) {
+                txResults.dosLevel = 0;
+            } else {
+                txResults.dosLevel = dosLevel;
+            }
+            txResults.validationPassed = false;
+            txResults.errorString = strprintf("CheckTransaction(): invalid Sapling tx version");
+            txResults.reasonString = strprintf("bad-sapling-tx-version-group-id");
+            return txResults;
+        }
+
+        // Reject transactions with invalid version
+        if (tx.fOverwintered && tx.nVersion < SAPLING_MIN_TX_VERSION ) {
+            txResults.validationPassed = false;
+            txResults.dosLevel = 100;
+            txResults.errorString = strprintf("CheckTransaction(): Sapling version too low");
+            txResults.reasonString = strprintf("bad-tx-sapling-version-too-low");
+            return txResults;
+        }
+
+        // Reject transactions with invalid version
+        if (tx.fOverwintered && tx.nVersion > SAPLING_MAX_TX_VERSION ) {
+            txResults.validationPassed = false;
+            txResults.dosLevel = 100;
+            txResults.errorString = strprintf("CheckTransaction(): Sapling version too high");
+            txResults.reasonString = strprintf("bad-tx-sapling-version-too-high");
+            return txResults;
+        }
+    } else if (overwinterActive) {
+        // Reject transactions with valid version but missing overwinter flag
+        if (tx.nVersion >= OVERWINTER_MIN_TX_VERSION && !tx.fOverwintered) {
+            txResults.validationPassed = false;
+            txResults.dosLevel = dosLevel;
+            txResults.errorString = strprintf("ContextualCheckTransaction(): overwinter flag must be set");
+            txResults.reasonString = strprintf("tx-overwinter-flag-not-set");
+            return txResults;
+        }
+
+        // Reject transactions with non-Overwinter version group ID
+        if (tx.fOverwintered && tx.nVersionGroupId != OVERWINTER_VERSION_GROUP_ID) {
+            if (isInitialBlockDownload) {
+                txResults.dosLevel = 0;
+            } else {
+                txResults.dosLevel = dosLevel;
+            }
+            txResults.validationPassed = false;
+            txResults.errorString = strprintf("CheckTransaction(): invalid Overwinter tx version");
+            txResults.reasonString = strprintf("bad-overwinter-tx-version-group-id");
+            return txResults;
+        }
+
+        // Reject transactions with invalid version
+        if (tx.fOverwintered && tx.nVersion > OVERWINTER_MAX_TX_VERSION ) {
+            txResults.validationPassed = false;
+            txResults.dosLevel = 100;
+            txResults.errorString = strprintf("CheckTransaction(): overwinter version too high");
+            txResults.reasonString = strprintf("bad-tx-overwinter-version-too-high");
+            return txResults;
+        }
+    }
+
+    // Rules that apply to Overwinter or later:
+    if (overwinterActive) {
+        // Reject transactions intended for Sprout
+        if (!tx.fOverwintered) {
+            int32_t ht = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight;
+            if (ASSETCHAINS_PRIVATE != 0 || ht < 0 || nHeight < ht) {
+                txResults.dosLevel = 0;
+            } else {
+                txResults.dosLevel = dosLevel;
+            }
+            txResults.validationPassed = false;
+            txResults.errorString = strprintf("ContextualCheckTransaction: overwinter is active");
+            txResults.reasonString = strprintf("tx-overwinter-active");
+            return txResults;
+        }
+
+        // Check that all transactions are unexpired
+        if (IsExpiredTx(tx, nHeight)) {
+            // Don't increase banscore if the transaction only just expired
+            int expiredDosLevel = IsExpiredTx(tx, nHeight - 1) ? (dosLevel > 10 ? dosLevel : 10) : 0;
+            txResults.validationPassed = false;
+            txResults.dosLevel = 100;
+            txResults.errorString = strprintf("ContextualCheckTransaction(): transaction %s is expired, expiry block %i vs current block %i\n",tx.GetHash().ToString(),tx.nExpiryHeight,nHeight);
+            txResults.reasonString = strprintf("tx-overwinter-expired");
+            return txResults;
+        }
+    }
+
+    // Rules that apply before Sapling:
+    if (!saplingActive) {
+        // Size limits
+        if (::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION) > MAX_TX_SIZE_BEFORE_SAPLING) {
+            txResults.validationPassed = false;
+            txResults.dosLevel = 100;
+            txResults.errorString = strprintf("ContextualCheckTransaction(): size limits failed");
+            txResults.reasonString = strprintf("bad-txns-oversize");
+            return txResults;
+        }
+    }
+
+
+    return txResults;
+}
+
+CheckTransationResults ContextualCheckTransactionBindingSigWorker(
+    const std::vector<const CTransaction*> vtx,
+    const std::vector<uint256> vTxSig,
+    const uint32_t threadNumber) {
+
+    //Results to be returned
+    CheckTransationResults txResults;
+
+    for (int i = 0; i < vtx.size(); i++) {
+        const uint256 dataToBeSigned = vTxSig[i];
+
+        //Verify Sapling
+        if (!vtx[i]->vShieldedSpend.empty() || !vtx[i]->vShieldedOutput.empty()) {
+
+            auto ctx = librustzcash_sapling_verification_ctx_init();
+
+            //Add spends to verification context sequentially to validate binding sig later
+            for (const SpendDescription &spend : vtx[i]->vShieldedSpend) {
+                //This function does not validate spend proof
+                if (!librustzcash_add_sapling_spend_to_context(ctx, spend.cv.begin())) {
+                    txResults.validationPassed = false;
+                    txResults.dosLevel = 100;
+                    txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling spend description invalid - cv desiralization error");
+                    txResults.reasonString = strprintf("bad-txns-sapling-spend-description-invalid");
+                    librustzcash_sapling_verification_ctx_free(ctx);
+                    return txResults;
+                }
+            }
+
+            //Add outputs to verification context sequentially to validate binding sig later
+            for (const OutputDescription &output : vtx[i]->vShieldedOutput) {
+                //This function does not validate output proof
+                if (!librustzcash_add_sapling_output_to_context(ctx, output.cv.begin())) {
+                    txResults.validationPassed = false;
+                    txResults.dosLevel = 100;
+                    txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling output description invalid - cv desiralization error");
+                    txResults.reasonString = strprintf("bad-txns-sapling-spend-description-invalid");
+                    librustzcash_sapling_verification_ctx_free(ctx);
+                    return txResults;
+                }
+            }
+
+            //Check the Sapling transaction binding Signature
+            if (!librustzcash_sapling_final_check(ctx,vtx[i]->valueBalance, vtx[i]->bindingSig.begin(), dataToBeSigned.begin())) {
+                txResults.validationPassed = false;
+                txResults.dosLevel = 100;
+                txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling binding signature invalid");
+                txResults.reasonString = strprintf("bad-txns-sapling-binding-signature-invalid");
+                librustzcash_sapling_verification_ctx_free(ctx);
+                return txResults;
+            }
+
+            librustzcash_sapling_verification_ctx_free(ctx);
+        }
+    }
+
+    return txResults;
+}
+
+CheckTransationResults ContextualCheckTransactionSaplingSpendWorker(
+    const std::vector<const SpendDescription*> vSpend,
+    const std::vector<uint256> vSpendSig,
+    const uint32_t threadNumber) {
+
+    //Results to be returned
+    CheckTransationResults txResults;
+
+    //Perform Sapling Spend checks
+    for (int i = 0; i < vSpend.size(); i++) {
+        auto spend = *vSpend[i];
+        const uint256 dataToBeSigned = vSpendSig[i];
+
+        auto ctx = librustzcash_sapling_verification_ctx_init();
+
+        if (!librustzcash_sapling_check_spend(
+            ctx,
+            spend.cv.begin(),
+            spend.anchor.begin(),
+            spend.nullifier.begin(),
+            spend.rk.begin(),
+            spend.zkproof.begin(),
+            spend.spendAuthSig.begin(),
+            dataToBeSigned.begin()
+        ))
+        {
+            txResults.validationPassed = false;
+            txResults.dosLevel = 100;
+            txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling spend description invalid");
+            txResults.reasonString = strprintf("bad-txns-sapling-spend-description-invalid");
+            librustzcash_sapling_verification_ctx_free(ctx);
+            return txResults;
+        }
+
+        librustzcash_sapling_verification_ctx_free(ctx);
+    }
+
+    return txResults;
+
+}
+
+CheckTransationResults ContextualCheckTransactionSaplingOutputWorker(
+    const std::vector<const OutputDescription*> vOutput,
+    const uint32_t threadNumber) {
+
+    //Results to be returned
+    CheckTransationResults txResults;
+
+    //Perform Sapling Output checks
+    for (auto output : vOutput) {
+        auto ctx = librustzcash_sapling_verification_ctx_init();
+
+        if (!librustzcash_sapling_check_output(
+            ctx,
+            output->cv.begin(),
+            output->cmu.begin(),
+            output->ephemeralKey.begin(),
+            output->zkproof.begin()
+        ))
+        {
+          txResults.validationPassed = false;
+          txResults.dosLevel = 100;
+          txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling output description invalid");
+          txResults.reasonString = strprintf("bad-txns-sapling-output-description-invalid");
+          librustzcash_sapling_verification_ctx_free(ctx);
+          return txResults;
+        }
+
+        librustzcash_sapling_verification_ctx_free(ctx);
+    }
+
+    return txResults;
+
+}
+
+
+bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const CBlock *block, CBlockIndex * const previndex,
+        CValidationState &state,
+        const int nHeight,
+        const int dosLevel,
+        bool (*isInitBlockDownload)(),int32_t validateprices) {
+
+      //Create a Vector of futures to be collected later
+      std::vector<std::future<CheckTransationResults>> vFutures;
+
+      bool isInitialBlockDownload = isInitBlockDownload();
+
+      //Get Thread Metrics
+      unsigned int minThreads = 1;
+      unsigned int threadCount = std::max(std::thread::hardware_concurrency() - 1, minThreads);
+
+      //Setup tx batches
+      std::vector<const CTransaction*> vtx;
+      std::vector<std::vector<const CTransaction*>> vvtx;
+      std::vector<uint256> vTxSig;
+      std::vector<std::vector<uint256>> vvTxSig;
+      for (int i = 0; i < threadCount; i++) {
+          vvtx.emplace_back(vtx);
+          vvTxSig.emplace_back(vTxSig);
+      }
+
+      //Setup spend batches
+      std::vector<const SpendDescription*> vSpend;
+      std::vector<std::vector<const SpendDescription*>> vvSpend;
+      std::vector<uint256> vSpendSig;
+      std::vector<std::vector<uint256>> vvSpendSig;
+      for (int i = 0; i < threadCount; i++) {
+          vvSpend.emplace_back(vSpend);
+          vvSpendSig.emplace_back(vSpendSig);
+      }
+
+      //Setup output batches
+      std::vector<const OutputDescription*> vOutput;
+      std::vector<std::vector<const OutputDescription*>> vvOutput;
+      for (int i = 0; i < threadCount; i++) {
+          vvOutput.emplace_back(vOutput);
+      }
+
+      //Check coinbase transaction and push all transactions to thread batch vectors
+      int t = 0;
+      int s = 0;
+      int o = 0;
+      for (uint32_t i = 0; i < block->vtx.size(); i++) {
+          const CTransaction* tx = &(block->vtx[i]);
+
+          //check the cointbase transaction
+          if (tx->IsCoinBase()) {
+              if (!ContextualCheckCoinbaseTransaction(slowflag,block,previndex, *tx, nHeight,validateprices)) {
+                  return state.DoS(100, error("CheckTransaction(): invalid script data for coinbase time lock"),
+                                      REJECT_INVALID, "bad-txns-invalid-script-data-for-coinbase-time-lock");
+              }
+          }
+
+          //Get Signature hash to pass to the sapling verifiers later
+          uint256 dataToBeSigned;
+          if (!tx->IsMint() && (!tx->vjoinsplit.empty() || !tx->vShieldedSpend.empty() || !tx->vShieldedOutput.empty())) {
+              auto consensusBranchId = CurrentEpochBranchId(nHeight, Params().GetConsensus());
+              // Empty output script.
+              CScript scriptCode;
+              try {
+                  dataToBeSigned = SignatureHash(scriptCode, *tx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId);
+              } catch (std::logic_error ex) {
+                  return state.DoS(100, error("CheckTransaction(): error computing signature hash"),
+                                      REJECT_INVALID, "error-computing-signature-hash");
+              }
+          }
+
+          if (!(tx->IsMint() || tx->vjoinsplit.empty())) {
+              BOOST_STATIC_ASSERT(crypto_sign_PUBLICKEYBYTES == 32);
+              // We rely on libsodium to check that the signature is canonical.
+              // https://github.com/jedisct1/libsodium/commit/62911edb7ff2275cccd74bf1c8aefcc4d76924e0
+              if (crypto_sign_verify_detached(&tx->joinSplitSig[0], dataToBeSigned.begin(), 32,tx->joinSplitPubKey.begin()) != 0) {
+                  return state.DoS(isInitialBlockDownload? 0 : 100, error("CheckTransaction(): invalid joinsplit signature"),
+                                      REJECT_INVALID, "bad-txns-invalid-joinsplit-signature");
+              }
+          }
+
+          //Most of the check can be done sigle threaded and do not warrant the additonal overhead required to spin up threads
+          CheckTransationResults singleResults = ContextualCheckTransactionSingleThreaded(*tx, nHeight, dosLevel, isInitialBlockDownload, i);
+
+          //Return single thereaded results
+          if (!singleResults.validationPassed) {
+            return state.DoS(singleResults.dosLevel, error(singleResults.errorString.c_str()), REJECT_INVALID, singleResults.reasonString);
+          }
+
+          //Verify Sapling
+          if (!tx->vShieldedSpend.empty() || !tx->vShieldedOutput.empty()) {
+              //Push tx to thread vector
+              vvtx[t].emplace_back(tx);
+              vvTxSig[t].emplace_back(dataToBeSigned);
+              //Increment thread vector
+              t++;
+              //reset if tread vector is greater qty of threads being used
+              if (t >= vvtx.size()) {
+                  t = 0;
+              }
+
+              //Add this transaction sapling spend to spend thread batches
+              for (int j = 0; j < tx->vShieldedSpend.size(); j++) {
+                  //Push spend to thread vector
+                  vvSpend[s].emplace_back(&(tx->vShieldedSpend[j]));
+                  vvSpendSig[s].emplace_back(dataToBeSigned);
+                  //Increment thread vector
+                  s++;
+                  //reset if tread vector is greater qty of threads being used
+                  if (s >= vvSpend.size()) {
+                      s = 0;
+                  }
+              }
+
+              //Add this transaction sapling outputs to output thread batches
+              for (int j = 0; j < tx->vShieldedOutput.size(); j++) {
+                  //Push output to thread vector
+                  vvOutput[o].emplace_back(&(tx->vShieldedOutput[j]));
+                  //Increment thread vector
+                  o++;
+                  //reset if tread vector is greater qty of threads being used
+                  if (o >= vvOutput.size()) {
+                      o = 0;
+                  }
+              }
+          }
+      }
+
+      //Skip costly sapling checks on intial download below the hardcoded checkpoints
+      if (!fCheckpointsEnabled || nHeight >= Checkpoints::GetTotalBlocksEstimate(Params().Checkpoints())) {
+          //Push batches of txs to async threads
+          for (int i = 0; i < vvtx.size(); i++) {
+              //Perform transaction level checks
+              if (!vvtx[i].empty()) {
+                  vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionBindingSigWorker, vvtx[i], vvTxSig[i], i));
+              }
+          }
+
+          //Push batches of spends to async threads
+          for (int i = 0; i < vvSpend.size(); i++) {
+              //Perform SpendDescription validations
+              if (!vvSpend[i].empty()) {
+                  vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionSaplingSpendWorker, vvSpend[i], vvSpendSig[i], i + vvtx.size()));
+              }
+          }
+
+          //Push batches of outputs to async threads
+          for (int i = 0; i < vvOutput.size(); i++) {
+              //Perform OutputDescription validations
+              if (!vvOutput[i].empty()) {
+                  vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionSaplingOutputWorker, vvOutput[i], i + vvtx.size() + vvSpend.size()));
+              }
+          }
+
+          //Wait for all threads to complete
+          for (auto &future : vFutures) {
+              future.wait();
+          }
+      }
+
+      bool checkResults = true;
+      CheckTransationResults failedResult;
+
+      //Collect the async results
+      for (auto &future : vFutures) {
+          auto result = future.get();
+          if (!result.validationPassed) {
+              checkResults = false;
+              //Return the highest dosLevel error, or first error if there are multiple equal dosLevel errors
+              if (failedResult.validationPassed || failedResult.dosLevel < result.dosLevel) {
+                failedResult = result;
+              }
+          }
+      }
+
+      //Return failed result
+      if (!checkResults) {
+        return state.DoS(failedResult.dosLevel, error(failedResult.errorString.c_str()), REJECT_INVALID, failedResult.reasonString);
+      }
+
+      return true;
+}
+
 /**
  * Check a transaction contextually against a set of consensus rules valid at a given block height.
  *
@@ -5445,6 +5910,11 @@ bool ContextualCheckBlock(int32_t slowflag,const CBlock& block, CValidationState
             LogPrint("hfnet","%s[%d]: STRANGE! pindexPrev == nullptr, ht.%ld, hash.%s!\n", __func__, __LINE__, txheight, block.GetHash().ToString());
     }
 
+    // Check transaction contextually against consensus rules at block height
+    if (!ContextualCheckTransactionMultithreaded(slowflag,&block,pindexPrev, state, nHeight, 100)) {
+        return false; // Failure reason has been set in validation state object
+    }
+
     // Check that all transactions are finalized, also validate interest in each tx
     for (uint32_t i = 0; i < block.vtx.size(); i++) {
         const CTransaction& tx = block.vtx[i];
@@ -5454,11 +5924,6 @@ bool ContextualCheckBlock(int32_t slowflag,const CBlock& block, CValidationState
         {
             fprintf(stderr, "validate interest failed for txnum.%i tx.%s\n", i, tx.ToString().c_str());
             return state.DoS(0, error("%s: komodo_validate_interest failed", __func__), REJECT_INVALID, "komodo-interest-invalid");
-        }
-
-        // Check transaction contextually against consensus rules at block height
-        if (!ContextualCheckTransaction(slowflag,&block,pindexPrev,tx, state, nHeight, 100)) {
-            return false; // Failure reason has been set in validation state object
         }
 
         int nLockTimeFlags = 0;

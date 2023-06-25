@@ -625,6 +625,34 @@ pub extern "C" fn librustzcash_sapling_check_output(
     )
 }
 
+#[no_mangle]
+pub extern "C" fn librustzcash_add_sapling_spend_to_context(
+    ctx: *mut SaplingVerificationContext,
+    cv: *const [c_uchar; 32]
+) -> bool {
+    let cv = match de_ct(jubjub::ExtendedPoint::from_bytes(unsafe { &*cv })) {
+        Some(p) => p,
+        None => return false,
+    };
+
+    unsafe { &mut *ctx }.add_spend_to_context(cv);
+    return true
+}
+
+#[no_mangle]
+pub extern "C" fn librustzcash_add_sapling_output_to_context(
+    ctx: *mut SaplingVerificationContext,
+    cv: *const [c_uchar; 32]
+) -> bool {
+    let cv = match de_ct(jubjub::ExtendedPoint::from_bytes(unsafe { &*cv })) {
+        Some(p) => p,
+        None => return false,
+    };
+
+    unsafe { &mut *ctx }.add_output_to_context(cv);
+    return true
+}
+
 /// Finally checks the validity of the entire Sapling transaction given
 /// valueBalance and the binding signature.
 #[no_mangle]
