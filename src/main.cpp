@@ -1113,7 +1113,7 @@ unsigned int GetP2SHSigOpCount(const CTransaction& tx, const CCoinsViewCache& in
  * Ensure that a coinbase transaction is structured according to the consensus rules of the
  * chain
  */
-bool ContextualCheckCoinbaseTransaction(int32_t slowflag,const CBlock *block,CBlockIndex * const previndex,const CTransaction& tx, const int nHeight,int32_t validateprices)
+bool ContextualCheckCoinbaseTransaction(const CTransaction& tx, const int nHeight)
 {
     // if time locks are on, ensure that this coin base is time locked exactly as it should be
     if (((uint64_t)(tx.GetValueOut()) >= ASSETCHAINS_TIMELOCKGTE) || (komodo_ac_block_subsidy(nHeight) >= ASSETCHAINS_TIMELOCKGTE))
@@ -1434,7 +1434,7 @@ CheckTransationResults ContextualCheckTransactionSaplingOutputWorker(
 }
 
 
-bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const CBlock *block, CBlockIndex * const previndex,
+bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector<const CTransaction*> vptx, CBlockIndex * const previndex,
         CValidationState &state,
         const int nHeight,
         const int dosLevel,
@@ -1480,12 +1480,12 @@ bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const CBlock *blo
       int t = 0;
       int s = 0;
       int o = 0;
-      for (uint32_t i = 0; i < block->vtx.size(); i++) {
-          const CTransaction* tx = &(block->vtx[i]);
+      for (uint32_t i = 0; i < vptx.size(); i++) {
+          const CTransaction* tx = vptx[i];
 
           //check the cointbase transaction
           if (tx->IsCoinBase()) {
-              if (!ContextualCheckCoinbaseTransaction(slowflag,block,previndex, *tx, nHeight,validateprices)) {
+              if (!ContextualCheckCoinbaseTransaction(*tx, nHeight)) {
                   return state.DoS(100, error("CheckTransaction(): invalid script data for coinbase time lock"),
                                       REJECT_INVALID, "bad-txns-invalid-script-data-for-coinbase-time-lock");
               }
@@ -1766,7 +1766,7 @@ bool ContextualCheckTransaction(int32_t slowflag,const CBlock *block, CBlockInde
 
     if (tx.IsCoinBase())
     {
-        if (!ContextualCheckCoinbaseTransaction(slowflag,block,previndex,tx, nHeight,validateprices))
+        if (!ContextualCheckCoinbaseTransaction(tx, nHeight))
             return state.DoS(100, error("CheckTransaction(): invalid script data for coinbase time lock"),
                                 REJECT_INVALID, "bad-txns-invalid-script-data-for-coinbase-time-lock");
     }
@@ -2284,7 +2284,9 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
 
     // DoS level set to 10 to be more forgiving.
     // Check transaction contextually against the set of consensus rules which apply in the next block to be mined.
-    if (!ContextualCheckTransaction(0,0,0,tx, state, nextBlockHeight, (dosLevel == -1) ? 10 : dosLevel))
+    std::vector<const CTransaction*> vptx;
+    vptx.emplace_back(&tx);
+    if (!ContextualCheckTransactionMultithreaded(0, vptx, 0, state, nextBlockHeight, (dosLevel == -1) ? 10 : dosLevel))
     {
         return error("AcceptToMemoryPool: ContextualCheckTransaction failed");
     }
@@ -5910,14 +5912,12 @@ bool ContextualCheckBlock(int32_t slowflag,const CBlock& block, CValidationState
             LogPrint("hfnet","%s[%d]: STRANGE! pindexPrev == nullptr, ht.%ld, hash.%s!\n", __func__, __LINE__, txheight, block.GetHash().ToString());
     }
 
-    // Check transaction contextually against consensus rules at block height
-    if (!ContextualCheckTransactionMultithreaded(slowflag,&block,pindexPrev, state, nHeight, 100)) {
-        return false; // Failure reason has been set in validation state object
-    }
 
     // Check that all transactions are finalized, also validate interest in each tx
+    std::vector<const CTransaction*> vptx;
     for (uint32_t i = 0; i < block.vtx.size(); i++) {
         const CTransaction& tx = block.vtx[i];
+        vptx.emplace_back(&block.vtx[i]);
 
         // Interest validation
         if (!komodo_validate_interest(tx, txheight, cmptime))
@@ -5933,6 +5933,11 @@ bool ContextualCheckBlock(int32_t slowflag,const CBlock& block, CValidationState
         if (!IsFinalTx(tx, nHeight, nLockTimeCutoff)) {
             return state.DoS(10, error("%s: contains a non-final transaction", __func__), REJECT_INVALID, "bad-txns-nonfinal");
         }
+    }
+
+    // Check transaction contextually against consensus rules at block height
+    if (!ContextualCheckTransactionMultithreaded(slowflag,vptx,pindexPrev, state, nHeight, 100)) {
+        return false; // Failure reason has been set in validation state object
     }
 
     // Enforce BIP 34 rule that the coinbase starts with serialized block height.
