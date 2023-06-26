@@ -2213,71 +2213,28 @@ int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex, bool witnessO
   return nMinimumHeight;
 }
 
-static void BuildSingleSaplingWitness(CWallet* wallet, std::vector<SaplingNoteData*> vNoteData, const CBlockIndex* pindex, const int startHeight, const int threadNumber)
+static void BuildSingleSaplingWitness(CWallet* wallet, std::vector<SaplingNoteData*> vNoteData, const CBlock *pblock, const int &nHeight, const int threadNumber)
 {
+    for (auto pnd : vNoteData) {
+        if (pnd->witnessHeight == nHeight - 1) {
+            SaplingWitness witness = pnd->witnesses.front();
+            for (const CTransaction& ctx : pblock->vtx) {
+                for (const OutputDescription &outdesc : ctx.vShieldedOutput) {
+                    witness.append(outdesc.cmu);
+                }
+            }
 
-    // Set Starting Values
-    CBlockIndex* pblockindex = chainActive[startHeight];
-    int chainHeight = chainActive.Height();
+            {
+                LOCK(wallet->cs_wallet_threadedfunction);
+                pnd->witnesses.push_front(witness);
+                while (pnd->witnesses.size() > WITNESS_CACHE_SIZE) {
+                    pnd->witnesses.pop_back();
+                }
 
-    const CChainParams& chainParams = Params();
-    double dProgressStart = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false);
-    double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.Tip(), false);
-
-    while (pblockindex) {
-
-      //exit loop if trying to shutdown
-      if (ShutdownRequested()) {
-          break;
-      }
-
-      //Retrieve the full block to get all of the transaction commitments
-      CBlock block;
-      ReadBlockFromDisk(block, pblockindex, 1);
-      CBlock *pblock = &block;
-
-      //Get current processing height
-      int nHeight = pblockindex->nHeight;
-
-      // //Report Progress to the GUI and log file
-      // int witnessHeight = pblockindex->nHeight;
-      if (nHeight % 100 == 0 && nHeight < chainHeight - 5) {
-          scanperc = (int)((Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false) - dProgressStart) / (dProgressTip - dProgressStart) * 100);
-          uiInterface.ShowProgress(_(("Building Witnesses for block " + std::to_string(nHeight) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
-      }
-
-
-
-      for (auto pnd : vNoteData) {
-          if (pnd->witnessHeight == nHeight - 1) {
-              SaplingWitness witness = pnd->witnesses.front();
-              for (const CTransaction& ctx : pblock->vtx) {
-                  for (const OutputDescription &outdesc : ctx.vShieldedOutput) {
-                      witness.append(outdesc.cmu);
-                  }
-              }
-
-              {
-                  LOCK(wallet->cs_wallet_threadedfunction);
-                  pnd->witnesses.push_front(witness);
-                  while (pnd->witnesses.size() > WITNESS_CACHE_SIZE) {
-                      pnd->witnesses.pop_back();
-                  }
-
-                  pnd->witnessHeight = nHeight;
-              }
-          }
-      }
-
-      //Check for completeness
-      if (pblockindex == pindex)
-        break;
-
-      //move to next block for more processing
-      pblockindex = chainActive.Next(pblockindex);
-
+                pnd->witnessHeight = nHeight;
+            }
+        }
     }
-
 }
 
 void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
@@ -2297,22 +2254,31 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
       fBuilingWitnessCache = true;
   }
 
+  // Set Starting Values
+  CBlockIndex* pblockindex = chainActive[startHeight];
+  int height = chainActive.Height();
+
   //Show in UI
-  uiInterface.ShowProgress("Building Witnesses", 0, false);
+  bool uiShown = false;
+  const CChainParams& chainParams = Params();
+  double dProgressStart = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false);
+  double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.Tip(), false);
+
+  //Get Thread Metrics
+  unsigned int minThreads = 1;
+  unsigned int threadCount = std::max(std::thread::hardware_concurrency() - 1, minThreads);
 
   //Create a vector of vectors of SaplingNoteData that needs to be updated to pass to the async threads
   //The SaplingNoteData needs to be batched so async threads won't overwhelm the host system with threads
   //Prepare this before going into the blockindex loop to prevent rechecking on each loop
   std::vector<SaplingNoteData*> vNoteData;
   std::vector<std::vector<SaplingNoteData*>> vvNoteData;
+  for (int i = 0; i < threadCount; i++) {
+      vvNoteData.emplace_back(vNoteData);
+  }
 
-  //Prepopulate empty vector
-  vvNoteData.emplace_back(vNoteData);
-
-  //Get Thread Metrics
-  unsigned int minThreads = 1;
-  unsigned int threadCount = std::max(std::thread::hardware_concurrency() - 1, minThreads);
-  unsigned int qtyNoteData = 0;
+  int t = 0;
+  //Gather up notedata to be processed
   for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
       CWalletTx* pwtx = &(it->second);
       if (pwtx->mapSaplingNoteData.empty()) {
@@ -2323,76 +2289,75 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
           int i = 0;
           for (mapSaplingNoteData_t::value_type& item : pwtx->mapSaplingNoteData) {
               auto* pnd = &(item.second);
+
               if (pnd->nullifier && GetSaplingSpendDepth(pnd->nullifier.value()) <= WITNESS_CACHE_SIZE) {
-                  qtyNoteData++;
-              }
 
-          }
-      }
-  }
-
-  if (qtyNoteData > 0) {
-      //Calculate number of notes to be processed by each thread.
-      unsigned int notesPerThread = (qtyNoteData / threadCount) + 1;
-
-      //Gather up notedata to be processed
-      for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
-          CWalletTx* pwtx = &(it->second);
-          if (pwtx->mapSaplingNoteData.empty()) {
-              continue;
-          }
-
-          if (pwtx->GetDepthInMainChain() > 0) {
-              int i = 0;
-              for (mapSaplingNoteData_t::value_type& item : pwtx->mapSaplingNoteData) {
-                  auto* pnd = &(item.second);
-
-                  if (pnd->nullifier && GetSaplingSpendDepth(pnd->nullifier.value()) <= WITNESS_CACHE_SIZE) {
-                      vNoteData.emplace_back(pnd);
-                      if (vvNoteData.size() > 0) {
-                          vvNoteData.pop_back();
-                      }
-                      vvNoteData.emplace_back(vNoteData);
-
-                      if (vNoteData.size() == notesPerThread) {
-                          vNoteData.resize(0);
-                          vvNoteData.emplace_back(vNoteData);
-                      }
-                  } else {
-                      //remove all but the last witness to save disk space once the note has been spent
-                      //and is deep enough to not be affected by chain reorg
-                      while (pnd->witnesses.size() > 1) {
-                          pnd->witnesses.pop_back();
-                      }
+                  vvNoteData[t].emplace_back(pnd);
+                  //Increment thread vector
+                  t++;
+                  //reset if tread vector is greater qty of threads being used
+                  if (t >= vvNoteData.size()) {
+                      t = 0;
                   }
-                  i++;
+
+              } else {
+                  //remove all but the last witness to save disk space once the note has been spent
+                  //and is deep enough to not be affected by chain reorg
+                  while (pnd->witnesses.size() > 1) {
+                      pnd->witnesses.pop_back();
+                  }
               }
+              i++;
           }
       }
   }
 
+  while (pblockindex) {
 
+      //exit loop if trying to shutdown
+      if (ShutdownRequested()) {
+          break;
+      }
 
-  //Launch async thread for each notedata in this batch
-  std::vector<std::future<void>> vSaplingWitnessFutures;
+      //Report Progress to the GUI and log file
+      int witnessHeight = pblockindex->nHeight;
+      if (witnessHeight % 100 == 0 && witnessHeight < height - 5) {
+          if (!uiShown) {
+              uiShown = true;
+              uiInterface.ShowProgress("Building Witnesses", 0, false);
+          }
+          scanperc = (int)((Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false) - dProgressStart) / (dProgressTip - dProgressStart) * 100);
+          uiInterface.ShowProgress(_(("Building Witnesses for block " + std::to_string(witnessHeight) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
+      }
 
-  // Parallelization with std::async by batch
-  for (int i = 0; i < vvNoteData.size(); i++) {
-      vSaplingWitnessFutures.emplace_back(std::async(std::launch::async, BuildSingleSaplingWitness, this, vvNoteData[i], pindex, startHeight, i));
+      //Retrieve the full block to get all of the transaction commitments
+      CBlock block;
+      ReadBlockFromDisk(block, pblockindex, 1);
+      CBlock *pblock = &block;
+
+      //Create 1 thread per transaction and increment the witnesses
+      std::vector<boost::thread*> witnessThreads;
+      for (int i = 0; i < vvNoteData.size(); i++) {
+          witnessThreads.emplace_back(new boost::thread(BuildSingleSaplingWitness, this, vvNoteData[i], pblock, witnessHeight, i));
+      }
+
+      // Cleanup
+      for (auto wthread : witnessThreads) {
+          wthread->join();
+          delete wthread;
+      }
+
+      if (pblockindex == pindex)
+          break;
+
+      pblockindex = chainActive.Next(pblockindex);
+
   }
 
-  // Complete all futures
-  for (int j = 0; j < vSaplingWitnessFutures.size(); j++) {
-      vSaplingWitnessFutures[j].wait();
+  if (uiShown) {
+      uiInterface.ShowProgress(_("Witness Cache Complete..."), 100, false);
   }
 
-  //clean vector of futures for this batch
-  vSaplingWitnessFutures.resize(0);
-
-  //Show Complete int the GUI
-  uiInterface.ShowProgress(_("Witness Cache Complete..."), 100, false);
-
-  //Set Global variables to unblock other processes
   fInitWitnessesBuilt = true;
   fBuilingWitnessCache = false;
 
