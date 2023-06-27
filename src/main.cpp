@@ -118,6 +118,7 @@ bool fCoinbaseEnforcedProtectionEnabled = true;
 size_t nCoinCacheUsage = 5000 * 300;
 uint64_t nPruneTarget = 0;
 bool fAlerts = DEFAULT_ALERTS;
+int maxProcessingThreads = 1;
 /* If the tip is older than this (in seconds), the node is considered to be in initial block download.
  */
 int64_t nMaxTipAge = DEFAULT_MAX_TIP_AGE;
@@ -1445,16 +1446,12 @@ bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector
 
       bool isInitialBlockDownload = isInitBlockDownload();
 
-      //Get Thread Metrics
-      unsigned int minThreads = 1;
-      unsigned int threadCount = std::max(std::thread::hardware_concurrency() - 1, minThreads);
-
       //Setup tx batches
       std::vector<const CTransaction*> vtx;
       std::vector<std::vector<const CTransaction*>> vvtx;
       std::vector<uint256> vTxSig;
       std::vector<std::vector<uint256>> vvTxSig;
-      for (int i = 0; i < threadCount; i++) {
+      for (int i = 0; i < maxProcessingThreads; i++) {
           vvtx.emplace_back(vtx);
           vvTxSig.emplace_back(vTxSig);
       }
@@ -1464,7 +1461,7 @@ bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector
       std::vector<std::vector<const SpendDescription*>> vvSpend;
       std::vector<uint256> vSpendSig;
       std::vector<std::vector<uint256>> vvSpendSig;
-      for (int i = 0; i < threadCount; i++) {
+      for (int i = 0; i < maxProcessingThreads; i++) {
           vvSpend.emplace_back(vSpend);
           vvSpendSig.emplace_back(vSpendSig);
       }
@@ -1472,7 +1469,7 @@ bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector
       //Setup output batches
       std::vector<const OutputDescription*> vOutput;
       std::vector<std::vector<const OutputDescription*>> vvOutput;
-      for (int i = 0; i < threadCount; i++) {
+      for (int i = 0; i < maxProcessingThreads; i++) {
           vvOutput.emplace_back(vOutput);
       }
 

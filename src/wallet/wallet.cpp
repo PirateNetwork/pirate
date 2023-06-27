@@ -93,7 +93,6 @@ unsigned int fKeepLastNTransactions = DEFAULT_TX_RETENTION_LASTTX;
 std::string recoverySeedPhrase = "";
 bool usingGUI = false;
 int recoveryHeight = 0;
-int maxProcessingThreads = 1;
 
 SecureString *strOpeningWalletPassphrase;
 
