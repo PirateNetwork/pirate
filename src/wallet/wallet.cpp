@@ -92,6 +92,7 @@ unsigned int fKeepLastNTransactions = DEFAULT_TX_RETENTION_LASTTX;
 std::string recoverySeedPhrase = "";
 bool usingGUI = false;
 int recoveryHeight = 0;
+int maxProcessingThreads = 1;
 
 SecureString *strOpeningWalletPassphrase;
 
@@ -2264,16 +2265,12 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
   double dProgressStart = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false);
   double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.Tip(), false);
 
-  //Get Thread Metrics
-  unsigned int minThreads = 1;
-  unsigned int threadCount = std::max(std::thread::hardware_concurrency() - 1, minThreads);
-
   //Create a vector of vectors of SaplingNoteData that needs to be updated to pass to the async threads
   //The SaplingNoteData needs to be batched so async threads won't overwhelm the host system with threads
   //Prepare this before going into the blockindex loop to prevent rechecking on each loop
   std::vector<SaplingNoteData*> vNoteData;
   std::vector<std::vector<SaplingNoteData*>> vvNoteData;
-  for (int i = 0; i < threadCount; i++) {
+  for (int i = 0; i < maxProcessingThreads; i++) {
       vvNoteData.emplace_back(vNoteData);
   }
 
@@ -3406,10 +3403,6 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
 {
     LOCK(cs_wallet);
 
-    //Get Thread Metrics
-    unsigned int minThreads = 1;
-    unsigned int threadCount = std::max(std::thread::hardware_concurrency() - 1, minThreads);
-
     //Data to be collected
     mapSaplingNoteData_t noteData;
     SaplingIncomingViewingKeyMap viewingKeysToAdd;
@@ -3420,21 +3413,21 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
     //Create key thread buckets
     std::vector<const SaplingIncomingViewingKey*> vIvk;
     std::vector<std::vector<const SaplingIncomingViewingKey*>> vvIvk;
-    for (int i = 0; i < threadCount; i++) {
+    for (int i = 0; i < maxProcessingThreads; i++) {
         vvIvk.emplace_back(vIvk);
     }
 
     //Create OutputDescription thread buckets
     std::vector<const OutputDescription*> vOutputDescrition;
     std::vector<std::vector<const OutputDescription*>> vvOutputDescrition;
-    for (int i = 0; i < threadCount; i++) {
+    for (int i = 0; i < maxProcessingThreads; i++) {
         vvOutputDescrition.emplace_back(vOutputDescrition);
     }
 
     //Create transaction position thread buckets
     std::vector<uint32_t> vPosition;
     std::vector<std::vector<uint32_t>> vvPosition;
-    for (int i = 0; i < threadCount; i++) {
+    for (int i = 0; i < maxProcessingThreads; i++) {
         vvPosition.emplace_back(vPosition);
     }
 

@@ -418,6 +418,8 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-mempooltxinputlimit=<n>", _("[DEPRECATED FROM OVERWINTER] Set the maximum number of transparent inputs in a transaction that the mempool will accept (default: 0 = no limit applied)"));
     strUsage += HelpMessageOpt("-par=<n>", strprintf(_("Set the number of script verification threads (%u to %d, 0 = auto, <0 = leave that many cores free, default: %d)"),
         -(int)boost::thread::hardware_concurrency(), MAX_SCRIPTCHECK_THREADS, DEFAULT_SCRIPTCHECK_THREADS));
+    strUsage += HelpMessageOpt("-maxprocessingthreads=<n>", strprintf(_("Set the number of processing threads used (default: %i)"),GetNumCores()));
+
 #ifndef _WIN32
     strUsage += HelpMessageOpt("-pid=<file>", strprintf(_("Specify pid file (default: %s)"), "komodod.pid"));
 #endif
@@ -1161,6 +1163,20 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     LogPrintf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
     LogPrintf("Pirate version %s (%s)\n", FormatFullVersion(), CLIENT_DATE);
+
+    //Get Thread Metrics
+    // unsigned int minThreads = 1;
+    maxProcessingThreads = std::max((int)std::thread::hardware_concurrency() - 1, 1);
+
+    if (mapArgs.count("-maxprocessingthreads")) {
+        int processingThreads = GetArg("-maxprocessingthreads", 0);
+        if (processingThreads < 0) {
+            return InitError(_("Maximum number of processing threads cannot be negative"));
+        } else if (processingThreads > 0) {
+            maxProcessingThreads = processingThreads;
+        }
+    }
+    LogPrintf("Maximum number of processing threads used in multithreaded functions %i\n", maxProcessingThreads);
 
     // when specifying an explicit binding address, you want to listen on it
     // even when -connect or -proxy is specified
