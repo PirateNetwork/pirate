@@ -1552,7 +1552,7 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
           "       }\n"
           "     ]\n"
           "3. fee                  (numeric, optional, default=0.0001\n"
-          "4. expiryheight          (numeric, optional, default=" + strprintf("%d", DEFAULT_TX_EXPIRY_DELTA) + ") Expiry height of transaction (if Overwinter is active)\n"
+          "4. expiryBlocks         (numeric, optional, default=" + strprintf("%d", DEFAULT_TX_EXPIRY_DELTA) + ") Qty of blocks before the transaction expires and is removed from the mempool if not confirmed.\n"
           "\nResult:\n"
           "\"transaction\"            (string) hex string of the transaction\n"
 
@@ -1570,7 +1570,7 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
 
     CAmount total = 0;
     int nHeight = chainActive.Tip()->nHeight;
-    TransactionBuilder tx = TransactionBuilder(Params().GetConsensus(), nHeight + 1, pwalletMain);
+    TransactionBuilder tx = TransactionBuilder(Params().GetConsensus(), nHeight + DEFAULT_TX_EXPIRY_DELTA, pwalletMain);
 
     CAmount nFee = 10000;
     if (!params[2].isNull()) {
