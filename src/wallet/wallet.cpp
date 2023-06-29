@@ -2244,7 +2244,8 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
   AssertLockHeld(cs_wallet);
 
   //Get start time for logging
-  int64_t nNow = GetTime();
+  int64_t nNow1 = GetTime();
+  int64_t nNow2 = GetTime();
 
   //Verifiy current witnesses again the SaplingHashRoot and/or set new initial witness
   int startHeight = VerifyAndSetInitialWitness(pindex, witnessOnly) + 1;
@@ -2312,6 +2313,11 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
       }
   }
 
+  //Retrieve the full block to get all of the transaction commitments
+  CBlock block;
+  ReadBlockFromDisk(block, pblockindex, 1);
+  CBlock *pblock = &block;
+
   while (pblockindex) {
 
       //exit loop if trying to shutdown
@@ -2321,7 +2327,8 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
 
       //Report Progress to the GUI and log file
       int witnessHeight = pblockindex->nHeight;
-      if (witnessHeight % 100 == 0 && witnessHeight < height - 5) {
+      if ((witnessHeight % 100 == 0 || GetTime() >= nNow1 + 15) && witnessHeight < height - 5 ) {
+          nNow1 = GetTime();
           if (!uiShown) {
               uiShown = true;
               uiInterface.ShowProgress("Building Witnesses", 0, false);
@@ -2330,20 +2337,25 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
           uiInterface.ShowProgress(_(("Building Witnesses for block " + std::to_string(witnessHeight) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
       }
 
-      if (GetTime() >= nNow + 60) {
-          nNow = GetTime();
+      if (GetTime() >= nNow2 + 60) {
+          nNow2 = GetTime();
           LogPrintf("Building Witnesses for block %d. Progress=%f\n", witnessHeight, Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex));
       }
 
-      //Retrieve the full block to get all of the transaction commitments
-      CBlock block;
-      ReadBlockFromDisk(block, pblockindex, 1);
-      CBlock *pblock = &block;
-
-      //Create 1 thread per transaction and increment the witnesses
+      //Create 1 thread per group of notes
       std::vector<boost::thread*> witnessThreads;
       for (int i = 0; i < vvNoteData.size(); i++) {
-          witnessThreads.emplace_back(new boost::thread(BuildSingleSaplingWitness, this, vvNoteData[i], pblock, witnessHeight, i));
+          if (!vvNoteData[i].empty()) {
+            witnessThreads.emplace_back(new boost::thread(BuildSingleSaplingWitness, this, vvNoteData[i], pblock, witnessHeight, i));
+          }
+      }
+
+      //prefetch the next block while the worker threads are processing
+      auto nNowReadTime = GetTimeMicros();
+      CBlockIndex* pnextblockindex = chainActive.Next(pblockindex);
+      CBlock nextBlock;
+      if (pnextblockindex) {
+          ReadBlockFromDisk(nextBlock, pnextblockindex, 1);
       }
 
       // Cleanup
@@ -2352,10 +2364,14 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
           delete wthread;
       }
 
+      //Check completeness
       if (pblockindex == pindex)
           break;
 
+      //Set Variables for next loop
       pblockindex = chainActive.Next(pblockindex);
+      block = nextBlock;
+      pblock = &block;
 
   }
 
