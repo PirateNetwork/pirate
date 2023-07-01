@@ -83,6 +83,7 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
     std::vector<SaplingNoteEntry> saplingEntries;
     std::set<libzcash::SaplingPaymentAddress> addresses;
     std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>> mapAddresses;
+    std::map<std::pair<int,int>, SaplingNoteEntry> mapsortedEntries;
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
         // We set minDepth to 11 to avoid unconfirmed notes and in anticipation of specifying
@@ -100,7 +101,16 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
             }
         }
 
+        //Sort Entries
         for (auto & entry : saplingEntries) {
+              auto entryIndex = std::make_pair(entry.confirmations, entry.op.n);
+              mapsortedEntries.insert({entryIndex, entry});
+        }
+
+
+        for (std::map<std::pair<int,int>, SaplingNoteEntry>::reverse_iterator rit = mapsortedEntries.rbegin(); rit != mapsortedEntries.rend(); rit++) {
+            SaplingNoteEntry entry = (*rit).second;
+            LogPrint("zrpcunsafe", "Sapling Note Sorting by address confirmations %i, op %i\n", entry.confirmations, entry.op.n);
             //Map all notes by address
             if (addresses.count(entry.address) > 0 || !fConsolidationMapUsed) {
                 std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>>::iterator it;
@@ -142,6 +152,7 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
               pwalletMain->GetSaplingIncomingViewingKey(boost::get<libzcash::SaplingPaymentAddress>(saplingEntry.address), ivk);
 
               if (ivk == extsk.expsk.full_viewing_key().in_viewing_key() && saplingEntry.address == addr) {
+                LogPrint("zrpcunsafe", "Sapling Note Selected confirmations %i, op %i\n", saplingEntry.confirmations, saplingEntry.op.n);
                 noteCount ++;
               }
             }
