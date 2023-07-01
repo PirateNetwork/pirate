@@ -757,9 +757,9 @@ void *chainparams_commandline()
                                     (2200000, uint256S("0x00000000215d10231183f53550314c915d3119bb3782ae717fca498f97c3b1e4"))
                                     (2300000, uint256S("0x000000002f81899792792c294ae4e313bd9e07b8522df23d5d49e6c13c8ca7d4"))
                                     (2400000, uint256S("0x0000000038f671599a462b3faa16e597b6bfd4f7e0dd78aa4707b0a0e828f70b"))
-                                    (2425507, uint256S("0x0000000006fb46756ed935c8f8cd5399a3cfab8f27fa4eb237a50fb53cc25805")),
-                            (int64_t)1685836388,    // * UNIX timestamp of last checkpoint block
-                            (int64_t)4963910,         // * total number of transactions between genesis and last checkpoint
+                                    (2459242, uint256S("0x00000000acfcfed7e72cc3489f4e63030493647887e2b7d36dc1e5c123a5b690")),
+                            (int64_t)1688106389,    // * UNIX timestamp of last checkpoint block
+                            (int64_t)5043793,         // * total number of transactions between genesis and last checkpoint
                             //   (the tx=... number in the SetBestChain debug.log lines)
                             (double)1179           // * estimated number of transactions per day after checkpoint
                             //   total number of tx / (checkpoint block height / (24 * 24))
