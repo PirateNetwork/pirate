@@ -3393,12 +3393,13 @@ mapSproutNoteData_t CWallet::FindMySproutNotes(const CTransaction &tx) const
  * the result of FindMySaplingNotes (for the addresses available at the time) will
  * already have been cached in CWalletTx.mapSaplingNoteData.
  */
-static void DecryptSaplingNoteWorker(const CWallet *wallet, std::vector<const SaplingIncomingViewingKey*> vIvk, std::vector<const OutputDescription*> vOutput, std::vector<uint32_t> vPosition, const uint256 hash, const int &height, mapSaplingNoteData_t *noteData, SaplingIncomingViewingKeyMap *viewingKeysToAdd)
+static void DecryptSaplingNoteWorker(const CWallet *wallet, std::vector<const SaplingIncomingViewingKey*> vIvk, std::vector<const OutputDescription*> vOutput, std::vector<uint32_t> vPosition, const uint256 hash, const int &height, mapSaplingNoteData_t *noteData, SaplingIncomingViewingKeyMap *viewingKeysToAdd, int threadNumber)
 {
     for (int i = 0; i < vIvk.size(); i++) {
         const SaplingIncomingViewingKey ivk = *vIvk[i];
+        const OutputDescription output = *vOutput[i];
 
-        auto result = SaplingNotePlaintext::decrypt(Params().GetConsensus(), height, vOutput[i]->encCiphertext, ivk, vOutput[i]->ephemeralKey, vOutput[i]->cmu);
+        auto result = SaplingNotePlaintext::decrypt(Params().GetConsensus(), height, output.encCiphertext, ivk, output.ephemeralKey, output.cmu);
         if (result) {
 
             auto address = ivk.address(result.get().d);
@@ -3457,14 +3458,9 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
 
     // Protocol Spec: 4.19 Block Chain Scanning (Sapling)
     int t = 0;
-    for (uint32_t i = 0; i < tx.vShieldedOutput.size(); ++i) {
-        // const OutputDescription output = tx.vShieldedOutput[i];
-
-
-        for (auto it = setSaplingIncomingViewingKeys.begin(); it != setSaplingIncomingViewingKeys.end(); ++it) {
-            const SaplingIncomingViewingKey ivk = *it;
-
-            vvIvk[t].emplace_back(&ivk);
+    for (uint32_t i = 0; i < tx.vShieldedOutput.size(); i++) {
+        for (auto it = setSaplingIncomingViewingKeys.begin(); it != setSaplingIncomingViewingKeys.end(); it++) {
+            vvIvk[t].emplace_back(&(*it));
             vvOutputDescrition[t].emplace_back(&tx.vShieldedOutput[i]);
             vvPosition[t].emplace_back(i);
             //Increment ivk vector
@@ -3473,13 +3469,14 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
             if (t >= vvIvk.size()) {
                 t = 0;
             }
-
         }
     }
 
     std::vector<boost::thread*> decryptionThreads;
-    for (int i = 0; i < vvIvk.size(); i++) {
-        decryptionThreads.emplace_back(new boost::thread(DecryptSaplingNoteWorker, this, vvIvk[i], vvOutputDescrition[i], vvPosition[i], hash, height, &noteData, &viewingKeysToAdd));
+    for (int i = 0; i < vvIvk.size(); ++i) {
+        if(!vvIvk.empty()) {
+            decryptionThreads.emplace_back(new boost::thread(DecryptSaplingNoteWorker, this, vvIvk[i], vvOutputDescrition[i], vvPosition[i], hash, height, &noteData, &viewingKeysToAdd, i));
+        }
     }
 
     // Cleanup
