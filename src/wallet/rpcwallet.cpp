@@ -5331,7 +5331,8 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
 
     //------------------------------------------------------------------------------------------------------------
-    TransactionBuilder builder = TransactionBuilder(bMTX_overwintered,iMTX_ExpiryHeight,iMTX_VersionGroupID,iMTX_Version,branchId, (uint8_t)iZip212_enabled);
+    TransactionBuilder builder = TransactionBuilder(bMTX_overwintered,iMTX_ExpiryHeight,iMTX_VersionGroupID,iMTX_Version,\
+                                                    nextBlockHeight, branchId, (uint8_t)iZip212_enabled);
 
     //SCENARIO #0
     //printf("z_sign_offline()   14 AsyncRPCOperation_sendmany scenario 0\n"); fflush(stdout);

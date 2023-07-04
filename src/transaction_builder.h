@@ -140,7 +140,7 @@ class TransactionBuilder
 {
 private:
     Consensus::Params consensusParams;
-    int nHeight;
+    int nHeight=0;
     const CKeyStore* keystore;
     CMutableTransaction mtx;
     CAmount fee = 10000;
@@ -181,7 +181,7 @@ public:
     TransactionBuilder() {}
     TransactionBuilder(const Consensus::Params& consensusParams, int nHeight, CKeyStore* keyStore = nullptr);
     //For signing offline transactions:
-    TransactionBuilder(bool fOverwintered, uint32_t nExpiryHeight, uint32_t nVersionGroupId, int32_t nVersion, uint32_t branchId, uint8_t cZip212Enabled);
+    TransactionBuilder(bool fOverwintered, uint32_t nExpiryHeight, uint32_t nVersionGroupId, int32_t nVersion, int nBlockHeight, uint32_t branchId, uint8_t cZip212Enabled);
 
     ADD_SERIALIZE_METHODS;
 
