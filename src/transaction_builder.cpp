@@ -118,6 +118,7 @@ TransactionBuilder::TransactionBuilder(
     uint32_t nExpiryHeight,
     uint32_t nVersionGroupId,
     int32_t nVersion,
+    int nBlockHeight,
     uint32_t branchId,
     uint8_t  cZip212Enabled)
 {
@@ -125,10 +126,12 @@ TransactionBuilder::TransactionBuilder(
     mtx.nExpiryHeight   = nExpiryHeight;
     mtx.nVersionGroupId = nVersionGroupId;
     mtx.nVersion        = nVersion;
+    nHeight             = nBlockHeight;
     consensusBranchId   = branchId;
     cZip212_enabled     = cZip212Enabled;
     
-    //printf("TransactionBuilder::TransactionBuilder(offline) values: fOverwintered=%u nExpiryHeight=%u nVersionGroupId=%u nVersion=%d\n",
+    //fprintf(stderr,"TransactionBuilder::TransactionBuilder(offline) values: (nHeight=%d), fOverwintered=%u, nExpiryHeight=%u, nVersionGroupId=%u, nVersion=%d\n",
+    //nHeight,
     //mtx.fOverwintered,
     //mtx.nExpiryHeight,
     //mtx.nVersionGroupId,
