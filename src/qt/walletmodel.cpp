@@ -1033,10 +1033,8 @@ WalletModel::SendCoinsReturn WalletModel::zsendCoins(WalletModelZTransaction &tr
           }
           else
           {
+            //Specific for the off-line transactions. Normal 'online' transactions won't see this
             transaction.setZSignOfflineTransaction("Could not find z_sign_offline in the result: "+sResult);
-            qsResult=QString::asprintf("Could not find z_sign_offline in the result: %s",sResult.c_str());
-            Q_EMIT coinsZSent(operationId);
-            return SendCoinsReturn(TransactionCreationFailed,qsResult);
           }
           iCounter=11; //exit polling loop
           break;
