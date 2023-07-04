@@ -345,8 +345,15 @@ void ZSendCoinsDialog::on_sendButton_clicked()
             try // Nice formatting for standard-format error
             {
                 int code = find_value(objError, "code").get_int();
-                std::string sMessage = find_value(objError, "message").get_str();
-
+                std::string sMessage="";
+                if (code==-26) //Transaction expired 
+                {
+                  sMessage = "The transaction expired";
+                }
+                else
+                {
+                  sMessage = find_value(objError, "message").get_str();
+                }
                 setResult("Transaction sending failed",sMessage.c_str() );
                 return;
             }
