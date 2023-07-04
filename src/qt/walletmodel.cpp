@@ -988,6 +988,8 @@ WalletModel::SendCoinsReturn WalletModel::zsendCoins(WalletModelZTransaction &tr
     int iCounter=0;
     UniValue oResult;
     string sResult;
+    int64_t lResult;
+    QString qsResult;
     while(1)
     {
       OperationStatus status;
@@ -996,15 +998,31 @@ WalletModel::SendCoinsReturn WalletModel::zsendCoins(WalletModelZTransaction &tr
       {
         case OperationStatus::CANCELLED:
           transaction.setZSignOfflineTransaction("Background thread was cancelled");
-          iCounter=11; //exit polling loop
+          qsResult=QString::asprintf("Background thread was cancelled");
+          Q_EMIT coinsZSent(operationId);
+          return SendCoinsReturn(TransactionCreationFailed,qsResult);
           break;
         case OperationStatus::EXECUTING:
           break;
         case OperationStatus::READY:
           break;
         case OperationStatus::FAILED:
-          transaction.setZSignOfflineTransaction("Background thread indicates an error occurred");
-          iCounter=11; //exit polling loop
+          oResult = operation->getError();          
+          lResult = find_value(oResult, "code").get_int64();
+          sResult = find_value(oResult, "message").get_str();
+
+          if (lResult==-26) //Transaction expired 
+          {
+              qsResult=QString::asprintf("The transaction expired");
+              Q_EMIT coinsZSent(operationId);
+              return SendCoinsReturn(PaymentRequestExpired,qsResult);
+          }
+          else
+          {
+              qsResult=QString::asprintf("Background thread indicates an error occurred: %s",sResult.c_str() );
+              Q_EMIT coinsZSent(operationId);
+              return SendCoinsReturn(TransactionCreationFailed,qsResult);
+          }
           break;
         case OperationStatus::SUCCESS:
           oResult = operation->getResult();
@@ -1015,13 +1033,18 @@ WalletModel::SendCoinsReturn WalletModel::zsendCoins(WalletModelZTransaction &tr
           }
           else
           {
-            transaction.setZSignOfflineTransaction("Could not find z_sing_offline in the result: "+sResult);
+            transaction.setZSignOfflineTransaction("Could not find z_sign_offline in the result: "+sResult);
+            qsResult=QString::asprintf("Could not find z_sign_offline in the result: %s",sResult.c_str());
+            Q_EMIT coinsZSent(operationId);
+            return SendCoinsReturn(TransactionCreationFailed,qsResult);
           }
           iCounter=11; //exit polling loop
           break;
         default:
           transaction.setZSignOfflineTransaction("Unknown result from the background thread");
-          iCounter=11; //exit polling loop
+          qsResult=QString::asprintf("Unknown result from the background thread");
+          Q_EMIT coinsZSent(operationId);
+          return SendCoinsReturn(TransactionCreationFailed,qsResult);
           break;
       }
       sleep(1);
