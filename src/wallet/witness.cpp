@@ -168,7 +168,7 @@ UniValue exportsaplingtree(const UniValue& params, bool fHelp,  const CPubKey& m
         file << strprintf("	\"height\": \"%s\",\n", std::to_string(152855));
         file << strprintf("	\"hash\": \"%s\",\n",pblockindex->GetBlockHash().GetHex());
         file << strprintf("	\"time\": %s,\n", pblockindex->GetBlockTime());
-        file << strprintf("	\"tree\": \"%s\"\n", HexStr(iss.begin(), iss.end()));
+        file << strprintf("	\"saplingTree\": \"%s\"\n", HexStr(iss.begin(), iss.end()));
         file << strprintf("}");
 
         file.close();
@@ -202,7 +202,7 @@ UniValue exportsaplingtree(const UniValue& params, bool fHelp,  const CPubKey& m
       file << strprintf("	\"height\": \"%s\",\n", std::to_string(height));
       file << strprintf("	\"hash\": \"%s\",\n",pblockindex->GetBlockHash().GetHex());
       file << strprintf("	\"time\": %s,\n", pblockindex->GetBlockTime());
-      file << strprintf("	\"tree\": \"%s\"\n", HexStr(iss.begin(), iss.end()));
+      file << strprintf("	\"saplingTree\": \"%s\"\n", HexStr(iss.begin(), iss.end()));
       file << strprintf("}");
 
       file.close();
