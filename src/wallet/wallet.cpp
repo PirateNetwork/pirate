@@ -3430,12 +3430,10 @@ bool CWallet::EraseFromWallet(const uint256 &hash)
 
     if (IsCrypted()) {
         if (!IsLocked()) {
-            if (mapWallet.erase(hash)) {
-                CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
-                s << hash;
-                uint256 chash = Hash(s.begin(), s.end());
-                return CWalletDB(strWalletFile).EraseCryptedTx(chash);
-            }
+          if (mapWallet.erase(hash)) {
+              uint256 chash = HashWithFP(hash);
+              return CWalletDB(strWalletFile).EraseCryptedTx(chash);
+          }
         }
     } else {
         if (mapWallet.erase(hash)) {
