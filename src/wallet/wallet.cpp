@@ -2246,6 +2246,7 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
   //Get start time for logging
   int64_t nNow1 = GetTime();
   int64_t nNow2 = GetTime();
+  int64_t nNow3 = GetTime();
 
   //Verifiy current witnesses again the SaplingHashRoot and/or set new initial witness
   int startHeight = VerifyAndSetInitialWitness(pindex, witnessOnly) + 1;
@@ -2340,6 +2341,15 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
       if (GetTime() >= nNow2 + 60) {
           nNow2 = GetTime();
           LogPrintf("Building Witnesses for block %d. Progress=%f\n", witnessHeight, Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex));
+      }
+
+      //flush progress to disk every 10 minutes
+      if (GetTime() >= nNow3 + 600) {
+          nNow3 = GetTime();
+          LogPrintf("Writing witness building progress to the disk.\n");
+          const CBlockLocator locatorBlock = chainActive.GetLocator(pindex);
+          const int locatorHeight = pindex->nHeight;
+          SetBestChain(locatorBlock, locatorHeight);
       }
 
       //Create 1 thread per group of notes
