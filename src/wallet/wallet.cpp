@@ -2374,6 +2374,8 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
           delete wthread;
       }
 
+      witnessThreads.resize(0);
+
       //Check completeness
       if (pblockindex == pindex)
           break;
@@ -2388,6 +2390,15 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
   if (uiShown) {
       uiInterface.ShowProgress(_("Witness Cache Complete..."), 100, false);
   }
+
+  //clean up
+  for (int i = 0; i < vvNoteData.size(); i++) {
+      for (auto pnd : vNoteData) {
+          delete pnd;
+      }
+      vvNoteData[i].resize(0);
+  }
+  vvNoteData.resize(0);
 
   fInitWitnessesBuilt = true;
   fBuilingWitnessCache = false;
@@ -3494,6 +3505,23 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
         dthread->join();
         delete dthread;
     }
+
+    //clean up pointers
+    for (int i = 0; i < vvOutputDescrition.size(); i++) {
+        for (auto pOutputDescrition : vOutputDescrition) {
+            delete pOutputDescrition;
+        }
+        vvOutputDescrition[i].resize(0);
+    }
+    vvOutputDescrition.resize(0);
+
+    for (int i = 0; i < vvIvk.size(); i++) {
+        for (auto pIvk : vIvk) {
+            delete pIvk;
+        }
+        vvIvk[i].resize(0);
+    }
+    vvIvk.resize(0);
 
     return std::make_pair(noteData, viewingKeysToAdd);
 }
