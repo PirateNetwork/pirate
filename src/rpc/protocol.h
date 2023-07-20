@@ -67,6 +67,7 @@ enum RPCErrorCode
     RPC_IN_WARMUP                   = -28, //! Client still warming up
     RPC_DISABLED_BEFORE_WITNESSES   = -31, //! Do not allow z_sendmany prior to building witnesses
     RPC_BUILDING_WITNESS_CACHE      = -32, //! Return error while builing witness cache
+    RPC_DISABLED_WHILE_CLEANUP      = -33, //! Return error while note is consolidating in cleanup mode
 
     //! Aliases for backward compatibility
     RPC_TRANSACTION_ERROR           = RPC_VERIFY_ERROR,

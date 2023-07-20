@@ -871,6 +871,15 @@ public:
     int nextConsolidation = 0;
     int targetConsolidationQty = 100;
 
+    string strCleanUpStatus = "";
+    bool fCleanupRoundComplete = false;
+    std::vector<uint256> vCleanUpTxids;
+    int cleanUpConfirmed = 0;
+    int cleanUpConflicted = 0;
+    int cleanUpUnconfirmed = 0;
+    int cleanupMaxExpirationHieght = 0;
+    int cleanupCurrentRoundUnspent = 0;
+
     bool fSaplingSweepEnabled = false;
     bool fSweepRunning = false;
     int sweepInterval = (Params().GetConsensus().nPowTargetSpacing/60) * 15; //Intialize every 15 minutes
@@ -1571,6 +1580,10 @@ public:
          std::vector<SaplingOutPoint> notes,
          std::vector<boost::optional<SaplingWitness>>& witnesses,
          uint256 &final_anchor);
+     bool GetSaplingNoteWitnessesConsolidationCleanup(
+          std::vector<SaplingOutPoint> notes,
+          std::vector<boost::optional<SaplingWitness>>& witnesses,
+          uint256 &final_anchor);
 
     isminetype IsMine(const CTxIn& txin) const;
     CAmount GetDebit(const CTxIn& txin, const isminefilter& filter) const;

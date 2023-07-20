@@ -51,6 +51,7 @@ extern uint16_t ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT;
 
 bool fBuilingWitnessCache = false;
 bool fInitWitnessesBuilt = false;
+bool fCleanUpMode = false;
 static bool fRPCRunning = false;
 static bool fRPCInWarmup = true;
 static bool fRPCNeedUnlocked = false;
@@ -884,6 +885,13 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
           // Find method
           if (!pcmd)
               throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
+
+          if (fCleanUpMode)
+          if (fCleanUpMode && pcmd->name == "z_sendmany")
+              throw JSONRPCError(RPC_DISABLED_WHILE_CLEANUP, "RPC Command disabled while in cleanup mode.");
+
+          if (fCleanUpMode && pcmd->name == "z_sendmany_prepare_offline")
+              throw JSONRPCError(RPC_DISABLED_WHILE_CLEANUP, "RPC Command disabled while in cleanup mode.");
 
           if (!fInitWitnessesBuilt && pcmd->name == "z_sendmany")
               throw JSONRPCError(RPC_DISABLED_BEFORE_WITNESSES, "RPC Command disabled until witnesses are built.");

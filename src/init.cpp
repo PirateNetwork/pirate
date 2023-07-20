@@ -501,6 +501,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-seedphrase=<phrase>", _("Recover wallet from seed phrase if a wallet file does not exist."));
     strUsage += HelpMessageOpt("-disablewallet", _("Do not load the wallet and disable wallet RPC calls"));
     strUsage += HelpMessageOpt("-keypool=<n>", strprintf(_("Set key pool size to <n> (default: %u)"), 100));
+    strUsage += HelpMessageOpt("-cleanup", _("Enable clean up mode. This will put the node in a special mode to reduce the number of unpsent notes through consolidation, requires consolidation to be enabled. Spending functions will be disabled until the consolidation is compleate at which time the node will return to normal operations."));
     strUsage += HelpMessageOpt("-consolidation", _("Enable auto Sapling note consolidation"));
     strUsage += HelpMessageOpt("-consolidatesaplingaddress=<zaddr>", _("Specify Sapling Address to Consolidate. Consolidation address must be the same as sweep  (default: all)"));
     strUsage += HelpMessageOpt("-consolidationtxfee", strprintf(_("Fee amount in Satoshis used send consolidation transactions. (default %i)"), DEFAULT_CONSOLIDATION_FEE));
@@ -2415,6 +2416,14 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             auto zAddress = DecodePaymentAddress(vaddresses[i]);
             if (!IsValidPaymentAddress(zAddress)) {
                 return InitError("Invalid consolidation address");
+            }
+        }
+
+        fCleanUpMode = GetBoolArg("-cleanup", false);
+        if (fCleanUpMode) {
+            pwalletMain->strCleanUpStatus = "Creating cleanup transactions.";
+            if (!pwalletMain->fSaplingConsolidationEnabled) {
+                return InitError("Consolidation must be enable to enable cleanup mode.");
             }
         }
 

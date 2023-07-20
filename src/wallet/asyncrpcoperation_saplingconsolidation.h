@@ -1,4 +1,5 @@
 #include "amount.h"
+#include "rpc/server.h"
 #include "asyncrpcoperation.h"
 #include "univalue.h"
 #include "zcash/Address.hpp"
@@ -33,5 +34,7 @@ private:
     bool main_impl();
 
     void setConsolidationResult(int numTxCreated, const CAmount& amountConsolidated, const std::vector<std::string>& consolidationTxIds);
+
+    void checkCleanUpConfirmedOrExpired();
 
 };

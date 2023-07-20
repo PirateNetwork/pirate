@@ -38,6 +38,7 @@
 
 extern bool fBuilingWitnessCache;
 extern bool fInitWitnessesBuilt;
+extern bool fCleanUpMode;
 
 class AsyncRPCQueue;
 class CRPCCommand;

@@ -217,24 +217,29 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "Returns an object containing various state info.\n"
             "\nResult:\n"
             "{\n"
-            "  \"version\": xxxxx,           (numeric) the server version\n"
-            "  \"protocolversion\": xxxxx,   (numeric) the protocol version\n"
-            "  \"walletversion\": xxxxx,     (numeric) the wallet version\n"
-            "  \"balance\": xxxxxxx,         (numeric) the total Komodo balance of the wallet\n"
-            "  \"blocks\": xxxxxx,           (numeric) the current number of blocks processed in the server\n"
-            "  \"timeoffset\": xxxxx,        (numeric) the time offset (deprecated; always 0)\n"
-            "  \"connections\": xxxxx,       (numeric) the number of connections\n"
-            "  \"tls_established\": xxxxx,   (numeric) the number of TLS connections established\n"
-            "  \"tls_verified\": xxxxx,      (numeric) the number of TLS connection with validated certificates\n"
-            "  \"proxy\": \"host:port\",     (string, optional) the proxy used by the server\n"
-            "  \"difficulty\": xxxxxx,       (numeric) the current difficulty\n"
-            "  \"testnet\": true|false,      (boolean) if the server is using testnet or not\n"
-            "  \"keypoololdest\": xxxxxx,    (numeric) the timestamp (seconds since GMT epoch) of the oldest pre-generated key in the key pool\n"
-            "  \"keypoolsize\": xxxx,        (numeric) how many new keys are pre-generated\n"
-            "  \"unlocked_until\": ttt,      (numeric) the timestamp in seconds since epoch (midnight Jan 1 1970 GMT) that the wallet is unlocked for transfers, or 0 if the wallet is locked\n"
-            "  \"paytxfee\": x.xxxx,         (numeric) the transaction fee set in " + CURRENCY_UNIT + "/kB\n"
-            "  \"relayfee\": x.xxxx,         (numeric) minimum relay fee for non-free transactions in " + CURRENCY_UNIT + "/kB\n"
-            "  \"errors\": \"...\"           (string) any error messages\n"
+            "  \"version\": xxxxx,                            (numeric) the server version\n"
+            "  \"protocolversion\": xxxxx,                    (numeric) the protocol version\n"
+            "  \"walletversion\": xxxxx,                      (numeric) the wallet version\n"
+            "  \"balance\": xxxxxxx,                          (numeric) the total Komodo balance of the wallet\n"
+            "  \"blocks\": xxxxxx,                            (numeric) the current number of blocks processed in the server\n"
+            "  \"timeoffset\": xxxxx,                         (numeric) the time offset (deprecated; always 0)\n"
+            "  \"connections\": xxxxx,                        (numeric) the number of connections\n"
+            "  \"tls_established\": xxxxx,                    (numeric) the number of TLS connections established\n"
+            "  \"tls_verified\": xxxxx,                       (numeric) the number of TLS connection with validated certificates\n"
+            "  \"proxy\": \"host:port\",                      (string, optional) the proxy used by the server\n"
+            "  \"difficulty\": xxxxxx,                        (numeric) the current difficulty\n"
+            "  \"testnet\": true|false,                       (boolean) if the server is using testnet or not\n"
+            "  \"keypoololdest\": xxxxxx,                     (numeric) the timestamp (seconds since GMT epoch) of the oldest pre-generated key in the key pool\n"
+            "  \"keypoolsize\": xxxx,                         (numeric) how many new keys are pre-generated\n"
+            "  \"unlocked_until\": ttt,                       (numeric) the timestamp in seconds since epoch (midnight Jan 1 1970 GMT) that the wallet is unlocked for transfers, or 0 if the wallet is locked\n"
+            "  \"paytxfee\": x.xxxx,                          (numeric) the transaction fee set in " + CURRENCY_UNIT + "/kB\n"
+            "  \"relayfee\": x.xxxx,                          (numeric) minimum relay fee for non-free transactions in " + CURRENCY_UNIT + "/kB\n"
+            "  \"errors\": \"...\"                            (string) any error messages\n"
+            "  \"cleanup_mode\": \"...\"                      (string) active|inactive\n"
+            "  \"cleanup_status\": \"...\"                    (string) status of the cleanup routine\n"
+            "  \"cleanup_confirmed_txs\": \"...\"             (numeric) qty of confirmed cleanup transactions for the current round\n"
+            "  \"cleanup_unconfirmed_txs\": \"...\"           (numeric) qty of unconfirmed cleanup transactions for the current round\n"
+            "  \"cleanup_conflicted_txs\": \"...\"            (numeric) qty of conflicted cleanup transactions for the current round\n"
             "}\n"
             "\nExamples:\n"
             + HelpExampleCli("getinfo", "")
@@ -327,6 +332,17 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
     obj.push_back(Pair("testnet",       Params().TestnetToBeDeprecatedFieldRPC()));
     obj.push_back(Pair("relayfee",      ValueFromAmount(::minRelayTxFee.GetFeePerK())));
     obj.push_back(Pair("errors",        GetWarnings("statusbar")));
+
+    obj.push_back(Pair("cleanup_mode", fCleanUpMode? "Active" : "Inactive"));
+    obj.push_back(Pair("cleanup_status",pwalletMain->strCleanUpStatus));
+    obj.push_back(Pair("cleanup_unspent_notes",pwalletMain->cleanupCurrentRoundUnspent));
+    obj.push_back(Pair("cleanup_unspent_target",pwalletMain->targetConsolidationQty));
+    obj.push_back(Pair("cleanup_confirmed_txs",pwalletMain->cleanUpConfirmed));
+    obj.push_back(Pair("cleanup_unconfirmed_txs",pwalletMain->cleanUpUnconfirmed));
+    obj.push_back(Pair("cleanup_conflicted_txs",pwalletMain->cleanUpConflicted));
+    obj.push_back(Pair("cleanup_expiration_height",pwalletMain->cleanupMaxExpirationHieght));
+
+
      if ( NOTARY_PUBKEY33[0] != 0 ) {
         char pubkeystr[65]; int32_t notaryid; std::string notaryname;
         if ( (notaryid= StakedNotaryID(notaryname, (char *)NOTARY_ADDRESS.c_str())) != -1 ) {
