@@ -178,9 +178,23 @@ CClientUIInterface uiInterface; // Declared but not defined in ui_interface.h
 //
 
 std::atomic<bool> fRequestShutdown(false);
+bool loadComplete = false;
 
 void StartShutdown()
 {
+
+      //Flush wallet on exit
+      //Write all transactions and block loacator to the wallet
+#ifdef ENABLE_WALLET
+    if (loadComplete) {
+        LogPrintf("Flushing wallet to disk on shutdown.\n");
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        CBlockLocator currentBlock = chainActive.GetLocator();
+        int chainHeight = chainActive.Tip()->nHeight;
+        pwalletMain->SetBestChain(currentBlock, chainHeight);
+    }
+#endif
+
     fRequestShutdown = true;
 }
 bool ShutdownRequested()
@@ -2746,6 +2760,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     // SENDALERT
     threadGroup.create_thread(boost::bind(ThreadSendAlert));
+
+    //Save the load status to check on Shutdown
+    loadComplete = true;
 
     return !ShutdownRequested();
 }
