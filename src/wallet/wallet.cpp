@@ -2255,13 +2255,14 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
     return;
   }
 
+  if (fCleanUpMode) {
+      fBuilingWitnessCache = false;
+      return;
+  }
+
   //Disable RPC while IsInitialBlockDownload()
   if (IsInitialBlockDownload() && !fInitWitnessesBuilt) {
       fBuilingWitnessCache = true;
-  }
-
-  if (fCleanUpMode) {
-      return;
   }
 
   // Set Starting Values
