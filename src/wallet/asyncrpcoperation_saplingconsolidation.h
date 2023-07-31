@@ -35,6 +35,8 @@ private:
 
     void setConsolidationResult(int numTxCreated, const CAmount& amountConsolidated, const std::vector<std::string>& consolidationTxIds);
 
+    void updateCleanupMetrics();
+
     void checkCleanUpConfirmedOrExpired();
 
 };
