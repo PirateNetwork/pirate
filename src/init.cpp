@@ -500,6 +500,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageGroup(_("Wallet options:"));
     strUsage += HelpMessageOpt("-seedphrase=<phrase>", _("Recover wallet from seed phrase if a wallet file does not exist."));
     strUsage += HelpMessageOpt("-disablewallet", _("Do not load the wallet and disable wallet RPC calls"));
+    strUsage += HelpMessageOpt("-mintxvalue=<amt>", strprintf(_("Set minimum incoming value of notes that will be added to the wallet in Arrtoshis (default: %u)"), 1));
     strUsage += HelpMessageOpt("-keypool=<n>", strprintf(_("Set key pool size to <n> (default: %u)"), 100));
     strUsage += HelpMessageOpt("-cleanup", _("Enable clean up mode. This will put the node in a special mode to reduce the number of unpsent notes through consolidation, requires consolidation to be enabled. Spending functions will be disabled until the consolidation is compleate at which time the node will return to normal operations."));
     strUsage += HelpMessageOpt("-consolidation", _("Enable auto Sapling note consolidation"));
@@ -2403,6 +2404,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             auto zAddress = pwalletMain->GenerateNewSaplingZKey();
             pwalletMain->SetZAddressBook(zAddress, "z-sapling", "");
         }
+
+        //Set Minimum value of incoming notes accepted
+        minTxValue = GetArg("-mintxvalue", DEFAULT_MIN_TX_VALUE);
 
         //Set Sapling Consolidation
         pwalletMain->fSaplingConsolidationEnabled = GetBoolArg("-consolidation", false);

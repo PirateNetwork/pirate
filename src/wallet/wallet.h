@@ -59,6 +59,7 @@ extern std::vector<CWalletRef> vpwallets;
  */
 extern CFeeRate payTxFee;
 extern CAmount maxTxFee;
+extern CAmount minTxValue;
 extern unsigned int nTxConfirmTarget;
 extern bool bSpendZeroConfChange;
 extern bool fSendFreeTransactions;
@@ -84,6 +85,8 @@ static const CAmount DEFAULT_FALLBACK_FEE = 20000;
 static const CAmount nHighTransactionFeeWarning = 0.01 * COIN;
 //! -maxtxfee default
 static const CAmount DEFAULT_TRANSACTION_MAXFEE = 0.1 * COIN;
+//! Note must be at least this value to be added to the wallet, default is 1 Arrtoshis which will add all notes.
+static const CAmount DEFAULT_MIN_TX_VALUE = 1;
 //! -txconfirmtarget default
 static const unsigned int DEFAULT_TX_CONFIRM_TARGET = 2;
 //! -maxtxfee will warn if called with a higher fee than this amount (in satoshis)

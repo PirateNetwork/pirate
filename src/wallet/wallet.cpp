@@ -76,6 +76,7 @@ bool bSpendZeroConfChange = true;
 bool fSendFreeTransactions = false;
 bool fPayAtLeastCustomFee = true;
 
+CAmount minTxValue = DEFAULT_MIN_TX_VALUE;
 
 bool fWalletRbf = DEFAULT_WALLET_RBF;
 //
@@ -3570,10 +3571,14 @@ static void DecryptSaplingNoteWorker(const CWallet *wallet, std::vector<const Sa
             nd.value = note.value();
             nd.address = address.get();
 
-            {
-                LOCK(wallet->cs_wallet_threadedfunction);
-                viewingKeysToAdd->insert(make_pair(address.get(),ivk));
-                noteData->insert(std::make_pair(op, nd));
+            if (nd.value >= minTxValue) {
+                //Only add notes greater then this value
+                //dust filter
+                {
+                    LOCK(wallet->cs_wallet_threadedfunction);
+                    viewingKeysToAdd->insert(make_pair(address.get(),ivk));
+                    noteData->insert(std::make_pair(op, nd));
+                }
             }
         }
     }
