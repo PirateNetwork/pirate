@@ -15,6 +15,7 @@
 
 // https://bitcointalk.org/index.php?topic=1605144.msg32538076#msg32538076 - notarization txes explained
 
+void adjust_hwmheight(int32_t in); // declared in komodo.cpp (should be used only in unit-tests)
 namespace fs = boost::filesystem;
 
 namespace LegacyEventsTests {
@@ -51,6 +52,19 @@ namespace LegacyEventsTests {
             void printMessage(const std::string &message) {
                 std::cout << "[          ] " << message;
             }
+            void ClearKomodoGlobals() {
+
+                // clear global structures between tests (should be called in SetUp and TearDown as well)
+
+                adjust_hwmheight(0);
+                for(size_t i = 0; i < KOMODO_STATES_NUMBER; ++i)
+                {
+                    /* The destructors of all members, including NPOINTS (std::vector) and events (std::list),
+                       will be called correctly after this assignment, and the memory will be freed.
+                    */
+                    KOMODO_STATES[i] = komodo_state();
+                }
+            }
         public:
             LegacyEvents() : pathDataDir("") {}
 
@@ -84,6 +98,11 @@ namespace LegacyEventsTests {
                 chainActive.SetTip(nullptr);
 
                 mempool.clear();
+                ClearKomodoGlobals();
+                /* We want to ensure that global variables are cleared after the current test execution
+                   because the next test that will be run may be different and may not use this fixture.
+                   Therefore, we should provide clear globals for this test as well.
+                */
             }
 
             void TearDown( ) {
@@ -103,6 +122,7 @@ namespace LegacyEventsTests {
                 SelectParams(CBaseChainParams::REGTEST);
 
                 mempool.clear();
+                ClearKomodoGlobals();
             }
     };
 
@@ -239,5 +259,11 @@ namespace LegacyEventsTests {
                with future call to komodo_setkmdheight (or rewind event create) and SAVEDHEIGHT, SAVEDTIMESTAMP and CURRENT_HEIGHT possible update.
         */
 
+    }
+
+    TEST_F(LegacyEvents, OtherTest) {
+        komodo_state *state_ptr = komodo_stateptrget((char *)chainName.symbol().c_str()); // &KOMODO_STATES[0]
+        ASSERT_TRUE(state_ptr != nullptr);
+        std::cerr << "state_ptr->NumCheckpoints() = " << state_ptr->NumCheckpoints() << std::endl;
     }
 }
