@@ -302,7 +302,11 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
         vecPriority.reserve(mempool.mapTx.size() + 1);
 
         // now add transactions from the mem pool
-        int32_t Notarisations = 0; uint64_t txvalue;
+        int32_t Notarisations = 0;
+        uint64_t txvalue;
+        int qtyLargeTx = 0;
+        int qtyMediumTx = 0;
+
         for (CTxMemPool::indexed_transaction_set::iterator mi = mempool.mapTx.begin();
              mi != mempool.mapTx.end(); ++mi)
         {
@@ -497,6 +501,18 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
             std::pop_heap(vecPriority.begin(), vecPriority.end(), comparer);
             vecPriority.pop_back();
 
+            if (GetBoolArg("-largetxthrottle", true)) {
+                if (tx.vShieldedOutput.size() >= 50 && qtyLargeTx >= 1) {
+                    LogPrintf("Large transaction rate limited\n");
+                    continue;
+                }
+
+                if (tx.vShieldedOutput.size() >= 10 && tx.vShieldedOutput.size() < 50 && qtyMediumTx >= 5) {
+                    LogPrintf("Medium transaction rate limited\n");
+                    continue;
+                }
+            }
+
             // Size limits
             unsigned int nTxSize = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
 
@@ -603,6 +619,16 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
             ++nBlockTx;
             nBlockSigOps += nTxSigOps;
             nFees += nTxFees;
+
+            if (tx.vShieldedOutput.size() >= 50) {
+                LogPrintf("Added large transaction\n");
+                qtyLargeTx++;
+            }
+
+            if (tx.vShieldedOutput.size() >= 10 && tx.vShieldedOutput.size() < 50) {
+                LogPrintf("Added medium transaction\n");
+                qtyMediumTx++;
+            }
 
             if (fPrintPriority)
             {

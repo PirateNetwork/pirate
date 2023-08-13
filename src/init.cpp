@@ -609,6 +609,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-gen", strprintf(_("Mine/generate coins (default: %u)"), 0));
     strUsage += HelpMessageOpt("-genproclimit=<n>", strprintf(_("Set the number of threads for coin mining if enabled (-1 = all cores, default: %d)"), 0));
     strUsage += HelpMessageOpt("-equihashsolver=<name>", _("Specify the Equihash solver to be used if enabled (default: \"default\")"));
+    strUsage += HelpMessageOpt("-largetxthrottle", strprintf(_("Throttle the block template to 1 large transaction and 5 medium transactions per block (default: %u)"), 1));
     strUsage += HelpMessageOpt("-mineraddress=<addr>", _("Send mined coins to a specific single address"));
     strUsage += HelpMessageOpt("-minetolocalwallet", strprintf(
             _("Require that mined blocks use a coinbase address in the local wallet (default: %u)"),
@@ -2623,6 +2624,12 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 #else // ENABLE_WALLET
     LogPrintf("No wallet support compiled in!\n");
 #endif // !ENABLE_WALLET
+
+    if (GetBoolArg("-largetxthrottle", true)) {
+        LogPrintf("Blocktemplate large tx throttle enabled.\n");
+    } else {
+        LogPrintf("Blocktemplate large tx throttle disabled.\n");
+    }
 
 #ifdef ENABLE_MINING
  #ifndef ENABLE_WALLET
