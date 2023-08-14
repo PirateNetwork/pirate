@@ -172,7 +172,7 @@ namespace LegacyEventsTests {
             }
     };
 
-    TEST_F(LegacyEvents, DISABLED_PhantomOpReturnEvent) {
+    TEST_F(LegacyEvents, PhantomOpReturnEvent) {
 
         int32_t fakeBlockHeight = 3507273;
 
@@ -224,7 +224,7 @@ namespace LegacyEventsTests {
         ASSERT_TRUE(stateFileSize == 0);
     }
 
-    TEST_F(LegacyEvents, DISABLED_NormalKMDLTCNota) {
+    TEST_F(LegacyEvents, NormalKMDLTCNota) {
 
         /* Test for normal KMD -> LTC nota in KMD chain */
 
@@ -287,7 +287,16 @@ namespace LegacyEventsTests {
         komodo_state *state_ptr = komodo_stateptrget((char *)chainName.symbol().c_str()); // &KOMODO_STATES[0]
         ASSERT_TRUE(state_ptr != nullptr);
         ASSERT_TRUE(state_ptr->NumCheckpoints() == 1);
-        ASSERT_TRUE(state_ptr->SAVEDHEIGHT == fakeBlockHeight);
+        ASSERT_TRUE(state_ptr->events.size() == 0);
+
+        ASSERT_TRUE(state_ptr->SAVEDHEIGHT==fakeBlockHeight);
+        ASSERT_TRUE(state_ptr->CURRENT_HEIGHT==fakeBlockHeight);
+        ASSERT_TRUE(state_ptr->SAVEDTIMESTAMP==0);
+        ASSERT_TRUE(state_ptr->LastNotarizedHash().ToString() == "0983a2c9709e524a2a66887266455c2141aebbae558ef9b78718fda8db7094a9");
+        ASSERT_TRUE(state_ptr->LastNotarizedDestTxId().ToString() == "1f7f887a8fbf2b48129fee471de3910cf2314ca17385e81f0a56dfa5fec48e23");
+        ASSERT_TRUE(state_ptr->LastNotarizedMoM().ToString() == "0000000000000000000000000000000000000000000000000000000000000000");
+        ASSERT_TRUE(state_ptr->LastNotarizedHeight() == 3507260);
+        ASSERT_TRUE(state_ptr->LastNotarizedMoMDepth() == 0);
 
         /*
             komodo_stateupdate will be called 2 times here:
@@ -296,7 +305,7 @@ namespace LegacyEventsTests {
                inside komodo_voutupdate komodo_stateupdate(height,0,0,0,zero,0,0,0,0,0,0,0,0,sp->LastNotarizedMoM(),sp->LastNotarizedMoMDepth()); and
                this call will trigger komodo::event_notarized creation inside komodo_stateupdate and write_event to disk. Then in komodo_eventadd_notarized
                it will call komodo_state::add_event<komodo::event_notarized>, but it will not be added (!) in events list because add_event adds events to
-               the list only for assetchains (!). Is it expected behavior? Then komodo_notarized_update will be called and checkpoint to numpoints will be
+               the list only for assetchains (!). Then komodo_notarized_update will be called and checkpoint to numpoints will be
                added via AddCheckpoint.
             2. [ komodo::event_kmdheight ]
                Second time komodo_stateupdate will be called from komodo_connectblock: komodo_stateupdate(height,0,0,0,zero,0,0,height,(uint32_t)pindex->nTime,0,0,0,0,zero,0)
@@ -307,7 +316,7 @@ namespace LegacyEventsTests {
 
     }
 
-    TEST_F(LegacyEvents, DISABLED_NormalMILKMDNota) {
+    TEST_F(LegacyEvents, NormalMILKMDNota) {
 
         /* Test for MIL -> KMD in KMD chain (MIL is 3P coin) */
 
@@ -393,7 +402,7 @@ namespace LegacyEventsTests {
 
     }
 
-    TEST_F(LegacyEvents, DISABLED_NormalMARTYKMDNota) {
+    TEST_F(LegacyEvents, NormalMARTYKMDNota) {
 
         /* Test for MARTY -> KMD in KMD chain (MARTY is AC) */
 
@@ -523,19 +532,65 @@ namespace LegacyEventsTests {
         chainActive.SetTip(&indexDummy);
         int32_t res_kcb = komodo_connectblock(false, &indexDummy, b);
 
-        komodo_state *state_ptr = komodo_stateptrget((char *)chainName.symbol().c_str()); // &KOMODO_STATES[0]
-        ASSERT_TRUE(state_ptr != nullptr);
-        ASSERT_TRUE(state_ptr->events.size() == 2);
-
         /*
             This is MARTY -> KMD notarization in MARTY chain. In this test:
 
             1. signedmasks file should be filled like this { 0x45, 0x16, 0x02, 0x00, 0xb9, 0x01, 0x00, 0x41, 0x04, 0x02, 0x82, 0x80 },
                first 4 bytes is a int32_t height and 8 bytes of uint64_t signedmask after. signedmask.80820204410001b9
-            2.  komodo::event_notarized and komodo::event_kmdheight added in the events list, because it's AC
+            2. komodo::event_notarized and komodo::event_kmdheight added in the events list, because it's AC
             3. TODO: ??? events in file written check ...
-            4. TODO: ??? state_ptr changes check ...
+            4. state_ptr changes check ...
         */
+
+        komodo_state *state_ptr = komodo_stateptrget((char *)chainName.symbol().c_str()); // &KOMODO_STATES[0]
+        ASSERT_TRUE(state_ptr != nullptr);
+        ASSERT_TRUE(state_ptr->events.size() == 2);
+
+        // (1) Check signedmasks
+        fs::path fileSignedMasksPath = GetDataDir(false) / "signedmasks";
+        uintmax_t signedMasksFileSize = 0;
+        if (fs::exists(fileSignedMasksPath) && fs::is_regular_file(fileSignedMasksPath)) {
+            signedMasksFileSize = fs::file_size(fileSignedMasksPath);
+        }
+
+        std::vector<uint8_t> expectedBytes = { 0x45, 0x16, 0x02, 0x00, 0xb9, 0x01, 0x00, 0x41, 0x04, 0x02, 0x82, 0x80 };
+        ASSERT_TRUE(signedMasksFileSize == expectedBytes.size());
+        std::vector<uint8_t> sm_bytes(signedMasksFileSize);
+        std::ifstream file(fileSignedMasksPath.string(), std::ios::binary);
+        if (file) {
+            file.read((char *)sm_bytes.data(), signedMasksFileSize);
+            file.close();
+        } else {
+            ASSERT_TRUE(false) << "Failed to open signedmasks file ...";
+        }
+        ASSERT_TRUE(expectedBytes == sm_bytes);
+
+        // (2) Check events count
+        std::map<komodo::komodo_event_type, int> eventCounter;
+        for (const std::shared_ptr<komodo::event>& e : state_ptr->events) {
+            ++eventCounter[e->type];
+        }
+        auto notarized_it = eventCounter.find(komodo::komodo_event_type::EVENT_NOTARIZED);
+        auto kmdheight_it = eventCounter.find(komodo::komodo_event_type::EVENT_KMDHEIGHT);
+        bool fAllEventsCorrect = (notarized_it != eventCounter.end() && notarized_it->second == 1)
+            && (kmdheight_it != eventCounter.end() && kmdheight_it->second == 1);
+        ASSERT_TRUE(fAllEventsCorrect);
+
+        // (3) Check the komodoevents file content
+
+        // TODO ...
+
+        // (4) Check komodo_state changes
+
+        ASSERT_TRUE(state_ptr->SAVEDHEIGHT==fakeBlockHeight);
+        ASSERT_TRUE(state_ptr->CURRENT_HEIGHT==fakeBlockHeight);
+        ASSERT_TRUE(state_ptr->SAVEDTIMESTAMP==indexDummy.nTime);
+        ASSERT_TRUE(state_ptr->LastNotarizedHash().ToString() == "0007f0f477aa48cb8ebaf9250ee5dbf51627b2fc5dc2a0b82924b6e2c51a5343");
+        ASSERT_TRUE(state_ptr->LastNotarizedDestTxId().ToString() == "3bbfcd09b2d8e789f2760539ba55d02572c8941d0de1c64c2f2e5990071cc376");
+        ASSERT_TRUE(state_ptr->LastNotarizedMoM().ToString() == "416ae1917650bc1ae51d5e215604b443e31287c08f2326479c558b5072980777");
+        ASSERT_TRUE(state_ptr->LastNotarizedHeight() == 136766);
+        ASSERT_TRUE(state_ptr->LastNotarizedMoMDepth() == 196628);
+        ASSERT_TRUE(state_ptr->NumCheckpoints() == 1);
 
     }
 
