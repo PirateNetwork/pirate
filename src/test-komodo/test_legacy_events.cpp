@@ -600,17 +600,4 @@ namespace LegacyEventsTests {
         ASSERT_TRUE(state_ptr->NumCheckpoints() == 1);
 
     }
-
-    TEST_F(LegacyEvents, OtherTest) {
-
-        // chainName = assetchain("MARTY");
-        // struct komodo_ccdata ccdata;
-        // std::memset(ccdata.symbol, 0, sizeof(ccdata.symbol));
-        // std::copy_n("MARTY", std::min(sizeof(ccdata.symbol), strlen("MARTY")), ccdata.symbol);
-        // ASSERT_TRUE(chainName.isSymbol(ccdata.symbol));
-
-        komodo_state *state_ptr = komodo_stateptrget((char *)chainName.symbol().c_str()); // &KOMODO_STATES[0]
-        ASSERT_TRUE(state_ptr != nullptr);
-        std::cerr << "state_ptr->NumCheckpoints() = " << state_ptr->NumCheckpoints() << std::endl;
-    }
 }
