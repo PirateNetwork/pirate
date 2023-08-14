@@ -212,7 +212,9 @@ namespace LegacyEventsTests {
         /*
             we shouldn't have matched == 1 on 3rd transaction in a block here, as a result,
             we shouldn't have komodo_voutupdate -> komodo_stateupdate -> write_event call
-            and komodoevents file should be empty
+            for komodo::event_opreturn, only for komodo::event_kmdheight, so the komodostate
+            filesize should be equal size of written komodo::event_kmdheight, i.e. 9. but
+            let's calculate this size here.
         */
 
         uintmax_t stateFileSize = 0;
@@ -221,7 +223,12 @@ namespace LegacyEventsTests {
             stateFileSize = fs::file_size(filePath);
         }
 
-        ASSERT_TRUE(stateFileSize == 0);
+        komodo::event_kmdheight kmd_ht(fakeBlockHeight);
+        kmd_ht.kheight = fakeBlockHeight;
+        kmd_ht.timestamp = 0;
+        std::stringstream ss; ss << kmd_ht; std::string buf = ss.str(); // see write_event
+
+        ASSERT_TRUE(stateFileSize == buf.size());
     }
 
     TEST_F(LegacyEvents, NormalKMDLTCNota) {
