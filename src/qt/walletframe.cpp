@@ -93,14 +93,14 @@ bool WalletFrame::addWallet(const QString& name, WalletModel *walletModel)
     //Some debug output:
     if (nMaxConnections==0)
     {
-        printf("nMaxConnections=0 (Offline mode)\n");
-        printf("To disable all network connections, set the following in the config file:\n");
+        printf("maxconnections=0 (Offline mode)\n");
+        printf("To disable all network connections, set the following in PIRATE.conf\n");
         printf("  server=0\n");
         printf("  listen=0\n");
     }
     else
     {
-        fprintf(stderr,"nMaxConnections=%d (Online mode)\n",nMaxConnections);
+        fprintf(stderr,"maxconnections=%d (Online mode)\n",nMaxConnections);
     }
 
     //Setup GUI to desired mode
