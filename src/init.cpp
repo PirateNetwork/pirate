@@ -1903,8 +1903,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             nMaxConnections=0;
             useBootstrap = false;
 
-            //Note: By this time the GUI configuration files: 'Pirate Chain/Treasure\ Chest.conf' and
-            //      PIRATE.conf is already created. We'll have to update the GUI configuration from
+            //Note: By this time the GUI configuration files: '~/.config/Pirate Chain/Treasure\ Chest.conf' and
+            //      PIRATE.conf are already created. We'll have to update the GUI configuration from
             //      the UI code
         }
     }
@@ -1967,9 +1967,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             LogPrintf("Shutdown requested. Exiting.\n");
             return false;
         }
-
-        boost::filesystem::create_directories(GetDataDir() / "blocks");
     }
+    //Create 'blocks' as part of the required directory structure for online and offline mode:
+    boost::filesystem::create_directories(GetDataDir() / "blocks");
+    
     // block tree db settings
     int dbMaxOpenFiles = GetArg("-dbmaxopenfiles", DEFAULT_DB_MAX_OPEN_FILES);
     bool dbCompression = GetBoolArg("-dbcompression", DEFAULT_DB_COMPRESSION);
