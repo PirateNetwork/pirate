@@ -828,25 +828,28 @@ int32_t komodo_connectblock(bool fJustCheck, CBlockIndex *pindex,CBlock& block)
                 }
                 if ( specialtx != 0 && isratification != 0 && numvouts > 2 )
                 {
-                    numvalid = 0;
-                    memset(pubkeys,0,sizeof(pubkeys));
-                    for (j=1; j<numvouts-1; j++)
+                    if (chainName.isKMD() && height < 100000)
                     {
-                        len = block.vtx[i].vout[j].scriptPubKey.size();
-                        if ( len >= sizeof(uint32_t) && len <= sizeof(scriptbuf) )
+                        numvalid = 0;
+                        memset(pubkeys,0,sizeof(pubkeys));
+                        for (j=1; j<numvouts-1; j++)
                         {
-                            memcpy(scriptbuf,(uint8_t *)&block.vtx[i].vout[j].scriptPubKey[0],len);
-                            if ( len == 35 && scriptbuf[0] == 33 && scriptbuf[34] == 0xac )
+                            len = block.vtx[i].vout[j].scriptPubKey.size();
+                            if ( len >= sizeof(uint32_t) && len <= sizeof(scriptbuf) )
                             {
-                                memcpy(pubkeys[numvalid++],scriptbuf+1,33);
-                                for (k=0; k<33; k++)
-                                    printf("%02x",scriptbuf[k+1]);
-                                printf(" <- new notary.[%d]\n",j-1);
+                                memcpy(scriptbuf,(uint8_t *)&block.vtx[i].vout[j].scriptPubKey[0],len);
+                                if ( len == 35 && scriptbuf[0] == 33 && scriptbuf[34] == 0xac )
+                                {
+                                    if (numvalid < 64) {
+                                        memcpy(pubkeys[numvalid++],scriptbuf+1,33);
+                                        for (k=0; k<33; k++)
+                                            printf("%02x",scriptbuf[k+1]);
+                                        printf(" <- new notary.[%d]\n",j-1);
+                                    }
+                                }
                             }
                         }
-                    }
-                    if ( !chainName.isKMD() || height < 100000 )
-                    {
+
                         if ( ((signedmask & 1) != 0 && numvalid >= KOMODO_MINRATIFY) || bitweight(signedmask) > (numnotaries/3) )
                         {
                             memset(&txhash,0,sizeof(txhash));
