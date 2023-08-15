@@ -463,6 +463,9 @@ int32_t komodo_voutupdate(bool fJustCheck,int32_t *isratificationp,int32_t notar
         if (scriptlen - len < 0 || (unsigned int)(scriptlen - len) < opretlen)
             return notaryid;
 
+        if (opretlen < 34)    // Stop processing of OP_RETURNs that do not contain significant data,
+            return notaryid;  // such as a 33-byte staking opret or a 32-byte notary proof in a mined block.
+
         opoffset = len;
 
         matched = 0;
