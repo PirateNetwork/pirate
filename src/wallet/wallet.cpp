@@ -3631,7 +3631,7 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
 
     std::vector<boost::thread*> decryptionThreads;
     for (int i = 0; i < vvIvk.size(); ++i) {
-        if(!vvIvk.empty()) {
+        if(!vvIvk[i].empty()) {
             decryptionThreads.emplace_back(new boost::thread(DecryptSaplingNoteWorker, this, vvIvk[i], vvOutputDescrition[i], vvPosition[i], hash, height, &noteData, &viewingKeysToAdd, i));
         }
     }
