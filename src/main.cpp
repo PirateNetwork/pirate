@@ -5699,9 +5699,6 @@ bool CheckBlock(int32_t *futureblockp, int32_t height, CBlockIndex *pindex, cons
     if ( ASSETCHAINS_CC != 0 && !fCheckPOW )
         return true;
 
-    CTransaction sTx;
-    CTransaction *ptx = nullptr;
-
     // CC contracts might refer to transactions in the current block, from a
     // CC spend within the same block and out of order
     if ( ASSETCHAINS_CC != 0 )
@@ -5775,11 +5772,6 @@ bool CheckBlock(int32_t *futureblockp, int32_t height, CBlockIndex *pindex, cons
     {
         LogPrintf("CheckBlockHeader komodo_check_deposit error");
         return(false);
-    }
-
-    if (ptx)
-    {
-        SyncWithWallets(*ptx, &block, pindex->nHeight);
     }
 
     if ( ASSETCHAINS_CC != 0 )
