@@ -1369,19 +1369,18 @@ CheckTransationResults ContextualCheckTransactionSaplingSpendWorker(
 
     //Perform Sapling Spend checks
     for (int i = 0; i < vSpend.size(); i++) {
-        auto spend = *vSpend[i];
         const uint256 dataToBeSigned = vSpendSig[i];
 
         auto ctx = librustzcash_sapling_verification_ctx_init();
 
         if (!librustzcash_sapling_check_spend(
             ctx,
-            spend.cv.begin(),
-            spend.anchor.begin(),
-            spend.nullifier.begin(),
-            spend.rk.begin(),
-            spend.zkproof.begin(),
-            spend.spendAuthSig.begin(),
+            vSpend[i]->cv.begin(),
+            vSpend[i]->anchor.begin(),
+            vSpend[i]->nullifier.begin(),
+            vSpend[i]->rk.begin(),
+            vSpend[i]->zkproof.begin(),
+            vSpend[i]->spendAuthSig.begin(),
             dataToBeSigned.begin()
         ))
         {
@@ -1434,7 +1433,15 @@ CheckTransationResults ContextualCheckTransactionSaplingOutputWorker(
 
 }
 
-
+/**
+ * Check a transaction contextually against a set of consensus rules valid at a given block height.
+ *
+ * Notes:
+ * 1. AcceptToMemoryPool calls CheckTransaction and this function.
+ * 2. ProcessNewBlock calls AcceptBlock, which calls CheckBlock (which calls CheckTransaction)
+ *    and ContextualCheckBlock (which calls this function).
+ * 3. The isInitBlockDownload argument is only to assist with testing.
+ */
 bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector<const CTransaction*> vptx, CBlockIndex * const previndex,
         CValidationState &state,
         const int nHeight,
@@ -1451,25 +1458,23 @@ bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector
       std::vector<std::vector<const CTransaction*>> vvtx;
       std::vector<uint256> vTxSig;
       std::vector<std::vector<uint256>> vvTxSig;
-      for (int i = 0; i < maxProcessingThreads; i++) {
-          vvtx.emplace_back(vtx);
-          vvTxSig.emplace_back(vTxSig);
-      }
 
       //Setup spend batches
       std::vector<const SpendDescription*> vSpend;
       std::vector<std::vector<const SpendDescription*>> vvSpend;
       std::vector<uint256> vSpendSig;
       std::vector<std::vector<uint256>> vvSpendSig;
-      for (int i = 0; i < maxProcessingThreads; i++) {
-          vvSpend.emplace_back(vSpend);
-          vvSpendSig.emplace_back(vSpendSig);
-      }
 
       //Setup output batches
       std::vector<const OutputDescription*> vOutput;
       std::vector<std::vector<const OutputDescription*>> vvOutput;
+
+      //Create Thread Vectors
       for (int i = 0; i < maxProcessingThreads; i++) {
+          vvtx.emplace_back(vtx);
+          vvTxSig.emplace_back(vTxSig);
+          vvSpend.emplace_back(vSpend);
+          vvSpendSig.emplace_back(vSpendSig);
           vvOutput.emplace_back(vOutput);
       }
 
@@ -1515,80 +1520,80 @@ bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector
           //Most of the check can be done sigle threaded and do not warrant the additonal overhead required to spin up threads
           CheckTransationResults singleResults = ContextualCheckTransactionSingleThreaded(*tx, nHeight, dosLevel, isInitialBlockDownload, i);
 
-          //Return single thereaded results
+          //Return single threaded results
           if (!singleResults.validationPassed) {
             return state.DoS(singleResults.dosLevel, error(singleResults.errorString.c_str()), REJECT_INVALID, singleResults.reasonString);
           }
 
-          //Verify Sapling
-          if (!tx->vShieldedSpend.empty() || !tx->vShieldedOutput.empty()) {
-              //Push tx to thread vector
-              vvtx[t].emplace_back(tx);
-              vvTxSig[t].emplace_back(dataToBeSigned);
-              //Increment thread vector
-              t++;
-              //reset if tread vector is greater qty of threads being used
-              if (t >= vvtx.size()) {
-                  t = 0;
-              }
-
-              //Add this transaction sapling spend to spend thread batches
-              for (int j = 0; j < tx->vShieldedSpend.size(); j++) {
-                  //Push spend to thread vector
-                  vvSpend[s].emplace_back(&(tx->vShieldedSpend[j]));
-                  vvSpendSig[s].emplace_back(dataToBeSigned);
+          //Skip costly sapling checks on intial download below the hardcoded checkpoints
+          if (!fCheckpointsEnabled || nHeight >= Checkpoints::GetTotalBlocksEstimate(Params().Checkpoints())) {
+              //Verify Sapling
+              if (!tx->vShieldedSpend.empty() || !tx->vShieldedOutput.empty()) {
+                  //Push tx to thread vector
+                  vvtx[t].emplace_back(tx);
+                  vvTxSig[t].emplace_back(dataToBeSigned);
                   //Increment thread vector
-                  s++;
+                  t++;
                   //reset if tread vector is greater qty of threads being used
-                  if (s >= vvSpend.size()) {
-                      s = 0;
+                  if (t >= vvtx.size()) {
+                      t = 0;
                   }
-              }
 
-              //Add this transaction sapling outputs to output thread batches
-              for (int j = 0; j < tx->vShieldedOutput.size(); j++) {
-                  //Push output to thread vector
-                  vvOutput[o].emplace_back(&(tx->vShieldedOutput[j]));
-                  //Increment thread vector
-                  o++;
-                  //reset if tread vector is greater qty of threads being used
-                  if (o >= vvOutput.size()) {
-                      o = 0;
+                  //Add this transaction sapling spend to spend thread batches
+                  for (int j = 0; j < tx->vShieldedSpend.size(); j++) {
+                      //Push spend to thread vector
+                      vvSpend[s].emplace_back(&(tx->vShieldedSpend[j]));
+                      vvSpendSig[s].emplace_back(dataToBeSigned);
+                      //Increment thread vector
+                      s++;
+                      //reset if tread vector is greater qty of threads being used
+                      if (s >= vvSpend.size()) {
+                          s = 0;
+                      }
+                  }
+
+                  //Add this transaction sapling outputs to output thread batches
+                  for (int j = 0; j < tx->vShieldedOutput.size(); j++) {
+                      //Push output to thread vector
+                      vvOutput[o].emplace_back(&(tx->vShieldedOutput[j]));
+                      //Increment thread vector
+                      o++;
+                      //reset if tread vector is greater qty of threads being used
+                      if (o >= vvOutput.size()) {
+                          o = 0;
+                      }
                   }
               }
           }
       }
 
-      //Skip costly sapling checks on intial download below the hardcoded checkpoints
-      if (!fCheckpointsEnabled || nHeight >= Checkpoints::GetTotalBlocksEstimate(Params().Checkpoints())) {
-          //Push batches of txs to async threads
-          for (int i = 0; i < vvtx.size(); i++) {
-              //Perform transaction level checks
-              if (!vvtx[i].empty()) {
-                  vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionBindingSigWorker, vvtx[i], vvTxSig[i], i));
-              }
+      //Push batches of txs to async threads
+      for (int i = 0; i < vvtx.size(); i++) {
+          //Perform transaction level checks
+          if (!vvtx[i].empty()) {
+              vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionBindingSigWorker, vvtx[i], vvTxSig[i], i));
           }
+      }
 
-          //Push batches of spends to async threads
-          for (int i = 0; i < vvSpend.size(); i++) {
-              //Perform SpendDescription validations
-              if (!vvSpend[i].empty()) {
-                  vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionSaplingSpendWorker, vvSpend[i], vvSpendSig[i], i + vvtx.size()));
-              }
+      //Push batches of spends to async threads
+      for (int i = 0; i < vvSpend.size(); i++) {
+          //Perform SpendDescription validations
+          if (!vvSpend[i].empty()) {
+              vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionSaplingSpendWorker, vvSpend[i], vvSpendSig[i], i + vvtx.size()));
           }
+      }
 
-          //Push batches of outputs to async threads
-          for (int i = 0; i < vvOutput.size(); i++) {
-              //Perform OutputDescription validations
-              if (!vvOutput[i].empty()) {
-                  vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionSaplingOutputWorker, vvOutput[i], i + vvtx.size() + vvSpend.size()));
-              }
+      //Push batches of outputs to async threads
+      for (int i = 0; i < vvOutput.size(); i++) {
+          //Perform OutputDescription validations
+          if (!vvOutput[i].empty()) {
+              vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionSaplingOutputWorker, vvOutput[i], i + vvtx.size() + vvSpend.size()));
           }
+      }
 
-          //Wait for all threads to complete
-          for (auto &future : vFutures) {
-              future.wait();
-          }
+      //Wait for all threads to complete
+      for (auto &future : vFutures) {
+          future.wait();
       }
 
       bool checkResults = true;
