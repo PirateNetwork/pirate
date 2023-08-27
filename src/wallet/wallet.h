@@ -1517,10 +1517,10 @@ public:
     void UpdateNullifierNoteMapForBlock(const CBlock* pblock);
     bool AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb, int nHeight, bool fRescan = false);
     bool EraseFromWallet(const uint256 &hash);
-    void SyncTransaction(const CTransaction& tx, const CBlock* pblock, const int nHeight);
+    void SyncTransactions(const std::vector<CTransaction> &vtx, const CBlock* pblock, const int nHeight);
     void ForceRescanWallet();
     void RescanWallet();
-    bool AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, const int nHeight, bool fUpdate, std::set<libzcash::SaplingPaymentAddress>& addressesFound, bool fRescan = false);
+    void AddToWalletIfInvolvingMe(const std::vector<CTransaction> &vtx, std::vector<CTransaction> &vAddedTxes, const CBlock* pblock, const int nHeight, bool fUpdate, std::set<libzcash::SaplingPaymentAddress>& addressesFound, bool fRescan = false);
     void WitnessNoteCommitment(
          std::vector<uint256> commitments,
          std::vector<boost::optional<SproutWitness>>& witnesses,
@@ -1571,7 +1571,7 @@ public:
         const uint256& hSig,
         uint8_t n) const;
     mapSproutNoteData_t FindMySproutNotes(const CTransaction& tx) const;
-    std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> FindMySaplingNotes(const CTransaction& tx, int height) const;
+    std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> FindMySaplingNotes(const std::vector<CTransaction> &vtx, int height) const;
     bool IsSproutNullifierFromMe(const uint256& nullifier) const;
     bool IsSaplingNullifierFromMe(const uint256& nullifier) const;
 

@@ -122,15 +122,17 @@ void AMQPNotificationInterface::UpdatedBlockTip(const CBlockIndex *pindex)
     }
 }
 
-void AMQPNotificationInterface::SyncTransaction(const CTransaction &tx, const CBlock *pblock, const int nHeight)
+void AMQPNotificationInterface::SyncTransactions(const std::vector<CTransaction> &vtx, const CBlock *pblock, const int nHeight)
 {
-    for (std::list<AMQPAbstractNotifier*>::iterator i = notifiers.begin(); i != notifiers.end(); ) {
-        AMQPAbstractNotifier *notifier = *i;
-        if (notifier->NotifyTransaction(tx)) {
-            i++;
-        } else {
-            notifier->Shutdown();
-            i = notifiers.erase(i);
+    for (int j = 0; j < vtx.size(); j++) {
+        for (std::list<AMQPAbstractNotifier*>::iterator i = notifiers.begin(); i != notifiers.end(); ) {
+            AMQPAbstractNotifier *notifier = *i;
+            if (notifier->NotifyTransaction(vtx[j])) {
+                i++;
+            } else {
+                notifier->Shutdown();
+                i = notifiers.erase(i);
+            }
         }
     }
 }

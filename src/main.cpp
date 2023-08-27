@@ -4548,7 +4548,11 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
              if ( !GetBoolArg("-disablewallet", false) && KOMODO_NSPV_FULLNODE )
                  pwalletMain->EraseFromWallet(tx.GetHash());
 #endif
-        } else SyncWithWallets(tx, NULL, pindexDelete->nHeight);
+        } else {
+            std::vector<CTransaction> vtx;
+            vtx.emplace_back(tx);
+            SyncWithWallets(vtx, NULL, pindexDelete->nHeight);
+        }
     }
     // Update cached incremental witnesses
     GetMainSignals().ChainTip(pindexDelete, &block, newSproutTree, newSaplingTree, false);
@@ -4763,13 +4767,18 @@ bool ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *pblock)
     {
         // Tell wallet about transactions that went from mempool
         // to conflicted:
+        int64_t nTimeConflicted = GetTimeMicros();
+        std::vector<CTransaction> vConflictedTx;
         BOOST_FOREACH(const CTransaction &tx, txConflicted) {
-            SyncWithWallets(tx, NULL, pindexNew->nHeight);
+             vConflictedTx.emplace_back(tx);
         }
+        SyncWithWallets(vConflictedTx, NULL, pindexNew->nHeight);
+        LogPrint("bench", "     - Connect Sync Conflicted Txes with Wallet: %.2fms\n", (GetTimeMicros() - nTimeConflicted) * 0.001);
+
         // ... and about transactions that got confirmed:
-        BOOST_FOREACH(const CTransaction &tx, pblock->vtx) {
-            SyncWithWallets(tx, pblock, pindexNew->nHeight);
-        }
+        int64_t nTimeSyncTx = GetTimeMicros();
+        SyncWithWallets(pblock->vtx, pblock, pindexNew->nHeight);
+        LogPrint("bench", "     - Connect Sync Non-Conflicted Txes with Wallet: %.2fms\n", (GetTimeMicros() - nTimeSyncTx) * 0.001);
     }
     // Update cached incremental witnesses
     GetMainSignals().ChainTip(pindexNew, pblock, oldSproutTree, oldSaplingTree, true);

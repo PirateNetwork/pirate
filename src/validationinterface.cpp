@@ -14,7 +14,7 @@ CMainSignals& GetMainSignals()
 
 void RegisterValidationInterface(CValidationInterface* pwalletIn) {
     g_signals.UpdatedBlockTip.connect(boost::bind(&CValidationInterface::UpdatedBlockTip, pwalletIn, _1));
-    g_signals.SyncTransaction.connect(boost::bind(&CValidationInterface::SyncTransaction, pwalletIn, _1, _2, _3));
+    g_signals.SyncTransactions.connect(boost::bind(&CValidationInterface::SyncTransactions, pwalletIn, _1, _2, _3));
     g_signals.EraseTransaction.connect(boost::bind(&CValidationInterface::EraseFromWallet, pwalletIn, _1));
     g_signals.UpdatedTransaction.connect(boost::bind(&CValidationInterface::UpdatedTransaction, pwalletIn, _1));
     g_signals.RescanWallet.connect(boost::bind(&CValidationInterface::RescanWallet, pwalletIn));
@@ -31,7 +31,7 @@ void UnregisterValidationInterface(CValidationInterface* pwalletIn) {
     g_signals.ChainTip.disconnect(boost::bind(&CValidationInterface::ChainTip, pwalletIn, _1, _2, _3, _4, _5));
     g_signals.UpdatedTransaction.disconnect(boost::bind(&CValidationInterface::UpdatedTransaction, pwalletIn, _1));
     g_signals.EraseTransaction.disconnect(boost::bind(&CValidationInterface::EraseFromWallet, pwalletIn, _1));
-    g_signals.SyncTransaction.disconnect(boost::bind(&CValidationInterface::SyncTransaction, pwalletIn, _1, _2, _3));
+    g_signals.SyncTransactions.disconnect(boost::bind(&CValidationInterface::SyncTransactions, pwalletIn, _1, _2, _3));
     g_signals.RescanWallet.disconnect(boost::bind(&CValidationInterface::RescanWallet, pwalletIn));
     g_signals.UpdatedBlockTip.disconnect(boost::bind(&CValidationInterface::UpdatedBlockTip, pwalletIn, _1));
 }
@@ -43,13 +43,13 @@ void UnregisterAllValidationInterfaces() {
     g_signals.ChainTip.disconnect_all_slots();
     g_signals.UpdatedTransaction.disconnect_all_slots();
     g_signals.EraseTransaction.disconnect_all_slots();
-    g_signals.SyncTransaction.disconnect_all_slots();
+    g_signals.SyncTransactions.disconnect_all_slots();
     g_signals.RescanWallet.disconnect_all_slots();
     g_signals.UpdatedBlockTip.disconnect_all_slots();
 }
 
-void SyncWithWallets(const CTransaction &tx, const CBlock *pblock, const int nHeight) {
-    g_signals.SyncTransaction(tx, pblock, nHeight);
+void SyncWithWallets(const std::vector<CTransaction> &vtx, const CBlock *pblock, const int nHeight) {
+    g_signals.SyncTransactions(vtx, pblock, nHeight);
 }
 
 void EraseFromWallets(const uint256 &hash) {

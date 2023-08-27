@@ -3289,108 +3289,142 @@ bool CWallet::UpdatedNoteData(const CWalletTx& wtxIn, CWalletTx& wtx)
  * pblock is optional, but should be provided if the transaction is known to be in a block.
  * If fUpdate is true, existing transactions will be updated.
  */
-bool CWallet::AddToWalletIfInvolvingMe(const CTransaction& tx, const CBlock* pblock, const int nHeight, bool fUpdate, std::set<SaplingPaymentAddress>& addressesFound, bool fRescan)
+void CWallet::AddToWalletIfInvolvingMe(const std::vector<CTransaction> &vtx, std::vector<CTransaction> &vAddedTxes, const CBlock* pblock, const int nHeight, bool fUpdate, std::set<SaplingPaymentAddress>& addressesFound, bool fRescan)
 {
     {
         AssertLockHeld(cs_wallet);
-        if ( tx.IsCoinBase() && tx.vout[0].nValue == 0 )
-            return false;
-        bool fExisted = mapWallet.count(tx.GetHash()) != 0;
-        if (fExisted && !fUpdate) return false;
-        auto saplingNoteDataAndAddressesToAdd = FindMySaplingNotes(tx, nHeight);
+
+        //Step 1 -- inital Tx checks
+        std::vector<CTransaction> vFilteredTxes;
+
+        for (int i = 0; i < vtx.size(); i++) {
+            if (vtx[i].IsCoinBase() && vtx[i].vout[0].nValue == 0)
+                continue;
+            bool fExisted = mapWallet.count(vtx[i].GetHash()) != 0;
+            if (fExisted && !fUpdate)
+                continue;
+
+            vFilteredTxes.emplace_back(vtx[i]);
+        }
+
+        //Step 2 -- decrypt transactions
+        auto saplingNoteDataAndAddressesToAdd = FindMySaplingNotes(vFilteredTxes, nHeight);
         auto saplingNoteData = saplingNoteDataAndAddressesToAdd.first;
         auto addressesToAdd = saplingNoteDataAndAddressesToAdd.second;
+
+        //Step 3 -- add addresses
         for (const auto &addressToAdd : addressesToAdd) {
             //Loaded into memory only
             //This will be saved during the wallet SetBestChainINTERNAL
-            if (!CCryptoKeyStore::AddSaplingIncomingViewingKey(addressToAdd.second, addressToAdd.first)) {
-                return false;
-            }
+            CCryptoKeyStore::AddSaplingIncomingViewingKey(addressToAdd.second, addressToAdd.first);
             //Store addresses to notify GUI later
             addressesFound.insert(addressToAdd.first);
         }
-        if (fExisted || IsMine(tx) || IsFromMe(tx) || saplingNoteData.size() > 0)
-        {
-            /**
-             * New implementation of wallet filter code.
-             *
-             * If any vout of tx is belongs to wallet (IsMine(tx) == true) and tx
-             * is not from us, mean, if every vin not belongs to our wallet
-             * (IsFromMe(tx) == false), then tx need to be checked through wallet
-             * filter. If tx haven't any vin from trusted / whitelisted address it
-             * shouldn't be added into wallet.
-            */
 
-            if (!mapMultiArgs["-whitelistaddress"].empty())
-            {
-                if (IsMine(tx) && !tx.IsCoinBase() && !IsFromMe(tx))
-                {
-                    bool fIsFromWhiteList = false;
-                    BOOST_FOREACH(const CTxIn& txin, tx.vin)
-                    {
-                        if (fIsFromWhiteList) break;
-                        uint256 hashBlock; CTransaction prevTx; CTxDestination dest;
-                        if (GetTransaction(txin.prevout.hash, prevTx, hashBlock, true) && ExtractDestination(prevTx.vout[txin.prevout.n].scriptPubKey,dest))
-                        {
-                            BOOST_FOREACH(const std::string& strWhiteListAddress, mapMultiArgs["-whitelistaddress"])
-                            {
-                                if (EncodeDestination(dest) == strWhiteListAddress)
-                                {
-                                    fIsFromWhiteList = true;
-                                    // std::cerr << __FUNCTION__ << " tx." << tx.GetHash().ToString() << " passed wallet filter! whitelistaddress." << EncodeDestination(dest) << std::endl;
-                                    LogPrintf("tx.%s passed wallet filter! whitelistaddress.%s\n", tx.GetHash().ToString(),EncodeDestination(dest));
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if (!fIsFromWhiteList)
-                    {
-                        // std::cerr << __FUNCTION__ << " tx." << tx.GetHash().ToString() << " is NOT passed wallet filter!" << std::endl;
-                        LogPrintf("tx.%s is NOT passed wallet filter!\n", tx.GetHash().ToString());
-                        return false;
-                    }
+        //Step 4 -- add transactions
+        for (int i = 0; i < vFilteredTxes.size(); i++) {
+
+            uint256 hash = vFilteredTxes[i].GetHash();
+            mapSaplingNoteData_t noteData;
+
+            for (mapSaplingNoteData_t::iterator it = saplingNoteData.begin(); it != saplingNoteData.end(); it++) {
+                SaplingOutPoint op = (*it).first;
+                SaplingNoteData nd = (*it).second;
+                if (op.hash == hash) {
+                      noteData.insert(std::make_pair(op, nd));
                 }
             }
 
-            CWalletTx wtx(this,tx);
 
-            if (saplingNoteData.size() > 0) {
-                wtx.SetSaplingNoteData(saplingNoteData);
+            bool fExisted = mapWallet.count(vFilteredTxes[i].GetHash()) != 0;
+
+            if (fExisted || IsMine(vFilteredTxes[i]) || IsFromMe(vFilteredTxes[i]) || noteData.size() > 0)
+            {
+                /**
+                 * New implementation of wallet filter code.
+                 *
+                 * If any vout of tx is belongs to wallet (IsMine(tx) == true) and tx
+                 * is not from us, mean, if every vin not belongs to our wallet
+                 * (IsFromMe(tx) == false), then tx need to be checked through wallet
+                 * filter. If tx haven't any vin from trusted / whitelisted address it
+                 * shouldn't be added into wallet.
+                */
+
+                if (!mapMultiArgs["-whitelistaddress"].empty())
+                {
+                    if (IsMine(vFilteredTxes[i]) && !vFilteredTxes[i].IsCoinBase() && !IsFromMe(vFilteredTxes[i]))
+                    {
+                        bool fIsFromWhiteList = false;
+                        BOOST_FOREACH(const CTxIn& txin, vFilteredTxes[i].vin)
+                        {
+                            if (fIsFromWhiteList) break;
+                            uint256 hashBlock; CTransaction prevTx; CTxDestination dest;
+                            if (GetTransaction(txin.prevout.hash, prevTx, hashBlock, true) && ExtractDestination(prevTx.vout[txin.prevout.n].scriptPubKey,dest))
+                            {
+                                BOOST_FOREACH(const std::string& strWhiteListAddress, mapMultiArgs["-whitelistaddress"])
+                                {
+                                    if (EncodeDestination(dest) == strWhiteListAddress)
+                                    {
+                                        fIsFromWhiteList = true;
+                                        // std::cerr << __FUNCTION__ << " tx." << tx.GetHash().ToString() << " passed wallet filter! whitelistaddress." << EncodeDestination(dest) << std::endl;
+                                        LogPrintf("tx.%s passed wallet filter! whitelistaddress.%s\n", vFilteredTxes[i].GetHash().ToString(),EncodeDestination(dest));
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if (!fIsFromWhiteList)
+                        {
+                            // std::cerr << __FUNCTION__ << " tx." << tx.GetHash().ToString() << " is NOT passed wallet filter!" << std::endl;
+                            LogPrintf("tx.%s is NOT passed wallet filter!\n", vFilteredTxes[i].GetHash().ToString());
+                            continue;
+                        }
+                    }
+                }
+
+                CWalletTx wtx(this,vFilteredTxes[i]);
+
+                if (noteData.size() > 0) {
+                    wtx.SetSaplingNoteData(noteData);
+                }
+
+                // Get merkle branch if transaction was found in a block
+                if (pblock)
+                    wtx.SetMerkleBranch(*pblock);
+
+                //Set Wallet Birthday on first transaction found
+                if (nBirthday > 0 && nHeight < nBirthday) {
+                    nBirthday = nHeight;
+                    SetWalletBirthday(nBirthday);
+                }
+
+                // Do not flush the wallet here for performance reasons
+                // this is safe, as in case of a crash, we rescan the necessary blocks on startup through our SetBestChain-mechanism
+                CWalletDB walletdb(strWalletFile, "r+", false);
+
+                if (AddToWallet(wtx, false, &walletdb, nHeight, fRescan)) {
+                    vAddedTxes.emplace_back(vFilteredTxes[i]);
+                }
             }
-
-            // Get merkle branch if transaction was found in a block
-            if (pblock)
-                wtx.SetMerkleBranch(*pblock);
-
-            //Set Wallet Birthday on first transaction found
-            if (nBirthday > 0 && nHeight < nBirthday) {
-                nBirthday = nHeight;
-                SetWalletBirthday(nBirthday);
-            }
-
-            // Do not flush the wallet here for performance reasons
-            // this is safe, as in case of a crash, we rescan the necessary blocks on startup through our SetBestChain-mechanism
-            CWalletDB walletdb(strWalletFile, "r+", false);
-
-            return AddToWallet(wtx, false, &walletdb, nHeight, fRescan);
         }
     }
-    return false;
 }
 
-void CWallet::SyncTransaction(const CTransaction& tx, const CBlock* pblock, const int nHeight)
+void CWallet::SyncTransactions(const std::vector<CTransaction> &vtx, const CBlock* pblock, const int nHeight)
 {
     LOCK(cs_wallet);
     std::set<SaplingPaymentAddress> addressesFound;
-    if (!AddToWalletIfInvolvingMe(tx, pblock, nHeight, true, addressesFound, false))
-        return; // Not one of ours
+
+    std::vector<CTransaction> vOurs;
+    AddToWalletIfInvolvingMe(vtx, vOurs, pblock, nHeight, true, addressesFound, false);
 
     for (std::set<SaplingPaymentAddress>::iterator it = addressesFound.begin(); it != addressesFound.end(); it++) {
         SetZAddressBook(*it, "z-sapling", "", true);
     }
 
-    MarkAffectedTransactionsDirty(tx);
+    for (int i = 0; i < vOurs.size(); i++) {
+        MarkAffectedTransactionsDirty(vOurs[i]);
+    }
 }
 
 void CWallet::MarkAffectedTransactionsDirty(const CTransaction& tx)
@@ -3546,11 +3580,12 @@ mapSproutNoteData_t CWallet::FindMySproutNotes(const CTransaction &tx) const
  * the result of FindMySaplingNotes (for the addresses available at the time) will
  * already have been cached in CWalletTx.mapSaplingNoteData.
  */
-static void DecryptSaplingNoteWorker(const CWallet *wallet, std::vector<const SaplingIncomingViewingKey*> vIvk, std::vector<const OutputDescription*> vOutput, std::vector<uint32_t> vPosition, const uint256 hash, const int &height, mapSaplingNoteData_t *noteData, SaplingIncomingViewingKeyMap *viewingKeysToAdd, int threadNumber)
+static void DecryptSaplingNoteWorker(const CWallet *wallet, std::vector<const SaplingIncomingViewingKey*> vIvk, std::vector<const OutputDescription*> vOutput, std::vector<uint32_t> vPosition, const std::vector<uint256> vHash, const int &height, mapSaplingNoteData_t *noteData, SaplingIncomingViewingKeyMap *viewingKeysToAdd, int threadNumber)
 {
     for (int i = 0; i < vIvk.size(); i++) {
         const SaplingIncomingViewingKey ivk = *vIvk[i];
         const OutputDescription output = *vOutput[i];
+        const uint256 hash = vHash[i];
 
         auto result = SaplingNotePlaintext::decrypt(Params().GetConsensus(), height, output.encCiphertext, ivk, output.ephemeralKey, output.cmu);
         if (result) {
@@ -3581,7 +3616,7 @@ static void DecryptSaplingNoteWorker(const CWallet *wallet, std::vector<const Sa
     }
 }
 
-std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySaplingNotes(const CTransaction &tx, int height) const
+std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySaplingNotes(const std::vector<CTransaction> &vtx, int height) const
 {
     LOCK(cs_wallet);
 
@@ -3589,50 +3624,55 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
     mapSaplingNoteData_t noteData;
     SaplingIncomingViewingKeyMap viewingKeysToAdd;
 
-    //Transaction being processed
-    uint256 hash = tx.GetHash();
-
     //Create key thread buckets
     std::vector<const SaplingIncomingViewingKey*> vIvk;
     std::vector<std::vector<const SaplingIncomingViewingKey*>> vvIvk;
-    for (int i = 0; i < maxProcessingThreads; i++) {
-        vvIvk.emplace_back(vIvk);
-    }
 
     //Create OutputDescription thread buckets
     std::vector<const OutputDescription*> vOutputDescrition;
     std::vector<std::vector<const OutputDescription*>> vvOutputDescrition;
-    for (int i = 0; i < maxProcessingThreads; i++) {
-        vvOutputDescrition.emplace_back(vOutputDescrition);
-    }
 
     //Create transaction position thread buckets
     std::vector<uint32_t> vPosition;
     std::vector<std::vector<uint32_t>> vvPosition;
-    for (int i = 0; i < maxProcessingThreads; i++) {
+
+    //Create transaction hash thread buckets
+    std::vector<uint256> vHash;
+    std::vector<std::vector<uint256>> vvHash;
+
+    for (uint32_t i = 0; i < maxProcessingThreads; i++) {
+        vvIvk.emplace_back(vIvk);
+        vvOutputDescrition.emplace_back(vOutputDescrition);
         vvPosition.emplace_back(vPosition);
+        vvHash.emplace_back(vHash);
     }
 
     // Protocol Spec: 4.19 Block Chain Scanning (Sapling)
-    int t = 0;
-    for (uint32_t i = 0; i < tx.vShieldedOutput.size(); i++) {
-        for (auto it = setSaplingIncomingViewingKeys.begin(); it != setSaplingIncomingViewingKeys.end(); it++) {
-            vvIvk[t].emplace_back(&(*it));
-            vvOutputDescrition[t].emplace_back(&tx.vShieldedOutput[i]);
-            vvPosition[t].emplace_back(i);
-            //Increment ivk vector
-            t++;
-            //reset if ivk vector is greater qty of threads being used
-            if (t >= vvIvk.size()) {
-                t = 0;
+    uint32_t t = 0;
+    for (uint32_t j = 0; j < vtx.size(); j++) {
+        //Transaction being processed
+        uint256 hash = vtx[j].GetHash();
+        for (uint32_t i = 0; i < vtx[j].vShieldedOutput.size(); i++) {
+            for (auto it = setSaplingIncomingViewingKeys.begin(); it != setSaplingIncomingViewingKeys.end(); it++) {
+                vvIvk[t].emplace_back(&(*it));
+                vvOutputDescrition[t].emplace_back(&vtx[j].vShieldedOutput[i]);
+                vvPosition[t].emplace_back(i);
+                vvHash[t].emplace_back(hash);
+                //Increment ivk vector
+                t++;
+                //reset if ivk vector is greater qty of threads being used
+                if (t >= vvIvk.size()) {
+                    t = 0;
+                }
             }
         }
     }
 
+
     std::vector<boost::thread*> decryptionThreads;
-    for (int i = 0; i < vvIvk.size(); ++i) {
+    for (uint32_t i = 0; i < vvIvk.size(); ++i) {
         if(!vvIvk[i].empty()) {
-            decryptionThreads.emplace_back(new boost::thread(DecryptSaplingNoteWorker, this, vvIvk[i], vvOutputDescrition[i], vvPosition[i], hash, height, &noteData, &viewingKeysToAdd, i));
+            decryptionThreads.emplace_back(new boost::thread(DecryptSaplingNoteWorker, this, vvIvk[i], vvOutputDescrition[i], vvPosition[i], vvHash[i], height, &noteData, &viewingKeysToAdd, i));
         }
     }
 
@@ -3643,7 +3683,7 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
     }
 
     //clean up pointers
-    for (int i = 0; i < vvOutputDescrition.size(); i++) {
+    for (uint32_t i = 0; i < vvOutputDescrition.size(); i++) {
         for (auto pOutputDescrition : vOutputDescrition) {
             delete pOutputDescrition;
         }
@@ -3651,7 +3691,7 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
     }
     vvOutputDescrition.resize(0);
 
-    for (int i = 0; i < vvIvk.size(); i++) {
+    for (uint32_t i = 0; i < vvIvk.size(); i++) {
         for (auto pIvk : vIvk) {
             delete pIvk;
         }
@@ -5058,13 +5098,14 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             bool blockInvolvesMe = false;
             CBlock block;
             ReadBlockFromDisk(block, pindex,1);
-            BOOST_FOREACH(CTransaction& tx, block.vtx)
-            {
-                if (AddToWalletIfInvolvingMe(tx, &block, pindex->nHeight, fUpdate, addressesFound, true)) {
-                    blockInvolvesMe = true;
-                    txList.insert(tx.GetHash());
-                    ret++;
-                }
+
+            std::vector<CTransaction> vOurs;
+            AddToWalletIfInvolvingMe(block.vtx, vOurs, &block, pindex->nHeight, fUpdate, addressesFound, true);
+
+            for (int i = 0; i < vOurs.size(); i++) {
+                blockInvolvesMe = true;
+                txList.insert(vOurs[i].GetHash());
+                ret++;
             }
 
             SproutMerkleTree sproutTree;

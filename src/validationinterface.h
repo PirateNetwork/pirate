@@ -27,7 +27,7 @@ void UnregisterValidationInterface(CValidationInterface* pwalletIn);
 /** Unregister all wallets from core */
 void UnregisterAllValidationInterfaces();
 /** Push an updated transaction to all registered wallets */
-void SyncWithWallets(const CTransaction& tx, const CBlock* pblock, const int nHeight);
+void SyncWithWallets(const std::vector<CTransaction> &vtx, const CBlock* pblock, const int nHeight);
 /** Erase a transaction from all registered wallets */
 void EraseFromWallets(const uint256 &hash);
 /** Rescan all registered wallets */
@@ -36,7 +36,7 @@ void RescanWallets();
 class CValidationInterface {
 protected:
     virtual void UpdatedBlockTip(const CBlockIndex *pindex) {}
-    virtual void SyncTransaction(const CTransaction &tx, const CBlock *pblock, const int nHeight) {}
+    virtual void SyncTransactions(const std::vector<CTransaction> &vtx, const CBlock *pblock, const int nHeight) {}
     virtual bool EraseFromWallet(const uint256 &hash) { return true; }
     virtual void RescanWallet() {}
     virtual void ChainTip(const CBlockIndex *pindex, const CBlock *pblock, SproutMerkleTree sproutTree, SaplingMerkleTree saplingTree, bool added) {}
@@ -53,7 +53,7 @@ struct CMainSignals {
     /** Notifies listeners of updated block chain tip */
     boost::signals2::signal<void (const CBlockIndex *)> UpdatedBlockTip;
     /** Notifies listeners of updated transaction data (transaction, and optionally the block it is found in. */
-    boost::signals2::signal<void (const CTransaction &, const CBlock *, const int nHeight)> SyncTransaction;
+    boost::signals2::signal<void (const std::vector<CTransaction> &, const CBlock *, const int nHeight)> SyncTransactions;
     /** Notifies listeners of an erased transaction (currently disabled, requires transaction replacement). */
     boost::signals2::signal<void (const uint256 &)> EraseTransaction;
     /** Notifies listeners of the need to rescan the wallet. */

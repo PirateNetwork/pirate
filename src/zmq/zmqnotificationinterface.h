@@ -25,7 +25,7 @@ protected:
     void Shutdown();
 
     // CValidationInterface
-    void SyncTransaction(const CTransaction &tx, const CBlock *pblock, const int nHeight);
+    void SyncTransactions(const std::vector<CTransaction> &vtx, const CBlock *pblock, const int nHeight);
     void UpdatedBlockTip(const CBlockIndex *pindex);
     void BlockChecked(const CBlock& block, const CValidationState& state);
 

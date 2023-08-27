@@ -713,7 +713,7 @@ TEST(WalletTests, GetConflictedSaplingNotes) {
         EXPECT_TRUE(chainActive.Contains(&fakeIndex));
         EXPECT_EQ(0, chainActive.Height());
 
-        // Simulate SyncTransaction which calls AddToWalletIfInvolvingMe
+        // Simulate SyncTransactions which calls AddToWalletIfInvolvingMe
         auto saplingNoteData = wallet.FindMySaplingNotes(wtx,  1).first;
         ASSERT_TRUE(saplingNoteData.size() > 0);
         wtx.SetSaplingNoteData(saplingNoteData);
@@ -983,7 +983,7 @@ TEST(WalletTests, NavigateFromSaplingNullifierToNote) {
     EXPECT_TRUE(chainActive.Contains(&fakeIndex));
     EXPECT_EQ(0, chainActive.Height());
 
-    // Simulate SyncTransaction which calls AddToWalletIfInvolvingMe
+    // Simulate SyncTransactions which calls AddToWalletIfInvolvingMe
     wtx.SetMerkleBranch(block);
     auto saplingNoteData = wallet.FindMySaplingNotes(wtx, chainActive.Height()).first;
     ASSERT_TRUE(saplingNoteData.size() > 0);
@@ -1847,7 +1847,7 @@ TEST(WalletTests, UpdatedSaplingNoteData) {
     EXPECT_TRUE(chainActive.Contains(&fakeIndex));
     EXPECT_EQ(0, chainActive.Height());
 
-    // Simulate SyncTransaction which calls AddToWalletIfInvolvingMe
+    // Simulate SyncTransactions which calls AddToWalletIfInvolvingMe
     auto saplingNoteData = wallet.FindMySaplingNotes(wtx, chainActive.Height()).first;
     ASSERT_TRUE(saplingNoteData.size() == 1); // wallet only has key for change output
     wtx.SetSaplingNoteData(saplingNoteData);
@@ -2001,7 +2001,7 @@ TEST(WalletTests, MarkAffectedSaplingTransactionsDirty) {
     EXPECT_TRUE(chainActive.Contains(&fakeIndex));
     EXPECT_EQ(0, chainActive.Height());
 
-    // Simulate SyncTransaction which calls AddToWalletIfInvolvingMe
+    // Simulate SyncTransactions which calls AddToWalletIfInvolvingMe
     auto saplingNoteData = wallet.FindMySaplingNotes(wtx, chainActive.Height()).first;
     ASSERT_TRUE(saplingNoteData.size() > 0);
     wtx.SetSaplingNoteData(saplingNoteData);

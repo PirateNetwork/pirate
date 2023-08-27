@@ -163,19 +163,21 @@ void CZMQNotificationInterface::BlockChecked(const CBlock& block, const CValidat
     }
 }
 
-void CZMQNotificationInterface::SyncTransaction(const CTransaction &tx, const CBlock *pblock, const int nHeight)
+void CZMQNotificationInterface::SyncTransactions(const std::vector<CTransaction> &vtx, const CBlock *pblock, const int nHeight)
 {
-    for (std::list<CZMQAbstractNotifier*>::iterator i = notifiers.begin(); i!=notifiers.end(); )
-    {
-        CZMQAbstractNotifier *notifier = *i;
-        if (notifier->NotifyTransaction(tx))
+    for (int j = 0; j < vtx.size(); j++) {
+        for (std::list<CZMQAbstractNotifier*>::iterator i = notifiers.begin(); i!=notifiers.end(); )
         {
-            i++;
-        }
-        else
-        {
-            notifier->Shutdown();
-            i = notifiers.erase(i);
+            CZMQAbstractNotifier *notifier = *i;
+            if (notifier->NotifyTransaction(vtx[j]))
+            {
+                i++;
+            }
+            else
+            {
+                notifier->Shutdown();
+                i = notifiers.erase(i);
+            }
         }
     }
 }
