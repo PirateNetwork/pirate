@@ -84,7 +84,7 @@ $(CARGO_CONFIGURED):
 
 else
 # Enable dependency vendoring
-RUST_BUILD_OPTS += --locked --offline
+RUST_BUILD_OPTS += --offline
 
 CARGO_CONFIGURED = $(top_srcdir)/.cargo/.configured-for-offline
 $(CARGO_CONFIGURED): $(top_srcdir)/.cargo/config.offline

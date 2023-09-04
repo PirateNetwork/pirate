@@ -107,7 +107,7 @@ $(host_prefix)/.stamp_$(final_build_id): $(native_packages) $(packages)
 	then echo Extracting pre-vendored crates from $(CRATE_ARCHIVE)...; \
 		tar xf $(CRATE_ARCHIVE) -C $(@D); \
 	else echo Vendoring crates...; \
-		$(@D)/native/bin/cargo vendor --locked --manifest-path $(BASEDIR)/../Cargo.toml $(@D)/$(CRATE_REGISTRY); \
+		$(@D)/native/bin/cargo vendor --manifest-path $(BASEDIR)/../Cargo.toml $(@D)/$(CRATE_REGISTRY); \
 	fi
 	$(AT)touch $@
 

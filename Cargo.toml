@@ -20,24 +20,26 @@ path = "src/rust/src/rustzcash.rs"
 crate-type = ["staticlib"]
 
 [dependencies]
-bellman = "0.8"
+bellman = "0.14"
 blake2b_simd = "0.5"
 blake2s_simd = "0.5"
-bls12_381 = "0.3"
-group = "0.8"
+bls12_381 = "0.8"
+group = "0.13"
+incrementalmerkletree = "0.3"
 libc = "0.2"
-jubjub = "0.5"
+jubjub = "0.10"
 subtle = "2.2"
-rand_core = "0.5.1"
+rand_core = "0.6"
 tracing = "0.1"
 tracing-core = "0.1"
 tracing-appender = "0.1"
-zcash_history = "0.2"
-zcash_primitives = "0.5"
-zcash_proofs = "0.5"
-ed25519-zebra = "2.0.0"
+zcash_history = "0.3"
+zcash_primitives = "0.11"
+zcash_proofs = "0.11"
+ed25519-zebra = "4"
 rand = "0.7.2"
 tiny-bip39 = "0.6.2"
+wagyu-zcash-parameters = "0.2"
 
 # Metrics
 hyper = { version = "=0.14.12", default-features = false, features = ["server", "tcp", "http1"] }
@@ -51,13 +53,14 @@ tokio = { version = "1.8", features = ["rt", "net", "time", "macros"] }
 funty = "=1.1.0"
 
 [patch.crates-io]
-zcash_proofs = { git = "https://github.com/piratenetwork/librustzcash", rev = "80b634f5606e274fbcae67f68cc129b1c8eda3d2", features = ["multicore"]}
-zcash_primitives = { git = "https://github.com/piratenetwork/librustzcash", rev = "80b634f5606e274fbcae67f68cc129b1c8eda3d2", features = ["transparent-inputs"]}
+# zcash_proofs = { git = "https://github.com/piratenetwork/librustzcash", rev = "b5a78a18c7e25e2335ab2d69e9d1c3626e265fb1"}
+# zcash_primitives = { git = "https://github.com/piratenetwork/librustzcash", rev = "b5a78a18c7e25e2335ab2d69e9d1c3626e265fb1"}
+# zcash_history = { git = "https://github.com/piratenetwork/librustzcash", rev = "b5a78a18c7e25e2335ab2d69e9d1c3626e265fb1"}
 
 #Test local changes to librustzcash
-#zcash_primitives = { path = '../librustzcash/zcash_primitives' , features = ["transparent-inputs"] }
-#zcash_proofs = { path = '../librustzcash/zcash_proofs' , features = ["multicore"]}
-
+zcash_primitives = { path = '../librustzcash/zcash_primitives'}
+zcash_proofs = { path = '../librustzcash/zcash_proofs'}
+zcash_history = { path = '../librustzcash/zcash_history'}
 
 [dependencies.tracing-subscriber]
 version = "0.2.12"

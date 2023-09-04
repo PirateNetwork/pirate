@@ -49,12 +49,9 @@ extern "C" {
     /// Loads the zk-SNARK parameters into memory and saves
     /// paths as necessary. Only called once.
     void librustzcash_init_zksnark_params(
-        const codeunit* spend_path,
-        size_t spend_path_len,
-        const codeunit* output_path,
-        size_t output_path_len,
         const codeunit* sprout_path,
-        size_t sprout_path_len
+        size_t sprout_path_len,
+        bool load_proving_keys
     );
 
     /// Validates the provided Equihash solution against
@@ -162,7 +159,7 @@ extern "C" {
     bool librustzcash_add_sapling_spend_to_context(
         void *ctx,
         const unsigned char *cv);
-    
+
     //add sapling output to proving context without validating proof
     bool librustzcash_add_sapling_output_to_context(
         void *ctx,

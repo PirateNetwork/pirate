@@ -19,7 +19,8 @@
 // See https://github.com/rust-lang/rfcs/pull/2585 for more background.
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
-use bellman::groth16::{Parameters, PreparedVerifyingKey, Proof};
+
+use bellman::groth16::{self, Parameters, PreparedVerifyingKey, Proof, prepare_verifying_key, VerifyingKey};
 use blake2s_simd::Params as Blake2sParams;
 use bls12_381::Bls12;
 use group::{cofactor::CofactorGroup, GroupEncoding};
@@ -29,6 +30,8 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::slice;
+use std::sync::Once;
+use std::convert::TryFrom;
 use subtle::CtOption;
 
 //Bip32 HDseed crates
@@ -49,22 +52,28 @@ use std::os::windows::ffi::OsStringExt;
 use zcash_primitives::{
     block::equihash,
     constants::{CRH_IVK_PERSONALIZATION, PROOF_GENERATION_KEY_GENERATOR, SPENDING_KEY_GENERATOR},
-    merkle_tree::MerklePath,
-    note_encryption::sapling_ka_agree,
-    primitives::{Diversifier, Note, PaymentAddress, ProofGenerationKey, Rseed, ViewingKey},
-    redjubjub::{self, Signature},
-    sapling::{merkle_hash, spend_sig},
+    merkle_tree::{MerklePath, HashSer},
+    sapling::{
+        merkle_hash,
+        note::ExtractedNoteCommitment,
+        note_encryption::sapling_ka_agree,
+        value::{NoteValue, ValueCommitment},
+        redjubjub::{self, Signature},
+        spend_sig,
+        Diversifier, Node, Note, NullifierDerivingKey, PaymentAddress, ProofGenerationKey, Rseed},
     transaction::components::Amount,
     zip32,
 };
 use zcash_proofs::{
     circuit::sapling::TREE_DEPTH as SAPLING_TREE_DEPTH,
-    load_parameters,
     sapling::{SaplingProvingContext, SaplingVerificationContext},
     sprout,
 };
 
-use zcash_history::{Entry as MMREntry, NodeData as MMRNodeData, Tree as MMRTree};
+use zcash_history::{Entry as MMREntry, Tree as MMRTree, Version, V1, V2};
+use zcash_primitives::consensus::BranchId;
+
+use incrementalmerkletree::Hashable;
 
 mod blake2b;
 mod ed25519;
@@ -74,8 +83,9 @@ mod tracing_ffi;
 #[cfg(test)]
 mod tests;
 
-static mut SAPLING_SPEND_VK: Option<PreparedVerifyingKey<Bls12>> = None;
-static mut SAPLING_OUTPUT_VK: Option<PreparedVerifyingKey<Bls12>> = None;
+static PROOF_PARAMETERS_LOADED: Once = Once::new();
+static mut SAPLING_SPEND_VK: Option<groth16::VerifyingKey<Bls12>> = None;
+static mut SAPLING_OUTPUT_VK: Option<groth16::VerifyingKey<Bls12>> = None;
 static mut SPROUT_GROTH16_VK: Option<PreparedVerifyingKey<Bls12>> = None;
 
 static mut SAPLING_SPEND_PARAMS: Option<Parameters<Bls12>> = None;
@@ -102,68 +112,73 @@ fn fixed_scalar_mult(from: &[u8; 32], p_g: &jubjub::SubgroupPoint) -> jubjub::Su
 
 /// Loads the zk-SNARK parameters into memory and saves paths as necessary.
 /// Only called once.
+///
+/// If `load_proving_keys` is `false`, the proving keys will not be loaded, making it
+/// impossible to create proofs. This flag is for the Boost test suite, which never
+/// creates shielded transactions, but exercises code that requires the verifying keys to
+/// be present even if there are no shielded components to verify.
 #[no_mangle]
 pub extern "C" fn librustzcash_init_zksnark_params(
-    #[cfg(not(target_os = "windows"))] spend_path: *const u8,
-    #[cfg(target_os = "windows")] spend_path: *const u16,
-    spend_path_len: usize,
-    #[cfg(not(target_os = "windows"))] output_path: *const u8,
-    #[cfg(target_os = "windows")] output_path: *const u16,
-    output_path_len: usize,
     #[cfg(not(target_os = "windows"))] sprout_path: *const u8,
     #[cfg(target_os = "windows")] sprout_path: *const u16,
     sprout_path_len: usize,
+    load_proving_keys: bool,
 ) {
-    #[cfg(not(target_os = "windows"))]
-    let (spend_path, output_path, sprout_path) = {
-        (
-            OsStr::from_bytes(unsafe { slice::from_raw_parts(spend_path, spend_path_len) }),
-            OsStr::from_bytes(unsafe { slice::from_raw_parts(output_path, output_path_len) }),
-            if sprout_path.is_null() {
-                None
-            } else {
-                Some(OsStr::from_bytes(unsafe {
-                    slice::from_raw_parts(sprout_path, sprout_path_len)
-                }))
-            },
-        )
-    };
+    PROOF_PARAMETERS_LOADED.call_once(|| {
+        #[cfg(not(target_os = "windows"))]
+        let sprout_path = if sprout_path.is_null() {
+            None
+        } else {
+            Some(OsStr::from_bytes(unsafe {
+                slice::from_raw_parts(sprout_path, sprout_path_len)
+            }))
+        };
 
-    #[cfg(target_os = "windows")]
-    let (spend_path, output_path, sprout_path) = {
-        (
-            OsString::from_wide(unsafe { slice::from_raw_parts(spend_path, spend_path_len) }),
-            OsString::from_wide(unsafe { slice::from_raw_parts(output_path, output_path_len) }),
-            if sprout_path.is_null() {
-                None
-            } else {
-                Some(OsString::from_wide(unsafe {
-                    slice::from_raw_parts(sprout_path, sprout_path_len)
-                }))
-            },
-        )
-    };
+        #[cfg(target_os = "windows")]
+        let sprout_path = if sprout_path.is_null() {
+            None
+        } else {
+            Some(OsString::from_wide(unsafe {
+                slice::from_raw_parts(sprout_path, sprout_path_len)
+            }))
+        };
 
-    let (spend_path, output_path, sprout_path) = (
-        Path::new(&spend_path),
-        Path::new(&output_path),
-        sprout_path.as_ref().map(|p| Path::new(p)),
-    );
+        let sprout_path = sprout_path.as_ref().map(Path::new);
 
-    // Load params
-    let params = load_parameters(spend_path, output_path, sprout_path);
+        let sprout_vk = {
+            let sprout_vk_bytes = include_bytes!("sprout-groth16.vk");
+            let vk = VerifyingKey::<Bls12>::read(&sprout_vk_bytes[..])
+                .expect("should be able to parse Sprout verification key");
+            prepare_verifying_key(&vk)
+        };
 
-    // Caller is responsible for calling this function once, so
-    // these global mutations are safe.
-    unsafe {
-        SAPLING_SPEND_PARAMS = Some(params.spend_params);
-        SAPLING_OUTPUT_PARAMS = Some(params.output_params);
-        SPROUT_GROTH16_PARAMS_PATH = sprout_path.map(|p| p.to_owned());
+        // Load params
+        let (sapling_spend_params, sapling_output_params) = {
+            let (spend_buf, output_buf) = wagyu_zcash_parameters::load_sapling_parameters();
+            let spend_params = Parameters::<Bls12>::read(&spend_buf[..], false)
+                .expect("couldn't deserialize Sapling spend parameters");
+            let output_params = Parameters::<Bls12>::read(&output_buf[..], false)
+                .expect("couldn't deserialize Sapling spend parameters");
+            (spend_params, output_params)
+        };
 
-        SAPLING_SPEND_VK = Some(params.spend_vk);
-        SAPLING_OUTPUT_VK = Some(params.output_vk);
-        SPROUT_GROTH16_VK = params.sprout_vk;
-    }
+        // We need to clone these because we aren't necessarily storing the proving
+        // parameters in memory.
+        let sapling_spend_vk = sapling_spend_params.vk.clone();
+        let sapling_output_vk = sapling_output_params.vk.clone();
+
+        // Caller is responsible for calling this function once, so
+        // these global mutations are safe.
+        unsafe {
+            SAPLING_SPEND_PARAMS = load_proving_keys.then_some(sapling_spend_params);
+            SAPLING_OUTPUT_PARAMS = load_proving_keys.then_some(sapling_output_params);
+            SPROUT_GROTH16_PARAMS_PATH = sprout_path.map(|p| p.to_owned());
+
+            SAPLING_SPEND_VK = Some(sapling_spend_vk);
+            SAPLING_OUTPUT_VK = Some(sapling_output_vk);
+            SPROUT_GROTH16_VK = Some(sprout_vk);
+        }
+    });
 }
 
 /// Writes the "uncommitted" note value for empty leaves of the Merkle tree.
@@ -171,12 +186,12 @@ pub extern "C" fn librustzcash_init_zksnark_params(
 /// `result` must be a valid pointer to 32 bytes which will be written.
 #[no_mangle]
 pub extern "C" fn librustzcash_tree_uncommitted(result: *mut [c_uchar; 32]) {
-    let tmp = Note::uncommitted().to_bytes();
-
     // Should be okay, caller is responsible for ensuring the pointer
     // is a valid pointer to 32 bytes that can be mutated.
     let result = unsafe { &mut *result };
-    *result = tmp;
+    Node::empty_leaf()
+        .write(&mut result[..])
+        .expect("Sapling leaves are 32 bytes");
 }
 
 /// Computes a merkle tree hash for a given depth. The `depth` parameter should
@@ -324,26 +339,24 @@ fn priv_get_note(
     value: u64,
     rcm: *const [c_uchar; 32],
 ) -> Result<Note, ()> {
-    let diversifier = Diversifier(unsafe { *diversifier });
-    let g_d = diversifier.g_d().ok_or(())?;
-
-    let pk_d = de_ct(jubjub::ExtendedPoint::from_bytes(unsafe { &*pk_d })).ok_or(())?;
-
-    let pk_d = de_ct(pk_d.into_subgroup()).ok_or(())?;
+    let recipient_bytes = {
+        let mut tmp = [0; 43];
+        tmp[..11].copy_from_slice(unsafe { &*diversifier });
+        tmp[11..].copy_from_slice(unsafe { &*pk_d });
+        tmp
+    };
+    let recipient = PaymentAddress::from_bytes(&recipient_bytes).ok_or(())?;
 
     // Deserialize randomness
     // If this is after ZIP 212, the caller has calculated rcm, and we don't need to call
     // Note::derive_esk, so we just pretend the note was using this rcm all along.
     let rseed = Rseed::BeforeZip212(de_ct(jubjub::Scalar::from_bytes(unsafe { &*rcm })).ok_or(())?);
 
-    let note = Note {
-        value,
-        g_d,
-        pk_d,
+    Ok(Note::from_parts(
+        recipient,
+        NoteValue::from_raw(value),
         rseed,
-    };
-
-    Ok(note)
+    ))
 }
 
 /// Compute a Sapling nullifier.
@@ -363,19 +376,12 @@ pub extern "C" fn librustzcash_sapling_compute_nf(
     position: u64,
     result: *mut [c_uchar; 32],
 ) -> bool {
+    // ZIP 216: Nullifier derivation is not consensus-critical
+    // (nullifiers are revealed, not calculated by consensus).
+    // In any case, ZIP 216 is now enabled retroactively.
     let note = match priv_get_note(diversifier, pk_d, value, rcm) {
         Ok(p) => p,
         Err(_) => return false,
-    };
-
-    let ak = match de_ct(jubjub::ExtendedPoint::from_bytes(unsafe { &*ak })) {
-        Some(p) => p,
-        None => return false,
-    };
-
-    let ak = match de_ct(ak.into_subgroup()) {
-        Some(ak) => ak,
-        None => return false,
     };
 
     let nk = match de_ct(jubjub::ExtendedPoint::from_bytes(unsafe { &*nk })) {
@@ -384,12 +390,11 @@ pub extern "C" fn librustzcash_sapling_compute_nf(
     };
 
     let nk = match de_ct(nk.into_subgroup()) {
-        Some(nk) => nk,
+        Some(nk) => NullifierDerivingKey(nk),
         None => return false,
     };
 
-    let vk = ViewingKey { ak, nk };
-    let nf = note.nf(&vk, position);
+    let nf = note.nf(&nk, position);
     let result = unsafe { &mut *result };
     result.copy_from_slice(&nf.0);
 
@@ -421,10 +426,6 @@ pub extern "C" fn librustzcash_sapling_compute_cmu(
     true
 }
 
-/// Computes \[sk\] \[8\] P for some 32-byte point P, and 32-byte Fs.
-///
-/// If P or sk are invalid, returns false. Otherwise, the result is written to
-/// the 32-byte `result` buffer.
 #[no_mangle]
 pub extern "C" fn librustzcash_sapling_ka_agree(
     p: *const [c_uchar; 32],
@@ -509,7 +510,7 @@ pub extern "C" fn librustzcash_eh_isvalid(
 /// Creates a Sapling verification context. Please free this when you're done.
 #[no_mangle]
 pub extern "C" fn librustzcash_sapling_verification_ctx_init() -> *mut SaplingVerificationContext {
-    let ctx = Box::new(SaplingVerificationContext::new());
+    let ctx = Box::new(SaplingVerificationContext::new(false));
 
     Box::into_raw(ctx)
 }
@@ -539,7 +540,7 @@ pub extern "C" fn librustzcash_sapling_check_spend(
     sighash_value: *const [c_uchar; 32],
 ) -> bool {
     // Deserialize the value commitment
-    let cv = match de_ct(jubjub::ExtendedPoint::from_bytes(unsafe { &*cv })) {
+    let cv = match de_ct(ValueCommitment::from_bytes_not_small_order(unsafe { &*cv })) {
         Some(p) => p,
         None => return false,
     };
@@ -570,15 +571,19 @@ pub extern "C" fn librustzcash_sapling_check_spend(
     };
 
     unsafe { &mut *ctx }.check_spend(
-        cv,
+        &cv,
         anchor,
         unsafe { &*nullifier },
         rk,
         unsafe { &*sighash_value },
         spend_auth_sig,
         zkproof,
-        unsafe { SAPLING_SPEND_VK.as_ref() }.unwrap(),
+        &prepare_verifying_key(
+                unsafe { SAPLING_SPEND_VK.as_ref() }
+                    .expect("Parameters not loaded: SAPLING_SPEND_VK should have been initialized"),
+        ),
     )
+
 }
 
 /// Check the validity of a Sapling Output description, accumulating the value
@@ -592,14 +597,14 @@ pub extern "C" fn librustzcash_sapling_check_output(
     zkproof: *const [c_uchar; GROTH_PROOF_SIZE],
 ) -> bool {
     // Deserialize the value commitment
-    let cv = match de_ct(jubjub::ExtendedPoint::from_bytes(unsafe { &*cv })) {
+    let cv = match de_ct(ValueCommitment::from_bytes_not_small_order(unsafe { &*cv })) {
         Some(p) => p,
         None => return false,
     };
 
     // Deserialize the commitment, which should be an element
     // of Fr.
-    let cm = match de_ct(bls12_381::Scalar::from_bytes(unsafe { &*cm })) {
+    let cm = match Option::from(ExtractedNoteCommitment::from_bytes(unsafe { &*cm })) {
         Some(a) => a,
         None => return false,
     };
@@ -617,11 +622,15 @@ pub extern "C" fn librustzcash_sapling_check_output(
     };
 
     unsafe { &mut *ctx }.check_output(
-        cv,
+        &cv,
         cm,
         epk,
         zkproof,
-        unsafe { SAPLING_OUTPUT_VK.as_ref() }.unwrap(),
+        &prepare_verifying_key(
+                unsafe { SAPLING_OUTPUT_VK.as_ref() }.expect(
+                    "Parameters not loaded: SAPLING_OUTPUT_VK should have been initialized",
+                ),
+            ),
     )
 }
 
@@ -630,12 +639,12 @@ pub extern "C" fn librustzcash_add_sapling_spend_to_context(
     ctx: *mut SaplingVerificationContext,
     cv: *const [c_uchar; 32]
 ) -> bool {
-    let cv = match de_ct(jubjub::ExtendedPoint::from_bytes(unsafe { &*cv })) {
+    let cv = match de_ct(ValueCommitment::from_bytes_not_small_order(unsafe { &*cv })) {
         Some(p) => p,
         None => return false,
     };
 
-    unsafe { &mut *ctx }.add_spend_to_context(cv);
+    unsafe { &mut *ctx }.add_spend_to_context(&cv);
     return true
 }
 
@@ -644,12 +653,12 @@ pub extern "C" fn librustzcash_add_sapling_output_to_context(
     ctx: *mut SaplingVerificationContext,
     cv: *const [c_uchar; 32]
 ) -> bool {
-    let cv = match de_ct(jubjub::ExtendedPoint::from_bytes(unsafe { &*cv })) {
+    let cv = match de_ct(ValueCommitment::from_bytes_not_small_order(unsafe { &*cv })) {
         Some(p) => p,
         None => return false,
     };
 
-    unsafe { &mut *ctx }.add_output_to_context(cv);
+    unsafe { &mut *ctx }.add_output_to_context(&cv);
     return true
 }
 
@@ -987,7 +996,10 @@ pub extern "C" fn librustzcash_sapling_spend_proof(
             anchor,
             merkle_path,
             unsafe { SAPLING_SPEND_PARAMS.as_ref() }.unwrap(),
-            unsafe { SAPLING_SPEND_VK.as_ref() }.unwrap(),
+            &prepare_verifying_key(
+                    unsafe { SAPLING_SPEND_VK.as_ref() }
+                        .expect("Parameters not loaded: SAPLING_SPEND_VK should have been initialized"),
+            ),
         )
         .expect("proving should not fail");
 
@@ -1087,9 +1099,9 @@ pub extern "C" fn librustzcash_zip32_xfvk_address(
         .expect("valid ExtendedFullViewingKey");
     let j = zip32::DiversifierIndex(unsafe { *j });
 
-    let addr = match xfvk.address(j) {
-        Ok(addr) => addr,
-        Err(_) => return false,
+    let addr = match xfvk.find_address(j) {
+        Some(addr) => addr,
+        None => return false,
     };
 
     let j_ret = unsafe { &mut *j_ret };
@@ -1101,7 +1113,19 @@ pub extern "C" fn librustzcash_zip32_xfvk_address(
     true
 }
 
-fn construct_mmr_tree(
+/// Switch the tree version on the epoch it is for.
+fn dispatch<T>(cbranch: u32, v1: impl FnOnce() -> T, v2: impl FnOnce() -> T) -> T {
+    match BranchId::try_from(cbranch).unwrap() {
+        BranchId::Sprout
+        | BranchId::Overwinter
+        | BranchId::Sapling
+        | BranchId::Heartwood
+        | BranchId::Canopy => v1(),
+        _ => v2(),
+    }
+}
+
+fn construct_mmr_tree<V: Version>(
     // Consensus branch id
     cbranch: u32,
     // Length of tree in array representation
@@ -1116,7 +1140,7 @@ fn construct_mmr_tree(
     p_len: size_t,
     // Extra nodes loaded (for deletion) count
     e_len: size_t,
-) -> Result<MMRTree, &'static str> {
+) -> Result<MMRTree<V>, &'static str> {
     let (indices, nodes) = unsafe {
         (
             slice::from_raw_parts(ni_ptr, p_len + e_len),
@@ -1158,6 +1182,40 @@ pub extern "system" fn librustzcash_mmr_append(
     // Return buffer for appended leaves, should be pre-allocated of ceiling(log2(t_len)) length
     buf_ret: *mut [c_uchar; zcash_history::MAX_NODE_DATA_SIZE],
 ) -> u32 {
+    dispatch(
+        cbranch,
+        || {
+            librustzcash_mmr_append_inner::<V1>(
+                cbranch, t_len, ni_ptr, n_ptr, p_len, nn_ptr, rt_ret, buf_ret,
+            )
+        },
+        || {
+            librustzcash_mmr_append_inner::<V2>(
+                cbranch, t_len, ni_ptr, n_ptr, p_len, nn_ptr, rt_ret, buf_ret,
+            )
+        },
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn librustzcash_mmr_append_inner<V: Version>(
+    // Consensus branch id
+    cbranch: u32,
+    // Length of tree in array representation
+    t_len: u32,
+    // Indices of provided tree nodes, length of p_len
+    ni_ptr: *const u32,
+    // Provided tree nodes data, length of p_len
+    n_ptr: *const [c_uchar; zcash_history::MAX_ENTRY_SIZE],
+    // Peaks count
+    p_len: size_t,
+    // New node pointer
+    nn_ptr: *const [u8; zcash_history::MAX_NODE_DATA_SIZE],
+    // Return of root commitment
+    rt_ret: *mut [u8; 32],
+    // Return buffer for appended leaves, should be pre-allocated of ceiling(log2(t_len)) length
+    buf_ret: *mut [c_uchar; zcash_history::MAX_NODE_DATA_SIZE],
+) -> u32 {
     let new_node_bytes: &[u8; zcash_history::MAX_NODE_DATA_SIZE] = unsafe {
         match nn_ptr.as_ref() {
             Some(r) => r,
@@ -1167,14 +1225,14 @@ pub extern "system" fn librustzcash_mmr_append(
         }
     };
 
-    let mut tree = match construct_mmr_tree(cbranch, t_len, ni_ptr, n_ptr, p_len, 0) {
+    let mut tree = match construct_mmr_tree::<V>(cbranch, t_len, ni_ptr, n_ptr, p_len, 0) {
         Ok(t) => t,
         _ => {
             return 0;
         } // error
     };
 
-    let node = match MMRNodeData::from_bytes(cbranch, &new_node_bytes[..]) {
+    let node = match V::from_bytes(cbranch, &new_node_bytes[..]) {
         Ok(node) => node,
         _ => {
             return 0;
@@ -1194,17 +1252,19 @@ pub extern "system" fn librustzcash_mmr_append(
         .root_node()
         .expect("Just added, should resolve always; qed");
     unsafe {
-        *rt_ret = root_node.data().hash();
+        *rt_ret = V::hash(root_node.data());
 
-        for (idx, next_buf) in slice::from_raw_parts_mut(buf_ret, return_count as usize)
+        for (idx, next_buf) in slice::from_raw_parts_mut(buf_ret, return_count)
             .iter_mut()
             .enumerate()
         {
-            tree.resolve_link(appended[idx])
-                .expect("This was generated by the tree and thus resolvable; qed")
-                .data()
-                .write(&mut &mut next_buf[..])
-                .expect("Write using cursor with enough buffer size cannot fail; qed");
+            V::write(
+                tree.resolve_link(appended[idx])
+                    .expect("This was generated by the tree and thus resolvable; qed")
+                    .data(),
+                &mut &mut next_buf[..],
+            )
+            .expect("Write using cursor with enough buffer size cannot fail; qed");
         }
     }
 
@@ -1228,7 +1288,30 @@ pub extern "system" fn librustzcash_mmr_delete(
     // Return of root commitment
     rt_ret: *mut [u8; 32],
 ) -> u32 {
-    let mut tree = match construct_mmr_tree(cbranch, t_len, ni_ptr, n_ptr, p_len, e_len) {
+    dispatch(
+        cbranch,
+        || librustzcash_mmr_delete_inner::<V1>(cbranch, t_len, ni_ptr, n_ptr, p_len, e_len, rt_ret),
+        || librustzcash_mmr_delete_inner::<V2>(cbranch, t_len, ni_ptr, n_ptr, p_len, e_len, rt_ret),
+    )
+}
+
+fn librustzcash_mmr_delete_inner<V: Version>(
+    // Consensus branch id
+    cbranch: u32,
+    // Length of tree in array representation
+    t_len: u32,
+    // Indices of provided tree nodes, length of p_len+e_len
+    ni_ptr: *const u32,
+    // Provided tree nodes data, length of p_len+e_len
+    n_ptr: *const [c_uchar; zcash_history::MAX_ENTRY_SIZE],
+    // Peaks count
+    p_len: size_t,
+    // Extra nodes loaded (for deletion) count
+    e_len: size_t,
+    // Return of root commitment
+    rt_ret: *mut [u8; 32],
+) -> u32 {
+    let mut tree = match construct_mmr_tree::<V>(cbranch, t_len, ni_ptr, n_ptr, p_len, e_len) {
         Ok(t) => t,
         _ => {
             return 0;
@@ -1243,11 +1326,11 @@ pub extern "system" fn librustzcash_mmr_delete(
     };
 
     unsafe {
-        *rt_ret = tree
-            .root_node()
-            .expect("Just generated without errors, root should be resolving")
-            .data()
-            .hash();
+        *rt_ret = V::hash(
+            tree.root_node()
+                .expect("Just generated without errors, root should be resolving")
+                .data(),
+        );
     }
 
     truncate_len
@@ -1259,6 +1342,18 @@ pub extern "system" fn librustzcash_mmr_hash_node(
     n_ptr: *const [u8; zcash_history::MAX_NODE_DATA_SIZE],
     h_ret: *mut [u8; 32],
 ) -> u32 {
+    dispatch(
+        cbranch,
+        || librustzcash_mmr_hash_node_inner::<V1>(cbranch, n_ptr, h_ret),
+        || librustzcash_mmr_hash_node_inner::<V2>(cbranch, n_ptr, h_ret),
+    )
+}
+
+fn librustzcash_mmr_hash_node_inner<V: Version>(
+    cbranch: u32,
+    n_ptr: *const [u8; zcash_history::MAX_NODE_DATA_SIZE],
+    h_ret: *mut [u8; 32],
+) -> u32 {
     let node_bytes: &[u8; zcash_history::MAX_NODE_DATA_SIZE] = unsafe {
         match n_ptr.as_ref() {
             Some(r) => r,
@@ -1266,13 +1361,13 @@ pub extern "system" fn librustzcash_mmr_hash_node(
         }
     };
 
-    let node = match MMRNodeData::from_bytes(cbranch, &node_bytes[..]) {
+    let node = match V::from_bytes(cbranch, &node_bytes[..]) {
         Ok(n) => n,
         _ => return 1, // error
     };
 
     unsafe {
-        *h_ret = node.hash();
+        *h_ret = V::hash(&node);
     }
 
     0
@@ -1290,7 +1385,7 @@ pub extern "C" fn librustzcash_restore_seed_from_phase(buf: *mut u8, buf_len: us
 
     let c_str: &CStr = unsafe { CStr::from_ptr(seed_phrase)};
     let rust_seed_phrase = c_str.to_str().unwrap().to_string();
-    
+
     let phrase = match Mnemonic::from_phrase(rust_seed_phrase.clone(), Language::English) {
         Ok(p) =>   p ,
         Err(_) =>  return 0
@@ -1305,13 +1400,13 @@ pub extern "C" fn librustzcash_restore_seed_from_phase(buf: *mut u8, buf_len: us
 #[no_mangle]
 pub extern "C" fn librustzcash_get_bip39_seed(buf: *mut u8, buf_len: usize) -> *const c_uchar {
     let buf = unsafe { slice::from_raw_parts_mut(buf, buf_len) };
-    
+
     let tmp_seed = bip39::Seed::new(&Mnemonic::from_entropy(&buf, Language::English).unwrap(), "");
     let bip39_seed = tmp_seed.as_bytes().as_ptr();
     std::mem::forget(tmp_seed);
     bip39_seed
 }
- 
+
 #[no_mangle]
 pub extern "C" fn librustzcash_get_seed_phrase(seed: *const c_uchar, length: u8) -> *const c_char {
     //16 byte = 12 word mnemonic
@@ -1327,9 +1422,9 @@ pub extern "C" fn librustzcash_get_seed_phrase(seed: *const c_uchar, length: u8)
 
     let seed = unsafe { std::slice::from_raw_parts(seed, length.into()) };
 
-    
+
     let s_mnemonic = Mnemonic::from_entropy(&seed, Language::English).unwrap();
-    
+
     let s = s_mnemonic.phrase().to_string();
     let c_str = CString::new(s).unwrap();
     let phrase = c_str.as_ptr();
