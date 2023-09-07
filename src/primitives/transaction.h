@@ -114,6 +114,10 @@ public:
     {
         return !(a == b);
     }
+
+    uint256 ProofHash() const {
+      return Hash(zkproof.begin(), zkproof.end());
+    }
 };
 
 /**
@@ -158,6 +162,10 @@ public:
     friend bool operator!=(const OutputDescription& a, const OutputDescription& b)
     {
         return !(a == b);
+    }
+
+    uint256 ProofHash() const {
+      return Hash(zkproof.begin(), zkproof.end());
     }
 };
 

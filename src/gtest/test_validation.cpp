@@ -58,7 +58,9 @@ public:
                     CAnchorsSproutMap &mapSproutAnchors,
                     CAnchorsSaplingMap &mapSaplingAnchors,
                     CNullifiersMap &mapSproutNullifiers,
-                    CNullifiersMap saplingNullifiersMap) {
+                    CNullifiersMap saplingNullifiersMap,
+                    CProofHashMap &mapZkOutputProofHash,
+                    CProofHashMap &mapZkSpendProofHash) {
         return false;
     }
 

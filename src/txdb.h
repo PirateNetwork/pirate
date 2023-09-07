@@ -69,6 +69,7 @@ public:
     bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
     bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
     bool GetNullifier(const uint256 &nf, ShieldedType type) const;
+    bool GetZkProofHash(const uint256 &zkProofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const;
     /***
      * @param txid the transaction id
      * @param coins the coins within the txid
@@ -90,7 +91,9 @@ public:
                     CAnchorsSproutMap &mapSproutAnchors,
                     CAnchorsSaplingMap &mapSaplingAnchors,
                     CNullifiersMap &mapSproutNullifiers,
-                    CNullifiersMap &mapSaplingNullifiers);
+                    CNullifiersMap &mapSaplingNullifiers,
+                    CProofHashMap &mapZkOutputProofHash,
+                    CProofHashMap &mapZkSpendProofHash);
     bool GetStats(CCoinsStats &stats) const;
 };
 

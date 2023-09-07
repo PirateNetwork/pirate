@@ -387,7 +387,9 @@ public:
                     const uint256 &hashAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
                     CNullifiersMap &mapSproutNullifiers,
-                    CNullifiersMap& mapSaplingNullifiers) {
+                    CNullifiersMap& mapSaplingNullifiers,
+                    CProofHashMap &mapZkOutputProofHash,
+                    CProofHashMap &mapZkSpendProofHash) {
         return false;
     }
 

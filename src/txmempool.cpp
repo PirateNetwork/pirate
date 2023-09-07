@@ -137,6 +137,10 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry &entry,
     }
     for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
         mapSaplingNullifiers[spendDescription.nullifier] = &tx;
+        mapZkSpendProofHash[spendDescription.ProofHash()] = &tx;
+    }
+    for (const OutputDescription &outputDescription : tx.vShieldedOutput) {
+        mapZkOutputProofHash[outputDescription.ProofHash()] = &tx;
     }
     nTransactionsUpdated++;
     totalTxSize += entry.GetTxSize();
@@ -377,6 +381,10 @@ void CTxMemPool::remove(const CTransaction &origTx, std::list<CTransaction>& rem
             }
             for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
                 mapSaplingNullifiers.erase(spendDescription.nullifier);
+                mapZkSpendProofHash.erase(spendDescription.ProofHash());
+            }
+            for (const OutputDescription &outputDescription : tx.vShieldedOutput) {
+                mapZkOutputProofHash.erase(outputDescription.ProofHash());
             }
             removed.push_back(tx);
             totalTxSize -= mapTx.find(hash)->GetTxSize();
@@ -406,8 +414,8 @@ void CTxMemPool::removeForReorg(const CCoinsViewCache *pcoins, unsigned int nMem
                     continue;
                 const CCoins *coins = pcoins->AccessCoins(txin.prevout.hash);
 		        if (nCheckFrequency != 0) assert(coins);
-                if (!coins || (coins->IsCoinBase() && (((signed long)nMemPoolHeight) - coins->nHeight < Params().CoinbaseMaturity()) && 
-                                                       ((signed long)nMemPoolHeight < komodo_block_unlocktime(coins->nHeight) && 
+                if (!coins || (coins->IsCoinBase() && (((signed long)nMemPoolHeight) - coins->nHeight < Params().CoinbaseMaturity()) &&
+                                                       ((signed long)nMemPoolHeight < komodo_block_unlocktime(coins->nHeight) &&
                                                          coins->IsAvailable(0) && coins->vout[0].nValue >= ASSETCHAINS_TIMELOCKGTE))) {
                     transactionsToRemove.push_back(tx);
                     break;
@@ -492,6 +500,22 @@ void CTxMemPool::removeConflicts(const CTransaction &tx, std::list<CTransaction>
     for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
         std::map<uint256, const CTransaction*>::iterator it = mapSaplingNullifiers.find(spendDescription.nullifier);
         if (it != mapSaplingNullifiers.end()) {
+            const CTransaction &txConflict = *it->second;
+            if (txConflict != tx) {
+                remove(txConflict, removed, true);
+            }
+        }
+        std::map<uint256, const CTransaction*>::iterator itt = mapZkSpendProofHash.find(spendDescription.ProofHash());
+        if (itt != mapZkSpendProofHash.end()) {
+            const CTransaction &txConflict = *itt->second;
+            if (txConflict != tx) {
+                remove(txConflict, removed, true);
+            }
+        }
+    }
+    for (const OutputDescription &outputDescription : tx.vShieldedOutput) {
+        std::map<uint256, const CTransaction*>::iterator it = mapZkOutputProofHash.find(outputDescription.ProofHash());
+        if (it != mapZkOutputProofHash.end()) {
             const CTransaction &txConflict = *it->second;
             if (txConflict != tx) {
                 remove(txConflict, removed, true);
@@ -659,6 +683,13 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
 
             assert(pcoins->GetSaplingAnchorAt(spendDescription.anchor, tree));
             assert(!pcoins->GetNullifier(spendDescription.nullifier, SAPLING));
+
+            std::set<std::pair<uint256, int>> txids;
+            assert(!pcoins->GetZkProofHash(spendDescription.ProofHash(), SPEND, txids));
+        }
+        for (const OutputDescription &outputDescription : tx.vShieldedOutput) {
+            std::set<std::pair<uint256, int>> txids;
+            assert(!pcoins->GetZkProofHash(outputDescription.ProofHash(), OUTPUT, txids));
         }
         if (fDependsWait)
             waitingOnDependants.push_back(&(*it));
@@ -699,6 +730,8 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
 
     checkNullifiers(SPROUT);
     checkNullifiers(SAPLING);
+    checkZkProofHash(OUTPUT);
+    checkZkProofHash(SPEND);
 
     assert(totalTxSize == checkTotal);
     assert(innerUsage == cachedInnerUsage);
@@ -717,6 +750,29 @@ void CTxMemPool::checkNullifiers(ShieldedType type) const
         default:
             throw runtime_error("Unknown nullifier type");
     }
+    for (const auto& entry : *mapToUse) {
+        uint256 hash = entry.second->GetHash();
+        CTxMemPool::indexed_transaction_set::const_iterator findTx = mapTx.find(hash);
+        const CTransaction& tx = findTx->GetTx();
+        assert(findTx != mapTx.end());
+        assert(&tx == entry.second);
+    }
+}
+
+void CTxMemPool::checkZkProofHash(ProofType type) const
+{
+    const std::map<uint256, const CTransaction*>* mapToUse;
+    switch (type) {
+        case SPROUT:
+            mapToUse = &mapZkOutputProofHash;
+            break;
+        case SAPLING:
+            mapToUse = &mapZkSpendProofHash;
+            break;
+        default:
+            throw runtime_error("Unknown proof type");
+    }
+
     for (const auto& entry : *mapToUse) {
         uint256 hash = entry.second->GetHash();
         CTxMemPool::indexed_transaction_set::const_iterator findTx = mapTx.find(hash);
@@ -839,6 +895,18 @@ bool CTxMemPool::nullifierExists(const uint256& nullifier, ShieldedType type) co
     }
 }
 
+bool CTxMemPool::zkProofHashExists(const uint256& zkproofHash, ProofType type) const
+{
+    switch (type) {
+        case OUTPUT:
+            return mapZkOutputProofHash.count(zkproofHash);
+        case SPEND:
+            return mapZkSpendProofHash.count(zkproofHash);
+        default:
+            throw runtime_error("Unknown proof type");
+    }
+}
+
 void CTxMemPool::NotifyRecentlyAdded()
 {
     uint64_t recentlyAddedSequence;
@@ -889,6 +957,11 @@ CCoinsViewMemPool::CCoinsViewMemPool(CCoinsView *baseIn, CTxMemPool &mempoolIn) 
 bool CCoinsViewMemPool::GetNullifier(const uint256 &nf, ShieldedType type) const
 {
     return mempool.nullifierExists(nf, type) || base->GetNullifier(nf, type);
+}
+
+bool CCoinsViewMemPool::GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const
+{
+    return mempool.zkProofHashExists(zkproofHash, type) || base->GetZkProofHash(zkproofHash, type, txids);
 }
 
 bool CCoinsViewMemPool::GetCoins(const uint256 &txid, CCoins &coins) const {

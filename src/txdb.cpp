@@ -61,6 +61,8 @@ static const char DB_FLAG = 'F';
 static const char DB_REINDEX_FLAG = 'R';
 static const char DB_LAST_BLOCK = 'l';
 
+static const char SPEND_PROOF_HASH = 'e';
+static const char OUTPUT_PROOF_HASH = 'E';
 
 CCoinsViewDB::CCoinsViewDB(std::string dbName, size_t nCacheSize, bool fMemory, bool fWipe) : db(GetDataDir() / dbName, nCacheSize, fMemory, fWipe) {
 }
@@ -108,6 +110,22 @@ bool CCoinsViewDB::GetNullifier(const uint256 &nf, ShieldedType type) const {
             throw runtime_error("Unknown shielded type");
     }
     return db.Read(make_pair(dbChar, nf), spent);
+}
+
+bool CCoinsViewDB::GetZkProofHash(const uint256 &zkProofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const {
+    char dbChar;
+    switch (type) {
+        case OUTPUT:
+            dbChar = OUTPUT_PROOF_HASH;
+            break;
+        case SAPLING:
+            dbChar = SPEND_PROOF_HASH;
+            break;
+        default:
+            throw runtime_error("Unknown proof type");
+    }
+
+    return db.Read(make_pair(dbChar, zkProofHash), txids);
 }
 
 bool CCoinsViewDB::GetCoins(const uint256 &txid, CCoins &coins) const {
@@ -159,6 +177,22 @@ void BatchWriteNullifiers(CDBBatch& batch, CNullifiersMap& mapToUse, const char&
     }
 }
 
+void BatchWriteProofHashes(CDBBatch& batch, CProofHashMap& mapToUse, const char& dbChar)
+{
+    for (CProofHashMap::iterator it = mapToUse.begin(); it != mapToUse.end();) {
+        if (it->second.flags & CProofHashCacheEntry::DIRTY) {
+            if (it->second.txids.empty()) {
+                batch.Erase(make_pair(dbChar, it->first));
+            } else {
+                batch.Write(make_pair(dbChar, it->first), it->second.txids);
+            }
+            // TODO: changed++? ... See comment in CCoinsViewDB::BatchWrite. If this is needed we could return an int
+        }
+        CProofHashMap::iterator itOld = it++;
+        mapToUse.erase(itOld);
+    }
+}
+
 template<typename Map, typename MapIterator, typename MapEntry, typename Tree>
 void BatchWriteAnchors(CDBBatch& batch, Map& mapToUse, const char& dbChar)
 {
@@ -185,7 +219,9 @@ bool CCoinsViewDB::BatchWrite(CCoinsMap &mapCoins,
                               CAnchorsSproutMap &mapSproutAnchors,
                               CAnchorsSaplingMap &mapSaplingAnchors,
                               CNullifiersMap &mapSproutNullifiers,
-                              CNullifiersMap &mapSaplingNullifiers) {
+                              CNullifiersMap &mapSaplingNullifiers,
+                              CProofHashMap &mapZkOutputProofHash,
+                              CProofHashMap &mapZkSpendProofHash) {
     CDBBatch batch(db);
     size_t count = 0;
     size_t changed = 0;
@@ -207,6 +243,9 @@ bool CCoinsViewDB::BatchWrite(CCoinsMap &mapCoins,
 
     ::BatchWriteNullifiers(batch, mapSproutNullifiers, DB_NULLIFIER);
     ::BatchWriteNullifiers(batch, mapSaplingNullifiers, DB_SAPLING_NULLIFIER);
+
+    ::BatchWriteProofHashes(batch, mapZkOutputProofHash, OUTPUT_PROOF_HASH);
+    ::BatchWriteProofHashes(batch, mapZkSpendProofHash, SPEND_PROOF_HASH);
 
     if (!hashBlock.IsNull())
         batch.Write(DB_BEST_BLOCK, hashBlock);

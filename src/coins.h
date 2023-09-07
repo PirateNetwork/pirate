@@ -342,16 +342,35 @@ struct CNullifiersCacheEntry
     CNullifiersCacheEntry() : entered(false), flags(0) {}
 };
 
+struct CProofHashCacheEntry
+{
+    std::set<std::pair<uint256, int>> txids;
+    unsigned char flags;
+
+    enum Flags {
+        DIRTY = (1 << 0), // This cache entry is potentially different from the version in the parent view.
+    };
+
+    CProofHashCacheEntry() : txids(), flags(0) {}
+};
+
 enum ShieldedType
 {
     SPROUT,
     SAPLING,
 };
 
+enum ProofType
+{
+    OUTPUT,
+    SPEND,
+};
+
 typedef boost::unordered_map<uint256, CCoinsCacheEntry, CCoinsKeyHasher> CCoinsMap;
 typedef boost::unordered_map<uint256, CAnchorsSproutCacheEntry, CCoinsKeyHasher> CAnchorsSproutMap;
 typedef boost::unordered_map<uint256, CAnchorsSaplingCacheEntry, CCoinsKeyHasher> CAnchorsSaplingMap;
 typedef boost::unordered_map<uint256, CNullifiersCacheEntry, CCoinsKeyHasher> CNullifiersMap;
+typedef boost::unordered_map<uint256, CProofHashCacheEntry, CCoinsKeyHasher> CProofHashMap;
 
 struct CCoinsStats
 {
@@ -380,6 +399,9 @@ public:
     //! Determine whether a nullifier is spent or not
     virtual bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
 
+    //! Determine whether a spendproof has been previously used
+    virtual bool GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const;
+
     //! Retrieve the CCoins (unspent transaction outputs) for a given txid
     virtual bool GetCoins(const uint256 &txid, CCoins &coins) const;
 
@@ -402,7 +424,9 @@ public:
                             CAnchorsSproutMap &mapSproutAnchors,
                             CAnchorsSaplingMap &mapSaplingAnchors,
                             CNullifiersMap &mapSproutNullifiers,
-                            CNullifiersMap &mapSaplingNullifiers);
+                            CNullifiersMap &mapSaplingNullifiers,
+                            CProofHashMap &mapZkOutputProofHash,
+                            CProofHashMap &mapZkSpendProofHash);
 
     //! Calculate statistics about the unspent transaction output set
     virtual bool GetStats(CCoinsStats &stats) const;
@@ -423,6 +447,7 @@ public:
     bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
     bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
     bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
+    bool GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const;
     bool GetCoins(const uint256 &txid, CCoins &coins) const;
     bool HaveCoins(const uint256 &txid) const;
     uint256 GetBestBlock() const;
@@ -435,7 +460,9 @@ public:
                     CAnchorsSproutMap &mapSproutAnchors,
                     CAnchorsSaplingMap &mapSaplingAnchors,
                     CNullifiersMap &mapSproutNullifiers,
-                    CNullifiersMap &mapSaplingNullifiers);
+                    CNullifiersMap &mapSaplingNullifiers,
+                    CProofHashMap &mapZkOutputProofHash,
+                    CProofHashMap &mapZkSpendProofHash);
     bool GetStats(CCoinsStats &stats) const;
 };
 
@@ -491,6 +518,8 @@ protected:
     mutable CAnchorsSaplingMap cacheSaplingAnchors;
     mutable CNullifiersMap cacheSproutNullifiers;
     mutable CNullifiersMap cacheSaplingNullifiers;
+    mutable CProofHashMap cacheZkOutputProofHash;
+    mutable CProofHashMap cacheZkSpendProofHash;
 
     /* Cached dynamic memory usage for the inner CCoins objects. */
     mutable size_t cachedCoinsUsage;
@@ -503,6 +532,7 @@ public:
     bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
     bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
     bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
+    bool GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const;
     bool GetCoins(const uint256 &txid, CCoins &coins) const;
     bool HaveCoins(const uint256 &txid) const;
     uint256 GetBestBlock() const;
@@ -515,7 +545,9 @@ public:
                     CAnchorsSproutMap &mapSproutAnchors,
                     CAnchorsSaplingMap &mapSaplingAnchors,
                     CNullifiersMap &mapSproutNullifiers,
-                    CNullifiersMap &mapSaplingNullifiers);
+                    CNullifiersMap &mapSaplingNullifiers,
+                    CProofHashMap &mapZkOutputProofHash,
+                    CProofHashMap &mapZkSpendProofHash);
 
 
     // Adds the tree to mapSproutAnchors (or mapSaplingAnchors based on the type of tree)
@@ -528,6 +560,9 @@ public:
 
     // Marks nullifiers for a given transaction as spent or not.
     void SetNullifiers(const CTransaction& tx, bool spent);
+
+    // Add txid to track duplicate proof on multiple txes
+    void SetZkProofHashes(const CTransaction& tx, bool addTx);
 
     /**
      * Return a pointer to CCoins in the cache, or NULL if not found. This is
@@ -571,7 +606,8 @@ public:
     bool HaveInputs(const CTransaction& tx) const;
 
     //! Check whether all joinsplit requirements (anchors/nullifiers) are satisfied
-    bool HaveJoinSplitRequirements(const CTransaction& tx) const;
+    bool HaveJoinSplitRequirements(const CTransaction& tx, int maxProcessingThreads) const;
+    bool HaveJoinSplitRequirementsDuplicateProofs(const CTransaction& tx, int maxProcessingThreads) const;
 
     //! Return priority of tx at height nHeight
     double GetPriority(const CTransaction &tx, int nHeight) const;

@@ -54,7 +54,7 @@ void CCoins::CalcMaskSize(unsigned int &nBytes, unsigned int &nNonzeroBytes) con
     nBytes += nLastUsedByte;
 }
 
-bool CCoins::Spend(uint32_t nPos) 
+bool CCoins::Spend(uint32_t nPos)
 {
     if (nPos >= vout.size() || vout[nPos].IsNull())
         return false;
@@ -65,6 +65,7 @@ bool CCoins::Spend(uint32_t nPos)
 bool CCoinsView::GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const { return false; }
 bool CCoinsView::GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const { return false; }
 bool CCoinsView::GetNullifier(const uint256 &nullifier, ShieldedType type) const { return false; }
+bool CCoinsView::GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const { return false; }
 bool CCoinsView::GetCoins(const uint256 &txid, CCoins &coins) const { return false; }
 bool CCoinsView::HaveCoins(const uint256 &txid) const { return false; }
 uint256 CCoinsView::GetBestBlock() const { return uint256(); }
@@ -76,7 +77,9 @@ bool CCoinsView::BatchWrite(CCoinsMap &mapCoins,
                             CAnchorsSproutMap &mapSproutAnchors,
                             CAnchorsSaplingMap &mapSaplingAnchors,
                             CNullifiersMap &mapSproutNullifiers,
-                            CNullifiersMap &mapSaplingNullifiers) { return false; }
+                            CNullifiersMap &mapSaplingNullifiers,
+                            CProofHashMap &mapZkOutputProofHash,
+                            CProofHashMap &mapZkSpendProofHash) { return false; }
 bool CCoinsView::GetStats(CCoinsStats &stats) const { return false; }
 
 
@@ -85,6 +88,7 @@ CCoinsViewBacked::CCoinsViewBacked(CCoinsView *viewIn) : base(viewIn) { }
 bool CCoinsViewBacked::GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const { return base->GetSproutAnchorAt(rt, tree); }
 bool CCoinsViewBacked::GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const { return base->GetSaplingAnchorAt(rt, tree); }
 bool CCoinsViewBacked::GetNullifier(const uint256 &nullifier, ShieldedType type) const { return base->GetNullifier(nullifier, type); }
+bool CCoinsViewBacked::GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const { return base->GetZkProofHash(zkproofHash, type, txids); }
 bool CCoinsViewBacked::GetCoins(const uint256 &txid, CCoins &coins) const { return base->GetCoins(txid, coins); }
 bool CCoinsViewBacked::HaveCoins(const uint256 &txid) const { return base->HaveCoins(txid); }
 uint256 CCoinsViewBacked::GetBestBlock() const { return base->GetBestBlock(); }
@@ -97,7 +101,9 @@ bool CCoinsViewBacked::BatchWrite(CCoinsMap &mapCoins,
                                   CAnchorsSproutMap &mapSproutAnchors,
                                   CAnchorsSaplingMap &mapSaplingAnchors,
                                   CNullifiersMap &mapSproutNullifiers,
-                                  CNullifiersMap &mapSaplingNullifiers) { return base->BatchWrite(mapCoins, hashBlock, hashSproutAnchor, hashSaplingAnchor, mapSproutAnchors, mapSaplingAnchors, mapSproutNullifiers, mapSaplingNullifiers); }
+                                  CNullifiersMap &mapSaplingNullifiers,
+                                  CProofHashMap &mapZkOutputProofHash,
+                                  CProofHashMap &mapZkSpendProofHash) { return base->BatchWrite(mapCoins, hashBlock, hashSproutAnchor, hashSaplingAnchor, mapSproutAnchors, mapSaplingAnchors, mapSproutNullifiers, mapSaplingNullifiers, mapZkOutputProofHash, mapZkSpendProofHash); }
 bool CCoinsViewBacked::GetStats(CCoinsStats &stats) const { return base->GetStats(stats); }
 
 CCoinsKeyHasher::CCoinsKeyHasher() : salt(GetRandHash()) {}
@@ -115,6 +121,8 @@ size_t CCoinsViewCache::DynamicMemoryUsage() const {
            memusage::DynamicUsage(cacheSaplingAnchors) +
            memusage::DynamicUsage(cacheSproutNullifiers) +
            memusage::DynamicUsage(cacheSaplingNullifiers) +
+           memusage::DynamicUsage(cacheZkOutputProofHash) +
+           memusage::DynamicUsage(cacheZkSpendProofHash) +
            cachedCoinsUsage;
 }
 
@@ -206,6 +214,58 @@ bool CCoinsViewCache::GetNullifier(const uint256 &nullifier, ShieldedType type) 
     cacheToUse->insert(std::make_pair(nullifier, entry));
 
     return tmp;
+}
+
+bool CCoinsViewCache::GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const {
+    CProofHashMap* cacheToUse;
+
+    switch (type) {
+        case OUTPUT:
+            cacheToUse = &cacheZkOutputProofHash;
+            break;
+        case SPEND:
+            cacheToUse = &cacheZkSpendProofHash;
+            break;
+        default:
+            throw std::runtime_error("Unknown shielded type");
+    }
+
+    CProofHashMap::iterator it = cacheToUse->find(zkproofHash);
+    if (it != cacheToUse->end()) {
+        txids = (*it).second.txids;
+
+        if (txids.size()>1) {
+            LogPrintf("Found duplicate zkproof %s\n", zkproofHash.ToString());
+            for (std::set<std::pair<uint256, int>>::iterator it = txids.begin(); it != txids.end(); it++) {
+                uint256 txid = (*it).first;
+                int proofNumber = (*it).second;
+                LogPrintf("Txid %s, proofNumber %i\n", txid.ToString(), proofNumber);
+            }
+        }
+        // LogPrintf(" top view zkproof %s found\n", zkproofHash.ToString());
+        return !it->second.txids.empty();
+    }
+
+    CProofHashCacheEntry entry;
+    bool tmp = base->GetZkProofHash(zkproofHash, type, txids);
+
+    if (tmp && txids.size() > 1)
+      LogPrintf(" base view zkproof %s found\n", zkproofHash.ToString());
+
+    entry.txids = txids;
+
+    if (txids.size()>1) {
+        LogPrintf("Found duplicate zkproof %s\n", zkproofHash.ToString());
+        for (std::set<std::pair<uint256, int>>::iterator it = txids.begin(); it != txids.end(); it++) {
+            uint256 txid = (*it).first;
+            int proofNumber = (*it).second;
+            LogPrintf("Txid %s, proofNumber %i\n", txid.ToString(), proofNumber);
+        }
+    }
+
+    cacheToUse->insert(std::make_pair(zkproofHash, entry));
+
+    return !txids.empty();
 }
 
 template<typename Tree, typename Cache, typename CacheIterator, typename CacheEntry>
@@ -350,6 +410,33 @@ void CCoinsViewCache::SetNullifiers(const CTransaction& tx, bool spent) {
     }
 }
 
+void CCoinsViewCache::SetZkProofHashes(const CTransaction& tx, bool addTx) {
+
+    int i = 0;
+    for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
+        std::pair<CProofHashMap::iterator, bool> ret = cacheZkSpendProofHash.insert(std::make_pair(spendDescription.ProofHash(), CProofHashCacheEntry()));
+        if (addTx) {
+          ret.first->second.txids.emplace(std::make_pair(tx.GetHash(), i));
+        } else {
+          ret.first->second.txids.erase(std::make_pair(tx.GetHash(), i));
+        }
+        ret.first->second.flags |= CProofHashCacheEntry::DIRTY;
+        i++;
+    }
+
+    i = 0;
+    for (const OutputDescription &outputDescription : tx.vShieldedOutput) {
+        std::pair<CProofHashMap::iterator, bool> ret = cacheZkOutputProofHash.insert(std::make_pair(outputDescription.ProofHash(), CProofHashCacheEntry()));
+        if (addTx) {
+          ret.first->second.txids.emplace(std::make_pair(tx.GetHash(), i));
+        } else {
+          ret.first->second.txids.erase(std::make_pair(tx.GetHash(), i));
+        }
+        ret.first->second.flags |= CProofHashCacheEntry::DIRTY;
+        i++;
+    }
+}
+
 bool CCoinsViewCache::GetCoins(const uint256 &txid, CCoins &coins) const {
     CCoinsMap::const_iterator it = FetchCoins(txid);
     if (it != cacheCoins.end()) {
@@ -457,6 +544,28 @@ void BatchWriteNullifiers(CNullifiersMap &mapNullifiers, CNullifiersMap &cacheNu
     }
 }
 
+void BatchWriteProofHashes(CProofHashMap &mapProofHash, CProofHashMap &cacheProofHash)
+{
+    for (CProofHashMap::iterator child_it = mapProofHash.begin(); child_it != mapProofHash.end();) {
+        if (child_it->second.flags & CProofHashCacheEntry::DIRTY) { // Ignore non-dirty entries (optimization).
+            CProofHashMap::iterator parent_it = cacheProofHash.find(child_it->first);
+
+            if (parent_it == cacheProofHash.end()) {
+                CProofHashCacheEntry& entry = cacheProofHash[child_it->first];
+                entry.txids = child_it->second.txids;
+                entry.flags = CNullifiersCacheEntry::DIRTY;
+            } else {
+                if (parent_it->second.txids != child_it->second.txids) {
+                    parent_it->second.txids = child_it->second.txids;
+                    parent_it->second.flags |= CNullifiersCacheEntry::DIRTY;
+                }
+            }
+        }
+        CProofHashMap::iterator itOld = child_it++;
+        mapProofHash.erase(itOld);
+    }
+}
+
 template<typename Map, typename MapIterator, typename MapEntry>
 void BatchWriteAnchors(
     Map &mapAnchors,
@@ -497,7 +606,9 @@ bool CCoinsViewCache::BatchWrite(CCoinsMap &mapCoins,
                                  CAnchorsSproutMap &mapSproutAnchors,
                                  CAnchorsSaplingMap &mapSaplingAnchors,
                                  CNullifiersMap &mapSproutNullifiers,
-                                 CNullifiersMap &mapSaplingNullifiers) {
+                                 CNullifiersMap &mapSaplingNullifiers,
+                                 CProofHashMap &mapZkOutputProofHash,
+                                 CProofHashMap &mapZkSpendProofHash) {
     assert(!hasModifier);
     for (CCoinsMap::iterator it = mapCoins.begin(); it != mapCoins.end();) {
         if (it->second.flags & CCoinsCacheEntry::DIRTY) { // Ignore non-dirty entries (optimization).
@@ -540,6 +651,9 @@ bool CCoinsViewCache::BatchWrite(CCoinsMap &mapCoins,
     ::BatchWriteNullifiers(mapSproutNullifiers, cacheSproutNullifiers);
     ::BatchWriteNullifiers(mapSaplingNullifiers, cacheSaplingNullifiers);
 
+    ::BatchWriteProofHashes(mapZkOutputProofHash, cacheZkOutputProofHash);
+    ::BatchWriteProofHashes(mapZkSpendProofHash, cacheZkSpendProofHash);
+
     hashSproutAnchor = hashSproutAnchorIn;
     hashSaplingAnchor = hashSaplingAnchorIn;
     hashBlock = hashBlockIn;
@@ -547,12 +661,14 @@ bool CCoinsViewCache::BatchWrite(CCoinsMap &mapCoins,
 }
 
 bool CCoinsViewCache::Flush() {
-    bool fOk = base->BatchWrite(cacheCoins, hashBlock, hashSproutAnchor, hashSaplingAnchor, cacheSproutAnchors, cacheSaplingAnchors, cacheSproutNullifiers, cacheSaplingNullifiers);
+    bool fOk = base->BatchWrite(cacheCoins, hashBlock, hashSproutAnchor, hashSaplingAnchor, cacheSproutAnchors, cacheSaplingAnchors, cacheSproutNullifiers, cacheSaplingNullifiers, cacheZkOutputProofHash, cacheZkSpendProofHash);
     cacheCoins.clear();
     cacheSproutAnchors.clear();
     cacheSaplingAnchors.clear();
     cacheSproutNullifiers.clear();
     cacheSaplingNullifiers.clear();
+    cacheZkOutputProofHash.clear();
+    cacheZkSpendProofHash.clear();
     cachedCoinsUsage = 0;
     return fOk;
 }
@@ -580,7 +696,7 @@ const CScript &CCoinsViewCache::GetSpendFor(const CTxIn& input) const
     return GetSpendFor(coins, input);
 }
 
-/** 
+/**
  * @brief get amount of bitcoins coming in to a transaction
  * @note lightweight clients may not know anything besides the hash of previous transactions,
  * so may not be able to calculate this.
@@ -606,8 +722,8 @@ CAmount CCoinsViewCache::GetValueIn(int32_t nHeight,int64_t &interestp,const CTr
         {
             if ( value >= 10*COIN )
             {
-                int64_t interest; 
-                int32_t txheight; 
+                int64_t interest;
+                int32_t txheight;
                 uint32_t locktime;
                 interest = komodo_accrued_interest(&txheight,&locktime,tx.vin[i].prevout.hash,
                         tx.vin[i].prevout.n,0,value,nHeight);
@@ -622,8 +738,34 @@ CAmount CCoinsViewCache::GetValueIn(int32_t nHeight,int64_t &interestp,const CTr
     return nResult;
 }
 
+static bool HaveJoinSplitRequirementsWorkerNullifier(const CCoinsViewCache *coinCache,const std::vector<const SpendDescription*> vSpend, int threadNum)
+{
+    //Perform Sapling Spend checks
+    for (int i = 0; i < vSpend.size(); i++) {
+        auto spendDescription = *vSpend[i];
+        if (coinCache->GetNullifier(spendDescription.nullifier, SAPLING)) // Prevent double spends
+            return false;
+    }
 
-bool CCoinsViewCache::HaveJoinSplitRequirements(const CTransaction& tx) const
+    return true;
+}
+
+static bool HaveJoinSplitRequirementsWorkerAnchor(const CCoinsViewCache *coinCache,const std::vector<const SpendDescription*> vSpend, int threadNum)
+{
+    //Perform Sapling Spend checks
+    for (int i = 0; i < vSpend.size(); i++) {
+        auto spendDescription = *vSpend[i];
+        SaplingMerkleTree tree;
+        if (!coinCache->GetSaplingAnchorAt(spendDescription.anchor, tree)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
+bool CCoinsViewCache::HaveJoinSplitRequirements(const CTransaction& tx, int maxProcessingThreads) const
 {
     boost::unordered_map<uint256, SproutMerkleTree, CCoinsKeyHasher> intermediates;
 
@@ -654,17 +796,130 @@ bool CCoinsViewCache::HaveJoinSplitRequirements(const CTransaction& tx) const
         intermediates.insert(std::make_pair(tree.root(), tree));
     }
 
-    for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
-        if (GetNullifier(spendDescription.nullifier, SAPLING)) // Prevent double spends
-            return false;
+    auto now = GetTimeMicros();
 
-        SaplingMerkleTree tree;
-        if (!GetSaplingAnchorAt(spendDescription.anchor, tree)) {
-            return false;
+    //Create a Vector of futures to be collected later
+    std::vector<std::future<bool>> vFutures;
+
+    //Setup spend batches
+    std::vector<const SpendDescription*> vSpend;
+
+    //Add this transaction sapling spend to spend thread batches
+    for (int i = 0; i < tx.vShieldedSpend.size(); i++) {
+        //Push spend to thread vector
+        vSpend.emplace_back(&(tx.vShieldedSpend[i]));
+    }
+
+    //Push batches of spends to async threads
+    if (!vSpend.empty()) {
+        vFutures.emplace_back(std::async(std::launch::async, HaveJoinSplitRequirementsWorkerNullifier, this, vSpend, 1));
+        vFutures.emplace_back(std::async(std::launch::async, HaveJoinSplitRequirementsWorkerAnchor, this, vSpend, 2));
+    }
+
+
+    //Wait for all threads to complete
+    for (auto &future : vFutures) {
+        future.wait();
+    }
+
+    //Collect the async results
+    bool ret = true;
+    for (auto &future : vFutures) {
+        if (!future.get()) {
+            ret = false;
         }
     }
 
+    //cleanup
+    vFutures.resize(0);
+    vSpend.resize(0);
+
+    return ret;
+}
+
+static bool HaveJoinSplitRequirementsWorkerDuplicateSpendProofs(const CCoinsViewCache *coinCache,const std::vector<const SpendDescription*> vSpend, int threadNum)
+{
+    //Perform Sapling Spend checks
+    for (int i = 0; i < vSpend.size(); i++) {
+        auto spendDescription = *vSpend[i];
+        std::set<std::pair<uint256, int>> txids;
+        if (coinCache->GetZkProofHash(spendDescription.ProofHash(), SPEND, txids))
+            return txids.empty();
+    }
+
     return true;
+}
+
+static bool HaveJoinSplitRequirementsWorkerDuplicateOutputProofs(const CCoinsViewCache *coinCache,const std::vector<const OutputDescription*> vOutput, int threadNum)
+{
+    //Perform Sapling Spend checks
+    for (int i = 0; i < vOutput.size(); i++) {
+        auto outputDescription = *vOutput[i];
+        std::set<std::pair<uint256, int>> txids;
+        if (coinCache->GetZkProofHash(outputDescription.ProofHash(), OUTPUT, txids))
+            return txids.empty();
+    }
+
+    return true;
+}
+
+bool CCoinsViewCache::HaveJoinSplitRequirementsDuplicateProofs(const CTransaction& tx, int maxProcessingThreads) const
+{
+    auto now = GetTimeMicros();
+
+    now = GetTimeMicros();
+
+    //Create a Vector of futures to be collected later
+    std::vector<std::future<bool>> vFutures;
+
+    //Setup spend & output batches
+    std::vector<const SpendDescription*> vSpend;
+    std::vector<const OutputDescription*> vOutput;
+
+    //Add this transaction sapling spend to spend thread batches
+    for (int i = 0; i < tx.vShieldedSpend.size(); i++) {
+        //Push spend to thread vector
+        vSpend.emplace_back(&(tx.vShieldedSpend[i]));
+    }
+
+    //Add this transaction sapling output to output thread batches
+    for (int i = 0; i < tx.vShieldedOutput.size(); i++) {
+        //Push spend to thread vector
+        vOutput.emplace_back(&(tx.vShieldedOutput[i]));
+    }
+
+    //Push batches of spends to async threads
+    if (!vSpend.empty()) {
+        //Perform SpendDescription validations
+        vFutures.emplace_back(std::async(std::launch::async, HaveJoinSplitRequirementsWorkerDuplicateSpendProofs, this, vSpend, 1));
+    }
+
+
+    //Push batches of output to async threads
+    if (!vOutput.empty()) {
+        //Perform SpendDescription validations
+        vFutures.emplace_back(std::async(std::launch::async, HaveJoinSplitRequirementsWorkerDuplicateOutputProofs, this, vOutput, 2));
+    }
+
+    //Wait for all threads to complete
+    for (auto &future : vFutures) {
+        future.wait();
+    }
+
+    //Collect the async results
+    bool ret = true;
+    for (auto &future : vFutures) {
+        if (!future.get()) {
+            ret = false;
+        }
+    }
+
+    //cleanup
+    vFutures.resize(0);
+    vSpend.resize(0);
+
+    return ret;
+
 }
 
 bool CCoinsViewCache::HaveInputs(const CTransaction& tx) const

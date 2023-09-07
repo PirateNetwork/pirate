@@ -2010,6 +2010,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             pblocktree = new CBlockTreeDB(nBlockTreeDBCache, false, fReindex, dbCompression, dbMaxOpenFiles);
             bool fAddressIndex = GetBoolArg("-addressindex", DEFAULT_ADDRESSINDEX);
             bool checkval;
+
             pblocktree->ReadFlag("addressindex", checkval);
             if ( checkval != fAddressIndex && fAddressIndex != 0 )
             {
@@ -2031,6 +2032,14 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             {
                 pblocktree->WriteFlag("archiverule", fArchive);
                 LogPrintf("Transaction archive not set, will reindex. could take a while.\n");
+                fReindex = true;
+            }
+            //One time reindex to enable prooftracking.
+            pblocktree->ReadFlag("proofrule", checkval);
+            if (checkval != fProof)
+            {
+                pblocktree->WriteFlag("proofrule", fProof);
+                LogPrintf("Transaction proof tracking not set, will reindex. could take a while.\n");
                 fReindex = true;
             }
         }
@@ -2541,6 +2550,48 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 std::map<std::pair<int,int>, CWalletTx*> mapSorted;
                 pwalletMain->ReorderWalletTransactions(mapSorted, maxOrderPos);
                 pwalletMain->UpdateWalletTransactionOrder(mapSorted, true);
+            }
+        }
+
+        //Scan the last 100 block to ensure proofs are being maintained.
+        {
+            if (!fReindex) {
+                CBlockIndex *pindexProofScan = chainActive.Tip();
+                if (pindexProofScan->nHeight > 100) {
+                    pindexProofScan = chainActive[pindexProofScan->nHeight-100];
+                } else {
+                    pindexProofScan = chainActive.Genesis();
+                }
+
+                while (pindexProofScan)
+                {
+                    CBlock proofBlock;
+                    ReadBlockFromDisk(proofBlock, pindexProofScan,1);
+
+                    BOOST_FOREACH(CTransaction& tx, proofBlock.vtx)
+                    {
+                        for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
+                            std::set<std::pair<uint256, int>> txids;
+                            bool foundProof = pcoinsTip->GetZkProofHash(spendDescription.ProofHash(), SPEND, txids);
+                            if (!foundProof) {
+                                LogPrintf("Proof not found for tx %s spend ProofHash %s. Restart Treasure Chest to reindex.\n", tx.GetHash().ToString(), spendDescription.ProofHash().ToString());
+                                pblocktree->WriteFlag("proofrule", false);
+                                return false;
+                            }
+                        }
+
+                        for (const OutputDescription &outputDescription : tx.vShieldedOutput) {
+                            std::set<std::pair<uint256, int>> txids;
+                            bool foundProof = pcoinsTip->GetZkProofHash(outputDescription.ProofHash(), OUTPUT, txids);
+                            if (!foundProof) {
+                                LogPrintf("Proof not found for tx %s output ProofHash %s. Restart Treasure Chest needs to reindex.\n", tx.GetHash().ToString(), outputDescription.ProofHash().ToString());
+                                pblocktree->WriteFlag("proofrule", false);
+                                return false;
+                            }
+                        }
+                    }
+                    pindexProofScan = chainActive.Next(pindexProofScan);
+                }
             }
         }
 
