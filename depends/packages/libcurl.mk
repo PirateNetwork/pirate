@@ -1,18 +1,18 @@
 package=libcurl
-$(package)_version=7.76.1
+$(package)_version=8.4.0
 $(package)_dependencies=openssl
 $(package)_download_path=https://curl.haxx.se/download
 $(package)_file_name=curl-$($(package)_version).tar.gz
-$(package)_sha256_hash=5f85c4d891ccb14d6c3c701da3010c91c6570c3419391d485d95235253d837d7
-$(package)_config_opts_linux=--disable-shared --enable-static --prefix=$(host_prefix) --host=x86_64-unknown-linux-gnu
-$(package)_config_opts_mingw32=--enable-mingw --disable-shared --enable-static --prefix=$(host_prefix) --host=x86_64-w64-mingw32
-$(package)_config_opts_darwin=--disable-shared --enable-static --prefix=$(host_prefix)
-$(package)_cflags_darwin=-mmacosx-version-min=10.9
+$(package)_sha256_hash=816e41809c043ff285e8c0f06a75a1fa250211bbfb2dc0a037eeef39f1a9e427
+$(package)_config_opts=--with-openssl --disable-shared --enable-static --prefix=$(host_prefix)
+$(package)_config_opts_linux=--host=x86_64-unknown-linux-gnu
+$(package)_config_opts_mingw32=--enable-mingw --host=x86_64-w64-mingw32
+$(package)_cflags_darwin=-mmacosx-version-min=$(OSX_MIN_VERSION)
 $(package)_conf_tool=./configure
 
 ifeq ($(build_os),darwin)
 define $(package)_set_vars
-  $(package)_build_env=MACOSX_DEPLOYMENT_TARGET="10.9"
+  $(package)_build_env=MACOSX_DEPLOYMENT_TARGET="$(OSX_MIN_VERSION)"
 endef
 endif
 
@@ -32,7 +32,7 @@ endef
 
 ifeq ($(build_os),darwin)
 define $(package)_build_cmds
-  $(MAKE) CPPFLAGS="-I$(host_prefix)/include -fPIC" CFLAGS='-mmacosx-version-min=10.9'
+  $(MAKE) CPPFLAGS="-I$(host_prefix)/include -fPIC" CFLAGS="-mmacosx-version-min=$(OSX_MIN_VERSION)"
 endef
 else
 define $(package)_build_cmds
