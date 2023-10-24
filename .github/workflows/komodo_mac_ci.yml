@@ -18,7 +18,6 @@ jobs:
       # Workaround for https://github.com/actions/setup-python/issues/577
       - name: Clean up binaries and links (macOS)
         run: |
-          brew unlink node
           rm -f /usr/local/bin/2to3-3.*
           rm -f /usr/local/bin/idle3.*
           rm -f /usr/local/bin/pydoc3.*
