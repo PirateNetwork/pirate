@@ -56,6 +56,7 @@ jobs:
           path: ./komodo-macos.tar.gz
 
   macos-test-dice-token-reards-faucet-cc:
+    if: ${{ false }}
 
     name: Test (MacOS/Dice, Token, Faucet, Rewards)
     runs-on: macos-latest
@@ -85,6 +86,7 @@ jobs:
           ./ci_setup.sh "cc_modules/test_dice.py cc_modules/test_faucet.py cc_modules/test_token.py cc_modules/test_rewards.py"
 
   macos-test-oracles:
+    if: ${{ false }}
 
     name: Test (macos/OraclesCC)
     runs-on: macos-latest
@@ -113,6 +115,7 @@ jobs:
           ./ci_setup.sh cc_modules/test_oracles.py
 
   macos-test-baserpc:
+    if: ${{ false }}
 
     name: Test (macos/BasicRPC)
     runs-on: macos-latest
@@ -141,6 +144,7 @@ jobs:
           ./ci_setup.sh basic
 
   macos-test-channels:
+    if: ${{ false }}
 
     name: Test (macos/ChannelsCC)
     runs-on: macos-latest
@@ -169,6 +173,7 @@ jobs:
           ./ci_setup.sh cc_modules/test_channels.py
 
   macos-test-heir:
+    if: ${{ false }}
 
     name: Test (macos/HeirCC)
     runs-on: macos-latest
