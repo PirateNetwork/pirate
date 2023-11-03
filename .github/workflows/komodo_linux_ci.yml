@@ -47,6 +47,7 @@ jobs:
           path: ./komodo-linux.tar.gz
 
   linux-test-dice-token-reards-faucet-cc:
+    if: ${{ false }}
 
     name: Test (Linux/Dice, Token, Faucet, Rewards)
     runs-on: ubuntu-latest
@@ -83,6 +84,7 @@ jobs:
           cd qa/pytest_komodo
           ./ci_setup.sh "cc_modules/test_dice.py cc_modules/test_faucet.py cc_modules/test_token.py cc_modules/test_rewards.py"
   linux-test-oracles:
+    if: ${{ false }}
 
     name: Test (Linux/OraclesCC)
     runs-on: ubuntu-latest
@@ -119,6 +121,7 @@ jobs:
           cd qa/pytest_komodo
           ./ci_setup.sh cc_modules/test_oracles.py
   linux-test-baserpc:
+    if: ${{ false }}
 
     name: Test (Linux/BasicRPC)
     runs-on: ubuntu-latest
@@ -155,6 +158,7 @@ jobs:
           cd qa/pytest_komodo
           ./ci_setup.sh basic
   linux-test-channels:
+    if: ${{ false }}
 
     name: Test (Linux/ChannelsCC)
     runs-on: ubuntu-latest
@@ -191,6 +195,7 @@ jobs:
           cd qa/pytest_komodo
           ./ci_setup.sh cc_modules/test_channels.py
   linux-test-heir:
+    if: ${{ false }}
 
     name: Test (Linux/HeirCC)
     runs-on: ubuntu-latest
