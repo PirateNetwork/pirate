@@ -347,6 +347,34 @@ int32_t komodo_validate_chain(uint256 srchash,int32_t notarized_height)
     } else return(1);
 }
 
+namespace {
+    bool CheckChainNameInScript(uint8_t* scriptbuf, int32_t scriptlen, size_t offsetInScript)
+    {
+        std::string chainPattern = chainName.ToString();
+        size_t chainPatternSize = chainPattern.size();
+
+        if (offsetInScript + chainPatternSize < scriptlen) {
+            if (std::equal(chainPattern.begin(), chainPattern.end(), &scriptbuf[offsetInScript]) && scriptbuf[offsetInScript + chainPatternSize] == '\0') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    std::string GetChainNameFromScript(uint8_t* scriptbuf, int32_t scriptlen, size_t offsetInScript)
+    {
+        std::string chainPattern = "";
+        const size_t maxChainName = sizeof(komodo_ccdata::symbol);
+
+        while (offsetInScript < scriptlen && scriptbuf[offsetInScript] != '\0' && chainPattern.size() < maxChainName) {
+            chainPattern.push_back(scriptbuf[offsetInScript]);
+            ++offsetInScript;
+        }
+
+        return chainPattern;
+    }
+}
+
 int32_t komodo_voutupdate(bool fJustCheck,int32_t *isratificationp,int32_t notaryid,uint8_t *scriptbuf,
         int32_t scriptlen,int32_t height,uint256 txhash,int32_t i,int32_t j,uint64_t *voutmaskp,
         int32_t *specialtxp,int32_t *notarizedheightp,uint64_t value,int32_t notarized,
@@ -399,42 +427,70 @@ int32_t komodo_voutupdate(bool fJustCheck,int32_t *isratificationp,int32_t notar
     {
         struct komodo_ccdata ccdata; struct komodo_ccdataMoMoM MoMoMdata;
         int32_t validated = 0,nameoffset,opoffset = 0;
-        if ( (opretlen= scriptbuf[len++]) == 0x4c )
-            opretlen = scriptbuf[len++];
-        else if ( opretlen == 0x4d )
-        {
-            opretlen = scriptbuf[len++];
-            opretlen += (scriptbuf[len++] << 8);
-        }
-        opoffset = len;
-        matched = 0;
-        if ( chainName.isKMD() )
-        {
-            if ( strcmp("KMD",(char *)&scriptbuf[len+32 * 2 + 4]) == 0 )
-                matched = 1;
-        }
-        else
-        {
-            if ( scriptbuf[len] == 'K' )
-            {
-                //fprintf(stderr,"i.%d j.%d KV OPRET len.%d %.8f\n",i,j,opretlen,dstr(value));
-                komodo_stateupdate(height,0,0,0,txhash,0,0,0,0,value,&scriptbuf[len],opretlen,j,zero,0);
-                return(-1);
+
+        if (scriptlen - len < 1)
+            return notaryid;
+
+        uint8_t opcode = scriptbuf[len++];
+
+        if (opcode <= OP_PUSHDATA4) {
+            opretlen = 0;
+            if (opcode < OP_PUSHDATA1) {
+                opretlen = opcode;
+            } else if (opcode == OP_PUSHDATA1) {
+                if (scriptlen - len < 1)
+                    return notaryid;
+                opretlen = scriptbuf[len++];
+            } else if (opcode == OP_PUSHDATA2) {
+                if (scriptlen - len < 2)
+                    return notaryid;
+                uint16_t x;
+                memcpy((char*)&x, &scriptbuf[len], 2);
+                opretlen = le16toh(x);
+                len += 2;
+            } else if (opcode == OP_PUSHDATA4) {
+                if (scriptlen - len < 4)
+                    return notaryid;
+                uint32_t x;
+                memcpy((char*)&x, &scriptbuf[len], 4);
+                opretlen = le32toh(x);
+                len += 4;
             }
-            if ( strcmp(chainName.symbol().c_str(),(char *)&scriptbuf[len+32*2+4]) == 0 )
-                matched = 1;
+        } else {
+            return notaryid;
         }
+
+        if (scriptlen - len < 0 || (unsigned int)(scriptlen - len) < opretlen)
+            return notaryid;
+
+        if (opretlen < 34)    // Stop processing of OP_RETURNs that do not contain significant data,
+            return notaryid;  // such as a 33-byte staking opret or a 32-byte notary proof in a mined block.
+
+        opoffset = len;
+
+        matched = 0;
+
+        if (CheckChainNameInScript(scriptbuf, scriptlen, len + 32 * 2 + 4)) {
+            matched = 1;
+        }
+
         offset = 32 * (1 + matched) + 4;
-        nameoffset = (int32_t)strlen((char *)&scriptbuf[len+offset]);
+
+        std::string fromScriptChainName = GetChainNameFromScript(scriptbuf, scriptlen, len + offset);
+        if (fromScriptChainName.empty())
+            return notaryid;
+
+        nameoffset = fromScriptChainName.size();
         nameoffset++;
         memset(&ccdata,0,sizeof(ccdata));
-        strncpy(ccdata.symbol,(char *)&scriptbuf[len+offset],sizeof(ccdata.symbol));
+        std::copy_n(fromScriptChainName.begin(), std::min(fromScriptChainName.size(), sizeof(ccdata.symbol)), ccdata.symbol);
+
         if ( j == 1 && opretlen >= len+offset-opoffset )
         {
             memset(&MoMoMdata,0,sizeof(MoMoMdata));
             if ( matched == 0 && signedmask != 0 && bitweight(signedmask) >= KOMODO_MINRATIFY )
                 notarized = 1;
-            if ( strcmp("PIZZA",ccdata.symbol) == 0 || strncmp("TXSCL",ccdata.symbol,5) == 0 || strcmp("BEER",ccdata.symbol) == 0)
+            if (fromScriptChainName == "PIZZA" || fromScriptChainName == "BEER" || fromScriptChainName.substr(0, 5) == "TXSCL")
                 notarized = 1;
             len += iguana_rwbignum(0,&scriptbuf[len],32,(uint8_t *)&srchash);
             len += iguana_rwnum(0,&scriptbuf[len],sizeof(*notarizedheightp),(uint8_t *)notarizedheightp);
@@ -541,13 +597,6 @@ int32_t komodo_voutupdate(bool fJustCheck,int32_t *isratificationp,int32_t notar
                             fwrite(&signedmask,1,sizeof(signedmask),signedfp);
                             fflush(signedfp);
                         }
-                        if ( opretlen > len && scriptbuf[len] == 'A' )
-                        {
-                            //for (i=0; i<opretlen-len; i++)
-                            //    printf("%02x",scriptbuf[len+i]);
-                            //printf(" Found extradata.[%d] %d - %d\n",opretlen-len,opretlen,len);
-                            komodo_stateupdate(height,0,0,0,txhash,0,0,0,0,value,&scriptbuf[len],opretlen-len+4+3+(scriptbuf[1] == 0x4d),j,zero,0);
-                        }
                     }
                 }
             } else if ( opretlen != 149 && height > 600000 && matched != 0 )
@@ -562,7 +611,7 @@ int32_t komodo_voutupdate(bool fJustCheck,int32_t *isratificationp,int32_t notar
         }
         else if ( matched != 0 )
         {
-            if ( opretlen >= 32*2+4 && strcmp(chainName.ToString().c_str(),(char *)&scriptbuf[len+32*2+4]) == 0 )
+            if ( opretlen >= 32*2+4 && CheckChainNameInScript(scriptbuf, scriptlen, len + 32 * 2 + 4) )
             {
                 for (k=0; k<32; k++)
                     if ( scriptbuf[len+k] != 0 )
@@ -573,9 +622,6 @@ int32_t komodo_voutupdate(bool fJustCheck,int32_t *isratificationp,int32_t notar
                     printf("ISRATIFICATION (%s)\n",(char *)&scriptbuf[len+32*2+4]);
                 }
             }
-
-            if ( *isratificationp == 0 && (signedmask != 0 || (scriptbuf[len] != 'X' && scriptbuf[len] != 'A')) ) // && scriptbuf[len] != 'I')
-                komodo_stateupdate(height,0,0,0,txhash,0,0,0,0,value,&scriptbuf[len],opretlen,j,zero,0);
         }
     }
     return(notaryid);
@@ -785,25 +831,28 @@ int32_t komodo_connectblock(bool fJustCheck, CBlockIndex *pindex,CBlock& block)
                 }
                 if ( specialtx != 0 && isratification != 0 && numvouts > 2 )
                 {
-                    numvalid = 0;
-                    memset(pubkeys,0,sizeof(pubkeys));
-                    for (j=1; j<numvouts-1; j++)
+                    if (chainName.isKMD() && height < 100000)
                     {
-                        len = block.vtx[i].vout[j].scriptPubKey.size();
-                        if ( len >= sizeof(uint32_t) && len <= sizeof(scriptbuf) )
+                        numvalid = 0;
+                        memset(pubkeys,0,sizeof(pubkeys));
+                        for (j=1; j<numvouts-1; j++)
                         {
-                            memcpy(scriptbuf,(uint8_t *)&block.vtx[i].vout[j].scriptPubKey[0],len);
-                            if ( len == 35 && scriptbuf[0] == 33 && scriptbuf[34] == 0xac )
+                            len = block.vtx[i].vout[j].scriptPubKey.size();
+                            if ( len >= sizeof(uint32_t) && len <= sizeof(scriptbuf) )
                             {
-                                memcpy(pubkeys[numvalid++],scriptbuf+1,33);
-                                for (k=0; k<33; k++)
-                                    printf("%02x",scriptbuf[k+1]);
-                                printf(" <- new notary.[%d]\n",j-1);
+                                memcpy(scriptbuf,(uint8_t *)&block.vtx[i].vout[j].scriptPubKey[0],len);
+                                if ( len == 35 && scriptbuf[0] == 33 && scriptbuf[34] == 0xac )
+                                {
+                                    if (numvalid < 64) {
+                                        memcpy(pubkeys[numvalid++],scriptbuf+1,33);
+                                        for (k=0; k<33; k++)
+                                            printf("%02x",scriptbuf[k+1]);
+                                        printf(" <- new notary.[%d]\n",j-1);
+                                    }
+                                }
                             }
                         }
-                    }
-                    if ( !chainName.isKMD() || height < 100000 )
-                    {
+
                         if ( ((signedmask & 1) != 0 && numvalid >= KOMODO_MINRATIFY) || bitweight(signedmask) > (numnotaries/3) )
                         {
                             memset(&txhash,0,sizeof(txhash));
