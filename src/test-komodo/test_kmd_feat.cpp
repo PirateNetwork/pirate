@@ -36,7 +36,7 @@ public:
         sAllowedTxIn.insert(uint256S("3533600e69a22776afb765305a0ec46bcb06e1942f36a113d73733190092f9d5")); // 10 * COIN, nLockTime = 1663755147
     }
 
-    bool GetCoins(const uint256 &txid, CCoins &coins) const {
+    bool GetCoins(const uint256 &txid, CCoins &coins) const override {
         if (sAllowedTxIn.count(txid)) {
             CTxOut txOut;
             txOut.nValue = 10 * COIN;
@@ -51,7 +51,7 @@ public:
         return false;
     }
 
-    bool HaveCoins(const uint256 &txid) const {
+    bool HaveCoins(const uint256 &txid) const override {
         if (sAllowedTxIn.count(txid))
             return true;
         return false;
@@ -69,11 +69,11 @@ public:
                     CAnchorsSproutMap &mapSproutAnchors,
                     CAnchorsSaplingMap &mapSaplingAnchors,
                     CNullifiersMap &mapSproutNullifiers,
-                    CNullifiersMap &mapSaplingNullifiers) {
+                    CNullifiersMap &mapSaplingNullifiers) override {
         return false;
     }
 
-    bool GetStats(CCoinsStats &stats) const {
+    bool GetStats(CCoinsStats &stats) const override {
         return false;
     }
 
