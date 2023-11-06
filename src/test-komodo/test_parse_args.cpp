@@ -218,7 +218,7 @@ namespace ParseArgumentsTests {
             komodo_args(argv0Data.get());      // argv0 is passed in try to get ac_name from program suffixes (works for MNZ and BTCH only)
             chainparams_commandline();         // set CChainParams (pCurrentParams) from ASSETCHAINS_* global variables
 
-            assetchain_info current_ac = {chainName.ToString(), ASSETCHAINS_P2PPORT, ASSETCHAINS_RPCPORT, ASSETCHAINS_MAGIC};
+            assetchain_info current_ac = {chainName.ToString(), ASSETCHAINS_P2PPORT, ASSETCHAINS_RPCPORT, static_cast<int32_t>(ASSETCHAINS_MAGIC)};
             const assetchain_info* ref_ac = nullptr;
 
             try {
