@@ -7,6 +7,7 @@
 #include "main.h"
 
 void chainparams_commandline();
+namespace fs = boost::filesystem;
 
 namespace ParseArgumentsTests {
 
