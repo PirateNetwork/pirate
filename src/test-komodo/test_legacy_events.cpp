@@ -115,6 +115,13 @@ namespace LegacyEventsTests {
                     */
                     KOMODO_STATES[i] = komodo_state();
                 }
+
+                if (mapBlockIndex.size() != 0) {
+                    BlockMap::iterator it1 = mapBlockIndex.begin();
+                    for (; it1 != mapBlockIndex.end(); it1++)
+                        delete (*it1).second;
+                    mapBlockIndex.clear();
+                }
             }
         public:
             LegacyEvents() : pathDataDir("") {}
