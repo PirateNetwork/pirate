@@ -677,6 +677,7 @@ int32_t komodo_notarycmp(uint8_t *scriptPubKey,int32_t scriptlen,uint8_t pubkeys
 static int32_t hwmheight;
 
 void adjust_hwmheight(int32_t newHeight) { hwmheight = newHeight; }
+void clear_fp_stateupdate() { fp = nullptr; } // tests should clear fp, before new call(s) to komodo_stateupdate if datadir is changed
 
 int32_t komodo_connectblock(bool fJustCheck, CBlockIndex *pindex,CBlock& block)
 {

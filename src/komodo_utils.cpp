@@ -958,6 +958,9 @@ void set_kmd_user_password_port(const std::string& ltc_config_filename)
 
 void komodo_args(char *argv0)
 {
+    uint8_t extrabuf[32756];
+    memset(extrabuf, 0, sizeof(extrabuf));
+
     uint8_t disablebits[32];
     uint8_t *extraptr=nullptr;
     FILE *fp; 
@@ -1147,6 +1150,7 @@ void komodo_args(char *argv0)
         fprintf(stderr,"ASSETCHAINS_SUPPLY %llu\n",(long long)ASSETCHAINS_SUPPLY);
         
         ASSETCHAINS_COMMISSION = GetArg("-ac_perc",0);
+        memset(ASSETCHAINS_OVERRIDE_PUBKEY33, 0, sizeof(ASSETCHAINS_OVERRIDE_PUBKEY33));
         ASSETCHAINS_OVERRIDE_PUBKEY = GetArg("-ac_pubkey","");
         ASSETCHAINS_SCRIPTPUB = GetArg("-ac_script","");
         ASSETCHAINS_BEAMPORT = GetArg("-ac_beam",0);
@@ -1329,7 +1333,6 @@ void komodo_args(char *argv0)
                 || ASSETCHAINS_CBMATURITY != 0 
                 || ASSETCHAINS_ADAPTIVEPOW != 0 )
         {
-            uint8_t extrabuf[32756];
             fprintf(stderr,"perc %.4f%% ac_pub=[%02x%02x%02x...] acsize.%d\n",dstr(ASSETCHAINS_COMMISSION)*100,ASSETCHAINS_OVERRIDE_PUBKEY33[0],ASSETCHAINS_OVERRIDE_PUBKEY33[1],ASSETCHAINS_OVERRIDE_PUBKEY33[2],(int32_t)ASSETCHAINS_SCRIPTPUB.size());
             extraptr = extrabuf;
             memcpy(extraptr,ASSETCHAINS_OVERRIDE_PUBKEY33,33), extralen = 33;

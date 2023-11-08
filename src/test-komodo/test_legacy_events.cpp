@@ -16,6 +16,8 @@
 // https://bitcointalk.org/index.php?topic=1605144.msg32538076#msg32538076 - notarization txes explained
 
 void adjust_hwmheight(int32_t in); // declared in komodo.cpp (should be used only in unit-tests)
+void clear_fp_stateupdate();
+
 namespace fs = boost::filesystem;
 
 namespace LegacyEventsTests {
@@ -95,6 +97,7 @@ namespace LegacyEventsTests {
 
         private:
             boost::filesystem::path pathDataDir;
+
             void printMessage(const std::string &message) {
                 std::cout << "[          ] " << message;
             }
@@ -103,12 +106,21 @@ namespace LegacyEventsTests {
                 // clear global structures between tests (should be called in SetUp and TearDown as well)
 
                 adjust_hwmheight(0);
+                clear_fp_stateupdate();
+
                 for(size_t i = 0; i < KOMODO_STATES_NUMBER; ++i)
                 {
                     /* The destructors of all members, including NPOINTS (std::vector) and events (std::list),
                        will be called correctly after this assignment, and the memory will be freed.
                     */
                     KOMODO_STATES[i] = komodo_state();
+                }
+
+                if (mapBlockIndex.size() != 0) {
+                    BlockMap::iterator it1 = mapBlockIndex.begin();
+                    for (; it1 != mapBlockIndex.end(); it1++)
+                        delete (*it1).second;
+                    mapBlockIndex.clear();
                 }
             }
         public:
@@ -202,6 +214,14 @@ namespace LegacyEventsTests {
         indexDummy.nHeight = fakeBlockHeight;
         //indexDummy.nTime = GetTime();
         chainActive.SetTip(&indexDummy);
+
+        if (IsInitialBlockDownload() == false) {
+            CBlockIndex *pfakeIndex = new CBlockIndex();
+            pfakeIndex->nHeight = 3507260;
+            mapBlockIndex.insert(std::make_pair(uint256S("0983a2c9709e524a2a66887266455c2141aebbae558ef9b78718fda8db7094a9"), pfakeIndex));
+            // pfakeIndex will be cleaned in destructor of CMainCleanup
+        }
+
         int32_t res_kcb = komodo_connectblock(false, &indexDummy, b);
 
         komodo_state *state_ptr = komodo_stateptrget((char *)chainName.symbol().c_str()); // &KOMODO_STATES[0]
@@ -289,6 +309,14 @@ namespace LegacyEventsTests {
         indexDummy.nHeight = fakeBlockHeight;
         //indexDummy.nTime = GetTime();
         chainActive.SetTip(&indexDummy);
+
+        if (IsInitialBlockDownload() == false) {
+            CBlockIndex *pfakeIndex = new CBlockIndex();
+            pfakeIndex->nHeight = 3507260;
+            mapBlockIndex.insert(std::make_pair(uint256S("0983a2c9709e524a2a66887266455c2141aebbae558ef9b78718fda8db7094a9"), pfakeIndex));
+            // pfakeIndex will be cleaned in destructor of CMainCleanup
+        }
+
         int32_t res_kcb = komodo_connectblock(false, &indexDummy, b);
 
         komodo_state *state_ptr = komodo_stateptrget((char *)chainName.symbol().c_str()); // &KOMODO_STATES[0]
@@ -537,6 +565,14 @@ namespace LegacyEventsTests {
         indexDummy.nHeight = fakeBlockHeight;
         indexDummy.nTime = 1689620962; /* for AC tests set blockindex time is mandatory (!) */
         chainActive.SetTip(&indexDummy);
+
+        if (IsInitialBlockDownload() == false) {
+            CBlockIndex *pfakeIndex = new CBlockIndex();
+            pfakeIndex->nHeight = 136766;
+            mapBlockIndex.insert(std::make_pair(uint256S("0007f0f477aa48cb8ebaf9250ee5dbf51627b2fc5dc2a0b82924b6e2c51a5343"), pfakeIndex));
+            // pfakeIndex will be cleaned in destructor of CMainCleanup
+        }
+
         int32_t res_kcb = komodo_connectblock(false, &indexDummy, b);
 
         /*
