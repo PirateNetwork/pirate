@@ -1,8 +1,18 @@
 FROM ubuntu:20.04
-RUN \ 
-    apt-get update &&\
-    apt-get install -y libgomp1
-CMD mkdir /komodo
+LABEL maintainer="smk@komodoplatform.com"
+RUN \
+    export ACCEPT_EULA=Y && \
+    export DEBIAN_FRONTEND=noninteractive && \
+    apt-get update && \
+    apt-get install software-properties-common -y && \
+    add-apt-repository ppa:ubuntu-toolchain-r/test -y && \
+    apt-get update && \
+    apt-get upgrade -y && \
+    apt-get dist-upgrade -y && \
+    apt-get install libgomp1 libstdc++6 binutils -y
+RUN mkdir /komodo
 WORKDIR /komodo
 COPY src/komodod src/komodo-cli ./
+RUN ln -sf /komodo/komodod /usr/bin/komodod && \
+    ln -sf /komodo/komodo-cli /usr/bin/komodo-cli
 CMD ./komodod
