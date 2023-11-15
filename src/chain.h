@@ -37,8 +37,8 @@
 
 extern CCriticalSection cs_main;
 
-static const int SPROUT_VALUE_VERSION = 1001400;
-static const int SAPLING_VALUE_VERSION = 1010100;
+static const int SPROUT_VALUE_VERSION = 80102;
+static const int SAPLING_VALUE_VERSION = 80102;
 
 // These 5 are declared here to avoid circular dependencies
 // code used this moved into .cpp
