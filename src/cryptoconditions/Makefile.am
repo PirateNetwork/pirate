@@ -65,7 +65,7 @@ libcryptoconditions_core_a_SOURCES = \
 	src/asn/per_decoder.c \
 	src/asn/per_encoder.c \
 	src/asn/per_opentype.c
-libcryptoconditions_core_a_CPPFLAGS=-I. -I./src/include -I./src/asn
+libcryptoconditions_core_a_CPPFLAGS=-I. -I./src/include -I./src/asn -fPIC
 
 test:
 	bash -c '[ -d .env ] || virtualenv .env -p python3'
