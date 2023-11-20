@@ -3653,7 +3653,10 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         }
 
         for (const auto& out : tx.vout) {
-            transparentValueDelta += out.nValue;
+            // If the outputs are unspendable, we should not include them in the transparent pool
+            if (!out.scriptPubKey.IsOpReturn()) {
+                transparentValueDelta += out.nValue;
+            }
         }
 
         vPos.push_back(std::make_pair(tx.GetHash(), pos));
