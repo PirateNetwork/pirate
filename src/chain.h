@@ -40,6 +40,7 @@ extern CCriticalSection cs_main;
 static const int SPROUT_VALUE_VERSION = 80102;
 static const int SAPLING_VALUE_VERSION = 80102;
 static const int TRANSPARENT_VALUE_VERSION = 80103;
+static const int BURNED_VALUE_VERSION = 80104;
 
 // These 5 are declared here to avoid circular dependencies
 // code used this moved into .cpp
@@ -222,6 +223,16 @@ public:
     //! Will be boost::none if nChainTx is zero.
     boost::optional<CAmount> nChainTransparentValue;
 
+    // This refers to the number of coins burned in this block,
+    // essentially making them unspendable (due to the OP_RETURN scripts value).
+    //!
+    //! For older blocks, this will be boost::none until a reindexing has occurred.
+    boost::optional<CAmount> nBurnedAmountDelta;
+
+    //! (memory only) Total value of the burned coins up to and
+    //! including this block.
+    boost::optional<CAmount> nChainTotalBurned;
+
     //! Change in value held by the Sprout circuit over this block.
     //! Will be boost::none for older blocks on old nodes until a reindex has taken place.
     boost::optional<CAmount> nSproutValue;
@@ -283,6 +294,8 @@ public:
         nChainTotalSupply = boost::none;
         nTransparentValue = boost::none;
         nChainTransparentValue = boost::none;
+        nBurnedAmountDelta = boost::none;
+        nChainTotalBurned = boost::none;
         nSproutValue = boost::none;
         nChainSproutValue = boost::none;
         nSaplingValue = 0;
@@ -482,6 +495,12 @@ public:
         if ((s.GetType() & SER_DISK) && (nVersion >= TRANSPARENT_VALUE_VERSION)) {
             READWRITE(nChainSupplyDelta);
             READWRITE(nTransparentValue);
+        }
+
+        // Only read/write nBurnedAmountDelta if the client version used to create
+        // this index was storing them.
+        if ((s.GetType() & SER_DISK) && (nVersion >= BURNED_VALUE_VERSION)) {
+            READWRITE(nBurnedAmountDelta);
         }
 
         // Only read/write nSproutValue if the client version used to create

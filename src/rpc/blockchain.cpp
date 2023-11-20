@@ -342,6 +342,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool tx
     valuePools.push_back(ValuePoolDesc(std::string("transparent"), blockindex->nChainTransparentValue, blockindex->nTransparentValue));
     valuePools.push_back(ValuePoolDesc(std::string("sprout"), blockindex->nChainSproutValue, blockindex->nSproutValue));
     valuePools.push_back(ValuePoolDesc(std::string("sapling"), blockindex->nChainSaplingValue, blockindex->nSaplingValue));
+    valuePools.push_back(ValuePoolDesc(std::string("burned"), blockindex->nChainTotalBurned, blockindex->nBurnedAmountDelta));
     result.push_back(Pair("valuePools", valuePools));
 
     if (blockindex->pprev)
@@ -1431,6 +1432,7 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp, const CPubKey& my
     valuePools.push_back(ValuePoolDesc(std::string("transparent"), tip->nChainTransparentValue, boost::none));
     valuePools.push_back(ValuePoolDesc(std::string("sprout"), tip->nChainSproutValue, boost::none));
     valuePools.push_back(ValuePoolDesc(std::string("sapling"), tip->nChainSaplingValue, boost::none));
+    valuePools.push_back(ValuePoolDesc(std::string("burned"), tip->nChainTotalBurned, boost::none));
     obj.push_back(Pair("valuePools",            valuePools));
 
     const Consensus::Params& consensusParams = Params().GetConsensus();

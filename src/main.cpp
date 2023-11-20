@@ -3508,6 +3508,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
     CAmount chainSupplyDelta = 0;
     CAmount transparentValueDelta = 0;
+    CAmount burnedAmountDelta = 0;
     std::vector<PrecomputedTransactionData> txdata;
     txdata.reserve(block.vtx.size()); // Required so that pointers to individual PrecomputedTransactionData don't get invalidated
     for (unsigned int i = 0; i < block.vtx.size(); i++)
@@ -3653,9 +3654,12 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         }
 
         for (const auto& out : tx.vout) {
-            // If the outputs are unspendable, we should not include them in the transparent pool
-            if (!out.scriptPubKey.IsOpReturn()) {
+            if (!out.scriptPubKey.IsUnspendable()) {
                 transparentValueDelta += out.nValue;
+            } else {
+                // If the outputs are unspendable, we should not include them in the transparent pool,
+                // but include in the burned amount calculations
+                burnedAmountDelta += out.nValue;
             }
         }
 
@@ -3674,6 +3678,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         // transparent value.
         pindex->nChainSupplyDelta = chainSupplyDelta;
         pindex->nTransparentValue = transparentValueDelta;
+        pindex->nBurnedAmountDelta = burnedAmountDelta;
         if (pindex->pprev) {
             if (pindex->pprev->nChainTotalSupply) {
                 pindex->nChainTotalSupply = *pindex->pprev->nChainTotalSupply + chainSupplyDelta;
@@ -3686,9 +3691,16 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             } else {
                 pindex->nChainTransparentValue = boost::none;
             }
+
+            if (pindex->pprev->nChainTotalBurned) {
+                pindex->nChainTotalBurned = *pindex->pprev->nChainTotalBurned + burnedAmountDelta;
+            } else {
+                pindex->nChainTotalBurned = boost::none;
+            }
         } else {
             pindex->nChainTotalSupply = chainSupplyDelta;
             pindex->nChainTransparentValue = transparentValueDelta;
+            pindex->nChainTotalBurned = burnedAmountDelta;
         }
 
         pindex->hashFinalSproutRoot = sprout_tree.root();
@@ -4746,6 +4758,7 @@ bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBl
     // the following values are computed here only for the genesis block
     CAmount chainSupplyDelta = 0;
     CAmount transparentValueDelta = 0;
+    CAmount burnedAmountDelta = 0;
 
     CAmount sproutValue = 0;
     CAmount saplingValue = 0;
@@ -4755,7 +4768,11 @@ bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBl
         if (pindexNew->pprev == nullptr) {
             chainSupplyDelta = tx.GetValueOut();
             for (const auto& out : tx.vout) {
-                transparentValueDelta += out.nValue;
+                if (!out.scriptPubKey.IsUnspendable()) {
+                    transparentValueDelta += out.nValue;
+                } else {
+                    burnedAmountDelta += out.nValue;
+                }
             }
         }
         // Negative valueBalance "takes" money from the transparent value pool
@@ -4775,13 +4792,16 @@ bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBl
     if (pindexNew->pprev == nullptr) {
         pindexNew->nChainSupplyDelta = chainSupplyDelta;
         pindexNew->nTransparentValue = transparentValueDelta;
+        pindexNew->nBurnedAmountDelta = burnedAmountDelta;
     } else {
         pindexNew->nChainSupplyDelta = boost::none;
         pindexNew->nTransparentValue = boost::none;
+        pindexNew->nBurnedAmountDelta = boost::none;
     }
 
     pindexNew->nChainTotalSupply = boost::none;
     pindexNew->nChainTransparentValue = boost::none;
+    pindexNew->nChainTotalBurned = boost::none;
 
     pindexNew->nSproutValue = sproutValue;
     pindexNew->nChainSproutValue = boost::none;
@@ -4827,6 +4847,7 @@ bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBl
             } else {
                 pindex->nChainTotalSupply = pindex->nChainSupplyDelta;
                 pindex->nChainTransparentValue = pindex->nTransparentValue;
+                pindex->nChainTotalBurned = pindex->nBurnedAmountDelta;
                 pindex->nChainSproutValue = pindex->nSproutValue;
                 pindex->nChainSaplingValue = pindex->nSaplingValue;
             }
@@ -6147,6 +6168,12 @@ bool static LoadBlockIndexDB()
                         pindex->nChainTransparentValue = boost::none;
                     }
 
+                    if (pindex->pprev->nChainTotalBurned && pindex->nBurnedAmountDelta) {
+                        pindex->nChainTotalBurned = *pindex->pprev->nChainTotalBurned + *pindex->nBurnedAmountDelta;
+                    } else {
+                        pindex->nChainTotalBurned = boost::none;
+                    }
+
                     if (pindex->pprev->nChainSproutValue && pindex->nSproutValue) {
                         pindex->nChainSproutValue = *pindex->pprev->nChainSproutValue + *pindex->nSproutValue;
                     } else {
@@ -6162,6 +6189,7 @@ bool static LoadBlockIndexDB()
                     pindex->nChainTx = 0;
                     pindex->nChainTotalSupply = boost::none;
                     pindex->nChainTransparentValue = boost::none;
+                    pindex->nChainTotalBurned = boost::none;
                     pindex->nChainSproutValue = boost::none;
                     pindex->nChainSaplingValue = boost::none;
                     mapBlocksUnlinked.insert(std::make_pair(pindex->pprev, pindex));
@@ -6170,6 +6198,7 @@ bool static LoadBlockIndexDB()
                 pindex->nChainTx = pindex->nTx;
                 pindex->nChainTotalSupply = pindex->nChainSupplyDelta;
                 pindex->nChainTransparentValue = pindex->nTransparentValue;
+                pindex->nChainTotalBurned = pindex->nBurnedAmountDelta;
                 pindex->nChainSproutValue = pindex->nSproutValue;
                 pindex->nChainSaplingValue = pindex->nSaplingValue;
             }
