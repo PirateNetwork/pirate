@@ -2145,20 +2145,6 @@ bool GetAddressUnspent(uint160 addressHash, int type,
     return true;
 }
 
-struct CompareBlocksByHeightMain
-{
-    bool operator()(const CBlockIndex* a, const CBlockIndex* b) const
-    {
-        /* Make sure that unequal blocks with the same height do not compare
-           equal. Use the pointers themselves to make a distinction. */
-
-        if (a->nHeight != b->nHeight)
-          return (a->nHeight > b->nHeight);
-
-        return a < b;
-    }
-};
-
 /****
  * @brief add a transaction to the mempool
  * @param[in] tx the transaction
