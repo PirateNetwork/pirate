@@ -23,6 +23,7 @@
 
 #include "amount.h"
 #include "wallet/db.h"
+#include "wallet/sapling.h"
 #include "key.h"
 #include "keystore.h"
 #include "zcash/Address.hpp"
@@ -356,6 +357,8 @@ public:
     bool EraseSproutViewingKey(const libzcash::SproutViewingKey &vk);
     bool WriteSaplingExtendedFullViewingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk);
     bool EraseSaplingExtendedFullViewingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk);
+
+    bool WriteSaplingWitnesses(const SaplingWallet& wallet);
 
 private:
     CWalletDB(const CWalletDB&);

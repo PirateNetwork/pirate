@@ -596,6 +596,13 @@ bool CWallet::AddLastDiversifierUsed(
 
     return true;
 }
+
+// Returns a loader that can be used to read an Sapling note commitment
+// tree from a stream into the Sapling wallet.
+SaplingWalletNoteCommitmentTreeLoader CWallet::GetSaplingNoteCommitmentTreeLoader() {
+    return SaplingWalletNoteCommitmentTreeLoader(saplingWallet);
+}
+
 // Add spending key to keystore and persist to disk
 bool CWallet::AddSproutZKey(const libzcash::SproutSpendingKey &key)
 {
@@ -1295,6 +1302,7 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
     LOCK2(cs_main, cs_wallet);
 
     if (added) {
+        IncrementSaplingWallet(pindex);
         // Prevent witness cache building && consolidation transactions
         // from being created when node is syncing after launch,
         // and also when node wakes up from suspension/hibernation and incoming blocks are old.
@@ -1317,10 +1325,10 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
             if (pblock->GetBlockTime() > GetTime() - nMaxTipAge - 3600) {
                 BuildWitnessCache(pindex, false);
             }
-
         }
 
     } else {
+        DecrementSaplingWallet(pindex);
         DecrementNoteWitnesses(pindex);
         UpdateNullifierNoteMapForBlock(pblock);
     }
@@ -2066,6 +2074,92 @@ void CWallet::DecrementNoteWitnesses(const CBlockIndex* pindex)
     }
     assert(KOMODO_REWIND != 0 || WITNESS_CACHE_SIZE != _COINBASE_MATURITY+10);
 }
+
+void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex) {
+
+    // Read the block from disk if we don't already have it.
+    // const CBlock* pblock;
+    // CBlock block;
+    // ReadBlockFromDisk(block, pindex, 1);
+    // pblock = &block;
+
+    // If we're at or beyond NU5 activation, initialize if necessary and then
+    // update the Orchard note commitment tree.
+    // if (consensus.NetworkUpgradeActive(pindex->nHeight, Consensu)) {
+      // SaplingMerkleFrontier saplingTree = SaplingMerkleFrontier();
+      //
+      // LogPrintf("GetLastCheckpointHeight %i\n", saplingWallet.GetLastCheckpointHeight());
+      //
+      // if (saplingWallet.GetLastCheckpointHeight()<0 || !saplingWalletInit) {
+      //     saplingWallet.Reset();
+      //     saplingWallet.InitNoteCommitmentTree(saplingTree);
+      //     saplingWalletInit = true;
+      // }
+      //
+      // LogPrintf("\nCheckpointNoteCommitmentTree %s\n", saplingWallet.CheckpointNoteCommitmentTree(pindex->nHeight)? "success":"fail");
+      // assert(saplingWallet.CheckpointNoteCommitmentTree(pindex->nHeight));
+
+      // LogPrintf("\nAppendNoteCommitments %s\n", saplingWallet.AppendNoteCommitments(pindex->nHeight, *pblock)? "success":"fail");
+      // assert(saplingWallet.AppendNoteCommitments(pindex->nHeight, *pblock));
+
+      // This assertion slows scanning for blocks with few shielded transactions by an
+      // order of magnitude. It is only intended as a consistency check between the node
+      // and wallet computing trees. Commented out until we have figured out what is
+      // causing the slowness and fixed it.
+      // https://github.com/zcash/zcash/issues/6052
+      LogPrintf("Chain Height %i\n", pindex->nHeight);
+      LogPrintf("Sapling Hash Root   - %s\n", pindex->hashFinalSaplingRoot.ToString());
+      LogPrintf("Sapling Wallet Root - %s\n\n", saplingWallet.GetLatestAnchor().ToString());
+      //assert(pindex->hashFinalOrchardRoot == orchardWallet.GetLatestAnchor());
+
+      // if (pindex->hashFinalSaplingRoot.ToString()!=saplingWallet.GetLatestAnchor().ToString()) {
+      //     saplingWallet.Reset();
+      //
+      //     CBlockIndex* pblockindex = chainActive[1];
+      //
+      //     while (pblockindex) {
+      //         if (pblockindex->nHeight>pindex->nHeight)
+      //             break;
+      //
+      //         ReadBlockFromDisk(block, pblockindex, 1);
+      //         pblock = &block;
+      //
+      //         LogPrintf("Height %i\n", pblockindex->nHeight);
+      //         LogPrintf("CheckpointNoteCommitmentTree %s\n", saplingWallet.CheckpointNoteCommitmentTree(pblockindex->nHeight)? "success":"fail");
+      //         LogPrintf("AppendNoteCommitments %s\n", saplingWallet.AppendNoteCommitments(pblockindex->nHeight, *pblock)? "success":"fail");
+      //         LogPrintf("Sapling Hash Root   - %s\n", pblockindex->hashFinalSaplingRoot.ToString());
+      //         LogPrintf("Sapling Wallet Root - %s\n\n", saplingWallet.GetLatestAnchor().ToString());
+      //
+      //         pblockindex = chainActive.Next(pblockindex);
+      //
+      //     }
+      //
+      // }
+
+
+}
+
+void CWallet::DecrementSaplingWallet(const CBlockIndex* pindex) {
+
+      uint32_t uResultHeight{0};
+      assert(pindex->nHeight >= 1);
+      assert(saplingWallet.Rewind(pindex->nHeight - 1, uResultHeight));
+      assert(uResultHeight == pindex->nHeight - 1);
+      // If we have no checkpoints after the rewind, then the latest anchor of the
+      // wallet's Orchard note commitment tree will be in an indeterminate state and it
+      // will be overwritten in the next `IncrementNoteWitnesses` call, so we can skip
+      // the check against `hashFinalOrchardRoot`.
+      auto walletLastCheckpointHeight = saplingWallet.GetLastCheckpointHeight();
+      if (saplingWallet.GetLastCheckpointHeight()<0) {
+          assert(pindex->pprev->hashFinalSaplingRoot == saplingWallet.GetLatestAnchor());
+      }
+
+      LogPrintf("\nRewinding to Height %i\n", pindex->nHeight - 1);
+      LogPrintf("Sapling Hash Root   - %s\n", pindex->pprev->hashFinalSaplingRoot.ToString());
+      LogPrintf("Sapling Wallet Root - %s\n\n", saplingWallet.GetLatestAnchor().ToString());
+
+}
+
 
 template<typename NoteData>
 void ClearSingleNoteWitnessCache(NoteData* nd)
@@ -3320,6 +3414,30 @@ void CWallet::AddToWalletIfInvolvingMe(const std::vector<CTransaction> &vtx, std
             //Store addresses to notify GUI later
             addressesFound.insert(addressToAdd.first);
         }
+
+
+        //Step 3a Increment witness tree if transaction were from a block
+        if (pblock) {
+
+            SaplingMerkleFrontier saplingTree = SaplingMerkleFrontier();
+
+            LogPrintf("GetLastCheckpointHeight %i\n", saplingWallet.GetLastCheckpointHeight());
+
+            if (saplingWallet.GetLastCheckpointHeight()<0 || !saplingWalletInit) {
+                saplingWallet.Reset();
+                saplingWallet.InitNoteCommitmentTree(saplingTree);
+                saplingWalletInit = true;
+            }
+
+            for (int i = 0; i < vtx.size(); i++) {
+                for (int j = 0; j < vtx[i].vShieldedOutput.size(); j++) {
+                    saplingWallet.AppendNoteCommitment(nHeight, i, j, vtx[i].vShieldedOutput[j], false);
+                }
+            }
+
+            LogPrintf("\nCheckpointNoteCommitmentTree %s\n", saplingWallet.CheckpointNoteCommitmentTree(nHeight)? "success":"fail");
+        }
+
 
         //Step 4 -- add transactions
         for (int i = 0; i < vFilteredTxes.size(); i++) {

@@ -187,6 +187,11 @@ public:
     int GetType() const { return nType; }
     int GetVersion() const { return nVersion; }
 
+    void write_u8(const unsigned char* pch, size_t nSize)
+    {
+        ctx.Write(pch, nSize);
+    }
+
     void write(const char *pch, size_t size) {
         ctx.Write((const unsigned char*)pch, size);
     }
@@ -262,6 +267,12 @@ public:
 
     int GetType() const { return nType; }
     int GetVersion() const { return nVersion; }
+
+    void write_u8(const unsigned char* pch, size_t size)
+    {
+        crypto_generichash_blake2b_update(&state, (const unsigned char*)pch, size);
+        // state->update({pch, size});
+    }
 
     CBLAKE2bWriter& write(const char *pch, size_t size) {
         crypto_generichash_blake2b_update(&state, (const unsigned char*)pch, size);

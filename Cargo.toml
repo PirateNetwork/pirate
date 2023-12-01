@@ -21,25 +21,35 @@ crate-type = ["staticlib"]
 
 [dependencies]
 bellman = "0.14"
-blake2b_simd = "0.5"
-blake2s_simd = "0.5"
+blake2b_simd = "1"
+blake2s_simd = "1"
 bls12_381 = "0.8"
+bridgetree = "0.4"
+byteorder = "1"
 group = "0.13"
-incrementalmerkletree = "0.3"
+incrementalmerkletree = "0.5"
 libc = "0.2"
 jubjub = "0.10"
+memuse = "0.2"
 subtle = "2.2"
 rand_core = "0.6"
 tracing = "0.1"
 tracing-core = "0.1"
 tracing-appender = "0.1"
+zcash_address = "0.3"
+zcash_encoding = "0.2"
 zcash_history = "0.3"
-zcash_primitives = "0.11"
-zcash_proofs = "0.11"
+zcash_note_encryption = "0.4"
+zcash_primitives = { version = "=0.13.0-rc.1", features = ["temporary-zcashd", "transparent-inputs"] }
+zcash_proofs = { version = "=0.13.0-rc.1", features = ["directories"] }
 ed25519-zebra = "4"
-rand = "0.7.2"
+rand = "0.8"
 tiny-bip39 = "0.6.2"
 wagyu-zcash-parameters = "0.2"
+
+# Rust/C++ interop
+# The version needs to match depends/packages/native_cxxbridge.mk
+cxx = { version = "=1.0.107", features = ["default"] }
 
 # Metrics
 hyper = { version = "=0.14.12", default-features = false, features = ["server", "tcp", "http1"] }
@@ -53,11 +63,17 @@ tokio = { version = "1.8", features = ["rt", "net", "time", "macros"] }
 funty = "=1.1.0"
 
 [patch.crates-io]
-# zcash_proofs = { git = "https://github.com/piratenetwork/librustzcash", rev = "b5a78a18c7e25e2335ab2d69e9d1c3626e265fb1"}
-# zcash_primitives = { git = "https://github.com/piratenetwork/librustzcash", rev = "b5a78a18c7e25e2335ab2d69e9d1c3626e265fb1"}
-# zcash_history = { git = "https://github.com/piratenetwork/librustzcash", rev = "b5a78a18c7e25e2335ab2d69e9d1c3626e265fb1"}
+# zcash_address = { git = "https://github.com/piratenetwork/librustzcash", rev = "4f3c1858376b217968796ce69ae9fc1730a6e317"}
+# zcash_encoding = { git = "https://github.com/piratenetwork/librustzcash", rev = "4f3c1858376b217968796ce69ae9fc1730a6e317"}
+# zcash_note_encryption = { git = "https://github.com/piratenetwork/librustzcash", rev = "4f3c1858376b217968796ce69ae9fc1730a6e317"}
+# zcash_proofs = { git = "https://github.com/piratenetwork/librustzcash", rev = "4f3c1858376b217968796ce69ae9fc1730a6e317"}
+# zcash_primitives = { git = "https://github.com/piratenetwork/librustzcash", rev = "4f3c1858376b217968796ce69ae9fc1730a6e317"}
+# zcash_history = { git = "https://github.com/piratenetwork/librustzcash", rev = "4f3c1858376b217968796ce69ae9fc1730a6e317"}
 
 #Test local changes to librustzcash
+zcash_address = { path = '../librustzcash/components/zcash_address'}
+zcash_encoding = { path = '../librustzcash/components/zcash_encoding'}
+zcash_note_encryption = { path = '../librustzcash/components/zcash_note_encryption'}
 zcash_primitives = { path = '../librustzcash/zcash_primitives'}
 zcash_proofs = { path = '../librustzcash/zcash_proofs'}
 zcash_history = { path = '../librustzcash/zcash_history'}

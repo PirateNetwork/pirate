@@ -29,12 +29,14 @@
 #include "main.h"
 #include "primitives/block.h"
 #include "primitives/transaction.h"
+#include "streams_rust.h"
 #include "tinyformat.h"
 #include "ui_interface.h"
 #include "util.h"
 #include "util/strencodings.h"
 #include "validationinterface.h"
 #include "wallet/crypter.h"
+#include "wallet/sapling.h"
 #include "wallet/wallet_ismine.h"
 #include "wallet/walletdb.h"
 #include "wallet/rpcwallet.h"
@@ -928,6 +930,9 @@ protected:
      */
     void DecrementNoteWitnesses(const CBlockIndex* pindex);
 
+    void IncrementSaplingWallet(const CBlockIndex* pindex);
+    void DecrementSaplingWallet(const CBlockIndex* pindex);
+
     template <typename WalletDB>
     void SetBestChainINTERNAL(WalletDB& walletdb, const CBlockLocator& loc, const int& height) {
         AssertLockHeld(cs_wallet);
@@ -1105,6 +1110,15 @@ protected:
             walletdb.TxnAbort();
             return;
         }
+
+        // Add persistence of Sapling incremental witness tree
+        saplingWallet.GarbageCollect();
+        if (!walletdb.WriteSaplingWitnesses(saplingWallet)) {
+            LogPrintf("SetBestChain(): Failed to write Sapling witnesses, aborting atomic write\n");
+            walletdb.TxnAbort();
+            return;
+        }
+
         if (!walletdb.TxnCommit()) {
             // Couldn't commit all to db, but in-memory state is fine
             LogPrintf("SetBestChain(): Couldn't commit atomic write\n");
@@ -1125,6 +1139,12 @@ private:
 protected:
     bool UpdatedNoteData(const CWalletTx& wtxIn, CWalletTx& wtx);
     void MarkAffectedTransactionsDirty(const CTransaction& tx);
+
+    /* The Sapling subset of wallet data. As many operations as possible are
+     * delegated to the Sapling wallet.
+     */
+    SaplingWallet saplingWallet;
+    bool saplingWalletInit = false;
 
     /* the hd chain data model (chain counters) */
     CHDChain hdChain;
@@ -1490,6 +1510,13 @@ public:
         const uint256 &chash,
         const std::vector<unsigned char> &vchCryptedSecret,
         libzcash::SaplingExtendedFullViewingKey &extfvk);
+
+    /**
+     * Returns a loader that can be used to read an Orchard note commitment
+     * tree from a stream into the Orchard wallet.
+     */
+    SaplingWalletNoteCommitmentTreeLoader GetSaplingNoteCommitmentTreeLoader();
+
 
 
     bool LoadTempHeldCryptedData();

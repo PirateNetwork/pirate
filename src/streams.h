@@ -37,6 +37,51 @@
 #include <utility>
 #include <vector>
 
+/**
+ * Wrapper around C++ stream objects, enabling them to be passed into Rust code.
+ */
+template<typename Stream>
+class RustStream {
+    Stream* stream;
+
+public:
+    RustStream(Stream& stream_) : stream(&stream_) {}
+
+    static long read_callback(void* context, unsigned char* pch, size_t nSize)
+    {
+        return reinterpret_cast<RustStream*>(context)->read(
+            reinterpret_cast<char*>(pch), nSize);
+    }
+
+    static long write_callback(void* context, const unsigned char* pch, size_t nSize)
+    {
+        return reinterpret_cast<RustStream*>(context)->write(
+            reinterpret_cast<const char*>(pch), nSize);
+    }
+
+    long read(char* pch, size_t nSize)
+    {
+        try {
+            stream->read(pch, nSize);
+            return nSize;
+        } catch (std::ios_base::failure e) {
+            // TODO: log
+            return -1;
+        }
+    }
+
+    long write(const char* pch, size_t nSize)
+    {
+        try {
+            stream->write(pch, nSize);
+            return nSize;
+        } catch (std::ios_base::failure e) {
+            // TODO: log
+            return -1;
+        }
+    }
+};
+
 template<typename Stream>
 class OverrideStream
 {
@@ -258,6 +303,8 @@ public:
     void clear()                                     { vch.clear(); nReadPos = 0; }
     iterator insert(iterator it, const char& x=char()) { return vch.insert(it, x); }
     void insert(iterator it, size_type n, const char& x) { vch.insert(it, n, x); }
+    value_type* data()                               { return vch.data() + nReadPos; }
+    const value_type* data() const                   { return vch.data() + nReadPos; }
 
     void insert(iterator it, std::vector<char>::const_iterator first, std::vector<char>::const_iterator last)
     {
@@ -354,6 +401,11 @@ public:
     void SetVersion(int n)       { nVersion = n; }
     int GetVersion() const       { return nVersion; }
 
+    void read_u8(unsigned char* pch, size_t nSize)
+    {
+        read(reinterpret_cast<char*>(pch), nSize);
+    }
+
     void read(char* pch, size_t nSize)
     {
         if (nSize == 0) return;
@@ -395,6 +447,11 @@ public:
             return;
         }
         nReadPos = nReadPosNext;
+    }
+
+    void write_u8(const unsigned char* pch, size_t nSize)
+    {
+        write(reinterpret_cast<const char*>(pch), nSize);
     }
 
     void write(const char* pch, size_t nSize)
@@ -461,7 +518,12 @@ public:
 
 };
 
-
+/**
+ * Concrete instantiation of a data stream, enabling them to be passed into Rust code.
+ *
+ * TODO: Rename this to RustStream once the non-`cxx` usages have been migrated to `cxx`.
+ */
+typedef CBaseDataStream<CSerializeData> RustDataStream;
 
 
 
@@ -486,7 +548,7 @@ private:
     const int nType;
     const int nVersion;
 
-    FILE* file;	
+    FILE* file;
 
 public:
     CAutoFile(FILE* filenew, int nTypeIn, int nVersionIn) : nType(nTypeIn), nVersion(nVersionIn)
@@ -529,6 +591,11 @@ public:
     int GetType() const          { return nType; }
     int GetVersion() const       { return nVersion; }
 
+    void read_u8(unsigned char* pch, size_t nSize)
+    {
+        read(reinterpret_cast<char*>(pch), nSize);
+    }
+
     void read(char* pch, size_t nSize)
     {
         if (!file)
@@ -548,6 +615,11 @@ public:
                 throw std::ios_base::failure(feof(file) ? "CAutoFile::ignore: end of file" : "CAutoFile::read: fread failed");
             nSize -= nNow;
         }
+    }
+
+    void write_u8(const unsigned char* pch, size_t nSize)
+    {
+        write(reinterpret_cast<const char*>(pch), nSize);
     }
 
     void write(const char* pch, size_t nSize)
@@ -648,6 +720,11 @@ public:
     // check whether we're at the end of the source file
     bool eof() const {
         return nReadPos == nSrcPos && feof(src);
+    }
+
+    void read_u8(unsigned char* pch, size_t nSize)
+    {
+        read(reinterpret_cast<char*>(pch), nSize);
     }
 
     // read a number of bytes

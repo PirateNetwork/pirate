@@ -21,6 +21,7 @@
 #ifndef BITCOIN_UINT256_H
 #define BITCOIN_UINT256_H
 
+#include <array>
 #include <assert.h>
 #include <cstring>
 #include <stdexcept>
@@ -90,6 +91,14 @@ public:
         return sizeof(data);
     }
 
+    std::array<uint8_t, WIDTH> GetRawBytes() const
+    {
+        std::array<uint8_t, WIDTH> buf = {};
+        std::memcpy(buf.data(), this->begin(), WIDTH);
+
+        return buf;
+    }
+    
     template<typename Stream>
     void Serialize(Stream& s) const
     {
@@ -133,6 +142,20 @@ public:
     uint256() {}
     uint256(const base_blob<256>& b) : base_blob<256>(b) {}
     explicit uint256(const std::vector<unsigned char>& vch) : base_blob<256>(vch) {}
+
+    static uint256 FromRawBytes(std::array<uint8_t, 32> bytes)
+    {
+        uint256 buf;
+        std::memcpy(buf.begin(), bytes.data(), 32);
+        return buf;
+    }
+
+    std::array<uint8_t, 32> ToRawBytes() const
+    {
+        std::array<uint8_t, 32> buf;
+        std::memcpy(buf.data(), begin(), 32);
+        return buf;
+    }
 
     /** A cheap hash function that just returns 64 bits from the result, it can be
      * used when the contents are considered uniformly random. It is not appropriate

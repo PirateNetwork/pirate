@@ -434,3 +434,14 @@ std::string CTransaction::ToString() const
         str += "    " + vout[i].ToString() + "\n";
     return str;
 }
+
+CRustTransaction::CRustTransaction() : nVersion(CTransaction::SPROUT_MIN_CURRENT_VERSION),
+                               fOverwintered(false), nVersionGroupId(0), nExpiryHeight(0),
+                               vin(), vout(), nLockTime(0),
+                               saplingBundle(),
+                               vJoinSplit(), joinSplitPubKey(), joinSplitSig() { }
+
+void CRustTransaction::UpdateHash() const
+{
+   *const_cast<uint256*>(&hash) = SerializeHash(*this);
+}

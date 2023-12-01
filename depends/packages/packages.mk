@@ -1,8 +1,8 @@
 ifeq ($(build_os),darwin)
-	zcash_packages := libsnark libgmp libsodium utfcpp
+	zcash_packages := libsnark libgmp libsodium utfcpp rustcxx
 else
 	proton_packages := proton
-	zcash_packages := libgmp libsodium utfcpp
+	zcash_packages := libgmp libsodium utfcpp rustcxx
 endif
 
 qt_native_packages = native_protobuf
@@ -14,7 +14,7 @@ qt_android_packages=qt
 qt_darwin_packages=qt
 qt_mingw32_packages=qt
 
-native_packages := native_ccache native_rust
+native_packages := native_ccache native_rust native_cxxbridge
 
 wallet_packages=bdb
 

@@ -129,6 +129,39 @@ size_t IncrementalMerkleTree<Depth, Hash>::size() const {
 }
 
 template<size_t Depth, typename Hash>
+SubtreeIndex IncrementalMerkleTree<Depth, Hash>::current_subtree_index() const
+{
+    return size() >> TRACKED_SUBTREE_HEIGHT;
+}
+
+template<size_t Depth, typename Hash>
+Hash IncrementalMerkleTree<Depth, Hash>::complete_subtree_root() const
+{
+    auto treeSize = size();
+
+    if ((treeSize != 0) && ((treeSize % (1 << TRACKED_SUBTREE_HEIGHT)) == 0)) {
+        // We are sitting on a 2^TRACKED_SUBTREE_HEIGHT boundary here.
+        assert(left);
+        assert(right);
+        assert(parents.size() >= (TRACKED_SUBTREE_HEIGHT - 1));
+        // All of the TRACKED_SUBTREE_HEIGHT - 1 elements in the parents
+        // should be occupied or this would not be a completed subtree
+        for (size_t i = 0; i < TRACKED_SUBTREE_HEIGHT - 1; i++) {
+            assert(parents[i]);
+        }
+
+        Hash root = Hash::combine(*left, *right, 0);
+        for (size_t d = 1; d < TRACKED_SUBTREE_HEIGHT; d++) {
+            root = Hash::combine(*parents[d - 1], root, d);
+        }
+
+        return root;
+    } else {
+        throw std::runtime_error("tree has no root");
+    }
+}
+
+template<size_t Depth, typename Hash>
 void IncrementalMerkleTree<Depth, Hash>::append(Hash obj) {
     if (is_complete(Depth)) {
         throw std::runtime_error("tree is full");

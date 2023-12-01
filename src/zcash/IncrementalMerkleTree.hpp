@@ -8,11 +8,74 @@
 
 #include "uint256.h"
 #include "serialize.h"
+#include "streams_rust.h"
 
 #include "Zcash.h"
 #include "zcash/util.h"
 
+#include "rust/bridge.h"
+#include "rust/sapling/wallet.h"
+
 namespace libzcash {
+
+typedef uint64_t SubtreeIndex;
+typedef std::array<uint8_t, 32> SubtreeRoot;
+static const uint8_t TRACKED_SUBTREE_HEIGHT = 16;
+
+class LatestSubtree {
+    public:
+
+    //! Version of this structure for extensibility purposes
+    uint8_t leadbyte = 0x00;
+    //! The index of the latest complete subtree
+    SubtreeIndex index;
+    //! The latest complete subtree root at level TRACKED_SUBTREE_HEIGHT
+    SubtreeRoot root;
+    //! The height of the block that contains the note commitment that is
+    //! the rightmost leaf of the most recently completed subtree.
+    int nHeight;
+
+    LatestSubtree() : nHeight(0) { }
+
+    LatestSubtree(SubtreeIndex index, SubtreeRoot root, int nHeight)
+        : index(index), root(root), nHeight(nHeight) { }
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(leadbyte);
+        READWRITE(index);
+        READWRITE(root);
+        READWRITE(nHeight);
+    }
+};
+
+class SubtreeData {
+    public:
+
+    //! Version of this structure for extensibility purposes
+    uint8_t leadbyte = 0x00;
+    //! The root of the subtree at level TRACKED_SUBTREE_HEIGHT
+    SubtreeRoot root;
+    //! The height of the block that contains the note commitment
+    //! that completed this subtree.
+    int nHeight;
+
+    SubtreeData() : nHeight(0) { }
+
+    SubtreeData(SubtreeRoot root, int nHeight)
+        : root(root), nHeight(nHeight) { }
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(leadbyte);
+        READWRITE(root);
+        READWRITE(nHeight);
+    }
+};
 
 class MerklePath {
 public:
@@ -98,7 +161,22 @@ public:
                parents.size() * 32; // parents
     }
 
+    //! Returns the number of (filled) leaves present in this tree, or
+    //! in other words, the 0-indexed position that the next leaf
+    //! added to the tree will occupy.
     size_t size() const;
+
+    //! Returns the current 2^TRACKED_SUBTREE_HEIGHT subtree index
+    //! that this tree is currently on. Specifically, a leaf appended
+    //! at this point will be located in the 2^TRACKED_SUBTREE_HEIGHT
+    //! subtree with the index returned by this function.
+    SubtreeIndex current_subtree_index() const;
+
+    //! If the last leaf appended to this tree completed a
+    //! 2^TRACKED_SUBTREE_HEIGHT subtree, this function will return
+    //! the 2^TRACKED_SUBTREE_HEIGHT root of that subtree. Otherwise,
+    //! this will return nullopt.
+    Hash complete_subtree_root() const;
 
     void append(Hash obj);
     Hash root() const {
@@ -259,5 +337,99 @@ typedef libzcash::IncrementalMerkleTree<INCREMENTAL_MERKLE_TREE_DEPTH_TESTING, l
 
 typedef libzcash::IncrementalWitness<SAPLING_INCREMENTAL_MERKLE_TREE_DEPTH, libzcash::PedersenHash> SaplingWitness;
 typedef libzcash::IncrementalWitness<INCREMENTAL_MERKLE_TREE_DEPTH_TESTING, libzcash::PedersenHash> SaplingTestingWitness;
+
+class SaplingWallet;
+class SaplingMerkleFrontierLegacySer;
+
+class SaplingMerkleFrontier
+{
+private:
+    /// An incremental PedersenHash tree. Memory is allocated by Rust.
+    rust::Box<merkle_frontier::SaplingFrontier> inner;
+
+    friend class SaplingWallet;
+    friend class SaplingMerkleFrontierLegacySer;
+public:
+    SaplingMerkleFrontier() : inner(merkle_frontier::new_sapling()) {}
+
+    SaplingMerkleFrontier(SaplingMerkleFrontier&& frontier) : inner(std::move(frontier.inner)) {}
+
+    SaplingMerkleFrontier(const SaplingMerkleFrontier& frontier) :
+        inner(frontier.inner->box_clone()) {}
+
+    SaplingMerkleFrontier& operator=(SaplingMerkleFrontier&& frontier)
+    {
+        if (this != &frontier) {
+            inner = std::move(frontier.inner);
+        }
+        return *this;
+    }
+    SaplingMerkleFrontier& operator=(const SaplingMerkleFrontier& frontier)
+    {
+        if (this != &frontier) {
+            inner = frontier.inner->box_clone();
+        }
+        return *this;
+    }
+
+    template<typename Stream>
+    void Serialize(Stream& s) const {
+        try {
+            inner->serialize(*ToRustStream(s));
+        } catch (const std::exception& e) {
+            throw std::ios_base::failure(e.what());
+        }
+    }
+
+    template<typename Stream>
+    void Unserialize(Stream& s) {
+        try {
+            inner = merkle_frontier::parse_sapling(*ToRustStream(s));
+        } catch (const std::exception& e) {
+            throw std::ios_base::failure(e.what());
+        }
+    }
+
+    size_t DynamicMemoryUsage() const {
+        return inner->dynamic_memory_usage();
+    }
+
+    // merkle_frontier::SaplingAppendResult AppendBundle(const SaplingBundle& bundle) {
+    //     return inner->append_bundle(*bundle.GetDetails());
+    // }
+
+    const uint256 root() const {
+        return uint256::FromRawBytes(inner->root());
+    }
+
+    static uint256 empty_root() {
+        return uint256::FromRawBytes(merkle_frontier::sapling_empty_root());
+    }
+
+    size_t size() const {
+        return inner->size();
+    }
+
+    libzcash::SubtreeIndex current_subtree_index() const {
+        return (inner->size() >> libzcash::TRACKED_SUBTREE_HEIGHT);
+    }
+};
+
+class SaplingMerkleFrontierLegacySer {
+private:
+    const SaplingMerkleFrontier& frontier;
+public:
+    SaplingMerkleFrontierLegacySer(const SaplingMerkleFrontier& frontier): frontier(frontier) {}
+
+    template<typename Stream>
+    void Serialize(Stream& s) const {
+        try {
+            frontier.inner->serialize_legacy(*ToRustStream(s));
+        } catch (const std::exception& e) {
+            throw std::ios_base::failure(e.what());
+        }
+    }
+};
+
 
 #endif /* ZC_INCREMENTALMERKLETREE_H_ */

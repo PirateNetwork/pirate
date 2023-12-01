@@ -565,6 +565,14 @@ bool CWalletDB::EraseSaplingExtendedFullViewingKey(
     return Erase(std::make_pair(std::string("sapextfvk"), extfvk));
 }
 
+bool CWalletDB::WriteSaplingWitnesses(const SaplingWallet& wallet) {
+    nWalletDBUpdated++;
+    return Write(
+            std::string("sapling_note_commitment_tree"),
+            SaplingWalletNoteCommitmentTreeWriter(wallet));
+}
+
+
 bool CWalletDB::WriteCScript(const uint160& hash, const CScript& redeemScript)
 {
     nWalletDBUpdated++;
@@ -1489,6 +1497,11 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 strErr = "Error reading wallet database: LoadLastDiversifierUsed failed";
                 return false;
             }
+        }
+        else if (strType == "sapling_note_commitment_tree")
+        {
+            auto loader = pwallet->GetSaplingNoteCommitmentTreeLoader();
+            ssValue >> loader;
         }
 
     } catch (...)

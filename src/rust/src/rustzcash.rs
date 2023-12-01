@@ -52,7 +52,7 @@ use std::os::windows::ffi::OsStringExt;
 use zcash_primitives::{
     block::equihash,
     constants::{CRH_IVK_PERSONALIZATION, PROOF_GENERATION_KEY_GENERATOR, SPENDING_KEY_GENERATOR},
-    merkle_tree::{MerklePath, HashSer},
+    merkle_tree::{HashSer,merkle_path_from_slice},
     sapling::{
         merkle_hash,
         note::ExtractedNoteCommitment,
@@ -65,7 +65,6 @@ use zcash_primitives::{
     zip32,
 };
 use zcash_proofs::{
-    circuit::sapling::TREE_DEPTH as SAPLING_TREE_DEPTH,
     sapling::{SaplingProvingContext, SaplingVerificationContext},
     sprout,
 };
@@ -78,7 +77,22 @@ use incrementalmerkletree::Hashable;
 mod blake2b;
 mod ed25519;
 mod metrics_ffi;
+mod streams_ffi;
 mod tracing_ffi;
+
+mod bridge;
+
+mod bundlecache;
+mod incremental_merkle_tree;
+mod merkle_frontier;
+mod params;
+mod sapling;
+mod streams;
+mod wallet;
+
+mod test_harness_ffi;
+
+const SAPLING_TREE_DEPTH: usize = 32;
 
 #[cfg(test)]
 mod tests;
@@ -980,7 +994,7 @@ pub extern "C" fn librustzcash_sapling_spend_proof(
     };
 
     // Parse the Merkle path from the caller
-    let merkle_path = match MerklePath::from_slice(unsafe { &(&*merkle_path)[..] }) {
+    let merkle_path = match merkle_path_from_slice(unsafe { &(&*merkle_path)[..] }) {
         Ok(w) => w,
         Err(_) => return false,
     };

@@ -44,6 +44,8 @@
 #include "zcash/JoinSplit.hpp"
 #include "zcash/Proof.hpp"
 
+#include <primitives/sapling.h>
+
 /**
  * A flag that is ORed into the protocol version to designate that a transaction
  * should be (un)serialized without witness data.
@@ -744,7 +746,7 @@ public:
      * @return Total transaction size in bytes
      */
     unsigned int GetTotalSize() const;
-    
+
     bool IsMint() const
     {
         return IsCoinImport() || IsCoinBase();
@@ -774,6 +776,320 @@ public:
 
     std::string ToString() const;
 };
+
+/** The basic transaction that is broadcasted on the network and contained in
+ * blocks.  A transaction can contain multiple inputs and outputs.
+ */
+class CRustTransaction
+{
+private:
+    /// The consensus branch ID that this transaction commits to.
+    /// Serialized from v5 onwards.
+    // std::optional<uint32_t> nConsensusBranchId;
+    SaplingBundle saplingBundle;
+
+    /** Memory only. */
+    const uint256 hash;
+    void UpdateHash() const;
+
+// protected:
+    /** Developer testing only.  Set evilDeveloperFlag to true.
+     * Convert a CMutableTransaction into a CTransaction without invoking UpdateHash()
+     */
+    // CTransaction(const CMutableTransaction &tx, bool evilDeveloperFlag);
+
+public:
+    typedef std::array<unsigned char, 64> joinsplit_sig_t;
+
+    // Transactions that include a list of JoinSplits are >= version 2.
+    static const int32_t SPROUT_MIN_CURRENT_VERSION = 1;
+    static const int32_t SPROUT_MAX_CURRENT_VERSION = 2;
+    static const int32_t OVERWINTER_MIN_CURRENT_VERSION = 3;
+    static const int32_t OVERWINTER_MAX_CURRENT_VERSION = 3;
+    static const int32_t SAPLING_MIN_CURRENT_VERSION = 4;
+    static const int32_t SAPLING_MAX_CURRENT_VERSION = 4;
+    static const int32_t NU5_MIN_CURRENT_VERSION = 4;
+    static const int32_t NU5_MAX_CURRENT_VERSION = 5;
+
+    static_assert(SPROUT_MIN_CURRENT_VERSION >= SPROUT_MIN_TX_VERSION,
+                  "standard rule for tx version should be consistent with network rule");
+
+    static_assert(OVERWINTER_MIN_CURRENT_VERSION >= OVERWINTER_MIN_TX_VERSION,
+                  "standard rule for tx version should be consistent with network rule");
+
+    static_assert( (OVERWINTER_MAX_CURRENT_VERSION <= OVERWINTER_MAX_TX_VERSION &&
+                    OVERWINTER_MAX_CURRENT_VERSION >= OVERWINTER_MIN_CURRENT_VERSION),
+                  "standard rule for tx version should be consistent with network rule");
+
+    static_assert(SAPLING_MIN_CURRENT_VERSION >= SAPLING_MIN_TX_VERSION,
+                  "standard rule for tx version should be consistent with network rule");
+
+    static_assert( (SAPLING_MAX_CURRENT_VERSION <= SAPLING_MAX_TX_VERSION &&
+                    SAPLING_MAX_CURRENT_VERSION >= SAPLING_MIN_CURRENT_VERSION),
+                  "standard rule for tx version should be consistent with network rule");
+
+    static_assert(NU5_MIN_CURRENT_VERSION >= SAPLING_MIN_TX_VERSION,
+                  "standard rule for tx version should be consistent with network rule");
+
+    // static_assert( (NU5_MAX_CURRENT_VERSION <= ZIP225_MAX_TX_VERSION &&
+    //                 NU5_MAX_CURRENT_VERSION >= NU5_MIN_CURRENT_VERSION),
+    //               "standard rule for tx version should be consistent with network rule");
+
+    // The local variables are made const to prevent unintended modification
+    // without updating the cached hash value. However, CTransaction is not
+    // actually immutable; deserialization and assignment are implemented,
+    // and bypass the constness. This is safe, as they update the entire
+    // structure, including the hash.
+    const bool fOverwintered{false};
+    const int32_t nVersion{0};
+    const uint32_t nVersionGroupId{0};
+    const std::vector<CTxIn> vin;
+    const std::vector<CTxOut> vout;
+    const uint32_t nLockTime{0};
+    const uint32_t nExpiryHeight{0};
+    const std::vector<JSDescription> vJoinSplit;
+    const uint256 joinSplitPubKey;
+    const joinsplit_sig_t joinSplitSig = {{0}};
+
+    /** Construct a CTransaction that qualifies as IsNull() */
+    CRustTransaction();
+
+    /** Convert a CMutableTransaction into a CTransaction. */
+    // CTransaction(const CMutableTransaction &tx);
+    // CTransaction(CMutableTransaction &&tx);
+
+    CRustTransaction& operator=(const CRustTransaction& tx);
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        uint32_t header;
+        if (ser_action.ForRead()) {
+            // When deserializing, unpack the 4 byte header to extract fOverwintered and nVersion.
+            READWRITE(header);
+            *const_cast<bool*>(&fOverwintered) = header >> 31;
+            *const_cast<int32_t*>(&this->nVersion) = header & 0x7FFFFFFF;
+        } else {
+            header = GetHeader();
+            READWRITE(header);
+        }
+        if (fOverwintered) {
+            READWRITE(*const_cast<uint32_t*>(&this->nVersionGroupId));
+        }
+
+        bool isOverwinterV3 =
+            fOverwintered &&
+            nVersionGroupId == OVERWINTER_VERSION_GROUP_ID &&
+            nVersion == OVERWINTER_TX_VERSION;
+
+        bool isSaplingV4 =
+            fOverwintered &&
+            nVersionGroupId == SAPLING_VERSION_GROUP_ID &&
+            nVersion == SAPLING_TX_VERSION;
+
+        // bool isZip225V5 =
+        //     fOverwintered &&
+        //     nVersionGroupId == ZIP225_VERSION_GROUP_ID &&
+        //     nVersion == ZIP225_TX_VERSION;
+
+        // It is not possible to make the transaction's serialized form vary on
+        // a per-enabled-feature basis. The approach here is that all
+        // serialization rules for not-yet-released features must be
+        // non-conflicting and transaction version/group must be set to
+        // ZFUTURE_TX_(VERSION/GROUP_ID)
+        bool isFuture = false;
+            // fOverwintered &&
+            // nVersionGroupId == ZFUTURE_VERSION_GROUP_ID &&
+            // nVersion == ZFUTURE_TX_VERSION;
+
+        if (fOverwintered && !(isOverwinterV3 || isSaplingV4 || isFuture)) {
+            throw std::ios_base::failure("Unknown transaction format");
+        }
+
+        // if (isZip225V5) {
+        //     // Common Transaction Fields (plus version bytes above)
+        //     if (ser_action.ForRead()) {
+        //         uint32_t consensusBranchId;
+        //         READWRITE(consensusBranchId);
+        //         *const_cast<std::optional<uint32_t>*>(&nConsensusBranchId) = consensusBranchId;
+        //     } else {
+        //         uint32_t consensusBranchId = nConsensusBranchId.value();
+        //         READWRITE(consensusBranchId);
+        //     }
+        //     READWRITE(*const_cast<uint32_t*>(&nLockTime));
+        //     READWRITE(*const_cast<uint32_t*>(&nExpiryHeight));
+        //
+        //     // Transparent Transaction Fields
+        //     READWRITE(*const_cast<std::vector<CTxIn>*>(&vin));
+        //     READWRITE(*const_cast<std::vector<CTxOut>*>(&vout));
+        //
+        //     // Sapling Transaction Fields
+        //     READWRITE(saplingBundle);
+        //
+        //     // Orchard Transaction Fields
+        //     READWRITE(orchardBundle);
+        // } else {
+        // Legacy transaction formats
+        READWRITE(*const_cast<std::vector<CTxIn>*>(&vin));
+        READWRITE(*const_cast<std::vector<CTxOut>*>(&vout));
+        READWRITE(*const_cast<uint32_t*>(&nLockTime));
+        if (isOverwinterV3 || isSaplingV4 || isFuture) {
+            READWRITE(*const_cast<uint32_t*>(&nExpiryHeight));
+        }
+        SaplingV4Reader saplingReader(isSaplingV4 || isFuture);
+        bool haveSaplingActions;
+        if (ser_action.ForRead()) {
+            READWRITE(saplingReader);
+            haveSaplingActions = saplingReader.HaveActions();
+        } else {
+            SaplingV4Writer saplingWriter(saplingBundle, isSaplingV4 || isFuture);
+            READWRITE(saplingWriter);
+            haveSaplingActions = saplingBundle.IsPresent();
+        }
+        if (nVersion >= 2) {
+            auto os = WithVersion(&s, static_cast<int>(header));
+            ::SerReadWrite(os, *const_cast<std::vector<JSDescription>*>(&vJoinSplit), ser_action);
+            if (vJoinSplit.size() > 0) {
+                READWRITE(*const_cast<uint256*>(&joinSplitPubKey));
+                READWRITE(*const_cast<joinsplit_sig_t*>(&joinSplitSig));
+            }
+        }
+        if ((isSaplingV4 || isFuture) && haveSaplingActions) {
+            std::array<unsigned char, 64> bindingSig;
+            if (!ser_action.ForRead()) {
+                bindingSig = saplingBundle.GetDetails().binding_sig();
+            }
+            READWRITE(bindingSig);
+            if (ser_action.ForRead()) {
+                saplingBundle = saplingReader.FinishBundleAssembly(bindingSig);
+            }
+        }
+        // }
+        if (ser_action.ForRead())
+            UpdateHash();
+    }
+
+    // template <typename Stream>
+    // CTransaction(deserialize_type, Stream& s) : CTransaction(CMutableTransaction(deserialize, s)) {}
+    //
+    // bool IsNull() const {
+    //     return vin.empty() && vout.empty();
+    // }
+    //
+    // const uint256& GetHash() const {
+    //     return wtxid.hash;
+    // }
+    //
+    // /**
+    //  * Returns the authorizing data commitment for this transaction.
+    //  *
+    //  * For v1-v4 transactions, this returns the null hash (i.e. all-zeroes).
+    //  */
+    // const uint256& GetAuthDigest() const {
+    //     return wtxid.authDigest;
+    // }
+    //
+    // const WTxId& GetWTxId() const {
+    //     return wtxid;
+    // }
+    //
+    uint32_t GetHeader() const {
+        // When serializing v1 and v2, the 4 byte header is nVersion
+        uint32_t header = this->nVersion;
+        // When serializing Overwintered tx, the 4 byte header is the combination of fOverwintered and nVersion
+        if (fOverwintered) {
+            header |= 1 << 31;
+        }
+        return header;
+    }
+
+    // std::optional<uint32_t> GetConsensusBranchId() const {
+    //     return nConsensusBranchId;
+    // }
+
+    size_t GetSaplingSpendsCount() const {
+        return saplingBundle.GetSpendsCount();
+    }
+
+    size_t GetSaplingOutputsCount() const {
+        return saplingBundle.GetOutputsCount();
+    }
+
+    const rust::Vec<sapling::Spend> GetSaplingSpends() const {
+        return saplingBundle.GetDetails().spends();
+    }
+
+    const rust::Vec<sapling::Output> GetSaplingOutputs() const {
+        return saplingBundle.GetDetails().outputs();
+    }
+
+    /**
+     * Returns the Sapling value balance for the transaction.
+     */
+    CAmount GetValueBalanceSapling() const {
+        return saplingBundle.GetValueBalance();
+    }
+
+    /**
+     * Returns the Sapling bundle for the transaction.
+     */
+    const SaplingBundle& GetSaplingBundle() const {
+        return saplingBundle;
+    }
+
+    /**
+     * Returns the Orchard bundle for the transaction.
+     */
+    // const OrchardBundle& GetOrchardBundle() const {
+    //     return orchardBundle;
+    // }
+
+    /*
+     * Context for the two methods below:
+     * As at most one of vpub_new and vpub_old is non-zero in every JoinSplit,
+     * we can think of a JoinSplit as an input or output according to which one
+     * it is (e.g. if vpub_new is non-zero the joinSplit is "giving value" to
+     * the outputs in the transaction). Similarly, we can think of the Sapling
+     * shielded part of the transaction as an input or output according to
+     * whether valueBalanceSapling - the sum of shielded input values minus the sum of
+     * shielded output values - is positive or negative.
+     */
+
+    // // Return sum of txouts, (negative valueBalanceSapling or zero) and JoinSplit vpub_old.
+    // CAmount GetValueOut() const;
+    // // GetValueIn() is a method on CCoinsViewCache, because
+    // // inputs must be known to compute value in.
+    //
+    // // Return sum of (positive valueBalanceSapling or zero) and JoinSplit vpub_new
+    // CAmount GetShieldedValueIn() const;
+    //
+    // // Return the conventional fee for this transaction calculated according to
+    // // <https://zips.z.cash/zip-0317#fee-calculation>.
+    // CAmount GetConventionalFee() const;
+    //
+    // // Return the number of logical actions calculated according to
+    // // <https://zips.z.cash/zip-0317#fee-calculation>.
+    // size_t GetLogicalActionCount() const;
+    //
+    // bool IsCoinBase() const
+    // {
+    //     return (vin.size() == 1 && vin[0].prevout.IsNull());
+    // }
+    //
+    // friend bool operator==(const CTransaction& a, const CTransaction& b)
+    // {
+    //     return a.wtxid.hash == b.wtxid.hash;
+    // }
+    //
+    // friend bool operator!=(const CTransaction& a, const CTransaction& b)
+    // {
+    //     return a.wtxid.hash != b.wtxid.hash;
+    // }
+    //
+    // std::string ToString() const;
+};
+
 
 /** A mutable version of CTransaction. */
 struct CMutableTransaction

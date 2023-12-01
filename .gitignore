@@ -185,3 +185,4 @@ release*
 target*
 .cargo/config
 .cargo/.configured*
+src/rust/gen/
