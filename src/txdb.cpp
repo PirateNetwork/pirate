@@ -132,7 +132,7 @@ bool CCoinsViewDB::GetZkProofHash(const uint256 &zkProofHash, ProofType type, st
         case OUTPUT:
             dbChar = OUTPUT_PROOF_HASH;
             break;
-        case SAPLING:
+        case SPEND:
             dbChar = SPEND_PROOF_HASH;
             break;
         default:
