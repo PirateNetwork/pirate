@@ -45,7 +45,7 @@ CMutableTransaction GetValidTransaction() {
     mtx.vin[1].prevout.hash = uint256S("0000000000000000000000000000000000000000000000000000000000000002");
     mtx.vin[1].prevout.n = 0;
     mtx.vout.resize(2);
-    // mtx.vout[0].scriptPubKey = 
+    // mtx.vout[0].scriptPubKey =
     mtx.vout[0].nValue = 0;
     mtx.vout[1].nValue = 0;
     mtx.vjoinsplit.resize(2);
@@ -69,6 +69,10 @@ public:
     }
 
     bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const {
+        return false;
+    }
+
+    bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const {
         return false;
     }
 
@@ -107,6 +111,7 @@ public:
                     const uint256 &hashSaplingAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
                     CAnchorsSaplingMap &mapSaplingAnchors,
+                    CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
                     CNullifiersMap &mapSproutNullifiers,
                     CNullifiersMap &mapSaplingNullifiers,
                     CProofHashMap &mapZkOutputProofHash,

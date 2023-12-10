@@ -2110,6 +2110,13 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex) {
       LogPrintf("Chain Height %i\n", pindex->nHeight);
       LogPrintf("Sapling Hash Root   - %s\n", pindex->hashFinalSaplingRoot.ToString());
       LogPrintf("Sapling Wallet Root - %s\n\n", saplingWallet.GetLatestAnchor().ToString());
+
+
+
+      SaplingMerkleFrontier saplingTree;
+      pcoinsTip->GetSaplingFrontierAnchorAt(saplingWallet.GetLatestAnchor(), saplingTree);
+      LogPrintf("LevelDB Sapling Tree Root - %s\n\n", saplingTree.root().ToString());
+
       //assert(pindex->hashFinalOrchardRoot == orchardWallet.GetLatestAnchor());
 
       // if (pindex->hashFinalSaplingRoot.ToString()!=saplingWallet.GetLatestAnchor().ToString()) {
@@ -5228,12 +5235,14 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
             SproutMerkleTree sproutTree;
             SaplingMerkleTree saplingTree;
+            SaplingMerkleFrontier saplingFrontierTree;
             // This should never fail: we should always be able to get the tree
             // state on the path to the tip of our chain
             assert(pcoinsTip->GetSproutAnchorAt(pindex->hashSproutAnchor, sproutTree));
             if (pindex->pprev) {
                 if (NetworkUpgradeActive(pindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
                     assert(pcoinsTip->GetSaplingAnchorAt(pindex->pprev->hashFinalSaplingRoot, saplingTree));
+                    assert(pcoinsTip->GetSaplingFrontierAnchorAt(pindex->pprev->hashFinalSaplingRoot, saplingFrontierTree));
                 }
             }
 

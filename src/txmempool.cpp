@@ -458,6 +458,14 @@ void CTxMemPool::removeWithAnchor(const uint256 &invalidRoot, ShieldedType type)
                     }
                 }
             break;
+            case SAPLINGFRONTIER:
+                BOOST_FOREACH(const SpendDescription& spendDescription, tx.vShieldedSpend) {
+                    if (spendDescription.anchor == invalidRoot) {
+                        transactionsToRemove.push_back(tx);
+                        break;
+                    }
+                }
+            break;
             default:
                 throw runtime_error("Unknown shielded type");
             break;
@@ -680,8 +688,11 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
         }
         for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
             SaplingMerkleTree tree;
+            SaplingMerkleFrontier frontierTree;
 
             assert(pcoins->GetSaplingAnchorAt(spendDescription.anchor, tree));
+            assert(pcoins->GetSaplingFrontierAnchorAt(spendDescription.anchor, frontierTree));
+
             assert(!pcoins->GetNullifier(spendDescription.nullifier, SAPLING));
 
             std::set<std::pair<uint256, int>> txids;

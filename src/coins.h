@@ -40,7 +40,7 @@
 #include <boost/unordered_map.hpp>
 #include "zcash/IncrementalMerkleTree.hpp"
 
-/** 
+/**
  * Pruned version of CTransaction: only retains metadata and unspent transaction outputs
  *
  * Serialized format:
@@ -330,6 +330,19 @@ struct CAnchorsSaplingCacheEntry
     CAnchorsSaplingCacheEntry() : entered(false), flags(0) {}
 };
 
+struct CAnchorsSaplingFrontierCacheEntry
+{
+    bool entered; // This will be false if the anchor is removed from the cache
+    SaplingMerkleFrontier tree; // The tree itself
+    unsigned char flags;
+
+    enum Flags {
+        DIRTY = (1 << 0), // This cache entry is potentially different from the version in the parent view.
+    };
+
+    CAnchorsSaplingFrontierCacheEntry() : entered(false), flags(0) {}
+};
+
 struct CNullifiersCacheEntry
 {
     bool entered; // If the nullifier is spent or not
@@ -358,6 +371,7 @@ enum ShieldedType
 {
     SPROUT,
     SAPLING,
+    SAPLINGFRONTIER,
 };
 
 enum ProofType
@@ -369,6 +383,7 @@ enum ProofType
 typedef boost::unordered_map<uint256, CCoinsCacheEntry, CCoinsKeyHasher> CCoinsMap;
 typedef boost::unordered_map<uint256, CAnchorsSproutCacheEntry, CCoinsKeyHasher> CAnchorsSproutMap;
 typedef boost::unordered_map<uint256, CAnchorsSaplingCacheEntry, CCoinsKeyHasher> CAnchorsSaplingMap;
+typedef boost::unordered_map<uint256, CAnchorsSaplingFrontierCacheEntry, CCoinsKeyHasher> CAnchorsSaplingFrontierMap;
 typedef boost::unordered_map<uint256, CNullifiersCacheEntry, CCoinsKeyHasher> CNullifiersMap;
 typedef boost::unordered_map<uint256, CProofHashCacheEntry, CCoinsKeyHasher> CProofHashMap;
 
@@ -396,6 +411,9 @@ public:
     //! Retrieve the tree (Sapling) at a particular anchored root in the chain
     virtual bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
 
+    //! Retrieve the tree (SaplingFroniter) at a particular anchored root in the chain
+    virtual bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const;
+
     //! Determine whether a nullifier is spent or not
     virtual bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
 
@@ -421,8 +439,10 @@ public:
                             const uint256 &hashBlock,
                             const uint256 &hashSproutAnchor,
                             const uint256 &hashSaplingAnchor,
+                            const uint256 &hashSaplingFrontierAnchor,
                             CAnchorsSproutMap &mapSproutAnchors,
                             CAnchorsSaplingMap &mapSaplingAnchors,
+                            CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
                             CNullifiersMap &mapSproutNullifiers,
                             CNullifiersMap &mapSaplingNullifiers,
                             CProofHashMap &mapZkOutputProofHash,
@@ -446,6 +466,7 @@ public:
     CCoinsViewBacked(CCoinsView *viewIn);
     bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
     bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
+    bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const;
     bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
     bool GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const;
     bool GetCoins(const uint256 &txid, CCoins &coins) const;
@@ -457,8 +478,10 @@ public:
                     const uint256 &hashBlock,
                     const uint256 &hashSproutAnchor,
                     const uint256 &hashSaplingAnchor,
+                    const uint256 &hashSaplingFrontierAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
                     CAnchorsSaplingMap &mapSaplingAnchors,
+                    CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
                     CNullifiersMap &mapSproutNullifiers,
                     CNullifiersMap &mapSaplingNullifiers,
                     CProofHashMap &mapZkOutputProofHash,
@@ -469,7 +492,7 @@ public:
 
 class CCoinsViewCache;
 
-/** 
+/**
  * A reference to a mutable cache entry. Encapsulating it allows us to run
  *  cleanup code after the modification is finished, and keeping track of
  *  concurrent modifications.
@@ -497,8 +520,8 @@ class CTransactionExceptionData
         CTransactionExceptionData() : scriptPubKey(), voutMask() {}
 };
 
-/** 
- * CCoinsView that adds a memory cache in front of another CCoinsView 
+/**
+ * CCoinsView that adds a memory cache in front of another CCoinsView
  */
 class CCoinsViewCache : public CCoinsViewBacked
 {
@@ -508,14 +531,16 @@ protected:
 
     /**
      * Make mutable so that we can "fill the cache" even from Get-methods
-     * declared as "const". 
+     * declared as "const".
      */
     mutable uint256 hashBlock;
     mutable CCoinsMap cacheCoins;
     mutable uint256 hashSproutAnchor;
     mutable uint256 hashSaplingAnchor;
+    mutable uint256 hashSaplingFrontierAnchor;
     mutable CAnchorsSproutMap cacheSproutAnchors;
     mutable CAnchorsSaplingMap cacheSaplingAnchors;
+    mutable CAnchorsSaplingFrontierMap cacheSaplingFrontierAnchors;
     mutable CNullifiersMap cacheSproutNullifiers;
     mutable CNullifiersMap cacheSaplingNullifiers;
     mutable CProofHashMap cacheZkOutputProofHash;
@@ -531,6 +556,7 @@ public:
     // Standard CCoinsView methods
     bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
     bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
+    bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const;
     bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
     bool GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const;
     bool GetCoins(const uint256 &txid, CCoins &coins) const;
@@ -542,8 +568,10 @@ public:
                     const uint256 &hashBlock,
                     const uint256 &hashSproutAnchor,
                     const uint256 &hashSaplingAnchor,
+                    const uint256 &hashSaplingFrontierAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
                     CAnchorsSaplingMap &mapSaplingAnchors,
+                    CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
                     CNullifiersMap &mapSproutNullifiers,
                     CNullifiersMap &mapSaplingNullifiers,
                     CProofHashMap &mapZkOutputProofHash,
@@ -591,7 +619,7 @@ public:
     //! Calculate the size of the cache (in bytes)
     size_t DynamicMemoryUsage() const;
 
-    /** 
+    /**
      * @brief get amount of bitcoins coming in to a transaction
      * @note lightweight clients may not know anything besides the hash of previous transactions,
      * so may not be able to calculate this.

@@ -29,6 +29,10 @@ public:
         return false;
     }
 
+    bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const {
+        return false;
+    }
+
     bool GetNullifier(const uint256 &nf, ShieldedType type) const {
         return false;
     }

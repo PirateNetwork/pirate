@@ -42,6 +42,7 @@ using namespace std;
 // previously used by DB_SAPLING_ANCHOR and DB_BEST_SAPLING_ANCHOR.
 static const char DB_SPROUT_ANCHOR = 'A';
 static const char DB_SAPLING_ANCHOR = 'Z';
+static const char DB_SAPLING_FRONTIER_ANCHOR = 'Y';
 static const char DB_NULLIFIER = 's';
 static const char DB_SAPLING_NULLIFIER = 'S';
 static const char DB_COINS = 'c';
@@ -49,14 +50,15 @@ static const char DB_BLOCK_FILES = 'f';
 static const char DB_TXINDEX = 't';
 static const char DB_ADDRESSINDEX = 'd';
 static const char DB_ADDRESSUNSPENTINDEX = 'u';
-static const char DB_TIMESTAMPINDEX = 'S';
-static const char DB_BLOCKHASHINDEX = 'z';
+static const char DB_TIMESTAMPINDEX = 'H';
+static const char DB_BLOCKHASHINDEX = 'h';
 static const char DB_SPENTINDEX = 'p';
 static const char DB_BLOCK_INDEX = 'b';
 
 static const char DB_BEST_BLOCK = 'B';
 static const char DB_BEST_SPROUT_ANCHOR = 'a';
 static const char DB_BEST_SAPLING_ANCHOR = 'z';
+static const char DB_BEST_SAPLING_FRONTIER_ANCHOR = 'y';
 static const char DB_FLAG = 'F';
 static const char DB_REINDEX_FLAG = 'R';
 static const char DB_LAST_BLOCK = 'l';
@@ -92,6 +94,18 @@ bool CCoinsViewDB::GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree
     }
 
     bool read = db.Read(make_pair(DB_SAPLING_ANCHOR, rt), tree);
+
+    return read;
+}
+
+bool CCoinsViewDB::GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const {
+    if (rt == SaplingMerkleFrontier::empty_root()) {
+        SaplingMerkleFrontier new_tree;
+        tree = new_tree;
+        return true;
+    }
+
+    bool read = db.Read(make_pair(DB_SAPLING_FRONTIER_ANCHOR, rt), tree);
 
     return read;
 }
@@ -155,6 +169,10 @@ uint256 CCoinsViewDB::GetBestAnchor(ShieldedType type) const {
             if (!db.Read(DB_BEST_SAPLING_ANCHOR, hashBestAnchor))
                 return SaplingMerkleTree::empty_root();
             break;
+        case SAPLINGFRONTIER:
+            if (!db.Read(DB_BEST_SAPLING_FRONTIER_ANCHOR, hashBestAnchor))
+                return SaplingMerkleFrontier::empty_root();
+            break;
         default:
             throw runtime_error("Unknown shielded type");
     }
@@ -216,8 +234,10 @@ bool CCoinsViewDB::BatchWrite(CCoinsMap &mapCoins,
                               const uint256 &hashBlock,
                               const uint256 &hashSproutAnchor,
                               const uint256 &hashSaplingAnchor,
+                              const uint256 &hashSaplingFrontierAnchor,
                               CAnchorsSproutMap &mapSproutAnchors,
                               CAnchorsSaplingMap &mapSaplingAnchors,
+                              CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
                               CNullifiersMap &mapSproutNullifiers,
                               CNullifiersMap &mapSaplingNullifiers,
                               CProofHashMap &mapZkOutputProofHash,
@@ -240,6 +260,7 @@ bool CCoinsViewDB::BatchWrite(CCoinsMap &mapCoins,
 
     ::BatchWriteAnchors<CAnchorsSproutMap, CAnchorsSproutMap::iterator, CAnchorsSproutCacheEntry, SproutMerkleTree>(batch, mapSproutAnchors, DB_SPROUT_ANCHOR);
     ::BatchWriteAnchors<CAnchorsSaplingMap, CAnchorsSaplingMap::iterator, CAnchorsSaplingCacheEntry, SaplingMerkleTree>(batch, mapSaplingAnchors, DB_SAPLING_ANCHOR);
+    ::BatchWriteAnchors<CAnchorsSaplingFrontierMap, CAnchorsSaplingFrontierMap::iterator, CAnchorsSaplingFrontierCacheEntry, SaplingMerkleFrontier>(batch, mapSaplingFrontierAnchors, DB_SAPLING_FRONTIER_ANCHOR);
 
     ::BatchWriteNullifiers(batch, mapSproutNullifiers, DB_NULLIFIER);
     ::BatchWriteNullifiers(batch, mapSaplingNullifiers, DB_SAPLING_NULLIFIER);
@@ -253,6 +274,8 @@ bool CCoinsViewDB::BatchWrite(CCoinsMap &mapCoins,
         batch.Write(DB_BEST_SPROUT_ANCHOR, hashSproutAnchor);
     if (!hashSaplingAnchor.IsNull())
         batch.Write(DB_BEST_SAPLING_ANCHOR, hashSaplingAnchor);
+    if (!hashSaplingFrontierAnchor.IsNull())
+        batch.Write(DB_BEST_SAPLING_FRONTIER_ANCHOR, hashSaplingFrontierAnchor);
 
     LogPrint("coindb", "Committing %u changed transactions (out of %u) to coin database...\n", (unsigned int)changed, (unsigned int)count);
     return db.WriteBatch(batch);
@@ -781,27 +804,27 @@ bool CBlockTreeDB::LoadBlockIndexGuts()
             CDiskBlockIndex diskindex;
             if (pcursor->GetValue(diskindex)) {
                 // Construct block index object
-                CBlockIndex* pindexNew = InsertBlockIndex(diskindex.GetBlockHash());
-                pindexNew->pprev          = InsertBlockIndex(diskindex.hashPrev);
-                pindexNew->nHeight = diskindex.nHeight;
-                pindexNew->nFile          = diskindex.nFile;
-                pindexNew->nDataPos       = diskindex.nDataPos;
-                pindexNew->nUndoPos       = diskindex.nUndoPos;
-                pindexNew->hashSproutAnchor     = diskindex.hashSproutAnchor;
-                pindexNew->nVersion       = diskindex.nVersion;
-                pindexNew->hashMerkleRoot = diskindex.hashMerkleRoot;
+                CBlockIndex* pindexNew            = InsertBlockIndex(diskindex.GetBlockHash());
+                pindexNew->pprev                  = InsertBlockIndex(diskindex.hashPrev);
+                pindexNew->nHeight                = diskindex.nHeight;
+                pindexNew->nFile                  = diskindex.nFile;
+                pindexNew->nDataPos               = diskindex.nDataPos;
+                pindexNew->nUndoPos               = diskindex.nUndoPos;
+                pindexNew->hashSproutAnchor       = diskindex.hashSproutAnchor;
+                pindexNew->nVersion               = diskindex.nVersion;
+                pindexNew->hashMerkleRoot         = diskindex.hashMerkleRoot;
                 pindexNew->hashFinalSaplingRoot   = diskindex.hashFinalSaplingRoot;
-                pindexNew->nTime          = diskindex.nTime;
-                pindexNew->nBits          = diskindex.nBits;
-                pindexNew->nNonce         = diskindex.nNonce;
+                pindexNew->nTime                  = diskindex.nTime;
+                pindexNew->nBits                  = diskindex.nBits;
+                pindexNew->nNonce                 = diskindex.nNonce;
                 // the Equihash solution will be loaded lazily from the dbindex entry
-                pindexNew->nStatus        = diskindex.nStatus;
-                pindexNew->nCachedBranchId = diskindex.nCachedBranchId;
-                pindexNew->nTx            = diskindex.nTx;
-                pindexNew->nSproutValue   = diskindex.nSproutValue;
-                pindexNew->nSaplingValue  = diskindex.nSaplingValue;
-                pindexNew->segid          = diskindex.segid;
-                pindexNew->nNotaryPay     = diskindex.nNotaryPay;
+                pindexNew->nStatus                = diskindex.nStatus;
+                pindexNew->nCachedBranchId        = diskindex.nCachedBranchId;
+                pindexNew->nTx                    = diskindex.nTx;
+                pindexNew->nSproutValue           = diskindex.nSproutValue;
+                pindexNew->nSaplingValue          = diskindex.nSaplingValue;
+                pindexNew->segid                  = diskindex.segid;
+                pindexNew->nNotaryPay             = diskindex.nNotaryPay;
 
                 if ( 0 ) // POW will be checked before any block is connected
                 {

@@ -28,9 +28,11 @@ class CCoinsViewTest : public CCoinsView
     uint256 hashBestBlock_;
     uint256 hashBestSproutAnchor_;
     uint256 hashBestSaplingAnchor_;
+    uint256 hashBestSaplingFrontierAnchor_;
     std::map<uint256, CCoins> map_;
     std::map<uint256, SproutMerkleTree> mapSproutAnchors_;
     std::map<uint256, SaplingMerkleTree> mapSaplingAnchors_;
+    std::map<uint256, SaplingMerkleFrontier> mapSaplingFrontierAnchors_;
     std::map<uint256, bool> mapSproutNullifiers_;
     std::map<uint256, bool> mapSaplingNullifiers_;
 
@@ -72,6 +74,23 @@ public:
         }
     }
 
+    bool GetSaplingFrontierAnchorAt(const uint256& rt, SaplingMerkleFrontier &tree) const {
+        if (rt == SaplingMerkleFrontier::empty_root()) {
+            SaplingMerkleFrontier new_tree;
+            tree = new_tree;
+            return true;
+        }
+
+        std::map<uint256, SaplingMerkleFrontier>::const_iterator it = mapSaplingFrontierAnchors_.find(rt);
+        if (it == mapSaplingFrontierAnchors_.end()) {
+            return false;
+        } else {
+            tree = it->second;
+            return true;
+        }
+    }
+
+
     bool GetNullifier(const uint256 &nf, ShieldedType type) const
     {
         const std::map<uint256, bool>* mapToUse;
@@ -102,6 +121,9 @@ public:
                 break;
             case SAPLING:
                 return hashBestSaplingAnchor_;
+                break;
+            case SAPLINGFRONTIER:
+                return hashBestSaplingFrontierAnchor_;
                 break;
             default:
                 throw std::runtime_error("Unknown shielded type");
@@ -244,7 +266,7 @@ public:
         JSDescription jsd;
         jsd.nullifiers[0] = sproutNullifier;
         mutableTx.vjoinsplit.emplace_back(jsd);
-        
+
         saplingNullifier = GetRandHash();
         SpendDescription sd;
         sd.nullifier = saplingNullifier;
@@ -270,9 +292,9 @@ uint256 appendRandomSproutCommitment(SproutMerkleTree &tree)
 template<typename Tree> bool GetAnchorAt(const CCoinsViewCacheTest &cache, const uint256 &rt, Tree &tree);
 template<> bool GetAnchorAt(const CCoinsViewCacheTest &cache, const uint256 &rt, SproutMerkleTree &tree) { return cache.GetSproutAnchorAt(rt, tree); }
 template<> bool GetAnchorAt(const CCoinsViewCacheTest &cache, const uint256 &rt, SaplingMerkleTree &tree) { return cache.GetSaplingAnchorAt(rt, tree); }
+template<> bool GetAnchorAt(const CCoinsViewCacheTest &cache, const uint256 &rt, SaplingMerkleFrontier &tree) { return cache.GetSaplingFrontierAnchorAt(rt, tree); }
 
-
-void checkNullifierCache(const CCoinsViewCacheTest &cache, const TxWithNullifiers &txWithNullifiers, bool shouldBeInCache) 
+void checkNullifierCache(const CCoinsViewCacheTest &cache, const TxWithNullifiers &txWithNullifiers, bool shouldBeInCache)
 {
     // Make sure the nullifiers have not gotten mixed up
     EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.sproutNullifier, SAPLING));
@@ -372,7 +394,7 @@ TEST(TestCoins, nullifier_regression_test)
     }
 }
 
-template<typename Tree> 
+template<typename Tree>
 void anchorPopRegressionTestImpl(ShieldedType type)
 {
     // Correct behavior:
@@ -452,7 +474,7 @@ TEST(TestCoins, anchor_pop_regression_test)
     anchorPopRegressionTestImpl<SaplingMerkleTree>(SAPLING);
 }
 
-template<typename Tree> 
+template<typename Tree>
 void anchorRegressionTestImpl(ShieldedType type)
 {
     // Correct behavior:
@@ -564,7 +586,7 @@ TEST(TestCoins, nullifiers_test)
     checkNullifierCache(cache3, txWithNullifiers, false);
 }
 
-template<typename Tree> 
+template<typename Tree>
 void anchorsFlushImpl(ShieldedType type)
 {
     CCoinsViewTest base;
@@ -580,7 +602,7 @@ void anchorsFlushImpl(ShieldedType type)
         cache.PushAnchor(tree);
         cache.Flush();
     }
-    
+
     {
         CCoinsViewCacheTest cache(&base);
         Tree tree;
@@ -679,7 +701,7 @@ TEST(TestCoins, chained_joinsplits)
     }
 }
 
-template<typename Tree> 
+template<typename Tree>
 void anchorsTestImpl(ShieldedType type)
 {
     // TODO: These tests should be more methodical.
@@ -735,7 +757,7 @@ void anchorsTestImpl(ShieldedType type)
         {
             Tree test_tree2;
             GetAnchorAt(cache, newrt, test_tree2);
-            
+
             EXPECT_TRUE(test_tree2.root() == newrt);
         }
 

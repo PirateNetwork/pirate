@@ -15,6 +15,7 @@
 
 #include "rust/bridge.h"
 #include "rust/sapling/wallet.h"
+#include "primitives/sapling.h"
 
 namespace libzcash {
 
@@ -394,9 +395,9 @@ public:
         return inner->dynamic_memory_usage();
     }
 
-    // merkle_frontier::SaplingAppendResult AppendBundle(const SaplingBundle& bundle) {
-    //     return inner->append_bundle(*bundle.GetDetails());
-    // }
+    merkle_frontier::SaplingAppendResult AppendBundle(const SaplingBundle& bundle) {
+        return inner->append_bundle(bundle.GetDetails());
+    }
 
     const uint256 root() const {
         return uint256::FromRawBytes(inner->root());

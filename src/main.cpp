@@ -4037,6 +4037,9 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     SaplingMerkleTree sapling_tree;
     assert(view.GetSaplingAnchorAt(view.GetBestAnchor(SAPLING), sapling_tree));
 
+    SaplingMerkleFrontier sapling_frontier_tree;
+    assert(view.GetSaplingFrontierAnchorAt(view.GetBestAnchor(SAPLINGFRONTIER), sapling_frontier_tree));
+
     // Grab the consensus branch ID for the block's height
     auto consensusBranchId = CurrentEpochBranchId(pindex->nHeight, Params().GetConsensus());
 
@@ -4170,8 +4173,18 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             }
         }
 
+        //Append Sapling Output to SaplingMerkleTree
         BOOST_FOREACH(const OutputDescription &outputDescription, tx.vShieldedOutput) {
             sapling_tree.append(outputDescription.cmu);
+        }
+
+        if (tx.vShieldedOutput.size()>0) {
+        //Append Sapling Outputs to SaplingMerkleFrontier
+            CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+            ss << tx;
+            CRustTransaction rTx;
+            ss >> rTx;
+            sapling_frontier_tree.AppendBundle(rTx.GetSaplingBundle());
         }
 
         vPos.push_back(std::make_pair(tx.GetHash(), pos));
@@ -4184,6 +4197,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
     view.PushAnchor(sprout_tree);
     view.PushAnchor(sapling_tree);
+    view.PushAnchor(sapling_frontier_tree);
     if (!fJustCheck) {
         pindex->hashFinalSproutRoot = sprout_tree.root();
     }
@@ -4546,6 +4560,7 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
     // Apply the block atomically to the chain state.
     uint256 sproutAnchorBeforeDisconnect = pcoinsTip->GetBestAnchor(SPROUT);
     uint256 saplingAnchorBeforeDisconnect = pcoinsTip->GetBestAnchor(SAPLING);
+    uint256 saplingFrontierAnchorBeforeDisconnect = pcoinsTip->GetBestAnchor(SAPLINGFRONTIER);
     int64_t nStart = GetTimeMicros();
     {
         CCoinsViewCache view(pcoinsTip);
@@ -4562,6 +4577,7 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
     LogPrint("bench", "- Disconnect block: %.2fms\n", (GetTimeMicros() - nStart) * 0.001);
     uint256 sproutAnchorAfterDisconnect = pcoinsTip->GetBestAnchor(SPROUT);
     uint256 saplingAnchorAfterDisconnect = pcoinsTip->GetBestAnchor(SAPLING);
+    uint256 saplingFrontierAnchorAfterDisconnect = pcoinsTip->GetBestAnchor(SAPLINGFRONTIER);
     // Write the chain state to disk, if necessary.
     if (!FlushStateToDisk(state, FLUSH_STATE_IF_NEEDED))
         return false;
@@ -4591,6 +4607,11 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
             // in which case we don't want to evict from the mempool yet!
             mempool.removeWithAnchor(saplingAnchorBeforeDisconnect, SAPLING);
         }
+        if (saplingFrontierAnchorBeforeDisconnect != saplingFrontierAnchorAfterDisconnect) {
+            // The anchor may not change between block disconnects,
+            // in which case we don't want to evict from the mempool yet!
+            mempool.removeWithAnchor(saplingFrontierAnchorBeforeDisconnect, SAPLINGFRONTIER);
+        }
     }
 
     // Update chainActive and related variables.
@@ -4599,8 +4620,10 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
     // Get the current commitment tree
     SproutMerkleTree newSproutTree;
     SaplingMerkleTree newSaplingTree;
+    SaplingMerkleFrontier newSaplingFrontierTree;
     assert(pcoinsTip->GetSproutAnchorAt(pcoinsTip->GetBestAnchor(SPROUT), newSproutTree));
     assert(pcoinsTip->GetSaplingAnchorAt(pcoinsTip->GetBestAnchor(SAPLING), newSaplingTree));
+    assert(pcoinsTip->GetSaplingFrontierAnchorAt(pcoinsTip->GetBestAnchor(SAPLINGFRONTIER), newSaplingFrontierTree));
     // Let wallets know transactions went from 1-confirmed to
     // 0-confirmed or conflicted:
     std::vector<uint256> TxToRemove;
@@ -4783,10 +4806,12 @@ bool ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *pblock)
     // Get the current commitment tree
     SproutMerkleTree oldSproutTree;
     SaplingMerkleTree oldSaplingTree;
+    SaplingMerkleFrontier oldSaplingFrontierTree;
     if ( KOMODO_NSPV_FULLNODE )
     {
         assert(pcoinsTip->GetSproutAnchorAt(pcoinsTip->GetBestAnchor(SPROUT), oldSproutTree));
         assert(pcoinsTip->GetSaplingAnchorAt(pcoinsTip->GetBestAnchor(SAPLING), oldSaplingTree));
+        assert(pcoinsTip->GetSaplingFrontierAnchorAt(pcoinsTip->GetBestAnchor(SAPLINGFRONTIER), oldSaplingFrontierTree));
     }
     // Apply the block atomically to the chain state.
     int64_t nTime2 = GetTimeMicros();
