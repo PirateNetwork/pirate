@@ -1144,7 +1144,6 @@ protected:
      * delegated to the Sapling wallet.
      */
     SaplingWallet saplingWallet;
-    bool saplingWalletInit = false;
 
     /* the hd chain data model (chain counters) */
     CHDChain hdChain;

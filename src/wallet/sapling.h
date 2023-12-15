@@ -107,35 +107,41 @@ public:
         return sapling_wallet_rewind(inner.get(), (uint32_t) nBlockHeight, &uResultHeight);
     }
 
+
+    /**
+    Clear the postions for a given Txid
+    */
+    bool ClearPositionsForTxid(const uint256 txid) {
+        if (!clear_note_positions_for_txid(inner.get(), txid.begin())) {
+            return false;
+        }
+
+        return true;
+    }
     /**
      * Append each Sapling note commitment from the specified block to the
      * wallet's note commitment tree. Does not mark any not for tracking.
      *
      * Returns `false` if the caller attempts to insert a block out-of-order.
      */
-    bool AppendNoteCommitments(const int nBlockHeight, const CBlock& block) {
+    bool AppendNoteCommitments(const int nBlockHeight, const CTransaction tx, const int txidx) {
         assert(nBlockHeight >= 0);
-        for (int txidx = 0; txidx < block.vtx.size(); txidx++) {
-            CTransaction tx = block.vtx[txidx];
 
-            if(tx.vShieldedOutput.size()>0) {
+        if(tx.vShieldedOutput.size()>0) {
 
-                CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-                ss << tx;
-                CRustTransaction rTx;
-                ss >> rTx;
-                SaplingBundle saplingBundle = rTx.GetSaplingBundle();
+            CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+            ss << tx;
+            CRustTransaction rTx;
+            ss >> rTx;
+            SaplingBundle saplingBundle = rTx.GetSaplingBundle();
 
-                LogPrintf("Appending commitments for block %i\n", GetLastCheckpointHeight());
-
-                if (!sapling_wallet_append_bundle_commitments(
-                        inner.get(),
-                        (uint32_t) nBlockHeight,
-                        txidx,
-                        saplingBundle.GetDetails().as_ptr()
-                        )) {
-                    return false;
-                }
+            if (!sapling_wallet_append_bundle_commitments(
+                    inner.get(),
+                    (uint32_t) nBlockHeight,
+                    txidx,
+                    saplingBundle.GetDetails().as_ptr()
+                    )) {
+                return false;
             }
         }
 
@@ -143,12 +149,24 @@ public:
     }
 
     /**
+    Create an empty postions map for a given txid, to be populated by calling AppendNotCommitment
+    */
+    bool CreateEmptyPositionsForTxid(const int nBlockHeight, const uint256 txid) {
+        if (!create_single_txid_positions(inner.get(), (uint32_t) nBlockHeight, txid.begin())) {
+            return false;
+        }
+
+        return true;
+    }
+    /**
+     *Call Create CreateEmptyPositionsForTxid before begining this function on any given tx
+     *
      * Append a specific Sapling note commitment from the specified block/tx/output to the
      * wallet's note commitment tree. Marks the note for tracking if it is flagged as isMine
      *
      * Returns `false` if the caller attempts to insert a block out-of-order.
      */
-    bool AppendNoteCommitment(const int nBlockHeight, int txidx, int outidx, const OutputDescription output, bool isMine) {
+    bool AppendNoteCommitment(const int nBlockHeight, const uint256 txid, int txidx, int outidx, const OutputDescription output, bool isMine) {
         assert(nBlockHeight >= 0);
 
         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
@@ -158,6 +176,7 @@ public:
         if (!sapling_wallet_append_single_commitment(
                 inner.get(),
                 (uint32_t) nBlockHeight,
+                txid.begin(),
                 txidx,
                 outidx,
                 (*rustOutput).as_ptr(),

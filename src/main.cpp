@@ -3720,8 +3720,10 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
     // empty root.
     if (NetworkUpgradeActive(pindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
         view.PopAnchor(pindex->pprev->hashFinalSaplingRoot, SAPLING);
+        view.PopAnchor(pindex->pprev->hashFinalSaplingRoot, SAPLINGFRONTIER);
     } else {
         view.PopAnchor(SaplingMerkleTree::empty_root(), SAPLING);
+        view.PopAnchor(SaplingMerkleFrontier::empty_root(), SAPLINGFRONTIER);
     }
 
     // move best block pointer to prevout block
@@ -4207,6 +4209,11 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     // same as the root of the Sapling tree
     if (NetworkUpgradeActive(pindex->nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_SAPLING)) {
         if (block.hashFinalSaplingRoot != sapling_tree.root()) {
+            return state.DoS(100,
+                         error("ConnectBlock(): block's hashFinalSaplingRoot is incorrect"),
+                               REJECT_INVALID, "bad-sapling-root-in-block");
+        }
+        if (block.hashFinalSaplingRoot != sapling_frontier_tree.root()) {
             return state.DoS(100,
                          error("ConnectBlock(): block's hashFinalSaplingRoot is incorrect"),
                                REJECT_INVALID, "bad-sapling-root-in-block");

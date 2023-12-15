@@ -173,9 +173,21 @@ bool sapling_wallet_append_bundle_commitments(
         const SaplingBundlePtr* bundle
         );
 
+bool clear_note_positions_for_txid(
+    SaplingWalletPtr* wallet,
+    const unsigned char txid[32]
+);
+
+bool create_single_txid_positions(
+    SaplingWalletPtr* wallet,
+    const uint32_t block_height,
+    const unsigned char txid[32]
+);
+
 bool sapling_wallet_append_single_commitment(
     SaplingWalletPtr* wallet,
     const uint32_t block_height,
+    const unsigned char txid[32],
     const size_t block_tx_idx,
     const size_t tx_output_idx,
     const OutputPtr* output,

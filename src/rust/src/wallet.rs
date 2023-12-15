@@ -1,6 +1,7 @@
 use bridgetree::BridgeTree;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use incrementalmerkletree::Position;
+use libc::c_uchar;
 use std::collections::{BTreeSet,BTreeMap};
 use std::io;
 use tracing::error;
@@ -319,9 +320,57 @@ impl Wallet {
         Ok(())
     }
 
+    pub fn clear_single_txid_postions(
+        &mut self,
+        txid: &TxId,
+    ) -> Result<(), WalletError>  {
+
+        //Check if txid already exists
+        match self.wallet_note_positions.get(txid) {
+           Some(_) => {
+               self.wallet_note_positions.remove(txid);
+               ()
+           },
+           None => ()
+        }
+
+        Ok(())
+
+    }
+
+    pub fn create_empty_txid_positions(
+        &mut self,
+        block_height: BlockHeight,
+        txid: &TxId,
+    ) -> Result<(), WalletError>  {
+
+        //Check if txid already exists
+        match self.wallet_note_positions.get(txid) {
+           Some(_) => {
+               self.wallet_note_positions.remove(txid);
+               ()
+           },
+           None => ()
+        }
+
+        self.wallet_note_positions
+            .insert(
+                *txid,
+                NotePositions {
+                    tx_height: block_height,
+                    note_positions: BTreeMap::default(),
+                },
+            );
+
+
+        Ok(())
+
+    }
+
     pub fn sapling_append_single_commitment(
         &mut self,
         block_height: BlockHeight,
+        txid: &TxId,
         block_tx_idx: usize,
         tx_output_idx: usize,
         sapling_output: &Output,
@@ -358,9 +407,16 @@ impl Wallet {
             return Err(WalletError::NoteCommitmentTreeFull);
         }
 
-        let mut pos = 0;
         if is_mine {
-            pos = self.commitment_tree.mark().expect("tree is not empty").into();
+            let pos = self.commitment_tree.mark().expect("tree is not empty");
+            assert!(self
+                    .wallet_note_positions
+                    .get_mut(txid)
+                    .expect("This should already be created")
+                    .note_positions
+                    .insert(tx_output_idx, pos)
+                    .is_none());
+
         }
 
 
@@ -466,19 +522,55 @@ pub extern "C" fn sapling_wallet_append_bundle_commitments(
 }
 
 #[no_mangle]
+pub extern "C" fn clear_note_positions_for_txid(
+    wallet: *mut Wallet,
+    txid: *const [c_uchar; 32],
+) -> bool {
+    let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null");
+    let txid = TxId::from_bytes(*unsafe { txid.as_ref() }.expect("txid may not be null."));
+    if let Err(e) =
+        wallet.clear_single_txid_postions(&txid)
+    {
+        error!("An error occurred clearing txid postions: {:?}", e);
+        return false;
+    }
+
+    true
+}
+
+#[no_mangle]
+pub extern "C" fn create_single_txid_positions(
+    wallet: *mut Wallet,
+    block_height: u32,
+    txid: *const [c_uchar; 32],
+) -> bool {
+    let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null");
+    let txid = TxId::from_bytes(*unsafe { txid.as_ref() }.expect("txid may not be null."));
+    if let Err(e) =
+        wallet.create_empty_txid_positions(block_height.into(), &txid)
+    {
+        error!("An error occurred createing empty txid postions: {:?}", e);
+        return false;
+    }
+
+    true
+}
+
+#[no_mangle]
 pub extern "C" fn sapling_wallet_append_single_commitment(
     wallet: *mut Wallet,
     block_height: u32,
+    txid: *const [c_uchar; 32],
     block_tx_idx: usize,
     tx_output_idx: usize,
     sapling_output: *const Output,
     is_mine: bool,
 ) -> bool {
     let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null");
-    // let txid = TxId::from_bytes(*unsafe { txid.as_ref() }.expect("txid may not be null."));
+    let txid = TxId::from_bytes(*unsafe { txid.as_ref() }.expect("txid may not be null."));
     if let Some(sapling_output) = unsafe { sapling_output.as_ref() } {
         if let Err(e) =
-            wallet.sapling_append_single_commitment(block_height.into(), block_tx_idx, tx_output_idx, sapling_output, is_mine)
+            wallet.sapling_append_single_commitment(block_height.into(), &txid, block_tx_idx, tx_output_idx, sapling_output, is_mine)
         {
             error!("An error occurred adding this Sapling output to the note commitment tree: {:?}", e);
             return false;
