@@ -25,13 +25,13 @@ struct SpendDescriptionInfo {
     libzcash::SaplingNote note;
     uint256 alpha;
     uint256 anchor;
-    SaplingWitness witness;
+    libzcash::MerklePath saplingMerklePath;
 
     SpendDescriptionInfo(
         libzcash::SaplingExpandedSpendingKey expsk,
         libzcash::SaplingNote note,
         uint256 anchor,
-        SaplingWitness witness);
+        libzcash::MerklePath saplingMerklePath);
 };
 
 class SpendDescriptionInfoRaw
@@ -208,7 +208,7 @@ public:
         libzcash::SaplingExpandedSpendingKey expsk,
         libzcash::SaplingNote note,
         uint256 anchor,
-        SaplingWitness witness);
+        libzcash::MerklePath saplingMerklePath);
 
     bool AddSaplingSpend_process_offline_transaction(
         libzcash::SaplingExpandedSpendingKey expsk,

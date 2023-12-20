@@ -206,21 +206,19 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
                 notes.push_back(fromNote.note);
             }
 
-            // Fetch Sapling anchor and witnesses
+            // Fetch Sapling anchor and merkle paths
             uint256 anchor;
-            std::vector<boost::optional<SaplingWitness>> witnesses;
+            std::vector<libzcash::MerklePath> saplingMerklePaths;
             {
                 LOCK2(cs_main, pwalletMain->cs_wallet);
-                pwalletMain->GetSaplingNoteWitnesses(ops, witnesses, anchor);
+                if (!pwalletMain->GetSaplingNoteWitnesses(ops, saplingMerklePaths, anchor)) {
+                    LogPrint("zrpcunsafe", "%s: Merkle Path not found for Sapling note. Stopping.\n", getId());
+                }
             }
 
             // Add Sapling spends
             for (size_t i = 0; i < notes.size(); i++) {
-                if (!witnesses[i]) {
-                    LogPrint("zrpcunsafe", "%s: Missing Witnesses. Stopping.\n", getId());
-                    break;
-                }
-                builder.AddSaplingSpend(extsk.expsk, notes[i], anchor, witnesses[i].get());
+                builder.AddSaplingSpend(extsk.expsk, notes[i], anchor, saplingMerklePaths[i]);
             }
 
             builder.SetFee(fee);

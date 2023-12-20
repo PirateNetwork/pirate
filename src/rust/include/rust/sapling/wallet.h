@@ -423,6 +423,20 @@ bool sapling_wallet_load_note_commitment_tree(
         void* stream,
         read_callback_t read_cb);
 
+
+bool sapling_wallet_get_path_for_note(
+    SaplingWalletPtr* wallet,
+    const unsigned char txid[32],
+    const size_t tx_output_idx,
+    unsigned char *path_ret
+);
+
+bool get_path_root_with_cm(
+    const unsigned char *merkle_path,
+    const unsigned char *cm,
+    unsigned char *anchor_out
+);
+
 /**
  * Returns whether the Sapling wallet's note commitment tree contains witness information
  * for all unspent notes.

@@ -195,6 +195,42 @@ public:
         return value;
     }
 
+
+    bool GetMerklePathOfNote(const uint256 txid, int outidx, libzcash::MerklePath &merklePath) {
+
+        unsigned char serializedPath[1065] = {};
+        if(!sapling_wallet_get_path_for_note(
+              inner.get(),
+              txid.begin(),
+              outidx,
+              serializedPath)) {
+            return false;
+        }
+
+        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+        ss << serializedPath;
+        ss >> merklePath;
+
+        return true;
+    }
+
+    bool GetPathRootWithCMU(libzcash::MerklePath &merklePath, uint256 cmu, uint256 &anchor) {
+        unsigned char serializedPath[1065] = {};
+        unsigned char serializedAnchor[32] = {};
+        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+        ss << merklePath;
+        ss >> serializedPath;
+
+        if (!get_path_root_with_cm(serializedPath, cmu.begin(), serializedAnchor)) {
+            return false;
+        }
+
+        CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+        rs << serializedAnchor;
+        rs >> anchor;
+
+        return true;
+    }
     /**
      * Return the root of the Sapling note commitment tree having the specified number
      * of confirmations. `confirmations` must be a value in the range `1..=100`; it is

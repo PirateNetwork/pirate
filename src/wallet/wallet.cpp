@@ -2465,6 +2465,9 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
   //Verifiy current witnesses again the SaplingHashRoot and/or set new initial witness
   int startHeight = VerifyAndSetInitialWitness(pindex, witnessOnly) + 1;
 
+  //disable this function
+  //return;
+
   if (startHeight > pindex->nHeight || witnessOnly) {
     return;
   }
@@ -2624,134 +2627,134 @@ void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
 
 }
 
-bool CWallet::GetSaplingNoteWitnessesConsolidationCleanup(std::vector<SaplingOutPoint> notes,
-                                      std::vector<boost::optional<SaplingWitness>>& witnesses,
-                                      uint256 &final_anchor)
-{
-    LOCK2(cs_main, cs_wallet);
-    witnesses.resize(notes.size());
-    boost::optional<uint256> rt;
-    int minHeight = 999999999;
-    int maxHeight = 0;
-    std::vector<SaplingNoteData*> vpNoteData;
-    for (SaplingOutPoint note : notes) {
-        if (mapWallet.count(note.hash) && mapWallet[note.hash].mapSaplingNoteData.count(note) && mapWallet[note.hash].mapSaplingNoteData[note].witnesses.size() > 0) {
-            minHeight = std::min(minHeight, mapWallet[note.hash].mapSaplingNoteData[note].witnessHeight);
-            maxHeight = std::max(maxHeight, mapWallet[note.hash].mapSaplingNoteData[note].witnessHeight);
-            vpNoteData.push_back(&mapWallet[note.hash].mapSaplingNoteData[note]);
-        }
-    }
-
-    // Set Starting Values
-    int chainHeight = chainActive.Height();
-    if (chainHeight < minHeight || chainHeight < maxHeight) {
-        LogPrintf("minHeight %i, maxHeight %i, chainHeight %i\n", minHeight, maxHeight, chainHeight);
-        return false;
-    }
-
-    //Create a vector of vectors of SaplingNoteData that needs to be updated to pass to the async threads
-    //The SaplingNoteData needs to be batched so async threads won't overwhelm the host system with threads
-    //Prepare this before going into the blockindex loop to prevent rechecking on each loop
-    std::vector<SaplingNoteData*> vNoteData;
-    std::vector<std::vector<SaplingNoteData*>> vvNoteData;
-    for (int i = 0; i < maxProcessingThreads; i++) {
-        vvNoteData.emplace_back(vNoteData);
-    }
-
-    int t = 0;
-    for (int i = 0; i < vpNoteData.size(); i++){
-        vpNoteData[i]->witnessRootValidated = false;
-        vvNoteData[t].emplace_back(vpNoteData[i]);
-        //Increment thread vector
-        t++;
-        //reset if tread vector is greater qty of threads being used
-        if (t >= vvNoteData.size()) {
-            t = 0;
-        }
-    }
-
-    //get Starting blockindex
-    CBlockIndex* pblockindex = chainActive[minHeight];
-    CBlockIndex* pindex = chainActive[maxHeight];
-
-    //Time for logging
-    int64_t nNow = 0;
-
-    while (pblockindex) {
-
-        //exit loop if trying to shutdown
-        if (ShutdownRequested()) {
-            break;
-        }
-
-        //Get Block fo incrementing witnesses
-        int witnessHeight = pblockindex->nHeight;
-        CBlock block;
-        ReadBlockFromDisk(block, pblockindex, 1);
-        CBlock *pblock = &block;
-
-        //Log progress
-        if (GetTime() >= nNow + 15) {
-            nNow = GetTime();
-            LogPrintf("Incrementing note witnesses from block %i to block %i\n", witnessHeight, maxHeight);
-        }
-
-        //Create 1 thread per group of notes
-        std::vector<boost::thread*> witnessThreads;
-        for (int i = 0; i < vvNoteData.size(); i++) {
-            if (!vvNoteData[i].empty()) {
-              witnessThreads.emplace_back(new boost::thread(BuildSingleSaplingWitness, this, vvNoteData[i], pblock, witnessHeight, i));
-            }
-        }
-
-        // Cleanup
-        for (auto wthread : witnessThreads) {
-            wthread->join();
-            delete wthread;
-        }
-        witnessThreads.resize(0);
-
-        //Check completeness
-        if (pblockindex == pindex) {
-            //get hashFinalSaplingRoot for witness validation
-            rt = pblockindex->hashFinalSaplingRoot;
-            break;
-        }
-
-        //Set Variables for next loop
-        pblockindex = chainActive.Next(pblockindex);
-    }
-
-    //Validate all roots match the pblockIndex maxheight
-    for (int i = 0; i < witnesses.size(); i++) {
-        witnesses[i] = vpNoteData[i]->witnesses.front();
-        if (*rt == witnesses[i]->root()) {
-            vpNoteData[i]->witnessRootValidated = true;
-        } else {
-            LogPrintf("Witness root failed validation");
-            return false;
-        }
-        assert(*rt == witnesses[i]->root());
-    }
-
-    // All returned witnesses have the same anchor
-    if (rt) {
-        final_anchor = *rt;
-    }
-
-    //clean up pointers
-    for (int i = 0; i < vvNoteData.size(); i++) {
-        for (auto pnd : vNoteData) {
-            delete pnd;
-        }
-        vvNoteData[i].resize(0);
-    }
-    vvNoteData.resize(0);
-    vpNoteData.resize(0);
-
-
-    return true;
-}
+// bool CWallet::GetSaplingNoteWitnessesConsolidationCleanup(std::vector<SaplingOutPoint> notes,
+//                                       std::vector<boost::optional<SaplingWitness>>& witnesses,
+//                                       uint256 &final_anchor)
+// {
+//     LOCK2(cs_main, cs_wallet);
+//     witnesses.resize(notes.size());
+//     boost::optional<uint256> rt;
+//     int minHeight = 999999999;
+//     int maxHeight = 0;
+//     std::vector<SaplingNoteData*> vpNoteData;
+//     for (SaplingOutPoint note : notes) {
+//         if (mapWallet.count(note.hash) && mapWallet[note.hash].mapSaplingNoteData.count(note) && mapWallet[note.hash].mapSaplingNoteData[note].witnesses.size() > 0) {
+//             minHeight = std::min(minHeight, mapWallet[note.hash].mapSaplingNoteData[note].witnessHeight);
+//             maxHeight = std::max(maxHeight, mapWallet[note.hash].mapSaplingNoteData[note].witnessHeight);
+//             vpNoteData.push_back(&mapWallet[note.hash].mapSaplingNoteData[note]);
+//         }
+//     }
+//
+//     // Set Starting Values
+//     int chainHeight = chainActive.Height();
+//     if (chainHeight < minHeight || chainHeight < maxHeight) {
+//         LogPrintf("minHeight %i, maxHeight %i, chainHeight %i\n", minHeight, maxHeight, chainHeight);
+//         return false;
+//     }
+//
+//     //Create a vector of vectors of SaplingNoteData that needs to be updated to pass to the async threads
+//     //The SaplingNoteData needs to be batched so async threads won't overwhelm the host system with threads
+//     //Prepare this before going into the blockindex loop to prevent rechecking on each loop
+//     std::vector<SaplingNoteData*> vNoteData;
+//     std::vector<std::vector<SaplingNoteData*>> vvNoteData;
+//     for (int i = 0; i < maxProcessingThreads; i++) {
+//         vvNoteData.emplace_back(vNoteData);
+//     }
+//
+//     int t = 0;
+//     for (int i = 0; i < vpNoteData.size(); i++){
+//         vpNoteData[i]->witnessRootValidated = false;
+//         vvNoteData[t].emplace_back(vpNoteData[i]);
+//         //Increment thread vector
+//         t++;
+//         //reset if tread vector is greater qty of threads being used
+//         if (t >= vvNoteData.size()) {
+//             t = 0;
+//         }
+//     }
+//
+//     //get Starting blockindex
+//     CBlockIndex* pblockindex = chainActive[minHeight];
+//     CBlockIndex* pindex = chainActive[maxHeight];
+//
+//     //Time for logging
+//     int64_t nNow = 0;
+//
+//     while (pblockindex) {
+//
+//         //exit loop if trying to shutdown
+//         if (ShutdownRequested()) {
+//             break;
+//         }
+//
+//         //Get Block fo incrementing witnesses
+//         int witnessHeight = pblockindex->nHeight;
+//         CBlock block;
+//         ReadBlockFromDisk(block, pblockindex, 1);
+//         CBlock *pblock = &block;
+//
+//         //Log progress
+//         if (GetTime() >= nNow + 15) {
+//             nNow = GetTime();
+//             LogPrintf("Incrementing note witnesses from block %i to block %i\n", witnessHeight, maxHeight);
+//         }
+//
+//         //Create 1 thread per group of notes
+//         std::vector<boost::thread*> witnessThreads;
+//         for (int i = 0; i < vvNoteData.size(); i++) {
+//             if (!vvNoteData[i].empty()) {
+//               witnessThreads.emplace_back(new boost::thread(BuildSingleSaplingWitness, this, vvNoteData[i], pblock, witnessHeight, i));
+//             }
+//         }
+//
+//         // Cleanup
+//         for (auto wthread : witnessThreads) {
+//             wthread->join();
+//             delete wthread;
+//         }
+//         witnessThreads.resize(0);
+//
+//         //Check completeness
+//         if (pblockindex == pindex) {
+//             //get hashFinalSaplingRoot for witness validation
+//             rt = pblockindex->hashFinalSaplingRoot;
+//             break;
+//         }
+//
+//         //Set Variables for next loop
+//         pblockindex = chainActive.Next(pblockindex);
+//     }
+//
+//     //Validate all roots match the pblockIndex maxheight
+//     for (int i = 0; i < witnesses.size(); i++) {
+//         witnesses[i] = vpNoteData[i]->witnesses.front();
+//         if (*rt == witnesses[i]->root()) {
+//             vpNoteData[i]->witnessRootValidated = true;
+//         } else {
+//             LogPrintf("Witness root failed validation");
+//             return false;
+//         }
+//         assert(*rt == witnesses[i]->root());
+//     }
+//
+//     // All returned witnesses have the same anchor
+//     if (rt) {
+//         final_anchor = *rt;
+//     }
+//
+//     //clean up pointers
+//     for (int i = 0; i < vvNoteData.size(); i++) {
+//         for (auto pnd : vNoteData) {
+//             delete pnd;
+//         }
+//         vvNoteData[i].resize(0);
+//     }
+//     vvNoteData.resize(0);
+//     vpNoteData.resize(0);
+//
+//
+//     return true;
+// }
 
 bool CWallet::DecryptWalletTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& hash, CWalletTx& wtx) {
 
@@ -3967,31 +3970,82 @@ void CWallet::GetSproutNoteWitnesses(std::vector<JSOutPoint> notes,
     }
 }
 
-void CWallet::GetSaplingNoteWitnesses(std::vector<SaplingOutPoint> notes,
-                                      std::vector<boost::optional<SaplingWitness>>& witnesses,
+// void CWallet::GetSaplingNoteWitnesses(std::vector<SaplingOutPoint> notes,
+//                                       std::vector<boost::optional<SaplingWitness>>& witnesses,
+//                                       uint256 &final_anchor)
+// {
+//     LOCK(cs_wallet);
+//     witnesses.resize(notes.size());
+//     boost::optional<uint256> rt;
+//     int i = 0;
+//     for (SaplingOutPoint note : notes) {
+//         if (mapWallet.count(note.hash) &&
+//                 mapWallet[note.hash].mapSaplingNoteData.count(note) &&
+//                 mapWallet[note.hash].mapSaplingNoteData[note].witnesses.size() > 0) {
+//             witnesses[i] = mapWallet[note.hash].mapSaplingNoteData[note].witnesses.front();
+//             if (!rt) {
+//                 rt = witnesses[i]->root();
+//             } else {
+//                 assert(*rt == witnesses[i]->root());
+//             }
+//         }
+//         i++;
+//     }
+//     // All returned witnesses have the same anchor
+//     if (rt) {
+//         final_anchor = *rt;
+//     }
+// }
+
+bool CWallet::GetSaplingNoteWitnesses(std::vector<SaplingOutPoint> notes,
+                                      std::vector<MerklePath>& saplingMerklePaths,
                                       uint256 &final_anchor)
 {
     LOCK(cs_wallet);
-    witnesses.resize(notes.size());
+    saplingMerklePaths.resize(notes.size());
     boost::optional<uint256> rt;
     int i = 0;
-    for (SaplingOutPoint note : notes) {
-        if (mapWallet.count(note.hash) &&
-                mapWallet[note.hash].mapSaplingNoteData.count(note) &&
-                mapWallet[note.hash].mapSaplingNoteData[note].witnesses.size() > 0) {
-            witnesses[i] = mapWallet[note.hash].mapSaplingNoteData[note].witnesses.front();
-            if (!rt) {
-                rt = witnesses[i]->root();
-            } else {
-                assert(*rt == witnesses[i]->root());
-            }
+    for (SaplingOutPoint op : notes) {
+
+        const CWalletTx* wtx = GetWalletTx(op.hash);
+        if (wtx == NULL) {
+            return false;
         }
-        i++;
+
+        if (wtx->mapSaplingNoteData.count(op)) {
+
+            if (!saplingWallet.GetMerklePathOfNote(op.hash, op.n, saplingMerklePaths[i])) {
+                return false;
+            }
+
+            LogPrintf("\nGot Path\n");
+
+            //Calculate the anchor
+            uint256 anchor;
+            OutputDescription output = wtx->vShieldedOutput[op.n];
+            if (!saplingWallet.GetPathRootWithCMU(saplingMerklePaths[i], output.cmu, anchor)) {
+                return false;
+            }
+
+            LogPrintf("Got Anchor %s\n\n", anchor.ToString());
+            LogPrintf("Sapling Wallet Anchor %s\n\n", saplingWallet.GetLatestAnchor().ToString());
+
+            //Check first anchor found and assert all following achors match
+            if (!rt) {
+                rt = anchor;
+            } else {
+                assert(*rt == anchor);
+            }
+            i++;
+        }
     }
+
     // All returned witnesses have the same anchor
     if (rt) {
         final_anchor = *rt;
     }
+
+    return true;
 }
 
 isminetype CWallet::IsMine(const CTxIn &txin) const
@@ -7881,6 +7935,15 @@ void CWallet::getZAddressBalances(std::map<libzcash::PaymentAddress, CAmount> &b
             balances[nd.address] += CAmount(nd.value);
         }
     }
+}
+
+
+bool CWallet::SaplingWalletGetMerklePathOfNote(const uint256 txid, int outidx, libzcash::MerklePath &merklePath) {
+    return saplingWallet.GetMerklePathOfNote(txid, outidx, merklePath);
+}
+
+bool CWallet::SaplingWalletGetPathRootWithCMU(libzcash::MerklePath &merklePath, uint256 cmu, uint256 &anchor) {
+   return saplingWallet.GetPathRootWithCMU(merklePath, cmu, anchor);
 }
 
 /**

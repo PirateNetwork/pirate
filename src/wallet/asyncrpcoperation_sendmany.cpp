@@ -452,11 +452,13 @@ bool AsyncRPCOperation_sendmany::main_impl() {
         // Fetch Sapling anchor and witnesses
         //printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses\n"); fflush(stdout);
         uint256 anchor;
-        std::vector<boost::optional<SaplingWitness>> witnesses;
+        std::vector<libzcash::MerklePath> saplingMerklePaths;
         {
             //printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses - start\n"); fflush(stdout);
             LOCK2(cs_main, pwalletMain->cs_wallet);
-            pwalletMain->GetSaplingNoteWitnesses(ops, witnesses, anchor);
+            if(!pwalletMain->GetSaplingNoteWitnesses(ops, saplingMerklePaths, anchor)) {
+                throw JSONRPCError(RPC_WALLET_ERROR, "Missing merkle path for Sapling note");
+            }
             //printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses - done\n"); fflush(stdout);
         }
 
@@ -470,18 +472,14 @@ bool AsyncRPCOperation_sendmany::main_impl() {
         auto ovk = fvk.ovk;
         for (size_t i = 0; i < notes.size(); i++)
         {
-            if (!witnesses[i])
-            {
-                throw JSONRPCError(RPC_WALLET_ERROR, "Missing witness for Sapling note");
-            }
             //printf("asyncrpcoperation_sendmany.cpp main_impl() Add sapling spend: %ld of %ld - start\n",i+1,notes.size() ); fflush(stdout);
             //Convert witness to a char array:
             CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-            ss << witnesses[i].get().path();
+            ss << saplingMerklePaths[i];
             std::vector<unsigned char> local_witness(ss.begin(), ss.end());
             myCharArray_s sWitness;
             memcpy (&sWitness.cArray[0], reinterpret_cast<unsigned char*>(local_witness.data()), sizeof(sWitness.cArray) );
-            assert(builder_.AddSaplingSpend_prepare_offline_transaction(fromAddress_, notes[i], anchor, witnesses[i].get().position(), &sWitness.cArray[0] ));
+            assert(builder_.AddSaplingSpend_prepare_offline_transaction(fromAddress_, notes[i], anchor, saplingMerklePaths[i].position(), &sWitness.cArray[0] ));
             //printf("asyncrpcoperation_sendmany.cpp main_impl() Add sapling spend: %ld of %ld - done\n",i+1,notes.size() ); fflush(stdout);
         }
 
@@ -495,47 +493,47 @@ bool AsyncRPCOperation_sendmany::main_impl() {
             auto strMemo = std::get<2>(r);
 
 
-            
+
             //Note: transaction builder expectes memo in
             //      ASCII encoding, not as a hex string.
             std::array<unsigned char, ZC_MEMO_SIZE> caMemo = {0x00};
             if (IsHex(strMemo))
-            {            
-                if (strMemo.length() > (ZC_MEMO_SIZE*2)) 
+            {
+                if (strMemo.length() > (ZC_MEMO_SIZE*2))
                 {
                     printf("asyncrpcoperation_sendmany.cpp main_impl() Hex encoded memo is larger than maximum allowed %d\n", (ZC_MEMO_SIZE*2) );
-                    
+
                     UniValue o(UniValue::VOBJ);
                     o.push_back(Pair("Failure", "Memo is too long"));
                     set_result(o);
-                    
+
                     return false;
-                }            
+                }
                 caMemo = get_memo_from_hex_string(strMemo);
             }
             else
             {
                 int iLength = strMemo.length();
-              
-                if (strMemo.length() > ZC_MEMO_SIZE) 
+
+                if (strMemo.length() > ZC_MEMO_SIZE)
                 {
                     printf("asyncrpcoperation_sendmany.cpp main_impl() Memo is larger than maximum allowed %d\n",ZC_MEMO_SIZE);
-                    
+
                     UniValue o(UniValue::VOBJ);
                     o.push_back(Pair("Failure", "Memo is too long"));
                     set_result(o);
-                    
+
                     return false;
-                }              
-                            
+                }
+
                 unsigned char cByte;
                 for (int iI=0;iI<iLength;iI++)
                 {
                     cByte = (unsigned char)strMemo[iI];
                     caMemo[iI] = cByte;
-                }                          
+                }
             }
-            
+
             //printf("asyncrpcoperation_sendmany.cpp main_impl() Output #%d:\n  addr=%s, ",iI+1,address.c_str() );
             //printf("value=%ld\n",value);
             //printf("memo=%s\n"  , strMemo.c_str() );
@@ -622,20 +620,19 @@ bool AsyncRPCOperation_sendmany::main_impl() {
             }
         }
 
-        // Fetch Sapling anchor and witnesses
+        // Fetch Sapling anchor and merkle paths
         uint256 anchor;
-        std::vector<boost::optional<SaplingWitness>> witnesses;
+        std::vector<libzcash::MerklePath> saplingMerklePaths;
         {
             LOCK2(cs_main, pwalletMain->cs_wallet);
-            pwalletMain->GetSaplingNoteWitnesses(ops, witnesses, anchor);
+            if (!pwalletMain->GetSaplingNoteWitnesses(ops, saplingMerklePaths, anchor)) {
+                LogPrint("zrpcunsafe", "%s: Merkle Path not found for Sapling note. Stopping.\n", getId());
+            }
         }
 
         // Add Sapling spends
         for (size_t i = 0; i < notes.size(); i++) {
-            if (!witnesses[i]) {
-                throw JSONRPCError(RPC_WALLET_ERROR, "Missing witness for Sapling note");
-            }
-            assert(builder_.AddSaplingSpend(expsk, notes[i], anchor, witnesses[i].get()));
+            assert(builder_.AddSaplingSpend(expsk, notes[i], anchor, saplingMerklePaths[i]));
         }
 
         // Add Sapling outputs

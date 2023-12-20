@@ -116,6 +116,10 @@ public:
 
     MerklePath(std::vector<std::vector<bool>> authentication_path, std::vector<bool> index)
     : authentication_path(authentication_path), index(index) { }
+
+    uint64_t position() {
+        return convertVectorToInt(index);
+    }
 };
 
 template<size_t Depth, typename Hash>

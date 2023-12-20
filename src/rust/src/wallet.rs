@@ -1,15 +1,17 @@
 use bridgetree::BridgeTree;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use incrementalmerkletree::Position;
+use incrementalmerkletree::{MerklePath, Position};
 use libc::c_uchar;
-use std::collections::{BTreeSet,BTreeMap};
+use std::collections::{BTreeSet, BTreeMap};
 use std::io;
+use std::convert::TryInto;
 use tracing::error;
+use subtle::CtOption;
 
 use zcash_encoding::{Optional, Vector};
 use zcash_primitives::{
     consensus::BlockHeight,
-    merkle_tree::{read_position, write_position},
+    merkle_tree::{read_position, write_position, write_merkle_path, merkle_path_from_slice, compute_root_from_witness},
     sapling::{Node, NOTE_COMMITMENT_TREE_DEPTH},
     sapling::note::ExtractedNoteCommitment,
     transaction::TxId,
@@ -21,8 +23,19 @@ use crate::{
     sapling::{Bundle, Output}
 };
 
+const SAPLING_TREE_DEPTH: usize = 32;
+
 pub const MAX_CHECKPOINTS: usize = 100;
 const NOTE_STATE_V1: u8 = 1;
+
+/// Converts CtOption<t> into Option<T>
+fn de_ct<T>(ct: CtOption<T>) -> Option<T> {
+    if ct.is_some().into() {
+        Some(ct.unwrap())
+    } else {
+        None
+    }
+}
 
 /// A data structure tracking the last transaction whose notes
 /// have been added to the wallet's note commitment tree.
@@ -362,8 +375,35 @@ impl Wallet {
                 },
             );
 
-
         Ok(())
+
+    }
+
+    pub fn get_position_of_note(
+        &mut self,
+        txid: &TxId,
+        tx_output_idx: &usize,
+    ) ->Option<Position> {
+        //Check if txid already exists
+        let txid_positions = match self.wallet_note_positions.get(txid) {
+           Some(positions) => {
+               positions
+           },
+           None => {
+               return None;
+           }
+       };
+
+        let output_position = match txid_positions.note_positions.get(tx_output_idx) {
+           Some(position) => {
+               position
+           },
+           None => {
+               return None;
+           }
+       };
+
+       return Some(*output_position)
 
     }
 
@@ -744,4 +784,62 @@ pub extern "C" fn sapling_wallet_init_from_frontier(
         );
         false
     }
+}
+
+type SaplingPath = MerklePath<Node, NOTE_COMMITMENT_TREE_DEPTH>;
+
+#[no_mangle]
+pub extern "C" fn sapling_wallet_get_path_for_note(
+    wallet: *mut Wallet,
+    txid: *const [c_uchar; 32],
+    tx_output_idx: usize,
+    path_ret: *mut [u8; 1 + 33 * SAPLING_TREE_DEPTH + 8],
+) -> bool {
+    let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null");
+    let txid = TxId::from_bytes(*unsafe { txid.as_ref() }.expect("txid may not be null."));
+
+    if let Some(position) = wallet.get_position_of_note(&txid, &tx_output_idx) {
+        if let Ok(witness) = wallet.commitment_tree.witness(position, 0) {
+            if let Ok(path) = SaplingPath::from_parts(witness, position) {
+                let mut buffer = vec![];
+                if let Ok(_) = write_merkle_path(&mut buffer, path) {
+                    if let Ok(rust_path_ret) = buffer.try_into() {
+                        let path_ret = unsafe { &mut *path_ret };
+                        *path_ret = rust_path_ret;
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+#[no_mangle]
+pub extern "C" fn get_path_root_with_cm(
+    merkle_path: *const [c_uchar; 1 + 33 * SAPLING_TREE_DEPTH + 8],
+    cm: *const [c_uchar; 32],
+    anchor_out: *mut [c_uchar; 32],
+) -> bool {
+
+    // Parse the Merkle path from the caller
+    let merkle_path: SaplingPath = match merkle_path_from_slice(unsafe { &(&*merkle_path)[..] }) {
+        Ok(w) => w,
+        Err(_) => return false,
+    };
+
+    let cm = match de_ct(ExtractedNoteCommitment::from_bytes(unsafe { &*cm })) {
+        Some(a) => Node::from_cmu(&a),
+        None => return false,
+    };
+
+    let anchor = compute_root_from_witness(cm, merkle_path.position(), merkle_path.path_elems());
+
+    println!("Path Anchor {:?}", anchor);
+
+    let anchor_out = unsafe { &mut *anchor_out };
+    *anchor_out = anchor.to_bytes();
+
+    return true;
 }

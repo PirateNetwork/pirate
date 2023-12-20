@@ -1489,9 +1489,15 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
             libzcash::SaplingNotePlaintext pt = decrypted.first;
             libzcash::SaplingPaymentAddress pa = decrypted.second;
 
-            auto witness = wtx.mapSaplingNoteData.at(op).witnesses.front();
-            auto anchor = witness.root();
             auto note = pt.note(wtx.mapSaplingNoteData.at(op).ivk).get();
+
+            libzcash::MerklePath saplingMerklePath;
+            if (!pwalletMain->SaplingWalletGetMerklePathOfNote(op.hash, op.n, saplingMerklePath))
+                throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Merkle Path for note note found.");
+
+            uint256 anchor;
+            if (!pwalletMain->SaplingWalletGetPathRootWithCMU(saplingMerklePath, note.cmu().get(), anchor))
+                throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Getting Anchor failed.");
 
             libzcash::SaplingExtendedFullViewingKey extfvk;
             pwalletMain->GetSaplingFullViewingKey(wtx.mapSaplingNoteData.at(op).ivk, extfvk);
@@ -1508,7 +1514,7 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
                 throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction with that use multiple spending keys are not supported.");
             }
 
-            if (!tb.AddSaplingSpend(extsk.expsk, note, anchor, witness))
+            if (!tb.AddSaplingSpend(extsk.expsk, note, anchor, saplingMerklePath))
                 throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX converting raw Sapling Spends failed.");
       } else {
           throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction with SaplingOutpoint not found.");

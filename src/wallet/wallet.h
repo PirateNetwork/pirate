@@ -1601,18 +1601,21 @@ public:
     bool IsSproutNullifierFromMe(const uint256& nullifier) const;
     bool IsSaplingNullifierFromMe(const uint256& nullifier) const;
 
+    bool SaplingWalletGetMerklePathOfNote(const uint256 txid, int outidx, libzcash::MerklePath &merklePath);
+    bool SaplingWalletGetPathRootWithCMU(libzcash::MerklePath &merklePath, uint256 cmu, uint256 &anchor);
+
     void GetSproutNoteWitnesses(
          std::vector<JSOutPoint> notes,
          std::vector<boost::optional<SproutWitness>>& witnesses,
          uint256 &final_anchor);
-    void GetSaplingNoteWitnesses(
+    // void GetSaplingNoteWitnesses(
+    //      std::vector<SaplingOutPoint> notes,
+    //      std::vector<boost::optional<SaplingWitness>>& witnesses,
+    //      uint256 &final_anchor);
+    bool GetSaplingNoteWitnesses(
          std::vector<SaplingOutPoint> notes,
-         std::vector<boost::optional<SaplingWitness>>& witnesses,
+         std::vector<libzcash::MerklePath>& saplingMerklePaths,
          uint256 &final_anchor);
-     bool GetSaplingNoteWitnessesConsolidationCleanup(
-          std::vector<SaplingOutPoint> notes,
-          std::vector<boost::optional<SaplingWitness>>& witnesses,
-          uint256 &final_anchor);
 
     isminetype IsMine(const CTxIn& txin) const;
     CAmount GetDebit(const CTxIn& txin, const isminefilter& filter) const;
