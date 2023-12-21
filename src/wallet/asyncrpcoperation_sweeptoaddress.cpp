@@ -211,7 +211,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
             std::vector<libzcash::MerklePath> saplingMerklePaths;
             {
                 LOCK2(cs_main, pwalletMain->cs_wallet);
-                if (!pwalletMain->GetSaplingNoteWitnesses(ops, saplingMerklePaths, anchor)) {
+                if (!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
                     LogPrint("zrpcunsafe", "%s: Merkle Path not found for Sapling note. Stopping.\n", getId());
                 }
             }

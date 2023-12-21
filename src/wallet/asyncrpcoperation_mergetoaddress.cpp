@@ -346,7 +346,7 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
         std::vector<libzcash::MerklePath> saplingMerklePaths;
         {
             LOCK2(cs_main, pwalletMain->cs_wallet);
-            if (!pwalletMain->GetSaplingNoteWitnesses(saplingOPs, saplingMerklePaths, anchor)) {
+            if (!pwalletMain->GetSaplingNoteMerklePaths(saplingOPs, saplingMerklePaths, anchor)) {
                 throw JSONRPCError(RPC_WALLET_ERROR, "Merkle Path not found for Sapling note");
             }
         }

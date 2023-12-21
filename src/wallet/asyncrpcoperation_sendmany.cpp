@@ -456,7 +456,7 @@ bool AsyncRPCOperation_sendmany::main_impl() {
         {
             //printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses - start\n"); fflush(stdout);
             LOCK2(cs_main, pwalletMain->cs_wallet);
-            if(!pwalletMain->GetSaplingNoteWitnesses(ops, saplingMerklePaths, anchor)) {
+            if(!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
                 throw JSONRPCError(RPC_WALLET_ERROR, "Missing merkle path for Sapling note");
             }
             //printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses - done\n"); fflush(stdout);
@@ -625,7 +625,7 @@ bool AsyncRPCOperation_sendmany::main_impl() {
         std::vector<libzcash::MerklePath> saplingMerklePaths;
         {
             LOCK2(cs_main, pwalletMain->cs_wallet);
-            if (!pwalletMain->GetSaplingNoteWitnesses(ops, saplingMerklePaths, anchor)) {
+            if (!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
                 LogPrint("zrpcunsafe", "%s: Merkle Path not found for Sapling note. Stopping.\n", getId());
             }
         }

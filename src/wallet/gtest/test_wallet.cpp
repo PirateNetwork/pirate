@@ -127,7 +127,7 @@ std::pair<uint256, uint256> GetWitnessesAndAnchors(TestWallet& wallet,
     uint256 sproutAnchor;
     uint256 saplingAnchor;
     wallet.GetSproutNoteWitnesses(sproutNotes, sproutWitnesses, sproutAnchor);
-    wallet.GetSaplingNoteWitnesses(saplingNotes, saplingWitnesses, saplingAnchor);
+    wallet.GetSaplingNoteMerklePaths(saplingNotes, saplingWitnesses, saplingAnchor);
     return std::make_pair(sproutAnchor, saplingAnchor);
 }
 

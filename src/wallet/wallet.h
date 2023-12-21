@@ -1608,11 +1608,7 @@ public:
          std::vector<JSOutPoint> notes,
          std::vector<boost::optional<SproutWitness>>& witnesses,
          uint256 &final_anchor);
-    // void GetSaplingNoteWitnesses(
-    //      std::vector<SaplingOutPoint> notes,
-    //      std::vector<boost::optional<SaplingWitness>>& witnesses,
-    //      uint256 &final_anchor);
-    bool GetSaplingNoteWitnesses(
+    bool GetSaplingNoteMerklePaths(
          std::vector<SaplingOutPoint> notes,
          std::vector<libzcash::MerklePath>& saplingMerklePaths,
          uint256 &final_anchor);
