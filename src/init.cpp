@@ -1967,7 +1967,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     }
     //Create 'blocks' as part of the required directory structure for online and offline mode:
     boost::filesystem::create_directories(GetDataDir() / "blocks");
-    
+
     // block tree db settings
     int dbMaxOpenFiles = GetArg("-dbmaxopenfiles", DEFAULT_DB_MAX_OPEN_FILES);
     bool dbCompression = GetBoolArg("-dbcompression", DEFAULT_DB_COMPRESSION);
@@ -2594,9 +2594,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
         if (clearWitnessCaches || GetBoolArg("-rescan", false) || !fInitializeArcTx || useBootstrap)
         {
-            pwalletMain->ClearNoteWitnessCache();
+            // pwalletMain->ClearNoteWitnessCache();
             pindexRescan = chainActive.Genesis();
             pwalletMain->nBirthday = 0;
+            pwalletMain->SaplingWalletReset();
 
             int rescanHeight = GetArg("-rescanheight", 0);
             if (chainActive.Tip() && rescanHeight > 0) {

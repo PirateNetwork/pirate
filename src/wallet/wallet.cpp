@@ -1310,26 +1310,26 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
         if (!initialDownloadCheck &&
             pblock->GetBlockTime() > GetTime() - 8640) //Last 144 blocks 2.4 * 60 * 60
         {
-            BuildWitnessCache(pindex, false);
+            // BuildWitnessCache(pindex, false);
             RunSaplingConsolidation(pindex->nHeight);
             RunSaplingSweep(pindex->nHeight);
             while(DeleteWalletTransactions(pindex, false)) {}
         } else {
             //Build intial witnesses on every block
-            BuildWitnessCache(pindex, true);
+            // BuildWitnessCache(pindex, true);
             if (initialDownloadCheck && pindex->nHeight % fDeleteInterval == 0) {
                 while(DeleteWalletTransactions(pindex, false)) {}
             }
 
             //Build full witness cache 1 hour before IsInitialBlockDownload() unlocks
             if (pblock->GetBlockTime() > GetTime() - nMaxTipAge - 3600) {
-                BuildWitnessCache(pindex, false);
+                // BuildWitnessCache(pindex, false);
             }
         }
 
     } else {
         DecrementSaplingWallet(pindex);
-        DecrementNoteWitnesses(pindex);
+        // DecrementNoteWitnesses(pindex);
         UpdateNullifierNoteMapForBlock(pblock);
     }
 
@@ -2019,61 +2019,61 @@ void CWallet::AddToSpends(const uint256& wtxid)
     }
 }
 
-void CWallet::ClearNoteWitnessCache()
-{
-    LOCK(cs_wallet);
-    for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
-        for (mapSproutNoteData_t::value_type& item : wtxItem.second.mapSproutNoteData) {
-            item.second.witnesses.clear();
-            item.second.witnessHeight = -1;
-        }
-        for (mapSaplingNoteData_t::value_type& item : wtxItem.second.mapSaplingNoteData) {
-            item.second.witnesses.clear();
-            item.second.witnessHeight = -1;
-        }
-    }
-}
+// void CWallet::ClearNoteWitnessCache()
+// {
+//     LOCK(cs_wallet);
+//     for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
+//         for (mapSproutNoteData_t::value_type& item : wtxItem.second.mapSproutNoteData) {
+//             item.second.witnesses.clear();
+//             item.second.witnessHeight = -1;
+//         }
+//         for (mapSaplingNoteData_t::value_type& item : wtxItem.second.mapSaplingNoteData) {
+//             item.second.witnesses.clear();
+//             item.second.witnessHeight = -1;
+//         }
+//     }
+// }
 
-void CWallet::DecrementNoteWitnesses(const CBlockIndex* pindex)
-{
-    AssertLockHeld(cs_wallet);
-
-    extern int32_t KOMODO_REWIND;
-
-    for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
-        //Sprout
-        for (auto& item : wtxItem.second.mapSproutNoteData) {
-            auto* nd = &(item.second);
-            if (nd->nullifier && pwalletMain->GetSproutSpendDepth(*item.second.nullifier) <= WITNESS_CACHE_SIZE) {
-              // Only decrement witnesses that are not above the current height
-                if (nd->witnessHeight <= pindex->nHeight) {
-                    if (nd->witnesses.size() > 1) {
-                        // indexHeight is the height of the block being removed, so
-                        // the new witness cache height is one below it.
-                        nd->witnesses.pop_front();
-                        nd->witnessHeight = pindex->nHeight - 1;
-                    }
-                }
-            }
-        }
-        //Sapling
-        for (auto& item : wtxItem.second.mapSaplingNoteData) {
-            auto* nd = &(item.second);
-            if (nd->nullifier && pwalletMain->GetSaplingSpendDepth(*item.second.nullifier) <= WITNESS_CACHE_SIZE) {
-                // Only decrement witnesses that are not above the current height
-                if (nd->witnessHeight <= pindex->nHeight) {
-                    if (nd->witnesses.size() > 1) {
-                        // indexHeight is the height of the block being removed, so
-                        // the new witness cache height is one below it.
-                        nd->witnesses.pop_front();
-                        nd->witnessHeight = pindex->nHeight - 1;
-                    }
-                }
-            }
-        }
-    }
-    assert(KOMODO_REWIND != 0 || WITNESS_CACHE_SIZE != _COINBASE_MATURITY+10);
-}
+// void CWallet::DecrementNoteWitnesses(const CBlockIndex* pindex)
+// {
+//     AssertLockHeld(cs_wallet);
+//
+//     extern int32_t KOMODO_REWIND;
+//
+//     for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
+//         //Sprout
+//         for (auto& item : wtxItem.second.mapSproutNoteData) {
+//             auto* nd = &(item.second);
+//             if (nd->nullifier && pwalletMain->GetSproutSpendDepth(*item.second.nullifier) <= WITNESS_CACHE_SIZE) {
+//               // Only decrement witnesses that are not above the current height
+//                 if (nd->witnessHeight <= pindex->nHeight) {
+//                     if (nd->witnesses.size() > 1) {
+//                         // indexHeight is the height of the block being removed, so
+//                         // the new witness cache height is one below it.
+//                         nd->witnesses.pop_front();
+//                         nd->witnessHeight = pindex->nHeight - 1;
+//                     }
+//                 }
+//             }
+//         }
+//         //Sapling
+//         for (auto& item : wtxItem.second.mapSaplingNoteData) {
+//             auto* nd = &(item.second);
+//             if (nd->nullifier && pwalletMain->GetSaplingSpendDepth(*item.second.nullifier) <= WITNESS_CACHE_SIZE) {
+//                 // Only decrement witnesses that are not above the current height
+//                 if (nd->witnessHeight <= pindex->nHeight) {
+//                     if (nd->witnesses.size() > 1) {
+//                         // indexHeight is the height of the block being removed, so
+//                         // the new witness cache height is one below it.
+//                         nd->witnesses.pop_front();
+//                         nd->witnessHeight = pindex->nHeight - 1;
+//                     }
+//                 }
+//             }
+//         }
+//     }
+//     assert(KOMODO_REWIND != 0 || WITNESS_CACHE_SIZE != _COINBASE_MATURITY+10);
+// }
 
 void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex) {
 
@@ -2087,6 +2087,10 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex) {
 
     if (NetworkUpgradeActive(pindex->nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
 
+        // if (mapWallet.size() == 0) {
+        //     return;
+        // }
+
         //Rebuild if wallet does not exisit
         if (lastCheckpoint<0) {
             rebuildWallet = true;
@@ -2098,11 +2102,11 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex) {
         }
 
         //Rebuild wallet if anchor does not match
-        if (lastCheckpoint == pindex->nHeight - 1) {
-            if (pindex->pprev->hashFinalSaplingRoot != saplingWallet.GetLatestAnchor()) {
-                rebuildWallet = true;
-            }
-        }
+        // if (lastCheckpoint == pindex->nHeight - 1) {
+        //     if (pindex->pprev->hashFinalSaplingRoot != saplingWallet.GetLatestAnchor()) {
+        //         rebuildWallet = true;
+        //     }
+        // }
 
         //Rebuild
         if (rebuildWallet) {
@@ -2127,26 +2131,28 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex) {
                 if (pwtx->GetDepthInMainChain() <= 0) {
                     continue;
                 }
-
-                //Include transaction for rebuild
-                mapWalletRebuild[txid] = pwtx;
-
             }
 
             //Determine Start Height of Sapling Wallet
             for (map<uint256, CWalletTx*>::iterator it = mapWalletRebuild.begin(); it != mapWalletRebuild.end(); ++it) {
                 CWalletTx* pwtx = (*it).second;
 
-                int txHeight = chainActive.Tip()->nHeight - pwtx->GetDepthInMainChain();
+                int txHeight = mapBlockIndex[pwtx->hashBlock]->nHeight;
+
                 //Check Note data for minimum height
                 for (mapSaplingNoteData_t::value_type& item : pwtx->mapSaplingNoteData) {
-                    nMinimumHeight = SaplingWitnessMinimumHeight(*item.second.nullifier, txHeight, nMinimumHeight);
+                    // if (item.second.nullifier != boost::none) {
+                        nMinimumHeight = SaplingWitnessMinimumHeight(*item.second.nullifier, txHeight, nMinimumHeight);
+                    // } else {
+                        // nMinimumHeight = min(txHeight, nMinimumHeight);
+                    // }
                 }
             }
 
+            LogPrint("saplingwallet", "Sapling Wallet - %s nMinimumHeight %i\n", __func__, nMinimumHeight);
             //No transactions exists to begin wallet at this hieght
             if (nMinimumHeight > pindex->nHeight) {
-                saplingWallet.Reset();
+                SaplingWalletReset();
                 return;
             }
 
@@ -2156,7 +2162,7 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex) {
             //Create a new wallet
             SaplingMerkleFrontier saplingFrontierTree;
             pcoinsTip->GetSaplingFrontierAnchorAt(pblockindex->pprev->hashFinalSaplingRoot, saplingFrontierTree);
-            saplingWallet.Reset();
+            SaplingWalletReset();
             saplingWallet.InitNoteCommitmentTree(saplingFrontierTree);
 
             //Loop thru blocks to rebuild saplingWallet commitment tree
@@ -2194,10 +2200,19 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex) {
 
                             if (opit != pwtx->mapSaplingNoteData.end()) {
                                 saplingWallet.AppendNoteCommitment(pblockindex->nHeight, txid, i, j, pblock->vtx[i].vShieldedOutput[j], true);
+                                //Get Merkle Path for note position
+                                MerklePath saplingMerklePath;
+                                assert(saplingWallet.GetMerklePathOfNote(txid, j, saplingMerklePath));
+                                uint64_t position = saplingMerklePath.position();
+                                pwtx->mapSaplingNoteData[op].setPosition(position);
+
+                                LogPrintf("Sapling Merkle Path position %i\n\n", position);
+
                             } else {
                                 saplingWallet.AppendNoteCommitment(pblockindex->nHeight, txid, i, j, pblock->vtx[i].vShieldedOutput[j], false);
                             }
                         }
+                        UpdateSaplingNullifierNoteMapWithTx(pwtx);
                     } else {
                         //No transactions in this tx belong to the wallet, use full tx appending
                         saplingWallet.ClearPositionsForTxid(txid);
@@ -2237,10 +2252,20 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex) {
 
                         if (opit != pwtx->mapSaplingNoteData.end()) {
                             saplingWallet.AppendNoteCommitment(pindex->nHeight, txid, i, j, pblock->vtx[i].vShieldedOutput[j], true);
+
+                            //Get Merkle Path for note position
+                            MerklePath saplingMerklePath;
+                            assert(saplingWallet.GetMerklePathOfNote(txid, j, saplingMerklePath));
+                            uint64_t position = saplingMerklePath.position();
+                            pwtx->mapSaplingNoteData[op].setPosition(position);
+
+                            LogPrintf("Sapling Merkle Path position %i\n\n", position);
+
                         } else {
                             saplingWallet.AppendNoteCommitment(pindex->nHeight, txid, i, j, pblock->vtx[i].vShieldedOutput[j], false);
                         }
                     }
+                    UpdateSaplingNullifierNoteMapWithTx(pwtx);
                 } else {
                     //No transactions in this tx belong to the wallet, use full tx appending
                     saplingWallet.ClearPositionsForTxid(txid);
@@ -2281,13 +2306,13 @@ void CWallet::DecrementSaplingWallet(const CBlockIndex* pindex) {
 }
 
 
-template<typename NoteData>
-void ClearSingleNoteWitnessCache(NoteData* nd)
-{
-    nd->witnesses.clear();
-    nd->witnessHeight = -1;
-    nd->witnessRootValidated = false;
-}
+// template<typename NoteData>
+// void ClearSingleNoteWitnessCache(NoteData* nd)
+// {
+//     nd->witnesses.clear();
+//     nd->witnessHeight = -1;
+//     nd->witnessRootValidated = false;
+// }
 
 int CWallet::SproutWitnessMinimumHeight(const uint256& nullifier, int nWitnessHeight, int nMinimumHeight)
 {
@@ -2305,327 +2330,327 @@ int CWallet::SaplingWitnessMinimumHeight(const uint256& nullifier, int nWitnessH
     return nMinimumHeight;
 }
 
-int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex, bool witnessOnly)
-{
-  AssertLockHeld(cs_main);
-  AssertLockHeld(cs_wallet);
+// int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex, bool witnessOnly)
+// {
+//   AssertLockHeld(cs_main);
+//   AssertLockHeld(cs_wallet);
+//
+//   int nWitnessTxIncrement = 0;
+//   int nWitnessTotalTxCount = mapWallet.size();
+//   int nMinimumHeight = pindex->nHeight;
+//   bool walletHasNotes = false; //Use to enable z_sendmany when no notes are present
+//
+//   for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
+//
+//     nWitnessTxIncrement += 1;
+//
+//     if (wtxItem.second.mapSproutNoteData.empty() && wtxItem.second.mapSaplingNoteData.empty())
+//       continue;
+//
+//     if (mapBlockIndex.count(wtxItem.second.hashBlock) == 0)
+//       continue;
+//
+//     if (wtxItem.second.GetDepthInMainChain() > 0) {
+//       walletHasNotes = true;
+//       auto wtxHash = wtxItem.second.GetHash();
+//       int wtxHeight = mapBlockIndex[wtxItem.second.hashBlock]->nHeight;
+//
+//       for (mapSaplingNoteData_t::value_type& item : wtxItem.second.mapSaplingNoteData) {
+//
+//         auto op = item.first;
+//         auto* nd = &(item.second);
+//         CBlockIndex* pblockindex;
+//         uint256 blockRoot;
+//         uint256 witnessRoot;
+//
+//         if (!nd->nullifier)
+//           ::ClearSingleNoteWitnessCache(nd);
+//
+//         if (!nd->witnesses.empty() && nd->witnessHeight > 0) {
+//
+//           //Skip all functions for validated witness while witness only = true
+//           if (nd->witnessRootValidated && witnessOnly)
+//             continue;
+//
+//           //Skip Validation when witness root has been validated
+//           if (nd->witnessRootValidated) {
+//             nMinimumHeight = SaplingWitnessMinimumHeight(*item.second.nullifier, nd->witnessHeight, nMinimumHeight);
+//             continue;
+//           }
+//
+//           //Skip Validation when witness height is greater that block height
+//           if (nd->witnessHeight > pindex->nHeight - 1) {
+//             nMinimumHeight = SaplingWitnessMinimumHeight(*item.second.nullifier, nd->witnessHeight, nMinimumHeight);
+//             continue;
+//           }
+//
+//           //Validate the witness at the witness height
+//           witnessRoot = nd->witnesses.front().root();
+//           pblockindex = chainActive[nd->witnessHeight];
+//           blockRoot = pblockindex->hashFinalSaplingRoot;
+//           if (witnessRoot == blockRoot) {
+//             nd->witnessRootValidated = true;
+//             nMinimumHeight = SaplingWitnessMinimumHeight(*item.second.nullifier, nd->witnessHeight, nMinimumHeight);
+//             continue;
+//           }
+//         }
+//
+//         //Clear witness Cache for all other scenarios
+//         pblockindex = chainActive[wtxHeight];
+//         ::ClearSingleNoteWitnessCache(nd);
+//
+//         LogPrintf("Setting Inital Sapling Witness for tx %s, %i of %i\n", wtxHash.ToString(), nWitnessTxIncrement, nWitnessTotalTxCount);
+//
+//         SaplingMerkleTree saplingTree;
+//         blockRoot = pblockindex->pprev->hashFinalSaplingRoot;
+//         pcoinsTip->GetSaplingAnchorAt(blockRoot, saplingTree);
+//
+//         //Cycle through blocks and transactions building sapling tree until the commitment needed is reached
+//         const CBlock* pblock;
+//         CBlock block;
+//         ReadBlockFromDisk(block, pblockindex, 1);
+//         pblock = &block;
+//
+//         for (const CTransaction& tx : block.vtx) {
+//           auto hash = tx.GetHash();
+//
+//           // Sapling
+//           for (uint32_t i = 0; i < tx.vShieldedOutput.size(); i++) {
+//             const uint256& note_commitment = tx.vShieldedOutput[i].cmu;
+//
+//             // Increment existing witness until the end of the block
+//             if (!nd->witnesses.empty()) {
+//               nd->witnesses.front().append(note_commitment);
+//             }
+//
+//             //Only needed for intial witness
+//             if (nd->witnesses.empty()) {
+//               saplingTree.append(note_commitment);
+//
+//               // If this is our note, witness it
+//               if (hash == wtxHash) {
+//                 SaplingOutPoint outPoint {hash, i};
+//                 if (op == outPoint) {
+//                   nd->witnesses.push_front(saplingTree.witness());
+//                 }
+//               }
+//             }
+//           }
+//         }
+//         nd->witnessHeight = pblockindex->nHeight;
+//         UpdateSaplingNullifierNoteMapWithTx(wtxItem.second);
+//         nMinimumHeight = SaplingWitnessMinimumHeight(*item.second.nullifier, nd->witnessHeight, nMinimumHeight);
+//       }
+//     }
+//   }
+//   //enable z_sendmany when the wallet has no Notes
+//   if (!IsInitialBlockDownload()) {
+//       if (!walletHasNotes || nMinimumHeight == pindex->nHeight) {
+//           fInitWitnessesBuilt = true;
+//       }
+//   }
+//
+//   return nMinimumHeight;
+// }
 
-  int nWitnessTxIncrement = 0;
-  int nWitnessTotalTxCount = mapWallet.size();
-  int nMinimumHeight = pindex->nHeight;
-  bool walletHasNotes = false; //Use to enable z_sendmany when no notes are present
+// static void BuildSingleSaplingWitness(CWallet* wallet, std::vector<SaplingNoteData*> vNoteData, const CBlock *pblock, const int &nHeight, const int threadNumber)
+// {
+//     for (auto pnd : vNoteData) {
+//         if (pnd->witnessHeight == nHeight - 1) {
+//             SaplingWitness witness = pnd->witnesses.front();
+//             for (const CTransaction& ctx : pblock->vtx) {
+//                 for (const OutputDescription &outdesc : ctx.vShieldedOutput) {
+//                     witness.append(outdesc.cmu);
+//                 }
+//             }
+//
+//             {
+//                 LOCK(wallet->cs_wallet_threadedfunction);
+//                 pnd->witnesses.push_front(witness);
+//                 while (pnd->witnesses.size() > WITNESS_CACHE_SIZE) {
+//                     pnd->witnesses.pop_back();
+//                 }
+//
+//                 pnd->witnessHeight = nHeight;
+//             }
+//         }
+//     }
+// }
 
-  for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
-
-    nWitnessTxIncrement += 1;
-
-    if (wtxItem.second.mapSproutNoteData.empty() && wtxItem.second.mapSaplingNoteData.empty())
-      continue;
-
-    if (mapBlockIndex.count(wtxItem.second.hashBlock) == 0)
-      continue;
-
-    if (wtxItem.second.GetDepthInMainChain() > 0) {
-      walletHasNotes = true;
-      auto wtxHash = wtxItem.second.GetHash();
-      int wtxHeight = mapBlockIndex[wtxItem.second.hashBlock]->nHeight;
-
-      for (mapSaplingNoteData_t::value_type& item : wtxItem.second.mapSaplingNoteData) {
-
-        auto op = item.first;
-        auto* nd = &(item.second);
-        CBlockIndex* pblockindex;
-        uint256 blockRoot;
-        uint256 witnessRoot;
-
-        if (!nd->nullifier)
-          ::ClearSingleNoteWitnessCache(nd);
-
-        if (!nd->witnesses.empty() && nd->witnessHeight > 0) {
-
-          //Skip all functions for validated witness while witness only = true
-          if (nd->witnessRootValidated && witnessOnly)
-            continue;
-
-          //Skip Validation when witness root has been validated
-          if (nd->witnessRootValidated) {
-            nMinimumHeight = SaplingWitnessMinimumHeight(*item.second.nullifier, nd->witnessHeight, nMinimumHeight);
-            continue;
-          }
-
-          //Skip Validation when witness height is greater that block height
-          if (nd->witnessHeight > pindex->nHeight - 1) {
-            nMinimumHeight = SaplingWitnessMinimumHeight(*item.second.nullifier, nd->witnessHeight, nMinimumHeight);
-            continue;
-          }
-
-          //Validate the witness at the witness height
-          witnessRoot = nd->witnesses.front().root();
-          pblockindex = chainActive[nd->witnessHeight];
-          blockRoot = pblockindex->hashFinalSaplingRoot;
-          if (witnessRoot == blockRoot) {
-            nd->witnessRootValidated = true;
-            nMinimumHeight = SaplingWitnessMinimumHeight(*item.second.nullifier, nd->witnessHeight, nMinimumHeight);
-            continue;
-          }
-        }
-
-        //Clear witness Cache for all other scenarios
-        pblockindex = chainActive[wtxHeight];
-        ::ClearSingleNoteWitnessCache(nd);
-
-        LogPrintf("Setting Inital Sapling Witness for tx %s, %i of %i\n", wtxHash.ToString(), nWitnessTxIncrement, nWitnessTotalTxCount);
-
-        SaplingMerkleTree saplingTree;
-        blockRoot = pblockindex->pprev->hashFinalSaplingRoot;
-        pcoinsTip->GetSaplingAnchorAt(blockRoot, saplingTree);
-
-        //Cycle through blocks and transactions building sapling tree until the commitment needed is reached
-        const CBlock* pblock;
-        CBlock block;
-        ReadBlockFromDisk(block, pblockindex, 1);
-        pblock = &block;
-
-        for (const CTransaction& tx : block.vtx) {
-          auto hash = tx.GetHash();
-
-          // Sapling
-          for (uint32_t i = 0; i < tx.vShieldedOutput.size(); i++) {
-            const uint256& note_commitment = tx.vShieldedOutput[i].cmu;
-
-            // Increment existing witness until the end of the block
-            if (!nd->witnesses.empty()) {
-              nd->witnesses.front().append(note_commitment);
-            }
-
-            //Only needed for intial witness
-            if (nd->witnesses.empty()) {
-              saplingTree.append(note_commitment);
-
-              // If this is our note, witness it
-              if (hash == wtxHash) {
-                SaplingOutPoint outPoint {hash, i};
-                if (op == outPoint) {
-                  nd->witnesses.push_front(saplingTree.witness());
-                }
-              }
-            }
-          }
-        }
-        nd->witnessHeight = pblockindex->nHeight;
-        UpdateSaplingNullifierNoteMapWithTx(wtxItem.second);
-        nMinimumHeight = SaplingWitnessMinimumHeight(*item.second.nullifier, nd->witnessHeight, nMinimumHeight);
-      }
-    }
-  }
-  //enable z_sendmany when the wallet has no Notes
-  if (!IsInitialBlockDownload()) {
-      if (!walletHasNotes || nMinimumHeight == pindex->nHeight) {
-          fInitWitnessesBuilt = true;
-      }
-  }
-
-  return nMinimumHeight;
-}
-
-static void BuildSingleSaplingWitness(CWallet* wallet, std::vector<SaplingNoteData*> vNoteData, const CBlock *pblock, const int &nHeight, const int threadNumber)
-{
-    for (auto pnd : vNoteData) {
-        if (pnd->witnessHeight == nHeight - 1) {
-            SaplingWitness witness = pnd->witnesses.front();
-            for (const CTransaction& ctx : pblock->vtx) {
-                for (const OutputDescription &outdesc : ctx.vShieldedOutput) {
-                    witness.append(outdesc.cmu);
-                }
-            }
-
-            {
-                LOCK(wallet->cs_wallet_threadedfunction);
-                pnd->witnesses.push_front(witness);
-                while (pnd->witnesses.size() > WITNESS_CACHE_SIZE) {
-                    pnd->witnesses.pop_back();
-                }
-
-                pnd->witnessHeight = nHeight;
-            }
-        }
-    }
-}
-
-void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
-{
-  AssertLockHeld(cs_main);
-  AssertLockHeld(cs_wallet);
-
-  //Get start time for logging
-  int64_t nNow1 = GetTime();
-  int64_t nNow2 = GetTime();
-  int64_t nNow3 = GetTime();
-
-  //Verifiy current witnesses again the SaplingHashRoot and/or set new initial witness
-  int startHeight = VerifyAndSetInitialWitness(pindex, witnessOnly) + 1;
-
-  //disable this function
-  //return;
-
-  if (startHeight > pindex->nHeight || witnessOnly) {
-    return;
-  }
-
-  if (fCleanUpMode) {
-      fBuilingWitnessCache = false;
-      return;
-  }
-
-  //Disable RPC while IsInitialBlockDownload()
-  if (IsInitialBlockDownload() && !fInitWitnessesBuilt) {
-      fBuilingWitnessCache = true;
-  }
-
-  // Set Starting Values
-  CBlockIndex* pblockindex = chainActive[startHeight];
-  int height = chainActive.Height();
-
-  //Show in UI
-  bool uiShown = false;
-  const CChainParams& chainParams = Params();
-  double dProgressStart = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false);
-  double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.Tip(), false);
-
-  //Create a vector of vectors of SaplingNoteData that needs to be updated to pass to the async threads
-  //The SaplingNoteData needs to be batched so async threads won't overwhelm the host system with threads
-  //Prepare this before going into the blockindex loop to prevent rechecking on each loop
-  std::vector<SaplingNoteData*> vNoteData;
-  std::vector<std::vector<SaplingNoteData*>> vvNoteData;
-  for (int i = 0; i < maxProcessingThreads; i++) {
-      vvNoteData.emplace_back(vNoteData);
-  }
-
-  int t = 0;
-  //Gather up notedata to be processed
-  for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
-      CWalletTx* pwtx = &(it->second);
-      if (pwtx->mapSaplingNoteData.empty()) {
-          continue;
-      }
-
-      if (pwtx->GetDepthInMainChain() > 0) {
-          int i = 0;
-          for (mapSaplingNoteData_t::value_type& item : pwtx->mapSaplingNoteData) {
-              auto* pnd = &(item.second);
-
-              if (pnd->nullifier && GetSaplingSpendDepth(pnd->nullifier.value()) <= WITNESS_CACHE_SIZE) {
-
-                  vvNoteData[t].emplace_back(pnd);
-                  //Increment thread vector
-                  t++;
-                  //reset if tread vector is greater qty of threads being used
-                  if (t >= vvNoteData.size()) {
-                      t = 0;
-                  }
-
-              } else {
-                  //remove all but the last witness to save disk space once the note has been spent
-                  //and is deep enough to not be affected by chain reorg
-                  while (pnd->witnesses.size() > 1) {
-                      pnd->witnesses.pop_back();
-                  }
-              }
-              i++;
-          }
-      }
-  }
-
-  //Retrieve the full block to get all of the transaction commitments
-  CBlock block;
-  ReadBlockFromDisk(block, pblockindex, 1);
-  CBlock *pblock = &block;
-
-  while (pblockindex) {
-
-      //exit loop if trying to shutdown
-      if (ShutdownRequested()) {
-          break;
-      }
-
-      //Report Progress to the GUI and log file
-      int witnessHeight = pblockindex->nHeight;
-      if ((witnessHeight % 100 == 0 || GetTime() >= nNow1 + 15) && witnessHeight < height - 5 ) {
-          nNow1 = GetTime();
-          if (!uiShown) {
-              uiShown = true;
-              uiInterface.ShowProgress("Building Witnesses", 0, false);
-          }
-          scanperc = (int)((Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false) - dProgressStart) / (dProgressTip - dProgressStart) * 100);
-          uiInterface.ShowProgress(_(("Building Witnesses for block " + std::to_string(witnessHeight) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
-      }
-
-      if (GetTime() >= nNow2 + 60) {
-          nNow2 = GetTime();
-          LogPrintf("Building Witnesses for block %d. Progress=%f\n", witnessHeight, Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex));
-      }
-
-      //flush progress to disk every 10 minutes
-      if (GetTime() >= nNow3 + 600) {
-          nNow3 = GetTime();
-          LogPrintf("Writing witness building progress to the disk.\n");
-          const CBlockLocator locatorBlock = chainActive.GetLocator(pindex);
-          const int locatorHeight = pindex->nHeight;
-          SetBestChain(locatorBlock, locatorHeight);
-      }
-
-      //Create 1 thread per group of notes
-      std::vector<boost::thread*> witnessThreads;
-      for (int i = 0; i < vvNoteData.size(); i++) {
-          if (!vvNoteData[i].empty()) {
-            witnessThreads.emplace_back(new boost::thread(BuildSingleSaplingWitness, this, vvNoteData[i], pblock, witnessHeight, i));
-          }
-      }
-
-      //prefetch the next block while the worker threads are processing
-      auto nNowReadTime = GetTimeMicros();
-      CBlockIndex* pnextblockindex = chainActive.Next(pblockindex);
-      CBlock nextBlock;
-      if (pnextblockindex) {
-          ReadBlockFromDisk(nextBlock, pnextblockindex, 1);
-      }
-
-      // Cleanup
-      for (auto wthread : witnessThreads) {
-          wthread->join();
-          delete wthread;
-      }
-
-      witnessThreads.resize(0);
-
-      //Check completeness
-      if (pblockindex == pindex)
-          break;
-
-      //Set Variables for next loop
-      pblockindex = chainActive.Next(pblockindex);
-      block = nextBlock;
-      pblock = &block;
-
-  }
-
-  if (uiShown) {
-      uiInterface.ShowProgress(_("Witness Cache Complete..."), 100, false);
-  }
-
-  //clean up
-  for (int i = 0; i < vvNoteData.size(); i++) {
-      for (auto pnd : vNoteData) {
-          delete pnd;
-      }
-      vvNoteData[i].resize(0);
-  }
-  vvNoteData.resize(0);
-
-  fInitWitnessesBuilt = true;
-  fBuilingWitnessCache = false;
-
-}
+// void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
+// {
+//   AssertLockHeld(cs_main);
+//   AssertLockHeld(cs_wallet);
+//
+//   //Get start time for logging
+//   int64_t nNow1 = GetTime();
+//   int64_t nNow2 = GetTime();
+//   int64_t nNow3 = GetTime();
+//
+//   //Verifiy current witnesses again the SaplingHashRoot and/or set new initial witness
+//   int startHeight = VerifyAndSetInitialWitness(pindex, witnessOnly) + 1;
+//
+//   //disable this function
+//   //return;
+//
+//   if (startHeight > pindex->nHeight || witnessOnly) {
+//     return;
+//   }
+//
+//   if (fCleanUpMode) {
+//       fBuilingWitnessCache = false;
+//       return;
+//   }
+//
+//   //Disable RPC while IsInitialBlockDownload()
+//   if (IsInitialBlockDownload() && !fInitWitnessesBuilt) {
+//       fBuilingWitnessCache = true;
+//   }
+//
+//   // Set Starting Values
+//   CBlockIndex* pblockindex = chainActive[startHeight];
+//   int height = chainActive.Height();
+//
+//   //Show in UI
+//   bool uiShown = false;
+//   const CChainParams& chainParams = Params();
+//   double dProgressStart = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false);
+//   double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.Tip(), false);
+//
+//   //Create a vector of vectors of SaplingNoteData that needs to be updated to pass to the async threads
+//   //The SaplingNoteData needs to be batched so async threads won't overwhelm the host system with threads
+//   //Prepare this before going into the blockindex loop to prevent rechecking on each loop
+//   std::vector<SaplingNoteData*> vNoteData;
+//   std::vector<std::vector<SaplingNoteData*>> vvNoteData;
+//   for (int i = 0; i < maxProcessingThreads; i++) {
+//       vvNoteData.emplace_back(vNoteData);
+//   }
+//
+//   int t = 0;
+//   //Gather up notedata to be processed
+//   for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
+//       CWalletTx* pwtx = &(it->second);
+//       if (pwtx->mapSaplingNoteData.empty()) {
+//           continue;
+//       }
+//
+//       if (pwtx->GetDepthInMainChain() > 0) {
+//           int i = 0;
+//           for (mapSaplingNoteData_t::value_type& item : pwtx->mapSaplingNoteData) {
+//               auto* pnd = &(item.second);
+//
+//               if (pnd->nullifier && GetSaplingSpendDepth(pnd->nullifier.value()) <= WITNESS_CACHE_SIZE) {
+//
+//                   vvNoteData[t].emplace_back(pnd);
+//                   //Increment thread vector
+//                   t++;
+//                   //reset if tread vector is greater qty of threads being used
+//                   if (t >= vvNoteData.size()) {
+//                       t = 0;
+//                   }
+//
+//               } else {
+//                   //remove all but the last witness to save disk space once the note has been spent
+//                   //and is deep enough to not be affected by chain reorg
+//                   while (pnd->witnesses.size() > 1) {
+//                       pnd->witnesses.pop_back();
+//                   }
+//               }
+//               i++;
+//           }
+//       }
+//   }
+//
+//   //Retrieve the full block to get all of the transaction commitments
+//   CBlock block;
+//   ReadBlockFromDisk(block, pblockindex, 1);
+//   CBlock *pblock = &block;
+//
+//   while (pblockindex) {
+//
+//       //exit loop if trying to shutdown
+//       if (ShutdownRequested()) {
+//           break;
+//       }
+//
+//       //Report Progress to the GUI and log file
+//       int witnessHeight = pblockindex->nHeight;
+//       if ((witnessHeight % 100 == 0 || GetTime() >= nNow1 + 15) && witnessHeight < height - 5 ) {
+//           nNow1 = GetTime();
+//           if (!uiShown) {
+//               uiShown = true;
+//               uiInterface.ShowProgress("Building Witnesses", 0, false);
+//           }
+//           scanperc = (int)((Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false) - dProgressStart) / (dProgressTip - dProgressStart) * 100);
+//           uiInterface.ShowProgress(_(("Building Witnesses for block " + std::to_string(witnessHeight) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
+//       }
+//
+//       if (GetTime() >= nNow2 + 60) {
+//           nNow2 = GetTime();
+//           LogPrintf("Building Witnesses for block %d. Progress=%f\n", witnessHeight, Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex));
+//       }
+//
+//       //flush progress to disk every 10 minutes
+//       if (GetTime() >= nNow3 + 600) {
+//           nNow3 = GetTime();
+//           LogPrintf("Writing witness building progress to the disk.\n");
+//           const CBlockLocator locatorBlock = chainActive.GetLocator(pindex);
+//           const int locatorHeight = pindex->nHeight;
+//           SetBestChain(locatorBlock, locatorHeight);
+//       }
+//
+//       //Create 1 thread per group of notes
+//       std::vector<boost::thread*> witnessThreads;
+//       for (int i = 0; i < vvNoteData.size(); i++) {
+//           if (!vvNoteData[i].empty()) {
+//             witnessThreads.emplace_back(new boost::thread(BuildSingleSaplingWitness, this, vvNoteData[i], pblock, witnessHeight, i));
+//           }
+//       }
+//
+//       //prefetch the next block while the worker threads are processing
+//       auto nNowReadTime = GetTimeMicros();
+//       CBlockIndex* pnextblockindex = chainActive.Next(pblockindex);
+//       CBlock nextBlock;
+//       if (pnextblockindex) {
+//           ReadBlockFromDisk(nextBlock, pnextblockindex, 1);
+//       }
+//
+//       // Cleanup
+//       for (auto wthread : witnessThreads) {
+//           wthread->join();
+//           delete wthread;
+//       }
+//
+//       witnessThreads.resize(0);
+//
+//       //Check completeness
+//       if (pblockindex == pindex)
+//           break;
+//
+//       //Set Variables for next loop
+//       pblockindex = chainActive.Next(pblockindex);
+//       block = nextBlock;
+//       pblock = &block;
+//
+//   }
+//
+//   if (uiShown) {
+//       uiInterface.ShowProgress(_("Witness Cache Complete..."), 100, false);
+//   }
+//
+//   //clean up
+//   for (int i = 0; i < vvNoteData.size(); i++) {
+//       for (auto pnd : vNoteData) {
+//           delete pnd;
+//       }
+//       vvNoteData[i].resize(0);
+//   }
+//   vvNoteData.resize(0);
+//
+//   fInitWitnessesBuilt = true;
+//   fBuilingWitnessCache = false;
+//
+// }
 
 bool CWallet::DecryptWalletTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& hash, CWalletTx& wtx) {
 
@@ -3171,14 +3196,14 @@ void CWallet::UpdateSproutNullifierNoteMapWithTx(CWalletTx& wtx) {
 /**
  * Update mapSaplingNullifiersToNotes, computing the nullifier from a cached witness if necessary.
  */
-void CWallet::UpdateSaplingNullifierNoteMapWithTx(CWalletTx& wtx) {
+void CWallet::UpdateSaplingNullifierNoteMapWithTx(CWalletTx* wtx) {
     LOCK(cs_wallet);
 
-    for (mapSaplingNoteData_t::value_type &item : wtx.mapSaplingNoteData) {
+    for (mapSaplingNoteData_t::value_type &item : wtx->mapSaplingNoteData) {
         SaplingOutPoint op = item.first;
         SaplingNoteData nd = item.second;
 
-        if (nd.witnesses.empty()) {
+        if (nd.getPostion() == boost::none) {
             // If there are no witnesses, erase the nullifier and associated mapping.
             if (item.second.nullifier) {
                 mapSaplingNullifiersToNotes.erase(item.second.nullifier.get());
@@ -3186,11 +3211,11 @@ void CWallet::UpdateSaplingNullifierNoteMapWithTx(CWalletTx& wtx) {
             item.second.nullifier = boost::none;
         }
         else {
-            uint64_t position = nd.witnesses.front().position();
+            uint64_t position = nd.getPostion().get();
             // Skip if we only have incoming viewing key
             if (mapSaplingFullViewingKeys.count(nd.ivk) != 0) {
                 SaplingExtendedFullViewingKey extfvk = mapSaplingFullViewingKeys.at(nd.ivk);
-                OutputDescription output = wtx.vShieldedOutput[op.n];
+                OutputDescription output = wtx->vShieldedOutput[op.n];
 
                 auto optDeserialized = SaplingNotePlaintext::attempt_sapling_enc_decryption_deserialization(output.encCiphertext, nd.ivk, output.ephemeralKey);
 
@@ -3234,7 +3259,7 @@ void CWallet::UpdateNullifierNoteMapForBlock(const CBlock *pblock) {
         bool txIsOurs = mapWallet.count(hash);
         if (txIsOurs) {
             UpdateSproutNullifierNoteMapWithTx(mapWallet[hash]);
-            UpdateSaplingNullifierNoteMapWithTx(mapWallet[hash]);
+            UpdateSaplingNullifierNoteMapWithTx(&mapWallet[hash]);
         }
     }
 }
@@ -3292,9 +3317,9 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
                 wtx.nIndex = wtxIn.nIndex;
                 fUpdated = true;
             }
-            if (UpdatedNoteData(wtxIn, wtx)) {
-                fUpdated = true;
-            }
+            // if (UpdatedNoteData(wtxIn, wtx)) {
+            //     fUpdated = true;
+            // }
             if (wtxIn.fFromMe && wtxIn.fFromMe != wtx.fFromMe)
             {
                 wtx.fFromMe = wtxIn.fFromMe;
@@ -3335,42 +3360,42 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
     return true;
 }
 
-bool CWallet::UpdatedNoteData(const CWalletTx& wtxIn, CWalletTx& wtx)
-{
-    bool unchangedSproutFlag = (wtxIn.mapSproutNoteData.empty() || wtxIn.mapSproutNoteData == wtx.mapSproutNoteData);
-    if (!unchangedSproutFlag) {
-        auto tmp = wtxIn.mapSproutNoteData;
-        // Ensure we keep any cached witnesses we may already have
-        for (const std::pair <JSOutPoint, SproutNoteData> nd : wtx.mapSproutNoteData) {
-            if (tmp.count(nd.first) && nd.second.witnesses.size() > 0) {
-                tmp.at(nd.first).witnesses.assign(
-                        nd.second.witnesses.cbegin(), nd.second.witnesses.cend());
-            }
-            tmp.at(nd.first).witnessHeight = nd.second.witnessHeight;
-        }
-        // Now copy over the updated note data
-        wtx.mapSproutNoteData = tmp;
-    }
-
-    bool unchangedSaplingFlag = (wtxIn.mapSaplingNoteData.empty() || wtxIn.mapSaplingNoteData == wtx.mapSaplingNoteData);
-    if (!unchangedSaplingFlag) {
-        auto tmp = wtxIn.mapSaplingNoteData;
-        // Ensure we keep any cached witnesses we may already have
-
-        for (const std::pair <SaplingOutPoint, SaplingNoteData> nd : wtx.mapSaplingNoteData) {
-            if (tmp.count(nd.first) && nd.second.witnesses.size() > 0) {
-                tmp.at(nd.first).witnesses.assign(
-                        nd.second.witnesses.cbegin(), nd.second.witnesses.cend());
-            }
-            tmp.at(nd.first).witnessHeight = nd.second.witnessHeight;
-        }
-
-        // Now copy over the updated note data
-        wtx.mapSaplingNoteData = tmp;
-    }
-
-    return !unchangedSproutFlag || !unchangedSaplingFlag;
-}
+// bool CWallet::UpdatedNoteData(const CWalletTx& wtxIn, CWalletTx& wtx)
+// {
+//     bool unchangedSproutFlag = (wtxIn.mapSproutNoteData.empty() || wtxIn.mapSproutNoteData == wtx.mapSproutNoteData);
+//     if (!unchangedSproutFlag) {
+//         auto tmp = wtxIn.mapSproutNoteData;
+//         // Ensure we keep any cached witnesses we may already have
+//         for (const std::pair <JSOutPoint, SproutNoteData> nd : wtx.mapSproutNoteData) {
+//             if (tmp.count(nd.first) && nd.second.witnesses.size() > 0) {
+//                 tmp.at(nd.first).witnesses.assign(
+//                         nd.second.witnesses.cbegin(), nd.second.witnesses.cend());
+//             }
+//             tmp.at(nd.first).witnessHeight = nd.second.witnessHeight;
+//         }
+//         // Now copy over the updated note data
+//         wtx.mapSproutNoteData = tmp;
+//     }
+//
+//     bool unchangedSaplingFlag = (wtxIn.mapSaplingNoteData.empty() || wtxIn.mapSaplingNoteData == wtx.mapSaplingNoteData);
+//     if (!unchangedSaplingFlag) {
+//         auto tmp = wtxIn.mapSaplingNoteData;
+//         // Ensure we keep any cached witnesses we may already have
+//
+//         for (const std::pair <SaplingOutPoint, SaplingNoteData> nd : wtx.mapSaplingNoteData) {
+//             if (tmp.count(nd.first) && nd.second.witnesses.size() > 0) {
+//                 tmp.at(nd.first).witnesses.assign(
+//                         nd.second.witnesses.cbegin(), nd.second.witnesses.cend());
+//             }
+//             tmp.at(nd.first).witnessHeight = nd.second.witnessHeight;
+//         }
+//
+//         // Now copy over the updated note data
+//         wtx.mapSaplingNoteData = tmp;
+//     }
+//
+//     return !unchangedSproutFlag || !unchangedSaplingFlag;
+// }
 
 /**
  * Add a transaction to the wallet, or update it.
@@ -5194,6 +5219,10 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
         uiInterface.ShowProgress(_("Rescanning..."), 0, false); // show rescan progress in GUI as dialog or on splashscreen, if -rescan on startup
         double dProgressStart = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pindex, false);
         double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.Tip(), false);
+
+        //Reset the sapling Wallet
+        SaplingWalletReset();
+
         while (pindex)
         {
             //exit loop if trying to shutdown
@@ -5220,6 +5249,8 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
                 ret++;
             }
 
+            IncrementSaplingWallet(pindex);
+
             SproutMerkleTree sproutTree;
             SaplingMerkleTree saplingTree;
             SaplingMerkleFrontier saplingFrontierTree;
@@ -5232,10 +5263,6 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
                     assert(pcoinsTip->GetSaplingFrontierAnchorAt(pindex->pprev->hashFinalSaplingRoot, saplingFrontierTree));
                 }
             }
-
-            // Build inital witness caches
-            if (blockInvolvesMe)
-                BuildWitnessCache(pindex, true);
 
             //Delete Transactions
             if (pindex->nHeight % fDeleteInterval == 0)
@@ -5250,6 +5277,9 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
         uiInterface.ShowProgress(_("Rescanning..."), 100, false); // hide progress dialog in GUI
 
+        // // Update the Sapling Wallet Merkle tree
+        //IncrementSaplingWallet(chainActive.Tip());
+
         //Write all transactions ant block loacator to the wallet
         currentBlock = chainActive.GetLocator();
         chainHeight = chainActive.Tip()->nHeight;
@@ -5257,9 +5287,6 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
         //Delete transactions
         while(DeleteWalletTransactions(chainActive.Tip(), true)) {}
-
-        //Update all witness caches
-        BuildWitnessCache(chainActive.Tip(), false);
 
         //Write everything to the wallet
         SetBestChain(currentBlock, chainHeight);
@@ -7788,6 +7815,10 @@ bool CWallet::SaplingWalletGetMerklePathOfNote(const uint256 txid, int outidx, l
 
 bool CWallet::SaplingWalletGetPathRootWithCMU(libzcash::MerklePath &merklePath, uint256 cmu, uint256 &anchor) {
    return saplingWallet.GetPathRootWithCMU(merklePath, cmu, anchor);
+}
+
+void CWallet::SaplingWalletReset() {
+   saplingWallet.Reset();
 }
 
 /**

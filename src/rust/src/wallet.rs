@@ -801,6 +801,7 @@ pub extern "C" fn sapling_wallet_get_path_for_note(
     if let Some(position) = wallet.get_position_of_note(&txid, &tx_output_idx) {
         if let Ok(witness) = wallet.commitment_tree.witness(position, 0) {
             if let Ok(path) = SaplingPath::from_parts(witness, position) {
+                println!("Sapling Path {:?}", path);
                 let mut buffer = vec![];
                 if let Ok(_) = write_merkle_path(&mut buffer, path) {
                     if let Ok(rust_path_ret) = buffer.try_into() {
@@ -835,8 +836,6 @@ pub extern "C" fn get_path_root_with_cm(
     };
 
     let anchor = compute_root_from_witness(cm, merkle_path.position(), merkle_path.path_elems());
-
-    println!("Path Anchor {:?}", anchor);
 
     let anchor_out = unsafe { &mut *anchor_out };
     *anchor_out = anchor.to_bytes();

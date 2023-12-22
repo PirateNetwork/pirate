@@ -334,22 +334,27 @@ public:
 
 class SaplingNoteData
 {
+private:
+    uint64_t position;
 public:
     /**
      * We initialize the height to -1 for the same reason as we do in SproutNoteData.
      * See the comment in that class for a full description.
      */
-    SaplingNoteData() : witnessHeight {-1}, nullifier(), witnessRootValidated {false}, value {0} { }
-    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk) : ivk {ivk}, witnessHeight {-1}, nullifier(), witnessRootValidated {false}, value {0} { }
-    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk, uint256 n) : ivk {ivk}, witnessHeight {-1}, nullifier(n), witnessRootValidated {false}, value {0} { }
+    SaplingNoteData() : nullifier(), value {0} {
+        setPosition(0);
+    }
+    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk) : ivk {ivk}, nullifier(), value {0} {
+        setPosition(0);
+    }
+    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk, uint256 n) : ivk {ivk}, nullifier(n), value {0} {
+        setPosition(0);
+    }
 
-    std::list<SaplingWitness> witnesses;
-    int witnessHeight;
     libzcash::SaplingIncomingViewingKey ivk;
     boost::optional<uint256> nullifier;
 
     //In Memory Only
-    bool witnessRootValidated;
     CAmount value;
     libzcash::SaplingPaymentAddress address;
 
@@ -363,17 +368,32 @@ public:
         }
         READWRITE(ivk);
         READWRITE(nullifier);
-        READWRITE(witnesses);
-        READWRITE(witnessHeight);
+        READWRITE(position);
     }
 
     friend bool operator==(const SaplingNoteData& a, const SaplingNoteData& b) {
-        return (a.ivk == b.ivk && a.nullifier == b.nullifier && a.witnessHeight == b.witnessHeight);
+        return (a.ivk == b.ivk && a.nullifier == b.nullifier && a.position == b.position);
     }
 
     friend bool operator!=(const SaplingNoteData& a, const SaplingNoteData& b) {
         return !(a == b);
     }
+
+    boost::optional<uint64_t> getPostion() {
+        if (position > 0) {
+            return position;
+        }
+        return boost::none;
+    }
+
+    bool setPosition(uint64_t postionIn) {
+        if (postionIn > 0) {
+            position = postionIn;
+            return true;
+        }
+        return false;
+    }
+
 };
 
 typedef std::map<JSOutPoint, SproutNoteData> mapSproutNoteData_t;
@@ -898,7 +918,7 @@ public:
 
     WalletCreateType createType = UNSET;
 
-    void ClearNoteWitnessCache();
+    // void ClearNoteWitnessCache();
 
     int64_t NullifierCount();
     std::set<uint256> GetNullifiers();
@@ -923,12 +943,12 @@ protected:
     /**
      * pindex is the new tip being connected.
      */
-     int VerifyAndSetInitialWitness(const CBlockIndex* pindex, bool witnessOnly);
-     void BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly);
-    /**
-     * pindex is the old tip being disconnected.
-     */
-    void DecrementNoteWitnesses(const CBlockIndex* pindex);
+    //  int VerifyAndSetInitialWitness(const CBlockIndex* pindex, bool witnessOnly);
+    //  void BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly);
+    // /**
+    //  * pindex is the old tip being disconnected.
+    //  */
+    // void DecrementNoteWitnesses(const CBlockIndex* pindex);
 
     void IncrementSaplingWallet(const CBlockIndex* pindex);
     void DecrementSaplingWallet(const CBlockIndex* pindex);
@@ -1137,7 +1157,7 @@ private:
     void SyncMetaData(std::pair<typename TxSpendMap<T>::iterator, typename TxSpendMap<T>::iterator>);
 
 protected:
-    bool UpdatedNoteData(const CWalletTx& wtxIn, CWalletTx& wtx);
+    // bool UpdatedNoteData(const CWalletTx& wtxIn, CWalletTx& wtx);
     void MarkAffectedTransactionsDirty(const CTransaction& tx);
 
     /* The Sapling subset of wallet data. As many operations as possible are
@@ -1539,7 +1559,7 @@ public:
     bool UpdateNullifierNoteMap();
     void UpdateNullifierNoteMapWithTx(const CWalletTx& wtx);
     void UpdateSproutNullifierNoteMapWithTx(CWalletTx& wtx);
-    void UpdateSaplingNullifierNoteMapWithTx(CWalletTx& wtx);
+    void UpdateSaplingNullifierNoteMapWithTx(CWalletTx* wtx);
     void UpdateNullifierNoteMapForBlock(const CBlock* pblock);
     bool AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb, int nHeight, bool fRescan = false);
     bool EraseFromWallet(const uint256 &hash);
@@ -1603,6 +1623,7 @@ public:
 
     bool SaplingWalletGetMerklePathOfNote(const uint256 txid, int outidx, libzcash::MerklePath &merklePath);
     bool SaplingWalletGetPathRootWithCMU(libzcash::MerklePath &merklePath, uint256 cmu, uint256 &anchor);
+    void SaplingWalletReset();
 
     void GetSproutNoteWitnesses(
          std::vector<JSOutPoint> notes,
