@@ -196,6 +196,10 @@ public:
     }
 
 
+    bool UnMarkNoteForTransaction(const uint256 txid) {
+        return sapling_wallet_unmark_transaction_notes(inner.get(),txid.begin());
+    }
+
     bool GetMerklePathOfNote(const uint256 txid, int outidx, libzcash::MerklePath &merklePath) {
 
         unsigned char serializedPath[1065] = {};

@@ -407,6 +407,28 @@ impl Wallet {
 
     }
 
+    pub fn unmark_positions_of_transaction(
+        &mut self,
+        txid: &TxId,
+    ) -> bool {
+        let txid_positions = match self.wallet_note_positions.get(txid) {
+           Some(positions) => {
+               positions
+           },
+           None => {
+               return false;
+           }
+       };
+
+        for (_, position) in txid_positions.note_positions.iter() {
+            self.commitment_tree.remove_mark(*position);
+        }
+
+        self.wallet_note_positions.remove(txid);
+
+       true
+    }
+
     pub fn sapling_append_single_commitment(
         &mut self,
         block_height: BlockHeight,
@@ -815,6 +837,17 @@ pub extern "C" fn sapling_wallet_get_path_for_note(
     }
 
     return false;
+}
+
+#[no_mangle]
+pub extern "C" fn sapling_wallet_unmark_transaction_notes(
+    wallet: *mut Wallet,
+    txid: *const [c_uchar; 32],
+) -> bool {
+    let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null");
+    let txid = TxId::from_bytes(*unsafe { txid.as_ref() }.expect("txid may not be null."));
+
+    wallet.unmark_positions_of_transaction(&txid)
 }
 
 #[no_mangle]

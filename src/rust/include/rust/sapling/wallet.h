@@ -423,6 +423,10 @@ bool sapling_wallet_load_note_commitment_tree(
         void* stream,
         read_callback_t read_cb);
 
+bool sapling_wallet_unmark_transaction_notes(
+    SaplingWalletPtr* wallet,
+    const unsigned char txid[32]
+);
 
 bool sapling_wallet_get_path_for_note(
     SaplingWalletPtr* wallet,

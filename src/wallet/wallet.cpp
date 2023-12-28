@@ -4868,6 +4868,11 @@ bool CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<ui
 
     for (int i = 0; i < removeTxs.size(); i++) {
         bool fRemoveFromSpends = !(mapWallet.at(removeTxs[i]).IsCoinBase());
+
+        //remove transaction tracking from the witness tree
+        saplingWallet.UnMarkNoteForTransaction(removeTxs[i]);
+
+        //remove transaction from the wallet
         if (EraseFromWallet(removeTxs[i])) {
             if (fRemoveFromSpends) {
                 RemoveFromSpends(removeTxs[i]);
@@ -4893,6 +4898,9 @@ bool CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<ui
             return false;
         }
     }
+
+    //Cleanup the sapling wallet witness tree
+    saplingWallet.GarbageCollect();
 
     // Miodrag: release memory back to the OS, only works on linux
     #ifdef __linux__
