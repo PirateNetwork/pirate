@@ -4993,8 +4993,11 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
               SaplingNoteData nd = pair.second;
               if (!nd.nullifier || pwalletMain->GetSaplingSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
                 LogPrint("deletetx","DeleteTx - Unspent sapling input tx %s\n", pwtx->GetHash().ToString());
-                deleteTx = false;
-                continue;
+                //Don't keep zero value notes
+                if (nd.value > 0) {
+                    deleteTx = false;
+                    continue;
+                }
               }
             }
 
