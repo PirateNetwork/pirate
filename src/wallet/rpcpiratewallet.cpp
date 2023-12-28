@@ -240,7 +240,13 @@ void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx &tx, s
 
         TransactionSpendZS spend;
         const SpendDescription& spendDesc = tx.vShieldedSpend[i];
-        SaplingOutPoint op = pwalletMain->mapArcSaplingOutPoints[spendDesc.nullifier];
+
+        // Find the op of the nullifier
+        map<uint256, SaplingOutPoint>::iterator opit = pwalletMain->mapArcSaplingOutPoints.find(spendDesc.nullifier);
+        if (opit == pwalletMain->mapArcSaplingOutPoints.end()) {
+            continue;
+        }
+        SaplingOutPoint op = (*opit).second;
 
         //Get Tx from files
         OutputDescription output = OutputDescription();
