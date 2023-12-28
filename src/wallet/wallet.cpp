@@ -1937,6 +1937,7 @@ void CWallet::AddToArcTxs(const uint256& wtxid, ArchiveTxPoint& arcTxPt)
 
     arcTxPt.ivks = arcTx.ivks;
     arcTxPt.ovks = arcTx.ovks;
+    arcTxPt.writeToDisk = true;
     mapArcTxs[wtxid] = arcTxPt;
 
     //Update Address txid map
@@ -1969,6 +1970,7 @@ void CWallet::AddToArcTxs(const CWalletTx& wtx, int txHeight, ArchiveTxPoint& ar
 
     arcTxPt.ivks = arcTx.ivks;
     arcTxPt.ovks = arcTx.ovks;
+    arcTxPt.writeToDisk = true;
     mapArcTxs[wtx.GetHash()] = arcTxPt;
 
     //Update Address txid map
@@ -3142,8 +3144,13 @@ void CWallet::UpdateNullifierNoteMapWithTx(const CWalletTx& wtx)
 
         for (const mapSaplingNoteData_t::value_type& item : wtx.mapSaplingNoteData) {
             if (item.second.nullifier) {
-                mapSaplingNullifiersToNotes[*item.second.nullifier] = item.first;
-                mapArcSaplingOutPoints[*item.second.nullifier] = item.first;
+                SaplingOutPoint op = item.first;
+
+                //Write Changes to disk on newt wallet flush
+                op.writeToDisk = true;
+                
+                mapSaplingNullifiersToNotes[*item.second.nullifier] = op;
+                mapArcSaplingOutPoints[*item.second.nullifier] = op;
             }
         }
     }
@@ -3202,6 +3209,9 @@ void CWallet::UpdateSaplingNullifierNoteMapWithTx(CWalletTx* wtx) {
     for (mapSaplingNoteData_t::value_type &item : wtx->mapSaplingNoteData) {
         SaplingOutPoint op = item.first;
         SaplingNoteData nd = item.second;
+
+        //Write Changes to Disk on next wallet flush
+        op.writeToDisk = true;
 
         if (nd.getPostion() == boost::none) {
             // If there are no witnesses, erase the nullifier and associated mapping.

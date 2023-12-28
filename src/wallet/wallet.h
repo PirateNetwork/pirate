@@ -956,6 +956,15 @@ protected:
     template <typename WalletDB>
     void SetBestChainINTERNAL(WalletDB& walletdb, const CBlockLocator& loc, const int& height) {
         AssertLockHeld(cs_wallet);
+
+        int txCount = 0;
+        int txSkippedCount = 0;
+        int arcTxPointCount = 0;
+        int arcTxPointSkipCount = 0;
+        int arcSaplingOutPointCount = 0;
+        int arcSaplingOutPointSkipCount = 0;
+        int paymentAddressCount = 0;
+
         if (!walletdb.TxnBegin()) {
             // This needs to be done atomically, so don't do it at all
             LogPrintf("SetBestChain(): Couldn't start atomic write\n");
@@ -972,28 +981,45 @@ protected:
                           walletdb.TxnAbort();
                           return;
                       }
+                      txCount++;
                 }
 
-                for (std::pair<const uint256, ArchiveTxPoint>& arcTxPtItem : mapArcTxs) {
-                    uint256 txid = arcTxPtItem.first;
-                    ArchiveTxPoint arcTxPt = arcTxPtItem.second;
-                    // Write all archived transactions to disk
-                      if (!walletdb.WriteArcTx(txid, arcTxPt, false)) {
-                          LogPrintf("SetBestChain(): Failed to write ArchiveTxPoint, aborting atomic write\n");
-                          walletdb.TxnAbort();
-                          return;
-                      }
+                for (map<uint256, ArchiveTxPoint>::iterator it = mapArcTxs.begin(); it != mapArcTxs.end(); ++it)
+                {
+
+                    uint256 txid = (*it).first;
+                    ArchiveTxPoint* pArcTxPt = &(*it).second;
+
+                    if (pArcTxPt->writeToDisk) {
+                        if (!walletdb.WriteArcTx(txid, *pArcTxPt, false)) {
+                            LogPrintf("SetBestChain(): Failed to write ArchiveTxPoint, aborting atomic write\n");
+                            walletdb.TxnAbort();
+                            return;
+                        }
+                        pArcTxPt->writeToDisk = false;
+                        arcTxPointCount++;
+                    } else {
+                        arcTxPointSkipCount++;
+                    }
                 }
 
-                for (std::pair<const uint256, SaplingOutPoint>& opItem : mapArcSaplingOutPoints) {
-                    uint256 nullifier = opItem.first;
-                    SaplingOutPoint op = opItem.second;
+                for (map<uint256, SaplingOutPoint>::iterator it = mapArcSaplingOutPoints.begin(); it != mapArcSaplingOutPoints.end(); ++it)
+                {
+                    uint256 nullifier = (*it).first;
+                    SaplingOutPoint* op = &(*it).second;
 
+                    if (op->writeToDisk) {
                     // Write all archived sapling outpoint
-                    if (!walletdb.WriteArcSaplingOp(nullifier, op, false)) {
-                        LogPrintf("SetBestChain(): Failed to write Archive Sapling Outpoint, aborting atomic write\n");
-                        walletdb.TxnAbort();
-                        return;
+                        if (!walletdb.WriteArcSaplingOp(nullifier, *op, false)) {
+                            LogPrintf("SetBestChain(): Failed to write Archive Sapling Outpoint, aborting atomic write\n");
+                            walletdb.TxnAbort();
+                            return;
+                        }
+                        //Don't write this object again unless it changes
+                        op->writeToDisk = false;
+                        arcSaplingOutPointCount++;
+                    } else {
+                        arcSaplingOutPointSkipCount++;
                     }
 
                 }
@@ -1008,7 +1034,7 @@ protected:
                         walletdb.TxnAbort();
                         return;
                     }
-
+                    paymentAddressCount++;
                 }
 
                 if (!walletdb.WriteBestBlock(loc)) {
@@ -1039,51 +1065,68 @@ protected:
                             walletdb.TxnAbort();
                             return;
                         }
+                        txCount++;
                     }
 
+                    for (map<uint256, ArchiveTxPoint>::iterator it = mapArcTxs.begin(); it != mapArcTxs.end(); ++it)
+                    {
 
-                    for (std::pair<const uint256, ArchiveTxPoint>& arcTxPtItem : mapArcTxs) {
-                        uint256 txid = arcTxPtItem.first;
-                        ArchiveTxPoint arcTxPt = arcTxPtItem.second;
+                        uint256 txid = (*it).first;
+                        ArchiveTxPoint* pArcTxPt = &(*it).second;
 
-                        std::vector<unsigned char> vchCryptedSecret;
-                        uint256 chash = HashWithFP(txid);
-                        CKeyingMaterial vchSecret = SerializeForEncryptionInput(txid, arcTxPt);
+                        if (pArcTxPt->writeToDisk) {
+                            std::vector<unsigned char> vchCryptedSecret;
+                            uint256 chash = HashWithFP(txid);
+                            CKeyingMaterial vchSecret = SerializeForEncryptionInput(txid, *pArcTxPt);
 
-                        //Encrypt all archived transactions in memory inorder to write to disk
-                        if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
-                            LogPrintf("SetBestChain(): Failed to encrypt ArchiveTxPoint, aborting atomic write\n");
-                            walletdb.TxnAbort();
-                            return;
+                            //Encrypt all archived transactions in memory inorder to write to disk
+                            if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
+                                LogPrintf("SetBestChain(): Failed to encrypt ArchiveTxPoint, aborting atomic write\n");
+                                walletdb.TxnAbort();
+                                return;
+                            }
+
+                            // Write all archived transactions to disk
+                            if (!walletdb.WriteCryptedArcTx(txid, chash, vchCryptedSecret, false)) {
+                                LogPrintf("SetBestChain(): Failed to write ArchiveTxPoint, aborting atomic write\n");
+                                walletdb.TxnAbort();
+                                return;
+                            }
+
+                            //Don't write this object again unless it changes
+                            pArcTxPt->writeToDisk = false;
+                            arcTxPointCount++;
+                        } else {
+                            arcTxPointSkipCount++;
                         }
+                    }
 
-                        // Write all archived transactions to disk
-                          if (!walletdb.WriteCryptedArcTx(txid, chash, vchCryptedSecret, false)) {
-                              LogPrintf("SetBestChain(): Failed to write ArchiveTxPoint, aborting atomic write\n");
-                              walletdb.TxnAbort();
-                              return;
-                          }
-                      }
-
-                    for (std::pair<const uint256, SaplingOutPoint>& opItem : mapArcSaplingOutPoints) {
-                        uint256 nullifier = opItem.first;
-                        SaplingOutPoint op = opItem.second;
+                    for (map<uint256, SaplingOutPoint>::iterator it = mapArcSaplingOutPoints.begin(); it != mapArcSaplingOutPoints.end(); ++it)
+                    {
+                        uint256 nullifier = (*it).first;
+                        SaplingOutPoint* op = &(*it).second;
 
                         std::vector<unsigned char> vchCryptedSecret;
                         uint256 chash = HashWithFP(nullifier);
-                        CKeyingMaterial vchSecret = SerializeForEncryptionInput(nullifier, op);
+                        CKeyingMaterial vchSecret = SerializeForEncryptionInput(nullifier, *op);
+                        if (op->writeToDisk) {
+                            if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
+                                LogPrintf("SetBestChain(): Failed to encrypt Archive Sapling Outpoint, aborting atomic write\n");
+                                walletdb.TxnAbort();
+                                return;
+                            }
 
-                        if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
-                            LogPrintf("SetBestChain(): Failed to encrypt Archive Sapling Outpoint, aborting atomic write\n");
-                            walletdb.TxnAbort();
-                            return;
-                        }
-
-                        // Write all archived sapling outpoint
-                        if (!walletdb.WriteCryptedArcSaplingOp(nullifier, chash, vchCryptedSecret, false)) {
-                            LogPrintf("SetBestChain(): Failed to write Archive Sapling Outpoint, aborting atomic write\n");
-                            walletdb.TxnAbort();
-                            return;
+                            // Write all archived sapling outpoint
+                            if (!walletdb.WriteCryptedArcSaplingOp(nullifier, chash, vchCryptedSecret, false)) {
+                                LogPrintf("SetBestChain(): Failed to write Archive Sapling Outpoint, aborting atomic write\n");
+                                walletdb.TxnAbort();
+                                return;
+                            }
+                            //Don't write this object again unless it changes
+                            op->writeToDisk = false;
+                            arcSaplingOutPointCount++;
+                        } else {
+                            arcSaplingOutPointSkipCount++;
                         }
 
                     }
@@ -1108,7 +1151,7 @@ protected:
                             walletdb.TxnAbort();
                             return;
                         }
-
+                        paymentAddressCount++;
                     }
 
                     if (!walletdb.WriteBestBlock(loc)) {
@@ -1149,7 +1192,16 @@ protected:
         mapUnsavedSaplingIncomingViewingKeys.clear();
         fRunSetBestChain = false;
         walletHeight = height; //Set Wallet height to chain height.
+
+        //Wallet Stats
         LogPrintf("SetBestChain(): SetBestChain was successful\n");
+        LogPrintf("SetBestChain():\n  %i - Transactions written\n", txCount);
+        LogPrintf("SetBestChain():\n  %i - Archived Tx Points written\n",arcTxPointCount);
+        LogPrintf("SetBestChain():\n  %i - Archived Points skipped\n", arcTxPointSkipCount);
+        LogPrintf("SetBestChain():\n  %i - Archived Sapling Outpoints written\n", arcSaplingOutPointCount);
+        LogPrintf("SetBestChain():\n  %i - Archived Sapling Outpoints skipped\n", arcSaplingOutPointSkipCount);
+        LogPrintf("SetBestChain():\n  %i - Payment Address written\n", paymentAddressCount);
+
     }
 
 private:

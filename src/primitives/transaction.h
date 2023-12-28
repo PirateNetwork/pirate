@@ -401,8 +401,11 @@ public:
 class SaplingOutPoint : public BaseOutPoint
 {
 public:
-    SaplingOutPoint() : BaseOutPoint() {};
-    SaplingOutPoint(uint256 hashIn, uint32_t nIn) : BaseOutPoint(hashIn, nIn) {};
+    //In-Memory Only
+    bool writeToDisk = true;
+    
+    SaplingOutPoint() : BaseOutPoint() {writeToDisk = true;};
+    SaplingOutPoint(uint256 hashIn, uint32_t nIn) : BaseOutPoint(hashIn, nIn) {writeToDisk = true;};
     std::string ToString() const;
 };
 
@@ -415,10 +418,13 @@ public:
     std::set<uint256> ivks;
     std::set<uint256> ovks;
 
+    //In-Memory Only
+    bool writeToDisk = true;
+
     ArchiveTxPoint() { SetNull(); }
-    ArchiveTxPoint(uint256 hashIn, int nIn) { hashBlock = hashIn; nIndex = nIn; }
+    ArchiveTxPoint(uint256 hashIn, int nIn) { hashBlock = hashIn; nIndex = nIn; writeToDisk = true; }
     ArchiveTxPoint(uint256 hashIn, int nIn, std::set<uint256> nIvks, std::set<uint256> nOvks)
-      { hashBlock = hashIn; nIndex = nIn; ivks = nIvks; ovks = nOvks;}
+      { hashBlock = hashIn; nIndex = nIn; ivks = nIvks; ovks = nOvks; writeToDisk = true;}
 
     ADD_SERIALIZE_METHODS;
 
@@ -430,7 +436,7 @@ public:
         READWRITE(ovks);
     }
 
-    void SetNull() { hashBlock.SetNull(); nIndex = -1; ivks.clear(); ovks.clear(); }
+    void SetNull() { hashBlock.SetNull(); nIndex = -1; ivks.clear(); ovks.clear(); writeToDisk = true; }
     bool IsNull() const { return (hashBlock.IsNull() && nIndex == -1 && ivks.size() == 0 && ovks.size() == 0); }
 };
 
