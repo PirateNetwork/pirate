@@ -1195,12 +1195,12 @@ protected:
 
         //Wallet Stats
         LogPrintf("SetBestChain(): SetBestChain was successful\n");
-        LogPrintf("SetBestChain():\n  %i - Transactions written\n", txCount);
-        LogPrintf("SetBestChain():\n  %i - Archived Tx Points written\n",arcTxPointCount);
-        LogPrintf("SetBestChain():\n  %i - Archived Points skipped\n", arcTxPointSkipCount);
-        LogPrintf("SetBestChain():\n  %i - Archived Sapling Outpoints written\n", arcSaplingOutPointCount);
-        LogPrintf("SetBestChain():\n  %i - Archived Sapling Outpoints skipped\n", arcSaplingOutPointSkipCount);
-        LogPrintf("SetBestChain():\n  %i - Payment Address written\n", paymentAddressCount);
+        LogPrintf("SetBestChain():  %i - Transactions written\n", txCount);
+        LogPrintf("SetBestChain():  %i - Archived Tx Points written\n",arcTxPointCount);
+        LogPrintf("SetBestChain():  %i - Archived Points skipped\n", arcTxPointSkipCount);
+        LogPrintf("SetBestChain():  %i - Archived Sapling Outpoints written\n", arcSaplingOutPointCount);
+        LogPrintf("SetBestChain():  %i - Archived Sapling Outpoints skipped\n", arcSaplingOutPointSkipCount);
+        LogPrintf("SetBestChain():  %i - Payment Address written\n", paymentAddressCount);
 
     }
 
