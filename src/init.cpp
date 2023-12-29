@@ -2040,6 +2040,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 LogPrintf("Transaction proof tracking not set, will reindex. could take a while.\n");
                 fReindex = true;
             }
+
+            //Check the Client Version of levelDB, reindex if needed.
+            pblocktree->ReadVersion(fReindex);
+
         }
     }
 
