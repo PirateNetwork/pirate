@@ -238,16 +238,18 @@ bool TransactionBuilder::AddSaplingSpend_prepare_offline_transaction(
 bool TransactionBuilder::AddSaplingSpendRaw(
   libzcash::SaplingPaymentAddress from,
   CAmount value,
-  SaplingOutPoint op)
+  SaplingOutPoint op,
+  libzcash::SaplingNotePlaintext notePt,
+  libzcash::MerklePath saplingMerklePath)
 {
-    rawSpends.emplace_back(from, value, op);
-
     // Consistency check: all from addresses must equal the first one
     if (!rawSpends.empty()) {
         if (!(rawSpends[0].addr == from)) {
             return false;
         }
     }
+
+    rawSpends.emplace_back(from, value, op, notePt, saplingMerklePath);
 
     return true;
 }
@@ -399,10 +401,15 @@ void TransactionBuilder::SetMinConfirmations(int iMinConf)
   this->iMinConf=iMinConf;
 }
 
-void TransactionBuilder::SetHeight(const Consensus::Params& consensusParams, int nHeight)
+void TransactionBuilder::SetConsensus(const Consensus::Params& consensusParams)
+{
+    this->consensusParams = consensusParams;
+    consensusBranchId = CurrentEpochBranchId(nHeight, consensusParams);
+}
+
+void TransactionBuilder::SetHeight(int nHeight)
 {
     this->nHeight = nHeight;
-    this->consensusParams = consensusParams;
     consensusBranchId = CurrentEpochBranchId(nHeight, consensusParams);
 }
 

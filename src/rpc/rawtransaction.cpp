@@ -1472,53 +1472,36 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
       throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
   }
 
-  tb.SetHeight(Params().GetConsensus(), chainActive.Tip()->nHeight);
+  tb.SetConsensus(Params().GetConsensus());
 
   libzcash::SaplingExtendedSpendingKey primaryKey;
   for (int i = 0; i < tb.rawSpends.size(); i++) {
-      SaplingOutPoint op = tb.rawSpends[i].op;
-      std::map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.find(op.hash);
-      if (it != pwalletMain->mapWallet.end()) {
-            CWalletTx wtx = (*it).second;
-            int txHeight = chainActive.Tip()->nHeight - wtx.GetDepthInMainChain();
-            auto maybe_decrypted = wtx.DecryptSaplingNote(Params().GetConsensus(), txHeight, op);
-            if (maybe_decrypted == boost::none)
-                throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Note decryption failed.");
+      libzcash::SaplingPaymentAddress addr = tb.rawSpends[i].addr;
+      libzcash::SaplingNotePlaintext notePt = tb.rawSpends[i].notePt;
+      libzcash::MerklePath saplingMerklePath = tb.rawSpends[i].saplingMerklePath;
 
-            auto decrypted = maybe_decrypted.get();
-            libzcash::SaplingNotePlaintext pt = decrypted.first;
-            libzcash::SaplingPaymentAddress pa = decrypted.second;
+      libzcash::SaplingIncomingViewingKey ivk;
+      if (!pwalletMain->GetSaplingIncomingViewingKey(addr, ivk))
+          throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Incoming Viewing key for SaplingOutpoint not found.");
 
-            auto note = pt.note(wtx.mapSaplingNoteData.at(op).ivk).get();
+      auto note = notePt.note(ivk).get();
 
-            libzcash::MerklePath saplingMerklePath;
-            if (!pwalletMain->SaplingWalletGetMerklePathOfNote(op.hash, op.n, saplingMerklePath))
-                throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Merkle Path for note note found.");
+      uint256 anchor;
+      if (!pwalletMain->SaplingWalletGetPathRootWithCMU(saplingMerklePath, note.cmu().get(), anchor))
+          throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Getting Anchor failed.");
 
-            uint256 anchor;
-            if (!pwalletMain->SaplingWalletGetPathRootWithCMU(saplingMerklePath, note.cmu().get(), anchor))
-                throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Getting Anchor failed.");
+      libzcash::SaplingExtendedSpendingKey extsk;
+      if (!pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk))
+          throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Spending key for SaplingOutpoint not found.");
 
-            libzcash::SaplingExtendedFullViewingKey extfvk;
-            pwalletMain->GetSaplingFullViewingKey(wtx.mapSaplingNoteData.at(op).ivk, extfvk);
-
-            libzcash::SaplingExtendedSpendingKey extsk;
-            if (!pwalletMain->HaveSaplingSpendingKey(extfvk))
-                throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Spending key for SaplingOutpoint not found.");
-
-            pwalletMain->GetSaplingExtendedSpendingKey(pa, extsk);
-
-            if (i == 0) {
-              primaryKey = extsk;
-            } else if (!(primaryKey == extsk)) {
-                throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction with that use multiple spending keys are not supported.");
-            }
-
-            if (!tb.AddSaplingSpend(extsk.expsk, note, anchor, saplingMerklePath))
-                throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX converting raw Sapling Spends failed.");
-      } else {
-          throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction with SaplingOutpoint not found.");
+      if (i == 0) {
+        primaryKey = extsk;
+      } else if (!(primaryKey == extsk)) {
+          throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction with that use multiple spending keys are not supported.");
       }
+
+      if (!tb.AddSaplingSpend(extsk.expsk, note, anchor, saplingMerklePath))
+          throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX converting raw Sapling Spends failed.");
   }
 
   uint256 ovk = primaryKey.ToXFVK().fvk.ovk;
@@ -1566,7 +1549,7 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
           + HelpExampleCli("z_createbuildinstructions", "\"[{\\\"txid\\\":\\\"myid\\\",\\\"index\\\":0},...]\" \"[{\\\"address\\\":\\\"sendtoaddress\\\",\\\"amount\\\":1.0000,\\\"memo\\\":\\\"memostring\\\"},...]\" 0.0001 200")
       );
 
-    LOCK(cs_main);
+    LOCK2(cs_main, pwalletMain->cs_wallet);
     RPCTypeCheck(params, boost::assign::list_of(UniValue::VARR)(UniValue::VARR)(UniValue::VNUM)(UniValue::VNUM), true);
     if (params[0].isNull() || params[1].isNull())
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, arguments 1 and 2 must be non-null");
@@ -1577,6 +1560,7 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
     CAmount total = 0;
     int nHeight = chainActive.Tip()->nHeight;
     TransactionBuilder tx = TransactionBuilder(Params().GetConsensus(), nHeight + DEFAULT_TX_EXPIRY_DELTA, pwalletMain);
+    tx.SetHeight(nHeight);
 
     CAmount nFee = 10000;
     if (!params[2].isNull()) {
@@ -1609,8 +1593,6 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
         if (nOutput < 0)
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, index must be positive");
 
-
-
         const CWalletTx* wtx = pwalletMain->GetWalletTx(txid);
         if (wtx != NULL) {
             SaplingOutPoint op = SaplingOutPoint(txid, nOutput);
@@ -1627,7 +1609,11 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
             CAmount value = note.value();
             total += value;
 
-            if (!tx.AddSaplingSpendRaw(pa, value, op))
+            libzcash::MerklePath saplingMerklePath;
+            if (!pwalletMain->SaplingWalletGetMerklePathOfNote(op.hash, op.n, saplingMerklePath))
+               throw JSONRPCError(RPC_INVALID_PARAMETER, "Getting Sapling Merkle Path failed");
+
+            if (!tx.AddSaplingSpendRaw(pa, value, op, pt, saplingMerklePath))
                 throw JSONRPCError(RPC_INVALID_PARAMETER, "All inputs must be from the same address");
 
         } else {

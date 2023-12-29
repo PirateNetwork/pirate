@@ -41,17 +41,17 @@ public:
     libzcash::SaplingPaymentAddress addr;
     CAmount value;
     SaplingOutPoint op;
+    libzcash::SaplingNotePlaintext notePt;
+    libzcash::MerklePath saplingMerklePath;
 
     SpendDescriptionInfoRaw() {}
 
     SpendDescriptionInfoRaw(
       libzcash::SaplingPaymentAddress addrIn,
       CAmount valueIn,
-      SaplingOutPoint opIn) {
-      addr = addrIn;
-      value = valueIn;
-      op = opIn;
-    }
+      SaplingOutPoint opIn,
+      libzcash::SaplingNotePlaintext notePtIn,
+      libzcash::MerklePath saplingMerklePathIn) : addr(addrIn), value(valueIn), op(opIn), notePt(notePtIn), saplingMerklePath(saplingMerklePathIn) {}
 
     ADD_SERIALIZE_METHODS;
 
@@ -60,6 +60,8 @@ public:
         READWRITE(addr);
         READWRITE(value);
         READWRITE(op);
+        READWRITE(notePt);
+        READWRITE(saplingMerklePath);
     }
 
 };
@@ -191,13 +193,15 @@ public:
         READWRITE(rawOutputs);
         READWRITE(mtx);
         READWRITE(fee);
+        READWRITE(nHeight);
     }
 
 
     void SetFee(CAmount fee);
     void SetMinConfirmations(int iMinConf);
 
-    void SetHeight(const Consensus::Params& consensusParams, int nHeight);
+    void SetConsensus(const Consensus::Params& consensusParams);
+    void SetHeight(int nHeight);
     void SetExpiryHeight(int expHeight);
 
     CTransaction getTransaction() {return mtx;}
@@ -229,7 +233,9 @@ public:
     bool AddSaplingSpendRaw(
       libzcash::SaplingPaymentAddress from,
       CAmount value,
-      SaplingOutPoint op);
+      SaplingOutPoint op,
+      libzcash::SaplingNotePlaintext notePt,
+      libzcash::MerklePath saplingMerklePath);
 
     void AddSaplingOutput(
         uint256 ovk,
