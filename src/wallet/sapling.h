@@ -63,16 +63,10 @@ public:
     void InitNoteCommitmentTree(const SaplingMerkleFrontier& frontier) {
         assert(!GetLastCheckpointHeight() >= 0);
 
-        // LogPrintf("\nCommitment Tree LastCheckpointHeight %i\n", GetLastCheckpointHeight());
-        //
-        // auto walletPtr = reinterpret_cast<merkle_frontier::SaplingWallet*>(inner.get());
-        //
-        // auto initWallet = frontier.inner->init_wallet(walletPtr);
-        //
-        // LogPrintf("\nInit Commitment Tree %s\n", initWallet? "success":"fail");
-
         assert(frontier.inner->init_wallet(
             reinterpret_cast<merkle_frontier::SaplingWallet*>(inner.get())));
+
+        LogPrint("saplingwallet","Initialized Commitment Tree with LastCheckpointHeight %i\n", GetLastCheckpointHeight());
     }
 
     /**
@@ -92,9 +86,9 @@ public:
         uint32_t lastHeight{0};
         if (sapling_wallet_get_last_checkpoint(inner.get(), &lastHeight)) {
             return (int) lastHeight;
-        } else {
-            return -1;
         }
+
+        return -1;
     }
 
     /**
@@ -120,7 +114,7 @@ public:
     }
     /**
      * Append each Sapling note commitment from the specified block to the
-     * wallet's note commitment tree. Does not mark any not for tracking.
+     * wallet's note commitment tree. Does not mark any notes for tracking.
      *
      * Returns `false` if the caller attempts to insert a block out-of-order.
      */
@@ -289,6 +283,9 @@ public:
                     wallet.inner.get(),
                     &rs, RustStream<Stream>::write_callback)) {
             throw std::ios_base::failure("Failed to serialize Sapling note commitment tree.");
+            LogPrint("saplingwallet","Sapling Wallet - Wallet failed to write\n");
+        } else {
+            LogPrint("saplingwallet","Sapling Wallet - Wallet written\n");
         }
     }
 };
@@ -311,6 +308,9 @@ public:
                     wallet.inner.get(),
                     &rs, RustStream<Stream>::read_callback)) {
             throw std::ios_base::failure("Failed to load Sapling note commitment tree.");
+            LogPrint("saplingwallet","Sapling Wallet - Wallet failed to load\n");
+        } else {
+            LogPrint("saplingwallet","Sapling Wallet - Wallet loaded\n");
         }
     }
 };

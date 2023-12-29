@@ -2628,7 +2628,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             uiInterface.InitMessage(_("Rescanning..."));
             LogPrintf("Rescanning last %i blocks (from block %i)...\n", chainActive.Height() - pindexRescan->nHeight, pindexRescan->nHeight);
             nStart = GetTimeMillis();
-            pwalletMain->ScanForWalletTransactions(pindexRescan, true);
+            pwalletMain->ScanForWalletTransactions(pindexRescan, true, false, false, false);
             LogPrintf(" rescan      %15dms\n", GetTimeMillis() - nStart);
 
             // Restore wallet transaction metadata after -zapwallettxes=1
@@ -2662,7 +2662,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 uiInterface.InitMessage(_("Rescanning..."));
                 LogPrintf("Rescanning last %i blocks (from block %i)...\n", chainActive.Height() - pindexRescan->nHeight, pindexRescan->nHeight);
                 nStart = GetTimeMillis();
-                pwalletMain->ScanForWalletTransactions(pindexRescan, true);
+                pwalletMain->ScanForWalletTransactions(pindexRescan, true, false, false, false);
                 LogPrintf(" rescan      %15dms\n", GetTimeMillis() - nStart);
             }
         }

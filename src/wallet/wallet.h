@@ -1216,6 +1216,7 @@ protected:
      * delegated to the Sapling wallet.
      */
     SaplingWallet saplingWallet;
+    bool saplingWalletValidated = false;
 
     /* the hd chain data model (chain counters) */
     CHDChain hdChain;
@@ -1628,7 +1629,7 @@ public:
     bool DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<uint256> &removeArcTxs, bool fRescan = false);
     bool DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan = false);
     bool initalizeArcTx();
-    int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false, bool fIgnoreBirthday = false, bool LockOnFinish = false);
+    int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false, bool fIgnoreBirthday = false, bool LockOnFinish = false, bool resetSaplingWallet = false);
     void ReacceptWalletTransactions();
     void ResendWalletTransactions(int64_t nBestBlockTime);
     std::vector<uint256> ResendWalletTransactionsBefore(int64_t nTime);
