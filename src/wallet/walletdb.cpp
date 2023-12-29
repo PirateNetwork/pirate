@@ -1614,6 +1614,18 @@ DBErrors CWalletDB::LoadCryptedSeedFromDB(CWallet* pwallet) {
     return DB_LOAD_OK;
 }
 
+DBErrors CWalletDB::ReadClientVersion() {
+    int nVersion = 0;
+    if (Read(std::string("version"), nVersion)) {
+        if (nVersion < MIN_WALLET_TX_VERSION) {
+            return DB_CLEAR_TX;
+        } else {
+            return DB_VERSION_OK;
+        }
+    }
+
+    return DB_VERSION_NOT_FOUND;
+}
 
 DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
 {

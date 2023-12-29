@@ -2146,7 +2146,20 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         // needed to restore wallet transaction meta data after -zapwallettxes
         std::vector<CWalletTx> vWtx;
 
-        if (GetBoolArg("-zapwallettxes", false)) {
+        //Clear transactions on passed aurguments
+        bool zapTransactions = GetBoolArg("-zapwallettxes", false);
+
+        //Clear transactions on min client version
+        {
+            CWalletDB walletdb(strWalletFile);
+            DBErrors nDbVersion = walletdb.ReadClientVersion();
+            if (nDbVersion == DB_CLEAR_TX || nDbVersion == DB_CLEAR_TX) {
+                zapTransactions = true;
+            }
+        }
+
+        //Run ZapWalletTx to clean out transactions
+        if (zapTransactions) {
             uiInterface.InitMessage(_("Zapping all transactions from wallet..."));
 
             pwalletMain = new CWallet(strWalletFile);
@@ -2593,7 +2606,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             }
         }
 
-        if (clearWitnessCaches || GetBoolArg("-rescan", false) || !fInitializeArcTx || useBootstrap)
+        if (clearWitnessCaches || GetBoolArg("-rescan", false) || !fInitializeArcTx || useBootstrap || zapTransactions)
         {
             // pwalletMain->ClearNoteWitnessCache();
             pindexRescan = chainActive.Genesis();

@@ -58,7 +58,10 @@ enum DBErrors
     DB_NONCRITICAL_ERROR,
     DB_TOO_NEW,
     DB_LOAD_FAIL,
-    DB_NEED_REWRITE
+    DB_NEED_REWRITE,
+    DB_CLEAR_TX,
+    DB_VERSION_OK,
+    DB_VERSION_NOT_FOUND,
 };
 
 /* simple hd chain data model */
@@ -275,6 +278,7 @@ public:
 
     DBErrors InitalizeCryptedLoad(CWallet* pwallet);
     DBErrors LoadCryptedSeedFromDB(CWallet* pwallet);
+    DBErrors ReadClientVersion() ;
     DBErrors LoadWallet(CWallet* pwallet);
     DBErrors FindWalletTxToZap(
       CWallet* pwallet, std::vector<uint256>& vTxHash,
