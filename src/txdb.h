@@ -170,6 +170,12 @@ public:
      */
     bool ReadReindexing(bool &fReindex) const;
 
+    //Write the client version to the index using the DB_VERSION flag
+    bool WriteVersion();
+
+    //Read the client version of the index using the DB_VERSION flag
+    bool ReadVersion(bool &fReindexing) const;
+
     bool ReadDiskBlockIndex(const uint256 &blockhash, CDiskBlockIndex &dbindex) const;
     /***
      * Retrieve the location of a particular transaction index value

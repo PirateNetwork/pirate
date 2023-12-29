@@ -66,6 +66,8 @@ static const char DB_LAST_BLOCK = 'l';
 static const char SPEND_PROOF_HASH = 'e';
 static const char OUTPUT_PROOF_HASH = 'E';
 
+static const char DB_VERSION = 'V';
+
 CCoinsViewDB::CCoinsViewDB(std::string dbName, size_t nCacheSize, bool fMemory, bool fWipe) : db(GetDataDir() / dbName, nCacheSize, fMemory, fWipe) {
 }
 
@@ -298,6 +300,24 @@ bool CBlockTreeDB::WriteReindexing(bool fReindexing) {
 
 bool CBlockTreeDB::ReadReindexing(bool &fReindexing) const {
     fReindexing = Exists(DB_REINDEX_FLAG);
+    return true;
+}
+
+bool CBlockTreeDB::WriteVersion() {
+    return Write(DB_VERSION, CLIENT_VERSION);
+}
+
+bool CBlockTreeDB::ReadVersion(bool &fReindexing) const {
+    if (!Exists(DB_VERSION)) {
+        fReindexing = true;
+        return true;
+    } else {
+        int db_version;
+        Read(DB_VERSION, db_version);
+        if (db_version < MIN_INDEX_VERSION) {
+            fReindexing = true;
+        }
+    }
     return true;
 }
 

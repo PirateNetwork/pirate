@@ -774,6 +774,7 @@ void ThreadImport(std::vector<boost::filesystem::path> vImportFiles)
             nFile++;
         }
         pblocktree->WriteReindexing(false);
+        pblocktree->WriteVersion();
         fReindex = false;
         LogPrintf("Reindexing finished\n");
         // To avoid ending up in a situation without genesis block, re-try initializing (no-op if reindexing worked):

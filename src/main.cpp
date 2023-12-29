@@ -6842,6 +6842,11 @@ bool static LoadBlockIndexDB()
     pblocktree->ReadReindexing(fReindexing);
     fReindex |= fReindexing;
 
+    //Check the Client Version of the Index
+    bool fReindexingVersion = false;
+    pblocktree->ReadVersion(fReindexingVersion);
+    fReindex |= fReindexingVersion;
+
     // Check whether we have a transaction index
     pblocktree->ReadFlag("txindex", fTxIndex);
     LogPrintf("%s: transaction index %s\n", __func__, fTxIndex ? "enabled" : "disabled");
