@@ -49,7 +49,7 @@ wagyu-zcash-parameters = "0.2"
 
 # Rust/C++ interop
 # The version needs to match depends/packages/native_cxxbridge.mk
-cxx = { version = "=1.0.107", features = ["default"] }
+cxx = { version = "=1.0.107", features = ["c++17"] }
 
 # Metrics
 hyper = { version = "=0.14.12", default-features = false, features = ["server", "tcp", "http1"] }
