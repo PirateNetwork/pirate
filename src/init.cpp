@@ -774,7 +774,6 @@ void ThreadImport(std::vector<boost::filesystem::path> vImportFiles)
             nFile++;
         }
         pblocktree->WriteReindexing(false);
-        pblocktree->WriteVersion();
         fReindex = false;
         LogPrintf("Reindexing finished\n");
         // To avoid ending up in a situation without genesis block, re-try initializing (no-op if reindexing worked):
@@ -1014,6 +1013,9 @@ bool AttemptDatabaseOpen(size_t nBlockTreeDBCache, bool dbCompression, size_t db
             strLoadError = _("Error loading block database");
             return false;
         }
+
+        //Write the client version to the index to verfiy on start
+        pblocktree->WriteVersion();
 
         const CChainParams& chainparams = Params();
         // If the loaded chain has a wrong genesis, bail out immediately
@@ -2001,41 +2003,38 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     LogPrintf("* Using %.1fMiB for chain state database\n", nCoinDBCache * (1.0 / 1024 / 1024));
     LogPrintf("* Using %.1fMiB for in-memory UTXO set\n", nCoinCacheUsage * (1.0 / 1024 / 1024));
 
-    if ( !fReindex )
-    {
-      if (nMaxConnections > 0) //Online mode
-      {
+    if ( !fReindex ) {
+        if (nMaxConnections > 0) {//Online mode
             pblocktree = new CBlockTreeDB(nBlockTreeDBCache, false, fReindex, dbCompression, dbMaxOpenFiles);
             bool fAddressIndex = GetBoolArg("-addressindex", DEFAULT_ADDRESSINDEX);
             bool checkval;
 
             pblocktree->ReadFlag("addressindex", checkval);
-            if ( checkval != fAddressIndex && fAddressIndex != 0 )
-            {
+            if ( checkval != fAddressIndex && fAddressIndex != 0 ) {
                 pblocktree->WriteFlag("addressindex", fAddressIndex);
                 fprintf(stderr,"set addressindex, will reindex. could take a while.\n");
                 fReindex = true;
             }
+
             bool fSpentIndex = GetBoolArg("-spentindex", DEFAULT_SPENTINDEX);
             pblocktree->ReadFlag("spentindex", checkval);
-            if ( checkval != fSpentIndex && fSpentIndex != 0 )
-            {
+            if ( checkval != fSpentIndex && fSpentIndex != 0 ) {
                 pblocktree->WriteFlag("spentindex", fSpentIndex);
                 fprintf(stderr,"set spentindex, will reindex. could take a while.\n");
                 fReindex = true;
             }
+
             //One time reindex to enable transaction archiving.
             pblocktree->ReadFlag("archiverule", checkval);
-            if (checkval != fArchive)
-            {
+            if (checkval != fArchive) {
                 pblocktree->WriteFlag("archiverule", fArchive);
                 LogPrintf("Transaction archive not set, will reindex. could take a while.\n");
                 fReindex = true;
             }
+
             //One time reindex to enable prooftracking.
             pblocktree->ReadFlag("proofrule", checkval);
-            if (checkval != fProof)
-            {
+            if (checkval != fProof) {
                 pblocktree->WriteFlag("proofrule", fProof);
                 LogPrintf("Transaction proof tracking not set, will reindex. could take a while.\n");
                 fReindex = true;
