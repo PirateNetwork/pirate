@@ -27,26 +27,19 @@ BITCOIN_INCLUDES += -I$(srcdir)/snark
 BITCOIN_INCLUDES += -I$(srcdir)/snark/libsnark
 BITCOIN_INCLUDES += -I$(srcdir)/univalue/include
 
-# if TARGET_WINDOWS
-# LIBBITCOIN_SERVER=libbitcoin_server.a -lcurl -larchive
-# endif
-# if TARGET_DARWIN
-# LIBBITCOIN_SERVER=libbitcoin_server.a -lcurl -larchive
-# endif
-# if TARGET_LINUX
-# LIBBITCOIN_SERVER=libbitcoin_server.a -lcurl -larchive
-# endif
-# if ARCH_ARM
-LIBBITCOIN_SERVER=libbitcoin_server.a -lcurl -larchive
-# endif
+if TARGET_WINDOWS
+LIBRUSTZCASH=$(top_builddir)/target/$(RUST_TARGET)/release/librustzcash.la -lbcrypt
+else
+LIBRUSTZCASH=$(top_builddir)/target/$(RUST_TARGET)/release/librustzcash.la
+endif
 
+LIBBITCOIN_SERVER=libbitcoin_server.a -lcurl -larchive
 LIBBITCOIN_WALLET=libbitcoin_wallet.a
 LIBBITCOIN_COMMON=libbitcoin_common.a
 LIBBITCOIN_CLI=libbitcoin_cli.a
 LIBBITCOIN_UTIL=libbitcoin_util.a
 LIBBITCOIN_CRYPTO=crypto/libbitcoin_crypto.a
 LIBBITCOINQT=qt/libkomodoqt.a
-LIBRUSTZCASH=$(top_builddir)/target/$(RUST_TARGET)/release/librustzcash.la
 LIBSECP256K1=secp256k1/libsecp256k1.la
 LIBCRYPTOCONDITIONS=cryptoconditions/libcryptoconditions_core.a
 LIBSNARK=snark/libsnark.a
