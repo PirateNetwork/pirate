@@ -41,7 +41,7 @@ fi
 TRIPLET=`./depends/config.guess`
 PREFIX="$(pwd)/depends/$TRIPLET"
 
-make "$@" -C ./depends/ V=1 # NO_PROTON=1
+make "$@" -C ./depends/ V=1
 
 
 ./autogen.sh

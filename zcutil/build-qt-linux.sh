@@ -44,7 +44,7 @@ then
 Usage:
 $0 --help
   Show this help message and exit.
-$0 [ --enable-lcov || --disable-tests ] [ --disable-mining ] [ --enable-proton ] [ --disable-libs ] [ MAKEARGS... ]
+$0 [ --enable-lcov || --disable-tests ] [ --disable-mining ] [ --disable-libs ] [ MAKEARGS... ]
   Build Zcash and most of its transitive dependencies from
   source. MAKEARGS are applied to both dependencies and Zcash itself.
   If --enable-lcov is passed, Zcash is configured to add coverage
@@ -52,9 +52,6 @@ $0 [ --enable-lcov || --disable-tests ] [ --disable-mining ] [ --enable-proton ]
   If --disable-tests is passed instead, the Zcash tests are not built.
   If --disable-mining is passed, Zcash is configured to not build any mining
   code. It must be passed after the test arguments, if present.
-  If --enable-proton is passed, Zcash is configured to build the Apache Qpid Proton
-  library required for AMQP support. This library is not built by default.
-  It must be passed after the test/mining arguments, if present.
 EOF
     exit 0
 fi
@@ -84,20 +81,12 @@ then
     shift
 fi
 
-# If --enable-proton is the next argument, enable building Proton code:
-PROTON_ARG='--enable-proton=no'
-if [ "x${1:-}" = 'x--enable-proton' ]
-then
-    PROTON_ARG=''
-    shift
-fi
-
 PREFIX="$(pwd)/depends/$BUILD/"
 
 HOST="$HOST" BUILD="$BUILD" "$MAKE" "$@" -C ./depends/ V=1
 ./autogen.sh
 
-./configure --prefix="${PREFIX}" --with-gui=qt5 --disable-bip70 --enable-tests=yes --enable-wallet=yes "$HARDENING_ARG" "$LCOV_ARG" "$TEST_ARG" "$MINING_ARG" "$PROTON_ARG" $CONFIGURE_FLAGS CXXFLAGS='-g0 -O2'
+./configure --prefix="${PREFIX}" --with-gui=qt5 --disable-bip70 --enable-tests=yes --enable-wallet=yes "$HARDENING_ARG" "$LCOV_ARG" "$TEST_ARG" "$MINING_ARG" $CONFIGURE_FLAGS CXXFLAGS='-g0 -O2'
 # -Wunused -Wunreachable-code
 
 nice -n 20 "$MAKE" "$@" V=1

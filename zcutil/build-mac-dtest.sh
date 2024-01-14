@@ -20,7 +20,7 @@ $0 --help
 
 $0 [ --enable-lcov ] [ --enable-debug ] [ MAKEARGS... ]
   Build Komodo and most of its transitive dependencies from
-  source. MAKEARGS are applied to both dependencies and Komodo itself. 
+  source. MAKEARGS are applied to both dependencies and Komodo itself.
   If --enable-lcov is passed, Komodo is configured to add coverage
   instrumentation, thus enabling "make cov" to work.
   If --enable-debug is passed, Komodo is built with debugging information. It
@@ -52,7 +52,7 @@ fi
 TRIPLET=`./depends/config.guess`
 PREFIX="$(pwd)/depends/$TRIPLET"
 
-make "$@" -C ./depends/ V=1 NO_QT=1 NO_PROTON=1
+make "$@" -C ./depends/ V=1 NO_QT=1
 
 ./autogen.sh
 

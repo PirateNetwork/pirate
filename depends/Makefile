@@ -77,9 +77,8 @@ include packages/packages.mk
 
 qt_packages_$(NO_QT) = $(qt_packages) $(qt_$(host_os)_packages) $(qt_$(host_arch)_$(host_os)_packages)
 wallet_packages_$(NO_WALLET) = $(wallet_packages)
-proton_packages_$(NO_PROTON) = $(proton_packages)
 
-packages += $($(host_arch)_$(host_os)_packages) $($(host_os)_packages) $(qt_packages_) $(rust_packages) $(proton_packages_) $(wallet_packages_)
+packages += $($(host_arch)_$(host_os)_packages) $($(host_os)_packages) $(qt_packages_) $(rust_packages) $(wallet_packages_)
 native_packages += $($(host_arch)_$(host_os)_native_packages) $($(host_os)_native_packages)
 
 ifneq ($(qt_packages_),)

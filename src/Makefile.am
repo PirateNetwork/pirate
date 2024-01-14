@@ -53,9 +53,7 @@ LIBCXXBRIDGE=libcxxbridge.a
 if ENABLE_ZMQ
 LIBBITCOIN_ZMQ=libbitcoin_zmq.a
 endif
-if ENABLE_PROTON
-LIBBITCOIN_PROTON=libbitcoin_proton.a
-endif
+
 if BUILD_BITCOIN_LIBS
 LIBZCASH_CONSENSUS=libzcashconsensus.la
 endif
@@ -210,9 +208,6 @@ EXTRA_LIBRARIES += $(LIBBITCOIN_WALLET)
 endif
 if ENABLE_ZMQ
 EXTRA_LIBRARIES += $(LIBBITCOIN_ZMQ)
-endif
-if ENABLE_PROTON
-EXTRA_LIBRARIES += $(LIBBITCOIN_PROTON)
 endif
 
 lib_LTLIBRARIES = $(LIBZCASH_CONSENSUS) $(LIBCC)
@@ -496,15 +491,6 @@ libbitcoin_zmq_a_SOURCES = \
 	zmq/zmqpublishnotifier.cpp
 endif
 
-if ENABLE_PROTON
-libbitcoin_proton_a_CPPFLAGS = $(BITCOIN_INCLUDES)
-libbitcoin_proton_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-libbitcoin_proton_a_SOURCES = \
-  amqp/amqpabstractnotifier.cpp \
-  amqp/amqpnotificationinterface.cpp \
-  amqp/amqppublishnotifier.cpp
-endif
-
 # wallet: zcashd, but only linked when wallet enabled
 libbitcoin_wallet_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 libbitcoin_wallet_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
@@ -698,7 +684,6 @@ pirated_LDADD = \
   $(LIBUNIVALUE) \
   $(LIBBITCOIN_UTIL) \
   $(LIBBITCOIN_ZMQ) \
-  $(LIBBITCOIN_PROTON) \
   $(LIBBITCOIN_CRYPTO)
 
 if ENABLE_WALLET
@@ -723,7 +708,6 @@ pirated_LDADD += \
   $(EVENT_PTHREADS_LIBS) \
   $(EVENT_LIBS) \
   $(ZMQ_LIBS) \
-  $(PROTON_LIBS) \
   $(LIBBITCOIN_CRYPTO) \
   $(LIBZCASH_LIBS) \
   $(LIBSECP256K1) \
@@ -739,9 +723,6 @@ pirated_LDADD += \
 # pirated_LDADD += libcc.so $(LIBSECP256K1)
 # endif
 
-if ENABLE_PROTON
-pirated_LDADD += $(LIBBITCOIN_PROTON) $(PROTON_LIBS)
-endif
 
 # [+] Decker: use static linking for libstdc++.6.dylib, libgomp.1.dylib, libgcc_s.1.dylib
 if TARGET_DARWIN
