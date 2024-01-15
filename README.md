@@ -12,16 +12,16 @@ This is the official Pirate Chain sourcecode repository based on https://github.
 
 ## Development Resources
 
-- Pirate Chain Website: [https://pirate.black](https://pirate.black/)
+- Pirate Chain Website: [https://piratechain.com](https://piratechain.com/)
 - Komodo Platform: [https://komodoplatform.com](https://komodoplatform.com/)
-- Pirate Blockexplorer: [https://explorer.pirate.black](https://pirate.black/)
-- Pirate Discord: [https://pirate.black/discord](https://pirate.black/discord)
+- Pirate Blockexplorer: [https://explorer.piratechain.com](https://piratechain.com/)
+- Pirate Discord: [https://piratechain.com/discord](https://piratechain.com/discord)
 - BTT ANN: [https://bitcointalk.org/index.php?topic=4979549.0](https://bitcointalk.org/index.php?topic=4979549.0/)
-- Mail: [marketing@pirate.black](mailto:marketing@pirate.black)
-- Support: [https://pirate.black/discord](https://pirate.black/discord)
-- API references & Dev Documentation: [https://docs.pirate.black](https://docs.pirate.black/)
-- Blog: [https://pirate.black/blog](https://pirate.black/blog/)
-- Whitepaper: [Pirate Chain Whitepaper](https://pirate.black/whitepaper)
+- Mail: [marketing@piratechain.com](mailto:marketing@piratechain.com)
+- Support: [https://piratechain.com/discord](https://piratechain.com/discord)
+- API references & Dev Documentation: [https://docs.piratechain.com](https://docs.piratechain.com/)
+- Blog: [https://piratechain.com/blog](https://piratechain.com/blog/)
+- Whitepaper: [Pirate Chain Whitepaper](https://piratechain.com/whitepaper)
 
 ## Komodo Platform Technologies Integrated In Pirate Chain
 
