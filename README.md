@@ -17,7 +17,7 @@ This is the official Pirate Chain sourcecode repository based on https://github.
 - Pirate Blockexplorer: [https://explorer.piratechain.com](https://piratechain.com/)
 - Pirate Discord: [https://piratechain.com/discord](https://piratechain.com/discord)
 - BTT ANN: [https://bitcointalk.org/index.php?topic=4979549.0](https://bitcointalk.org/index.php?topic=4979549.0/)
-- Mail: [marketing@piratechain.com](mailto:marketing@piratechain.com)
+- Mail: [business@piratechain.com](mailto:business@piratechain.com)
 - Support: [https://piratechain.com/discord](https://piratechain.com/discord)
 - API references & Dev Documentation: [https://docs.piratechain.com](https://docs.piratechain.com/)
 - Blog: [https://piratechain.com/blog](https://piratechain.com/blog/)
