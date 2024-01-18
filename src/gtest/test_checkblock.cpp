@@ -24,7 +24,7 @@ public:
 
 int32_t futureblock;
 TEST(CheckBlock, VersionTooLow) {
-    auto verifier = libzcash::ProofVerifier::Strict();
+    auto verifier = ProofVerifier::Strict();
 
     CBlock block;
     block.nVersion = 1;
@@ -61,7 +61,7 @@ TEST(CheckBlock, BlockSproutRejectsBadVersion) {
     MockCValidationState state;
     CBlockIndex indexPrev {Params().GenesisBlock()};
 
-    auto verifier = libzcash::ProofVerifier::Strict();
+    auto verifier = ProofVerifier::Strict();
 
     EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-txns-version-too-low", false)).Times(1);
     EXPECT_FALSE(CheckBlock(block, state, verifier, false, false));

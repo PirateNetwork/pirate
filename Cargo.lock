@@ -1152,6 +1152,7 @@ dependencies = [
  "ed25519-zebra",
  "funty 1.1.0",
  "group",
+ "hex",
  "hyper",
  "incrementalmerkletree",
  "ipnet",

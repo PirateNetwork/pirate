@@ -1835,7 +1835,7 @@ bool ContextualCheckTransaction(int32_t slowflag,const CBlock *block, CBlockInde
 }
 
 bool CheckTransaction(uint32_t tiptime,const CTransaction& tx, CValidationState &state,
-                      libzcash::ProofVerifier& verifier,int32_t txIndex, int32_t numTxs)
+                      ProofVerifier& verifier,int32_t txIndex, int32_t numTxs)
 {
     if (chainName.isKMD())
     {
@@ -1882,7 +1882,7 @@ bool CheckTransaction(uint32_t tiptime,const CTransaction& tx, CValidationState 
     } else {
         // Ensure that zk-SNARKs v|| y
         BOOST_FOREACH(const JSDescription &joinsplit, tx.vjoinsplit) {
-            if (!joinsplit.Verify(*pzcashParams, verifier, tx.joinSplitPubKey)) {
+            if (!verifier.VerifySprout(joinsplit, tx.joinSplitPubKey)) {
                 return state.DoS(100, error("CheckTransaction(): joinsplit does not verify"),
                                  REJECT_INVALID, "bad-txns-joinsplit-verification-failed");
             }
@@ -2273,7 +2273,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
             return false;
         }
     }
-    auto verifier = libzcash::ProofVerifier::Strict();
+    auto verifier = ProofVerifier::Strict();
     if (chainName.isKMD() && chainActive.Tip() != nullptr
             && !komodo_validate_interest(tx, chainActive.Tip()->nHeight + 1, chainActive.Tip()->GetMedianTimePast() + 777))
     {
@@ -3888,8 +3888,8 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             fExpensiveChecks = false;
         }
     }
-    auto verifier = libzcash::ProofVerifier::Strict();
-    auto disabledVerifier = libzcash::ProofVerifier::Disabled();
+    auto verifier = ProofVerifier::Strict();
+    auto disabledVerifier = ProofVerifier::Disabled();
     int32_t futureblock;
     CAmount blockReward = GetBlockSubsidy(pindex->nHeight, chainparams.GetConsensus());
     uint64_t notarypaycheque = 0;
@@ -5717,7 +5717,7 @@ int32_t komodo_checkPOW(int64_t stakeTxValue,int32_t slowflag,CBlock *pblock,int
  * @returns true on success, on error, state will contain info
  */
 bool CheckBlock(int32_t *futureblockp, int32_t height, CBlockIndex *pindex, const CBlock& block,
-        CValidationState& state, libzcash::ProofVerifier& verifier, bool fCheckPOW,
+        CValidationState& state, ProofVerifier& verifier, bool fCheckPOW,
         bool fCheckMerkleRoot)
 {
     uint8_t pubkey33[33];
@@ -6202,7 +6202,7 @@ bool AcceptBlock(int32_t *futureblockp,CBlock& block, CValidationState& state, C
     }
 
     // See method docstring for why this is always disabled
-    auto verifier = libzcash::ProofVerifier::Disabled();
+    auto verifier = ProofVerifier::Disabled();
     bool fContextualCheckBlock = ContextualCheckBlock(0,block, state, pindex->pprev);
     if ( (!CheckBlock(futureblockp,pindex->nHeight,pindex,block, state, verifier,0)) || !fContextualCheckBlock )
     {
@@ -6379,7 +6379,7 @@ bool ProcessNewBlock(bool from_miner, int32_t height, CValidationState &state, C
     // Preliminary checks
     bool checked;
     int32_t futureblock=0;
-    auto verifier = libzcash::ProofVerifier::Disabled();
+    auto verifier = ProofVerifier::Disabled();
     uint256 hash = pblock->GetHash();
     {
         LOCK(cs_main);
@@ -6433,7 +6433,7 @@ bool TestBlockValidity(CValidationState &state, const CBlock& block, CBlockIndex
     indexDummy.pprev = pindexPrev;
     indexDummy.nHeight = pindexPrev->nHeight + 1;
     // JoinSplit proofs are verified in ConnectBlock
-    auto verifier = libzcash::ProofVerifier::Disabled();
+    auto verifier = ProofVerifier::Disabled();
     // NOTE: CheckBlockHeader is called by CheckBlock
     if (!ContextualCheckBlockHeader(block, state, pindexPrev))
     {
@@ -6940,7 +6940,7 @@ bool CVerifyDB::VerifyDB(CCoinsView *coinsview, int nCheckLevel, int nCheckDepth
     int nGoodTransactions = 0;
     CValidationState state;
     // No need to verify JoinSplits twice
-    auto verifier = libzcash::ProofVerifier::Disabled();
+    auto verifier = ProofVerifier::Disabled();
     //fprintf(stderr,"start VerifyDB %u\n",(uint32_t)time(NULL));
     for (CBlockIndex* pindex = chainActive.Tip(); pindex && pindex->pprev; pindex = pindex->pprev)
     {

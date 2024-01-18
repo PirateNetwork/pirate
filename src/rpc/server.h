@@ -400,10 +400,6 @@ extern UniValue getdeprecationinfo(const UniValue& params, bool fHelp, const CPu
 extern UniValue setmocktime(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue resendwallettransactions(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue zc_benchmark(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue zc_raw_keygen(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue zc_raw_joinsplit(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue zc_raw_receive(const UniValue& params, bool fHelp, const CPubKey& mypk);
-extern UniValue zc_sample_joinsplit(const UniValue& params, bool fHelp, const CPubKey& mypk);
 
 extern UniValue getrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rcprawtransaction.cpp
 extern UniValue listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk);
