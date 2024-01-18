@@ -10,7 +10,13 @@ qt_darwin_packages := qt
 qt_mingw32_packages := qt
 
 native_packages := native_ccache native_rust native_cxxbridge
+$(host_arch)_$(host_os)_native_packages += native_b2
 
 wallet_packages := bdb
 
 packages := boost openssl libevent zeromq $(zcash_packages) zlib libarchive googletest libcurl
+
+# We use a complete SDK for Darwin, which includes libc++.
+ifneq ($(host_os),darwin)
+packages += libcxx
+endif
