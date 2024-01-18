@@ -235,8 +235,8 @@ FILE* OpenUndoFile(const CDiskBlockPos &pos, bool fReadOnly = false);
 boost::filesystem::path GetBlockPosFilename(const CDiskBlockPos &pos, const char *prefix);
 /** Import blocks from an external file */
 bool LoadExternalBlockFile(FILE* fileIn, CDiskBlockPos *dbp = NULL);
-/** 
- * Initialize a new block tree database + block data on disk 
+/**
+ * Initialize a new block tree database + block data on disk
  * @returns true on success
  */
 bool InitBlockIndex();
@@ -271,7 +271,7 @@ bool IsInitialBlockDownload();
 int IsNotInSync();
 /** Format a string that describes several potential problems detected by the core */
 std::string GetWarnings(const std::string& strFor);
-/** 
+/**
  * @brief Find a transaction (uses locks)
  * @param[in] hash the transaction to look for
  * @param[out] txOut the transaction found
@@ -320,7 +320,7 @@ void FlushStateToDiskPeriodic();
 void PruneAndFlush();
 
 /**
- * @brief Try to add transaction to memory pool 
+ * @brief Try to add transaction to memory pool
  * @param pool
  * @param state
  * @param tx
@@ -776,7 +776,7 @@ void UpdateCoins(const CTransaction& tx, CCoinsViewCache& inputs, int nHeight);
 /** Transaction validation functions */
 
 /** Context-independent validity checks */
-bool CheckTransaction(uint32_t tiptime,const CTransaction& tx, CValidationState& state, libzcash::ProofVerifier& verifier, int32_t txIndex, int32_t numTxs);
+bool CheckTransaction(uint32_t tiptime,const CTransaction& tx, CValidationState& state, ProofVerifier& verifier, int32_t txIndex, int32_t numTxs);
 bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransaction& tx, CValidationState &state);
 
 /** Check for standard transaction types
@@ -896,7 +896,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 /** Context-independent validity checks */
 bool CheckBlockHeader(int32_t *futureblockp,int32_t height,CBlockIndex *pindex,const CBlockHeader& block, CValidationState& state, bool fCheckPOW = true);
 bool CheckBlock(int32_t *futureblockp,int32_t height,CBlockIndex *pindex,const CBlock& block, CValidationState& state,
-                libzcash::ProofVerifier& verifier,
+                ProofVerifier& verifier,
                 bool fCheckPOW = true, bool fCheckMerkleRoot = true);
 
 /** Context-dependent validity checks */

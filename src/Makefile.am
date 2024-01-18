@@ -23,8 +23,6 @@ BITCOIN_INCLUDES += -I$(srcdir)/cc/includes
 BITCOIN_INCLUDES += -I$(srcdir)/cryptoconditions/include
 BITCOIN_INCLUDES += -I$(srcdir)/cryptoconditions/src
 BITCOIN_INCLUDES += -I$(srcdir)/cryptoconditions/src/asn
-BITCOIN_INCLUDES += -I$(srcdir)/snark
-BITCOIN_INCLUDES += -I$(srcdir)/snark/libsnark
 BITCOIN_INCLUDES += -I$(srcdir)/univalue/include
 
 if TARGET_WINDOWS
@@ -42,7 +40,6 @@ LIBBITCOIN_CRYPTO=crypto/libbitcoin_crypto.a
 LIBBITCOINQT=qt/libkomodoqt.a
 LIBSECP256K1=secp256k1/libsecp256k1.la
 LIBCRYPTOCONDITIONS=cryptoconditions/libcryptoconditions_core.a
-LIBSNARK=snark/libsnark.a
 LIBUNIVALUE=univalue/libunivalue.la
 LIBCC=libcc.a
 LIBZCASH=libzcash.a
@@ -62,20 +59,29 @@ endif
 # endif
 
 CXXBRIDGE_RS = \
+	rust/src/blake2b.rs \
+	rust/src/ed25519.rs \
   rust/src/sapling/spec.rs \
   rust/src/sapling/zip32.rs \
+	rust/src/sprout.rs \
   rust/src/streams.rs \
   rust/src/bridge.rs
 
 CXXBRIDGE_H = \
+	rust/gen/include/rust/blake2b.h \
+	rust/gen/include/rust/ed25519.h \
   rust/gen/include/rust/sapling/spec.h \
   rust/gen/include/rust/sapling/zip32.h \
+	rust/gen/include/rust/sprout.h \
   rust/gen/include/rust/streams.h \
   rust/gen/include/rust/bridge.h
 
 CXXBRIDGE_CPP = \
+	rust/gen/src/blake2b.cpp \
+	rust/gen/src/ed25519.cpp \
   rust/gen/src/sapling/spec.cpp \
   rust/gen/src/sapling/zip32.cpp \
+	rust/gen/src/sprout.cpp \
   rust/gen/src/streams.cpp \
   rust/gen/src/bridge.cpp
 
@@ -156,21 +162,6 @@ $(LIBRUSTZCASH): cargo-build-lib
 $(LIBSECP256K1): $(wildcard secp256k1/src/*) $(wildcard secp256k1/include/*)
 	$(AM_V_at)$(MAKE) $(AM_MAKEFLAGS) -C $(@D) $(@F) OPTFLAGS="-O2 -march=$(PLATFORM_VARIANT) -g "
 
-LIBSNARK_CXXFLAGS = $(AM_CXXFLAGS) $(PIC_FLAGS) -DBINARY_OUTPUT -DNO_PT_COMPRESSION=1 -fstack-protector-all
-LIBSNARK_CONFIG_FLAGS = CURVE=ALT_BN128 NO_PROCPS=1 NO_DOCS=1 STATIC=1 NO_SUPERCOP=1 FEATUREFLAGS=-DMONTGOMERY_OUTPUT NO_COPY_DEPINST=1 NO_COMPILE_LIBGTEST=1
-if HAVE_OPENMP
-LIBSNARK_CONFIG_FLAGS += MULTICORE=1
-endif
-if TARGET_DARWIN
-LIBSNARK_CONFIG_FLAGS += PLATFORM=darwin
-endif
-
-$(LIBSNARK): $(wildcard snark/src/*)
-	$(AM_V_at) CC="$(CC)" CXX="$(CXX)" AR="$(AR)" CXXFLAGS="$(LIBSNARK_CXXFLAGS)" $(MAKE) $(AM_MAKEFLAGS) -C snark/ DEPINST="$(LIBSNARK_DEPINST)" $(LIBSNARK_CONFIG_FLAGS) OPTFLAGS="-O2 -march=$(PLATFORM_VARIANT)"
-
-libsnark-tests: $(wildcard snark/src/*)
-	$(AM_V_at) CC="$(CC)" CXX="$(CXX)" AR="$(AR)" CXXFLAGS="$(LIBSNARK_CXXFLAGS)" $(MAKE) $(AM_MAKEFLAGS) -C snark/ check DEPINST="$(LIBSNARK_DEPINST)" $(LIBSNARK_CONFIG_FLAGS) OPTFLAGS="-O2 -march=$(PLATFORM_VARIANT)"
-
 $(LIBUNIVALUE): $(wildcard univalue/lib/*)
 	$(AM_V_at)$(MAKE) $(AM_MAKEFLAGS) -C $(@D) $(@F) OPTFLAGS="-O2 -march=$(PLATFORM_VARIANT) -g "
 
@@ -242,7 +233,7 @@ LIBZCASH_H = \
   zcash/Zcash.h \
   zcash/address/zip32.h
 
-.PHONY: FORCE collate-libsnark check-symbols check-security
+.PHONY: FORCE check-symbols check-security
 # bitcoin core #
 BITCOIN_CORE_H = \
   addressindex.h \
@@ -695,7 +686,6 @@ pirated_LDADD += \
 	$(LIBTLS) \
 	$(LIBRUSTZCASH) \
 	$(LIBCXXBRIDGE) \
-  $(LIBSNARK) \
   $(LIBLEVELDB) \
   $(LIBMEMENV) \
   $(LIBSECP256K1) \
@@ -783,7 +773,6 @@ wallet_utility_LDADD = \
 	$(LIBZCASH) \
 	$(LIBRUSTZCASH) \
 	$(LIBCXXBRIDGE) \
-	$(LIBSNARK) \
 	$(LIBZCASH_LIBS)\
   $(LIBCRYPTOCONDITIONS)
 endif
@@ -808,12 +797,11 @@ pirate_tx_LDADD = \
 	$(LIBTLS) \
 	$(LIBRUSTZCASH) \
 	$(LIBCXXBRIDGE) \
-  $(LIBSNARK) \
   $(LIBBITCOIN_CRYPTO) \
   $(LIBZCASH_LIBS) \
   $(LIBCRYPTOCONDITIONS)
 
-pirate_tx_LDADD += $(BOOST_LIBS) $(CRYPTO_LIBS)
+pirate_tx_LDADD += $(BOOST_LIBS) $(CRYPTO_LIBS) -lcurl
 #
 
 # zcash protocol primitives #
@@ -822,19 +810,12 @@ libzcash_a_SOURCES = \
 	zcash/NoteEncryption.cpp \
 	zcash/Address.cpp \
 	zcash/JoinSplit.cpp \
-	zcash/Proof.cpp \
 	zcash/Note.cpp \
 	zcash/prf.cpp \
 	zcash/address/sapling.cpp \
 	zcash/address/sprout.cpp \
 	zcash/util.cpp \
-  zcash/address/zip32.cpp \
-	zcash/circuit/commitment.tcc \
-	zcash/circuit/gadget.tcc \
-	zcash/circuit/merkle.tcc \
-	zcash/circuit/note.tcc \
-	zcash/circuit/prfs.tcc \
-	zcash/circuit/utils.tcc
+  zcash/address/zip32.cpp
 
 libzcash_a_CPPFLAGS = -DMULTICORE -fopenmp -fPIC -DBINARY_OUTPUT -DCURVE_ALT_BN128 \
 	-DBOOST_SPIRIT_THREADSAFE -DHAVE_BUILD_INFO -D__STDC_FORMAT_MACROS $(HARDENED_CPPFLAGS) \
@@ -895,12 +876,11 @@ CLEANFILES = leveldb/libleveldb.a leveldb/libmemenv.a *.gcda *.gcno */*.gcno wal
 
 DISTCLEANFILES = obj/build.h
 
-EXTRA_DIST = leveldb snark rust
+EXTRA_DIST = leveldb rust
 
 clean-local:
 	-$(MAKE) -C leveldb clean
 	-$(MAKE) -C secp256k1 clean
-	-$(MAKE) -C snark clean
 	-$(MAKE) -C univalue clean
 	-rm -f leveldb/*/*.gcno leveldb/helpers/memenv/*.gcno
 	-rm -f config.h
@@ -909,7 +889,6 @@ clean-local:
 	-$(RM) cryptoconditions/.libs/*.a
 
 clean-all: clean-local
-	-$(MAKE) -C snark clean-all
 	-$(MAKE) -C univalue clean-all
 
 .rc.o:

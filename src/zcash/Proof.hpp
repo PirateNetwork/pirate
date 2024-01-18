@@ -4,6 +4,8 @@
 #include "serialize.h"
 #include "uint256.h"
 
+#include <variant>
+
 namespace libzcash {
 
 const unsigned char G1_PREFIX_MASK = 0x02;
@@ -15,12 +17,6 @@ private:
     base_blob<256> data;
 public:
     Fq() : data() { }
-
-    template<typename libsnark_Fq>
-    Fq(libsnark_Fq element);
-
-    template<typename libsnark_Fq>
-    libsnark_Fq to_libsnark_fq() const;
 
     ADD_SERIALIZE_METHODS;
 
@@ -48,12 +44,6 @@ private:
     base_blob<512> data;
 public:
     Fq2() : data() { }
-
-    template<typename libsnark_Fq2>
-    Fq2(libsnark_Fq2 element);
-
-    template<typename libsnark_Fq2>
-    libsnark_Fq2 to_libsnark_fq2() const;
 
     ADD_SERIALIZE_METHODS;
 
@@ -83,12 +73,6 @@ private:
 
 public:
     CompressedG1() : y_lsb(false), x() { }
-
-    template<typename libsnark_G1>
-    CompressedG1(libsnark_G1 point);
-
-    template<typename libsnark_G1>
-    libsnark_G1 to_libsnark_g1() const;
 
     ADD_SERIALIZE_METHODS;
 
@@ -133,12 +117,6 @@ private:
 
 public:
     CompressedG2() : y_gt(false), x() { }
-
-    template<typename libsnark_G2>
-    CompressedG2(libsnark_G2 point);
-
-    template<typename libsnark_G2>
-    libsnark_G2 to_libsnark_g2() const;
 
     ADD_SERIALIZE_METHODS;
 
@@ -190,17 +168,6 @@ private:
 public:
     PHGRProof() : g_A(), g_A_prime(), g_B(), g_B_prime(), g_C(), g_C_prime(), g_K(), g_H() { }
 
-    // Produces a compressed proof using a libsnark zkSNARK proof
-    template<typename libsnark_proof>
-    PHGRProof(const libsnark_proof& proof);
-
-    // Produces a libsnark zkSNARK proof out of this proof,
-    // or throws an exception if it is invalid.
-    template<typename libsnark_proof>
-    libsnark_proof to_libsnark_proof() const;
-
-    static PHGRProof random_invalid();
-
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
@@ -235,42 +202,16 @@ public:
     }
 };
 
-void initialize_curve_params();
+static constexpr size_t GROTH_PROOF_SIZE = (
+    48 + // π_A
+    96 + // π_B
+    48); // π_C
 
-class ProofVerifier {
-private:
-    bool perform_verification;
-
-    ProofVerifier(bool perform_verification) : perform_verification(perform_verification) { }
-
-public:
-    // ProofVerifier should never be copied
-    ProofVerifier(const ProofVerifier&) = delete;
-    ProofVerifier& operator=(const ProofVerifier&) = delete;
-    ProofVerifier(ProofVerifier&&);
-    ProofVerifier& operator=(ProofVerifier&&);
-
-    // Creates a verification context that strictly verifies
-    // all proofs using libsnark's API.
-    static ProofVerifier Strict();
-
-    // Creates a verification context that performs no
-    // verification, used when avoiding duplicate effort
-    // such as during reindexing.
-    static ProofVerifier Disabled();
-
-    template <typename VerificationKey,
-              typename ProcessedVerificationKey,
-              typename PrimaryInput,
-              typename Proof
-              >
-    bool check(
-        const VerificationKey& vk,
-        const ProcessedVerificationKey& pvk,
-        const PrimaryInput& pi,
-        const Proof& p
-    );
-};
+typedef std::array<unsigned char, GROTH_PROOF_SIZE> GrothProof;
+// TODO: Because PHGRProof is listed first, using the default
+// constructor for JSDescription() will create a JSDescription
+// with a PHGRProof. The default however should be GrothProof.
+typedef std::variant<PHGRProof, GrothProof> SproutProof;
 
 }
 

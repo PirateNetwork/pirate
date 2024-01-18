@@ -8,16 +8,16 @@
 #include "zcash/Note.hpp"
 #include "zcash/NoteEncryption.hpp"
 
-CWalletTx GetValidReceive(ZCJoinSplit& params,
-                          const libzcash::SproutSpendingKey& sk, CAmount value,
-                          bool randomInputs,
-                          int32_t version = 2);
-libzcash::SproutNote GetNote(ZCJoinSplit& params,
-                       const libzcash::SproutSpendingKey& sk,
-                       const CTransaction& tx, size_t js, size_t n);
-CWalletTx GetValidSpend(ZCJoinSplit& params,
-                        const libzcash::SproutSpendingKey& sk,
-                        const libzcash::SproutNote& note, CAmount value);
+// CWalletTx GetValidReceive(ZCJoinSplit& params,
+//                           const libzcash::SproutSpendingKey& sk, CAmount value,
+//                           bool randomInputs,
+//                           int32_t version = 2);
+// libzcash::SproutNote GetNote(ZCJoinSplit& params,
+//                        const libzcash::SproutSpendingKey& sk,
+//                        const CTransaction& tx, size_t js, size_t n);
+// CWalletTx GetValidSpend(ZCJoinSplit& params,
+//                         const libzcash::SproutSpendingKey& sk,
+//                         const libzcash::SproutNote& note, CAmount value);
 
 // Sapling
 static const std::string T_SECRET_REGTEST = "cND2ZvtabDbJ1gucx9GWH6XT9kgTAqfb6cotPt5Q5CyxVDhid2EN";

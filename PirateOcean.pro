@@ -14,8 +14,6 @@ INCLUDEPATH += \
             $$PWD/src/cryptoconditions/include \
             $$PWD/src/cryptoconditions/src \
             $$PWD/src/cryptoconditions/src/asn \
-            $$PWD/src/snark \
-            $$PWD/src/snark/libsnark \
             $$PWD/src/univalue/include \
             $$PWD/src/leveldb/include \
             $$PWD/src/leveldb/helpers/memenv \
@@ -403,7 +401,6 @@ LIBS += -L$$PWD/src/univalue/.libs -lunivalue
 LIBS += -L$$PWD/src/leveldb/ -lleveldb
 LIBS += -L$$PWD/src/leveldb/ -lmemenv
 
-LIBS += -L$$PWD/src/snark/ -lsnark
 
 
 LIBS += -L$$PWD/depends/x86_64-unknown-linux-gnu/lib -ldb-6.2

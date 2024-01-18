@@ -48,13 +48,13 @@ struct ShieldCoinbaseUTXO {
 };
 
 // Package of info which is passed to perform_joinsplit methods.
-struct ShieldCoinbaseJSInfo
-{
-    std::vector<JSInput> vjsin;
-    std::vector<JSOutput> vjsout;
-    CAmount vpub_old = 0;
-    CAmount vpub_new = 0;
-};
+// struct ShieldCoinbaseJSInfo
+// {
+//     std::vector<JSInput> vjsin;
+//     std::vector<JSOutput> vjsout;
+//     CAmount vpub_old = 0;
+//     CAmount vpub_new = 0;
+// };
 
 class AsyncRPCOperation_shieldcoinbase : public AsyncRPCOperation {
 public:
@@ -78,7 +78,7 @@ public:
     virtual UniValue getStatus() const;
 
     bool testmode = false;  // Set to true to disable sending txs and generating proofs
-    bool paymentDisclosureMode = true; // Set to true to save esk for encrypted notes in payment disclosure database.
+    // bool paymentDisclosureMode = true; // Set to true to save esk for encrypted notes in payment disclosure database.
 
 private:
     friend class ShieldToAddress;
@@ -89,8 +89,8 @@ private:
     CAmount fee_;
     PaymentAddress tozaddr_;
 
-    uint256 joinSplitPubKey_;
-    unsigned char joinSplitPrivKey_[crypto_sign_SECRETKEYBYTES];
+    // uint256 joinSplitPubKey_;
+    // unsigned char joinSplitPrivKey_[crypto_sign_SECRETKEYBYTES];
 
     std::vector<ShieldCoinbaseUTXO> inputs_;
 
@@ -100,16 +100,16 @@ private:
     bool main_impl();
 
     // JoinSplit without any input notes to spend
-    UniValue perform_joinsplit(ShieldCoinbaseJSInfo &);
+    // UniValue perform_joinsplit(ShieldCoinbaseJSInfo &);
 
-    void sign_send_raw_transaction(UniValue obj);     // throws exception if there was an error
+    // void sign_send_raw_transaction(UniValue obj);     // throws exception if there was an error
 
     void lock_utxos();
 
     void unlock_utxos();
 
     // payment disclosure!
-    std::vector<PaymentDisclosureKeyInfo> paymentDisclosureData_;
+    // std::vector<PaymentDisclosureKeyInfo> paymentDisclosureData_;
 };
 
 class ShieldToAddress : public boost::static_visitor<bool>
@@ -148,13 +148,13 @@ public:
         return delegate->main_impl();
     }
 
-    UniValue perform_joinsplit(ShieldCoinbaseJSInfo &info) {
-        return delegate->perform_joinsplit(info);
-    }
-
-    void sign_send_raw_transaction(UniValue obj) {
-        delegate->sign_send_raw_transaction(obj);
-    }
+    // UniValue perform_joinsplit(ShieldCoinbaseJSInfo &info) {
+    //     return delegate->perform_joinsplit(info);
+    // }
+    //
+    // void sign_send_raw_transaction(UniValue obj) {
+    //     delegate->sign_send_raw_transaction(obj);
+    // }
 
     void set_state(OperationStatus state) {
         delegate->state_.store(state);
@@ -163,4 +163,3 @@ public:
 
 
 #endif /* ASYNCRPCOPERATION_SHIELDCOINBASE_H */
-

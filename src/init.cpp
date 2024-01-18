@@ -84,8 +84,6 @@
 #include <openssl/crypto.h>
 #include <thread>
 
-#include <libsnark/common/profiling.hpp>
-
 #if ENABLE_ZMQ
 #include "zmq/zmqnotificationinterface.h"
 #endif
@@ -1592,11 +1590,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         ConnectMetricsScreen();
         threadGroup.create_thread(&ThreadShowMetricsScreen);
     }
-
-    // These must be disabled for now, they are buggy and we probably don't
-    // want any of libsnark's profiling in production anyway.
-    libsnark::inhibit_profiling_info = true;
-    libsnark::inhibit_profiling_counters = true;
 
     if ( KOMODO_NSPV_FULLNODE )
     {

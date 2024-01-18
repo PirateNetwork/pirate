@@ -91,78 +91,78 @@ double benchmark_sleep()
     return timer_stop(tv_start);
 }
 
-double benchmark_parameter_loading()
-{
-    // FIXME: this is duplicated with the actual loading code
-    boost::filesystem::path pk_path = ZC_GetParamsDir() / "sprout-proving.key";
-    boost::filesystem::path vk_path = ZC_GetParamsDir() / "sprout-verifying.key";
+// double benchmark_parameter_loading()
+// {
+//     // FIXME: this is duplicated with the actual loading code
+//     boost::filesystem::path pk_path = ZC_GetParamsDir() / "sprout-proving.key";
+//     boost::filesystem::path vk_path = ZC_GetParamsDir() / "sprout-verifying.key";
+//
+//     struct timeval tv_start;
+//     timer_start(tv_start);
+//
+//     auto newParams = ZCJoinSplit::Prepared(vk_path.string(), pk_path.string());
+//
+//     double ret = timer_stop(tv_start);
+//
+//     delete newParams;
+//
+//     return ret;
+// }
 
-    struct timeval tv_start;
-    timer_start(tv_start);
+// double benchmark_create_joinsplit()
+// {
+//     uint256 joinSplitPubKey;
+//
+//     /* Get the anchor of an empty commitment tree. */
+//     uint256 anchor = SproutMerkleTree().root();
+//
+//     struct timeval tv_start;
+//     timer_start(tv_start);
+//     JSDescription jsdesc(true,
+//                          *pzcashParams,
+//                          joinSplitPubKey,
+//                          anchor,
+//                          {JSInput(), JSInput()},
+//                          {JSOutput(), JSOutput()},
+//                          0,
+//                          0);
+//     double ret = timer_stop(tv_start);
+//
+//     auto verifier = ProofVerifier::Strict();
+//     assert(jsdesc.Verify(*pzcashParams, verifier, joinSplitPubKey));
+//     return ret;
+// }
 
-    auto newParams = ZCJoinSplit::Prepared(vk_path.string(), pk_path.string());
+// std::vector<double> benchmark_create_joinsplit_threaded(int nThreads)
+// {
+//     std::vector<double> ret;
+//     std::vector<std::future<double>> tasks;
+//     std::vector<std::thread> threads;
+//     for (int i = 0; i < nThreads; i++) {
+//         std::packaged_task<double(void)> task(&benchmark_create_joinsplit);
+//         tasks.emplace_back(task.get_future());
+//         threads.emplace_back(std::move(task));
+//     }
+//     std::future_status status;
+//     for (auto it = tasks.begin(); it != tasks.end(); it++) {
+//         it->wait();
+//         ret.push_back(it->get());
+//     }
+//     for (auto it = threads.begin(); it != threads.end(); it++) {
+//         it->join();
+//     }
+//     return ret;
+// }
 
-    double ret = timer_stop(tv_start);
-
-    delete newParams;
-
-    return ret;
-}
-
-double benchmark_create_joinsplit()
-{
-    uint256 joinSplitPubKey;
-
-    /* Get the anchor of an empty commitment tree. */
-    uint256 anchor = SproutMerkleTree().root();
-
-    struct timeval tv_start;
-    timer_start(tv_start);
-    JSDescription jsdesc(true,
-                         *pzcashParams,
-                         joinSplitPubKey,
-                         anchor,
-                         {JSInput(), JSInput()},
-                         {JSOutput(), JSOutput()},
-                         0,
-                         0);
-    double ret = timer_stop(tv_start);
-
-    auto verifier = libzcash::ProofVerifier::Strict();
-    assert(jsdesc.Verify(*pzcashParams, verifier, joinSplitPubKey));
-    return ret;
-}
-
-std::vector<double> benchmark_create_joinsplit_threaded(int nThreads)
-{
-    std::vector<double> ret;
-    std::vector<std::future<double>> tasks;
-    std::vector<std::thread> threads;
-    for (int i = 0; i < nThreads; i++) {
-        std::packaged_task<double(void)> task(&benchmark_create_joinsplit);
-        tasks.emplace_back(task.get_future());
-        threads.emplace_back(std::move(task));
-    }
-    std::future_status status;
-    for (auto it = tasks.begin(); it != tasks.end(); it++) {
-        it->wait();
-        ret.push_back(it->get());
-    }
-    for (auto it = threads.begin(); it != threads.end(); it++) {
-        it->join();
-    }
-    return ret;
-}
-
-double benchmark_verify_joinsplit(const JSDescription &joinsplit)
-{
-    struct timeval tv_start;
-    timer_start(tv_start);
-    uint256 joinSplitPubKey;
-    auto verifier = libzcash::ProofVerifier::Strict();
-    joinsplit.Verify(*pzcashParams, verifier, joinSplitPubKey);
-    return timer_stop(tv_start);
-}
+// double benchmark_verify_joinsplit(const JSDescription &joinsplit)
+// {
+//     struct timeval tv_start;
+//     timer_start(tv_start);
+//     uint256 joinSplitPubKey;
+//     auto verifier = ProofVerifier::Strict();
+//     joinsplit.Verify(*pzcashParams, verifier, joinSplitPubKey);
+//     return timer_stop(tv_start);
+// }
 
 #ifdef ENABLE_MINING
 double benchmark_solve_equihash()
@@ -280,79 +280,79 @@ double benchmark_large_tx(size_t nInputs)
     return timer_stop(tv_start);
 }
 
-double benchmark_try_decrypt_notes(size_t nAddrs)
-{
-    CWallet wallet;
-    for (int i = 0; i < nAddrs; i++) {
-        auto sk = libzcash::SproutSpendingKey::random();
-        wallet.AddSproutSpendingKey(sk);
-    }
+// double benchmark_try_decrypt_notes(size_t nAddrs)
+// {
+//     CWallet wallet;
+//     for (int i = 0; i < nAddrs; i++) {
+//         auto sk = libzcash::SproutSpendingKey::random();
+//         wallet.AddSproutSpendingKey(sk);
+//     }
+//
+//     auto sk = libzcash::SproutSpendingKey::random();
+//     auto tx = GetValidReceive(*pzcashParams, sk, 10, true);
+//
+//     struct timeval tv_start;
+//     timer_start(tv_start);
+//     auto nd = wallet.FindMySproutNotes(tx);
+//     return timer_stop(tv_start);
+// }
 
-    auto sk = libzcash::SproutSpendingKey::random();
-    auto tx = GetValidReceive(*pzcashParams, sk, 10, true);
-
-    struct timeval tv_start;
-    timer_start(tv_start);
-    auto nd = wallet.FindMySproutNotes(tx);
-    return timer_stop(tv_start);
-}
-
-double benchmark_increment_note_witnesses(size_t nTxs)
-{
-    CWallet wallet;
-    SproutMerkleTree sproutTree;
-    SaplingMerkleTree saplingTree;
-
-    auto sk = libzcash::SproutSpendingKey::random();
-    wallet.AddSproutSpendingKey(sk);
-
-    // First block
-    CBlock block1;
-    for (int i = 0; i < nTxs; i++) {
-        auto wtx = GetValidReceive(*pzcashParams, sk, 10, true);
-        auto note = GetNote(*pzcashParams, sk, wtx, 0, 1);
-        auto nullifier = note.nullifier(sk);
-
-        mapSproutNoteData_t noteData;
-        JSOutPoint jsoutpt {wtx.GetHash(), 0, 1};
-        SproutNoteData nd {sk.address(), nullifier};
-        noteData[jsoutpt] = nd;
-
-        wtx.SetSproutNoteData(noteData);
-        wallet.AddToWallet(wtx, true, NULL, 0);
-        block1.vtx.push_back(wtx);
-    }
-    CBlockIndex index1(block1);
-    index1.nHeight = 1;
-
-    // Increment to get transactions witnessed
-    wallet.ChainTip(&index1, &block1, sproutTree, saplingTree, true);
-
-    // Second block
-    CBlock block2;
-    block2.hashPrevBlock = block1.GetHash();
-    {
-        auto wtx = GetValidReceive(*pzcashParams, sk, 10, true);
-        auto note = GetNote(*pzcashParams, sk, wtx, 0, 1);
-        auto nullifier = note.nullifier(sk);
-
-        mapSproutNoteData_t noteData;
-        JSOutPoint jsoutpt {wtx.GetHash(), 0, 1};
-        SproutNoteData nd {sk.address(), nullifier};
-        noteData[jsoutpt] = nd;
-
-        wtx.SetSproutNoteData(noteData);
-        wallet.AddToWallet(wtx, true, NULL, 0);
-        block2.vtx.push_back(wtx);
-    }
-    CBlockIndex index2(block2);
-    index2.nHeight = 2;
-
-    struct timeval tv_start;
-    timer_start(tv_start);
-    wallet.ChainTip(&index2, &block2, sproutTree, saplingTree, true);
-    return timer_stop(tv_start);
-}
+// double benchmark_increment_note_witnesses(size_t nTxs)
+// {
+//     CWallet wallet;
+//     SproutMerkleTree sproutTree;
+//     SaplingMerkleTree saplingTree;
+//
+//     auto sk = libzcash::SproutSpendingKey::random();
+//     wallet.AddSproutSpendingKey(sk);
+//
+//     // First block
+//     CBlock block1;
+//     for (int i = 0; i < nTxs; i++) {
+//         auto wtx = GetValidReceive(*pzcashParams, sk, 10, true);
+//         auto note = GetNote(*pzcashParams, sk, wtx, 0, 1);
+//         auto nullifier = note.nullifier(sk);
+//
+//         mapSproutNoteData_t noteData;
+//         JSOutPoint jsoutpt {wtx.GetHash(), 0, 1};
+//         SproutNoteData nd {sk.address(), nullifier};
+//         noteData[jsoutpt] = nd;
+//
+//         wtx.SetSproutNoteData(noteData);
+//         wallet.AddToWallet(wtx, true, NULL, 0);
+//         block1.vtx.push_back(wtx);
+//     }
+//     CBlockIndex index1(block1);
+//     index1.nHeight = 1;
+//
+//     // Increment to get transactions witnessed
+//     wallet.ChainTip(&index1, &block1, sproutTree, saplingTree, true);
+//
+//     // Second block
+//     CBlock block2;
+//     block2.hashPrevBlock = block1.GetHash();
+//     {
+//         auto wtx = GetValidReceive(*pzcashParams, sk, 10, true);
+//         auto note = GetNote(*pzcashParams, sk, wtx, 0, 1);
+//         auto nullifier = note.nullifier(sk);
+//
+//         mapSproutNoteData_t noteData;
+//         JSOutPoint jsoutpt {wtx.GetHash(), 0, 1};
+//         SproutNoteData nd {sk.address(), nullifier};
+//         noteData[jsoutpt] = nd;
+//
+//         wtx.SetSproutNoteData(noteData);
+//         wallet.AddToWallet(wtx, true, NULL, 0);
+//         block2.vtx.push_back(wtx);
+//     }
+//     CBlockIndex index2(block2);
+//     index2.nHeight = 2;
+//
+//     struct timeval tv_start;
+//     timer_start(tv_start);
+//     wallet.ChainTip(&index2, &block2, sproutTree, saplingTree, true);
+//     return timer_stop(tv_start);
+// }
 
 // Fake the input of a given block
 class FakeCoinsViewDB : public CCoinsViewDB {

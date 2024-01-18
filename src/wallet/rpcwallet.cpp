@@ -3313,35 +3313,6 @@ UniValue fundrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
     return result;
 }
 
-UniValue zc_sample_joinsplit(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    if (fHelp) {
-        throw runtime_error(
-            "zcsamplejoinsplit\n"
-            "\n"
-            "Perform a joinsplit and return the JSDescription.\n"
-            );
-    }
-
-    LOCK(cs_main);
-
-    uint256 joinSplitPubKey;
-    uint256 anchor = SproutMerkleTree().root();
-    JSDescription samplejoinsplit(true,
-                                  *pzcashParams,
-                                  joinSplitPubKey,
-                                  anchor,
-                                  {JSInput(), JSInput()},
-                                  {JSOutput(), JSOutput()},
-                                  0,
-                                  0);
-
-    CDataStream ss(SER_NETWORK, SAPLING_TX_VERSION | (1 << 31));
-    ss << samplejoinsplit;
-
-    return HexStr(ss.begin(), ss.end());
-}
-
 UniValue zc_benchmark(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (!EnsureWalletIsAvailable(fHelp)) {
@@ -3388,20 +3359,20 @@ UniValue zc_benchmark(const UniValue& params, bool fHelp, const CPubKey& mypk)
     for (int i = 0; i < samplecount; i++) {
         if (benchmarktype == "sleep") {
             sample_times.push_back(benchmark_sleep());
-        } else if (benchmarktype == "parameterloading") {
-            sample_times.push_back(benchmark_parameter_loading());
-        } else if (benchmarktype == "createjoinsplit") {
-            if (params.size() < 3) {
-                sample_times.push_back(benchmark_create_joinsplit());
-            } else {
-                int nThreads = params[2].get_int();
-                std::vector<double> vals = benchmark_create_joinsplit_threaded(nThreads);
-                // Divide by nThreads^2 to get average seconds per JoinSplit because
-                // we are running one JoinSplit per thread.
-                sample_times.push_back(std::accumulate(vals.begin(), vals.end(), 0.0) / (nThreads*nThreads));
-            }
-        } else if (benchmarktype == "verifyjoinsplit") {
-            sample_times.push_back(benchmark_verify_joinsplit(samplejoinsplit));
+        // } else if (benchmarktype == "parameterloading") {
+        //     sample_times.push_back(benchmark_parameter_loading());
+        // } else if (benchmarktype == "createjoinsplit") {
+        //     if (params.size() < 3) {
+        //         sample_times.push_back(benchmark_create_joinsplit());
+        //     } else {
+        //         int nThreads = params[2].get_int();
+        //         std::vector<double> vals = benchmark_create_joinsplit_threaded(nThreads);
+        //         // Divide by nThreads^2 to get average seconds per JoinSplit because
+        //         // we are running one JoinSplit per thread.
+        //         sample_times.push_back(std::accumulate(vals.begin(), vals.end(), 0.0) / (nThreads*nThreads));
+        //     }
+        // } else if (benchmarktype == "verifyjoinsplit") {
+        //     sample_times.push_back(benchmark_verify_joinsplit(samplejoinsplit));
 #ifdef ENABLE_MINING
         } else if (benchmarktype == "solveequihash") {
             if (params.size() < 3) {
@@ -3421,12 +3392,12 @@ UniValue zc_benchmark(const UniValue& params, bool fHelp, const CPubKey& mypk)
                 nInputs = params[2].get_int();
             }
             sample_times.push_back(benchmark_large_tx(nInputs));
-        } else if (benchmarktype == "trydecryptnotes") {
-            int nAddrs = params[2].get_int();
-            sample_times.push_back(benchmark_try_decrypt_notes(nAddrs));
-        } else if (benchmarktype == "incnotewitnesses") {
-            int nTxs = params[2].get_int();
-            sample_times.push_back(benchmark_increment_note_witnesses(nTxs));
+        // } else if (benchmarktype == "trydecryptnotes") {
+        //     int nAddrs = params[2].get_int();
+        //     sample_times.push_back(benchmark_try_decrypt_notes(nAddrs));
+        // } else if (benchmarktype == "incnotewitnesses") {
+        //     int nTxs = params[2].get_int();
+        //     sample_times.push_back(benchmark_increment_note_witnesses(nTxs));
         } else if (benchmarktype == "connectblockslow") {
             if (Params().NetworkIDString() != "regtest") {
                 throw JSONRPCError(RPC_TYPE_ERROR, "Benchmark must be run in regtest mode");
@@ -3467,324 +3438,6 @@ UniValue zc_benchmark(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     return results;
 }
-
-UniValue zc_raw_receive(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    if (!EnsureWalletIsAvailable(fHelp)) {
-        return NullUniValue;
-    }
-
-    if (fHelp || params.size() != 2) {
-        throw runtime_error(
-            "zcrawreceive zcsecretkey encryptednote\n"
-            "\n"
-            "DEPRECATED. Decrypts encryptednote and checks if the coin commitments\n"
-            "are in the blockchain as indicated by the \"exists\" result.\n"
-            "\n"
-            "Output: {\n"
-            "  \"amount\": value,\n"
-            "  \"note\": noteplaintext,\n"
-            "  \"exists\": exists\n"
-            "}\n"
-            );
-    }
-
-    RPCTypeCheck(params, boost::assign::list_of(UniValue::VSTR)(UniValue::VSTR));
-
-    LOCK(cs_main);
-
-    auto spendingkey = DecodeSpendingKey(params[0].get_str());
-    if (!IsValidSpendingKey(spendingkey)) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid spending key");
-    }
-    if (boost::get<libzcash::SproutSpendingKey>(&spendingkey) == nullptr) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Only works with Sprout spending keys");
-    }
-    SproutSpendingKey k = boost::get<libzcash::SproutSpendingKey>(spendingkey);
-
-    uint256 epk;
-    unsigned char nonce;
-    ZCNoteEncryption::Ciphertext ct;
-    uint256 h_sig;
-
-    {
-        CDataStream ssData(ParseHexV(params[1], "encrypted_note"), SER_NETWORK, PROTOCOL_VERSION);
-        try {
-            ssData >> nonce;
-            ssData >> epk;
-            ssData >> ct;
-            ssData >> h_sig;
-        } catch(const std::exception &) {
-            throw runtime_error(
-                "encrypted_note could not be decoded"
-            );
-        }
-    }
-
-    ZCNoteDecryption decryptor(k.receiving_key());
-
-    SproutNotePlaintext npt = SproutNotePlaintext::decrypt(
-        decryptor,
-        ct,
-        epk,
-        h_sig,
-        nonce
-    );
-    SproutPaymentAddress payment_addr = k.address();
-    SproutNote decrypted_note = npt.note(payment_addr);
-
-    assert(pwalletMain != NULL);
-    std::vector<boost::optional<SproutWitness>> witnesses;
-    uint256 anchor;
-    uint256 commitment = decrypted_note.cm();
-    pwalletMain->WitnessNoteCommitment(
-        {commitment},
-        witnesses,
-        anchor
-    );
-
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-    ss << npt;
-
-    UniValue result(UniValue::VOBJ);
-    result.push_back(Pair("amount", ValueFromAmount(decrypted_note.value())));
-    result.push_back(Pair("note", HexStr(ss.begin(), ss.end())));
-    result.push_back(Pair("exists", (bool) witnesses[0]));
-    return result;
-}
-
-
-
-UniValue zc_raw_joinsplit(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    if (!EnsureWalletIsAvailable(fHelp)) {
-        return NullUniValue;
-    }
-
-    if (fHelp || params.size() != 5) {
-        throw runtime_error(
-            "zcrawjoinsplit rawtx inputs outputs vpub_old vpub_new\n"
-            "  inputs: a JSON object mapping {note: zcsecretkey, ...}\n"
-            "  outputs: a JSON object mapping {zcaddr: value, ...}\n"
-            "\n"
-            "DEPRECATED. Splices a joinsplit into rawtx. Inputs are unilaterally confidential.\n"
-            "Outputs are confidential between sender/receiver. The vpub_old and\n"
-            "vpub_new values are globally public and move transparent value into\n"
-            "or out of the confidential value store, respectively.\n"
-            "\n"
-            "Note: The caller is responsible for delivering the output enc1 and\n"
-            "enc2 to the appropriate recipients, as well as signing rawtxout and\n"
-            "ensuring it is mined. (A future RPC call will deliver the confidential\n"
-            "payments in-band on the blockchain.)\n"
-            "\n"
-            "Output: {\n"
-            "  \"encryptednote1\": enc1,\n"
-            "  \"encryptednote2\": enc2,\n"
-            "  \"rawtxn\": rawtxout\n"
-            "}\n"
-            );
-    }
-
-    LOCK(cs_main);
-
-    CTransaction tx;
-    if (!DecodeHexTx(tx, params[0].get_str()))
-        throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX decode failed");
-
-    UniValue inputs = params[1].get_obj();
-    UniValue outputs = params[2].get_obj();
-
-    CAmount vpub_old(0);
-    CAmount vpub_new(0);
-
-    if (params[3].get_real() != 0.0)
-        vpub_old = AmountFromValue(params[3]);
-
-    if (params[4].get_real() != 0.0)
-        vpub_new = AmountFromValue(params[4]);
-
-    std::vector<JSInput> vjsin;
-    std::vector<JSOutput> vjsout;
-    std::vector<SproutNote> notes;
-    std::vector<SproutSpendingKey> keys;
-    std::vector<uint256> commitments;
-
-    for (const string& name_ : inputs.getKeys()) {
-        auto spendingkey = DecodeSpendingKey(inputs[name_].get_str());
-        if (!IsValidSpendingKey(spendingkey)) {
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid spending key");
-        }
-        if (boost::get<libzcash::SproutSpendingKey>(&spendingkey) == nullptr) {
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Only works with Sprout spending keys");
-        }
-        SproutSpendingKey k = boost::get<libzcash::SproutSpendingKey>(spendingkey);
-
-        keys.push_back(k);
-
-        SproutNotePlaintext npt;
-
-        {
-            CDataStream ssData(ParseHexV(name_, "note"), SER_NETWORK, PROTOCOL_VERSION);
-            ssData >> npt;
-        }
-
-        SproutPaymentAddress addr = k.address();
-        SproutNote note = npt.note(addr);
-        notes.push_back(note);
-        commitments.push_back(note.cm());
-    }
-
-    uint256 anchor;
-    std::vector<boost::optional<SproutWitness>> witnesses;
-    pwalletMain->WitnessNoteCommitment(commitments, witnesses, anchor);
-
-    assert(witnesses.size() == notes.size());
-    assert(notes.size() == keys.size());
-
-    {
-        for (size_t i = 0; i < witnesses.size(); i++) {
-            if (!witnesses[i]) {
-                throw runtime_error(
-                    "joinsplit input could not be found in tree"
-                );
-            }
-
-            vjsin.push_back(JSInput(*witnesses[i], notes[i], keys[i]));
-        }
-    }
-
-    while (vjsin.size() < ZC_NUM_JS_INPUTS) {
-        vjsin.push_back(JSInput());
-    }
-
-    for (const string& name_ : outputs.getKeys()) {
-        auto addrTo = DecodePaymentAddress(name_);
-        if (!IsValidPaymentAddress(addrTo)) {
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid recipient address.");
-        }
-        if (boost::get<libzcash::SproutPaymentAddress>(&addrTo) == nullptr) {
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Only works with Sprout payment addresses");
-        }
-        CAmount nAmount = AmountFromValue(outputs[name_]);
-
-        vjsout.push_back(JSOutput(boost::get<libzcash::SproutPaymentAddress>(addrTo), nAmount));
-    }
-
-    while (vjsout.size() < ZC_NUM_JS_OUTPUTS) {
-        vjsout.push_back(JSOutput());
-    }
-
-    // TODO
-    if (vjsout.size() != ZC_NUM_JS_INPUTS || vjsin.size() != ZC_NUM_JS_OUTPUTS) {
-        throw runtime_error("unsupported joinsplit input/output counts");
-    }
-
-    uint256 joinSplitPubKey;
-    unsigned char joinSplitPrivKey[crypto_sign_SECRETKEYBYTES];
-    crypto_sign_keypair(joinSplitPubKey.begin(), joinSplitPrivKey);
-
-    CMutableTransaction mtx(tx);
-    mtx.nVersion = 2;
-    mtx.joinSplitPubKey = joinSplitPubKey;
-
-    JSDescription jsdesc(false,
-                         *pzcashParams,
-                         joinSplitPubKey,
-                         anchor,
-                         {vjsin[0], vjsin[1]},
-                         {vjsout[0], vjsout[1]},
-                         vpub_old,
-                         vpub_new);
-
-    {
-        auto verifier = libzcash::ProofVerifier::Strict();
-        assert(jsdesc.Verify(*pzcashParams, verifier, joinSplitPubKey));
-    }
-
-    mtx.vjoinsplit.push_back(jsdesc);
-
-    // Empty output script.
-    CScript scriptCode;
-    CTransaction signTx(mtx);
-    auto consensusBranchId = CurrentEpochBranchId(chainActive.Height() + 1, Params().GetConsensus());
-    uint256 dataToBeSigned = SignatureHash(scriptCode, signTx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId);
-
-    // Add the signature
-    assert(crypto_sign_detached(&mtx.joinSplitSig[0], NULL,
-                         dataToBeSigned.begin(), 32,
-                         joinSplitPrivKey
-                        ) == 0);
-
-    // Sanity check
-    assert(crypto_sign_verify_detached(&mtx.joinSplitSig[0],
-                                       dataToBeSigned.begin(), 32,
-                                       mtx.joinSplitPubKey.begin()
-                                      ) == 0);
-
-    CTransaction rawTx(mtx);
-
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-    ss << rawTx;
-
-    std::string encryptedNote1;
-    std::string encryptedNote2;
-    {
-        CDataStream ss2(SER_NETWORK, PROTOCOL_VERSION);
-        ss2 << ((unsigned char) 0x00);
-        ss2 << jsdesc.ephemeralKey;
-        ss2 << jsdesc.ciphertexts[0];
-        ss2 << jsdesc.h_sig(*pzcashParams, joinSplitPubKey);
-
-        encryptedNote1 = HexStr(ss2.begin(), ss2.end());
-    }
-    {
-        CDataStream ss2(SER_NETWORK, PROTOCOL_VERSION);
-        ss2 << ((unsigned char) 0x01);
-        ss2 << jsdesc.ephemeralKey;
-        ss2 << jsdesc.ciphertexts[1];
-        ss2 << jsdesc.h_sig(*pzcashParams, joinSplitPubKey);
-
-        encryptedNote2 = HexStr(ss2.begin(), ss2.end());
-    }
-
-    UniValue result(UniValue::VOBJ);
-    result.push_back(Pair("encryptednote1", encryptedNote1));
-    result.push_back(Pair("encryptednote2", encryptedNote2));
-    result.push_back(Pair("rawtxn", HexStr(ss.begin(), ss.end())));
-    return result;
-}
-
-UniValue zc_raw_keygen(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    if (!EnsureWalletIsAvailable(fHelp)) {
-        return NullUniValue;
-    }
-
-    if (fHelp || params.size() != 0) {
-        throw runtime_error(
-            "zcrawkeygen\n"
-            "\n"
-            "DEPRECATED. Generate a zcaddr which can send and receive confidential values.\n"
-            "\n"
-            "Output: {\n"
-            "  \"zcaddress\": zcaddr,\n"
-            "  \"zcsecretkey\": zcsecretkey,\n"
-            "  \"zcviewingkey\": zcviewingkey,\n"
-            "}\n"
-            );
-    }
-
-    auto k = SproutSpendingKey::random();
-    auto addr = k.address();
-    auto viewing_key = k.viewing_key();
-
-    UniValue result(UniValue::VOBJ);
-    result.push_back(Pair("zcaddress", EncodePaymentAddress(addr)));
-    result.push_back(Pair("zcsecretkey", EncodeSpendingKey(k)));
-    result.push_back(Pair("zcviewingkey", EncodeViewingKey(viewing_key)));
-    return result;
-}
-
 
 UniValue z_getnewaddresskey(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
@@ -6598,7 +6251,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
         if (address == "ANY_TADDR") {
             useAnyUTXO = true;
         } else if (address == "ANY_SPROUT") {
-            useAnySprout = true;
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Sprout Disabled.");
         } else if (address == "ANY_SAPLING") {
             useAnySapling = true;
         } else {
@@ -6633,7 +6286,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
 
     // Validate the destination address
     auto destaddress = params[1].get_str();
-    bool isToSproutZaddr = false;
+    // bool isToSproutZaddr = false;
     bool isToSaplingZaddr = false;
     CTxDestination taddr = DecodeDestination(destaddress);
     if (!IsValidDestination(taddr)) {
@@ -6646,7 +6299,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
                     throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Sapling has not activated");
                 }
             } else {
-                isToSproutZaddr = true;
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Sprout Disabled.");
             }
         } else {
             throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, unknown address format: ") + destaddress );
@@ -6671,14 +6324,14 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
         }
     }
 
-    int sproutNoteLimit = MERGE_TO_ADDRESS_DEFAULT_SPROUT_LIMIT;
+    // int sproutNoteLimit = MERGE_TO_ADDRESS_DEFAULT_SPROUT_LIMIT;
     int saplingNoteLimit = MERGE_TO_ADDRESS_DEFAULT_SAPLING_LIMIT;
     if (params.size() > 4) {
         int nNoteLimit = params[4].get_int();
         if (nNoteLimit < 0) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Limit on maximum number of notes cannot be negative");
         }
-        sproutNoteLimit = nNoteLimit;
+        // sproutNoteLimit = nNoteLimit;
         saplingNoteLimit = nNoteLimit;
     }
 
@@ -6695,7 +6348,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
     std::string memo;
     if (params.size() > 6) {
         memo = params[6].get_str();
-        if (!(isToSproutZaddr || isToSaplingZaddr)) {
+        if (!(isToSaplingZaddr)) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Memo can not be used with a taddr.  It can only be used with a zaddr.");
         } else if (!IsHex(memo)) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected memo data in hexadecimal format.");
@@ -6709,7 +6362,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
 
     // Prepare to get UTXOs and notes
     std::vector<MergeToAddressInputUTXO> utxoInputs;
-    std::vector<MergeToAddressInputSproutNote> sproutNoteInputs;
+    // std::vector<MergeToAddressInputSproutNote> sproutNoteInputs;
     std::vector<MergeToAddressInputSaplingNote> saplingNoteInputs;
     CAmount mergedUTXOValue = 0;
     CAmount mergedNoteValue = 0;
@@ -6723,9 +6376,10 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
 
     unsigned int max_tx_size = saplingActive ? MAX_TX_SIZE_AFTER_SAPLING : MAX_TX_SIZE_BEFORE_SAPLING;
     size_t estimatedTxSize = 200;  // tx overhead + wiggle room
-    if (isToSproutZaddr) {
-        estimatedTxSize += JOINSPLIT_SIZE;
-    } else if (isToSaplingZaddr) {
+    // if (isToSproutZaddr) {
+    //     throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Sprout Disabled.");
+    // } else
+    if (isToSaplingZaddr) {
         estimatedTxSize += OUTPUTDESCRIPTION_SIZE;
     }
 
@@ -6783,57 +6437,58 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
         }
     }
 
-    if (useAnySprout || useAnySapling || zaddrs.size() > 0) {
+    if (useAnySapling || zaddrs.size() > 0) {
         // Get available notes
         std::vector<CSproutNotePlaintextEntry> sproutEntries;
-        //std::vector<SaplingNoteEntry> saplingEntries;
-        //pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, zaddrs);
-        std::vector<SaplingNoteEntry> saplingEntries,skipsapling;
-        pwalletMain->GetFilteredNotes(sproutEntries, useAnySprout == 0 ? saplingEntries : skipsapling, zaddrs);
+        std::vector<SaplingNoteEntry> saplingEntries;
+        pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, zaddrs);
+        sproutEntries.clear();
+        // std::vector<SaplingNoteEntry> saplingEntries,skipsapling;
+        // pwalletMain->GetFilteredNotes(sproutEntries, useAnySprout == 0 ? saplingEntries : skipsapling, zaddrs);
         // If Sapling is not active, do not allow sending from a sapling addresses.
         if (!saplingActive && saplingEntries.size() > 0) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Sapling has not activated");
         }
         // Sending from both Sprout and Sapling is currently unsupported using z_mergetoaddress
-        if (sproutEntries.size() > 0 && saplingEntries.size() > 0) {
-            throw JSONRPCError(
-                               RPC_INVALID_PARAMETER,
-                               "Cannot send from both Sprout and Sapling addresses using z_mergetoaddress");
-        }
+        // if (sproutEntries.size() > 0 && saplingEntries.size() > 0) {
+        //     throw JSONRPCError(
+        //                        RPC_INVALID_PARAMETER,
+        //                        "Cannot send from both Sprout and Sapling addresses using z_mergetoaddress");
+        // }
         // If sending between shielded addresses, they must be the same type
-        if ((saplingEntries.size() > 0 && isToSproutZaddr) || (sproutEntries.size() > 0 && isToSaplingZaddr)) {
-            throw JSONRPCError(
-                               RPC_INVALID_PARAMETER,
-                               "Cannot send between Sprout and Sapling addresses using z_mergetoaddress");
-        }
+        // if ((saplingEntries.size() > 0 && isToSproutZaddr) || (sproutEntries.size() > 0 && isToSaplingZaddr)) {
+        //     throw JSONRPCError(
+        //                        RPC_INVALID_PARAMETER,
+        //                        "Cannot send between Sprout and Sapling addresses using z_mergetoaddress");
+        // }
 
         // Find unspent notes and update estimated size
-        for (const CSproutNotePlaintextEntry& entry : sproutEntries) {
-            noteCounter++;
-            CAmount nValue = entry.plaintext.value();
-
-            if (!maxedOutNotesFlag) {
-                // If we haven't added any notes yet and the merge is to a
-                // z-address, we have already accounted for the first JoinSplit.
-                size_t increase = (sproutNoteInputs.empty() && !isToSproutZaddr) || (sproutNoteInputs.size() % 2 == 0) ? JOINSPLIT_SIZE : 0;
-                if (estimatedTxSize + increase >= max_tx_size ||
-                    (sproutNoteLimit > 0 && noteCounter > sproutNoteLimit))
-                {
-                    maxedOutNotesFlag = true;
-                } else {
-                    estimatedTxSize += increase;
-                    auto zaddr = entry.address;
-                    SproutSpendingKey zkey;
-                    pwalletMain->GetSproutSpendingKey(zaddr, zkey);
-                    sproutNoteInputs.emplace_back(entry.jsop, entry.plaintext.note(zaddr), nValue, zkey);
-                    mergedNoteValue += nValue;
-                }
-            }
-
-            if (maxedOutNotesFlag) {
-                remainingNoteValue += nValue;
-            }
-        }
+        // for (const CSproutNotePlaintextEntry& entry : sproutEntries) {
+        //     noteCounter++;
+        //     CAmount nValue = entry.plaintext.value();
+        //
+        //     if (!maxedOutNotesFlag) {
+        //         // If we haven't added any notes yet and the merge is to a
+        //         // z-address, we have already accounted for the first JoinSplit.
+        //         size_t increase = (sproutNoteInputs.empty() && !isToSproutZaddr) || (sproutNoteInputs.size() % 2 == 0) ? JOINSPLIT_SIZE : 0;
+        //         if (estimatedTxSize + increase >= max_tx_size ||
+        //             (sproutNoteLimit > 0 && noteCounter > sproutNoteLimit))
+        //         {
+        //             maxedOutNotesFlag = true;
+        //         } else {
+        //             estimatedTxSize += increase;
+        //             auto zaddr = entry.address;
+        //             SproutSpendingKey zkey;
+        //             pwalletMain->GetSproutSpendingKey(zaddr, zkey);
+        //             sproutNoteInputs.emplace_back(entry.jsop, entry.plaintext.note(zaddr), nValue, zkey);
+        //             mergedNoteValue += nValue;
+        //         }
+        //     }
+        //
+        //     if (maxedOutNotesFlag) {
+        //         remainingNoteValue += nValue;
+        //     }
+        // }
 
         for (const SaplingNoteEntry& entry : saplingEntries) {
             noteCounter++;
@@ -6862,7 +6517,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
     }
 
     size_t numUtxos = utxoInputs.size();
-    size_t numNotes = sproutNoteInputs.size() + saplingNoteInputs.size();
+    size_t numNotes = saplingNoteInputs.size();
 
     //fprintf(stderr, "num utxos.%li\n", numUtxos);
     if (numUtxos < 2 && numNotes == 0) {
@@ -6900,10 +6555,10 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
     CMutableTransaction contextualTx = CreateNewContextualCMutableTransaction(
                                                                               Params().GetConsensus(),
                                                                               nextBlockHeight);
-    bool isSproutShielded = sproutNoteInputs.size() > 0 || isToSproutZaddr;
-    if (contextualTx.nVersion == 1 && isSproutShielded) {
-        contextualTx.nVersion = 2; // Tx format should support vjoinsplit
-    }
+    // bool isSproutShielded = sproutNoteInputs.size() > 0 || isToSproutZaddr;
+    // if (contextualTx.nVersion == 1 && isSproutShielded) {
+    //     contextualTx.nVersion = 2; // Tx format should support vjoinsplit
+    // }
 
     // Builder (used if Sapling addresses are involved)
     boost::optional<TransactionBuilder> builder;
@@ -6915,7 +6570,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
     // Create operation and add to global queue
     std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
     std::shared_ptr<AsyncRPCOperation> operation(
-                                                 new AsyncRPCOperation_mergetoaddress(builder, contextualTx, utxoInputs, sproutNoteInputs, saplingNoteInputs, recipient, nFee, contextInfo) );
+                                                 new AsyncRPCOperation_mergetoaddress(builder, contextualTx, utxoInputs, saplingNoteInputs, recipient, nFee, contextInfo) );
     q->addOperation(operation);
     AsyncRPCOperationId operationId = operation->getId();
 
@@ -9464,10 +9119,6 @@ static const CRPCCommand commands[] =
     { "wallet",             "walletpassphrasechange",   &walletpassphrasechange,   true  },
     { "wallet",             "walletpassphrase",         &walletpassphrase,         true  },
     { "wallet",             "zcbenchmark",              &zc_benchmark,             true  },
-    { "wallet",             "zcrawkeygen",              &zc_raw_keygen,            true  },
-    { "wallet",             "zcrawjoinsplit",           &zc_raw_joinsplit,         true  },
-    { "wallet",             "zcrawreceive",             &zc_raw_receive,           true  },
-    { "wallet",             "zcsamplejoinsplit",        &zc_sample_joinsplit,      true  },
     { "wallet",             "z_listreceivedbyaddress",  &z_listreceivedbyaddress,  false },
     { "wallet",             "z_listunspent",            &z_listunspent,            false },
     { "wallet",             "z_getbalance",             &z_getbalance,             false },

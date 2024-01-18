@@ -866,7 +866,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 }
 
                 CValidationState state;
-                auto verifier = libzcash::ProofVerifier::Strict();
+                auto verifier = ProofVerifier::Strict();
                 // ac_public chains set at height like KMD and ZEX, will force a rescan if we dont ignore this error: bad-txns-acpublic-chain
                 // there cannot be any ztx in the wallet on ac_public chains that started from block 1, so this wont affect those.
                 // PIRATE fails this check for notary nodes, need exception. Triggers full rescan without it.

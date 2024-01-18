@@ -66,7 +66,7 @@ use zcash_primitives::{
 };
 use zcash_proofs::{
     sapling::{SaplingProvingContext, SaplingVerificationContext},
-    sprout,
+    sprout as old_sprout,
 };
 
 use zcash_history::{Entry as MMREntry, Tree as MMRTree, Version, V1, V2};
@@ -87,6 +87,7 @@ mod incremental_merkle_tree;
 mod merkle_frontier;
 mod params;
 mod sapling;
+mod sprout;
 mod streams;
 mod wallet;
 
@@ -713,14 +714,14 @@ pub extern "C" fn librustzcash_sprout_prove(
     in_value1: u64,
     in_rho1: *const [c_uchar; 32],
     in_r1: *const [c_uchar; 32],
-    in_auth1: *const [c_uchar; sprout::WITNESS_PATH_SIZE],
+    in_auth1: *const [c_uchar; old_sprout::WITNESS_PATH_SIZE],
 
     // Second input
     in_sk2: *const [c_uchar; 32],
     in_value2: u64,
     in_rho2: *const [c_uchar; 32],
     in_r2: *const [c_uchar; 32],
-    in_auth2: *const [c_uchar; sprout::WITNESS_PATH_SIZE],
+    in_auth2: *const [c_uchar; old_sprout::WITNESS_PATH_SIZE],
 
     // First output
     out_pk1: *const [c_uchar; 32],
@@ -751,7 +752,7 @@ pub extern "C" fn librustzcash_sprout_prove(
 
     drop(sprout_fs);
 
-    let proof = sprout::create_proof(
+    let proof = old_sprout::create_proof(
         unsafe { *phi },
         unsafe { *rt },
         unsafe { *h_sig },
@@ -796,7 +797,7 @@ pub extern "C" fn librustzcash_sprout_verify(
     vpub_old: u64,
     vpub_new: u64,
 ) -> bool {
-    sprout::verify_proof(
+    old_sprout::verify_proof(
         unsafe { &*proof },
         unsafe { &*rt },
         unsafe { &*h_sig },

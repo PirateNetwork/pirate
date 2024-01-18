@@ -38,6 +38,7 @@
 #include <array>
 
 #include <boost/variant.hpp>
+#include <variant>
 
 #include "zcash/NoteEncryption.hpp"
 #include "zcash/Zcash.h"
@@ -172,7 +173,7 @@ public:
 };
 
 template <typename Stream>
-class SproutProofSerializer : public boost::static_visitor<>
+class SproutProofSerializer
 {
     Stream& s;
     bool useGroth;
@@ -201,7 +202,7 @@ template<typename Stream, typename T>
 inline void SerReadWriteSproutProof(Stream& s, const T& proof, bool useGroth, CSerActionSerialize ser_action)
 {
     auto ps = SproutProofSerializer<Stream>(s, useGroth);
-    boost::apply_visitor(ps, proof);
+    std::visit(ps, proof);
 }
 
 template<typename Stream, typename T>
@@ -223,8 +224,8 @@ class JSDescription
 public:
     // These values 'enter from' and 'exit to' the value
     // pool, respectively.
-    CAmount vpub_old;
-    CAmount vpub_new;
+    CAmount vpub_old{0};
+    CAmount vpub_new{0};
 
     // JoinSplits are always anchored to a root in the note
     // commitment tree at some point in the blockchain
@@ -267,42 +268,6 @@ public:
     libzcash::SproutProof proof;
 
     JSDescription(): vpub_old(0), vpub_new(0) { }
-
-    JSDescription(
-            bool makeGrothProof,
-            ZCJoinSplit& params,
-            const uint256& joinSplitPubKey,
-            const uint256& rt,
-            const std::array<libzcash::JSInput, ZC_NUM_JS_INPUTS>& inputs,
-            const std::array<libzcash::JSOutput, ZC_NUM_JS_OUTPUTS>& outputs,
-            CAmount vpub_old,
-            CAmount vpub_new,
-            bool computeProof = true, // Set to false in some tests
-            uint256 *esk = nullptr // payment disclosure
-    );
-
-    static JSDescription Randomized(
-            bool makeGrothProof,
-            ZCJoinSplit& params,
-            const uint256& joinSplitPubKey,
-            const uint256& rt,
-            std::array<libzcash::JSInput, ZC_NUM_JS_INPUTS>& inputs,
-            std::array<libzcash::JSOutput, ZC_NUM_JS_OUTPUTS>& outputs,
-            std::array<size_t, ZC_NUM_JS_INPUTS>& inputMap,
-            std::array<size_t, ZC_NUM_JS_OUTPUTS>& outputMap,
-            CAmount vpub_old,
-            CAmount vpub_new,
-            bool computeProof = true, // Set to false in some tests
-            uint256 *esk = nullptr, // payment disclosure
-            std::function<int(int)> gen = GetRandInt
-    );
-
-    // Verifies that the JoinSplit proof is correct.
-    bool Verify(
-        ZCJoinSplit& params,
-        libzcash::ProofVerifier& verifier,
-        const uint256& joinSplitPubKey
-    ) const;
 
     // Returns the calculated h_sig
     uint256 h_sig(ZCJoinSplit& params, const uint256& joinSplitPubKey) const;
@@ -349,6 +314,35 @@ public:
     {
         return !(a == b);
     }
+};
+
+class ProofVerifier {
+private:
+    bool perform_verification;
+
+    ProofVerifier(bool perform_verification) : perform_verification(perform_verification) { }
+
+public:
+    // ProofVerifier should never be copied
+    ProofVerifier(const ProofVerifier&) = delete;
+    ProofVerifier& operator=(const ProofVerifier&) = delete;
+    ProofVerifier(ProofVerifier&&);
+    ProofVerifier& operator=(ProofVerifier&&);
+
+    // Creates a verification context that strictly verifies
+    // all proofs.
+    static ProofVerifier Strict();
+
+    // Creates a verification context that performs no
+    // verification, used when avoiding duplicate effort
+    // such as during reindexing.
+    static ProofVerifier Disabled();
+
+    // Verifies that the JoinSplit proof is correct.
+    bool VerifySprout(
+        const JSDescription& jsdesc,
+        const uint256& joinSplitPubKey
+    );
 };
 
 class BaseOutPoint
@@ -403,7 +397,7 @@ class SaplingOutPoint : public BaseOutPoint
 public:
     //In-Memory Only
     bool writeToDisk = true;
-    
+
     SaplingOutPoint() : BaseOutPoint() {writeToDisk = true;};
     SaplingOutPoint(uint256 hashIn, uint32_t nIn) : BaseOutPoint(hashIn, nIn) {writeToDisk = true;};
     std::string ToString() const;
