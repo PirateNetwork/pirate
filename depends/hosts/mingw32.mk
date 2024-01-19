@@ -1,7 +1,7 @@
 mingw32_CC=x86_64-w64-mingw32-gcc-posix
 mingw32_CXX=x86_64-w64-mingw32-g++-posix
-mingw32_CFLAGS=-pipe -std=c11
-mingw32_CXXFLAGS=-pipe -std=c++11
+mingw32_CFLAGS=-pipe -std=c17
+mingw32_CXXFLAGS=-pipe -std=c++17
 
 mingw32_release_CFLAGS=-g -O2
 mingw32_release_CXXFLAGS=$(mingw32_CXXFLAGS) $(mingw32_release_CFLAGS)
