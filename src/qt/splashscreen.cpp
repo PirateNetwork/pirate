@@ -348,12 +348,12 @@ void SplashScreen::on_btnRestore_clicked()
       //Remove multiple white spaces between the words and remove any white spaces at the beginning & end
       QString qPhrase = this->restoreSeed->ui->txtSeed->toPlainText().simplified().trimmed();
       std::string phrase = qPhrase.toStdString();
-      
+
       std::stringstream stream(phrase);
       unsigned int iCount = std::distance(std::istream_iterator<std::string>(stream), std::istream_iterator<std::string>());
       if (
-         (iCount != 12) && 
-         (iCount != 18) && 
+         (iCount != 12) &&
+         (iCount != 18) &&
          (iCount != 24)
          ) {
         QMessageBox msgBox;
@@ -377,7 +377,7 @@ void SplashScreen::on_btnRestore_clicked()
       } else {
           //Keep the dialog on the screen, to give the user another attempt at entering a valid seed.
           this->restoreSeed->ui->lblInvalid->setVisible(true);
-      }      
+      }
 }
 
 void SplashScreen::on_btnDone_clicked()
@@ -416,8 +416,8 @@ void SplashScreen::subscribeToCoreSignals()
     uiInterface.InitNeedUnlockWallet.connect(boost::bind(NeedUnlockWallet, this));
     uiInterface.InitCreateWallet.connect(boost::bind(showCreateWallet, this));
     uiInterface.InitShowPhrase.connect(boost::bind(showNewPhrase, this));
-    uiInterface.InitMessage.connect(boost::bind(InitMessage, this, _1));
-    uiInterface.ShowProgress.connect(boost::bind(ShowProgress, this, _1, _2, _3));
+    uiInterface.InitMessage.connect(boost::bind(InitMessage, this, std::placeholders::_1));
+    uiInterface.ShowProgress.connect(boost::bind(ShowProgress, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 }
 
 void SplashScreen::unsubscribeFromCoreSignals()
@@ -426,8 +426,8 @@ void SplashScreen::unsubscribeFromCoreSignals()
     uiInterface.InitNeedUnlockWallet.disconnect(boost::bind(NeedUnlockWallet, this));
     uiInterface.InitCreateWallet.disconnect(boost::bind(showCreateWallet, this));
     uiInterface.InitShowPhrase.disconnect(boost::bind(showNewPhrase, this));
-    uiInterface.InitMessage.disconnect(boost::bind(InitMessage, this, _1));
-    uiInterface.ShowProgress.disconnect(boost::bind(ShowProgress, this, _1, _2, _3));
+    uiInterface.InitMessage.disconnect(boost::bind(InitMessage, this, std::placeholders::_1));
+    uiInterface.ShowProgress.disconnect(boost::bind(ShowProgress, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
 }
 

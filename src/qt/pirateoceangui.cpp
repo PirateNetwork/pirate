@@ -353,10 +353,10 @@ void PirateOceanGUI::createActions()
     bool fEnableZSigning = settings.value("fEnableZSigning").toBool();
     if (fEnableZSigning==true) {
         bool fEnableZSigning_ModeSign  = settings.value("fEnableZSigning_ModeSign").toBool();
-        
+
         if (fEnableZSigning_ModeSign==true) {
           bOverrideMaxConnections=true;
-          nMaxConnections=0;                    
+          nMaxConnections=0;
         }
     }
 
@@ -595,53 +595,53 @@ void PirateOceanGUI::setColdStorageLayout( )
 {
     QSettings settings;
     bool fEnableZSigning = settings.value("fEnableZSigning").toBool();
-    if (fEnableZSigning==true) 
+    if (fEnableZSigning==true)
     {
-        //Cold storage enabled.        
+        //Cold storage enabled.
         // Evaluate if this is the online role (prepare spend transactions)
         // or the offline role (signs the transactions)
         //
-        // For the online role, 
+        // For the online role,
         //   For addresses for which we have the viewing key only, perform authorisation
         //   (signing) with the off-line partner wallet.
         //   For addresses for which we have the spending key, allow spending, the
         //   same when ZSigning==false
         bool fEnableZSigning_ModeSpend = settings.value("fEnableZSigning_ModeSpend").toBool();
         bool fEnableZSigning_ModeSign  = settings.value("fEnableZSigning_ModeSign").toBool();
-          
+
         zsendCoinsAction->setVisible( fEnableZSigning_ModeSpend );
         zsignAction->setVisible( fEnableZSigning_ModeSign );
-        
+
         //If the offline role is enabled, the wallet shouldn't have internet access,
         //for security reasons. The wallet should not attempt to sync with the blockchain.
         //This can be accomplished by editing PIRATE.conf and setting maxconnections=0.
         //Alternatively, the number of connections are override here when "Signing"
         //is enabled:
-        if (fEnableZSigning_ModeSign==true) 
+        if (fEnableZSigning_ModeSign==true)
         {
             bOverrideMaxConnections=true;
-            nMaxConnections=0;                   
-          
-            //History not available for the cold storage offline mode.        
+            nMaxConnections=0;
+
+            //History not available for the cold storage offline mode.
             historyAction->setVisible( fEnableZSigning_ModeSpend );
-        
+
             //Hide the Rescan function. No blockchain to use it with
-            rescanAction->setVisible(false);         
+            rescanAction->setVisible(false);
         }
         else
         {
-            historyAction->setVisible(true);                
-            rescanAction->setVisible(true);          
+            historyAction->setVisible(true);
+            rescanAction->setVisible(true);
         }
     }
     else
     {
-        //Cold storage disabled. 
+        //Cold storage disabled.
         //  Only display addresses for which we have the full spending key
         zsendCoinsAction->setVisible(true);
         zsignAction->setVisible(false);
-        
-        historyAction->setVisible(true);                
+
+        historyAction->setVisible(true);
         rescanAction->setVisible(true);
     }
     receiveCoinsAction->setVisible(true);
@@ -845,15 +845,15 @@ void PirateOceanGUI::optionsClicked()
           // or the off-line role (signs the transactions)
           bool fEnableZSigning_ModeSpend = settings.value("fEnableZSigning_ModeSpend").toBool();
           bool fEnableZSigning_ModeSign  = settings.value("fEnableZSigning_ModeSign").toBool();
-          
+
           zsendCoinsAction->setVisible( fEnableZSigning_ModeSpend );
           zsignAction->setVisible( fEnableZSigning_ModeSign );
-        } else {        
-          //Offline signing disabled. 
+        } else {
+          //Offline signing disabled.
           zsendCoinsAction->setVisible(true);
           zsignAction->setVisible(false);
         }
-        
+
         //Update GUI to accommodate new configuration:
         if (zsendCoinsAction->isVisible()) {
           if (zsendCoinsAction->isChecked() || zsignAction->isChecked())
@@ -866,7 +866,7 @@ void PirateOceanGUI::optionsClicked()
           {
             gotoZSignPage();
           }
-        }        
+        }
     }
 
     dlg.close();
@@ -1229,7 +1229,7 @@ void PirateOceanGUI::message(const QString &title, const QString &message, unsig
         QMessageBox mBox((QMessageBox::Icon)nMBoxIcon, strTitle, message, buttons, this);
         int r = mBox.exec();
         if (ret != nullptr)
-        {   
+        {
            *ret = r;
         }
     }
@@ -1380,7 +1380,7 @@ void PirateOceanGUI::setEncryptionStatus(int status)
         break;
     case WalletModel::Unlocked:
         //Update GUI to reflect the current cold storage
-        //state: online or offline mode         
+        //state: online or offline mode
         setColdStorageLayout();
 
         optionsAction->setVisible(true);
@@ -1536,15 +1536,15 @@ static int ThreadSafeMessageBox(PirateOceanGUI *gui, const std::string& message,
 void PirateOceanGUI::subscribeToCoreSignals()
 {
     // Connect signals to client
-    uiInterface.ThreadSafeMessageBox.connect(boost::bind(ThreadSafeMessageBox, this, _1, _2, _3));
-    uiInterface.ThreadSafeQuestion.connect(boost::bind(ThreadSafeMessageBox, this, _1, _3, _4));
+    uiInterface.ThreadSafeMessageBox.connect(boost::bind(ThreadSafeMessageBox, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+    uiInterface.ThreadSafeQuestion.connect(boost::bind(ThreadSafeMessageBox, this, std::placeholders::_1, std::placeholders::_3, std::placeholders::_4));
 }
 
 void PirateOceanGUI::unsubscribeFromCoreSignals()
 {
     // Disconnect signals from client
-    uiInterface.ThreadSafeMessageBox.disconnect(boost::bind(ThreadSafeMessageBox, this, _1, _2, _3));
-    uiInterface.ThreadSafeQuestion.disconnect(boost::bind(ThreadSafeMessageBox, this, _1, _3, _4));
+    uiInterface.ThreadSafeMessageBox.disconnect(boost::bind(ThreadSafeMessageBox, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+    uiInterface.ThreadSafeQuestion.disconnect(boost::bind(ThreadSafeMessageBox, this, std::placeholders::_1, std::placeholders::_3, std::placeholders::_4));
 }
 
 void PirateOceanGUI::toggleNetworkActive()

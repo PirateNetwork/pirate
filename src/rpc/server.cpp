@@ -83,12 +83,12 @@ void RPCServer::OnStopped(boost::function<void ()> slot)
 
 void RPCServer::OnPreCommand(boost::function<void (const CRPCCommand&)> slot)
 {
-    g_rpcSignals.PreCommand.connect(boost::bind(slot, _1));
+    g_rpcSignals.PreCommand.connect(boost::bind(slot, std::placeholders::_1));
 }
 
 void RPCServer::OnPostCommand(boost::function<void (const CRPCCommand&)> slot)
 {
-    g_rpcSignals.PostCommand.connect(boost::bind(slot, _1));
+    g_rpcSignals.PostCommand.connect(boost::bind(slot, std::placeholders::_1));
 }
 
 void RPCTypeCheck(const UniValue& params,
