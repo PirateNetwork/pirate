@@ -2,6 +2,8 @@
 #include "params.h"
 #include "ui_interface.h"
 
+#include <fstream>
+
 std::map<std::string, ParamFile> mapParams;
 static const int K_READ_BUF_SIZE{ 1024 * 16 };
 
