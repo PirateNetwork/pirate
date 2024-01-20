@@ -8,14 +8,6 @@ Zcash has been subjected to a formal third-party security review. For security
 announcements, audit results and other general security information, see
 https://z.cash/support/security.html
 
-x86-64 Linux Only
------------------------
-
-There are [known bugs](https://github.com/scipr-lab/libsnark/issues/26) which
-make proving keys generated on 64-bit systems unusable on 32-bit and big-endian
-systems. It's unclear if a warning will be issued in this case, or if the
-proving system will be silently compromised.
-
 Wallet Encryption
 -----------------
 
@@ -36,8 +28,8 @@ Wallet encryption is disabled, for several reasons:
 
 - We were concerned about the resistance of the algorithm used to derive wallet
   encryption keys (inherited from [Bitcoin](https://bitcoin.org/en/secure-your-wallet))
-  to dictionary attacks by a powerful attacker. If and when we re-enable wallet 
-  encryption, it is likely to be with a modern passphrase-based key derivation 
+  to dictionary attacks by a powerful attacker. If and when we re-enable wallet
+  encryption, it is likely to be with a modern passphrase-based key derivation
   algorithm designed for greater resistance to dictionary attack, such as Argon2i.
 
 You should use full-disk encryption (or encryption of your home directory) to
@@ -51,11 +43,6 @@ This implementation of Zcash is not resistant to side-channel attacks. You
 should assume (even unprivileged) users who are running on the hardware, or who
 are physically near the hardware, that your `zcashd` process is running on will
 be able to:
-
-- Determine the values of your secret spending keys, as well as which notes you
-  are spending, by observing cache side-channels as you perform a JoinSplit
-  operation. This is due to probable side-channel leakage in the libsnark
-  proving machinery.
 
 - Determine which notes you own by observing cache side-channel information
   leakage from the incremental witnesses as they are updated with new notes.
