@@ -13,10 +13,10 @@ Use the brewfile to install the necessary packages:
 brew bundle
 ```
 
-or 
+or
 
 ```shell
-brew tap discoteq/discoteq; brew install flock autoconf autogen automake gcc@8 binutils protobuf coreutils wget
+brew tap discoteq/discoteq; brew install flock autoconf autogen automake gcc@9 binutils protobuf coreutils wget
 ```
 
 Get all that installed, then run:
@@ -30,7 +30,7 @@ cd pirate
 
 To build a distributable version of pirate then run the makeReleaseMac.sh script after building. This will fix the dependency references and move the komodod and komodo-cli binaries to the kmd/mac/pirate-cli directory along with the 6 libraries required for it to work properly.
 
-When you are done building, you need to create `PIRATE.conf` the Mac way. 
+When you are done building, you need to create `PIRATE.conf` the Mac way.
 
 ```shell
 mkdir ~/Library/Application\ Support/Komodo/PIRATE

@@ -121,7 +121,7 @@ Ensure you have [brew](https://brew.sh) and the command line tools installed (co
 brew update
 brew upgrade
 brew tap discoteq/discoteq; brew install flock
-brew install autoconf autogen automake gcc@8 binutilsprotobuf coreutils wget python3
+brew install autoconf autogen automake gcc@9 binutilsprotobuf coreutils wget python3
 git clone https://github.com/PirateNetwork/pirate --branch master
 cd pirate
 # This step is not required for when using the Qt GUI
