@@ -569,7 +569,6 @@ qt_komodo_qt_LDADD += \
   $(LIBTLS) \
   $(LIBRUSTZCASH) \
   $(LIBCXXBRIDGE) \
-  $(LIBSNARK) \
   $(LIBZCASH_LIBS) \
   $(LIBCRYPTOCONDITIONS)
 

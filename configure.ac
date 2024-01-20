@@ -800,27 +800,6 @@ fi
 #AC_CHECK_HEADER([gmpxx.h],,AC_MSG_ERROR(libgmpxx headers missing))
 #AC_CHECK_LIB([gmpxx],[main],GMPXX_LIBS=-lgmpxx, [AC_MSG_ERROR(libgmpxx missing)])
 
-# libsnark header layout is broken unless cpp's -I is passed with the
-# libsnark directory, so for now we use this hideous workaround:
-echo 'Hunting for libsnark include directory...'
-[LIBSNARK_INCDIR="$(echo "$CPPFLAGS" | sed 's,^.*-I\([^ ]*/include\).*$,\1/libsnark,')"]
-if test -d "$LIBSNARK_INCDIR"; then
-   echo "Found libsnark include directory: $LIBSNARK_INCDIR"
-else
-#AC_MSG_ERROR(libsnark include directory not found)
-echo "libsnark include directory not found ($LIBSNARK_INCDIR)"
-fi
-
-CPPFLAGS="-I$LIBSNARK_INCDIR $CPPFLAGS"
-
-# Now check for libsnark compilability using traditional autoconf tests:
-if test x$TARGET_OS = xdarwin; then
-AC_CHECK_HEADER([libsnark/gadgetlib1/gadget.hpp],,AC_MSG_ERROR(libsnark headers missing))
-AC_CHECK_LIB([snark],[main],LIBSNARK_LIBS=-lsnark, [AC_MSG_ERROR(libsnark missing)], [-lgmpxx])
-fi
-#AC_CHECK_HEADER([libsnark/gadgetlib1/gadget.hpp],,AC_MSG_ERROR(libsnark headers missing))
-#AC_CHECK_LIB([snark],[main],LIBSNARK_LIBS=-lsnark, [AC_MSG_ERROR(libsnark missing)], [-lgmpxx])
-
 RUST_LIBS=""
 case $host in
   *mingw*)
@@ -840,14 +819,6 @@ AX_OPENMP(
   [AC_MSG_WARN([OpenMP not supported, disabling multithreading])
    AC_DEFINE(HAVE_OPENMP, 0, [Define if OpenMP is enabled])
    AM_CONDITIONAL([HAVE_OPENMP], [false])])
-
-# Gitian uses a config.site that sets depends_prefix, and then sets --prefix=/
-# build.sh just uses --prefix
-if test x$depends_prefix != x; then
-  LIBSNARK_DEPINST="$depends_prefix"
-else
-  LIBSNARK_DEPINST="$prefix"
-fi
 
 # Additional Zcash flags
 AX_CHECK_COMPILE_FLAG([-fwrapv],[CXXFLAGS="$CXXFLAGS -fwrapv"])
@@ -1022,7 +993,6 @@ AC_SUBST(EVENT_PTHREADS_LIBS)
 AC_SUBST(ZMQ_LIBS)
 AC_SUBST(GMP_LIBS)
 AC_SUBST(GMPXX_LIBS)
-AC_SUBST(LIBSNARK_DEPINST)
 AC_SUBST(LIBZCASH_LIBS)
 AC_CONFIG_FILES([Makefile src/Makefile doc/man/Makefile src/test/buildenv.py])
 AC_CONFIG_FILES([qa/pull-tester/run-bitcoind-for-test.sh],[chmod +x qa/pull-tester/run-bitcoind-for-test.sh])
