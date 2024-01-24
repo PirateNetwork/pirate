@@ -1716,6 +1716,7 @@ public:
     DBErrors LoadCryptedSeedFromDB();
     DBErrors LoadWallet(bool& fFirstRunRet);
     DBErrors ZapWalletTx(std::vector<CWalletTx>& vWtx);
+    DBErrors ReadClientVersion();
     DBErrors ZapOldRecords();
 
     bool SetAddressBook(const CTxDestination& address, const std::string& strName, const std::string& purpose);

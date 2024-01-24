@@ -2115,11 +2115,14 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
         //Clear transactions on min client version
         {
-            CWalletDB walletdb(strWalletFile);
-            DBErrors nDbVersion = walletdb.ReadClientVersion();
-            if (nDbVersion == DB_CLEAR_TX || nDbVersion == DB_CLEAR_TX) {
+            pwalletMain = new CWallet(strWalletFile);
+            DBErrors nDbVersion = pwalletMain->ReadClientVersion();
+            if (nDbVersion == DB_CLEAR_TX || nDbVersion == DB_VERSION_NOT_FOUND) {
                 zapTransactions = true;
             }
+
+            delete pwalletMain;
+            pwalletMain = NULL;
         }
 
         //Run ZapWalletTx to clean out transactions

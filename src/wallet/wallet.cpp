@@ -6746,6 +6746,14 @@ DBErrors CWallet::LoadWallet(bool& fFirstRunRet)
     return DB_LOAD_OK;
 }
 
+DBErrors CWallet::ReadClientVersion()
+{
+    if (!fFileBacked)
+        return DB_LOAD_OK;
+
+    return CWalletDB(strWalletFile,"cr+").ReadClientVersion();
+}
+
 DBErrors CWallet::ZapWalletTx(std::vector<CWalletTx>& vWtx)
 {
     if (!fFileBacked)
