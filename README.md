@@ -69,7 +69,7 @@ sudo apt-get install build-essential pkg-config libc6-dev m4 g++-multilib autoco
 ### Dependencies (Ubuntu 20.04)
 ```shell
 #The following packages are needed:
-sudo apt-get install build-essential pkg-config libc6-dev m4 g++-multilib autoconf libtool ncurses-dev unzip git python3 python3-zmq zlib1g-dev wget libcurl4-gnutls-dev bsdmainutils automake curl libsodium-dev
+sudo apt-get install build-essential pkg-config libc6-dev m4 g++-multilib autoconf libtool ncurses-dev unzip git python3 python3-zmq zlib1g-dev wget libcurl4-gnutls-dev bsdmainutils automake curl libsodium-dev bison
 
 ```shell
 #On newer Linux distributions, like Ubuntu 22.04, the following additional packages are required:
