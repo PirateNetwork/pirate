@@ -28,10 +28,6 @@
 #include "wallet/wallet.h"
 #endif // ENABLE_WALLET
 
-#ifdef Q_OS_MAC
-#include "macdockiconhandler.h"
-#endif
-
 #include "chainparams.h"
 #include "init.h"
 #include "ui_interface.h"
@@ -298,7 +294,6 @@ PirateOceanGUI::~PirateOceanGUI()
         trayIcon->hide();
 #ifdef Q_OS_MAC
     delete appMenuBar;
-    MacDockIconHandler::cleanup();
 #endif
 
     delete rpcConsole;
@@ -781,9 +776,6 @@ void PirateOceanGUI::createTrayIconMenu()
     connect(trayIcon, SIGNAL(activated(QSystemTrayIcon::ActivationReason)),
             this, SLOT(trayIconActivated(QSystemTrayIcon::ActivationReason)));
 #else
-    // Note: On macOS, the Dock icon is used to provide the tray's functionality.
-    MacDockIconHandler *dockIconHandler = MacDockIconHandler::instance();
-    connect(dockIconHandler, &MacDockIconHandler::dockIconClicked, this, &PirateOceanGUI::macosDockIconActivated);
 
     trayIconMenu = new QMenu(this);
     trayIconMenu->setAsDockMenu();
