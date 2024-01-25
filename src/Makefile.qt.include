@@ -152,7 +152,6 @@ QT_MOC_CPP = \
   qt/moc_guiutil.cpp \
   qt/moc_intro.cpp \
   qt/moc_importkeydialog.cpp\
-  qt/moc_macdockiconhandler.cpp \
   qt/moc_macnotificationhandler.cpp \
   qt/moc_modaloverlay.cpp \
   qt/moc_notificator.cpp \
@@ -192,10 +191,7 @@ QT_MOC_CPP = \
   qt/moc_walletmodel.cpp \
   qt/moc_walletview.cpp
 
-KOMODO_MM = qt/macdockiconhandler.mm
-#\
-#  qt/macdockiconhandler.mm \
-#  qt/macnotificationhandler.mm
+KOMODO_MM =
 
 QT_MOC = \
   qt/komodo.moc \
@@ -242,7 +238,6 @@ KOMODO_QT_H = \
   qt/guiutil.h \
   qt/intro.h \
   qt/importkeydialog.h \
-  qt/macdockiconhandler.h \
   qt/macnotificationhandler.h \
   qt/modaloverlay.h \
   qt/networkstyle.h \
