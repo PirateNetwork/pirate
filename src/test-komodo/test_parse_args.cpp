@@ -154,7 +154,7 @@ namespace ParseArgumentsTests {
             {"NINJA", "-ac_name=NINJA -ac_supply=100000000 -addnode=209.222.101.247 -addnode=103.195.100.32 -addnode=209.222.101.247 -addnode=103.195.100.32 -addnode=15.235.204.174 -addnode=148.113.1.52 -addnode=65.21.77.109 -addnode=89.19.26.211 -addnode=89.19.26.212"},
             {"PIRATE", "-ac_name=PIRATE -ac_supply=0 -ac_reward=25600000000 -ac_halving=77777 -ac_private=1 -addnode=209.222.101.247 -addnode=103.195.100.32 -addnode=88.99.212.81 -addnode=15.235.204.174 -addnode=148.113.1.52 -addnode=65.21.77.109 -addnode=89.19.26.211 -addnode=89.19.26.212"},
             {"SUPERNET", "-ac_name=SUPERNET -ac_supply=816061 -addnode=209.222.101.247 -addnode=103.195.100.32 -addnode=209.222.101.247 -addnode=103.195.100.32 -addnode=15.235.204.174 -addnode=148.113.1.52 -addnode=65.21.77.109 -addnode=89.19.26.211 -addnode=89.19.26.212"},
-            {"THC", "-ac_name=THC -ac_supply=251253103 -ac_reward=360000000,300000000,240000000,180000000,150000000,90000000,0 -ac_staked=100 -ac_eras=7 -ac_end=500001,1000001,1500001,2000001,2500001,4500001,0 -ac_perc=233333333 -ac_cc=2 -ac_ccenable=229,236,240 -ac_script=2ea22c8020987fad30df055db6fd922c3a57e55d76601229ed3da3b31340112e773df3d0d28103120c008203000401ccb8 -ac_founders=150 -ac_cbmaturity=1 -ac_sapling=1 -earlytxid=7e4a76259e99c9379551389e9f757fc5f46c33ae922a8644dc2b187af2a6adc1 -addnode=209.222.101.247 -addnode=103.195.100.32 -addnode=157.230.45.184 -addnode=165.22.52.123 -addnode=15.235.204.174 -addnode=148.113.1.52 -addnode=65.21.77.109 -addnode=89.19.26.211 -addnode=89.19.26.212"},
+            {"ERA7", "-ac_name=ERA7 -ac_supply=7777777 -ac_reward=700000000,600000000,500000000,400000000,300000000,200000000,0 -ac_staked=100 -ac_eras=7 -ac_end=1000000,2000000,3000000,4000000,5000000,6000000,0 -ac_cc=2 -ac_ccenable=229,236,240 -ac_cbmaturity=1 -ac_sapling=1"},
             {"TXX001", "-ac_name=TXX001 -ac_sapling=1 -ac_founders=1 -ac_reward=0,1125000000,562500000 -ac_end=128,340000,5422111 -ac_blocktime=150 -ac_supply=6178674 -ac_halving=129,340000,840000 -ac_cc=2 -ac_cclib=txx001 -ac_ccenable=228,234,235,236,241 -ac_perc=11111111 -ac_eras=3 -ac_script=76a9145eb10cf64f2bab1b457f1f25e658526155928fac88ac -clientname=GoldenSandtrout -addnode=188.165.212.101 -addnode=136.243.227.142 -addnode=5.9.224.250",}
 
         };
@@ -170,7 +170,7 @@ namespace ParseArgumentsTests {
             { "NINJA", {"NINJA", 8426, 8427, -1301311821} },
             { "PIRATE", {"PIRATE", 45452, 45453, 397860952} },
             { "SUPERNET", {"SUPERNET", 11340, 11341, -1190058922} },
-            { "THC", {"THC", 36789, 36790, -1111205507} },
+            { "ERA7", {"ERA7", 37332, 37333, -1314352964} },
             { "TXX001", {"TXX001", 55965, 55966, 951479465} },
         };
 
