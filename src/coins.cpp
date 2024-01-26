@@ -591,6 +591,12 @@ const CScript &CCoinsViewCache::GetSpendFor(const CTxIn& input) const
  */
 CAmount CCoinsViewCache::GetValueIn(int32_t nHeight,int64_t &interestp,const CTransaction& tx) const
 {
+    return GetTransparentValueIn(nHeight, interestp, tx) + tx.GetShieldedValueIn();
+}
+
+// TODO: remove this if it ends up unused
+CAmount CCoinsViewCache::GetTransparentValueIn(int32_t nHeight,int64_t &interestp,const CTransaction& tx) const
+{
     CAmount value,nResult = 0;
     interestp = 0;
     if ( tx.IsCoinImport() )
@@ -617,7 +623,6 @@ CAmount CCoinsViewCache::GetValueIn(int32_t nHeight,int64_t &interestp,const CTr
         }
 #endif
     }
-    nResult += tx.GetShieldedValueIn();
 
     return nResult;
 }
