@@ -158,10 +158,9 @@ private:
       std::string sMemo;
     }Output_s;
 
-
-    //Split witness into its components that are used by the transaction builder:
-    std::vector<uint64_t> alWitnessPosition;
-    std::vector<myCharArray_s> asWitness;       //From rustzcash.rs
+    //Split MerklePath into its components that are used by the transaction builder:
+    std::vector<uint64_t>      alMerklePathPosition;
+    std::vector<myCharArray_s> asMerklePath;          //From zcash/IncrementalMerkleTree.hpp
 
     std::vector<SpendDescriptionInfo> spends;
     std::vector<OutputDescriptionInfo> outputs;
@@ -218,17 +217,15 @@ public:
         libzcash::SaplingExpandedSpendingKey expsk,
         libzcash::SaplingNote note,
         uint256 anchor,
-
-        uint64_t lWitnessPosition,
-        unsigned char *pcWitness);
+        uint64_t lMerklePathPosition,
+        unsigned char *pcMerkle);
 
     bool AddSaplingSpend_prepare_offline_transaction(
         std::string sFromAddr,
         libzcash::SaplingNote note,
         uint256 anchor,
-
-        uint64_t lWitnessPosition,
-        unsigned char *pcWitness);
+        uint64_t lMerklePosition,
+        unsigned char *pcMerkle);
 
     bool AddSaplingSpendRaw(
       libzcash::SaplingPaymentAddress from,
