@@ -24,6 +24,7 @@ SpendDescriptionInfo::SpendDescriptionInfo(
     libzcash::MerklePath saplingMerklePath) : expsk(expsk), note(note), anchor(anchor), saplingMerklePath(saplingMerklePath)
 {
     librustzcash_sapling_generate_r(alpha.begin());
+    //printf("SpendDescriptionInfo saplingMerklePath.position()=%lx\n", saplingMerklePath.position() );
 }
 
 boost::optional<OutputDescription> OutputDescriptionInfo::Build(void* ctx) {
@@ -129,7 +130,19 @@ TransactionBuilder::TransactionBuilder(
     nHeight             = nBlockHeight;
     consensusBranchId   = branchId;
     cZip212_enabled     = cZip212Enabled;
+    /*
+    fprintf(stderr,"TransactionBuilder::TransactionBuilder(offline) values: (nHeight=%d), fOverwintered=%u, nExpiryHeight=%u, nVersionGroupId=%u, nVersion=%d\n",
+    nHeight,
+    mtx.fOverwintered,
+    mtx.nExpiryHeight,
+    mtx.nVersionGroupId,
+    mtx.nVersion);
 
+    boost::optional<CTransaction> maybe_tx = CTransaction(mtx);
+    auto tx_result = maybe_tx.get();
+    auto signedtxn = EncodeHexTx(tx_result);
+    printf("TransactionBuilder::TransactionBuilder(offline) mtx= %s\n",signedtxn.c_str());
+    */
 }
 
 bool TransactionBuilder::AddSaplingSpend(
@@ -154,19 +167,20 @@ bool TransactionBuilder::AddSaplingSpend(
 
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << saplingMerklePath;
-    std::vector<unsigned char> local_witness(ss.begin(), ss.end());
+    std::vector<unsigned char> vLocalMerkle(ss.begin(), ss.end());
+  
+    myCharArray_s sMerkle;
+    memcpy (&sMerkle.cArray[0], reinterpret_cast<unsigned char*>(vLocalMerkle.data()), sizeof(sMerkle.cArray) );
+    asMerklePath.emplace_back(sMerkle);
 
-    myCharArray_s sWitness;
-    memcpy (&sWitness.cArray[0], reinterpret_cast<unsigned char*>(local_witness.data()), sizeof(sWitness.cArray) );
-    asWitness.emplace_back(sWitness);
-
-    alWitnessPosition.emplace_back(saplingMerklePath.position());
+    alMerklePathPosition.emplace_back(saplingMerklePath.position());
 
     mtx.valueBalance += note.value();
 
     boost::optional<CTransaction> maybe_tx = CTransaction(mtx);
     auto tx_result = maybe_tx.get();
     auto signedtxn = EncodeHexTx(tx_result);
+    //printf("TransactionBuilder::AddSaplingSpend() position()=%lx, mtx= %s\n", saplingMerklePath.position(), signedtxn.c_str());
 
     return true;
 }
@@ -175,10 +189,10 @@ bool TransactionBuilder::AddSaplingSpend_process_offline_transaction(
     libzcash::SaplingExpandedSpendingKey expsk,
     libzcash::SaplingNote note,
     uint256 anchor,
-    uint64_t lWitnessPosition,
-    unsigned char *pcWitness)
+    uint64_t lMerklePathPosition,
+    unsigned char *pcMerkle)
 {
-    myCharArray_s sWitness;
+    myCharArray_s sMerkle;
 
     // Consistency check: all anchors must equal the first one
     if (!spends.empty()) {
@@ -190,15 +204,26 @@ bool TransactionBuilder::AddSaplingSpend_process_offline_transaction(
     libzcash::MerklePath saplingMerklePath; //Unused parameter. required by spends.emplace_back()
     spends.emplace_back(expsk, note, anchor, saplingMerklePath);
 
-    alWitnessPosition.emplace_back(lWitnessPosition);
-    memcpy (&sWitness.cArray[0],pcWitness,sizeof(sWitness.cArray));
-    asWitness.emplace_back(sWitness);
-
+    alMerklePathPosition.emplace_back(lMerklePathPosition);
+    memcpy (&sMerkle.cArray[0],pcMerkle,sizeof(sMerkle.cArray));
+    asMerklePath.emplace_back(sMerkle);
+    /*
+    printf("AddSaplingSpend2() spends(%ld), alMerklePathPosition(%ld), asMerklePath(%ld)\n",spends.size(),alMerklePathPosition.size(), asMerklePath.size() );fflush(stdout);
+    printf("anchor %s\n", anchor.GetHex().c_str() );
+    printf("merkle position %lu\n", lMerklePathPosition);
+    printf("merkle path:\n");
+    for (int iI=0; iI<sizeof(sMerkle.cArray);iI++)
+    {
+      printf("%d ",pcMerkle[iI]);
+    }
+    printf("\n");
+    */
     mtx.valueBalance += note.value();
 
     boost::optional<CTransaction> maybe_tx = CTransaction(mtx);
     auto tx_result = maybe_tx.get();
     auto signedtxn = EncodeHexTx(tx_result);
+    //printf("TransactionBuilder::AddSaplingSpend_process_offline_transaction() mtx= %s\n",signedtxn.c_str());
 
     return true;
 }
@@ -208,10 +233,12 @@ bool TransactionBuilder::AddSaplingSpend_prepare_offline_transaction(
     std::string sFromAddr,
     libzcash::SaplingNote note,
     uint256 anchor,
-    uint64_t lWitnessPosition,
-    unsigned char *pcWitness)
+    uint64_t lMerklePathPosition,
+    unsigned char *pcMerkle)
 {
-    myCharArray_s sWitness;
+    myCharArray_s sMerkle;
+
+    //printf("AddSaplingSpend_prepare_offline_transaction()\n");
 
     // Consistency check: all anchors must equal the first one
     if (!spends.empty()) {
@@ -222,15 +249,16 @@ bool TransactionBuilder::AddSaplingSpend_prepare_offline_transaction(
 
     fromAddress_ = sFromAddr;
 
-    libzcash::MerklePath saplingMerklePath;                   //Unused, just to keep spends happy
+    libzcash::MerklePath saplingMerklePath;         //Unused, just to keep spends happy
     libzcash::SaplingExpandedSpendingKey expsk;     //Unused, just to keep spends happy
     spends.emplace_back(expsk, note, anchor, saplingMerklePath);
 
-    alWitnessPosition.emplace_back(lWitnessPosition);
-    memcpy (&sWitness.cArray[0],pcWitness,sizeof(sWitness.cArray));
-    asWitness.emplace_back(sWitness);
+    alMerklePathPosition.emplace_back(lMerklePathPosition);
+    memcpy (&sMerkle.cArray[0],pcMerkle,sizeof(sMerkle.cArray));
+    asMerklePath.emplace_back(sMerkle);
 
     mtx.valueBalance += note.value();
+    //printf("  note.value = %ld\n", note.value() );
 
     return true;
 }
@@ -525,9 +553,12 @@ std::string TransactionBuilder::Build_offline_transaction()
         //            [4] Array of recipient: address, amount, memo
         //            [5]..[13] Blockchain parameters
         //            [15] Checksum of all the characters in the command.
-        std::string sVersion="1";
+        std::string sVersion="2";
 
         sReturn="z_sign_offline arrr "+sVersion+" ";
+        // Version 2 : 'Witness' was replaced by 'MerklePath'. The serialised data structure is identical to version 1,
+        //             but when the data is processed and reassembled, then libzcash::MerklePath must be used. 
+        //             The version number is increased to indicate this difference
         sChecksumInput="arrr "+sVersion+" ";
 
 
@@ -537,7 +568,7 @@ std::string TransactionBuilder::Build_offline_transaction()
 
 
 
-        //Parameter [3]: Spending notes '[{"witnessposition":number,"witnesspath":hex,"note_d":hex,"note_pkd":hex,"note_r":hex,"value":number,"zip212":number},{...},{...}]'
+        //Parameter [3]: Spending notes '[{"merkleposition":number,"merklepath":hex,"note_d":hex,"note_pkd":hex,"note_r":hex,"value":number,"zip212":number},{...},{...}]'
         if (spends.size() <= 0)
         {
           sReturn="Error:No spends";
@@ -551,11 +582,11 @@ std::string TransactionBuilder::Build_offline_transaction()
         {
             //printf("transaction_builder.cpp process spends-for(%ld)\n",i);
             auto spend = spends[i];
-            uint64_t      lWitnessPosition = alWitnessPosition[i];
-            myCharArray_s sWitness         = asWitness[i];
-            char cWitnessPathHex[ 2*(1 + 33 * SAPLING_TREE_DEPTH + 8) + 1 ];
-            cWitnessPathHex[2*(1 + 33 * SAPLING_TREE_DEPTH + 8)]=0; //null terminate
-            CharArrayToHex(&sWitness.cArray[0], sizeof(myCharArray_s), &cWitnessPathHex[0]);
+            uint64_t      lMerklePathPosition = alMerklePathPosition[i];
+            myCharArray_s sMerkle         = asMerklePath[i];
+            char cMerklePathHex[ 2*(1 + 33 * SAPLING_TREE_DEPTH + 8) + 1 ];
+            cMerklePathHex[2*(1 + 33 * SAPLING_TREE_DEPTH + 8)]=0; //null terminate
+            CharArrayToHex(&sMerkle.cArray[0], sizeof(myCharArray_s), &cMerklePathHex[0]);
 
             libzcash::diversifier_t d     = spend.note.d;
             uint256       pk_d            = spend.note.pk_d;
@@ -596,16 +627,16 @@ std::string TransactionBuilder::Build_offline_transaction()
 
             char cHex[ 20+ 2*(1 + 33 * SAPLING_TREE_DEPTH + 8) + 1];
             //20                        14                8            11             9            8              9              2
-            //{"witnessposition":number,"witnesspath":hex,"note_d":hex,"note_pkd":hex,"note_r":hex,"value":number,"zip212":number},{...},{...}]'
-            snprintf(&cHex[0],sizeof(cHex),"{\"witnessposition\":\"%ld\",",lWitnessPosition);
+            //{"merkleposition":number,"merklepath":hex,"note_d":hex,"note_pkd":hex,"note_r":hex,"value":number,"zip212":number},{...},{...}]'
+            snprintf(&cHex[0],sizeof(cHex),"{\"merkleposition\":\"%ld\",",lMerklePathPosition);
             sReturn=sReturn+cHex;
-            sTmp = strprintf("%u ", lWitnessPosition);
+            sTmp = strprintf("%u ", lMerklePathPosition);
             sChecksumInput+=sTmp;
 
 
-            snprintf(&cHex[0],sizeof(cHex),"\"witnesspath\":\"%s\",", &cWitnessPathHex[0]);
+            snprintf(&cHex[0],sizeof(cHex),"\"merklepath\":\"%s\",", &cMerklePathHex[0]);
             sReturn=sReturn+cHex;
-            sTmp = strprintf("%s ",&cWitnessPathHex[0]);
+            sTmp = strprintf("%s ",&cMerklePathHex[0]);
             sChecksumInput+=sTmp;
 
 
@@ -888,8 +919,8 @@ TransactionBuilderResult TransactionBuilder::Build()
     for (size_t i = 0; i < spends.size(); i++)
     {
         auto spend = spends[i];
-        uint64_t      lWitnessPosition = alWitnessPosition[i];
-        myCharArray_s sWitness         = asWitness[i];
+        uint64_t      lMerklePathPosition = alMerklePathPosition[i];
+        myCharArray_s sMerkle         = asMerklePath[i];
 
         // libzcash::diversifier_t d     = spend.note.d;
         // uint256       pk_d            = spend.note.pk_d;
@@ -899,9 +930,9 @@ TransactionBuilderResult TransactionBuilder::Build()
 
         //printf("transaction_builder.cpp process spends-for()\n");
         //auto cm = spend.note.cm();
-        //auto nf = spend.note.nullifier(spend.expsk.full_viewing_key(), lWitnessPosition);
+        //auto nf = spend.note.nullifier(spend.expsk.full_viewing_key(), lMerklePathPosition);
         auto cmu = spend.note.cmu();
-        auto nf = spend.note.nullifier(spend.expsk.full_viewing_key(), lWitnessPosition);
+        auto nf = spend.note.nullifier(spend.expsk.full_viewing_key(), lMerklePathPosition);
         if (!(cmu && nf))
         {
             //printf("transaction_builder.cpp cm && nf error\n");
@@ -909,16 +940,7 @@ TransactionBuilderResult TransactionBuilder::Build()
             return TransactionBuilderResult("Spend is invalid");
         }
 
-/*
-        //printf("transaction_builder.cpp passed (cm&&nf)\n");
-        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-        //printf("transaction_builder.cpp 1\n");
-        ss << spend.witness.path();
-        //printf("transaction_builder.cpp 2\n");
-        std::vector<unsigned char> witness(ss.begin(), ss.end());
-        //printf("transaction_builder.cpp 3\n");
-*/
-        std::vector<unsigned char> witness ( &sWitness.cArray[0], &sWitness.cArray[0] +  sizeof(myCharArray_s) );
+        std::vector<unsigned char> vMerkle ( &sMerkle.cArray[0], &sMerkle.cArray[0] +  sizeof(myCharArray_s) );
 
         SpendDescription sdesc;
         uint256 rcm = spend.note.rcm();
@@ -931,7 +953,7 @@ TransactionBuilderResult TransactionBuilder::Build()
                 spend.alpha.begin(),
                 spend.note.value(),
                 spend.anchor.begin(),
-                witness.data(),
+                vMerkle.data(),
                 sdesc.cv.begin(),
                 sdesc.rk.begin(),
                 sdesc.zkproof.data())) {
