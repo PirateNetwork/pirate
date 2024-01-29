@@ -176,9 +176,9 @@ void StartShutdown()
 {
 
       //Flush wallet on exit
-      //Write all transactions and block loacator to the wallet
+      //Write all transactions and block locator to the wallet
 #ifdef ENABLE_WALLET
-    if (loadComplete) {
+    if ( (loadComplete) && (nMaxConnections>0) ) {
         LogPrintf("Flushing wallet to disk on shutdown.\n");
         LOCK2(cs_main, pwalletMain->cs_wallet);
         CBlockLocator currentBlock = chainActive.GetLocator();
@@ -2027,7 +2027,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     }
 
     // ************
-    // Now we're finally able to open the database
+    // Online mode: Now we're finally able to open the database
+    //              In offline mode the database isn't used & doesn't need to be available on the hard drive storage
     // Results can be:
     // - everything opens fine (AttemptDatabaseOpen == true)
     // - It looks like we are trying to open a database that belongs to another chain (AttemptDatabaseOpen throws)
@@ -2039,36 +2040,40 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     // -- throws exception
     // ************
 
-    try
+    if (nMaxConnections>0)
     {
-        bool fReset = fReindex;
-        std::string strLoadError;
-        while(!AttemptDatabaseOpen(nBlockTreeDBCache, dbCompression, dbMaxOpenFiles, nCoinDBCache, strLoadError))
+        try
         {
-            if (!fReset) // suggest a reindex if we haven't already
+            bool fReset = fReindex;
+            std::string strLoadError;
+            while(!AttemptDatabaseOpen(nBlockTreeDBCache, dbCompression, dbMaxOpenFiles, nCoinDBCache, strLoadError))
             {
-                bool fRet = uiInterface.ThreadSafeMessageBox(
-                    strLoadError + ".\n\n" + _("error in HDD data, might just need to update to latest, if that doesnt work, then you need to resync"),
-                    "", CClientUIInterface::MSG_ERROR | CClientUIInterface::BTN_ABORT);
-                if (fRet)
+                if (!fReset) // suggest a reindex if we haven't already
                 {
-                    // we should try again, but this time reindex
-                    fReindex = true;
-                    fRequestShutdown = false;
+                    bool fRet = uiInterface.ThreadSafeMessageBox(
+                        strLoadError + ".\n\n" + _("error in HDD data, might just need to update to latest, if that doesnt work, then you need to resync"),
+                        "", CClientUIInterface::MSG_ERROR | CClientUIInterface::BTN_ABORT);
+                    if (fRet)
+                    {
+                        // we should try again, but this time reindex
+                        fReindex = true;
+                        fRequestShutdown = false;
+                    } else {
+                        LogPrintf("Aborted block database rebuild. Exiting.\n");
+                        return false;
+                    }
                 } else {
-                    LogPrintf("Aborted block database rebuild. Exiting.\n");
-                    return false;
+                    return InitError(strLoadError);
                 }
-            } else {
-                return InitError(strLoadError);
-            }
 
+            }
         }
-    }
-    catch(const InvalidGenesisException& ex)
-    {
-        // We're probably pointing to the wrong data directory
-        return InitError(ex.what());
+        catch(const InvalidGenesisException& ex)
+        {
+            // We're probably pointing to the wrong data directory
+            return InitError(ex.what());
+        }
+        LogPrintf(" block index %15dms\n", GetTimeMillis() - nStart);
     }
     KOMODO_LOADINGBLOCKS = false;
 
@@ -2080,7 +2085,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         LogPrintf("Shutdown requested. Exiting.\n");
         return false;
     }
-    LogPrintf(" block index %15dms\n", GetTimeMillis() - nStart);
 
     if (nMaxConnections>0)
     {
@@ -2115,10 +2119,12 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
         //Clear transactions on min client version
         {
-            pwalletMain = new CWallet(strWalletFile);
-            DBErrors nDbVersion = pwalletMain->ReadClientVersion();
-            if (nDbVersion == DB_CLEAR_TX || nDbVersion == DB_VERSION_NOT_FOUND) {
-                zapTransactions = true;
+            if ( boost::filesystem::exists( strWalletFile )) {
+                CWalletDB walletdb(strWalletFile);
+                DBErrors nDbVersion = walletdb.ReadClientVersion();
+                if (nDbVersion == DB_CLEAR_TX || nDbVersion == DB_CLEAR_TX) {
+                    zapTransactions = true;
+                }
             }
 
             delete pwalletMain;
@@ -2128,7 +2134,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         //Run ZapWalletTx to clean out transactions
         if (zapTransactions) {
             uiInterface.InitMessage(_("Zapping all transactions from wallet..."));
-
             pwalletMain = new CWallet(strWalletFile);
             DBErrors nZapWalletRet = pwalletMain->ZapWalletTx(vWtx);
             if (nZapWalletRet != DB_LOAD_OK) {
@@ -2532,6 +2537,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         }
 
         //Scan the last 100 block to ensure proofs are being maintained.
+        if (nMaxConnections>0)
         {
             if (!fReindex) {
                 CBlockIndex *pindexProofScan = chainActive.Tip();
@@ -2655,7 +2661,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 #else // ENABLE_WALLET
     LogPrintf("No wallet support compiled in!\n");
 #endif // !ENABLE_WALLET
-
     if (GetBoolArg("-largetxthrottle", true)) {
         LogPrintf("Blocktemplate large tx throttle enabled.\n");
     } else {
@@ -2726,22 +2731,25 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         BOOST_FOREACH(const std::string& strFile, mapMultiArgs["-loadblock"])
             vImportFiles.push_back(strFile);
     }
-    threadGroup.create_thread(boost::bind(&ThreadImport, vImportFiles));
+    if (nMaxConnections>0)
     {
-        CBlockIndex *tip = nullptr;
+        threadGroup.create_thread(boost::bind(&ThreadImport, vImportFiles));
         {
-            LOCK(cs_main);
-            tip = chainActive.Tip();
-        }
-        if (tip == nullptr) {
-            LogPrintf("Waiting for genesis block to be imported...\n");
-            while (!ShutdownRequested() && tip == nullptr)
+            CBlockIndex *tip = nullptr;
             {
-                MilliSleep(10);
                 LOCK(cs_main);
                 tip = chainActive.Tip();
             }
-            if (ShutdownRequested()) return false;
+            if (tip == nullptr) {
+                LogPrintf("Waiting for genesis block to be imported...\n");
+                while (!ShutdownRequested() && tip == nullptr)
+                {
+                    MilliSleep(10);
+                    LOCK(cs_main);
+                    tip = chainActive.Tip();
+                }
+                if (ShutdownRequested()) return false;
+            }
         }
     }
 
