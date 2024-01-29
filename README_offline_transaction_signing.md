@@ -149,11 +149,12 @@ shortfalls:
    https://github.com/PirateNetwork/pirate 
    
    Furthermore, if you do not have a copy of the blockchain, you can download a 
-   bootstrap file from the website too. At the time of writing (September 2022)
-   the file approached 14GB. The wallet software itself has an option to download
-   this file, but if the transfer gets interrupted you'll have to start from the 
-   beginning again. With a utility like 'wget' you can use the resume option (-c) 
-   to continue downloading. On a 10mbps link it takes about 4 hours to download.
+   bootstrap file from the website too. At the time of writing (January 2023)
+   the file approached 22GB, with the full blockchain at 28GB.
+   The wallet software itself has an option to download this file, but if the
+   transfer gets interrupted you'll have to start from the beginning again. 
+   With a utility like 'wget' or 'curl'you can use the resume option to continue
+   downloading. On a 10mbps link it takes about 4 hours to download.
    Filename: ARRR-bootstrap.tar.gz
         
 4 Online machine
@@ -162,7 +163,7 @@ shortfalls:
    lets continue setting up the online machine
    
    If you've downloaded the Debian Linux install archive, install it as root user:
-   # dpkg -i pirate-qt-ubuntu1804-v5.5.1.deb
+   # dpkg -i pirate-qt-ubuntu1804-v5.7.5.deb
    The application binary is installed in /usr/local/bin/pirate-qt
    
   Treasure chest will create two sub directories in your $HOME directory where all 
@@ -171,9 +172,7 @@ shortfalls:
       ~/.komodo/PIRATE -- Contains your wallet and the blockchain
       
   Note: Significant improvements were made in version 5.6, that is not compatible
-        with 5.5 or older. As soon as it's out of 'dev' and officially released we
-        recommend that you upgrade to it. Version 5.6 is avalible in the github
-        'dev' branch
+        with 5.5 or older. We recommend that you always run the latest release.
 
 4.2 First run
     From a terminal console, launch the application: pirate-qt
@@ -270,7 +269,7 @@ shortfalls:
    Copy the zcash parameters to ~/.zcash-params on the offline machine
    
    If you've downloaded the Debian Linux install archive, install it as root user:
-   # dpkg -i pirate-qt-ubuntu1804-v5.5.1.deb
+   # dpkg -i pirate-qt-ubuntu1804-v5.7.5.deb
    The application binary is installed in /usr/local/bin/pirate-qt
   
 5.2 First run
