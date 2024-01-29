@@ -1616,13 +1616,20 @@ DBErrors CWalletDB::LoadCryptedSeedFromDB(CWallet* pwallet) {
 
 DBErrors CWalletDB::ReadClientVersion() {
     int nVersion = 0;
-    if (Read(std::string("version"), nVersion)) {
-        if (nVersion < MIN_WALLET_TX_VERSION) {
-            return DB_CLEAR_TX;
-        } else {
-            return DB_VERSION_OK;
-        }
+    try
+    {
+      if (Read(std::string("version"), nVersion)) {
+          if (nVersion < MIN_WALLET_TX_VERSION) {
+              return DB_CLEAR_TX;
+          } else {
+              return DB_VERSION_OK;
+          }
+      }
     }
+    catch (...) {
+        printf("DB corrupt/doesn't exist yet\n");
+        return DB_CORRUPT;
+    }    
 
     return DB_VERSION_NOT_FOUND;
 }
