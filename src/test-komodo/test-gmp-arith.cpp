@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "mini-gmp.h"
 #include "utilstrencodings.h"
+#include "base58.h"
 #include <univalue.h>
 
 #include <iostream>
@@ -38,7 +39,52 @@ namespace GMPArithTests
         {"3cf1dce4182fce875748c4986b240ff7d7bc3fffb02fd6b4d5", "RXL3YXG2ceaB6C5hfJcN4fvmLH2C34knhA"},
         {"3c19494a36d54f01d680aa3c9b390f522a2a3dff7e2836626b", "RBatmanSuperManPaddingtonBearpcCTt"},
         {"3c531cca970048c1564bfdf8320729381d7755d481522e4402", "RGreetzToCA333FromDecker33332cYmMb"},
+        {"22d73e8f", "test2"},
     };
+
+    namespace replacement_for_base58
+    {
+
+        char *bitcoin_base58encode(char *coinaddr, uint8_t *data, int32_t datalen)
+        {
+            if (!coinaddr)
+                return nullptr;
+            if (data && datalen > 0)
+            {
+                std::string encoded = EncodeBase58(data, data + datalen);
+                for (size_t i = 0; i < encoded.length(); ++i)
+                {
+                    coinaddr[i] = encoded[i];
+                }
+                coinaddr[encoded.length()] = '\0';
+            }
+            else
+            {
+                coinaddr[0] = '\0';
+            }
+            return coinaddr;
+        }
+
+        int32_t bitcoin_base58decode(uint8_t *data, const char *coinaddr)
+        {
+            if (data == nullptr || coinaddr == nullptr)
+            {
+                return -1;
+            }
+
+            std::vector<unsigned char> vchRet;
+            const std::string str(coinaddr);
+
+            if (DecodeBase58(str, vchRet))
+            {
+                std::copy(vchRet.begin(), vchRet.end(), data);
+                return vchRet.size();
+            }
+
+            return -1;
+        }
+
+    }
 
     TEST(GMPArithTests, base58operations)
     {
@@ -69,13 +115,38 @@ namespace GMPArithTests
 
                 https://stackoverflow.com/questions/48333136/size-of-buffer-to-hold-base58-encoded-data
             */
-            std::vector<uint8_t> decodedStr(decoded_length, 0);
-
-            size_t data_size = bitcoin_base58decode(decodedStr.data(), element.second.c_str()); // *(char (*)[10])decodedStr.get(),h
+            std::vector<uint8_t> decodedStr(decoded_length + 1, 0); // +1 to handle the case when decoded_length == 0, i.e. decodedStr.data() == nullptr (A)
+            int32_t data_size = bitcoin_base58decode(decodedStr.data(), element.second.c_str()); // *(char (*)[10])decodedStr.get(),h
+            // std::cerr << "'" << element.second << "': " << data_size << std::endl;
 
             ASSERT_GE(decoded_length, sourceData.size());
             ASSERT_EQ(data_size, sourceData.size());
             ASSERT_TRUE(std::memcmp(decodedStr.data(), sourceData.data(), sourceData.size()) == 0);
         }
+
+        // special cases test (decode)
+        std::vector<std::pair<std::string, int32_t>> decodeTestCases = {
+            {"", 0},          // empty data to decode
+            {"ERROR", -1},    // capital "O" is not a part of base58 alphabet
+            {"test2", 4},
+            {"RGreetzToCA333FromDecker33332cYmMb", 25},
+            {"  test2", 4},   // spaces behind
+            {"test2  ", 4},   // spaces after
+            {"  test2  ", 4}, // spaces behind and after
+            {"te st2", -1},   // spaces in-between
+        };
+        for (auto const &test : decodeTestCases)
+        {
+            std::vector<uint8_t> decodedStr(test.first.length() + 1, 0); // +1 for the same as in (A)
+            int32_t data_size = bitcoin_base58decode(decodedStr.data(), test.first.c_str());
+            // std::cerr << "'" << test.first << "': " << data_size << " - " << HexStr(decodedStr) << std::endl;
+            ASSERT_EQ(data_size, test.second);
+        }
+
+        // special cases test (encode)
+        char buf[] = { '\xff' };
+        uint8_t data[] = {0xDE, 0xAD, 0xCA, 0xFE};
+        const char *p_encoded = bitcoin_base58encode(&buf[0], data, 0);
+        ASSERT_EQ(buf[0], '\0');
     }
 }
