@@ -50,11 +50,10 @@ namespace GMPArithTests
 
             // encode test
             size_t encoded_length = element.second.size() + 1;
-            std::unique_ptr<char[]> encodedStr(new char[encoded_length]);
-            std::memset(encodedStr.get(), 0, encoded_length);
+            std::vector<char> encodedStr(encoded_length, 0);
 
             std::vector<unsigned char> sourceData = ParseHex(element.first);
-            const char *p_encoded = bitcoin_base58encode(encodedStr.get(), sourceData.data(), sourceData.size());
+            const char *p_encoded = bitcoin_base58encode(encodedStr.data(), sourceData.data(), sourceData.size());
 
             ASSERT_STREQ(p_encoded, element.second.c_str());
 
@@ -70,14 +69,13 @@ namespace GMPArithTests
 
                 https://stackoverflow.com/questions/48333136/size-of-buffer-to-hold-base58-encoded-data
             */
-            std::unique_ptr<uint8_t[]> decodedStr(new uint8_t[decoded_length]);
-            std::memset(decodedStr.get(), 0, decoded_length);
+            std::vector<uint8_t> decodedStr(decoded_length, 0);
 
-            size_t data_size = bitcoin_base58decode(decodedStr.get(), element.second.c_str()); // *(char (*)[10])decodedStr.get(),h
+            size_t data_size = bitcoin_base58decode(decodedStr.data(), element.second.c_str()); // *(char (*)[10])decodedStr.get(),h
 
             ASSERT_GE(decoded_length, sourceData.size());
             ASSERT_EQ(data_size, sourceData.size());
-            ASSERT_TRUE(std::memcmp(decodedStr.get(), sourceData.data(), sourceData.size()) == 0);
+            ASSERT_TRUE(std::memcmp(decodedStr.data(), sourceData.data(), sourceData.size()) == 0);
         }
     }
 }
