@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
-#include "mini-gmp.h"
 #include "utilstrencodings.h"
 #include "base58.h"
 #include <univalue.h>
+#include "komodo_utils.h"
 
 #include <iostream>
 #include <vector>
@@ -41,50 +41,6 @@ namespace GMPArithTests
         {"3c531cca970048c1564bfdf8320729381d7755d481522e4402", "RGreetzToCA333FromDecker33332cYmMb"},
         {"22d73e8f", "test2"},
     };
-
-    namespace replacement_for_base58
-    {
-
-        char *bitcoin_base58encode(char *coinaddr, uint8_t *data, int32_t datalen)
-        {
-            if (!coinaddr)
-                return nullptr;
-            if (data && datalen > 0)
-            {
-                std::string encoded = EncodeBase58(data, data + datalen);
-                for (size_t i = 0; i < encoded.length(); ++i)
-                {
-                    coinaddr[i] = encoded[i];
-                }
-                coinaddr[encoded.length()] = '\0';
-            }
-            else
-            {
-                coinaddr[0] = '\0';
-            }
-            return coinaddr;
-        }
-
-        int32_t bitcoin_base58decode(uint8_t *data, const char *coinaddr)
-        {
-            if (data == nullptr || coinaddr == nullptr)
-            {
-                return -1;
-            }
-
-            std::vector<unsigned char> vchRet;
-            const std::string str(coinaddr);
-
-            if (DecodeBase58(str, vchRet))
-            {
-                std::copy(vchRet.begin(), vchRet.end(), data);
-                return vchRet.size();
-            }
-
-            return -1;
-        }
-
-    }
 
     TEST(GMPArithTests, base58operations)
     {
