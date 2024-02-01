@@ -32,7 +32,8 @@ bin_PROGRAMS += komodo-test
     test-komodo/test_oldhash_removal.cpp \
     test-komodo/test_kmd_feat.cpp \
     test-komodo/test_legacy_events.cpp \
-    test-komodo/test_parse_args.cpp
+    test-komodo/test_parse_args.cpp \
+    test-komodo/test-gmp-arith.cpp
 
 if TARGET_WINDOWS
 komodo_test_SOURCES += test-komodo/komodo-test-res.rc
