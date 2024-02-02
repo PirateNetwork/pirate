@@ -40,6 +40,8 @@ namespace GMPArithTests
         {"3c19494a36d54f01d680aa3c9b390f522a2a3dff7e2836626b", "RBatmanSuperManPaddingtonBearpcCTt"},
         {"3c531cca970048c1564bfdf8320729381d7755d481522e4402", "RGreetzToCA333FromDecker33332cYmMb"},
         {"22d73e8f", "test2"},
+        {"bc907ece717a8f94e07de7bf6f8b3e9f91abb8858ebf831072cdbb9016ef53bc5d01bf0891e2", "UtrRXqvRFUAtCrCTRAHPH6yroQKUrrTJRmxt2h5U4QTUN1jCxTAh"},
+        {"bc907ece717a8f94e07de7bf6f8b3e9f91abb8858ebf831072cdbb9016ef53bc5de225fbd6", "7KYb75jv5BgrDCbmW36yhofiBy2vSLpCCWDfJ9dMdZxPWnKicJh"},
     };
 
     TEST(GMPArithTests, base58operations)
