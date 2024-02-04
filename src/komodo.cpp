@@ -115,8 +115,9 @@ int32_t komodo_parsestatefile(struct komodo_state *sp,FILE *fp,char *symbol, con
     {
         LogPrintf("Error occurred in parsestatefile: %s\n", pe.what());
         LogPrintf("%s file is invalid. Komodod will be stopped. Please remove %s and %s.ind files and start the daemon\n", KOMODO_STATE_FILENAME, KOMODO_STATE_FILENAME, KOMODO_STATE_FILENAME);
-        uiInterface.ThreadSafeMessageBox(strprintf("Please remove %s and %s.ind files and restart", KOMODO_STATE_FILENAME, KOMODO_STATE_FILENAME), "", CClientUIInterface::MSG_ERROR);
-        StartShutdown();            
+        uiInterface.ThreadSafeMessageBox(strprintf("Error occured in state files %s and %s, resetting. Please restart.", KOMODO_STATE_FILENAME, KOMODO_STATE_FILENAME), "", CClientUIInterface::MSG_ERROR);
+        DeleteStateFiles();
+        StartShutdown();
         func = -1;
     }
     return func;

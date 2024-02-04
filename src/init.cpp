@@ -386,6 +386,16 @@ void OnRPCPreCommand(const CRPCCommand& cmd)
         throw JSONRPCError(RPC_FORBIDDEN_BY_SAFE_MODE, string("Safe mode: ") + strWarning);
 }
 
+bool DeleteStateFiles() {
+    try {
+      boost::filesystem::remove(GetDataDir() / KOMODO_STATE_FILENAME);
+      boost::filesystem::remove(GetDataDir() / (std::string(KOMODO_STATE_FILENAME) + ".ind"));
+    }
+    catch (...) {
+        return false;
+    }
+    return true;
+}
 std::string HelpMessage(HelpMessageMode mode)
 {
     const bool showDebug = GetBoolArg("-help-debug", false);

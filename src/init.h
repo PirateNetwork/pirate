@@ -41,6 +41,10 @@ bool ShutdownRequested();
 /** Interrupt threads */
 void Interrupt(boost::thread_group& threadGroup);
 void Shutdown();
+
+//Delete Komodo State files
+bool DeleteStateFiles();
+
 /***
  * Initialize everything and fire up the services
  * @pre Parameters should be parsed and config file should be read
