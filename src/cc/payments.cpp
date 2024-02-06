@@ -81,6 +81,12 @@
 
 void mpz_set_lli( mpz_t rop, long long op )
 {
+   /*
+        If a negative `op` is passed, it will be imported without a sign (!).
+        For example, -1 is equal to 18446744073709551615 (2^64 - 1). To preserve the sign,
+        we should consider using `mpz_neg` to invert the sign. Otherwise, the sign will
+        be lost (!).
+   */
    mpz_import(rop, 1, 1, sizeof(op), 0, 0, &op);
 }
 
