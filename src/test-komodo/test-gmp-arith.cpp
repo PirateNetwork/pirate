@@ -3,6 +3,7 @@
 #include "base58.h"
 #include <univalue.h>
 #include "komodo_utils.h"
+#include "komodo_hardfork.h"
 
 #include <iostream>
 #include <vector>
@@ -11,6 +12,7 @@
 #include <cstring>
 #include <memory>
 
+uint64_t RewardsCalc(int64_t amount, uint256 txid, int64_t APR, int64_t minseconds, int64_t maxseconds, uint32_t timestamp); // rewards cpp
 namespace GMPArithTests
 {
 
@@ -106,5 +108,63 @@ namespace GMPArithTests
         uint8_t data[] = {0xDE, 0xAD, 0xCA, 0xFE};
         const char *p_encoded = bitcoin_base58encode(&buf[0], data, 0);
         ASSERT_EQ(buf[0], '\0');
+    }
+
+    /* In addition to libsnark (./src/snark/libsnark/algebra/fields/bigint.hpp),
+       it appears that we are also using functions from gmp.h in rewards.cpp and
+       payments.cpp. The purpose of these tests is to perform the same computations
+       without using functions from the GMP library. Once the new code without
+       GMP function usage is written, the old code will be removed.
+    */
+
+    struct TestRewardsParams {
+        int64_t amount;
+        int64_t duration;
+        int64_t APR;
+        uint64_t rewards;
+    };
+
+    TEST(GMPArithTests, RewardsTest)
+    {
+
+        bool fPrintToConsoleOld = fPrintToConsole;
+        assetchain assetchainOld = chainName; // save the chainName before test
+        chainName = assetchain("OTHER");      // considering this is not KMD
+        fPrintToConsole = true;
+        uint256 txid;
+
+        // reward = (((amount * duration) / (365 * 24 * 3600LL)) * (APR / 1000000)) / 10000;
+        std::vector<TestRewardsParams> testCasesBeforeHF = {
+            {-31536, -10000000, 1000000, 1},
+            {-31536, -10000000, 2000000, 2},
+            {std::numeric_limits<int64_t>::min(), -2, 1000000, 0},            // numeric overflow
+            {std::numeric_limits<int64_t>::min(), -315360000000, 1000000, 0}, // overflow on multiply and on entire result ... 9 223 372 036 854 775 808 > INT64_MAX
+        };
+
+        // reward = (amount * APR * duration) / COIN*100*365*24*3600;
+
+        // NB! can't use negative amounts in these tests, bcz -1 will be converted to 18446744073709551615 (2^64 -1) after mpz_set_lli
+        std::vector<TestRewardsParams> testCasesAfterHF = {
+            {1, 1, 315360000000000000, 1},
+        };
+
+        for (const TestRewardsParams &testCase : testCasesBeforeHF)
+        {
+            // myGetTransaction inside CCduration will return 0, so duration will be equal maxseconds
+            uint64_t rewards = RewardsCalc(testCase.amount, txid, testCase.APR, 0 /* minseconds */, testCase.duration /* maxseconds */, nStakedDecemberHardforkTimestamp);
+            ASSERT_EQ(rewards, testCase.rewards);
+        }
+
+        for (const TestRewardsParams &testCase : testCasesAfterHF)
+        {
+            // TODO: here we should somehow force myGetTransaction inside CCduration to find given
+            // txid via fTxIndex, i.e. create tx index, blockfile with given txid in /tmp first.
+
+            // uint64_t rewards = RewardsCalc(testCase.amount, txid, testCase.APR, 0 /* minseconds */, testCase.duration /* maxseconds */, nStakedDecemberHardforkTimestamp + 1);
+            // ASSERT_EQ(rewards, testCase.rewards);
+        }
+
+        fPrintToConsole = fPrintToConsoleOld;
+        chainName = assetchainOld; // restore saved values
     }
 }
