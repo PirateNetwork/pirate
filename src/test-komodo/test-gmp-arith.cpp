@@ -121,7 +121,7 @@ namespace GMPArithTests
 
     struct TestRewardsParams {
         int64_t amount;
-        int64_t duration;
+        int64_t duration; // duration is actually limited by uint32_t as nTime is 32 bit (!)
         int64_t APR;
         uint64_t rewards;
     };
@@ -168,6 +168,14 @@ namespace GMPArithTests
         std::vector<TestRewardsParams> testCasesAfterHF = {
             {1, 1, 315360000000000000, 1},
             {2, 2, 315360000000000000, 2},
+            {777 * COIN, 86400, 315360000000000000, 777 * COIN},
+            {std::numeric_limits<int64_t>::max(), 1, 1, 29},
+            {std::numeric_limits<int64_t>::max(), 2, 1, 58},
+            {std::numeric_limits<int64_t>::max(), 777, 777, 17657335},
+            {std::numeric_limits<int64_t>::max(), 1, std::numeric_limits<uint32_t>::max(), 125615427599},
+            // test below will cause crash on in mpz_get_ui2, as reward will be 269 757 076 770 150 354 665, which
+            // is more than can fit in int64_t (!), so mpz_get_ui2 should be modified
+            // {std::numeric_limits<int64_t>::max(), 1, std::numeric_limits<int64_t>::max(), 0},
         };
 
         for (const TestRewardsParams &testCase : testCasesBeforeHF)
@@ -192,7 +200,7 @@ namespace GMPArithTests
                 datadirOld = mapArgs["-datadir"];
             }
             mapArgs["-datadir"] = temp.string();
-            std::cerr << "Data directory: " << temp.string() << std::endl;
+            // std::cerr << "Data directory: " << temp.string() << std::endl;
 
             if ( pblocktree != nullptr ) {
                 fRewardTestFailure = true; RewardTestErrorMessage = "Expected pblocktree not initialised!";
