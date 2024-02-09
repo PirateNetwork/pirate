@@ -118,6 +118,12 @@ uint64_t RewardsCalc(int64_t amount, uint256 txid, int64_t APR, int64_t minsecon
 
         // set result to variable we can use and return it.
         reward = mpz_get_ui2(mpzReward);
+
+        mpz_clear(mpzModifier);
+        mpz_clear(mpzReward);
+        mpz_clear(mpzAPR);
+        mpz_clear(mpzDuration);
+        mpz_clear(mpzAmount);
     }
     if ( reward > amount )
         reward = amount;
