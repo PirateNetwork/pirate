@@ -4,6 +4,7 @@
 #include <univalue.h>
 #include "komodo_utils.h"
 #include "komodo_hardfork.h"
+#include "txdb.h"
 
 #include <iostream>
 #include <vector>
@@ -12,6 +13,7 @@
 #include <cstring>
 #include <memory>
 
+bool FindBlockPos(int32_t tmpflag,CValidationState &state, CDiskBlockPos &pos, unsigned int nAddSize, unsigned int nHeight, uint64_t nTime, bool fKnown); // main.cpp
 uint64_t RewardsCalc(int64_t amount, uint256 txid, int64_t APR, int64_t minseconds, int64_t maxseconds, uint32_t timestamp); // rewards cpp
 namespace GMPArithTests
 {
@@ -124,12 +126,31 @@ namespace GMPArithTests
         uint64_t rewards;
     };
 
+    CTransaction CreateCoinBaseTransaction(int nBlockHeight) {
+        // Create coinbase transaction
+        auto consensusParams = Params().GetConsensus();
+        CMutableTransaction mtx = CreateNewContextualCMutableTransaction(consensusParams, nBlockHeight);
+        CScript scriptSig = (CScript() << nBlockHeight << CScriptNum(1)) + COINBASE_FLAGS;
+        mtx.vin.push_back(CTxIn(COutPoint(), scriptSig, 0));
+        mtx.vout.push_back(CTxOut(300000000, CScript() << ParseHex("031111111111111111111111111111111111111111111111111111111111111111") << OP_CHECKSIG));
+        CTransaction tx(mtx);
+        return tx;
+    }
+
+    bool CreateTxForFindInMyGetTransaction( const uint256& txid ) {
+        // CDiskTxPos pos(pindex->GetBlockPos(), GetSizeOfCompactSize(block.vtx.size()));
+        // vPos.push_back(std::make_pair(tx.GetHash(), pos));
+        // pos.nTxOffset += ::GetSerializeSize(tx, SER_DISK, CLIENT_VERSION); // nTxOffset after header
+        // if (fTxIndex) if (!pblocktree->WriteTxIndex(vPos)) // ConnectBlock
+    }
+
     TEST(GMPArithTests, RewardsTest)
     {
 
         bool fPrintToConsoleOld = fPrintToConsole;
         assetchain assetchainOld = chainName; // save the chainName before test
         chainName = assetchain("OTHER");      // considering this is not KMD
+        const CChainParams& chainparams = Params();
         fPrintToConsole = true;
         uint256 txid;
 
@@ -146,6 +167,7 @@ namespace GMPArithTests
         // NB! can't use negative amounts in these tests, bcz -1 will be converted to 18446744073709551615 (2^64 -1) after mpz_set_lli
         std::vector<TestRewardsParams> testCasesAfterHF = {
             {1, 1, 315360000000000000, 1},
+            {2, 2, 315360000000000000, 2},
         };
 
         for (const TestRewardsParams &testCase : testCasesBeforeHF)
@@ -155,16 +177,126 @@ namespace GMPArithTests
             ASSERT_EQ(rewards, testCase.rewards);
         }
 
-        for (const TestRewardsParams &testCase : testCasesAfterHF)
-        {
-            // TODO: here we should somehow force myGetTransaction inside CCduration to find given
-            // txid via fTxIndex, i.e. create tx index, blockfile with given txid in /tmp first.
+        // here we should force myGetTransaction inside CCduration to find given
+        // txid via fTxIndex, i.e. create tx index, blockfile with given txid in /tmp first.
+        UnloadBlockIndex();
+        ClearDatadirCache();
+        boost::filesystem::path temp = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
 
-            // uint64_t rewards = RewardsCalc(testCase.amount, txid, testCase.APR, 0 /* minseconds */, testCase.duration /* maxseconds */, nStakedDecemberHardforkTimestamp + 1);
-            // ASSERT_EQ(rewards, testCase.rewards);
+        bool fRewardTestFailure = false;
+        std::string RewardTestErrorMessage = "";
+
+        if (boost::filesystem::create_directories(temp)) {
+            std::string datadirOld;
+            if (mapArgs.find("-datadir") != mapArgs.end()) {
+                datadirOld = mapArgs["-datadir"];
+            }
+            mapArgs["-datadir"] = temp.string();
+            std::cerr << "Data directory: " << temp.string() << std::endl;
+
+            if ( pblocktree != nullptr ) {
+                fRewardTestFailure = true; RewardTestErrorMessage = "Expected pblocktree not initialised!";
+            } else {
+                pblocktree = new CBlockTreeDB(1 << 20, true); // see testutils.cpp
+                CCoinsViewDB *pcoinsdbview = new CCoinsViewDB(1 << 23, true);
+                pcoinsTip = new CCoinsViewCache(pcoinsdbview);
+
+                if (InitBlockIndex() && fTxIndex) {
+
+                    CBlockIndex *pindex = chainActive.Tip(); // genesis block
+                    if (pindex) {
+                        // Compose a new block
+                        CBlock b; 
+                        int nHeight = pindex->nHeight + 1;
+                        b.vtx.push_back(CreateCoinBaseTransaction(nHeight));
+                        CBlockIndex indexDummy(b);
+                        indexDummy.nHeight = nHeight;
+                        indexDummy.pprev = pindex;
+                        txid = b.vtx[0].GetHash();
+                        
+                        for (const TestRewardsParams &testCase : testCasesAfterHF)
+                        {
+                            b.nTime = pindex->nTime + testCase.duration;
+                            indexDummy.nTime = b.nTime;
+                            mapBlockIndex.insert(std::make_pair(b.GetHash(), &indexDummy));
+
+                            CDiskBlockPos blockPos;
+                            CValidationState state;
+                            
+                            unsigned int nBlockSize = ::GetSerializeSize(b, SER_DISK, CLIENT_VERSION);
+                            // here every test iteration new block will written on new place in a file, but for tests purposes it's ok
+                            if (!FindBlockPos(0, state, blockPos, nBlockSize + 8, indexDummy.nHeight, b.GetBlockTime(), false))
+                            {
+                                fRewardTestFailure = true; RewardTestErrorMessage = "FindBlockPos failed!";
+                            }
+                            if (!WriteBlockToDisk(b, blockPos, chainparams.MessageStart())) {
+                                    fRewardTestFailure = true; RewardTestErrorMessage = "WriteBlockToDisk failed!";
+                            }
+                            if (fRewardTestFailure) {
+                                mapBlockIndex.erase(b.GetHash());
+                                break;
+                            }
+
+                            indexDummy.nFile = blockPos.nFile;
+                            indexDummy.nDataPos = blockPos.nPos;
+                            indexDummy.nStatus |= BLOCK_HAVE_DATA;
+                            
+                            std::vector<std::pair<uint256, CDiskTxPos> > vPos;
+                            CDiskBlockPos dbp = indexDummy.GetBlockPos();
+                            CDiskTxPos pos(dbp, /* nTxOffsetIn */ GetSizeOfCompactSize(b.vtx.size()));
+                            vPos.push_back(std::make_pair(txid, pos));
+                            
+                            if (pblocktree->WriteTxIndex(vPos)) {
+                                chainActive.SetTip(&indexDummy);
+
+                                CBlock new_block;
+                                CBlockIndex indexDummy2(new_block);
+                                indexDummy2.nHeight = indexDummy.nHeight + 1;
+                                indexDummy2.nTime = indexDummy.nTime + testCase.duration;
+                                chainActive.SetTip(&indexDummy2);
+
+                                uint64_t rewards = RewardsCalc(testCase.amount, txid, testCase.APR, 0 /* minseconds */, testCase.duration /* maxseconds */, nStakedDecemberHardforkTimestamp + 1);
+                                ASSERT_EQ(rewards, testCase.rewards);
+
+                            } else {
+                                fRewardTestFailure = true; RewardTestErrorMessage = "WriteTxIndex failed!";
+                            }
+
+                            mapBlockIndex.erase(b.GetHash());
+                        }
+
+                    } else {
+                        fRewardTestFailure = true; RewardTestErrorMessage = "pindex on Genesis block failed!";
+                    }
+
+                } else {
+                    fRewardTestFailure = true; RewardTestErrorMessage = "Can't init block index or tx index is not enabled!";
+                }
+
+                delete pcoinsTip;
+                pcoinsTip = nullptr;
+                delete pcoinsdbview;
+                pcoinsdbview = nullptr;
+                delete pblocktree;
+                pblocktree = nullptr;
+            }
+
+            if (!datadirOld.empty()) {
+                mapArgs["-datadir"] = datadirOld;
+            }
+
+        } else {
+            fRewardTestFailure = true; RewardTestErrorMessage = "Can't create data directories";
         }
+        
+
+        boost::filesystem::remove_all(temp);
 
         fPrintToConsole = fPrintToConsoleOld;
         chainName = assetchainOld; // restore saved values
+
+        if (fRewardTestFailure) {
+            FAIL() << RewardTestErrorMessage;
+        }
     }
 }
