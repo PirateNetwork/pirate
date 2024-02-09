@@ -137,11 +137,13 @@ namespace GMPArithTests
         return tx;
     }
 
-    bool CreateTxForFindInMyGetTransaction( const uint256& txid ) {
-        // CDiskTxPos pos(pindex->GetBlockPos(), GetSizeOfCompactSize(block.vtx.size()));
-        // vPos.push_back(std::make_pair(tx.GetHash(), pos));
-        // pos.nTxOffset += ::GetSerializeSize(tx, SER_DISK, CLIENT_VERSION); // nTxOffset after header
-        // if (fTxIndex) if (!pblocktree->WriteTxIndex(vPos)) // ConnectBlock
+    // Helper function to delete and set to nullptr if not nullptr
+    template<typename T>
+    void deleteIfUsedBefore(T*& ptr) {
+        if (ptr != nullptr) {
+            delete ptr;
+            ptr = nullptr;
+        }
     }
 
     TEST(GMPArithTests, RewardsTest)
@@ -202,92 +204,103 @@ namespace GMPArithTests
             mapArgs["-datadir"] = temp.string();
             // std::cerr << "Data directory: " << temp.string() << std::endl;
 
-            if ( pblocktree != nullptr ) {
-                fRewardTestFailure = true; RewardTestErrorMessage = "Expected pblocktree not initialised!";
-            } else {
-                pblocktree = new CBlockTreeDB(1 << 20, true); // see testutils.cpp
-                CCoinsViewDB *pcoinsdbview = new CCoinsViewDB(1 << 23, true);
-                pcoinsTip = new CCoinsViewCache(pcoinsdbview);
+            // previous tests may accidentally leave behind pblocktree and pcoinsTip,
+            // so we need to ensure that the memory is free and no remnants are left.
+            deleteIfUsedBefore(pblocktree);
+            deleteIfUsedBefore(pcoinsTip);
 
-                if (InitBlockIndex() && fTxIndex) {
+            pblocktree = new CBlockTreeDB(1 << 20, true); // see testutils.cpp
+            CCoinsViewDB *pcoinsdbview = new CCoinsViewDB(1 << 23, true);
+            pcoinsTip = new CCoinsViewCache(pcoinsdbview);
 
-                    CBlockIndex *pindex = chainActive.Tip(); // genesis block
-                    if (pindex) {
-                        // Compose a new block
-                        CBlock b; 
-                        int nHeight = pindex->nHeight + 1;
-                        b.vtx.push_back(CreateCoinBaseTransaction(nHeight));
-                        CBlockIndex indexDummy(b);
-                        indexDummy.nHeight = nHeight;
-                        indexDummy.pprev = pindex;
-                        txid = b.vtx[0].GetHash();
-                        
-                        for (const TestRewardsParams &testCase : testCasesAfterHF)
+            if (InitBlockIndex() && fTxIndex)
+            {
+
+                CBlockIndex *pindex = chainActive.Tip(); // genesis block
+                if (pindex)
+                {
+                    // Compose a new block
+                    CBlock b;
+                    int nHeight = pindex->nHeight + 1;
+                    b.vtx.push_back(CreateCoinBaseTransaction(nHeight));
+                    CBlockIndex indexDummy(b);
+                    indexDummy.nHeight = nHeight;
+                    indexDummy.pprev = pindex;
+                    txid = b.vtx[0].GetHash();
+
+                    for (const TestRewardsParams &testCase : testCasesAfterHF)
+                    {
+                        b.nTime = pindex->nTime + testCase.duration;
+                        indexDummy.nTime = b.nTime;
+                        mapBlockIndex.insert(std::make_pair(b.GetHash(), &indexDummy));
+
+                        CDiskBlockPos blockPos;
+                        CValidationState state;
+
+                        unsigned int nBlockSize = ::GetSerializeSize(b, SER_DISK, CLIENT_VERSION);
+                        // here every test iteration new block will written on new place in a file, but for tests purposes it's ok
+                        if (!FindBlockPos(0, state, blockPos, nBlockSize + 8, indexDummy.nHeight, b.GetBlockTime(), false))
                         {
-                            b.nTime = pindex->nTime + testCase.duration;
-                            indexDummy.nTime = b.nTime;
-                            mapBlockIndex.insert(std::make_pair(b.GetHash(), &indexDummy));
-
-                            CDiskBlockPos blockPos;
-                            CValidationState state;
-                            
-                            unsigned int nBlockSize = ::GetSerializeSize(b, SER_DISK, CLIENT_VERSION);
-                            // here every test iteration new block will written on new place in a file, but for tests purposes it's ok
-                            if (!FindBlockPos(0, state, blockPos, nBlockSize + 8, indexDummy.nHeight, b.GetBlockTime(), false))
-                            {
-                                fRewardTestFailure = true; RewardTestErrorMessage = "FindBlockPos failed!";
-                            }
-                            if (!WriteBlockToDisk(b, blockPos, chainparams.MessageStart())) {
-                                    fRewardTestFailure = true; RewardTestErrorMessage = "WriteBlockToDisk failed!";
-                            }
-                            if (fRewardTestFailure) {
-                                mapBlockIndex.erase(b.GetHash());
-                                break;
-                            }
-
-                            indexDummy.nFile = blockPos.nFile;
-                            indexDummy.nDataPos = blockPos.nPos;
-                            indexDummy.nStatus |= BLOCK_HAVE_DATA;
-                            
-                            std::vector<std::pair<uint256, CDiskTxPos> > vPos;
-                            CDiskBlockPos dbp = indexDummy.GetBlockPos();
-                            CDiskTxPos pos(dbp, /* nTxOffsetIn */ GetSizeOfCompactSize(b.vtx.size()));
-                            vPos.push_back(std::make_pair(txid, pos));
-                            
-                            if (pblocktree->WriteTxIndex(vPos)) {
-                                chainActive.SetTip(&indexDummy);
-
-                                CBlock new_block;
-                                CBlockIndex indexDummy2(new_block);
-                                indexDummy2.nHeight = indexDummy.nHeight + 1;
-                                indexDummy2.nTime = indexDummy.nTime + testCase.duration;
-                                chainActive.SetTip(&indexDummy2);
-
-                                uint64_t rewards = RewardsCalc(testCase.amount, txid, testCase.APR, 0 /* minseconds */, testCase.duration /* maxseconds */, nStakedDecemberHardforkTimestamp + 1);
-                                ASSERT_EQ(rewards, testCase.rewards);
-
-                            } else {
-                                fRewardTestFailure = true; RewardTestErrorMessage = "WriteTxIndex failed!";
-                            }
-
+                            fRewardTestFailure = true;
+                            RewardTestErrorMessage = "FindBlockPos failed!";
+                        }
+                        if (!WriteBlockToDisk(b, blockPos, chainparams.MessageStart()))
+                        {
+                            fRewardTestFailure = true;
+                            RewardTestErrorMessage = "WriteBlockToDisk failed!";
+                        }
+                        if (fRewardTestFailure)
+                        {
                             mapBlockIndex.erase(b.GetHash());
+                            break;
                         }
 
-                    } else {
-                        fRewardTestFailure = true; RewardTestErrorMessage = "pindex on Genesis block failed!";
+                        indexDummy.nFile = blockPos.nFile;
+                        indexDummy.nDataPos = blockPos.nPos;
+                        indexDummy.nStatus |= BLOCK_HAVE_DATA;
+
+                        std::vector<std::pair<uint256, CDiskTxPos>> vPos;
+                        CDiskBlockPos dbp = indexDummy.GetBlockPos();
+                        CDiskTxPos pos(dbp, /* nTxOffsetIn */ GetSizeOfCompactSize(b.vtx.size()));
+                        vPos.push_back(std::make_pair(txid, pos));
+
+                        if (pblocktree->WriteTxIndex(vPos))
+                        {
+                            chainActive.SetTip(&indexDummy);
+
+                            CBlock new_block;
+                            CBlockIndex indexDummy2(new_block);
+                            indexDummy2.nHeight = indexDummy.nHeight + 1;
+                            indexDummy2.nTime = indexDummy.nTime + testCase.duration;
+                            chainActive.SetTip(&indexDummy2);
+
+                            uint64_t rewards = RewardsCalc(testCase.amount, txid, testCase.APR, 0 /* minseconds */, testCase.duration /* maxseconds */, nStakedDecemberHardforkTimestamp + 1);
+                            ASSERT_EQ(rewards, testCase.rewards);
+                        }
+                        else
+                        {
+                            fRewardTestFailure = true;
+                            RewardTestErrorMessage = "WriteTxIndex failed!";
+                        }
+
+                        mapBlockIndex.erase(b.GetHash());
                     }
-
-                } else {
-                    fRewardTestFailure = true; RewardTestErrorMessage = "Can't init block index or tx index is not enabled!";
                 }
-
-                delete pcoinsTip;
-                pcoinsTip = nullptr;
-                delete pcoinsdbview;
-                pcoinsdbview = nullptr;
-                delete pblocktree;
-                pblocktree = nullptr;
+                else
+                {
+                    fRewardTestFailure = true;
+                    RewardTestErrorMessage = "pindex on Genesis block failed!";
+                }
             }
+            else
+            {
+                fRewardTestFailure = true;
+                RewardTestErrorMessage = "Can't init block index or tx index is not enabled!";
+            }
+
+            deleteIfUsedBefore(pcoinsTip);
+            deleteIfUsedBefore(pcoinsdbview);
+            deleteIfUsedBefore(pblocktree);
 
             if (!datadirOld.empty()) {
                 mapArgs["-datadir"] = datadirOld;
