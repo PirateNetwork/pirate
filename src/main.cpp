@@ -6948,6 +6948,16 @@ bool CVerifyDB::VerifyDB(CCoinsView *coinsview, int nCheckLevel, int nCheckDepth
         uiInterface.ShowProgress(_("Verifying blocks..."), std::max(1, std::min(99, (int)(((double)(chainActive.Height() - pindex->nHeight)) / (double)nCheckDepth * (nCheckLevel >= 4 ? 50 : 100)))), false);
         if (pindex->nHeight < chainActive.Height()-nCheckDepth)
             break;
+
+        //Pre-check 0: Read hashFinalSaplingRoot and verify it against the database
+        uint256 dbRoot = coinsview->GetBestAnchor(SAPLINGFRONTIER);
+        if (dbRoot !=  chainActive.Tip()->hashFinalSaplingRoot) {
+            if (!(dbRoot == SaplingMerkleTree::empty_root() && chainActive.Tip()->hashFinalSaplingRoot == uint256())) {
+                return error("VerifyDB(): ***Obsolete block database detected, reindexing the blockchain data required.\n");
+            }
+        }
+
+
         CBlock block;
         // check level 0: read from disk
         if (!ReadBlockFromDisk(block, pindex,0))

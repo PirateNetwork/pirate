@@ -1054,8 +1054,7 @@ bool AttemptDatabaseOpen(size_t nBlockTreeDBCache, bool dbCompression, size_t db
         }
         if ( KOMODO_REWIND == 0 )
         {
-            if (!CVerifyDB().VerifyDB(pcoinsdbview, GetArg("-checklevel", 3),
-                                        GetArg("-checkblocks", 288))) {
+            if (!CVerifyDB().VerifyDB(pcoinsdbview, GetArg("-checklevel", 3),GetArg("-checkblocks", 288))) {
                 strLoadError = _("Corrupted block database detected");
                 return false;
             }
@@ -2142,7 +2141,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         }
 
         //Run ZapWalletTx to clean out transactions
-        if (zapTransactions) {
+        //Reset transactions on redindex
+        if (zapTransactions || fReindex) {
             uiInterface.InitMessage(_("Zapping all transactions from wallet..."));
             pwalletMain = new CWallet(strWalletFile);
             DBErrors nZapWalletRet = pwalletMain->ZapWalletTx(vWtx);
