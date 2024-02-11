@@ -2807,14 +2807,55 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
+    //Count Sapling Outpoints
+    int outCount = 0;
+    for (map<uint256,CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it) {
+        CWalletTx wtx = (*it).second;
+        outCount += wtx.mapSaplingNoteData.size();
+    }
+
+    //Count Sapling Keys
+    std::set<libzcash::SaplingExtendedSpendingKey> saplingExtSpendingKeys;
+    std::set<libzcash::SaplingExtendedFullViewingKey> saplingExtFullViewingKeys;
+    std::set<libzcash::SaplingPaymentAddress> saplingAddresses;
+    pwalletMain->GetSaplingPaymentAddresses(saplingAddresses);
+
+    for (auto addr : saplingAddresses) {
+        libzcash::SaplingExtendedSpendingKey extsk;
+        if (pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
+            if (EncodePaymentAddress(addr) == EncodePaymentAddress(extsk.DefaultAddress())) {
+                saplingExtSpendingKeys.insert(extsk);
+            }
+        }
+    }
+
+    for (auto addr : saplingAddresses) {
+        libzcash::SaplingExtendedSpendingKey extsk;
+        if (!pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
+            libzcash::SaplingIncomingViewingKey ivk;
+            libzcash::SaplingExtendedFullViewingKey extfvk;
+            pwalletMain->GetSaplingIncomingViewingKey(addr, ivk);
+            pwalletMain->GetSaplingFullViewingKey(ivk,extfvk);
+            if (EncodePaymentAddress(addr) == EncodePaymentAddress(extfvk.DefaultAddress())) {
+                saplingExtFullViewingKeys.insert(extfvk);
+            }
+        }
+    }
+
     UniValue obj(UniValue::VOBJ);
-    obj.push_back(Pair("walletversion", pwalletMain->GetVersion()));
-    obj.push_back(Pair("balance",       ValueFromAmount(pwalletMain->GetBalance())));
-    obj.push_back(Pair("unconfirmed_balance", ValueFromAmount(pwalletMain->GetUnconfirmedBalance())));
-    obj.push_back(Pair("immature_balance",    ValueFromAmount(pwalletMain->GetImmatureBalance())));
-    obj.push_back(Pair("txcount",       (int)pwalletMain->mapWallet.size()));
-    obj.push_back(Pair("keypoololdest", pwalletMain->GetOldestKeyPoolTime()));
-    obj.push_back(Pair("keypoolsize",   (int)pwalletMain->GetKeyPoolSize()));
+    obj.push_back(Pair("walletversion",           pwalletMain->GetVersion()));
+    obj.push_back(Pair("balance",                 ValueFromAmount(pwalletMain->GetBalance())));
+    obj.push_back(Pair("unconfirmed_balance",     ValueFromAmount(pwalletMain->GetUnconfirmedBalance())));
+    obj.push_back(Pair("immature_balance",        ValueFromAmount(pwalletMain->GetImmatureBalance())));
+    obj.push_back(Pair("txcount",                 (int)pwalletMain->mapWallet.size()));
+    obj.push_back(Pair("saplingnotes",            outCount));
+    obj.push_back(Pair("arctxcount",              (int)pwalletMain->mapArcTxs.size()));
+    obj.push_back(Pair("arcsaplingnotes",         (int)pwalletMain->mapArcSaplingOutPoints.size()));
+    obj.push_back(Pair("saplingaddresses",        saplingAddresses.size()));
+    obj.push_back(Pair("saplingspendingkeys",     saplingExtSpendingKeys.size()));
+    obj.push_back(Pair("saplingfullviewingkeys",  saplingExtFullViewingKeys.size()));
+    obj.push_back(Pair("keypoololdest",           pwalletMain->GetOldestKeyPoolTime()));
+    obj.push_back(Pair("keypoolsize",             (int)pwalletMain->GetKeyPoolSize()));
     if (pwalletMain->IsCrypted())
         obj.push_back(Pair("unlocked_until", nWalletUnlockTime));
     obj.push_back(Pair("paytxfee",      ValueFromAmount(payTxFee.GetFeePerK())));

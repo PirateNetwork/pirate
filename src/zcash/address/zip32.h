@@ -151,6 +151,12 @@ struct SaplingExtendedSpendingKey {
             a.expsk == b.expsk &&
             a.dk == b.dk;
     }
+
+    friend inline bool operator<(const SaplingExtendedSpendingKey& a, const SaplingExtendedSpendingKey& b) {
+        return (a.depth < b.depth ||
+            (a.depth == b.depth && a.childIndex < b.childIndex) ||
+            (a.depth == b.depth && a.childIndex == b.childIndex && a.expsk < b.expsk));
+    }
 };
 
 struct SaplingDiversifiedExtendedSpendingKey {
