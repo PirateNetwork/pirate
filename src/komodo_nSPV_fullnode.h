@@ -524,7 +524,7 @@ int32_t NSPV_mempoolfuncs(bits256 *satoshisp,int32_t *vindexp,std::vector<uint25
                                 E_UNMARSHAL(vopret,ss >> e; ss >> f; ss >> tmp_txid;);
                                 if (e!=eval || (txid!=zeroid && txid!=tmp_txid) || (func!=0 && f!=func)) continue;
                                 break;
-                            case EVAL_TOKENS:EVAL_DICE:EVAL_DILITHIUM:EVAL_FAUCET:EVAL_LOTO:EVAL_PAYMENTS:EVAL_REWARDS:
+                            case EVAL_TOKENS:EVAL_DICE:EVAL_FAUCET:EVAL_LOTO:EVAL_PAYMENTS:EVAL_REWARDS:
                                 E_UNMARSHAL(vopret,ss >> e; ss >> f;);
                                 if (e!=eval || (func!=0 && f!=func)) continue;
                                 break;
