@@ -5,6 +5,7 @@
 #include "komodo_utils.h"
 #include "komodo_hardfork.h"
 #include "txdb.h"
+#include <gmp.h>
 
 #include <iostream>
 #include <vector>
@@ -15,6 +16,7 @@
 
 bool FindBlockPos(int32_t tmpflag,CValidationState &state, CDiskBlockPos &pos, unsigned int nAddSize, unsigned int nHeight, uint64_t nTime, bool fKnown); // main.cpp
 uint64_t RewardsCalc(int64_t amount, uint256 txid, int64_t APR, int64_t minseconds, int64_t maxseconds, uint32_t timestamp); // rewards cpp
+
 namespace GMPArithTests
 {
 
@@ -319,5 +321,93 @@ namespace GMPArithTests
         if (fRewardTestFailure) {
             FAIL() << RewardTestErrorMessage;
         }
+    }
+
+    bool BnFitsCAmount(const mpz_t &bn_mpz)
+    {
+        const int64_t max = std::numeric_limits<int64_t>::max();
+        mpz_t bn_max;
+        mpz_init(bn_max);
+        mpz_import(bn_max, 1, 1, sizeof(max), 0, 0, &max);
+        if (mpz_cmp(bn_mpz, bn_max) < 1)
+        {
+            mpz_clear(bn_max);
+            return true;
+        }
+        mpz_clear(bn_max);
+        return false;
+    }
+
+    bool BnFitsCAmount(arith_uint256 const &au_num)
+    {
+        const int64_t max = std::numeric_limits<int64_t>::max();
+        arith_uint256 au_max(max);
+        if (au_num <= au_max) {
+            return true;
+        }
+        return false;
+    }
+
+    std::string BnToString(const mpz_t &bn_mpz)
+    {
+        size_t num_limbs = mpz_sizeinbase(bn_mpz, 10);
+        std::unique_ptr<char[]> buffer(new char[num_limbs + 2]); // possible sign and '\0'
+        mpz_get_str(buffer.get(), 10, bn_mpz);
+        std::string result(buffer.get());
+        return result;
+    }
+
+    std::string BnToString(const arith_uint256 &au_num) {
+
+        if (au_num == 0) {
+            return "0";
+        }
+
+        std::string result;
+        arith_uint256 num(au_num);
+
+        while (num > 0) {
+            arith_uint256 q(num / 10);
+            arith_uint256 r(num - q * 10);
+            char digit = '0' + static_cast<char>(r.GetLow64());
+            result = digit + result;
+            num /= 10;
+        }
+
+        return result;
+    }
+
+    TEST(GMPArithTests, PaymentsTest)
+    {
+
+        /* BnToString */
+        mpz_t bn_mpz;
+        mpz_init(bn_mpz);
+        mpz_import(bn_mpz, 1, 1, sizeof(MAX_MONEY), 0, 0, &MAX_MONEY);
+        mpz_mul(bn_mpz, bn_mpz, bn_mpz);
+        std::string str_bn_mpz = BnToString(bn_mpz);
+        mpz_clear(bn_mpz);
+
+        arith_uint256 bn_a(MAX_MONEY);
+        bn_a = bn_a * bn_a;
+        std::string str_bn_a = BnToString(bn_a);
+
+        ASSERT_TRUE(str_bn_mpz == "400000000000000000000000000000000");
+        ASSERT_TRUE(str_bn_a == "400000000000000000000000000000000");
+
+        /* BnFitsCAmount */
+        const int64_t int64_t_max = std::numeric_limits<int64_t>::max();
+
+        mpz_init(bn_mpz);
+        mpz_import(bn_mpz, 1, 1, sizeof(int64_t_max), 0, 0, &int64_t_max);
+        ASSERT_TRUE(BnFitsCAmount(bn_mpz));
+        mpz_add_ui(bn_mpz, bn_mpz, 1);
+        ASSERT_FALSE(BnFitsCAmount(bn_mpz));
+        mpz_clear(bn_mpz);
+
+        arith_uint256 au(int64_t_max);
+        ASSERT_TRUE(BnFitsCAmount(au));
+        au += 1;
+        ASSERT_FALSE(BnFitsCAmount(au));
     }
 }
