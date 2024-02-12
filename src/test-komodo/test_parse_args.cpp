@@ -216,7 +216,9 @@ namespace ParseArgumentsTests {
 
             ClearAssetchainGlobalParams();
             ParseParameters(argc, argv.get()); // before calling komodo_args -ac_name param should be set in mapArgs
+            int64_t oldMAX_MONEY = MAX_MONEY;
             komodo_args(argv0Data.get());      // argv0 is passed in try to get ac_name from program suffixes (works for MNZ and BTCH only)
+            MAX_MONEY = oldMAX_MONEY;
             chainparams_commandline();         // set CChainParams (pCurrentParams) from ASSETCHAINS_* global variables
 
             assetchain_info current_ac = {chainName.ToString(), ASSETCHAINS_P2PPORT, ASSETCHAINS_RPCPORT, static_cast<int32_t>(ASSETCHAINS_MAGIC)};

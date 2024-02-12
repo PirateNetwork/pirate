@@ -379,7 +379,6 @@ namespace GMPArithTests
 
     TEST(GMPArithTests, PaymentsTest)
     {
-
         /* BnToString */
         mpz_t bn_mpz;
         mpz_init(bn_mpz);
@@ -392,8 +391,11 @@ namespace GMPArithTests
         bn_a = bn_a * bn_a;
         std::string str_bn_a = BnToString(bn_a);
 
-        ASSERT_TRUE(str_bn_mpz == "400000000000000000000000000000000");
-        ASSERT_TRUE(str_bn_a == "400000000000000000000000000000000");
+        /*
+            MAX_MONEY isn't always 200000000 * COIN, it can be set by komodo_max_money during komodo_args call.
+            And tests calling komodo_args/komodo_max_money can alter the MAX_MONEY value!
+        */
+        ASSERT_TRUE(str_bn_mpz == str_bn_a);
 
         /* BnFitsCAmount */
         const int64_t int64_t_max = std::numeric_limits<int64_t>::max();
