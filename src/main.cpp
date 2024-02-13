@@ -2474,31 +2474,35 @@ bool IsInitialBlockDownload()
         return false;
 
     if (fImporting || fReindex)
-    {
-        //fprintf(stderr,"IsInitialBlockDownload: fImporting %d || %d fReindex\n",(int32_t)fImporting,(int32_t)fReindex);
         return true;
-    }
 
     if (fCheckpointsEnabled && chainActive.Height() < Checkpoints::GetTotalBlocksEstimate(chainParams.Checkpoints()))
-    {
-        //fprintf(stderr,"IsInitialBlockDownload: checkpoint -> initialdownload - %d blocks\n", Checkpoints::GetTotalBlocksEstimate(chainParams.Checkpoints()));
         return true;
-    }
 
-    CBlockIndex *ptr = chainActive.Tip();
-    if (ptr == NULL)
-    {
+    if (chainActive.Tip() == nullptr)
         return true;
-    }
-    bool state = ((chainActive.Height() < ptr->nHeight - 24*60) ||
-             ptr->GetBlockTime() < (GetTime() - nMaxTipAge));
+
+    /* TODO:
+       - IBD check uses minimumchain work instead of checkpoints.
+         https://github.com/zcash/zcash/commit/e41632c9fb5d32491e7f394b7b3a82f6cb5897cb
+       - Consider using hashActivationBlock for Sapling in KMD.
+         https://github.com/zcash/zcash/pull/4060/commits/150e3303109047118179f33b1cc5fc63095eb21d
+    */
+
+    // if (chainName.isKMD() && chainActive.Tip()->nChainWork < UintToArith256(chainParams.GetConsensus().nMinimumChainWork))
+    //     return true;
+
+    bool state = ((chainActive.Height() < chainActive.Tip()->nHeight - 24*60) ||
+             chainActive.Tip()->GetBlockTime() < (GetTime() - nMaxTipAge));
+
     if ( KOMODO_INSYNC != 0 )
         state = false;
+
     if (!state)
     {
         LogPrintf("Leaving InitialBlockDownload (latching to false)\n");
         latchToFalse.store(true, std::memory_order_relaxed);
-    } // else fprintf(stderr,"state.%d  ht.%d vs %d, t.%u\n",state,(int32_t)chainActive.Height(),(uint32_t)ptr->nHeight,(int32_t)ptr->GetBlockTime());
+    }
     return state;
 }
 
