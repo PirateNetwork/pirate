@@ -124,6 +124,9 @@ src/komodo-tx.exe
 #output during builds, symbol tables?
 *.dSYM
 
+src/*_7776
+*_7776
+
 
 src/cryptoconditions/compile
 
