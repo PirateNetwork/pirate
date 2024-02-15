@@ -25,6 +25,7 @@
 #include "util.h"
 #include "utilstrencodings.h"
 
+#include <cinttypes>
 #include <assert.h>
 #include <boost/assign/list_of.hpp>
 
@@ -711,6 +712,7 @@ void *chainparams_commandline()
 
         pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = ASSETCHAINS_SAPLING;
         pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = ASSETCHAINS_OVERWINTER;
+
         checkpointData =
                 {
                         MapCheckpoints {
@@ -726,6 +728,29 @@ void *chainparams_commandline()
     else
     {
         checkpointData = pCurrentParams->Checkpoints();
+    }
+
+    /* launch with -debug=params to log additional data about chain params,
+       fDebug is not set yet, so, we can't use LogAcceptCategory or LogPrint */
+    if (!mapMultiArgs["-debug"].empty() && pCurrentParams != nullptr) {
+        const std::vector<std::string>& categories = mapMultiArgs["-debug"];
+        if (std::find(categories.begin(), categories.end(), std::string("params")) != categories.end()) {
+            MapCheckpoints::reverse_iterator lastCheckpoint = checkpointData.mapCheckpoints.rbegin();
+            if (lastCheckpoint != checkpointData.mapCheckpoints.rend())
+                LogPrintf("Last checkpoint [%s]: height=%d, hash=%s\n", chainName.ToString(), lastCheckpoint->first, lastCheckpoint->second.ToString());
+            else
+                LogPrintf("Last checkpoint [%s]: MapCheckpoints is NOT set!\n", chainName.ToString());
+            int32_t nMagic = 0;
+            if (MESSAGE_START_SIZE <= sizeof(nMagic)) {
+                for (size_t i = 0; i < MESSAGE_START_SIZE; ++i) {
+                    nMagic = (nMagic << 8) | pCurrentParams->pchMessageStart[i];
+                }
+                nMagic = htobe32(nMagic);
+                LogPrintf("MessageStart: %s (s.%" PRId32 ", u.%" PRIu32 ", 0x%08" PRIx32 ")\n",
+                          HexStr(FLATDATA(pCurrentParams->pchMessageStart), true),
+                          nMagic, static_cast<uint32_t>(nMagic), nMagic);
+            }
+        }
     }
 
     pCurrentParams->SetCheckpointData(checkpointData);
