@@ -194,6 +194,10 @@ public:
         return sapling_wallet_unmark_transaction_notes(inner.get(),txid.begin());
     }
 
+    bool IsNoteTracked(const uint256 txid, int outidx, uint64_t &position) {
+        return sapling_is_note_tracked(inner.get(), txid.begin(), outidx, &position);
+    }
+
     bool GetMerklePathOfNote(const uint256 txid, int outidx, libzcash::MerklePath &merklePath) {
 
         unsigned char serializedPath[1065] = {};

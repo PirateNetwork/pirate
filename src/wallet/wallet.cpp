@@ -2091,11 +2091,11 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex) {
 
     if (NetworkUpgradeActive(pindex->nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
 
-      if (lastCheckpoint > pindex->nHeight - 1 ) {
-          saplingWalletValidated = false;
-          LogPrint("saplingwallet","Sapling Wallet - Last Checkpoint is higher than wallet, skipping block\n");
-          return;
-      }
+        if (lastCheckpoint > pindex->nHeight - 1 ) {
+            saplingWalletValidated = false;
+            LogPrint("saplingwallet","Sapling Wallet - Last Checkpoint is higher than wallet, skipping block\n");
+            return;
+        }
 
         //Rebuild if wallet does not exisit
         if (lastCheckpoint<0) {
@@ -2115,17 +2115,15 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex) {
                 LogPrint("saplingwallet","Sapling Wallet - Sapling Root is out of sync with the blockchain, rebuild witnesses\n");
                 rebuildWallet = true;
             }
-            saplingWalletValidated = true;
-        }
 
-        //Rebuild
-        if (rebuildWallet) {
-            std::map<uint256, CWalletTx*> mapWalletRebuild;
-
-            //Collect valid transactions
             for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
                 uint256 txid = (*it).first;
                 CWalletTx *pwtx = &(*it).second;
+
+                //exit loop if we need to rebuild
+                if (rebuildWallet) {
+                    break;
+                }
 
                 //Exclude transactions with no Sapling Data
                 if (pwtx->mapSaplingNoteData.empty()) {
@@ -2142,26 +2140,113 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex) {
                     continue;
                 }
 
-                mapWalletRebuild[txid] = pwtx;
-            }
+                //exit loop if trying to shutdown
+                if (ShutdownRequested()) {
+                    break;
+                }
 
-            //Determine Start Height of Sapling Wallet
-            for (map<uint256, CWalletTx*>::iterator it = mapWalletRebuild.begin(); it != mapWalletRebuild.end(); ++it) {
-                CWalletTx* pwtx = (*it).second;
-
-                int txHeight = mapBlockIndex[pwtx->hashBlock]->nHeight;
-
-                //Check Note data for minimum height
+                //Check if all notes are tracked correctly
                 for (mapSaplingNoteData_t::value_type& item : pwtx->mapSaplingNoteData) {
-                    nMinimumHeight = SaplingWitnessMinimumHeight(*item.second.nullifier, txHeight, nMinimumHeight);
+
+                    //exit loop if we need to rebuild
+                    if (rebuildWallet) {
+                        break;
+                    }
+
+                    const SaplingOutPoint op = item.first;
+                    uint64_t position;
+
+                    if(!saplingWallet.IsNoteTracked(op.hash, op.n, position)) {
+                        rebuildWallet = true;
+                    } else {
+                        CBlockIndex* pCheckIndex = mapBlockIndex[pwtx->hashBlock];
+
+                        //Create a new wallet to validate tracked merkle path
+                        SaplingMerkleFrontier saplingCheckFrontierTree;
+                        pcoinsTip->GetSaplingFrontierAnchorAt(pCheckIndex->pprev->hashFinalSaplingRoot, saplingCheckFrontierTree);
+                        SaplingWallet saplingWalletCheck;
+                        saplingWalletCheck.InitNoteCommitmentTree(saplingCheckFrontierTree);
+
+                        MerklePath saplingCheckMerklePath;
+                        uint64_t positionCheck;
+
+                        //Retrieve the full block to get all of the transaction commitments
+                        CBlock checkBlock;
+                        ReadBlockFromDisk(checkBlock, pCheckIndex, 1);
+                        CBlock *pCheckBlock = &checkBlock;
+
+                        //Calculate Merkle Path
+                        for (int i = 0; i < pCheckBlock->vtx.size(); i++) {
+                            uint256 txid = pCheckBlock->vtx[i].GetHash();
+
+                            //Use single output appending for transaction that belong to the wallet so that they can be marked
+                            if (pwtx->GetHash() == txid) {
+                                saplingWalletCheck.CreateEmptyPositionsForTxid(pCheckIndex->nHeight, txid);
+
+                                for (int j = 0; j < pCheckBlock->vtx[i].vShieldedOutput.size(); j++) {
+                                    auto opit = pwtx->mapSaplingNoteData.find(op);
+                                    if (opit != pwtx->mapSaplingNoteData.end() && j == op.n) {
+                                        saplingWalletCheck.AppendNoteCommitment(pCheckIndex->nHeight, txid, i, j, pCheckBlock->vtx[i].vShieldedOutput[j], true);
+
+                                        //Get Merkle Path for note position
+                                        assert(saplingWalletCheck.GetMerklePathOfNote(txid, j, saplingCheckMerklePath));
+                                        positionCheck = saplingCheckMerklePath.position();
+
+                                        LogPrint("saplingwallet", "Sapling Check Wallet - Merkle Path position %i\n", positionCheck);
+
+                                    } else {
+                                        saplingWalletCheck.AppendNoteCommitment(pCheckIndex->nHeight, txid, i, j, pCheckBlock->vtx[i].vShieldedOutput[j], false);
+                                    }
+                                }
+
+                            } else {
+                                //No transactions in this tx belong to the wallet, use full tx appending
+                                saplingWalletCheck.ClearPositionsForTxid(txid);
+                                saplingWalletCheck.AppendNoteCommitments(pCheckIndex->nHeight,pCheckBlock->vtx[i],i);
+                            }
+                        }
+
+                        LogPrint("saplingwallet", "Sapling Wallet - Merkle Path position %i\n", positionCheck);
+
+                        if (positionCheck != position) {
+                            LogPrint("saplingwallet", "Sapling Wallet Validation failed, rebuilding witnesses\n");
+                            rebuildWallet = true;
+                        } else {
+                            pwtx->mapSaplingNoteData[op].setPosition(position);
+                            UpdateSaplingNullifierNoteMapWithTx(pwtx);
+                        }
+                    }
                 }
             }
 
-            LogPrint("saplingwallet", "Sapling Wallet - rebuilding wallet from block %i\n", nMinimumHeight);
+            saplingWalletValidated = true;
+        }
+
+        //Rebuild
+        if (rebuildWallet) {
+
+            //Don't recheck after a rebuild
+            saplingWalletValidated = true;
+
+            //Determine Start Height of Sapling Wallet
+            for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
+                CWalletTx* pwtx = &(*it).second;
+
+                // Find the block it claims to be in
+                BlockMap::iterator mi = mapBlockIndex.find(pwtx->hashBlock);
+                if (mi == mapBlockIndex.end()) {
+                    continue;
+                }
+
+                nMinimumHeight = std::min(mapBlockIndex[pwtx->hashBlock]->nHeight, nMinimumHeight);
+
+            }
+
+            LogPrint("\n\nsaplingwallet", "Sapling Wallet - rebuilding wallet from block %i\n\n", nMinimumHeight);
 
             //No transactions exists to begin wallet at this hieght
             if (nMinimumHeight > pindex->nHeight) {
-                LogPrint("saplingwallet", "Sapling Wallet - no transactions exist at height %i to rebuild wallet\n", nMinimumHeight);
+                LogPrint("\n\nsaplingwallet", "Sapling Wallet - no transactions exist at height %i to rebuild wallet\n\n", nMinimumHeight);
                 SaplingWalletReset();
                 return;
             }
@@ -2190,7 +2275,7 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex) {
 
                 if (GetTime() >= nNow2 + 60) {
                     nNow2 = GetTime();
-                    LogPrintf("Building Witnesses for block %d. Progress=%f\n", pblockindex->nHeight, Checkpoints::GuessVerificationProgress(Params().Checkpoints(), pblockindex));
+                    LogPrintf("Rebuilding Witnesses for block %d. Progress=%f\n", pblockindex->nHeight, Checkpoints::GuessVerificationProgress(Params().Checkpoints(), pblockindex));
                 }
 
                 //Report Progress to the GUI and log file
@@ -2199,10 +2284,10 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex) {
                     nNow1 = GetTime();
                     if (!uiShown) {
                         uiShown = true;
-                        uiInterface.ShowProgress("Building Witnesses", 0, false);
+                        uiInterface.ShowProgress("Rebuilding Witnesses", 0, false);
                     }
                     scanperc = (int)((Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false) - dProgressStart) / (dProgressTip - dProgressStart) * 100);
-                    uiInterface.ShowProgress(_(("Building Witnesses for block " + std::to_string(witnessHeight) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
+                    uiInterface.ShowProgress(_(("Rebuilding Witnesses for block " + std::to_string(witnessHeight) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
                 }
 
                 //exit loop if trying to shutdown
@@ -2217,12 +2302,12 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex) {
 
                 for (int i = 0; i < pblock->vtx.size(); i++) {
                     uint256 txid = pblock->vtx[i].GetHash();
-                    auto it = mapWalletRebuild.find(txid);
+                    auto it = mapWallet.find(txid);
 
                     //Use single output appending for transaction that belong to the wallet so that they can be marked
-                    if (it != mapWalletRebuild.end()) {
-                        saplingWallet.CreateEmptyPositionsForTxid(pindex->nHeight, txid);
-                        CWalletTx *pwtx = (*it).second;
+                    if (it != mapWallet.end()) {
+                        saplingWallet.CreateEmptyPositionsForTxid(pblockindex->nHeight, txid);
+                        CWalletTx *pwtx = &(*it).second;
                         for (int j = 0; j < pblock->vtx[i].vShieldedOutput.size(); j++) {
                             SaplingOutPoint op = SaplingOutPoint(txid, j);
                             auto opit = pwtx->mapSaplingNoteData.find(op);

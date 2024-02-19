@@ -1,5 +1,5 @@
 use bridgetree::BridgeTree;
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use byteorder::{ByteOrder, LittleEndian, ReadBytesExt, WriteBytesExt};
 use incrementalmerkletree::{MerklePath, Position};
 use libc::c_uchar;
 use std::collections::{BTreeSet, BTreeMap};
@@ -811,6 +811,31 @@ pub extern "C" fn sapling_wallet_init_from_frontier(
 type SaplingPath = MerklePath<Node, NOTE_COMMITMENT_TREE_DEPTH>;
 
 #[no_mangle]
+pub extern "C" fn sapling_is_note_tracked(
+    wallet: *mut Wallet,
+    txid: *const [c_uchar; 32],
+    tx_output_idx: usize,
+    position_out: *mut u64,
+) -> bool {
+    let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null");
+    let txid = TxId::from_bytes(*unsafe { txid.as_ref() }.expect("txid may not be null."));
+
+    if let Some(position) = wallet.get_position_of_note(&txid, &tx_output_idx) {
+
+        let mut buf = [0; 8];
+        LittleEndian::write_u64(&mut buf, position.into());
+
+        let position_out = unsafe { &mut *position_out };
+        *position_out = LittleEndian::read_u64(&buf);
+        return true;
+    }
+
+    let position_out = unsafe { &mut *position_out };
+    *position_out = 0;
+    return false;
+}
+
+#[no_mangle]
 pub extern "C" fn sapling_wallet_get_path_for_note(
     wallet: *mut Wallet,
     txid: *const [c_uchar; 32],
@@ -823,7 +848,7 @@ pub extern "C" fn sapling_wallet_get_path_for_note(
     if let Some(position) = wallet.get_position_of_note(&txid, &tx_output_idx) {
         if let Ok(witness) = wallet.commitment_tree.witness(position, 0) {
             if let Ok(path) = SaplingPath::from_parts(witness, position) {
-                println!("Sapling Path {:?}", path);
+                // println!("Sapling Path {:?}", path);
                 let mut buffer = vec![];
                 if let Ok(_) = write_merkle_path(&mut buffer, path) {
                     if let Ok(rust_path_ret) = buffer.try_into() {

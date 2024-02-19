@@ -428,6 +428,13 @@ bool sapling_wallet_unmark_transaction_notes(
     const unsigned char txid[32]
 );
 
+bool sapling_is_note_tracked(
+  SaplingWalletPtr* wallet,
+  const unsigned char txid[32],
+  const size_t tx_output_idx,
+  uint64_t *position_out
+);
+
 bool sapling_wallet_get_path_for_note(
     SaplingWalletPtr* wallet,
     const unsigned char txid[32],
