@@ -106,7 +106,7 @@ RUST_ENV_VARS = \
   CXX="$(CXX)" \
   CXXFLAGS="$(CXXFLAGS)" \
   TERM=dumb
-RUST_BUILD_OPTS = --release --target $(RUST_TARGET) --manifest-path $(top_srcdir)/Cargo.toml
+RUST_BUILD_OPTS = --locked --release --target $(RUST_TARGET) --manifest-path $(top_srcdir)/Cargo.toml
 
 rust_verbose = $(rust_verbose_@AM_V@)
 rust_verbose_ = $(rust_verbose_@AM_DEFAULT_V@)
