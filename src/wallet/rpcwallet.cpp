@@ -2851,9 +2851,9 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
     obj.push_back(Pair("saplingnotes",            outCount));
     obj.push_back(Pair("arctxcount",              (int)pwalletMain->mapArcTxs.size()));
     obj.push_back(Pair("arcsaplingnotes",         (int)pwalletMain->mapArcSaplingOutPoints.size()));
-    obj.push_back(Pair("saplingaddresses",        saplingAddresses.size()));
-    obj.push_back(Pair("saplingspendingkeys",     saplingExtSpendingKeys.size()));
-    obj.push_back(Pair("saplingfullviewingkeys",  saplingExtFullViewingKeys.size()));
+    obj.push_back(Pair("saplingaddresses",        (int)saplingAddresses.size()));
+    obj.push_back(Pair("saplingspendingkeys",     (int)saplingExtSpendingKeys.size()));
+    obj.push_back(Pair("saplingfullviewingkeys",  (int)saplingExtFullViewingKeys.size()));
     obj.push_back(Pair("keypoololdest",           pwalletMain->GetOldestKeyPoolTime()));
     obj.push_back(Pair("keypoolsize",             (int)pwalletMain->GetKeyPoolSize()));
     if (pwalletMain->IsCrypted())
