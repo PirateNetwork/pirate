@@ -2151,6 +2151,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 return false;
             }
 
+            //Reset the saplingwallet on zap
+            pwalletMain->SaplingWalletReset();
+
             delete pwalletMain;
             pwalletMain = NULL;
         }
@@ -2662,6 +2665,17 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 pwalletMain->ScanForWalletTransactions(pindexRescan, true, false, false, false);
                 LogPrintf(" rescan      %15dms\n", GetTimeMillis() - nStart);
             }
+        }
+
+        //Validate Rust Sapling Wallet, rebuild if needed
+        if (chainActive.Tip() && chainActive.Height() > 0) {
+            LOCK2(cs_main, pwalletMain->cs_wallet);
+            LogPrintf("Validating Note Position from height %i\n", chainActive.Height());
+            if (!pwalletMain->ValidateSaplingWalletTrackedPositions(chainActive.Tip())) {
+                pwalletMain->SaplingWalletReset();
+                pwalletMain->IncrementSaplingWallet(chainActive.Tip());
+            }
+            pwalletMain->saplingWalletPositionsValidated=true;
         }
 
         pwalletMain->SetBroadcastTransactions(GetBoolArg("-walletbroadcast", true));

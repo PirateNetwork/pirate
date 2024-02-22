@@ -918,7 +918,8 @@ public:
 
     WalletCreateType createType = UNSET;
 
-    // void ClearNoteWitnessCache();
+    //Tracks if ValidateSaplingWalletTrackedPositions has been run
+    bool saplingWalletPositionsValidated = false;
 
     int64_t NullifierCount();
     std::set<uint256> GetNullifiers();
@@ -935,23 +936,19 @@ public:
     std::map<uint256, SaplingOutPoint> mapArcSaplingOutPoints;
     void AddToArcSaplingOutPoints(const uint256& nullifier, const SaplingOutPoint& op);
 
+    /**
+     * pindex is the new tip being connected.  Public so these can be called from init.cpp.
+     */
+
+    bool ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex);
+    void IncrementSaplingWallet(const CBlockIndex* pindex);
+    void DecrementSaplingWallet(const CBlockIndex* pindex);
+
+
 protected:
 
     int SproutWitnessMinimumHeight(const uint256& nullifier, int nWitnessHeight, int nMinimumHeight);
     int SaplingWitnessMinimumHeight(const uint256& nullifier, int nWitnessHeight, int nMinimumHeight);
-
-    /**
-     * pindex is the new tip being connected.
-     */
-    //  int VerifyAndSetInitialWitness(const CBlockIndex* pindex, bool witnessOnly);
-    //  void BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly);
-    // /**
-    //  * pindex is the old tip being disconnected.
-    //  */
-    // void DecrementNoteWitnesses(const CBlockIndex* pindex);
-
-    void IncrementSaplingWallet(const CBlockIndex* pindex);
-    void DecrementSaplingWallet(const CBlockIndex* pindex);
 
     template <typename WalletDB>
     void SetBestChainINTERNAL(WalletDB& walletdb, const CBlockLocator& loc, const int& height) {
