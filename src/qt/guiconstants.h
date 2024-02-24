@@ -58,7 +58,7 @@ static const int MAX_URI_LENGTH = 255;
 #define SPINNER_FRAMES 36
 
 #define QAPP_ORG_NAME "Pirate Chain"
-#define QAPP_ORG_DOMAIN "pirate.black"
+#define QAPP_ORG_DOMAIN "piratechain.com"
 #define QAPP_APP_NAME_DEFAULT "Treasure Chest"
 #define QAPP_APP_NAME_TESTNET "Treasure Chest Testnet"
 

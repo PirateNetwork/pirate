@@ -85,7 +85,7 @@ public:
     bool getMinimizeOnClose() const { return fMinimizeOnClose; }
     int getDisplayUnit() const { return nDisplayUnit; }
     bool getHexMemo() const { return fEnableHexMemo; }
-    QString getThirdPartyTxUrls() const { return "http://explorer.pirate.black/tx/%s"; }
+    QString getThirdPartyTxUrls() const { return "http://explorer.piratechain.com/tx/%s"; }
     // #ifdef ENABLE_BIP70
     // bool getProxySettings(QNetworkProxy& proxy) const;
     // #endif

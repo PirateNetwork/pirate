@@ -2,7 +2,7 @@
 This README matches the behaviour of Treasure Chest v5.6
 
 ## Introduction
-The problem with traditional wallets and how Pirate.black addresses these
+The problem with traditional wallets and how piratechain.com addresses these
 shortfalls:
 1. How traditional wallets work
    A file called 'wallet.dat' stores your addresses. Each address consists of a public
@@ -144,8 +144,8 @@ shortfalls:
    30GB of hard drive space. The internet link should run at 10mbps or faster. 
    The machines can run Linux, Mac OS X or MS Windows. For this tutorial Linux is used.
    
-2. You can obtain the software from the official Pirate website, Pirate.black:
-   https://pirate.black/wallets/treasure-chest or a source copy from GitHUB at
+2. You can obtain the software from the official Pirate website, piratechain.com:
+   https://piratechain.com/wallets/treasure-chest or a source copy from GitHUB at
    https://github.com/PirateNetwork/pirate 
    
    Furthermore, if you do not have a copy of the blockchain, you can download a 
