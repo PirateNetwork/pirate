@@ -94,7 +94,7 @@ void initalizeMapParamBootstrap() {
 
   ParamFile bootFile;
   bootFile.name = "bootstrap";
-  bootFile.URL = "http://bootstrap.arrr.black/ARRR-bootstrap.tar.gz";
+  bootFile.URL = "http://bootstrap.arrr.black/ARRR-bootstrap-v2.tar.gz";
   bootFile.verified = false;
   bootFile.path = GetDataDir() / "ARRR-bootstrap.tar.gz";
   bootFile.dlnow = 0;
