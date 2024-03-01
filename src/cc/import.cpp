@@ -257,7 +257,7 @@ int32_t CheckCODAimport(CTransaction importTx,CTransaction burnTx,std::vector<CT
     {
         sprintf(out + (i * 2), "%02x", hash[i]);
     }
-    out[65]='\0';
+    out[64]='\0';
     codaburntxid.SetHex(out);
     result=CodaRPC(&retstr,"prove-payment","-address",srcaddr.c_str(),"-receipt-chain-hash",receipt.c_str(),"");
     if (result==0)
