@@ -52,13 +52,10 @@ LIBZCASH_CONSENSUS=libzcashconsensus.la
 endif
 
 $(LIBSECP256K1): $(wildcard secp256k1/src/*) $(wildcard secp256k1/include/*)
-	$(AM_V_at)$(MAKE) $(AM_MAKEFLAGS) -C $(@D) $(@F) OPTFLAGS="$(LIBSNARK_OPTFLAGS) "
-
-$(LIBSNARK): $(wildcard snark/src/*)
-	$(AM_V_at)CC="$(CC)" CXX="$(CXX)" AR="$(AR)" CXXFLAGS="$(LIBSNARK_CXXFLAGS)" $(MAKE) $(AM_MAKEFLAGS) -C snark/ DEPINST="$(LIBSNARK_DEPINST)" $(LIBSNARK_CONFIG_FLAGS) OPTFLAGS="$(LIBSNARK_OPTFLAGS)"
+	$(AM_V_at)$(MAKE) $(AM_MAKEFLAGS) -C $(@D) $(@F)
 
 $(LIBUNIVALUE): $(wildcard univalue/lib/*)
-	$(AM_V_at)$(MAKE) $(AM_MAKEFLAGS) -C $(@D) $(@F) OPTFLAGS="$(LIBSNARK_OPTFLAGS)"
+	$(AM_V_at)$(MAKE) $(AM_MAKEFLAGS) -C $(@D) $(@F)
 
 # libcjson build
 LIBCJSON=libcjson.a
@@ -117,7 +114,7 @@ LIBZCASH_H = \
   zcash/Zcash.h \
   zcash/zip32.h
 
-.PHONY: FORCE collate-libsnark check-symbols check-security
+.PHONY: FORCE check-symbols check-security
 # bitcoin core #
 BITCOIN_CORE_H = \
   addressindex.h \
@@ -699,7 +696,6 @@ clean-local:
 	-$(RM) cryptoconditions/.libs/*.a
 
 clean-all: clean-local
-	-$(MAKE) -C snark clean-all
 	-$(MAKE) -C univalue clean-all
 
 .rc.o:
