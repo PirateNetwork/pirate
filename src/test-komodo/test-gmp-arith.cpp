@@ -5,7 +5,6 @@
 #include "komodo_utils.h"
 #include "komodo_hardfork.h"
 #include "txdb.h"
-#include <gmp.h>
 
 #include <iostream>
 #include <vector>
