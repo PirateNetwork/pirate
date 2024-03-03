@@ -1,8 +1,5 @@
-![Pirate cli build - Ubuntu 18.04](https://github.com/PirateNetwork/pirate/workflows/Pirate%20cli%20build%20-%20Ubuntu%2018.04/badge.svg)\
 ![Pirate cli build - Ubuntu 20.04](https://github.com/PirateNetwork/pirate/workflows/Pirate%20cli%20build%20-%20Ubuntu%2020.04/badge.svg)\
-![Pirate cli build - Windows cross compile 18.04](https://github.com/PirateNetwork/pirate/workflows/Pirate%20cli%20build%20-%20Windows%20cross%20compile%2018.04/badge.svg)\
 ![Pirate cli build - Windows cross compile 20.04](https://github.com/PirateNetwork/pirate/workflows/Pirate%20cli%20build%20-%20Windows%20cross%20compile%2020.04/badge.svg)\
-![Pirate cli build - MacOS 10.15 Catalina](https://github.com/PirateNetwork/pirate/workflows/Pirate%20cli%20build%20-%20MacOS/badge.svg)\
 ![Pirate Logo](https://i.ibb.co/F7Dgnxy/Pirate-Logo-Wordmark-Gold.png "Pirate Chain Logo")
 
 
@@ -37,6 +34,23 @@ This is the official Pirate Chain sourcecode repository based on https://github.
 
 ## About this Project
 Pirate Chain (ARRR) is a 100% private send cryptocurrency. It uses a privacy protocol that cannot be compromised by other users activity on the network. Most privacy coins are riddled with holes created by optional privacy. Pirate Chain uses zk-SNARKs to shield 100% of the peer to peer transactions on the blockchain making for highly anonymous and private transactions.
+
+## Signed Releases
+A Signature file is included in all releases designated as signed in the releases sections of this repository.
+
+Verify the hashes specified in the signatures-vX.X.X.zip of each file by running:
+```shell
+sha256sum -c sha256sum-vX.Y.Z.txt
+```
+
+Verify the signatures specified in the signatures-vX.X.X.zip of each file by running:
+```shell
+1. First, import the public key (Available on GitHub at https://github.com/piratenetwork/pirate/blob/master/public_key.asc)
+gpg --import public_key.asc
+
+2. Verify signature
+gpg --verify <filename.sig> <downloaded-filename-to-verify>
+```
 
 ## Getting started
 Build the code as described below. To see instructions on how to construct and send an offline transaction look
