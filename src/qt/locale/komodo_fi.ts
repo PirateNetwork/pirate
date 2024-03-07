@@ -1,4 +1,6 @@
-<TS language="fi" version="2.1">
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE TS>
+<TS version="2.1" language="fi">
 <context>
     <name>AddressBookPage</name>
     <message>
@@ -117,7 +119,7 @@
     <name>AskPassphraseDialog</name>
     <message>
         <source>Passphrase Dialog</source>
-        <translation>Tunnuslauseen tekstinsyöttökenttä</translation>
+        <translation>Tunnuslauseen tekstikenttä</translation>
     </message>
     <message>
         <source>Enter passphrase</source>
@@ -133,7 +135,7 @@
     </message>
     <message>
         <source>Enter the new passphrase to the wallet.&lt;br/&gt;Please use a passphrase of &lt;b&gt;ten or more random characters&lt;/b&gt;, or &lt;b&gt;eight or more words&lt;/b&gt;.</source>
-        <translation>Kirjoita uusi salauslause lompakolle.&lt;br/&gt;Käytä salauslausetta jossa on joko&lt;b&gt;kymmenen tai useampi satunnainen merkki&lt;/b&gt;, tai&lt;b&gt;vähintään kahdeksan sanaa&lt;/b&gt;</translation>
+        <translation>Kirjoita uusi tunnuslause lompakolle.&lt;br/&gt;Käytä salauslausetta jossa on joko&lt;b&gt;kymmenen tai useampi satunnainen merkki&lt;/b&gt;, tai&lt;b&gt;vähintään kahdeksan sanaa&lt;/b&gt;.</translation>
     </message>
     <message>
         <source>Encrypt wallet</source>
@@ -141,7 +143,7 @@
     </message>
     <message>
         <source>This operation needs your wallet passphrase to unlock the wallet.</source>
-        <translation>Tämä toiminto vaatii lompakkosi tunnuslauseen sen avaamiseksi</translation>
+        <translation>Tämä toiminto vaatii lompakkosi tunnuslauseen sen avaamiseksi.</translation>
     </message>
     <message>
         <source>Unlock wallet</source>
@@ -149,7 +151,7 @@
     </message>
     <message>
         <source>This operation needs your wallet passphrase to decrypt the wallet.</source>
-        <translation>Tämä toiminto vaatii lompakkosia tunnuslauseen salauksen purkuun</translation>
+        <translation>Tämä toiminto vaatii tunnuslauseen lompakon salauksen purkamiseksi.</translation>
     </message>
     <message>
         <source>Decrypt wallet</source>
@@ -157,7 +159,7 @@
     </message>
     <message>
         <source>Change passphrase</source>
-        <translation>Vaihda salasana</translation>
+        <translation>Vaihda tunnuslause</translation>
     </message>
     <message>
         <source>Enter the old passphrase and new passphrase to the wallet.</source>
@@ -323,7 +325,7 @@
     </message>
     <message>
         <source>Network activity disabled.</source>
-        <translation>Verkkoyhteysmittari pois käytöstä</translation>
+        <translation>Verkkotoiminta pois käytöstä.</translation>
     </message>
     <message>
         <source>Click to enable network activity again.</source>
@@ -435,7 +437,10 @@
     </message>
     <message numerus="yes">
         <source>%n active connection(s) to Pirate network</source>
-        <translation><numerusform>%n aktiivinen yhteys Pirate-verkkoon</numerusform><numerusform>%n aktiivista yhteyttä Pirate-verkkoon</numerusform></translation>
+        <translation>
+            <numerusform>%n aktiivinen yhteys Pirate-verkkoon</numerusform>
+            <numerusform>%n aktiivista yhteyttä Pirate-verkkoon</numerusform>
+        </translation>
     </message>
     <message>
         <source>Indexing blocks on disk...</source>
@@ -447,7 +452,10 @@
     </message>
     <message numerus="yes">
         <source>Processed %n block(s) of transaction history.</source>
-        <translation><numerusform>Prosessoitu %n lohko rahansiirtohistoriasta.</numerusform><numerusform>Prosessoitu %n lohkoa rahansiirtohistoriasta.</numerusform></translation>
+        <translation>
+            <numerusform>Prosessoitu %n lohko rahansiirtohistoriasta.</numerusform>
+            <numerusform>Prosessoitu %n lohkoa rahansiirtohistoriasta.</numerusform>
+        </translation>
     </message>
     <message>
         <source>%1 behind</source>
@@ -734,12 +742,12 @@
         <translation>Muokkaa lähettävää osoitetta</translation>
     </message>
     <message>
-        <source>The entered address "%1" is not a valid Pirate address.</source>
-        <translation>Antamasi osoite "%1" ei ole kelvollinen Pirate-osoite.</translation>
+        <source>The entered address &quot;%1&quot; is not a valid Pirate address.</source>
+        <translation>Antamasi osoite &quot;%1&quot; ei ole kelvollinen Pirate-osoite.</translation>
     </message>
     <message>
-        <source>The entered address "%1" is already in the address book.</source>
-        <translation>Antamasi osoite "%1" on jo osoitekirjassa</translation>
+        <source>The entered address &quot;%1&quot; is already in the address book.</source>
+        <translation>Antamasi osoite &quot;%1&quot; on jo osoitekirjassa.</translation>
     </message>
     <message>
         <source>Could not unlock wallet.</source>
@@ -747,7 +755,7 @@
     </message>
     <message>
         <source>New key generation failed.</source>
-        <translation>Uuden avaimen luonti epäonnistui.</translation>
+        <translation>Uuden avaimen luominen epäonnistui.</translation>
     </message>
 </context>
 <context>
@@ -808,8 +816,8 @@
         <translation>Valitse datahakemisto käynnistyksen yhteydessä (oletus: %u)</translation>
     </message>
     <message>
-        <source>Set language, for example "de_DE" (default: system locale)</source>
-        <translation>Aseta kieli, esimerkiksi "de_DE" (oletus: järjestelmän kieli)</translation>
+        <source>Set language, for example &quot;de_DE&quot; (default: system locale)</source>
+        <translation>Aseta kieli, esimerkiksi &quot;de_DE&quot; (oletus: järjestelmän kieli)</translation>
     </message>
     <message>
         <source>Start minimized</source>
@@ -855,8 +863,8 @@
         <translation>Määritä oma kansio:</translation>
     </message>
     <message>
-        <source>Error: Specified data directory "%1" cannot be created.</source>
-        <translation>Virhe: Annettu datahakemistoa "%1" ei voida luoda.</translation>
+        <source>Error: Specified data directory &quot;%1&quot; cannot be created.</source>
+        <translation>Virhe: Annettu datahakemistoa &quot;%1&quot; ei voida luoda.</translation>
     </message>
     <message>
         <source>Error</source>
@@ -864,11 +872,17 @@
     </message>
     <message numerus="yes">
         <source>%n GB of free space available</source>
-        <translation><numerusform>%n Gt vapaata tilaa käytettävissä</numerusform><numerusform>%n Gt vapaata tilaa käytettävissä</numerusform></translation>
+        <translation>
+            <numerusform>%n Gt vapaata tilaa käytettävissä</numerusform>
+            <numerusform>%n Gt vapaata tilaa käytettävissä</numerusform>
+        </translation>
     </message>
     <message numerus="yes">
         <source>(of %n GB needed)</source>
-        <translation><numerusform>(%n Gt tarvittavasta tilasta)</numerusform><numerusform>(%n Gt tarvittavasta tilasta)</numerusform></translation>
+        <translation>
+            <numerusform>(%n Gt tarvittavasta tilasta)</numerusform>
+            <numerusform>(%n Gt tarvittavasta tilasta)</numerusform>
+        </translation>
     </message>
 </context>
 <context>
@@ -879,7 +893,7 @@
     </message>
     <message>
         <source>Unknown...</source>
-        <translation>Tunnistamaton..</translation>
+        <translation>Tunnistamaton...</translation>
     </message>
     <message>
         <source>Last block time</source>
@@ -895,7 +909,7 @@
     </message>
     <message>
         <source>calculating...</source>
-        <translation>lasketaan..</translation>
+        <translation>lasketaan...</translation>
     </message>
     <message>
         <source>Estimated time left until synced</source>
@@ -905,7 +919,7 @@
         <source>Hide</source>
         <translation>Piilota</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>OpenURIDialog</name>
     <message>
@@ -924,7 +938,7 @@
         <source>Select payment request file</source>
         <translation>Valitse maksupyynnön tiedosto</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>OptionsDialog</name>
     <message>
@@ -1041,7 +1055,7 @@
     </message>
     <message>
         <source>&amp;Port:</source>
-        <translation>&amp;Portti</translation>
+        <translation>&amp;Portti:</translation>
     </message>
     <message>
         <source>Port of the proxy (e.g. 9050)</source>
@@ -1097,7 +1111,7 @@
     </message>
     <message>
         <source>User Interface &amp;language:</source>
-        <translation>&amp;Käyttöliittymän kieli</translation>
+        <translation>&amp;Käyttöliittymän kieli:</translation>
     </message>
     <message>
         <source>The user interface language can be set here. This setting will take effect after restarting %1.</source>
@@ -1105,7 +1119,7 @@
     </message>
     <message>
         <source>&amp;Unit to show amounts in:</source>
-        <translation>Yksikkö jona pirate-määrät näytetään</translation>
+        <translation>&amp;Yksikkö, jolla pirate-määrät näytetään:</translation>
     </message>
     <message>
         <source>Choose the default subdivision unit to show in the interface and when sending coins.</source>
@@ -1113,7 +1127,7 @@
     </message>
     <message>
         <source>Whether to show coin control features or not.</source>
-        <translation>Näytetäänkö kolikkokontrollin ominaisuuksia vai ei</translation>
+        <translation>Näytetäänkö kolikkokontrollin ominaisuuksia vai ei.</translation>
     </message>
     <message>
         <source>&amp;OK</source>
@@ -1180,7 +1194,7 @@
     </message>
     <message>
         <source>Total of transactions that have yet to be confirmed, and do not yet count toward the spendable balance</source>
-        <translation>Varmistamattomien rahansiirtojen summa, jota ei lasketa käytettävissä olevaan taseeseen.</translation>
+        <translation>Varmistamattomien rahansiirtojen summa, jota ei lasketa käytettävissä olevaan taseeseen</translation>
     </message>
     <message>
         <source>Immature:</source>
@@ -1200,7 +1214,7 @@
     </message>
     <message>
         <source>Your current total balance</source>
-        <translation>Tililläsi tällä hetkellä olevien Pirateien määrä</translation>
+        <translation>Tililläsi oleva Piraten määrä</translation>
     </message>
     <message>
         <source>Your current balance in watch-only addresses</source>
@@ -1227,9 +1241,6 @@
         <translation>Nykyinen tase seurantaosoitetteissa</translation>
     </message>
 </context>
-<context>
-    <name>PaymentServer</name>
-    </context>
 <context>
     <name>PeerTableModel</name>
     <message>
@@ -1287,7 +1298,7 @@
         <source>%1 and %2</source>
         <translation>%1 ja %2</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>QObject::QObject</name>
     <message>
@@ -1299,7 +1310,7 @@
     <name>QRImageWidget</name>
     <message>
         <source>&amp;Save Image...</source>
-        <translation>&amp;Tallenna kuva</translation>
+        <translation>&amp;Tallenna kuva...</translation>
     </message>
     <message>
         <source>&amp;Copy Image</source>
@@ -1330,7 +1341,7 @@
     </message>
     <message>
         <source>Debug window</source>
-        <translation>&amp;Debug-ikkuna</translation>
+        <translation>Debug-ikkuna</translation>
     </message>
     <message>
         <source>General</source>
@@ -1601,7 +1612,7 @@
     <name>ReceiveCoinsDialog</name>
     <message>
         <source>&amp;Amount:</source>
-        <translation>&amp;Määrä</translation>
+        <translation>&amp;Määrä:</translation>
     </message>
     <message>
         <source>&amp;Label:</source>
@@ -1696,7 +1707,7 @@
     </message>
     <message>
         <source>&amp;Save Image...</source>
-        <translation>&amp;Tallenna kuva</translation>
+        <translation>&amp;Tallenna kuva...</translation>
     </message>
     <message>
         <source>Payment information</source>
@@ -1718,7 +1729,7 @@
         <source>Message</source>
         <translation>Viesti</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>RecentRequestsTableModel</name>
     <message>
@@ -1854,7 +1865,7 @@
     </message>
     <message>
         <source>Clear all fields of the form.</source>
-        <translation>Tyhjennä lomakkeen kaikki kentät</translation>
+        <translation>Tyhjennä kaikki lomakkeen kentät.</translation>
     </message>
     <message>
         <source>Dust:</source>
@@ -1925,7 +1936,7 @@
     </message>
     <message>
         <source>Pay &amp;To:</source>
-        <translation>Maksun saaja:</translation>
+        <translation>Maksun &amp;saaja:</translation>
     </message>
     <message>
         <source>&amp;Label:</source>
@@ -1981,7 +1992,7 @@
     </message>
     <message>
         <source>Enter a label for this address to add it to the list of used addresses</source>
-        <translation>Aseta nimi tälle osoitteelle lisätäksesi sen käytettyjen osoitteiden listalle.</translation>
+        <translation>Aseta osoitteelle nimi ja lisää sen käytettyjen osoitteiden listalle</translation>
     </message>
     <message>
         <source>A message that was attached to the Pirate: URI which will be stored with the transaction for your reference. Note: This message will not be sent over the Pirate network.</source>
@@ -1995,7 +2006,7 @@
         <source>Memo:</source>
         <translation>Muistio:</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>SendConfirmationDialog</name>
     <message>
@@ -2086,7 +2097,7 @@
     </message>
     <message>
         <source>Verify &amp;Message</source>
-        <translation>Varmista &amp;viesti...</translation>
+        <translation>Vahvista &amp;viesti</translation>
     </message>
     <message>
         <source>Reset all verify message fields</source>
@@ -2161,14 +2172,14 @@
         <source>Amount</source>
         <translation>Määrä</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>TransactionDescDialog</name>
     <message>
         <source>This pane shows a detailed description of the transaction</source>
         <translation>Tämä ruutu näyttää yksityiskohtaisen tiedon rahansiirrosta</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>TransactionTableModel</name>
     <message>
@@ -2203,7 +2214,7 @@
         <source>(no label)</source>
         <translation>(ei nimikettä)</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>TransactionView</name>
     <message>
@@ -2370,7 +2381,7 @@
         <source>Backup Successful</source>
         <translation>Varmuuskopio Onnistui</translation>
     </message>
-    </context>
+</context>
 <context>
     <name>pirate-core</name>
     <message>
@@ -2439,7 +2450,7 @@
     </message>
     <message>
         <source>Bind to given address and always listen on it. Use [host]:port notation for IPv6</source>
-        <translation>Kytkeydy annettuun osoitteeseen ja pidä linja aina auki. Käytä [host]:portin merkintätapaa IPv6:lle.</translation>
+        <translation>Kytkeydy annettuun osoitteeseen ja pidä linja aina auki. Käytä [host]:portin merkintää IPv6:lle</translation>
     </message>
     <message>
         <source>Cannot obtain a lock on data directory %s. %s is probably already running.</source>
@@ -2450,7 +2461,7 @@
         <translation>Suorita käsky kun lompakossa rahansiirto muuttuu (%s cmd on vaihdettu TxID kanssa)</translation>
     </message>
     <message>
-        <source>Please check that your computer's date and time are correct! If your clock is wrong, %s will not work properly.</source>
+        <source>Please check that your computer&apos;s date and time are correct! If your clock is wrong, %s will not work properly.</source>
         <translation>Tarkistathan että tietokoneesi päivämäärä ja kellonaika ovat oikeassa! Jos kellosi on väärässä, %s ei toimi oikein.</translation>
     </message>
     <message>
@@ -2462,8 +2473,8 @@
         <translation>Aseta script varmistuksen threadien lukumäärä (%u - %d, 0= auto, &lt;0 = jätä näin monta ydintä vapaaksi, oletus: %d)</translation>
     </message>
     <message>
-        <source>The block database contains a block which appears to be from the future. This may be due to your computer's date and time being set incorrectly. Only rebuild the block database if you are sure that your computer's date and time are correct</source>
-        <translation>Lohkotietokanta sisältää lohkon, joka vaikuttaa olevan tulevaisuudesta. Tämä saattaa johtua tietokoneesi virheellisesti asetetuista aika-asetuksista. Rakenna lohkotietokanta uudelleen vain jos olet varma, että tietokoneesi päivämäärä ja aika ovat oikein.</translation>
+        <source>The block database contains a block which appears to be from the future. This may be due to your computer&apos;s date and time being set incorrectly. Only rebuild the block database if you are sure that your computer&apos;s date and time are correct</source>
+        <translation>Lohkotietokanta sisältää lohkon, joka vaikuttaa olevan tulevaisuudesta. Tämä saattaa johtua tietokoneesi virheellisesti asetetuista aika-asetuksista. Rakenna lohkotietokanta uudelleen vain jos olet varma, että tietokoneesi päivämäärä ja aika ovat oikein</translation>
     </message>
     <message>
         <source>Use UPnP to map the listening port (default: 1 when listening and no -proxy)</source>
@@ -2494,8 +2505,8 @@
         <translation>Lohkon luonnin asetukset:</translation>
     </message>
     <message>
-        <source>Cannot resolve -%s address: '%s'</source>
-        <translation>-%s -osoitteen '%s' selvittäminen epäonnistui</translation>
+        <source>Cannot resolve -%s address: &apos;%s&apos;</source>
+        <translation>-%s -osoitteen &apos;%s&apos; selvittäminen epäonnistui</translation>
     </message>
     <message>
         <source>Connection options:</source>
@@ -2570,16 +2581,16 @@
         <translation>Virheellinen tai olematon alkulohko löydetty. Väärä data-hakemisto verkolle?</translation>
     </message>
     <message>
-        <source>Invalid -onion address: '%s'</source>
-        <translation>Virheellinen -onion osoite: '%s'</translation>
+        <source>Invalid -onion address: &apos;%s&apos;</source>
+        <translation>Virheellinen -onion osoite: &apos;%s&apos;</translation>
     </message>
     <message>
-        <source>Invalid amount for -%s=&lt;amount&gt;: '%s'</source>
-        <translation>Virheellinen määrä -%s=&lt;amount&gt;: '%s'</translation>
+        <source>Invalid amount for -%s=&lt;amount&gt;: &apos;%s&apos;</source>
+        <translation>Virheellinen määrä -%s=&lt;amount&gt;: &apos;%s&apos;</translation>
     </message>
     <message>
-        <source>Invalid amount for -fallbackfee=&lt;amount&gt;: '%s'</source>
-        <translation>Virheellinen määrä -fallbackfee=&lt;amount&gt;: '%s'</translation>
+        <source>Invalid amount for -fallbackfee=&lt;amount&gt;: &apos;%s&apos;</source>
+        <translation>Virheellinen määrä -fallbackfee=&lt;amount&gt;: &apos;%s&apos;</translation>
     </message>
     <message>
         <source>Loading banlist...</source>
@@ -2603,7 +2614,7 @@
     </message>
     <message>
         <source>Print version and exit</source>
-        <translation>Näytä versio ja poistu.</translation>
+        <translation>Näytä versio ja poistu</translation>
     </message>
     <message>
         <source>Prune mode is incompatible with -txindex.</source>
@@ -2687,7 +2698,7 @@
     </message>
     <message>
         <source>The transaction amount is too small to send after the fee has been deducted</source>
-        <translation>Siirtomäärä on liian pieni lähetettäväksi kulun vähentämisen jälkeen.</translation>
+        <translation>Siirtomäärä on liian pieni lähetettäväksi kulujen vähentämisen jälkeen</translation>
     </message>
     <message>
         <source>(default: %u)</source>
@@ -2718,20 +2729,20 @@
         <translation>Tietoa</translation>
     </message>
     <message>
-        <source>Invalid amount for -paytxfee=&lt;amount&gt;: '%s' (must be at least %s)</source>
-        <translation>Kelvoton määrä argumentille -paytxfee=&lt;amount&gt;: '%s' (pitää olla vähintään %s)</translation>
+        <source>Invalid amount for -paytxfee=&lt;amount&gt;: &apos;%s&apos; (must be at least %s)</source>
+        <translation>Kelvoton määrä argumentille -paytxfee=&lt;amount&gt;: &apos;%s&apos; (pitää olla vähintään %s)</translation>
     </message>
     <message>
-        <source>Invalid netmask specified in -whitelist: '%s'</source>
-        <translation>Kelvoton verkkopeite määritelty argumentissa -whitelist: '%s'</translation>
+        <source>Invalid netmask specified in -whitelist: &apos;%s&apos;</source>
+        <translation>Kelvoton verkkopeite määritelty argumentissa -whitelist: &apos;%s&apos;</translation>
     </message>
     <message>
         <source>Keep at most &lt;n&gt; unconnectable transactions in memory (default: %u)</source>
         <translation>Pidä enimmillään &lt;n&gt; yhdistämiskelvotonta rahansiirtoa muistissa (oletus: %u)</translation>
     </message>
     <message>
-        <source>Need to specify a port with -whitebind: '%s'</source>
-        <translation>Pitää määritellä portti argumentilla -whitebind: '%s'</translation>
+        <source>Need to specify a port with -whitebind: &apos;%s&apos;</source>
+        <translation>Pitää määritellä portti argumentilla -whitebind: &apos;%s&apos;</translation>
     </message>
     <message>
         <source>Node relay options:</source>
@@ -2870,8 +2881,8 @@
         <translation>Sisällytä IP-osoitteet virheenkorjauslokissa (oletus: %u)</translation>
     </message>
     <message>
-        <source>Invalid -proxy address: '%s'</source>
-        <translation>Virheellinen proxy-osoite '%s'</translation>
+        <source>Invalid -proxy address: &apos;%s&apos;</source>
+        <translation>Virheellinen proxy-osoite &apos;%s&apos;</translation>
     </message>
     <message>
         <source>Listen for JSON-RPC connections on &lt;port&gt; (default: %u or testnet: %u)</source>
@@ -2943,7 +2954,7 @@
     </message>
     <message>
         <source>This is the transaction fee you will pay if you send a transaction.</source>
-        <translation>Tämä on lähetyksestä maksettava maksu jonka maksat</translation>
+        <translation>Tämä on lähetyksestä maksettava siirtomaksu jonka maksat.</translation>
     </message>
     <message>
         <source>Threshold for disconnecting misbehaving peers (default: %u)</source>
@@ -2958,8 +2969,8 @@
         <translation>Lähetyksessä tulee olla ainakin yksi vastaanottaja</translation>
     </message>
     <message>
-        <source>Unknown network specified in -onlynet: '%s'</source>
-        <translation>Tuntematon verkko -onlynet parametrina: '%s'</translation>
+        <source>Unknown network specified in -onlynet: &apos;%s&apos;</source>
+        <translation>Tuntematon verkko -onlynet parametrina: &apos;%s&apos;</translation>
     </message>
     <message>
         <source>Insufficient funds</source>
