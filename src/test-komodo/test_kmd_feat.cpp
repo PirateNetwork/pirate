@@ -334,6 +334,8 @@ TEST_F(KomodoFeatures, komodo_interest_validate) {
                 delete pLastBlockIndex;
             }
         }
+
+        pcoinsTip = nullptr; // avoid dangling pointer after this test
     }
 }
 
