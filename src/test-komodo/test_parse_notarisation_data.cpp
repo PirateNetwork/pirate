@@ -8107,10 +8107,10 @@ std::vector<notarized_checkpoint> get_test_checkpoints()
 /*
 void write_test_checkpoints(const std::string& filename, const std::vector<notarized_checkpoint>& checkpoints)
 {
-    std::ofstream out(filename, 
-            std::ios_base::openmode::_S_out 
-            | std::ios_base::openmode::_S_bin
-            | std::ios_base::openmode::_S_trunc);
+    std::ofstream out(filename,
+            std::ios::out
+            | std::ios::binary
+            | std::ios::trunc);
 
     for(auto itr = checkpoints.begin(); itr != checkpoints.end(); ++itr)
     {
@@ -8140,22 +8140,22 @@ std::vector<notarized_checkpoint> get_test_checkpoints_from_file(const std::stri
 {
     std::vector<notarized_checkpoint> retval;
 
-    std::ifstream in(filename, std::ios_base::openmode::_S_in
-            | std::ios_base::openmode::_S_bin);
+    std::ifstream in(filename, std::ios::in
+            | std::ios::binary);
 
     if (!in.is_open())
     {
         // look in the test directory
         std::string test = std::string("./test/") + filename;
-        in.open(test, std::ios_base::openmode::_S_in
-            | std::ios_base::openmode::_S_bin);
+        in.open(test, std::ios::in
+            | std::ios::binary);
     }
     if (!in.is_open())
     {
         // look in the ../test directory
         std::string test = std::string("../test/") + filename;
-        in.open(test, std::ios_base::openmode::_S_in
-            | std::ios_base::openmode::_S_bin);
+        in.open(test, std::ios::in
+            | std::ios::binary);
     }
 
     while(!in.eof())
