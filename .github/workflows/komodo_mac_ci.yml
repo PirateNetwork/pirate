@@ -45,7 +45,6 @@ jobs:
       - name: Build (macOS)
         run: |
           # flag for some CC tests transactions - so DO NOT USE THIS CI ARTIFACTS IN PRODUCTION!!!
-          export CPATH=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/
           ./zcutil/build-mac-dtest.sh -j4
           tar -czvf komodo-macos.tar.gz src/komodod src/komodo-cli
         env:
