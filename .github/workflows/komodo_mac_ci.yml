@@ -40,18 +40,14 @@ jobs:
           brew install python3
           brew install gmp
 
-      - name: Select Xcode version
-        run: |
-          sudo xcode-select -s '/Applications/Xcode_13.2.1.app/Contents/Developer'
-
       # https://www.jessesquires.com/blog/2020/01/06/selecting-an-xcode-version-on-github-ci/
       - name: Build (macOS)
         run: |
           # flag for some CC tests transactions - so DO NOT USE THIS CI ARTIFACTS IN PRODUCTION!!!
           ./zcutil/build-mac-dtest.sh -j4
           tar -czvf komodo-macos.tar.gz src/komodod src/komodo-cli
-        env:
-          DEVELOPER_DIR: /Applications/Xcode_13.2.1.app/Contents/Developer
+        # env:
+        #   DEVELOPER_DIR: /Applications/Xcode_13.2.1.app/Contents/Developer
 
       - name: Upload komodo-macos.tar.gz as artifact
         uses: actions/upload-artifact@v1
