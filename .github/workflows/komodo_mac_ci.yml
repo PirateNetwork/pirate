@@ -10,7 +10,7 @@ jobs:
 
   macos-build:
     name: MacOS Build
-    runs-on: macos-latest
+    runs-on: macos-12
     
     steps:
       - uses: actions/checkout@v2
@@ -41,12 +41,15 @@ jobs:
           brew install python3
           brew install gmp
 
+      # https://www.jessesquires.com/blog/2020/01/06/selecting-an-xcode-version-on-github-ci/
       - name: Build (macOS)
         run: |
           # flag for some CC tests transactions - so DO NOT USE THIS CI ARTIFACTS IN PRODUCTION!!!
           export CPATH=/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/
           ./zcutil/build-mac-dtest.sh -j4
           tar -czvf komodo-macos.tar.gz src/komodod src/komodo-cli
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_13.2.1.app/Contents/Developer
 
       - name: Upload komodo-macos.tar.gz as artifact
         uses: actions/upload-artifact@v1
