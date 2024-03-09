@@ -31,7 +31,6 @@ jobs:
       - name: Install deps (macOS)
         run: |
           brew update
-          brew upgrade || true
           brew tap discoteq/discoteq; brew install flock
           brew install autoconf autogen automake
           brew install binutils
