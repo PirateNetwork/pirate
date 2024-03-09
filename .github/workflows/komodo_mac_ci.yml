@@ -40,6 +40,10 @@ jobs:
           brew install python3
           brew install gmp
 
+      - name: Select Xcode version
+        run: |
+          sudo xcode-select -s '/Applications/Xcode_13.2.1.app/Contents/Developer'
+
       # https://www.jessesquires.com/blog/2020/01/06/selecting-an-xcode-version-on-github-ci/
       - name: Build (macOS)
         run: |
