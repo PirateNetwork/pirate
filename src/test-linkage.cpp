@@ -2,14 +2,18 @@
 #include <curl/curl.h>
 #include <iostream>
 #include <string>
+#include <cstring>
+#include <memory>
 
 #if defined(HAVE_CONFIG_H)
 #include "config/bitcoin-config.h"
 #endif
 
 #include "komodo_cJSON.h"
+#include "hex.h"
 
 char *CClib_name(); // cclib.cpp (no interface)
+
 
 int main(int argc, char* argv[])
 {
@@ -35,7 +39,16 @@ int main(int argc, char* argv[])
 
     curl_global_cleanup();
 
+    // cjson test
     std::cout << "cJSON version: " << cJSON_Version() << std::endl;
+
+    // decode_hex test from bitcoin_common
+    const char hexString[] = "4465636B6572";
+    size_t len = std::strlen(hexString);
+    size_t byteLen = len / 2 + 1;
+    std::unique_ptr<char[]> byteArray(new char[byteLen]);
+    decode_hex((uint8_t *)byteArray.get(), len / 2, hexString);
+    std::cerr << "Decoded hex: '" << byteArray.get() << "'" << std::endl;
 
     // std::cout << "CClib name: " << CClib_name() << std::endl;
     // nb! libcc can't be added without bitcoin_server and other dependencies
