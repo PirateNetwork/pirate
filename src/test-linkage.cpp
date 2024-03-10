@@ -32,6 +32,11 @@
 
 #include <secp256k1.h>
 #include <iomanip>
+#include <cryptoconditions.h>
+#include "komodo_cutils.h"
+
+#include <boost/thread.hpp>
+#include <sodium.h>
 
 using namespace std;
 
@@ -82,6 +87,10 @@ assetchain chainName;
 CWallet* pwalletMain = nullptr;
 #endif
 /* --- stubs for linkage --- */
+
+void printMessage(const std::string& message) {
+  std::cout << message << std::endl;
+}
 
 int main(int argc, char* argv[])
 {
@@ -183,11 +192,39 @@ int main(int argc, char* argv[])
     std::vector<bool> vBool = convertBytesVectorToVector(bytes);
     std::cout << "vBool contents: ";
     for (const bool bit : vBool) {
-        std::cout << bit;
+        std::cout << (bit ? "1" : "0");
     }
     std::cout << std::endl;
 
     /* libcryptoconditions call */
+    CC *cond = cc_new(CC_Eval);
+    if (cond) {
+        cc_free(cond);
+    }
+
+    /* libcjson call */
+    const char s_decker[] = "DECKER";
+    char *cloned_decker = clonestr(const_cast<char *>(s_decker));
+    if (cloned_decker) {
+        // there should not be any clones of Decker; all clones must be freed =)
+        std::cout << cloned_decker << std::endl;
+        free(cloned_decker);
+    }
+
+    /* boost lib(s) call */
+    std::string threadMessage = "This message is printed from a separate thread.";
+    boost::thread myThread(printMessage, threadMessage);
+    std::cout << "This message is printed from the main thread." << std::endl;
+    myThread.join();
+
+    /* sodium, rustzcash calls */
+    if (sodium_init() < 0) {
+        std::cerr << "Error initializing Libsodium" << std::endl;
+    } else {
+        const char* version = sodium_version_string();
+        std::cout << "Libsodium version: " << version << std::endl;
+    }
+
 
     // std::cout << "CClib name: " << CClib_name() << std::endl;
     // nb! libcc can't be added without bitcoin_server and other dependencies
