@@ -558,6 +558,8 @@ test_linkage_LDADD = \
   $(LIBBITCOIN_COMMON) \
   $(LIBCJSON) \
   $(ZMQ_LIBS) \
+  $(LIBLEVELDB) \
+  $(LIBMEMENV) \
   -lcurl
 bin_PROGRAMS += test-linkage
 

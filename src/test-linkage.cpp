@@ -12,6 +12,9 @@
 #include "komodo_cJSON.h"
 #include "hex.h"
 #include <zmq.h>
+#include <leveldb/db.h>
+#include <leveldb/env.h>
+#include <memenv.h>
 
 char *CClib_name(); // cclib.cpp (no interface)
 
@@ -55,6 +58,11 @@ int main(int argc, char* argv[])
     int zmq_major, zmq_minor, zmq_patch;
     zmq_version(&zmq_major, &zmq_minor, &zmq_patch);
     std::cout << "ZeroMQ version: " << zmq_major << "." << zmq_minor << "." << zmq_patch << std::endl;
+
+    // leveldb test
+    std::cout << "LevelDB version " << leveldb::kMajorVersion << "." << leveldb::kMinorVersion << std::endl;
+    leveldb::Env* penv = leveldb::NewMemEnv(leveldb::Env::Default());
+    delete penv;
 
     // std::cout << "CClib name: " << CClib_name() << std::endl;
     // nb! libcc can't be added without bitcoin_server and other dependencies
