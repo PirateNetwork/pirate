@@ -52,10 +52,3 @@ CXXFLAGS="-arch x86_64 -I$PREFIX/include -fwrapv -fno-strict-aliasing -Wno-depre
 ./configure --prefix="${PREFIX}" --with-gui=no "$HARDENING_ARG" "$LCOV_ARG" "$DEBUGGING_ARG" --enable-static --disable-shared
 
 make "$@" NO_GTEST=1 STATIC=1
-
-# logging debug info
-sw_vers
-xcodebuild -version
-ld -v
-xxd -l 16 -g 1 ./src/komodod || true
-xxd -l 16 -g 1 ./src/test-linkage || true
