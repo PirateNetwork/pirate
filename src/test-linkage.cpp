@@ -11,6 +11,7 @@
 
 #include "komodo_cJSON.h"
 #include "hex.h"
+#include <zmq.h>
 
 char *CClib_name(); // cclib.cpp (no interface)
 
@@ -49,6 +50,11 @@ int main(int argc, char* argv[])
     std::unique_ptr<char[]> byteArray(new char[byteLen]);
     decode_hex((uint8_t *)byteArray.get(), len / 2, hexString);
     std::cerr << "Decoded hex: '" << byteArray.get() << "'" << std::endl;
+
+    // libzmq test
+    int zmq_major, zmq_minor, zmq_patch;
+    zmq_version(&zmq_major, &zmq_minor, &zmq_patch);
+    std::cout << "ZeroMQ version: " << zmq_major << "." << zmq_minor << "." << zmq_patch << std::endl;
 
     // std::cout << "CClib name: " << CClib_name() << std::endl;
     // nb! libcc can't be added without bitcoin_server and other dependencies

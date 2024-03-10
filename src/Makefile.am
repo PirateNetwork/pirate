@@ -557,6 +557,7 @@ test_linkage_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 test_linkage_LDADD = \
   $(LIBBITCOIN_COMMON) \
   $(LIBCJSON) \
+  $(ZMQ_LIBS) \
   -lcurl
 bin_PROGRAMS += test-linkage
 
