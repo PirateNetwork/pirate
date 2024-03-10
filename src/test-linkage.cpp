@@ -30,6 +30,9 @@
 #include "komodo_interest.h"
 #include "ui_interface.h"
 
+#include <secp256k1.h>
+#include <iomanip>
+
 using namespace std;
 
 // #include "komodo_nSPV_defs.h"
@@ -126,11 +129,65 @@ int main(int argc, char* argv[])
     leveldb::Env* penv = leveldb::NewMemEnv(leveldb::Env::Default());
     delete penv;
 
-    // bitcoin server test
+    /* libbitcoin server test */
     CBloomFilter filter;
     filter.clear();
     // to use this we should link GetRand from libbitcoin_util and this will require libsecp256k1 also, and libzcash_libs (lsodium) 
     // and libbitcoin crypto for hashes ... 
+
+    secp256k1_pubkey pubkey;
+    size_t pubkeylen = 0;
+
+    std::cout << "Public Key: ";
+    for (int i = 0; i < sizeof(pubkey.data); ++i) {
+        std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(pubkey.data[i]);
+    }
+    std::cout << std::dec << std::endl;
+
+    /* libbitcoin_util call */
+    std::vector<unsigned char>vch(32, 0);
+    std::cout << "Zero bytes  : " << HexStr(vch, true) << std::endl;
+    GetRandBytes(vch.data(), vch.size());
+    std::cout << "Random bytes: " << HexStr(vch, true) << std::endl;
+
+    /* libsecp256k1 call */
+    secp256k1_context *ctx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
+    unsigned char seed[32];
+    LockObject(seed);
+    GetRandBytes(seed, 32);
+    bool ret = secp256k1_context_randomize(ctx, seed);
+    UnlockObject(seed);
+    std::cerr << secp256k1_ec_pubkey_create(ctx, &pubkey, vch.data()) << std::endl;
+    if (ctx) {
+        secp256k1_context_destroy(ctx);
+    }
+
+    /* libbitcoin common call */
+    CScript script = CScript() << OP_1;
+    std::cout << script.ToString() << std::endl;
+
+    /* libunivalue call */
+    UniValue obj(UniValue::VOBJ);
+    obj.push_back(Pair("status", "still buggy =)"));
+    std::cout << obj.write() << std::endl;
+
+    /* libbitcoin crypto call */
+    string data = "DECKER";
+    uint256 sha256;
+    CSHA256().Write((const unsigned char *)data.c_str(), data.length()).Finalize(sha256.begin());
+    std::cout << sha256.ToString() << std::endl;
+    std::cout << HexStr(sha256) << std::endl;
+
+    /* libzcash call */
+    std::vector<unsigned char> bytes{1, 1, 1, 0, 0, 0, 1, 1, 1};
+    std::vector<bool> vBool = convertBytesVectorToVector(bytes);
+    std::cout << "vBool contents: ";
+    for (const bool bit : vBool) {
+        std::cout << bit;
+    }
+    std::cout << std::endl;
+
+    /* libcryptoconditions call */
 
     // std::cout << "CClib name: " << CClib_name() << std::endl;
     // nb! libcc can't be added without bitcoin_server and other dependencies
