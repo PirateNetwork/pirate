@@ -72,7 +72,9 @@ EXTRA_LIBRARIES += \
   $(LIBBITCOIN_COMMON) \
   $(LIBBITCOIN_SERVER) \
   $(LIBBITCOIN_CLI) \
-  libzcash.a
+  libzcash.a \
+  $(LIBCC)
+
 if ENABLE_WALLET
 BITCOIN_INCLUDES += $(BDB_CPPFLAGS)
 EXTRA_LIBRARIES += $(LIBBITCOIN_WALLET)
@@ -84,7 +86,7 @@ if ENABLE_PROTON
 EXTRA_LIBRARIES += $(LIBBITCOIN_PROTON)
 endif
 
-lib_LTLIBRARIES = $(LIBZCASH_CONSENSUS) $(LIBCC)
+lib_LTLIBRARIES = $(LIBZCASH_CONSENSUS)
 
 bin_PROGRAMS =
 noinst_PROGRAMS =
@@ -364,10 +366,10 @@ libbitcoin_wallet_a_SOURCES = \
   $(BITCOIN_CORE_H) \
   $(LIBZCASH_H)
 
-# a shared library for cryptoconditions
+# a static library for cryptoconditions
 libcc_a_SOURCES = cc/cclib.cpp
 libcc_a_CXXFLAGS = -DBUILD_CUSTOMCC -I../secp256k1/include -I../depends/$(shell echo `../depends/config.guess`/include) -I./univalue/include -I./cryptoconditions/include -I./cryptoconditions/src -I./cryptoconditions/src/asn -I. -I./cc
-libcc_a_LDFLAGS = -version-info 0:0:0
+# libcc_a_LDFLAGS = -version-info 0:0:0
 
 # crypto primitives library
 crypto_libbitcoin_crypto_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_CONFIG_INCLUDES)
