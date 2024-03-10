@@ -16,8 +16,69 @@
 #include <leveldb/env.h>
 #include <memenv.h>
 
-char *CClib_name(); // cclib.cpp (no interface)
+#include "assetchain.h"
+#include "bloom.h"
+#include "amount.h"
+#include "consensus/params.h"
+#include "key_io.h"
+#include "main.h"
+#include "wallet/wallet.h"
+#include <univalue.h>
+#include "cc/CCinclude.h"
+#include "komodo_utils.h"
+#include "komodo_notary.h"
+#include "komodo_interest.h"
+#include "ui_interface.h"
 
+using namespace std;
+
+// #include "komodo_nSPV_defs.h"
+// #include "komodo_nSPV.h"            // shared defines, structs, serdes, purge functions
+// #include "komodo_nSPV_fullnode.h"   // nSPV fullnode handling of the getnSPV request messages
+// #include "komodo_nSPV_superlite.h"  // nSPV superlite client, issuing requests and handling nSPV responses
+// #include "komodo_nSPV_wallet.h"     // nSPV_send and support functions, really all the rest is to support this
+
+/* --- stubs for linkage --- */
+CCriticalSection cs_main;
+BlockMap mapBlockIndex;
+CChain chainActive;
+bool ShutdownRequested() { return false; }
+void StartShutdown() {}
+CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams) { return 0; }
+uint8_t is_STAKED(const std::string& symbol) { return 0; }
+bool IsInitialBlockDownload() { return false; }
+bool GetTransaction(const uint256 &hash, CTransaction &txOut, uint256 &hashBlock, bool fAllowSlow) { return false; }
+bool myGetTransaction(const uint256 &hash, CTransaction &txOut, uint256 &hashBlock) { return false; }
+bool EnsureWalletIsAvailable(bool avoidException) { return true; }
+
+uint32_t GetLatestTimestamp(int32_t height) { return 0; } // CCutils.cpp
+struct NSPV_inforesp NSPV_inforesult;
+char NSPV_pubkeystr[67],NSPV_wifstr[64];
+
+int32_t STAKED_era(int timestamp) { return 0; } // notaries_staked.cpp
+int8_t numStakedNotaries(uint8_t pubkeys[64][33],int8_t era) { return 0; }
+int32_t komodo_longestchain() { return -1; }
+uint64_t komodo_interestsum() { return 0; } // we don't link agains libbitcoin_wallet_a, so should have stubs
+// uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight) { return 0; }
+CClientUIInterface uiInterface;
+bool pubkey2addr(char *destaddr,uint8_t *pubkey33) { return false; }
+void UpdateNotaryAddrs(uint8_t pubkeys[64][33],int8_t numNotaries) { }
+uint256 GetMerkleRoot(const std::vector<uint256>& vLeaves) { return uint256(); } // cc/eval.cpp
+bool CheckEquihashSolution(const CBlockHeader *pblock, const CChainParams& params) { return false; } //pow.cpp
+isminetype IsMine(const CKeyStore& keystore, const CTxDestination& dest) { return ISMINE_NO; }
+CMutableTransaction CreateNewContextualCMutableTransaction(const Consensus::Params& consensusParams, int nHeight) { return CMutableTransaction(); }
+FILE* OpenBlockFile(const CDiskBlockPos &pos, bool fReadOnly) { return nullptr; }
+// bool ReadBlockFromDisk(int32_t height,CBlock& block, const CDiskBlockPos& pos,bool checkPOW) { return false; }
+bool ReadBlockFromDisk(CBlock& block, const CBlockIndex* pindex,bool checkPOW) { return false; }
+void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const CCoinControl *coinControl, bool fIncludeZeroValue, bool fIncludeCoinBase) const {}
+
+CScript COINBASE_FLAGS;
+
+assetchain chainName;
+#ifdef ENABLE_WALLET
+CWallet* pwalletMain = nullptr;
+#endif
+/* --- stubs for linkage --- */
 
 int main(int argc, char* argv[])
 {
@@ -37,7 +98,8 @@ int main(int argc, char* argv[])
 
     std::cout << "Boost version: "
               << BOOST_VERSION / 100000 << "."     // Major version
-              << BOOST_VERSION / 100 % 1000 << "." // Minor version
+              << BOOST_VERSION / 100 % 1000
+               << "." // Minor version
               << BOOST_VERSION % 100               // Patch version
               << std::endl;
 
@@ -63,6 +125,12 @@ int main(int argc, char* argv[])
     std::cout << "LevelDB version " << leveldb::kMajorVersion << "." << leveldb::kMinorVersion << std::endl;
     leveldb::Env* penv = leveldb::NewMemEnv(leveldb::Env::Default());
     delete penv;
+
+    // bitcoin server test
+    CBloomFilter filter;
+    filter.clear();
+    // to use this we should link GetRand from libbitcoin_util and this will require libsecp256k1 also, and libzcash_libs (lsodium) 
+    // and libbitcoin crypto for hashes ... 
 
     // std::cout << "CClib name: " << CClib_name() << std::endl;
     // nb! libcc can't be added without bitcoin_server and other dependencies
