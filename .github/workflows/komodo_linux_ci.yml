@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-20.04
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Install deps (Linux)
 
@@ -54,7 +54,7 @@ jobs:
     needs: linux-build
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Install deps (Dice, Token, Faucet, Rewards CC)
         run: |
@@ -91,7 +91,7 @@ jobs:
     needs: linux-build
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Install deps (OraclesCC)
         run: |
@@ -128,7 +128,7 @@ jobs:
     needs: linux-build
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Install deps (BasicRPC)
         run: |
@@ -165,7 +165,7 @@ jobs:
     needs: linux-build
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Install deps (ChannelsCC)
         run: |
@@ -202,7 +202,7 @@ jobs:
     needs: linux-build
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Install deps (HeirCC)
         run: |

@@ -13,7 +13,7 @@ jobs:
     runs-on: macos-13
     
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       # Workaround for https://github.com/actions/setup-python/issues/577
       - name: Clean up binaries and links (macOS)
@@ -63,7 +63,7 @@ jobs:
     needs: macos-build
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Install deps (Dice, Token, Faucet, Rewards CC)
         run: |
@@ -93,7 +93,7 @@ jobs:
     needs: macos-build
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Install deps (OraclesCC)
         run: |
@@ -122,7 +122,7 @@ jobs:
     needs: macos-build
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Install deps (BasicRPC)
         run: |
@@ -151,7 +151,7 @@ jobs:
     needs: macos-build
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Install deps (ChannelsCC)
         run: |
@@ -180,7 +180,7 @@ jobs:
     needs: macos-build
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       - name: Install deps (HeirCC)
         run: |
