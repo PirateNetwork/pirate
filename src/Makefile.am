@@ -549,32 +549,6 @@ if ENABLE_PROTON
 komodod_LDADD += $(LIBBITCOIN_PROTON) $(PROTON_LIBS)
 endif
 
-# test-linkage binary #
-test_linkage_SOURCES = test-linkage.cpp
-test_linkage_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(EVENT_CFLAGS)
-test_linkage_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
-test_linkage_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
-test_linkage_LDADD = \
-  $(LIBBITCOIN_SERVER) \
-  $(LIBBITCOIN_COMMON) \
-  $(LIBUNIVALUE) \
-  $(LIBBITCOIN_UTIL) \
-  $(LIBBITCOIN_CRYPTO) \
-  $(LIBZCASH) \
-  $(LIBLEVELDB) \
-  $(LIBMEMENV) \
-  $(LIBSECP256K1) \
-  $(LIBCRYPTOCONDITIONS) \
-  $(LIBCJSON) \
-  $(BOOST_LIBS) \
-  $(ZMQ_LIBS) \
-  $(LIBZCASH) \
-  $(LIBBITCOIN_CRYPTO) \
-  $(LIBZCASH_LIBS) \
-  $(LIBCC) \
-  -lcurl
-bin_PROGRAMS += test-linkage
-
 # bitcoin-cli binary #
 komodo_cli_SOURCES = bitcoin-cli.cpp
 komodo_cli_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(EVENT_CFLAGS)
