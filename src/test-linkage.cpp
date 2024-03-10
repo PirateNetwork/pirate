@@ -7,6 +7,10 @@
 #include "config/bitcoin-config.h"
 #endif
 
+#include "komodo_cJSON.h"
+
+char *CClib_name(); // cclib.cpp (no interface)
+
 int main(int argc, char* argv[])
 {
     std::string sPackageString = "v0.01a";
@@ -30,4 +34,27 @@ int main(int argc, char* argv[])
               << std::endl;
 
     curl_global_cleanup();
+
+    std::cout << "cJSON version: " << cJSON_Version() << std::endl;
+
+    // std::cout << "CClib name: " << CClib_name() << std::endl;
+    // nb! libcc can't be added without bitcoin_server and other dependencies
+
+    /*
+
+    Remaining libs to test:
+
+    $(LIBBITCOIN_SERVER)
+    $(LIBBITCOIN_ZMQ)
+    $(LIBBITCOIN_PROTON)
+    $(LIBLEVELDB)
+    $(LIBMEMENV)
+    $(EVENT_PTHREADS_LIBS)
+    $(ZMQ_LIBS)
+    $(PROTON_LIBS)
+    $(LIBCC)
+    -lcurl (explicitly added)
+
+    libbitcoin_wallet.a
+    */
 }

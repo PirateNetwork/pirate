@@ -72,7 +72,7 @@ EXTRA_LIBRARIES += \
   $(LIBBITCOIN_COMMON) \
   $(LIBBITCOIN_SERVER) \
   $(LIBBITCOIN_CLI) \
-  libzcash.a \
+  $(LIBZCASH) \
   $(LIBCC)
 
 if ENABLE_WALLET
@@ -555,6 +555,7 @@ test_linkage_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(EVENT_CFLAGS)
 test_linkage_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 test_linkage_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 test_linkage_LDADD = \
+  $(LIBCJSON) \
   -lcurl
 bin_PROGRAMS += test-linkage
 
