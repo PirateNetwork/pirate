@@ -21,6 +21,7 @@
 #include "amount.h"
 #include "consensus/params.h"
 #include "key_io.h"
+#include "cc/CCinclude.h"
 #include "main.h"
 #include "wallet/wallet.h"
 #include <univalue.h>
@@ -37,6 +38,7 @@
 
 #include <boost/thread.hpp>
 #include <sodium.h>
+#include "librustzcash.h"
 
 using namespace std;
 
@@ -60,6 +62,8 @@ bool myGetTransaction(const uint256 &hash, CTransaction &txOut, uint256 &hashBlo
 bool EnsureWalletIsAvailable(bool avoidException) { return true; }
 
 uint32_t GetLatestTimestamp(int32_t height) { return 0; } // CCutils.cpp
+bool pubkey2addr(char *destaddr,uint8_t *pubkey33) { return false; }
+
 struct NSPV_inforesp NSPV_inforesult;
 char NSPV_pubkeystr[67],NSPV_wifstr[64];
 
@@ -69,7 +73,6 @@ int32_t komodo_longestchain() { return -1; }
 uint64_t komodo_interestsum() { return 0; } // we don't link agains libbitcoin_wallet_a, so should have stubs
 // uint64_t komodo_accrued_interest(int32_t *txheightp,uint32_t *locktimep,uint256 hash,int32_t n,int32_t checkheight,uint64_t checkvalue,int32_t tipheight) { return 0; }
 CClientUIInterface uiInterface;
-bool pubkey2addr(char *destaddr,uint8_t *pubkey33) { return false; }
 void UpdateNotaryAddrs(uint8_t pubkeys[64][33],int8_t numNotaries) { }
 uint256 GetMerkleRoot(const std::vector<uint256>& vLeaves) { return uint256(); } // cc/eval.cpp
 bool CheckEquihashSolution(const CBlockHeader *pblock, const CChainParams& params) { return false; } //pow.cpp
@@ -217,7 +220,7 @@ int main(int argc, char* argv[])
     std::cout << "This message is printed from the main thread." << std::endl;
     myThread.join();
 
-    /* sodium, rustzcash calls */
+    /* sodium call */
     if (sodium_init() < 0) {
         std::cerr << "Error initializing Libsodium" << std::endl;
     } else {
@@ -225,6 +228,15 @@ int main(int argc, char* argv[])
         std::cout << "Libsodium version: " << version << std::endl;
     }
 
+    /* librustzcash calls */
+    auto ctx_librustzcash = librustzcash_sapling_proving_ctx_init();
+    librustzcash_sapling_proving_ctx_free(ctx_librustzcash);
+
+    /* libcc calls */
+
+    /* after this main.o should be linked to the project as a part of libbitcoin_server */
+    // char destaddr[65];
+    // Getscriptaddress(destaddr,CScript());
 
     // std::cout << "CClib name: " << CClib_name() << std::endl;
     // nb! libcc can't be added without bitcoin_server and other dependencies
