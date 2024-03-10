@@ -45,7 +45,7 @@ jobs:
         run: |
           # flag for some CC tests transactions - so DO NOT USE THIS CI ARTIFACTS IN PRODUCTION!!!
           ./zcutil/build-mac-dtest.sh -j4
-          tar -czvf komodo-macos.tar.gz src/komodod src/komodo-cli
+          tar -czvf komodo-macos.tar.gz src/komodod src/komodo-cli src/wallet-utility src/komodo-tx
         # env:
         #   DEVELOPER_DIR: /Applications/Xcode_13.2.1.app/Contents/Developer
 
