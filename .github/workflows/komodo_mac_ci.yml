@@ -45,15 +45,20 @@ jobs:
         run: |
           # flag for some CC tests transactions - so DO NOT USE THIS CI ARTIFACTS IN PRODUCTION!!!
           ./zcutil/build-mac-dtest.sh -j4
-          tar -czvf komodo-macos.tar.gz src/komodod src/komodo-cli src/wallet-utility src/komodo-tx src/test-linkage
+        # tar -czvf komodo-macos.tar.gz src/komodod src/komodo-cli src/wallet-utility src/komodo-tx src/test-linkage
         # env:
         #   DEVELOPER_DIR: /Applications/Xcode_13.2.1.app/Contents/Developer
 
-      - name: Upload komodo-macos.tar.gz as artifact
-        uses: actions/upload-artifact@v1
+      - name: Upload binaries as artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: komodo-macos
-          path: ./komodo-macos.tar.gz
+          path: |
+            ./src/komodod
+            ./src/komodo-cli
+            ./src/wallet-utility
+            ./src/komodo-tx
+            ./src/test-linkage
 
   macos-test-dice-token-reards-faucet-cc:
     if: ${{ false }}
