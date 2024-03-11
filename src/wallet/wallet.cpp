@@ -271,16 +271,16 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingDiversifiedAddress()
     auto ivk = extsk.expsk.full_viewing_key().in_viewing_key();
     SaplingPaymentAddress addr;
     blob88 diversifier;
+    arith_uint88 div;
 
     //Initalize diversifier
-    for (int j = 0; j < diversifier.size(); j++) {
-        diversifier.begin()[j] = 0;
-    }
+    diversifier = ArithToUint88(div);
 
     //Get Last used diversifier if one exists
     for (auto entry : mapLastDiversifierPath) {
         if (entry.first == ivk) {
             diversifier = entry.second;
+            div = UintToArith88(diversifier);
         }
     }
 
@@ -297,19 +297,8 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingDiversifiedAddress()
       }
 
       //increment the diversifier
-      for (int j = 0; j < diversifier.size(); j++) {
-          int i = diversifier.begin()[j];
-          diversifier.begin()[j]++;
-          i++;
-          if ( i >= 256) {
-              diversifier.begin()[j] = 0;
-          } else {
-            break;
-          }
-          //Should only be reached after all combinations have been tried
-          if (i >= 256 && j+1 == diversifier.size())
-              throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): Unable to find new diversified address with the current key");
-      }
+      div++;
+      diversifier = ArithToUint88(div);
 
     }
     while (!found);
