@@ -2256,6 +2256,8 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex) {
 
         //Rebuild
         if (rebuildWallet) {
+            //Disable the RPC z_sendmany RPC while rebuilding
+            fBuilingWitnessCache = true;
 
             //Don't recheck after a rebuild
             saplingWalletValidated = true;
@@ -2424,6 +2426,9 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex) {
             }
         }
     }
+
+    fInitWitnessesBuilt = true;
+    fBuilingWitnessCache = false;
 
     // This assertion slows scanning for blocks with few shielded transactions by an
     // order of magnitude. It is only intended as a consistency check between the node
