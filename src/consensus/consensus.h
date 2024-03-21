@@ -22,8 +22,8 @@
 #define BITCOIN_CONSENSUS_CONSENSUS_H
 
 #if defined(_MSC_VER) || defined(macintosh) || defined(__APPLE__) || defined(__APPLE_CC__)
-typedef signed int            int32_t;
-typedef unsigned int          uint32_t;
+typedef signed int int32_t;
+typedef unsigned int uint32_t;
 #endif
 
 #if defined(linux) || defined(__linux)
@@ -49,13 +49,17 @@ static const int32_t OVERWINTER_MAX_TX_VERSION = 3;
 static const int32_t SAPLING_MIN_TX_VERSION = 4;
 /** The maximum allowed Sapling transaction version (network rule) */
 static const int32_t SAPLING_MAX_TX_VERSION = 4;
+/** The minimum allowed Orchard transaction version (network rule) */
+static const int32_t ORCHARD_MIN_TX_VERSION = 5;
+/** The maximum allowed Orchard transaction version (network rule) */
+static const int32_t ORCHARD_MAX_TX_VERSION = 5;
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
-//static const unsigned int MAX_BLOCK_SIZE = 2000000;
+// static const unsigned int MAX_BLOCK_SIZE = 2000000;
 /** The maximum allowed number of signature check operations in a block (network rule) */
 extern unsigned int MAX_BLOCK_SIGOPS;
 /** The maximum size of a transaction (network rule) */
 static const unsigned int MAX_TX_SIZE_BEFORE_SAPLING = 100000;
-static const unsigned int MAX_TX_SIZE_AFTER_SAPLING = (2 * MAX_TX_SIZE_BEFORE_SAPLING); //MAX_BLOCK_SIZE;
+static const unsigned int MAX_TX_SIZE_AFTER_SAPLING = (2 * MAX_TX_SIZE_BEFORE_SAPLING); // MAX_BLOCK_SIZE;
 /** The minimum value which is invalid for expiry height, used by CTransaction and CMutableTransaction */
 static constexpr uint32_t TX_EXPIRY_HEIGHT_THRESHOLD = 500000000;
 /** The number of blocks after Canopy activation after which v1 plaintexts will be rejected */

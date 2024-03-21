@@ -1,6 +1,8 @@
 use crate::{
     bundlecache::init as bundlecache_init,
-    merkle_frontier::{new_sapling, sapling_empty_root, parse_sapling, SaplingFrontier, SaplingWallet},
+    merkle_frontier::{
+        new_sapling, parse_sapling, sapling_empty_root, SaplingFrontier, SaplingWallet,
+    },
     params::{network, Network},
     sapling::{
         apply_sapling_bundle_signatures, build_sapling_bundle, finish_bundle_assembly,
@@ -13,7 +15,7 @@ use crate::{
     },
     streams::{
         from_auto_file, from_blake2b_writer, from_buffered_file, from_data, from_hash_writer,
-        from_size_computer, CppStream,
+        from_secure_data, from_size_computer, CppStream,
     },
     test_harness_ffi::{
         test_only_invalid_sapling_bundle, test_only_replace_sapling_nullifier,
@@ -25,12 +27,14 @@ use crate::{
 #[cxx::bridge]
 pub(crate) mod ffi {
 
-        extern "C++" {
+    extern "C++" {
         include!("hash.h");
         include!("streams.h");
 
         #[cxx_name = "RustDataStream"]
         type RustStream = crate::streams::ffi::RustStream;
+        #[cxx_name = "SecureRustDataStream"]
+        type SecureRustStream = crate::streams::ffi::SecureRustStream;
         type CAutoFile = crate::streams::ffi::CAutoFile;
         type CBufferedFile = crate::streams::ffi::CBufferedFile;
         type CHashWriter = crate::streams::ffi::CHashWriter;
@@ -42,6 +46,7 @@ pub(crate) mod ffi {
         type CppStream<'a>;
 
         fn from_data(stream: Pin<&mut RustStream>) -> Box<CppStream<'_>>;
+        fn from_secure_data(stream: Pin<&mut SecureRustStream>) -> Box<CppStream<'_>>;
         fn from_auto_file(file: Pin<&mut CAutoFile>) -> Box<CppStream<'_>>;
         fn from_buffered_file(file: Pin<&mut CBufferedFile>) -> Box<CppStream<'_>>;
         fn from_hash_writer(writer: Pin<&mut CHashWriter>) -> Box<CppStream<'_>>;
@@ -130,7 +135,9 @@ pub(crate) mod ffi {
         fn recursive_dynamic_usage(self: &SaplingBundle) -> usize;
         fn is_present(self: &SaplingBundle) -> bool;
         fn spends(self: &SaplingBundle) -> Vec<Spend>;
+        fn get_spend(self: &SaplingBundle, spend_index: usize) -> Result<Box<Spend>>;
         fn outputs(self: &SaplingBundle) -> Vec<Output>;
+        fn get_output(self: &SaplingBundle, out_index: usize) -> Result<Box<Output>>;
         fn num_spends(self: &SaplingBundle) -> usize;
         fn num_outputs(self: &SaplingBundle) -> usize;
         fn value_balance_zat(self: &SaplingBundle) -> i64;
@@ -268,7 +275,10 @@ pub(crate) mod ffi {
         fn dynamic_memory_usage(self: &SaplingFrontier) -> usize;
         fn root(self: &SaplingFrontier) -> [u8; 32];
         fn size(self: &SaplingFrontier) -> u64;
-        fn append_bundle(self: &mut SaplingFrontier, sapling_bundle: &SaplingBundle) -> Result<SaplingAppendResult>;
+        fn append_bundle(
+            self: &mut SaplingFrontier,
+            sapling_bundle: &SaplingBundle,
+        ) -> Result<SaplingAppendResult>;
         unsafe fn init_wallet(self: &SaplingFrontier, wallet: *mut SaplingWallet) -> bool;
     }
 }
