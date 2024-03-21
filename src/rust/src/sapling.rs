@@ -41,9 +41,9 @@ use super::{
 };
 use crate::params::Network;
 use crate::{
+    bridge::ffi,
     bundlecache::{sapling_bundle_validity_cache, sapling_bundle_validity_cache_mut, CacheEntries},
     streams::CppStream,
-    bridge::ffi,
 };
 
 pub(crate) mod spec;
@@ -243,6 +243,20 @@ impl Bundle {
             .collect()
     }
 
+    pub(crate) fn get_spend(&self, spend_index: usize) -> Result<Box<Spend>, String> {
+        let bundle = match &self.0 {
+            Some(b) => b,
+            None => return Err(format!("Failed to retireve sapling bundle")),
+        };
+
+        let spend = match bundle.shielded_spends().iter().nth(spend_index) {
+            Some(s) => s.clone(),
+            None => return Err(format!("Failed to retireve spend description")),
+        };
+
+        return Ok(Box::new(Spend(spend)));
+    }
+
     pub(crate) fn outputs(&self) -> Vec<Output> {
         self.0
             .iter()
@@ -250,6 +264,20 @@ impl Bundle {
             .cloned()
             .map(Output)
             .collect()
+    }
+
+    pub(crate) fn get_output(&self, out_index: usize) -> Result<Box<Output>, String> {
+        let bundle = match &self.0 {
+            Some(b) => b,
+            None => return Err(format!("Failed to retireve sapling bundle")),
+        };
+
+        let output = match bundle.shielded_outputs().iter().nth(out_index) {
+            Some(o) => o.clone(),
+            None => return Err(format!("Failed to retireve ouput description")),
+        };
+
+        return Ok(Box::new(Output(output)));
     }
 
     pub(crate) fn num_spends(&self) -> usize {

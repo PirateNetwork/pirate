@@ -12,6 +12,19 @@ pub(crate) mod ffi {
         unsafe fn read_u8(self: Pin<&mut RustStream>, pch: *mut u8, nSize: usize) -> Result<()>;
         unsafe fn write_u8(self: Pin<&mut RustStream>, pch: *const u8, nSize: usize) -> Result<()>;
 
+        #[cxx_name = "SecureRustDataStream"]
+        type SecureRustStream;
+        unsafe fn read_u8(
+            self: Pin<&mut SecureRustStream>,
+            pch: *mut u8,
+            nSize: usize,
+        ) -> Result<()>;
+        unsafe fn write_u8(
+            self: Pin<&mut SecureRustStream>,
+            pch: *const u8,
+            nSize: usize,
+        ) -> Result<()>;
+
         type CAutoFile;
         unsafe fn read_u8(self: Pin<&mut CAutoFile>, pch: *mut u8, nSize: usize) -> Result<()>;
         unsafe fn write_u8(self: Pin<&mut CAutoFile>, pch: *const u8, nSize: usize) -> Result<()>;
@@ -39,6 +52,7 @@ pub(crate) mod ffi {
     }
 
     impl UniquePtr<RustStream> {}
+    impl UniquePtr<SecureRustStream> {}
     impl UniquePtr<CAutoFile> {}
     impl UniquePtr<CBufferedFile> {}
     impl UniquePtr<CHashWriter> {}
@@ -48,6 +62,10 @@ pub(crate) mod ffi {
 
 pub(crate) fn from_data(stream: Pin<&mut ffi::RustStream>) -> Box<CppStream<'_>> {
     Box::new(CppStream::Data(stream))
+}
+
+pub(crate) fn from_secure_data(stream: Pin<&mut ffi::SecureRustStream>) -> Box<CppStream<'_>> {
+    Box::new(CppStream::SecureData(stream))
 }
 
 pub(crate) fn from_auto_file(file: Pin<&mut ffi::CAutoFile>) -> Box<CppStream<'_>> {
@@ -72,6 +90,7 @@ pub(crate) fn from_size_computer(sc: Pin<&mut ffi::CSizeComputer>) -> Box<CppStr
 
 pub(crate) enum CppStream<'a> {
     Data(Pin<&'a mut ffi::RustStream>),
+    SecureData(Pin<&'a mut ffi::SecureRustStream>),
     AutoFile(Pin<&'a mut ffi::CAutoFile>),
     BufferedFile(Pin<&'a mut ffi::CBufferedFile>),
     Hash(Pin<&'a mut ffi::CHashWriter>),
@@ -85,6 +104,9 @@ impl<'a> io::Read for CppStream<'a> {
         let len = buf.len();
         match self {
             CppStream::Data(inner) => unsafe { inner.as_mut().read_u8(pch, len) }
+                .map(|()| buf.len())
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e)),
+            CppStream::SecureData(inner) => unsafe { inner.as_mut().read_u8(pch, len) }
                 .map(|()| buf.len())
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e)),
             CppStream::AutoFile(inner) => unsafe { inner.as_mut().read_u8(pch, len) }
@@ -115,6 +137,9 @@ impl<'a> io::Write for CppStream<'a> {
         let len = buf.len();
         match self {
             CppStream::Data(inner) => unsafe { inner.as_mut().write_u8(pch, len) }
+                .map(|()| buf.len())
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e)),
+            CppStream::SecureData(inner) => unsafe { inner.as_mut().write_u8(pch, len) }
                 .map(|()| buf.len())
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e)),
             CppStream::AutoFile(inner) => unsafe { inner.as_mut().write_u8(pch, len) }

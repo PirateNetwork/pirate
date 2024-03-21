@@ -13,6 +13,7 @@
 #include <rust/cxx.h>
 
 rust::Box<stream::CppStream> ToRustStream(RustDataStream& stream);
+rust::Box<stream::CppStream> ToRustStream(SecureRustDataStream& stream);
 rust::Box<stream::CppStream> ToRustStream(CAutoFile& file);
 rust::Box<stream::CppStream> ToRustStream(CBufferedFile& file);
 rust::Box<stream::CppStream> ToRustStream(CHashWriter& writer);

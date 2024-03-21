@@ -24,9 +24,9 @@
 #include "serialize.h"
 #include "streams.h"
 #include "support/allocators/secure.h"
+#include "wallet/walletdb.h"
 #include "zcash/Address.hpp"
 #include "zcash/address/zip32.h"
-#include "wallet/walletdb.h"
 
 class uint256;
 
@@ -65,7 +65,8 @@ public:
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action) {
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
         READWRITE(vchCryptedKey);
         READWRITE(vchSalt);
         READWRITE(nDerivationMethod);
@@ -83,20 +84,6 @@ public:
     }
 };
 
-typedef std::vector<unsigned char, secure_allocator<unsigned char> > CKeyingMaterial;
-
-class CSecureDataStream : public CBaseDataStream<CKeyingMaterial>
-{
-public:
-    explicit CSecureDataStream(int nTypeIn, int nVersionIn) : CBaseDataStream(nTypeIn, nVersionIn) { }
-
-    CSecureDataStream(const_iterator pbegin, const_iterator pend, int nTypeIn, int nVersionIn) :
-            CBaseDataStream(pbegin, pend, nTypeIn, nVersionIn) { }
-
-    CSecureDataStream(const vector_type& vchIn, int nTypeIn, int nVersionIn) :
-            CBaseDataStream(vchIn, nTypeIn, nVersionIn) { }
-};
-
 /** Encryption/decryption context with key information */
 class CCrypter
 {
@@ -106,8 +93,8 @@ private:
     bool fKeySet;
 
 public:
-    bool SetKeyFromPassphrase(const SecureString &strKeyData, const std::vector<unsigned char>& chSalt, const unsigned int nRounds, const unsigned int nDerivationMethod);
-    bool Encrypt(const CKeyingMaterial& vchPlaintext, std::vector<unsigned char> &vchCiphertext);
+    bool SetKeyFromPassphrase(const SecureString& strKeyData, const std::vector<unsigned char>& chSalt, const unsigned int nRounds, const unsigned int nDerivationMethod);
+    bool Encrypt(const CKeyingMaterial& vchPlaintext, std::vector<unsigned char>& vchCiphertext);
     bool Decrypt(const std::vector<unsigned char>& vchCiphertext, CKeyingMaterial& vchPlaintext);
     bool SetKey(const CKeyingMaterial& chNewKey, const std::vector<unsigned char>& chNewIV);
 
@@ -170,8 +157,9 @@ public:
     {
     }
 
-    void SetDBCrypted() {
-      fUseCrypto = true;
+    void SetDBCrypted()
+    {
+        fUseCrypto = true;
     }
 
     bool IsCrypted() const
@@ -194,13 +182,13 @@ public:
     bool Lock();
 
     bool SetHDSeed(const HDSeed& seed);
-    bool SetCryptedHDSeed(const uint256& seedFp, const std::vector<unsigned char> &vchCryptedSecret);
+    bool SetCryptedHDSeed(const uint256& seedFp, const std::vector<unsigned char>& vchCryptedSecret);
     bool HaveHDSeed() const;
     bool GetHDSeed(HDSeed& seedOut) const;
-    bool GetSeedPhrase(std::string &phraseOut) const;
+    bool GetSeedPhrase(std::string& phraseOut) const;
 
-    bool AddCryptedKey(const CPubKey &vchPubKey, const std::vector<unsigned char> &vchCryptedSecret);
-    bool HaveKey(const CKeyID &address) const
+    bool AddCryptedKey(const CPubKey& vchPubKey, const std::vector<unsigned char>& vchCryptedSecret);
+    bool HaveKey(const CKeyID& address) const
     {
         {
             LOCK(cs_KeyStore);
@@ -210,29 +198,27 @@ public:
         }
         return false;
     }
-    bool GetKey(const CKeyID &address, CKey& keyOut) const;
-    bool GetPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const;
-    void GetKeys(std::set<CKeyID> &setAddress) const
+    bool GetKey(const CKeyID& address, CKey& keyOut) const;
+    bool GetPubKey(const CKeyID& address, CPubKey& vchPubKeyOut) const;
+    void GetKeys(std::set<CKeyID>& setAddress) const
     {
-        if (!IsCrypted())
-        {
+        if (!IsCrypted()) {
             CBasicKeyStore::GetKeys(setAddress);
             return;
         }
         setAddress.clear();
         CryptedKeyMap::const_iterator mi = mapCryptedKeys.begin();
-        while (mi != mapCryptedKeys.end())
-        {
+        while (mi != mapCryptedKeys.end()) {
             setAddress.insert((*mi).first);
             mi++;
         }
     }
     virtual bool AddCryptedSproutSpendingKey(
-        const libzcash::SproutPaymentAddress &address,
-        const libzcash::ReceivingKey &rk,
-        const std::vector<unsigned char> &vchCryptedSecret);
-    bool AddSproutSpendingKey(const libzcash::SproutSpendingKey &sk);
-    bool HaveSproutSpendingKey(const libzcash::SproutPaymentAddress &address) const
+        const libzcash::SproutPaymentAddress& address,
+        const libzcash::ReceivingKey& rk,
+        const std::vector<unsigned char>& vchCryptedSecret);
+    bool AddSproutSpendingKey(const libzcash::SproutSpendingKey& sk);
+    bool HaveSproutSpendingKey(const libzcash::SproutPaymentAddress& address) const
     {
         {
             LOCK(cs_KeyStore);
@@ -242,18 +228,16 @@ public:
         }
         return false;
     }
-    bool GetSproutSpendingKey(const libzcash::SproutPaymentAddress &address, libzcash::SproutSpendingKey &skOut) const;
-    void GetSproutPaymentAddresses(std::set<libzcash::SproutPaymentAddress> &setAddress) const
+    bool GetSproutSpendingKey(const libzcash::SproutPaymentAddress& address, libzcash::SproutSpendingKey& skOut) const;
+    void GetSproutPaymentAddresses(std::set<libzcash::SproutPaymentAddress>& setAddress) const
     {
-        if (!IsCrypted())
-        {
+        if (!IsCrypted()) {
             CBasicKeyStore::GetSproutPaymentAddresses(setAddress);
             return;
         }
         setAddress.clear();
         CryptedSproutSpendingKeyMap::const_iterator mi = mapCryptedSproutSpendingKeys.begin();
-        while (mi != mapCryptedSproutSpendingKeys.end())
-        {
+        while (mi != mapCryptedSproutSpendingKeys.end()) {
             setAddress.insert((*mi).first);
             mi++;
         }
@@ -261,25 +245,25 @@ public:
 
 
     bool EncryptSerializedSecret(
-        const CKeyingMaterial &vchSecret,
+        const CKeyingMaterial& vchSecret,
         const uint256 chash,
-        std::vector<unsigned char> &vchCryptedSecret);
+        std::vector<unsigned char>& vchCryptedSecret);
     bool EncryptSerializedSecret(
-        CKeyingMaterial &vMasterKeyIn,
-        const CKeyingMaterial &vchSecret,
+        CKeyingMaterial& vMasterKeyIn,
+        const CKeyingMaterial& vchSecret,
         const uint256 chash,
-        std::vector<unsigned char> &vchCryptedSecret);
+        std::vector<unsigned char>& vchCryptedSecret);
     bool DecryptSerializedSecret(
-         const std::vector<unsigned char>& vchCryptedSecret,
-         const uint256 chash,
-         CKeyingMaterial &vchSecret);
+        const std::vector<unsigned char>& vchCryptedSecret,
+        const uint256 chash,
+        CKeyingMaterial& vchSecret);
 
     //! Sapling
     bool AddCryptedSaplingSpendingKey(
-        const libzcash::SaplingExtendedFullViewingKey &extfvk,
-        const std::vector<unsigned char> &vchCryptedSecret);
+        const libzcash::SaplingExtendedFullViewingKey& extfvk,
+        const std::vector<unsigned char>& vchCryptedSecret);
 
-    bool HaveSaplingSpendingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk) const
+    bool HaveSaplingSpendingKey(const libzcash::SaplingExtendedFullViewingKey& extfvk) const
     {
         {
             LOCK(cs_KeyStore);
@@ -293,14 +277,14 @@ public:
         }
         return false;
     }
-    bool GetSaplingSpendingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk, libzcash::SaplingExtendedSpendingKey &skOut) const;
+    bool GetSaplingSpendingKey(const libzcash::SaplingExtendedFullViewingKey& extfvk, libzcash::SaplingExtendedSpendingKey& skOut) const;
 
 
     /**
      * Wallet status (encrypted, locked) changed.
      * Note: Called without locks held.
      */
-    boost::signals2::signal<void (CCryptoKeyStore* wallet)> NotifyStatusChanged;
+    boost::signals2::signal<void(CCryptoKeyStore* wallet)> NotifyStatusChanged;
 };
 
 #endif // BITCOIN_WALLET_CRYPTER_H
