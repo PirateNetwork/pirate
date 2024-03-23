@@ -361,3 +361,262 @@ std::string CTransaction::ToString() const
         str += "    " + vout[i].ToString() + "\n";
     return str;
 }
+
+size_t CTransaction::GetSaplingSpendsCount() const
+{
+    return saplingBundle.GetSpendsCount();
+}
+
+size_t CTransaction::GetSaplingOutputsCount() const
+{
+    return saplingBundle.GetOutputsCount();
+}
+
+std::optional<uint256> CTransaction::GetSpendCV(size_t spendIndex) const
+{
+    if (spendIndex >= GetSaplingSpendsCount()) {
+        return std::nullopt;
+    }
+
+    uint256 cv;
+    auto spendRust = saplingBundle.GetDetails().get_spend(spendIndex);
+    auto rustCV = spendRust->cv();
+    std::memcpy(&cv, &rustCV, 32);
+    return cv;
+}
+
+std::optional<uint256> CTransaction::GetSpendAnchor(size_t spendIndex) const
+{
+    if (spendIndex >= GetSaplingSpendsCount()) {
+        return std::nullopt;
+    }
+
+    uint256 anchor;
+    auto spendRust = saplingBundle.GetDetails().get_spend(spendIndex);
+    auto rustAnchor = spendRust->anchor();
+    std::memcpy(&anchor, &rustAnchor, 32);
+    return anchor;
+}
+
+std::optional<uint256> CTransaction::GetSpendNullifier(size_t spendIndex) const
+{
+    if (spendIndex >= GetSaplingSpendsCount()) {
+        return std::nullopt;
+    }
+
+    uint256 nullifier;
+    auto spendRust = saplingBundle.GetDetails().get_spend(spendIndex);
+    auto rustNullifier = spendRust->nullifier();
+    std::memcpy(&nullifier, &rustNullifier, 32);
+    return nullifier;
+}
+
+std::optional<uint256> CTransaction::GetSpendRK(size_t spendIndex) const
+{
+    if (spendIndex >= GetSaplingSpendsCount()) {
+        return std::nullopt;
+    }
+
+    uint256 rk;
+    auto spendRust = saplingBundle.GetDetails().get_spend(spendIndex);
+    auto rustRK = spendRust->rk();
+    std::memcpy(&rk, &rustRK, 32);
+    return rk;
+}
+
+std::optional<libzcash::GrothProof> CTransaction::GetSpendZKProof(size_t spendIndex) const
+{
+    if (spendIndex >= GetSaplingSpendsCount()) {
+        return std::nullopt;
+    }
+
+    libzcash::GrothProof zkproof;
+    auto spendRust = saplingBundle.GetDetails().get_spend(spendIndex);
+    auto rustZKProof = spendRust->zkproof();
+    std::memcpy(&zkproof, &rustZKProof, 192);
+    return zkproof;
+}
+
+std::optional<std::array<unsigned char, 64>> CTransaction::GetSpendAuthSig(size_t spendIndex) const
+{
+    if (spendIndex >= GetSaplingSpendsCount()) {
+        return std::nullopt;
+    }
+
+    std::array<unsigned char, 64> spendAuthSig;
+    auto spendRust = saplingBundle.GetDetails().get_spend(spendIndex);
+    auto rustSpendAuthSig = spendRust->spend_auth_sig();
+    std::memcpy(&spendAuthSig, &rustSpendAuthSig, 64);
+    return spendAuthSig;
+}
+
+const rust::Vec<sapling::Spend> CTransaction::GetSaplingSpends() const
+{
+    return saplingBundle.GetDetails().spends();
+}
+
+std::vector<SpendDescription> CTransaction::GetSpendDescriptionFromBundle() const
+{
+    size_t spendCount = GetSaplingSpendsCount();
+    std::vector<SpendDescription> returnSpends;
+
+    for (size_t i = 0; i < spendCount; i++) {
+        auto spendRust = saplingBundle.GetDetails().get_spend(i);
+        SpendDescription spendDescription;
+
+        auto rustCV = spendRust->cv();
+        std::memcpy(&spendDescription.cv, &rustCV, 32);
+
+        auto rustAnchor = spendRust->anchor();
+        std::memcpy(&spendDescription.anchor, &rustAnchor, 32);
+
+        auto rustNullifier = spendRust->nullifier();
+        std::memcpy(&spendDescription.nullifier, &rustNullifier, 32);
+
+        auto rustRK = spendRust->rk();
+        std::memcpy(&spendDescription.rk, &rustRK, 32);
+
+        auto rustZKProok = spendRust->zkproof();
+        std::memcpy(&spendDescription.zkproof, &rustZKProok, 192);
+
+        auto rustSpendAuthSig = spendRust->spend_auth_sig();
+        std::memcpy(&spendDescription.spendAuthSig, &rustSpendAuthSig, 64);
+
+        returnSpends.emplace_back(spendDescription);
+    }
+
+    return returnSpends;
+}
+
+std::optional<uint256> CTransaction::GetOutputCV(size_t outIndex) const
+{
+    if (outIndex >= GetSaplingOutputsCount()) {
+        return std::nullopt;
+    }
+
+    uint256 cv;
+    auto outRust = saplingBundle.GetDetails().get_output(outIndex);
+    auto rustCV = outRust->cv();
+    std::memcpy(&cv, &rustCV, 32);
+    return cv;
+}
+
+std::optional<uint256> CTransaction::GetOutputCMU(size_t outIndex) const
+{
+    if (outIndex >= GetSaplingOutputsCount()) {
+        return std::nullopt;
+    }
+
+    uint256 cmu;
+    auto outRust = saplingBundle.GetDetails().get_output(outIndex);
+    auto rustCMU = outRust->cmu();
+    std::memcpy(&cmu, &rustCMU, 32);
+    return cmu;
+}
+
+std::optional<uint256> CTransaction::GetOutputEphemeralKey(size_t outIndex) const
+{
+    if (outIndex >= GetSaplingOutputsCount()) {
+        return std::nullopt;
+    }
+
+    uint256 ephemeralKey;
+    auto outRust = saplingBundle.GetDetails().get_output(outIndex);
+    auto rustEphemeralKey = outRust->ephemeral_key();
+    std::memcpy(&ephemeralKey, &rustEphemeralKey, 32);
+    return ephemeralKey;
+}
+
+std::optional<libzcash::SaplingEncCiphertext> CTransaction::GetOutputEncCiphertext(size_t outIndex) const
+{
+    if (outIndex >= GetSaplingOutputsCount()) {
+        return std::nullopt;
+    }
+
+    libzcash::SaplingEncCiphertext encCiphertext;
+    auto outRust = saplingBundle.GetDetails().get_output(outIndex);
+    auto rustEncCiphertext = outRust->enc_ciphertext();
+    std::memcpy(&encCiphertext, &rustEncCiphertext, 580);
+    return encCiphertext;
+}
+
+std::optional<libzcash::SaplingOutCiphertext> CTransaction::GetOutputOutCiphertext(size_t outIndex) const
+{
+    if (outIndex >= GetSaplingOutputsCount()) {
+        return std::nullopt;
+    }
+
+    libzcash::SaplingOutCiphertext outCiphertext;
+    auto outRust = saplingBundle.GetDetails().get_output(outIndex);
+    auto rustOutCiphertext = outRust->out_ciphertext();
+    std::memcpy(&outCiphertext, &rustOutCiphertext, 80);
+    return outCiphertext;
+}
+
+std::optional<libzcash::GrothProof> CTransaction::GetOutputZKProof(size_t outIndex) const
+{
+    if (outIndex >= GetSaplingOutputsCount()) {
+        return std::nullopt;
+    }
+
+    libzcash::GrothProof zkproof;
+    auto outRust = saplingBundle.GetDetails().get_output(outIndex);
+    auto rustZKProof = outRust->zkproof();
+    std::memcpy(&zkproof, &rustZKProof, 80);
+    return zkproof;
+}
+
+const rust::Vec<sapling::Output> CTransaction::GetSaplingOutputs() const
+{
+    return saplingBundle.GetDetails().outputs();
+}
+
+std::vector<OutputDescription> CTransaction::GetOutputDescriptionFromBundle() const
+{
+    size_t outCount = GetSaplingOutputsCount();
+    std::vector<OutputDescription> returnOutputs;
+
+    for (size_t i = 0; i < outCount; i++) {
+        auto outRust = saplingBundle.GetDetails().get_output(i);
+        OutputDescription outDescription;
+
+        auto rustCV = outRust->cv();
+        std::memcpy(&outDescription.cv, &rustCV, 32);
+
+        auto rustCMU = outRust->cmu();
+        std::memcpy(&outDescription.cmu, &rustCMU, 32);
+
+        auto rustEphemeralKey = outRust->ephemeral_key();
+        std::memcpy(&outDescription.ephemeralKey, &rustEphemeralKey, 32);
+
+        auto rustEncCiphertext = outRust->enc_ciphertext();
+        std::memcpy(&outDescription.encCiphertext, &rustEncCiphertext, 580);
+
+        auto rustOutCiphertext = outRust->out_ciphertext();
+        std::memcpy(&outDescription.outCiphertext, &rustOutCiphertext, 80);
+
+        auto rustZKProof = outRust->zkproof();
+        std::memcpy(&outDescription.zkproof, &rustZKProof, 192);
+
+        returnOutputs.emplace_back(outDescription);
+    }
+
+    return returnOutputs;
+}
+
+
+/**
+ * Returns the Sapling value balance for the transaction.
+ */
+CAmount CTransaction::GetValueBalanceSapling() const
+{
+    return saplingBundle.GetValueBalance();
+}
+
+/**
+ * Returns the Sapling bundle for the transaction.
+ */
+const SaplingBundle& CTransaction::GetSaplingBundle() const
+{
+    return saplingBundle;
+}
