@@ -40,7 +40,7 @@ define vendor_crate_deps
     tar -xf $(native_rust_cached) -C $$($(1)_download_dir) && \
     tar --strip-components=1 -xf $$($(1)_source_dir)/$(2) -C $$($(1)_download_dir)/$(1) && \
 	cp $(3) $$($(1)_download_dir)/$(1)/Cargo.lock && \
-	$$($(1)_download_dir)/native/bin/cargo vendor --locked --manifest-path $$($(1)_download_dir)/$(1)/$(4) $$($(1)_download_dir)/$(CRATE_REGISTRY) && \
+	$$($(1)_download_dir)/native/bin/cargo vendor --manifest-path $$($(1)_download_dir)/$(1)/$(4) $$($(1)_download_dir)/$(CRATE_REGISTRY) && \
 	cd $$($(1)_download_dir) && \
 	find $(CRATE_REGISTRY) | sort | tar --no-recursion -czf $$($(1)_download_dir)/$(5).temp -T - && \
     mv $$($(1)_download_dir)/$(5).temp $$($(1)_source_dir)/$(5) && \
