@@ -852,6 +852,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 if (strType == "tx") {
                     ssKey >> hash;
                     ssValue >> wtx;
+                    LogPrintf("Deserializing TX %s\n", hash.ToString());
                 } else {
                     uint256 chash;
                     ssKey >> chash;
@@ -1629,7 +1630,7 @@ DBErrors CWalletDB::ReadClientVersion() {
     catch (...) {
         printf("DB corrupt/doesn't exist yet\n");
         return DB_CORRUPT;
-    }    
+    }
 
     return DB_VERSION_NOT_FOUND;
 }

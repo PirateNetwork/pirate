@@ -123,11 +123,7 @@ public:
 
         if(tx.vShieldedOutput.size()>0) {
 
-            CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-            ss << tx;
-            CRustTransaction rTx;
-            ss >> rTx;
-            SaplingBundle saplingBundle = rTx.GetSaplingBundle();
+            SaplingBundle saplingBundle = tx.GetSaplingBundle();
 
             if (!sapling_wallet_append_bundle_commitments(
                     inner.get(),
