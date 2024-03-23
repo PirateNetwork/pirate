@@ -4164,13 +4164,9 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             sapling_tree.append(outputDescription.cmu);
         }
 
-        if (tx.vShieldedOutput.size()>0) {
         //Append Sapling Outputs to SaplingMerkleFrontier
-            CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-            ss << tx;
-            CRustTransaction rTx;
-            ss >> rTx;
-            sapling_frontier_tree.AppendBundle(rTx.GetSaplingBundle());
+        if (tx.GetSaplingBundle().IsPresent()) {
+            sapling_frontier_tree.AppendBundle(tx.GetSaplingBundle());
         }
 
         for (const auto& out : tx.vout) {
