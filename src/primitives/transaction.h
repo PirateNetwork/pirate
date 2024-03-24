@@ -47,6 +47,7 @@
 #include "zcash/Zcash.h"
 
 #include <primitives/sapling.h>
+#include <primitives/orchard.h>
 
 /**
  * A flag that is ORed into the protocol version to designate that a transaction
@@ -626,6 +627,7 @@ private:
     /// The consensus branch ID that this transaction commits to.
     /// Serialized from v5 onwards.
     std::optional<uint32_t> nConsensusBranchId;
+    OrchardBundle orchardBundle;
     SaplingBundle saplingBundle;
 
     /** Memory only. */
@@ -776,7 +778,7 @@ public:
             READWRITE(saplingBundle);
 
             // Orchard Transaction Fields
-            // READWRITE(orchardBundle);
+            READWRITE(orchardBundle);
         } else {
             // Legacy transaction formats
             READWRITE(*const_cast<std::vector<CTxIn>*>(&vin));
@@ -956,6 +958,10 @@ public:
      * Returns the Sapling bundle for the transaction.
      */
     const SaplingBundle& GetSaplingBundle() const;
+    /**
+     * Returns the Orchard bundle for the transaction.
+     */
+    const OrchardBundle& GetOrchardBundle() const;
 };
 
 /** A mutable version of CTransaction. */
@@ -971,6 +977,7 @@ struct CMutableTransaction {
     int32_t nLockTime{0};
     uint32_t nExpiryHeight{0};
     SaplingBundle saplingBundle;
+    OrchardBundle orchardBundle;
     std::vector<JSDescription> vjoinsplit;
     uint256 joinSplitPubKey;
     CTransaction::joinsplit_sig_t joinSplitSig = {{0}};
@@ -1049,7 +1056,7 @@ struct CMutableTransaction {
             READWRITE(saplingBundle);
 
             // Orchard Transaction Fields
-            // READWRITE(orchardBundle);
+            READWRITE(orchardBundle);
         } else {
             READWRITE(vin);
             READWRITE(vout);
