@@ -14,6 +14,9 @@ extern "C" {
 #endif
 
 /// Typesafe pointer to a Rust-allocated orchard::bundle::Bundle value
+struct OrchardBundlePtr;
+typedef struct OrchardBundlePtr OrchardBundlePtr;
+
 struct SaplingBundlePtr;
 typedef struct SaplingBundlePtr SaplingBundlePtr;
 

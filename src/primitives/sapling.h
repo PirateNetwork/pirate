@@ -19,13 +19,13 @@ class SaplingBundle
 private:
     /// An optional Sapling bundle.
     /// Memory is allocated by Rust.
-    rust::Box<sapling::Bundle> inner;
+    rust::Box<sapling::SaplingBundle> inner;
 
     friend class SaplingV4Reader;
 public:
     SaplingBundle() : inner(sapling::none_bundle()) {}
 
-    SaplingBundle(rust::Box<sapling::Bundle>&& bundle) : inner(std::move(bundle)) {}
+    SaplingBundle(rust::Box<sapling::SaplingBundle>&& bundle) : inner(std::move(bundle)) {}
 
     SaplingBundle(SaplingBundle&& bundle) : inner(std::move(bundle.inner)) {}
 
@@ -48,13 +48,13 @@ public:
         return *this;
     }
 
-    const sapling::Bundle& GetDetails() const {
+    const sapling::SaplingBundle& GetDetails() const {
         return *inner;
     }
 
     /// @brief Only for tests.
     /// @return A mutable reference to the Sapling bundle.
-    sapling::Bundle& GetDetailsMut() {
+    sapling::SaplingBundle& GetDetailsMut() {
         return *inner;
     }
 

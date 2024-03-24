@@ -1,4 +1,5 @@
 // Copyright (c) 2021-2023 The Zcash developers
+// Copyright (c) 2021-2024 The Pirate developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -7,7 +8,7 @@
 
 //#include "rust/sapling/keys.h"
 //#include "rust/builder.h"
-#include "rust/streams.h"
+// #include "rust/streams.h"
 
 #ifdef __cplusplus
 extern "C" {

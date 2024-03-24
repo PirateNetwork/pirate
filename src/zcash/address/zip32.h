@@ -53,7 +53,67 @@ uint256 ovkForShieldingFromTaddr(HDSeed& seed);
 
 namespace libzcash {
 
-typedef blob88 diversifier_index_t;
+/**
+ * 88-bit diversifier index. This would ideally derive from base_uint
+ * but those values must have bit widths that are multiples of 32.
+ */
+class diversifier_index_t : public base_blob<88> {
+public:
+    diversifier_index_t() {}
+    diversifier_index_t(const base_blob<88>& b) : base_blob<88>(b) {}
+    diversifier_index_t(uint64_t i): base_blob<88>() {
+        data[0] = i & 0xFF;
+        data[1] = (i >> 8) & 0xFF;
+        data[2] = (i >> 16) & 0xFF;
+        data[3] = (i >> 24) & 0xFF;
+        data[4] = (i >> 32) & 0xFF;
+        data[5] = (i >> 40) & 0xFF;
+        data[6] = (i >> 48) & 0xFF;
+        data[7] = (i >> 56) & 0xFF;
+    }
+    explicit diversifier_index_t(const std::vector<unsigned char>& vch) : base_blob<88>(vch) {}
+
+    static diversifier_index_t FromRawBytes(std::array<uint8_t, 11> bytes)
+    {
+        diversifier_index_t buf;
+        std::memcpy(buf.begin(), bytes.data(), 11);
+        return buf;
+    }
+
+    bool increment() {
+        for (int i = 0; i < 11; i++) {
+            this->data[i] += 1;
+            if (this->data[i] != 0) {
+                return true; // no overflow
+            }
+        }
+
+        return false; //overflow
+    }
+
+    std::optional<diversifier_index_t> succ() const {
+        diversifier_index_t next(*this);
+        if (next.increment()) {
+            return next;
+        } else {
+            return std::nullopt;
+        }
+    }
+
+    std::optional<uint32_t> ToTransparentChildIndex() const;
+
+    friend bool operator<(const diversifier_index_t& a, const diversifier_index_t& b) {
+        for (int i = 10; i >= 0; i--) {
+            if (a.data[i] == b.data[i]) {
+                continue;
+            } else {
+                return a.data[i] < b.data[i];
+            }
+        }
+
+        return false;
+    }
+};
 
 struct SaplingExtendedFullViewingKey {
     uint8_t depth;
