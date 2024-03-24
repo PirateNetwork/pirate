@@ -142,7 +142,7 @@ CMutableTransaction::CMutableTransaction(const CTransaction& tx) : nVersion(tx.n
                                                                    vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
                                                                    valueBalance(tx.valueBalance), vShieldedSpend(tx.vShieldedSpend), vShieldedOutput(tx.vShieldedOutput),
                                                                    vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
-                                                                   bindingSig(tx.bindingSig), saplingBundle(tx.GetSaplingBundle())
+                                                                   bindingSig(tx.bindingSig), saplingBundle(tx.GetSaplingBundle()), orchardBundle(tx.GetOrchardBundle())
 {
 }
 
@@ -156,13 +156,13 @@ void CTransaction::UpdateHash() const
     *const_cast<uint256*>(&hash) = SerializeHash(*this);
 }
 
-CTransaction::CTransaction() : nVersion(CTransaction::SPROUT_MIN_CURRENT_VERSION), fOverwintered(false), nVersionGroupId(0), nExpiryHeight(0), vin(), vout(), nLockTime(0), valueBalance(0), vShieldedSpend(), vShieldedOutput(), vjoinsplit(), joinSplitPubKey(), joinSplitSig(), bindingSig(), saplingBundle() {}
+CTransaction::CTransaction() : nVersion(CTransaction::SPROUT_MIN_CURRENT_VERSION), fOverwintered(false), nVersionGroupId(0), nExpiryHeight(0), vin(), vout(), nLockTime(0), valueBalance(0), vShieldedSpend(), vShieldedOutput(), vjoinsplit(), joinSplitPubKey(), joinSplitSig(), bindingSig(), saplingBundle(), orchardBundle() {}
 
 CTransaction::CTransaction(const CMutableTransaction& tx) : nVersion(tx.nVersion), fOverwintered(tx.fOverwintered), nVersionGroupId(tx.nVersionGroupId), nExpiryHeight(tx.nExpiryHeight),
                                                             vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
                                                             valueBalance(tx.valueBalance), vShieldedSpend(tx.vShieldedSpend), vShieldedOutput(tx.vShieldedOutput),
                                                             vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
-                                                            bindingSig(tx.bindingSig), saplingBundle(tx.saplingBundle)
+                                                            bindingSig(tx.bindingSig), saplingBundle(tx.saplingBundle), orchardBundle(tx.orchardBundle)
 {
     UpdateHash();
 }
@@ -175,7 +175,7 @@ CTransaction::CTransaction(
                               vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
                               valueBalance(tx.valueBalance), vShieldedSpend(tx.vShieldedSpend), vShieldedOutput(tx.vShieldedOutput),
                               vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
-                              bindingSig(tx.bindingSig), saplingBundle(tx.saplingBundle)
+                              bindingSig(tx.bindingSig), saplingBundle(tx.saplingBundle), orchardBundle(tx.orchardBundle)
 {
     assert(evilDeveloperFlag);
 }
@@ -185,7 +185,7 @@ CTransaction::CTransaction(CMutableTransaction&& tx) : nVersion(tx.nVersion), fO
                                                        valueBalance(tx.valueBalance),
                                                        vShieldedSpend(std::move(tx.vShieldedSpend)), vShieldedOutput(std::move(tx.vShieldedOutput)),
                                                        vjoinsplit(std::move(tx.vjoinsplit)),
-                                                       joinSplitPubKey(std::move(tx.joinSplitPubKey)), joinSplitSig(std::move(tx.joinSplitSig)), saplingBundle(std::move(tx.saplingBundle))
+                                                       joinSplitPubKey(std::move(tx.joinSplitPubKey)), joinSplitSig(std::move(tx.joinSplitSig)), saplingBundle(std::move(tx.saplingBundle)), orchardBundle(std::move(tx.orchardBundle))
 {
     UpdateHash();
 }
@@ -200,6 +200,7 @@ CTransaction& CTransaction::operator=(const CTransaction& tx)
     *const_cast<unsigned int*>(&nLockTime) = tx.nLockTime;
     *const_cast<uint32_t*>(&nExpiryHeight) = tx.nExpiryHeight;
     saplingBundle = tx.saplingBundle;
+    orchardBundle = tx.orchardBundle;
     *const_cast<CAmount*>(&valueBalance) = tx.valueBalance;
     *const_cast<std::vector<SpendDescription>*>(&vShieldedSpend) = tx.vShieldedSpend;
     *const_cast<std::vector<OutputDescription>*>(&vShieldedOutput) = tx.vShieldedOutput;
@@ -619,4 +620,12 @@ CAmount CTransaction::GetValueBalanceSapling() const
 const SaplingBundle& CTransaction::GetSaplingBundle() const
 {
     return saplingBundle;
+}
+
+/**
+ * Returns the Orchard bundle for the transaction.
+ */
+const OrchardBundle& CTransaction::GetOrchardBundle() const
+{
+    return orchardBundle;
 }
