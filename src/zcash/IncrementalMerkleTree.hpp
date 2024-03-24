@@ -16,6 +16,7 @@
 #include "rust/bridge.h"
 #include "rust/sapling/wallet.h"
 #include "primitives/sapling.h"
+#include "primitives/orchard.h"
 
 namespace libzcash {
 
@@ -436,5 +437,97 @@ public:
     }
 };
 
+class OrchardWallet;
+class OrchardMerkleFrontierLegacySer;
+
+class OrchardMerkleFrontier
+{
+private:
+    /// An incremental Sinsemilla tree. Memory is allocated by Rust.
+    rust::Box<merkle_frontier::OrchardFrontier> inner;
+
+    friend class OrchardWallet;
+    friend class OrchardMerkleFrontierLegacySer;
+public:
+    OrchardMerkleFrontier() : inner(merkle_frontier::new_orchard()) {}
+
+    OrchardMerkleFrontier(OrchardMerkleFrontier&& frontier) : inner(std::move(frontier.inner)) {}
+
+    OrchardMerkleFrontier(const OrchardMerkleFrontier& frontier) :
+        inner(frontier.inner->box_clone()) {}
+
+    OrchardMerkleFrontier& operator=(OrchardMerkleFrontier&& frontier)
+    {
+        if (this != &frontier) {
+            inner = std::move(frontier.inner);
+        }
+        return *this;
+    }
+    OrchardMerkleFrontier& operator=(const OrchardMerkleFrontier& frontier)
+    {
+        if (this != &frontier) {
+            inner = frontier.inner->box_clone();
+        }
+        return *this;
+    }
+
+    template<typename Stream>
+    void Serialize(Stream& s) const {
+        try {
+            inner->serialize(*ToRustStream(s));
+        } catch (const std::exception& e) {
+            throw std::ios_base::failure(e.what());
+        }
+    }
+
+    template<typename Stream>
+    void Unserialize(Stream& s) {
+        try {
+            inner = merkle_frontier::parse_orchard(*ToRustStream(s));
+        } catch (const std::exception& e) {
+            throw std::ios_base::failure(e.what());
+        }
+    }
+
+    size_t DynamicMemoryUsage() const {
+        return inner->dynamic_memory_usage();
+    }
+
+    merkle_frontier::OrchardAppendResult AppendBundle(const OrchardBundle& bundle) {
+        return inner->append_bundle(*bundle.GetDetails());
+    }
+
+    const uint256 root() const {
+        return uint256::FromRawBytes(inner->root());
+    }
+
+    static uint256 empty_root() {
+        return uint256::FromRawBytes(merkle_frontier::orchard_empty_root());
+    }
+
+    size_t size() const {
+        return inner->size();
+    }
+
+    libzcash::SubtreeIndex current_subtree_index() const {
+        return (inner->size() >> libzcash::TRACKED_SUBTREE_HEIGHT);
+    }
+};
+
+class OrchardMerkleFrontierLegacySer {
+private:
+    const OrchardMerkleFrontier& frontier;
+public:
+    OrchardMerkleFrontierLegacySer(const OrchardMerkleFrontier& frontier): frontier(frontier) {}
+
+    template<typename Stream>
+    void Serialize(Stream& s) const {
+        try {
+            frontier.inner->serialize_legacy(*ToRustStream(s));
+        } catch (const std::exception& e) {
+            throw std::ios_base::failure(e.what());
+        }
+    }
+};
 
 #endif /* ZC_INCREMENTALMERKLETREE_H_ */

@@ -4,14 +4,14 @@ use incrementalmerkletree::{
     frontier::{CommitmentTree, Frontier},
     Hashable, Level,
 };
-// use orchard::tree::MerkleHashOrchard;
+use orchard::tree::MerkleHashOrchard;
 use zcash_primitives::{
     merkle_tree::{read_frontier_v1, write_commitment_tree, write_frontier_v1, HashSer},
     sapling::{NOTE_COMMITMENT_TREE_DEPTH, Node},
 };
 
 // use crate::{bridge::ffi, orchard_bundle, streams::CppStream, wallet::Wallet};
-use crate::{bridge::ffi, sapling::Bundle, streams::CppStream, wallet::Wallet};
+use crate::{bridge::ffi, sapling::Bundle as SaplingBundle, orchard_bundle, streams::CppStream, orchard_wallet::Wallet as OrchardWalletInternal, sapling_wallet::Wallet as SaplingWalletInternal};
 
 // This is also defined in `IncrementalMerkleTree.hpp`
 pub const TRACKED_SUBTREE_HEIGHT: u8 = 16;
@@ -78,6 +78,82 @@ impl<H: Copy + Hashable + HashSer> MerkleFrontier<H> {
 }
 
 /// Returns the root of an empty Orchard Merkle tree.
+pub(crate) fn orchard_empty_root() -> [u8; 32] {
+    let level = Level::from(NOTE_COMMITMENT_TREE_DEPTH);
+    MerkleHashOrchard::empty_root(level).to_bytes()
+}
+
+/// An Orchard incremental Merkle frontier.
+pub(crate) type OrchardFrontier = MerkleFrontier<MerkleHashOrchard>;
+
+
+/// Constructs a new empty Orchard Merkle frontier.
+pub(crate) fn new_orchard() -> Box<OrchardFrontier> {
+    Box::new(MerkleFrontier(Inner::empty()))
+}
+
+/// Attempts to parse an Orchard Merkle frontier from the given C++ stream.
+pub(crate) fn parse_orchard(reader: &mut CppStream<'_>) -> Result<Box<OrchardFrontier>, String> {
+    OrchardFrontier::parse(reader)
+}
+
+pub(crate) struct OrchardWallet;
+
+impl OrchardFrontier {
+    /// Appends the note commitments in the given bundle to this frontier.
+    pub(crate) fn append_bundle(
+        &mut self,
+        bundle: &orchard_bundle::Bundle,
+    ) -> Result<ffi::OrchardAppendResult, &'static str> {
+        if let Some(bundle) = bundle.inner() {
+            // A single bundle can't contain 2^TRACKED_SUBTREE_HEIGHT actions, so we'll never cross
+            // more than one subtree boundary while processing that bundle. This means we only need
+            // to find a single subtree root while processing an individual bundle, so `Option` is
+            // sufficient; we don't need a `Vec`.
+            let mut tracked_root: Option<MerkleHashOrchard> = None;
+            for action in bundle.actions().iter() {
+                if !self.0.append(MerkleHashOrchard::from_cmx(action.cmx())) {
+                    return Err("Orchard note commitment tree is full.");
+                }
+
+                if let Some(non_empty_frontier) = self.0.value() {
+                    let level = Level::from(TRACKED_SUBTREE_HEIGHT);
+                    let pos = non_empty_frontier.position();
+                    if pos.is_complete_subtree(level) {
+                        assert_eq!(tracked_root, None);
+                        tracked_root = Some(non_empty_frontier.root(Some(level)))
+                    }
+                }
+            }
+
+            Ok(if let Some(root_hash) = tracked_root {
+                ffi::OrchardAppendResult {
+                    has_subtree_boundary: true,
+                    completed_subtree_root: root_hash.to_bytes(),
+                }
+            } else {
+                ffi::OrchardAppendResult {
+                    has_subtree_boundary: false,
+                    completed_subtree_root: [0u8; 32],
+                }
+            })
+        } else {
+            Err("null Orchard bundle pointer")
+        }
+    }
+
+    /// Overwrites the first bridge of the Orchard wallet's note commitment tree to have
+    /// `self` as its latest state.
+    ///
+    /// This will fail with an assertion error if any checkpoints exist in the tree.
+    ///
+    /// TODO: Remove once `crate::wallet` is migrated to `cxx`.
+    pub(crate) fn init_wallet(&self, wallet: *mut OrchardWallet) -> bool {
+        crate::orchard_wallet::orchard_wallet_init_from_frontier(wallet as *mut OrchardWalletInternal, &self.0)
+    }
+}
+
+/// Returns the root of an empty Sapling Merkle tree.
 pub(crate) fn sapling_empty_root() -> [u8; 32] {
     let level = Level::from(NOTE_COMMITMENT_TREE_DEPTH);
     let mut root = [0; 32];
@@ -106,7 +182,7 @@ impl SaplingFrontier {
     /// Appends the note commitments in the given bundle to this frontier.
     pub(crate) fn append_bundle(
         &mut self,
-        sapling_bundle: &Bundle,
+        sapling_bundle: &SaplingBundle,
     ) -> Result<ffi::SaplingAppendResult, &'static str> {
         if let Some(sapling_bundle) = sapling_bundle.inner() {
             // A single bundle can't contain 2^TRACKED_SUBTREE_HEIGHT actions, so we'll never cross
@@ -157,6 +233,6 @@ impl SaplingFrontier {
     ///
     /// TODO: Remove once `crate::wallet` is migrated to `cxx`.
     pub(crate) fn init_wallet(&self, wallet: *mut SaplingWallet) -> bool {
-        crate::wallet::sapling_wallet_init_from_frontier(wallet as *mut Wallet, &self.0)
+        crate::sapling_wallet::sapling_wallet_init_from_frontier(wallet as *mut SaplingWalletInternal, &self.0)
     }
 }
