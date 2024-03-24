@@ -1161,6 +1161,7 @@ dependencies = [
  "memuse",
  "metrics",
  "metrics-exporter-prometheus",
+ "orchard",
  "rand 0.8.5",
  "rand_core 0.6.4",
  "subtle 2.4.0",

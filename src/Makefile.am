@@ -227,6 +227,7 @@ LIBZCASH_H = \
   zcash/Note.hpp \
   zcash/prf.h \
   zcash/Proof.hpp \
+	zcash/address/orchard.hpp \
 	zcash/address/sapling.hpp \
 	zcash/address/sprout.hpp \
   zcash/util.h \
@@ -309,6 +310,7 @@ BITCOIN_CORE_H = \
 	span.h \
   primitives/block.h \
 	primitives/sapling.h \
+	primitives/orchard.h \
   primitives/transaction.h \
   protocol.h \
   pubkey.h \
@@ -812,6 +814,7 @@ libzcash_a_SOURCES = \
 	zcash/JoinSplit.cpp \
 	zcash/Note.cpp \
 	zcash/prf.cpp \
+	zcash/address/orchard.cpp \
 	zcash/address/sapling.cpp \
 	zcash/address/sprout.cpp \
 	zcash/util.cpp \
