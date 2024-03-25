@@ -325,7 +325,7 @@ UniValue getsaplingwitnessatheight(const UniValue& params, bool fHelp,  const CP
     if (j == toHeight) {
       wit.push_back(Pair("hash", block.GetHash().GetHex()));
       wit.push_back(Pair("height", j));
-      wit.push_back(Pair("finalsaplingroot", block.hashFinalSaplingRoot.GetHex()));
+      wit.push_back(Pair("hashblockcommitments", block.hashBlockCommitments.GetHex()));
     }
   }
 
@@ -394,7 +394,7 @@ UniValue getsaplingblocks(const UniValue& params, bool fHelp,  const CPubKey& my
       jsonblock.push_back(Pair("hash", block.GetHash().GetHex()));
       jsonblock.push_back(Pair("previousblockhash", pblockindex->pprev->GetBlockHash().GetHex()));
       jsonblock.push_back(Pair("height", pblockindex->nHeight));
-      jsonblock.push_back(Pair("finalsaplingroot", block.hashFinalSaplingRoot.GetHex()));
+      jsonblock.push_back(Pair("hashblockcommitments", block.hashBlockCommitments.GetHex()));
 
       UniValue jsontxs(UniValue::VARR);
       for (const CTransaction& tx : block.vtx) {

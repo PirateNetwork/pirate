@@ -891,7 +891,7 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp, const CPubKey& myp
     result.push_back(Pair("capabilities", aCaps));
     result.push_back(Pair("version", pblock->nVersion));
     result.push_back(Pair("previousblockhash", pblock->hashPrevBlock.GetHex()));
-    result.push_back(Pair("finalsaplingroothash", pblock->hashFinalSaplingRoot.GetHex()));
+    result.push_back(Pair("hashBlockCommitments", pblock->hashBlockCommitments.GetHex()));
     result.push_back(Pair("transactions", transactions));
     if (coinbasetxn) {
         assert(txCoinbase.isObject());

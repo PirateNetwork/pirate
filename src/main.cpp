@@ -4202,19 +4202,22 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     }
     blockundo.old_sprout_tree_root = old_sprout_tree_root;
 
-    // If Sapling is active, block.hashFinalSaplingRoot must be the
+    // If Sapling is active, block.hashBlockCommitments must be the
     // same as the root of the Sapling tree
     if (NetworkUpgradeActive(pindex->nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_SAPLING)) {
-        if (block.hashFinalSaplingRoot != sapling_tree.root()) {
+        if (block.hashBlockCommitments != sapling_tree.root()) {
             return state.DoS(100,
-                         error("ConnectBlock(): block's hashFinalSaplingRoot is incorrect"),
+                         error("ConnectBlock(): block's hashBlockCommitments is incorrect"),
                                REJECT_INVALID, "bad-sapling-root-in-block");
         }
-        if (block.hashFinalSaplingRoot != sapling_frontier_tree.root()) {
+        if (block.hashBlockCommitments != sapling_frontier_tree.root()) {
             return state.DoS(100,
-                         error("ConnectBlock(): block's hashFinalSaplingRoot is incorrect"),
+                         error("ConnectBlock(): block's hashBlockCommitments is incorrect"),
                                REJECT_INVALID, "bad-sapling-root-in-block");
         }
+
+        //Set the hashFinalSaplingRoot in the block index (equal to HahsBlockCommitments before Orchard)
+        pindex->hashFinalSaplingRoot = sapling_frontier_tree.root();
     }
     int64_t nTime1 = GetTimeMicros(); nTimeConnect += nTime1 - nTimeStart;
     LogPrint("bench", "      - Connect %u transactions: %.2fms (%.3fms/tx, %.3fms/txin) [%.2fs]\n", (unsigned)block.vtx.size(), 0.001 * (nTime1 - nTimeStart), 0.001 * (nTime1 - nTimeStart) / block.vtx.size(), nInputs <= 1 ? 0 : 0.001 * (nTime1 - nTimeStart) / (nInputs-1), nTimeConnect * 0.000001);
@@ -5381,24 +5384,58 @@ bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBl
 {
     pindexNew->nTx = block.vtx.size();
     pindexNew->nChainTx = 0;
+
+    // the following values are computed here only for the genesis block
+    CAmount chainSupplyDelta = 0;
+    CAmount transparentValueDelta = 0;
+
     CAmount sproutValue = 0;
     CAmount saplingValue = 0;
+    CAmount orchardValue = 0;
     for (auto tx : block.vtx) {
-        // Negative valueBalance "takes" money from the transparent value pool
-        // and adds it to the Sapling value pool. Positive valueBalance "gives"
+        // For the genesis block only, compute the chain supply delta and the transparent
+        // output total.
+        if (pindexNew->pprev == nullptr) {
+            chainSupplyDelta = tx.GetValueOut();
+            for (const auto& out : tx.vout) {
+                transparentValueDelta += out.nValue;
+            }
+        }
+
+        // Negative valueBalanceSapling "takes" money from the transparent value pool
+        // and adds it to the Sapling value pool. Positive valueBalanceSapling "gives"
         // money to the transparent value pool, removing from the Sapling value
         // pool. So we invert the sign here.
-        saplingValue += -tx.valueBalance;
+        saplingValue += -tx.GetValueBalanceSapling();
+
+        // valueBalanceOrchard behaves the same way as valueBalanceSapling.
+        orchardValue += -tx.GetOrchardBundle().GetValueBalance();
 
         for (auto js : tx.vjoinsplit) {
             sproutValue += js.vpub_old;
             sproutValue -= js.vpub_new;
         }
     }
+    // These values can only be computed here for the genesis block.
+    // For all other blocks, we update them in ConnectBlock instead.
+    if (pindexNew->pprev == nullptr) {
+        pindexNew->nChainSupplyDelta = chainSupplyDelta;
+        pindexNew->nTransparentValue = transparentValueDelta;
+    } else {
+        pindexNew->nChainSupplyDelta = std::nullopt;
+        pindexNew->nTransparentValue = std::nullopt;
+    }
+
+    pindexNew->nChainTotalSupply = std::nullopt;
+    pindexNew->nChainTransparentValue = std::nullopt;
+
     pindexNew->nSproutValue = sproutValue;
-    pindexNew->nChainSproutValue = boost::none;
+    pindexNew->nChainSproutValue = std::nullopt;
     pindexNew->nSaplingValue = saplingValue;
-    pindexNew->nChainSaplingValue = boost::none;
+    pindexNew->nChainSaplingValue = std::nullopt;
+    pindexNew->nOrchardValue = orchardValue;
+    pindexNew->nChainOrchardValue = std::nullopt;
+
     pindexNew->nFile = pos.nFile;
     pindexNew->nDataPos = pos.nPos;
     pindexNew->nUndoPos = 0;
@@ -5416,21 +5453,44 @@ bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBl
             CBlockIndex *pindex = queue.front();
             queue.pop_front();
             pindex->nChainTx = (pindex->pprev ? pindex->pprev->nChainTx : 0) + pindex->nTx;
+
             if (pindex->pprev) {
+                // Transparent value and chain total supply are added to the
+                // block index only in `ConnectBlock`, because that's the only
+                // place that we have a valid coins view with which to compute
+                // the transparent input value and fees.
+
+                // Calculate the block's effect on the Sprout chain value pool balance.
                 if (pindex->pprev->nChainSproutValue && pindex->nSproutValue) {
                     pindex->nChainSproutValue = *pindex->pprev->nChainSproutValue + *pindex->nSproutValue;
                 } else {
-                    pindex->nChainSproutValue = boost::none;
+                    pindex->nChainSproutValue = std::nullopt;
                 }
+
+                // Calculate the block's effect on the Sapling chain value pool balance.
                 if (pindex->pprev->nChainSaplingValue) {
                     pindex->nChainSaplingValue = *pindex->pprev->nChainSaplingValue + pindex->nSaplingValue;
                 } else {
-                    pindex->nChainSaplingValue = boost::none;
+                    pindex->nChainSaplingValue = std::nullopt;
+                }
+
+                // Calculate the block's effect on the Orchard chain value pool balance.
+                if (pindex->pprev->nChainOrchardValue) {
+                    pindex->nChainOrchardValue = *pindex->pprev->nChainOrchardValue + pindex->nOrchardValue;
+                } else {
+                    pindex->nChainOrchardValue = std::nullopt;
                 }
             } else {
+                pindex->nChainTotalSupply = pindex->nChainSupplyDelta;
+                pindex->nChainTransparentValue = pindex->nTransparentValue;
                 pindex->nChainSproutValue = pindex->nSproutValue;
                 pindex->nChainSaplingValue = pindex->nSaplingValue;
+                pindex->nChainOrchardValue = pindex->nOrchardValue;
             }
+
+            // Fall back to hardcoded Sprout value pool balance
+            //FallbackSproutValuePoolBalance(pindex, chainparams);
+
             {
                 LOCK(cs_nBlockSequenceId);
                 pindex->nSequenceId = nBlockSequenceId++;
@@ -5440,10 +5500,8 @@ bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBl
             }
             std::pair<std::multimap<CBlockIndex*, CBlockIndex*>::iterator, std::multimap<CBlockIndex*, CBlockIndex*>::iterator> range = mapBlocksUnlinked.equal_range(pindex);
             while (range.first != range.second) {
-                std::multimap<CBlockIndex*, CBlockIndex*>::iterator it = range.first;
-                queue.push_back(it->second);
-                range.first++;
-                mapBlocksUnlinked.erase(it);
+                queue.push_back(range.first->second);
+                range.first = mapBlocksUnlinked.erase(range.first);
             }
         }
     } else {
@@ -6710,17 +6768,13 @@ bool static LoadBlockIndexDB()
     // Calculate nChainWork
     vector<pair<int, CBlockIndex*> > vSortedByHeight;
     vSortedByHeight.reserve(mapBlockIndex.size());
-    for(const auto& item : mapBlockIndex)
+    for (const std::pair<uint256, CBlockIndex*>& item : mapBlockIndex)
     {
         CBlockIndex* pindex = item.second;
         vSortedByHeight.push_back(make_pair(pindex->nHeight, pindex));
     }
     sort(vSortedByHeight.begin(), vSortedByHeight.end());
-
-    uiInterface.ShowProgress(_("Loading block index DB..."), 0, false);
-    int cur_height_num = 0;
-
-    for(const auto& item : vSortedByHeight)
+    for (const std::pair<int, CBlockIndex*>& item : vSortedByHeight)
     {
         CBlockIndex* pindex = item.second;
         pindex->nChainWork = (pindex->pprev ? pindex->pprev->nChainWork : 0) + GetBlockProof(*pindex);
@@ -6730,27 +6784,65 @@ bool static LoadBlockIndexDB()
             if (pindex->pprev) {
                 if (pindex->pprev->nChainTx) {
                     pindex->nChainTx = pindex->pprev->nChainTx + pindex->nTx;
+
+                    if (pindex->pprev->nChainTotalSupply && pindex->nChainSupplyDelta) {
+                        pindex->nChainTotalSupply = *pindex->pprev->nChainTotalSupply + *pindex->nChainSupplyDelta;
+                    } else {
+                        pindex->nChainTotalSupply = std::nullopt;
+                    }
+
+                    if (pindex->pprev->nChainTransparentValue && pindex->nTransparentValue) {
+                        pindex->nChainTransparentValue = *pindex->pprev->nChainTransparentValue + *pindex->nTransparentValue;
+                    } else {
+                        pindex->nChainTransparentValue = std::nullopt;
+                    }
+
                     if (pindex->pprev->nChainSproutValue && pindex->nSproutValue) {
                         pindex->nChainSproutValue = *pindex->pprev->nChainSproutValue + *pindex->nSproutValue;
                     } else {
-                        pindex->nChainSproutValue = boost::none;
+                        pindex->nChainSproutValue = std::nullopt;
                     }
+
                     if (pindex->pprev->nChainSaplingValue) {
                         pindex->nChainSaplingValue = *pindex->pprev->nChainSaplingValue + pindex->nSaplingValue;
                     } else {
-                        pindex->nChainSaplingValue = boost::none;
+                        pindex->nChainSaplingValue = std::nullopt;
+                    }
+
+                    if (pindex->pprev->nChainOrchardValue) {
+                        pindex->nChainOrchardValue = *pindex->pprev->nChainOrchardValue + pindex->nOrchardValue;
+                    } else {
+                        pindex->nChainOrchardValue = std::nullopt;
                     }
                 } else {
                     pindex->nChainTx = 0;
-                    pindex->nChainSproutValue = boost::none;
-                    pindex->nChainSaplingValue = boost::none;
+                    pindex->nChainTotalSupply = std::nullopt;
+                    pindex->nChainTransparentValue = std::nullopt;
+                    pindex->nChainSproutValue = std::nullopt;
+                    pindex->nChainSaplingValue = std::nullopt;
+                    pindex->nChainOrchardValue = std::nullopt;
                     mapBlocksUnlinked.insert(std::make_pair(pindex->pprev, pindex));
                 }
             } else {
                 pindex->nChainTx = pindex->nTx;
+                pindex->nChainTotalSupply = pindex->nChainSupplyDelta;
+                pindex->nChainTransparentValue = pindex->nTransparentValue;
                 pindex->nChainSproutValue = pindex->nSproutValue;
                 pindex->nChainSaplingValue = pindex->nSaplingValue;
+                pindex->nChainOrchardValue = pindex->nOrchardValue;
             }
+
+            // Fall back to hardcoded Sprout value pool balance
+            // FallbackSproutValuePoolBalance(pindex, chainparams);
+
+            // If developer option -developersetpoolsizezero has been enabled,
+            // override and set the in-memory size of shielded pools to zero.  An unshielding transaction
+            // can then be used to trigger and test the handling of turnstile violations.
+            // if (fExperimentalDeveloperSetPoolSizeZero) {
+            //     pindex->nChainSproutValue = 0;
+            //     pindex->nChainSaplingValue = 0;
+            //     pindex->nChainOrchardValue = 0;
+            // }
         }
         // Construct in-memory chain of branch IDs.
         // Relies on invariant: a block that does not activate a network upgrade
@@ -6773,30 +6865,8 @@ bool static LoadBlockIndexDB()
             pindex->BuildSkip();
         if (pindex->IsValid(BLOCK_VALID_TREE) && (pindexBestHeader == NULL || CBlockIndexWorkComparator()(pindexBestHeader, pindex)))
             pindexBestHeader = pindex;
-
-        uiInterface.ShowProgress(_("Loading block index DB..."), (int)((double)(cur_height_num*100)/(double)(vSortedByHeight.size())), false);
-        cur_height_num++;
     }
 
-    uiInterface.ShowProgress("", 100, false);
-
-    // Load block file info
-    pblocktree->ReadLastBlockFile(nLastBlockFile);
-    vinfoBlockFile.resize(nLastBlockFile + 1);
-    tmpBlockFiles.resize(nLastTmpFile + 1);
-    LogPrintf("%s: last block file = %i\n", __func__, nLastBlockFile);
-    for (int nFile = 0; nFile <= nLastBlockFile; nFile++) {
-        pblocktree->ReadBlockFileInfo(nFile, vinfoBlockFile[nFile]);
-    }
-    LogPrintf("%s: last block file info: %s\n", __func__, vinfoBlockFile[nLastBlockFile].ToString());
-    for (int nFile = nLastBlockFile + 1; true; nFile++) {
-        CBlockFileInfo info;
-        if (pblocktree->ReadBlockFileInfo(nFile, info)) {
-            vinfoBlockFile.push_back(info);
-        } else {
-            break;
-        }
-    }
 
     // Check presence of blk files
     LogPrintf("Checking all blk files are present...\n");
@@ -7112,7 +7182,7 @@ bool RewindBlockIndex(const CChainParams& params)
             pindexIter->nStatus &= ~(BLOCK_HAVE_DATA | BLOCK_HAVE_UNDO);
             // Remove branch ID
             pindexIter->nStatus &= ~BLOCK_ACTIVATES_UPGRADE;
-            pindexIter->nCachedBranchId = boost::none;
+            pindexIter->nCachedBranchId = std::nullopt;
             // Remove storage location
             pindexIter->nFile = 0;
             pindexIter->nDataPos = 0;
@@ -7120,11 +7190,17 @@ bool RewindBlockIndex(const CChainParams& params)
             // Remove various other things
             pindexIter->nTx = 0;
             pindexIter->nChainTx = 0;
-            pindexIter->nSproutValue = boost::none;
-            pindexIter->nChainSproutValue = boost::none;
+            pindexIter->nChainSupplyDelta = std::nullopt;
+            pindexIter->nChainTotalSupply = std::nullopt;
+            pindexIter->nTransparentValue = std::nullopt;
+            pindexIter->nChainTransparentValue = std::nullopt;
+            pindexIter->nSproutValue = std::nullopt;
+            pindexIter->nChainSproutValue = std::nullopt;
             pindexIter->nSaplingValue = 0;
-            pindexIter->nChainSaplingValue = boost::none;
+            pindexIter->nChainSaplingValue = std::nullopt;
             pindexIter->nSequenceId = 0;
+            pindexIter->nOrchardValue = 0;
+            pindexIter->nChainOrchardValue = std::nullopt;
 
             // Make sure it gets written
             /* corresponds to commented out block below as an alternative to setDirtyBlockIndex
