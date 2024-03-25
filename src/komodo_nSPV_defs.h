@@ -74,7 +74,7 @@ struct NSPV_equihdr
     int32_t nVersion;
     uint256 hashPrevBlock;
     uint256 hashMerkleRoot;
-    uint256 hashFinalSaplingRoot;
+    uint256 hashBlockCommitments;
     uint32_t nTime;
     uint32_t nBits;
     uint256 nNonce;

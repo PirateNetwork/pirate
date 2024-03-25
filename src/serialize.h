@@ -822,10 +822,16 @@ template<typename Stream, typename T, typename A, typename V> void Unserialize_i
 template<typename Stream, typename T, typename A> inline void Unserialize(Stream& is, std::vector<T, A>& v);
 
 /**
- * optional
+ * boost::optional
  */
 template<typename Stream, typename T> void Serialize(Stream& os, const boost::optional<T>& item);
 template<typename Stream, typename T> void Unserialize(Stream& is, boost::optional<T>& item);
+
+/**
+ * std::optional
+ */
+template<typename Stream, typename T> void Serialize(Stream& os, const std::optional<T>& item);
+template<typename Stream, typename T> void Unserialize(Stream& is, std::optional<T>& item);
 
 /**
  * array
@@ -1061,7 +1067,7 @@ inline void Unserialize(Stream& is, std::vector<T, A>& v)
 
 
 /**
- * optional
+ * boost::optional
  */
 template<typename Stream, typename T>
 void Serialize(Stream& os, const boost::optional<T>& item)
@@ -1086,6 +1092,41 @@ void Unserialize(Stream& is, boost::optional<T>& item)
 
     if (discriminant == 0x00) {
         item = boost::none;
+    } else if (discriminant == 0x01) {
+        T object;
+        Unserialize(is, object);
+        item = object;
+    } else {
+        throw std::ios_base::failure("non-canonical optional discriminant");
+    }
+}
+
+/**
+ * std::optional
+ */
+template<typename Stream, typename T>
+void Serialize(Stream& os, const std::optional<T>& item)
+{
+    // If the value is there, put 0x01 and then serialize the value.
+    // If it's not, put 0x00.
+    if (item) {
+        unsigned char discriminant = 0x01;
+        Serialize(os, discriminant);
+        Serialize(os, *item);
+    } else {
+        unsigned char discriminant = 0x00;
+        Serialize(os, discriminant);
+    }
+}
+
+template<typename Stream, typename T>
+void Unserialize(Stream& is, std::optional<T>& item)
+{
+    unsigned char discriminant = 0x00;
+    Unserialize(is, discriminant);
+
+    if (discriminant == 0x00) {
+        item = std::nullopt;
     } else if (discriminant == 0x01) {
         T object;
         Unserialize(is, object);
@@ -1308,7 +1349,7 @@ public:
     {
         write(reinterpret_cast<const char*>(pch), nSize);
     }
-    
+
     void write(const char *psz, size_t _nSize)
     {
         this->nSize += _nSize;

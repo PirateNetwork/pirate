@@ -833,7 +833,7 @@ bool CBlockTreeDB::LoadBlockIndexGuts()
                 pindexNew->hashSproutAnchor       = diskindex.hashSproutAnchor;
                 pindexNew->nVersion               = diskindex.nVersion;
                 pindexNew->hashMerkleRoot         = diskindex.hashMerkleRoot;
-                pindexNew->hashFinalSaplingRoot   = diskindex.hashFinalSaplingRoot;
+                pindexNew->hashBlockCommitments   = diskindex.hashBlockCommitments;
                 pindexNew->nTime                  = diskindex.nTime;
                 pindexNew->nBits                  = diskindex.nBits;
                 pindexNew->nNonce                 = diskindex.nNonce;
@@ -846,6 +846,12 @@ bool CBlockTreeDB::LoadBlockIndexGuts()
                 pindexNew->nBurnedAmountDelta     = diskindex.nBurnedAmountDelta;
                 pindexNew->nSproutValue           = diskindex.nSproutValue;
                 pindexNew->nSaplingValue          = diskindex.nSaplingValue;
+                pindexNew->nOrchardValue          = diskindex.nOrchardValue;
+                pindexNew->hashFinalSaplingRoot   = diskindex.hashFinalSaplingRoot;
+                pindexNew->hashFinalOrchardRoot   = diskindex.hashFinalOrchardRoot;
+                pindexNew->hashChainHistoryRoot   = diskindex.hashChainHistoryRoot;
+                pindexNew->hashAuthDataRoot       = diskindex.hashAuthDataRoot;
+                //Komodo Data
                 pindexNew->segid                  = diskindex.segid;
                 pindexNew->nNotaryPay             = diskindex.nNotaryPay;
 

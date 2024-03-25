@@ -111,7 +111,7 @@ CBlockHeader CBlockIndex::GetBlockHeader() const
         header.hashPrevBlock    = pprev->GetBlockHash();
     }
     header.hashMerkleRoot       = hashMerkleRoot;
-    header.hashFinalSaplingRoot = hashFinalSaplingRoot;
+    header.hashBlockCommitments = hashBlockCommitments;
     header.nTime                = nTime;
     header.nBits                = nBits;
     header.nNonce               = nNonce;

@@ -119,12 +119,12 @@ double GetNetworkDifficulty(const CBlockIndex* blockindex)
 }
 
 static UniValue ValuePoolDesc(
-    const boost::optional<std::string> name,
-    const boost::optional<CAmount> chainValue,
-    const boost::optional<CAmount> valueDelta)
+    const std::optional<std::string> &name,
+    const std::optional<CAmount> chainValue,
+    const std::optional<CAmount> valueDelta)
 {
     UniValue rv(UniValue::VOBJ);
-    if (name.is_initialized()) {
+    if (name != std::nullopt) {
         rv.pushKV("id", name.value());
     }
     rv.push_back(Pair("monitored", (bool)chainValue));
@@ -316,7 +316,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool tx
     result.push_back(Pair("version", block.nVersion));
     result.push_back(Pair("merkleroot", block.hashMerkleRoot.GetHex()));
     result.push_back(Pair("segid", (int)komodo_segid(0,blockindex->nHeight)));
-    result.push_back(Pair("finalsaplingroot", block.hashFinalSaplingRoot.GetHex()));
+    result.push_back(Pair("hashblockcommitments", block.hashBlockCommitments.GetHex()));
     UniValue txs(UniValue::VARR);
     BOOST_FOREACH(const CTransaction&tx, block.vtx)
     {
@@ -337,7 +337,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool tx
     result.push_back(Pair("difficulty", GetDifficulty(blockindex)));
     result.push_back(Pair("chainwork", blockindex->nChainWork.GetHex()));
     result.push_back(Pair("anchor", blockindex->hashFinalSproutRoot.GetHex()));
-    result.pushKV("chainSupply", ValuePoolDesc(boost::none, blockindex->nChainTotalSupply, blockindex->nChainSupplyDelta));
+    result.pushKV("chainSupply", ValuePoolDesc(std::nullopt, blockindex->nChainTotalSupply, blockindex->nChainSupplyDelta));
     UniValue valuePools(UniValue::VARR);
     valuePools.push_back(ValuePoolDesc(std::string("transparent"), blockindex->nChainTransparentValue, blockindex->nTransparentValue));
     valuePools.push_back(ValuePoolDesc(std::string("sprout"), blockindex->nChainSproutValue, blockindex->nSproutValue));
@@ -1427,12 +1427,12 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp, const CPubKey& my
     obj.push_back(Pair("commitments",           static_cast<uint64_t>(tree.size())));
 
     CBlockIndex* tip = chainActive.Tip();
-    obj.pushKV("chainSupply", ValuePoolDesc(boost::none, tip->nChainTotalSupply, boost::none));
+    obj.pushKV("chainSupply", ValuePoolDesc(std::nullopt, tip->nChainTotalSupply, std::nullopt));
     UniValue valuePools(UniValue::VARR);
-    valuePools.push_back(ValuePoolDesc(std::string("transparent"), tip->nChainTransparentValue, boost::none));
-    valuePools.push_back(ValuePoolDesc(std::string("sprout"), tip->nChainSproutValue, boost::none));
-    valuePools.push_back(ValuePoolDesc(std::string("sapling"), tip->nChainSaplingValue, boost::none));
-    valuePools.push_back(ValuePoolDesc(std::string("burned"), tip->nChainTotalBurned, boost::none));
+    valuePools.push_back(ValuePoolDesc(std::string("transparent"), tip->nChainTransparentValue, std::nullopt));
+    valuePools.push_back(ValuePoolDesc(std::string("sprout"), tip->nChainSproutValue, std::nullopt));
+    valuePools.push_back(ValuePoolDesc(std::string("sapling"), tip->nChainSaplingValue, std::nullopt));
+    valuePools.push_back(ValuePoolDesc(std::string("burned"), tip->nChainTotalBurned, std::nullopt));
     obj.push_back(Pair("valuePools",            valuePools));
 
     const Consensus::Params& consensusParams = Params().GetConsensus();
