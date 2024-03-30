@@ -24,7 +24,7 @@
 #include "script/interpreter.h"
 #include "uint256.h"
 
-#include <boost/variant.hpp>
+#include <variant>
 
 #include <stdint.h>
 
@@ -89,14 +89,14 @@ public:
     friend bool operator<(const CNoDestination &a, const CNoDestination &b) { return true; }
 };
 
-/** 
+/**
  * A txout script template with a specific destination. It is either:
  *  * CNoDestination: no destination set
  *  * CKeyID: TX_PUBKEYHASH destination
  *  * CScriptID: TX_SCRIPTHASH destination
  *  A CTxDestination is the internal data type encoded in a bitcoin address
  */
-typedef boost::variant<CNoDestination, CPubKey, CKeyID, CScriptID> CTxDestination;
+typedef std::variant<CNoDestination, CPubKey, CKeyID, CScriptID> CTxDestination;
 
 class COptCCParams
 {
@@ -111,7 +111,7 @@ class COptCCParams
 
         COptCCParams() : version(0), evalCode(0), n(0), m(0) {}
 
-        COptCCParams(uint8_t ver, uint8_t code, uint8_t _n, uint8_t _m, std::vector<CPubKey> &vkeys, std::vector<std::vector<unsigned char>> &vdata) : 
+        COptCCParams(uint8_t ver, uint8_t code, uint8_t _n, uint8_t _m, std::vector<CPubKey> &vkeys, std::vector<std::vector<unsigned char>> &vdata) :
             version(ver), evalCode(code), n(_n), m(_m), vKeys(vkeys), vData(vdata) {}
 
         COptCCParams(std::vector<unsigned char> &vch);

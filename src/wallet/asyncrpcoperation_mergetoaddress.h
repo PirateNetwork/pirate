@@ -63,7 +63,7 @@ typedef std::tuple<std::string, std::string> MergeToAddressRecipient;
 
 // A struct to help us track the witness and anchor for a given JSOutPoint
 // struct MergeToAddressWitnessAnchorData {
-//     boost::optional<SproutWitness> witness;
+//     std::optional<SproutWitness> witness;
 //     uint256 anchor;
 // };
 
@@ -71,7 +71,7 @@ class AsyncRPCOperation_mergetoaddress : public AsyncRPCOperation
 {
 public:
     AsyncRPCOperation_mergetoaddress(
-                                     boost::optional<TransactionBuilder> builder,
+                                     std::optional<TransactionBuilder> builder,
                                      CMutableTransaction contextualTx,
                                      std::vector<MergeToAddressInputUTXO> utxoInputs,
                                      std::vector<MergeToAddressInputSaplingNote> saplingNoteInputs,
@@ -134,7 +134,7 @@ private:
     // // JoinSplit where you have the witnesses and anchor
     // UniValue perform_joinsplit(
     //                            MergeToAddressJSInfo& info,
-    //                            std::vector<boost::optional<SproutWitness>> witnesses,
+    //                            std::vector<std::optional<SproutWitness>> witnesses,
     //                            uint256 anchor);
     //
     // void sign_send_raw_transaction(UniValue obj); // throws exception if there was an error
@@ -194,7 +194,7 @@ public:
     //
     // UniValue perform_joinsplit(
     //                            MergeToAddressJSInfo& info,
-    //                            std::vector<boost::optional<SproutWitness>> witnesses,
+    //                            std::vector<std::optional<SproutWitness>> witnesses,
     //                            uint256 anchor)
     // {
     //     return delegate->perform_joinsplit(info, witnesses, anchor);

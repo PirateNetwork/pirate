@@ -2451,7 +2451,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 if (!IsValidPaymentAddress(zSweep)) {
                     return InitError("Invalid sweep address");
                 }
-                auto hasSpendingKey = boost::apply_visitor(HaveSpendingKeyForPaymentAddress(pwalletMain), zSweep);
+                auto hasSpendingKey = std::visit(HaveSpendingKeyForPaymentAddress(pwalletMain), zSweep);
                 if (!hasSpendingKey) {
                     return InitError("Wallet must have the spending key of sweep address");
                 }
@@ -2704,8 +2704,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         if (pwalletMain) {
             // Address has alreday been validated
             CTxDestination addr = DecodeDestination(mapArgs["-mineraddress"]);
-            CKeyID keyID = boost::get<CKeyID>(addr);
-            minerAddressInLocalWallet = pwalletMain->HaveKey(keyID);
+            CKeyID *keyID = std::get_if<CKeyID>(&addr);
+            minerAddressInLocalWallet = pwalletMain->HaveKey(*keyID);
         }
         if (GetBoolArg("-minetolocalwallet", true) && !minerAddressInLocalWallet) {
             return InitError(_("-mineraddress is not in the local wallet. Either use a local address, or set -minetolocalwallet=0"));

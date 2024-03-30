@@ -22,8 +22,7 @@
 #define BITCOIN_CONSENSUS_PARAMS_H
 
 #include "uint256.h"
-
-#include <boost/optional.hpp>
+#include <optional>
 
 int32_t MAX_BLOCK_SIZE(int32_t height);
 
@@ -112,8 +111,8 @@ struct Params {
     /** Proof of work parameters */
     uint256 powLimit; // minimum dificulty limit if EQUIHASH used
     uint256 powAlternate; // minimum dificulty limit if EQUIHASH not used
-    boost::optional<uint32_t> nPowAllowMinDifficultyBlocksAfterHeight;
-    boost::optional<uint32_t> nHF22Height;
+    std::optional<uint32_t> nPowAllowMinDifficultyBlocksAfterHeight;
+    std::optional<uint32_t> nHF22Height;
     uint32_t nHF22NotariesPriorityRotateDelta;
     int64_t nPowAveragingWindow; // lookback window to determine block production speed averages
     int64_t nPowMaxAdjustDown; // max percentage difficulty level should be lowered

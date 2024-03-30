@@ -15,7 +15,7 @@
 CAmount fSweepTxFee = DEFAULT_SWEEP_FEE;
 bool fSweepMapUsed = false;
 const int SWEEP_EXPIRY_DELTA = 40;
-boost::optional<libzcash::SaplingPaymentAddress> rpcSweepAddress;
+std::optional<libzcash::SaplingPaymentAddress> rpcSweepAddress;
 
 AsyncRPCOperation_sweeptoaddress::AsyncRPCOperation_sweeptoaddress(int targetHeight, bool fromRpc) : targetHeight_(targetHeight), fromRPC_(fromRpc){}
 
@@ -73,7 +73,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
     LogPrint("zrpcunsafe", "%s: Beginning asyncrpcoperation_sweeptoaddress.\n", getId());
     auto consensusParams = Params().GetConsensus();
     auto nextActivationHeight = NextActivationHeight(targetHeight_, consensusParams);
-    if (nextActivationHeight && targetHeight_ + SWEEP_EXPIRY_DELTA >= nextActivationHeight.get()) {
+    if (nextActivationHeight && targetHeight_ + SWEEP_EXPIRY_DELTA >= nextActivationHeight.value()) {
         LogPrint("zrpcunsafe", "%s: Sweep txs would be created before a NU activation but may expire after. Skipping this round.\n", getId());
         setSweepResult(0, 0, std::vector<std::string>());
         return true;
@@ -94,17 +94,17 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
             if (fSweepMapUsed) {
                 const vector<string>& v = mapMultiArgs["-sweepsaplingaddress"];
                 for(int i = 0; i < v.size(); i++) {
-                    auto zAddress = DecodePaymentAddress(v[i]);
-                    if (boost::get<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
-                        sweepAddress = boost::get<libzcash::SaplingPaymentAddress>(zAddress);
+                    libzcash::PaymentAddress zAddress = DecodePaymentAddress(v[i]);
+                    if (std::get_if<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
+                        sweepAddress = *(std::get_if<libzcash::SaplingPaymentAddress>(&zAddress));
                     }
                 }
             } else {
                 return false;
             }
         } else {
-            if (boost::get<libzcash::SaplingPaymentAddress>(&rpcSweepAddress) != nullptr) {
-                sweepAddress = boost::get<libzcash::SaplingPaymentAddress>(rpcSweepAddress);
+            if (rpcSweepAddress.has_value()) {
+                sweepAddress = rpcSweepAddress.value();
             } else {
                 return false;
             }
@@ -151,7 +151,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
             for (const SaplingNoteEntry& saplingEntry : saplingEntries) {
 
               libzcash::SaplingIncomingViewingKey ivk;
-              pwalletMain->GetSaplingIncomingViewingKey(boost::get<libzcash::SaplingPaymentAddress>(saplingEntry.address), ivk);
+              pwalletMain->GetSaplingIncomingViewingKey(saplingEntry.address, ivk);
 
               if (ivk == extsk.expsk.full_viewing_key().in_viewing_key() && saplingEntry.address == addr) {
                 noteCount ++;
@@ -169,7 +169,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
             for (const SaplingNoteEntry& saplingEntry : saplingEntries) {
 
                 libzcash::SaplingIncomingViewingKey ivk;
-                pwalletMain->GetSaplingIncomingViewingKey(boost::get<libzcash::SaplingPaymentAddress>(saplingEntry.address), ivk);
+                pwalletMain->GetSaplingIncomingViewingKey(saplingEntry.address, ivk);
 
                 //Select Notes from that same address we will be sending to.
                 if (ivk == extsk.expsk.full_viewing_key().in_viewing_key() && saplingEntry.address == addr) {

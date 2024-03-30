@@ -27,8 +27,6 @@
 #include <iostream>
 #include <stdexcept>
 
-#include <boost/optional.hpp>
-
 /*
 #ifdef __APPLE__
 #include <machine/endian.h>
@@ -83,7 +81,7 @@ int Equihash<N,K>::InitialiseState(eh_HashState& base_state)
     unsigned char personalization[crypto_generichash_blake2b_PERSONALBYTES] = {};
     if ( ASSETCHAINS_NK[0] == 0 && ASSETCHAINS_NK[1] == 0 )
         memcpy(personalization, "ZcashPoW", 8);
-    else 
+    else
         memcpy(personalization, "NandKPoW", 8);
     memcpy(personalization+8,  &le_N, 4);
     memcpy(personalization+12, &le_K, 4);
@@ -110,20 +108,20 @@ void GenerateHash(const eh_HashState& base_state, eh_index g,
                                           sizeof(eh_index));
         crypto_generichash_blake2b_final(&state, hash, hLen);
     }
-    else 
+    else
     {
         uint32_t myHash[16] = {0};
         uint32_t startIndex = g & 0xFFFFFFF0;
 
         for (uint32_t g2 = startIndex; g2 <= g; g2++) {
     	    uint32_t tmpHash[16] = {0};
-    	 
-    	    eh_HashState state;	
+
+    	    eh_HashState state;
     	    state = base_state;
     	    eh_index lei = htole32(g2);
     	    crypto_generichash_blake2b_update(&state, (const unsigned char*) &lei,
     		                              sizeof(eh_index));
-    	    
+
     	    crypto_generichash_blake2b_final(&state, (unsigned char*)&tmpHash[0], static_cast<uint8_t>(hLen));
 
     	    for (uint32_t idx = 0; idx < 16; idx++) myHash[idx] += tmpHash[idx];
@@ -722,7 +720,7 @@ bool Equihash<N,K>::OptimisedSolve(const eh_HashState& base_state,
         size_t hashLen;
         size_t lenIndices;
         unsigned char tmpHash[HashOutput];
-        std::vector<boost::optional<std::vector<FullStepRow<FinalFullWidth>>>> X;
+        std::vector<std::optional<std::vector<FullStepRow<FinalFullWidth>>>> X;
         X.reserve(K+1);
 
         // 3) Repeat steps 1 and 2 for each partial index
@@ -740,7 +738,7 @@ bool Equihash<N,K>::OptimisedSolve(const eh_HashState& base_state,
                                  GetSizeInBytes(N), HashLength, CollisionBitLength, newIndex);
                 if (cancelled(PartialGeneration)) throw solver_cancelled;
             }
-            boost::optional<std::vector<FullStepRow<FinalFullWidth>>> ic = icv;
+            std::optional<std::vector<FullStepRow<FinalFullWidth>>> ic = icv;
 
             // 2a) For each pair of lists:
             hashLen = HashLength;
@@ -765,7 +763,7 @@ bool Equihash<N,K>::OptimisedSolve(const eh_HashState& base_state,
                         if (ic->size() == 0)
                             goto invalidsolution;
 
-                        X[r] = boost::none;
+                        X[r] = std::nullopt;
                         hashLen -= CollisionByteLength;
                         lenIndices *= 2;
                         rti = lti;
@@ -864,7 +862,7 @@ template bool Equihash<200,9>::OptimisedSolve(const eh_HashState& base_state,
                                               const std::function<bool(EhSolverCancelCheck)> cancelled);
 #endif
 template bool Equihash<200,9>::IsValidSolution(const eh_HashState& base_state, std::vector<unsigned char> soln);
-                                              
+
 // Explicit instantiations for Equihash<96,3>
 template int Equihash<150,5>::InitialiseState(eh_HashState& base_state);
 #ifdef ENABLE_MINING

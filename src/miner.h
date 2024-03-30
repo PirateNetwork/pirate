@@ -23,7 +23,6 @@
 
 #include "primitives/block.h"
 
-#include <boost/optional.hpp>
 #include <stdint.h>
 
 class CBlockIndex;
@@ -46,7 +45,7 @@ struct CBlockTemplate
 #define KOMODO_MAXGPUCOUNT 65
 
 /*****
- * @breif Generate a new block based on mempool txs, without valid proof-of-work 
+ * @breif Generate a new block based on mempool txs, without valid proof-of-work
  * @param _pk the public key
  * @param _scriptPubKeyIn the script for the public key
  * @param gpucount assists in calculating the block's nTime
@@ -55,10 +54,10 @@ struct CBlockTemplate
  */
 CBlockTemplate* CreateNewBlock(const CPubKey _pk,const CScript& _scriptPubKeyIn, int32_t gpucount, bool isStake = false);
 #ifdef ENABLE_WALLET
-boost::optional<CScript> GetMinerScriptPubKey(CReserveKey& reservekey);
+std::optional<CScript> GetMinerScriptPubKey(CReserveKey& reservekey);
 CBlockTemplate* CreateNewBlockWithKey(CReserveKey& reservekey, int32_t nHeight, int32_t gpucount, bool isStake = false);
 #else
-boost::optional<CScript> GetMinerScriptPubKey();
+std::optional<CScript> GetMinerScriptPubKey();
 CBlockTemplate* CreateNewBlockWithKey();
 #endif
 

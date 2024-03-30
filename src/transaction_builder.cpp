@@ -13,7 +13,6 @@
 #include "key_io.h"
 #include "core_io.h" //for EncodeHexTx
 
-#include <boost/variant.hpp>
 #include <librustzcash.h>
 
 
@@ -27,19 +26,19 @@ SpendDescriptionInfo::SpendDescriptionInfo(
     //printf("SpendDescriptionInfo saplingMerklePath.position()=%lx\n", saplingMerklePath.position() );
 }
 
-boost::optional<OutputDescription> OutputDescriptionInfo::Build(void* ctx) {
+std::optional<OutputDescription> OutputDescriptionInfo::Build(void* ctx) {
     auto cmu = this->note.cmu();
     if (!cmu) {
-        return boost::none;
+        return std::nullopt;
     }
 
     libzcash::SaplingNotePlaintext notePlaintext(this->note, this->memo);
 
     auto res = notePlaintext.encrypt(this->note.pk_d);
     if (!res) {
-        return boost::none;
+        return std::nullopt;
     }
-    auto enc = res.get();
+    auto enc = res.value();
     auto encryptor = enc.second;
 
     libzcash::SaplingPaymentAddress address(this->note.d, this->note.pk_d);
@@ -57,7 +56,7 @@ boost::optional<OutputDescription> OutputDescriptionInfo::Build(void* ctx) {
             this->note.value(),
             odesc.cv.begin(),
             odesc.zkproof.begin())) {
-        return boost::none;
+        return std::nullopt;
     }
 
     odesc.cmu = *cmu;
@@ -78,13 +77,13 @@ TransactionBuilderResult::TransactionBuilderResult(const CTransaction& tx) : may
 
 TransactionBuilderResult::TransactionBuilderResult(const std::string& error) : maybeError(error) {}
 
-bool TransactionBuilderResult::IsTx() { return maybeTx != boost::none; }
+bool TransactionBuilderResult::IsTx() { return maybeTx != std::nullopt; }
 
-bool TransactionBuilderResult::IsError() { return maybeError != boost::none; }
+bool TransactionBuilderResult::IsError() { return maybeError != std::nullopt; }
 
 CTransaction TransactionBuilderResult::GetTxOrThrow() {
     if (maybeTx) {
-        return maybeTx.get();
+        return maybeTx.value();
     } else {
         throw JSONRPCError(RPC_WALLET_ERROR, "Failed to build transaction: " + GetError());
     }
@@ -92,7 +91,7 @@ CTransaction TransactionBuilderResult::GetTxOrThrow() {
 
 std::string TransactionBuilderResult::GetError() {
     if (maybeError) {
-        return maybeError.get();
+        return maybeError.value();
     } else {
         // This can only happen if isTx() is true in which case we should not call getError()
         throw std::runtime_error("getError() was called in TransactionBuilderResult, but the result was not initialized as an error.");
@@ -108,8 +107,8 @@ TransactionBuilder::TransactionBuilder(
 
     consensusBranchId = CurrentEpochBranchId(nHeight, consensusParams);
 
-    boost::optional<CTransaction> maybe_tx = CTransaction(mtx);
-    auto tx_result = maybe_tx.get();
+    std::optional<CTransaction> maybe_tx = CTransaction(mtx);
+    auto tx_result = maybe_tx.value();
     auto signedtxn = EncodeHexTx(tx_result);
     //printf("TransactionBuilder::TransactionBuilder(online) mtx= %s\n",signedtxn.c_str());
 }
@@ -138,8 +137,8 @@ TransactionBuilder::TransactionBuilder(
     mtx.nVersionGroupId,
     mtx.nVersion);
 
-    boost::optional<CTransaction> maybe_tx = CTransaction(mtx);
-    auto tx_result = maybe_tx.get();
+    std::optional<CTransaction> maybe_tx = CTransaction(mtx);
+    auto tx_result = maybe_tx.value();
     auto signedtxn = EncodeHexTx(tx_result);
     //printf("TransactionBuilder::TransactionBuilder(offline) mtx= %s\n",signedtxn.c_str());
     */
@@ -168,7 +167,7 @@ bool TransactionBuilder::AddSaplingSpend(
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << saplingMerklePath;
     std::vector<unsigned char> vLocalMerkle(ss.begin(), ss.end());
-  
+
     myCharArray_s sMerkle;
     memcpy (&sMerkle.cArray[0], reinterpret_cast<unsigned char*>(vLocalMerkle.data()), sizeof(sMerkle.cArray) );
     asMerklePath.emplace_back(sMerkle);
@@ -177,8 +176,8 @@ bool TransactionBuilder::AddSaplingSpend(
 
     mtx.valueBalance += note.value();
 
-    boost::optional<CTransaction> maybe_tx = CTransaction(mtx);
-    auto tx_result = maybe_tx.get();
+    std::optional<CTransaction> maybe_tx = CTransaction(mtx);
+    auto tx_result = maybe_tx.value();
     auto signedtxn = EncodeHexTx(tx_result);
     //printf("TransactionBuilder::AddSaplingSpend() position()=%lx, mtx= %s\n", saplingMerklePath.position(), signedtxn.c_str());
 
@@ -220,8 +219,8 @@ bool TransactionBuilder::AddSaplingSpend_process_offline_transaction(
     */
     mtx.valueBalance += note.value();
 
-    boost::optional<CTransaction> maybe_tx = CTransaction(mtx);
-    auto tx_result = maybe_tx.get();
+    std::optional<CTransaction> maybe_tx = CTransaction(mtx);
+    auto tx_result = maybe_tx.value();
     auto signedtxn = EncodeHexTx(tx_result);
     //printf("TransactionBuilder::AddSaplingSpend_process_offline_transaction() mtx= %s\n",signedtxn.c_str());
 
@@ -328,8 +327,8 @@ void TransactionBuilder::AddSaplingOutput_offline_transaction(
     std::array<unsigned char, ZC_MEMO_SIZE> memo)
 {
     auto addr = DecodePaymentAddress(address);
-    assert(boost::get<libzcash::SaplingPaymentAddress>(&addr) != nullptr);
-    auto to = boost::get<libzcash::SaplingPaymentAddress>(addr);
+    assert(std::get_if<libzcash::SaplingPaymentAddress>(&addr) != nullptr);
+    auto to = *(std::get_if<libzcash::SaplingPaymentAddress>(&addr));
 
     libzcash::Zip212Enabled zip_212_enabled = libzcash::Zip212Enabled::BeforeZip212;
     // We use nHeight = chainActive.Height() + 1 since the output will be included in the next block
@@ -449,7 +448,7 @@ void TransactionBuilder::SetExpiryHeight(int expHeight)
 void TransactionBuilder::SendChangeTo(libzcash::SaplingPaymentAddress changeAddr, uint256 ovk)
 {
     zChangeAddr = std::make_pair(ovk, changeAddr);
-    tChangeAddr = boost::none;
+    tChangeAddr = std::nullopt;
 }
 
 bool TransactionBuilder::SendChangeTo(CTxDestination& changeAddr)
@@ -459,7 +458,7 @@ bool TransactionBuilder::SendChangeTo(CTxDestination& changeAddr)
     }
 
     tChangeAddr = changeAddr;
-    zChangeAddr = boost::none;
+    zChangeAddr = std::nullopt;
 
     return true;
 }
@@ -557,7 +556,7 @@ std::string TransactionBuilder::Build_offline_transaction()
 
         sReturn="z_sign_offline arrr "+sVersion+" ";
         // Version 2 : 'Witness' was replaced by 'MerklePath'. The serialised data structure is identical to version 1,
-        //             but when the data is processed and reassembled, then libzcash::MerklePath must be used. 
+        //             but when the data is processed and reassembled, then libzcash::MerklePath must be used.
         //             The version number is increased to indicate this difference
         // Version 3 : Store hardware wallet commission in the 'fee' field instead of the 'change back to ourselves'
         //             This allows the full amount available in the address to be paid in a single transaction
@@ -868,8 +867,8 @@ std::string TransactionBuilder::Build_offline_transaction()
 
 TransactionBuilderResult TransactionBuilder::Build()
 {
-    boost::optional<CTransaction> maybe_tx = CTransaction(mtx);
-    auto tx_result = maybe_tx.get();
+    std::optional<CTransaction> maybe_tx = CTransaction(mtx);
+    auto tx_result = maybe_tx.value();
     auto signedtxn = EncodeHexTx(tx_result);
 
     //
@@ -982,7 +981,7 @@ TransactionBuilderResult TransactionBuilder::Build()
             return TransactionBuilderResult("Failed to create output description");
         }
 
-        mtx.vShieldedOutput.push_back(odesc.get());
+        mtx.vShieldedOutput.push_back(odesc.value());
     }
 
     // add op_return if there is one to add
@@ -1034,7 +1033,7 @@ TransactionBuilderResult TransactionBuilder::Build()
     }
 
     maybe_tx = CTransaction(mtx);
-    tx_result = maybe_tx.get();
+    tx_result = maybe_tx.value();
     signedtxn = EncodeHexTx(tx_result);
     //printf("signed txn: %s\n\n",signedtxn.c_str() );
 

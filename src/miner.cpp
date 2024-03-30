@@ -138,7 +138,7 @@ void UpdateTime(CBlockHeader* pblock, const Consensus::Params& consensusParams, 
     else pblock->nTime = std::max((int64_t)(pindexPrev->nTime+1), GetTime());
 
     // Updating time can change work required on testnet:
-    if (ASSETCHAINS_ADAPTIVEPOW > 0 || consensusParams.nPowAllowMinDifficultyBlocksAfterHeight != boost::none)
+    if (ASSETCHAINS_ADAPTIVEPOW > 0 || consensusParams.nPowAllowMinDifficultyBlocksAfterHeight != std::nullopt)
     {
         pblock->nBits = GetNextWorkRequired(pindexPrev, pblock, consensusParams);
     }
@@ -329,7 +329,7 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
             uint32_t cmptime = (uint32_t)pblock->nTime;
 
             if (chainName.isKMD() &&
-                consensusParams.nHF22Height != boost::none && nHeight > consensusParams.nHF22Height.get()
+                consensusParams.nHF22Height != std::nullopt && nHeight > consensusParams.nHF22Height.value()
             ) {
                 uint32_t cmptime_old = cmptime;
                 cmptime = nMedianTimePast + 777;
@@ -976,7 +976,7 @@ CBlockTemplate* CreateNewBlockWithKey(CReserveKey& reservekey, int32_t nHeight, 
             // wallet disabled
             CTxDestination dest = DecodeDestination(GetArg("-mineraddress", ""));
             if (IsValidDestination(dest)) {
-                // CKeyID keyID = boost::get<CKeyID>(dest);
+                // CKeyID keyID = std::get_if<CKeyID>(dest);
                 // scriptPubKey = CScript() << OP_DUP << OP_HASH160 << ToByteVector(keyID) << OP_EQUALVERIFY << OP_CHECKSIG;
                 scriptPubKey = GetScriptForDestination(dest);
             } else
@@ -1386,9 +1386,9 @@ void static BitcoinMiner()
 
                     /* check if hf22 rule can be applied */
                     const Consensus::Params &params = chainparams.GetConsensus();
-                    if (params.nHF22Height != boost::none)
+                    if (params.nHF22Height != std::nullopt)
                     {
-                        const uint32_t nHeightAfterGAPSecondBlockAllowed = params.nHF22Height.get();
+                        const uint32_t nHeightAfterGAPSecondBlockAllowed = params.nHF22Height.value();
                         const uint32_t nMaxGAPAllowed = params.nMaxFutureBlockTime + 1;
                         const uint32_t tiptime = pindexPrev->GetBlockTime();
 

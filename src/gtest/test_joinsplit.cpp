@@ -3,7 +3,6 @@
 #include "util/strencodings.h"
 
 #include <boost/foreach.hpp>
-#include <boost/variant/get.hpp>
 
 #include "zcash/prf.h"
 #include "util.h"

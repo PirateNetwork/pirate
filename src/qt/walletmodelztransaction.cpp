@@ -47,12 +47,12 @@ void WalletModelZTransaction::setTransactionFee(const CAmount& newFee)
     fee = newFee;
 }
 
-boost::optional<TransactionBuilder> WalletModelZTransaction::getBuilder() const
+std::optional<TransactionBuilder> WalletModelZTransaction::getBuilder() const
 {
     return builder;
 }
 
-void WalletModelZTransaction::setBuilder(const boost::optional<TransactionBuilder>& newBuilder)
+void WalletModelZTransaction::setBuilder(const std::optional<TransactionBuilder>& newBuilder)
 {
     builder = newBuilder;
 }

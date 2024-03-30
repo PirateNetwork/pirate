@@ -485,7 +485,7 @@ double benchmark_create_sapling_spend()
     SaplingNote note(address, GetRand(MAX_MONEY), libzcash::Zip212Enabled::BeforeZip212);
     SaplingMerkleTree tree;
     auto maybe_cm = note.cmu();
-    tree.append(maybe_cm.get());
+    tree.append(maybe_cm.value());
     auto anchor = tree.root();
     auto witness = tree.witness();
     auto maybe_nf = note.nullifier(expsk.full_viewing_key(), witness.position());
@@ -543,7 +543,7 @@ double benchmark_create_sapling_output()
         throw JSONRPCError(RPC_INTERNAL_ERROR, "SaplingNotePlaintext::encrypt() failed");
     }
 
-    auto enc = res.get();
+    auto enc = res.value();
     auto encryptor = enc.second;
 
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);

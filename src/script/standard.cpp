@@ -34,7 +34,7 @@ typedef vector<unsigned char> valtype;
 
 unsigned nMaxDatacarrierBytes = MAX_OP_RETURN_RELAY;
 
-bool komodo_is_vSolutionsFixActive(); // didn't want to bring komodo headers here, it's a special case to bypass bad code in Solver() and ExtractDestination() 
+bool komodo_is_vSolutionsFixActive(); // didn't want to bring komodo headers here, it's a special case to bypass bad code in Solver() and ExtractDestination()
 
 COptCCParams::COptCCParams(std::vector<unsigned char> &vch)
 {
@@ -197,7 +197,7 @@ static bool MatchMultisig(const CScript& script, unsigned int& required, std::ve
     while (script.GetOp(it, opcode, data) && CPubKey::ValidSize(data)) {
         pubkeys.emplace_back(std::move(data));
     }
-    
+
     if (!IsSmallInteger(opcode)) return false;
     unsigned int keys = CScript::DecodeOP_N(opcode);
     if (pubkeys.size() != keys || keys < required) return false;
@@ -253,7 +253,7 @@ bool Solver(const CScript& scriptPubKey, txnouttype& typeRet, std::vector<std::v
                     ptr[i] = hash20[i];
                 vSolutionsRet.push_back(hashBytes);
 
-                if (!komodo_is_vSolutionsFixActive()) 
+                if (!komodo_is_vSolutionsFixActive())
                 {
                     // allow this code before the hardfork if anyone might accidentally try it
                     if (vParams.size())
@@ -529,7 +529,7 @@ CScript GetScriptForDestination(const CTxDestination& dest)
 {
     CScript script;
 
-    boost::apply_visitor(CScriptVisitor(&script), dest);
+    std::visit(CScriptVisitor(&script), dest);
     return script;
 }
 
@@ -545,5 +545,5 @@ CScript GetScriptForMultisig(int nRequired, const std::vector<CPubKey>& keys)
 }
 
 bool IsValidDestination(const CTxDestination& dest) {
-    return dest.which() != 0;
+    return dest.index() != std::variant_npos;
 }

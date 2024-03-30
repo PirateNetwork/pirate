@@ -10,7 +10,6 @@
 #include <script/script.h>
 #include <util/strencodings.h>
 
-#include <boost/variant/apply_visitor.hpp>
 #include <boost/variant/static_visitor.hpp>
 
 #include <assert.h>
@@ -358,7 +357,7 @@ std::string EncodeExtKey(const CExtKey& key)
 
 std::string EncodeDestination(const CTxDestination& dest)
 {
-    return boost::apply_visitor(DestinationEncoder(Params()), dest);
+    return std::visit(DestinationEncoder(Params()), dest);
 }
 
 CTxDestination DecodeDestination(const std::string& str)
@@ -378,7 +377,7 @@ bool IsValidDestinationString(const std::string& str)
 
 std::string EncodePaymentAddress(const libzcash::PaymentAddress& zaddr)
 {
-    return boost::apply_visitor(PaymentAddressEncoder(Params()), zaddr);
+    return std::visit(PaymentAddressEncoder(Params()), zaddr);
 }
 
 libzcash::PaymentAddress DecodePaymentAddress(const std::string& str)
@@ -417,7 +416,7 @@ bool IsValidPaymentAddressString(const std::string& str, uint32_t consensusBranc
 
 std::string EncodeViewingKey(const libzcash::ViewingKey& vk)
 {
-    return boost::apply_visitor(ViewingKeyEncoder(Params()), vk);
+    return std::visit(ViewingKeyEncoder(Params()), vk);
 }
 
 libzcash::ViewingKey DecodeViewingKey(const std::string& str)
@@ -454,7 +453,7 @@ libzcash::ViewingKey DecodeViewingKey(const std::string& str)
 
 std::string EncodeSpendingKey(const libzcash::SpendingKey& zkey)
 {
-    return boost::apply_visitor(SpendingKeyEncoder(Params()), zkey);
+    return std::visit(SpendingKeyEncoder(Params()), zkey);
 }
 
 libzcash::SpendingKey DecodeSpendingKey(const std::string& str)
@@ -493,7 +492,7 @@ libzcash::SpendingKey DecodeSpendingKey(const std::string& str)
 
 std::string EncodeDiversifiedSpendingKey(const libzcash::DiversifiedSpendingKey& zkey)
 {
-    return boost::apply_visitor(DiversifiedSpendingKeyEncoder(Params()), zkey);
+    return std::visit(DiversifiedSpendingKeyEncoder(Params()), zkey);
 }
 
 libzcash::DiversifiedSpendingKey DecodeDiversifiedSpendingKey(const std::string& str)
@@ -518,7 +517,7 @@ libzcash::DiversifiedSpendingKey DecodeDiversifiedSpendingKey(const std::string&
 
 std::string EncodeDiversifiedViewingKey(const libzcash::DiversifiedViewingKey& zkey)
 {
-    return boost::apply_visitor(DiversifiedViewingKeyEncoder(Params()), zkey);
+    return std::visit(DiversifiedViewingKeyEncoder(Params()), zkey);
 }
 
 libzcash::DiversifiedViewingKey DecodeDiversifiedViewingKey(const std::string& str)

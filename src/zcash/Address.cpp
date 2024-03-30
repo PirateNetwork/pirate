@@ -24,7 +24,7 @@ namespace libzcash {
 
   //Diversifid SpendingKeys
   std::pair<std::string, PaymentAddress> AddressInfoFromDiversifiedSpendingKey::operator()(const SaplingDiversifiedExtendedSpendingKey &dsk) const {
-      SaplingPaymentAddress addr = dsk.extsk.ToXFVK().fvk.in_viewing_key().address(dsk.d).get();
+      SaplingPaymentAddress addr = dsk.extsk.ToXFVK().fvk.in_viewing_key().address(dsk.d).value();
       return std::make_pair("z-sapling", addr);
   }
   std::pair<std::string, PaymentAddress> AddressInfoFromDiversifiedSpendingKey::operator()(const InvalidEncoding&) const {
@@ -44,7 +44,7 @@ namespace libzcash {
 
   //Diversified Viewing Keys
   std::pair<std::string, PaymentAddress> AddressInfoFromDiversifiedViewingKey::operator()(const SaplingDiversifiedExtendedFullViewingKey &dvk) const {
-      SaplingPaymentAddress addr = dvk.extfvk.fvk.in_viewing_key().address(dvk.d).get();
+      SaplingPaymentAddress addr = dvk.extfvk.fvk.in_viewing_key().address(dvk.d).value();
       return std::make_pair("z-sapling", addr);
   }
   std::pair<std::string, PaymentAddress> AddressInfoFromDiversifiedViewingKey::operator()(const InvalidEncoding&) const {
@@ -76,21 +76,21 @@ class IsValidAddressForNetwork : public boost::static_visitor<bool> {
 };
 
 bool IsValidPaymentAddress(const libzcash::PaymentAddress& zaddr, uint32_t consensusBranchId) {
-    return boost::apply_visitor(IsValidAddressForNetwork(consensusBranchId), zaddr);
+    return std::visit(IsValidAddressForNetwork(consensusBranchId), zaddr);
 }
 
 bool IsValidViewingKey(const libzcash::ViewingKey& vk) {
-    return vk.which() != 0;
+    return vk.index() != std::variant_npos;
 }
 
 bool IsValidDiversifiedViewingKey(const libzcash::DiversifiedViewingKey& vk) {
-    return vk.which() != 0;
+    return vk.index() != std::variant_npos;
 }
 
 bool IsValidSpendingKey(const libzcash::SpendingKey& zkey) {
-    return zkey.which() != 0;
+    return zkey.index() != std::variant_npos;
 }
 
 bool IsValidDiversifiedSpendingKey(const libzcash::DiversifiedSpendingKey& zkey) {
-    return zkey.which() != 0;
+    return zkey.index() != std::variant_npos;
 }

@@ -120,8 +120,8 @@ std::pair<JSOutPoint, SaplingOutPoint> CreateValidBlock(TestWallet& wallet,
 std::pair<uint256, uint256> GetWitnessesAndAnchors(TestWallet& wallet,
                                 std::vector<JSOutPoint>& sproutNotes,
                                 std::vector<SaplingOutPoint>& saplingNotes,
-                                std::vector<boost::optional<SproutWitness>>& sproutWitnesses,
-                                std::vector<boost::optional<SaplingWitness>>& saplingWitnesses) {
+                                std::vector<std::optional<SproutWitness>>& sproutWitnesses,
+                                std::vector<std::optional<SaplingWitness>>& saplingWitnesses) {
     sproutWitnesses.clear();
     saplingWitnesses.clear();
     uint256 sproutAnchor;
@@ -371,7 +371,7 @@ TEST(WalletTests, SetSaplingNoteAddrsInCWalletTx) {
         auto pk = sk.DefaultAddress();
 
         libzcash::SaplingNote note(pk, 50000, zip_212_enabled[ver]);
-        auto cm = note.cmu().get();
+        auto cm = note.cmu().value();
         SaplingMerkleTree tree;
         tree.append(cm);
         auto anchor = tree.root();
@@ -687,7 +687,7 @@ TEST(WalletTests, GetConflictedSaplingNotes) {
 
         // Generate note A
         libzcash::SaplingNote note(pk, 50000, zip_212_enabled[ver]);
-        auto cm = note.cmu().get();
+        auto cm = note.cmu().value();
         SaplingMerkleTree saplingTree;
         saplingTree.append(cm);
         auto anchor = saplingTree.root();
@@ -1083,7 +1083,7 @@ TEST(WalletTests, SpentSaplingNoteIsFromMe) {
 
         // Generate Sapling note A
         libzcash::SaplingNote note(pk, 50000, zip_212_enabled[ver]);
-        auto cm = note.cmu().get();
+        auto cm = note.cmu().value();
         SaplingMerkleTree saplingTree;
         saplingTree.append(cm);
         auto anchor = saplingTree.root();
@@ -1235,8 +1235,8 @@ TEST(WalletTests, CachedWitnessesEmptyChain) {
     std::vector<JSOutPoint> sproutNotes {jsoutpt, jsoutpt2};
     std::vector<SaplingOutPoint> saplingNotes = SetSaplingNoteData(wtx);
 
-    std::vector<boost::optional<SproutWitness>> sproutWitnesses;
-    std::vector<boost::optional<SaplingWitness>> saplingWitnesses;
+    std::vector<std::optional<SproutWitness>> sproutWitnesses;
+    std::vector<std::optional<SaplingWitness>> saplingWitnesses;
 
     ::GetWitnessesAndAnchors(wallet, sproutNotes, saplingNotes, sproutWitnesses, saplingWitnesses);
 
@@ -1286,8 +1286,8 @@ TEST(WalletTests, CachedWitnessesEmptyChain) {
 //         // Called to fetch anchor
 //         std::vector<JSOutPoint> sproutNotes {outpts.first};
 //         std::vector<SaplingOutPoint> saplingNotes {outpts.second};
-//         std::vector<boost::optional<SproutWitness>> sproutWitnesses;
-//         std::vector<boost::optional<SaplingWitness>> saplingWitnesses;
+//         std::vector<std::optional<SproutWitness>> sproutWitnesses;
+//         std::vector<std::optional<SaplingWitness>> saplingWitnesses;
 //
 //         anchors1 = GetWitnessesAndAnchors(wallet, sproutNotes, saplingNotes, sproutWitnesses, saplingWitnesses);
 //         EXPECT_NE(anchors1.first, anchors1.second);
@@ -1308,8 +1308,8 @@ TEST(WalletTests, CachedWitnessesEmptyChain) {
 //         wallet.AddToWallet(wtx, true, NULL, 0);
 //
 //         std::vector<JSOutPoint> sproutNotes {jsoutpt};
-//         std::vector<boost::optional<SproutWitness>> sproutWitnesses;
-//         std::vector<boost::optional<SaplingWitness>> saplingWitnesses;
+//         std::vector<std::optional<SproutWitness>> sproutWitnesses;
+//         std::vector<std::optional<SaplingWitness>> saplingWitnesses;
 //
 //         GetWitnessesAndAnchors(wallet, sproutNotes, saplingNotes, sproutWitnesses, saplingWitnesses);
 //
@@ -1356,8 +1356,8 @@ TEST(WalletTests, CachedWitnessesEmptyChain) {
 //
 //         // Incrementing with the same block again should not change the cache
 //         wallet.BuildWitnessCache(&index2, false);
-//         std::vector<boost::optional<SproutWitness>> sproutWitnesses5;
-//         std::vector<boost::optional<SaplingWitness>> saplingWitnesses5;
+//         std::vector<std::optional<SproutWitness>> sproutWitnesses5;
+//         std::vector<std::optional<SaplingWitness>> saplingWitnesses5;
 //
 //         auto anchors5 = GetWitnessesAndAnchors(wallet, sproutNotes, saplingNotes, sproutWitnesses5, saplingWitnesses5);
 //         EXPECT_NE(anchors5.first, anchors5.second);
@@ -1397,8 +1397,8 @@ TEST(WalletTests, CachedWitnessesEmptyChain) {
 //         // Called to fetch anchor
 //         std::vector<JSOutPoint> sproutNotes {outpts.first};
 //         std::vector<SaplingOutPoint> saplingNotes {outpts.second};
-//         std::vector<boost::optional<SproutWitness>> sproutWitnesses;
-//         std::vector<boost::optional<SaplingWitness>> saplingWitnesses;
+//         std::vector<std::optional<SproutWitness>> sproutWitnesses;
+//         std::vector<std::optional<SaplingWitness>> saplingWitnesses;
 //         anchors2 = GetWitnessesAndAnchors(wallet, sproutNotes, saplingNotes, sproutWitnesses, saplingWitnesses);
 //     }
 //
@@ -1417,8 +1417,8 @@ TEST(WalletTests, CachedWitnessesEmptyChain) {
 //         wallet.AddToWallet(wtx, true, NULL, 0);
 //
 //         std::vector<JSOutPoint> sproutNotes {jsoutpt};
-//         std::vector<boost::optional<SproutWitness>> sproutWitnesses;
-//         std::vector<boost::optional<SaplingWitness>> saplingWitnesses;
+//         std::vector<std::optional<SproutWitness>> sproutWitnesses;
+//         std::vector<std::optional<SaplingWitness>> saplingWitnesses;
 //
 //         auto anchors3 = GetWitnessesAndAnchors(wallet, sproutNotes, saplingNotes, sproutWitnesses, saplingWitnesses);
 //
@@ -1461,8 +1461,8 @@ TEST(WalletTests, CachedWitnessesEmptyChain) {
 //     SproutMerkleTree sproutRiTree = sproutTree;
 //     SaplingMerkleTree saplingTree;
 //     SaplingMerkleTree saplingRiTree = saplingTree;
-//     std::vector<boost::optional<SproutWitness>> sproutWitnesses;
-//     std::vector<boost::optional<SaplingWitness>> saplingWitnesses;
+//     std::vector<std::optional<SproutWitness>> sproutWitnesses;
+//     std::vector<std::optional<SaplingWitness>> saplingWitnesses;
 //
 //     auto sk = libzcash::SproutSpendingKey::random();
 //     wallet.AddSproutSpendingKey(sk);
@@ -1567,8 +1567,8 @@ TEST(WalletTests, CachedWitnessesEmptyChain) {
 //     wallet.AddToWallet(wtx, true, NULL, 0);
 //
 //     std::vector<JSOutPoint> sproutNotes {jsoutpt, jsoutpt2};
-//     std::vector<boost::optional<SproutWitness>> sproutWitnesses;
-//     std::vector<boost::optional<SaplingWitness>> saplingWitnesses;
+//     std::vector<std::optional<SproutWitness>> sproutWitnesses;
+//     std::vector<std::optional<SaplingWitness>> saplingWitnesses;
 //
 //     // Before clearing, we should have a witness for one note
 //     GetWitnessesAndAnchors(wallet, sproutNotes, saplingNotes, sproutWitnesses, saplingWitnesses);
