@@ -176,7 +176,7 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     QString styleSheet = "QWidget {background-color: #303030; color: #ffffff;} QFrame#outerFrame {background-color: #282828; color: #ffffff;} QFrame#innerFrame {background-color: #303030; color: #ffffff;} QGroupBox {background-color: #282828; color: #ffffff;} QLineEdit {background-color: #303030; color: #ffffff;} QPlainTextEdit {background-color: #303030; color: #ffffff;}";
     styleSheet = styleSheet + " QRadioButton { background-color: #303030;color: #ffffff; spacing: 5px;}";
     styleSheet = styleSheet + " QRadioButton::indicator {background-color: #000000; color: #ffffff; width: 8px;height: 8px; border: 4px solid #000000; border-radius: 8px;}";
-    styleSheet = styleSheet + " QRadioButton::indicator:checked {background-color: rgba(25,225,25); color: #ffffff; width: 8px; height: 8px; border: 4px solid #000000; border-radius: 8px;}";
+    styleSheet = styleSheet + " QRadioButton::indicator:checked {background-color: rgba(25,225,25,1); color: #ffffff; width: 8px; height: 8px; border: 4px solid #000000; border-radius: 8px;}";
 
     //Add Create Seed
     newWallet = new NewWallet(networkStyle);
