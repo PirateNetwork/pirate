@@ -9,7 +9,7 @@ extern ZCJoinSplit* params;
 
 extern bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBlockIndex *pindexNew, const CDiskBlockPos& pos);
 
-void ExpectOptionalAmount(CAmount expected, boost::optional<CAmount> actual) {
+void ExpectOptionalAmount(CAmount expected, std::optional<CAmount> actual) {
     EXPECT_TRUE((bool)actual);
     if (actual) {
         EXPECT_EQ(expected, *actual);

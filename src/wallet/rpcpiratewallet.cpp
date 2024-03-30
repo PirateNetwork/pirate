@@ -292,9 +292,9 @@ void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx &tx, s
 
             if (pt) {
                 ivksOut.insert(ivk);
-                auto note = pt.get();
+                auto note = pt.value();
                 auto pa = ivk.address(note.d);
-                auto address = pa.get();
+                auto address = pa.value();
                 spend.encodedAddress = EncodePaymentAddress(address);
                 spend.amount = note.value();
                 spend.spendShieldedOutputIndex = (int)op.n;
@@ -327,13 +327,13 @@ void getSaplingSends(const Consensus::Params& params, int nHeight, RpcTx &tx, st
                     outputDesc.outCiphertext,ovk,outputDesc.cv,outputDesc.cmu,outputDesc.ephemeralKey);
 
             if (opt) {
-                auto opt_unwrapped = opt.get();
+                auto opt_unwrapped = opt.value();
                 auto pt = libzcash::SaplingNotePlaintext::decrypt(params, nHeight,
                         outputDesc.encCiphertext,outputDesc.ephemeralKey,opt_unwrapped.esk,opt_unwrapped.pk_d,outputDesc.cmu);
 
                 if (pt) {
                     ovksOut.insert(ovk);
-                    auto pt_unwrapped = pt.get();
+                    auto pt_unwrapped = pt.value();
                     auto memo = pt_unwrapped.memo();
                     libzcash::SaplingPaymentAddress sentAddr(pt_unwrapped.d, opt_unwrapped.pk_d);
 
@@ -382,9 +382,9 @@ void getSaplingReceives(const Consensus::Params& params, int nHeight, RpcTx &tx,
 
             if (pt) {
                 ivksOut.insert(ivk);
-                auto note = pt.get();
+                auto note = pt.value();
                 auto pa = ivk.address(note.d);
-                auto address = pa.get();
+                auto address = pa.value();
                 auto memo = note.memo();
                 received.encodedAddress = EncodePaymentAddress(address);
                 received.amount = note.value();
@@ -1456,12 +1456,12 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
       isTAddress = true;
 
     if (IsValidPaymentAddress(zAddress)) {
-      if (boost::get<libzcash::SproutPaymentAddress>(&zAddress) != nullptr) {
-          zcAddress = boost::get<libzcash::SproutPaymentAddress>(zAddress);
+      if (std::get_if<libzcash::SproutPaymentAddress>(&zAddress) != nullptr) {
+          zcAddress = *(std::get_if<libzcash::SproutPaymentAddress>(&zAddress));
           isZcAddress = true;
       }
-      if (boost::get<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
-          zsAddress = boost::get<libzcash::SaplingPaymentAddress>(zAddress);
+      if (std::get_if<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
+          zsAddress = *(std::get_if<libzcash::SaplingPaymentAddress>(&zAddress));
           isZsAddress = true;
       }
     }
@@ -1742,12 +1742,12 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
       isTAddress = true;
 
     if (IsValidPaymentAddress(zAddress)) {
-      if (boost::get<libzcash::SproutPaymentAddress>(&zAddress) != nullptr) {
-          zcAddress = boost::get<libzcash::SproutPaymentAddress>(zAddress);
+      if (std::get_if<libzcash::SproutPaymentAddress>(&zAddress) != nullptr) {
+          zcAddress = *(std::get_if<libzcash::SproutPaymentAddress>(&zAddress));
           isZcAddress = true;
       }
-      if (boost::get<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
-          zsAddress = boost::get<libzcash::SaplingPaymentAddress>(zAddress);
+      if (std::get_if<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
+          zsAddress = *(std::get_if<libzcash::SaplingPaymentAddress>(&zAddress));
           isZsAddress = true;
       }
     }
@@ -2028,12 +2028,12 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
       isTAddress = true;
 
     if (IsValidPaymentAddress(zAddress)) {
-      if (boost::get<libzcash::SproutPaymentAddress>(&zAddress) != nullptr) {
-          zcAddress = boost::get<libzcash::SproutPaymentAddress>(zAddress);
+      if (std::get_if<libzcash::SproutPaymentAddress>(&zAddress) != nullptr) {
+          zcAddress = *(std::get_if<libzcash::SproutPaymentAddress>(&zAddress));
           isZcAddress = true;
       }
-      if (boost::get<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
-          zsAddress = boost::get<libzcash::SaplingPaymentAddress>(zAddress);
+      if (std::get_if<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
+          zsAddress = *(std::get_if<libzcash::SaplingPaymentAddress>(&zAddress));
           isZsAddress = true;
       }
     }
@@ -2415,9 +2415,9 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
                   if (txType == 0 && pwalletMain->IsLockedNote(op))
                       txType = 3;
 
-                  auto note = pt.get();
+                  auto note = pt.value();
                   auto pa = ivk.address(note.d);
-                  auto addr = pa.get();
+                  auto addr = pa.value();
                   string addressString = EncodePaymentAddress(addr);
                   if (addressBalances.count(addressString) == 0)
                       addressBalances.insert(make_pair(addressString,txAmounts));

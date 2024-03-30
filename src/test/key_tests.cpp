@@ -198,8 +198,8 @@ BOOST_AUTO_TEST_CASE(zc_address_test)
 
             auto spendingkey2 = DecodeSpendingKey(sk_string);
             BOOST_CHECK(IsValidSpendingKey(spendingkey2));
-            BOOST_ASSERT(boost::get<SproutSpendingKey>(&spendingkey2) != nullptr);
-            auto sk2 = boost::get<SproutSpendingKey>(spendingkey2);
+            BOOST_ASSERT(std::get_if<SproutSpendingKey>(&spendingkey2) != nullptr);
+            auto sk2 = std::get_if<SproutSpendingKey>(spendingkey2);
             BOOST_CHECK(sk.inner() == sk2.inner());
         }
         {
@@ -213,8 +213,8 @@ BOOST_AUTO_TEST_CASE(zc_address_test)
             auto paymentaddr2 = DecodePaymentAddress(addr_string);
             BOOST_ASSERT(IsValidPaymentAddress(paymentaddr2));
 
-            BOOST_ASSERT(boost::get<SproutPaymentAddress>(&paymentaddr2) != nullptr);
-            auto addr2 = boost::get<SproutPaymentAddress>(paymentaddr2);
+            BOOST_ASSERT(std::get_if<SproutPaymentAddress>(&paymentaddr2) != nullptr);
+            auto addr2 = std::get_if<SproutPaymentAddress>(paymentaddr2);
             BOOST_CHECK(addr.a_pk == addr2.a_pk);
             BOOST_CHECK(addr.pk_enc == addr2.pk_enc);
         }
@@ -238,8 +238,8 @@ BOOST_AUTO_TEST_CASE(zs_address_test)
             auto spendingkey2 = DecodeSpendingKey(sk_string);
             BOOST_CHECK(IsValidSpendingKey(spendingkey2));
 
-            BOOST_ASSERT(boost::get<SaplingExtendedSpendingKey>(&spendingkey2) != nullptr);
-            auto sk2 = boost::get<SaplingExtendedSpendingKey>(spendingkey2);
+            BOOST_ASSERT(std::get_if<SaplingExtendedSpendingKey>(&spendingkey2) != nullptr);
+            auto sk2 = std::get_if<SaplingExtendedSpendingKey>(spendingkey2);
             BOOST_CHECK(sk == sk2);
         }
         {
@@ -251,8 +251,8 @@ BOOST_AUTO_TEST_CASE(zs_address_test)
             auto paymentaddr2 = DecodePaymentAddress(addr_string);
             BOOST_CHECK(IsValidPaymentAddress(paymentaddr2));
 
-            BOOST_ASSERT(boost::get<SaplingPaymentAddress>(&paymentaddr2) != nullptr);
-            auto addr2 = boost::get<SaplingPaymentAddress>(paymentaddr2);
+            BOOST_ASSERT(std::get_if<SaplingPaymentAddress>(&paymentaddr2) != nullptr);
+            auto addr2 = std::get_if<SaplingPaymentAddress>(paymentaddr2);
             BOOST_CHECK(addr == addr2);
         }
     }

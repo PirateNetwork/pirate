@@ -59,7 +59,7 @@ SaplingNote::SaplingNote(
 }
 
 // Call librustzcash to compute the commitment
-boost::optional<uint256> SaplingNote::cmu() const {
+std::optional<uint256> SaplingNote::cmu() const {
     uint256 result;
     uint256 rcm_tmp = rcm();
     if (!librustzcash_sapling_compute_cmu(
@@ -70,14 +70,14 @@ boost::optional<uint256> SaplingNote::cmu() const {
             result.begin()
         ))
     {
-        return boost::none;
+        return std::nullopt;
     }
 
     return result;
 }
 
 // Call librustzcash to compute the nullifier
-boost::optional<uint256> SaplingNote::nullifier(const SaplingFullViewingKey& vk, const uint64_t position) const
+std::optional<uint256> SaplingNote::nullifier(const SaplingFullViewingKey& vk, const uint64_t position) const
 {
     auto ak = vk.ak;
     auto nk = vk.nk;
@@ -95,7 +95,7 @@ boost::optional<uint256> SaplingNote::nullifier(const SaplingFullViewingKey& vk,
             result.begin()
     ))
     {
-        return boost::none;
+        return std::nullopt;
     }
 
     return result;
@@ -167,7 +167,7 @@ SaplingNotePlaintext::SaplingNotePlaintext(
 }
 
 
-boost::optional<SaplingNote> SaplingNotePlaintext::note(const SaplingIncomingViewingKey& ivk) const
+std::optional<SaplingNote> SaplingNotePlaintext::note(const SaplingIncomingViewingKey& ivk) const
 {
     auto addr = ivk.address(d);
     if (addr) {
@@ -175,14 +175,14 @@ boost::optional<SaplingNote> SaplingNotePlaintext::note(const SaplingIncomingVie
         if (leadbyte != 0x01) {
             zip_212_enabled = Zip212Enabled::AfterZip212;
         };
-        auto tmp = SaplingNote(d, addr.get().pk_d, value_, rseed, zip_212_enabled);
+        auto tmp = SaplingNote(d, addr.value().pk_d, value_, rseed, zip_212_enabled);
         return tmp;
     } else {
-        return boost::none;
+        return std::nullopt;
     }
 }
 
-boost::optional<SaplingOutgoingPlaintext> SaplingOutgoingPlaintext::decrypt(
+std::optional<SaplingOutgoingPlaintext> SaplingOutgoingPlaintext::decrypt(
     const SaplingOutCiphertext &ciphertext,
     const uint256& ovk,
     const uint256& cv,
@@ -192,13 +192,13 @@ boost::optional<SaplingOutgoingPlaintext> SaplingOutgoingPlaintext::decrypt(
 {
     auto pt = AttemptSaplingOutDecryption(ciphertext, ovk, cv, cm, epk);
     if (!pt) {
-        return boost::none;
+        return std::nullopt;
     }
 
     // Deserialize from the plaintext
     try {
         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-        ss << pt.get();
+        ss << pt.value();
         SaplingOutgoingPlaintext ret;
         ss >> ret;
         assert(ss.size() == 0);
@@ -206,11 +206,11 @@ boost::optional<SaplingOutgoingPlaintext> SaplingOutgoingPlaintext::decrypt(
     } catch (const boost::thread_interrupted&) {
         throw;
     } catch (...) {
-        return boost::none;
+        return std::nullopt;
     }
 }
 
-boost::optional<SaplingNotePlaintext> SaplingNotePlaintext::decrypt(
+std::optional<SaplingNotePlaintext> SaplingNotePlaintext::decrypt(
     const Consensus::Params& params,
     int height,
     const SaplingEncCiphertext &ciphertext,
@@ -222,20 +222,20 @@ boost::optional<SaplingNotePlaintext> SaplingNotePlaintext::decrypt(
     auto ret = attempt_sapling_enc_decryption_deserialization(ciphertext, ivk, epk);
 
     if (!ret) {
-        return boost::none;
+        return std::nullopt;
     } else {
         const SaplingNotePlaintext plaintext = *ret;
 
         // Check leadbyte is allowed at block height
         if (!plaintext_version_is_valid(params, height, plaintext.get_leadbyte())) {
-            return boost::none;
+            return std::nullopt;
         }
 
         return plaintext_checks_without_height(plaintext, ivk, epk, cmu);
     }
 }
 
-boost::optional<SaplingNotePlaintext> SaplingNotePlaintext::attempt_sapling_enc_decryption_deserialization(
+std::optional<SaplingNotePlaintext> SaplingNotePlaintext::attempt_sapling_enc_decryption_deserialization(
     const SaplingEncCiphertext &ciphertext,
     const uint256 &ivk,
     const uint256 &epk
@@ -244,25 +244,25 @@ boost::optional<SaplingNotePlaintext> SaplingNotePlaintext::attempt_sapling_enc_
     auto encPlaintext = AttemptSaplingEncDecryption(ciphertext, ivk, epk);
 
     if (!encPlaintext) {
-        return boost::none;
+        return std::nullopt;
     }
 
     // Deserialize from the plaintext
     SaplingNotePlaintext ret;
     try {
         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-        ss << encPlaintext.get();
+        ss << encPlaintext.value();
         ss >> ret;
         assert(ss.size() == 0);
         return ret;
     } catch (const boost::thread_interrupted&) {
         throw;
     } catch (...) {
-        return boost::none;
+        return std::nullopt;
     }
 }
 
-boost::optional<SaplingNotePlaintext> SaplingNotePlaintext::plaintext_checks_without_height(
+std::optional<SaplingNotePlaintext> SaplingNotePlaintext::plaintext_checks_without_height(
     const SaplingNotePlaintext &plaintext,
     const uint256 &ivk,
     const uint256 &epk,
@@ -271,7 +271,7 @@ boost::optional<SaplingNotePlaintext> SaplingNotePlaintext::plaintext_checks_wit
 {
     uint256 pk_d;
     if (!librustzcash_ivk_to_pkd(ivk.begin(), plaintext.d.data(), pk_d.begin())) {
-        return boost::none;
+        return std::nullopt;
     }
 
     uint256 cmu_expected;
@@ -284,11 +284,11 @@ boost::optional<SaplingNotePlaintext> SaplingNotePlaintext::plaintext_checks_wit
         cmu_expected.begin()
     ))
     {
-        return boost::none;
+        return std::nullopt;
     }
 
     if (cmu_expected != cmu) {
-        return boost::none;
+        return std::nullopt;
     }
 
     if (plaintext.get_leadbyte() != 0x01) {
@@ -297,17 +297,17 @@ boost::optional<SaplingNotePlaintext> SaplingNotePlaintext::plaintext_checks_wit
         uint256 expected_epk;
         uint256 esk = plaintext.generate_or_derive_esk();
         if (!librustzcash_sapling_ka_derivepublic(plaintext.d.data(), esk.begin(), expected_epk.begin())) {
-            return boost::none;
+            return std::nullopt;
         }
         if (expected_epk != epk) {
-            return boost::none;
+            return std::nullopt;
         }
     }
 
     return plaintext;
 }
 
-boost::optional<SaplingNotePlaintext> SaplingNotePlaintext::decrypt(
+std::optional<SaplingNotePlaintext> SaplingNotePlaintext::decrypt(
     const Consensus::Params& params,
     int height,
     const SaplingEncCiphertext &ciphertext,
@@ -320,20 +320,20 @@ boost::optional<SaplingNotePlaintext> SaplingNotePlaintext::decrypt(
     auto ret = attempt_sapling_enc_decryption_deserialization(ciphertext, epk, esk, pk_d);
 
     if (!ret) {
-        return boost::none;
+        return std::nullopt;
     } else {
         SaplingNotePlaintext plaintext = *ret;
 
         // Check leadbyte is allowed at block height
         if (!plaintext_version_is_valid(params, height, plaintext.get_leadbyte())) {
-            return boost::none;
+            return std::nullopt;
         }
 
         return plaintext_checks_without_height(plaintext, epk, esk, pk_d, cmu);
     }
 }
 
-boost::optional<SaplingNotePlaintext> SaplingNotePlaintext::attempt_sapling_enc_decryption_deserialization(
+std::optional<SaplingNotePlaintext> SaplingNotePlaintext::attempt_sapling_enc_decryption_deserialization(
     const SaplingEncCiphertext &ciphertext,
     const uint256 &epk,
     const uint256 &esk,
@@ -343,25 +343,25 @@ boost::optional<SaplingNotePlaintext> SaplingNotePlaintext::attempt_sapling_enc_
     auto encPlaintext = AttemptSaplingEncDecryption(ciphertext, epk, esk, pk_d);
 
     if (!encPlaintext) {
-        return boost::none;
+        return std::nullopt;
     };
 
     // Deserialize from the plaintext
     SaplingNotePlaintext ret;
     try {
         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-        ss << encPlaintext.get();
+        ss << encPlaintext.value();
         ss >> ret;
         assert(ss.size() == 0);
         return ret;
     } catch (const boost::thread_interrupted&) {
         throw;
     } catch (...) {
-        return boost::none;
+        return std::nullopt;
     }
 }
 
-boost::optional<SaplingNotePlaintext> SaplingNotePlaintext::plaintext_checks_without_height(
+std::optional<SaplingNotePlaintext> SaplingNotePlaintext::plaintext_checks_without_height(
     const SaplingNotePlaintext &plaintext,
     const uint256 &epk,
     const uint256 &esk,
@@ -372,10 +372,10 @@ boost::optional<SaplingNotePlaintext> SaplingNotePlaintext::plaintext_checks_wit
     // Check that epk is consistent with esk
     uint256 expected_epk;
     if (!librustzcash_sapling_ka_derivepublic(plaintext.d.data(), esk.begin(), expected_epk.begin())) {
-        return boost::none;
+        return std::nullopt;
     }
     if (expected_epk != epk) {
-        return boost::none;
+        return std::nullopt;
     }
 
     uint256 cmu_expected;
@@ -388,32 +388,32 @@ boost::optional<SaplingNotePlaintext> SaplingNotePlaintext::plaintext_checks_wit
         cmu_expected.begin()
     ))
     {
-        return boost::none;
+        return std::nullopt;
     }
 
     if (cmu_expected != cmu) {
-        return boost::none;
+        return std::nullopt;
     }
 
     if (plaintext.get_leadbyte() != 0x01) {
         // ZIP 212: Additionally check that the esk provided to this function
         // is consistent with the esk we can derive
         if (esk != plaintext.generate_or_derive_esk()) {
-            return boost::none;
+            return std::nullopt;
         }
     }
 
     return plaintext;
 }
 
-boost::optional<SaplingNotePlaintextEncryptionResult> SaplingNotePlaintext::encrypt(const uint256& pk_d) const
+std::optional<SaplingNotePlaintextEncryptionResult> SaplingNotePlaintext::encrypt(const uint256& pk_d) const
 {
     // Get the encryptor
     auto sne = SaplingNoteEncryption::FromDiversifier(d, generate_or_derive_esk());
     if (!sne) {
-        return boost::none;
+        return std::nullopt;
     }
-    auto enc = sne.get();
+    auto enc = sne.value();
 
     // Create the plaintext
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
@@ -425,9 +425,9 @@ boost::optional<SaplingNotePlaintextEncryptionResult> SaplingNotePlaintext::encr
     // Encrypt the plaintext
     auto encciphertext = enc.encrypt_to_recipient(pk_d, pt);
     if (!encciphertext) {
-        return boost::none;
+        return std::nullopt;
     }
-    return SaplingNotePlaintextEncryptionResult(encciphertext.get(), enc);
+    return SaplingNotePlaintextEncryptionResult(encciphertext.value(), enc);
 }
 
 

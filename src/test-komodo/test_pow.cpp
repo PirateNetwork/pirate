@@ -81,7 +81,7 @@ TEST(PoW, MinDifficultyRules) {
     for (int i = 0; i <= lastBlk; i++) {
         nextTime = nextTime + params.nPowTargetSpacing;
         blocks[i].pprev = i ? &blocks[i - 1] : nullptr;
-        blocks[i].nHeight = params.nPowAllowMinDifficultyBlocksAfterHeight.get() + i;
+        blocks[i].nHeight = params.nPowAllowMinDifficultyBlocksAfterHeight.value() + i;
         blocks[i].nTime = nextTime;
         blocks[i].nBits = 0x1e7fffff; /* target 0x007fffff000... */
         blocks[i].nChainWork = i ? blocks[i - 1].nChainWork 

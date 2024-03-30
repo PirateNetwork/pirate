@@ -1484,10 +1484,10 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
       if (!pwalletMain->GetSaplingIncomingViewingKey(addr, ivk))
           throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Incoming Viewing key for SaplingOutpoint not found.");
 
-      auto note = notePt.note(ivk).get();
+      auto note = notePt.note(ivk).value();
 
       uint256 anchor;
-      if (!pwalletMain->SaplingWalletGetPathRootWithCMU(saplingMerklePath, note.cmu().get(), anchor))
+      if (!pwalletMain->SaplingWalletGetPathRootWithCMU(saplingMerklePath, note.cmu().value(), anchor))
           throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Getting Anchor failed.");
 
       libzcash::SaplingExtendedSpendingKey extsk;
@@ -1599,13 +1599,13 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
 
             int txHeight = chainActive.Tip()->nHeight - wtx->GetDepthInMainChain();
             auto maybe_decrypted = wtx->DecryptSaplingNote(Params().GetConsensus(), txHeight, op);
-            if (maybe_decrypted == boost::none)
+            if (maybe_decrypted == std::nullopt)
                 throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Note decryption failed.");
 
-            auto decrypted = maybe_decrypted.get();
+            auto decrypted = maybe_decrypted.value();
             libzcash::SaplingNotePlaintext pt = decrypted.first;
             libzcash::SaplingPaymentAddress pa = decrypted.second;
-            auto note = pt.note(wtx->mapSaplingNoteData.at(op).ivk).get();
+            auto note = pt.note(wtx->mapSaplingNoteData.at(op).ivk).value();
             CAmount value = note.value();
             total += value;
 
@@ -1645,9 +1645,9 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
           if (IsValidDestination(tAddress)) {
               isTAddr = true;
           } else {
-              auto zAddress = DecodePaymentAddress(encodedAddress);
-              if (boost::get<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
-                  zsAddress = boost::get<libzcash::SaplingPaymentAddress>(zAddress);
+              libzcash::PaymentAddress zAddress = DecodePaymentAddress(encodedAddress);
+              if (std::get_if<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
+                  zsAddress = *(std::get_if<libzcash::SaplingPaymentAddress>(&zAddress));
                   isZsAddr = true;
               } else {
                   throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid address.");

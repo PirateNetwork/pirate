@@ -37,8 +37,6 @@
 #endif
 
 #include <array>
-
-#include <boost/variant.hpp>
 #include <variant>
 
 #include "zcash/JoinSplit.hpp"

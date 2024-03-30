@@ -58,7 +58,7 @@ TEST(NoteEncryption, NotePlaintext)
             FAIL();
         }
 
-        auto enc = res.get();
+        auto enc = res.value();
 
         auto ct = enc.first;
         auto encryptor = enc.second;
@@ -218,7 +218,7 @@ TEST(NoteEncryption, RejectsInvalidNoteZip212Enabled)
             FAIL();
         }
 
-        auto enc = res.get();
+        auto enc = res.value();
 
         auto ct = enc.first;
         auto encryptor = enc.second;
@@ -249,7 +249,7 @@ TEST(NoteEncryption, RejectsInvalidNoteZip212Enabled)
             FAIL();
         }
 
-        auto enc = res.get();
+        auto enc = res.value();
 
         auto ct = enc.first;
         auto encryptor = enc.second;
@@ -308,7 +308,7 @@ TEST(NoteEncryption, AcceptsValidNoteZip212Enabled)
             FAIL();
         }
 
-        auto enc = res.get();
+        auto enc = res.value();
 
         auto ct = enc.first;
         auto encryptor = enc.second;
@@ -350,7 +350,7 @@ TEST(NoteEncryption, AcceptsValidNoteZip212Enabled)
                     FAIL();
                 }
 
-                auto enc = res.get();
+                auto enc = res.value();
 
                 auto ct = enc.first;
                 auto encryptor = enc.second;
@@ -387,7 +387,7 @@ TEST(NoteEncryption, AcceptsValidNoteZip212Enabled)
             FAIL();
         }
 
-        auto enc = res.get();
+        auto enc = res.value();
 
         auto ct = enc.first;
         auto encryptor = enc.second;
@@ -440,7 +440,7 @@ TEST(NoteEncryption, SaplingApi)
     librustzcash_sapling_generate_r(esk.begin());
 
     // Invalid diversifier
-    ASSERT_EQ(boost::none, SaplingNoteEncryption::FromDiversifier({1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, esk));
+    ASSERT_EQ(std::nullopt, SaplingNoteEncryption::FromDiversifier({1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, esk));
 
     // Encrypt to pk_1
     auto enc = *SaplingNoteEncryption::FromDiversifier(pk_1.d, esk);

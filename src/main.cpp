@@ -3536,7 +3536,7 @@ int8_t GetAddressType(const CScript &scriptPubKey, CTxDestination &vDest, txnout
     if ( (Solver(scriptPubKey, txType, vSols) || ExtractDestination(scriptPubKey, vDest)) )
     {
         keyType = 1;
-        if (vDest.which())
+        if (vDest.index() != std::variant_npos)
         {
             // if we failed to solve, and got a vDest, assume P2PKH or P2PK address returned
             CKeyID kid;
@@ -6090,7 +6090,7 @@ bool ContextualCheckBlock(int32_t slowflag,const CBlock& block, CValidationState
 
     /* HF22 - check interest validation against pindexPrev->GetMedianTimePast() + 777 */
     if (chainName.isKMD() &&
-        consensusParams.nHF22Height != boost::none && txheight > consensusParams.nHF22Height.get()
+        consensusParams.nHF22Height != std::nullopt && txheight > consensusParams.nHF22Height.value()
     ) {
         if (pindexPrev) {
             uint32_t cmptime_old = cmptime;

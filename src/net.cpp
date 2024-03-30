@@ -1205,8 +1205,8 @@ static bool AttemptToEvictConnection(bool fPreferNewConnection) {
 
     const Consensus::Params& params = Params().GetConsensus();
     auto nextEpoch = NextEpoch(height, params);
-    if (nextEpoch) {
-        auto idx = nextEpoch.get();
+    if (nextEpoch.has_value()) {
+        auto idx = nextEpoch.value();
         int nActivationHeight = params.vUpgrades[idx].nActivationHeight;
 
         if (nActivationHeight > 0 &&

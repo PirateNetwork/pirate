@@ -280,7 +280,7 @@ public:
      * transactions they are spent in. This is the same security semantics as
      * for transparent addresses.
      */
-    boost::optional<uint256> nullifier;
+    std::optional<uint256> nullifier;
 
     /**
      * Cached incremental witnesses for spendable Notes.
@@ -352,7 +352,7 @@ public:
     }
 
     libzcash::SaplingIncomingViewingKey ivk;
-    boost::optional<uint256> nullifier;
+    std::optional<uint256> nullifier;
 
     //In Memory Only
     CAmount value;
@@ -379,11 +379,11 @@ public:
         return !(a == b);
     }
 
-    boost::optional<uint64_t> getPostion() {
+    std::optional<uint64_t> getPostion() {
         if (position > 0) {
             return position;
         }
-        return boost::none;
+        return std::nullopt;
     }
 
     bool setPosition(uint64_t postionIn) {
@@ -648,17 +648,17 @@ public:
 
     std::pair<libzcash::SproutNotePlaintext, libzcash::SproutPaymentAddress> DecryptSproutNote(
 	JSOutPoint jsop) const;
-    boost::optional<std::pair<
+    std::optional<std::pair<
         libzcash::SaplingNotePlaintext,
         libzcash::SaplingPaymentAddress>> DecryptSaplingNote(const Consensus::Params& params, int height, SaplingOutPoint op) const;
-    boost::optional<std::pair<
+    std::optional<std::pair<
         libzcash::SaplingNotePlaintext,
         libzcash::SaplingPaymentAddress>> DecryptSaplingNoteWithoutLeadByteCheck(SaplingOutPoint op) const;
-    boost::optional<std::pair<
+    std::optional<std::pair<
         libzcash::SaplingNotePlaintext,
         libzcash::SaplingPaymentAddress>> RecoverSaplingNote(const Consensus::Params& params, int height,
             SaplingOutPoint op, std::set<uint256>& ovks) const;
-    boost::optional<std::pair<
+    std::optional<std::pair<
         libzcash::SaplingNotePlaintext,
         libzcash::SaplingPaymentAddress>> RecoverSaplingNoteWithoutLeadByteCheck(SaplingOutPoint op, std::set<uint256>& ovks) const;
 
@@ -1241,7 +1241,7 @@ public:
     std::map<uint256, std::vector<unsigned char>> mapTempHoldCryptedSaplingMetadata;
 
     //Key used to create diversified address
-    boost::optional<libzcash::SaplingExtendedSpendingKey> primarySaplingSpendingKey;
+    std::optional<libzcash::SaplingExtendedSpendingKey> primarySaplingSpendingKey;
     typedef std::map<unsigned int, CMasterKey> MasterKeyMap;
     MasterKeyMap mapMasterKeys;
     unsigned int nMasterKeyMaxID;
@@ -1619,7 +1619,7 @@ public:
     void AddToWalletIfInvolvingMe(const std::vector<CTransaction> &vtx, std::vector<CTransaction> &vAddedTxes, const CBlock* pblock, const int nHeight, bool fUpdate, std::set<libzcash::SaplingPaymentAddress>& addressesFound, bool fRescan = false);
     void WitnessNoteCommitment(
          std::vector<uint256> commitments,
-         std::vector<boost::optional<SproutWitness>>& witnesses,
+         std::vector<std::optional<SproutWitness>>& witnesses,
          uint256 &final_anchor);
     void ReorderWalletTransactions(std::map<std::pair<int,int>, CWalletTx*> &mapSorted, int64_t &maxOrderPos);
     void UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletTx*> &mapSorted, bool resetOrder);
@@ -1660,7 +1660,7 @@ public:
 
     std::set<CTxDestination> GetAccountAddresses(const std::string& strAccount) const;
 
-    boost::optional<uint256> GetSproutNoteNullifier(
+    std::optional<uint256> GetSproutNoteNullifier(
         const JSDescription& jsdesc,
         const libzcash::SproutPaymentAddress& address,
         const ZCNoteDecryption& dec,
@@ -1677,7 +1677,7 @@ public:
 
     void GetSproutNoteWitnesses(
          std::vector<JSOutPoint> notes,
-         std::vector<boost::optional<SproutWitness>>& witnesses,
+         std::vector<std::optional<SproutWitness>>& witnesses,
          uint256 &final_anchor);
     bool GetSaplingNoteMerklePaths(
          std::vector<SaplingOutPoint> notes,
@@ -1918,9 +1918,9 @@ private:
 public:
     GetViewingKeyForPaymentAddress(CWallet *wallet) : m_wallet(wallet) {}
 
-    boost::optional<libzcash::ViewingKey> operator()(const libzcash::SproutPaymentAddress &zaddr) const;
-    boost::optional<libzcash::ViewingKey> operator()(const libzcash::SaplingPaymentAddress &zaddr) const;
-    boost::optional<libzcash::ViewingKey> operator()(const libzcash::InvalidEncoding& no) const;
+    std::optional<libzcash::ViewingKey> operator()(const libzcash::SproutPaymentAddress &zaddr) const;
+    std::optional<libzcash::ViewingKey> operator()(const libzcash::SaplingPaymentAddress &zaddr) const;
+    std::optional<libzcash::ViewingKey> operator()(const libzcash::InvalidEncoding& no) const;
 };
 
 class IncomingViewingKeyBelongsToWallet : public boost::static_visitor<bool>
@@ -1954,9 +1954,9 @@ private:
 public:
     GetSpendingKeyForPaymentAddress(CWallet *wallet) : m_wallet(wallet) {}
 
-    boost::optional<libzcash::SpendingKey> operator()(const libzcash::SproutPaymentAddress &zaddr) const;
-    boost::optional<libzcash::SpendingKey> operator()(const libzcash::SaplingPaymentAddress &zaddr) const;
-    boost::optional<libzcash::SpendingKey> operator()(const libzcash::InvalidEncoding& no) const;
+    std::optional<libzcash::SpendingKey> operator()(const libzcash::SproutPaymentAddress &zaddr) const;
+    std::optional<libzcash::SpendingKey> operator()(const libzcash::SaplingPaymentAddress &zaddr) const;
+    std::optional<libzcash::SpendingKey> operator()(const libzcash::InvalidEncoding& no) const;
 };
 
 class GetPubKeyForPubKey : public boost::static_visitor<CPubKey> {
@@ -2038,18 +2038,18 @@ private:
     CWallet *m_wallet;
     const Consensus::Params &params;
     int64_t nTime;
-    boost::optional<std::string> hdKeypath; // currently sapling only
-    boost::optional<std::string> seedFpStr; // currently sapling only
+    std::optional<std::string> hdKeypath; // currently sapling only
+    std::optional<std::string> seedFpStr; // currently sapling only
     bool log;
 public:
     AddSpendingKeyToWallet(CWallet *wallet, const Consensus::Params &params) :
-        m_wallet(wallet), params(params), nTime(1), hdKeypath(boost::none), seedFpStr(boost::none), log(false) {}
+        m_wallet(wallet), params(params), nTime(1), hdKeypath(std::nullopt), seedFpStr(std::nullopt), log(false) {}
     AddSpendingKeyToWallet(
         CWallet *wallet,
         const Consensus::Params &params,
         int64_t _nTime,
-        boost::optional<std::string> _hdKeypath,
-        boost::optional<std::string> _seedFp,
+        std::optional<std::string> _hdKeypath,
+        std::optional<std::string> _seedFp,
         bool _log
     ) : m_wallet(wallet), params(params), nTime(_nTime), hdKeypath(_hdKeypath), seedFpStr(_seedFp), log(_log) {}
 

@@ -8,7 +8,7 @@
 static const CAmount DEFAULT_SWEEP_FEE = 10000;
 extern CAmount fSweepTxFee;
 extern bool fSweepMapUsed;
-extern boost::optional<libzcash::SaplingPaymentAddress> rpcSweepAddress;
+extern std::optional<libzcash::SaplingPaymentAddress> rpcSweepAddress;
 
 class AsyncRPCOperation_sweeptoaddress : public AsyncRPCOperation
 {

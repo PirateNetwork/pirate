@@ -168,7 +168,7 @@ public:
                 const libzcash::PaymentAddress& zaddr = item.first;
 
                 bool mine = false;
-                auto saplingAddr = boost::get<libzcash::SaplingPaymentAddress>(&zaddr);
+                auto saplingAddr = std::get_if<libzcash::SaplingPaymentAddress>(&zaddr);
 
                 if (saplingAddr != nullptr) {
                     libzcash::SaplingIncomingViewingKey ivk;
@@ -221,7 +221,7 @@ public:
         bool mine = false;
         ZAddressTableEntry newEntry;
         libzcash::PaymentAddress zaddr = DecodePaymentAddress(address.toStdString());
-        auto saplingAddr = boost::get<libzcash::SaplingPaymentAddress>(&zaddr);
+        auto saplingAddr = std::get_if<libzcash::SaplingPaymentAddress>(&zaddr);
         if (saplingAddr != nullptr) {
             libzcash::SaplingIncomingViewingKey ivk;
             libzcash::SaplingExtendedFullViewingKey extfvk;
@@ -445,7 +445,7 @@ bool ZAddressTableModel::setData(const QModelIndex &index, const QVariant &value
             libzcash::PaymentAddress newAddress = DecodePaymentAddress(value.toString().toStdString());
             // Refuse to set invalid address, set error status and return false
 //!!!!! check validity
-//            if(boost::get<CNoDestination>(&newAddress))
+//            if(std::get_if<CNoDestination>(&newAddress))
 //            {
 //                editStatus = INVALID_ADDRESS;
 //                return false;

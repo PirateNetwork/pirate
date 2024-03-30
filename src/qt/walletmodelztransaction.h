@@ -29,8 +29,8 @@ public:
     void setTransactionFee(const CAmount& newFee);
     CAmount getTransactionFee() const;
 
-    void setBuilder(const boost::optional<TransactionBuilder>& newBuilder);
-    boost::optional<TransactionBuilder> getBuilder() const;
+    void setBuilder(const std::optional<TransactionBuilder>& newBuilder);
+    std::optional<TransactionBuilder> getBuilder() const;
 
     void setContextualTx(const CMutableTransaction& newContextualTx);
     CMutableTransaction getContextualTx() const;
@@ -57,7 +57,7 @@ private:
     bool    bIsMine;     //True: Spending key must be in the local adres book. False: Prepare an offline transaction signing (Off-line PC wallet || h/w wallet)
     QList<SendCoinsRecipient> recipients;
     CAmount fee;
-    boost::optional<TransactionBuilder> builder;
+    std::optional<TransactionBuilder> builder;
     CMutableTransaction contextualTx;
     std::vector<SendManyRecipient> taddrRecipients;
     std::vector<SendManyRecipient> zaddrRecipients;

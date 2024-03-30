@@ -18,7 +18,7 @@
 #include "zcash/Note.hpp"
 #include "zcash/NoteEncryption.hpp"
 
-#include <boost/optional.hpp>
+#include <optional>
 
 struct SpendDescriptionInfo {
     libzcash::SaplingExpandedSpendingKey expsk;
@@ -78,7 +78,7 @@ struct OutputDescriptionInfo {
         libzcash::SaplingNote note,
         std::array<unsigned char, ZC_MEMO_SIZE> memo) : ovk(ovk), note(note), memo(memo) {}
 
-    boost::optional<OutputDescription> Build(void* ctx);
+    std::optional<OutputDescription> Build(void* ctx);
 };
 
 
@@ -126,8 +126,8 @@ struct myCharArray_s{
 
 class TransactionBuilderResult {
 private:
-    boost::optional<CTransaction> maybeTx;
-    boost::optional<std::string> maybeError;
+    std::optional<CTransaction> maybeTx;
+    std::optional<std::string> maybeError;
 public:
     TransactionBuilderResult() = delete;
     TransactionBuilderResult(const CTransaction& tx);
@@ -168,9 +168,9 @@ private:
     std::vector<Output_s> outputs_offline;
     std::vector<TransparentInputInfo> tIns;
 
-    boost::optional<std::pair<uint256, libzcash::SaplingPaymentAddress>> zChangeAddr;
-    boost::optional<CTxDestination> tChangeAddr;
-    boost::optional<CScript> opReturn;
+    std::optional<std::pair<uint256, libzcash::SaplingPaymentAddress>> zChangeAddr;
+    std::optional<CTxDestination> tChangeAddr;
+    std::optional<CScript> opReturn;
 
     bool AddOpRetLast(CScript &s);
 

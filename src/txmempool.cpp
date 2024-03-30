@@ -168,7 +168,7 @@ void CTxMemPool::addAddressIndex(const CTxMemPoolEntry &entry, const CCoinsViewC
         CTxDestination vDest;
         if (Solver(prevout.scriptPubKey, txType, vSols) || ExtractDestination(prevout.scriptPubKey, vDest))
         {
-            if (vDest.which())
+            if (vDest.index() != std::variant_npos)
             {
                 uint160 hashBytes;
                 if (CBitcoinAddress(vDest).GetIndexKey(hashBytes, keyType, prevout.scriptPubKey.IsPayToCryptoCondition()))
@@ -200,7 +200,7 @@ void CTxMemPool::addAddressIndex(const CTxMemPoolEntry &entry, const CCoinsViewC
         if ((Solver(out.scriptPubKey, txType, vSols) || ExtractDestination(out.scriptPubKey, vDest)) && txType != TX_MULTISIG)
         {
             // if we failed to solve, and got a vDest, assume P2PKH or P2PK address returned
-            if (vDest.which())
+            if (vDest.index() != std::variant_npos)
             {
                 uint160 hashBytes;
                 if (CBitcoinAddress(vDest).GetIndexKey(hashBytes, keyType, out.scriptPubKey.IsPayToCryptoCondition()))
@@ -274,7 +274,7 @@ void CTxMemPool::addSpentIndex(const CTxMemPoolEntry &entry, const CCoinsViewCac
         if ((Solver(prevout.scriptPubKey, txType, vSols) || ExtractDestination(prevout.scriptPubKey, vDest)) && txType != TX_MULTISIG)
         {
             // if we failed to solve, and got a vDest, assume P2PKH or P2PK address returned
-            if (vDest.which())
+            if (vDest.index() != std::variant_npos)
             {
                 CKeyID kid;
                 if (CBitcoinAddress(vDest).GetKeyID(kid))

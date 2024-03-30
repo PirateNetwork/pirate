@@ -32,7 +32,6 @@
 #include "zcash/address/zip32.h"
 
 #include <boost/signals2/signal.hpp>
-#include <boost/variant.hpp>
 
 /** A virtual base class for key stores */
 class CKeyStore
@@ -42,7 +41,7 @@ protected:
 
 public:
     mutable CCriticalSection cs_KeyStore;
-    
+
     virtual ~CKeyStore() {}
 
     //! Set the HD seed for this keystore

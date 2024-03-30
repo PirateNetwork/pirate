@@ -119,7 +119,7 @@ public:
         consensus.nPowMaxAdjustDown = 32; // 32% adjustment down
         consensus.nPowMaxAdjustUp = 16; // 16% adjustment up
         consensus.nPowTargetSpacing = 1 * 60;
-        consensus.nPowAllowMinDifficultyBlocksAfterHeight = boost::none;
+        consensus.nPowAllowMinDifficultyBlocksAfterHeight = std::nullopt;
         consensus.nHF22Height = 2973410; /* nS6HardforkHeight + 7 * 1440 (~1 week) */
         consensus.nHF22NotariesPriorityRotateDelta = 20;
         assert(0 < consensus.nHF22NotariesPriorityRotateDelta);
@@ -372,7 +372,7 @@ public:
         consensus.nPowMaxAdjustUp = 16; // 16% adjustment up
         consensus.nPowTargetSpacing = 2.5 * 60;
         consensus.nPowAllowMinDifficultyBlocksAfterHeight = 299187;
-        consensus.nHF22Height = boost::none;
+        consensus.nHF22Height = std::nullopt;
         consensus.nHF22NotariesPriorityRotateDelta = 1;
         assert(0 < consensus.nHF22NotariesPriorityRotateDelta);
         consensus.vUpgrades[Consensus::BASE_SPROUT].nProtocolVersion = 170002;
@@ -467,7 +467,7 @@ public:
         consensus.nPowMaxAdjustUp = 0; // Turn off adjustment up
         consensus.nPowTargetSpacing = 2.5 * 60;
         consensus.nPowAllowMinDifficultyBlocksAfterHeight = 0;
-        consensus.nHF22Height = boost::none;
+        consensus.nHF22Height = std::nullopt;
         consensus.nHF22NotariesPriorityRotateDelta = 1;
         assert(0 < consensus.nHF22NotariesPriorityRotateDelta);
         consensus.vUpgrades[Consensus::BASE_SPROUT].nProtocolVersion = 170002;
@@ -626,8 +626,8 @@ CScript CChainParams::GetFoundersRewardScriptAtHeight(int nHeight) const {
 
     CTxDestination address = DecodeDestination(GetFoundersRewardAddressAtHeight(nHeight).c_str());
     assert(IsValidDestination(address));
-    assert(boost::get<CScriptID>(&address) != nullptr);
-    CScriptID scriptID = boost::get<CScriptID>(address); // address is a boost variant
+    assert(std::get_if<CScriptID>(&address) != nullptr);
+    CScriptID scriptID = *(std::get_if<CScriptID>(&address)); // address is a std::variant
     CScript script = CScript() << OP_HASH160 << ToByteVector(scriptID) << OP_EQUAL;
     return script;
 }

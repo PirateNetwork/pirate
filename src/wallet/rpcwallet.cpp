@@ -839,7 +839,7 @@ UniValue signmessage(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw JSONRPCError(RPC_TYPE_ERROR, "Invalid address");
     }
 
-    const CKeyID *keyID = boost::get<CKeyID>(&dest);
+    const CKeyID *keyID = std::get_if<CKeyID>(&dest);
     if (!keyID) {
         throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to key");
     }
@@ -3031,7 +3031,7 @@ UniValue listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
                 entry.push_back(Pair("account", pwalletMain->mapAddressBook[address].name));
 
             if (scriptPubKey.IsPayToScriptHash()) {
-                const CScriptID& hash = boost::get<CScriptID>(address);
+                const CScriptID& hash = *(std::get_if<CScriptID>(&address));
                 CScript redeemScript;
                 if (pwalletMain->GetCScript(hash, redeemScript))
                     entry.push_back(Pair("redeemScript", HexStr(redeemScript.begin(), redeemScript.end())));
@@ -3197,7 +3197,7 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
             if (!IsValidPaymentAddress(zaddr)) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, address is not a valid zaddr: ") + address);
             }
-            auto hasSpendingKey = boost::apply_visitor(HaveSpendingKeyForPaymentAddress(pwalletMain), zaddr);
+            auto hasSpendingKey = std::visit(HaveSpendingKeyForPaymentAddress(pwalletMain), zaddr);
             if (!fIncludeWatchonly && !hasSpendingKey) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, spending key for address does not belong to wallet: ") + address);
             }
@@ -3207,7 +3207,7 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
             }
             setAddress.insert(address);
 
-            if (boost::get<libzcash::SproutPaymentAddress>(&zaddr) != nullptr) {
+            if (std::get_if<libzcash::SproutPaymentAddress>(&zaddr) != nullptr) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, sprout addresses are not supported: ") + address);
             }
 
@@ -3271,7 +3271,7 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
             obj.push_back(Pair("rawconfirmations", entry.confirmations));
             libzcash::SaplingIncomingViewingKey ivk;
             libzcash::SaplingExtendedFullViewingKey extfvk;
-            pwalletMain->GetSaplingIncomingViewingKey(boost::get<libzcash::SaplingPaymentAddress>(entry.address), ivk);
+            pwalletMain->GetSaplingIncomingViewingKey(entry.address, ivk);
             pwalletMain->GetSaplingFullViewingKey(ivk, extfvk);
             bool hasSaplingSpendingKey = pwalletMain->HaveSaplingSpendingKey(extfvk);
             bool hasSaplingFullViewingKey = pwalletMain->HaveSaplingFullViewingKey(ivk);
@@ -3580,11 +3580,11 @@ UniValue z_setprimaryspendingkey(const UniValue& params, bool fHelp, const CPubK
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid spending key!");
     }
 
-    if (boost::get<libzcash::SaplingExtendedSpendingKey>(&spendingkey) == nullptr) {
+    if (std::get_if<libzcash::SaplingExtendedSpendingKey>(&spendingkey) == nullptr) {
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Primary key must be a Sapling Extended Spending Key!");
     }
 
-    const libzcash::SaplingExtendedSpendingKey extsk = *(boost::get<libzcash::SaplingExtendedSpendingKey>(&spendingkey));
+    const libzcash::SaplingExtendedSpendingKey extsk = *(std::get_if<libzcash::SaplingExtendedSpendingKey>(&spendingkey));
     // const libzcash::SaplingExtendedSpendingKey sk = *extsk;
 
     return pwalletMain->SetPrimarySpendingKey(extsk);
@@ -3762,8 +3762,8 @@ UniValue z_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubK
     }
 
     // Visitor to support Sprout and Sapling addrs
-    if (!boost::apply_visitor(PaymentAddressBelongsToWallet(pwalletMain), zaddr) &&
-        !boost::apply_visitor(IncomingViewingKeyBelongsToWallet(pwalletMain), zaddr)) {
+    if (!std::visit(PaymentAddressBelongsToWallet(pwalletMain), zaddr) &&
+        !std::visit(IncomingViewingKeyBelongsToWallet(pwalletMain), zaddr)) {
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "From address does not belong to this node, zaddr spending key or viewing key not found.");
     }
 
@@ -3772,11 +3772,11 @@ UniValue z_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubK
     std::vector<SaplingNoteEntry> saplingEntries;
     pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, fromaddress, nMinDepth, false, false);
 
-    if (boost::get<libzcash::SaplingPaymentAddress>(&zaddr) != nullptr) {
+    if (std::get_if<libzcash::SaplingPaymentAddress>(&zaddr) != nullptr) {
 
         std::set<std::pair<PaymentAddress, uint256>> nullifierSet = pwalletMain->GetNullifiersForAddresses({zaddr});
         libzcash::SaplingIncomingViewingKey ivk;
-        pwalletMain->GetSaplingIncomingViewingKey(boost::get<libzcash::SaplingPaymentAddress>(zaddr), ivk);
+        pwalletMain->GetSaplingIncomingViewingKey(*(std::get_if<libzcash::SaplingPaymentAddress>(&zaddr)), ivk);
         bool hasSaplingFullViewingKey = pwalletMain->HaveSaplingFullViewingKey(ivk);
 
         for (SaplingNoteEntry & entry : saplingEntries) {
@@ -3851,7 +3851,7 @@ UniValue z_getbalance(const UniValue& params, bool fHelp, const CPubKey& mypk)
         if (!IsValidPaymentAddress(res)) {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a taddr or zaddr.");
         }
-        if (!boost::apply_visitor(PaymentAddressBelongsToWallet(pwalletMain), res)) {
+        if (!std::visit(PaymentAddressBelongsToWallet(pwalletMain), res)) {
              throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "From address does not belong to this node, spending key or viewing key not found.");
         }
     }
@@ -4162,7 +4162,7 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp, const CPubKey& my
 
         // We don't need to check the leadbyte here: if wtx exists in
         // the wallet, it must have already passed the leadbyte check
-        auto decrypted = wtxPrev.DecryptSaplingNoteWithoutLeadByteCheck(op).get();
+        auto decrypted = wtxPrev.DecryptSaplingNoteWithoutLeadByteCheck(op).value();
         auto notePt = decrypted.first;
         auto pa = decrypted.second;
 
@@ -4535,11 +4535,11 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
       throw JSONRPCError(RPC_INVALID_PARAMETER, "From address must be a z-addr");
     }
     // We don't need to lock on the wallet as spending key related methods are thread-safe
-    if (!boost::apply_visitor(HaveSpendingKeyForPaymentAddress(pwalletMain), address))
+    if (!std::visit(HaveSpendingKeyForPaymentAddress(pwalletMain), address))
     {
       throw JSONRPCError(RPC_INVALID_PARAMETER, "The spending key of the from_address is not in your wallet");
     }
-    auto spendingkey_ = boost::apply_visitor(GetSpendingKeyForPaymentAddress(pwalletMain), address).get();
+    auto spendingkey_ = std::visit(GetSpendingKeyForPaymentAddress(pwalletMain), address).value();
 
 
 
@@ -5084,7 +5084,7 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
     //printf("z_sign_offline()   15 Get SaplingExtendedSpendingKey\n"); fflush(stdout);
     SaplingExpandedSpendingKey expsk;
     uint256 ovk;
-    auto sk = boost::get<libzcash::SaplingExtendedSpendingKey>(spendingkey_);
+    auto sk = *(std::get_if<libzcash::SaplingExtendedSpendingKey>(&spendingkey_));
     expsk = sk.expsk;
     ovk = expsk.full_viewing_key().ovk;
 
@@ -5140,8 +5140,8 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
         //printf("z_sign_offline() 20 for(%d) address=%s, value=%ld, hexMemo=%s\n", iI, address.c_str(), value, hexMemo.c_str() ); fflush(stdout);
 
         auto addr = DecodePaymentAddress(address);
-        assert(boost::get<libzcash::SaplingPaymentAddress>(&addr) != nullptr);
-        auto to = boost::get<libzcash::SaplingPaymentAddress>(addr);
+        assert(std::get_if<libzcash::SaplingPaymentAddress>(&addr) != nullptr);
+        auto to = *(std::get_if<libzcash::SaplingPaymentAddress>(&addr));
 
         auto memo = get_memo_from_hex_string(hexMemo);
 
@@ -5218,12 +5218,12 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
         }
 
         // Check that we have the spending key
-        if (!boost::apply_visitor(HaveSpendingKeyForPaymentAddress(pwalletMain), res)) {
+        if (!std::visit(HaveSpendingKeyForPaymentAddress(pwalletMain), res)) {
              throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "From address does not belong to this node, zaddr spending key not found.");
         }
 
         // Remember whether this is a Sprout or Sapling address
-        fromSapling = boost::get<libzcash::SaplingPaymentAddress>(&res) != nullptr;
+        fromSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
     }
     // This logic will need to be updated if we add a new shielded pool
     bool fromSprout = !(fromTaddr || fromSapling);
@@ -5266,7 +5266,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
             if (IsValidPaymentAddress(res, branchId)) {
                 isZaddr = true;
 
-                bool toSapling = boost::get<libzcash::SaplingPaymentAddress>(&res) != nullptr;
+                bool toSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
                 bool toSprout = !toSapling;
                 noSproutAddrs = noSproutAddrs && toSapling;
 
@@ -5370,7 +5370,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
     for (int i = 0; i < zaddrRecipients.size(); i++) {
         auto address = std::get<0>(zaddrRecipients[i]);
         auto res = DecodePaymentAddress(address);
-        bool toSapling = boost::get<libzcash::SaplingPaymentAddress>(&res) != nullptr;
+        bool toSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
         if (toSapling) {
             mtx.vShieldedOutput.push_back(OutputDescription());
         } else {
@@ -5436,7 +5436,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
     UniValue contextInfo = o;
 
     // Builder (used if Sapling addresses are involved)
-    boost::optional<TransactionBuilder> builder;
+    std::optional<TransactionBuilder> builder;
     if (noSproutAddrs) {
         builder = TransactionBuilder(Params().GetConsensus(), nextBlockHeight, pwalletMain);
     }
@@ -5529,13 +5529,13 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
     }
 
     // Check that we have the spending key
-    if (boost::apply_visitor(HaveSpendingKeyForPaymentAddress(pwalletMain), res))
+    if (std::visit(HaveSpendingKeyForPaymentAddress(pwalletMain), res))
     {
       //printf("z_sendmany_prepare_offline() Have full key for from_address. Must use z_sendmany instead of z_sendmany_prepare_offline\n"); fflush(stdout);
       throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Have the full spending key of the from_address. Use z_sendmany() command to send the transaction directly to the network.");
     }
 
-    if (!boost::apply_visitor(IncomingViewingKeyBelongsToWallet(pwalletMain), res))
+    if (!std::visit(IncomingViewingKeyBelongsToWallet(pwalletMain), res))
     {
       //printf("z_sendmany_prepare_offline() Unknown from address\n");fflush(stdout);
       throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "From address not found in the wallet.");
@@ -5556,7 +5556,7 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
     }
 
     // Remember whether this is a Sprout or Sapling address
-    fromSapling = boost::get<libzcash::SaplingPaymentAddress>(&res) != nullptr;
+    fromSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
     if (fromSapling == false)
     {
       //printf("z_sendmany_prepare_offline() The from_address is not a sapling address\n");fflush(stdout);
@@ -5615,7 +5615,7 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
         {
             isZaddr = true;
 
-            bool toSapling = boost::get<libzcash::SaplingPaymentAddress>(&res) != nullptr;
+            bool toSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
             bool toSprout = !toSapling;
             noSproutAddrs = noSproutAddrs && toSapling;
 
@@ -5755,7 +5755,7 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
     {
         auto address = std::get<0>(zaddrRecipients[i]);
         auto res = DecodePaymentAddress(address);
-        bool toSapling = boost::get<libzcash::SaplingPaymentAddress>(&res) != nullptr;
+        bool toSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
         if (toSapling)
         {
             mtx.vShieldedOutput.push_back(OutputDescription());
@@ -5839,7 +5839,7 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
 
 
     //Proceed to create and sign the off-line transaction:
-    boost::optional<TransactionBuilder> builder;
+    std::optional<TransactionBuilder> builder;
     if (noSproutAddrs)
     {
         builder = TransactionBuilder(Params().GetConsensus(), nextBlockHeight, pwalletMain);
@@ -5972,7 +5972,7 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp, const CPubKey& myp
     if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
         auto res = DecodePaymentAddress(destaddress);
         if (IsValidPaymentAddress(res)) {
-            bool toSapling = boost::get<libzcash::SaplingPaymentAddress>(&res) != nullptr;
+            bool toSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
             if (toSapling) {
                 throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Sapling has not activated");
             }
@@ -6031,7 +6031,7 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp, const CPubKey& myp
         CAmount nValue = out.tx->vout[out.i].nValue;
 
         if (!maxedOutFlag) {
-            size_t increase = (boost::get<CScriptID>(&address) != nullptr) ? CTXIN_SPEND_P2SH_SIZE : CTXIN_SPEND_DUST_SIZE;
+            size_t increase = (std::get_if<CScriptID>(&address) != nullptr) ? CTXIN_SPEND_P2SH_SIZE : CTXIN_SPEND_DUST_SIZE;
             if (estimatedTxSize + increase >= max_tx_size ||
                 (mempoolLimit > 0 && utxoCounter > mempoolLimit))
             {
@@ -6342,7 +6342,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
     if (!IsValidDestination(taddr)) {
         auto decodeAddr = DecodePaymentAddress(destaddress);
         if (IsValidPaymentAddress(decodeAddr)) {
-            if (boost::get<libzcash::SaplingPaymentAddress>(&decodeAddr) != nullptr) {
+            if (std::get_if<libzcash::SaplingPaymentAddress>(&decodeAddr) != nullptr) {
                 isToSaplingZaddr = true;
                 // If Sapling is not active, do not allow sending to a sapling addresses.
                 if (!saplingActive) {
@@ -6468,7 +6468,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
 
             utxoCounter++;
             if (!maxedOutUTXOsFlag) {
-                size_t increase = (boost::get<CScriptID>(&address) != nullptr) ? CTXIN_SPEND_P2SH_SIZE : CTXIN_SPEND_DUST_SIZE;
+                size_t increase = (std::get_if<CScriptID>(&address) != nullptr) ? CTXIN_SPEND_P2SH_SIZE : CTXIN_SPEND_DUST_SIZE;
                 if (estimatedTxSize + increase >= max_tx_size ||
                     (mempoolLimit > 0 && utxoCounter > mempoolLimit))
                 {
@@ -6611,7 +6611,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
     // }
 
     // Builder (used if Sapling addresses are involved)
-    boost::optional<TransactionBuilder> builder;
+    std::optional<TransactionBuilder> builder;
     if (isToSaplingZaddr || saplingNoteInputs.size() > 0) {
         builder = TransactionBuilder(Params().GetConsensus(), nextBlockHeight, pwalletMain);
     } else
@@ -7709,7 +7709,7 @@ UniValue gatewaysdumpprivkey(const UniValue& params, bool fHelp, const CPubKey& 
     if (!IsValidDestination(dest)) {
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid transparent address");
     }
-    const CKeyID *keyID = boost::get<CKeyID>(&dest);
+    const CKeyID *keyID = std::get_if<CKeyID>(&dest);
     if (!keyID) {
         throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to a key");
     }
