@@ -290,7 +290,7 @@ QCheckBox::indicator {
 }
 
 QCheckBox::indicator:checked {
-    background-color: rgba(25,225,25);
+    background-color: rgba(25,225,25,1);
     color: #ffffff;
     width: 8px;
     height: 8px;
@@ -359,7 +359,7 @@ QRadioButton::indicator {
 }
 
 QRadioButton::indicator:checked {
-    background-color: rgba(25,225,25);
+    background-color: rgba(25,225,25,1);
     color: #ffffff;
     width: 8px;
     height: 8px;
