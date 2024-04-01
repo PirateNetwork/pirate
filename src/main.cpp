@@ -5500,8 +5500,10 @@ bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBl
             }
             std::pair<std::multimap<CBlockIndex*, CBlockIndex*>::iterator, std::multimap<CBlockIndex*, CBlockIndex*>::iterator> range = mapBlocksUnlinked.equal_range(pindex);
             while (range.first != range.second) {
-                queue.push_back(range.first->second);
-                range.first = mapBlocksUnlinked.erase(range.first);
+                std::multimap<CBlockIndex*, CBlockIndex*>::iterator it = range.first;
+                queue.push_back(it->second);
+                range.first++;
+                mapBlocksUnlinked.erase(it);
             }
         }
     } else {
@@ -6774,6 +6776,10 @@ bool static LoadBlockIndexDB()
         vSortedByHeight.push_back(make_pair(pindex->nHeight, pindex));
     }
     sort(vSortedByHeight.begin(), vSortedByHeight.end());
+
+    uiInterface.ShowProgress(_("Loading block index DB..."), 0, false);
+    int cur_height_num = 0;
+
     for (const std::pair<int, CBlockIndex*>& item : vSortedByHeight)
     {
         CBlockIndex* pindex = item.second;
@@ -6865,8 +6871,28 @@ bool static LoadBlockIndexDB()
             pindex->BuildSkip();
         if (pindex->IsValid(BLOCK_VALID_TREE) && (pindexBestHeader == NULL || CBlockIndexWorkComparator()(pindexBestHeader, pindex)))
             pindexBestHeader = pindex;
+
+        uiInterface.ShowProgress(_("Loading block index DB..."), (int)((double)(cur_height_num*100)/(double)(vSortedByHeight.size())), false);
+        cur_height_num++;
     }
 
+    // Load block file info
+    pblocktree->ReadLastBlockFile(nLastBlockFile);
+    vinfoBlockFile.resize(nLastBlockFile + 1);
+    tmpBlockFiles.resize(nLastTmpFile + 1);
+    LogPrintf("%s: last block file = %i\n", __func__, nLastBlockFile);
+    for (int nFile = 0; nFile <= nLastBlockFile; nFile++) {
+        pblocktree->ReadBlockFileInfo(nFile, vinfoBlockFile[nFile]);
+    }
+    LogPrintf("%s: last block file info: %s\n", __func__, vinfoBlockFile[nLastBlockFile].ToString());
+    for (int nFile = nLastBlockFile + 1; true; nFile++) {
+        CBlockFileInfo info;
+        if (pblocktree->ReadBlockFileInfo(nFile, info)) {
+            vinfoBlockFile.push_back(info);
+        } else {
+            break;
+        }
+    }
 
     // Check presence of blk files
     LogPrintf("Checking all blk files are present...\n");
