@@ -224,6 +224,7 @@ LIBZCASH_H = \
   zcash/NoteEncryption.hpp \
   zcash/Address.hpp \
   zcash/JoinSplit.hpp \
+	zcash/memo.h \
   zcash/Note.hpp \
   zcash/prf.h \
   zcash/Proof.hpp \
@@ -367,6 +368,7 @@ BITCOIN_CORE_H = \
   wallet/db.h \
   wallet/rpcwallet.h \
 	wallet/rpcpiratewallet.h \
+	wallet/orchard.h \
 	wallet/sapling.h \
   wallet/wallet.h \
 	wallet/wallet_fees.h \
@@ -509,6 +511,7 @@ libbitcoin_wallet_a_SOURCES = \
   cc/CCtx.cpp \
   wallet/rpcwallet.cpp \
 	wallet/rpcpiratewallet.cpp \
+	wallet/orchard.cpp \
   wallet/wallet.cpp \
 	wallet/wallet_fees.cpp \
   wallet/wallet_ismine.cpp \
@@ -812,6 +815,7 @@ libzcash_a_SOURCES = \
 	zcash/NoteEncryption.cpp \
 	zcash/Address.cpp \
 	zcash/JoinSplit.cpp \
+	zcash/memo.cpp \
 	zcash/Note.cpp \
 	zcash/prf.cpp \
 	zcash/address/orchard.cpp \

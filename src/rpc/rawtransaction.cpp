@@ -53,7 +53,7 @@
 #include <boost/assign/list_of.hpp>
 
 #include <univalue.h>
-#include <utf8.h>
+#include <utf8cpp/utf8.h>
 
 using namespace std;
 
