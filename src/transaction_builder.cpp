@@ -15,6 +15,118 @@
 
 #include <librustzcash.h>
 
+uint256 ProduceShieldedSignatureHash(
+    uint32_t consensusBranchId,
+    const CTransaction& tx,
+    const std::vector<CTxOut>& allPrevOutputs,
+    const sapling::UnauthorizedBundle& saplingBundle,
+    const std::optional<orchard::UnauthorizedBundle>& orchardBundle)
+{
+    CDataStream sTx(SER_NETWORK, PROTOCOL_VERSION);
+    sTx << tx;
+
+    CDataStream sAllPrevOutputs(SER_NETWORK, PROTOCOL_VERSION);
+    sAllPrevOutputs << allPrevOutputs;
+
+    const OrchardUnauthorizedBundlePtr* orchardBundlePtr;
+    if (orchardBundle.has_value()) {
+        orchardBundlePtr = orchardBundle->inner.get();
+    } else {
+        orchardBundlePtr = nullptr;
+    }
+
+    auto dataToBeSigned = builder::shielded_signature_digest(
+        consensusBranchId,
+        {reinterpret_cast<const unsigned char*>(sTx.data()), sTx.size()},
+        {reinterpret_cast<const unsigned char*>(sAllPrevOutputs.data()), sAllPrevOutputs.size()},
+        saplingBundle,
+        orchardBundlePtr);
+    return uint256::FromRawBytes(dataToBeSigned);
+}
+
+namespace orchard {
+
+Builder::Builder(
+    bool spendsEnabled,
+    bool outputsEnabled,
+    uint256 anchor) : inner(nullptr, orchard_builder_free)
+{
+    inner.reset(orchard_builder_new(spendsEnabled, outputsEnabled, anchor.IsNull() ? nullptr : anchor.begin()));
+}
+
+bool Builder::AddSpend(orchard::SpendInfo spendInfo)
+{
+    if (!inner) {
+        throw std::logic_error("orchard::Builder has already been used");
+    }
+
+    if (orchard_builder_add_spend(
+        inner.get(),
+        spendInfo.inner.release()))
+    {
+        hasActions = true;
+        return true;
+    } else {
+        return false;
+    }
+}
+
+void Builder::AddOutput(
+    const std::optional<uint256>& ovk,
+    const libzcash::OrchardRawAddress& to,
+    CAmount value,
+    const std::optional<libzcash::Memo>& memo)
+{
+    if (!inner) {
+        throw std::logic_error("orchard::Builder has already been used");
+    }
+
+    orchard_builder_add_recipient(
+        inner.get(),
+        ovk.has_value() ? ovk->begin() : nullptr,
+        to.inner.get(),
+        value,
+        memo.has_value() ? memo.value().ToBytes().data() : nullptr);
+
+    hasActions = true;
+}
+
+std::optional<UnauthorizedBundle> Builder::Build() {
+    if (!inner) {
+        throw std::logic_error("orchard::Builder has already been used");
+    }
+
+    auto bundle = orchard_builder_build(inner.release());
+    if (bundle == nullptr) {
+        return std::nullopt;
+    } else {
+        return UnauthorizedBundle(bundle);
+    }
+}
+
+std::optional<OrchardBundle> UnauthorizedBundle::ProveAndSign(
+    const std::vector<libzcash::OrchardSpendingKey>& keys,
+    uint256 sighash)
+{
+    if (!inner) {
+        throw std::logic_error("orchard::UnauthorizedBundle has already been used");
+    }
+
+    std::vector<const OrchardSpendingKeyPtr*> pKeys;
+    for (const auto& key : keys) {
+        pKeys.push_back(key.inner.get());
+    }
+
+    auto authorizedBundle = orchard_unauthorized_bundle_prove_and_sign(
+        inner.release(), pKeys.data(), pKeys.size(), sighash.begin());
+    if (authorizedBundle == nullptr) {
+        return std::nullopt;
+    } else {
+        return OrchardBundle(authorizedBundle);
+    }
+}
+
+} // namespace orchard
 
 SpendDescriptionInfo::SpendDescriptionInfo(
     libzcash::SaplingExpandedSpendingKey expsk,

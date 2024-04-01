@@ -12,7 +12,7 @@
 
 #include "komodo_defs.h"
 
-#include <utf8.h>
+#include <utf8cpp/utf8.h>
 
 using namespace std;
 using namespace libzcash;

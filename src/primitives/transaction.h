@@ -434,6 +434,16 @@ public:
     std::string ToString() const;
 };
 
+/** An outpoint - a combination of a txid and an index n into its orchard
+ * actions */
+class OrchardOutPoint : public BaseOutPoint
+{
+public:
+    OrchardOutPoint() : BaseOutPoint() {};
+    OrchardOutPoint(uint256 hashIn, uint32_t nIn) : BaseOutPoint(hashIn, nIn) {};
+    std::string ToString() const;
+};
+
 /** An block location point used to log the exact chain location of archived transactions */
 class ArchiveTxPoint
 {
