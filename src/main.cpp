@@ -3689,6 +3689,18 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
         view.PopAnchor(SaplingMerkleFrontier::empty_root(), SAPLINGFRONTIER);
     }
 
+    // Set the old best Orchard anchor back. We can get this from the
+    // `hashFinalOrchardRoot` of the last block. However, if the last
+    // block was not on or after the Orchard activation height, this
+    // will be set to `null`. For logical consistency, in this case we
+    // set the last anchor to the empty root.
+    if (NetworkUpgradeActive(pindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
+        view.PopAnchor(pindex->pprev->hashFinalOrchardRoot, ORCHARDFRONTIER);
+    } else {
+        view.PopAnchor(OrchardMerkleFrontier::empty_root(), ORCHARDFRONTIER);
+    }
+
+
     // move best block pointer to prevout block
     view.SetBestBlock(pindex->pprev->GetBlockHash());
 
@@ -4005,6 +4017,9 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     SaplingMerkleFrontier sapling_frontier_tree;
     assert(view.GetSaplingFrontierAnchorAt(view.GetBestAnchor(SAPLINGFRONTIER), sapling_frontier_tree));
 
+    OrchardMerkleFrontier orchard_frontier_tree;
+    assert(view.GetOrchardFrontierAnchorAt(view.GetBestAnchor(ORCHARDFRONTIER), orchard_frontier_tree));
+
     // Grab the consensus branch ID for the block's height
     auto consensusBranchId = CurrentEpochBranchId(pindex->nHeight, Params().GetConsensus());
 
@@ -4169,6 +4184,11 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             sapling_frontier_tree.AppendBundle(tx.GetSaplingBundle());
         }
 
+        //Append Orchard Outputs to OrchardMerkleFrontier
+        if (tx.GetOrchardBundle().IsPresent()) {
+            orchard_frontier_tree.AppendBundle(tx.GetOrchardBundle());
+        }
+
         for (const auto& out : tx.vout) {
             if (!out.scriptPubKey.IsUnspendable()) {
                 transparentValueDelta += out.nValue;
@@ -4190,6 +4210,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     view.PushAnchor(sprout_tree);
     view.PushAnchor(sapling_tree);
     view.PushAnchor(sapling_frontier_tree);
+    view.PushAnchor(orchard_frontier_tree);
     if (!fJustCheck) {
         // Update pindex with the net change in transparent value and the chain's total
         // transparent value.
@@ -4240,6 +4261,9 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
         //Set the hashFinalSaplingRoot in the block index (equal to HahsBlockCommitments before Orchard)
         pindex->hashFinalSaplingRoot = sapling_frontier_tree.root();
+
+        //Set the hashFinalOrchardRoot in the block index
+        pindex->hashFinalOrchardRoot = orchard_frontier_tree.root();
     }
     int64_t nTime1 = GetTimeMicros(); nTimeConnect += nTime1 - nTimeStart;
     LogPrint("bench", "      - Connect %u transactions: %.2fms (%.3fms/tx, %.3fms/txin) [%.2fs]\n", (unsigned)block.vtx.size(), 0.001 * (nTime1 - nTimeStart), 0.001 * (nTime1 - nTimeStart) / block.vtx.size(), nInputs <= 1 ? 0 : 0.001 * (nTime1 - nTimeStart) / (nInputs-1), nTimeConnect * 0.000001);
@@ -4590,6 +4614,7 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
     uint256 sproutAnchorBeforeDisconnect = pcoinsTip->GetBestAnchor(SPROUT);
     uint256 saplingAnchorBeforeDisconnect = pcoinsTip->GetBestAnchor(SAPLING);
     uint256 saplingFrontierAnchorBeforeDisconnect = pcoinsTip->GetBestAnchor(SAPLINGFRONTIER);
+    uint256 orchardFrontierAnchorBeforeDisconnect = pcoinsTip->GetBestAnchor(ORCHARDFRONTIER);
     int64_t nStart = GetTimeMicros();
     {
         CCoinsViewCache view(pcoinsTip);
@@ -4607,6 +4632,7 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
     uint256 sproutAnchorAfterDisconnect = pcoinsTip->GetBestAnchor(SPROUT);
     uint256 saplingAnchorAfterDisconnect = pcoinsTip->GetBestAnchor(SAPLING);
     uint256 saplingFrontierAnchorAfterDisconnect = pcoinsTip->GetBestAnchor(SAPLINGFRONTIER);
+    uint256 orchardFrontierAnchorAfterDisconnect = pcoinsTip->GetBestAnchor(ORCHARDFRONTIER);
     // Write the chain state to disk, if necessary.
     if (!FlushStateToDisk(state, FLUSH_STATE_IF_NEEDED))
         return false;
@@ -4641,6 +4667,11 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
             // in which case we don't want to evict from the mempool yet!
             mempool.removeWithAnchor(saplingFrontierAnchorBeforeDisconnect, SAPLINGFRONTIER);
         }
+        if (orchardFrontierAnchorBeforeDisconnect != orchardFrontierAnchorAfterDisconnect) {
+            // The anchor may not change between block disconnects,
+            // in which case we don't want to evict from the mempool yet!
+            mempool.removeWithAnchor(orchardFrontierAnchorBeforeDisconnect, ORCHARDFRONTIER);
+        }
     }
 
     // Update chainActive and related variables.
@@ -4650,9 +4681,11 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
     SproutMerkleTree newSproutTree;
     SaplingMerkleTree newSaplingTree;
     SaplingMerkleFrontier newSaplingFrontierTree;
+    OrchardMerkleFrontier newOrchardFrontierTree;
     assert(pcoinsTip->GetSproutAnchorAt(pcoinsTip->GetBestAnchor(SPROUT), newSproutTree));
     assert(pcoinsTip->GetSaplingAnchorAt(pcoinsTip->GetBestAnchor(SAPLING), newSaplingTree));
     assert(pcoinsTip->GetSaplingFrontierAnchorAt(pcoinsTip->GetBestAnchor(SAPLINGFRONTIER), newSaplingFrontierTree));
+    assert(pcoinsTip->GetOrchardFrontierAnchorAt(pcoinsTip->GetBestAnchor(ORCHARDFRONTIER), newOrchardFrontierTree));
     // Let wallets know transactions went from 1-confirmed to
     // 0-confirmed or conflicted:
     std::vector<uint256> TxToRemove;
@@ -4743,13 +4776,13 @@ int32_t komodo_activate_sapling(CBlockIndex *pindex)
     return activation;
 }
 
-int32_t komodo_activate_canopy(CBlockIndex *pindex)
+int32_t komodo_activate_orchard(CBlockIndex *pindex)
 {
     uint32_t blocktime,prevtime; CBlockIndex *prev; int32_t i,transition=0,height,prevht;
     int32_t activation = 0;
     if ( pindex == 0 )
     {
-        fprintf(stderr,"komodo_activate_canopy null pindex\n");
+        fprintf(stderr,"komodo_activate_orchard null pindex\n");
         return(0);
     }
     height = pindex->nHeight;
@@ -4773,25 +4806,25 @@ int32_t komodo_activate_canopy(CBlockIndex *pindex)
     }
     height = pindex->nHeight;
     blocktime = (uint32_t)pindex->nTime;
-    //fprintf(stderr,"starting blocktime %u cmp.%d\n",blocktime,blocktime > KOMODO_CANOPY_ACTIVATION);
-    if ( blocktime > KOMODO_CANOPY_ACTIVATION ) // find the earliest transition
+    //fprintf(stderr,"starting blocktime %u cmp.%d\n",blocktime,blocktime > KOMODO_ORCHARD_ACTIVATION);
+    if ( blocktime > KOMODO_ORCHARD_ACTIVATION ) // find the earliest transition
     {
         while ( (prev= pindex->pprev) != 0 )
         {
             prevht = prev->nHeight;
             prevtime = (uint32_t)prev->nTime;
-            //fprintf(stderr,"(%d, %u).%d -> (%d, %u).%d\n",prevht,prevtime,prevtime > KOMODO_CANOPY_ACTIVATION,height,blocktime,blocktime > KOMODO_CANOPY_ACTIVATION);
+            //fprintf(stderr,"(%d, %u).%d -> (%d, %u).%d\n",prevht,prevtime,prevtime > KOMODO_ORCHARD_ACTIVATION,height,blocktime,blocktime > KOMODO_ORCHARD_ACTIVATION);
             if ( prevht+1 != height )
             {
                 fprintf(stderr,"komodo_activate_sapling: unexpected non-contiguous ht %d vs %d\n",prevht,height);
                 return(0);
             }
-            if ( prevtime <= KOMODO_CANOPY_ACTIVATION && blocktime > KOMODO_CANOPY_ACTIVATION )
+            if ( prevtime <= KOMODO_ORCHARD_ACTIVATION && blocktime > KOMODO_ORCHARD_ACTIVATION )
             {
                 activation = height + 60;
                 fprintf(stderr,"%s transition at %d (%d, %u) -> (%d, %u)\n",chainName.symbol().c_str(),height,prevht,prevtime,height,blocktime);
             }
-            if ( prevtime < KOMODO_CANOPY_ACTIVATION-3600*24 )
+            if ( prevtime < KOMODO_ORCHARD_ACTIVATION-3600*24 )
                 break;
             pindex = prev;
             height = prevht;
@@ -4800,9 +4833,9 @@ int32_t komodo_activate_canopy(CBlockIndex *pindex)
     }
     if ( activation != 0 )
     {
-        komodo_setcanopy(activation);
+        komodo_setorchard(activation);
         fprintf(stderr,"%s sapling activation at %d\n",chainName.symbol().c_str(),activation);
-        ASSETCHAINS_CANOPY = activation;
+        ASSETCHAINS_ORCHARD = activation;
     }
     return activation;
 }
@@ -4836,11 +4869,13 @@ bool ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *pblock)
     SproutMerkleTree oldSproutTree;
     SaplingMerkleTree oldSaplingTree;
     SaplingMerkleFrontier oldSaplingFrontierTree;
+    OrchardMerkleFrontier oldOrchardFrontierTree;
     if ( KOMODO_NSPV_FULLNODE )
     {
         assert(pcoinsTip->GetSproutAnchorAt(pcoinsTip->GetBestAnchor(SPROUT), oldSproutTree));
         assert(pcoinsTip->GetSaplingAnchorAt(pcoinsTip->GetBestAnchor(SAPLING), oldSaplingTree));
         assert(pcoinsTip->GetSaplingFrontierAnchorAt(pcoinsTip->GetBestAnchor(SAPLINGFRONTIER), oldSaplingFrontierTree));
+        assert(pcoinsTip->GetOrchardFrontierAnchorAt(pcoinsTip->GetBestAnchor(ORCHARDFRONTIER), oldOrchardFrontierTree));
     }
     // Apply the block atomically to the chain state.
     int64_t nTime2 = GetTimeMicros();
@@ -4916,8 +4951,8 @@ bool ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *pblock)
     {
         if ( ASSETCHAINS_SAPLING <= 0 && pindexNew->nTime > KOMODO_SAPLING_ACTIVATION - 24*3600 )
             komodo_activate_sapling(pindexNew);
-        if ( ASSETCHAINS_PRIVATE == 1 && ASSETCHAINS_CANOPY <= 0 && pindexNew->nTime > KOMODO_CANOPY_ACTIVATION - 24*3600 )
-            komodo_activate_canopy(pindexNew);
+        if ( ASSETCHAINS_PRIVATE == 1 && ASSETCHAINS_ORCHARD <= 0 && pindexNew->nTime > KOMODO_ORCHARD_ACTIVATION - 24*3600 )
+            komodo_activate_orchard(pindexNew);
         if ( ASSETCHAINS_CC != 0 && KOMODO_SNAPSHOT_INTERVAL != 0 && (pindexNew->nHeight % KOMODO_SNAPSHOT_INTERVAL) == 0 && pindexNew->nHeight >= KOMODO_SNAPSHOT_INTERVAL )
         {
             uint64_t start = time(NULL);

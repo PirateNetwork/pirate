@@ -43,22 +43,22 @@ public:
 };
 
 inline bool plaintext_version_is_valid(const Consensus::Params& params, int height, unsigned char leadbyte) {
-    int canopyActivationHeight = params.vUpgrades[Consensus::UPGRADE_CANOPY].nActivationHeight;
+    int orchardActivationHeight = params.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight;
 
-    if (height < canopyActivationHeight && leadbyte != 0x01) {
-        // non-0x01 received before Canopy activation height
+    if (height < orchardActivationHeight && leadbyte != 0x01) {
+        // non-0x01 received before Orchard activation height
         return false;
     }
-    if (height >= canopyActivationHeight
-        && height < canopyActivationHeight + ZIP212_GRACE_PERIOD
+    if (height >= orchardActivationHeight
+        && height < orchardActivationHeight + ZIP212_GRACE_PERIOD
         && leadbyte != 0x01
         && leadbyte != 0x02)
     {
-        // non-{0x01,0x02} received after Canopy activation and before grace period has elapsed
+        // non-{0x01,0x02} received after Orchard activation and before grace period has elapsed
         return false;
     }
-    if (canopyActivationHeight > 0 && height >= canopyActivationHeight + ZIP212_GRACE_PERIOD && leadbyte != 0x02) {
-        // non-0x02 received past (Canopy activation height + grace period)
+    if (orchardActivationHeight > 0 && height >= orchardActivationHeight + ZIP212_GRACE_PERIOD && leadbyte != 0x02) {
+        // non-0x02 received past (Orchard activation height + grace period)
         return false;
     }
     return true;
