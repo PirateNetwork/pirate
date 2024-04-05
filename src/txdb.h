@@ -69,6 +69,7 @@ public:
     bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
     bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
     bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const;
+    bool GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const;
     bool GetNullifier(const uint256 &nf, ShieldedType type) const;
     bool GetZkProofHash(const uint256 &zkProofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const;
     /***
@@ -90,11 +91,14 @@ public:
                     const uint256 &hashSproutAnchor,
                     const uint256 &hashSaplingAnchor,
                     const uint256 &hashSaplingFrontierAnchor,
+                    const uint256 &hashOrchardFrontierAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
                     CAnchorsSaplingMap &mapSaplingAnchors,
                     CAnchorsSaplingFrontierMap & mapSaplingFrontierAnchors,
+                    CAnchorsOrchardFrontierMap & mapOrchardFrontierAnchors,
                     CNullifiersMap &mapSproutNullifiers,
                     CNullifiersMap &mapSaplingNullifiers,
+                    CNullifiersMap &mapOrchardNullifiers,
                     CProofHashMap &mapZkOutputProofHash,
                     CProofHashMap &mapZkSpendProofHash);
     bool GetStats(CCoinsStats &stats) const;

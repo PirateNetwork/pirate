@@ -65,6 +65,7 @@ bool CCoins::Spend(uint32_t nPos)
 bool CCoinsView::GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const { return false; }
 bool CCoinsView::GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const { return false; }
 bool CCoinsView::GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const { return false; }
+bool CCoinsView::GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const { return false; }
 bool CCoinsView::GetNullifier(const uint256 &nullifier, ShieldedType type) const { return false; }
 bool CCoinsView::GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const { return false; }
 bool CCoinsView::GetCoins(const uint256 &txid, CCoins &coins) const { return false; }
@@ -76,11 +77,14 @@ bool CCoinsView::BatchWrite(CCoinsMap &mapCoins,
                             const uint256 &hashSproutAnchor,
                             const uint256 &hashSaplingAnchor,
                             const uint256 &hashSaplingFontierAnchor,
+                            const uint256 &hashOrchardFrontierAnchor,
                             CAnchorsSproutMap &mapSproutAnchors,
                             CAnchorsSaplingMap &mapSaplingAnchors,
                             CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
+                            CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
                             CNullifiersMap &mapSproutNullifiers,
                             CNullifiersMap &mapSaplingNullifiers,
+                            CNullifiersMap &mapOrchardNullifiers,
                             CProofHashMap &mapZkOutputProofHash,
                             CProofHashMap &mapZkSpendProofHash) { return false; }
 bool CCoinsView::GetStats(CCoinsStats &stats) const { return false; }
@@ -91,6 +95,7 @@ CCoinsViewBacked::CCoinsViewBacked(CCoinsView *viewIn) : base(viewIn) { }
 bool CCoinsViewBacked::GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const { return base->GetSproutAnchorAt(rt, tree); }
 bool CCoinsViewBacked::GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const { return base->GetSaplingAnchorAt(rt, tree); }
 bool CCoinsViewBacked::GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const { return base->GetSaplingFrontierAnchorAt(rt, tree); }
+bool CCoinsViewBacked::GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const { return base->GetOrchardFrontierAnchorAt(rt, tree); }
 bool CCoinsViewBacked::GetNullifier(const uint256 &nullifier, ShieldedType type) const { return base->GetNullifier(nullifier, type); }
 bool CCoinsViewBacked::GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const { return base->GetZkProofHash(zkproofHash, type, txids); }
 bool CCoinsViewBacked::GetCoins(const uint256 &txid, CCoins &coins) const { return base->GetCoins(txid, coins); }
@@ -102,14 +107,17 @@ bool CCoinsViewBacked::BatchWrite(CCoinsMap &mapCoins,
                                   const uint256 &hashBlock,
                                   const uint256 &hashSproutAnchor,
                                   const uint256 &hashSaplingAnchor,
-                                  const uint256 &hashSaplingFontierAnchor,
+                                  const uint256 &hashSaplingFrontierAnchor,
+                                  const uint256 &hashOrchardFrontierAnchor,
                                   CAnchorsSproutMap &mapSproutAnchors,
                                   CAnchorsSaplingMap &mapSaplingAnchors,
                                   CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
+                                  CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
                                   CNullifiersMap &mapSproutNullifiers,
                                   CNullifiersMap &mapSaplingNullifiers,
+                                  CNullifiersMap &mapOrchardNullifiers,
                                   CProofHashMap &mapZkOutputProofHash,
-                                  CProofHashMap &mapZkSpendProofHash) { return base->BatchWrite(mapCoins, hashBlock, hashSproutAnchor, hashSaplingAnchor, hashSaplingFontierAnchor, mapSproutAnchors, mapSaplingAnchors, mapSaplingFrontierAnchors, mapSproutNullifiers, mapSaplingNullifiers, mapZkOutputProofHash, mapZkSpendProofHash); }
+                                  CProofHashMap &mapZkSpendProofHash) { return base->BatchWrite(mapCoins, hashBlock, hashSproutAnchor, hashSaplingAnchor, hashSaplingFrontierAnchor, hashOrchardFrontierAnchor, mapSproutAnchors, mapSaplingAnchors, mapSaplingFrontierAnchors, mapOrchardFrontierAnchors, mapSproutNullifiers, mapSaplingNullifiers, mapOrchardNullifiers, mapZkOutputProofHash, mapZkSpendProofHash); }
 bool CCoinsViewBacked::GetStats(CCoinsStats &stats) const { return base->GetStats(stats); }
 
 CCoinsKeyHasher::CCoinsKeyHasher() : salt(GetRandHash()) {}
@@ -126,8 +134,10 @@ size_t CCoinsViewCache::DynamicMemoryUsage() const {
            memusage::DynamicUsage(cacheSproutAnchors) +
            memusage::DynamicUsage(cacheSaplingAnchors) +
            memusage::DynamicUsage(cacheSaplingFrontierAnchors) +
+           memusage::DynamicUsage(cacheOrchardFrontierAnchors) +
            memusage::DynamicUsage(cacheSproutNullifiers) +
            memusage::DynamicUsage(cacheSaplingNullifiers) +
+           memusage::DynamicUsage(cacheOrchardNullifiers) +
            memusage::DynamicUsage(cacheZkOutputProofHash) +
            memusage::DynamicUsage(cacheZkSpendProofHash) +
            cachedCoinsUsage;
@@ -214,6 +224,29 @@ bool CCoinsViewCache::GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkl
     }
 
     CAnchorsSaplingFrontierMap::iterator ret = cacheSaplingFrontierAnchors.insert(std::make_pair(rt, CAnchorsSaplingFrontierCacheEntry())).first;
+    ret->second.entered = true;
+    ret->second.tree = tree;
+    cachedCoinsUsage += ret->second.tree.DynamicMemoryUsage();
+
+    return true;
+}
+
+bool CCoinsViewCache::GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const {
+    CAnchorsOrchardFrontierMap::const_iterator it = cacheOrchardFrontierAnchors.find(rt);
+    if (it != cacheOrchardFrontierAnchors.end()) {
+        if (it->second.entered) {
+            tree = it->second.tree;
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    if (!base->GetOrchardFrontierAnchorAt(rt, tree)) {
+        return false;
+    }
+
+    CAnchorsOrchardFrontierMap::iterator ret = cacheOrchardFrontierAnchors.insert(std::make_pair(rt, CAnchorsOrchardFrontierCacheEntry())).first;
     ret->second.entered = true;
     ret->second.tree = tree;
     cachedCoinsUsage += ret->second.tree.DynamicMemoryUsage();
@@ -362,6 +395,16 @@ template<> void CCoinsViewCache::PushAnchor(const SaplingMerkleFrontier &tree)
     );
 }
 
+template<> void CCoinsViewCache::PushAnchor(const OrchardMerkleFrontier &tree)
+{
+    AbstractPushAnchor<OrchardMerkleFrontier, CAnchorsOrchardFrontierMap, CAnchorsOrchardFrontierMap::iterator, CAnchorsOrchardFrontierCacheEntry>(
+        tree,
+        ORCHARDFRONTIER,
+        cacheOrchardFrontierAnchors,
+        hashOrchardFrontierAnchor
+    );
+}
+
 template<>
 void CCoinsViewCache::BringBestAnchorIntoCache(
     const uint256 &currentRoot,
@@ -387,6 +430,15 @@ void CCoinsViewCache::BringBestAnchorIntoCache(
 )
 {
     assert(GetSaplingFrontierAnchorAt(currentRoot, tree));
+}
+
+template<>
+void CCoinsViewCache::BringBestAnchorIntoCache(
+    const uint256 &currentRoot,
+    OrchardMerkleFrontier &tree
+)
+{
+    assert(GetOrchardFrontierAnchorAt(currentRoot, tree));
 }
 
 template<typename Tree, typename Cache, typename CacheEntry>
@@ -445,6 +497,14 @@ void CCoinsViewCache::PopAnchor(const uint256 &newrt, ShieldedType type) {
                 SAPLINGFRONTIER,
                 cacheSaplingFrontierAnchors,
                 hashSaplingFrontierAnchor
+            );
+            break;
+        case ORCHARDFRONTIER:
+            AbstractPopAnchor<OrchardMerkleFrontier, CAnchorsOrchardFrontierMap, CAnchorsOrchardFrontierCacheEntry>(
+                newrt,
+                ORCHARDFRONTIER,
+                cacheOrchardFrontierAnchors,
+                hashOrchardFrontierAnchor
             );
             break;
         default:
@@ -575,6 +635,11 @@ uint256 CCoinsViewCache::GetBestAnchor(ShieldedType type) const {
                 hashSaplingFrontierAnchor = base->GetBestAnchor(type);
             return hashSaplingFrontierAnchor;
             break;
+        case ORCHARDFRONTIER:
+            if (hashOrchardFrontierAnchor.IsNull())
+                hashOrchardFrontierAnchor = base->GetBestAnchor(type);
+            return hashOrchardFrontierAnchor;
+            break;
         default:
             throw std::runtime_error("Unknown shielded type");
     }
@@ -666,11 +731,14 @@ bool CCoinsViewCache::BatchWrite(CCoinsMap &mapCoins,
                                  const uint256 &hashSproutAnchorIn,
                                  const uint256 &hashSaplingAnchorIn,
                                  const uint256 &hashSaplingFrontierAnchorIn,
+                                 const uint256 &hashOrchardFrontierAnchorIn,
                                  CAnchorsSproutMap &mapSproutAnchors,
                                  CAnchorsSaplingMap &mapSaplingAnchors,
                                  CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
+                                 CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
                                  CNullifiersMap &mapSproutNullifiers,
                                  CNullifiersMap &mapSaplingNullifiers,
+                                 CNullifiersMap &mapOrchardNullifiers,
                                  CProofHashMap &mapZkOutputProofHash,
                                  CProofHashMap &mapZkSpendProofHash) {
     assert(!hasModifier);
@@ -712,9 +780,11 @@ bool CCoinsViewCache::BatchWrite(CCoinsMap &mapCoins,
     ::BatchWriteAnchors<CAnchorsSproutMap, CAnchorsSproutMap::iterator, CAnchorsSproutCacheEntry>(mapSproutAnchors, cacheSproutAnchors, cachedCoinsUsage);
     ::BatchWriteAnchors<CAnchorsSaplingMap, CAnchorsSaplingMap::iterator, CAnchorsSaplingCacheEntry>(mapSaplingAnchors, cacheSaplingAnchors, cachedCoinsUsage);
     ::BatchWriteAnchors<CAnchorsSaplingFrontierMap, CAnchorsSaplingFrontierMap::iterator, CAnchorsSaplingFrontierCacheEntry>(mapSaplingFrontierAnchors, cacheSaplingFrontierAnchors, cachedCoinsUsage);
+    ::BatchWriteAnchors<CAnchorsOrchardFrontierMap, CAnchorsOrchardFrontierMap::iterator, CAnchorsOrchardFrontierCacheEntry>(mapOrchardFrontierAnchors, cacheOrchardFrontierAnchors, cachedCoinsUsage);
 
     ::BatchWriteNullifiers(mapSproutNullifiers, cacheSproutNullifiers);
     ::BatchWriteNullifiers(mapSaplingNullifiers, cacheSaplingNullifiers);
+    ::BatchWriteNullifiers(mapOrchardNullifiers, cacheOrchardNullifiers);
 
     ::BatchWriteProofHashes(mapZkOutputProofHash, cacheZkOutputProofHash);
     ::BatchWriteProofHashes(mapZkSpendProofHash, cacheZkSpendProofHash);
@@ -722,16 +792,18 @@ bool CCoinsViewCache::BatchWrite(CCoinsMap &mapCoins,
     hashSproutAnchor = hashSproutAnchorIn;
     hashSaplingAnchor = hashSaplingAnchorIn;
     hashSaplingFrontierAnchor = hashSaplingFrontierAnchorIn;
+    hashOrchardFrontierAnchor = hashOrchardFrontierAnchorIn;
     hashBlock = hashBlockIn;
     return true;
 }
 
 bool CCoinsViewCache::Flush() {
-    bool fOk = base->BatchWrite(cacheCoins, hashBlock, hashSproutAnchor, hashSaplingAnchor, hashSaplingFrontierAnchor, cacheSproutAnchors, cacheSaplingAnchors, cacheSaplingFrontierAnchors, cacheSproutNullifiers, cacheSaplingNullifiers, cacheZkOutputProofHash, cacheZkSpendProofHash);
+    bool fOk = base->BatchWrite(cacheCoins, hashBlock, hashSproutAnchor, hashSaplingAnchor, hashSaplingFrontierAnchor, hashOrchardFrontierAnchor, cacheSproutAnchors, cacheSaplingAnchors, cacheSaplingFrontierAnchors, cacheOrchardFrontierAnchors, cacheSproutNullifiers, cacheSaplingNullifiers, cacheOrchardNullifiers, cacheZkOutputProofHash, cacheZkSpendProofHash);
     cacheCoins.clear();
     cacheSproutAnchors.clear();
     cacheSaplingAnchors.clear();
     cacheSaplingFrontierAnchors.clear();
+    cacheOrchardFrontierAnchors.clear();
     cacheSproutNullifiers.clear();
     cacheSaplingNullifiers.clear();
     cacheZkOutputProofHash.clear();
