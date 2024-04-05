@@ -411,7 +411,7 @@ void TransactionBuilder::AddSaplingOutput(
         //Online
         zip_212_enabled = libzcash::Zip212Enabled::BeforeZip212;
         // We use nHeight = chainActive.Height() + 1 since the output will be included in the next block
-        if (NetworkUpgradeActive(nHeight + 1, consensusParams, Consensus::UPGRADE_CANOPY)) {
+        if (NetworkUpgradeActive(nHeight + 1, consensusParams, Consensus::UPGRADE_ORCHARD)) {
             zip_212_enabled = libzcash::Zip212Enabled::AfterZip212;
         }
     }
@@ -444,7 +444,7 @@ void TransactionBuilder::AddSaplingOutput_offline_transaction(
 
     libzcash::Zip212Enabled zip_212_enabled = libzcash::Zip212Enabled::BeforeZip212;
     // We use nHeight = chainActive.Height() + 1 since the output will be included in the next block
-    if (NetworkUpgradeActive(nHeight + 1, consensusParams, Consensus::UPGRADE_CANOPY)) {
+    if (NetworkUpgradeActive(nHeight + 1, consensusParams, Consensus::UPGRADE_ORCHARD)) {
         zip_212_enabled = libzcash::Zip212Enabled::AfterZip212;
     }
 
@@ -941,7 +941,7 @@ std::string TransactionBuilder::Build_offline_transaction()
         //Parameter [14]: Zip212 enabled: Used for the outputs
         std::string sZip212_enabled = "0";
         // We use nHeight = chainActive.Height() + 1 since the output will be included in the next block
-        if (NetworkUpgradeActive(nHeight + 1, consensusParams, Consensus::UPGRADE_CANOPY)) {
+        if (NetworkUpgradeActive(nHeight + 1, consensusParams, Consensus::UPGRADE_ORCHARD)) {
             sZip212_enabled = "1";
         }
         sReturn+= sZip212_enabled+" ";

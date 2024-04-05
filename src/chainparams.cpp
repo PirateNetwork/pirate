@@ -132,8 +132,8 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170007;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
-        consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nProtocolVersion = 170007;
-        consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
+        consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nProtocolVersion = 170007;
+        consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
 
         /**
          * The message start string is designed to be unlikely to occur in normal data.
@@ -388,8 +388,8 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = 207500;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170007;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 280000;
-        consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nProtocolVersion = 170007;
-        consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nActivationHeight = 280500;
+        consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nProtocolVersion = 170007;
+        consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight = 280500;
 
         pchMessageStart[0] = 0x5A;
         pchMessageStart[1] = 0x1F;
@@ -485,8 +485,8 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170006;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight =
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
-        consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nProtocolVersion = 170007;
-        consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nActivationHeight =
+        consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nProtocolVersion = 170007;
+        consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight =
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
 
         // The best chain should have at least this much work.
@@ -664,10 +664,10 @@ void komodo_setactivation(int32_t height)
     fprintf(stderr,"SET SAPLING ACTIVATION height.%d\n",height);
 }
 
-void komodo_setcanopy(int32_t height)
+void komodo_setorchard(int32_t height)
 {
-    pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nActivationHeight = height;
-    ASSETCHAINS_CANOPY = height;
+    pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight = height;
+    ASSETCHAINS_ORCHARD = height;
     fprintf(stderr,"SET ZIP212 ACTIVATION height.%d\n",height);
 }
 
@@ -713,7 +713,7 @@ void *chainparams_commandline()
 
         pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = ASSETCHAINS_SAPLING;
         pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = ASSETCHAINS_OVERWINTER;
-        pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nActivationHeight = ASSETCHAINS_CANOPY;
+        pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight = ASSETCHAINS_ORCHARD;
         checkpointData = //(Checkpoints::CCheckpointData)
                 {
                         boost::assign::map_list_of

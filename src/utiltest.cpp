@@ -70,7 +70,7 @@
 //     CWalletTx wtx {NULL, tx};
 //     return wtx;
 // }
-// 
+//
 // libzcash::SproutNote GetNote(ZCJoinSplit& params,
 //                        const libzcash::SproutSpendingKey& sk,
 //                        const CTransaction& tx, size_t js, size_t n) {
@@ -167,20 +167,20 @@ void RegtestDeactivateSapling() {
 }
 
 
-const Consensus::Params& RegtestActivateCanopy(int canopyActivationHeight) {
+const Consensus::Params& RegtestActivateOrchard(int orchardActivationHeight) {
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_CANOPY, canopyActivationHeight);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_ORCHARD, orchardActivationHeight);
     return Params().GetConsensus();
 }
 
-const Consensus::Params& RegtestActivateCanopy() {
-    return RegtestActivateCanopy(Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+const Consensus::Params& RegtestActivateOrchard() {
+    return RegtestActivateOrchard(Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
 }
 
-void RegtestDeactivateCanopy() {
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_CANOPY, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+void RegtestDeactivateOrchard() {
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_ORCHARD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     SelectParams(CBaseChainParams::MAIN);
