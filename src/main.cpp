@@ -1174,6 +1174,17 @@ bool ContextualCheckCoinbaseTransaction(const CTransaction& tx, const int nHeigh
     return(true);
 }
 
+/* Called from ContextualCheckTransactionMultithreaded for the checks that do not require signficant processing
+ *
+ * Check a transaction contextually against a set of consensus rules valid at a given block height.
+ *
+ * Notes:
+ * 1. AcceptToMemoryPool calls CheckTransaction and ContextualCheckTransactionMultithreaded.
+ * 2. ProcessNewBlock calls AcceptBlock, which calls CheckBlock (which calls CheckTransaction)
+ *    and ContextualCheckBlock (which calls ContextualCheckTransactionMultithreaded).
+ * 3. The isInitBlockDownload argument is only to assist with testing.
+ */
+
 CheckTransationResults ContextualCheckTransactionSingleThreaded(
     const CTransaction tx,
     const int nHeight,
@@ -1184,10 +1195,19 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
     //Results to be returned
     CheckTransationResults txResults;
 
+    //Get current Consensus Branch ID
+    auto consensus = Params().GetConsensus();
+    auto consensusBranchId = CurrentEpochBranchId(nHeight, consensus);
+
     //Set Chain parameters to check against
-    bool overwinterActive = NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_OVERWINTER);
-    bool saplingActive = NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING);
+    bool overwinterActive = NetworkUpgradeActive(nHeight, consensus, Consensus::UPGRADE_OVERWINTER);
+    bool saplingActive = NetworkUpgradeActive(nHeight, consensus, Consensus::UPGRADE_SAPLING);
+    bool orchardActive = NetworkUpgradeActive(nHeight, consensus, Consensus::UPGRADE_ORCHARD);
     bool isSprout = !overwinterActive;
+
+    //Get Sapling and Orchard bundles
+    auto& sapling_bundle = tx.GetSaplingBundle();
+    auto& orchard_bundle = tx.GetOrchardBundle();
 
     // If Sprout rules apply, reject transactions which are intended for Overwinter and beyond
     if (isSprout && tx.fOverwintered) {
@@ -1198,53 +1218,27 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
             txResults.dosLevel = dosLevel;
         }
         txResults.validationPassed = false;
-        txResults.errorString = strprintf("ContextualCheckTransaction(): ht.%d activates.%d dosLevel.%d overwinter is not active yet",nHeight, Params().GetConsensus().vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight, txResults.dosLevel);
+        txResults.errorString = strprintf("ContextualCheckTransaction(): ht.%d activates.%d dosLevel.%d overwinter is not active yet",nHeight, consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight, txResults.dosLevel);
         txResults.reasonString = strprintf("tx-overwinter-not-active");
         return txResults;
     }
 
-    //If Salping rules apply
-    if (saplingActive) {
-        // Reject transactions with valid version but missing overwintered flag
-        if (tx.nVersion >= SAPLING_MIN_TX_VERSION && !tx.fOverwintered) {
-            txResults.validationPassed = false;
-            txResults.dosLevel = dosLevel;
-            txResults.errorString = strprintf("ContextualCheckTransaction(): overwintered flag must be set");
-            txResults.reasonString = strprintf("tx-overwintered-flag-not-set");
-            return txResults;
-        }
-
-        // Reject transactions with non-Sapling version group ID
-        if (tx.fOverwintered && tx.nVersionGroupId != SAPLING_VERSION_GROUP_ID) {
-            if (isInitialBlockDownload) {
+    // Rules that apply to Overwinter or later:
+    if (overwinterActive) {
+        // Reject transactions intended for Sprout
+        if (!tx.fOverwintered) {
+            int32_t ht = consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight;
+            if (ASSETCHAINS_PRIVATE != 0 || ht < 0 || nHeight < ht) {
                 txResults.dosLevel = 0;
             } else {
                 txResults.dosLevel = dosLevel;
             }
             txResults.validationPassed = false;
-            txResults.errorString = strprintf("CheckTransaction(): invalid Sapling tx version");
-            txResults.reasonString = strprintf("bad-sapling-tx-version-group-id");
+            txResults.errorString = strprintf("ContextualCheckTransaction: overwinter is active");
+            txResults.reasonString = strprintf("tx-overwinter-active");
             return txResults;
         }
 
-        // Reject transactions with invalid version
-        if (tx.fOverwintered && tx.nVersion < SAPLING_MIN_TX_VERSION ) {
-            txResults.validationPassed = false;
-            txResults.dosLevel = 100;
-            txResults.errorString = strprintf("CheckTransaction(): Sapling version too low");
-            txResults.reasonString = strprintf("bad-tx-sapling-version-too-low");
-            return txResults;
-        }
-
-        // Reject transactions with invalid version
-        if (tx.fOverwintered && tx.nVersion > SAPLING_MAX_TX_VERSION ) {
-            txResults.validationPassed = false;
-            txResults.dosLevel = 100;
-            txResults.errorString = strprintf("CheckTransaction(): Sapling version too high");
-            txResults.reasonString = strprintf("bad-tx-sapling-version-too-high");
-            return txResults;
-        }
-    } else if (overwinterActive) {
         // Reject transactions with valid version but missing overwinter flag
         if (tx.nVersion >= OVERWINTER_MIN_TX_VERSION && !tx.fOverwintered) {
             txResults.validationPassed = false;
@@ -1254,42 +1248,12 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
             return txResults;
         }
 
-        // Reject transactions with non-Overwinter version group ID
-        if (tx.fOverwintered && tx.nVersionGroupId != OVERWINTER_VERSION_GROUP_ID) {
-            if (isInitialBlockDownload) {
-                txResults.dosLevel = 0;
-            } else {
-                txResults.dosLevel = dosLevel;
-            }
+        // Reject transactions with an overwinter flag and a version below overwinter
+        if (tx.nVersion < OVERWINTER_MIN_TX_VERSION && tx.fOverwintered) {
             txResults.validationPassed = false;
-            txResults.errorString = strprintf("CheckTransaction(): invalid Overwinter tx version");
-            txResults.reasonString = strprintf("bad-overwinter-tx-version-group-id");
-            return txResults;
-        }
-
-        // Reject transactions with invalid version
-        if (tx.fOverwintered && tx.nVersion > OVERWINTER_MAX_TX_VERSION ) {
-            txResults.validationPassed = false;
-            txResults.dosLevel = 100;
-            txResults.errorString = strprintf("CheckTransaction(): overwinter version too high");
-            txResults.reasonString = strprintf("bad-tx-overwinter-version-too-high");
-            return txResults;
-        }
-    }
-
-    // Rules that apply to Overwinter or later:
-    if (overwinterActive) {
-        // Reject transactions intended for Sprout
-        if (!tx.fOverwintered) {
-            int32_t ht = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight;
-            if (ASSETCHAINS_PRIVATE != 0 || ht < 0 || nHeight < ht) {
-                txResults.dosLevel = 0;
-            } else {
-                txResults.dosLevel = dosLevel;
-            }
-            txResults.validationPassed = false;
-            txResults.errorString = strprintf("ContextualCheckTransaction: overwinter is active");
-            txResults.reasonString = strprintf("tx-overwinter-active");
+            txResults.dosLevel = dosLevel;
+            txResults.errorString = strprintf("ContextualCheckTransaction(): tx version is too old");
+            txResults.reasonString = strprintf("tx-overwinter-version-too-old");
             return txResults;
         }
 
@@ -1303,6 +1267,31 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
             txResults.reasonString = strprintf("tx-overwinter-expired");
             return txResults;
         }
+
+        //Rules that apply before Sapling Activates
+        if (!saplingActive) {
+            // Reject transactions with non-Overwinter version group ID
+            if (tx.nVersionGroupId != OVERWINTER_VERSION_GROUP_ID) {
+                if (isInitialBlockDownload) {
+                    txResults.dosLevel = 0;
+                } else {
+                    txResults.dosLevel = dosLevel;
+                }
+                txResults.validationPassed = false;
+                txResults.errorString = strprintf("CheckTransaction(): invalid Overwinter tx version");
+                txResults.reasonString = strprintf("bad-overwinter-tx-version-group-id");
+                return txResults;
+            }
+
+            // Reject transactions with invalid version
+            if (tx.nVersion > OVERWINTER_MAX_TX_VERSION ) {
+                txResults.validationPassed = false;
+                txResults.dosLevel = 100;
+                txResults.errorString = strprintf("CheckTransaction(): overwinter version too high");
+                txResults.reasonString = strprintf("bad-tx-overwinter-version-too-high");
+                return txResults;
+            }
+        }
     }
 
     // Rules that apply before Sapling:
@@ -1315,12 +1304,149 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
             txResults.reasonString = strprintf("bad-txns-oversize");
             return txResults;
         }
+        // Check for presence of a sapling bundle
+        if (sapling_bundle.IsPresent()) {
+            txResults.validationPassed = false;
+            txResults.dosLevel = 100;
+            txResults.errorString = strprintf("ContextualCheckTransaction(): pre-Sapling transaction has Sapling components");
+            txResults.reasonString = strprintf("bad-tx-has-orchard-actions");
+            return txResults;
+        }
     }
 
+    // Rules that apply to Sapling or later:
+    if (saplingActive) {
+
+        if (tx.nVersionGroupId == SAPLING_VERSION_GROUP_ID) {
+            // Reject transactions with invalid version
+            if (tx.nVersion < SAPLING_MIN_TX_VERSION ) {
+                txResults.validationPassed = false;
+                txResults.dosLevel = 100;
+                txResults.errorString = strprintf("CheckTransaction(): Sapling version too low");
+                txResults.reasonString = strprintf("bad-tx-sapling-version-too-low");
+                return txResults;
+            }
+
+            // Reject transactions with invalid version
+            if (tx.nVersion > SAPLING_MAX_TX_VERSION ) {
+                txResults.validationPassed = false;
+                txResults.dosLevel = 100;
+                txResults.errorString = strprintf("CheckTransaction(): Sapling version too high");
+                txResults.reasonString = strprintf("bad-tx-sapling-version-too-high");
+                return txResults;
+            }
+        }
+
+        // Rules that became inactive after Orchard activation.
+        if (!orchardActive) {
+            // Reject transactions with non-Sapling version group ID
+            if (tx.nVersionGroupId != SAPLING_VERSION_GROUP_ID) {
+                if (isInitialBlockDownload) {
+                    txResults.dosLevel = 0;
+                } else {
+                    txResults.dosLevel = dosLevel;
+                }
+                txResults.validationPassed = false;
+                txResults.errorString = strprintf("CheckTransaction(): invalid Sapling tx version");
+                txResults.reasonString = strprintf("bad-sapling-tx-version-group-id");
+                return txResults;
+            }
+        }
+    }
+
+    // Rules that apply before Orchard:
+    if (!orchardActive) {
+        // Check of presence of an orchard bundle
+        if (orchard_bundle.IsPresent()) {
+            txResults.validationPassed = false;
+            txResults.dosLevel = 100;
+            txResults.errorString = strprintf("ContextualCheckTransaction(): pre-Orchard transaction has Orchard actions");
+            txResults.reasonString = strprintf("bad-tx-has-orchard-actions");
+            return txResults;
+        }
+        //This should not be set prior to Orchard being active
+        if (tx.GetConsensusBranchId().has_value()) {
+            txResults.validationPassed = false;
+            txResults.dosLevel = 100;
+            txResults.errorString = strprintf("CheckTransaction(): pre-Orchard transaction does has consensus branch id field set");
+            txResults.reasonString = strprintf("bad-tx-pre-orchard consensus-branch-id");
+        }
+    }
+
+    // Rules that apply to Orchard or later:
+    if (orchardActive) {
+        // Reject transactions with non-Sapling version group ID
+        if (!(tx.nVersionGroupId == SAPLING_VERSION_GROUP_ID || tx.nVersionGroupId == ORCHARD_VERSION_GROUP_ID)) {
+            if (isInitialBlockDownload) {
+                txResults.dosLevel = 0;
+            } else {
+                txResults.dosLevel = dosLevel;
+            }
+            txResults.validationPassed = false;
+            txResults.errorString = strprintf("CheckTransaction(): invalid Orchard tx version");
+            txResults.reasonString = strprintf("bad-orchard-tx-version-group-id");
+            return txResults;
+        }
+
+        if (tx.nVersionGroupId == ORCHARD_VERSION_GROUP_ID) {
+            // Reject transactions with invalid version
+            if (tx.fOverwintered && tx.nVersion < ORCHARD_MIN_TX_VERSION ) {
+                txResults.validationPassed = false;
+                txResults.dosLevel = 100;
+                txResults.errorString = strprintf("CheckTransaction(): Orchard version too low");
+                txResults.reasonString = strprintf("bad-tx-orchard-version-too-low");
+                return txResults;
+            }
+
+            // Reject transactions with invalid version
+            if (tx.fOverwintered && tx.nVersion > ORCHARD_MAX_TX_VERSION ) {
+                txResults.validationPassed = false;
+                txResults.dosLevel = 100;
+                txResults.errorString = strprintf("CheckTransaction(): Orchard version too high");
+                txResults.reasonString = strprintf("bad-tx-orchard-version-too-high");
+                return txResults;
+            }
+
+            if (!tx.GetConsensusBranchId().has_value()) {
+                txResults.validationPassed = false;
+                txResults.dosLevel = 100;
+                txResults.errorString = strprintf("CheckTransaction(): transaction does not have consensus branch id field set");
+                txResults.reasonString = strprintf("bad-tx-consensus-branch-id-missing");
+                return txResults;
+            }
+
+            // tx.nConsensusBranchId must match the current consensus branch id
+            if (tx.GetConsensusBranchId().value() != consensusBranchId) {
+                txResults.validationPassed = false;
+                txResults.dosLevel = 100;
+                txResults.errorString = strprintf("CheckTransaction(): transaction's consensus branch id (%08x) does not match the current consensus branch (%08x)", tx.GetConsensusBranchId().value(), consensusBranchId);
+                txResults.reasonString = strprintf("bad-tx-consensus-branch-id-mismatch");
+                return txResults;
+            }
+
+            // v5 transactions must have empty joinSplits
+            if (!(tx.vjoinsplit.empty())) {
+                txResults.validationPassed = false;
+                txResults.dosLevel = 100;
+                txResults.errorString = strprintf("CheckTransaction(): Sprout JoinSplits not allowed in Orchard transactions.");
+                txResults.reasonString = strprintf("bad-tx-has-joinsplits");
+                return txResults;
+            }
+        }
+    }
 
     return txResults;
 }
 
+/* Called from ContextualCheckTransactionMultithreaded for the checks that signficant processing
+ *
+ * Check a transaction contextually against a specific consensus rule valid at a given block height.
+ *
+ * Notes:
+ * 1. AcceptToMemoryPool calls CheckTransaction and ContextualCheckTransactionMultithreaded.
+ * 2. ProcessNewBlock calls AcceptBlock, which calls CheckBlock (which calls CheckTransaction)
+ *    and ContextualCheckBlock (which calls ContextualCheckTransactionMultithreaded).
+ */
 CheckTransationResults ContextualCheckTransactionBindingSigWorker(
     const std::vector<const CTransaction*> vtx,
     const std::vector<uint256> vTxSig,
@@ -1380,6 +1506,15 @@ CheckTransationResults ContextualCheckTransactionBindingSigWorker(
     return txResults;
 }
 
+/* Called from ContextualCheckTransactionMultithreaded for the checks that signficant processing
+ *
+ * Check a transaction contextually against a specific consensus rule valid at a given block height.
+ *
+ * Notes:
+ * 1. AcceptToMemoryPool calls CheckTransaction and ContextualCheckTransactionMultithreaded.
+ * 2. ProcessNewBlock calls AcceptBlock, which calls CheckBlock (which calls CheckTransaction)
+ *    and ContextualCheckBlock (which calls ContextualCheckTransactionMultithreaded).
+ */
 CheckTransationResults ContextualCheckTransactionSaplingSpendWorker(
     const std::vector<const SpendDescription*> vSpend,
     const std::vector<uint256> vSpendSig,
@@ -1420,6 +1555,15 @@ CheckTransationResults ContextualCheckTransactionSaplingSpendWorker(
 
 }
 
+/* Called from ContextualCheckTransactionMultithreaded for the checks that signficant processing
+ *
+ * Check a transaction contextually against a specific consensus rule valid at a given block height.
+ *
+ * Notes:
+ * 1. AcceptToMemoryPool calls CheckTransaction and ContextualCheckTransactionMultithreaded.
+ * 2. ProcessNewBlock calls AcceptBlock, which calls CheckBlock (which calls CheckTransaction)
+ *    and ContextualCheckBlock (which calls ContextualCheckTransactionMultithreaded).
+ */
 CheckTransationResults ContextualCheckTransactionSaplingOutputWorker(
     const std::vector<const OutputDescription*> vOutput,
     const uint32_t threadNumber) {
