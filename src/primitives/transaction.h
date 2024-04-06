@@ -60,37 +60,41 @@ extern std::string ASSETCHAINS_SELFIMPORT;
 
 // Overwinter transaction version
 static const int32_t OVERWINTER_TX_VERSION = 3;
-static_assert(OVERWINTER_TX_VERSION >= OVERWINTER_MIN_TX_VERSION,
-              "Overwinter tx version must not be lower than minimum");
-static_assert(OVERWINTER_TX_VERSION <= OVERWINTER_MAX_TX_VERSION,
-              "Overwinter tx version must not be higher than maximum");
+static_assert(OVERWINTER_TX_VERSION >= OVERWINTER_MIN_TX_VERSION,"Overwinter tx version must not be lower than minimum");
+static_assert(OVERWINTER_TX_VERSION <= OVERWINTER_MAX_TX_VERSION,"Overwinter tx version must not be higher than maximum");
+
+// Overwinter version group id
+static constexpr uint32_t OVERWINTER_VERSION_GROUP_ID = 0x03C48270;
+static_assert(OVERWINTER_VERSION_GROUP_ID != 0, "version group id must be non-zero as specified in ZIP 202");
 
 // Sapling transaction version
 static const int32_t SAPLING_TX_VERSION = 4;
-static_assert(SAPLING_TX_VERSION >= SAPLING_MIN_TX_VERSION,
-              "Sapling tx version must not be lower than minimum");
-static_assert(SAPLING_TX_VERSION <= SAPLING_MAX_TX_VERSION,
-              "Sapling tx version must not be higher than maximum");
+static_assert(SAPLING_TX_VERSION >= SAPLING_MIN_TX_VERSION,"Sapling tx version must not be lower than minimum");
+static_assert(SAPLING_TX_VERSION <= SAPLING_MAX_TX_VERSION,"Sapling tx version must not be higher than maximum");
+
+// Sapling version group id
+static constexpr uint32_t SAPLING_VERSION_GROUP_ID = 0x892F2085;
+static_assert(SAPLING_VERSION_GROUP_ID != 0, "version group id must be non-zero as specified in ZIP 202");
+
+// Orchard transaction version
+static const int32_t ORCHARD_TX_VERSION = 5;
+static_assert(ORCHARD_TX_VERSION >= ORCHARD_MIN_TX_VERSION,"Orchard tx version must not be lower than minimum");
+static_assert(ORCHARD_TX_VERSION <= ORCHARD_MAX_TX_VERSION,"Orchard tx version must not be higher than maximum");
 
 // Orchard transaction version group id
 // (defined in section 7.1 of the protocol spec)
 static constexpr uint32_t ORCHARD_VERSION_GROUP_ID = 0x26A7270A;
 static_assert(ORCHARD_VERSION_GROUP_ID != 0, "version group id must be non-zero as specified in ZIP 202");
 
-// ZIP225 transaction version
-static const int32_t ORCHARD_TX_VERSION = 5;
-static_assert(ORCHARD_TX_VERSION >= ORCHARD_MIN_TX_VERSION,
-              "ZIP225 tx version must not be lower than minimum");
-static_assert(ORCHARD_TX_VERSION <= ORCHARD_MAX_TX_VERSION,
-              "ZIP225 tx version must not be higher than maximum");
+// Future transaction version. This value must only be used
+// in integration-testing contexts.
+static const int32_t ZFUTURE_TX_VERSION = 0x0000FFFF;
 
 // Future transaction version group id
 static constexpr uint32_t ZFUTURE_VERSION_GROUP_ID = 0xFFFFFFFF;
 static_assert(ZFUTURE_VERSION_GROUP_ID != 0, "version group id must be non-zero as specified in ZIP 202");
 
-// Future transaction version. This value must only be used
-// in integration-testing contexts.
-static const int32_t ZFUTURE_TX_VERSION = 0x0000FFFF;
+
 
 /**
  * A shielded input to a transaction. It contains data that describes a Spend transfer.
@@ -616,14 +620,6 @@ public:
     std::string ToString() const;
 };
 
-// Overwinter version group id
-static constexpr uint32_t OVERWINTER_VERSION_GROUP_ID = 0x03C48270;
-static_assert(OVERWINTER_VERSION_GROUP_ID != 0, "version group id must be non-zero as specified in ZIP 202");
-
-// Sapling version group id
-static constexpr uint32_t SAPLING_VERSION_GROUP_ID = 0x892F2085;
-static_assert(SAPLING_VERSION_GROUP_ID != 0, "version group id must be non-zero as specified in ZIP 202");
-
 struct CMutableTransaction;
 
 /** The basic transaction that is broadcasted on the network and contained in
@@ -933,6 +929,10 @@ public:
     }
 
     std::string ToString() const;
+
+    std::optional<uint32_t> GetConsensusBranchId() const {
+        return nConsensusBranchId;
+    }
 
     //Sapling Functions
     size_t GetSaplingSpendsCount() const;
