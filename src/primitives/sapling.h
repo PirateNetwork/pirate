@@ -116,6 +116,16 @@ public:
     const size_t GetOutputsCount() const {
         return inner->num_outputs();
     }
+
+    const std::vector<uint256> GetNullifiers() const {
+        const auto spends = inner->spends();
+        std::vector<uint256> result;
+        result.reserve(spends.size());
+        for (const auto& spend : spends) {
+            result.push_back(uint256::FromRawBytes(spend.nullifier()));
+        }
+        return result;
+    }
 };
 
 /**

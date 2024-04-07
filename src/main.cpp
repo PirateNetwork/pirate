@@ -1209,6 +1209,26 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
     auto& sapling_bundle = tx.GetSaplingBundle();
     auto& orchard_bundle = tx.GetOrchardBundle();
 
+    //Coinbase rules - allow transaparent addresses only
+    if (tx.IsCoinBase()) {
+        if (sapling_bundle.IsPresent()) {
+            txResults.validationPassed = false;
+            txResults.dosLevel = dosLevel;
+            txResults.errorString = strprintf("ContextualCheckTransaction(): sapling bundle not allowed in coinbase transaction");
+            txResults.reasonString = strprintf("tx-coinbase-sapling-bundle");
+            return txResults;
+        }
+
+        if (orchard_bundle.IsPresent()) {
+            txResults.validationPassed = false;
+            txResults.dosLevel = dosLevel;
+            txResults.errorString = strprintf("ContextualCheckTransaction(): orchard bundle not allowed in coinbase transaction");
+            txResults.reasonString = strprintf("tx-coinbase-orchard-bundle");
+            return txResults;
+        }
+
+    }
+
     // If Sprout rules apply, reject transactions which are intended for Overwinter and beyond
     if (isSprout && tx.fOverwintered) {
         int32_t ht = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight;
@@ -1500,6 +1520,27 @@ CheckTransationResults ContextualCheckTransactionBindingSigWorker(
             }
 
             librustzcash_sapling_verification_ctx_free(ctx);
+        }
+
+        //Perform Orchard Checks after Sapling checks are done
+
+        if (vtx[i]->GetOrchardBundle().IsPresent()) {
+            // This will be a single-transaction batch, which is still more efficient as every
+            // Orchard bundle contains at least two signatures.
+            std::optional<rust::Box<orchard::BatchValidator>> orchardAuth = orchard::init_batch_validator(true);
+
+            // Queue Orchard bundle to be batch-validated.
+            if (orchardAuth.has_value()) {
+                vtx[i]->GetOrchardBundle().QueueAuthValidation(*orchardAuth.value(), dataToBeSigned);
+            }
+
+            if (!orchardAuth.value()->validate()) {
+                txResults.validationPassed = false;
+                txResults.dosLevel = 100;
+                txResults.errorString = strprintf("ContextualCheckTransaction(): Orchard bundle authorization invalid");
+                txResults.reasonString = strprintf("bad-txns-orchard-bundle-authorization");
+                return txResults;
+            }
         }
     }
 
@@ -1879,7 +1920,8 @@ bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransactio
                              REJECT_INVALID, "bad-tx-overwinter-version-too-low");
         }
         if (tx.nVersionGroupId != OVERWINTER_VERSION_GROUP_ID &&
-                tx.nVersionGroupId != SAPLING_VERSION_GROUP_ID) {
+            tx.nVersionGroupId != SAPLING_VERSION_GROUP_ID &&
+            tx.nVersionGroupId != ORCHARD_VERSION_GROUP_ID ) {
             return state.DoS(100, error("CheckTransaction(): unknown tx version group id"),
                              REJECT_INVALID, "bad-tx-version-group-id");
         }
@@ -1889,17 +1931,25 @@ bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransactio
         }
     }
 
+    auto orchard_bundle = tx.GetOrchardBundle();
+
     // Transactions containing empty `vin` must have either non-empty
     // `vjoinsplit` or non-empty `vShieldedSpend`.
-    if (tx.vin.empty() && tx.vjoinsplit.empty() && tx.vShieldedSpend.empty())
+    if (tx.vin.empty() &&
+        tx.vjoinsplit.empty() &&
+        tx.GetSaplingSpendsCount() == 0 &&
+        !orchard_bundle.SpendsEnabled())
         return state.DoS(10, error("CheckTransaction(): vin empty"),
                          REJECT_INVALID, "bad-txns-vin-empty");
 
     // Transactions containing empty `vout` must have either non-empty
     // `vjoinsplit` or non-empty `vShieldedOutput`.
-    if (tx.vout.empty() && tx.vjoinsplit.empty() && tx.vShieldedOutput.empty())
-        return state.DoS(10, error("CheckTransaction(): vout empty"),
-                         REJECT_INVALID, "bad-txns-vout-empty");
+    if (tx.vout.empty() &&
+        tx.vjoinsplit.empty() &&
+        tx.GetSaplingOutputsCount() == 0 &&
+        !orchard_bundle.OutputsEnabled()) {
+        return state.DoS(10, error("CheckTransaction(): vout empty"),REJECT_INVALID, "bad-txns-vout-empty");
+    }
 
     // Size limits
     BOOST_STATIC_ASSERT(MAX_TX_SIZE_AFTER_SAPLING > MAX_TX_SIZE_BEFORE_SAPLING); // sanity
@@ -1912,11 +1962,10 @@ bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransactio
     int32_t iscoinbase = tx.IsCoinBase();
     BOOST_FOREACH(const CTxOut& txout, tx.vout)
     {
-        if (txout.nValue < 0)
-            return state.DoS(100, error("CheckTransaction(): txout.nValue negative"),
-                             REJECT_INVALID, "bad-txns-vout-negative");
-        if (txout.nValue > MAX_MONEY)
-        {
+        if (txout.nValue < 0) {
+            return state.DoS(100, error("CheckTransaction(): txout.nValue negative"),REJECT_INVALID, "bad-txns-vout-negative");
+        }
+        if (txout.nValue > MAX_MONEY) {
             fprintf(stderr,"%.8f > max %.8f\n",(double)txout.nValue/COIN,(double)MAX_MONEY/COIN);
             return state.DoS(100, error("CheckTransaction(): txout.nValue too high"),REJECT_INVALID, "bad-txns-vout-toolarge");
         }
@@ -1944,16 +1993,25 @@ bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransactio
                              REJECT_INVALID, "bad-txns-txouttotal-toolarge");
     }
 
-    // Check for non-zero valueBalance when there are no Sapling inputs or outputs
-    if (tx.vShieldedSpend.empty() && tx.vShieldedOutput.empty() && tx.valueBalance != 0) {
-        return state.DoS(100, error("CheckTransaction(): tx.valueBalance has no sources or sinks"),
+
+    // Check for non-zero valueBalanceSapling when there are no Sapling inputs or outputs
+    if (tx.GetSaplingSpendsCount() == 0 && tx.GetSaplingOutputsCount() == 0 && tx.GetValueBalanceSapling() != 0)
+    {
+        return state.DoS(100, error("CheckTransaction(): tx.valueBalanceSapling has no sources or sinks"),
                             REJECT_INVALID, "bad-txns-valuebalance-nonzero");
     }
-    if ( acpublic != 0 && (tx.vShieldedSpend.empty() == 0 || tx.vShieldedOutput.empty() == 0) )
-    {
+
+    //Check for Sapling in a non-private asset chain
+    if (acpublic != 0 && (!(tx.GetSaplingSpendsCount() == 0) || !(tx.GetSaplingOutputsCount() == 0))) {
         return state.DoS(100, error("CheckTransaction(): this is a public chain, no sapling allowed"),
-                         REJECT_INVALID, "bad-txns-acpublic-chain");
+                         REJECT_INVALID, "bad-txns-acpublic-chain-sapling");
     }
+
+    if (acpublic != 0 && (orchard_bundle.SpendsEnabled() || orchard_bundle.OutputsEnabled())) {
+        return state.DoS(100, error("CheckTransaction(): this is a public chain, no orchard allowed"),
+                         REJECT_INVALID, "bad-txns-acpublic-chain-orchard");
+    }
+
     if ( ASSETCHAINS_PRIVATE != 0 && invalid_private_taddr != 0 && tx.vShieldedSpend.empty() == 0 )
     {
         if ( !( current_season > 5 &&
@@ -1968,19 +2026,68 @@ bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransactio
                 }
     }
 
-    // Check for overflow valueBalance
-    if (tx.valueBalance > MAX_MONEY || tx.valueBalance < -MAX_MONEY) {
-        return state.DoS(100, error("CheckTransaction(): abs(tx.valueBalance) too large"),
+    // Check for overflow valueBalanceSapling
+    if (tx.GetValueBalanceSapling() > MAX_MONEY || tx.GetValueBalanceSapling() < -MAX_MONEY) {
+        return state.DoS(100, error("CheckTransaction(): abs(tx.valueBalanceSapling) too large"),
                             REJECT_INVALID, "bad-txns-valuebalance-toolarge");
     }
 
-    if (tx.valueBalance <= 0) {
-        // NB: negative valueBalance "takes" money from the transparent value pool just as outputs do
-        nValueOut += -tx.valueBalance;
+    if (tx.GetValueBalanceSapling() <= 0) {
+        // NB: negative valueBalanceSapling "takes" money from the transparent value pool just as outputs do
+        nValueOut += -tx.GetValueBalanceSapling();
 
         if (!MoneyRange(nValueOut)) {
             return state.DoS(100, error("CheckTransaction(): txout total out of range"),
                                 REJECT_INVALID, "bad-txns-txouttotal-toolarge");
+        }
+    }
+
+    // nSpendsSapling, nOutputsSapling, and nActionsOrchard MUST all be less than 2^16
+    size_t max_elements = (1 << 16) - 1;
+    if (tx.GetSaplingSpendsCount() > max_elements) {
+        return state.DoS(
+            100,
+            error("CheckTransaction(): 2^16 or more Sapling spends"),
+            REJECT_INVALID, "bad-tx-too-many-sapling-spends");
+    }
+    if (tx.GetSaplingOutputsCount() > max_elements) {
+        return state.DoS(
+            100,
+            error("CheckTransaction(): 2^16 or more Sapling outputs"),
+            REJECT_INVALID, "bad-tx-too-many-sapling-outputs");
+    }
+    if (orchard_bundle.GetNumActions() > max_elements) {
+        return state.DoS(
+            100,
+            error("CheckTransaction(): 2^16 or more Orchard actions"),
+            REJECT_INVALID, "bad-tx-too-many-orchard-actions");
+    }
+
+    // Check that if neither Orchard spends nor outputs are enabled, the transaction contains
+    // no Orchard actions. This subsumes the check that valueBalanceOrchard must equal zero
+    // in the case that both spends and outputs are disabled.
+    if (orchard_bundle.GetNumActions() > 0 && !orchard_bundle.OutputsEnabled() && !orchard_bundle.SpendsEnabled()) {
+        return state.DoS(
+            100,
+            error("CheckTransaction(): Orchard actions are present, but flags do not permit Orchard spends or outputs"),
+            REJECT_INVALID, "bad-tx-orchard-flags-disable-actions");
+    }
+
+    auto valueBalanceOrchard = orchard_bundle.GetValueBalance();
+
+    // Check for overflow valueBalanceOrchard
+    if (valueBalanceOrchard > MAX_MONEY || valueBalanceOrchard < -MAX_MONEY) {
+        return state.DoS(100, error("CheckTransaction(): abs(tx.valueBalanceOrchard) too large"),
+                         REJECT_INVALID, "bad-txns-valuebalance-toolarge");
+    }
+
+    if (valueBalanceOrchard <= 0) {
+        // NB: negative valueBalanceOrchard "takes" money from the transparent value pool just as outputs do
+        nValueOut += -valueBalanceOrchard;
+
+        if (!MoneyRange(nValueOut)) {
+            return state.DoS(100, error("CheckTransaction(): txout total out of range"),
+                             REJECT_INVALID, "bad-txns-txouttotal-toolarge");
         }
     }
 
@@ -2077,9 +2184,20 @@ bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransactio
         }
 
         // Also check for Sapling
-        if (tx.valueBalance >= 0) {
-            // NB: positive valueBalance "adds" money to the transparent value pool, just as inputs do
-            nValueIn += tx.valueBalance;
+        if (tx.GetValueBalanceSapling() >= 0) {
+            // NB: positive valueBalanceSapling "adds" money to the transparent value pool, just as inputs do
+            nValueIn += tx.GetValueBalanceSapling();
+
+            if (!MoneyRange(nValueIn)) {
+                return state.DoS(100, error("CheckTransaction(): txin total out of range"),
+                                 REJECT_INVALID, "bad-txns-txintotal-toolarge");
+            }
+        }
+
+        // Also check for Orchard
+        if (valueBalanceOrchard >= 0) {
+            // NB: positive valueBalanceOrchard "adds" money to the transparent value pool, just as inputs do
+            nValueIn += valueBalanceOrchard;
 
             if (!MoneyRange(nValueIn)) {
                 return state.DoS(100, error("CheckTransaction(): txin total out of range"),
@@ -2116,14 +2234,27 @@ bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransactio
 
     // Check for duplicate sapling nullifiers in this transaction
     {
-        set<uint256> vSaplingNullifiers;
-        BOOST_FOREACH(const SpendDescription& spend_desc, tx.vShieldedSpend)
+      set<uint256> vSaplingNullifiers;
+        for (const uint256& nf : tx.GetSaplingBundle().GetNullifiers())
         {
-            if (vSaplingNullifiers.count(spend_desc.nullifier))
+            if (vSaplingNullifiers.count(nf))
                 return state.DoS(100, error("CheckTransaction(): duplicate nullifiers"),
                             REJECT_INVALID, "bad-spend-description-nullifiers-duplicate");
 
-            vSaplingNullifiers.insert(spend_desc.nullifier);
+            vSaplingNullifiers.insert(nf);
+        }
+    }
+
+    // Check for duplicate orchard nullifiers in this transaction
+    {
+        std::set<uint256> vOrchardNullifiers;
+        for (const uint256& nf : tx.GetOrchardBundle().GetNullifiers())
+        {
+            if (vOrchardNullifiers.count(nf))
+                return state.DoS(100, error("CheckTransaction(): duplicate nullifiers"),
+                            REJECT_INVALID, "bad-orchard-nullifiers-duplicate");
+
+            vOrchardNullifiers.insert(nf);
         }
     }
 
@@ -2135,12 +2266,20 @@ bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransactio
                              REJECT_INVALID, "bad-cb-has-joinsplits");
 
         // A coinbase transaction cannot have spend descriptions or output descriptions
-        if (tx.vShieldedSpend.size() > 0)
+        if (tx.GetSaplingSpendsCount() > 0)
             return state.DoS(100, error("CheckTransaction(): coinbase has spend descriptions"),
                              REJECT_INVALID, "bad-cb-has-spend-description");
-        if (tx.vShieldedOutput.size() > 0)
+        if (tx.GetSaplingOutputsCount() > 0)
             return state.DoS(100, error("CheckTransaction(): coinbase has output descriptions"),
                              REJECT_INVALID, "bad-cb-has-output-description");
+
+        if (orchard_bundle.SpendsEnabled())
+            return state.DoS(100, error("CheckTransaction(): coinbase has enableSpendsOrchard set"),
+                             REJECT_INVALID, "bad-cb-has-orchard-spend");
+
+        if (orchard_bundle.OutputsEnabled())
+           return state.DoS(100, error("CheckTransaction(): coinbase has enableOutputsOrchard set"),
+                            REJECT_INVALID, "bad-cb-has-orchard-output");
 
         if (tx.vin[0].scriptSig.size() < 2 || tx.vin[0].scriptSig.size() > 100)
             return state.DoS(100, error("CheckTransaction(): coinbase script size"),
