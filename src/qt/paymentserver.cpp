@@ -508,7 +508,7 @@ void PaymentServer::handleURIOrFile(const QString& s)
             SendCoinsRecipient recipient;
             if (GUIUtil::parseKomodoURI(s, &recipient))
             {
-                if (!IsValidDestinationString(recipient.address.toStdString())) {
+                if (!IsValidPaymentAddressString(recipient.address.toStdString(), CurrentEpochBranchId(chainActive.Height(), Params().GetConsensus()))) {
                     Q_EMIT message(tr("URI handling"), tr("Invalid payment address %1").arg(recipient.address),
                         CClientUIInterface::MSG_ERROR);
                 }
