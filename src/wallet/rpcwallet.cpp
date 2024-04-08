@@ -3143,6 +3143,8 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
+    EnsureWalletIsUnlocked();
+
     // User has supplied zaddrs to filter on
     if (params.size() > 3) {
         filterAddresses = true;
@@ -3577,6 +3579,8 @@ UniValue z_listaddresses(const UniValue& params, bool fHelp, const CPubKey& mypk
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
+    EnsureWalletIsUnlocked();
+
     bool fIncludeWatchonly = false;
     if (params.size() > 0) {
         fIncludeWatchonly = params[0].get_bool();
@@ -3863,6 +3867,8 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
+    EnsureWalletIsUnlocked();
+
     UniValue results(UniValue::VARR);
 
     //Get All Notes
@@ -3942,6 +3948,8 @@ UniValue z_gettotalbalance(const UniValue& params, bool fHelp, const CPubKey& my
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    EnsureWalletIsUnlocked();
 
     int nMinDepth = 1;
     if (params.size() > 0) {
