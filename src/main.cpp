@@ -997,6 +997,11 @@ bool IsExpiredTx(const CTransaction &tx, int nBlockHeight)
     return static_cast<uint32_t>(nBlockHeight) > tx.nExpiryHeight;
 }
 
+bool IsExpiringSoonTx(const CTransaction &tx, int nNextBlockHeight)
+{
+    return IsExpiredTx(tx, nNextBlockHeight + TX_EXPIRING_SOON_THRESHOLD);
+}
+
 bool CheckFinalTx(const CTransaction &tx, int flags)
 {
     AssertLockHeld(cs_main);
@@ -2362,17 +2367,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
             return false;
         }
     }
-    auto verifier = ProofVerifier::Strict();
-    if (chainName.isKMD() && chainActive.Tip() != nullptr
-            && !komodo_validate_interest(tx, chainActive.Tip()->nHeight + 1, chainActive.Tip()->GetMedianTimePast() + 777))
-    {
-        return state.DoS(0, error("%s: komodo_validate_interest failed txid.%s", __func__, tx.GetHash().ToString()), REJECT_INVALID, "komodo-interest-invalid");
-    }
 
-    if (!CheckTransaction(tiptime,tx, state, verifier, 0, 0))
-    {
-        return error("AcceptToMemoryPool: CheckTransaction failed");
-    }
 
     // Check for duplicate sapling zkproofs in this transaction (mempool only) - move to CheckTransaction to enforce at consensus
     {
@@ -2398,14 +2393,25 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         }
     }
 
-    // DoS level set to 10 to be more forgiving.
-    // Check transaction contextually against the set of consensus rules which apply in the next block to be mined.
-    std::vector<const CTransaction*> vptx;
-    vptx.emplace_back(&tx);
-    if (!ContextualCheckTransactionMultithreaded(0, vptx, 0, state, nextBlockHeight, (dosLevel == -1) ? 10 : dosLevel))
+    auto verifier = ProofVerifier::Strict();
+    if (chainName.isKMD() && chainActive.Tip() != nullptr
+            && !komodo_validate_interest(tx, chainActive.Tip()->nHeight + 1, chainActive.Tip()->GetMedianTimePast() + 777))
     {
-        return error("AcceptToMemoryPool: ContextualCheckTransaction failed");
+        return state.DoS(0, error("%s: komodo_validate_interest failed txid.%s", __func__, tx.GetHash().ToString()), REJECT_INVALID, "komodo-interest-invalid");
     }
+
+    if (!CheckTransaction(tiptime,tx, state, verifier, 0, 0))
+    {
+        return error("AcceptToMemoryPool: CheckTransaction failed");
+    }
+
+    // DoS mitigation: reject transactions expiring soon
+    // Note that if a valid transaction belonging to the wallet is in the mempool and the node is shutdown,
+    // upon restart, CWalletTx::AcceptToMemoryPool() will be invoked which might result in rejection.
+    if (IsExpiringSoonTx(tx, nextBlockHeight)) {
+        return state.DoS(0, error("AcceptToMemoryPool(): transaction is expiring soon"), REJECT_INVALID, "tx-expiring-soon");
+    }
+
     // Coinbase is only valid in a block, not as a loose transaction
     if (tx.IsCoinBase())
     {
@@ -2427,7 +2433,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
     {
         return state.DoS(0, false, REJECT_NONSTANDARD, "non-final");
     }
-    // is it already in the memory pool?
+
+    // is it already in the memory pool? Do this before the more cpu intesive zkp validations
     uint256 hash = tx.GetHash();
     if (pool.exists(hash))
     {
@@ -2446,29 +2453,39 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
                 return state.Invalid(false, REJECT_INVALID, "mempool conflict");
             }
         }
-        BOOST_FOREACH(const JSDescription &joinsplit, tx.vjoinsplit) {
-            BOOST_FOREACH(const uint256 &nf, joinsplit.nullifiers) {
+        //Check for duplicate Nullifers
+        for (const JSDescription &joinsplit : tx.vjoinsplit) {
+            for (const uint256 &nf : joinsplit.nullifiers) {
                 if (pool.nullifierExists(nf, SPROUT)) {
-                    fprintf(stderr,"pool.mapNullifiers.count\n");
-                    return false;
+                    return state.Invalid(error("AcceptToMemoryPool: duplicate nullifier requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-nullifier-requirements-not-met");
                 }
             }
         }
-        for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
-            if (pool.nullifierExists(spendDescription.nullifier, SAPLING)) {
-                return false;
+        for (const uint256& nf : tx.GetSaplingBundle().GetNullifiers()) {
+            if (pool.nullifierExists(nf, SAPLING)) {
+                return state.Invalid(error("AcceptToMemoryPool: duplicate nullifier requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-nullifier-requirements-not-met");
             }
+        }
+        for (const uint256& nf : tx.GetOrchardBundle().GetNullifiers()) {
+            if (pool.nullifierExists(nf, ORCHARDFRONTIER)) {
+                return state.Invalid(error("AcceptToMemoryPool: duplicate nullifier requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-nullifier-requirements-not-met");
+            }
+        }
 
+
+        //Check for duplicate Proofs
+        for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
             if (pool.zkProofHashExists(spendDescription.ProofHash(), SPEND)) {
-                return false;
+                return state.Invalid(error("AcceptToMemoryPool: duplicate proof requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-proof-requirements-not-met");
             }
         }
         for (const OutputDescription &outputDescription : tx.vShieldedOutput) {
             if (pool.zkProofHashExists(outputDescription.ProofHash(), OUTPUT)) {
-                return false;
+                return state.Invalid(error("AcceptToMemoryPool: duplicate proof requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-proof-requirements-not-met");
             }
         }
     }
+
     {
         CCoinsView dummy;
         CCoinsViewCache view(&dummy);
@@ -2668,6 +2685,18 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         if ( komodoConnectingSet )
             KOMODO_CONNECTING = -1;
 
+        // Do this step last before adding it to the mempool - this is the most CPU intensive step and validates the zkproofs.
+        // Eliminate transactions with all other types of failures before doing this validation.
+        // DoS level set to 10 to be more forgiving.
+        // Check transaction contextually against the set of consensus rules which apply in the next block to be mined.
+        std::vector<const CTransaction*> vptx;
+        vptx.emplace_back(&tx);
+        if (!ContextualCheckTransactionMultithreaded(0, vptx, 0, state, nextBlockHeight, (dosLevel == -1) ? 10 : dosLevel))
+        {
+            return error("AcceptToMemoryPool: ContextualCheckTransaction failed");
+        }
+
+        //Add to mempool
         {
             LOCK(pool.cs);
             // Store transaction in memory

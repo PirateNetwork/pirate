@@ -123,6 +123,9 @@ static const unsigned int WITNESS_WRITE_UPDATES = 10000;
 static const unsigned int MAX_REJECT_MESSAGE_LENGTH = 111;
 static const int64_t DEFAULT_MAX_TIP_AGE = 24 * 60 * 60;
 
+/** The number of blocks within expiry height when a tx is considered to be expiring soon */
+static constexpr uint32_t TX_EXPIRING_SOON_THRESHOLD = 3;
+
 /** Default NSPV support enabled */
 static const bool DEFAULT_NSPV_PROCESSING = false;
 
