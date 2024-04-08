@@ -154,6 +154,7 @@ private:
 
     std::map<uint256, const CTransaction*> mapSproutNullifiers;
     std::map<uint256, const CTransaction*> mapSaplingNullifiers;
+    std::map<uint256, const CTransaction*> mapOrchardNullifiers;
     std::map<uint256, const CTransaction*> mapZkOutputProofHash;
     std::map<uint256, const CTransaction*> mapZkSpendProofHash;
 
@@ -244,7 +245,7 @@ public:
 
     void NotifyRecentlyAdded();
     bool IsFullyNotified();
-    
+
     unsigned long size()
     {
         LOCK(cs);
@@ -270,7 +271,7 @@ public:
 
     /** Estimate priority needed to get into the next nBlocks */
     double estimatePriority(int nBlocks) const;
-    
+
     /** Write/Read estimates to disk */
     bool WriteFeeEstimates(CAutoFile& fileout) const;
     bool ReadFeeEstimates(CAutoFile& filein);
@@ -283,7 +284,7 @@ public:
     }
 };
 
-/** 
+/**
  * CCoinsView that brings transactions from a memorypool into view.
  * It does not check for spendings by memory pool transactions.
  */

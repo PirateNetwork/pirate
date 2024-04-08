@@ -130,18 +130,25 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry &entry,
             mapNextTx[tx.vin[i].prevout] = CInPoint(&tx, i);
         }
     }
-    BOOST_FOREACH(const JSDescription &joinsplit, tx.vjoinsplit) {
-        BOOST_FOREACH(const uint256 &nf, joinsplit.nullifiers) {
+    for (const JSDescription &joinsplit : tx.vjoinsplit) {
+        for (const uint256 &nf : joinsplit.nullifiers) {
             mapSproutNullifiers[nf] = &tx;
         }
     }
+    for (const uint256& nf : tx.GetSaplingBundle().GetNullifiers()) {
+        mapSaplingNullifiers[nf] = &tx;
+    }
+    for (const uint256& nf : tx.GetOrchardBundle().GetNullifiers()) {
+        mapOrchardNullifiers[nf] = &tx;
+    }
     for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
-        mapSaplingNullifiers[spendDescription.nullifier] = &tx;
         mapZkSpendProofHash[spendDescription.ProofHash()] = &tx;
     }
     for (const OutputDescription &outputDescription : tx.vShieldedOutput) {
         mapZkOutputProofHash[outputDescription.ProofHash()] = &tx;
     }
+
+
     nTransactionsUpdated++;
     totalTxSize += entry.GetTxSize();
     cachedInnerUsage += entry.DynamicMemoryUsage();
@@ -379,8 +386,14 @@ void CTxMemPool::remove(const CTransaction &origTx, std::list<CTransaction>& rem
                     mapSproutNullifiers.erase(nf);
                 }
             }
+
+            for (const uint256& nf : tx.GetSaplingBundle().GetNullifiers()) {
+                mapSaplingNullifiers.erase(nf);
+            }
+            for (const uint256& nf : tx.GetOrchardBundle().GetNullifiers()) {
+                mapOrchardNullifiers.erase(nf);
+            }
             for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
-                mapSaplingNullifiers.erase(spendDescription.nullifier);
                 mapZkSpendProofHash.erase(spendDescription.ProofHash());
             }
             for (const OutputDescription &outputDescription : tx.vShieldedOutput) {
@@ -505,14 +518,25 @@ void CTxMemPool::removeConflicts(const CTransaction &tx, std::list<CTransaction>
             }
         }
     }
-    for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
-        std::map<uint256, const CTransaction*>::iterator it = mapSaplingNullifiers.find(spendDescription.nullifier);
+    for (const uint256& nf : tx.GetSaplingBundle().GetNullifiers()) {
+        std::map<uint256, const CTransaction*>::iterator it = mapSaplingNullifiers.find(nf);
         if (it != mapSaplingNullifiers.end()) {
             const CTransaction &txConflict = *it->second;
             if (txConflict != tx) {
                 remove(txConflict, removed, true);
             }
         }
+    }
+    for (const uint256& nf : tx.GetOrchardBundle().GetNullifiers()) {
+        std::map<uint256, const CTransaction*>::iterator it = mapOrchardNullifiers.find(nf);
+        if (it != mapOrchardNullifiers.end()) {
+            const CTransaction &txConflict = *it->second;
+            if (txConflict != tx) {
+                remove(txConflict, removed, true);
+            }
+        }
+    }
+    for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
         std::map<uint256, const CTransaction*>::iterator itt = mapZkSpendProofHash.find(spendDescription.ProofHash());
         if (itt != mapZkSpendProofHash.end()) {
             const CTransaction &txConflict = *itt->second;
@@ -666,8 +690,8 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
 
         boost::unordered_map<uint256, SproutMerkleTree, CCoinsKeyHasher> intermediates;
 
-        BOOST_FOREACH(const JSDescription &joinsplit, tx.vjoinsplit) {
-            BOOST_FOREACH(const uint256 &nf, joinsplit.nullifiers) {
+        for (const JSDescription &joinsplit : tx.vjoinsplit) {
+            for (const uint256 &nf : joinsplit.nullifiers) {
                 assert(!pcoins->GetNullifier(nf, SPROUT));
             }
 
@@ -679,7 +703,7 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
                 assert(pcoins->GetSproutAnchorAt(joinsplit.anchor, tree));
             }
 
-            BOOST_FOREACH(const uint256& commitment, joinsplit.commitments)
+            for (const uint256& commitment : joinsplit.commitments)
             {
                 tree.append(commitment);
             }
@@ -701,6 +725,9 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
         for (const OutputDescription &outputDescription : tx.vShieldedOutput) {
             std::set<std::pair<uint256, int>> txids;
             assert(!pcoins->GetZkProofHash(outputDescription.ProofHash(), OUTPUT, txids));
+        }
+        for (const uint256& nf : tx.GetOrchardBundle().GetNullifiers()) {
+            assert(!pcoins->GetNullifier(nf, ORCHARDFRONTIER));
         }
         if (fDependsWait)
             waitingOnDependants.push_back(&(*it));
@@ -741,6 +768,7 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
 
     checkNullifiers(SPROUT);
     checkNullifiers(SAPLING);
+    checkNullifiers(ORCHARDFRONTIER);
     checkZkProofHash(OUTPUT);
     checkZkProofHash(SPEND);
 
@@ -757,6 +785,8 @@ void CTxMemPool::checkNullifiers(ShieldedType type) const
             break;
         case SAPLING:
             mapToUse = &mapSaplingNullifiers;
+        case ORCHARDFRONTIER:
+            mapToUse = &mapOrchardNullifiers;
             break;
         default:
             throw runtime_error("Unknown nullifier type");
@@ -774,10 +804,10 @@ void CTxMemPool::checkZkProofHash(ProofType type) const
 {
     const std::map<uint256, const CTransaction*>* mapToUse;
     switch (type) {
-        case SPROUT:
+        case OUTPUT:
             mapToUse = &mapZkOutputProofHash;
             break;
-        case SAPLING:
+        case SPEND:
             mapToUse = &mapZkSpendProofHash;
             break;
         default:
@@ -901,6 +931,8 @@ bool CTxMemPool::nullifierExists(const uint256& nullifier, ShieldedType type) co
             return mapSproutNullifiers.count(nullifier);
         case SAPLING:
             return mapSaplingNullifiers.count(nullifier);
+        case ORCHARDFRONTIER:
+            return mapOrchardNullifiers.count(nullifier);
         default:
             throw runtime_error("Unknown nullifier type");
     }
