@@ -12,7 +12,7 @@
 
 #include <optional>
 
-const uint32_t ZIP32_HARDENED_KEY_LIMIT = 0x80000000;
+const uint32_t HARDENED_KEY_LIMIT = 0x80000000;
 const size_t ZIP32_XFVK_SIZE = 169;
 const size_t ZIP32_XSK_SIZE = 169;
 const size_t ZIP32_DXFVK_SIZE = 180;
@@ -52,6 +52,15 @@ public:
 uint256 ovkForShieldingFromTaddr(HDSeed& seed);
 
 namespace libzcash {
+
+typedef uint32_t AccountId;
+
+/**
+ * The account identifier used for HD derivation of
+ * transparent and Sapling addresses via the legacy
+ * `getnewaddress` and `z_getnewaddress` code paths,
+ */
+const AccountId ZCASH_LEGACY_ACCOUNT = HARDENED_KEY_LIMIT - 1;
 
 /**
  * 88-bit diversifier index. This would ideally derive from base_uint
