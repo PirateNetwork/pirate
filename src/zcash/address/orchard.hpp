@@ -295,10 +295,10 @@ public:
     OrchardSpendingKey(const OrchardSpendingKey& key) :
         inner(orchard_spending_key_clone(key.inner.get()), orchard_spending_key_free) {}
 
-    // static OrchardSpendingKey ForAccount(
-    //         const HDSeed& seed,
-    //         uint32_t bip44CoinType,
-    //         libzcash::AccountId accountId);
+    static OrchardSpendingKey ForAccount(
+            const HDSeed& seed,
+            uint32_t bip44CoinType,
+            libzcash::AccountId accountId);
 
     OrchardFullViewingKey ToFullViewingKey() const;
 

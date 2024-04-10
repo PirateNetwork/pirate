@@ -47,23 +47,23 @@ OrchardRawAddress OrchardFullViewingKey::GetChangeAddress() const {
     return ToInternalIncomingViewingKey().Address(0);
 }
 
-// OrchardSpendingKey OrchardSpendingKey::ForAccount(
-//         const HDSeed& seed,
-//         uint32_t bip44CoinType,
-//         libzcash::AccountId accountId) {
-//
-//     auto ptr = orchard_spending_key_for_account(
-//             seed.RawSeed().data(),
-//             seed.RawSeed().size(),
-//             bip44CoinType,
-//             accountId);
-//
-//     if (ptr == nullptr) {
-//         throw std::ios_base::failure("Unable to generate Orchard extended spending key.");
-//     }
-//
-//     return OrchardSpendingKey(ptr);
-// }
+OrchardSpendingKey OrchardSpendingKey::ForAccount(
+        const HDSeed& seed,
+        uint32_t bip44CoinType,
+        libzcash::AccountId accountId) {
+
+    auto ptr = orchard_spending_key_for_account(
+            seed.RawSeed().data(),
+            seed.RawSeed().size(),
+            bip44CoinType,
+            accountId);
+
+    if (ptr == nullptr) {
+        throw std::ios_base::failure("Unable to generate Orchard extended spending key.");
+    }
+
+    return OrchardSpendingKey(ptr);
+}
 
 OrchardFullViewingKey OrchardSpendingKey::ToFullViewingKey() const {
     return OrchardFullViewingKey(orchard_spending_key_to_full_viewing_key(inner.get()));
