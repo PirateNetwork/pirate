@@ -185,15 +185,15 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingZKey()
 
     // We use a fixed keypath scheme of m/32'/coin_type'/account'
     // Derive m/32'
-    auto m_32h = m.Derive(32 | ZIP32_HARDENED_KEY_LIMIT);
+    auto m_32h = m.Derive(32 | HARDENED_KEY_LIMIT);
     // Derive m/32'/coin_type'
-    auto m_32h_cth = m_32h.Derive(bip44CoinType | ZIP32_HARDENED_KEY_LIMIT);
+    auto m_32h_cth = m_32h.Derive(bip44CoinType | HARDENED_KEY_LIMIT);
 
     // Derive account key at next index, skip keys already known to the wallet
     libzcash::SaplingExtendedSpendingKey xsk;
     do
     {
-        xsk = m_32h_cth.Derive(hdChain.saplingAccountCounter | ZIP32_HARDENED_KEY_LIMIT);
+        xsk = m_32h_cth.Derive(hdChain.saplingAccountCounter | HARDENED_KEY_LIMIT);
         metadata.hdKeypath = "m/32'/" + std::to_string(bip44CoinType) + "'/" + std::to_string(hdChain.saplingAccountCounter) + "'";
         metadata.seedFp = hdChain.seedFp;
 
@@ -237,9 +237,9 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingDiversifiedAddress()
         uint32_t bip44CoinType = Params().BIP44CoinType();
 
         //Derive default key
-        auto m_32h = m.Derive(32 | ZIP32_HARDENED_KEY_LIMIT);
-        auto m_32h_cth = m_32h.Derive(bip44CoinType | ZIP32_HARDENED_KEY_LIMIT);
-        extsk = m_32h_cth.Derive(0 | ZIP32_HARDENED_KEY_LIMIT);
+        auto m_32h = m.Derive(32 | HARDENED_KEY_LIMIT);
+        auto m_32h_cth = m_32h.Derive(bip44CoinType | HARDENED_KEY_LIMIT);
+        extsk = m_32h_cth.Derive(0 | HARDENED_KEY_LIMIT);
 
         //Check of default spending key
         auto ivk = extsk.expsk.full_viewing_key().in_viewing_key();
