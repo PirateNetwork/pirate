@@ -51,6 +51,7 @@
 #include "rpc/server.h"
 #include "rpc/register.h"
 #include "script/standard.h"
+#include "script/sigcache.h"
 #include "scheduler.h"
 #include "txdb.h"
 #include "torcontrol.h"
@@ -1570,6 +1571,19 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     LogPrintf("Using config file %s\n", GetConfigFile().string());
     LogPrintf("Using at most %i connections (%i file descriptors available)\n", nMaxConnections, nFD);
     std::ostringstream strErrors;
+
+    // Initialize the validity caches. We currently have three:
+    // - Transparent signature validity.
+    // - Sapling bundle validity.
+    // - Orchard bundle validity.
+    // Assign half of the cap to transparent signatures, and split the rest
+    // between Sapling and Orchard bundles.
+    size_t nMaxCacheSize = GetArg("-maxsigcachesize", DEFAULT_MAX_SIG_CACHE_SIZE) * ((size_t) 1 << 20);
+    if (nMaxCacheSize <= 0) {
+        return InitError(strprintf(_("-maxsigcachesize must be at least 1")));
+    }
+    InitSignatureCache(nMaxCacheSize / 2);
+    bundlecache::init(nMaxCacheSize / 4);
 
     LogPrintf("Using %u threads for script verification\n", nScriptCheckThreads);
     if (nScriptCheckThreads) {
