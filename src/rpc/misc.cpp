@@ -309,6 +309,7 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
         obj.push_back(Pair("paytxfee",      ValueFromAmount(payTxFee.GetFeePerK())));
 #endif
         obj.push_back(Pair("sapling", ASSETCHAINS_SAPLING));
+        obj.push_back(Pair("orchard", ASSETCHAINS_ORCHARD));
     }
     obj.push_back(Pair("timeoffset",    0));
     obj.push_back(Pair("connections",   (int)vNodes.size()));

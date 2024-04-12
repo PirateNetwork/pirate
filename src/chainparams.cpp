@@ -668,7 +668,7 @@ void komodo_setorchard(int32_t height)
 {
     pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight = height;
     ASSETCHAINS_ORCHARD = height;
-    fprintf(stderr,"SET ZIP212 ACTIVATION height.%d\n",height);
+    fprintf(stderr,"SET ORCHARD ACTIVATION height.%d\n",height);
 }
 
 void *chainparams_commandline()
@@ -697,18 +697,6 @@ void *chainparams_commandline()
         pCurrentParams->pchMessageStart[3] = (ASSETCHAINS_MAGIC >> 24) & 0xff;
         fprintf(stderr,">>>>>>>>>> %s: p2p.%u rpc.%u magic.%08x %u %u coins\n",chainName.symbol().c_str(),ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT,ASSETCHAINS_MAGIC,ASSETCHAINS_MAGIC,(uint32_t)ASSETCHAINS_SUPPLY);
 
-        pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = ASSETCHAINS_SAPLING;
-        pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = ASSETCHAINS_OVERWINTER;
-        checkpointData =
-                {
-                        MapCheckpoints {
-                                { 0, pCurrentParams->consensus.hashGenesisBlock }
-                        },
-                        (int64_t)1231006505,
-                        (int64_t)1,
-                        (double)2777 // * estimated number of transactions per day after checkpoint
-                        //   total number of tx / (checkpoint block height / (24 * 24))
-                };
 
 
         pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = ASSETCHAINS_SAPLING;

@@ -4863,7 +4863,7 @@ int32_t komodo_activate_orchard(CBlockIndex *pindex)
     }
     height = pindex->nHeight;
     blocktime = (uint32_t)pindex->nTime;
-    //fprintf(stderr,"komodo_activate_sapling.%d starting blocktime %u cmp.%d\n",height,blocktime,blocktime > KOMODO_SAPLING_ACTIVATION);
+    fprintf(stderr,"komodo_activate_orchard.%d starting blocktime %u cmp.%d\n",height,blocktime,blocktime > KOMODO_SAPLING_ACTIVATION);
 
     // avoid trying unless we have at least 30 blocks
     if (height < 30)
@@ -4882,17 +4882,18 @@ int32_t komodo_activate_orchard(CBlockIndex *pindex)
     }
     height = pindex->nHeight;
     blocktime = (uint32_t)pindex->nTime;
-    //fprintf(stderr,"starting blocktime %u cmp.%d\n",blocktime,blocktime > KOMODO_ORCHARD_ACTIVATION);
+    fprintf(stderr,"KOMODO_ORCHARD_ACTIVATION %u \n", KOMODO_ORCHARD_ACTIVATION);
+    fprintf(stderr,"starting orchard blocktime %u cmp.%d\n",blocktime,blocktime > KOMODO_ORCHARD_ACTIVATION);
     if ( blocktime > KOMODO_ORCHARD_ACTIVATION ) // find the earliest transition
     {
         while ( (prev= pindex->pprev) != 0 )
         {
             prevht = prev->nHeight;
             prevtime = (uint32_t)prev->nTime;
-            //fprintf(stderr,"(%d, %u).%d -> (%d, %u).%d\n",prevht,prevtime,prevtime > KOMODO_ORCHARD_ACTIVATION,height,blocktime,blocktime > KOMODO_ORCHARD_ACTIVATION);
+            fprintf(stderr,"(%d, %u).%d -> (%d, %u).%d\n",prevht,prevtime,prevtime > KOMODO_ORCHARD_ACTIVATION,height,blocktime,blocktime > KOMODO_ORCHARD_ACTIVATION);
             if ( prevht+1 != height )
             {
-                fprintf(stderr,"komodo_activate_sapling: unexpected non-contiguous ht %d vs %d\n",prevht,height);
+                fprintf(stderr,"komodo_activate_orchard: unexpected non-contiguous ht %d vs %d\n",prevht,height);
                 return(0);
             }
             if ( prevtime <= KOMODO_ORCHARD_ACTIVATION && blocktime > KOMODO_ORCHARD_ACTIVATION )
@@ -4910,7 +4911,7 @@ int32_t komodo_activate_orchard(CBlockIndex *pindex)
     if ( activation != 0 )
     {
         komodo_setorchard(activation);
-        fprintf(stderr,"%s sapling activation at %d\n",chainName.symbol().c_str(),activation);
+        fprintf(stderr,"%s orchard activation at %d\n",chainName.symbol().c_str(),activation);
         ASSETCHAINS_ORCHARD = activation;
     }
     return activation;
@@ -5027,7 +5028,7 @@ bool ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *pblock)
     {
         if ( ASSETCHAINS_SAPLING <= 0 && pindexNew->nTime > KOMODO_SAPLING_ACTIVATION - 24*3600 )
             komodo_activate_sapling(pindexNew);
-        if ( ASSETCHAINS_PRIVATE == 1 && ASSETCHAINS_ORCHARD <= 0 && pindexNew->nTime > KOMODO_ORCHARD_ACTIVATION - 24*3600 )
+        if ( ASSETCHAINS_ORCHARD <= 0 && pindexNew->nTime > KOMODO_ORCHARD_ACTIVATION - 24*3600 )
             komodo_activate_orchard(pindexNew);
         if ( ASSETCHAINS_CC != 0 && KOMODO_SNAPSHOT_INTERVAL != 0 && (pindexNew->nHeight % KOMODO_SNAPSHOT_INTERVAL) == 0 && pindexNew->nHeight >= KOMODO_SNAPSHOT_INTERVAL )
         {
@@ -7132,6 +7133,11 @@ bool static LoadBlockIndexDB()
         {
             fprintf(stderr,"set sapling height, if possible from ht.%d %u\n",(int32_t)pindex->nHeight,(uint32_t)pindex->nTime);
             komodo_activate_sapling(pindex);
+        }
+        if ( ASSETCHAINS_ORCHARD <= 0 )
+        {
+            fprintf(stderr,"set orchard height, if possible from ht.%d %u\n",(int32_t)pindex->nHeight,(uint32_t)pindex->nTime);
+            komodo_activate_orchard(pindex);
         }
     }
     return true;
