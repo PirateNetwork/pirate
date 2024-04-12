@@ -665,7 +665,7 @@ void komodo_setorchard(int32_t height)
 {
     pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight = height;
     ASSETCHAINS_ORCHARD = height;
-    fprintf(stderr,"SET ZIP212 ACTIVATION height.%d\n",height);
+    fprintf(stderr,"SET ORCHARD ACTIVATION height.%d\n",height);
 }
 
 /* This function returns the checkpoint list for a currently active asset chain.
@@ -1008,8 +1008,6 @@ void *chainparams_commandline()
         pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = ASSETCHAINS_SAPLING;
         pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = ASSETCHAINS_OVERWINTER;
         pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight = ASSETCHAINS_ORCHARD;
-
-
 
         if (chainName.isSymbol("PIRATE"))
         {
