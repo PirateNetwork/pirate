@@ -603,6 +603,7 @@ libbitcoin_common_a_SOURCES = \
   metrics.cpp \
   primitives/block.cpp \
   primitives/transaction.cpp \
+	primitives/transaction_info.cpp \
   protocol.cpp \
   pubkey.cpp \
   scheduler.cpp \
