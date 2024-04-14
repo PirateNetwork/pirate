@@ -67,6 +67,7 @@
 #endif
 #include <stdint.h>
 #include <stdio.h>
+#include <filesystem>
 
 #ifndef _WIN32
 #include <signal.h>
@@ -76,7 +77,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/split.hpp>
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/function.hpp>
 #include <boost/interprocess/sync/file_lock.hpp>
@@ -92,6 +93,7 @@
 #include "librustzcash.h"
 
 using namespace std;
+using namespace boost::placeholders;
 
 #include "komodo_defs.h"
 #include "komodo_extern_globals.h"
@@ -1537,7 +1539,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     std::string strDataDir = GetDataDir().string();
 #ifdef ENABLE_WALLET
     // Wallet file must be a plain filename without a directory
-    if (strWalletFile != boost::filesystem::basename(strWalletFile) + boost::filesystem::extension(strWalletFile))
+    if (strWalletFile != std::filesystem::path(strWalletFile).stem().string() + std::filesystem::path(strWalletFile).extension().string())
         return InitError(strprintf(_("Wallet %s resides outside data directory %s"), strWalletFile, strDataDir));
 #endif
     // Make sure only a single Bitcoin process is using the data directory.
