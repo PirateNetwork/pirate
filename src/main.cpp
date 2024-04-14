@@ -9625,8 +9625,7 @@ CMutableTransaction CreateNewContextualCMutableTransaction(const Consensus::Para
     mtx.nVersionGroupId = txVersionInfo.nVersionGroupId;
     mtx.nVersion        = txVersionInfo.nVersion;
 
-    bool isOverwintered = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_OVERWINTER);
-    if (isOverwintered)
+    if (mtx.fOverwintered)
     {
         if (mtx.nVersion >= ORCHARD_TX_VERSION) {
             mtx.nConsensusBranchId = CurrentEpochBranchId(nHeight, consensusParams);
