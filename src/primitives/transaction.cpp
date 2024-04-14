@@ -144,6 +144,7 @@ std::string CTxOut::ToString() const
 
 CMutableTransaction::CMutableTransaction() : nVersion(CTransaction::SPROUT_MIN_CURRENT_VERSION), fOverwintered(false), nVersionGroupId(0), nExpiryHeight(0), nLockTime(0), valueBalance(0) {}
 CMutableTransaction::CMutableTransaction(const CTransaction& tx) : nVersion(tx.nVersion), fOverwintered(tx.fOverwintered), nVersionGroupId(tx.nVersionGroupId), nExpiryHeight(tx.nExpiryHeight),
+                                                                   nConsensusBranchId(tx.GetConsensusBranchId()),
                                                                    vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
                                                                    valueBalance(tx.valueBalance), vShieldedSpend(tx.vShieldedSpend), vShieldedOutput(tx.vShieldedOutput),
                                                                    vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
@@ -153,17 +154,60 @@ CMutableTransaction::CMutableTransaction(const CTransaction& tx) : nVersion(tx.n
 
 uint256 CMutableTransaction::GetHash() const
 {
-    return SerializeHash(*this);
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << *this;
+    uint256 hash;
+    if (!zcash_transaction_digests(
+        reinterpret_cast<const unsigned char*>(ss.data()),
+        ss.size(),
+        hash.begin(),
+        nullptr))
+    {
+        throw std::ios_base::failure("CMutableTransaction::GetHash: Invalid transaction format");
+    }
+    return hash;
+}
+
+uint256 CMutableTransaction::GetAuthDigest() const
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << *this;
+    uint256 authDigest;
+    if (!zcash_transaction_digests(
+        reinterpret_cast<const unsigned char*>(ss.data()),
+        ss.size(),
+        nullptr,
+        authDigest.begin()))
+    {
+        throw std::ios_base::failure("CMutableTransaction::GetAuthDigest: Invalid transaction format");
+    }
+    return authDigest;
 }
 
 void CTransaction::UpdateHash() const
 {
-    *const_cast<uint256*>(&hash) = SerializeHash(*this);
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << *this;
+    if (!zcash_transaction_digests(
+        reinterpret_cast<const unsigned char*>(ss.data()),
+        ss.size(),
+        const_cast<uint256*>(&wtxid.hash)->begin(),
+        const_cast<uint256*>(&wtxid.authDigest)->begin()))
+    {
+        throw std::ios_base::failure("CTransaction::UpdateHash: Invalid transaction format");
+    }
 }
 
-CTransaction::CTransaction() : nVersion(CTransaction::SPROUT_MIN_CURRENT_VERSION), fOverwintered(false), nVersionGroupId(0), nExpiryHeight(0), vin(), vout(), nLockTime(0), valueBalance(0), vShieldedSpend(), vShieldedOutput(), vjoinsplit(), joinSplitPubKey(), joinSplitSig(), bindingSig(), saplingBundle(), orchardBundle() {}
+CTransaction::CTransaction() : nVersion(CTransaction::SPROUT_MIN_CURRENT_VERSION),
+                              fOverwintered(false), nVersionGroupId(0), nExpiryHeight(0),
+                              nConsensusBranchId(std::nullopt),
+                              vin(), vout(), nLockTime(0),
+                              valueBalance(0), vShieldedSpend(), vShieldedOutput(),
+                              vjoinsplit(), joinSplitPubKey(), joinSplitSig(), bindingSig(),
+                              saplingBundle(), orchardBundle() {}
 
 CTransaction::CTransaction(const CMutableTransaction& tx) : nVersion(tx.nVersion), fOverwintered(tx.fOverwintered), nVersionGroupId(tx.nVersionGroupId), nExpiryHeight(tx.nExpiryHeight),
+                                                            nConsensusBranchId(tx.nConsensusBranchId),
                                                             vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
                                                             valueBalance(tx.valueBalance), vShieldedSpend(tx.vShieldedSpend), vShieldedOutput(tx.vShieldedOutput),
                                                             vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
@@ -177,6 +221,7 @@ CTransaction::CTransaction(const CMutableTransaction& tx) : nVersion(tx.nVersion
 CTransaction::CTransaction(
     const CMutableTransaction& tx,
     bool evilDeveloperFlag) : nVersion(tx.nVersion), fOverwintered(tx.fOverwintered), nVersionGroupId(tx.nVersionGroupId), nExpiryHeight(tx.nExpiryHeight),
+                              nConsensusBranchId(tx.nConsensusBranchId),
                               vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
                               valueBalance(tx.valueBalance), vShieldedSpend(tx.vShieldedSpend), vShieldedOutput(tx.vShieldedOutput),
                               vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
@@ -186,6 +231,7 @@ CTransaction::CTransaction(
 }
 
 CTransaction::CTransaction(CMutableTransaction&& tx) : nVersion(tx.nVersion), fOverwintered(tx.fOverwintered), nVersionGroupId(tx.nVersionGroupId),
+                                                       nConsensusBranchId(tx.nConsensusBranchId),
                                                        vin(std::move(tx.vin)), vout(std::move(tx.vout)), nLockTime(tx.nLockTime), nExpiryHeight(tx.nExpiryHeight),
                                                        valueBalance(tx.valueBalance),
                                                        vShieldedSpend(std::move(tx.vShieldedSpend)), vShieldedOutput(std::move(tx.vShieldedOutput)),
@@ -200,6 +246,7 @@ CTransaction& CTransaction::operator=(const CTransaction& tx)
     *const_cast<bool*>(&fOverwintered) = tx.fOverwintered;
     *const_cast<int*>(&nVersion) = tx.nVersion;
     *const_cast<uint32_t*>(&nVersionGroupId) = tx.nVersionGroupId;
+    nConsensusBranchId = tx.nConsensusBranchId;
     *const_cast<std::vector<CTxIn>*>(&vin) = tx.vin;
     *const_cast<std::vector<CTxOut>*>(&vout) = tx.vout;
     *const_cast<unsigned int*>(&nLockTime) = tx.nLockTime;
@@ -213,7 +260,8 @@ CTransaction& CTransaction::operator=(const CTransaction& tx)
     *const_cast<uint256*>(&joinSplitPubKey) = tx.joinSplitPubKey;
     *const_cast<joinsplit_sig_t*>(&joinSplitSig) = tx.joinSplitSig;
     *const_cast<binding_sig_t*>(&bindingSig) = tx.bindingSig;
-    *const_cast<uint256*>(&hash) = tx.hash;
+    *const_cast<uint256*>(&wtxid.hash) = tx.wtxid.hash;
+    *const_cast<uint256*>(&wtxid.authDigest) = tx.wtxid.authDigest;
     return *this;
 }
 
