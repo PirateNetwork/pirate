@@ -3830,7 +3830,7 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
     // block was not on or after the Orchard activation height, this
     // will be set to `null`. For logical consistency, in this case we
     // set the last anchor to the empty root.
-    if (NetworkUpgradeActive(pindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
+    if (NetworkUpgradeActive(pindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD) && !pindex->pprev->hashFinalOrchardRoot.IsNull()) {
         view.PopAnchor(pindex->pprev->hashFinalOrchardRoot, ORCHARDFRONTIER);
     } else {
         view.PopAnchor(OrchardMerkleFrontier::empty_root(), ORCHARDFRONTIER);
@@ -4337,10 +4337,14 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
         //Set the hashFinalSaplingRoot in the block index (equal to HahsBlockCommitments before Orchard)
         pindex->hashFinalSaplingRoot = sapling_frontier_tree.root();
+    }
 
+    
+    if (NetworkUpgradeActive(pindex->nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
         //Set the hashFinalOrchardRoot in the block index
         pindex->hashFinalOrchardRoot = orchard_frontier_tree.root();
     }
+
     int64_t nTime1 = GetTimeMicros(); nTimeConnect += nTime1 - nTimeStart;
     LogPrint("bench", "      - Connect %u transactions: %.2fms (%.3fms/tx, %.3fms/txin) [%.2fs]\n", (unsigned)block.vtx.size(), 0.001 * (nTime1 - nTimeStart), 0.001 * (nTime1 - nTimeStart) / block.vtx.size(), nInputs <= 1 ? 0 : 0.001 * (nTime1 - nTimeStart) / (nInputs-1), nTimeConnect * 0.000001);
 
