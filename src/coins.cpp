@@ -263,6 +263,9 @@ bool CCoinsViewCache::GetNullifier(const uint256 &nullifier, ShieldedType type) 
         case SAPLING:
             cacheToUse = &cacheSaplingNullifiers;
             break;
+        case ORCHARDFRONTIER:
+            cacheToUse = &cacheOrchardNullifiers;
+            break;
         default:
             throw std::runtime_error("Unknown shielded type");
     }
