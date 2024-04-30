@@ -228,6 +228,7 @@ LIBZCASH_H = \
   zcash/Note.hpp \
   zcash/prf.h \
   zcash/Proof.hpp \
+	zcash/address/pirate_orchard.hpp \
 	zcash/address/orchard.hpp \
 	zcash/address/sapling.hpp \
 	zcash/address/sprout.hpp \
@@ -820,6 +821,7 @@ libzcash_a_SOURCES = \
 	zcash/memo.cpp \
 	zcash/Note.cpp \
 	zcash/prf.cpp \
+	zcash/address/pirate_orchard.cpp \
 	zcash/address/orchard.cpp \
 	zcash/address/sapling.cpp \
 	zcash/address/sprout.cpp \

@@ -128,6 +128,13 @@ bool CBasicKeyStore::AddSaplingWatchOnly(const libzcash::SaplingExtendedFullView
     return true;
 }
 
+bool CBasicKeyStore::AddOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
+{
+    LOCK(cs_KeyStore);
+    setOrchardWatchOnly.insert(extfvk);
+    return true;
+}
+
 bool CBasicKeyStore::RemoveWatchOnly(const CScript &dest)
 {
     LOCK(cs_KeyStore);
@@ -139,6 +146,13 @@ bool CBasicKeyStore::RemoveSaplingWatchOnly(const libzcash::SaplingExtendedFullV
 {
     LOCK(cs_KeyStore);
     setSaplingWatchOnly.erase(extfvk);
+    return true;
+}
+
+bool CBasicKeyStore::RemoveOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
+{
+    LOCK(cs_KeyStore);
+    setOrchardWatchOnly.erase(extfvk);
     return true;
 }
 
@@ -154,6 +168,13 @@ bool CBasicKeyStore::HaveSaplingWatchOnly(const libzcash::SaplingExtendedFullVie
     return setSaplingWatchOnly.count(extfvk) > 0;
 }
 
+bool CBasicKeyStore::HaveOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
+{
+    LOCK(cs_KeyStore);
+    setOrchardWatchOnly.count(extfvk) > 0;
+    return true;
+}
+
 bool CBasicKeyStore::HaveWatchOnly() const
 {
     LOCK(cs_KeyStore);
@@ -162,6 +183,9 @@ bool CBasicKeyStore::HaveWatchOnly() const
         return true;
 
     if (!setSaplingWatchOnly.empty())
+        return true;
+
+    if (!setOrchardWatchOnly.empty())
         return true;
 
     return false;
@@ -193,6 +217,26 @@ bool CBasicKeyStore::AddSaplingSpendingKey(
     return true;
 }
 
+bool CBasicKeyStore::AddOrchardSpendingKey(
+    const libzcash::OrchardExtendedSpendingKeyPirate &extsk)
+{
+    LOCK(cs_KeyStore);
+    auto extfvkOpt = extsk.GetXFVK();
+    if (extfvkOpt == std::nullopt) {
+        return false;
+    }
+    auto extfvk = extfvkOpt.value();
+
+    // if OrchardFullViewingKey is not in OrchardFullViewingKeyMap, add it
+    if (!CBasicKeyStore::AddOrchardExtendedFullViewingKey(extfvk)) {
+        return false;
+    }
+
+    mapOrchardSpendingKeys[extfvk] = extsk;
+
+    return true;
+}
+
 bool CBasicKeyStore::AddSproutViewingKey(const libzcash::SproutViewingKey &vk)
 {
     LOCK(cs_KeyStore);
@@ -211,6 +255,28 @@ bool CBasicKeyStore::AddSaplingExtendedFullViewingKey(
     setSaplingOutgoingViewingKeys.insert(extfvk.fvk.ovk);
 
     return CBasicKeyStore::AddSaplingIncomingViewingKey(ivk, extfvk.DefaultAddress());
+}
+
+bool CBasicKeyStore::AddOrchardExtendedFullViewingKey(
+    const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
+{
+    LOCK(cs_KeyStore);
+    auto ivkOpt = extfvk.fvk.GetIVK();
+    auto ovkOpt = extfvk.fvk.GetOVK();
+    auto addressOpt = extfvk.fvk.GetDefaultAddress();
+
+    if (ivkOpt == std::nullopt || ovkOpt == std::nullopt || addressOpt == std::nullopt) {
+        return false;
+    }
+
+    auto ivk = ivkOpt.value();
+    auto ovk = ovkOpt.value();
+    auto address = addressOpt.value();;
+
+    mapOrchardFullViewingKeys[ivk] = extfvk;
+    setSaplingOutgoingViewingKeys.insert(ovk);
+
+    return CBasicKeyStore::AddOrchardIncomingViewingKey(ivk, address);
 }
 
 // This function updates the wallet's internal address->ivk map.
@@ -232,6 +298,25 @@ bool CBasicKeyStore::AddSaplingIncomingViewingKey(
     return true;
 }
 
+// This function updates the wallet's internal address->ivk map.
+// If we add an address that is already in the map, the map will
+// remain unchanged as each address only has one ivk.
+bool CBasicKeyStore::AddOrchardIncomingViewingKey(
+    const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+    const libzcash::OrchardPaymentAddressPirate &addr)
+{
+    LOCK(cs_KeyStore);
+
+    // Add addr -> SaplingIncomingViewing to SaplingIncomingViewingKeyMap
+    mapOrchardIncomingViewingKeys[addr] = ivk;
+    setOrchardIncomingViewingKeys.insert(ivk);
+
+    //Cleared during SetBestChainINTERNAL to capture new address ivk pairs discovered while the wallet is locked
+    mapUnsavedOrchardIncomingViewingKeys[addr] = ivk;
+
+    return true;
+}
+
 bool CBasicKeyStore::AddSaplingDiversifiedAddress(
     const libzcash::SaplingPaymentAddress &addr,
     const libzcash::SaplingIncomingViewingKey &ivk,
@@ -239,20 +324,45 @@ bool CBasicKeyStore::AddSaplingDiversifiedAddress(
 )
 {
     LOCK(cs_KeyStore);
-    DiversifierPath dPath(ivk, path);
+    SaplingDiversifierPath dPath(ivk, path);
 
     mapSaplingPaymentAddresses[addr] = dPath;
 
     return true;
 }
 
-bool CBasicKeyStore::AddLastDiversifierUsed(
+bool CBasicKeyStore::AddOrchardDiversifiedAddress(
+    const libzcash::OrchardPaymentAddressPirate &addr,
+    const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+    const blob88 &path
+)
+{
+    LOCK(cs_KeyStore);
+    OrchardDiversifierPath dPath(ivk, path);
+
+    mapOrchardPaymentAddresses[addr] = dPath;
+
+    return true;
+}
+
+bool CBasicKeyStore::AddLastSaplingDiversifierUsed(
     const libzcash::SaplingIncomingViewingKey &ivk,
     const blob88 &path)
 {
     LOCK(cs_KeyStore);
 
-    mapLastDiversifierPath[ivk] = path;
+    mapLastSaplingDiversifierPath[ivk] = path;
+
+    return true;
+}
+
+bool CBasicKeyStore::AddLastOrchardDiversifierUsed(
+    const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+    const blob88 &path)
+{
+    LOCK(cs_KeyStore);
+
+    mapLastOrchardDiversifierPath[ivk] = path;
 
     return true;
 }
@@ -276,10 +386,22 @@ bool CBasicKeyStore::HaveSaplingFullViewingKey(const libzcash::SaplingIncomingVi
     return mapSaplingFullViewingKeys.count(ivk) > 0;
 }
 
+bool CBasicKeyStore::HaveOrchardFullViewingKey(const libzcash::OrchardIncomingViewingKeyPirate &ivk) const
+{
+    LOCK(cs_KeyStore);
+    return mapOrchardFullViewingKeys.count(ivk) > 0;
+}
+
 bool CBasicKeyStore::HaveSaplingIncomingViewingKey(const libzcash::SaplingPaymentAddress &addr) const
 {
     LOCK(cs_KeyStore);
     return mapSaplingIncomingViewingKeys.count(addr) > 0;
+}
+
+bool CBasicKeyStore::HaveOrchardIncomingViewingKey(const libzcash::OrchardPaymentAddressPirate &addr) const
+{
+    LOCK(cs_KeyStore);
+    return mapOrchardIncomingViewingKeys.count(addr) > 0;
 }
 
 bool CBasicKeyStore::GetSproutViewingKey(
@@ -308,12 +430,37 @@ bool CBasicKeyStore::GetSaplingFullViewingKey(
     return false;
 }
 
+bool CBasicKeyStore::GetOrchardFullViewingKey(
+    const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+    libzcash::OrchardExtendedFullViewingKeyPirate &extfvkOut) const
+{
+    LOCK(cs_KeyStore);
+    OrchardFullViewingKeyMap::const_iterator mi = mapOrchardFullViewingKeys.find(ivk);
+    if (mi != mapOrchardFullViewingKeys.end()) {
+        extfvkOut = mi->second;
+        return true;
+    }
+    return false;
+}
+
 bool CBasicKeyStore::GetSaplingIncomingViewingKey(const libzcash::SaplingPaymentAddress &addr,
                                    libzcash::SaplingIncomingViewingKey &ivkOut) const
 {
     LOCK(cs_KeyStore);
     SaplingIncomingViewingKeyMap::const_iterator mi = mapSaplingIncomingViewingKeys.find(addr);
     if (mi != mapSaplingIncomingViewingKeys.end()) {
+        ivkOut = mi->second;
+        return true;
+    }
+    return false;
+}
+
+bool CBasicKeyStore::GetOrchardIncomingViewingKey(const libzcash::OrchardPaymentAddressPirate &addr,
+                                   libzcash::OrchardIncomingViewingKeyPirate &ivkOut) const
+{
+    LOCK(cs_KeyStore);
+    OrchardIncomingViewingKeyMap::const_iterator mi = mapOrchardIncomingViewingKeys.find(addr);
+    if (mi != mapOrchardIncomingViewingKeys.end()) {
         ivkOut = mi->second;
         return true;
     }
@@ -329,4 +476,15 @@ bool CBasicKeyStore::GetSaplingExtendedSpendingKey(const libzcash::SaplingPaymen
     return GetSaplingIncomingViewingKey(addr, ivk) &&
             GetSaplingFullViewingKey(ivk, extfvk) &&
             GetSaplingSpendingKey(extfvk, extskOut);
+}
+
+bool CBasicKeyStore::GetOrchardExtendedSpendingKey(const libzcash::OrchardPaymentAddressPirate &addr,
+                                    libzcash::OrchardExtendedSpendingKeyPirate &extskOut) const {
+    libzcash::OrchardIncomingViewingKeyPirate ivk;
+    libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+
+    LOCK(cs_KeyStore);
+    return GetOrchardIncomingViewingKey(addr, ivk) &&
+            GetOrchardFullViewingKey(ivk, extfvk) &&
+            GetOrchardSpendingKey(extfvk, extskOut);
 }

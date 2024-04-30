@@ -70,10 +70,13 @@ public:
     //! Support for Watch-only addresses
     virtual bool AddWatchOnly(const CScript &dest) =0;
     virtual bool AddSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk) =0;
+    virtual bool AddOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) =0;
     virtual bool RemoveWatchOnly(const CScript &dest) =0;
     virtual bool RemoveSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk) =0;
+    virtual bool RemoveOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) =0;
     virtual bool HaveWatchOnly(const CScript &dest) const =0;
     virtual bool HaveSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk) const =0;
+    virtual bool HaveOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) =0;
     virtual bool HaveWatchOnly() const =0;
 
     //! Add a spending key to the store.
@@ -110,14 +113,52 @@ public:
         libzcash::SaplingIncomingViewingKey& ivkOut) const =0;
     virtual void GetSaplingPaymentAddresses(std::set<libzcash::SaplingPaymentAddress> &setAddress) const =0;
 
+
+
+    //! Add a Orchard spending key to the store.
+    virtual bool AddOrchardSpendingKey(
+        const libzcash::OrchardExtendedSpendingKeyPirate &extsk) =0;
+
+    //! Check whether a Orchard spending key corresponding to a given Orchard viewing key is present in the store.
+    virtual bool HaveOrchardSpendingKey(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) const =0;
+    virtual bool GetOrchardSpendingKey(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk, libzcash::OrchardExtendedSpendingKeyPirate& extskOut) const =0;
+
+    //! Support for Orchard full viewing keys
+    virtual bool AddOrchardExtendedFullViewingKey(
+        const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) =0;
+    virtual bool HaveOrchardFullViewingKey(const libzcash::OrchardIncomingViewingKeyPirate &ivk) const =0;
+    virtual bool GetOrchardFullViewingKey(
+        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        libzcash::OrchardExtendedFullViewingKeyPirate& extfvkOut) const =0;
+
+    //! Orchard incoming viewing keys
+    virtual bool AddOrchardIncomingViewingKey(
+        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        const libzcash::OrchardPaymentAddressPirate &addr) =0;
+    virtual bool HaveOrchardIncomingViewingKey(const libzcash::OrchardPaymentAddressPirate &addr) const =0;
+    virtual bool GetOrchardIncomingViewingKey(
+        const libzcash::OrchardPaymentAddressPirate &addr,
+        libzcash::OrchardIncomingViewingKeyPirate& ivkOut) const =0;
+    virtual void GetOrchardPaymentAddresses(std::set<libzcash::OrchardPaymentAddressPirate> &setAddress) const =0;
+
     //! Sapling diversified addfresses
     virtual bool AddSaplingDiversifiedAddress(
         const libzcash::SaplingPaymentAddress &addr,
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path) =0;
 
-    virtual bool AddLastDiversifierUsed(
+    virtual bool AddLastSaplingDiversifierUsed(
         const libzcash::SaplingIncomingViewingKey &ivk,
+        const blob88 &path) =0;
+
+    //! Orchard diversified addfresses
+    virtual bool AddOrchardDiversifiedAddress(
+        const libzcash::OrchardPaymentAddressPirate &addr,
+        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        const blob88 &path) =0;
+
+    virtual bool AddLastOrchardDiversifierUsed(
+        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
         const blob88 &path) =0;
 
     //! Support for Sprout viewing keys
@@ -131,8 +172,11 @@ public:
 
 typedef std::map<CKeyID, CKey> KeyMap;
 typedef std::map<CScriptID, CScript > ScriptMap;
+
 typedef std::set<CScript> WatchOnlySet;
 typedef std::set<libzcash::SaplingExtendedFullViewingKey> SaplingWatchOnlySet;
+typedef std::set<libzcash::OrchardExtendedFullViewingKeyPirate> OrchardWatchOnlySet;
+
 typedef std::map<libzcash::SproutPaymentAddress, libzcash::SproutSpendingKey> SproutSpendingKeyMap;
 typedef std::map<libzcash::SproutPaymentAddress, libzcash::SproutViewingKey> SproutViewingKeyMap;
 typedef std::map<libzcash::SproutPaymentAddress, ZCNoteDecryption> NoteDecryptorMap;
@@ -146,11 +190,23 @@ typedef std::map<libzcash::SaplingPaymentAddress, libzcash::SaplingIncomingViewi
 typedef std::set<libzcash::SaplingIncomingViewingKey> SaplingIncomingViewingKeySet;
 typedef std::set<uint256> SaplingOutgoingViewingKeySet;
 
-//diversified addresses
-typedef std::pair<libzcash::SaplingIncomingViewingKey, blob88> DiversifierPath;
-typedef std::map<libzcash::SaplingPaymentAddress, DiversifierPath> SaplingPaymentAddresses;
+//diversified sapling addresses
+typedef std::pair<libzcash::SaplingIncomingViewingKey, blob88> SaplingDiversifierPath;
+typedef std::map<libzcash::SaplingPaymentAddress, SaplingDiversifierPath> SaplingPaymentAddresses;
+typedef std::map<libzcash::SaplingIncomingViewingKey, blob88> LastSaplingDiversifierPath;
 
-typedef std::map<libzcash::SaplingIncomingViewingKey, blob88> LastDiversifierPath;
+//Orchard
+typedef std::map<libzcash::OrchardExtendedFullViewingKeyPirate, libzcash::OrchardExtendedSpendingKeyPirate> OrchardSpendingKeyMap;
+typedef std::map<libzcash::OrchardIncomingViewingKeyPirate, libzcash::OrchardExtendedFullViewingKeyPirate> OrchardFullViewingKeyMap;
+// Only maps from default addresses to ivk, may need to be reworked when adding diversified addresses.
+typedef std::map<libzcash::OrchardPaymentAddressPirate, libzcash::OrchardIncomingViewingKeyPirate> OrchardIncomingViewingKeyMap;
+typedef std::set<libzcash::OrchardIncomingViewingKeyPirate> OrchardIncomingViewingKeySet;
+typedef std::set<uint256> OrchardOutgoingViewingKeySet;
+
+//diversified orchard addresses
+typedef std::pair<libzcash::OrchardIncomingViewingKeyPirate, blob88> OrchardDiversifierPath;
+typedef std::map<libzcash::OrchardPaymentAddressPirate, OrchardDiversifierPath> OrchardPaymentAddresses;
+typedef std::map<libzcash::OrchardIncomingViewingKeyPirate, blob88> LastOrchardDiversifierPath;
 
 /** Basic key store, that keeps keys in an address->secret map */
 class CBasicKeyStore : public CKeyStore
@@ -161,10 +217,12 @@ protected:
     ScriptMap mapScripts;
     WatchOnlySet setWatchOnly;
     SaplingWatchOnlySet setSaplingWatchOnly;
+    OrchardWatchOnlySet setOrchardWatchOnly;
     SproutSpendingKeyMap mapSproutSpendingKeys;
     SproutViewingKeyMap mapSproutViewingKeys;
     NoteDecryptorMap mapNoteDecryptors;
 
+    //Sapling
     SaplingSpendingKeyMap mapSaplingSpendingKeys;
     SaplingFullViewingKeyMap mapSaplingFullViewingKeys;
     SaplingIncomingViewingKeyMap mapSaplingIncomingViewingKeys;
@@ -172,7 +230,17 @@ protected:
     SaplingIncomingViewingKeySet setSaplingIncomingViewingKeys;
     SaplingOutgoingViewingKeySet setSaplingOutgoingViewingKeys;
     SaplingPaymentAddresses mapSaplingPaymentAddresses;
-    LastDiversifierPath mapLastDiversifierPath;
+    LastSaplingDiversifierPath mapLastSaplingDiversifierPath;
+
+    //Orchard
+    OrchardSpendingKeyMap mapOrchardSpendingKeys;
+    OrchardFullViewingKeyMap mapOrchardFullViewingKeys;
+    OrchardIncomingViewingKeyMap mapOrchardIncomingViewingKeys;
+    OrchardIncomingViewingKeyMap mapUnsavedOrchardIncomingViewingKeys;
+    OrchardIncomingViewingKeySet setOrchardIncomingViewingKeys;
+    OrchardOutgoingViewingKeySet setOrchardOutgoingViewingKeys;
+    OrchardPaymentAddresses mapOrchardPaymentAddresses;
+    LastOrchardDiversifierPath mapLastOrchardDiversifierPath;
 
 public:
     bool SetHDSeed(const HDSeed& seed);
@@ -222,10 +290,13 @@ public:
 
     virtual bool AddWatchOnly(const CScript &dest);
     virtual bool AddSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk);
+    virtual bool AddOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk);
     virtual bool RemoveWatchOnly(const CScript &dest);
     virtual bool RemoveSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk);
+    virtual bool RemoveOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk);
     virtual bool HaveWatchOnly(const CScript &dest) const;
     virtual bool HaveSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk) const;
+    virtual bool HaveOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk);
     virtual bool HaveWatchOnly() const;
 
     bool AddSproutSpendingKey(const libzcash::SproutSpendingKey &sk);
@@ -357,14 +428,97 @@ public:
         }
     }
 
-    //! Sapling diversified addfresses
+    //! Sapling diversified addresses
     virtual bool AddSaplingDiversifiedAddress(
         const libzcash::SaplingPaymentAddress &addr,
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path);
 
-    virtual bool AddLastDiversifierUsed(
+    virtual bool AddLastSaplingDiversifierUsed(
         const libzcash::SaplingIncomingViewingKey &ivk,
+        const blob88 &path);
+
+    //! Orchard
+    void GetOrchardIncomingViewingKeySet(OrchardIncomingViewingKeySet &ivks) {
+        LOCK(cs_KeyStore);
+        for (OrchardIncomingViewingKeySet::iterator it = setOrchardIncomingViewingKeys.begin(); it != setOrchardIncomingViewingKeys.end(); it++) {
+            ivks.insert(*it);
+        }
+    }
+    void GetOrchardOutgoingViewingKeySet(OrchardOutgoingViewingKeySet &ovks) {
+        LOCK(cs_KeyStore);
+        for (OrchardOutgoingViewingKeySet::iterator it = setOrchardOutgoingViewingKeys.begin(); it != setOrchardOutgoingViewingKeys.end(); it++) {
+            ovks.insert(*it);
+        }
+    }
+
+    virtual bool AddOrchardSpendingKey(
+        const libzcash::OrchardExtendedSpendingKeyPirate &extsk);
+    bool HaveOrchardSpendingKey(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) const
+    {
+        bool result;
+        {
+            LOCK(cs_KeyStore);
+            result = (mapOrchardSpendingKeys.count(extfvk) > 0);
+        }
+        return result;
+    }
+    bool GetOrchardSpendingKey(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk, libzcash::OrchardExtendedSpendingKeyPirate &extskOut) const
+    {
+        {
+            LOCK(cs_KeyStore);
+
+            OrchardSpendingKeyMap::const_iterator mi = mapOrchardSpendingKeys.find(extfvk);
+            if (mi != mapOrchardSpendingKeys.end())
+            {
+                extskOut = mi->second;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    virtual bool AddOrchardExtendedFullViewingKey(
+        const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk);
+    virtual bool HaveOrchardFullViewingKey(const libzcash::OrchardIncomingViewingKeyPirate &ivk) const;
+    virtual bool GetOrchardFullViewingKey(
+        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        libzcash::OrchardExtendedFullViewingKeyPirate& extfvkOut) const;
+
+    virtual bool AddOrchardIncomingViewingKey(
+        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        const libzcash::OrchardPaymentAddressPirate &addr);
+    virtual bool HaveOrchardIncomingViewingKey(const libzcash::OrchardPaymentAddressPirate &addr) const;
+    virtual bool GetOrchardIncomingViewingKey(
+        const libzcash::OrchardPaymentAddressPirate &addr,
+        libzcash::OrchardIncomingViewingKeyPirate& ivkOut) const;
+
+    bool GetOrchardExtendedSpendingKey(
+        const libzcash::OrchardPaymentAddressPirate &addr,
+        libzcash::OrchardExtendedSpendingKeyPirate &extskOut) const;
+
+    void GetOrchardPaymentAddresses(std::set<libzcash::OrchardPaymentAddressPirate> &setAddress) const
+    {
+        setAddress.clear();
+        {
+            LOCK(cs_KeyStore);
+            auto mi = mapOrchardIncomingViewingKeys.begin();
+            while (mi != mapOrchardIncomingViewingKeys.end())
+            {
+                setAddress.insert((*mi).first);
+                mi++;
+            }
+        }
+    }
+
+    //! Orchard diversified addresses
+    virtual bool AddOrchardDiversifiedAddress(
+        const libzcash::OrchardPaymentAddressPirate &addr,
+        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        const blob88 &path);
+
+    virtual bool AddLastOrchardDiversifierUsed(
+        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
         const blob88 &path);
 
     virtual bool AddSproutViewingKey(const libzcash::SproutViewingKey &vk);
@@ -381,5 +535,8 @@ typedef std::map<libzcash::SproutPaymentAddress, std::vector<unsigned char> > Cr
 
 //! Sapling
 typedef std::map<libzcash::SaplingExtendedFullViewingKey, std::vector<unsigned char> > CryptedSaplingSpendingKeyMap;
+
+//! Orchard
+typedef std::map<libzcash::OrchardExtendedFullViewingKeyPirate, std::vector<unsigned char> > CryptedOrchardSpendingKeyMap;
 
 #endif // BITCOIN_KEYSTORE_H

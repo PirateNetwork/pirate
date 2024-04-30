@@ -794,7 +794,7 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
             if (pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
                 if (EncodePaymentAddress(addr) == EncodePaymentAddress(extsk.DefaultAddress())) {
                     auto ivk = extsk.expsk.full_viewing_key().in_viewing_key();
-                    CKeyMetadata keyMeta = pwalletMain->mapSaplingZKeyMetadata[ivk];
+                    CKeyMetadata keyMeta = pwalletMain->mapSaplingSpendingKeyMetadata[ivk];
                     std::string strTime = EncodeDumpTime(keyMeta.nCreateTime);
                     // Keys imported with z_importkey do not have zip32 metadata
                     if (keyMeta.hdKeypath.empty() || keyMeta.seedFp.IsNull()) {

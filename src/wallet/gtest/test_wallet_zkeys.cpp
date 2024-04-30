@@ -96,7 +96,7 @@ TEST(wallet_zkeys_tests, StoreAndLoadSaplingZkeys) {
     ASSERT_TRUE(wallet.LoadSaplingZKeyMetadata(ivk2, meta));
 
     // check metadata is the same
-    ASSERT_EQ(wallet.mapSaplingZKeyMetadata[ivk2].nCreateTime, now);
+    ASSERT_EQ(wallet.mapSaplingSpendingKeyMetadata[ivk2].nCreateTime, now);
 
     // Load a diversified address for the third key into the wallet
     auto dpa2 = sk2.ToXFVK().Address(diversifier).get().second;

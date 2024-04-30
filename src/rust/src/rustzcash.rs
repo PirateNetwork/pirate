@@ -91,6 +91,7 @@ mod merkle_frontier;
 mod orchard_bundle;
 mod orchard_ffi;
 mod orchard_keys_ffi;
+mod orchard_keys;
 mod params;
 mod sapling;
 mod sprout;

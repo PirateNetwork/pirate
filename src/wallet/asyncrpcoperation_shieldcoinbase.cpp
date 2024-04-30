@@ -331,6 +331,10 @@ bool ShieldToAddress::operator()(const libzcash::SaplingPaymentAddress &zaddr) c
     return true;
 }
 
+bool ShieldToAddress::operator()(const libzcash::OrchardPaymentAddressPirate &zaddr) const {
+    return false;
+}
+
 bool ShieldToAddress::operator()(const libzcash::InvalidEncoding& no) const {
     return false;
 }

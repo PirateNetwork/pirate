@@ -123,6 +123,7 @@ public:
 
     bool operator()(const libzcash::SproutPaymentAddress &zaddr) const;
     bool operator()(const libzcash::SaplingPaymentAddress &zaddr) const;
+    bool operator()(const libzcash::OrchardPaymentAddressPirate &zaddr) const;
     bool operator()(const libzcash::InvalidEncoding& no) const;
 };
 

@@ -508,7 +508,7 @@ bool CWalletDB::WriteCryptedSaplingDiversifiedAddress(
     return true;
 }
 
-bool CWalletDB::WriteLastDiversifierUsed(
+bool CWalletDB::WriteLastSaplingDiversifierUsed(
     const libzcash::SaplingIncomingViewingKey &ivk,
     const blob88 &path)
 {
@@ -517,7 +517,7 @@ bool CWalletDB::WriteLastDiversifierUsed(
     return Write(std::make_pair(std::string("sapzlastdiv"), ivk), path);
 }
 
-bool CWalletDB::WriteLastCryptedDiversifierUsed(
+bool CWalletDB::WriteLastCryptedSaplingDiversifierUsed(
     const uint256 chash,
     const libzcash::SaplingIncomingViewingKey &ivk,
     const std::vector<unsigned char> &vchCryptedSecret)
@@ -570,6 +570,201 @@ bool CWalletDB::WriteSaplingWitnesses(const SaplingWallet& wallet) {
     return Write(
             std::string("sapling_note_commitment_tree"),
             SaplingWalletNoteCommitmentTreeWriter(wallet));
+}
+
+//Orchard
+
+bool CWalletDB::WriteOrchardZKey(const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+                const libzcash::OrchardExtendedSpendingKeyPirate &extsk,
+                const CKeyMetadata &keyMeta)
+{
+    nWalletDBUpdated++;
+
+    if (!Write(std::make_pair(std::string("orchzkeymeta"), ivk), keyMeta))
+        return false;
+
+    return Write(std::make_pair(std::string("orchzkey"), ivk), extsk, false);
+
+    //Erase the extended full viewing key record when it's corresponding spending key is added
+    auto extfvkOpt = extsk.GetXFVK();
+    if (extfvkOpt != std::nullopt) {
+        Erase(std::make_pair(std::string("orchextfvk"), extfvkOpt.value()));
+    }
+}
+
+bool CWalletDB::WriteCryptedOrchardZKey(
+    const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk,
+    const std::vector<unsigned char>& vchCryptedSecret,
+    const std::vector<unsigned char>& vchCryptedMetaDataSecret)
+{
+    const bool fEraseUnencryptedKey = true;
+    nWalletDBUpdated++;
+
+    auto ivkOpt = extfvk.fvk.GetIVK();
+    if (ivkOpt == std::nullopt) {
+       return false;
+    }
+    auto ivk = ivkOpt.value();
+
+    uint256 fvkFinger = extfvk.fvk.GetFingerprint();
+
+    if (!WriteTxn(std::make_pair(std::string("corchzkeymeta"), fvkFinger), vchCryptedMetaDataSecret, __FUNCTION__))
+        return false;
+
+    if (!WriteTxn(std::make_pair(std::string("corchzkey"), fvkFinger), vchCryptedSecret, __FUNCTION__, false))
+        return false;
+
+    if (fEraseUnencryptedKey)
+    {
+      //Update the key to something invalid before deleting it, so any if the record ends up in the slack space it contains an invalid key
+        if (!WriteTxn(std::make_pair(std::string("orchzkey"), ivk), 0, __FUNCTION__))
+            return false;
+
+        Erase(std::make_pair(std::string("orchzkey"), ivk));
+        Erase(std::make_pair(std::string("orchzkeymeta"), ivk));
+
+        //Erase the extended fullviewing key record when it's corresponding spending key is added
+        Erase(std::make_pair(std::string("orchextfvk"), extfvk));
+        Erase(std::make_pair(std::string("corchextfvk"), fvkFinger));
+    }
+    return true;
+}
+
+
+
+bool CWalletDB::WriteOrchardFullViewingKey(
+    const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
+{
+    nWalletDBUpdated++;
+    return Write(std::make_pair(std::string("orchextfvk"), extfvk), '1');
+}
+
+bool CWalletDB::EraseOrchardFullViewingKey(
+    const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
+{
+    nWalletDBUpdated++;
+    return Erase(std::make_pair(std::string("orchextfvk"), extfvk));
+}
+
+bool CWalletDB::WriteCryptedOrchardFullViewingKey(
+    const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk,
+    const std::vector<unsigned char>& vchCryptedSecret)
+{
+    const bool fEraseUnencryptedKey = true;
+    nWalletDBUpdated++;
+    uint256 fvkFinger = extfvk.fvk.GetFingerprint();
+
+    if (!WriteTxn(std::make_pair(std::string("corchextfvk"), fvkFinger), vchCryptedSecret, __FUNCTION__))
+      return false;
+
+    if (fEraseUnencryptedKey)
+    {
+        Erase(std::make_pair(std::string("orchextfvk"), extfvk));
+    }
+    return true;
+}
+
+bool CWalletDB::WriteOrchardPaymentAddress(
+    const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+    const libzcash::OrchardPaymentAddressPirate &addr)
+{
+    nWalletDBUpdated++;
+
+    return Write(std::make_pair(std::string("orchzaddr"), addr), ivk);
+}
+
+bool CWalletDB::WriteCryptedOrchardPaymentAddress(
+    const libzcash::OrchardPaymentAddressPirate &addr,
+    const uint256 chash,
+    const std::vector<unsigned char> &vchCryptedSecret)
+{
+    nWalletDBUpdated++;
+
+    if (!Write(std::make_pair(std::string("corchzaddr"), chash), vchCryptedSecret)) {
+        return false;
+    }
+
+    Erase(std::make_pair(std::string("orchzaddr"), addr));
+    return true;
+}
+
+bool CWalletDB::WriteOrchardDiversifiedAddress(
+    const libzcash::OrchardPaymentAddressPirate &addr,
+    const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+    const blob88 &path)
+{
+    nWalletDBUpdated++;
+
+    return Write(std::make_pair(std::string("orchzdivaddr"), addr), std::make_pair(ivk, path));
+}
+
+bool CWalletDB::WriteCryptedOrchardDiversifiedAddress(
+    const libzcash::OrchardPaymentAddressPirate &addr,
+    const uint256 chash,
+    const std::vector<unsigned char> &vchCryptedSecret)
+{
+    nWalletDBUpdated++;
+
+    if (!Write(std::make_pair(std::string("corchzdivaddr"), chash), vchCryptedSecret, false)) {
+        return false;
+    }
+
+    Erase(std::make_pair(std::string("orchzdivaddr"), addr));
+    return true;
+}
+
+
+bool CWalletDB::WriteLastOrchardDiversifierUsed(
+    const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+    const blob88 &path)
+{
+    nWalletDBUpdated++;
+
+    return Write(std::make_pair(std::string("orchzlastdiv"), ivk), path);
+}
+
+bool CWalletDB::WriteLastCryptedOrchardDiversifierUsed(
+    const uint256 chash,
+    const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+    const std::vector<unsigned char> &vchCryptedSecret)
+{
+    nWalletDBUpdated++;
+
+    if (!Write(std::make_pair(std::string("corchzlastdiv"), chash), vchCryptedSecret)) {
+        return false;
+    }
+
+    Erase(std::make_pair(std::string("orchzlastdiv"), ivk));
+    return true;
+}
+
+bool CWalletDB::WritePrimaryOrchardSpendingKey(
+    const libzcash::OrchardExtendedSpendingKeyPirate &key)
+{
+    nWalletDBUpdated++;
+    return Write(std::string("porchspendkey"), key);
+}
+
+bool CWalletDB::WriteCryptedPrimaryOrchardSpendingKey(
+    const libzcash::OrchardExtendedSpendingKeyPirate &extsk,
+    const std::vector<unsigned char>& vchCryptedSecret)
+{
+    auto extfvkOpt = extsk.GetXFVK();
+    if (extfvkOpt == std::nullopt) {
+        return false;
+    }
+    auto extfvk = extfvkOpt.value();
+
+    nWalletDBUpdated++;
+    uint256 extfvkFinger = extfvk.fvk.GetFingerprint();
+
+    if (!WriteTxn(std::string("cporchspendkey"), std::make_pair(extfvkFinger, vchCryptedSecret), __FUNCTION__, true)) {
+        return false;
+    }
+
+    Erase(std::string("porchspendkey"));
+
+    return true;
 }
 
 
@@ -769,12 +964,18 @@ public:
     unsigned int nKeys;
     unsigned int nCKeys;
     unsigned int nKeyMeta;
-    unsigned int nZKeys;
-    unsigned int nCZKeys;
-    unsigned int nZKeyMeta;
-    unsigned int nCZKeyMeta;
-    unsigned int nSapZAddrs;
-    unsigned int nCSapZAddrs;
+    unsigned int nSaplingKeys;
+    unsigned int nCSaplingKeys;
+    unsigned int nSaplingKeyMeta;
+    unsigned int nCSaplingKeyMeta;
+    unsigned int nSaplingAddrs;
+    unsigned int nCSaplingAddrs;
+    unsigned int nOrchardKeys;
+    unsigned int nCOrchardKeys;
+    unsigned int nOrchardKeyMeta;
+    unsigned int nCOrchardKeyMeta;
+    unsigned int nOrchardAddrs;
+    unsigned int nCOrchardAddrs;
     unsigned int nArcTx;
     unsigned int nWalletTx;
     bool fIsEncrypted;
@@ -783,7 +984,9 @@ public:
     vector<uint256> vWalletUpgrade;
 
     CWalletScanState() {
-        nKeys = nCKeys = nKeyMeta = nZKeys = nCZKeys = nZKeyMeta = nCZKeyMeta = nSapZAddrs = nCSapZAddrs = 0;
+        nKeys = nCKeys = nKeyMeta = 0;
+        nSaplingKeys = nCSaplingKeys = nSaplingKeyMeta = nCSaplingKeyMeta = nSaplingAddrs = nCSaplingAddrs = 0;
+        nOrchardKeys = nCOrchardKeys = nOrchardKeyMeta = nCOrchardKeyMeta = nOrchardAddrs = nCOrchardAddrs = 0;
         nArcTx = nWalletTx = 0;
         fIsEncrypted = false;
         fAnyUnordered = false;
@@ -1277,7 +1480,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             }
 
             //add checks for integrity
-            wss.nZKeys++;
+            wss.nSaplingKeys++;
         }
         else if (strType == "csapzkey")
         {
@@ -1286,7 +1489,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             vector<unsigned char> vchCryptedSecret;
             ssValue >> vchCryptedSecret;
             libzcash::SaplingExtendedFullViewingKey extfvk;
-            wss.nCZKeys++;
+            wss.nCSaplingKeys++;
 
             if (!pwallet->LoadCryptedSaplingZKey(extfvkFinger, vchCryptedSecret, extfvk))
             {
@@ -1366,7 +1569,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             CKeyMetadata keyMeta;
             ssValue >> keyMeta;
 
-            wss.nZKeyMeta++;
+            wss.nSaplingKeyMeta++;
 
             pwallet->LoadSaplingZKeyMetadata(ivk, keyMeta);
         }
@@ -1377,7 +1580,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             vector<unsigned char> vchCryptedSecret;
             ssValue >> vchCryptedSecret;
 
-            wss.nCZKeyMeta++;
+            wss.nCSaplingKeyMeta++;
 
             pwallet->mapTempHoldCryptedSaplingMetadata[extfvkFinger] = vchCryptedSecret;
         }
@@ -1388,7 +1591,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             libzcash::SaplingIncomingViewingKey ivk;
             ssValue >> ivk;
 
-            wss.nSapZAddrs++;
+            wss.nSaplingAddrs++;
 
             if (!pwallet->LoadSaplingPaymentAddress(addr, ivk))
             {
@@ -1411,7 +1614,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             ssValue >> vchCryptedSecret;
             libzcash::SaplingPaymentAddress addr;
 
-            wss.nCSapZAddrs++;
+            wss.nCSaplingAddrs++;
 
             if (!pwallet->LoadCryptedSaplingPaymentAddress(chash, vchCryptedSecret, addr))
             {
@@ -1430,7 +1633,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         {
             libzcash::SaplingPaymentAddress addr;
             ssKey >> addr;
-            DiversifierPath dPath;
+            SaplingDiversifierPath dPath;
             ssValue >> dPath;
 
             if (!pwallet->LoadSaplingDiversifiedAddress(addr, dPath.first, dPath.second))
@@ -1480,9 +1683,9 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             blob88 path;
             ssValue >> path;
 
-            if (!pwallet->LoadLastDiversifierUsed(ivk, path))
+            if (!pwallet->LoadLastSaplingDiversifierUsed(ivk, path))
             {
-                strErr = "Error reading wallet database: LoadLastDiversifierUsed failed";
+                strErr = "Error reading wallet database: LoadLastSaplingDiversifierUsed failed";
                 return false;
             }
         }
@@ -1493,9 +1696,9 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             vector<unsigned char> vchCryptedSecret;
             ssValue >> vchCryptedSecret;
 
-            if (!pwallet->LoadLastCryptedDiversifierUsed(chash, vchCryptedSecret))
+            if (!pwallet->LoadLastCryptedSaplingDiversifierUsed(chash, vchCryptedSecret))
             {
-                strErr = "Error reading wallet database: LoadLastDiversifierUsed failed";
+                strErr = "Error reading wallet database: LoadLastSaplingDiversifierUsed failed";
                 return false;
             }
         }
@@ -1504,6 +1707,292 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             auto loader = pwallet->GetSaplingNoteCommitmentTreeLoader();
             ssValue >> loader;
         }
+
+        else if (strType == "orchzkey")
+        {
+            libzcash::OrchardIncomingViewingKeyPirate ivk;
+            ssKey >> ivk;
+            libzcash::OrchardExtendedSpendingKeyPirate key;
+            ssValue >> key;
+
+            if (!pwallet->LoadOrchardZKey(key))
+            {
+                strErr = "Error reading wallet database: LoadOrchardZKey failed";
+                return false;
+            }
+
+
+            auto extfvkOpt = key.GetXFVK();
+            if (extfvkOpt == std::nullopt) {
+                return false;
+                strErr = "Error reading wallet database: LoadOrchardZKey failed";
+            }
+            auto extfvk = extfvkOpt.value();
+
+            auto addrOpt = extfvk.fvk.GetDefaultAddress();
+            if (addrOpt == std::nullopt) {
+                return false;
+                strErr = "Error reading wallet database: LoadOrchardZKey failed";
+            }
+            auto addr = addrOpt.value();
+
+
+            //Insert if not found, don't overwrite if found
+            auto r = pwallet->mapZAddressBook.find(addr);
+            if (r == pwallet->mapZAddressBook.end()) {
+                pwallet->mapZAddressBook[addr].name = "orchard";
+                pwallet->mapZAddressBook[addr].purpose = "unknown";
+            }
+
+            //add checks for integrity
+            wss.nOrchardKeys++;
+        }
+        else if (strType == "corchzkey")
+        {
+            uint256 extfvkFinger;
+            ssKey >> extfvkFinger;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+            libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+            wss.nCOrchardKeys++;
+
+            if (!pwallet->LoadCryptedOrchardZKey(extfvkFinger, vchCryptedSecret, extfvk))
+            {
+                strErr = "Error reading wallet database: LoadCryptedSaplingZKey failed";
+                return false;
+            }
+
+            auto addrOpt = extfvk.fvk.GetDefaultAddress();
+            if (addrOpt == std::nullopt) {
+                return false;
+                strErr = "Error reading wallet database: LoadOrchardZKey failed";
+            }
+            auto addr = addrOpt.value();
+
+            //Insert if not found, don't overwrite if found
+            auto r = pwallet->mapZAddressBook.find(addr);
+            if (r == pwallet->mapZAddressBook.end()) {
+                pwallet->mapZAddressBook[addr].name = "orchard";
+                pwallet->mapZAddressBook[addr].purpose = "unknown";
+            }
+
+            wss.fIsEncrypted = true;
+        }
+        else if (strType == "orchextfvk")
+        {
+            libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+            ssKey >> extfvk;
+            char fYes;
+            ssValue >> fYes;
+            if (fYes == '1') {
+                if(!pwallet->LoadOrchardFullViewingKey(extfvk))
+                {
+                    strErr = "Error reading wallet database: LoadOrchardFullViewingKey failed";
+                    return false;
+                }
+                if(!pwallet->LoadOrchardWatchOnly(extfvk))
+                {
+                    strErr = "Error reading wallet database: LoadOrchardWatchOnly failed";
+                    return false;
+                }
+            }
+
+            auto addrOpt = extfvk.fvk.GetDefaultAddress();
+            if (addrOpt == std::nullopt) {
+                return false;
+                strErr = "Error reading wallet database: LoadOrchardZKey failed";
+            }
+            auto addr = addrOpt.value();
+
+            //Insert if not found, don't overwrite if found
+            auto r = pwallet->mapZAddressBook.find(addr);
+            if (r == pwallet->mapZAddressBook.end()) {
+                pwallet->mapZAddressBook[addr].name = "orchard";
+                pwallet->mapZAddressBook[addr].purpose = "unknown";
+            }
+
+            // Viewing keys have no birthday information for now,
+            // so set the wallet birthday to the beginning of time.
+            pwallet->nTimeFirstKey = 1;
+        }
+        else if (strType == "corchextfvk")
+        {
+            uint256 extfvkFinger;
+            ssKey >> extfvkFinger;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+            libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+            if (!pwallet->LoadCryptedOrchardExtendedFullViewingKey(extfvkFinger, vchCryptedSecret, extfvk))
+            {
+                strErr = "Error reading wallet database: LoadCryptedSaplingExtendedFullViewingKey failed";
+                return false;
+            }
+
+            auto addrOpt = extfvk.fvk.GetDefaultAddress();
+            if (addrOpt == std::nullopt) {
+                return false;
+                strErr = "Error reading wallet database: LoadOrchardZKey failed";
+            }
+            auto addr = addrOpt.value();
+
+            pwallet->LoadOrchardWatchOnly(extfvk);
+
+            //Insert if not found, don't overwrite if found
+            auto r = pwallet->mapZAddressBook.find(addr);
+            if (r == pwallet->mapZAddressBook.end()) {
+                pwallet->mapZAddressBook[addr].name = "orchard";
+                pwallet->mapZAddressBook[addr].purpose = "unknown";
+            }
+
+            // Viewing keys have no birthday information for now,
+            // so set the wallet birthday to the beginning of time.
+            pwallet->nTimeFirstKey = 1;
+        }
+        else if (strType == "orchzkeymeta")
+        {
+            libzcash::OrchardIncomingViewingKeyPirate ivk;
+            ssKey >> ivk;
+            CKeyMetadata keyMeta;
+            ssValue >> keyMeta;
+
+            wss.nOrchardKeyMeta++;
+
+            pwallet->LoadOrchardZKeyMetadata(ivk, keyMeta);
+        }
+        else if (strType == "corchzkeymeta")
+        {
+            uint256 extfvkFinger;
+            ssKey >> extfvkFinger;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+
+            wss.nCOrchardKeyMeta++;
+
+            pwallet->mapTempHoldCryptedOrchardMetadata[extfvkFinger] = vchCryptedSecret;
+        }
+        else if (strType == "orchzaddr")
+        {
+            libzcash::OrchardPaymentAddressPirate addr;
+            ssKey >> addr;
+            libzcash::OrchardIncomingViewingKeyPirate ivk;
+            ssValue >> ivk;
+
+            wss.nOrchardAddrs++;
+
+            if (!pwallet->LoadOrchardPaymentAddress(addr, ivk))
+            {
+                strErr = "Error reading wallet database: LoadOrchardPaymentAddress failed";
+                return false;
+            }
+
+            //Insert if not found, don't overwrite if found
+            auto r = pwallet->mapZAddressBook.find(addr);
+            if (r == pwallet->mapZAddressBook.end()) {
+                pwallet->mapZAddressBook[addr].name = "orchard";
+                pwallet->mapZAddressBook[addr].purpose = "unknown";
+            }
+        }
+        else if (strType == "corchzaddr")
+        {
+            uint256 chash;
+            ssKey >> chash;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+            libzcash::OrchardPaymentAddressPirate addr;
+
+            wss.nCOrchardAddrs++;
+
+            if (!pwallet->LoadCryptedOrchardPaymentAddress(chash, vchCryptedSecret, addr))
+            {
+                strErr = "Error reading wallet database: LoadCryptedOrchardPaymentAddress failed";
+                return false;
+            }
+
+            //Insert if not found, don't overwrite if found
+            auto r = pwallet->mapZAddressBook.find(addr);
+            if (r == pwallet->mapZAddressBook.end()) {
+                pwallet->mapZAddressBook[addr].name = "orchard";
+                pwallet->mapZAddressBook[addr].purpose = "unknown";
+            }
+        }
+        else if (strType == "orchzdivaddr")
+        {
+            libzcash::OrchardPaymentAddressPirate addr;
+            ssKey >> addr;
+            OrchardDiversifierPath dPath;
+            ssValue >> dPath;
+
+            if (!pwallet->LoadOrchardDiversifiedAddress(addr, dPath.first, dPath.second))
+            {
+                strErr = "Error reading wallet database: LoadOrchardDiversifiedAddress failed";
+                return false;
+            }
+        }
+        else if (strType == "corchzdivaddr")
+        {
+            uint256 chash;
+            ssKey >> chash;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+
+            if (!pwallet->LoadCryptedOrchardDiversifiedAddress(chash, vchCryptedSecret))
+            {
+                strErr = "Error reading wallet database: LoadCryptedOrchardDiversifiedAddress failed";
+                return false;
+            }
+        }
+        else if (strType == "porchspendkey")
+        {
+            libzcash::OrchardExtendedSpendingKeyPirate key;
+            ssValue >> key;
+
+            pwallet->primaryOrchardSpendingKey = key;
+        }
+        else if (strType == "cporchspendkey")
+        {
+            uint256 extfvkFinger;
+            ssValue >> extfvkFinger;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+
+            if (!pwallet->LoadCryptedPrimaryOrchardSpendingKey(extfvkFinger, vchCryptedSecret))
+            {
+                strErr = "Error reading wallet database: LoadCryptedPrimaryOrchardSpendingKey failed";
+                return false;
+            }
+        }
+
+        else if (strType == "orchzlastdiv")
+        {
+            libzcash::OrchardIncomingViewingKeyPirate ivk;
+            ssKey >> ivk;
+            blob88 path;
+            ssValue >> path;
+
+            if (!pwallet->LoadLastOrchardDiversifierUsed(ivk, path))
+            {
+                strErr = "Error reading wallet database: LoadLastOrchardDiversifierUsed failed";
+                return false;
+            }
+        }
+        else if (strType == "corchzlastdiv")
+        {
+            uint256 chash;
+            ssKey >> chash;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+
+            if (!pwallet->LoadLastCryptedSaplingDiversifierUsed(chash, vchCryptedSecret))
+            {
+                strErr = "Error reading wallet database: LoadLastOrchardDiversifierUsed failed";
+                return false;
+            }
+        }
+        // else if (strType == "orchard_note_commitment_tree")
+        // {
+        //     auto loader = pwallet->GetOrchardNoteCommitmentTreeLoader();
+        //     ssValue >> loader;
+        // }
 
     } catch (...)
     {
@@ -1517,7 +2006,12 @@ static bool IsKeyType(string strType)
     return (strType == "key" || strType == "wkey" ||
             strType == "hdseed" || strType == "chdseed" ||
             strType == "zkey" || strType == "czkey" ||
+            strType == "sapextfvk" || strType == "csapextfvk" ||
             strType == "sapzkey" || strType == "csapzkey" ||
+            strType == "pspendkey" || strType == "cpspendkey" ||
+            strType == "orchextfvk" || strType == "corchextfvk" ||
+            strType == "orchzkey" || strType == "corchzkey" ||
+            strType == "porchspendkey" || strType == "cporchspendkey" ||
             strType == "vkey" ||
             strType == "mkey" || strType == "ckey");
 }
@@ -1743,14 +2237,24 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
     LogPrintf("Keys: %u plaintext, %u encrypted, %u w/ metadata, %u total\n",
            wss.nKeys, wss.nCKeys, wss.nKeyMeta, wss.nKeys + wss.nCKeys);
 
-    LogPrintf("ZKeys: %u plaintext, %u w/metadata\n",
-           wss.nZKeys, wss.nZKeyMeta);
+    LogPrintf("SaplingKeys: %u plaintext, %u w/metadata\n",
+           wss.nSaplingKeys, wss.nSaplingKeyMeta);
 
-     LogPrintf("ZKeys: %u encrypted, %u w/encrypted metadata\n",
-           wss.nCZKeys, wss.nCZKeyMeta);
+     LogPrintf("SaplingKeys: %u encrypted, %u w/encrypted metadata\n",
+           wss.nCSaplingKeys, wss.nCSaplingKeyMeta);
 
-    LogPrintf("Sapling Addresses: %u \n",wss.nSapZAddrs);
-    LogPrintf("Encrypted Sapling Addresses: %u \n",wss.nCSapZAddrs);
+    LogPrintf("Sapling Addresses: %u \n",wss.nSaplingAddrs);
+    LogPrintf("Encrypted Sapling Addresses: %u \n",wss.nCSaplingAddrs);
+
+    LogPrintf("OrchardKeys: %u plaintext, %u w/metadata\n",
+           wss.nOrchardKeys, wss.nOrchardKeyMeta);
+
+     LogPrintf("OrchardKeys: %u encrypted, %u w/encrypted metadata\n",
+           wss.nCOrchardKeys, wss.nCOrchardKeyMeta);
+
+    LogPrintf("Orchard Addresses: %u \n",wss.nOrchardAddrs);
+    LogPrintf("Encrypted Orchard Addresses: %u \n",wss.nCOrchardAddrs);
+
     LogPrintf("Transactions: %u wallet transactions, %u archived transactions\n", wss.nWalletTx, wss.nArcTx);
 
     // nTimeFirstKey is only reliable if all keys have metadata

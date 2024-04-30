@@ -18,6 +18,13 @@ namespace libzcash {
   std::pair<std::string, PaymentAddress> AddressInfoFromSpendingKey::operator()(const SaplingExtendedSpendingKey &sk) const {
       return std::make_pair("z-sapling", sk.DefaultAddress());
   }
+  std::pair<std::string, PaymentAddress> AddressInfoFromSpendingKey::operator()(const OrchardExtendedSpendingKeyPirate &extsk) const {
+      auto addressOpt = extsk.sk.GetDefaultAddress();
+      if (addressOpt == std::nullopt) {
+          throw std::invalid_argument("Cannot derive default address from invalid spending key");
+      }
+      return std::make_pair("z-orchard", addressOpt.value());
+  }
   std::pair<std::string, PaymentAddress> AddressInfoFromSpendingKey::operator()(const InvalidEncoding&) const {
       throw std::invalid_argument("Cannot derive default address from invalid spending key");
   }
@@ -38,6 +45,13 @@ namespace libzcash {
   std::pair<std::string, PaymentAddress> AddressInfoFromViewingKey::operator()(const SaplingExtendedFullViewingKey &sk) const {
       return std::make_pair("z-sapling", sk.DefaultAddress());
   }
+  std::pair<std::string, PaymentAddress> AddressInfoFromViewingKey::operator()(const OrchardExtendedFullViewingKeyPirate &sk) const {
+      auto address = sk.fvk.GetDefaultAddress();
+      if (address == std::nullopt) {
+          throw std::invalid_argument("Cannot derive default address from invalid viewing key");
+      }
+      return std::make_pair("z-orchard", address.value());
+  }
   std::pair<std::string, PaymentAddress> AddressInfoFromViewingKey::operator()(const InvalidEncoding&) const {
       throw std::invalid_argument("Cannot derive default address from invalid viewing key");
   }
@@ -54,29 +68,27 @@ namespace libzcash {
 }
 
 class IsValidAddressForNetwork : public boost::static_visitor<bool> {
-    private:
-        uint32_t branchId;
     public:
-        IsValidAddressForNetwork(uint32_t consensusBranchId) : branchId(consensusBranchId) {}
 
         bool operator()(const libzcash::SproutPaymentAddress &addr) const {
+            return true;
+        }
+
+        bool operator()(const libzcash::SaplingPaymentAddress &addr) const {
+            return true;
+        }
+
+        bool operator()(const libzcash::OrchardPaymentAddressPirate &addr) const {
             return true;
         }
 
         bool operator()(const libzcash::InvalidEncoding &addr) const {
             return false;
         }
-
-        bool operator()(const libzcash::SaplingPaymentAddress &addr) const {
-            if (SAPLING_BRANCH_ID == branchId)
-                return true;
-            else
-                return false;
-        }
 };
 
-bool IsValidPaymentAddress(const libzcash::PaymentAddress& zaddr, uint32_t consensusBranchId) {
-    return std::visit(IsValidAddressForNetwork(consensusBranchId), zaddr);
+bool IsValidPaymentAddress(const libzcash::PaymentAddress& zaddr) {
+    return std::visit(IsValidAddressForNetwork(), zaddr);
 }
 
 bool IsValidViewingKey(const libzcash::ViewingKey& vk) {
