@@ -119,9 +119,16 @@ public:
         wallet->getZAddressBalances(balances, 0, false);
 
 
-        std::set<libzcash::SaplingPaymentAddress> addresses;
-        wallet->GetSaplingPaymentAddresses(addresses);
-        for (auto addr : addresses) {
+        std::set<libzcash::SaplingPaymentAddress> sapAddresses;
+        wallet->GetSaplingPaymentAddresses(sapAddresses);
+        for (auto addr : sapAddresses) {
+            if (balances.count(addr) == 0)
+                balances[addr] = 0;
+        }
+
+        std::set<libzcash::OrchardPaymentAddressPirate> orchAddresses;
+        wallet->GetOrchardPaymentAddresses(orchAddresses);
+        for (auto addr : orchAddresses) {
             if (balances.count(addr) == 0)
                 balances[addr] = 0;
         }
@@ -198,6 +205,37 @@ public:
                   cachedAddressTable.append(entry);
 
                 }
+
+                auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddressPirate>(&zaddr);
+
+                if (orchardAddr != nullptr) {
+                    libzcash::OrchardIncomingViewingKeyPirate ivk;
+                    libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+                    if (wallet->GetOrchardIncomingViewingKey(*orchardAddr, ivk) &&
+                        wallet->GetOrchardFullViewingKey(ivk, extfvk) &&
+                        wallet->HaveOrchardSpendingKey(extfvk)) {
+                            mine = true;
+                    }
+
+                  CAmount balance = 0;
+                  std::map<libzcash::PaymentAddress, CAmount>::iterator it = balances.find(zaddr);
+                  if (it != balances.end()) {
+                      balance = it->second;
+                  }
+
+                  ZAddressTableEntry::Type addressType = translateTransactionType(
+                          QString::fromStdString(item.second.purpose), mine);
+                  const std::string& strName = item.second.name;
+
+                  ZAddressTableEntry entry;
+                  entry.type = addressType;
+                  entry.label = QString::fromStdString(strName);
+                  entry.address = QString::fromStdString(EncodePaymentAddress(zaddr));
+                  entry.balance = balance;
+                  entry.mine = mine;
+                  cachedAddressTable.append(entry);
+
+                }
             }
         }
         // qLowerBound() and qUpperBound() require our cachedAddressTable list to be sorted in asc order
@@ -222,13 +260,28 @@ public:
         ZAddressTableEntry newEntry;
         libzcash::PaymentAddress zaddr = DecodePaymentAddress(address.toStdString());
         auto saplingAddr = std::get_if<libzcash::SaplingPaymentAddress>(&zaddr);
-        if (saplingAddr != nullptr) {
-            libzcash::SaplingIncomingViewingKey ivk;
-            libzcash::SaplingExtendedFullViewingKey extfvk;
-            if (wallet->GetSaplingIncomingViewingKey(*saplingAddr, ivk) &&
-                wallet->GetSaplingFullViewingKey(ivk, extfvk) &&
-                wallet->HaveSaplingSpendingKey(extfvk)) {
-                    mine = true;
+        auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddressPirate>(&zaddr);
+
+        if (saplingAddr != nullptr || orchardAddr != nullptr) {
+
+            if (saplingAddr != nullptr) {
+                libzcash::SaplingIncomingViewingKey ivk;
+                libzcash::SaplingExtendedFullViewingKey extfvk;
+                if (wallet->GetSaplingIncomingViewingKey(*saplingAddr, ivk) &&
+                    wallet->GetSaplingFullViewingKey(ivk, extfvk) &&
+                    wallet->HaveSaplingSpendingKey(extfvk)) {
+                        mine = true;
+                }
+            }
+
+            if (orchardAddr != nullptr) {
+                libzcash::OrchardIncomingViewingKeyPirate ivk;
+                libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+                if (wallet->GetOrchardIncomingViewingKey(*orchardAddr, ivk) &&
+                    wallet->GetOrchardFullViewingKey(ivk, extfvk) &&
+                    wallet->HaveOrchardSpendingKey(extfvk)) {
+                        mine = true;
+                }
             }
 
             switch(status)

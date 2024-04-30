@@ -135,6 +135,7 @@ private:
     CryptedKeyMap mapCryptedKeys;
     CryptedSproutSpendingKeyMap mapCryptedSproutSpendingKeys;
     CryptedSaplingSpendingKeyMap mapCryptedSaplingSpendingKeys;
+    CryptedOrchardSpendingKeyMap mapCryptedOrchardSpendingKeys;
 
     CKeyingMaterial vMasterKey;
 
@@ -279,6 +280,26 @@ public:
     }
     bool GetSaplingSpendingKey(const libzcash::SaplingExtendedFullViewingKey& extfvk, libzcash::SaplingExtendedSpendingKey& skOut) const;
 
+    //! Orchard
+    bool AddCryptedOrchardSpendingKey(
+        const libzcash::OrchardExtendedFullViewingKeyPirate& extfvk,
+        const std::vector<unsigned char>& vchCryptedSecret);
+
+    bool HaveOrchardSpendingKey(const libzcash::OrchardExtendedFullViewingKeyPirate& extfvk) const
+    {
+        {
+            LOCK(cs_KeyStore);
+            if (!IsCrypted())
+                return CBasicKeyStore::HaveOrchardSpendingKey(extfvk);
+            for (auto entry : mapCryptedOrchardSpendingKeys) {
+                if (entry.first == extfvk) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+    bool GetOrchardSpendingKey(const libzcash::OrchardExtendedFullViewingKeyPirate& extfvk, libzcash::OrchardExtendedSpendingKeyPirate& extskOut) const;
 
     /**
      * Wallet status (encrypted, locked) changed.

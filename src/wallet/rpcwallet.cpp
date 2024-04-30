@@ -84,6 +84,7 @@ using namespace libzcash;
 //extern std::string ASSETCHAINS_OVERRIDE_PUBKEY;
 const std::string ADDR_TYPE_SPROUT = "sprout";
 const std::string ADDR_TYPE_SAPLING = "sapling";
+const std::string ADDR_TYPE_ORCHARD = "orchard";
 
 int64_t nWalletUnlockTime;
 static CCriticalSection cs_nWalletUnlockTime;
@@ -3481,27 +3482,26 @@ UniValue z_getnewaddresskey(const UniValue& params, bool fHelp, const CPubKey& m
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
-    bool allowSapling = (Params().GetConsensus().vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight <= chainActive.Tip()->nHeight);
-
     std::string defaultType;
-    if ( GetTime() < KOMODO_SAPLING_ACTIVATION )
-        defaultType = ADDR_TYPE_SPROUT;
-    else defaultType = ADDR_TYPE_SAPLING;
+    if ( GetTime() < KOMODO_ORCHARD_ACTIVATION )
+        defaultType = ADDR_TYPE_SAPLING;
+    else defaultType = ADDR_TYPE_ORCHARD;
 
     if (fHelp || params.size() > 1)
         throw runtime_error(
             "z_getnewaddresskey ( type )\n"
-            "This creates a new sapling extended spending key and\n"
+            "This creates a new extended spending key and\n"
             "returns a new shielded address for receiving payments.\n"
             "\nWith no arguments, returns a Sapling address.\n"
             "\nArguments:\n"
             "1. \"type\"         (string, optional, default=\"" + defaultType + "\") The type of address. One of [\""
-            + ADDR_TYPE_SPROUT + "\", \"" + ADDR_TYPE_SAPLING + "\"].\n"
+            + ADDR_TYPE_SAPLING + "\", \"" + ADDR_TYPE_ORCHARD + "\"].\n"
             "\nResult:\n"
             "\"" + chainName.ToString() + "_address\"    (string) The new shielded address.\n"
             "\nExamples:\n"
             + HelpExampleCli("z_getnewaddresskey", "")
             + HelpExampleCli("z_getnewaddresskey", ADDR_TYPE_SAPLING)
+            + HelpExampleCli("z_getnewaddresskey", ADDR_TYPE_ORCHARD)
             + HelpExampleRpc("z_getnewaddresskey", "")
         );
 
@@ -3514,15 +3514,13 @@ UniValue z_getnewaddresskey(const UniValue& params, bool fHelp, const CPubKey& m
         addrType = params[0].get_str();
     }
 
-    if (addrType == ADDR_TYPE_SPROUT) {
-        if ( GetTime() >= KOMODO_SAPLING_DEADLINE )
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "sprout not valid anymore");
-        auto zAddress = pwalletMain->GenerateNewSproutZKey();
-        pwalletMain->SetZAddressBook(zAddress, "z-sprout", "");
-        return EncodePaymentAddress(zAddress);
-    } else if (addrType == ADDR_TYPE_SAPLING) {
+    if (addrType == ADDR_TYPE_SAPLING) {
         auto zAddress = pwalletMain->GenerateNewSaplingZKey();
         pwalletMain->SetZAddressBook(zAddress, "z-sapling", "");
+        return EncodePaymentAddress(zAddress);
+    } else if (addrType == ADDR_TYPE_ORCHARD) {
+        auto zAddress = pwalletMain->GenerateNewOrchardZKey();
+        pwalletMain->SetZAddressBook(zAddress, "orchard", "");
         return EncodePaymentAddress(zAddress);
     } else {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid address type");
@@ -3534,10 +3532,18 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
-    if (fHelp || params.size() > 0)
+    std::string defaultType;
+    if ( GetTime() < KOMODO_ORCHARD_ACTIVATION )
+        defaultType = ADDR_TYPE_SAPLING;
+    else defaultType = ADDR_TYPE_ORCHARD;
+
+    if (fHelp || params.size() > 1)
         throw runtime_error(
             "z_getnewaddress\n"
-            "\nReturns a new diversified shielded address for receiving payments.\n"
+            "\nReturns a new diversified shielded address for receiving payments from the set primary key.\n"
+            "\nArguments:\n"
+            "1. \"type\"         (string, optional, default=\"" + defaultType + "\") The type of address. One of [\""
+            + ADDR_TYPE_SAPLING + "\", \"" + ADDR_TYPE_ORCHARD + "\"].\n"
             "\nResult:\n"
             "\"" + strprintf("%s",chainName.symbol()) + "_address\"    (string) The new diversified shielded address.\n"
             "\nExamples:\n"
@@ -3549,10 +3555,22 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
 
     EnsureWalletIsUnlocked();
 
-    auto zAddress = pwalletMain->GenerateNewSaplingDiversifiedAddress();
-    pwalletMain->SetZAddressBook(zAddress, "z-sapling", "");
-    return EncodePaymentAddress(zAddress);
+    auto addrType = defaultType;
+    if (params.size() > 0) {
+        addrType = params[0].get_str();
+    }
 
+    if (addrType == ADDR_TYPE_SAPLING) {
+        auto zAddress = pwalletMain->GenerateNewSaplingDiversifiedAddress();
+        pwalletMain->SetZAddressBook(zAddress, "z-sapling", "");
+        return EncodePaymentAddress(zAddress);
+    } else if (addrType == ADDR_TYPE_ORCHARD) {
+        auto zAddress = pwalletMain->GenerateNewOrchardDiversifiedAddress();
+        pwalletMain->SetZAddressBook(zAddress, "orchard", "");
+        return EncodePaymentAddress(zAddress);
+    } else {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid address type");
+    }
 }
 
 UniValue z_setprimaryspendingkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
@@ -3587,7 +3605,7 @@ UniValue z_setprimaryspendingkey(const UniValue& params, bool fHelp, const CPubK
     const libzcash::SaplingExtendedSpendingKey extsk = *(std::get_if<libzcash::SaplingExtendedSpendingKey>(&spendingkey));
     // const libzcash::SaplingExtendedSpendingKey sk = *extsk;
 
-    return pwalletMain->SetPrimarySpendingKey(extsk);
+    return pwalletMain->SetPrimarySaplingSpendingKey(extsk);
 
 }
 
@@ -5212,7 +5230,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
     fromTaddr = IsValidDestination(taddr);
     if (!fromTaddr) {
         auto res = DecodePaymentAddress(fromaddress);
-        if (!IsValidPaymentAddress(res, branchId)) {
+        if (!IsValidPaymentAddress(res)) {
             // invalid
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a taddr or zaddr.");
         }
@@ -5263,7 +5281,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
         CTxDestination taddr = DecodeDestination(address);
         if (!IsValidDestination(taddr)) {
             auto res = DecodePaymentAddress(address);
-            if (IsValidPaymentAddress(res, branchId)) {
+            if (IsValidPaymentAddress(res)) {
                 isZaddr = true;
 
                 bool toSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
@@ -5518,8 +5536,7 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
     }
 
     auto res = DecodePaymentAddress(fromaddress);
-    // if (!IsValidPaymentAddress(res, branchId)) //Branch ID not yet available, since we don't yet know if we're online or offline
-    //                                            //TBD: Split into 2 unique functions
+
     if (!IsValidPaymentAddress(res))
     {
       //TBD: Do this test on the online machine?
@@ -5548,8 +5565,7 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
     branchId = CurrentEpochBranchId(chainActive.Height(), Params().GetConsensus());
 
     //Test again with the branchID
-    if (!IsValidPaymentAddress(res, branchId))
-    //if (!IsValidPaymentAddress(res))
+    if (!IsValidPaymentAddress(res))
     {
       //printf("z_sendmany_prepare_offline() enter 2\n"); fflush(stdout);
       throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "The from_adres is not a valid payment address");
@@ -5611,7 +5627,7 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
         }
 
         auto res = DecodePaymentAddress(address);
-        if (IsValidPaymentAddress(res, branchId))
+        if (IsValidPaymentAddress(res))
         {
             isZaddr = true;
 
@@ -5939,7 +5955,7 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp, const CPubKey& myp
 
     // Validate the destination address
     auto destaddress = params[1].get_str();
-    if (!IsValidPaymentAddressString(destaddress, CurrentEpochBranchId(chainActive.Height(), Params().GetConsensus()))) {
+    if (!IsValidPaymentAddressString(destaddress)) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, unknown address format: ") + destaddress );
     }
 

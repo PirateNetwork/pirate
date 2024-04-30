@@ -38,7 +38,7 @@ TEST(Keys, EncodeAndDecodeSapling)
                 Params().Bech32HRP(CChainParams::SAPLING_PAYMENT_ADDRESS));
 
             auto paymentaddr2 = DecodePaymentAddress(addr_string);
-            EXPECT_TRUE(IsValidPaymentAddress(paymentaddr2, SAPLING_BRANCH_ID));
+            EXPECT_TRUE(IsValidPaymentAddress(paymentaddr2));
 
             ASSERT_TRUE(std::get_if<libzcash::SaplingPaymentAddress>(&paymentaddr2) != nullptr);
             auto addr2 = std::get_if<libzcash::SaplingPaymentAddress>(paymentaddr2);

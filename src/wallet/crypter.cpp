@@ -201,12 +201,36 @@ static bool DecryptSaplingSpendingKey(const CKeyingMaterial& vMasterKey,
     if (!DecryptSecret(vMasterKey, vchCryptedSecret, extfvkFinger, vchSecret))
         return false;
 
-    if (vchSecret.size() != ZIP32_XSK_SIZE)
+    if (vchSecret.size() != SAPLING_ZIP32_XSK_SIZE)
         return false;
 
     CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
     ss >> sk;
     return sk.ToXFVK().fvk.GetFingerprint() == extfvkFinger;
+}
+
+static bool DecryptOrchardSpendingKey(const CKeyingMaterial& vMasterKey,
+                                      const std::vector<unsigned char>& vchCryptedSecret,
+                                      const uint256& fvkFinger,
+                                      libzcash::OrchardExtendedSpendingKeyPirate& extsk)
+{
+    CKeyingMaterial vchSecret;
+    if (!DecryptSecret(vMasterKey, vchCryptedSecret, fvkFinger, vchSecret))
+        return false;
+
+    if (vchSecret.size() != libzcash::SerializedOrchardExtendedSpendingKeySize)
+        return false;
+
+    CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
+    ss >> extsk;
+
+    auto extfvkOpt = extsk.GetXFVK();
+    if (extfvkOpt == std::nullopt) {
+        return false;
+    }
+    auto extfvk = extfvkOpt.value();
+
+    return extfvk.fvk.GetFingerprint() == fvkFinger;
 }
 
 static bool DecryptSaplingExtendedFullViewingKey(const CKeyingMaterial& vMasterKey,
@@ -218,7 +242,7 @@ static bool DecryptSaplingExtendedFullViewingKey(const CKeyingMaterial& vMasterK
     if (!DecryptSecret(vMasterKey, vchCryptedSecret, extfvkFinger, vchSecret))
         return false;
 
-    if (vchSecret.size() != ZIP32_XFVK_SIZE)
+    if (vchSecret.size() != SAPLING_ZIP32_XFVK_SIZE)
         return false;
 
     CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
@@ -359,6 +383,19 @@ bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn)
             const std::vector<unsigned char>& vchCryptedSecret = (*miSapling).second;
             libzcash::SaplingExtendedSpendingKey sk;
             if (!DecryptSaplingSpendingKey(vMasterKeyIn, vchCryptedSecret, extfvk.fvk.GetFingerprint(), sk)) {
+                keyFail = true;
+                break;
+            }
+            keyPass = true;
+            if (fDecryptionThoroughlyChecked)
+                break;
+        }
+        CryptedOrchardSpendingKeyMap::const_iterator miOrchard = mapCryptedOrchardSpendingKeys.begin();
+        for (; miOrchard != mapCryptedOrchardSpendingKeys.end(); ++miOrchard) {
+            const libzcash::OrchardExtendedFullViewingKeyPirate& extfvk = (*miOrchard).first;
+            const std::vector<unsigned char>& vchCryptedSecret = (*miOrchard).second;
+            libzcash::OrchardExtendedSpendingKeyPirate extsk;
+            if (!DecryptOrchardSpendingKey(vMasterKeyIn, vchCryptedSecret, extfvk.fvk.GetFingerprint(), extsk)) {
                 keyFail = true;
                 break;
             }
@@ -591,6 +628,23 @@ bool CCryptoKeyStore::AddCryptedSaplingSpendingKey(
     return true;
 }
 
+bool CCryptoKeyStore::AddCryptedOrchardSpendingKey(
+    const libzcash::OrchardExtendedFullViewingKeyPirate& extfvk,
+    const std::vector<unsigned char>& vchCryptedSecret)
+{
+    {
+        LOCK(cs_KeyStore);
+        // if SaplingFullViewingKey is not in SaplingFullViewingKeyMap, add it
+        if (!CBasicKeyStore::AddOrchardExtendedFullViewingKey(extfvk)) {
+            return false;
+        }
+
+        mapCryptedOrchardSpendingKeys[extfvk] = vchCryptedSecret;
+    }
+    return true;
+}
+
+
 bool CCryptoKeyStore::GetSproutSpendingKey(const libzcash::SproutPaymentAddress& address, libzcash::SproutSpendingKey& skOut) const
 {
     {
@@ -618,6 +672,23 @@ bool CCryptoKeyStore::GetSaplingSpendingKey(const libzcash::SaplingExtendedFullV
             if (entry.first == extfvk) {
                 const std::vector<unsigned char>& vchCryptedSecret = entry.second;
                 return DecryptSaplingSpendingKey(vMasterKey, vchCryptedSecret, entry.first.fvk.GetFingerprint(), skOut);
+            }
+        }
+    }
+    return false;
+}
+
+bool CCryptoKeyStore::GetOrchardSpendingKey(const libzcash::OrchardExtendedFullViewingKeyPirate& extfvk, libzcash::OrchardExtendedSpendingKeyPirate& extskOut) const
+{
+    {
+        LOCK(cs_KeyStore);
+        if (!IsCrypted())
+            return CBasicKeyStore::GetOrchardSpendingKey(extfvk, extskOut);
+
+        for (auto entry : mapCryptedOrchardSpendingKeys) {
+            if (entry.first == extfvk) {
+                const std::vector<unsigned char>& vchCryptedSecret = entry.second;
+                return DecryptOrchardSpendingKey(vMasterKey, vchCryptedSecret, entry.first.fvk.GetFingerprint(), extskOut);
             }
         }
     }

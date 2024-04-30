@@ -451,7 +451,7 @@ bool WalletModel::validateAddress(const QString &address, bool allowZAddresses)
 
     if (validTAddress) return true;
 
-    if (allowZAddresses) return IsValidPaymentAddressString(address.toStdString(), CurrentEpochBranchId(chainActive.Height(), Params().GetConsensus()));
+    if (allowZAddresses) return IsValidPaymentAddressString(address.toStdString());
 
     return false;
 }
@@ -624,7 +624,7 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
 
         if (bIsMine==true)
         {
-          if (!IsValidPaymentAddress(res, branchId))
+          if (!IsValidPaymentAddress(res))
           {
              return InvalidFromAddress;
           }
@@ -670,7 +670,7 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
 
         if (!IsValidDestination(taddr)) {
             auto res = DecodePaymentAddress(rcp.address.toStdString());
-            if (IsValidPaymentAddress(res, branchId)) {
+            if (IsValidPaymentAddress(res)) {
                 isZaddr = true;
 
                 bool toSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;

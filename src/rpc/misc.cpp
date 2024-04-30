@@ -622,6 +622,24 @@ public:
 #endif
         return obj;
     }
+
+    UniValue operator()(const libzcash::OrchardPaymentAddressPirate &zaddr) const {
+        UniValue obj(UniValue::VOBJ);
+        obj.push_back(Pair("type", "orchard"));
+        obj.push_back(Pair("diversifier", HexStr(zaddr.d)));
+        obj.push_back(Pair("diversifiedtransmissionkey", zaddr.pk_d.GetHex()));
+#ifdef ENABLE_WALLET
+        if (pwalletMain) {
+            libzcash::OrchardIncomingViewingKeyPirate ivk;
+            libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+            bool isMine = pwalletMain->GetOrchardIncomingViewingKey(zaddr, ivk) &&
+                pwalletMain->GetOrchardFullViewingKey(ivk, extfvk) &&
+                pwalletMain->HaveOrchardSpendingKey(extfvk);
+            obj.push_back(Pair("ismine", isMine));
+        }
+#endif
+        return obj;
+    }
 };
 
 UniValue z_validateaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)

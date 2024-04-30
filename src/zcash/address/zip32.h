@@ -9,14 +9,15 @@
 #include "support/allocators/secure.h"
 #include "uint256.h"
 #include "zcash/address/sapling.hpp"
+#include "zcash/address/pirate_orchard.hpp"
 
 #include <optional>
 
 const uint32_t HARDENED_KEY_LIMIT = 0x80000000;
-const size_t ZIP32_XFVK_SIZE = 169;
-const size_t ZIP32_XSK_SIZE = 169;
-const size_t ZIP32_DXFVK_SIZE = 180;
-const size_t ZIP32_DXSK_SIZE = 180;
+const size_t SAPLING_ZIP32_XFVK_SIZE = 169;
+const size_t SAPLING_ZIP32_XSK_SIZE = 169;
+const size_t SAPLING_ZIP32_DXFVK_SIZE = 180;
+const size_t SAPLING_ZIP32_DXSK_SIZE = 180;
 
 typedef std::vector<unsigned char, secure_allocator<unsigned char>> RawHDSeed;
 
@@ -238,6 +239,77 @@ struct SaplingDiversifiedExtendedSpendingKey {
     inline void SerializationOp(Stream& s, Operation ser_action) {
         READWRITE(extsk);
         READWRITE(d);
+    }
+};
+
+struct OrchardExtendedFullViewingKeyPirate {
+    uint8_t depth;
+    uint32_t parentFVKTag;
+    uint32_t childIndex;
+    uint256 chaincode;
+    libzcash::OrchardFullViewingKeyPirate fvk;
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(depth);
+        READWRITE(parentFVKTag);
+        READWRITE(childIndex);
+        READWRITE(chaincode);
+        READWRITE(fvk);
+    }
+
+    friend inline bool operator==(const OrchardExtendedFullViewingKeyPirate& a, const OrchardExtendedFullViewingKeyPirate& b) {
+        return (
+            a.depth == b.depth &&
+            a.parentFVKTag == b.parentFVKTag &&
+            a.childIndex == b.childIndex &&
+            a.chaincode == b.chaincode &&
+            a.fvk == b.fvk);
+    }
+    friend inline bool operator<(const OrchardExtendedFullViewingKeyPirate& a, const OrchardExtendedFullViewingKeyPirate& b) {
+        return (a.depth < b.depth ||
+            (a.depth == b.depth && a.childIndex < b.childIndex) ||
+            (a.depth == b.depth && a.childIndex == b.childIndex && a.fvk < b.fvk));
+    }
+};
+
+struct OrchardExtendedSpendingKeyPirate {
+    uint8_t depth;
+    uint32_t parentFVKTag;
+    uint32_t childIndex;
+    uint256 chaincode;
+    libzcash::OrchardSpendingKeyPirate sk;
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(depth);
+        READWRITE(parentFVKTag);
+        READWRITE(childIndex);
+        READWRITE(chaincode);
+        READWRITE(sk);
+    }
+
+    static OrchardExtendedSpendingKeyPirate Master(const HDSeed& seed, bool bip39Enabled = true);
+    std::optional<OrchardExtendedSpendingKeyPirate> DeriveChild(uint32_t bip44CoinType, uint32_t account) const;
+    std::optional<OrchardExtendedFullViewingKeyPirate> GetXFVK() const;
+
+    friend bool operator==(const OrchardExtendedSpendingKeyPirate& a, const OrchardExtendedSpendingKeyPirate& b)
+    {
+        return a.depth == b.depth &&
+            a.parentFVKTag == b.parentFVKTag &&
+            a.childIndex == b.childIndex &&
+            a.chaincode == b.chaincode &&
+            a.sk == b.sk;
+    }
+
+    friend inline bool operator<(const OrchardExtendedSpendingKeyPirate& a, const OrchardExtendedSpendingKeyPirate& b) {
+        return (a.depth < b.depth ||
+            (a.depth == b.depth && a.childIndex < b.childIndex) ||
+            (a.depth == b.depth && a.childIndex == b.childIndex && a.sk < b.sk));
     }
 };
 
