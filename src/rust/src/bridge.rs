@@ -176,6 +176,9 @@ pub(crate) mod ffi {
         type BundleAssembler;
 
         fn new_bundle_assembler() -> Box<SaplingBundleAssembler>;
+        fn add_spend_to_assembler(self: &mut SaplingBundleAssembler, spend_bytes: [u8; 384]) -> bool;
+        fn add_output_to_assembler(self: &mut SaplingBundleAssembler, output_bytes: [u8; 948]) -> bool;
+        fn add_value_balance_to_assembler(self: &mut SaplingBundleAssembler, value_balance: i64) -> bool;
         #[cxx_name = "parse_v4_components"]
         fn parse_v4_sapling_components(
             stream: &mut CppStream<'_>,

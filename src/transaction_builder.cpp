@@ -1144,6 +1144,11 @@ TransactionBuilderResult TransactionBuilder::Build()
         }
     }
 
+    //Temporary code
+    //Create Sapling Bundle from vShieldedSpend and vShieldedOutput
+    //TODO: refactor to make this cleaner and remove vShieldedSpend and vShieldedOutput
+    mtx.CreateSaplingBundleFromLegacy();
+
     maybe_tx = CTransaction(mtx);
     tx_result = maybe_tx.value();
     signedtxn = EncodeHexTx(tx_result);
