@@ -840,10 +840,38 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
         nonce >>= 16;
         pblock->nNonce = ArithToUint256(nonce);
 
+        uint32_t prevConsensusBranchId = CurrentEpochBranchId(pindexPrev->nHeight, chainparams.GetConsensus());
+
         // Fill in header
         pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
-        pblock->hashBlockCommitments   = sapling_tree.root();
-
+        if (NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
+            // hashBlockCommitments depends on the block transactions, so we have to
+            // update it whenever the coinbase transaction changes.
+            //
+            // - For the internal miner (either directly or via the `generate` RPC), this
+            //   will occur in `IncrementExtraNonce()`, like for `hashMerkleRoot`.
+            // - For `getblocktemplate`, we have two sets of fields to handle:
+            //   - The `defaultroots` fields, which contain both the default value (if
+            //     nothing in the template is altered), and the roots that can be used to
+            //     recalculate it (if some or all of the template is altered).
+            //   - The legacy `finalsaplingroothash`, `lightclientroothash`, and
+            //     `blockcommitmentshash` fields, which had the semantics of "place this
+            //     value into the block header and things will work" (except for in
+            //     v4.6.0 where they were accidentally set to always be the NU5 value).
+            //
+            // To accommodate all use cases, we calculate the `hashBlockCommitments`
+            // default value here (unlike `hashMerkleRoot`), and additionally cache the
+            // values necessary to recalculate it.
+            pblocktemplate->hashChainHistoryRoot = view.GetHistoryRoot(prevConsensusBranchId);
+            pblocktemplate->hashAuthDataRoot = pblock->BuildAuthDataMerkleTree();
+            pblock->hashBlockCommitments = DeriveBlockCommitmentsHash(
+                    pblocktemplate->hashChainHistoryRoot,
+                    pblocktemplate->hashAuthDataRoot);
+        } else {
+            pblocktemplate->hashChainHistoryRoot.SetNull();
+            pblocktemplate->hashAuthDataRoot.SetNull();
+            pblock->hashBlockCommitments = sapling_tree.root();
+        }
         // all Verus PoS chains need this data in the block at all times
         if ( chainName.isKMD() || ASSETCHAINS_STAKED == 0 || KOMODO_MININGTHREADS > 0 )
         {
