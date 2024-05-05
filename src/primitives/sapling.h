@@ -126,6 +126,14 @@ public:
         }
         return result;
     }
+
+    void FinishBundleAssembly(
+        rust::Box<sapling::BundleAssembler> assembler,
+        std::array<unsigned char, 64> bindingSig)
+    {
+        inner = sapling::finish_bundle_assembly(std::move(assembler), bindingSig);
+        return;
+    }
 };
 
 /**

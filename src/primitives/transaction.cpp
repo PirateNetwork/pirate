@@ -146,10 +146,12 @@ CMutableTransaction::CMutableTransaction() : nVersion(CTransaction::SPROUT_MIN_C
 CMutableTransaction::CMutableTransaction(const CTransaction& tx) : nVersion(tx.nVersion), fOverwintered(tx.fOverwintered), nVersionGroupId(tx.nVersionGroupId), nExpiryHeight(tx.nExpiryHeight),
                                                                    nConsensusBranchId(tx.GetConsensusBranchId()),
                                                                    vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
-                                                                   valueBalance(tx.valueBalance), vShieldedSpend(tx.vShieldedSpend), vShieldedOutput(tx.vShieldedOutput),
+                                                                   valueBalance(tx.ValueBalanceFromBundle()), vShieldedSpend(tx.GetSpendDescriptionFromBundle()), vShieldedOutput(tx.GetOutputDescriptionFromBundle()),
                                                                    vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
-                                                                   bindingSig(tx.bindingSig), saplingBundle(tx.GetSaplingBundle()), orchardBundle(tx.GetOrchardBundle())
+                                                                   bindingSig(tx.BindingSigFromBundle()),
+                                                                   saplingBundle(tx.GetSaplingBundle()), orchardBundle(tx.GetOrchardBundle())
 {
+
 }
 
 uint256 CMutableTransaction::GetHash() const
@@ -209,9 +211,10 @@ CTransaction::CTransaction() : nVersion(CTransaction::SPROUT_MIN_CURRENT_VERSION
 CTransaction::CTransaction(const CMutableTransaction& tx) : nVersion(tx.nVersion), fOverwintered(tx.fOverwintered), nVersionGroupId(tx.nVersionGroupId), nExpiryHeight(tx.nExpiryHeight),
                                                             nConsensusBranchId(tx.nConsensusBranchId),
                                                             vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
-                                                            valueBalance(tx.valueBalance), vShieldedSpend(tx.vShieldedSpend), vShieldedOutput(tx.vShieldedOutput),
+                                                            valueBalance(tx.ValueBalanceFromBundle()), vShieldedSpend(tx.GetSpendDescriptionFromBundle()), vShieldedOutput(tx.GetOutputDescriptionFromBundle()),
                                                             vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
-                                                            bindingSig(tx.bindingSig), saplingBundle(tx.saplingBundle), orchardBundle(tx.orchardBundle)
+                                                            bindingSig(tx.BindingSigFromBundle()),
+                                                            saplingBundle(tx.saplingBundle), orchardBundle(tx.orchardBundle)
 {
     UpdateHash();
 }
@@ -223,9 +226,10 @@ CTransaction::CTransaction(
     bool evilDeveloperFlag) : nVersion(tx.nVersion), fOverwintered(tx.fOverwintered), nVersionGroupId(tx.nVersionGroupId), nExpiryHeight(tx.nExpiryHeight),
                               nConsensusBranchId(tx.nConsensusBranchId),
                               vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
-                              valueBalance(tx.valueBalance), vShieldedSpend(tx.vShieldedSpend), vShieldedOutput(tx.vShieldedOutput),
+                              valueBalance(tx.ValueBalanceFromBundle()), vShieldedSpend(tx.GetSpendDescriptionFromBundle()), vShieldedOutput(tx.GetOutputDescriptionFromBundle()),
                               vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
-                              bindingSig(tx.bindingSig), saplingBundle(tx.saplingBundle), orchardBundle(tx.orchardBundle)
+                              bindingSig(tx.BindingSigFromBundle()),
+                              saplingBundle(tx.saplingBundle), orchardBundle(tx.orchardBundle)
 {
     assert(evilDeveloperFlag);
 }
@@ -233,10 +237,10 @@ CTransaction::CTransaction(
 CTransaction::CTransaction(CMutableTransaction&& tx) : nVersion(tx.nVersion), fOverwintered(tx.fOverwintered), nVersionGroupId(tx.nVersionGroupId),
                                                        nConsensusBranchId(tx.nConsensusBranchId),
                                                        vin(std::move(tx.vin)), vout(std::move(tx.vout)), nLockTime(tx.nLockTime), nExpiryHeight(tx.nExpiryHeight),
-                                                       valueBalance(tx.valueBalance),
-                                                       vShieldedSpend(std::move(tx.vShieldedSpend)), vShieldedOutput(std::move(tx.vShieldedOutput)),
-                                                       vjoinsplit(std::move(tx.vjoinsplit)),
-                                                       joinSplitPubKey(std::move(tx.joinSplitPubKey)), joinSplitSig(std::move(tx.joinSplitSig)), saplingBundle(std::move(tx.saplingBundle)), orchardBundle(std::move(tx.orchardBundle))
+                                                       valueBalance(tx.ValueBalanceFromBundle()), vShieldedSpend(tx.GetSpendDescriptionFromBundle()), vShieldedOutput(tx.GetOutputDescriptionFromBundle()),
+                                                       vjoinsplit(std::move(tx.vjoinsplit)), joinSplitPubKey(std::move(tx.joinSplitPubKey)), joinSplitSig(std::move(tx.joinSplitSig)),
+                                                       bindingSig(tx.BindingSigFromBundle()),
+                                                       saplingBundle(std::move(tx.saplingBundle)), orchardBundle(std::move(tx.orchardBundle))
 {
     UpdateHash();
 }
@@ -253,13 +257,13 @@ CTransaction& CTransaction::operator=(const CTransaction& tx)
     *const_cast<uint32_t*>(&nExpiryHeight) = tx.nExpiryHeight;
     saplingBundle = tx.saplingBundle;
     orchardBundle = tx.orchardBundle;
-    *const_cast<CAmount*>(&valueBalance) = tx.valueBalance;
-    *const_cast<std::vector<SpendDescription>*>(&vShieldedSpend) = tx.vShieldedSpend;
-    *const_cast<std::vector<OutputDescription>*>(&vShieldedOutput) = tx.vShieldedOutput;
+    *const_cast<CAmount*>(&valueBalance) = tx.ValueBalanceFromBundle();
+    *const_cast<std::vector<SpendDescription>*>(&vShieldedSpend) = tx.GetSpendDescriptionFromBundle();
+    *const_cast<std::vector<OutputDescription>*>(&vShieldedOutput) = tx.GetOutputDescriptionFromBundle();
     *const_cast<std::vector<JSDescription>*>(&vjoinsplit) = tx.vjoinsplit;
     *const_cast<uint256*>(&joinSplitPubKey) = tx.joinSplitPubKey;
     *const_cast<joinsplit_sig_t*>(&joinSplitSig) = tx.joinSplitSig;
-    *const_cast<binding_sig_t*>(&bindingSig) = tx.bindingSig;
+    *const_cast<binding_sig_t*>(&bindingSig) = tx.BindingSigFromBundle();
     *const_cast<uint256*>(&wtxid.hash) = tx.wtxid.hash;
     *const_cast<uint256*>(&wtxid.authDigest) = tx.wtxid.authDigest;
     return *this;
@@ -274,11 +278,11 @@ CAmount CTransaction::GetValueOut() const
             throw std::runtime_error("CTransaction::GetValueOut(): value out of range");
     }
 
-    if (valueBalance <= 0) {
+    if (GetValueBalanceSapling() <= 0) {
         // NB: negative valueBalance "takes" money from the transparent value pool just as outputs do
-        nValueOut += -valueBalance;
+        nValueOut += -GetValueBalanceSapling();
 
-        if (!MoneyRange(-valueBalance) || !MoneyRange(nValueOut)) {
+        if (!MoneyRange(-GetValueBalanceSapling()) || !MoneyRange(nValueOut)) {
             throw std::runtime_error("CTransaction::GetValueOut(): value out of range");
         }
     }
@@ -298,11 +302,11 @@ CAmount CTransaction::GetShieldedValueIn() const
 {
     CAmount nValue = 0;
 
-    if (valueBalance >= 0) {
+    if (GetValueBalanceSapling() >= 0) {
         // NB: positive valueBalance "gives" money to the transparent value pool just as inputs do
-        nValue += valueBalance;
+        nValue += GetValueBalanceSapling();
 
-        if (!MoneyRange(valueBalance) || !MoneyRange(nValue)) {
+        if (!MoneyRange(GetValueBalanceSapling()) || !MoneyRange(nValue)) {
             throw std::runtime_error("CTransaction::GetShieldedValueIn(): value out of range");
         }
     }
@@ -511,34 +515,35 @@ const rust::Vec<sapling::Spend> CTransaction::GetSaplingSpends() const
 
 std::vector<SpendDescription> CTransaction::GetSpendDescriptionFromBundle() const
 {
-    size_t spendCount = GetSaplingSpendsCount();
     std::vector<SpendDescription> returnSpends;
+    if (saplingBundle.IsPresent()) {
+        size_t spendCount = GetSaplingSpendsCount();
 
-    for (size_t i = 0; i < spendCount; i++) {
-        auto spendRust = saplingBundle.GetDetails().get_spend(i);
-        SpendDescription spendDescription;
+        for (size_t i = 0; i < spendCount; i++) {
+            auto spendRust = saplingBundle.GetDetails().get_spend(i);
+            SpendDescription spendDescription;
 
-        auto rustCV = spendRust->cv();
-        std::memcpy(&spendDescription.cv, &rustCV, 32);
+            auto rustCV = spendRust->cv();
+            std::memcpy(&spendDescription.cv, &rustCV, 32);
 
-        auto rustAnchor = spendRust->anchor();
-        std::memcpy(&spendDescription.anchor, &rustAnchor, 32);
+            auto rustAnchor = spendRust->anchor();
+            std::memcpy(&spendDescription.anchor, &rustAnchor, 32);
 
-        auto rustNullifier = spendRust->nullifier();
-        std::memcpy(&spendDescription.nullifier, &rustNullifier, 32);
+            auto rustNullifier = spendRust->nullifier();
+            std::memcpy(&spendDescription.nullifier, &rustNullifier, 32);
 
-        auto rustRK = spendRust->rk();
-        std::memcpy(&spendDescription.rk, &rustRK, 32);
+            auto rustRK = spendRust->rk();
+            std::memcpy(&spendDescription.rk, &rustRK, 32);
 
-        auto rustZKProok = spendRust->zkproof();
-        std::memcpy(&spendDescription.zkproof, &rustZKProok, 192);
+            auto rustZKProok = spendRust->zkproof();
+            std::memcpy(&spendDescription.zkproof, &rustZKProok, 192);
 
-        auto rustSpendAuthSig = spendRust->spend_auth_sig();
-        std::memcpy(&spendDescription.spendAuthSig, &rustSpendAuthSig, 64);
+            auto rustSpendAuthSig = spendRust->spend_auth_sig();
+            std::memcpy(&spendDescription.spendAuthSig, &rustSpendAuthSig, 64);
 
-        returnSpends.emplace_back(spendDescription);
+            returnSpends.emplace_back(spendDescription);
+        }
     }
-
     return returnSpends;
 }
 
@@ -627,32 +632,34 @@ const rust::Vec<sapling::Output> CTransaction::GetSaplingOutputs() const
 
 std::vector<OutputDescription> CTransaction::GetOutputDescriptionFromBundle() const
 {
-    size_t outCount = GetSaplingOutputsCount();
     std::vector<OutputDescription> returnOutputs;
+    if (saplingBundle.IsPresent()) {
+        size_t outCount = GetSaplingOutputsCount();
 
-    for (size_t i = 0; i < outCount; i++) {
-        auto outRust = saplingBundle.GetDetails().get_output(i);
-        OutputDescription outDescription;
+        for (size_t i = 0; i < outCount; i++) {
+            auto outRust = saplingBundle.GetDetails().get_output(i);
+            OutputDescription outDescription;
 
-        auto rustCV = outRust->cv();
-        std::memcpy(&outDescription.cv, &rustCV, 32);
+            auto rustCV = outRust->cv();
+            std::memcpy(&outDescription.cv, &rustCV, 32);
 
-        auto rustCMU = outRust->cmu();
-        std::memcpy(&outDescription.cmu, &rustCMU, 32);
+            auto rustCMU = outRust->cmu();
+            std::memcpy(&outDescription.cmu, &rustCMU, 32);
 
-        auto rustEphemeralKey = outRust->ephemeral_key();
-        std::memcpy(&outDescription.ephemeralKey, &rustEphemeralKey, 32);
+            auto rustEphemeralKey = outRust->ephemeral_key();
+            std::memcpy(&outDescription.ephemeralKey, &rustEphemeralKey, 32);
 
-        auto rustEncCiphertext = outRust->enc_ciphertext();
-        std::memcpy(&outDescription.encCiphertext, &rustEncCiphertext, 580);
+            auto rustEncCiphertext = outRust->enc_ciphertext();
+            std::memcpy(&outDescription.encCiphertext, &rustEncCiphertext, 580);
 
-        auto rustOutCiphertext = outRust->out_ciphertext();
-        std::memcpy(&outDescription.outCiphertext, &rustOutCiphertext, 80);
+            auto rustOutCiphertext = outRust->out_ciphertext();
+            std::memcpy(&outDescription.outCiphertext, &rustOutCiphertext, 80);
 
-        auto rustZKProof = outRust->zkproof();
-        std::memcpy(&outDescription.zkproof, &rustZKProof, 192);
+            auto rustZKProof = outRust->zkproof();
+            std::memcpy(&outDescription.zkproof, &rustZKProof, 192);
 
-        returnOutputs.emplace_back(outDescription);
+            returnOutputs.emplace_back(outDescription);
+        }
     }
 
     return returnOutputs;
@@ -681,4 +688,42 @@ const SaplingBundle& CTransaction::GetSaplingBundle() const
 const OrchardBundle& CTransaction::GetOrchardBundle() const
 {
     return orchardBundle;
+}
+
+/**
+ * Create a Sapling bundle from the legacy stuctures
+ */
+bool CMutableTransaction::CreateSaplingBundleFromLegacy()
+{
+    rust::Box<sapling::BundleAssembler> assembler = sapling::new_bundle_assembler();
+
+    for (const SpendDescription& spendDesc : vShieldedSpend) {
+        std::array<unsigned char, 384> transferData;
+        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+
+        // Serialize sending data
+        ss << spendDesc;
+        ss >> transferData;
+
+        assembler->add_spend_to_assembler(transferData);
+
+    }
+
+    for (const OutputDescription& outputDesc : vShieldedOutput) {
+        std::array<unsigned char, 948> transferData;
+        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+
+        // Serialize sending data
+        ss << outputDesc;
+        ss >> transferData;
+
+        assembler->add_output_to_assembler(transferData);
+
+    }
+
+    assembler->add_value_balance_to_assembler(valueBalance);
+
+    saplingBundle.FinishBundleAssembly(std::move(assembler), bindingSig);
+
+    return true;
 }

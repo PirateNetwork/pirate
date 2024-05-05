@@ -870,24 +870,22 @@ public:
                 if (ser_action.ForRead()) {
                     saplingBundle = saplingReader.FinishBundleAssembly(bindingSigForReadWrite);
                 }
-
-                // Populate old struture until code can be updated to pull from the saplingBundle
-                if (ser_action.ForRead()) {
-                    if (haveSaplingActions) {
-                        // Populate Binding Sig
-                        *const_cast<binding_sig_t*>(&bindingSig) = saplingBundle.GetDetails().binding_sig();
-                        // Populate SpendDescriptions from saplingBundle
-                        *const_cast<std::vector<SpendDescription>*>(&vShieldedSpend) = GetSpendDescriptionFromBundle();
-                        // Populate OutputDescriptions from saplingBundle
-                        *const_cast<std::vector<OutputDescription>*>(&vShieldedOutput) = GetOutputDescriptionFromBundle();
-                        // Populate Value Balance from saplingBundle
-                        *const_cast<CAmount*>(&valueBalance) = GetValueBalanceSapling();
-                    }
-                }
             }
         }
 
         if (ser_action.ForRead()) {
+          // Populate old struture until code can be updated to pull from the saplingBundle
+            if (saplingBundle.IsPresent()) {
+                // Populate Binding Sig
+                *const_cast<binding_sig_t*>(&bindingSig) = saplingBundle.GetDetails().binding_sig();
+                // Populate SpendDescriptions from saplingBundle
+                *const_cast<std::vector<SpendDescription>*>(&vShieldedSpend) = GetSpendDescriptionFromBundle();
+                // Populate OutputDescriptions from saplingBundle
+                *const_cast<std::vector<OutputDescription>*>(&vShieldedOutput) = GetOutputDescriptionFromBundle();
+                // Populate Value Balance from saplingBundle
+                *const_cast<CAmount*>(&valueBalance) = GetValueBalanceSapling();
+            }
+
             UpdateHash();
         }
     }
@@ -1031,6 +1029,25 @@ public:
      * Returns the Orchard bundle for the transaction.
      */
     const OrchardBundle& GetOrchardBundle() const;
+
+    CAmount ValueBalanceFromBundle() const {
+        CAmount valueBalanceBundle = 0;
+
+        if (saplingBundle.IsPresent()) {
+          valueBalanceBundle = saplingBundle.GetValueBalance();
+        }
+
+        return valueBalanceBundle;
+    }
+
+    binding_sig_t BindingSigFromBundle() const {
+        binding_sig_t bindingSigBundle = {{0}};
+
+        if (saplingBundle.IsPresent()) {
+            bindingSigBundle = saplingBundle.GetDetails().binding_sig();
+        }
+        return bindingSigBundle;
+    }
 };
 
 /** A mutable version of CTransaction. */
@@ -1199,71 +1216,97 @@ struct CMutableTransaction {
      */
     uint256 GetAuthDigest() const;
 
-    std::vector<SpendDescription> GetSpendDescriptionFromBundle() const
-    {
-        size_t spendCount = saplingBundle.GetSpendsCount();
-        std::vector<SpendDescription> returnSpends;
+    CAmount ValueBalanceFromBundle() const {
+        CAmount valueBalanceBundle = 0;
 
-        for (size_t i = 0; i < spendCount; i++) {
-            auto spendRust = saplingBundle.GetDetails().get_spend(i);
-            SpendDescription spendDescription;
-
-            auto rustCV = spendRust->cv();
-            std::memcpy(&spendDescription.cv, &rustCV, 32);
-
-            auto rustAnchor = spendRust->anchor();
-            std::memcpy(&spendDescription.anchor, &rustAnchor, 32);
-
-            auto rustNullifier = spendRust->nullifier();
-            std::memcpy(&spendDescription.nullifier, &rustNullifier, 32);
-
-            auto rustRK = spendRust->rk();
-            std::memcpy(&spendDescription.rk, &rustRK, 32);
-
-            auto rustZKProok = spendRust->zkproof();
-            std::memcpy(&spendDescription.zkproof, &rustZKProok, 192);
-
-            auto rustSpendAuthSig = spendRust->spend_auth_sig();
-            std::memcpy(&spendDescription.spendAuthSig, &rustSpendAuthSig, 64);
-
-            returnSpends.emplace_back(spendDescription);
+        if (saplingBundle.IsPresent()) {
+          valueBalanceBundle = saplingBundle.GetValueBalance();
         }
 
+        return valueBalanceBundle;
+    }
+
+    CTransaction::binding_sig_t BindingSigFromBundle() const {
+        CTransaction::binding_sig_t bindingSigBundle = {{0}};
+
+        if (saplingBundle.IsPresent()) {
+            bindingSigBundle = saplingBundle.GetDetails().binding_sig();
+        }
+        return bindingSigBundle;
+    }
+
+    std::vector<SpendDescription> GetSpendDescriptionFromBundle() const
+    {
+        std::vector<SpendDescription> returnSpends;
+
+        if (saplingBundle.IsPresent()) {
+            size_t spendCount = saplingBundle.GetSpendsCount();
+
+            for (size_t i = 0; i < spendCount; i++) {
+                auto spendRust = saplingBundle.GetDetails().get_spend(i);
+                SpendDescription spendDescription;
+
+                auto rustCV = spendRust->cv();
+                std::memcpy(&spendDescription.cv, &rustCV, 32);
+
+                auto rustAnchor = spendRust->anchor();
+                std::memcpy(&spendDescription.anchor, &rustAnchor, 32);
+
+                auto rustNullifier = spendRust->nullifier();
+                std::memcpy(&spendDescription.nullifier, &rustNullifier, 32);
+
+                auto rustRK = spendRust->rk();
+                std::memcpy(&spendDescription.rk, &rustRK, 32);
+
+                auto rustZKProok = spendRust->zkproof();
+                std::memcpy(&spendDescription.zkproof, &rustZKProok, 192);
+
+                auto rustSpendAuthSig = spendRust->spend_auth_sig();
+                std::memcpy(&spendDescription.spendAuthSig, &rustSpendAuthSig, 64);
+
+                returnSpends.emplace_back(spendDescription);
+            }
+        }
         return returnSpends;
     }
 
     std::vector<OutputDescription> GetOutputDescriptionFromBundle() const
     {
-        size_t outCount = saplingBundle.GetOutputsCount();
         std::vector<OutputDescription> returnOutputs;
 
-        for (size_t i = 0; i < outCount; i++) {
-            auto outRust = saplingBundle.GetDetails().get_output(i);
-            OutputDescription outDescription;
+        if (saplingBundle.IsPresent()) {
+            size_t outCount = saplingBundle.GetOutputsCount();
 
-            auto rustCV = outRust->cv();
-            std::memcpy(&outDescription.cv, &rustCV, 32);
+            for (size_t i = 0; i < outCount; i++) {
+                auto outRust = saplingBundle.GetDetails().get_output(i);
+                OutputDescription outDescription;
 
-            auto rustCMU = outRust->cmu();
-            std::memcpy(&outDescription.cmu, &rustCMU, 32);
+                auto rustCV = outRust->cv();
+                std::memcpy(&outDescription.cv, &rustCV, 32);
 
-            auto rustEphemeralKey = outRust->ephemeral_key();
-            std::memcpy(&outDescription.ephemeralKey, &rustEphemeralKey, 32);
+                auto rustCMU = outRust->cmu();
+                std::memcpy(&outDescription.cmu, &rustCMU, 32);
 
-            auto rustEncCiphertext = outRust->enc_ciphertext();
-            std::memcpy(&outDescription.encCiphertext, &rustEncCiphertext, 580);
+                auto rustEphemeralKey = outRust->ephemeral_key();
+                std::memcpy(&outDescription.ephemeralKey, &rustEphemeralKey, 32);
 
-            auto rustOutCiphertext = outRust->out_ciphertext();
-            std::memcpy(&outDescription.outCiphertext, &rustOutCiphertext, 80);
+                auto rustEncCiphertext = outRust->enc_ciphertext();
+                std::memcpy(&outDescription.encCiphertext, &rustEncCiphertext, 580);
 
-            auto rustZKProof = outRust->zkproof();
-            std::memcpy(&outDescription.zkproof, &rustZKProof, 192);
+                auto rustOutCiphertext = outRust->out_ciphertext();
+                std::memcpy(&outDescription.outCiphertext, &rustOutCiphertext, 80);
 
-            returnOutputs.emplace_back(outDescription);
+                auto rustZKProof = outRust->zkproof();
+                std::memcpy(&outDescription.zkproof, &rustZKProof, 192);
+
+                returnOutputs.emplace_back(outDescription);
+            }
         }
 
         return returnOutputs;
     }
+
+    bool CreateSaplingBundleFromLegacy();
 };
 
 #endif // BITCOIN_PRIMITIVES_TRANSACTION_H
