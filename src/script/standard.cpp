@@ -545,5 +545,5 @@ CScript GetScriptForMultisig(int nRequired, const std::vector<CPubKey>& keys)
 }
 
 bool IsValidDestination(const CTxDestination& dest) {
-    return dest.index() != std::variant_npos;
+    return dest.index() != 0;
 }
