@@ -1982,7 +1982,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             vector<unsigned char> vchCryptedSecret;
             ssValue >> vchCryptedSecret;
 
-            if (!pwallet->LoadLastCryptedSaplingDiversifierUsed(chash, vchCryptedSecret))
+            if (!pwallet->LoadLastCryptedOrchardDiversifierUsed(chash, vchCryptedSecret))
             {
                 strErr = "Error reading wallet database: LoadLastOrchardDiversifierUsed failed";
                 return false;
