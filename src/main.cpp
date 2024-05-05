@@ -847,8 +847,15 @@ bool IsStandardTx(const CTransaction& tx, string& reason, const int nHeight)
 {
     bool overwinterActive = NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_OVERWINTER);
     bool saplingActive = NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING);
+    bool orchardActive = NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD);
 
-    if (saplingActive) {
+    if (orchardActive) {
+        // Sapling standard rules apply
+        if (tx.nVersion > CTransaction::ORCHARD_MAX_CURRENT_VERSION || tx.nVersion < CTransaction::ORCHARD_MIN_CURRENT_VERSION) {
+            reason = "orchard-version";
+            return false;
+        }
+    } else if (saplingActive) {
         // Sapling standard rules apply
         if (tx.nVersion > CTransaction::SAPLING_MAX_CURRENT_VERSION || tx.nVersion < CTransaction::SAPLING_MIN_CURRENT_VERSION) {
             reason = "sapling-version";
@@ -3836,6 +3843,13 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
         view.PopAnchor(OrchardMerkleFrontier::empty_root(), ORCHARDFRONTIER);
     }
 
+    // This is guaranteed to be filled by LoadBlockIndex.
+    assert(pindex->nCachedBranchId);
+    auto consensusBranchId = pindex->nCachedBranchId.value();
+
+    if (NetworkUpgradeActive(pindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
+        view.PopHistoryNode(consensusBranchId);
+    }
 
     // move best block pointer to prevout block
     view.SetBestBlock(pindex->pprev->GetBlockHash());
@@ -3992,6 +4006,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         return(false);
     AssertLockHeld(cs_main);
     bool fExpensiveChecks = true;
+    bool fCheckAuthDataRoot = true;
     if (fCheckpointsEnabled) {
         CBlockIndex *pindexLastCheckpoint = Checkpoints::GetLastCheckpoint(chainparams.Checkpoints());
         if (pindexLastCheckpoint && pindexLastCheckpoint->GetAncestor(pindex->nHeight) == pindex) {
@@ -4156,8 +4171,14 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     OrchardMerkleFrontier orchard_frontier_tree;
     assert(view.GetOrchardFrontierAnchorAt(view.GetBestAnchor(ORCHARDFRONTIER), orchard_frontier_tree));
 
-    // Grab the consensus branch ID for the block's height
-    auto consensusBranchId = CurrentEpochBranchId(pindex->nHeight, Params().GetConsensus());
+    // Grab the consensus branch ID for this block and its parent
+    auto consensusBranchId = CurrentEpochBranchId(pindex->nHeight, chainparams.GetConsensus());
+    auto prevConsensusBranchId = CurrentEpochBranchId(pindex->nHeight - 1, chainparams.GetConsensus());
+
+    CAmount chainSupplyDelta = 0;
+    CAmount transparentValueDelta = 0;
+    size_t total_sapling_tx = 0;
+    size_t total_orchard_tx = 0;
 
     std::vector<PrecomputedTransactionData> txdata;
     txdata.reserve(block.vtx.size()); // Required so that pointers to individual PrecomputedTransactionData don't get invalidated
@@ -4178,6 +4199,12 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                 return state.DoS(100, error("ConnectBlock(): inputs missing/spent"),
                                  REJECT_INVALID, "bad-txns-inputs-missingorspent");
             }
+
+            for (const auto& input : tx.vin) {
+                const auto prevout = view.GetOutputFor(input);
+                transparentValueDelta -= prevout.nValue;
+            }
+
             // are the JoinSplit's requirements met?
             if (!view.HaveJoinSplitRequirements(tx, maxProcessingThreads))
                 return state.DoS(100, error("ConnectBlock(): JoinSplit requirements not met"),
@@ -4230,6 +4257,20 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             if (nSigOps > MAX_BLOCK_SIGOPS)
                 return state.DoS(100, error("ConnectBlock(): too many sigops"),
                                  REJECT_INVALID, "bad-blk-sigops");
+        }
+
+        if (tx.IsMint())
+        {
+            // Add the output value of the coinbase transaction to the chain supply
+            // delta. This includes fees, which are then canceled out by the fee
+            // subtractions in the other branch of this conditional.
+            chainSupplyDelta += tx.GetValueOut();
+        } else {
+            const auto txFee = view.GetValueIn(pindex->nHeight,interest,tx) - tx.GetValueOut();
+            // Fees from a transaction do not go into an output of the transaction,
+            // and therefore decrease the chain supply. If the miner claims them,
+            // they will be re-added in the other branch of this conditional.
+            chainSupplyDelta -= txFee;
         }
 
         txdata.emplace_back(tx);
@@ -4297,15 +4338,30 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         //Append Sapling Outputs to SaplingMerkleFrontier
         if (tx.GetSaplingBundle().IsPresent()) {
             sapling_frontier_tree.AppendBundle(tx.GetSaplingBundle());
+            total_sapling_tx += 1;
         }
 
         //Append Orchard Outputs to OrchardMerkleFrontier
         if (tx.GetOrchardBundle().IsPresent()) {
             orchard_frontier_tree.AppendBundle(tx.GetOrchardBundle());
+            total_orchard_tx += 1;
+        }
+
+        for (const auto& out : tx.vout) {
+            transparentValueDelta += out.nValue;
         }
 
         vPos.push_back(std::make_pair(tx.GetHash(), pos));
         pos.nTxOffset += ::GetSerializeSize(tx, SER_DISK, CLIENT_VERSION);
+    }
+
+    // Derive the various block commitments.
+    // We only derive them if they will be used for this block.
+    std::optional<uint256> hashAuthDataRoot;
+    std::optional<uint256> hashChainHistoryRoot;
+    if (NetworkUpgradeActive(pindex->nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
+        hashAuthDataRoot = block.BuildAuthDataMerkleTree();
+        hashChainHistoryRoot = view.GetHistoryRoot(prevConsensusBranchId);
     }
 
     // This is moved from CheckBlock for staking chains, so we can enforce the staking tx value was indeed paid to the coinbase.
@@ -4317,33 +4373,92 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     view.PushAnchor(sapling_frontier_tree);
     view.PushAnchor(orchard_frontier_tree);
     if (!fJustCheck) {
-        pindex->hashFinalSproutRoot = sprout_tree.root();
+      pindex->nChainSupplyDelta = chainSupplyDelta;
+      pindex->nTransparentValue = transparentValueDelta;
+      if (pindex->pprev) {
+          if (pindex->pprev->nChainTotalSupply) {
+              pindex->nChainTotalSupply = *pindex->pprev->nChainTotalSupply + chainSupplyDelta;
+          } else {
+              pindex->nChainTotalSupply = std::nullopt;
+          }
+
+          if (pindex->pprev->nChainTransparentValue) {
+              pindex->nChainTransparentValue = *pindex->pprev->nChainTransparentValue + transparentValueDelta;
+          } else {
+              pindex->nChainTransparentValue = std::nullopt;
+          }
+      } else {
+          pindex->nChainTotalSupply = chainSupplyDelta;
+          pindex->nChainTransparentValue = transparentValueDelta;
+      }
+      pindex->hashFinalSproutRoot = sprout_tree.root();
     }
+
     blockundo.old_sprout_tree_root = old_sprout_tree_root;
 
     // If Sapling is active, block.hashBlockCommitments must be the
     // same as the root of the Sapling tree
     if (NetworkUpgradeActive(pindex->nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_SAPLING)) {
-        if (block.hashBlockCommitments != sapling_tree.root()) {
-            return state.DoS(100,
-                         error("ConnectBlock(): block's hashBlockCommitments is incorrect"),
-                               REJECT_INVALID, "bad-sapling-root-in-block");
-        }
-        if (block.hashBlockCommitments != sapling_frontier_tree.root()) {
-            return state.DoS(100,
-                         error("ConnectBlock(): block's hashBlockCommitments is incorrect"),
-                               REJECT_INVALID, "bad-sapling-root-in-block");
-        }
-
         //Set the hashFinalSaplingRoot in the block index (equal to HahsBlockCommitments before Orchard)
         pindex->hashFinalSaplingRoot = sapling_frontier_tree.root();
     }
 
-    
+    // - If this block is before NU5 activation:
+        //   - hashAuthDataRoot and hashFinalOrchardRoot are always null.
+        //   - We don't set hashChainHistoryRoot here to maintain the invariant
+        //     documented in CBlockIndex (which was ensured in AddToBlockIndex).
+        // - If this block is on or after NU5 activation, this is where we set
+        //   the correct values of hashAuthDataRoot, hashFinalOrchardRoot, and
+        //   hashChainHistoryRoot; in particular, blocks that are never passed
+        //   to ConnectBlock() (and thus never on the main chain) will stay with
+        //   these set to null.
     if (NetworkUpgradeActive(pindex->nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
-        //Set the hashFinalOrchardRoot in the block index
+        pindex->hashAuthDataRoot = hashAuthDataRoot.value();
         pindex->hashFinalOrchardRoot = orchard_frontier_tree.root();
+        pindex->hashChainHistoryRoot = hashChainHistoryRoot.value();
     }
+
+    if (NetworkUpgradeActive(pindex->nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
+        if (fCheckAuthDataRoot) {
+            // If NU5 is active, block.hashBlockCommitments must be the top digest
+            // of the ZIP 244 block commitments linked list.
+            // https://zips.z.cash/zip-0244#block-header-changes
+            uint256 hashBlockCommitments = DeriveBlockCommitmentsHash(
+                hashChainHistoryRoot.value(),
+                hashAuthDataRoot.value());
+            if (block.hashBlockCommitments != hashBlockCommitments) {
+                return state.DoS(100,
+                    error("ConnectBlock(): block's hashBlockCommitments is incorrect (should be ZIP 244 block commitment)"),
+                    REJECT_INVALID, "bad-block-commitments-hash");
+            }
+        }
+    } else if (NetworkUpgradeActive(pindex->nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_SAPLING)) {
+        // If Sapling is active, block.hashBlockCommitments must be the
+        // same as the root of the Sapling tree
+        if (block.hashBlockCommitments != sapling_frontier_tree.root()) {
+            return state.DoS(100,
+                error("ConnectBlock(): block's hashBlockCommitments is incorrect (should be Sapling tree root)"),
+                REJECT_INVALID, "bad-sapling-root-in-block");
+        }
+    }
+
+    if (NetworkUpgradeActive(pindex->nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
+        HistoryNode historyNode;
+        historyNode = libzcash::NewV2Leaf(
+            block.GetHash(),
+            block.nTime,
+            block.nBits,
+            pindex->hashFinalSaplingRoot,
+            pindex->hashFinalOrchardRoot,
+            ArithToUint256(GetBlockProof(*pindex)),
+            pindex->nHeight,
+            total_sapling_tx,
+            total_orchard_tx
+        );
+        view.PushHistoryNode(consensusBranchId, historyNode);
+    }
+
+
 
     int64_t nTime1 = GetTimeMicros(); nTimeConnect += nTime1 - nTimeStart;
     LogPrint("bench", "      - Connect %u transactions: %.2fms (%.3fms/tx, %.3fms/txin) [%.2fs]\n", (unsigned)block.vtx.size(), 0.001 * (nTime1 - nTimeStart), 0.001 * (nTime1 - nTimeStart) / block.vtx.size(), nInputs <= 1 ? 0 : 0.001 * (nTime1 - nTimeStart) / (nInputs-1), nTimeConnect * 0.000001);

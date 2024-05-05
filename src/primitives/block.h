@@ -26,6 +26,11 @@
 #include "uint256.h"
 #include "arith_uint256.h"
 
+// Derives the ZIP 244 block commitments hash.
+uint256 DeriveBlockCommitmentsHash(
+    uint256 hashChainHistoryRoot,
+    uint256 hashAuthDataRoot);
+
 /** Nodes collect new transactions into a block, hash them into a hash tree,
  * and scan through nonce values to make the block's hash satisfy proof-of-work
  * requirements.  When they solve the proof-of-work, they broadcast the block
@@ -186,6 +191,10 @@ public:
         block.nSolution      = nSolution;
         return block;
     }
+
+    // Build the authorizing data Merkle tree for this block and return its
+    // root.
+    uint256 BuildAuthDataMerkleTree() const;
 
     // Build the in-memory merkle tree for this block and return the merkle root.
     // If non-NULL, *mutated is set to whether mutation was detected in the merkle

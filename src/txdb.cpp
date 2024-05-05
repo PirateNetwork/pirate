@@ -64,6 +64,11 @@ static const char DB_BLOCKHASHINDEX = 'h';
 static const char DB_SPENTINDEX = 'p';
 static const char DB_BLOCK_INDEX = 'b';
 
+//History Node
+static const char DB_MMR_LENGTH = 'M';
+static const char DB_MMR_NODE = 'm';
+static const char DB_MMR_ROOT = 'r';
+
 static const char DB_COINS = 'c';
 static const char DB_BLOCK_FILES = 'f';
 static const char DB_BEST_BLOCK = 'B';
@@ -206,6 +211,55 @@ uint256 CCoinsViewDB::GetBestAnchor(ShieldedType type) const {
     return hashBestAnchor;
 }
 
+HistoryIndex CCoinsViewDB::GetHistoryLength(uint32_t epochId) const {
+    HistoryIndex historyLength;
+    if (!db.Read(make_pair(DB_MMR_LENGTH, epochId), historyLength)) {
+        // Starting new history
+        historyLength = 0;
+    }
+
+    return historyLength;
+}
+
+HistoryNode CCoinsViewDB::GetHistoryAt(uint32_t epochId, HistoryIndex index) const {
+    HistoryNode mmrNode = {};
+
+    if (index >= GetHistoryLength(epochId)) {
+        throw runtime_error("History data inconsistent - reindex?");
+    }
+
+    if (libzcash::IsV1HistoryTree(epochId)) {
+        // History nodes serialized by `zcashd` versions that were unaware of NU5, used
+        // the previous shorter maximum serialized length. Because we stored this as an
+        // array, we can't just read the current (longer) maximum serialized length, as
+        // it will result in an exception for those older nodes.
+        //
+        // Instead, we always read an array of the older length. This works as expected
+        // for V1 nodes serialized by older clients, while for V1 nodes serialized by
+        // NU5-aware clients this is guaranteed to ignore only trailing zero bytes.
+        std::array<unsigned char, NODE_V1_SERIALIZED_LENGTH> tmpMmrNode;
+        if (!db.Read(make_pair(DB_MMR_NODE, make_pair(epochId, index)), tmpMmrNode)) {
+            throw runtime_error("History data inconsistent (expected node not found) - reindex?");
+        }
+        std::copy(std::begin(tmpMmrNode), std::end(tmpMmrNode), mmrNode.begin());
+    } else {
+        if (!db.Read(make_pair(DB_MMR_NODE, make_pair(epochId, index)), mmrNode)) {
+            throw runtime_error("History data inconsistent (expected node not found) - reindex?");
+        }
+    }
+
+    return mmrNode;
+}
+
+uint256 CCoinsViewDB::GetHistoryRoot(uint32_t epochId) const {
+    uint256 root;
+    if (!db.Read(make_pair(DB_MMR_ROOT, epochId), root))
+    {
+        root = uint256();
+    }
+    return root;
+}
+
 void BatchWriteNullifiers(CDBBatch& batch, CNullifiersMap& mapToUse, const char& dbChar)
 {
     for (CNullifiersMap::iterator it = mapToUse.begin(); it != mapToUse.end();) {
@@ -256,6 +310,29 @@ void BatchWriteAnchors(CDBBatch& batch, Map& mapToUse, const char& dbChar)
     }
 }
 
+void BatchWriteHistory(CDBBatch& batch, CHistoryCacheMap& historyCacheMap) {
+    for (auto nextHistoryCache = historyCacheMap.begin(); nextHistoryCache != historyCacheMap.end(); nextHistoryCache++) {
+        auto historyCache = nextHistoryCache->second;
+        auto epochId = nextHistoryCache->first;
+
+        // delete old entries since updateDepth
+        for (int i = historyCache.updateDepth + 1; i <= historyCache.length; i++) {
+            batch.Erase(make_pair(DB_MMR_NODE, make_pair(epochId, i)));
+        }
+
+        // replace/append new/updated entries
+        for (auto it = historyCache.appends.begin(); it != historyCache.appends.end(); it++) {
+            batch.Write(make_pair(DB_MMR_NODE, make_pair(epochId, it->first)), it->second);
+        }
+
+        // write new length
+        batch.Write(make_pair(DB_MMR_LENGTH, epochId), historyCache.length);
+
+        // write current root
+        batch.Write(make_pair(DB_MMR_ROOT, epochId), historyCache.root);
+    }
+}
+
 bool CCoinsViewDB::BatchWrite(CCoinsMap &mapCoins,
                               const uint256 &hashBlock,
                               const uint256 &hashSproutAnchor,
@@ -269,6 +346,7 @@ bool CCoinsViewDB::BatchWrite(CCoinsMap &mapCoins,
                               CNullifiersMap &mapSproutNullifiers,
                               CNullifiersMap &mapSaplingNullifiers,
                               CNullifiersMap &mapOrchardNullifiers,
+                              CHistoryCacheMap &historyCacheMap,
                               CProofHashMap &mapZkOutputProofHash,
                               CProofHashMap &mapZkSpendProofHash) {
     CDBBatch batch(db);
@@ -295,6 +373,8 @@ bool CCoinsViewDB::BatchWrite(CCoinsMap &mapCoins,
     ::BatchWriteNullifiers(batch, mapSproutNullifiers, DB_SPROUT_NULLIFIER);
     ::BatchWriteNullifiers(batch, mapSaplingNullifiers, DB_SAPLING_NULLIFIER);
     ::BatchWriteNullifiers(batch, mapOrchardNullifiers, DB_ORCHARD_NULLIFIER);
+
+    ::BatchWriteHistory(batch, historyCacheMap);
 
     ::BatchWriteProofHashes(batch, mapZkOutputProofHash, OUTPUT_PROOF_HASH);
     ::BatchWriteProofHashes(batch, mapZkSpendProofHash, SPEND_PROOF_HASH);

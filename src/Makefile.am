@@ -65,6 +65,7 @@ CXXBRIDGE_RS = \
   rust/src/sapling/zip32.rs \
 	rust/src/sprout.rs \
   rust/src/streams.rs \
+	rust/src/history.rs \
   rust/src/bridge.rs
 
 CXXBRIDGE_H = \
@@ -74,6 +75,7 @@ CXXBRIDGE_H = \
   rust/gen/include/rust/sapling/zip32.h \
 	rust/gen/include/rust/sprout.h \
   rust/gen/include/rust/streams.h \
+	rust/gen/include/rust/history.h \
   rust/gen/include/rust/bridge.h
 
 CXXBRIDGE_CPP = \
@@ -83,6 +85,7 @@ CXXBRIDGE_CPP = \
   rust/gen/src/sapling/zip32.cpp \
 	rust/gen/src/sprout.cpp \
   rust/gen/src/streams.cpp \
+	rust/gen/src/history.cpp \
   rust/gen/src/bridge.cpp
 
 # We add a rust/cxx.h include to indicate that we provide this (via the rustcxx depends
@@ -232,6 +235,7 @@ LIBZCASH_H = \
 	zcash/address/orchard.hpp \
 	zcash/address/sapling.hpp \
 	zcash/address/sprout.hpp \
+	zcash/History.hpp \
   zcash/util.h \
   zcash/Zcash.h \
   zcash/address/zip32.h
@@ -825,6 +829,7 @@ libzcash_a_SOURCES = \
 	zcash/address/orchard.cpp \
 	zcash/address/sapling.cpp \
 	zcash/address/sprout.cpp \
+	zcash/History.cpp \
 	zcash/util.cpp \
   zcash/address/zip32.cpp
 
