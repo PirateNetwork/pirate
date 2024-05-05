@@ -92,17 +92,17 @@ bool IsValidPaymentAddress(const libzcash::PaymentAddress& zaddr) {
 }
 
 bool IsValidViewingKey(const libzcash::ViewingKey& vk) {
-    return vk.index() != std::variant_npos;
+    return vk.index() != 0;
 }
 
 bool IsValidDiversifiedViewingKey(const libzcash::DiversifiedViewingKey& vk) {
-    return vk.index() != std::variant_npos;
+    return vk.index() != 0;
 }
 
 bool IsValidSpendingKey(const libzcash::SpendingKey& zkey) {
-    return zkey.index() != std::variant_npos;
+    return zkey.index() != 0;
 }
 
 bool IsValidDiversifiedSpendingKey(const libzcash::DiversifiedSpendingKey& zkey) {
-    return zkey.index() != std::variant_npos;
+    return zkey.index() != 0;
 }
