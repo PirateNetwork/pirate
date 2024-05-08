@@ -1417,10 +1417,21 @@ void CWallet::RunSaplingConsolidation(int blockHeight) {
 
 }
 
-void CWallet::CommitAutomatedTx(const CTransaction& tx) {
+bool CWallet::CommitAutomatedTx(const CTransaction& tx) {
   CWalletTx wtx(this, tx);
-  CReserveKey reservekey(pwalletMain);
-  CommitTransaction(wtx, reservekey);
+
+  // push to local node and sync with wallets
+  if(!wtx.AcceptToMemoryPool(false)) {
+      return false;
+  }
+
+  // push to network
+  if (!wtx.RelayWalletTransaction()) {
+      return false;
+  }
+
+  return true;
+
 }
 
 void CWallet::SetBestChain(const CBlockLocator& loc, const int& height)
@@ -3469,9 +3480,10 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
                 wtx.nIndex = wtxIn.nIndex;
                 fUpdated = true;
             }
-            // if (UpdatedNoteData(wtxIn, wtx)) {
-            //     fUpdated = true;
-            // }
+            if (wtxIn.mapSaplingNoteData.size() > 0 && wtxIn.mapSaplingNoteData != wtx.mapSaplingNoteData) {
+                wtx.mapSaplingNoteData = wtxIn.mapSaplingNoteData;
+                fUpdated = true;
+            }
             if (wtxIn.fFromMe && wtxIn.fFromMe != wtx.fFromMe)
             {
                 wtx.fFromMe = wtxIn.fFromMe;
@@ -3512,43 +3524,6 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
     return true;
 }
 
-// bool CWallet::UpdatedNoteData(const CWalletTx& wtxIn, CWalletTx& wtx)
-// {
-//     bool unchangedSproutFlag = (wtxIn.mapSproutNoteData.empty() || wtxIn.mapSproutNoteData == wtx.mapSproutNoteData);
-//     if (!unchangedSproutFlag) {
-//         auto tmp = wtxIn.mapSproutNoteData;
-//         // Ensure we keep any cached witnesses we may already have
-//         for (const std::pair <JSOutPoint, SproutNoteData> nd : wtx.mapSproutNoteData) {
-//             if (tmp.count(nd.first) && nd.second.witnesses.size() > 0) {
-//                 tmp.at(nd.first).witnesses.assign(
-//                         nd.second.witnesses.cbegin(), nd.second.witnesses.cend());
-//             }
-//             tmp.at(nd.first).witnessHeight = nd.second.witnessHeight;
-//         }
-//         // Now copy over the updated note data
-//         wtx.mapSproutNoteData = tmp;
-//     }
-//
-//     bool unchangedSaplingFlag = (wtxIn.mapSaplingNoteData.empty() || wtxIn.mapSaplingNoteData == wtx.mapSaplingNoteData);
-//     if (!unchangedSaplingFlag) {
-//         auto tmp = wtxIn.mapSaplingNoteData;
-//         // Ensure we keep any cached witnesses we may already have
-//
-//         for (const std::pair <SaplingOutPoint, SaplingNoteData> nd : wtx.mapSaplingNoteData) {
-//             if (tmp.count(nd.first) && nd.second.witnesses.size() > 0) {
-//                 tmp.at(nd.first).witnesses.assign(
-//                         nd.second.witnesses.cbegin(), nd.second.witnesses.cend());
-//             }
-//             tmp.at(nd.first).witnessHeight = nd.second.witnessHeight;
-//         }
-//
-//         // Now copy over the updated note data
-//         wtx.mapSaplingNoteData = tmp;
-//     }
-//
-//     return !unchangedSproutFlag || !unchangedSaplingFlag;
-// }
-
 /**
  * Add a transaction to the wallet, or update it.
  * pblock is optional, but should be provided if the transaction is known to be in a block.
@@ -3559,25 +3534,12 @@ void CWallet::AddToWalletIfInvolvingMe(const std::vector<CTransaction> &vtx, std
     {
         AssertLockHeld(cs_wallet);
 
-        //Step 1 -- inital Tx checks
-        std::vector<CTransaction> vFilteredTxes;
-
-        for (int i = 0; i < vtx.size(); i++) {
-            if (vtx[i].IsCoinBase() && vtx[i].vout[0].nValue == 0)
-                continue;
-            bool fExisted = mapWallet.count(vtx[i].GetHash()) != 0;
-            if (fExisted && !fUpdate)
-                continue;
-
-            vFilteredTxes.emplace_back(vtx[i]);
-        }
-
-        //Step 2 -- decrypt transactions
-        auto saplingNoteDataAndAddressesToAdd = FindMySaplingNotes(vFilteredTxes, nHeight);
+        //Step 1 -- decrypt transactions
+        auto saplingNoteDataAndAddressesToAdd = FindMySaplingNotes(vtx, nHeight);
         auto saplingNoteData = saplingNoteDataAndAddressesToAdd.first;
         auto addressesToAdd = saplingNoteDataAndAddressesToAdd.second;
 
-        //Step 3 -- add addresses
+        //Step 2 -- add addresses
         for (const auto &addressToAdd : addressesToAdd) {
             //Loaded into memory only
             //This will be saved during the wallet SetBestChainINTERNAL
@@ -3586,10 +3548,10 @@ void CWallet::AddToWalletIfInvolvingMe(const std::vector<CTransaction> &vtx, std
             addressesFound.insert(addressToAdd.first);
         }
 
-        //Step 4 -- add transactions
-        for (int i = 0; i < vFilteredTxes.size(); i++) {
+        //Step 3 -- add transactions
+        for (int i = 0; i < vtx.size(); i++) {
 
-            uint256 hash = vFilteredTxes[i].GetHash();
+            uint256 hash = vtx[i].GetHash();
             mapSaplingNoteData_t noteData;
 
             for (mapSaplingNoteData_t::iterator it = saplingNoteData.begin(); it != saplingNoteData.end(); it++) {
@@ -3600,10 +3562,9 @@ void CWallet::AddToWalletIfInvolvingMe(const std::vector<CTransaction> &vtx, std
                 }
             }
 
+            bool fExisted = mapWallet.count(vtx[i].GetHash()) != 0;
 
-            bool fExisted = mapWallet.count(vFilteredTxes[i].GetHash()) != 0;
-
-            if (fExisted || IsMine(vFilteredTxes[i]) || IsFromMe(vFilteredTxes[i]) || noteData.size() > 0)
+            if (fExisted || IsMine(vtx[i]) || IsFromMe(vtx[i]) || noteData.size() > 0)
             {
                 /**
                  * New implementation of wallet filter code.
@@ -3617,10 +3578,10 @@ void CWallet::AddToWalletIfInvolvingMe(const std::vector<CTransaction> &vtx, std
 
                 if (!mapMultiArgs["-whitelistaddress"].empty())
                 {
-                    if (IsMine(vFilteredTxes[i]) && !vFilteredTxes[i].IsCoinBase() && !IsFromMe(vFilteredTxes[i]))
+                    if (IsMine(vtx[i]) && !vtx[i].IsCoinBase() && !IsFromMe(vtx[i]))
                     {
                         bool fIsFromWhiteList = false;
-                        BOOST_FOREACH(const CTxIn& txin, vFilteredTxes[i].vin)
+                        BOOST_FOREACH(const CTxIn& txin, vtx[i].vin)
                         {
                             if (fIsFromWhiteList) break;
                             uint256 hashBlock; CTransaction prevTx; CTxDestination dest;
@@ -3631,8 +3592,7 @@ void CWallet::AddToWalletIfInvolvingMe(const std::vector<CTransaction> &vtx, std
                                     if (EncodeDestination(dest) == strWhiteListAddress)
                                     {
                                         fIsFromWhiteList = true;
-                                        // std::cerr << __FUNCTION__ << " tx." << tx.GetHash().ToString() << " passed wallet filter! whitelistaddress." << EncodeDestination(dest) << std::endl;
-                                        LogPrintf("tx.%s passed wallet filter! whitelistaddress.%s\n", vFilteredTxes[i].GetHash().ToString(),EncodeDestination(dest));
+                                        LogPrintf("tx.%s passed wallet filter! whitelistaddress.%s\n", vtx[i].GetHash().ToString(),EncodeDestination(dest));
                                         break;
                                     }
                                 }
@@ -3640,14 +3600,13 @@ void CWallet::AddToWalletIfInvolvingMe(const std::vector<CTransaction> &vtx, std
                         }
                         if (!fIsFromWhiteList)
                         {
-                            // std::cerr << __FUNCTION__ << " tx." << tx.GetHash().ToString() << " is NOT passed wallet filter!" << std::endl;
-                            LogPrintf("tx.%s is NOT passed wallet filter!\n", vFilteredTxes[i].GetHash().ToString());
+                            LogPrintf("tx.%s is NOT passed wallet filter!\n", vtx[i].GetHash().ToString());
                             continue;
                         }
                     }
                 }
 
-                CWalletTx wtx(this,vFilteredTxes[i]);
+                CWalletTx wtx(this,vtx[i]);
 
                 if (noteData.size() > 0) {
                     wtx.SetSaplingNoteData(noteData);
@@ -3668,7 +3627,7 @@ void CWallet::AddToWalletIfInvolvingMe(const std::vector<CTransaction> &vtx, std
                 CWalletDB walletdb(strWalletFile, "r+", false);
 
                 if (AddToWallet(wtx, false, &walletdb, nHeight, fRescan)) {
-                    vAddedTxes.emplace_back(vFilteredTxes[i]);
+                    vAddedTxes.emplace_back(vtx[i]);
                 }
             }
         }

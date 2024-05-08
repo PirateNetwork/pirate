@@ -231,7 +231,9 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
                 break;
             }
 
-            pwalletMain->CommitAutomatedTx(tx);
+            if (!pwalletMain->CommitAutomatedTx(tx)) {
+                return false;
+            }
             LogPrint("zrpcunsafe", "%s: Committed sweep transaction with txid=%s\n", getId(), tx.GetHash().ToString());
             amountSwept += amountToSend - fee;
             sweepTxIds.push_back(tx.GetHash().ToString());
