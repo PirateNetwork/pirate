@@ -520,6 +520,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-maxtxfee=<amt>", strprintf(_("Maximum total fees (in %s) to use in a single wallet transaction; setting this too low may abort large transactions (default: %s)"),
         CURRENCY_UNIT, FormatMoney(maxTxFee)));
     strUsage += HelpMessageOpt("-upgradewallet", _("Upgrade wallet to latest format") + " " + _("on startup"));
+    strUsage += HelpMessageOpt("-unlockforreporting", _("Allow reporting of transactional and metadata on an encrypted wallet while locked.") + " " + strprintf(_("(default: %u)"), false));
     strUsage += HelpMessageOpt("-wallet=<file>", _("Specify wallet file (within data directory)") + " " + strprintf(_("(default: %s)"), "wallet.dat"));
     strUsage += HelpMessageOpt("-walletbroadcast", _("Make the wallet broadcast transactions") + " " + strprintf(_("(default: %u)"), true));
     strUsage += HelpMessageOpt("-walletnotify=<cmd>", _("Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)"));
@@ -2492,6 +2493,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
           LogPrintf("keeptxfornblock is less the MAX_REORG_LENGTH, Setting to %i\n", MAX_REORG_LENGTH + 1);
           fDeleteTransactionsAfterNBlocks = MAX_REORG_LENGTH + 1;
         }
+
+        //Set up Reporting while encrypted options
+        fUnlockedForReporting = GetBoolArg("-unlockforreporting", false);
 
         if (fFirstRun)
         {

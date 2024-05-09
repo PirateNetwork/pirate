@@ -115,7 +115,7 @@ UniValue exportsaplingtree(const UniValue& params, bool fHelp,  const CPubKey& m
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    EnsureWalletIsUnlocked();
+    EnsureWalletIsUnlockedForReporting();
 
     boost::filesystem::path exportdir;
     try {

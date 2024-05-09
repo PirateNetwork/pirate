@@ -207,6 +207,7 @@ extern std::string HelpExampleCli(const std::string& methodname, const std::stri
 extern std::string HelpExampleRpc(const std::string& methodname, const std::string& args);
 
 extern void EnsureWalletIsUnlocked();
+extern void EnsureWalletIsUnlockedForReporting();
 
 bool StartRPC();
 void InterruptRPC();

@@ -1062,7 +1062,7 @@ UniValue zs_listtransactions(const UniValue& params, bool fHelp, const CPubKey& 
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    EnsureWalletIsUnlocked();
+    EnsureWalletIsUnlockedForReporting();
 
     UniValue ret(UniValue::VARR);
 
@@ -2250,8 +2250,8 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    EnsureWalletIsUnlocked();
-    
+    EnsureWalletIsUnlockedForReporting();
+
     int nMinDepth = 1;
 
     CAmount confirmed = 0;
