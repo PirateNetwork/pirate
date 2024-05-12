@@ -101,7 +101,7 @@ cd pirate
 ./zcutil/build.sh -j8
 
 #For qt GUI binaries
-./zcutil/build-qt-linux.sh -j8.
+./zcutil/build-qt-linux.sh -j8
 
 #If you get this compile error:
 qt/moc_addressbookpage.cpp:142:1: error: ‘QT_INIT_METAOBJECT’ does not name a type
