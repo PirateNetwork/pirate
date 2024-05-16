@@ -624,3 +624,44 @@ const char *notaries_elected[NUM_KMD_SEASONS][NUM_KMD_NOTARIES][2] =
         {"nodename_63", "0000000000000000000000000000000000000000000000000000000000000063"}
    }
 };
+
+class NotaryChecker {
+public:
+    NotaryChecker() {
+        checkSeasons();
+        checkNotaries();
+    }
+
+private:
+    void checkSeasons() const {
+        for (size_t i = 0; i < NUM_KMD_SEASONS; ++i) {
+            assert(KMD_SEASON_TIMESTAMPS[i] != 0 && "KMD_SEASON_TIMESTAMPS is invalid");
+            assert(KMD_SEASON_HEIGHTS[i] != 0 && "KMD_SEASON_HEIGHTS is invalid");
+        }
+    }
+
+    void checkNotaries() const {
+        for (int season = 0; season < NUM_KMD_SEASONS; ++season) {
+            for (int notary = 0; notary < NUM_KMD_NOTARIES; ++notary) {
+                const char* name = notaries_elected[season][notary][0];
+                const char* pubkey = notaries_elected[season][notary][1];
+                assert(name != nullptr && "Notary name is null");
+                assert(pubkey != nullptr && "Notary pubkey is null");
+                assert(isValidPubkey(pubkey) && "Notary pubkey is invalid");
+            }
+        }
+    }
+
+    bool isValidPubkey(const char* str) const {
+        if (strlen(str) != 66) return false;
+        if (str[0] != '0' || (str[1] != '2' && str[1] != '3')) return false;
+        for (int i = 2; i < 66; ++i) {
+            if (!((str[i] >= '0' && str[i] <= '9') || (str[i] >= 'a' && str[i] <= 'f') || (str[i] >= 'A' && str[i] <= 'F'))) {
+                return false;
+            }
+        }
+        return true;
+    }
+};
+
+NotaryChecker notaryChecker;
