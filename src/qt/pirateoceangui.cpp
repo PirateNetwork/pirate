@@ -1332,7 +1332,7 @@ bool PirateOceanGUI::eventFilter(QObject *object, QEvent *event)
 }
 
 #ifdef ENABLE_WALLET
-/*
+
 bool PirateOceanGUI::handlePaymentRequest(const SendCoinsRecipient& recipient)
 {
     // URI has to be valid
@@ -1346,7 +1346,7 @@ bool PirateOceanGUI::handlePaymentRequest(const SendCoinsRecipient& recipient)
     printf("handlePaymentRequest() - false");
     return false;
 }
-*/
+
 void PirateOceanGUI::setHDStatus(int hdEnabled)
 {
     labelWalletHDStatusIcon->setPixmap(platformStyle->SingleColorIcon(hdEnabled ? ":/icons/hd_enabled" : ":/icons/hd_disabled").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));

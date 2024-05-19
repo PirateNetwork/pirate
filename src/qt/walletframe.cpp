@@ -138,7 +138,7 @@ void WalletFrame::removeAllWallets()
         walletStack->removeWidget(i.value());
     mapWalletViews.clear();
 }
-/*
+
 bool WalletFrame::handlePaymentRequest(const SendCoinsRecipient &recipient)
 {
     WalletView *walletView = currentWalletView();
@@ -147,7 +147,7 @@ bool WalletFrame::handlePaymentRequest(const SendCoinsRecipient &recipient)
 
     return walletView->handlePaymentRequest(recipient);
 }
-*/
+
 void WalletFrame::showOutOfSyncWarning(bool fShow)
 {
     bOutOfSync = fShow;

@@ -41,7 +41,7 @@ public:
     bool removeWallet(const QString &name);
     void removeAllWallets();
 
-    //bool handlePaymentRequest(const SendCoinsRecipient& recipient);
+    bool handlePaymentRequest(const SendCoinsRecipient& recipient);
 
     void showOutOfSyncWarning(bool fShow);
 

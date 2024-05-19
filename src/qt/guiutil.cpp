@@ -152,7 +152,7 @@ void setupAmountWidget(QLineEdit *widget, QWidget *parent)
     widget->setAlignment(Qt::AlignRight|Qt::AlignVCenter);
 }
 
-bool parseKomodoURI(const QUrl &uri, SendCoinsRecipient *out)
+bool parsePirateURI(const QUrl &uri, SendCoinsRecipient *out)
 {
     // return if URI is not valid or is no pirate: URI
     if(!uri.isValid() || uri.scheme() != QString("pirate"))
@@ -213,7 +213,7 @@ bool parseKomodoURI(const QUrl &uri, SendCoinsRecipient *out)
     return true;
 }
 
-bool parseKomodoURI(QString uri, SendCoinsRecipient *out)
+bool parsePirateURI(QString uri, SendCoinsRecipient *out)
 {
     // Convert pirate:// to pirate:
     //
@@ -224,7 +224,7 @@ bool parseKomodoURI(QString uri, SendCoinsRecipient *out)
         uri.replace(0, 10, "pirate:");
     }
     QUrl uriInstance(uri);
-    return parseKomodoURI(uriInstance, out);
+    return parsePirateURI(uriInstance, out);
 }
 
 QString formatKomodoURI(const SendCoinsRecipient &info)

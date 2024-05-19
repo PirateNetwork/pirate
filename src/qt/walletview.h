@@ -55,7 +55,7 @@ public:
     */
     void setWalletModel(WalletModel *walletModel);
 
-    //bool handlePaymentRequest(const SendCoinsRecipient& recipient);
+    bool handlePaymentRequest(const SendCoinsRecipient& recipient);
 
     void showOutOfSyncWarning(bool fShow);
 
