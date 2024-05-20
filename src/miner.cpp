@@ -696,11 +696,19 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
         txNew.vout[0].nValue = GetBlockSubsidy(nHeight,consensusParams);
         txNew.nExpiryHeight = 0;
 
-        // KIP0003 - fee burning
-        if (chainName.isKMD() && nHeight >= nKIP0003Activation)
+        if (chainName.isKMD())
         {
-            CTxOut burnOpRet(nFees, CScript() << OP_RETURN);
-            txNew.vout.push_back(burnOpRet);
+            bool fAdd5kSat = IS_KOMODO_NOTARY && My_notaryid >= 0;
+            if (nHeight < nKIP0003Activation)
+            {
+                txNew.vout[0].nValue += nFees + (fAdd5kSat ? 5000 : 0);
+            }
+            else
+            {
+                // KIP0003 - fee burning
+                CTxOut burnOpRet(nFees + (fAdd5kSat ? 5000 : 0), CScript() << OP_RETURN);
+                txNew.vout.push_back(burnOpRet);
+            }
         }
         else
         {
@@ -711,8 +719,6 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
             txNew.nLockTime = std::max(pindexPrev->GetMedianTimePast()+1, GetTime());
         else txNew.nLockTime = std::max((int64_t)(pindexPrev->nTime+1), GetTime());        
 
-        if ( chainName.isKMD() && IS_KOMODO_NOTARY && My_notaryid >= 0 )
-            txNew.vout[0].nValue += 5000;
         pblock->vtx[0] = txNew;
 
         uint64_t commission;
