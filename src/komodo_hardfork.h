@@ -22,6 +22,8 @@ extern const int32_t nS7HardforkHeight;   // dPoW Season 7, Fri Jun 30 2023
 extern const uint32_t nS8Timestamp;       // dPoW Season 8, Sat Sep 14 2024 13:37:33 GMT+0000
 extern const int32_t nS8HardforkHeight;   // dPoW Season 8, Sat Sep 14 2024
 
+extern const int32_t nKIP0003Activation;  // https://github.com/KomodoPlatform/kips/blob/main/kips/kip-0003.mediawiki
+
 static const uint32_t KMD_SEASON_TIMESTAMPS[NUM_KMD_SEASONS] = {1525132800, 1563148800, nStakedDecemberHardforkTimestamp, nS4Timestamp, nS5Timestamp, nS6Timestamp, nS7Timestamp, nS8Timestamp, 1951328000};
 static const int32_t KMD_SEASON_HEIGHTS[NUM_KMD_SEASONS] = {814000, 1444000, nDecemberHardforkHeight, nS4HardforkHeight, nS5HardforkHeight, nS6HardforkHeight, nS7HardforkHeight, nS8HardforkHeight, 8113400};
 

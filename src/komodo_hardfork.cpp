@@ -20,6 +20,8 @@ const int32_t nS7HardforkHeight = 3484958;  // dPoW Season 7, Fri Jun 30 2023
 const uint32_t nS8Timestamp = 1726321053;   // dPoW Season 8, Sat Sep 14 2024 13:37:33 GMT+0000
 const int32_t nS8HardforkHeight = 4100333;  // dPoW Season 8, Sat Sep 14 2024
 
+const int32_t nKIP0003Activation = nS8HardforkHeight;
+
 // Era array of pubkeys. Add extra seasons to bottom as requried, after adding appropriate info above. 
 const char *notaries_elected[NUM_KMD_SEASONS][NUM_KMD_NOTARIES][2] =
 {

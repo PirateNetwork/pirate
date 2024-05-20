@@ -693,8 +693,20 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
         txNew.vin[0].scriptSig = (CScript() << nHeight << CScriptNum(1)) + COINBASE_FLAGS;
         txNew.vout.resize(1);
         txNew.vout[0].scriptPubKey = scriptPubKeyIn;
-        txNew.vout[0].nValue = GetBlockSubsidy(nHeight,consensusParams) + nFees;
+        txNew.vout[0].nValue = GetBlockSubsidy(nHeight,consensusParams);
         txNew.nExpiryHeight = 0;
+
+        // KIP0003 - fee burning
+        if (chainName.isKMD() && nHeight >= nKIP0003Activation)
+        {
+            CTxOut burnOpRet(nFees, CScript() << OP_RETURN);
+            txNew.vout.push_back(burnOpRet);
+        }
+        else
+        {
+            txNew.vout[0].nValue += nFees;
+        }
+
         if ( ASSETCHAINS_ADAPTIVEPOW <= 0 )
             txNew.nLockTime = std::max(pindexPrev->GetMedianTimePast()+1, GetTime());
         else txNew.nLockTime = std::max((int64_t)(pindexPrev->nTime+1), GetTime());        
