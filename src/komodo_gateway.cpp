@@ -177,7 +177,7 @@ int32_t komodo_check_deposit(int32_t height,const CBlock& block)
         }
         if ( chainName.isKMD() )
         {
-            if ( overflow != 0 || total > COIN/10 )
+            if ( overflow != 0 )
             {
                 if ( height >= activation )
                 {
