@@ -3873,7 +3873,7 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     if (fHelp || params.size() > 1)
         throw runtime_error(
-            "z_getbalances ( minconf includeWatchonly )\n"
+            "z_getbalances ( includeWatchonly )\n"
             "\nReturns array of wallet sapling addresses and balances.\n"
             "Results are an array of Objects, each of which has:\n"
             "{address, balance, unconfirmed, spendable}\n"
