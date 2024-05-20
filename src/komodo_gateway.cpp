@@ -186,12 +186,6 @@ int32_t komodo_check_deposit(int32_t height,const CBlock& block)
                     return(-1);
                 }
             }
-            else if ( block.nBits == KOMODO_MINDIFF_NBITS && total > 0 ) // to deal with fee stealing
-            {
-                fprintf(stderr,"notary mined ht.%d with extra %.8f\n",height,dstr(total));
-                if ( height > KOMODO_NOTARIES_HEIGHT1 )
-                    return(-1);
-            }
             if ( strangeout != 0 || notmatched != 0 )
             {
                 if ( 0 && strcmp(NOTARY_PUBKEY.c_str(),"03b7621b44118017a16043f19b30cc8a4cfe068ac4e42417bae16ba460c80f3828") == 0 )
