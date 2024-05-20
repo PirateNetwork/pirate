@@ -47,7 +47,7 @@ namespace GUIUtil
     // Parse "pirate:" URI into recipient object, return true on successful parsing
     bool parsePirateURI(const QUrl &uri, SendCoinsRecipient *out);
     bool parsePirateURI(QString uri, SendCoinsRecipient *out);
-    QString formatKomodoURI(const SendCoinsRecipient &info);
+    QString formatPirateURI(const SendCoinsRecipient &info);
 
     // Returns true if given address+amount meets "dust" definition
     bool isDust(const QString& address, const CAmount& amount);

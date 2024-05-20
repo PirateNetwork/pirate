@@ -368,7 +368,7 @@ QDialog#AskPassphraseDialog QLineEdit{
 }
 
 QStackedWidget#SendCoinsEntry QLabel#messageLabel {
-    color: red;
+    color: #ffffff;
 }
 
 QStackedWidget#SendCoinsEntry QLabel#messageTextLabel {

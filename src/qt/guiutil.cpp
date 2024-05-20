@@ -186,9 +186,16 @@ bool parsePirateURI(const QUrl &uri, SendCoinsRecipient *out)
             rv.label = i->second;
             fShouldReturnFalse = false;
         }
+
         if (i->first == "message")
         {
             rv.message = i->second;
+            fShouldReturnFalse = false;
+        }
+
+        if (i->first == "memo")
+        {
+            rv.memo = i->second;
             fShouldReturnFalse = false;
         }
         else if (i->first == "amount")
@@ -227,7 +234,7 @@ bool parsePirateURI(QString uri, SendCoinsRecipient *out)
     return parsePirateURI(uriInstance, out);
 }
 
-QString formatKomodoURI(const SendCoinsRecipient &info)
+QString formatPirateURI(const SendCoinsRecipient &info)
 {
     QString ret = QString("pirate:%1").arg(info.address);
     int paramCount = 0;
@@ -249,6 +256,13 @@ QString formatKomodoURI(const SendCoinsRecipient &info)
     {
         QString msg(QUrl::toPercentEncoding(info.message));
         ret += QString("%1message=%2").arg(paramCount == 0 ? "?" : "&").arg(msg);
+        paramCount++;
+    }
+
+    if (!info.memo.isEmpty())
+    {
+        QString memo(QUrl::toPercentEncoding(info.memo));
+        ret += QString("%1memo=%2").arg(paramCount == 0 ? "?" : "&").arg(memo);
         paramCount++;
     }
 

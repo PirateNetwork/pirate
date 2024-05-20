@@ -368,7 +368,7 @@ QRadioButton::indicator:checked {
 }
 
 QStackedWidget#SendCoinsEntry QLabel#messageLabel {
-    color: red;
+    color: #ffffff;
 }
 
 QWidget#OverviewPage QLabel#lockedMessage {

@@ -416,7 +416,7 @@ QWidget#OverviewPage QLabel#lockedMessage {
 }
 
 QStackedWidget#SendCoinsEntry QLabel#messageLabel {
-    color: red;
+    color:#687864;
 }
 
 QStackedWidget#SendCoinsEntry QLabel#messageTextLabel {

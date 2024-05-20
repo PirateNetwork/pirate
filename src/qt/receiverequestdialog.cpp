@@ -135,7 +135,7 @@ void ReceiveRequestDialog::update()
         target = info.address;
     setWindowTitle(tr("Request payment to %1").arg(target));
 
-    QString uri = GUIUtil::formatKomodoURI(info);
+    QString uri = GUIUtil::formatPirateURI(info);
     ui->btnSaveAs->setEnabled(false);
     QString html;
     html += "<html><font face='verdana, arial, helvetica, sans-serif'>";
@@ -200,7 +200,7 @@ void ReceiveRequestDialog::update()
 
 void ReceiveRequestDialog::on_btnCopyURI_clicked()
 {
-    GUIUtil::setClipboard(GUIUtil::formatKomodoURI(info));
+    GUIUtil::setClipboard(GUIUtil::formatPirateURI(info));
 }
 
 void ReceiveRequestDialog::on_btnCopyAddress_clicked()
