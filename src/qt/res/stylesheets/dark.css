@@ -408,9 +408,17 @@ QDialog#OpenPhraseDialog QPlainTextEdit{
 }
 
 QStackedWidget#SendCoinsEntry QLabel#messageLabel {
-    color: #ffffff;
+    color: red;
 }
 
 QStackedWidget#SendCoinsEntry QLabel#messageTextLabel {
+    color: #ffffff;
+}
+
+QStackedWidget#SendCoinsEntry QLabel#paymentDescription {
+    color: #ffffff;
+}
+
+QStackedWidget#SendCoinsEntry QLabel#paymentDescriptionLabel {
     color: #ffffff;
 }
