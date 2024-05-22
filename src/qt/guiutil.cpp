@@ -195,6 +195,10 @@ bool parsePirateURI(const QUrl &uri, SendCoinsRecipient *out)
 
         if (i->first == "memo")
         {
+            //QUrlQuery doesn't properly parse %3A or %3B
+            i->second.replace("%3A", ":");
+            i->second.replace("%3B", ";");
+
             rv.memo = i->second;
             fShouldReturnFalse = false;
         }
