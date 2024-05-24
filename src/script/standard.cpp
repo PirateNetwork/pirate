@@ -32,6 +32,7 @@ using namespace std;
 
 typedef vector<unsigned char> valtype;
 
+bool fAcceptDatacarrier = DEFAULT_ACCEPT_DATACARRIER;
 unsigned nMaxDatacarrierBytes = MAX_OP_RETURN_RELAY;
 
 bool komodo_is_vSolutionsFixActive(); // didn't want to bring komodo headers here, it's a special case to bypass bad code in Solver() and ExtractDestination() 
@@ -346,7 +347,10 @@ bool IsStandard(const CScript& scriptPubKey, txnouttype& whichType)
             return false;
         if (m < 1 || m > n)
             return false;
-    }
+    }  else if (whichType == TX_NULL_DATA &&
+               (!fAcceptDatacarrier || scriptPubKey.size() > nMaxDatacarrierBytes))
+          return false;
+
     return whichType != TX_NONSTANDARD;
 }
 

@@ -28,6 +28,8 @@
 
 #include <stdint.h>
 
+static const bool DEFAULT_ACCEPT_DATACARRIER = true;
+
 class CKeyID;
 class CScript;
 
@@ -41,6 +43,11 @@ public:
 };
 
 static const unsigned int MAX_OP_RETURN_RELAY = 8192;      //! bytes
+
+static const unsigned int MAX_OP_RETURN_RELAY_KMD = 140; /* 76 bytes of nota size + 64 bytes chain name */
+static const unsigned int MAX_OP_RETURN_RELAY_AC = 208;  /* 144 bytes of nota size + 64 bytes chain name */
+
+extern bool fAcceptDatacarrier;
 extern unsigned nMaxDatacarrierBytes;
 
 /**
