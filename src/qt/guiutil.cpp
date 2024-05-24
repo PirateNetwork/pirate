@@ -53,21 +53,13 @@
 #include <QDoubleValidator>
 #include <QFileDialog>
 #include <QFont>
+#include <QFontDatabase>
 #include <QLineEdit>
 #include <QSettings>
 #include <QTextDocument> // for Qt::mightBeRichText
 #include <QThread>
-#include <QMouseEvent>
-
-#if QT_VERSION < 0x050000
-#include <QUrl>
-#else
 #include <QUrlQuery>
-#endif
-
-#if QT_VERSION >= 0x50200
-#include <QFontDatabase>
-#endif
+#include <QMouseEvent>
 
 static fs::detail::utf8_codecvt_facet utf8;
 
@@ -98,17 +90,7 @@ QString dateTimeStr(qint64 nTime)
 
 QFont fixedPitchFont()
 {
-#if QT_VERSION >= 0x50200
     return QFontDatabase::systemFont(QFontDatabase::FixedFont);
-#else
-    QFont font("Monospace");
-#if QT_VERSION >= 0x040800
-    font.setStyleHint(QFont::Monospace);
-#else
-    font.setStyleHint(QFont::TypeWriter);
-#endif
-    return font;
-#endif
 }
 
 // Just some dummy data to generate an convincing random-looking (but consistent) address
@@ -134,11 +116,10 @@ void setupAddressWidget(QValidatedLineEdit *widget, QWidget *parent, bool allowZ
     parent->setFocusProxy(widget);
 
     widget->setFont(fixedPitchFont());
-#if QT_VERSION >= 0x040700
+
     // We don't want translators to use own addresses in translations
     // and this is the only place, where this address is supplied.
     widget->setPlaceholderText(QObject::tr("Enter a Pirate address (e.g. %1)").arg(QString("zs1u39a4y9g8tn...hnc2csmcl")));
-#endif
     widget->setValidator(new KomodoAddressEntryValidator(parent, allowZAddresses));
     widget->setCheckValidator(new KomodoAddressCheckValidator(parent, allowZAddresses));
 }
@@ -166,12 +147,8 @@ bool parsePirateURI(const QUrl &uri, SendCoinsRecipient *out)
     }
     rv.amount = 0;
 
-#if QT_VERSION < 0x050000
-    QList<QPair<QString, QString> > items = uri.queryItems();
-#else
     QUrlQuery uriQuery(uri);
     QList<QPair<QString, QString> > items = uriQuery.queryItems();
-#endif
     for (QList<QPair<QString, QString> >::iterator i = items.begin(); i != items.end(); i++)
     {
         bool fShouldReturnFalse = false;
