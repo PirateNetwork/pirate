@@ -1,8 +1,8 @@
-package=libXau
-$(package)_version=1.0.8
+package=libXdmcp
+$(package)_version=1.1.5
 $(package)_download_path=https://xorg.freedesktop.org/releases/individual/lib/
-$(package)_file_name=$(package)-$($(package)_version).tar.bz2
-$(package)_sha256_hash=fdd477320aeb5cdd67272838722d6b7d544887dfe7de46e1e7cc0c27c2bea4f2
+$(package)_file_name=$(package)-$($(package)_version).tar.xz
+$(package)_sha256_hash=d8a5222828c3adab70adf69a5583f1d32eb5ece04304f7f8392b6a353aa2228c
 $(package)_dependencies=xproto
 
 # When updating this package, check the default value of
