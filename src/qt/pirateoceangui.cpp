@@ -1335,10 +1335,16 @@ bool PirateOceanGUI::eventFilter(QObject *object, QEvent *event)
 
 bool PirateOceanGUI::handlePaymentRequest(const SendCoinsRecipient& recipient)
 {
+    // Automatically open the Z-send tab when receiving a Pirate URI
+    showNormalIfMinimized();
+    sleep(1);
+    showNormalIfMinimized();
+    gotoZSendCoinsPage();
+
     // URI has to be valid
     if (walletFrame && walletFrame->handlePaymentRequest(recipient))
     {
-        showNormalIfMinimized();
+        //showNormalIfMinimized();
         //gotoSendCoinsPage();
         printf("handlePaymentRequest() - true");
         return true;
