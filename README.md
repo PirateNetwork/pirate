@@ -58,29 +58,46 @@ at README_offline_transaction_signing.md
 
 A list of outstanding improvements is included in README_todo.md
 
-### Dependencies Ubuntu
+## Dependencies Ubuntu
 
+### Dependencies (Ubuntu 18.04) - End of life, will be removed in future updates.
 ```shell
 #The following packages are needed:
 sudo apt-get update && sudo apt-get upgrade -y
-sudo apt-get install build-essential pkg-config libc6-dev m4 g++-multilib autoconf libtool libncurses-dev unzip git python zlib1g-dev wget bsdmainutils automake libboost-all-dev libssl-dev libprotobuf-dev protobuf-compiler libqrencode-dev libdb++-dev ntp ntpdate nano software-properties-common curl libevent-dev libcurl4-gnutls-dev cmake clang libsodium-dev -y
+sudo apt-get install build-essential pkg-config m4 g++-multilib autoconf libtool libncurses-dev unzip git python3 python3-zmq zlib1g-dev wget libcurl4-gnutls-dev bsdmainutils curl libsodium-dev bison
 
+#gcc9 is also required
+sudo apt-get update -y && apt-get upgrade -y
+sudo apt-get install software-properties-common -y
+sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
+sudo apt-get update -y
+sudo apt-get install gcc-9 g++-9 -y
+sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 60 --slave /usr/bin/g++ g++ /usr/bin/g++-9
+
+```
 
 ### Dependencies (Ubuntu 20.04)
 ```shell
 #The following packages are needed:
-sudo apt-get install build-essential pkg-config libc6-dev m4 g++-multilib autoconf libtool ncurses-dev unzip git python3 python3-zmq zlib1g-dev wget libcurl4-gnutls-dev bsdmainutils automake curl libsodium-dev bison
-
-```shell
-#On newer Linux distributions, like Ubuntu 22.04, the following additional packages are required:
-sudo apt-get install liblz4-dev libbrotli-dev
+sudo apt-get update && sudo apt-get upgrade -y
+sudo apt-get install build-essential pkg-config m4 g++-multilib autoconf libtool libncurses-dev unzip git python3 python3-zmq zlib1g-dev wget libcurl4-gnutls-dev bsdmainutils curl libsodium-dev bison
 ```
+
+### Dependencies (Ubuntu 22.04)
+```shell
+#The following packages are needed:
+sudo apt-get update && sudo apt-get upgrade -y
+sudo apt-get install build-essential pkg-config m4 g++-multilib autoconf libtool libncurses-dev unzip git python3 python3-zmq zlib1g-dev wget libcurl4-gnutls-dev bsdmainutils curl libsodium-dev bison liblz4-dev
+```
+
+## Dependencies Other Linux
 
 ### Dependencies Manjaro
 ```shell
 #The following packages are needed:
 pacman -Syu base-devel pkg-config glibc m4 gcc autoconf libtool ncurses unzip git python python-pyzmq zlib wget libcurl-gnutls automake curl cmake mingw-w64
 ```
+
 ### Build Pirate
 
 This software is based on zcash and considered experimental and is continuously undergoing heavy development.
@@ -138,12 +155,18 @@ cd pirate
 
 #### Windows
 Use a debian cross-compilation setup with mingw for windows and run:
-```shell
-sudo apt-get install build-essential pkg-config libc6-dev m4 g++-multilib autoconf libtool ncurses-dev unzip git python python-zmq zlib1g-dev wget libcurl4-gnutls-dev bsdmainutils automake curl cmake mingw-w64
-curl https://sh.rustup.rs -sSf | sh
-source $HOME/.cargo/env
-rustup target add x86_64-pc-windows-gnu
 
+#### Dependencies (Ubuntu 20.04)
+```shell
+sudo apt-get install build-essential pkg-config m4 g++-multilib autoconf libtool libncurses-dev unzip git python3 python3-zmq zlib1g-dev wget libcurl4-gnutls-dev bsdmainutils curl libsodium-dev bison mingw-w64
+```
+
+#### Dependencies (Ubuntu 20.04)
+```shell
+sudo apt-get install build-essential pkg-config m4 g++-multilib autoconf libtool libncurses-dev unzip git python3 python3-zmq zlib1g-dev wget libcurl4-gnutls-dev bsdmainutils curl libsodium-dev bison liblz4-dev mingw-w64
+```
+
+```shell
 sudo update-alternatives --config x86_64-w64-mingw32-gcc
 # (configure to use POSIX variant)
 sudo update-alternatives --config x86_64-w64-mingw32-g++
