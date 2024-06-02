@@ -67,6 +67,8 @@ private:
     bool fNewRecipientAllowed;
     const PlatformStyle *platformStyle;
 
+    bool fHWWalletCommission;
+    CAmount commission;
     // Process WalletModel::SendCoinsReturn and generate a pair consisting
     // of a message and message flags for use in Q_EMIT message().
     // Additional parameter msgArg can be used via .arg(msgArg).

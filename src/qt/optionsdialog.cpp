@@ -28,6 +28,7 @@
 #include <QFile>
 #include <QSettings>
 #include <QPalette>
+#include <stdio.h>
 
 OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
     QDialog(parent),
@@ -180,8 +181,8 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
 
     /* Offline signing */
     connect(ui->enableOfflineSigning,  SIGNAL(clicked(bool)), this, SLOT(enableOfflineSigningClick(bool)));
-    connect(ui->rbOfflineSigning_Sign, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
-    connect(ui->rbOfflineSigning_Spend,SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
+    connect(ui->rbOfflineSigning_Sign, SIGNAL(clicked(bool)), this, SLOT(rbOfflineSigning_SignClick(bool)));
+    connect(ui->rbOfflineSigning_Spend,SIGNAL(clicked(bool)), this, SLOT(rbOfflineSigning_SpendClick(bool)));
 }
 
 OptionsDialog::~OptionsDialog()
@@ -256,6 +257,7 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->enableOfflineSigning,   OptionsModel::EnableZSigning);
     mapper->addMapping(ui->rbOfflineSigning_Spend, OptionsModel::EnableZSigning_Spend);
     mapper->addMapping(ui->rbOfflineSigning_Sign,  OptionsModel::EnableZSigning_Sign);
+    mapper->addMapping(ui->cbOfflineSigning_HWwallet, OptionsModel::EnableZSigning_HWwallet);
 
     mapper->addMapping(ui->saplingConsolidationEnabled, OptionsModel::SaplingConsolidationEnabled);
     mapper->addMapping(ui->enableDeleteTx, OptionsModel::EnableDeleteTx);
@@ -407,6 +409,18 @@ void OptionsDialog::enableOfflineSigningClick(bool bChecked)
   evaluateOfflineSigning(bChecked);
 }
 
+void OptionsDialog::rbOfflineSigning_SpendClick(bool bChecked)
+{
+  ui->cbOfflineSigning_HWwallet->setVisible(true);
+  showRestartWarning();
+}
+
+void OptionsDialog::rbOfflineSigning_SignClick(bool bChecked)
+{
+  ui->cbOfflineSigning_HWwallet->setVisible(false);
+  showRestartWarning();
+}
+
 void OptionsDialog::evaluateOfflineSigning(bool bChecked)
 {
   if (bChecked==true)
@@ -418,6 +432,17 @@ void OptionsDialog::evaluateOfflineSigning(bool bChecked)
        )
     {
       ui->rbOfflineSigning_Sign->setChecked(true);
+    }
+    
+    //The h/w wallet option is applicable to the 'Spend' role.
+    //Hide the option when 'Sign' is selected
+    if (ui->rbOfflineSigning_Spend->isChecked()==true)
+    {
+      ui->cbOfflineSigning_HWwallet->setVisible(true);
+    }
+    else
+    {
+      ui->cbOfflineSigning_HWwallet->setVisible(false);
     }
   }
   else

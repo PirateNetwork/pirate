@@ -131,6 +131,7 @@ void OptionsModel::Init(bool resetSettings)
     if (fEnableZSigning==false) {
       settings.setValue("fEnableZSigning_ModeSpend", false);
       settings.setValue("fEnableZSigning_ModeSign",  false);
+      settings.setValue("fEnableZSigning_HWwallet",  false);
     } else {
       if (!settings.contains("fEnableZSigning_ModeSpend"))
       {
@@ -139,6 +140,10 @@ void OptionsModel::Init(bool resetSettings)
       if (!settings.contains("fEnableZSigning_ModeSign"))
       {
         settings.setValue("fEnableZSigning_ModeSign",  false);
+      }
+      if (!settings.contains("fEnableZSigning_HWwallet"))
+      {
+        settings.setValue("fEnableZSigning_HWwallet",  false);
       }
     }
 
@@ -425,6 +430,9 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case EnableZSigning_Spend:
             //  Offline transaction role: Create offline transactions for 'viewing only' addresses
             return settings.value("fEnableZSigning_ModeSpend");
+        case EnableZSigning_HWwallet:
+            // Offline transaction: Does the user use a hardware wallet to authorise the 'Spend' transaction?
+            return settings.value("fEnableZSigning_HWwallet");
         case EnableZSigning_Sign:
             //  Offline transaction role: Sign offline transactions
             return settings.value("fEnableZSigning_ModeSign");
@@ -670,6 +678,12 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
                 settings.setValue("fEnableZSigning_ModeSign", value);
                 setRestartRequired(true);
             }
+            break;
+        case EnableZSigning_HWwallet:
+            if (settings.value("fEnableZSigning_HWwallet") != value) {
+                settings.setValue("fEnableZSigning_HWwallet", value);
+            }
+            //Its not necessary to restart the wallet if this configuration option changed.
             break;
         case EnableZSigning_Spend:
             if (settings.value("fEnableZSigning_ModeSpend") != value) {

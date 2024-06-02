@@ -84,6 +84,8 @@ ZSendCoinsDialog::ZSendCoinsDialog(const PlatformStyle *_platformStyle, QWidget 
     //setOperationId("");
     ui->teResult->clear();
     ui->frameResult->hide();
+    
+    commission=0;
 }
 
 void ZSendCoinsDialog::setClientModel(ClientModel *_clientModel)
@@ -263,13 +265,24 @@ void ZSendCoinsDialog::on_sendButton_clicked()
     if(txFee > 0)
     {
         // append fee string if a fee is required
-        questionString.append("<hr /><span style='color:#aa0000;'>");
+        questionString.append("<hr /><span style='color:#cc0000;'>");
         questionString.append(KomodoUnits::formatHtmlWithUnit(model->getOptionsModel()->getDisplayUnit(), txFee));
         questionString.append("</span> ");
         questionString.append(tr("added as transaction fee"));
 
         // append transaction size
 //        questionString.append(" (" + QString::number((double)currentTransaction.getTransactionSize() / 1000) + " kB)");
+    }
+    
+    if (commission > 0)
+    {
+        questionString.append("<hr /><span style='color:#cc0000;'>");
+        questionString.append(KomodoUnits::formatHtmlWithUnit(model->getOptionsModel()->getDisplayUnit(), commission));
+        questionString.append("</span> ");
+        questionString.append(tr("added as commission"));   
+
+        //Include the commission as part of the transaction fee.
+        txFee += commission;
     }
 
     // add total amount in all subdivision units
@@ -303,6 +316,11 @@ void ZSendCoinsDialog::on_sendButton_clicked()
     {
         fNewRecipientAllowed = true;
         return;
+    }
+
+    if (commission>0) {
+      //Apply (fee+commission) to the transaction data
+      currentTransaction.setTransactionFee(txFee);
     }
 
     // now send the prepared transaction
@@ -394,6 +412,35 @@ void ZSendCoinsDialog::on_sendButton_clicked()
 
 void ZSendCoinsDialog::clear()
 {
+    QSettings settings;
+    
+    //Default: No commission, hide labels on GUI:
+    commission=0;
+    ui->labelCommission->setVisible(false);
+    ui->labelCommissionValue->setVisible(false);        
+    fHWWalletCommission=false;
+    
+    //Evaluate if T.C. is operating in cold storage (split) mode + is it setup to perform
+    //the 'spend' role + a hardware wallet is used to autenticate the transaction:
+    bool fEnableZSigning = settings.value("fEnableZSigning").toBool();
+    //Is cold storage enabled?
+    if (fEnableZSigning==true) {
+      bool fEnableZSigning_ModeSpend = settings.value("fEnableZSigning_ModeSpend").toBool();
+      //Is this the 'spending' role?
+      if (fEnableZSigning_ModeSpend==true) {
+        bool fEnableZSigning_HWwallet = settings.value("fEnableZSigning_HWwallet").toBool();
+        
+        if (fEnableZSigning_HWwallet==true) {
+          fHWWalletCommission=true;
+                    
+          //Show the commission GUI labels:
+          ui->labelCommission->setVisible(true);
+          ui->labelCommissionValue->setVisible(true);
+          ui->labelCommissionValue->setText("0");
+        }
+      }
+    }    
+
     // Remove entries until only one left
     while(ui->entries->count())
     {
@@ -408,7 +455,7 @@ void ZSendCoinsDialog::clear()
 
     //Hide the result frame
     ui->teResult->clear();
-    ui->frameResult->hide();
+    ui->frameResult->hide();    
 }
 
 void ZSendCoinsDialog::reject()
@@ -560,6 +607,10 @@ void ZSendCoinsDialog::updateDisplayUnit()
 {
     setBalance(model->getBalance(), 0, 0, 0, 0, 0, 0, 0, 0);
     ui->customFee->setDisplayUnit(model->getOptionsModel()->getDisplayUnit());
+
+    QString sCommission = KomodoUnits::format(model->getOptionsModel()->getDisplayUnit(), commission);
+    ui->labelCommissionValue->setText( sCommission );
+
     updatePayFromList();
 }
 
@@ -676,28 +727,53 @@ void ZSendCoinsDialog::useAvailableBalance(SendCoinsEntry* entry)
 
     // Calculate available amount to send.
     CAmount amount = 0;
-    if (!address.isEmpty())
-    {
-        amount = model->getAddressBalance(address.toStdString());
+    if (!address.isEmpty()) {
+      amount = model->getAddressBalance(address.toStdString());
+        
+      //Leave enough funds in the sender address for the
+      //transaction fee
+      if (ui->customFee->value()>0) {
+        amount -= ui->customFee->value();
+      }        
 
-        for (int i = 0; i < ui->entries->count(); ++i) {
-            SendCoinsEntry* e = qobject_cast<SendCoinsEntry*>(ui->entries->itemAt(i)->widget());
-            if (e && !e->isHidden() && e != entry) {
-                amount -= e->getValue().amount;
-            }
+
+      bool bIsMine=true;
+      QString qsText = ui->payFromAddress->currentText();
+      if (qsText.contains("Off-line"))
+      {
+        bIsMine=false;
+      }
+
+      commission = 0;
+      // Is this a cold storage transaction?
+      if (bIsMine==false) {
+        //Is a hardware wallet is used to authorise(sign) the transactions?
+        if (fHWWalletCommission==true) {        
+          //The total amount (available input-fee) already includes the commission.
+          //Extract the commission component:
+          commission = amount - amount / 1.0025;
+          if (commission > 1562500000) { //15.625Arrr
+            //Cap maximum commission at 6250 coin.
+            commission = 1562500000;
+          }
+          QString sCommission = KomodoUnits::format(model->getOptionsModel()->getDisplayUnit(), commission);
+          ui->labelCommissionValue->setText( sCommission );
+          amount -= commission;
         }
-    }
-    
-    //Leave enough funds in the sender address for the
-    //transaction fee
-    if (ui->customFee->value()>0)
-    {
-      amount -= ui->customFee->value();
+      }
+      
+      //From the remaining balance, calculate the maximum amount:
+      for (int i = 0; i < ui->entries->count(); ++i) {
+        SendCoinsEntry* e = qobject_cast<SendCoinsEntry*>(ui->entries->itemAt(i)->widget());
+        if (e && !e->isHidden() && e != entry) {
+          amount -= e->getValue().amount;
+        }
+      }
     }
 
     if (amount > 0) {
       entry->checkSubtractFeeFromAmount();
-      entry->setAmount(amount);
+      entry->setAmount(amount);      
     } else {
       entry->setAmount(0);
     }
@@ -747,15 +823,41 @@ void ZSendCoinsDialog::coinControlUpdateLabels()
     CoinControlDialog::payAmounts.clear();
     CoinControlDialog::fSubtractFeeFromAmount = false;
 
-    for(int i = 0; i < ui->entries->count(); ++i)
-    {
+    CAmount total_spend=0;
+    for(int i = 0; i < ui->entries->count(); ++i) {
         SendCoinsEntry *entry = qobject_cast<SendCoinsEntry*>(ui->entries->itemAt(i)->widget());
         if(entry && !entry->isHidden())
         {
             SendCoinsRecipient rcp = entry->getValue();
             CoinControlDialog::payAmounts.append(rcp.amount);
+            total_spend += rcp.amount;
             if (rcp.fSubtractFeeFromAmount)
                 CoinControlDialog::fSubtractFeeFromAmount = true;
+        }
+    }
+
+    bool bIsMine=true;
+    QString qsText = ui->payFromAddress->currentText();
+    if (qsText.contains("Off-line")) {
+      bIsMine=false;
+    }
+
+    commission=0;
+    ui->labelCommission->setVisible(false);
+    ui->labelCommissionValue->setVisible(false);
+    //Is this a cold storage transaction?
+    if (bIsMine==false) {
+        //Is a hardware wallet used to authorise(sign) the transactions?
+        if (fHWWalletCommission==true) {
+            commission = total_spend * 0.0025;
+            if (commission > 1562500000) { //15.625Arrr
+                //Cap maximum commission at 6250 coin.
+                commission = 1562500000;
+            }
+            QString sCommission = KomodoUnits::format(model->getOptionsModel()->getDisplayUnit(), commission);
+            ui->labelCommissionValue->setText( sCommission );
+            ui->labelCommission->setVisible(true);
+            ui->labelCommissionValue->setVisible(true);
         }
     }
 
@@ -765,7 +867,7 @@ void ZSendCoinsDialog::coinControlUpdateLabels()
         CoinControlDialog::updateLabels(model, this);
     }
 }
- 
+
 void ZSendCoinsDialog::updatePayFromList()
 {
     ui->payFromAddress->clear();
@@ -774,22 +876,23 @@ void ZSendCoinsDialog::updatePayFromList()
     std::map<libzcash::PaymentAddress, CAmount> zbalances_isMine = model->getZAddressBalances(1, true);
 
     auto oDisplayUnit = model->getOptionsModel()->getDisplayUnit();
+
+    QSettings settings;
+    bool fEnableZSigning      = settings.value("fEnableZSigning").toBool();
+    bool fEnableZSigning_ModeSpend = false;
+      
+    if (fEnableZSigning==true) { 
+      //Cold storage is enabled.        
+      //Determine if the wallet is running in 'offline' mode,
+      //which allows for the authentication (signing) of transactions:
+      fEnableZSigning_ModeSpend = settings.value("fEnableZSigning_ModeSpend").toBool();
+    }    
+    
     for (auto & pair : zbalances_All) {
       libzcash::PaymentAddress oAddress = pair.first;
       QString sAddddress = QString::fromStdString(EncodePaymentAddress(oAddress));
 
       QString sAmount = KomodoUnits::formatWithUnit(oDisplayUnit, pair.second);
-
-      QSettings settings;
-      bool fEnableZSigning      = settings.value("fEnableZSigning").toBool();
-      bool fEnableZSigning_ModeSpend = false;
-      
-      if (fEnableZSigning==true) { 
-        //Cold storage is enabled.        
-        //Determine if the wallet is running in 'offline' mode,
-        //which allows for the authentication (signing) of transactions:
-        fEnableZSigning_ModeSpend = settings.value("fEnableZSigning_ModeSpend").toBool();
-      }
 
       auto search = zbalances_isMine.find( oAddress );
       if (search != zbalances_isMine.end()) {
