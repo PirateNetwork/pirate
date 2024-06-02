@@ -71,6 +71,8 @@ private Q_SLOTS:
 
     void setTheme();
     void enableOfflineSigningClick(bool bChecked);
+    void rbOfflineSigning_SignClick(bool bChecked);
+    void rbOfflineSigning_SpendClick(bool bChecked);
     void showRestartWarning(bool fPersistent = false);
     void enableProxyTypes();
     void clearStatusLabel();

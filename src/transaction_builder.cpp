@@ -141,7 +141,7 @@ TransactionBuilder::TransactionBuilder(
     boost::optional<CTransaction> maybe_tx = CTransaction(mtx);
     auto tx_result = maybe_tx.get();
     auto signedtxn = EncodeHexTx(tx_result);
-    printf("TransactionBuilder::TransactionBuilder(offline) mtx= %s\n",signedtxn.c_str());
+    //printf("TransactionBuilder::TransactionBuilder(offline) mtx= %s\n",signedtxn.c_str());
     */
 }
 
@@ -553,12 +553,14 @@ std::string TransactionBuilder::Build_offline_transaction()
         //            [4] Array of recipient: address, amount, memo
         //            [5]..[13] Blockchain parameters
         //            [15] Checksum of all the characters in the command.
-        std::string sVersion="2";
+        std::string sVersion="3";
 
         sReturn="z_sign_offline arrr "+sVersion+" ";
         // Version 2 : 'Witness' was replaced by 'MerklePath'. The serialised data structure is identical to version 1,
         //             but when the data is processed and reassembled, then libzcash::MerklePath must be used. 
         //             The version number is increased to indicate this difference
+        // Version 3 : Store hardware wallet commission in the 'fee' field instead of the 'change back to ourselves'
+        //             This allows the full amount available in the address to be paid in a single transaction
         sChecksumInput="arrr "+sVersion+" ";
 
 

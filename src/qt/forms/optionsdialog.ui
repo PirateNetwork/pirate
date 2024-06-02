@@ -20,7 +20,7 @@
    <item>
     <widget class="QTabWidget" name="tabWidget">
      <property name="currentIndex">
-      <number>0</number>
+      <number>1</number>
      </property>
      <widget class="QWidget" name="tabMain">
       <attribute name="title">
@@ -202,8 +202,25 @@
           <item row="1" column="0" colspan="2">
            <widget class="QFrame" name="frameOfflineSigning">
             <layout class="QGridLayout" name="gridLayout">
+             <item row="0" column="2">
+              <widget class="QRadioButton" name="rbOfflineSigning_Sign">
+               <property name="toolTip">
+                <string>This wallet acts as the offline participant that signs the transaction. The (extended) spending key of the spending address is required. Access to the blockchain is not required.</string>
+               </property>
+               <property name="text">
+                <string>Sign
+(Offline mode)</string>
+               </property>
+              </widget>
+             </item>
              <item row="0" column="1">
               <widget class="QRadioButton" name="rbOfflineSigning_Spend">
+               <property name="minimumSize">
+                <size>
+                 <width>170</width>
+                 <height>0</height>
+                </size>
+               </property>
                <property name="toolTip">
                 <string>This wallet acts as the online participant that creates the transaction. The (extended) viewing key of the spending address is required. Access to the blockchain is required via an internet connection.</string>
                </property>
@@ -242,14 +259,22 @@
                </property>
               </spacer>
              </item>
-             <item row="0" column="2">
-              <widget class="QRadioButton" name="rbOfflineSigning_Sign">
+             <item row="1" column="1">
+              <widget class="QCheckBox" name="cbOfflineSigning_HWwallet">
+               <property name="enabled">
+                <bool>true</bool>
+               </property>
+               <property name="minimumSize">
+                <size>
+                 <width>170</width>
+                 <height>0</height>
+                </size>
+               </property>
                <property name="toolTip">
-                <string>This wallet acts as the offline participant that signs the transaction. The (extended) spending key of the spending address is required. Access to the blockchain is not required.</string>
+                <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Select this option if you use a hardware wallet to authorise the transaction. The hardware wallet has a 0.25% commission fee. If this option is selected, Treasure chest will automatically calculate the fee and add it to the transaction fee.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
                </property>
                <property name="text">
-                <string>Sign
-(Offline mode)</string>
+                <string>With hardware wallet</string>
                </property>
               </widget>
              </item>
