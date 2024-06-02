@@ -235,7 +235,7 @@ void PaymentServer::ipcParseCommandLine(int argc, char* argv[])
             savedPaymentRequests.append(arg);
 
             SendCoinsRecipient r;
-            if (GUIUtil::parseKomodoURI(arg, &r) && !r.address.isEmpty())
+            if (GUIUtil::parsePirateURI(arg, &r) && !r.address.isEmpty())
             {
                 auto tempChainParams = Params(CBaseChainParams::MAIN);
 
@@ -506,9 +506,9 @@ void PaymentServer::handleURIOrFile(const QString& s)
         else // normal URI
         {
             SendCoinsRecipient recipient;
-            if (GUIUtil::parseKomodoURI(s, &recipient))
+            if (GUIUtil::parsePirateURI(s, &recipient))
             {
-                if (!IsValidDestinationString(recipient.address.toStdString())) {
+                if (!IsValidPaymentAddressString(recipient.address.toStdString(), CurrentEpochBranchId(chainActive.Height(), Params().GetConsensus()))) {
                     Q_EMIT message(tr("URI handling"), tr("Invalid payment address %1").arg(recipient.address),
                         CClientUIInterface::MSG_ERROR);
                 }

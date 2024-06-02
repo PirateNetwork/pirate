@@ -389,3 +389,11 @@ QDialog#AskPassphraseDialog QLineEdit{
 QStackedWidget#SendCoinsEntry QLabel#messageTextLabel {
     color: #ffffff;
 }
+
+QStackedWidget#SendCoinsEntry QLabel#paymentDescription {
+    color: #ffffff;
+}
+
+QStackedWidget#SendCoinsEntry QLabel#paymentDescriptionLabel {
+    color: #ffffff;
+}

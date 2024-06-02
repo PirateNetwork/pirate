@@ -140,6 +140,9 @@ void SendCoinsEntry::clear()
     ui->messageTextLabel->clear();
     ui->messageTextLabel->hide();
     ui->messageLabel->hide();
+    ui->paymentDescription->clear();
+    ui->paymentDescription->hide();
+    ui->paymentDescriptionLabel->hide();
     ui->addAsLabel->clear();
     ui->addAsLabel->hide();
     ui->labellLabel->hide();
@@ -284,7 +287,7 @@ SendCoinsRecipient SendCoinsEntry::getValue()
     recipient.label = ui->addAsLabel->text();
     recipient.amount = ui->payAmount->value();
     recipient.memo = ui->memo->text();
-    recipient.message = ui->messageTextLabel->text();
+    recipient.message = ui->paymentDescription->text();
     recipient.fSubtractFeeFromAmount = (ui->checkboxSubtractFeeFromAmount->checkState() == Qt::Checked);
 
     return recipient;
@@ -306,33 +309,45 @@ void SendCoinsEntry::setValue(const SendCoinsRecipient &value)
 {
     recipient = value;
 
-    #ifdef ENABLE_BIP70
-    if (recipient.paymentRequest.IsInitialized()) // payment request
-    {
-        if (recipient.authenticatedMerchant.isEmpty()) // unauthenticated
-        {
-            ui->payTo_is->setText(recipient.address);
-            ui->memoTextLabel_is->setText(recipient.message);
-            ui->payAmount_is->setValue(recipient.amount);
-            ui->payAmount_is->setReadOnly(true);
-            setCurrentWidget(ui->SendCoins_UnauthenticatedPaymentRequest);
-        }
-        else // authenticated
-        {
-            ui->payTo_s->setText(recipient.authenticatedMerchant);
-            ui->memoTextLabel_s->setText(recipient.message);
-            ui->payAmount_s->setValue(recipient.amount);
-            ui->payAmount_s->setReadOnly(true);
-            setCurrentWidget(ui->SendCoins_AuthenticatedPaymentRequest);
-        }
-    }
-    else // normal payment
-    #endif
+    // #ifdef ENABLE_BIP70
+    // if (recipient.paymentRequest.IsInitialized()) // payment request
+    // {
+    //     if (recipient.authenticatedMerchant.isEmpty()) // unauthenticated
+    //     {
+    //         // message
+    //         ui->paymentDescription_is->setText(recipient.message);
+    //         ui->paymentDescription_is->setVisible(!recipient.message.isEmpty());
+    //         ui->paymentDescriptionLabel_is->setVisible(!recipient.message.isEmpty());
+    //
+    //         ui->payTo_is->setText(recipient.address);
+    //         ui->memo_is->setText(recipient.memo);
+    //         ui->payAmount_is->setValue(recipient.amount);
+    //         ui->payAmount_is->setReadOnly(true);
+    //         setCurrentWidget(ui->SendCoins_UnauthenticatedPaymentRequest);
+    //     }
+    //     else // authenticated
+    //     {
+    //         // message
+    //         ui->paymentDescription_s->setText(recipient.message);
+    //         ui->paymentDescription_s->setVisible(!recipient.message.isEmpty());
+    //         ui->paymentDescriptionLabel_s->setVisible(!recipient.message.isEmpty());
+    //
+    //         ui->payTo_s->setText(recipient.authenticatedMerchant);
+    //         ui->memo_s->setText(recipient.memo);
+    //         ui->payAmount_s->setValue(recipient.amount);
+    //         ui->payAmount_s->setReadOnly(true);
+    //         setCurrentWidget(ui->SendCoins_AuthenticatedPaymentRequest);
+    //     }
+    // }
+    // else // normal payment
+    // #endif
     {
         // message
-        ui->messageTextLabel->setText(recipient.message);
-        ui->messageTextLabel->setVisible(!recipient.message.isEmpty());
-        ui->messageLabel->setVisible(!recipient.message.isEmpty());
+        ui->paymentDescription->setText(recipient.message);
+        ui->paymentDescription->setVisible(!recipient.message.isEmpty());
+        ui->paymentDescriptionLabel->setVisible(!recipient.message.isEmpty());
+
+        ui->memo->setText(recipient.memo);
 
         ui->addAsLabel->clear();
         ui->payTo->setText(recipient.address); // this may set a label from addressbook

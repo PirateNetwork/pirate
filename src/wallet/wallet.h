@@ -1701,7 +1701,7 @@ public:
     void ChainTip(const CBlockIndex *pindex, const CBlock *pblock, SproutMerkleTree sproutTree, SaplingMerkleTree saplingTree, bool added);
     void RunSaplingSweep(int blockHeight);
     void RunSaplingConsolidation(int blockHeight);
-    void CommitAutomatedTx(const CTransaction& tx);
+    bool CommitAutomatedTx(const CTransaction& tx);
     /** Saves witness caches and best block locator to disk. */
     void SetBestChain(const CBlockLocator& loc, const int& height);
     void SetWalletBirthday(int nHeight);

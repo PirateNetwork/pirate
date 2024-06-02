@@ -254,7 +254,9 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
                         break;
                     }
 
-                    pwalletMain->CommitAutomatedTx(tx);
+                    if (!pwalletMain->CommitAutomatedTx(tx)) {
+                        return false;
+                    }
                     LogPrint("zrpcunsafe", "%s: Committed consolidation transaction with txid=%s\n", getId(), tx.GetHash().ToString());
                     amountConsolidated += amountToSend - fee;
                     numTxCreated++;

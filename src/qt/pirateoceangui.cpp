@@ -1332,13 +1332,19 @@ bool PirateOceanGUI::eventFilter(QObject *object, QEvent *event)
 }
 
 #ifdef ENABLE_WALLET
-/*
+
 bool PirateOceanGUI::handlePaymentRequest(const SendCoinsRecipient& recipient)
 {
+    // Automatically open the Z-send tab when receiving a Pirate URI
+    showNormalIfMinimized();
+    sleep(1);
+    showNormalIfMinimized();
+    gotoZSendCoinsPage();
+
     // URI has to be valid
     if (walletFrame && walletFrame->handlePaymentRequest(recipient))
     {
-        showNormalIfMinimized();
+        //showNormalIfMinimized();
         //gotoSendCoinsPage();
         printf("handlePaymentRequest() - true");
         return true;
@@ -1346,7 +1352,7 @@ bool PirateOceanGUI::handlePaymentRequest(const SendCoinsRecipient& recipient)
     printf("handlePaymentRequest() - false");
     return false;
 }
-*/
+
 void PirateOceanGUI::setHDStatus(int hdEnabled)
 {
     labelWalletHDStatusIcon->setPixmap(platformStyle->SingleColorIcon(hdEnabled ? ":/icons/hd_enabled" : ":/icons/hd_disabled").pixmap(STATUSBAR_ICONSIZE,STATUSBAR_ICONSIZE));

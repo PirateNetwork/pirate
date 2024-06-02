@@ -335,12 +335,12 @@ void WalletView::gotoVerifyMessageTab(QString addr)
     if (!addr.isEmpty())
         signVerifyMessageDialog->setAddress_VM(addr);
 }
-/*
+
 bool WalletView::handlePaymentRequest(const SendCoinsRecipient& recipient)
 {
-    return sendCoinsPage->handlePaymentRequest(recipient);
+    return zsendCoinsPage->handlePaymentRequest(recipient);
 }
-*/
+
 void WalletView::showOutOfSyncWarning(bool fShow)
 {
     overviewPage->showOutOfSyncWarning(fShow);

@@ -1,0 +1,12 @@
+diff --git a/xcb.pc.in b/xcb.pc.in
+index 2dc8c13bbbeffc5d9f3e50c17f81a697a396caaf..4d91ef615d778cb0b1fc0caf20600f10839e0840 100644
+--- a/xcb.pc.in
++++ b/xcb.pc.in
+@@ -8,6 +8,6 @@ Name: XCB
+ Description: X-protocol C Binding
+ Version: @PACKAGE_VERSION@
+ Requires.private: @NEEDED@
+-Libs: -L${libdir} -lxcb
++Libs: -L${libdir} -lxcb -lXau -lXdmcp
+ Libs.private: @LIBS@
+ Cflags: -I${includedir}

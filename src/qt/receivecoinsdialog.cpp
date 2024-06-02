@@ -273,7 +273,7 @@ void ReceiveCoinsDialog::copyURI()
     }
 
     const RecentRequestsTableModel * const submodel = model->getRecentRequestsTableModel();
-    const QString uri = GUIUtil::formatKomodoURI(submodel->entry(sel.row()).recipient);
+    const QString uri = GUIUtil::formatPirateURI(submodel->entry(sel.row()).recipient);
     GUIUtil::setClipboard(uri);
 }
 

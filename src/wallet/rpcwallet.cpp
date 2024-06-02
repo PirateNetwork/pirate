@@ -121,6 +121,16 @@ void EnsureWalletIsUnlocked()
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
 }
 
+void EnsureWalletIsUnlockedForReporting()
+{
+    if (fUnlockedForReporting) {
+        return;
+    }
+
+    if (pwalletMain->IsLocked())
+        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
+}
+
 void Lock2NSPV(const CPubKey &pk)
 {
     if (!pk.IsValid())
@@ -291,7 +301,7 @@ UniValue getaccountaddress(const UniValue& params, bool fHelp, const CPubKey& my
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
-    EnsureWalletIsUnlocked();
+    EnsureWalletIsUnlockedForReporting();
 
     // Parse the account first so we don't generate a key if there's an error
     string strAccount = AccountFromValue(params[0]);
@@ -405,6 +415,7 @@ UniValue getaccount(const UniValue& params, bool fHelp, const CPubKey& mypk)
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
 
     CTxDestination dest = DecodeDestination(params[0].get_str());
     if (!IsValidDestination(dest)) {
@@ -442,6 +453,7 @@ UniValue getaddressesbyaccount(const UniValue& params, bool fHelp, const CPubKey
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
 
     string strAccount = AccountFromValue(params[0]);
 
@@ -766,6 +778,7 @@ UniValue listaddressgroupings(const UniValue& params, bool fHelp, const CPubKey&
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
 
     UniValue jsonGroupings(UniValue::VARR);
     std::map<CTxDestination, CAmount> balances = pwalletMain->GetAddressBalances();
@@ -873,6 +886,7 @@ UniValue getreceivedbyaddress(const UniValue& params, bool fHelp, const CPubKey&
        );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
 
     // Bitcoin address
     CTxDestination dest = DecodeDestination(params[0].get_str());
@@ -944,6 +958,7 @@ UniValue getreceivedbyaccount(const UniValue& params, bool fHelp, const CPubKey&
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
 
     // Minimum confirmations
     int nMinDepth = 1;
@@ -1146,6 +1161,7 @@ UniValue getbalance(const UniValue& params, bool fHelp, const CPubKey& mypk)
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
 
     if (params.size() == 0)
         return  ValueFromAmount(pwalletMain->GetBalance());
@@ -1214,6 +1230,7 @@ UniValue getunconfirmedbalance(const UniValue& params, bool fHelp, const CPubKey
                 "Returns the server's total unconfirmed balance\n");
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
 
     return ValueFromAmount(pwalletMain->GetUnconfirmedBalance());
 }
@@ -1246,6 +1263,8 @@ UniValue movecmd(const UniValue& params, bool fHelp, const CPubKey& mypk)
         );
     if ( ASSETCHAINS_PRIVATE != 0 )
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "cant use transparent addresses in private chain");
+
+    EnsureWalletIsUnlockedForReporting();
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
@@ -1709,6 +1728,7 @@ UniValue listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubKey
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
 
     return ListReceived(params, false);
 }
@@ -1745,6 +1765,7 @@ UniValue listreceivedbyaccount(const UniValue& params, bool fHelp, const CPubKey
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
 
     return ListReceived(params, true);
 }
@@ -1918,6 +1939,7 @@ UniValue listtransactions(const UniValue& params, bool fHelp, const CPubKey& myp
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
 
     string strAccount = "*";
     if (params.size() > 0)
@@ -2013,6 +2035,7 @@ UniValue listaccounts(const UniValue& params, bool fHelp, const CPubKey& mypk)
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
 
     int nMinDepth = 1;
     if (params.size() > 0)
@@ -2106,6 +2129,7 @@ UniValue listsinceblock(const UniValue& params, bool fHelp, const CPubKey& mypk)
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
 
     CBlockIndex *pindex = NULL;
     int target_confirms = 1;
@@ -2208,6 +2232,7 @@ UniValue gettransaction(const UniValue& params, bool fHelp, const CPubKey& mypk)
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
 
     uint256 hash;
     hash.SetHex(params[0].get_str());
@@ -2263,6 +2288,7 @@ UniValue backupwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlocked();
 
     boost::filesystem::path exportdir;
     try {
@@ -2660,6 +2686,7 @@ UniValue lockunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlocked();
 
     if (params.size() == 1)
         RPCTypeCheck(params, boost::assign::list_of(UniValue::VBOOL));
@@ -2734,6 +2761,7 @@ UniValue listlockunspent(const UniValue& params, bool fHelp, const CPubKey& mypk
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
 
     vector<COutPoint> vOutpts;
     pwalletMain->ListLockedCoins(vOutpts);
@@ -2770,6 +2798,7 @@ UniValue settxfee(const UniValue& params, bool fHelp, const CPubKey& mypk)
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlocked();
 
     // Amount
     CAmount nAmount = AmountFromValue(params[0]);
@@ -2806,6 +2835,7 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
 
     //Count Sapling Outpoints
     int outCount = 0;
@@ -2880,6 +2910,7 @@ UniValue resendwallettransactions(const UniValue& params, bool fHelp, const CPub
             );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlocked();
 
     std::vector<uint256> txids = pwalletMain->ResendWalletTransactionsBefore(GetTime());
     UniValue result(UniValue::VARR);
@@ -2963,6 +2994,8 @@ UniValue listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
     vector<COutput> vecOutputs;
     assert(pwalletMain != NULL);
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
+
     pwalletMain->AvailableCoins(vecOutputs, false, NULL, true);
     BOOST_FOREACH(const COutput& out, vecOutputs) {
         int nDepth    = out.tx->GetDepthInMainChain();
@@ -3142,6 +3175,7 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
     bool filterAddresses = false;
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
 
     // User has supplied zaddrs to filter on
     if (params.size() > 3) {
@@ -3290,6 +3324,9 @@ UniValue fundrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
                             "\nSend the transaction\n"
                             + HelpExampleCli("sendrawtransaction", "\"signedtransactionhex\"")
                             );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlocked();
 
     RPCTypeCheck(params, boost::assign::list_of(UniValue::VSTR));
 
@@ -3577,6 +3614,8 @@ UniValue z_listaddresses(const UniValue& params, bool fHelp, const CPubKey& mypk
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
+    EnsureWalletIsUnlockedForReporting();
+
     bool fIncludeWatchonly = false;
     if (params.size() > 0) {
         fIncludeWatchonly = params[0].get_bool();
@@ -3704,6 +3743,8 @@ UniValue z_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubK
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
+    EnsureWalletIsUnlockedForReporting();
+
     int nMinDepth = 1;
     if (params.size() > 1) {
         nMinDepth = params[1].get_int();
@@ -3790,6 +3831,7 @@ UniValue z_getbalance(const UniValue& params, bool fHelp, const CPubKey& mypk)
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
 
     int nMinDepth = 1;
     if (params.size() > 1) {
@@ -3831,7 +3873,7 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     if (fHelp || params.size() > 1)
         throw runtime_error(
-            "z_getbalances ( minconf includeWatchonly )\n"
+            "z_getbalances ( includeWatchonly )\n"
             "\nReturns array of wallet sapling addresses and balances.\n"
             "Results are an array of Objects, each of which has:\n"
             "{address, balance, unconfirmed, spendable}\n"
@@ -3862,6 +3904,8 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    EnsureWalletIsUnlockedForReporting();
 
     UniValue results(UniValue::VARR);
 
@@ -3942,6 +3986,8 @@ UniValue z_gettotalbalance(const UniValue& params, bool fHelp, const CPubKey& my
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    EnsureWalletIsUnlockedForReporting();
 
     int nMinDepth = 1;
     if (params.size() > 0) {
@@ -4027,6 +4073,7 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp, const CPubKey& my
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
 
     uint256 hash;
     hash.SetHex(params[0].get_str());
@@ -4239,6 +4286,7 @@ UniValue z_getoperationstatus(const UniValue& params, bool fHelp, const CPubKey&
 UniValue z_getoperationstatus_IMPL(const UniValue& params, bool fRemoveFinishedOperations=false)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
 
     std::set<AsyncRPCOperationId> filter;
     if (params.size()==1) {
@@ -6061,55 +6109,56 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp, const CPubKey& myp
     return o;
 }
 
-// UniValue enableconsolidation(const UniValue& params, bool fHelp, const CPubKey& mypk)
-// {
-//
-//     if (!EnsureWalletIsAvailable(fHelp))
-//         return NullUniValue;
-//
-//     if (fHelp || params.size() != 1)
-//         throw runtime_error(
-//             "enableconsolidation true/false\n"
-//             "\nEnable or Disable consolidation function in a running node."
-//             "}\n"
-//             "\nExamples:\n"
-//             + HelpExampleCli("enableconsolidation", "true")
-//             + HelpExampleCli("enableconsolidation", "1")
-//             + HelpExampleRpc("enableconsolidation", "true")
-//             + HelpExampleRpc("enableconsolidation", "1")
-//         );
-//
-//       LOCK2(cs_main, pwalletMain->cs_wallet);
-//
-//       bool enabled = false;
-//       if (params[0].isNum()) {
-//           if (params[0].get_int() != 0) {
-//               enabled = true;
-//           }
-//       } else if (params[0].isBool()) {
-//           if (params[0].isTrue()) {
-//               enabled = true;
-//           }
-//       } else if(params[0].isStr()) {
-//           if (params[0].get_str() == "true" || "1") {
-//               enabled = true;
-//           } else if (params[0].get_str() == "false" || "0") {
-//               enabled = false;
-//           } else {
-//             throw JSONRPCError(RPC_TYPE_ERROR, "Invalid type provided. Verbose parameter must be a boolean.");
-//           }
-//       } else {
-//           throw JSONRPCError(RPC_TYPE_ERROR, "Invalid type provided. Verbose parameter must be a boolean.");
-//       }
-//
-//
-//       pwalletMain->fSaplingConsolidationEnabled = enabled;
-//
-//       UniValue result(UniValue::VOBJ);
-//       result.push_back(Pair("consolidationEnabled", enabled));
-//
-//       return result;
-// }
+UniValue enableconsolidation(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "enableconsolidation true/false\n"
+            "\nEnable or Disable consolidation function in a running node."
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("enableconsolidation", "true")
+            + HelpExampleCli("enableconsolidation", "1")
+            + HelpExampleRpc("enableconsolidation", "true")
+            + HelpExampleRpc("enableconsolidation", "1")
+        );
+
+      LOCK2(cs_main, pwalletMain->cs_wallet);
+      EnsureWalletIsUnlockedForReporting();
+
+      bool enabled = false;
+      if (params[0].isNum()) {
+          if (params[0].get_int() != 0) {
+              enabled = true;
+          }
+      } else if (params[0].isBool()) {
+          if (params[0].isTrue()) {
+              enabled = true;
+          }
+      } else if(params[0].isStr()) {
+          if (params[0].get_str() == "true" || "1") {
+              enabled = true;
+          } else if (params[0].get_str() == "false" || "0") {
+              enabled = false;
+          } else {
+            throw JSONRPCError(RPC_TYPE_ERROR, "Invalid type provided. Verbose parameter must be a boolean.");
+          }
+      } else {
+          throw JSONRPCError(RPC_TYPE_ERROR, "Invalid type provided. Verbose parameter must be a boolean.");
+      }
+
+
+      pwalletMain->fSaplingConsolidationEnabled = enabled;
+
+      UniValue result(UniValue::VOBJ);
+      result.push_back(Pair("consolidationEnabled", enabled));
+
+      return result;
+}
 
 UniValue consolidationstatus(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
@@ -6128,6 +6177,7 @@ UniValue consolidationstatus(const UniValue& params, bool fHelp, const CPubKey& 
         );
 
       LOCK2(cs_main, pwalletMain->cs_wallet);
+      EnsureWalletIsUnlockedForReporting();
 
       UniValue result(UniValue::VOBJ);
       result.push_back(Pair("consolidationEnabled", pwalletMain->fSaplingConsolidationEnabled));
@@ -6610,6 +6660,7 @@ UniValue z_listoperationids(const UniValue& params, bool fHelp, const CPubKey& m
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
 
     std::string filter;
     bool useFilter = false;
@@ -6852,6 +6903,7 @@ UniValue setpubkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
       );
 
     LOCK2(cs_main, pwalletMain ? &pwalletMain->cs_wallet : NULL);
+    EnsureWalletIsUnlocked();
 
     char Raddress[64];
     uint8_t pubkey33[33];

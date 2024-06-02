@@ -422,3 +422,11 @@ QStackedWidget#SendCoinsEntry QLabel#messageLabel {
 QStackedWidget#SendCoinsEntry QLabel#messageTextLabel {
     color:#687864;
 }
+
+QStackedWidget#SendCoinsEntry QLabel#paymentDescription {
+    color: #687864;
+}
+
+QStackedWidget#SendCoinsEntry QLabel#paymentDescriptionLabel {
+    color: #687864;
+}

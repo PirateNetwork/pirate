@@ -45,9 +45,9 @@ namespace GUIUtil
     void setupAmountWidget(QLineEdit *widget, QWidget *parent);
 
     // Parse "pirate:" URI into recipient object, return true on successful parsing
-    bool parseKomodoURI(const QUrl &uri, SendCoinsRecipient *out);
-    bool parseKomodoURI(QString uri, SendCoinsRecipient *out);
-    QString formatKomodoURI(const SendCoinsRecipient &info);
+    bool parsePirateURI(const QUrl &uri, SendCoinsRecipient *out);
+    bool parsePirateURI(QString uri, SendCoinsRecipient *out);
+    QString formatPirateURI(const SendCoinsRecipient &info);
 
     // Returns true if given address+amount meets "dust" definition
     bool isDust(const QString& address, const CAmount& amount);

@@ -40,6 +40,7 @@
 using namespace std;
 
 void EnsureWalletIsUnlocked();
+void EnsureWalletIsUnlockedForReporting();
 bool EnsureWalletIsAvailable(bool avoidException);
 
 UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys);
@@ -907,7 +908,7 @@ UniValue rescan(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    EnsureWalletIsUnlocked();
+    EnsureWalletIsUnlockedForReporting();
 
     pwalletMain->ScanForWalletTransactions(chainActive[0], true, true, true, true);
 
