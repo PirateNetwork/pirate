@@ -338,7 +338,12 @@ void WalletView::gotoVerifyMessageTab(QString addr)
 
 bool WalletView::handlePaymentRequest(const SendCoinsRecipient& recipient)
 {
-    return zsendCoinsPage->handlePaymentRequest(recipient);
+    if (zsendCoinsPage->handlePaymentRequest(recipient)) {
+        setCurrentWidget(zsendCoinsPage);
+        zsendCoinsPage->updatePayFromList();
+        return true;
+    }
+    return false;
 }
 
 void WalletView::showOutOfSyncWarning(bool fShow)
@@ -508,6 +513,18 @@ void WalletView::rescan()
     }
 
     walletModel->rescan();
+}
+
+bool WalletView::isLocked() {
+
+    if(!walletModel)
+        return true;
+
+    if (walletModel->getEncryptionStatus() == WalletModel::Locked) {
+        return true;
+    }
+
+    return false;
 }
 
 void WalletView::encryptWallet(bool status)

@@ -145,7 +145,15 @@ bool WalletFrame::handlePaymentRequest(const SendCoinsRecipient &recipient)
     if (!walletView)
         return false;
 
-    return walletView->handlePaymentRequest(recipient);
+    if (walletView->isLocked()) {
+        walletView->unlockWallet();
+    }
+
+    if (!walletView->isLocked()) {
+        return walletView->handlePaymentRequest(recipient);
+    }
+    
+    return false;
 }
 
 void WalletFrame::showOutOfSyncWarning(bool fShow)
