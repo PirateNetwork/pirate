@@ -42,8 +42,6 @@ public:
     CScriptID(const uint160& in) : uint160(in) {}
 };
 
-static const unsigned int MAX_OP_RETURN_RELAY = 8192;      //! bytes
-
 static const unsigned int MAX_OP_RETURN_RELAY_KMD = 140; /* 76 bytes of nota size + 64 bytes chain name */
 static const unsigned int MAX_OP_RETURN_RELAY_AC = 208;  /* 144 bytes of nota size + 64 bytes chain name */
 

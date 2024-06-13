@@ -33,7 +33,7 @@ using namespace std;
 typedef vector<unsigned char> valtype;
 
 bool fAcceptDatacarrier = DEFAULT_ACCEPT_DATACARRIER;
-unsigned nMaxDatacarrierBytes = MAX_OP_RETURN_RELAY;
+unsigned nMaxDatacarrierBytes = MAX_OP_RETURN_RELAY_KMD;
 
 bool komodo_is_vSolutionsFixActive(); // didn't want to bring komodo headers here, it's a special case to bypass bad code in Solver() and ExtractDestination() 
 
