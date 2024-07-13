@@ -47,24 +47,14 @@ void WalletModelZTransaction::setTransactionFee(const CAmount& newFee)
     fee = newFee;
 }
 
-std::optional<TransactionBuilder> WalletModelZTransaction::getBuilder() const
+int WalletModelZTransaction::getTxHeight() const
 {
-    return builder;
+    return txHeight;
 }
 
-void WalletModelZTransaction::setBuilder(const std::optional<TransactionBuilder>& newBuilder)
+void WalletModelZTransaction::setTxHeight(const int& newTxHeight)
 {
-    builder = newBuilder;
-}
-
-CMutableTransaction WalletModelZTransaction::getContextualTx() const
-{
-    return contextualTx;
-}
-
-void WalletModelZTransaction::setContextualTx(const CMutableTransaction& newContextualTx)
-{
-    contextualTx = newContextualTx;
+    txHeight = newTxHeight;
 }
 
 std::vector<SendManyRecipient> WalletModelZTransaction::getTaddrRecipients() const

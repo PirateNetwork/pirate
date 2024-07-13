@@ -154,7 +154,9 @@ BOOST_AUTO_TEST_CASE(tx_valid)
             BOOST_CHECK_MESSAGE(CheckTransaction(tx, state, verifier), strTest + comment);
             BOOST_CHECK_MESSAGE(state.IsValid(), comment);
 
-            PrecomputedTransactionData txdata(tx);
+            // None of these test vectors use ZIP 244.
+            assert(tx.nVersion < ORCHARD_TX_VERSION);
+            PrecomputedTransactionData txdata(tx, {});
             for (unsigned int i = 0; i < tx.vin.size(); i++)
             {
                 if (!mapprevOutScriptPubKeys.count(tx.vin[i].prevout))
@@ -241,7 +243,8 @@ BOOST_AUTO_TEST_CASE(tx_invalid)
             CValidationState state;
             fValid = CheckTransaction(tx, state, verifier) && state.IsValid();
 
-            PrecomputedTransactionData txdata(tx);
+            assert(tx.nVersion < ORCHARD_TX_VERSION);
+            PrecomputedTransactionData txdata(tx, {});
             for (unsigned int i = 0; i < tx.vin.size() && fValid; i++)
             {
                 if (!mapprevOutScriptPubKeys.count(tx.vin[i].prevout))
@@ -513,7 +516,7 @@ void test_simple_joinsplit_invalidity(uint32_t consensusBranchId, CMutableTransa
         CValidationState state;
 
         newTx.vjoinsplit.push_back(JSDescription());
-        
+
         JSDescription *jsdesc = &newTx.vjoinsplit[0];
         jsdesc->vpub_old = -1;
 
@@ -699,6 +702,11 @@ BOOST_AUTO_TEST_CASE(test_big_overwinter_transaction) {
         mtx.vout[i].scriptPubKey = CScript() << OP_1;
     }
 
+    // Fake coins being spent.
+    std::vector<CTxOut> allPrevOutputs;
+    allPrevOutputs.resize(mtx.vin.size());
+    PrecomputedTransactionData txdata(mtx, allPrevOutputs);
+
     // sign all inputs
     for(uint32_t i = 0; i < mtx.vin.size(); i++) {
         bool hashSigned = SignSignature(keystore, scriptPubKey, mtx, i, 1000, sigHashes.at(i % sigHashes.size()), consensusBranchId);
@@ -711,7 +719,6 @@ BOOST_AUTO_TEST_CASE(test_big_overwinter_transaction) {
     ssout >> tx;
 
     // check all inputs concurrently, with the cache
-    PrecomputedTransactionData txdata(tx);
     boost::thread_group threadGroup;
     CCheckQueue<CScriptCheck> scriptcheckqueue(128);
     CCheckQueueControl<CScriptCheck> control(&scriptcheckqueue);

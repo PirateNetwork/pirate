@@ -23,6 +23,21 @@ uint256 OrchardPaymentAddressPirate::GetHash() const
     return Hash(ss.begin(), ss.end());
 }
 
+OrchardPaymentAddress_t OrchardPaymentAddressPirate::ToBytes() const
+{
+    // Data Stream for serialization
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+
+    // Return Data
+    OrchardPaymentAddress_t address_t;
+
+    // Serialize data
+    ss << *this;
+    ss >> address_t;
+
+    return address_t;
+}
+
 uint256 OrchardFullViewingKeyPirate::GetFingerprint() const
 {
     CBLAKE2bWriter ss(SER_GETHASH, 0, ZCASH_ORCHARH_FVFP_PERSONALIZATION);

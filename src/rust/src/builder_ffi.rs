@@ -4,14 +4,14 @@ use std::slice;
 
 use incrementalmerkletree::Hashable;
 use libc::size_t;
-use orchard::keys::SpendingKey;
+use orchard::keys::{SpendingKey, SpendAuthorizingKey};
 use orchard::{
     builder::{Builder, InProgress, Unauthorized, Unproven},
     bundle::{Authorized, Flags},
     keys::{FullViewingKey, OutgoingViewingKey},
     tree::{MerkleHashOrchard, MerklePath},
     value::NoteValue,
-    Bundle, Note,
+    Bundle, Note, Address
 };
 use rand_core::OsRng;
 use tracing::error;
@@ -94,7 +94,7 @@ pub extern "C" fn orchard_builder_add_spend(
 pub extern "C" fn orchard_builder_add_recipient(
     builder: *mut Builder,
     ovk: *const [u8; 32],
-    recipient: *const orchard::Address,
+    recipient: *const [u8; 43],
     value: u64,
     memo: *const [u8; 512],
 ) -> bool {
@@ -102,11 +102,14 @@ pub extern "C" fn orchard_builder_add_recipient(
     let ovk = unsafe { ovk.as_ref() }
         .copied()
         .map(OutgoingViewingKey::from);
-    let recipient = unsafe { recipient.as_ref() }.expect("Recipient may not be null.");
+
+    let to = unsafe { recipient.as_ref() }.expect("Recipient may not be null.");
+    let recipient = Address::from_raw_address_bytes(to).unwrap();
+
     let value = NoteValue::from_raw(value);
     let memo = unsafe { memo.as_ref() }.copied();
 
-    match builder.add_recipient(ovk, *recipient, value, memo) {
+    match builder.add_recipient(ovk, recipient, value, memo) {
         Ok(()) => true,
         Err(e) => {
             error!("Failed to add Orchard recipient: {}", e);
@@ -114,6 +117,31 @@ pub extern "C" fn orchard_builder_add_recipient(
         }
     }
 }
+
+// #[no_mangle]
+// pub extern "C" fn orchard_builder_add_recipient(
+//     builder: *mut Builder,
+//     ovk: *const [u8; 32],
+//     recipient: *const orchard::Address,
+//     value: u64,
+//     memo: *const [u8; 512],
+// ) -> bool {
+//     let builder = unsafe { builder.as_mut() }.expect("Builder may not be null.");
+//     let ovk = unsafe { ovk.as_ref() }
+//         .copied()
+//         .map(OutgoingViewingKey::from);
+//     let recipient = unsafe { recipient.as_ref() }.expect("Recipient may not be null.");
+//     let value = NoteValue::from_raw(value);
+//     let memo = unsafe { memo.as_ref() }.copied();
+//
+//     match builder.add_recipient(ovk, *recipient, value, memo) {
+//         Ok(()) => true,
+//         Err(e) => {
+//             error!("Failed to add Orchard recipient: {}", e);
+//             false
+//         }
+//     }
+// }
 
 #[no_mangle]
 pub extern "C" fn orchard_builder_free(builder: *mut Builder) {
@@ -153,24 +181,36 @@ pub extern "C" fn orchard_unauthorized_bundle_free(
 #[no_mangle]
 pub extern "C" fn orchard_unauthorized_bundle_prove_and_sign(
     bundle: *mut Bundle<InProgress<Unproven, Unauthorized>, Amount>,
-    keys: *const *const SpendingKey,
+    keys: *const u8,
     keys_len: size_t,
     sighash: *const [u8; 32],
 ) -> *mut Bundle<Authorized, Amount> {
     let bundle = unsafe { Box::from_raw(bundle) };
-    let keys = unsafe { slice::from_raw_parts(keys, keys_len) };
+    let keys = unsafe { slice::from_raw_parts(keys, 32 * keys_len) };
     let sighash = unsafe { sighash.as_ref() }.expect("sighash pointer may not be null.");
     let pk = unsafe { ORCHARD_PK.as_ref() }
         .expect("Parameters not loaded: ORCHARD_PK should have been initialized");
 
-    let signing_keys = keys
-        .iter()
-        .map(|sk| {
-            unsafe { sk.as_ref() }
-                .expect("SpendingKey pointers must not be null")
-                .into()
-        })
-        .collect::<Vec<_>>();
+    //Parse SpendingKey bytes vector from vec<u8>
+    let mut keybytes: Vec<[u8;32]> = Vec::new();
+    for i in 0..keys_len {
+        let mut kbytes: [u8; 32] = [0; 32];
+        for n in 0..32 {
+            kbytes[n] = keys[n + (i * 32)];
+        }
+        keybytes.push(kbytes);
+    }
+
+    //Convert SpendingKey bytes vector to SpendAuthorizingKey vector
+    let mut signing_keys: Vec<SpendAuthorizingKey> = Vec::new();
+    for k in keybytes.iter() {
+        let sk = SpendingKey::from_bytes(*k);
+        if sk.is_some().into() {
+            signing_keys.push(SpendAuthorizingKey::from(&sk.unwrap()));
+        } else {
+            error!("Unable to parse spending key!");
+        }
+    }
 
     let mut rng = OsRng;
     let res = bundle
@@ -188,6 +228,45 @@ pub extern "C" fn orchard_unauthorized_bundle_prove_and_sign(
         }
     }
 }
+
+// #[no_mangle]
+// pub extern "C" fn orchard_unauthorized_bundle_prove_and_sign(
+//     bundle: *mut Bundle<InProgress<Unproven, Unauthorized>, Amount>,
+//     keys: *const *const SpendingKey,
+//     keys_len: size_t,
+//     sighash: *const [u8; 32],
+// ) -> *mut Bundle<Authorized, Amount> {
+//     let bundle = unsafe { Box::from_raw(bundle) };
+//     let keys = unsafe { slice::from_raw_parts(keys, keys_len) };
+//     let sighash = unsafe { sighash.as_ref() }.expect("sighash pointer may not be null.");
+//     let pk = unsafe { ORCHARD_PK.as_ref() }
+//         .expect("Parameters not loaded: ORCHARD_PK should have been initialized");
+//
+//     let signing_keys = keys
+//         .iter()
+//         .map(|sk| {
+//             unsafe { sk.as_ref() }
+//                 .expect("SpendingKey pointers must not be null")
+//                 .into()
+//         })
+//         .collect::<Vec<_>>();
+//
+//     let mut rng = OsRng;
+//     let res = bundle
+//         .create_proof(pk, &mut rng)
+//         .and_then(|b| b.apply_signatures(rng, *sighash, &signing_keys));
+//
+//     match res {
+//         Ok(signed) => Box::into_raw(Box::new(signed)),
+//         Err(e) => {
+//             error!(
+//                 "An error occurred while authorizing the orchard bundle: {:?}",
+//                 e
+//             );
+//             std::ptr::null_mut()
+//         }
+//     }
+// }
 
 /// Calculates a shielded signature digest for the given under-construction transaction.
 ///

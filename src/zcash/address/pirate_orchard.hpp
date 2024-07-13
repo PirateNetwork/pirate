@@ -50,6 +50,9 @@ public:
     //! Get the 256-bit SHA256d hash of this payment address.
     uint256 GetHash() const;
 
+    // Get serialized bytes of an Orchard Address
+    OrchardPaymentAddress_t ToBytes() const;
+
     friend inline bool operator==(const OrchardPaymentAddressPirate& a, const OrchardPaymentAddressPirate& b)
     {
         return a.d == b.d && a.pk_d == b.pk_d;

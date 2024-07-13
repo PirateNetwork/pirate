@@ -1471,48 +1471,75 @@ CheckTransationResults ContextualCheckTransactionBindingSigWorker(
     for (int i = 0; i < vtx.size(); i++) {
         const uint256 dataToBeSigned = vTxSig[i];
 
-        //Verify Sapling
-        if (!vtx[i]->vShieldedSpend.empty() || !vtx[i]->vShieldedOutput.empty()) {
+        // //Verify Sapling
+        // if (!vtx[i]->vShieldedSpend.empty() || !vtx[i]->vShieldedOutput.empty()) {
+        //
+        //     auto ctx = librustzcash_sapling_verification_ctx_init();
+        //
+        //     //Add spends to verification context sequentially to validate binding sig later
+        //     for (const SpendDescription &spend : vtx[i]->vShieldedSpend) {
+        //         //This function does not validate spend proof
+        //         if (!librustzcash_add_sapling_spend_to_context(ctx, spend.cv.begin())) {
+        //             txResults.validationPassed = false;
+        //             txResults.dosLevel = 100;
+        //             txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling spend description invalid - cv desiralization error");
+        //             txResults.reasonString = strprintf("bad-txns-sapling-spend-description-invalid");
+        //             librustzcash_sapling_verification_ctx_free(ctx);
+        //             return txResults;
+        //         }
+        //     }
+        //
+        //     //Add outputs to verification context sequentially to validate binding sig later
+        //     for (const OutputDescription &output : vtx[i]->vShieldedOutput) {
+        //         //This function does not validate output proof
+        //         if (!librustzcash_add_sapling_output_to_context(ctx, output.cv.begin())) {
+        //             txResults.validationPassed = false;
+        //             txResults.dosLevel = 100;
+        //             txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling output description invalid - cv desiralization error");
+        //             txResults.reasonString = strprintf("bad-txns-sapling-spend-description-invalid");
+        //             librustzcash_sapling_verification_ctx_free(ctx);
+        //             return txResults;
+        //         }
+        //     }
+        //
+        //     //Check the Sapling transaction binding Signature
+        //     if (!librustzcash_sapling_final_check(ctx,vtx[i]->valueBalance, vtx[i]->bindingSig.begin(), dataToBeSigned.begin())) {
+        //         txResults.validationPassed = false;
+        //         txResults.dosLevel = 100;
+        //         txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling binding signature invalid");
+        //         txResults.reasonString = strprintf("bad-txns-sapling-binding-signature-invalid");
+        //         librustzcash_sapling_verification_ctx_free(ctx);
+        //         return txResults;
+        //     }
+        //
+        //     librustzcash_sapling_verification_ctx_free(ctx);
+        // }
 
-            auto ctx = librustzcash_sapling_verification_ctx_init();
+        // Queue Sapling bundle to be batch-validated. This also checks some consensus rules.
+        if (vtx[i]->GetSaplingBundle().IsPresent()) {
 
-            //Add spends to verification context sequentially to validate binding sig later
-            for (const SpendDescription &spend : vtx[i]->vShieldedSpend) {
-                //This function does not validate spend proof
-                if (!librustzcash_add_sapling_spend_to_context(ctx, spend.cv.begin())) {
+            // This will be a single-transaction batch, which will be more efficient
+            // than unbatched if the transaction contains at least one Sapling Spend
+            // or at least two Sapling Outputs.
+            std::optional<rust::Box<sapling::BatchValidator>> saplingAuth = sapling::init_batch_validator(true);
+
+            if (saplingAuth.has_value()) {
+                if (!vtx[i]->GetSaplingBundle().QueueAuthValidation(*saplingAuth.value(), dataToBeSigned)) {
                     txResults.validationPassed = false;
                     txResults.dosLevel = 100;
-                    txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling spend description invalid - cv desiralization error");
-                    txResults.reasonString = strprintf("bad-txns-sapling-spend-description-invalid");
-                    librustzcash_sapling_verification_ctx_free(ctx);
+                    txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling bundle authorization queue failed");
+                    txResults.reasonString = strprintf("bad-txns-sapling-bundle-authorization");
                     return txResults;
                 }
             }
 
-            //Add outputs to verification context sequentially to validate binding sig later
-            for (const OutputDescription &output : vtx[i]->vShieldedOutput) {
-                //This function does not validate output proof
-                if (!librustzcash_add_sapling_output_to_context(ctx, output.cv.begin())) {
-                    txResults.validationPassed = false;
-                    txResults.dosLevel = 100;
-                    txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling output description invalid - cv desiralization error");
-                    txResults.reasonString = strprintf("bad-txns-sapling-spend-description-invalid");
-                    librustzcash_sapling_verification_ctx_free(ctx);
-                    return txResults;
-                }
-            }
-
-            //Check the Sapling transaction binding Signature
-            if (!librustzcash_sapling_final_check(ctx,vtx[i]->valueBalance, vtx[i]->bindingSig.begin(), dataToBeSigned.begin())) {
+            if (!saplingAuth.value()->validate()) {
                 txResults.validationPassed = false;
                 txResults.dosLevel = 100;
-                txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling binding signature invalid");
-                txResults.reasonString = strprintf("bad-txns-sapling-binding-signature-invalid");
-                librustzcash_sapling_verification_ctx_free(ctx);
+                txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling bundle authorization validate failed");
+                txResults.reasonString = strprintf("bad-txns-sapling-bundle-authorization");
                 return txResults;
             }
-
-            librustzcash_sapling_verification_ctx_free(ctx);
         }
 
         //Perform Orchard Checks after Sapling checks are done
@@ -1681,6 +1708,7 @@ bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector
       int t = 0;
       int s = 0;
       int o = 0;
+      CCoinsViewCache view(pcoinsTip);
       for (uint32_t i = 0; i < vptx.size(); i++) {
           const CTransaction* tx = vptx[i];
 
@@ -1693,13 +1721,20 @@ bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector
           }
 
           //Get Signature hash to pass to the sapling verifiers later
+
           uint256 dataToBeSigned;
+
           if (!tx->IsMint() && (!tx->vjoinsplit.empty() || !tx->vShieldedSpend.empty() || !tx->vShieldedOutput.empty())) {
               auto consensusBranchId = CurrentEpochBranchId(nHeight, Params().GetConsensus());
               // Empty output script.
               CScript scriptCode;
               try {
-                  dataToBeSigned = SignatureHash(scriptCode, *tx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId);
+                  std::vector<CTxOut> allPrevOutputs;
+                  for (const auto& input : tx->vin) {
+                      allPrevOutputs.push_back(view.GetOutputFor(input));
+                  }
+                  PrecomputedTransactionData txdata(*tx, allPrevOutputs);
+                  dataToBeSigned = SignatureHash(scriptCode, *tx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId, txdata);
               } catch (std::logic_error ex) {
                   return state.DoS(100, error("CheckTransaction(): error computing signature hash"),
                                       REJECT_INVALID, "error-computing-signature-hash");
@@ -1778,7 +1813,7 @@ bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector
       for (int i = 0; i < vvSpend.size(); i++) {
           //Perform SpendDescription validations
           if (!vvSpend[i].empty()) {
-              vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionSaplingSpendWorker, vvSpend[i], vvSpendSig[i], i + vvtx.size()));
+              //vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionSaplingSpendWorker, vvSpend[i], vvSpendSig[i], i + vvtx.size()));
           }
       }
 
@@ -1786,7 +1821,7 @@ bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector
       for (int i = 0; i < vvOutput.size(); i++) {
           //Perform OutputDescription validations
           if (!vvOutput[i].empty()) {
-              vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionSaplingOutputWorker, vvOutput[i], i + vvtx.size() + vvSpend.size()));
+              //vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionSaplingOutputWorker, vvOutput[i], i + vvtx.size() + vvSpend.size()));
           }
       }
 
@@ -2638,8 +2673,12 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         }
 
         // Check against previous transactions
-        // This is done last to help prevent CPU exhaustion denial-of-service attacks.
-        PrecomputedTransactionData txdata(tx);
+        // This is done near the end to help prevent CPU exhaustion denial-of-service attacks.
+        std::vector<CTxOut> allPrevOutputs;
+        for (const auto& input : tx.vin) {
+            allPrevOutputs.push_back(view.GetOutputFor(input));
+        }
+        PrecomputedTransactionData txdata(tx, allPrevOutputs);
         if (!ContextualCheckInputs(tx, state, view, true, STANDARD_SCRIPT_VERIFY_FLAGS, true, txdata, Params().GetConsensus(), consensusBranchId))
         {
             //fprintf(stderr,"accept failure.9\n");
@@ -4191,6 +4230,9 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         if (nSigOps > MAX_BLOCK_SIGOPS)
             return state.DoS(100, error("ConnectBlock(): too many sigops"),
                              REJECT_INVALID, "bad-blk-sigops");
+
+        std::vector<CTxOut> allPrevOutputs;
+
         if (!tx.IsMint())
         {
             if (!view.HaveInputs(tx))
@@ -4203,6 +4245,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             for (const auto& input : tx.vin) {
                 const auto prevout = view.GetOutputFor(input);
                 transparentValueDelta -= prevout.nValue;
+                allPrevOutputs.push_back(prevout);
             }
 
             // are the JoinSplit's requirements met?
@@ -4223,7 +4266,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                 for (size_t j = 0; j < tx.vin.size(); j++)
                 {
                     const CTxIn input = tx.vin[j];
-                    const CTxOut &prevout = view.GetOutputFor(tx.vin[j]);
+                    const CTxOut &prevout = allPrevOutputs[j];
 
                     vector<vector<unsigned char>> vSols;
                     CTxDestination vDest;
@@ -4273,7 +4316,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             chainSupplyDelta -= txFee;
         }
 
-        txdata.emplace_back(tx);
+        txdata.emplace_back(tx, allPrevOutputs);
 
         valueout = tx.GetValueOut();
         if ( KOMODO_VALUETOOBIG(valueout) != 0 )
@@ -7303,6 +7346,8 @@ bool CVerifyDB::VerifyDB(CCoinsView *coinsview, int nCheckLevel, int nCheckDepth
         //Pre-check 0: Read hashFinalSaplingRoot and verify it against the database
         uint256 dbRoot = coinsview->GetBestAnchor(SAPLINGFRONTIER);
         if (dbRoot !=  chainActive.Tip()->hashFinalSaplingRoot) {
+            LogPrintf("Chain Tip sapling root %s\n", chainActive.Tip()->hashFinalSaplingRoot.ToString());
+            LogPrintf("dbroot %s\n", dbRoot.ToString());
             if (!(dbRoot == SaplingMerkleTree::empty_root() && chainActive.Tip()->hashFinalSaplingRoot == uint256())) {
                 return error("VerifyDB(): ***Obsolete block database detected, reindexing the blockchain data required.\n");
             }

@@ -4,7 +4,7 @@
 #include "zcash/Address.hpp"
 #include "zcash/address/zip32.h"
 
-//Default fee used for sweep transactions
+// Default fee used for sweep transactions
 static const CAmount DEFAULT_SWEEP_FEE = 10000;
 extern CAmount fSweepTxFee;
 extern bool fSweepMapUsed;
@@ -35,5 +35,4 @@ private:
     bool main_impl();
 
     void setSweepResult(int numTxCreated, const CAmount& amountSwept, const std::vector<std::string>& sweepTxIds);
-
 };

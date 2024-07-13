@@ -955,24 +955,24 @@ UniValue decoderawtransaction(const UniValue& params, bool fHelp, const CPubKey&
         TxToJSONExpanded(tx, uint256(), result, true);
 
         UniValue inputs(UniValue::VARR);
-        for (int i = 0; i < tb.rawSpends.size(); i++) {
+        for (int i = 0; i < tb.rawSaplingSpends.size(); i++) {
             UniValue input(UniValue::VOBJ);
-            input.push_back(Pair("fromaddr",EncodePaymentAddress(tb.rawSpends[i].addr)));
-            input.push_back(Pair("value", ValueFromAmount(CAmount(tb.rawSpends[i].value))));
-            input.push_back(Pair("valueZat", tb.rawSpends[i].value));;
-            input.push_back(Pair("txid",tb.rawSpends[i].op.hash.ToString()));
-            input.push_back(Pair("shieldedoutputindex",(uint64_t)tb.rawSpends[i].op.n));
+            input.push_back(Pair("fromaddr",EncodePaymentAddress(tb.rawSaplingSpends[i].addr)));
+            input.push_back(Pair("value", ValueFromAmount(CAmount(tb.rawSaplingSpends[i].value))));
+            input.push_back(Pair("valueZat", tb.rawSaplingSpends[i].value));;
+            input.push_back(Pair("txid",tb.rawSaplingSpends[i].op.hash.ToString()));
+            input.push_back(Pair("shieldedoutputindex",(uint64_t)tb.rawSaplingSpends[i].op.n));
             inputs.push_back(input);
         }
 
         UniValue outputs(UniValue::VARR);
-        for (int i = 0; i < tb.rawOutputs.size(); i++) {
+        for (int i = 0; i < tb.rawSaplingOutputs.size(); i++) {
             UniValue output(UniValue::VOBJ);
-            output.push_back(Pair("toaddr",EncodePaymentAddress(tb.rawOutputs[i].addr)));
-            output.push_back(Pair("value", ValueFromAmount(CAmount(tb.rawOutputs[i].value))));
-            output.push_back(Pair("valueZat", tb.rawOutputs[i].value));;
+            output.push_back(Pair("toaddr",EncodePaymentAddress(tb.rawSaplingOutputs[i].addr)));
+            output.push_back(Pair("value", ValueFromAmount(CAmount(tb.rawSaplingOutputs[i].value))));
+            output.push_back(Pair("valueZat", tb.rawSaplingOutputs[i].value));;
 
-            auto memo = tb.rawOutputs[i].memo;
+            auto memo = tb.rawSaplingOutputs[i].memo;
             output.push_back(Pair("memo", HexStr(memo)));
             if (memo[0] <= 0xf4) {
                 // Trim off trailing zeroes
@@ -1295,6 +1295,13 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
     CMutableTransaction mergedTxsave = mergedTx;
     int32_t txpow,numiters = 0;
     const CTransaction txConst(mergedTx);
+
+    std::vector<CTxOut> allPrevOutputs;
+    for (const auto& input : txConst.vin) {
+        allPrevOutputs.push_back(view.GetOutputFor(input));
+    }
+    PrecomputedTransactionData txdata(txConst, allPrevOutputs);
+
     if ( (txpow = ASSETCHAINS_TXPOW) != 0 )
     {
         if ( txConst.IsCoinBase() != 0 )
@@ -1313,6 +1320,13 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
         if ( txpow != 0 )
             mergedTx = mergedTxsave;
         // Sign what we can:
+
+        std::vector<CTxOut> allMergedPrevOutputs;
+        for (const auto& input : mergedTx.vin) {
+            allMergedPrevOutputs.push_back(view.GetOutputFor(input));
+        }
+        PrecomputedTransactionData mergedTxdata(mergedTx, allPrevOutputs);
+
         for (unsigned int i = 0; i < mergedTx.vin.size(); i++) {
             CTxIn& txin = mergedTx.vin[i];
             const CCoins* coins = view.AccessCoins(txin.prevout.hash);
@@ -1326,17 +1340,17 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
             SignatureData sigdata;
             // Only sign SIGHASH_SINGLE if there's a corresponding output:
             if (!fHashSingle || (i < mergedTx.vout.size()))
-                ProduceSignature(MutableTransactionSignatureCreator(&keystore, &mergedTx, i, amount, nHashType), prevPubKey, sigdata, consensusBranchId);
+                ProduceSignature(MutableTransactionSignatureCreator(&keystore, &mergedTx, mergedTxdata, i, amount, nHashType), prevPubKey, sigdata, consensusBranchId);
 
             // ... and merge in other signatures:
             BOOST_FOREACH(const CMutableTransaction& txv, txVariants) {
-                sigdata = CombineSignatures(prevPubKey, TransactionSignatureChecker(&txConst, i, amount), sigdata, DataFromTransaction(txv, i), consensusBranchId);
+                sigdata = CombineSignatures(prevPubKey, TransactionSignatureChecker(&txConst, i, amount, txdata), sigdata, DataFromTransaction(txv, i), consensusBranchId);
             }
 
             UpdateTransaction(mergedTx, i, sigdata);
 
             ScriptError serror = SCRIPT_ERR_OK;
-            if (!VerifyScript(txin.scriptSig, prevPubKey, STANDARD_SCRIPT_VERIFY_FLAGS, TransactionSignatureChecker(&txConst, i, amount), consensusBranchId, &serror)) {
+            if (!VerifyScript(txin.scriptSig, prevPubKey, STANDARD_SCRIPT_VERIFY_FLAGS, TransactionSignatureChecker(&txConst, i, amount, txdata), consensusBranchId, &serror)) {
                 TxInErrorToJSON(txin, vErrors, ScriptErrorString(serror));
             }
         }
@@ -1475,10 +1489,10 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
   tb.SetConsensus(Params().GetConsensus());
 
   libzcash::SaplingExtendedSpendingKey primaryKey;
-  for (int i = 0; i < tb.rawSpends.size(); i++) {
-      libzcash::SaplingPaymentAddress addr = tb.rawSpends[i].addr;
-      libzcash::SaplingNotePlaintext notePt = tb.rawSpends[i].notePt;
-      libzcash::MerklePath saplingMerklePath = tb.rawSpends[i].saplingMerklePath;
+  for (int i = 0; i < tb.rawSaplingSpends.size(); i++) {
+      libzcash::SaplingPaymentAddress addr = tb.rawSaplingSpends[i].addr;
+      libzcash::SaplingNotePlaintext notePt = tb.rawSaplingSpends[i].notePt;
+      libzcash::MerklePath saplingMerklePath = tb.rawSaplingSpends[i].saplingMerklePath;
 
       libzcash::SaplingIncomingViewingKey ivk;
       if (!pwalletMain->GetSaplingIncomingViewingKey(addr, ivk))
@@ -1500,7 +1514,7 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
           throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction with that use multiple spending keys are not supported.");
       }
 
-      if (!tb.AddSaplingSpend(extsk.expsk, note, anchor, saplingMerklePath))
+      if (!tb.AddSaplingSpend(extsk, note, anchor, saplingMerklePath))
           throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX converting raw Sapling Spends failed.");
   }
 

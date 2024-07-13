@@ -93,6 +93,21 @@ public:
     }
 };
 
+class OrchardNote : public BaseNote {
+private:
+    uint256 rseed;
+    friend class OrcahrdNotePlaintext;
+public:
+    OrchardPaymentAddressPirate address;
+
+    OrchardNote(OrchardPaymentAddressPirate address, uint64_t value, uint256 rseed)
+            : BaseNote(value), address(address), rseed(rseed) {}
+
+    virtual ~OrchardNote() {};
+
+};
+
+
 class BaseNotePlaintext {
 protected:
     uint64_t value_ = 0;
@@ -236,6 +251,28 @@ public:
     unsigned char get_leadbyte() const {
         return leadbyte;
     }
+};
+
+class OrchardNotePlaintext : public BaseNotePlaintext {
+private:
+    uint256 rseed;
+public:
+
+    OrchardNotePlaintext() {}
+
+    OrchardNotePlaintext(const OrchardNote& note, std::array<unsigned char, ZC_MEMO_SIZE> memo);
+
+    virtual ~OrchardNotePlaintext() {}
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(value_);      // 8 bytes
+        READWRITE(rseed);       // 32 bytes
+        READWRITE(memo_);       // 512 bytes
+    }
+
 };
 
 class SaplingOutgoingPlaintext

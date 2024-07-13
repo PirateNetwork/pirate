@@ -1,10 +1,10 @@
+#include "asyncrpcoperation_sweeptoaddress.h"
 #include "assert.h"
 #include "boost/variant/static_visitor.hpp"
-#include "asyncrpcoperation_sweeptoaddress.h"
 #include "init.h"
 #include "key_io.h"
-#include "rpc/protocol.h"
 #include "random.h"
+#include "rpc/protocol.h"
 #include "sync.h"
 #include "tinyformat.h"
 #include "transaction_builder.h"
@@ -17,11 +17,12 @@ bool fSweepMapUsed = false;
 const int SWEEP_EXPIRY_DELTA = 40;
 std::optional<libzcash::SaplingPaymentAddress> rpcSweepAddress;
 
-AsyncRPCOperation_sweeptoaddress::AsyncRPCOperation_sweeptoaddress(int targetHeight, bool fromRpc) : targetHeight_(targetHeight), fromRPC_(fromRpc){}
+AsyncRPCOperation_sweeptoaddress::AsyncRPCOperation_sweeptoaddress(int targetHeight, bool fromRpc) : targetHeight_(targetHeight), fromRPC_(fromRpc) {}
 
 AsyncRPCOperation_sweeptoaddress::~AsyncRPCOperation_sweeptoaddress() {}
 
-void AsyncRPCOperation_sweeptoaddress::main() {
+void AsyncRPCOperation_sweeptoaddress::main()
+{
     if (isCancelled())
         return;
 
@@ -69,7 +70,8 @@ void AsyncRPCOperation_sweeptoaddress::main() {
     LogPrintf("%s", s);
 }
 
-bool AsyncRPCOperation_sweeptoaddress::main_impl() {
+bool AsyncRPCOperation_sweeptoaddress::main_impl()
+{
     LogPrint("zrpcunsafe", "%s: Beginning asyncrpcoperation_sweeptoaddress.\n", getId());
     auto consensusParams = Params().GetConsensus();
     auto nextActivationHeight = NextActivationHeight(targetHeight_, consensusParams);
@@ -93,7 +95,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
         if (!fromRPC_) {
             if (fSweepMapUsed) {
                 const vector<string>& v = mapMultiArgs["-sweepsaplingaddress"];
-                for(int i = 0; i < v.size(); i++) {
+                for (int i = 0; i < v.size(); i++) {
                     libzcash::PaymentAddress zAddress = DecodePaymentAddress(v[i]);
                     if (std::get_if<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
                         sweepAddress = *(std::get_if<libzcash::SaplingPaymentAddress>(&zAddress));
@@ -110,8 +112,8 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
             }
         }
 
-        for (auto & entry : saplingEntries) {
-            //Map all notes by address
+        for (auto& entry : saplingEntries) {
+            // Map all notes by address
             if (sweepAddress == entry.address) {
                 continue;
             } else {
@@ -140,61 +142,57 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
 
         libzcash::SaplingExtendedSpendingKey extsk;
         if (pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
-
             std::vector<SaplingNoteEntry> fromNotes;
             CAmount amountToSend = pwalletMain->targetSweepQty;
             int maxQuantity = 50;
 
-            //Count Notes availiable for this address
+            // Count Notes availiable for this address
             int targetCount = 0;
             int noteCount = 0;
             for (const SaplingNoteEntry& saplingEntry : saplingEntries) {
-
-              libzcash::SaplingIncomingViewingKey ivk;
-              pwalletMain->GetSaplingIncomingViewingKey(saplingEntry.address, ivk);
-
-              if (ivk == extsk.expsk.full_viewing_key().in_viewing_key() && saplingEntry.address == addr) {
-                noteCount ++;
-              }
-            }
-
-            //Don't sweep if under the threshold
-            if (noteCount <= targetCount){
-                continue;
-            }
-
-            //if we make it here then we need to sweep and the routine is considered incomplete
-            sweepComplete = false;
-
-            for (const SaplingNoteEntry& saplingEntry : saplingEntries) {
-
                 libzcash::SaplingIncomingViewingKey ivk;
                 pwalletMain->GetSaplingIncomingViewingKey(saplingEntry.address, ivk);
 
-                //Select Notes from that same address we will be sending to.
                 if (ivk == extsk.expsk.full_viewing_key().in_viewing_key() && saplingEntry.address == addr) {
-                  amountToSend += CAmount(saplingEntry.note.value());
-                  fromNotes.push_back(saplingEntry);
+                    noteCount++;
+                }
+            }
+
+            // Don't sweep if under the threshold
+            if (noteCount <= targetCount) {
+                continue;
+            }
+
+            // if we make it here then we need to sweep and the routine is considered incomplete
+            sweepComplete = false;
+
+            for (const SaplingNoteEntry& saplingEntry : saplingEntries) {
+                libzcash::SaplingIncomingViewingKey ivk;
+                pwalletMain->GetSaplingIncomingViewingKey(saplingEntry.address, ivk);
+
+                // Select Notes from that same address we will be sending to.
+                if (ivk == extsk.expsk.full_viewing_key().in_viewing_key() && saplingEntry.address == addr) {
+                    amountToSend += CAmount(saplingEntry.note.value());
+                    fromNotes.push_back(saplingEntry);
                 }
 
                 if (fromNotes.size() >= maxQuantity)
-                  break;
-
+                    break;
             }
 
             int minQuantity = 1;
             if (fromNotes.size() < minQuantity)
-              continue;
+                continue;
 
             CAmount fee = fSweepTxFee;
             if (amountToSend <= fSweepTxFee) {
-              fee = 0;
+                fee = 0;
             }
             amountSwept += amountToSend;
             auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
             {
                 LOCK2(cs_main, pwalletMain->cs_wallet);
-                builder.SetExpiryHeight(chainActive.Tip()->nHeight+ SWEEP_EXPIRY_DELTA);
+                builder.SetExpiryHeight(chainActive.Tip()->nHeight + SWEEP_EXPIRY_DELTA);
             }
             LogPrint("zrpcunsafe", "%s: Beginning creating transaction with Sapling output amount=%s\n", getId(), FormatMoney(amountToSend - fee));
 
@@ -218,7 +216,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
 
             // Add Sapling spends
             for (size_t i = 0; i < notes.size(); i++) {
-                builder.AddSaplingSpend(extsk.expsk, notes[i], anchor, saplingMerklePaths[i]);
+                builder.AddSaplingSpend(extsk, notes[i], anchor, saplingMerklePaths[i]);
             }
 
             builder.SetFee(fee);
@@ -237,7 +235,6 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
             LogPrint("zrpcunsafe", "%s: Committed sweep transaction with txid=%s\n", getId(), tx.GetHash().ToString());
             amountSwept += amountToSend - fee;
             sweepTxIds.push_back(tx.GetHash().ToString());
-
         }
     }
 
@@ -249,10 +246,10 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
     LogPrint("zrpcunsafe", "%s: Created %d transactions with total Sapling output amount=%s\n", getId(), numTxCreated, FormatMoney(amountSwept));
     setSweepResult(numTxCreated, amountSwept, sweepTxIds);
     return true;
-
 }
 
-void AsyncRPCOperation_sweeptoaddress::setSweepResult(int numTxCreated, const CAmount& amountSwept, const std::vector<std::string>& sweepTxIds) {
+void AsyncRPCOperation_sweeptoaddress::setSweepResult(int numTxCreated, const CAmount& amountSwept, const std::vector<std::string>& sweepTxIds)
+{
     UniValue res(UniValue::VOBJ);
     res.push_back(Pair("num_tx_created", numTxCreated));
     res.push_back(Pair("amount_swept", FormatMoney(amountSwept)));
@@ -264,11 +261,13 @@ void AsyncRPCOperation_sweeptoaddress::setSweepResult(int numTxCreated, const CA
     set_result(res);
 }
 
-void AsyncRPCOperation_sweeptoaddress::cancel() {
+void AsyncRPCOperation_sweeptoaddress::cancel()
+{
     set_state(OperationStatus::CANCELLED);
 }
 
-UniValue AsyncRPCOperation_sweeptoaddress::getStatus() const {
+UniValue AsyncRPCOperation_sweeptoaddress::getStatus() const
+{
     UniValue v = AsyncRPCOperation::getStatus();
     UniValue obj = v.get_obj();
     obj.push_back(Pair("method", "sweeptoaddress"));

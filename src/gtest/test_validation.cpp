@@ -87,7 +87,11 @@ TEST(Validation, ContextualCheckInputsPassesWithCoinbase) {
     for (int idx = Consensus::BASE_SPROUT; idx < Consensus::MAX_NETWORK_UPGRADES; idx++) {
         auto consensusBranchId = NetworkUpgradeInfo[idx].nBranchId;
         CValidationState state;
-        PrecomputedTransactionData txdata(tx);
+        std::vector<CTxOut> allPrevOutputs;
+        for (const auto& input : tx.vin) {
+            allPrevOutputs.push_back(view.GetOutputFor(input));
+        }
+        PrecomputedTransactionData txdata(tx, allPrevOutputs);
         EXPECT_TRUE(ContextualCheckInputs(tx, state, view, false, 0, false, txdata, Params(CBaseChainParams::MAIN).GetConsensus(), consensusBranchId));
     }
 }

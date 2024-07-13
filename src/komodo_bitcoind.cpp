@@ -2329,7 +2329,13 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
             txNew.vout[1].nValue = 0;
         }
         CTransaction txNewConst(txNew);
-        signSuccess = ProduceSignature(TransactionSignatureCreator(&keystore, &txNewConst, 0, *utxovaluep, SIGHASH_ALL), best_scriptPubKey, sigdata, consensusBranchId);
+        CCoinsViewCache view(pcoinsTip);
+        std::vector<CTxOut> allPrevOutputs;
+        for (const auto& input : txNewConst.vin) {
+            allPrevOutputs.push_back(view.GetOutputFor(input));
+        }
+        PrecomputedTransactionData txdata(txNewConst, allPrevOutputs);
+        signSuccess = ProduceSignature(TransactionSignatureCreator(&keystore, &txNewConst, txdata, 0, *utxovaluep, SIGHASH_ALL), best_scriptPubKey, sigdata, consensusBranchId);
         UpdateTransaction(txNew,0,sigdata);
         ptr = (uint8_t *)&sigdata.scriptSig[0];
         siglen = sigdata.scriptSig.size();
