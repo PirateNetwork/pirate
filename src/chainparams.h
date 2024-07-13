@@ -26,6 +26,8 @@
 #include "primitives/block.h"
 #include "protocol.h"
 
+#include <librustzcash.h>
+
 #define KOMODO_MINDIFF_NBITS 0x200f0f0f
 
 #include <vector>
@@ -94,6 +96,14 @@ public:
      * @returns parameters that influence chain consensus
      */
     const Consensus::Params& GetConsensus() const { return consensus; }
+
+    const rust::Box<consensus::Network> RustNetwork() const {
+        return consensus::network(
+            NetworkIDString(),
+            consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight,
+            consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight,
+            consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight);
+    }
     /***
      * Message header start bytes
      * @returns 4 bytes

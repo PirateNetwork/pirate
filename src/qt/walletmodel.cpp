@@ -665,41 +665,42 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
         if (rcp.fSubtractFeeFromAmount)
             fSubtractFeeFromAmount = true;
 
-        bool isZaddr = false;
+        bool isZaddr = true;
         CTxDestination taddr = DecodeDestination(rcp.address.toStdString());
 
         if (!IsValidDestination(taddr)) {
             auto res = DecodePaymentAddress(rcp.address.toStdString());
-            if (IsValidPaymentAddress(res)) {
-                isZaddr = true;
-
-                bool toSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
-                bool toSprout = !toSapling;
-                noSproutAddrs = noSproutAddrs && toSapling;
-
-                containsSproutOutput |= toSprout;
-                containsSaplingOutput |= toSapling;
-
-                // Sending to both Sprout and Sapling is currently unsupported using z_sendmany
-                if (containsSproutOutput && containsSaplingOutput)
-                {
-                    return SendingBothSproutAndSapling;
-                }
-                if ( GetTime() > KOMODO_SAPLING_DEADLINE )
-                {
-                    if ( fromSprout || toSprout )
-                        return SproutUsageExpired;
-                }
-                if ( toSapling && chainName.isKMD() )
-                    return SproutUsageWillExpireSoon;
-
-                // If we are sending from a shielded address, all recipient
-                // shielded addresses must be of the same type.
-                if ((fromSprout && toSapling) || (fromSapling && toSprout))
-                {
-                    return SendBetweenSproutAndSapling;
-                }
-            } else {
+            if (!IsValidPaymentAddress(res)) {
+            //     isZaddr = true;
+            //
+            //     bool toSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
+            //     bool toOrchard = std::get_if<libzcash::OrchardPaymentAddressPirate>(&res) != nullptr;
+            //     bool toSprout = !toSapling;
+            //     noSproutAddrs = noSproutAddrs && toSapling;
+            //
+            //     containsSproutOutput |= toSprout;
+            //     containsSaplingOutput |= toSapling;
+            //
+            //     // Sending to both Sprout and Sapling is currently unsupported using z_sendmany
+            //     if (containsSproutOutput && containsSaplingOutput)
+            //     {
+            //         return SendingBothSproutAndSapling;
+            //     }
+            //     if ( GetTime() > KOMODO_SAPLING_DEADLINE )
+            //     {
+            //         if ( fromSprout || toSprout )
+            //             return SproutUsageExpired;
+            //     }
+            //     if ( toSapling && chainName.isKMD() )
+            //         return SproutUsageWillExpireSoon;
+            //
+            //     // If we are sending from a shielded address, all recipient
+            //     // shielded addresses must be of the same type.
+            //     if ((fromSprout && toSapling) || (fromSapling && toSprout))
+            //     {
+            //         return SendBetweenSproutAndSapling;
+            //     }
+            // } else {
                 return InvalidAddress;
             }
         }
@@ -838,23 +839,7 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
     o.push_back(Pair("fee", std::stod(FormatMoney(nFee))));
     UniValue contextInfo = o;
 
-    // Builder (used if Sapling addresses are involved)
-    std::optional<TransactionBuilder> builder;
-    if (noSproutAddrs)
-    {
-        builder = TransactionBuilder(Params().GetConsensus(), nextBlockHeight, wallet);
-    }
-
-    // Contextual transaction we will build on
-    // (used if no Sapling addresses are involved)
-    CMutableTransaction contextualTx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nextBlockHeight);
-    bool isShielded = !fromTaddr || zaddrRecipients.size() > 0;
-    if (contextualTx.nVersion == 1 && isShielded)
-    {
-        contextualTx.nVersion = 2; // Tx format should support vjoinsplits
-    }
-    transaction.setBuilder(builder);
-    transaction.setContextualTx(contextualTx);
+    transaction.setTxHeight(nextBlockHeight);
     transaction.setZaddrRecipients(zaddrRecipients);
     transaction.setContextInfo(contextInfo);
 
@@ -941,8 +926,8 @@ WalletModel::SendCoinsReturn WalletModel::zsendCoins(WalletModelZTransaction &tr
 {
     // Create operation and add to global queue
     std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
-    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(transaction.getBuilder(),
-                                                                                 transaction.getContextualTx(),
+    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(Params().GetConsensus(),
+                                                                                 transaction.getTxHeight(),
                                                                                  transaction.getFromAddress().toStdString(),
                                                                                  transaction.getTaddrRecipients(),
                                                                                  transaction.getZaddrRecipients(),

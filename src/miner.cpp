@@ -599,7 +599,11 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
             // policy here, but we still have to ensure that the block we
             // create only contains transactions that are valid in new blocks.
             CValidationState state;
-            PrecomputedTransactionData txdata(tx);
+            std::vector<CTxOut> allPrevOutputs;
+            for (const auto& input : tx.vin) {
+                allPrevOutputs.push_back(view.GetOutputFor(input));
+            }
+            PrecomputedTransactionData txdata(tx, allPrevOutputs);
             if (!ContextualCheckInputs(tx, state, view, true, MANDATORY_SCRIPT_VERIFY_FLAGS, true, txdata, Params().GetConsensus(), consensusBranchId))
             {
                 //fprintf(stderr,"context failure\n");

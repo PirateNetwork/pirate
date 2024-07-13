@@ -69,10 +69,7 @@ pub(crate) mod ffi {
             network: &str,
             overwinter: i32,
             sapling: i32,
-            blossom: i32,
-            heartwood: i32,
-            canopy: i32,
-            nu5: i32,
+            orchard: i32,
         ) -> Result<Box<Network>>;
     }
 

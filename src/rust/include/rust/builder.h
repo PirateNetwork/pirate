@@ -61,7 +61,7 @@ bool orchard_builder_add_spend(
 bool orchard_builder_add_recipient(
     OrchardBuilderPtr* ptr,
     const unsigned char* ovk,
-    const OrchardRawAddressPtr* recipient,
+    const unsigned char* recipient,
     uint64_t value,
     const unsigned char* memo);
 
@@ -82,7 +82,7 @@ void orchard_unauthorized_bundle_free(OrchardUnauthorizedBundlePtr* bundle);
 /// `bundle` is always freed by this method.
 OrchardBundlePtr* orchard_unauthorized_bundle_prove_and_sign(
     OrchardUnauthorizedBundlePtr* bundle,
-    const OrchardSpendingKeyPtr** keys,
+    const unsigned char* keys,
     size_t keys_len,
     const unsigned char* sighash);
 

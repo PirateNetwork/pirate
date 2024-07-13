@@ -14,6 +14,14 @@ const unsigned char ZCASH_SAPLING_FVFP_PERSONALIZATION[crypto_generichash_blake2
 
 
 //! Sapling
+std::array<uint8_t, 43> SaplingPaymentAddress::GetRawBytes() const {
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << *this;
+    std::array<uint8_t, 43> rawBytes;
+    std::move(ss.begin(), ss.end(), rawBytes.begin());
+    return rawBytes;
+}
+
 uint256 SaplingPaymentAddress::GetHash() const {
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << *this;

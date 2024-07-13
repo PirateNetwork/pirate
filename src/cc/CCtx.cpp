@@ -20,12 +20,12 @@ std::vector<CPubKey> NULL_pubkeys;
 struct NSPV_CCmtxinfo NSPV_U;
 
 /* see description to function definition in CCinclude.h */
-bool SignTx(CMutableTransaction &mtx,int32_t vini,int64_t utxovalue,const CScript scriptPubKey)
+bool SignTx(CMutableTransaction &mtx,const PrecomputedTransactionData& txToDataIn, int32_t vini,int64_t utxovalue,const CScript scriptPubKey)
 {
 #ifdef ENABLE_WALLET
     CTransaction txNewConst(mtx); SignatureData sigdata; const CKeyStore& keystore = *pwalletMain;
     auto consensusBranchId = CurrentEpochBranchId(chainActive.Height() + 1, Params().GetConsensus());
-    if ( ProduceSignature(TransactionSignatureCreator(&keystore,&txNewConst,vini,utxovalue,SIGHASH_ALL),scriptPubKey,sigdata,consensusBranchId) != 0 )
+    if ( ProduceSignature(TransactionSignatureCreator(&keystore,&txNewConst,txToDataIn, vini,utxovalue,SIGHASH_ALL),scriptPubKey,sigdata,consensusBranchId) != 0 )
     {
         UpdateTransaction(mtx,vini,sigdata);
         return(true);
@@ -62,6 +62,7 @@ UniValue FinalizeCCTxExt(bool remote, uint64_t CCmask, struct CCcontract_info *c
 	struct CCcontract_info *cpTokens, tokensC;
     UniValue sigData(UniValue::VARR),result(UniValue::VOBJ);
     const UniValue sigDataNull = NullUniValue;
+    std::vector<CTxOut> allPrevOutputs;
 
     globalpk = GetUnspendable(cp,0);
     n = mtx.vout.size();
@@ -148,6 +149,7 @@ UniValue FinalizeCCTxExt(bool remote, uint64_t CCmask, struct CCcontract_info *c
         {
             utxovout = mtx.vin[i].prevout.n;
             utxovalues[i] = vintx.vout[utxovout].nValue;
+            allPrevOutputs.push_back(vintx.vout[utxovout]);
             totalinputs += utxovalues[i];
             if ( vintx.vout[utxovout].scriptPubKey.IsPayToCryptoCondition() == 0 )
             {
@@ -171,8 +173,8 @@ UniValue FinalizeCCTxExt(bool remote, uint64_t CCmask, struct CCcontract_info *c
     }
     if ( opret.size() > 0 )
         mtx.vout.push_back(CTxOut(0,opret));
-    PrecomputedTransactionData txdata(mtx);
-    n = mtx.vin.size(); 
+    PrecomputedTransactionData txdata(mtx, allPrevOutputs);
+    n = mtx.vin.size();
     for (i=0; i<n; i++)
     {
         if (i==0 && mtx.vin[i].prevout.n==10e8)
@@ -186,7 +188,7 @@ UniValue FinalizeCCTxExt(bool remote, uint64_t CCmask, struct CCcontract_info *c
                 {
                     if (!remote)
                     {
-                        if (SignTx(mtx, i, vintx.vout[utxovout].nValue, vintx.vout[utxovout].scriptPubKey) == 0)
+                        if (SignTx(mtx, txdata, i, vintx.vout[utxovout].nValue, vintx.vout[utxovout].scriptPubKey) == 0)
                             fprintf(stderr, "signing error for vini.%d of %llx\n", i, (long long)vinimask);
                     }
                     else
@@ -315,7 +317,7 @@ UniValue FinalizeCCTxExt(bool remote, uint64_t CCmask, struct CCcontract_info *c
                         return sigDataNull;
                     }
                 }
-                uint256 sighash = SignatureHash(CCPubKey(cond), mtx, i, SIGHASH_ALL,utxovalues[i],consensusBranchId, &txdata);
+                uint256 sighash = SignatureHash(CCPubKey(cond), mtx, i, SIGHASH_ALL,utxovalues[i],consensusBranchId, txdata);
                 if ( 0 )
                 {
                     int32_t z;

@@ -43,10 +43,7 @@ pub(crate) fn network(
     network: &str,
     overwinter: i32,
     sapling: i32,
-    blossom: i32,
-    heartwood: i32,
-    canopy: i32,
-    nu5: i32,
+    orchard: i32,
 ) -> Result<Box<Network>, &'static str> {
     let i32_to_optional_height = |n: i32| {
         if n.is_negative() {
@@ -59,14 +56,11 @@ pub(crate) fn network(
     let params = match network {
         "main" => Network::Consensus(consensus::Network::MainNetwork),
         "test" => Network::Consensus(consensus::Network::TestNetwork),
-        "regtest" => Network::RegTest {
-            overwinter: i32_to_optional_height(overwinter),
-            sapling: i32_to_optional_height(sapling),
-            blossom: i32_to_optional_height(blossom),
-            heartwood: i32_to_optional_height(heartwood),
-            canopy: i32_to_optional_height(canopy),
-            nu5: i32_to_optional_height(nu5),
-        },
+        // "regtest" => Network::RegTest {
+        //     overwinter: i32_to_optional_height(overwinter),
+        //     sapling: i32_to_optional_height(sapling),
+        //     nu5: i32_to_optional_height(nu5),
+        // },
         _ => return Err("Unsupported network kind"),
     };
 

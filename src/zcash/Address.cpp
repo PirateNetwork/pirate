@@ -71,7 +71,7 @@ class IsValidAddressForNetwork : public boost::static_visitor<bool> {
     public:
 
         bool operator()(const libzcash::SproutPaymentAddress &addr) const {
-            return true;
+            return false;
         }
 
         bool operator()(const libzcash::SaplingPaymentAddress &addr) const {

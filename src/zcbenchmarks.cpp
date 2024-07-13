@@ -225,60 +225,60 @@ double benchmark_verify_equihash()
     return timer_stop(tv_start);
 }
 
-double benchmark_large_tx(size_t nInputs)
-{
-    // Create priv/pub key
-    CKey priv;
-    priv.MakeNewKey(false);
-    auto pub = priv.GetPubKey();
-    CBasicKeyStore tempKeystore;
-    tempKeystore.AddKey(priv);
-
-    // The "original" transaction that the spending transaction will spend
-    // from.
-    CMutableTransaction m_orig_tx;
-    m_orig_tx.vout.resize(1);
-    m_orig_tx.vout[0].nValue = 1000000;
-    CScript prevPubKey = GetScriptForDestination(pub.GetID());
-    m_orig_tx.vout[0].scriptPubKey = prevPubKey;
-
-    auto orig_tx = CTransaction(m_orig_tx);
-
-    CMutableTransaction spending_tx;
-    spending_tx.fOverwintered = true;
-    spending_tx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
-    spending_tx.nVersion = SAPLING_TX_VERSION;
-
-    auto input_hash = orig_tx.GetHash();
-    // Add nInputs inputs
-    for (size_t i = 0; i < nInputs; i++) {
-        spending_tx.vin.emplace_back(input_hash, 0);
-    }
-
-    // Sign for all the inputs
-    auto consensusBranchId = NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId;
-    for (size_t i = 0; i < nInputs; i++) {
-        SignSignature(tempKeystore, prevPubKey, spending_tx, i, 1000000, SIGHASH_ALL, consensusBranchId);
-    }
-
-    // Spending tx has all its inputs signed and does not need to be mutated anymore
-    CTransaction final_spending_tx(spending_tx);
-
-    // Benchmark signature verification costs:
-    struct timeval tv_start;
-    timer_start(tv_start);
-    PrecomputedTransactionData txdata(final_spending_tx);
-    for (size_t i = 0; i < nInputs; i++) {
-        ScriptError serror = SCRIPT_ERR_OK;
-        assert(VerifyScript(final_spending_tx.vin[i].scriptSig,
-                            prevPubKey,
-                            STANDARD_SCRIPT_VERIFY_FLAGS,
-                            TransactionSignatureChecker(&final_spending_tx, i, 1000000, txdata),
-                            consensusBranchId,
-                            &serror));
-    }
-    return timer_stop(tv_start);
-}
+// double benchmark_large_tx(size_t nInputs)
+// {
+//     // Create priv/pub key
+//     CKey priv;
+//     priv.MakeNewKey(false);
+//     auto pub = priv.GetPubKey();
+//     CBasicKeyStore tempKeystore;
+//     tempKeystore.AddKey(priv);
+//
+//     // The "original" transaction that the spending transaction will spend
+//     // from.
+//     CMutableTransaction m_orig_tx;
+//     m_orig_tx.vout.resize(1);
+//     m_orig_tx.vout[0].nValue = 1000000;
+//     CScript prevPubKey = GetScriptForDestination(pub.GetID());
+//     m_orig_tx.vout[0].scriptPubKey = prevPubKey;
+//
+//     auto orig_tx = CTransaction(m_orig_tx);
+//
+//     CMutableTransaction spending_tx;
+//     spending_tx.fOverwintered = true;
+//     spending_tx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
+//     spending_tx.nVersion = SAPLING_TX_VERSION;
+//
+//     auto input_hash = orig_tx.GetHash();
+//     // Add nInputs inputs
+//     for (size_t i = 0; i < nInputs; i++) {
+//         spending_tx.vin.emplace_back(input_hash, 0);
+//     }
+//
+//     // Sign for all the inputs
+//     auto consensusBranchId = NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId;
+//     for (size_t i = 0; i < nInputs; i++) {
+//         SignSignature(tempKeystore, prevPubKey, spending_tx, i, 1000000, SIGHASH_ALL, consensusBranchId);
+//     }
+//
+//     // Spending tx has all its inputs signed and does not need to be mutated anymore
+//     CTransaction final_spending_tx(spending_tx);
+//
+//     // Benchmark signature verification costs:
+//     struct timeval tv_start;
+//     timer_start(tv_start);
+//     PrecomputedTransactionData txdata(final_spending_tx);
+//     for (size_t i = 0; i < nInputs; i++) {
+//         ScriptError serror = SCRIPT_ERR_OK;
+//         assert(VerifyScript(final_spending_tx.vin[i].scriptSig,
+//                             prevPubKey,
+//                             STANDARD_SCRIPT_VERIFY_FLAGS,
+//                             TransactionSignatureChecker(&final_spending_tx, i, 1000000, txdata),
+//                             consensusBranchId,
+//                             &serror));
+//     }
+//     return timer_stop(tv_start);
+// }
 
 // double benchmark_try_decrypt_notes(size_t nAddrs)
 // {

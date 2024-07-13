@@ -1,11 +1,11 @@
 #include "amount.h"
-#include "rpc/server.h"
 #include "asyncrpcoperation.h"
+#include "rpc/server.h"
 #include "univalue.h"
 #include "zcash/Address.hpp"
 #include "zcash/address/zip32.h"
 
-//Default fee used for consolidation transactions
+// Default fee used for consolidation transactions
 static const CAmount DEFAULT_CONSOLIDATION_FEE = 10000;
 extern CAmount fConsolidationTxFee;
 extern bool fConsolidationMapUsed;
@@ -38,5 +38,4 @@ private:
     void updateCleanupMetrics();
 
     void checkCleanUpConfirmedOrExpired();
-
 };
