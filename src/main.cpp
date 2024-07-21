@@ -1576,45 +1576,45 @@ CheckTransationResults ContextualCheckTransactionBindingSigWorker(
  * 2. ProcessNewBlock calls AcceptBlock, which calls CheckBlock (which calls CheckTransaction)
  *    and ContextualCheckBlock (which calls ContextualCheckTransactionMultithreaded).
  */
-CheckTransationResults ContextualCheckTransactionSaplingSpendWorker(
-    const std::vector<const SpendDescription*> vSpend,
-    const std::vector<uint256> vSpendSig,
-    const uint32_t threadNumber) {
-
-    //Results to be returned
-    CheckTransationResults txResults;
-
-    //Perform Sapling Spend checks
-    for (int i = 0; i < vSpend.size(); i++) {
-        const uint256 dataToBeSigned = vSpendSig[i];
-
-        auto ctx = librustzcash_sapling_verification_ctx_init();
-
-        if (!librustzcash_sapling_check_spend(
-            ctx,
-            vSpend[i]->cv.begin(),
-            vSpend[i]->anchor.begin(),
-            vSpend[i]->nullifier.begin(),
-            vSpend[i]->rk.begin(),
-            vSpend[i]->zkproof.begin(),
-            vSpend[i]->spendAuthSig.begin(),
-            dataToBeSigned.begin()
-        ))
-        {
-            txResults.validationPassed = false;
-            txResults.dosLevel = 100;
-            txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling spend description invalid");
-            txResults.reasonString = strprintf("bad-txns-sapling-spend-description-invalid");
-            librustzcash_sapling_verification_ctx_free(ctx);
-            return txResults;
-        }
-
-        librustzcash_sapling_verification_ctx_free(ctx);
-    }
-
-    return txResults;
-
-}
+// CheckTransationResults ContextualCheckTransactionSaplingSpendWorker(
+//     const std::vector<const SpendDescription*> vSpend,
+//     const std::vector<uint256> vSpendSig,
+//     const uint32_t threadNumber) {
+//
+//     //Results to be returned
+//     CheckTransationResults txResults;
+//
+//     //Perform Sapling Spend checks
+//     for (int i = 0; i < vSpend.size(); i++) {
+//         const uint256 dataToBeSigned = vSpendSig[i];
+//
+//         auto ctx = librustzcash_sapling_verification_ctx_init();
+//
+//         if (!librustzcash_sapling_check_spend(
+//             ctx,
+//             vSpend[i]->cv.begin(),
+//             vSpend[i]->anchor.begin(),
+//             vSpend[i]->nullifier.begin(),
+//             vSpend[i]->rk.begin(),
+//             vSpend[i]->zkproof.begin(),
+//             vSpend[i]->spendAuthSig.begin(),
+//             dataToBeSigned.begin()
+//         ))
+//         {
+//             txResults.validationPassed = false;
+//             txResults.dosLevel = 100;
+//             txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling spend description invalid");
+//             txResults.reasonString = strprintf("bad-txns-sapling-spend-description-invalid");
+//             librustzcash_sapling_verification_ctx_free(ctx);
+//             return txResults;
+//         }
+//
+//         librustzcash_sapling_verification_ctx_free(ctx);
+//     }
+//
+//     return txResults;
+//
+// }
 
 /* Called from ContextualCheckTransactionMultithreaded for the checks that signficant processing
  *
@@ -1625,39 +1625,39 @@ CheckTransationResults ContextualCheckTransactionSaplingSpendWorker(
  * 2. ProcessNewBlock calls AcceptBlock, which calls CheckBlock (which calls CheckTransaction)
  *    and ContextualCheckBlock (which calls ContextualCheckTransactionMultithreaded).
  */
-CheckTransationResults ContextualCheckTransactionSaplingOutputWorker(
-    const std::vector<const OutputDescription*> vOutput,
-    const uint32_t threadNumber) {
-
-    //Results to be returned
-    CheckTransationResults txResults;
-
-    //Perform Sapling Output checks
-    for (auto output : vOutput) {
-        auto ctx = librustzcash_sapling_verification_ctx_init();
-
-        if (!librustzcash_sapling_check_output(
-            ctx,
-            output->cv.begin(),
-            output->cmu.begin(),
-            output->ephemeralKey.begin(),
-            output->zkproof.begin()
-        ))
-        {
-          txResults.validationPassed = false;
-          txResults.dosLevel = 100;
-          txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling output description invalid");
-          txResults.reasonString = strprintf("bad-txns-sapling-output-description-invalid");
-          librustzcash_sapling_verification_ctx_free(ctx);
-          return txResults;
-        }
-
-        librustzcash_sapling_verification_ctx_free(ctx);
-    }
-
-    return txResults;
-
-}
+// CheckTransationResults ContextualCheckTransactionSaplingOutputWorker(
+//     const std::vector<const OutputDescription*> vOutput,
+//     const uint32_t threadNumber) {
+//
+//     //Results to be returned
+//     CheckTransationResults txResults;
+//
+//     //Perform Sapling Output checks
+//     for (auto output : vOutput) {
+//         auto ctx = librustzcash_sapling_verification_ctx_init();
+//
+//         if (!librustzcash_sapling_check_output(
+//             ctx,
+//             output->cv.begin(),
+//             output->cmu.begin(),
+//             output->ephemeralKey.begin(),
+//             output->zkproof.begin()
+//         ))
+//         {
+//           txResults.validationPassed = false;
+//           txResults.dosLevel = 100;
+//           txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling output description invalid");
+//           txResults.reasonString = strprintf("bad-txns-sapling-output-description-invalid");
+//           librustzcash_sapling_verification_ctx_free(ctx);
+//           return txResults;
+//         }
+//
+//         librustzcash_sapling_verification_ctx_free(ctx);
+//     }
+//
+//     return txResults;
+//
+// }
 
 /**
  * Check a transaction contextually against a set of consensus rules valid at a given block height.
@@ -1686,22 +1686,22 @@ bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector
       std::vector<std::vector<uint256>> vvTxSig;
 
       //Setup spend batches
-      std::vector<const SpendDescription*> vSpend;
-      std::vector<std::vector<const SpendDescription*>> vvSpend;
+      // std::vector<const SpendDescription*> vSpend;
+      // std::vector<std::vector<const SpendDescription*>> vvSpend;
       std::vector<uint256> vSpendSig;
       std::vector<std::vector<uint256>> vvSpendSig;
 
       //Setup output batches
-      std::vector<const OutputDescription*> vOutput;
-      std::vector<std::vector<const OutputDescription*>> vvOutput;
+      // std::vector<const OutputDescription*> vOutput;
+      // std::vector<std::vector<const OutputDescription*>> vvOutput;
 
       //Create Thread Vectors
       for (int i = 0; i < maxProcessingThreads; i++) {
           vvtx.emplace_back(vtx);
           vvTxSig.emplace_back(vTxSig);
-          vvSpend.emplace_back(vSpend);
+          // vvSpend.emplace_back(vSpend);
           vvSpendSig.emplace_back(vSpendSig);
-          vvOutput.emplace_back(vOutput);
+          // vvOutput.emplace_back(vOutput);
       }
 
       //Check coinbase transaction and push all transactions to thread batch vectors
@@ -1724,7 +1724,11 @@ bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector
 
           uint256 dataToBeSigned;
 
-          if (!tx->IsMint() && (!tx->vjoinsplit.empty() || !tx->vShieldedSpend.empty() || !tx->vShieldedOutput.empty())) {
+          if (!tx->IsMint() &&
+              (!tx->vjoinsplit.empty() ||
+                tx->GetSaplingSpendsCount() > 0 ||
+                tx->GetSaplingOutputsCount() > 0)) {
+
               auto consensusBranchId = CurrentEpochBranchId(nHeight, Params().GetConsensus());
               // Empty output script.
               CScript scriptCode;
@@ -1762,7 +1766,7 @@ bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector
           //Skip costly sapling checks on intial download below the hardcoded checkpoints
           if (!fCheckpointsEnabled || nHeight >= Checkpoints::GetTotalBlocksEstimate(Params().Checkpoints())) {
               //Verify Sapling
-              if (!tx->vShieldedSpend.empty() || !tx->vShieldedOutput.empty()) {
+              if (tx->GetSaplingSpendsCount() > 0 || tx->GetSaplingOutputsCount() > 0) {
                   //Push tx to thread vector
                   vvtx[t].emplace_back(tx);
                   vvTxSig[t].emplace_back(dataToBeSigned);
@@ -1773,30 +1777,30 @@ bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector
                       t = 0;
                   }
 
-                  //Add this transaction sapling spend to spend thread batches
-                  for (int j = 0; j < tx->vShieldedSpend.size(); j++) {
-                      //Push spend to thread vector
-                      vvSpend[s].emplace_back(&(tx->vShieldedSpend[j]));
-                      vvSpendSig[s].emplace_back(dataToBeSigned);
-                      //Increment thread vector
-                      s++;
-                      //reset if tread vector is greater qty of threads being used
-                      if (s >= vvSpend.size()) {
-                          s = 0;
-                      }
-                  }
-
-                  //Add this transaction sapling outputs to output thread batches
-                  for (int j = 0; j < tx->vShieldedOutput.size(); j++) {
-                      //Push output to thread vector
-                      vvOutput[o].emplace_back(&(tx->vShieldedOutput[j]));
-                      //Increment thread vector
-                      o++;
-                      //reset if tread vector is greater qty of threads being used
-                      if (o >= vvOutput.size()) {
-                          o = 0;
-                      }
-                  }
+                  // //Add this transaction sapling spend to spend thread batches
+                  // for (int j = 0; j < tx->GetSaplingSpendsCount(); j++) {
+                  //     //Push spend to thread vector
+                  //     vvSpend[s].emplace_back(&(tx->vShieldedSpend[j]));
+                  //     vvSpendSig[s].emplace_back(dataToBeSigned);
+                  //     //Increment thread vector
+                  //     s++;
+                  //     //reset if tread vector is greater qty of threads being used
+                  //     if (s >= vvSpend.size()) {
+                  //         s = 0;
+                  //     }
+                  // }
+                  //
+                  // //Add this transaction sapling outputs to output thread batches
+                  // for (int j = 0; j < tx->vShieldedOutput.size(); j++) {
+                  //     //Push output to thread vector
+                  //     vvOutput[o].emplace_back(&(tx->vShieldedOutput[j]));
+                  //     //Increment thread vector
+                  //     o++;
+                  //     //reset if tread vector is greater qty of threads being used
+                  //     if (o >= vvOutput.size()) {
+                  //         o = 0;
+                  //     }
+                  // }
               }
           }
       }
@@ -1809,21 +1813,21 @@ bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector
           }
       }
 
-      //Push batches of spends to async threads
-      for (int i = 0; i < vvSpend.size(); i++) {
-          //Perform SpendDescription validations
-          if (!vvSpend[i].empty()) {
-              //vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionSaplingSpendWorker, vvSpend[i], vvSpendSig[i], i + vvtx.size()));
-          }
-      }
-
-      //Push batches of outputs to async threads
-      for (int i = 0; i < vvOutput.size(); i++) {
-          //Perform OutputDescription validations
-          if (!vvOutput[i].empty()) {
-              //vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionSaplingOutputWorker, vvOutput[i], i + vvtx.size() + vvSpend.size()));
-          }
-      }
+      // //Push batches of spends to async threads
+      // for (int i = 0; i < vvSpend.size(); i++) {
+      //     //Perform SpendDescription validations
+      //     if (!vvSpend[i].empty()) {
+      //         //vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionSaplingSpendWorker, vvSpend[i], vvSpendSig[i], i + vvtx.size()));
+      //     }
+      // }
+      //
+      // //Push batches of outputs to async threads
+      // for (int i = 0; i < vvOutput.size(); i++) {
+      //     //Perform OutputDescription validations
+      //     if (!vvOutput[i].empty()) {
+      //         //vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionSaplingOutputWorker, vvOutput[i], i + vvtx.size() + vvSpend.size()));
+      //     }
+      // }
 
       //Wait for all threads to complete
       for (auto &future : vFutures) {
@@ -2040,7 +2044,7 @@ bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransactio
                          REJECT_INVALID, "bad-txns-acpublic-chain-orchard");
     }
 
-    if ( ASSETCHAINS_PRIVATE != 0 && invalid_private_taddr != 0 && tx.vShieldedSpend.empty() == 0 )
+    if ( ASSETCHAINS_PRIVATE != 0 && invalid_private_taddr != 0 && tx.GetSaplingSpendsCount() > 0 )
     {
         if ( !( current_season > 5 &&
                 tx.vin.size() == 0 &&
@@ -2395,24 +2399,30 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
     // Check for duplicate sapling zkproofs in this transaction (mempool only) - move to CheckTransaction to enforce at consensus
     {
         set<libzcash::GrothProof> vSaplingOutputProof;
-        BOOST_FOREACH(const OutputDescription& out_desc, tx.vShieldedOutput)
-        {
-            if (vSaplingOutputProof.count(out_desc.zkproof))
+        for (const auto& output : tx.GetSaplingSpends()) {
+            libzcash::GrothProof zkproof;
+            auto rustZKProok = output.zkproof();
+            std::memcpy(&zkproof, &rustZKProok, 192);
+
+            if (vSaplingOutputProof.count(zkproof))
                 return state.Invalid(error("AcceptToMemoryPool: duplicate proof requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-proof-requirements-not-met");
 
-            vSaplingOutputProof.insert(out_desc.zkproof);
+            vSaplingOutputProof.insert(zkproof);
         }
     }
 
     // Check for duplicate sapling zkproofs in this transaction (mempool only) - move to CheckTransaction to enforce at consensus
     {
         set<libzcash::GrothProof> vSaplingSpendProof;
-        BOOST_FOREACH(const SpendDescription& spend_desc, tx.vShieldedSpend)
-        {
-            if (vSaplingSpendProof.count(spend_desc.zkproof))
+        for (const auto& spend : tx.GetSaplingSpends()) {
+            libzcash::GrothProof zkproof;
+            auto rustZKProok = spend.zkproof();
+            std::memcpy(&zkproof, &rustZKProok, 192);
+
+            if (vSaplingSpendProof.count(zkproof))
                 return state.Invalid(error("AcceptToMemoryPool: duplicate proof requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-proof-requirements-not-met");
 
-            vSaplingSpendProof.insert(spend_desc.zkproof);
+            vSaplingSpendProof.insert(zkproof);
         }
     }
 
@@ -2497,13 +2507,17 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
 
 
         //Check for duplicate Proofs
-        for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
-            if (pool.zkProofHashExists(spendDescription.ProofHash(), SPEND)) {
+        for (const auto& spend : tx.GetSaplingSpends()) {
+            auto zkproof = spend.zkproof();
+            auto proofHash = Hash(zkproof.begin(), zkproof.end());
+            if (pool.zkProofHashExists(proofHash, SPEND)) {
                 return state.Invalid(error("AcceptToMemoryPool: duplicate proof requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-proof-requirements-not-met");
             }
         }
-        for (const OutputDescription &outputDescription : tx.vShieldedOutput) {
-            if (pool.zkProofHashExists(outputDescription.ProofHash(), OUTPUT)) {
+        for (const auto& output : tx.GetSaplingOutputs()) {
+            auto zkproof = output.zkproof();
+            auto proofHash = Hash(zkproof.begin(), zkproof.end());
+            if (pool.zkProofHashExists(proofHash, OUTPUT)) {
                 return state.Invalid(error("AcceptToMemoryPool: duplicate proof requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-proof-requirements-not-met");
             }
         }
@@ -4374,8 +4388,9 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         }
 
         //Append Sapling Output to SaplingMerkleTree
-        BOOST_FOREACH(const OutputDescription &outputDescription, tx.vShieldedOutput) {
-            sapling_tree.append(outputDescription.cmu);
+        for (const auto& output : tx.GetSaplingOutputs()) {
+            auto cmu = uint256::FromRawBytes(output.cmu());
+            sapling_tree.append(cmu);
         }
 
         //Append Sapling Outputs to SaplingMerkleFrontier
@@ -6172,7 +6187,7 @@ bool CheckBlock(int32_t *futureblockp, int32_t height, CBlockIndex *pindex, cons
         for(const CTxMemPoolEntry& e : mempool.mapTx)
         {
             const CTransaction &tx = e.GetTx();
-            if ( tx.vjoinsplit.empty() && tx.vShieldedSpend.empty())
+            if ( tx.vjoinsplit.empty() && tx.GetSaplingSpendsCount() == 0)
             {
                 transactionsToRemove.push_back(tx);
                 tmpmempool.addUnchecked(tx.GetHash(),e,true);
@@ -6191,7 +6206,7 @@ bool CheckBlock(int32_t *futureblockp, int32_t height, CBlockIndex *pindex, cons
             {
                 CValidationState state; CTransaction Tx;
                 const CTransaction &tx = (CTransaction)block.vtx[i];
-                if ( tx.IsCoinBase() || !tx.vjoinsplit.empty() || !tx.vShieldedSpend.empty()
+                if ( tx.IsCoinBase() || !tx.vjoinsplit.empty() || tx.GetSaplingSpendsCount() > 0
                         || (i == block.vtx.size()-1 && komodo_isPoS((CBlock *)&block,height,0) != 0) )
                     continue;
                 Tx = tx;
@@ -8963,8 +8978,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         // TODO: currently, prohibit joinsplits and shielded spends/outputs from entering mapOrphans
         else if (fMissingInputs &&
                  tx.vjoinsplit.empty() &&
-                 tx.vShieldedSpend.empty() &&
-                 tx.vShieldedOutput.empty())
+                 tx.GetSaplingSpendsCount() == 0 &&
+                 tx.GetSaplingOutputsCount() == 0)
         {
             // valid stake transactions end up in the orphan tx bin
             AddOrphanTx(tx, pfrom->GetId());

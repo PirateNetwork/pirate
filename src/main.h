@@ -766,9 +766,9 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(const CTransacti
 //Validate a batch of transactions
 CheckTransationResults ContextualCheckTransactionBindingSigWorker(const std::vector<const CTransaction*> vtx, const std::vector<uint256> vTxSig, const uint32_t threadNumber);
 //Validate a batch of Sapling spend descriptions
-CheckTransationResults ContextualCheckTransactionSaplingSpendWorker(const std::vector<const SpendDescription*> vSpend, const std::vector<uint256> vSpendSig, const uint32_t threadNumber);
+// CheckTransationResults ContextualCheckTransactionSaplingSpendWorker(const std::vector<const SpendDescription*> vSpend, const std::vector<uint256> vSpendSig, const uint32_t threadNumber);
 //Validate a batch of Sapling output descriptions
-CheckTransationResults ContextualCheckTransactionSaplingOutputWorker(const std::vector<const OutputDescription*> vOutput, const uint32_t threadNumber);
+// CheckTransationResults ContextualCheckTransactionSaplingOutputWorker(const std::vector<const OutputDescription*> vOutput, const uint32_t threadNumber);
 /** Check a transaction contextually against a set of consensus rules */
 bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector<const CTransaction*> vptx, CBlockIndex * const pindexPrev, CValidationState &state, int nHeight, int dosLevel,
                                 bool (*isInitBlockDownload)() = IsInitialBlockDownload,int32_t validateprices=1);

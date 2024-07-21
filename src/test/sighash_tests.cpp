@@ -202,7 +202,9 @@ void static RandomTransaction(CMutableTransaction &tx, bool fSingle, uint32_t co
         // Empty output script.
         CScript scriptCode;
         CTransaction signTx(tx);
-        uint256 dataToBeSigned = SignatureHash(scriptCode, signTx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId);
+        std::vector<CTxOut> allPrevOutputs;
+        PrecomputedTransactionData txdata(signTx, allPrevOutputs);
+        uint256 dataToBeSigned = SignatureHash(scriptCode, signTx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId, txdata);
 
         assert(crypto_sign_detached(&tx.joinSplitSig[0], NULL,
                                     dataToBeSigned.begin(), 32,

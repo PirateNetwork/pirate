@@ -135,53 +135,53 @@ SaplingSpendDescriptionInfo::SaplingSpendDescriptionInfo(
     // printf("SaplingSpendDescriptionInfo saplingMerklePath.position()=%lx\n", saplingMerklePath.position() );
 }
 
-std::optional<OutputDescription> SaplingOutputDescriptionInfo::Build(void* ctx)
-{
-    auto cmu = this->note.cmu();
-    if (!cmu) {
-        return std::nullopt;
-    }
-
-    libzcash::SaplingNotePlaintext notePlaintext(this->note, this->memo);
-
-    auto res = notePlaintext.encrypt(this->note.pk_d);
-    if (!res) {
-        return std::nullopt;
-    }
-    auto enc = res.value();
-    auto encryptor = enc.second;
-
-    libzcash::SaplingPaymentAddress address(this->note.d, this->note.pk_d);
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-    ss << address;
-    std::vector<unsigned char> addressBytes(ss.begin(), ss.end());
-
-    OutputDescription odesc;
-    uint256 rcm = this->note.rcm();
-    if (!librustzcash_sapling_output_proof(
-            ctx,
-            encryptor.get_esk().begin(),
-            addressBytes.data(),
-            rcm.begin(),
-            this->note.value(),
-            odesc.cv.begin(),
-            odesc.zkproof.begin())) {
-        return std::nullopt;
-    }
-
-    odesc.cmu = *cmu;
-    odesc.ephemeralKey = encryptor.get_epk();
-    odesc.encCiphertext = enc.first;
-
-    libzcash::SaplingOutgoingPlaintext outPlaintext(this->note.pk_d, encryptor.get_esk());
-    odesc.outCiphertext = outPlaintext.encrypt(
-        this->ovk,
-        odesc.cv,
-        odesc.cmu,
-        encryptor);
-
-    return odesc;
-}
+// std::optional<OutputDescription> SaplingOutputDescriptionInfo::Build(void* ctx)
+// {
+//     auto cmu = this->note.cmu();
+//     if (!cmu) {
+//         return std::nullopt;
+//     }
+//
+//     libzcash::SaplingNotePlaintext notePlaintext(this->note, this->memo);
+//
+//     auto res = notePlaintext.encrypt(this->note.pk_d);
+//     if (!res) {
+//         return std::nullopt;
+//     }
+//     auto enc = res.value();
+//     auto encryptor = enc.second;
+//
+//     libzcash::SaplingPaymentAddress address(this->note.d, this->note.pk_d);
+//     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+//     ss << address;
+//     std::vector<unsigned char> addressBytes(ss.begin(), ss.end());
+//
+//     OutputDescription odesc;
+//     uint256 rcm = this->note.rcm();
+//     if (!librustzcash_sapling_output_proof(
+//             ctx,
+//             encryptor.get_esk().begin(),
+//             addressBytes.data(),
+//             rcm.begin(),
+//             this->note.value(),
+//             odesc.cv.begin(),
+//             odesc.zkproof.begin())) {
+//         return std::nullopt;
+//     }
+//
+//     odesc.cmu = *cmu;
+//     odesc.ephemeralKey = encryptor.get_epk();
+//     odesc.encCiphertext = enc.first;
+//
+//     libzcash::SaplingOutgoingPlaintext outPlaintext(this->note.pk_d, encryptor.get_esk());
+//     odesc.outCiphertext = outPlaintext.encrypt(
+//         this->ovk,
+//         odesc.cv,
+//         odesc.cmu,
+//         encryptor);
+//
+//     return odesc;
+// }
 
 TransactionBuilderResult::TransactionBuilderResult(const CTransaction& tx) : maybeTx(tx) {}
 
@@ -538,15 +538,8 @@ TransactionBuilderResult TransactionBuilder::Build()
     // Consistency checks
     //
 
-    LogPrintf("TransactionBuilder #1\n");
-
     // Valid change
     CAmount change = valueBalanceSapling + valueBalanceOrchard - fee;
-
-    LogPrintf("Value Balance Sapling %i\n", valueBalanceSapling);
-    LogPrintf("Value Balance Orchard %i\n", valueBalanceOrchard);
-    LogPrintf("Value Balance fee %i\n", fee);
-    LogPrintf("Value Balance change %i\n", change);
 
     for (auto tIn : tIns) {
         change += tIn.nValue;
@@ -561,7 +554,6 @@ TransactionBuilderResult TransactionBuilder::Build()
     //
     // Change output
     //
-    LogPrintf("TransactionBuilder #2\n");
     if (change > 0) {
         // Send change to the specified change address. If no change address
         // was set, send change to the first Sapling address given as input.
@@ -588,7 +580,6 @@ TransactionBuilderResult TransactionBuilder::Build()
     //
     // Sapling spends and outputs
     //
-    LogPrintf("TransactionBuilder #3\n");
     std::optional<rust::Box<sapling::UnauthorizedBundle>> maybeSaplingBundle;
     try {
         maybeSaplingBundle = sapling::build_bundle(std::move(saplingBuilder), nHeight);
@@ -600,7 +591,6 @@ TransactionBuilderResult TransactionBuilder::Build()
     //
     // Orchard
     //
-    LogPrintf("TransactionBuilder #4\n");
     std::optional<orchard::UnauthorizedBundle> orchardBundle;
     if (orchardBuilder.has_value() && orchardBuilder->HasActions()) {
         auto bundle = orchardBuilder->Build();
@@ -611,17 +601,14 @@ TransactionBuilderResult TransactionBuilder::Build()
         }
     }
 
-    LogPrintf("TransactionBuilder #5\n");
     // add op_return if there is one to add
     AddOpRetLast();
 
     //
     // Signatures
     //
-    LogPrintf("TransactionBuilder #6\n");
     auto consensusBranchId = CurrentEpochBranchId(nHeight, consensusParams);
 
-    LogPrintf("TransactionBuilder #7\n");
     // Empty output script.
     uint256 dataToBeSigned;
     try {
@@ -644,8 +631,6 @@ TransactionBuilderResult TransactionBuilder::Build()
         return TransactionBuilderResult("Could not construct signature hash: " + std::string(ex.what()));
     }
 
-
-    LogPrintf("TransactionBuilder #8\n");
     const unsigned char* keys;
     size_t keyCount = 0;
 
@@ -659,7 +644,6 @@ TransactionBuilderResult TransactionBuilder::Build()
         }
     }
 
-    LogPrintf("TransactionBuilder #9\n");
     // Create Sapling spendAuth and binding signatures
     try {
         mtx.saplingBundle = sapling::apply_bundle_signatures(
@@ -668,28 +652,7 @@ TransactionBuilderResult TransactionBuilder::Build()
         return TransactionBuilderResult(e.what());
     }
 
-
-    LogPrintf("Sapling Output Count %i\n", mtx.saplingBundle.GetOutputsCount());
-
-
-    // Create Sapling spendAuth and binding signatures
-    // for (size_t i = 0; i < saplingSpends.size(); i++) {
-    //     librustzcash_sapling_spend_sig(
-    //         saplingSpends[i].expsk.ask.begin(),
-    //         saplingSpends[i].alpha.begin(),
-    //         dataToBeSigned.begin(),
-    //         mtx.vShieldedSpend[i].spendAuthSig.data());
-    // }
-    // librustzcash_sapling_binding_sig(
-    //     ctx,
-    //     mtx.valueBalance,
-    //     dataToBeSigned.begin(),
-    //     mtx.bindingSig.data());
-    //
-    // librustzcash_sapling_proving_ctx_free(ctx);
-
     // Transparent signatures
-    LogPrintf("TransactionBuilder #10\n");
     CTransaction txNewConst(mtx);
     const PrecomputedTransactionData txdata(txNewConst, tIns);
     for (int nIn = 0; nIn < mtx.vin.size(); nIn++) {
@@ -706,15 +669,6 @@ TransactionBuilderResult TransactionBuilder::Build()
             UpdateTransaction(mtx, nIn, sigdata);
         }
     }
-
-    // Temporary code
-    // Create Sapling Bundle from vShieldedSpend and vShieldedOutput
-    // TODO: refactor to make this cleaner and remove vShieldedSpend and vShieldedOutput
-    // mtx.CreateSaplingBundleFromLegacy();
-    //  mtx.valueBalance = mtx.ValueBalanceFromBundle();
-    //  mtx.vShieldedSpend = mtx.GetSpendDescriptionFromBundle();
-    //  mtx.vShieldedOutput = mtx.GetOutputDescriptionFromBundle();
-    //  mtx.bindingSig = mtx.BindingSigFromBundle();
 
     maybe_tx = CTransaction(mtx);
     tx_result = maybe_tx.value();

@@ -110,109 +110,6 @@ struct TxParams {
     unsigned int expiryDelta;
 };
 
-
-/**
- * A shielded input to a transaction. It contains data that describes a Spend transfer.
- */
-class SpendDescription
-{
-public:
-    typedef std::array<unsigned char, 64> spend_auth_sig_t;
-
-    uint256 cv;                    //!< A value commitment to the value of the input note.
-    uint256 anchor;                //!< A Merkle root of the Sapling note commitment tree at some block height in the past.
-    uint256 nullifier;             //!< The nullifier of the input note.
-    uint256 rk;                    //!< The randomized public key for spendAuthSig.
-    libzcash::GrothProof zkproof;  //!< A zero-knowledge proof using the spend circuit.
-    spend_auth_sig_t spendAuthSig; //!< A signature authorizing this spend.
-
-    SpendDescription() {}
-
-    ADD_SERIALIZE_METHODS;
-
-    template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action)
-    {
-        READWRITE(cv);
-        READWRITE(anchor);
-        READWRITE(nullifier);
-        READWRITE(rk);
-        READWRITE(zkproof);
-        READWRITE(spendAuthSig);
-    }
-
-    friend bool operator==(const SpendDescription& a, const SpendDescription& b)
-    {
-        return (
-            a.cv == b.cv &&
-            a.anchor == b.anchor &&
-            a.nullifier == b.nullifier &&
-            a.rk == b.rk &&
-            a.zkproof == b.zkproof &&
-            a.spendAuthSig == b.spendAuthSig);
-    }
-
-    friend bool operator!=(const SpendDescription& a, const SpendDescription& b)
-    {
-        return !(a == b);
-    }
-
-    uint256 ProofHash() const
-    {
-        return Hash(zkproof.begin(), zkproof.end());
-    }
-};
-
-/**
- * A shielded output to a transaction. It contains data that describes an Output transfer.
- */
-class OutputDescription
-{
-public:
-    uint256 cv;                                   //!< A value commitment to the value of the output note.
-    uint256 cmu;                                  //!< The note commitment for the output note.
-    uint256 ephemeralKey;                         //!< A Jubjub public key.
-    libzcash::SaplingEncCiphertext encCiphertext; //!< A ciphertext component for the encrypted output note.
-    libzcash::SaplingOutCiphertext outCiphertext; //!< A ciphertext component for the encrypted output note.
-    libzcash::GrothProof zkproof;                 //!< A zero-knowledge proof using the output circuit.
-
-    OutputDescription() {}
-
-    ADD_SERIALIZE_METHODS;
-
-    template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action)
-    {
-        READWRITE(cv);
-        READWRITE(cmu);
-        READWRITE(ephemeralKey);
-        READWRITE(encCiphertext);
-        READWRITE(outCiphertext);
-        READWRITE(zkproof);
-    }
-
-    friend bool operator==(const OutputDescription& a, const OutputDescription& b)
-    {
-        return (
-            a.cv == b.cv &&
-            a.cmu == b.cmu &&
-            a.ephemeralKey == b.ephemeralKey &&
-            a.encCiphertext == b.encCiphertext &&
-            a.outCiphertext == b.outCiphertext &&
-            a.zkproof == b.zkproof);
-    }
-
-    friend bool operator!=(const OutputDescription& a, const OutputDescription& b)
-    {
-        return !(a == b);
-    }
-
-    uint256 ProofHash() const
-    {
-        return Hash(zkproof.begin(), zkproof.end());
-    }
-};
-
 template <typename Stream>
 class SproutProofSerializer
 {
@@ -749,8 +646,6 @@ public:
 
 
     const CAmount valueBalance;
-    const std::vector<SpendDescription> vShieldedSpend;
-    const std::vector<OutputDescription> vShieldedOutput;
     const binding_sig_t bindingSig = {{0}};
 
     /** Construct a CTransaction that qualifies as IsNull() */
@@ -878,10 +773,6 @@ public:
             if (saplingBundle.IsPresent()) {
                 // Populate Binding Sig
                 *const_cast<binding_sig_t*>(&bindingSig) = saplingBundle.GetDetails().binding_sig();
-                // Populate SpendDescriptions from saplingBundle
-                *const_cast<std::vector<SpendDescription>*>(&vShieldedSpend) = GetSpendDescriptionFromBundle();
-                // Populate OutputDescriptions from saplingBundle
-                *const_cast<std::vector<OutputDescription>*>(&vShieldedOutput) = GetOutputDescriptionFromBundle();
                 // Populate Value Balance from saplingBundle
                 *const_cast<CAmount*>(&valueBalance) = GetValueBalanceSapling();
             }
@@ -997,23 +888,8 @@ public:
     size_t GetSaplingSpendsCount() const;
     size_t GetSaplingOutputsCount() const;
 
-    std::optional<uint256> GetSpendCV(size_t spendIndex) const;
-    std::optional<uint256> GetSpendAnchor(size_t spendIndex) const;
-    std::optional<uint256> GetSpendNullifier(size_t spendIndex) const;
-    std::optional<uint256> GetSpendRK(size_t spendIndex) const;
-    std::optional<libzcash::GrothProof> GetSpendZKProof(size_t spendIndex) const;
-    std::optional<std::array<unsigned char, 64>> GetSpendAuthSig(size_t spendIndex) const;
     const rust::Vec<sapling::Spend> GetSaplingSpends() const;
-    std::vector<SpendDescription> GetSpendDescriptionFromBundle() const;
-
-    std::optional<uint256> GetOutputCV(size_t outIndex) const;
-    std::optional<uint256> GetOutputCMU(size_t outIndex) const;
-    std::optional<uint256> GetOutputEphemeralKey(size_t outIndex) const;
-    std::optional<libzcash::SaplingEncCiphertext> GetOutputEncCiphertext(size_t outIndex) const;
-    std::optional<libzcash::SaplingOutCiphertext> GetOutputOutCiphertext(size_t outIndex) const;
-    std::optional<libzcash::GrothProof> GetOutputZKProof(size_t outIndex) const;
     const rust::Vec<sapling::Output> GetSaplingOutputs() const;
-    std::vector<OutputDescription> GetOutputDescriptionFromBundle() const;
 
 
     /**
@@ -1070,8 +946,6 @@ struct CMutableTransaction {
 
     CTransaction::binding_sig_t bindingSig = {{0}};
     CAmount valueBalance;
-    std::vector<SpendDescription> vShieldedSpend;
-    std::vector<OutputDescription> vShieldedOutput;
 
     CMutableTransaction();
     CMutableTransaction(const CTransaction& tx);
@@ -1185,10 +1059,6 @@ struct CMutableTransaction {
                     if (haveSaplingActions) {
                         // Populate Binding Sig
                         bindingSig = saplingBundle.GetDetails().binding_sig();
-                        // Populate SpendDescriptions from saplingBundle
-                        vShieldedSpend = GetSpendDescriptionFromBundle();
-                        // Populate OutputDescriptions from saplingBundle
-                        vShieldedOutput = GetOutputDescriptionFromBundle();
                         // Populate Value Balance from saplingBundle
                         valueBalance = saplingBundle.GetValueBalance();
                     }
@@ -1235,78 +1105,6 @@ struct CMutableTransaction {
         return bindingSigBundle;
     }
 
-    std::vector<SpendDescription> GetSpendDescriptionFromBundle() const
-    {
-        std::vector<SpendDescription> returnSpends;
-
-        if (saplingBundle.IsPresent()) {
-            size_t spendCount = saplingBundle.GetSpendsCount();
-
-            for (size_t i = 0; i < spendCount; i++) {
-                auto spendRust = saplingBundle.GetDetails().get_spend(i);
-                SpendDescription spendDescription;
-
-                auto rustCV = spendRust->cv();
-                std::memcpy(&spendDescription.cv, &rustCV, 32);
-
-                auto rustAnchor = spendRust->anchor();
-                std::memcpy(&spendDescription.anchor, &rustAnchor, 32);
-
-                auto rustNullifier = spendRust->nullifier();
-                std::memcpy(&spendDescription.nullifier, &rustNullifier, 32);
-
-                auto rustRK = spendRust->rk();
-                std::memcpy(&spendDescription.rk, &rustRK, 32);
-
-                auto rustZKProok = spendRust->zkproof();
-                std::memcpy(&spendDescription.zkproof, &rustZKProok, 192);
-
-                auto rustSpendAuthSig = spendRust->spend_auth_sig();
-                std::memcpy(&spendDescription.spendAuthSig, &rustSpendAuthSig, 64);
-
-                returnSpends.emplace_back(spendDescription);
-            }
-        }
-        return returnSpends;
-    }
-
-    std::vector<OutputDescription> GetOutputDescriptionFromBundle() const
-    {
-        std::vector<OutputDescription> returnOutputs;
-
-        if (saplingBundle.IsPresent()) {
-            size_t outCount = saplingBundle.GetOutputsCount();
-
-            for (size_t i = 0; i < outCount; i++) {
-                auto outRust = saplingBundle.GetDetails().get_output(i);
-                OutputDescription outDescription;
-
-                auto rustCV = outRust->cv();
-                std::memcpy(&outDescription.cv, &rustCV, 32);
-
-                auto rustCMU = outRust->cmu();
-                std::memcpy(&outDescription.cmu, &rustCMU, 32);
-
-                auto rustEphemeralKey = outRust->ephemeral_key();
-                std::memcpy(&outDescription.ephemeralKey, &rustEphemeralKey, 32);
-
-                auto rustEncCiphertext = outRust->enc_ciphertext();
-                std::memcpy(&outDescription.encCiphertext, &rustEncCiphertext, 580);
-
-                auto rustOutCiphertext = outRust->out_ciphertext();
-                std::memcpy(&outDescription.outCiphertext, &rustOutCiphertext, 80);
-
-                auto rustZKProof = outRust->zkproof();
-                std::memcpy(&outDescription.zkproof, &rustZKProof, 192);
-
-                returnOutputs.emplace_back(outDescription);
-            }
-        }
-
-        return returnOutputs;
-    }
-
-    bool CreateSaplingBundleFromLegacy();
 };
 
 #endif // BITCOIN_PRIMITIVES_TRANSACTION_H

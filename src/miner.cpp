@@ -502,12 +502,12 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
             vecPriority.pop_back();
 
             if (GetBoolArg("-largetxthrottle", true)) {
-                if (tx.vShieldedOutput.size() >= 50 && qtyLargeTx >= 1) {
+                if (tx.GetSaplingOutputsCount() >= 50 && qtyLargeTx >= 1) {
                     LogPrintf("Large transaction rate limited\n");
                     continue;
                 }
 
-                if (tx.vShieldedOutput.size() >= 10 && tx.vShieldedOutput.size() < 50 && qtyMediumTx >= 5) {
+                if (tx.GetSaplingOutputsCount() >= 10 && tx.GetSaplingOutputsCount() < 50 && qtyMediumTx >= 5) {
                     LogPrintf("Medium transaction rate limited\n");
                     continue;
                 }
@@ -611,8 +611,10 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
             }
             UpdateCoins(tx, view, nHeight);
 
-            BOOST_FOREACH(const OutputDescription &outDescription, tx.vShieldedOutput) {
-                sapling_tree.append(outDescription.cmu);
+            //Append Sapling Output to SaplingMerkleTree
+            for (const auto& output : tx.GetSaplingOutputs()) {
+                auto cmu = uint256::FromRawBytes(output.cmu());
+                sapling_tree.append(cmu);
             }
 
             // Added
@@ -624,12 +626,12 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
             nBlockSigOps += nTxSigOps;
             nFees += nTxFees;
 
-            if (tx.vShieldedOutput.size() >= 50) {
+            if (tx.GetSaplingOutputsCount() >= 50) {
                 LogPrintf("Added large transaction\n");
                 qtyLargeTx++;
             }
 
-            if (tx.vShieldedOutput.size() >= 10 && tx.vShieldedOutput.size() < 50) {
+            if (tx.GetSaplingOutputsCount() >= 10 && tx.GetSaplingOutputsCount() < 50) {
                 LogPrintf("Added medium transaction\n");
                 qtyMediumTx++;
             }

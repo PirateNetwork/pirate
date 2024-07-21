@@ -146,7 +146,7 @@ CMutableTransaction::CMutableTransaction() : nVersion(CTransaction::SPROUT_MIN_C
 CMutableTransaction::CMutableTransaction(const CTransaction& tx) : nVersion(tx.nVersion), fOverwintered(tx.fOverwintered), nVersionGroupId(tx.nVersionGroupId), nExpiryHeight(tx.nExpiryHeight),
                                                                    nConsensusBranchId(tx.GetConsensusBranchId()),
                                                                    vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
-                                                                   valueBalance(tx.ValueBalanceFromBundle()), vShieldedSpend(tx.GetSpendDescriptionFromBundle()), vShieldedOutput(tx.GetOutputDescriptionFromBundle()),
+                                                                   valueBalance(tx.ValueBalanceFromBundle()),
                                                                    vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
                                                                    bindingSig(tx.BindingSigFromBundle()),
                                                                    saplingBundle(tx.GetSaplingBundle()), orchardBundle(tx.GetOrchardBundle())
@@ -204,14 +204,14 @@ CTransaction::CTransaction() : nVersion(CTransaction::SPROUT_MIN_CURRENT_VERSION
                               fOverwintered(false), nVersionGroupId(0), nExpiryHeight(0),
                               nConsensusBranchId(std::nullopt),
                               vin(), vout(), nLockTime(0),
-                              valueBalance(0), vShieldedSpend(), vShieldedOutput(),
+                              valueBalance(0),
                               vjoinsplit(), joinSplitPubKey(), joinSplitSig(), bindingSig(),
                               saplingBundle(), orchardBundle() {}
 
 CTransaction::CTransaction(const CMutableTransaction& tx) : nVersion(tx.nVersion), fOverwintered(tx.fOverwintered), nVersionGroupId(tx.nVersionGroupId), nExpiryHeight(tx.nExpiryHeight),
                                                             nConsensusBranchId(tx.nConsensusBranchId),
                                                             vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
-                                                            valueBalance(tx.ValueBalanceFromBundle()), vShieldedSpend(tx.GetSpendDescriptionFromBundle()), vShieldedOutput(tx.GetOutputDescriptionFromBundle()),
+                                                            valueBalance(tx.ValueBalanceFromBundle()),
                                                             vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
                                                             bindingSig(tx.BindingSigFromBundle()),
                                                             saplingBundle(tx.saplingBundle), orchardBundle(tx.orchardBundle)
@@ -226,7 +226,7 @@ CTransaction::CTransaction(
     bool evilDeveloperFlag) : nVersion(tx.nVersion), fOverwintered(tx.fOverwintered), nVersionGroupId(tx.nVersionGroupId), nExpiryHeight(tx.nExpiryHeight),
                               nConsensusBranchId(tx.nConsensusBranchId),
                               vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
-                              valueBalance(tx.ValueBalanceFromBundle()), vShieldedSpend(tx.GetSpendDescriptionFromBundle()), vShieldedOutput(tx.GetOutputDescriptionFromBundle()),
+                              valueBalance(tx.ValueBalanceFromBundle()),
                               vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
                               bindingSig(tx.BindingSigFromBundle()),
                               saplingBundle(tx.saplingBundle), orchardBundle(tx.orchardBundle)
@@ -237,7 +237,7 @@ CTransaction::CTransaction(
 CTransaction::CTransaction(CMutableTransaction&& tx) : nVersion(tx.nVersion), fOverwintered(tx.fOverwintered), nVersionGroupId(tx.nVersionGroupId),
                                                        nConsensusBranchId(tx.nConsensusBranchId),
                                                        vin(std::move(tx.vin)), vout(std::move(tx.vout)), nLockTime(tx.nLockTime), nExpiryHeight(tx.nExpiryHeight),
-                                                       valueBalance(tx.ValueBalanceFromBundle()), vShieldedSpend(tx.GetSpendDescriptionFromBundle()), vShieldedOutput(tx.GetOutputDescriptionFromBundle()),
+                                                       valueBalance(tx.ValueBalanceFromBundle()),
                                                        vjoinsplit(std::move(tx.vjoinsplit)), joinSplitPubKey(std::move(tx.joinSplitPubKey)), joinSplitSig(std::move(tx.joinSplitSig)),
                                                        bindingSig(tx.BindingSigFromBundle()),
                                                        saplingBundle(std::move(tx.saplingBundle)), orchardBundle(std::move(tx.orchardBundle))
@@ -258,8 +258,6 @@ CTransaction& CTransaction::operator=(const CTransaction& tx)
     saplingBundle = tx.saplingBundle;
     orchardBundle = tx.orchardBundle;
     *const_cast<CAmount*>(&valueBalance) = tx.ValueBalanceFromBundle();
-    *const_cast<std::vector<SpendDescription>*>(&vShieldedSpend) = tx.GetSpendDescriptionFromBundle();
-    *const_cast<std::vector<OutputDescription>*>(&vShieldedOutput) = tx.GetOutputDescriptionFromBundle();
     *const_cast<std::vector<JSDescription>*>(&vjoinsplit) = tx.vjoinsplit;
     *const_cast<uint256*>(&joinSplitPubKey) = tx.joinSplitPubKey;
     *const_cast<joinsplit_sig_t*>(&joinSplitSig) = tx.joinSplitSig;
@@ -446,8 +444,8 @@ std::string CTransaction::ToString() const
                          nLockTime,
                          nExpiryHeight,
                          valueBalance,
-                         vShieldedSpend.size(),
-                         vShieldedOutput.size());
+                         GetSaplingSpendsCount(),
+                         GetSaplingOutputsCount());
     } else if (nVersion >= 3) {
         str += strprintf("CTransaction(hash=%s, ver=%d, fOverwintered=%d, nVersionGroupId=%08x, vin.size=%u, vout.size=%u, nLockTime=%u, nExpiryHeight=%u)\n",
                          GetHash().ToString().substr(0, 10),
@@ -476,241 +474,15 @@ size_t CTransaction::GetSaplingOutputsCount() const
     return saplingBundle.GetOutputsCount();
 }
 
-std::optional<uint256> CTransaction::GetSpendCV(size_t spendIndex) const
-{
-    if (spendIndex >= GetSaplingSpendsCount()) {
-        return std::nullopt;
-    }
-
-    uint256 cv;
-    auto spendRust = saplingBundle.GetDetails().get_spend(spendIndex);
-    auto rustCV = spendRust->cv();
-    std::memcpy(&cv, &rustCV, 32);
-    return cv;
-}
-
-std::optional<uint256> CTransaction::GetSpendAnchor(size_t spendIndex) const
-{
-    if (spendIndex >= GetSaplingSpendsCount()) {
-        return std::nullopt;
-    }
-
-    uint256 anchor;
-    auto spendRust = saplingBundle.GetDetails().get_spend(spendIndex);
-    auto rustAnchor = spendRust->anchor();
-    std::memcpy(&anchor, &rustAnchor, 32);
-    return anchor;
-}
-
-std::optional<uint256> CTransaction::GetSpendNullifier(size_t spendIndex) const
-{
-    if (spendIndex >= GetSaplingSpendsCount()) {
-        return std::nullopt;
-    }
-
-    uint256 nullifier;
-    auto spendRust = saplingBundle.GetDetails().get_spend(spendIndex);
-    auto rustNullifier = spendRust->nullifier();
-    std::memcpy(&nullifier, &rustNullifier, 32);
-    return nullifier;
-}
-
-std::optional<uint256> CTransaction::GetSpendRK(size_t spendIndex) const
-{
-    if (spendIndex >= GetSaplingSpendsCount()) {
-        return std::nullopt;
-    }
-
-    uint256 rk;
-    auto spendRust = saplingBundle.GetDetails().get_spend(spendIndex);
-    auto rustRK = spendRust->rk();
-    std::memcpy(&rk, &rustRK, 32);
-    return rk;
-}
-
-std::optional<libzcash::GrothProof> CTransaction::GetSpendZKProof(size_t spendIndex) const
-{
-    if (spendIndex >= GetSaplingSpendsCount()) {
-        return std::nullopt;
-    }
-
-    libzcash::GrothProof zkproof;
-    auto spendRust = saplingBundle.GetDetails().get_spend(spendIndex);
-    auto rustZKProof = spendRust->zkproof();
-    std::memcpy(&zkproof, &rustZKProof, 192);
-    return zkproof;
-}
-
-std::optional<std::array<unsigned char, 64>> CTransaction::GetSpendAuthSig(size_t spendIndex) const
-{
-    if (spendIndex >= GetSaplingSpendsCount()) {
-        return std::nullopt;
-    }
-
-    std::array<unsigned char, 64> spendAuthSig;
-    auto spendRust = saplingBundle.GetDetails().get_spend(spendIndex);
-    auto rustSpendAuthSig = spendRust->spend_auth_sig();
-    std::memcpy(&spendAuthSig, &rustSpendAuthSig, 64);
-    return spendAuthSig;
-}
-
 const rust::Vec<sapling::Spend> CTransaction::GetSaplingSpends() const
 {
     return saplingBundle.GetDetails().spends();
-}
-
-std::vector<SpendDescription> CTransaction::GetSpendDescriptionFromBundle() const
-{
-    std::vector<SpendDescription> returnSpends;
-    if (saplingBundle.IsPresent()) {
-        size_t spendCount = GetSaplingSpendsCount();
-
-        for (size_t i = 0; i < spendCount; i++) {
-            auto spendRust = saplingBundle.GetDetails().get_spend(i);
-            SpendDescription spendDescription;
-
-            auto rustCV = spendRust->cv();
-            std::memcpy(&spendDescription.cv, &rustCV, 32);
-
-            auto rustAnchor = spendRust->anchor();
-            std::memcpy(&spendDescription.anchor, &rustAnchor, 32);
-
-            auto rustNullifier = spendRust->nullifier();
-            std::memcpy(&spendDescription.nullifier, &rustNullifier, 32);
-
-            auto rustRK = spendRust->rk();
-            std::memcpy(&spendDescription.rk, &rustRK, 32);
-
-            auto rustZKProok = spendRust->zkproof();
-            std::memcpy(&spendDescription.zkproof, &rustZKProok, 192);
-
-            auto rustSpendAuthSig = spendRust->spend_auth_sig();
-            std::memcpy(&spendDescription.spendAuthSig, &rustSpendAuthSig, 64);
-
-            returnSpends.emplace_back(spendDescription);
-        }
-    }
-    return returnSpends;
-}
-
-std::optional<uint256> CTransaction::GetOutputCV(size_t outIndex) const
-{
-    if (outIndex >= GetSaplingOutputsCount()) {
-        return std::nullopt;
-    }
-
-    uint256 cv;
-    auto outRust = saplingBundle.GetDetails().get_output(outIndex);
-    auto rustCV = outRust->cv();
-    std::memcpy(&cv, &rustCV, 32);
-    return cv;
-}
-
-std::optional<uint256> CTransaction::GetOutputCMU(size_t outIndex) const
-{
-    if (outIndex >= GetSaplingOutputsCount()) {
-        return std::nullopt;
-    }
-
-    uint256 cmu;
-    auto outRust = saplingBundle.GetDetails().get_output(outIndex);
-    auto rustCMU = outRust->cmu();
-    std::memcpy(&cmu, &rustCMU, 32);
-    return cmu;
-}
-
-std::optional<uint256> CTransaction::GetOutputEphemeralKey(size_t outIndex) const
-{
-    if (outIndex >= GetSaplingOutputsCount()) {
-        return std::nullopt;
-    }
-
-    uint256 ephemeralKey;
-    auto outRust = saplingBundle.GetDetails().get_output(outIndex);
-    auto rustEphemeralKey = outRust->ephemeral_key();
-    std::memcpy(&ephemeralKey, &rustEphemeralKey, 32);
-    return ephemeralKey;
-}
-
-std::optional<libzcash::SaplingEncCiphertext> CTransaction::GetOutputEncCiphertext(size_t outIndex) const
-{
-    if (outIndex >= GetSaplingOutputsCount()) {
-        return std::nullopt;
-    }
-
-    libzcash::SaplingEncCiphertext encCiphertext;
-    auto outRust = saplingBundle.GetDetails().get_output(outIndex);
-    auto rustEncCiphertext = outRust->enc_ciphertext();
-    std::memcpy(&encCiphertext, &rustEncCiphertext, 580);
-    return encCiphertext;
-}
-
-std::optional<libzcash::SaplingOutCiphertext> CTransaction::GetOutputOutCiphertext(size_t outIndex) const
-{
-    if (outIndex >= GetSaplingOutputsCount()) {
-        return std::nullopt;
-    }
-
-    libzcash::SaplingOutCiphertext outCiphertext;
-    auto outRust = saplingBundle.GetDetails().get_output(outIndex);
-    auto rustOutCiphertext = outRust->out_ciphertext();
-    std::memcpy(&outCiphertext, &rustOutCiphertext, 80);
-    return outCiphertext;
-}
-
-std::optional<libzcash::GrothProof> CTransaction::GetOutputZKProof(size_t outIndex) const
-{
-    if (outIndex >= GetSaplingOutputsCount()) {
-        return std::nullopt;
-    }
-
-    libzcash::GrothProof zkproof;
-    auto outRust = saplingBundle.GetDetails().get_output(outIndex);
-    auto rustZKProof = outRust->zkproof();
-    std::memcpy(&zkproof, &rustZKProof, 80);
-    return zkproof;
 }
 
 const rust::Vec<sapling::Output> CTransaction::GetSaplingOutputs() const
 {
     return saplingBundle.GetDetails().outputs();
 }
-
-std::vector<OutputDescription> CTransaction::GetOutputDescriptionFromBundle() const
-{
-    std::vector<OutputDescription> returnOutputs;
-    if (saplingBundle.IsPresent()) {
-        size_t outCount = GetSaplingOutputsCount();
-
-        for (size_t i = 0; i < outCount; i++) {
-            auto outRust = saplingBundle.GetDetails().get_output(i);
-            OutputDescription outDescription;
-
-            auto rustCV = outRust->cv();
-            std::memcpy(&outDescription.cv, &rustCV, 32);
-
-            auto rustCMU = outRust->cmu();
-            std::memcpy(&outDescription.cmu, &rustCMU, 32);
-
-            auto rustEphemeralKey = outRust->ephemeral_key();
-            std::memcpy(&outDescription.ephemeralKey, &rustEphemeralKey, 32);
-
-            auto rustEncCiphertext = outRust->enc_ciphertext();
-            std::memcpy(&outDescription.encCiphertext, &rustEncCiphertext, 580);
-
-            auto rustOutCiphertext = outRust->out_ciphertext();
-            std::memcpy(&outDescription.outCiphertext, &rustOutCiphertext, 80);
-
-            auto rustZKProof = outRust->zkproof();
-            std::memcpy(&outDescription.zkproof, &rustZKProof, 192);
-
-            returnOutputs.emplace_back(outDescription);
-        }
-    }
-
-    return returnOutputs;
-}
-
 
 /**
  * Returns the Sapling value balance for the transaction.
@@ -734,42 +506,4 @@ const SaplingBundle& CTransaction::GetSaplingBundle() const
 const OrchardBundle& CTransaction::GetOrchardBundle() const
 {
     return orchardBundle;
-}
-
-/**
- * Create a Sapling bundle from the legacy stuctures
- */
-bool CMutableTransaction::CreateSaplingBundleFromLegacy()
-{
-    rust::Box<sapling::BundleAssembler> assembler = sapling::new_bundle_assembler();
-
-    for (const SpendDescription& spendDesc : vShieldedSpend) {
-        std::array<unsigned char, 384> transferData;
-        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-
-        // Serialize sending data
-        ss << spendDesc;
-        ss >> transferData;
-
-        assembler->add_spend_to_assembler(transferData);
-
-    }
-
-    for (const OutputDescription& outputDesc : vShieldedOutput) {
-        std::array<unsigned char, 948> transferData;
-        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-
-        // Serialize sending data
-        ss << outputDesc;
-        ss >> transferData;
-
-        assembler->add_output_to_assembler(transferData);
-
-    }
-
-    assembler->add_value_balance_to_assembler(valueBalance);
-
-    saplingBundle.FinishBundleAssembly(std::move(assembler), bindingSig);
-
-    return true;
 }
