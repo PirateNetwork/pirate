@@ -1365,11 +1365,11 @@ uint256 SignatureHash(
             hashJoinSplits = txdata.hashJoinSplits;
         }
 
-        if (!txTo.vShieldedSpend.empty()) {
+        if (txTo.GetSaplingSpendsCount() > 0) {
             hashShieldedSpends = txdata.hashShieldedSpends;
         }
 
-        if (!txTo.vShieldedOutput.empty()) {
+        if (txTo.GetSaplingOutputsCount() > 0) {
             hashShieldedOutputs = txdata.hashShieldedOutputs;
         }
 

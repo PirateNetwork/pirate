@@ -2199,8 +2199,9 @@ bool CWallet::IsNoteSaplingChange(const std::set<std::pair<libzcash::PaymentAddr
     // - Notes created by consolidation transactions (e.g. using
     //   z_mergetoaddress).
     // - Notes sent from one address to itself.
-    for (const SpendDescription &spend : mapWallet[op.hash].vShieldedSpend) {
-        if (nullifierSet.count(std::make_pair(address, spend.nullifier))) {
+    for (const auto& spend : mapWallet[op.hash].GetSaplingSpends())  {
+        uint256 nullifier = uint256::FromRawBytes(spend.nullifier());
+        if (nullifierSet.count(std::make_pair(address, nullifier))) {
             return true;
         }
     }
@@ -2293,8 +2294,8 @@ set<uint256> CWallet::GetConflicts(const uint256& txid) const
 
     std::pair<TxNullifiers::const_iterator, TxNullifiers::const_iterator> range_o;
 
-    for (const SpendDescription &spend : wtx.vShieldedSpend) {
-        uint256 nullifier = spend.nullifier;
+    for (const auto& spend : wtx.GetSaplingSpends())  {
+        uint256 nullifier = uint256::FromRawBytes(spend.nullifier());
         if (mapTxSaplingNullifiers.count(nullifier) <= 1) {
             continue;  // No conflict if zero or one spends
         }
@@ -2688,8 +2689,10 @@ void CWallet::AddToSpends(const uint256& wtxid)
             AddToSproutSpends(nullifier, wtxid);
         }
     }
-    for (const SpendDescription &spend : thisTx.vShieldedSpend) {
-        AddToSaplingSpends(spend.nullifier, wtxid);
+
+    for (const auto& spend : thisTx.GetSaplingSpends())  {
+        uint256 nullifier = uint256::FromRawBytes(spend.nullifier());
+        AddToSaplingSpends(nullifier, wtxid);
     }
 }
 
@@ -2834,19 +2837,17 @@ bool CWallet::ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex) {
                     if (pwtx->GetHash() == txid) {
                         saplingWalletCheck.CreateEmptyPositionsForTxid(pCheckIndex->nHeight, txid);
 
-                        for (int j = 0; j < pCheckBlock->vtx[i].vShieldedOutput.size(); j++) {
+                        auto vOutputs = pCheckBlock->vtx[i].GetSaplingOutputs();
+                        for (int j = 0; j < vOutputs.size(); j++) {
                             auto opit = pwtx->mapSaplingNoteData.find(op);
                             if (opit != pwtx->mapSaplingNoteData.end() && j == op.n) {
-                                saplingWalletCheck.AppendNoteCommitment(pCheckIndex->nHeight, txid, i, j, pCheckBlock->vtx[i].vShieldedOutput[j], true);
+                                saplingWalletCheck.AppendNoteCommitment(pCheckIndex->nHeight, txid, i, j, &vOutputs[j], true);
+                                assert(saplingWalletCheck.IsNoteTracked(txid, j, positionCheck));
+                                LogPrint("saplingwallet", "Sapling Wallet - Merkle Path position %i\n", positionCheck);
 
-                                //Get Merkle Path for note position
-                                assert(saplingWalletCheck.GetMerklePathOfNote(txid, j, saplingCheckMerklePath));
-                                positionCheck = saplingCheckMerklePath.position();
-
-                                LogPrint("saplingwallet", "Sapling Check Wallet - Merkle Path position %i\n", positionCheck);
 
                             } else {
-                                saplingWalletCheck.AppendNoteCommitment(pCheckIndex->nHeight, txid, i, j, pCheckBlock->vtx[i].vShieldedOutput[j], false);
+                                saplingWalletCheck.AppendNoteCommitment(pCheckIndex->nHeight, txid, i, j, &vOutputs[j], false);
                             }
                         }
 
@@ -3014,22 +3015,23 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex) {
                     if (it != mapWallet.end()) {
                         saplingWallet.CreateEmptyPositionsForTxid(pblockindex->nHeight, txid);
                         CWalletTx *pwtx = &(*it).second;
-                        for (int j = 0; j < pblock->vtx[i].vShieldedOutput.size(); j++) {
+                        auto vOutputs = pblock->vtx[i].GetSaplingOutputs();
+                        for (int j = 0; j < vOutputs.size(); j++) {
                             SaplingOutPoint op = SaplingOutPoint(txid, j);
                             auto opit = pwtx->mapSaplingNoteData.find(op);
 
                             if (opit != pwtx->mapSaplingNoteData.end()) {
-                                saplingWallet.AppendNoteCommitment(pblockindex->nHeight, txid, i, j, pblock->vtx[i].vShieldedOutput[j], true);
-                                //Get Merkle Path for note position
-                                MerklePath saplingMerklePath;
-                                assert(saplingWallet.GetMerklePathOfNote(txid, j, saplingMerklePath));
-                                uint64_t position = saplingMerklePath.position();
+                                saplingWallet.AppendNoteCommitment(pblockindex->nHeight, txid, i, j, &vOutputs[j], true);
+                                //Get note position
+                                uint64_t position = 0;
+                                assert(saplingWallet.IsNoteTracked(txid, j, position));
                                 pwtx->mapSaplingNoteData[op].setPosition(position);
 
                                 LogPrint("saplingwallet", "Sapling Wallet - Merkle Path position %i\n", position);
 
+
                             } else {
-                                saplingWallet.AppendNoteCommitment(pblockindex->nHeight, txid, i, j, pblock->vtx[i].vShieldedOutput[j], false);
+                                saplingWallet.AppendNoteCommitment(pblockindex->nHeight, txid, i, j, &vOutputs[j], false);
                             }
                         }
                         UpdateSaplingNullifierNoteMapWithTx(pwtx);
@@ -3070,23 +3072,29 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex) {
                 if (it != mapWallet.end()) {
                     saplingWallet.CreateEmptyPositionsForTxid(pindex->nHeight, txid);
                     CWalletTx *pwtx = &(*it).second;
-                    for (int j = 0; j < pblock->vtx[i].vShieldedOutput.size(); j++) {
+                    auto vOutputs = pblock->vtx[i].GetSaplingOutputs();
+
+                    LogPrint("saplingwallet", "Sapling Wallet - Appending Single Commitments for transaction %s\n", pwtx->GetHash().ToString());
+
+                    for (int j = 0; j < vOutputs.size(); j++) {
                         SaplingOutPoint op = SaplingOutPoint(txid, j);
                         auto opit = pwtx->mapSaplingNoteData.find(op);
+                        LogPrint("saplingwallet", "Sapling Wallet - Checking for outpoint %s, %i\n", pwtx->GetHash().ToString(), j);
 
                         if (opit != pwtx->mapSaplingNoteData.end()) {
-                            saplingWallet.AppendNoteCommitment(pindex->nHeight, txid, i, j, pblock->vtx[i].vShieldedOutput[j], true);
+                            LogPrint("saplingwallet", "Sapling Wallet - Appending outpoint %s, %i\n", pwtx->GetHash().ToString(), j);
+                            saplingWallet.AppendNoteCommitment(pindex->nHeight, txid, i, j, &vOutputs[j], true);
 
-                            //Get Merkle Path for note position
-                            MerklePath saplingMerklePath;
-                            assert(saplingWallet.GetMerklePathOfNote(txid, j, saplingMerklePath));
-                            uint64_t position = saplingMerklePath.position();
+                            //Get note position
+                            uint64_t position = 0;
+                            assert(saplingWallet.IsNoteTracked(txid, j, position));
                             pwtx->mapSaplingNoteData[op].setPosition(position);
 
                             LogPrint("saplingwallet", "Sapling Wallet - Merkle Path position %i\n", position);
 
                         } else {
-                            saplingWallet.AppendNoteCommitment(pindex->nHeight, txid, i, j, pblock->vtx[i].vShieldedOutput[j], false);
+                            LogPrint("saplingwallet", "Sapling Wallet - Outpoint %s, %i not found in note data\n", pwtx->GetHash().ToString(), j);
+                            saplingWallet.AppendNoteCommitment(pindex->nHeight, txid, i, j, &vOutputs[j], false);
                         }
                     }
                     UpdateSaplingNullifierNoteMapWithTx(pwtx);
@@ -3132,15 +3140,6 @@ void CWallet::DecrementSaplingWallet(const CBlockIndex* pindex) {
 
 }
 
-
-// template<typename NoteData>
-// void ClearSingleNoteWitnessCache(NoteData* nd)
-// {
-//     nd->witnesses.clear();
-//     nd->witnessHeight = -1;
-//     nd->witnessRootValidated = false;
-// }
-
 int CWallet::SproutWitnessMinimumHeight(const uint256& nullifier, int nWitnessHeight, int nMinimumHeight)
 {
     if (GetSproutSpendDepth(nullifier) <= WITNESS_CACHE_SIZE) {
@@ -3156,328 +3155,6 @@ int CWallet::SaplingWitnessMinimumHeight(const uint256& nullifier, int nWitnessH
     }
     return nMinimumHeight;
 }
-
-// int CWallet::VerifyAndSetInitialWitness(const CBlockIndex* pindex, bool witnessOnly)
-// {
-//   AssertLockHeld(cs_main);
-//   AssertLockHeld(cs_wallet);
-//
-//   int nWitnessTxIncrement = 0;
-//   int nWitnessTotalTxCount = mapWallet.size();
-//   int nMinimumHeight = pindex->nHeight;
-//   bool walletHasNotes = false; //Use to enable z_sendmany when no notes are present
-//
-//   for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
-//
-//     nWitnessTxIncrement += 1;
-//
-//     if (wtxItem.second.mapSproutNoteData.empty() && wtxItem.second.mapSaplingNoteData.empty())
-//       continue;
-//
-//     if (mapBlockIndex.count(wtxItem.second.hashBlock) == 0)
-//       continue;
-//
-//     if (wtxItem.second.GetDepthInMainChain() > 0) {
-//       walletHasNotes = true;
-//       auto wtxHash = wtxItem.second.GetHash();
-//       int wtxHeight = mapBlockIndex[wtxItem.second.hashBlock]->nHeight;
-//
-//       for (mapSaplingNoteData_t::value_type& item : wtxItem.second.mapSaplingNoteData) {
-//
-//         auto op = item.first;
-//         auto* nd = &(item.second);
-//         CBlockIndex* pblockindex;
-//         uint256 blockRoot;
-//         uint256 witnessRoot;
-//
-//         if (!nd->nullifier)
-//           ::ClearSingleNoteWitnessCache(nd);
-//
-//         if (!nd->witnesses.empty() && nd->witnessHeight > 0) {
-//
-//           //Skip all functions for validated witness while witness only = true
-//           if (nd->witnessRootValidated && witnessOnly)
-//             continue;
-//
-//           //Skip Validation when witness root has been validated
-//           if (nd->witnessRootValidated) {
-//             nMinimumHeight = SaplingWitnessMinimumHeight(*item.second.nullifier, nd->witnessHeight, nMinimumHeight);
-//             continue;
-//           }
-//
-//           //Skip Validation when witness height is greater that block height
-//           if (nd->witnessHeight > pindex->nHeight - 1) {
-//             nMinimumHeight = SaplingWitnessMinimumHeight(*item.second.nullifier, nd->witnessHeight, nMinimumHeight);
-//             continue;
-//           }
-//
-//           //Validate the witness at the witness height
-//           witnessRoot = nd->witnesses.front().root();
-//           pblockindex = chainActive[nd->witnessHeight];
-//           blockRoot = pblockindex->hashFinalSaplingRoot;
-//           if (witnessRoot == blockRoot) {
-//             nd->witnessRootValidated = true;
-//             nMinimumHeight = SaplingWitnessMinimumHeight(*item.second.nullifier, nd->witnessHeight, nMinimumHeight);
-//             continue;
-//           }
-//         }
-//
-//         //Clear witness Cache for all other scenarios
-//         pblockindex = chainActive[wtxHeight];
-//         ::ClearSingleNoteWitnessCache(nd);
-//
-//         LogPrintf("Setting Inital Sapling Witness for tx %s, %i of %i\n", wtxHash.ToString(), nWitnessTxIncrement, nWitnessTotalTxCount);
-//
-//         SaplingMerkleTree saplingTree;
-//         blockRoot = pblockindex->pprev->hashFinalSaplingRoot;
-//         pcoinsTip->GetSaplingAnchorAt(blockRoot, saplingTree);
-//
-//         //Cycle through blocks and transactions building sapling tree until the commitment needed is reached
-//         const CBlock* pblock;
-//         CBlock block;
-//         ReadBlockFromDisk(block, pblockindex, 1);
-//         pblock = &block;
-//
-//         for (const CTransaction& tx : block.vtx) {
-//           auto hash = tx.GetHash();
-//
-//           // Sapling
-//           for (uint32_t i = 0; i < tx.vShieldedOutput.size(); i++) {
-//             const uint256& note_commitment = tx.vShieldedOutput[i].cmu;
-//
-//             // Increment existing witness until the end of the block
-//             if (!nd->witnesses.empty()) {
-//               nd->witnesses.front().append(note_commitment);
-//             }
-//
-//             //Only needed for intial witness
-//             if (nd->witnesses.empty()) {
-//               saplingTree.append(note_commitment);
-//
-//               // If this is our note, witness it
-//               if (hash == wtxHash) {
-//                 SaplingOutPoint outPoint {hash, i};
-//                 if (op == outPoint) {
-//                   nd->witnesses.push_front(saplingTree.witness());
-//                 }
-//               }
-//             }
-//           }
-//         }
-//         nd->witnessHeight = pblockindex->nHeight;
-//         UpdateSaplingNullifierNoteMapWithTx(wtxItem.second);
-//         nMinimumHeight = SaplingWitnessMinimumHeight(*item.second.nullifier, nd->witnessHeight, nMinimumHeight);
-//       }
-//     }
-//   }
-//   //enable z_sendmany when the wallet has no Notes
-//   if (!IsInitialBlockDownload()) {
-//       if (!walletHasNotes || nMinimumHeight == pindex->nHeight) {
-//           fInitWitnessesBuilt = true;
-//       }
-//   }
-//
-//   return nMinimumHeight;
-// }
-
-// static void BuildSingleSaplingWitness(CWallet* wallet, std::vector<SaplingNoteData*> vNoteData, const CBlock *pblock, const int &nHeight, const int threadNumber)
-// {
-//     for (auto pnd : vNoteData) {
-//         if (pnd->witnessHeight == nHeight - 1) {
-//             SaplingWitness witness = pnd->witnesses.front();
-//             for (const CTransaction& ctx : pblock->vtx) {
-//                 for (const OutputDescription &outdesc : ctx.vShieldedOutput) {
-//                     witness.append(outdesc.cmu);
-//                 }
-//             }
-//
-//             {
-//                 LOCK(wallet->cs_wallet_threadedfunction);
-//                 pnd->witnesses.push_front(witness);
-//                 while (pnd->witnesses.size() > WITNESS_CACHE_SIZE) {
-//                     pnd->witnesses.pop_back();
-//                 }
-//
-//                 pnd->witnessHeight = nHeight;
-//             }
-//         }
-//     }
-// }
-
-// void CWallet::BuildWitnessCache(const CBlockIndex* pindex, bool witnessOnly)
-// {
-//   AssertLockHeld(cs_main);
-//   AssertLockHeld(cs_wallet);
-//
-//   //Get start time for logging
-//   int64_t nNow1 = GetTime();
-//   int64_t nNow2 = GetTime();
-//   int64_t nNow3 = GetTime();
-//
-//   //Verifiy current witnesses again the SaplingHashRoot and/or set new initial witness
-//   int startHeight = VerifyAndSetInitialWitness(pindex, witnessOnly) + 1;
-//
-//   //disable this function
-//   //return;
-//
-//   if (startHeight > pindex->nHeight || witnessOnly) {
-//     return;
-//   }
-//
-//   if (fCleanUpMode) {
-//       fBuilingWitnessCache = false;
-//       return;
-//   }
-//
-//   //Disable RPC while IsInitialBlockDownload()
-//   if (IsInitialBlockDownload() && !fInitWitnessesBuilt) {
-//       fBuilingWitnessCache = true;
-//   }
-//
-//   // Set Starting Values
-//   CBlockIndex* pblockindex = chainActive[startHeight];
-//   int height = chainActive.Height();
-//
-//   //Show in UI
-//   bool uiShown = false;
-//   const CChainParams& chainParams = Params();
-//   double dProgressStart = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false);
-//   double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.Tip(), false);
-//
-//   //Create a vector of vectors of SaplingNoteData that needs to be updated to pass to the async threads
-//   //The SaplingNoteData needs to be batched so async threads won't overwhelm the host system with threads
-//   //Prepare this before going into the blockindex loop to prevent rechecking on each loop
-//   std::vector<SaplingNoteData*> vNoteData;
-//   std::vector<std::vector<SaplingNoteData*>> vvNoteData;
-//   for (int i = 0; i < maxProcessingThreads; i++) {
-//       vvNoteData.emplace_back(vNoteData);
-//   }
-//
-//   int t = 0;
-//   //Gather up notedata to be processed
-//   for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
-//       CWalletTx* pwtx = &(it->second);
-//       if (pwtx->mapSaplingNoteData.empty()) {
-//           continue;
-//       }
-//
-//       if (pwtx->GetDepthInMainChain() > 0) {
-//           int i = 0;
-//           for (mapSaplingNoteData_t::value_type& item : pwtx->mapSaplingNoteData) {
-//               auto* pnd = &(item.second);
-//
-//               if (pnd->nullifier && GetSaplingSpendDepth(pnd->nullifier.value()) <= WITNESS_CACHE_SIZE) {
-//
-//                   vvNoteData[t].emplace_back(pnd);
-//                   //Increment thread vector
-//                   t++;
-//                   //reset if tread vector is greater qty of threads being used
-//                   if (t >= vvNoteData.size()) {
-//                       t = 0;
-//                   }
-//
-//               } else {
-//                   //remove all but the last witness to save disk space once the note has been spent
-//                   //and is deep enough to not be affected by chain reorg
-//                   while (pnd->witnesses.size() > 1) {
-//                       pnd->witnesses.pop_back();
-//                   }
-//               }
-//               i++;
-//           }
-//       }
-//   }
-//
-//   //Retrieve the full block to get all of the transaction commitments
-//   CBlock block;
-//   ReadBlockFromDisk(block, pblockindex, 1);
-//   CBlock *pblock = &block;
-//
-//   while (pblockindex) {
-//
-//       //exit loop if trying to shutdown
-//       if (ShutdownRequested()) {
-//           break;
-//       }
-//
-//       //Report Progress to the GUI and log file
-//       int witnessHeight = pblockindex->nHeight;
-//       if ((witnessHeight % 100 == 0 || GetTime() >= nNow1 + 15) && witnessHeight < height - 5 ) {
-//           nNow1 = GetTime();
-//           if (!uiShown) {
-//               uiShown = true;
-//               uiInterface.ShowProgress("Building Witnesses", 0, false);
-//           }
-//           scanperc = (int)((Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false) - dProgressStart) / (dProgressTip - dProgressStart) * 100);
-//           uiInterface.ShowProgress(_(("Building Witnesses for block " + std::to_string(witnessHeight) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
-//       }
-//
-//       if (GetTime() >= nNow2 + 60) {
-//           nNow2 = GetTime();
-//           LogPrintf("Building Witnesses for block %d. Progress=%f\n", witnessHeight, Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex));
-//       }
-//
-//       //flush progress to disk every 10 minutes
-//       if (GetTime() >= nNow3 + 600) {
-//           nNow3 = GetTime();
-//           LogPrintf("Writing witness building progress to the disk.\n");
-//           const CBlockLocator locatorBlock = chainActive.GetLocator(pindex);
-//           const int locatorHeight = pindex->nHeight;
-//           SetBestChain(locatorBlock, locatorHeight);
-//       }
-//
-//       //Create 1 thread per group of notes
-//       std::vector<boost::thread*> witnessThreads;
-//       for (int i = 0; i < vvNoteData.size(); i++) {
-//           if (!vvNoteData[i].empty()) {
-//             witnessThreads.emplace_back(new boost::thread(BuildSingleSaplingWitness, this, vvNoteData[i], pblock, witnessHeight, i));
-//           }
-//       }
-//
-//       //prefetch the next block while the worker threads are processing
-//       auto nNowReadTime = GetTimeMicros();
-//       CBlockIndex* pnextblockindex = chainActive.Next(pblockindex);
-//       CBlock nextBlock;
-//       if (pnextblockindex) {
-//           ReadBlockFromDisk(nextBlock, pnextblockindex, 1);
-//       }
-//
-//       // Cleanup
-//       for (auto wthread : witnessThreads) {
-//           wthread->join();
-//           delete wthread;
-//       }
-//
-//       witnessThreads.resize(0);
-//
-//       //Check completeness
-//       if (pblockindex == pindex)
-//           break;
-//
-//       //Set Variables for next loop
-//       pblockindex = chainActive.Next(pblockindex);
-//       block = nextBlock;
-//       pblock = &block;
-//
-//   }
-//
-//   if (uiShown) {
-//       uiInterface.ShowProgress(_("Witness Cache Complete..."), 100, false);
-//   }
-//
-//   //clean up
-//   for (int i = 0; i < vvNoteData.size(); i++) {
-//       for (auto pnd : vNoteData) {
-//           delete pnd;
-//       }
-//       vvNoteData[i].resize(0);
-//   }
-//   vvNoteData.resize(0);
-//
-//   fInitWitnessesBuilt = true;
-//   fBuilingWitnessCache = false;
-//
-// }
 
 bool CWallet::DecryptWalletTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& hash, CWalletTx& wtx) {
 
@@ -4084,6 +3761,8 @@ void CWallet::UpdateSproutNullifierNoteMapWithTx(CWalletTx& wtx) {
 void CWallet::UpdateSaplingNullifierNoteMapWithTx(CWalletTx* wtx) {
     LOCK(cs_wallet);
 
+    auto vOutputs = wtx->GetSaplingOutputs();
+
     for (mapSaplingNoteData_t::value_type &item : wtx->mapSaplingNoteData) {
         SaplingOutPoint op = item.first;
         SaplingNoteData nd = item.second;
@@ -4103,15 +3782,22 @@ void CWallet::UpdateSaplingNullifierNoteMapWithTx(CWalletTx* wtx) {
             // Skip if we only have incoming viewing key
             if (mapSaplingFullViewingKeys.count(nd.ivk) != 0) {
                 SaplingExtendedFullViewingKey extfvk = mapSaplingFullViewingKeys.at(nd.ivk);
-                OutputDescription output = wtx->vShieldedOutput[op.n];
 
-                auto optDeserialized = SaplingNotePlaintext::attempt_sapling_enc_decryption_deserialization(output.encCiphertext, nd.ivk, output.ephemeralKey);
+                //Cipher Text
+                libzcash::SaplingEncCiphertext encCiphertext;
+                auto rustEncCiphertext = vOutputs[op.n].enc_ciphertext();
+                std::memcpy(&encCiphertext, &rustEncCiphertext, 580);
+
+                auto ephemeralKey = uint256::FromRawBytes(vOutputs[op.n].ephemeral_key());
+                auto cmu = uint256::FromRawBytes(vOutputs[op.n].cmu());
+
+                auto optDeserialized = SaplingNotePlaintext::attempt_sapling_enc_decryption_deserialization(encCiphertext, nd.ivk, ephemeralKey);
 
                 // The transaction would not have entered the wallet unless
                 // its plaintext had been successfully decrypted previously.
                 assert(optDeserialized != std::nullopt);
 
-                auto optPlaintext = SaplingNotePlaintext::plaintext_checks_without_height(*optDeserialized, nd.ivk, output.ephemeralKey, output.cmu);
+                auto optPlaintext = SaplingNotePlaintext::plaintext_checks_without_height(*optDeserialized, nd.ivk, ephemeralKey, cmu);
 
                 // An item in mapSaplingNoteData must have already been successfully decrypted,
                 // otherwise the item would not exist in the first place.
@@ -4395,8 +4081,8 @@ void CWallet::MarkAffectedTransactionsDirty(const CTransaction& tx)
         }
     }
 
-    for (const SpendDescription &spend : tx.vShieldedSpend) {
-        uint256 nullifier = spend.nullifier;
+    for (const auto& spend : tx.GetSaplingSpends())  {
+        uint256 nullifier = uint256::FromRawBytes(spend.nullifier());
         if (mapSaplingNullifiersToNotes.count(nullifier) &&
             mapWallet.count(mapSaplingNullifiersToNotes[nullifier].hash)) {
             mapWallet[mapSaplingNullifiersToNotes[nullifier].hash].MarkDirty();
@@ -4529,14 +4215,25 @@ mapSproutNoteData_t CWallet::FindMySproutNotes(const CTransaction &tx) const
  * the result of FindMySaplingNotes (for the addresses available at the time) will
  * already have been cached in CWalletTx.mapSaplingNoteData.
  */
-static void DecryptSaplingNoteWorker(const CWallet *wallet, std::vector<const SaplingIncomingViewingKey*> vIvk, std::vector<const OutputDescription*> vOutput, std::vector<uint32_t> vPosition, const std::vector<uint256> vHash, const int &height, mapSaplingNoteData_t *noteData, SaplingIncomingViewingKeyMap *viewingKeysToAdd, int threadNumber)
+static void DecryptSaplingNoteWorker(
+    const CWallet *wallet,
+    const std::vector<const SaplingIncomingViewingKey*> vIvk,
+    const std::vector<SaplingEncryptedNote> vSaplingEncryptedNote,
+    const std::vector<uint32_t> vPosition,
+    const std::vector<uint256> vHash,
+    const int &height,
+    mapSaplingNoteData_t *noteData,
+    SaplingIncomingViewingKeyMap *viewingKeysToAdd,
+    int threadNumber)
 {
     for (int i = 0; i < vIvk.size(); i++) {
         const SaplingIncomingViewingKey ivk = *vIvk[i];
-        const OutputDescription output = *vOutput[i];
+        const libzcash::SaplingEncCiphertext encCiphertext = vSaplingEncryptedNote[i].encCiphertext;
+        const uint256 ephemeralKey = vSaplingEncryptedNote[i].ephemeralKey;
+        const uint256 cmu = vSaplingEncryptedNote[i].cmu;
         const uint256 hash = vHash[i];
 
-        auto result = SaplingNotePlaintext::decrypt(Params().GetConsensus(), height, output.encCiphertext, ivk, output.ephemeralKey, output.cmu);
+        auto result = SaplingNotePlaintext::decrypt(Params().GetConsensus(), height, encCiphertext, ivk, ephemeralKey, cmu);
         if (result) {
 
             auto address = ivk.address(result.value().d);
@@ -4577,9 +4274,9 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
     std::vector<const SaplingIncomingViewingKey*> vIvk;
     std::vector<std::vector<const SaplingIncomingViewingKey*>> vvIvk;
 
-    //Create OutputDescription thread buckets
-    std::vector<const OutputDescription*> vOutputDescrition;
-    std::vector<std::vector<const OutputDescription*>> vvOutputDescrition;
+    //Create Output thread buckets
+    std::vector<SaplingEncryptedNote> vSaplingEncryptedNote;
+    std::vector<std::vector<SaplingEncryptedNote>> vvSaplingEncryptedNote;
 
     //Create transaction position thread buckets
     std::vector<uint32_t> vPosition;
@@ -4591,7 +4288,7 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
 
     for (uint32_t i = 0; i < maxProcessingThreads; i++) {
         vvIvk.emplace_back(vIvk);
-        vvOutputDescrition.emplace_back(vOutputDescrition);
+        vvSaplingEncryptedNote.emplace_back(vSaplingEncryptedNote);
         vvPosition.emplace_back(vPosition);
         vvHash.emplace_back(vHash);
     }
@@ -4601,12 +4298,30 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
     for (uint32_t j = 0; j < vtx.size(); j++) {
         //Transaction being processed
         uint256 hash = vtx[j].GetHash();
-        for (uint32_t i = 0; i < vtx[j].vShieldedOutput.size(); i++) {
+        auto vOutputs = vtx[j].GetSaplingOutputs();
+
+        for (uint32_t i = 0; i < vOutputs.size(); i++) {
+
+            //new note
+            SaplingEncryptedNote encrypted_note;
+
+            //Cipher Text
+            auto rustEncCiphertext = vOutputs[i].enc_ciphertext();
+            std::memcpy(&encrypted_note.encCiphertext, &rustEncCiphertext, 580);
+
+            //Ephemeral Key
+            encrypted_note.ephemeralKey = uint256::FromRawBytes(vOutputs[i].ephemeral_key());
+
+            //CMU
+            encrypted_note.cmu = uint256::FromRawBytes(vOutputs[i].cmu());
+
+            //Create a tread entry for every ivk with the current note.
             for (auto it = setSaplingIncomingViewingKeys.begin(); it != setSaplingIncomingViewingKeys.end(); it++) {
                 vvIvk[t].emplace_back(&(*it));
-                vvOutputDescrition[t].emplace_back(&vtx[j].vShieldedOutput[i]);
                 vvPosition[t].emplace_back(i);
                 vvHash[t].emplace_back(hash);
+                vvSaplingEncryptedNote[t].emplace_back(encrypted_note);
+
                 //Increment ivk vector
                 t++;
                 //reset if ivk vector is greater qty of threads being used
@@ -4621,7 +4336,7 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
     std::vector<boost::thread*> decryptionThreads;
     for (uint32_t i = 0; i < vvIvk.size(); ++i) {
         if(!vvIvk[i].empty()) {
-            decryptionThreads.emplace_back(new boost::thread(DecryptSaplingNoteWorker, this, vvIvk[i], vvOutputDescrition[i], vvPosition[i], vvHash[i], height, &noteData, &viewingKeysToAdd, i));
+            decryptionThreads.emplace_back(new boost::thread(DecryptSaplingNoteWorker, this, vvIvk[i], vvSaplingEncryptedNote[i], vvPosition[i], vvHash[i], height, &noteData, &viewingKeysToAdd, i));
         }
     }
 
@@ -4631,22 +4346,11 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
         delete dthread;
     }
 
-    //clean up pointers
-    for (uint32_t i = 0; i < vvOutputDescrition.size(); i++) {
-        for (auto pOutputDescrition : vOutputDescrition) {
-            delete pOutputDescrition;
-        }
-        vvOutputDescrition[i].resize(0);
-    }
-    vvOutputDescrition.resize(0);
-
-    for (uint32_t i = 0; i < vvIvk.size(); i++) {
-        for (auto pIvk : vIvk) {
-            delete pIvk;
-        }
-        vvIvk[i].resize(0);
-    }
+    //clean up vectors
     vvIvk.resize(0);
+    vvSaplingEncryptedNote.resize(0);
+    vvPosition.resize(0);
+    vvHash.resize(0);
 
     return std::make_pair(noteData, viewingKeysToAdd);
 }
@@ -4727,8 +4431,9 @@ bool CWallet::GetSaplingNoteMerklePaths(std::vector<SaplingOutPoint> notes,
 
             //Calculate the anchor
             uint256 anchor;
-            OutputDescription output = wtx->vShieldedOutput[op.n];
-            if (!saplingWallet.GetPathRootWithCMU(saplingMerklePaths[i], output.cmu, anchor)) {
+            auto vOutputs = wtx->GetSaplingOutputs();
+            auto cmu = uint256::FromRawBytes(vOutputs[op.n].cmu());
+            if (!saplingWallet.GetPathRootWithCMU(saplingMerklePaths[i], cmu, anchor)) {
                 return false;
             }
 
@@ -4987,8 +4692,9 @@ bool CWallet::IsFromMe(const CTransaction& tx) const
             }
         }
     }
-    for (const SpendDescription &spend : tx.vShieldedSpend) {
-        if (IsSaplingNullifierFromMe(spend.nullifier)) {
+    for (const auto& spend : tx.GetSaplingSpends())  {
+        uint256 nullifier = uint256::FromRawBytes(spend.nullifier());
+        if (IsSaplingNullifierFromMe(nullifier)) {
             return true;
         }
     }
@@ -5196,7 +4902,7 @@ void CWalletTx::SetSaplingNoteData(mapSaplingNoteData_t &noteData)
 {
     mapSaplingNoteData.clear();
     for (const std::pair<SaplingOutPoint, SaplingNoteData> nd : noteData) {
-        if (nd.first.n < vShieldedOutput.size()) {
+        if (nd.first.n < GetSaplingOutputsCount()) {
             mapSaplingNoteData[nd.first] = nd.second;
         } else {
             throw std::logic_error("CWalletTx::SetSaplingNoteData(): Invalid note");
@@ -5253,16 +4959,19 @@ std::optional<std::pair<
         return std::nullopt;
     }
 
-    auto output = this->vShieldedOutput[op.n];
+    auto vOutputs = this->GetSaplingOutputs();
+    auto encCiphertext = vOutputs[op.n].enc_ciphertext();
+    auto ephemeralKey = uint256::FromRawBytes(vOutputs[op.n].ephemeral_key());
+    auto cmu = uint256::FromRawBytes(vOutputs[op.n].cmu());
     auto nd = this->mapSaplingNoteData.at(op);
 
     auto maybe_pt = SaplingNotePlaintext::decrypt(
         params,
         height,
-        output.encCiphertext,
+        encCiphertext,
         nd.ivk,
-        output.ephemeralKey,
-        output.cmu);
+        ephemeralKey,
+        cmu);
     assert(maybe_pt != std::nullopt);
     auto notePt = maybe_pt.value();
 
@@ -5282,10 +4991,13 @@ std::optional<std::pair<
         return std::nullopt;
     }
 
-    auto output = this->vShieldedOutput[op.n];
+    auto vOutputs = this->GetSaplingOutputs();
+    auto encCiphertext = vOutputs[op.n].enc_ciphertext();
+    auto ephemeralKey = uint256::FromRawBytes(vOutputs[op.n].ephemeral_key());
+    auto cmu = uint256::FromRawBytes(vOutputs[op.n].cmu());
     auto nd = this->mapSaplingNoteData.at(op);
 
-    auto optDeserialized = SaplingNotePlaintext::attempt_sapling_enc_decryption_deserialization(output.encCiphertext, nd.ivk, output.ephemeralKey);
+    auto optDeserialized = SaplingNotePlaintext::attempt_sapling_enc_decryption_deserialization(encCiphertext, nd.ivk, ephemeralKey);
 
     // The transaction would not have entered the wallet unless
     // its plaintext had been successfully decrypted previously.
@@ -5294,8 +5006,8 @@ std::optional<std::pair<
     auto maybe_pt = SaplingNotePlaintext::plaintext_checks_without_height(
         *optDeserialized,
         nd.ivk,
-        output.ephemeralKey,
-        output.cmu);
+        ephemeralKey,
+        cmu);
     assert(maybe_pt != std::nullopt);
     auto notePt = maybe_pt.value();
 
@@ -5310,15 +5022,21 @@ std::optional<std::pair<
     SaplingNotePlaintext,
     SaplingPaymentAddress>> CWalletTx::RecoverSaplingNote(const Consensus::Params& params, int height, SaplingOutPoint op, std::set<uint256>& ovks) const
 {
-    auto output = this->vShieldedOutput[op.n];
+
+    auto vOutputs = this->GetSaplingOutputs();
+    auto encCiphertext = vOutputs[op.n].enc_ciphertext();
+    auto outCiphertext = vOutputs[op.n].out_ciphertext();
+    auto ephemeralKey = uint256::FromRawBytes(vOutputs[op.n].ephemeral_key());
+    auto cmu = uint256::FromRawBytes(vOutputs[op.n].cmu());
+    auto cv = uint256::FromRawBytes(vOutputs[op.n].cv());
 
     for (auto ovk : ovks) {
         auto outPt = SaplingOutgoingPlaintext::decrypt(
-            output.outCiphertext,
+            outCiphertext,
             ovk,
-            output.cv,
-            output.cmu,
-            output.ephemeralKey);
+            cv,
+            cmu,
+            ephemeralKey);
         if (!outPt) {
             // Try decrypting with the next ovk
             continue;
@@ -5327,11 +5045,11 @@ std::optional<std::pair<
         auto maybe_pt = SaplingNotePlaintext::decrypt(
             params,
             height,
-            output.encCiphertext,
-            output.ephemeralKey,
+            encCiphertext,
+            ephemeralKey,
             outPt->esk,
             outPt->pk_d,
-            output.cmu);
+            cmu);
         assert(static_cast<bool>(maybe_pt));
         auto notePt = maybe_pt.value();
 
@@ -5346,21 +5064,27 @@ std::optional<std::pair<
     SaplingNotePlaintext,
     SaplingPaymentAddress>> CWalletTx::RecoverSaplingNoteWithoutLeadByteCheck(SaplingOutPoint op, std::set<uint256>& ovks) const
 {
-    auto output = this->vShieldedOutput[op.n];
+
+    auto vOutputs = this->GetSaplingOutputs();
+    auto encCiphertext = vOutputs[op.n].enc_ciphertext();
+    auto outCiphertext = vOutputs[op.n].out_ciphertext();
+    auto ephemeralKey = uint256::FromRawBytes(vOutputs[op.n].ephemeral_key());
+    auto cmu = uint256::FromRawBytes(vOutputs[op.n].cmu());
+    auto cv = uint256::FromRawBytes(vOutputs[op.n].cv());
 
     for (auto ovk : ovks) {
         auto outPt = SaplingOutgoingPlaintext::decrypt(
-            output.outCiphertext,
+            outCiphertext,
             ovk,
-            output.cv,
-            output.cmu,
-            output.ephemeralKey);
+            cv,
+            cmu,
+            ephemeralKey);
         if (!outPt) {
             // Try decrypting with the next ovk
             continue;
         }
 
-        auto optDeserialized = SaplingNotePlaintext::attempt_sapling_enc_decryption_deserialization(output.encCiphertext, output.ephemeralKey, outPt->esk, outPt->pk_d);
+        auto optDeserialized = SaplingNotePlaintext::attempt_sapling_enc_decryption_deserialization(encCiphertext, ephemeralKey, outPt->esk, outPt->pk_d);
 
         // The transaction would not have entered the wallet unless
         // its plaintext had been successfully decrypted previously.
@@ -5368,10 +5092,10 @@ std::optional<std::pair<
 
         auto maybe_pt = SaplingNotePlaintext::plaintext_checks_without_height(
             *optDeserialized,
-            output.ephemeralKey,
+            ephemeralKey,
             outPt->esk,
             outPt->pk_d,
-            output.cmu);
+            cmu);
         assert(static_cast<bool>(maybe_pt));
         auto notePt = maybe_pt.value();
 
@@ -5833,10 +5557,10 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
             }
 
             //Check for outputs that no longer have parents in the wallet. Exclude parents that are in the same transaction. (Sapling)
-            for (int i = 0; i < pwtx->vShieldedSpend.size(); i++) {
-              const SpendDescription& spendDesc = pwtx->vShieldedSpend[i];
-              if (pwalletMain->IsSaplingNullifierFromMe(spendDesc.nullifier)) {
-                const uint256& parentHash = pwalletMain->mapSaplingNullifiersToNotes[spendDesc.nullifier].hash;
+            for (const auto& spend : pwtx->GetSaplingSpends())  {
+              uint256 saplingNullifier = uint256::FromRawBytes(spend.nullifier());
+              if (pwalletMain->IsSaplingNullifierFromMe(saplingNullifier)) {
+                const uint256& parentHash = pwalletMain->mapSaplingNullifiersToNotes[saplingNullifier].hash;
                 const CWalletTx* parent = pwalletMain->GetWalletTx(parentHash);
                 if (parent != NULL && parentHash != wtxid) {
                   LogPrint("deletetx","DeleteTx - Parent of sapling tx %s found\n", pwtx->GetHash().ToString());
@@ -5986,7 +5710,7 @@ bool CWallet::initalizeArcTx() {
         }
 
         //Initalize in memory saplingnotedata
-        for (uint32_t i = 0; i < wtx.vShieldedOutput.size(); ++i) {
+        for (uint32_t i = 0; i < wtx.GetSaplingOutputsCount(); ++i) {
             auto op = SaplingOutPoint(wtxid, i);
 
             if (wtx.mapSaplingNoteData.count(op) != 0) {
@@ -8745,67 +8469,15 @@ void CWallet::GetFilteredNotes(
             }
         }
 
-        // for (auto & pair : wtx.mapSproutNoteData) {
-        //     JSOutPoint jsop = pair.first;
-        //     SproutNoteData nd = pair.second;
-        //     SproutPaymentAddress pa = nd.address;
-        //
-        //     // skip notes which belong to a different payment address in the wallet
-        //     if (!(filterAddresses.empty() || filterAddresses.count(pa))) {
-        //         continue;
-        //     }
-        //
-        //     // skip note which has been spent
-        //     if (ignoreSpent && nd.nullifier && IsSproutSpent(*nd.nullifier)) {
-        //         continue;
-        //     }
-        //
-        //     // skip notes which cannot be spent
-        //     if (requireSpendingKey && !HaveSproutSpendingKey(pa)) {
-        //         continue;
-        //     }
-        //
-        //     // skip locked notes
-        //     if (ignoreLocked && IsLockedNote(jsop)) {
-        //         continue;
-        //     }
-        //
-        //     int i = jsop.js; // Index into CTransaction.vjoinsplit
-        //     int j = jsop.n; // Index into JSDescription.ciphertexts
-        //
-        //     // Get cached decryptor
-        //     ZCNoteDecryption decryptor;
-        //     if (!GetNoteDecryptor(pa, decryptor)) {
-        //         // Note decryptors are created when the wallet is loaded, so it should always exist
-        //         throw std::runtime_error(strprintf("Could not find note decryptor for payment address %s", EncodePaymentAddress(pa)));
-        //     }
-        //
-        //     // determine amount of funds in the note
-        //     auto hSig = wtx.vjoinsplit[i].h_sig(*pzcashParams, wtx.joinSplitPubKey);
-        //     try {
-        //         SproutNotePlaintext plaintext = SproutNotePlaintext::decrypt(
-        //                 decryptor,
-        //                 wtx.vjoinsplit[i].ciphertexts[j],
-        //                 wtx.vjoinsplit[i].ephemeralKey,
-        //                 hSig,
-        //                 (unsigned char) j);
-        //
-        //         sproutEntries.push_back(CSproutNotePlaintextEntry{jsop, pa, plaintext, wtx.GetDepthInMainChain()});
-        //
-        //     } catch (const note_decryption_failed &err) {
-        //         // Couldn't decrypt with this spending key
-        //         throw std::runtime_error(strprintf("Could not decrypt note for payment address %s", EncodePaymentAddress(pa)));
-        //     } catch (const std::exception &exc) {
-        //         // Unexpected failure
-        //         throw std::runtime_error(strprintf("Error while decrypting note for payment address %s: %s", EncodePaymentAddress(pa), exc.what()));
-        //     }
-        // }
+        auto vOutputs = wtx.GetSaplingOutputs();
 
         for (auto & pair : wtx.mapSaplingNoteData) {
             SaplingOutPoint op = pair.first;
             SaplingNoteData nd = pair.second;
 
-            auto optDeserialized = SaplingNotePlaintext::attempt_sapling_enc_decryption_deserialization(wtx.vShieldedOutput[op.n].encCiphertext, nd.ivk, wtx.vShieldedOutput[op.n].ephemeralKey);
+            auto encCiphertext = vOutputs[op.n].enc_ciphertext();
+            auto ephemeralKey = uint256::FromRawBytes(vOutputs[op.n].ephemeral_key());
+            auto optDeserialized = SaplingNotePlaintext::attempt_sapling_enc_decryption_deserialization(encCiphertext, nd.ivk, ephemeralKey);
 
             // The transaction would not have entered the wallet unless
             // its plaintext had been successfully decrypted previously.

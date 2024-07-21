@@ -332,6 +332,12 @@ public:
     }
 };
 
+struct SaplingEncryptedNote {
+    libzcash::SaplingEncCiphertext encCiphertext;
+    uint256 ephemeralKey;
+    uint256 cmu;
+};
+
 class SaplingNoteData
 {
 private:
@@ -380,14 +386,14 @@ public:
     }
 
     std::optional<uint64_t> getPostion() {
-        if (position > 0) {
+        if (position >= 0) {
             return position;
         }
         return std::nullopt;
     }
 
     bool setPosition(uint64_t postionIn) {
-        if (postionIn > 0) {
+        if (postionIn >= 0) {
             position = postionIn;
             return true;
         }

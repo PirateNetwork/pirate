@@ -144,14 +144,21 @@ UniValue TxJoinSplitToJSON(const CTransaction& tx) {
 
 UniValue TxShieldedSpendsToJSON(const CTransaction& tx) {
     UniValue vdesc(UniValue::VARR);
-    for (const SpendDescription& spendDesc : tx.vShieldedSpend) {
+    for (const auto& spend : tx.GetSaplingSpends()) {
+        auto cv = spend.cv();
+        auto anchor = spend.anchor();
+        auto nullifier = spend.nullifier();
+        auto rk = spend.rk();
+        auto zkproof = spend.zkproof();
+        auto spendAuthSig = spend.spend_auth_sig();
+
         UniValue obj(UniValue::VOBJ);
-        obj.push_back(Pair("cv", spendDesc.cv.GetHex()));
-        obj.push_back(Pair("anchor", spendDesc.anchor.GetHex()));
-        obj.push_back(Pair("nullifier", spendDesc.nullifier.GetHex()));
-        obj.push_back(Pair("rk", spendDesc.rk.GetHex()));
-        obj.push_back(Pair("proof", HexStr(spendDesc.zkproof.begin(), spendDesc.zkproof.end())));
-        obj.push_back(Pair("spendAuthSig", HexStr(spendDesc.spendAuthSig.begin(), spendDesc.spendAuthSig.end())));
+        obj.push_back(Pair("cv", HexStr(cv.begin(), cv.end())));
+        obj.push_back(Pair("anchor", HexStr(anchor.begin(), anchor.end())));
+        obj.push_back(Pair("nullifier", HexStr(nullifier.begin(), nullifier.end())));
+        obj.push_back(Pair("rk", HexStr(rk.begin(), rk.end())));
+        obj.push_back(Pair("proof", HexStr(zkproof.begin(), zkproof.end())));
+        obj.push_back(Pair("spendAuthSig", HexStr(spendAuthSig.begin(), spendAuthSig.end())));
         vdesc.push_back(obj);
     }
     return vdesc;
@@ -159,14 +166,22 @@ UniValue TxShieldedSpendsToJSON(const CTransaction& tx) {
 
 UniValue TxShieldedOutputsToJSON(const CTransaction& tx) {
     UniValue vdesc(UniValue::VARR);
-    for (const OutputDescription& outputDesc : tx.vShieldedOutput) {
+
+    for (const auto& output : tx.GetSaplingOutputs())  {
+        auto cmu = output.cmu();
+        auto ephemeralKey = output.ephemeral_key();
+        auto cv = output.cv();
+        auto encCiphertext = output.enc_ciphertext();
+        auto outCiphertext = output.out_ciphertext();
+        auto zkproof = output.zkproof();
+
         UniValue obj(UniValue::VOBJ);
-        obj.push_back(Pair("cv", outputDesc.cv.GetHex()));
-        obj.push_back(Pair("cmu", outputDesc.cmu.GetHex()));
-        obj.push_back(Pair("ephemeralKey", outputDesc.ephemeralKey.GetHex()));
-        obj.push_back(Pair("encCiphertext", HexStr(outputDesc.encCiphertext.begin(), outputDesc.encCiphertext.end())));
-        obj.push_back(Pair("outCiphertext", HexStr(outputDesc.outCiphertext.begin(), outputDesc.outCiphertext.end())));
-        obj.push_back(Pair("proof", HexStr(outputDesc.zkproof.begin(), outputDesc.zkproof.end())));
+        obj.push_back(Pair("cv", HexStr(cv.begin(), cv.end())));
+        obj.push_back(Pair("cmu", HexStr(cmu.begin(), cmu.end())));
+        obj.push_back(Pair("ephemeralKey", HexStr(ephemeralKey.begin(), ephemeralKey.end())));
+        obj.push_back(Pair("encCiphertext", HexStr(encCiphertext.begin(), encCiphertext.end())));
+        obj.push_back(Pair("outCiphertext", HexStr(outCiphertext.begin(), outCiphertext.end())));
+        obj.push_back(Pair("proof", HexStr(zkproof.begin(), zkproof.end())));
         vdesc.push_back(obj);
     }
     return vdesc;

@@ -141,11 +141,15 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry &entry,
     for (const uint256& nf : tx.GetOrchardBundle().GetNullifiers()) {
         mapOrchardNullifiers[nf] = &tx;
     }
-    for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
-        mapZkSpendProofHash[spendDescription.ProofHash()] = &tx;
+    for (const auto& spend : tx.GetSaplingSpends()) {
+        auto zkproof = spend.zkproof();
+        auto proofHash = Hash(zkproof.begin(), zkproof.end());
+        mapZkSpendProofHash[proofHash] = &tx;
     }
-    for (const OutputDescription &outputDescription : tx.vShieldedOutput) {
-        mapZkOutputProofHash[outputDescription.ProofHash()] = &tx;
+    for (const auto& output : tx.GetSaplingOutputs()) {
+        auto zkproof = output.zkproof();
+        auto proofHash = Hash(zkproof.begin(), zkproof.end());
+        mapZkOutputProofHash[proofHash] = &tx;
     }
 
 
@@ -393,11 +397,15 @@ void CTxMemPool::remove(const CTransaction &origTx, std::list<CTransaction>& rem
             for (const uint256& nf : tx.GetOrchardBundle().GetNullifiers()) {
                 mapOrchardNullifiers.erase(nf);
             }
-            for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
-                mapZkSpendProofHash.erase(spendDescription.ProofHash());
+            for (const auto& spend : tx.GetSaplingSpends()) {
+                auto zkproof = spend.zkproof();
+                auto proofHash = Hash(zkproof.begin(), zkproof.end());
+                mapZkSpendProofHash.erase(proofHash);
             }
-            for (const OutputDescription &outputDescription : tx.vShieldedOutput) {
-                mapZkOutputProofHash.erase(outputDescription.ProofHash());
+            for (const auto& output : tx.GetSaplingOutputs()) {
+                auto zkproof = output.zkproof();
+                auto proofHash = Hash(zkproof.begin(), zkproof.end());
+                mapZkOutputProofHash.erase(proofHash);
             }
             removed.push_back(tx);
             totalTxSize -= mapTx.find(hash)->GetTxSize();
@@ -464,16 +472,18 @@ void CTxMemPool::removeWithAnchor(const uint256 &invalidRoot, ShieldedType type)
                 }
             break;
             case SAPLING:
-                BOOST_FOREACH(const SpendDescription& spendDescription, tx.vShieldedSpend) {
-                    if (spendDescription.anchor == invalidRoot) {
+                for (const auto& spend : tx.GetSaplingSpends()) {
+                    uint256 anchor = uint256::FromRawBytes(spend.anchor());
+                    if (anchor == invalidRoot) {
                         transactionsToRemove.push_back(tx);
                         break;
                     }
                 }
             break;
             case SAPLINGFRONTIER:
-                BOOST_FOREACH(const SpendDescription& spendDescription, tx.vShieldedSpend) {
-                    if (spendDescription.anchor == invalidRoot) {
+                for (const auto& spend : tx.GetSaplingSpends()) {
+                    uint256 anchor = uint256::FromRawBytes(spend.anchor());
+                    if (anchor == invalidRoot) {
                         transactionsToRemove.push_back(tx);
                         break;
                     }
@@ -536,8 +546,10 @@ void CTxMemPool::removeConflicts(const CTransaction &tx, std::list<CTransaction>
             }
         }
     }
-    for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
-        std::map<uint256, const CTransaction*>::iterator itt = mapZkSpendProofHash.find(spendDescription.ProofHash());
+    for (const auto& spend : tx.GetSaplingSpends()) {
+        auto zkproof = spend.zkproof();
+        auto proofHash = Hash(zkproof.begin(), zkproof.end());
+        std::map<uint256, const CTransaction*>::iterator itt = mapZkSpendProofHash.find(proofHash);
         if (itt != mapZkSpendProofHash.end()) {
             const CTransaction &txConflict = *itt->second;
             if (txConflict != tx) {
@@ -545,8 +557,10 @@ void CTxMemPool::removeConflicts(const CTransaction &tx, std::list<CTransaction>
             }
         }
     }
-    for (const OutputDescription &outputDescription : tx.vShieldedOutput) {
-        std::map<uint256, const CTransaction*>::iterator it = mapZkOutputProofHash.find(outputDescription.ProofHash());
+    for (const auto& output : tx.GetSaplingOutputs()) {
+        auto zkproof = output.zkproof();
+        auto proofHash = Hash(zkproof.begin(), zkproof.end());
+        std::map<uint256, const CTransaction*>::iterator it = mapZkOutputProofHash.find(proofHash);
         if (it != mapZkOutputProofHash.end()) {
             const CTransaction &txConflict = *it->second;
             if (txConflict != tx) {
@@ -710,21 +724,28 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
 
             intermediates.insert(std::make_pair(tree.root(), tree));
         }
-        for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
+        for (const auto& spend : tx.GetSaplingSpends())  {
+            uint256 anchor = uint256::FromRawBytes(spend.anchor());
+            uint256 nullifier = uint256::FromRawBytes(spend.nullifier());
+
             SaplingMerkleTree tree;
             SaplingMerkleFrontier frontierTree;
 
-            assert(pcoins->GetSaplingAnchorAt(spendDescription.anchor, tree));
-            assert(pcoins->GetSaplingFrontierAnchorAt(spendDescription.anchor, frontierTree));
+            assert(pcoins->GetSaplingAnchorAt(anchor, tree));
+            assert(pcoins->GetSaplingFrontierAnchorAt(anchor, frontierTree));
 
-            assert(!pcoins->GetNullifier(spendDescription.nullifier, SAPLING));
+            assert(!pcoins->GetNullifier(nullifier, SAPLING));
 
             std::set<std::pair<uint256, int>> txids;
-            assert(!pcoins->GetZkProofHash(spendDescription.ProofHash(), SPEND, txids));
+            auto zkproof = spend.zkproof();
+            auto proofHash = Hash(zkproof.begin(), zkproof.end());
+            assert(!pcoins->GetZkProofHash(proofHash, SPEND, txids));
         }
-        for (const OutputDescription &outputDescription : tx.vShieldedOutput) {
+        for (const auto& output : tx.GetSaplingOutputs()) {
+            auto zkproof = output.zkproof();
+            auto proofHash = Hash(zkproof.begin(), zkproof.end());
             std::set<std::pair<uint256, int>> txids;
-            assert(!pcoins->GetZkProofHash(outputDescription.ProofHash(), OUTPUT, txids));
+            assert(!pcoins->GetZkProofHash(proofHash, OUTPUT, txids));
         }
         for (const uint256& nf : tx.GetOrchardBundle().GetNullifiers()) {
             assert(!pcoins->GetNullifier(nf, ORCHARDFRONTIER));

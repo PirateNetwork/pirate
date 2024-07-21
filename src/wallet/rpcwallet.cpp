@@ -3454,14 +3454,14 @@ UniValue zc_benchmark(const UniValue& params, bool fHelp, const CPubKey& mypk)
             sample_times.push_back(benchmark_loadwallet());
         } else if (benchmarktype == "listunspent") {
             sample_times.push_back(benchmark_listunspent());
-        } else if (benchmarktype == "createsaplingspend") {
-            sample_times.push_back(benchmark_create_sapling_spend());
-        } else if (benchmarktype == "createsaplingoutput") {
-            sample_times.push_back(benchmark_create_sapling_output());
-        } else if (benchmarktype == "verifysaplingspend") {
-            sample_times.push_back(benchmark_verify_sapling_spend());
-        } else if (benchmarktype == "verifysaplingoutput") {
-            sample_times.push_back(benchmark_verify_sapling_output());
+        // } else if (benchmarktype == "createsaplingspend") {
+        //     sample_times.push_back(benchmark_create_sapling_spend());
+        // } else if (benchmarktype == "createsaplingoutput") {
+        //     sample_times.push_back(benchmark_create_sapling_output());
+        // } else if (benchmarktype == "verifysaplingspend") {
+        //     sample_times.push_back(benchmark_verify_sapling_spend());
+        // } else if (benchmarktype == "verifysaplingoutput") {
+        //     sample_times.push_back(benchmark_verify_sapling_output());
         } else {
             throw JSONRPCError(RPC_TYPE_ERROR, "Invalid benchmarktype");
         }
@@ -4167,11 +4167,12 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp, const CPubKey& my
 
     // Sapling spends
     std::set<uint256> ovks;
-    for (size_t i = 0; i < wtx.vShieldedSpend.size(); ++i) {
-        auto spend = wtx.vShieldedSpend[i];
+    int spendIndex = 0;
+    for (const auto& spend : wtx.GetSaplingSpends())  {
+        uint256 nullifier = uint256::FromRawBytes(spend.nullifier());
 
         // Fetch teh note that is being spent
-        auto res = pwalletMain->mapSaplingNullifiersToNotes.find(spend.nullifier);
+        auto res = pwalletMain->mapSaplingNullifiersToNotes.find(nullifier);
         if (res == pwalletMain->mapSaplingNullifiersToNotes.end()) {
             continue;
         }
@@ -4191,17 +4192,19 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp, const CPubKey& my
 
         UniValue entry(UniValue::VOBJ);
         entry.push_back(Pair("type", ADDR_TYPE_SAPLING));
-        entry.push_back(Pair("spend", (int)i));
+        entry.push_back(Pair("spend", spendIndex));
         entry.push_back(Pair("txidPrev", op.hash.GetHex()));
         entry.push_back(Pair("outputPrev", (int)op.n));
         entry.push_back(Pair("address", EncodePaymentAddress(pa)));
         entry.push_back(Pair("value", ValueFromAmount(notePt.value())));
         entry.push_back(Pair("valueZat", notePt.value()));
         spends.push_back(entry);
+        spendIndex++;
     }
 
     // Sapling outputs
-    for (uint32_t i = 0; i < wtx.vShieldedOutput.size(); ++i) {
+    uint32_t outputCount = wtx.GetSaplingSpendsCount();
+    for (uint32_t i = 0; i < outputCount; ++i) {
         auto op = SaplingOutPoint(hash, i);
 
         SaplingNotePlaintext notePt;
@@ -5386,20 +5389,10 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
     // As a sanity check, estimate and verify that the size of the transaction will be valid.
     // Depending on the input notes, the actual tx size may turn out to be larger and perhaps invalid.
     size_t txsize = 0;
-    for (int i = 0; i < saplingRecipients.size(); i++) {
-        auto address = std::get<0>(saplingRecipients[i]);
-        auto res = DecodePaymentAddress(address);
-        bool toSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
-        if (toSapling) {
-            mtx.vShieldedOutput.push_back(OutputDescription());
-        } else {
-            JSDescription jsdesc;
-            if (mtx.fOverwintered && (mtx.nVersion >= SAPLING_TX_VERSION)) {
-                jsdesc.proof = GrothProof();
-            }
-            mtx.vjoinsplit.push_back(jsdesc);
-        }
-    }
+
+    // Fine to call this because we are only testing that `mtx` is a valid size.
+    mtx.saplingBundle = sapling::test_only_invalid_bundle(0, saplingRecipients.size(), 0);
+
     CTransaction tx(mtx);
     txsize += GetSerializeSize(tx, SER_NETWORK, tx.nVersion);
     if (fromTaddr) {
@@ -5754,24 +5747,10 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
     // As a sanity check, estimate and verify that the size of the transaction will be valid.
     // Depending on the input notes, the actual tx size may turn out to be larger and perhaps invalid.
     size_t txsize = 0;
-    for (int i = 0; i < saplingRecipients.size(); i++)
-    {
-        auto address = std::get<0>(saplingRecipients[i]);
-        auto res = DecodePaymentAddress(address);
-        bool toSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
-        if (toSapling)
-        {
-            mtx.vShieldedOutput.push_back(OutputDescription());
-        }
-        else
-        {
-            JSDescription jsdesc;
-            if (mtx.fOverwintered && (mtx.nVersion >= SAPLING_TX_VERSION)) {
-                jsdesc.proof = GrothProof();
-            }
-            mtx.vjoinsplit.push_back(jsdesc);
-        }
-    }
+
+    // Fine to call this because we are only testing that `mtx` is a valid size.
+    mtx.saplingBundle = sapling::test_only_invalid_bundle(0, saplingRecipients.size(), 0);
+
     CTransaction tx(mtx);
     txsize += GetSerializeSize(tx, SER_NETWORK, tx.nVersion);
     if (txsize > max_tx_size) {
@@ -6183,8 +6162,8 @@ UniValue consolidationstatus(const UniValue& params, bool fHelp, const CPubKey& 
 #define MERGE_TO_ADDRESS_DEFAULT_SAPLING_LIMIT 90
 
 #define JOINSPLIT_SIZE GetSerializeSize(JSDescription(), SER_NETWORK, PROTOCOL_VERSION)
-#define OUTPUTDESCRIPTION_SIZE GetSerializeSize(OutputDescription(), SER_NETWORK, PROTOCOL_VERSION)
-#define SPENDDESCRIPTION_SIZE GetSerializeSize(SpendDescription(), SER_NETWORK, PROTOCOL_VERSION)
+#define OUTPUTDESCRIPTION_SIZE 948
+#define SPENDDESCRIPTION_SIZE 384
 
 UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {

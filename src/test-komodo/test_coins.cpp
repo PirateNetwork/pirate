@@ -267,10 +267,10 @@ public:
         jsd.nullifiers[0] = sproutNullifier;
         mutableTx.vjoinsplit.emplace_back(jsd);
 
-        saplingNullifier = GetRandHash();
-        SpendDescription sd;
-        sd.nullifier = saplingNullifier;
-        mutableTx.vShieldedSpend.push_back(sd);
+        // saplingNullifier = GetRandHash();
+        // SpendDescription sd;
+        // sd.nullifier = saplingNullifier;
+        // mutableTx.vShieldedSpend.push_back(sd);
 
         tx = CTransaction(mutableTx);
     }

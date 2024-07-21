@@ -729,13 +729,17 @@ TEST(WalletTests, GetConflictedSaplingNotes) {
         wtx = wallet.mapWallet[hash];
 
         // Decrypt output note B
+        auto vOutputs = wtx.GetSaplingOutputs();
+        auto cmu = uint256::FromRawBytes(vOutputs[0].cmu());
+        auto ephemeralKey = uint256::FromRawBytes(vOutputs[0].ephemeral_key());
+        auto encCiphertext = vOutputs[0].enc_ciphertext();
         auto maybe_pt = libzcash::SaplingNotePlaintext::decrypt(
                 consensusParams,
                 wtx.nExpiryHeight,
-                wtx.vShieldedOutput[0].encCiphertext,
+                encCiphertext,
                 ivk,
-                wtx.vShieldedOutput[0].ephemeralKey,
-                wtx.vShieldedOutput[0].cmu);
+                ephemeralKey,
+                cmu);
         ASSERT_EQ(static_cast<bool>(maybe_pt), true);
         auto maybe_note = maybe_pt.get().note(ivk);
         ASSERT_EQ(static_cast<bool>(maybe_note), true);
@@ -1138,13 +1142,17 @@ TEST(WalletTests, SpentSaplingNoteIsFromMe) {
         ASSERT_FALSE(wallet.mapSaplingNullifiersToNotes.count(nf.get()));
 
         // Decrypt note B
+        auto vOutputs = wtx.GetSaplingOutputs();
+        auto cmu = uint256::FromRawBytes(vOutputs[0].cmu());
+        auto ephemeralKey = uint256::FromRawBytes(vOutputs[0].ephemeral_key());
+        auto encCiphertext = vOutputs[0].enc_ciphertext();
         auto maybe_pt = libzcash::SaplingNotePlaintext::decrypt(
             consensusParams,
             wtx.nExpiryHeight,
-            wtx.vShieldedOutput[0].encCiphertext,
+            encCiphertext,
             ivk,
-            wtx.vShieldedOutput[0].ephemeralKey,
-            wtx.vShieldedOutput[0].cmu);
+            ephemeralKey,
+            cmu);
         ASSERT_EQ(static_cast<bool>(maybe_pt), true);
         auto maybe_note = maybe_pt.get().note(ivk);
         ASSERT_EQ(static_cast<bool>(maybe_note), true);
@@ -1169,8 +1177,8 @@ TEST(WalletTests, SpentSaplingNoteIsFromMe) {
         EXPECT_EQ(tx2.vin.size(), 0);
         EXPECT_EQ(tx2.vout.size(), 0);
         EXPECT_EQ(tx2.vJoinSplit.size(), 0);
-        EXPECT_EQ(tx2.vShieldedSpend.size(), 1);
-        EXPECT_EQ(tx2.vShieldedOutput.size(), 2);
+        EXPECT_EQ(tx2.GetSaplingSpendsCount(), 1);
+        EXPECT_EQ(tx2.GetSaplingOutputsCount(), 2);
         EXPECT_EQ(tx2.valueBalance, 10000);
 
         CWalletTx wtx2 {&wallet, tx2};
@@ -1981,8 +1989,8 @@ TEST(WalletTests, MarkAffectedSaplingTransactionsDirty) {
     EXPECT_EQ(tx1.vin.size(), 1);
     EXPECT_EQ(tx1.vout.size(), 0);
     EXPECT_EQ(tx1.vjoinsplit.size(), 0);
-    EXPECT_EQ(tx1.vShieldedSpend.size(), 0);
-    EXPECT_EQ(tx1.vShieldedOutput.size(), 1);
+    EXPECT_EQ(tx1.GetSaplingSpendsCount(), 0);
+    EXPECT_EQ(tx1.GetSaplingOutputsCount(), 1);
     EXPECT_EQ(tx1.valueBalance, -40000);
 
     CWalletTx wtx {&wallet, tx1};
@@ -2017,7 +2025,11 @@ TEST(WalletTests, MarkAffectedSaplingTransactionsDirty) {
     wtx = wallet.mapWallet[hash];
 
     // Prepare to spend the note that was just created
-    auto maybe_pt = libzcash::SaplingNotePlaintext::decrypt(consensusParams, fakeIndex.nHeight, tx1.vShieldedOutput[0].encCiphertext, ivk, tx1.vShieldedOutput[0].ephemeralKey, tx1.vShieldedOutput[0].cmu);
+    vOutputs = tx1.GetSaplingOutputs();
+    auto cmu = uint256::FromRawBytes(vOutputs[0].cmu());
+    auto ephemeralKey = uint256::FromRawBytes(vOutputs[0].ephemeral_key());
+    auto encCiphertext = vOutputs[0].enc_ciphertext();
+    auto maybe_pt = libzcash::SaplingNotePlaintext::decrypt(consensusParams, fakeIndex.nHeight, encCiphertext, ivk, ephemeralKey, cmu);
     ASSERT_EQ(static_cast<bool>(maybe_pt), true);
     auto maybe_note = maybe_pt.get().note(ivk);
     ASSERT_EQ(static_cast<bool>(maybe_note), true);
@@ -2037,8 +2049,9 @@ TEST(WalletTests, MarkAffectedSaplingTransactionsDirty) {
     EXPECT_EQ(tx2.vin.size(), 0);
     EXPECT_EQ(tx2.vout.size(), 0);
     EXPECT_EQ(tx2.vjoinsplit.size(), 0);
-    EXPECT_EQ(tx2.vShieldedSpend.size(), 1);
-    EXPECT_EQ(tx2.vShieldedOutput.size(), 2);
+    EXPECT_EQ(tx2.GetSaplingSpendsCount(), 1);
+    EXPECT_EQ(tx2.GetSaplingOutputsCount(), 2);
+    EXPECT_EQ(tx2.GetSaplingSpendsCount(), 2);
     EXPECT_EQ(tx2.valueBalance, 10000);
 
     CWalletTx wtx2 {&wallet, tx2};

@@ -831,8 +831,9 @@ void CCoinsViewCache::SetNullifiers(const CTransaction& tx, bool spent) {
             ret.first->second.flags |= CNullifiersCacheEntry::DIRTY;
         }
     }
-    for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
-        std::pair<CNullifiersMap::iterator, bool> ret = cacheSaplingNullifiers.insert(std::make_pair(spendDescription.nullifier, CNullifiersCacheEntry()));
+    for (const auto& spend : tx.GetSaplingSpends()) {
+        auto nullifier = uint256::FromRawBytes(spend.nullifier());
+        std::pair<CNullifiersMap::iterator, bool> ret = cacheSaplingNullifiers.insert(std::make_pair(nullifier, CNullifiersCacheEntry()));
         ret.first->second.entered = spent;
         ret.first->second.flags |= CNullifiersCacheEntry::DIRTY;
     }
@@ -841,8 +842,10 @@ void CCoinsViewCache::SetNullifiers(const CTransaction& tx, bool spent) {
 void CCoinsViewCache::SetZkProofHashes(const CTransaction& tx, bool addTx) {
 
     int i = 0;
-    for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
-        std::pair<CProofHashMap::iterator, bool> ret = cacheZkSpendProofHash.insert(std::make_pair(spendDescription.ProofHash(), CProofHashCacheEntry()));
+    for (const auto& spend : tx.GetSaplingSpends()) {
+        auto zkproof = spend.zkproof();
+        auto proofHash = Hash(zkproof.begin(), zkproof.end());
+        std::pair<CProofHashMap::iterator, bool> ret = cacheZkSpendProofHash.insert(std::make_pair(proofHash, CProofHashCacheEntry()));
         if (addTx) {
           ret.first->second.txids.emplace(std::make_pair(tx.GetHash(), i));
         } else {
@@ -853,8 +856,10 @@ void CCoinsViewCache::SetZkProofHashes(const CTransaction& tx, bool addTx) {
     }
 
     i = 0;
-    for (const OutputDescription &outputDescription : tx.vShieldedOutput) {
-        std::pair<CProofHashMap::iterator, bool> ret = cacheZkOutputProofHash.insert(std::make_pair(outputDescription.ProofHash(), CProofHashCacheEntry()));
+    for (const auto& output : tx.GetSaplingOutputs()) {
+        auto zkproof = output.zkproof();
+        auto proofHash = Hash(zkproof.begin(), zkproof.end());
+        std::pair<CProofHashMap::iterator, bool> ret = cacheZkOutputProofHash.insert(std::make_pair(proofHash, CProofHashCacheEntry()));
         if (addTx) {
           ret.first->second.txids.emplace(std::make_pair(tx.GetHash(), i));
         } else {
@@ -1145,7 +1150,7 @@ bool CCoinsViewCache::Flush() {
                                 hashSproutAnchor, hashSaplingAnchor, hashSaplingFrontierAnchor, hashOrchardFrontierAnchor,
                                 cacheSproutAnchors, cacheSaplingAnchors, cacheSaplingFrontierAnchors, cacheOrchardFrontierAnchors,
                                 cacheSproutNullifiers, cacheSaplingNullifiers, cacheOrchardNullifiers,
-                                historyCacheMap, 
+                                historyCacheMap,
                                 cacheZkOutputProofHash, cacheZkSpendProofHash);
     cacheCoins.clear();
     cacheSproutAnchors.clear();
@@ -1232,32 +1237,31 @@ CAmount CCoinsViewCache::GetTransparentValueIn(int32_t nHeight,int64_t &interest
     return nResult;
 }
 
-static bool HaveJoinSplitRequirementsWorkerNullifier(const CCoinsViewCache *coinCache,const std::vector<const SpendDescription*> vSpend, int threadNum)
+static bool HaveJoinSplitRequirementsWorkerNullifier(const CCoinsViewCache *coinCache,const std::vector<uint256> vSpendNullifer, int threadNum)
 {
     //Perform Sapling Spend checks
-    for (int i = 0; i < vSpend.size(); i++) {
-        auto spendDescription = *vSpend[i];
-        if (coinCache->GetNullifier(spendDescription.nullifier, SAPLING)) // Prevent double spends
+    for (int i = 0; i < vSpendNullifer.size(); i++) {
+        auto nullifier = vSpendNullifer[i];
+        if (coinCache->GetNullifier(nullifier, SAPLING)) // Prevent double spends
             return false;
     }
 
     return true;
 }
 
-static bool HaveJoinSplitRequirementsWorkerAnchor(const CCoinsViewCache *coinCache,const std::vector<const SpendDescription*> vSpend, int threadNum)
+static bool HaveJoinSplitRequirementsWorkerAnchor(const CCoinsViewCache *coinCache,const std::vector<uint256> vSpendAnchor, int threadNum)
 {
     //Perform Sapling Spend checks
-    for (int i = 0; i < vSpend.size(); i++) {
-        auto spendDescription = *vSpend[i];
+    for (int i = 0; i < vSpendAnchor.size(); i++) {
+        auto anchor = vSpendAnchor[i];
         SaplingMerkleTree tree;
-        if (!coinCache->GetSaplingAnchorAt(spendDescription.anchor, tree)) {
+        if (!coinCache->GetSaplingAnchorAt(anchor, tree)) {
             return false;
         }
     }
 
     return true;
 }
-
 
 bool CCoinsViewCache::HaveJoinSplitRequirements(const CTransaction& tx, int maxProcessingThreads) const
 {
@@ -1295,21 +1299,50 @@ bool CCoinsViewCache::HaveJoinSplitRequirements(const CTransaction& tx, int maxP
     //Create a Vector of futures to be collected later
     std::vector<std::future<bool>> vFutures;
 
-    //Setup spend batches
-    std::vector<const SpendDescription*> vSpend;
+    //Setup batches
+    std::vector<uint256> vSpendAnchor;
+    std::vector<std::vector<uint256>> vvSpendAnchor;
+    std::vector<uint256> vSpendNullifier;
+    std::vector<std::vector<uint256>> vvSpendNullifier;
+
+    //Create Thread Vectors
+    for (int i = 0; i < maxProcessingThreads; i++) {
+        vvSpendAnchor.emplace_back(vSpendAnchor);
+        vvSpendNullifier.emplace_back(vSpendNullifier);
+    }
+
+    //Thread counter
+    int t = 0;
 
     //Add this transaction sapling spend to spend thread batches
-    for (int i = 0; i < tx.vShieldedSpend.size(); i++) {
-        //Push spend to thread vector
-        vSpend.emplace_back(&(tx.vShieldedSpend[i]));
+    for (const auto& spend : tx.GetSaplingSpends()) {
+        auto nullifier = uint256::FromRawBytes(spend.nullifier());
+        auto anchor = uint256::FromRawBytes(spend.anchor());
+
+        //Push spend data to thread vector
+        vvSpendNullifier[t].emplace_back(nullifier);
+        vvSpendAnchor[t].emplace_back(anchor);
+
+        //Increment thread vector
+        t++;
+        //reset if tread vector is greater qty of threads being used
+        if (t >= vvSpendNullifier.size()) {
+            t = 0;
+        }
     }
 
     //Push batches of spends to async threads
-    if (!vSpend.empty()) {
-        vFutures.emplace_back(std::async(std::launch::async, HaveJoinSplitRequirementsWorkerNullifier, this, vSpend, 1));
-        vFutures.emplace_back(std::async(std::launch::async, HaveJoinSplitRequirementsWorkerAnchor, this, vSpend, 2));
+    for (int i = 0; i < vvSpendNullifier.size(); i++) {
+        if (!vvSpendNullifier[i].empty()) {
+            vFutures.emplace_back(std::async(std::launch::async, HaveJoinSplitRequirementsWorkerNullifier, this, vvSpendNullifier[i], 1000 + i));
+        }
     }
 
+    for (int i = 0; i < vvSpendAnchor.size(); i++) {
+        if (!vvSpendAnchor[i].empty()) {
+            vFutures.emplace_back(std::async(std::launch::async, HaveJoinSplitRequirementsWorkerAnchor, this, vvSpendAnchor[i], 2000 + i));
+        }
+    }
 
     //Wait for all threads to complete
     for (auto &future : vFutures) {
@@ -1326,37 +1359,39 @@ bool CCoinsViewCache::HaveJoinSplitRequirements(const CTransaction& tx, int maxP
 
     //cleanup
     vFutures.resize(0);
-    vSpend.resize(0);
+    vvSpendNullifier.resize(0);
+    vvSpendAnchor.resize(0);
 
     return ret;
 }
 
-static bool HaveJoinSplitRequirementsWorkerDuplicateSpendProofs(const CCoinsViewCache *coinCache,const std::vector<const SpendDescription*> vSpend, int threadNum)
+static bool HaveJoinSplitRequirementsWorkerDuplicateSpendProofs(const CCoinsViewCache *coinCache,const std::vector<uint256> vSpendProof, int threadNum)
 {
     //Perform Sapling Spend checks
-    for (int i = 0; i < vSpend.size(); i++) {
-        auto spendDescription = *vSpend[i];
+    for (int i = 0; i < vSpendProof.size(); i++) {
+        auto proofHash = vSpendProof[i];
         std::set<std::pair<uint256, int>> txids;
-        if (coinCache->GetZkProofHash(spendDescription.ProofHash(), SPEND, txids))
+        if (coinCache->GetZkProofHash(proofHash, SPEND, txids))
             return txids.empty();
     }
 
     return true;
 }
 
-static bool HaveJoinSplitRequirementsWorkerDuplicateOutputProofs(const CCoinsViewCache *coinCache,const std::vector<const OutputDescription*> vOutput, int threadNum)
+static bool HaveJoinSplitRequirementsWorkerDuplicateOutputProofs(const CCoinsViewCache *coinCache,const std::vector<uint256> vOutputProof, int threadNum)
 {
     //Perform Sapling Spend checks
-    for (int i = 0; i < vOutput.size(); i++) {
-        auto outputDescription = *vOutput[i];
+    for (int i = 0; i < vOutputProof.size(); i++) {
+        auto proofHash = vOutputProof[i];
         std::set<std::pair<uint256, int>> txids;
-        if (coinCache->GetZkProofHash(outputDescription.ProofHash(), OUTPUT, txids))
+        if (coinCache->GetZkProofHash(proofHash, OUTPUT, txids))
             return txids.empty();
     }
 
     return true;
 }
 
+//Cannot be combined with anchor and nullifier checking due do differing consensus rules
 bool CCoinsViewCache::HaveJoinSplitRequirementsDuplicateProofs(const CTransaction& tx, int maxProcessingThreads) const
 {
     auto now = GetTimeMicros();
@@ -1367,32 +1402,67 @@ bool CCoinsViewCache::HaveJoinSplitRequirementsDuplicateProofs(const CTransactio
     std::vector<std::future<bool>> vFutures;
 
     //Setup spend & output batches
-    std::vector<const SpendDescription*> vSpend;
-    std::vector<const OutputDescription*> vOutput;
+    std::vector<uint256> vSpendProof;
+    std::vector<std::vector<uint256>> vvSpendProof;
+    std::vector<uint256> vOutputProof;
+    std::vector<std::vector<uint256>> vvOutputProof;
 
-    //Add this transaction sapling spend to spend thread batches
-    for (int i = 0; i < tx.vShieldedSpend.size(); i++) {
-        //Push spend to thread vector
-        vSpend.emplace_back(&(tx.vShieldedSpend[i]));
+    //Create Thread Vectors
+    for (int i = 0; i < maxProcessingThreads; i++) {
+        vvSpendProof.emplace_back(vSpendProof);
+        vvOutputProof.emplace_back(vOutputProof);
     }
 
-    //Add this transaction sapling output to output thread batches
-    for (int i = 0; i < tx.vShieldedOutput.size(); i++) {
+    //Thread counter
+    int t = 0;
+
+    //Add this transaction sapling spend to spend thread batches
+    for (const auto& spend : tx.GetSaplingSpends()) {
+        auto zkproof = spend.zkproof();
+        auto proofHash = Hash(zkproof.begin(), zkproof.end());
         //Push spend to thread vector
-        vOutput.emplace_back(&(tx.vShieldedOutput[i]));
+        vvSpendProof[t].emplace_back(proofHash);
+
+        //Increment thread vector
+        t++;
+        //reset if tread vector is greater qty of threads being used
+        if (t >= vvSpendProof.size()) {
+            t = 0;
+        }
+    }
+
+    //Reset Thread Counter
+    t = 0;
+
+    //Add this transaction sapling output to outpu thread batches
+    for (const auto& output : tx.GetSaplingOutputs()) {
+        auto zkproof = output.zkproof();
+        auto proofHash = Hash(zkproof.begin(), zkproof.end());
+        //Push output data to thread vector
+        vvOutputProof[t].emplace_back(proofHash);
+
+        //Increment thread vector
+        t++;
+        //reset if tread vector is greater qty of threads being used
+        if (t >= vvOutputProof.size()) {
+            t = 0;
+        }
     }
 
     //Push batches of spends to async threads
-    if (!vSpend.empty()) {
-        //Perform SpendDescription validations
-        vFutures.emplace_back(std::async(std::launch::async, HaveJoinSplitRequirementsWorkerDuplicateSpendProofs, this, vSpend, 1));
+    for (int i = 0; i < vvSpendProof.size(); i++) {
+        if (!vvSpendProof[i].empty()) {
+            //Perform SpendDescription validations
+            vFutures.emplace_back(std::async(std::launch::async, HaveJoinSplitRequirementsWorkerDuplicateSpendProofs, this, vvSpendProof[i], 1000 + i));
+        }
     }
 
-
     //Push batches of output to async threads
-    if (!vOutput.empty()) {
-        //Perform SpendDescription validations
-        vFutures.emplace_back(std::async(std::launch::async, HaveJoinSplitRequirementsWorkerDuplicateOutputProofs, this, vOutput, 2));
+    for (int i = 0; i < vvOutputProof.size(); i++) {
+        if (!vvOutputProof[i].empty()) {
+            //Perform OutputDescription validations
+            vFutures.emplace_back(std::async(std::launch::async, HaveJoinSplitRequirementsWorkerDuplicateOutputProofs, this, vvOutputProof[i], 2000 + i));
+        }
     }
 
     //Wait for all threads to complete
@@ -1410,7 +1480,8 @@ bool CCoinsViewCache::HaveJoinSplitRequirementsDuplicateProofs(const CTransactio
 
     //cleanup
     vFutures.resize(0);
-    vSpend.resize(0);
+    vvSpendProof.resize(0);
+    vvOutputProof.resize(0);
 
     return ret;
 
@@ -1441,7 +1512,7 @@ double CCoinsViewCache::GetPriority(const CTransaction &tx, int nHeight) const
     // use the maximum priority for all (partially or fully) shielded transactions.
     // (Note that coinbase transactions cannot contain JoinSplits, or Sapling shielded Spends or Outputs.)
 
-    if (tx.vjoinsplit.size() > 0 || tx.vShieldedSpend.size() > 0 || tx.vShieldedOutput.size() > 0 || tx.IsCoinImport()) {
+    if (tx.vjoinsplit.size() > 0 || tx.GetSaplingSpendsCount() > 0 || tx.GetSaplingOutputsCount() > 0 || tx.IsCoinImport()) {
         return MAX_PRIORITY;
     }
 

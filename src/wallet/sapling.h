@@ -121,7 +121,7 @@ public:
     bool AppendNoteCommitments(const int nBlockHeight, const CTransaction tx, const int txidx) {
         assert(nBlockHeight >= 0);
 
-        if(tx.vShieldedOutput.size()>0) {
+        if(tx.GetSaplingOutputsCount()>0) {
 
             SaplingBundle saplingBundle = tx.GetSaplingBundle();
 
@@ -156,20 +156,20 @@ public:
      *
      * Returns `false` if the caller attempts to insert a block out-of-order.
      */
-    bool AppendNoteCommitment(const int nBlockHeight, const uint256 txid, int txidx, int outidx, const OutputDescription output, bool isMine) {
+    bool AppendNoteCommitment(const int nBlockHeight, const uint256 txid, int txidx, int outidx, const sapling::Output* output, bool isMine) {
         assert(nBlockHeight >= 0);
 
-        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-        ss << output;
+        // CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+        // ss << output;
 
-        rust::box<sapling::Output> rustOutput = sapling::parse_v4_output({reinterpret_cast<uint8_t*>(ss.data()), ss.size()});
+        // rust::box<sapling::Output> rustOutput = sapling::parse_v4_output({reinterpret_cast<uint8_t*>(ss.data()), ss.size()});
         if (!sapling_wallet_append_single_commitment(
                 inner.get(),
                 (uint32_t) nBlockHeight,
                 txid.begin(),
                 txidx,
                 outidx,
-                (*rustOutput).as_ptr(),
+                output->as_ptr(),
                 isMine)) {
             return false;
         }

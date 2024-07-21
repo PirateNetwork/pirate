@@ -27,8 +27,9 @@ static int Dealer  = 0, Player1 = 1, Player2 = 2;
 
 
 int CCSign(CMutableTransaction &tx, unsigned int nIn, CC *cond, std::vector<int> keyIds) {
-    PrecomputedTransactionData txdata(tx);
-    uint256 sighash = SignatureHash(CCPubKey(cond), tx, nIn, SIGHASH_ALL, 0, 0, &txdata);
+    std::vector<CTxOut> allPrevOutputs;
+    PrecomputedTransactionData txdata(tx, allPrevOutputs);
+    uint256 sighash = SignatureHash(CCPubKey(cond), tx, nIn, SIGHASH_ALL, 0, 0, txdata);
     int nSigned = 0;
     for (int i=0; i<keyIds.size(); i++)
         nSigned += cc_signTreeSecp256k1Msg32(cond, playerSecrets[keyIds[i]].begin(), sighash.begin());
@@ -42,7 +43,8 @@ int TestCC(CMutableTransaction &mtxTo, unsigned int nIn, CC *cond)
     CAmount amount;
     ScriptError error;
     CTransaction txTo(mtxTo);
-    PrecomputedTransactionData txdata(txTo);
+    std::vector<CTxOut> allPrevOutputs;
+    PrecomputedTransactionData txdata(txTo, allPrevOutputs);
     auto checker = ServerTransactionSignatureChecker(&txTo, nIn, amount, false, txdata);
     return VerifyScript(txTo.vin[nIn].scriptSig, CCPubKey(cond), 0, checker, 0, &error);
 }

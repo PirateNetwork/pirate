@@ -501,7 +501,9 @@ void test_simple_joinsplit_invalidity(uint32_t consensusBranchId, CMutableTransa
         // Empty output script.
         CScript scriptCode;
         CTransaction signTx(newTx);
-        uint256 dataToBeSigned = SignatureHash(scriptCode, signTx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId);
+        std::vector<CTxOut> allPrevOutputs;
+        PrecomputedTransactionData txdata(signTx, allPrevOutputs);
+        uint256 dataToBeSigned = SignatureHash(scriptCode, signTx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId, txdata);
 
         assert(crypto_sign_detached(&newTx.joinSplitSig[0], NULL,
                                     dataToBeSigned.begin(), 32,

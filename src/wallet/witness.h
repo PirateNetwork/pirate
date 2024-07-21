@@ -7,6 +7,6 @@
 
 class CRPCTable;
 
-void RegisterZeroExperimentalRPCCommands(CRPCTable &tableRPC);
+void RegisterZeroExperimentalRPCCommands(CRPCTable& tableRPC);
 
-#endif //BITCOIN_WALLET_WITNESS_H
+#endif // BITCOIN_WALLET_WITNESS_H

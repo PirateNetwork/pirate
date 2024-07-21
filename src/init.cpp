@@ -2583,21 +2583,25 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
                     BOOST_FOREACH(CTransaction& tx, proofBlock.vtx)
                     {
-                        for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
+                        for (const auto& spend : tx.GetSaplingSpends()) {
+                            auto zkproof = spend.zkproof();
+                            auto proofHash = Hash(zkproof.begin(), zkproof.end());
                             std::set<std::pair<uint256, int>> txids;
-                            bool foundProof = pcoinsTip->GetZkProofHash(spendDescription.ProofHash(), SPEND, txids);
+                            bool foundProof = pcoinsTip->GetZkProofHash(proofHash, SPEND, txids);
                             if (!foundProof) {
-                                LogPrintf("Proof not found for tx %s spend ProofHash %s. Restart Treasure Chest to reindex.\n", tx.GetHash().ToString(), spendDescription.ProofHash().ToString());
+                                LogPrintf("Proof not found for tx %s spend ProofHash %s. Restart Treasure Chest to reindex.\n", tx.GetHash().ToString(), proofHash.ToString());
                                 pblocktree->WriteFlag("proofrule", false);
                                 return false;
                             }
                         }
 
-                        for (const OutputDescription &outputDescription : tx.vShieldedOutput) {
+                        for (const auto& output : tx.GetSaplingOutputs()) {
+                            auto zkproof = output.zkproof();
+                            auto proofHash = Hash(zkproof.begin(), zkproof.end());
                             std::set<std::pair<uint256, int>> txids;
-                            bool foundProof = pcoinsTip->GetZkProofHash(outputDescription.ProofHash(), OUTPUT, txids);
+                            bool foundProof = pcoinsTip->GetZkProofHash(proofHash, OUTPUT, txids);
                             if (!foundProof) {
-                                LogPrintf("Proof not found for tx %s output ProofHash %s. Restart Treasure Chest needs to reindex.\n", tx.GetHash().ToString(), outputDescription.ProofHash().ToString());
+                                LogPrintf("Proof not found for tx %s output ProofHash %s. Restart Treasure Chest needs to reindex.\n", tx.GetHash().ToString(), proofHash.ToString());
                                 pblocktree->WriteFlag("proofrule", false);
                                 return false;
                             }
