@@ -80,6 +80,9 @@ public:
     OrchardIncomingViewingKeyPirate() : dk(), ivk() {}
     OrchardIncomingViewingKeyPirate(uint256 dk, uint256 ivk) : dk(dk), ivk(ivk) {}
 
+    // Can pass in diversifier for Sapling addr
+    std::optional<OrchardPaymentAddressPirate> address(diversifier_t d) const;
+
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>

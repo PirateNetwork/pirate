@@ -23,6 +23,9 @@ typedef struct SaplingBundlePtr SaplingBundlePtr;
 struct OutputPtr;
 typedef struct OutputPtr OutputPtr;
 
+struct ActionPtr;
+typedef struct ActionPtr ActionPtr;
+
 #ifdef __cplusplus
 }
 #endif

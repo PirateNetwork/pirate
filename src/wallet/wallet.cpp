@@ -3940,42 +3940,75 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
  * pblock is optional, but should be provided if the transaction is known to be in a block.
  * If fUpdate is true, existing transactions will be updated.
  */
-void CWallet::AddToWalletIfInvolvingMe(const std::vector<CTransaction> &vtx, std::vector<CTransaction> &vAddedTxes, const CBlock* pblock, const int nHeight, bool fUpdate, std::set<SaplingPaymentAddress>& addressesFound, bool fRescan)
+void CWallet::AddToWalletIfInvolvingMe(
+    const std::vector<CTransaction> &vtx,
+    std::vector<CTransaction> &vAddedTxes,
+    const CBlock* pblock,
+    const int nHeight,
+    bool fUpdate,
+    std::set<SaplingPaymentAddress>& saplingAddressesFound,
+    std::set<OrchardPaymentAddressPirate>& orchardAddressesFound,
+    bool fRescan)
 {
     {
         AssertLockHeld(cs_wallet);
 
-        //Step 1 -- decrypt transactions
+        //Step 1a -- decrypt sapling transactions
         auto saplingNoteDataAndAddressesToAdd = FindMySaplingNotes(vtx, nHeight);
         auto saplingNoteData = saplingNoteDataAndAddressesToAdd.first;
-        auto addressesToAdd = saplingNoteDataAndAddressesToAdd.second;
+        auto saplingAddressesToAdd = saplingNoteDataAndAddressesToAdd.second;
 
-        //Step 2 -- add addresses
-        for (const auto &addressToAdd : addressesToAdd) {
+        //Step 1B -- decrypt orchard transactions
+        auto orchardNoteDataAndAddressesToAdd = FindMyOrchardNotes(vtx, nHeight);
+        auto orchardNoteData = orchardNoteDataAndAddressesToAdd.first;
+        auto orchardAddressesToAdd = orchardNoteDataAndAddressesToAdd.second;
+
+        //Step 2a -- add sapling addresses
+        for (const auto &saplingAddressToAdd : saplingAddressesToAdd) {
             //Loaded into memory only
             //This will be saved during the wallet SetBestChainINTERNAL
-            CCryptoKeyStore::AddSaplingIncomingViewingKey(addressToAdd.second, addressToAdd.first);
+            CCryptoKeyStore::AddSaplingIncomingViewingKey(saplingAddressToAdd.second, saplingAddressToAdd.first);
             //Store addresses to notify GUI later
-            addressesFound.insert(addressToAdd.first);
+            saplingAddressesFound.insert(saplingAddressToAdd.first);
+        }
+
+        //Step 2b -- add orchard addresses
+        for (const auto &orchardAddressToAdd : orchardAddressesToAdd) {
+            //Loaded into memory only
+            //This will be saved during the wallet SetBestChainINTERNAL
+            CCryptoKeyStore::AddOrchardIncomingViewingKey(orchardAddressToAdd.second, orchardAddressToAdd.first);
+            //Store addresses to notify GUI later
+            orchardAddressesFound.insert(orchardAddressToAdd.first);
         }
 
         //Step 3 -- add transactions
         for (int i = 0; i < vtx.size(); i++) {
 
             uint256 hash = vtx[i].GetHash();
-            mapSaplingNoteData_t noteData;
 
+            //Format Decrypted Sapling Note data for insertion into CWalletTx
+            mapSaplingNoteData_t mapSaplingNoteData;
             for (mapSaplingNoteData_t::iterator it = saplingNoteData.begin(); it != saplingNoteData.end(); it++) {
                 SaplingOutPoint op = (*it).first;
                 SaplingNoteData nd = (*it).second;
                 if (op.hash == hash) {
-                      noteData.insert(std::make_pair(op, nd));
+                      mapSaplingNoteData.insert(std::make_pair(op, nd));
+                }
+            }
+
+            //Format Decrypted Orchard Note data for insertion into CWalletTx
+            mapOrchardNoteData_t mapOrchardNoteData;
+            for (mapOrchardNoteData_t::iterator it = orchardNoteData.begin(); it != orchardNoteData.end(); it++) {
+                OrchardOutPoint op = (*it).first;
+                OrchardNoteData nd = (*it).second;
+                if (op.hash == hash) {
+                      mapOrchardNoteData.insert(std::make_pair(op, nd));
                 }
             }
 
             bool fExisted = mapWallet.count(vtx[i].GetHash()) != 0;
 
-            if (fExisted || IsMine(vtx[i]) || IsFromMe(vtx[i]) || noteData.size() > 0)
+            if (fExisted || IsMine(vtx[i]) || IsFromMe(vtx[i]) || mapSaplingNoteData.size() > 0 || mapOrchardNoteData.size() > 0)
             {
                 /**
                  * New implementation of wallet filter code.
@@ -4019,8 +4052,14 @@ void CWallet::AddToWalletIfInvolvingMe(const std::vector<CTransaction> &vtx, std
 
                 CWalletTx wtx(this,vtx[i]);
 
-                if (noteData.size() > 0) {
-                    wtx.SetSaplingNoteData(noteData);
+                //Set Decrypted Sapling Note Data in CWalletTx
+                if (mapSaplingNoteData.size() > 0) {
+                    wtx.SetSaplingNoteData(mapSaplingNoteData);
+                }
+
+                //Set Decrypted Sapling Note Data in CWalletTx
+                if (mapOrchardNoteData.size() > 0) {
+                    wtx.SetOrchardNoteData(mapOrchardNoteData);
                 }
 
                 // Get merkle branch if transaction was found in a block
@@ -4048,13 +4087,18 @@ void CWallet::AddToWalletIfInvolvingMe(const std::vector<CTransaction> &vtx, std
 void CWallet::SyncTransactions(const std::vector<CTransaction> &vtx, const CBlock* pblock, const int nHeight)
 {
     LOCK(cs_wallet);
-    std::set<SaplingPaymentAddress> addressesFound;
+    std::set<SaplingPaymentAddress> saplingAddressesFound;
+    std::set<OrchardPaymentAddressPirate> orchardAddressesFound;
 
     std::vector<CTransaction> vOurs;
-    AddToWalletIfInvolvingMe(vtx, vOurs, pblock, nHeight, true, addressesFound, false);
+    AddToWalletIfInvolvingMe(vtx, vOurs, pblock, nHeight, true, saplingAddressesFound, orchardAddressesFound, false);
 
-    for (std::set<SaplingPaymentAddress>::iterator it = addressesFound.begin(); it != addressesFound.end(); it++) {
+    for (std::set<SaplingPaymentAddress>::iterator it = saplingAddressesFound.begin(); it != saplingAddressesFound.end(); it++) {
         SetZAddressBook(*it, "z-sapling", "", true);
+    }
+
+    for (std::set<OrchardPaymentAddressPirate>::iterator it = orchardAddressesFound.begin(); it != orchardAddressesFound.end(); it++) {
+        SetZAddressBook(*it, "orchard", "", true);
     }
 
     for (int i = 0; i < vOurs.size(); i++) {
@@ -4204,6 +4248,135 @@ mapSproutNoteData_t CWallet::FindMySproutNotes(const CTransaction &tx) const
         }
     }
     return noteData;
+}
+
+/**
+ * Finds all output notes in the given transaction that have been sent to
+ * SaplingPaymentAddresses in this wallet.
+ *
+ * It should never be necessary to call this method with a CWalletTx, because
+ * the result of FindMySaplingNotes (for the addresses available at the time) will
+ * already have been cached in CWalletTx.mapSaplingNoteData.
+ */
+static void DecryptOrchardNoteWorker(
+    const CWallet *wallet,
+    const std::vector<const OrchardIncomingViewingKeyPirate*> vIvk,
+    const std::vector<orchard_bundle::Action*> vOrchardEncryptedAction,
+    const std::vector<uint32_t> vPosition,
+    const std::vector<uint256> vHash,
+    const int &height,
+    mapOrchardNoteData_t *noteData,
+    OrchardIncomingViewingKeyMap *viewingKeysToAdd,
+    int threadNumber)
+{
+    for (int i = 0; i < vIvk.size(); i++) {
+
+        auto result = OrchardDecryptedActions::AttemptDecryptOchardAction(vOrchardEncryptedAction[i], *vIvk[i]);
+        if (result != std::nullopt) {
+
+            // We don't cache the nullifier here as computing it requires knowledge of the note position
+            // in the commitment tree, which can only be determined when the transaction has been mined.
+            OrchardOutPoint op {vHash[i], vPosition[i]};
+            OrchardNoteData nd;
+            nd.ivk = *vIvk[i];
+
+            //Cache Address and value - in Memory Only
+            nd.value = result.value().GetValue();
+            nd.address = result.value().GetAddress();
+
+            LogPrintf("\n\nOrchard Transaction Found %s, %i\n\n", vHash[i].ToString(), vPosition[i]);
+
+            if (nd.value >= minTxValue) {
+                //Only add notes greater then this value
+                //dust filter
+                {
+                    LOCK(wallet->cs_wallet_threadedfunction);
+                    viewingKeysToAdd->insert(make_pair(nd.address, nd.ivk));
+                    noteData->insert(std::make_pair(op, nd));
+                }
+            }
+        }
+    }
+}
+
+std::pair<mapOrchardNoteData_t, OrchardIncomingViewingKeyMap> CWallet::FindMyOrchardNotes(const std::vector<CTransaction> &vtx, int height) const
+{
+    LOCK(cs_wallet);
+
+    //Data to be collected
+    mapOrchardNoteData_t noteData;
+    OrchardIncomingViewingKeyMap viewingKeysToAdd;
+
+    //Create key thread buckets
+    std::vector<const OrchardIncomingViewingKeyPirate*> vIvk;
+    std::vector<std::vector<const OrchardIncomingViewingKeyPirate*>> vvIvk;
+
+    //Create Output thread buckets
+    std::vector<orchard_bundle::Action*> vOrchardEncryptedAction;
+    std::vector<std::vector<orchard_bundle::Action*>> vvOrchardEncryptedAction;
+
+    //Create transaction position thread buckets
+    std::vector<uint32_t> vPosition;
+    std::vector<std::vector<uint32_t>> vvPosition;
+
+    //Create transaction hash thread buckets
+    std::vector<uint256> vHash;
+    std::vector<std::vector<uint256>> vvHash;
+
+    for (uint32_t i = 0; i < maxProcessingThreads; i++) {
+        vvIvk.emplace_back(vIvk);
+        vvOrchardEncryptedAction.emplace_back(vOrchardEncryptedAction);
+        vvPosition.emplace_back(vPosition);
+        vvHash.emplace_back(vHash);
+    }
+
+    // Protocol Spec: 4.19 Block Chain Scanning (Sapling)
+    uint32_t t = 0;
+    for (uint32_t j = 0; j < vtx.size(); j++) {
+        //Transaction being processed
+        uint256 hash = vtx[j].GetHash();
+        auto vActions = vtx[j].GetOrchardActions();
+
+        for (uint32_t i = 0; i < vActions.size(); i++) {
+
+            //Create a tread entry for every ivk with the current note.
+            for (auto it = setOrchardIncomingViewingKeys.begin(); it != setOrchardIncomingViewingKeys.end(); it++) {
+                vvIvk[t].emplace_back(&(*it));
+                vvPosition[t].emplace_back(i);
+                vvHash[t].emplace_back(hash);
+                vvOrchardEncryptedAction[t].emplace_back(&vActions[i]);
+
+                //Increment ivk vector
+                t++;
+                //reset if ivk vector is greater qty of threads being used
+                if (t >= vvIvk.size()) {
+                    t = 0;
+                }
+            }
+        }
+    }
+
+
+    std::vector<boost::thread*> decryptionThreads;
+    for (uint32_t i = 0; i < vvIvk.size(); ++i) {
+        if(!vvIvk[i].empty()) {
+            decryptionThreads.emplace_back(new boost::thread(DecryptOrchardNoteWorker, this, vvIvk[i], vvOrchardEncryptedAction[i], vvPosition[i], vvHash[i], height, &noteData, &viewingKeysToAdd, i));
+        }
+    }
+
+    // Cleanup
+    for (auto dthread : decryptionThreads) {
+        dthread->join();
+        delete dthread;
+    }
+
+    //clean up vectors
+    vvIvk.resize(0);
+    vvOrchardEncryptedAction.resize(0);
+    vvPosition.resize(0);
+    vvHash.resize(0);
+
+    return std::make_pair(noteData, viewingKeysToAdd);
 }
 
 
@@ -4906,6 +5079,18 @@ void CWalletTx::SetSaplingNoteData(mapSaplingNoteData_t &noteData)
             mapSaplingNoteData[nd.first] = nd.second;
         } else {
             throw std::logic_error("CWalletTx::SetSaplingNoteData(): Invalid note");
+        }
+    }
+}
+
+void CWalletTx::SetOrchardNoteData(mapOrchardNoteData_t &noteData)
+{
+    mapOrchardNoteData.clear();
+    for (const std::pair<OrchardOutPoint, OrchardNoteData> nd : noteData) {
+        if (nd.first.n < GetOrchardActionsCount()) {
+            mapOrchardNoteData[nd.first] = nd.second;
+        } else {
+            throw std::logic_error("CWalletTx::SetOrchardNoteData(): Invalid note");
         }
     }
 }
@@ -5766,7 +5951,8 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
     std::set<uint256> txListOriginal;
 
     //Collect Sapling Addresses to notify GUI after rescan
-    std::set<SaplingPaymentAddress> addressesFound;
+    std::set<SaplingPaymentAddress> saplingAddressesFound;
+    std::set<OrchardPaymentAddressPirate> orchardAddressesFound;
 
     {
         //Lock cs_keystore to prevent wallet from locking during rescan
@@ -5814,7 +6000,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             ReadBlockFromDisk(block, pindex,1);
 
             std::vector<CTransaction> vOurs;
-            AddToWalletIfInvolvingMe(block.vtx, vOurs, &block, pindex->nHeight, fUpdate, addressesFound, true);
+            AddToWalletIfInvolvingMe(block.vtx, vOurs, &block, pindex->nHeight, fUpdate, saplingAddressesFound, orchardAddressesFound, true);
 
             for (int i = 0; i < vOurs.size(); i++) {
                 blockInvolvesMe = true;
@@ -5870,8 +6056,12 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
     }
 
     //Notfiy GUI of all new addresses found
-    for (std::set<SaplingPaymentAddress>::iterator it = addressesFound.begin(); it != addressesFound.end(); it++) {
+    for (std::set<SaplingPaymentAddress>::iterator it = saplingAddressesFound.begin(); it != saplingAddressesFound.end(); it++) {
         SetZAddressBook(*it, "z-sapling", "", true);
+    }
+
+    for (std::set<OrchardPaymentAddressPirate>::iterator it = orchardAddressesFound.begin(); it != orchardAddressesFound.end(); it++) {
+        SetZAddressBook(*it, "orchard", "", true);
     }
 
     //Notify GUI of all new transactions found

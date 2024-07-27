@@ -12,26 +12,26 @@ use crate::orchard_keys::zip32::{ExtendedSpendingKey, ChildIndex, ZIP32_PURPOSE}
 mod zip32;
 mod prf_expand;
 
-// #[no_mangle]
-// pub extern "C" fn orchard_ivk_to_address(
-//     ivk_bytes: *const [c_uchar; 64],
-//     diversifier_index: *const [c_uchar; 11],
-//     out_bytes: *mut [c_uchar; 43],
-// ) -> bool {
-//     let ivk_bytes = unsafe { *ivk_bytes };
-//     let ivk = IncomingViewingKey::from_bytes(&ivk_bytes);
-//     if ivk.is_some().into() {
-//
-//         let diversifier_index = DiversifierIndex::from(unsafe { *diversifier_index });
-//         let address = ivk.unwrap().address_at(diversifier_index);
-//         let out_bytes = unsafe { &mut *out_bytes };
-//         *out_bytes = address.to_raw_address_bytes();
-//
-//         return true
-//     }
-//     return false
-//
-// }
+#[no_mangle]
+pub extern "C" fn orchard_ivk_to_address(
+    ivk_bytes: *const [c_uchar; 64],
+    diversifier_index: *const [c_uchar; 11],
+    out_bytes: *mut [c_uchar; 43],
+) -> bool {
+    let ivk_bytes = unsafe { *ivk_bytes };
+    let ivk = IncomingViewingKey::from_bytes(&ivk_bytes);
+    if ivk.is_some().into() {
+
+        let diversifier_index = DiversifierIndex::from(unsafe { *diversifier_index });
+        let address = ivk.unwrap().address_at(diversifier_index);
+        let out_bytes = unsafe { &mut *out_bytes };
+        *out_bytes = address.to_raw_address_bytes();
+
+        return true
+    }
+    return false
+
+}
 
 #[no_mangle]
 pub extern "C" fn orchard_fvk_to_ovk(

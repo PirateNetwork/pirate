@@ -46,6 +46,15 @@ impl Action {
     pub(crate) fn spend_auth_sig(&self) -> [u8; 64] {
         self.0.authorization().into()
     }
+
+    pub(crate) fn as_ptr(&self) -> *const ffi::ActionPtr {
+        let ret: *const orchard::Action<Signature<SpendAuth>> = &self.0;
+        ret.cast()
+    }
+
+    pub(crate) fn inner(&self) -> orchard::Action<Signature<SpendAuth>> {
+        self.0.clone()
+    }
 }
 
 #[derive(Clone)]

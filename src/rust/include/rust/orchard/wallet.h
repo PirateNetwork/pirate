@@ -401,6 +401,14 @@ bool orchard_wallet_load_note_commitment_tree(
 bool orchard_wallet_unspent_notes_are_spendable(
     const OrchardWalletPtr* wallet);
 
+bool try_orchard_decrypt_action(
+    const ActionPtr* orchard_action,
+    const unsigned char* ivk_bytes,
+    uint64_t *value_out,
+    unsigned char *address_out,
+    unsigned char *memo_out
+);
+
 #ifdef __cplusplus
 }
 #endif

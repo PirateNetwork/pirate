@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-// bool orchard_ivk_to_address(const unsigned char *ivk_bytes, const unsigned char *diversifier_index, unsigned char *out_bytes);
+bool orchard_ivk_to_address(const unsigned char *ivk_bytes, const unsigned char *diversifier_index, unsigned char *out_bytes);
 
 bool orchard_fvk_to_ovk(const unsigned char *fvk_bytes, unsigned char *out_bytes);
 bool orchard_fvk_to_ovk_internal(const unsigned char *fvk_bytes, unsigned char *out_bytes);
