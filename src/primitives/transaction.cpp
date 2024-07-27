@@ -484,6 +484,16 @@ const rust::Vec<sapling::Output> CTransaction::GetSaplingOutputs() const
     return saplingBundle.GetDetails().outputs();
 }
 
+const rust::Vec<orchard_bundle::Action> CTransaction::GetOrchardActions() const
+{
+    return orchardBundle.GetDetails().actions();
+}
+
+size_t CTransaction::GetOrchardActionsCount() const
+{
+    return orchardBundle.GetNumActions();
+}
+
 /**
  * Returns the Sapling value balance for the transaction.
  */

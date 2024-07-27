@@ -494,7 +494,7 @@ public:
     }
 
     merkle_frontier::OrchardAppendResult AppendBundle(const OrchardBundle& bundle) {
-        return inner->append_bundle(*bundle.GetDetails());
+        return inner->append_bundle(bundle.GetDetails());
     }
 
     const uint256 root() const {

@@ -36,6 +36,7 @@
 #include "util/strencodings.h"
 #include "validationinterface.h"
 #include "wallet/crypter.h"
+#include "wallet/orchard.h"
 #include "wallet/sapling.h"
 #include "wallet/wallet_ismine.h"
 #include "wallet/walletdb.h"
@@ -402,8 +403,73 @@ public:
 
 };
 
+class OrchardNoteData
+{
+private:
+    uint64_t position;
+public:
+    /**
+     * We initialize the height to -1 for the same reason as we do in SproutNoteData.
+     * See the comment in that class for a full description.
+     */
+    OrchardNoteData() : nullifier(), value {0} {
+        setPosition(0);
+    }
+    OrchardNoteData(libzcash::OrchardIncomingViewingKeyPirate ivk) : ivk {ivk}, nullifier(), value {0} {
+        setPosition(0);
+    }
+    OrchardNoteData(libzcash::OrchardIncomingViewingKeyPirate ivk, uint256 n) : ivk {ivk}, nullifier(n), value {0} {
+        setPosition(0);
+    }
+
+    libzcash::OrchardIncomingViewingKeyPirate ivk;
+    std::optional<uint256> nullifier;
+
+    //In Memory Only
+    CAmount value;
+    libzcash::OrchardPaymentAddressPirate address;
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        int nVersion = s.GetVersion();
+        if (!(s.GetType() & SER_GETHASH)) {
+            READWRITE(nVersion);
+        }
+        READWRITE(ivk);
+        READWRITE(nullifier);
+        READWRITE(position);
+    }
+
+    friend bool operator==(const OrchardNoteData& a, const OrchardNoteData& b) {
+        return (a.ivk == b.ivk && a.nullifier == b.nullifier && a.position == b.position);
+    }
+
+    friend bool operator!=(const OrchardNoteData& a, const OrchardNoteData& b) {
+        return !(a == b);
+    }
+
+    std::optional<uint64_t> getPostion() {
+        if (position >= 0) {
+            return position;
+        }
+        return std::nullopt;
+    }
+
+    bool setPosition(uint64_t postionIn) {
+        if (postionIn >= 0) {
+            position = postionIn;
+            return true;
+        }
+        return false;
+    }
+
+};
+
 typedef std::map<JSOutPoint, SproutNoteData> mapSproutNoteData_t;
 typedef std::map<SaplingOutPoint, SaplingNoteData> mapSaplingNoteData_t;
+typedef std::map<OrchardOutPoint, OrchardNoteData> mapOrchardNoteData_t;
 
 /** Decrypted note, its location in a transaction, and number of confirmations. */
 struct CSproutNotePlaintextEntry
@@ -500,6 +566,7 @@ public:
     mapValue_t mapValue;
     mapSproutNoteData_t mapSproutNoteData;
     mapSaplingNoteData_t mapSaplingNoteData;
+    mapOrchardNoteData_t mapOrchardNoteData;
     std::vector<std::pair<std::string, std::string> > vOrderForm;
     unsigned int fTimeReceivedIsTxTime;
     unsigned int nTimeReceived; //! time received by this node
@@ -651,6 +718,7 @@ public:
 
     void SetSproutNoteData(mapSproutNoteData_t &noteData);
     void SetSaplingNoteData(mapSaplingNoteData_t &noteData);
+    void SetOrchardNoteData(mapOrchardNoteData_t &noteData);
 
     std::pair<libzcash::SproutNotePlaintext, libzcash::SproutPaymentAddress> DecryptSproutNote(
 	JSOutPoint jsop) const;
@@ -1696,7 +1764,15 @@ public:
     void SyncTransactions(const std::vector<CTransaction> &vtx, const CBlock* pblock, const int nHeight);
     void ForceRescanWallet();
     void RescanWallet();
-    void AddToWalletIfInvolvingMe(const std::vector<CTransaction> &vtx, std::vector<CTransaction> &vAddedTxes, const CBlock* pblock, const int nHeight, bool fUpdate, std::set<libzcash::SaplingPaymentAddress>& addressesFound, bool fRescan = false);
+    void AddToWalletIfInvolvingMe(
+        const std::vector<CTransaction> &vtx,
+        std::vector<CTransaction> &vAddedTxes,
+        const CBlock* pblock,
+        const int nHeight,
+        bool fUpdate,
+        std::set<libzcash::SaplingPaymentAddress>& addressesFound,
+        std::set<libzcash::OrchardPaymentAddressPirate>& orchardAddressesFound,
+        bool fRescan = false);
     void WitnessNoteCommitment(
          std::vector<uint256> commitments,
          std::vector<std::optional<SproutWitness>>& witnesses,
@@ -1748,6 +1824,7 @@ public:
         uint8_t n) const;
     mapSproutNoteData_t FindMySproutNotes(const CTransaction& tx) const;
     std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> FindMySaplingNotes(const std::vector<CTransaction> &vtx, int height) const;
+    std::pair<mapOrchardNoteData_t, OrchardIncomingViewingKeyMap> FindMyOrchardNotes(const std::vector<CTransaction> &vtx, int height) const;
     bool IsSproutNullifierFromMe(const uint256& nullifier) const;
     bool IsSaplingNullifierFromMe(const uint256& nullifier) const;
 

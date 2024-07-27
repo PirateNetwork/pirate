@@ -94,6 +94,7 @@ pub(crate) mod ffi {
         type OrchardBundlePtr;
         type SaplingBundlePtr;
         type OutputPtr;
+        type ActionPtr;
     }
 
     #[namespace = "sapling"]
@@ -276,6 +277,7 @@ pub(crate) mod ffi {
         fn enc_ciphertext(self: &Action) -> [u8; 580];
         fn out_ciphertext(self: &Action) -> [u8; 80];
         fn spend_auth_sig(self: &Action) -> [u8; 64];
+        fn as_ptr(self: &Action) -> *const ActionPtr;
 
         #[rust_name = "none_orchard_bundle"]
         fn none() -> Box<OrchardBundle>;

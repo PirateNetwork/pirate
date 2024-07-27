@@ -9,6 +9,9 @@ use tracing::error;
 use subtle::CtOption;
 
 use zcash_encoding::{Optional, Vector};
+
+use zcash_note_encryption::try_note_decryption;
+
 use zcash_primitives::{
     consensus::BlockHeight,
     merkle_tree::{read_position, write_position, write_merkle_path, merkle_path_from_slice, compute_root_from_witness},
@@ -18,8 +21,9 @@ use zcash_primitives::{
 
 use orchard::{
     bundle::Authorized,
-    keys::{FullViewingKey, IncomingViewingKey, OutgoingViewingKey, Scope, SpendingKey},
+    keys::{FullViewingKey, IncomingViewingKey, PreparedIncomingViewingKey, OutgoingViewingKey, Scope, SpendingKey},
     note::{Nullifier,ExtractedNoteCommitment},
+    note_encryption::OrchardDomain,
     tree::{MerkleHashOrchard},
     Address, Bundle, Note,
 };
@@ -27,6 +31,7 @@ use orchard::{
 use crate::{
     builder_ffi::OrchardSpendInfo,
     incremental_merkle_tree::{read_tree, write_tree},
+    orchard_bundle::Action,
     streams_ffi::{CppStreamReader, CppStreamWriter, ReadCb, StreamObj, WriteCb},
     zcashd_orchard::OrderedAddress,
 };
@@ -857,4 +862,45 @@ pub extern "C" fn get_orchard_path_root_with_cm(
     *anchor_out = anchor.to_bytes();
 
     return true;
+}
+
+#[no_mangle]
+pub extern "C" fn try_orchard_decrypt_action(
+    orchard_action: *const Action,
+    ivk_bytes: *const [c_uchar; 64],
+    value_out: *mut u64,
+    address_out: *mut [u8; 43],
+    memo_out: *mut [u8; 512],
+) -> bool {
+
+    let ivk_bytes = unsafe { *ivk_bytes };
+    let ivk = IncomingViewingKey::from_bytes(&ivk_bytes);
+    if ivk.is_some().into() {
+
+        if let Some(orchard_action) = unsafe { orchard_action.as_ref() } {
+
+            let prepared_ivk = PreparedIncomingViewingKey::new(&ivk.unwrap());
+            let action = &orchard_action.inner();
+            let domain = OrchardDomain::for_action(action);
+            let decrypted = match try_note_decryption(&domain, &prepared_ivk, action) {
+                Some(r) => r,
+                None => return false,
+            };
+
+            let value_out = unsafe { &mut *value_out };
+            let value = decrypted.0.value().inner();
+            let mut buf = [0; 8];
+            LittleEndian::write_u64(&mut buf, value.into());
+            *value_out = LittleEndian::read_u64(&buf);
+
+            let address_out = unsafe { &mut *address_out };
+            *address_out = decrypted.1.to_raw_address_bytes();
+
+            let memo_out = unsafe { &mut *memo_out };
+            *memo_out = decrypted.2;
+
+            return true
+        }
+    }
+    return false
 }

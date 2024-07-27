@@ -38,6 +38,51 @@ OrchardPaymentAddress_t OrchardPaymentAddressPirate::ToBytes() const
     return address_t;
 }
 
+std::optional<OrchardPaymentAddressPirate> OrchardIncomingViewingKeyPirate::address(diversifier_t d) const
+{
+    // Datastreams for serialization
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
+    CDataStream ds(SER_NETWORK, PROTOCOL_VERSION); // sending stream - diversifier
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); // returning stream
+
+    // Tranfer Data
+    OrchardIncomingViewingKey_t ivk_t;
+    OrchardPaymentAddress_t address_t;
+
+    // Return Type
+    OrchardPaymentAddressPirate address;
+
+    // rust result
+    bool rustCompleted;
+
+    // Serialize sending data
+    ss << *this;
+    ss >> ivk_t;
+
+
+    // Call rust FFI
+    rustCompleted = orchard_ivk_to_address(ivk_t.begin(), d.begin(), address_t.begin());
+
+    // Deserialize rust result on success
+    if (rustCompleted) {
+        rs << address_t;
+        rs >> address;
+    }
+
+    // Cleanse the memory of the transfer and serialization objects
+    memory_cleanse(ss.data(), ss.size());
+    memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(ivk_t.data(), ivk_t.size());
+    memory_cleanse(address_t.data(), address_t.size());
+
+    // Return data
+    if (rustCompleted) {
+        return address;
+    }
+
+    return std::nullopt;
+}
+
 uint256 OrchardFullViewingKeyPirate::GetFingerprint() const
 {
     CBLAKE2bWriter ss(SER_GETHASH, 0, ZCASH_ORCHARH_FVFP_PERSONALIZATION);

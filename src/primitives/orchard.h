@@ -57,8 +57,8 @@ public:
         return *this;
     }
 
-    const rust::Box<orchard_bundle::OrchardBundle>& GetDetails() const {
-        return inner;
+    const orchard_bundle::OrchardBundle& GetDetails() const {
+        return *inner;
     }
 
     size_t RecursiveDynamicUsage() const {
