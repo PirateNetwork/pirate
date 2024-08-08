@@ -490,6 +490,16 @@ struct SaplingNoteEntry
     int confirmations;
 };
 
+/** Orchard note, its location in a transaction, and number of confirmations. */
+struct OrchardNoteEntry
+{
+    OrchardOutPoint op;
+    libzcash::OrchardPaymentAddressPirate address;
+    libzcash::OrchardNote note;
+    std::array<unsigned char, ZC_MEMO_SIZE> memo;
+    int confirmations;
+};
+
 /** A transaction with a merkle branch linking it to the block chain. */
 class CMerkleTx : public CTransaction
 {
@@ -942,6 +952,7 @@ private:
     typedef TxSpendMap<uint256> TxNullifiers;
     TxNullifiers mapTxSproutNullifiers;
     TxNullifiers mapTxSaplingNullifiers;
+    TxNullifiers mapTxOrchardNullifiers;
 
     std::vector<CTransaction> pendingSaplingSweepTxs;
     AsyncRPCOperationId saplingSweepOperationId;
@@ -952,10 +963,12 @@ private:
     void AddToTransparentSpends(const COutPoint& outpoint, const uint256& wtxid);
     void AddToSproutSpends(const uint256& nullifier, const uint256& wtxid);
     void AddToSaplingSpends(const uint256& nullifier, const uint256& wtxid);
+    void AddToOrchardSpends(const uint256& nullifier, const uint256& wtxid);
     void AddToSpends(const uint256& wtxid);
     void RemoveFromTransparentSpends(const uint256& wtxid);
     void RemoveFromSproutSpends(const uint256& wtxid);
     void RemoveFromSaplingSpends(const uint256& wtxid);
+    void RemoveFromOrchardSpends(const uint256& wtxid);
     void RemoveFromSpends(const uint256& wtxid);
 
 public:
@@ -994,6 +1007,7 @@ public:
 
     //Tracks if ValidateSaplingWalletTrackedPositions has been run
     bool saplingWalletPositionsValidated = false;
+    bool orchardWalletPositionsValidated = false;
 
     int64_t NullifierCount();
     std::set<uint256> GetNullifiers();
@@ -1010,6 +1024,9 @@ public:
     std::map<uint256, SaplingOutPoint> mapArcSaplingOutPoints;
     void AddToArcSaplingOutPoints(const uint256& nullifier, const SaplingOutPoint& op);
 
+    std::map<uint256, OrchardOutPoint> mapArcOrchardOutPoints;
+    void AddToArcOrchardOutPoints(const uint256& nullifier, const OrchardOutPoint& op);
+
     /**
      * pindex is the new tip being connected.  Public so these can be called from init.cpp.
      */
@@ -1017,6 +1034,10 @@ public:
     bool ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex);
     void IncrementSaplingWallet(const CBlockIndex* pindex);
     void DecrementSaplingWallet(const CBlockIndex* pindex);
+
+    bool ValidateOrchardWalletTrackedPositions(const CBlockIndex* pindex);
+    void IncrementOrchardWallet(const CBlockIndex* pindex);
+    void DecrementOrchardWallet(const CBlockIndex* pindex);
 
 
 protected:
@@ -1253,6 +1274,13 @@ protected:
             return;
         }
 
+        orchardWallet.GarbageCollect();
+        // if (!walletdb.WriteOrchardWitnesses(orchardWallet)) {
+        //     LogPrintf("SetBestChain(): Failed to write Sapling witnesses, aborting atomic write\n");
+        //     walletdb.TxnAbort();
+        //     return;
+        // }
+
         if (!walletdb.TxnCommit()) {
             // Couldn't commit all to db, but in-memory state is fine
             LogPrintf("SetBestChain(): Couldn't commit atomic write\n");
@@ -1288,6 +1316,9 @@ protected:
      */
     SaplingWallet saplingWallet;
     bool saplingWalletValidated = false;
+
+    OrchardWallet orchardWallet;
+    bool orchardWalletValidated = false;
 
     /* the hd chain data model (chain counters) */
     CHDChain hdChain;
@@ -1412,8 +1443,8 @@ public:
      *   but with the now-cached nullifiers).
      */
     std::map<uint256, JSOutPoint> mapSproutNullifiersToNotes;
-
     std::map<uint256, SaplingOutPoint> mapSaplingNullifiersToNotes;
+    std::map<uint256, OrchardOutPoint> mapOrchardNullifiersToNotes;
 
     std::map<uint256, CWalletTx> mapWallet;
     bool fRunSetBestChain = false;
@@ -1428,6 +1459,7 @@ public:
     std::set<COutPoint> setLockedCoins;
     std::set<JSOutPoint> setLockedSproutNotes;
     std::set<SaplingOutPoint> setLockedSaplingNotes;
+    std::set<OrchardOutPoint> setLockedOrchardNotes;
 
     int64_t nTimeFirstKey;
 
@@ -1455,6 +1487,8 @@ public:
     unsigned int GetSproutSpendDepth(const uint256& nullifier) const;
     bool IsSaplingSpent(const uint256& nullifier) const;
     unsigned int GetSaplingSpendDepth(const uint256& nullifier) const;
+    bool IsOrchardSpent(const uint256& nullifier) const;
+    unsigned int GetOrchardSpendDepth(const uint256& nullifier) const;
 
     bool IsLockedCoin(uint256 hash, unsigned int n) const;
     void LockCoin(COutPoint& output);
@@ -1473,6 +1507,12 @@ public:
     void UnlockNote(const SaplingOutPoint& output);
     void UnlockAllSaplingNotes();
     std::vector<SaplingOutPoint> ListLockedSaplingNotes();
+
+    bool IsLockedNote(const OrchardOutPoint& output) const;
+    void LockNote(const OrchardOutPoint& output);
+    void UnlockNote(const OrchardOutPoint& output);
+    void UnlockAllOrchardNotes();
+    std::vector<OrchardOutPoint> ListLockedOrchardNotes();
 
     /**
      * keystore implementation
@@ -1733,6 +1773,7 @@ public:
      * tree from a stream into the Orchard wallet.
      */
     SaplingWalletNoteCommitmentTreeLoader GetSaplingNoteCommitmentTreeLoader();
+    OrchardWalletNoteCommitmentTreeLoader GetOrchardNoteCommitmentTreeLoader();
 
 
 
@@ -1758,6 +1799,7 @@ public:
     void UpdateNullifierNoteMapWithTx(const CWalletTx& wtx);
     void UpdateSproutNullifierNoteMapWithTx(CWalletTx& wtx);
     void UpdateSaplingNullifierNoteMapWithTx(CWalletTx* wtx);
+    void UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx);
     void UpdateNullifierNoteMapForBlock(const CBlock* pblock);
     bool AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb, int nHeight, bool fRescan = false);
     bool EraseFromWallet(const uint256 &hash);
@@ -1831,6 +1873,10 @@ public:
     bool SaplingWalletGetMerklePathOfNote(const uint256 txid, int outidx, libzcash::MerklePath &merklePath);
     bool SaplingWalletGetPathRootWithCMU(libzcash::MerklePath &merklePath, uint256 cmu, uint256 &anchor);
     void SaplingWalletReset();
+
+    bool OrchardWalletGetMerklePathOfNote(const uint256 txid, int outidx, libzcash::MerklePath &merklePath);
+    bool OrchardWalletGetPathRootWithCMU(libzcash::MerklePath &merklePath, uint256 cmu, uint256 &anchor);
+    void OrchardWalletReset();
 
     void GetSproutNoteWitnesses(
          std::vector<JSOutPoint> notes,
@@ -1975,8 +2021,8 @@ public:
     void getZAddressBalances(std::map<libzcash::PaymentAddress, CAmount> &balances, int minDepth, bool requireSpendingKey);
 
     /* Find notes filtered by payment address, min depth, ability to spend */
-    void GetFilteredNotes(std::vector<CSproutNotePlaintextEntry>& sproutEntries,
-                          std::vector<SaplingNoteEntry>& saplingEntries,
+    void GetFilteredNotes(std::vector<SaplingNoteEntry>& saplingEntries,
+                          std::vector<OrchardNoteEntry>& orchardEntries,
                           std::string address,
                           int minDepth=1,
                           bool ignoreSpent=true,
@@ -1984,8 +2030,8 @@ public:
 
     /* Find notes filtered by payment addresses, min depth, max depth, if they are spent,
        if a spending key is required, and if they are locked */
-    void GetFilteredNotes(std::vector<CSproutNotePlaintextEntry>& sproutEntries,
-                          std::vector<SaplingNoteEntry>& saplingEntries,
+    void GetFilteredNotes(std::vector<SaplingNoteEntry>& saplingEntries,
+                          std::vector<OrchardNoteEntry>& orchardEntries,
                           std::set<libzcash::PaymentAddress>& filterAddresses,
                           int minDepth=1,
                           int maxDepth=INT_MAX,

@@ -174,12 +174,12 @@ bool sapling_wallet_append_bundle_commitments(
         const SaplingBundlePtr* bundle
         );
 
-bool clear_note_positions_for_txid(
+bool clear_sapling_note_positions_for_txid(
     SaplingWalletPtr* wallet,
     const unsigned char txid[32]
 );
 
-bool create_single_txid_positions(
+bool create_sapling_single_txid_positions(
     SaplingWalletPtr* wallet,
     const uint32_t block_height,
     const unsigned char txid[32]
@@ -443,7 +443,7 @@ bool sapling_wallet_get_path_for_note(
     unsigned char *path_ret
 );
 
-bool get_path_root_with_cm(
+bool get_sapling_path_root_with_cm(
     const unsigned char *merkle_path,
     const unsigned char *cm,
     unsigned char *anchor_out

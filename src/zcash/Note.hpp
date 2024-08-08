@@ -96,7 +96,6 @@ public:
 class OrchardNote : public BaseNote {
 private:
     uint256 rseed;
-    friend class OrcahrdNotePlaintext;
 public:
     OrchardPaymentAddressPirate address;
 

@@ -81,8 +81,8 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
         return true;
     }
 
-    std::vector<CSproutNotePlaintextEntry> sproutEntries;
     std::vector<SaplingNoteEntry> saplingEntries;
+    std::vector<OrchardNoteEntry> orchardEntries;
     libzcash::SaplingPaymentAddress sweepAddress;
     std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>> mapAddresses;
 
@@ -91,7 +91,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
         // We set minDepth to 11 to avoid unconfirmed notes and in anticipation of specifying
         // an anchor at height N-10 for each Sprout JoinSplit description
         // Consider, should notes be sorted?
-        pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, "", 11);
+        pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, "", 11);
         if (!fromRPC_) {
             if (fSweepMapUsed) {
                 const vector<string>& v = mapMultiArgs["-sweepsaplingaddress"];

@@ -98,18 +98,18 @@ bool orchard_wallet_init_from_frontier(
  * wrap this pointer in an `OrchardIncomingViewingKey` which handles deallocation
  * in the object destructor.
  */
-struct RawOrchardActionIVK {
-    uint64_t actionIdx;
-    OrchardIncomingViewingKeyPtr* ivk;
-};
-static_assert(
-    sizeof(RawOrchardActionIVK) == 16,
-    "RawOrchardActionIVK struct should have exactly a 128-bit in-memory representation.");
-static_assert(alignof(RawOrchardActionIVK) == 8, "RawOrchardActionIVK struct alignment is not 64 bits.");
-
-typedef void (*push_action_ivk_callback_t)(void* rec, const RawOrchardActionIVK actionIvk);
-
-typedef void (*push_spend_action_idx_callback_t)(void* rec, uint32_t actionIdx);
+// struct RawOrchardActionIVK {
+//     uint64_t actionIdx;
+//     OrchardIncomingViewingKeyPtr* ivk;
+// };
+// static_assert(
+//     sizeof(RawOrchardActionIVK) == 16,
+//     "RawOrchardActionIVK struct should have exactly a 128-bit in-memory representation.");
+// static_assert(alignof(RawOrchardActionIVK) == 8, "RawOrchardActionIVK struct alignment is not 64 bits.");
+//
+// typedef void (*push_action_ivk_callback_t)(void* rec, const RawOrchardActionIVK actionIvk);
+//
+// typedef void (*push_spend_action_idx_callback_t)(void* rec, uint32_t actionIdx);
 
 /**
  * Searches the provided bundle for notes that are visible to the specified wallet's
@@ -128,29 +128,29 @@ typedef void (*push_spend_action_idx_callback_t)(void* rec, uint32_t actionIdx);
  * Returns `true` if the bundle is involved with the wallet; i.e. if it contains
  * notes spendable by the wallet, or spends any of the wallet's notes.
  */
-bool orchard_wallet_add_notes_from_bundle(
-    OrchardWalletPtr* wallet,
-    const unsigned char txid[32],
-    const OrchardBundlePtr* bundle,
-    void* callbackReceiver,
-    push_action_ivk_callback_t push_cb,
-    push_spend_action_idx_callback_t spend_cb);
-
-/**
- * Decrypts a selection of notes from the bundle with specified incoming viewing
- * keys, and adds those notes to the wallet.
- *
- * The provided bundle must be a component of the transaction from which
- * `txid` was derived.
- */
-bool orchard_wallet_load_bundle(
-    OrchardWalletPtr* wallet,
-    const unsigned char txid[32],
-    const OrchardBundlePtr* bundle,
-    const RawOrchardActionIVK* actionIvks,
-    size_t actionIvksLen,
-    const uint32_t* actionsSpendingWalletNotes,
-    size_t actionsSpendingWalletNotesLen);
+// bool orchard_wallet_add_notes_from_bundle(
+//     OrchardWalletPtr* wallet,
+//     const unsigned char txid[32],
+//     const OrchardBundlePtr* bundle,
+//     void* callbackReceiver,
+//     push_action_ivk_callback_t push_cb,
+//     push_spend_action_idx_callback_t spend_cb);
+//
+// /**
+//  * Decrypts a selection of notes from the bundle with specified incoming viewing
+//  * keys, and adds those notes to the wallet.
+//  *
+//  * The provided bundle must be a component of the transaction from which
+//  * `txid` was derived.
+//  */
+// bool orchard_wallet_load_bundle(
+//     OrchardWalletPtr* wallet,
+//     const unsigned char txid[32],
+//     const OrchardBundlePtr* bundle,
+//     const RawOrchardActionIVK* actionIvks,
+//     size_t actionIvksLen,
+//     const uint32_t* actionsSpendingWalletNotes,
+//     size_t actionsSpendingWalletNotesLen);
 
 /**
  * Add the note commitment values for the specified bundle to the wallet's note
@@ -163,11 +163,32 @@ bool orchard_wallet_load_bundle(
  * position to have its note commitments appended to the note commitment tree.
  */
 bool orchard_wallet_append_bundle_commitments(
+       OrchardWalletPtr* wallet,
+       const uint32_t block_height,
+       const size_t block_tx_idx,
+       const OrchardBundlePtr* bundle
+       );
+
+bool clear_orchard_note_positions_for_txid(
+   OrchardWalletPtr* wallet,
+   const unsigned char txid[32]
+);
+
+bool create_orchard_single_txid_positions(
+   OrchardWalletPtr* wallet,
+   const uint32_t block_height,
+   const unsigned char txid[32]
+);
+
+bool orchard_wallet_append_single_commitment(
     OrchardWalletPtr* wallet,
     const uint32_t block_height,
-    const size_t block_tx_idx,
     const unsigned char txid[32],
-    const OrchardBundlePtr* bundle);
+    const size_t block_tx_idx,
+    const size_t tx_output_idx,
+    const ActionPtr* action,
+    const bool is_mine
+);
 
 /**
  * Obtains the root of the wallet's Orchard note commitment tree at the given
@@ -189,34 +210,34 @@ bool orchard_wallet_commitment_tree_root(
  * Returns whether the specified transaction involves any Orchard notes that belong to
  * this wallet.
  */
-bool orchard_wallet_tx_involves_my_notes(
-    const OrchardWalletPtr* wallet,
-    const unsigned char txid[32]);
+// bool orchard_wallet_tx_involves_my_notes(
+//     const OrchardWalletPtr* wallet,
+//     const unsigned char txid[32]);
 
 /**
  * Add the specified spending key to the wallet's key store.  This will also compute and
  * add the associated full and incoming viewing keys.
  */
-void orchard_wallet_add_spending_key(
-    OrchardWalletPtr* wallet,
-    const OrchardSpendingKeyPtr* sk);
+// void orchard_wallet_add_spending_key(
+//     OrchardWalletPtr* wallet,
+//     const OrchardSpendingKeyPtr* sk);
 
 /**
  * Add the specified full viewing key to the wallet's key store.  This will also compute
  * and add the associated incoming viewing key.
  */
-void orchard_wallet_add_full_viewing_key(
-    OrchardWalletPtr* wallet,
-    const OrchardFullViewingKeyPtr* fvk);
+// void orchard_wallet_add_full_viewing_key(
+//     OrchardWalletPtr* wallet,
+//     const OrchardFullViewingKeyPtr* fvk);
 
 /**
  * Add the specified raw address to the wallet's key store, associated with the incoming
  * viewing key from which that address was derived.
  */
-bool orchard_wallet_add_raw_address(
-    OrchardWalletPtr* wallet,
-    const OrchardRawAddressPtr* addr,
-    const OrchardIncomingViewingKeyPtr* ivk);
+// bool orchard_wallet_add_raw_address(
+//     OrchardWalletPtr* wallet,
+//     const OrchardRawAddressPtr* addr,
+//     const OrchardIncomingViewingKeyPtr* ivk);
 
 /**
  * Returns a pointer to the Orchard spending key corresponding to the specified raw
@@ -225,9 +246,9 @@ bool orchard_wallet_add_raw_address(
  * Memory is allocated by Rust and must be manually freed using
  * `orchard_spending_key_free`.
  */
-OrchardSpendingKeyPtr* orchard_wallet_get_spending_key_for_address(
-    const OrchardWalletPtr* wallet,
-    const OrchardRawAddressPtr* addr);
+// OrchardSpendingKeyPtr* orchard_wallet_get_spending_key_for_address(
+//     const OrchardWalletPtr* wallet,
+//     const OrchardRawAddressPtr* addr);
 
 /**
  * Returns a pointer to the Orchard incoming viewing key corresponding to the specified
@@ -236,24 +257,24 @@ OrchardSpendingKeyPtr* orchard_wallet_get_spending_key_for_address(
  * Memory is allocated by Rust and must be manually freed using
  * `orchard_incoming_viewing_key_free`.
  */
-OrchardIncomingViewingKeyPtr* orchard_wallet_get_ivk_for_address(
-    const OrchardWalletPtr* wallet,
-    const OrchardRawAddressPtr* addr);
+// OrchardIncomingViewingKeyPtr* orchard_wallet_get_ivk_for_address(
+//     const OrchardWalletPtr* wallet,
+//     const OrchardRawAddressPtr* addr);
 
 /**
  * A C struct used to transfer note metadata information across the Rust FFI boundary.
  * This must have the same in-memory representation as the `FFINoteMetadata` type in
  * orchard_ffi/wallet.rs.
  */
-struct RawOrchardNoteMetadata {
-    unsigned char txid[32];
-    uint32_t actionIdx;
-    OrchardRawAddressPtr* addr;
-    CAmount noteValue;
-    unsigned char memo[512];
-};
-
-typedef void (*push_note_callback_t)(void* resultVector, const RawOrchardNoteMetadata noteMeta);
+// struct RawOrchardNoteMetadata {
+//     unsigned char txid[32];
+//     uint32_t actionIdx;
+//     OrchardRawAddressPtr* addr;
+//     CAmount noteValue;
+//     unsigned char memo[512];
+// };
+//
+// typedef void (*push_note_callback_t)(void* resultVector, const RawOrchardNoteMetadata noteMeta);
 
 /**
  * Finds notes that belong to the wallet that were sent to addresses derived from the
@@ -267,43 +288,43 @@ typedef void (*push_note_callback_t)(void* resultVector, const RawOrchardNoteMet
  * `RawOrchardNoteMetadata::addr` pointers for values provided to the callback must be
  * manually freed by the caller.
  */
-void orchard_wallet_get_filtered_notes(
-    const OrchardWalletPtr* wallet,
-    const OrchardIncomingViewingKeyPtr* ivk,
-    bool ignoreMined,
-    bool requireSpendingKey,
-    void* resultVector,
-    push_note_callback_t push_cb);
+// void orchard_wallet_get_filtered_notes(
+//     const OrchardWalletPtr* wallet,
+//     const OrchardIncomingViewingKeyPtr* ivk,
+//     bool ignoreMined,
+//     bool requireSpendingKey,
+//     void* resultVector,
+//     push_note_callback_t push_cb);
 
 /**
  * A C struct used to transfer Orchard action spend information across the FFI boundary.
  * This must have the same in-memory representation as the `FFIActionSpend` type in
  * orchard_ffi/wallet.rs.
  */
-struct RawOrchardActionSpend {
-    uint32_t spendActionIdx;
-    unsigned char outpointTxId[32];
-    uint32_t outpointActionIdx;
-    OrchardRawAddressPtr* receivedAt;
-    CAmount noteValue;
-};
+// struct RawOrchardActionSpend {
+//     uint32_t spendActionIdx;
+//     unsigned char outpointTxId[32];
+//     uint32_t outpointActionIdx;
+//     OrchardRawAddressPtr* receivedAt;
+//     CAmount noteValue;
+// };
 
 /**
  * A C struct used to transfer Orchard action output information across the FFI boundary.
  * This must have the same in-memory representation as the `FFIActionOutput` type in
  * orchard_ffi/wallet.rs.
  */
-struct RawOrchardActionOutput {
-    uint32_t outputActionIdx;
-    OrchardRawAddressPtr* recipient;
-    CAmount noteValue;
-    unsigned char memo[512];
-    bool isOutgoing;
-};
-
-typedef void (*push_spend_t)(void* callbackReceiver, const RawOrchardActionSpend data);
-
-typedef void (*push_output_t)(void* callbackReceiver, const RawOrchardActionOutput data);
+// struct RawOrchardActionOutput {
+//     uint32_t outputActionIdx;
+//     OrchardRawAddressPtr* recipient;
+//     CAmount noteValue;
+//     unsigned char memo[512];
+//     bool isOutgoing;
+// };
+//
+// typedef void (*push_spend_t)(void* callbackReceiver, const RawOrchardActionSpend data);
+//
+// typedef void (*push_output_t)(void* callbackReceiver, const RawOrchardActionOutput data);
 
 /**
  * Trial-decrypts the specified Orchard bundle, and uses the provided callbacks to pass
@@ -320,39 +341,39 @@ typedef void (*push_output_t)(void* callbackReceiver, const RawOrchardActionOutp
  * pointer for each `RawOrchardActionSpend` value, must be freed using
  * `orchard_address_free`.
  */
-bool orchard_wallet_get_txdata(
-    const OrchardWalletPtr* wallet,
-    const OrchardBundlePtr* bundle,
-    const unsigned char* raw_ovks,
-    size_t raw_ovks_len,
-    void* callbackReceiver,
-    push_spend_t push_spend_cb,
-    push_output_t push_output_cb);
-
-typedef void (*push_txid_callback_t)(void* resultVector, unsigned char txid[32]);
+// bool orchard_wallet_get_txdata(
+//     const OrchardWalletPtr* wallet,
+//     const OrchardBundlePtr* bundle,
+//     const unsigned char* raw_ovks,
+//     size_t raw_ovks_len,
+//     void* callbackReceiver,
+//     push_spend_t push_spend_cb,
+//     push_output_t push_output_cb);
+//
+// typedef void (*push_txid_callback_t)(void* resultVector, unsigned char txid[32]);
 
 /**
  * Returns a vector of transaction IDs for transactions that have been observed as
  * spending the given outpoint (transaction ID and action index) by using the `push_cb`
  * callback to push transaction IDs onto the provided result vector.
  */
-void orchard_wallet_get_potential_spends(
-    const OrchardWalletPtr* wallet,
-    const unsigned char txid[32],
-    const uint32_t action_idx,
-    void* resultVector,
-    push_txid_callback_t push_cb);
+// void orchard_wallet_get_potential_spends(
+//     const OrchardWalletPtr* wallet,
+//     const unsigned char txid[32],
+//     const uint32_t action_idx,
+//     void* resultVector,
+//     push_txid_callback_t push_cb);
 
 /**
  * Returns a vector of transaction IDs for transactions that have been observed as
  * spending the given nullifier by using the `push_cb` callback to push transaction
  * IDs onto the provided result vector.
  */
-void orchard_wallet_get_potential_spends_from_nullifier(
-    const OrchardWalletPtr* wallet,
-    const unsigned char* nullifier,
-    void* resultVector,
-    push_txid_callback_t push_cb);
+// void orchard_wallet_get_potential_spends_from_nullifier(
+//     const OrchardWalletPtr* wallet,
+//     const unsigned char* nullifier,
+//     void* resultVector,
+//     push_txid_callback_t push_cb);
 
 /**
  * Fetches the information needed to spend the wallet note at the given
@@ -365,11 +386,11 @@ void orchard_wallet_get_potential_spends_from_nullifier(
  * Returns `null` if the outpoint is not known to the wallet, or the checkpoint
  * depth exceeds the maximum number of checkpoints retained by the wallet.
  */
-OrchardSpendInfoPtr* orchard_wallet_get_spend_info(
-    const OrchardWalletPtr* wallet,
-    const unsigned char txid[32],
-    uint32_t action_idx,
-    size_t checkpoint_depth);
+// OrchardSpendInfoPtr* orchard_wallet_get_spend_info(
+//     const OrchardWalletPtr* wallet,
+//     const unsigned char txid[32],
+//     uint32_t action_idx,
+//     size_t checkpoint_depth);
 
 /**
  * Run the garbage collection operation on the wallet's note commitment
@@ -394,20 +415,59 @@ bool orchard_wallet_load_note_commitment_tree(
     void* stream,
     read_callback_t read_cb);
 
+bool orchard_wallet_unmark_transaction_notes(
+    OrchardWalletPtr* wallet,
+    const unsigned char txid[32]
+);
+
+bool orchard_is_note_tracked(
+  OrchardWalletPtr* wallet,
+  const unsigned char txid[32],
+  const size_t tx_output_idx,
+  uint64_t *position_out
+);
+
+bool orchard_wallet_get_path_for_note(
+    OrchardWalletPtr* wallet,
+    const unsigned char txid[32],
+    const size_t tx_output_idx,
+    unsigned char *path_ret
+);
+
+bool get_orchard_path_root_with_cm(
+    const unsigned char *merkle_path,
+    const unsigned char *cm,
+    unsigned char *anchor_out
+);
+
 /**
  * Returns whether the Orchard wallet's note commitment tree contains witness information
  * for all unspent notes.
  */
-bool orchard_wallet_unspent_notes_are_spendable(
-    const OrchardWalletPtr* wallet);
+// bool orchard_wallet_unspent_notes_are_spendable(
+//     const OrchardWalletPtr* wallet);
 
-bool try_orchard_decrypt_action(
+bool try_orchard_decrypt_action_ivk(
     const ActionPtr* orchard_action,
     const unsigned char* ivk_bytes,
     uint64_t *value_out,
     unsigned char *address_out,
-    unsigned char *memo_out
+    unsigned char *memo_out,
+    unsigned char *rho_out,
+    unsigned char *rseed_out
 );
+
+bool try_orchard_decrypt_action_fvk(
+    const ActionPtr* orchard_action,
+    const unsigned char* fvk_bytes,
+    uint64_t *value_out,
+    unsigned char *address_out,
+    unsigned char *memo_out,
+    unsigned char *rho_out,
+    unsigned char *rseed_out,
+    unsigned char *nullifier_out
+);
+
 
 #ifdef __cplusplus
 }

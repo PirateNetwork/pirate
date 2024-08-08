@@ -138,7 +138,7 @@ public:
                     if (!CheckFinalTx(wtx))
                         continue;
 
-                    if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapSproutNoteData.size() == 0 && !wtx.IsTrusted())
+                    if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapOrchardNoteData.size() == 0 && !wtx.IsTrusted())
                         continue;
 
                     //Excude transactions with less confirmations than required
@@ -225,7 +225,7 @@ public:
                     getRpcArcTx(wtx, arcTx, fIncludeWatchonly, false);
                 }
 
-                //Try ArcTx is nor found in mapWallet
+                //Try ArcTx if not found in mapWallet
                 if (!isActiveTx) {
                     std::map<uint256, ArchiveTxPoint>::iterator ami = wallet->mapArcTxs.find(hash);
                     if(ami != wallet->mapArcTxs.end()) {

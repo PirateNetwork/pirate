@@ -86,6 +86,16 @@ public:
     bool spendable;
 };
 
+class TransactionSpendZO
+{
+public:
+    string encodedAddress;
+    CAmount amount;
+    string spendTxid;
+    int spendShieldedActionIndex;
+    bool spendable;
+};
+
 class TransactionSendZS
 {
 public:
@@ -97,12 +107,34 @@ public:
     bool mine;
 };
 
+class TransactionSendZO
+{
+public:
+    string encodedAddress;
+    CAmount amount;
+    int shieldedActionIndex;
+    string memo;
+    string memoStr;
+    bool mine;
+};
+
 class TransactionReceivedZS
 {
 public:
     string encodedAddress;
     CAmount amount;
     int shieldedOutputIndex;
+    string memo;
+    string memoStr;
+    bool spendable;
+};
+
+class TransactionReceivedZO
+{
+public:
+    string encodedAddress;
+    CAmount amount;
+    int shieldedActionIndex;
     string memo;
     string memoStr;
     bool spendable;
@@ -133,18 +165,23 @@ public:
       CAmount sproutValueSpent = 0;
       CAmount saplingValue = 0;
       int archiveType;
-      std::set<uint256> ivks;
-      std::set<uint256> ovks;
+      std::set<uint256> saplingIvks;
+      std::set<uint256> saplingOvks;
+      std::set<libzcash::OrchardIncomingViewingKeyPirate> orchardIvks;
+      std::set<libzcash::OrchardOutgoingViewingKey> orchardOvks;
       std::set<string> spentFrom;
       std::set<string> addresses;
       std::vector<TransactionSpendT> vTSpend;
       std::vector<TransactionSpendZC> vZcSpend;
       std::vector<TransactionSpendZS> vZsSpend;
+      std::vector<TransactionSpendZO> vZoSpend;
       std::vector<TransactionSendT> vTSend;
       std::vector<TransactionSendZS> vZsSend;
+      std::vector<TransactionSendZO> vZoSend;
       std::vector<TransactionReceivedT> vTReceived;
       std::vector<TransactionReceivedZC> vZcReceived;
       std::vector<TransactionReceivedZS> vZsReceived;
+      std::vector<TransactionReceivedZO> vZoReceived;
 };
 
 class RpcArcTransactions
@@ -155,6 +192,7 @@ public:
 
 void getRpcArcTransactions(RpcArcTransactions &arcTxs);
 
+//Transparent
 template<typename RpcTx>
 void getTransparentSends(RpcTx &tx, vector<TransactionSendT> &vSend, CAmount &transparentValue);
 
@@ -164,14 +202,14 @@ void getTransparentSpends(RpcTx &tx, vector<TransactionSpendT> &vSpend, CAmount 
 template<typename RpcTx>
 void getTransparentRecieves(RpcTx &tx, vector<TransactionReceivedT> &vReceived, bool fIncludeWatchonly = false);
 
-
+//Sprout
 template<typename RpcTx>
 void getSproutSpends(RpcTx &tx, vector<TransactionSpendZC> &vSpend, CAmount &sproutValue, CAmount &sproutValueSpent, bool fIncludeWatchonly = false);
 
 template<typename RpcTx>
 void getSproutReceives(RpcTx &tx, vector<TransactionReceivedZC> &vReceived, bool fIncludeWatchonly = false);
 
-
+//Sapling
 template<typename RpcTx>
 void getSaplingSends(const Consensus::Params& params, int nHeight, RpcTx &tx, std::set<uint256> &ovks, std::set<uint256> &ovksOut, vector<TransactionSendZS> &vSend);
 
@@ -181,11 +219,19 @@ void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx &tx, s
 template<typename RpcTx>
 void getSaplingReceives(const Consensus::Params& params, int nHeight, RpcTx &tx, std::set<uint256> &ivks, std::set<uint256> &ivksOut , vector<TransactionReceivedZS> &vReceived, bool fIncludeWatchonly = false);
 
+//Orchard
+template<typename RpcTx>
+void getOrchardReceives(const Consensus::Params& params, int nHeight, RpcTx &tx, std::set<libzcash::OrchardIncomingViewingKeyPirate> &ivks, std::set<libzcash::OrchardIncomingViewingKeyPirate> &ivksOut , vector<TransactionReceivedZO> &vReceived, bool fIncludeWatchonly = false);
+
+
 void getAllSproutRKs(vector<uint256> &rks);
 void getAllSaplingOVKs(std::set<uint256> &ovks, bool fIncludeWatchonly = false);
 void getAllSaplingIVKs(std::set<uint256> &ivks, bool fIncludeWatchonly = false);
+void getAllOrchardOVKs(std::set<libzcash::OrchardOutgoingViewingKey> &ovks, bool fIncludeWatchonly = false);
+void getAllOrchardIVKs(std::set<libzcash::OrchardIncomingViewingKeyPirate> &ivks, bool fIncludeWatchonly = false);
 
 void getRpcArcTxSaplingKeys(const CWalletTx &tx, int txHeight, RpcArcTransaction &arcTx, bool fIncludeWatchonly = false);
+void getRpcArcTxOrchardKeys(const CWalletTx &tx, int txHeight, RpcArcTransaction &arcTx, bool fIncludeWatchonly = false);
 void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, bool fIncludeWatchonly = false, bool rescan = false);
 void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, bool fIncludeWatchonly = false, bool rescan = false);
 

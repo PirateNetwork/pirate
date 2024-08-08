@@ -201,7 +201,7 @@ typedef std::map<libzcash::OrchardIncomingViewingKeyPirate, libzcash::OrchardExt
 // Only maps from default addresses to ivk, may need to be reworked when adding diversified addresses.
 typedef std::map<libzcash::OrchardPaymentAddressPirate, libzcash::OrchardIncomingViewingKeyPirate> OrchardIncomingViewingKeyMap;
 typedef std::set<libzcash::OrchardIncomingViewingKeyPirate> OrchardIncomingViewingKeySet;
-typedef std::set<uint256> OrchardOutgoingViewingKeySet;
+typedef std::set<libzcash::OrchardOutgoingViewingKey> OrchardOutgoingViewingKeySet;
 
 //diversified orchard addresses
 typedef std::pair<libzcash::OrchardIncomingViewingKeyPirate, blob88> OrchardDiversifierPath;

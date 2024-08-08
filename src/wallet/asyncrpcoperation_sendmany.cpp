@@ -711,16 +711,16 @@ bool AsyncRPCOperation_sendmany::find_utxos(bool fAcceptCoinbase = false)
 
 bool AsyncRPCOperation_sendmany::find_unspent_notes()
 {
-    std::vector<CSproutNotePlaintextEntry> sproutEntries;
     std::vector<SaplingNoteEntry> saplingEntries;
+    std::vector<OrchardNoteEntry> orchardEntries;
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
         if (bOfflineSpendingKey == true) {
             // Offline transaction, Does not require the spending key in this wallet
-            pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, fromaddress_, mindepth_, true, false);
+            pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, fromaddress_, mindepth_, true, false);
         } else {
             // Local transaction: Require the spending key
-            pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, fromaddress_, mindepth_, true, true);
+            pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, fromaddress_, mindepth_, true, true);
         }
     }
 
