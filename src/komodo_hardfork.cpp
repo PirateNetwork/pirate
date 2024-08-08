@@ -574,7 +574,7 @@ const char *notaries_elected[NUM_KMD_SEASONS][NUM_KMD_NOTARIES][2] =
         {"chmexvet_SH", "02d27ed1cddfbaff9e47865e7df0165457e8f075f70bbea8c0498598ccf494555d"},
         {"cipi_AR", "033ae024cdb748e083406a2e20037017a1292079ad6a8161ae5b43f398724fea74"}, // 20
         {"cipi_EU", "03d6e1f3a693b5d69049791005d7cb64c259a1ad85833f5a9c545d4fee29905009"},
-        {"cipi_NA", "036cc1d7476e4260601927be0fc8b748ae68d8fec8f5c498f71569a01bd92046c5"}, // 10
+        {"cipi_NA", "036cc1d7476e4260601927be0fc8b748ae68d8fec8f5c498f71569a01bd92046c5"},
         {"dimxy_AR", "02689d0b77b1e8e8c93a102d8b689fd08179164d70e2dd585543c3896a0916e6a1"},
         {"dragonhound_AR", "030a72f1a15f67624aea55743c5b777bdd55362596add77b544ee2e582bdebf0c7"},
         {"dragonhound_EU", "0286d7af8583e18127bd1f45730916b4f48ae3e0c90181b2745174b91b76c6e28b"},
