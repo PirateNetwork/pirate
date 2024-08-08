@@ -584,7 +584,7 @@ pub extern "C" fn sapling_wallet_append_bundle_commitments(
 }
 
 #[no_mangle]
-pub extern "C" fn clear_note_positions_for_txid(
+pub extern "C" fn clear_sapling_note_positions_for_txid(
     wallet: *mut Wallet,
     txid: *const [c_uchar; 32],
 ) -> bool {
@@ -601,7 +601,7 @@ pub extern "C" fn clear_note_positions_for_txid(
 }
 
 #[no_mangle]
-pub extern "C" fn create_single_txid_positions(
+pub extern "C" fn create_sapling_single_txid_positions(
     wallet: *mut Wallet,
     block_height: u32,
     txid: *const [c_uchar; 32],
@@ -876,7 +876,7 @@ pub extern "C" fn sapling_wallet_unmark_transaction_notes(
 }
 
 #[no_mangle]
-pub extern "C" fn get_path_root_with_cm(
+pub extern "C" fn get_sapling_path_root_with_cm(
     merkle_path: *const [c_uchar; 1 + 33 * SAPLING_TREE_DEPTH + 8],
     cm: *const [c_uchar; 32],
     anchor_out: *mut [c_uchar; 32],

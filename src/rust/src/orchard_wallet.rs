@@ -56,7 +56,7 @@ fn de_ct<T>(ct: CtOption<T>) -> Option<T> {
 pub struct LastObserved {
     block_height: BlockHeight,
     block_tx_idx: Option<usize>,
-    tx_output_idx: Option<usize>,
+    tx_action_idx: Option<usize>,
 }
 
 pub struct Wallet {
@@ -214,7 +214,7 @@ impl Wallet {
             self.last_observed = Some(LastObserved {
                 block_height: to_height,
                 block_tx_idx: None,
-                tx_output_idx: None,
+                tx_action_idx: None,
             });
 
             self.last_checkpoint = if checkpoint_count > blocks_to_rewind as usize {
@@ -234,7 +234,7 @@ impl Wallet {
             self.last_observed = Some(LastObserved {
                 block_height: to_height,
                 block_tx_idx: None,
-                tx_output_idx: None,
+                tx_action_idx: None,
             });
 
             Ok(to_height)
@@ -280,7 +280,7 @@ impl Wallet {
         self.last_observed = Some(LastObserved {
             block_height,
             block_tx_idx: Some(block_tx_idx),
-            tx_output_idx: None,
+            tx_action_idx: None,
         });
 
         for (action_idx, action) in bundle.actions().iter().enumerate() {
@@ -345,7 +345,7 @@ impl Wallet {
     pub fn get_position_of_note(
         &mut self,
         txid: &TxId,
-        tx_output_idx: &usize,
+        tx_action_idx: &usize,
     ) ->Option<Position> {
         //Check if txid already exists
         let txid_positions = match self.wallet_note_positions.get(txid) {
@@ -357,7 +357,7 @@ impl Wallet {
            }
        };
 
-        let output_position = match txid_positions.note_positions.get(tx_output_idx) {
+        let output_position = match txid_positions.note_positions.get(tx_action_idx) {
            Some(position) => {
                position
            },
@@ -392,62 +392,60 @@ impl Wallet {
        true
     }
 
-    // pub fn orchard_append_single_commitment(
-    //     &mut self,
-    //     block_height: BlockHeight,
-    //     txid: &TxId,
-    //     block_tx_idx: usize,
-    //     tx_output_idx: usize,
-    //     orchard_output: &Output,
-    //     is_mine: bool,
-    // ) -> Result<(), WalletError> {
-    //     if let Some(last) = &self.last_observed {
-    //         if !(
-    //             //We are observing a subsequent output in the same transaction
-    //             (block_height == last.block_height && last.block_tx_idx.map_or(false, |idx| idx == block_tx_idx) && last.tx_output_idx.map_or(false, |idx| idx < tx_output_idx))
-    //             // we are observing a subsequent transaction in the same block
-    //             || (block_height == last.block_height && last.block_tx_idx.map_or(false, |idx| idx < block_tx_idx))
-    //             // or we are observing a new block
-    //             || block_height > last.block_height
-    //         ) {
-    //             return Err(WalletError::OutOfOrder(
-    //                 last.clone(),
-    //                 block_height,
-    //                 block_tx_idx,
-    //                 tx_output_idx,
-    //             ));
-    //         }
-    //     }
-    //
-    //     self.last_observed = Some(LastObserved {
-    //         block_height,
-    //         block_tx_idx: Some(block_tx_idx),
-    //         tx_output_idx: Some(tx_output_idx),
-    //     });
-    //
-    //     if !self.commitment_tree.append(MerkleHashOrchard::from_cmu(
-    //         &ExtractedNoteCommitment::from_bytes(&orchard_output.cmu()).unwrap()
-    //         ))
-    //     {
-    //         return Err(WalletError::NoteCommitmentTreeFull);
-    //     }
-    //
-    //     if is_mine {
-    //         let pos = self.commitment_tree.mark().expect("tree is not empty");
-    //         assert!(self
-    //                 .wallet_note_positions
-    //                 .get_mut(txid)
-    //                 .expect("This should already be created")
-    //                 .note_positions
-    //                 .insert(tx_output_idx, pos)
-    //                 .is_none());
-    //
-    //     }
-    //
-    //
-    //     Ok(())
-    //
-    // }
+    pub fn orchard_append_single_commitment(
+        &mut self,
+        block_height: BlockHeight,
+        txid: &TxId,
+        block_tx_idx: usize,
+        tx_action_idx: usize,
+        orchard_action: &Action,
+        is_mine: bool,
+    ) -> Result<(), WalletError> {
+        if let Some(last) = &self.last_observed {
+            if !(
+                //We are observing a subsequent output in the same transaction
+                (block_height == last.block_height && last.block_tx_idx.map_or(false, |idx| idx == block_tx_idx) && last.tx_action_idx.map_or(false, |idx| idx < tx_action_idx))
+                // we are observing a subsequent transaction in the same block
+                || (block_height == last.block_height && last.block_tx_idx.map_or(false, |idx| idx < block_tx_idx))
+                // or we are observing a new block
+                || block_height > last.block_height
+            ) {
+                return Err(WalletError::OutOfOrder(
+                    last.clone(),
+                    block_height,
+                    block_tx_idx,
+                    tx_action_idx,
+                ));
+            }
+        }
+
+        self.last_observed = Some(LastObserved {
+            block_height,
+            block_tx_idx: Some(block_tx_idx),
+            tx_action_idx: Some(tx_action_idx),
+        });
+
+        if !self.commitment_tree.append(MerkleHashOrchard::from_cmx(&ExtractedNoteCommitment::from_bytes(&orchard_action.cmx()).unwrap()))
+        {
+            return Err(WalletError::NoteCommitmentTreeFull);
+        }
+
+        if is_mine {
+            let pos = self.commitment_tree.mark().expect("tree is not empty");
+            assert!(self
+                    .wallet_note_positions
+                    .get_mut(txid)
+                    .expect("This should already be created")
+                    .note_positions
+                    .insert(tx_action_idx, pos)
+                    .is_none());
+
+        }
+
+
+        Ok(())
+
+    }
 
     /// Returns the root of the Orchard note commitment tree, as of the specified checkpoint
     /// depth. A depth of 0 corresponds to the chain tip.
@@ -581,29 +579,29 @@ pub extern "C" fn create_orchard_single_txid_positions(
     true
 }
 
-// #[no_mangle]
-// pub extern "C" fn orchard_wallet_append_single_commitment(
-//     wallet: *mut Wallet,
-//     block_height: u32,
-//     txid: *const [c_uchar; 32],
-//     block_tx_idx: usize,
-//     tx_output_idx: usize,
-//     orchard_output: *const Output,
-//     is_mine: bool,
-// ) -> bool {
-//     let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null");
-//     let txid = TxId::from_bytes(*unsafe { txid.as_ref() }.expect("txid may not be null."));
-//     if let Some(orchard_output) = unsafe { orchard_output.as_ref() } {
-//         if let Err(e) =
-//             wallet.orchard_append_single_commitment(block_height.into(), &txid, block_tx_idx, tx_output_idx, orchard_output, is_mine)
-//         {
-//             error!("An error occurred adding this Sapling output to the note commitment tree: {:?}", e);
-//             return false;
-//         }
-//     }
-//
-//     true
-// }
+#[no_mangle]
+pub extern "C" fn orchard_wallet_append_single_commitment(
+    wallet: *mut Wallet,
+    block_height: u32,
+    txid: *const [c_uchar; 32],
+    block_tx_idx: usize,
+    tx_action_idx: usize,
+    orchard_action: *const Action,
+    is_mine: bool,
+) -> bool {
+    let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null");
+    let txid = TxId::from_bytes(*unsafe { txid.as_ref() }.expect("txid may not be null."));
+    if let Some(orchard_action) = unsafe { orchard_action.as_ref() } {
+        if let Err(e) =
+            wallet.orchard_append_single_commitment(block_height.into(), &txid, block_tx_idx, tx_action_idx, orchard_action, is_mine)
+        {
+            error!("An error occurred adding this Orchard action to the note commitment tree: {:?}", e);
+            return false;
+        }
+    }
+
+    true
+}
 
 #[no_mangle]
 pub extern "C" fn orchard_wallet_commitment_tree_root(
@@ -777,13 +775,13 @@ type SaplingPath = MerklePath<MerkleHashOrchard, NOTE_COMMITMENT_TREE_DEPTH>;
 pub extern "C" fn orchard_is_note_tracked(
     wallet: *mut Wallet,
     txid: *const [c_uchar; 32],
-    tx_output_idx: usize,
+    tx_action_idx: usize,
     position_out: *mut u64,
 ) -> bool {
     let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null");
     let txid = TxId::from_bytes(*unsafe { txid.as_ref() }.expect("txid may not be null."));
 
-    if let Some(position) = wallet.get_position_of_note(&txid, &tx_output_idx) {
+    if let Some(position) = wallet.get_position_of_note(&txid, &tx_action_idx) {
 
         let mut buf = [0; 8];
         LittleEndian::write_u64(&mut buf, position.into());
@@ -802,13 +800,13 @@ pub extern "C" fn orchard_is_note_tracked(
 pub extern "C" fn orchard_wallet_get_path_for_note(
     wallet: *mut Wallet,
     txid: *const [c_uchar; 32],
-    tx_output_idx: usize,
+    tx_action_idx: usize,
     path_ret: *mut [u8; 1 + 33 * SAPLING_TREE_DEPTH + 8],
 ) -> bool {
     let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null");
     let txid = TxId::from_bytes(*unsafe { txid.as_ref() }.expect("txid may not be null."));
 
-    if let Some(position) = wallet.get_position_of_note(&txid, &tx_output_idx) {
+    if let Some(position) = wallet.get_position_of_note(&txid, &tx_action_idx) {
         if let Ok(witness) = wallet.commitment_tree.witness(position, 0) {
             if let Ok(path) = SaplingPath::from_parts(witness, position) {
                 // println!("Sapling Path {:?}", path);
@@ -865,12 +863,14 @@ pub extern "C" fn get_orchard_path_root_with_cm(
 }
 
 #[no_mangle]
-pub extern "C" fn try_orchard_decrypt_action(
+pub extern "C" fn try_orchard_decrypt_action_ivk(
     orchard_action: *const Action,
     ivk_bytes: *const [c_uchar; 64],
     value_out: *mut u64,
     address_out: *mut [u8; 43],
     memo_out: *mut [u8; 512],
+    rho_out: *mut [u8; 32],
+    rseed_out: *mut [u8; 32],
 ) -> bool {
 
     let ivk_bytes = unsafe { *ivk_bytes };
@@ -898,6 +898,65 @@ pub extern "C" fn try_orchard_decrypt_action(
 
             let memo_out = unsafe { &mut *memo_out };
             *memo_out = decrypted.2;
+
+            let rseed_out = unsafe { &mut *rseed_out };
+            *rseed_out = *decrypted.0.rseed().as_bytes();
+
+            return true
+        }
+    }
+    return false
+}
+
+#[no_mangle]
+pub extern "C" fn try_orchard_decrypt_action_fvk(
+    orchard_action: *const Action,
+    fvk_bytes: *const [c_uchar; 96],
+    value_out: *mut u64,
+    address_out: *mut [u8; 43],
+    memo_out: *mut [u8; 512],
+    rho_out: *mut [u8; 32],
+    rseed_out: *mut [u8; 32],
+    nullifier_out: *mut [u8; 32],
+) -> bool {
+
+    let fvk_bytes = unsafe { *fvk_bytes };
+    let fvkopt = FullViewingKey::from_bytes(&fvk_bytes);
+    if fvkopt.is_some().into() {
+
+        let fvk = fvkopt.unwrap();
+
+        if let Some(orchard_action) = unsafe { orchard_action.as_ref() } {
+            let ivk = fvk.to_ivk(Scope::External);
+            let prepared_ivk = PreparedIncomingViewingKey::new(&ivk);
+            let action = &orchard_action.inner();
+            let domain = OrchardDomain::for_action(action);
+            let decrypted = match try_note_decryption(&domain, &prepared_ivk, action) {
+                Some(r) => r,
+                None => return false,
+            };
+
+            let value_out = unsafe { &mut *value_out };
+            let value = decrypted.0.value().inner();
+            let mut buf = [0; 8];
+            LittleEndian::write_u64(&mut buf, value.into());
+            *value_out = LittleEndian::read_u64(&buf);
+
+            let address_out = unsafe { &mut *address_out };
+            *address_out = decrypted.1.to_raw_address_bytes();
+
+            let memo_out = unsafe { &mut *memo_out };
+            *memo_out = decrypted.2;
+
+            let rho_out = unsafe { &mut *rho_out };
+            *rho_out = decrypted.0.rho().to_bytes();
+
+            let rseed_out = unsafe { &mut *rseed_out };
+            *rseed_out = *decrypted.0.rseed().as_bytes();
+
+            let nullifier = decrypted.0.nullifier(&fvk);
+            let nullifier_out = unsafe { &mut *nullifier_out };
+            *nullifier_out = nullifier.to_bytes();
 
             return true
         }

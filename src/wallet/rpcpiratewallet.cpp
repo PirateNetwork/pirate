@@ -440,6 +440,53 @@ void getSaplingReceives(const Consensus::Params& params, int nHeight, RpcTx &tx,
     }
 }
 
+template<typename RpcTx>
+void getOrchardReceives(const Consensus::Params& params, int nHeight, RpcTx &tx, std::set<libzcash::OrchardIncomingViewingKeyPirate> &ivks, std::set<libzcash::OrchardIncomingViewingKeyPirate> &ivksOut, vector<TransactionReceivedZO> &vReceived, bool fIncludeWatchonly) {
+
+    int shieldedActionIndex = 0;
+    for (const auto& rustAction : tx.GetOrchardActions())  {
+        TransactionReceivedZO received;
+
+        for (std::set<libzcash::OrchardIncomingViewingKeyPirate>::iterator it = ivks.begin(); it != ivks.end(); it++) {
+            auto ivk = *it;
+            auto decrypted = OrchardDecryptedActions::AttemptDecryptOrchardAction(&rustAction, ivk);
+
+            if (decrypted != std::nullopt) {
+                ivksOut.insert(ivk);
+                received.encodedAddress = EncodePaymentAddress(decrypted.value().GetAddress());
+                received.amount = decrypted.value().GetValue();
+                received.shieldedActionIndex = shieldedActionIndex;
+                received.memo = HexStr(decrypted.value().GetMemo());
+
+                libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+                pwalletMain->GetOrchardFullViewingKey(ivk, extfvk);
+                received.spendable = pwalletMain->HaveOrchardSpendingKey(extfvk);
+
+                // If the leading byte is 0xF4 or lower, the memo field should be interpreted as a
+                // UTF-8-encoded text string.
+                auto memo = decrypted.value().GetMemo();
+                if (memo[0] <= 0xf4) {
+                    // Trim off trailing zeroes
+                    auto end = std::find_if(
+                        memo.rbegin(),
+                        memo.rend(),
+                        [](unsigned char v) { return v != 0; });
+                    std::string memoStr(memo.begin(), end.base());
+                    if (utf8::is_valid(memoStr)) {
+                        received.memoStr = memoStr;
+                    }
+                }
+
+                if (received.spendable || fIncludeWatchonly)
+                    vReceived.push_back(received);
+                //ivk found no need to try anymore
+                break;
+            }
+        }
+        shieldedActionIndex++;
+    }
+}
+
 void getAllSproutRKs(vector<uint256> &rks) {
     std::set<libzcash::SproutPaymentAddress> addresses;
     pwalletMain->GetSproutPaymentAddresses(addresses);
@@ -517,9 +564,9 @@ void getRpcArcTxSaplingKeys(const CWalletTx &tx, int txHeight, RpcArcTransaction
     getAllSaplingIVKs(ivks, fIncludeWatchonly);
 
     auto params = Params().GetConsensus();
-    getSaplingSpends(params, txHeight, tx, ivks, arcTx.ivks, arcTx.vZsSpend, fIncludeWatchonly);
-    getSaplingSends(params, txHeight, tx, ovks, arcTx.ovks, arcTx.vZsSend);
-    getSaplingReceives(params, txHeight, tx, ivks, arcTx.ivks, arcTx.vZsReceived, fIncludeWatchonly);
+    getSaplingSpends(params, txHeight, tx, ivks, arcTx.saplingIvks, arcTx.vZsSpend, fIncludeWatchonly);
+    getSaplingSends(params, txHeight, tx, ovks, arcTx.saplingOvks, arcTx.vZsSend);
+    getSaplingReceives(params, txHeight, tx, ivks, arcTx.saplingIvks, arcTx.vZsReceived, fIncludeWatchonly);
 
     //Create Set of wallet address the belong to the wallet for this tx
     for (int i = 0; i < arcTx.vZsSpend.size(); i++) {
@@ -530,6 +577,99 @@ void getRpcArcTxSaplingKeys(const CWalletTx &tx, int txHeight, RpcArcTransaction
     }
     for(int i = 0; i < arcTx.vZsReceived.size(); i++) {
         arcTx.addresses.insert(arcTx.vZsReceived[i].encodedAddress);
+    }
+}
+
+void getAllOrchardOVKs(std::set<libzcash::OrchardOutgoingViewingKey> &ovks, bool fIncludeWatchonly) {
+
+    //exit if pwalletMain is not set
+    if (pwalletMain == nullptr)
+        return;
+
+    //get ovks for all spending keys
+    if (fIncludeWatchonly) {
+        pwalletMain->GetOrchardOutgoingViewingKeySet(ovks);
+    } else {
+        std::set<libzcash::OrchardIncomingViewingKeyPirate> setIvks;
+        pwalletMain->GetOrchardIncomingViewingKeySet(setIvks);
+        for (std::set<libzcash::OrchardIncomingViewingKeyPirate>::iterator it = setIvks.begin(); it != setIvks.end(); it++) {
+            libzcash::OrchardIncomingViewingKeyPirate ivk = (*it);
+            libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+
+            if(pwalletMain->GetOrchardFullViewingKey(ivk, extfvk)) {
+                if (pwalletMain->HaveOrchardSpendingKey(extfvk) || fIncludeWatchonly) {
+                    //External OVK
+                    auto ovkOpt_e = extfvk.fvk.GetOVK();
+                    if (ovkOpt_e != std::nullopt) {
+                        ovks.insert(ovkOpt_e.value());
+                    }
+                    //Internal OVK
+                    auto ovkOpt_i = extfvk.fvk.GetOVKinternal();
+                    if (ovkOpt_i != std::nullopt) {
+                        ovks.insert(ovkOpt_i.value());
+                    }
+
+                }
+            }
+        }
+    }
+
+    //ovk used of t addresses
+    // HDSeed seed;
+    // if (pwalletMain->GetHDSeed(seed)) {
+    //     ovks.insert(ovkForShieldingFromTaddr(seed));
+    // }
+}
+
+void getAllOrchardIVKs(std::set<libzcash::OrchardIncomingViewingKeyPirate> &ivks, bool fIncludeWatchonly) {
+
+    //exit if pwalletMain is not set
+    if (pwalletMain == nullptr)
+        return;
+
+    std::set<libzcash::OrchardIncomingViewingKeyPirate> setIvks;
+    pwalletMain->GetOrchardIncomingViewingKeySet(setIvks);
+    //get ivks for all spending keys
+    for (std::set<libzcash::OrchardIncomingViewingKeyPirate>::iterator it = setIvks.begin(); it != setIvks.end(); it++) {
+        libzcash::OrchardIncomingViewingKeyPirate ivk = (*it);
+
+
+        if (fIncludeWatchonly) {
+            ivks.insert(ivk);
+        } else {
+            libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+            if(pwalletMain->GetOrchardFullViewingKey(ivk, extfvk)) {
+                if (pwalletMain->HaveOrchardSpendingKey(extfvk)) {
+                    ivks.insert(ivk);
+                }
+            }
+        }
+    }
+}
+
+void getRpcArcTxOrchardKeys(const CWalletTx &tx, int txHeight, RpcArcTransaction &arcTx, bool fIncludeWatchonly) {
+    AssertLockHeld(pwalletMain->cs_wallet);
+
+    std::set<libzcash::OrchardIncomingViewingKeyPirate> ivks;
+    std::set<libzcash::OrchardOutgoingViewingKey> ovks;
+
+    getAllOrchardOVKs(ovks, fIncludeWatchonly);
+    getAllOrchardIVKs(ivks, fIncludeWatchonly);
+
+    auto params = Params().GetConsensus();
+    //getOrchardSpends(params, txHeight, tx, ivks, arcTx.saplingIvks, arcTx.vZsSpend, fIncludeWatchonly);
+    //getOrchardSends(params, txHeight, tx, ovks, arcTx.saplingOvks, arcTx.vZsSend);
+    getOrchardReceives(params, txHeight, tx, ivks, arcTx.orchardIvks, arcTx.vZoReceived, fIncludeWatchonly);
+
+    //Create Set of wallet address the belong to the wallet for this tx
+    // for (int i = 0; i < arcTx.vZsSpend.size(); i++) {
+    //     arcTx.addresses.insert(arcTx.vZsSpend[i].encodedAddress);
+    // }
+    // for (int i = 0; i < arcTx.vZsSend.size(); i++) {
+    //     arcTx.addresses.insert(arcTx.vZsSend[i].encodedAddress);
+    //}
+    for(int i = 0; i < arcTx.vZoReceived.size(); i++) {
+        arcTx.addresses.insert(arcTx.vZoReceived[i].encodedAddress);
     }
 }
 
@@ -554,8 +694,10 @@ void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, bool fIncludeWatchonly
     uint256 hashBlock;
     int nIndex;
     ArchiveTxPoint arcTxPt;
-    std::set<uint256> ivks;
-    std::set<uint256> ovks;
+    std::set<uint256> saplingIvks;
+    std::set<uint256> saplingOvks;
+    std::set<libzcash::OrchardIncomingViewingKeyPirate> orchardIvks;
+    std::set<libzcash::OrchardOutgoingViewingKey> orchardOvks;
 
     //try to find the transaction to pull the hashblock
     std::map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.find(txid);
@@ -566,12 +708,16 @@ void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, bool fIncludeWatchonly
         nIndex = arcTxPt.nIndex;
 
         //Get Ivks and Ovks saved in ArchiveTxPoint
-        if ((arcTxPt.ivks.size() == 0 && arcTxPt.ovks.size() == 0) || rescan) {
-            getAllSaplingOVKs(ovks, fIncludeWatchonly);
-            getAllSaplingIVKs(ivks, fIncludeWatchonly);
+        if ((arcTxPt.saplingIvks.size() == 0 && arcTxPt.saplingOvks.size() == 0 && arcTxPt.orchardIvks.size() == 0 && arcTxPt.orchardOvks.size() == 0) || rescan) {
+            getAllSaplingOVKs(saplingOvks, fIncludeWatchonly);
+            getAllSaplingIVKs(saplingIvks, fIncludeWatchonly);
+            getAllOrchardOVKs(orchardOvks, fIncludeWatchonly);
+            getAllOrchardIVKs(orchardIvks, fIncludeWatchonly);
         } else {
-            ivks = arcTxPt.ivks;
-            ovks = arcTxPt.ovks;
+            saplingIvks = arcTxPt.saplingIvks;
+            saplingOvks = arcTxPt.saplingOvks;
+            orchardIvks = arcTxPt.orchardIvks;
+            orchardOvks = arcTxPt.orchardOvks;
         }
 
         // Find the block it claims to be in
@@ -630,14 +776,15 @@ void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, bool fIncludeWatchonly
     //Spends must be located to determine if outputs are change
     getTransparentSpends(tx, arcTx.vTSpend, arcTx.transparentValue, fIncludeWatchonly);
     // getSproutSpends(tx, arcTx.vZcSpend, arcTx.sproutValue, arcTx.sproutValueSpent, fIncludeWatchonly);
-    getSaplingSpends(params, txHeight, tx, ivks, arcTx.ivks, arcTx.vZsSpend, fIncludeWatchonly);
+    getSaplingSpends(params, txHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsSpend, fIncludeWatchonly);
 
     getTransparentSends(tx, arcTx.vTSend, arcTx.transparentValue);
-    getSaplingSends(params, txHeight, tx, ovks, arcTx.ovks, arcTx.vZsSend);
+    getSaplingSends(params, txHeight, tx, saplingOvks, arcTx.saplingOvks, arcTx.vZsSend);
 
     getTransparentRecieves(tx, arcTx.vTReceived, fIncludeWatchonly);
     // getSproutReceives(tx, arcTx.vZcReceived, fIncludeWatchonly);
-    getSaplingReceives(params, txHeight, tx, ivks, arcTx.ivks, arcTx.vZsReceived, fIncludeWatchonly);
+    getSaplingReceives(params, txHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsReceived, fIncludeWatchonly);
+    getOrchardReceives(params, txHeight, tx, orchardIvks, arcTx.orchardIvks, arcTx.vZoReceived, fIncludeWatchonly);
 
     arcTx.saplingValue = -tx.valueBalance;
 
@@ -662,12 +809,17 @@ void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, bool fIncludeWatchonly
     for (int i = 0; i < arcTx.vZsSpend.size(); i++) {
         arcTx.addresses.insert(arcTx.vZsSpend[i].encodedAddress);
     }
+
+
     for (int i = 0; i < arcTx.vTSend.size(); i++) {
         arcTx.addresses.insert(arcTx.vTSend[i].encodedAddress);
     }
     for (int i = 0; i < arcTx.vZsSend.size(); i++) {
         arcTx.addresses.insert(arcTx.vZsSend[i].encodedAddress);
     }
+
+
+
     for (int i = 0; i < arcTx.vTReceived.size(); i++) {
         arcTx.addresses.insert(arcTx.vTReceived[i].encodedAddress);
     }
@@ -677,6 +829,9 @@ void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, bool fIncludeWatchonly
     for(int i = 0; i < arcTx.vZsReceived.size(); i++) {
         arcTx.addresses.insert(arcTx.vZsReceived[i].encodedAddress);
     }
+    for(int i = 0; i < arcTx.vZoReceived.size(); i++) {
+        arcTx.addresses.insert(arcTx.vZoReceived[i].encodedAddress);
+    }
 
 }
 
@@ -685,23 +840,31 @@ void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, bool fIncludeWatchonly
     AssertLockHeld(cs_main);
     AssertLockHeld(pwalletMain->cs_wallet);
 
-    std::set<uint256> ivks;
-    std::set<uint256> ovks;
+    std::set<uint256> saplingIvks;
+    std::set<uint256> saplingOvks;
+    std::set<libzcash::OrchardIncomingViewingKeyPirate> orchardIvks;
+    std::set<libzcash::OrchardOutgoingViewingKey> orchardOvks;
     ArchiveTxPoint arcTxPt;
     std::map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.find(tx.GetHash());
     if (it != pwalletMain->mapArcTxs.end()) {
         arcTxPt = it->second;
         //Get Ivks and Ovks saved in ArchiveTxPoint
-        if ((arcTxPt.ivks.size() == 0 && arcTxPt.ovks.size() == 0) || rescan) {
-            getAllSaplingOVKs(ovks, fIncludeWatchonly);
-            getAllSaplingIVKs(ivks, fIncludeWatchonly);
+        if ((arcTxPt.saplingIvks.size() == 0 && arcTxPt.saplingOvks.size() == 0 && arcTxPt.orchardIvks.size() == 0 && arcTxPt.orchardOvks.size() == 0) || rescan) {
+            getAllSaplingOVKs(saplingOvks, fIncludeWatchonly);
+            getAllSaplingIVKs(saplingIvks, fIncludeWatchonly);
+            getAllOrchardOVKs(orchardOvks, fIncludeWatchonly);
+            getAllOrchardIVKs(orchardIvks, fIncludeWatchonly);
         } else {
-            ivks = arcTxPt.ivks;
-            ovks = arcTxPt.ovks;
+            saplingIvks = arcTxPt.saplingIvks;
+            saplingOvks = arcTxPt.saplingOvks;
+            orchardIvks = arcTxPt.orchardIvks;
+            orchardOvks = arcTxPt.orchardOvks;
         }
     } else {
-        getAllSaplingOVKs(ovks, fIncludeWatchonly);
-        getAllSaplingIVKs(ivks, fIncludeWatchonly);;
+        getAllSaplingOVKs(saplingOvks, fIncludeWatchonly);
+        getAllSaplingIVKs(saplingIvks, fIncludeWatchonly);
+        getAllOrchardOVKs(orchardOvks, fIncludeWatchonly);
+        getAllOrchardIVKs(orchardIvks, fIncludeWatchonly);
     }
 
 
@@ -746,14 +909,15 @@ void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, bool fIncludeWatchonly
     //Spends must be located to determine if outputs are change
     getTransparentSpends(tx, arcTx.vTSpend, arcTx.transparentValue, fIncludeWatchonly);
     // getSproutSpends(tx, arcTx.vZcSpend, arcTx.sproutValue, arcTx.sproutValueSpent, fIncludeWatchonly);
-    getSaplingSpends(params, txHeight, tx, ivks, arcTx.ivks, arcTx.vZsSpend, fIncludeWatchonly);
+    getSaplingSpends(params, txHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsSpend, fIncludeWatchonly);
 
     getTransparentSends(tx, arcTx.vTSend, arcTx.transparentValue);
-    getSaplingSends(params, txHeight, tx, ovks, arcTx.ovks, arcTx.vZsSend);
+    getSaplingSends(params, txHeight, tx, saplingOvks, arcTx.saplingOvks, arcTx.vZsSend);
 
     getTransparentRecieves(tx, arcTx.vTReceived, fIncludeWatchonly);
     // getSproutReceives(tx, arcTx.vZcReceived, fIncludeWatchonly);
-    getSaplingReceives(params, txHeight, tx, ivks, arcTx.ivks, arcTx.vZsReceived, fIncludeWatchonly);
+    getSaplingReceives(params, txHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsReceived, fIncludeWatchonly);
+    getOrchardReceives(params, txHeight, tx, orchardIvks, arcTx.orchardIvks, arcTx.vZoReceived, fIncludeWatchonly);
 
     arcTx.saplingValue = -tx.valueBalance;
 
@@ -792,6 +956,9 @@ void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, bool fIncludeWatchonly
     }
     for(int i = 0; i < arcTx.vZsReceived.size(); i++) {
         arcTx.addresses.insert(arcTx.vZsReceived[i].encodedAddress);
+    }
+    for(int i = 0; i < arcTx.vZoReceived.size(); i++) {
+        arcTx.addresses.insert(arcTx.vZoReceived[i].encodedAddress);
     }
 }
 
@@ -978,6 +1145,23 @@ void getRpcArcTxJSONReceives(RpcArcTransaction &arcTx, UniValue& ArcTxJSON, bool
         obj.push_back(Pair("memo", arcTx.vZsReceived[i].memo));
         obj.push_back(Pair("memoStr", arcTx.vZsReceived[i].memoStr));
         if (!filterAddress || arcTx.vZsReceived[i].encodedAddress == encodedAddress)
+            ArcTxJSON.push_back(obj);
+    }
+
+    for (int i = 0; i < arcTx.vZoReceived.size(); i++) {
+        UniValue obj(UniValue::VOBJ);
+        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZoReceived[i].encodedAddress) != arcTx.spentFrom.end();
+        obj.push_back(Pair("type", "orchard"));
+        obj.push_back(Pair("output", arcTx.vZoReceived[i].shieldedActionIndex));
+        obj.push_back(Pair("outgoing", false));
+        obj.push_back(Pair("address", arcTx.vZoReceived[i].encodedAddress));
+        obj.push_back(Pair("value", ValueFromAmount(CAmount(arcTx.vZoReceived[i].amount))));
+        obj.push_back(Pair("valueZat", arcTx.vZoReceived[i].amount));
+        obj.push_back(Pair("change", change));
+        obj.push_back(Pair("spendable", arcTx.vZoReceived[i].spendable));
+        obj.push_back(Pair("memo", arcTx.vZoReceived[i].memo));
+        obj.push_back(Pair("memoStr", arcTx.vZoReceived[i].memoStr));
+        if (!filterAddress || arcTx.vZoReceived[i].encodedAddress == encodedAddress)
             ArcTxJSON.push_back(obj);
     }
 }
@@ -2710,25 +2894,25 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
 void decrypttransaction(CTransaction &tx, RpcArcTransaction &arcTx, int nHeight) {
     //get Ovks for sapling decryption
-    std::set<uint256> ovks;
-    getAllSaplingOVKs(ovks, true);
+    std::set<uint256> saplingOvks;
+    getAllSaplingOVKs(saplingOvks, true);
 
     //get Ivks for sapling decryption
-    std::set<uint256> ivks;
-    getAllSaplingIVKs(ivks, true);
+    std::set<uint256> saplingIvks;
+    getAllSaplingIVKs(saplingIvks, true);
 
     auto params = Params().GetConsensus();
     //Spends must be located to determine if outputs are change
     getTransparentSpends(tx, arcTx.vTSpend, arcTx.transparentValue, true);
     // getSproutSpends(tx, arcTx.vZcSpend, arcTx.sproutValue, arcTx.sproutValueSpent, true);
-    getSaplingSpends(params, nHeight, tx, ivks, arcTx.ivks, arcTx.vZsSpend, true);
+    getSaplingSpends(params, nHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsSpend, true);
 
     getTransparentSends(tx, arcTx.vTSend, arcTx.transparentValue);
-    getSaplingSends(params, nHeight, tx, ovks, arcTx.ovks, arcTx.vZsSend);
+    getSaplingSends(params, nHeight, tx, saplingOvks, arcTx.saplingOvks, arcTx.vZsSend);
 
     getTransparentRecieves(tx, arcTx.vTReceived, true);
     // getSproutReceives(tx, arcTx.vZcReceived, true);
-    getSaplingReceives(params, nHeight, tx, ivks, arcTx.ivks, arcTx.vZsReceived, true);
+    getSaplingReceives(params, nHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsReceived, true);
 
     arcTx.saplingValue = -tx.valueBalance;
 

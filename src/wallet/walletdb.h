@@ -410,6 +410,8 @@ public:
                            const libzcash::OrchardExtendedSpendingKeyPirate &extsk,
                            const std::vector<unsigned char>& vchCryptedSecret);
 
+      bool WriteOrchardWitnesses(const OrchardWallet& wallet);
+
 private:
     CWalletDB(const CWalletDB&);
     void operator=(const CWalletDB&);

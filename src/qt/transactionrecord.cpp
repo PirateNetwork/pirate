@@ -150,6 +150,40 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
         }
     }
 
+    for (int i = 0; i < arcTx.vZoReceived.size(); i++) {
+        auto tx = TransactionRecord();
+        tx.archiveType = arcTx.archiveType;
+        tx.hash = arcTx.txid;
+        tx.time = arcTx.nTime;
+        tx.address = arcTx.vZoReceived[i].encodedAddress;
+        tx.debit = arcTx.vZoReceived[i].amount;
+        tx.idx = arcTx.vZoReceived[i].shieldedActionIndex;
+        tx.involvesWatchAddress = !arcTx.vZoReceived[i].spendable;
+        tx.memohex = arcTx.vZoReceived[i].memo;
+
+        if (arcTx.vZoReceived[i].memoStr.length() != 0) {
+            tx.memo = arcTx.vZoReceived[i].memoStr;
+        }
+
+        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZoReceived[i].encodedAddress) != arcTx.spentFrom.end();
+        if (change) {
+            if (arcTx.vZoReceived[i].memoStr.length() == 0) {
+                tx.type = TransactionRecord::SendToSelf;
+            } else {
+                tx.type = TransactionRecord::SendToSelfWithMemo;
+            }
+            partsChange.append(tx);
+        } else {
+            if (arcTx.vZoReceived[i].memoStr.length() == 0) {
+                tx.type = TransactionRecord::RecvWithAddress;
+            } else {
+                tx.type = TransactionRecord::RecvWithAddressWithMemo;
+            }
+
+            parts.append(tx);
+        }
+    }
+
     if (parts.size() == 0) {
         parts.append(partsChange);
     }

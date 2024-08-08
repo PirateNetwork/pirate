@@ -767,6 +767,12 @@ bool CWalletDB::WriteCryptedPrimaryOrchardSpendingKey(
     return true;
 }
 
+bool CWalletDB::WriteOrchardWitnesses(const OrchardWallet& wallet) {
+    nWalletDBUpdated++;
+    return Write(
+            std::string("orchard_note_commitment_tree"),
+            OrchardWalletNoteCommitmentTreeWriter(wallet));
+}
 
 bool CWalletDB::WriteCScript(const uint160& hash, const CScript& redeemScript)
 {

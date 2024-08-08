@@ -3219,9 +3219,9 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
     UniValue results(UniValue::VARR);
 
     //Get All Notes
-    std::vector<CSproutNotePlaintextEntry> sproutEntries;
     std::vector<SaplingNoteEntry> saplingEntries;
-    pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, zaddrs, nMinDepth, nMaxDepth, true, !fIncludeWatchonly, false);
+    std::vector<OrchardNoteEntry> orchardEntries;
+    pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, zaddrs, nMinDepth, nMaxDepth, true, !fIncludeWatchonly, false);
     std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>> mapResults;
 
     for (auto & entry : saplingEntries) {
@@ -3717,14 +3717,14 @@ CAmount getBalanceTaddr(std::string transparentAddress, int minDepth=1, bool ign
 
 CAmount getBalanceZaddr(std::string address, int minDepth = 1, bool ignoreUnspendable=true) {
     CAmount balance = 0;
-    std::vector<CSproutNotePlaintextEntry> sproutEntries;
     std::vector<SaplingNoteEntry> saplingEntries;
+    std::vector<OrchardNoteEntry> orchardEntries;
     LOCK2(cs_main, pwalletMain->cs_wallet);
-    pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, address, minDepth, true, ignoreUnspendable);
-    for (auto & entry : sproutEntries) {
-        balance += CAmount(entry.plaintext.value());
-    }
+    pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, address, minDepth, true, ignoreUnspendable);
     for (auto & entry : saplingEntries) {
+        balance += CAmount(entry.note.value());
+    }
+    for (auto & entry : orchardEntries) {
         balance += CAmount(entry.note.value());
     }
     return balance;
@@ -3786,9 +3786,9 @@ UniValue z_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubK
     }
 
     UniValue result(UniValue::VARR);
-    std::vector<CSproutNotePlaintextEntry> sproutEntries;
     std::vector<SaplingNoteEntry> saplingEntries;
-    pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, fromaddress, nMinDepth, false, false);
+    std::vector<OrchardNoteEntry> orchardEntries;
+    pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, fromaddress, nMinDepth, false, false);
 
     if (std::get_if<libzcash::SaplingPaymentAddress>(&zaddr) != nullptr) {
 
@@ -3929,10 +3929,11 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     //Get All Notes
     std::set<libzcash::PaymentAddress> zaddrs = {};
-    std::vector<CSproutNotePlaintextEntry> sproutEntries;
     std::vector<SaplingNoteEntry> saplingEntries;
-    pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, zaddrs, 0, 99999999, true, !fIncludeWatchonly, false);
-    std::map<libzcash::SaplingPaymentAddress, std::vector<CAmount>> mapResults;
+    std::vector<OrchardNoteEntry> orchardEntries;
+    pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, zaddrs, 0, 99999999, true, !fIncludeWatchonly, false);
+    std::map<libzcash::SaplingPaymentAddress, std::vector<CAmount>> mapSaplingResults;
+    std::map<libzcash::OrchardPaymentAddressPirate, std::vector<CAmount>> mapOrchardResults;
 
     for (auto & entry : saplingEntries) {
         //Get Note depths
@@ -3941,8 +3942,8 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
         //Map all balances by address
         std::map<libzcash::SaplingPaymentAddress, std::vector<CAmount>>::iterator it;
-        it = mapResults.find(entry.address);
-        if (it != mapResults.end()) {
+        it = mapSaplingResults.find(entry.address);
+        if (it != mapSaplingResults.end()) {
             if (entry.confirmations > 0) {
                 it->second[0] += CAmount(entry.note.value());
             } else {
@@ -3957,11 +3958,47 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
                 balance.push_back(0);
                 balance.push_back(CAmount(entry.note.value()));
             }
-            mapResults[entry.address] = balance;
+            mapSaplingResults[entry.address] = balance;
         }
     }
 
-    for (std::map<libzcash::SaplingPaymentAddress, std::vector<CAmount>>::iterator it = mapResults.begin(); it != mapResults.end(); it++) {
+    for (std::map<libzcash::SaplingPaymentAddress, std::vector<CAmount>>::iterator it = mapSaplingResults.begin(); it != mapSaplingResults.end(); it++) {
+        UniValue obj(UniValue::VOBJ);
+        obj.push_back(Pair("address", EncodePaymentAddress(it->first)));
+        obj.push_back(Pair("balance", ValueFromAmount(it->second[0])));
+        obj.push_back(Pair("unconfirmed", ValueFromAmount(it->second[1])));
+        obj.push_back(Pair("spendable", HaveSpendingKeyForPaymentAddress(pwalletMain)(it->first)));
+        results.push_back(obj);
+    }
+
+    for (auto & entry : orchardEntries) {
+        //Get Note depths
+        int nHeight   = tx_height(entry.op.hash);
+        int dpowconfs = komodo_dpowconfs(nHeight, entry.confirmations);
+
+        //Map all balances by address
+        std::map<libzcash::OrchardPaymentAddressPirate, std::vector<CAmount>>::iterator it;
+        it = mapOrchardResults.find(entry.address);
+        if (it != mapOrchardResults.end()) {
+            if (entry.confirmations > 0) {
+                it->second[0] += CAmount(entry.note.value());
+            } else {
+                it->second[1] += CAmount(entry.note.value());
+            }
+        } else {
+            std::vector<CAmount> balance;
+            if (entry.confirmations > 0) {
+                balance.push_back(CAmount(entry.note.value()));
+                balance.push_back(0);
+            } else {
+                balance.push_back(0);
+                balance.push_back(CAmount(entry.note.value()));
+            }
+            mapOrchardResults[entry.address] = balance;
+        }
+    }
+
+    for (std::map<libzcash::OrchardPaymentAddressPirate, std::vector<CAmount>>::iterator it = mapOrchardResults.begin(); it != mapOrchardResults.end(); it++) {
         UniValue obj(UniValue::VOBJ);
         obj.push_back(Pair("address", EncodePaymentAddress(it->first)));
         obj.push_back(Pair("balance", ValueFromAmount(it->second[0])));
@@ -4382,13 +4419,13 @@ std::vector<SaplingNoteEntry> z_sapling_inputs_;
 
 bool rpcwallet__find_unspent_notes(std::string fromaddress_,  int mindepth_)
 {
-    std::vector<CSproutNotePlaintextEntry> sproutEntries;  //Not used by us
     std::vector<SaplingNoteEntry> saplingEntries;
+    std::vector<OrchardNoteEntry> orchardEntries;
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
         //printf("rpcwallet__find_unspent_notes() enter\n"); fflush(stdout);
         //Local transaction: Require the spending key
-        pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, fromaddress_, mindepth_,true,true);
+        pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, fromaddress_, mindepth_,true,true);
         //printf("rpcwallet__find_unspent_notes() done\n"); fflush(stdout);
     }
 
@@ -6449,56 +6486,14 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
 
     if (useAnySapling || zaddrs.size() > 0) {
         // Get available notes
-        std::vector<CSproutNotePlaintextEntry> sproutEntries;
         std::vector<SaplingNoteEntry> saplingEntries;
-        pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, zaddrs);
-        sproutEntries.clear();
-        // std::vector<SaplingNoteEntry> saplingEntries,skipsapling;
-        // pwalletMain->GetFilteredNotes(sproutEntries, useAnySprout == 0 ? saplingEntries : skipsapling, zaddrs);
+        std::vector<OrchardNoteEntry> orchardEntries;
+        pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, zaddrs);
+
         // If Sapling is not active, do not allow sending from a sapling addresses.
         if (!saplingActive && saplingEntries.size() > 0) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Sapling has not activated");
         }
-        // Sending from both Sprout and Sapling is currently unsupported using z_mergetoaddress
-        // if (sproutEntries.size() > 0 && saplingEntries.size() > 0) {
-        //     throw JSONRPCError(
-        //                        RPC_INVALID_PARAMETER,
-        //                        "Cannot send from both Sprout and Sapling addresses using z_mergetoaddress");
-        // }
-        // If sending between shielded addresses, they must be the same type
-        // if ((saplingEntries.size() > 0 && isToSproutZaddr) || (sproutEntries.size() > 0 && isToSaplingZaddr)) {
-        //     throw JSONRPCError(
-        //                        RPC_INVALID_PARAMETER,
-        //                        "Cannot send between Sprout and Sapling addresses using z_mergetoaddress");
-        // }
-
-        // Find unspent notes and update estimated size
-        // for (const CSproutNotePlaintextEntry& entry : sproutEntries) {
-        //     noteCounter++;
-        //     CAmount nValue = entry.plaintext.value();
-        //
-        //     if (!maxedOutNotesFlag) {
-        //         // If we haven't added any notes yet and the merge is to a
-        //         // z-address, we have already accounted for the first JoinSplit.
-        //         size_t increase = (sproutNoteInputs.empty() && !isToSproutZaddr) || (sproutNoteInputs.size() % 2 == 0) ? JOINSPLIT_SIZE : 0;
-        //         if (estimatedTxSize + increase >= max_tx_size ||
-        //             (sproutNoteLimit > 0 && noteCounter > sproutNoteLimit))
-        //         {
-        //             maxedOutNotesFlag = true;
-        //         } else {
-        //             estimatedTxSize += increase;
-        //             auto zaddr = entry.address;
-        //             SproutSpendingKey zkey;
-        //             pwalletMain->GetSproutSpendingKey(zaddr, zkey);
-        //             sproutNoteInputs.emplace_back(entry.jsop, entry.plaintext.note(zaddr), nValue, zkey);
-        //             mergedNoteValue += nValue;
-        //         }
-        //     }
-        //
-        //     if (maxedOutNotesFlag) {
-        //         remainingNoteValue += nValue;
-        //     }
-        // }
 
         for (const SaplingNoteEntry& entry : saplingEntries) {
             noteCounter++;

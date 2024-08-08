@@ -355,6 +355,9 @@ public:
 class OrchardOutPoint : public BaseOutPoint
 {
 public:
+    // In-Memory Only
+    bool writeToDisk = true;
+
     OrchardOutPoint() : BaseOutPoint() {};
     OrchardOutPoint(uint256 hashIn, uint32_t nIn) : BaseOutPoint(hashIn, nIn) {};
     std::string ToString() const;
@@ -366,8 +369,10 @@ class ArchiveTxPoint
 public:
     uint256 hashBlock;
     int nIndex;
-    std::set<uint256> ivks;
-    std::set<uint256> ovks;
+    std::set<uint256> saplingIvks;
+    std::set<uint256> saplingOvks;
+    std::set<libzcash::OrchardIncomingViewingKeyPirate> orchardIvks;
+    std::set<libzcash::OrchardOutgoingViewingKey> orchardOvks;
 
     // In-Memory Only
     bool writeToDisk = true;
@@ -379,12 +384,14 @@ public:
         nIndex = nIn;
         writeToDisk = true;
     }
-    ArchiveTxPoint(uint256 hashIn, int nIn, std::set<uint256> nIvks, std::set<uint256> nOvks)
+    ArchiveTxPoint(uint256 hashIn, int nIn, std::set<uint256> nSaplingIvks, std::set<uint256> nSaplingOvks, std::set<libzcash::OrchardIncomingViewingKeyPirate> nOrchardIvks, std::set<libzcash::OrchardOutgoingViewingKey> nOrchardOvks)
     {
         hashBlock = hashIn;
         nIndex = nIn;
-        ivks = nIvks;
-        ovks = nOvks;
+        saplingIvks = nSaplingIvks;
+        saplingOvks = nSaplingOvks;
+        orchardIvks = nOrchardIvks;
+        orchardOvks = nOrchardOvks;
         writeToDisk = true;
     }
 
@@ -395,19 +402,23 @@ public:
     {
         READWRITE(hashBlock);
         READWRITE(nIndex);
-        READWRITE(ivks);
-        READWRITE(ovks);
+        READWRITE(saplingIvks);
+        READWRITE(saplingOvks);
+        READWRITE(orchardIvks);
+        READWRITE(orchardOvks);
     }
 
     void SetNull()
     {
         hashBlock.SetNull();
         nIndex = -1;
-        ivks.clear();
-        ovks.clear();
+        saplingIvks.clear();
+        saplingOvks.clear();
+        orchardIvks.clear();
+        orchardOvks.clear();
         writeToDisk = true;
     }
-    bool IsNull() const { return (hashBlock.IsNull() && nIndex == -1 && ivks.size() == 0 && ovks.size() == 0); }
+    bool IsNull() const { return (hashBlock.IsNull() && nIndex == -1 && saplingIvks.size() == 0 && saplingOvks.size() == 0 && orchardIvks.size() == 0 && orchardOvks.size() == 0); }
 };
 
 /** An input of a transaction.  It contains the location of the previous

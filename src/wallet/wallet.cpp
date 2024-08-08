@@ -1097,6 +1097,10 @@ SaplingWalletNoteCommitmentTreeLoader CWallet::GetSaplingNoteCommitmentTreeLoade
     return SaplingWalletNoteCommitmentTreeLoader(saplingWallet);
 }
 
+OrchardWalletNoteCommitmentTreeLoader CWallet::GetOrchardNoteCommitmentTreeLoader() {
+    return OrchardWalletNoteCommitmentTreeLoader(orchardWallet);
+}
+
 // Add spending key to keystore and persist to disk
 bool CWallet::AddSproutZKey(const libzcash::SproutSpendingKey &key)
 {
@@ -1963,6 +1967,7 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
 
     if (added) {
         IncrementSaplingWallet(pindex);
+        IncrementOrchardWallet(pindex);
         // Prevent witness cache building && consolidation transactions
         // from being created when node is syncing after launch,
         // and also when node wakes up from suspension/hibernation and incoming blocks are old.
@@ -1989,6 +1994,7 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
 
     } else {
         DecrementSaplingWallet(pindex);
+        DecrementOrchardWallet(pindex);
         // DecrementNoteWitnesses(pindex);
         UpdateNullifierNoteMapForBlock(pblock);
     }
@@ -2502,6 +2508,34 @@ unsigned int CWallet::GetSaplingSpendDepth(const uint256& nullifier) const {
     return 0;
 }
 
+bool CWallet::IsOrchardSpent(const uint256& nullifier) const {
+    pair<TxNullifiers::const_iterator, TxNullifiers::const_iterator> range;
+    range = mapTxOrchardNullifiers.equal_range(nullifier);
+
+    for (TxNullifiers::const_iterator it = range.first; it != range.second; ++it) {
+        const uint256& wtxid = it->second;
+        std::map<uint256, CWalletTx>::const_iterator mit = mapWallet.find(wtxid);
+        if (mit != mapWallet.end() && mit->second.GetDepthInMainChain() >= 0) {
+            return true; // Spent
+        }
+    }
+    return false;
+}
+
+unsigned int CWallet::GetOrchardSpendDepth(const uint256& nullifier) const {
+    pair<TxNullifiers::const_iterator, TxNullifiers::const_iterator> range;
+    range = mapTxOrchardNullifiers.equal_range(nullifier);
+
+    for (TxNullifiers::const_iterator it = range.first; it != range.second; ++it) {
+        const uint256& wtxid = it->second;
+        std::map<uint256, CWalletTx>::const_iterator mit = mapWallet.find(wtxid);
+        if (mit != mapWallet.end() && mit->second.GetDepthInMainChain() >= 0) {
+            return mit->second.GetDepthInMainChain(); // Spent
+        }
+    }
+    return 0;
+}
+
 void CWallet::AddToTransparentSpends(const COutPoint& outpoint, const uint256& wtxid)
 {
     mapTxSpends.insert(make_pair(outpoint, wtxid));
@@ -2529,11 +2563,21 @@ void CWallet::AddToSaplingSpends(const uint256& nullifier, const uint256& wtxid)
     SyncMetaData<uint256>(range);
 }
 
+void CWallet::AddToOrchardSpends(const uint256& nullifier, const uint256& wtxid)
+{
+    mapTxOrchardNullifiers.insert(make_pair(nullifier, wtxid));
+
+    pair<TxNullifiers::iterator, TxNullifiers::iterator> range;
+    range = mapTxOrchardNullifiers.equal_range(nullifier);
+    SyncMetaData<uint256>(range);
+}
+
 void CWallet::RemoveFromSpends(const uint256& wtxid)
 {
     RemoveFromTransparentSpends(wtxid);
     RemoveFromSproutSpends(wtxid);
     RemoveFromSaplingSpends(wtxid);
+    RemoveFromOrchardSpends(wtxid);
 }
 
 void CWallet::RemoveFromTransparentSpends(const uint256& wtxid)
@@ -2593,6 +2637,25 @@ void CWallet::RemoveFromSaplingSpends(const uint256& wtxid)
     }
 }
 
+void CWallet::RemoveFromOrchardSpends(const uint256& wtxid)
+{
+    if (mapTxOrchardNullifiers.size() > 0)
+    {
+        std::multimap<uint256, uint256>::const_iterator itr = mapTxOrchardNullifiers.cbegin();
+        while (itr != mapTxOrchardNullifiers.cend())
+        {
+            if (itr->second == wtxid)
+            {
+                itr = mapTxOrchardNullifiers.erase(itr);
+            }
+            else
+            {
+                ++itr;
+            }
+        }
+    }
+}
+
 void CWallet::LoadArcTxs(const uint256& wtxid, const ArchiveTxPoint& arcTxPt)
 {
     mapArcTxs[wtxid] = arcTxPt;
@@ -2607,8 +2670,10 @@ void CWallet::AddToArcTxs(const uint256& wtxid, ArchiveTxPoint& arcTxPt)
 
     getRpcArcTx(txid, arcTx, true, rescan);
 
-    arcTxPt.ivks = arcTx.ivks;
-    arcTxPt.ovks = arcTx.ovks;
+    arcTxPt.saplingIvks = arcTx.saplingIvks;
+    arcTxPt.saplingOvks = arcTx.saplingOvks;
+    arcTxPt.orchardIvks = arcTx.orchardIvks;
+    arcTxPt.orchardOvks = arcTx.orchardOvks;
     arcTxPt.writeToDisk = true;
     mapArcTxs[wtxid] = arcTxPt;
 
@@ -2639,9 +2704,12 @@ void CWallet::AddToArcTxs(const CWalletTx& wtx, int txHeight, ArchiveTxPoint& ar
     RpcArcTransaction arcTx;
 
     getRpcArcTxSaplingKeys(wtx, txHeight, arcTx, true);
+    getRpcArcTxOrchardKeys(wtx, txHeight, arcTx, true);
 
-    arcTxPt.ivks = arcTx.ivks;
-    arcTxPt.ovks = arcTx.ovks;
+    arcTxPt.saplingIvks = arcTx.saplingIvks;
+    arcTxPt.saplingOvks = arcTx.saplingOvks;
+    arcTxPt.orchardIvks = arcTx.orchardIvks;
+    arcTxPt.orchardOvks = arcTx.orchardOvks;
     arcTxPt.writeToDisk = true;
     mapArcTxs[wtx.GetHash()] = arcTxPt;
 
@@ -2673,6 +2741,11 @@ void CWallet::AddToArcSaplingOutPoints(const uint256& nullifier, const SaplingOu
     mapArcSaplingOutPoints[nullifier] = op;
 }
 
+void CWallet::AddToArcOrchardOutPoints(const uint256& nullifier, const OrchardOutPoint& op)
+{
+    mapArcOrchardOutPoints[nullifier] = op;
+}
+
 void CWallet::AddToSpends(const uint256& wtxid)
 {
     assert(mapWallet.count(wtxid));
@@ -2692,6 +2765,11 @@ void CWallet::AddToSpends(const uint256& wtxid)
     for (const auto& spend : thisTx.GetSaplingSpends())  {
         uint256 nullifier = uint256::FromRawBytes(spend.nullifier());
         AddToSaplingSpends(nullifier, wtxid);
+    }
+
+    for (const auto& action : thisTx.GetOrchardActions())  {
+        uint256 nullifier = uint256::FromRawBytes(action.nullifier());
+        AddToOrchardSpends(nullifier, wtxid);
     }
 }
 
@@ -2865,6 +2943,131 @@ bool CWallet::ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex) {
                 } else {
                     pwtx->mapSaplingNoteData[op].setPosition(position);
                     UpdateSaplingNullifierNoteMapWithTx(pwtx);
+                }
+            }
+        }
+    }
+
+    if (uiShown) {
+        uiInterface.ShowProgress(_("Validating Note Postions..."), 100, false);
+    }
+
+    return true;
+
+}
+
+bool CWallet::ValidateOrchardWalletTrackedPositions(const CBlockIndex* pindex) {
+
+    AssertLockHeld(cs_main);
+    AssertLockHeld(cs_wallet);
+
+    int64_t nNow = GetTime();
+    int valperc = 0;
+    int i = 0;
+    int walletSize = mapWallet.size();
+    bool uiShown = false;
+
+
+    for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
+        uint256 txid = (*it).first;
+        CWalletTx *pwtx = &(*it).second;
+
+        valperc = i/walletSize;
+        if (GetTime() >= nNow + 60) {
+            nNow = GetTime();
+            LogPrintf("Validating Note Postions... Progress=%d\n", valperc );
+        }
+
+        if (GetTime() >= nNow + 10) {
+            uiShown = true;
+        }
+
+        if (uiShown) {
+            uiInterface.ShowProgress("Validating Note Postions...", std::max(1, std::min(99, valperc)), false);
+        }
+
+        //Exclude transactions with no Sapling Data
+        if (pwtx->mapOrchardNoteData.empty()) {
+            continue;
+        }
+
+        //Exclude transactions that are in invalid blocks
+        if (mapBlockIndex.count(pwtx->hashBlock) == 0) {
+            continue;
+        }
+
+        //Exclude unconfirmed transactions
+        if (pwtx->GetDepthInMainChain() <= 0) {
+            continue;
+        }
+
+        //exit loop if trying to shutdown
+        if (ShutdownRequested()) {
+            break;
+        }
+
+        //Check if all notes are tracked correctly
+        for (mapOrchardNoteData_t::value_type& item : pwtx->mapOrchardNoteData) {
+
+            const OrchardOutPoint op = item.first;
+            uint64_t position;
+
+            if(!orchardWallet.IsNoteTracked(op.hash, op.n, position)) {
+                return false;
+            } else {
+                CBlockIndex* pCheckIndex = mapBlockIndex[pwtx->hashBlock];
+
+                //Create a new wallet to validate tracked merkle path
+                OrchardMerkleFrontier orchardCheckFrontierTree;
+                pcoinsTip->GetOrchardFrontierAnchorAt(pCheckIndex->pprev->hashFinalOrchardRoot, orchardCheckFrontierTree);
+                OrchardWallet orchardWalletCheck;
+                orchardWalletCheck.InitNoteCommitmentTree(orchardCheckFrontierTree);
+
+                MerklePath orchardCheckMerklePath;
+                uint64_t positionCheck;
+
+                //Retrieve the full block to get all of the transaction commitments
+                CBlock checkBlock;
+                ReadBlockFromDisk(checkBlock, pCheckIndex, 1);
+                CBlock *pCheckBlock = &checkBlock;
+
+                //Calculate Merkle Path
+                for (int i = 0; i < pCheckBlock->vtx.size(); i++) {
+                    uint256 txid = pCheckBlock->vtx[i].GetHash();
+
+                    //Use single output appending for transaction that belong to the wallet so that they can be marked
+                    if (pwtx->GetHash() == txid) {
+                        orchardWalletCheck.CreateEmptyPositionsForTxid(pCheckIndex->nHeight, txid);
+
+                        auto vActions = pCheckBlock->vtx[i].GetOrchardActions();
+                        for (int j = 0; j < vActions.size(); j++) {
+                            auto opit = pwtx->mapOrchardNoteData.find(op);
+                            if (opit != pwtx->mapOrchardNoteData.end() && j == op.n) {
+                                orchardWalletCheck.AppendNoteCommitment(pCheckIndex->nHeight, txid, i, j, &vActions[j], true);
+                                assert(orchardWalletCheck.IsNoteTracked(txid, j, positionCheck));
+                                LogPrint("orchardwallet", "Orchard Wallet - Merkle Path position %i\n", positionCheck);
+
+
+                            } else {
+                                orchardWalletCheck.AppendNoteCommitment(pCheckIndex->nHeight, txid, i, j, &vActions[j], false);
+                            }
+                        }
+
+                    } else {
+                        //No transactions in this tx belong to the wallet, use full tx appending
+                        orchardWalletCheck.ClearPositionsForTxid(txid);
+                        orchardWalletCheck.AppendNoteCommitments(pCheckIndex->nHeight,pCheckBlock->vtx[i],i);
+                    }
+                }
+
+                LogPrint("orchardwallet", "Orchard Wallet - Merkle Path position %i\n", positionCheck);
+
+                if (positionCheck != position) {
+                    LogPrint("orchardwallet", "Orchard Wallet Validation failed, rebuilding witnesses\n");
+                    return false;
+                } else {
+                    pwtx->mapOrchardNoteData[op].setPosition(position);
+                    UpdateOrchardNullifierNoteMapWithTx(pwtx);
                 }
             }
         }
@@ -3121,6 +3324,249 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex) {
 
 }
 
+void CWallet::IncrementOrchardWallet(const CBlockIndex* pindex) {
+
+    AssertLockHeld(cs_main);
+    AssertLockHeld(cs_wallet);
+
+    int64_t nNow1 = GetTime();
+    int64_t nNow2 = GetTime();
+    bool rebuildWallet = false;
+    int nMinimumHeight = pindex->nHeight;
+    int lastCheckpoint = orchardWallet.GetLastCheckpointHeight();
+    LogPrint("orchardwallet","Orchard Wallet - Last Checkpoint %i, Block Height %i\n", lastCheckpoint, nMinimumHeight);
+
+    if (NetworkUpgradeActive(pindex->nHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
+
+        if (lastCheckpoint > pindex->nHeight - 1 ) {
+            orchardWalletValidated = false;
+            LogPrint("orchardwallet","Orchard Wallet - Last Checkpoint is higher than wallet, skipping block\n");
+            return;
+        }
+
+        //Rebuild if wallet does not exisit
+        if (lastCheckpoint<0) {
+            LogPrint("orchardwallet","Orchard Wallet - Last Checkpoint doesn't exist, rebuild witnesses\n");
+            rebuildWallet = true;
+        }
+
+        //Rebuild if wallet is out of sync with the blockchain
+        if (lastCheckpoint != pindex->nHeight - 1 ) {
+            LogPrint("orchardwallet","Orchard Wallet - Last Checkpoint is out of sync with the blockchain, rebuild witnesses\n");
+            rebuildWallet = true;
+        }
+
+        //Rebuild wallet if anchor does not match, only check on wallet opening due to performance issues, or rescan without wallet reset
+        if (lastCheckpoint == pindex->nHeight - 1 && !orchardWalletValidated) {
+            if (pindex->pprev->hashFinalOrchardRoot != orchardWallet.GetLatestAnchor()) {
+                LogPrint("orchardwallet","Orchard Wallet - Orchard Root is out of sync with the blockchain, rebuild witnesses\n");
+                rebuildWallet = true;
+            }
+
+            //Should never run here, should only run at initialization
+            if (!orchardWalletPositionsValidated) {
+                rebuildWallet = !ValidateOrchardWalletTrackedPositions(pindex);
+                orchardWalletPositionsValidated = true;
+            }
+
+            orchardWalletValidated = true;
+        }
+
+        //Rebuild
+        if (rebuildWallet) {
+            //Disable the RPC z_sendmany RPC while rebuilding
+            fBuilingWitnessCache = true;
+
+            //Don't recheck after a rebuild
+            orchardWalletValidated = true;
+
+            //Determine Start Height of Sapling Wallet
+            for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
+                CWalletTx* pwtx = &(*it).second;
+
+                // Find the block it claims to be in
+                BlockMap::iterator mi = mapBlockIndex.find(pwtx->hashBlock);
+                if (mi == mapBlockIndex.end()) {
+                    continue;
+                }
+
+                nMinimumHeight = std::min(mapBlockIndex[pwtx->hashBlock]->nHeight, nMinimumHeight);
+
+            }
+
+            LogPrint("\n\norchardwallet", "Orchard Wallet - rebuilding wallet from block %i\n\n", nMinimumHeight);
+
+            //No transactions exists to begin wallet at this hieght
+            if (nMinimumHeight > pindex->nHeight) {
+                LogPrint("\n\norchardwallet", "Orchard Wallet - no transactions exist at height %i to rebuild wallet\n\n", nMinimumHeight);
+                OrchardWalletReset();
+                return;
+            }
+
+            // Set Starting Values
+            CBlockIndex* pblockindex = chainActive[nMinimumHeight];
+
+            //Create a new wallet
+            OrchardMerkleFrontier orchardFrontierTree;
+            pcoinsTip->GetOrchardFrontierAnchorAt(pblockindex->pprev->hashFinalOrchardRoot, orchardFrontierTree);
+            OrchardWalletReset();
+            orchardWallet.InitNoteCommitmentTree(orchardFrontierTree);
+
+            //Show in UI
+            int chainHeight = chainActive.Height();
+            bool uiShown = false;
+            const CChainParams& chainParams = Params();
+            double dProgressStart = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false);
+            double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.Tip(), false);
+
+            //Loop thru blocks to rebuild saplingWallet commitment tree
+            while (pblockindex) {
+
+                //Create Checkpoint before incrementing wallet
+                orchardWallet.CheckpointNoteCommitmentTree(pblockindex->nHeight);
+
+                if (GetTime() >= nNow2 + 60) {
+                    nNow2 = GetTime();
+                    LogPrintf("Rebuilding Orchard Witnesses for block %d. Progress=%f\n", pblockindex->nHeight, Checkpoints::GuessVerificationProgress(Params().Checkpoints(), pblockindex));
+                }
+
+                //Report Progress to the GUI and log file
+                int witnessHeight = pblockindex->nHeight;
+                if ((witnessHeight % 100 == 0 || GetTime() >= nNow1 + 15) && witnessHeight < chainHeight - 5 ) {
+                    nNow1 = GetTime();
+                    if (!uiShown) {
+                        uiShown = true;
+                        uiInterface.ShowProgress("Rebuilding Orchard Witnesses", 0, false);
+                    }
+                    scanperc = (int)((Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false) - dProgressStart) / (dProgressTip - dProgressStart) * 100);
+                    uiInterface.ShowProgress(_(("Rebuilding Orchard Witnesses for block " + std::to_string(witnessHeight) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
+                }
+
+                //exit loop if trying to shutdown
+                if (ShutdownRequested()) {
+                    break;
+                }
+
+                //Retrieve the full block to get all of the transaction commitments
+                CBlock block;
+                ReadBlockFromDisk(block, pblockindex, 1);
+                CBlock *pblock = &block;
+
+                for (int i = 0; i < pblock->vtx.size(); i++) {
+                    uint256 txid = pblock->vtx[i].GetHash();
+                    auto it = mapWallet.find(txid);
+
+                    //Use single output appending for transaction that belong to the wallet so that they can be marked
+                    if (it != mapWallet.end()) {
+                        orchardWallet.CreateEmptyPositionsForTxid(pblockindex->nHeight, txid);
+                        CWalletTx *pwtx = &(*it).second;
+                        auto vActions = pblock->vtx[i].GetOrchardActions();
+                        for (int j = 0; j < vActions.size(); j++) {
+                            OrchardOutPoint op = OrchardOutPoint(txid, j);
+                            auto opit = pwtx->mapOrchardNoteData.find(op);
+
+                            if (opit != pwtx->mapOrchardNoteData.end()) {
+                                orchardWallet.AppendNoteCommitment(pblockindex->nHeight, txid, i, j, &vActions[j], true);
+                                //Get note position
+                                uint64_t position = 0;
+                                assert(orchardWallet.IsNoteTracked(txid, j, position));
+                                pwtx->mapOrchardNoteData[op].setPosition(position);
+
+                                LogPrint("orchardwallet", "Orchard Wallet - Merkle Path position %i\n", position);
+
+
+                            } else {
+                                orchardWallet.AppendNoteCommitment(pblockindex->nHeight, txid, i, j, &vActions[j], false);
+                            }
+                        }
+                        UpdateOrchardNullifierNoteMapWithTx(pwtx);
+                    } else {
+                        //No transactions in this tx belong to the wallet, use full tx appending
+                        orchardWallet.ClearPositionsForTxid(txid);
+                        orchardWallet.AppendNoteCommitments(pblockindex->nHeight,pblock->vtx[i],i);
+                    }
+                }
+
+                //Check completeness
+                if (pblockindex == pindex)
+                    break;
+
+                //Set Variables for next loop
+                pblockindex = chainActive.Next(pblockindex);
+            }
+
+            if (uiShown) {
+                uiInterface.ShowProgress(_("Witness Cache Complete..."), 100, false);
+            }
+
+        } else {
+
+            //Retrieve the full block to get all of the transaction commitments
+            CBlock block;
+            ReadBlockFromDisk(block, pindex, 1);
+            CBlock *pblock = &block;
+
+            //Create Checkpoint before incrementing wallet
+            orchardWallet.CheckpointNoteCommitmentTree(pindex->nHeight);
+
+            for (int i = 0; i < pblock->vtx.size(); i++) {
+                uint256 txid = pblock->vtx[i].GetHash();
+                auto it = mapWallet.find(txid);
+
+                //Use single output appending for transaction that belong to the wallet so that they can be marked
+                if (it != mapWallet.end()) {
+                    orchardWallet.CreateEmptyPositionsForTxid(pindex->nHeight, txid);
+                    CWalletTx *pwtx = &(*it).second;
+                    auto vActions = pblock->vtx[i].GetOrchardActions();
+
+                    LogPrint("orchardwallet", "Orchard Wallet - Appending Single Commitments for transaction %s\n", pwtx->GetHash().ToString());
+
+                    for (int j = 0; j < vActions.size(); j++) {
+                        OrchardOutPoint op = OrchardOutPoint(txid, j);
+                        auto opit = pwtx->mapOrchardNoteData.find(op);
+                        LogPrint("orchardwallet", "Orchard Wallet - Checking for outpoint %s, %i\n", pwtx->GetHash().ToString(), j);
+
+                        if (opit != pwtx->mapOrchardNoteData.end()) {
+                            LogPrint("orchardwallet", "Orchard Wallet - Appending outpoint %s, %i\n", pwtx->GetHash().ToString(), j);
+                            orchardWallet.AppendNoteCommitment(pindex->nHeight, txid, i, j, &vActions[j], true);
+
+                            //Get note position
+                            uint64_t position = 0;
+                            assert(orchardWallet.IsNoteTracked(txid, j, position));
+                            pwtx->mapOrchardNoteData[op].setPosition(position);
+
+                            LogPrint("orchardwallet", "Orchard Wallet - Merkle Path position %i\n", position);
+
+                        } else {
+                            LogPrint("orchardwallet", "Orchard Wallet - Action %s, %i not found in note data\n", pwtx->GetHash().ToString(), j);
+                            orchardWallet.AppendNoteCommitment(pindex->nHeight, txid, i, j, &vActions[j], false);
+                        }
+                    }
+                    UpdateOrchardNullifierNoteMapWithTx(pwtx);
+                } else {
+                    //No transactions in this tx belong to the wallet, use full tx appending
+                    orchardWallet.ClearPositionsForTxid(txid);
+                    orchardWallet.AppendNoteCommitments(pindex->nHeight,pblock->vtx[i],i);
+                }
+            }
+        }
+    }
+
+    fInitWitnessesBuilt = true;
+    fBuilingWitnessCache = false;
+
+    // This assertion slows scanning for blocks with few shielded transactions by an
+    // order of magnitude. It is only intended as a consistency check between the node
+    // and wallet computing trees. Commented out until we have figured out what is
+    // causing the slowness and fixed it.
+    // https://github.com/zcash/zcash/issues/6052
+    // LogPrintf("Chain Height %i\n", pindex->nHeight);
+    // LogPrintf("Sapling Hash Root   - %s\n", pindex->hashFinalSaplingRoot.ToString());
+    // LogPrintf("Sapling Wallet Root - %s\n\n", saplingWallet.GetLatestAnchor().ToString());
+    // LogPrintf("New Checkpoint %i\n", saplingWallet.GetLastCheckpointHeight());
+
+}
+
 void CWallet::DecrementSaplingWallet(const CBlockIndex* pindex) {
 
       uint32_t uResultHeight{0};
@@ -3135,6 +3581,24 @@ void CWallet::DecrementSaplingWallet(const CBlockIndex* pindex) {
       auto walletLastCheckpointHeight = saplingWallet.GetLastCheckpointHeight();
       if (saplingWallet.GetLastCheckpointHeight()>0) {
           assert(pindex->pprev->hashFinalSaplingRoot == saplingWallet.GetLatestAnchor());
+      }
+
+}
+
+void CWallet::DecrementOrchardWallet(const CBlockIndex* pindex) {
+
+      uint32_t uResultHeight{0};
+      assert(pindex->nHeight >= 1);
+      assert(orchardWallet.Rewind(pindex->nHeight - 1, uResultHeight));
+      assert(uResultHeight == pindex->nHeight - 1);
+      // If we have no checkpoints after the rewind, then the latest anchor of the
+      // wallet's Orchard note commitment tree will be in an indeterminate state and it
+      // will be overwritten in the next `IncrementNoteWitnesses` call, so we can skip
+      // the check against `hashFinalOrchardRoot`.
+
+      auto walletLastCheckpointHeight = orchardWallet.GetLastCheckpointHeight();
+      if (orchardWallet.GetLastCheckpointHeight()>0) {
+          assert(pindex->pprev->hashFinalOrchardRoot == orchardWallet.GetLatestAnchor());
       }
 
 }
@@ -3705,6 +4169,18 @@ void CWallet::UpdateNullifierNoteMapWithTx(const CWalletTx& wtx)
                 mapArcSaplingOutPoints[*item.second.nullifier] = op;
             }
         }
+
+        for (const mapOrchardNoteData_t::value_type& item : wtx.mapOrchardNoteData) {
+            if (item.second.nullifier) {
+                OrchardOutPoint op = item.first;
+
+                //Write Changes to disk on newt wallet flush
+                op.writeToDisk = true;
+
+                mapOrchardNullifiersToNotes[*item.second.nullifier] = op;
+                mapArcOrchardOutPoints[*item.second.nullifier] = op;
+            }
+        }
     }
 }
 
@@ -3819,6 +4295,56 @@ void CWallet::UpdateSaplingNullifierNoteMapWithTx(CWalletTx* wtx) {
 }
 
 /**
+* Update mapSaplingNullifiersToNotes, computing the nullifier from a cached witness if necessary.
+*/
+void CWallet::UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx) {
+   LOCK(cs_wallet);
+
+   auto vActions = wtx->GetOrchardActions();
+
+   for (mapOrchardNoteData_t::value_type &item : wtx->mapOrchardNoteData) {
+       OrchardOutPoint op = item.first;
+       OrchardNoteData nd = item.second;
+
+       //Write Changes to Disk on next wallet flush
+       op.writeToDisk = true;
+
+       if (nd.getPostion() == std::nullopt) {
+           // If there are no witnesses, erase the nullifier and associated mapping.
+           if (item.second.nullifier) {
+               mapOrchardNullifiersToNotes.erase(item.second.nullifier.value());
+           }
+           item.second.nullifier = std::nullopt;
+       }
+       else {
+           uint64_t position = nd.getPostion().value();
+           // Skip if we only have incoming viewing key
+           if (mapOrchardFullViewingKeys.count(nd.ivk) != 0) {
+               OrchardExtendedFullViewingKeyPirate extfvk = mapOrchardFullViewingKeys.at(nd.ivk);
+
+               //Cipher Text
+               auto optDeserialized = OrchardDecryptedActions::DecryptOrchardAction(&vActions[op.n], extfvk.fvk);
+
+               // The transaction would not have entered the wallet unless
+               // it had been successfully decrypted previously.
+               assert(optDeserialized != std::nullopt);
+
+
+               auto optNullifier = optDeserialized.value().GetNullifier();
+               if (!optNullifier) {
+                   // This should not happen.  If it does, maybe the position has been corrupted or miscalculated?
+                   assert(false);
+               }
+               uint256 nullifier = optNullifier.value();
+               mapOrchardNullifiersToNotes[nullifier] = op;
+               mapArcOrchardOutPoints[nullifier] = op;
+               item.second.nullifier = nullifier;
+           }
+       }
+   }
+}
+
+/**
  * Iterate over transactions in a block and update the cached Sapling nullifiers
  * for transactions which belong to the wallet.
  */
@@ -3831,6 +4357,7 @@ void CWallet::UpdateNullifierNoteMapForBlock(const CBlock *pblock) {
         if (txIsOurs) {
             UpdateSproutNullifierNoteMapWithTx(mapWallet[hash]);
             UpdateSaplingNullifierNoteMapWithTx(&mapWallet[hash]);
+            UpdateOrchardNullifierNoteMapWithTx(&mapWallet[hash]);
         }
     }
 }
@@ -4268,7 +4795,7 @@ static void DecryptOrchardNoteWorker(
 {
     for (int i = 0; i < vIvk.size(); i++) {
 
-        auto result = OrchardDecryptedActions::AttemptDecryptOchardAction(vOrchardEncryptedAction[i], *vIvk[i]);
+        auto result = OrchardDecryptedActions::AttemptDecryptOrchardAction(vOrchardEncryptedAction[i], *vIvk[i]);
         if (result != std::nullopt) {
 
             // We don't cache the nullifier here as computing it requires knowledge of the note position
@@ -6006,6 +6533,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             }
 
             IncrementSaplingWallet(pindex);
+            IncrementOrchardWallet(pindex);
 
             SproutMerkleTree sproutTree;
             SaplingMerkleTree saplingTree;
@@ -8296,6 +8824,37 @@ std::vector<SaplingOutPoint> CWallet::ListLockedSaplingNotes()
     return vOutputs;
 }
 
+void CWallet::LockNote(const OrchardOutPoint& output)
+{
+    AssertLockHeld(cs_wallet);
+    setLockedOrchardNotes.insert(output);
+}
+
+void CWallet::UnlockNote(const OrchardOutPoint& output)
+{
+    AssertLockHeld(cs_wallet);
+    setLockedOrchardNotes.erase(output);
+}
+
+void CWallet::UnlockAllOrchardNotes()
+{
+    AssertLockHeld(cs_wallet);
+    setLockedOrchardNotes.clear();
+}
+
+bool CWallet::IsLockedNote(const OrchardOutPoint& output) const
+{
+    AssertLockHeld(cs_wallet);
+    return (setLockedOrchardNotes.count(output) > 0);
+}
+
+std::vector<OrchardOutPoint> CWallet::ListLockedOrchardNotes()
+{
+    AssertLockHeld(cs_wallet);
+    std::vector<OrchardOutPoint> vOutputs(setLockedOrchardNotes.begin(), setLockedOrchardNotes.end());
+    return vOutputs;
+}
+
 /** @} */ // end of Actions
 
 class CAffectedKeysVisitor
@@ -8579,6 +9138,28 @@ void CWallet::getZAddressBalances(std::map<libzcash::PaymentAddress, CAmount> &b
                 balances[nd.address] = 0;
             balances[nd.address] += CAmount(nd.value);
         }
+
+        for (auto & pair : wtx.mapOrchardNoteData) {
+            OrchardOutPoint op = pair.first;
+            OrchardNoteData nd = pair.second;
+
+            // if (nd.nullifier && IsSaplingSpent(*nd.nullifier)) {
+            //     continue;
+            // }
+
+            // skip notes which cannot be spent
+            if (requireSpendingKey) {
+                libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+                if (!(GetOrchardFullViewingKey(nd.ivk, extfvk) &&
+                    HaveOrchardSpendingKey(extfvk))) {
+                    continue;
+                }
+            }
+
+            if (!balances.count(nd.address))
+                balances[nd.address] = 0;
+            balances[nd.address] += CAmount(nd.value);
+        }
     }
 }
 
@@ -8596,13 +9177,26 @@ void CWallet::SaplingWalletReset() {
    CWalletDB(strWalletFile).WriteSaplingWitnesses(saplingWallet);
 }
 
+bool CWallet::OrchardWalletGetMerklePathOfNote(const uint256 txid, int outidx, libzcash::MerklePath &merklePath) {
+    return orchardWallet.GetMerklePathOfNote(txid, outidx, merklePath);
+}
+
+bool CWallet::OrchardWalletGetPathRootWithCMU(libzcash::MerklePath &merklePath, uint256 cmu, uint256 &anchor) {
+   return orchardWallet.GetPathRootWithCMU(merklePath, cmu, anchor);
+}
+
+void CWallet::OrchardWalletReset() {
+   orchardWallet.Reset();
+   CWalletDB(strWalletFile).WriteOrchardWitnesses(orchardWallet);
+}
+
 /**
  * Find notes in the wallet filtered by payment address, min depth and ability to spend.
  * These notes are decrypted and added to the output parameter vector, outEntries.
  */
 void CWallet::GetFilteredNotes(
-    std::vector<CSproutNotePlaintextEntry>& sproutEntries,
     std::vector<SaplingNoteEntry>& saplingEntries,
+    std::vector<OrchardNoteEntry>& orchardEntries,
     std::string address,
     int minDepth,
     bool ignoreSpent,
@@ -8614,7 +9208,7 @@ void CWallet::GetFilteredNotes(
         filterAddresses.insert(DecodePaymentAddress(address));
     }
 
-    GetFilteredNotes(sproutEntries, saplingEntries, filterAddresses, minDepth, INT_MAX, ignoreSpent, requireSpendingKey);
+    GetFilteredNotes(saplingEntries, orchardEntries, filterAddresses, minDepth, INT_MAX, ignoreSpent, requireSpendingKey);
 }
 
 /**
@@ -8623,8 +9217,8 @@ void CWallet::GetFilteredNotes(
  * These notes are decrypted and added to the output parameter vector, outEntries.
  */
 void CWallet::GetFilteredNotes(
-    std::vector<CSproutNotePlaintextEntry>& sproutEntries,
     std::vector<SaplingNoteEntry>& saplingEntries,
+    std::vector<OrchardNoteEntry>& orchardEntries,
     std::set<PaymentAddress>& filterAddresses,
     int minDepth,
     int maxDepth,
@@ -8702,6 +9296,55 @@ void CWallet::GetFilteredNotes(
             saplingEntries.push_back(SaplingNoteEntry {
                 op, pa, note, notePt.memo(), wtx.GetDepthInMainChain() });
         }
+
+
+        auto vActions = wtx.GetOrchardActions();
+
+        for (auto & pair : wtx.mapOrchardNoteData) {
+            OrchardOutPoint op = pair.first;
+            OrchardNoteData nd = pair.second;
+
+            auto optDeserialized = OrchardDecryptedActions::AttemptDecryptOrchardAction(&vActions[op.n], nd.ivk);
+
+            // The transaction would not have entered the wallet unless
+            // its plaintext had been successfully decrypted previously.
+            assert(optDeserialized != std::nullopt);
+
+            auto pa = optDeserialized.value().GetAddress();
+            auto noteValue = optDeserialized.value().GetValue();
+            auto rseed = optDeserialized.value().GetRseed();
+            auto memo = optDeserialized.value().GetMemo();
+
+            OrchardNote note = OrchardNote(pa, noteValue, rseed);
+
+            // skip notes which belong to a different payment address in the wallet
+            if (!(filterAddresses.empty() || filterAddresses.count(pa))) {
+                continue;
+            }
+
+            // if (ignoreSpent && nd.nullifier && IsSaplingSpent(*nd.nullifier)) {
+            //     continue;
+            // }
+
+            // skip notes which cannot be spent
+            if (requireSpendingKey) {
+                libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+                if (!(GetOrchardFullViewingKey(nd.ivk, extfvk) &&
+                    HaveOrchardSpendingKey(extfvk))) {
+                    continue;
+                }
+            }
+
+            // skip locked notes
+            // TODO: Add locking for Orchard notes -> done
+            if (ignoreLocked && IsLockedNote(op)) {
+                 continue;
+            }
+
+            orchardEntries.push_back(OrchardNoteEntry {op, pa, note, memo, wtx.GetDepthInMainChain()});
+        }
+
+
     }
 }
 
@@ -8824,7 +9467,12 @@ bool HaveSpendingKeyForPaymentAddress::operator()(const libzcash::SaplingPayment
 
 bool HaveSpendingKeyForPaymentAddress::operator()(const libzcash::OrchardPaymentAddressPirate &zaddr) const
 {
-    return false;
+    libzcash::OrchardIncomingViewingKeyPirate ivk;
+    libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+
+    return m_wallet->GetOrchardIncomingViewingKey(zaddr, ivk) &&
+        m_wallet->GetOrchardFullViewingKey(ivk, extfvk) &&
+        m_wallet->HaveOrchardSpendingKey(extfvk);
 }
 
 bool HaveSpendingKeyForPaymentAddress::operator()(const libzcash::InvalidEncoding& no) const
