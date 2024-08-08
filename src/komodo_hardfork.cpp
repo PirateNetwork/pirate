@@ -594,8 +594,8 @@ const char *notaries_elected[NUM_KMD_SEASONS][NUM_KMD_NOTARIES][2] =
         {"mcrypt_NA", "03ccaa74304165e0d66968c3f714942a130d67f02db1c2f910a75dfc15c0d3d58f"},
         {"naezith_EU", "038f61a0418deafdb9fa8809a5df0956943f423364022cab578c3fcb158f3dfc55"}, // 40
         {"naezith_NA", "033d9e2e3e51627b4cf9fec2ddbaadfd76a50965d423a2741e5b0db6ab13a057af"},
-        {"onuz-ozkan_EU", "03c159a0733fb3d15d0b6e7eb67568343c10891eb6f1e8ab0ae6fbe9e33af17bc0"},
-        {"onuz-ozkan_NA", "02be4ac61cf534b0fb98568ec539ee9e34c5104088f94f21cee2945d37d88373da"},
+        {"onur-ozkan_EU", "03c159a0733fb3d15d0b6e7eb67568343c10891eb6f1e8ab0ae6fbe9e33af17bc0"},
+        {"onur-ozkan_NA", "02be4ac61cf534b0fb98568ec539ee9e34c5104088f94f21cee2945d37d88373da"},
         {"pbca26_NA", "024034ed324e69316d6f6d554168b56828e40334f99d7adfe4ef9248c49d433e12"},
         {"ptyx_SH", "02ac5e2bc7bd5372395eab76c56951f699af617cd4e1fa2926eb7318e9caecd531"},
         {"shamardy_SH", "026d378de09ba51d8f56be52bc8d02f5e20bae843406e23686047b76c72412a7b3"},
