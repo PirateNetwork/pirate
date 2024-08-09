@@ -150,6 +150,24 @@ const string strMessageMagic = "Komodo Signed Message:\n";
 // Internal stuff
 namespace {
 
+    /** Abort with a message */
+    bool AbortNode(const std::string& strMessage, const std::string& userMessage="")
+    {
+        strMiscWarning = strMessage;
+        LogPrintf("*** %s\n", strMessage);
+        uiInterface.ThreadSafeMessageBox(
+            userMessage.empty() ? _("Error: A fatal internal error occurred, see debug.log for details") : userMessage,
+            "", CClientUIInterface::MSG_ERROR);
+        StartShutdown();
+        return false;
+    }
+
+    bool AbortNode(CValidationState& state, const std::string& strMessage, const std::string& userMessage="")
+    {
+        AbortNode(strMessage, userMessage);
+        return state.Error(strMessage);
+    }
+
     struct CBlockIndexWorkComparator
     {
         bool operator()(CBlockIndex *pa, const CBlockIndex *pb) const {
@@ -2401,45 +2419,16 @@ bool ReadBlockFromDisk(CBlock& block, const CBlockIndex* pindex,bool checkPOW)
 
 CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams)
 {
-    int32_t numhalvings,i; uint64_t numerator; CAmount nSubsidy = 3 * COIN;
-    if ( chainName.isKMD() )
-    {
-        if ( nHeight == 1 )
-            return(100000000 * COIN); // ICO allocation
-        else if ( nHeight < KOMODO_ENDOFERA )
-            return(3 * COIN);
-        else if ( nHeight < 2*KOMODO_ENDOFERA )
-            return(2 * COIN);
-        else return(COIN);
+    if (chainName.isKMD()) {
+        if (nHeight == 1)
+            return 100000000 * COIN; // ICO allocation
+        else if (nHeight < nS8HardforkHeight)
+            return 3 * COIN;
+        else
+            return COIN; // KIP-0002, https://github.com/KomodoPlatform/kips/blob/main/kips/kip-0002.mediawiki
+    } else {
+        return komodo_ac_block_subsidy(nHeight);
     }
-    else
-    {
-        return(komodo_ac_block_subsidy(nHeight));
-    }
-    /*
-     // Mining slow start
-     // The subsidy is ramped up linearly, skipping the middle payout of
-     // MAX_SUBSIDY/2 to keep the monetary curve consistent with no slow start.
-     if (nHeight < consensusParams.nSubsidySlowStartInterval / 2) {
-     nSubsidy /= consensusParams.nSubsidySlowStartInterval;
-     nSubsidy *= nHeight;
-     return nSubsidy;
-     } else if (nHeight < consensusParams.nSubsidySlowStartInterval) {
-     nSubsidy /= consensusParams.nSubsidySlowStartInterval;
-     nSubsidy *= (nHeight+1);
-     return nSubsidy;
-     }
-
-     assert(nHeight > consensusParams.SubsidySlowStartShift());
-     int halvings = (nHeight - consensusParams.SubsidySlowStartShift()) / consensusParams.nSubsidyHalvingInterval;*/
-    // Force block reward to zero when right shift is undefined.
-    //int halvings = nHeight / consensusParams.nSubsidyHalvingInterval;
-    //if (halvings >= 64)
-    //    return 0;
-
-    // Subsidy is cut in half every 840,000 blocks which will occur approximately every 4 years.
-    //nSubsidy >>= halvings;
-    //return nSubsidy;
 }
 
 bool IsInitialBlockDownload()
@@ -2456,31 +2445,35 @@ bool IsInitialBlockDownload()
         return false;
 
     if (fImporting || fReindex)
-    {
-        //fprintf(stderr,"IsInitialBlockDownload: fImporting %d || %d fReindex\n",(int32_t)fImporting,(int32_t)fReindex);
         return true;
-    }
 
     if (fCheckpointsEnabled && chainActive.Height() < Checkpoints::GetTotalBlocksEstimate(chainParams.Checkpoints()))
-    {
-        //fprintf(stderr,"IsInitialBlockDownload: checkpoint -> initialdownload - %d blocks\n", Checkpoints::GetTotalBlocksEstimate(chainParams.Checkpoints()));
         return true;
-    }
 
-    CBlockIndex *ptr = chainActive.Tip();
-    if (ptr == NULL)
-    {
+    if (chainActive.Tip() == nullptr)
         return true;
-    }
-    bool state = ((chainActive.Height() < ptr->nHeight - 24*60) ||
-             ptr->GetBlockTime() < (GetTime() - nMaxTipAge));
+
+    /* TODO:
+       - IBD check uses minimumchain work instead of checkpoints.
+         https://github.com/zcash/zcash/commit/e41632c9fb5d32491e7f394b7b3a82f6cb5897cb
+       - Consider using hashActivationBlock for Sapling in KMD.
+         https://github.com/zcash/zcash/pull/4060/commits/150e3303109047118179f33b1cc5fc63095eb21d
+    */
+
+    // if (chainName.isKMD() && chainActive.Tip()->nChainWork < UintToArith256(chainParams.GetConsensus().nMinimumChainWork))
+    //     return true;
+
+    bool state = ((chainActive.Height() < chainActive.Tip()->nHeight - 24*60) ||
+             chainActive.Tip()->GetBlockTime() < (GetTime() - nMaxTipAge));
+
     if ( KOMODO_INSYNC != 0 )
         state = false;
+
     if (!state)
     {
         LogPrintf("Leaving InitialBlockDownload (latching to false)\n");
         latchToFalse.store(true, std::memory_order_relaxed);
-    } // else fprintf(stderr,"state.%d  ht.%d vs %d, t.%u\n",state,(int32_t)chainActive.Height(),(uint32_t)ptr->nHeight,(int32_t)ptr->GetBlockTime());
+    }
     return state;
 }
 
@@ -2936,24 +2929,6 @@ namespace {
             return error("%s: %s Checksum mismatch %s vs %s", __func__,hashBlock.GetHex().c_str(),hashChecksum.GetHex().c_str(),hasher.GetHash().GetHex().c_str());
 
         return true;
-    }
-
-    /** Abort with a message */
-    bool AbortNode(const std::string& strMessage, const std::string& userMessage="")
-    {
-        strMiscWarning = strMessage;
-        LogPrintf("*** %s\n", strMessage);
-        uiInterface.ThreadSafeMessageBox(
-                                         userMessage.empty() ? _("Error: A fatal internal error occurred, see debug.log for details") : userMessage,
-                                         "", CClientUIInterface::MSG_ERROR);
-        StartShutdown();
-        return false;
-    }
-
-    bool AbortNode(CValidationState& state, const std::string& strMessage, const std::string& userMessage="")
-    {
-        AbortNode(strMessage, userMessage);
-        return state.Error(strMessage);
     }
 
 } // anon namespace

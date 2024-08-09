@@ -22,6 +22,45 @@
 
 #include "cc/CCinclude.h"
 
+char *bitcoin_base58encode(char *coinaddr, uint8_t *data, int32_t datalen)
+{
+    if (!coinaddr)
+        return nullptr;
+    if (data && datalen > 0)
+    {
+        std::string encoded = EncodeBase58(data, data + datalen);
+        for (size_t i = 0; i < encoded.length(); ++i)
+        {
+            coinaddr[i] = encoded[i];
+        }
+        coinaddr[encoded.length()] = '\0';
+    }
+    else
+    {
+        coinaddr[0] = '\0';
+    }
+    return coinaddr;
+}
+
+int32_t bitcoin_base58decode(uint8_t *data, const char *coinaddr)
+{
+    if (data == nullptr || coinaddr == nullptr)
+    {
+        return -1;
+    }
+
+    std::vector<unsigned char> vchRet;
+    const std::string str(coinaddr);
+
+    if (DecodeBase58(str, vchRet))
+    {
+        std::copy(vchRet.begin(), vchRet.end(), data);
+        return vchRet.size();
+    }
+
+    return -1;
+}
+
 void vcalc_sha256(char deprecated[(256 >> 3) * 2 + 1],uint8_t hash[256 >> 3],uint8_t *src,int32_t len)
 {
     CSHA256().Write((const unsigned char *)src, len).Finalize(hash);
@@ -1090,9 +1129,9 @@ void komodo_args(char *argv0)
         {
             if ( equihash_params_possible(ASSETCHAINS_NK[0], ASSETCHAINS_NK[1]) == -1 ) 
             {
-                printf("equihash values N.%li and K.%li are not currently available\n", ASSETCHAINS_NK[0], ASSETCHAINS_NK[1]);
+                printf("equihash values N.%" PRIu64 " and K.%" PRIu64 " are not currently available\n", ASSETCHAINS_NK[0], ASSETCHAINS_NK[1]);
                 exit(0);
-            } else printf("ASSETCHAINS_ALGO, algorithm set to equihash with N.%li and K.%li\n", ASSETCHAINS_NK[0], ASSETCHAINS_NK[1]);
+            } else printf("ASSETCHAINS_ALGO, algorithm set to equihash with N.%" PRIu64 " and K.%" PRIu64 "\n", ASSETCHAINS_NK[0], ASSETCHAINS_NK[1]);
         }
         if (i == ASSETCHAINS_NUMALGOS)
         {
@@ -1103,7 +1142,7 @@ void komodo_args(char *argv0)
         if ( ASSETCHAINS_LASTERA < 1 || ASSETCHAINS_LASTERA > ASSETCHAINS_MAX_ERAS )
         {
             ASSETCHAINS_LASTERA = 1;
-            printf("ASSETCHAINS_LASTERA, if specified, must be between 1 and %u. ASSETCHAINS_LASTERA set to %lu\n", ASSETCHAINS_MAX_ERAS, ASSETCHAINS_LASTERA);
+            printf("ASSETCHAINS_LASTERA, if specified, must be between 1 and %u. ASSETCHAINS_LASTERA set to %" PRIu64 "\n", ASSETCHAINS_MAX_ERAS, ASSETCHAINS_LASTERA);
         }
         ASSETCHAINS_LASTERA -= 1;
 
@@ -1282,7 +1321,7 @@ void komodo_args(char *argv0)
                 }
                 else
                 {
-                    printf("ASSETCHAINS_FOUNDERS_REWARD set to %ld\n", ASSETCHAINS_FOUNDERS_REWARD);
+                    printf("ASSETCHAINS_FOUNDERS_REWARD set to %" PRIu64 "\n", ASSETCHAINS_FOUNDERS_REWARD);
                 }
                 /*else if ( ASSETCHAINS_SELFIMPORT.size() == 0 )
                 {

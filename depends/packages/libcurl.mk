@@ -7,6 +7,7 @@ $(package)_sha256_hash=816e41809c043ff285e8c0f06a75a1fa250211bbfb2dc0a037eeef39f
 $(package)_config_opts=--with-openssl --disable-shared --enable-static --prefix=$(host_prefix)
 $(package)_config_opts_linux=--host=x86_64-unknown-linux-gnu
 $(package)_config_opts_mingw32=--enable-mingw --host=x86_64-w64-mingw32
+$(package)_config_opts_darwin=--without-libidn2 --without-zstd --without-nghttp2 --without-librtmp --without-brotli
 $(package)_cflags_darwin=-mmacosx-version-min=$(OSX_MIN_VERSION)
 $(package)_conf_tool=./configure
 

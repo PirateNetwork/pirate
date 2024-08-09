@@ -1,3 +1,5 @@
+#include <cassert>
+#include <cstring>
 #include "komodo_hardfork.h"
 
 const uint32_t nStakedDecemberHardforkTimestamp = 1576840000; //December 2019 hardfork 12/20/2019 @ 11:06am (UTC)
@@ -17,6 +19,8 @@ const int32_t nS7HardforkHeight = 3484958;  // dPoW Season 7, Fri Jun 30 2023
 
 const uint32_t nS8Timestamp = 1728049053;   // dPoW Season 8, Fri Oct 4 2024 13:37:33 GMT+0000
 const int32_t nS8HardforkHeight = 4125988;  // dPoW Season 8, Fri Oct 4 2024 (est. via https://github.com/KomodoPlatform/NotaryNodes/blob/master/utils/estimate_hf_block.py)
+
+const int32_t nKIP0003Activation = nS8HardforkHeight;
 
 // Era array of pubkeys. Add extra seasons to bottom as requried, after adding appropriate info above. 
 const char *notaries_elected[NUM_KMD_SEASONS][NUM_KMD_NOTARIES][2] =
@@ -612,7 +616,7 @@ const char *notaries_elected[NUM_KMD_SEASONS][NUM_KMD_NOTARIES][2] =
         {"dimxy_DEV", "039a01cd626d5efbe7fd05a59d8e5fced53bacac589192278f9b00ad31654b6956"},
         {"ca333_DEV", "03cf925a2d7d697448c3ac6fff9aff349b80d773b4ce7de22c9ef7e2c8c002bec6"},
         {"qa_DEV", "036f42e1888378068c3a17a53665b0a9db21465571d63ca02eb8d5681afa709074"},
-        {"core_DEV", "035509136135ba8e3f5d4733f7a9c160c2e1fefd8dc4658c3d95a5407e8da14749"},
+        {"core_DEV", "03955c7999538cee313bf196a7df59db208c651f6a5a1b0eed94732ba753b4f3f4"},
         {"security_DEV", "022450f4f32435372b43dc2b9d5b690114fbe5e5dcbe0c02ab8164698f1a9eda6e"},
         {"tonyl_AR", "0277bbdf6403d1ebaac5a715a9120118e74be0d3bed71a2c8cf5542fb6ca7d2dd7"},
         {"van_EU", "03af7f8c82f20671ca1978116353839d3e501523e379bfb52b1e05d7816bb5812f"}, // 60
@@ -621,3 +625,44 @@ const char *notaries_elected[NUM_KMD_SEASONS][NUM_KMD_NOTARIES][2] =
         {"dragonhound_DEV", "02f9a7b49282885cd03969f1f5478287497bc8edfceee9eac676053c107c5fcdaf"}
    }
 };
+
+class NotaryChecker {
+public:
+    NotaryChecker() {
+        checkSeasons();
+        checkNotaries();
+    }
+
+private:
+    void checkSeasons() const {
+        for (size_t i = 0; i < NUM_KMD_SEASONS; ++i) {
+            assert(KMD_SEASON_TIMESTAMPS[i] != 0 && "KMD_SEASON_TIMESTAMPS is invalid");
+            assert(KMD_SEASON_HEIGHTS[i] != 0 && "KMD_SEASON_HEIGHTS is invalid");
+        }
+    }
+
+    void checkNotaries() const {
+        for (int season = 0; season < NUM_KMD_SEASONS; ++season) {
+            for (int notary = 0; notary < NUM_KMD_NOTARIES; ++notary) {
+                const char* name = notaries_elected[season][notary][0];
+                const char* pubkey = notaries_elected[season][notary][1];
+                assert(name != nullptr && "Notary name is null");
+                assert(pubkey != nullptr && "Notary pubkey is null");
+                assert(isValidPubkey(pubkey) && "Notary pubkey is invalid");
+            }
+        }
+    }
+
+    bool isValidPubkey(const char* str) const {
+        if (strlen(str) != 66) return false;
+        if (str[0] != '0' || (str[1] != '2' && str[1] != '3')) return false;
+        for (int i = 2; i < 66; ++i) {
+            if (!((str[i] >= '0' && str[i] <= '9') || (str[i] >= 'a' && str[i] <= 'f') || (str[i] >= 'A' && str[i] <= 'F'))) {
+                return false;
+            }
+        }
+        return true;
+    }
+};
+
+NotaryChecker notaryChecker;

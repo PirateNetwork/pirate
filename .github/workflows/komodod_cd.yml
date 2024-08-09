@@ -30,7 +30,7 @@ jobs:
         id: shortify_commit
 
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Install deps (Linux)
         env:
@@ -78,7 +78,7 @@ jobs:
     name: OSX Build
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Install deps (macOS)
         run: |
           rm '/usr/local/bin/2to3'
@@ -109,7 +109,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Install deps (Windows)
         env:
           DEBIAN_FRONTEND: noninteractive

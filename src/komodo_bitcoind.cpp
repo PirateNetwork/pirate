@@ -2032,7 +2032,40 @@ int32_t komodo_checkPOW(int64_t stakeTxValue, int32_t slowflag,CBlock *pblock,in
         }
     }
 
-//fprintf(stderr,"komodo_checkPOW possible.%d slowflag.%d ht.%d notaryid.%d failed.%d\n",possible,slowflag,height,notaryid,failed);
+    /*
+        KIP0003 partial (for S8) consensus rule implementation. If it's an easy-mined
+        block (i.e., produced by a notary), the coinbase should have at only two
+        vouts. The first vout should be equal to the block reward (BR), and the second
+        should reflect a burned fee. Even if the fee in the block is zero, a 0-value
+        OP_RETURN second vout should exist to indicate that the block producer supports
+        KIP0003. We will not calculate fees for each transaction here for simplicity.
+        We will just check that the coinbase's first vout amount pays exactly the block
+        reward or less. This will mean that fees are burned anyway. Before the beginning
+        of S9, this rule should be removed, and a common rule (for both easy-mined and
+        regular blocks) for KIP0003 with nFees burned amount check should be placed in
+        ConnectBlock.
+    */
+
+    if (chainName.isKMD() && height > nKIP0003Activation && possible != 0 && failed != 0 && notaryid != -1)
+    {
+        // it's a P2PK block with hash > bnTarget and mined by notary with index notaryid
+        const CBlock &blk = *pblock;
+        const CAmount blockReward = GetBlockSubsidy(height, Params().GetConsensus());
+
+        bool fKIP0003Checked = blk.vtx.size() > 1 &&
+                               blk.vtx[0].vout.size() == 2 &&
+                               blk.vtx[0].vout[0].nValue <= blockReward &&
+                               blk.vtx[0].vout[1].scriptPubKey.IsOpReturn();
+
+        LogPrintf("KIP0003 check for NN: ht.%d, hash.%s - %s\n",
+                  height, blk.GetHash().ToString(),
+                  fKIP0003Checked ? "PASSED!" : "FAILED!");
+
+        // Uncomment the following line if you need to return -1 on failure
+        // if (!fKIP0003Checked) return -1;
+    }
+
+    //fprintf(stderr,"komodo_checkPOW possible.%d slowflag.%d ht.%d notaryid.%d failed.%d\n",possible,slowflag,height,notaryid,failed);
     if ( failed != 0 && possible == 0 && notaryid < 0 )
         return(-1);
     else return(0);

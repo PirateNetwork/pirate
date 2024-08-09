@@ -14,7 +14,7 @@ make HOST=$HOST NO_QT=1 "$@"
 cd $BASE_DIR
 
 ./autogen.sh
-CONFIG_SITE=$BASE_DIR/depends/$HOST/share/config.site CXXFLAGS="-DPTW32_STATIC_LIB -DCURL_STATICLIB -DCURVE_ALT_BN128 -fopenmp -pthread" ./configure --prefix=$PREFIX --host=$HOST --enable-static --disable-shared
+CONFIG_SITE=$BASE_DIR/depends/$HOST/share/config.site CXXFLAGS="-DPTW32_STATIC_LIB -DCURL_STATICLIB -DCURVE_ALT_BN128 -pthread" ./configure --prefix=$PREFIX --host=$HOST --enable-static --disable-shared
 sed -i 's/-lboost_system-mt /-lboost_system-mt-s /' configure
 
 make "$@"

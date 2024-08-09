@@ -177,7 +177,7 @@ int32_t komodo_check_deposit(int32_t height,const CBlock& block)
         }
         if ( chainName.isKMD() )
         {
-            if ( overflow != 0 || total > COIN/10 )
+            if ( overflow != 0 )
             {
                 if ( height >= activation )
                 {
@@ -185,12 +185,6 @@ int32_t komodo_check_deposit(int32_t height,const CBlock& block)
                         fprintf(stderr,">>>>>>>> <<<<<<<<<< ht.%d illegal nonz output %.8f n.%d\n",height,dstr(block.vtx[0].vout[1].nValue),n);
                     return(-1);
                 }
-            }
-            else if ( block.nBits == KOMODO_MINDIFF_NBITS && total > 0 ) // to deal with fee stealing
-            {
-                fprintf(stderr,"notary mined ht.%d with extra %.8f\n",height,dstr(total));
-                if ( height > KOMODO_NOTARIES_HEIGHT1 )
-                    return(-1);
             }
             if ( strangeout != 0 || notmatched != 0 )
             {
