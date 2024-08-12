@@ -559,6 +559,7 @@ const char *notaries_elected[NUM_KMD_SEASONS][NUM_KMD_NOTARIES][2] =
         {"dragonhound_DEV", "02f9a7b49282885cd03969f1f5478287497bc8edfceee9eac676053c107c5fcdaf"}
    },
    {
+        // Season 8
         {"alright_DEV", "028548847b3bbccff37c9b47bc4154183304902773d514b792ec2adc91e600e3b9"}, // 0
         {"alien_AR", "03a40091ce1e7aa9863d9ad0c27f67b7d18bb47612438570ce344cd1782937c575"},
         {"alien_EU", "03bb749e337b9074465fa28e757b5aa92cb1f0fea1a39589bca91a602834d443cd"},
