@@ -32,41 +32,41 @@ namespace orchard
 {
 
 /// The information necessary to spend an Orchard note.
-class SpendInfo
-{
-private:
-    /// Memory is allocated by Rust.
-    std::unique_ptr<OrchardSpendInfoPtr, decltype(&orchard_spend_info_free)> inner;
-    libzcash::OrchardRawAddress from;
-    uint64_t noteValue;
-
-    // SpendInfo() : inner(nullptr, orchard_spend_info_free) {}
-    SpendInfo(
-        OrchardSpendInfoPtr* spendInfo,
-        libzcash::OrchardRawAddress fromIn,
-        uint64_t noteValueIn) : inner(spendInfo, orchard_spend_info_free), from(fromIn), noteValue(noteValueIn) {}
-
-    friend class Builder;
-    friend class ::OrchardWallet;
-
-public:
-    // SpendInfo should never be copied
-    SpendInfo(const SpendInfo&) = delete;
-    SpendInfo& operator=(const SpendInfo&) = delete;
-    SpendInfo(SpendInfo&& spendInfo) : inner(std::move(spendInfo.inner)), from(std::move(spendInfo.from)), noteValue(std::move(spendInfo.noteValue)) {}
-    SpendInfo& operator=(SpendInfo&& spendInfo)
-    {
-        if (this != &spendInfo) {
-            inner = std::move(spendInfo.inner);
-            from = std::move(spendInfo.from);
-            noteValue = std::move(spendInfo.noteValue);
-        }
-        return *this;
-    }
-
-    inline libzcash::OrchardRawAddress FromAddress() const { return from; };
-    inline uint64_t Value() const { return noteValue; };
-};
+// class SpendInfo
+// {
+// private:
+//     /// Memory is allocated by Rust.
+//     std::unique_ptr<OrchardSpendInfoPtr, decltype(&orchard_spend_info_free)> inner;
+//     libzcash::OrchardRawAddress from;
+//     uint64_t noteValue;
+//
+//     // SpendInfo() : inner(nullptr, orchard_spend_info_free) {}
+//     SpendInfo(
+//         OrchardSpendInfoPtr* spendInfo,
+//         libzcash::OrchardRawAddress fromIn,
+//         uint64_t noteValueIn) : inner(spendInfo, orchard_spend_info_free), from(fromIn), noteValue(noteValueIn) {}
+//
+//     friend class Builder;
+//     friend class ::OrchardWallet;
+//
+// public:
+//     // SpendInfo should never be copied
+//     SpendInfo(const SpendInfo&) = delete;
+//     SpendInfo& operator=(const SpendInfo&) = delete;
+//     SpendInfo(SpendInfo&& spendInfo) : inner(std::move(spendInfo.inner)), from(std::move(spendInfo.from)), noteValue(std::move(spendInfo.noteValue)) {}
+//     SpendInfo& operator=(SpendInfo&& spendInfo)
+//     {
+//         if (this != &spendInfo) {
+//             inner = std::move(spendInfo.inner);
+//             from = std::move(spendInfo.from);
+//             noteValue = std::move(spendInfo.noteValue);
+//         }
+//         return *this;
+//     }
+//
+//     inline libzcash::OrchardRawAddress FromAddress() const { return from; };
+//     inline uint64_t Value() const { return noteValue; };
+// };
 
 /// A builder that constructs an `UnauthorizedBundle` from a set of notes to be spent,
 /// and recipients to receive funds.
@@ -100,7 +100,10 @@ public:
     ///
     /// Returns `false` if the given Merkle path does not have the required anchor
     /// for the given note.
-    bool AddSpend(orchard::SpendInfo spendInfo);
+    bool AddSpend(
+      const libzcash::OrchardFullViewingKeyPirate fvk,
+      const orchard_bundle::Action* action,
+      const libzcash::MerklePath orchardMerklePath);
 
     /// Adds an address which will receive funds in this bundle.
     void AddOutput(

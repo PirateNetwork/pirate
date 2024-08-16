@@ -88,6 +88,7 @@ mod bundlecache;
 mod history;
 mod incremental_merkle_tree;
 mod merkle_frontier;
+mod orchard_actions;
 mod orchard_bundle;
 mod orchard_ffi;
 mod orchard_keys_ffi;

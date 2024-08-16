@@ -232,7 +232,6 @@ LIBZCASH_H = \
   zcash/prf.h \
   zcash/Proof.hpp \
 	zcash/address/pirate_orchard.hpp \
-	zcash/address/orchard.hpp \
 	zcash/address/sapling.hpp \
 	zcash/address/sprout.hpp \
 	zcash/History.hpp \
@@ -517,7 +516,6 @@ libbitcoin_wallet_a_SOURCES = \
   cc/CCtx.cpp \
   wallet/rpcwallet.cpp \
 	wallet/rpcpiratewallet.cpp \
-	wallet/orchard.cpp \
   wallet/wallet.cpp \
 	wallet/wallet_fees.cpp \
   wallet/wallet_ismine.cpp \
@@ -826,7 +824,6 @@ libzcash_a_SOURCES = \
 	zcash/Note.cpp \
 	zcash/prf.cpp \
 	zcash/address/pirate_orchard.cpp \
-	zcash/address/orchard.cpp \
 	zcash/address/sapling.cpp \
 	zcash/address/sprout.cpp \
 	zcash/History.cpp \

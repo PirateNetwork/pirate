@@ -449,14 +449,17 @@ void getOrchardReceives(const Consensus::Params& params, int nHeight, RpcTx &tx,
 
         for (std::set<libzcash::OrchardIncomingViewingKeyPirate>::iterator it = ivks.begin(); it != ivks.end(); it++) {
             auto ivk = *it;
-            auto decrypted = OrchardDecryptedActions::AttemptDecryptOrchardAction(&rustAction, ivk);
+            auto pt = OrchardNotePlaintext::AttemptDecryptOrchardAction(&rustAction, ivk);
 
-            if (decrypted != std::nullopt) {
+            if (pt) {
+                auto note = pt.value();
+                auto memo = note.memo();
+
                 ivksOut.insert(ivk);
-                received.encodedAddress = EncodePaymentAddress(decrypted.value().GetAddress());
-                received.amount = decrypted.value().GetValue();
+                received.encodedAddress = EncodePaymentAddress(note.GetAddress());
+                received.amount = note.value();
                 received.shieldedActionIndex = shieldedActionIndex;
-                received.memo = HexStr(decrypted.value().GetMemo());
+                received.memo = HexStr(memo);
 
                 libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
                 pwalletMain->GetOrchardFullViewingKey(ivk, extfvk);
@@ -464,7 +467,6 @@ void getOrchardReceives(const Consensus::Params& params, int nHeight, RpcTx &tx,
 
                 // If the leading byte is 0xF4 or lower, the memo field should be interpreted as a
                 // UTF-8-encoded text string.
-                auto memo = decrypted.value().GetMemo();
                 if (memo[0] <= 0xf4) {
                     // Trim off trailing zeroes
                     auto end = std::find_if(

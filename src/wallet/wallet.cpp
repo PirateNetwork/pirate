@@ -4326,16 +4326,17 @@ void CWallet::UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx) {
                OrchardExtendedFullViewingKeyPirate extfvk = mapOrchardFullViewingKeys.at(nd.ivk);
 
                //Cipher Text
-               auto optDeserialized = OrchardDecryptedActions::DecryptOrchardAction(&vActions[op.n], extfvk.fvk);
+               auto optDeserialized = OrchardNotePlaintext::AttemptDecryptOrchardAction(&vActions[op.n], nd.ivk);
 
                // The transaction would not have entered the wallet unless
                // it had been successfully decrypted previously.
                assert(optDeserialized != std::nullopt);
+               auto note = optDeserialized.value().note().value();
 
 
-               auto optNullifier = optDeserialized.value().GetNullifier();
+               auto optNullifier = note.GetNullifier(extfvk.fvk);
                if (!optNullifier) {
-                   // This should not happen.  If it does, maybe the position has been corrupted or miscalculated?
+                   // This should not happen.
                    assert(false);
                }
                uint256 nullifier = optNullifier.value();
@@ -4798,7 +4799,7 @@ static void DecryptOrchardNoteWorker(
 {
     for (int i = 0; i < vIvk.size(); i++) {
 
-        auto result = OrchardDecryptedActions::AttemptDecryptOrchardAction(vOrchardEncryptedAction[i], *vIvk[i]);
+        auto result = OrchardNotePlaintext::AttemptDecryptOrchardAction(vOrchardEncryptedAction[i], *vIvk[i]);
         if (result != std::nullopt) {
 
             // We don't cache the nullifier here as computing it requires knowledge of the note position
@@ -4808,8 +4809,9 @@ static void DecryptOrchardNoteWorker(
             nd.ivk = *vIvk[i];
 
             //Cache Address and value - in Memory Only
-            nd.value = result.value().GetValue();
-            nd.address = result.value().GetAddress();
+            auto note = result.value();
+            nd.value = note.value();
+            nd.address = note.GetAddress();
 
             LogPrintf("\n\nOrchard Transaction Found %s, %i\n\n", vHash[i].ToString(), vPosition[i]);
 
@@ -9308,18 +9310,16 @@ void CWallet::GetFilteredNotes(
             OrchardOutPoint op = pair.first;
             OrchardNoteData nd = pair.second;
 
-            auto optDeserialized = OrchardDecryptedActions::AttemptDecryptOrchardAction(&vActions[op.n], nd.ivk);
+            auto optDeserialized = OrchardNotePlaintext::AttemptDecryptOrchardAction(&vActions[op.n], nd.ivk);
 
             // The transaction would not have entered the wallet unless
             // its plaintext had been successfully decrypted previously.
             assert(optDeserialized != std::nullopt);
 
-            auto pa = optDeserialized.value().GetAddress();
-            auto noteValue = optDeserialized.value().GetValue();
-            auto rseed = optDeserialized.value().GetRseed();
-            auto memo = optDeserialized.value().GetMemo();
-
-            OrchardNote note = OrchardNote(pa, noteValue, rseed);
+            auto notePt = optDeserialized.value();
+            auto pa = notePt.GetAddress();
+            auto memo = notePt.memo();
+            auto note = notePt.note().value();
 
             // skip notes which belong to a different payment address in the wallet
             if (!(filterAddresses.empty() || filterAddresses.count(pa))) {

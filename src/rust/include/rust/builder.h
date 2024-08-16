@@ -50,7 +50,9 @@ void orchard_builder_free(OrchardBuilderPtr* ptr);
 /// `spend_info` is always freed by this method, whether or not it succeeds.
 bool orchard_builder_add_spend(
     OrchardBuilderPtr* ptr,
-    OrchardSpendInfoPtr* spend_info);
+    const unsigned char* fvk_bytes,
+    const ActionPtr* orchard_action,
+    const unsigned char *merkle_path);
 
 /// Adds an address which will receive funds in this bundle.
 ///

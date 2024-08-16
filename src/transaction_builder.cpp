@@ -55,20 +55,38 @@ Builder::Builder(
     inner.reset(orchard_builder_new(spendsEnabled, outputsEnabled, anchor.IsNull() ? nullptr : anchor.begin()));
 }
 
-bool Builder::AddSpend(orchard::SpendInfo spendInfo)
+bool Builder::AddSpend(
+  const libzcash::OrchardFullViewingKeyPirate fvk,
+  const orchard_bundle::Action* action,
+  const libzcash::MerklePath orchardMerklePath)
 {
     if (!inner) {
         throw std::logic_error("orchard::Builder has already been used");
     }
 
+    CDataStream ssfvk(SER_NETWORK, PROTOCOL_VERSION);
+    ssfvk << fvk;
+    std::array<unsigned char, 96> fvk_t;
+    std::move(ssfvk.begin(), ssfvk.end(), fvk_t.begin());
+
+    //Serialize Merkle Path to pass to Rust
+    CDataStream ssMerklePath(SER_NETWORK, PROTOCOL_VERSION);
+    ssMerklePath << orchardMerklePath;
+    std::array<unsigned char, 1065> merklepath_t;
+    std::move(ssMerklePath.begin(), ssMerklePath.end(), merklepath_t.begin());
+
     if (orchard_builder_add_spend(
             inner.get(),
-            spendInfo.inner.release())) {
+            fvk_t.begin(),
+            action->as_ptr(),
+            merklepath_t.begin()
+          )) {
         hasActions = true;
         return true;
     } else {
         return false;
     }
+    return false;
 }
 
 void Builder::AddOutput(

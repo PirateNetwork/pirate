@@ -447,27 +447,6 @@ bool get_orchard_path_root_with_cm(
 // bool orchard_wallet_unspent_notes_are_spendable(
 //     const OrchardWalletPtr* wallet);
 
-bool try_orchard_decrypt_action_ivk(
-    const ActionPtr* orchard_action,
-    const unsigned char* ivk_bytes,
-    uint64_t *value_out,
-    unsigned char *address_out,
-    unsigned char *memo_out,
-    unsigned char *rho_out,
-    unsigned char *rseed_out
-);
-
-bool try_orchard_decrypt_action_fvk(
-    const ActionPtr* orchard_action,
-    const unsigned char* fvk_bytes,
-    uint64_t *value_out,
-    unsigned char *address_out,
-    unsigned char *memo_out,
-    unsigned char *rho_out,
-    unsigned char *rseed_out,
-    unsigned char *nullifier_out
-);
-
 
 #ifdef __cplusplus
 }

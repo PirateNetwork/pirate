@@ -7,6 +7,9 @@
 #include "NoteEncryption.hpp"
 #include "consensus/params.h"
 #include "consensus/consensus.h"
+#include "primitives/orchard.h"
+
+#include "rust/orchard/orchard_actions.h"
 
 #include <array>
 #include <optional>
@@ -95,14 +98,49 @@ public:
 
 class OrchardNote : public BaseNote {
 private:
+    uint256 rho;
     uint256 rseed;
 public:
     OrchardPaymentAddressPirate address;
 
-    OrchardNote(OrchardPaymentAddressPirate address, uint64_t value, uint256 rseed)
-            : BaseNote(value), address(address), rseed(rseed) {}
+    OrchardNote(OrchardPaymentAddressPirate address, uint64_t value, uint256 rho, uint256 rseed)
+            : BaseNote(value), address(address), rho(rho), rseed(rseed) {}
 
     virtual ~OrchardNote() {};
+
+    std::optional<uint256> GetNullifier(const libzcash::OrchardFullViewingKeyPirate fvk)
+    {
+
+        // Datastreams for serialization
+        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
+        CDataStream as(SER_NETWORK, PROTOCOL_VERSION); // sending stream
+        CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); // returning stream
+
+        // Tranfer Data
+        libzcash::OrchardFullViewingKey_t fvk_t;
+        libzcash::OrchardPaymentAddress_t address_t;
+        uint256 nullifier_t;
+
+        // Serialize sending data
+        ss << fvk;
+        ss >> fvk_t;
+
+        as << address;
+        as >> address_t;
+
+        if (!get_nullifer_from_parts(
+              fvk_t.begin(),
+              address_t.begin(),
+              value_,
+              rho.begin(),
+              rseed.begin(),
+              nullifier_t.begin())) {
+                    return std::nullopt;
+        }
+
+        return nullifier_t;
+
+    }
 
 };
 
@@ -115,6 +153,8 @@ public:
     BaseNotePlaintext() {}
     BaseNotePlaintext(const BaseNote& note, std::array<unsigned char, ZC_MEMO_SIZE> memo)
         : value_(note.value()), memo_(memo) {}
+    BaseNotePlaintext(const uint64_t value, std::array<unsigned char, ZC_MEMO_SIZE> memo)
+        : value_(value), memo_(memo) {}
     virtual ~BaseNotePlaintext() {}
 
     inline uint64_t value() const { return value_; }
@@ -254,22 +294,107 @@ public:
 
 class OrchardNotePlaintext : public BaseNotePlaintext {
 private:
+    libzcash::OrchardPaymentAddressPirate address;
+    uint256 rho;
     uint256 rseed;
+    std::optional<uint256> nullifier;
 public:
 
     OrchardNotePlaintext() {}
 
-    OrchardNotePlaintext(const OrchardNote& note, std::array<unsigned char, ZC_MEMO_SIZE> memo);
+    OrchardNotePlaintext(
+      const CAmount value,
+      const libzcash::OrchardPaymentAddressPirate address,
+      const std::array<unsigned char, ZC_MEMO_SIZE> memo,
+      const uint256 rho,
+      const uint256 rseed,
+      const std::optional<uint256> nullifier)
+    : BaseNotePlaintext(value, memo), address(address), rho(rho), rseed(rseed), nullifier(nullifier) {}
 
     virtual ~OrchardNotePlaintext() {}
+
+    libzcash::OrchardPaymentAddressPirate GetAddress() {
+        return address;
+    };
+
+    // CAmount GetValue() {
+    //   return value_;
+    // };
+    //
+    // uint256 GetRseed() {
+    //   return rseed;
+    // };
+    //
+    // uint256 GetRho() {
+    //   return rho;
+    // };
+    //
+    // std::optional<uint256> GetNullifier() {
+    //   return nullifier;
+    // };
+
+    // std::array<unsigned char, ZC_MEMO_SIZE> GetMemo() {
+    //   return memo_;
+    // };
+
+    static std::optional<OrchardNotePlaintext> AttemptDecryptOrchardAction(
+        const orchard_bundle::Action* action,
+        const libzcash::OrchardIncomingViewingKeyPirate ivk
+    )
+    {
+
+        // Datastreams for serialization
+        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
+        CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); // returning stream
+
+        // Tranfer Data
+        libzcash::OrchardIncomingViewingKey_t ivk_t;
+        libzcash::OrchardPaymentAddress_t address_t;
+        std::array<unsigned char, ZC_MEMO_SIZE> memo_t;
+        uint64_t value_t;
+        uint256 rho_t;
+        uint256 rseed_t;
+
+        // rust result
+        bool rustCompleted;
+
+        // Serialize sending data
+        ss << ivk;
+        ss >> ivk_t;
+
+        if(!try_orchard_decrypt_action_ivk(
+            action->as_ptr(),
+            ivk_t.begin(),
+            &value_t,
+            address_t.begin(),
+            memo_t.begin(),
+            rho_t.begin(),
+            rseed_t.begin())) {
+              return std::nullopt;
+            }
+
+        // deserialize returned data
+        libzcash::OrchardPaymentAddressPirate address_r;
+        rs << address_t;
+        rs >> address_r;
+
+        OrchardNotePlaintext ret = OrchardNotePlaintext(value_t, address_r, memo_t, rho_t, rseed_t, std::nullopt);
+
+        return ret;
+    };
+
+    std::optional<OrchardNote> note() const;
 
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action) {
         READWRITE(value_);      // 8 bytes
-        READWRITE(rseed);       // 32 bytes
+        READWRITE(address);     // 43 bytes
         READWRITE(memo_);       // 512 bytes
+        READWRITE(rho);         // 32 bytes
+        READWRITE(rseed);       // 32 bytes
+        READWRITE(nullifier);   // 32 bytes
     }
 
 };

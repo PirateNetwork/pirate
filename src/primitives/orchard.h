@@ -12,7 +12,6 @@
 
 #include <rust/bridge.h>
 #include <rust/orchard/wallet.h>
-#include "zcash/address/orchard.hpp"
 
 class OrchardMerkleFrontier;
 class OrchardWallet;

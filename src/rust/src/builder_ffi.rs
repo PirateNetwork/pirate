@@ -3,12 +3,13 @@ use std::ptr;
 use std::slice;
 
 use incrementalmerkletree::Hashable;
-use libc::size_t;
-use orchard::keys::{SpendingKey, SpendAuthorizingKey};
+use libc::{size_t, c_uchar};
+use orchard::keys::{SpendingKey, SpendAuthorizingKey,PreparedIncomingViewingKey};
 use orchard::{
     builder::{Builder, InProgress, Unauthorized, Unproven},
     bundle::{Authorized, Flags},
-    keys::{FullViewingKey, OutgoingViewingKey},
+    keys::{FullViewingKey, OutgoingViewingKey, Scope},
+    note_encryption::OrchardDomain,
     tree::{MerkleHashOrchard, MerklePath},
     value::NoteValue,
     Bundle, Note, Address
@@ -17,6 +18,7 @@ use rand_core::OsRng;
 use tracing::error;
 use zcash_primitives::{
     consensus::BranchId,
+    merkle_tree::merkle_path_from_slice,
     transaction::{
         components::{sapling, Amount},
         sighash::{signature_hash, SignableInput},
@@ -25,8 +27,12 @@ use zcash_primitives::{
     },
 };
 
+use zcash_note_encryption::try_note_decryption;
+
 use crate::{
     bridge::ffi::OrchardUnauthorizedBundlePtr,
+    orchard_bundle::Action,
+    orchard_wallet::{ORCHARD_TREE_DEPTH,OrchardPath},
     transaction_ffi::{MapTransparent, TransparentAuth},
     ORCHARD_PK,
 };
@@ -47,12 +53,12 @@ impl OrchardSpendInfo {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn orchard_spend_info_free(spend_info: *mut OrchardSpendInfo) {
-    if !spend_info.is_null() {
-        drop(unsafe { Box::from_raw(spend_info) });
-    }
-}
+// #[no_mangle]
+// pub extern "C" fn orchard_spend_info_free(spend_info: *mut OrchardSpendInfo) {
+//     if !spend_info.is_null() {
+//         drop(unsafe { Box::from_raw(spend_info) });
+//     }
+// }
 
 #[no_mangle]
 pub extern "C" fn orchard_builder_new(
@@ -72,22 +78,50 @@ pub extern "C" fn orchard_builder_new(
 #[no_mangle]
 pub extern "C" fn orchard_builder_add_spend(
     builder: *mut Builder,
-    orchard_spend_info: *mut OrchardSpendInfo,
+    fvk_bytes: *const [c_uchar; 96],
+    orchard_action: *const Action,
+    merkle_path: *const [c_uchar; 1 + 33 * ORCHARD_TREE_DEPTH + 8]
 ) -> bool {
     let builder = unsafe { builder.as_mut() }.expect("Builder may not be null.");
-    let orchard_spend_info = unsafe { Box::from_raw(orchard_spend_info) };
 
-    match builder.add_spend(
-        orchard_spend_info.fvk,
-        orchard_spend_info.note,
-        orchard_spend_info.merkle_path,
-    ) {
-        Ok(()) => true,
-        Err(e) => {
-            error!("Failed to add Orchard spend: {}", e);
-            false
+    // Parse the Merkle path from the caller
+    let merkle_path: OrchardPath = match merkle_path_from_slice(unsafe { &(&*merkle_path)[..] }) {
+        Ok(w) => w,
+        Err(_) => return false,
+    };
+
+
+    let fvk_bytes = unsafe { *fvk_bytes };
+    let fvkopt = FullViewingKey::from_bytes(&fvk_bytes);
+    if fvkopt.is_some().into() {
+
+        let fvk = fvkopt.unwrap();
+
+        if let Some(orchard_action) = unsafe { orchard_action.as_ref() } {
+            let ivk = fvk.to_ivk(Scope::External);
+            let prepared_ivk = PreparedIncomingViewingKey::new(&ivk);
+            let action = &orchard_action.inner();
+            let domain = OrchardDomain::for_action(action);
+            let decrypted = match try_note_decryption(&domain, &prepared_ivk, action) {
+                Some(r) => r,
+                None => return false,
+            };
+
+            match builder.add_spend(
+                fvk,
+                decrypted.0,
+                merkle_path.into(),
+            ) {
+                Ok(()) => return true,
+                Err(e) => {
+                    error!("Failed to add Orchard spend: {}", e);
+                    return false
+                }
+            }
         }
     }
+    return false
+
 }
 
 #[no_mangle]

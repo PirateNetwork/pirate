@@ -36,10 +36,10 @@ use crate::{
     zcashd_orchard::OrderedAddress,
 };
 
-const SAPLING_TREE_DEPTH: usize = 32;
-
+pub const ORCHARD_TREE_DEPTH: usize = 32;
 pub const MAX_CHECKPOINTS: usize = 100;
 const NOTE_STATE_V1: u8 = 1;
+pub type OrchardPath = MerklePath<MerkleHashOrchard, NOTE_COMMITMENT_TREE_DEPTH>;
 
 /// Converts CtOption<t> into Option<T>
 fn de_ct<T>(ct: CtOption<T>) -> Option<T> {
@@ -769,7 +769,7 @@ pub extern "C" fn orchard_wallet_init_from_frontier(
     }
 }
 
-type SaplingPath = MerklePath<MerkleHashOrchard, NOTE_COMMITMENT_TREE_DEPTH>;
+
 
 #[no_mangle]
 pub extern "C" fn orchard_is_note_tracked(
@@ -801,14 +801,14 @@ pub extern "C" fn orchard_wallet_get_path_for_note(
     wallet: *mut Wallet,
     txid: *const [c_uchar; 32],
     tx_action_idx: usize,
-    path_ret: *mut [u8; 1 + 33 * SAPLING_TREE_DEPTH + 8],
+    path_ret: *mut [u8; 1 + 33 * ORCHARD_TREE_DEPTH + 8],
 ) -> bool {
     let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null");
     let txid = TxId::from_bytes(*unsafe { txid.as_ref() }.expect("txid may not be null."));
 
     if let Some(position) = wallet.get_position_of_note(&txid, &tx_action_idx) {
         if let Ok(witness) = wallet.commitment_tree.witness(position, 0) {
-            if let Ok(path) = SaplingPath::from_parts(witness, position) {
+            if let Ok(path) = OrchardPath::from_parts(witness, position) {
                 // println!("Sapling Path {:?}", path);
                 let mut buffer = vec![];
                 if let Ok(_) = write_merkle_path(&mut buffer, path) {
@@ -838,13 +838,13 @@ pub extern "C" fn orchard_wallet_unmark_transaction_notes(
 
 #[no_mangle]
 pub extern "C" fn get_orchard_path_root_with_cm(
-    merkle_path: *const [c_uchar; 1 + 33 * SAPLING_TREE_DEPTH + 8],
+    merkle_path: *const [c_uchar; 1 + 33 * ORCHARD_TREE_DEPTH + 8],
     cm: *const [c_uchar; 32],
     anchor_out: *mut [c_uchar; 32],
 ) -> bool {
 
     // Parse the Merkle path from the caller
-    let merkle_path: SaplingPath = match merkle_path_from_slice(unsafe { &(&*merkle_path)[..] }) {
+    let merkle_path: OrchardPath = match merkle_path_from_slice(unsafe { &(&*merkle_path)[..] }) {
         Ok(w) => w,
         Err(_) => return false,
     };
@@ -860,106 +860,4 @@ pub extern "C" fn get_orchard_path_root_with_cm(
     *anchor_out = anchor.to_bytes();
 
     return true;
-}
-
-#[no_mangle]
-pub extern "C" fn try_orchard_decrypt_action_ivk(
-    orchard_action: *const Action,
-    ivk_bytes: *const [c_uchar; 64],
-    value_out: *mut u64,
-    address_out: *mut [u8; 43],
-    memo_out: *mut [u8; 512],
-    rho_out: *mut [u8; 32],
-    rseed_out: *mut [u8; 32],
-) -> bool {
-
-    let ivk_bytes = unsafe { *ivk_bytes };
-    let ivk = IncomingViewingKey::from_bytes(&ivk_bytes);
-    if ivk.is_some().into() {
-
-        if let Some(orchard_action) = unsafe { orchard_action.as_ref() } {
-
-            let prepared_ivk = PreparedIncomingViewingKey::new(&ivk.unwrap());
-            let action = &orchard_action.inner();
-            let domain = OrchardDomain::for_action(action);
-            let decrypted = match try_note_decryption(&domain, &prepared_ivk, action) {
-                Some(r) => r,
-                None => return false,
-            };
-
-            let value_out = unsafe { &mut *value_out };
-            let value = decrypted.0.value().inner();
-            let mut buf = [0; 8];
-            LittleEndian::write_u64(&mut buf, value.into());
-            *value_out = LittleEndian::read_u64(&buf);
-
-            let address_out = unsafe { &mut *address_out };
-            *address_out = decrypted.1.to_raw_address_bytes();
-
-            let memo_out = unsafe { &mut *memo_out };
-            *memo_out = decrypted.2;
-
-            let rseed_out = unsafe { &mut *rseed_out };
-            *rseed_out = *decrypted.0.rseed().as_bytes();
-
-            return true
-        }
-    }
-    return false
-}
-
-#[no_mangle]
-pub extern "C" fn try_orchard_decrypt_action_fvk(
-    orchard_action: *const Action,
-    fvk_bytes: *const [c_uchar; 96],
-    value_out: *mut u64,
-    address_out: *mut [u8; 43],
-    memo_out: *mut [u8; 512],
-    rho_out: *mut [u8; 32],
-    rseed_out: *mut [u8; 32],
-    nullifier_out: *mut [u8; 32],
-) -> bool {
-
-    let fvk_bytes = unsafe { *fvk_bytes };
-    let fvkopt = FullViewingKey::from_bytes(&fvk_bytes);
-    if fvkopt.is_some().into() {
-
-        let fvk = fvkopt.unwrap();
-
-        if let Some(orchard_action) = unsafe { orchard_action.as_ref() } {
-            let ivk = fvk.to_ivk(Scope::External);
-            let prepared_ivk = PreparedIncomingViewingKey::new(&ivk);
-            let action = &orchard_action.inner();
-            let domain = OrchardDomain::for_action(action);
-            let decrypted = match try_note_decryption(&domain, &prepared_ivk, action) {
-                Some(r) => r,
-                None => return false,
-            };
-
-            let value_out = unsafe { &mut *value_out };
-            let value = decrypted.0.value().inner();
-            let mut buf = [0; 8];
-            LittleEndian::write_u64(&mut buf, value.into());
-            *value_out = LittleEndian::read_u64(&buf);
-
-            let address_out = unsafe { &mut *address_out };
-            *address_out = decrypted.1.to_raw_address_bytes();
-
-            let memo_out = unsafe { &mut *memo_out };
-            *memo_out = decrypted.2;
-
-            let rho_out = unsafe { &mut *rho_out };
-            *rho_out = decrypted.0.rho().to_bytes();
-
-            let rseed_out = unsafe { &mut *rseed_out };
-            *rseed_out = *decrypted.0.rseed().as_bytes();
-
-            let nullifier = decrypted.0.nullifier(&fvk);
-            let nullifier_out = unsafe { &mut *nullifier_out };
-            *nullifier_out = nullifier.to_bytes();
-
-            return true
-        }
-    }
-    return false
 }
