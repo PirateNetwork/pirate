@@ -5820,6 +5820,26 @@ std::optional<std::pair<
     return std::nullopt;
 }
 
+std::optional<std::pair<
+    OrchardNotePlaintext,
+    OrchardPaymentAddressPirate>> CWalletTx::DecryptOrchardNote(OrchardOutPoint op) const
+{
+    // Check whether we can decrypt this SaplingOutPoint
+    if (this->mapOrchardNoteData.count(op) == 0) {
+        return std::nullopt;
+    }
+
+    auto vActions = this->GetOrchardActions();
+    auto nd = this->mapOrchardNoteData.at(op);
+
+    auto maybe_pt = OrchardNotePlaintext::AttemptDecryptOrchardAction(&vActions[op.n], nd.ivk);
+    assert(maybe_pt != std::nullopt);
+    auto notePt = maybe_pt.value();
+    auto pa = notePt.GetAddress();
+
+    return std::make_pair(notePt, pa);
+}
+
 int64_t CWalletTx::GetTxTime() const
 {
     int64_t n = nTimeSmart;
@@ -6438,6 +6458,22 @@ bool CWallet::initalizeArcTx() {
                 }
             }
         }
+
+        //Initalize in memory orchardnotedata
+        for (uint32_t i = 0; i < wtx.GetOrchardActionsCount(); ++i) {
+            auto op = OrchardOutPoint(wtxid, i);
+
+            if (wtx.mapOrchardNoteData.count(op) != 0) {
+                auto nd = wtx.mapOrchardNoteData.at(op);
+                auto decrypted = wtx.DecryptOrchardNote(op);
+                if (decrypted) {
+                    nd.value = decrypted->first.value();
+                    nd.address = decrypted->second;
+                    //Set the updated Sapling Note Data
+                    it->second.mapOrchardNoteData[op] = nd;
+                }
+            }
+        }
     }
 
     for (map<uint256, ArchiveTxPoint>::iterator it = mapArcTxs.begin(); it != mapArcTxs.end(); it++) {
@@ -6454,7 +6490,7 @@ bool CWallet::initalizeArcTx() {
  * from or to us. If fUpdate is true, found transactions that already
  * exist in the wallet will be updated.
  */
-int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, bool fIgnoreBirthday, bool LockOnFinish, bool resetSaplingWallet)
+int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, bool fIgnoreBirthday, bool LockOnFinish, bool resetWallets)
 {
     if (nMaxConnections == 0) {
         //Ignore function for cold storage offline mode
@@ -6506,9 +6542,10 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
         double dProgressStart = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pindex, false);
         double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.Tip(), false);
 
-        // //Reset the sapling Wallet
-        if (resetSaplingWallet) {
+        //Reset the sapling Wallet
+        if (resetWallets) {
           SaplingWalletReset();
+          OrchardWalletReset();
         }
 
         while (pindex)
@@ -9321,6 +9358,8 @@ void CWallet::GetFilteredNotes(
             auto memo = notePt.memo();
             auto note = notePt.note().value();
 
+            LogPrintf("Found Orchard Note with Outpoint %s, index %i, value %i\n", wtx.GetHash().ToString(), op.n, notePt.note().value().value());
+
             // skip notes which belong to a different payment address in the wallet
             if (!(filterAddresses.empty() || filterAddresses.count(pa))) {
                 continue;
@@ -9345,6 +9384,7 @@ void CWallet::GetFilteredNotes(
                  continue;
             }
 
+            LogPrintf("Adding Found Orchard Note with Outpoint");
             orchardEntries.push_back(OrchardNoteEntry {op, pa, note, memo, wtx.GetDepthInMainChain()});
         }
 

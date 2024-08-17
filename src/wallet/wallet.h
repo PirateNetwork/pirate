@@ -730,8 +730,9 @@ public:
     void SetSaplingNoteData(mapSaplingNoteData_t &noteData);
     void SetOrchardNoteData(mapOrchardNoteData_t &noteData);
 
-    std::pair<libzcash::SproutNotePlaintext, libzcash::SproutPaymentAddress> DecryptSproutNote(
-	JSOutPoint jsop) const;
+    std::pair<libzcash::SproutNotePlaintext, libzcash::SproutPaymentAddress> DecryptSproutNote(JSOutPoint jsop) const;
+
+
     std::optional<std::pair<
         libzcash::SaplingNotePlaintext,
         libzcash::SaplingPaymentAddress>> DecryptSaplingNote(const Consensus::Params& params, int height, SaplingOutPoint op) const;
@@ -745,6 +746,11 @@ public:
     std::optional<std::pair<
         libzcash::SaplingNotePlaintext,
         libzcash::SaplingPaymentAddress>> RecoverSaplingNoteWithoutLeadByteCheck(SaplingOutPoint op, std::set<uint256>& ovks) const;
+
+
+    std::optional<std::pair<
+        libzcash::OrchardNotePlaintext,
+        libzcash::OrchardPaymentAddressPirate>> DecryptOrchardNote(OrchardOutPoint op) const;
 
     //! filter decides which addresses will count towards the debit
     CAmount GetDebit(const isminefilter& filter) const;
@@ -1055,6 +1061,8 @@ protected:
         int arcTxPointSkipCount = 0;
         int arcSaplingOutPointCount = 0;
         int arcSaplingOutPointSkipCount = 0;
+        int arcOrchardOutPointCount = 0;
+        int arcOrchardOutPointSkipCount = 0;
         int paymentAddressCount = 0;
 
         if (!walletdb.TxnBegin()) {
@@ -1112,6 +1120,27 @@ protected:
                         arcSaplingOutPointCount++;
                     } else {
                         arcSaplingOutPointSkipCount++;
+                    }
+
+                }
+
+                for (map<uint256, OrchardOutPoint>::iterator it = mapArcOrchardOutPoints.begin(); it != mapArcOrchardOutPoints.end(); ++it)
+                {
+                    uint256 nullifier = (*it).first;
+                    OrchardOutPoint* op = &(*it).second;
+
+                    if (op->writeToDisk) {
+                    // Write all archived sapling outpoint
+                        if (!walletdb.WriteArcOrchardOp(nullifier, *op, false)) {
+                            LogPrintf("SetBestChain(): Failed to write Archive Sapling Outpoint, aborting atomic write\n");
+                            walletdb.TxnAbort();
+                            return;
+                        }
+                        //Don't write this object again unless it changes
+                        op->writeToDisk = false;
+                        arcOrchardOutPointCount++;
+                    } else {
+                        arcOrchardOutPointSkipCount++;
                     }
 
                 }
@@ -1223,6 +1252,36 @@ protected:
 
                     }
 
+                    for (map<uint256, OrchardOutPoint>::iterator it = mapArcOrchardOutPoints.begin(); it != mapArcOrchardOutPoints.end(); ++it)
+                    {
+                        uint256 nullifier = (*it).first;
+                        OrchardOutPoint* op = &(*it).second;
+
+                        std::vector<unsigned char> vchCryptedSecret;
+                        uint256 chash = HashWithFP(nullifier);
+                        CKeyingMaterial vchSecret = SerializeForEncryptionInput(nullifier, *op);
+                        if (op->writeToDisk) {
+                            if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
+                                LogPrintf("SetBestChain(): Failed to encrypt Archive Orchard Outpoint, aborting atomic write\n");
+                                walletdb.TxnAbort();
+                                return;
+                            }
+
+                            // Write all archived sapling outpoint
+                            if (!walletdb.WriteCryptedArcOrchardOp(nullifier, chash, vchCryptedSecret, false)) {
+                                LogPrintf("SetBestChain(): Failed to write Archive Orchard Outpoint, aborting atomic write\n");
+                                walletdb.TxnAbort();
+                                return;
+                            }
+                            //Don't write this object again unless it changes
+                            op->writeToDisk = false;
+                            arcOrchardOutPointCount++;
+                        } else {
+                            arcOrchardOutPointSkipCount++;
+                        }
+
+                    }
+
                     for (std::pair<const libzcash::SaplingPaymentAddress, libzcash::SaplingIncomingViewingKey>& ivkItem : mapUnsavedSaplingIncomingViewingKeys) {
                         auto addr = ivkItem.first;
                         auto ivk = ivkItem.second;
@@ -1275,11 +1334,11 @@ protected:
         }
 
         orchardWallet.GarbageCollect();
-        // if (!walletdb.WriteOrchardWitnesses(orchardWallet)) {
-        //     LogPrintf("SetBestChain(): Failed to write Sapling witnesses, aborting atomic write\n");
-        //     walletdb.TxnAbort();
-        //     return;
-        // }
+        if (!walletdb.WriteOrchardWitnesses(orchardWallet)) {
+            LogPrintf("SetBestChain(): Failed to write Sapling witnesses, aborting atomic write\n");
+            walletdb.TxnAbort();
+            return;
+        }
 
         if (!walletdb.TxnCommit()) {
             // Couldn't commit all to db, but in-memory state is fine
@@ -1299,6 +1358,8 @@ protected:
         LogPrintf("SetBestChain():  %i - Archived Points skipped\n", arcTxPointSkipCount);
         LogPrintf("SetBestChain():  %i - Archived Sapling Outpoints written\n", arcSaplingOutPointCount);
         LogPrintf("SetBestChain():  %i - Archived Sapling Outpoints skipped\n", arcSaplingOutPointSkipCount);
+        LogPrintf("SetBestChain():  %i - Archived Orchard Outpoints written\n", arcOrchardOutPointCount);
+        LogPrintf("SetBestChain():  %i - Archived Orchard Outpoints skipped\n", arcOrchardOutPointSkipCount);
         LogPrintf("SetBestChain():  %i - Payment Address written\n", paymentAddressCount);
 
     }
@@ -1824,7 +1885,7 @@ public:
     bool DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<uint256> &removeArcTxs, bool fRescan = false);
     bool DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan = false);
     bool initalizeArcTx();
-    int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false, bool fIgnoreBirthday = false, bool LockOnFinish = false, bool resetSaplingWallet = false);
+    int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false, bool fIgnoreBirthday = false, bool LockOnFinish = false, bool resetWallets = false);
     void ReacceptWalletTransactions();
     void ResendWalletTransactions(int64_t nBestBlockTime);
     std::vector<uint256> ResendWalletTransactionsBefore(int64_t nTime);

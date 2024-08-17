@@ -257,6 +257,50 @@ bool CWalletDB::EraseCryptedArcSaplingOp(uint256 chash)
     nWalletDBUpdated++;
     return Erase(std::make_pair(std::string("carczsop"), chash));
 }
+
+bool CWalletDB::WriteArcOrchardOp(uint256 nullifier, OrchardOutPoint op, bool txnProtected)
+{
+    nWalletDBUpdated++;
+    if (txnProtected) {
+        if (!WriteTxn(std::make_pair(std::string("arcorchop"), nullifier), op, __FUNCTION__)) {
+            return false;
+        }
+    } else {
+        if (!Write(std::make_pair(std::string("arcorchop"), nullifier), op)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool CWalletDB::WriteCryptedArcOrchardOp(uint256 nullifier, uint256 chash, const std::vector<unsigned char>& vchCryptedSecret, bool txnProtected)
+{
+    nWalletDBUpdated++;
+    if (txnProtected) {
+        if (!WriteTxn(std::make_pair(std::string("carcorchop"), chash), vchCryptedSecret, __FUNCTION__)) {
+            return false;
+        }
+    } else {
+        if (!Write(std::make_pair(std::string("carcorchop"), chash), vchCryptedSecret)) {
+            return false;
+        }
+    }
+
+    Erase(std::make_pair(std::string("arcorchop"), nullifier));
+    return true;
+}
+
+bool CWalletDB::EraseArcOrchardOp(uint256 nullifier)
+{
+    nWalletDBUpdated++;
+    return Erase(std::make_pair(std::string("arcorchop"), nullifier));
+}
+
+bool CWalletDB::EraseCryptedArcOrchardOp(uint256 chash)
+{
+    nWalletDBUpdated++;
+    return Erase(std::make_pair(std::string("carcorchop"), chash));
+}
 //End Historical Wallet Tx
 
 bool CWalletDB::WriteTx(uint256 hash, const CWalletTx& wtx, bool txnProtected)
