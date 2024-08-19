@@ -1591,16 +1591,25 @@ void komodo_args(char *argv0)
     if ( !chainName.isKMD() )
     {
         BITCOIND_RPCPORT = GetArg("-rpcport", ASSETCHAINS_RPCPORT);
+
         //fprintf(stderr,"(%s) port.%u chain params initialized\n",chainName.symbol().c_str(),BITCOIND_RPCPORT);
         if ( chainName.isSymbol("PIRATE") && ASSETCHAINS_HALVING[0] == 77777 )
         {
             ASSETCHAINS_HALVING[0] *= 5;
             fprintf(stderr,"PIRATE halving changed to %d %.1f days ASSETCHAINS_LASTERA.%llu\n",(int32_t)ASSETCHAINS_HALVING[0],(double)ASSETCHAINS_HALVING[0]/1440,(long long)ASSETCHAINS_LASTERA);
         }
-        else if ( ASSETCHAINS_PRIVATE != 0 )
+
+        // Chains for which the use of "-ac_private" is permitted.
+        const std::set<std::string> allowedPrivateOnly = {"PIRATE", "ZOMBIE"};
+
+        if ( ASSETCHAINS_PRIVATE != 0 && allowedPrivateOnly.count(chainName.ToString()) == 0)
         {
-            fprintf(stderr,"-ac_private for a non-PIRATE chain is not supported. The only reason to have an -ac_private chain is for total privacy and that is best achieved with the largest anon set. PIRATE has that and it is recommended to just use PIRATE\n");
+            fprintf(stderr, "-ac_private for a non-PIRATE chain is not supported.\n"
+                            "The only reason to have an -ac_private chain is for total\n"
+                            "privacy and that is best achieved with the largest anon set.\n"
+                            "PIRATE has that and it is recommended to just use PIRATE\n");
             StartShutdown();
+            throw std::invalid_argument("-ac_private for a non-PIRATE chain is not supported.");
         }
         // Set cc enables for all existing ac_cc chains here. 
         if ( chainName.isSymbol("AXO") )
