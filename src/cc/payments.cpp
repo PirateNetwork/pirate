@@ -370,7 +370,7 @@ bool PaymentsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &
             {
                 if ( amountReleased < minrelease*COIN )
                 {
-                    fprintf(stderr, "does not meet minrelease amount.%li minrelease.%li\n",amountReleased, (int64_t)minrelease*COIN);
+                    fprintf(stderr, "does not meet minrelease amount.%" PRId64 " minrelease.%" PRId64 "\n",amountReleased, (int64_t)minrelease*COIN);
                     return(eval->Invalid("amount is too small"));
                 }
                 // Get all the script pubkeys and allocations
@@ -477,7 +477,7 @@ bool PaymentsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &
                     if ( test < minimum )
                     {
                         // prevent anyone being paid the minimum.
-                        fprintf(stderr, "vout.%i test.%li vs minimum.%i\n",i, test, minimum);
+                        fprintf(stderr, "vout.%" PRId32 " test.%" PRId64 " vs minimum.%" PRId32 "\n",i, test, minimum);
                         return(eval->Invalid("under minimum size"));
                     }
                     amount += tx.vout[i].nValue;

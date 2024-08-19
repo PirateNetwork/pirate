@@ -152,7 +152,7 @@ public:
     BetProtocol bet;
     CAmount totalPayout;
 
-    ExampleBet() : bet(BetProtocol(EVAL_DISPUTEBET, players, 2, VCH("BetHeader", 9))), totalPayout(100) {}
+    ExampleBet() : bet(BetProtocol(EVAL_DISPUTEBET, players, 2, std::vector<unsigned char> { 'B','e','t','H','e','a','d','e','r' })), totalPayout(100) {}
     ~ExampleBet() {};
 
     CTransaction SessionTx()
