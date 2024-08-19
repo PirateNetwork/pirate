@@ -15,7 +15,6 @@
 
 #include "CCrewards.h"
 #include "komodo_bitcoind.h"
-#include <gmp.h>
 
 /*
  The rewards CC contract is initially for OOT, which needs this functionality. However, many of the attributes can be parameterized to allow different rewards programs to run. Multiple rewards plans could even run on the same blockchain, though the user would need to choose which one to lock funds into.
@@ -67,15 +66,7 @@
  vout.n-1: opreturn 'U' sbits fundingtxid
  
  */
- 
-/// the following are compatible with windows
-/// mpz_set_lli sets a long long singed int to a big num mpz_t for very large integer math
-void mpz_set_lli( mpz_t rop, long long op );
-// mpz_get_si2 gets a mpz_t and returns a signed long long int
-int64_t mpz_get_si2( mpz_t op );
-// mpz_get_ui2 gets a mpz_t and returns a unsigned long long int
-uint64_t mpz_get_ui2( mpz_t op );
- 
+
 uint64_t RewardsCalc(int64_t amount, uint256 txid, int64_t APR, int64_t minseconds, int64_t maxseconds, uint32_t timestamp)
 {
     int32_t numblocks; int64_t duration; uint64_t reward = 0;
@@ -95,29 +86,11 @@ uint64_t RewardsCalc(int64_t amount, uint256 txid, int64_t APR, int64_t minsecon
         reward = (((amount * duration) / (365 * 24 * 3600LL)) * (APR / 1000000)) / 10000;
     else 
     {
-        // declare and init the mpz_t big num variables 
-        mpz_t mpzAmount, mpzDuration, mpzReward, mpzAPR, mpzModifier;
-        mpz_init(mpzAmount);
-        mpz_init(mpzDuration);
-        mpz_init(mpzAPR);
-        mpz_init(mpzReward);
-        mpz_init(mpzModifier);
-
-        // set the inputs to big num variables
-        mpz_set_lli(mpzAmount, amount);
-        mpz_set_lli(mpzDuration, duration);
-        mpz_set_lli(mpzAPR, APR);
-        mpz_set_lli(mpzModifier, COIN*100*365*24*3600LL);
-
-        // (amount * APR * duration)
-        mpz_mul(mpzReward, mpzAmount, mpzDuration);
-        mpz_mul(mpzReward, mpzReward, mpzAPR);
-
-        // total_of_above / (COIN * 100 * 365*24*3600LL)
-        mpz_tdiv_q(mpzReward, mpzReward, mpzModifier);
-
-        // set result to variable we can use and return it.
-        reward = mpz_get_ui2(mpzReward);
+        // (amount * APR * duration) / (COIN * 100 * 365*24*3600LL)
+        arith_uint256 a_amount(amount), a_apr(APR), a_duration(duration), a_den(COIN * 100 * 365 * 24 * 3600LL);
+        arith_uint256 a_num(a_amount * a_apr * a_duration);
+        arith_uint256 a_reward = a_num / a_den;
+        reward = a_reward.GetLow64();
     }
     if ( reward > amount )
         reward = amount;
