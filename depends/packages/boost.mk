@@ -4,7 +4,7 @@ $(package)_version=1_72_0
 $(package)_download_path=https://github.com/KomodoPlatform/boost/releases/download/boost-1.72.0-kmd
 $(package)_sha256_hash=59c9b274bc451cf91a9ba1dd2c7fdcaf5d60b1b3aa83f2c9fa143417cc660722
 $(package)_file_name=$(package)_$($(package)_version).tar.bz2
-$(package)_patches=fix-Solaris.patch ignore_wnonnull_gcc_11.patch
+$(package)_patches=fix-Solaris.patch ignore_wnonnull_gcc_11.patch range_enums_clang_16.patch
 
 define $(package)_set_vars
 $(package)_config_opts_release=variant=release
@@ -30,7 +30,8 @@ endef
 define $(package)_preprocess_cmds
   echo "using $(boost_toolset_$(host_os)) : : $($(package)_cxx) : <cxxflags>\"$($(package)_cxxflags) $($(package)_cppflags)\" <linkflags>\"$($(package)_ldflags)\" <archiver>\"$(boost_archiver_$(host_os))\" <striper>\"$(host_STRIP)\"  <ranlib>\"$(host_RANLIB)\" <rc>\"$(host_WINDRES)\" : ;" > user-config.jam&& \
   patch -p1 < $($(package)_patch_dir)/fix-Solaris.patch &&\
-  patch -p2 < $($(package)_patch_dir)/ignore_wnonnull_gcc_11.patch
+  patch -p2 < $($(package)_patch_dir)/ignore_wnonnull_gcc_11.patch &&\
+  patch -p2 < $($(package)_patch_dir)/range_enums_clang_16.patch
 endef
 
 define $(package)_config_cmds
