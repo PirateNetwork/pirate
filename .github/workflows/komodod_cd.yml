@@ -77,28 +77,40 @@ jobs:
   osx-build:
     name: OSX Build
     if: ${{ github.event_name != 'workflow_dispatch' }}
-    runs-on: macos-latest
+    runs-on: macos-latest-large
+
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+
+      # Workaround for https://github.com/actions/setup-python/issues/577
+      - name: Clean up binaries and links (macOS)
+        run: |
+          rm -f /usr/local/bin/2to3-3.*
+          rm -f /usr/local/bin/idle3.*
+          rm -f /usr/local/bin/pydoc3.*
+          rm -f /usr/local/bin/python3.*
+          rm -f /usr/local/bin/2to3
+          rm -f /usr/local/bin/idle3
+          rm -f /usr/local/bin/pydoc3
+          rm -f /usr/local/bin/python3
+          rm -f /usr/local/bin/python3-config
+
       - name: Install deps (macOS)
         run: |
-          rm '/usr/local/bin/2to3'
-          brew unlink node
           brew update
-          brew upgrade || true
           brew tap discoteq/discoteq; brew install flock
           brew install autoconf autogen automake
-          brew install gcc@8
           brew install binutils
           brew install protobuf
           brew install coreutils
           brew install wget
           brew install python3
-          brew install gmp
+
       - name: Build (macOS)
         run: |
           ./zcutil/build-mac.sh -j4
           zip --junk-paths komodo-osx src/komodod src/komodo-cli
+
       - name: Upload komodo-osx.zip as artifact
         uses: actions/upload-artifact@v1
         with:
