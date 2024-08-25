@@ -201,7 +201,7 @@ if ENABLE_ZMQ
 EXTRA_LIBRARIES += $(LIBBITCOIN_ZMQ)
 endif
 
-lib_LTLIBRARIES = $(LIBZCASH_CONSENSUS) $(LIBCC)
+lib_LTLIBRARIES = $(LIBZCASH_CONSENSUS)
 
 bin_PROGRAMS =
 noinst_PROGRAMS =
@@ -460,7 +460,6 @@ libbitcoin_server_a_SOURCES = \
   txmempool.cpp \
   validationinterface.cpp \
 	cc/cclib.cpp \
-	mini-gmp.c \
   $(BITCOIN_CORE_H) \
   $(LIBZCASH_H) \
 	$(LIBTLS_H)
@@ -517,7 +516,7 @@ libbitcoin_wallet_a_SOURCES = \
   $(BITCOIN_CORE_H) \
   $(LIBZCASH_H)
 
-# a shared library for cryptoconditions
+# a static library for cryptoconditions
 libcc_a_SOURCES = cc/cclib.cpp
 libcc_a_CXXFLAGS = -DBUILD_CUSTOMCC -I../secp256k1/include -I../depends/$(shell echo `../depends/config.guess`/include) -I./univalue/include -I./cryptoconditions/include -I./cryptoconditions/src -I./cryptoconditions/src/asn -I. -I./cc -I$(srcdir)/rust/include -I$(srcdir)/rust/gen/include
 libcc_a_LDFLAGS = -version-info 0:0:0
@@ -714,19 +713,12 @@ pirated_LDADD += \
 # endif
 
 
-# [+] Decker: use static linking for libstdc++.6.dylib, libgomp.1.dylib, libgcc_s.1.dylib
-if TARGET_DARWIN
-pirated_LDFLAGS += -static-libgcc
-endif
 
 # bitcoin-cli binary #
 pirate_cli_SOURCES = bitcoin-cli.cpp
 pirate_cli_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(EVENT_CFLAGS)
 pirate_cli_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 pirate_cli_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
-if TARGET_DARWIN
-pirate_cli_LDFLAGS += -static-libgcc
-endif
 
 # wallet-utility binary #
 if ENABLE_WALLET
@@ -774,7 +766,7 @@ wallet_utility_LDADD = \
 	$(LIBRUSTZCASH) \
 	$(LIBCXXBRIDGE) \
 	$(LIBZCASH_LIBS)\
-  $(LIBCRYPTOCONDITIONS)
+	$(LIBCRYPTOCONDITIONS)
 endif
 
 # zcash-tx binary #
@@ -815,9 +807,9 @@ libzcash_a_SOURCES = \
 	zcash/address/sapling.cpp \
 	zcash/address/sprout.cpp \
 	zcash/util.cpp \
-  zcash/address/zip32.cpp
+	zcash/address/zip32.cpp
 
-libzcash_a_CPPFLAGS = -DMULTICORE -fopenmp -fPIC -DBINARY_OUTPUT -DCURVE_ALT_BN128 \
+libzcash_a_CPPFLAGS = -fPIC -DBINARY_OUTPUT -DCURVE_ALT_BN128 \
 	-DBOOST_SPIRIT_THREADSAFE -DHAVE_BUILD_INFO -D__STDC_FORMAT_MACROS $(HARDENED_CPPFLAGS) \
 	$(HARDENED_CXXFLAGS) $(HARDENED_LDFLAGS) -pipe $(SAN_LDFLAGS) \
 	-Wstack-protector $(SAN_CXXFLAGS) -fstack-protector-all -fPIE -fvisibility=hidden \

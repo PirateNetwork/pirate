@@ -159,6 +159,24 @@ const string strMessageMagic = "Komodo Signed Message:\n";
 // Internal stuff
 namespace {
 
+    /** Abort with a message */
+    bool AbortNode(const std::string& strMessage, const std::string& userMessage="")
+    {
+        strMiscWarning = strMessage;
+        LogPrintf("*** %s\n", strMessage);
+        uiInterface.ThreadSafeMessageBox(
+            userMessage.empty() ? _("Error: A fatal internal error occurred, see debug.log for details") : userMessage,
+            "", CClientUIInterface::MSG_ERROR);
+        StartShutdown();
+        return false;
+    }
+
+    bool AbortNode(CValidationState& state, const std::string& strMessage, const std::string& userMessage="")
+    {
+        AbortNode(strMessage, userMessage);
+        return state.Error(strMessage);
+    }
+
     struct CBlockIndexWorkComparator
     {
         bool operator()(CBlockIndex *pa, const CBlockIndex *pb) const {
@@ -2666,20 +2684,6 @@ bool GetAddressUnspent(uint160 addressHash, int type,
     return true;
 }
 
-struct CompareBlocksByHeightMain
-{
-    bool operator()(const CBlockIndex* a, const CBlockIndex* b) const
-    {
-        /* Make sure that unequal blocks with the same height do not compare
-           equal. Use the pointers themselves to make a distinction. */
-
-        if (a->nHeight != b->nHeight)
-          return (a->nHeight > b->nHeight);
-
-        return a < b;
-    }
-};
-
 /****
  * @brief add a transaction to the mempool
  * @param[in] tx the transaction
@@ -2936,45 +2940,16 @@ bool ReadBlockFromDisk(CBlock& block, const CBlockIndex* pindex,bool checkPOW)
 
 CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams)
 {
-    int32_t numhalvings,i; uint64_t numerator; CAmount nSubsidy = 3 * COIN;
-    if ( chainName.isKMD() )
-    {
-        if ( nHeight == 1 )
-            return(100000000 * COIN); // ICO allocation
-        else if ( nHeight < KOMODO_ENDOFERA )
-            return(3 * COIN);
-        else if ( nHeight < 2*KOMODO_ENDOFERA )
-            return(2 * COIN);
-        else return(COIN);
+    if (chainName.isKMD()) {
+        if (nHeight == 1)
+            return 100000000 * COIN; // ICO allocation
+        else if (nHeight < nS8HardforkHeight)
+            return 3 * COIN;
+        else
+            return COIN; // KIP-0002, https://github.com/KomodoPlatform/kips/blob/main/kips/kip-0002.mediawiki
+    } else {
+        return komodo_ac_block_subsidy(nHeight);
     }
-    else
-    {
-        return(komodo_ac_block_subsidy(nHeight));
-    }
-    /*
-     // Mining slow start
-     // The subsidy is ramped up linearly, skipping the middle payout of
-     // MAX_SUBSIDY/2 to keep the monetary curve consistent with no slow start.
-     if (nHeight < consensusParams.nSubsidySlowStartInterval / 2) {
-     nSubsidy /= consensusParams.nSubsidySlowStartInterval;
-     nSubsidy *= nHeight;
-     return nSubsidy;
-     } else if (nHeight < consensusParams.nSubsidySlowStartInterval) {
-     nSubsidy /= consensusParams.nSubsidySlowStartInterval;
-     nSubsidy *= (nHeight+1);
-     return nSubsidy;
-     }
-
-     assert(nHeight > consensusParams.SubsidySlowStartShift());
-     int halvings = (nHeight - consensusParams.SubsidySlowStartShift()) / consensusParams.nSubsidyHalvingInterval;*/
-    // Force block reward to zero when right shift is undefined.
-    //int halvings = nHeight / consensusParams.nSubsidyHalvingInterval;
-    //if (halvings >= 64)
-    //    return 0;
-
-    // Subsidy is cut in half every 840,000 blocks which will occur approximately every 4 years.
-    //nSubsidy >>= halvings;
-    //return nSubsidy;
 }
 
 bool IsInitialBlockDownload()
@@ -2991,31 +2966,35 @@ bool IsInitialBlockDownload()
         return false;
 
     if (fImporting || fReindex)
-    {
-        //fprintf(stderr,"IsInitialBlockDownload: fImporting %d || %d fReindex\n",(int32_t)fImporting,(int32_t)fReindex);
         return true;
-    }
 
     if (fCheckpointsEnabled && chainActive.Height() < Checkpoints::GetTotalBlocksEstimate(chainParams.Checkpoints()))
-    {
-        //fprintf(stderr,"IsInitialBlockDownload: checkpoint -> initialdownload - %d blocks\n", Checkpoints::GetTotalBlocksEstimate(chainParams.Checkpoints()));
         return true;
-    }
 
-    CBlockIndex *ptr = chainActive.Tip();
-    if (ptr == NULL)
-    {
+    if (chainActive.Tip() == nullptr)
         return true;
-    }
-    bool state = ((chainActive.Height() < ptr->nHeight - 24*60) ||
-             ptr->GetBlockTime() < (GetTime() - nMaxTipAge));
+
+    /* TODO:
+       - IBD check uses minimumchain work instead of checkpoints.
+         https://github.com/zcash/zcash/commit/e41632c9fb5d32491e7f394b7b3a82f6cb5897cb
+       - Consider using hashActivationBlock for Sapling in KMD.
+         https://github.com/zcash/zcash/pull/4060/commits/150e3303109047118179f33b1cc5fc63095eb21d
+    */
+
+    // if (chainName.isKMD() && chainActive.Tip()->nChainWork < UintToArith256(chainParams.GetConsensus().nMinimumChainWork))
+    //     return true;
+
+    bool state = ((chainActive.Height() < chainActive.Tip()->nHeight - 24*60) ||
+             chainActive.Tip()->GetBlockTime() < (GetTime() - nMaxTipAge));
+
     if ( KOMODO_INSYNC != 0 )
         state = false;
+
     if (!state)
     {
         LogPrintf("Leaving InitialBlockDownload (latching to false)\n");
         latchToFalse.store(true, std::memory_order_relaxed);
-    } // else fprintf(stderr,"state.%d  ht.%d vs %d, t.%u\n",state,(int32_t)chainActive.Height(),(uint32_t)ptr->nHeight,(int32_t)ptr->GetBlockTime());
+    }
     return state;
 }
 
@@ -3482,24 +3461,6 @@ namespace {
             return error("%s: %s Checksum mismatch %s vs %s", __func__,hashBlock.GetHex().c_str(),hashChecksum.GetHex().c_str(),hasher.GetHash().GetHex().c_str());
 
         return true;
-    }
-
-    /** Abort with a message */
-    bool AbortNode(const std::string& strMessage, const std::string& userMessage="")
-    {
-        strMiscWarning = strMessage;
-        LogPrintf("*** %s\n", strMessage);
-        uiInterface.ThreadSafeMessageBox(
-                                         userMessage.empty() ? _("Error: A fatal internal error occurred, see debug.log for details") : userMessage,
-                                         "", CClientUIInterface::MSG_ERROR);
-        StartShutdown();
-        return false;
-    }
-
-    bool AbortNode(CValidationState& state, const std::string& strMessage, const std::string& userMessage="")
-    {
-        AbortNode(strMessage, userMessage);
-        return state.Error(strMessage);
     }
 
 } // anon namespace
@@ -4046,6 +4007,9 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     // Grab the consensus branch ID for the block's height
     auto consensusBranchId = CurrentEpochBranchId(pindex->nHeight, Params().GetConsensus());
 
+    CAmount chainSupplyDelta = 0;
+    CAmount transparentValueDelta = 0;
+    CAmount burnedAmountDelta = 0;
     std::vector<PrecomputedTransactionData> txdata;
     txdata.reserve(block.vtx.size()); // Required so that pointers to individual PrecomputedTransactionData don't get invalidated
     for (unsigned int i = 0; i < block.vtx.size(); i++)
@@ -4065,6 +4029,12 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                 return state.DoS(100, error("ConnectBlock(): inputs missing/spent"),
                                  REJECT_INVALID, "bad-txns-inputs-missingorspent");
             }
+
+            for (const auto& input : tx.vin) {
+                const auto prevout = view.GetOutputFor(input);
+                transparentValueDelta -= prevout.nValue;
+            }
+
             // are the JoinSplit's requirements met?
             if (!view.HaveJoinSplitRequirements(tx, maxProcessingThreads))
                 return state.DoS(100, error("ConnectBlock(): JoinSplit requirements not met"),
@@ -4127,9 +4097,21 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             fprintf(stderr,"valueout %.8f too big\n",(double)valueout/COIN);
             return state.DoS(100, error("ConnectBlock(): GetValueOut too big"),REJECT_INVALID,"tx valueout is too big");
         }
-        if (!tx.IsCoinBase())
+        if (tx.IsCoinBase())
         {
-            nFees += (stakeTxValue= view.GetValueIn(chainActive.Tip()->nHeight,interest,tx) - valueout);
+            // Add the output value of the coinbase transaction to the chain supply
+            // delta. This includes fees, which are then canceled out by the fee
+            // subtractions in the other branch of this conditional.
+            chainSupplyDelta += tx.GetValueOut();
+        } else {
+            const auto txFee = (stakeTxValue= view.GetValueIn(chainActive.Tip()->nHeight,interest,tx) - valueout);
+            nFees += txFee;
+
+            // Fees from a transaction do not go into an output of the transaction,
+            // and therefore decrease the chain supply. If the miner claims them,
+            // they will be re-added in the other branch of this conditional.
+            chainSupplyDelta -= txFee;
+
             sum += interest;
 
             std::vector<CScriptCheck> vChecks;
@@ -4190,6 +4172,16 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             sapling_frontier_tree.AppendBundle(rTx.GetSaplingBundle());
         }
 
+        for (const auto& out : tx.vout) {
+            if (!out.scriptPubKey.IsUnspendable()) {
+                transparentValueDelta += out.nValue;
+            } else {
+                // If the outputs are unspendable, we should not include them in the transparent pool,
+                // but include in the burned amount calculations
+                burnedAmountDelta += out.nValue;
+            }
+        }
+
         vPos.push_back(std::make_pair(tx.GetHash(), pos));
         pos.nTxOffset += ::GetSerializeSize(tx, SER_DISK, CLIENT_VERSION);
     }
@@ -4202,6 +4194,35 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     view.PushAnchor(sapling_tree);
     view.PushAnchor(sapling_frontier_tree);
     if (!fJustCheck) {
+        // Update pindex with the net change in transparent value and the chain's total
+        // transparent value.
+        pindex->nChainSupplyDelta = chainSupplyDelta;
+        pindex->nTransparentValue = transparentValueDelta;
+        pindex->nBurnedAmountDelta = burnedAmountDelta;
+        if (pindex->pprev) {
+            if (pindex->pprev->nChainTotalSupply) {
+                pindex->nChainTotalSupply = *pindex->pprev->nChainTotalSupply + chainSupplyDelta;
+            } else {
+                pindex->nChainTotalSupply = boost::none;
+            }
+
+            if (pindex->pprev->nChainTransparentValue) {
+                pindex->nChainTransparentValue = *pindex->pprev->nChainTransparentValue + transparentValueDelta;
+            } else {
+                pindex->nChainTransparentValue = boost::none;
+            }
+
+            if (pindex->pprev->nChainTotalBurned) {
+                pindex->nChainTotalBurned = *pindex->pprev->nChainTotalBurned + burnedAmountDelta;
+            } else {
+                pindex->nChainTotalBurned = boost::none;
+            }
+        } else {
+            pindex->nChainTotalSupply = chainSupplyDelta;
+            pindex->nChainTransparentValue = transparentValueDelta;
+            pindex->nChainTotalBurned = burnedAmountDelta;
+        }
+
         pindex->hashFinalSproutRoot = sprout_tree.root();
     }
     blockundo.old_sprout_tree_root = old_sprout_tree_root;
@@ -5385,9 +5406,27 @@ bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBl
 {
     pindexNew->nTx = block.vtx.size();
     pindexNew->nChainTx = 0;
+
+    // the following values are computed here only for the genesis block
+    CAmount chainSupplyDelta = 0;
+    CAmount transparentValueDelta = 0;
+    CAmount burnedAmountDelta = 0;
+
     CAmount sproutValue = 0;
     CAmount saplingValue = 0;
     for (auto tx : block.vtx) {
+        // For the genesis block only, compute the chain supply delta and the transparent
+        // output total.
+        if (pindexNew->pprev == nullptr) {
+            chainSupplyDelta = tx.GetValueOut();
+            for (const auto& out : tx.vout) {
+                if (!out.scriptPubKey.IsUnspendable()) {
+                    transparentValueDelta += out.nValue;
+                } else {
+                    burnedAmountDelta += out.nValue;
+                }
+            }
+        }
         // Negative valueBalance "takes" money from the transparent value pool
         // and adds it to the Sapling value pool. Positive valueBalance "gives"
         // money to the transparent value pool, removing from the Sapling value
@@ -5399,6 +5438,23 @@ bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBl
             sproutValue -= js.vpub_new;
         }
     }
+
+    // These values can only be computed here for the genesis block.
+    // For all other blocks, we update them in ConnectBlock instead.
+    if (pindexNew->pprev == nullptr) {
+        pindexNew->nChainSupplyDelta = chainSupplyDelta;
+        pindexNew->nTransparentValue = transparentValueDelta;
+        pindexNew->nBurnedAmountDelta = burnedAmountDelta;
+    } else {
+        pindexNew->nChainSupplyDelta = boost::none;
+        pindexNew->nTransparentValue = boost::none;
+        pindexNew->nBurnedAmountDelta = boost::none;
+    }
+
+    pindexNew->nChainTotalSupply = boost::none;
+    pindexNew->nChainTransparentValue = boost::none;
+    pindexNew->nChainTotalBurned = boost::none;
+
     pindexNew->nSproutValue = sproutValue;
     pindexNew->nChainSproutValue = boost::none;
     pindexNew->nSaplingValue = saplingValue;
@@ -5420,18 +5476,30 @@ bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBl
             CBlockIndex *pindex = queue.front();
             queue.pop_front();
             pindex->nChainTx = (pindex->pprev ? pindex->pprev->nChainTx : 0) + pindex->nTx;
+
             if (pindex->pprev) {
+                // Transparent value and chain total supply are added to the
+                // block index only in `ConnectBlock`, because that's the only
+                // place that we have a valid coins view with which to compute
+                // the transparent input value and fees.
+
+                // Calculate the block's effect on the Sprout chain value pool balance.
                 if (pindex->pprev->nChainSproutValue && pindex->nSproutValue) {
                     pindex->nChainSproutValue = *pindex->pprev->nChainSproutValue + *pindex->nSproutValue;
                 } else {
                     pindex->nChainSproutValue = boost::none;
                 }
+
+                // calculate the block's effect on the chain's net Sapling value
                 if (pindex->pprev->nChainSaplingValue) {
                     pindex->nChainSaplingValue = *pindex->pprev->nChainSaplingValue + pindex->nSaplingValue;
                 } else {
                     pindex->nChainSaplingValue = boost::none;
                 }
             } else {
+                pindex->nChainTotalSupply = pindex->nChainSupplyDelta;
+                pindex->nChainTransparentValue = pindex->nTransparentValue;
+                pindex->nChainTotalBurned = pindex->nBurnedAmountDelta;
                 pindex->nChainSproutValue = pindex->nSproutValue;
                 pindex->nChainSaplingValue = pindex->nSaplingValue;
             }
@@ -6734,11 +6802,31 @@ bool static LoadBlockIndexDB()
             if (pindex->pprev) {
                 if (pindex->pprev->nChainTx) {
                     pindex->nChainTx = pindex->pprev->nChainTx + pindex->nTx;
+
+                    if (pindex->pprev->nChainTotalSupply && pindex->nChainSupplyDelta) {
+                        pindex->nChainTotalSupply = *pindex->pprev->nChainTotalSupply + *pindex->nChainSupplyDelta;
+                    } else {
+                        pindex->nChainTotalSupply = boost::none;
+                    }
+
+                    if (pindex->pprev->nChainTransparentValue && pindex->nTransparentValue) {
+                        pindex->nChainTransparentValue = *pindex->pprev->nChainTransparentValue + *pindex->nTransparentValue;
+                    } else {
+                        pindex->nChainTransparentValue = boost::none;
+                    }
+
+                    if (pindex->pprev->nChainTotalBurned && pindex->nBurnedAmountDelta) {
+                        pindex->nChainTotalBurned = *pindex->pprev->nChainTotalBurned + *pindex->nBurnedAmountDelta;
+                    } else {
+                        pindex->nChainTotalBurned = boost::none;
+                    }
+
                     if (pindex->pprev->nChainSproutValue && pindex->nSproutValue) {
                         pindex->nChainSproutValue = *pindex->pprev->nChainSproutValue + *pindex->nSproutValue;
                     } else {
                         pindex->nChainSproutValue = boost::none;
                     }
+
                     if (pindex->pprev->nChainSaplingValue) {
                         pindex->nChainSaplingValue = *pindex->pprev->nChainSaplingValue + pindex->nSaplingValue;
                     } else {
@@ -6746,12 +6834,18 @@ bool static LoadBlockIndexDB()
                     }
                 } else {
                     pindex->nChainTx = 0;
+                    pindex->nChainTotalSupply = boost::none;
+                    pindex->nChainTransparentValue = boost::none;
+                    pindex->nChainTotalBurned = boost::none;
                     pindex->nChainSproutValue = boost::none;
                     pindex->nChainSaplingValue = boost::none;
                     mapBlocksUnlinked.insert(std::make_pair(pindex->pprev, pindex));
                 }
             } else {
                 pindex->nChainTx = pindex->nTx;
+                pindex->nChainTotalSupply = pindex->nChainSupplyDelta;
+                pindex->nChainTransparentValue = pindex->nTransparentValue;
+                pindex->nChainTotalBurned = pindex->nBurnedAmountDelta;
                 pindex->nChainSproutValue = pindex->nSproutValue;
                 pindex->nChainSaplingValue = pindex->nSaplingValue;
             }

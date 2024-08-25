@@ -1,5 +1,5 @@
-FROM ubuntu:16.04
-MAINTAINER Mihail Fedorov <kolo@komodoplatform.com>
+FROM ubuntu:20.04
+LABEL maintainer="smk762 <smk@komodoplatform.com>"
 
 RUN apt-get -y update && \
     apt-get -y upgrade && \

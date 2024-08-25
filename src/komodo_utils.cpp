@@ -22,6 +22,45 @@
 
 #include "cc/CCinclude.h"
 
+char *bitcoin_base58encode(char *coinaddr, uint8_t *data, int32_t datalen)
+{
+    if (!coinaddr)
+        return nullptr;
+    if (data && datalen > 0)
+    {
+        std::string encoded = EncodeBase58(data, data + datalen);
+        for (size_t i = 0; i < encoded.length(); ++i)
+        {
+            coinaddr[i] = encoded[i];
+        }
+        coinaddr[encoded.length()] = '\0';
+    }
+    else
+    {
+        coinaddr[0] = '\0';
+    }
+    return coinaddr;
+}
+
+int32_t bitcoin_base58decode(uint8_t *data, const char *coinaddr)
+{
+    if (data == nullptr || coinaddr == nullptr)
+    {
+        return -1;
+    }
+
+    std::vector<unsigned char> vchRet;
+    const std::string str(coinaddr);
+
+    if (DecodeBase58(str, vchRet))
+    {
+        std::copy(vchRet.begin(), vchRet.end(), data);
+        return vchRet.size();
+    }
+
+    return -1;
+}
+
 void vcalc_sha256(char deprecated[(256 >> 3) * 2 + 1],uint8_t hash[256 >> 3],uint8_t *src,int32_t len)
 {
     CSHA256().Write((const unsigned char *)src, len).Finalize(hash);
@@ -960,6 +999,9 @@ void set_kmd_user_password_port(const std::string& ltc_config_filename)
 
 void komodo_args(char *argv0)
 {
+    uint8_t extrabuf[32756];
+    memset(extrabuf, 0, sizeof(extrabuf));
+
     uint8_t disablebits[32];
     uint8_t *extraptr=nullptr;
     FILE *fp;
@@ -1098,9 +1140,9 @@ void komodo_args(char *argv0)
         {
             if ( equihash_params_possible(ASSETCHAINS_NK[0], ASSETCHAINS_NK[1]) == -1 )
             {
-                printf("equihash values N.%li and K.%li are not currently available\n", ASSETCHAINS_NK[0], ASSETCHAINS_NK[1]);
+                printf("equihash values N.%" PRIu64 " and K.%" PRIu64 " are not currently available\n", ASSETCHAINS_NK[0], ASSETCHAINS_NK[1]);
                 exit(0);
-            } else printf("ASSETCHAINS_ALGO, algorithm set to equihash with N.%li and K.%li\n", ASSETCHAINS_NK[0], ASSETCHAINS_NK[1]);
+            } else printf("ASSETCHAINS_ALGO, algorithm set to equihash with N.%" PRIu64 " and K.%" PRIu64 "\n", ASSETCHAINS_NK[0], ASSETCHAINS_NK[1]);
         }
         if (i == ASSETCHAINS_NUMALGOS)
         {
@@ -1111,7 +1153,7 @@ void komodo_args(char *argv0)
         if ( ASSETCHAINS_LASTERA < 1 || ASSETCHAINS_LASTERA > ASSETCHAINS_MAX_ERAS )
         {
             ASSETCHAINS_LASTERA = 1;
-            printf("ASSETCHAINS_LASTERA, if specified, must be between 1 and %u. ASSETCHAINS_LASTERA set to %lu\n", ASSETCHAINS_MAX_ERAS, ASSETCHAINS_LASTERA);
+            printf("ASSETCHAINS_LASTERA, if specified, must be between 1 and %u. ASSETCHAINS_LASTERA set to %" PRIu64 "\n", ASSETCHAINS_MAX_ERAS, ASSETCHAINS_LASTERA);
         }
         ASSETCHAINS_LASTERA -= 1;
 
@@ -1158,6 +1200,7 @@ void komodo_args(char *argv0)
         fprintf(stderr,"ASSETCHAINS_SUPPLY %llu\n",(long long)ASSETCHAINS_SUPPLY);
 
         ASSETCHAINS_COMMISSION = GetArg("-ac_perc",0);
+        memset(ASSETCHAINS_OVERRIDE_PUBKEY33, 0, sizeof(ASSETCHAINS_OVERRIDE_PUBKEY33));
         ASSETCHAINS_OVERRIDE_PUBKEY = GetArg("-ac_pubkey","");
         ASSETCHAINS_SCRIPTPUB = GetArg("-ac_script","");
         ASSETCHAINS_BEAMPORT = GetArg("-ac_beam",0);
@@ -1292,7 +1335,7 @@ void komodo_args(char *argv0)
                 }
                 else
                 {
-                    printf("ASSETCHAINS_FOUNDERS_REWARD set to %ld\n", ASSETCHAINS_FOUNDERS_REWARD);
+                    printf("ASSETCHAINS_FOUNDERS_REWARD set to %" PRIu64 "\n", ASSETCHAINS_FOUNDERS_REWARD);
                 }
                 /*else if ( ASSETCHAINS_SELFIMPORT.size() == 0 )
                 {
@@ -1343,7 +1386,6 @@ void komodo_args(char *argv0)
                 || ASSETCHAINS_CBMATURITY != 0
                 || ASSETCHAINS_ADAPTIVEPOW != 0 )
         {
-            uint8_t extrabuf[32756];
             fprintf(stderr,"perc %.4f%% ac_pub=[%02x%02x%02x...] acsize.%d\n",dstr(ASSETCHAINS_COMMISSION)*100,ASSETCHAINS_OVERRIDE_PUBKEY33[0],ASSETCHAINS_OVERRIDE_PUBKEY33[1],ASSETCHAINS_OVERRIDE_PUBKEY33[2],(int32_t)ASSETCHAINS_SCRIPTPUB.size());
             extraptr = extrabuf;
             memcpy(extraptr,ASSETCHAINS_OVERRIDE_PUBKEY33,33), extralen = 33;
@@ -1563,6 +1605,7 @@ void komodo_args(char *argv0)
     if ( !chainName.isKMD() )
     {
         BITCOIND_RPCPORT = GetArg("-rpcport", ASSETCHAINS_RPCPORT);
+
         //fprintf(stderr,"(%s) port.%u chain params initialized\n",chainName.symbol().c_str(),BITCOIND_RPCPORT);
         if ( chainName.isSymbol("PIRATE") && ASSETCHAINS_HALVING[0] == 77777 )
         {

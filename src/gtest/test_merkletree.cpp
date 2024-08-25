@@ -52,7 +52,7 @@ void test_tree(
     UniValue root_tests,
     UniValue ser_tests,
     UniValue witness_ser_tests,
-    UniValue path_tests,
+    UniValue path_tests
 )
 {
     size_t witness_ser_i = 0;
@@ -144,8 +144,7 @@ TEST(merkletree, vectors) {
         root_tests,
         ser_tests,
         witness_ser_tests,
-        path_tests,
-        true
+        path_tests
     );
 }
 
@@ -161,8 +160,7 @@ TEST(merkletree, SaplingVectors) {
         root_tests,
         ser_tests,
         witness_ser_tests,
-        path_tests,
-        false
+        path_tests
     );
 }
 

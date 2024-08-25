@@ -1744,6 +1744,7 @@ void ThreadDNSAddressSeed()
                     CAddress addr = CAddress(CService(ip, ASSETCHAINS_P2PPORT));
                     addr.nTime = GetTime() - 3*nOneDay - GetRand(4*nOneDay); // use a random age between 3 and 7 days old
                     vAdd.push_back(addr);
+                    found++;
                 }
             }
             // TODO: The seed name resolve may fail, yielding an IP of [::], which results in

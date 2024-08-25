@@ -8,6 +8,7 @@
 #include <thread>
 #include <gtest/gtest.h>
 
+// NB! first generateBlock call changes IsInitialBlockDownload() to false globally (!), affects other tests
 
 TEST(test_block, header_size_is_expected) {
     // Header with an empty Equihash solution.

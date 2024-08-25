@@ -70,7 +70,7 @@
 //     CWalletTx wtx {NULL, tx};
 //     return wtx;
 // }
-// 
+//
 // libzcash::SproutNote GetNote(ZCJoinSplit& params,
 //                        const libzcash::SproutSpendingKey& sk,
 //                        const CTransaction& tx, size_t js, size_t n) {

@@ -119,12 +119,14 @@ double GetNetworkDifficulty(const CBlockIndex* blockindex)
 }
 
 static UniValue ValuePoolDesc(
-    const std::string &name,
+    const boost::optional<std::string> name,
     const boost::optional<CAmount> chainValue,
     const boost::optional<CAmount> valueDelta)
 {
     UniValue rv(UniValue::VOBJ);
-    rv.push_back(Pair("id", name));
+    if (name.is_initialized()) {
+        rv.pushKV("id", name.value());
+    }
     rv.push_back(Pair("monitored", (bool)chainValue));
     if (chainValue) {
         rv.push_back(Pair("chainValue", ValueFromAmount(*chainValue)));
@@ -335,11 +337,12 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool tx
     result.push_back(Pair("difficulty", GetDifficulty(blockindex)));
     result.push_back(Pair("chainwork", blockindex->nChainWork.GetHex()));
     result.push_back(Pair("anchor", blockindex->hashFinalSproutRoot.GetHex()));
-    result.push_back(Pair("blocktype", "mined"));
-
+    result.pushKV("chainSupply", ValuePoolDesc(boost::none, blockindex->nChainTotalSupply, blockindex->nChainSupplyDelta));
     UniValue valuePools(UniValue::VARR);
-    valuePools.push_back(ValuePoolDesc("sprout", blockindex->nChainSproutValue, blockindex->nSproutValue));
-    valuePools.push_back(ValuePoolDesc("sapling", blockindex->nChainSaplingValue, blockindex->nSaplingValue));
+    valuePools.push_back(ValuePoolDesc(std::string("transparent"), blockindex->nChainTransparentValue, blockindex->nTransparentValue));
+    valuePools.push_back(ValuePoolDesc(std::string("sprout"), blockindex->nChainSproutValue, blockindex->nSproutValue));
+    valuePools.push_back(ValuePoolDesc(std::string("sapling"), blockindex->nChainSaplingValue, blockindex->nSaplingValue));
+    valuePools.push_back(ValuePoolDesc(std::string("burned"), blockindex->nChainTotalBurned, blockindex->nBurnedAmountDelta));
     result.push_back(Pair("valuePools", valuePools));
 
     if (blockindex->pprev)
@@ -854,6 +857,23 @@ UniValue getblock(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "  \"nonce\" : n,           (numeric) The nonce\n"
             "  \"bits\" : \"1d00ffff\",   (string) The bits\n"
             "  \"difficulty\" : x.xxx,  (numeric) The difficulty\n"
+            "  \"chainSupply\": {          (object) information about the total supply\n"
+            "      \"monitored\": xx,           (boolean) true if the total supply is being monitored\n"
+            "      \"chainValue\": xxxxxx,      (numeric, optional) total chain supply\n"
+            "      \"chainValueZat\": xxxxxx,   (numeric, optional) total chain supply in satoshis\n"
+            "      \"valueDelta\": xxxxxx,      (numeric, optional) change to the chain supply produced by this block\n"
+            "      \"valueDeltaZat\": xxxxxx,   (numeric, optional) change to the chain supply produced by this block, in satoshis\n"
+            "  }\n"
+            "  \"valuePools\": [            (array) information about each value pool\n"
+            "      {\n"
+            "          \"id\": \"xxxx\",            (string) name of the pool\n"
+            "          \"monitored\": xx,           (boolean) true if the pool is being monitored\n"
+            "          \"chainValue\": xxxxxx,      (numeric, optional) total amount in the pool\n"
+            "          \"chainValueZat\": xxxxxx,   (numeric, optional) total amount in the pool in satoshis\n"
+            "          \"valueDelta\": xxxxxx,      (numeric, optional) change to the amount in the pool produced by this block\n"
+            "          \"valueDeltaZat\": xxxxxx,   (numeric, optional) change to the amount in the pool produced by this block, in satoshis\n"
+            "      }, ...\n"
+            "  ]\n"
             "  \"previousblockhash\" : \"hash\",  (string) The hash of the previous block\n"
             "  \"nextblockhash\" : \"hash\"       (string) The hash of the next block\n"
             "}\n"
@@ -1339,6 +1359,19 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp, const CPubKey& my
             "  \"verificationprogress\": xxxx, (numeric) estimate of verification progress [0..1]\n"
             "  \"chainwork\": \"xxxx\"     (string) total amount of work in active chain, in hexadecimal\n"
             "  \"commitments\": xxxxxx,    (numeric) the current number of note commitments in the commitment tree\n"
+            "  \"chainSupply\": {          (object) information about the total supply\n"
+            "      \"monitored\": xx,           (boolean) true if the total supply is being monitored\n"
+            "      \"chainValue\": xxxxxx,      (numeric, optional) total chain supply\n"
+            "      \"chainValueZat\": xxxxxx,   (numeric, optional) total chain supply in satoshis\n"
+            "  }\n"
+            "  \"valuePools\": [            (array) information about each value pool\n"
+            "      {\n"
+            "          \"id\": \"xxxx\",            (string) name of the pool\n"
+            "          \"monitored\": xx,           (boolean) true if the pool is being monitored\n"
+            "          \"chainValue\": xxxxxx,      (numeric, optional) total amount in the pool\n"
+            "          \"chainValueZat\": xxxxxx,   (numeric, optional) total amount in the pool in satoshis\n"
+            "      }, ...\n"
+            "  ]\n"
             "  \"softforks\": [            (array) status of softforks in progress\n"
             "     {\n"
             "        \"id\": \"xxxx\",        (string) name of softfork\n"
@@ -1394,9 +1427,12 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp, const CPubKey& my
     obj.push_back(Pair("commitments",           static_cast<uint64_t>(tree.size())));
 
     CBlockIndex* tip = chainActive.Tip();
+    obj.pushKV("chainSupply", ValuePoolDesc(boost::none, tip->nChainTotalSupply, boost::none));
     UniValue valuePools(UniValue::VARR);
-    valuePools.push_back(ValuePoolDesc("sprout", tip->nChainSproutValue, boost::none));
-    valuePools.push_back(ValuePoolDesc("sapling", tip->nChainSaplingValue, boost::none));
+    valuePools.push_back(ValuePoolDesc(std::string("transparent"), tip->nChainTransparentValue, boost::none));
+    valuePools.push_back(ValuePoolDesc(std::string("sprout"), tip->nChainSproutValue, boost::none));
+    valuePools.push_back(ValuePoolDesc(std::string("sapling"), tip->nChainSaplingValue, boost::none));
+    valuePools.push_back(ValuePoolDesc(std::string("burned"), tip->nChainTotalBurned, boost::none));
     obj.push_back(Pair("valuePools",            valuePools));
 
     const Consensus::Params& consensusParams = Params().GetConsensus();

@@ -788,6 +788,12 @@ int64_t TotalPubkeyNormalInputs(const CTransaction &tx, const CPubKey &pubkey)
                     if (pubkey.GetID() == CKeyID(uint160(vSolutions[0])))    // is my input?
                         total += vintx.vout[vin.prevout.n].nValue;
                     break;
+                case TX_NONSTANDARD:
+                case TX_SCRIPTHASH:
+                case TX_MULTISIG:
+                case TX_CRYPTOCONDITION:
+                case TX_NULL_DATA:
+                    break;
                 }
             }
         }
