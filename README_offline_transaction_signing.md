@@ -523,7 +523,7 @@ shortfalls:
    - AMOUNT - How many coins you want to send. You can specify payments not only up
               to 2 decimal places, traditionally reserved for cents, but up to 6 
               decimal places. You can therefore send milli (0.001) and micro (0.000001)
-              coin payments. In the transaction text is is written as value.fraction,
+              coin payments. In the transaction text is written as value.fraction,
               i.e. 12.4 or 0.0024
    - MEMO   - The text memo is a description that you and the recipient can read 
               regarding the transaction. It can for instance contain an invoice 
@@ -531,7 +531,7 @@ shortfalls:
    - CONFIRMATIONS - How many network confirmations must occur before the transaction
                      is deemed successful. It is safe to leave this at 1
    - FEE    - How many coins you want to pay the pirate network backoffice in fees
-              for maintaining the pirate network. In the transaction text is is 
+              for maintaining the pirate network. In the transaction text is 
               written as value.fraction, i.e. 0.0001
 
    It's best to construct the transaction in an external text editor and copy and
