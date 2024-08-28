@@ -623,7 +623,7 @@ void WalletView::requestedSyncWarningInfo()
 }
 
 void WalletView::openUnlockTimerDialog() {
-    if (ShutdownRequested) {
+    if (ShutdownRequested()) {
         return;
     }
 

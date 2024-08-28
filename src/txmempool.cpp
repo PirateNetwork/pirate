@@ -774,10 +774,10 @@ void CTxMemPool::checkZkProofHash(ProofType type) const
 {
     const std::map<uint256, const CTransaction*>* mapToUse;
     switch (type) {
-        case SPROUT:
+        case OUTPUT:
             mapToUse = &mapZkOutputProofHash;
             break;
-        case SAPLING:
+        case SPEND:
             mapToUse = &mapZkSpendProofHash;
             break;
         default:

@@ -555,7 +555,7 @@ qt_komodo_qt_LDADD += $(LIBBITCOIN_CLI) \
   $(EVENT_PTHREADS_LIBS) \
   $(EVENT_LIBS)
 
-qt_komodo_qt_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(QT_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) -fopenmp
+qt_komodo_qt_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(QT_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 qt_komodo_qt_LIBTOOLFLAGS = --tag CXX
 
 qt_komodo_qt_LDADD += \

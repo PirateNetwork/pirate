@@ -61,7 +61,7 @@ public:
      * if any checkpoints exist in the tree.
      */
     void InitNoteCommitmentTree(const SaplingMerkleFrontier& frontier) {
-        assert(!GetLastCheckpointHeight() >= 0);
+        assert(GetLastCheckpointHeight() == -1);
 
         assert(frontier.inner->init_wallet(
             reinterpret_cast<merkle_frontier::SaplingWallet*>(inner.get())));

@@ -368,7 +368,7 @@ bool RPCConsole::RPCParseCommandLine(std::string &strResult, const std::string &
         }
         *pstrFilteredOut = strCommand;
         for (auto i = filter_ranges.rbegin(); i != filter_ranges.rend(); ++i) {
-            pstrFilteredOut->replace(i->first, i->second - i->first, "(???)");
+            pstrFilteredOut->replace(i->first, i->second - i->first, "(\?\?\?)");
         }
     }
     switch(state) // final state
@@ -782,7 +782,7 @@ void RPCConsole::clear(bool clearHistory)
     }
 
 #ifdef Q_OS_MAC
-    QString clsKey = "(???)-L";
+    QString clsKey = "(\?\?\?)-L";
 #else
     QString clsKey = "Ctrl-L";
 #endif

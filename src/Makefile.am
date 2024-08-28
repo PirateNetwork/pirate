@@ -664,6 +664,10 @@ pirated_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 pirated_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 pirated_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 
+if TARGET_DARWIN
+pirated_LDFLAGS += -framework Security
+endif
+
 if TARGET_WINDOWS
 pirated_SOURCES += bitcoind-res.rc
 endif
@@ -775,6 +779,10 @@ pirate_tx_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES)
 pirate_tx_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 pirate_tx_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
 
+if TARGET_DARWIN
+pirate_tx_LDFLAGS += -framework Security
+endif
+
 if TARGET_WINDOWS
 pirate_tx_SOURCES += bitcoin-tx-res.rc
 endif
@@ -854,7 +862,7 @@ libtls_a_SOURCES = \
     tls/utiltls.cpp\
     tls/tlsmanager.cpp
 
-libtls_a_CPPFLAGS = -DMULTICORE -fopenmp -fPIC -DBINARY_OUTPUT -DCURVE_ALT_BN128 -DBOOST_SPIRIT_THREADSAFE -DHAVE_BUILD_INFO -D__STDC_FORMAT_MACROS $(HARDENED_CPPFLAGS) -pipe -O2 -g  -Wstack-protector -fstack-protector-all -fPIE -fvisibility=hidden -DSTATIC $(BITCOIN_INCLUDES) -I$(srcdir)/rust/include -I$(srcdir)/rust/gen/include
+libtls_a_CPPFLAGS = -fPIC -DBINARY_OUTPUT -DCURVE_ALT_BN128 -DBOOST_SPIRIT_THREADSAFE -DHAVE_BUILD_INFO -D__STDC_FORMAT_MACROS $(HARDENED_CPPFLAGS) -pipe -O2 -g  -Wstack-protector -fstack-protector-all -fPIE -fvisibility=hidden -DSTATIC $(BITCOIN_INCLUDES) -I$(srcdir)/rust/include -I$(srcdir)/rust/gen/include
 
 libtls_a_CXXFLAGS = $(HARDENED_CXXFLAGS) -fwrapv -fno-strict-aliasing
 

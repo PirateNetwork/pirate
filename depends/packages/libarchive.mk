@@ -6,7 +6,7 @@ $(package)_download_file=$(package)-$($(package)_version).tar.gz
 $(package)_config_opts=--with-sysroot=$(host_prefix)/lib
 $(package)_config_opts_linux=--disable-bsdtar --disable-bsdcpio --disable-shared --enable-static --prefix=$(host_prefix) --host=$(HOST)
 $(package)_config_opts_mingw32=--disable-bsdtar --disable-bsdcpio --disable-shared --enable-static --prefix=$(host_prefix) --host=x86_64-w64-mingw32
-$(package)_config_opts_darwin=--disable-bsdtar --disable-bsdcpio --disable-shared --enable-static --prefix=$(host_prefix)
+$(package)_config_opts_darwin=--disable-bsdtar --disable-bsdcpio --disable-shared --enable-static --prefix=$(host_prefix) --without-zstd --without-lz4
 $(package)_sha256_hash=fcf87f3ad8db2e4f74f32526dee62dd1fb9894782b0a503a89c9d7a70a235191
 $(package)_cflags_darwin=-mmacosx-version-min=10.9
 $(package)_conf_tool=./configure

@@ -168,7 +168,7 @@ bool TransactionBuilder::AddSaplingSpend(
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << saplingMerklePath;
     std::vector<unsigned char> vLocalMerkle(ss.begin(), ss.end());
-  
+
     myCharArray_s sMerkle;
     memcpy (&sMerkle.cArray[0], reinterpret_cast<unsigned char*>(vLocalMerkle.data()), sizeof(sMerkle.cArray) );
     asMerklePath.emplace_back(sMerkle);
@@ -557,7 +557,7 @@ std::string TransactionBuilder::Build_offline_transaction()
 
         sReturn="z_sign_offline arrr "+sVersion+" ";
         // Version 2 : 'Witness' was replaced by 'MerklePath'. The serialised data structure is identical to version 1,
-        //             but when the data is processed and reassembled, then libzcash::MerklePath must be used. 
+        //             but when the data is processed and reassembled, then libzcash::MerklePath must be used.
         //             The version number is increased to indicate this difference
         // Version 3 : Store hardware wallet commission in the 'fee' field instead of the 'change back to ourselves'
         //             This allows the full amount available in the address to be paid in a single transaction
@@ -630,7 +630,7 @@ std::string TransactionBuilder::Build_offline_transaction()
             char cHex[ 20+ 2*(1 + 33 * SAPLING_TREE_DEPTH + 8) + 1];
             //20                        14                8            11             9            8              9              2
             //{"merkleposition":number,"merklepath":hex,"note_d":hex,"note_pkd":hex,"note_r":hex,"value":number,"zip212":number},{...},{...}]'
-            snprintf(&cHex[0],sizeof(cHex),"{\"merkleposition\":\"%ld\",",lMerklePathPosition);
+            snprintf(&cHex[0],sizeof(cHex),"{\"merkleposition\":\"%llu\",",lMerklePathPosition);
             sReturn=sReturn+cHex;
             sTmp = strprintf("%u ", lMerklePathPosition);
             sChecksumInput+=sTmp;
@@ -660,9 +660,9 @@ std::string TransactionBuilder::Build_offline_transaction()
             sChecksumInput+=sTmp;
 
 
-            snprintf(&cHex[0],sizeof(cHex),"\"value\":%ld,", lValue);
+            snprintf(&cHex[0],sizeof(cHex),"\"value\":%llu,", lValue);
             sReturn=sReturn+cHex;
-            sTmp = strprintf("%ld ",lValue);
+            sTmp = strprintf("%llu ",lValue);
             sChecksumInput+=sTmp;
 
 

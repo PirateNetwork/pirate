@@ -356,7 +356,7 @@ UniValue getsaplingblocks(const UniValue& params, bool fHelp,  const CPubKey& my
 
 
     if (nHeight < 0 || nHeight > chainActive.Height()) {
-      nHeight == chainActive.Height();
+      nHeight = chainActive.Height();
       nBlocks = -1;
     }
 

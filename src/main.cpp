@@ -70,6 +70,7 @@
 #include <map>
 #include <unordered_map>
 #include <vector>
+#include <random>
 
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/filesystem.hpp>
@@ -8206,7 +8207,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         uint64_t num_proc = 0; /* nProcessedAddrs */
         uint64_t num_rate_limit = 0; /* nRatelimitedAddrs */
-        random_shuffle(vAddr.begin(), vAddr.end(), GetRandInt);
+
+        std::mt19937 g(std::time(nullptr));
+        std::shuffle(vAddr.begin(), vAddr.end(), g);
 
         BOOST_FOREACH(CAddress& addr, vAddr)
         {

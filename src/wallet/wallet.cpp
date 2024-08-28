@@ -52,6 +52,7 @@
 #include "komodo_defs.h"
 
 #include <assert.h>
+#include <random>
 
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/filesystem.hpp>
@@ -1933,7 +1934,7 @@ void CWallet::AddToArcTxs(const uint256& wtxid, ArchiveTxPoint& arcTxPt)
     uint256 txid = wtxid;
     RpcArcTransaction arcTx;
 
-    getRpcArcTx(txid, arcTx, true, rescan);
+    getRpcArcTx(txid, arcTx, true, true);
 
     arcTxPt.ivks = arcTx.ivks;
     arcTxPt.ovks = arcTx.ovks;
@@ -3042,7 +3043,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         }
 
         //Encrypt all CScripts
-        for (map<const CScriptID, CScript>::iterator it = mapScripts.begin(); it != mapScripts.end(); ++it) {
+        for (map<CScriptID, CScript>::iterator it = mapScripts.begin(); it != mapScripts.end(); ++it) {
             if (!AddCScript((*it).second)) {
                 LogPrintf("Setting encrypted CScript failed!!!\n");
                 return false;
@@ -6115,7 +6116,8 @@ bool CWallet::SelectCoinsMinConf(const CAmount& nTargetValue, int nConfMine, int
     vector<pair<CAmount, pair<const CWalletTx*,unsigned int> > > vValue;
     CAmount nTotalLower = 0;
 
-    random_shuffle(vCoins.begin(), vCoins.end(), GetRandInt);
+    std:mt19937 g(std::time(nullptr));
+    std::shuffle(vCoins.begin(), vCoins.end(), g);
 
     BOOST_FOREACH(const COutput &output, vCoins)
     {

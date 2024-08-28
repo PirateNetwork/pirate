@@ -1923,7 +1923,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                     "\n\n" + _("Bootstrap download failed!!!\n\nPress OK to continue and sync from the network."),
                     "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
 
-                if (!keepRunning==CClientUIInterface::BTN_CANCEL) {
+                if (!(keepRunning==CClientUIInterface::BTN_CANCEL)) {
                     fRequestShutdown = true;
                 }
             }

@@ -381,7 +381,6 @@ public:
      */
         template<typename Stream>
         void Serialize(Stream &s_) const
-            REQUIRES(!cs)
     {
         LOCK(cs);
 

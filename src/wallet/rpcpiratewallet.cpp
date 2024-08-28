@@ -2413,7 +2413,7 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
                       wtx.vShieldedOutput[op.n].encCiphertext,ivk,wtx.vShieldedOutput[op.n].ephemeralKey,wtx.vShieldedOutput[op.n].cmu);
 
                   if (txType == 0 && pwalletMain->IsLockedNote(op))
-                      txType == 3;
+                      txType = 3;
 
                   auto note = pt.get();
                   auto pa = ivk.address(note.d);

@@ -41,7 +41,7 @@ void UpdateDialog::setMessage()
 
     ui->message->setText(message);
 
-    if (ShutdownRequested) {
+    if (ShutdownRequested()) {
         QDialog::reject();
     }
 }

@@ -44,3 +44,7 @@ pirate_test_CPPFLAGS = $(pirated_CPPFLAGS)
 pirate_test_LDADD = -lgtest $(pirated_LDADD)
 
 pirate_test_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) -static
+
+if TARGET_DARWIN
+pirate_test_LDFLAGS += -framework Security
+endif

@@ -414,7 +414,7 @@ int TransactionTableModel::columnCount(const QModelIndex &parent) const
 QString TransactionTableModel::formatTxStatus(const TransactionRecord *wtx) const
 {
     QString status;
-    if (!wtx->archiveType == ARCHIVED) {
+    if (!(wtx->archiveType == ARCHIVED)) {
         switch(wtx->status.status)
         {
         case TransactionStatus::OpenUntilBlock:
@@ -594,7 +594,7 @@ QVariant TransactionTableModel::addressColor(const TransactionRecord *wtx) const
 QString TransactionTableModel::formatTxAmount(const TransactionRecord *wtx, bool showUnconfirmed, KomodoUnits::SeparatorStyle separators) const
 {
     QString str = KomodoUnits::format(walletModel->getOptionsModel()->getDisplayUnit(), wtx->credit + wtx->debit, false, separators);
-    if(showUnconfirmed && !wtx->archiveType == ARCHIVED)
+    if(showUnconfirmed && !(wtx->archiveType == ARCHIVED))
     {
         if(!wtx->status.countsForBalance)
         {
@@ -606,7 +606,7 @@ QString TransactionTableModel::formatTxAmount(const TransactionRecord *wtx, bool
 
 QVariant TransactionTableModel::txStatusDecoration(const TransactionRecord *wtx) const
 {
-    if (!wtx->archiveType == ARCHIVED) {
+    if (!(wtx->archiveType == ARCHIVED)) {
         switch(wtx->status.status)
         {
         case TransactionStatus::OpenUntilBlock:
