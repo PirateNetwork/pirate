@@ -1,14 +1,13 @@
 package=libcurl
-$(package)_version=8.4.0
+$(package)_version=7.78.0
 $(package)_dependencies=openssl
 $(package)_download_path=https://curl.haxx.se/download
-$(package)_file_name=curl-$($(package)_version).tar.gz
-$(package)_sha256_hash=816e41809c043ff285e8c0f06a75a1fa250211bbfb2dc0a037eeef39f1a9e427
-$(package)_config_opts=--with-openssl --disable-shared --enable-static --prefix=$(host_prefix) --without-brotli
-$(package)_config_opts_linux=--host=x86_64-unknown-linux-gnu
-$(package)_config_opts_mingw32=--enable-mingw --host=x86_64-w64-mingw32
-$(package)_config_opts_darwin=--without-libidn2 --without-zstd --without-nghttp2 --without-librtmp
-$(package)_cflags_darwin=-mmacosx-version-min=$(OSX_MIN_VERSION)
+$(package)_file_name=curl-$($(package)_version).tar.xz
+$(package)_sha256_hash=be42766d5664a739c3974ee3dfbbcbe978a4ccb1fe628bb1d9b59ac79e445fb5
+$(package)_config_opts_linux=--disable-shared --enable-static --prefix=$(host_prefix) --host=$(HOST) --with-openssl --without-brotli
+$(package)_config_opts_mingw32=--enable-mingw --disable-shared --enable-static --prefix=$(host_prefix) --host=x86_64-w64-mingw32 --with-openssl --without-brotli
+$(package)_config_opts_darwin=--disable-shared --enable-static --prefix=$(host_prefix) --with-openssl --without-brotli
+$(package)_cflags_darwin=-mmacosx-version-min=10.9
 $(package)_conf_tool=./configure
 
 ifeq ($(build_os),darwin)
