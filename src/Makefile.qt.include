@@ -438,6 +438,7 @@ KOMODO_QT_CPP += \
 RES_IMAGES = \
   qt/res/backgrounds/pirate.png \
   qt/res/backgrounds/piratemap.png \
+  qt/res/backgrounds/pirateship.png \
   qt/res/backgrounds/armada.png \
   qt/res/backgrounds/night.png \
   qt/res/backgrounds/ghostship.png \

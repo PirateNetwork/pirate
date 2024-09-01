@@ -119,6 +119,7 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
     ui->theme->addItem("Ghost Ship", QVariant("ghostship"));
     ui->theme->addItem("Night Ship", QVariant("night"));
     ui->theme->addItem("Pirate", QVariant("pirate"));
+    ui->theme->addItem("Pirate Ship", QVariant("pirateship"));
     ui->theme->addItem("Pirate Map", QVariant("piratemap"));
     ui->theme->addItem("Treasure", QVariant("treasure"));
     ui->theme->addItem("Treasure Map", QVariant("treasuremap"));
@@ -433,7 +434,7 @@ void OptionsDialog::evaluateOfflineSigning(bool bChecked)
     {
       ui->rbOfflineSigning_Sign->setChecked(true);
     }
-    
+
     //The h/w wallet option is applicable to the 'Spend' role.
     //Hide the option when 'Sign' is selected
     if (ui->rbOfflineSigning_Spend->isChecked()==true)

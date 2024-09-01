@@ -62,13 +62,13 @@ QStatusBar
 
 QFrame#frame
 {
-    background-color: rgba(0,0,0,0.6);
+    background-color: rgba(0,0,0,0.8);
     color: #ffffff;
 }
 
 QFrame#frame_2
 {
-    background-color: rgba(0,0,0,0.6);
+    background-color: rgba(0,0,0,0.8);
     color: #ffffff;
 }
 
@@ -164,8 +164,8 @@ QComboBox::indicator {
 }
 
 QTableView {
-    background-color: rgba(0,0,0,0.6);
-    alternate-background-color: rgba(76,0,0,0.3);
+    background-color: rgba(0,0,0,0.8);
+    alternate-background-color: rgba(25,25,25,0.8);
     color: #ffffff;
 }
 
@@ -290,7 +290,7 @@ QCheckBox::indicator {
 }
 
 QCheckBox::indicator:checked {
-    background-color: rgba(25,225,25);
+    background-color: rgba(25,225,25,1);
     color: #ffffff;
     width: 8px;
     height: 8px;
@@ -323,21 +323,6 @@ QWidget#contentWidget QLabel{
     color: #ffffff;
 }
 
-QLabel#labelMode {
-    background-color: rgba(0,0,0,0.6);
-    color: #FEFEFE;
-}
-
-QLabel#labelModeText {
-    background-color: rgba(0,0,0,0.6);
-    color: #FEFEFE;
-}
-
-QLabel#labelExplanation {
-    background-color: rgba(0,0,0,0.6);
-    color: #FEFEFE;
-}
-
 QFrame#encodingFrame {
     background: #303030;
     color: #ffffff;
@@ -359,7 +344,7 @@ QRadioButton::indicator {
 }
 
 QRadioButton::indicator:checked {
-    background-color: rgba(25,225,25);
+    background-color: rgba(25,225,25,1);
     color: #ffffff;
     width: 8px;
     height: 8px;
@@ -367,12 +352,8 @@ QRadioButton::indicator:checked {
     border-radius: 8px;
 }
 
-QStackedWidget#SendCoinsEntry QLabel#messageLabel {
-    color: red;
-}
-
 QWidget#OverviewPage QLabel#lockedMessage {
-    color: black;
+    color: white;
     font-weight: bold;
 }
 
@@ -384,6 +365,10 @@ QDialog#AskPassphraseDialog {
 QDialog#AskPassphraseDialog QLineEdit{
     background-color: #202020;
     color: #ffffff;
+}
+
+QStackedWidget#SendCoinsEntry QLabel#messageLabel {
+    color: red;
 }
 
 QStackedWidget#SendCoinsEntry QLabel#messageTextLabel {

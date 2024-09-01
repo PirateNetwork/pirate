@@ -5,6 +5,7 @@
         <file alias="ghostship">res/stylesheets/ghostship.css</file>
         <file alias="night">res/stylesheets/night.css</file>
         <file alias="piratemap">res/stylesheets/piratemap.css</file>
+        <file alias="pirateship">res/stylesheets/pirateship.css</file>
         <file alias="treasure">res/stylesheets/treasure.css</file>
         <file alias="treasuremap">res/stylesheets/treasuremap.css</file>
         <file alias="dark">res/stylesheets/dark.css</file>
@@ -14,6 +15,7 @@
     <qresource prefix="/backgrounds">
         <file alias="pirate">res/backgrounds/pirate.png</file>
         <file alias="piratemap">res/backgrounds/piratemap.png</file>
+        <file alias="pirateship">res/backgrounds/pirateship.png</file>
         <file alias="armada">res/backgrounds/armada.png</file>
         <file alias="ghostship">res/backgrounds/ghostship.png</file>
         <file alias="night">res/backgrounds/night.png</file>

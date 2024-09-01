@@ -739,21 +739,23 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
         if(index.column() == Amount && (rec->credit+rec->debit) < 0)
         {
             QSettings settings;
-            if (settings.value("strTheme", "armada").toString() == "dark") {
+            if (settings.value("strTheme", "pirate").toString() == "dark") {
                 return COLOR_NEGATIVE_DARK;
-            } else if (settings.value("strTheme", "armada").toString() == "pirate") {
+            } else if (settings.value("strTheme", "pirate").toString() == "pirate") {
+                return COLOR_NEGATIVE_DARK;
+            } else if (settings.value("strTheme", "pirate").toString() == "pirateship") {
                 return COLOR_NEGATIVE;
-            } else if (settings.value("strTheme", "armada").toString() == "piratemap") {
+            } else if (settings.value("strTheme", "pirate").toString() == "piratemap") {
                 return COLOR_NEGATIVE_DARK;
-            } else if (settings.value("strTheme", "armada").toString() == "armada") {
+            } else if (settings.value("strTheme", "pirate").toString() == "armada") {
                 return COLOR_NEGATIVE_DARK;
-            } else if (settings.value("strTheme", "armada").toString() == "treasure") {
+            } else if (settings.value("strTheme", "pirate").toString() == "treasure") {
                 return COLOR_NEGATIVE_DARK;
-            } else if (settings.value("strTheme", "armada").toString() == "treasuremap") {
+            } else if (settings.value("strTheme", "pirate").toString() == "treasuremap") {
                 return COLOR_NEGATIVE_DARK;
-            } else if (settings.value("strTheme", "armada").toString() == "ghostship") {
+            } else if (settings.value("strTheme", "pirate").toString() == "ghostship") {
                 return COLOR_NEGATIVE_DARK;
-            } else if (settings.value("strTheme", "armada").toString() == "night") {
+            } else if (settings.value("strTheme", "pirate").toString() == "night") {
                 return COLOR_NEGATIVE_DARK;
             } else {
                 return COLOR_NEGATIVE;
@@ -762,21 +764,23 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
         if(index.column() == Amount && (rec->credit+rec->debit) > 0)
         {
             QSettings settings;
-            if (settings.value("strTheme", "armada").toString() == "dark") {
+            if (settings.value("strTheme", "pirate").toString() == "dark") {
                 return COLOR_POSITIVE_DARK;
-            } else if (settings.value("strTheme", "armada").toString() == "pirate") {
+            } else if (settings.value("strTheme", "pirate").toString() == "pirate") {
                 return COLOR_POSITIVE_PIRATE;
-            } else if (settings.value("strTheme", "armada").toString() == "piratemap") {
+            } else if (settings.value("strTheme", "pirate").toString() == "pirate") {
                 return COLOR_POSITIVE_PIRATE;
-            } else if (settings.value("strTheme", "armada").toString() == "armada") {
+            } else if (settings.value("strTheme", "pirate").toString() == "piratemap") {
                 return COLOR_POSITIVE_PIRATE;
-            } else if (settings.value("strTheme", "armada").toString() == "treasure") {
+            } else if (settings.value("strTheme", "pirate").toString() == "armada") {
                 return COLOR_POSITIVE_PIRATE;
-            } else if (settings.value("strTheme", "armada").toString() == "treasuremap") {
+            } else if (settings.value("strTheme", "pirate").toString() == "treasure") {
                 return COLOR_POSITIVE_PIRATE;
-            } else if (settings.value("strTheme", "armada").toString() == "ghostship") {
+            } else if (settings.value("strTheme", "pirate").toString() == "treasuremap") {
                 return COLOR_POSITIVE_PIRATE;
-            } else if (settings.value("strTheme", "armada").toString() == "night") {
+            } else if (settings.value("strTheme", "pirate").toString() == "ghostship") {
+                return COLOR_POSITIVE_PIRATE;
+            } else if (settings.value("strTheme", "pirate").toString() == "night") {
                 return COLOR_POSITIVE_PIRATE;
             } else {
                 return COLOR_POSITIVE;

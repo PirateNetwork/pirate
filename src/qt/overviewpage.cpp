@@ -94,21 +94,23 @@ public:
         if(amount < 0)
         {
             QSettings settings;
-            if (settings.value("strTheme", "armada").toString() == "dark") {
+            if (settings.value("strTheme", "pirate").toString() == "dark") {
                 foreground = COLOR_NEGATIVE_DARK;
-            } else if (settings.value("strTheme", "armada").toString() == "pirate") {
+            } else if (settings.value("strTheme", "pirate").toString() == "pirate") {
+                foreground = COLOR_NEGATIVE_DARK;
+            } else if (settings.value("strTheme", "pirate").toString() == "pirateship") {
                 foreground = COLOR_NEGATIVE;
-            } else if (settings.value("strTheme", "armada").toString() == "piratemap") {
+            } else if (settings.value("strTheme", "pirate").toString() == "piratemap") {
                 foreground = COLOR_NEGATIVE_DARK;
-            } else if (settings.value("strTheme", "armada").toString() == "armada") {
+            } else if (settings.value("strTheme", "pirate").toString() == "armada") {
                 foreground = COLOR_NEGATIVE_DARK;
-            } else if (settings.value("strTheme", "armada").toString() == "treasure") {
+            } else if (settings.value("strTheme", "pirate").toString() == "treasure") {
                 foreground = COLOR_NEGATIVE_DARK;
-            } else if (settings.value("strTheme", "armada").toString() == "treasuremap") {
+            } else if (settings.value("strTheme", "pirate").toString() == "treasuremap") {
                 foreground = COLOR_NEGATIVE_DARK;
-            } else if (settings.value("strTheme", "armada").toString() == "ghostship") {
+            } else if (settings.value("strTheme", "pirate").toString() == "ghostship") {
                 foreground = COLOR_NEGATIVE_DARK;
-            } else if (settings.value("strTheme", "armada").toString() == "night") {
+            } else if (settings.value("strTheme", "pirate").toString() == "night") {
                 foreground = COLOR_NEGATIVE_DARK;
             } else {
                 foreground = COLOR_NEGATIVE;
@@ -117,21 +119,23 @@ public:
         else if(amount > 0)
         {
             QSettings settings;
-            if (settings.value("strTheme", "armada").toString() == "dark") {
+            if (settings.value("strTheme", "pirate").toString() == "dark") {
                 foreground = COLOR_POSITIVE_DARK;
-            } else if (settings.value("strTheme", "armada").toString() == "pirate") {
+            } else if (settings.value("strTheme", "pirate").toString() == "pirate") {
+              foreground = COLOR_POSITIVE_PIRATE;
+            } else if (settings.value("strTheme", "pirate").toString() == "pirateship") {
                 foreground = COLOR_POSITIVE_PIRATE;
-            } else if (settings.value("strTheme", "armada").toString() == "piratemap") {
+            } else if (settings.value("strTheme", "pirate").toString() == "piratemap") {
                 foreground = COLOR_POSITIVE_PIRATE;
-            } else if (settings.value("strTheme", "armada").toString() == "armada") {
+            } else if (settings.value("strTheme", "pirate").toString() == "armada") {
                 foreground = COLOR_POSITIVE_PIRATE;
-            } else if (settings.value("strTheme", "armada").toString() == "treasure") {
+            } else if (settings.value("strTheme", "pirate").toString() == "treasure") {
                 foreground = COLOR_POSITIVE_PIRATE;
-            } else if (settings.value("strTheme", "armada").toString() == "treasuremap") {
+            } else if (settings.value("strTheme", "pirate").toString() == "treasuremap") {
                 foreground = COLOR_POSITIVE_PIRATE;
-            } else if (settings.value("strTheme", "armada").toString() == "ghostship") {
+            } else if (settings.value("strTheme", "pirate").toString() == "ghostship") {
                 foreground = COLOR_POSITIVE_PIRATE;
-            } else if (settings.value("strTheme", "armada").toString() == "night") {
+            } else if (settings.value("strTheme", "pirate").toString() == "night") {
                 foreground = COLOR_POSITIVE_PIRATE;
             } else {
                 foreground = COLOR_POSITIVE;
