@@ -5,7 +5,6 @@ $(package)_file_name=$(package)-$($(package)_version).tar.gz
 $(package)_sha256_hash=ebb65ef6ca439333c2bb41a0c1990587288da07f6c7fd07cb3a18cc18d30ce19
 $(package)_dependencies=
 $(package)_config_opts=
-$(package)_config_opts_aarch64=--build==$(build_prefix)
 
 define $(package)_set_vars
   $(package)_build_env=DO_NOT_UPDATE_CONFIG_SCRIPTS=1
