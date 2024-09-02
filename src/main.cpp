@@ -5191,7 +5191,7 @@ static void NotifyHeaderTip() {
  * or an activated best chain. pblock is either NULL or a pointer to a block
  * that is already loaded (to avoid loading it again from disk).
  */
-bool ActivateBestChain(bool fSkipdpow, CValidationState &state, CBlock *pblock) {
+bool ActivateBestChain(bool fSkipdpow, CValidationState &state, bool fNotifyUI, CBlock *pblock) {
     CBlockIndex *pindexNewTip = NULL;
     CBlockIndex *pindexMostWork = NULL;
     const CChainParams& chainParams = Params();
@@ -5218,6 +5218,12 @@ bool ActivateBestChain(bool fSkipdpow, CValidationState &state, CBlock *pblock) 
                 return false;
             pindexNewTip = chainActive.Tip();
             fInitialDownload = IsInitialBlockDownload();
+
+            //Notify UI Startup screen
+            if (pindexNewTip->nHeight % 100 == 0 && fNotifyUI)
+            {
+                uiInterface.InitMessage(_(("Activating best chain - Currently on block " + std::to_string(pindexNewTip->nHeight)).c_str()));
+            }
         }
         // When we reach this point, we switched to a new tip (stored in pindexNewTip).
 
@@ -6487,7 +6493,7 @@ bool ProcessNewBlock(bool from_miner, int32_t height, CValidationState &state, C
 
     NotifyHeaderTip();
 
-    if (futureblock == 0 && !ActivateBestChain(false, state, pblock))
+    if (futureblock == 0 && !ActivateBestChain(false, state, false, pblock))
         return error("%s: ActivateBestChain failed", __func__);
 
     return true;
@@ -7370,7 +7376,7 @@ bool InitBlockIndex()
                 return error("LoadBlockIndex(): couldnt add to block index");
             if (!ReceivedBlockTransactions(block, state, pindex, blockPos))
                 return error("LoadBlockIndex(): genesis block not accepted");
-            if (!ActivateBestChain(true, state, &block))
+            if (!ActivateBestChain(true, state, false, &block))
                 return error("LoadBlockIndex(): genesis block cannot be activated");
             // Force a chainstate write so that when we VerifyDB in a moment, it doesn't check stale data
             if ( KOMODO_NSPV_FULLNODE )

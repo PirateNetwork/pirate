@@ -1878,7 +1878,7 @@ UniValue invalidateblock(const UniValue& params, bool fHelp, const CPubKey& mypk
     }
 
     if (state.IsValid()) {
-        ActivateBestChain(true,state);
+        ActivateBestChain(true,state,false);
     }
 
     if (!state.IsValid()) {
@@ -1917,7 +1917,7 @@ UniValue reconsiderblock(const UniValue& params, bool fHelp, const CPubKey& mypk
     }
 
     if (state.IsValid()) {
-        ActivateBestChain(true,state);
+        ActivateBestChain(true,state,false);
     }
 
     if (!state.IsValid()) {
