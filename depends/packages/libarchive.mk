@@ -3,7 +3,7 @@ $(package)_version=3.4.1
 $(package)_download_path=https://github.com/libarchive/libarchive/releases/download/v$($(package)_version)
 $(package)_file_name=$(package)-$($(package)_version).tar.gz
 $(package)_download_file=$(package)-$($(package)_version).tar.gz
-$(package)_config_opts=--with-sysroot=$(host_prefix)/lib
+$(package)_config_opts=--with-sysroot=$(host_prefix)/lib --without-bz2lib
 $(package)_config_opts_linux=--disable-bsdtar --disable-bsdcpio --disable-shared --enable-static --prefix=$(host_prefix) --host=$(HOST)
 $(package)_config_opts_mingw32=--disable-bsdtar --disable-bsdcpio --disable-shared --enable-static --prefix=$(host_prefix) --host=x86_64-w64-mingw32
 $(package)_config_opts_darwin=--disable-bsdtar --disable-bsdcpio --disable-shared --enable-static --prefix=$(host_prefix) --without-zstd --without-lz4
