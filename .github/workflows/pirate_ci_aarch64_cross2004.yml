@@ -1,6 +1,6 @@
 # we are using separate workflow because CI producing test binaries with CPPFLAGS=-DTESTMODE
 
-name: Pirate build - Ubuntu 20.04
+name: Pirate build - AArch64 cross compile 20.04
 
 
 on:
@@ -36,23 +36,28 @@ jobs:
         run: |
           sudo apt-get update  # prevents repo404 errors on apt-remove below
           sudo apt-get upgrade -y
-          sudo apt-get install -y build-essential pkg-config m4 g++-multilib autoconf libtool libncurses-dev unzip git python3 python3-zmq zlib1g-dev wget libcurl4-gnutls-dev bsdmainutils curl libsodium-dev bison
+          sudo apt-get install -y build-essential pkg-config m4 g++-multilib autoconf libtool libncurses-dev unzip git python3 python3-zmq zlib1g-dev wget libcurl4-gnutls-dev bsdmainutils curl libsodium-dev bison libbz2-dev
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+          export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=/usr/bin/aarch64-linux-gnu-gcc-9
+          export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_AR=/usr/bin/aarch64-linux-gnu-ar-9
+
       - name: Build (Linux)
         if: runner.os == 'Linux'
         run: |
-          ./zcutil/build-qt-linux.sh -j$(nproc)
+          ./zcutil/build-qt-arm.sh -j$(nproc)
           strip src/pirated
           strip src/pirate-cli
-          strip pirate-qt-linux
-          zip --junk-paths pirate-linux src/pirated src/pirate-cli
-          zip --junk-paths pirate-qt-linux pirate-qt-linux
-      - name: Upload pirate-linux.zip as artifact
+          strip pirate-qt-arm
+          zip --junk-paths pirate-aarch64 src/pirated src/pirate-cli
+          zip --junk-paths pirate-qt-aarch64 pirate-qt-arm
+      - name: Upload pirate-aarch64.zip as artifact
         uses: actions/upload-artifact@v1
         with:
-          name: pirate-linux
+          name: pirate-linux-aarch64
           path: ./pirate-linux.zip
-      - name: Upload pirate-qt-linux.zip as artifact
+      - name: Upload pirate-qt-aarch64.zip as artifact
         uses: actions/upload-artifact@v1
         with:
-          name: pirate-qt-linux
-          path: ./pirate-qt-linux.zip
+          name: pirate-qt-aarch64
+          path: ./pirate-qt-aarch64.zip

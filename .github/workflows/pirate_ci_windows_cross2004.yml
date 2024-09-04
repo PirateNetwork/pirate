@@ -1,6 +1,6 @@
 # we are using separate workflow because CI producing test binaries with CPPFLAGS=-DTESTMODE
 
-name: Pirate cli build - Windows cross compile 20.04
+name: Pirate build - Windows cross compile 20.04
 
 
 on:
@@ -8,6 +8,7 @@ on:
     branches:
     - master
     - beta
+    - dev
 
 
 jobs:
@@ -24,15 +25,24 @@ jobs:
         run: |
           sudo apt-get update  # prevents repo404 errors on apt-remove below
           sudo apt-get upgrade -y
-          sudo apt-get install mingw-w64 build-essential pkg-config libc6-dev m4 g++-multilib autoconf libtool libncurses-dev unzip git python zlib1g-dev wget bsdmainutils automake libboost-all-dev libssl-dev libprotobuf-dev protobuf-compiler libqrencode-dev libdb++-dev ntp ntpdate nano software-properties-common curl libevent-dev libcurl4-gnutls-dev cmake clang libsodium-dev -y
+          sudo apt-get install -y build-essential pkg-config m4 g++-multilib autoconf libtool libncurses-dev unzip git python3 python3-zmq zlib1g-dev wget libcurl4-gnutls-dev bsdmainutils curl libsodium-dev bison mingw-w64
           sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
           sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
       - name: Build (Windows)
         run: |
-          ./zcutil/build-win.sh -j$(nproc)
+          ./zcutil/build-qt-win.sh -j$(nproc)
+          strip src/pirated.exe
+          strip src/pirate-cli.exe
+          strip pirate-qt-win.exe
           zip --junk-paths pirate-win src/pirated.exe src/pirate-cli.exe
+          zip --junk-paths pirate-qt-win pirate-qt-win.exe
       - name: Upload pirate-win.zip as artifact
         uses: actions/upload-artifact@v1
         with:
           name: pirate-win
           path: ./pirate-win.zip
+      - name: Upload pirate-qt-win.zip as artifact
+        uses: actions/upload-artifact@v1
+        with:
+          name: pirate-qt-win
+          path: ./pirate-qt-win.zip
