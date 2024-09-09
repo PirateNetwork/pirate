@@ -4190,8 +4190,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     auto consensusBranchId = CurrentEpochBranchId(pindex->nHeight, chainparams.GetConsensus());
     auto prevConsensusBranchId = CurrentEpochBranchId(pindex->nHeight - 1, chainparams.GetConsensus());
 
-    CAmount chainSupplyDelta = 0;
-    CAmount transparentValueDelta = 0;
     size_t total_sapling_tx = 0;
     size_t total_orchard_tx = 0;
 
@@ -5057,7 +5055,7 @@ int32_t komodo_activate_orchard(CBlockIndex *pindex)
     }
     height = pindex->nHeight;
     blocktime = (uint32_t)pindex->nTime;
-    fprintf(stderr,"KOMODO_ORCHARD_ACTIVATION %u \n", KOMODO_ORCHARD_ACTIVATION);
+    fprintf(stderr,"KOMODO_ORCHARD_ACTIVATION %l \n", KOMODO_ORCHARD_ACTIVATION);
     fprintf(stderr,"starting orchard blocktime %u cmp.%d\n",blocktime,blocktime > KOMODO_ORCHARD_ACTIVATION);
     if ( blocktime > KOMODO_ORCHARD_ACTIVATION ) // find the earliest transition
     {

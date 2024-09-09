@@ -73,7 +73,7 @@ public:
                     CNullifiersMap &mapSproutNullifiers,
                     CNullifiersMap &mapSaplingNullifiers,
                     CProofHashMap &mapZkOutputProofHash,
-                    CProofHashMap &mapZkSpendProofHash) override {
+                    CProofHashMap &mapZkSpendProofHash) {
         return false;
     }
 
