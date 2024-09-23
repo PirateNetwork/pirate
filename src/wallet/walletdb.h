@@ -293,7 +293,8 @@ public:
       CWallet* pwallet, std::vector<uint256>& vTxHash,
       std::vector<CWalletTx>& vWtx, std::vector<uint256>& vCTxHash,
       std::vector<uint256>& vArcHash, std::vector<uint256>& vCArcHash,
-      std::vector<uint256>& vArcSaplingNullifier, std::vector<uint256>& vCArcSaplingNullifier);
+      std::vector<uint256>& vArcSaplingNullifier, std::vector<uint256>& vCArcSaplingNullifier,
+      std::vector<uint256>& vArcOrchardNullifier, std::vector<uint256>& vCArcOrchardNullifier);
     DBErrors ZapWalletTx(CWallet* pwallet, std::vector<CWalletTx>& vWtx);
 
     //Find and Erase records that are no longer used in the wallet.

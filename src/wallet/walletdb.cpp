@@ -50,12 +50,14 @@ static list<uint256> deadTxns;
 
 bool CWalletDB::WriteName(const string& strAddress, const string& strName)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(make_pair(string("name"), strAddress), strName);
 }
 
 bool CWalletDB::WriteCryptedName(const string& strAddress, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     if (!Write(make_pair(string("cname"), chash), vchCryptedSecret)) {
         return false;
@@ -67,6 +69,7 @@ bool CWalletDB::WriteCryptedName(const string& strAddress, const uint256& chash,
 
 bool CWalletDB::EraseName(const string& strAddress)
 {
+    LogPrintf("Updating db %s\n", __func__);
     // This should only be used for sending addresses, never for receiving addresses,
     // receiving addresses must always have an address book entry if they're not change return.
     nWalletDBUpdated++;
@@ -75,6 +78,7 @@ bool CWalletDB::EraseName(const string& strAddress)
 
 bool CWalletDB::EraseCryptedName(const uint256& chash)
 {
+    LogPrintf("Updating db %s\n", __func__);
     // This should only be used for sending addresses, never for receiving addresses,
     // receiving addresses must always have an address book entry if they're not change return.
     nWalletDBUpdated++;
@@ -83,12 +87,14 @@ bool CWalletDB::EraseCryptedName(const uint256& chash)
 
 bool CWalletDB::WritePurpose(const string& strAddress, const string& strPurpose)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(make_pair(string("purpose"), strAddress), strPurpose);
 }
 
 bool CWalletDB::WriteCryptedPurpose(const string& strAddress, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     if (!Write(make_pair(string("cpurpose"), chash), vchCryptedSecret)) {
         return false;
@@ -100,12 +106,14 @@ bool CWalletDB::WriteCryptedPurpose(const string& strAddress, const uint256& cha
 
 bool CWalletDB::ErasePurpose(const string& strPurpose)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Erase(make_pair(string("purpose"), strPurpose));
 }
 
 bool CWalletDB::EraseCryptedPurpose(const uint256& chash)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Erase(make_pair(string("cpurpose"), chash));
 }
@@ -113,12 +121,14 @@ bool CWalletDB::EraseCryptedPurpose(const uint256& chash)
 //Begin Sapling Address book
 bool CWalletDB::WriteSaplingName(const string& strAddress, const string& strName)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(make_pair(string("zname"), strAddress), strName);
 }
 
 bool CWalletDB::WriteCryptedSaplingName(const string& strAddress, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     if (!Write(make_pair(string("czname"), chash), vchCryptedSecret)) {
         return false;
@@ -130,6 +140,7 @@ bool CWalletDB::WriteCryptedSaplingName(const string& strAddress, const uint256&
 
 bool CWalletDB::EraseSaplingName(const string& strAddress)
 {
+    LogPrintf("Updating db %s\n", __func__);;
     // This should only be used for sending addresses, never for receiving addresses,
     // receiving addresses must always have an address book entry if they're not change return.
     nWalletDBUpdated++;
@@ -138,6 +149,7 @@ bool CWalletDB::EraseSaplingName(const string& strAddress)
 
 bool CWalletDB::EraseCryptedSaplingName(const uint256& chash)
 {
+    LogPrintf("Updating db %s\n", __func__);;
     // This should only be used for sending addresses, never for receiving addresses,
     // receiving addresses must always have an address book entry if they're not change return.
     nWalletDBUpdated++;
@@ -146,12 +158,14 @@ bool CWalletDB::EraseCryptedSaplingName(const uint256& chash)
 
 bool CWalletDB::WriteSaplingPurpose(const string& strAddress, const string& strPurpose)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(make_pair(string("zpurpose"), strAddress), strPurpose);
 }
 
 bool CWalletDB::WriteCryptedSaplingPurpose(const string& strAddress, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     if (!Write(make_pair(string("czpurpose"), chash), vchCryptedSecret)) {
         return false;
@@ -163,12 +177,14 @@ bool CWalletDB::WriteCryptedSaplingPurpose(const string& strAddress, const uint2
 
 bool CWalletDB::EraseSaplingPurpose(const string& strPurpose)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Erase(make_pair(string("zpurpose"), strPurpose));
 }
 
 bool CWalletDB::EraseCryptedSaplingPurpose(const uint256& chash)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Erase(make_pair(string("czpurpose"), chash));
 }
@@ -350,6 +366,7 @@ bool CWalletDB::EraseCryptedTx(uint256 hash)
 
 bool CWalletDB::WriteKey(const CPubKey& vchPubKey, const CPrivKey& vchPrivKey, const CKeyMetadata& keyMeta)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
     if (!Write(std::make_pair(std::string("keymeta"), vchPubKey), keyMeta, false))
@@ -369,6 +386,7 @@ bool CWalletDB::WriteCryptedKey(const CPubKey& vchPubKey,
                                 const uint256 chash,
                                 const std::vector<unsigned char> &vchCryptedMetaDataSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     const bool fEraseUnencryptedKey = true;
     nWalletDBUpdated++;
 
@@ -391,6 +409,7 @@ bool CWalletDB::WriteCryptedZKey(const libzcash::SproutPaymentAddress & addr,
                                  const std::vector<unsigned char>& vchCryptedSecret,
                                  const CKeyMetadata &keyMeta)
 {
+    LogPrintf("Updating db %s\n", __func__);
     const bool fEraseUnencryptedKey = true;
     nWalletDBUpdated++;
 
@@ -411,6 +430,7 @@ bool CWalletDB::WriteCryptedSaplingZKey(
     const std::vector<unsigned char>& vchCryptedSecret,
     const std::vector<unsigned char>& vchCryptedMetaDataSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     const bool fEraseUnencryptedKey = true;
     nWalletDBUpdated++;
     auto ivk = extfvk.fvk.in_viewing_key();
@@ -442,6 +462,7 @@ bool CWalletDB::WriteCryptedSaplingExtendedFullViewingKey(
     const libzcash::SaplingExtendedFullViewingKey &extfvk,
     const std::vector<unsigned char>& vchCryptedSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     const bool fEraseUnencryptedKey = true;
     nWalletDBUpdated++;
     uint256 extfvkFinger = extfvk.fvk.GetFingerprint();
@@ -460,6 +481,7 @@ bool CWalletDB::WriteCryptedPrimarySaplingSpendingKey(
     const libzcash::SaplingExtendedSpendingKey &extsk,
     const std::vector<unsigned char>& vchCryptedSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     uint256 extfvkFinger = extsk.ToXFVK().fvk.GetFingerprint();
 
@@ -474,12 +496,14 @@ bool CWalletDB::WriteCryptedPrimarySaplingSpendingKey(
 
 bool CWalletDB::WriteMasterKey(unsigned int nID, const CMasterKey& kMasterKey)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return WriteTxn(std::make_pair(std::string("mkey"), nID), kMasterKey, __FUNCTION__, true);
 }
 
 bool CWalletDB::WriteZKey(const libzcash::SproutPaymentAddress& addr, const libzcash::SproutSpendingKey& key, const CKeyMetadata &keyMeta)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
     if (!Write(std::make_pair(std::string("zkeymeta"), addr), keyMeta))
@@ -492,6 +516,7 @@ bool CWalletDB::WriteSaplingZKey(const libzcash::SaplingIncomingViewingKey &ivk,
                 const libzcash::SaplingExtendedSpendingKey &key,
                 const CKeyMetadata &keyMeta)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
     if (!Write(std::make_pair(std::string("sapzkeymeta"), ivk), keyMeta))
@@ -507,6 +532,7 @@ bool CWalletDB::WriteSaplingPaymentAddress(
     const libzcash::SaplingIncomingViewingKey &ivk,
     const libzcash::SaplingPaymentAddress &addr)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
     return Write(std::make_pair(std::string("sapzaddr"), addr), ivk);
@@ -517,6 +543,7 @@ bool CWalletDB::WriteCryptedSaplingPaymentAddress(
     const uint256 chash,
     const std::vector<unsigned char> &vchCryptedSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
     if (!Write(std::make_pair(std::string("csapzaddr"), chash), vchCryptedSecret)) {
@@ -532,6 +559,7 @@ bool CWalletDB::WriteSaplingDiversifiedAddress(
     const libzcash::SaplingIncomingViewingKey &ivk,
     const blob88 &path)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
     return Write(std::make_pair(std::string("sapzdivaddr"), addr), std::make_pair(ivk, path));
@@ -542,6 +570,7 @@ bool CWalletDB::WriteCryptedSaplingDiversifiedAddress(
     const uint256 chash,
     const std::vector<unsigned char> &vchCryptedSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
     if (!Write(std::make_pair(std::string("csapzdivaddr"), chash), vchCryptedSecret, false)) {
@@ -556,6 +585,7 @@ bool CWalletDB::WriteLastSaplingDiversifierUsed(
     const libzcash::SaplingIncomingViewingKey &ivk,
     const blob88 &path)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
     return Write(std::make_pair(std::string("sapzlastdiv"), ivk), path);
@@ -566,6 +596,7 @@ bool CWalletDB::WriteLastCryptedSaplingDiversifierUsed(
     const libzcash::SaplingIncomingViewingKey &ivk,
     const std::vector<unsigned char> &vchCryptedSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
     if (!Write(std::make_pair(std::string("csapzlastdiv"), chash), vchCryptedSecret)) {
@@ -579,18 +610,21 @@ bool CWalletDB::WriteLastCryptedSaplingDiversifierUsed(
 bool CWalletDB::WritePrimarySaplingSpendingKey(
     const libzcash::SaplingExtendedSpendingKey &key)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(std::string("pspendkey"), key);
 }
 
 bool CWalletDB::WriteSproutViewingKey(const libzcash::SproutViewingKey &vk)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(std::make_pair(std::string("vkey"), vk), '1');
 }
 
 bool CWalletDB::EraseSproutViewingKey(const libzcash::SproutViewingKey &vk)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Erase(std::make_pair(std::string("vkey"), vk));
 }
@@ -598,6 +632,7 @@ bool CWalletDB::EraseSproutViewingKey(const libzcash::SproutViewingKey &vk)
 bool CWalletDB::WriteSaplingExtendedFullViewingKey(
     const libzcash::SaplingExtendedFullViewingKey &extfvk)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(std::make_pair(std::string("sapextfvk"), extfvk), '1');
 }
@@ -605,11 +640,14 @@ bool CWalletDB::WriteSaplingExtendedFullViewingKey(
 bool CWalletDB::EraseSaplingExtendedFullViewingKey(
     const libzcash::SaplingExtendedFullViewingKey &extfvk)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Erase(std::make_pair(std::string("sapextfvk"), extfvk));
 }
 
-bool CWalletDB::WriteSaplingWitnesses(const SaplingWallet& wallet) {
+bool CWalletDB::WriteSaplingWitnesses(const SaplingWallet& wallet)
+{
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(
             std::string("sapling_note_commitment_tree"),
@@ -622,6 +660,7 @@ bool CWalletDB::WriteOrchardZKey(const libzcash::OrchardIncomingViewingKeyPirate
                 const libzcash::OrchardExtendedSpendingKeyPirate &extsk,
                 const CKeyMetadata &keyMeta)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
     if (!Write(std::make_pair(std::string("orchzkeymeta"), ivk), keyMeta))
@@ -641,6 +680,7 @@ bool CWalletDB::WriteCryptedOrchardZKey(
     const std::vector<unsigned char>& vchCryptedSecret,
     const std::vector<unsigned char>& vchCryptedMetaDataSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     const bool fEraseUnencryptedKey = true;
     nWalletDBUpdated++;
 
@@ -679,6 +719,7 @@ bool CWalletDB::WriteCryptedOrchardZKey(
 bool CWalletDB::WriteOrchardFullViewingKey(
     const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(std::make_pair(std::string("orchextfvk"), extfvk), '1');
 }
@@ -686,6 +727,7 @@ bool CWalletDB::WriteOrchardFullViewingKey(
 bool CWalletDB::EraseOrchardFullViewingKey(
     const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Erase(std::make_pair(std::string("orchextfvk"), extfvk));
 }
@@ -694,6 +736,7 @@ bool CWalletDB::WriteCryptedOrchardFullViewingKey(
     const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk,
     const std::vector<unsigned char>& vchCryptedSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     const bool fEraseUnencryptedKey = true;
     nWalletDBUpdated++;
     uint256 fvkFinger = extfvk.fvk.GetFingerprint();
@@ -712,6 +755,7 @@ bool CWalletDB::WriteOrchardPaymentAddress(
     const libzcash::OrchardIncomingViewingKeyPirate &ivk,
     const libzcash::OrchardPaymentAddressPirate &addr)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
     return Write(std::make_pair(std::string("orchzaddr"), addr), ivk);
@@ -722,6 +766,7 @@ bool CWalletDB::WriteCryptedOrchardPaymentAddress(
     const uint256 chash,
     const std::vector<unsigned char> &vchCryptedSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
     if (!Write(std::make_pair(std::string("corchzaddr"), chash), vchCryptedSecret)) {
@@ -737,6 +782,7 @@ bool CWalletDB::WriteOrchardDiversifiedAddress(
     const libzcash::OrchardIncomingViewingKeyPirate &ivk,
     const blob88 &path)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
     return Write(std::make_pair(std::string("orchzdivaddr"), addr), std::make_pair(ivk, path));
@@ -747,6 +793,7 @@ bool CWalletDB::WriteCryptedOrchardDiversifiedAddress(
     const uint256 chash,
     const std::vector<unsigned char> &vchCryptedSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
     if (!Write(std::make_pair(std::string("corchzdivaddr"), chash), vchCryptedSecret, false)) {
@@ -762,6 +809,7 @@ bool CWalletDB::WriteLastOrchardDiversifierUsed(
     const libzcash::OrchardIncomingViewingKeyPirate &ivk,
     const blob88 &path)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
     return Write(std::make_pair(std::string("orchzlastdiv"), ivk), path);
@@ -772,6 +820,7 @@ bool CWalletDB::WriteLastCryptedOrchardDiversifierUsed(
     const libzcash::OrchardIncomingViewingKeyPirate &ivk,
     const std::vector<unsigned char> &vchCryptedSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
     if (!Write(std::make_pair(std::string("corchzlastdiv"), chash), vchCryptedSecret)) {
@@ -785,6 +834,7 @@ bool CWalletDB::WriteLastCryptedOrchardDiversifierUsed(
 bool CWalletDB::WritePrimaryOrchardSpendingKey(
     const libzcash::OrchardExtendedSpendingKeyPirate &key)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(std::string("porchspendkey"), key);
 }
@@ -793,6 +843,7 @@ bool CWalletDB::WriteCryptedPrimaryOrchardSpendingKey(
     const libzcash::OrchardExtendedSpendingKeyPirate &extsk,
     const std::vector<unsigned char>& vchCryptedSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     auto extfvkOpt = extsk.GetXFVK();
     if (extfvkOpt == std::nullopt) {
         return false;
@@ -811,7 +862,9 @@ bool CWalletDB::WriteCryptedPrimaryOrchardSpendingKey(
     return true;
 }
 
-bool CWalletDB::WriteOrchardWitnesses(const OrchardWallet& wallet) {
+bool CWalletDB::WriteOrchardWitnesses(const OrchardWallet& wallet)
+{
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(
             std::string("orchard_note_commitment_tree"),
@@ -820,12 +873,14 @@ bool CWalletDB::WriteOrchardWitnesses(const OrchardWallet& wallet) {
 
 bool CWalletDB::WriteCScript(const uint160& hash, const CScript& redeemScript)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(std::make_pair(std::string("cscript"), hash), *(const CScriptBase*)(&redeemScript), false);
 }
 
 bool CWalletDB::WriteCryptedCScript(const uint256 chash, const uint160& hash, const std::vector<unsigned char> &vchCryptedSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
     if (!Write(std::make_pair(std::string("ccscript"), chash), vchCryptedSecret, false)) {
@@ -838,12 +893,14 @@ bool CWalletDB::WriteCryptedCScript(const uint256 chash, const uint160& hash, co
 
 bool CWalletDB::WriteWatchOnly(const CScript &dest)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(std::make_pair(std::string("watchs"), *(const CScriptBase*)(&dest)), '1');
 }
 
 bool CWalletDB::WriteCryptedWatchOnly(const uint256 chash, const CScript &dest, const std::vector<unsigned char> &vchCryptedSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     if (!Write(std::make_pair(std::string("cwatchs"), chash), vchCryptedSecret)) {
         return false;
@@ -855,69 +912,81 @@ bool CWalletDB::WriteCryptedWatchOnly(const uint256 chash, const CScript &dest, 
 
 bool CWalletDB::EraseWatchOnly(const CScript &dest)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Erase(std::make_pair(std::string("watchs"), *(const CScriptBase*)(&dest)));
 }
 
 bool CWalletDB::EraseCryptedWatchOnly(const uint256 chash)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Erase(std::make_pair(std::string("cwatchs"), chash));
 }
 
 bool CWalletDB::WriteIsCrypted(const bool &crypted)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(std::string("iscrypted"), crypted);
 }
 
 bool CWalletDB::WriteWalletBirthday(const int& nHeight)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(std::string("walletbirthday"), nHeight);
 }
 
 bool CWalletDB::ReadWalletBirthday(int& nHeight)
 {
+    LogPrintf("Updating db %s\n", __func__);
     return Read(std::string("walletbirthday"), nHeight);
 }
 
 bool CWalletDB::WriteWalletBip39Enabled(const bool& enabled)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(std::string("walletbip39enabled"), enabled);
 }
 
 bool CWalletDB::ReadWalletBip39Enabled(bool& enabled)
 {
+    LogPrintf("Updating db %s\n", __func__);
     return Read(std::string("walletbip39enabled"), enabled);
 }
 
 bool CWalletDB::WriteBestBlock(const CBlockLocator& locator)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(std::string("bestblock"), locator);
 }
 
 bool CWalletDB::ReadBestBlock(CBlockLocator& locator)
 {
+    LogPrintf("Updating db %s\n", __func__);
     return Read(std::string("bestblock"), locator);
 }
 
 bool CWalletDB::WriteOrderPosNext(int64_t nOrderPosNext)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(std::string("orderposnext"), nOrderPosNext);
 }
 
 bool CWalletDB::WriteDefaultKey(const CPubKey& vchPubKey)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(std::string("defaultkey"), vchPubKey);
 }
 
 bool CWalletDB::WriteCryptedDefaultKey(const uint256 chash, const std::vector<unsigned char> &vchCryptedSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     if (!Write(std::string("cdefaultkey"), make_pair(chash, vchCryptedSecret))) {
         return false;
@@ -928,22 +997,26 @@ bool CWalletDB::WriteCryptedDefaultKey(const uint256 chash, const std::vector<un
 
 bool CWalletDB::ReadPool(int64_t nPool, CKeyPool& keypool)
 {
+    LogPrintf("Updating db %s\n", __func__);
     return Read(std::make_pair(std::string("pool"), nPool), keypool);
 }
 
 bool CWalletDB::ReadCryptedPool(int64_t nPool, std::pair<uint256, std::vector<unsigned char>> &vchCryptedSecretPair)
 {
+    LogPrintf("Updating db %s\n", __func__);
     return Read(std::make_pair(std::string("cpool"), nPool), vchCryptedSecretPair);
 }
 
 bool CWalletDB::WritePool(int64_t nPool, const CKeyPool& keypool)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(std::make_pair(std::string("pool"), nPool), keypool);
 }
 
 bool CWalletDB::WriteCryptedPool(int64_t nPool, const uint256 chash, const std::vector<unsigned char> &vchCryptedSecret)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     if (!Write(std::make_pair(std::string("cpool"), nPool), std::make_pair(chash, vchCryptedSecret))) {
         return false;
@@ -955,6 +1028,7 @@ bool CWalletDB::WriteCryptedPool(int64_t nPool, const uint256 chash, const std::
 
 bool CWalletDB::ErasePool(int64_t nPool)
 {
+    LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     if (!Erase(std::make_pair(std::string("pool"), nPool))) {
         return false;
@@ -967,27 +1041,32 @@ bool CWalletDB::ErasePool(int64_t nPool)
 
 bool CWalletDB::WriteMinVersion(int nVersion)
 {
+    LogPrintf("Updating db %s\n", __func__);
     return Write(std::string("minversion"), nVersion);
 }
 
 bool CWalletDB::ReadAccount(const string& strAccount, CAccount& account)
 {
+    LogPrintf("Updating db %s\n", __func__);
     account.SetNull();
     return Read(make_pair(string("acc"), strAccount), account);
 }
 
 bool CWalletDB::WriteAccount(const string& strAccount, const CAccount& account)
 {
+    LogPrintf("Updating db %s\n", __func__);
     return Write(make_pair(string("acc"), strAccount), account);
 }
 
 bool CWalletDB::WriteAccountingEntry(const uint64_t nAccEntryNum, const CAccountingEntry& acentry)
 {
+    LogPrintf("Updating db %s\n", __func__);
     return Write(std::make_pair(std::string("acentry"), std::make_pair(acentry.strAccount, nAccEntryNum)), acentry);
 }
 
 bool CWalletDB::WriteAccountingEntry(const CAccountingEntry& acentry)
 {
+    LogPrintf("Updating db %s\n", __func__);
     return WriteAccountingEntry(++nAccountingEntryNumber, acentry);
 }
 
@@ -1054,6 +1133,8 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         // is just the two items serialized one after the other
         ssKey >> strType;
 
+        LogPrintf("Loading type %s\n", strType);
+
         //General Wallet Info
         if (strType == "hdseed") // encypted type is chdseed
         {
@@ -1066,12 +1147,14 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (seed.Fingerprint() != seedFp)
             {
                 strErr = "Error reading wallet database: HDSeed corrupt";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
 
             if (!pwallet->LoadHDSeed(seed))
             {
                 strErr = "Error reading wallet database: LoadHDSeed failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
         }
@@ -1115,6 +1198,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                     if (!pwallet->DecryptWalletTransaction(chash, vchCryptedSecret, hash, wtx))
                     {
                         strErr = "Error reading wallet database: DecryptWalletTransaction failed";
+                        LogPrintf("Loading Error %s - %s\n", strType, strErr);
                         return false;
                     }
                 }
@@ -1142,11 +1226,13 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                         ssValue >> fTmp >> fUnused >> wtx.strFromAccount;
                         strErr = strprintf("LoadWallet() upgrading tx ver=%d %d '%s' %s",
                                            wtx.fTimeReceivedIsTxTime, fTmp, wtx.strFromAccount, hash.ToString());
+                        LogPrintf("Loading Error %s - %s\n", strType, strErr);
                         wtx.fTimeReceivedIsTxTime = fTmp;
                     }
                     else
                     {
                         strErr = strprintf("LoadWallet() repairing tx ver=%d %s", wtx.fTimeReceivedIsTxTime, hash.ToString());
+                        LogPrintf("Loading Error %s - %s\n", strType, strErr);
                         wtx.fTimeReceivedIsTxTime = 0;
                     }
                     wss.vWalletUpgrade.push_back(hash);
@@ -1181,6 +1267,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                         if (!pwallet->DecryptWalletArchiveTransaction(chash, vchCryptedSecret, txid, arcTxPt))
                         {
                             strErr = "Error reading wallet database: DecryptWalletArchiveTransaction failed";
+                            LogPrintf("Loading Error %s - %s\n", strType, strErr);
                             return false;
                         }
                     }
@@ -1209,11 +1296,38 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                     if (!pwallet->DecryptArchivedSaplingOutpoint(chash, vchCryptedSecret, nullifier, op))
                     {
                         strErr = "Error reading wallet database: DecryptArchivedSaplingOutpoint failed";
+                        LogPrintf("Loading Error %s - %s\n", strType, strErr);
                         return false;
                     }
                 }
 
                 pwallet->AddToArcSaplingOutPoints(nullifier, op);
+            }
+        }
+        else if (strType == "arcorchop" || strType == "carcorchop") //carczsop is encrypted arczsop
+        {
+            if (nMaxConnections > 0) {
+                uint256 nullifier;
+                OrchardOutPoint op;
+                if (strType == "arcorchop") {
+                    ssKey >> nullifier;
+                    ssValue >> op;
+                } else {
+                    uint256 chash;
+                    ssKey >> chash;
+                    vector<unsigned char> vchCryptedSecret;
+                    ssValue >> vchCryptedSecret;
+
+                    if (!pwallet->DecryptArchivedOrchardOutpoint(chash, vchCryptedSecret, nullifier, op))
+                    {
+
+                        strErr = "Error reading wallet database: DecryptArchivedSaplingOutpoint failed";
+                        LogPrintf("Loading Error %s - %s\n", strType, strErr);
+                        return false;
+                    }
+                }
+
+                pwallet->AddToArcOrchardOutPoints(nullifier, op);
             }
         }
         //End transaction data records
@@ -1283,6 +1397,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
 
             if (!pwallet->LoadCryptedWatchOnly(chash, vchCryptedSecret)) {
                 strErr = "Error reading wallet database: LoadCryptedWatchOnly failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
 
@@ -1300,6 +1415,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadCScript(script))
             {
                 strErr = "Error reading wallet database: LoadCScript failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
         }
@@ -1313,6 +1429,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadCryptedCScript(chash, vchCryptedSecret))
             {
                 strErr = "Error reading wallet database: LoadCryptedCScript failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
         }
@@ -1323,6 +1440,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!vchPubKey.IsValid())
             {
                 strErr = "Error reading wallet database: CPubKey corrupt";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
             CKey key;
@@ -1363,6 +1481,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 if (Hash(vchKey.begin(), vchKey.end()) != hash)
                 {
                     strErr = "Error reading wallet database: CPubKey/CPrivKey corrupt";
+                    LogPrintf("Loading Error %s - %s\n", strType, strErr);
                     return false;
                 }
 
@@ -1372,11 +1491,13 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!key.Load(pkey, vchPubKey, fSkipCheck))
             {
                 strErr = "Error reading wallet database: CPrivKey corrupt";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
             if (!pwallet->LoadKey(key, vchPubKey))
             {
                 strErr = "Error reading wallet database: LoadKey failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
         }
@@ -1391,6 +1512,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadCryptedKey(chash, vchCryptedSecret))
             {
                 strErr = "Error reading wallet database: LoadCryptedKey failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
             wss.fIsEncrypted = true;
@@ -1443,6 +1565,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
 
             if (!pwallet->DecryptDefaultKey(chash, vchCryptedSecret, vchPubKey)) {
               strErr = "Error reading wallet database: DecryptDefaultKey failed";
+              LogPrintf("Loading Error %s - %s\n", strType, strErr);
               return false;
             }
 
@@ -1519,6 +1642,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadSaplingZKey(key))
             {
                 strErr = "Error reading wallet database: LoadSaplingZKey failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
 
@@ -1544,6 +1668,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadCryptedSaplingZKey(extfvkFinger, vchCryptedSecret, extfvk))
             {
                 strErr = "Error reading wallet database: LoadCryptedSaplingZKey failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
 
@@ -1566,11 +1691,13 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 if(!pwallet->LoadSaplingFullViewingKey(extfvk))
                 {
                     strErr = "Error reading wallet database: LoadSaplingFullViewingKey failed";
+                    LogPrintf("Loading Error %s - %s\n", strType, strErr);
                     return false;
                 }
                 if(!pwallet->LoadSaplingWatchOnly(extfvk))
                 {
                     strErr = "Error reading wallet database: LoadSaplingWatchOnly failed";
+                    LogPrintf("Loading Error %s - %s\n", strType, strErr);
                     return false;
                 }
             }
@@ -1596,6 +1723,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadCryptedSaplingExtendedFullViewingKey(extfvkFinger, vchCryptedSecret, extfvk))
             {
                 strErr = "Error reading wallet database: LoadCryptedSaplingExtendedFullViewingKey failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
 
@@ -1646,6 +1774,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadSaplingPaymentAddress(addr, ivk))
             {
                 strErr = "Error reading wallet database: LoadSaplingPaymentAddress failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
 
@@ -1669,6 +1798,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadCryptedSaplingPaymentAddress(chash, vchCryptedSecret, addr))
             {
                 strErr = "Error reading wallet database: LoadCryptedSaplingPaymentAddress failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
 
@@ -1689,6 +1819,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadSaplingDiversifiedAddress(addr, dPath.first, dPath.second))
             {
                 strErr = "Error reading wallet database: LoadSaplingDiversifiedAddress failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
         }
@@ -1702,6 +1833,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadCryptedSaplingDiversifiedAddress(chash, vchCryptedSecret))
             {
                 strErr = "Error reading wallet database: LoadCryptedSaplingDiversifiedAddress failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
         }
@@ -1722,6 +1854,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadCryptedPrimarySaplingSpendingKey(extfvkFinger, vchCryptedSecret))
             {
                 strErr = "Error reading wallet database: LoadCryptedPrimarySaplingSpendingKey failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
         }
@@ -1736,6 +1869,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadLastSaplingDiversifierUsed(ivk, path))
             {
                 strErr = "Error reading wallet database: LoadLastSaplingDiversifierUsed failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
         }
@@ -1749,6 +1883,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadLastCryptedSaplingDiversifierUsed(chash, vchCryptedSecret))
             {
                 strErr = "Error reading wallet database: LoadLastSaplingDiversifierUsed failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
         }
@@ -1768,21 +1903,24 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadOrchardZKey(key))
             {
                 strErr = "Error reading wallet database: LoadOrchardZKey failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
 
 
             auto extfvkOpt = key.GetXFVK();
             if (extfvkOpt == std::nullopt) {
-                return false;
                 strErr = "Error reading wallet database: LoadOrchardZKey failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
+                return false;
             }
             auto extfvk = extfvkOpt.value();
 
             auto addrOpt = extfvk.fvk.GetDefaultAddress();
             if (addrOpt == std::nullopt) {
-                return false;
                 strErr = "Error reading wallet database: LoadOrchardZKey failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
+                return false;
             }
             auto addr = addrOpt.value();
 
@@ -1809,13 +1947,15 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadCryptedOrchardZKey(extfvkFinger, vchCryptedSecret, extfvk))
             {
                 strErr = "Error reading wallet database: LoadCryptedSaplingZKey failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
 
             auto addrOpt = extfvk.fvk.GetDefaultAddress();
             if (addrOpt == std::nullopt) {
-                return false;
                 strErr = "Error reading wallet database: LoadOrchardZKey failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
+                return false;
             }
             auto addr = addrOpt.value();
 
@@ -1838,19 +1978,22 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 if(!pwallet->LoadOrchardFullViewingKey(extfvk))
                 {
                     strErr = "Error reading wallet database: LoadOrchardFullViewingKey failed";
+                    LogPrintf("Loading Error %s - %s\n", strType, strErr);
                     return false;
                 }
                 if(!pwallet->LoadOrchardWatchOnly(extfvk))
                 {
                     strErr = "Error reading wallet database: LoadOrchardWatchOnly failed";
+                    LogPrintf("Loading Error %s - %s\n", strType, strErr);
                     return false;
                 }
             }
 
             auto addrOpt = extfvk.fvk.GetDefaultAddress();
             if (addrOpt == std::nullopt) {
-                return false;
                 strErr = "Error reading wallet database: LoadOrchardZKey failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
+                return false;
             }
             auto addr = addrOpt.value();
 
@@ -1875,13 +2018,15 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadCryptedOrchardExtendedFullViewingKey(extfvkFinger, vchCryptedSecret, extfvk))
             {
                 strErr = "Error reading wallet database: LoadCryptedSaplingExtendedFullViewingKey failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
 
             auto addrOpt = extfvk.fvk.GetDefaultAddress();
             if (addrOpt == std::nullopt) {
-                return false;
                 strErr = "Error reading wallet database: LoadOrchardZKey failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
+                return false;
             }
             auto addr = addrOpt.value();
 
@@ -1932,6 +2077,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadOrchardPaymentAddress(addr, ivk))
             {
                 strErr = "Error reading wallet database: LoadOrchardPaymentAddress failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
 
@@ -1955,6 +2101,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadCryptedOrchardPaymentAddress(chash, vchCryptedSecret, addr))
             {
                 strErr = "Error reading wallet database: LoadCryptedOrchardPaymentAddress failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
 
@@ -1975,6 +2122,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadOrchardDiversifiedAddress(addr, dPath.first, dPath.second))
             {
                 strErr = "Error reading wallet database: LoadOrchardDiversifiedAddress failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
         }
@@ -1988,6 +2136,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadCryptedOrchardDiversifiedAddress(chash, vchCryptedSecret))
             {
                 strErr = "Error reading wallet database: LoadCryptedOrchardDiversifiedAddress failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
         }
@@ -2008,6 +2157,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadCryptedPrimaryOrchardSpendingKey(extfvkFinger, vchCryptedSecret))
             {
                 strErr = "Error reading wallet database: LoadCryptedPrimaryOrchardSpendingKey failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
         }
@@ -2022,6 +2172,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadLastOrchardDiversifierUsed(ivk, path))
             {
                 strErr = "Error reading wallet database: LoadLastOrchardDiversifierUsed failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
         }
@@ -2035,14 +2186,15 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (!pwallet->LoadLastCryptedOrchardDiversifierUsed(chash, vchCryptedSecret))
             {
                 strErr = "Error reading wallet database: LoadLastOrchardDiversifierUsed failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
         }
-        // else if (strType == "orchard_note_commitment_tree")
-        // {
-        //     auto loader = pwallet->GetOrchardNoteCommitmentTreeLoader();
-        //     ssValue >> loader;
-        // }
+        else if (strType == "orchard_note_commitment_tree")
+        {
+            auto loader = pwallet->GetOrchardNoteCommitmentTreeLoader();
+            ssValue >> loader;
+        }
 
     } catch (...)
     {
@@ -2328,7 +2480,10 @@ DBErrors CWalletDB::FindWalletTxToZap(
   CWallet* pwallet, vector<uint256>& vTxHash,
   vector<CWalletTx>& vWtx, vector<uint256>& vCTxHash,
   vector<uint256>& vArcHash, vector<uint256>& vCArcHash,
-  vector<uint256>& vArcSaplingNullifier, vector<uint256>& vCArcSaplingNullifier)
+  vector<uint256>& vArcSaplingNullifier,
+  vector<uint256>& vCArcSaplingNullifier,
+  vector<uint256>& vArcOrchardNullifier,
+  vector<uint256>& vCArcOrchardNullifier)
 {
     pwallet->vchDefaultKey = CPubKey();
     bool fNoncriticalErrors = false;
@@ -2392,6 +2547,14 @@ DBErrors CWalletDB::FindWalletTxToZap(
                 uint256 hash;
                 ssKey >> hash;
                 vCArcSaplingNullifier.push_back(hash);
+            } if (strType == "arcorchop") {
+                uint256 nullifier;
+                ssKey >> nullifier;
+                vArcOrchardNullifier.push_back(nullifier);
+            } if (strType == "carcorchop") {
+                uint256 hash;
+                ssKey >> hash;
+                vCArcOrchardNullifier.push_back(hash);
             }
         }
         pcursor->close();
@@ -2418,7 +2581,9 @@ DBErrors CWalletDB::ZapWalletTx(CWallet* pwallet, vector<CWalletTx>& vWtx)
     vector<uint256> vCArcTxHash;
     vector<uint256> vArcSaplingNullifier;
     vector<uint256> vCArcSaplingNullifier;
-    DBErrors err = FindWalletTxToZap(pwallet, vTxHash, vWtx, vCTxHash, vArcTxHash, vCArcTxHash, vArcSaplingNullifier, vCArcSaplingNullifier);
+    vector<uint256> vArcOrchardNullifier;
+    vector<uint256> vCArcOrchardNullifier;
+    DBErrors err = FindWalletTxToZap(pwallet, vTxHash, vWtx, vCTxHash, vArcTxHash, vCArcTxHash, vArcSaplingNullifier, vCArcSaplingNullifier, vArcOrchardNullifier, vCArcOrchardNullifier);
     if (err != DB_LOAD_OK)
         return err;
 
@@ -2453,7 +2618,18 @@ DBErrors CWalletDB::ZapWalletTx(CWallet* pwallet, vector<CWalletTx>& vWtx)
 
     // erase each crypted archive Nullier SaplingOutput set
     BOOST_FOREACH (uint256& arcNullifier, vCArcSaplingNullifier) {
-        if (!EraseCryptedArcSaplingOp(arcNullifier))
+        if (!EraseCryptedArcOrchardOp(arcNullifier))
+            return DB_CORRUPT;
+    }
+    // erase each archive Nullier OrchardOutput set
+    BOOST_FOREACH (uint256& arcNullifier, vArcOrchardNullifier) {
+        if (!EraseArcSaplingOp(arcNullifier))
+            return DB_CORRUPT;
+    }
+
+    // erase each crypted archive Nullier OrchardOutput set
+    BOOST_FOREACH (uint256& arcNullifier, vCArcOrchardNullifier) {
+        if (!EraseCryptedArcOrchardOp(arcNullifier))
             return DB_CORRUPT;
     }
     return DB_LOAD_OK;

@@ -3664,6 +3664,20 @@ bool CWallet::DecryptArchivedSaplingOutpoint(const uint256& chash, const std::ve
     return HashWithFP(nullifier) == chash;
 }
 
+bool CWallet::DecryptArchivedOrchardOutpoint(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& nullifier, OrchardOutPoint& op) {
+
+    if (IsLocked()) {
+        return false;
+    }
+
+    CKeyingMaterial vchSecret;
+    if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
+        return false;
+    }
+    DeserializeFromDecryptionOutput(vchSecret, nullifier, op);
+    return HashWithFP(nullifier) == chash;
+}
+
 bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
 {
     LOCK2(cs_wallet, cs_KeyStore);
@@ -6580,6 +6594,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             SproutMerkleTree sproutTree;
             SaplingMerkleTree saplingTree;
             SaplingMerkleFrontier saplingFrontierTree;
+            OrchardMerkleFrontier orchardFrontierTree;
             // This should never fail: we should always be able to get the tree
             // state on the path to the tip of our chain
             assert(pcoinsTip->GetSproutAnchorAt(pindex->hashSproutAnchor, sproutTree));
@@ -6587,6 +6602,9 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
                 if (NetworkUpgradeActive(pindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
                     assert(pcoinsTip->GetSaplingAnchorAt(pindex->pprev->hashFinalSaplingRoot, saplingTree));
                     assert(pcoinsTip->GetSaplingFrontierAnchorAt(pindex->pprev->hashFinalSaplingRoot, saplingFrontierTree));
+                }
+                if (NetworkUpgradeActive(pindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
+                    assert(pcoinsTip->GetOrchardFrontierAnchorAt(pindex->pprev->hashFinalOrchardRoot, orchardFrontierTree));
                 }
             }
 
@@ -9730,7 +9748,7 @@ KeyAddResult AddSpendingKeyToWallet::operator()(const libzcash::OrchardExtendedS
         if (m_wallet->HaveOrchardSpendingKey(extfvk)) {
             return KeyAlreadyExists;
         } else {
-            if (!m_wallet-> AddOrchardSpendingKey(extsk)) {
+            if (!m_wallet-> AddOrchardZKey(extsk)) {
                 return KeyNotAdded;
             }
 

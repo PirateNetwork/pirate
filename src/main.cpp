@@ -5055,7 +5055,7 @@ int32_t komodo_activate_orchard(CBlockIndex *pindex)
     }
     height = pindex->nHeight;
     blocktime = (uint32_t)pindex->nTime;
-    fprintf(stderr,"KOMODO_ORCHARD_ACTIVATION %l \n", KOMODO_ORCHARD_ACTIVATION);
+    fprintf(stderr,"KOMODO_ORCHARD_ACTIVATION %u\n", KOMODO_ORCHARD_ACTIVATION);
     fprintf(stderr,"starting orchard blocktime %u cmp.%d\n",blocktime,blocktime > KOMODO_ORCHARD_ACTIVATION);
     if ( blocktime > KOMODO_ORCHARD_ACTIVATION ) // find the earliest transition
     {

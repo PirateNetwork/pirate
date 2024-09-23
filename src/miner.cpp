@@ -289,8 +289,11 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
 
         CCoinsViewCache view(pcoinsTip);
 
-        SaplingMerkleTree sapling_tree;
-        assert(view.GetSaplingAnchorAt(view.GetBestAnchor(SAPLING), sapling_tree));
+        SaplingMerkleFrontier sapling_frontier_tree;
+        assert(view.GetSaplingFrontierAnchorAt(view.GetBestAnchor(SAPLINGFRONTIER), sapling_frontier_tree));
+
+        OrchardMerkleFrontier orchard_frontier_tree;
+        assert(view.GetOrchardFrontierAnchorAt(view.GetBestAnchor(ORCHARDFRONTIER), orchard_frontier_tree));
 
         // Priority order to process transactions
         list<COrphan> vOrphan; // list memory doesn't move
@@ -306,6 +309,7 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
         uint64_t txvalue;
         int qtyLargeTx = 0;
         int qtyMediumTx = 0;
+        int txidx = 0;
 
         for (CTxMemPool::indexed_transaction_set::iterator mi = mempool.mapTx.begin();
              mi != mempool.mapTx.end(); ++mi)
@@ -611,10 +615,14 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
             }
             UpdateCoins(tx, view, nHeight);
 
-            //Append Sapling Output to SaplingMerkleTree
-            for (const auto& output : tx.GetSaplingOutputs()) {
-                auto cmu = uint256::FromRawBytes(output.cmu());
-                sapling_tree.append(cmu);
+            //Append Sapling Output to saplingFrontierTree
+            if (tx.GetSaplingBundle().IsPresent()) {
+                sapling_frontier_tree.AppendBundle(tx.GetSaplingBundle());
+            }
+
+            //Append Orchard Actions to orchardFrontierTree
+            if (tx.GetOrchardBundle().IsPresent()) {
+                orchard_frontier_tree.AppendBundle(tx.GetOrchardBundle());
             }
 
             // Added
@@ -876,7 +884,7 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
         } else {
             pblocktemplate->hashChainHistoryRoot.SetNull();
             pblocktemplate->hashAuthDataRoot.SetNull();
-            pblock->hashBlockCommitments = sapling_tree.root();
+            pblock->hashBlockCommitments = sapling_frontier_tree.root();
         }
         // all Verus PoS chains need this data in the block at all times
         if ( chainName.isKMD() || ASSETCHAINS_STAKED == 0 || KOMODO_MININGTHREADS > 0 )

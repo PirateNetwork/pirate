@@ -38,7 +38,7 @@
 
 extern CCriticalSection cs_main;
 
-static const int SPROUT_VALUE_VERSION = 80102;
+static const int SPROUT_VALUE_VERSION = 80101;
 static const int SAPLING_VALUE_VERSION = 80102;
 static const int TRANSPARENT_VALUE_VERSION = 80103;
 static const int BURNED_VALUE_VERSION = 80104;
