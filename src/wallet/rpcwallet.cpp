@@ -3222,7 +3222,7 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
     std::vector<SaplingNoteEntry> saplingEntries;
     std::vector<OrchardNoteEntry> orchardEntries;
     pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, zaddrs, nMinDepth, nMaxDepth, true, !fIncludeWatchonly, false);
-    std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>> mapResults;
+    std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>> mapResultsSapling;
 
     for (auto & entry : saplingEntries) {
         //Only Look at notes with the filtered address or add the note address to the address set
@@ -3238,24 +3238,94 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
         //Map all notes by address
         std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>>::iterator it;
-        it = mapResults.find(entry.address);
-        if (it != mapResults.end()) {
+        it = mapResultsSapling.find(entry.address);
+        if (it != mapResultsSapling.end()) {
             it->second.push_back(entry);
         } else {
             std::vector<SaplingNoteEntry> entries;
             entries.push_back(entry);
-            mapResults[entry.address] = entries;
+            mapResultsSapling[entry.address] = entries;
+        }
+    }
+
+    std::map<libzcash::OrchardPaymentAddressPirate, std::vector<OrchardNoteEntry>> mapResultsOrchard;
+
+    for (auto & entry : orchardEntries) {
+        //Only Look at notes with the filtered address or add the note address to the address set
+        if (filterAddresses) {
+            std::set<libzcash::PaymentAddress>::iterator it;
+            it = zaddrs.find(entry.address);
+            if (it == zaddrs.end()) {
+              continue;
+            }
+        } else {
+            zaddrs.insert(entry.address);
+        }
+
+        //Map all notes by address
+        std::map<libzcash::OrchardPaymentAddressPirate, std::vector<OrchardNoteEntry>>::iterator it;
+        it = mapResultsOrchard.find(entry.address);
+        if (it != mapResultsOrchard.end()) {
+            it->second.push_back(entry);
+        } else {
+            std::vector<OrchardNoteEntry> entries;
+            entries.push_back(entry);
+            mapResultsOrchard[entry.address] = entries;
         }
     }
 
     std::set<std::pair<PaymentAddress, uint256>> nullifierSet = pwalletMain->GetNullifiersForAddresses(zaddrs);
-    for (std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>>::iterator it = mapResults.begin(); it != mapResults.end(); it++) {
+    {
 
-        std::vector<SaplingNoteEntry> entries = (*it).second;
+        for (std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>>::iterator it = mapResultsSapling.begin(); it != mapResultsSapling.end(); it++) {
 
-        // for (std::set<SaplingNoteEntry>::iterator iit = entries.begin(); iit != entries.end(); iit++) {
+            std::vector<SaplingNoteEntry> entries = (*it).second;
+
+            for (int i = 0; i < entries.size(); i++) {
+                SaplingNoteEntry entry = entries[i];
+
+                UniValue obj(UniValue::VOBJ);
+
+                int nHeight   = tx_height(entry.op.hash);
+                int dpowconfs = komodo_dpowconfs(nHeight, entry.confirmations);
+
+                // Only return notarized results when minconf>1
+                if (nMinDepth > 1 && dpowconfs == 1)
+                    continue;
+
+                obj.push_back(Pair("txid", entry.op.hash.ToString()));
+                obj.push_back(Pair("outindex", (int)entry.op.n));
+                obj.push_back(Pair("confirmations", dpowconfs));
+                obj.push_back(Pair("rawconfirmations", entry.confirmations));
+                libzcash::SaplingIncomingViewingKey ivk;
+                libzcash::SaplingExtendedFullViewingKey extfvk;
+                pwalletMain->GetSaplingIncomingViewingKey(entry.address, ivk);
+                pwalletMain->GetSaplingFullViewingKey(ivk, extfvk);
+                bool hasSaplingSpendingKey = pwalletMain->HaveSaplingSpendingKey(extfvk);
+                bool hasSaplingFullViewingKey = pwalletMain->HaveSaplingFullViewingKey(ivk);
+
+                obj.push_back(Pair("spendable", hasSaplingSpendingKey));
+                obj.push_back(Pair("address", EncodePaymentAddress(entry.address)));
+                obj.push_back(Pair("amount", ValueFromAmount(CAmount(entry.note.value())))); // note.value() is equivalent to plaintext.value()
+                obj.push_back(Pair("memo", HexStr(entry.memo)));
+                if (hasSaplingFullViewingKey) {
+                    obj.push_back(Pair("change", pwalletMain->IsNoteSaplingChange(nullifierSet, entry.address, entry.op)));
+                } else {
+                    obj.push_back(Pair("change", false));
+                }
+
+                results.push_back(obj);
+            }
+        }
+    }
+
+
+    for (std::map<libzcash::OrchardPaymentAddressPirate, std::vector<OrchardNoteEntry>>::iterator itOrchard = mapResultsOrchard.begin(); itOrchard != mapResultsOrchard.end(); itOrchard++) {
+
+        std::vector<OrchardNoteEntry> entries = (*itOrchard).second;
+
         for (int i = 0; i < entries.size(); i++) {
-            SaplingNoteEntry entry = entries[i];
+            OrchardNoteEntry entry = entries[i];
 
             UniValue obj(UniValue::VOBJ);
 
@@ -3270,19 +3340,20 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
             obj.push_back(Pair("outindex", (int)entry.op.n));
             obj.push_back(Pair("confirmations", dpowconfs));
             obj.push_back(Pair("rawconfirmations", entry.confirmations));
-            libzcash::SaplingIncomingViewingKey ivk;
-            libzcash::SaplingExtendedFullViewingKey extfvk;
-            pwalletMain->GetSaplingIncomingViewingKey(entry.address, ivk);
-            pwalletMain->GetSaplingFullViewingKey(ivk, extfvk);
-            bool hasSaplingSpendingKey = pwalletMain->HaveSaplingSpendingKey(extfvk);
-            bool hasSaplingFullViewingKey = pwalletMain->HaveSaplingFullViewingKey(ivk);
+            libzcash::OrchardIncomingViewingKeyPirate ivk;
+            libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+            pwalletMain->GetOrchardIncomingViewingKey(entry.address, ivk);
+            pwalletMain->GetOrchardFullViewingKey(ivk, extfvk);
+            bool hasOrchardSpendingKey = pwalletMain->HaveOrchardSpendingKey(extfvk);
+            bool hasOrchardFullViewingKey = pwalletMain->HaveOrchardFullViewingKey(ivk);
 
-            obj.push_back(Pair("spendable", hasSaplingSpendingKey));
+            obj.push_back(Pair("spendable", hasOrchardSpendingKey));
             obj.push_back(Pair("address", EncodePaymentAddress(entry.address)));
             obj.push_back(Pair("amount", ValueFromAmount(CAmount(entry.note.value())))); // note.value() is equivalent to plaintext.value()
             obj.push_back(Pair("memo", HexStr(entry.memo)));
-            if (hasSaplingFullViewingKey) {
-                obj.push_back(Pair("change", pwalletMain->IsNoteSaplingChange(nullifierSet, entry.address, entry.op)));
+            if (hasOrchardFullViewingKey) {
+                obj.push_back(Pair("change", false));
+                // obj.push_back(Pair("change", pwalletMain->IsNoteSaplingChange(nullifierSet, entry.address, entry.op)));
             } else {
                 obj.push_back(Pair("change", false));
             }
