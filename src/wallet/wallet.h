@@ -1948,6 +1948,10 @@ public:
          std::vector<SaplingOutPoint> notes,
          std::vector<libzcash::MerklePath>& saplingMerklePaths,
          uint256 &final_anchor);
+    bool GetOrchardNoteMerklePaths(
+        std::vector<OrchardOutPoint> notes,
+        std::vector<libzcash::MerklePath>& orchardMerklePaths,
+        uint256 &final_anchor);
 
     isminetype IsMine(const CTxIn& txin) const;
     CAmount GetDebit(const CTxIn& txin, const isminefilter& filter) const;

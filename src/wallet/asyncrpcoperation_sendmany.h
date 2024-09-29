@@ -84,7 +84,9 @@ private:
     int mindepth_;
     std::string fromaddress_;
     bool isfromtaddr_;
-    bool isfromzaddr_;
+    bool isfromsaplingaddr_;
+    bool isfromorchardaddr_;
+    bool isfromprivate_;
     CTxDestination fromtaddr_;
     std::string fromAddress_;
     PaymentAddress frompaymentaddress_;
@@ -95,6 +97,7 @@ private:
     std::vector<SendManyRecipient> orchard_outputs_;
     std::vector<SendManyInputUTXO> t_inputs_;
     std::vector<SaplingNoteEntry> z_sapling_inputs_;
+    std::vector<OrchardNoteEntry> z_orchard_inputs_;
 
     TransactionBuilder builder_;
     CTransaction tx_;

@@ -175,8 +175,7 @@ public:
     /// object in any way will cause an exception. This emulates Rust's compile-time
     /// move semantics at runtime.
     std::optional<OrchardBundle> ProveAndSign(
-        const unsigned char* keys,
-        size_t keyCount,
+        libzcash::OrchardSpendingKeyPirate keys,
         uint256 sighash);
 };
 
@@ -369,9 +368,12 @@ private:
     CAmount valueBalanceOrchard = 0;
 
     std::optional<std::pair<uint256, libzcash::SaplingPaymentAddress>> firstSaplingSpendAddr;
-
     std::optional<std::pair<uint256, libzcash::SaplingPaymentAddress>> saplingChangeAddr;
+
+    std::vector<libzcash::OrchardSpendingKeyPirate> orchardSpendingKeys;
+    std::optional<std::pair<uint256, libzcash::OrchardPaymentAddressPirate>> firstOrchardSpendAddr;
     std::optional<std::pair<uint256, libzcash::OrchardPaymentAddressPirate>> orchardChangeAddr;
+
     std::optional<CTxDestination> tChangeAddr;
     std::optional<CScript> opReturn;
 
@@ -472,6 +474,17 @@ public:
     // Orchard
     void setOrchardOvk(uint256 ovk);
 
+    void InitalizeOrchard(
+        bool spendsEnabled,
+        bool outputsEnabled,
+        uint256 anchor);
+
+    void AddOrchardSpend(
+      const libzcash::OrchardExtendedSpendingKeyPirate fvk,
+      const orchard_bundle::Action* action,
+      const libzcash::MerklePath orchardMerklePath,
+      CAmount value);
+
     void AddOrchardOutput(
         const std::optional<uint256>& ovk,
         const libzcash::OrchardPaymentAddressPirate to,
@@ -493,6 +506,8 @@ public:
     void AddOpRet(CScript& s);
 
     bool AddOpRetLast();
+
+    void SendChangeTo(libzcash::OrchardPaymentAddressPirate changeAddr, uint256 ovk);
 
     void SendChangeTo(libzcash::SaplingPaymentAddress changeAddr, uint256 ovk);
 

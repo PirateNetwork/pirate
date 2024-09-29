@@ -124,8 +124,7 @@ std::optional<UnauthorizedBundle> Builder::Build()
 }
 
 std::optional<OrchardBundle> UnauthorizedBundle::ProveAndSign(
-    const unsigned char* keys,
-    size_t keyCount,
+    libzcash::OrchardSpendingKeyPirate key,
     uint256 sighash)
 {
     if (!inner) {
@@ -133,7 +132,9 @@ std::optional<OrchardBundle> UnauthorizedBundle::ProveAndSign(
     }
 
     auto authorizedBundle = orchard_unauthorized_bundle_prove_and_sign(
-        inner.release(), keys, keyCount, sighash.begin());
+        inner.release(),
+        key.sk.begin(),
+        sighash.begin());
     if (authorizedBundle == nullptr) {
         return std::nullopt;
     } else {
@@ -410,6 +411,61 @@ void TransactionBuilder::setOrchardOvk(uint256 ovk)
     ovkOrchard = ovk;
 }
 
+void TransactionBuilder::InitalizeOrchard(
+    bool spendsEnabled,
+    bool outputsEnabled,
+    uint256 anchor)
+{
+    if (mtx.nVersion < ORCHARD_MIN_TX_VERSION) {
+        throw std::runtime_error("TransactionBuilder cannot initialize Orchard before Orchard activation");
+    }
+
+    orchardBuilder = orchard::Builder(spendsEnabled, outputsEnabled, anchor);
+}
+
+void TransactionBuilder::AddOrchardSpend(
+  const libzcash::OrchardExtendedSpendingKeyPirate extsk,
+  const orchard_bundle::Action* action,
+  const libzcash::MerklePath orchardMerklePath,
+  CAmount value)
+{
+    if (!orchardBuilder.has_value()) {
+        // Try to give a useful error.
+        if (mtx.nVersion < ORCHARD_MIN_TX_VERSION) {
+            throw std::runtime_error("TransactionBuilder cannot add Orchard output before NU5 activation");
+        } else {
+            throw std::runtime_error("TransactionBuilder cannot add Orchard output without Orchard anchor");
+        }
+    }
+
+    auto fvkOpt = extsk.GetXFVK();
+    if (fvkOpt == std::nullopt) {
+        throw std::runtime_error("TransactionBuilder cannot get XFVK from EXTSK");
+    }
+    auto fvk = fvkOpt.value().fvk;
+
+    if (!firstOrchardSpendAddr.has_value()) {
+
+        auto ovkOpt = fvk.GetOVK();
+        if (ovkOpt == std::nullopt) {
+            throw std::runtime_error("TransactionBuilder cannot get ovk from FVK");
+        }
+        auto ovk = ovkOpt.value();
+
+        auto changeAddrOpt = fvk.GetDefaultAddress();
+        if (changeAddrOpt == std::nullopt) {
+            throw std::runtime_error("TransactionBuilder cannot get default address from FVK");
+        }
+        auto changeAddr = changeAddrOpt.value();
+
+        firstOrchardSpendAddr = std::make_pair(ovk,changeAddr);
+    }
+
+    orchardBuilder.value().AddSpend(fvk, action, orchardMerklePath);
+    orchardSpendingKeys.push_back(extsk.sk);
+    valueBalanceOrchard += value;
+}
+
 void TransactionBuilder::AddOrchardOutput(
     const std::optional<uint256>& ovk,
     const libzcash::OrchardPaymentAddressPirate to,
@@ -523,10 +579,18 @@ void TransactionBuilder::SetExpiryHeight(int expHeight)
     this->mtx.nExpiryHeight = expHeight;
 }
 
+void TransactionBuilder::SendChangeTo(libzcash::OrchardPaymentAddressPirate changeAddr, uint256 ovk)
+{
+    orchardChangeAddr = std::make_pair(ovk, changeAddr);
+    tChangeAddr = std::nullopt;
+    saplingChangeAddr = std::nullopt;
+}
+
 void TransactionBuilder::SendChangeTo(libzcash::SaplingPaymentAddress changeAddr, uint256 ovk)
 {
     saplingChangeAddr = std::make_pair(ovk, changeAddr);
     tChangeAddr = std::nullopt;
+    orchardChangeAddr = std::nullopt;
 }
 
 bool TransactionBuilder::SendChangeTo(CTxDestination& changeAddr)
@@ -537,6 +601,7 @@ bool TransactionBuilder::SendChangeTo(CTxDestination& changeAddr)
 
     tChangeAddr = changeAddr;
     saplingChangeAddr = std::nullopt;
+    orchardChangeAddr = std::nullopt;
 
     return true;
 }
@@ -577,19 +642,15 @@ TransactionBuilderResult TransactionBuilder::Build()
         // was set, send change to the first Sapling address given as input.
         if (orchardChangeAddr) {
             AddOrchardOutput(orchardChangeAddr->first, orchardChangeAddr->second, change, std::nullopt);
+        }else if (firstOrchardSpendAddr) {
+                AddOrchardOutput(firstOrchardSpendAddr->first, firstOrchardSpendAddr->second, change, std::nullopt);
         } else if (saplingChangeAddr) {
             AddSaplingOutput(saplingChangeAddr->first, saplingChangeAddr->second, change);
+        } else if (firstSaplingSpendAddr) {
+            AddSaplingOutput(firstSaplingSpendAddr->first, firstSaplingSpendAddr->second, change);
         } else if (tChangeAddr) {
             // tChangeAddr has already been validated.
             assert(AddTransparentOutput(tChangeAddr.value(), change));
-            // } else if (firstOrchardSpendAddr.has_value()) {
-            //     auto ovk = orchardSpendingKeys[0].ToFullViewingKey().ToInternalOutgoingViewingKey();
-            //     AddOrchardOutput(ovk, firstOrchardSpendAddr.value(), change, std::nullopt);
-        } else if (firstSaplingSpendAddr.has_value()) {
-            uint256 ovk;
-            libzcash::SaplingPaymentAddress changeAddr;
-            std::tie(ovk, changeAddr) = firstSaplingSpendAddr.value();
-            AddSaplingOutput(ovk, changeAddr, change);
         } else {
             return TransactionBuilderResult("Could not determine change address");
         }
@@ -649,12 +710,10 @@ TransactionBuilderResult TransactionBuilder::Build()
         return TransactionBuilderResult("Could not construct signature hash: " + std::string(ex.what()));
     }
 
-    const unsigned char* keys;
-    size_t keyCount = 0;
-
     if (orchardBundle.has_value()) {
         auto authorizedBundle = orchardBundle.value().ProveAndSign(
-            keys, keyCount, dataToBeSigned);
+            orchardSpendingKeys[0],
+            dataToBeSigned);
         if (authorizedBundle.has_value()) {
             mtx.orchardBundle = authorizedBundle.value();
         } else {

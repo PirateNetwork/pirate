@@ -100,7 +100,9 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
 
     fromtaddr_ = DecodeDestination(fromAddress);
     isfromtaddr_ = IsValidDestination(fromtaddr_);
-    isfromzaddr_ = false;
+    isfromsaplingaddr_ = false;
+    isfromorchardaddr_ = false;
+    isfromprivate_ = false;
 
     int ivOUT = (int)saplingOutputs.size();
 
@@ -109,7 +111,23 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
         fromAddress_ = fromAddress; // Initialise private, persistant Address for the object.
         auto address = DecodePaymentAddress(fromAddress);
         if (IsValidPaymentAddress(address)) {
-            isfromzaddr_ = true;
+
+            auto saplingPaymentAddress = std::get_if<libzcash::SaplingPaymentAddress>(&address);
+            if (saplingPaymentAddress != nullptr) {
+                isfromsaplingaddr_ = true;
+                isfromprivate_ = true;
+            }
+
+            auto orchardPaymentAddress = std::get_if<libzcash::OrchardPaymentAddressPirate>(&address);
+            if (orchardPaymentAddress != nullptr) {
+                isfromorchardaddr_ = true;
+                isfromprivate_ = true;
+            }
+
+            if(!isfromsaplingaddr_ && !isfromorchardaddr_) {
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address");
+            }
+
             frompaymentaddress_ = address;
             // We don't need to lock on the wallet as spending key related methods are thread-safe
             if (!std::visit(HaveSpendingKeyForPaymentAddress(pwalletMain), address)) {
@@ -125,7 +143,7 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
         }
     }
 
-    if (isfromzaddr_ && minDepth == 0) {
+    if ((isfromsaplingaddr_ || isfromorchardaddr_) && minDepth == 0) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Minconf cannot be zero when sending from zaddr");
     }
 
@@ -229,7 +247,7 @@ void AsyncRPCOperation_sendmany::main()
 // 3. #1277 Spendable notes are not locked, so an operation running in parallel could also try to use them
 bool AsyncRPCOperation_sendmany::main_impl()
 {
-    assert(isfromtaddr_ != isfromzaddr_);
+    assert(isfromtaddr_ != isfromprivate_);
 
     bool isSingleZaddrOutput = (sapling_outputs_.size() + orchard_outputs_.size() == 1);
     bool isMultipleZaddrOutput = (sapling_outputs_.size() + orchard_outputs_.size() >= 1);
@@ -256,8 +274,8 @@ bool AsyncRPCOperation_sendmany::main_impl()
         }
     }
 
-    if (isfromzaddr_ && !find_unspent_notes()) {
-        throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Insufficient funds, no unspent notes found for zaddr from address.");
+    if ((isfromsaplingaddr_ || isfromorchardaddr_) && !find_unspent_notes()) {
+        throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Insufficient funds, no unspent notes found for from address.");
     }
 
     CAmount t_inputs_total = 0;
@@ -265,9 +283,14 @@ bool AsyncRPCOperation_sendmany::main_impl()
         t_inputs_total += std::get<2>(t);
     }
 
-    CAmount z_inputs_total = 0;
+    CAmount sapling_inputs_total = 0;
     for (auto t : z_sapling_inputs_) {
-        z_inputs_total += t.note.value();
+        sapling_inputs_total += t.note.value();
+    }
+
+    CAmount orchard_inputs_total = 0;
+    for (auto t : z_orchard_inputs_) {
+        orchard_inputs_total += t.note.value();
     }
 
     CAmount sapling_outputs_total = 0;
@@ -280,11 +303,12 @@ bool AsyncRPCOperation_sendmany::main_impl()
         orchard_outputs_total += std::get<1>(t);
     }
 
+
     CAmount sendAmount = sapling_outputs_total + orchard_outputs_total;
     CAmount targetAmount = sendAmount + minersFee;
 
-    assert(!isfromtaddr_ || z_inputs_total == 0);
-    assert(!isfromzaddr_ || t_inputs_total == 0);
+    assert(!isfromtaddr_ || sapling_inputs_total + orchard_inputs_total == 0);
+    assert((!isfromsaplingaddr_ && !isfromorchardaddr_) || t_inputs_total == 0);
 
     if (isfromtaddr_ && (t_inputs_total < targetAmount)) {
         throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS,
@@ -292,10 +316,16 @@ bool AsyncRPCOperation_sendmany::main_impl()
                                      FormatMoney(t_inputs_total), FormatMoney(targetAmount)));
     }
 
-    if (isfromzaddr_ && (z_inputs_total < targetAmount)) {
+    if (isfromsaplingaddr_ && (sapling_inputs_total < targetAmount)) {
         throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS,
                            strprintf("Insufficient shielded funds, have %s, need %s",
-                                     FormatMoney(z_inputs_total), FormatMoney(targetAmount)));
+                                     FormatMoney(sapling_inputs_total), FormatMoney(targetAmount)));
+    }
+
+    if (isfromorchardaddr_ && (orchard_inputs_total < targetAmount)) {
+        throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS,
+                           strprintf("Insufficient shielded funds, have %s, need %s",
+                                     FormatMoney(orchard_inputs_total), FormatMoney(targetAmount)));
     }
 
     // If from address is a taddr, select UTXOs to spend
@@ -376,7 +406,7 @@ bool AsyncRPCOperation_sendmany::main_impl()
     LogPrint((isfromtaddr_) ? "zrpc" : "zrpcunsafe", "%s: spending %s to send %s with fee %s\n",
              getId(), FormatMoney(targetAmount), FormatMoney(sendAmount), FormatMoney(minersFee));
     LogPrint("zrpc", "%s: transparent input: %s (to choose from)\n", getId(), FormatMoney(t_inputs_total));
-    LogPrint("zrpcunsafe", "%s: private input: %s (to choose from)\n", getId(), FormatMoney(z_inputs_total));
+    LogPrint("zrpcunsafe", "%s: private input: %s (to choose from)\n", getId(), FormatMoney(sapling_inputs_total));
     LogPrint("zrpcunsafe", "%s: private output: %s\n", getId(), FormatMoney(sapling_outputs_total));
     LogPrint("zrpc", "%s: fee: %s\n", getId(), FormatMoney(minersFee));
 
@@ -515,13 +545,13 @@ bool AsyncRPCOperation_sendmany::main_impl()
 
     builder_.SetFee(minersFee);
 
-    // Get various necessary keys
-    SaplingExtendedSpendingKey extsk;
+    //ovk will be set based on the from address
     uint256 ovk;
-    if (isfromzaddr_) {
-        extsk = *(std::get_if<libzcash::SaplingExtendedSpendingKey>(&spendingkey_));
-        ovk = extsk.expsk.full_viewing_key().ovk;
-    } else {
+
+    // Set change address if we are using transparent funds
+    // TODO: Should we just use fromtaddr_ as the change address?
+    if (isfromtaddr_) {
+
         // Sending from a t-address, which we don't have an ovk for. Instead,
         // generate a common one from the HD seed. This ensures the data is
         // recoverable, while keeping it logically separate from the ZIP 32
@@ -533,11 +563,7 @@ bool AsyncRPCOperation_sendmany::main_impl()
                 "AsyncRPCOperation_sendmany::main_impl(): HD seed not found");
         }
         ovk = ovkForShieldingFromTaddr(seed);
-    }
 
-    // Set change address if we are using transparent funds
-    // TODO: Should we just use fromtaddr_ as the change address?
-    if (isfromtaddr_) {
         LOCK2(cs_main, pwalletMain->cs_wallet);
 
         EnsureWalletIsUnlocked();
@@ -555,33 +581,131 @@ bool AsyncRPCOperation_sendmany::main_impl()
         assert(builder_.SendChangeTo(changeAddr));
     }
 
-    // Select Sapling notes
-    std::vector<SaplingOutPoint> ops;
-    std::vector<SaplingNote> notes;
-    CAmount sum = 0;
-    for (auto t : z_sapling_inputs_) {
-        ops.push_back(t.op);
-        notes.push_back(t.note);
-        sum += t.note.value();
-        if (sum >= targetAmount) {
-            break;
-        }
-    }
 
-    // Fetch Sapling anchor and merkle paths
-    uint256 anchor;
-    std::vector<libzcash::MerklePath> saplingMerklePaths;
-    {
+
+
+
+    if (isfromsaplingaddr_) {
         LOCK2(cs_main, pwalletMain->cs_wallet);
-        if (!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
-            LogPrint("zrpcunsafe", "%s: Merkle Path not found for Sapling note. Stopping.\n", getId());
+
+        // Get various necessary keys
+        SaplingExtendedSpendingKey extsk;
+        extsk = *(std::get_if<libzcash::SaplingExtendedSpendingKey>(&spendingkey_));
+        ovk = extsk.expsk.full_viewing_key().ovk;
+
+        // Select Sapling notes
+        std::vector<SaplingOutPoint> ops;
+        std::vector<SaplingNote> notes;
+        CAmount sum = 0;
+        for (auto t : z_sapling_inputs_) {
+            ops.push_back(t.op);
+            notes.push_back(t.note);
+            sum += t.note.value();
+            if (sum >= targetAmount) {
+                break;
+            }
         }
+
+        // Fetch Sapling anchor and merkle paths
+        uint256 anchor;
+        std::vector<libzcash::MerklePath> saplingMerklePaths;
+        {
+            if (!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
+                throw JSONRPCError(
+                    RPC_WALLET_ERROR,
+                     strprintf("%s: Merkle Path not found for Sapling note. Stopping.\n", getId()));
+            }
+        }
+
+        // Add Sapling spends
+        for (size_t i = 0; i < notes.size(); i++) {
+            assert(builder_.AddSaplingSpend(extsk, notes[i], anchor, saplingMerklePaths[i]));
+        }
+
     }
 
-    // Add Sapling spends
-    for (size_t i = 0; i < notes.size(); i++) {
-        assert(builder_.AddSaplingSpend(extsk, notes[i], anchor, saplingMerklePaths[i]));
+    if (isfromorchardaddr_) {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+
+
+        // Get various necessary keys
+        OrchardExtendedSpendingKeyPirate extsk;
+        extsk = *(std::get_if<libzcash::OrchardExtendedSpendingKeyPirate>(&spendingkey_));
+
+        auto fvkOpt = extsk.GetXFVK();
+        if (fvkOpt == std::nullopt) {
+          throw JSONRPCError(
+              RPC_WALLET_ERROR,
+               strprintf("%s: FVK not found for Orchard spending key. Stopping.\n", getId()));
+        }
+
+        auto fvk = fvkOpt.value().fvk;
+        auto ovkOpt = fvk.GetOVK();
+        if (fvkOpt == std::nullopt) {
+          throw JSONRPCError(
+              RPC_WALLET_ERROR,
+               strprintf("%s: OVK not found for Orchard spending key. Stopping.\n", getId()));
+        }
+
+        ovk = ovkOpt.value();
+
+        // Select Orchard notes
+        std::vector<OrchardOutPoint> ops;
+        std::vector<OrchardNote> notes;
+        CAmount sum = 0;
+        for (auto t : z_orchard_inputs_) {
+            ops.push_back(t.op);
+            notes.push_back(t.note);
+            sum += t.note.value();
+            if (sum >= targetAmount) {
+                break;
+            }
+        }
+
+        // Fetch Orchard anchor and merkle paths
+        uint256 anchor;
+        std::vector<libzcash::MerklePath> orchardMerklePaths;
+        {
+            if (!pwalletMain->GetOrchardNoteMerklePaths(ops, orchardMerklePaths, anchor)) {
+                throw JSONRPCError(
+                    RPC_WALLET_ERROR,
+                     strprintf("%s: Merkle Path not found for Orchard note. Stopping.\n", getId()));
+            }
+        }
+
+        //Initalize Orchard builder based on inputs and outputs
+        if (!orchard_outputs_.empty()) {
+          builder_.InitalizeOrchard(true, true, anchor);
+        } else {
+          builder_.InitalizeOrchard(true, false, anchor);
+        }
+
+
+        // Add Orchard spends
+        for (size_t i = 0; i < ops.size(); i++) {
+
+            const CWalletTx* wtx = pwalletMain->GetWalletTx(ops[i].hash);
+            if (wtx == NULL) {
+                throw JSONRPCError(
+                    RPC_WALLET_ERROR,
+                     strprintf("%s: Wallet Transaction not found.\n", getId()));
+            }
+
+            if (wtx->mapOrchardNoteData.count(ops[i])) {
+                auto vActions = wtx->GetOrchardActions();
+                builder_.AddOrchardSpend(extsk, &vActions[ops[i].n], orchardMerklePaths[i], notes[i].value());
+            }
+        }
+
+    } else {
+      //Initalize Orchard builder based on inputs and outputs
+      if (!orchard_outputs_.empty()) {
+        builder_.InitalizeOrchard(false, true, uint256());
+      }
     }
+
+    assert(!ovk.IsNull());
+
 
     // Add Sapling outputs
     for (auto r : sapling_outputs_) {
@@ -598,7 +722,7 @@ bool AsyncRPCOperation_sendmany::main_impl()
         builder_.AddSaplingOutput(ovk, to, value, memo);
     }
 
-    // Add Sapling outputs
+    // Add Orchard outputs
     for (auto r : orchard_outputs_) {
         auto address = std::get<0>(r);
         auto value = std::get<1>(r);
@@ -735,13 +859,29 @@ bool AsyncRPCOperation_sendmany::find_unspent_notes()
                  HexStr(data).substr(0, 10));
     }
 
-    if (z_sapling_inputs_.empty()) {
+    for (auto entry : orchardEntries) {
+        z_orchard_inputs_.push_back(entry);
+        std::string data(entry.memo.begin(), entry.memo.end());
+        LogPrint("zrpcunsafe", "%s: found unspent Orchard note (txid=%s, vShieldedSpend=%d, amount=%s, memo=%s)\n",
+                 getId(),
+                 entry.op.hash.ToString().substr(0, 10),
+                 entry.op.n,
+                 FormatMoney(entry.note.value()),
+                 HexStr(data).substr(0, 10));
+    }
+
+    if (z_sapling_inputs_.empty() && z_orchard_inputs_.empty()) {
         return false;
     }
 
     // sort in descending order, so big notes appear first
     std::sort(z_sapling_inputs_.begin(), z_sapling_inputs_.end(),
               [](SaplingNoteEntry i, SaplingNoteEntry j) -> bool {
+                  return i.note.value() > j.note.value();
+              });
+
+    std::sort(z_orchard_inputs_.begin(), z_orchard_inputs_.end(),
+              [](OrchardNoteEntry i, OrchardNoteEntry j) -> bool {
                   return i.note.value() > j.note.value();
               });
 

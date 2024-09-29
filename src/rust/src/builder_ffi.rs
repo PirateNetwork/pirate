@@ -215,36 +215,26 @@ pub extern "C" fn orchard_unauthorized_bundle_free(
 #[no_mangle]
 pub extern "C" fn orchard_unauthorized_bundle_prove_and_sign(
     bundle: *mut Bundle<InProgress<Unproven, Unauthorized>, Amount>,
-    keys: *const u8,
-    keys_len: size_t,
+    skbytes: *const [u8; 32],
     sighash: *const [u8; 32],
 ) -> *mut Bundle<Authorized, Amount> {
     let bundle = unsafe { Box::from_raw(bundle) };
-    let keys = unsafe { slice::from_raw_parts(keys, 32 * keys_len) };
+    let skbytes = unsafe { skbytes.as_ref() }.expect("spending key pointer may not be null.");
     let sighash = unsafe { sighash.as_ref() }.expect("sighash pointer may not be null.");
     let pk = unsafe { ORCHARD_PK.as_ref() }
         .expect("Parameters not loaded: ORCHARD_PK should have been initialized");
 
-    //Parse SpendingKey bytes vector from vec<u8>
-    let mut keybytes: Vec<[u8;32]> = Vec::new();
-    for i in 0..keys_len {
-        let mut kbytes: [u8; 32] = [0; 32];
-        for n in 0..32 {
-            kbytes[n] = keys[n + (i * 32)];
-        }
-        keybytes.push(kbytes);
-    }
-
     //Convert SpendingKey bytes vector to SpendAuthorizingKey vector
     let mut signing_keys: Vec<SpendAuthorizingKey> = Vec::new();
-    for k in keybytes.iter() {
-        let sk = SpendingKey::from_bytes(*k);
-        if sk.is_some().into() {
-            signing_keys.push(SpendAuthorizingKey::from(&sk.unwrap()));
-        } else {
-            error!("Unable to parse spending key!");
-        }
+
+    let sk = SpendingKey::from_bytes(*skbytes);
+    if sk.is_some().into() {
+        println!("Keys found: {:x?}", sk.unwrap());
+        signing_keys.push(SpendAuthorizingKey::from(&sk.unwrap()));
+    } else {
+        println!("Unable to parse spending key!");
     }
+
 
     let mut rng = OsRng;
     let res = bundle
@@ -254,7 +244,8 @@ pub extern "C" fn orchard_unauthorized_bundle_prove_and_sign(
     match res {
         Ok(signed) => Box::into_raw(Box::new(signed)),
         Err(e) => {
-            error!(
+
+            println!(
                 "An error occurred while authorizing the orchard bundle: {:?}",
                 e
             );
@@ -262,45 +253,6 @@ pub extern "C" fn orchard_unauthorized_bundle_prove_and_sign(
         }
     }
 }
-
-// #[no_mangle]
-// pub extern "C" fn orchard_unauthorized_bundle_prove_and_sign(
-//     bundle: *mut Bundle<InProgress<Unproven, Unauthorized>, Amount>,
-//     keys: *const *const SpendingKey,
-//     keys_len: size_t,
-//     sighash: *const [u8; 32],
-// ) -> *mut Bundle<Authorized, Amount> {
-//     let bundle = unsafe { Box::from_raw(bundle) };
-//     let keys = unsafe { slice::from_raw_parts(keys, keys_len) };
-//     let sighash = unsafe { sighash.as_ref() }.expect("sighash pointer may not be null.");
-//     let pk = unsafe { ORCHARD_PK.as_ref() }
-//         .expect("Parameters not loaded: ORCHARD_PK should have been initialized");
-//
-//     let signing_keys = keys
-//         .iter()
-//         .map(|sk| {
-//             unsafe { sk.as_ref() }
-//                 .expect("SpendingKey pointers must not be null")
-//                 .into()
-//         })
-//         .collect::<Vec<_>>();
-//
-//     let mut rng = OsRng;
-//     let res = bundle
-//         .create_proof(pk, &mut rng)
-//         .and_then(|b| b.apply_signatures(rng, *sighash, &signing_keys));
-//
-//     match res {
-//         Ok(signed) => Box::into_raw(Box::new(signed)),
-//         Err(e) => {
-//             error!(
-//                 "An error occurred while authorizing the orchard bundle: {:?}",
-//                 e
-//             );
-//             std::ptr::null_mut()
-//         }
-//     }
-// }
 
 /// Calculates a shielded signature digest for the given under-construction transaction.
 ///

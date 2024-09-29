@@ -5174,6 +5174,58 @@ bool CWallet::GetSaplingNoteMerklePaths(std::vector<SaplingOutPoint> notes,
     return true;
 }
 
+bool CWallet::GetOrchardNoteMerklePaths(std::vector<OrchardOutPoint> notes,
+                                      std::vector<MerklePath>& orchardMerklePaths,
+                                      uint256 &final_anchor)
+{
+    LOCK(cs_wallet);
+    orchardMerklePaths.resize(notes.size());
+    std::optional<uint256> rt;
+    int i = 0;
+    for (OrchardOutPoint op : notes) {
+
+        const CWalletTx* wtx = GetWalletTx(op.hash);
+        if (wtx == NULL) {
+            return false;
+        }
+
+        if (wtx->mapOrchardNoteData.count(op)) {
+
+            if (!orchardWallet.GetMerklePathOfNote(op.hash, op.n, orchardMerklePaths[i])) {
+                return false;
+            }
+
+            LogPrintf("\nGot Path\n");
+
+            //Calculate the anchor
+            uint256 anchor;
+            auto vActions = wtx->GetOrchardActions();
+            auto cmu = uint256::FromRawBytes(vActions[op.n].cmx());
+            if (!orchardWallet.GetPathRootWithCMU(orchardMerklePaths[i], cmu, anchor)) {
+                return false;
+            }
+
+            LogPrintf("Got Anchor %s\n\n", anchor.ToString());
+            LogPrintf("Orchard Wallet Anchor %s\n\n", orchardWallet.GetLatestAnchor().ToString());
+
+            //Check first anchor found and assert all following achors match
+            if (!rt) {
+                rt = anchor;
+            } else {
+                assert(*rt == anchor);
+            }
+            i++;
+        }
+    }
+
+    // All returned witnesses have the same anchor
+    if (rt) {
+        final_anchor = *rt;
+    }
+
+    return true;
+}
+
 isminetype CWallet::IsMine(const CTxIn &txin) const
 {
     {
@@ -9402,7 +9454,7 @@ void CWallet::GetFilteredNotes(
                  continue;
             }
 
-            LogPrintf("Adding Found Orchard Note with Outpoint");
+            LogPrintf("Adding Found Orchard Note with Outpoint\n");
             orchardEntries.push_back(OrchardNoteEntry {op, pa, note, memo, wtx.GetDepthInMainChain()});
         }
 

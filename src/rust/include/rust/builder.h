@@ -84,8 +84,7 @@ void orchard_unauthorized_bundle_free(OrchardUnauthorizedBundlePtr* bundle);
 /// `bundle` is always freed by this method.
 OrchardBundlePtr* orchard_unauthorized_bundle_prove_and_sign(
     OrchardUnauthorizedBundlePtr* bundle,
-    const unsigned char* keys,
-    size_t keys_len,
+    const unsigned char* skbytes,
     const unsigned char* sighash);
 
 #ifdef __cplusplus
