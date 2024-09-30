@@ -2134,16 +2134,29 @@ std::set<std::pair<libzcash::PaymentAddress, uint256>> CWallet::GetNullifiersFor
 {
     std::set<std::pair<libzcash::PaymentAddress, uint256>> nullifierSet;
     // Sapling ivk -> list of addrs map
+
     // (There may be more than one diversified address for a given ivk.)
-    std::map<libzcash::SaplingIncomingViewingKey, std::vector<libzcash::SaplingPaymentAddress>> ivkMap;
+    std::map<libzcash::SaplingIncomingViewingKey, std::vector<libzcash::SaplingPaymentAddress>> ivkMapSapling;
     for (const auto & addr : addresses) {
         auto saplingAddr = std::get_if<libzcash::SaplingPaymentAddress>(&addr);
         if (saplingAddr != nullptr) {
             libzcash::SaplingIncomingViewingKey ivk;
             this->GetSaplingIncomingViewingKey(*saplingAddr, ivk);
-            ivkMap[ivk].push_back(*saplingAddr);
+            ivkMapSapling[ivk].push_back(*saplingAddr);
         }
     }
+
+    // (There may be more than one diversified address for a given ivk.)
+    std::map<libzcash::OrchardIncomingViewingKeyPirate, std::vector<libzcash::OrchardPaymentAddressPirate>> ivkMapOrchard;
+    for (const auto & addr : addresses) {
+        auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddressPirate>(&addr);
+        if (orchardAddr != nullptr) {
+            libzcash::OrchardIncomingViewingKeyPirate ivk;
+            this->GetOrchardIncomingViewingKey(*orchardAddr, ivk);
+            ivkMapOrchard[ivk].push_back(*orchardAddr);
+        }
+    }
+
     for (const auto & txPair : mapWallet) {
         // Sprout
         for (const auto & noteDataPair : txPair.second.mapSproutNoteData) {
@@ -2159,8 +2172,19 @@ std::set<std::pair<libzcash::PaymentAddress, uint256>> CWallet::GetNullifiersFor
             auto & noteData = noteDataPair.second;
             auto & nullifier = noteData.nullifier;
             auto & ivk = noteData.ivk;
-            if (nullifier && ivkMap.count(ivk)) {
-                for (const auto & addr : ivkMap[ivk]) {
+            if (nullifier && ivkMapSapling.count(ivk)) {
+                for (const auto & addr : ivkMapSapling[ivk]) {
+                    nullifierSet.insert(std::make_pair(addr, nullifier.value()));
+                }
+            }
+        }
+        // Orchard
+        for (const auto & noteDataPair : txPair.second.mapOrchardNoteData) {
+            auto & noteData = noteDataPair.second;
+            auto & nullifier = noteData.nullifier;
+            auto & ivk = noteData.ivk;
+            if (nullifier && ivkMapOrchard.count(ivk)) {
+                for (const auto & addr : ivkMapOrchard[ivk]) {
                     nullifierSet.insert(std::make_pair(addr, nullifier.value()));
                 }
             }
@@ -2213,6 +2237,28 @@ bool CWallet::IsNoteSaplingChange(const std::set<std::pair<libzcash::PaymentAddr
     }
     return false;
 }
+
+bool CWallet::IsNoteOrchardChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet,
+        const libzcash::PaymentAddress & address,
+        const OrchardOutPoint & op)
+{
+    // A Note is marked as "change" if the address that received it
+    // also spent Notes in the same transaction. This will catch,
+    // for instance:
+    // - Change created by spending fractions of Notes (because
+    //   z_sendmany sends change to the originating z-address).
+    // - Notes created by consolidation transactions (e.g. using
+    //   z_mergetoaddress).
+    // - Notes sent from one address to itself.
+    for (const auto& action : mapWallet[op.hash].GetOrchardActions())  {
+        uint256 nullifier = uint256::FromRawBytes(action.nullifier());
+        if (nullifierSet.count(std::make_pair(address, nullifier))) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool CWallet::SetWalletCrypted(CWalletDB* pwalletdb) {
     LOCK(cs_wallet);
 
@@ -2298,14 +2344,27 @@ set<uint256> CWallet::GetConflicts(const uint256& txid) const
         }
     }
 
-    std::pair<TxNullifiers::const_iterator, TxNullifiers::const_iterator> range_o;
+    std::pair<TxNullifiers::const_iterator, TxNullifiers::const_iterator> range_s;
 
     for (const auto& spend : wtx.GetSaplingSpends())  {
         uint256 nullifier = uint256::FromRawBytes(spend.nullifier());
         if (mapTxSaplingNullifiers.count(nullifier) <= 1) {
             continue;  // No conflict if zero or one spends
         }
-        range_o = mapTxSaplingNullifiers.equal_range(nullifier);
+        range_s = mapTxSaplingNullifiers.equal_range(nullifier);
+        for (TxNullifiers::const_iterator it = range_s.first; it != range_s.second; ++it) {
+            result.insert(it->second);
+        }
+    }
+
+    std::pair<TxNullifiers::const_iterator, TxNullifiers::const_iterator> range_o;
+
+    for (const auto& action : wtx.GetOrchardActions())  {
+        uint256 nullifier = uint256::FromRawBytes(action.nullifier());
+        if (mapTxOrchardNullifiers.count(nullifier) <= 1) {
+            continue;  // No conflict if zero or one spends
+        }
+        range_o = mapTxOrchardNullifiers.equal_range(nullifier);
         for (TxNullifiers::const_iterator it = range_o.first; it != range_o.second; ++it) {
             result.insert(it->second);
         }
@@ -4319,6 +4378,12 @@ void CWallet::UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx) {
 
    auto vActions = wtx->GetOrchardActions();
 
+   for (const auto& action : vActions) {
+       LogPrintf("Nullifiers found %s\n", uint256::FromRawBytes(action.nullifier()).ToString());
+   }
+
+   LogPrintf("Updating Orchard Nullifiers");
+
    for (mapOrchardNoteData_t::value_type &item : wtx->mapOrchardNoteData) {
        OrchardOutPoint op = item.first;
        OrchardNoteData nd = item.second;
@@ -4332,6 +4397,7 @@ void CWallet::UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx) {
                mapOrchardNullifiersToNotes.erase(item.second.nullifier.value());
            }
            item.second.nullifier = std::nullopt;
+           LogPrintf("\nNullifier of Tx %s, output %i erased\n\n", wtx->GetHash().ToString(), op.n);
        }
        else {
            uint64_t position = nd.getPostion().value();
@@ -4357,6 +4423,7 @@ void CWallet::UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx) {
                mapOrchardNullifiersToNotes[nullifier] = op;
                mapArcOrchardOutPoints[nullifier] = op;
                item.second.nullifier = nullifier;
+               LogPrintf("\nNullifier of Tx %s, output %i set with Position %u and Nullifier %s\n\n", wtx->GetHash().ToString(), op.n, position, nullifier.ToString());
            }
        }
    }
@@ -4672,6 +4739,14 @@ void CWallet::MarkAffectedTransactionsDirty(const CTransaction& tx)
         if (mapSaplingNullifiersToNotes.count(nullifier) &&
             mapWallet.count(mapSaplingNullifiersToNotes[nullifier].hash)) {
             mapWallet[mapSaplingNullifiersToNotes[nullifier].hash].MarkDirty();
+        }
+    }
+
+    for (const auto& action : tx.GetOrchardActions())  {
+        uint256 nullifier = uint256::FromRawBytes(action.nullifier());
+        if (mapOrchardNullifiersToNotes.count(nullifier) &&
+            mapWallet.count(mapOrchardNullifiersToNotes[nullifier].hash)) {
+            mapWallet[mapOrchardNullifiersToNotes[nullifier].hash].MarkDirty();
         }
     }
 }
@@ -5095,6 +5170,18 @@ bool CWallet::IsSaplingNullifierFromMe(const uint256& nullifier) const
     return false;
 }
 
+bool CWallet::IsOrchardNullifierFromMe(const uint256& nullifier) const
+{
+    {
+        LOCK(cs_wallet);
+        if (mapOrchardNullifiersToNotes.count(nullifier) &&
+                mapWallet.count(mapOrchardNullifiersToNotes.at(nullifier).hash)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void CWallet::GetSproutNoteWitnesses(std::vector<JSOutPoint> notes,
                                      std::vector<std::optional<SproutWitness>>& witnesses,
                                      uint256 &final_anchor)
@@ -5463,6 +5550,12 @@ bool CWallet::IsFromMe(const CTransaction& tx) const
     for (const auto& spend : tx.GetSaplingSpends())  {
         uint256 nullifier = uint256::FromRawBytes(spend.nullifier());
         if (IsSaplingNullifierFromMe(nullifier)) {
+            return true;
+        }
+    }
+    for (const auto& action : tx.GetOrchardActions())  {
+        uint256 nullifier = uint256::FromRawBytes(action.nullifier());
+        if (IsOrchardNullifierFromMe(nullifier)) {
             return true;
         }
     }
@@ -9256,9 +9349,9 @@ void CWallet::getZAddressBalances(std::map<libzcash::PaymentAddress, CAmount> &b
             OrchardOutPoint op = pair.first;
             OrchardNoteData nd = pair.second;
 
-            // if (nd.nullifier && IsSaplingSpent(*nd.nullifier)) {
-            //     continue;
-            // }
+            if (nd.nullifier && IsOrchardSpent(*nd.nullifier)) {
+                continue;
+            }
 
             // skip notes which cannot be spent
             if (requireSpendingKey) {
@@ -9435,9 +9528,9 @@ void CWallet::GetFilteredNotes(
                 continue;
             }
 
-            // if (ignoreSpent && nd.nullifier && IsSaplingSpent(*nd.nullifier)) {
-            //     continue;
-            // }
+            if (ignoreSpent && nd.nullifier && IsOrchardSpent(*nd.nullifier)) {
+                continue;
+            }
 
             // skip notes which cannot be spent
             if (requireSpendingKey) {

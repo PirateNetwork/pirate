@@ -355,9 +355,6 @@ public:
         uint256 rho_t;
         uint256 rseed_t;
 
-        // rust result
-        bool rustCompleted;
-
         // Serialize sending data
         ss << ivk;
         ss >> ivk_t;

@@ -59,6 +59,9 @@ pub extern "C" fn try_orchard_decrypt_action_ivk(
             let memo_out = unsafe { &mut *memo_out };
             *memo_out = decrypted.2;
 
+            let rho_out = unsafe { &mut *rho_out };
+            *rho_out = decrypted.0.rho().to_bytes();
+
             let rseed_out = unsafe { &mut *rseed_out };
             *rseed_out = *decrypted.0.rseed().as_bytes();
 

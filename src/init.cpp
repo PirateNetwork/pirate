@@ -2166,6 +2166,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
             //Reset the saplingwallet on zap
             pwalletMain->SaplingWalletReset();
+            pwalletMain->OrchardWalletReset();
 
             delete pwalletMain;
             pwalletMain = NULL;
@@ -2614,10 +2615,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
         if (clearWitnessCaches || GetBoolArg("-rescan", false) || !fInitializeArcTx || useBootstrap || zapTransactions)
         {
-            // pwalletMain->ClearNoteWitnessCache();
             pindexRescan = chainActive.Genesis();
             pwalletMain->nBirthday = 0;
             pwalletMain->SaplingWalletReset();
+            pwalletMain->OrchardWalletReset();
 
             int rescanHeight = GetArg("-rescanheight", 0);
             if (chainActive.Tip() && rescanHeight > 0) {
@@ -2690,10 +2691,16 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         //Validate Rust Sapling Wallet, rebuild if needed
         if (chainActive.Tip() && chainActive.Height() > 0) {
             LOCK2(cs_main, pwalletMain->cs_wallet);
-            LogPrintf("Validating Note Position from height %i\n", chainActive.Height());
+            LogPrintf("Validating Sapling Note Positions from height %i\n", chainActive.Height());
             if (!pwalletMain->ValidateSaplingWalletTrackedPositions(chainActive.Tip())) {
                 pwalletMain->SaplingWalletReset();
                 pwalletMain->IncrementSaplingWallet(chainActive.Tip());
+            }
+            pwalletMain->saplingWalletPositionsValidated=true;
+            LogPrintf("Validating Orchard Note Positions from height %i\n", chainActive.Height());
+            if (!pwalletMain->ValidateOrchardWalletTrackedPositions(chainActive.Tip())) {
+                pwalletMain->OrchardWalletReset();
+                pwalletMain->IncrementOrchardWallet(chainActive.Tip());
             }
             pwalletMain->saplingWalletPositionsValidated=true;
         }

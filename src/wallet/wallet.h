@@ -631,6 +631,7 @@ public:
         mapValue.clear();
         mapSproutNoteData.clear();
         mapSaplingNoteData.clear();
+        mapOrchardNoteData.clear();
         vOrderForm.clear();
         fTimeReceivedIsTxTime = false;
         nTimeReceived = 0;
@@ -689,6 +690,10 @@ public:
 
         if (fOverwintered && nVersion >= SAPLING_TX_VERSION) {
             READWRITE(mapSaplingNoteData);
+        }
+
+        if (nVersion >= ORCHARD_TX_VERSION) {
+            READWRITE(mapOrchardNoteData);
         }
 
         if (ser_action.ForRead())
@@ -1931,6 +1936,7 @@ public:
     std::pair<mapOrchardNoteData_t, OrchardIncomingViewingKeyMap> FindMyOrchardNotes(const std::vector<CTransaction> &vtx, int height) const;
     bool IsSproutNullifierFromMe(const uint256& nullifier) const;
     bool IsSaplingNullifierFromMe(const uint256& nullifier) const;
+    bool IsOrchardNullifierFromMe(const uint256& nullifier) const;
 
     bool SaplingWalletGetMerklePathOfNote(const uint256 txid, int outidx, libzcash::MerklePath &merklePath);
     bool SaplingWalletGetPathRootWithCMU(libzcash::MerklePath &merklePath, uint256 cmu, uint256 &anchor);
@@ -1977,6 +1983,7 @@ public:
     std::set<std::pair<libzcash::PaymentAddress, uint256>> GetNullifiersForAddresses(const std::set<libzcash::PaymentAddress> & addresses);
     bool IsNoteSproutChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet, const libzcash::PaymentAddress & address, const JSOutPoint & entry);
     bool IsNoteSaplingChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet, const libzcash::PaymentAddress & address, const SaplingOutPoint & entry);
+    bool IsNoteOrchardChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet, const libzcash::PaymentAddress & address, const OrchardOutPoint & entry);
 
     DBErrors InitalizeCryptedLoad();
     DBErrors LoadCryptedSeedFromDB();
