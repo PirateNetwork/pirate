@@ -1052,7 +1052,7 @@ void komodo_args(char *argv0)
         fprintf(stderr, "Cannot be STAKED and KMD notary at the same time!\n");
         StartShutdown();
     }
-    SoftSetArg("-ac_name", std::string("PIRATE"));
+    SoftSetArg("-ac_name", std::string("PIRATETST"));
     SoftSetArg("-ac_supply", std::string("0"));
     SoftSetArg("-ac_reward", std::string("25600000000"));
     SoftSetArg("-ac_private", std::string("1"));
