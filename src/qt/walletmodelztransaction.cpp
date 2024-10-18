@@ -57,14 +57,14 @@ void WalletModelZTransaction::setTxHeight(const int& newTxHeight)
     txHeight = newTxHeight;
 }
 
-std::vector<SendManyRecipient> WalletModelZTransaction::getTaddrRecipients() const
+std::vector<SendManyRecipient> WalletModelZTransaction::getOaddrRecipients() const
 {
-    return taddrRecipients;
+    return oaddrRecipients;
 }
 
-void WalletModelZTransaction::setTaddrRecipients(const std::vector<SendManyRecipient>& newTaddrRecipients)
+void WalletModelZTransaction::setOaddrRecipients(const std::vector<SendManyRecipient>& newOaddrRecipients)
 {
-    taddrRecipients = newTaddrRecipients;
+    oaddrRecipients = newOaddrRecipients;
 }
 
 std::vector<SendManyRecipient> WalletModelZTransaction::getZaddrRecipients() const

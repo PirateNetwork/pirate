@@ -642,7 +642,7 @@ TransactionBuilderResult TransactionBuilder::Build()
         // was set, send change to the first Sapling address given as input.
         if (orchardChangeAddr) {
             AddOrchardOutput(orchardChangeAddr->first, orchardChangeAddr->second, change, std::nullopt);
-        }else if (firstOrchardSpendAddr) {
+        } else if (firstOrchardSpendAddr) {
                 AddOrchardOutput(firstOrchardSpendAddr->first, firstOrchardSpendAddr->second, change, std::nullopt);
         } else if (saplingChangeAddr) {
             AddSaplingOutput(saplingChangeAddr->first, saplingChangeAddr->second, change);
@@ -711,6 +711,13 @@ TransactionBuilderResult TransactionBuilder::Build()
     }
 
     if (orchardBundle.has_value()) {
+        //Populate a random key when not spending from orchard.
+        if (orchardSpendingKeys.size() == 0) {
+            auto randomKey = libzcash::OrchardSpendingKeyPirate().random();
+            if (randomKey != std::nullopt) {
+                orchardSpendingKeys.push_back(randomKey.value());
+            }
+        }
         auto authorizedBundle = orchardBundle.value().ProveAndSign(
             orchardSpendingKeys[0],
             dataToBeSigned);

@@ -653,7 +653,7 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
     set<std::string> setAddress; // Used to detect duplicates
 
     // Recipients
-    //std::vector<SendManyRecipient> taddrRecipients;
+    std::vector<SendManyRecipient> oaddrRecipients;
     std::vector<SendManyRecipient> zaddrRecipients;
 
     bool containsSproutOutput = false;
@@ -665,42 +665,20 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
         if (rcp.fSubtractFeeFromAmount)
             fSubtractFeeFromAmount = true;
 
-        bool isZaddr = true;
+        bool isZaddr = false;
+        bool isOaddr = false;
         CTxDestination taddr = DecodeDestination(rcp.address.toStdString());
 
         if (!IsValidDestination(taddr)) {
             auto res = DecodePaymentAddress(rcp.address.toStdString());
-            if (!IsValidPaymentAddress(res)) {
-            //     isZaddr = true;
-            //
-            //     bool toSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
-            //     bool toOrchard = std::get_if<libzcash::OrchardPaymentAddressPirate>(&res) != nullptr;
-            //     bool toSprout = !toSapling;
-            //     noSproutAddrs = noSproutAddrs && toSapling;
-            //
-            //     containsSproutOutput |= toSprout;
-            //     containsSaplingOutput |= toSapling;
-            //
-            //     // Sending to both Sprout and Sapling is currently unsupported using z_sendmany
-            //     if (containsSproutOutput && containsSaplingOutput)
-            //     {
-            //         return SendingBothSproutAndSapling;
-            //     }
-            //     if ( GetTime() > KOMODO_SAPLING_DEADLINE )
-            //     {
-            //         if ( fromSprout || toSprout )
-            //             return SproutUsageExpired;
-            //     }
-            //     if ( toSapling && chainName.isKMD() )
-            //         return SproutUsageWillExpireSoon;
-            //
-            //     // If we are sending from a shielded address, all recipient
-            //     // shielded addresses must be of the same type.
-            //     if ((fromSprout && toSapling) || (fromSapling && toSprout))
-            //     {
-            //         return SendBetweenSproutAndSapling;
-            //     }
-            // } else {
+            if (IsValidPaymentAddress(res)) {
+
+                isZaddr = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
+                isOaddr = std::get_if<libzcash::OrchardPaymentAddressPirate>(&res) != nullptr;
+
+                assert(isZaddr != isOaddr);
+
+            } else {
                 return InvalidAddress;
             }
         }
@@ -720,12 +698,11 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
             memo = rcp.memo.toStdString();
         }
 
-        if (isZaddr)
-        {
+        if (isZaddr) {
             zaddrRecipients.push_back( SendManyRecipient(rcp.address.toStdString(), rcp.amount, memo) );
-        }
-        else
-        {
+        } else if (isOaddr) {
+            oaddrRecipients.push_back( SendManyRecipient(rcp.address.toStdString(), rcp.amount, memo) );
+        } else {
             //taddr not allowed on PirateNetwork
             return InvalidAddress;
         }
@@ -830,6 +807,7 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
 
     transaction.setTxHeight(nextBlockHeight);
     transaction.setZaddrRecipients(zaddrRecipients);
+    transaction.setOaddrRecipients(oaddrRecipients);
     transaction.setContextInfo(contextInfo);
 
     return SendCoinsReturn(OK);
@@ -918,8 +896,8 @@ WalletModel::SendCoinsReturn WalletModel::zsendCoins(WalletModelZTransaction &tr
     std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(Params().GetConsensus(),
                                                                                  transaction.getTxHeight(),
                                                                                  transaction.getFromAddress().toStdString(),
-                                                                                 transaction.getTaddrRecipients(),
                                                                                  transaction.getZaddrRecipients(),
+                                                                                 transaction.getOaddrRecipients(),
                                                                                  1,
                                                                                  transaction.getTransactionFee(),
                                                                                  transaction.getContextInfo()) );

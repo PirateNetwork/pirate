@@ -32,8 +32,8 @@ public:
     void setTxHeight(const int& newTxHeight);
     int getTxHeight() const;
 
-    void setTaddrRecipients(const std::vector<SendManyRecipient>& newTaddrRecipients);
-    std::vector<SendManyRecipient> getTaddrRecipients() const;
+    void setOaddrRecipients(const std::vector<SendManyRecipient>& newOaddrRecipients);
+    std::vector<SendManyRecipient> getOaddrRecipients() const;
 
     void setZaddrRecipients(const std::vector<SendManyRecipient>& newZaddrRecipients);
     std::vector<SendManyRecipient> getZaddrRecipients() const;
@@ -55,7 +55,7 @@ private:
     QList<SendCoinsRecipient> recipients;
     CAmount fee;
     int txHeight;
-    std::vector<SendManyRecipient> taddrRecipients;
+    std::vector<SendManyRecipient> oaddrRecipients;
     std::vector<SendManyRecipient> zaddrRecipients;
     UniValue contextInfo;
 
