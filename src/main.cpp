@@ -1615,6 +1615,10 @@ bool ContextualCheckTransactionMultithreaded(
                 tx->GetSaplingBundle().IsPresent() ||
                 tx->GetOrchardBundle().IsPresent())) {
 
+              if (!view.HaveInputs(*tx))
+                  return state.DoS(100, error("CheckTransaction(): inputs missing/spent"),
+                                     REJECT_INVALID, "bad-txns-inputs-missingorspent");
+
               std::vector<CTxOut> allPrevOutputs;
               for (const auto& input : tx->vin) {
                   allPrevOutputs.push_back(view.GetOutputFor(input));
