@@ -1554,7 +1554,7 @@ CheckTransationResults ContextualCheckTransactionBindingSigWorker(
 bool ContextualCheckTransactionMultithreaded(
         int32_t slowflag,
         const std::vector<const CTransaction*> vptx,
-        const std::vector<const PrecomputedTransactionData*> vptxdata,
+        const CCoinsViewCache &view,
         CBlockIndex * const previndex,
         CValidationState &state,
         const int nHeight,
@@ -1597,7 +1597,6 @@ bool ContextualCheckTransactionMultithreaded(
       int o = 0;
       for (uint32_t i = 0; i < vptx.size(); i++) {
           const CTransaction* tx = vptx[i];
-          const PrecomputedTransactionData* txdata = vptxdata[i];
 
           //check the cointbase transaction
           if (tx->IsCoinBase()) {
@@ -1616,11 +1615,17 @@ bool ContextualCheckTransactionMultithreaded(
                 tx->GetSaplingBundle().IsPresent() ||
                 tx->GetOrchardBundle().IsPresent())) {
 
+              std::vector<CTxOut> allPrevOutputs;
+              for (const auto& input : tx->vin) {
+                  allPrevOutputs.push_back(view.GetOutputFor(input));
+              }
+              PrecomputedTransactionData txdata(*tx, allPrevOutputs);
+
               auto consensusBranchId = CurrentEpochBranchId(nHeight, Params().GetConsensus());
               // Empty output script.
               CScript scriptCode;
               try {
-                  dataToBeSigned = SignatureHash(scriptCode, *tx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId, *txdata);
+                  dataToBeSigned = SignatureHash(scriptCode, *tx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId, txdata);
               } catch (std::logic_error ex) {
                   return state.DoS(100, error("CheckTransaction(): error computing signature hash"),
                                       REJECT_INVALID, "error-computing-signature-hash");
@@ -2535,9 +2540,8 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
               allPrevOutputs.push_back(view.GetOutputFor(input));
           }
         }
-        const PrecomputedTransactionData txdata(tx, allPrevOutputs);
-        std::vector<const PrecomputedTransactionData*> vptxdata;
-        vptxdata.emplace_back(&txdata);
+
+        PrecomputedTransactionData txdata(tx, allPrevOutputs);
         if (!ContextualCheckInputs(tx, state, view, true, STANDARD_SCRIPT_VERIFY_FLAGS, true, txdata, Params().GetConsensus(), consensusBranchId))
         {
             //fprintf(stderr,"accept failure.9\n");
@@ -2577,7 +2581,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         // Check transaction contextually against the set of consensus rules which apply in the next block to be mined.
         std::vector<const CTransaction*> vptx;
         vptx.emplace_back(&tx);
-        if (!ContextualCheckTransactionMultithreaded(0, vptx, vptxdata, 0, state, nextBlockHeight, (dosLevel == -1) ? 10 : dosLevel))
+        if (!ContextualCheckTransactionMultithreaded(0, vptx, view, 0, state, nextBlockHeight, (dosLevel == -1) ? 10 : dosLevel))
         {
             return error("AcceptToMemoryPool: ContextualCheckTransaction failed");
         }
@@ -3326,7 +3330,7 @@ bool ContextualCheckInputs(
                            bool fScriptChecks,
                            unsigned int flags,
                            bool cacheStore,
-                           const PrecomputedTransactionData& txdata,
+                           PrecomputedTransactionData& txdata,
                            const Consensus::Params& consensusParams,
                            uint32_t consensusBranchId,
                            std::vector<CScriptCheck> *pvChecks)
@@ -6216,25 +6220,11 @@ bool ContextualCheckBlock(int32_t slowflag,const CBlock& block, CValidationState
 
 
     // Check that all transactions are finalized, also validate interest in each tx
-    std::vector<const PrecomputedTransactionData*> vptxdata;
     std::vector<const CTransaction*> vptx;
 
     for (uint32_t i = 0; i < block.vtx.size(); i++) {
         const CTransaction& tx = block.vtx[i];
         vptx.emplace_back(&block.vtx[i]);
-
-        //Precomupted transaction data
-        {
-            CCoinsViewCache view(pcoinsTip);
-            std::vector<CTxOut> allPrevOutputs;
-            if (!tx.IsMint()) {
-                for (const auto& input : tx.vin) {
-                    allPrevOutputs.push_back(view.GetOutputFor(input));
-                }
-            }
-            const PrecomputedTransactionData txdata(tx, allPrevOutputs);
-            vptxdata.emplace_back(&txdata);
-        }
 
         // Interest validation
         if (!komodo_validate_interest(tx, txheight, cmptime))
@@ -6253,7 +6243,8 @@ bool ContextualCheckBlock(int32_t slowflag,const CBlock& block, CValidationState
     }
 
     // Check transaction contextually against consensus rules at block height
-    if (!ContextualCheckTransactionMultithreaded(slowflag,vptx,vptxdata,pindexPrev, state, nHeight, 100)) {
+    CCoinsViewCache view(pcoinsTip);
+    if (!ContextualCheckTransactionMultithreaded(slowflag,vptx,view,pindexPrev, state, nHeight, 100)) {
         return false; // Failure reason has been set in validation state object
     }
 
