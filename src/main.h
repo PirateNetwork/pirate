@@ -746,7 +746,7 @@ unsigned int GetP2SHSigOpCount(const CTransaction& tx, const CCoinsViewCache& ma
  * instead of being performed inline.
  */
 bool ContextualCheckInputs(const CTransaction& tx, CValidationState &state, const CCoinsViewCache &view, bool fScriptChecks,
-                           unsigned int flags, bool cacheStore, PrecomputedTransactionData& txdata,
+                           unsigned int flags, bool cacheStore, const PrecomputedTransactionData& txdata,
                            const Consensus::Params& consensusParams, uint32_t consensusBranchId,
                            std::vector<CScriptCheck> *pvChecks = NULL);
 
@@ -770,7 +770,7 @@ CheckTransationResults ContextualCheckTransactionBindingSigWorker(const std::vec
 //Validate a batch of Sapling output descriptions
 // CheckTransationResults ContextualCheckTransactionSaplingOutputWorker(const std::vector<const OutputDescription*> vOutput, const uint32_t threadNumber);
 /** Check a transaction contextually against a set of consensus rules */
-bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector<const CTransaction*> vptx, CBlockIndex * const pindexPrev, CValidationState &state, int nHeight, int dosLevel,
+bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector<const CTransaction*> vptx, const std::vector<const PrecomputedTransactionData*> vptxdata, CBlockIndex * const pindexPrev, CValidationState &state, int nHeight, int dosLevel,
                                 bool (*isInitBlockDownload)() = IsInitialBlockDownload,int32_t validateprices=1);
 
 
@@ -838,11 +838,11 @@ private:
     bool cacheStore;
     uint32_t consensusBranchId;
     ScriptError error;
-    PrecomputedTransactionData *txdata;
+    const PrecomputedTransactionData *txdata;
 
 public:
     CScriptCheck(): amount(0), ptxTo(0), nIn(0), nFlags(0), cacheStore(false), consensusBranchId(0), error(SCRIPT_ERR_UNKNOWN_ERROR) {}
-    CScriptCheck(const CCoins& txFromIn, const CTransaction& txToIn, unsigned int nInIn, unsigned int nFlagsIn, bool cacheIn, uint32_t consensusBranchIdIn, PrecomputedTransactionData* txdataIn) :
+    CScriptCheck(const CCoins& txFromIn, const CTransaction& txToIn, unsigned int nInIn, unsigned int nFlagsIn, bool cacheIn, uint32_t consensusBranchIdIn, const PrecomputedTransactionData* txdataIn) :
         scriptPubKey(CCoinsViewCache::GetSpendFor(&txFromIn, txToIn.vin[nInIn])), amount(txFromIn.vout[txToIn.vin[nInIn].prevout.n].nValue),
         ptxTo(&txToIn), nIn(nInIn), nFlags(nFlagsIn), cacheStore(cacheIn), consensusBranchId(consensusBranchIdIn), error(SCRIPT_ERR_UNKNOWN_ERROR), txdata(txdataIn) { }
 

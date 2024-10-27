@@ -1490,50 +1490,6 @@ CheckTransationResults ContextualCheckTransactionBindingSigWorker(
     for (int i = 0; i < vtx.size(); i++) {
         const uint256 dataToBeSigned = vTxSig[i];
 
-        // //Verify Sapling
-        // if (!vtx[i]->vShieldedSpend.empty() || !vtx[i]->vShieldedOutput.empty()) {
-        //
-        //     auto ctx = librustzcash_sapling_verification_ctx_init();
-        //
-        //     //Add spends to verification context sequentially to validate binding sig later
-        //     for (const SpendDescription &spend : vtx[i]->vShieldedSpend) {
-        //         //This function does not validate spend proof
-        //         if (!librustzcash_add_sapling_spend_to_context(ctx, spend.cv.begin())) {
-        //             txResults.validationPassed = false;
-        //             txResults.dosLevel = 100;
-        //             txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling spend description invalid - cv desiralization error");
-        //             txResults.reasonString = strprintf("bad-txns-sapling-spend-description-invalid");
-        //             librustzcash_sapling_verification_ctx_free(ctx);
-        //             return txResults;
-        //         }
-        //     }
-        //
-        //     //Add outputs to verification context sequentially to validate binding sig later
-        //     for (const OutputDescription &output : vtx[i]->vShieldedOutput) {
-        //         //This function does not validate output proof
-        //         if (!librustzcash_add_sapling_output_to_context(ctx, output.cv.begin())) {
-        //             txResults.validationPassed = false;
-        //             txResults.dosLevel = 100;
-        //             txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling output description invalid - cv desiralization error");
-        //             txResults.reasonString = strprintf("bad-txns-sapling-spend-description-invalid");
-        //             librustzcash_sapling_verification_ctx_free(ctx);
-        //             return txResults;
-        //         }
-        //     }
-        //
-        //     //Check the Sapling transaction binding Signature
-        //     if (!librustzcash_sapling_final_check(ctx,vtx[i]->valueBalance, vtx[i]->bindingSig.begin(), dataToBeSigned.begin())) {
-        //         txResults.validationPassed = false;
-        //         txResults.dosLevel = 100;
-        //         txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling binding signature invalid");
-        //         txResults.reasonString = strprintf("bad-txns-sapling-binding-signature-invalid");
-        //         librustzcash_sapling_verification_ctx_free(ctx);
-        //         return txResults;
-        //     }
-        //
-        //     librustzcash_sapling_verification_ctx_free(ctx);
-        // }
-
         // Queue Sapling bundle to be batch-validated. This also checks some consensus rules.
         if (vtx[i]->GetSaplingBundle().IsPresent()) {
 
@@ -1586,98 +1542,6 @@ CheckTransationResults ContextualCheckTransactionBindingSigWorker(
     return txResults;
 }
 
-/* Called from ContextualCheckTransactionMultithreaded for the checks that signficant processing
- *
- * Check a transaction contextually against a specific consensus rule valid at a given block height.
- *
- * Notes:
- * 1. AcceptToMemoryPool calls CheckTransaction and ContextualCheckTransactionMultithreaded.
- * 2. ProcessNewBlock calls AcceptBlock, which calls CheckBlock (which calls CheckTransaction)
- *    and ContextualCheckBlock (which calls ContextualCheckTransactionMultithreaded).
- */
-// CheckTransationResults ContextualCheckTransactionSaplingSpendWorker(
-//     const std::vector<const SpendDescription*> vSpend,
-//     const std::vector<uint256> vSpendSig,
-//     const uint32_t threadNumber) {
-//
-//     //Results to be returned
-//     CheckTransationResults txResults;
-//
-//     //Perform Sapling Spend checks
-//     for (int i = 0; i < vSpend.size(); i++) {
-//         const uint256 dataToBeSigned = vSpendSig[i];
-//
-//         auto ctx = librustzcash_sapling_verification_ctx_init();
-//
-//         if (!librustzcash_sapling_check_spend(
-//             ctx,
-//             vSpend[i]->cv.begin(),
-//             vSpend[i]->anchor.begin(),
-//             vSpend[i]->nullifier.begin(),
-//             vSpend[i]->rk.begin(),
-//             vSpend[i]->zkproof.begin(),
-//             vSpend[i]->spendAuthSig.begin(),
-//             dataToBeSigned.begin()
-//         ))
-//         {
-//             txResults.validationPassed = false;
-//             txResults.dosLevel = 100;
-//             txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling spend description invalid");
-//             txResults.reasonString = strprintf("bad-txns-sapling-spend-description-invalid");
-//             librustzcash_sapling_verification_ctx_free(ctx);
-//             return txResults;
-//         }
-//
-//         librustzcash_sapling_verification_ctx_free(ctx);
-//     }
-//
-//     return txResults;
-//
-// }
-
-/* Called from ContextualCheckTransactionMultithreaded for the checks that signficant processing
- *
- * Check a transaction contextually against a specific consensus rule valid at a given block height.
- *
- * Notes:
- * 1. AcceptToMemoryPool calls CheckTransaction and ContextualCheckTransactionMultithreaded.
- * 2. ProcessNewBlock calls AcceptBlock, which calls CheckBlock (which calls CheckTransaction)
- *    and ContextualCheckBlock (which calls ContextualCheckTransactionMultithreaded).
- */
-// CheckTransationResults ContextualCheckTransactionSaplingOutputWorker(
-//     const std::vector<const OutputDescription*> vOutput,
-//     const uint32_t threadNumber) {
-//
-//     //Results to be returned
-//     CheckTransationResults txResults;
-//
-//     //Perform Sapling Output checks
-//     for (auto output : vOutput) {
-//         auto ctx = librustzcash_sapling_verification_ctx_init();
-//
-//         if (!librustzcash_sapling_check_output(
-//             ctx,
-//             output->cv.begin(),
-//             output->cmu.begin(),
-//             output->ephemeralKey.begin(),
-//             output->zkproof.begin()
-//         ))
-//         {
-//           txResults.validationPassed = false;
-//           txResults.dosLevel = 100;
-//           txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling output description invalid");
-//           txResults.reasonString = strprintf("bad-txns-sapling-output-description-invalid");
-//           librustzcash_sapling_verification_ctx_free(ctx);
-//           return txResults;
-//         }
-//
-//         librustzcash_sapling_verification_ctx_free(ctx);
-//     }
-//
-//     return txResults;
-//
-// }
-
 /**
  * Check a transaction contextually against a set of consensus rules valid at a given block height.
  *
@@ -1687,7 +1551,11 @@ CheckTransationResults ContextualCheckTransactionBindingSigWorker(
  *    and ContextualCheckBlock (which calls this function).
  * 3. The isInitBlockDownload argument is only to assist with testing.
  */
-bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector<const CTransaction*> vptx, CBlockIndex * const previndex,
+bool ContextualCheckTransactionMultithreaded(
+        int32_t slowflag,
+        const std::vector<const CTransaction*> vptx,
+        const std::vector<const PrecomputedTransactionData*> vptxdata,
+        CBlockIndex * const previndex,
         CValidationState &state,
         const int nHeight,
         const int dosLevel,
@@ -1727,9 +1595,9 @@ bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector
       int t = 0;
       int s = 0;
       int o = 0;
-      CCoinsViewCache view(pcoinsTip);
       for (uint32_t i = 0; i < vptx.size(); i++) {
           const CTransaction* tx = vptx[i];
+          const PrecomputedTransactionData* txdata = vptxdata[i];
 
           //check the cointbase transaction
           if (tx->IsCoinBase()) {
@@ -1745,19 +1613,14 @@ bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector
 
           if (!tx->IsMint() &&
               (!tx->vjoinsplit.empty() ||
-                tx->GetSaplingSpendsCount() > 0 ||
-                tx->GetSaplingOutputsCount() > 0)) {
+                tx->GetSaplingBundle().IsPresent() ||
+                tx->GetOrchardBundle().IsPresent())) {
 
               auto consensusBranchId = CurrentEpochBranchId(nHeight, Params().GetConsensus());
               // Empty output script.
               CScript scriptCode;
               try {
-                  std::vector<CTxOut> allPrevOutputs;
-                  for (const auto& input : tx->vin) {
-                      allPrevOutputs.push_back(view.GetOutputFor(input));
-                  }
-                  PrecomputedTransactionData txdata(*tx, allPrevOutputs);
-                  dataToBeSigned = SignatureHash(scriptCode, *tx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId, txdata);
+                  dataToBeSigned = SignatureHash(scriptCode, *tx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId, *txdata);
               } catch (std::logic_error ex) {
                   return state.DoS(100, error("CheckTransaction(): error computing signature hash"),
                                       REJECT_INVALID, "error-computing-signature-hash");
@@ -1784,8 +1647,8 @@ bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector
 
           //Skip costly sapling checks on intial download below the hardcoded checkpoints
           if (!fCheckpointsEnabled || nHeight >= Checkpoints::GetTotalBlocksEstimate(Params().Checkpoints())) {
-              //Verify Sapling
-              if (tx->GetSaplingSpendsCount() > 0 || tx->GetSaplingOutputsCount() > 0) {
+              //Verify Sapling & Orchard
+              if (tx->GetSaplingBundle().IsPresent() || tx->GetOrchardBundle().IsPresent()) {
                   //Push tx to thread vector
                   vvtx[t].emplace_back(tx);
                   vvTxSig[t].emplace_back(dataToBeSigned);
@@ -1795,31 +1658,6 @@ bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector
                   if (t >= vvtx.size()) {
                       t = 0;
                   }
-
-                  // //Add this transaction sapling spend to spend thread batches
-                  // for (int j = 0; j < tx->GetSaplingSpendsCount(); j++) {
-                  //     //Push spend to thread vector
-                  //     vvSpend[s].emplace_back(&(tx->vShieldedSpend[j]));
-                  //     vvSpendSig[s].emplace_back(dataToBeSigned);
-                  //     //Increment thread vector
-                  //     s++;
-                  //     //reset if tread vector is greater qty of threads being used
-                  //     if (s >= vvSpend.size()) {
-                  //         s = 0;
-                  //     }
-                  // }
-                  //
-                  // //Add this transaction sapling outputs to output thread batches
-                  // for (int j = 0; j < tx->vShieldedOutput.size(); j++) {
-                  //     //Push output to thread vector
-                  //     vvOutput[o].emplace_back(&(tx->vShieldedOutput[j]));
-                  //     //Increment thread vector
-                  //     o++;
-                  //     //reset if tread vector is greater qty of threads being used
-                  //     if (o >= vvOutput.size()) {
-                  //         o = 0;
-                  //     }
-                  // }
               }
           }
       }
@@ -1831,22 +1669,6 @@ bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector
               vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionBindingSigWorker, vvtx[i], vvTxSig[i], i));
           }
       }
-
-      // //Push batches of spends to async threads
-      // for (int i = 0; i < vvSpend.size(); i++) {
-      //     //Perform SpendDescription validations
-      //     if (!vvSpend[i].empty()) {
-      //         //vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionSaplingSpendWorker, vvSpend[i], vvSpendSig[i], i + vvtx.size()));
-      //     }
-      // }
-      //
-      // //Push batches of outputs to async threads
-      // for (int i = 0; i < vvOutput.size(); i++) {
-      //     //Perform OutputDescription validations
-      //     if (!vvOutput[i].empty()) {
-      //         //vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionSaplingOutputWorker, vvOutput[i], i + vvtx.size() + vvSpend.size()));
-      //     }
-      // }
 
       //Wait for all threads to complete
       for (auto &future : vFutures) {
@@ -2708,10 +2530,14 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         // Check against previous transactions
         // This is done near the end to help prevent CPU exhaustion denial-of-service attacks.
         std::vector<CTxOut> allPrevOutputs;
-        for (const auto& input : tx.vin) {
-            allPrevOutputs.push_back(view.GetOutputFor(input));
+        if (!tx.IsMint()) {
+          for (const auto& input : tx.vin) {
+              allPrevOutputs.push_back(view.GetOutputFor(input));
+          }
         }
-        PrecomputedTransactionData txdata(tx, allPrevOutputs);
+        const PrecomputedTransactionData txdata(tx, allPrevOutputs);
+        std::vector<const PrecomputedTransactionData*> vptxdata;
+        vptxdata.emplace_back(&txdata);
         if (!ContextualCheckInputs(tx, state, view, true, STANDARD_SCRIPT_VERIFY_FLAGS, true, txdata, Params().GetConsensus(), consensusBranchId))
         {
             //fprintf(stderr,"accept failure.9\n");
@@ -2751,7 +2577,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         // Check transaction contextually against the set of consensus rules which apply in the next block to be mined.
         std::vector<const CTransaction*> vptx;
         vptx.emplace_back(&tx);
-        if (!ContextualCheckTransactionMultithreaded(0, vptx, 0, state, nextBlockHeight, (dosLevel == -1) ? 10 : dosLevel))
+        if (!ContextualCheckTransactionMultithreaded(0, vptx, vptxdata, 0, state, nextBlockHeight, (dosLevel == -1) ? 10 : dosLevel))
         {
             return error("AcceptToMemoryPool: ContextualCheckTransaction failed");
         }
@@ -3500,7 +3326,7 @@ bool ContextualCheckInputs(
                            bool fScriptChecks,
                            unsigned int flags,
                            bool cacheStore,
-                           PrecomputedTransactionData& txdata,
+                           const PrecomputedTransactionData& txdata,
                            const Consensus::Params& consensusParams,
                            uint32_t consensusBranchId,
                            std::vector<CScriptCheck> *pvChecks)
@@ -6390,10 +6216,25 @@ bool ContextualCheckBlock(int32_t slowflag,const CBlock& block, CValidationState
 
 
     // Check that all transactions are finalized, also validate interest in each tx
+    std::vector<const PrecomputedTransactionData*> vptxdata;
     std::vector<const CTransaction*> vptx;
+
     for (uint32_t i = 0; i < block.vtx.size(); i++) {
         const CTransaction& tx = block.vtx[i];
         vptx.emplace_back(&block.vtx[i]);
+
+        //Precomupted transaction data
+        {
+            CCoinsViewCache view(pcoinsTip);
+            std::vector<CTxOut> allPrevOutputs;
+            if (!tx.IsMint()) {
+                for (const auto& input : tx.vin) {
+                    allPrevOutputs.push_back(view.GetOutputFor(input));
+                }
+            }
+            const PrecomputedTransactionData txdata(tx, allPrevOutputs);
+            vptxdata.emplace_back(&txdata);
+        }
 
         // Interest validation
         if (!komodo_validate_interest(tx, txheight, cmptime))
@@ -6412,7 +6253,7 @@ bool ContextualCheckBlock(int32_t slowflag,const CBlock& block, CValidationState
     }
 
     // Check transaction contextually against consensus rules at block height
-    if (!ContextualCheckTransactionMultithreaded(slowflag,vptx,pindexPrev, state, nHeight, 100)) {
+    if (!ContextualCheckTransactionMultithreaded(slowflag,vptx,vptxdata,pindexPrev, state, nHeight, 100)) {
         return false; // Failure reason has been set in validation state object
     }
 
