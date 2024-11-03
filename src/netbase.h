@@ -18,6 +18,7 @@
 #include <string>
 #include <vector>
 
+#include <functional>
 extern int nConnectTimeout;
 extern bool fNameLookup;
 
