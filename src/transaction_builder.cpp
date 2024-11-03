@@ -621,7 +621,7 @@ TransactionBuilderResult TransactionBuilder::Build()
     // Consistency checks
     //
 
-    // Valid change
+    // Validate change
     CAmount change = valueBalanceSapling + valueBalanceOrchard - fee;
 
     for (auto tIn : tIns) {
@@ -643,7 +643,7 @@ TransactionBuilderResult TransactionBuilder::Build()
         if (orchardChangeAddr) {
             AddOrchardOutput(orchardChangeAddr->first, orchardChangeAddr->second, change, std::nullopt);
         } else if (firstOrchardSpendAddr) {
-                AddOrchardOutput(firstOrchardSpendAddr->first, firstOrchardSpendAddr->second, change, std::nullopt);
+            AddOrchardOutput(firstOrchardSpendAddr->first, firstOrchardSpendAddr->second, change, std::nullopt);
         } else if (saplingChangeAddr) {
             AddSaplingOutput(saplingChangeAddr->first, saplingChangeAddr->second, change);
         } else if (firstSaplingSpendAddr) {

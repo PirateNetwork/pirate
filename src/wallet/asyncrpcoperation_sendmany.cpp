@@ -673,12 +673,8 @@ bool AsyncRPCOperation_sendmany::main_impl()
             }
         }
 
-        //Initalize Orchard builder based on inputs and outputs
-        if (!orchard_outputs_.empty()) {
-          builder_.InitalizeOrchard(true, true, anchor);
-        } else {
-          builder_.InitalizeOrchard(true, false, anchor);
-        }
+        //Initalize Orchard builder
+        builder_.InitalizeOrchard(true, true, anchor);
 
 
         // Add Orchard spends
