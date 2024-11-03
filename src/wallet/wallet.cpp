@@ -4410,23 +4410,20 @@ void CWallet::UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx) {
 
                // The transaction would not have entered the wallet unless
                // it had been successfully decrypted previously.
-               if (optDeserialized != std::nullopt) {
-                   auto note = optDeserialized.value().note().value();
+               assert(optDeserialized != std::nullopt);
+               auto note = optDeserialized.value().note().value();
 
 
-                   auto optNullifier = note.GetNullifier(extfvk.fvk);
-                   if (!optNullifier) {
-                       // This should not happen.
-                       assert(false);
-                   }
-                   uint256 nullifier = optNullifier.value();
-                   mapOrchardNullifiersToNotes[nullifier] = op;
-                   mapArcOrchardOutPoints[nullifier] = op;
-                   item.second.nullifier = nullifier;
-                   LogPrintf("\nNullifier of Tx %s, output %i set with Position %u and Nullifier %s\n\n", wtx->GetHash().ToString(), op.n, position, nullifier.ToString());
-              } else {
-                   LogPrintf("\nError Setting Nullifier of Tx %s, output %i set with Position %u\n\n", wtx->GetHash().ToString(), op.n, position);
-              }
+               auto optNullifier = note.GetNullifier(extfvk.fvk);
+               if (!optNullifier) {
+                   // This should not happen.
+                   assert(false);
+               }
+               uint256 nullifier = optNullifier.value();
+               mapOrchardNullifiersToNotes[nullifier] = op;
+               mapArcOrchardOutPoints[nullifier] = op;
+               item.second.nullifier = nullifier;
+               LogPrintf("\nNullifier of Tx %s, output %i set with Position %u and Nullifier %s\n\n", wtx->GetHash().ToString(), op.n, position, nullifier.ToString());
            }
        }
    }
@@ -4505,6 +4502,10 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
             }
             if (wtxIn.mapSaplingNoteData.size() > 0 && wtxIn.mapSaplingNoteData != wtx.mapSaplingNoteData) {
                 wtx.mapSaplingNoteData = wtxIn.mapSaplingNoteData;
+                fUpdated = true;
+            }
+            if (wtxIn.mapOrchardNoteData.size() > 0 && wtxIn.mapOrchardNoteData != wtx.mapOrchardNoteData) {
+                wtx.mapOrchardNoteData = wtxIn.mapOrchardNoteData;
                 fUpdated = true;
             }
             if (wtxIn.fFromMe && wtxIn.fFromMe != wtx.fFromMe)
@@ -4665,14 +4666,10 @@ void CWallet::AddToWalletIfInvolvingMe(
                 CWalletTx wtx(this,vtx[i]);
 
                 //Set Decrypted Sapling Note Data in CWalletTx
-                if (mapSaplingNoteData.size() > 0) {
-                    wtx.SetSaplingNoteData(mapSaplingNoteData);
-                }
+                wtx.SetSaplingNoteData(mapSaplingNoteData);
 
                 //Set Decrypted Sapling Note Data in CWalletTx
-                if (mapOrchardNoteData.size() > 0) {
-                    wtx.SetOrchardNoteData(mapOrchardNoteData);
-                }
+                wtx.SetOrchardNoteData(mapOrchardNoteData);
 
                 // Get merkle branch if transaction was found in a block
                 if (pblock)

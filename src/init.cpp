@@ -2691,18 +2691,20 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         //Validate Rust Sapling Wallet, rebuild if needed
         if (chainActive.Tip() && chainActive.Height() > 0) {
             LOCK2(cs_main, pwalletMain->cs_wallet);
+
             LogPrintf("Validating Sapling Note Positions from height %i\n", chainActive.Height());
             if (!pwalletMain->ValidateSaplingWalletTrackedPositions(chainActive.Tip())) {
                 pwalletMain->SaplingWalletReset();
                 pwalletMain->IncrementSaplingWallet(chainActive.Tip());
             }
             pwalletMain->saplingWalletPositionsValidated=true;
+
             LogPrintf("Validating Orchard Note Positions from height %i\n", chainActive.Height());
             if (!pwalletMain->ValidateOrchardWalletTrackedPositions(chainActive.Tip())) {
                 pwalletMain->OrchardWalletReset();
                 pwalletMain->IncrementOrchardWallet(chainActive.Tip());
             }
-            pwalletMain->saplingWalletPositionsValidated=true;
+            pwalletMain->orchardWalletPositionsValidated=true;
         }
 
         pwalletMain->SetBroadcastTransactions(GetBoolArg("-walletbroadcast", true));
