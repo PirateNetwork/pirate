@@ -4410,20 +4410,23 @@ void CWallet::UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx) {
 
                // The transaction would not have entered the wallet unless
                // it had been successfully decrypted previously.
-               assert(optDeserialized != std::nullopt);
-               auto note = optDeserialized.value().note().value();
+               if (optDeserialized != std::nullopt) {
+                   auto note = optDeserialized.value().note().value();
 
 
-               auto optNullifier = note.GetNullifier(extfvk.fvk);
-               if (!optNullifier) {
-                   // This should not happen.
-                   assert(false);
-               }
-               uint256 nullifier = optNullifier.value();
-               mapOrchardNullifiersToNotes[nullifier] = op;
-               mapArcOrchardOutPoints[nullifier] = op;
-               item.second.nullifier = nullifier;
-               LogPrintf("\nNullifier of Tx %s, output %i set with Position %u and Nullifier %s\n\n", wtx->GetHash().ToString(), op.n, position, nullifier.ToString());
+                   auto optNullifier = note.GetNullifier(extfvk.fvk);
+                   if (!optNullifier) {
+                       // This should not happen.
+                       assert(false);
+                   }
+                   uint256 nullifier = optNullifier.value();
+                   mapOrchardNullifiersToNotes[nullifier] = op;
+                   mapArcOrchardOutPoints[nullifier] = op;
+                   item.second.nullifier = nullifier;
+                   LogPrintf("\nNullifier of Tx %s, output %i set with Position %u and Nullifier %s\n\n", wtx->GetHash().ToString(), op.n, position, nullifier.ToString());
+              } else {
+                   LogPrintf("\nError Setting Nullifier of Tx %s, output %i set with Position %u\n\n", wtx->GetHash().ToString(), op.n, position);
+              }
            }
        }
    }
