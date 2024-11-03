@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <iostream>
 #include <stdexcept>
+#include <optional>
 
 /*
 #ifdef __APPLE__
