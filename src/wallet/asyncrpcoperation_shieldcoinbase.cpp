@@ -286,7 +286,62 @@ bool ShieldToAddress::operator()(const libzcash::SaplingPaymentAddress& zaddr) c
 
 bool ShieldToAddress::operator()(const libzcash::OrchardPaymentAddressPirate& zaddr) const
 {
-    return false;
+    m_op->builder_.SetFee(m_op->fee_);
+
+    // Sending from a t-address, which we don't have an ovk for. Instead,
+    // generate a common one from the HD seed. This ensures the data is
+    // recoverable, while keeping it logically separate from the ZIP 32
+    // Sapling key hierarchy, which the user might not be using.
+    HDSeed seed;
+    if (!pwalletMain->GetHDSeed(seed)) {
+        throw JSONRPCError(
+            RPC_WALLET_ERROR,
+            "CWallet::GenerateNewSaplingZKey(): HD seed not found");
+    }
+    uint256 ovk = ovkForShieldingFromTaddr(seed);
+
+    // Add transparent inputs
+    for (auto t : m_op->inputs_) {
+        if (t.amount >= ASSETCHAINS_TIMELOCKGTE) {
+            m_op->builder_.SetLockTime((uint32_t)(chainActive.Height()));
+            m_op->builder_.AddTransparentInput(COutPoint(t.txid, t.vout), t.scriptPubKey, t.amount, 0xfffffffe);
+        } else {
+            m_op->builder_.AddTransparentInput(COutPoint(t.txid, t.vout), t.scriptPubKey, t.amount);
+        }
+    }
+
+    // Send all value to the target z-addr
+    m_op->builder_.SendChangeTo(zaddr, ovk);
+
+    // Build the transaction
+    m_op->tx_ = m_op->builder_.Build().GetTxOrThrow();
+
+    // Send the transaction
+    // TODO: Use CWallet::CommitTransaction instead of sendrawtransaction
+    auto signedtxn = EncodeHexTx(m_op->tx_);
+    if (!m_op->testmode) {
+        UniValue params = UniValue(UniValue::VARR);
+        params.push_back(signedtxn);
+        UniValue sendResultValue = sendrawtransaction(params, false, CPubKey());
+        if (sendResultValue.isNull()) {
+            throw JSONRPCError(RPC_WALLET_ERROR, "sendrawtransaction did not return an error or a txid.");
+        }
+
+        auto txid = sendResultValue.get_str();
+
+        UniValue o(UniValue::VOBJ);
+        o.push_back(Pair("txid", txid));
+        m_op->set_result(o);
+    } else {
+        // Test mode does not send the transaction to the network.
+        UniValue o(UniValue::VOBJ);
+        o.push_back(Pair("test", 1));
+        o.push_back(Pair("txid", m_op->tx_.GetHash().ToString()));
+        o.push_back(Pair("hex", signedtxn));
+        m_op->set_result(o);
+    }
+
+    return true;
 }
 
 bool ShieldToAddress::operator()(const libzcash::InvalidEncoding& no) const
