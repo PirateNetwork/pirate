@@ -4382,7 +4382,7 @@ void CWallet::UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx) {
        LogPrintf("Nullifiers found %s\n", uint256::FromRawBytes(action.nullifier()).ToString());
    }
 
-   LogPrintf("Updating Orchard Nullifiers");
+   LogPrintf("Updating Orchard Nullifiers\n");
 
    for (mapOrchardNoteData_t::value_type &item : wtx->mapOrchardNoteData) {
        OrchardOutPoint op = item.first;
@@ -4888,14 +4888,15 @@ static void DecryptOrchardNoteWorker(
 {
     for (int i = 0; i < vIvk.size(); i++) {
 
-        auto result = OrchardNotePlaintext::AttemptDecryptOrchardAction(vOrchardEncryptedAction[i], *vIvk[i]);
+        OrchardIncomingViewingKeyPirate ivk = *vIvk[i];
+        auto result = OrchardNotePlaintext::AttemptDecryptOrchardAction(vOrchardEncryptedAction[i], ivk);
         if (result != std::nullopt) {
 
             // We don't cache the nullifier here as computing it requires knowledge of the note position
             // in the commitment tree, which can only be determined when the transaction has been mined.
             OrchardOutPoint op {vHash[i], vPosition[i]};
             OrchardNoteData nd;
-            nd.ivk = *vIvk[i];
+            nd.ivk = ivk;
 
             //Cache Address and value - in Memory Only
             auto note = result.value();
@@ -4903,7 +4904,6 @@ static void DecryptOrchardNoteWorker(
             nd.address = note.GetAddress();
 
             LogPrintf("\n\nOrchard Transaction Found %s, %i\n\n", vHash[i].ToString(), vPosition[i]);
-
             if (nd.value >= minTxValue) {
                 //Only add notes greater then this value
                 //dust filter
@@ -4956,13 +4956,14 @@ std::pair<mapOrchardNoteData_t, OrchardIncomingViewingKeyMap> CWallet::FindMyOrc
         auto vActions = vtx[j].GetOrchardActions();
 
         for (uint32_t i = 0; i < vActions.size(); i++) {
+            auto action = &vActions[i];
 
             //Create a tread entry for every ivk with the current note.
             for (auto it = setOrchardIncomingViewingKeys.begin(); it != setOrchardIncomingViewingKeys.end(); it++) {
                 vvIvk[t].emplace_back(&(*it));
                 vvPosition[t].emplace_back(i);
                 vvHash[t].emplace_back(hash);
-                vvOrchardEncryptedAction[t].emplace_back(&vActions[i]);
+                vvOrchardEncryptedAction[t].emplace_back(action);
 
                 //Increment ivk vector
                 t++;
@@ -4972,20 +4973,28 @@ std::pair<mapOrchardNoteData_t, OrchardIncomingViewingKeyMap> CWallet::FindMyOrc
                 }
             }
         }
-    }
 
-
-    std::vector<boost::thread*> decryptionThreads;
-    for (uint32_t i = 0; i < vvIvk.size(); ++i) {
-        if(!vvIvk[i].empty()) {
-            decryptionThreads.emplace_back(new boost::thread(DecryptOrchardNoteWorker, this, vvIvk[i], vvOrchardEncryptedAction[i], vvPosition[i], vvHash[i], height, &noteData, &viewingKeysToAdd, i));
+        std::vector<boost::thread*> decryptionThreads;
+        for (uint32_t i = 0; i < vvIvk.size(); i++) {
+            if(!vvIvk[i].empty()) {
+                decryptionThreads.emplace_back(new boost::thread(DecryptOrchardNoteWorker, this, vvIvk[i], vvOrchardEncryptedAction[i], vvPosition[i], vvHash[i], height, &noteData, &viewingKeysToAdd, i));
+            }
         }
-    }
 
-    // Cleanup
-    for (auto dthread : decryptionThreads) {
-        dthread->join();
-        delete dthread;
+        // Cleanup Threads
+        for (auto dthread : decryptionThreads) {
+            dthread->join();
+            delete dthread;
+        }
+
+        //Rest Vectors for next transaction
+        for (uint32_t i = 0; i < vvIvk.size(); i++) {
+            vvIvk[i].resize(0);
+            vvOrchardEncryptedAction[i].resize(0);
+            vvPosition[i].resize(0);
+            vvHash[i].resize(0);
+        }
+
     }
 
     //clean up vectors
