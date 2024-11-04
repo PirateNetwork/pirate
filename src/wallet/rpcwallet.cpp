@@ -5359,7 +5359,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
         fromOrchard = std::get_if<libzcash::OrchardPaymentAddressPirate>(&res) != nullptr;
 
         // Remember whether this is Sprout address
-        fromSprout = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
+        fromSprout = std::get_if<libzcash::SproutPaymentAddress>(&res) != nullptr;
         if (fromSprout) {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a taddr, sapling or orchard.");
         }
@@ -5410,7 +5410,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
                 toOrchard = std::get_if<libzcash::OrchardPaymentAddressPirate>(&res) != nullptr;
 
                 // Remember whether this is Sprout address
-                bool toSprout = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
+                bool toSprout = std::get_if<libzcash::SproutPaymentAddress>(&res) != nullptr;
 
                 if (toSprout)
                     throw JSONRPCError(RPC_INVALID_PARAMETER,"Sprout usage has expired");
