@@ -54,6 +54,21 @@ bool orchard_builder_add_spend(
     const ActionPtr* orchard_action,
     const unsigned char *merkle_path);
 
+/// Adds a note to be spent in this bundle, building the note from parts.
+///
+/// Returns `false` if the Merkle path in `spend_info` does not have the
+/// required anchor.
+///
+/// `spend_info` is always freed by this method, whether or not it succeeds.
+bool orchard_builder_add_spend_from_parts(
+    OrchardBuilderPtr* ptr,
+    const unsigned char* fvk_bytes,
+    const unsigned char* note_address_bytes,
+    uint64_t value,
+    const unsigned char* rho_bytes,
+    const unsigned char* rseed_bytes,
+    const unsigned char *merkle_path);
+
 /// Adds an address which will receive funds in this bundle.
 ///
 /// `ovk` is a pointer to the outgoing viewing key to make this recipient recoverable by,

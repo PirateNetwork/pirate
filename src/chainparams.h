@@ -97,13 +97,6 @@ public:
      */
     const Consensus::Params& GetConsensus() const { return consensus; }
 
-    const rust::Box<consensus::Network> RustNetwork() const {
-        return consensus::network(
-            NetworkIDString(),
-            consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight,
-            consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight,
-            consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight);
-    }
     /***
      * Message header start bytes
      * @returns 4 bytes

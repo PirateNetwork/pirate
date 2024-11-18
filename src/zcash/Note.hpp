@@ -98,15 +98,28 @@ public:
 
 class OrchardNote : public BaseNote {
 private:
-    uint256 rho;
-    uint256 rseed;
+    uint256 rho_;
+    uint256 rseed_;
+    uint256 cmx_;
 public:
     OrchardPaymentAddressPirate address;
 
-    OrchardNote(OrchardPaymentAddressPirate address, uint64_t value, uint256 rho, uint256 rseed)
-            : BaseNote(value), address(address), rho(rho), rseed(rseed) {}
+    OrchardNote(OrchardPaymentAddressPirate address, uint64_t value, uint256 rho, uint256 rseed, uint256 cmx)
+            : BaseNote(value), address(address), rho_(rho), rseed_(rseed), cmx_(cmx) {}
 
     virtual ~OrchardNote() {};
+
+    uint256 rho() {
+      return rho_;
+    }
+
+    uint256 rseed() {
+      return rseed_;
+    }
+
+    uint256 cmx() {
+      return cmx_;
+    }
 
     std::optional<uint256> GetNullifier(const libzcash::OrchardFullViewingKeyPirate fvk)
     {
@@ -132,8 +145,8 @@ public:
               fvk_t.begin(),
               address_t.begin(),
               value_,
-              rho.begin(),
-              rseed.begin(),
+              rho_.begin(),
+              rseed_.begin(),
               nullifier_t.begin())) {
                     return std::nullopt;
         }
@@ -298,6 +311,7 @@ private:
     uint256 rho;
     uint256 rseed;
     std::optional<uint256> nullifier;
+    uint256 cmx;
 public:
 
     OrchardNotePlaintext() {}
@@ -308,8 +322,9 @@ public:
       const std::array<unsigned char, ZC_MEMO_SIZE> memo,
       const uint256 rho,
       const uint256 rseed,
-      const std::optional<uint256> nullifier)
-    : BaseNotePlaintext(value, memo), address(address), rho(rho), rseed(rseed), nullifier(nullifier) {}
+      const std::optional<uint256> nullifier,
+      const uint256 cmx)
+    : BaseNotePlaintext(value, memo), address(address), rho(rho), rseed(rseed), nullifier(nullifier), cmx(cmx) {}
 
     virtual ~OrchardNotePlaintext() {}
 
@@ -375,7 +390,7 @@ public:
         rs << address_t;
         rs >> address_r;
 
-        OrchardNotePlaintext ret = OrchardNotePlaintext(value_t, address_r, memo_t, rho_t, rseed_t, std::nullopt);
+        OrchardNotePlaintext ret = OrchardNotePlaintext(value_t, address_r, memo_t, rho_t, rseed_t, std::nullopt, uint256::FromRawBytes(action->cmx()));
 
         return ret;
     };

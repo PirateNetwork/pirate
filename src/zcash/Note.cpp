@@ -477,5 +477,5 @@ uint256 SaplingNotePlaintext::generate_or_derive_esk() const {
 
 std::optional<OrchardNote> OrchardNotePlaintext::note() const
 {
-    return OrchardNote(address, value_, rho, rseed);
+    return OrchardNote(address, value_, rho, rseed, cmx);
 }

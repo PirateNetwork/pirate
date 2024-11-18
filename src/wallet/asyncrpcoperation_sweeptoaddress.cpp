@@ -142,7 +142,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
 
         libzcash::SaplingExtendedSpendingKey extsk;
         if (pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
-            std::vector<SaplingNoteEntry> fromNotes;
+            std::vector<SaplingNoteEntry> z_sapling_inputs;
             CAmount amountToSend = pwalletMain->targetSweepQty;
             int maxQuantity = 50;
 
@@ -173,15 +173,15 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 // Select Notes from that same address we will be sending to.
                 if (ivk == extsk.expsk.full_viewing_key().in_viewing_key() && saplingEntry.address == addr) {
                     amountToSend += CAmount(saplingEntry.note.value());
-                    fromNotes.push_back(saplingEntry);
+                    z_sapling_inputs.push_back(saplingEntry);
                 }
 
-                if (fromNotes.size() >= maxQuantity)
+                if (z_sapling_inputs.size() >= maxQuantity)
                     break;
             }
 
             int minQuantity = 1;
-            if (fromNotes.size() < minQuantity)
+            if (z_sapling_inputs.size() < minQuantity)
                 continue;
 
             CAmount fee = fSweepTxFee;
@@ -193,40 +193,45 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
             {
                 LOCK2(cs_main, pwalletMain->cs_wallet);
                 builder.SetExpiryHeight(chainActive.Tip()->nHeight + SWEEP_EXPIRY_DELTA);
-            }
-            LogPrint("zrpcunsafe", "%s: Beginning creating transaction with Sapling output amount=%s\n", getId(), FormatMoney(amountToSend - fee));
 
-            // Select Sapling notes
-            std::vector<SaplingOutPoint> ops;
-            std::vector<libzcash::SaplingNote> notes;
-            for (auto fromNote : fromNotes) {
-                ops.push_back(fromNote.op);
-                notes.push_back(fromNote.note);
-            }
+                LogPrint("zrpcunsafe", "%s: Beginning creating transaction with Sapling output amount=%s\n", getId(), FormatMoney(amountToSend - fee));
 
-            // Fetch Sapling anchor and merkle paths
-            uint256 anchor;
-            std::vector<libzcash::MerklePath> saplingMerklePaths;
-            {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
-                if (!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
-                    LogPrint("zrpcunsafe", "%s: Merkle Path not found for Sapling note. Stopping.\n", getId());
+                for (auto entry : z_sapling_inputs) {
+
+                    libzcash::MerklePath saplingMerklePath;
+                    if (!pwalletMain->SaplingWalletGetMerklePathOfNote(entry.op.hash, entry.op.n, saplingMerklePath)) {
+                        LogPrint("zrpcunsafe", "%s: Merkle Path not found for Sapling note. Stopping.\n", getId());
+                        return false;
+                    }
+
+                    uint256 anchor;
+                    if (!pwalletMain->SaplingWalletGetPathRootWithCMU(saplingMerklePath, entry.note.cmu().value(), anchor)) {
+                        LogPrint("zrpcunsafe", "%s: Getting Anchor failed. Stopping.\n", getId());
+                        return false;
+                    }
+
+                    if (!builder.AddSaplingSpendRaw(entry.op, entry.address, entry.note.value(), entry.note.rcm(), saplingMerklePath, anchor)) {
+                        LogPrint("zrpcunsafe", "%s: Adding Raw Sapling Spend failed. Stopping.\n", getId());
+                        return false;
+                    }
+
+                }
+
+                if (!builder.ConvertRawSaplingSpend(extsk)) {
+                    LogPrint("zrpcunsafe", "%s: Converting Raw Sapling Spends failed.\n", getId());
+                    return false;
                 }
             }
 
-            // Add Sapling spends
-            for (size_t i = 0; i < notes.size(); i++) {
-                builder.AddSaplingSpend(extsk, notes[i], anchor, saplingMerklePaths[i]);
-            }
-
             builder.SetFee(fee);
-            builder.AddSaplingOutput(extsk.expsk.ovk, sweepAddress, amountToSend - fee);
+            builder.AddSaplingOutputRaw(sweepAddress, amountToSend - fee, {{0}});
+            builder.ConvertRawSaplingOutput(extsk.expsk.ovk);
 
             auto tx = builder.Build().GetTxOrThrow();
 
             if (isCancelled()) {
                 LogPrint("zrpcunsafe", "%s: Canceled. Stopping.\n", getId());
-                break;
+                return false;
             }
 
             if (!pwalletMain->CommitAutomatedTx(tx)) {

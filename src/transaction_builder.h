@@ -31,43 +31,6 @@ uint256 ProduceShieldedSignatureHash(
 namespace orchard
 {
 
-/// The information necessary to spend an Orchard note.
-// class SpendInfo
-// {
-// private:
-//     /// Memory is allocated by Rust.
-//     std::unique_ptr<OrchardSpendInfoPtr, decltype(&orchard_spend_info_free)> inner;
-//     libzcash::OrchardRawAddress from;
-//     uint64_t noteValue;
-//
-//     // SpendInfo() : inner(nullptr, orchard_spend_info_free) {}
-//     SpendInfo(
-//         OrchardSpendInfoPtr* spendInfo,
-//         libzcash::OrchardRawAddress fromIn,
-//         uint64_t noteValueIn) : inner(spendInfo, orchard_spend_info_free), from(fromIn), noteValue(noteValueIn) {}
-//
-//     friend class Builder;
-//     friend class ::OrchardWallet;
-//
-// public:
-//     // SpendInfo should never be copied
-//     SpendInfo(const SpendInfo&) = delete;
-//     SpendInfo& operator=(const SpendInfo&) = delete;
-//     SpendInfo(SpendInfo&& spendInfo) : inner(std::move(spendInfo.inner)), from(std::move(spendInfo.from)), noteValue(std::move(spendInfo.noteValue)) {}
-//     SpendInfo& operator=(SpendInfo&& spendInfo)
-//     {
-//         if (this != &spendInfo) {
-//             inner = std::move(spendInfo.inner);
-//             from = std::move(spendInfo.from);
-//             noteValue = std::move(spendInfo.noteValue);
-//         }
-//         return *this;
-//     }
-//
-//     inline libzcash::OrchardRawAddress FromAddress() const { return from; };
-//     inline uint64_t Value() const { return noteValue; };
-// };
-
 /// A builder that constructs an `UnauthorizedBundle` from a set of notes to be spent,
 /// and recipients to receive funds.
 class Builder
@@ -96,21 +59,25 @@ public:
         return *this;
     }
 
-    /// Adds a note to be spent in this bundle.
+    /// Adds a note's serialized parts to be spent in this bundle.
     ///
+    /// Returns 'false' if deserialzation or note contruction fails
     /// Returns `false` if the given Merkle path does not have the required anchor
     /// for the given note.
-    bool AddSpend(
-      const libzcash::OrchardFullViewingKeyPirate fvk,
-      const orchard_bundle::Action* action,
-      const libzcash::MerklePath orchardMerklePath);
+    bool AddSpendFromParts(
+        const libzcash::OrchardFullViewingKeyPirate fvk,
+        const libzcash::OrchardPaymentAddressPirate addr,
+        const CAmount value,
+        const uint256 rho,
+        const uint256 rseed,
+        const libzcash::MerklePath orchardMerklePath);
 
     /// Adds an address which will receive funds in this bundle.
-    void AddOutput(
+    bool AddOutput(
         const std::optional<uint256>& ovk,
         const libzcash::OrchardPaymentAddressPirate& to,
         CAmount value,
-        const std::optional<libzcash::Memo>& memo);
+        const std::array<unsigned char, ZC_MEMO_SIZE> memo);
 
     /// Returns `true` if any spends or outputs have been added to this builder. This can
     /// be used to avoid calling `Build()` and creating a dummy Orchard bundle.
@@ -181,75 +148,87 @@ public:
 
 } // namespace orchard
 
-struct SaplingSpendDescriptionInfo {
-    libzcash::SaplingExtendedSpendingKey extsk;
-    libzcash::SaplingNote note;
-    uint256 alpha;
-    uint256 anchor;
-    libzcash::MerklePath saplingMerklePath;
-
-    SaplingSpendDescriptionInfo(
-        libzcash::SaplingExtendedSpendingKey extsk,
-        libzcash::SaplingNote note,
-        uint256 anchor,
-        libzcash::MerklePath saplingMerklePath);
-};
-
-class SaplingSpendDescriptionInfoRaw
+class SaplingSpendDescriptionInfo
 {
 public:
+    SaplingOutPoint op;
     libzcash::SaplingPaymentAddress addr;
     CAmount value;
-    SaplingOutPoint op;
-    libzcash::SaplingNotePlaintext notePt;
+    uint256 rcm;
     libzcash::MerklePath saplingMerklePath;
+    uint256 anchor;
 
-    SaplingSpendDescriptionInfoRaw() {}
+    SaplingSpendDescriptionInfo() {}
 
-    SaplingSpendDescriptionInfoRaw(
+    SaplingSpendDescriptionInfo(
+        SaplingOutPoint opIn,
         libzcash::SaplingPaymentAddress addrIn,
         CAmount valueIn,
-        SaplingOutPoint opIn,
-        libzcash::SaplingNotePlaintext notePtIn,
-        libzcash::MerklePath saplingMerklePathIn) : addr(addrIn), value(valueIn), op(opIn), notePt(notePtIn), saplingMerklePath(saplingMerklePathIn) {}
+        uint256 rcmIn,
+        libzcash::MerklePath saplingMerklePathIn,
+        uint256 anchorIn) : op(opIn), addr(addrIn), value(valueIn), rcm(rcmIn), saplingMerklePath(saplingMerklePathIn), anchor(anchorIn) {}
 
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action)
     {
+        READWRITE(op);
         READWRITE(addr);
         READWRITE(value);
-        READWRITE(op);
-        READWRITE(notePt);
+        READWRITE(rcm);
         READWRITE(saplingMerklePath);
+        READWRITE(anchor);
+    }
+};
+
+class OrchardSpendDescriptionInfo
+{
+public:
+    OrchardOutPoint op;
+    libzcash::OrchardPaymentAddressPirate addr;
+    CAmount value;
+    uint256 rho;
+    uint256 rseed;
+    libzcash::MerklePath orchardMerklePath;
+    uint256 anchor;
+
+    OrchardSpendDescriptionInfo() {}
+
+    OrchardSpendDescriptionInfo(
+        OrchardOutPoint opIn,
+        libzcash::OrchardPaymentAddressPirate addrIn,
+        CAmount valueIn,
+        uint256 rhoIn,
+        uint256 rseedIn,
+        libzcash::MerklePath orchardMerklePathIn,
+        uint256 anchorIn) : op(opIn), addr(addrIn), value(valueIn), rho(rhoIn), rseed(rseedIn), orchardMerklePath(orchardMerklePathIn), anchor(anchorIn) {}
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(op);
+        READWRITE(addr);
+        READWRITE(value);
+        READWRITE(rho);
+        READWRITE(rseed);
+        READWRITE(orchardMerklePath);
+        READWRITE(anchor);
     }
 };
 
 
-struct SaplingOutputDescriptionInfo {
-    uint256 ovk;
-    libzcash::SaplingNote note;
-    std::array<unsigned char, ZC_MEMO_SIZE> memo;
-
-    SaplingOutputDescriptionInfo(
-        uint256 ovk,
-        libzcash::SaplingNote note,
-        std::array<unsigned char, ZC_MEMO_SIZE> memo) : ovk(ovk), note(note), memo(memo) {}
-
-    // std::optional<OutputDescription> Build(void* ctx);
-};
-
-
-class SaplingOutputDescriptionInfoRaw
+class SaplingOutputDescriptionInfo
 {
 public:
     libzcash::SaplingPaymentAddress addr;
     CAmount value;
     std::array<unsigned char, ZC_MEMO_SIZE> memo;
 
-    SaplingOutputDescriptionInfoRaw() {}
-    SaplingOutputDescriptionInfoRaw(
+    SaplingOutputDescriptionInfo() {}
+    SaplingOutputDescriptionInfo(
         libzcash::SaplingPaymentAddress addrIn,
         CAmount valueIn,
         std::array<unsigned char, ZC_MEMO_SIZE> memoIn)
@@ -270,15 +249,15 @@ public:
     }
 };
 
-class OrchardOutputDescriptionInfoRaw
+class OrchardOutputDescriptionInfo
 {
 public:
     libzcash::OrchardPaymentAddressPirate addr;
     CAmount value;
     std::array<unsigned char, ZC_MEMO_SIZE> memo;
 
-    OrchardOutputDescriptionInfoRaw() {}
-    OrchardOutputDescriptionInfoRaw(
+    OrchardOutputDescriptionInfo() {}
+    OrchardOutputDescriptionInfo(
         libzcash::OrchardPaymentAddressPirate addrIn,
         CAmount valueIn,
         std::array<unsigned char, ZC_MEMO_SIZE> memoIn)
@@ -308,11 +287,6 @@ struct TransparentInputInfo {
         CAmount value) : scriptPubKey(scriptPubKey), value(value) {}
 };
 
-#define SAPLING_TREE_DEPTH 32 // From rustzcash.rs
-struct myCharArray_s {
-    unsigned char cArray[1 + 33 * SAPLING_TREE_DEPTH + 8];
-};
-
 class TransactionBuilderResult
 {
 private:
@@ -339,24 +313,9 @@ private:
     CAmount fee = 10000;
     int iMinConf = 1;
     uint32_t consensusBranchId;
-    uint8_t cZip212_enabled;
+    std::string strNetworkID = "main";
+    uint16_t checksum = 0xFFFF;
 
-    std::string fromAddress_;
-    typedef struct
-    {
-        std::string sAddr;
-        CAmount iValue;
-        std::string sMemo;
-    } Output_s;
-
-    // Split MerklePath into its components that are used by the transaction builder:
-    std::vector<uint64_t> alMerklePathPosition;
-    std::vector<myCharArray_s> asMerklePath; // From zcash/IncrementalMerkleTree.hpp
-
-    std::vector<SaplingSpendDescriptionInfo> saplingSpends;
-    std::vector<SaplingOutputDescriptionInfo> saplingOutputs;
-    std::vector<std::string> sOutputRecipients;
-    std::vector<Output_s> outputs_offline;
     std::vector<CTxOut> tIns;
 
     std::optional<SaplingBundle> saplingBundle;
@@ -379,13 +338,21 @@ private:
 
     bool AddOpRetLast(CScript& s);
 
-public:
-    std::vector<SaplingSpendDescriptionInfoRaw> rawSaplingSpends;
-    std::vector<SaplingOutputDescriptionInfoRaw> rawSaplingOutputs;
+    const rust::Box<consensus::Network> RustNetwork() const
+    {
+        return consensus::network(
+            strNetworkID,
+            consensusParams.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight,
+            consensusParams.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight,
+            consensusParams.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight);
+    }
 
-    // std::vector<SaplingSpendDescriptionInfoRaw> rawOrchardSpends;
-    std::vector<OrchardOutputDescriptionInfoRaw> rawOrchardOutputs;
-    uint256 ovkOrchard;
+public:
+    std::vector<SaplingSpendDescriptionInfo> vSaplingSpends;
+    std::vector<SaplingOutputDescriptionInfo> vSaplingOutputs;
+
+    std::vector<OrchardSpendDescriptionInfo> vOrchardSpends;
+    std::vector<OrchardOutputDescriptionInfo> vOrchardOutputs;
 
 
     TransactionBuilder();
@@ -395,110 +362,72 @@ public:
     TransactionBuilder(const TransactionBuilder&) = delete;
     TransactionBuilder& operator=(const TransactionBuilder&) = delete;
 
-    // For signing offline transactions:
-    TransactionBuilder(bool fOverwintered, uint32_t nExpiryHeight, uint32_t nVersionGroupId, int32_t nVersion, int nBlockHeight, uint32_t branchId, uint8_t cZip212Enabled);
 
-    ADD_SERIALIZE_METHODS;
-
-    template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action)
-    {
-        READWRITE(rawSaplingSpends);
-        READWRITE(rawSaplingOutputs);
-        READWRITE(rawOrchardOutputs);
-        READWRITE(mtx);
-        READWRITE(fee);
-        READWRITE(nHeight);
-    }
-
-
+    // Transaction Builder initialization functions
+    void InitializeTransactionBuilder(const Consensus::Params& consensusParams, int nHeight);
     void SetFee(CAmount fee);
     void SetMinConfirmations(int iMinConf);
-
-    void SetConsensus(const Consensus::Params& consensusParams);
-    void SetHeight(int nHeight);
     void SetExpiryHeight(int expHeight);
+    void SetLockTime(uint32_t time) { this->mtx.nLockTime = time; }
 
+    // Validate datastream with crc16 Checksum
+    uint16_t CalculateChecksum();
+    void SetChecksum();
+    uint16_t GetChecksum();
+    bool ValidateChecksum();
+
+
+    // Return the underlying mutable transaction
     CTransaction getTransaction() { return mtx; }
 
-    // Returns false if the anchor does not match the anchor used by
-    // previously-added Sapling spends.
-    bool AddSaplingSpend(
-        libzcash::SaplingExtendedSpendingKey extsk,
-        libzcash::SaplingNote note,
-        uint256 anchor,
-        libzcash::MerklePath saplingMerklePath);
 
-    bool AddSaplingSpend_process_offline_transaction(
-        libzcash::SaplingExtendedSpendingKey extsk,
-        libzcash::SaplingNote note,
-        uint256 anchor,
-        uint64_t lMerklePathPosition,
-        unsigned char* pcMerkle);
-
-    bool AddSaplingSpend_prepare_offline_transaction(
-        std::string sFromAddr,
-        libzcash::SaplingNote note,
-        uint256 anchor,
-        uint64_t lMerklePosition,
-        unsigned char* pcMerkle);
+    // Sapling
+    void InitializeSapling();
 
     bool AddSaplingSpendRaw(
-        libzcash::SaplingPaymentAddress from,
-        CAmount value,
         SaplingOutPoint op,
-        libzcash::SaplingNotePlaintext notePt,
-        libzcash::MerklePath saplingMerklePath);
+        libzcash::SaplingPaymentAddress addr,
+        CAmount value,
+        uint256 rcm,
+        libzcash::MerklePath saplingMerklePath,
+        uint256 anchor);
 
-    void AddSaplingOutput(
-        uint256 ovk,
+    bool ConvertRawSaplingSpend(libzcash::SaplingExtendedSpendingKey extsk);
+
+    bool AddSaplingOutputRaw(
         libzcash::SaplingPaymentAddress to,
         CAmount value,
         std::array<unsigned char, ZC_MEMO_SIZE> memo = {{0}});
 
-    void AddSaplingOutput_offline_transaction(
-        // uint256 ovk,
-        std::string address,
-        CAmount value,
-        std::array<unsigned char, ZC_MEMO_SIZE> memo = {{0}});
+    bool ConvertRawSaplingOutput(uint256 ovk);
 
-    void AddPaymentOutput(std::string sAddr, CAmount iValue, std::string sMemo);
-
-    void AddSaplingOutputRaw(
-        libzcash::SaplingPaymentAddress to,
-        CAmount value,
-        std::array<unsigned char, ZC_MEMO_SIZE> memo = {{0}});
-
-    void ConvertRawSaplingOutput(uint256 ovk);
 
     // Orchard
-    void setOrchardOvk(uint256 ovk);
-
-    void InitalizeOrchard(
+    void InitializeOrchard(
         bool spendsEnabled,
         bool outputsEnabled,
         uint256 anchor);
 
-    void AddOrchardSpend(
-      const libzcash::OrchardExtendedSpendingKeyPirate fvk,
-      const orchard_bundle::Action* action,
-      const libzcash::MerklePath orchardMerklePath,
-      CAmount value);
-
-    void AddOrchardOutput(
-        const std::optional<uint256>& ovk,
-        const libzcash::OrchardPaymentAddressPirate to,
+    bool AddOrchardSpendRaw(
+        OrchardOutPoint op,
+        libzcash::OrchardPaymentAddressPirate addr,
         CAmount value,
-        const std::optional<std::array<unsigned char, ZC_MEMO_SIZE>>& memo = {{0}});
+        uint256 rho,
+        uint256 rseed,
+        libzcash::MerklePath saplingMerklePath,
+        uint256 anchor);
 
-    void AddOrchardOutputRaw(
+    bool ConvertRawOrchardSpend(libzcash::OrchardExtendedSpendingKeyPirate extsk);
+
+    bool AddOrchardOutputRaw(
         libzcash::OrchardPaymentAddressPirate to,
         CAmount value,
         std::array<unsigned char, ZC_MEMO_SIZE> memo = {{0}});
 
-    void createOrchardBuilderFromRawInputs();
+    bool ConvertRawOrchardOutput(uint256 ovk);
 
-    // Assumes that the value correctly corresponds to the provided UTXO.
+
+    // Transaparent Addresses
     void AddTransparentInput(COutPoint utxo, CScript scriptPubKey, CAmount value, uint32_t nSequence = 0xffffffff);
 
     bool AddTransparentOutput(CTxDestination& to, CAmount value);
@@ -507,16 +436,33 @@ public:
 
     bool AddOpRetLast();
 
+
+    // Change
     void SendChangeTo(libzcash::OrchardPaymentAddressPirate changeAddr, uint256 ovk);
 
     void SendChangeTo(libzcash::SaplingPaymentAddress changeAddr, uint256 ovk);
 
     bool SendChangeTo(CTxDestination& changeAddr);
 
-    void SetLockTime(uint32_t time) { this->mtx.nLockTime = time; }
-
     TransactionBuilderResult Build();
-    std::string Build_offline_transaction();
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(consensusParams);
+        READWRITE(consensusBranchId);
+        READWRITE(strNetworkID);
+        READWRITE(nHeight);
+        READWRITE(mtx);
+        READWRITE(vSaplingSpends);
+        READWRITE(vSaplingOutputs);
+        READWRITE(vOrchardSpends);
+        READWRITE(vOrchardOutputs);
+        READWRITE(fee);
+        READWRITE(checksum);
+    }
 };
 
 #endif /* TRANSACTION_BUILDER_H */

@@ -160,20 +160,20 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "z_sendmany", 3},
     { "z_sendmany_prepare_offline", 1},
     { "z_sendmany_prepare_offline", 2},
-    { "z_sendmany_prepare_offline", 3},    
+    { "z_sendmany_prepare_offline", 3},
     { "z_sign_offline", 1},  //version
     { "z_sign_offline", 3},  //spending notes
-    { "z_sign_offline", 4},  //outputs    
-    { "z_sign_offline", 5},  //minconf    
+    { "z_sign_offline", 4},  //outputs
+    { "z_sign_offline", 5},  //minconf
     { "z_sign_offline", 6},  //fee
     { "z_sign_offline", 7},  //next block height
     { "z_sign_offline", 8},  //branch ID
     { "z_sign_offline", 10},  //MTX overwintered
     { "z_sign_offline", 11}, //MTX expiry height
-    { "z_sign_offline", 12}, //MTX version groupID    
-    { "z_sign_offline", 13}, //MTX version    
-    { "z_sign_offline", 14}, //zip212 enabled    
-    { "z_sign_offline", 15}, //checksum    
+    { "z_sign_offline", 12}, //MTX version groupID
+    { "z_sign_offline", 13}, //MTX version
+    { "z_sign_offline", 14}, //zip212 enabled
+    { "z_sign_offline", 15}, //checksum
     { "z_shieldcoinbase", 2},
     { "z_shieldcoinbase", 3},
     { "z_getoperationstatus", 0},
@@ -233,7 +233,12 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "z_createbuildinstructions", 0 },
     { "z_createbuildinstructions", 1 },
     { "z_createbuildinstructions", 2 },
-    { "z_createbuildinstructions", 3 }
+    { "z_createbuildinstructions", 3 },
+
+    { "z_createbuildinstructionscoincontrol", 0 },
+    { "z_createbuildinstructionscoincontrol", 1 },
+    { "z_createbuildinstructionscoincontrol", 2 },
+    { "z_createbuildinstructionscoincontrol", 3 }
 };
 
 class CRPCConvertTable

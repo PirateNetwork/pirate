@@ -411,130 +411,130 @@ bool AsyncRPCOperation_sendmany::main_impl()
     LogPrint("zrpc", "%s: fee: %s\n", getId(), FormatMoney(minersFee));
 
     // Offline Signing
-    if (bOfflineSpendingKey == true) {
-        /* Format the necessary data to construct a transaction that can
-         * be signed with an off-line wallet
-         */
-
-        builder_.SetFee(minersFee);
-        builder_.SetMinConfirmations(1);
-
-        // Select Sapling notes that makes up the total amount to send:
-        std::vector<SaplingOutPoint> ops;
-        std::vector<SaplingNote> notes;
-        CAmount sum = 0;
-        int iI = 0;
-        for (auto t : z_sapling_inputs_) {
-            ops.push_back(t.op);
-            notes.push_back(t.note);
-            sum += t.note.value();
-
-            // printf("asyncrpcoperation_sendmany.cpp main_impl() Process z_sapling_inputs_ #%d Value=%ld, Sum=%ld\n",iI, t.note.value(), sum); fflush(stdout);
-            // iI+=1;
-            if (sum >= targetAmount) {
-                // printf("asyncrpcoperation_sendmany.cpp main_impl() Notes exceed targetAmount: %ld>%ld\n",sum,targetAmount);
-                break;
-            }
-        }
-
-        // Fetch Sapling anchor and witnesses
-        // printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses\n"); fflush(stdout);
-        uint256 anchor;
-        std::vector<libzcash::MerklePath> saplingMerklePaths;
-        {
-            // printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses - start\n"); fflush(stdout);
-            LOCK2(cs_main, pwalletMain->cs_wallet);
-            if (!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
-                throw JSONRPCError(RPC_WALLET_ERROR, "Missing merkle path for Sapling note");
-            }
-            // printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses - done\n"); fflush(stdout);
-        }
-
-        // Add Sapling spends to the transaction builder:
-        // printf("asyncrpcoperation_sendmany.cpp main_impl() Add sapling spends: #%ld\n",notes.size() ); fflush(stdout);
-
-        // Note: expsk is uninitialised - we do not have the spending key!
-        //     : fvk also garbage?
-        SaplingExpandedSpendingKey expsk;
-        auto fvk = expsk.full_viewing_key();
-        auto ovk = fvk.ovk;
-        for (size_t i = 0; i < notes.size(); i++) {
-            // printf("asyncrpcoperation_sendmany.cpp main_impl() Add sapling spend: %ld of %ld - start\n",i+1,notes.size() ); fflush(stdout);
-            // Convert witness to a char array:
-            CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-            ss << saplingMerklePaths[i];
-            std::vector<unsigned char> local_witness(ss.begin(), ss.end());
-            myCharArray_s sWitness;
-            memcpy(&sWitness.cArray[0], reinterpret_cast<unsigned char*>(local_witness.data()), sizeof(sWitness.cArray));
-            assert(builder_.AddSaplingSpend_prepare_offline_transaction(fromAddress_, notes[i], anchor, saplingMerklePaths[i].position(), &sWitness.cArray[0]));
-            // printf("asyncrpcoperation_sendmany.cpp main_impl() Add sapling spend: %ld of %ld - done\n",i+1,notes.size() ); fflush(stdout);
-        }
-
-        // Add Sapling outputs to the transaction builder
-        // printf("asyncrpcoperation_sendmany.cpp main_impl() Add sapling outputs\n" ); fflush(stdout);
-        iI = 0;
-        for (auto r : sapling_outputs_) {
-            auto address = std::get<0>(r);
-            auto value = std::get<1>(r);
-            auto strMemo = std::get<2>(r);
-
-
-            // Note: transaction builder expectes memo in
-            //       ASCII encoding, not as a hex string.
-            std::array<unsigned char, ZC_MEMO_SIZE> caMemo = {0x00};
-            if (IsHex(strMemo)) {
-                if (strMemo.length() > (ZC_MEMO_SIZE * 2)) {
-                    printf("asyncrpcoperation_sendmany.cpp main_impl() Hex encoded memo is larger than maximum allowed %d\n", (ZC_MEMO_SIZE * 2));
-
-                    UniValue o(UniValue::VOBJ);
-                    o.push_back(Pair("Failure", "Memo is too long"));
-                    set_result(o);
-
-                    return false;
-                }
-                caMemo = get_memo_from_hex_string(strMemo);
-            } else {
-                int iLength = strMemo.length();
-
-                if (strMemo.length() > ZC_MEMO_SIZE) {
-                    printf("asyncrpcoperation_sendmany.cpp main_impl() Memo is larger than maximum allowed %d\n", ZC_MEMO_SIZE);
-
-                    UniValue o(UniValue::VOBJ);
-                    o.push_back(Pair("Failure", "Memo is too long"));
-                    set_result(o);
-
-                    return false;
-                }
-
-                unsigned char cByte;
-                for (int iI = 0; iI < iLength; iI++) {
-                    cByte = (unsigned char)strMemo[iI];
-                    caMemo[iI] = cByte;
-                }
-            }
-
-            // printf("asyncrpcoperation_sendmany.cpp main_impl() Output #%d:\n  addr=%s, ",iI+1,address.c_str() );
-            // printf("value=%ld\n",value);
-            // printf("memo=%s\n"  , strMemo.c_str() );
-            // fflush(stdout);
-            iI += 1;
-            // builder_.AddSaplingOutput_offline_transaction(ovk, address, value, memo);
-            builder_.AddSaplingOutput_offline_transaction(address, value, caMemo);
-        }
-
-        // Build the off-line transaction
-        std::string sResult = builder_.Build_offline_transaction();
-        // printf("AsyncRPCOperation_sendmany::main_impl() %s\n",sResult.c_str() );
-
-        // Send result upstream
-        // printf("AsyncRPCOperation_sendmany::main_impl() Result available\n");
-        UniValue o(UniValue::VOBJ);
-        o.push_back(Pair("Success", sResult));
-        set_result(o);
-
-        // printf("AsyncRPCOperation_sendmany::main_impl() Pushed result OBJ back. return true\n");
-        return true;
-    }
+    // if (bOfflineSpendingKey == true) {
+    //     /* Format the necessary data to construct a transaction that can
+    //      * be signed with an off-line wallet
+    //      */
+    //
+    //     builder_.SetFee(minersFee);
+    //     builder_.SetMinConfirmations(1);
+    //
+    //     // Select Sapling notes that makes up the total amount to send:
+    //     std::vector<SaplingOutPoint> ops;
+    //     std::vector<SaplingNote> notes;
+    //     CAmount sum = 0;
+    //     int iI = 0;
+    //     for (auto t : z_sapling_inputs_) {
+    //         ops.push_back(t.op);
+    //         notes.push_back(t.note);
+    //         sum += t.note.value();
+    //
+    //         // printf("asyncrpcoperation_sendmany.cpp main_impl() Process z_sapling_inputs_ #%d Value=%ld, Sum=%ld\n",iI, t.note.value(), sum); fflush(stdout);
+    //         // iI+=1;
+    //         if (sum >= targetAmount) {
+    //             // printf("asyncrpcoperation_sendmany.cpp main_impl() Notes exceed targetAmount: %ld>%ld\n",sum,targetAmount);
+    //             break;
+    //         }
+    //     }
+    //
+    //     // Fetch Sapling anchor and witnesses
+    //     // printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses\n"); fflush(stdout);
+    //     uint256 anchor;
+    //     std::vector<libzcash::MerklePath> saplingMerklePaths;
+    //     {
+    //         // printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses - start\n"); fflush(stdout);
+    //         LOCK2(cs_main, pwalletMain->cs_wallet);
+    //         if (!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
+    //             throw JSONRPCError(RPC_WALLET_ERROR, "Missing merkle path for Sapling note");
+    //         }
+    //         // printf("asyncrpcoperation_sendmany.cpp main_impl() Fetch Sapling anchor and witnesses - done\n"); fflush(stdout);
+    //     }
+    //
+    //     // Add Sapling spends to the transaction builder:
+    //     // printf("asyncrpcoperation_sendmany.cpp main_impl() Add sapling spends: #%ld\n",notes.size() ); fflush(stdout);
+    //
+    //     // Note: expsk is uninitialised - we do not have the spending key!
+    //     //     : fvk also garbage?
+    //     SaplingExpandedSpendingKey expsk;
+    //     auto fvk = expsk.full_viewing_key();
+    //     auto ovk = fvk.ovk;
+    //     for (size_t i = 0; i < notes.size(); i++) {
+    //         // printf("asyncrpcoperation_sendmany.cpp main_impl() Add sapling spend: %ld of %ld - start\n",i+1,notes.size() ); fflush(stdout);
+    //         // Convert witness to a char array:
+    //         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    //         ss << saplingMerklePaths[i];
+    //         std::vector<unsigned char> local_witness(ss.begin(), ss.end());
+    //         myCharArray_s sWitness;
+    //         memcpy(&sWitness.cArray[0], reinterpret_cast<unsigned char*>(local_witness.data()), sizeof(sWitness.cArray));
+    //         assert(builder_.AddSaplingSpend_prepare_offline_transaction(fromAddress_, notes[i], anchor, saplingMerklePaths[i].position(), &sWitness.cArray[0]));
+    //         // printf("asyncrpcoperation_sendmany.cpp main_impl() Add sapling spend: %ld of %ld - done\n",i+1,notes.size() ); fflush(stdout);
+    //     }
+    //
+    //     // Add Sapling outputs to the transaction builder
+    //     // printf("asyncrpcoperation_sendmany.cpp main_impl() Add sapling outputs\n" ); fflush(stdout);
+    //     iI = 0;
+    //     for (auto r : sapling_outputs_) {
+    //         auto address = std::get<0>(r);
+    //         auto value = std::get<1>(r);
+    //         auto strMemo = std::get<2>(r);
+    //
+    //
+    //         // Note: transaction builder expectes memo in
+    //         //       ASCII encoding, not as a hex string.
+    //         std::array<unsigned char, ZC_MEMO_SIZE> caMemo = {0x00};
+    //         if (IsHex(strMemo)) {
+    //             if (strMemo.length() > (ZC_MEMO_SIZE * 2)) {
+    //                 printf("asyncrpcoperation_sendmany.cpp main_impl() Hex encoded memo is larger than maximum allowed %d\n", (ZC_MEMO_SIZE * 2));
+    //
+    //                 UniValue o(UniValue::VOBJ);
+    //                 o.push_back(Pair("Failure", "Memo is too long"));
+    //                 set_result(o);
+    //
+    //                 return false;
+    //             }
+    //             caMemo = get_memo_from_hex_string(strMemo);
+    //         } else {
+    //             int iLength = strMemo.length();
+    //
+    //             if (strMemo.length() > ZC_MEMO_SIZE) {
+    //                 printf("asyncrpcoperation_sendmany.cpp main_impl() Memo is larger than maximum allowed %d\n", ZC_MEMO_SIZE);
+    //
+    //                 UniValue o(UniValue::VOBJ);
+    //                 o.push_back(Pair("Failure", "Memo is too long"));
+    //                 set_result(o);
+    //
+    //                 return false;
+    //             }
+    //
+    //             unsigned char cByte;
+    //             for (int iI = 0; iI < iLength; iI++) {
+    //                 cByte = (unsigned char)strMemo[iI];
+    //                 caMemo[iI] = cByte;
+    //             }
+    //         }
+    //
+    //         // printf("asyncrpcoperation_sendmany.cpp main_impl() Output #%d:\n  addr=%s, ",iI+1,address.c_str() );
+    //         // printf("value=%ld\n",value);
+    //         // printf("memo=%s\n"  , strMemo.c_str() );
+    //         // fflush(stdout);
+    //         iI += 1;
+    //         // builder_.AddSaplingOutput_offline_transaction(ovk, address, value, memo);
+    //         builder_.AddSaplingOutput_offline_transaction(address, value, caMemo);
+    //     }
+    //
+    //     // Build the off-line transaction
+    //     std::string sResult = builder_.Build_offline_transaction();
+    //     // printf("AsyncRPCOperation_sendmany::main_impl() %s\n",sResult.c_str() );
+    //
+    //     // Send result upstream
+    //     // printf("AsyncRPCOperation_sendmany::main_impl() Result available\n");
+    //     UniValue o(UniValue::VOBJ);
+    //     o.push_back(Pair("Success", sResult));
+    //     set_result(o);
+    //
+    //     // printf("AsyncRPCOperation_sendmany::main_impl() Pushed result OBJ back. return true\n");
+    //     return true;
+    // }
 
     /**
      * SCENARIO #0
@@ -547,6 +547,7 @@ bool AsyncRPCOperation_sendmany::main_impl()
 
     //ovk will be set based on the from address
     uint256 ovk;
+
 
     // Set change address if we are using transparent funds
     // TODO: Should we just use fromtaddr_ as the change address?
@@ -594,39 +595,40 @@ bool AsyncRPCOperation_sendmany::main_impl()
         ovk = extsk.expsk.full_viewing_key().ovk;
 
         // Select Sapling notes
-        std::vector<SaplingOutPoint> ops;
-        std::vector<SaplingNote> notes;
+        // std::vector<SaplingOutPoint> ops;
+        // std::vector<SaplingNote> notes;
         CAmount sum = 0;
-        for (auto t : z_sapling_inputs_) {
-            ops.push_back(t.op);
-            notes.push_back(t.note);
-            sum += t.note.value();
+        for (auto entry : z_sapling_inputs_) {
+
+            libzcash::MerklePath saplingMerklePath;
+            if (!pwalletMain->SaplingWalletGetMerklePathOfNote(entry.op.hash, entry.op.n, saplingMerklePath)) {
+                throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Merkle Path not found for Sapling note. Stopping.\n", getId()));
+            }
+
+            uint256 anchor;
+            if (!pwalletMain->SaplingWalletGetPathRootWithCMU(saplingMerklePath, entry.note.cmu().value(), anchor)) {
+                throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Getting Anchor failed. Stopping.\n", getId()));
+            }
+
+            if (!builder_.AddSaplingSpendRaw(entry.op, entry.address, entry.note.value(), entry.note.rcm(), saplingMerklePath, anchor)) {
+                throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Adding Raw Sapling Spend failed. Stopping.\n", getId()));
+            }
+
+            sum += entry.note.value();
             if (sum >= targetAmount) {
                 break;
             }
         }
 
-        // Fetch Sapling anchor and merkle paths
-        uint256 anchor;
-        std::vector<libzcash::MerklePath> saplingMerklePaths;
-        {
-            if (!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
-                throw JSONRPCError(
-                    RPC_WALLET_ERROR,
-                     strprintf("%s: Merkle Path not found for Sapling note. Stopping.\n", getId()));
-            }
-        }
-
-        // Add Sapling spends
-        for (size_t i = 0; i < notes.size(); i++) {
-            assert(builder_.AddSaplingSpend(extsk, notes[i], anchor, saplingMerklePaths[i]));
+        if (!builder_.ConvertRawSaplingSpend(extsk)) {
+            throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Converting Raw Sapling Spends failed.\n", getId()));
         }
 
     }
 
+
     if (isfromorchardaddr_) {
         LOCK2(cs_main, pwalletMain->cs_wallet);
-
 
         // Get various necessary keys
         OrchardExtendedSpendingKeyPirate extsk;
@@ -649,59 +651,48 @@ bool AsyncRPCOperation_sendmany::main_impl()
 
         ovk = ovkOpt.value();
 
-        // Select Orchard notes
-        std::vector<OrchardOutPoint> ops;
-        std::vector<OrchardNote> notes;
+
         CAmount sum = 0;
-        for (auto t : z_orchard_inputs_) {
-            ops.push_back(t.op);
-            notes.push_back(t.note);
-            sum += t.note.value();
+        uint256 anchor;
+        for (auto entry : z_orchard_inputs_) {
+
+            libzcash::MerklePath orchardMerklePath;
+            if (!pwalletMain->OrchardWalletGetMerklePathOfNote(entry.op.hash, entry.op.n, orchardMerklePath)) {
+                throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Merkle Path not found for Orchard note. Stopping.\n", getId()));
+            }
+
+            uint256 pathAnchor;
+            if (!pwalletMain->OrchardWalletGetPathRootWithCMU(orchardMerklePath, entry.note.cmx(), pathAnchor)) {
+                throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Getting Orchard Anchor failed. Stopping.\n", getId()));
+            }
+
+            //Set orchard anchor for transaction
+            if (anchor.IsNull()) {
+                anchor = pathAnchor;
+            }
+
+            if (!builder_.AddOrchardSpendRaw(entry.op, entry.address, entry.note.value(), entry.note.rho(), entry.note.rseed(), orchardMerklePath, anchor)) {
+                throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Adding Raw Orchard Spend failed. Stopping.\n", getId()));
+            }
+
+            sum += entry.note.value();
             if (sum >= targetAmount) {
                 break;
             }
         }
 
-        // Fetch Orchard anchor and merkle paths
-        uint256 anchor;
-        std::vector<libzcash::MerklePath> orchardMerklePaths;
-        {
-            if (!pwalletMain->GetOrchardNoteMerklePaths(ops, orchardMerklePaths, anchor)) {
-                throw JSONRPCError(
-                    RPC_WALLET_ERROR,
-                     strprintf("%s: Merkle Path not found for Orchard note. Stopping.\n", getId()));
-            }
-        }
-
         //Initalize Orchard builder
-        builder_.InitalizeOrchard(true, true, anchor);
+        builder_.InitializeOrchard(true, true, anchor);
 
-
-        // Add Orchard spends
-        for (size_t i = 0; i < ops.size(); i++) {
-
-            const CWalletTx* wtx = pwalletMain->GetWalletTx(ops[i].hash);
-            if (wtx == NULL) {
-                throw JSONRPCError(
-                    RPC_WALLET_ERROR,
-                     strprintf("%s: Wallet Transaction not found.\n", getId()));
-            }
-
-            if (wtx->mapOrchardNoteData.count(ops[i])) {
-                auto vActions = wtx->GetOrchardActions();
-                builder_.AddOrchardSpend(extsk, &vActions[ops[i].n], orchardMerklePaths[i], notes[i].value());
-            }
+        if (!builder_.ConvertRawOrchardSpend(extsk)) {
+            throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Converting Raw Orchard Spends failed.\n", getId()));
         }
 
     } else {
-      //Initalize Orchard builder based on inputs and outputs
-      if (!orchard_outputs_.empty()) {
-        builder_.InitalizeOrchard(false, true, uint256());
-      }
+        builder_.InitializeOrchard(false, true, uint256());
     }
 
     assert(!ovk.IsNull());
-
 
     // Add Sapling outputs
     for (auto r : sapling_outputs_) {
@@ -715,7 +706,14 @@ bool AsyncRPCOperation_sendmany::main_impl()
 
         auto memo = get_memo_from_hex_string(hexMemo);
 
-        builder_.AddSaplingOutput(ovk, to, value, memo);
+        if (!builder_.AddSaplingOutputRaw(to, value, memo)) {
+            throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Adding Raw Sapling Output failed. Stopping.\n", getId()));
+        }
+    }
+
+    //Add Outputs to sapling builder with OVK
+    if (!builder_.ConvertRawSaplingOutput(ovk)) {
+        throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Converting Raw Orchard Outputs failed.\n", getId()));
     }
 
     // Add Orchard outputs
@@ -730,7 +728,14 @@ bool AsyncRPCOperation_sendmany::main_impl()
 
         auto memo = get_memo_from_hex_string(hexMemo);
 
-        builder_.AddOrchardOutput(ovk, to, value, memo);
+        if (!builder_.AddOrchardOutputRaw(to, value, memo)) {
+            throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Adding Raw Orchard Output failed. Stopping.\n", getId()));
+        }
+    }
+
+    //Add Outputs to orchard builder with OVK
+    if (!builder_.ConvertRawOrchardOutput(ovk)) {
+        throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Converting Raw Orchard Outputs failed.\n", getId()));
     }
 
     // Build the transaction

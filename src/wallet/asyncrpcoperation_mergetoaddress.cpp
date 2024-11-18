@@ -276,30 +276,49 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
     std::vector<SaplingOutPoint> saplingOPs;
     std::vector<SaplingNote> saplingNotes;
     std::vector<SaplingExtendedSpendingKey> extsks;
+    std::set<SaplingExtendedSpendingKey> setExtsks;
     for (const MergeToAddressInputSaplingNote& saplingNoteInput : saplingNoteInputs_) {
         saplingOPs.push_back(std::get<0>(saplingNoteInput));
         saplingNotes.push_back(std::get<1>(saplingNoteInput));
         auto extsk = std::get<3>(saplingNoteInput);
         extsks.push_back(extsk);
+        setExtsks.insert(extsk);
         if (!ovk) {
             ovk = extsk.expsk.full_viewing_key().ovk;
         }
     }
 
-    // Fetch Sapling anchor and merkle paths
-    uint256 anchor;
-    std::vector<libzcash::MerklePath> saplingMerklePaths;
+    //Iterate thru all the selected notes and add them to the transactions
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
-        if (!pwalletMain->GetSaplingNoteMerklePaths(saplingOPs, saplingMerklePaths, anchor)) {
-            throw JSONRPCError(RPC_WALLET_ERROR, "Merkle Path not found for Sapling note");
+        for (std::set<SaplingExtendedSpendingKey>::iterator it = setExtsks.begin(); it != setExtsks.end(); it++) {
+            auto currentExtsk = *it;
+
+            for (int i = 0; i < extsks.size(); i++) {
+                if (currentExtsk == extsks[i]) {
+                    libzcash::MerklePath saplingMerklePath;
+                    if (!pwalletMain->SaplingWalletGetMerklePathOfNote(saplingOPs[i].hash, saplingOPs[i].n, saplingMerklePath)) {
+                        throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Merkle Path not found for Sapling note. Stopping.\n", getId()));
+                    }
+
+                    uint256 anchor;
+                    if (!pwalletMain->SaplingWalletGetPathRootWithCMU(saplingMerklePath, saplingNotes[i].cmu().value(), anchor)) {
+                        throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Getting Anchor failed. Stopping.\n", getId()));
+                    }
+
+                    libzcash::SaplingPaymentAddress recipient(saplingNotes[i].d, saplingNotes[i].pk_d);
+                    if (!builder_.AddSaplingSpendRaw(saplingOPs[i], recipient, saplingNotes[i].value(), saplingNotes[i].rcm(), saplingMerklePath, anchor)) {
+                        throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Adding Raw Sapling Spend failed. Stopping.\n", getId()));
+                    }
+                }
+            }
+
+            if (!builder_.ConvertRawSaplingSpend(currentExtsk)) {
+                throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Converting Raw Sapling Spends failed.\n", getId()));
+            }
         }
     }
 
-    // Add Sapling spends
-    for (size_t i = 0; i < saplingNotes.size(); i++) {
-        assert(builder_.AddSaplingSpend(extsks[i], saplingNotes[i], anchor, saplingMerklePaths[i]));
-    }
 
     if (isToTaddr_) {
         if (!builder_.AddTransparentOutput(toTaddr_, sendAmount)) {
@@ -352,7 +371,8 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
             throw JSONRPCError(RPC_WALLET_ERROR, "Sending to a Sapling address requires an ovk.");
         }
 
-        builder_.AddSaplingOutput(ovk.value(), *saplingPaymentAddress, sendAmount, caMemo);
+        builder_.AddSaplingOutputRaw(*saplingPaymentAddress, sendAmount, caMemo);
+        builder_.ConvertRawSaplingOutput(ovk.value());
     }
 
 

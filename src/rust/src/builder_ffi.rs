@@ -1,6 +1,7 @@
 use std::convert::TryFrom;
 use std::ptr;
 use std::slice;
+use subtle::CtOption;
 
 use incrementalmerkletree::Hashable;
 use libc::{size_t, c_uchar};
@@ -9,6 +10,7 @@ use orchard::{
     builder::{Builder, InProgress, Unauthorized, Unproven},
     bundle::{Authorized, Flags},
     keys::{FullViewingKey, OutgoingViewingKey, Scope},
+    note::{Nullifier,RandomSeed},
     note_encryption::OrchardDomain,
     tree::{MerkleHashOrchard, MerklePath},
     value::NoteValue,
@@ -50,6 +52,15 @@ impl OrchardSpendInfo {
             note,
             merkle_path,
         }
+    }
+}
+
+/// Converts CtOption<t> into Option<T>
+fn de_ct<T>(ct: CtOption<T>) -> Option<T> {
+    if ct.is_some().into() {
+        Some(ct.unwrap())
+    } else {
+        None
     }
 }
 
@@ -122,6 +133,67 @@ pub extern "C" fn orchard_builder_add_spend(
     }
     return false
 
+}
+
+#[no_mangle]
+pub extern "C" fn orchard_builder_add_spend_from_parts(
+    builder: *mut Builder,
+    fvk_bytes: *const [c_uchar; 96],
+    note_address_bytes: *const[c_uchar; 43],
+    value_raw: u64,
+    rho_bytes: *const[c_uchar; 32],
+    rseed_bytes: *const[c_uchar; 32],
+    merkle_path: *const [c_uchar; 1 + 33 * ORCHARD_TREE_DEPTH + 8]
+) -> bool {
+    let builder = unsafe { builder.as_mut() }.expect("Builder may not be null.");
+
+    //build note from parts
+    let note_address_bytes = unsafe { *note_address_bytes };
+    let address = match de_ct(Address::from_raw_address_bytes(&note_address_bytes)) {
+        Some(r) => r,
+        None => return false,
+    };
+
+    let rho_bytes = unsafe { *rho_bytes };
+    let rho = match de_ct(Nullifier::from_bytes(&rho_bytes)) {
+        Some(r) => r,
+        None => return false,
+    };
+
+    let rseed_bytes = unsafe { *rseed_bytes };
+    let rseed = match de_ct(RandomSeed::from_bytes(rseed_bytes, &rho)) {
+        Some(r) => r,
+        None => return false,
+    };
+
+    let note_value = NoteValue::from_raw(value_raw);
+
+    let note = match de_ct(Note::from_parts(address, note_value, rho, rseed)) {
+        Some(r) => r,
+        None => return false,
+    };
+
+    // Parse the Merkle path from the caller
+    let merkle_path: OrchardPath = match merkle_path_from_slice(unsafe { &(&*merkle_path)[..] }) {
+        Ok(r) => r,
+        Err(_) => return false,
+    };
+
+    //Deseralize Full Viewing key
+    let fvk_bytes = unsafe { *fvk_bytes };
+    let fvk = match FullViewingKey::from_bytes(&fvk_bytes) {
+        Some(r) => r,
+        None => return false
+    };
+
+    //Add note to builder and return result
+    return match builder.add_spend(fvk, note, merkle_path.into()) {
+        Ok(()) => true,
+        Err(e) => {
+            error!("Failed to add Orchard spend: {}", e);
+            false
+        }
+    }
 }
 
 #[no_mangle]

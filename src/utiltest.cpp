@@ -78,7 +78,7 @@ CWalletTx GetValidSaplingReceive(const Consensus::Params& consensusParams,
     auto builder = TransactionBuilder(consensusParams, 1, &keyStore);
     builder.SetFee(0);
     builder.AddTransparentInput(COutPoint(), scriptPubKey, value);
-    builder.AddSaplingOutput(fvk.ovk, pa, value, {});
+    // builder.AddSaplingOutput(fvk.ovk, pa, value, {});
 
     CTransaction tx = builder.Build().GetTxOrThrow();
     CWalletTx wtx {NULL, tx};

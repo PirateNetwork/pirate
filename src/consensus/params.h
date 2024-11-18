@@ -21,12 +21,14 @@
 #ifndef BITCOIN_CONSENSUS_PARAMS_H
 #define BITCOIN_CONSENSUS_PARAMS_H
 
+#include "serialize.h"
 #include "uint256.h"
 #include <optional>
 
 int32_t MAX_BLOCK_SIZE(int32_t height);
 
-namespace Consensus {
+namespace Consensus
+{
 
 /**
  * Index into Params.vUpgrades and NetworkUpgradeInfo
@@ -74,6 +76,17 @@ struct NetworkUpgrade {
      * should remain disabled on mainnet.
      */
     static constexpr int NO_ACTIVATION_HEIGHT = -1;
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(nProtocolVersion);
+        READWRITE(nActivationHeight);
+        READWRITE(ALWAYS_ACTIVE);
+        READWRITE(NO_ACTIVATION_HEIGHT);
+    }
 };
 
 /**
@@ -99,7 +112,8 @@ struct Params {
      */
     int SubsidySlowStartShift() const { return nSubsidySlowStartInterval / 2; }
     int nSubsidyHalvingInterval;
-    int GetLastFoundersRewardBlockHeight() const {
+    int GetLastFoundersRewardBlockHeight() const
+    {
         return nSubsidyHalvingInterval + SubsidySlowStartShift() - 1;
     }
     /** Used to check majorities for block version upgrade */
@@ -109,20 +123,20 @@ struct Params {
     NetworkUpgrade vUpgrades[MAX_NETWORK_UPGRADES];
 
     /** Proof of work parameters */
-    uint256 powLimit; // minimum dificulty limit if EQUIHASH used
+    uint256 powLimit;     // minimum dificulty limit if EQUIHASH used
     uint256 powAlternate; // minimum dificulty limit if EQUIHASH not used
     std::optional<uint32_t> nPowAllowMinDifficultyBlocksAfterHeight;
     std::optional<uint32_t> nHF22Height;
     uint32_t nHF22NotariesPriorityRotateDelta;
     int64_t nPowAveragingWindow; // lookback window to determine block production speed averages
-    int64_t nPowMaxAdjustDown; // max percentage difficulty level should be lowered
-    int64_t nPowMaxAdjustUp; // max percentage difficulty level should be raised
-    int64_t nPowTargetSpacing; // the target block production speed (in seconds)
+    int64_t nPowMaxAdjustDown;   // max percentage difficulty level should be lowered
+    int64_t nPowMaxAdjustUp;     // max percentage difficulty level should be raised
+    int64_t nPowTargetSpacing;   // the target block production speed (in seconds)
 
     /* Proof of stake parameters */
     uint256 posLimit;
-    int64_t nPOSAveragingWindow;    // can be completely different than POW and initially trying a relatively large number, like 100
-    int64_t nPOSTargetSpacing;      // spacing is 1000 units per block to get better resolution, (100 % = 1000, 50% = 2000, 10% = 10000)
+    int64_t nPOSAveragingWindow; // can be completely different than POW and initially trying a relatively large number, like 100
+    int64_t nPOSTargetSpacing;   // spacing is 1000 units per block to get better resolution, (100 % = 1000, 50% = 2000, 10% = 10000)
 
     /* applied to all block times */
     int64_t nMaxFutureBlockTime;
@@ -134,7 +148,7 @@ struct Params {
     /****
      * @returns the minimum time the lookback window should take before difficulty should be raised
      */
-    int64_t MinActualTimespan() const { return (AveragingWindowTimespan() * (100 - nPowMaxAdjustUp  )) / 100; }
+    int64_t MinActualTimespan() const { return (AveragingWindowTimespan() * (100 - nPowMaxAdjustUp)) / 100; }
     /*****
      * @returns the maximum time the lookback window should take before the difficulty should be lowered
      */
@@ -142,6 +156,33 @@ struct Params {
     void SetSaplingHeight(int32_t height) { vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = height; }
     void SetOverwinterHeight(int32_t height) { vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = height; }
     uint256 nMinimumChainWork;
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(hashGenesisBlock);
+        READWRITE(nSubsidySlowStartInterval);
+        READWRITE(nSubsidyHalvingInterval);
+        READWRITE(nMajorityEnforceBlockUpgrade);
+        READWRITE(nMajorityRejectBlockOutdated);
+        READWRITE(nMajorityWindow);
+        READWRITE(powLimit);
+        READWRITE(powAlternate);
+        READWRITE(nPowAllowMinDifficultyBlocksAfterHeight);
+        READWRITE(nHF22Height);
+        READWRITE(nHF22NotariesPriorityRotateDelta);
+        READWRITE(nPowAveragingWindow);
+        READWRITE(nPowMaxAdjustDown);
+        READWRITE(nPowMaxAdjustUp);
+        READWRITE(nPowTargetSpacing);
+        READWRITE(posLimit);
+        READWRITE(nPOSAveragingWindow);
+        READWRITE(nPOSTargetSpacing);
+        READWRITE(nMaxFutureBlockTime);
+        READWRITE(nMinimumChainWork);
+    }
 };
 
 } // namespace Consensus
