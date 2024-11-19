@@ -503,6 +503,14 @@ CAmount CTransaction::GetValueBalanceSapling() const
 }
 
 /**
+ * Returns the Orchard value balance for the transaction.
+ */
+CAmount CTransaction::GetValueBalanceOrchard() const
+{
+    return orchardBundle.GetValueBalance();
+}
+
+/**
  * Returns the Sapling bundle for the transaction.
  */
 const SaplingBundle& CTransaction::GetSaplingBundle() const

@@ -395,6 +395,49 @@ public:
         return ret;
     };
 
+    static std::optional<OrchardNotePlaintext> AttemptDecryptOrchardAction(
+        const orchard_bundle::Action* action,
+        const libzcash::OrchardOutgoingViewingKey ovk
+    )
+    {
+
+        // Datastreams for serialization
+        // CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
+        CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); // returning stream
+
+        // Tranfer Data
+        // libzcash::OrchardOutgoingViewingKey_t ovk_t;
+        libzcash::OrchardPaymentAddress_t address_t;
+        std::array<unsigned char, ZC_MEMO_SIZE> memo_t;
+        uint64_t value_t;
+        uint256 rho_t;
+        uint256 rseed_t;
+
+        // Serialize sending data
+        // ss << ovk;
+        // ss >> ovk_t;
+
+        if(!try_orchard_decrypt_action_ovk(
+            action->as_ptr(),
+            ovk.begin(),
+            &value_t,
+            address_t.begin(),
+            memo_t.begin(),
+            rho_t.begin(),
+            rseed_t.begin())) {
+              return std::nullopt;
+            }
+
+        // deserialize returned data
+        libzcash::OrchardPaymentAddressPirate address_r;
+        rs << address_t;
+        rs >> address_r;
+
+        OrchardNotePlaintext ret = OrchardNotePlaintext(value_t, address_r, memo_t, rho_t, rseed_t, std::nullopt, uint256::FromRawBytes(action->cmx()));
+
+        return ret;
+    };
+
     std::optional<OrchardNote> note() const;
 
     ADD_SERIALIZE_METHODS;

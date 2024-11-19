@@ -10,6 +10,16 @@
 extern "C" {
 #endif
 
+bool try_orchard_decrypt_action_ovk(
+    const ActionPtr* orchard_action,
+    const unsigned char* ovk_bytes,
+    uint64_t *value_out,
+    unsigned char *address_out,
+    unsigned char *memo_out,
+    unsigned char *rho_out,
+    unsigned char *rseed_out
+);
+
 bool try_orchard_decrypt_action_ivk(
     const ActionPtr* orchard_action,
     const unsigned char* ivk_bytes,

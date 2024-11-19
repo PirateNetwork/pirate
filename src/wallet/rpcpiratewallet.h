@@ -6,15 +6,14 @@
 #define BITCOIN_WALLET_RPCPIRATEWALLET_H
 
 struct balancestruct {
-  CAmount confirmed;
-  CAmount unconfirmed;
-  CAmount locked;
-  CAmount immature;
-  bool spendable;
+    CAmount confirmed;
+    CAmount unconfirmed;
+    CAmount locked;
+    CAmount immature;
+    bool spendable;
 };
 
-enum
-{
+enum {
     ALL_SECTIONS = 0,
     SPEND_SECTION = 1,
     SEND_SECTION = 2,
@@ -49,30 +48,6 @@ public:
     string encodedScriptPubKey;
     CAmount amount;
     int vout;
-    bool spendable;
-};
-
-
-class TransactionSpendZC
-{
-public:
-    string encodedAddress;
-    CAmount amount;
-    string spendTxid;
-    int spendJsIndex;
-    int spendJsOutIndex;
-    bool spendable;
-};
-
-class TransactionReceivedZC
-{
-public:
-    string encodedAddress;
-    CAmount amount;
-    int jsIndex;
-    int jsOutIndex;
-    string memo;
-    string memoStr;
     bool spendable;
 };
 
@@ -141,109 +116,104 @@ public:
 };
 
 enum ArchiveType {
-  ARCHIVED = 0,
-  ACTIVE = 1
+    ARCHIVED = 0,
+    ACTIVE = 1
 };
 
 class RpcArcTransaction
 {
 public:
-      uint256 txid;
-      bool coinbase;
-      string category;
-      int64_t blockHeight;
-      uint256 blockHash;
-      int blockIndex;
-      int64_t nBlockTime;
-      int confirmations;
-      int rawconfirmations;
-      int64_t nTime;
-      int64_t expiryHeight;
-      uint64_t size;
-      CAmount transparentValue = 0;
-      CAmount sproutValue = 0;
-      CAmount sproutValueSpent = 0;
-      CAmount saplingValue = 0;
-      int archiveType;
-      std::set<uint256> saplingIvks;
-      std::set<uint256> saplingOvks;
-      std::set<libzcash::OrchardIncomingViewingKeyPirate> orchardIvks;
-      std::set<libzcash::OrchardOutgoingViewingKey> orchardOvks;
-      std::set<string> spentFrom;
-      std::set<string> addresses;
-      std::vector<TransactionSpendT> vTSpend;
-      std::vector<TransactionSpendZC> vZcSpend;
-      std::vector<TransactionSpendZS> vZsSpend;
-      std::vector<TransactionSpendZO> vZoSpend;
-      std::vector<TransactionSendT> vTSend;
-      std::vector<TransactionSendZS> vZsSend;
-      std::vector<TransactionSendZO> vZoSend;
-      std::vector<TransactionReceivedT> vTReceived;
-      std::vector<TransactionReceivedZC> vZcReceived;
-      std::vector<TransactionReceivedZS> vZsReceived;
-      std::vector<TransactionReceivedZO> vZoReceived;
+    uint256 txid;
+    bool coinbase;
+    string category;
+    int64_t blockHeight;
+    uint256 blockHash;
+    int blockIndex;
+    int64_t nBlockTime;
+    int confirmations;
+    int rawconfirmations;
+    int64_t nTime;
+    int64_t expiryHeight;
+    uint64_t size;
+    CAmount transparentValue = 0;
+    CAmount saplingValue = 0;
+    CAmount orchardValue = 0;
+    int archiveType;
+    std::set<uint256> saplingIvks;
+    std::set<uint256> saplingOvks;
+    std::set<libzcash::OrchardIncomingViewingKeyPirate> orchardIvks;
+    std::set<libzcash::OrchardOutgoingViewingKey> orchardOvks;
+    std::set<string> spentFrom;
+    std::set<string> addresses;
+    std::vector<TransactionSpendT> vTSpend;
+    std::vector<TransactionSpendZS> vZsSpend;
+    std::vector<TransactionSpendZO> vZoSpend;
+    std::vector<TransactionSendT> vTSend;
+    std::vector<TransactionSendZS> vZsSend;
+    std::vector<TransactionSendZO> vZoSend;
+    std::vector<TransactionReceivedT> vTReceived;
+    std::vector<TransactionReceivedZS> vZsReceived;
+    std::vector<TransactionReceivedZO> vZoReceived;
 };
 
 class RpcArcTransactions
 {
 public:
-      std::map<std::pair<int,int>, RpcArcTransaction> mapArcTx;
+    std::map<std::pair<int, int>, RpcArcTransaction> mapArcTx;
 };
 
-void getRpcArcTransactions(RpcArcTransactions &arcTxs);
+void getRpcArcTransactions(RpcArcTransactions& arcTxs);
 
-//Transparent
-template<typename RpcTx>
-void getTransparentSends(RpcTx &tx, vector<TransactionSendT> &vSend, CAmount &transparentValue);
+// Transparent
+template <typename RpcTx>
+void getTransparentSends(RpcTx& tx, vector<TransactionSendT>& vSend, CAmount& transparentValue);
 
-template<typename RpcTx>
-void getTransparentSpends(RpcTx &tx, vector<TransactionSpendT> &vSpend, CAmount &transparentValue, bool fIncludeWatchonly = false);
+template <typename RpcTx>
+void getTransparentSpends(RpcTx& tx, vector<TransactionSpendT>& vSpend, CAmount& transparentValue, bool fIncludeWatchonly = false);
 
-template<typename RpcTx>
-void getTransparentRecieves(RpcTx &tx, vector<TransactionReceivedT> &vReceived, bool fIncludeWatchonly = false);
+template <typename RpcTx>
+void getTransparentRecieves(RpcTx& tx, vector<TransactionReceivedT>& vReceived, bool fIncludeWatchonly = false);
 
-//Sprout
-template<typename RpcTx>
-void getSproutSpends(RpcTx &tx, vector<TransactionSpendZC> &vSpend, CAmount &sproutValue, CAmount &sproutValueSpent, bool fIncludeWatchonly = false);
+// Sapling
+template <typename RpcTx>
+void getSaplingSends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<uint256>& ovks, std::set<uint256>& ovksOut, vector<TransactionSendZS>& vSend);
 
-template<typename RpcTx>
-void getSproutReceives(RpcTx &tx, vector<TransactionReceivedZC> &vReceived, bool fIncludeWatchonly = false);
+template <typename RpcTx>
+void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<uint256>& ivks, std::set<uint256>& ivksOut, vector<TransactionSpendZS>& vSpend, bool fIncludeWatchonly = false);
 
-//Sapling
-template<typename RpcTx>
-void getSaplingSends(const Consensus::Params& params, int nHeight, RpcTx &tx, std::set<uint256> &ovks, std::set<uint256> &ovksOut, vector<TransactionSendZS> &vSend);
+template <typename RpcTx>
+void getSaplingReceives(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<uint256>& ivks, std::set<uint256>& ivksOut, vector<TransactionReceivedZS>& vReceived, bool fIncludeWatchonly = false);
 
-template<typename RpcTx>
-void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx &tx, std::set<uint256> &ivks, std::set<uint256> &ivksOut, vector<TransactionSpendZS> &vSpend, bool fIncludeWatchonly = false);
+// Orchard
+template <typename RpcTx>
+void getOrchardSends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::OrchardOutgoingViewingKey>& ovks, std::set<libzcash::OrchardOutgoingViewingKey>& ovksOut, vector<TransactionSendZO>& vSend);
 
-template<typename RpcTx>
-void getSaplingReceives(const Consensus::Params& params, int nHeight, RpcTx &tx, std::set<uint256> &ivks, std::set<uint256> &ivksOut , vector<TransactionReceivedZS> &vReceived, bool fIncludeWatchonly = false);
+template <typename RpcTx>
+void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::OrchardIncomingViewingKeyPirate>& ivks, std::set<libzcash::OrchardIncomingViewingKeyPirate>& ivksOut, vector<TransactionSpendZS>& vSpend, bool fIncludeWatchonly = false);
 
-//Orchard
-template<typename RpcTx>
-void getOrchardReceives(const Consensus::Params& params, int nHeight, RpcTx &tx, std::set<libzcash::OrchardIncomingViewingKeyPirate> &ivks, std::set<libzcash::OrchardIncomingViewingKeyPirate> &ivksOut , vector<TransactionReceivedZO> &vReceived, bool fIncludeWatchonly = false);
+template <typename RpcTx>
+void getOrchardReceives(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::OrchardIncomingViewingKeyPirate>& ivks, std::set<libzcash::OrchardIncomingViewingKeyPirate>& ivksOut, vector<TransactionReceivedZO>& vReceived, bool fIncludeWatchonly = false);
 
 
-void getAllSproutRKs(vector<uint256> &rks);
-void getAllSaplingOVKs(std::set<uint256> &ovks, bool fIncludeWatchonly = false);
-void getAllSaplingIVKs(std::set<uint256> &ivks, bool fIncludeWatchonly = false);
-void getAllOrchardOVKs(std::set<libzcash::OrchardOutgoingViewingKey> &ovks, bool fIncludeWatchonly = false);
-void getAllOrchardIVKs(std::set<libzcash::OrchardIncomingViewingKeyPirate> &ivks, bool fIncludeWatchonly = false);
+void getAllSaplingOVKs(std::set<uint256>& ovks, bool fIncludeWatchonly = false);
+void getAllSaplingIVKs(std::set<uint256>& ivks, bool fIncludeWatchonly = false);
+void getAllOrchardOVKs(std::set<libzcash::OrchardOutgoingViewingKey>& ovks, bool fIncludeWatchonly = false);
+void getAllOrchardIVKs(std::set<libzcash::OrchardIncomingViewingKeyPirate>& ivks, bool fIncludeWatchonly = false);
 
-void getRpcArcTxSaplingKeys(const CWalletTx &tx, int txHeight, RpcArcTransaction &arcTx, bool fIncludeWatchonly = false);
-void getRpcArcTxOrchardKeys(const CWalletTx &tx, int txHeight, RpcArcTransaction &arcTx, bool fIncludeWatchonly = false);
-void getRpcArcTx(CWalletTx &tx, RpcArcTransaction &arcTx, bool fIncludeWatchonly = false, bool rescan = false);
-void getRpcArcTx(uint256 &txid, RpcArcTransaction &arcTx, bool fIncludeWatchonly = false, bool rescan = false);
+void getRpcArcTxSaplingKeys(const CWalletTx& tx, int txHeight, RpcArcTransaction& arcTx, bool fIncludeWatchonly = false);
+void getRpcArcTxOrchardKeys(const CWalletTx& tx, int txHeight, RpcArcTransaction& arcTx, bool fIncludeWatchonly = false);
+void getRpcArcTx(CWalletTx& tx, RpcArcTransaction& arcTx, bool fIncludeWatchonly = false, bool rescan = false);
+void getRpcArcTx(uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly = false, bool rescan = false);
 
-void getRpcArcTxJSONHeader(RpcArcTransaction &arcTx, UniValue& ArcTxJSON);
-void getRpcArcTxJSONSpends(RpcArcTransaction &arcTx, UniValue& ArcTxJSON, bool filterAddress = false, string addressString = "");
-void getRpcArcTxJSONSends(RpcArcTransaction &arcTx, UniValue& ArcTxJSON, bool filterAddress = false, string addressString = "");
-void getRpcArcTxJSONReceives(RpcArcTransaction &arcTx, UniValue& ArcTxJSON, bool filterAddress = false, string addressString = "");
+void getRpcArcTxJSONHeader(RpcArcTransaction& arcTx, UniValue& ArcTxJSON);
+void getRpcArcTxJSONSpends(RpcArcTransaction& arcTx, UniValue& ArcTxJSON, bool filterAddress = false, string addressString = "");
+void getRpcArcTxJSONSends(RpcArcTransaction& arcTx, UniValue& ArcTxJSON, bool filterAddress = false, string addressString = "");
+void getRpcArcTxJSONReceives(RpcArcTransaction& arcTx, UniValue& ArcTxJSON, bool filterAddress = false, string addressString = "");
 
-void decrypttransaction(CTransaction &tx, RpcArcTransaction &arcTx, int nHeight);
+void decrypttransaction(CTransaction& tx, RpcArcTransaction& arcTx, int nHeight);
 
 class CRPCTable;
 
-void RegisterPirateExclusiveRPCCommands(CRPCTable &tableRPC);
+void RegisterPirateExclusiveRPCCommands(CRPCTable& tableRPC);
 
-#endif //BITCOIN_WALLET_RPCWALLET_H
+#endif // BITCOIN_WALLET_RPCWALLET_H

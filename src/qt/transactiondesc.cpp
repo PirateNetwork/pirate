@@ -95,8 +95,11 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
     strHTML += "<b>" + tr("rawconfirmations") + ":</b> " + QString::number(arcTx.rawconfirmations) + "<br>";
     strHTML += "<b>" + tr("confirmations") + ":</b> " + QString::number(arcTx.confirmations) + "<br>";
     strHTML += "<b>" + tr("expiryHeight") + ":</b> " + QString::number(arcTx.expiryHeight) + "<br>";
-    strHTML += "<b>" + tr("fee") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, -(arcTx.transparentValue + arcTx.sproutValue + arcTx.saplingValue)) + "<br>";
-
+    if (arcTx.coinbase) {
+        strHTML += "<b>" + tr("fee") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, 0) + "<br>";
+    } else {
+        strHTML += "<b>" + tr("fee") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, -(arcTx.transparentValue + arcTx.saplingValue + arcTx.orchardValue)) + "<br>";
+    }
 
 
     if (arcTx.spentFrom.size() > 0) {
@@ -116,33 +119,6 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
             }
         }
 
-        CAmount sproutValueReceived = 0;
-        for (int i = 0; i < arcTx.vZcReceived.size(); i++) {
-            QString tempHTML;
-            bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZcReceived[i].encodedAddress) != arcTx.spentFrom.end();
-            sproutValueReceived += arcTx.vZcReceived[i].amount;
-            tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Sprout Send")  + "<br>";
-            tempHTML += "<b>" + tr("    Address") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZcReceived[i].encodedAddress)  + "<br>";
-            tempHTML += "<b>" + tr("    Value") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, CAmount(arcTx.vZcReceived[i].amount)) + "<br>";
-            if (change) {
-                tempHTML += "<b>" + tr("    Change") + ":</b> True<br>";
-                sendChangeHTML += tempHTML;
-            } else {
-                allChange = false;
-                tempHTML += "<b>" + tr("    Change") + ":</b> False<br>";
-                sendHTML += tempHTML;
-            }
-        }
-
-        if (arcTx.sproutValue - arcTx.sproutValueSpent - sproutValueReceived != 0) {
-            QString tempHTML;
-            tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Sprout Send")  + "<br>";
-            tempHTML += "<b>" + tr("    Address") + ":</b> " + "Shielded"  + "<br>";
-            tempHTML += "<b>" + tr("    Value") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, CAmount(arcTx.sproutValue - arcTx.sproutValueSpent)) + "<br>";
-            tempHTML += "<b>" + tr("    Change") + ":</b> False<br>";
-            sendHTML += tempHTML;
-        }
-
         for (int i = 0; i < arcTx.vZsSend.size(); i++) {
             QString tempHTML;
             bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsSend[i].encodedAddress) != arcTx.spentFrom.end();
@@ -156,6 +132,26 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
                 tempHTML += "<b>" + tr("    Change") + ":</b> False<br>";
             }
             tempHTML += "<b>" + tr("    Memo") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZsSend[i].memoStr)  + "<br>";
+            if (change) {
+                sendChangeHTML += tempHTML;
+            } else {
+                sendHTML += tempHTML;
+            }
+        }
+
+        for (int i = 0; i < arcTx.vZoSend.size(); i++) {
+            QString tempHTML;
+            bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZoSend[i].encodedAddress) != arcTx.spentFrom.end();
+            tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Orchard Send")  + "<br>";
+            tempHTML += "<b>" + tr("    Address") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZoSend[i].encodedAddress)  + "<br>";
+            tempHTML += "<b>" + tr("    Value") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, CAmount(arcTx.vZoSend[i].amount)) + "<br>";
+            if (change) {
+                tempHTML += "<b>" + tr("    Change") + ":</b> True<br>";
+            } else {
+                allChange = false;
+                tempHTML += "<b>" + tr("    Change") + ":</b> False<br>";
+            }
+            tempHTML += "<b>" + tr("    Memo") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZoSend[i].memoStr)  + "<br>";
             if (change) {
                 sendChangeHTML += tempHTML;
             } else {
@@ -180,22 +176,6 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
         }
     }
 
-    for (int i = 0; i < arcTx.vZcReceived.size(); i++) {
-        QString tempHTML;
-        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZcReceived[i].encodedAddress) != arcTx.spentFrom.end();
-        tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Sprout Received")  + "<br>";
-        tempHTML += "<b>" + tr("    Address") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZcReceived[i].encodedAddress)  + "<br>";
-        tempHTML += "<b>" + tr("    Value") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, CAmount(arcTx.vZcReceived[i].amount)) + "<br>";
-        if (change) {
-            tempHTML += "<b>" + tr("    Change") + ":</b> True<br>";
-            recChangeHTML += tempHTML;
-        } else {
-            allChange = false;
-            tempHTML += "<b>" + tr("    Change") + ":</b> False<br>";
-            recHTML += tempHTML;
-        }
-    }
-
     for (int i = 0; i < arcTx.vZsReceived.size(); i++) {
         QString tempHTML;
         bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsReceived[i].encodedAddress) != arcTx.spentFrom.end();
@@ -209,6 +189,27 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
             tempHTML += "<b>" + tr("    Change") + ":</b> False<br>";
         }
         tempHTML += "<b>" + tr("    Memo") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZsReceived[i].memoStr)  + "<br>";
+        if (change) {
+            recChangeHTML += tempHTML;
+        } else {
+            allChange = false;
+            recHTML += tempHTML;
+        }
+    }
+
+    for (int i = 0; i < arcTx.vZoReceived.size(); i++) {
+        QString tempHTML;
+        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZoReceived[i].encodedAddress) != arcTx.spentFrom.end();
+        tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Orchard Received")  + "<br>";
+        tempHTML += "<b>" + tr("    Address") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZoReceived[i].encodedAddress)  + "<br>";
+        tempHTML += "<b>" + tr("    Value") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, CAmount(arcTx.vZoReceived[i].amount)) + "<br>";
+        if (change) {
+            tempHTML += "<b>" + tr("    Change") + ":</b> True<br>";
+        } else {
+            allChange = false;
+            tempHTML += "<b>" + tr("    Change") + ":</b> False<br>";
+        }
+        tempHTML += "<b>" + tr("    Memo") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZoReceived[i].memoStr)  + "<br>";
         if (change) {
             recChangeHTML += tempHTML;
         } else {

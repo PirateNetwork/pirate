@@ -3,12 +3,12 @@ use libc::c_uchar;
 
 use orchard::{
     Address, Note,
-    keys::{IncomingViewingKey, PreparedIncomingViewingKey, FullViewingKey, Scope},
+    keys::{OutgoingViewingKey, IncomingViewingKey, PreparedIncomingViewingKey, FullViewingKey, Scope},
     note::{Nullifier, RandomSeed},
     note_encryption::OrchardDomain,
     value::NoteValue};
 
-use zcash_note_encryption::try_note_decryption;
+use zcash_note_encryption::{try_note_decryption, try_output_recovery_with_ovk};
 
 use crate::orchard_bundle::Action;
 use subtle::CtOption;
@@ -20,6 +20,53 @@ fn de_ct<T>(ct: CtOption<T>) -> Option<T> {
     } else {
         None
     }
+}
+
+#[no_mangle]
+pub extern "C" fn try_orchard_decrypt_action_ovk(
+    orchard_action: *const Action,
+    ovk_bytes: *const [c_uchar; 32],
+    value_out: *mut u64,
+    address_out: *mut [u8; 43],
+    memo_out: *mut [u8; 512],
+    rho_out: *mut [u8; 32],
+    rseed_out: *mut [u8; 32],
+) -> bool {
+
+    let ovk_bytes = unsafe { *ovk_bytes };
+    let ovk = OutgoingViewingKey::from(ovk_bytes);
+
+    if let Some(orchard_action) = unsafe { orchard_action.as_ref() } {
+
+        let action = &orchard_action.inner();
+        let domain = OrchardDomain::for_action(action);
+        let decrypted = match try_output_recovery_with_ovk(&domain, &ovk, action, action.cv_net(), &action.encrypted_note().out_ciphertext) {
+            Some(r) => r,
+            None => return false,
+        };
+
+        let value_out = unsafe { &mut *value_out };
+        let value = decrypted.0.value().inner();
+        let mut buf = [0; 8];
+        LittleEndian::write_u64(&mut buf, value.into());
+        *value_out = LittleEndian::read_u64(&buf);
+
+        let address_out = unsafe { &mut *address_out };
+        *address_out = decrypted.1.to_raw_address_bytes();
+
+        let memo_out = unsafe { &mut *memo_out };
+        *memo_out = decrypted.2;
+
+        let rho_out = unsafe { &mut *rho_out };
+        *rho_out = decrypted.0.rho().to_bytes();
+
+        let rseed_out = unsafe { &mut *rseed_out };
+        *rseed_out = *decrypted.0.rseed().as_bytes();
+
+        return true
+    }
+
+    return false
 }
 
 #[no_mangle]

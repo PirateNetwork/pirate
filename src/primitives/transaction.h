@@ -911,6 +911,11 @@ public:
     CAmount GetValueBalanceSapling() const;
 
     /**
+     * Returns the Sapling value balance for the transaction.
+     */
+    CAmount GetValueBalanceOrchard() const;
+
+    /**
      * Returns the Sapling bundle for the transaction.
      */
     const SaplingBundle& GetSaplingBundle() const;
