@@ -401,6 +401,7 @@ void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
         // Find the op of the nullifier
         map<uint256, OrchardOutPoint>::iterator opit = pwalletMain->mapArcOrchardOutPoints.find(nullifier);
         if (opit == pwalletMain->mapArcOrchardOutPoints.end()) {
+            LogPrintf("Unable to find orchard outpoint\n");
             continue;
         }
         OrchardOutPoint op = (*opit).second;

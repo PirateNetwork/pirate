@@ -110,6 +110,7 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     aboutAction(0),
     receiveCoinsAction(0),
     receiveCoinsMenuAction(0),
+    hardwareWalletAction(0),
     optionsAction(0),
     toggleHideAction(0),
     encryptWalletAction(0),
@@ -377,6 +378,13 @@ void PirateOceanGUI::createActions()
     historyAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_5));
     tabGroup->addAction(historyAction);
 
+    hardwareWalletAction = new QAction(platformStyle->SingleColorIcon(":/icons/z-send"), tr("&HW Wallet"), this);
+    hardwareWalletAction->setStatusTip(tr("Use Hardware Wallet"));
+    hardwareWalletAction->setToolTip(hardwareWalletAction->statusTip());
+    hardwareWalletAction->setCheckable(true);
+    hardwareWalletAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_6));
+    tabGroup->addAction(hardwareWalletAction);
+
 #ifdef ENABLE_WALLET
     // These showNormalIfMinimized are needed because Send Coins and Receive Coins
     // can be triggered from the tray menu, and need to show the GUI to be useful.
@@ -403,6 +411,8 @@ void PirateOceanGUI::createActions()
     connect(receiveCoinsMenuAction, SIGNAL(triggered()), this, SLOT(gotoReceiveCoinsPage()));
     connect(historyAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(historyAction, SIGNAL(triggered()), this, SLOT(gotoHistoryPage()));
+    connect(hardwareWalletAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
+    connect(hardwareWalletAction, SIGNAL(triggered()), this, SLOT(gotoHardwareWalletPage()));
 
 #endif // ENABLE_WALLET
 
@@ -582,6 +592,7 @@ void PirateOceanGUI::createToolBars()
         toolbar->addAction(zsignAction);
         toolbar->addAction(receiveCoinsAction);
         toolbar->addAction(historyAction);
+        toolbar->addAction(hardwareWalletAction);
         overviewAction->setChecked(true);
     }
 }
@@ -738,6 +749,7 @@ void PirateOceanGUI::setWalletActionsEnabled(bool enabled)
     zsignMenuAction->setEnabled(enabled);
     receiveCoinsAction->setEnabled(enabled);
     receiveCoinsMenuAction->setEnabled(enabled);
+    hardwareWalletAction->setEnabled(enabled);
     historyAction->setEnabled(enabled);
     encryptWalletAction->setEnabled(enabled);
     backupWalletAction->setEnabled(enabled);
@@ -790,6 +802,7 @@ void PirateOceanGUI::createTrayIconMenu()
     trayIconMenu->addAction(zsendCoinsMenuAction);
     trayIconMenu->addAction(zsignMenuAction);
     trayIconMenu->addAction(receiveCoinsMenuAction);
+    trayIconMenu->addAction(hardwareWalletAction);
     trayIconMenu->addSeparator();
     trayIconMenu->addAction(optionsAction);
     trayIconMenu->addAction(openRPCConsoleAction);
@@ -937,6 +950,14 @@ void PirateOceanGUI::gotoReceiveCoinsPage()
 
     receiveCoinsAction->setChecked(true);
     if (walletFrame) walletFrame->gotoReceiveCoinsPage();
+}
+
+void PirateOceanGUI::gotoHardwareWalletPage()
+{
+    if (walletFrame) walletFrame->resetUnlockTimer();
+
+    hardwareWalletAction->setChecked(true);
+    if (walletFrame) walletFrame->gotoHardwareWalletPage();
 }
 
 void PirateOceanGUI::gotoZSendCoinsPage(QString addr)

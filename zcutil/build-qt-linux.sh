@@ -86,9 +86,14 @@ PREFIX="$(pwd)/depends/$BUILD/"
 HOST="$HOST" BUILD="$BUILD" "$MAKE" "$@" -C ./depends/ V=1
 ./autogen.sh
 
-./configure --prefix="${PREFIX}" --with-gui=qt5 --disable-bip70 --enable-tests=yes --enable-wallet=yes "$HARDENING_ARG" "$LCOV_ARG" "$TEST_ARG" "$MINING_ARG" $CONFIGURE_FLAGS CXXFLAGS='-g0'
-# -Wunused -Wunreachable-code
+DEBUG=1
+export DEBUG
+DEBUGGING_ARG='--enable-debug'
 
-nice -n 20 "$MAKE" "$@" V=1
+./configure --prefix="${PREFIX}" --with-gui=qt5 --disable-bip70 --enable-tests=yes --enable-wallet=yes "$DEBUGGING_ARG" "$HARDENING_ARG" "$LCOV_ARG" "$TEST_ARG" "$MINING_ARG" $CONFIGURE_FLAGS CXXFLAGS='-g0'
+# -Wunused -Wunreachable-code'
+
+nice -n 20 "$MAKE" "$@"
+#V=1
 
 cp src/qt/komodo-qt ./pirate-qt-linux

@@ -104,6 +104,7 @@ QT_FORMS_UI = \
   qt/forms/askpassphrasedialog.ui \
   qt/forms/coincontroldialog.ui \
   qt/forms/editaddressdialog.ui \
+  qt/forms/hardwarewallet.ui \
   qt/forms/helpmessagedialog.ui \
   qt/forms/intro.ui \
   qt/forms/importSKdialog.ui \
@@ -150,9 +151,11 @@ QT_MOC_CPP = \
   qt/moc_editaddressdialog.cpp \
   qt/moc_editzaddressdialog.cpp \
   qt/moc_guiutil.cpp \
+  qt/moc_hardwarewallet.cpp \
   qt/moc_intro.cpp \
   qt/moc_importkeydialog.cpp\
   qt/moc_macnotificationhandler.cpp \
+  qt/moc_message_framing.cpp \
   qt/moc_modaloverlay.cpp \
   qt/moc_notificator.cpp \
   qt/moc_newseed.cpp \
@@ -189,7 +192,7 @@ QT_MOC_CPP = \
   qt/moc_updatedialog.cpp \
   qt/moc_walletframe.cpp \
   qt/moc_walletmodel.cpp \
-  qt/moc_walletview.cpp
+  qt/moc_walletview.cpp 
 
 KOMODO_MM =
 
@@ -237,8 +240,10 @@ KOMODO_QT_H = \
   qt/guiconstants.h \
   qt/guiutil.h \
   qt/intro.h \
+  qt/hardwarewallet.h \
   qt/importkeydialog.h \
   qt/macnotificationhandler.h \
+  qt/message_framing.h \
   qt/modaloverlay.h \
   qt/networkstyle.h \
   qt/newseed.h \
@@ -281,7 +286,18 @@ KOMODO_QT_H = \
   qt/walletmodel.h \
   qt/walletmodeltransaction.h \
   qt/walletview.h \
-  qt/winshutdownmonitor.h
+  qt/winshutdownmonitor.h \
+  qt/hardwarewallet/BaseTypes.h \
+  qt/hardwarewallet/libraries/checksums.h \
+  qt/hardwarewallet/libraries/crc16.h \
+  qt/hardwarewallet/libraries/md5sum.h \
+  qt/hardwarewallet/libraries/predef.h \
+  qt/hardwarewallet/libraries/SerialPort_posix_i.h \
+  qt/hardwarewallet/libraries/SerialPort.h \
+  qt/hardwarewallet/communication/comms_filetx_i.h \
+  qt/hardwarewallet/communication/comms_filetx.h \
+  qt/hardwarewallet/communication/communication_structures.h
+
 
 RES_ICONS = \
   qt/res/icons/add.png \
@@ -350,7 +366,9 @@ KOMODO_QT_BASE_CPP = \
   qt/csvmodelwriter.cpp \
   qt/guiutil.cpp \
   qt/intro.cpp \
+  qt/hardwarewallet.cpp \
   qt/modaloverlay.cpp \
+  qt/message_framing.cpp \
   qt/networkstyle.cpp \
   qt/newseed.cpp \
   qt/newwallet.cpp \
@@ -366,7 +384,12 @@ KOMODO_QT_BASE_CPP = \
   qt/rpcconsole.cpp \
   qt/splashscreen.cpp \
   qt/trafficgraphwidget.cpp \
-  qt/utilitydialog.cpp
+  qt/utilitydialog.cpp \
+  qt/hardwarewallet/libraries/checksums.c \
+  qt/hardwarewallet/libraries/crc16.c \
+  qt/hardwarewallet/libraries/md5sum.cpp \
+  qt/hardwarewallet/libraries/SerialPort_posix.cpp \
+  qt/hardwarewallet/communication/comms_filetx.cpp 
 
 KOMODO_QT_WINDOWS_CPP = qt/winshutdownmonitor.cpp
 
@@ -451,7 +474,10 @@ RES_MOVIES = $(wildcard $(srcdir)/qt/res/movies/spinner-*.png)
 KOMODO_RC = qt/res/komodo-qt-res.rc
 
 KOMODO_QT_INCLUDES = -I$(builddir)/qt -I$(srcdir)/qt -I$(srcdir)/qt/forms \
-  -I$(builddir)/qt/forms -DQT_NO_KEYWORDS
+  -I$(builddir)/qt/forms -DQT_NO_KEYWORDS \
+  -I$(builddir)/qt/hardwarewallet \
+  -I$(builddir)/qt/hardwarewallet/communication \
+  -I$(builddir)/qt/hardwarewallet/libraries 
 
 qt_libkomodoqt_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(KOMODO_QT_INCLUDES) \
   $(QT_INCLUDES) $(QT_DBUS_INCLUDES) $(PROTOBUF_CFLAGS) $(QR_CFLAGS)

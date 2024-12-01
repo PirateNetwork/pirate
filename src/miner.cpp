@@ -886,6 +886,13 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
             pblocktemplate->hashAuthDataRoot.SetNull();
             pblock->hashBlockCommitments = sapling_frontier_tree.root();
         }
+
+        // LogPrintf("\n\nMining Block\n");
+        // LogPrintf("hashChainHistoryRoot %s\n", pblocktemplate->hashChainHistoryRoot.ToString());
+        // LogPrintf("hashAuthDataRoot %s\n", pblocktemplate->hashAuthDataRoot.ToString());
+        // LogPrintf("hashBlockCommitments %s\n\n\n", pblock->hashBlockCommitments.ToString());
+
+
         // all Verus PoS chains need this data in the block at all times
         if ( chainName.isKMD() || ASSETCHAINS_STAKED == 0 || KOMODO_MININGTHREADS > 0 )
         {

@@ -111,6 +111,7 @@ private:
     QAction *aboutAction;
     QAction *receiveCoinsAction;
     QAction *receiveCoinsMenuAction;
+    QAction *hardwareWalletAction;
     QAction *optionsAction;
     QAction *toggleHideAction;
     QAction *encryptWalletAction;
@@ -212,6 +213,8 @@ private Q_SLOTS:
     void gotoHistoryPage();
     /** Switch to receive coins page */
     void gotoReceiveCoinsPage();
+    /**Switch to Hardwarewallet Page*/
+    void gotoHardwareWalletPage();
     /** Switch to send coins page */
     //void gotoSendCoinsPage(QString addr = "");
     /** Switch to z-send coins page */

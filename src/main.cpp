@@ -4314,6 +4314,13 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             uint256 hashBlockCommitments = DeriveBlockCommitmentsHash(
                 hashChainHistoryRoot.value(),
                 hashAuthDataRoot.value());
+
+            // LogPrintf("\n\nValidating Block\n");
+            // LogPrintf("hashChainHistoryRoot %s\n", hashChainHistoryRoot.value().ToString());
+            // LogPrintf("hashAuthDataRoot %s\n", hashAuthDataRoot.value().ToString());
+            // LogPrintf("hashBlockCommitments %s\n\n\n", hashBlockCommitments.ToString());
+
+
             if (block.hashBlockCommitments != hashBlockCommitments) {
                 return state.DoS(100,
                     error("ConnectBlock(): block's hashBlockCommitments is incorrect (should be ZIP 244 block commitment)"),
