@@ -44,6 +44,11 @@ static const uint16_t CrcTable[] =
 
 uint16_t	CalcCrc16(void* pBuffer, uint32_t lSize, uint16_t wSeed)
 {
+   printf("\nCalcCrc16\n");
+   printf("pBuffer: %p\n", pBuffer);
+   printf("lSize: %u\n", lSize);
+   printf("wSeed: %u\n", wSeed);
+   
    uint16_t wChecksum = wSeed;
    uint8_t  *pData = (uint8_t *) pBuffer;
    uint8_t  cValue;

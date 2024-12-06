@@ -222,7 +222,7 @@ void MsgFrame_Widget::Frameing (void)
     iReturnCode = iNwBufWritePos - iNwBufReadPos;
     if (iReturnCode<=0)
     {
-      //printf("No remaining bytes to read. Blank variables\n");
+      // printf("No remaining bytes to read. Blank variables\n");
       iNwBufWritePos=0;
       iNwBufReadPos=0;
     }
@@ -240,7 +240,7 @@ void MsgFrame_Widget::Frameing (void)
       if (recv_len>0)
       {
         iNwBufWritePos=recv_len;
-        //printf("Read from uart: %d\n",recv_len);
+        printf("Read from uart: %d\n",recv_len);
       }
       else
       {
@@ -249,7 +249,7 @@ void MsgFrame_Widget::Frameing (void)
       }
     }
 
-    //printf("%d-(%d+1)=%d bytes to process, internal position: %d, write-internal=%d\n",iNwBufWritePos, iNwBufReadPos, (iNwBufWritePos-iNwBufReadPos-1), iInternalBufferPos, (iNwBufWritePos - iInternalBufferPos) );
+    printf("%d-(%d+1)=%d bytes to process, internal position: %d, write-internal=%d\n",iNwBufWritePos, iNwBufReadPos, (iNwBufWritePos-iNwBufReadPos-1), iInternalBufferPos, (iNwBufWritePos - iInternalBufferPos) );
     cData=cNwBuf[iNwBufReadPos];
     iNwBufReadPos++;
 
@@ -258,7 +258,7 @@ void MsgFrame_Widget::Frameing (void)
       case RxNOSYNC:
         if(cData == PROTOCOL_SOM)
         {
-          //printf("SOM\n");
+          printf("SOM\n");
           cInternalBufferState=RxMSGID;
         }
         else
@@ -308,7 +308,7 @@ void MsgFrame_Widget::Frameing (void)
            (cInternalMsgID==MSGID_ERROR)
            )
         {
-          //printf("Detected MSGID:0x%02x\n\n",cInternalMsgID);
+          printf("Detected MSGID:0x%02x\n\n",cInternalMsgID);
         }
         else
         {
@@ -317,7 +317,7 @@ void MsgFrame_Widget::Frameing (void)
         }
         break;
       case RxLEN1:
-        //printf("len[0]: 0x%02x\n",cData);
+        printf("len[0]: 0x%02x\n",cData);
         iInternalBufferLength = (uint16_t)cData; // Message length: Low byte
         cInternalBufferState=RxLEN2;
         break;
@@ -380,7 +380,7 @@ void MsgFrame_Widget::Frameing (void)
         //}
         iCalcDataBuffCRC =CalcCrc16(&cInternalBuffer[0],iInternalBufferLength,0);
 
-        //printf("CRC[1]: 0x%02x, RxCRC:0x%04x, CalcCRC:0x%04x\n",cData,iInternalCRC,iCalcDataBuffCRC);
+        printf("CRC[1]: 0x%02x, RxCRC:0x%04x, CalcCRC:0x%04x\n",cData,iInternalCRC,iCalcDataBuffCRC);
         if (iCalcDataBuffCRC == iInternalCRC)
         {
           cInternalBufferState=RxEOM;
@@ -398,14 +398,15 @@ void MsgFrame_Widget::Frameing (void)
 
         if (cData == PROTOCOL_EOM)
         {
-          //printf("Received frame, msgid=%u\n",cInternalMsgID);
+          printf("Received frame, msgid=%u\n",cInternalMsgID);
 
-          //printf("Copy %u bytes\n",iInternalBufferLength);
+          printf("Copy %u bytes\n",iInternalBufferLength);
           //iInternalBufferLength;
           //memcpy(pDataBuffer,&cInternalBuffer[0],iInternalBufferLength);
           //*pcMsgID = cInternalMsgID;
 
-          //Does the callback happen here at the emit?          
+          //Does the callback happen here at the emit?   
+          printf("Emit signal_FrameDetected\n");       
           Q_EMIT signal_FrameDetected(cInternalMsgID, &cInternalBuffer[0], iInternalBufferLength);
           return;
         }
@@ -464,12 +465,12 @@ int8_t MsgFrame_Widget::Pack (uint8_t cMsgID, uint8_t *pcaData, uint16_t iLength
   //   2 : Ping
   //0x55 : Sign transaction
   cDataPack[1]=cMsgID;
-  //printf("Sending msgid 0x%02x\n", cMsgID);
+  printf("Sending msgid 0x%02x\n", cMsgID);
 
   // Length
   cDataPack[2]=  (uint8_t)((iLength >> 0) & 0xFF);
   cDataPack[3]=  (uint8_t)((iLength >> 8) & 0xFF);
-  //printf ("length[1][0]: 0x%02x 0x%02x\n", cData[3], cData[2]);
+  printf ("length[1][0]: 0x%02x 0x%02x\n", cDataPack[3], cDataPack[2]);
 
   //Assign data into tx buffer
   if (iLength>0)
@@ -484,11 +485,11 @@ int8_t MsgFrame_Widget::Pack (uint8_t cMsgID, uint8_t *pcaData, uint16_t iLength
   }
   cDataPack[4+iLength  ] = (uint8_t)((iCRC >> 0) & 0xFF);
   cDataPack[4+iLength+1] = (uint8_t)((iCRC >> 8) & 0xFF);
-  //printf ("CRC[1][0]:0x%02x 0x%02x, crc=0x%04x\n", cData[4+iLength+1], cData[4+iLength], iCRC);
+  printf ("CRC[1][0]:0x%02x 0x%02x, crc=0x%04x\n", cDataPack[4+iLength+1], cDataPack[4+iLength], iCRC);
 
   // EOM: End of Message
   cDataPack[4+iLength+2]=PROTOCOL_EOM;
-  //printf ("EOM: 0x%02x\n", cData[4+iLength+2]);
+  printf ("EOM: 0x%02x\n", cDataPack[4+iLength+2]);
 
   /*
   printf("Transaction: %u bytes\n",(iLength+7));

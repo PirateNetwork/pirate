@@ -1431,6 +1431,7 @@ int8_t HardwareWallet::Setup_GUI_for_upgrade()
 //uint16_t   iInternalBufferLength=0;
 void HardwareWallet::message_framedetected(uint8_t cMsgID, uint8_t *pcaData, uint16_t iLength)
 {
+  printf("message_framedetected\n");
   try
   {
     int8_t cReturnCode=0;

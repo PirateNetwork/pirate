@@ -288,7 +288,6 @@ KOMODO_QT_H = \
   qt/walletview.h \
   qt/winshutdownmonitor.h \
   qt/hardwarewallet/BaseTypes.h \
-  qt/hardwarewallet/libraries/checksums.h \
   qt/hardwarewallet/libraries/crc16.h \
   qt/hardwarewallet/libraries/md5sum.h \
   qt/hardwarewallet/libraries/predef.h \
@@ -385,7 +384,6 @@ KOMODO_QT_BASE_CPP = \
   qt/splashscreen.cpp \
   qt/trafficgraphwidget.cpp \
   qt/utilitydialog.cpp \
-  qt/hardwarewallet/libraries/checksums.c \
   qt/hardwarewallet/libraries/crc16.c \
   qt/hardwarewallet/libraries/md5sum.cpp \
   qt/hardwarewallet/libraries/SerialPort_posix.cpp \
