@@ -6562,11 +6562,16 @@ bool CWallet::initalizeArcTx() {
                 }
             }
         }
+
+        ArchiveTxPoint arcTx;
+        AddToArcTxs(wtx, txHeight, arcTx);
     }
 
     for (map<uint256, ArchiveTxPoint>::iterator it = mapArcTxs.begin(); it != mapArcTxs.end(); it++) {
-        //Add to mapAddressTxids
-        AddToArcTxs(it->first, it->second);
+        //Add to mapAddressTxids the Archived that are no longer in the wallet
+        if (!it->second.writeToDisk) {
+            AddToArcTxs(it->first, it->second);
+        }
     }
 
   return true;
@@ -9502,7 +9507,8 @@ bool IncomingViewingKeyBelongsToWallet::operator()(const libzcash::SaplingPaymen
 
 bool IncomingViewingKeyBelongsToWallet::operator()(const libzcash::OrchardPaymentAddressPirate &zaddr) const
 {
-    return false;
+    libzcash::OrchardIncomingViewingKeyPirate ivk;
+    return m_wallet->GetOrchardIncomingViewingKey(zaddr, ivk);
 }
 
 bool IncomingViewingKeyBelongsToWallet::operator()(const libzcash::InvalidEncoding& no) const
@@ -9527,7 +9533,12 @@ bool PaymentAddressBelongsToWallet::operator()(const libzcash::SaplingPaymentAdd
 
 bool PaymentAddressBelongsToWallet::operator()(const libzcash::OrchardPaymentAddressPirate &zaddr) const
 {
-    return false;
+    libzcash::OrchardIncomingViewingKeyPirate ivk;
+
+    // If we have a OrchardExtendedSpendingKey in the wallet, then we will
+    // also have the corresponding OrchardFullViewingKey.
+    return m_wallet->GetOrchardIncomingViewingKey(zaddr, ivk) &&
+        m_wallet->HaveOrchardFullViewingKey(ivk);
 }
 
 bool PaymentAddressBelongsToWallet::operator()(const libzcash::InvalidEncoding& no) const

@@ -1687,7 +1687,7 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR,"OVK not found for Orchard spending key. Stopping.");
       }
 
-      ovk = ovkOpt.value();
+      ovk = ovkOpt.value().ovk;
   }
 
   //Validate the outgoing viewing key passed is not null

@@ -496,7 +496,7 @@ bool TransactionBuilder::ConvertRawOrchardSpend(libzcash::OrchardExtendedSpendin
         }
         auto changeAddr = changeAddrOpt.value();
 
-        firstOrchardSpendAddr = std::make_pair(ovk, changeAddr);
+        firstOrchardSpendAddr = std::make_pair(ovk.ovk, changeAddr);
     }
 
     for (int i = 0; i < vOrchardSpends.size(); i++) {

@@ -649,7 +649,7 @@ bool AsyncRPCOperation_sendmany::main_impl()
                strprintf("%s: OVK not found for Orchard spending key. Stopping.\n", getId()));
         }
 
-        ovk = ovkOpt.value();
+        ovk = ovkOpt.value().ovk;
 
 
         CAmount sum = 0;

@@ -381,9 +381,9 @@ void getOrchardSends(const Consensus::Params& params, int nHeight, RpcTx& tx, st
 
                 send.mine = addrIsMine;
                 vSend.push_back(send);
+                // ovk found no need to try anymore
+                break;
             }
-            // ovk found no need ot try anymore
-            break;
         }
         shieldedActionIndex++;
     }
@@ -401,7 +401,6 @@ void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
         // Find the op of the nullifier
         map<uint256, OrchardOutPoint>::iterator opit = pwalletMain->mapArcOrchardOutPoints.find(nullifier);
         if (opit == pwalletMain->mapArcOrchardOutPoints.end()) {
-            LogPrintf("Unable to find orchard outpoint\n");
             continue;
         }
         OrchardOutPoint op = (*opit).second;
@@ -528,7 +527,7 @@ void getAllSaplingOVKs(std::set<uint256>& ovks, bool fIncludeWatchonly)
     if (pwalletMain == nullptr)
         return;
 
-    // get ovks for all spending keys
+    // get ovks for all sapling spending keys
     if (fIncludeWatchonly) {
         pwalletMain->GetSaplingOutgoingViewingKeySet(ovks);
     } else {
@@ -544,6 +543,38 @@ void getAllSaplingOVKs(std::set<uint256>& ovks, bool fIncludeWatchonly)
                 }
             }
         }
+    }
+
+    // get ovks for all orchard spending keys (Orcharch OVKs can be used when the source is a Orchard note)
+    std::set<libzcash::OrchardOutgoingViewingKey> ovksOrchard;
+    if (fIncludeWatchonly) {
+        pwalletMain->GetOrchardOutgoingViewingKeySet(ovksOrchard);
+    } else {
+        std::set<libzcash::OrchardIncomingViewingKeyPirate> setIvks;
+        pwalletMain->GetOrchardIncomingViewingKeySet(setIvks);
+        for (std::set<libzcash::OrchardIncomingViewingKeyPirate>::iterator it = setIvks.begin(); it != setIvks.end(); it++) {
+            libzcash::OrchardIncomingViewingKeyPirate ivk = (*it);
+            libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+
+            if (pwalletMain->GetOrchardFullViewingKey(ivk, extfvk)) {
+                if (pwalletMain->HaveOrchardSpendingKey(extfvk) || fIncludeWatchonly) {
+                    // External OVK
+                    auto ovkOpt_e = extfvk.fvk.GetOVK();
+                    if (ovkOpt_e != std::nullopt) {
+                        ovksOrchard.insert(ovkOpt_e.value());
+                    }
+                    // Internal OVK
+                    auto ovkOpt_i = extfvk.fvk.GetOVKinternal();
+                    if (ovkOpt_i != std::nullopt) {
+                        ovksOrchard.insert(ovkOpt_i.value());
+                    }
+                }
+            }
+        }
+    }
+
+    for (std::set<libzcash::OrchardOutgoingViewingKey>::iterator it = ovksOrchard.begin(); it != ovksOrchard.end(); it++) {
+        ovks.insert(it->ovk);
     }
 
     // ovk used of t addresses
@@ -594,6 +625,11 @@ void getRpcArcTxSaplingKeys(const CWalletTx& tx, int txHeight, RpcArcTransaction
     getSaplingSends(params, txHeight, tx, ovks, arcTx.saplingOvks, arcTx.vZsSend);
     getSaplingReceives(params, txHeight, tx, ivks, arcTx.saplingIvks, arcTx.vZsReceived, fIncludeWatchonly);
 
+    // Create Set of wallet address the belong to the wallet for this tx and have been spent from
+    for (int i = 0; i < arcTx.vZsSpend.size(); i++) {
+        arcTx.spentFrom.insert(arcTx.vZsSpend[i].encodedAddress);
+    }
+
     // Create Set of wallet address the belong to the wallet for this tx
     for (int i = 0; i < arcTx.vZsSpend.size(); i++) {
         arcTx.addresses.insert(arcTx.vZsSpend[i].encodedAddress);
@@ -637,6 +673,29 @@ void getAllOrchardOVKs(std::set<libzcash::OrchardOutgoingViewingKey>& ovks, bool
                 }
             }
         }
+    }
+
+    // get ovks for all sapling spending keys (Sapling OVKs can be used for Orchard when the source is a Sapling note)
+    std::set<uint256> ovksSapling;
+    if (fIncludeWatchonly) {
+        pwalletMain->GetSaplingOutgoingViewingKeySet(ovksSapling);
+    } else {
+        std::set<libzcash::SaplingIncomingViewingKey> setIvks;
+        pwalletMain->GetSaplingIncomingViewingKeySet(setIvks);
+        for (std::set<libzcash::SaplingIncomingViewingKey>::iterator it = setIvks.begin(); it != setIvks.end(); it++) {
+            libzcash::SaplingIncomingViewingKey ivk = (*it);
+            libzcash::SaplingExtendedFullViewingKey extfvk;
+
+            if (pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
+                if (pwalletMain->HaveSaplingSpendingKey(extfvk) || fIncludeWatchonly) {
+                    ovksSapling.insert(extfvk.fvk.ovk);
+                }
+            }
+        }
+    }
+
+    for (std::set<uint256>::iterator it = ovksSapling.begin(); it != ovksSapling.end(); it++) {
+        ovks.insert(libzcash::OrchardOutgoingViewingKey(*it));
     }
 
     // ovk used of t addresses
@@ -686,6 +745,11 @@ void getRpcArcTxOrchardKeys(const CWalletTx& tx, int txHeight, RpcArcTransaction
     getOrchardSpends(params, txHeight, tx, ivks, arcTx.orchardIvks, arcTx.vZoSpend, fIncludeWatchonly);
     getOrchardSends(params, txHeight, tx, ovks, arcTx.orchardOvks, arcTx.vZoSend);
     getOrchardReceives(params, txHeight, tx, ivks, arcTx.orchardIvks, arcTx.vZoReceived, fIncludeWatchonly);
+
+    // Create Set of wallet address the belong to the wallet for this tx and have been spent from
+    for (int i = 0; i < arcTx.vZoSpend.size(); i++) {
+        arcTx.spentFrom.insert(arcTx.vZoSpend[i].encodedAddress);
+    }
 
     // Create Set of wallet address the belong to the wallet for this tx
     for (int i = 0; i < arcTx.vZoSpend.size(); i++) {
@@ -914,15 +978,22 @@ void getRpcArcTx(CWalletTx& tx, RpcArcTransaction& arcTx, bool fIncludeWatchonly
 
     if (tx.IsCoinBase()) {
         arcTx.coinbase = true;
-        if (tx.GetDepthInMainChain() < 1)
+        if (tx.GetDepthInMainChain() < 1) {
             arcTx.category = "orphan";
-        else if (tx.GetBlocksToMaturity() > 0)
+        } else if (tx.GetBlocksToMaturity() > 0) {
             arcTx.category = "immature";
-        else
+        } else {
             arcTx.category = "generate";
+        }
     } else {
         arcTx.coinbase = false;
-        arcTx.category = "standard";
+        if (tx.GetDepthInMainChain() < 1) {
+            arcTx.category = "orphan";
+        } else if (tx.GetBlocksToMaturity() > 0) {
+            arcTx.category = "immature";
+        } else {
+            arcTx.category = "standard";
+        }
     }
 
     arcTx.expiryHeight = (int64_t)tx.nExpiryHeight;

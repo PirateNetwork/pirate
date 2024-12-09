@@ -64,11 +64,30 @@ public:
     }
 };
 
-class OrchardOutgoingViewingKey : public uint256
+class OrchardOutgoingViewingKey
 {
 public:
-    OrchardOutgoingViewingKey() : uint256() {}
-    OrchardOutgoingViewingKey(uint256 ovk) : uint256(ovk) {}
+    uint256 ovk;
+
+    OrchardOutgoingViewingKey() : ovk() {}
+    OrchardOutgoingViewingKey(uint256 ovk) : ovk(ovk) {}
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action)
+    {
+        READWRITE(ovk);
+    }
+
+    friend inline bool operator==(const OrchardOutgoingViewingKey& a, const OrchardOutgoingViewingKey& b)
+    {
+        return a.ovk == b.ovk;
+    }
+    friend inline bool operator<(const OrchardOutgoingViewingKey& a, const OrchardOutgoingViewingKey& b)
+    {
+        return (a.ovk < b.ovk);
+    }
 };
 
 class OrchardIncomingViewingKeyPirate

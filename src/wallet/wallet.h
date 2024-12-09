@@ -1134,7 +1134,7 @@ protected:
                     if (op->writeToDisk) {
                     // Write all archived sapling outpoint
                         if (!walletdb.WriteArcOrchardOp(nullifier, *op, false)) {
-                            LogPrintf("SetBestChain(): Failed to write Archive Sapling Outpoint, aborting atomic write\n");
+                            LogPrintf("SetBestChain(): Failed to write Archive Orchard Outpoint, aborting atomic write\n");
                             walletdb.TxnAbort();
                             return;
                         }
@@ -1269,7 +1269,7 @@ protected:
                                 return;
                             }
 
-                            // Write all archived sapling outpoint
+                            // Write all archived orchard outpoint
                             if (!walletdb.WriteCryptedArcOrchardOp(nullifier, chash, vchCryptedSecret, false)) {
                                 LogPrintf("SetBestChain(): Failed to write Archive Orchard Outpoint, aborting atomic write\n");
                                 walletdb.TxnAbort();

@@ -419,7 +419,7 @@ public:
 
         if(!try_orchard_decrypt_action_ovk(
             action->as_ptr(),
-            ovk.begin(),
+            ovk.ovk.begin(),
             &value_t,
             address_t.begin(),
             memo_t.begin(),

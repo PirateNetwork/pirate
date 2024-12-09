@@ -274,7 +274,7 @@ bool CBasicKeyStore::AddOrchardExtendedFullViewingKey(
     auto address = addressOpt.value();;
 
     mapOrchardFullViewingKeys[ivk] = extfvk;
-    setSaplingOutgoingViewingKeys.insert(ovk);
+    setOrchardOutgoingViewingKeys.insert(ovk);
 
     return CBasicKeyStore::AddOrchardIncomingViewingKey(ivk, address);
 }
