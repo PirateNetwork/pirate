@@ -2833,62 +2833,6 @@ void CWallet::AddToSpends(const uint256& wtxid)
     }
 }
 
-// void CWallet::ClearNoteWitnessCache()
-// {
-//     LOCK(cs_wallet);
-//     for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
-//         for (mapSproutNoteData_t::value_type& item : wtxItem.second.mapSproutNoteData) {
-//             item.second.witnesses.clear();
-//             item.second.witnessHeight = -1;
-//         }
-//         for (mapSaplingNoteData_t::value_type& item : wtxItem.second.mapSaplingNoteData) {
-//             item.second.witnesses.clear();
-//             item.second.witnessHeight = -1;
-//         }
-//     }
-// }
-
-// void CWallet::DecrementNoteWitnesses(const CBlockIndex* pindex)
-// {
-//     AssertLockHeld(cs_wallet);
-//
-//     extern int32_t KOMODO_REWIND;
-//
-//     for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
-//         //Sprout
-//         for (auto& item : wtxItem.second.mapSproutNoteData) {
-//             auto* nd = &(item.second);
-//             if (nd->nullifier && pwalletMain->GetSproutSpendDepth(*item.second.nullifier) <= WITNESS_CACHE_SIZE) {
-//               // Only decrement witnesses that are not above the current height
-//                 if (nd->witnessHeight <= pindex->nHeight) {
-//                     if (nd->witnesses.size() > 1) {
-//                         // indexHeight is the height of the block being removed, so
-//                         // the new witness cache height is one below it.
-//                         nd->witnesses.pop_front();
-//                         nd->witnessHeight = pindex->nHeight - 1;
-//                     }
-//                 }
-//             }
-//         }
-//         //Sapling
-//         for (auto& item : wtxItem.second.mapSaplingNoteData) {
-//             auto* nd = &(item.second);
-//             if (nd->nullifier && pwalletMain->GetSaplingSpendDepth(*item.second.nullifier) <= WITNESS_CACHE_SIZE) {
-//                 // Only decrement witnesses that are not above the current height
-//                 if (nd->witnessHeight <= pindex->nHeight) {
-//                     if (nd->witnesses.size() > 1) {
-//                         // indexHeight is the height of the block being removed, so
-//                         // the new witness cache height is one below it.
-//                         nd->witnesses.pop_front();
-//                         nd->witnessHeight = pindex->nHeight - 1;
-//                     }
-//                 }
-//             }
-//         }
-//     }
-//     assert(KOMODO_REWIND != 0 || WITNESS_CACHE_SIZE != _COINBASE_MATURITY+10);
-// }
-
 //Valdated the Postions of all notes in C++ wallet vs the Rust SaplingWallet and validates the position recorded are correct.
 //Returns False is the SaplingWallet needs to be rebuilt
 bool CWallet::ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex) {
@@ -3663,22 +3607,6 @@ void CWallet::DecrementOrchardWallet(const CBlockIndex* pindex) {
 
 }
 
-int CWallet::SproutWitnessMinimumHeight(const uint256& nullifier, int nWitnessHeight, int nMinimumHeight)
-{
-    if (GetSproutSpendDepth(nullifier) <= WITNESS_CACHE_SIZE) {
-        nMinimumHeight = min(nWitnessHeight, nMinimumHeight);
-    }
-    return nMinimumHeight;
-}
-
-int CWallet::SaplingWitnessMinimumHeight(const uint256& nullifier, int nWitnessHeight, int nMinimumHeight)
-{
-    if (GetSaplingSpendDepth(nullifier) <= WITNESS_CACHE_SIZE) {
-        nMinimumHeight = min(nWitnessHeight, nMinimumHeight);
-    }
-    return nMinimumHeight;
-}
-
 bool CWallet::DecryptWalletTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& hash, CWalletTx& wtx) {
 
     if (IsLocked()) {
@@ -4378,12 +4306,6 @@ void CWallet::UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx) {
 
    auto vActions = wtx->GetOrchardActions();
 
-   for (const auto& action : vActions) {
-       LogPrintf("Nullifiers found %s\n", uint256::FromRawBytes(action.nullifier()).ToString());
-   }
-
-   LogPrintf("Updating Orchard Nullifiers\n");
-
    for (mapOrchardNoteData_t::value_type &item : wtx->mapOrchardNoteData) {
        OrchardOutPoint op = item.first;
        OrchardNoteData nd = item.second;
@@ -4397,7 +4319,6 @@ void CWallet::UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx) {
                mapOrchardNullifiersToNotes.erase(item.second.nullifier.value());
            }
            item.second.nullifier = std::nullopt;
-           LogPrintf("\nNullifier of Tx %s, output %i erased\n\n", wtx->GetHash().ToString(), op.n);
        }
        else {
            uint64_t position = nd.getPostion().value();
@@ -4423,7 +4344,6 @@ void CWallet::UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx) {
                mapOrchardNullifiersToNotes[nullifier] = op;
                mapArcOrchardOutPoints[nullifier] = op;
                item.second.nullifier = nullifier;
-               LogPrintf("\nNullifier of Tx %s, output %i set with Position %u and Nullifier %s\n\n", wtx->GetHash().ToString(), op.n, position, nullifier.ToString());
            }
        }
    }

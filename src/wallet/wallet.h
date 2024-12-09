@@ -1053,9 +1053,6 @@ public:
 
 protected:
 
-    int SproutWitnessMinimumHeight(const uint256& nullifier, int nWitnessHeight, int nMinimumHeight);
-    int SaplingWitnessMinimumHeight(const uint256& nullifier, int nWitnessHeight, int nMinimumHeight);
-
     template <typename WalletDB>
     void SetBestChainINTERNAL(WalletDB& walletdb, const CBlockLocator& loc, const int& height) {
         AssertLockHeld(cs_wallet);
