@@ -1501,6 +1501,14 @@ void PirateOceanGUI::ShowProgress(QString title, int nProgress)
 {
     if (nProgress == 0)
     {
+        //Close anything that already exists
+        if (progressDialog)
+        {
+            progressDialog->close();
+            progressDialog->deleteLater();
+        }
+
+        //Create a new dialog
         progressDialog = new QProgressDialog(title, "", 0, 100);
         progressDialog->setWindowModality(Qt::ApplicationModal);
         progressDialog->setMinimumHeight(75);

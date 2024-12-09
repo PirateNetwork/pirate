@@ -6742,9 +6742,6 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
                 ret++;
             }
 
-            IncrementSaplingWallet(pindex);
-            IncrementOrchardWallet(pindex);
-
             SproutMerkleTree sproutTree;
             SaplingMerkleTree saplingTree;
             SaplingMerkleFrontier saplingFrontierTree;
@@ -6775,8 +6772,11 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
         uiInterface.ShowProgress(_("Rescanning..."), 100, false); // hide progress dialog in GUI
 
-        // // Update the Sapling Wallet Merkle tree
-        //IncrementSaplingWallet(chainActive.Tip());
+        //Update the Sapling Wallet Merkle tree
+        IncrementSaplingWallet(chainActive.Tip());
+
+        //Update the Orchard Wallet Merkle tree
+        IncrementOrchardWallet(chainActive.Tip());
 
         //Write all transactions ant block loacator to the wallet
         currentBlock = chainActive.GetLocator();
