@@ -878,48 +878,46 @@ void getRpcArcTx(uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly
     arcTx.saplingValue = -tx.GetValueBalanceSapling();
     arcTx.orchardValue = -tx.GetValueBalanceOrchard();
 
-    // Create Set of wallet address the belong to the wallet for this tx and have been spent from
+    // Create Sets of wallet address the belong to the wallet for this tx
     for (int i = 0; i < arcTx.vTSpend.size(); i++) {
+        arcTx.addresses.insert(arcTx.vTSpend[i].encodedAddress);
         arcTx.spentFrom.insert(arcTx.vTSpend[i].encodedAddress);
     }
     for (int i = 0; i < arcTx.vZsSpend.size(); i++) {
+        arcTx.addresses.insert(arcTx.vZsSpend[i].encodedAddress);
         arcTx.spentFrom.insert(arcTx.vZsSpend[i].encodedAddress);
     }
     for (int i = 0; i < arcTx.vZoSpend.size(); i++) {
-        arcTx.spentFrom.insert(arcTx.vZoSpend[i].encodedAddress);
-    }
-
-    // Create Set of wallet address the belong to the wallet for this tx
-    for (int i = 0; i < arcTx.vTSpend.size(); i++) {
-        arcTx.addresses.insert(arcTx.vTSpend[i].encodedAddress);
-    }
-    for (int i = 0; i < arcTx.vZsSpend.size(); i++) {
-        arcTx.addresses.insert(arcTx.vZsSpend[i].encodedAddress);
-    }
-    for (int i = 0; i < arcTx.vZoSpend.size(); i++) {
         arcTx.addresses.insert(arcTx.vZoSpend[i].encodedAddress);
+        arcTx.spentFrom.insert(arcTx.vZoSpend[i].encodedAddress);
     }
 
 
     for (int i = 0; i < arcTx.vTSend.size(); i++) {
         arcTx.addresses.insert(arcTx.vTSend[i].encodedAddress);
+        arcTx.sendTo.insert(arcTx.vTSend[i].encodedAddress);
     }
     for (int i = 0; i < arcTx.vZsSend.size(); i++) {
         arcTx.addresses.insert(arcTx.vZsSend[i].encodedAddress);
+        arcTx.sendTo.insert(arcTx.vZsSend[i].encodedAddress);
     }
     for (int i = 0; i < arcTx.vZoSend.size(); i++) {
         arcTx.addresses.insert(arcTx.vZoSend[i].encodedAddress);
+        arcTx.sendTo.insert(arcTx.vZoSend[i].encodedAddress);
     }
 
 
     for (int i = 0; i < arcTx.vTReceived.size(); i++) {
         arcTx.addresses.insert(arcTx.vTReceived[i].encodedAddress);
+        arcTx.receivedIn.insert(arcTx.vTReceived[i].encodedAddress);
     }
     for (int i = 0; i < arcTx.vZsReceived.size(); i++) {
         arcTx.addresses.insert(arcTx.vZsReceived[i].encodedAddress);
+        arcTx.receivedIn.insert(arcTx.vZsReceived[i].encodedAddress);
     }
     for (int i = 0; i < arcTx.vZoReceived.size(); i++) {
         arcTx.addresses.insert(arcTx.vZoReceived[i].encodedAddress);
+        arcTx.receivedIn.insert(arcTx.vZoReceived[i].encodedAddress);
     }
 }
 
@@ -1016,48 +1014,45 @@ void getRpcArcTx(CWalletTx& tx, RpcArcTransaction& arcTx, bool fIncludeWatchonly
     arcTx.saplingValue = -tx.GetValueBalanceSapling();
     arcTx.orchardValue = -tx.GetValueBalanceOrchard();
 
-    // Create Set of wallet address the belong to the wallet for this tx and have been spent from
     for (int i = 0; i < arcTx.vTSpend.size(); i++) {
+        arcTx.addresses.insert(arcTx.vTSpend[i].encodedAddress);
         arcTx.spentFrom.insert(arcTx.vTSpend[i].encodedAddress);
     }
     for (int i = 0; i < arcTx.vZsSpend.size(); i++) {
+        arcTx.addresses.insert(arcTx.vZsSpend[i].encodedAddress);
         arcTx.spentFrom.insert(arcTx.vZsSpend[i].encodedAddress);
     }
     for (int i = 0; i < arcTx.vZoSpend.size(); i++) {
-        arcTx.spentFrom.insert(arcTx.vZoSpend[i].encodedAddress);
-    }
-
-    // Create Set of wallet address the belong to the wallet for this tx
-    for (int i = 0; i < arcTx.vTSpend.size(); i++) {
-        arcTx.addresses.insert(arcTx.vTSpend[i].encodedAddress);
-    }
-    for (int i = 0; i < arcTx.vZsSpend.size(); i++) {
-        arcTx.addresses.insert(arcTx.vZsSpend[i].encodedAddress);
-    }
-    for (int i = 0; i < arcTx.vZoSpend.size(); i++) {
         arcTx.addresses.insert(arcTx.vZoSpend[i].encodedAddress);
+        arcTx.spentFrom.insert(arcTx.vZoSpend[i].encodedAddress);
     }
 
 
     for (int i = 0; i < arcTx.vTSend.size(); i++) {
         arcTx.addresses.insert(arcTx.vTSend[i].encodedAddress);
+        arcTx.sendTo.insert(arcTx.vTSend[i].encodedAddress);
     }
     for (int i = 0; i < arcTx.vZsSend.size(); i++) {
         arcTx.addresses.insert(arcTx.vZsSend[i].encodedAddress);
+        arcTx.sendTo.insert(arcTx.vZsSend[i].encodedAddress);
     }
     for (int i = 0; i < arcTx.vZoSend.size(); i++) {
         arcTx.addresses.insert(arcTx.vZoSend[i].encodedAddress);
+        arcTx.sendTo.insert(arcTx.vZoSend[i].encodedAddress);
     }
 
 
     for (int i = 0; i < arcTx.vTReceived.size(); i++) {
         arcTx.addresses.insert(arcTx.vTReceived[i].encodedAddress);
+        arcTx.receivedIn.insert(arcTx.vTReceived[i].encodedAddress);
     }
     for (int i = 0; i < arcTx.vZsReceived.size(); i++) {
         arcTx.addresses.insert(arcTx.vZsReceived[i].encodedAddress);
+        arcTx.receivedIn.insert(arcTx.vZsReceived[i].encodedAddress);
     }
     for (int i = 0; i < arcTx.vZoReceived.size(); i++) {
         arcTx.addresses.insert(arcTx.vZoReceived[i].encodedAddress);
+        arcTx.receivedIn.insert(arcTx.vZoReceived[i].encodedAddress);
     }
 }
 

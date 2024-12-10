@@ -144,6 +144,8 @@ public:
     std::set<libzcash::OrchardIncomingViewingKeyPirate> orchardIvks;
     std::set<libzcash::OrchardOutgoingViewingKey> orchardOvks;
     std::set<string> spentFrom;
+    std::set<string> sendTo;
+    std::set<string> receivedIn;
     std::set<string> addresses;
     std::vector<TransactionSpendT> vTSpend;
     std::vector<TransactionSpendZS> vZsSpend;

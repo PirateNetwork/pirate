@@ -490,7 +490,7 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
     switch(wtx->type)
     {
     case TransactionRecord::RecvWithAddress:
-        return tr("Received with");
+        return tr("Received");
     case TransactionRecord::RecvWithAddressWithMemo:
         return tr("Received with Memo");
     case TransactionRecord::RecvFromOther:
@@ -498,7 +498,7 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
     case TransactionRecord::SendToAddress:
         return tr("Sent to");
     case TransactionRecord::SendToAddressWithMemo:
-        return tr("Sent with Memo");
+        return tr("Sent to with Memo");
     case TransactionRecord::SendToOther:
         return tr("Sent to");
     case TransactionRecord::SendToSelf:

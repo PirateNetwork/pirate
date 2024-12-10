@@ -85,17 +85,17 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
         typeWidget->setFixedWidth(120);
     }
 
-    typeWidget->addItem(tr("All"), TransactionFilterProxy::ALL_TYPES);
-    typeWidget->addItem(tr("Received with"), TransactionFilterProxy::TYPE(TransactionRecord::RecvWithAddress) |
-                                             TransactionFilterProxy::TYPE(TransactionRecord::RecvWithAddressWithMemo) |
-                                             TransactionFilterProxy::TYPE(TransactionRecord::RecvFromOther));
-    typeWidget->addItem(tr("Sent to"), TransactionFilterProxy::TYPE(TransactionRecord::SendToAddress) |
-                                       TransactionFilterProxy::TYPE(TransactionRecord::SendToAddressWithMemo) |
-                                       TransactionFilterProxy::TYPE(TransactionRecord::SendToOther) );
-    typeWidget->addItem(tr("To yourself"), TransactionFilterProxy::TYPE(TransactionRecord::SendToSelf) |
-                                           TransactionFilterProxy::TYPE(TransactionRecord::SendToSelfWithMemo) );
-    typeWidget->addItem(tr("Mined"), TransactionFilterProxy::TYPE(TransactionRecord::Generated));
-    typeWidget->addItem(tr("Other"), TransactionFilterProxy::TYPE(TransactionRecord::Other));
+    typeWidget->addItem(tr("All"),          TransactionFilterProxy::ALL_TYPES);
+    typeWidget->addItem(tr("Received"),     TransactionFilterProxy::TYPE(TransactionRecord::RecvWithAddress) |
+                                            TransactionFilterProxy::TYPE(TransactionRecord::RecvWithAddressWithMemo) |
+                                            TransactionFilterProxy::TYPE(TransactionRecord::RecvFromOther));
+    typeWidget->addItem(tr("Sent to"),      TransactionFilterProxy::TYPE(TransactionRecord::SendToAddress) |
+                                            TransactionFilterProxy::TYPE(TransactionRecord::SendToAddressWithMemo) |
+                                            TransactionFilterProxy::TYPE(TransactionRecord::SendToOther) );
+    typeWidget->addItem(tr("To yourself"),  TransactionFilterProxy::TYPE(TransactionRecord::SendToSelf) |
+                                            TransactionFilterProxy::TYPE(TransactionRecord::SendToSelfWithMemo) );
+    typeWidget->addItem(tr("Mined"),        TransactionFilterProxy::TYPE(TransactionRecord::Generated));
+    typeWidget->addItem(tr("Other"),        TransactionFilterProxy::TYPE(TransactionRecord::Other));
     typeWidget->setObjectName("typeComboBox");
     hlayout->addWidget(typeWidget);
 
