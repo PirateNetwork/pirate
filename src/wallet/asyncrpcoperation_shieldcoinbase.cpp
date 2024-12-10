@@ -310,6 +310,9 @@ bool ShieldToAddress::operator()(const libzcash::OrchardPaymentAddressPirate& za
         }
     }
 
+    //Initalize Orchard
+    m_op->builder_.InitializeOrchard(false, true, uint256());
+
     // Send all value to the target z-addr
     m_op->builder_.SendChangeTo(zaddr, ovk);
 
