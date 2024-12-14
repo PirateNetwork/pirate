@@ -655,10 +655,6 @@ public:
     const uint256 joinSplitPubKey;
     const joinsplit_sig_t joinSplitSig = {{0}};
 
-
-    const CAmount valueBalance;
-    const binding_sig_t bindingSig = {{0}};
-
     /** Construct a CTransaction that qualifies as IsNull() */
     CTransaction();
 
@@ -780,14 +776,6 @@ public:
         }
 
         if (ser_action.ForRead()) {
-          // Populate old struture until code can be updated to pull from the saplingBundle
-            if (saplingBundle.IsPresent()) {
-                // Populate Binding Sig
-                *const_cast<binding_sig_t*>(&bindingSig) = saplingBundle.GetDetails().binding_sig();
-                // Populate Value Balance from saplingBundle
-                *const_cast<CAmount*>(&valueBalance) = GetValueBalanceSapling();
-            }
-
             UpdateHash();
         }
     }
@@ -924,16 +912,6 @@ public:
      */
     const OrchardBundle& GetOrchardBundle() const;
 
-    CAmount ValueBalanceFromBundle() const {
-        CAmount valueBalanceBundle = 0;
-
-        if (saplingBundle.IsPresent()) {
-          valueBalanceBundle = saplingBundle.GetValueBalance();
-        }
-
-        return valueBalanceBundle;
-    }
-
     binding_sig_t BindingSigFromBundle() const {
         binding_sig_t bindingSigBundle = {{0}};
 
@@ -961,9 +939,6 @@ struct CMutableTransaction {
     std::vector<JSDescription> vjoinsplit;
     uint256 joinSplitPubKey;
     CTransaction::joinsplit_sig_t joinSplitSig = {{0}};
-
-    CTransaction::binding_sig_t bindingSig = {{0}};
-    CAmount valueBalance;
 
     CMutableTransaction();
     CMutableTransaction(const CTransaction& tx);
@@ -1071,16 +1046,6 @@ struct CMutableTransaction {
                 if (ser_action.ForRead()) {
                     saplingBundle = saplingReader.FinishBundleAssembly(bindingSigForReadWrite);
                 }
-
-                // Populate old struture until code can be updated to pull from the saplingBundle
-                if (ser_action.ForRead()) {
-                    if (haveSaplingActions) {
-                        // Populate Binding Sig
-                        bindingSig = saplingBundle.GetDetails().binding_sig();
-                        // Populate Value Balance from saplingBundle
-                        valueBalance = saplingBundle.GetValueBalance();
-                    }
-                }
             }
         }
     }
@@ -1103,25 +1068,6 @@ struct CMutableTransaction {
      * For v1-v4 transactions, this returns the null hash (i.e. all-zeroes).
      */
     uint256 GetAuthDigest() const;
-
-    CAmount ValueBalanceFromBundle() const {
-        CAmount valueBalanceBundle = 0;
-
-        if (saplingBundle.IsPresent()) {
-          valueBalanceBundle = saplingBundle.GetValueBalance();
-        }
-
-        return valueBalanceBundle;
-    }
-
-    CTransaction::binding_sig_t BindingSigFromBundle() const {
-        CTransaction::binding_sig_t bindingSigBundle = {{0}};
-
-        if (saplingBundle.IsPresent()) {
-            bindingSigBundle = saplingBundle.GetDetails().binding_sig();
-        }
-        return bindingSigBundle;
-    }
 
 };
 

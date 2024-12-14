@@ -142,13 +142,11 @@ std::string CTxOut::ToString() const
     return strprintf("CTxOut(nValue=%d.%08d, scriptPubKey=%s)", nValue / COIN, nValue % COIN, HexStr(scriptPubKey).substr(0, 30));
 }
 
-CMutableTransaction::CMutableTransaction() : nVersion(CTransaction::SPROUT_MIN_CURRENT_VERSION), fOverwintered(false), nVersionGroupId(0), nExpiryHeight(0), nLockTime(0), valueBalance(0) {}
+CMutableTransaction::CMutableTransaction() : nVersion(CTransaction::SPROUT_MIN_CURRENT_VERSION), fOverwintered(false), nVersionGroupId(0), nExpiryHeight(0), nLockTime(0){}
 CMutableTransaction::CMutableTransaction(const CTransaction& tx) : nVersion(tx.nVersion), fOverwintered(tx.fOverwintered), nVersionGroupId(tx.nVersionGroupId), nExpiryHeight(tx.nExpiryHeight),
                                                                    nConsensusBranchId(tx.GetConsensusBranchId()),
                                                                    vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
-                                                                   valueBalance(tx.ValueBalanceFromBundle()),
                                                                    vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
-                                                                   bindingSig(tx.BindingSigFromBundle()),
                                                                    saplingBundle(tx.GetSaplingBundle()), orchardBundle(tx.GetOrchardBundle())
 {
 
@@ -204,16 +202,13 @@ CTransaction::CTransaction() : nVersion(CTransaction::SPROUT_MIN_CURRENT_VERSION
                               fOverwintered(false), nVersionGroupId(0), nExpiryHeight(0),
                               nConsensusBranchId(std::nullopt),
                               vin(), vout(), nLockTime(0),
-                              valueBalance(0),
-                              vjoinsplit(), joinSplitPubKey(), joinSplitSig(), bindingSig(),
+                              vjoinsplit(), joinSplitPubKey(), joinSplitSig(),
                               saplingBundle(), orchardBundle() {}
 
 CTransaction::CTransaction(const CMutableTransaction& tx) : nVersion(tx.nVersion), fOverwintered(tx.fOverwintered), nVersionGroupId(tx.nVersionGroupId), nExpiryHeight(tx.nExpiryHeight),
                                                             nConsensusBranchId(tx.nConsensusBranchId),
                                                             vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
-                                                            valueBalance(tx.ValueBalanceFromBundle()),
                                                             vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
-                                                            bindingSig(tx.BindingSigFromBundle()),
                                                             saplingBundle(tx.saplingBundle), orchardBundle(tx.orchardBundle)
 {
     UpdateHash();
@@ -226,9 +221,7 @@ CTransaction::CTransaction(
     bool evilDeveloperFlag) : nVersion(tx.nVersion), fOverwintered(tx.fOverwintered), nVersionGroupId(tx.nVersionGroupId), nExpiryHeight(tx.nExpiryHeight),
                               nConsensusBranchId(tx.nConsensusBranchId),
                               vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
-                              valueBalance(tx.ValueBalanceFromBundle()),
                               vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
-                              bindingSig(tx.BindingSigFromBundle()),
                               saplingBundle(tx.saplingBundle), orchardBundle(tx.orchardBundle)
 {
     assert(evilDeveloperFlag);
@@ -237,9 +230,7 @@ CTransaction::CTransaction(
 CTransaction::CTransaction(CMutableTransaction&& tx) : nVersion(tx.nVersion), fOverwintered(tx.fOverwintered), nVersionGroupId(tx.nVersionGroupId),
                                                        nConsensusBranchId(tx.nConsensusBranchId),
                                                        vin(std::move(tx.vin)), vout(std::move(tx.vout)), nLockTime(tx.nLockTime), nExpiryHeight(tx.nExpiryHeight),
-                                                       valueBalance(tx.ValueBalanceFromBundle()),
                                                        vjoinsplit(std::move(tx.vjoinsplit)), joinSplitPubKey(std::move(tx.joinSplitPubKey)), joinSplitSig(std::move(tx.joinSplitSig)),
-                                                       bindingSig(tx.BindingSigFromBundle()),
                                                        saplingBundle(std::move(tx.saplingBundle)), orchardBundle(std::move(tx.orchardBundle))
 {
     UpdateHash();
@@ -257,11 +248,9 @@ CTransaction& CTransaction::operator=(const CTransaction& tx)
     *const_cast<uint32_t*>(&nExpiryHeight) = tx.nExpiryHeight;
     saplingBundle = tx.saplingBundle;
     orchardBundle = tx.orchardBundle;
-    *const_cast<CAmount*>(&valueBalance) = tx.ValueBalanceFromBundle();
     *const_cast<std::vector<JSDescription>*>(&vjoinsplit) = tx.vjoinsplit;
     *const_cast<uint256*>(&joinSplitPubKey) = tx.joinSplitPubKey;
     *const_cast<joinsplit_sig_t*>(&joinSplitSig) = tx.joinSplitSig;
-    *const_cast<binding_sig_t*>(&bindingSig) = tx.BindingSigFromBundle();
     *const_cast<uint256*>(&wtxid.hash) = tx.wtxid.hash;
     *const_cast<uint256*>(&wtxid.authDigest) = tx.wtxid.authDigest;
     return *this;
@@ -443,7 +432,7 @@ std::string CTransaction::ToString() const
                          vout.size(),
                          nLockTime,
                          nExpiryHeight,
-                         valueBalance,
+                         GetValueBalanceSapling(),
                          GetSaplingSpendsCount(),
                          GetSaplingOutputsCount());
     } else if (nVersion >= 3) {
