@@ -6002,6 +6002,7 @@ void CWalletTx::GetAmounts(list<COutputEntry>& listReceived,
     // If we sent utxos from this transaction, create output for value taken from (negative valueBalance)
     // or added (positive valueBalance) to the transparent value pool by Sapling shielding and unshielding.
     if (isFromMyTaddr) {
+        CAmount valueBalance = GetValueBalanceSapling() + GetValueBalanceOrchard();
         if (valueBalance < 0) {
             COutputEntry output = {CNoDestination(), -valueBalance, (int) vout.size()};
             listSent.push_back(output);

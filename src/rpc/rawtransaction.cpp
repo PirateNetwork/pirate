@@ -327,14 +327,15 @@ void TxToJSONExpanded(const CTransaction& tx, const uint256 hashBlock, UniValue&
 
     if (tx.fOverwintered && tx.nVersion >= SAPLING_TX_VERSION) {
         if (!isTxBuilder)
-          entry.push_back(Pair("valueBalance", ValueFromAmount(tx.valueBalance)));
+          entry.push_back(Pair("valueBalance", ValueFromAmount(tx.GetValueBalanceSapling())));
 
         UniValue vspenddesc = TxShieldedSpendsToJSON(tx);
         entry.push_back(Pair("vShieldedSpend", vspenddesc));
         UniValue voutputdesc = TxShieldedOutputsToJSON(tx);
         entry.push_back(Pair("vShieldedOutput", voutputdesc));
         if (!(vspenddesc.empty() && voutputdesc.empty())) {
-            entry.push_back(Pair("bindingSig", HexStr(tx.bindingSig.begin(), tx.bindingSig.end())));
+            CTransaction::binding_sig_t bindingSig = tx.BindingSigFromBundle();
+            entry.push_back(Pair("bindingSig", HexStr(bindingSig.begin(), bindingSig.end())));
         }
     }
 
@@ -412,13 +413,14 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry)
     entry.push_back(Pair("vjoinsplit", vjoinsplit));
 
     if (tx.fOverwintered && tx.nVersion >= SAPLING_TX_VERSION) {
-        entry.push_back(Pair("valueBalance", ValueFromAmount(tx.valueBalance)));
+        entry.push_back(Pair("valueBalance", ValueFromAmount(tx.GetValueBalanceSapling())));
         UniValue vspenddesc = TxShieldedSpendsToJSON(tx);
         entry.push_back(Pair("vShieldedSpend", vspenddesc));
         UniValue voutputdesc = TxShieldedOutputsToJSON(tx);
         entry.push_back(Pair("vShieldedOutput", voutputdesc));
         if (!(vspenddesc.empty() && voutputdesc.empty())) {
-            entry.push_back(Pair("bindingSig", HexStr(tx.bindingSig.begin(), tx.bindingSig.end())));
+            CTransaction::binding_sig_t bindingSig = tx.BindingSigFromBundle();
+            entry.push_back(Pair("bindingSig", HexStr(bindingSig.begin(), bindingSig.end())));
         }
     }
 
