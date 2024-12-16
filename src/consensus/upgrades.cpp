@@ -93,6 +93,11 @@ bool NetworkUpgradeActive(
 }
 
 int CurrentEpoch(int nHeight, const Consensus::Params& params) {
+    //Always return Sprout if height is less than or equal to 0 (Genisis block)
+    if (nHeight <= 0) {
+        return Consensus::BASE_SPROUT;
+    }
+
     for (auto idxInt = Consensus::MAX_NETWORK_UPGRADES - 1; idxInt >= Consensus::BASE_SPROUT; idxInt--) {
         if (NetworkUpgradeActive(nHeight, params, Consensus::UpgradeIndex(idxInt))) {
             return idxInt;
