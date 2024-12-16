@@ -2015,14 +2015,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 fReindex = true;
             }
 
-            //One time reindex to enable prooftracking.
-            pblocktree->ReadFlag("proofrule", checkval);
-            if (checkval != fProof) {
-                pblocktree->WriteFlag("proofrule", fProof);
-                LogPrintf("Transaction proof tracking not set, will reindex. could take a while.\n");
-                fReindex = true;
-            }
-
             //Check the Client Version of levelDB, reindex if needed.
             pblocktree->ReadVersion(fReindex);
 
@@ -2563,53 +2555,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 std::map<std::pair<int,int>, CWalletTx*> mapSorted;
                 pwalletMain->ReorderWalletTransactions(mapSorted, maxOrderPos);
                 pwalletMain->UpdateWalletTransactionOrder(mapSorted, true);
-            }
-        }
-
-        //Scan the last 100 block to ensure proofs are being maintained.
-        if (nMaxConnections>0)
-        {
-            if (!fReindex) {
-                CBlockIndex *pindexProofScan = chainActive.Tip();
-                if (pindexProofScan->nHeight > 100) {
-                    pindexProofScan = chainActive[pindexProofScan->nHeight-100];
-                } else {
-                    pindexProofScan = chainActive.Genesis();
-                }
-
-                while (pindexProofScan)
-                {
-                    CBlock proofBlock;
-                    ReadBlockFromDisk(proofBlock, pindexProofScan,1);
-
-                    BOOST_FOREACH(CTransaction& tx, proofBlock.vtx)
-                    {
-                        for (const auto& spend : tx.GetSaplingSpends()) {
-                            auto zkproof = spend.zkproof();
-                            auto proofHash = Hash(zkproof.begin(), zkproof.end());
-                            std::set<std::pair<uint256, int>> txids;
-                            bool foundProof = pcoinsTip->GetZkProofHash(proofHash, SPEND, txids);
-                            if (!foundProof) {
-                                LogPrintf("Proof not found for tx %s spend ProofHash %s. Restart Treasure Chest to reindex.\n", tx.GetHash().ToString(), proofHash.ToString());
-                                pblocktree->WriteFlag("proofrule", false);
-                                return false;
-                            }
-                        }
-
-                        for (const auto& output : tx.GetSaplingOutputs()) {
-                            auto zkproof = output.zkproof();
-                            auto proofHash = Hash(zkproof.begin(), zkproof.end());
-                            std::set<std::pair<uint256, int>> txids;
-                            bool foundProof = pcoinsTip->GetZkProofHash(proofHash, OUTPUT, txids);
-                            if (!foundProof) {
-                                LogPrintf("Proof not found for tx %s output ProofHash %s. Restart Treasure Chest needs to reindex.\n", tx.GetHash().ToString(), proofHash.ToString());
-                                pblocktree->WriteFlag("proofrule", false);
-                                return false;
-                            }
-                        }
-                    }
-                    pindexProofScan = chainActive.Next(pindexProofScan);
-                }
             }
         }
 

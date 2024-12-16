@@ -549,9 +549,9 @@ void CTxMemPool::removeConflicts(const CTransaction &tx, std::list<CTransaction>
     for (const auto& spend : tx.GetSaplingSpends()) {
         auto zkproof = spend.zkproof();
         auto proofHash = Hash(zkproof.begin(), zkproof.end());
-        std::map<uint256, const CTransaction*>::iterator itt = mapZkSpendProofHash.find(proofHash);
-        if (itt != mapZkSpendProofHash.end()) {
-            const CTransaction &txConflict = *itt->second;
+        std::map<uint256, const CTransaction*>::iterator it = mapZkSpendProofHash.find(proofHash);
+        if (it != mapZkSpendProofHash.end()) {
+            const CTransaction &txConflict = *it->second;
             if (txConflict != tx) {
                 remove(txConflict, removed, true);
             }
@@ -735,17 +735,6 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
             assert(pcoins->GetSaplingFrontierAnchorAt(anchor, frontierTree));
 
             assert(!pcoins->GetNullifier(nullifier, SAPLING));
-
-            std::set<std::pair<uint256, int>> txids;
-            auto zkproof = spend.zkproof();
-            auto proofHash = Hash(zkproof.begin(), zkproof.end());
-            assert(!pcoins->GetZkProofHash(proofHash, SPEND, txids));
-        }
-        for (const auto& output : tx.GetSaplingOutputs()) {
-            auto zkproof = output.zkproof();
-            auto proofHash = Hash(zkproof.begin(), zkproof.end());
-            std::set<std::pair<uint256, int>> txids;
-            assert(!pcoins->GetZkProofHash(proofHash, OUTPUT, txids));
         }
         for (const uint256& nf : tx.GetOrchardBundle().GetNullifiers()) {
             assert(!pcoins->GetNullifier(nf, ORCHARDFRONTIER));
@@ -790,8 +779,7 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
     checkNullifiers(SPROUT);
     checkNullifiers(SAPLING);
     checkNullifiers(ORCHARDFRONTIER);
-    checkZkProofHash(OUTPUT);
-    checkZkProofHash(SPEND);
+
 
     assert(totalTxSize == checkTotal);
     assert(innerUsage == cachedInnerUsage);
@@ -812,29 +800,6 @@ void CTxMemPool::checkNullifiers(ShieldedType type) const
         default:
             throw runtime_error("Unknown nullifier type");
     }
-    for (const auto& entry : *mapToUse) {
-        uint256 hash = entry.second->GetHash();
-        CTxMemPool::indexed_transaction_set::const_iterator findTx = mapTx.find(hash);
-        const CTransaction& tx = findTx->GetTx();
-        assert(findTx != mapTx.end());
-        assert(&tx == entry.second);
-    }
-}
-
-void CTxMemPool::checkZkProofHash(ProofType type) const
-{
-    const std::map<uint256, const CTransaction*>* mapToUse;
-    switch (type) {
-        case OUTPUT:
-            mapToUse = &mapZkOutputProofHash;
-            break;
-        case SPEND:
-            mapToUse = &mapZkSpendProofHash;
-            break;
-        default:
-            throw runtime_error("Unknown proof type");
-    }
-
     for (const auto& entry : *mapToUse) {
         uint256 hash = entry.second->GetHash();
         CTxMemPool::indexed_transaction_set::const_iterator findTx = mapTx.find(hash);
@@ -959,18 +924,6 @@ bool CTxMemPool::nullifierExists(const uint256& nullifier, ShieldedType type) co
     }
 }
 
-bool CTxMemPool::zkProofHashExists(const uint256& zkproofHash, ProofType type) const
-{
-    switch (type) {
-        case OUTPUT:
-            return mapZkOutputProofHash.count(zkproofHash);
-        case SPEND:
-            return mapZkSpendProofHash.count(zkproofHash);
-        default:
-            throw runtime_error("Unknown proof type");
-    }
-}
-
 void CTxMemPool::NotifyRecentlyAdded()
 {
     uint64_t recentlyAddedSequence;
@@ -1021,11 +974,6 @@ CCoinsViewMemPool::CCoinsViewMemPool(CCoinsView *baseIn, CTxMemPool &mempoolIn) 
 bool CCoinsViewMemPool::GetNullifier(const uint256 &nf, ShieldedType type) const
 {
     return mempool.nullifierExists(nf, type) || base->GetNullifier(nf, type);
-}
-
-bool CCoinsViewMemPool::GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const
-{
-    return mempool.zkProofHashExists(zkproofHash, type) || base->GetZkProofHash(zkproofHash, type, txids);
 }
 
 bool CCoinsViewMemPool::GetCoins(const uint256 &txid, CCoins &coins) const {

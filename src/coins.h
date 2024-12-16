@@ -369,18 +369,6 @@ struct CNullifiersCacheEntry
     CNullifiersCacheEntry() : entered(false), flags(0) {}
 };
 
-struct CProofHashCacheEntry
-{
-    std::set<std::pair<uint256, int>> txids;
-    unsigned char flags;
-
-    enum Flags {
-        DIRTY = (1 << 0), // This cache entry is potentially different from the version in the parent view.
-    };
-
-    CProofHashCacheEntry() : txids(), flags(0) {}
-};
-
 enum ShieldedType
 {
     SPROUT,
@@ -401,7 +389,6 @@ typedef boost::unordered_map<uint256, CAnchorsSaplingCacheEntry, CCoinsKeyHasher
 typedef boost::unordered_map<uint256, CAnchorsSaplingFrontierCacheEntry, CCoinsKeyHasher> CAnchorsSaplingFrontierMap;
 typedef boost::unordered_map<uint256, CAnchorsOrchardFrontierCacheEntry, CCoinsKeyHasher> CAnchorsOrchardFrontierMap;
 typedef boost::unordered_map<uint256, CNullifiersCacheEntry, CCoinsKeyHasher> CNullifiersMap;
-typedef boost::unordered_map<uint256, CProofHashCacheEntry, CCoinsKeyHasher> CProofHashMap;
 typedef boost::unordered_map<uint32_t, HistoryCache> CHistoryCacheMap;
 
 struct CCoinsStats
@@ -436,9 +423,6 @@ public:
 
     //! Determine whether a nullifier is spent or not
     virtual bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
-
-    //! Determine whether a spendproof has been previously used
-    virtual bool GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const;
 
     //! Retrieve the CCoins (unspent transaction outputs) for a given txid
     virtual bool GetCoins(const uint256 &txid, CCoins &coins) const;
@@ -477,9 +461,7 @@ public:
                             CNullifiersMap &mapSproutNullifiers,
                             CNullifiersMap &mapSaplingNullifiers,
                             CNullifiersMap &mapOrchardNullifiers,
-                            CHistoryCacheMap &historyCacheMap,
-                            CProofHashMap &mapZkOutputProofHash,
-                            CProofHashMap &mapZkSpendProofHash);
+                            CHistoryCacheMap &historyCacheMap);
 
     //! Calculate statistics about the unspent transaction output set
     virtual bool GetStats(CCoinsStats &stats) const;
@@ -502,7 +484,6 @@ public:
     bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const;
     bool GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const;
     bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
-    bool GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const;
     bool GetCoins(const uint256 &txid, CCoins &coins) const;
     bool HaveCoins(const uint256 &txid) const;
     uint256 GetBestBlock() const;
@@ -524,9 +505,7 @@ public:
                     CNullifiersMap &mapSproutNullifiers,
                     CNullifiersMap &mapSaplingNullifiers,
                     CNullifiersMap &mapOrchardNullifiers,
-                    CHistoryCacheMap &historyCacheMap,
-                    CProofHashMap &mapZkOutputProofHash,
-                    CProofHashMap &mapZkSpendProofHash);
+                    CHistoryCacheMap &historyCacheMap);
     bool GetStats(CCoinsStats &stats) const;
 };
 
@@ -588,8 +567,6 @@ protected:
     mutable CNullifiersMap cacheSaplingNullifiers;
     mutable CNullifiersMap cacheOrchardNullifiers;
     mutable CHistoryCacheMap historyCacheMap;
-    mutable CProofHashMap cacheZkOutputProofHash;
-    mutable CProofHashMap cacheZkSpendProofHash;
 
     /* Cached dynamic memory usage for the inner CCoins objects. */
     mutable size_t cachedCoinsUsage;
@@ -604,7 +581,6 @@ public:
     bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const;
     bool GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const;
     bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
-    bool GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const;
     bool GetCoins(const uint256 &txid, CCoins &coins) const;
     bool HaveCoins(const uint256 &txid) const;
     uint256 GetBestBlock() const;
@@ -626,9 +602,7 @@ public:
                     CNullifiersMap &mapSproutNullifiers,
                     CNullifiersMap &mapSaplingNullifiers,
                     CNullifiersMap &mapOrchardNullifiers,
-                    CHistoryCacheMap &historyCacheMap,
-                    CProofHashMap &mapZkOutputProofHash,
-                    CProofHashMap &mapZkSpendProofHash);
+                    CHistoryCacheMap &historyCacheMap);
 
 
     // Adds the tree to mapSproutAnchors (or mapSaplingAnchors based on the type of tree)
@@ -647,9 +621,6 @@ public:
 
     // Pop MMR node history from the end of the history tree
     void PopHistoryNode(uint32_t epochId);
-
-    // Add txid to track duplicate proof on multiple txes
-    void SetZkProofHashes(const CTransaction& tx, bool addTx);
 
     /**
      * Return a pointer to CCoins in the cache, or NULL if not found. This is
@@ -705,7 +676,6 @@ public:
 
     //! Check whether all joinsplit requirements (anchors/nullifiers) are satisfied
     bool HaveJoinSplitRequirements(const CTransaction& tx, int maxProcessingThreads) const;
-    bool HaveJoinSplitRequirementsDuplicateProofs(const CTransaction& tx, int maxProcessingThreads) const;
 
     //! Return priority of tx at height nHeight
     double GetPriority(const CTransaction &tx, int nHeight) const;

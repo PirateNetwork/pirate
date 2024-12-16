@@ -159,7 +159,6 @@ private:
     std::map<uint256, const CTransaction*> mapZkSpendProofHash;
 
     void checkNullifiers(ShieldedType type) const;
-    void checkZkProofHash(ProofType type) const;
 
 public:
     typedef boost::multi_index_container<
@@ -241,7 +240,6 @@ public:
     void ClearPrioritisation(const uint256 hash);
 
     bool nullifierExists(const uint256& nullifier, ShieldedType type) const;
-    bool zkProofHashExists(const uint256& zkproofHash, ProofType type) const;
 
     void NotifyRecentlyAdded();
     bool IsFullyNotified();
@@ -296,7 +294,6 @@ protected:
 public:
     CCoinsViewMemPool(CCoinsView *baseIn, CTxMemPool &mempoolIn);
     bool GetNullifier(const uint256 &txid, ShieldedType type) const;
-    bool GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const;
     bool GetCoins(const uint256 &txid, CCoins &coins) const;
     bool HaveCoins(const uint256 &txid) const;
 };
