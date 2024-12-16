@@ -346,6 +346,10 @@ pub(crate) mod ffi {
             self: &mut SaplingFrontier,
             sapling_bundle: &SaplingBundle,
         ) -> Result<SaplingAppendResult>;
+        fn append(
+            self: &mut SaplingFrontier,
+            sapling_cmu: [u8; 32],
+        ) -> Result<SaplingAppendResult>;
         unsafe fn init_wallet(self: &SaplingFrontier, wallet: *mut SaplingWallet) -> bool;
     }
 
@@ -366,6 +370,10 @@ pub(crate) mod ffi {
         fn append_bundle(
             self: &mut OrchardFrontier,
             bundle: &OrchardBundle,
+        ) -> Result<OrchardAppendResult>;
+        fn append(
+            self: &mut OrchardFrontier,
+            orchard_cmx: [u8; 32],
         ) -> Result<OrchardAppendResult>;
         unsafe fn init_wallet(self: &OrchardFrontier, wallet: *mut OrchardWallet) -> bool;
     }

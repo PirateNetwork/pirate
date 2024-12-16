@@ -404,6 +404,13 @@ public:
         return inner->append_bundle(bundle.GetDetails());
     }
 
+    // Append a note commitment to the frontier (for testing)
+    merkle_frontier::SaplingAppendResult append(uint256 cmu) {
+        std::array<uint8_t, 32> cmu_bytes;
+        std::copy(cmu.begin(), cmu.end(), cmu_bytes.begin());
+        return inner->append(cmu_bytes);
+    }
+
     const uint256 root() const {
         return uint256::FromRawBytes(inner->root());
     }
@@ -495,6 +502,13 @@ public:
 
     merkle_frontier::OrchardAppendResult AppendBundle(const OrchardBundle& bundle) {
         return inner->append_bundle(bundle.GetDetails());
+    }
+
+    // Append a note commitment to the frontier (for testing)
+    merkle_frontier::OrchardAppendResult append(uint256 cmx) {
+        std::array<uint8_t, 32> cmx_bytes;
+        std::copy(cmx.begin(), cmx.end(), cmx_bytes.begin());
+        return inner->append(cmx_bytes);
     }
 
     const uint256 root() const {
