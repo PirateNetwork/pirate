@@ -69,7 +69,6 @@ bool CCoinsView::GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) 
 bool CCoinsView::GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const { return false; }
 bool CCoinsView::GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const { return false; }
 bool CCoinsView::GetNullifier(const uint256 &nullifier, ShieldedType type) const { return false; }
-bool CCoinsView::GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const { return false; }
 bool CCoinsView::GetCoins(const uint256 &txid, CCoins &coins) const { return false; }
 bool CCoinsView::HaveCoins(const uint256 &txid) const { return false; }
 uint256 CCoinsView::GetBestBlock() const { return uint256(); }
@@ -81,7 +80,7 @@ bool CCoinsView::BatchWrite(CCoinsMap &mapCoins,
                             const uint256 &hashBlock,
                             const uint256 &hashSproutAnchor,
                             const uint256 &hashSaplingAnchor,
-                            const uint256 &hashSaplingFontierAnchor,
+                            const uint256 &hashSaplingFrontierAnchor,
                             const uint256 &hashOrchardFrontierAnchor,
                             CAnchorsSproutMap &mapSproutAnchors,
                             CAnchorsSaplingMap &mapSaplingAnchors,
@@ -90,9 +89,7 @@ bool CCoinsView::BatchWrite(CCoinsMap &mapCoins,
                             CNullifiersMap &mapSproutNullifiers,
                             CNullifiersMap &mapSaplingNullifiers,
                             CNullifiersMap &mapOrchardNullifiers,
-                            CHistoryCacheMap &historyCacheMap,
-                            CProofHashMap &mapZkOutputProofHash,
-                            CProofHashMap &mapZkSpendProofHash) { return false; }
+                            CHistoryCacheMap &historyCacheMap) { return false; }
 bool CCoinsView::GetStats(CCoinsStats &stats) const { return false; }
 
 
@@ -103,7 +100,6 @@ bool CCoinsViewBacked::GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &
 bool CCoinsViewBacked::GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const { return base->GetSaplingFrontierAnchorAt(rt, tree); }
 bool CCoinsViewBacked::GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const { return base->GetOrchardFrontierAnchorAt(rt, tree); }
 bool CCoinsViewBacked::GetNullifier(const uint256 &nullifier, ShieldedType type) const { return base->GetNullifier(nullifier, type); }
-bool CCoinsViewBacked::GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const { return base->GetZkProofHash(zkproofHash, type, txids); }
 bool CCoinsViewBacked::GetCoins(const uint256 &txid, CCoins &coins) const { return base->GetCoins(txid, coins); }
 bool CCoinsViewBacked::HaveCoins(const uint256 &txid) const { return base->HaveCoins(txid); }
 uint256 CCoinsViewBacked::GetBestBlock() const { return base->GetBestBlock(); }
@@ -125,15 +121,12 @@ bool CCoinsViewBacked::BatchWrite(CCoinsMap &mapCoins,
                                   CNullifiersMap &mapSproutNullifiers,
                                   CNullifiersMap &mapSaplingNullifiers,
                                   CNullifiersMap &mapOrchardNullifiers,
-                                  CHistoryCacheMap &historyCacheMap,
-                                  CProofHashMap &mapZkOutputProofHash,
-                                  CProofHashMap &mapZkSpendProofHash) {
+                                  CHistoryCacheMap &historyCacheMap) {
       return base->BatchWrite(mapCoins, hashBlock,
             hashSproutAnchor, hashSaplingAnchor, hashSaplingFrontierAnchor, hashOrchardFrontierAnchor,
             mapSproutAnchors, mapSaplingAnchors, mapSaplingFrontierAnchors, mapOrchardFrontierAnchors,
             mapSproutNullifiers, mapSaplingNullifiers, mapOrchardNullifiers,
-            historyCacheMap,
-            mapZkOutputProofHash, mapZkSpendProofHash); }
+            historyCacheMap); }
 
 
 bool CCoinsViewBacked::GetStats(CCoinsStats &stats) const { return base->GetStats(stats); }
@@ -157,8 +150,6 @@ size_t CCoinsViewCache::DynamicMemoryUsage() const {
            memusage::DynamicUsage(cacheSaplingNullifiers) +
            memusage::DynamicUsage(cacheOrchardNullifiers) +
            memusage::DynamicUsage(historyCacheMap) +
-           memusage::DynamicUsage(cacheZkOutputProofHash) +
-           memusage::DynamicUsage(cacheZkSpendProofHash) +
            cachedCoinsUsage;
 }
 
@@ -324,58 +315,6 @@ HistoryNode CCoinsViewCache::GetHistoryAt(uint32_t epochId, HistoryIndex index) 
 
 uint256 CCoinsViewCache::GetHistoryRoot(uint32_t epochId) const {
     return SelectHistoryCache(epochId).root;
-}
-
-bool CCoinsViewCache::GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const {
-    CProofHashMap* cacheToUse;
-
-    switch (type) {
-        case OUTPUT:
-            cacheToUse = &cacheZkOutputProofHash;
-            break;
-        case SPEND:
-            cacheToUse = &cacheZkSpendProofHash;
-            break;
-        default:
-            throw std::runtime_error("Unknown shielded type");
-    }
-
-    CProofHashMap::iterator it = cacheToUse->find(zkproofHash);
-    if (it != cacheToUse->end()) {
-        txids = (*it).second.txids;
-
-        if (txids.size()>1) {
-            LogPrintf("Found duplicate zkproof %s\n", zkproofHash.ToString());
-            for (std::set<std::pair<uint256, int>>::iterator it = txids.begin(); it != txids.end(); it++) {
-                uint256 txid = (*it).first;
-                int proofNumber = (*it).second;
-                LogPrintf("Txid %s, proofNumber %i\n", txid.ToString(), proofNumber);
-            }
-        }
-        // LogPrintf(" top view zkproof %s found\n", zkproofHash.ToString());
-        return !it->second.txids.empty();
-    }
-
-    CProofHashCacheEntry entry;
-    bool tmp = base->GetZkProofHash(zkproofHash, type, txids);
-
-    if (tmp && txids.size() > 1)
-      LogPrintf(" base view zkproof %s found\n", zkproofHash.ToString());
-
-    entry.txids = txids;
-
-    if (txids.size()>1) {
-        LogPrintf("Found duplicate zkproof %s\n", zkproofHash.ToString());
-        for (std::set<std::pair<uint256, int>>::iterator it = txids.begin(); it != txids.end(); it++) {
-            uint256 txid = (*it).first;
-            int proofNumber = (*it).second;
-            LogPrintf("Txid %s, proofNumber %i\n", txid.ToString(), proofNumber);
-        }
-    }
-
-    cacheToUse->insert(std::make_pair(zkproofHash, entry));
-
-    return !txids.empty();
 }
 
 template<typename Tree, typename Cache, typename CacheIterator, typename CacheEntry>
@@ -837,36 +776,11 @@ void CCoinsViewCache::SetNullifiers(const CTransaction& tx, bool spent) {
         ret.first->second.entered = spent;
         ret.first->second.flags |= CNullifiersCacheEntry::DIRTY;
     }
-}
-
-void CCoinsViewCache::SetZkProofHashes(const CTransaction& tx, bool addTx) {
-
-    int i = 0;
-    for (const auto& spend : tx.GetSaplingSpends()) {
-        auto zkproof = spend.zkproof();
-        auto proofHash = Hash(zkproof.begin(), zkproof.end());
-        std::pair<CProofHashMap::iterator, bool> ret = cacheZkSpendProofHash.insert(std::make_pair(proofHash, CProofHashCacheEntry()));
-        if (addTx) {
-          ret.first->second.txids.emplace(std::make_pair(tx.GetHash(), i));
-        } else {
-          ret.first->second.txids.erase(std::make_pair(tx.GetHash(), i));
-        }
-        ret.first->second.flags |= CProofHashCacheEntry::DIRTY;
-        i++;
-    }
-
-    i = 0;
-    for (const auto& output : tx.GetSaplingOutputs()) {
-        auto zkproof = output.zkproof();
-        auto proofHash = Hash(zkproof.begin(), zkproof.end());
-        std::pair<CProofHashMap::iterator, bool> ret = cacheZkOutputProofHash.insert(std::make_pair(proofHash, CProofHashCacheEntry()));
-        if (addTx) {
-          ret.first->second.txids.emplace(std::make_pair(tx.GetHash(), i));
-        } else {
-          ret.first->second.txids.erase(std::make_pair(tx.GetHash(), i));
-        }
-        ret.first->second.flags |= CProofHashCacheEntry::DIRTY;
-        i++;
+    for (const auto& action : tx.GetOrchardActions()) {
+        auto nullifier = uint256::FromRawBytes(action.nullifier());
+        std::pair<CNullifiersMap::iterator, bool> ret = cacheOrchardNullifiers.insert(std::make_pair(nullifier, CNullifiersCacheEntry()));
+        ret.first->second.entered = spent;
+        ret.first->second.flags |= CNullifiersCacheEntry::DIRTY;
     }
 }
 
@@ -987,28 +901,6 @@ void BatchWriteNullifiers(CNullifiersMap &mapNullifiers, CNullifiersMap &cacheNu
     }
 }
 
-void BatchWriteProofHashes(CProofHashMap &mapProofHash, CProofHashMap &cacheProofHash)
-{
-    for (CProofHashMap::iterator child_it = mapProofHash.begin(); child_it != mapProofHash.end();) {
-        if (child_it->second.flags & CProofHashCacheEntry::DIRTY) { // Ignore non-dirty entries (optimization).
-            CProofHashMap::iterator parent_it = cacheProofHash.find(child_it->first);
-
-            if (parent_it == cacheProofHash.end()) {
-                CProofHashCacheEntry& entry = cacheProofHash[child_it->first];
-                entry.txids = child_it->second.txids;
-                entry.flags = CNullifiersCacheEntry::DIRTY;
-            } else {
-                if (parent_it->second.txids != child_it->second.txids) {
-                    parent_it->second.txids = child_it->second.txids;
-                    parent_it->second.flags |= CNullifiersCacheEntry::DIRTY;
-                }
-            }
-        }
-        CProofHashMap::iterator itOld = child_it++;
-        mapProofHash.erase(itOld);
-    }
-}
-
 template<typename Map, typename MapIterator, typename MapEntry>
 void BatchWriteAnchors(
     Map &mapAnchors,
@@ -1084,9 +976,7 @@ bool CCoinsViewCache::BatchWrite(CCoinsMap &mapCoins,
                                  CNullifiersMap &mapSproutNullifiers,
                                  CNullifiersMap &mapSaplingNullifiers,
                                  CNullifiersMap &mapOrchardNullifiers,
-                                 CHistoryCacheMap &historyCacheMapIn,
-                                 CProofHashMap &mapZkOutputProofHash,
-                                 CProofHashMap &mapZkSpendProofHash) {
+                                 CHistoryCacheMap &historyCacheMapIn) {
     assert(!hasModifier);
     for (CCoinsMap::iterator it = mapCoins.begin(); it != mapCoins.end();) {
         if (it->second.flags & CCoinsCacheEntry::DIRTY) { // Ignore non-dirty entries (optimization).
@@ -1134,9 +1024,6 @@ bool CCoinsViewCache::BatchWrite(CCoinsMap &mapCoins,
 
     ::BatchWriteHistory(historyCacheMap, historyCacheMapIn);
 
-    ::BatchWriteProofHashes(mapZkOutputProofHash, cacheZkOutputProofHash);
-    ::BatchWriteProofHashes(mapZkSpendProofHash, cacheZkSpendProofHash);
-
     hashSproutAnchor = hashSproutAnchorIn;
     hashSaplingAnchor = hashSaplingAnchorIn;
     hashSaplingFrontierAnchor = hashSaplingFrontierAnchorIn;
@@ -1150,8 +1037,7 @@ bool CCoinsViewCache::Flush() {
                                 hashSproutAnchor, hashSaplingAnchor, hashSaplingFrontierAnchor, hashOrchardFrontierAnchor,
                                 cacheSproutAnchors, cacheSaplingAnchors, cacheSaplingFrontierAnchors, cacheOrchardFrontierAnchors,
                                 cacheSproutNullifiers, cacheSaplingNullifiers, cacheOrchardNullifiers,
-                                historyCacheMap,
-                                cacheZkOutputProofHash, cacheZkSpendProofHash);
+                                historyCacheMap);
     cacheCoins.clear();
     cacheSproutAnchors.clear();
     cacheSaplingAnchors.clear();
@@ -1161,8 +1047,6 @@ bool CCoinsViewCache::Flush() {
     cacheSaplingNullifiers.clear();
     cacheOrchardNullifiers.clear();
     historyCacheMap.clear();
-    cacheZkOutputProofHash.clear();
-    cacheZkSpendProofHash.clear();
     cachedCoinsUsage = 0;
     return fOk;
 }
@@ -1363,128 +1247,6 @@ bool CCoinsViewCache::HaveJoinSplitRequirements(const CTransaction& tx, int maxP
     vvSpendAnchor.resize(0);
 
     return ret;
-}
-
-static bool HaveJoinSplitRequirementsWorkerDuplicateSpendProofs(const CCoinsViewCache *coinCache,const std::vector<uint256> vSpendProof, int threadNum)
-{
-    //Perform Sapling Spend checks
-    for (int i = 0; i < vSpendProof.size(); i++) {
-        auto proofHash = vSpendProof[i];
-        std::set<std::pair<uint256, int>> txids;
-        if (coinCache->GetZkProofHash(proofHash, SPEND, txids))
-            return txids.empty();
-    }
-
-    return true;
-}
-
-static bool HaveJoinSplitRequirementsWorkerDuplicateOutputProofs(const CCoinsViewCache *coinCache,const std::vector<uint256> vOutputProof, int threadNum)
-{
-    //Perform Sapling Spend checks
-    for (int i = 0; i < vOutputProof.size(); i++) {
-        auto proofHash = vOutputProof[i];
-        std::set<std::pair<uint256, int>> txids;
-        if (coinCache->GetZkProofHash(proofHash, OUTPUT, txids))
-            return txids.empty();
-    }
-
-    return true;
-}
-
-//Cannot be combined with anchor and nullifier checking due do differing consensus rules
-bool CCoinsViewCache::HaveJoinSplitRequirementsDuplicateProofs(const CTransaction& tx, int maxProcessingThreads) const
-{
-    auto now = GetTimeMicros();
-
-    now = GetTimeMicros();
-
-    //Create a Vector of futures to be collected later
-    std::vector<std::future<bool>> vFutures;
-
-    //Setup spend & output batches
-    std::vector<uint256> vSpendProof;
-    std::vector<std::vector<uint256>> vvSpendProof;
-    std::vector<uint256> vOutputProof;
-    std::vector<std::vector<uint256>> vvOutputProof;
-
-    //Create Thread Vectors
-    for (int i = 0; i < maxProcessingThreads; i++) {
-        vvSpendProof.emplace_back(vSpendProof);
-        vvOutputProof.emplace_back(vOutputProof);
-    }
-
-    //Thread counter
-    int t = 0;
-
-    //Add this transaction sapling spend to spend thread batches
-    for (const auto& spend : tx.GetSaplingSpends()) {
-        auto zkproof = spend.zkproof();
-        auto proofHash = Hash(zkproof.begin(), zkproof.end());
-        //Push spend to thread vector
-        vvSpendProof[t].emplace_back(proofHash);
-
-        //Increment thread vector
-        t++;
-        //reset if tread vector is greater qty of threads being used
-        if (t >= vvSpendProof.size()) {
-            t = 0;
-        }
-    }
-
-    //Reset Thread Counter
-    t = 0;
-
-    //Add this transaction sapling output to outpu thread batches
-    for (const auto& output : tx.GetSaplingOutputs()) {
-        auto zkproof = output.zkproof();
-        auto proofHash = Hash(zkproof.begin(), zkproof.end());
-        //Push output data to thread vector
-        vvOutputProof[t].emplace_back(proofHash);
-
-        //Increment thread vector
-        t++;
-        //reset if tread vector is greater qty of threads being used
-        if (t >= vvOutputProof.size()) {
-            t = 0;
-        }
-    }
-
-    //Push batches of spends to async threads
-    for (int i = 0; i < vvSpendProof.size(); i++) {
-        if (!vvSpendProof[i].empty()) {
-            //Perform SpendDescription validations
-            vFutures.emplace_back(std::async(std::launch::async, HaveJoinSplitRequirementsWorkerDuplicateSpendProofs, this, vvSpendProof[i], 1000 + i));
-        }
-    }
-
-    //Push batches of output to async threads
-    for (int i = 0; i < vvOutputProof.size(); i++) {
-        if (!vvOutputProof[i].empty()) {
-            //Perform OutputDescription validations
-            vFutures.emplace_back(std::async(std::launch::async, HaveJoinSplitRequirementsWorkerDuplicateOutputProofs, this, vvOutputProof[i], 2000 + i));
-        }
-    }
-
-    //Wait for all threads to complete
-    for (auto &future : vFutures) {
-        future.wait();
-    }
-
-    //Collect the async results
-    bool ret = true;
-    for (auto &future : vFutures) {
-        if (!future.get()) {
-            ret = false;
-        }
-    }
-
-    //cleanup
-    vFutures.resize(0);
-    vvSpendProof.resize(0);
-    vvOutputProof.resize(0);
-
-    return ret;
-
 }
 
 bool CCoinsViewCache::HaveInputs(const CTransaction& tx) const

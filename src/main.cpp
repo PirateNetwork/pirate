@@ -2354,23 +2354,6 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
                 return state.Invalid(error("AcceptToMemoryPool: duplicate nullifier requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-nullifier-requirements-not-met");
             }
         }
-
-
-        //Check for duplicate Proofs
-        for (const auto& spend : tx.GetSaplingSpends()) {
-            auto zkproof = spend.zkproof();
-            auto proofHash = Hash(zkproof.begin(), zkproof.end());
-            if (pool.zkProofHashExists(proofHash, SPEND)) {
-                return state.Invalid(error("AcceptToMemoryPool: duplicate proof requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-proof-requirements-not-met");
-            }
-        }
-        for (const auto& output : tx.GetSaplingOutputs()) {
-            auto zkproof = output.zkproof();
-            auto proofHash = Hash(zkproof.begin(), zkproof.end());
-            if (pool.zkProofHashExists(proofHash, OUTPUT)) {
-                return state.Invalid(error("AcceptToMemoryPool: duplicate proof requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-proof-requirements-not-met");
-            }
-        }
     }
 
     {
@@ -2424,12 +2407,6 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
             if (!view.HaveJoinSplitRequirements(tx, maxProcessingThreads))
             {
                 return state.Invalid(error("AcceptToMemoryPool: joinsplit requirements not met"),REJECT_DUPLICATE, "bad-txns-joinsplit-requirements-not-met");
-            }
-
-            // are the joinsplit's requirements met?
-            if (!view.HaveJoinSplitRequirementsDuplicateProofs(tx, maxProcessingThreads))
-            {
-                return state.Invalid(error("AcceptToMemoryPool: duplicate proof requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-proof-requirements-not-met");
             }
 
             // Bring the best block into scope
@@ -3190,9 +3167,6 @@ void UpdateCoins(const CTransaction& tx, CCoinsViewCache& inputs, CTxUndo &txund
     // spend nullifiers
     inputs.SetNullifiers(tx, true);
 
-    //record proofs
-    inputs.SetZkProofHashes(tx, true);
-
     inputs.ModifyCoins(tx.GetHash())->FromTx(tx, nHeight); // add outputs
 
     // Unorthodox state
@@ -3235,14 +3209,6 @@ namespace Consensus {
         // are the JoinSplit's requirements met?
         if (!inputs.HaveJoinSplitRequirements(tx, maxProcessingThreads))
             return state.Invalid(error("CheckInputs(): %s JoinSplit requirements not met", tx.GetHash().ToString()));
-
-        // are the joinsplit's requirements met?
-        if (!inputs.HaveJoinSplitRequirementsDuplicateProofs(tx, maxProcessingThreads))
-        {
-            LogPrintf("Duplicate proof requirments requirements not met");
-            //TODO enable this at the consensus level
-            // return state.Invalid(error("AcceptToMemoryPool: duplicate proof requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-proof-requirements-not-met");
-        }
 
         CAmount nValueIn = 0;
         CAmount nFees = 0;
@@ -3616,9 +3582,6 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
 
         // unspend nullifiers
         view.SetNullifiers(tx, false);
-
-        // unrecord proofs
-        view.SetZkProofHashes(tx, false);
 
         // restore inputs
         if (!tx.IsMint()) {
@@ -4063,14 +4026,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             if (!view.HaveJoinSplitRequirements(tx, maxProcessingThreads))
                 return state.DoS(100, error("ConnectBlock(): JoinSplit requirements not met"),
                                  REJECT_INVALID, "bad-txns-joinsplit-requirements-not-met");
-
-           // are the joinsplit's requirements met?
-           if (!view.HaveJoinSplitRequirementsDuplicateProofs(tx, maxProcessingThreads))
-           {
-               LogPrintf("Duplicate proof requirments requirements not met");
-               //TODO enable this at the consensus level
-               // return state.Invalid(error("AcceptToMemoryPool: duplicate proof requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-proof-requirements-not-met");
-           }
 
             if (fAddressIndex || fSpentIndex)
             {
@@ -7517,7 +7472,6 @@ bool InitBlockIndex()
     }
     if ( pblocktree != 0 )
     {
-        pblocktree->WriteFlag("proofrule", fProof);
         pblocktree->WriteFlag("archiverule", fArchive);
         // Use the provided setting for -txindex in the new database
         // fTxIndex = GetBoolArg("-txindex", true);
