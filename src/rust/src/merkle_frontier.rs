@@ -4,14 +4,20 @@ use incrementalmerkletree::{
     frontier::{CommitmentTree, Frontier},
     Hashable, Level,
 };
-use orchard::tree::MerkleHashOrchard;
+use orchard::{
+    tree::MerkleHashOrchard,
+    note::ExtractedNoteCommitment as OrchardExtractedNoteCommitment,
+};
+
 use zcash_primitives::{
     merkle_tree::{read_frontier_v1, write_commitment_tree, write_frontier_v1, HashSer},
-    sapling::{NOTE_COMMITMENT_TREE_DEPTH, Node},
+    sapling::{NOTE_COMMITMENT_TREE_DEPTH, Node, note::ExtractedNoteCommitment as SaplingExtractedNoteCommitment},
 };
 
 // use crate::{bridge::ffi, orchard_bundle, streams::CppStream, wallet::Wallet};
 use crate::{bridge::ffi, sapling::Bundle as SaplingBundle, orchard_bundle, streams::CppStream, orchard_wallet::Wallet as OrchardWalletInternal, sapling_wallet::Wallet as SaplingWalletInternal};
+
+use crate::de_ct;
 
 // This is also defined in `IncrementalMerkleTree.hpp`
 pub const TRACKED_SUBTREE_HEIGHT: u8 = 16;
@@ -142,6 +148,52 @@ impl OrchardFrontier {
         }
     }
 
+        /// Appends a single cmx this frontier.
+        pub(crate) fn append(
+            &mut self,
+            orchard_cmx: [u8; 32],
+        ) -> Result<ffi::OrchardAppendResult, &'static str> {
+            // A single bundle can't contain 2^TRACKED_SUBTREE_HEIGHT actions, so we'll never cross
+            // more than one subtree boundary while processing that bundle. This means we only need
+            // to find a single subtree root while processing an individual bundle, so `Option` is
+            // sufficient; we don't need a `Vec`.
+            let mut tracked_root: Option<MerkleHashOrchard> = None;
+
+            // Deserialize the extracted note commitment.
+            let cmx = match de_ct(OrchardExtractedNoteCommitment::from_bytes(&orchard_cmx)) {
+                Some(a) => a,
+                None => return Err("Orchard CMX is invalid."),
+            };
+
+            //Append the note commitment to the frontier.
+            if !self.0.append(MerkleHashOrchard::from_cmx(&cmx)) {
+                return Err("Orchard note commitment tree is full.");
+            }
+
+            // Check if the frontier has a complete subtree.
+            if let Some(non_empty_frontier) = self.0.value() {
+                let level = Level::from(TRACKED_SUBTREE_HEIGHT);
+                let pos = non_empty_frontier.position();
+                if pos.is_complete_subtree(level) {
+                    assert_eq!(tracked_root, None);
+                    tracked_root = Some(non_empty_frontier.root(Some(level)))
+                }
+            }
+            
+            // Return the result.
+            Ok(if let Some(root_hash) = tracked_root {
+                ffi::OrchardAppendResult {
+                    has_subtree_boundary: true,
+                    completed_subtree_root: root_hash.to_bytes(),
+                }
+            } else {
+                ffi::OrchardAppendResult {
+                    has_subtree_boundary: false,
+                    completed_subtree_root: [0u8; 32],
+                }
+            })
+        }
+
     /// Overwrites the first bridge of the Orchard wallet's note commitment tree to have
     /// `self` as its latest state.
     ///
@@ -224,6 +276,57 @@ impl SaplingFrontier {
         } else {
             Err("null Sapling bundle pointer")
         }
+    }
+
+    pub(crate) fn append(
+        &mut self,
+        sapling_cmu: [u8; 32],
+    ) -> Result<ffi::SaplingAppendResult, &'static str> {
+        // A single bundle can't contain 2^TRACKED_SUBTREE_HEIGHT actions, so we'll never cross
+        // more than one subtree boundary while processing that bundle. This means we only need
+        // to find a single subtree root while processing an individual bundle, so `Option` is
+        // sufficient; we don't need a `Vec`.
+        let mut tracked_root: Option<Node> = None;
+
+        // Deserialize the extracted note commitment.
+        let cmu = match de_ct(SaplingExtractedNoteCommitment::from_bytes(&sapling_cmu)) {
+            Some(a) => a,
+            None => return Err("Sapling CMU is invalid."),
+        };
+
+        //Append the note commitment to the frontier.
+        if !self.0.append(Node::from_cmu(&cmu)) {
+            return Err("Sapling note commitment tree is full.");
+        }
+
+        // Check if the frontier has a complete subtree.
+        if let Some(non_empty_frontier) = self.0.value() {
+            let level = Level::from(TRACKED_SUBTREE_HEIGHT);
+            let pos = non_empty_frontier.position();
+            if pos.is_complete_subtree(level) {
+                assert_eq!(tracked_root, None);
+                tracked_root = Some(non_empty_frontier.root(Some(level)))
+            }
+        }
+        
+        // Return the result.
+        Ok(if let Some(root_hash) = tracked_root {
+
+            let mut root = [0; 32];
+            root_hash.write(&mut root[..])
+                    .expect("root is 32 bytes");
+
+            ffi::SaplingAppendResult {
+                has_subtree_boundary: true,
+                completed_subtree_root: root,
+            }
+        } else {
+            ffi::SaplingAppendResult {
+                has_subtree_boundary: false,
+                completed_subtree_root: [0u8; 32],
+            }
+        })
+
     }
 
     /// Overwrites the first bridge of the SApling wallet's note commitment tree to have
