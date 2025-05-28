@@ -1,0 +1,20 @@
+name: Build Pirated
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils python3 libboost-system-dev libboost-filesystem-dev libboost-chrono-dev libboost-program-options-dev libboost-test-dev libboost-thread-dev libcurl4-openssl-dev
+
+    - name: Build Pirated
+      run: |
+        cd zcutil
+        ./build-ubuntu24.sh -j$(nproc) 
