@@ -14,6 +14,9 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils python3 libboost-system-dev libboost-filesystem-dev libboost-chrono-dev libboost-program-options-dev libboost-test-dev libboost-thread-dev libcurl4-openssl-dev
 
+    - name: Make build script executable
+      run: chmod +x zcutil/build-ubuntu24.sh
+
     - name: Build Pirated
       run: |
         cd zcutil
