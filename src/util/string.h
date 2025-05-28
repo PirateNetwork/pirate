@@ -91,8 +91,9 @@ template <typename T1, size_t PREFIX_LEN>
 [[nodiscard]] inline bool HasPrefix(const T1& obj,
                                 const std::array<uint8_t, PREFIX_LEN>& prefix)
 {
+    static_assert(!std::is_integral_v<T1>, "HasPrefix was called with an integral type for the first argument (obj). This is not allowed.");
     return obj.size() >= PREFIX_LEN &&
            std::equal(std::begin(prefix), std::end(prefix), std::begin(obj));
 }
 
-#endif // BITCOIN_UTIL_STRENCODINGS_H
+#endif // BITCOIN_UTIL_STRING_H
