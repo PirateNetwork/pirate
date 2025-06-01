@@ -20,11 +20,8 @@ jobs:
           libboost-test-dev libboost-thread-dev libcurl4-openssl-dev \
           python3-zmq libsodium-dev bison curl zip
 
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable 
-        override: true
+    - name: Install Rust (stable)
+      uses: dtolnay/rust-toolchain@stable
 
     - name: Make build script executable
       run: chmod +x zcutil/build.sh
@@ -79,11 +76,8 @@ jobs:
       run: |
         brew install autoconf automake libtool pkg-config boost zeromq libsodium coreutils python3 curl zip
 
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable 
-        override: true
+    - name: Install Rust (stable)
+      uses: dtolnay/rust-toolchain@stable
 
     - name: Make build script executable
       run: chmod +x zcutil/build-mac.sh
@@ -144,11 +138,8 @@ jobs:
           mingw-w64-x86_64-boost mingw-w64-x86_64-python3 mingw-w64-x86_64-openssl 
           mingw-w64-x86_64-zeromq mingw-w64-x86_64-libsodium mingw-w64-x86_64-curl zip
 
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
+    - name: Install Rust (stable)
+      uses: dtolnay/rust-toolchain@stable
 
     - name: Make build script executable and Fetch Zcash Params (Windows)
       shell: msys2 {0}
@@ -211,12 +202,10 @@ jobs:
           build-essential pkg-config autoconf libtool automake bsdmainutils \
           python3 curl g++-aarch64-linux-gnu gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu zip
 
-    - name: Install Rust (with AArch64 target)
-      uses: actions-rs/toolchain@v1
+    - name: Install Rust (stable, AArch64 target)
+      uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: stable
-        target: aarch64-unknown-linux-gnu 
-        override: true
+        targets: aarch64-unknown-linux-gnu
 
     - name: Make build script executable
       run: chmod +x zcutil/build-arm.sh
@@ -260,11 +249,8 @@ jobs:
           python3-zmq libsodium-dev bison curl \
           qttools5-dev qt5-default zip
 
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable 
-        override: true
+    - name: Install Rust (stable)
+      uses: dtolnay/rust-toolchain@stable
 
     - name: Make QT build script executable
       run: chmod +x zcutil/build-qt-linux.sh
@@ -326,11 +312,8 @@ jobs:
         brew install autoconf automake libtool pkg-config boost zeromq libsodium coreutils python3 curl qt@5 zip
         echo "/usr/local/opt/qt@5/bin" >> $GITHUB_PATH
 
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable 
-        override: true
+    - name: Install Rust (stable)
+      uses: dtolnay/rust-toolchain@stable
 
     - name: Make QT build script executable
       run: chmod +x zcutil/build-qt-mac.sh
@@ -410,11 +393,8 @@ jobs:
           mingw-w64-x86_64-zeromq mingw-w64-x86_64-libsodium mingw-w64-x86_64-curl 
           mingw-w64-x86_64-qt5 zip
 
-    - name: Install Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
+    - name: Install Rust (stable)
+      uses: dtolnay/rust-toolchain@stable
 
     - name: Make QT build script executable and Fetch Zcash Params (Windows)
       shell: msys2 {0}
@@ -484,12 +464,10 @@ jobs:
           python3 curl g++-aarch64-linux-gnu gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
           qttools5-dev zip
 
-    - name: Install Rust (with AArch64 target)
-      uses: actions-rs/toolchain@v1
+    - name: Install Rust (stable, AArch64 target)
+      uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: stable
-        target: aarch64-unknown-linux-gnu 
-        override: true
+        targets: aarch64-unknown-linux-gnu
 
     - name: Make QT build script executable
       run: chmod +x zcutil/build-qt-arm.sh
