@@ -59,7 +59,7 @@ CXXFLAGS="-arch x86_64 -I$PREFIX/include -fwrapv -fno-strict-aliasing \
 -Wno-unknown-warning-option -Werror -Wno-error=attributes -g" \
 ./configure --prefix="${PREFIX}" --disable-bip70 --with-gui=qt5 "$HARDENING_ARG" "$LCOV_ARG" "$DEBUGGING_ARG"
 
-make "$@" NO_GTEST=1 STATIC=1
+make "$@" NO_GTEST=0 STATIC=1
 
 cp src/qt/komodo-qt "$mydir"/pirate-qt-mac
 

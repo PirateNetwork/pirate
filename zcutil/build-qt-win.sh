@@ -17,7 +17,7 @@ cd ../
 CONFIG_SITE=$PWD/depends/x86_64-w64-mingw32/share/config.site \
     CXXFLAGS="-DPTW32_STATIC_LIB -DCURL_STATICLIB -DCURVE_ALT_BN128 -pthread -g0 -O2" \
     ./configure --prefix="${PREFIX}" --host=x86_64-w64-mingw32 --enable-static --disable-shared \
-    --with-gui=qt5 --disable-bip70 --enable-tests=no
+    --with-gui=qt5 --disable-bip70 --enable-tests=yes
 
 sed -i 's/-lboost_system-mt /-lboost_system-mt-s /' configure
 cd src/
