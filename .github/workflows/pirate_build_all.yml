@@ -29,6 +29,10 @@ jobs:
     - name: Fetch Zcash Params
       run: ./zcutil/fetch-params.sh
 
+    - name: Apply Rust lint fixes (librustzcash)
+      working-directory: ./src/rust
+      run: cargo fix --lib -p librustzcash --allow-dirty --allow-staged
+
     - name: Build Pirated Daemon (Linux x86_64)
       run: |
         ./zcutil/build.sh -j$(nproc)
