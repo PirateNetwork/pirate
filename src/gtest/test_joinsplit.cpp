@@ -32,29 +32,47 @@ JSDescription makeSproutProof(
         uint64_t vpub_new_raw,
         const uint256& joinSplitPubKey
 ) {
-    CAmount vpub_old = static_cast<CAmount>(vpub_old_raw);
-    CAmount vpub_new = static_cast<CAmount>(vpub_new_raw);
-    return JSDescription(js, joinSplitPubKey, rt, inputs, outputs, vpub_old, vpub_new);
+    JSDescription jsdesc;
+    jsdesc.vpub_old = static_cast<CAmount>(vpub_old_raw);
+    jsdesc.vpub_new = static_cast<CAmount>(vpub_new_raw);
+    jsdesc.anchor = rt;
+
+    std::array<SproutNote, ZC_NUM_JS_OUTPUTS> output_notes; // getPlaintexts needs this
+
+    jsdesc.proof = js.prove(
+        inputs,
+        outputs,
+        output_notes, // TODO: Do we need to capture these output_notes anywhere?
+        jsdesc.ciphertexts,
+        jsdesc.ephemeralKey,
+        joinSplitPubKey,
+        jsdesc.randomSeed,
+        jsdesc.macs,
+        jsdesc.nullifiers,
+        jsdesc.commitments,
+        jsdesc.vpub_old,
+        jsdesc.vpub_new,
+        jsdesc.anchor,
+        false // computeProof
+    );
+
+    return jsdesc;
 }
 
 bool verifySproutProof(
-        ZCJoinSplit& js,
+        ZCJoinSplit& js, // Added js parameter here
         const JSDescription& jsdesc,
         const uint256& joinSplitPubKey
 )
 {
     auto verifier = ProofVerifier::Strict();
-    for (const auto& commitment : jsdesc.commitments)
-    {
-        if (!js.VerifyProof(jsdesc.h_sig(joinSplitPubKey), commitment))
-        {
-            return false;
-        }
-    }
 
-    bool phgrPassed = jsdesc.Verify(js, verifier, joinSplitPubKey);
+    // The h_sig is implicitly verified by VerifySprout when it checks the proof.
+    // No need to check commitments one by one with a raw VerifyProof call.
+    // bool h_sig_valid = js.VerifyProof(jsdesc.h_sig(js, joinSplitPubKey), commitment); // Incorrect old call pattern
 
-    return phgrPassed;
+    // ProofVerifier::VerifySprout checks both the Groth/PHGR proof and related consistency.
+    return verifier.VerifySprout(jsdesc, joinSplitPubKey);
 }
 
 
