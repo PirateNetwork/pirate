@@ -935,7 +935,7 @@ endif
 if ENABLE_TESTS
 include Makefile.ktest.include
 #include Makefile.test.include # bitcoin tests
-#include Makefile.gtest.include # zcash tests
+include Makefile.gtest.include # zcash tests
 endif
 
 
