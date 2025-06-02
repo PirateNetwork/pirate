@@ -6,7 +6,7 @@ TESTS += zcash-gtest
 bin_PROGRAMS += zcash-gtest
 
 # tool for generating our public parameters
-komodo_gtest_SOURCES = \
+zcash_gtest_SOURCES = \
 	gtest/main.cpp \
 	gtest/utils.cpp \
 	gtest/test_checktransaction.cpp \
@@ -16,11 +16,11 @@ komodo_gtest_SOURCES = \
 # These tests are order-dependent, because they
 # depend on global state (see #1539)
 if ENABLE_WALLET
-komodo_gtest_SOURCES += \
+zcash_gtest_SOURCES += \
 	wallet/gtest/test_wallet_zkeys.cpp
 endif
 
-komodo_gtest_SOURCES += \
+zcash_gtest_SOURCES += \
 	gtest/test_tautology.cpp \
 	gtest/test_deprecation.cpp \
 	gtest/test_httprpc.cpp \
@@ -46,28 +46,28 @@ komodo_gtest_SOURCES += \
 	gtest/test_checkblock.cpp \
 	gtest/test_zip32.cpp
 if ENABLE_WALLET
-komodo_gtest_SOURCES += \
+zcash_gtest_SOURCES += \
 	wallet/gtest/test_wallet.cpp
 endif
 
-komodo_gtest_CPPFLAGS = $(AM_CPPFLAGS) -DBINARY_OUTPUT -DCURVE_ALT_BN128 -DSTATIC $(BITCOIN_INCLUDES)
-komodo_gtest_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+zcash_gtest_CPPFLAGS = $(AM_CPPFLAGS) -DBINARY_OUTPUT -DCURVE_ALT_BN128 -DSTATIC $(BITCOIN_INCLUDES)
+zcash_gtest_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
-komodo_gtest_LDADD = -lgtest -lgmock $(LIBBITCOIN_SERVER) $(LIBBITCOIN_CLI) $(LIBBITCOIN_COMMON) $(LIBBITCOIN_UTIL) $(LIBBITCOIN_CRYPTO) $(LIBBITCOIN_UNIVALUE) $(LIBLEVELDB) $(LIBMEMENV) \
+zcash_gtest_LDADD = -lgtest -lgmock $(LIBBITCOIN_SERVER) $(LIBBITCOIN_CLI) $(LIBBITCOIN_COMMON) $(LIBBITCOIN_UTIL) $(LIBBITCOIN_CRYPTO) $(LIBBITCOIN_UNIVALUE) $(LIBLEVELDB) $(LIBMEMENV) \
   $(BOOST_LIBS) $(BOOST_UNIT_TEST_FRAMEWORK_LIB) $(LIBSECP256K1)
 
 if ENABLE_ZMQ
-komodo_gtest_LDADD += $(LIBBITCOIN_ZMQ) $(ZMQ_LIBS)
+zcash_gtest_LDADD += $(LIBBITCOIN_ZMQ) $(ZMQ_LIBS)
 endif
 
 if ENABLE_WALLET
-komodo_gtest_LDADD += $(LIBBITCOIN_WALLET)
+zcash_gtest_LDADD += $(LIBBITCOIN_WALLET)
 endif
 
-komodo_gtest_LDADD += $(LIBZCASH_CONSENSUS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(LIBZCASH) $(LIBZCASH_LIBS)
+zcash_gtest_LDADD += $(LIBZCASH_CONSENSUS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(LIBZCASH) $(LIBZCASH_LIBS)
 
 
-komodo_gtest_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) -static
+zcash_gtest_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) -static
 
-komodo-gtest-expected-failures: komodo-gtest FORCE
-	./komodo-gtest --gtest_filter=*DISABLED_* --gtest_also_run_disabled_tests
+zcash-gtest-expected-failures: zcash-gtest FORCE
+	./zcash-gtest --gtest_filter=*DISABLED_* --gtest_also_run_disabled_tests
