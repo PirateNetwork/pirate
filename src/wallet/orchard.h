@@ -58,7 +58,7 @@ public:
      * if any checkpoints exist in the tree.
      */
     void InitNoteCommitmentTree(const OrchardMerkleFrontier& frontier) {
-        assert(!GetLastCheckpointHeight() >= 0);
+        assert(!(GetLastCheckpointHeight() >= 0));
         assert(frontier.inner->init_wallet(
             reinterpret_cast<merkle_frontier::OrchardWallet*>(inner.get())));
 
