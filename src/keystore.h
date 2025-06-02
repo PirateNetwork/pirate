@@ -76,7 +76,7 @@ public:
     virtual bool RemoveOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) =0;
     virtual bool HaveWatchOnly(const CScript &dest) const =0;
     virtual bool HaveSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk) const =0;
-    virtual bool HaveOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) =0;
+    virtual bool HaveOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) const =0;
     virtual bool HaveWatchOnly() const =0;
 
     //! Add a spending key to the store.
@@ -296,7 +296,7 @@ public:
     virtual bool RemoveOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk);
     virtual bool HaveWatchOnly(const CScript &dest) const;
     virtual bool HaveSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk) const;
-    virtual bool HaveOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk);
+    virtual bool HaveOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) const;
     virtual bool HaveWatchOnly() const;
 
     bool AddSproutSpendingKey(const libzcash::SproutSpendingKey &sk);

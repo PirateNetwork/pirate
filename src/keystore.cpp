@@ -168,11 +168,10 @@ bool CBasicKeyStore::HaveSaplingWatchOnly(const libzcash::SaplingExtendedFullVie
     return setSaplingWatchOnly.count(extfvk) > 0;
 }
 
-bool CBasicKeyStore::HaveOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
+bool CBasicKeyStore::HaveOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) const
 {
     LOCK(cs_KeyStore);
-    setOrchardWatchOnly.count(extfvk) > 0;
-    return true;
+    return setOrchardWatchOnly.count(extfvk) > 0;
 }
 
 bool CBasicKeyStore::HaveWatchOnly() const
