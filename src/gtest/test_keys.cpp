@@ -21,7 +21,7 @@ TEST(Keys, EncodeAndDecodeSapling)
 
         {
             std::string str = EncodeSpendingKey(sk);
-            SpendingKey spendingkey2 = DecodeSpendingKey(str);
+            libzcash::SpendingKey spendingkey2 = DecodeSpendingKey(str);
             ASSERT_TRUE(IsValidSpendingKey(spendingkey2));
             auto sk2 = std::get_if<libzcash::SaplingExtendedSpendingKey>(&spendingkey2);
             ASSERT_TRUE(sk2 != nullptr);
@@ -30,7 +30,7 @@ TEST(Keys, EncodeAndDecodeSapling)
 
         {
             std::string str = EncodePaymentAddress(addr);
-            PaymentAddress paymentaddr2 = DecodePaymentAddress(str);
+            libzcash::PaymentAddress paymentaddr2 = DecodePaymentAddress(str);
             ASSERT_TRUE(IsValidPaymentAddress(paymentaddr2));
             auto addr2 = std::get_if<libzcash::SaplingPaymentAddress>(&paymentaddr2);
             ASSERT_TRUE(addr2 != nullptr);
@@ -39,12 +39,13 @@ TEST(Keys, EncodeAndDecodeSapling)
 
         {
             std::string vk_string = EncodeViewingKey(vk);
-            ViewingKey viewingkey2 = DecodeViewingKey(vk_string);
+            libzcash::ViewingKey viewingkey2 = DecodeViewingKey(vk_string);
             ASSERT_TRUE(IsValidViewingKey(viewingkey2));
             auto vk2_ptr = std::get_if<libzcash::SaplingExtendedFullViewingKey>(&viewingkey2);
             ASSERT_TRUE(vk2_ptr != nullptr);
-            ASSERT_EQ(vk, *vk2_ptr);
-            ASSERT_EQ(vk.fvk.in_viewing_key(), vk2_ptr->fvk.in_viewing_key());
+            auto vk2 = *vk2_ptr;
+            ASSERT_EQ(vk, vk2);
+            ASSERT_EQ(vk.fvk.in_viewing_key(), vk2.fvk.in_viewing_key());
         }
     }
 }
