@@ -151,8 +151,44 @@ jobs:
         chmod +x zcutil/build-win.sh
         ./zcutil/fetch-params.sh
 
+    - name: Install build dependencies (Windows)
+      shell: msys2 {0}
+      run: |
+        pacman -S --noconfirm --needed \
+          mingw-w64-x86_64-toolchain \
+          mingw-w64-x86_64-cmake \
+          mingw-w64-x86_64-boost \
+          mingw-w64-x86_64-openssl \
+          mingw-w64-x86_64-libevent \
+          mingw-w64-x86_64-zeromq \
+          mingw-w64-x86_64-miniupnpc \
+          mingw-w64-x86_64-protobuf \
+          mingw-w64-x86_64-qrencode \
+          mingw-w64-x86_64-libsodium \
+          curl \
+          unzip \
+          zip \
+          patch
+
+    - name: Debug Make in MSYS2 (Windows)
+      shell: msys2 {0}
+      run: |
+        echo "--- Debugging make command ---"
+        cd depends
+        echo "Current directory: $(pwd)"
+        echo "Listing directory contents:"
+        ls -la
+        echo "Output of 'type make':"
+        type make
+        echo "Attempting to run 'make --version':"
+        make --version
+        echo "Attempting to run 'make -n HOST=x86_64-w64-mingw32 V=1' (dry run):"
+        make -n HOST=x86_64-w64-mingw32 V=1
+        echo "--- End Debugging make command ---"
+        cd ..
+
     - name: Build Pirated Daemon (Windows)
-      shell: msys2 {0} 
+      shell: msys2 {0}
       run: |
         ./zcutil/build-win.sh -j$(nproc)
 
