@@ -25,13 +25,15 @@ extern ZCJoinSplit* params;
 // and store the result in a JSDescription object.
 JSDescription makeSproutProof(
         ZCJoinSplit& js,
-        const std::array<JSInput, 2>& inputs,
-        const std::array<JSOutput, 2>& outputs,
-        const uint256& joinSplitPubKey,
-        uint64_t vpub_old,
-        uint64_t vpub_new,
-        const uint256& rt
-){
+        const std::array<libzcash::JSInput, ZC_NUM_JS_INPUTS>& inputs,
+        const std::array<libzcash::JSOutput, ZC_NUM_JS_OUTPUTS>& outputs,
+        const uint256& rt,
+        uint64_t vpub_old_raw,
+        uint64_t vpub_new_raw,
+        const uint256& joinSplitPubKey
+) {
+    CAmount vpub_old = static_cast<CAmount>(vpub_old_raw);
+    CAmount vpub_new = static_cast<CAmount>(vpub_new_raw);
     return JSDescription(js, joinSplitPubKey, rt, inputs, outputs, vpub_old, vpub_new);
 }
 
@@ -42,9 +44,17 @@ bool verifySproutProof(
 )
 {
     auto verifier = ProofVerifier::Strict();
-    bool phgrPassed = jsdescs[0].Verify(js, verifier, joinSplitPubKey);
-    bool grothPassed = jsdescs[1].Verify(js, verifier, joinSplitPubKey);
-    return phgrPassed && grothPassed;
+    for (const auto& commitment : jsdesc.commitments)
+    {
+        if (!js.VerifyProof(jsdesc.h_sig(joinSplitPubKey), commitment))
+        {
+            return false;
+        }
+    }
+
+    bool phgrPassed = jsdesc.Verify(js, verifier, joinSplitPubKey);
+
+    return phgrPassed;
 }
 
 
@@ -85,10 +95,10 @@ void test_full_api(ZCJoinSplit* js)
             *js,
             inputs,
             outputs,
-            joinSplitPubKey,
+            rt,
             vpub_old,
             vpub_new,
-            rt
+            joinSplitPubKey
         );
     }
 
@@ -147,10 +157,10 @@ void test_full_api(ZCJoinSplit* js)
                 *js,
                 inputs,
                 outputs,
-                joinSplitPubKey2,
+                rt,
                 vpub_old,
                 vpub_new,
-                rt
+                joinSplitPubKey2
             );
 
         }
