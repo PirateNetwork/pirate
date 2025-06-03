@@ -65,7 +65,7 @@ TEST(HTTPRPC, FailsWithBadAuth)
         .WillRepeatedly(Return(std::make_pair(true, "Basic spam:eggs")));
     // Construct CService correctly for the GetPeer mock
     CService peerService;
-    LookupNumeric("127.0.0.1", peerService, 1337); // Default port, can be anything
+    peerService = LookupNumeric("127.0.0.1", 1337); // Default port, can be anything
     EXPECT_CALL(req, GetPeer())
         .WillRepeatedly(Return(peerService));
     EXPECT_CALL(req, WriteHeader("WWW-Authenticate", "Basic realm=\"jsonrpc\""))
