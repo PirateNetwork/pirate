@@ -7,8 +7,8 @@ convert_json_to_header() {
     local var_name=$(basename "$input_file" .json)
     
     echo "// Auto-generated file from $input_file" > "$output_file"
-    echo "#ifndef TEST_DATA_${var_name^^}_H" >> "$output_file"
-    echo "#define TEST_DATA_${var_name^^}_H" >> "$output_file"
+    echo "#ifndef TEST_DATA_$(echo "$var_name" | tr '[:lower:]' '[:upper:]')_H" >> "$output_file"
+    echo "#define TEST_DATA_$(echo "$var_name" | tr '[:lower:]' '[:upper:]')_H" >> "$output_file"
     echo "" >> "$output_file"
     echo "namespace json_tests {" >> "$output_file"
     echo "static const char ${var_name}[] = {" >> "$output_file"
@@ -19,7 +19,7 @@ convert_json_to_header() {
     echo "};" >> "$output_file"
     echo "} // namespace json_tests" >> "$output_file"
     echo "" >> "$output_file"
-    echo "#endif // TEST_DATA_${var_name^^}_H" >> "$output_file"
+    echo "#endif // TEST_DATA_$(echo "$var_name" | tr '[:lower:]' '[:upper:]')_H" >> "$output_file"
 }
 
 # Convert merkle_roots.json
