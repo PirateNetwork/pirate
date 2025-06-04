@@ -40,6 +40,8 @@ jobs:
         echo "--- Content of depends/funcs.mk (fetch_file_inner) on Linux x86_64 runner ---"
         if [ -f depends/funcs.mk ]; then
           awk '/define fetch_file_inner/,/endef/' depends/funcs.mk
+          echo "--- Content of depends/funcs.mk (configure block) on Linux x86_64 runner ---"
+          awk '/^\$\(\$(\1)_configured\):/{p=1} p; /^\$\(AT\)touch \$\$@/{p=0}' depends/funcs.mk
         else
           echo "depends/funcs.mk not found."
         fi
@@ -134,6 +136,8 @@ jobs:
         echo "--- Content of depends/funcs.mk (fetch_file_inner) on macOS runner ---"
         if [ -f depends/funcs.mk ]; then
           awk '/define fetch_file_inner/,/endef/' depends/funcs.mk
+          echo "--- Content of depends/funcs.mk (configure block) on macOS runner ---"
+          awk '/^\$\(\$(\1)_configured\):/{p=1} p; /^\$\(AT\)touch \$\$@/{p=0}' depends/funcs.mk
         else
           echo "depends/funcs.mk not found."
         fi
@@ -223,13 +227,13 @@ jobs:
         else
           echo "depends/funcs.mk not found for od -c."
         fi
-        echo "--- Relevant content of depends/funcs.mk (configure step) ---"
+        echo "--- Content of depends/funcs.mk (fetch_file_inner) on Windows runner ---"
         if [ -f depends/funcs.mk ]; then
-          cat depends/funcs.mk | grep -A 10 -B 10 "define int_add_cmds" 
-          echo "--- Line ~290 from funcs.mk (make error reference) ---"
-          awk 'NR>=280 && NR<=300' depends/funcs.mk
+          awk '/define fetch_file_inner/,/endef/' depends/funcs.mk
+          echo "--- Content of depends/funcs.mk (configure block) on Windows runner ---"
+          awk '/^\$\(\$(\1)_configured\):/{p=1} p; /^\$\(AT\)touch \$\$@/{p=0}' depends/funcs.mk
         else
-          echo "depends/funcs.mk not found for cat/awk."
+          echo "depends/funcs.mk not found for awk."
         fi
         echo "-----------------------------------------------------------------"
 
@@ -283,6 +287,8 @@ jobs:
         type make
         echo "Attempting to run 'make --version':"
         make --version
+        echo "Value of build_DOWNLOAD variable:"
+        make -p | grep -E '^build_DOWNLOAD\s*=' 
         echo "Attempting to run 'make -n HOST=x86_64-w64-mingw32 V=1' (dry run):"
         make -n HOST=x86_64-w64-mingw32 V=1
         echo "--- End Debugging make command ---"
@@ -363,6 +369,8 @@ jobs:
         echo "--- Content of depends/funcs.mk (fetch_file_inner) on Linux AArch64 runner ---"
         if [ -f depends/funcs.mk ]; then
           awk '/define fetch_file_inner/,/endef/' depends/funcs.mk
+          echo "--- Content of depends/funcs.mk (configure block) on Linux AArch64 runner ---"
+          awk '/^\$\(\$(\1)_configured\):/{p=1} p; /^\$\(AT\)touch \$\$@/{p=0}' depends/funcs.mk
         else
           echo "depends/funcs.mk not found."
         fi
