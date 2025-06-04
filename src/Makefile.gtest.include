@@ -2,6 +2,19 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
+# Stamp file for generated JSON headers
+JSON_HEADERS_STAMP = $(builddir)/gtest/json_headers.stamp
+
+# Rule to generate JSON headers
+$(JSON_HEADERS_STAMP): $(srcdir)/test/data/generate_json_headers.sh $(wildcard $(srcdir)/test/data/*.json)
+	@echo "Generating JSON headers for gtest..."
+	@(cd $(srcdir)/test/data && $(SHELL) ./generate_json_headers.sh)
+	@$(MKDIR_P) $(@D)
+	@touch $@
+
+# Ensure zcash-gtest depends on the generated headers
+zcash-gtest: $(JSON_HEADERS_STAMP)
+
 TESTS += zcash-gtest
 bin_PROGRAMS += zcash-gtest
 
@@ -51,7 +64,8 @@ zcash_gtest_SOURCES += \
 endif
 
 zcash_gtest_CPPFLAGS = $(AM_CPPFLAGS) -DBINARY_OUTPUT -DCURVE_ALT_BN128 -DSTATIC $(BITCOIN_INCLUDES)
-zcash_gtest_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+# Attempt to enable C++17 for gtest
+zcash_gtest_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS) -std=c++17
 
 zcash_gtest_LDADD = -lgtest -lgmock $(LIBBITCOIN_SERVER) $(LIBBITCOIN_CLI) $(LIBBITCOIN_COMMON) $(LIBBITCOIN_UTIL) $(LIBBITCOIN_CRYPTO) $(LIBBITCOIN_UNIVALUE) $(LIBLEVELDB) $(LIBMEMENV) \
   $(BOOST_LIBS) $(BOOST_UNIT_TEST_FRAMEWORK_LIB) $(LIBSECP256K1)
