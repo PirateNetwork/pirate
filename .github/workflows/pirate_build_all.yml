@@ -40,6 +40,18 @@ jobs:
     - name: Run C++ tests (Linux x86_64)
       run: make check
 
+    - name: Display test-suite.log on failure (Linux x86_64)
+      if: failure()
+      run: |
+        echo "Attempting to display src/test-suite.log..."
+        if [ -f src/test-suite.log ]; then
+          cat src/test-suite.log
+        else
+          echo "src/test-suite.log not found."
+          echo "Listing src directory:"
+          ls -la src
+        fi
+
     - name: Run Python utility tests (Linux x86_64)
       env:
         PYTHONPATH: ./src/test 
@@ -95,6 +107,18 @@ jobs:
 
     - name: Run C++ tests (macOS)
       run: make check
+
+    - name: Display config.log on failure (macOS)
+      if: failure()
+      run: |
+        echo "Attempting to display config.log..."
+        if [ -f config.log ]; then
+          cat config.log
+        else
+          echo "config.log not found."
+          echo "Listing current directory:"
+          ls -la
+        fi
 
     - name: Run Python utility tests (macOS)
       env:
@@ -251,6 +275,10 @@ jobs:
       run: chmod +x zcutil/build-arm.sh
 
     - name: Build Pirated Daemon (AArch64 Cross-Compile)
+      env:
+        CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_AR: aarch64-linux-gnu-ar
+        RUSTFLAGS: --cfg=rust_secp_no_symbol_renaming -L native=/home/runner/work/pirate/pirate/src/secp256k1/.libs
       run: |
         ./zcutil/build-arm.sh -j$(nproc)
         
