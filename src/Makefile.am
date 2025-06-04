@@ -142,10 +142,9 @@ $(CARGO_CONFIGURED):
 	@echo "INFO: Configuring Rust for OFFLINE build (modifying .cargo/config)."
 	$(AM_V_at)rm -f $(top_srcdir)/.cargo/.configured-for-online
 	$(AM_V_at)touch $(top_srcdir)/.cargo/config # Ensure .cargo/config exists
-	@echo "Appending vendored sources directory to .cargo/config: $(RUST_VENDORED_SOURCES)"
 	$(AM_V_at)echo "" >>$(top_srcdir)/.cargo/config # Add a newline for safety before appending
 	$(AM_V_at)echo "# Added by Makefile.am for vendored offline build:" >>$(top_srcdir)/.cargo/config
-	$(AM_V_at)echo "directory = \\"$(RUST_VENDORED_SOURCES)\\"" >>$(top_srcdir)/.cargo/config
+	$(AM_V_at)echo 'directory = "$(RUST_VENDORED_SOURCES)"' >>$(top_srcdir)/.cargo/config
 	$(AM_V_at)touch $@
 endif
 
