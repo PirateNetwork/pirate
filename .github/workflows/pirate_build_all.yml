@@ -156,6 +156,36 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    - name: Ensure LF line endings for Makefiles and scripts (Windows)
+      shell: bash
+      run: |
+        echo "Attempting to convert .mk files to LF..."
+        find . -type f -name '*.mk' -exec dos2unix {} \\;
+        echo "Attempting to convert Makefiles to LF..."
+        find . -type f -name 'Makefile' -exec dos2unix {} \\;
+        echo "Attempting to convert .sh files to LF..."
+        find . -type f -name '*.sh' -exec dos2unix {} \\;
+        echo "Conversion attempt finished."
+
+    - name: Display critical file line endings and content (Windows)
+      shell: bash
+      run: |
+        echo "--- Verifying line endings for depends/funcs.mk (using od -c) ---"
+        if [ -f depends/funcs.mk ]; then
+          od -c depends/funcs.mk | head -n 30
+        else
+          echo "depends/funcs.mk not found for od -c."
+        fi
+        echo "--- Relevant content of depends/funcs.mk (configure step) ---"
+        if [ -f depends/funcs.mk ]; then
+          cat depends/funcs.mk | grep -A 10 -B 10 "define int_add_cmds" 
+          echo "--- Line ~290 from funcs.mk (make error reference) ---"
+          awk 'NR>=280 && NR<=300' depends/funcs.mk
+        else
+          echo "depends/funcs.mk not found for cat/awk."
+        fi
+        echo "-----------------------------------------------------------------"
+
     - name: Set up MSYS2
       uses: msys2/setup-msys2@v2
       with:
