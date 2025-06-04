@@ -9,8 +9,6 @@ $(package)_config_opts=
 endef
 
 define $(package)_config_cmds
-  pwd && \
-  ls -la && \
   $($(package)_autoconf)
 endef
 
