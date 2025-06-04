@@ -1,1 +1,9 @@
+# Enforce LF line endings for consistency across platforms
+* text=auto eol=lf
+
+# Specific rules for file types
+*.mk text eol=lf
+Makefile text eol=lf
+*.sh text eol=lf
+
 src/clientversion.cpp export-subst
