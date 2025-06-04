@@ -22,7 +22,7 @@ endef
 define fetch_file_inner
     ( mkdir -p $$($(1)_download_dir) && echo Fetching $(3) from $(2) && \
     $(build_DOWNLOAD) "$$($(1)_download_dir)/$(4).temp" "$(2)/$(3)" && \
-    echo "$(5)  $$($(1)_download_dir)/$(4).temp" > $$($(1)_download_dir)/.$(4).hash && \
+    echo "$(5)  $$($(1)_download_dir)/$(4).hash" > $$($(1)_download_dir)/.$(4).hash && \
     $(build_SHA256SUM) -c $$($(1)_download_dir)/.$(4).hash && \
     mv $$($(1)_download_dir)/$(4).temp $$($(1)_source_dir)/$(4) && \
     rm -rf $$($(1)_download_dir) )
@@ -218,13 +218,14 @@ $($(1)_configured): | $($(1)_preprocessed)
 	$(AT)rm -rf $(host_prefix); mkdir -p $(host_prefix)/lib; cd $(host_prefix); $(foreach package,$($(1)_all_dependencies), tar --no-same-owner -xf $($(package)_cached); )
 	$(AT)mkdir -p $$(@D)
 	$(AT)+ (
-	 echo "DEBUG: Current directory before attempting cd to $$(@D):" && pwd && 
-	 cd $$(@D) && 
-	 echo "DEBUG: In directory before configure:" && 
-	 pwd && 
-	 echo "DEBUG: Contents of directory before configure:" && 
-	 ls -la && 
-	 $($(1)_config_env) $(call $(1)_config_cmds, $(1))
+	 echo "DEBUG: Current directory before attempting cd to $$(@D):"; \
+	 pwd; \
+	 cd $$(@D); \
+	 echo "DEBUG: In directory after cd to $$(@D):"; \
+	 pwd; \
+	 echo "DEBUG: Contents of directory before configure:"; \
+	 ls -la; \
+	 $($(1)_config_env) $($(1)_config_cmds)
 	)
 	$(AT)touch $$@
 $($(1)_built): | $($(1)_configured)
