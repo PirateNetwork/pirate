@@ -126,21 +126,26 @@ cargo_verbose_ = $(cargo_verbose_@AM_DEFAULT_V@)
 cargo_verbose_1 = --verbose
 
 if ENABLE_ONLINE_RUST
-# Ensure that .cargo/config does not exist
+# Ensure that .cargo/config does not exist for online builds
 CARGO_CONFIGURED = $(top_srcdir)/.cargo/.configured-for-online
 $(CARGO_CONFIGURED):
+	@echo "INFO: Configuring Rust for ONLINE build (removing .cargo/config)."
 	$(AM_V_at)rm -f $(top_srcdir)/.cargo/.configured-for-offline $(top_srcdir)/.cargo/config
 	$(AM_V_at)touch $@
 
 else
-# Enable dependency vendoring
+# Enable dependency vendoring: ensure .cargo/config exists and append vendored sources directory
 RUST_BUILD_OPTS += --offline
 
 CARGO_CONFIGURED = $(top_srcdir)/.cargo/.configured-for-offline
-$(CARGO_CONFIGURED): $(top_srcdir)/.cargo/config.offline
+$(CARGO_CONFIGURED):
+	@echo "INFO: Configuring Rust for OFFLINE build (modifying .cargo/config)."
 	$(AM_V_at)rm -f $(top_srcdir)/.cargo/.configured-for-online
-	$(AM_V_at)cp $< $(top_srcdir)/.cargo/config
-	$(AM_V_at)echo "directory = \"$(RUST_VENDORED_SOURCES)\"" >>$(top_srcdir)/.cargo/config
+	$(AM_V_at)touch $(top_srcdir)/.cargo/config # Ensure .cargo/config exists
+	@echo "Appending vendored sources directory to .cargo/config: $(RUST_VENDORED_SOURCES)"
+	$(AM_V_at)echo "" >>$(top_srcdir)/.cargo/config # Add a newline for safety before appending
+	$(AM_V_at)echo "# Added by Makefile.am for vendored offline build:" >>$(top_srcdir)/.cargo/config
+	$(AM_V_at)echo "directory = \\"$(RUST_VENDORED_SOURCES)\\"" >>$(top_srcdir)/.cargo/config
 	$(AM_V_at)touch $@
 endif
 
