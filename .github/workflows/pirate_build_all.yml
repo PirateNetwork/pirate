@@ -10,6 +10,9 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    - name: Show commit hash (Linux x86_64)
+      run: git rev-parse HEAD
+
     - name: Install dependencies (Linux x86_64)
       run: |
         sudo apt-get update
@@ -18,7 +21,29 @@ jobs:
           libevent-dev bsdmainutils python3 libboost-system-dev \
           libboost-filesystem-dev libboost-chrono-dev libboost-program-options-dev \
           libboost-test-dev libboost-thread-dev libcurl4-openssl-dev \
-          python3-zmq libsodium-dev bison curl zip
+          python3-zmq libsodium-dev bison curl zip dos2unix
+
+    - name: Ensure LF line endings (Linux x86_64)
+      shell: bash
+      run: |
+        echo "Attempting to convert .mk files to LF..."
+        find . -type f -name '*.mk' -exec dos2unix {} \\;
+        echo "Attempting to convert Makefiles to LF..."
+        find . -type f -name 'Makefile' -exec dos2unix {} \\;
+        echo "Attempting to convert .sh files to LF..."
+        find . -type f -name '*.sh' -exec dos2unix {} \\;
+        echo "Conversion attempt finished."
+
+    - name: Display critical file content (Linux x86_64)
+      shell: bash
+      run: |
+        echo "--- Content of depends/funcs.mk (fetch_file_inner) on Linux x86_64 runner ---"
+        if [ -f depends/funcs.mk ]; then
+          awk '/define fetch_file_inner/,/endef/' depends/funcs.mk
+        else
+          echo "depends/funcs.mk not found."
+        fi
+        echo "--------------------------------------------------------------------"
 
     - name: Install Rust (stable)
       uses: dtolnay/rust-toolchain@stable
@@ -90,7 +115,29 @@ jobs:
 
     - name: Install dependencies (macOS)
       run: |
-        brew install autoconf automake libtool pkg-config boost zeromq libsodium coreutils python3 curl zip
+        brew install autoconf automake libtool pkg-config boost zeromq libsodium coreutils python3 curl zip dos2unix
+
+    - name: Ensure LF line endings for Makefiles and scripts (macOS)
+      shell: bash
+      run: |
+        echo "Attempting to convert .mk files to LF..."
+        find . -type f -name '*.mk' -exec dos2unix {} \\;
+        echo "Attempting to convert Makefiles to LF..."
+        find . -type f -name 'Makefile' -exec dos2unix {} \\;
+        echo "Attempting to convert .sh files to LF..."
+        find . -type f -name '*.sh' -exec dos2unix {} \\;
+        echo "Conversion attempt finished."
+
+    - name: Display critical file content (macOS)
+      shell: bash
+      run: |
+        echo "--- Content of depends/funcs.mk (fetch_file_inner) on macOS runner ---"
+        if [ -f depends/funcs.mk ]; then
+          awk '/define fetch_file_inner/,/endef/' depends/funcs.mk
+        else
+          echo "depends/funcs.mk not found."
+        fi
+        echo "--------------------------------------------------------------------"
 
     - name: Install Rust (stable)
       uses: dtolnay/rust-toolchain@stable
@@ -289,12 +336,37 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    - name: Show commit hash (Linux AArch64)
+      run: git rev-parse HEAD
+
     - name: Install dependencies (Ubuntu for AArch64 cross-compile)
       run: |
         sudo apt-get update
         sudo apt-get install -y \
           build-essential pkg-config autoconf libtool automake bsdmainutils \
-          python3 curl g++-aarch64-linux-gnu gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu zip
+          python3 curl g++-aarch64-linux-gnu gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu zip dos2unix
+
+    - name: Ensure LF line endings (Linux AArch64)
+      shell: bash
+      run: |
+        echo "Attempting to convert .mk files to LF..."
+        find . -type f -name '*.mk' -exec dos2unix {} \\;
+        echo "Attempting to convert Makefiles to LF..."
+        find . -type f -name 'Makefile' -exec dos2unix {} \\;
+        echo "Attempting to convert .sh files to LF..."
+        find . -type f -name '*.sh' -exec dos2unix {} \\;
+        echo "Conversion attempt finished."
+
+    - name: Display critical file content (Linux AArch64)
+      shell: bash
+      run: |
+        echo "--- Content of depends/funcs.mk (fetch_file_inner) on Linux AArch64 runner ---"
+        if [ -f depends/funcs.mk ]; then
+          awk '/define fetch_file_inner/,/endef/' depends/funcs.mk
+        else
+          echo "depends/funcs.mk not found."
+        fi
+        echo "--------------------------------------------------------------------"
 
     - name: Install Rust (stable, AArch64 target)
       uses: dtolnay/rust-toolchain@stable
