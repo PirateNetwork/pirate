@@ -27,11 +27,11 @@ jobs:
       shell: bash
       run: |
         echo "Attempting to convert .mk files to LF..."
-        find . -type f -name '*.mk' -exec dos2unix {} \\;
+        find . -type f -name '*.mk' -exec dos2unix {} \;
         echo "Attempting to convert Makefiles to LF..."
-        find . -type f -name 'Makefile' -exec dos2unix {} \\;
+        find . -type f -name 'Makefile' -exec dos2unix {} \;
         echo "Attempting to convert .sh files to LF..."
-        find . -type f -name '*.sh' -exec dos2unix {} \\;
+        find . -type f -name '*.sh' -exec dos2unix {} \;
         echo "Conversion attempt finished."
 
     - name: Display critical file content (Linux x86_64)
@@ -121,11 +121,11 @@ jobs:
       shell: bash
       run: |
         echo "Attempting to convert .mk files to LF..."
-        find . -type f -name '*.mk' -exec dos2unix {} \\;
+        find . -type f -name '*.mk' -exec dos2unix {} \;
         echo "Attempting to convert Makefiles to LF..."
-        find . -type f -name 'Makefile' -exec dos2unix {} \\;
+        find . -type f -name 'Makefile' -exec dos2unix {} \;
         echo "Attempting to convert .sh files to LF..."
-        find . -type f -name '*.sh' -exec dos2unix {} \\;
+        find . -type f -name '*.sh' -exec dos2unix {} \;
         echo "Conversion attempt finished."
 
     - name: Display critical file content (macOS)
@@ -207,11 +207,11 @@ jobs:
       shell: bash
       run: |
         echo "Attempting to convert .mk files to LF..."
-        find . -type f -name '*.mk' -exec dos2unix {} \\;
+        find . -type f -name '*.mk' -exec dos2unix {} \;
         echo "Attempting to convert Makefiles to LF..."
-        find . -type f -name 'Makefile' -exec dos2unix {} \\;
+        find . -type f -name 'Makefile' -exec dos2unix {} \;
         echo "Attempting to convert .sh files to LF..."
-        find . -type f -name '*.sh' -exec dos2unix {} \\;
+        find . -type f -name '*.sh' -exec dos2unix {} \;
         echo "Conversion attempt finished."
 
     - name: Display critical file line endings and content (Windows)
@@ -350,11 +350,11 @@ jobs:
       shell: bash
       run: |
         echo "Attempting to convert .mk files to LF..."
-        find . -type f -name '*.mk' -exec dos2unix {} \\;
+        find . -type f -name '*.mk' -exec dos2unix {} \;
         echo "Attempting to convert Makefiles to LF..."
-        find . -type f -name 'Makefile' -exec dos2unix {} \\;
+        find . -type f -name 'Makefile' -exec dos2unix {} \;
         echo "Attempting to convert .sh files to LF..."
-        find . -type f -name '*.sh' -exec dos2unix {} \\;
+        find . -type f -name '*.sh' -exec dos2unix {} \;
         echo "Conversion attempt finished."
 
     - name: Display critical file content (Linux AArch64)
