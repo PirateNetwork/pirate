@@ -129,8 +129,8 @@ if ENABLE_ONLINE_RUST
 # Ensure that .cargo/config does not exist for online builds
 CARGO_CONFIGURED = $(top_srcdir)/.cargo/.configured-for-online
 $(CARGO_CONFIGURED):
-	@echo "INFO: Configuring Rust for ONLINE build (removing .cargo/config)."
-	$(AM_V_at)rm -f $(top_srcdir)/.cargo/.configured-for-offline $(top_srcdir)/.cargo/config
+	@echo "INFO: Configuring Rust for ONLINE build."
+	$(AM_V_at)rm -f $(top_srcdir)/.cargo/.configured-for-offline
 	$(AM_V_at)touch $@
 
 else
