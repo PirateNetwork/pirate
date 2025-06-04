@@ -58,4 +58,4 @@ CXXFLAGS="-arch x86_64 -I$PREFIX/include -fwrapv -fno-strict-aliasing \
 -Wno-unknown-warning-option -Werror -Wno-error=attributes -g" \
 ./configure --prefix="${PREFIX}" --with-gui=no "$HARDENING_ARG" "$LCOV_ARG" "$DEBUGGING_ARG"
 
-make "$@" NO_GTEST=0 STATIC=1
+make "$@" V=1 NO_GTEST=0 STATIC=1
