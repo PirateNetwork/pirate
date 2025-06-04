@@ -8,14 +8,7 @@ define $(package)_set_vars
 $(package)_config_opts=
 endef
 
-# Adding verbose cd and ls to debug path issues on Windows for native_ccache
 define $(package)_config_cmds
-  echo "Current directory before cd:" && pwd && \
-  echo "Listing current directory before cd:" && ls -la && \
-  echo "Attempting to cd to $($(package)_build_dir) and configure" && \
-  cd "$($(package)_build_dir)" && \
-  echo "Current directory after cd:" && pwd && \
-  echo "Listing current directory after cd:" && ls -la && \
   $($(package)_autoconf)
 endef
 
