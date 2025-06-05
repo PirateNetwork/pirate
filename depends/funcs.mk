@@ -217,15 +217,12 @@ $($(1)_configured): | $($(1)_preprocessed)
 	$(AT)echo Configuring $(1)...
 	$(AT)rm -rf $(host_prefix); mkdir -p $(host_prefix)/lib; cd $(host_prefix); $(foreach package,$($(1)_all_dependencies), tar --no-same-owner -xf $($(package)_cached); )
 	$(AT)mkdir -p $$(@D)
-	$(AT)+ (
-	 echo "DEBUG: Current directory before attempting cd to $$(@D):" && pwd && 
-	 cd $$(@D) && 
-	 echo "DEBUG: In directory before configure:" && 
-	 pwd && 
-	 echo "DEBUG: Contents of directory before configure:" && 
-	 ls -la && 
-	 $($(1)_config_env) $(call $(1)_config_cmds, $(1))
-	)
+	$(AT)+ (cd $$(@D) && \
+	 echo "DEBUG: In directory before configure:" && \
+	 pwd && \
+	 echo "DEBUG: Contents of directory before configure:" && \
+	 ls -la && \
+	 $($(1)_config_env) $(call $(1)_config_cmds, $(1)))
 	$(AT)touch $$@
 $($(1)_built): | $($(1)_configured)
 	$(AT)echo Building $(1)...
