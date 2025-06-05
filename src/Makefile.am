@@ -144,6 +144,9 @@ $(CARGO_CONFIGURED):
 	$(AM_V_at)touch $(top_srcdir)/.cargo/config # Ensure .cargo/config exists
 	$(AM_V_at)echo "" >>$(top_srcdir)/.cargo/config # Add a newline for safety before appending
 	$(AM_V_at)echo "# Added by Makefile.am for vendored offline build:" >>$(top_srcdir)/.cargo/config
+	$(AM_V_at)echo '[source.crates-io]' >>$(top_srcdir)/.cargo/config
+	$(AM_V_at)echo 'replace-with = "vendored-sources"' >>$(top_srcdir)/.cargo/config
+	$(AM_V_at)echo '[source.vendored-sources]' >>$(top_srcdir)/.cargo/config
 	$(AM_V_at)echo 'directory = "$(RUST_VENDORED_SOURCES)"' >>$(top_srcdir)/.cargo/config
 	$(AM_V_at)touch $@
 endif
