@@ -22,7 +22,7 @@ endef
 define fetch_file_inner
     ( mkdir -p $$($(1)_download_dir) && echo Fetching $(3) from $(2) && \
     $(build_DOWNLOAD) "$$($(1)_download_dir)/$(4).temp" "$(2)/$(3)" && \
-    echo "$(5)  $$($(1)_download_dir)/$(4).temp" > $$($(1)_download_dir)/.$(4).hash && \
+    echo "$(5)  $$($(1)_download_dir)/$(4).hash" > $$($(1)_download_dir)/.$(4).hash && \
     $(build_SHA256SUM) -c $$($(1)_download_dir)/.$(4).hash && \
     mv $$($(1)_download_dir)/$(4).temp $$($(1)_source_dir)/$(4) && \
     rm -rf $$($(1)_download_dir) )
