@@ -70,11 +70,25 @@ jobs:
         echo "" >> .cargo/config
         echo "[source.vendored-sources]" >> .cargo/config
         echo "directory = \"vendored-sources\"" >> .cargo/config
+        echo "" >> .cargo/config
+        echo "[source.piratenetwork-bellman]" >> .cargo/config
+        echo "git = \"https://github.com/piratenetwork/librustzcash\"" >> .cargo/config
+        echo "branch = \"master\"" >> .cargo/config
         cat .cargo/config
         
-    - name: Apply Rust lint fixes (librustzcash)
+    - name: Configure bellman dependency and apply Rust lint fixes
       working-directory: ./src/rust
-      run: cargo fix --lib -p librustzcash --allow-dirty --allow-staged
+      run: |
+        # Add bellman dependency to Cargo.toml
+        if [ -f Cargo.toml ]; then
+          echo "Adding bellman dependency to Cargo.toml"
+          if ! grep -q 'bellman' Cargo.toml; then
+            echo 'bellman = { git = "https://github.com/piratenetwork/librustzcash", branch = "master" }' >> Cargo.toml
+          fi
+        fi
+        
+        # Apply Rust lint fixes
+        cargo fix --lib -p librustzcash --allow-dirty --allow-staged
 
     - name: Build Pirated Daemon (Linux x86_64)
       run: |
@@ -345,7 +359,7 @@ jobs:
         # Apply our patch to improve download reliability
         patch -p0 depends/funcs.mk < depends/patches/funcs-win-download-fix.patch || {
           echo "Patch failed, using direct sed replacement"
-          sed -i 's|$(build_DOWNLOAD) "$$($(1)_download_dir)/$(4).temp" "$(2)/$(3)"|curl --connect-timeout ${DOWNLOAD_CONNECT_TIMEOUT:-30} --retry ${CURL_RETRIES:-5} --retry-delay 5 --retry-max-time ${DOWNLOAD_TIMEOUT:-600} -L -o "$$($(1)_download_dir)/$(4).temp" "$(2)/$(3)"|g' depends/funcs.mk
+          sed -i 's|$(build_DOWNLOAD) "$$($(1)_download_dir)/$(4).temp" "$(2)/$(3)"|curl --connect-timeout 30 --retry 5 --retry-delay 5 --retry-max-time 600 -L -o "$$($(1)_download_dir)/$(4).temp" "$(2)/$(3)"|g' depends/funcs.mk
         }
         echo "--- Patching complete ---"
         
@@ -550,6 +564,10 @@ jobs:
         echo "" >> .cargo/config
         echo "[source.vendored-sources]" >> .cargo/config
         echo "directory = \"vendored-sources\"" >> .cargo/config
+        echo "" >> .cargo/config
+        echo "[source.piratenetwork-bellman]" >> .cargo/config
+        echo "git = \"https://github.com/piratenetwork/librustzcash\"" >> .cargo/config
+        echo "branch = \"master\"" >> .cargo/config
         cat .cargo/config
 
     - name: Build Treasure Chest (Linux x86_64)
