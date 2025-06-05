@@ -17,26 +17,26 @@ $(package)_sha256_hash_windows=092e526a777655486c102c8f018845c7c518374b6f394bf66
 # 2. Determine _file_name_to_use and _sha256_hash_to_use based on (stripped) build_os
 _tmp_build_os := $(strip $(build_os))
 ifeq ($(_tmp_build_os),mingw32)
-  _file_name_to_use = $($(package)_file_name_windows)
-  _sha256_hash_to_use = $($(package)_sha256_hash_windows)
+  _file_name_to_use := $($(package)_file_name_windows)
+  _sha256_hash_to_use := $($(package)_sha256_hash_windows)
 else ifeq ($(_tmp_build_os),linux)
   ifeq ($(strip $(build_arch)),aarch64)
-    _file_name_to_use = $($(package)_file_name_aarch64_linux)
-    _sha256_hash_to_use = $($(package)_sha256_hash_aarch64_linux)
+    _file_name_to_use := $($(package)_file_name_aarch64_linux)
+    _sha256_hash_to_use := $($(package)_sha256_hash_aarch64_linux)
   else
-    _file_name_to_use = $($(package)_file_name_linux)
-    _sha256_hash_to_use = $($(package)_sha256_hash_linux)
+    _file_name_to_use := $($(package)_file_name_linux)
+    _sha256_hash_to_use := $($(package)_sha256_hash_linux)
   endif
 else ifeq ($(_tmp_build_os),darwin)
-  _file_name_to_use = $($(package)_file_name_darwin)
-  _sha256_hash_to_use = $($(package)_sha256_hash_darwin)
+  _file_name_to_use := $($(package)_file_name_darwin)
+  _sha256_hash_to_use := $($(package)_sha256_hash_darwin)
 else ifeq ($(_tmp_build_os),freebsd)
-  _file_name_to_use = $($(package)_file_name_freebsd)
-  _sha256_hash_to_use = $($(package)_sha256_hash_freebsd)
+  _file_name_to_use := $($(package)_file_name_freebsd)
+  _sha256_hash_to_use := $($(package)_sha256_hash_freebsd)
 else
   # Fallback, with a warning or error if possible, for now default to linux x86
-  _file_name_to_use = $($(package)_file_name_linux)
-  _sha256_hash_to_use = $($(package)_sha256_hash_linux)
+  _file_name_to_use := $($(package)_file_name_linux)
+  _sha256_hash_to_use := $($(package)_sha256_hash_linux)
 endif
 
 # 3. Assign to the main package variables, stripping results
