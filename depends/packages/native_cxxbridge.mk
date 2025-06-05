@@ -18,7 +18,7 @@ $(package)_dependencies=native_rust
 # $ cp Cargo.lock ../../depends/patches/native_cxxbridge/
 $(package)_patches=Cargo.lock
 $(package)_extra_sources=$(package)-$($(package)_version)-vendored.tar.gz
-
+  
 define $(package)_fetch_cmds
 $(call fetch_file,$(1),$($(1)_download_path),$($(1)_download_file),$($(1)_file_name),$($(1)_sha256_hash)) && \
 $(call vendor_crate_deps,$(1),$($(1)_file_name),$(PATCHES_PATH)/$(1)/Cargo.lock,Cargo.toml,$(1)-$($(1)_version)-vendored.tar.gz)
@@ -38,11 +38,16 @@ define $(package)_preprocess_cmds
   echo "[source.crates-io]" >.cargo/config && \
   echo "replace-with = \"vendored-sources\"" >>.cargo/config && \
   echo "[source.vendored-sources]" >>.cargo/config && \
-  echo "directory = \"$(CRATE_REGISTRY)\"" >>.cargo/config
+  echo "directory = \"$(CRATE_REGISTRY)\"" >>.cargo/config && \
+  echo "" >> .cargo/config && \
+  echo "# Patches bellman and pairing to use the Pirate Network fork" >> .cargo/config && \
+  echo "[patch.crates-io]" >> .cargo/config && \
+  echo "bellman = { git = \"https://github.com/piratenetwork/librustzcash\", branch = \"master\" }" >> .cargo/config && \
+  echo "pairing = { git = \"https://github.com/piratenetwork/librustzcash\", branch = \"master\" }" >> .cargo/config
 endef
 
 define $(package)_build_cmds
-  cargo build --locked --offline --release --package=cxxbridge-cmd --bin=cxxbridge
+  cargo build --offline --release --package=cxxbridge-cmd --bin=cxxbridge
 endef
 
 define $(package)_stage_cmds
