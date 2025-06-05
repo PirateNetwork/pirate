@@ -56,6 +56,11 @@ jobs:
     - name: Fetch Zcash Params
       run: ./zcutil/fetch-params.sh
 
+    - name: Prepare for Rust linting
+      run: |
+        mkdir -p vendored-sources
+        touch vendored-sources/.keep
+        
     - name: Apply Rust lint fixes (librustzcash)
       working-directory: ./src/rust
       run: cargo fix --lib -p librustzcash --allow-dirty --allow-staged
@@ -151,6 +156,11 @@ jobs:
 
     - name: Fetch Zcash Params
       run: ./zcutil/fetch-params.sh
+      
+    - name: Prepare for Rust build
+      run: |
+        mkdir -p vendored-sources
+        touch vendored-sources/.keep
 
     - name: Build Pirated Daemon (macOS)
       run: |
@@ -255,6 +265,12 @@ jobs:
       run: |
         chmod +x zcutil/build-win.sh
         ./zcutil/fetch-params.sh
+        
+    - name: Prepare for Rust build (Windows)
+      shell: msys2 {0}
+      run: |
+        mkdir -p vendored-sources
+        touch vendored-sources/.keep
 
     - name: Install build dependencies (Windows)
       shell: msys2 {0}
@@ -384,6 +400,11 @@ jobs:
     - name: Make build script executable
       run: chmod +x zcutil/build-arm.sh
 
+    - name: Prepare for Rust build
+      run: |
+        mkdir -p vendored-sources
+        touch vendored-sources/.keep
+
     - name: Build Pirated Daemon (AArch64 Cross-Compile)
       env:
         CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
@@ -435,6 +456,11 @@ jobs:
     
     - name: Fetch Zcash Params
       run: ./zcutil/fetch-params.sh
+      
+    - name: Prepare for Rust build
+      run: |
+        mkdir -p vendored-sources
+        touch vendored-sources/.keep
 
     - name: Build Treasure Chest (Linux x86_64)
       run: |
@@ -498,6 +524,11 @@ jobs:
 
     - name: Fetch Zcash Params
       run: ./zcutil/fetch-params.sh
+      
+    - name: Prepare for Rust build
+      run: |
+        mkdir -p vendored-sources
+        touch vendored-sources/.keep
 
     - name: Build Treasure Chest (macOS)
       run: |
@@ -579,6 +610,12 @@ jobs:
       run: |
         chmod +x zcutil/build-qt-win.sh
         ./zcutil/fetch-params.sh
+        
+    - name: Prepare for Rust build
+      shell: msys2 {0}
+      run: |
+        mkdir -p vendored-sources
+        touch vendored-sources/.keep
 
     - name: Build Treasure Chest (Windows)
       shell: msys2 {0} 
@@ -649,6 +686,11 @@ jobs:
 
     - name: Make QT build script executable
       run: chmod +x zcutil/build-qt-arm.sh
+
+    - name: Prepare for Rust build
+      run: |
+        mkdir -p vendored-sources
+        touch vendored-sources/.keep
 
     - name: Build Treasure Chest (AArch64 Cross-Compile)
       run: |
