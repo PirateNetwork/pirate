@@ -9,6 +9,8 @@ $(package)_file_name_freebsd=rust-$($(package)_version)-x86_64-unknown-freebsd.t
 $(package)_sha256_hash_freebsd=2985d98910b4a1dd336bfc7a1ac3b18082ed917cff097b4db6f0d6602016c289
 $(package)_file_name_aarch64_linux=rust-$($(package)_version)-aarch64-unknown-linux-gnu.tar.gz
 $(package)_sha256_hash_aarch64_linux=88af5aa7a40c8f1b40416a1f27de8ffbe09c155d933f69d3e109c0ccee92353b
+$(package)_file_name_windows=rust-$($(package)_version)-x86_64-pc-windows-gnu.tar.gz
+$(package)_sha256_hash_windows=092e526a777655486c102c8f018845c7c518374b6f394bf660767254f97e5724
 
 # Mapping from GCC canonical hosts to Rust targets
 # If a mapping is not present, we assume they are identical, unless $host_os is
@@ -24,6 +26,36 @@ $(package)_rust_std_sha256_hash_x86_64-unknown-freebsd=eed4b3f3358a8887b0f6a62e0
 
 
 $(package)_rust_std_sha256_hash_x86_64-unknown-linux-gnu=5e7738090baf6dc12c3ed62fb02cf51f80af2403f6df85feae0ebf157e2d8d35
+
+# Logic to set generic package file_name, download_file, and sha256_hash
+# based on build_os and build_arch, which are derived from config.guess
+ifeq ($(build_os),mingw32) # Default for Windows (e.g., x86_64-w64-mingw32)
+  _file_name_to_use = $($(package)_file_name_windows)
+  _sha256_hash_to_use = $($(package)_sha256_hash_windows)
+else ifeq ($(build_os),linux)
+  ifeq ($(build_arch),aarch64)
+    _file_name_to_use = $($(package)_file_name_aarch64_linux)
+    _sha256_hash_to_use = $($(package)_sha256_hash_aarch64_linux)
+  else # x86_64 linux (or other non-aarch64 linux)
+    _file_name_to_use = $($(package)_file_name_linux)
+    _sha256_hash_to_use = $($(package)_sha256_hash_linux)
+  endif
+else ifeq ($(build_os),darwin)
+  _file_name_to_use = $($(package)_file_name_darwin)
+  _sha256_hash_to_use = $($(package)_sha256_hash_darwin)
+else ifeq ($(build_os),freebsd)
+  _file_name_to_use = $($(package)_file_name_freebsd)
+  _sha256_hash_to_use = $($(package)_sha256_hash_freebsd)
+else
+  # Fallback to linux x86_64 if build_os is not recognized or not set as expected
+  # This provides a default but might not be correct for all unhandled cases.
+  _file_name_to_use = $($(package)_file_name_linux)
+  _sha256_hash_to_use = $($(package)_sha256_hash_linux)
+endif
+
+$($(package)_file_name) := $(_file_name_to_use)
+$($(package)_download_file) := $(_file_name_to_use) # Assuming download file is same as local for the primary toolchain
+$($(package)_sha256_hash) := $(_sha256_hash_to_use)
 
 define rust_target
 $(if $($(1)_rust_target_$(2)),$($(1)_rust_target_$(2)),$(if $(findstring darwin,$(3)),x86_64-apple-darwin,$(if $(findstring freebsd,$(3)),x86_64-unknown-freebsd,$(2))))
@@ -42,7 +74,7 @@ $(package)_build_subdir=buildos
 $(package)_extra_sources=$($(package)_file_name_$(build_os))
 
 define $(package)_fetch_cmds
-$(call fetch_file,$(package),$($(package)_download_path),$($(package)_download_file),$($(package)_file_name),$($(package)_sha256_hash)) && \
+$(call fetch_file,$(package),$($(package)_download_path),$($(package)_exact_file_name),$($(package)_exact_file_name),$($(package)_exact_sha256_hash)) && \
 $(call fetch_file,$(package),$($(package)_download_path),$($(package)_file_name_$(build_os)),$($(package)_file_name_$(build_os)),$($(package)_sha256_hash_$(build_os)))
 endef
 
