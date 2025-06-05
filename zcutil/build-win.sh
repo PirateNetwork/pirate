@@ -1,5 +1,5 @@
 #!/bin/bash
-HOST=x86_64-w64-mingw32
+HOST=x86_64-w64-mingw64
 CXX=x86_64-w64-mingw32-g++-posix
 CC=x86_64-w64-mingw32-gcc-posix
 PREFIX="$(pwd)/depends/$HOST"
@@ -14,9 +14,9 @@ cd ../
 
 ./autogen.sh
 
-CONFIG_SITE=$PWD/depends/x86_64-w64-mingw32/share/config.site \
-    CXXFLAGS="-DPTW32_STATIC_LIB -DCURL_STATICLIB -DCURVE_ALT_BN128 -pthread -g0 -O2" \
-    ./configure --prefix="${PREFIX}" --host=x86_64-w64-mingw32 --enable-static --disable-shared \
+CONFIG_SITE=$PWD/depends/x86_64-w64-mingw64/share/config.site \
+    CXXFLAGS="-DPTW32_STATIC_LIB -DCURL_STATICLIB -DCURVE_ALT_BN128 -pthread" \
+    ./configure --prefix="${PREFIX}" --host=x86_64-w64-mingw64 --enable-static --disable-shared \
     --with-gui=no --disable-bip70 --enable-tests=yes
 
 sed -i 's/-lboost_system-mt /-lboost_system-mt-s /' configure
