@@ -6,4 +6,4 @@ ar = "aarch64-linux-gnu-ar"
 replace-with = "vendored-sources"
 
 [source.vendored-sources]
-directory = "depends/aarch64-linux-gnu/share/../native/lib/vendored-sources" 
+directory = "vendored-sources" 
