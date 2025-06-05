@@ -1,3 +1,9 @@
 [target.aarch64-unknown-linux-gnu]
 linker = "aarch64-linux-gnu-gcc"
-ar = "aarch64-linux-gnu-ar" 
+ar = "aarch64-linux-gnu-ar"
+
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "depends/aarch64-linux-gnu/share/../native/lib/vendored-sources" 
