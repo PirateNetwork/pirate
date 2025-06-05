@@ -291,6 +291,30 @@ jobs:
           zip \
           patch
 
+    - name: Prepare directories for Windows build
+      shell: msys2 {0}
+      run: |
+        echo "--- Creating necessary directories for Windows build ---"
+        mkdir -p depends/sources/download-stamps
+        mkdir -p depends/work/download/native_ccache-3.7.4
+        mkdir -p depends/work/build
+        mkdir -p depends/SDKs
+        mkdir -p depends/sdk-sources
+        echo "--- Directories created ---"
+        
+    - name: Patch funcs.mk for Windows
+      shell: msys2 {0}
+      run: |
+        echo "--- Patching funcs.mk for Windows ---"
+        # Create a backup of the original file
+        cp depends/funcs.mk depends/funcs.mk.orig
+        # Apply our patch to improve download reliability
+        patch -p0 depends/funcs.mk < depends/patches/funcs-win-download-fix.patch || {
+          echo "Patch failed, using direct sed replacement"
+          sed -i 's|$(build_DOWNLOAD) "$$($(1)_download_dir)/$(4).temp" "$(2)/$(3)"|curl --connect-timeout ${DOWNLOAD_CONNECT_TIMEOUT:-30} --retry ${CURL_RETRIES:-5} --retry-delay 5 --retry-max-time ${DOWNLOAD_TIMEOUT:-600} -L -o "$$($(1)_download_dir)/$(4).temp" "$(2)/$(3)"|g' depends/funcs.mk
+        }
+        echo "--- Patching complete ---"
+        
     - name: Debug Make in MSYS2 (Windows)
       shell: msys2 {0}
       run: |
@@ -313,7 +337,13 @@ jobs:
     - name: Build Pirated Daemon (Windows)
       shell: msys2 {0}
       run: |
-        ./zcutil/build-win.sh -j$(nproc)
+        # Set environment variables to help with downloads
+        export CURL_RETRIES=5
+        export DOWNLOAD_CONNECT_TIMEOUT=30
+        export DOWNLOAD_TIMEOUT=600
+        
+        # Build with more verbose output and fewer jobs to avoid resource issues
+        ./zcutil/build-win.sh -j2 V=1
 
     - name: Run C++ tests (Windows)
       shell: msys2 {0}
