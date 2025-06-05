@@ -496,6 +496,7 @@ jobs:
     - name: Fix Cargo config for Linux AArch64
       run: |
         # Fix the .cargo/config file for Linux AArch64
+        rm -f .cargo/config
         echo "# Clean cargo config for Linux AArch64" > .cargo/config
         echo "[target.aarch64-unknown-linux-gnu]" >> .cargo/config
         echo "linker = \"aarch64-linux-gnu-gcc\"" >> .cargo/config
@@ -506,6 +507,10 @@ jobs:
         echo "" >> .cargo/config
         echo "[source.vendored-sources]" >> .cargo/config
         echo "directory = \"vendored-sources\"" >> .cargo/config
+        echo "" >> .cargo/config
+        echo "[source.piratenetwork-bellman]" >> .cargo/config
+        echo "git = \"https://github.com/piratenetwork/librustzcash\"" >> .cargo/config
+        echo "branch = \"master\"" >> .cargo/config
         cat .cargo/config
 
     - name: Build Pirated Daemon (AArch64 Cross-Compile)
