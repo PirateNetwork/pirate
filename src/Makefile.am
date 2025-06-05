@@ -434,7 +434,6 @@ libbitcoin_server_a_SOURCES = \
   cc/gateways.cpp \
   cc/channels.cpp \
   cc/auction.cpp \
-  cc/betprotocol.cpp \
   chain.cpp \
   checkpoints.cpp \
   fs.cpp \
