@@ -53,9 +53,9 @@ else
   _sha256_hash_to_use = $($(package)_sha256_hash_linux)
 endif
 
-$($(package)_file_name) := $(_file_name_to_use)
-$($(package)_download_file) := $(_file_name_to_use) # Assuming download file is same as local for the primary toolchain
-$($(package)_sha256_hash) := $(_sha256_hash_to_use)
+native_rust_file_name := $(_file_name_to_use)
+native_rust_download_file := $(_file_name_to_use) # Assuming download file is same as local for the primary toolchain
+native_rust_sha256_hash := $(_sha256_hash_to_use)
 
 define rust_target
 $(if $($(1)_rust_target_$(2)),$($(1)_rust_target_$(2)),$(if $(findstring darwin,$(3)),x86_64-apple-darwin,$(if $(findstring freebsd,$(3)),x86_64-unknown-freebsd,$(2))))
