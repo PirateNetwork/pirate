@@ -61,6 +61,17 @@ jobs:
         mkdir -p vendored-sources
         touch vendored-sources/.keep
         
+    - name: Fix Cargo config for Linux x86_64
+      run: |
+        # Fix the .cargo/config file for Linux x86_64
+        echo "# Clean cargo config for Linux x86_64" > .cargo/config
+        echo "[source.crates-io]" >> .cargo/config
+        echo "replace-with = \"vendored-sources\"" >> .cargo/config
+        echo "" >> .cargo/config
+        echo "[source.vendored-sources]" >> .cargo/config
+        echo "directory = \"vendored-sources\"" >> .cargo/config
+        cat .cargo/config
+        
     - name: Apply Rust lint fixes (librustzcash)
       working-directory: ./src/rust
       run: cargo fix --lib -p librustzcash --allow-dirty --allow-staged
@@ -161,6 +172,17 @@ jobs:
       run: |
         mkdir -p vendored-sources
         touch vendored-sources/.keep
+
+    - name: Fix Cargo config for macOS
+      run: |
+        # Fix the .cargo/config file for macOS
+        echo "# Clean cargo config for macOS" > .cargo/config
+        echo "[source.crates-io]" >> .cargo/config
+        echo "replace-with = \"vendored-sources\"" >> .cargo/config
+        echo "" >> .cargo/config
+        echo "[source.vendored-sources]" >> .cargo/config
+        echo "directory = \"vendored-sources\"" >> .cargo/config
+        cat .cargo/config
 
     - name: Build Pirated Daemon (macOS)
       run: |
@@ -271,6 +293,18 @@ jobs:
       run: |
         mkdir -p vendored-sources
         touch vendored-sources/.keep
+        
+    - name: Fix Cargo config for Windows
+      shell: msys2 {0}
+      run: |
+        # Fix the .cargo/config file for Windows
+        echo "# Clean cargo config for Windows" > .cargo/config
+        echo "[source.crates-io]" >> .cargo/config
+        echo "replace-with = \"vendored-sources\"" >> .cargo/config
+        echo "" >> .cargo/config
+        echo "[source.vendored-sources]" >> .cargo/config
+        echo "directory = \"vendored-sources\"" >> .cargo/config
+        cat .cargo/config
 
     - name: Install build dependencies (Windows)
       shell: msys2 {0}
@@ -435,6 +469,21 @@ jobs:
         mkdir -p vendored-sources
         touch vendored-sources/.keep
 
+    - name: Fix Cargo config for Linux AArch64
+      run: |
+        # Fix the .cargo/config file for Linux AArch64
+        echo "# Clean cargo config for Linux AArch64" > .cargo/config
+        echo "[target.aarch64-unknown-linux-gnu]" >> .cargo/config
+        echo "linker = \"aarch64-linux-gnu-gcc\"" >> .cargo/config
+        echo "ar = \"aarch64-linux-gnu-ar\"" >> .cargo/config
+        echo "" >> .cargo/config
+        echo "[source.crates-io]" >> .cargo/config
+        echo "replace-with = \"vendored-sources\"" >> .cargo/config
+        echo "" >> .cargo/config
+        echo "[source.vendored-sources]" >> .cargo/config
+        echo "directory = \"vendored-sources\"" >> .cargo/config
+        cat .cargo/config
+
     - name: Build Pirated Daemon (AArch64 Cross-Compile)
       env:
         CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
@@ -491,6 +540,17 @@ jobs:
       run: |
         mkdir -p vendored-sources
         touch vendored-sources/.keep
+
+    - name: Fix Cargo config for Linux x86_64 QT
+      run: |
+        # Fix the .cargo/config file for Linux x86_64
+        echo "# Clean cargo config for Linux x86_64 QT" > .cargo/config
+        echo "[source.crates-io]" >> .cargo/config
+        echo "replace-with = \"vendored-sources\"" >> .cargo/config
+        echo "" >> .cargo/config
+        echo "[source.vendored-sources]" >> .cargo/config
+        echo "directory = \"vendored-sources\"" >> .cargo/config
+        cat .cargo/config
 
     - name: Build Treasure Chest (Linux x86_64)
       run: |
@@ -559,6 +619,17 @@ jobs:
       run: |
         mkdir -p vendored-sources
         touch vendored-sources/.keep
+
+    - name: Fix Cargo config for macOS
+      run: |
+        # Fix the .cargo/config file for macOS
+        echo "# Clean cargo config for macOS" > .cargo/config
+        echo "[source.crates-io]" >> .cargo/config
+        echo "replace-with = \"vendored-sources\"" >> .cargo/config
+        echo "" >> .cargo/config
+        echo "[source.vendored-sources]" >> .cargo/config
+        echo "directory = \"vendored-sources\"" >> .cargo/config
+        cat .cargo/config
 
     - name: Build Treasure Chest (macOS)
       run: |
@@ -646,6 +717,18 @@ jobs:
       run: |
         mkdir -p vendored-sources
         touch vendored-sources/.keep
+        
+    - name: Fix Cargo config for Windows QT
+      shell: msys2 {0}
+      run: |
+        # Fix the .cargo/config file for Windows QT
+        echo "# Clean cargo config for Windows QT" > .cargo/config
+        echo "[source.crates-io]" >> .cargo/config
+        echo "replace-with = \"vendored-sources\"" >> .cargo/config
+        echo "" >> .cargo/config
+        echo "[source.vendored-sources]" >> .cargo/config
+        echo "directory = \"vendored-sources\"" >> .cargo/config
+        cat .cargo/config
 
     - name: Build Treasure Chest (Windows)
       shell: msys2 {0} 
@@ -721,6 +804,21 @@ jobs:
       run: |
         mkdir -p vendored-sources
         touch vendored-sources/.keep
+
+    - name: Fix Cargo config for Linux AArch64 QT
+      run: |
+        # Fix the .cargo/config file for Linux AArch64 QT
+        echo "# Clean cargo config for Linux AArch64 QT" > .cargo/config
+        echo "[target.aarch64-unknown-linux-gnu]" >> .cargo/config
+        echo "linker = \"aarch64-linux-gnu-gcc\"" >> .cargo/config
+        echo "ar = \"aarch64-linux-gnu-ar\"" >> .cargo/config
+        echo "" >> .cargo/config
+        echo "[source.crates-io]" >> .cargo/config
+        echo "replace-with = \"vendored-sources\"" >> .cargo/config
+        echo "" >> .cargo/config
+        echo "[source.vendored-sources]" >> .cargo/config
+        echo "directory = \"vendored-sources\"" >> .cargo/config
+        cat .cargo/config
 
     - name: Build Treasure Chest (AArch64 Cross-Compile)
       run: |
