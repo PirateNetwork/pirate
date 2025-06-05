@@ -11,7 +11,7 @@ FALLBACK_DOWNLOAD_PATH ?= https://github.com/PirateNetwork/Dependencies/raw/main
 BUILD ?= $(shell ./config.guess)
 HOST ?= $(BUILD)
 PATCHES_PATH = $(BASEDIR)/patches
-BASEDIR = $(abspath ../)
+BASEDIR = $(CURDIR)
 HASH_LENGTH:=11
 DOWNLOAD_CONNECT_TIMEOUT:=10
 DOWNLOAD_RETRIES:=3
@@ -30,9 +30,9 @@ else
 release_type=release
 endif
 
-base_build_dir = ../work/build
-base_staging_dir = ../work/staging
-base_download_dir = $(abspath $(BASEDIR)/work/download)
+base_build_dir=$(BASEDIR)/work/build
+base_staging_dir=$(BASEDIR)/work/staging
+base_download_dir=$(BASEDIR)/work/download
 canonical_host:=$(shell ./config.sub $(HOST))
 build:=$(shell ./config.sub $(BUILD))
 
