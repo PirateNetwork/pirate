@@ -544,6 +544,8 @@ crypto_libbitcoin_crypto_a_SOURCES = \
   crypto/hmac_sha512.h \
   crypto/ripemd160.cpp \
   crypto/ripemd160.h \
+  crypto/chacha20.cpp \
+  crypto/chacha20.h \
   crypto/sha1.cpp \
   crypto/sha1.h \
 	crypto/sha3.cpp \
@@ -846,6 +848,7 @@ libzcashconsensus_la_SOURCES = \
   crypto/equihash.cpp \
   crypto/hmac_sha512.cpp \
   crypto/ripemd160.cpp \
+  crypto/chacha20.cpp \
   crypto/sha1.cpp \
 	crypto/sha3.cpp \
   crypto/sha256.cpp \
@@ -933,12 +936,15 @@ include Makefile.leveldb.include
 endif
 
 if ENABLE_TESTS
-include Makefile.ktest.include
+include Makefile.ktest.include # komodo tests
 #include Makefile.test.include # bitcoin tests
-#include Makefile.gtest.include # zcash tests
+include Makefile.gtest.include # zcash tests
 endif
 
 
 if ENABLE_QT
 include Makefile.qt.include
+if ENABLE_TESTS
+#include Makefile.qttest.include
+endif
 endif

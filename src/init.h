@@ -21,6 +21,7 @@
 #ifndef BITCOIN_INIT_H
 #define BITCOIN_INIT_H
 
+#include <tracing.h>
 #include <string>
 
 #include "zcash/JoinSplit.hpp"
@@ -32,6 +33,8 @@ namespace boost
 {
 class thread_group;
 } // namespace boost
+
+extern TracingHandle* pTracingHandle;
 
 extern CWallet* pwalletMain;
 extern ZCJoinSplit* pzcashParams;

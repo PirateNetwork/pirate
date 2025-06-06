@@ -468,7 +468,7 @@
    <string>Pirate Plus hardware wallet control interface</string>
   </property>
   <property name="windowIcon">
-   <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+   <iconset resource="../pirate_hardware_interface/pictures.qrc">
     <normaloff>:/images/pirate_plus.ico</normaloff>:/images/pirate_plus.ico</iconset>
   </property>
   <property name="windowOpacity">
@@ -1559,7 +1559,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/43.png</normaloff>:/emojis/43.png</iconset>
           </property>
           <property name="iconSize">
@@ -1585,7 +1585,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/35.png</normaloff>:/emojis/35.png</iconset>
           </property>
           <property name="iconSize">
@@ -1611,7 +1611,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/42.png</normaloff>:/emojis/42.png</iconset>
           </property>
           <property name="iconSize">
@@ -1637,7 +1637,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/36.png</normaloff>:/emojis/36.png</iconset>
           </property>
           <property name="iconSize">
@@ -1663,7 +1663,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/38.png</normaloff>:/emojis/38.png</iconset>
           </property>
           <property name="iconSize">
@@ -1689,7 +1689,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/18.png</normaloff>:/emojis/18.png</iconset>
           </property>
           <property name="iconSize">
@@ -1715,7 +1715,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/51.png</normaloff>:/emojis/51.png</iconset>
           </property>
           <property name="iconSize">
@@ -1741,7 +1741,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/31.png</normaloff>:/emojis/31.png</iconset>
           </property>
           <property name="iconSize">
@@ -1767,7 +1767,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/32.png</normaloff>:/emojis/32.png</iconset>
           </property>
           <property name="iconSize">
@@ -1793,7 +1793,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/10.png</normaloff>:/emojis/10.png</iconset>
           </property>
           <property name="iconSize">
@@ -1819,7 +1819,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/02.png</normaloff>:/emojis/02.png</iconset>
           </property>
           <property name="iconSize">
@@ -1845,7 +1845,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/45.png</normaloff>:/emojis/45.png</iconset>
           </property>
           <property name="iconSize">
@@ -1871,7 +1871,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/46.png</normaloff>:/emojis/46.png</iconset>
           </property>
           <property name="iconSize">
@@ -1897,7 +1897,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/14.png</normaloff>:/emojis/14.png</iconset>
           </property>
           <property name="iconSize">
@@ -1923,7 +1923,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/15.png</normaloff>:/emojis/15.png</iconset>
           </property>
           <property name="iconSize">
@@ -1949,7 +1949,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/48.png</normaloff>:/emojis/48.png</iconset>
           </property>
           <property name="iconSize">
@@ -1975,7 +1975,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/06.png</normaloff>:/emojis/06.png</iconset>
           </property>
           <property name="iconSize">
@@ -2001,7 +2001,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/08.png</normaloff>:/emojis/08.png</iconset>
           </property>
           <property name="iconSize">
@@ -2027,7 +2027,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/17.png</normaloff>:/emojis/17.png</iconset>
           </property>
           <property name="iconSize">
@@ -2053,7 +2053,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/22.png</normaloff>:/emojis/22.png</iconset>
           </property>
           <property name="iconSize">
@@ -2079,7 +2079,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/21.png</normaloff>:/emojis/21.png</iconset>
           </property>
           <property name="iconSize">
@@ -2105,7 +2105,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/59.png</normaloff>:/emojis/59.png</iconset>
           </property>
           <property name="iconSize">
@@ -2131,7 +2131,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/61.png</normaloff>:/emojis/61.png</iconset>
           </property>
           <property name="iconSize">
@@ -2157,7 +2157,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/27.png</normaloff>:/emojis/27.png</iconset>
           </property>
           <property name="iconSize">
@@ -2183,7 +2183,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/60.png</normaloff>:/emojis/60.png</iconset>
           </property>
           <property name="iconSize">
@@ -2209,7 +2209,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/33.png</normaloff>:/emojis/33.png</iconset>
           </property>
           <property name="iconSize">
@@ -2235,7 +2235,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/07.png</normaloff>:/emojis/07.png</iconset>
           </property>
           <property name="iconSize">
@@ -2264,7 +2264,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/54.png</normaloff>:/emojis/54.png</iconset>
           </property>
           <property name="iconSize">
@@ -2290,7 +2290,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/28.png</normaloff>:/emojis/28.png</iconset>
           </property>
           <property name="iconSize">
@@ -2316,7 +2316,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/13.png</normaloff>:/emojis/13.png</iconset>
           </property>
           <property name="iconSize">
@@ -2342,7 +2342,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/73.png</normaloff>:/emojis/73.png</iconset>
           </property>
           <property name="iconSize">
@@ -2374,7 +2374,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/16.png</normaloff>:/emojis/16.png</iconset>
           </property>
           <property name="iconSize">
@@ -2400,7 +2400,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/47.png</normaloff>:/emojis/47.png</iconset>
           </property>
           <property name="iconSize">
@@ -2426,7 +2426,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/53.png</normaloff>:/emojis/53.png</iconset>
           </property>
           <property name="iconSize">
@@ -2452,7 +2452,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/12.png</normaloff>:/emojis/12.png</iconset>
           </property>
           <property name="iconSize">
@@ -2478,7 +2478,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/62.png</normaloff>:/emojis/62.png</iconset>
           </property>
           <property name="iconSize">
@@ -2504,7 +2504,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/34.png</normaloff>:/emojis/34.png</iconset>
           </property>
           <property name="iconSize">
@@ -2530,7 +2530,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/52.png</normaloff>:/emojis/52.png</iconset>
           </property>
           <property name="iconSize">
@@ -2556,7 +2556,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/05.png</normaloff>:/emojis/05.png</iconset>
           </property>
           <property name="iconSize">
@@ -2582,7 +2582,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/40.png</normaloff>:/emojis/40.png</iconset>
           </property>
           <property name="iconSize">
@@ -2608,7 +2608,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/11.png</normaloff>:/emojis/11.png</iconset>
           </property>
           <property name="iconSize">
@@ -2634,7 +2634,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/26.png</normaloff>:/emojis/26.png</iconset>
           </property>
           <property name="iconSize">
@@ -2660,7 +2660,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/55.png</normaloff>:/emojis/55.png</iconset>
           </property>
           <property name="iconSize">
@@ -2686,7 +2686,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/19.png</normaloff>:/emojis/19.png</iconset>
           </property>
           <property name="iconSize">
@@ -2712,7 +2712,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/25.png</normaloff>:/emojis/25.png</iconset>
           </property>
           <property name="iconSize">
@@ -2738,7 +2738,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/04.png</normaloff>:/emojis/04.png</iconset>
           </property>
           <property name="iconSize">
@@ -2767,7 +2767,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/24.png</normaloff>:/emojis/24.png</iconset>
           </property>
           <property name="iconSize">
@@ -2793,7 +2793,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/09.png</normaloff>:/emojis/09.png</iconset>
           </property>
           <property name="iconSize">
@@ -2819,7 +2819,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/30.png</normaloff>:/emojis/30.png</iconset>
           </property>
           <property name="iconSize">
@@ -2845,7 +2845,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/29.png</normaloff>:/emojis/29.png</iconset>
           </property>
           <property name="iconSize">
@@ -2871,7 +2871,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/58.png</normaloff>:/emojis/58.png</iconset>
           </property>
           <property name="iconSize">
@@ -2897,7 +2897,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/65.png</normaloff>:/emojis/65.png</iconset>
           </property>
           <property name="iconSize">
@@ -2923,7 +2923,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/68.png</normaloff>:/emojis/68.png</iconset>
           </property>
           <property name="iconSize">
@@ -2949,7 +2949,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/69.png</normaloff>:/emojis/69.png</iconset>
           </property>
           <property name="iconSize">
@@ -3713,7 +3713,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/images/pirate.png</normaloff>:/images/pirate.png</iconset>
           </property>
           <property name="iconSize">
@@ -3742,7 +3742,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/images/radiant.png</normaloff>:/images/radiant.png</iconset>
           </property>
           <property name="iconSize">
@@ -3897,7 +3897,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/images/dero.png</normaloff>:/images/dero.png</iconset>
           </property>
           <property name="iconSize">
@@ -5438,7 +5438,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/images/pirate.png</normaloff>:/images/pirate.png</iconset>
           </property>
           <property name="iconSize">
@@ -6378,7 +6378,7 @@ Transaction</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/images/radiant.png</normaloff>:/images/radiant.png</iconset>
           </property>
           <property name="iconSize">
@@ -7276,7 +7276,7 @@ Transaction</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/images/dero.png</normaloff>:/images/dero.png</iconset>
           </property>
           <property name="iconSize">
@@ -7614,7 +7614,7 @@ p, li { white-space: pre-wrap; }
              <string/>
             </property>
             <property name="icon">
-             <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+             <iconset resource="../pirate_hardware_interface/pictures.qrc">
               <normaloff>:/images/pirate.png</normaloff>:/images/pirate.png</iconset>
             </property>
             <property name="iconSize">
@@ -7766,7 +7766,7 @@ p, li { white-space: pre-wrap; }
              <string/>
             </property>
             <property name="icon">
-             <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+             <iconset resource="../pirate_hardware_interface/pictures.qrc">
               <normaloff>:/images/pirate.png</normaloff>:/images/pirate.png</iconset>
             </property>
             <property name="iconSize">
@@ -7957,7 +7957,7 @@ p, li { white-space: pre-wrap; }
              <string/>
             </property>
             <property name="icon">
-             <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+             <iconset resource="../pirate_hardware_interface/pictures.qrc">
               <normaloff>:/images/pirate.png</normaloff>:/images/pirate.png</iconset>
             </property>
             <property name="iconSize">
@@ -8066,7 +8066,7 @@ p, li { white-space: pre-wrap; }
              <string/>
             </property>
             <property name="icon">
-             <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+             <iconset resource="../pirate_hardware_interface/pictures.qrc">
               <normaloff>:/images/pirate.png</normaloff>:/images/pirate.png</iconset>
             </property>
             <property name="iconSize">
@@ -10123,7 +10123,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/46.png</normaloff>:/emojis/46.png</iconset>
           </property>
           <property name="iconSize">
@@ -10149,7 +10149,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/47.png</normaloff>:/emojis/47.png</iconset>
           </property>
           <property name="iconSize">
@@ -10175,7 +10175,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/19.png</normaloff>:/emojis/19.png</iconset>
           </property>
           <property name="iconSize">
@@ -10201,7 +10201,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/45.png</normaloff>:/emojis/45.png</iconset>
           </property>
           <property name="iconSize">
@@ -10227,7 +10227,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/31.png</normaloff>:/emojis/31.png</iconset>
           </property>
           <property name="iconSize">
@@ -10253,7 +10253,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/38.png</normaloff>:/emojis/38.png</iconset>
           </property>
           <property name="iconSize">
@@ -10279,7 +10279,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/02.png</normaloff>:/emojis/02.png</iconset>
           </property>
           <property name="iconSize">
@@ -10305,7 +10305,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/40.png</normaloff>:/emojis/40.png</iconset>
           </property>
           <property name="iconSize">
@@ -10331,7 +10331,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/43.png</normaloff>:/emojis/43.png</iconset>
           </property>
           <property name="iconSize">
@@ -10360,7 +10360,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/24.png</normaloff>:/emojis/24.png</iconset>
           </property>
           <property name="iconSize">
@@ -10386,7 +10386,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/35.png</normaloff>:/emojis/35.png</iconset>
           </property>
           <property name="iconSize">
@@ -10412,7 +10412,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/53.png</normaloff>:/emojis/53.png</iconset>
           </property>
           <property name="iconSize">
@@ -10438,7 +10438,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/29.png</normaloff>:/emojis/29.png</iconset>
           </property>
           <property name="iconSize">
@@ -10464,7 +10464,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/55.png</normaloff>:/emojis/55.png</iconset>
           </property>
           <property name="iconSize">
@@ -10490,7 +10490,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/08.png</normaloff>:/emojis/08.png</iconset>
           </property>
           <property name="iconSize">
@@ -10516,7 +10516,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/36.png</normaloff>:/emojis/36.png</iconset>
           </property>
           <property name="iconSize">
@@ -10542,7 +10542,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/30.png</normaloff>:/emojis/30.png</iconset>
           </property>
           <property name="iconSize">
@@ -10568,7 +10568,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/16.png</normaloff>:/emojis/16.png</iconset>
           </property>
           <property name="iconSize">
@@ -10594,7 +10594,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/60.png</normaloff>:/emojis/60.png</iconset>
           </property>
           <property name="iconSize">
@@ -10620,7 +10620,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/48.png</normaloff>:/emojis/48.png</iconset>
           </property>
           <property name="iconSize">
@@ -10646,7 +10646,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/15.png</normaloff>:/emojis/15.png</iconset>
           </property>
           <property name="iconSize">
@@ -10672,7 +10672,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/22.png</normaloff>:/emojis/22.png</iconset>
           </property>
           <property name="iconSize">
@@ -10698,7 +10698,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/42.png</normaloff>:/emojis/42.png</iconset>
           </property>
           <property name="iconSize">
@@ -10724,7 +10724,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/33.png</normaloff>:/emojis/33.png</iconset>
           </property>
           <property name="iconSize">
@@ -10750,7 +10750,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/61.png</normaloff>:/emojis/61.png</iconset>
           </property>
           <property name="iconSize">
@@ -10776,7 +10776,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/21.png</normaloff>:/emojis/21.png</iconset>
           </property>
           <property name="iconSize">
@@ -10802,7 +10802,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/73.png</normaloff>:/emojis/73.png</iconset>
           </property>
           <property name="iconSize">
@@ -10834,7 +10834,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/07.png</normaloff>:/emojis/07.png</iconset>
           </property>
           <property name="iconSize">
@@ -10860,7 +10860,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/12.png</normaloff>:/emojis/12.png</iconset>
           </property>
           <property name="iconSize">
@@ -10886,7 +10886,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/58.png</normaloff>:/emojis/58.png</iconset>
           </property>
           <property name="iconSize">
@@ -10912,7 +10912,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/27.png</normaloff>:/emojis/27.png</iconset>
           </property>
           <property name="iconSize">
@@ -10938,7 +10938,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/05.png</normaloff>:/emojis/05.png</iconset>
           </property>
           <property name="iconSize">
@@ -10964,7 +10964,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/28.png</normaloff>:/emojis/28.png</iconset>
           </property>
           <property name="iconSize">
@@ -10990,7 +10990,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/62.png</normaloff>:/emojis/62.png</iconset>
           </property>
           <property name="iconSize">
@@ -11016,7 +11016,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/17.png</normaloff>:/emojis/17.png</iconset>
           </property>
           <property name="iconSize">
@@ -11045,7 +11045,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/54.png</normaloff>:/emojis/54.png</iconset>
           </property>
           <property name="iconSize">
@@ -11071,7 +11071,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/59.png</normaloff>:/emojis/59.png</iconset>
           </property>
           <property name="iconSize">
@@ -11097,7 +11097,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/10.png</normaloff>:/emojis/10.png</iconset>
           </property>
           <property name="iconSize">
@@ -11123,7 +11123,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/26.png</normaloff>:/emojis/26.png</iconset>
           </property>
           <property name="iconSize">
@@ -11149,7 +11149,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/32.png</normaloff>:/emojis/32.png</iconset>
           </property>
           <property name="iconSize">
@@ -11175,7 +11175,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/14.png</normaloff>:/emojis/14.png</iconset>
           </property>
           <property name="iconSize">
@@ -11201,7 +11201,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/06.png</normaloff>:/emojis/06.png</iconset>
           </property>
           <property name="iconSize">
@@ -11227,7 +11227,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/25.png</normaloff>:/emojis/25.png</iconset>
           </property>
           <property name="iconSize">
@@ -11253,7 +11253,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/13.png</normaloff>:/emojis/13.png</iconset>
           </property>
           <property name="iconSize">
@@ -11279,7 +11279,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/51.png</normaloff>:/emojis/51.png</iconset>
           </property>
           <property name="iconSize">
@@ -11305,7 +11305,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/52.png</normaloff>:/emojis/52.png</iconset>
           </property>
           <property name="iconSize">
@@ -11331,7 +11331,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/04.png</normaloff>:/emojis/04.png</iconset>
           </property>
           <property name="iconSize">
@@ -11357,7 +11357,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/09.png</normaloff>:/emojis/09.png</iconset>
           </property>
           <property name="iconSize">
@@ -11383,7 +11383,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/18.png</normaloff>:/emojis/18.png</iconset>
           </property>
           <property name="iconSize">
@@ -11409,7 +11409,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/11.png</normaloff>:/emojis/11.png</iconset>
           </property>
           <property name="iconSize">
@@ -11435,7 +11435,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/34.png</normaloff>:/emojis/34.png</iconset>
           </property>
           <property name="iconSize">
@@ -11809,7 +11809,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/65.png</normaloff>:/emojis/65.png</iconset>
           </property>
           <property name="iconSize">
@@ -11835,7 +11835,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/68.png</normaloff>:/emojis/68.png</iconset>
           </property>
           <property name="iconSize">
@@ -11861,7 +11861,7 @@ p, li { white-space: pre-wrap; }
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/69.png</normaloff>:/emojis/69.png</iconset>
           </property>
           <property name="iconSize">
@@ -12119,7 +12119,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/27.png</normaloff>:/emojis/27.png</iconset>
           </property>
           <property name="iconSize">
@@ -12145,7 +12145,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/52.png</normaloff>:/emojis/52.png</iconset>
           </property>
           <property name="iconSize">
@@ -12171,7 +12171,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/11.png</normaloff>:/emojis/11.png</iconset>
           </property>
           <property name="iconSize">
@@ -12197,7 +12197,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/10.png</normaloff>:/emojis/10.png</iconset>
           </property>
           <property name="iconSize">
@@ -12223,7 +12223,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/05.png</normaloff>:/emojis/05.png</iconset>
           </property>
           <property name="iconSize">
@@ -12249,7 +12249,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/29.png</normaloff>:/emojis/29.png</iconset>
           </property>
           <property name="iconSize">
@@ -12275,7 +12275,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/46.png</normaloff>:/emojis/46.png</iconset>
           </property>
           <property name="iconSize">
@@ -12301,7 +12301,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/45.png</normaloff>:/emojis/45.png</iconset>
           </property>
           <property name="iconSize">
@@ -12327,7 +12327,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/62.png</normaloff>:/emojis/62.png</iconset>
           </property>
           <property name="iconSize">
@@ -12353,7 +12353,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/55.png</normaloff>:/emojis/55.png</iconset>
           </property>
           <property name="iconSize">
@@ -12379,7 +12379,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/14.png</normaloff>:/emojis/14.png</iconset>
           </property>
           <property name="iconSize">
@@ -12405,7 +12405,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/36.png</normaloff>:/emojis/36.png</iconset>
           </property>
           <property name="iconSize">
@@ -12431,7 +12431,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/38.png</normaloff>:/emojis/38.png</iconset>
           </property>
           <property name="iconSize">
@@ -12457,7 +12457,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/58.png</normaloff>:/emojis/58.png</iconset>
           </property>
           <property name="iconSize">
@@ -12483,7 +12483,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/18.png</normaloff>:/emojis/18.png</iconset>
           </property>
           <property name="iconSize">
@@ -12509,7 +12509,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/59.png</normaloff>:/emojis/59.png</iconset>
           </property>
           <property name="iconSize">
@@ -12535,7 +12535,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/61.png</normaloff>:/emojis/61.png</iconset>
           </property>
           <property name="iconSize">
@@ -12561,7 +12561,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/04.png</normaloff>:/emojis/04.png</iconset>
           </property>
           <property name="iconSize">
@@ -12587,7 +12587,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/40.png</normaloff>:/emojis/40.png</iconset>
           </property>
           <property name="iconSize">
@@ -12613,7 +12613,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/47.png</normaloff>:/emojis/47.png</iconset>
           </property>
           <property name="iconSize">
@@ -12639,7 +12639,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/34.png</normaloff>:/emojis/34.png</iconset>
           </property>
           <property name="iconSize">
@@ -12665,7 +12665,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/48.png</normaloff>:/emojis/48.png</iconset>
           </property>
           <property name="iconSize">
@@ -12691,7 +12691,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/25.png</normaloff>:/emojis/25.png</iconset>
           </property>
           <property name="iconSize">
@@ -12717,7 +12717,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/42.png</normaloff>:/emojis/42.png</iconset>
           </property>
           <property name="iconSize">
@@ -12746,7 +12746,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/24.png</normaloff>:/emojis/24.png</iconset>
           </property>
           <property name="iconSize">
@@ -12772,7 +12772,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/07.png</normaloff>:/emojis/07.png</iconset>
           </property>
           <property name="iconSize">
@@ -12798,7 +12798,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/19.png</normaloff>:/emojis/19.png</iconset>
           </property>
           <property name="iconSize">
@@ -12824,7 +12824,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/22.png</normaloff>:/emojis/22.png</iconset>
           </property>
           <property name="iconSize">
@@ -12850,7 +12850,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/51.png</normaloff>:/emojis/51.png</iconset>
           </property>
           <property name="iconSize">
@@ -12876,7 +12876,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/26.png</normaloff>:/emojis/26.png</iconset>
           </property>
           <property name="iconSize">
@@ -12902,7 +12902,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/31.png</normaloff>:/emojis/31.png</iconset>
           </property>
           <property name="iconSize">
@@ -12928,7 +12928,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/17.png</normaloff>:/emojis/17.png</iconset>
           </property>
           <property name="iconSize">
@@ -12954,7 +12954,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/33.png</normaloff>:/emojis/33.png</iconset>
           </property>
           <property name="iconSize">
@@ -12980,7 +12980,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/32.png</normaloff>:/emojis/32.png</iconset>
           </property>
           <property name="iconSize">
@@ -13006,7 +13006,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/35.png</normaloff>:/emojis/35.png</iconset>
           </property>
           <property name="iconSize">
@@ -13032,7 +13032,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/16.png</normaloff>:/emojis/16.png</iconset>
           </property>
           <property name="iconSize">
@@ -13058,7 +13058,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/60.png</normaloff>:/emojis/60.png</iconset>
           </property>
           <property name="iconSize">
@@ -13084,7 +13084,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/43.png</normaloff>:/emojis/43.png</iconset>
           </property>
           <property name="iconSize">
@@ -13110,7 +13110,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/06.png</normaloff>:/emojis/06.png</iconset>
           </property>
           <property name="iconSize">
@@ -13136,7 +13136,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/21.png</normaloff>:/emojis/21.png</iconset>
           </property>
           <property name="iconSize">
@@ -13162,7 +13162,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/08.png</normaloff>:/emojis/08.png</iconset>
           </property>
           <property name="iconSize">
@@ -13188,7 +13188,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/53.png</normaloff>:/emojis/53.png</iconset>
           </property>
           <property name="iconSize">
@@ -13214,7 +13214,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/02.png</normaloff>:/emojis/02.png</iconset>
           </property>
           <property name="iconSize">
@@ -13240,7 +13240,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/12.png</normaloff>:/emojis/12.png</iconset>
           </property>
           <property name="iconSize">
@@ -13266,7 +13266,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/15.png</normaloff>:/emojis/15.png</iconset>
           </property>
           <property name="iconSize">
@@ -13292,7 +13292,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/09.png</normaloff>:/emojis/09.png</iconset>
           </property>
           <property name="iconSize">
@@ -13318,7 +13318,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/13.png</normaloff>:/emojis/13.png</iconset>
           </property>
           <property name="iconSize">
@@ -13347,7 +13347,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/54.png</normaloff>:/emojis/54.png</iconset>
           </property>
           <property name="iconSize">
@@ -13373,7 +13373,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/73.png</normaloff>:/emojis/73.png</iconset>
           </property>
           <property name="iconSize">
@@ -13405,7 +13405,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/30.png</normaloff>:/emojis/30.png</iconset>
           </property>
           <property name="iconSize">
@@ -13431,7 +13431,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/28.png</normaloff>:/emojis/28.png</iconset>
           </property>
           <property name="iconSize">
@@ -13481,7 +13481,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/65.png</normaloff>:/emojis/65.png</iconset>
           </property>
           <property name="iconSize">
@@ -13507,7 +13507,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/68.png</normaloff>:/emojis/68.png</iconset>
           </property>
           <property name="iconSize">
@@ -13533,7 +13533,7 @@ password</string>
            <string/>
           </property>
           <property name="icon">
-           <iconset resource="../../../../pirate_hardware_interface/pictures.qrc">
+           <iconset resource="../pirate_hardware_interface/pictures.qrc">
             <normaloff>:/emojis/69.png</normaloff>:/emojis/69.png</iconset>
           </property>
           <property name="iconSize">
@@ -15648,7 +15648,7 @@ p, li { white-space: pre-wrap; }
   <tabstop>btApplyConfig_Start</tabstop>
  </tabstops>
  <resources>
-  <include location="../../../../pirate_hardware_interface/pictures.qrc"/>
+  <include location="../pirate_hardware_interface/pictures.qrc"/>
  </resources>
  <connections/>
 </ui>

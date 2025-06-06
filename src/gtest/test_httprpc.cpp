@@ -52,7 +52,7 @@ TEST(HTTPRPC, FailsWithBadAuth) {
     EXPECT_CALL(req, GetHeader("authorization"))
         .WillRepeatedly(Return(std::make_pair(true, "Basic spam:eggs")));
     EXPECT_CALL(req, GetPeer())
-        .WillRepeatedly(Return(CService("127.0.0.1:1337")));
+        .WillRepeatedly(Return(LookupNumeric("127.0.0.1", 1337)));
     EXPECT_CALL(req, WriteHeader("WWW-Authenticate", "Basic realm=\"jsonrpc\""))
         .Times(1);
     EXPECT_CALL(req, WriteReply(HTTP_UNAUTHORIZED, ""))

@@ -12,11 +12,11 @@
 #include <serialize.h>
 #include <span.h>
 #include <streams.h>
-#include <test/util/setup_common.h>
-#include <util/memory.h>
+// #include <test/util/setup_common.h>
+// #include <util/memory.h>
 #include <util/strencodings.h>
 #include <util/string.h>
-#include <util/system.h>
+// #include <util/system.h>
 #include <version.h>
 
 #include <boost/test/unit_test.hpp>

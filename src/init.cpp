@@ -105,6 +105,8 @@ extern void ThreadSendAlert();
 //extern bool komodo_dailysnapshot(int32_t height);  //todo remove
 //extern int32_t KOMODO_SNAPSHOT_INTERVAL;
 
+TracingHandle* pTracingHandle = nullptr;
+
 extern int nMaxConnections;          // from net.cpp
 extern bool bOverrideMaxConnections; // from net.cpp
 
