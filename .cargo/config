@@ -2,8 +2,10 @@
 linker = "aarch64-linux-gnu-gcc"
 ar = "aarch64-linux-gnu-ar"
 
+
+# Added by Makefile.am for vendored offline build:
 [source.crates-io]
 replace-with = "vendored-sources"
 
 [source.vendored-sources]
-directory = "vendored-sources" 
+directory = "/home/cryptoforge/Dev/pirate_dev/pirate_master/depends/x86_64-unknown-linux-gnu/share/../vendored-sources"

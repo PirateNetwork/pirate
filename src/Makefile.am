@@ -130,22 +130,27 @@ if ENABLE_ONLINE_RUST
 CARGO_CONFIGURED = $(top_srcdir)/.cargo/.configured-for-online
 $(CARGO_CONFIGURED):
 	@echo "INFO: Configuring Rust for ONLINE build."
-	$(AM_V_at)rm -f $(top_srcdir)/.cargo/.configured-for-offline
+	$(AM_V_at)rm -f $(top_srcdir)/.cargo/.configured-for-offline $(top_srcdir)/.cargo/config
+	$(AM_V_at)touch $(top_srcdir)/.cargo/persistent-config # Ensure .cargo/persistent-config  exists
+	$(AM_V_at)cp -f $(top_srcdir)/.cargo/persistent-config $(top_srcdir)/.cargo/config
 	$(AM_V_at)touch $@
 
 else
 # Enable dependency vendoring: ensure .cargo/config exists and append vendored sources directory
+# $(AM_V_at)cp -f $(top_srcdir)/.cargo/persistent-config $(top_srcdir)/.cargo/config
 RUST_BUILD_OPTS += --offline
 
 CARGO_CONFIGURED = $(top_srcdir)/.cargo/.configured-for-offline
 $(CARGO_CONFIGURED):
 	@echo "INFO: Configuring Rust for OFFLINE build (modifying .cargo/config)."
-	$(AM_V_at)rm -f $(top_srcdir)/.cargo/.configured-for-online
-	$(AM_V_at)touch $(top_srcdir)/.cargo/config # Ensure .cargo/config exists
+	$(AM_V_at)rm -f $(top_srcdir)/.cargo/.configured-for-online $(top_srcdir)/.cargo/config
+	$(AM_V_at)touch $(top_srcdir)/.cargo/persistent-config # Ensure .cargo/persistent-config exists
+	$(AM_V_at)cp -f $(top_srcdir)/.cargo/persistent-config $(top_srcdir)/.cargo/config
 	$(AM_V_at)echo "" >>$(top_srcdir)/.cargo/config # Add a newline for safety before appending
 	$(AM_V_at)echo "# Added by Makefile.am for vendored offline build:" >>$(top_srcdir)/.cargo/config
 	$(AM_V_at)echo '[source.crates-io]' >>$(top_srcdir)/.cargo/config
 	$(AM_V_at)echo 'replace-with = "vendored-sources"' >>$(top_srcdir)/.cargo/config
+	$(AM_V_at)echo "" >>$(top_srcdir)/.cargo/config # Add a newline for safety before appending
 	$(AM_V_at)echo '[source.vendored-sources]' >>$(top_srcdir)/.cargo/config
 	$(AM_V_at)echo 'directory = "$(RUST_VENDORED_SOURCES)"' >>$(top_srcdir)/.cargo/config
 	$(AM_V_at)touch $@
@@ -434,6 +439,7 @@ libbitcoin_server_a_SOURCES = \
   cc/gateways.cpp \
   cc/channels.cpp \
   cc/auction.cpp \
+  cc/betprotocol.cpp \
   chain.cpp \
   checkpoints.cpp \
   fs.cpp \
