@@ -40,9 +40,9 @@ else
 endif
 
 # 3. Assign to the main package variables, stripping results
-$($(package)_file_name) := $(strip $(_file_name_to_use))
-$($(package)_download_file) := $(strip $(_file_name_to_use))
-$($(package)_sha256_hash) := $(strip $(_sha256_hash_to_use))
+$(package)_file_name = $(strip $(_file_name_to_use))
+$(package)_download_file = $(strip $(_file_name_to_use))
+$(package)_sha256_hash = $(strip $(_sha256_hash_to_use))
 
 # --- Original Rust target mappings and std sha256 hashes (keep these as they are) ---
 $(package)_rust_target_x86_64-pc-linux-gnu=x86_64-unknown-linux-gnu
