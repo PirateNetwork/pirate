@@ -70,7 +70,7 @@ ifneq ($(canonical_host),$(build))
   $(package)_exact_file_name=rust-std-$($(package)_version)-$($(package)_rust_target).tar.gz
   $(package)_exact_sha256_hash=$($(package)_rust_std_sha256_hash_$($(package)_rust_target))
   $(package)_build_subdir=buildos
-  $(package)_extra_sources = $($(package)_file_name) # Uses the already determined file_name for the build OS
+  $(package)_extra_sources = $($(package)_file_name)
 
   define $(package)_fetch_cmds
     $(call fetch_file,$(package),$($(package)_download_path),$($(package)_exact_file_name),$($(package)_exact_file_name),$($(package)_exact_sha256_hash)) && \
