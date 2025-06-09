@@ -79,13 +79,15 @@ ifneq ($(canonical_host),$(build))
 
   define $(package)_extract_cmds
     mkdir -p $($(package)_extract_dir) && \
-    echo "$($(package)_exact_sha256_hash)  $($(package)_source_dir)/$($(package)_exact_file_name)" > $($(package)_extract_dir)/.$($(package)_exact_file_name).hash && \
-    echo "$($(package)_sha256_hash)  $($(package)_source_dir)/$($(package)_extra_sources)" > $($(package)_extract_dir)/.$($(package)_extra_sources).hash && \
-    $(build_SHA256SUM) -c $($(package)_extract_dir)/.$($(package)_exact_file_name).hash && \
-    $(build_SHA256SUM) -c $($(package)_extract_dir)/.$($(package)_extra_sources).hash && \
     mkdir -p $(canonical_host) && \
-    tar --strip-components=1 -xf $($(package)_source_dir)/$($(package)_exact_file_name) -C $(canonical_host) && \
     mkdir -p buildos && \
+    cd $($(package)_extract_dir) && \
+    echo "$($(package)_exact_sha256_hash)  $($(package)_source_dir)/$($(package)_exact_file_name)" > .$($(package)_exact_file_name).hash && \
+    echo "$($(package)_sha256_hash)  $($(package)_source_dir)/$($(package)_extra_sources)" > .$($(package)_extra_sources).hash && \
+    $(build_SHA256SUM) -c .$($(package)_exact_file_name).hash && \
+    $(build_SHA256SUM) -c .$($(package)_extra_sources).hash && \
+    cd .. && \
+    tar --strip-components=1 -xf $($(package)_source_dir)/$($(package)_exact_file_name) -C $(canonical_host) && \
     tar --strip-components=1 -xf $($(package)_source_dir)/$($(package)_extra_sources) -C buildos
   endef
 
