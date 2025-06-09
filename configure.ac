@@ -552,8 +552,14 @@ if test x$use_hardening != xno; then
     HARDENED_CPPFLAGS="$HARDENED_CPPFLAGS -D_FORTIFY_SOURCE=2"
   ],[AC_MSG_ERROR(Cannot enable -D_FORTIFY_SOURCE=2)])
 
-  #AX_CHECK_LINK_FLAG([[-Wl,-z,relro]], [HARDENED_LDFLAGS="$HARDENED_LDFLAGS -Wl,-z,relro"],[AC_MSG_ERROR(Cannot enable RELRO)])
-  #AX_CHECK_LINK_FLAG([[-Wl,-z,now]], [HARDENED_LDFLAGS="$HARDENED_LDFLAGS -Wl,-z,now"],[AC_MSG_ERROR(Cannot enable BIND_NOW)])
+  # RELRO.
+  AX_CHECK_LINK_FLAG([-Wl,-z,relro], [
+      HARDENED_LDFLAGS="$HARDENED_LDFLAGS -Wl,-z,relro"
+  ])
+  # BIND_NOW.
+  AX_CHECK_LINK_FLAG([-Wl,-z,now], [
+      HARDENED_LDFLAGS="$HARDENED_LDFLAGS -Wl,-z,now"
+  ])
 
   if test x$TARGET_OS != xwindows; then
     # All windows code is PIC, forcing it on just adds useless compile warnings
@@ -753,7 +759,7 @@ else
     fi
   fi
 
-  if test "x$use_zmq" = "xyes"; then
+  if "x$use_zmq" = "xyes"; then
      AC_CHECK_HEADER([zmq.h],
        [AC_DEFINE([ENABLE_ZMQ],[1],[Define to 1 to enable ZMQ functions])],
        [AC_MSG_WARN([zmq.h not found, disabling zmq support])
@@ -767,7 +773,7 @@ else
     AC_DEFINE_UNQUOTED([ENABLE_ZMQ],[0],[Define to 1 to enable ZMQ functions])
   fi
 
-  if test "x$use_zmq" = "xyes"; then
+  if "x$use_zmq" = "xyes"; then
     dnl Assume libzmq was built for static linking
     case $host in
       *mingw*)
