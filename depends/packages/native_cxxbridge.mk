@@ -51,10 +51,8 @@ define $(package)_build_cmds
 endef
 
 define $(package)_stage_cmds
-  if [ "$(build_os)" = "mingw32" ]; then \
-    cargo install --locked --offline --path=. --bin=cxxbridge --root=$($(package)_staging_prefix_dir) && \
-    cp target/release/cxxbridge.exe $($(package)_staging_prefix_dir)/bin/ ; \
-  else \
-    cargo install --locked --offline --path=. --bin=cxxbridge --root=$($(package)_staging_prefix_dir) ; \
+  cargo install --locked --offline --path=. --bin=cxxbridge --root=$($(package)_staging_prefix_dir) && \
+  if test "$(build_os)" = "mingw32"; then \
+    cp target/release/cxxbridge.exe $($(package)_staging_prefix_dir)/bin/; \
   fi
 endef
