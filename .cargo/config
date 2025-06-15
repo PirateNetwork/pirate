@@ -1,7 +1,7 @@
 # Patches bellman and pairing to use the Pirate Network fork
-[patch.crates-io]
-bellman = { git = "https://github.com/piratenetwork/librustzcash", branch = "master" }
-pairing = { git = "https://github.com/piratenetwork/librustzcash", branch = "master" }
+#[patch.crates-io]
+#bellman = { git = "https://github.com/piratenetwork/librustzcash", rev = "a32cd7289e07391c5d27a1068899dcea95aa3b98" }
+#pairing = { git = "https://github.com/piratenetwork/librustzcash", rev = "a32cd7289e07391c5d27a1068899dcea95aa3b98" }
 
 # Configure cross-compilation targets
 [target.aarch64-unknown-linux-gnu]
