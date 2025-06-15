@@ -117,11 +117,15 @@ src/pirate-cli
 src/pirated
 src/pirate-tx
 src/pirate-test
+src/pirate-gtest
+src/pirate-ktest
 src/wallet-utility
 src/pirate-cli.exe
 src/pirated.exe
 src/pirate-tx.exe
 src/pirate-test.exe
+src/pirate-gtest.exe
+src/pirate-ktest.exe
 src/wallet-utility.exe
 pirate-qt-win.exe
 pirate-qt-linux

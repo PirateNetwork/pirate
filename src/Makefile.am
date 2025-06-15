@@ -944,13 +944,18 @@ if EMBEDDED_LEVELDB
 include Makefile.leveldb.include
 endif
 
-if ENABLE_TESTS
-include Makefile.ktest.include
-#include Makefile.test.include # bitcoin tests
-include Makefile.gtest.include # zcash tests
-endif
-
-
 if ENABLE_QT
 include Makefile.qt.include
+if ENABLE_TESTS
+#include Makefile.qttest.include
 endif
+endif
+
+if ENABLE_TESTS
+include Makefile.gtest.include #zcash tests
+include Makefile.ktest.include #komodo tests 
+#include Makefile.test.include #bitcoin tests
+endif
+
+
+

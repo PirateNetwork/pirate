@@ -1,8 +1,8 @@
-TESTS += pirate-test
-bin_PROGRAMS += pirate-test
+TESTS += pirate-ktest
+bin_PROGRAMS += pirate-ktest
 
 # tool for generating our public parameters
-pirate_test_SOURCES = \
+pirate_ktest_SOURCES = \
 	test-komodo/main.cpp \
 	test-komodo/testutils.cpp \
 	test-komodo/test_cryptoconditions.cpp \
@@ -15,35 +15,35 @@ pirate_test_SOURCES = \
 	test-komodo/test_script_standard_tests.cpp \
 	test-komodo/test_addrman.cpp \
 	test-komodo/test_netbase_tests.cpp \
-  test-komodo/test_events.cpp \
-  test-komodo/test_hex.cpp \
-  test-komodo/test_alerts.cpp \
-  test-komodo/test_equihash.cpp \
-  test-komodo/test_random.cpp \
-  test-komodo/test_block.cpp \
-  test-komodo/test_mempool.cpp \
-  test-komodo/test_notary.cpp \
-  test-komodo/test_pow.cpp \
-  test-komodo/test_txid.cpp \
-  test-komodo/test_coins.cpp \
-  test-komodo/test_haraka_removal.cpp \
-  test-komodo/test_miner.cpp \
-  test-komodo/test_oldhash_removal.cpp \
+	test-komodo/test_events.cpp \
+	test-komodo/test_hex.cpp \
+	test-komodo/test_alerts.cpp \
+	test-komodo/test_equihash.cpp \
+	test-komodo/test_random.cpp \
+	test-komodo/test_block.cpp \
+	test-komodo/test_mempool.cpp \
+	test-komodo/test_notary.cpp \
+	test-komodo/test_pow.cpp \
+	test-komodo/test_txid.cpp \
+	test-komodo/test_coins.cpp \
+	test-komodo/test_haraka_removal.cpp \
+	test-komodo/test_miner.cpp \
+	test-komodo/test_oldhash_removal.cpp \
 	test-komodo/test_kmd_feat.cpp \
 	test-komodo/test_legacy_events.cpp \
 	test-komodo/test_parse_args.cpp \
 	test-komodo/test-gmp-arith.cpp
 
 if TARGET_WINDOWS
-pirate_test_SOURCES += test-komodo/komodo-test-res.rc
+pirate_ktest_SOURCES += test-komodo/komodo-test-res.rc
 endif
 
-pirate_test_CPPFLAGS = $(pirated_CPPFLAGS)
+pirate_ktest_CPPFLAGS = $(pirated_CPPFLAGS)
 
-pirate_test_LDADD = -lgtest $(pirated_LDADD)
+pirate_ktest_LDADD = -lgtest $(pirated_LDADD)
 
-pirate_test_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) -static
+pirate_ktest_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) -static
 
 if TARGET_DARWIN
-pirate_test_LDFLAGS += -framework Security
+pirate_ktest_LDFLAGS += -framework Security
 endif

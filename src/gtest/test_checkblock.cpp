@@ -3,15 +3,19 @@
 
 #include "consensus/validation.h"
 #include "main.h"
+//#include "proof_verifier.h"
+//#include "util/test.h"
 #include "zcash/Proof.hpp"
 
 class MockCValidationState : public CValidationState {
 public:
-    MOCK_METHOD5(DoS, bool(int level, bool ret,
-             unsigned char chRejectCodeIn, std::string strRejectReasonIn,
-             bool corruptionIn));
-    MOCK_METHOD3(Invalid, bool(bool ret,
-                 unsigned char _chRejectCode, std::string _strRejectReason));
+    MOCK_METHOD6(DoS, bool(int level, bool ret,
+             unsigned int chRejectCodeIn, const std::string strRejectReasonIn,
+             bool corruptionIn,
+             const std::string &strDebugMessageIn));
+    MOCK_METHOD4(Invalid, bool(bool ret,
+                 unsigned int _chRejectCode, const std::string _strRejectReason,
+                 const std::string &_strDebugMessage));
     MOCK_METHOD1(Error, bool(std::string strRejectReasonIn));
     MOCK_CONST_METHOD0(IsValid, bool());
     MOCK_CONST_METHOD0(IsInvalid, bool());
@@ -20,9 +24,9 @@ public:
     MOCK_CONST_METHOD0(CorruptionPossible, bool());
     MOCK_CONST_METHOD0(GetRejectCode, unsigned char());
     MOCK_CONST_METHOD0(GetRejectReason, std::string());
+    MOCK_CONST_METHOD0(GetDebugMessage, std::string());
 };
 
-int32_t futureblock;
 TEST(CheckBlock, VersionTooLow) {
     auto verifier = ProofVerifier::Strict();
 
@@ -30,10 +34,21 @@ TEST(CheckBlock, VersionTooLow) {
     block.nVersion = 1;
 
     MockCValidationState state;
-    EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "version-too-low", false)).Times(1);
-    EXPECT_FALSE(CheckBlock(&futureblock,0,0,block, state, verifier, false, false));
+
+    SelectParams(CBaseChainParams::MAIN);
+
+    EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "version-too-low", false, "")).Times(1);
+    EXPECT_FALSE(CheckBlock(0, 1, NULL, block, state, verifier, false, false));
 }
 
+
+// Subclass of CTransaction which doesn't call UpdateHash when constructing
+// from a CMutableTransaction.  This enables us to create a CTransaction
+// with bad values which normally trigger an exception during construction.
+class UNSAFE_CTransaction : public CTransaction {
+    public:
+        UNSAFE_CTransaction(const CMutableTransaction &tx) : CTransaction(tx, true) {}
+};
 
 // Test that a Sprout tx with negative version is still rejected
 // by CheckBlock under Sprout consensus rules.
@@ -54,7 +69,8 @@ TEST(CheckBlock, BlockSproutRejectsBadVersion) {
     mtx.nVersion = -1;
     mtx.nVersionGroupId = 0;
 
-    CTransaction tx {mtx};
+    EXPECT_THROW((CTransaction(mtx)), std::ios_base::failure);
+    UNSAFE_CTransaction tx {mtx};
     CBlock block;
     block.vtx.push_back(tx);
 
@@ -63,21 +79,22 @@ TEST(CheckBlock, BlockSproutRejectsBadVersion) {
 
     auto verifier = ProofVerifier::Strict();
 
-    EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-txns-version-too-low", false)).Times(1);
-    EXPECT_FALSE(CheckBlock(block, state, verifier, false, false));
+    EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-txns-version-too-low", false, "")).Times(1);
+    EXPECT_FALSE(CheckBlock(0, 1, &indexPrev, block, state, verifier, false, false));
 }
 
 
 class ContextualCheckBlockTest : public ::testing::Test {
 protected:
-    virtual void SetUp() {
+    void SetUp() override {
         SelectParams(CBaseChainParams::MAIN);
     }
 
-    virtual void TearDown() {
+    void TearDown() override {
         // Revert to test default. No-op on mainnet params.
         UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
         UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_ORCHARD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     }
 
     // Returns a valid but empty mutable transaction at block height 1.
@@ -97,9 +114,10 @@ protected:
         mtx.vout[0].nValue = 0;
 
         // Give it a Founder's Reward vout for height 1.
+        auto rewardScript = Params().GetFoundersRewardScriptAtHeight(1);
         mtx.vout.push_back(CTxOut(
                     GetBlockSubsidy(1, Params().GetConsensus())/5,
-                    Params().GetFoundersRewardScriptAtHeight(1)));
+                    rewardScript));
 
         return mtx;
     }
@@ -118,7 +136,7 @@ protected:
 
         // We now expect this to be a valid block.
         MockCValidationState state;
-        EXPECT_TRUE(ContextualCheckBlock(block, state, &indexPrev));
+        EXPECT_TRUE(ContextualCheckBlock(0, block, state, &indexPrev));
     }
 
     // Expects a height-1 block containing a given transaction to fail
@@ -135,8 +153,8 @@ protected:
 
         // We now expect this to be an invalid block, for the given reason.
         MockCValidationState state;
-        EXPECT_CALL(state, DoS(level, false, REJECT_INVALID, reason, false)).Times(1);
-        EXPECT_FALSE(ContextualCheckBlock(block, state, &indexPrev));
+        EXPECT_CALL(state, DoS(level, false, REJECT_INVALID, reason, false, "")).Times(1);
+        EXPECT_FALSE(ContextualCheckBlock(0, block, state, &indexPrev));
     }
 
 };
@@ -153,7 +171,8 @@ TEST_F(ContextualCheckBlockTest, BadCoinbaseHeight) {
 
     // Treating block as genesis should pass
     MockCValidationState state;
-    EXPECT_TRUE(ContextualCheckBlock(block, state, NULL));
+    EXPECT_TRUE(ContextualCheckBlock(0, block, state, NULL));
+
 
     // Give the transaction a Founder's Reward vout
     mtx.vout.push_back(CTxOut(
@@ -166,21 +185,21 @@ TEST_F(ContextualCheckBlockTest, BadCoinbaseHeight) {
     CBlock prev;
     CBlockIndex indexPrev {prev};
     indexPrev.nHeight = 0;
-    EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-cb-height", false)).Times(1);
-    EXPECT_FALSE(ContextualCheckBlock(block, state, &indexPrev));
+    EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-cb-height", false, "")).Times(1);
+    EXPECT_FALSE(ContextualCheckBlock(0, block, state, &indexPrev));
 
     // Setting to an incorrect height should fail
     mtx.vin[0].scriptSig = CScript() << 2 << OP_0;
     CTransaction tx3 {mtx};
     block.vtx[0] = tx3;
-    EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-cb-height", false)).Times(1);
-    EXPECT_FALSE(ContextualCheckBlock(block, state, &indexPrev));
+    EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-cb-height", false, "")).Times(1);
+    EXPECT_FALSE(ContextualCheckBlock(0, block, state, &indexPrev));
 
     // After correcting the scriptSig, should pass
     mtx.vin[0].scriptSig = CScript() << 1 << OP_0;
     CTransaction tx4 {mtx};
     block.vtx[0] = tx4;
-    EXPECT_TRUE(ContextualCheckBlock(block, state, &indexPrev));
+    EXPECT_TRUE(ContextualCheckBlock(0, block, state, &indexPrev));
 }
 
 // TEST PLAN: first, check that each ruleset accepts its own transaction type.
@@ -235,10 +254,39 @@ TEST_F(ContextualCheckBlockTest, BlockSaplingRulesAcceptSaplingTx) {
     ExpectValidBlockFromTx(CTransaction(mtx));
 }
 
+
+// Test that a block evaluated under Blossom rules can contain Blossom transactions.
+TEST_F(ContextualCheckBlockTest, BlockBlossomRulesAcceptBlossomTx) {
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, 1);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, 1);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_ORCHARD, 1);
+
+    CMutableTransaction mtx = GetFirstBlockCoinbaseTx();
+
+    // Make it a Blossom transaction (using Sapling version/group id).
+    mtx.fOverwintered = true;
+    mtx.nVersion = SAPLING_TX_VERSION;
+    mtx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
+
+    SCOPED_TRACE("BlockOrchardRulesAcceptOrchardTx");
+    ExpectValidBlockFromTx(CTransaction(mtx));
+}
+
+
 // TEST PLAN: next, check that each ruleset will not accept other transaction
-// types. Currently (May 2018) this means we'll test Sprout-Overwinter,
-// Sprout-Sapling, Overwinter-Sprout, Overwinter-Sapling, Sapling-Sprout, and
-// Sapling-Overwinter.
+// types. Currently (February 2020) this means with each of four *branches* active
+// (Sprout, Overwinter, Sapling, Blossom), we'll test that transactions for tx
+// *versions* not valid on that branch are rejected.
+//
+// Note that Sapling and Blossom transactions use the same tx version and version
+// group id, but different consensus branch ids. These tests use transactions with
+// no inputs and only a transparent output, therefore they are not signed and do not
+// depend on the consensus branch id. Testing that Sapling rejects transactions that
+// are signed for Blossom, and vice versa, is outside the scope of these tests.
+//
+// TODO: Change the testing approach to not require O(branches * versions) code.
+
 
 // Test that a block evaluated under Sprout rules cannot contain non-Sprout
 // transactions which require Overwinter to be active.  This test assumes that
@@ -253,7 +301,7 @@ TEST_F(ContextualCheckBlockTest, BlockSproutRulesRejectOtherTx) {
 
     {
         SCOPED_TRACE("BlockSproutRulesRejectOverwinterTx");
-        ExpectInvalidBlockFromTx(CTransaction(mtx), 0, "tx-overwinter-not-active");
+        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwinter-not-active");
     }
 
     // Make it a Sapling transaction
@@ -263,7 +311,7 @@ TEST_F(ContextualCheckBlockTest, BlockSproutRulesRejectOtherTx) {
 
     {
         SCOPED_TRACE("BlockSproutRulesRejectSaplingTx");
-        ExpectInvalidBlockFromTx(CTransaction(mtx), 0, "tx-overwinter-not-active");
+        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwinter-not-active");
     }
 };
 
@@ -281,7 +329,7 @@ TEST_F(ContextualCheckBlockTest, BlockOverwinterRulesRejectOtherTx) {
 
     {
         SCOPED_TRACE("BlockOverwinterRulesRejectSproutTx");
-        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwinter-active");
+        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwintered-flag-not-set");
     }
 
     // Make it a Sapling transaction
@@ -291,7 +339,7 @@ TEST_F(ContextualCheckBlockTest, BlockOverwinterRulesRejectOtherTx) {
 
     {
         SCOPED_TRACE("BlockOverwinterRulesRejectSaplingTx");
-        ExpectInvalidBlockFromTx(CTransaction(mtx), 0, "bad-overwinter-tx-version-group-id");
+        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "bad-tx-overwinter-version-too-high");
     }
 }
 
@@ -309,7 +357,7 @@ TEST_F(ContextualCheckBlockTest, BlockSaplingRulesRejectOtherTx) {
 
     {
         SCOPED_TRACE("BlockSaplingRulesRejectSproutTx");
-        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwinter-active");
+        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwintered-flag-not-set");
     }
 
     // Make it an Overwinter transaction
@@ -319,6 +367,35 @@ TEST_F(ContextualCheckBlockTest, BlockSaplingRulesRejectOtherTx) {
 
     {
         SCOPED_TRACE("BlockSaplingRulesRejectOverwinterTx");
-        ExpectInvalidBlockFromTx(CTransaction(mtx), 0, "bad-sapling-tx-version-group-id");
+        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "bad-sapling-tx-version-group-id");
+    }
+}
+
+
+// Test block evaluated under Blossom rules cannot contain non-Blossom transactions.
+TEST_F(ContextualCheckBlockTest, BlockBlossomRulesRejectOtherTx) {
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, 1);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, 1);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_ORCHARD, 1);
+
+    CMutableTransaction mtx = GetFirstBlockCoinbaseTx();
+
+    // Set the version to Sprout+JoinSplit (but nJoinSplit will be 0).
+    mtx.nVersion = 2;
+
+    {
+        SCOPED_TRACE("BlockOrchardRulesRejectSproutTx");
+        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwintered-flag-not-set");
+    }
+
+    // Make it an Overwinter transaction
+    mtx.fOverwintered = true;
+    mtx.nVersion = OVERWINTER_TX_VERSION;
+    mtx.nVersionGroupId = OVERWINTER_VERSION_GROUP_ID;
+
+    {
+        SCOPED_TRACE("BlockBlossomRulesRejectOverwinterTx");
+        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "bad-sapling-tx-version-group-id");
     }
 }

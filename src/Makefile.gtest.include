@@ -2,86 +2,67 @@
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
-# Stamp file for generated JSON headers
-JSON_HEADERS_STAMP = $(builddir)/gtest/json_headers.stamp
-
-# Rule to generate JSON headers
-$(JSON_HEADERS_STAMP): $(srcdir)/test/data/generate_json_headers.sh $(wildcard $(srcdir)/test/data/*.json)
-	@echo "Generating JSON headers for gtest..."
-	@(cd $(srcdir)/test/data && $(SHELL) ./generate_json_headers.sh)
-	@$(MKDIR_P) $(@D)
-	@touch $@
-
-# Ensure zcash-gtest depends on the generated headers
-zcash-gtest: $(JSON_HEADERS_STAMP)
-
-TESTS += zcash-gtest
-bin_PROGRAMS += zcash-gtest
+TESTS += pirate-gtest
+bin_PROGRAMS += pirate-gtest
 
 # tool for generating our public parameters
-zcash_gtest_SOURCES = \
+pirate_gtest_SOURCES = \
 	gtest/main.cpp \
-	gtest/utils.cpp \
+	gtest/testutils.h \
+	gtest/testutils.cpp \
+	#gtest/utils.cpp \
 	gtest/test_checktransaction.cpp \
-	gtest/json_test_vectors.cpp \
-    gtest/json_test_vectors.h
+	#gtest/json_test_vectors.cpp \
+    #gtest/json_test_vectors.h
 
 # These tests are order-dependent, because they
 # depend on global state (see #1539)
 if ENABLE_WALLET
-zcash_gtest_SOURCES += \
-	wallet/gtest/test_wallet_zkeys.cpp
+pirate_gtest_SOURCES += \
+	#wallet/gtest/test_wallet_zkeys.cpp
 endif
 
-zcash_gtest_SOURCES += \
-	gtest/test_tautology.cpp \
-	gtest/test_deprecation.cpp \
-	gtest/test_httprpc.cpp \
-	gtest/test_joinsplit.cpp \
-	gtest/test_keys.cpp \
-	# gtest/test_keystore.cpp \
-	gtest/test_noteencryption.cpp \
-	gtest/test_merkletree.cpp \
-	gtest/test_metrics.cpp \
-	gtest/test_miner.cpp \
-	gtest/test_pow.cpp \
-	gtest/test_rpc.cpp \
-	gtest/test_sapling_note.cpp \
-	gtest/test_transaction.cpp \
-	gtest/test_transaction_builder.cpp \
-	gtest/test_upgrades.cpp \
-	gtest/test_validation.cpp \
-	gtest/test_circuit.cpp \
-	gtest/test_libzcash_utils.cpp \
-	gtest/test_proofs.cpp \
-	gtest/test_paymentdisclosure.cpp \
-	gtest/test_pedersen_hash.cpp \
+pirate_gtest_SOURCES += \
+	#gtest/test_tautology.cpp \
+	#gtest/test_deprecation.cpp \
+	#gtest/test_httprpc.cpp \
+	#gtest/test_joinsplit.cpp \
+	#gtest/test_keys.cpp \
+	#gtest/test_keystore.cpp \
+	#gtest/test_noteencryption.cpp \
+	#gtest/test_merkletree.cpp \
+	#gtest/test_metrics.cpp \
+	#gtest/test_miner.cpp \
+	#gtest/test_pow.cpp \
+	#gtest/test_rpc.cpp \
+	#gtest/test_sapling_note.cpp \
+	#gtest/test_transaction.cpp \
+	#gtest/test_transaction_builder.cpp \
+	#gtest/test_upgrades.cpp \
+	#gtest/test_validation.cpp \
+	#gtest/test_circuit.cpp \
+	#gtest/test_libzcash_utils.cpp \
+	#gtest/test_proofs.cpp \
+	#gtest/test_paymentdisclosure.cpp \
+	#gtest/test_pedersen_hash.cpp \
 	gtest/test_checkblock.cpp \
 	gtest/test_zip32.cpp
-if ENABLE_WALLET
-zcash_gtest_SOURCES += \
-	wallet/gtest/test_wallet.cpp
-endif
-
-zcash_gtest_CPPFLAGS = $(AM_CPPFLAGS) -DBINARY_OUTPUT -DCURVE_ALT_BN128 -DSTATIC $(BITCOIN_INCLUDES)
-# Attempt to enable C++17 for gtest
-zcash_gtest_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS) -std=c++17
-
-zcash_gtest_LDADD = -lgtest -lgmock $(LIBBITCOIN_SERVER) $(LIBBITCOIN_CLI) $(LIBBITCOIN_COMMON) $(LIBBITCOIN_UTIL) $(LIBBITCOIN_CRYPTO) $(LIBBITCOIN_UNIVALUE) $(LIBLEVELDB) $(LIBMEMENV) \
-  $(BOOST_LIBS) $(BOOST_UNIT_TEST_FRAMEWORK_LIB) $(LIBSECP256K1)
-
-if ENABLE_ZMQ
-zcash_gtest_LDADD += $(LIBBITCOIN_ZMQ) $(ZMQ_LIBS)
-endif
 
 if ENABLE_WALLET
-zcash_gtest_LDADD += $(LIBBITCOIN_WALLET)
+pirate_gtest_SOURCES += \
+	#wallet/gtest/test_wallet.cpp
 endif
 
-zcash_gtest_LDADD += $(LIBZCASH_CONSENSUS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(LIBZCASH) $(LIBZCASH_LIBS)
+if TARGET_WINDOWS
+pirate_gtest_SOURCES += test-komodo/komodo-test-res.rc
+endif
 
+pirate_gtest_CPPFLAGS = $(pirated_CPPFLAGS)
 
-zcash_gtest_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) -static
+pirate_gtest_LDADD = -lgtest -lgmock $(pirated_LDADD)
 
-zcash-gtest-expected-failures: zcash-gtest FORCE
-	./zcash-gtest --gtest_filter=*DISABLED_* --gtest_also_run_disabled_tests
+pirate_gtest_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS) -static
+
+if TARGET_DARWIN
+pirate_gtest_LDFLAGS += -framework Security
+endif

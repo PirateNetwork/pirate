@@ -1,28 +1,20 @@
-#include "gmock/gmock.h"
-#include "crypto/common.h"
 #include "key.h"
-#include "pubkey.h"
-#include "zcash/JoinSplit.hpp"
-#include "util.h"
+#include "base58.h"
+#include "chainparams.h"
+#include "gtest/gtest.h"
+#include "crypto/common.h"
+#include "testutils.h"
 
-#include "librustzcash.h"
-
-struct ECCryptoClosure
-{
-    ECCVerifyHandle handle;
-};
-
-ECCryptoClosure instance_of_eccryptoclosure;
-
-ZCJoinSplit* params;
 
 int main(int argc, char **argv) {
-  assert(init_and_check_sodium() != -1);
-  ECC_Start();
+    assert(init_and_check_sodium() != -1);
+    ECC_Start();
+    ECCVerifyHandle handle;  // Inits secp256k1 verify context
 
-  boost::filesystem::path sapling_spend = ZC_GetParamsDir() / "sapling-spend.params";
-  boost::filesystem::path sapling_output = ZC_GetParamsDir() / "sapling-output.params";
-  boost::filesystem::path sprout_groth16 = ZC_GetParamsDir() / "sprout-groth16.params";
+    //Load the Sapling parameters
+    boost::filesystem::path sapling_spend = ZC_GetParamsDir() / "sapling-spend.params";
+    boost::filesystem::path sapling_output = ZC_GetParamsDir() / "sapling-output.params";
+    boost::filesystem::path sprout_groth16 = ZC_GetParamsDir() / "sprout-groth16.params";
 
     static_assert(
         sizeof(boost::filesystem::path::value_type) == sizeof(codeunit),
@@ -37,10 +29,20 @@ int main(int argc, char **argv) {
         true
     );
 
-  testing::InitGoogleMock(&argc, argv);
 
-  auto ret = RUN_ALL_TESTS();
+    SetupNetworking();
+    SelectParams(CBaseChainParams::REGTEST);
+    chainName = assetchain(); // KMD by default
 
-  ECC_Stop();
-  return ret;
+    CBitcoinSecret vchSecret;
+    // this returns false due to network prefix mismatch but works anyway
+    vchSecret.SetString(notarySecret);
+    notaryKey = vchSecret.GetKey();
+
+    testing::InitGoogleTest(&argc, argv);
+    
+    auto ret = RUN_ALL_TESTS();
+
+    ECC_Stop();
+    return ret;
 }
