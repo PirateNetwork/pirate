@@ -411,7 +411,7 @@ void test_simple_sapling_invalidity(uint32_t consensusBranchId, CMutableTransact
         CValidationState state;
 
         BOOST_CHECK(!CheckTransactionWithoutProofVerification(newTx, state));
-        BOOST_CHECK(state.GetRejectReason() == "bad-txns-vin-empty");
+        BOOST_CHECK(state.GetRejectReason() == "bad-txns-no-source-of-funds");
     }
     {
         CMutableTransaction newTx(tx);
@@ -421,7 +421,7 @@ void test_simple_sapling_invalidity(uint32_t consensusBranchId, CMutableTransact
         newTx.vShieldedSpend[0].nullifier = GetRandHash();
 
         BOOST_CHECK(!CheckTransactionWithoutProofVerification(newTx, state));
-        BOOST_CHECK(state.GetRejectReason() == "bad-txns-vout-empty");
+        BOOST_CHECK(state.GetRejectReason() == "bad-txns-no-sink-of-funds");
     }
     {
         // Ensure that nullifiers are never duplicated within a transaction.
@@ -481,12 +481,12 @@ void test_simple_joinsplit_invalidity(uint32_t consensusBranchId, CMutableTransa
 
         // No joinsplits, vin and vout, means it should be invalid.
         BOOST_CHECK(!CheckTransactionWithoutProofVerification(newTx, state));
-        BOOST_CHECK(state.GetRejectReason() == "bad-txns-vin-empty");
+        BOOST_CHECK(state.GetRejectReason() == "bad-txns-no-source-of-funds");
 
         newTx.vin.push_back(CTxIn(uint256S("0000000000000000000000000000000000000000000000000000000000000001"), 0));
 
         BOOST_CHECK(!CheckTransactionWithoutProofVerification(newTx, state));
-        BOOST_CHECK(state.GetRejectReason() == "bad-txns-vout-empty");
+        BOOST_CHECK(state.GetRejectReason() == "bad-txns-no-sink-of-funds");
 
         newTx.vjoinsplit.push_back(JSDescription());
         JSDescription *jsdesc = &newTx.vjoinsplit[0];
