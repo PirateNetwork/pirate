@@ -750,9 +750,6 @@ bool ContextualCheckInputs(const CTransaction& tx, CValidationState &state, cons
                            const Consensus::Params& consensusParams, uint32_t consensusBranchId,
                            std::vector<CScriptCheck> *pvChecks = NULL);
 
-/** Check a transaction contextually against a set of consensus rules */
-bool ContextualCheckTransaction(int32_t slowflag,const CBlock *block, CBlockIndex * const pindexPrev,const CTransaction& tx, CValidationState &state, int nHeight, int dosLevel,
-                                bool (*isInitBlockDownload)() = IsInitialBlockDownload,int32_t validateprices=1);
 struct CheckTransationResults
 {
     bool validationPassed = true;
@@ -762,9 +759,9 @@ struct CheckTransationResults
 };
 
 //Validate a batch of transactions
-CheckTransationResults ContextualCheckTransactionSingleThreaded(const CTransaction tx, const int nHeight, const int dosLevel, const bool isInitialBlockDownload, const uint32_t threadNumber);
+CheckTransationResults ContextualCheckTransactionSingleThreaded(const CTransaction tx, const int nHeight, const int dosLevel, const bool isInitialBlockDownload = false);
 //Validate a batch of transactions
-CheckTransationResults ContextualCheckTransactionBindingSigWorker(const std::vector<const CTransaction*> vtx, const std::vector<uint256> vTxSig, const uint32_t threadNumber);
+CheckTransationResults ContextualCheckTransactionShieldedBundles(const std::vector<const CTransaction*> vtx, const CCoinsViewCache *view, const uint32_t consensusBranchId, const bool isInitialBlockDownload = false, const uint32_t threadNumber = 0);
 //Validate a batch of Sapling spend descriptions
 // CheckTransationResults ContextualCheckTransactionSaplingSpendWorker(const std::vector<const SpendDescription*> vSpend, const std::vector<uint256> vSpendSig, const uint32_t threadNumber);
 //Validate a batch of Sapling output descriptions

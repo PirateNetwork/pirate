@@ -1201,8 +1201,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
     const CTransaction tx,
     const int nHeight,
     const int dosLevel,
-    const bool isInitialBlockDownload,
-    const uint32_t threadNumber) {
+    const bool isInitialBlockDownload) {
 
     //Results to be returned
     CheckTransationResults txResults;
@@ -1226,7 +1225,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
         if (sapling_bundle.IsPresent()) {
             txResults.validationPassed = false;
             txResults.dosLevel = dosLevel;
-            txResults.errorString = strprintf("ContextualCheckTransaction(): sapling bundle not allowed in coinbase transaction");
+            txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: sapling bundle not allowed in coinbase transaction");
             txResults.reasonString = strprintf("tx-coinbase-sapling-bundle");
             return txResults;
         }
@@ -1234,7 +1233,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
         if (orchard_bundle.IsPresent()) {
             txResults.validationPassed = false;
             txResults.dosLevel = dosLevel;
-            txResults.errorString = strprintf("ContextualCheckTransaction(): orchard bundle not allowed in coinbase transaction");
+            txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: orchard bundle not allowed in coinbase transaction");
             txResults.reasonString = strprintf("tx-coinbase-orchard-bundle");
             return txResults;
         }
@@ -1243,14 +1242,13 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
 
     // If Sprout rules apply, reject transactions which are intended for Overwinter and beyond
     if (isSprout && tx.fOverwintered) {
-        int32_t ht = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight;
-        if (ht < 0 || nHeight < ht) {
+        if (isInitialBlockDownload) {
             txResults.dosLevel = 0;
         } else {
             txResults.dosLevel = dosLevel;
         }
         txResults.validationPassed = false;
-        txResults.errorString = strprintf("ContextualCheckTransaction(): ht.%d activates.%d dosLevel.%d overwinter is not active yet",nHeight, consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight, txResults.dosLevel);
+        txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: ht.%d activates.%d dosLevel.%d overwinter is not active yet",nHeight, consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight, txResults.dosLevel);
         txResults.reasonString = strprintf("tx-overwinter-not-active");
         return txResults;
     }
@@ -1259,15 +1257,14 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
     if (overwinterActive) {
         // Reject transactions intended for Sprout
         if (!tx.fOverwintered) {
-            int32_t ht = consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight;
-            if (ASSETCHAINS_PRIVATE != 0 || ht < 0 || nHeight < ht) {
+            if (isInitialBlockDownload) {
                 txResults.dosLevel = 0;
             } else {
                 txResults.dosLevel = dosLevel;
             }
             txResults.validationPassed = false;
-            txResults.errorString = strprintf("ContextualCheckTransaction: overwinter is active");
-            txResults.reasonString = strprintf("tx-overwinter-active");
+            txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: overwinter is active");
+            txResults.reasonString = strprintf("tx-overwinter-flag-not-set");
             return txResults;
         }
 
@@ -1275,7 +1272,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
         if (tx.nVersion >= OVERWINTER_MIN_TX_VERSION && !tx.fOverwintered) {
             txResults.validationPassed = false;
             txResults.dosLevel = dosLevel;
-            txResults.errorString = strprintf("ContextualCheckTransaction(): overwinter flag must be set");
+            txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: overwinter flag must be set");
             txResults.reasonString = strprintf("tx-overwinter-flag-not-set");
             return txResults;
         }
@@ -1284,7 +1281,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
         if (tx.nVersion < OVERWINTER_MIN_TX_VERSION && tx.fOverwintered) {
             txResults.validationPassed = false;
             txResults.dosLevel = dosLevel;
-            txResults.errorString = strprintf("ContextualCheckTransaction(): tx version is too old");
+            txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: tx version is too old");
             txResults.reasonString = strprintf("tx-overwinter-version-too-old");
             return txResults;
         }
@@ -1295,7 +1292,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
             int expiredDosLevel = IsExpiredTx(tx, nHeight - 1) ? (dosLevel > 10 ? dosLevel : 10) : 0;
             txResults.validationPassed = false;
             txResults.dosLevel = 100;
-            txResults.errorString = strprintf("ContextualCheckTransaction(): transaction %s is expired, expiry block %i vs current block %i\n",tx.GetHash().ToString(),tx.nExpiryHeight,nHeight);
+            txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: transaction %s is expired, expiry block %i vs current block %i\n",tx.GetHash().ToString(),tx.nExpiryHeight,nHeight);
             txResults.reasonString = strprintf("tx-overwinter-expired");
             return txResults;
         }
@@ -1310,7 +1307,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
                     txResults.dosLevel = dosLevel;
                 }
                 txResults.validationPassed = false;
-                txResults.errorString = strprintf("CheckTransaction(): invalid Overwinter tx version");
+                txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: invalid Overwinter tx version");
                 txResults.reasonString = strprintf("bad-overwinter-tx-version-group-id");
                 return txResults;
             }
@@ -1319,7 +1316,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
             if (tx.nVersion > OVERWINTER_MAX_TX_VERSION ) {
                 txResults.validationPassed = false;
                 txResults.dosLevel = 100;
-                txResults.errorString = strprintf("CheckTransaction(): overwinter version too high");
+                txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: overwinter version too high");
                 txResults.reasonString = strprintf("bad-tx-overwinter-version-too-high");
                 return txResults;
             }
@@ -1332,7 +1329,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
         if (::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION) > MAX_TX_SIZE_BEFORE_SAPLING) {
             txResults.validationPassed = false;
             txResults.dosLevel = 100;
-            txResults.errorString = strprintf("ContextualCheckTransaction(): size limits failed");
+            txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: size limits failed");
             txResults.reasonString = strprintf("bad-txns-oversize");
             return txResults;
         }
@@ -1340,7 +1337,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
         if (sapling_bundle.IsPresent()) {
             txResults.validationPassed = false;
             txResults.dosLevel = 100;
-            txResults.errorString = strprintf("ContextualCheckTransaction(): pre-Sapling transaction has Sapling components");
+            txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: pre-Sapling transaction has Sapling components");
             txResults.reasonString = strprintf("bad-tx-has-orchard-actions");
             return txResults;
         }
@@ -1354,7 +1351,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
             if (tx.nVersion < SAPLING_MIN_TX_VERSION ) {
                 txResults.validationPassed = false;
                 txResults.dosLevel = 100;
-                txResults.errorString = strprintf("CheckTransaction(): Sapling version too low");
+                txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: Sapling version too low");
                 txResults.reasonString = strprintf("bad-tx-sapling-version-too-low");
                 return txResults;
             }
@@ -1363,7 +1360,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
             if (tx.nVersion > SAPLING_MAX_TX_VERSION ) {
                 txResults.validationPassed = false;
                 txResults.dosLevel = 100;
-                txResults.errorString = strprintf("CheckTransaction(): Sapling version too high");
+                txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: Sapling version too high");
                 txResults.reasonString = strprintf("bad-tx-sapling-version-too-high");
                 return txResults;
             }
@@ -1379,7 +1376,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
                     txResults.dosLevel = dosLevel;
                 }
                 txResults.validationPassed = false;
-                txResults.errorString = strprintf("CheckTransaction(): invalid Sapling tx version");
+                txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: invalid Sapling tx version");
                 txResults.reasonString = strprintf("bad-sapling-tx-version-group-id");
                 return txResults;
             }
@@ -1392,7 +1389,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
         if (orchard_bundle.IsPresent()) {
             txResults.validationPassed = false;
             txResults.dosLevel = 100;
-            txResults.errorString = strprintf("ContextualCheckTransaction(): pre-Orchard transaction has Orchard actions");
+            txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: pre-Orchard transaction has Orchard actions");
             txResults.reasonString = strprintf("bad-tx-has-orchard-actions");
             return txResults;
         }
@@ -1400,7 +1397,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
         if (tx.GetConsensusBranchId().has_value()) {
             txResults.validationPassed = false;
             txResults.dosLevel = 100;
-            txResults.errorString = strprintf("CheckTransaction(): pre-Orchard transaction does has consensus branch id field set");
+            txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: pre-Orchard transaction does has consensus branch id field set");
             txResults.reasonString = strprintf("bad-tx-pre-orchard consensus-branch-id");
         }
     }
@@ -1415,7 +1412,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
                 txResults.dosLevel = dosLevel;
             }
             txResults.validationPassed = false;
-            txResults.errorString = strprintf("CheckTransaction(): invalid Orchard tx version");
+            txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: invalid Orchard tx version");
             txResults.reasonString = strprintf("bad-orchard-tx-version-group-id");
             return txResults;
         }
@@ -1425,7 +1422,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
             if (tx.fOverwintered && tx.nVersion < ORCHARD_MIN_TX_VERSION ) {
                 txResults.validationPassed = false;
                 txResults.dosLevel = 100;
-                txResults.errorString = strprintf("CheckTransaction(): Orchard version too low");
+                txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: Orchard version too low");
                 txResults.reasonString = strprintf("bad-tx-orchard-version-too-low");
                 return txResults;
             }
@@ -1434,7 +1431,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
             if (tx.fOverwintered && tx.nVersion > ORCHARD_MAX_TX_VERSION ) {
                 txResults.validationPassed = false;
                 txResults.dosLevel = 100;
-                txResults.errorString = strprintf("CheckTransaction(): Orchard version too high");
+                txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: Orchard version too high");
                 txResults.reasonString = strprintf("bad-tx-orchard-version-too-high");
                 return txResults;
             }
@@ -1442,7 +1439,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
             if (!tx.GetConsensusBranchId().has_value()) {
                 txResults.validationPassed = false;
                 txResults.dosLevel = 100;
-                txResults.errorString = strprintf("CheckTransaction(): transaction does not have consensus branch id field set");
+                txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: transaction does not have consensus branch id field set");
                 txResults.reasonString = strprintf("bad-tx-consensus-branch-id-missing");
                 return txResults;
             }
@@ -1451,7 +1448,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
             if (tx.GetConsensusBranchId().value() != consensusBranchId) {
                 txResults.validationPassed = false;
                 txResults.dosLevel = 100;
-                txResults.errorString = strprintf("CheckTransaction(): transaction's consensus branch id (%08x) does not match the current consensus branch (%08x)", tx.GetConsensusBranchId().value(), consensusBranchId);
+                txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: transaction's consensus branch id (%08x) does not match the current consensus branch (%08x)", tx.GetConsensusBranchId().value(), consensusBranchId);
                 txResults.reasonString = strprintf("bad-tx-consensus-branch-id-mismatch");
                 return txResults;
             }
@@ -1460,7 +1457,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
             if (!(tx.vjoinsplit.empty())) {
                 txResults.validationPassed = false;
                 txResults.dosLevel = 100;
-                txResults.errorString = strprintf("CheckTransaction(): Sprout JoinSplits not allowed in Orchard transactions.");
+                txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: Sprout JoinSplits not allowed in Orchard transactions.");
                 txResults.reasonString = strprintf("bad-tx-has-joinsplits");
                 return txResults;
             }
@@ -1479,16 +1476,66 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
  * 2. ProcessNewBlock calls AcceptBlock, which calls CheckBlock (which calls CheckTransaction)
  *    and ContextualCheckBlock (which calls ContextualCheckTransactionMultithreaded).
  */
-CheckTransationResults ContextualCheckTransactionBindingSigWorker(
+CheckTransationResults ContextualCheckTransactionShieldedBundles(
     const std::vector<const CTransaction*> vtx,
-    const std::vector<uint256> vTxSig,
+    const CCoinsViewCache* view,
+    const uint32_t consensusBranchId,
+    const bool isInitialBlockDownload,
     const uint32_t threadNumber) {
 
     //Results to be returned
     CheckTransationResults txResults;
 
     for (int i = 0; i < vtx.size(); i++) {
-        const uint256 dataToBeSigned = vTxSig[i];
+
+        //Get Signature hash to pass to the sapling verifiers later
+
+          uint256 dataToBeSigned;
+
+        if (!vtx[i]->vjoinsplit.empty() ||
+            vtx[i]->GetSaplingBundle().IsPresent() ||
+            vtx[i]->GetOrchardBundle().IsPresent()) {
+
+            if (!view->HaveInputs(*vtx[i])) {
+                fprintf(stderr,"Vin Size %d\n",vtx[i]->vin.size());
+                txResults.validationPassed = false;
+                txResults.dosLevel = 100;
+                txResults.errorString = strprintf("ContextualCheckTransactionShieldedBundles: inputs missing/spent");
+                txResults.reasonString = strprintf("bad-txns-inputs-missingorspent");
+                return txResults;
+            }
+
+            std::vector<CTxOut> allPrevOutputs;
+            for (const auto& input : vtx[i]->vin) {
+                allPrevOutputs.push_back(view->GetOutputFor(input));
+            }
+            PrecomputedTransactionData txdata(*vtx[i], allPrevOutputs);
+
+            // Empty output script.
+            CScript scriptCode;
+            try {
+                dataToBeSigned = SignatureHash(scriptCode, *vtx[i], NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId, txdata);
+            } catch (std::logic_error ex) {
+                txResults.validationPassed = false;
+                txResults.dosLevel = 100;
+                txResults.errorString = strprintf("ContextualCheckTransactionShieldedBundles: error computing signature hash");
+                txResults.reasonString = strprintf("error-computing-signature-hash");
+                return txResults;
+            }
+        }
+
+        if (!(vtx[i]->IsMint() || vtx[i]->vjoinsplit.empty())) {
+            BOOST_STATIC_ASSERT(crypto_sign_PUBLICKEYBYTES == 32);
+            // We rely on libsodium to check that the signature is canonical.
+            // https://github.com/jedisct1/libsodium/commit/62911edb7ff2275cccd74bf1c8aefcc4d76924e0
+            if (crypto_sign_verify_detached(&vtx[i]->joinSplitSig[0], dataToBeSigned.begin(), 32,vtx[i]->joinSplitPubKey.begin()) != 0) {
+                txResults.validationPassed = false;
+                txResults.dosLevel = isInitialBlockDownload? 0 : 100;
+                txResults.errorString = strprintf("ContextualCheckTransactionShieldedBundles: invalid joinsplit signature");
+                txResults.reasonString = strprintf("bad-txns-invalid-joinsplit-signature");
+                return txResults;
+            }
+        }
 
         // Queue Sapling bundle to be batch-validated. This also checks some consensus rules.
         if (vtx[i]->GetSaplingBundle().IsPresent()) {
@@ -1502,7 +1549,7 @@ CheckTransationResults ContextualCheckTransactionBindingSigWorker(
                 if (!vtx[i]->GetSaplingBundle().QueueAuthValidation(*saplingAuth.value(), dataToBeSigned)) {
                     txResults.validationPassed = false;
                     txResults.dosLevel = 100;
-                    txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling bundle authorization queue failed");
+                    txResults.errorString = strprintf("ContextualCheckTransactionShieldedBundles: Sapling bundle authorization queue failed");
                     txResults.reasonString = strprintf("bad-txns-sapling-bundle-authorization");
                     return txResults;
                 }
@@ -1511,7 +1558,7 @@ CheckTransationResults ContextualCheckTransactionBindingSigWorker(
             if (!saplingAuth.value()->validate()) {
                 txResults.validationPassed = false;
                 txResults.dosLevel = 100;
-                txResults.errorString = strprintf("ContextualCheckTransaction(): Sapling bundle authorization validate failed");
+                txResults.errorString = strprintf("ContextualCheckTransactionShieldedBundles: Sapling bundle authorization validate failed");
                 txResults.reasonString = strprintf("bad-txns-sapling-bundle-authorization");
                 return txResults;
             }
@@ -1532,7 +1579,7 @@ CheckTransationResults ContextualCheckTransactionBindingSigWorker(
             if (!orchardAuth.value()->validate()) {
                 txResults.validationPassed = false;
                 txResults.dosLevel = 100;
-                txResults.errorString = strprintf("ContextualCheckTransaction(): Orchard bundle authorization invalid");
+                txResults.errorString = strprintf("ContextualCheckTransactionShieldedBundles: Orchard bundle authorization invalid");
                 txResults.reasonString = strprintf("bad-txns-orchard-bundle-authorization");
                 return txResults;
             }
@@ -1569,14 +1616,14 @@ bool ContextualCheckTransactionMultithreaded(
       //Setup tx batches
       std::vector<const CTransaction*> vtx;
       std::vector<std::vector<const CTransaction*>> vvtx;
-      std::vector<uint256> vTxSig;
-      std::vector<std::vector<uint256>> vvTxSig;
+      //std::vector<uint256> vTxSig;
+      //std::vector<std::vector<uint256>> vvTxSig;
 
       //Setup spend batches
       // std::vector<const SpendDescription*> vSpend;
       // std::vector<std::vector<const SpendDescription*>> vvSpend;
-      std::vector<uint256> vSpendSig;
-      std::vector<std::vector<uint256>> vvSpendSig;
+      // std::vector<uint256> vSpendSig;
+      // std::vector<std::vector<uint256>> vvSpendSig;
 
       //Setup output batches
       // std::vector<const OutputDescription*> vOutput;
@@ -1585,9 +1632,9 @@ bool ContextualCheckTransactionMultithreaded(
       //Create Thread Vectors
       for (int i = 0; i < maxProcessingThreads; i++) {
           vvtx.emplace_back(vtx);
-          vvTxSig.emplace_back(vTxSig);
+          // vvTxSig.emplace_back(vTxSig);
           // vvSpend.emplace_back(vSpend);
-          vvSpendSig.emplace_back(vSpendSig);
+          // vvSpendSig.emplace_back(vSpendSig);
           // vvOutput.emplace_back(vOutput);
       }
 
@@ -1601,53 +1648,13 @@ bool ContextualCheckTransactionMultithreaded(
           //check the cointbase transaction
           if (tx->IsCoinBase()) {
               if (!ContextualCheckCoinbaseTransaction(*tx, nHeight)) {
-                  return state.DoS(100, error("CheckTransaction(): invalid script data for coinbase time lock"),
+                  return state.DoS(100, error("ContextualCheckCoinbaseTransaction: invalid script data for coinbase time lock"),
                                       REJECT_INVALID, "bad-txns-invalid-script-data-for-coinbase-time-lock");
               }
           }
 
-          //Get Signature hash to pass to the sapling verifiers later
-
-          uint256 dataToBeSigned;
-
-          if (!tx->IsMint() &&
-              (!tx->vjoinsplit.empty() ||
-                tx->GetSaplingBundle().IsPresent() ||
-                tx->GetOrchardBundle().IsPresent())) {
-
-              if (!view.HaveInputs(*tx))
-                  return state.DoS(100, error("CheckTransaction(): inputs missing/spent"),
-                                     REJECT_INVALID, "bad-txns-inputs-missingorspent");
-
-              std::vector<CTxOut> allPrevOutputs;
-              for (const auto& input : tx->vin) {
-                  allPrevOutputs.push_back(view.GetOutputFor(input));
-              }
-              PrecomputedTransactionData txdata(*tx, allPrevOutputs);
-
-              auto consensusBranchId = CurrentEpochBranchId(nHeight, Params().GetConsensus());
-              // Empty output script.
-              CScript scriptCode;
-              try {
-                  dataToBeSigned = SignatureHash(scriptCode, *tx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId, txdata);
-              } catch (std::logic_error ex) {
-                  return state.DoS(100, error("CheckTransaction(): error computing signature hash"),
-                                      REJECT_INVALID, "error-computing-signature-hash");
-              }
-          }
-
-          if (!(tx->IsMint() || tx->vjoinsplit.empty())) {
-              BOOST_STATIC_ASSERT(crypto_sign_PUBLICKEYBYTES == 32);
-              // We rely on libsodium to check that the signature is canonical.
-              // https://github.com/jedisct1/libsodium/commit/62911edb7ff2275cccd74bf1c8aefcc4d76924e0
-              if (crypto_sign_verify_detached(&tx->joinSplitSig[0], dataToBeSigned.begin(), 32,tx->joinSplitPubKey.begin()) != 0) {
-                  return state.DoS(isInitialBlockDownload? 0 : 100, error("CheckTransaction(): invalid joinsplit signature"),
-                                      REJECT_INVALID, "bad-txns-invalid-joinsplit-signature");
-              }
-          }
-
           //Most of the check can be done sigle threaded and do not warrant the additonal overhead required to spin up threads
-          CheckTransationResults singleResults = ContextualCheckTransactionSingleThreaded(*tx, nHeight, dosLevel, isInitialBlockDownload, i);
+          CheckTransationResults singleResults = ContextualCheckTransactionSingleThreaded(*tx, nHeight, dosLevel, isInitialBlockDownload);
 
           //Return single threaded results
           if (!singleResults.validationPassed) {
@@ -1657,10 +1664,9 @@ bool ContextualCheckTransactionMultithreaded(
           //Skip costly sapling checks on intial download below the hardcoded checkpoints
           if (!fCheckpointsEnabled || nHeight >= Checkpoints::GetTotalBlocksEstimate(Params().Checkpoints())) {
               //Verify Sapling & Orchard
-              if (tx->GetSaplingBundle().IsPresent() || tx->GetOrchardBundle().IsPresent()) {
+              if (!tx->IsMint()) {
                   //Push tx to thread vector
                   vvtx[t].emplace_back(tx);
-                  vvTxSig[t].emplace_back(dataToBeSigned);
                   //Increment thread vector
                   t++;
                   //reset if tread vector is greater qty of threads being used
@@ -1671,11 +1677,13 @@ bool ContextualCheckTransactionMultithreaded(
           }
       }
 
+      auto consensusBranchId = CurrentEpochBranchId(nHeight, Params().GetConsensus());
+            
       //Push batches of txs to async threads
       for (int i = 0; i < vvtx.size(); i++) {
           //Perform transaction level checks
           if (!vvtx[i].empty()) {
-              vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionBindingSigWorker, vvtx[i], vvTxSig[i], i));
+              vFutures.emplace_back(std::async(std::launch::async, ContextualCheckTransactionShieldedBundles, vvtx[i], &view, consensusBranchId, isInitialBlockDownload, i));
           }
       }
 
@@ -1822,7 +1830,7 @@ bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransactio
         tx.GetSaplingSpendsCount() == 0 &&
         !orchard_bundle.SpendsEnabled())
         return state.DoS(10, error("CheckTransaction(): vin empty"),
-                         REJECT_INVALID, "bad-txns-vin-empty");
+                         REJECT_INVALID, "bad-txns-no-source-of-funds");
 
     // Transactions containing empty `vout` must have either non-empty
     // `vjoinsplit` or non-empty `vShieldedOutput`.
@@ -1830,7 +1838,7 @@ bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransactio
         tx.vjoinsplit.empty() &&
         tx.GetSaplingOutputsCount() == 0 &&
         !orchard_bundle.OutputsEnabled()) {
-        return state.DoS(10, error("CheckTransaction(): vout empty"),REJECT_INVALID, "bad-txns-vout-empty");
+        return state.DoS(10, error("CheckTransaction(): vout empty"),REJECT_INVALID, "bad-txns-no-sink-of-funds");
     }
 
     // Size limits
@@ -1848,7 +1856,7 @@ bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransactio
             return state.DoS(100, error("CheckTransaction(): txout.nValue negative"),REJECT_INVALID, "bad-txns-vout-negative");
         }
         if (txout.nValue > MAX_MONEY) {
-            fprintf(stderr,"%.8f > max %.8f\n",(double)txout.nValue/COIN,(double)MAX_MONEY/COIN);
+            //fprintf(stderr,"%.8f > max %.8f\n",(double)txout.nValue/COIN,(double)MAX_MONEY/COIN);
             return state.DoS(100, error("CheckTransaction(): txout.nValue too high"),REJECT_INVALID, "bad-txns-vout-toolarge");
         }
         if ( ASSETCHAINS_PRIVATE != 0 )

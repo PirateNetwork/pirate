@@ -1212,7 +1212,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 {
                     //fprintf(stderr, "tx failed: %s rejectreason.%s\n", wtx.GetHash().GetHex().c_str(), state.GetRejectReason().c_str());
                     // vin-empty on staking chains is error relating to a failed staking tx, that for some unknown reason did not fully erase. save them here to erase and re-add later on.
-                    if ( ASSETCHAINS_STAKED != 0 && state.GetRejectReason() == "bad-txns-vin-empty" )
+                    if ( ASSETCHAINS_STAKED != 0 && state.GetRejectReason() == "bad-txns-no-source-of-funds" )
                         deadTxns.push_back(hash);
                     return false;
                 }
