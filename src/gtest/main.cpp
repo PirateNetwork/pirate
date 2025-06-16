@@ -5,6 +5,14 @@
 #include "crypto/common.h"
 #include "testutils.h"
 
+struct ECCryptoClosure
+{
+    ECCVerifyHandle handle;
+};
+
+ECCryptoClosure instance_of_eccryptoclosure;
+
+ZCJoinSplit* params;
 
 int main(int argc, char **argv) {
     assert(init_and_check_sodium() != -1);

@@ -47,6 +47,16 @@ void acceptTxFail(const CTransaction tx);
 CMutableTransaction spendTx(const CTransaction &txIn, int nOut=0);
 // std::vector<uint8_t> getSig(const CMutableTransaction mtx, CScript inputPubKey, int nIn=0);
 
+// int GenZero(int n)
+// {
+//     return 0;
+// }
+
+// int GenMax(int n)
+// {
+//     return n-1;
+// }
+
 class TransactionInProcess
 {
 public:

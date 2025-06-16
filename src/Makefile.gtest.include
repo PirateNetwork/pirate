@@ -10,10 +10,10 @@ pirate_gtest_SOURCES = \
 	gtest/main.cpp \
 	gtest/testutils.h \
 	gtest/testutils.cpp \
-	#gtest/utils.cpp \
+	gtest/test_block.cpp \
 	gtest/test_checktransaction.cpp \
-	#gtest/json_test_vectors.cpp \
-    #gtest/json_test_vectors.h
+	gtest/json_test_vectors.cpp \
+    gtest/json_test_vectors.h
 
 # These tests are order-dependent, because they
 # depend on global state (see #1539)
@@ -23,11 +23,11 @@ pirate_gtest_SOURCES += \
 endif
 
 pirate_gtest_SOURCES += \
-	#gtest/test_tautology.cpp \
-	#gtest/test_deprecation.cpp \
-	#gtest/test_httprpc.cpp \
-	#gtest/test_joinsplit.cpp \
-	#gtest/test_keys.cpp \
+	gtest/test_tautology.cpp \
+	gtest/test_deprecation.cpp \
+	gtest/test_httprpc.cpp \
+	gtest/test_joinsplit.cpp \
+	gtest/test_keys.cpp \
 	#gtest/test_keystore.cpp \
 	#gtest/test_noteencryption.cpp \
 	#gtest/test_merkletree.cpp \
