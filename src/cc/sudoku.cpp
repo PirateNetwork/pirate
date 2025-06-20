@@ -149,7 +149,7 @@
 /* And that brings me to this topic: What do all these points mean?                 */
 /*                                                                                  */
 /* Well, who knows? This is still subjective, and the weighting system I've chosen  */
-/* for point scoring is is largely arbitrary. But based upon feedback from a number */
+/* for point scoring is largely arbitrary. But based upon feedback from a number */
 /* of individuals, a rough scale of difficulty plays out as follows:                */
 /*                                                                                  */
 /*   DEGREE OF DIFFICULTY   |  SCORE                                                */

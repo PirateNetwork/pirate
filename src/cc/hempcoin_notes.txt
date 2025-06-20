@@ -53,7 +53,7 @@ paymentsfund:
 get the payment fund scriptpubkey hex from vout 0: (the split it at OP_CHECKCRYPTOCONDITION or 'cc' )
     2ea22c8020987fad30df055db6fd922c3a57e55d76601229ed3da3b31340112e773df3d0d28103120c008203000401cc 2a0401f00101246a22f046337db779358deaa69b9af053e27d85cb8e8e48b0b13805c084b04f87be6577ee75
 
-    put the second half into an OP_RETURN: (the remaining part of the the above scriptpubkey) eg.
+    put the second half into an OP_RETURN: (the remaining part of the above scriptpubkey) eg.
         ./komodo-cli -ac_name=TESTHC opreturn_burn 1 2a0401f00101246a22f046337db779358deaa69b9af053e27d85cb8e8e48b0b13805c084b04f87be6577ee75
             opret_burn takes any burn amount and arbitrary hex string. (RPC works, but may have bugs, likely use this for LABS too with some fixes)
     this gives a raw hex. Decode it and check the OP_RETURN is right before sending. 
