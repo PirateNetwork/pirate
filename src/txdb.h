@@ -67,7 +67,6 @@ public:
     CCoinsViewDB(size_t nCacheSize, bool fMemory = false, bool fWipe = false);
 
     bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
-    bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
     bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const;
     bool GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const;
     bool GetNullifier(const uint256 &nf, ShieldedType type) const;
@@ -91,11 +90,9 @@ public:
     bool BatchWrite(CCoinsMap &mapCoins,
                     const uint256 &hashBlock,
                     const uint256 &hashSproutAnchor,
-                    const uint256 &hashSaplingAnchor,
                     const uint256 &hashSaplingFrontierAnchor,
                     const uint256 &hashOrchardFrontierAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
-                    CAnchorsSaplingMap &mapSaplingAnchors,
                     CAnchorsSaplingFrontierMap & mapSaplingFrontierAnchors,
                     CAnchorsOrchardFrontierMap & mapOrchardFrontierAnchors,
                     CNullifiersMap &mapSproutNullifiers,

@@ -68,23 +68,6 @@ public:
         }
     }
 
-    bool GetSaplingAnchorAt(const uint256& rt, SaplingMerkleTree& tree) const
-    {
-        if (rt == SaplingMerkleTree::empty_root()) {
-            SaplingMerkleTree new_tree;
-            tree = new_tree;
-            return true;
-        }
-
-        std::map<uint256, SaplingMerkleTree>::const_iterator it = mapSaplingAnchors_.find(rt);
-        if (it == mapSaplingAnchors_.end()) {
-            return false;
-        } else {
-            tree = it->second;
-            return true;
-        }
-    }
-
     bool GetSaplingFrontierAnchorAt(const uint256& rt, SaplingMerkleFrontier& tree) const
     {
         if (rt == SaplingMerkleFrontier::empty_root()) {
@@ -127,7 +110,7 @@ public:
         case SPROUT:
             mapToUse = &mapSproutNullifiers_;
             break;
-        case SAPLING:
+        case SAPLINGFRONTIER:
             mapToUse = &mapSaplingNullifiers_;
             break;
         case ORCHARDFRONTIER:
@@ -151,9 +134,6 @@ public:
         switch (type) {
         case SPROUT:
             return hashBestSproutAnchor_;
-            break;
-        case SAPLING:
-            return hashBestSaplingAnchor_;
             break;
         case SAPLINGFRONTIER:
             return hashBestSaplingFrontierAnchor_;
@@ -218,11 +198,9 @@ public:
     bool BatchWrite(CCoinsMap& mapCoins,
                     const uint256& hashBlock,
                     const uint256& hashSproutAnchor,
-                    const uint256& hashSaplingAnchor,
                     const uint256& hashSaplingFrontierAnchor,
                     const uint256& hashOrchardFrontierAnchor,
                     CAnchorsSproutMap& mapSproutAnchors,
-                    CAnchorsSaplingMap& mapSaplingAnchors,
                     CAnchorsSaplingFrontierMap& mapSaplingFrontierAnchors,
                     CAnchorsOrchardFrontierMap& mapOrchardFrontierAnchors,
                     CNullifiersMap& mapSproutNullifiers,
@@ -240,7 +218,6 @@ public:
         }
 
         BatchWriteAnchors<SproutMerkleTree, CAnchorsSproutMap>(mapSproutAnchors, mapSproutAnchors_);
-        BatchWriteAnchors<SaplingMerkleTree, CAnchorsSaplingMap>(mapSaplingAnchors, mapSaplingAnchors_);
         BatchWriteAnchors<SaplingMerkleFrontier, CAnchorsSaplingFrontierMap>(mapSaplingFrontierAnchors, mapSaplingFrontierAnchors_);
         BatchWriteAnchors<OrchardMerkleFrontier, CAnchorsOrchardFrontierMap>(mapOrchardFrontierAnchors, mapOrchardFrontierAnchors_);
 
@@ -250,10 +227,8 @@ public:
 
         mapCoins.clear();
         mapSproutAnchors.clear();
-        mapSaplingAnchors.clear();
         hashBestBlock_ = hashBlock;
         hashBestSproutAnchor_ = hashSproutAnchor;
-        hashBestSaplingAnchor_ = hashSaplingAnchor;
         hashBestSaplingFrontierAnchor_ = hashSaplingFrontierAnchor;
         hashBestOrchardFrontierAnchor_ = hashOrchardFrontierAnchor;
         return true;
@@ -272,7 +247,6 @@ public:
         // Manually recompute the dynamic usage of the whole data, and compare it.
         size_t ret = memusage::DynamicUsage(cacheCoins) +
                      memusage::DynamicUsage(cacheSproutAnchors) +
-                     memusage::DynamicUsage(cacheSaplingAnchors) +
                      memusage::DynamicUsage(cacheSaplingFrontierAnchors) +
                      memusage::DynamicUsage(cacheOrchardFrontierAnchors) +
                      memusage::DynamicUsage(cacheSproutNullifiers) +
@@ -368,11 +342,6 @@ bool GetAnchorAt(const CCoinsViewCacheTest& cache, const uint256& rt, SproutMerk
     return cache.GetSproutAnchorAt(rt, tree);
 }
 template <>
-bool GetAnchorAt(const CCoinsViewCacheTest& cache, const uint256& rt, SaplingMerkleTree& tree)
-{
-    return cache.GetSaplingAnchorAt(rt, tree);
-}
-template <>
 bool GetAnchorAt(const CCoinsViewCacheTest& cache, const uint256& rt, SaplingMerkleFrontier& tree)
 {
     return cache.GetSaplingFrontierAnchorAt(rt, tree);
@@ -386,15 +355,15 @@ bool GetAnchorAt(const CCoinsViewCacheTest& cache, const uint256& rt, OrchardMer
 void checkNullifierCache(const CCoinsViewCacheTest& cache, const TxWithNullifiers& txWithNullifiers, bool shouldBeInCache)
 {
     // Make sure the nullifiers have not gotten mixed up
-    EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.sproutNullifier, SAPLING));
+    EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.sproutNullifier, SAPLINGFRONTIER));
     EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.sproutNullifier, ORCHARDFRONTIER));
     EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.saplingNullifier, SPROUT));
     EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.saplingNullifier, ORCHARDFRONTIER));
     EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.orchardNullifier, SPROUT));
-    EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.orchardNullifier, SAPLING));
+    EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.orchardNullifier, SAPLINGFRONTIER));
     // Check if the nullifiers either are or are not in the cache
     bool containsSproutNullifier = cache.GetNullifier(txWithNullifiers.sproutNullifier, SPROUT);
-    bool containsSaplingNullifier = cache.GetNullifier(txWithNullifiers.saplingNullifier, SAPLING);
+    bool containsSaplingNullifier = cache.GetNullifier(txWithNullifiers.saplingNullifier, SAPLINGFRONTIER);
     bool containsOrchardNullifier = cache.GetNullifier(txWithNullifiers.orchardNullifier, ORCHARDFRONTIER);
     EXPECT_TRUE(containsSproutNullifier == shouldBeInCache);
     EXPECT_TRUE(containsSaplingNullifier == shouldBeInCache);
@@ -568,7 +537,6 @@ void anchorPopRegressionTestImpl(ShieldedType type)
 TEST(TestCoins, anchor_pop_regression_test)
 {
     anchorPopRegressionTestImpl<SproutMerkleTree>(SPROUT);
-    anchorPopRegressionTestImpl<SaplingMerkleTree>(SAPLING);
     anchorPopRegressionTestImpl<SaplingMerkleFrontier>(SAPLINGFRONTIER);
     anchorPopRegressionTestImpl<OrchardMerkleFrontier>(ORCHARDFRONTIER);
 }
@@ -659,7 +627,6 @@ void anchorRegressionTestImpl(ShieldedType type)
 TEST(TestCoins, anchor_regression_test)
 {
     anchorRegressionTestImpl<SproutMerkleTree>(SPROUT);
-    anchorRegressionTestImpl<SaplingMerkleTree>(SAPLING);
     anchorRegressionTestImpl<SaplingMerkleFrontier>(SAPLINGFRONTIER);
     anchorRegressionTestImpl<OrchardMerkleFrontier>(ORCHARDFRONTIER);
 }
@@ -721,7 +688,6 @@ void anchorsFlushImpl(ShieldedType type)
 TEST(TestCoins, anchors_flush_test)
 {
     anchorsFlushImpl<SproutMerkleTree>(SPROUT);
-    anchorsFlushImpl<SaplingMerkleTree>(SAPLING);
     anchorsFlushImpl<SaplingMerkleFrontier>(SAPLINGFRONTIER);
     anchorsFlushImpl<OrchardMerkleFrontier>(ORCHARDFRONTIER);
 }
@@ -878,7 +844,6 @@ void anchorsTestImpl(ShieldedType type)
 TEST(TestCoins, anchors_test)
 {
     anchorsTestImpl<SproutMerkleTree>(SPROUT);
-    anchorsTestImpl<SaplingMerkleTree>(SAPLING);
     anchorsTestImpl<SaplingMerkleFrontier>(SAPLINGFRONTIER);
     anchorsTestImpl<OrchardMerkleFrontier>(ORCHARDFRONTIER);
 }

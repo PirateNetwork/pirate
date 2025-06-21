@@ -1960,8 +1960,6 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
 
 void CWallet::ChainTip(const CBlockIndex *pindex,
                        const CBlock *pblock,
-                       SproutMerkleTree sproutTree,
-                       SaplingMerkleTree saplingTree,
                        bool added)
 {
     LOCK2(cs_main, cs_wallet);
@@ -1969,34 +1967,25 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
     if (added) {
         IncrementSaplingWallet(pindex);
         IncrementOrchardWallet(pindex);
-        // Prevent witness cache building && consolidation transactions
+        // Prevent consolidation & sweep transactions
         // from being created when node is syncing after launch,
         // and also when node wakes up from suspension/hibernation and incoming blocks are old.
         bool initialDownloadCheck = IsInitialBlockDownload();
         if (!initialDownloadCheck &&
             pblock->GetBlockTime() > GetTime() - 8640) //Last 144 blocks 2.4 * 60 * 60
         {
-            // BuildWitnessCache(pindex, false);
             RunSaplingConsolidation(pindex->nHeight);
             RunSaplingSweep(pindex->nHeight);
             while(DeleteWalletTransactions(pindex, false)) {}
         } else {
-            //Build intial witnesses on every block
-            // BuildWitnessCache(pindex, true);
             if (initialDownloadCheck && pindex->nHeight % fDeleteInterval == 0) {
                 while(DeleteWalletTransactions(pindex, false)) {}
-            }
-
-            //Build full witness cache 1 hour before IsInitialBlockDownload() unlocks
-            if (pblock->GetBlockTime() > GetTime() - nMaxTipAge - 3600) {
-                // BuildWitnessCache(pindex, false);
             }
         }
 
     } else {
         DecrementSaplingWallet(pindex);
         DecrementOrchardWallet(pindex);
-        // DecrementNoteWitnesses(pindex);
         UpdateNullifierNoteMapForBlock(pblock);
     }
 
@@ -6669,7 +6658,6 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             }
 
             SproutMerkleTree sproutTree;
-            SaplingMerkleTree saplingTree;
             SaplingMerkleFrontier saplingFrontierTree;
             OrchardMerkleFrontier orchardFrontierTree;
             // This should never fail: we should always be able to get the tree
@@ -6677,7 +6665,6 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             assert(pcoinsTip->GetSproutAnchorAt(pindex->hashSproutAnchor, sproutTree));
             if (pindex->pprev) {
                 if (NetworkUpgradeActive(pindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
-                    assert(pcoinsTip->GetSaplingAnchorAt(pindex->pprev->hashFinalSaplingRoot, saplingTree));
                     assert(pcoinsTip->GetSaplingFrontierAnchorAt(pindex->pprev->hashFinalSaplingRoot, saplingFrontierTree));
                 }
                 if (NetworkUpgradeActive(pindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD)) {

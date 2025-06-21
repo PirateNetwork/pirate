@@ -471,7 +471,7 @@ void CTxMemPool::removeWithAnchor(const uint256 &invalidRoot, ShieldedType type)
                     }
                 }
             break;
-            case SAPLING:
+            case SAPLINGFRONTIER:
                 for (const auto& spend : tx.GetSaplingSpends()) {
                     uint256 anchor = uint256::FromRawBytes(spend.anchor());
                     if (anchor == invalidRoot) {
@@ -480,12 +480,10 @@ void CTxMemPool::removeWithAnchor(const uint256 &invalidRoot, ShieldedType type)
                     }
                 }
             break;
-            case SAPLINGFRONTIER:
-                for (const auto& spend : tx.GetSaplingSpends()) {
-                    uint256 anchor = uint256::FromRawBytes(spend.anchor());
-                    if (anchor == invalidRoot) {
+            case ORCHARDFRONTIER:
+                if (tx.GetOrchardBundle().IsPresent()) {
+                    if (tx.GetOrchardBundle().GetAnchor().value() == invalidRoot) {
                         transactionsToRemove.push_back(tx);
-                        break;
                     }
                 }
             break;
@@ -704,6 +702,7 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
 
         boost::unordered_map<uint256, SproutMerkleTree, CCoinsKeyHasher> intermediates;
 
+        // Check Sprout
         for (const JSDescription &joinsplit : tx.vjoinsplit) {
             for (const uint256 &nf : joinsplit.nullifiers) {
                 assert(!pcoins->GetNullifier(nf, SPROUT));
@@ -724,21 +723,27 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
 
             intermediates.insert(std::make_pair(tree.root(), tree));
         }
+
+        //Check Sapling
         for (const auto& spend : tx.GetSaplingSpends())  {
             uint256 anchor = uint256::FromRawBytes(spend.anchor());
             uint256 nullifier = uint256::FromRawBytes(spend.nullifier());
 
-            SaplingMerkleTree tree;
-            SaplingMerkleFrontier frontierTree;
-
-            assert(pcoins->GetSaplingAnchorAt(anchor, tree));
-            assert(pcoins->GetSaplingFrontierAnchorAt(anchor, frontierTree));
-
-            assert(!pcoins->GetNullifier(nullifier, SAPLING));
+            SaplingMerkleFrontier saplingFrontierTree;
+            assert(pcoins->GetSaplingFrontierAnchorAt(anchor, saplingFrontierTree));
+            assert(!pcoins->GetNullifier(nullifier, SAPLINGFRONTIER));
         }
+
+        // Check Orchard
         for (const uint256& nf : tx.GetOrchardBundle().GetNullifiers()) {
             assert(!pcoins->GetNullifier(nf, ORCHARDFRONTIER));
         }
+
+        if (tx.GetOrchardBundle().IsPresent()) {
+            OrchardMerkleFrontier orchardFrontierTree;
+            assert(!pcoins->GetOrchardFrontierAnchorAt(tx.GetOrchardBundle().GetAnchor().value(), orchardFrontierTree));
+        }
+
         if (fDependsWait)
             waitingOnDependants.push_back(&(*it));
         else {
@@ -777,7 +782,7 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
     }
 
     checkNullifiers(SPROUT);
-    checkNullifiers(SAPLING);
+    checkNullifiers(SAPLINGFRONTIER);
     checkNullifiers(ORCHARDFRONTIER);
 
 
@@ -792,7 +797,7 @@ void CTxMemPool::checkNullifiers(ShieldedType type) const
         case SPROUT:
             mapToUse = &mapSproutNullifiers;
             break;
-        case SAPLING:
+        case SAPLINGFRONTIER:
             mapToUse = &mapSaplingNullifiers;
         case ORCHARDFRONTIER:
             mapToUse = &mapOrchardNullifiers;
@@ -915,7 +920,7 @@ bool CTxMemPool::nullifierExists(const uint256& nullifier, ShieldedType type) co
     switch (type) {
         case SPROUT:
             return mapSproutNullifiers.count(nullifier);
-        case SAPLING:
+        case SAPLINGFRONTIER:
             return mapSaplingNullifiers.count(nullifier);
         case ORCHARDFRONTIER:
             return mapOrchardNullifiers.count(nullifier);

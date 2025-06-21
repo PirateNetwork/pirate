@@ -1672,37 +1672,8 @@ UniValue z_gettreestate(const UniValue& params, bool fHelp, const CPubKey& mypk)
         res.pushKV("sprout", sprout_result);
     }
 
-    // sapling
-    int sapling_activation_height = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight; /* ASSETCHAINS_SAPLING */
-    if (sapling_activation_height > Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT)
-    {
-        UniValue sapling_result(UniValue::VOBJ);
-        UniValue sapling_commitments(UniValue::VOBJ);
-        sapling_commitments.pushKV("finalRoot", pindex->hashFinalSaplingRoot.GetHex());
-        bool need_skiphash = false;
-        SaplingMerkleTree tree;
-        if (pcoinsTip->GetSaplingAnchorAt(pindex->hashFinalSaplingRoot, tree)) {
-            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
-            s << tree;
-            sapling_commitments.pushKV("finalState", HexStr(s.begin(), s.end()));
-        } else {
-            // Set skipHash to the most recent block that has a finalState.
-            const CBlockIndex* pindex_skip = pindex->pprev;
-            auto saplingActive = [&](const CBlockIndex* pindex_cur) -> bool {
-                return pindex_cur && pindex_cur->nHeight >= sapling_activation_height;
-            };
-            while (saplingActive(pindex_skip) && !pcoinsTip->GetSaplingAnchorAt(pindex_skip->hashFinalSaplingRoot, tree)) {
-                pindex_skip = pindex_skip->pprev;
-            }
-            if (saplingActive(pindex_skip)) {
-                sapling_result.pushKV("skipHash", pindex_skip->GetBlockHash().GetHex());
-            }
-        }
-        sapling_result.pushKV("commitments", sapling_commitments);
-        res.pushKV("sapling", sapling_result);
-    }
-
     //Sapling Frontier
+    int sapling_activation_height = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight; /* ASSETCHAINS_SAPLING */
     if (sapling_activation_height > Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT)
     {
         UniValue sapling_result(UniValue::VOBJ);
@@ -1729,6 +1700,36 @@ UniValue z_gettreestate(const UniValue& params, bool fHelp, const CPubKey& mypk)
         }
         sapling_result.pushKV("commitments", sapling_commitments);
         res.pushKV("saplingfrontier", sapling_result);
+    }
+
+    //Orchard Frontier
+    int orchard_activation_height = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight;
+    if (orchard_activation_height > Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT)
+    {
+        UniValue orchard_result(UniValue::VOBJ);
+        UniValue orchard_commitments(UniValue::VOBJ);
+        orchard_commitments.pushKV("finalRoot", pindex->hashFinalOrchardRoot.GetHex());
+        bool need_skiphash = false;
+        OrchardMerkleFrontier tree;
+        if (pcoinsTip->GetOrchardFrontierAnchorAt(pindex->hashFinalOrchardRoot, tree)) {
+            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+            s << tree;
+            orchard_commitments.pushKV("finalState", HexStr(s.begin(), s.end()));
+        } else {
+            // Set skipHash to the most recent block that has a finalState.
+            const CBlockIndex* pindex_skip = pindex->pprev;
+            auto orchardActive = [&](const CBlockIndex* pindex_cur) -> bool {
+                return pindex_cur && pindex_cur->nHeight >= orchard_activation_height;
+            };
+            while (orchardActive(pindex_skip) && !pcoinsTip->GetOrchardFrontierAnchorAt(pindex_skip->hashFinalSaplingRoot, tree)) {
+                pindex_skip = pindex_skip->pprev;
+            }
+            if (orchardActive(pindex_skip)) {
+                orchard_result.pushKV("skipHash", pindex_skip->GetBlockHash().GetHex());
+            }
+        }
+        orchard_result.pushKV("commitments", orchard_commitments);
+        res.pushKV("orchardfrontier", orchard_result);
     }
 
     return res;

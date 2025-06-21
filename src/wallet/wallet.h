@@ -1970,7 +1970,7 @@ public:
     CAmount GetCredit(const CTransaction& tx, int32_t voutNum, const isminefilter& filter) const;
     CAmount GetCredit(const CTransaction& tx, const isminefilter& filter) const;
     CAmount GetChange(const CTransaction& tx) const;
-    void ChainTip(const CBlockIndex *pindex, const CBlock *pblock, SproutMerkleTree sproutTree, SaplingMerkleTree saplingTree, bool added);
+    void ChainTip(const CBlockIndex *pindex, const CBlock *pblock, bool added);
     void RunSaplingSweep(int blockHeight);
     void RunSaplingConsolidation(int blockHeight);
     bool CommitAutomatedTx(const CTransaction& tx);

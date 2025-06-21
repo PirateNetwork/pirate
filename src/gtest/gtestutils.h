@@ -214,11 +214,11 @@ public:
         return false;
     }
 
-    bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const {
+    bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const {
         return false;
     }
-
-    bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const {
+    
+    bool GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const {
         return false;
     }
 

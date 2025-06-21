@@ -70,10 +70,6 @@ public:
         return false;
     }
 
-    bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const {
-        return false;
-    }
-
     bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const {
         return false;
     }
@@ -114,11 +110,9 @@ public:
     bool BatchWrite(CCoinsMap &mapCoins,
                     const uint256 &hashBlock,
                     const uint256 &hashSproutAnchor,
-                    const uint256 &hashSaplingAnchor,
                     const uint256 &hashSaplingFrontierAnchor,
                     const uint256 &hashOrchardFrontierAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
-                    CAnchorsSaplingMap &mapSaplingAnchors,
                     CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
                     CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
                     CNullifiersMap &mapSproutNullifiers,

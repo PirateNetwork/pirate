@@ -1497,7 +1497,6 @@ CheckTransationResults ContextualCheckTransactionShieldedBundles(
             vtx[i]->GetOrchardBundle().IsPresent()) {
 
             if (!view->HaveInputs(*vtx[i])) {
-                fprintf(stderr,"Vin Size %d\n",vtx[i]->vin.size());
                 txResults.validationPassed = false;
                 txResults.dosLevel = 100;
                 txResults.errorString = strprintf("ContextualCheckTransactionShieldedBundles: inputs missing/spent");
@@ -2353,7 +2352,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
             }
         }
         for (const uint256& nf : tx.GetSaplingBundle().GetNullifiers()) {
-            if (pool.nullifierExists(nf, SAPLING)) {
+            if (pool.nullifierExists(nf, SAPLINGFRONTIER)) {
                 return state.Invalid(error("AcceptToMemoryPool: duplicate nullifier requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-nullifier-requirements-not-met");
             }
         }
@@ -3645,10 +3644,8 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
     // the Sapling activation height. Otherwise, the last anchor was the
     // empty root.
     if (NetworkUpgradeActive(pindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
-        view.PopAnchor(pindex->pprev->hashFinalSaplingRoot, SAPLING);
         view.PopAnchor(pindex->pprev->hashFinalSaplingRoot, SAPLINGFRONTIER);
     } else {
-        view.PopAnchor(SaplingMerkleTree::empty_root(), SAPLING);
         view.PopAnchor(SaplingMerkleFrontier::empty_root(), SAPLINGFRONTIER);
     }
 
@@ -3982,9 +3979,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         assert(sprout_tree.root() == old_sprout_tree_root);
     }
 
-    SaplingMerkleTree sapling_tree;
-    assert(view.GetSaplingAnchorAt(view.GetBestAnchor(SAPLING), sapling_tree));
-
     SaplingMerkleFrontier sapling_frontier_tree;
     assert(view.GetSaplingFrontierAnchorAt(view.GetBestAnchor(SAPLINGFRONTIER), sapling_frontier_tree));
 
@@ -4159,12 +4153,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             }
         }
 
-        //Append Sapling Output to SaplingMerkleTree
-        for (const auto& output : tx.GetSaplingOutputs()) {
-            auto cmu = uint256::FromRawBytes(output.cmu());
-            sapling_tree.append(cmu);
-        }
-
         //Append Sapling Outputs to SaplingMerkleFrontier
         if (tx.GetSaplingBundle().IsPresent()) {
             sapling_frontier_tree.AppendBundle(tx.GetSaplingBundle());
@@ -4209,7 +4197,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         return state.DoS(100, error("ConnectBlock: ac_staked chain failed slow komodo_checkPOW"),REJECT_INVALID, "failed-slow_checkPOW");
 
     view.PushAnchor(sprout_tree);
-    view.PushAnchor(sapling_tree);
     view.PushAnchor(sapling_frontier_tree);
     view.PushAnchor(orchard_frontier_tree);
     if (!fJustCheck) {
@@ -4665,7 +4652,6 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
     }
     // Apply the block atomically to the chain state.
     uint256 sproutAnchorBeforeDisconnect = pcoinsTip->GetBestAnchor(SPROUT);
-    uint256 saplingAnchorBeforeDisconnect = pcoinsTip->GetBestAnchor(SAPLING);
     uint256 saplingFrontierAnchorBeforeDisconnect = pcoinsTip->GetBestAnchor(SAPLINGFRONTIER);
     uint256 orchardFrontierAnchorBeforeDisconnect = pcoinsTip->GetBestAnchor(ORCHARDFRONTIER);
     int64_t nStart = GetTimeMicros();
@@ -4683,7 +4669,6 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
 
     LogPrint("bench", "- Disconnect block: %.2fms\n", (GetTimeMicros() - nStart) * 0.001);
     uint256 sproutAnchorAfterDisconnect = pcoinsTip->GetBestAnchor(SPROUT);
-    uint256 saplingAnchorAfterDisconnect = pcoinsTip->GetBestAnchor(SAPLING);
     uint256 saplingFrontierAnchorAfterDisconnect = pcoinsTip->GetBestAnchor(SAPLINGFRONTIER);
     uint256 orchardFrontierAnchorAfterDisconnect = pcoinsTip->GetBestAnchor(ORCHARDFRONTIER);
     // Write the chain state to disk, if necessary.
@@ -4710,11 +4695,6 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
             // in which case we don't want to evict from the mempool yet!
             mempool.removeWithAnchor(sproutAnchorBeforeDisconnect, SPROUT);
         }
-        if (saplingAnchorBeforeDisconnect != saplingAnchorAfterDisconnect) {
-            // The anchor may not change between block disconnects,
-            // in which case we don't want to evict from the mempool yet!
-            mempool.removeWithAnchor(saplingAnchorBeforeDisconnect, SAPLING);
-        }
         if (saplingFrontierAnchorBeforeDisconnect != saplingFrontierAnchorAfterDisconnect) {
             // The anchor may not change between block disconnects,
             // in which case we don't want to evict from the mempool yet!
@@ -4732,11 +4712,9 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
 
     // Get the current commitment tree
     SproutMerkleTree newSproutTree;
-    SaplingMerkleTree newSaplingTree;
     SaplingMerkleFrontier newSaplingFrontierTree;
     OrchardMerkleFrontier newOrchardFrontierTree;
     assert(pcoinsTip->GetSproutAnchorAt(pcoinsTip->GetBestAnchor(SPROUT), newSproutTree));
-    assert(pcoinsTip->GetSaplingAnchorAt(pcoinsTip->GetBestAnchor(SAPLING), newSaplingTree));
     assert(pcoinsTip->GetSaplingFrontierAnchorAt(pcoinsTip->GetBestAnchor(SAPLINGFRONTIER), newSaplingFrontierTree));
     assert(pcoinsTip->GetOrchardFrontierAnchorAt(pcoinsTip->GetBestAnchor(ORCHARDFRONTIER), newOrchardFrontierTree));
     // Let wallets know transactions went from 1-confirmed to
@@ -4760,7 +4738,7 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
         }
     }
     // Update cached incremental witnesses
-    GetMainSignals().ChainTip(pindexDelete, &block, newSproutTree, newSaplingTree, false);
+    GetMainSignals().ChainTip(pindexDelete, &block, false);
 
     return true;
 }
@@ -4921,13 +4899,11 @@ bool ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *pblock)
     KOMODO_CONNECTING = (int32_t)pindexNew->nHeight;
     // Get the current commitment tree
     SproutMerkleTree oldSproutTree;
-    SaplingMerkleTree oldSaplingTree;
     SaplingMerkleFrontier oldSaplingFrontierTree;
     OrchardMerkleFrontier oldOrchardFrontierTree;
     if ( KOMODO_NSPV_FULLNODE )
     {
         assert(pcoinsTip->GetSproutAnchorAt(pcoinsTip->GetBestAnchor(SPROUT), oldSproutTree));
-        assert(pcoinsTip->GetSaplingAnchorAt(pcoinsTip->GetBestAnchor(SAPLING), oldSaplingTree));
         assert(pcoinsTip->GetSaplingFrontierAnchorAt(pcoinsTip->GetBestAnchor(SAPLINGFRONTIER), oldSaplingFrontierTree));
         assert(pcoinsTip->GetOrchardFrontierAnchorAt(pcoinsTip->GetBestAnchor(ORCHARDFRONTIER), oldOrchardFrontierTree));
     }
@@ -4991,7 +4967,7 @@ bool ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *pblock)
         LogPrint("bench", "     - Connect Sync Non-Conflicted Txes with Wallet: %.2fms\n", (GetTimeMicros() - nTimeSyncTx) * 0.001);
     }
     // Update cached incremental witnesses
-    GetMainSignals().ChainTip(pindexNew, pblock, oldSproutTree, oldSaplingTree, true);
+    GetMainSignals().ChainTip(pindexNew, pblock, true);
 
     EnforceNodeDeprecation(pindexNew->nHeight);
 
@@ -7183,15 +7159,24 @@ bool CVerifyDB::VerifyDB(CCoinsView *coinsview, int nCheckLevel, int nCheckDepth
             break;
 
         //Pre-check 0: Read hashFinalSaplingRoot and verify it against the database
-        uint256 dbRoot = coinsview->GetBestAnchor(SAPLINGFRONTIER);
-        if (dbRoot !=  chainActive.Tip()->hashFinalSaplingRoot) {
+        uint256 dbRootSapling = coinsview->GetBestAnchor(SAPLINGFRONTIER);
+        if (dbRootSapling !=  chainActive.Tip()->hashFinalSaplingRoot) {
             LogPrintf("Chain Tip sapling root %s\n", chainActive.Tip()->hashFinalSaplingRoot.ToString());
-            LogPrintf("dbroot %s\n", dbRoot.ToString());
-            if (!(dbRoot == SaplingMerkleTree::empty_root() && chainActive.Tip()->hashFinalSaplingRoot == uint256())) {
-                return error("VerifyDB(): ***Obsolete block database detected, reindexing the blockchain data required.\n");
+            LogPrintf("dbroot %s\n", dbRootSapling.ToString());
+            if (!(dbRootSapling == SaplingMerkleFrontier::empty_root() && chainActive.Tip()->hashFinalSaplingRoot == uint256())) {
+                return error("VerifyDB(): ***Obsolete block database detected (Sapling Empty Root), reindexing the blockchain data required.\n");
             }
         }
 
+        //Pre-check 1: Read hashFinalOrchardRoot and verify it against the database
+        uint256 dbRootOrchard = coinsview->GetBestAnchor(ORCHARDFRONTIER);
+        if (dbRootOrchard !=  chainActive.Tip()->hashFinalOrchardRoot) {
+            LogPrintf("Chain Tip orchard root %s\n", chainActive.Tip()->hashFinalOrchardRoot.ToString());
+            LogPrintf("dbroot %s\n", dbRootOrchard.ToString());
+            if (!(dbRootOrchard == OrchardMerkleFrontier::empty_root() && chainActive.Tip()->hashFinalOrchardRoot == uint256())) {
+                return error("VerifyDB(): ***Obsolete block database detected (Orchard Empty Root), reindexing the blockchain data required.\n");
+            }
+        }
 
         CBlock block;
         // check level 0: read from disk

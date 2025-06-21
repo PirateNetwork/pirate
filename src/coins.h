@@ -318,19 +318,6 @@ struct CAnchorsSproutCacheEntry
     CAnchorsSproutCacheEntry() : entered(false), flags(0) {}
 };
 
-struct CAnchorsSaplingCacheEntry
-{
-    bool entered; // This will be false if the anchor is removed from the cache
-    SaplingMerkleTree tree; // The tree itself
-    unsigned char flags;
-
-    enum Flags {
-        DIRTY = (1 << 0), // This cache entry is potentially different from the version in the parent view.
-    };
-
-    CAnchorsSaplingCacheEntry() : entered(false), flags(0) {}
-};
-
 struct CAnchorsSaplingFrontierCacheEntry
 {
     bool entered; // This will be false if the anchor is removed from the cache
@@ -372,7 +359,6 @@ struct CNullifiersCacheEntry
 enum ShieldedType
 {
     SPROUT,
-    SAPLING,
     SAPLINGFRONTIER,
     ORCHARDFRONTIER,
 };
@@ -385,7 +371,6 @@ enum ProofType
 
 typedef boost::unordered_map<uint256, CCoinsCacheEntry, CCoinsKeyHasher> CCoinsMap;
 typedef boost::unordered_map<uint256, CAnchorsSproutCacheEntry, CCoinsKeyHasher> CAnchorsSproutMap;
-typedef boost::unordered_map<uint256, CAnchorsSaplingCacheEntry, CCoinsKeyHasher> CAnchorsSaplingMap;
 typedef boost::unordered_map<uint256, CAnchorsSaplingFrontierCacheEntry, CCoinsKeyHasher> CAnchorsSaplingFrontierMap;
 typedef boost::unordered_map<uint256, CAnchorsOrchardFrontierCacheEntry, CCoinsKeyHasher> CAnchorsOrchardFrontierMap;
 typedef boost::unordered_map<uint256, CNullifiersCacheEntry, CCoinsKeyHasher> CNullifiersMap;
@@ -411,9 +396,6 @@ class CCoinsView
 public:
     //! Retrieve the tree (Sprout) at a particular anchored root in the chain
     virtual bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
-
-    //! Retrieve the tree (Sapling) at a particular anchored root in the chain
-    virtual bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
 
     //! Retrieve the tree (SaplingFroniter) at a particular anchored root in the chain
     virtual bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const;
@@ -451,11 +433,9 @@ public:
     virtual bool BatchWrite(CCoinsMap &mapCoins,
                             const uint256 &hashBlock,
                             const uint256 &hashSproutAnchor,
-                            const uint256 &hashSaplingAnchor,
                             const uint256 &hashSaplingFrontierAnchor,
                             const uint256 &hashOrchardFrontierAnchor,
                             CAnchorsSproutMap &mapSproutAnchors,
-                            CAnchorsSaplingMap &mapSaplingAnchors,
                             CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
                             CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
                             CNullifiersMap &mapSproutNullifiers,
@@ -480,7 +460,6 @@ protected:
 public:
     CCoinsViewBacked(CCoinsView *viewIn);
     bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
-    bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
     bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const;
     bool GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const;
     bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
@@ -495,11 +474,9 @@ public:
     bool BatchWrite(CCoinsMap &mapCoins,
                     const uint256 &hashBlock,
                     const uint256 &hashSproutAnchor,
-                    const uint256 &hashSaplingAnchor,
                     const uint256 &hashSaplingFrontierAnchor,
                     const uint256 &hashOrchardFrontierAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
-                    CAnchorsSaplingMap &mapSaplingAnchors,
                     CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
                     CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
                     CNullifiersMap &mapSproutNullifiers,
@@ -556,11 +533,9 @@ protected:
     mutable uint256 hashBlock;
     mutable CCoinsMap cacheCoins;
     mutable uint256 hashSproutAnchor;
-    mutable uint256 hashSaplingAnchor;
     mutable uint256 hashSaplingFrontierAnchor;
     mutable uint256 hashOrchardFrontierAnchor;
     mutable CAnchorsSproutMap cacheSproutAnchors;
-    mutable CAnchorsSaplingMap cacheSaplingAnchors;
     mutable CAnchorsSaplingFrontierMap cacheSaplingFrontierAnchors;
     mutable CAnchorsOrchardFrontierMap cacheOrchardFrontierAnchors;
     mutable CNullifiersMap cacheSproutNullifiers;
@@ -577,7 +552,6 @@ public:
 
     // Standard CCoinsView methods
     bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
-    bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
     bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const;
     bool GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const;
     bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
@@ -592,11 +566,9 @@ public:
     bool BatchWrite(CCoinsMap &mapCoins,
                     const uint256 &hashBlock,
                     const uint256 &hashSproutAnchor,
-                    const uint256 &hashSaplingAnchor,
                     const uint256 &hashSaplingFrontierAnchor,
                     const uint256 &hashOrchardFrontierAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
-                    CAnchorsSaplingMap &mapSaplingAnchors,
                     CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
                     CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
                     CNullifiersMap &mapSproutNullifiers,

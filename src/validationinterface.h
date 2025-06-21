@@ -39,7 +39,7 @@ protected:
     virtual void SyncTransactions(const std::vector<CTransaction> &vtx, const CBlock *pblock, const int nHeight) {}
     virtual bool EraseFromWallet(const uint256 &hash) { return true; }
     virtual void RescanWallet() {}
-    virtual void ChainTip(const CBlockIndex *pindex, const CBlock *pblock, SproutMerkleTree sproutTree, SaplingMerkleTree saplingTree, bool added) {}
+    virtual void ChainTip(const CBlockIndex *pindex, const CBlock *pblock, bool added) {}
     virtual void UpdatedTransaction(const uint256 &hash) {}
     virtual void Inventory(const uint256 &hash) {}
     virtual void ResendWalletTransactions(int64_t nBestBlockTime) {}
@@ -61,7 +61,7 @@ struct CMainSignals {
     /** Notifies listeners of an updated transaction without new data (for now: a coinbase potentially becoming visible). */
     boost::signals2::signal<void (const uint256 &)> UpdatedTransaction;
     /** Notifies listeners of a change to the tip of the active block chain. */
-    boost::signals2::signal<void (const CBlockIndex *, const CBlock *, SproutMerkleTree, SaplingMerkleTree, bool)> ChainTip;
+    boost::signals2::signal<void (const CBlockIndex *, const CBlock *, bool)> ChainTip;
     /** Notifies listeners about an inventory item being seen on the network. */
     boost::signals2::signal<void (const uint256 &)> Inventory;
     /** Tells listeners to broadcast their data. */

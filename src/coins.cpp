@@ -65,7 +65,6 @@ bool CCoins::Spend(uint32_t nPos)
     return true;
 }
 bool CCoinsView::GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const { return false; }
-bool CCoinsView::GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const { return false; }
 bool CCoinsView::GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const { return false; }
 bool CCoinsView::GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const { return false; }
 bool CCoinsView::GetNullifier(const uint256 &nullifier, ShieldedType type) const { return false; }
@@ -79,11 +78,9 @@ uint256 CCoinsView::GetHistoryRoot(uint32_t epochId) const { return uint256(); }
 bool CCoinsView::BatchWrite(CCoinsMap &mapCoins,
                             const uint256 &hashBlock,
                             const uint256 &hashSproutAnchor,
-                            const uint256 &hashSaplingAnchor,
                             const uint256 &hashSaplingFrontierAnchor,
                             const uint256 &hashOrchardFrontierAnchor,
                             CAnchorsSproutMap &mapSproutAnchors,
-                            CAnchorsSaplingMap &mapSaplingAnchors,
                             CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
                             CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
                             CNullifiersMap &mapSproutNullifiers,
@@ -96,7 +93,6 @@ bool CCoinsView::GetStats(CCoinsStats &stats) const { return false; }
 CCoinsViewBacked::CCoinsViewBacked(CCoinsView *viewIn) : base(viewIn) { }
 
 bool CCoinsViewBacked::GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const { return base->GetSproutAnchorAt(rt, tree); }
-bool CCoinsViewBacked::GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const { return base->GetSaplingAnchorAt(rt, tree); }
 bool CCoinsViewBacked::GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const { return base->GetSaplingFrontierAnchorAt(rt, tree); }
 bool CCoinsViewBacked::GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const { return base->GetOrchardFrontierAnchorAt(rt, tree); }
 bool CCoinsViewBacked::GetNullifier(const uint256 &nullifier, ShieldedType type) const { return base->GetNullifier(nullifier, type); }
@@ -111,11 +107,9 @@ void CCoinsViewBacked::SetBackend(CCoinsView &viewIn) { base = &viewIn; }
 bool CCoinsViewBacked::BatchWrite(CCoinsMap &mapCoins,
                                   const uint256 &hashBlock,
                                   const uint256 &hashSproutAnchor,
-                                  const uint256 &hashSaplingAnchor,
                                   const uint256 &hashSaplingFrontierAnchor,
                                   const uint256 &hashOrchardFrontierAnchor,
                                   CAnchorsSproutMap &mapSproutAnchors,
-                                  CAnchorsSaplingMap &mapSaplingAnchors,
                                   CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
                                   CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
                                   CNullifiersMap &mapSproutNullifiers,
@@ -123,8 +117,8 @@ bool CCoinsViewBacked::BatchWrite(CCoinsMap &mapCoins,
                                   CNullifiersMap &mapOrchardNullifiers,
                                   CHistoryCacheMap &historyCacheMap) {
       return base->BatchWrite(mapCoins, hashBlock,
-            hashSproutAnchor, hashSaplingAnchor, hashSaplingFrontierAnchor, hashOrchardFrontierAnchor,
-            mapSproutAnchors, mapSaplingAnchors, mapSaplingFrontierAnchors, mapOrchardFrontierAnchors,
+            hashSproutAnchor, hashSaplingFrontierAnchor, hashOrchardFrontierAnchor,
+            mapSproutAnchors, mapSaplingFrontierAnchors, mapOrchardFrontierAnchors,
             mapSproutNullifiers, mapSaplingNullifiers, mapOrchardNullifiers,
             historyCacheMap); }
 
@@ -143,7 +137,6 @@ CCoinsViewCache::~CCoinsViewCache()
 size_t CCoinsViewCache::DynamicMemoryUsage() const {
     return memusage::DynamicUsage(cacheCoins) +
            memusage::DynamicUsage(cacheSproutAnchors) +
-           memusage::DynamicUsage(cacheSaplingAnchors) +
            memusage::DynamicUsage(cacheSaplingFrontierAnchors) +
            memusage::DynamicUsage(cacheOrchardFrontierAnchors) +
            memusage::DynamicUsage(cacheSproutNullifiers) +
@@ -188,29 +181,6 @@ bool CCoinsViewCache::GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tre
     }
 
     CAnchorsSproutMap::iterator ret = cacheSproutAnchors.insert(std::make_pair(rt, CAnchorsSproutCacheEntry())).first;
-    ret->second.entered = true;
-    ret->second.tree = tree;
-    cachedCoinsUsage += ret->second.tree.DynamicMemoryUsage();
-
-    return true;
-}
-
-bool CCoinsViewCache::GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const {
-    CAnchorsSaplingMap::const_iterator it = cacheSaplingAnchors.find(rt);
-    if (it != cacheSaplingAnchors.end()) {
-        if (it->second.entered) {
-            tree = it->second.tree;
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    if (!base->GetSaplingAnchorAt(rt, tree)) {
-        return false;
-    }
-
-    CAnchorsSaplingMap::iterator ret = cacheSaplingAnchors.insert(std::make_pair(rt, CAnchorsSaplingCacheEntry())).first;
     ret->second.entered = true;
     ret->second.tree = tree;
     cachedCoinsUsage += ret->second.tree.DynamicMemoryUsage();
@@ -270,7 +240,7 @@ bool CCoinsViewCache::GetNullifier(const uint256 &nullifier, ShieldedType type) 
         case SPROUT:
             cacheToUse = &cacheSproutNullifiers;
             break;
-        case SAPLING:
+        case SAPLINGFRONTIER:
             cacheToUse = &cacheSaplingNullifiers;
             break;
         case ORCHARDFRONTIER:
@@ -361,16 +331,6 @@ template<> void CCoinsViewCache::PushAnchor(const SproutMerkleTree &tree)
     );
 }
 
-template<> void CCoinsViewCache::PushAnchor(const SaplingMerkleTree &tree)
-{
-    AbstractPushAnchor<SaplingMerkleTree, CAnchorsSaplingMap, CAnchorsSaplingMap::iterator, CAnchorsSaplingCacheEntry>(
-        tree,
-        SAPLING,
-        cacheSaplingAnchors,
-        hashSaplingAnchor
-    );
-}
-
 template<> void CCoinsViewCache::PushAnchor(const SaplingMerkleFrontier &tree)
 {
     AbstractPushAnchor<SaplingMerkleFrontier, CAnchorsSaplingFrontierMap, CAnchorsSaplingFrontierMap::iterator, CAnchorsSaplingFrontierCacheEntry>(
@@ -398,15 +358,6 @@ void CCoinsViewCache::BringBestAnchorIntoCache(
 )
 {
     assert(GetSproutAnchorAt(currentRoot, tree));
-}
-
-template<>
-void CCoinsViewCache::BringBestAnchorIntoCache(
-    const uint256 &currentRoot,
-    SaplingMerkleTree &tree
-)
-{
-    assert(GetSaplingAnchorAt(currentRoot, tree));
 }
 
 template<>
@@ -733,14 +684,6 @@ void CCoinsViewCache::PopAnchor(const uint256 &newrt, ShieldedType type) {
                 hashSproutAnchor
             );
             break;
-        case SAPLING:
-            AbstractPopAnchor<SaplingMerkleTree, CAnchorsSaplingMap, CAnchorsSaplingCacheEntry>(
-                newrt,
-                SAPLING,
-                cacheSaplingAnchors,
-                hashSaplingAnchor
-            );
-            break;
         case SAPLINGFRONTIER:
             AbstractPopAnchor<SaplingMerkleFrontier, CAnchorsSaplingFrontierMap, CAnchorsSaplingFrontierCacheEntry>(
                 newrt,
@@ -825,7 +768,7 @@ const CCoins* CCoinsViewCache::AccessCoins(const uint256 &txid) const {
 
 bool CCoinsViewCache::HaveCoins(const uint256 &txid) const {
     CCoinsMap::const_iterator it = FetchCoins(txid);
-    // We're using vtx.empty() instead of IsPruned here for performance reasons,
+    // We're using vout.empty() instead of IsPruned here for performance reasons,
     // as we only care about the case where a transaction was replaced entirely
     // in a reorganization (which wipes vout entirely, as opposed to spending
     // which just cleans individual outputs).
@@ -854,11 +797,6 @@ uint256 CCoinsViewCache::GetBestAnchor(ShieldedType type) const {
             if (hashSproutAnchor.IsNull())
                 hashSproutAnchor = base->GetBestAnchor(type);
             return hashSproutAnchor;
-            break;
-        case SAPLING:
-            if (hashSaplingAnchor.IsNull())
-                hashSaplingAnchor = base->GetBestAnchor(type);
-            return hashSaplingAnchor;
             break;
         case SAPLINGFRONTIER:
             if (hashSaplingFrontierAnchor.IsNull())
@@ -966,11 +904,9 @@ void BatchWriteHistory(CHistoryCacheMap& historyCacheMap, CHistoryCacheMap& hist
 bool CCoinsViewCache::BatchWrite(CCoinsMap &mapCoins,
                                  const uint256 &hashBlockIn,
                                  const uint256 &hashSproutAnchorIn,
-                                 const uint256 &hashSaplingAnchorIn,
                                  const uint256 &hashSaplingFrontierAnchorIn,
                                  const uint256 &hashOrchardFrontierAnchorIn,
                                  CAnchorsSproutMap &mapSproutAnchors,
-                                 CAnchorsSaplingMap &mapSaplingAnchors,
                                  CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
                                  CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
                                  CNullifiersMap &mapSproutNullifiers,
@@ -1014,7 +950,6 @@ bool CCoinsViewCache::BatchWrite(CCoinsMap &mapCoins,
     }
 
     ::BatchWriteAnchors<CAnchorsSproutMap, CAnchorsSproutMap::iterator, CAnchorsSproutCacheEntry>(mapSproutAnchors, cacheSproutAnchors, cachedCoinsUsage);
-    ::BatchWriteAnchors<CAnchorsSaplingMap, CAnchorsSaplingMap::iterator, CAnchorsSaplingCacheEntry>(mapSaplingAnchors, cacheSaplingAnchors, cachedCoinsUsage);
     ::BatchWriteAnchors<CAnchorsSaplingFrontierMap, CAnchorsSaplingFrontierMap::iterator, CAnchorsSaplingFrontierCacheEntry>(mapSaplingFrontierAnchors, cacheSaplingFrontierAnchors, cachedCoinsUsage);
     ::BatchWriteAnchors<CAnchorsOrchardFrontierMap, CAnchorsOrchardFrontierMap::iterator, CAnchorsOrchardFrontierCacheEntry>(mapOrchardFrontierAnchors, cacheOrchardFrontierAnchors, cachedCoinsUsage);
 
@@ -1025,7 +960,6 @@ bool CCoinsViewCache::BatchWrite(CCoinsMap &mapCoins,
     ::BatchWriteHistory(historyCacheMap, historyCacheMapIn);
 
     hashSproutAnchor = hashSproutAnchorIn;
-    hashSaplingAnchor = hashSaplingAnchorIn;
     hashSaplingFrontierAnchor = hashSaplingFrontierAnchorIn;
     hashOrchardFrontierAnchor = hashOrchardFrontierAnchorIn;
     hashBlock = hashBlockIn;
@@ -1034,13 +968,12 @@ bool CCoinsViewCache::BatchWrite(CCoinsMap &mapCoins,
 
 bool CCoinsViewCache::Flush() {
     bool fOk = base->BatchWrite(cacheCoins, hashBlock,
-                                hashSproutAnchor, hashSaplingAnchor, hashSaplingFrontierAnchor, hashOrchardFrontierAnchor,
-                                cacheSproutAnchors, cacheSaplingAnchors, cacheSaplingFrontierAnchors, cacheOrchardFrontierAnchors,
+                                hashSproutAnchor, hashSaplingFrontierAnchor, hashOrchardFrontierAnchor,
+                                cacheSproutAnchors, cacheSaplingFrontierAnchors, cacheOrchardFrontierAnchors,
                                 cacheSproutNullifiers, cacheSaplingNullifiers, cacheOrchardNullifiers,
                                 historyCacheMap);
     cacheCoins.clear();
     cacheSproutAnchors.clear();
-    cacheSaplingAnchors.clear();
     cacheSaplingFrontierAnchors.clear();
     cacheOrchardFrontierAnchors.clear();
     cacheSproutNullifiers.clear();
@@ -1121,25 +1054,37 @@ CAmount CCoinsViewCache::GetTransparentValueIn(int32_t nHeight,int64_t &interest
     return nResult;
 }
 
-static bool HaveJoinSplitRequirementsWorkerNullifier(const CCoinsViewCache *coinCache,const std::vector<uint256> vSpendNullifer, int threadNum)
+static bool HaveJoinSplitRequirementsWorkerNullifierSapling(const CCoinsViewCache *coinCache,const std::vector<uint256> vSpendNullifer, int threadNum)
 {
     //Perform Sapling Spend checks
     for (int i = 0; i < vSpendNullifer.size(); i++) {
         auto nullifier = vSpendNullifer[i];
-        if (coinCache->GetNullifier(nullifier, SAPLING)) // Prevent double spends
+        if (coinCache->GetNullifier(nullifier, SAPLINGFRONTIER)) // Prevent double spends
             return false;
     }
 
     return true;
 }
 
-static bool HaveJoinSplitRequirementsWorkerAnchor(const CCoinsViewCache *coinCache,const std::vector<uint256> vSpendAnchor, int threadNum)
+static bool HaveJoinSplitRequirementsWorkerNullifierOrchard(const CCoinsViewCache *coinCache,const std::vector<uint256> vSpendNullifer, int threadNum)
 {
     //Perform Sapling Spend checks
+    for (int i = 0; i < vSpendNullifer.size(); i++) {
+        auto nullifier = vSpendNullifer[i];
+        if (coinCache->GetNullifier(nullifier, ORCHARDFRONTIER)) // Prevent double spends
+            return false;
+    }
+
+    return true;
+}
+
+static bool HaveJoinSplitRequirementsWorkerAnchorSapling(const CCoinsViewCache *coinCache,const std::vector<uint256> vSpendAnchor, int threadNum)
+{
+    //Perform Orchard Spend checks
     for (int i = 0; i < vSpendAnchor.size(); i++) {
         auto anchor = vSpendAnchor[i];
-        SaplingMerkleTree tree;
-        if (!coinCache->GetSaplingAnchorAt(anchor, tree)) {
+        SaplingMerkleFrontier tree;
+        if (!coinCache->GetSaplingFrontierAnchorAt(anchor, tree)) {
             return false;
         }
     }
@@ -1180,19 +1125,33 @@ bool CCoinsViewCache::HaveJoinSplitRequirements(const CTransaction& tx, int maxP
 
     auto now = GetTimeMicros();
 
+
+    // Check Orchard bundlde Anchor befor processing multithreaded operations
+    if (tx.GetOrchardBundle().IsPresent()) {
+        OrchardMerkleFrontier tree;
+        if (!GetOrchardFrontierAnchorAt(tx.GetOrchardBundle().GetAnchor().value(), tree)) {
+            return false;
+        }
+    }
+
     //Create a Vector of futures to be collected later
     std::vector<std::future<bool>> vFutures;
 
     //Setup batches
-    std::vector<uint256> vSpendAnchor;
-    std::vector<std::vector<uint256>> vvSpendAnchor;
-    std::vector<uint256> vSpendNullifier;
-    std::vector<std::vector<uint256>> vvSpendNullifier;
+    std::vector<uint256> vSaplingSpendAnchor;
+    std::vector<std::vector<uint256>> vvSaplingSpendAnchor;
+    std::vector<uint256> vSaplingSpendNullifier;
+    std::vector<std::vector<uint256>> vvSaplingSpendNullifier;
+
+    std::vector<uint256> vOrchardSpendNullifier;
+    std::vector<std::vector<uint256>> vvOrchardSpendNullifier;
 
     //Create Thread Vectors
     for (int i = 0; i < maxProcessingThreads; i++) {
-        vvSpendAnchor.emplace_back(vSpendAnchor);
-        vvSpendNullifier.emplace_back(vSpendNullifier);
+        vvSaplingSpendAnchor.emplace_back(vSaplingSpendAnchor);
+        vvSaplingSpendNullifier.emplace_back(vSaplingSpendNullifier);
+
+        vvOrchardSpendNullifier.emplace_back(vOrchardSpendNullifier);
     }
 
     //Thread counter
@@ -1204,27 +1163,51 @@ bool CCoinsViewCache::HaveJoinSplitRequirements(const CTransaction& tx, int maxP
         auto anchor = uint256::FromRawBytes(spend.anchor());
 
         //Push spend data to thread vector
-        vvSpendNullifier[t].emplace_back(nullifier);
-        vvSpendAnchor[t].emplace_back(anchor);
+        vvSaplingSpendNullifier[t].emplace_back(nullifier);
+        vvSaplingSpendAnchor[t].emplace_back(anchor);
 
         //Increment thread vector
         t++;
         //reset if tread vector is greater qty of threads being used
-        if (t >= vvSpendNullifier.size()) {
+        if (t >= vvSaplingSpendNullifier.size()) {
+            t = 0;
+        }
+    }
+
+    // Reset thread counter
+    t = 0;
+
+    //Add this transaction orchard actions to spend thread batches
+    for (const auto& action : tx.GetOrchardActions()) {
+        auto nullifier = uint256::FromRawBytes(action.nullifier());
+
+        //Push spend data to thread vector
+        vvOrchardSpendNullifier[t].emplace_back(nullifier);
+
+        //Increment thread vector
+        t++;
+        //reset if tread vector is greater qty of threads being used
+        if (t >= vvOrchardSpendNullifier.size()) {
             t = 0;
         }
     }
 
     //Push batches of spends to async threads
-    for (int i = 0; i < vvSpendNullifier.size(); i++) {
-        if (!vvSpendNullifier[i].empty()) {
-            vFutures.emplace_back(std::async(std::launch::async, HaveJoinSplitRequirementsWorkerNullifier, this, vvSpendNullifier[i], 1000 + i));
+    for (int i = 0; i < vvSaplingSpendNullifier.size(); i++) {
+        if (!vvSaplingSpendNullifier[i].empty()) {
+            vFutures.emplace_back(std::async(std::launch::async, HaveJoinSplitRequirementsWorkerNullifierSapling, this, vvSaplingSpendNullifier[i], 1000 + i));
         }
     }
 
-    for (int i = 0; i < vvSpendAnchor.size(); i++) {
-        if (!vvSpendAnchor[i].empty()) {
-            vFutures.emplace_back(std::async(std::launch::async, HaveJoinSplitRequirementsWorkerAnchor, this, vvSpendAnchor[i], 2000 + i));
+    for (int i = 0; i < vvSaplingSpendAnchor.size(); i++) {
+        if (!vvSaplingSpendAnchor[i].empty()) {
+            vFutures.emplace_back(std::async(std::launch::async, HaveJoinSplitRequirementsWorkerAnchorSapling, this, vvSaplingSpendAnchor[i], 2000 + i));
+        }
+    }
+
+    for (int i = 0; i < vvOrchardSpendNullifier.size(); i++) {
+        if (!vvOrchardSpendNullifier[i].empty()) {
+            vFutures.emplace_back(std::async(std::launch::async, HaveJoinSplitRequirementsWorkerNullifierOrchard, this, vvOrchardSpendNullifier[i], 3000 + i));
         }
     }
 
@@ -1243,8 +1226,9 @@ bool CCoinsViewCache::HaveJoinSplitRequirements(const CTransaction& tx, int maxP
 
     //cleanup
     vFutures.resize(0);
-    vvSpendNullifier.resize(0);
-    vvSpendAnchor.resize(0);
+    vvSaplingSpendNullifier.resize(0);
+    vvSaplingSpendAnchor.resize(0);
+    vvOrchardSpendNullifier.resize(0);
 
     return ret;
 }

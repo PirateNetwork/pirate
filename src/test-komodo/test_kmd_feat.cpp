@@ -65,13 +65,15 @@ public:
     bool BatchWrite(CCoinsMap &mapCoins,
                     const uint256 &hashBlock,
                     const uint256 &hashSproutAnchor,
-                    const uint256 &hashSaplingAnchor,
                     const uint256 &hashSaplingFrontierAnchor,
+                    const uint256 &hashOrchardFrontierAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
-                    CAnchorsSaplingMap &mapSaplingAnchors,
                     CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
+                    CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
                     CNullifiersMap &mapSproutNullifiers,
-                    CNullifiersMap &mapSaplingNullifiers) {
+                    CNullifiersMap &mapSaplingNullifiers,
+                    CNullifiersMap &mapOrchardNullifiers,
+                    CHistoryCacheMap &historyCacheMap) override{
         return false;
     }
 
