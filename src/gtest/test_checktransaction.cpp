@@ -5,7 +5,7 @@
 #include "main.h"
 #include "primitives/transaction.h"
 #include "consensus/validation.h"
-#include "gtest/testutils.h"
+#include "gtest/gtestutils.h"
 
 extern ZCJoinSplit* params;
 

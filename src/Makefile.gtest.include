@@ -8,8 +8,8 @@ bin_PROGRAMS += pirate-gtest
 # tool for generating our public parameters
 pirate_gtest_SOURCES = \
 	gtest/main.cpp \
-	gtest/testutils.h \
-	gtest/testutils.cpp \
+	gtest/gtestutils.h \
+	gtest/gtestutils.cpp \
 	gtest/test_block.cpp \
 	gtest/test_checktransaction.cpp \
 	gtest/json_test_vectors.cpp \
@@ -28,16 +28,15 @@ pirate_gtest_SOURCES += \
 	gtest/test_httprpc.cpp \
 	gtest/test_joinsplit.cpp \
 	gtest/test_keys.cpp \
-	#gtest/test_keystore.cpp \
-	#gtest/test_noteencryption.cpp \
-	#gtest/test_merkletree.cpp \
-	#gtest/test_metrics.cpp \
+	gtest/test_keystore.cpp \
+	gtest/test_noteencryption.cpp \
+	gtest/test_merkletree.cpp \
+	gtest/test_metrics.cpp \
 	#gtest/test_miner.cpp \
-	#gtest/test_pow.cpp \
-	#gtest/test_rpc.cpp \
-	#gtest/test_sapling_note.cpp \
+	gtest/test_rpc.cpp \
+	gtest/test_sapling_note.cpp \
 	#gtest/test_transaction.cpp \
-	#gtest/test_transaction_builder.cpp \
+	gtest/test_transaction_builder.cpp \
 	#gtest/test_upgrades.cpp \
 	#gtest/test_validation.cpp \
 	#gtest/test_circuit.cpp \

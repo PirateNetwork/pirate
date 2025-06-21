@@ -24,7 +24,7 @@
 #include "komodo_notary.h"
 #include "komodo_bitcoind.h"
 #include "utilmoneystr.h"
-#include "testutils.h"
+#include "gtest/gtestutils.h"
 #include "coincontrol.h"
 #include "cc/CCinclude.h"
 

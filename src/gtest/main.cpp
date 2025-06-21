@@ -1,9 +1,10 @@
 #include "key.h"
 #include "base58.h"
+#include "script/sigcache.h"
 #include "chainparams.h"
 #include "gtest/gtest.h"
 #include "crypto/common.h"
-#include "testutils.h"
+#include "gtest/gtestutils.h"
 
 struct ECCryptoClosure
 {
@@ -36,6 +37,16 @@ int main(int argc, char **argv) {
         sprout_groth16_str.length(),
         true
     );
+
+    // Initialize the validity caches. We currently have three:
+    // - Transparent signature validity.
+    // - Sapling bundle validity.
+    // - Orchard bundle validity.
+    // Assign half of the cap to transparent signatures, and split the rest
+    // between Sapling and Orchard bundles.
+    size_t nMaxCacheSize = DEFAULT_MAX_SIG_CACHE_SIZE * ((size_t) 1 << 20);
+    InitSignatureCache(nMaxCacheSize / 2);
+    bundlecache::init(nMaxCacheSize / 4);
 
 
     SetupNetworking();

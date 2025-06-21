@@ -320,6 +320,11 @@ bool TransactionBuilder::AddSaplingSpendRaw(
     libzcash::MerklePath saplingMerklePath,
     uint256 anchor)
 {
+    // Sanity check: cannot add Sapling spend to pre-Sapling transaction
+    if (mtx.nVersion < SAPLING_TX_VERSION) {
+        throw std::runtime_error("TransactionBuilder cannot add Sapling spend to pre-Sapling transaction");
+    }
+    
     // Consistency check: all from addresses must equal the first one
     if (!vSaplingSpends.empty()) {
         if (!(vSaplingSpends[0].addr == addr)) {
@@ -672,23 +677,25 @@ TransactionBuilderResult TransactionBuilder::Build()
     // Change output
     //
     if (change > 0) {
-        // Send change to the specified change address. If no change address
-        // was set, send change to the first Sapling address given as input.
+        // Send change to the specified change address.
         if (orchardChangeAddr) {
             AddOrchardOutputRaw(orchardChangeAddr->second, change, {{0}});
             ConvertRawOrchardOutput(orchardChangeAddr->first);
-        } else if (firstOrchardSpendAddr) {
-            AddOrchardOutputRaw(firstOrchardSpendAddr->second, change, {{0}});
-            ConvertRawOrchardOutput(firstOrchardSpendAddr->first);
         } else if (saplingChangeAddr) {
             AddSaplingOutputRaw(saplingChangeAddr->second, change, {{0}});
             ConvertRawSaplingOutput(saplingChangeAddr->first);
+        } else if (tChangeAddr) {
+            assert(AddTransparentOutput(tChangeAddr.value(), change));
+
+        // If no change address was set, use the first Sapling or Orchard address
+        } else if (firstOrchardSpendAddr) {
+            AddOrchardOutputRaw(firstOrchardSpendAddr->second, change, {{0}});
+            ConvertRawOrchardOutput(firstOrchardSpendAddr->first);
+
         } else if (firstSaplingSpendAddr) {
             AddSaplingOutputRaw(firstSaplingSpendAddr->second, change, {{0}});
             ConvertRawSaplingOutput(firstSaplingSpendAddr->first);
-        } else if (tChangeAddr) {
-            // tChangeAddr has already been validated.
-            assert(AddTransparentOutput(tChangeAddr.value(), change));
+        
         } else {
             return TransactionBuilderResult("Could not determine change address");
         }

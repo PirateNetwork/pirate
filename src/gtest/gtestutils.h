@@ -247,4 +247,14 @@ public:
     bool GetStats(CCoinsStats &stats) const {
         return false;
     }
+
+};
+
+// Fake an empty view
+class GTestCCoinsViewCache : public CCoinsViewCache {
+public:
+    GTestCCoinsViewCache(GTestCoinsViewDB *baseIn) : CCoinsViewCache(baseIn) {
+        fprintf(stderr, "GTestCCoinsViewCache created\n");
+     }
+
 };
