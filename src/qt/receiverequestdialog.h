@@ -33,6 +33,8 @@ public:
     explicit QRImageWidget(QWidget *parent = 0);
     QImage exportImage();
 
+    Qt::ReturnByValueConstant pixmapReturnType;
+
 public Q_SLOTS:
     void saveImage();
     void copyImage();

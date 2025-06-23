@@ -119,6 +119,7 @@ namespace boost {
 } // namespace boost
 
 using namespace std;
+namespace fs = boost::filesystem;
 
 map<string, string> mapArgs;
 map<string, vector<string> > mapMultiArgs;
@@ -330,7 +331,7 @@ int LogPrintStr(const std::string &str)
             // reopen the log file, if requested
             if (fReopenDebugLog) {
                 fReopenDebugLog = false;
-                boost::filesystem::path pathDebug = GetDataDir() / "debug.log";
+                fs::path pathDebug = GetDataDir() / "debug.log";
                 if (freopen(pathDebug.string().c_str(),"a",fileout) != NULL)
                     setbuf(fileout, NULL); // unbuffered
             }
@@ -542,7 +543,7 @@ void PrintExceptionContinue(const std::exception* pex, const char* pszThread)
 }
 
 
-namespace fs = boost::filesystem;
+
 
 /**
  * @brief get the OS-specific default application data directory
@@ -551,7 +552,7 @@ namespace fs = boost::filesystem;
  * @note Unix: ~/
  * @returns the default path to the application data directory
  */
-boost::filesystem::path GetAppDir()
+fs::path GetAppDir()
 {
     // Windows < Vista: C:\Documents and Settings\Username\Application Data
     // Windows >= Vista: C:\Users\Username\AppData\Roaming
@@ -587,7 +588,7 @@ boost::filesystem::path GetAppDir()
  * @note Unix: ~/.komodo
  * @returns the default path to the Komodo data directory
  */
-boost::filesystem::path GetDefaultDataDir()
+fs::path GetDefaultDataDir()
 {
     fs::path pathRet = GetAppDir();
 
@@ -612,16 +613,14 @@ boost::filesystem::path GetDefaultDataDir()
 #endif
 }
 
-static boost::filesystem::path pathCached;
-static boost::filesystem::path pathCachedNetSpecific;
-static boost::filesystem::path zc_paramsPathCached;
+static fs::path pathCached;
+static fs::path pathCachedNetSpecific;
+static fs::path zc_paramsPathCached;
 static CCriticalSection csPathCached;
 
-static boost::filesystem::path ZC_GetBaseParamsDir()
+static fs::path ZC_GetBaseParamsDir()
 {
     // Copied from GetDefaultDataDir and adapter for zcash params.
-
-    namespace fs = boost::filesystem;
     // Windows < Vista: C:\Documents and Settings\Username\Application Data\ZcashParams
     // Windows >= Vista: C:\Users\Username\AppData\Roaming\ZcashParams
     // Mac: ~/Library/Application Support/ZcashParams
@@ -647,9 +646,8 @@ static boost::filesystem::path ZC_GetBaseParamsDir()
 #endif
 }
 
-const boost::filesystem::path &ZC_GetParamsDir()
+const fs::path &ZC_GetParamsDir()
 {
-    namespace fs = boost::filesystem;
 
     LOCK(csPathCached); // Reuse the same lock as upstream.
 
@@ -668,9 +666,8 @@ const boost::filesystem::path &ZC_GetParamsDir()
 // Return the user specified export directory.  Create directory if it doesn't exist.
 // If user did not set option, return an empty path.
 // If there is a filesystem problem, throw an exception.
-const boost::filesystem::path GetExportDir()
+const fs::path GetExportDir()
 {
-    namespace fs = boost::filesystem;
     fs::path path;
     if (mapArgs.count("-exportdir")) {
         path = fs::system_complete(mapArgs["-exportdir"]);
@@ -691,10 +688,8 @@ const boost::filesystem::path GetExportDir()
  * @param fNetSpecific if true, adds network-specific subdirectory (i.e. "regtest" or "testnet3")
  * @returns the full OS-specific data directory including Komodo (i.e. "~/.komodo")
  */
-const boost::filesystem::path &GetDataDir(bool fNetSpecific)
+const fs::path &GetDataDir(bool fNetSpecific)
 {
-    namespace fs = boost::filesystem;
-
     LOCK(csPathCached);
 
     fs::path &path = fNetSpecific ? pathCachedNetSpecific : pathCached;
@@ -723,11 +718,11 @@ const boost::filesystem::path &GetDataDir(bool fNetSpecific)
 
 void ClearDatadirCache()
 {
-    pathCached = boost::filesystem::path();
-    pathCachedNetSpecific = boost::filesystem::path();
+    pathCached = fs::path();
+    pathCachedNetSpecific = fs::path();
 }
 
-boost::filesystem::path GetConfigFile()
+fs::path GetConfigFile()
 {
     char confname[512];
     if ( !mapArgs.count("-conf") && !chainName.isKMD() ){
@@ -741,20 +736,15 @@ boost::filesystem::path GetConfigFile()
         strcpy(confname,"komodo.conf");
 #endif
     }
-    boost::filesystem::path pathConfigFile(GetArg("-conf",confname));
-    if (!pathConfigFile.is_complete()){
-        pathConfigFile = GetDataDir(false) / pathConfigFile;
-    }
-
-    //printf("DEBUG - util.cpp:710 correct pathConfigFile: %s\n",GetConfigFile().string().c_str());
-    return pathConfigFile;
+    std::string confPath = GetArg("-conf",confname);
+    return fs::absolute(fs::path(confPath), GetDataDir(false));
 }
 
 void ReadConfigFile(map<string, string>& mapSettingsRet,
                     map<string, vector<string> >& mapMultiSettingsRet)
 {
 
-    boost::filesystem::ifstream streamConfig(GetConfigFile());
+    fs::ifstream streamConfig(GetConfigFile());
     if (!streamConfig.good())
         throw missing_zcash_conf();
     set<string> setOptions;
@@ -778,14 +768,12 @@ void ReadConfigFile(map<string, string>& mapSettingsRet,
 }
 
 #ifndef _WIN32
-boost::filesystem::path GetPidFile()
+fs::path GetPidFile()
 {
-    boost::filesystem::path pathPidFile(GetArg("-pid", "komodod.pid"));
-    if (!pathPidFile.is_complete()) pathPidFile = GetDataDir() / pathPidFile;
-    return pathPidFile;
+    return fs::absolute(fs::path(GetArg("-pid", "komodod.pid")), GetDataDir(true));
 }
 
-void CreatePidFile(const boost::filesystem::path &path, pid_t pid)
+void CreatePidFile(const fs::path &path, pid_t pid)
 {
     FILE* file = fopen(path.string().c_str(), "w");
     if (file)
@@ -796,7 +784,7 @@ void CreatePidFile(const boost::filesystem::path &path, pid_t pid)
 }
 #endif
 
-bool RenameOver(boost::filesystem::path src, boost::filesystem::path dest)
+bool RenameOver(fs::path src, fs::path dest)
 {
 #ifdef _WIN32
     return MoveFileExA(src.string().c_str(), dest.string().c_str(),
@@ -812,13 +800,13 @@ bool RenameOver(boost::filesystem::path src, boost::filesystem::path dest)
  * Specifically handles case where path p exists, but it wasn't possible for the user to
  * write to the parent directory.
  */
-bool TryCreateDirectory(const boost::filesystem::path& p)
+bool TryCreateDirectory(const fs::path& p)
 {
     try
     {
-        return boost::filesystem::create_directory(p);
-    } catch (const boost::filesystem::filesystem_error&) {
-        if (!boost::filesystem::exists(p) || !boost::filesystem::is_directory(p))
+        return fs::create_directory(p);
+    } catch (const fs::filesystem_error&) {
+        if (!fs::exists(p) || !fs::is_directory(p))
             throw;
     }
 
@@ -923,9 +911,9 @@ void AllocateFileRange(FILE *file, unsigned int offset, unsigned int length) {
 void ShrinkDebugFile()
 {
     // Scroll debug.log if it's getting too big
-    boost::filesystem::path pathLog = GetDataDir() / "debug.log";
+    fs::path pathLog = GetDataDir() / "debug.log";
     FILE* file = fopen(pathLog.string().c_str(), "r");
-    if (file && boost::filesystem::file_size(pathLog) > 10 * 1000000)
+    if (file && fs::file_size(pathLog) > 10 * 1000000)
     {
         // Restart the file with some of the end
         std::vector <char> vch(200000,0);
@@ -945,9 +933,9 @@ void ShrinkDebugFile()
 }
 
 #ifdef _WIN32
-boost::filesystem::path GetSpecialFolderPath(int nFolder, bool fCreate)
+fs::path GetSpecialFolderPath(int nFolder, bool fCreate)
 {
-    namespace fs = boost::filesystem;
+    namespace fs = fs;
 
     char pszPath[MAX_PATH] = "";
 
@@ -961,23 +949,23 @@ boost::filesystem::path GetSpecialFolderPath(int nFolder, bool fCreate)
 }
 #endif
 
-boost::filesystem::path GetTempPath() {
+fs::path GetTempPath() {
 #if BOOST_FILESYSTEM_VERSION == 3
-    return boost::filesystem::temp_directory_path();
+    return fs::temp_directory_path();
 #else
     // TODO: remove when we don't support filesystem v2 anymore
-    boost::filesystem::path path;
+    fs::path path;
 #ifdef _WIN32
     char pszPath[MAX_PATH] = "";
 
     if (GetTempPathA(MAX_PATH, pszPath))
-        path = boost::filesystem::path(pszPath);
+        path = fs::path(pszPath);
 #else
-    path = boost::filesystem::path("/tmp");
+    path = fs::path("/tmp");
 #endif
-    if (path.empty() || !boost::filesystem::is_directory(path)) {
+    if (path.empty() || !fs::is_directory(path)) {
         LogPrintf("GetTempPath(): failed to find temp path\n");
-        return boost::filesystem::path("");
+        return fs::path("");
     }
     return path;
 #endif
@@ -1020,9 +1008,9 @@ void SetupEnvironment()
     // The path locale is lazy initialized and to avoid deinitialization errors
     // in multithreading environments, it is set explicitly by the main thread.
     // A dummy locale is used to extract the internal default locale, used by
-    // boost::filesystem::path, which is then used to explicitly imbue the path.
-    std::locale loc = boost::filesystem::path::imbue(std::locale::classic());
-    boost::filesystem::path::imbue(loc);
+    // fs::path, which is then used to explicitly imbue the path.
+    std::locale loc = fs::path::imbue(std::locale::classic());
+    fs::path::imbue(loc);
 }
 
 bool SetupNetworking()

@@ -139,9 +139,9 @@ public:
 
           for (std::map<QString, CAmount>::iterator bi = stringBalances.begin(); bi != stringBalances.end(); bi++) {
               QString address = bi->first;
-              QList<ZAddressTableEntry>::iterator lower = qLowerBound(
+              QList<ZAddressTableEntry>::iterator lower = std::lower_bound(
                   cachedAddressTable.begin(), cachedAddressTable.end(), address, ZAddressTableEntryLessThan());
-              QList<ZAddressTableEntry>::iterator upper = qUpperBound(
+              QList<ZAddressTableEntry>::iterator upper = std::upper_bound(
                   cachedAddressTable.begin(), cachedAddressTable.end(), address, ZAddressTableEntryLessThan());
               int lowerIndex = (lower - cachedAddressTable.begin());
               int upperIndex = (upper - cachedAddressTable.begin());
@@ -238,18 +238,18 @@ public:
                 }
             }
         }
-        // qLowerBound() and qUpperBound() require our cachedAddressTable list to be sorted in asc order
+        // std::lower_bound() and std::upper_bound() require our cachedAddressTable list to be sorted in asc order
         // Even though the map is already sorted this re-sorting step is needed because the originating map
         // is sorted by binary address, not by base58() address.
-        qSort(cachedAddressTable.begin(), cachedAddressTable.end(), ZAddressTableEntryLessThan());
+        std::sort(cachedAddressTable.begin(), cachedAddressTable.end(), ZAddressTableEntryLessThan());
     }
 
     void updateEntry(const QString &address, const QString &label, bool isMine, const QString &purpose, int status)
     {
         // Find address / label in model
-        QList<ZAddressTableEntry>::iterator lower = qLowerBound(
+        QList<ZAddressTableEntry>::iterator lower = std::lower_bound(
             cachedAddressTable.begin(), cachedAddressTable.end(), address, ZAddressTableEntryLessThan());
-        QList<ZAddressTableEntry>::iterator upper = qUpperBound(
+        QList<ZAddressTableEntry>::iterator upper = std::upper_bound(
             cachedAddressTable.begin(), cachedAddressTable.end(), address, ZAddressTableEntryLessThan());
         int lowerIndex = (lower - cachedAddressTable.begin());
         int upperIndex = (upper - cachedAddressTable.begin());
@@ -550,7 +550,8 @@ QVariant ZAddressTableModel::headerData(int section, Qt::Orientation orientation
 Qt::ItemFlags ZAddressTableModel::flags(const QModelIndex &index) const
 {
     if(!index.isValid())
-        return 0;
+        return Qt::NoItemFlags;
+
     ZAddressTableEntry *rec = static_cast<ZAddressTableEntry*>(index.internalPointer());
 
     Qt::ItemFlags retval = Qt::ItemIsSelectable | Qt::ItemIsEnabled;

@@ -2631,7 +2631,7 @@ UniValue encryptwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
         //replace the file with the previous backup
         boost::filesystem::remove(pathWallet);
-        copy_file(pathBackup, pathWallet, boost::filesystem::copy_option::overwrite_if_exists);
+        copy_file(pathBackup, pathWallet, boost::filesystem::copy_options::overwrite_existing);
         boost::filesystem::remove(pathBackup);
 
         //shutdown
