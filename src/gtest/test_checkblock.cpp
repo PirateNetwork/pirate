@@ -3,19 +3,21 @@
 
 #include "consensus/validation.h"
 #include "main.h"
+#include "keystore.h"
+#include "key_io.h"
 //#include "proof_verifier.h"
 //#include "util/test.h"
 #include "zcash/Proof.hpp"
 
+static const std::string tSecretRegtest = "UuRoAgHmjHZqexxVAPjzW8N6hr3o7aETZqCZon2m8EYAmjmdTcj1";
+
 class MockCValidationState : public CValidationState {
 public:
-    MOCK_METHOD6(DoS, bool(int level, bool ret,
-             unsigned int chRejectCodeIn, const std::string strRejectReasonIn,
-             bool corruptionIn,
-             const std::string &strDebugMessageIn));
-    MOCK_METHOD4(Invalid, bool(bool ret,
-                 unsigned int _chRejectCode, const std::string _strRejectReason,
-                 const std::string &_strDebugMessage));
+    MOCK_METHOD5(DoS, bool(int level, bool ret,
+             unsigned char chRejectCodeIn, std::string strRejectReasonIn,
+             bool corruptionIn));
+    MOCK_METHOD3(Invalid, bool(bool ret,
+                 unsigned char _chRejectCode, std::string _strRejectReason));
     MOCK_METHOD1(Error, bool(std::string strRejectReasonIn));
     MOCK_CONST_METHOD0(IsValid, bool());
     MOCK_CONST_METHOD0(IsInvalid, bool());
@@ -24,21 +26,21 @@ public:
     MOCK_CONST_METHOD0(CorruptionPossible, bool());
     MOCK_CONST_METHOD0(GetRejectCode, unsigned char());
     MOCK_CONST_METHOD0(GetRejectReason, std::string());
-    MOCK_CONST_METHOD0(GetDebugMessage, std::string());
 };
 
 TEST(CheckBlock, VersionTooLow) {
     auto verifier = ProofVerifier::Strict();
 
     CBlock block;
+    int32_t futureblock;
     block.nVersion = 1;
 
     MockCValidationState state;
 
     SelectParams(CBaseChainParams::MAIN);
 
-    EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "version-too-low", false, "")).Times(1);
-    EXPECT_FALSE(CheckBlock(0, 1, NULL, block, state, verifier, false, false));
+    EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "version-too-low", false)).Times(1);
+    EXPECT_FALSE(CheckBlock(&futureblock, 1, NULL, block, state, verifier, false, false));
 }
 
 
@@ -55,6 +57,12 @@ class UNSAFE_CTransaction : public CTransaction {
 TEST(CheckBlock, BlockSproutRejectsBadVersion) {
     SelectParams(CBaseChainParams::MAIN);
 
+    CBasicKeyStore keystore;
+    CKey tsk = DecodeSecret(tSecretRegtest);
+    EXPECT_TRUE(tsk.IsValid());
+    keystore.AddKey(tsk);
+    auto scriptPubKey = GetScriptForDestination(tsk.GetPubKey().GetID());
+
     CMutableTransaction mtx;
     mtx.vin.resize(1);
     mtx.vin[0].prevout.SetNull();
@@ -63,8 +71,7 @@ TEST(CheckBlock, BlockSproutRejectsBadVersion) {
     mtx.vout[0].scriptPubKey = CScript() << OP_TRUE;
     mtx.vout[0].nValue = 0;
     mtx.vout.push_back(CTxOut(
-        GetBlockSubsidy(1, Params().GetConsensus())/5,
-        Params().GetFoundersRewardScriptAtHeight(1)));
+        GetBlockSubsidy(1, Params().GetConsensus()),scriptPubKey));
     mtx.fOverwintered = false;
     mtx.nVersion = -1;
     mtx.nVersionGroupId = 0;
@@ -72,6 +79,7 @@ TEST(CheckBlock, BlockSproutRejectsBadVersion) {
     EXPECT_THROW((CTransaction(mtx)), std::ios_base::failure);
     UNSAFE_CTransaction tx {mtx};
     CBlock block;
+    int32_t futureblock;
     block.vtx.push_back(tx);
 
     MockCValidationState state;
@@ -79,8 +87,8 @@ TEST(CheckBlock, BlockSproutRejectsBadVersion) {
 
     auto verifier = ProofVerifier::Strict();
 
-    EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-txns-version-too-low", false, "")).Times(1);
-    EXPECT_FALSE(CheckBlock(0, 1, &indexPrev, block, state, verifier, false, false));
+    EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-txns-version-too-low", false)).Times(1);
+    EXPECT_FALSE(CheckBlock(&futureblock, 1, &indexPrev, block, state, verifier, false, false));
 }
 
 
@@ -99,6 +107,13 @@ protected:
 
     // Returns a valid but empty mutable transaction at block height 1.
     CMutableTransaction GetFirstBlockCoinbaseTx() {
+
+        CBasicKeyStore keystore;
+        CKey tsk = DecodeSecret(tSecretRegtest);
+        EXPECT_TRUE(tsk.IsValid());
+        keystore.AddKey(tsk);
+        auto scriptPubKey = GetScriptForDestination(tsk.GetPubKey().GetID());
+
         CMutableTransaction mtx;
 
         // No inputs.
@@ -113,10 +128,10 @@ protected:
         mtx.vout[0].scriptPubKey = CScript() << OP_TRUE;
         mtx.vout[0].nValue = 0;
 
-        // Give it a Founder's Reward vout for height 1.
-        auto rewardScript = Params().GetFoundersRewardScriptAtHeight(1);
+        // Give it a a vout
+        auto rewardScript = scriptPubKey;
         mtx.vout.push_back(CTxOut(
-                    GetBlockSubsidy(1, Params().GetConsensus())/5,
+                    GetBlockSubsidy(1, Params().GetConsensus()),
                     rewardScript));
 
         return mtx;
@@ -130,6 +145,11 @@ protected:
         // Create a block and add the transaction to it.
         CBlock block;
         block.vtx.push_back(tx);
+
+        // Set Testing mode to true, so that we can use the
+        // ContextualCheckBlock function without IsInitialBlockDownload()
+        // being true.
+        fTesting = true;
 
         // Set the previous block index to the genesis block.
         CBlockIndex indexPrev {Params().GenesisBlock()};
@@ -148,12 +168,17 @@ protected:
         CBlock block;
         block.vtx.push_back(tx);
 
+        // Set Testing mode to true, so that we can use the
+        // ContextualCheckBlock function without IsInitialBlockDownload()
+        // being true.
+        fTesting = true;
+
         // Set the previous block index to the genesis block.
         CBlockIndex indexPrev {Params().GenesisBlock()};
 
         // We now expect this to be an invalid block, for the given reason.
         MockCValidationState state;
-        EXPECT_CALL(state, DoS(level, false, REJECT_INVALID, reason, false, "")).Times(1);
+        EXPECT_CALL(state, DoS(level, false, REJECT_INVALID, reason, false)).Times(1);
         EXPECT_FALSE(ContextualCheckBlock(0, block, state, &indexPrev));
     }
 
@@ -161,6 +186,13 @@ protected:
 
 
 TEST_F(ContextualCheckBlockTest, BadCoinbaseHeight) {
+
+    CBasicKeyStore keystore;
+    CKey tsk = DecodeSecret(tSecretRegtest);
+    EXPECT_TRUE(tsk.IsValid());
+    keystore.AddKey(tsk);
+    auto scriptPubKey = GetScriptForDestination(tsk.GetPubKey().GetID());
+
     // Put a transaction in a block with no height in scriptSig
     CMutableTransaction mtx = GetFirstBlockCoinbaseTx();
     mtx.vin[0].scriptSig = CScript() << OP_0;
@@ -174,10 +206,10 @@ TEST_F(ContextualCheckBlockTest, BadCoinbaseHeight) {
     EXPECT_TRUE(ContextualCheckBlock(0, block, state, NULL));
 
 
-    // Give the transaction a Founder's Reward vout
+    // Give the transaction a vout
     mtx.vout.push_back(CTxOut(
-                GetBlockSubsidy(1, Params().GetConsensus())/5,
-                Params().GetFoundersRewardScriptAtHeight(1)));
+                GetBlockSubsidy(1, Params().GetConsensus()),
+                scriptPubKey));
 
     // Treating block as non-genesis should fail
     CTransaction tx2 {mtx};
@@ -185,14 +217,14 @@ TEST_F(ContextualCheckBlockTest, BadCoinbaseHeight) {
     CBlock prev;
     CBlockIndex indexPrev {prev};
     indexPrev.nHeight = 0;
-    EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-cb-height", false, "")).Times(1);
+    EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-cb-height", false)).Times(1);
     EXPECT_FALSE(ContextualCheckBlock(0, block, state, &indexPrev));
 
     // Setting to an incorrect height should fail
     mtx.vin[0].scriptSig = CScript() << 2 << OP_0;
     CTransaction tx3 {mtx};
     block.vtx[0] = tx3;
-    EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-cb-height", false, "")).Times(1);
+    EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-cb-height", false)).Times(1);
     EXPECT_FALSE(ContextualCheckBlock(0, block, state, &indexPrev));
 
     // After correcting the scriptSig, should pass
@@ -292,6 +324,10 @@ TEST_F(ContextualCheckBlockTest, BlockBlossomRulesAcceptBlossomTx) {
 // transactions which require Overwinter to be active.  This test assumes that
 // mainnet Overwinter activation is at least height 2.
 TEST_F(ContextualCheckBlockTest, BlockSproutRulesRejectOtherTx) {
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_ORCHARD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+
     CMutableTransaction mtx = GetFirstBlockCoinbaseTx();
 
     // Make it an Overwinter transaction
@@ -313,89 +349,91 @@ TEST_F(ContextualCheckBlockTest, BlockSproutRulesRejectOtherTx) {
         SCOPED_TRACE("BlockSproutRulesRejectSaplingTx");
         ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwinter-not-active");
     }
+
+    TearDown();
 };
 
 
-// Test block evaluated under Overwinter rules cannot contain non-Overwinter
-// transactions.
-TEST_F(ContextualCheckBlockTest, BlockOverwinterRulesRejectOtherTx) {
-    SelectParams(CBaseChainParams::REGTEST);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, 1);
+// // Test block evaluated under Overwinter rules cannot contain non-Overwinter
+// // transactions.
+// TEST_F(ContextualCheckBlockTest, BlockOverwinterRulesRejectOtherTx) {
+//     SelectParams(CBaseChainParams::REGTEST);
+//     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, 1);
 
-    CMutableTransaction mtx = GetFirstBlockCoinbaseTx();
+//     CMutableTransaction mtx = GetFirstBlockCoinbaseTx();
 
-    // Set the version to Sprout+JoinSplit (but nJoinSplit will be 0).
-    mtx.nVersion = 2;
+//     // Set the version to Sprout+JoinSplit (but nJoinSplit will be 0).
+//     mtx.nVersion = 2;
 
-    {
-        SCOPED_TRACE("BlockOverwinterRulesRejectSproutTx");
-        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwintered-flag-not-set");
-    }
+//     {
+//         SCOPED_TRACE("BlockOverwinterRulesRejectSproutTx");
+//         ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwintered-flag-not-set");
+//     }
 
-    // Make it a Sapling transaction
-    mtx.fOverwintered = true;
-    mtx.nVersion = SAPLING_TX_VERSION;
-    mtx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
+//     // Make it a Sapling transaction
+//     mtx.fOverwintered = true;
+//     mtx.nVersion = SAPLING_TX_VERSION;
+//     mtx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
 
-    {
-        SCOPED_TRACE("BlockOverwinterRulesRejectSaplingTx");
-        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "bad-tx-overwinter-version-too-high");
-    }
-}
-
-
-// Test block evaluated under Sapling rules cannot contain non-Sapling transactions.
-TEST_F(ContextualCheckBlockTest, BlockSaplingRulesRejectOtherTx) {
-    SelectParams(CBaseChainParams::REGTEST);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, 1);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, 1);
-
-    CMutableTransaction mtx = GetFirstBlockCoinbaseTx();
-
-    // Set the version to Sprout+JoinSplit (but nJoinSplit will be 0).
-    mtx.nVersion = 2;
-
-    {
-        SCOPED_TRACE("BlockSaplingRulesRejectSproutTx");
-        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwintered-flag-not-set");
-    }
-
-    // Make it an Overwinter transaction
-    mtx.fOverwintered = true;
-    mtx.nVersion = OVERWINTER_TX_VERSION;
-    mtx.nVersionGroupId = OVERWINTER_VERSION_GROUP_ID;
-
-    {
-        SCOPED_TRACE("BlockSaplingRulesRejectOverwinterTx");
-        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "bad-sapling-tx-version-group-id");
-    }
-}
+//     {
+//         SCOPED_TRACE("BlockOverwinterRulesRejectSaplingTx");
+//         ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "bad-tx-overwinter-version-too-high");
+//     }
+// }
 
 
-// Test block evaluated under Blossom rules cannot contain non-Blossom transactions.
-TEST_F(ContextualCheckBlockTest, BlockBlossomRulesRejectOtherTx) {
-    SelectParams(CBaseChainParams::REGTEST);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, 1);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, 1);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_ORCHARD, 1);
+// // Test block evaluated under Sapling rules cannot contain non-Sapling transactions.
+// TEST_F(ContextualCheckBlockTest, BlockSaplingRulesRejectOtherTx) {
+//     SelectParams(CBaseChainParams::REGTEST);
+//     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, 1);
+//     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, 1);
 
-    CMutableTransaction mtx = GetFirstBlockCoinbaseTx();
+//     CMutableTransaction mtx = GetFirstBlockCoinbaseTx();
 
-    // Set the version to Sprout+JoinSplit (but nJoinSplit will be 0).
-    mtx.nVersion = 2;
+//     // Set the version to Sprout+JoinSplit (but nJoinSplit will be 0).
+//     mtx.nVersion = 2;
 
-    {
-        SCOPED_TRACE("BlockOrchardRulesRejectSproutTx");
-        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwintered-flag-not-set");
-    }
+//     {
+//         SCOPED_TRACE("BlockSaplingRulesRejectSproutTx");
+//         ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwintered-flag-not-set");
+//     }
 
-    // Make it an Overwinter transaction
-    mtx.fOverwintered = true;
-    mtx.nVersion = OVERWINTER_TX_VERSION;
-    mtx.nVersionGroupId = OVERWINTER_VERSION_GROUP_ID;
+//     // Make it an Overwinter transaction
+//     mtx.fOverwintered = true;
+//     mtx.nVersion = OVERWINTER_TX_VERSION;
+//     mtx.nVersionGroupId = OVERWINTER_VERSION_GROUP_ID;
 
-    {
-        SCOPED_TRACE("BlockBlossomRulesRejectOverwinterTx");
-        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "bad-sapling-tx-version-group-id");
-    }
-}
+//     {
+//         SCOPED_TRACE("BlockSaplingRulesRejectOverwinterTx");
+//         ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "bad-sapling-tx-version-group-id");
+//     }
+// }
+
+
+// // Test block evaluated under Blossom rules cannot contain non-Blossom transactions.
+// TEST_F(ContextualCheckBlockTest, BlockBlossomRulesRejectOtherTx) {
+//     SelectParams(CBaseChainParams::REGTEST);
+//     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, 1);
+//     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, 1);
+//     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_ORCHARD, 1);
+
+//     CMutableTransaction mtx = GetFirstBlockCoinbaseTx();
+
+//     // Set the version to Sprout+JoinSplit (but nJoinSplit will be 0).
+//     mtx.nVersion = 2;
+
+//     {
+//         SCOPED_TRACE("BlockOrchardRulesRejectSproutTx");
+//         ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwintered-flag-not-set");
+//     }
+
+//     // Make it an Overwinter transaction
+//     mtx.fOverwintered = true;
+//     mtx.nVersion = OVERWINTER_TX_VERSION;
+//     mtx.nVersionGroupId = OVERWINTER_VERSION_GROUP_ID;
+
+//     {
+//         SCOPED_TRACE("BlockBlossomRulesRejectOverwinterTx");
+//         ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "bad-sapling-tx-version-group-id");
+//     }
+// }

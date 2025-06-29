@@ -1,7 +1,8 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
-#include <zcash/address/zip32.h>
+//#include "miner.h"
+#include "zcash/address/zip32.h"
 
 // From https://github.com/zcash-hackworks/zcash-test-vectors/blob/master/sapling_zip32.py
 // Sapling consistently uses little-endian encoding, but uint256S takes its input in
@@ -12,7 +13,7 @@ TEST(ZIP32, TestVectors) {
         17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
     HDSeed seed(rawSeed);
 
-    auto m = libzcash::SaplingExtendedSpendingKey::Master(seed);
+    auto m = libzcash::SaplingExtendedSpendingKey::Master(seed, false);
     EXPECT_EQ(m.depth, 0);
     EXPECT_EQ(m.parentFVKTag, 0);
     EXPECT_EQ(m.childIndex, 0);
@@ -109,7 +110,7 @@ TEST(ZIP32, TestVectors) {
     auto maybe_m_1_2hv_3 = m_1_2hv.Derive(3);
     EXPECT_TRUE(maybe_m_1_2hv_3);
 
-    auto m_1_2hv_3 = maybe_m_1_2hv_3.get();
+    auto m_1_2hv_3 = maybe_m_1_2hv_3.value();
     EXPECT_EQ(m_1_2hv_3.depth, 3);
     EXPECT_EQ(m_1_2hv_3.parentFVKTag, 0x7583c148);
     EXPECT_EQ(m_1_2hv_3.childIndex, 3);
