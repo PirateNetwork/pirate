@@ -27,6 +27,7 @@
 
 class CBlockIndex;
 class CScript;
+class CPubKey;
 #ifdef ENABLE_WALLET
 class CReserveKey;
 class CWallet;
@@ -61,10 +62,8 @@ struct CBlockTemplate
  */
 CBlockTemplate* CreateNewBlock(const CPubKey _pk,const CScript& _scriptPubKeyIn, int32_t gpucount, bool isStake = false);
 #ifdef ENABLE_WALLET
-std::optional<CScript> GetMinerScriptPubKey(CReserveKey& reservekey);
 CBlockTemplate* CreateNewBlockWithKey(CReserveKey& reservekey, int32_t nHeight, int32_t gpucount, bool isStake = false);
 #else
-std::optional<CScript> GetMinerScriptPubKey();
 CBlockTemplate* CreateNewBlockWithKey();
 #endif
 
