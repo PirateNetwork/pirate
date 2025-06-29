@@ -104,6 +104,7 @@ CConditionVariable cvBlockChange;
 int nScriptCheckThreads = 0;
 bool fExperimentalMode = true;
 bool fImporting = false;
+bool fTesting = false;
 bool fReindex = false;
 bool fTxIndex = true;
 bool fArchive = true;
@@ -2942,6 +2943,9 @@ bool IsInitialBlockDownload()
     if (latchToFalse.load(std::memory_order_relaxed))
         return false;
 
+    if (fTesting)
+        return false; // Testing mode is never in IBD
+    
     if (fImporting || fReindex)
         return true;
 
