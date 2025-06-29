@@ -164,6 +164,7 @@ extern CWaitableCriticalSection csBestBlock;
 extern CConditionVariable cvBlockChange;
 extern bool fExperimentalMode;
 extern bool fImporting;
+extern bool fTesting;
 extern bool fReindex;
 extern int nScriptCheckThreads;
 extern bool fTxIndex;
