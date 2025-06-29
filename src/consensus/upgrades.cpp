@@ -94,7 +94,7 @@ bool NetworkUpgradeActive(
 
 int CurrentEpoch(int nHeight, const Consensus::Params& params) {
     //Always return Sprout if height is less than or equal to 0 (Genisis block)
-    if (nHeight <= 0) {
+    if (nHeight < 0) {
         return Consensus::BASE_SPROUT;
     }
 
