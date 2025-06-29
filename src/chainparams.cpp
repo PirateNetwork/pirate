@@ -636,6 +636,11 @@ std::string CChainParams::GetFoundersRewardAddressAtHeight(int nHeight) const {
     int maxHeight = consensus.GetLastFoundersRewardBlockHeight();
     assert(nHeight > 0 && nHeight <= maxHeight);
 
+    // No founders reward addresses available
+    if (vFoundersRewardAddress.empty()) {
+        return ""; 
+    }   
+
     size_t addressChangeInterval = (maxHeight + vFoundersRewardAddress.size()) / vFoundersRewardAddress.size();
     size_t i = nHeight / addressChangeInterval;
     return vFoundersRewardAddress[i];
