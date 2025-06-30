@@ -180,7 +180,7 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingZKey()
     if (!GetHDSeed(seed))
         throw std::runtime_error("CWallet::GenerateNewSaplingZKey(): HD seed not found");
 
-    auto m = libzcash::SaplingExtendedSpendingKey::Master(seed, pwalletMain->bip39Enabled);
+    auto m = libzcash::SaplingExtendedSpendingKey::Master(seed, bip39Enabled);
     uint32_t bip44CoinType = Params().BIP44CoinType();
 
     // We use a fixed keypath scheme of m/32'/coin_type'/account'
@@ -235,7 +235,7 @@ OrchardPaymentAddressPirate CWallet::GenerateNewOrchardZKey()
     if (!GetHDSeed(seed))
         throw std::runtime_error("CWallet::GenerateNewOrchardZKey(): HD seed not found");
 
-    auto master = libzcash::OrchardExtendedSpendingKeyPirate::Master(seed, pwalletMain->bip39Enabled);
+    auto master = libzcash::OrchardExtendedSpendingKeyPirate::Master(seed, bip39Enabled);
     uint32_t bip44CoinType = Params().BIP44CoinType();
 
     // We use a fixed keypath scheme of m/32'/coin_type'/account'
@@ -306,13 +306,13 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingDiversifiedAddress()
     AssertLockHeld(cs_wallet); // mapSaplingSpendingKeyMetadata
 
     libzcash::SaplingExtendedSpendingKey extsk;
-    if (pwalletMain->primarySaplingSpendingKey == std::nullopt) {
+    if (primarySaplingSpendingKey == std::nullopt) {
         // Try to get the seed
         HDSeed seed;
         if (!GetHDSeed(seed))
             throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): HD seed not found");
 
-        auto m = libzcash::SaplingExtendedSpendingKey::Master(seed, pwalletMain->bip39Enabled);
+        auto m = libzcash::SaplingExtendedSpendingKey::Master(seed, bip39Enabled);
         uint32_t bip44CoinType = Params().BIP44CoinType();
 
         //Derive default key
@@ -323,7 +323,7 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingDiversifiedAddress()
         //Check of default spending key
         auto ivk = extsk.expsk.full_viewing_key().in_viewing_key();
         libzcash::SaplingExtendedFullViewingKey extfvk;
-        pwalletMain->GetSaplingFullViewingKey(ivk, extfvk);
+        GetSaplingFullViewingKey(ivk, extfvk);
         if (!HaveSaplingSpendingKey(extfvk)) {
 
           //Set metadata
@@ -345,7 +345,7 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingDiversifiedAddress()
             SetPrimarySaplingSpendingKey(extsk);
         }
     } else {
-        extsk = pwalletMain->primarySaplingSpendingKey.value();
+        extsk = primarySaplingSpendingKey.value();
     }
 
     auto ivk = extsk.expsk.full_viewing_key().in_viewing_key();
@@ -407,7 +407,7 @@ OrchardPaymentAddressPirate CWallet::GenerateNewOrchardDiversifiedAddress()
     libzcash::OrchardIncomingViewingKeyPirate ivk;
     libzcash::OrchardPaymentAddressPirate addr;
 
-    if (pwalletMain->primaryOrchardSpendingKey == std::nullopt) {
+    if (primaryOrchardSpendingKey == std::nullopt) {
 
         // Create new metadata
         int64_t nCreationTime = GetTime();
@@ -418,7 +418,7 @@ OrchardPaymentAddressPirate CWallet::GenerateNewOrchardDiversifiedAddress()
         if (!GetHDSeed(seed))
             throw std::runtime_error("CWallet::GenerateNewOrchardZKey(): HD seed not found");
 
-        auto master = libzcash::OrchardExtendedSpendingKeyPirate::Master(seed, pwalletMain->bip39Enabled);
+        auto master = libzcash::OrchardExtendedSpendingKeyPirate::Master(seed, bip39Enabled);
         uint32_t bip44CoinType = Params().BIP44CoinType();
 
         // We use a fixed keypath scheme of m/32'/coin_type'/account'
@@ -479,7 +479,7 @@ OrchardPaymentAddressPirate CWallet::GenerateNewOrchardDiversifiedAddress()
         }
 
     } else {
-        extsk = pwalletMain->primaryOrchardSpendingKey.value();
+        extsk = primaryOrchardSpendingKey.value();
         extfvk = extsk.GetXFVK().value();
         ivk = extfvk.fvk.GetIVK().value();
     }
@@ -543,7 +543,7 @@ bool CWallet::SetPrimarySaplingSpendingKey(
           return false;
       }
 
-      pwalletMain->primarySaplingSpendingKey = extsk;
+      primarySaplingSpendingKey = extsk;
 
       if (!fFileBacked) {
           return true;
@@ -577,7 +577,7 @@ bool CWallet::SetPrimaryOrchardSpendingKey(
           return false;
       }
 
-      pwalletMain->primaryOrchardSpendingKey = extsk;
+      primaryOrchardSpendingKey = extsk;
 
       if (!fFileBacked) {
           return true;
