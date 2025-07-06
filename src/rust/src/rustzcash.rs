@@ -1131,8 +1131,10 @@ pub extern "C" fn librustzcash_zip32_xfvk_address(
     j_ret: *mut [c_uchar; 11],
     addr_ret: *mut [c_uchar; 43],
 ) -> bool {
-    let xfvk = zip32::ExtendedFullViewingKey::read(&unsafe { *xfvk }[..])
-        .expect("valid ExtendedFullViewingKey");
+    let xfvk = match zip32::ExtendedFullViewingKey::read(&unsafe { *xfvk }[..]) {
+        Ok(xfvk) => xfvk,
+        Err(_) => return false,
+    };
     let j = zip32::DiversifierIndex(unsafe { *j });
 
     let addr = match xfvk.find_address(j) {
