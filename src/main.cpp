@@ -1265,7 +1265,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
             }
             txResults.validationPassed = false;
             txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: overwinter is active");
-            txResults.reasonString = strprintf("tx-overwinter-flag-not-set");
+            txResults.reasonString = strprintf("tx-overwintered-flag-not-set");
             return txResults;
         }
 
@@ -1274,7 +1274,7 @@ CheckTransationResults ContextualCheckTransactionSingleThreaded(
             txResults.validationPassed = false;
             txResults.dosLevel = dosLevel;
             txResults.errorString = strprintf("ContextualCheckTransactionSingleThreaded: overwinter flag must be set");
-            txResults.reasonString = strprintf("tx-overwinter-flag-not-set");
+            txResults.reasonString = strprintf("tx-overwintered-flag-not-set");
             return txResults;
         }
 
