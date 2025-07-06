@@ -304,7 +304,7 @@ OrchardExtendedSpendingKeyPirate OrchardExtendedSpendingKeyPirate::Master(const 
 
 }
 
-std::optional<OrchardExtendedSpendingKeyPirate> OrchardExtendedSpendingKeyPirate::DeriveChild(uint32_t bip44CoinType, uint32_t account) const
+std::optional<OrchardExtendedSpendingKeyPirate> OrchardExtendedSpendingKeyPirate::Derive(uint32_t bip44CoinType, uint32_t account) const
 {
     //Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); //sending stream

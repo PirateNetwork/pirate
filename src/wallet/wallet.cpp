@@ -248,7 +248,7 @@ OrchardPaymentAddressPirate CWallet::GenerateNewOrchardZKey()
     do
     {
         auto account = hdChain.orchardAccountCounter;
-        auto xskOpt = master.DeriveChild(coinType, account);
+        auto xskOpt = master.Derive(coinType, account);
 
         metadata.hdKeypath = "m/32'/" + std::to_string(coinType) + "'/" + std::to_string(account) + "'";
         metadata.seedFp = hdChain.seedFp;
@@ -430,7 +430,7 @@ OrchardPaymentAddressPirate CWallet::GenerateNewOrchardDiversifiedAddress()
         do {
 
             account = accountCounter;
-            auto extskOpt = master.DeriveChild(coinType, account);
+            auto extskOpt = master.Derive(coinType, account);
 
             metadata.hdKeypath = "m/32'/" + std::to_string(coinType) + "'/" + std::to_string(account) + "'";
             metadata.seedFp = hdChain.seedFp;

@@ -294,7 +294,7 @@ struct OrchardExtendedSpendingKeyPirate {
     }
 
     static OrchardExtendedSpendingKeyPirate Master(const HDSeed& seed, bool bip39Enabled = true);
-    std::optional<OrchardExtendedSpendingKeyPirate> DeriveChild(uint32_t bip44CoinType, uint32_t account) const;
+    std::optional<OrchardExtendedSpendingKeyPirate> Derive(uint32_t bip44CoinType, uint32_t account) const;
     std::optional<OrchardExtendedFullViewingKeyPirate> GetXFVK() const;
 
     friend bool operator==(const OrchardExtendedSpendingKeyPirate& a, const OrchardExtendedSpendingKeyPirate& b)
