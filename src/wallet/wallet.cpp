@@ -217,6 +217,8 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingZKey()
     if (!AddSaplingZKey(xsk)) {
         throw std::runtime_error("CWallet::GenerateNewSaplingZKey(): AddSaplingZKey failed");
     }
+
+    nTimeFirstKey = 1;
     // return default sapling payment address.
     return addr;
 }
@@ -296,6 +298,8 @@ OrchardPaymentAddressPirate CWallet::GenerateNewOrchardZKey()
     if (!AddOrchardZKey(xsk)) {
         throw std::runtime_error("CWallet::GenerateNewSaplingZKey(): AddSaplingZKey failed");
     }
+
+    nTimeFirstKey = 1;
     // return default sapling payment address.
     return address;
 }
@@ -667,10 +671,6 @@ bool CWallet::AddSaplingZKey(
         return false;
     }
 
-    if (!fFileBacked) {
-        return true;
-    }
-
     auto ivk = extsk.ToXFVK().fvk.in_viewing_key();
 
     if (!IsCrypted()) {
@@ -679,12 +679,20 @@ bool CWallet::AddSaplingZKey(
             return false;
         }
 
+        if (!fFileBacked) {
+            return true;
+        }   
 
         if(!CWalletDB(strWalletFile).WriteSaplingZKey(ivk, extsk, mapSaplingSpendingKeyMetadata[ivk])) {
             LogPrintf("Writing unencrypted Sapling Spending Key failed!!!\n");
             return false;
         }
     } else {
+        
+        if (!fFileBacked) {
+            return true;
+        }
+
         //Encrypt Sapling Extended Speding Key
         auto extfvk = extsk.ToXFVK();
 
@@ -732,12 +740,12 @@ bool CWallet::AddSaplingIncomingViewingKey(
         return false;
     }
 
-    if (!fFileBacked) {
-        return true;
-    }
-
     if (!CCryptoKeyStore::AddSaplingIncomingViewingKey(ivk, addr)) {
         return false;
+    }
+
+    if (!fFileBacked) {
+        return true;
     }
 
     if (!IsCrypted()) {
@@ -768,12 +776,12 @@ bool CWallet::AddSaplingExtendedFullViewingKey(const libzcash::SaplingExtendedFu
         return false;
     }
 
-    if (!fFileBacked) {
-        return true;
-    }
-
     if (!CCryptoKeyStore::AddSaplingExtendedFullViewingKey(extfvk)) {
         return false;
+    }
+
+    if (!fFileBacked) {
+        return true;
     }
 
     if (!IsCrypted()) {
@@ -804,12 +812,12 @@ bool CWallet::AddSaplingDiversifiedAddress(
         return false;
     }
 
-    if (!fFileBacked) {
-        return true;
-    }
-
     if (!CCryptoKeyStore::AddSaplingDiversifiedAddress(addr, ivk, path)) {
         return false;
+    }
+
+    if (!fFileBacked) {
+        return true;
     }
 
     if (!IsCrypted()) {
@@ -843,12 +851,12 @@ bool CWallet::AddOrchardDiversifiedAddress(
         return false;
     }
 
-    if (!fFileBacked) {
-        return true;
-    }
-
     if (!CCryptoKeyStore::AddOrchardDiversifiedAddress(addr, ivk, path)) {
         return false;
+    }
+
+    if (!fFileBacked) {
+        return true;
     }
 
     if (!IsCrypted()) {
@@ -958,10 +966,6 @@ bool CWallet::AddOrchardZKey(
         return false;
     }
 
-    if (!fFileBacked) {
-        return true;
-    }
-
     //Get OrchardExtendedFullViewingKey
     auto extfvkOpt = extsk.GetXFVK();
     if (extfvkOpt == std::nullopt) {
@@ -982,11 +986,20 @@ bool CWallet::AddOrchardZKey(
             return false;
         }
 
+        if (!fFileBacked) {
+            return true;
+        }
+
         if(!CWalletDB(strWalletFile).WriteOrchardZKey(ivk, extsk, mapOrchardSpendingKeyMetadata[ivk])) {
             LogPrintf("Writing unencrypted Orchard Spending Key failed!!!\n");
             return false;
         }
     } else {
+
+        if (!fFileBacked) {
+            return true;
+        }
+
         //Encrypt Sapling Extended Speding Key
         std::vector<unsigned char> vchCryptedSpendingKey;
         uint256 chash = extfvk.fvk.GetFingerprint();
@@ -1029,12 +1042,12 @@ bool CWallet::AddOrchardExtendedFullViewingKey(const libzcash::OrchardExtendedFu
         return false;
     }
 
-    if (!fFileBacked) {
-        return true;
-    }
-
     if (!CCryptoKeyStore::AddOrchardExtendedFullViewingKey(extfvk)) {
         return false;
+    }
+
+    if (!fFileBacked) {
+        return true;
     }
 
     if (!IsCrypted()) {
@@ -1064,12 +1077,12 @@ bool CWallet::AddOrchardIncomingViewingKey(
         return false;
     }
 
-    if (!fFileBacked) {
-        return true;
-    }
-
     if (!CCryptoKeyStore::AddOrchardIncomingViewingKey(ivk, addr)) {
         return false;
+    }
+
+    if (!fFileBacked) {
+        return true;
     }
 
     if (!IsCrypted()) {
@@ -1166,8 +1179,6 @@ bool CWallet::AddKeyPubKey(const CKey& secret, const CPubKey &pubkey)
     if (HaveWatchOnly(script))
         RemoveWatchOnly(script);
 
-    if (!fFileBacked)
-        return true;
 
     if (!IsCrypted()) {
         if (!CCryptoKeyStore::AddKeyPubKey(secret, pubkey)) {
@@ -1175,11 +1186,19 @@ bool CWallet::AddKeyPubKey(const CKey& secret, const CPubKey &pubkey)
             return false;
         }
 
+        if (!fFileBacked) {
+            return true;
+        }
+
         if (!CWalletDB(strWalletFile).WriteKey(pubkey, secret.GetPrivKey(), mapKeyMetadata[pubkey.GetID()])) {
             LogPrintf("Writing Transparent Spending Key failed!!!\n");
             return false;
         }
     } else {
+
+        if (!fFileBacked) {
+            return true;
+        }
 
         //Encrypt Key
         std::vector<unsigned char> vchCryptedSpendingKey;
