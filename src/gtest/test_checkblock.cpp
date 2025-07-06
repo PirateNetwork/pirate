@@ -5,8 +5,6 @@
 #include "main.h"
 #include "keystore.h"
 #include "key_io.h"
-//#include "proof_verifier.h"
-//#include "util/test.h"
 #include "zcash/Proof.hpp"
 
 static const std::string tSecretRegtest = "UuRoAgHmjHZqexxVAPjzW8N6hr3o7aETZqCZon2m8EYAmjmdTcj1";
@@ -354,86 +352,86 @@ TEST_F(ContextualCheckBlockTest, BlockSproutRulesRejectOtherTx) {
 };
 
 
-// // Test block evaluated under Overwinter rules cannot contain non-Overwinter
-// // transactions.
-// TEST_F(ContextualCheckBlockTest, BlockOverwinterRulesRejectOtherTx) {
-//     SelectParams(CBaseChainParams::REGTEST);
-//     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, 1);
+// Test block evaluated under Overwinter rules cannot contain non-Overwinter
+// transactions.
+TEST_F(ContextualCheckBlockTest, BlockOverwinterRulesRejectOtherTx) {
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, 1);
 
-//     CMutableTransaction mtx = GetFirstBlockCoinbaseTx();
+    CMutableTransaction mtx = GetFirstBlockCoinbaseTx();
 
-//     // Set the version to Sprout+JoinSplit (but nJoinSplit will be 0).
-//     mtx.nVersion = 2;
+    // Set the version to Sprout+JoinSplit (but nJoinSplit will be 0).
+    mtx.nVersion = 2;
 
-//     {
-//         SCOPED_TRACE("BlockOverwinterRulesRejectSproutTx");
-//         ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwintered-flag-not-set");
-//     }
+    {
+        SCOPED_TRACE("BlockOverwinterRulesRejectSproutTx");
+        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwintered-flag-not-set");
+    }
 
-//     // Make it a Sapling transaction
-//     mtx.fOverwintered = true;
-//     mtx.nVersion = SAPLING_TX_VERSION;
-//     mtx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
+    // Make it a Sapling transaction
+    mtx.fOverwintered = true;
+    mtx.nVersion = SAPLING_TX_VERSION;
+    mtx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
 
-//     {
-//         SCOPED_TRACE("BlockOverwinterRulesRejectSaplingTx");
-//         ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "bad-tx-overwinter-version-too-high");
-//     }
-// }
-
-
-// // Test block evaluated under Sapling rules cannot contain non-Sapling transactions.
-// TEST_F(ContextualCheckBlockTest, BlockSaplingRulesRejectOtherTx) {
-//     SelectParams(CBaseChainParams::REGTEST);
-//     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, 1);
-//     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, 1);
-
-//     CMutableTransaction mtx = GetFirstBlockCoinbaseTx();
-
-//     // Set the version to Sprout+JoinSplit (but nJoinSplit will be 0).
-//     mtx.nVersion = 2;
-
-//     {
-//         SCOPED_TRACE("BlockSaplingRulesRejectSproutTx");
-//         ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwintered-flag-not-set");
-//     }
-
-//     // Make it an Overwinter transaction
-//     mtx.fOverwintered = true;
-//     mtx.nVersion = OVERWINTER_TX_VERSION;
-//     mtx.nVersionGroupId = OVERWINTER_VERSION_GROUP_ID;
-
-//     {
-//         SCOPED_TRACE("BlockSaplingRulesRejectOverwinterTx");
-//         ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "bad-sapling-tx-version-group-id");
-//     }
-// }
+    {
+        SCOPED_TRACE("BlockOverwinterRulesRejectSaplingTx");
+        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "bad-overwinter-tx-version-group-id");
+    }
+}
 
 
-// // Test block evaluated under Blossom rules cannot contain non-Blossom transactions.
-// TEST_F(ContextualCheckBlockTest, BlockBlossomRulesRejectOtherTx) {
-//     SelectParams(CBaseChainParams::REGTEST);
-//     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, 1);
-//     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, 1);
-//     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_ORCHARD, 1);
+// Test block evaluated under Sapling rules cannot contain non-Sapling transactions.
+TEST_F(ContextualCheckBlockTest, BlockSaplingRulesRejectOtherTx) {
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, 1);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, 1);
 
-//     CMutableTransaction mtx = GetFirstBlockCoinbaseTx();
+    CMutableTransaction mtx = GetFirstBlockCoinbaseTx();
 
-//     // Set the version to Sprout+JoinSplit (but nJoinSplit will be 0).
-//     mtx.nVersion = 2;
+    // Set the version to Sprout+JoinSplit (but nJoinSplit will be 0).
+    mtx.nVersion = 2;
 
-//     {
-//         SCOPED_TRACE("BlockOrchardRulesRejectSproutTx");
-//         ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwintered-flag-not-set");
-//     }
+    {
+        SCOPED_TRACE("BlockSaplingRulesRejectSproutTx");
+        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwintered-flag-not-set");
+    }
 
-//     // Make it an Overwinter transaction
-//     mtx.fOverwintered = true;
-//     mtx.nVersion = OVERWINTER_TX_VERSION;
-//     mtx.nVersionGroupId = OVERWINTER_VERSION_GROUP_ID;
+    // Make it an Overwinter transaction
+    mtx.fOverwintered = true;
+    mtx.nVersion = OVERWINTER_TX_VERSION;
+    mtx.nVersionGroupId = OVERWINTER_VERSION_GROUP_ID;
 
-//     {
-//         SCOPED_TRACE("BlockBlossomRulesRejectOverwinterTx");
-//         ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "bad-sapling-tx-version-group-id");
-//     }
-// }
+    {
+        SCOPED_TRACE("BlockSaplingRulesRejectOverwinterTx");
+        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "bad-sapling-tx-version-group-id");
+    }
+}
+
+
+// Test block evaluated under Orchard rules cannot contain non-Orchard transactions.
+TEST_F(ContextualCheckBlockTest, BlockOrchardRulesRejectOtherTx) {
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, 1);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, 1);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_ORCHARD, 1);
+
+    CMutableTransaction mtx = GetFirstBlockCoinbaseTx();
+
+    // Set the version to Sprout+JoinSplit (but nJoinSplit will be 0).
+    mtx.nVersion = 2;
+
+    {
+        SCOPED_TRACE("BlockOrchardRulesRejectSproutTx");
+        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwintered-flag-not-set");
+    }
+
+    // Make it an Overwinter transaction
+    mtx.fOverwintered = true;
+    mtx.nVersion = OVERWINTER_TX_VERSION;
+    mtx.nVersionGroupId = OVERWINTER_VERSION_GROUP_ID;
+
+    {
+        SCOPED_TRACE("BlockOrchardRulesRejectOverwinterTx");
+        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "bad-orchard-tx-version-group-id");
+    }
+}

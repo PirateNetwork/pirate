@@ -997,7 +997,7 @@ TEST(ChecktransactionTests, OverwinterFlagNotSet) {
 
     CheckTransationResults results0 = ContextualCheckTransactionSingleThreaded(tx, 0, 100, false);
     EXPECT_FALSE(results0.validationPassed);
-    EXPECT_EQ(results0.reasonString, "tx-overwinter-flag-not-set");
+    EXPECT_EQ(results0.reasonString, "tx-overwintered-flag-not-set");
     EXPECT_EQ(results0.dosLevel, 100);
 
     // Revert to default
