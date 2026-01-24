@@ -1,6 +1,15 @@
 use crate::{
     bundlecache::init as bundlecache_init,
-    merkle_frontier::{new_sapling, sapling_empty_root, parse_sapling, SaplingFrontier, SaplingWallet},
+    merkle_frontier::{
+        new_orchard, new_sapling, orchard_empty_root, parse_orchard, parse_sapling,
+        sapling_empty_root, OrchardFrontier, OrchardWallet, SaplingFrontier, SaplingWallet,
+    },
+    orchard_bundle::{
+        none_orchard_bundle, orchard_bundle_from_raw_box, parse_orchard_bundle, Action,
+        Bundle as OrchardBundle,
+    },
+    builder_ffi::shielded_signature_digest,
+    orchard_ffi::{orchard_batch_validation_init, BatchValidator as OrchardBatchValidator},
     params::{network, Network},
     sapling::{
         apply_sapling_bundle_signatures, build_sapling_bundle, finish_bundle_assembly,
@@ -13,7 +22,7 @@ use crate::{
     },
     streams::{
         from_auto_file, from_blake2b_writer, from_buffered_file, from_data, from_hash_writer,
-        from_size_computer, CppStream,
+        from_secure_data, from_size_computer, CppStream,
     },
     test_harness_ffi::{
         test_only_invalid_sapling_bundle, test_only_replace_sapling_nullifier,
@@ -25,12 +34,14 @@ use crate::{
 #[cxx::bridge]
 pub(crate) mod ffi {
 
-        extern "C++" {
+    extern "C++" {
         include!("hash.h");
         include!("streams.h");
 
         #[cxx_name = "RustDataStream"]
         type RustStream = crate::streams::ffi::RustStream;
+        #[cxx_name = "SecureRustDataStream"]
+        type SecureRustStream = crate::streams::ffi::SecureRustStream;
         type CAutoFile = crate::streams::ffi::CAutoFile;
         type CBufferedFile = crate::streams::ffi::CBufferedFile;
         type CHashWriter = crate::streams::ffi::CHashWriter;
@@ -42,6 +53,7 @@ pub(crate) mod ffi {
         type CppStream<'a>;
 
         fn from_data(stream: Pin<&mut RustStream>) -> Box<CppStream<'_>>;
+        fn from_secure_data(stream: Pin<&mut SecureRustStream>) -> Box<CppStream<'_>>;
         fn from_auto_file(file: Pin<&mut CAutoFile>) -> Box<CppStream<'_>>;
         fn from_buffered_file(file: Pin<&mut CBufferedFile>) -> Box<CppStream<'_>>;
         fn from_hash_writer(writer: Pin<&mut CHashWriter>) -> Box<CppStream<'_>>;
@@ -57,10 +69,7 @@ pub(crate) mod ffi {
             network: &str,
             overwinter: i32,
             sapling: i32,
-            blossom: i32,
-            heartwood: i32,
-            canopy: i32,
-            nu5: i32,
+            orchard: i32,
         ) -> Result<Box<Network>>;
     }
 
@@ -81,9 +90,11 @@ pub(crate) mod ffi {
     }
 
     unsafe extern "C++" {
-        include!("rust/sapling.h");
+        include!("rust/pointers.h");
+        type OrchardBundlePtr;
         type SaplingBundlePtr;
         type OutputPtr;
+        type ActionPtr;
     }
 
     #[namespace = "sapling"]
@@ -112,7 +123,7 @@ pub(crate) mod ffi {
         fn zkproof(self: &Output) -> [u8; 192];
         fn serialize_v4(self: &Output, stream: &mut CppStream<'_>) -> Result<()>;
 
-        #[cxx_name = "Bundle"]
+        #[cxx_name = "SaplingBundle"]
         type SaplingBundle;
 
         #[cxx_name = "none_bundle"]
@@ -130,7 +141,9 @@ pub(crate) mod ffi {
         fn recursive_dynamic_usage(self: &SaplingBundle) -> usize;
         fn is_present(self: &SaplingBundle) -> bool;
         fn spends(self: &SaplingBundle) -> Vec<Spend>;
+        fn get_spend(self: &SaplingBundle, spend_index: usize) -> Result<Box<Spend>>;
         fn outputs(self: &SaplingBundle) -> Vec<Output>;
+        fn get_output(self: &SaplingBundle, out_index: usize) -> Result<Box<Output>>;
         fn num_spends(self: &SaplingBundle) -> usize;
         fn num_outputs(self: &SaplingBundle) -> usize;
         fn value_balance_zat(self: &SaplingBundle) -> i64;
@@ -161,6 +174,9 @@ pub(crate) mod ffi {
         type BundleAssembler;
 
         fn new_bundle_assembler() -> Box<SaplingBundleAssembler>;
+        fn add_spend_to_assembler(self: &mut SaplingBundleAssembler, spend_bytes: [u8; 384]) -> bool;
+        fn add_output_to_assembler(self: &mut SaplingBundleAssembler, output_bytes: [u8; 948]) -> bool;
+        fn add_value_balance_to_assembler(self: &mut SaplingBundleAssembler, value_balance: i64) -> bool;
         #[cxx_name = "parse_v4_components"]
         fn parse_v4_sapling_components(
             stream: &mut CppStream<'_>,
@@ -248,6 +264,57 @@ pub(crate) mod ffi {
         fn validate(self: &mut SaplingBatchValidator) -> bool;
     }
 
+    #[namespace = "orchard_bundle"]
+    extern "Rust" {
+        type Action;
+        type OrchardBundle;
+
+        fn cv(self: &Action) -> [u8; 32];
+        fn nullifier(self: &Action) -> [u8; 32];
+        fn rk(self: &Action) -> [u8; 32];
+        fn cmx(self: &Action) -> [u8; 32];
+        fn ephemeral_key(self: &Action) -> [u8; 32];
+        fn enc_ciphertext(self: &Action) -> [u8; 580];
+        fn out_ciphertext(self: &Action) -> [u8; 80];
+        fn spend_auth_sig(self: &Action) -> [u8; 64];
+        fn as_ptr(self: &Action) -> *const ActionPtr;
+
+        #[rust_name = "none_orchard_bundle"]
+        fn none() -> Box<OrchardBundle>;
+        #[rust_name = "orchard_bundle_from_raw_box"]
+        unsafe fn from_raw_box(bundle: *mut OrchardBundlePtr) -> Box<OrchardBundle>;
+        fn box_clone(self: &OrchardBundle) -> Box<OrchardBundle>;
+        #[rust_name = "parse_orchard_bundle"]
+        fn parse(stream: &mut CppStream<'_>) -> Result<Box<OrchardBundle>>;
+        fn serialize(self: &OrchardBundle, stream: &mut CppStream<'_>) -> Result<()>;
+        fn as_ptr(self: &OrchardBundle) -> *const OrchardBundlePtr;
+        fn recursive_dynamic_usage(self: &OrchardBundle) -> usize;
+        fn is_present(self: &OrchardBundle) -> bool;
+        fn actions(self: &OrchardBundle) -> Vec<Action>;
+        fn num_actions(self: &OrchardBundle) -> usize;
+        fn enable_spends(self: &OrchardBundle) -> bool;
+        fn enable_outputs(self: &OrchardBundle) -> bool;
+        fn value_balance_zat(self: &OrchardBundle) -> i64;
+        fn anchor(self: &OrchardBundle) -> [u8; 32];
+        fn proof(self: &OrchardBundle) -> Vec<u8>;
+        fn binding_sig(self: &OrchardBundle) -> [u8; 64];
+        fn coinbase_outputs_are_valid(self: &OrchardBundle) -> bool;
+    }
+
+    #[namespace = "orchard"]
+    extern "Rust" {
+        #[cxx_name = "BatchValidator"]
+        type OrchardBatchValidator;
+        #[cxx_name = "init_batch_validator"]
+        fn orchard_batch_validation_init(cache_store: bool) -> Box<OrchardBatchValidator>;
+        fn add_bundle(
+            self: &mut OrchardBatchValidator,
+            bundle: Box<OrchardBundle>,
+            sighash: [u8; 32],
+        );
+        fn validate(self: &mut OrchardBatchValidator) -> bool;
+    }
+
     #[namespace = "merkle_frontier"]
     struct SaplingAppendResult {
         has_subtree_boundary: bool,
@@ -255,7 +322,14 @@ pub(crate) mod ffi {
     }
 
     #[namespace = "merkle_frontier"]
+    struct OrchardAppendResult {
+        has_subtree_boundary: bool,
+        completed_subtree_root: [u8; 32],
+    }
+
+    #[namespace = "merkle_frontier"]
     extern "Rust" {
+
         type SaplingFrontier;
         type SaplingWallet;
 
@@ -268,7 +342,54 @@ pub(crate) mod ffi {
         fn dynamic_memory_usage(self: &SaplingFrontier) -> usize;
         fn root(self: &SaplingFrontier) -> [u8; 32];
         fn size(self: &SaplingFrontier) -> u64;
-        fn append_bundle(self: &mut SaplingFrontier, sapling_bundle: &SaplingBundle) -> Result<SaplingAppendResult>;
+        fn append_bundle(
+            self: &mut SaplingFrontier,
+            sapling_bundle: &SaplingBundle,
+        ) -> Result<SaplingAppendResult>;
+        fn append(
+            self: &mut SaplingFrontier,
+            sapling_cmu: [u8; 32],
+        ) -> Result<SaplingAppendResult>;
         unsafe fn init_wallet(self: &SaplingFrontier, wallet: *mut SaplingWallet) -> bool;
+    }
+
+    #[namespace = "merkle_frontier"]
+    extern "Rust" {
+        type OrchardFrontier;
+        type OrchardWallet;
+
+        fn orchard_empty_root() -> [u8; 32];
+        fn new_orchard() -> Box<OrchardFrontier>;
+        fn box_clone(self: &OrchardFrontier) -> Box<OrchardFrontier>;
+        fn parse_orchard(reader: &mut CppStream<'_>) -> Result<Box<OrchardFrontier>>;
+        fn serialize(self: &OrchardFrontier, writer: &mut CppStream<'_>) -> Result<()>;
+        fn serialize_legacy(self: &OrchardFrontier, writer: &mut CppStream<'_>) -> Result<()>;
+        fn dynamic_memory_usage(self: &OrchardFrontier) -> usize;
+        fn root(self: &OrchardFrontier) -> [u8; 32];
+        fn size(self: &OrchardFrontier) -> u64;
+        fn append_bundle(
+            self: &mut OrchardFrontier,
+            bundle: &OrchardBundle,
+        ) -> Result<OrchardAppendResult>;
+        fn append(
+            self: &mut OrchardFrontier,
+            orchard_cmx: [u8; 32],
+        ) -> Result<OrchardAppendResult>;
+        unsafe fn init_wallet(self: &OrchardFrontier, wallet: *mut OrchardWallet) -> bool;
+    }
+
+    unsafe extern "C++" {
+        include!("rust/builder.h");
+        type OrchardUnauthorizedBundlePtr;
+    }
+    #[namespace = "builder"]
+    extern "Rust" {
+        unsafe fn shielded_signature_digest(
+            consensus_branch_id: u32,
+            tx_bytes: &[u8],
+            all_prev_outputs: &[u8],
+            sapling_bundle: &SaplingUnauthorizedBundle,
+            orchard_bundle: *const OrchardUnauthorizedBundlePtr,
+        ) -> Result<[u8; 32]>;
     }
 }

@@ -41,9 +41,9 @@ use super::{
 };
 use crate::params::Network;
 use crate::{
+    bridge::ffi,
     bundlecache::{sapling_bundle_validity_cache, sapling_bundle_validity_cache_mut, CacheEntries},
     streams::CppStream,
-    bridge::ffi,
 };
 
 pub(crate) mod spec;
@@ -243,6 +243,20 @@ impl Bundle {
             .collect()
     }
 
+    pub(crate) fn get_spend(&self, spend_index: usize) -> Result<Box<Spend>, String> {
+        let bundle = match &self.0 {
+            Some(b) => b,
+            None => return Err(format!("Failed to retireve sapling bundle")),
+        };
+
+        let spend = match bundle.shielded_spends().iter().nth(spend_index) {
+            Some(s) => s.clone(),
+            None => return Err(format!("Failed to retireve spend description")),
+        };
+
+        return Ok(Box::new(Spend(spend)));
+    }
+
     pub(crate) fn outputs(&self) -> Vec<Output> {
         self.0
             .iter()
@@ -250,6 +264,20 @@ impl Bundle {
             .cloned()
             .map(Output)
             .collect()
+    }
+
+    pub(crate) fn get_output(&self, out_index: usize) -> Result<Box<Output>, String> {
+        let bundle = match &self.0 {
+            Some(b) => b,
+            None => return Err(format!("Failed to retireve sapling bundle")),
+        };
+
+        let output = match bundle.shielded_outputs().iter().nth(out_index) {
+            Some(o) => o.clone(),
+            None => return Err(format!("Failed to retireve ouput description")),
+        };
+
+        return Ok(Box::new(Output(output)));
     }
 
     pub(crate) fn num_spends(&self) -> usize {
@@ -346,6 +374,49 @@ impl BundleAssembler {
             shielded_outputs,
         }))
     }
+
+    pub(crate) fn add_spend_to_assembler(
+        &mut self,
+        spend_bytes: [u8; 384],
+    ) -> bool {
+        let spend = match  sapling::SpendDescription::read(&mut io::Cursor::new(&spend_bytes))
+            .map_err(|e| format!("{}", e)) {
+                Ok(s) => s,
+                Err(_) => return false
+            };
+
+        self.shielded_spends.push(spend);
+        return true
+    }
+
+    pub(crate) fn add_output_to_assembler(
+        &mut self,
+        output_bytes: [u8; 948],
+    ) -> bool {
+        let output = match  sapling::OutputDescription::read(&mut io::Cursor::new(&output_bytes))
+            .map_err(|e| format!("{}", e)) {
+                Ok(s) => s,
+                Err(_) => return false
+            };
+
+        self.shielded_outputs.push(output);
+        return true
+    }
+
+    pub(crate) fn add_value_balance_to_assembler(
+        &mut self,
+        value_balance: i64,
+    ) -> bool {
+
+        let value_balance = match Amount::from_i64(value_balance) {
+            Ok(vb) => vb,
+            Err(()) => return false,
+        };
+
+        self.value_balance = value_balance;
+        return true
+    }
+
 
     pub(crate) fn have_actions(&self) -> bool {
         !(self.shielded_spends.is_empty() && self.shielded_outputs.is_empty())

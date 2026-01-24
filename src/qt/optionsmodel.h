@@ -52,7 +52,6 @@ public:
         EnableZSigning,                 // bool
         EnableZSigning_Spend,           // bool
         EnableZSigning_Sign,            // bool
-        EnableZSigning_HWwallet,        // bool
         EnableHexMemo,                  // bool
         EnableBootstrap,                // bool
         ZapWalletTxes,                  // bool

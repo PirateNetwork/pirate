@@ -235,11 +235,6 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "  \"paytxfee\": x.xxxx,                          (numeric) the transaction fee set in " + CURRENCY_UNIT + "/kB\n"
             "  \"relayfee\": x.xxxx,                          (numeric) minimum relay fee for non-free transactions in " + CURRENCY_UNIT + "/kB\n"
             "  \"errors\": \"...\"                            (string) any error messages\n"
-            "  \"cleanup_mode\": \"...\"                      (string) active|inactive\n"
-            "  \"cleanup_status\": \"...\"                    (string) status of the cleanup routine\n"
-            "  \"cleanup_confirmed_txs\": \"...\"             (numeric) qty of confirmed cleanup transactions for the current round\n"
-            "  \"cleanup_unconfirmed_txs\": \"...\"           (numeric) qty of unconfirmed cleanup transactions for the current round\n"
-            "  \"cleanup_conflicted_txs\": \"...\"            (numeric) qty of conflicted cleanup transactions for the current round\n"
             "}\n"
             "\nExamples:\n"
             + HelpExampleCli("getinfo", "")
@@ -309,6 +304,7 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
         obj.push_back(Pair("paytxfee",      ValueFromAmount(payTxFee.GetFeePerK())));
 #endif
         obj.push_back(Pair("sapling", ASSETCHAINS_SAPLING));
+        obj.push_back(Pair("orchard", ASSETCHAINS_ORCHARD));
     }
     obj.push_back(Pair("timeoffset",    0));
     obj.push_back(Pair("connections",   (int)vNodes.size()));
@@ -332,16 +328,6 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
     obj.push_back(Pair("testnet",       Params().TestnetToBeDeprecatedFieldRPC()));
     obj.push_back(Pair("relayfee",      ValueFromAmount(::minRelayTxFee.GetFeePerK())));
     obj.push_back(Pair("errors",        GetWarnings("statusbar")));
-
-    obj.push_back(Pair("cleanup_mode", fCleanUpMode? "Active" : "Inactive"));
-    obj.push_back(Pair("cleanup_status",pwalletMain->strCleanUpStatus));
-    obj.push_back(Pair("cleanup_unspent_notes",pwalletMain->cleanupCurrentRoundUnspent));
-    obj.push_back(Pair("cleanup_unspent_target",pwalletMain->targetConsolidationQty));
-    obj.push_back(Pair("cleanup_confirmed_txs",pwalletMain->cleanUpConfirmed));
-    obj.push_back(Pair("cleanup_unconfirmed_txs",pwalletMain->cleanUpUnconfirmed));
-    obj.push_back(Pair("cleanup_conflicted_txs",pwalletMain->cleanUpConflicted));
-    obj.push_back(Pair("cleanup_expiration_height",pwalletMain->cleanupMaxExpirationHieght));
-
 
      if ( NOTARY_PUBKEY33[0] != 0 ) {
         char pubkeystr[65]; int32_t notaryid; std::string notaryname;
@@ -576,7 +562,7 @@ UniValue validateaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
         isminetype mine = pwalletMain ? IsMine(*pwalletMain, dest) : ISMINE_NO;
         ret.push_back(Pair("ismine", (mine & ISMINE_SPENDABLE) ? true : false));
         ret.push_back(Pair("iswatchonly", (mine & ISMINE_WATCH_ONLY) ? true: false));
-        UniValue detail = boost::apply_visitor(DescribeAddressVisitor(), dest);
+        UniValue detail = std::visit(DescribeAddressVisitor(), dest);
         ret.pushKVs(detail);
         if (pwalletMain && pwalletMain->mapAddressBook.count(dest))
             ret.push_back(Pair("account", pwalletMain->mapAddressBook[dest].name));
@@ -616,6 +602,24 @@ public:
             bool isMine = pwalletMain->GetSaplingIncomingViewingKey(zaddr, ivk) &&
                 pwalletMain->GetSaplingFullViewingKey(ivk, extfvk) &&
                 pwalletMain->HaveSaplingSpendingKey(extfvk);
+            obj.push_back(Pair("ismine", isMine));
+        }
+#endif
+        return obj;
+    }
+
+    UniValue operator()(const libzcash::OrchardPaymentAddressPirate &zaddr) const {
+        UniValue obj(UniValue::VOBJ);
+        obj.push_back(Pair("type", "orchard"));
+        obj.push_back(Pair("diversifier", HexStr(zaddr.d)));
+        obj.push_back(Pair("diversifiedtransmissionkey", zaddr.pk_d.GetHex()));
+#ifdef ENABLE_WALLET
+        if (pwalletMain) {
+            libzcash::OrchardIncomingViewingKeyPirate ivk;
+            libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+            bool isMine = pwalletMain->GetOrchardIncomingViewingKey(zaddr, ivk) &&
+                pwalletMain->GetOrchardFullViewingKey(ivk, extfvk) &&
+                pwalletMain->HaveOrchardSpendingKey(extfvk);
             obj.push_back(Pair("ismine", isMine));
         }
 #endif
@@ -664,7 +668,7 @@ UniValue z_validateaddress(const UniValue& params, bool fHelp, const CPubKey& my
     if (isValid)
     {
         ret.push_back(Pair("address", strAddress));
-        UniValue detail = boost::apply_visitor(DescribePaymentAddressVisitor(), address);
+        UniValue detail = std::visit(DescribePaymentAddressVisitor(), address);
         ret.pushKVs(detail);
     }
     return ret;
@@ -697,7 +701,7 @@ CScript _createmultisig_redeemScript(const UniValue& params)
         // Case 1: Bitcoin address and we have full public key:
         CTxDestination dest = DecodeDestination(ks);
         if (pwalletMain && IsValidDestination(dest)) {
-            const CKeyID *keyID = boost::get<CKeyID>(&dest);
+            const CKeyID *keyID = std::get_if<CKeyID>(&dest);
             if (!keyID) {
                 throw std::runtime_error(strprintf("%s does not refer to a key", ks));
             }
@@ -810,7 +814,7 @@ UniValue verifymessage(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw JSONRPCError(RPC_TYPE_ERROR, "Invalid address");
     }
 
-    const CKeyID *keyID = boost::get<CKeyID>(&destination);
+    const CKeyID *keyID = std::get_if<CKeyID>(&destination);
     if (!keyID) {
         throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to key");
     }

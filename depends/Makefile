@@ -52,6 +52,7 @@ full_host_os:=$(subst $(host_arch)-$(host_vendor)-,,$(canonical_host))
 host_os:=$(findstring linux,$(full_host_os))
 host_os+=$(findstring darwin,$(full_host_os))
 host_os+=$(findstring mingw32,$(full_host_os))
+host_os+=$(findstring mingw64,$(full_host_os))
 host_os:=$(strip $(host_os))
 ifeq ($(host_os),)
 host_os=$(full_host_os)
@@ -94,7 +95,7 @@ $(host_arch)_$(host_os)_native_toolchain?=$($(host_os)_native_toolchain)
 include funcs.mk
 
 toolchain_path=$($($(host_arch)_$(host_os)_native_toolchain)_prefixbin)
-final_build_id_long+=$(shell $(build_SHA256SUM) config.site.in)
+final_build_id_long+=$(shell $(build_SHA256SUM) $(BASEDIR)/config.site.in)
 final_build_id+=$(shell echo -n $(final_build_id_long) | $(build_SHA256SUM) | cut -c-$(HASH_LENGTH))
 $(host_prefix)/.stamp_$(final_build_id): $(native_packages) $(packages)
 	$(AT)rm -rf $(@D)
@@ -106,7 +107,7 @@ $(host_prefix)/.stamp_$(final_build_id): $(native_packages) $(packages)
 	then echo Extracting pre-vendored crates from $(CRATE_ARCHIVE)...; \
 		tar xf $(CRATE_ARCHIVE) -C $(@D); \
 	else echo Vendoring crates...; \
-		$(@D)/native/bin/cargo vendor --locked --manifest-path $(BASEDIR)/../Cargo.toml $(@D)/$(CRATE_REGISTRY); \
+		$(@D)/native/bin/cargo vendor --manifest-path $(BASEDIR)/../Cargo.toml $(@D)/$(CRATE_REGISTRY); \
 	fi
 	$(AT)touch $@
 
@@ -176,7 +177,7 @@ download-osx:
 download-linux:
 	@$(MAKE) -s HOST=x86_64-unknown-linux-gnu download-one
 download-win:
-	@$(MAKE) -s HOST=x86_64-w64-mingw32 download-one
+	@$(MAKE) -s HOST=x86_64-w64-mingw64 download-one
 download: download-osx download-linux download-win
 
 .PHONY: install cached download-one download-osx download-linux download-win download check-packages check-sources

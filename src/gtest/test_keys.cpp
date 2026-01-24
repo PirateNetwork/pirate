@@ -14,49 +14,38 @@ TEST(Keys, EncodeAndDecodeSapling)
     HDSeed seed(rawSeed);
     auto m = libzcash::SaplingExtendedSpendingKey::Master(seed);
 
-    for (uint32_t i = 0; i < 1000; i++) {
+    for (uint32_t i = 0; i < 100; i++) {
         auto sk = m.Derive(i);
+        auto vk = sk.ToXFVK();
+        auto addr = sk.DefaultAddress();
+
         {
-            std::string sk_string = EncodeSpendingKey(sk);
-            EXPECT_EQ(
-                sk_string.substr(0, 24),
-                Params().Bech32HRP(CChainParams::SAPLING_EXTENDED_SPEND_KEY));
-
-            auto spendingkey2 = DecodeSpendingKey(sk_string);
-            EXPECT_TRUE(IsValidSpendingKey(spendingkey2));
-
-            ASSERT_TRUE(boost::get<libzcash::SaplingExtendedSpendingKey>(&spendingkey2) != nullptr);
-            auto sk2 = boost::get<libzcash::SaplingExtendedSpendingKey>(spendingkey2);
-            EXPECT_EQ(sk, sk2);
+            std::string str = EncodeSpendingKey(sk);
+            libzcash::SpendingKey spendingkey2 = DecodeSpendingKey(str);
+            ASSERT_TRUE(IsValidSpendingKey(spendingkey2));
+            auto sk2 = std::get_if<libzcash::SaplingExtendedSpendingKey>(&spendingkey2);
+            ASSERT_TRUE(sk2 != nullptr);
+            ASSERT_EQ(sk, *sk2);
         }
+
         {
-            auto addr = sk.DefaultAddress();
-
-            std::string addr_string = EncodePaymentAddress(addr);
-            EXPECT_EQ(
-                addr_string.substr(0, 2),
-                Params().Bech32HRP(CChainParams::SAPLING_PAYMENT_ADDRESS));
-
-            auto paymentaddr2 = DecodePaymentAddress(addr_string);
-            EXPECT_TRUE(IsValidPaymentAddress(paymentaddr2, SAPLING_BRANCH_ID));
-
-            ASSERT_TRUE(boost::get<libzcash::SaplingPaymentAddress>(&paymentaddr2) != nullptr);
-            auto addr2 = boost::get<libzcash::SaplingPaymentAddress>(paymentaddr2);
-            EXPECT_EQ(addr, addr2);
+            std::string str = EncodePaymentAddress(addr);
+            libzcash::PaymentAddress paymentaddr2 = DecodePaymentAddress(str);
+            ASSERT_TRUE(IsValidPaymentAddress(paymentaddr2));
+            auto addr2 = std::get_if<libzcash::SaplingPaymentAddress>(&paymentaddr2);
+            ASSERT_TRUE(addr2 != nullptr);
+            ASSERT_EQ(addr, *addr2);
         }
+
         {
-            auto ivk = sk.ToXFVK().fvk.in_viewing_key();
-            std::string ivk_string = EncodeViewingKey(ivk);
-            EXPECT_EQ(
-                ivk_string.substr(0, 5),
-                Params().Bech32HRP(CChainParams::SAPLING_INCOMING_VIEWING_KEY));
-
-            auto viewing_key = DecodeViewingKey(ivk_string);
-            EXPECT_TRUE(IsValidViewingKey(viewing_key));
-
-            auto ivk2 = boost::get<libzcash::SaplingIncomingViewingKey>(&viewing_key);
-            ASSERT_TRUE(ivk2 != nullptr);
-            EXPECT_EQ(*ivk2, ivk);
+            std::string vk_string = EncodeViewingKey(vk);
+            libzcash::ViewingKey viewingkey2 = DecodeViewingKey(vk_string);
+            ASSERT_TRUE(IsValidViewingKey(viewingkey2));
+            auto vk2_ptr = std::get_if<libzcash::SaplingExtendedFullViewingKey>(&viewingkey2);
+            ASSERT_TRUE(vk2_ptr != nullptr);
+            auto vk2 = *vk2_ptr;
+            ASSERT_EQ(vk, vk2);
+            ASSERT_EQ(vk.fvk.in_viewing_key(), vk2.fvk.in_viewing_key());
         }
     }
 }

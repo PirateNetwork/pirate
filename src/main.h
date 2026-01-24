@@ -100,9 +100,9 @@ static const int MAX_SCRIPTCHECK_THREADS = 16;
 /** -par default (number of script-checking threads, 0 = auto) */
 static const int DEFAULT_SCRIPTCHECK_THREADS = 0;
 /** Number of blocks that can be requested at any given time from a single peer. */
-static const int MAX_BLOCKS_IN_TRANSIT_PER_PEER = 16;
+static const int MAX_BLOCKS_IN_TRANSIT_PER_PEER = 128;  // Increased from 16 to improve sync speed
 /** Timeout in seconds during which a peer must stall block download progress before being disconnected. */
-static const unsigned int BLOCK_STALLING_TIMEOUT = 2;
+static const unsigned int BLOCK_STALLING_TIMEOUT = 10;  // Increased from 2 to reduce false disconnects
 /** Number of headers sent in one getheaders result. We rely on the assumption that if a peer sends
  *  less than this number, we reached its tip. Changing this value is a protocol upgrade. */
 static const unsigned int MAX_HEADERS_RESULTS = 160;
@@ -110,7 +110,7 @@ static const unsigned int MAX_HEADERS_RESULTS = 160;
  *  Larger windows tolerate larger download speed differences between peer, but increase the potential
  *  degree of disordering of blocks on disk (which make reindexing and in the future perhaps pruning
  *  harder). We'll probably want to make this a per-peer adaptive value at some point. */
-static unsigned int BLOCK_DOWNLOAD_WINDOW = 1024;
+static unsigned int BLOCK_DOWNLOAD_WINDOW = 4096;  // Increased from 1024 to 4096 for better lookahead
 /** Time to wait (in seconds) between writing blocks/block index to disk. */
 static const unsigned int DATABASE_WRITE_INTERVAL = 15 * 60;
 /** Time to wait (in seconds) between flushing chainstate to disk. */
@@ -122,6 +122,9 @@ static const unsigned int WITNESS_WRITE_UPDATES = 10000;
 /** Maximum length of reject messages. */
 static const unsigned int MAX_REJECT_MESSAGE_LENGTH = 111;
 static const int64_t DEFAULT_MAX_TIP_AGE = 24 * 60 * 60;
+
+/** The number of blocks within expiry height when a tx is considered to be expiring soon */
+static constexpr uint32_t TX_EXPIRING_SOON_THRESHOLD = 3;
 
 /** Default NSPV support enabled */
 static const bool DEFAULT_NSPV_PROCESSING = false;
@@ -150,6 +153,7 @@ struct BlockHasher
 extern unsigned int expiryDelta;
 extern CScript COINBASE_FLAGS;
 extern CCriticalSection cs_main;
+extern CCriticalSection cs_main_multithreaded;
 extern CBlockPolicyEstimator feeEstimator;
 extern CTxMemPool mempool;
 typedef boost::unordered_map<uint256, CBlockIndex*, BlockHasher> BlockMap;
@@ -161,6 +165,7 @@ extern CWaitableCriticalSection csBestBlock;
 extern CConditionVariable cvBlockChange;
 extern bool fExperimentalMode;
 extern bool fImporting;
+extern bool fTesting;
 extern bool fReindex;
 extern int nScriptCheckThreads;
 extern bool fTxIndex;
@@ -747,9 +752,6 @@ bool ContextualCheckInputs(const CTransaction& tx, CValidationState &state, cons
                            const Consensus::Params& consensusParams, uint32_t consensusBranchId,
                            std::vector<CScriptCheck> *pvChecks = NULL);
 
-/** Check a transaction contextually against a set of consensus rules */
-bool ContextualCheckTransaction(int32_t slowflag,const CBlock *block, CBlockIndex * const pindexPrev,const CTransaction& tx, CValidationState &state, int nHeight, int dosLevel,
-                                bool (*isInitBlockDownload)() = IsInitialBlockDownload,int32_t validateprices=1);
 struct CheckTransationResults
 {
     bool validationPassed = true;
@@ -758,23 +760,45 @@ struct CheckTransationResults
     std::string reasonString = "";
 };
 
-//Validate a batch of transactions
-CheckTransationResults ContextualCheckTransactionSingleThreaded(const CTransaction tx, const int nHeight, const int dosLevel, const bool isInitialBlockDownload, const uint32_t threadNumber);
-//Validate a batch of transactions
-CheckTransationResults ContextualCheckTransactionBindingSigWorker(const std::vector<const CTransaction*> vtx, const std::vector<uint256> vTxSig, const uint32_t threadNumber);
-//Validate a batch of Sapling spend descriptions
-CheckTransationResults ContextualCheckTransactionSaplingSpendWorker(const std::vector<const SpendDescription*> vSpend, const std::vector<uint256> vSpendSig, const uint32_t threadNumber);
-//Validate a batch of Sapling output descriptions
-CheckTransationResults ContextualCheckTransactionSaplingOutputWorker(const std::vector<const OutputDescription*> vOutput, const uint32_t threadNumber);
-/** Check a transaction contextually against a set of consensus rules */
-bool ContextualCheckTransactionMultithreaded(int32_t slowflag, const std::vector<const CTransaction*> vptx, CBlockIndex * const pindexPrev, CValidationState &state, int nHeight, int dosLevel,
-                                bool (*isInitBlockDownload)() = IsInitialBlockDownload,int32_t validateprices=1);
+/// Check a transaction contextually against a set of consensus rules */
+bool ContextualCheckTransaction(const CTransaction tx, CValidationState &state, int nHeight, int dosLevel,
+                                bool (*isInitBlockDownload)() = IsInitialBlockDownload);
 
 
 /** Apply the effects of this transaction on the UTXO set represented by view */
 void UpdateCoins(const CTransaction& tx, CCoinsViewCache& inputs, int nHeight);
 
-/** Transaction validation functions */
+/**
+ * Check whether all shielded inputs of this transaction are valid.
+ *
+ * This checks that:
+ * - The anchors in the transaction exist in the given view.
+ * - The nullifiers in the transaction do not exist in the given view.
+ * - The signatures for the transaction's shielded components are valid.
+ *
+ * This also currently checks the Sapling proofs, due to the way the Rust verification
+ * code is written. Sprout and Orchard proofs are currently checked in CheckTransaction().
+ * Once we have batch proof validation implemented, these will all be accumulated in
+ * CheckTransaction().
+ *
+ * To skip checking signatures, use `Consensus::CheckTxShieldedInputs` instead.
+ *
+ * This does not modify the view to add the nullifiers to the spent set.
+ *
+ * The `isInitBlockDownload` argument is a function parameter to assist with testing.
+ */
+bool ContextualCheckShieldedInputs(
+        const CTransaction& tx,
+        const PrecomputedTransactionData& txdata,
+        CValidationState &state,
+        const CCoinsViewCache &view,
+        std::optional<rust::Box<sapling::BatchValidator>>& saplingAuth,
+        std::optional<rust::Box<orchard::BatchValidator>>& orchardAuth,
+        const Consensus::Params& consensus,
+        uint32_t consensusBranchId,
+        bool isMined,
+        bool (*isInitBlockDownload)() = IsInitialBlockDownload);
+
 
 /** Context-independent validity checks */
 bool CheckTransaction(uint32_t tiptime,const CTransaction& tx, CValidationState& state, ProofVerifier& verifier, int32_t txIndex, int32_t numTxs);
@@ -787,6 +811,23 @@ bool IsStandardTx(const CTransaction& tx, std::string& reason, int nHeight = 0);
 
 namespace Consensus {
 
+    /**
+ * Check whether all shielded inputs of this transaction are valid.
+ *
+ * This checks that:
+ * - The anchors in the transaction exist in the given view.
+ * - The nullifiers in the transaction do not exist in the given view.
+ *
+ * This does not modify the view to add the nullifiers to the spent set.
+ * This does not check proofs or signatures.
+ */
+bool CheckTxShieldedInputs(
+    const CTransaction& tx,
+    CValidationState& state,
+    const CCoinsViewCache& view,
+    int dosLevel,
+    std::string calledFrom);
+    
 /**
  * Check whether all inputs of this transaction are valid (no double spends and amounts)
  * This does not modify the UTXO set. This does not check scripts and sigs.
@@ -835,6 +876,8 @@ private:
     bool cacheStore;
     uint32_t consensusBranchId;
     ScriptError error;
+    // We store a pointer instead of a reference here, to allow it to be null for
+    // performance reasons (enabling fast swaps in CCheckQueue::Loop).
     PrecomputedTransactionData *txdata;
 
 public:

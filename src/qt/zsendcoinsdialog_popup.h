@@ -21,10 +21,14 @@ public:
     ~ZSendCoinsDialog_popup();
     void SetUnsignedTransaction (QString sTransaction);
     bool GetSignedTransaction(QString *qsResult);
+    void SetOfflineMode(bool offline);
 
 public Q_SLOTS:
     void SendTransaction( );
     void ClosePopup();
+    void on_copyInputButton_clicked();
+    void on_pasteResultButton_clicked();
+    void on_copyResultButton_clicked();
 
 private:
     Ui::ZSendCoinsDialog_popup *ui;

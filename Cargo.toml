@@ -32,6 +32,7 @@ incrementalmerkletree = "0.5"
 libc = "0.2"
 jubjub = "0.10"
 memuse = "0.2"
+orchard = "0.6"
 subtle = "2.2"
 rand_core = "0.6"
 tracing = "0.1"
@@ -64,12 +65,12 @@ tokio = { version = "1.8", features = ["rt", "net", "time", "macros"] }
 funty = "=1.1.0"
 
 [patch.crates-io]
-zcash_address = { git = "https://github.com/piratenetwork/librustzcash", rev = "c5098346214986986b5cdf2864a783434bf43135"}
-zcash_encoding = { git = "https://github.com/piratenetwork/librustzcash", rev = "c5098346214986986b5cdf2864a783434bf43135"}
-zcash_note_encryption = { git = "https://github.com/piratenetwork/librustzcash", rev = "c5098346214986986b5cdf2864a783434bf43135"}
-zcash_primitives = { git = "https://github.com/piratenetwork/librustzcash", rev = "c5098346214986986b5cdf2864a783434bf43135"}
-zcash_proofs = { git = "https://github.com/piratenetwork/librustzcash", rev = "c5098346214986986b5cdf2864a783434bf43135"}
-zcash_history = { git = "https://github.com/piratenetwork/librustzcash", rev = "c5098346214986986b5cdf2864a783434bf43135"}
+zcash_address = { git = "https://github.com/piratenetwork/librustzcash", rev = "73a0c0b8669a515a8b4f96d4602a7d6c496d9df6"}
+zcash_encoding = { git = "https://github.com/piratenetwork/librustzcash", rev = "73a0c0b8669a515a8b4f96d4602a7d6c496d9df6"}
+zcash_note_encryption = { git = "https://github.com/piratenetwork/librustzcash", rev = "73a0c0b8669a515a8b4f96d4602a7d6c496d9df6"}
+zcash_primitives = { git = "https://github.com/piratenetwork/librustzcash", rev = "73a0c0b8669a515a8b4f96d4602a7d6c496d9df6"}
+zcash_proofs = { git = "https://github.com/piratenetwork/librustzcash", rev = "73a0c0b8669a515a8b4f96d4602a7d6c496d9df6"}
+zcash_history = { git = "https://github.com/piratenetwork/librustzcash", rev = "73a0c0b8669a515a8b4f96d4602a7d6c496d9df6"}
 
 #Test local changes to librustzcash
 # zcash_address = { path = '../librustzcash/components/zcash_address'}

@@ -40,7 +40,7 @@ int32_t NSPV_rwequihdr(int32_t rwflag,uint8_t *serialized,struct NSPV_equihdr *p
     len += iguana_rwnum(rwflag,&serialized[len],sizeof(ptr->nVersion),&ptr->nVersion);
     len += iguana_rwbignum(rwflag,&serialized[len],sizeof(ptr->hashPrevBlock),(uint8_t *)&ptr->hashPrevBlock);
     len += iguana_rwbignum(rwflag,&serialized[len],sizeof(ptr->hashMerkleRoot),(uint8_t *)&ptr->hashMerkleRoot);
-    len += iguana_rwbignum(rwflag,&serialized[len],sizeof(ptr->hashFinalSaplingRoot),(uint8_t *)&ptr->hashFinalSaplingRoot);
+    len += iguana_rwbignum(rwflag,&serialized[len],sizeof(ptr->hashBlockCommitments),(uint8_t *)&ptr->hashBlockCommitments);
     len += iguana_rwnum(rwflag,&serialized[len],sizeof(ptr->nTime),&ptr->nTime);
     len += iguana_rwnum(rwflag,&serialized[len],sizeof(ptr->nBits),&ptr->nBits);
     len += iguana_rwbignum(rwflag,&serialized[len],sizeof(ptr->nNonce),(uint8_t *)&ptr->nNonce);
@@ -464,7 +464,7 @@ uint256 NSPV_hdrhash(struct NSPV_equihdr *hdr)
     block.nVersion = hdr->nVersion;
     block.hashPrevBlock = hdr->hashPrevBlock;
     block.hashMerkleRoot = hdr->hashMerkleRoot;
-    block.hashFinalSaplingRoot = hdr->hashFinalSaplingRoot;
+    block.hashBlockCommitments = hdr->hashBlockCommitments;
     block.nTime = hdr->nTime;
     block.nBits = hdr->nBits;
     block.nNonce = hdr->nNonce;
@@ -590,7 +590,7 @@ int32_t NSPV_notarizationextract(int32_t verifyntz,int32_t *ntzheightp,uint256 *
             {
                 fprintf(stderr,"numsigs.%d error\n",numsigs);
                 return(-3);
-            } 
+            }
             return(0);
         }
         else

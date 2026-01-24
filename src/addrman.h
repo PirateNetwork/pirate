@@ -747,6 +747,46 @@ public:
         }
     }
 
+    //! Remove an address from the address manager
+    bool Remove(const CService &addr)
+    {
+        bool fRet = false;
+        {
+            LOCK(cs);
+            Check();
+            int nId = -1;
+            CAddrInfo* pinfo = Find(addr, &nId);
+            if (pinfo && nId != -1) {
+                // If the address is in the "tried" table, we can't easily remove it
+                // So we'll mark it as bad instead
+                if (pinfo->fInTried) {
+                    // Mark as bad by setting very old timestamps and high attempt count
+                    pinfo->nLastTry = 1; // Very old timestamp (1970-01-01)
+                    pinfo->nAttempts = 100; // Many failed attempts
+                    pinfo->nLastSuccess = 0; // Never successful
+                    fRet = true;
+                } else {
+                    // If it's in the "new" table, we can actually delete it
+                    // First, clear it from all "new" buckets
+                    for (int bucket = 0; bucket < ADDRMAN_NEW_BUCKET_COUNT; bucket++) {
+                        for (int pos = 0; pos < ADDRMAN_BUCKET_SIZE; pos++) {
+                            if (vvNew[bucket][pos] == nId) {
+                                ClearNew(bucket, pos);
+                            }
+                        }
+                    }
+                    // Now delete the entry if refcount is 0
+                    if (pinfo->nRefCount == 0) {
+                        Delete(nId);
+                        fRet = true;
+                    }
+                }
+            }
+            Check();
+        }
+        return fRet;
+    }
+
 };
 
 #endif // BITCOIN_ADDRMAN_H

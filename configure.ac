@@ -1,9 +1,9 @@
 dnl require autoconf 2.60 (AS_ECHO/AS_ECHO_N)
 AC_PREREQ([2.60])
-define(_CLIENT_VERSION_MAJOR, 5)
-define(_CLIENT_VERSION_MINOR, 9)
-define(_CLIENT_VERSION_REVISION, 1)
-define(_CLIENT_VERSION_BUILD,50)
+define(_CLIENT_VERSION_MAJOR, 6)
+define(_CLIENT_VERSION_MINOR, 0)
+define(_CLIENT_VERSION_REVISION, 0)
+define(_CLIENT_VERSION_BUILD,0)
 define(_ZC_BUILD_VAL, m4_if(m4_eval(_CLIENT_VERSION_BUILD < 25), 1, m4_incr(_CLIENT_VERSION_BUILD), m4_eval(_CLIENT_VERSION_BUILD < 50), 1, m4_eval(_CLIENT_VERSION_BUILD - 24), m4_eval(_CLIENT_VERSION_BUILD == 50), 1, , m4_eval(_CLIENT_VERSION_BUILD - 50)))
 define(_CLIENT_VERSION_SUFFIX, m4_if(m4_eval(_CLIENT_VERSION_BUILD < 25), 1, _CLIENT_VERSION_REVISION-beta$1, m4_eval(_CLIENT_VERSION_BUILD < 50), 1, _CLIENT_VERSION_REVISION-rc$1, m4_eval(_CLIENT_VERSION_BUILD == 50), 1, _CLIENT_VERSION_REVISION, _CLIENT_VERSION_REVISION-$1)))
 define(_CLIENT_VERSION_IS_RELEASE, true)
@@ -552,8 +552,14 @@ if test x$use_hardening != xno; then
     HARDENED_CPPFLAGS="$HARDENED_CPPFLAGS -D_FORTIFY_SOURCE=2"
   ],[AC_MSG_ERROR(Cannot enable -D_FORTIFY_SOURCE=2)])
 
-  #AX_CHECK_LINK_FLAG([[-Wl,-z,relro]], [HARDENED_LDFLAGS="$HARDENED_LDFLAGS -Wl,-z,relro"],[AC_MSG_ERROR(Cannot enable RELRO)])
-  #AX_CHECK_LINK_FLAG([[-Wl,-z,now]], [HARDENED_LDFLAGS="$HARDENED_LDFLAGS -Wl,-z,now"],[AC_MSG_ERROR(Cannot enable BIND_NOW)])
+  # RELRO.
+  AX_CHECK_LINK_FLAG([-Wl,-z,relro], [
+      HARDENED_LDFLAGS="$HARDENED_LDFLAGS -Wl,-z,relro"
+  ])
+  # BIND_NOW.
+  AX_CHECK_LINK_FLAG([-Wl,-z,now], [
+      HARDENED_LDFLAGS="$HARDENED_LDFLAGS -Wl,-z,now"
+  ])
 
   if test x$TARGET_OS != xwindows; then
     # All windows code is PIC, forcing it on just adds useless compile warnings
@@ -733,6 +739,10 @@ if test x$use_pkgconfig = xyes; then
       else
           AC_DEFINE_UNQUOTED([ENABLE_ZMQ],[0],[Define to 1 to enable ZMQ functions])
       fi
+      
+        dnl Check for libcurl (C URL library) and libarchive (archive handling)
+        PKG_CHECK_MODULES([CURL],[libcurl],, [AC_MSG_WARN([libcurl not found. curl features will be disabled])])
+        PKG_CHECK_MODULES([ARCHIVE],[libarchive],, [AC_MSG_WARN([libarchive not found. archive features will be disabled])])
     ]
   )
 else
@@ -753,7 +763,7 @@ else
     fi
   fi
 
-  if test "x$use_zmq" = "xyes"; then
+  if "x$use_zmq" = "xyes"; then
      AC_CHECK_HEADER([zmq.h],
        [AC_DEFINE([ENABLE_ZMQ],[1],[Define to 1 to enable ZMQ functions])],
        [AC_MSG_WARN([zmq.h not found, disabling zmq support])
@@ -767,7 +777,7 @@ else
     AC_DEFINE_UNQUOTED([ENABLE_ZMQ],[0],[Define to 1 to enable ZMQ functions])
   fi
 
-  if test "x$use_zmq" = "xyes"; then
+  if "x$use_zmq" = "xyes"; then
     dnl Assume libzmq was built for static linking
     case $host in
       *mingw*)
@@ -775,6 +785,13 @@ else
       ;;
     esac
   fi
+  
+  dnl Fallback checks for libcurl and libarchive when pkg-config is not available
+  AC_CHECK_HEADER([curl/curl.h],, [AC_MSG_WARN([curl headers not found])])
+  AC_CHECK_LIB([curl], [curl_easy_init], CURL_LIBS=-lcurl, AC_MSG_WARN([libcurl not found]))
+
+  AC_CHECK_HEADER([archive.h],, [AC_MSG_WARN([libarchive headers not found])])
+  AC_CHECK_LIB([archive], [archive_version_number], ARCHIVE_LIBS=-larchive, AC_MSG_WARN([libarchive not found]))
   if test x$enable_bip70 != xno; then
     BITCOIN_QT_CHECK(AC_CHECK_LIB([protobuf] ,[main],[PROTOBUF_LIBS=-lprotobuf], BITCOIN_QT_FAIL(libprotobuf not found)))
   fi
@@ -960,10 +977,12 @@ AC_SUBST(SSL_LIBS)
 AC_SUBST(EVENT_LIBS)
 AC_SUBST(EVENT_PTHREADS_LIBS)
 AC_SUBST(ZMQ_LIBS)
+AC_SUBST(CURL_LIBS)
+AC_SUBST(ARCHIVE_LIBS)
 AC_SUBST(LIBZCASH_LIBS)
 AC_CONFIG_FILES([Makefile src/Makefile doc/man/Makefile src/test/buildenv.py])
-AC_CONFIG_FILES([qa/pull-tester/run-bitcoind-for-test.sh],[chmod +x qa/pull-tester/run-bitcoind-for-test.sh])
-AC_CONFIG_FILES([qa/pull-tester/tests-config.sh],[chmod +x qa/pull-tester/tests-config.sh])
+AC_CONFIG_FILES([qa/pull-tester/tests_config.ini],[chmod +x qa/pull-tester/tests_config.ini])
+AC_CONFIG_LINKS([qa/pull-tester/rpc-tests.py:qa/pull-tester/rpc-tests.py])
 
 dnl boost's m4 checks do something really nasty: they export these vars. As a
 dnl result, they leak into secp256k1's configure and crazy things happen.

@@ -3,7 +3,6 @@
 #include "util/strencodings.h"
 
 #include <boost/foreach.hpp>
-#include <boost/variant/get.hpp>
 
 #include "zcash/prf.h"
 #include "util.h"
@@ -26,26 +25,54 @@ extern ZCJoinSplit* params;
 // and store the result in a JSDescription object.
 JSDescription makeSproutProof(
         ZCJoinSplit& js,
-        const std::array<JSInput, 2>& inputs,
-        const std::array<JSOutput, 2>& outputs,
-        const uint256& joinSplitPubKey,
-        uint64_t vpub_old,
-        uint64_t vpub_new,
-        const uint256& rt
-){
-    return JSDescription(js, joinSplitPubKey, rt, inputs, outputs, vpub_old, vpub_new);
+        const std::array<libzcash::JSInput, ZC_NUM_JS_INPUTS>& inputs,
+        const std::array<libzcash::JSOutput, ZC_NUM_JS_OUTPUTS>& outputs,
+        const uint256& rt,
+        uint64_t vpub_old_raw,
+        uint64_t vpub_new_raw,
+        const uint256& joinSplitPubKey
+) {
+    JSDescription jsdesc;
+    jsdesc.vpub_old = static_cast<CAmount>(vpub_old_raw);
+    jsdesc.vpub_new = static_cast<CAmount>(vpub_new_raw);
+    jsdesc.anchor = rt;
+
+    std::array<SproutNote, ZC_NUM_JS_OUTPUTS> output_notes; // getPlaintexts needs this
+
+    jsdesc.proof = js.prove(
+        inputs,
+        outputs,
+        output_notes, // TODO: Do we need to capture these output_notes anywhere?
+        jsdesc.ciphertexts,
+        jsdesc.ephemeralKey,
+        joinSplitPubKey,
+        jsdesc.randomSeed,
+        jsdesc.macs,
+        jsdesc.nullifiers,
+        jsdesc.commitments,
+        jsdesc.vpub_old,
+        jsdesc.vpub_new,
+        jsdesc.anchor,
+        false // computeProof
+    );
+
+    return jsdesc;
 }
 
 bool verifySproutProof(
-        ZCJoinSplit& js,
+        ZCJoinSplit& js, // Added js parameter here
         const JSDescription& jsdesc,
         const uint256& joinSplitPubKey
 )
 {
     auto verifier = ProofVerifier::Strict();
-    bool phgrPassed = jsdescs[0].Verify(js, verifier, joinSplitPubKey);
-    bool grothPassed = jsdescs[1].Verify(js, verifier, joinSplitPubKey);
-    return phgrPassed && grothPassed;
+
+    // The h_sig is implicitly verified by VerifySprout when it checks the proof.
+    // No need to check commitments one by one with a raw VerifyProof call.
+    // bool h_sig_valid = js.VerifyProof(jsdesc.h_sig(js, joinSplitPubKey), commitment); // Incorrect old call pattern
+
+    // ProofVerifier::VerifySprout checks both the Groth/PHGR proof and related consistency.
+    return verifier.VerifySprout(jsdesc, joinSplitPubKey);
 }
 
 
@@ -86,10 +113,10 @@ void test_full_api(ZCJoinSplit* js)
             *js,
             inputs,
             outputs,
-            joinSplitPubKey,
+            rt,
             vpub_old,
             vpub_new,
-            rt
+            joinSplitPubKey
         );
     }
 
@@ -148,10 +175,10 @@ void test_full_api(ZCJoinSplit* js)
                 *js,
                 inputs,
                 outputs,
-                joinSplitPubKey2,
+                rt,
                 vpub_old,
                 vpub_new,
-                rt
+                joinSplitPubKey2
             );
 
         }
@@ -321,11 +348,11 @@ TEST(joinsplit, full_api_test)
         increment_note_witnesses(note1.cm(), witnesses, tree);
         SproutNote note2(addr.a_pk, 100, random_uint256(), random_uint256());
         increment_note_witnesses(note2.cm(), witnesses, tree);
-        SproutNote note3(addr.a_pk, 2100000000000001, random_uint256(), random_uint256());
+        SproutNote note3(addr.a_pk, MAX_MONEY + 1, random_uint256(), random_uint256());
         increment_note_witnesses(note3.cm(), witnesses, tree);
-        SproutNote note4(addr.a_pk, 1900000000000000, random_uint256(), random_uint256());
+        SproutNote note4(addr.a_pk, (MAX_MONEY/2) + 10, random_uint256(), random_uint256());
         increment_note_witnesses(note4.cm(), witnesses, tree);
-        SproutNote note5(addr.a_pk, 1900000000000000, random_uint256(), random_uint256());
+        SproutNote note5(addr.a_pk, (MAX_MONEY/2) + 10, random_uint256(), random_uint256());
         increment_note_witnesses(note5.cm(), witnesses, tree);
 
         // Should work
@@ -352,7 +379,7 @@ TEST(joinsplit, full_api_test)
             JSOutput(),
             JSOutput()
         },
-        2100000000000001,
+        MAX_MONEY + 1,
         0,
         tree.root(),
         "nonsensical vpub_old value");
@@ -368,7 +395,7 @@ TEST(joinsplit, full_api_test)
             JSOutput()
         },
         0,
-        2100000000000001,
+        MAX_MONEY + 1,
         tree.root(),
         "nonsensical vpub_new value");
 
@@ -469,7 +496,7 @@ TEST(joinsplit, full_api_test)
             JSInput()
         },
         {
-            JSOutput(addr, 2100000000000001),
+            JSOutput(addr, MAX_MONEY + 1),
             JSOutput()
         },
         0,
@@ -484,8 +511,8 @@ TEST(joinsplit, full_api_test)
             JSInput()
         },
         {
-            JSOutput(addr, 1900000000000000),
-            JSOutput(addr, 1900000000000000)
+            JSOutput(addr, (MAX_MONEY/2) + 10),
+            JSOutput(addr, (MAX_MONEY/2) + 10)
         },
         0,
         0,

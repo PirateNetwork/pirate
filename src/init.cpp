@@ -51,6 +51,7 @@
 #include "rpc/server.h"
 #include "rpc/register.h"
 #include "script/standard.h"
+#include "script/sigcache.h"
 #include "scheduler.h"
 #include "txdb.h"
 #include "torcontrol.h"
@@ -62,10 +63,12 @@
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
 #include "wallet/asyncrpcoperation_saplingconsolidation.h"
+#include "wallet/asyncrpcoperation_orchardconsolidation.h"
 #include "wallet/asyncrpcoperation_sweeptoaddress.h"
 #endif
 #include <stdint.h>
 #include <stdio.h>
+#include <filesystem>
 
 #ifndef _WIN32
 #include <signal.h>
@@ -75,7 +78,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/split.hpp>
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/function.hpp>
 #include <boost/interprocess/sync/file_lock.hpp>
@@ -91,6 +94,7 @@
 #include "librustzcash.h"
 
 using namespace std;
+using namespace boost::placeholders;
 
 #include "komodo_defs.h"
 #include "komodo_extern_globals.h"
@@ -443,6 +447,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-spentindex", strprintf(_("Maintain a full spent index, used to query the spending txid and input index for an outpoint (default: %u)"), DEFAULT_SPENTINDEX));
     strUsage += HelpMessageGroup(_("Connection options:"));
     strUsage += HelpMessageOpt("-addnode=<ip>", _("Add a node to connect to and attempt to keep the connection open"));
+    strUsage += HelpMessageOpt("-allowlocaladdnode", _("Allow addnode connections to local addresses (127.x.x.x, ::1) for testing (default: 0)"));
     strUsage += HelpMessageOpt("-asmap=<file>", strprintf("Specify asn mapping used for bucketing of the peers (default: %s). Relative paths will be prefixed by the net-specific datadir location.", DEFAULT_ASMAP_FILENAME));
     strUsage += HelpMessageOpt("-banscore=<n>", strprintf(_("Threshold for disconnecting misbehaving peers (default: %u)"), 100));
     strUsage += HelpMessageOpt("-bantime=<n>", strprintf(_("Number of seconds to keep misbehaving peers from reconnecting (default: %u)"), 86400));
@@ -494,13 +499,30 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-disablewallet", _("Do not load the wallet and disable wallet RPC calls"));
     strUsage += HelpMessageOpt("-mintxvalue=<amt>", strprintf(_("Set minimum incoming value of notes that will be added to the wallet in Arrtoshis (default: %u)"), 1));
     strUsage += HelpMessageOpt("-keypool=<n>", strprintf(_("Set key pool size to <n> (default: %u)"), 100));
-    strUsage += HelpMessageOpt("-cleanup", _("Enable clean up mode. This will put the node in a special mode to reduce the number of unpsent notes through consolidation, requires consolidation to be enabled. Spending functions will be disabled until the consolidation is compleate at which time the node will return to normal operations."));
-    strUsage += HelpMessageOpt("-consolidation", _("Enable auto Sapling note consolidation"));
-    strUsage += HelpMessageOpt("-consolidatesaplingaddress=<zaddr>", _("Specify Sapling Address to Consolidate. Consolidation address must be the same as sweep  (default: all)"));
-    strUsage += HelpMessageOpt("-consolidationtxfee", strprintf(_("Fee amount in Satoshis used send consolidation transactions. (default %i)"), DEFAULT_CONSOLIDATION_FEE));
-    strUsage += HelpMessageOpt("-sweep", _("Enable auto Sapling note sweep, automatically move all funds to a sigle address periodocally."));
-    strUsage += HelpMessageOpt("-sweepsaplingaddress=<zaddr>", _("Specify Sapling Address to Sweep funds to. (default: all)"));
-    strUsage += HelpMessageOpt("-sweeptxfee", strprintf(_("Fee amount in Satoshis used send sweep transactions. (default %i)"), DEFAULT_SWEEP_FEE));
+    
+    // Protocol-specific consolidation commands
+    strUsage += HelpMessageOpt("-saplingconsolidation", _("Enable auto Sapling note consolidation"));
+    strUsage += HelpMessageOpt("-saplingconsolidationtxfee", strprintf(_("Fee amount in Satoshis used for Sapling consolidation transactions. (default %i)"), DEFAULT_SAPLING_CONSOLIDATION_FEE));
+    strUsage += HelpMessageOpt("-saplingconsolidationinterval", strprintf(_("Interval in blocks between Sapling note consolidation (default %i)"), DEFAULT_SAPLING_CONSOLIDATION_INTERVAL));
+    strUsage += HelpMessageOpt("-orchardconsolidation", _("Enable auto Orchard note consolidation"));
+    strUsage += HelpMessageOpt("-orchardconsolidationtxfee", strprintf(_("Fee amount in Satoshis used for Orchard consolidation transactions. (default %i)"), DEFAULT_ORCHARD_CONSOLIDATION_FEE));
+    strUsage += HelpMessageOpt("-orchardconsolidationinterval", strprintf(_("Interval in blocks between Orchard note consolidation (default %i)"), DEFAULT_ORCHARD_CONSOLIDATION_INTERVAL));
+    strUsage += HelpMessageOpt("-consolidatesaplingaddress=<zaddr>", _("Specify Sapling Address to Consolidate (default: all)"));
+    strUsage += HelpMessageOpt("-consolidateorchardaddress=<zaddr>", _("Specify Orchard Address to Consolidate (default: all)"));
+    
+    // Deprecated consolidation commands
+    strUsage += HelpMessageOpt("-consolidation", _("(DEPRECATED) Use -saplingconsolidation instead"));
+    strUsage += HelpMessageOpt("-consolidationtxfee", _("(DEPRECATED) Use -saplingconsolidationtxfee instead"));
+    strUsage += HelpMessageOpt("-consolidateaddress=<zaddr>", _("(DEPRECATED) Use protocol-specific address options instead"));
+    
+    // Sweep commands
+    strUsage += HelpMessageOpt("-sweep", _("Enable auto note sweep, automatically move all funds to a single address periodically"));
+    strUsage += HelpMessageOpt("-sweepaddress=<zaddr>", _("Specify Address to Sweep funds to (supports both Sapling and Orchard addresses)"));
+    strUsage += HelpMessageOpt("-sweeptxfee", strprintf(_("Fee amount in Satoshis used for sweep transactions. (default %i)"), DEFAULT_SWEEP_FEE));
+    
+    // Deprecated sweep commands
+    strUsage += HelpMessageOpt("-sweepsaplingaddress=<zaddr>", _("(DEPRECATED) Use -sweepaddress instead"));
+    strUsage += HelpMessageOpt("-sweeporchardaddress=<zaddr>", _("(DEPRECATED) Use -sweepaddress instead"));
     strUsage += HelpMessageOpt("-deletetx", _("Enable Old Transaction Deletion"));
     strUsage += HelpMessageOpt("-deleteinterval", strprintf(_("Delete transaction every <n> blocks during inital block download (default: %i)"), DEFAULT_TX_DELETE_INTERVAL));
     strUsage += HelpMessageOpt("-keeptxnum", strprintf(_("Keep the last <n> transactions (default: %i)"), DEFAULT_TX_RETENTION_LASTTX));
@@ -511,7 +533,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-paytxfee=<amt>", strprintf(_("Fee (in %s/kB) to add to transactions you send (default: %s)"),
         CURRENCY_UNIT, FormatMoney(payTxFee.GetFeePerK())));
     strUsage += HelpMessageOpt("-rescan", _("Rescan the block chain for missing wallet transactions") + " " + _("on startup"));
-    strUsage += HelpMessageOpt("-rescanheight", _("Rescan the block chain from the specified height when rescan=1 on startup"));
+    strUsage += HelpMessageOpt("-rescanheight", _("Start block height for rescanning (works with -rescan, -zapwallettxes, or GUI rescan). Default: 0 (genesis)"));
     strUsage += HelpMessageOpt("-salvagewallet", _("Attempt to recover private keys from a corrupt wallet.dat") + " " + _("on startup"));
     strUsage += HelpMessageOpt("-sendfreetransactions", strprintf(_("Send transactions as zero-fee transactions if possible (default: %u)"), 0));
     strUsage += HelpMessageOpt("-spendzeroconfchange", strprintf(_("Spend unconfirmed change when sending transactions (default: %u)"), 1));
@@ -525,8 +547,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-walletbroadcast", _("Make the wallet broadcast transactions") + " " + strprintf(_("(default: %u)"), true));
     strUsage += HelpMessageOpt("-walletnotify=<cmd>", _("Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)"));
     strUsage += HelpMessageOpt("-whitelistaddress=<Raddress>", _("Enable the wallet filter for notary nodes and add one Raddress to the whitelist of the wallet filter. If -whitelistaddress= is used, then the wallet filter is automatically activated. Several Raddresses can be defined using several -whitelistaddress= (similar to -addnode). The wallet filter will filter the utxo to only ones coming from my own Raddress (derived from pubkey) and each Raddress defined using -whitelistaddress= this option is mostly for Notary Nodes)."));
-    strUsage += HelpMessageOpt("-zapwallettxes=<mode>", _("Delete all wallet transactions and only recover those parts of the blockchain through -rescan on startup") +
-        " " + _("(1 = keep tx meta data e.g. account owner and payment request information, 2 = drop tx meta data)"));
+    strUsage += HelpMessageOpt("-zapwallettxes=1", _("Delete all wallet transactions and rescan the blockchain to rebuild them on startup"));
 #endif
 
 #if ENABLE_ZMQ
@@ -1394,13 +1415,23 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     // a transaction spammer can cheaply fill blocks using
     // 1-satoshi-fee transactions. It should be set above the real
     // cost to you of processing a transaction.
+    
     if (mapArgs.count("-minrelaytxfee"))
-    {
+    {   
         CAmount n = 0;
-        if (ParseMoney(mapArgs["-minrelaytxfee"], n) && n > 0)
-            ::minRelayTxFee = CFeeRate(n);
-        else
-            return InitError(strprintf(_("Invalid amount for -minrelaytxfee=<amount>: '%s'"), mapArgs["-minrelaytxfee"]));
+        if (Params().NetworkIDString() != "regtest") {
+            if (ParseMoney(mapArgs["-minrelaytxfee"], n) && n > 0)
+                ::minRelayTxFee = CFeeRate(n);
+            else
+                return InitError(strprintf(_("Invalid amount for -minrelaytxfee=<amount>: '%s'"), mapArgs["-minrelaytxfee"]));
+        } else {
+            // In regtest mode, we allow a zero minrelaytxfee, so that
+            // transactions can be relayed without fees.
+            if (ParseMoney(mapArgs["-minrelaytxfee"], n))
+                ::minRelayTxFee = CFeeRate(n);
+            else
+                return InitError(strprintf(_("Invalid amount for -minrelaytxfee=<amount>: '%s'"), mapArgs["-minrelaytxfee"]));
+        }
     }
 
 #ifdef ENABLE_WALLET
@@ -1539,9 +1570,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     std::string strDataDir = GetDataDir().string();
 #ifdef ENABLE_WALLET
-    // Wallet file must be a plain filename without a directory
-    if (strWalletFile != boost::filesystem::basename(strWalletFile) + boost::filesystem::extension(strWalletFile))
-        return InitError(strprintf(_("Wallet %s resides outside data directory %s"), strWalletFile, strDataDir));
+    // Wallet file must be in the datadir for security
+    if (strWalletFile != std::filesystem::path(strWalletFile).filename().string()) {
+        return InitError(_("Wallet file can only be specified as a filename, not a path"));
+    }
 #endif
     // Make sure only a single Bitcoin process is using the data directory.
     boost::filesystem::path pathLockFile = GetDataDir() / ".lock";
@@ -1553,7 +1585,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         if (!lock.try_lock())
             return InitError(strprintf(_("Cannot obtain a lock on data directory %s. Pirate is probably already running."), strDataDir));
     } catch(const boost::interprocess::interprocess_exception& e) {
-        return InitError(strprintf(_("Cannot obtain a lock on data directory %s. Pirate is probably already running.") + " %s.", strDataDir, e.what()));
+        return InitError(strprintf(_("Cannot obtain a lock on data directory %s. Pirate is probably already running. Error: %s"), strDataDir, e.what()));
     }
 
 #ifndef _WIN32
@@ -1562,7 +1594,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     if (GetBoolArg("-shrinkdebugfile", !fDebug))
         ShrinkDebugFile();
     LogPrintf("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n");
-    LogPrintf("Komodo version %s (%s)\n", FormatFullVersion(), CLIENT_DATE);
+    LogPrintf("Pirate version %s (%s)\n", FormatFullVersion(), CLIENT_DATE);
 
     if (fPrintToDebugLog)
         OpenDebugLog();
@@ -1577,6 +1609,19 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     LogPrintf("Using config file %s\n", GetConfigFile().string());
     LogPrintf("Using at most %i connections (%i file descriptors available)\n", nMaxConnections, nFD);
     std::ostringstream strErrors;
+
+    // Initialize the validity caches. We currently have three:
+    // - Transparent signature validity.
+    // - Sapling bundle validity.
+    // - Orchard bundle validity.
+    // Assign half of the cap to transparent signatures, and split the rest
+    // between Sapling and Orchard bundles.
+    size_t nMaxCacheSize = GetArg("-maxsigcachesize", DEFAULT_MAX_SIG_CACHE_SIZE) * ((size_t) 1 << 20);
+    if (nMaxCacheSize <= 0) {
+        return InitError(strprintf(_("-maxsigcachesize must be at least 1")));
+    }
+    InitSignatureCache(nMaxCacheSize / 2);
+    bundlecache::init(nMaxCacheSize / 4);
 
     LogPrintf("Using %u threads for script verification\n", nScriptCheckThreads);
     if (nScriptCheckThreads) {
@@ -1865,7 +1910,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     newInstall = GetBoolArg("-setup_cold_storage", false);
 
     //Prompt on new install: Cold storage or normal operation?
-    if (newInstall && !IsArgSet("maxconnections")) {
+    if (usingGUI && newInstall && !IsArgSet("maxconnections")) {
         int fColdStorage_Offline = uiInterface.ThreadSafeMessageBox(
             "\n\n" + _("New install detected.\n\nPress YES to setup this wallet in the tradional online mode, i.e. a full function wallet that can create, authorise (sign) and send transactions.\n\nPress No to setup this instance as a cold storage offline wallet which only authorise (sign) transactions"),
             "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_YES | CClientUIInterface::BTN_NO );
@@ -1888,7 +1933,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             newInstall = true;
 
         //Prompt on new install
-        if (newInstall && !GetBoolArg("-bootstrap", false)) {
+        if (usingGUI &&newInstall && !GetBoolArg("-bootstrap", false)) {
             int fBoot = uiInterface.ThreadSafeMessageBox(
                 "\n\n" + _("New install detected.\n\nPress OK to download the blockchain bootstrap (faster, less secure).\n\nPress Cancel to continue on and sync the blockchain from peer nodes (slower, more secure)."),
                 "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
@@ -1898,7 +1943,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         }
 
         //Prompt GUI
-        if (GetBoolArg("-bootstrap", false) && GetArg("-bootstrap", "1") != "2" && !useBootstrap) {
+        if (usingGUI &&GetBoolArg("-bootstrap", false) && GetArg("-bootstrap", "1") != "2" && !useBootstrap) {
             int fBoot = uiInterface.ThreadSafeMessageBox(
                 "\n\n" + _("Bootstrap option detected.\n\nPress OK to download the blockchain bootstrap (faster, less secure).\n\nPress Cancel to continue on and sync the blockchain from peer nodes (slower, more secure)."),
                 "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
@@ -1922,7 +1967,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             boost::filesystem::remove(GetDataDir() / "komodostate");
             boost::filesystem::remove(GetDataDir() / "signedmasks");
             boost::filesystem::remove(GetDataDir() / "komodostate.ind");
-            if (!getBootstrap() && !fRequestShutdown ) {
+            if (usingGUI && !getBootstrap() && !fRequestShutdown ) {
                 int keepRunning = uiInterface.ThreadSafeMessageBox(
                     "\n\n" + _("Bootstrap download failed!!!\n\nPress OK to continue and sync from the network."),
                     "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
@@ -1983,7 +2028,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             pblocktree->ReadFlag("addressindex", checkval);
             if ( checkval != fAddressIndex && fAddressIndex != 0 ) {
                 pblocktree->WriteFlag("addressindex", fAddressIndex);
-                fprintf(stderr,"set addressindex, will reindex. could take a while.\n");
+                LogPrintf("Set addressindex, will reindex. could take a while.\n");
                 fReindex = true;
             }
 
@@ -1991,7 +2036,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             pblocktree->ReadFlag("spentindex", checkval);
             if ( checkval != fSpentIndex && fSpentIndex != 0 ) {
                 pblocktree->WriteFlag("spentindex", fSpentIndex);
-                fprintf(stderr,"set spentindex, will reindex. could take a while.\n");
+                LogPrintf("Set spentindex, will reindex. could take a while.\n");
                 fReindex = true;
             }
 
@@ -2000,14 +2045,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             if (checkval != fArchive) {
                 pblocktree->WriteFlag("archiverule", fArchive);
                 LogPrintf("Transaction archive not set, will reindex. could take a while.\n");
-                fReindex = true;
-            }
-
-            //One time reindex to enable prooftracking.
-            pblocktree->ReadFlag("proofrule", checkval);
-            if (checkval != fProof) {
-                pblocktree->WriteFlag("proofrule", fProof);
-                LogPrintf("Transaction proof tracking not set, will reindex. could take a while.\n");
                 fReindex = true;
             }
 
@@ -2154,6 +2191,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
             //Reset the saplingwallet on zap
             pwalletMain->SaplingWalletReset();
+            pwalletMain->OrchardWalletReset();
 
             delete pwalletMain;
             pwalletMain = NULL;
@@ -2416,64 +2454,131 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         //Set Minimum value of incoming notes accepted
         minTxValue = GetArg("-mintxvalue", DEFAULT_MIN_TX_VALUE);
 
-        //Set Sapling Consolidation
-        pwalletMain->fSaplingConsolidationEnabled = GetBoolArg("-consolidation", false);
-        fConsolidationTxFee  = GetArg("-consolidationtxfee", DEFAULT_CONSOLIDATION_FEE);
-        fConsolidationMapUsed = !mapMultiArgs["-consolidatesaplingaddress"].empty();
+        //Set Consolidation Configuration
+        // Check for deprecated consolidation parameters and throw errors
+        if (mapArgs.count("-consolidation")) {
+            return InitError("Deprecated parameter -consolidation is no longer supported. Use -saplingconsolidation and/or -orchardconsolidation instead.");
+        }
+        if (mapArgs.count("-consolidationtxfee")) {
+            return InitError("Deprecated parameter -consolidationtxfee is no longer supported. Use -saplingconsolidationtxfee and/or -orchardconsolidationtxfee instead.");
+        }
+        if (mapArgs.count("-consolidateaddress")) {
+            return InitError("Deprecated parameter -consolidateaddress is no longer supported. Use -consolidatesaplingaddress and/or -consolidateorchardaddress instead.");
+        }
+        
+        // Protocol-specific consolidation configuration
+        pwalletMain->fSaplingConsolidationEnabled = GetBoolArg("-saplingconsolidation", false);
+        pwalletMain->fOrchardConsolidationEnabled = GetBoolArg("-orchardconsolidation", false);
+        
+        // Set protocol-specific fees
+        fSaplingConsolidationTxFee = GetArg("-saplingconsolidationtxfee", DEFAULT_SAPLING_CONSOLIDATION_FEE);
+        fOrchardConsolidationTxFee = GetArg("-orchardconsolidationtxfee", DEFAULT_ORCHARD_CONSOLIDATION_FEE);
+        
+        // Address configuration
+        fSaplingConsolidationMapUsed = !mapMultiArgs["-consolidatesaplingaddress"].empty();
+        fOrchardConsolidationMapUsed = !mapMultiArgs["-consolidateorchardaddress"].empty();
+        
+        // Initialize consolidation intervals
+        pwalletMain->saplingConsolidationInterval = GetArg("-saplingconsolidationinterval", DEFAULT_SAPLING_CONSOLIDATION_INTERVAL);
+        pwalletMain->targetSaplingConsolidationQty = 100;
+        pwalletMain->orchardConsolidationInterval = GetArg("-orchardconsolidationinterval", DEFAULT_ORCHARD_CONSOLIDATION_INTERVAL);
+        pwalletMain->targetOrchardConsolidationQty = 100;
 
         //Validate Sapling Addresses
-        vector<string>& vaddresses = mapMultiArgs["-consolidatesaplingaddress"];
-        for (int i = 0; i < vaddresses.size(); i++) {
-            LogPrintf("Consolidating Sapling Address: %s\n", vaddresses[i]);
-            auto zAddress = DecodePaymentAddress(vaddresses[i]);
+        vector<string>& vsaplingaddresses = mapMultiArgs["-consolidatesaplingaddress"];
+        for (int i = 0; i < vsaplingaddresses.size(); i++) {
+            LogPrintf("Consolidating Sapling Address: %s\n", vsaplingaddresses[i]);
+            auto zAddress = DecodePaymentAddress(vsaplingaddresses[i]);
             if (!IsValidPaymentAddress(zAddress)) {
-                return InitError("Invalid consolidation address");
+                return InitError("Invalid Sapling consolidation address");
             }
         }
 
-        fCleanUpMode = GetBoolArg("-cleanup", false);
-        if (fCleanUpMode) {
-            pwalletMain->strCleanUpStatus = "Creating cleanup transactions.";
-            if (!pwalletMain->fSaplingConsolidationEnabled) {
-                return InitError("Consolidation must be enable to enable cleanup mode.");
+        //Validate Orchard Addresses
+        vector<string>& vorchardaddresses = mapMultiArgs["-consolidateorchardaddress"];
+        for (int i = 0; i < vorchardaddresses.size(); i++) {
+            LogPrintf("Consolidating Orchard Address: %s\n", vorchardaddresses[i]);
+            auto orchardAddress = DecodePaymentAddress(vorchardaddresses[i]);
+            if (!IsValidPaymentAddress(orchardAddress)) {
+                return InitError("Invalid Orchard consolidation address");
             }
         }
 
-        //Set Sapling Sweep
-        pwalletMain->fSaplingSweepEnabled = GetBoolArg("-sweep", false);
+        //Set Sweep Configuration
+        // Check for deprecated protocol-specific sweep parameters and throw errors
+        if (mapArgs.count("-sweepsaplingaddress")) {
+            return InitError("Deprecated parameter -sweepsaplingaddress is no longer supported. Use -sweepaddress instead.");
+        }
+        if (mapArgs.count("-sweeporchardaddress")) {
+            return InitError("Deprecated parameter -sweeporchardaddress is no longer supported. Use -sweepaddress instead.");
+        }
+        
+        // Unified sweep support
+        bool hasSweep = GetBoolArg("-sweep", false) || !mapMultiArgs["-sweepaddress"].empty();
+        
+        // Enable sweep flags
+        pwalletMain->fSweepEnabled = hasSweep;
 
-        if (pwalletMain->fSaplingSweepEnabled) {
-            fSweepTxFee  = GetArg("-sweeptxfee", DEFAULT_SWEEP_FEE);
-            fSweepMapUsed = !mapMultiArgs["-sweepsaplingaddress"].empty();
+        if (pwalletMain->fSweepEnabled) {
+            fSweepTxFee = GetArg("-sweeptxfee", DEFAULT_SWEEP_FEE);
+            
+            // Handle unified sweep address configuration
+            bool hasSweepAddress = !mapMultiArgs["-sweepaddress"].empty();
+            fSweepMapUsed = hasSweepAddress;
 
-            //Validate Sapling Addresses
-            vector<string>& vSweep = mapMultiArgs["-sweepsaplingaddress"];
-            if (vSweep.size() != 1) {
-                return InitError("A single sweep address must be specified.");
+            // Validate sweep addresses
+            vector<string> allSweepAddresses;
+            
+            // Collect sweep addresses from unified parameter
+            if (hasSweepAddress) {
+                vector<string>& vSweep = mapMultiArgs["-sweepaddress"];
+                allSweepAddresses.insert(allSweepAddresses.end(), vSweep.begin(), vSweep.end());
+            }
+            
+            // Validate that only one sweep address is specified total
+            if (allSweepAddresses.size() != 1) {
+                return InitError("Exactly one sweep address must be specified across all sweep parameters.");
             }
 
-            for (int i = 0; i < vSweep.size(); i++) {
-                LogPrintf("Sweep Sapling Address: %s\n", vSweep[i]);
-                auto zSweep = DecodePaymentAddress(vSweep[i]);
+            // Validate the sweep address
+            for (const auto& sweepAddr : allSweepAddresses) {
+                LogPrintf("Sweep Address: %s\n", sweepAddr);
+                auto zSweep = DecodePaymentAddress(sweepAddr);
                 if (!IsValidPaymentAddress(zSweep)) {
                     return InitError("Invalid sweep address");
                 }
-                auto hasSpendingKey = boost::apply_visitor(HaveSpendingKeyForPaymentAddress(pwalletMain), zSweep);
+                auto hasSpendingKey = std::visit(HaveSpendingKeyForPaymentAddress(pwalletMain), zSweep);
                 if (!hasSpendingKey) {
                     return InitError("Wallet must have the spending key of sweep address");
                 }
             }
 
+            // Validate consolidation compatibility with sweep
             if (pwalletMain->fSaplingConsolidationEnabled) {
                 //Validate 1 Consolidation address only that matches the sweep address
-                vector<string>& vaddresses = mapMultiArgs["-consolidatesaplingaddress"];
-                if (vaddresses.size() == 0) {
-                    fConsolidationMapUsed = true;
-                    mapMultiArgs["-consolidatesaplingaddress"] = vSweep;
+                vector<string>& vsaplingaddresses = mapMultiArgs["-consolidatesaplingaddress"];
+                if (vsaplingaddresses.size() == 0) {
+                    fSaplingConsolidationMapUsed = true;
+                    mapMultiArgs["-consolidatesaplingaddress"] = allSweepAddresses;
                 } else {
-                    for (int i = 0; i < vaddresses.size(); i++) {
-                        if (vSweep[0] != vaddresses[i]) {
-                            return InitError("Consolidation can only be used on the sweep address when sweep is enabled.");
+                    for (int i = 0; i < vsaplingaddresses.size(); i++) {
+                        if (allSweepAddresses[0] != vsaplingaddresses[i]) {
+                            return InitError("Sapling consolidation can only be used on the sweep address when sweep is enabled.");
+                        }
+                    }
+                }
+            }
+            
+            if (pwalletMain->fOrchardConsolidationEnabled) {
+                //Validate Orchard consolidation compatibility with sweep
+                vector<string>& vorchardaddresses = mapMultiArgs["-consolidateorchardaddress"];
+                if (vorchardaddresses.size() == 0) {
+                    fOrchardConsolidationMapUsed = true;
+                    mapMultiArgs["-consolidateorchardaddress"] = allSweepAddresses;
+                } else {
+                    for (int i = 0; i < vorchardaddresses.size(); i++) {
+                        if (allSweepAddresses[0] != vorchardaddresses[i]) {
+                            return InitError("Orchard consolidation can only be used on the sweep address when sweep is enabled.");
                         }
                     }
                 }
@@ -2553,62 +2658,21 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             }
         }
 
-        //Scan the last 100 block to ensure proofs are being maintained.
-        if (nMaxConnections>0)
-        {
-            if (!fReindex) {
-                CBlockIndex *pindexProofScan = chainActive.Tip();
-                if (pindexProofScan->nHeight > 100) {
-                    pindexProofScan = chainActive[pindexProofScan->nHeight-100];
-                } else {
-                    pindexProofScan = chainActive.Genesis();
-                }
-
-                while (pindexProofScan)
-                {
-                    CBlock proofBlock;
-                    ReadBlockFromDisk(proofBlock, pindexProofScan,1);
-
-                    BOOST_FOREACH(CTransaction& tx, proofBlock.vtx)
-                    {
-                        for (const SpendDescription &spendDescription : tx.vShieldedSpend) {
-                            std::set<std::pair<uint256, int>> txids;
-                            bool foundProof = pcoinsTip->GetZkProofHash(spendDescription.ProofHash(), SPEND, txids);
-                            if (!foundProof) {
-                                LogPrintf("Proof not found for tx %s spend ProofHash %s. Restart Treasure Chest to reindex.\n", tx.GetHash().ToString(), spendDescription.ProofHash().ToString());
-                                pblocktree->WriteFlag("proofrule", false);
-                                return false;
-                            }
-                        }
-
-                        for (const OutputDescription &outputDescription : tx.vShieldedOutput) {
-                            std::set<std::pair<uint256, int>> txids;
-                            bool foundProof = pcoinsTip->GetZkProofHash(outputDescription.ProofHash(), OUTPUT, txids);
-                            if (!foundProof) {
-                                LogPrintf("Proof not found for tx %s output ProofHash %s. Restart Treasure Chest needs to reindex.\n", tx.GetHash().ToString(), outputDescription.ProofHash().ToString());
-                                pblocktree->WriteFlag("proofrule", false);
-                                return false;
-                            }
-                        }
-                    }
-                    pindexProofScan = chainActive.Next(pindexProofScan);
-                }
-            }
-        }
-
         if (clearWitnessCaches || GetBoolArg("-rescan", false) || !fInitializeArcTx || useBootstrap || zapTransactions)
         {
-            // pwalletMain->ClearNoteWitnessCache();
             pindexRescan = chainActive.Genesis();
             pwalletMain->nBirthday = 0;
             pwalletMain->SaplingWalletReset();
+            pwalletMain->OrchardWalletReset();
 
             int rescanHeight = GetArg("-rescanheight", 0);
             if (chainActive.Tip() && rescanHeight > 0) {
                 if (rescanHeight > chainActive.Tip()->nHeight) {
                     pindexRescan = chainActive.Tip();
+                    LogPrintf("Rescan height %d exceeds chain tip, starting from tip at height %d\n", rescanHeight, pindexRescan->nHeight);
                 } else {
                     pindexRescan = chainActive[rescanHeight];
+                    LogPrintf("Starting rescan from specified height %d\n", rescanHeight);
                 }
             }
         }
@@ -2634,31 +2698,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             nStart = GetTimeMillis();
             pwalletMain->ScanForWalletTransactions(pindexRescan, true, false, false, false);
             LogPrintf(" rescan      %15dms\n", GetTimeMillis() - nStart);
-
-            // Restore wallet transaction metadata after -zapwallettxes=1
-            if (GetBoolArg("-zapwallettxes", false) && GetArg("-zapwallettxes", "1") != "2" && fInitializeArcTx)
-            {
-                CWalletDB walletdb(strWalletFile);
-
-                BOOST_FOREACH(const CWalletTx& wtxOld, vWtx)
-                {
-                    uint256 hash = wtxOld.GetHash();
-                    std::map<uint256, CWalletTx>::iterator mi = pwalletMain->mapWallet.find(hash);
-                    if (mi != pwalletMain->mapWallet.end())
-                    {
-                        ArchiveTxPoint arcTxPt;
-                        const CWalletTx* copyFrom = &wtxOld;
-                        CWalletTx* copyTo = &mi->second;
-                        copyTo->mapValue = copyFrom->mapValue;
-                        copyTo->vOrderForm = copyFrom->vOrderForm;
-                        copyTo->nTimeReceived = copyFrom->nTimeReceived;
-                        copyTo->nTimeSmart = copyFrom->nTimeSmart;
-                        copyTo->fFromMe = copyFrom->fFromMe;
-                        copyTo->strFromAccount = copyFrom->strFromAccount;
-                        copyTo->nOrderPos = copyFrom->nOrderPos;
-                    }
-                }
-            }
         } else {
             //Rescan at minimum last 1 block
             if (chainActive.Tip() && chainActive.Height() > 0) {
@@ -2674,12 +2713,20 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         //Validate Rust Sapling Wallet, rebuild if needed
         if (chainActive.Tip() && chainActive.Height() > 0) {
             LOCK2(cs_main, pwalletMain->cs_wallet);
-            LogPrintf("Validating Note Position from height %i\n", chainActive.Height());
+
+            LogPrintf("Validating Sapling Note Positions from height %i\n", chainActive.Height());
             if (!pwalletMain->ValidateSaplingWalletTrackedPositions(chainActive.Tip())) {
                 pwalletMain->SaplingWalletReset();
                 pwalletMain->IncrementSaplingWallet(chainActive.Tip());
             }
             pwalletMain->saplingWalletPositionsValidated=true;
+
+            LogPrintf("Validating Orchard Note Positions from height %i\n", chainActive.Height());
+            if (!pwalletMain->ValidateOrchardWalletTrackedPositions(chainActive.Tip())) {
+                pwalletMain->OrchardWalletReset();
+                pwalletMain->IncrementOrchardWallet(chainActive.Tip());
+            }
+            pwalletMain->orchardWalletPositionsValidated=true;
         }
 
         pwalletMain->SetBroadcastTransactions(GetBoolArg("-walletbroadcast", true));
@@ -2711,8 +2758,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         if (pwalletMain) {
             // Address has alreday been validated
             CTxDestination addr = DecodeDestination(mapArgs["-mineraddress"]);
-            CKeyID keyID = boost::get<CKeyID>(addr);
-            minerAddressInLocalWallet = pwalletMain->HaveKey(keyID);
+            CKeyID *keyID = std::get_if<CKeyID>(&addr);
+            minerAddressInLocalWallet = pwalletMain->HaveKey(*keyID);
         }
         if (GetBoolArg("-minetolocalwallet", true) && !minerAddressInLocalWallet) {
             return InitError(_("-mineraddress is not in the local wallet. Either use a local address, or set -minetolocalwallet=0"));
@@ -2739,7 +2786,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             nLocalServices |= NODE_ADDRINDEX;
         if ( GetBoolArg("-spentindex", DEFAULT_SPENTINDEX) != 0 )
             nLocalServices |= NODE_SPENTINDEX;
-        fprintf(stderr,"nLocalServices %llx %d, %d\n",(long long)nLocalServices,GetBoolArg("-addressindex", DEFAULT_ADDRESSINDEX),GetBoolArg("-spentindex", DEFAULT_SPENTINDEX));
+        fprintf(stdout,"nLocalServices %llx %d, %d\n",(long long)nLocalServices,GetBoolArg("-addressindex", DEFAULT_ADDRESSINDEX),GetBoolArg("-spentindex", DEFAULT_SPENTINDEX));
     }
     // ********************************************************* Step 10: import blocks
 

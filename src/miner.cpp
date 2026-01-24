@@ -46,6 +46,7 @@
 #include "net.h"
 #include "pow.h"
 #include "primitives/transaction.h"
+#include "primitives/block.h"
 #include "random.h"
 #include "timedata.h"
 #include "ui_interface.h"
@@ -138,7 +139,7 @@ void UpdateTime(CBlockHeader* pblock, const Consensus::Params& consensusParams, 
     else pblock->nTime = std::max((int64_t)(pindexPrev->nTime+1), GetTime());
 
     // Updating time can change work required on testnet:
-    if (ASSETCHAINS_ADAPTIVEPOW > 0 || consensusParams.nPowAllowMinDifficultyBlocksAfterHeight != boost::none)
+    if (ASSETCHAINS_ADAPTIVEPOW > 0 || consensusParams.nPowAllowMinDifficultyBlocksAfterHeight != std::nullopt)
     {
         pblock->nBits = GetNextWorkRequired(pindexPrev, pblock, consensusParams);
     }
@@ -289,8 +290,11 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
 
         CCoinsViewCache view(pcoinsTip);
 
-        SaplingMerkleTree sapling_tree;
-        assert(view.GetSaplingAnchorAt(view.GetBestAnchor(SAPLING), sapling_tree));
+        SaplingMerkleFrontier sapling_frontier_tree;
+        assert(view.GetSaplingFrontierAnchorAt(view.GetBestAnchor(SAPLINGFRONTIER), sapling_frontier_tree));
+
+        OrchardMerkleFrontier orchard_frontier_tree;
+        assert(view.GetOrchardFrontierAnchorAt(view.GetBestAnchor(ORCHARDFRONTIER), orchard_frontier_tree));
 
         // Priority order to process transactions
         list<COrphan> vOrphan; // list memory doesn't move
@@ -306,6 +310,7 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
         uint64_t txvalue;
         int qtyLargeTx = 0;
         int qtyMediumTx = 0;
+        int txidx = 0;
 
         for (CTxMemPool::indexed_transaction_set::iterator mi = mempool.mapTx.begin();
              mi != mempool.mapTx.end(); ++mi)
@@ -329,7 +334,7 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
             uint32_t cmptime = (uint32_t)pblock->nTime;
 
             if (chainName.isKMD() &&
-                consensusParams.nHF22Height != boost::none && nHeight > consensusParams.nHF22Height.get()
+                consensusParams.nHF22Height != std::nullopt && nHeight > consensusParams.nHF22Height.value()
             ) {
                 uint32_t cmptime_old = cmptime;
                 cmptime = nMedianTimePast + 777;
@@ -502,12 +507,12 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
             vecPriority.pop_back();
 
             if (GetBoolArg("-largetxthrottle", true)) {
-                if (tx.vShieldedOutput.size() >= 50 && qtyLargeTx >= 1) {
+                if (tx.GetSaplingOutputsCount() >= 50 && qtyLargeTx >= 1) {
                     LogPrintf("Large transaction rate limited\n");
                     continue;
                 }
 
-                if (tx.vShieldedOutput.size() >= 10 && tx.vShieldedOutput.size() < 50 && qtyMediumTx >= 5) {
+                if (tx.GetSaplingOutputsCount() >= 10 && tx.GetSaplingOutputsCount() < 50 && qtyMediumTx >= 5) {
                     LogPrintf("Medium transaction rate limited\n");
                     continue;
                 }
@@ -599,7 +604,11 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
             // policy here, but we still have to ensure that the block we
             // create only contains transactions that are valid in new blocks.
             CValidationState state;
-            PrecomputedTransactionData txdata(tx);
+            std::vector<CTxOut> allPrevOutputs;
+            for (const auto& input : tx.vin) {
+                allPrevOutputs.push_back(view.GetOutputFor(input));
+            }
+            PrecomputedTransactionData txdata(tx, allPrevOutputs);
             if (!ContextualCheckInputs(tx, state, view, true, MANDATORY_SCRIPT_VERIFY_FLAGS, true, txdata, Params().GetConsensus(), consensusBranchId))
             {
                 //fprintf(stderr,"context failure\n");
@@ -607,8 +616,14 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
             }
             UpdateCoins(tx, view, nHeight);
 
-            BOOST_FOREACH(const OutputDescription &outDescription, tx.vShieldedOutput) {
-                sapling_tree.append(outDescription.cmu);
+            //Append Sapling Output to saplingFrontierTree
+            if (tx.GetSaplingBundle().IsPresent()) {
+                sapling_frontier_tree.AppendBundle(tx.GetSaplingBundle());
+            }
+
+            //Append Orchard Actions to orchardFrontierTree
+            if (tx.GetOrchardBundle().IsPresent()) {
+                orchard_frontier_tree.AppendBundle(tx.GetOrchardBundle());
             }
 
             // Added
@@ -620,12 +635,12 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
             nBlockSigOps += nTxSigOps;
             nFees += nTxFees;
 
-            if (tx.vShieldedOutput.size() >= 50) {
+            if (tx.GetSaplingOutputsCount() >= 50) {
                 LogPrintf("Added large transaction\n");
                 qtyLargeTx++;
             }
 
-            if (tx.vShieldedOutput.size() >= 10 && tx.vShieldedOutput.size() < 50) {
+            if (tx.GetSaplingOutputsCount() >= 10 && tx.GetSaplingOutputsCount() < 50) {
                 LogPrintf("Added medium transaction\n");
                 qtyMediumTx++;
             }
@@ -840,9 +855,44 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
         nonce >>= 16;
         pblock->nNonce = ArithToUint256(nonce);
 
+        uint32_t prevConsensusBranchId = CurrentEpochBranchId(pindexPrev->nHeight, chainparams.GetConsensus());
+
         // Fill in header
         pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
-        pblock->hashFinalSaplingRoot   = sapling_tree.root();
+        if (NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
+            // hashBlockCommitments depends on the block transactions, so we have to
+            // update it whenever the coinbase transaction changes.
+            //
+            // - For the internal miner (either directly or via the `generate` RPC), this
+            //   will occur in `IncrementExtraNonce()`, like for `hashMerkleRoot`.
+            // - For `getblocktemplate`, we have two sets of fields to handle:
+            //   - The `defaultroots` fields, which contain both the default value (if
+            //     nothing in the template is altered), and the roots that can be used to
+            //     recalculate it (if some or all of the template is altered).
+            //   - The legacy `finalsaplingroothash`, `lightclientroothash`, and
+            //     `blockcommitmentshash` fields, which had the semantics of "place this
+            //     value into the block header and things will work" (except for in
+            //     v4.6.0 where they were accidentally set to always be the NU5 value).
+            //
+            // To accommodate all use cases, we calculate the `hashBlockCommitments`
+            // default value here (unlike `hashMerkleRoot`), and additionally cache the
+            // values necessary to recalculate it.
+            pblocktemplate->hashChainHistoryRoot = view.GetHistoryRoot(prevConsensusBranchId);
+            pblocktemplate->hashAuthDataRoot = pblock->BuildAuthDataMerkleTree();
+            pblock->hashBlockCommitments = DeriveBlockCommitmentsHash(
+                    pblocktemplate->hashChainHistoryRoot,
+                    pblocktemplate->hashAuthDataRoot);
+        } else {
+            pblocktemplate->hashChainHistoryRoot.SetNull();
+            pblocktemplate->hashAuthDataRoot.SetNull();
+            pblock->hashBlockCommitments = sapling_frontier_tree.root();
+        }
+
+        // LogPrintf("\n\nMining Block\n");
+        // LogPrintf("hashChainHistoryRoot %s\n", pblocktemplate->hashChainHistoryRoot.ToString());
+        // LogPrintf("hashAuthDataRoot %s\n", pblocktemplate->hashAuthDataRoot.ToString());
+        // LogPrintf("hashBlockCommitments %s\n\n\n", pblock->hashBlockCommitments.ToString());
+
 
         // all Verus PoS chains need this data in the block at all times
         if ( chainName.isKMD() || ASSETCHAINS_STAKED == 0 || KOMODO_MININGTHREADS > 0 )
@@ -918,13 +968,6 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
     return pblocktemplate.release();
 }
 
-//////////////////////////////////////////////////////////////////////////////
-//
-// Internal miner
-//
-
-#ifdef ENABLE_MINING
-
 void IncrementExtraNonce(CBlock* pblock, CBlockIndex* pindexPrev, unsigned int& nExtraNonce)
 {
     // Update nExtraNonce
@@ -942,8 +985,27 @@ void IncrementExtraNonce(CBlock* pblock, CBlockIndex* pindexPrev, unsigned int& 
 
     pblock->vtx[0] = txCoinbase;
     pblock->hashMerkleRoot = pblock->BuildMerkleTree();
+
+    // For Orchard blocks, we also need to update hashBlockCommitments since
+    // changing the coinbase transaction changes the auth data root
+    if (NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
+        // Get the chain history root from the current view
+        LOCK(cs_main);
+        CCoinsViewCache view(pcoinsTip);
+        uint32_t prevConsensusBranchId = CurrentEpochBranchId(pindexPrev->nHeight, Params().GetConsensus());
+        uint256 hashChainHistoryRoot = view.GetHistoryRoot(prevConsensusBranchId);
+        
+        // Recalculate the auth data root with the modified coinbase transaction
+        uint256 hashAuthDataRoot = pblock->BuildAuthDataMerkleTree();
+        
+        // Recalculate hashBlockCommitments
+        pblock->hashBlockCommitments = DeriveBlockCommitmentsHash(
+            hashChainHistoryRoot,
+            hashAuthDataRoot);
+    }
 }
 
+#ifdef ENABLE_MINING
 #ifdef ENABLE_WALLET
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -984,23 +1046,27 @@ CBlockTemplate* CreateNewBlockWithKey(CReserveKey& reservekey, int32_t nHeight, 
     }
     else
     {
-        if (!GetBoolArg("-disablewallet", false)) {
-            // wallet enabled
-            if (!reservekey.GetReservedKey(pubkey))
+        // First check if mineraddress is configured
+        CTxDestination dest = DecodeDestination(GetArg("-mineraddress", ""));
+        if (IsValidDestination(dest)) {
+            scriptPubKey = GetScriptForDestination(dest);
+        }
+        else if (GetBoolArg("-disablewallet", false)) {
+            // wallet disabled and no valid mineraddress
+            return NULL;
+        }
+        else {
+            // wallet enabled - try to get reserved key
+            if (!reservekey.GetReservedKey(pubkey)) {
                 return NULL;
-            scriptPubKey.clear();
-            scriptPubKey = CScript() << ToByteVector(pubkey) << OP_CHECKSIG;
-        } else {
-            // wallet disabled
-            CTxDestination dest = DecodeDestination(GetArg("-mineraddress", ""));
-            if (IsValidDestination(dest)) {
-                // CKeyID keyID = boost::get<CKeyID>(dest);
-                // scriptPubKey = CScript() << OP_DUP << OP_HASH160 << ToByteVector(keyID) << OP_EQUALVERIFY << OP_CHECKSIG;
-                scriptPubKey = GetScriptForDestination(dest);
-            } else
-                return NULL;
+            } else {
+                scriptPubKey.clear();
+                scriptPubKey = CScript() << ToByteVector(pubkey) << OP_CHECKSIG;
+            }
         }
     }
+
+
     return CreateNewBlock(pubkey, scriptPubKey, gpucount, isStake);
 }
 
@@ -1292,7 +1358,7 @@ void static BitcoinMiner()
 #endif
             if ( ptr == 0 )
             {
-                if ( 0 && !GetBoolArg("-gen",false))
+                if ( !GetBoolArg("-gen",false))
                 {
                     miningTimer.stop();
                     c.disconnect();
@@ -1404,9 +1470,9 @@ void static BitcoinMiner()
 
                     /* check if hf22 rule can be applied */
                     const Consensus::Params &params = chainparams.GetConsensus();
-                    if (params.nHF22Height != boost::none)
+                    if (params.nHF22Height != std::nullopt)
                     {
-                        const uint32_t nHeightAfterGAPSecondBlockAllowed = params.nHF22Height.get();
+                        const uint32_t nHeightAfterGAPSecondBlockAllowed = params.nHF22Height.value();
                         const uint32_t nMaxGAPAllowed = params.nMaxFutureBlockTime + 1;
                         const uint32_t tiptime = pindexPrev->GetBlockTime();
 

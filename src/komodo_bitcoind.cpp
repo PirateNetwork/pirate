@@ -919,7 +919,7 @@ int32_t komodo_is_special(uint8_t pubkeys[66][33],int32_t mids[66],uint32_t bloc
                     if ( height > 792000 )
                     {
                         for (j=0; j<66; j++)
-                            fprintf(stderr,"%d ",mids[j]);
+                            fprintf(stdout,"%d /n",mids[j]);
                         fprintf(stderr,"ht.%d repeat notaryid.%d in mids[%d]\n",height,notaryid,i);
                         return(-1);
                     } else break;
@@ -1296,7 +1296,7 @@ arith_uint256 komodo_PoWtarget(int32_t *percPoSp,arith_uint256 target,int32_t he
             }
         } //else fprintf(stderr, "pindex returned null ht.%i\n",ht);
         if ( dispflag != 0 && ASSETCHAINS_STAKED < 100 && (i % 10) == 9 )
-            fprintf(stderr," %d, ",percPoS);
+            fprintf(stdout," %d, ",percPoS);
     }
     if ( m+n < 100 )
     {
@@ -1322,14 +1322,14 @@ arith_uint256 komodo_PoWtarget(int32_t *percPoSp,arith_uint256 target,int32_t he
         if ( dispflag != 0 && ASSETCHAINS_STAKED < 100 )
         {
             for (i=31; i>=24; i--)
-                fprintf(stderr,"%02x",((uint8_t *)&ave)[i]);
-            fprintf(stderr," increase diff -> ");
+                fprintf(stdout,"%02x",((uint8_t *)&ave)[i]);
+            fprintf(stdout," increase diff -> ");
             for (i=31; i>=24; i--)
-                fprintf(stderr,"%02x",((uint8_t *)&bnTarget)[i]);
-            fprintf(stderr," floor diff ");
+                fprintf(stdout,"%02x",((uint8_t *)&bnTarget)[i]);
+            fprintf(stdout," floor diff ");
             for (i=31; i>=24; i--)
-                fprintf(stderr,"%02x",((uint8_t *)&target)[i]);
-            fprintf(stderr," ht.%d percPoS.%d vs goal.%d -> diff %d\n",height,percPoS,goalperc,goalperc - percPoS);
+                fprintf(stdout,"%02x",((uint8_t *)&target)[i]);
+            fprintf(stdout," ht.%d percPoS.%d vs goal.%d -> diff %d\n",height,percPoS,goalperc,goalperc - percPoS);
         }
     }
     else if ( percPoS > goalperc ) // decrease PoW diff -> raise bnTarget
@@ -1443,11 +1443,11 @@ uint32_t komodo_stake(int32_t validateflag,arith_uint256 bnTarget,int32_t nHeigh
     if ( 0 && validateflag != 0 )
     {
         for (i=31; i>=24; i--)
-            fprintf(stderr,"%02x",((uint8_t *)&hashval)[i]);
-        fprintf(stderr," vs ");
+            fprintf(stdout,"%02x",((uint8_t *)&hashval)[i]);
+        fprintf(stdout," vs ");
         for (i=31; i>=24; i--)
-            fprintf(stderr,"%02x",((uint8_t *)&bnTarget)[i]);
-        fprintf(stderr," segid.%d iter.%d winner.%d coinage.%llu %d ht.%d t.%u v%d diff.%d ht.%d\n",segid,iter,winner,(long long)coinage,(int32_t)(blocktime - txtime),nHeight,blocktime,(int32_t)value,(int32_t)diff,nHeight);
+            fprintf(stdout,"%02x",((uint8_t *)&bnTarget)[i]);
+        fprintf(stdout," segid.%d iter.%d winner.%d coinage.%llu %d ht.%d t.%u v%d diff.%d ht.%d\n",segid,iter,winner,(long long)coinage,(int32_t)(blocktime - txtime),nHeight,blocktime,(int32_t)value,(int32_t)diff,nHeight);
     }
     if ( nHeight < 10 )
         return(blocktime);
@@ -1795,8 +1795,8 @@ int64_t komodo_checkcommission(CBlock *pblock,int32_t height)
             {
                 int32_t i;
                 for (i=0; i<scriptlen; i++)
-                    fprintf(stderr,"%02x",script[i]);
-                fprintf(stderr," vout[1] %.8f vs %.8f\n",(double)checktoshis/COIN,(double)pblock->vtx[0].vout[1].nValue/COIN);
+                    fprintf(stdout,"%02x",script[i]);
+                fprintf(stdout," vout[1] %.8f vs %.8f\n",(double)checktoshis/COIN,(double)pblock->vtx[0].vout[1].nValue/COIN);
             }
             if ( ASSETCHAINS_SCRIPTPUB.size() > 1 )
             {
@@ -1859,7 +1859,7 @@ int32_t komodo_checkPOW(int64_t stakeTxValue, int32_t slowflag,CBlock *pblock,in
     {
         if ( slowflag != 0 )
         {
-            fprintf(stderr,"height.%d slowflag.%d possible.%d cmp.%d\n",height,slowflag,possible,bhash > bnTarget);
+            fprintf(stdout,"height.%d slowflag.%d possible.%d cmp.%d\n",height,slowflag,possible,bhash > bnTarget);
             return(0);
         }
         BlockMap::const_iterator it = mapBlockIndex.find(pblock->hashPrevBlock);
@@ -1910,11 +1910,11 @@ int32_t komodo_checkPOW(int64_t stakeTxValue, int32_t slowflag,CBlock *pblock,in
                 if ( bhash > bnTarget )
                 {
                     for (i=31; i>=16; i--)
-                        fprintf(stderr,"%02x",((uint8_t *)&bhash)[i]);
-                    fprintf(stderr," > ");
+                        fprintf(stdout,"%02x",((uint8_t *)&bhash)[i]);
+                    fprintf(stdout," > ");
                     for (i=31; i>=16; i--)
-                        fprintf(stderr,"%02x",((uint8_t *)&bnTarget)[i]);
-                    fprintf(stderr," ht.%d PoW diff violation PoSperc.%d vs goalperc.%d\n",height,PoSperc,(int32_t)ASSETCHAINS_STAKED);
+                        fprintf(stdout,"%02x",((uint8_t *)&bnTarget)[i]);
+                    fprintf(stdout," ht.%d PoW diff violation PoSperc.%d vs goalperc.%d\n",height,PoSperc,(int32_t)ASSETCHAINS_STAKED);
                     return(-1);
                 }
                 else
@@ -2133,7 +2133,8 @@ int64_t komodo_newcoins(int64_t *zfundsp,int64_t *sproutfundsp,int32_t nHeight,C
             sproutfunds -= joinsplit.vpub_new;
             sproutfunds += joinsplit.vpub_old;
         }
-        zfunds -= tx.valueBalance;
+        zfunds -= tx.GetValueBalanceSapling();
+        zfunds -= tx.GetValueBalanceOrchard();
     }
     *zfundsp = zfunds;
     *sproutfundsp = sproutfunds;
@@ -2362,7 +2363,13 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
             txNew.vout[1].nValue = 0;
         }
         CTransaction txNewConst(txNew);
-        signSuccess = ProduceSignature(TransactionSignatureCreator(&keystore, &txNewConst, 0, *utxovaluep, SIGHASH_ALL), best_scriptPubKey, sigdata, consensusBranchId);
+        CCoinsViewCache view(pcoinsTip);
+        std::vector<CTxOut> allPrevOutputs;
+        for (const auto& input : txNewConst.vin) {
+            allPrevOutputs.push_back(view.GetOutputFor(input));
+        }
+        PrecomputedTransactionData txdata(txNewConst, allPrevOutputs);
+        signSuccess = ProduceSignature(TransactionSignatureCreator(&keystore, &txNewConst, txdata, 0, *utxovaluep, SIGHASH_ALL), best_scriptPubKey, sigdata, consensusBranchId);
         UpdateTransaction(txNew,0,sigdata);
         ptr = (uint8_t *)&sigdata.scriptSig[0];
         siglen = sigdata.scriptSig.size();

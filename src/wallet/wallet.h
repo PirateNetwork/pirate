@@ -36,6 +36,7 @@
 #include "util/strencodings.h"
 #include "validationinterface.h"
 #include "wallet/crypter.h"
+#include "wallet/orchard.h"
 #include "wallet/sapling.h"
 #include "wallet/wallet_ismine.h"
 #include "wallet/walletdb.h"
@@ -109,13 +110,13 @@ extern unsigned int WITNESS_CACHE_SIZE;
 //! Size of HD seed in bytes
 static const size_t HD_WALLET_SEED_LENGTH = 32;
 
-//Default Transaction Rentention N-BLOCKS
+//Default Transaction Retention N-BLOCKS
 static const int DEFAULT_TX_DELETE_INTERVAL = 10000;
 
-//Default Transaction Rentention N-BLOCKS
+//Default Transaction Retention N-BLOCKS
 static const unsigned int DEFAULT_TX_RETENTION_BLOCKS = 10000;
 
-//Default Retenion Last N-Transactions
+//Default Retention Last N-Transactions
 static const unsigned int DEFAULT_TX_RETENTION_LASTTX = 200;
 
 //Amount of transactions to delete per run while syncing
@@ -195,6 +196,16 @@ struct CRecipient
 typedef std::map<std::string, std::string> mapValue_t;
 
 
+/**
+ * @brief Read transaction order position from key-value map
+ * 
+ * Reads the order position value from a transaction's metadata map.
+ * Order positions are used to maintain consistent ordering of transactions
+ * in the wallet across different application runs.
+ * 
+ * @param nOrderPos Reference to store the read order position (-1 if not found)
+ * @param mapValue Key-value map containing transaction metadata
+ */
 static void ReadOrderPos(int64_t& nOrderPos, mapValue_t& mapValue)
 {
     if (!mapValue.count("n"))
@@ -205,7 +216,15 @@ static void ReadOrderPos(int64_t& nOrderPos, mapValue_t& mapValue)
     nOrderPos = atoi64(mapValue["n"].c_str());
 }
 
-
+/**
+ * @brief Write transaction order position to key-value map
+ * 
+ * Stores the order position value in a transaction's metadata map for persistence.
+ * Only writes non-null order positions (not -1).
+ * 
+ * @param nOrderPos Order position to write
+ * @param mapValue Key-value map to store transaction metadata
+ */
 static void WriteOrderPos(const int64_t& nOrderPos, mapValue_t& mapValue)
 {
     if (nOrderPos == -1)
@@ -213,14 +232,25 @@ static void WriteOrderPos(const int64_t& nOrderPos, mapValue_t& mapValue)
     mapValue["n"] = i64tostr(nOrderPos);
 }
 
+/**
+ * @brief Output entry containing destination, amount, and output index
+ * 
+ * Represents an output from a transaction with its destination address,
+ * amount, and position within the transaction.
+ */
 struct COutputEntry
 {
-    CTxDestination destination;
-    CAmount amount;
-    int vout;
+    CTxDestination destination; //!< Destination address for the output
+    CAmount amount;            //!< Amount of the output in satoshis
+    int vout;                  //!< Output index within the transaction
 };
 
-/** A note outpoint */
+/**
+ * @brief A Zcash Sprout note outpoint
+ * 
+ * Identifies a specific Sprout note within a transaction by combining
+ * the transaction hash, JoinSplit index, and output index within that JoinSplit.
+ */
 class JSOutPoint
 {
 public:
@@ -231,7 +261,17 @@ public:
     // Index into JSDescription fields of length ZC_NUM_JS_OUTPUTS
     uint8_t n;
 
+    /**
+     * @brief Default constructor - creates null outpoint
+     */
     JSOutPoint() { SetNull(); }
+    
+    /**
+     * @brief Constructor with hash, JoinSplit index, and output index
+     * @param h Transaction hash
+     * @param js JoinSplit index 
+     * @param n Output index within the JoinSplit
+     */
     JSOutPoint(uint256 h, uint64_t js, uint8_t n) : hash {h}, js {js}, n {n} { }
 
     ADD_SERIALIZE_METHODS;
@@ -243,30 +283,66 @@ public:
         READWRITE(n);
     }
 
+    /**
+     * @brief Set outpoint to null state
+     */
     void SetNull() { hash.SetNull(); }
+    
+    /**
+     * @brief Check if outpoint is null
+     * @return True if hash is null
+     */
     bool IsNull() const { return hash.IsNull(); }
 
+    /**
+     * @brief Less-than comparison operator for ordering
+     * @param a First outpoint
+     * @param b Second outpoint
+     * @return True if a < b using hash, then js, then n for ordering
+     */
     friend bool operator<(const JSOutPoint& a, const JSOutPoint& b) {
         return (a.hash < b.hash ||
                 (a.hash == b.hash && a.js < b.js) ||
                 (a.hash == b.hash && a.js == b.js && a.n < b.n));
     }
 
+    /**
+     * @brief Equality comparison operator
+     * @param a First outpoint
+     * @param b Second outpoint
+     * @return True if all components are equal
+     */
     friend bool operator==(const JSOutPoint& a, const JSOutPoint& b) {
         return (a.hash == b.hash && a.js == b.js && a.n == b.n);
     }
 
+    /**
+     * @brief Inequality comparison operator
+     * @param a First outpoint
+     * @param b Second outpoint
+     * @return True if any components are different
+     */
     friend bool operator!=(const JSOutPoint& a, const JSOutPoint& b) {
         return !(a == b);
     }
 
+    /**
+     * @brief Get string representation of the outpoint
+     * @return String containing hash, JoinSplit index, and output index
+     */
     std::string ToString() const;
 };
 
+/**
+ * @brief Data associated with a Sprout note in the wallet
+ * 
+ * Contains all information needed to track and spend a Sprout note,
+ * including the payment address, cached nullifier, and witness data.
+ */
 class SproutNoteData
 {
 public:
-    libzcash::SproutPaymentAddress address;
+    libzcash::SproutPaymentAddress address; //!< Payment address that can spend this note
 
     /**
      * Cached note nullifier. May not be set if the wallet was not unlocked when
@@ -280,7 +356,7 @@ public:
      * transactions they are spent in. This is the same security semantics as
      * for transparent addresses.
      */
-    boost::optional<uint256> nullifier;
+    std::optional<uint256> nullifier;
 
     /**
      * Cached incremental witnesses for spendable Notes.
@@ -300,11 +376,25 @@ public:
     int witnessHeight;
 
     //In Memory Only
-    bool witnessRootValidated;
+    bool witnessRootValidated; //!< Whether witness root has been validated (memory only)
 
+    /**
+     * @brief Default constructor
+     */
     SproutNoteData() : address(), nullifier(), witnessHeight {-1}, witnessRootValidated {false} { }
+    
+    /**
+     * @brief Constructor with payment address
+     * @param a Payment address for the note
+     */
     SproutNoteData(libzcash::SproutPaymentAddress a) :
             address {a}, nullifier(), witnessHeight {-1}, witnessRootValidated {false} { }
+    
+    /**
+     * @brief Constructor with payment address and nullifier
+     * @param a Payment address for the note
+     * @param n Nullifier for the note
+     */
     SproutNoteData(libzcash::SproutPaymentAddress a, uint256 n) :
             address {a}, nullifier {n}, witnessHeight {-1}, witnessRootValidated {false} { }
 
@@ -318,18 +408,48 @@ public:
         READWRITE(witnessHeight);
     }
 
+    /**
+     * @brief Less-than comparison operator for ordering
+     * @param a First SproutNoteData
+     * @param b Second SproutNoteData
+     * @return True if a < b using address and nullifier for ordering
+     */
     friend bool operator<(const SproutNoteData& a, const SproutNoteData& b) {
         return (a.address < b.address ||
                 (a.address == b.address && a.nullifier < b.nullifier));
     }
 
+    /**
+     * @brief Equality comparison operator
+     * @param a First SproutNoteData
+     * @param b Second SproutNoteData
+     * @return True if address and nullifier are equal
+     */
     friend bool operator==(const SproutNoteData& a, const SproutNoteData& b) {
         return (a.address == b.address && a.nullifier == b.nullifier);
     }
 
+    /**
+     * @brief Inequality comparison operator
+     * @param a First SproutNoteData
+     * @param b Second SproutNoteData
+     * @return True if address or nullifier are different
+     */
     friend bool operator!=(const SproutNoteData& a, const SproutNoteData& b) {
         return !(a == b);
     }
+};
+
+/**
+ * @brief Encrypted Sapling note information
+ * 
+ * Contains the encrypted ciphertext, ephemeral key, and commitment
+ * for a Sapling note before decryption.
+ */
+struct SaplingEncryptedNote {
+    libzcash::SaplingEncCiphertext encCiphertext; //!< Encrypted note ciphertext
+    uint256 ephemeralKey;                         //!< Ephemeral key used for encryption
+    uint256 cmu;                                  //!< Note commitment
 };
 
 class SaplingNoteData
@@ -342,17 +462,17 @@ public:
      * See the comment in that class for a full description.
      */
     SaplingNoteData() : nullifier(), value {0} {
-        setPosition(0);
+        setPosition(UINT64_MAX); // Use UINT64_MAX as sentinel for unset position
     }
     SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk) : ivk {ivk}, nullifier(), value {0} {
-        setPosition(0);
+        setPosition(UINT64_MAX); // Use UINT64_MAX as sentinel for unset position
     }
     SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk, uint256 n) : ivk {ivk}, nullifier(n), value {0} {
-        setPosition(0);
+        setPosition(UINT64_MAX); // Use UINT64_MAX as sentinel for unset position
     }
 
     libzcash::SaplingIncomingViewingKey ivk;
-    boost::optional<uint256> nullifier;
+    std::optional<uint256> nullifier;
 
     //In Memory Only
     CAmount value;
@@ -379,25 +499,84 @@ public:
         return !(a == b);
     }
 
-    boost::optional<uint64_t> getPostion() {
-        if (position > 0) {
+    std::optional<uint64_t> getPosition() {
+        if (position != UINT64_MAX) {
             return position;
         }
-        return boost::none;
+        return std::nullopt;
     }
 
-    bool setPosition(uint64_t postionIn) {
-        if (postionIn > 0) {
-            position = postionIn;
-            return true;
+    bool setPosition(uint64_t positionIn) {
+        position = positionIn;
+        return true;
+    }
+
+};
+
+class OrchardNoteData
+{
+private:
+    uint64_t position;
+public:
+    /**
+     * We initialize the height to -1 for the same reason as we do in SproutNoteData.
+     * See the comment in that class for a full description.
+     */
+    OrchardNoteData() : nullifier(), value {0} {
+        setPosition(UINT64_MAX); // Use UINT64_MAX as sentinel for unset position
+    }
+    OrchardNoteData(libzcash::OrchardIncomingViewingKeyPirate ivk) : ivk {ivk}, nullifier(), value {0} {
+        setPosition(UINT64_MAX); // Use UINT64_MAX as sentinel for unset position
+    }
+    OrchardNoteData(libzcash::OrchardIncomingViewingKeyPirate ivk, uint256 n) : ivk {ivk}, nullifier(n), value {0} {
+        setPosition(UINT64_MAX); // Use UINT64_MAX as sentinel for unset position
+    }
+
+    libzcash::OrchardIncomingViewingKeyPirate ivk;
+    std::optional<uint256> nullifier;
+
+    //In Memory Only
+    CAmount value;
+    libzcash::OrchardPaymentAddressPirate address;
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        int nVersion = s.GetVersion();
+        if (!(s.GetType() & SER_GETHASH)) {
+            READWRITE(nVersion);
         }
-        return false;
+        READWRITE(ivk);
+        READWRITE(nullifier);
+        READWRITE(position);
+    }
+
+    friend bool operator==(const OrchardNoteData& a, const OrchardNoteData& b) {
+        return (a.ivk == b.ivk && a.nullifier == b.nullifier && a.position == b.position);
+    }
+
+    friend bool operator!=(const OrchardNoteData& a, const OrchardNoteData& b) {
+        return !(a == b);
+    }
+
+    std::optional<uint64_t> getPosition() {
+        if (position != UINT64_MAX) {
+            return position;
+        }
+        return std::nullopt;
+    }
+
+    bool setPosition(uint64_t positionIn) {
+        position = positionIn;
+        return true;
     }
 
 };
 
 typedef std::map<JSOutPoint, SproutNoteData> mapSproutNoteData_t;
 typedef std::map<SaplingOutPoint, SaplingNoteData> mapSaplingNoteData_t;
+typedef std::map<OrchardOutPoint, OrchardNoteData> mapOrchardNoteData_t;
 
 /** Decrypted note, its location in a transaction, and number of confirmations. */
 struct CSproutNotePlaintextEntry
@@ -414,6 +593,16 @@ struct SaplingNoteEntry
     SaplingOutPoint op;
     libzcash::SaplingPaymentAddress address;
     libzcash::SaplingNote note;
+    std::array<unsigned char, ZC_MEMO_SIZE> memo;
+    int confirmations;
+};
+
+/** Orchard note, its location in a transaction, and number of confirmations. */
+struct OrchardNoteEntry
+{
+    OrchardOutPoint op;
+    libzcash::OrchardPaymentAddressPirate address;
+    libzcash::OrchardNote note;
     std::array<unsigned char, ZC_MEMO_SIZE> memo;
     int confirmations;
 };
@@ -494,6 +683,7 @@ public:
     mapValue_t mapValue;
     mapSproutNoteData_t mapSproutNoteData;
     mapSaplingNoteData_t mapSaplingNoteData;
+    mapOrchardNoteData_t mapOrchardNoteData;
     std::vector<std::pair<std::string, std::string> > vOrderForm;
     unsigned int fTimeReceivedIsTxTime;
     unsigned int nTimeReceived; //! time received by this node
@@ -548,6 +738,7 @@ public:
         mapValue.clear();
         mapSproutNoteData.clear();
         mapSaplingNoteData.clear();
+        mapOrchardNoteData.clear();
         vOrderForm.clear();
         fTimeReceivedIsTxTime = false;
         nTimeReceived = 0;
@@ -608,6 +799,10 @@ public:
             READWRITE(mapSaplingNoteData);
         }
 
+        if (nVersion >= ORCHARD_TX_VERSION) {
+            READWRITE(mapOrchardNoteData);
+        }
+
         if (ser_action.ForRead())
         {
             strFromAccount = mapValue["fromaccount"];
@@ -645,22 +840,29 @@ public:
 
     void SetSproutNoteData(mapSproutNoteData_t &noteData);
     void SetSaplingNoteData(mapSaplingNoteData_t &noteData);
+    void SetOrchardNoteData(mapOrchardNoteData_t &noteData);
 
-    std::pair<libzcash::SproutNotePlaintext, libzcash::SproutPaymentAddress> DecryptSproutNote(
-	JSOutPoint jsop) const;
-    boost::optional<std::pair<
+    std::pair<libzcash::SproutNotePlaintext, libzcash::SproutPaymentAddress> DecryptSproutNote(JSOutPoint jsop) const;
+
+
+    std::optional<std::pair<
         libzcash::SaplingNotePlaintext,
         libzcash::SaplingPaymentAddress>> DecryptSaplingNote(const Consensus::Params& params, int height, SaplingOutPoint op) const;
-    boost::optional<std::pair<
+    std::optional<std::pair<
         libzcash::SaplingNotePlaintext,
         libzcash::SaplingPaymentAddress>> DecryptSaplingNoteWithoutLeadByteCheck(SaplingOutPoint op) const;
-    boost::optional<std::pair<
+    std::optional<std::pair<
         libzcash::SaplingNotePlaintext,
         libzcash::SaplingPaymentAddress>> RecoverSaplingNote(const Consensus::Params& params, int height,
             SaplingOutPoint op, std::set<uint256>& ovks) const;
-    boost::optional<std::pair<
+    std::optional<std::pair<
         libzcash::SaplingNotePlaintext,
         libzcash::SaplingPaymentAddress>> RecoverSaplingNoteWithoutLeadByteCheck(SaplingOutPoint op, std::set<uint256>& ovks) const;
+
+
+    std::optional<std::pair<
+        libzcash::OrchardNotePlaintext,
+        libzcash::OrchardPaymentAddressPirate>> DecryptOrchardNote(OrchardOutPoint op) const;
 
     //! filter decides which addresses will count towards the debit
     CAmount GetDebit(const isminefilter& filter) const;
@@ -868,6 +1070,7 @@ private:
     typedef TxSpendMap<uint256> TxNullifiers;
     TxNullifiers mapTxSproutNullifiers;
     TxNullifiers mapTxSaplingNullifiers;
+    TxNullifiers mapTxOrchardNullifiers;
 
     std::vector<CTransaction> pendingSaplingSweepTxs;
     AsyncRPCOperationId saplingSweepOperationId;
@@ -875,13 +1078,18 @@ private:
     std::vector<CTransaction> pendingSaplingConsolidationTxs;
     AsyncRPCOperationId saplingConsolidationOperationId;
 
+    std::vector<CTransaction> pendingOrchardConsolidationTxs;
+    AsyncRPCOperationId orchardConsolidationOperationId;
+
     void AddToTransparentSpends(const COutPoint& outpoint, const uint256& wtxid);
     void AddToSproutSpends(const uint256& nullifier, const uint256& wtxid);
     void AddToSaplingSpends(const uint256& nullifier, const uint256& wtxid);
+    void AddToOrchardSpends(const uint256& nullifier, const uint256& wtxid);
     void AddToSpends(const uint256& wtxid);
     void RemoveFromTransparentSpends(const uint256& wtxid);
     void RemoveFromSproutSpends(const uint256& wtxid);
     void RemoveFromSaplingSpends(const uint256& wtxid);
+    void RemoveFromOrchardSpends(const uint256& wtxid);
     void RemoveFromSpends(const uint256& wtxid);
 
 public:
@@ -890,24 +1098,25 @@ public:
     int walletHeight = 0;
 
     bool needsRescan = false;
+    
+    // Sapling consolidation settings
     bool fSaplingConsolidationEnabled = false;
-    bool fConsolidationRunning = false;
-    int initializeConsolidationInterval = (Params().GetConsensus().nPowTargetSpacing/60) * 60 * 24 * 7; //Intialize 1 per week
-    int nextConsolidation = 0;
-    int targetConsolidationQty = 100;
+    bool fSaplingConsolidationRunning = false;
+    int saplingConsolidationInterval = (Params().GetConsensus().nPowTargetSpacing/60) * 60 * 24 * 7; // Initialize 1 per week
+    int nextSaplingConsolidation = 0;
+    int targetSaplingConsolidationQty = 100;
+    
+    // Orchard consolidation settings
+    bool fOrchardConsolidationEnabled = false;
+    bool fOrchardConsolidationRunning = false;
+    int orchardConsolidationInterval = (Params().GetConsensus().nPowTargetSpacing/60) * 60 * 24 * 7; // Initialize 1 per week
+    int nextOrchardConsolidation = 0;
+    int targetOrchardConsolidationQty = 100;
 
-    string strCleanUpStatus = "";
-    bool fCleanupRoundComplete = false;
-    std::vector<uint256> vCleanUpTxids;
-    int cleanUpConfirmed = 0;
-    int cleanUpConflicted = 0;
-    int cleanUpUnconfirmed = 0;
-    int cleanupMaxExpirationHieght = 0;
-    int cleanupCurrentRoundUnspent = 0;
-
-    bool fSaplingSweepEnabled = false;
+    // Protocol-agnostic sweep configuration
+    bool fSweepEnabled = false;          // Unified sweep flag supporting all protocols
     bool fSweepRunning = false;
-    int sweepInterval = (Params().GetConsensus().nPowTargetSpacing/60) * 15; //Intialize every 15 minutes
+    int sweepInterval = (Params().GetConsensus().nPowTargetSpacing/60) * 15; //Initialize every 15 minutes
     int nextSweep = 0;
     int targetSweepQty = 0;
 
@@ -920,6 +1129,7 @@ public:
 
     //Tracks if ValidateSaplingWalletTrackedPositions has been run
     bool saplingWalletPositionsValidated = false;
+    bool orchardWalletPositionsValidated = false;
 
     int64_t NullifierCount();
     std::set<uint256> GetNullifiers();
@@ -936,19 +1146,25 @@ public:
     std::map<uint256, SaplingOutPoint> mapArcSaplingOutPoints;
     void AddToArcSaplingOutPoints(const uint256& nullifier, const SaplingOutPoint& op);
 
+    std::map<uint256, OrchardOutPoint> mapArcOrchardOutPoints;
+    void AddToArcOrchardOutPoints(const uint256& nullifier, const OrchardOutPoint& op);
+
     /**
      * pindex is the new tip being connected.  Public so these can be called from init.cpp.
      */
 
+    void ProcessSaplingBlockTransactions(const CBlockIndex* pblockindex, const CBlock* pblock);
     bool ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex);
-    void IncrementSaplingWallet(const CBlockIndex* pindex);
+    void IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pblock = nullptr);
     void DecrementSaplingWallet(const CBlockIndex* pindex);
+
+    void ProcessOrchardBlockTransactions(const CBlockIndex* pblockindex, const CBlock* pblock);
+    bool ValidateOrchardWalletTrackedPositions(const CBlockIndex* pindex);
+    void IncrementOrchardWallet(const CBlockIndex* pindex, const CBlock* pblock = nullptr);
+    void DecrementOrchardWallet(const CBlockIndex* pindex);
 
 
 protected:
-
-    int SproutWitnessMinimumHeight(const uint256& nullifier, int nWitnessHeight, int nMinimumHeight);
-    int SaplingWitnessMinimumHeight(const uint256& nullifier, int nWitnessHeight, int nMinimumHeight);
 
     template <typename WalletDB>
     void SetBestChainINTERNAL(WalletDB& walletdb, const CBlockLocator& loc, const int& height) {
@@ -960,6 +1176,8 @@ protected:
         int arcTxPointSkipCount = 0;
         int arcSaplingOutPointCount = 0;
         int arcSaplingOutPointSkipCount = 0;
+        int arcOrchardOutPointCount = 0;
+        int arcOrchardOutPointSkipCount = 0;
         int paymentAddressCount = 0;
 
         if (!walletdb.TxnBegin()) {
@@ -1021,6 +1239,27 @@ protected:
 
                 }
 
+                for (map<uint256, OrchardOutPoint>::iterator it = mapArcOrchardOutPoints.begin(); it != mapArcOrchardOutPoints.end(); ++it)
+                {
+                    uint256 nullifier = (*it).first;
+                    OrchardOutPoint* op = &(*it).second;
+
+                    if (op->writeToDisk) {
+                    // Write all archived sapling outpoint
+                        if (!walletdb.WriteArcOrchardOp(nullifier, *op, false)) {
+                            LogPrintf("SetBestChain(): Failed to write Archive Orchard Outpoint, aborting atomic write\n");
+                            walletdb.TxnAbort();
+                            return;
+                        }
+                        //Don't write this object again unless it changes
+                        op->writeToDisk = false;
+                        arcOrchardOutPointCount++;
+                    } else {
+                        arcOrchardOutPointSkipCount++;
+                    }
+
+                }
+
                 for (std::pair<const libzcash::SaplingPaymentAddress, libzcash::SaplingIncomingViewingKey>& ivkItem : mapUnsavedSaplingIncomingViewingKeys) {
                     auto addr = ivkItem.first;
                     auto ivk = ivkItem.second;
@@ -1028,6 +1267,19 @@ protected:
                     // Write all archived sapling outpoint
                     if (!walletdb.WriteSaplingPaymentAddress(ivk, addr)) {
                         LogPrintf("SetBestChain(): Failed to write unsaved Sapling Payment address, aborting atomic write\n");
+                        walletdb.TxnAbort();
+                        return;
+                    }
+                    paymentAddressCount++;
+                }
+
+                for (std::pair<const libzcash::OrchardPaymentAddressPirate, libzcash::OrchardIncomingViewingKeyPirate>& ivkItem : mapUnsavedOrchardIncomingViewingKeys) {
+                    auto addr = ivkItem.first;
+                    auto ivk = ivkItem.second;
+
+                    // Write all archived orchard outpoint
+                    if (!walletdb.WriteOrchardPaymentAddress(ivk, addr)) {
+                        LogPrintf("SetBestChain(): Failed to write unsaved Orchard Payment address, aborting atomic write\n");
                         walletdb.TxnAbort();
                         return;
                     }
@@ -1128,6 +1380,36 @@ protected:
 
                     }
 
+                    for (map<uint256, OrchardOutPoint>::iterator it = mapArcOrchardOutPoints.begin(); it != mapArcOrchardOutPoints.end(); ++it)
+                    {
+                        uint256 nullifier = (*it).first;
+                        OrchardOutPoint* op = &(*it).second;
+
+                        std::vector<unsigned char> vchCryptedSecret;
+                        uint256 chash = HashWithFP(nullifier);
+                        CKeyingMaterial vchSecret = SerializeForEncryptionInput(nullifier, *op);
+                        if (op->writeToDisk) {
+                            if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
+                                LogPrintf("SetBestChain(): Failed to encrypt Archive Orchard Outpoint, aborting atomic write\n");
+                                walletdb.TxnAbort();
+                                return;
+                            }
+
+                            // Write all archived orchard outpoint
+                            if (!walletdb.WriteCryptedArcOrchardOp(nullifier, chash, vchCryptedSecret, false)) {
+                                LogPrintf("SetBestChain(): Failed to write Archive Orchard Outpoint, aborting atomic write\n");
+                                walletdb.TxnAbort();
+                                return;
+                            }
+                            //Don't write this object again unless it changes
+                            op->writeToDisk = false;
+                            arcOrchardOutPointCount++;
+                        } else {
+                            arcOrchardOutPointSkipCount++;
+                        }
+
+                    }
+
                     for (std::pair<const libzcash::SaplingPaymentAddress, libzcash::SaplingIncomingViewingKey>& ivkItem : mapUnsavedSaplingIncomingViewingKeys) {
                         auto addr = ivkItem.first;
                         auto ivk = ivkItem.second;
@@ -1151,6 +1433,29 @@ protected:
                         paymentAddressCount++;
                     }
 
+                    for (std::pair<const libzcash::OrchardPaymentAddressPirate, libzcash::OrchardIncomingViewingKeyPirate>& ivkItem : mapUnsavedOrchardIncomingViewingKeys) {
+                        auto addr = ivkItem.first;
+                        auto ivk = ivkItem.second;
+
+                        std::vector<unsigned char> vchCryptedSecret;
+                        uint256 chash = HashWithFP(addr);
+                        CKeyingMaterial vchSecret = SerializeForEncryptionInput(addr, ivk);
+
+                        if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
+                            LogPrintf("SetBestChain(): Failed to encrypt unsaved Orchard Payment address, aborting atomic write\n");
+                            walletdb.TxnAbort();
+                            return;
+                        }
+
+                        // Write all unsaved Orchard Payment Addresses
+                        if (!walletdb.WriteCryptedOrchardPaymentAddress(addr, chash, vchCryptedSecret)) {
+                            LogPrintf("SetBestChain(): Failed to write unsaved Orchard Payment address, aborting atomic write\n");
+                            walletdb.TxnAbort();
+                            return;
+                        }
+                        paymentAddressCount++;
+                    }
+
                     if (!walletdb.WriteBestBlock(loc)) {
                         LogPrintf("SetBestChain(): Failed to write best block, aborting atomic write\n");
                         walletdb.TxnAbort();
@@ -1165,18 +1470,72 @@ protected:
             }
         } catch (const std::exception &exc) {
             // Unexpected failure
-            LogPrintf("SetBestChain(): Unexpected error during atomic write:\n");
-            LogPrintf("%s\n", exc.what());
+            LogPrintf("SetBestChain(): Unexpected error during atomic write: %s\n", exc.what());
             walletdb.TxnAbort();
             return;
         }
 
         // Add persistence of Sapling incremental witness tree
         saplingWallet.GarbageCollect();
-        if (!walletdb.WriteSaplingWitnesses(saplingWallet)) {
-            LogPrintf("SetBestChain(): Failed to write Sapling witnesses, aborting atomic write\n");
-            walletdb.TxnAbort();
-            return;
+        if (IsCrypted() && !IsLocked()) {
+            // Wallet is encrypted - write encrypted witness trees
+            CDataStream ss(SER_DISK, CLIENT_VERSION);
+            ss << SaplingWalletNoteCommitmentTreeWriter(saplingWallet);
+            
+            std::vector<unsigned char> vchCryptedSecret;
+            std::string saplingTreeKey = "sapling_note_commitment_tree";
+            uint256 chash = HashWithFP(saplingTreeKey);
+            CKeyingMaterial vchSecret(ss.begin(), ss.end());
+
+            if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
+                LogPrintf("SetBestChain(): Failed to encrypt Sapling witnesses, aborting atomic write\n");
+                walletdb.TxnAbort();
+                return;
+            }
+
+            if (!walletdb.WriteCryptedSaplingWitnesses(vchCryptedSecret, chash)) {
+                LogPrintf("SetBestChain(): Failed to write encrypted Sapling witnesses, aborting atomic write\n");
+                walletdb.TxnAbort();
+                return;
+            }
+        } else if (!IsCrypted()) {
+            // Wallet is not encrypted - write unencrypted witness trees
+            if (!walletdb.WriteSaplingWitnesses(saplingWallet)) {
+                LogPrintf("SetBestChain(): Failed to write Sapling witnesses, aborting atomic write\n");
+                walletdb.TxnAbort();
+                return;
+            }
+        }
+
+        orchardWallet.GarbageCollect();
+        if (IsCrypted() && !IsLocked()) {
+            // Wallet is encrypted - write encrypted witness trees
+            CDataStream ss(SER_DISK, CLIENT_VERSION);
+            ss << OrchardWalletNoteCommitmentTreeWriter(orchardWallet);
+            
+            std::vector<unsigned char> vchCryptedSecret;
+            std::string orchardTreeKey = "orchard_note_commitment_tree";
+            uint256 chash = HashWithFP(orchardTreeKey);
+            CKeyingMaterial vchSecret(ss.begin(), ss.end());
+
+            if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
+                LogPrintf("SetBestChain(): Failed to encrypt Orchard witnesses, aborting atomic write\n");
+                walletdb.TxnAbort();
+                return;
+            }
+
+            if (!walletdb.WriteCryptedOrchardWitnesses(vchCryptedSecret, chash)) {
+                LogPrintf("SetBestChain(): Failed to write encrypted Orchard witnesses, aborting atomic write\n");
+                walletdb.TxnAbort();
+                return;
+            }
+        } else if (!IsCrypted()) {
+            // Wallet is not encrypted - write unencrypted witness trees
+            if (!walletdb.WriteOrchardWitnesses(orchardWallet)) {
+                LogPrintf("SetBestChain(): Failed to write Orchard witnesses, aborting atomic write\n");
+                walletdb.TxnAbort();
+                return;
+            }
         }
 
         if (!walletdb.TxnCommit()) {
@@ -1187,6 +1546,7 @@ protected:
 
         //Clear Unsaved Sapling Addresses after successful TxnCommit
         mapUnsavedSaplingIncomingViewingKeys.clear();
+        mapUnsavedOrchardIncomingViewingKeys.clear();
         fRunSetBestChain = false;
         walletHeight = height; //Set Wallet height to chain height.
 
@@ -1197,6 +1557,8 @@ protected:
         LogPrintf("SetBestChain():  %i - Archived Points skipped\n", arcTxPointSkipCount);
         LogPrintf("SetBestChain():  %i - Archived Sapling Outpoints written\n", arcSaplingOutPointCount);
         LogPrintf("SetBestChain():  %i - Archived Sapling Outpoints skipped\n", arcSaplingOutPointSkipCount);
+        LogPrintf("SetBestChain():  %i - Archived Orchard Outpoints written\n", arcOrchardOutPointCount);
+        LogPrintf("SetBestChain():  %i - Archived Orchard Outpoints skipped\n", arcOrchardOutPointSkipCount);
         LogPrintf("SetBestChain():  %i - Payment Address written\n", paymentAddressCount);
 
     }
@@ -1214,6 +1576,9 @@ protected:
      */
     SaplingWallet saplingWallet;
     bool saplingWalletValidated = false;
+
+    OrchardWallet orchardWallet;
+    bool orchardWalletValidated = false;
 
     /* the hd chain data model (chain counters) */
     CHDChain hdChain;
@@ -1235,13 +1600,16 @@ public:
     std::set<int64_t> setKeyPool;
     std::map<CKeyID, CKeyMetadata> mapKeyMetadata;
     std::map<libzcash::SproutPaymentAddress, CKeyMetadata> mapSproutZKeyMetadata;
-    std::map<libzcash::SaplingIncomingViewingKey, CKeyMetadata> mapSaplingZKeyMetadata;
+    std::map<libzcash::SaplingIncomingViewingKey, CKeyMetadata> mapSaplingSpendingKeyMetadata;
+    std::map<libzcash::OrchardIncomingViewingKeyPirate, CKeyMetadata> mapOrchardSpendingKeyMetadata;
 
     //Temporary Holfing maps for crypted data to be loaded after all keys are loaded
     std::map<uint256, std::vector<unsigned char>> mapTempHoldCryptedSaplingMetadata;
+    std::map<uint256, std::vector<unsigned char>> mapTempHoldCryptedOrchardMetadata;
 
     //Key used to create diversified address
-    boost::optional<libzcash::SaplingExtendedSpendingKey> primarySaplingSpendingKey;
+    std::optional<libzcash::SaplingExtendedSpendingKey> primarySaplingSpendingKey;
+    std::optional<libzcash::OrchardExtendedSpendingKeyPirate> primaryOrchardSpendingKey;
     typedef std::map<unsigned int, CMasterKey> MasterKeyMap;
     MasterKeyMap mapMasterKeys;
     unsigned int nMasterKeyMaxID;
@@ -1335,8 +1703,8 @@ public:
      *   but with the now-cached nullifiers).
      */
     std::map<uint256, JSOutPoint> mapSproutNullifiersToNotes;
-
     std::map<uint256, SaplingOutPoint> mapSaplingNullifiersToNotes;
+    std::map<uint256, OrchardOutPoint> mapOrchardNullifiersToNotes;
 
     std::map<uint256, CWalletTx> mapWallet;
     bool fRunSetBestChain = false;
@@ -1351,6 +1719,7 @@ public:
     std::set<COutPoint> setLockedCoins;
     std::set<JSOutPoint> setLockedSproutNotes;
     std::set<SaplingOutPoint> setLockedSaplingNotes;
+    std::set<OrchardOutPoint> setLockedOrchardNotes;
 
     int64_t nTimeFirstKey;
 
@@ -1373,11 +1742,13 @@ public:
     bool SelectCoinsMinConf(const CAmount& nTargetValue, int nConfMine, int nConfTheirs, std::vector<COutput> vCoins, std::set<std::pair<const CWalletTx*,unsigned int> >& setCoinsRet, CAmount& nValueRet) const;
 
     bool IsSpent(const uint256& hash, unsigned int n) const;
-    unsigned int GetSpendDepth(const uint256& hash, unsigned int n) const;
+    int GetSpendDepth(const uint256& hash, unsigned int n) const;
     bool IsSproutSpent(const uint256& nullifier) const;
-    unsigned int GetSproutSpendDepth(const uint256& nullifier) const;
+    int GetSproutSpendDepth(const uint256& nullifier) const;
     bool IsSaplingSpent(const uint256& nullifier) const;
-    unsigned int GetSaplingSpendDepth(const uint256& nullifier) const;
+    int GetSaplingSpendDepth(const uint256& nullifier) const;
+    bool IsOrchardSpent(const uint256& nullifier) const;
+    int GetOrchardSpendDepth(const uint256& nullifier) const;
 
     bool IsLockedCoin(uint256 hash, unsigned int n) const;
     void LockCoin(COutPoint& output);
@@ -1396,6 +1767,12 @@ public:
     void UnlockNote(const SaplingOutPoint& output);
     void UnlockAllSaplingNotes();
     std::vector<SaplingOutPoint> ListLockedSaplingNotes();
+
+    bool IsLockedNote(const OrchardOutPoint& output) const;
+    void LockNote(const OrchardOutPoint& output);
+    void UnlockNote(const OrchardOutPoint& output);
+    void UnlockAllOrchardNotes();
+    std::vector<OrchardOutPoint> ListLockedOrchardNotes();
 
     /**
      * keystore implementation
@@ -1437,6 +1814,7 @@ public:
     bool LoadCryptedWatchOnly(const uint256 &chash, std::vector<unsigned char> &vchCryptedSecret);
 
     bool LoadSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk);
+    bool LoadOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk);
 
     bool OpenWallet(const SecureString& strWalletPassphrase);
     bool Unlock(const SecureString& strWalletPassphrase);
@@ -1445,6 +1823,7 @@ public:
     bool DecryptWalletTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& hash, CWalletTx& wtx);
     bool DecryptWalletArchiveTransaction(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& txid, ArchiveTxPoint& arcTxPt);
     bool DecryptArchivedSaplingOutpoint(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& nullifier, SaplingOutPoint& op);
+    bool DecryptArchivedOrchardOutpoint(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& nullifier, OrchardOutPoint& op);
     bool EncryptWallet(const SecureString& strWalletPassphrase);
 
     bool EncryptSerializedWalletObjects(
@@ -1518,7 +1897,7 @@ public:
     //! Generates new Sapling diversified payment address
     libzcash::SaplingPaymentAddress GenerateNewSaplingDiversifiedAddress();
     //Set Primary key for address diversification
-    bool SetPrimarySpendingKey(
+    bool SetPrimarySaplingSpendingKey(
         const libzcash::SaplingExtendedSpendingKey &extsk);
     bool LoadCryptedPrimarySaplingSpendingKey(
         const uint256 &extfvkFinger,
@@ -1535,7 +1914,7 @@ public:
         const libzcash::SaplingPaymentAddress &addr,
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path);
-    bool AddLastDiversifierUsed(
+    bool AddLastSaplingDiversifierUsed(
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path);
 
@@ -1568,10 +1947,10 @@ public:
         const uint256 &chash,
         const std::vector<unsigned char> &vchCryptedSecret);
 
-    bool LoadLastDiversifierUsed(
+    bool LoadLastSaplingDiversifierUsed(
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path);
-    bool LoadLastCryptedDiversifierUsed(
+    bool LoadLastCryptedSaplingDiversifierUsed(
         const uint256 &chash,
         const std::vector<unsigned char> &vchCryptedSecret);
     //! Adds an encrypted spending key to the store, without saving it to disk (used by LoadWallet)
@@ -1581,10 +1960,81 @@ public:
         libzcash::SaplingExtendedFullViewingKey &extfvk);
 
     /**
+      * Orchard ZKeys
+      */
+    //! Generates new Orchard key
+    libzcash::OrchardPaymentAddressPirate GenerateNewOrchardZKey();
+    //! Generates new Sapling diversified payment address
+    libzcash::OrchardPaymentAddressPirate GenerateNewOrchardDiversifiedAddress();
+    //Set Primary key for address diversification
+    bool SetPrimaryOrchardSpendingKey(
+        const libzcash::OrchardExtendedSpendingKeyPirate &extsk);
+    bool LoadCryptedPrimaryOrchardSpendingKey(
+        const uint256 &extfvkFinger,
+        const std::vector<unsigned char> &vchCryptedSecret);
+    //! Adds Sapling spending key to the store, and saves it to disk
+    bool AddOrchardZKey(
+        const libzcash::OrchardExtendedSpendingKeyPirate &key);
+    bool AddOrchardExtendedFullViewingKey(
+        const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk);
+    bool AddOrchardIncomingViewingKey(
+        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        const libzcash::OrchardPaymentAddressPirate &addr);
+    bool AddOrchardDiversifiedAddress(
+        const libzcash::OrchardPaymentAddressPirate &addr,
+        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        const blob88 &path);
+    bool AddLastOrchardDiversifierUsed(
+        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        const blob88 &path);
+
+    //! Adds spending key to the store, without saving it to disk (used by LoadWallet)
+    bool LoadOrchardZKey(const libzcash::OrchardExtendedSpendingKeyPirate &key);
+    //! Load spending key metadata (used by LoadWallet)
+    bool LoadOrchardZKeyMetadata(const libzcash::OrchardIncomingViewingKeyPirate &ivk, const CKeyMetadata &meta);
+    //! Add Sapling full viewing key to the store, without saving it to disk (used by LoadWallet)
+    bool LoadOrchardFullViewingKey(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk);
+    bool LoadCryptedOrchardExtendedFullViewingKey(
+        const uint256 &extfvkFinger,
+        const std::vector<unsigned char> &vchCryptedSecret,
+        libzcash::OrchardExtendedFullViewingKeyPirate &extfvk);
+
+    //! Adds a Sapling payment address -> incoming viewing key map entry,
+    //! without saving it to disk (used by LoadWallet)
+    bool LoadOrchardPaymentAddress(
+        const libzcash::OrchardPaymentAddressPirate &addr,
+        const libzcash::OrchardIncomingViewingKeyPirate &ivk);
+    bool LoadCryptedOrchardPaymentAddress(
+        const uint256 &chash,
+        const std::vector<unsigned char> &vchCryptedSecret,
+        libzcash::OrchardPaymentAddressPirate& addr);
+
+    bool LoadOrchardDiversifiedAddress(
+        const libzcash::OrchardPaymentAddressPirate &addr,
+        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        const blob88 &path);
+    bool LoadCryptedOrchardDiversifiedAddress(
+        const uint256 &chash,
+        const std::vector<unsigned char> &vchCryptedSecret);
+
+    bool LoadLastOrchardDiversifierUsed(
+        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        const blob88 &path);
+    bool LoadLastCryptedOrchardDiversifierUsed(
+        const uint256 &chash,
+        const std::vector<unsigned char> &vchCryptedSecret);
+    //! Adds an encrypted spending key to the store, without saving it to disk (used by LoadWallet)
+    bool LoadCryptedOrchardZKey(
+        const uint256 &chash,
+        const std::vector<unsigned char> &vchCryptedSecret,
+        libzcash::OrchardExtendedFullViewingKeyPirate &extfvk);
+
+    /**
      * Returns a loader that can be used to read an Orchard note commitment
      * tree from a stream into the Orchard wallet.
      */
     SaplingWalletNoteCommitmentTreeLoader GetSaplingNoteCommitmentTreeLoader();
+    OrchardWalletNoteCommitmentTreeLoader GetOrchardNoteCommitmentTreeLoader();
 
 
 
@@ -1610,23 +2060,32 @@ public:
     void UpdateNullifierNoteMapWithTx(const CWalletTx& wtx);
     void UpdateSproutNullifierNoteMapWithTx(CWalletTx& wtx);
     void UpdateSaplingNullifierNoteMapWithTx(CWalletTx* wtx);
+    void UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx);
     void UpdateNullifierNoteMapForBlock(const CBlock* pblock);
     bool AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletDB* pwalletdb, int nHeight, bool fRescan = false);
     bool EraseFromWallet(const uint256 &hash);
     void SyncTransactions(const std::vector<CTransaction> &vtx, const CBlock* pblock, const int nHeight);
     void ForceRescanWallet();
     void RescanWallet();
-    void AddToWalletIfInvolvingMe(const std::vector<CTransaction> &vtx, std::vector<CTransaction> &vAddedTxes, const CBlock* pblock, const int nHeight, bool fUpdate, std::set<libzcash::SaplingPaymentAddress>& addressesFound, bool fRescan = false);
+    void AddToWalletIfInvolvingMe(
+        const std::vector<CTransaction> &vtx,
+        std::vector<CTransaction> &vAddedTxes,
+        const CBlock* pblock,
+        const int nHeight,
+        bool fUpdate,
+        std::set<libzcash::SaplingPaymentAddress>& addressesFound,
+        std::set<libzcash::OrchardPaymentAddressPirate>& orchardAddressesFound,
+        bool fRescan = false);
     void WitnessNoteCommitment(
          std::vector<uint256> commitments,
-         std::vector<boost::optional<SproutWitness>>& witnesses,
+         std::vector<std::optional<SproutWitness>>& witnesses,
          uint256 &final_anchor);
     void ReorderWalletTransactions(std::map<std::pair<int,int>, CWalletTx*> &mapSorted, int64_t &maxOrderPos);
     void UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletTx*> &mapSorted, bool resetOrder);
     bool DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<uint256> &removeArcTxs, bool fRescan = false);
     bool DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan = false);
     bool initalizeArcTx();
-    int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false, bool fIgnoreBirthday = false, bool LockOnFinish = false, bool resetSaplingWallet = false);
+    int ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate = false, bool fIgnoreBirthday = false, bool LockOnFinish = false, bool resetWallets = false);
     void ReacceptWalletTransactions();
     void ResendWalletTransactions(int64_t nBestBlockTime);
     std::vector<uint256> ResendWalletTransactionsBefore(int64_t nTime);
@@ -1660,7 +2119,7 @@ public:
 
     std::set<CTxDestination> GetAccountAddresses(const std::string& strAccount) const;
 
-    boost::optional<uint256> GetSproutNoteNullifier(
+    std::optional<uint256> GetSproutNoteNullifier(
         const JSDescription& jsdesc,
         const libzcash::SproutPaymentAddress& address,
         const ZCNoteDecryption& dec,
@@ -1668,21 +2127,33 @@ public:
         uint8_t n) const;
     mapSproutNoteData_t FindMySproutNotes(const CTransaction& tx) const;
     std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> FindMySaplingNotes(const std::vector<CTransaction> &vtx, int height) const;
+    std::pair<mapOrchardNoteData_t, OrchardIncomingViewingKeyMap> FindMyOrchardNotes(const std::vector<CTransaction> &vtx, int height) const;
     bool IsSproutNullifierFromMe(const uint256& nullifier) const;
     bool IsSaplingNullifierFromMe(const uint256& nullifier) const;
+    bool IsOrchardNullifierFromMe(const uint256& nullifier) const;
 
     bool SaplingWalletGetMerklePathOfNote(const uint256 txid, int outidx, libzcash::MerklePath &merklePath);
     bool SaplingWalletGetPathRootWithCMU(libzcash::MerklePath &merklePath, uint256 cmu, uint256 &anchor);
-    void SaplingWalletReset();
+    bool SaplingWalletReset();
+    bool LoadCryptedSaplingWallet(const CKeyingMaterial& vchSecret);
+
+    bool OrchardWalletGetMerklePathOfNote(const uint256 txid, int outidx, libzcash::MerklePath &merklePath);
+    bool OrchardWalletGetPathRootWithCMU(libzcash::MerklePath &merklePath, uint256 cmu, uint256 &anchor);
+    bool OrchardWalletReset();
+    bool LoadCryptedOrchardWallet(const CKeyingMaterial& vchSecret);
 
     void GetSproutNoteWitnesses(
          std::vector<JSOutPoint> notes,
-         std::vector<boost::optional<SproutWitness>>& witnesses,
+         std::vector<std::optional<SproutWitness>>& witnesses,
          uint256 &final_anchor);
     bool GetSaplingNoteMerklePaths(
          std::vector<SaplingOutPoint> notes,
          std::vector<libzcash::MerklePath>& saplingMerklePaths,
          uint256 &final_anchor);
+    bool GetOrchardNoteMerklePaths(
+        std::vector<OrchardOutPoint> notes,
+        std::vector<libzcash::MerklePath>& orchardMerklePaths,
+        uint256 &final_anchor);
 
     isminetype IsMine(const CTxIn& txin) const;
     CAmount GetDebit(const CTxIn& txin, const isminefilter& filter) const;
@@ -1698,9 +2169,10 @@ public:
     CAmount GetCredit(const CTransaction& tx, int32_t voutNum, const isminefilter& filter) const;
     CAmount GetCredit(const CTransaction& tx, const isminefilter& filter) const;
     CAmount GetChange(const CTransaction& tx) const;
-    void ChainTip(const CBlockIndex *pindex, const CBlock *pblock, SproutMerkleTree sproutTree, SaplingMerkleTree saplingTree, bool added);
+    void ChainTip(const CBlockIndex *pindex, const CBlock *pblock, bool added);
     void RunSaplingSweep(int blockHeight);
     void RunSaplingConsolidation(int blockHeight);
+    void RunOrchardConsolidation(int blockHeight);
     bool CommitAutomatedTx(const CTransaction& tx);
     /** Saves witness caches and best block locator to disk. */
     void SetBestChain(const CBlockLocator& loc, const int& height);
@@ -1708,6 +2180,7 @@ public:
     std::set<std::pair<libzcash::PaymentAddress, uint256>> GetNullifiersForAddresses(const std::set<libzcash::PaymentAddress> & addresses);
     bool IsNoteSproutChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet, const libzcash::PaymentAddress & address, const JSOutPoint & entry);
     bool IsNoteSaplingChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet, const libzcash::PaymentAddress & address, const SaplingOutPoint & entry);
+    bool IsNoteOrchardChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet, const libzcash::PaymentAddress & address, const OrchardOutPoint & entry);
 
     DBErrors InitalizeCryptedLoad();
     DBErrors LoadCryptedSeedFromDB();
@@ -1818,8 +2291,8 @@ public:
     void getZAddressBalances(std::map<libzcash::PaymentAddress, CAmount> &balances, int minDepth, bool requireSpendingKey);
 
     /* Find notes filtered by payment address, min depth, ability to spend */
-    void GetFilteredNotes(std::vector<CSproutNotePlaintextEntry>& sproutEntries,
-                          std::vector<SaplingNoteEntry>& saplingEntries,
+    void GetFilteredNotes(std::vector<SaplingNoteEntry>& saplingEntries,
+                          std::vector<OrchardNoteEntry>& orchardEntries,
                           std::string address,
                           int minDepth=1,
                           bool ignoreSpent=true,
@@ -1827,8 +2300,8 @@ public:
 
     /* Find notes filtered by payment addresses, min depth, max depth, if they are spent,
        if a spending key is required, and if they are locked */
-    void GetFilteredNotes(std::vector<CSproutNotePlaintextEntry>& sproutEntries,
-                          std::vector<SaplingNoteEntry>& saplingEntries,
+    void GetFilteredNotes(std::vector<SaplingNoteEntry>& saplingEntries,
+                          std::vector<OrchardNoteEntry>& orchardEntries,
                           std::set<libzcash::PaymentAddress>& filterAddresses,
                           int minDepth=1,
                           int maxDepth=INT_MAX,
@@ -1908,6 +2381,7 @@ public:
 
     bool operator()(const libzcash::SproutPaymentAddress &zaddr) const;
     bool operator()(const libzcash::SaplingPaymentAddress &zaddr) const;
+    bool operator()(const libzcash::OrchardPaymentAddressPirate &zaddr) const;
     bool operator()(const libzcash::InvalidEncoding& no) const;
 };
 
@@ -1918,9 +2392,10 @@ private:
 public:
     GetViewingKeyForPaymentAddress(CWallet *wallet) : m_wallet(wallet) {}
 
-    boost::optional<libzcash::ViewingKey> operator()(const libzcash::SproutPaymentAddress &zaddr) const;
-    boost::optional<libzcash::ViewingKey> operator()(const libzcash::SaplingPaymentAddress &zaddr) const;
-    boost::optional<libzcash::ViewingKey> operator()(const libzcash::InvalidEncoding& no) const;
+    std::optional<libzcash::ViewingKey> operator()(const libzcash::SproutPaymentAddress &zaddr) const;
+    std::optional<libzcash::ViewingKey> operator()(const libzcash::SaplingPaymentAddress &zaddr) const;
+    std::optional<libzcash::ViewingKey> operator()(const libzcash::OrchardPaymentAddressPirate &zaddr) const;
+    std::optional<libzcash::ViewingKey> operator()(const libzcash::InvalidEncoding& no) const;
 };
 
 class IncomingViewingKeyBelongsToWallet : public boost::static_visitor<bool>
@@ -1932,6 +2407,7 @@ public:
 
     bool operator()(const libzcash::SproutPaymentAddress &zaddr) const;
     bool operator()(const libzcash::SaplingPaymentAddress &zaddr) const;
+    bool operator()(const libzcash::OrchardPaymentAddressPirate &zaddr) const;
     bool operator()(const libzcash::InvalidEncoding& no) const;
 };
 
@@ -1944,6 +2420,7 @@ public:
 
     bool operator()(const libzcash::SproutPaymentAddress &zaddr) const;
     bool operator()(const libzcash::SaplingPaymentAddress &zaddr) const;
+    bool operator()(const libzcash::OrchardPaymentAddressPirate &zaddr) const;
     bool operator()(const libzcash::InvalidEncoding& no) const;
 };
 
@@ -1954,9 +2431,10 @@ private:
 public:
     GetSpendingKeyForPaymentAddress(CWallet *wallet) : m_wallet(wallet) {}
 
-    boost::optional<libzcash::SpendingKey> operator()(const libzcash::SproutPaymentAddress &zaddr) const;
-    boost::optional<libzcash::SpendingKey> operator()(const libzcash::SaplingPaymentAddress &zaddr) const;
-    boost::optional<libzcash::SpendingKey> operator()(const libzcash::InvalidEncoding& no) const;
+    std::optional<libzcash::SpendingKey> operator()(const libzcash::SproutPaymentAddress &zaddr) const;
+    std::optional<libzcash::SpendingKey> operator()(const libzcash::SaplingPaymentAddress &zaddr) const;
+    std::optional<libzcash::SpendingKey> operator()(const libzcash::OrchardPaymentAddressPirate &zaddr) const;
+    std::optional<libzcash::SpendingKey> operator()(const libzcash::InvalidEncoding& no) const;
 };
 
 class GetPubKeyForPubKey : public boost::static_visitor<CPubKey> {
@@ -2018,6 +2496,7 @@ public:
 
     KeyAddResult operator()(const libzcash::SproutViewingKey &sk) const;
     KeyAddResult operator()(const libzcash::SaplingExtendedFullViewingKey &sk) const;
+    KeyAddResult operator()(const libzcash::OrchardExtendedFullViewingKeyPirate &sk) const;
     KeyAddResult operator()(const libzcash::InvalidEncoding& no) const;
 };
 
@@ -2029,6 +2508,7 @@ public:
     AddDiversifiedViewingKeyToWallet(CWallet *wallet) : m_wallet(wallet) {}
 
     KeyAddResult operator()(const libzcash::SaplingDiversifiedExtendedFullViewingKey &sk) const;
+    KeyAddResult operator()(const libzcash::OrchardDiversifiedExtendedFullViewingKeyPirate &sk) const;
     KeyAddResult operator()(const libzcash::InvalidEncoding& no) const;
 };
 
@@ -2038,24 +2518,25 @@ private:
     CWallet *m_wallet;
     const Consensus::Params &params;
     int64_t nTime;
-    boost::optional<std::string> hdKeypath; // currently sapling only
-    boost::optional<std::string> seedFpStr; // currently sapling only
+    std::optional<std::string> hdKeypath; // currently sapling only
+    std::optional<std::string> seedFpStr; // currently sapling only
     bool log;
 public:
     AddSpendingKeyToWallet(CWallet *wallet, const Consensus::Params &params) :
-        m_wallet(wallet), params(params), nTime(1), hdKeypath(boost::none), seedFpStr(boost::none), log(false) {}
+        m_wallet(wallet), params(params), nTime(1), hdKeypath(std::nullopt), seedFpStr(std::nullopt), log(false) {}
     AddSpendingKeyToWallet(
         CWallet *wallet,
         const Consensus::Params &params,
         int64_t _nTime,
-        boost::optional<std::string> _hdKeypath,
-        boost::optional<std::string> _seedFp,
+        std::optional<std::string> _hdKeypath,
+        std::optional<std::string> _seedFp,
         bool _log
     ) : m_wallet(wallet), params(params), nTime(_nTime), hdKeypath(_hdKeypath), seedFpStr(_seedFp), log(_log) {}
 
 
     KeyAddResult operator()(const libzcash::SproutSpendingKey &sk) const;
     KeyAddResult operator()(const libzcash::SaplingExtendedSpendingKey &sk) const;
+    KeyAddResult operator()(const libzcash::OrchardExtendedSpendingKeyPirate &sk) const;
     KeyAddResult operator()(const libzcash::InvalidEncoding& no) const;
 };
 
@@ -2067,6 +2548,7 @@ public:
     AddDiversifiedSpendingKeyToWallet(CWallet *wallet) : m_wallet(wallet) {}
 
     KeyAddResult operator()(const libzcash::SaplingDiversifiedExtendedSpendingKey &sk) const;
+    KeyAddResult operator()(const libzcash::OrchardDiversifiedExtendedSpendingKeyPirate &sk) const;
     KeyAddResult operator()(const libzcash::InvalidEncoding& no) const;
 };
 

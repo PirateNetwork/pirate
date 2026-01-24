@@ -284,6 +284,7 @@ void WalletView::gotoReceiveCoinsPage()
 {
     setCurrentWidget(receiveCoinsPage);
 }
+
 /*
 void WalletView::gotoSendCoinsPage(QString addr)
 {

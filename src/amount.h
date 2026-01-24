@@ -33,6 +33,7 @@ static const CAmount COIN = 100000000;
 static const CAmount CENT = 1000000;
 
 extern const std::string CURRENCY_UNIT;
+extern const std::string MINOR_CURRENCY_UNIT;
 extern int64_t MAX_MONEY;
 
 inline bool MoneyRange(const CAmount& nValue) { return (nValue >= 0 && nValue <= MAX_MONEY); }

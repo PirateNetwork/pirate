@@ -100,7 +100,7 @@ public:
 
             const QFontMetrics fm(fontMetrics());
             int h = lineEdit()->minimumSizeHint().height();
-            int w = fm.width(KomodoUnits::format(KomodoUnits::ARRR, KomodoUnits::maxMoney(), false, KomodoUnits::separatorAlways));
+            int w = fm.horizontalAdvance(KomodoUnits::format(KomodoUnits::ARRR, KomodoUnits::maxMoney(), false, KomodoUnits::separatorAlways));
             w += 2; // cursor blinking space
 
             QStyleOptionSpinBox opt;
@@ -172,7 +172,7 @@ protected:
         if (text().isEmpty()) // Allow step-up with empty field
             return StepUpEnabled;
 
-        StepEnabled rv = 0;
+        StepEnabled rv = StepNone;
         bool valid = false;
         CAmount val = value(&valid);
         if(valid)

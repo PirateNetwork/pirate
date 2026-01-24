@@ -19,13 +19,13 @@ class SaplingBundle
 private:
     /// An optional Sapling bundle.
     /// Memory is allocated by Rust.
-    rust::Box<sapling::Bundle> inner;
+    rust::Box<sapling::SaplingBundle> inner;
 
     friend class SaplingV4Reader;
 public:
     SaplingBundle() : inner(sapling::none_bundle()) {}
 
-    SaplingBundle(rust::Box<sapling::Bundle>&& bundle) : inner(std::move(bundle)) {}
+    SaplingBundle(rust::Box<sapling::SaplingBundle>&& bundle) : inner(std::move(bundle)) {}
 
     SaplingBundle(SaplingBundle&& bundle) : inner(std::move(bundle.inner)) {}
 
@@ -48,13 +48,13 @@ public:
         return *this;
     }
 
-    const sapling::Bundle& GetDetails() const {
+    const sapling::SaplingBundle& GetDetails() const {
         return *inner;
     }
 
     /// @brief Only for tests.
     /// @return A mutable reference to the Sapling bundle.
-    sapling::Bundle& GetDetailsMut() {
+    sapling::SaplingBundle& GetDetailsMut() {
         return *inner;
     }
 
@@ -115,6 +115,24 @@ public:
 
     const size_t GetOutputsCount() const {
         return inner->num_outputs();
+    }
+
+    const std::vector<uint256> GetNullifiers() const {
+        const auto spends = inner->spends();
+        std::vector<uint256> result;
+        result.reserve(spends.size());
+        for (const auto& spend : spends) {
+            result.push_back(uint256::FromRawBytes(spend.nullifier()));
+        }
+        return result;
+    }
+
+    void FinishBundleAssembly(
+        rust::Box<sapling::BundleAssembler> assembler,
+        std::array<unsigned char, 64> bindingSig)
+    {
+        inner = sapling::finish_bundle_assembly(std::move(assembler), bindingSig);
+        return;
     }
 };
 

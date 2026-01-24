@@ -33,7 +33,7 @@ public:
     //! Override automatic min/max checks on fee, m_feerate must be set if true
     bool fOverrideFeeRate;
     //! Override the default payTxFee if set
-    boost::optional<CFeeRate> m_feerate;
+    std::optional<CFeeRate> m_feerate;
     //! Override the default confirmation target if set
     unsigned int m_confirm_target;
     //! Signal BIP-125 replace by fee.

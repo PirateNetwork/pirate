@@ -139,7 +139,7 @@ bool AppInit(int argc, char* argv[])
         void chainparams_commandline();
         chainparams_commandline();
 
-        fprintf(stderr,"call komodo_args.(%s) NOTARY_PUBKEY.(%s)\n",argv[0],NOTARY_PUBKEY.c_str());
+        fprintf(stdout,"call komodo_args.(%s) NOTARY_PUBKEY.(%s)\n",argv[0],NOTARY_PUBKEY.c_str());
         printf("initialized %s at %u\n",chainName.symbol().c_str(),(uint32_t)time(NULL));
         if (!boost::filesystem::is_directory(GetDataDir(false)))
         {

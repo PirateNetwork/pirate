@@ -39,6 +39,7 @@ public:
     void setModel(WalletModel *walletModel);
 
     void setResult(const string sHeading, const string sResult);
+    void SetOfflineMode(bool offline);
 
 public Q_SLOTS:
     void clear();
@@ -51,9 +52,16 @@ private:
 
     WalletModel *model;
     const PlatformStyle *platformStyle;
+    
+    void updateOfflineMode();
 
 private Q_SLOTS:
     void on_signButton_clicked();
+    void on_broadcastButton_clicked();
+    void on_copyInputButton_clicked();
+    void on_pasteInputButton_clicked();
+    void on_copyResultButton_clicked();
+    void on_pasteResultButton_clicked();
     void sendResetUnlockSignal();
 
 Q_SIGNALS:

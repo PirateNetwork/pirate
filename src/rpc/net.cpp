@@ -38,6 +38,9 @@
 
 using namespace std;
 
+// Access to network constants
+extern int MAX_ADDNODE_CONNECTIONS;
+
 UniValue getconnectioncount(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (fHelp || params.size() != 0)
@@ -204,6 +207,7 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
         obj.push_back(Pair("addr_processed", stats.m_addr_processed));
         obj.push_back(Pair("addr_rate_limited", stats.m_addr_rate_limited));
         obj.push_back(Pair("whitelisted", stats.fWhitelisted));
+        obj.push_back(Pair("addnode", stats.fAddNode));
 
         ret.push_back(obj);
     }
@@ -297,7 +301,7 @@ UniValue addnode(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (strCommand == "onetry")
     {
         CAddress addr;
-        OpenNetworkConnection(addr, NULL, strNode.c_str());
+        OpenNetworkConnection(addr, NULL, strNode.c_str(), true, true);
         return NullUniValue;
     }
 
@@ -311,6 +315,7 @@ UniValue addnode(const UniValue& params, bool fHelp, const CPubKey& mypk)
     {
         if (it != vAddedNodes.end())
             throw JSONRPCError(RPC_CLIENT_NODE_ALREADY_ADDED, "Error: Node already added");
+        
         vAddedNodes.push_back(strNode);
     }
     else if(strCommand == "remove")
@@ -328,7 +333,8 @@ UniValue disconnectnode(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "disconnectnode \"node\" \n"
-            "\nImmediately disconnects from the specified node.\n"
+            "\nImmediately disconnects from the specified node, removes it from addnode list,\n"
+            "removes it from the address manager, and saves the updated peers.dat.\n"
             "\nArguments:\n"
             "1. \"node\"     (string, required) The node (see getpeerinfo for nodes)\n"
             "\nExamples:\n"
@@ -336,11 +342,117 @@ UniValue disconnectnode(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("disconnectnode", "\"192.168.0.6:8233\"")
         );
 
-    CNode* pNode = FindNode(params[0].get_str());
-    if (pNode == NULL)
-        throw JSONRPCError(RPC_CLIENT_NODE_NOT_CONNECTED, "Node not found in connected nodes");
-
-    pNode->fDisconnect = true;
+    string strNode = params[0].get_str();
+    bool fDisconnected = false;
+    string strMatchedNode = strNode;  // Keep track of the actual matched node format
+    CService nodeService;  // Store the service address for addrman removal
+    
+    // Find and disconnect the node with proper locking
+    {
+        LOCK(cs_vNodes);
+        CNode* pNode = FindNode(strNode);
+        if (pNode != NULL) {
+            LogPrintf("Disconnecting node %s (id=%d)\n", strNode, pNode->id);
+            pNode->fDisconnect = true;
+            pNode->CloseSocketDisconnect();  // Immediate socket closure
+            fDisconnected = true;
+            // Use the node's actual address name for addnode removal
+            strMatchedNode = pNode->addrName;
+            nodeService = pNode->addr;  // Store for addrman removal
+        }
+    }
+    
+    // Also try to find by IP address if the string lookup failed
+    if (!fDisconnected) {
+        LOCK(cs_vNodes);
+        BOOST_FOREACH(CNode* pnode, vNodes) {
+            if (pnode->addrName == strNode || pnode->addr.ToString() == strNode) {
+                LogPrintf("Disconnecting node %s (id=%d) by address match\n", strNode, pnode->id);
+                pnode->fDisconnect = true;
+                pnode->CloseSocketDisconnect();  // Immediate socket closure
+                fDisconnected = true;
+                // Use the node's actual address name for addnode removal
+                strMatchedNode = pnode->addrName;
+                nodeService = pnode->addr;  // Store for addrman removal
+                break;
+            }
+        }
+    }
+    
+    // If not found in active connections, try to parse the address for addrman removal
+    if (!fDisconnected) {
+        CService addr;
+        // Parse the address with port, don't use default port - extract port from input
+        int port = Params().GetDefaultPort(); // fallback
+        string hostname = strNode;
+        
+        // Split host and port manually to avoid using default port
+        size_t colon = strNode.find_last_of(':');
+        if (colon != string::npos && colon > 0) {
+            string portStr = strNode.substr(colon + 1);
+            int32_t parsedPort;
+            if (ParseInt32(portStr, &parsedPort) && parsedPort > 0 && parsedPort < 0x10000) {
+                port = parsedPort;
+                hostname = strNode.substr(0, colon);
+            }
+        }
+        
+        if (Lookup(hostname.c_str(), addr, port, false)) {
+            nodeService = addr;
+            LogPrintf("Node %s not in active connections, but parsed address %s for removal from addrman\n", 
+                      strNode, nodeService.ToString());
+        } else {
+            LogPrintf("Node %s not in active connections and unable to parse address, skipping addrman removal\n", strNode);
+            // Don't throw error, just continue without addrman removal
+        }
+    }
+    
+    // Remove from addnode list to prevent automatic reconnection
+    bool fRemovedFromAddnodes = false;
+    {
+        LOCK(cs_vAddedNodes);
+        vector<string> searchFormats;
+        searchFormats.push_back(strNode);           // Original user input
+        if (fDisconnected) {
+            searchFormats.push_back(strMatchedNode);    // Matched node's addrName if found
+        }
+        
+        // Try each format to find and remove from addnode list
+        for (const string& searchStr : searchFormats) {
+            vector<string>::iterator it = vAddedNodes.begin();
+            for(; it != vAddedNodes.end(); it++) {
+                if (searchStr == *it) {
+                    vAddedNodes.erase(it);
+                    LogPrintf("Removed %s from addnode list (matched as %s)\n", *it, searchStr);
+                    fRemovedFromAddnodes = true;
+                    break;
+                }
+            }
+            if (fRemovedFromAddnodes) break;  // Found and removed, stop searching
+        }
+    }
+    
+    // Remove from address manager (peers.dat)
+    bool fRemovedFromAddrman = false;
+    if (nodeService.IsValid()) {
+        // Use the new Remove method to delete/mark the address as bad in addrman
+        fRemovedFromAddrman = addrman.Remove(nodeService);
+        
+        if (fRemovedFromAddrman) {
+            LogPrintf("Removed/marked address %s in addrman\n", nodeService.ToString());
+            
+            // Force save the updated addrman to peers.dat
+            DumpAddresses();
+            LogPrintf("Updated peers.dat after removing %s\n", nodeService.ToString());
+        } else {
+            LogPrintf("Address %s not found in addrman\n", nodeService.ToString());
+        }
+    }
+    
+    LogPrintf("disconnectnode: %s disconnected=%s, removed_from_addnodes=%s, removed_from_addrman=%s\n", 
+              strNode, fDisconnected ? "true" : "false", 
+              fRemovedFromAddnodes ? "true" : "false",
+              fRemovedFromAddrman ? "true" : "false");
 
     return NullUniValue;
 }
@@ -459,6 +571,96 @@ UniValue getaddednodeinfo(const UniValue& params, bool fHelp, const CPubKey& myp
     }
 
     return ret;
+}
+
+UniValue getaddnodestatus(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "getaddnodestatus\n"
+            "\nReturns status information about addnode connections.\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"active_connections\": n,        (numeric) Number of active addnode connections\n"
+            "  \"max_connections\": n,           (numeric) Maximum addnode connections allowed\n"
+            "  \"configured_nodes\": n,          (numeric) Number of nodes configured via -addnode\n"
+            "  \"connection_details\": [         (array) Details of each addnode connection\n"
+            "    {\n"
+            "      \"configured_address\": \"addr\",  (string) Address as configured in addnode\n"
+            "      \"connected\": true|false,         (boolean) Connection status\n"
+            "      \"connected_address\": \"addr\",   (string) Actual connected address (if connected)\n"
+            "      \"connection_time\": n             (numeric) Time connected (if connected)\n"
+            "    }\n"
+            "  ]\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("getaddnodestatus", "")
+            + HelpExampleRpc("getaddnodestatus", "")
+        );
+
+    UniValue obj(UniValue::VOBJ);
+    UniValue details(UniValue::VARR);
+    
+    int nActiveConnections = GetAddNodeConnectionCount();
+    obj.push_back(Pair("active_connections", nActiveConnections));
+    extern int MAX_ADDNODE_CONNECTIONS;
+    obj.push_back(Pair("max_connections", MAX_ADDNODE_CONNECTIONS));
+    
+    list<string> lAddedNodes;
+    {
+        LOCK(cs_vAddedNodes);
+        BOOST_FOREACH(const std::string& strAddNode, vAddedNodes)
+            lAddedNodes.push_back(strAddNode);
+    }
+    obj.push_back(Pair("configured_nodes", (int)lAddedNodes.size()));
+    
+    // Get connection details
+    {
+        LOCK(cs_vNodes);
+        BOOST_FOREACH(const std::string& strAddNode, lAddedNodes) {
+            UniValue nodeDetail(UniValue::VOBJ);
+            nodeDetail.push_back(Pair("configured_address", strAddNode));
+            
+            bool fConnected = false;
+            int64_t nTimeConnected = 0;
+            string connectedAddress = "";
+            
+            // Try to find matching addnode connection using multiple matching strategies
+            BOOST_FOREACH(CNode* pnode, vNodes) {
+                if (pnode->fAddNode) {
+                    // Direct name match (most common case)
+                    if (pnode->addrName == strAddNode) {
+                        fConnected = true;
+                        nTimeConnected = pnode->nTimeConnected;
+                        connectedAddress = pnode->addrName;
+                        break;
+                    }
+                    
+                    // Try matching by parsing both addresses to compare them properly
+                    CService configuredAddr, connectedAddr;
+                    if (Lookup(strAddNode.c_str(), configuredAddr, Params().GetDefaultPort(), false) &&
+                        Lookup(pnode->addrName.c_str(), connectedAddr, Params().GetDefaultPort(), false)) {
+                        if (configuredAddr == connectedAddr) {
+                            fConnected = true;
+                            nTimeConnected = pnode->nTimeConnected;
+                            connectedAddress = pnode->addrName;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            nodeDetail.push_back(Pair("connected", fConnected));
+            if (fConnected) {
+                nodeDetail.push_back(Pair("connected_address", connectedAddress));
+                nodeDetail.push_back(Pair("connection_time", nTimeConnected));
+            }
+            details.push_back(nodeDetail);
+        }
+    }
+    
+    obj.push_back(Pair("connection_details", details));
+    return obj;
 }
 
 UniValue getnettotals(const UniValue& params, bool fHelp, const CPubKey& mypk)
@@ -723,6 +925,7 @@ static const CRPCCommand commands[] =
     { "network",            "addnode",                &addnode,                true  },
     { "network",            "disconnectnode",         &disconnectnode,         true  },
     { "network",            "getaddednodeinfo",       &getaddednodeinfo,       true  },
+    { "network",            "getaddnodestatus",       &getaddnodestatus,       true  },
     { "network",            "getnettotals",           &getnettotals,           true  },
     { "network",            "getnetworkinfo",         &getnetworkinfo,         true  },
     { "network",            "setban",                 &setban,                 true  },

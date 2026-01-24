@@ -1,3 +1,6 @@
+default_build_SHA256SUM = sha256sum
+default_build_DOWNLOAD_TOOL = curl -sSfL -o
+
 default_host_CC = $(host_toolchain)gcc
 default_host_CXX = $(host_toolchain)g++
 default_host_AR = $(host_toolchain)ar

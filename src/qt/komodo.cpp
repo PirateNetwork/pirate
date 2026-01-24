@@ -474,7 +474,7 @@ void KomodoApplication::createWindow(const NetworkStyle *networkStyle)
 
 void KomodoApplication::createSplashScreen(const NetworkStyle *networkStyle)
 {
-    SplashScreen *splash = new SplashScreen(0, networkStyle);
+    SplashScreen *splash = new SplashScreen(networkStyle);
     // We don't hold a direct pointer to the splash screen after creation, but the splash
     // screen will take care of deleting itself when slotFinish happens.
     splash->show();
@@ -640,8 +640,6 @@ int main(int argc, char *argv[])
     Q_INIT_RESOURCE(komodo);
     Q_INIT_RESOURCE(komodo_locale);
 
-    QApplication::setStyle("fusion");
-    KomodoApplication app(argc, argv);
 #if QT_VERSION > 0x050100
     // Generate high-dpi pixmaps
     QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
@@ -649,6 +647,9 @@ int main(int argc, char *argv[])
 #if QT_VERSION >= 0x050600
     QGuiApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
 #endif
+
+    QApplication::setStyle("fusion");
+    KomodoApplication app(argc, argv);
 #ifdef Q_OS_MAC
     QApplication::setAttribute(Qt::AA_DontShowIconsInMenus);
 #endif

@@ -10,10 +10,12 @@
 
 #include <cassert>
 #include <cstdio>
+#include <chrono>
 
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QSettings>
+#include <QResizeEvent>
 
 WalletFrame::WalletFrame(const PlatformStyle *_platformStyle, PirateOceanGUI *_gui) :
     QFrame(_gui),
@@ -30,10 +32,59 @@ WalletFrame::WalletFrame(const PlatformStyle *_platformStyle, PirateOceanGUI *_g
     QLabel *noWallet = new QLabel(tr("No wallet has been loaded."));
     noWallet->setAlignment(Qt::AlignCenter);
     walletStack->addWidget(noWallet);
+    
+    // Initialize resize timer for debounced resize events
+    resizeTimer = new QTimer(this);
+    resizeTimer->setSingleShot(true);
+    resizeTimer->setInterval(250); // 250 ms delay
+    connect(resizeTimer, &QTimer::timeout, this, &WalletFrame::applyAspectRatioResize);
+    
+    // Delay enabling resize until wallet is fully loaded (5 seconds after startup)
+    QTimer::singleShot(5000, this, [this]() {
+        // Enable resize handling after startup complete
+    });
 }
 
 WalletFrame::~WalletFrame()
 {
+}
+
+void WalletFrame::resizeEvent(QResizeEvent *event)
+{
+    QFrame::resizeEvent(event);
+    
+    // Don't process resize events for the first 5 seconds after startup
+    static auto startTime = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::steady_clock::now() - startTime).count();
+    
+    if (elapsed < 5) {
+        return; // Skip resize handling during startup
+    }
+    
+    // Restart the timer on each resize event
+    // This prevents multiple executions during rapid resizing
+    resizeTimer->stop();
+    resizeTimer->start();
+}
+
+void WalletFrame::applyAspectRatioResize()
+{
+    // This function is called 1 second after the last resize event
+    // Apply 16:9 aspect ratio to the parent window
+    
+    if (!gui) return;
+    
+    int currentWidth = gui->width();
+    int currentHeight = gui->height();
+    
+    double aspectRatio = 16.0 / 9.0;
+    
+    // Calculate new dimensions maintaining aspect ratio
+    int targetHeight = static_cast<int>(currentWidth / aspectRatio);
+    
+    // Resize the parent window to maintain aspect ratio
+    gui->resize(currentWidth, targetHeight);
 }
 
 void WalletFrame::setClientModel(ClientModel *_clientModel)
@@ -191,6 +242,7 @@ void WalletFrame::gotoReceiveCoinsPage()
     for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i)
         i.value()->gotoReceiveCoinsPage();
 }
+
 /*
 void WalletFrame::gotoSendCoinsPage(QString addr)
 {

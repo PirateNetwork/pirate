@@ -135,6 +135,9 @@ public:
     /** Whether the transaction was sent/received with a watch-only address */
     bool involvesWatchAddress;
 
+    /** Whether the transaction address belongs to the wallet */
+    bool involvesOwnAddress;
+
     /** Return the unique identifier for this transaction (part) */
     QString getTxID() const;
 

@@ -35,7 +35,7 @@
 #include <univalue.h>
 #include <unistd.h>
 
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/foreach.hpp>
 #include <boost/iostreams/concepts.hpp>
@@ -47,11 +47,11 @@
 
 using namespace RPCServer;
 using namespace std;
+using namespace boost::placeholders;
 extern uint16_t ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT;
 
 bool fBuilingWitnessCache = false;
 bool fInitWitnessesBuilt = false;
-bool fCleanUpMode = false;
 static bool fRPCRunning = false;
 static bool fRPCInWarmup = true;
 static bool fRPCNeedUnlocked = false;
@@ -595,6 +595,7 @@ static const CRPCCommand vRPCCommands[] =
     { "wallet",             "importwallet",           &importwallet,           true  },
     { "wallet",             "importaddress",          &importaddress,          true  },
     { "wallet",             "keypoolrefill",          &keypoolrefill,          true  },
+    { "wallet",             "getkeypoolsize",         &getkeypoolsize,          false  },
     { "wallet",             "listaccounts",           &listaccounts,           false },
     { "wallet",             "listaddressgroupings",   &listaddressgroupings,   false },
     { "wallet",             "listlockunspent",        &listlockunspent,        false },
@@ -635,6 +636,7 @@ static const CRPCCommand vRPCCommands[] =
     { "wallet",             "z_importkey",            &z_importkey,            true  },
     { "wallet",             "z_exportviewingkey",     &z_exportviewingkey,     true  },
     { "wallet",             "z_importviewingkey",     &z_importviewingkey,     true  },
+    { "wallet",             "z_setaddressbook",       &z_setaddressbook,       true  },
     { "wallet",             "z_exportwallet",         &z_exportwallet,         true  },
     { "wallet",             "z_importwallet",         &z_importwallet,         true  },
     { "wallet",             "opreturn_burn",          &opreturn_burn,          true  },
@@ -881,13 +883,6 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
           // Find method
           if (!pcmd)
               throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
-
-          if (fCleanUpMode)
-          if (fCleanUpMode && pcmd->name == "z_sendmany")
-              throw JSONRPCError(RPC_DISABLED_WHILE_CLEANUP, "RPC Command disabled while in cleanup mode.");
-
-          if (fCleanUpMode && pcmd->name == "z_sendmany_prepare_offline")
-              throw JSONRPCError(RPC_DISABLED_WHILE_CLEANUP, "RPC Command disabled while in cleanup mode.");
 
           if (!fInitWitnessesBuilt && pcmd->name == "z_sendmany")
               throw JSONRPCError(RPC_DISABLED_BEFORE_WITNESSES, "RPC Command disabled until witnesses are built.");

@@ -14,19 +14,27 @@ const unsigned char ZCASH_SAPLING_FVFP_PERSONALIZATION[crypto_generichash_blake2
 
 
 //! Sapling
+std::array<uint8_t, 43> SaplingPaymentAddress::GetRawBytes() const {
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << *this;
+    std::array<uint8_t, 43> rawBytes;
+    std::move(ss.begin(), ss.end(), rawBytes.begin());
+    return rawBytes;
+}
+
 uint256 SaplingPaymentAddress::GetHash() const {
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << *this;
     return Hash(ss.begin(), ss.end());
 }
 
-boost::optional<SaplingPaymentAddress> SaplingIncomingViewingKey::address(diversifier_t d) const {
+std::optional<SaplingPaymentAddress> SaplingIncomingViewingKey::address(diversifier_t d) const {
     uint256 pk_d;
     if (librustzcash_check_diversifier(d.data())) {
         librustzcash_ivk_to_pkd(this->begin(), d.data(), pk_d.begin());
         return SaplingPaymentAddress(d, pk_d);
     } else {
-        return boost::none;
+        return std::nullopt;
     }
 }
 
@@ -76,7 +84,7 @@ SaplingFullViewingKey SaplingSpendingKey::full_viewing_key() const {
 SaplingPaymentAddress SaplingSpendingKey::default_address() const {
     // Iterates within default_diversifier to ensure a valid address is returned
     auto addrOpt = full_viewing_key().in_viewing_key().address(default_diversifier(*this));
-    assert(addrOpt != boost::none);
+    assert(addrOpt != std::nullopt);
     return addrOpt.value();
 }
 

@@ -27,7 +27,6 @@
 #include <stdint.h>
 #include <vector>
 #include <string>
-#include <boost/variant/apply_visitor.hpp>
 #include <boost/variant/static_visitor.hpp>
 
 /** All alphanumeric characters except for "0", "I", "O", and "l" */
@@ -256,7 +255,7 @@ bool CBitcoinAddress::Set(const CScriptID& id)
 
 bool CBitcoinAddress::Set(const CTxDestination& dest)
 {
-    return boost::apply_visitor(CBitcoinAddressVisitor(this), dest);
+    return std::visit(CBitcoinAddressVisitor(this), dest);
 }
 
 bool CBitcoinAddress::IsValid() const
@@ -349,7 +348,7 @@ bool CCustomBitcoinAddress::Set(const CScriptID& id)
 
 bool CCustomBitcoinAddress::Set(const CTxDestination& dest)
 {
-    return boost::apply_visitor(CBitcoinAddressVisitor(this), dest);
+    return std::visit(CBitcoinAddressVisitor(this), dest);
 }
 
 bool CCustomBitcoinAddress::IsValid() const

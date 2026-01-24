@@ -189,7 +189,7 @@ QT_MOC_CPP = \
   qt/moc_updatedialog.cpp \
   qt/moc_walletframe.cpp \
   qt/moc_walletmodel.cpp \
-  qt/moc_walletview.cpp
+  qt/moc_walletview.cpp 
 
 KOMODO_MM =
 
@@ -283,6 +283,7 @@ KOMODO_QT_H = \
   qt/walletview.h \
   qt/winshutdownmonitor.h
 
+
 RES_ICONS = \
   qt/res/icons/add.png \
   qt/res/icons/address-book.png \
@@ -368,6 +369,8 @@ KOMODO_QT_BASE_CPP = \
   qt/trafficgraphwidget.cpp \
   qt/utilitydialog.cpp
 
+KOMODO_QT_POSIX_CPP =
+
 KOMODO_QT_WINDOWS_CPP = qt/winshutdownmonitor.cpp
 
 KOMODO_QT_WALLET_CPP = \
@@ -417,6 +420,8 @@ reset:=$(shell tput sgr0)
 KOMODO_QT_CPP = $(KOMODO_QT_BASE_CPP)
 if TARGET_WINDOWS
 KOMODO_QT_CPP += $(KOMODO_QT_WINDOWS_CPP)
+else
+KOMODO_QT_CPP += $(KOMODO_QT_POSIX_CPP)
 endif
 if ENABLE_WALLET
 KOMODO_QT_CPP += $(KOMODO_QT_WALLET_CPP)
@@ -521,7 +526,10 @@ endif
 #	@rm -f komodod$(EXEEXT)
 #	$(AM_V_CXXLD)$(komodod_LINK) $(komodod_OBJECTS) $(komodod_LDADD) $(LIBS)
 
-qt_komodo_qt_LDADD = $(LIBBITCOIN_SERVER) qt/libkomodoqt.a
+qt_komodo_qt_LDADD = $(LIBBITCOIN_SERVER) \
+  $(CURL_LIBS) \
+  $(ARCHIVE_LIBS) \
+  qt/libkomodoqt.a
 if ENABLE_ZMQ
 qt_komodo_qt_LDADD += $(LIBBITCOIN_ZMQ) $(ZMQ_LIBS)
 endif

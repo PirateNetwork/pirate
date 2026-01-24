@@ -23,11 +23,11 @@
 
 #include "primitives/block.h"
 
-#include <boost/optional.hpp>
 #include <stdint.h>
 
 class CBlockIndex;
 class CScript;
+class CPubKey;
 #ifdef ENABLE_WALLET
 class CReserveKey;
 class CWallet;
@@ -40,13 +40,20 @@ namespace Consensus { struct Params; };
 struct CBlockTemplate
 {
     CBlock block;
+    // Cached whenever we update `block`, so we can update hashBlockCommitments
+    // when we change the coinbase transaction.
+    uint256 hashChainHistoryRoot;
+    // Cached whenever we update `block`, so we can return it from `getblocktemplate`
+    // (enabling the caller to update `hashBlockCommitments` when they change
+    // `hashPrevBlock`).
+    uint256 hashAuthDataRoot;
     std::vector<CAmount> vTxFees;
     std::vector<int64_t> vTxSigOps;
 };
 #define KOMODO_MAXGPUCOUNT 65
 
 /*****
- * @breif Generate a new block based on mempool txs, without valid proof-of-work 
+ * @breif Generate a new block based on mempool txs, without valid proof-of-work
  * @param _pk the public key
  * @param _scriptPubKeyIn the script for the public key
  * @param gpucount assists in calculating the block's nTime
@@ -55,17 +62,16 @@ struct CBlockTemplate
  */
 CBlockTemplate* CreateNewBlock(const CPubKey _pk,const CScript& _scriptPubKeyIn, int32_t gpucount, bool isStake = false);
 #ifdef ENABLE_WALLET
-boost::optional<CScript> GetMinerScriptPubKey(CReserveKey& reservekey);
 CBlockTemplate* CreateNewBlockWithKey(CReserveKey& reservekey, int32_t nHeight, int32_t gpucount, bool isStake = false);
 #else
-boost::optional<CScript> GetMinerScriptPubKey();
 CBlockTemplate* CreateNewBlockWithKey();
 #endif
 
-#ifdef ENABLE_MINING
+
 /** Modify the extranonce in a block */
 void IncrementExtraNonce(CBlock* pblock, CBlockIndex* pindexPrev, unsigned int& nExtraNonce);
 /** Run the miner threads */
+#ifdef ENABLE_MINING
  #ifdef ENABLE_WALLET
 void GenerateBitcoins(bool fGenerate, CWallet* pwallet, int nThreads);
  #else

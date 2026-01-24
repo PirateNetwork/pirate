@@ -10,7 +10,6 @@
 #include <script/script.h>
 #include <util/strencodings.h>
 
-#include <boost/variant/apply_visitor.hpp>
 #include <boost/variant/static_visitor.hpp>
 
 #include <assert.h>
@@ -106,6 +105,19 @@ public:
         return bech32::Encode(m_params.Bech32HRP(CChainParams::SAPLING_PAYMENT_ADDRESS), data);
     }
 
+    std::string operator()(const libzcash::OrchardPaymentAddressPirate& zaddr) const
+    {
+        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+        ss << zaddr;
+        // ConvertBits requires unsigned char, but CDataStream uses char
+        std::vector<unsigned char> seraddr(ss.begin(), ss.end());
+        std::vector<unsigned char> data;
+        // See calculation comment below
+        data.reserve((seraddr.size() * 8 + 4) / 5);
+        ConvertBits<8, 5, true>([&](unsigned char c) { data.push_back(c); }, seraddr.begin(), seraddr.end());
+        return bech32::Encode(m_params.Bech32HRP(CChainParams::ORCHARD_PAYMENT_ADDRESS), data);
+    }
+
     std::string operator()(const libzcash::InvalidEncoding& no) const { return {}; }
 };
 
@@ -144,6 +156,22 @@ public:
         return ret;
     }
 
+    std::string operator()(const libzcash::OrchardExtendedFullViewingKeyPirate& extfvk) const
+    {
+        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+        ss << extfvk;
+        // ConvertBits requires unsigned char, but CDataStream uses char
+        std::vector<unsigned char> serkey(ss.begin(), ss.end());
+        std::vector<unsigned char> data;
+        // See calculation comment below
+        data.reserve((serkey.size() * 8 + 4) / 5);
+        ConvertBits<8, 5, true>([&](unsigned char c) { data.push_back(c); }, serkey.begin(), serkey.end());
+        std::string ret = bech32::Encode(m_params.Bech32HRP(CChainParams::ORCHARD_EXTENDED_FVK), data);
+        memory_cleanse(serkey.data(), serkey.size());
+        memory_cleanse(data.data(), data.size());
+        return ret;
+    }
+
     std::string operator()(const libzcash::InvalidEncoding& no) const { return {}; }
 };
 
@@ -166,6 +194,22 @@ public:
         data.reserve((serkey.size() * 8 + 4) / 5);
         ConvertBits<8, 5, true>([&](unsigned char c) { data.push_back(c); }, serkey.begin(), serkey.end());
         std::string ret = bech32::Encode(m_params.Bech32HRP(CChainParams::SAPLING_DIVERSIFIED_EXTENDED_FVK), data);
+        memory_cleanse(serkey.data(), serkey.size());
+        memory_cleanse(data.data(), data.size());
+        return ret;
+    }
+
+    std::string operator()(const libzcash::OrchardDiversifiedExtendedFullViewingKeyPirate& extfvk) const
+    {
+        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+        ss << extfvk;
+        // ConvertBits requires unsigned char, but CDataStream uses char
+        std::vector<unsigned char> serkey(ss.begin(), ss.end());
+        std::vector<unsigned char> data;
+        // See calculation comment below
+        data.reserve((serkey.size() * 8 + 4) / 5);
+        ConvertBits<8, 5, true>([&](unsigned char c) { data.push_back(c); }, serkey.begin(), serkey.end());
+        std::string ret = bech32::Encode(m_params.Bech32HRP(CChainParams::ORCHARD_DIVERSIFIED_EXTENDED_FVK), data);
         memory_cleanse(serkey.data(), serkey.size());
         memory_cleanse(data.data(), data.size());
         return ret;
@@ -209,6 +253,22 @@ public:
         return ret;
     }
 
+    std::string operator()(const libzcash::OrchardExtendedSpendingKeyPirate& zkey) const
+    {
+        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+        ss << zkey;
+        // ConvertBits requires unsigned char, but CDataStream uses char
+        std::vector<unsigned char> serkey(ss.begin(), ss.end());
+        std::vector<unsigned char> data;
+        // See calculation comment below
+        data.reserve((serkey.size() * 8 + 4) / 5);
+        ConvertBits<8, 5, true>([&](unsigned char c) { data.push_back(c); }, serkey.begin(), serkey.end());
+        std::string ret = bech32::Encode(m_params.Bech32HRP(CChainParams::ORCHARD_EXTENDED_SPEND_KEY), data);
+        memory_cleanse(serkey.data(), serkey.size());
+        memory_cleanse(data.data(), data.size());
+        return ret;
+    }
+
     std::string operator()(const libzcash::InvalidEncoding& no) const { return {}; }
 };
 
@@ -236,6 +296,22 @@ public:
         return ret;
     }
 
+    std::string operator()(const libzcash::OrchardDiversifiedExtendedSpendingKeyPirate& zkey) const
+    {
+        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+        ss << zkey;
+        // ConvertBits requires unsigned char, but CDataStream uses char
+        std::vector<unsigned char> serkey(ss.begin(), ss.end());
+        std::vector<unsigned char> data;
+        // See calculation comment below
+        data.reserve((serkey.size() * 8 + 4) / 5);
+        ConvertBits<8, 5, true>([&](unsigned char c) { data.push_back(c); }, serkey.begin(), serkey.end());
+        std::string ret = bech32::Encode(m_params.Bech32HRP(CChainParams::ORCHARD_DIVERSIFIED_EXTENDED_SPEND_KEY), data);
+        memory_cleanse(serkey.data(), serkey.size());
+        memory_cleanse(data.data(), data.size());
+        return ret;
+    }
+
     std::string operator()(const libzcash::InvalidEncoding& no) const { return {}; }
 };
 
@@ -244,11 +320,17 @@ public:
 // regular serialized size in bytes, convert to bits, and then
 // perform ceiling division to get the number of 5-bit clusters.
 const size_t ConvertedSaplingPaymentAddressSize = ((32 + 11) * 8 + 4) / 5;
-const size_t ConvertedSaplingExtendedFullViewingKeySize = (ZIP32_XFVK_SIZE * 8 + 4) / 5;
-const size_t ConvertedSaplingDiversifiedExtendedFullViewingKeySize = (ZIP32_DXFVK_SIZE * 8 + 4) / 5;
-const size_t ConvertedSaplingExtendedSpendingKeySize = (ZIP32_XSK_SIZE * 8 + 4) / 5;
-const size_t ConvertedSaplingDiversifiedExtendedSpendingKeySize = (ZIP32_DXSK_SIZE * 8 + 4) / 5;
-const size_t ConvertedSaplingIncomingViewingKeySize = (32 * 8 + 4) / 5;
+const size_t ConvertedSaplingExtendedFullViewingKeySize = (SAPLING_ZIP32_XFVK_SIZE * 8 + 4) / 5;
+const size_t ConvertedSaplingDiversifiedExtendedFullViewingKeySize = (SAPLING_ZIP32_DXFVK_SIZE * 8 + 4) / 5;
+const size_t ConvertedSaplingExtendedSpendingKeySize = (SAPLING_ZIP32_XSK_SIZE * 8 + 4) / 5;
+const size_t ConvertedSaplingDiversifiedExtendedSpendingKeySize = (SAPLING_ZIP32_DXSK_SIZE * 8 + 4) / 5;
+
+const size_t ConvertedOrchardPaymentAddressSize = (libzcash::SerializedOrchardPaymentAddressSize * 8 + 4) / 5;
+const size_t ConvertedOrchardExtendedFullViewingKeySize = (libzcash::SerializedOrchardExtendedFullViewingKeySize * 8 + 4) / 5;
+const size_t ConvertedOrchardDiversifiedExtendedFullViewingKeySize = (libzcash::SerializedOrchardDiversifiedExtendedFullViewingKeySize * 8 + 4) / 5;
+const size_t ConvertedOrchardExtendedSpendingKeySize = (libzcash::SerializedOrchardExtendedSpendingKeySize * 8 + 4) / 5;
+const size_t ConvertedOrchardDiversifiedExtendedSpendingKeySize = (libzcash::SerializedOrchardDiversifiedExtendedSpendingKeySize * 8 + 4) / 5;
+
 } // namespace
 
 CKey DecodeSecret(const std::string& str)
@@ -358,7 +440,7 @@ std::string EncodeExtKey(const CExtKey& key)
 
 std::string EncodeDestination(const CTxDestination& dest)
 {
-    return boost::apply_visitor(DestinationEncoder(Params()), dest);
+    return std::visit(DestinationEncoder(Params()), dest);
 }
 
 CTxDestination DecodeDestination(const std::string& str)
@@ -378,7 +460,7 @@ bool IsValidDestinationString(const std::string& str)
 
 std::string EncodePaymentAddress(const libzcash::PaymentAddress& zaddr)
 {
-    return boost::apply_visitor(PaymentAddressEncoder(Params()), zaddr);
+    return std::visit(PaymentAddressEncoder(Params()), zaddr);
 }
 
 libzcash::PaymentAddress DecodePaymentAddress(const std::string& str)
@@ -396,28 +478,47 @@ libzcash::PaymentAddress DecodePaymentAddress(const std::string& str)
         }
     }
     data.clear();
-    auto bech = bech32::Decode(str);
-    if (bech.first == Params().Bech32HRP(CChainParams::SAPLING_PAYMENT_ADDRESS) &&
-        bech.second.size() == ConvertedSaplingPaymentAddressSize) {
+    auto bechSapAddr = bech32::Decode(str);
+    if (bechSapAddr.first == Params().Bech32HRP(CChainParams::SAPLING_PAYMENT_ADDRESS) &&
+        bechSapAddr.second.size() == ConvertedSaplingPaymentAddressSize) {
         // Bech32 decoding
-        data.reserve((bech.second.size() * 5) / 8);
-        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bech.second.begin(), bech.second.end())) {
+        data.reserve((bechSapAddr.second.size() * 5) / 8);
+        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bechSapAddr.second.begin(), bechSapAddr.second.end())) {
             CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
             libzcash::SaplingPaymentAddress ret;
             ss >> ret;
+            memory_cleanse(ss.data(), ss.size());
+            memory_cleanse(data.data(), data.size());
+            memory_cleanse(bechSapAddr.second.data(), bechSapAddr.second.size());
+            return ret;
+        }
+    }
+    data.clear();
+    auto bechOrchAddr = bech32::Decode(str);
+    if (bechOrchAddr.first == Params().Bech32HRP(CChainParams::ORCHARD_PAYMENT_ADDRESS) &&
+        bechOrchAddr.second.size() == ConvertedOrchardPaymentAddressSize) {
+        // Bech32 decoding
+        data.reserve((bechOrchAddr.second.size() * 5) / 8);
+        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bechOrchAddr.second.begin(), bechOrchAddr.second.end())) {
+            CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
+            libzcash::OrchardPaymentAddressPirate ret;
+            ss >> ret;
+            memory_cleanse(ss.data(), ss.size());
+            memory_cleanse(data.data(), data.size());
+            memory_cleanse(bechOrchAddr.second.data(), bechOrchAddr.second.size());
             return ret;
         }
     }
     return libzcash::InvalidEncoding();
 }
 
-bool IsValidPaymentAddressString(const std::string& str, uint32_t consensusBranchId) {
-    return IsValidPaymentAddress(DecodePaymentAddress(str), consensusBranchId);
+bool IsValidPaymentAddressString(const std::string& str) {
+    return IsValidPaymentAddress(DecodePaymentAddress(str));
 }
 
 std::string EncodeViewingKey(const libzcash::ViewingKey& vk)
 {
-    return boost::apply_visitor(ViewingKeyEncoder(Params()), vk);
+    return std::visit(ViewingKeyEncoder(Params()), vk);
 }
 
 libzcash::ViewingKey DecodeViewingKey(const std::string& str)
@@ -437,15 +538,34 @@ libzcash::ViewingKey DecodeViewingKey(const std::string& str)
         }
     }
     data.clear();
-    auto bechFvk = bech32::Decode(str);
-    if(bechFvk.first == Params().Bech32HRP(CChainParams::SAPLING_EXTENDED_FVK) &&
-       bechFvk.second.size() == ConvertedSaplingExtendedFullViewingKeySize) {
+    auto bechSapFvk = bech32::Decode(str);
+    if(bechSapFvk.first == Params().Bech32HRP(CChainParams::SAPLING_EXTENDED_FVK) &&
+       bechSapFvk.second.size() == ConvertedSaplingExtendedFullViewingKeySize) {
         // Bech32 decoding
-        data.reserve((bechFvk.second.size() * 5) / 8);
-        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bechFvk.second.begin(), bechFvk.second.end())) {
+        data.reserve((bechSapFvk.second.size() * 5) / 8);
+        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bechSapFvk.second.begin(), bechSapFvk.second.end())) {
             CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
             libzcash::SaplingExtendedFullViewingKey ret;
             ss >> ret;
+            memory_cleanse(ss.data(), ss.size());
+            memory_cleanse(data.data(), data.size());
+            memory_cleanse(bechSapFvk.second.data(), bechSapFvk.second.size());
+            return ret;
+        }
+    }
+    data.clear();
+    auto bechOrchFvk = bech32::Decode(str);
+    if(bechOrchFvk.first == Params().Bech32HRP(CChainParams::ORCHARD_EXTENDED_FVK) &&
+       bechOrchFvk.second.size() == ConvertedOrchardExtendedFullViewingKeySize) {
+        // Bech32 decoding
+        data.reserve((bechOrchFvk.second.size() * 5) / 8);
+        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bechOrchFvk.second.begin(), bechOrchFvk.second.end())) {
+            CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
+            libzcash::OrchardExtendedFullViewingKeyPirate ret;
+            ss >> ret;
+            memory_cleanse(ss.data(), ss.size());
+            memory_cleanse(data.data(), data.size());
+            memory_cleanse(bechOrchFvk.second.data(), bechOrchFvk.second.size());
             return ret;
         }
     }
@@ -454,7 +574,7 @@ libzcash::ViewingKey DecodeViewingKey(const std::string& str)
 
 std::string EncodeSpendingKey(const libzcash::SpendingKey& zkey)
 {
-    return boost::apply_visitor(SpendingKeyEncoder(Params()), zkey);
+    return std::visit(SpendingKeyEncoder(Params()), zkey);
 }
 
 libzcash::SpendingKey DecodeSpendingKey(const std::string& str)
@@ -474,16 +594,34 @@ libzcash::SpendingKey DecodeSpendingKey(const std::string& str)
         }
     }
     data.clear();
-    auto bech = bech32::Decode(str);
-    if (bech.first == Params().Bech32HRP(CChainParams::SAPLING_EXTENDED_SPEND_KEY) &&
-        bech.second.size() == ConvertedSaplingExtendedSpendingKeySize) {
+    auto bechSapSK = bech32::Decode(str);
+    if (bechSapSK.first == Params().Bech32HRP(CChainParams::SAPLING_EXTENDED_SPEND_KEY) &&
+        bechSapSK.second.size() == ConvertedSaplingExtendedSpendingKeySize) {
         // Bech32 decoding
-        data.reserve((bech.second.size() * 5) / 8);
-        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bech.second.begin(), bech.second.end())) {
+        data.reserve((bechSapSK.second.size() * 5) / 8);
+        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bechSapSK.second.begin(), bechSapSK.second.end())) {
             CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
             libzcash::SaplingExtendedSpendingKey ret;
             ss >> ret;
+            memory_cleanse(ss.data(), ss.size());
             memory_cleanse(data.data(), data.size());
+            memory_cleanse(bechSapSK.second.data(), bechSapSK.second.size());
+            return ret;
+        }
+    }
+    data.clear();
+    auto bechOrchSK = bech32::Decode(str);
+    if (bechOrchSK.first == Params().Bech32HRP(CChainParams::ORCHARD_EXTENDED_SPEND_KEY) &&
+        bechOrchSK.second.size() == ConvertedOrchardExtendedSpendingKeySize) {
+        // Bech32 decoding
+        data.reserve((bechOrchSK.second.size() * 5) / 8);
+        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bechOrchSK.second.begin(), bechOrchSK.second.end())) {
+            CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
+            libzcash::OrchardExtendedSpendingKeyPirate ret;
+            ss >> ret;
+            memory_cleanse(ss.data(), ss.size());
+            memory_cleanse(data.data(), data.size());
+            memory_cleanse(bechOrchSK.second.data(), bechOrchSK.second.size());
             return ret;
         }
     }
@@ -493,7 +631,7 @@ libzcash::SpendingKey DecodeSpendingKey(const std::string& str)
 
 std::string EncodeDiversifiedSpendingKey(const libzcash::DiversifiedSpendingKey& zkey)
 {
-    return boost::apply_visitor(DiversifiedSpendingKeyEncoder(Params()), zkey);
+    return std::visit(DiversifiedSpendingKeyEncoder(Params()), zkey);
 }
 
 libzcash::DiversifiedSpendingKey DecodeDiversifiedSpendingKey(const std::string& str)
@@ -508,7 +646,23 @@ libzcash::DiversifiedSpendingKey DecodeDiversifiedSpendingKey(const std::string&
             CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
             libzcash::SaplingDiversifiedExtendedSpendingKey ret;
             ss >> ret;
+            memory_cleanse(ss.data(), ss.size());
             memory_cleanse(data.data(), data.size());
+            memory_cleanse(bech.second.data(), bech.second.size());
+            return ret;
+        }
+    }
+    if (bech.first == Params().Bech32HRP(CChainParams::ORCHARD_DIVERSIFIED_EXTENDED_SPEND_KEY) &&
+        bech.second.size() == ConvertedOrchardDiversifiedExtendedSpendingKeySize) {
+        // Bech32 decoding
+        data.reserve((bech.second.size() * 5) / 8);
+        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bech.second.begin(), bech.second.end())) {
+            CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
+            libzcash::OrchardDiversifiedExtendedSpendingKeyPirate ret;
+            ss >> ret;
+            memory_cleanse(ss.data(), ss.size());
+            memory_cleanse(data.data(), data.size());
+            memory_cleanse(bech.second.data(), bech.second.size());
             return ret;
         }
     }
@@ -518,7 +672,7 @@ libzcash::DiversifiedSpendingKey DecodeDiversifiedSpendingKey(const std::string&
 
 std::string EncodeDiversifiedViewingKey(const libzcash::DiversifiedViewingKey& zkey)
 {
-    return boost::apply_visitor(DiversifiedViewingKeyEncoder(Params()), zkey);
+    return std::visit(DiversifiedViewingKeyEncoder(Params()), zkey);
 }
 
 libzcash::DiversifiedViewingKey DecodeDiversifiedViewingKey(const std::string& str)
@@ -533,7 +687,23 @@ libzcash::DiversifiedViewingKey DecodeDiversifiedViewingKey(const std::string& s
             CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
             libzcash::SaplingDiversifiedExtendedFullViewingKey ret;
             ss >> ret;
+            memory_cleanse(ss.data(), ss.size());
             memory_cleanse(data.data(), data.size());
+            memory_cleanse(bech.second.data(), bech.second.size());
+            return ret;
+        }
+    }
+    if (bech.first == Params().Bech32HRP(CChainParams::ORCHARD_DIVERSIFIED_EXTENDED_FVK) &&
+        bech.second.size() == ConvertedOrchardDiversifiedExtendedFullViewingKeySize) {
+        // Bech32 decoding
+        data.reserve((bech.second.size() * 5) / 8);
+        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bech.second.begin(), bech.second.end())) {
+            CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
+            libzcash::OrchardDiversifiedExtendedFullViewingKeyPirate ret;
+            ss >> ret;
+            memory_cleanse(ss.data(), ss.size());
+            memory_cleanse(data.data(), data.size());
+            memory_cleanse(bech.second.data(), bech.second.size());
             return ret;
         }
     }

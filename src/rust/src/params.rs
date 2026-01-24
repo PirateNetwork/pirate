@@ -14,7 +14,7 @@ pub(crate) enum Network {
         blossom: Option<BlockHeight>,
         heartwood: Option<BlockHeight>,
         canopy: Option<BlockHeight>,
-        nu5: Option<BlockHeight>,
+        orchard: Option<BlockHeight>,
     },
 }
 
@@ -43,10 +43,7 @@ pub(crate) fn network(
     network: &str,
     overwinter: i32,
     sapling: i32,
-    blossom: i32,
-    heartwood: i32,
-    canopy: i32,
-    nu5: i32,
+    orchard: i32,
 ) -> Result<Box<Network>, &'static str> {
     let i32_to_optional_height = |n: i32| {
         if n.is_negative() {
@@ -56,16 +53,18 @@ pub(crate) fn network(
         }
     };
 
+    let non_existant_upgrade :i32 = 0;
+
     let params = match network {
         "main" => Network::Consensus(consensus::Network::MainNetwork),
         "test" => Network::Consensus(consensus::Network::TestNetwork),
         "regtest" => Network::RegTest {
             overwinter: i32_to_optional_height(overwinter),
             sapling: i32_to_optional_height(sapling),
-            blossom: i32_to_optional_height(blossom),
-            heartwood: i32_to_optional_height(heartwood),
-            canopy: i32_to_optional_height(canopy),
-            nu5: i32_to_optional_height(nu5),
+            blossom: i32_to_optional_height(orchard-30),
+            heartwood: i32_to_optional_height(orchard-20),
+            canopy: i32_to_optional_height(orchard-10),
+            orchard: i32_to_optional_height(orchard),
         },
         _ => return Err("Unsupported network kind"),
     };
@@ -83,14 +82,14 @@ impl consensus::Parameters for Network {
                 blossom,
                 heartwood,
                 canopy,
-                nu5,
+                orchard,
             } => match nu {
                 consensus::NetworkUpgrade::Overwinter => *overwinter,
                 consensus::NetworkUpgrade::Sapling => *sapling,
                 consensus::NetworkUpgrade::Blossom => *blossom,
                 consensus::NetworkUpgrade::Heartwood => *heartwood,
                 consensus::NetworkUpgrade::Canopy => *canopy,
-                consensus::NetworkUpgrade::Nu5 => *nu5,
+                consensus::NetworkUpgrade::Nu5 => *orchard,
             },
         }
     }

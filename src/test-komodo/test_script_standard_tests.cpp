@@ -199,23 +199,23 @@ namespace TestScriptStandartTests {
         s.clear();
         s << ToByteVector(pubkey) << OP_CHECKSIG;
         ASSERT_TRUE(ExtractDestination(s, address));
-        ASSERT_TRUE(boost::get<CKeyID>(&address) &&
-                    *boost::get<CKeyID>(&address) == pubkey.GetID());
+        ASSERT_TRUE(std::get_if<CKeyID>(&address) &&
+                    *std::get_if<CKeyID>(&address) == pubkey.GetID());
 
         // TX_PUBKEYHASH
         s.clear();
         s << OP_DUP << OP_HASH160 << ToByteVector(pubkey.GetID()) << OP_EQUALVERIFY << OP_CHECKSIG;
         ASSERT_TRUE(ExtractDestination(s, address));
-        ASSERT_TRUE(boost::get<CKeyID>(&address) &&
-                    *boost::get<CKeyID>(&address) == pubkey.GetID());
+        ASSERT_TRUE(std::get_if<CKeyID>(&address) &&
+                    *std::get_if<CKeyID>(&address) == pubkey.GetID());
 
         // TX_SCRIPTHASH
         CScript redeemScript(s); // initialize with leftover P2PKH script
         s.clear();
         s << OP_HASH160 << ToByteVector(CScriptID(redeemScript)) << OP_EQUAL;
         ASSERT_TRUE(ExtractDestination(s, address));
-        ASSERT_TRUE(boost::get<CScriptID>(&address) &&
-                    *boost::get<CScriptID>(&address) == CScriptID(redeemScript));
+        ASSERT_TRUE(std::get_if<CScriptID>(&address) &&
+                    *std::get_if<CScriptID>(&address) == CScriptID(redeemScript));
 
         // TX_MULTISIG
         s.clear();
@@ -249,8 +249,8 @@ namespace TestScriptStandartTests {
         ASSERT_EQ(whichType, TX_PUBKEY);
         ASSERT_EQ(addresses.size(), 1);
         ASSERT_EQ(nRequired, 1);
-        ASSERT_TRUE(boost::get<CKeyID>(&addresses[0]) &&
-                    *boost::get<CKeyID>(&addresses[0]) == pubkeys[0].GetID());
+        ASSERT_TRUE(std::get_if<CKeyID>(&addresses[0]) &&
+                    *std::get_if<CKeyID>(&addresses[0]) == pubkeys[0].GetID());
 
         // TX_PUBKEYHASH
         s.clear();
@@ -259,8 +259,8 @@ namespace TestScriptStandartTests {
         ASSERT_EQ(whichType, TX_PUBKEYHASH);
         ASSERT_EQ(addresses.size(), 1);
         ASSERT_EQ(nRequired, 1);
-        ASSERT_TRUE(boost::get<CKeyID>(&addresses[0]) &&
-                    *boost::get<CKeyID>(&addresses[0]) == pubkeys[0].GetID());
+        ASSERT_TRUE(std::get_if<CKeyID>(&addresses[0]) &&
+                    *std::get_if<CKeyID>(&addresses[0]) == pubkeys[0].GetID());
 
         // TX_SCRIPTHASH
         CScript redeemScript(s); // initialize with leftover P2PKH script
@@ -270,8 +270,8 @@ namespace TestScriptStandartTests {
         ASSERT_EQ(whichType, TX_SCRIPTHASH);
         ASSERT_EQ(addresses.size(), 1);
         ASSERT_EQ(nRequired, 1);
-        ASSERT_TRUE(boost::get<CScriptID>(&addresses[0]) &&
-                    *boost::get<CScriptID>(&addresses[0]) == CScriptID(redeemScript));
+        ASSERT_TRUE(std::get_if<CScriptID>(&addresses[0]) &&
+                    *std::get_if<CScriptID>(&addresses[0]) == CScriptID(redeemScript));
 
         // TX_MULTISIG
         s.clear();
@@ -283,10 +283,10 @@ namespace TestScriptStandartTests {
         ASSERT_EQ(whichType, TX_MULTISIG);
         ASSERT_EQ(addresses.size(), 2);
         ASSERT_EQ(nRequired, 2);
-        ASSERT_TRUE(boost::get<CKeyID>(&addresses[0]) &&
-                    *boost::get<CKeyID>(&addresses[0]) == pubkeys[0].GetID());
-        ASSERT_TRUE(boost::get<CKeyID>(&addresses[1]) &&
-                    *boost::get<CKeyID>(&addresses[1]) == pubkeys[1].GetID());
+        ASSERT_TRUE(std::get_if<CKeyID>(&addresses[0]) &&
+                    *std::get_if<CKeyID>(&addresses[0]) == pubkeys[0].GetID());
+        ASSERT_TRUE(std::get_if<CKeyID>(&addresses[1]) &&
+                    *std::get_if<CKeyID>(&addresses[1]) == pubkeys[1].GetID());
 
         // TX_NULL_DATA
         s.clear();

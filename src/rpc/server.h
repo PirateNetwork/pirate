@@ -38,7 +38,6 @@
 
 extern bool fBuilingWitnessCache;
 extern bool fInitWitnessesBuilt;
-extern bool fCleanUpMode;
 
 class AsyncRPCQueue;
 class CRPCCommand;
@@ -380,6 +379,7 @@ extern UniValue listsinceblock(const UniValue& params, bool fHelp, const CPubKey
 extern UniValue gettransaction(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue backupwallet(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue keypoolrefill(const UniValue& params, bool fHelp, const CPubKey& mypk);
+extern UniValue getkeypoolsize(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue openwallet(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue walletpassphrase(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue walletpassphrasechange(const UniValue& params, bool fHelp, const CPubKey& mypk);
@@ -416,6 +416,7 @@ extern UniValue gettxoutproof(const UniValue& params, bool fHelp, const CPubKey&
 extern UniValue verifytxoutproof(const UniValue& params, bool fHelp, const CPubKey& mypk);
 
 extern UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPubKey& mypk);
+extern UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk);
 
 extern UniValue getblockcount(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcblockchain.cpp
@@ -435,6 +436,7 @@ extern UniValue gettxout(const UniValue& params, bool fHelp, const CPubKey& mypk
 extern UniValue verifychain(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue getchaintips(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue z_gettreestate(const UniValue& params, bool fHelp, const CPubKey& mypk);
+extern UniValue z_gettreestatelegacy(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue invalidateblock(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue reconsiderblock(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue getspentinfo(const UniValue& params, bool fHelp, const CPubKey& mypk);
@@ -474,6 +476,7 @@ extern UniValue z_exportkey(const UniValue& params, bool fHelp, const CPubKey& m
 extern UniValue z_importkey(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcdump.cpp
 extern UniValue z_exportviewingkey(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcdump.cpp
 extern UniValue z_importviewingkey(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcdump.cpp
+extern UniValue z_setaddressbook(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcdump.cpp
 extern UniValue z_getnewaddresskey(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue z_setprimaryspendingkey(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
@@ -486,6 +489,7 @@ extern UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey&
 extern UniValue z_gettotalbalance(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 
 // extern UniValue enableconsolidation(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
+extern UniValue sweepstatus(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue consolidationstatus(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue consolidateaddress(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 

@@ -74,6 +74,7 @@ public:
     uint256 seedFp;
     int64_t nCreateTime; // 0 means unknown
     uint32_t saplingAccountCounter;
+    uint32_t orchardAccountCounter;
 
     CHDChain() { SetNull(); }
 
@@ -86,6 +87,7 @@ public:
         READWRITE(seedFp);
         READWRITE(nCreateTime);
         READWRITE(saplingAccountCounter);
+        READWRITE(orchardAccountCounter);
     }
 
     void SetNull()
@@ -94,6 +96,7 @@ public:
         seedFp.SetNull();
         nCreateTime = 0;
         saplingAccountCounter = 0;
+        orchardAccountCounter = 0;
     }
 };
 
@@ -214,10 +217,16 @@ public:
     bool EraseArcTx(uint256 hash);
     bool WriteCryptedArcTx(uint256 txid, uint256 chash, const std::vector<unsigned char>& vchCryptedSecret, bool txnProtected);
     bool EraseCryptedArcTx(uint256 hash);
+    
     bool WriteArcSaplingOp(uint256 nullifier, SaplingOutPoint op, bool txnProtected);
     bool WriteCryptedArcSaplingOp(uint256 nullifier, uint256 chash, const std::vector<unsigned char>& vchCryptedSecret, bool txnProtected);
     bool EraseArcSaplingOp(uint256 nullifier);
     bool EraseCryptedArcSaplingOp(uint256 chash);
+
+    bool WriteArcOrchardOp(uint256 nullifier, OrchardOutPoint op, bool txnProtected);
+    bool WriteCryptedArcOrchardOp(uint256 nullifier, uint256 chash, const std::vector<unsigned char>& vchCryptedSecret, bool txnProtected);
+    bool EraseArcOrchardOp(uint256 nullifier);
+    bool EraseCryptedArcOrchardOp(uint256 chash);
     //End Historical Wallet Tx
 
     bool WriteTx(uint256 hash, const CWalletTx& wtx, bool txnProtected);
@@ -284,7 +293,8 @@ public:
       CWallet* pwallet, std::vector<uint256>& vTxHash,
       std::vector<CWalletTx>& vWtx, std::vector<uint256>& vCTxHash,
       std::vector<uint256>& vArcHash, std::vector<uint256>& vCArcHash,
-      std::vector<uint256>& vArcSaplingNullifier, std::vector<uint256>& vCArcSaplingNullifier);
+      std::vector<uint256>& vArcSaplingNullifier, std::vector<uint256>& vCArcSaplingNullifier,
+      std::vector<uint256>& vArcOrchardNullifier, std::vector<uint256>& vCArcOrchardNullifier);
     DBErrors ZapWalletTx(CWallet* pwallet, std::vector<CWalletTx>& vWtx);
 
     //Find and Erase records that are no longer used in the wallet.
@@ -331,10 +341,10 @@ public:
         const std::vector<unsigned char> &vchCryptedSecret);
 
     //Write the last used diversifier and ivk used
-    bool WriteLastDiversifierUsed(
+    bool WriteLastSaplingDiversifierUsed(
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path);
-    bool WriteLastCryptedDiversifierUsed(
+    bool WriteLastCryptedSaplingDiversifierUsed(
         const uint256 chash,
         const libzcash::SaplingIncomingViewingKey &ivk,
         const std::vector<unsigned char> &vchCryptedSecret);
@@ -363,6 +373,55 @@ public:
     bool EraseSaplingExtendedFullViewingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk);
 
     bool WriteSaplingWitnesses(const SaplingWallet& wallet);
+    bool WriteCryptedSaplingWitnesses(const std::vector<unsigned char>& vchCryptedSecret,
+                                      const uint256 chash);
+
+    //Orchard
+    bool WriteOrchardZKey(const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+                                 const libzcash::OrchardExtendedSpendingKeyPirate &extsk,
+                                 const CKeyMetadata &keyMeta);
+    bool WriteCryptedOrchardZKey(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk,
+                                        const std::vector<unsigned char>& vchCryptedSecret,
+                                        const std::vector<unsigned char>& vchCryptedMetaDataSecret);
+    bool WriteOrchardFullViewingKey(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk);
+    bool EraseOrchardFullViewingKey(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk);
+    bool WriteCryptedOrchardFullViewingKey(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk,
+                                           const std::vector<unsigned char>& vchCryptedSecret);
+    bool WriteOrchardPaymentAddress(const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+                                    const libzcash::OrchardPaymentAddressPirate &addr);
+    bool WriteCryptedOrchardPaymentAddress(const libzcash::OrchardPaymentAddressPirate &addr,
+                                           const uint256 chash,
+                                           const std::vector<unsigned char> &vchCryptedSecret);
+
+     //Wrtie the address, ivk and path of diversified address to the wallet
+     bool WriteOrchardDiversifiedAddress(
+         const libzcash::OrchardPaymentAddressPirate &addr,
+         const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+         const blob88 &path);
+     bool WriteCryptedOrchardDiversifiedAddress(
+         const libzcash::OrchardPaymentAddressPirate &addr,
+         const uint256 chash,
+         const std::vector<unsigned char> &vchCryptedSecret);
+
+     //Write the last used diversifier and ivk used
+     bool WriteLastOrchardDiversifierUsed(
+         const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+         const blob88 &path);
+     bool WriteLastCryptedOrchardDiversifierUsed(
+         const uint256 chash,
+         const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+         const std::vector<unsigned char> &vchCryptedSecret);
+
+     //Write the current spending key used to create diversified addresses to the wallet
+     bool WritePrimaryOrchardSpendingKey(
+         const libzcash::OrchardExtendedSpendingKeyPirate &key);
+     bool WriteCryptedPrimaryOrchardSpendingKey(
+                           const libzcash::OrchardExtendedSpendingKeyPirate &extsk,
+                           const std::vector<unsigned char>& vchCryptedSecret);
+
+      bool WriteOrchardWitnesses(const OrchardWallet& wallet);
+      bool WriteCryptedOrchardWitnesses(const std::vector<unsigned char>& vchCryptedSecret,
+                                        const uint256 chash);
 
 private:
     CWalletDB(const CWalletDB&);

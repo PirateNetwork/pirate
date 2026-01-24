@@ -271,6 +271,10 @@ std::shared_ptr<CBlock> generateBlock(CWallet* wallet, CValidationState* validat
         LOCK(cs_main);
         tipindex = chainActive.Tip();
     }
+
+    // Remove the reserve key from the keypool
+    reservekey.KeepKey();
+
     if (!ProcessNewBlock(1,tipindex->nHeight+1,state, NULL, pblock, true, NULL))
     {
         if (validationState != nullptr)
@@ -358,6 +362,10 @@ UniValue generate(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
         CalcPoW(pblock); // add PoW
         CValidationState state;
+
+        // Remove the reserve key from the keypool
+        reservekey.KeepKey();
+
         if (!ProcessNewBlock(1,chainActive.Tip()->nHeight+1,state, NULL, pblock, true, NULL))
             throw JSONRPCError(RPC_INTERNAL_ERROR, "ProcessNewBlock, block not accepted");
         ++nHeight;
@@ -829,6 +837,10 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp, const CPubKey& myp
     UpdateTime(pblock, Params().GetConsensus(), pindexPrev);
     pblock->nNonce = uint256();
 
+    // Update extra nonce and recalculate merkle root for proper template generation
+    unsigned int nExtraNonce = 0;
+    IncrementExtraNonce(pblock, pindexPrev, nExtraNonce);
+
     UniValue aCaps(UniValue::VARR); aCaps.push_back("proposal");
 
     UniValue txCoinbase = NullUniValue;
@@ -847,6 +859,9 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp, const CPubKey& myp
         entry.push_back(Pair("data", EncodeHexTx(tx)));
 
         entry.push_back(Pair("hash", txHash.GetHex()));
+        
+        // Add authdigest field for transactions
+        entry.push_back(Pair("authdigest", tx.GetAuthDigest().GetHex()));
 
         UniValue deps(UniValue::VARR);
         BOOST_FOREACH (const CTxIn &in, tx.vin)
@@ -891,7 +906,33 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp, const CPubKey& myp
     result.push_back(Pair("capabilities", aCaps));
     result.push_back(Pair("version", pblock->nVersion));
     result.push_back(Pair("previousblockhash", pblock->hashPrevBlock.GetHex()));
-    result.push_back(Pair("finalsaplingroothash", pblock->hashFinalSaplingRoot.GetHex()));
+    result.push_back(Pair("hashBlockCommitments", pblock->hashBlockCommitments.GetHex()));
+    
+    // Add defaultroots field for compatibility (matching Zcash format)
+    {
+        // These are items in the result object that are valid only if the
+        // block template returned by this RPC is used unmodified. Otherwise,
+        // these values must be recomputed.
+        UniValue defaultroots(UniValue::VOBJ);
+        defaultroots.push_back(Pair("merkleroot", pblock->hashMerkleRoot.GetHex()));
+        defaultroots.push_back(Pair("chainhistoryroot", pblocktemplate->hashChainHistoryRoot.GetHex()));
+        
+        // Check if we're post-Orchard activation and add NU5-specific fields
+        bool isOrchardActive = NetworkUpgradeActive(pindexPrev->nHeight + 1, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD);
+        if (isOrchardActive) {
+            defaultroots.push_back(Pair("authdataroot", pblocktemplate->hashAuthDataRoot.GetHex()));
+            defaultroots.push_back(Pair("blockcommitmentshash", pblock->hashBlockCommitments.GetHex()));
+        }
+        
+        result.push_back(Pair("defaultroots", defaultroots));
+    }
+    
+    // Add legacy fields for backward compatibility (following Zcash pattern)
+    // These 3 fields are deprecated; should be removed in a future release
+    result.push_back(Pair("blockcommitmentshash", pblock->hashBlockCommitments.GetHex()));
+    result.push_back(Pair("lightclientroothash", pblock->hashBlockCommitments.GetHex()));
+    result.push_back(Pair("finalsaplingroothash", pblock->hashBlockCommitments.GetHex()));
+    
     result.push_back(Pair("transactions", transactions));
     if (coinbasetxn) {
         assert(txCoinbase.isObject());

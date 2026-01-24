@@ -69,7 +69,7 @@ then
     shift
 elif [ "x${1:-}" = 'x--disable-tests' ]
 then
-    TEST_ARG='--enable-tests=no'
+    TEST_ARG='--enable-tests=yes'
     shift
 fi
 

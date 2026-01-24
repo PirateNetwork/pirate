@@ -7,6 +7,7 @@
 
 #include <QFrame>
 #include <QMap>
+#include <QTimer>
 
 class PirateOceanGUI;
 class ClientModel;
@@ -58,8 +59,14 @@ private:
     bool bOutOfSync;
 
     const PlatformStyle *platformStyle;
+    
+    QTimer *resizeTimer;
+    void applyAspectRatioResize();
 
     WalletView *currentWalletView();
+
+protected:
+    void resizeEvent(QResizeEvent *event) override;
 
 public Q_SLOTS:
     //Reset the timer to 5 minutes on activity

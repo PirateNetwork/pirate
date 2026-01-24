@@ -1,5 +1,5 @@
 
-zcash_packages := libsodium utfcpp rustcxx
+zcash_packages := libsodium rustcxx utfcpp tl_expected
 
 qt_native_packages = native_protobuf
 qt_packages = qrencode protobuf

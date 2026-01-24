@@ -3,7 +3,7 @@
 
 #include <array>
 #include <deque>
-#include <boost/optional.hpp>
+#include <optional>
 #include <boost/static_assert.hpp>
 
 #include "uint256.h"
@@ -16,6 +16,7 @@
 #include "rust/bridge.h"
 #include "rust/sapling/wallet.h"
 #include "primitives/sapling.h"
+#include "primitives/orchard.h"
 
 namespace libzcash {
 
@@ -214,11 +215,11 @@ public:
 
 private:
     static EmptyMerkleRoots<Depth, Hash> emptyroots;
-    boost::optional<Hash> left;
-    boost::optional<Hash> right;
+    std::optional<Hash> left;
+    std::optional<Hash> right;
 
     // Collapsed "left" subtrees ordered toward the root of the tree.
-    std::vector<boost::optional<Hash>> parents;
+    std::vector<std::optional<Hash>> parents;
     MerklePath path(std::deque<Hash> filler_hashes = std::deque<Hash>()) const;
     Hash root(size_t depth, std::deque<Hash> filler_hashes = std::deque<Hash>()) const;
     bool is_complete(size_t depth = Depth) const;
@@ -281,7 +282,7 @@ public:
 private:
     IncrementalMerkleTree<Depth, Hash> tree;
     std::vector<Hash> filled;
-    boost::optional<IncrementalMerkleTree<Depth, Hash>> cursor;
+    std::optional<IncrementalMerkleTree<Depth, Hash>> cursor;
     size_t cursor_depth = 0;
     std::deque<Hash> partial_path() const;
     IncrementalWitness(IncrementalMerkleTree<Depth, Hash> tree) : tree(tree) {}
@@ -403,6 +404,13 @@ public:
         return inner->append_bundle(bundle.GetDetails());
     }
 
+    // Append a note commitment to the frontier (for testing)
+    merkle_frontier::SaplingAppendResult append(uint256 cmu) {
+        std::array<uint8_t, 32> cmu_bytes;
+        std::copy(cmu.begin(), cmu.end(), cmu_bytes.begin());
+        return inner->append(cmu_bytes);
+    }
+
     const uint256 root() const {
         return uint256::FromRawBytes(inner->root());
     }
@@ -436,5 +444,104 @@ public:
     }
 };
 
+class OrchardWallet;
+class OrchardMerkleFrontierLegacySer;
+
+class OrchardMerkleFrontier
+{
+private:
+    /// An incremental Sinsemilla tree. Memory is allocated by Rust.
+    rust::Box<merkle_frontier::OrchardFrontier> inner;
+
+    friend class OrchardWallet;
+    friend class OrchardMerkleFrontierLegacySer;
+public:
+    OrchardMerkleFrontier() : inner(merkle_frontier::new_orchard()) {}
+
+    OrchardMerkleFrontier(OrchardMerkleFrontier&& frontier) : inner(std::move(frontier.inner)) {}
+
+    OrchardMerkleFrontier(const OrchardMerkleFrontier& frontier) :
+        inner(frontier.inner->box_clone()) {}
+
+    OrchardMerkleFrontier& operator=(OrchardMerkleFrontier&& frontier)
+    {
+        if (this != &frontier) {
+            inner = std::move(frontier.inner);
+        }
+        return *this;
+    }
+    OrchardMerkleFrontier& operator=(const OrchardMerkleFrontier& frontier)
+    {
+        if (this != &frontier) {
+            inner = frontier.inner->box_clone();
+        }
+        return *this;
+    }
+
+    template<typename Stream>
+    void Serialize(Stream& s) const {
+        try {
+            inner->serialize(*ToRustStream(s));
+        } catch (const std::exception& e) {
+            throw std::ios_base::failure(e.what());
+        }
+    }
+
+    template<typename Stream>
+    void Unserialize(Stream& s) {
+        try {
+            inner = merkle_frontier::parse_orchard(*ToRustStream(s));
+        } catch (const std::exception& e) {
+            throw std::ios_base::failure(e.what());
+        }
+    }
+
+    size_t DynamicMemoryUsage() const {
+        return inner->dynamic_memory_usage();
+    }
+
+    merkle_frontier::OrchardAppendResult AppendBundle(const OrchardBundle& bundle) {
+        return inner->append_bundle(bundle.GetDetails());
+    }
+
+    // Append a note commitment to the frontier (for testing)
+    merkle_frontier::OrchardAppendResult append(uint256 cmx) {
+        std::array<uint8_t, 32> cmx_bytes;
+        std::copy(cmx.begin(), cmx.end(), cmx_bytes.begin());
+        return inner->append(cmx_bytes);
+    }
+
+    const uint256 root() const {
+        return uint256::FromRawBytes(inner->root());
+    }
+
+    static uint256 empty_root() {
+        return uint256::FromRawBytes(merkle_frontier::orchard_empty_root());
+    }
+
+    size_t size() const {
+        return inner->size();
+    }
+
+    libzcash::SubtreeIndex current_subtree_index() const {
+        return (inner->size() >> libzcash::TRACKED_SUBTREE_HEIGHT);
+    }
+};
+
+class OrchardMerkleFrontierLegacySer {
+private:
+    const OrchardMerkleFrontier& frontier;
+public:
+    OrchardMerkleFrontierLegacySer(const OrchardMerkleFrontier& frontier): frontier(frontier) {}
+
+    template<typename Stream>
+    void Serialize(Stream& s) const {
+        try {
+            frontier.inner->serialize_legacy(*ToRustStream(s));
+        } catch (const std::exception& e) {
+            throw std::ios_base::failure(e.what());
+        }
+    }
+};
 
 #endif /* ZC_INCREMENTALMERKLETREE_H_ */

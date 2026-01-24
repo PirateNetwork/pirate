@@ -90,6 +90,20 @@
          </widget>
         </item>
         <item>
+         <layout class="QHBoxLayout" name="horizontalLayoutInputButtons">
+          <item>
+           <widget class="QPushButton" name="copyInputButton">
+            <property name="text">
+             <string>Copy</string>
+            </property>
+            <property name="toolTip">
+             <string>Copy unsigned transaction to clipboard</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
          <layout class="QHBoxLayout" name="horizontalLayoutCoinControl1">
           <property name="rightMargin">
            <number>0</number>
@@ -181,6 +195,30 @@
          </widget>
         </item>
         <item>
+         <layout class="QHBoxLayout" name="horizontalLayoutResultButtons">
+          <item>
+           <widget class="QPushButton" name="pasteResultButton">
+            <property name="text">
+             <string>Paste</string>
+            </property>
+            <property name="toolTip">
+             <string>Paste signed transaction from clipboard</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="copyResultButton">
+            <property name="text">
+             <string>Copy</string>
+            </property>
+            <property name="toolTip">
+             <string>Copy signed transaction to clipboard</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
          <widget class="QTextEdit" name="teResult">
           <property name="readOnly">
            <bool>false</bool>
@@ -206,10 +244,10 @@
         </size>
        </property>
        <property name="toolTip">
-        <string>Confirm the send action</string>
+        <string>Broadcast the signed transaction to the network</string>
        </property>
        <property name="text">
-        <string>S&amp;end transaction</string>
+        <string>&amp;Broadcast Transaction</string>
        </property>
        <property name="icon">
         <iconset resource="../komodo.qrc">

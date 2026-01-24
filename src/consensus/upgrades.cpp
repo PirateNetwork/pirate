@@ -45,9 +45,9 @@ const struct NUInfo NetworkUpgradeInfo[Consensus::MAX_NETWORK_UPGRADES] = {
         /*.strInfo =*/ "Activate Sapling.",
     },
     {
-        /*.nBranchId =*/ 0xe9ff75a6,
-        /*.strName =*/ "Canopy",
-        /*.strInfo =*/ "Activate Canopy.",
+        /*.nBranchId =*/ 0xc2d6d0b4,
+        /*.strName =*/ "Orchard",
+        /*.strInfo =*/ "Activate Orchard.",
     }
 };
 
@@ -93,6 +93,11 @@ bool NetworkUpgradeActive(
 }
 
 int CurrentEpoch(int nHeight, const Consensus::Params& params) {
+    //Always return Sprout if height is less than or equal to 0 (Genisis block)
+    if (nHeight < 0) {
+        return Consensus::BASE_SPROUT;
+    }
+
     for (auto idxInt = Consensus::MAX_NETWORK_UPGRADES - 1; idxInt >= Consensus::BASE_SPROUT; idxInt--) {
         if (NetworkUpgradeActive(nHeight, params, Consensus::UpgradeIndex(idxInt))) {
             return idxInt;
@@ -102,7 +107,7 @@ int CurrentEpoch(int nHeight, const Consensus::Params& params) {
     return Consensus::BASE_SPROUT;
 }
 
-#define NSPV_BRANCHID 0x76b809bb
+//#define NSPV_BRANCHID 0x76b809bb
 extern int32_t KOMODO_NSPV;
 #ifndef KOMODO_NSPV_SUPERLITE
 #define KOMODO_NSPV_SUPERLITE (KOMODO_NSPV > 0)
@@ -110,8 +115,8 @@ extern int32_t KOMODO_NSPV;
 
 uint32_t CurrentEpochBranchId(int nHeight, const Consensus::Params& params)
 {
-    if ( KOMODO_NSPV_SUPERLITE )
-        return(NSPV_BRANCHID);
+    // Always return the correct branch ID for the current epoch
+    // NSPV mode should still respect network upgrade consensus rules
     return NetworkUpgradeInfo[CurrentEpoch(nHeight, params)].nBranchId;
 }
 
@@ -156,9 +161,9 @@ bool IsActivationHeightForAnyUpgrade(
     return false;
 }
 
-boost::optional<int> NextEpoch(int nHeight, const Consensus::Params& params) {
+std::optional<int> NextEpoch(int nHeight, const Consensus::Params& params) {
     if (nHeight < 0) {
-        return boost::none;
+        return std::nullopt;
     }
 
     // Sprout is never pending
@@ -168,16 +173,16 @@ boost::optional<int> NextEpoch(int nHeight, const Consensus::Params& params) {
         }
     }
 
-    return boost::none;
+    return std::nullopt;
 }
 
-boost::optional<int> NextActivationHeight(
+std::optional<int> NextActivationHeight(
     int nHeight,
     const Consensus::Params& params)
 {
     auto idx = NextEpoch(nHeight, params);
     if (idx) {
-        return params.vUpgrades[idx.get()].nActivationHeight;
+        return params.vUpgrades[idx.value()].nActivationHeight;
     }
-    return boost::none;
+    return std::nullopt;
 }

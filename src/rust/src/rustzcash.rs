@@ -23,6 +23,7 @@
 use bellman::groth16::{self, Parameters, PreparedVerifyingKey, Proof, prepare_verifying_key, VerifyingKey};
 use blake2s_simd::Params as Blake2sParams;
 use bls12_381::Bls12;
+use tracing::info;
 use group::{cofactor::CofactorGroup, GroupEncoding};
 use libc::{c_uchar, size_t};
 use rand_core::{OsRng, RngCore};
@@ -69,7 +70,6 @@ use zcash_proofs::{
     sprout as old_sprout,
 };
 
-use zcash_history::{Entry as MMREntry, Tree as MMRTree, Version, V1, V2};
 use zcash_primitives::consensus::BranchId;
 
 use incrementalmerkletree::Hashable;
@@ -79,17 +79,27 @@ mod ed25519;
 mod metrics_ffi;
 mod streams_ffi;
 mod tracing_ffi;
+mod zcashd_orchard;
 
 mod bridge;
 
+mod builder_ffi;
 mod bundlecache;
+mod history;
 mod incremental_merkle_tree;
 mod merkle_frontier;
+mod orchard_actions;
+mod orchard_bundle;
+mod orchard_ffi;
+mod orchard_keys_ffi;
+mod orchard_keys;
 mod params;
 mod sapling;
 mod sprout;
 mod streams;
-mod wallet;
+mod transaction_ffi;
+mod sapling_wallet;
+mod orchard_wallet;
 
 mod test_harness_ffi;
 
@@ -106,6 +116,9 @@ static mut SPROUT_GROTH16_VK: Option<PreparedVerifyingKey<Bls12>> = None;
 static mut SAPLING_SPEND_PARAMS: Option<Parameters<Bls12>> = None;
 static mut SAPLING_OUTPUT_PARAMS: Option<Parameters<Bls12>> = None;
 static mut SPROUT_GROTH16_PARAMS_PATH: Option<PathBuf> = None;
+
+static mut ORCHARD_PK: Option<orchard::circuit::ProvingKey> = None;
+static mut ORCHARD_VK: Option<orchard::circuit::VerifyingKey> = None;
 
 /// Converts CtOption<t> into Option<T>
 fn de_ct<T>(ct: CtOption<T>) -> Option<T> {
@@ -182,6 +195,11 @@ pub extern "C" fn librustzcash_init_zksnark_params(
         let sapling_spend_vk = sapling_spend_params.vk.clone();
         let sapling_output_vk = sapling_output_params.vk.clone();
 
+        // Generate Orchard parameters.
+        info!(target: "main", "Loading Orchard parameters");
+        let orchard_pk = load_proving_keys.then(orchard::circuit::ProvingKey::build);
+        let orchard_vk = orchard::circuit::VerifyingKey::build();
+
         // Caller is responsible for calling this function once, so
         // these global mutations are safe.
         unsafe {
@@ -192,6 +210,9 @@ pub extern "C" fn librustzcash_init_zksnark_params(
             SAPLING_SPEND_VK = Some(sapling_spend_vk);
             SAPLING_OUTPUT_VK = Some(sapling_output_vk);
             SPROUT_GROTH16_VK = Some(sprout_vk);
+
+            ORCHARD_PK = orchard_pk;
+            ORCHARD_VK = Some(orchard_vk);
         }
     });
 }
@@ -1110,8 +1131,10 @@ pub extern "C" fn librustzcash_zip32_xfvk_address(
     j_ret: *mut [c_uchar; 11],
     addr_ret: *mut [c_uchar; 43],
 ) -> bool {
-    let xfvk = zip32::ExtendedFullViewingKey::read(&unsafe { *xfvk }[..])
-        .expect("valid ExtendedFullViewingKey");
+    let xfvk = match zip32::ExtendedFullViewingKey::read(&unsafe { *xfvk }[..]) {
+        Ok(xfvk) => xfvk,
+        Err(_) => return false,
+    };
     let j = zip32::DiversifierIndex(unsafe { *j });
 
     let addr = match xfvk.find_address(j) {
@@ -1126,266 +1149,6 @@ pub extern "C" fn librustzcash_zip32_xfvk_address(
     addr_ret.copy_from_slice(&addr.1.to_bytes());
 
     true
-}
-
-/// Switch the tree version on the epoch it is for.
-fn dispatch<T>(cbranch: u32, v1: impl FnOnce() -> T, v2: impl FnOnce() -> T) -> T {
-    match BranchId::try_from(cbranch).unwrap() {
-        BranchId::Sprout
-        | BranchId::Overwinter
-        | BranchId::Sapling
-        | BranchId::Heartwood
-        | BranchId::Canopy => v1(),
-        _ => v2(),
-    }
-}
-
-fn construct_mmr_tree<V: Version>(
-    // Consensus branch id
-    cbranch: u32,
-    // Length of tree in array representation
-    t_len: u32,
-
-    // Indices of provided tree nodes, length of p_len+e_len
-    ni_ptr: *const u32,
-    // Provided tree nodes data, length of p_len+e_len
-    n_ptr: *const [c_uchar; zcash_history::MAX_ENTRY_SIZE],
-
-    // Peaks count
-    p_len: size_t,
-    // Extra nodes loaded (for deletion) count
-    e_len: size_t,
-) -> Result<MMRTree<V>, &'static str> {
-    let (indices, nodes) = unsafe {
-        (
-            slice::from_raw_parts(ni_ptr, p_len + e_len),
-            slice::from_raw_parts(n_ptr, p_len + e_len),
-        )
-    };
-
-    let mut peaks: Vec<_> = indices
-        .iter()
-        .zip(nodes.iter())
-        .map(
-            |(index, node)| match MMREntry::from_bytes(cbranch, &node[..]) {
-                Ok(entry) => Ok((*index, entry)),
-                Err(_) => Err("Invalid encoding"),
-            },
-        )
-        .collect::<Result<_, _>>()?;
-    let extra = peaks.split_off(p_len);
-
-    Ok(MMRTree::new(t_len, peaks, extra))
-}
-
-#[no_mangle]
-pub extern "system" fn librustzcash_mmr_append(
-    // Consensus branch id
-    cbranch: u32,
-    // Length of tree in array representation
-    t_len: u32,
-    // Indices of provided tree nodes, length of p_len
-    ni_ptr: *const u32,
-    // Provided tree nodes data, length of p_len
-    n_ptr: *const [c_uchar; zcash_history::MAX_ENTRY_SIZE],
-    // Peaks count
-    p_len: size_t,
-    // New node pointer
-    nn_ptr: *const [u8; zcash_history::MAX_NODE_DATA_SIZE],
-    // Return of root commitment
-    rt_ret: *mut [u8; 32],
-    // Return buffer for appended leaves, should be pre-allocated of ceiling(log2(t_len)) length
-    buf_ret: *mut [c_uchar; zcash_history::MAX_NODE_DATA_SIZE],
-) -> u32 {
-    dispatch(
-        cbranch,
-        || {
-            librustzcash_mmr_append_inner::<V1>(
-                cbranch, t_len, ni_ptr, n_ptr, p_len, nn_ptr, rt_ret, buf_ret,
-            )
-        },
-        || {
-            librustzcash_mmr_append_inner::<V2>(
-                cbranch, t_len, ni_ptr, n_ptr, p_len, nn_ptr, rt_ret, buf_ret,
-            )
-        },
-    )
-}
-
-#[allow(clippy::too_many_arguments)]
-fn librustzcash_mmr_append_inner<V: Version>(
-    // Consensus branch id
-    cbranch: u32,
-    // Length of tree in array representation
-    t_len: u32,
-    // Indices of provided tree nodes, length of p_len
-    ni_ptr: *const u32,
-    // Provided tree nodes data, length of p_len
-    n_ptr: *const [c_uchar; zcash_history::MAX_ENTRY_SIZE],
-    // Peaks count
-    p_len: size_t,
-    // New node pointer
-    nn_ptr: *const [u8; zcash_history::MAX_NODE_DATA_SIZE],
-    // Return of root commitment
-    rt_ret: *mut [u8; 32],
-    // Return buffer for appended leaves, should be pre-allocated of ceiling(log2(t_len)) length
-    buf_ret: *mut [c_uchar; zcash_history::MAX_NODE_DATA_SIZE],
-) -> u32 {
-    let new_node_bytes: &[u8; zcash_history::MAX_NODE_DATA_SIZE] = unsafe {
-        match nn_ptr.as_ref() {
-            Some(r) => r,
-            None => {
-                return 0;
-            } // Null pointer passed, error
-        }
-    };
-
-    let mut tree = match construct_mmr_tree::<V>(cbranch, t_len, ni_ptr, n_ptr, p_len, 0) {
-        Ok(t) => t,
-        _ => {
-            return 0;
-        } // error
-    };
-
-    let node = match V::from_bytes(cbranch, &new_node_bytes[..]) {
-        Ok(node) => node,
-        _ => {
-            return 0;
-        } // error
-    };
-
-    let appended = match tree.append_leaf(node) {
-        Ok(appended) => appended,
-        _ => {
-            return 0;
-        }
-    };
-
-    let return_count = appended.len();
-
-    let root_node = tree
-        .root_node()
-        .expect("Just added, should resolve always; qed");
-    unsafe {
-        *rt_ret = V::hash(root_node.data());
-
-        for (idx, next_buf) in slice::from_raw_parts_mut(buf_ret, return_count)
-            .iter_mut()
-            .enumerate()
-        {
-            V::write(
-                tree.resolve_link(appended[idx])
-                    .expect("This was generated by the tree and thus resolvable; qed")
-                    .data(),
-                &mut &mut next_buf[..],
-            )
-            .expect("Write using cursor with enough buffer size cannot fail; qed");
-        }
-    }
-
-    return_count as u32
-}
-
-#[no_mangle]
-pub extern "system" fn librustzcash_mmr_delete(
-    // Consensus branch id
-    cbranch: u32,
-    // Length of tree in array representation
-    t_len: u32,
-    // Indices of provided tree nodes, length of p_len+e_len
-    ni_ptr: *const u32,
-    // Provided tree nodes data, length of p_len+e_len
-    n_ptr: *const [c_uchar; zcash_history::MAX_ENTRY_SIZE],
-    // Peaks count
-    p_len: size_t,
-    // Extra nodes loaded (for deletion) count
-    e_len: size_t,
-    // Return of root commitment
-    rt_ret: *mut [u8; 32],
-) -> u32 {
-    dispatch(
-        cbranch,
-        || librustzcash_mmr_delete_inner::<V1>(cbranch, t_len, ni_ptr, n_ptr, p_len, e_len, rt_ret),
-        || librustzcash_mmr_delete_inner::<V2>(cbranch, t_len, ni_ptr, n_ptr, p_len, e_len, rt_ret),
-    )
-}
-
-fn librustzcash_mmr_delete_inner<V: Version>(
-    // Consensus branch id
-    cbranch: u32,
-    // Length of tree in array representation
-    t_len: u32,
-    // Indices of provided tree nodes, length of p_len+e_len
-    ni_ptr: *const u32,
-    // Provided tree nodes data, length of p_len+e_len
-    n_ptr: *const [c_uchar; zcash_history::MAX_ENTRY_SIZE],
-    // Peaks count
-    p_len: size_t,
-    // Extra nodes loaded (for deletion) count
-    e_len: size_t,
-    // Return of root commitment
-    rt_ret: *mut [u8; 32],
-) -> u32 {
-    let mut tree = match construct_mmr_tree::<V>(cbranch, t_len, ni_ptr, n_ptr, p_len, e_len) {
-        Ok(t) => t,
-        _ => {
-            return 0;
-        } // error
-    };
-
-    let truncate_len = match tree.truncate_leaf() {
-        Ok(v) => v,
-        _ => {
-            return 0;
-        } // Error
-    };
-
-    unsafe {
-        *rt_ret = V::hash(
-            tree.root_node()
-                .expect("Just generated without errors, root should be resolving")
-                .data(),
-        );
-    }
-
-    truncate_len
-}
-
-#[no_mangle]
-pub extern "system" fn librustzcash_mmr_hash_node(
-    cbranch: u32,
-    n_ptr: *const [u8; zcash_history::MAX_NODE_DATA_SIZE],
-    h_ret: *mut [u8; 32],
-) -> u32 {
-    dispatch(
-        cbranch,
-        || librustzcash_mmr_hash_node_inner::<V1>(cbranch, n_ptr, h_ret),
-        || librustzcash_mmr_hash_node_inner::<V2>(cbranch, n_ptr, h_ret),
-    )
-}
-
-fn librustzcash_mmr_hash_node_inner<V: Version>(
-    cbranch: u32,
-    n_ptr: *const [u8; zcash_history::MAX_NODE_DATA_SIZE],
-    h_ret: *mut [u8; 32],
-) -> u32 {
-    let node_bytes: &[u8; zcash_history::MAX_NODE_DATA_SIZE] = unsafe {
-        match n_ptr.as_ref() {
-            Some(r) => r,
-            None => return 1,
-        }
-    };
-
-    let node = match V::from_bytes(cbranch, &node_bytes[..]) {
-        Ok(n) => n,
-        _ => return 1, // error
-    };
-
-    unsafe {
-        *h_ret = V::hash(&node);
-    }
-
-    0
 }
 
 #[no_mangle]

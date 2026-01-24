@@ -310,7 +310,7 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHead
     //{
         // Comparing to pindexLast->nHeight with >= because this function
         // returns the work required for the block after pindexLast.
-        //if (params.nPowAllowMinDifficultyBlocksAfterHeight != boost::none &&
+        //if (params.nPowAllowMinDifficultyBlocksAfterHeight != std::nullopt &&
         //    pindexLast->nHeight >= params.nPowAllowMinDifficultyBlocksAfterHeight.get())
         //{
             // Special difficulty rule for testnet:
@@ -667,9 +667,9 @@ bool CheckProofOfWork(const CBlockHeader &blkHeader, uint8_t *pubkey33, int32_t 
             }
 
             /* hf22 rule applied to stale blocks */
-            if (params.nHF22Height != boost::none) {
+            if (params.nHF22Height != std::nullopt) {
 
-                const uint32_t nHeightAfterGAPSecondBlockAllowed = params.nHF22Height.get();
+                const uint32_t nHeightAfterGAPSecondBlockAllowed = params.nHF22Height.value();
                 const uint32_t nMaxGAPAllowed = params.nMaxFutureBlockTime + 1;
 
                 /*  in KMD chain after nHeightAfterGAPSecondBlockAllowed height we should allow

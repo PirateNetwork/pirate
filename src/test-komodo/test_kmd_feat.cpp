@@ -67,13 +67,15 @@ public:
                     const uint256 &hashSproutAnchor,
                     const uint256 &hashSaplingAnchor,
                     const uint256 &hashSaplingFrontierAnchor,
+                    const uint256 &hashOrchardFrontierAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
                     CAnchorsSaplingMap &mapSaplingAnchors,
                     CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
+                    CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
                     CNullifiersMap &mapSproutNullifiers,
                     CNullifiersMap &mapSaplingNullifiers,
-                    CProofHashMap &mapZkOutputProofHash,
-                    CProofHashMap &mapZkSpendProofHash) override {
+                    CNullifiersMap &mapOrchardNullifiers,
+                    CHistoryCacheMap &historyCacheMap) override{
         return false;
     }
 
@@ -88,9 +90,11 @@ public:
 bool TestSignTx(const CKeyStore& keystore, CMutableTransaction& mtx, int32_t vini, CAmount utxovalue, const CScript scriptPubKey)
 {
     CTransaction txNewConst(mtx);
+    std::vector<CTxOut> allPrevOutputs;
+    PrecomputedTransactionData txdata(txNewConst, allPrevOutputs);
     SignatureData sigdata;
     auto consensusBranchId = CurrentEpochBranchId(chainActive.Height()+1, Params().GetConsensus());
-    if (ProduceSignature(TransactionSignatureCreator(&keystore, &txNewConst, vini, utxovalue, SIGHASH_ALL), scriptPubKey, sigdata, consensusBranchId) != 0) {
+    if (ProduceSignature(TransactionSignatureCreator(&keystore, &txNewConst, txdata, vini, utxovalue, SIGHASH_ALL), scriptPubKey, sigdata, consensusBranchId) != 0) {
         UpdateTransaction(mtx, vini, sigdata);
         return true;
     } else {

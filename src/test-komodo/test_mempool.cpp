@@ -23,7 +23,9 @@ void CreateJoinSplitSignature(CMutableTransaction& mtx, uint32_t consensusBranch
     // Empty output script.
     CScript scriptCode;
     CTransaction signTx(mtx);
-    uint256 dataToBeSigned = SignatureHash(scriptCode, signTx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId);
+    std::vector<CTxOut> allPrevOutputs;
+    PrecomputedTransactionData txdata(signTx, allPrevOutputs);
+    uint256 dataToBeSigned = SignatureHash(scriptCode, signTx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId, txdata);
     if (dataToBeSigned == one) {
         throw std::runtime_error("SignatureHash failed");
     }
@@ -68,11 +70,11 @@ public:
         return false;
     }
 
-    bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const {
+    bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const {
         return false;
     }
 
-    bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const {
+     bool GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const {
         return false;
     }
 
@@ -109,13 +111,16 @@ public:
                     const uint256 &hashBlock,
                     const uint256 &hashSproutAnchor,
                     const uint256 &hashSaplingAnchor,
+                    const uint256 &hashSaplingFrontierAnchor,
+                    const uint256 &hashOrchardFrontierAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
                     CAnchorsSaplingMap &mapSaplingAnchors,
                     CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
+                    CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
                     CNullifiersMap &mapSproutNullifiers,
                     CNullifiersMap &mapSaplingNullifiers,
-                    CProofHashMap &mapZkOutputProofHash,
-                    CProofHashMap &mapZkSpendProofHash) {
+                    CNullifiersMap &mapOrchardNullifiers,
+                    CHistoryCacheMap &historyCacheMap) {
         return false;
     }
 
@@ -286,7 +291,7 @@ TEST(Mempool, SproutV3TxWhenOverwinterActive) {
 
     LOCK( get_cs_main() );
     EXPECT_FALSE(AcceptToMemoryPool(pool, state1, tx1, false, &missingInputs));
-    EXPECT_EQ(state1.GetRejectReason(), "tx-overwinter-flag-not-set");
+    EXPECT_EQ(state1.GetRejectReason(), "tx-overwintered-flag-not-set");
 
     // Revert to default
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);

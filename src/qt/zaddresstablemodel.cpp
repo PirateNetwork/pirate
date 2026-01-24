@@ -119,9 +119,16 @@ public:
         wallet->getZAddressBalances(balances, 0, false);
 
 
-        std::set<libzcash::SaplingPaymentAddress> addresses;
-        wallet->GetSaplingPaymentAddresses(addresses);
-        for (auto addr : addresses) {
+        std::set<libzcash::SaplingPaymentAddress> sapAddresses;
+        wallet->GetSaplingPaymentAddresses(sapAddresses);
+        for (auto addr : sapAddresses) {
+            if (balances.count(addr) == 0)
+                balances[addr] = 0;
+        }
+
+        std::set<libzcash::OrchardPaymentAddressPirate> orchAddresses;
+        wallet->GetOrchardPaymentAddresses(orchAddresses);
+        for (auto addr : orchAddresses) {
             if (balances.count(addr) == 0)
                 balances[addr] = 0;
         }
@@ -132,9 +139,9 @@ public:
 
           for (std::map<QString, CAmount>::iterator bi = stringBalances.begin(); bi != stringBalances.end(); bi++) {
               QString address = bi->first;
-              QList<ZAddressTableEntry>::iterator lower = qLowerBound(
+              QList<ZAddressTableEntry>::iterator lower = std::lower_bound(
                   cachedAddressTable.begin(), cachedAddressTable.end(), address, ZAddressTableEntryLessThan());
-              QList<ZAddressTableEntry>::iterator upper = qUpperBound(
+              QList<ZAddressTableEntry>::iterator upper = std::upper_bound(
                   cachedAddressTable.begin(), cachedAddressTable.end(), address, ZAddressTableEntryLessThan());
               int lowerIndex = (lower - cachedAddressTable.begin());
               int upperIndex = (upper - cachedAddressTable.begin());
@@ -168,7 +175,7 @@ public:
                 const libzcash::PaymentAddress& zaddr = item.first;
 
                 bool mine = false;
-                auto saplingAddr = boost::get<libzcash::SaplingPaymentAddress>(&zaddr);
+                auto saplingAddr = std::get_if<libzcash::SaplingPaymentAddress>(&zaddr);
 
                 if (saplingAddr != nullptr) {
                     libzcash::SaplingIncomingViewingKey ivk;
@@ -198,20 +205,51 @@ public:
                   cachedAddressTable.append(entry);
 
                 }
+
+                auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddressPirate>(&zaddr);
+
+                if (orchardAddr != nullptr) {
+                    libzcash::OrchardIncomingViewingKeyPirate ivk;
+                    libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+                    if (wallet->GetOrchardIncomingViewingKey(*orchardAddr, ivk) &&
+                        wallet->GetOrchardFullViewingKey(ivk, extfvk) &&
+                        wallet->HaveOrchardSpendingKey(extfvk)) {
+                            mine = true;
+                    }
+
+                  CAmount balance = 0;
+                  std::map<libzcash::PaymentAddress, CAmount>::iterator it = balances.find(zaddr);
+                  if (it != balances.end()) {
+                      balance = it->second;
+                  }
+
+                  ZAddressTableEntry::Type addressType = translateTransactionType(
+                          QString::fromStdString(item.second.purpose), mine);
+                  const std::string& strName = item.second.name;
+
+                  ZAddressTableEntry entry;
+                  entry.type = addressType;
+                  entry.label = QString::fromStdString(strName);
+                  entry.address = QString::fromStdString(EncodePaymentAddress(zaddr));
+                  entry.balance = balance;
+                  entry.mine = mine;
+                  cachedAddressTable.append(entry);
+
+                }
             }
         }
-        // qLowerBound() and qUpperBound() require our cachedAddressTable list to be sorted in asc order
+        // std::lower_bound() and std::upper_bound() require our cachedAddressTable list to be sorted in asc order
         // Even though the map is already sorted this re-sorting step is needed because the originating map
         // is sorted by binary address, not by base58() address.
-        qSort(cachedAddressTable.begin(), cachedAddressTable.end(), ZAddressTableEntryLessThan());
+        std::sort(cachedAddressTable.begin(), cachedAddressTable.end(), ZAddressTableEntryLessThan());
     }
 
     void updateEntry(const QString &address, const QString &label, bool isMine, const QString &purpose, int status)
     {
         // Find address / label in model
-        QList<ZAddressTableEntry>::iterator lower = qLowerBound(
+        QList<ZAddressTableEntry>::iterator lower = std::lower_bound(
             cachedAddressTable.begin(), cachedAddressTable.end(), address, ZAddressTableEntryLessThan());
-        QList<ZAddressTableEntry>::iterator upper = qUpperBound(
+        QList<ZAddressTableEntry>::iterator upper = std::upper_bound(
             cachedAddressTable.begin(), cachedAddressTable.end(), address, ZAddressTableEntryLessThan());
         int lowerIndex = (lower - cachedAddressTable.begin());
         int upperIndex = (upper - cachedAddressTable.begin());
@@ -221,14 +259,29 @@ public:
         bool mine = false;
         ZAddressTableEntry newEntry;
         libzcash::PaymentAddress zaddr = DecodePaymentAddress(address.toStdString());
-        auto saplingAddr = boost::get<libzcash::SaplingPaymentAddress>(&zaddr);
-        if (saplingAddr != nullptr) {
-            libzcash::SaplingIncomingViewingKey ivk;
-            libzcash::SaplingExtendedFullViewingKey extfvk;
-            if (wallet->GetSaplingIncomingViewingKey(*saplingAddr, ivk) &&
-                wallet->GetSaplingFullViewingKey(ivk, extfvk) &&
-                wallet->HaveSaplingSpendingKey(extfvk)) {
-                    mine = true;
+        auto saplingAddr = std::get_if<libzcash::SaplingPaymentAddress>(&zaddr);
+        auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddressPirate>(&zaddr);
+
+        if (saplingAddr != nullptr || orchardAddr != nullptr) {
+
+            if (saplingAddr != nullptr) {
+                libzcash::SaplingIncomingViewingKey ivk;
+                libzcash::SaplingExtendedFullViewingKey extfvk;
+                if (wallet->GetSaplingIncomingViewingKey(*saplingAddr, ivk) &&
+                    wallet->GetSaplingFullViewingKey(ivk, extfvk) &&
+                    wallet->HaveSaplingSpendingKey(extfvk)) {
+                        mine = true;
+                }
+            }
+
+            if (orchardAddr != nullptr) {
+                libzcash::OrchardIncomingViewingKeyPirate ivk;
+                libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+                if (wallet->GetOrchardIncomingViewingKey(*orchardAddr, ivk) &&
+                    wallet->GetOrchardFullViewingKey(ivk, extfvk) &&
+                    wallet->HaveOrchardSpendingKey(extfvk)) {
+                        mine = true;
+                }
             }
 
             switch(status)
@@ -445,7 +498,7 @@ bool ZAddressTableModel::setData(const QModelIndex &index, const QVariant &value
             libzcash::PaymentAddress newAddress = DecodePaymentAddress(value.toString().toStdString());
             // Refuse to set invalid address, set error status and return false
 //!!!!! check validity
-//            if(boost::get<CNoDestination>(&newAddress))
+//            if(std::get_if<CNoDestination>(&newAddress))
 //            {
 //                editStatus = INVALID_ADDRESS;
 //                return false;
@@ -497,7 +550,8 @@ QVariant ZAddressTableModel::headerData(int section, Qt::Orientation orientation
 Qt::ItemFlags ZAddressTableModel::flags(const QModelIndex &index) const
 {
     if(!index.isValid())
-        return 0;
+        return Qt::NoItemFlags;
+
     ZAddressTableEntry *rec = static_cast<ZAddressTableEntry*>(index.internalPointer());
 
     Qt::ItemFlags retval = Qt::ItemIsSelectable | Qt::ItemIsEnabled;
@@ -565,9 +619,13 @@ QString ZAddressTableModel::addRow(const QString &type, const QString &label, co
         {
             strAddress = EncodePaymentAddress(wallet->GenerateNewSproutZKey());
         }
-        else
+        else if ( GetTime() < KOMODO_ORCHARD_ACTIVATION )
         {
             strAddress = EncodePaymentAddress(wallet->GenerateNewSaplingZKey());
+        }
+        else
+        {
+            strAddress = EncodePaymentAddress(wallet->GenerateNewOrchardZKey());
         }
     }
     else

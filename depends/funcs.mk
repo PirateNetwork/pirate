@@ -1,3 +1,8 @@
+CARGO_EXEC := cargo
+ifeq ($(build_os),mingw32)
+CARGO_EXEC := cargo.exe
+endif
+
 define int_vars
 #Set defaults for vars which may be overridden per-package
 $(1)_cc=$($($(1)_type)_CC)
@@ -21,7 +26,7 @@ endef
 
 define fetch_file_inner
     ( mkdir -p $$($(1)_download_dir) && echo Fetching $(3) from $(2) && \
-    $(build_DOWNLOAD) "$$($(1)_download_dir)/$(4).temp" "$(2)/$(3)" && \
+    curl --connect-timeout 30 --retry 5 --retry-delay 5 --retry-max-time 600 -L -o "$$($(1)_download_dir)/$(4).temp" "$(2)/$(3)" && \
     echo "$(5)  $$($(1)_download_dir)/$(4).temp" > $$($(1)_download_dir)/.$(4).hash && \
     $(build_SHA256SUM) -c $$($(1)_download_dir)/.$(4).hash && \
     mv $$($(1)_download_dir)/$(4).temp $$($(1)_source_dir)/$(4) && \
@@ -40,7 +45,7 @@ define vendor_crate_deps
     tar -xf $(native_rust_cached) -C $$($(1)_download_dir) && \
     tar --strip-components=1 -xf $$($(1)_source_dir)/$(2) -C $$($(1)_download_dir)/$(1) && \
 	cp $(3) $$($(1)_download_dir)/$(1)/Cargo.lock && \
-	$$($(1)_download_dir)/native/bin/cargo vendor --locked --manifest-path $$($(1)_download_dir)/$(1)/$(4) $$($(1)_download_dir)/$(CRATE_REGISTRY) && \
+	$$($(1)_download_dir)/native/bin/$(CARGO_EXEC) vendor --manifest-path $$($(1)_download_dir)/$(1)/$(4) $$($(1)_download_dir)/$(CRATE_REGISTRY) && \
 	cd $$($(1)_download_dir) && \
 	find $(CRATE_REGISTRY) | sort | tar --no-recursion -czf $$($(1)_download_dir)/$(5).temp -T - && \
     mv $$($(1)_download_dir)/$(5).temp $$($(1)_source_dir)/$(5) && \
@@ -88,7 +93,11 @@ $(1)_staging_dir=$(base_staging_dir)/$(host)/$(1)/$($(1)_version)-$($(1)_build_i
 $(1)_staging_prefix_dir:=$$($(1)_staging_dir)$($($(1)_type)_prefix)
 $(1)_extract_dir:=$(base_build_dir)/$(host)/$(1)/$($(1)_version)-$($(1)_build_id)
 $(1)_download_dir:=$(base_download_dir)/$(1)-$($(1)_version)
+ifeq ($$($(1)_build_subdir),.)
+$(1)_build_dir:=$$($(1)_extract_dir)
+else
 $(1)_build_dir:=$$($(1)_extract_dir)/$$($(1)_build_subdir)
+endif
 $(1)_cached_checksum:=$(BASE_CACHE)/$(host)/$(1)/$(1)-$($(1)_version)-$($(1)_build_id).tar.gz.hash
 $(1)_patch_dir:=$(base_build_dir)/$(host)/$(1)/$($(1)_version)-$($(1)_build_id)/.patches-$($(1)_build_id)
 $(1)_prefixbin:=$($($(1)_type)_prefix)/bin/
@@ -213,7 +222,12 @@ $($(1)_configured): | $($(1)_preprocessed)
 	$(AT)echo Configuring $(1)...
 	$(AT)rm -rf $(host_prefix); mkdir -p $(host_prefix)/lib; cd $(host_prefix); $(foreach package,$($(1)_all_dependencies), tar --no-same-owner -xf $($(package)_cached); )
 	$(AT)mkdir -p $$(@D)
-	$(AT)+cd $$(@D); $($(1)_config_env) $(call $(1)_config_cmds, $(1))
+	$(AT)+ (cd $$(@D) && \
+	 echo "DEBUG: In directory before configure:" && \
+	 pwd && \
+	 echo "DEBUG: Contents of directory before configure:" && \
+	 ls -la && \
+	 $($(1)_config_env) $(call $(1)_config_cmds, $(1)))
 	$(AT)touch $$@
 $($(1)_built): | $($(1)_configured)
 	$(AT)echo Building $(1)...

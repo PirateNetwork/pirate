@@ -84,6 +84,11 @@ public:
         cachedWallet.clear();
 
         bool fIncludeWatchonly = true;
+        
+        // Declare arcTxList outside lock scope so we can use it after releasing locks
+        QList<RpcArcTransaction> arcTxList;
+        arcTxList.reserve(200); // Pre-allocate for expected size
+        
         {
             LOCK2(cs_main, wallet->cs_wallet);
 
@@ -124,24 +129,26 @@ public:
             }
 
 
-
+            // Collect RpcArcTransaction data under lock, then process outside
             for (map<std::pair<int,int>, uint256>::reverse_iterator it = sortedArchive.rbegin(); it != sortedArchive.rend(); ++it)
             {
+                if (arcTxList.size() >= 200) break;  // Check limit before processing
 
                 uint256 txid = (*it).second;
                 RpcArcTransaction arcTx;
 
-                if (wallet->mapWallet.count(txid)) {
-
-                    CWalletTx& wtx = wallet->mapWallet[txid];
+                // Use find() instead of count() + operator[] to avoid duplicate lookup
+                std::map<uint256, CWalletTx>::iterator mi = wallet->mapWallet.find(txid);
+                if (mi != wallet->mapWallet.end()) {
+                    CWalletTx& wtx = mi->second;
 
                     if (!CheckFinalTx(wtx))
                         continue;
 
-                    if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapSproutNoteData.size() == 0 && !wtx.IsTrusted())
+                    if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapOrchardNoteData.size() == 0 && !wtx.IsTrusted())
                         continue;
 
-                    //Excude transactions with less confirmations than required
+                    //Exclude transactions with less confirmations than required
                     if (wtx.GetDepthInMainChain() < 0 )
                         continue;
 
@@ -153,13 +160,15 @@ public:
 
                     if (arcTx.blockHash.IsNull() || mapBlockIndex.count(arcTx.blockHash) == 0)
                       continue;
-
                 }
 
-                cachedWallet.append(TransactionRecord::decomposeTransaction(arcTx));
-
-                if (cachedWallet.size() >= 200) break;
+                arcTxList.append(arcTx);
             }
+        } // Release locks here before expensive decomposeTransaction calls
+
+        // Process transactions outside of locks - decomposeTransaction is pure computation
+        for (const RpcArcTransaction& arcTx : arcTxList) {
+            cachedWallet.append(TransactionRecord::decomposeTransaction(arcTx));
         }
     }
 
@@ -171,22 +180,17 @@ public:
     void updateWallet(const uint256 &hash, int status, bool showTransaction)
     {
 
-        // Find bounds of this transaction in model
-        bool inModel = false;
-        QList<TransactionRecord>::iterator i;
-        for (i = cachedWallet.begin(); i != cachedWallet.end(); ++i) {
-            TransactionRecord tRecord = *i;
-            if (tRecord.hash == hash) {
-                inModel = true;
-            }
-        }
-
-        QList<TransactionRecord>::iterator lower = qLowerBound(
+        // Find bounds of this transaction in model using binary search
+        // This is O(log n) instead of O(n) linear search
+        QList<TransactionRecord>::iterator lower = std::lower_bound(
             cachedWallet.begin(), cachedWallet.end(), hash, TxLessThan());
-        QList<TransactionRecord>::iterator upper = qUpperBound(
+        QList<TransactionRecord>::iterator upper = std::upper_bound(
             cachedWallet.begin(), cachedWallet.end(), hash, TxLessThan());
         int lowerIndex = (lower - cachedWallet.begin());
         int upperIndex = (upper - cachedWallet.begin());
+        
+        // Transaction is in model if lower != upper (binary search found it)
+        bool inModel = (lower != upper);
 
         if(showTransaction && inModel)
             status = CT_UPDATED; /* In model, but want to show, do nothing */
@@ -210,33 +214,37 @@ public:
             }
             if(showTransaction)
             {
-                LOCK2(cs_main, wallet->cs_wallet);
-                // Find transaction in wallet
+                // Collect data with locks held in correct order (cs_main before cs_wallet)
+                // Then release before GUI operations to avoid blocking
                 bool isActiveTx = false;
                 bool isArchiveTx = false;
                 RpcArcTransaction arcTx;
                 bool fIncludeWatchonly = true;
 
-                //Try mapWallet first
-                std::map<uint256, CWalletTx>::iterator mi = wallet->mapWallet.find(hash);
-                if(mi != wallet->mapWallet.end()) {
-                    isActiveTx = true;
-                    CWalletTx& wtx = wallet->mapWallet[hash];
-                    getRpcArcTx(wtx, arcTx, fIncludeWatchonly, false);
-                }
-
-                //Try ArcTx is nor found in mapWallet
-                if (!isActiveTx) {
-                    std::map<uint256, ArchiveTxPoint>::iterator ami = wallet->mapArcTxs.find(hash);
-                    if(ami != wallet->mapArcTxs.end()) {
-                          isArchiveTx = true;
-                          uint256 txid = hash;
-                          getRpcArcTx(txid, arcTx, fIncludeWatchonly, false);
-                          if (arcTx.blockHash.IsNull() || mapBlockIndex.count(arcTx.blockHash) == 0) {
-                              isArchiveTx = false;
-                          }
+                {
+                    LOCK2(cs_main, wallet->cs_wallet);
+                    
+                    //Try mapWallet first
+                    std::map<uint256, CWalletTx>::iterator mi = wallet->mapWallet.find(hash);
+                    if(mi != wallet->mapWallet.end()) {
+                        isActiveTx = true;
+                        CWalletTx& wtx = wallet->mapWallet[hash];
+                        getRpcArcTx(wtx, arcTx, fIncludeWatchonly, false);
                     }
-                }
+
+                    //Try ArcTx if not found in mapWallet
+                    if (!isActiveTx) {
+                        std::map<uint256, ArchiveTxPoint>::iterator ami = wallet->mapArcTxs.find(hash);
+                        if(ami != wallet->mapArcTxs.end()) {
+                            uint256 txid = hash;
+                            getRpcArcTx(txid, arcTx, fIncludeWatchonly, false);
+                            // Check block index while we have cs_main
+                            if (!arcTx.blockHash.IsNull() && mapBlockIndex.count(arcTx.blockHash) > 0) {
+                                isArchiveTx = true;
+                            }
+                        }
+                    }
+                } // Release both locks before GUI operations
 
                 if (!isActiveTx && !isArchiveTx) {
                     qWarning() << "TransactionTablePriv::updateWallet: Warning: Got CT_NEW, but transaction is not in wallet";
@@ -490,7 +498,7 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
     switch(wtx->type)
     {
     case TransactionRecord::RecvWithAddress:
-        return tr("Received with");
+        return tr("Received");
     case TransactionRecord::RecvWithAddressWithMemo:
         return tr("Received with Memo");
     case TransactionRecord::RecvFromOther:
@@ -498,7 +506,7 @@ QString TransactionTableModel::formatTxType(const TransactionRecord *wtx) const
     case TransactionRecord::SendToAddress:
         return tr("Sent to");
     case TransactionRecord::SendToAddressWithMemo:
-        return tr("Sent with Memo");
+        return tr("Sent to with Memo");
     case TransactionRecord::SendToOther:
         return tr("Sent to");
     case TransactionRecord::SendToSelf:

@@ -98,7 +98,7 @@ QValidator::State KomodoAddressCheckValidator::validate(QString &input, int &pos
         // bcz we can't get CurrentEpochBranchId(chainActive.Height(), Params().GetConsensus()) here.
         // this affects only validator in QValidateLineEdit, so, nothing other hurts.
 
-        if (IsValidPaymentAddressString(input.toStdString(), SAPLING_BRANCH_ID))
+        if (IsValidPaymentAddressString(input.toStdString()))
             return QValidator::Acceptable;
     }
 

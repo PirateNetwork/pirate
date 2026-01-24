@@ -119,7 +119,7 @@ public:
         consensus.nPowMaxAdjustDown = 32; // 32% adjustment down
         consensus.nPowMaxAdjustUp = 16; // 16% adjustment up
         consensus.nPowTargetSpacing = 1 * 60;
-        consensus.nPowAllowMinDifficultyBlocksAfterHeight = boost::none;
+        consensus.nPowAllowMinDifficultyBlocksAfterHeight = std::nullopt;
         consensus.nHF22Height = 2973410; /* nS6HardforkHeight + 7 * 1440 (~1 week) */
         consensus.nHF22NotariesPriorityRotateDelta = 20;
         assert(0 < consensus.nHF22NotariesPriorityRotateDelta);
@@ -133,8 +133,8 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170007;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
-        consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nProtocolVersion = 170007;
-        consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
+        consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nProtocolVersion = 170007;
+        consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
 
         // The best chain should have at least this much work.
         // if (chainName.isKMD()) {
@@ -219,6 +219,14 @@ public:
         bech32HRPs[SAPLING_DIVERSIFIED_EXTENDED_SPEND_KEY]    = "secret-diversified-extended-key-main";
         bech32HRPs[SAPLING_EXTENDED_FVK]                      = "zxviews";
         bech32HRPs[SAPLING_DIVERSIFIED_EXTENDED_FVK]          = "zdxviews";
+
+        bech32HRPs[ORCHARD_PAYMENT_ADDRESS]                   = "pirate";
+        bech32HRPs[ORCHARD_FULL_VIEWING_KEY]                  = "pirate-viewing-key";
+        bech32HRPs[ORCHARD_EXTENDED_FVK]                      = "pirate-extended-viewing-key";
+        bech32HRPs[ORCHARD_DIVERSIFIED_EXTENDED_FVK]          = "pirate-diversified-extended-viewing-key";
+        bech32HRPs[ORCHARD_EXTENDED_SPEND_KEY]                = "pirate-secret-extended-key";
+        bech32HRPs[ORCHARD_DIVERSIFIED_EXTENDED_SPEND_KEY]    = "pirate-secret-diversified-6extended-key";
+
 
         vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_main), std::end(chainparams_seed_main));
 
@@ -372,7 +380,7 @@ public:
         consensus.nPowMaxAdjustUp = 16; // 16% adjustment up
         consensus.nPowTargetSpacing = 2.5 * 60;
         consensus.nPowAllowMinDifficultyBlocksAfterHeight = 299187;
-        consensus.nHF22Height = boost::none;
+        consensus.nHF22Height = std::nullopt;
         consensus.nHF22NotariesPriorityRotateDelta = 1;
         assert(0 < consensus.nHF22NotariesPriorityRotateDelta);
         consensus.vUpgrades[Consensus::BASE_SPROUT].nProtocolVersion = 170002;
@@ -385,8 +393,8 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = 207500;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170007;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 280000;
-        consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nProtocolVersion = 170007;
-        consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nActivationHeight = 280500;
+        consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nProtocolVersion = 170007;
+        consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight = 280500;
 
         pchMessageStart[0] = 0x5A;
         pchMessageStart[1] = 0x1F;
@@ -426,6 +434,13 @@ public:
         bech32HRPs[SAPLING_INCOMING_VIEWING_KEY] = "zivktestsapling";
         bech32HRPs[SAPLING_EXTENDED_SPEND_KEY]   = "secret-extended-key-test";
         bech32HRPs[SAPLING_EXTENDED_FVK]         = "zxviewtestsapling";
+
+        bech32HRPs[ORCHARD_PAYMENT_ADDRESS]                   = "pirate-test";
+        bech32HRPs[ORCHARD_FULL_VIEWING_KEY]                  = "pirate-viewing-key-test";
+        bech32HRPs[ORCHARD_EXTENDED_FVK]                      = "pirate-extended-viewing-key-test";
+        bech32HRPs[ORCHARD_DIVERSIFIED_EXTENDED_FVK]          = "pirate-diversified-extended-viewing-key-test";
+        bech32HRPs[ORCHARD_EXTENDED_SPEND_KEY]                = "pirate-secret-extended-key-test";
+        bech32HRPs[ORCHARD_DIVERSIFIED_EXTENDED_SPEND_KEY]    = "pirate-secret-diversified-6extended-key-test";
 
         vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_test), std::end(chainparams_seed_test));
 
@@ -467,7 +482,7 @@ public:
         consensus.nPowMaxAdjustUp = 0; // Turn off adjustment up
         consensus.nPowTargetSpacing = 2.5 * 60;
         consensus.nPowAllowMinDifficultyBlocksAfterHeight = 0;
-        consensus.nHF22Height = boost::none;
+        consensus.nHF22Height = std::nullopt;
         consensus.nHF22NotariesPriorityRotateDelta = 1;
         assert(0 < consensus.nHF22NotariesPriorityRotateDelta);
         consensus.vUpgrades[Consensus::BASE_SPROUT].nProtocolVersion = 170002;
@@ -477,14 +492,11 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_TESTDUMMY].nActivationHeight =
             Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
         consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nProtocolVersion = 170003;
-        consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight =
-            Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
+        consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = 50;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170006;
-        consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight =
-            Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
-        consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nProtocolVersion = 170007;
-        consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nActivationHeight =
-            Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
+        consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 100;
+        consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nProtocolVersion = 170007;
+        consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight = 200;
 
         // The best chain should have at least this much work.
         consensus.nMinimumChainWork = uint256S("0x00");
@@ -552,6 +564,13 @@ public:
         bech32HRPs[SAPLING_EXTENDED_SPEND_KEY]   = "secret-extended-key-regtest";
         bech32HRPs[SAPLING_EXTENDED_FVK]         = "zxviewregtestsapling";
 
+        bech32HRPs[ORCHARD_PAYMENT_ADDRESS]                   = "pirate-regtest";
+        bech32HRPs[ORCHARD_FULL_VIEWING_KEY]                  = "pirate-viewing-key-regtest";
+        bech32HRPs[ORCHARD_EXTENDED_FVK]                      = "pirate-extended-viewing-key-regtest";
+        bech32HRPs[ORCHARD_DIVERSIFIED_EXTENDED_FVK]          = "pirate-diversified-extended-viewing-key-regtest";
+        bech32HRPs[ORCHARD_EXTENDED_SPEND_KEY]                = "pirate-secret-extended-key-regtest";
+        bech32HRPs[ORCHARD_DIVERSIFIED_EXTENDED_SPEND_KEY]    = "pirate-secret-diversified-6extended-key-regtest";
+
         // Founders reward script expects a vector of 2-of-3 multisig addresses
         vFoundersRewardAddress = { "t2FwcEhFdNXuFMv1tcYwaBJtYVtMj8b1uTg" };
         assert(vFoundersRewardAddress.size() <= consensus.GetLastFoundersRewardBlockHeight());
@@ -614,6 +633,11 @@ std::string CChainParams::GetFoundersRewardAddressAtHeight(int nHeight) const {
     int maxHeight = consensus.GetLastFoundersRewardBlockHeight();
     assert(nHeight > 0 && nHeight <= maxHeight);
 
+    // No founders reward addresses available
+    if (vFoundersRewardAddress.empty()) {
+        return ""; 
+    }   
+
     size_t addressChangeInterval = (maxHeight + vFoundersRewardAddress.size()) / vFoundersRewardAddress.size();
     size_t i = nHeight / addressChangeInterval;
     return vFoundersRewardAddress[i];
@@ -626,8 +650,8 @@ CScript CChainParams::GetFoundersRewardScriptAtHeight(int nHeight) const {
 
     CTxDestination address = DecodeDestination(GetFoundersRewardAddressAtHeight(nHeight).c_str());
     assert(IsValidDestination(address));
-    assert(boost::get<CScriptID>(&address) != nullptr);
-    CScriptID scriptID = boost::get<CScriptID>(address); // address is a boost variant
+    assert(std::get_if<CScriptID>(&address) != nullptr);
+    CScriptID scriptID = *(std::get_if<CScriptID>(&address)); // address is a std::variant
     CScript script = CScript() << OP_HASH160 << ToByteVector(scriptID) << OP_EQUAL;
     return script;
 }
@@ -658,14 +682,14 @@ void komodo_setactivation(int32_t height)
     pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = height;
     pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = height;
     ASSETCHAINS_SAPLING = height;
-    fprintf(stderr,"SET SAPLING ACTIVATION height.%d\n",height);
+    fprintf(stdout,"SET SAPLING ACTIVATION height.%d\n",height);
 }
 
-void komodo_setcanopy(int32_t height)
+void komodo_setorchard(int32_t height)
 {
-    pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nActivationHeight = height;
-    ASSETCHAINS_CANOPY = height;
-    fprintf(stderr,"SET ZIP212 ACTIVATION height.%d\n",height);
+    pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight = height;
+    ASSETCHAINS_ORCHARD = height;
+    fprintf(stdout,"SET ORCHARD ACTIVATION height.%d\n",height);
 }
 
 /* This function returns the checkpoint list for a currently active asset chain.
@@ -1003,23 +1027,24 @@ void *chainparams_commandline()
         pCurrentParams->pchMessageStart[1] = (ASSETCHAINS_MAGIC >> 8) & 0xff;
         pCurrentParams->pchMessageStart[2] = (ASSETCHAINS_MAGIC >> 16) & 0xff;
         pCurrentParams->pchMessageStart[3] = (ASSETCHAINS_MAGIC >> 24) & 0xff;
-        fprintf(stderr,">>>>>>>>>> %s: p2p.%u rpc.%u magic.%08x %u %u coins\n",chainName.symbol().c_str(),ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT,ASSETCHAINS_MAGIC,ASSETCHAINS_MAGIC,(uint32_t)ASSETCHAINS_SUPPLY);
+        fprintf(stdout,">>>>>>>>>> %s: p2p.%u rpc.%u magic.%08x %u %u coins\n",chainName.symbol().c_str(),ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT,ASSETCHAINS_MAGIC,ASSETCHAINS_MAGIC,(uint32_t)ASSETCHAINS_SUPPLY);
 
-        pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = ASSETCHAINS_SAPLING;
-        pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = ASSETCHAINS_OVERWINTER;
-        pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_CANOPY].nActivationHeight = ASSETCHAINS_CANOPY;
+        //Use defined activation heights when in non-regtest mode
+        if (Params().NetworkIDString() != "regtest") {
+            pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = ASSETCHAINS_SAPLING;
+            pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = ASSETCHAINS_OVERWINTER;
+            pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight = ASSETCHAINS_ORCHARD;
 
+            if (chainName.isSymbol("PIRATE"))
+            {
+                pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 152855;
+                pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = 152855;
+                pCurrentParams->consensus.nMinimumChainWork = uint256S("0x00000000000000000000000000000000000000000000000000c46a0c07176634");
 
+            }
 
-        if (chainName.isSymbol("PIRATE"))
-        {
-            pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 152855;
-            pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = 152855;
-            pCurrentParams->consensus.nMinimumChainWork = uint256S("0x00000000000000000000000000000000000000000000000000c46a0c07176634");
-
+            checkpointData = GetACCheckPoints();
         }
-
-        checkpointData = GetACCheckPoints();
 
     }
     else

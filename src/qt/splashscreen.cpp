@@ -43,9 +43,10 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QMessageBox>
+#include <QScreen>
 
-SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) :
-    QWidget(0, f), curAlignment(0)
+SplashScreen::SplashScreen(const NetworkStyle *networkStyle) :
+    QWidget(), curAlignment(0)
 {
     // set reference point, paddings
     int paddingRight            = 125;
@@ -84,23 +85,23 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     pixPaint.setPen(QColor(193, 157, 66));
     pixPaint.setFont(QFont(font, 45*fontFactor));
     QFontMetrics fm = pixPaint.fontMetrics();
-    int titleTextWidth = fm.width(splashTitle);
+    int titleTextWidth = fm.horizontalAdvance(splashTitle);
     if (titleTextWidth > 176) {
         fontFactor = fontFactor * 176 / titleTextWidth;
     }
 
     pixPaint.setFont(QFont(font, 60*fontFactor));
     fm = pixPaint.fontMetrics();
-    titleTextWidth  = fm.width(splashTitle);
+    titleTextWidth  = fm.horizontalAdvance(splashTitle);
     pixPaint.setFont(QFont(font, 25*fontFactor));
 
     // if the version string is too long, reduce size
     fm = pixPaint.fontMetrics();
-    int versionTextWidth  = fm.width(versionText);
+    int versionTextWidth  = fm.horizontalAdvance(versionText);
     pixPaint.drawText(((pixmap.width()/devicePixelRatio))-(versionTextWidth)-30,((pixmap.height()/devicePixelRatio)/2)+85,versionText);
 
     fm = pixPaint.fontMetrics();
-    int copyrightTextWidth  = fm.width(copyrightText);
+    int copyrightTextWidth  = fm.horizontalAdvance(copyrightText);
     pixPaint.drawText(((pixmap.width()/devicePixelRatio))-(copyrightTextWidth)-30,((pixmap.height()/devicePixelRatio)/2)+105,copyrightText);
 
     // draw additional text if special network
@@ -109,7 +110,7 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
         boldFont.setWeight(QFont::Bold);
         pixPaint.setFont(boldFont);
         fm = pixPaint.fontMetrics();
-        int titleAddTextWidth  = fm.width(titleAddText);
+        int titleAddTextWidth  = fm.horizontalAdvance(titleAddText);
         pixPaint.drawText(pixmap.width()/devicePixelRatio-titleAddTextWidth-10,15,titleAddText);
     }
 
@@ -122,7 +123,7 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     QRect r(QPoint(), QSize(pixmap.size().width()/devicePixelRatio,pixmap.size().height()/devicePixelRatio));
     resize(r.size());
     setFixedSize(r.size());
-    move(QApplication::desktop()->screenGeometry().center() - r.center());
+    move(QGuiApplication::primaryScreen()->geometry().center() - r.center());
 
     //Set Main Create Wallet Widget
     QVBoxLayout *seedLayout = new QVBoxLayout(this);
@@ -176,7 +177,7 @@ SplashScreen::SplashScreen(Qt::WindowFlags f, const NetworkStyle *networkStyle) 
     QString styleSheet = "QWidget {background-color: #303030; color: #ffffff;} QFrame#outerFrame {background-color: #282828; color: #ffffff;} QFrame#innerFrame {background-color: #303030; color: #ffffff;} QGroupBox {background-color: #282828; color: #ffffff;} QLineEdit {background-color: #303030; color: #ffffff;} QPlainTextEdit {background-color: #303030; color: #ffffff;}";
     styleSheet = styleSheet + " QRadioButton { background-color: #303030;color: #ffffff; spacing: 5px;}";
     styleSheet = styleSheet + " QRadioButton::indicator {background-color: #000000; color: #ffffff; width: 8px;height: 8px; border: 4px solid #000000; border-radius: 8px;}";
-    styleSheet = styleSheet + " QRadioButton::indicator:checked {background-color: rgba(25,225,25); color: #ffffff; width: 8px; height: 8px; border: 4px solid #000000; border-radius: 8px;}";
+    styleSheet = styleSheet + " QRadioButton::indicator:checked {background-color: rgba(25,225,25,1); color: #ffffff; width: 8px; height: 8px; border: 4px solid #000000; border-radius: 8px;}";
 
     //Add Create Seed
     newWallet = new NewWallet(networkStyle);

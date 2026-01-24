@@ -1,8 +1,16 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2018-2025 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-//#include "sendcoinsdialog.h"
+/**
+ * @file zsendcoinsdialog.cpp
+ * @brief Shielded transaction send dialog implementation
+ * 
+ * Provides GUI for creating and sending shielded z-address transactions,
+ * with support for both online and offline signing modes.
+ */
+
 #include "zsendcoinsdialog.h"
 #include "ui_zsendcoinsdialog.h"
 #include "ui_zsendcoinsdialog_popup.h"
@@ -49,9 +57,9 @@ ZSendCoinsDialog::ZSendCoinsDialog(const PlatformStyle *_platformStyle, QWidget 
     platformStyle(_platformStyle)
 {
     ui->setupUi(this);
-
     ui->payFromAddress->setMaxVisibleItems(30);
 
+    // Configure button icons based on platform style
     if (!_platformStyle->getImagesOnButtons()) {
         ui->addButton->setIcon(QIcon());
         ui->clearButton->setIcon(QIcon());
@@ -61,16 +69,17 @@ ZSendCoinsDialog::ZSendCoinsDialog(const PlatformStyle *_platformStyle, QWidget 
         ui->addButton->setIcon(_platformStyle->SingleColorIcon(":/icons/add"));
         ui->clearButton->setIcon(_platformStyle->SingleColorIcon(":/icons/remove"));
         ui->sendButton->setIcon(_platformStyle->SingleColorIcon(":/icons/send"));
-        ui->refreshPayFrom->setIcon(platformStyle->SingleColorIcon(":/icons/refresh"));
+        ui->refreshPayFrom->setIcon(_platformStyle->SingleColorIcon(":/icons/refresh"));
     }
 
     addEntry();
 
+    // Connect UI signals
     connect(ui->addButton, SIGNAL(clicked()), this, SLOT(addEntry()));
     connect(ui->clearButton, SIGNAL(clicked()), this, SLOT(clear()));
     connect(ui->refreshPayFrom, SIGNAL(clicked()), this, SLOT(updatePayFromList()));
 
-    //Detect UI activity
+    // Connect unlock timer reset signals
     connect(ui->addButton, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
     connect(ui->clearButton, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
     connect(ui->refreshPayFrom, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
@@ -78,14 +87,12 @@ ZSendCoinsDialog::ZSendCoinsDialog(const PlatformStyle *_platformStyle, QWidget 
     connect(ui->payFromAddress, SIGNAL(highlighted(int)), this, SLOT(sendResetUnlockSignal()));
     connect(ui->sendButton, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
 
-    // init transaction fee section
-    QSettings settings;
+    // Initialize transaction fee
     ui->customFee->setValue(ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE);
-    //setOperationId("");
     ui->teResult->clear();
     ui->frameResult->hide();
     
-    commission=0;
+    commission = 0;
 }
 
 void ZSendCoinsDialog::setClientModel(ClientModel *_clientModel)
@@ -136,46 +143,54 @@ void ZSendCoinsDialog::sendResetUnlockSignal() {
     Q_EMIT resetUnlockTimerEvent();
 }
 
+/**
+ * @brief Handle send button click - create and send shielded transaction
+ * 
+ * Supports two modes:
+ * - Online: Direct transaction creation and broadcast
+ * - Offline: Generate transaction builder data for offline signing
+ */
 void ZSendCoinsDialog::on_sendButton_clicked()
 {
-    if(!model || !model->getOptionsModel())
+    if (!model || !model->getOptionsModel())
         return;
 
-    QString fromaddress;
-    QString sIsMine;
-    bool bIsMine=true;
+    // Extract source address and determine if it's owned (online mode)
+    QString fromAddress;
+    bool isOwnedAddress = true;
+    
     if (!ui->payFromAddress->currentText().split(' ').isEmpty())
     {
-      fromaddress = ui->payFromAddress->currentText().split(' ').at(2);
-      //If the string format on the GUI is changed the adres might get
-      //misinterpreted here. Might have to look at a better way to identify
-      //the adres.
-      if (ui->payFromAddress->currentText().contains("Off-line"))
-      {
-        bIsMine=false;
-      }
+        fromAddress = ui->payFromAddress->currentText().split(' ').at(2);
+        
+        // Check if address is marked for offline transaction
+        if (ui->payFromAddress->currentText().contains("Off-line"))
+        {
+            isOwnedAddress = false;
+        }
     }
 
+    // Validate and collect recipients
     QList<SendCoinsRecipient> recipients;
     bool valid = true;
 
-    for(int i = 0; i < ui->entries->count(); ++i)
+    for (int i = 0; i < ui->entries->count(); ++i)
     {
         SendCoinsEntry *entry = qobject_cast<SendCoinsEntry*>(ui->entries->itemAt(i)->widget());
-        if(entry)
+        if (entry)
         {
-            if(entry->validate(true))
+            if (entry->validate(true))
             {
                 SendCoinsRecipient recipient = entry->getValue();
-                if (recipient.memo.length()>0)
+                
+                // Convert memo to hex format if needed
+                if (recipient.memo.length() > 0 && !entry->getSubmitMemoAsHex())
                 {
-                    //Memo must be transferred in HEX format.
-                    if (!entry->getSubmitMemoAsHex()) {
-                        std::string sMemo = HexStr(recipient.memo.toStdString());
-                        recipient.memo = QString::fromStdString(sMemo);
-                    } 
+                    std::string memoHex = HexStr(recipient.memo.toStdString());
+                    recipient.memo = QString::fromStdString(memoHex);
                 }
-                recipients.append( recipient );
+                
+                recipients.append(recipient);
             }
             else
             {
@@ -184,66 +199,55 @@ void ZSendCoinsDialog::on_sendButton_clicked()
         }
     }
 
-    if(!valid || recipients.isEmpty())
+    if (!valid || recipients.isEmpty() || fromAddress.isEmpty())
     {
         return;
     }
 
-    if (fromaddress.isEmpty())
-      return;
-
     fNewRecipientAllowed = false;
+    
+    // Request wallet unlock
     WalletModel::UnlockContext ctx(model->requestUnlock());
-    if(!ctx.isValid())
+    if (!ctx.isValid())
     {
-        // Unlock wallet was cancelled
         fNewRecipientAllowed = true;
         return;
     }
 
-    // prepare transaction for getting txFee earlier
-    WalletModelZTransaction currentTransaction(fromaddress, recipients, ui->customFee->value(), bIsMine);
-    WalletModel::SendCoinsReturn prepareStatus;
-
-    // Always use a CCoinControl instance, use the CoinControlDialog instance if CoinControl has been enabled
+    // Prepare transaction
+    WalletModelZTransaction currentTransaction(fromAddress, recipients, ui->customFee->value(), isOwnedAddress);
     CCoinControl ctrl;
-    // if (model->getOptionsModel()->getCoinControlFeatures())
-    //     ctrl = *CoinControlDialog::coinControl;
-
     updateCoinControlState(ctrl);
 
-    prepareStatus = model->prepareZTransaction(currentTransaction, ctrl);
+    WalletModel::SendCoinsReturn prepareStatus = model->prepareZTransaction(currentTransaction, ctrl);
 
-    // process prepareStatus and on error generate message shown to user
+    // Handle preparation errors
     processSendCoinsReturn(prepareStatus,
         KomodoUnits::formatWithUnit(model->getOptionsModel()->getDisplayUnit(), currentTransaction.getTransactionFee()));
 
-    if(prepareStatus.status != WalletModel::OK) {
+    if (prepareStatus.status != WalletModel::OK)
+    {
         fNewRecipientAllowed = true;
         return;
     }
 
     CAmount txFee = currentTransaction.getTransactionFee();
 
-    // Format confirmation message
+    // Build confirmation message
     QStringList formatted;
     for (const SendCoinsRecipient &rcp : currentTransaction.getRecipients())
     {
-        // generate bold amount string
-        QString amount = "<b>" + KomodoUnits::formatHtmlWithUnit(model->getOptionsModel()->getDisplayUnit(), rcp.amount);
-        amount.append("</b>");
-        // generate monospace address string
-        QString address = "<span style='font-family: monospace;'>" + rcp.address;
-        address.append("</span>");
+        QString amount = "<b>" + KomodoUnits::formatHtmlWithUnit(
+            model->getOptionsModel()->getDisplayUnit(), rcp.amount) + "</b>";
+        QString address = "<span style='font-family: monospace;'>" + rcp.address + "</span>";
 
         QString recipientElement;
-
-        if(rcp.label.length() > 0) // label with address
+        if (rcp.label.length() > 0)
         {
             recipientElement = tr("%1 to %2").arg(amount, GUIUtil::HtmlEscape(rcp.label));
             recipientElement.append(QString(" (%1)").arg(address));
         }
-        else // just address
+        else
         {
             recipientElement = tr("%1 to %2").arg(amount, address);
         }
@@ -251,81 +255,83 @@ void ZSendCoinsDialog::on_sendButton_clicked()
         formatted.append(recipientElement);
     }
 
-    QString questionString;
-    if (bIsMine==true)
-    {
-      questionString = tr("Are you sure you want to send?");
-    }
-    else
-    {
-      questionString = tr("Are you sure you want to prepare the transaction for off-line signing?");
-    }
+    // Determine confirmation dialog text based on mode
+    QString questionString = isOwnedAddress
+        ? tr("Are you sure you want to send?")
+        : tr("Are you sure you want to create unsigned transaction?");
+    
     questionString.append("<br /><br />%1");
 
-    if(txFee > 0)
+    // Add transaction fee display
+    if (txFee > 0)
     {
-        // append fee string if a fee is required
         questionString.append("<hr /><span style='color:#cc0000;'>");
-        questionString.append(KomodoUnits::formatHtmlWithUnit(model->getOptionsModel()->getDisplayUnit(), txFee));
+        questionString.append(KomodoUnits::formatHtmlWithUnit(
+            model->getOptionsModel()->getDisplayUnit(), txFee));
         questionString.append("</span> ");
         questionString.append(tr("added as transaction fee"));
-
-        // append transaction size
-//        questionString.append(" (" + QString::number((double)currentTransaction.getTransactionSize() / 1000) + " kB)");
     }
     
+    // Add commission if applicable (legacy hardware wallet commission removed)
     if (commission > 0)
     {
         questionString.append("<hr /><span style='color:#cc0000;'>");
-        questionString.append(KomodoUnits::formatHtmlWithUnit(model->getOptionsModel()->getDisplayUnit(), commission));
+        questionString.append(KomodoUnits::formatHtmlWithUnit(
+            model->getOptionsModel()->getDisplayUnit(), commission));
         questionString.append("</span> ");
         questionString.append(tr("added as commission"));   
-
-        //Include the commission as part of the transaction fee.
         txFee += commission;
     }
 
-    // add total amount in all subdivision units
+    // Add total amount display
     questionString.append("<hr />");
     CAmount totalAmount = currentTransaction.getTotalTransactionAmount() + txFee;
     QStringList alternativeUnits;
+    
     for (KomodoUnits::Unit u : KomodoUnits::availableUnits())
     {
-        if(u != model->getOptionsModel()->getDisplayUnit())
+        if (u != model->getOptionsModel()->getDisplayUnit())
+        {
             alternativeUnits.append(KomodoUnits::formatHtmlWithUnit(u, totalAmount));
+        }
     }
-    questionString.append(tr("Total amount: %1")
-        .arg(KomodoUnits::formatHtmlWithUnit(model->getOptionsModel()->getDisplayUnit(), totalAmount)));
-    questionString.append(QString("<span><br />(=%2)</span>")
-        .arg(alternativeUnits.join(" " + tr("or") + " ")));
+    
+    questionString.append(tr("Total amount: %1").arg(
+        KomodoUnits::formatHtmlWithUnit(model->getOptionsModel()->getDisplayUnit(), totalAmount)));
+    questionString.append(QString("<span><br />(=%2)</span>").arg(
+        alternativeUnits.join(" " + tr("or") + " ")));
 
-    QString sHeading;
-    if (bIsMine==true)
-    {
-      sHeading="Confirm send coins";
-    }
-    else
-    {
-       sHeading="Confirm prepare off-line transaction";
-    }
-    ZSendConfirmationDialog confirmationDialog(tr(sHeading.toStdString().c_str() ),
-      questionString.arg(formatted.join("<br />")), SEND_CONFIRM_DELAY, this);
+    // Show confirmation dialog
+    QString heading = isOwnedAddress 
+        ? tr("Confirm send coins")
+        : tr("Confirm create unsigned transaction");
+    ZSendConfirmationDialog confirmationDialog(heading,
+        questionString.arg(formatted.join("<br />")), SEND_CONFIRM_DELAY, this);
     confirmationDialog.exec();
+    
     QMessageBox::StandardButton retval = (QMessageBox::StandardButton)confirmationDialog.result();
-    if(retval != QMessageBox::Yes)
+    if (retval != QMessageBox::Yes)
     {
         fNewRecipientAllowed = true;
         return;
     }
 
-    if (commission>0) {
-      //Apply (fee+commission) to the transaction data
-      currentTransaction.setTransactionFee(txFee);
+    // Apply commission to transaction if applicable
+    if (commission > 0)
+    {
+        currentTransaction.setTransactionFee(txFee);
     }
 
-    // now send the prepared transaction
+    // Handle offline signing mode first - skip sending if address not owned
+    if (!isOwnedAddress)
+    {
+        fNewRecipientAllowed = true;
+        handleOfflineSigning(currentTransaction, txFee, fromAddress);
+        return;
+    }
+
+    // Execute transaction (only for owned addresses)
     WalletModel::SendCoinsReturn sendStatus = model->zsendCoins(currentTransaction);
-    // process sendStatus and on error generate message shown to user
     processSendCoinsReturn(sendStatus);
 
     if (sendStatus.status == WalletModel::OK)
@@ -333,116 +339,153 @@ void ZSendCoinsDialog::on_sendButton_clicked()
         accept();
         CoinControlDialog::coinControl->UnSelectAll();
         coinControlUpdateLabels();
+        
+        // Display operation ID for online mode
+        std::string result = "opid = " + currentTransaction.getOperationId();
+        setResult("", result);
     }
+    
     fNewRecipientAllowed = true;
+}
 
-
-    QString qsResult="";
-    string sResult="";
-    if (bIsMine==false)
+/**
+ * @brief Handle offline transaction signing workflow
+ * @param transaction The prepared transaction
+ * @param txFee Total transaction fee including commission
+ * @param fromAddress Source z-address
+ */
+void ZSendCoinsDialog::handleOfflineSigning(const WalletModelZTransaction &transaction, 
+                                            CAmount txFee,
+                                            const QString &fromAddress)
+{
+    try
     {
-      sResult = currentTransaction.getZSignOfflineTransaction();
-
-      ZSendCoinsDialog_popup *poPopup = new ZSendCoinsDialog_popup(platformStyle);
-      poPopup->SetUnsignedTransaction( QString::fromStdString(sResult) );
-      poPopup->exec();
-
-      bool bResult = poPopup->GetSignedTransaction(&qsResult);
-      if (bResult == true)
-      {
-        UniValue oResult;
-        UniValue osString(UniValue::VSTR);
-        try
+        // Build parameters for z_createbuildinstructions RPC
+        UniValue params(UniValue::VARR);
+        params.push_back(fromAddress.toStdString());
+        
+        // Build recipients array
+        UniValue outputs(UniValue::VARR);
+        for (const SendCoinsRecipient &rcp : transaction.getRecipients())
         {
-          UniValue params(UniValue::VARR);
-          params.push_back (qsResult.toStdString());
-          oResult = tableRPC.execute("sendrawtransaction", params );
-        }
-        catch (UniValue& objError)
-        {
-            try // Nice formatting for standard-format error
+            UniValue output(UniValue::VOBJ);
+            output.push_back(Pair("address", rcp.address.toStdString()));
+            output.push_back(Pair("amount", FormatMoney(rcp.amount)));
+            
+            if (!rcp.memo.isNull() && rcp.memo.length() > 0)
             {
-                int code = find_value(objError, "code").get_int();
-                std::string sMessage="";
-                if (code==-26) //Transaction expired 
-                {
-                  sMessage = "The transaction expired";
-                }
-                else
-                {
-                  sMessage = find_value(objError, "message").get_str();
-                }
-                setResult("Transaction sending failed",sMessage.c_str() );
-                return;
+                output.push_back(Pair("memo", rcp.memo.toStdString()));
             }
-            catch (const std::runtime_error&) // raised when converting to invalid type, i.e. missing code or message
-            {
-                setResult("Transaction sending failed","Could not parse the response. Please look in the log and command line output" );
-                return;
-            }
+            
+            outputs.push_back(output);
         }
-        catch (...)
+        params.push_back(outputs);
+        
+        // Add minconf and fee parameters
+        params.push_back(1);  // minconf
+        params.push_back(ValueFromAmount(txFee));
+        
+        // Execute RPC to get transaction builder hex
+        UniValue buildResult = tableRPC.execute("z_createbuildinstructions", params);
+        
+        if (buildResult.isNull() || !buildResult.isStr())
         {
-            setResult("Transaction sending failed","Could not parse the response. Please look in the log and command line output");
+            setResult("Transaction preparation failed", 
+                     "z_createbuildinstructions did not return valid hex data");
             return;
         }
-
-        if (oResult.empty())
+        
+        std::string hexData = buildResult.get_str();
+        
+        // Display hex data for offline signing
+        ZSendCoinsDialog_popup *popup = new ZSendCoinsDialog_popup(platformStyle);
+        popup->SetUnsignedTransaction(QString::fromStdString(hexData));
+        popup->SetOfflineMode(true);  // Hide broadcast button for offline mode
+        popup->exec();
+        
+        // Check if user provided signed transaction
+        QString signedTx;
+        if (popup->GetSignedTransaction(&signedTx))
         {
-          setResult("Transaction sending failed","The result is empty");
-          return;
+            broadcastSignedTransaction(signedTx);
         }
-
-        if (oResult[0].getType() != UniValue::VSTR)
-        {
-          setResult("","Transaction sending failed. The result is empty");
-          return;
-        }
-
-        std::string sMessage = "Transaction submitted. TxID="+oResult[0].get_str();
-        setResult("",sMessage);
-      }
     }
-    else
+    catch (const UniValue& objError)
     {
-      sResult="opid = " + currentTransaction.getOperationId();
-      setResult("",sResult);
+        handleRPCError(objError, "Transaction preparation failed");
+    }
+    catch (const std::exception& e)
+    {
+        setResult("Transaction preparation failed", e.what());
     }
 }
 
+/**
+ * @brief Broadcast a signed transaction to the network
+ * @param signedTx Hex-encoded signed transaction
+ */
+void ZSendCoinsDialog::broadcastSignedTransaction(const QString &signedTx)
+{
+    try
+    {
+        UniValue sendParams(UniValue::VARR);
+        sendParams.push_back(signedTx.toStdString());
+        UniValue result = tableRPC.execute("sendrawtransaction", sendParams);
+        
+        if (result.isNull() || !result.isStr())
+        {
+            setResult("Transaction sending failed", "Invalid response from sendrawtransaction");
+            return;
+        }
+        
+        std::string txid = result.get_str();
+        setResult("", "Transaction submitted. TxID=" + txid);
+    }
+    catch (const UniValue& objError)
+    {
+        handleRPCError(objError, "Transaction sending failed");
+    }
+    catch (...)
+    {
+        setResult("Transaction sending failed", 
+                 "Could not parse the response. Please check the log");
+    }
+}
+
+/**
+ * @brief Handle RPC error responses
+ * @param objError UniValue error object
+ * @param context Error context description
+ */
+void ZSendCoinsDialog::handleRPCError(const UniValue& objError, const std::string& context)
+{
+    try
+    {
+        int code = find_value(objError, "code").get_int();
+        std::string message = (code == -26) 
+            ? "The transaction expired"
+            : find_value(objError, "message").get_str();
+        
+        setResult(context, message.c_str());
+    }
+    catch (const std::runtime_error&)
+    {
+        setResult(context, "Could not parse the error response");
+    }
+}
+
+/**
+ * @brief Clear all form entries and reset to default state
+ */
 void ZSendCoinsDialog::clear()
 {
-    QSettings settings;
-    
-    //Default: No commission, hide labels on GUI:
-    commission=0;
+    // Reset commission (legacy hardware wallet commission removed)
+    commission = 0;
     ui->labelCommission->setVisible(false);
-    ui->labelCommissionValue->setVisible(false);        
-    fHWWalletCommission=false;
-    
-    //Evaluate if T.C. is operating in cold storage (split) mode + is it setup to perform
-    //the 'spend' role + a hardware wallet is used to autenticate the transaction:
-    bool fEnableZSigning = settings.value("fEnableZSigning").toBool();
-    //Is cold storage enabled?
-    if (fEnableZSigning==true) {
-      bool fEnableZSigning_ModeSpend = settings.value("fEnableZSigning_ModeSpend").toBool();
-      //Is this the 'spending' role?
-      if (fEnableZSigning_ModeSpend==true) {
-        bool fEnableZSigning_HWwallet = settings.value("fEnableZSigning_HWwallet").toBool();
-        
-        if (fEnableZSigning_HWwallet==true) {
-          fHWWalletCommission=true;
-                    
-          //Show the commission GUI labels:
-          ui->labelCommission->setVisible(true);
-          ui->labelCommissionValue->setVisible(true);
-          ui->labelCommissionValue->setText("0");
-        }
-      }
-    }    
+    ui->labelCommissionValue->setVisible(false);
 
-    // Remove entries until only one left
-    while(ui->entries->count())
+    // Remove all entries except one
+    while (ui->entries->count())
     {
         ui->entries->takeAt(0)->widget()->deleteLater();
     }
@@ -450,12 +493,12 @@ void ZSendCoinsDialog::clear()
 
     updateTabsAndLabels();
 
-    //Select the top adress:
+    // Select the first address
     ui->payFromAddress->setCurrentIndex(0);
 
-    //Hide the result frame
+    // Hide result frame
     ui->teResult->clear();
-    ui->frameResult->hide();    
+    ui->frameResult->hide();
 }
 
 void ZSendCoinsDialog::reject()
@@ -468,29 +511,38 @@ void ZSendCoinsDialog::accept()
     clear();
 }
 
+/**
+ * @brief Add a new recipient entry to the form
+ * @return Pointer to the newly created SendCoinsEntry
+ */
 SendCoinsEntry *ZSendCoinsDialog::addEntry()
 {
     SendCoinsEntry *entry = new SendCoinsEntry(platformStyle, this, true);
     entry->setModel(model);
     ui->entries->addWidget(entry);
+    
+    // Connect entry signals
     connect(entry, SIGNAL(removeEntry(SendCoinsEntry*)), this, SLOT(removeEntry(SendCoinsEntry*)));
     connect(entry, SIGNAL(useAvailableBalance(SendCoinsEntry*)), this, SLOT(useAvailableBalance(SendCoinsEntry*)));
     connect(entry, SIGNAL(payAmountChanged()), this, SLOT(coinControlUpdateLabels()));
     connect(entry, SIGNAL(subtractFeeFromAmountChanged()), this, SLOT(coinControlUpdateLabels()));
-
     connect(entry, SIGNAL(resetUnlockTimerEvent()), this, SLOT(sendResetUnlockSignal()));
 
-    // Focus the field, so that entry can start immediately
+    // Focus and scroll to new entry
     entry->clear();
     entry->setFocus();
     ui->scrollAreaWidgetContents->resize(ui->scrollAreaWidgetContents->sizeHint());
     qApp->processEvents();
+    
     QScrollBar* bar = ui->scrollArea->verticalScrollBar();
-    if(bar)
+    if (bar)
+    {
         bar->setSliderPosition(bar->maximum());
+    }
+    
     entry->hideCheckboxSubtractFeeFromAmount();
-
     updateTabsAndLabels();
+    
     return entry;
 }
 
@@ -500,16 +552,21 @@ void ZSendCoinsDialog::updateTabsAndLabels()
     coinControlUpdateLabels();
 }
 
+/**
+ * @brief Remove a recipient entry from the form
+ * @param entry The entry to remove
+ */
 void ZSendCoinsDialog::removeEntry(SendCoinsEntry* entry)
 {
     entry->hide();
 
-    // If the last entry is about to be removed add an empty one
+    // Always maintain at least one entry
     if (ui->entries->count() == 1)
+    {
         addEntry();
+    }
 
     entry->deleteLater();
-
     updateTabsAndLabels();
 }
 
@@ -603,30 +660,38 @@ void ZSendCoinsDialog::setBalance(const CAmount& balance, const CAmount& unconfi
     }
 }
 
+/**
+ * @brief Update display unit for currency amounts
+ */
 void ZSendCoinsDialog::updateDisplayUnit()
 {
     setBalance(model->getBalance(), 0, 0, 0, 0, 0, 0, 0, 0);
     ui->customFee->setDisplayUnit(model->getOptionsModel()->getDisplayUnit());
 
-    QString sCommission = KomodoUnits::format(model->getOptionsModel()->getDisplayUnit(), commission);
-    ui->labelCommissionValue->setText( sCommission );
+    QString commissionStr = KomodoUnits::format(
+        model->getOptionsModel()->getDisplayUnit(), commission);
+    ui->labelCommissionValue->setText(commissionStr);
 
     updatePayFromList();
 }
 
-void ZSendCoinsDialog::setResult(const string sHeading, const string sResult)
+/**
+ * @brief Display result message in the result frame
+ * @param heading Result heading text (empty for default "Result:")
+ * @param result Result message text
+ */
+void ZSendCoinsDialog::setResult(const std::string heading, const std::string result)
 {
-    if (sHeading.length() == 0)
+    if (heading.length() == 0)
     {
-      ui->lbResult->setText("Result: ");
+        ui->lbResult->setText(tr("Result: "));
     }
     else
     {
-      ui->lbResult->setText("Result:"+QString::fromStdString(sHeading));
+        ui->lbResult->setText(tr("Result: %1").arg(QString::fromStdString(heading)));
     }
 
-    ui->teResult->setText( QString::fromStdString(sResult) );
-
+    ui->teResult->setText(QString::fromStdString(result));
     ui->frameResult->show();
 }
 
@@ -713,6 +778,10 @@ void ZSendCoinsDialog::processSendCoinsReturn(const WalletModel::SendCoinsReturn
     Q_EMIT message(tr("Z-Send Coins"), msgParams.first, msgParams.second);
 }
 
+/**
+ * @brief Calculate and set available balance for an entry
+ * @param entry The entry to set the balance for
+ */
 void ZSendCoinsDialog::useAvailableBalance(SendCoinsEntry* entry)
 {
     if (ui->payFromAddress->currentText().isEmpty())
@@ -721,61 +790,47 @@ void ZSendCoinsDialog::useAvailableBalance(SendCoinsEntry* entry)
         return;
     }
 
+    // Extract address from combo box text
     QString address;
     if (!ui->payFromAddress->currentText().split(' ').isEmpty())
-      address = ui->payFromAddress->currentText().split(' ').at(2);
-
-    // Calculate available amount to send.
-    CAmount amount = 0;
-    if (!address.isEmpty()) {
-      amount = model->getAddressBalance(address.toStdString());
-        
-      //Leave enough funds in the sender address for the
-      //transaction fee
-      if (ui->customFee->value()>0) {
-        amount -= ui->customFee->value();
-      }        
-
-
-      bool bIsMine=true;
-      QString qsText = ui->payFromAddress->currentText();
-      if (qsText.contains("Off-line"))
-      {
-        bIsMine=false;
-      }
-
-      commission = 0;
-      // Is this a cold storage transaction?
-      if (bIsMine==false) {
-        //Is a hardware wallet is used to authorise(sign) the transactions?
-        if (fHWWalletCommission==true) {        
-          //The total amount (available input-fee) already includes the commission.
-          //Extract the commission component:
-          commission = amount - amount / 1.0025;
-          if (commission > 1562500000) { //15.625Arrr
-            //Cap maximum commission at 6250 coin.
-            commission = 1562500000;
-          }
-          QString sCommission = KomodoUnits::format(model->getOptionsModel()->getDisplayUnit(), commission);
-          ui->labelCommissionValue->setText( sCommission );
-          amount -= commission;
-        }
-      }
-      
-      //From the remaining balance, calculate the maximum amount:
-      for (int i = 0; i < ui->entries->count(); ++i) {
-        SendCoinsEntry* e = qobject_cast<SendCoinsEntry*>(ui->entries->itemAt(i)->widget());
-        if (e && !e->isHidden() && e != entry) {
-          amount -= e->getValue().amount;
-        }
-      }
+    {
+        address = ui->payFromAddress->currentText().split(' ').at(2);
     }
 
-    if (amount > 0) {
-      entry->checkSubtractFeeFromAmount();
-      entry->setAmount(amount);      
-    } else {
-      entry->setAmount(0);
+    // Calculate available amount
+    CAmount amount = 0;
+    if (!address.isEmpty())
+    {
+        amount = model->getAddressBalance(address.toStdString());
+        
+        // Reserve funds for transaction fee
+        if (ui->customFee->value() > 0)
+        {
+            amount -= ui->customFee->value();
+        }
+
+        // Reset commission (legacy hardware wallet commission removed)
+        commission = 0;
+        
+        // Subtract amounts from other entries
+        for (int i = 0; i < ui->entries->count(); ++i)
+        {
+            SendCoinsEntry* e = qobject_cast<SendCoinsEntry*>(ui->entries->itemAt(i)->widget());
+            if (e && !e->isHidden() && e != entry)
+            {
+                amount -= e->getValue().amount;
+            }
+        }
+    }
+
+    if (amount > 0)
+    {
+        entry->checkSubtractFeeFromAmount();
+        entry->setAmount(amount);
+    }
+    else
+    {
+        entry->setAmount(0);
     }
 }
 
@@ -784,34 +839,38 @@ void ZSendCoinsDialog::updateCoinControlState(CCoinControl& ctrl)
     ctrl.m_feerate = CFeeRate(ui->customFee->value());
 }
 
-void ZSendCoinsDialog::payFromAddressIndexChanged(int iIndex)
+/**
+ * @brief Update button text when address selection changes
+ * @param index The new index in the address combobox
+ */
+void ZSendCoinsDialog::payFromAddressIndexChanged(int index)
 {
-  if (iIndex>=0)
-  {
-    bool bIsMine=true;
-    QString qsText = ui->payFromAddress->currentText();
-    if (qsText.contains("Off-line"))
+    if (index >= 0)
     {
-      bIsMine=false;
-    }
-
-    if (bIsMine==true) //Local adres
-    {
-      ui->sendButton->setText("S&end");
+        QString text = ui->payFromAddress->currentText();
+        bool isOffline = text.contains("Off-line");
+        
+        ui->sendButton->setText(isOffline 
+            ? tr("Create Unsigned Transaction")
+            : tr("S&end Transaction"));
+        
+        // Update tooltip to explain the action
+        ui->sendButton->setToolTip(isOffline
+            ? tr("Create transaction builder data for offline signing with private keys")
+            : tr("Sign and broadcast transaction to the network"));
     }
     else
     {
-      ui->sendButton->setText("Prepare off-line transaction");
+        ui->sendButton->setText(tr("S&end Transaction"));
+        ui->sendButton->setToolTip(tr("Sign and broadcast transaction to the network"));
     }
-  }
-  else
-  {
-    ui->sendButton->setText("S&end");
-  }
-  coinControlUpdateLabels();
+    
+    coinControlUpdateLabels();
 }
 
-// Coin Control: update labels
+/**
+ * @brief Update coin control labels and commission display
+ */
 void ZSendCoinsDialog::coinControlUpdateLabels()
 {
     if (!model || !model->getOptionsModel())
@@ -819,104 +878,78 @@ void ZSendCoinsDialog::coinControlUpdateLabels()
 
     updateCoinControlState(*CoinControlDialog::coinControl);
 
-    // set pay amounts
+    // Clear payment amounts
     CoinControlDialog::payAmounts.clear();
     CoinControlDialog::fSubtractFeeFromAmount = false;
 
-    CAmount total_spend=0;
-    for(int i = 0; i < ui->entries->count(); ++i) {
+    // Calculate total spend and collect amounts
+    for (int i = 0; i < ui->entries->count(); ++i)
+    {
         SendCoinsEntry *entry = qobject_cast<SendCoinsEntry*>(ui->entries->itemAt(i)->widget());
-        if(entry && !entry->isHidden())
+        if (entry && !entry->isHidden())
         {
             SendCoinsRecipient rcp = entry->getValue();
             CoinControlDialog::payAmounts.append(rcp.amount);
-            total_spend += rcp.amount;
+            
             if (rcp.fSubtractFeeFromAmount)
+            {
                 CoinControlDialog::fSubtractFeeFromAmount = true;
+            }
         }
     }
 
-    bool bIsMine=true;
-    QString qsText = ui->payFromAddress->currentText();
-    if (qsText.contains("Off-line")) {
-      bIsMine=false;
-    }
-
-    commission=0;
+    // Reset commission (legacy hardware wallet commission removed)
+    commission = 0;
     ui->labelCommission->setVisible(false);
     ui->labelCommissionValue->setVisible(false);
-    //Is this a cold storage transaction?
-    if (bIsMine==false) {
-        //Is a hardware wallet used to authorise(sign) the transactions?
-        if (fHWWalletCommission==true) {
-            commission = total_spend * 0.0025;
-            if (commission > 1562500000) { //15.625Arrr
-                //Cap maximum commission at 6250 coin.
-                commission = 1562500000;
-            }
-            QString sCommission = KomodoUnits::format(model->getOptionsModel()->getDisplayUnit(), commission);
-            ui->labelCommissionValue->setText( sCommission );
-            ui->labelCommission->setVisible(true);
-            ui->labelCommissionValue->setVisible(true);
-        }
-    }
 
+    // Update coin control dialog labels if selections exist
     if (CoinControlDialog::coinControl->HasSelected())
     {
-        // actual coin control calculation
         CoinControlDialog::updateLabels(model, this);
     }
 }
 
+/**
+ * @brief Refresh the list of available z-addresses for spending
+ */
 void ZSendCoinsDialog::updatePayFromList()
 {
     ui->payFromAddress->clear();
 
-    std::map<libzcash::PaymentAddress, CAmount> zbalances_All = model->getZAddressBalances(1, false);
-    std::map<libzcash::PaymentAddress, CAmount> zbalances_isMine = model->getZAddressBalances(1, true);
+    // Get all z-address balances
+    std::map<libzcash::PaymentAddress, CAmount> allBalances = 
+        model->getZAddressBalances(1, false);
+    std::map<libzcash::PaymentAddress, CAmount> ownedBalances = 
+        model->getZAddressBalances(1, true);
 
-    auto oDisplayUnit = model->getOptionsModel()->getDisplayUnit();
-
-    QSettings settings;
-    bool fEnableZSigning      = settings.value("fEnableZSigning").toBool();
-    bool fEnableZSigning_ModeSpend = false;
-      
-    if (fEnableZSigning==true) { 
-      //Cold storage is enabled.        
-      //Determine if the wallet is running in 'offline' mode,
-      //which allows for the authentication (signing) of transactions:
-      fEnableZSigning_ModeSpend = settings.value("fEnableZSigning_ModeSpend").toBool();
-    }    
+    auto displayUnit = model->getOptionsModel()->getDisplayUnit();
     
-    for (auto & pair : zbalances_All) {
-      libzcash::PaymentAddress oAddress = pair.first;
-      QString sAddddress = QString::fromStdString(EncodePaymentAddress(oAddress));
+    // Populate address list with addresses that have balances > 0
+    for (const auto &pair : allBalances)
+    {
+        libzcash::PaymentAddress address = pair.first;
+        CAmount balance = pair.second;
+        
+        // Skip addresses with zero balance
+        if (balance <= 0)
+            continue;
+        
+        QString addressStr = QString::fromStdString(EncodePaymentAddress(address));
+        QString amountStr = KomodoUnits::formatWithUnit(displayUnit, balance);
 
-      QString sAmount = KomodoUnits::formatWithUnit(oDisplayUnit, pair.second);
-
-      auto search = zbalances_isMine.find( oAddress );
-      if (search != zbalances_isMine.end()) {
-          //If we filter for 'cold storage enabled':
-          //    Only adresses for which we have the viewing key will be shown in 
-          //    the address drop down
-          
-          //else 
-          //    All address will be shown:
-          //    Those with spending key will be a normal Spend and
-          //    those with only the viewing key will be 'prepare on offline transaction'
-
-          //if (fEnableZSigning==false) {
-            ui->payFromAddress->addItem(tr("(%1) %2").arg(sAmount).arg(sAddddress) );
-          //}          
-      }
-      else {
-          if (fEnableZSigning_ModeSpend) {
-            // Cold storage online mode:
-            //   Show addressed for which we have the viewing key only
-            //   in order to be able to 'prepare an offline transaction'
-            ui->payFromAddress->addItem(tr("(%1) %2 - Off-line Transaction").arg(sAmount).arg(sAddddress) );
-          }
-      }
+        auto search = ownedBalances.find(address);
+        if (search != ownedBalances.end())
+        {
+            // Address with spending key - normal transaction flow
+            ui->payFromAddress->addItem(tr("(%1) %2").arg(amountStr).arg(addressStr));
+        }
+        else
+        {
+            // Viewing key only - automatically use offline transaction preparation
+            ui->payFromAddress->addItem(
+                tr("(%1) %2 - Off-line Transaction").arg(amountStr).arg(addressStr));
+        }
     }
 
     payFromAddressIndexChanged(ui->payFromAddress->currentIndex());

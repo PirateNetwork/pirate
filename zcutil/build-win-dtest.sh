@@ -1,5 +1,5 @@
 #!/bin/bash
-export HOST=x86_64-w64-mingw32
+export HOST=x86_64-w64-mingw64
 CXX=x86_64-w64-mingw32-g++-posix
 CC=x86_64-w64-mingw32-gcc-posix
 
@@ -15,7 +15,7 @@ make HOST=$HOST NO_QT=1 "$@"
 cd $BASE_DIR
 
 ./autogen.sh
-CONFIG_SITE=$PWD/depends/x86_64-w64-mingw32/share/config.site CXXFLAGS="-DPTW32_STATIC_LIB -DCURL_STATICLIB -DCURVE_ALT_BN128 -pthread" CPPFLAGS=-DTESTMODE ./configure --prefix="${PREFIX}" --host=x86_64-w64-mingw32 --enable-static --disable-shared
+CONFIG_SITE=$PWD/depends/x86_64-w64-mingw64/share/config.site CXXFLAGS="-DPTW32_STATIC_LIB -DCURL_STATICLIB -DCURVE_ALT_BN128 -pthread" CPPFLAGS=-DTESTMODE ./configure --prefix="${PREFIX}" --host=x86_64-w64-mingw64 --enable-static --disable-shared
 sed -i 's/-lboost_system-mt /-lboost_system-mt-s /' configure
 cd src/
 CC="${CC} -g " CXX="${CXX} -g " make V=1  pirated.exe pirate-cli.exe pirate-tx.exe

@@ -382,7 +382,7 @@ long komodo_stateind_validate(struct komodo_state *sp,const std::string& indfnam
     if ( (inds= OS_fileptr(&fsize,indfname.c_str())) != 0 )
     {
         long lastfpos = 0;
-        fprintf(stderr,"inds.%p validate %s fsize.%ld datalen.%ld n.%d lastfpos.%ld\n",inds,indfname.c_str(),fsize,datalen,(int32_t)(fsize / sizeof(uint32_t)),lastfpos);
+        fprintf(stdout,"inds.%p validate %s fsize.%ld datalen.%ld n.%d lastfpos.%ld\n",inds,indfname.c_str(),fsize,datalen,(int32_t)(fsize / sizeof(uint32_t)),lastfpos);
         if ( (fsize % sizeof(uint32_t)) == 0 )
         {
             int32_t n = (int32_t)(fsize / sizeof(uint32_t));
@@ -466,7 +466,7 @@ bool komodo_faststateinit(komodo_state *sp,const char *fname,char *symbol, const
         if ( indfp != nullptr )
             fwrite(&prevpos100,1,sizeof(prevpos100),indfp), indcounter++;
 
-        fprintf(stderr,"processing %s %ldKB, validated.%d\n",fname,datalen/1024,-1);
+        fprintf(stdout,"processing %s %ldKB, validated.%d\n",fname,datalen/1024,-1);
         int32_t func;
         while (!ShutdownRequested() && (func= komodo_parsestatefiledata(sp,filedata,&fpos,datalen,symbol,dest)) >= 0)
         {
@@ -481,7 +481,7 @@ bool komodo_faststateinit(komodo_state *sp,const char *fname,char *symbol, const
             else 
                 printf("%s validated fpos.%ld\n",indfname.c_str(),fpos);
         }
-        fprintf(stderr,"took %d seconds to process %s %ldKB\n",(int32_t)(time(NULL)-starttime),fname,datalen/1024);
+        fprintf(stdout,"took %d seconds to process %s %ldKB\n",(int32_t)(time(NULL)-starttime),fname,datalen/1024);
         free(filedata);
         return true;
     }

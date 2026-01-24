@@ -17,8 +17,9 @@ class CCTest : public ::testing::Test {
 public:
     void CCSign(CMutableTransaction &tx, CC *cond) {
         tx.vin.resize(1);
-        PrecomputedTransactionData txdata(tx);
-        uint256 sighash = SignatureHash(CCPubKey(cond), tx, 0, SIGHASH_ALL, 0, 0, &txdata);
+        std::vector<CTxOut> allPrevOutputs;
+        PrecomputedTransactionData txdata(tx, allPrevOutputs);
+        uint256 sighash = SignatureHash(CCPubKey(cond), tx, 0, SIGHASH_ALL, 0, 0, txdata);
 
         int out = cc_signTreeSecp256k1Msg32(cond, notaryKey.begin(), sighash.begin());
         tx.vin[0].scriptSig = CCSig(cond);
@@ -35,7 +36,7 @@ TEST_F(CCTest, testIsPayToCryptoCondition)
 {
     CScript s = CScript() << std::vector<unsigned char>({'a'});
     ASSERT_FALSE(s.IsPayToCryptoCondition());
-        
+
     s = CScript() << std::vector<unsigned char>({'a'}) << OP_CHECKCRYPTOCONDITION;
     ASSERT_TRUE(s.IsPayToCryptoCondition());
 
@@ -87,7 +88,8 @@ static bool CCVerify(const CMutableTransaction &mtxTo, const CC *cond) {
     CAmount amount;
     ScriptError error;
     CTransaction txTo(mtxTo);
-    PrecomputedTransactionData txdata(txTo);
+    std::vector<CTxOut> allPrevOutputs;
+    PrecomputedTransactionData txdata(txTo, allPrevOutputs);
     auto checker = ServerTransactionSignatureChecker(&txTo, 0, amount, false, txdata);
     return VerifyScript(CCSig(cond), CCPubKey(cond), 0, checker, 0, &error);
 };
@@ -107,7 +109,7 @@ TEST_F(CCTest, testVerifyCryptoCondition)
     CCSign(mtxTo, cond);
     ASSERT_TRUE(CCVerify(mtxTo, cond));
 
-    
+
     // has signature nodes
     CCFromJson(cond, R"!!({
       "type": "threshold-sha-256",
@@ -129,7 +131,7 @@ TEST_F(CCTest, testVerifyCryptoCondition)
     // here the signature is set wrong
     cond->threshold = 2;
     ASSERT_TRUE(CCVerify(mtxTo, cond));
-    memset(cond->subconditions[1]->signature, 0, 32); 
+    memset(cond->subconditions[1]->signature, 0, 32);
     ASSERT_FALSE(CCVerify(mtxTo, cond));
 }
 

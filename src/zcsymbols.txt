@@ -234,16 +234,16 @@ libzcash_a-IncrementalMerkleTree.o:
 0000000000000000 W std::vector<bool, std::allocator<bool> >::vector(std::vector<bool, std::allocator<bool> > const&)
 0000000000000000 W std::vector<bool, std::allocator<bool> >::vector(std::vector<bool, std::allocator<bool> > const&)
 0000000000000000 n std::vector<bool, std::allocator<bool> >::vector(std::vector<bool, std::allocator<bool> > const&)
-0000000000000000 W void std::vector<boost::optional<libzcash::PedersenHash>, std::allocator<boost::optional<libzcash::PedersenHash> > >::_M_emplace_back_aux<boost::optional<libzcash::PedersenHash> const&>(boost::optional<libzcash::PedersenHash> const&)
-0000000000000000 W void std::vector<boost::optional<libzcash::PedersenHash>, std::allocator<boost::optional<libzcash::PedersenHash> > >::_M_emplace_back_aux<boost::optional<libzcash::PedersenHash> const&>(boost::optional<libzcash::PedersenHash> const&)
-0000000000000000 W std::vector<boost::optional<libzcash::PedersenHash>, std::allocator<boost::optional<libzcash::PedersenHash> > >::~vector()
-0000000000000000 W std::vector<boost::optional<libzcash::PedersenHash>, std::allocator<boost::optional<libzcash::PedersenHash> > >::~vector()
-0000000000000000 n std::vector<boost::optional<libzcash::PedersenHash>, std::allocator<boost::optional<libzcash::PedersenHash> > >::~vector()
-0000000000000000 W void std::vector<boost::optional<libzcash::SHA256Compress>, std::allocator<boost::optional<libzcash::SHA256Compress> > >::_M_emplace_back_aux<boost::optional<libzcash::SHA256Compress> const&>(boost::optional<libzcash::SHA256Compress> const&)
-0000000000000000 W void std::vector<boost::optional<libzcash::SHA256Compress>, std::allocator<boost::optional<libzcash::SHA256Compress> > >::_M_emplace_back_aux<boost::optional<libzcash::SHA256Compress> const&>(boost::optional<libzcash::SHA256Compress> const&)
-0000000000000000 W std::vector<boost::optional<libzcash::SHA256Compress>, std::allocator<boost::optional<libzcash::SHA256Compress> > >::~vector()
-0000000000000000 W std::vector<boost::optional<libzcash::SHA256Compress>, std::allocator<boost::optional<libzcash::SHA256Compress> > >::~vector()
-0000000000000000 n std::vector<boost::optional<libzcash::SHA256Compress>, std::allocator<boost::optional<libzcash::SHA256Compress> > >::~vector()
+0000000000000000 W void std::vector<std::optional<libzcash::PedersenHash>, std::allocator<std::optional<libzcash::PedersenHash> > >::_M_emplace_back_aux<std::optional<libzcash::PedersenHash> const&>(std::optional<libzcash::PedersenHash> const&)
+0000000000000000 W void std::vector<std::optional<libzcash::PedersenHash>, std::allocator<std::optional<libzcash::PedersenHash> > >::_M_emplace_back_aux<std::optional<libzcash::PedersenHash> const&>(std::optional<libzcash::PedersenHash> const&)
+0000000000000000 W std::vector<std::optional<libzcash::PedersenHash>, std::allocator<std::optional<libzcash::PedersenHash> > >::~vector()
+0000000000000000 W std::vector<std::optional<libzcash::PedersenHash>, std::allocator<std::optional<libzcash::PedersenHash> > >::~vector()
+0000000000000000 n std::vector<std::optional<libzcash::PedersenHash>, std::allocator<std::optional<libzcash::PedersenHash> > >::~vector()
+0000000000000000 W void std::vector<std::optional<libzcash::SHA256Compress>, std::allocator<std::optional<libzcash::SHA256Compress> > >::_M_emplace_back_aux<std::optional<libzcash::SHA256Compress> const&>(std::optional<libzcash::SHA256Compress> const&)
+0000000000000000 W void std::vector<std::optional<libzcash::SHA256Compress>, std::allocator<std::optional<libzcash::SHA256Compress> > >::_M_emplace_back_aux<std::optional<libzcash::SHA256Compress> const&>(std::optional<libzcash::SHA256Compress> const&)
+0000000000000000 W std::vector<std::optional<libzcash::SHA256Compress>, std::allocator<std::optional<libzcash::SHA256Compress> > >::~vector()
+0000000000000000 W std::vector<std::optional<libzcash::SHA256Compress>, std::allocator<std::optional<libzcash::SHA256Compress> > >::~vector()
+0000000000000000 n std::vector<std::optional<libzcash::SHA256Compress>, std::allocator<std::optional<libzcash::SHA256Compress> > >::~vector()
 0000000000000000 W void std::vector<libzcash::PedersenHash, std::allocator<libzcash::PedersenHash> >::emplace_back<libzcash::PedersenHash>(libzcash::PedersenHash&&)
 0000000000000000 W void std::vector<libzcash::PedersenHash, std::allocator<libzcash::PedersenHash> >::emplace_back<libzcash::PedersenHash>(libzcash::PedersenHash&&)
 0000000000000000 W void std::vector<libzcash::PedersenHash, std::allocator<libzcash::PedersenHash> >::_M_emplace_back_aux<libzcash::PedersenHash const&>(libzcash::PedersenHash const&)
@@ -290,18 +290,18 @@ libzcash_a-IncrementalMerkleTree.o:
                  U vtable for __cxxabiv1::__si_class_type_info
 0000000000000000 V vtable for boost::system::system_error
 0000000000000000 V vtable for boost::system::error_category::std_category
-0000000000000500 r boost::optional<libzcash::PedersenHash>::get()::__PRETTY_FUNCTION__
-0000000000000aa0 r boost::optional<libzcash::SHA256Compress>::get()::__PRETTY_FUNCTION__
-00000000000008e0 r boost::optional<libzcash::IncrementalMerkleTree<29ul, libzcash::SHA256Compress> >::operator->()::__PRETTY_FUNCTION__
-0000000000000340 r boost::optional<libzcash::IncrementalMerkleTree<32ul, libzcash::PedersenHash> >::operator->()::__PRETTY_FUNCTION__
-0000000000000120 r boost::optional<libzcash::IncrementalMerkleTree<4ul, libzcash::PedersenHash> >::operator->()::__PRETTY_FUNCTION__
-00000000000006c0 r boost::optional<libzcash::IncrementalMerkleTree<4ul, libzcash::SHA256Compress> >::operator->()::__PRETTY_FUNCTION__
-0000000000000440 r boost::optional<libzcash::PedersenHash>::get() const::__PRETTY_FUNCTION__
-00000000000009e0 r boost::optional<libzcash::SHA256Compress>::get() const::__PRETTY_FUNCTION__
-00000000000007c0 r boost::optional<libzcash::IncrementalMerkleTree<29ul, libzcash::SHA256Compress> >::operator->() const::__PRETTY_FUNCTION__
-0000000000000220 r boost::optional<libzcash::IncrementalMerkleTree<32ul, libzcash::PedersenHash> >::operator->() const::__PRETTY_FUNCTION__
-0000000000000000 r boost::optional<libzcash::IncrementalMerkleTree<4ul, libzcash::PedersenHash> >::operator->() const::__PRETTY_FUNCTION__
-00000000000005a0 r boost::optional<libzcash::IncrementalMerkleTree<4ul, libzcash::SHA256Compress> >::operator->() const::__PRETTY_FUNCTION__
+0000000000000500 r std::optional<libzcash::PedersenHash>::get()::__PRETTY_FUNCTION__
+0000000000000aa0 r std::optional<libzcash::SHA256Compress>::get()::__PRETTY_FUNCTION__
+00000000000008e0 r std::optional<libzcash::IncrementalMerkleTree<29ul, libzcash::SHA256Compress> >::operator->()::__PRETTY_FUNCTION__
+0000000000000340 r std::optional<libzcash::IncrementalMerkleTree<32ul, libzcash::PedersenHash> >::operator->()::__PRETTY_FUNCTION__
+0000000000000120 r std::optional<libzcash::IncrementalMerkleTree<4ul, libzcash::PedersenHash> >::operator->()::__PRETTY_FUNCTION__
+00000000000006c0 r std::optional<libzcash::IncrementalMerkleTree<4ul, libzcash::SHA256Compress> >::operator->()::__PRETTY_FUNCTION__
+0000000000000440 r std::optional<libzcash::PedersenHash>::get() const::__PRETTY_FUNCTION__
+00000000000009e0 r std::optional<libzcash::SHA256Compress>::get() const::__PRETTY_FUNCTION__
+00000000000007c0 r std::optional<libzcash::IncrementalMerkleTree<29ul, libzcash::SHA256Compress> >::operator->() const::__PRETTY_FUNCTION__
+0000000000000220 r std::optional<libzcash::IncrementalMerkleTree<32ul, libzcash::PedersenHash> >::operator->() const::__PRETTY_FUNCTION__
+0000000000000000 r std::optional<libzcash::IncrementalMerkleTree<4ul, libzcash::PedersenHash> >::operator->() const::__PRETTY_FUNCTION__
+00000000000005a0 r std::optional<libzcash::IncrementalMerkleTree<4ul, libzcash::SHA256Compress> >::operator->() const::__PRETTY_FUNCTION__
 
 libzcash_a-NoteEncryption.o:
                  U crypto_aead_chacha20poly1305_ietf_decrypt
@@ -2019,9 +2019,9 @@ libzcash_a-JoinSplit.o:
 0000000000000000 W std::vector<unsigned long, std::allocator<unsigned long> >::vector(std::vector<unsigned long, std::allocator<unsigned long> > const&)
 0000000000000000 W std::vector<unsigned long, std::allocator<unsigned long> >::vector(std::vector<unsigned long, std::allocator<unsigned long> > const&)
 0000000000000000 n std::vector<unsigned long, std::allocator<unsigned long> >::vector(std::vector<unsigned long, std::allocator<unsigned long> > const&)
-0000000000000000 W std::vector<boost::optional<libzcash::SHA256Compress>, std::allocator<boost::optional<libzcash::SHA256Compress> > >::~vector()
-0000000000000000 W std::vector<boost::optional<libzcash::SHA256Compress>, std::allocator<boost::optional<libzcash::SHA256Compress> > >::~vector()
-0000000000000000 n std::vector<boost::optional<libzcash::SHA256Compress>, std::allocator<boost::optional<libzcash::SHA256Compress> > >::~vector()
+0000000000000000 W std::vector<std::optional<libzcash::SHA256Compress>, std::allocator<std::optional<libzcash::SHA256Compress> > >::~vector()
+0000000000000000 W std::vector<std::optional<libzcash::SHA256Compress>, std::allocator<std::optional<libzcash::SHA256Compress> > >::~vector()
+0000000000000000 n std::vector<std::optional<libzcash::SHA256Compress>, std::allocator<std::optional<libzcash::SHA256Compress> > >::~vector()
 0000000000000000 W void std::vector<libsnark::linear_term<libsnark::Fp_model<4l, libsnark::alt_bn128_modulus_r> >, std::allocator<libsnark::linear_term<libsnark::Fp_model<4l, libsnark::alt_bn128_modulus_r> > > >::emplace_back<libsnark::linear_term<libsnark::Fp_model<4l, libsnark::alt_bn128_modulus_r> > const&>(libsnark::linear_term<libsnark::Fp_model<4l, libsnark::alt_bn128_modulus_r> > const&)
 0000000000000000 W void std::vector<libsnark::linear_term<libsnark::Fp_model<4l, libsnark::alt_bn128_modulus_r> >, std::allocator<libsnark::linear_term<libsnark::Fp_model<4l, libsnark::alt_bn128_modulus_r> > > >::emplace_back<libsnark::linear_term<libsnark::Fp_model<4l, libsnark::alt_bn128_modulus_r> > >(libsnark::linear_term<libsnark::Fp_model<4l, libsnark::alt_bn128_modulus_r> >&&)
 0000000000000000 W void std::vector<libsnark::linear_term<libsnark::Fp_model<4l, libsnark::alt_bn128_modulus_r> >, std::allocator<libsnark::linear_term<libsnark::Fp_model<4l, libsnark::alt_bn128_modulus_r> > > >::emplace_back<libsnark::linear_term<libsnark::Fp_model<4l, libsnark::alt_bn128_modulus_r> > const&>(libsnark::linear_term<libsnark::Fp_model<4l, libsnark::alt_bn128_modulus_r> > const&)

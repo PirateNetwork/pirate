@@ -1,6 +1,12 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2018-2025 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+/**
+ * @file zsendcoinsdialog.h
+ * @brief Shielded transaction send dialog interface
+ */
 
 #ifndef KOMODO_QT_ZSENDCOINSDIALOG_H
 #define KOMODO_QT_ZSENDCOINSDIALOG_H
@@ -62,19 +68,20 @@ public Q_SLOTS:
 private:
     Ui::ZSendCoinsDialog *ui;
     ClientModel *clientModel;
-
     WalletModel *model;
     bool fNewRecipientAllowed;
     const PlatformStyle *platformStyle;
-
-    bool fHWWalletCommission;
     CAmount commission;
-    // Process WalletModel::SendCoinsReturn and generate a pair consisting
-    // of a message and message flags for use in Q_EMIT message().
-    // Additional parameter msgArg can be used via .arg(msgArg).
-    void processSendCoinsReturn(const WalletModel::SendCoinsReturn &sendCoinsReturn, const QString &msgArg = QString());
-    // Update the passed in CCoinControl with state from the GUI
+
+    // Internal helper methods
+    void processSendCoinsReturn(const WalletModel::SendCoinsReturn &sendCoinsReturn, 
+                               const QString &msgArg = QString());
     void updateCoinControlState(CCoinControl& ctrl);
+    void handleOfflineSigning(const WalletModelZTransaction &transaction, 
+                             CAmount txFee, 
+                             const QString &fromAddress);
+    void broadcastSignedTransaction(const QString &signedTx);
+    void handleRPCError(const UniValue& objError, const std::string& context);
 
 private Q_SLOTS:
     void on_sendButton_clicked();

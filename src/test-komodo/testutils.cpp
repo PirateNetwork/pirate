@@ -166,40 +166,40 @@ CMutableTransaction spendTx(const CTransaction &txIn, int nOut)
 }
 
 
-std::vector<uint8_t> getSig(const CMutableTransaction mtx, CScript inputPubKey, int nIn)
-{
-    uint256 hash = SignatureHash(inputPubKey, mtx, nIn, SIGHASH_ALL, 0, 0);
-    std::vector<uint8_t> vchSig;
-    notaryKey.Sign(hash, vchSig);
-    vchSig.push_back((unsigned char)SIGHASH_ALL);
-    return vchSig;
-}
+// std::vector<uint8_t> getSig(const CMutableTransaction mtx, CScript inputPubKey, int nIn)
+// {
+//     uint256 hash = SignatureHash(inputPubKey, mtx, nIn, SIGHASH_ALL, 0, 0);
+//     std::vector<uint8_t> vchSig;
+//     notaryKey.Sign(hash, vchSig);
+//     vchSig.push_back((unsigned char)SIGHASH_ALL);
+//     return vchSig;
+// }
 
 
 /*
  * In order to do tests there needs to be inputs to spend.
  * This method creates a block and returns a transaction that spends the coinbase.
  */
-CTransaction getInputTx(CScript scriptPubKey)
-{
-    // Get coinbase
-    CBlock block;
-    generateBlock(&block);
-    CTransaction coinbase = block.vtx[0];
-
-    // Create tx
-    auto mtx = spendTx(coinbase);
-    mtx.vout[0].scriptPubKey = scriptPubKey;
-    uint256 hash = SignatureHash(coinbase.vout[0].scriptPubKey, mtx, 0, SIGHASH_ALL, 0, 0);
-    std::vector<unsigned char> vchSig;
-    notaryKey.Sign(hash, vchSig);
-    vchSig.push_back((unsigned char)SIGHASH_ALL);
-    mtx.vin[0].scriptSig << vchSig;
-
-    // Accept
-    acceptTxFail(mtx);
-    return CTransaction(mtx);
-}
+// CTransaction getInputTx(CScript scriptPubKey)
+// {
+//     // Get coinbase
+//     CBlock block;
+//     generateBlock(&block);
+//     CTransaction coinbase = block.vtx[0];
+//
+//     // Create tx
+//     auto mtx = spendTx(coinbase);
+//     mtx.vout[0].scriptPubKey = scriptPubKey;
+//     uint256 hash = SignatureHash(coinbase.vout[0].scriptPubKey, mtx, 0, SIGHASH_ALL, 0, 0);
+//     std::vector<unsigned char> vchSig;
+//     notaryKey.Sign(hash, vchSig);
+//     vchSig.push_back((unsigned char)SIGHASH_ALL);
+//     mtx.vin[0].scriptSig << vchSig;
+//
+//     // Accept
+//     acceptTxFail(mtx);
+//     return CTransaction(mtx);
+// }
 
 /****
  * A class to provide a simple chain for tests
@@ -683,7 +683,7 @@ bool TestWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWall
                     CScript scriptChange;
 
                     // coin control: send change to custom address
-                    if (coinControl && !boost::get<CNoDestination>(&coinControl->destChange))
+                    if (coinControl && !std::get_if<CNoDestination>(&coinControl->destChange))
                         scriptChange = GetScriptForDestination(coinControl->destChange);
 
                     // no coin control: send change to newly generated address
@@ -773,17 +773,21 @@ bool TestWallet::CreateTransaction(const std::vector<CRecipient>& vecSend, CWall
                 // Sign
                 int nIn = 0;
                 CTransaction txNewConst(txNew);
+                CCoinsViewCache view(pcoinsTip);
+                std::vector<CTxOut> allPrevOutputs;
                 for(const auto& coin : setCoins)
                 {
                     bool signSuccess;
                     const CScript& scriptPubKey = coin.first.vout[coin.second].scriptPubKey;
                     SignatureData sigdata;
-                    if (sign)
+                    if (sign) {
+                        PrecomputedTransactionData txdata(txNewConst, allPrevOutputs);
                         signSuccess = ProduceSignature(TransactionSignatureCreator(
-                                this, &txNewConst, nIn, coin.first.vout[coin.second].nValue, SIGHASH_ALL),
+                                this, &txNewConst, txdata, nIn, coin.first.vout[coin.second].nValue, SIGHASH_ALL),
                                 scriptPubKey, sigdata, consensusBranchId);
-                    else
+                    } else {
                         signSuccess = ProduceSignature(DummySignatureCreator(this), scriptPubKey, sigdata, consensusBranchId);
+                    }
 
                     if (!signSuccess)
                     {
@@ -895,7 +899,7 @@ bool TestWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey, C
             // Broadcast
             if (!::AcceptToMemoryPool(mempool, state, wtxNew, false, nullptr))
             {
-                fprintf(stderr,"commit failed\n");
+                fprintf(stdout,"commit failed\n");
                 // This must not fail. The transaction has already been signed and recorded.
                 LogPrintf("CommitTransaction(): Error: Transaction not valid\n");
                 return false;

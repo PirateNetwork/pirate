@@ -273,6 +273,34 @@ AC_DEFUN([BITCOIN_QT_CONFIGURE],[
     AC_MSG_RESULT([$bitcoin_enable_qt])
   fi
 
+  # Smart deduplication: preserve last occurrence of each library (important for static linking order)
+  if test -n "$QT_LIBS"; then
+    qt_libs_reversed=""
+    qt_libs_deduped=""
+    qt_seen_libs=""
+    
+    # First, reverse the library list to process from end to beginning
+    for qt_lib in $QT_LIBS; do
+      qt_libs_reversed="$qt_lib $qt_libs_reversed"
+    done
+    
+    # Process reversed list, keeping first occurrence (which is last in original order)
+    for qt_lib in $qt_libs_reversed; do
+      case " $qt_seen_libs " in
+        *" $qt_lib "*) 
+          # Skip this duplicate (already seen means it appears later in original order)
+          ;;
+        *)
+          # Keep this library and mark as seen
+          qt_libs_deduped="$qt_lib $qt_libs_deduped"
+          qt_seen_libs="$qt_seen_libs $qt_lib"
+          ;;
+      esac
+    done
+    
+    QT_LIBS="$qt_libs_deduped"
+  fi
+
   AC_SUBST(QT_PIE_FLAGS)
   AC_SUBST(QT_INCLUDES)
   AC_SUBST(QT_LIBS)

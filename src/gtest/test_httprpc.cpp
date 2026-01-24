@@ -45,14 +45,29 @@ TEST(HTTPRPC, FailsWithoutAuthHeader) {
     req.CleanUp();
 }
 
-TEST(HTTPRPC, FailsWithBadAuth) {
+TEST(HTTPRPC, FailsWithBadAuth)
+{
+    // Mock the getpeerinfo RPC call to succeed, so that a username and password
+    // for the remote peer is added to the rpcauth table.
+    // EXPECT_CALL(rpcService, CallRPC("getpeerinfo", _, _))
+    //     .WillOnce(Return(UniValue(UniValue::VARR)));
+    // Mock the lookup function to return a CService.
+    // This is necessary because the default mock action for LookupNumeric is to return false.
+    // EXPECT_CALL(*pLookupNumericMock, LookupNumeric("127.0.0.1", _, _))
+    //     .WillRepeatedly(Return(CService(CNetAddr("127.0.0.1"), 1337)));
+
+    // Test the HTTP basic authentication.
+    // Wrong password
     MockHTTPRequest req;
     EXPECT_CALL(req, GetRequestMethod())
         .WillRepeatedly(Return(HTTPRequest::POST));
     EXPECT_CALL(req, GetHeader("authorization"))
         .WillRepeatedly(Return(std::make_pair(true, "Basic spam:eggs")));
+    // Construct CService correctly for the GetPeer mock
+    CService peerService;
+    peerService = LookupNumeric("127.0.0.1", 1337); // Default port, can be anything
     EXPECT_CALL(req, GetPeer())
-        .WillRepeatedly(Return(CService("127.0.0.1:1337")));
+        .WillRepeatedly(Return(peerService));
     EXPECT_CALL(req, WriteHeader("WWW-Authenticate", "Basic realm=\"jsonrpc\""))
         .Times(1);
     EXPECT_CALL(req, WriteReply(HTTP_UNAUTHORIZED, ""))

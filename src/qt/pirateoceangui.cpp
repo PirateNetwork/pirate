@@ -50,6 +50,7 @@
 #include <QStackedWidget>
 #include <QStatusBar>
 #include <QStyle>
+#include <QScreen>
 #include <QTimer>
 #include <QToolBar>
 #include <QVBoxLayout>
@@ -133,7 +134,7 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     QSettings settings;
     if (!restoreGeometry(settings.value("MainWindowGeometry").toByteArray())) {
         // Restore failed (perhaps missing setting), center the window
-        move(QApplication::desktop()->availableGeometry().center() - frameGeometry().center());
+        move(QGuiApplication::primaryScreen()->availableGeometry().center() - frameGeometry().center());
     }
 
     QCoreApplication::setAttribute(Qt::AA_UseStyleSheetPropagationInWidgetStyles, true);
@@ -1480,6 +1481,14 @@ void PirateOceanGUI::ShowProgress(QString title, int nProgress)
 {
     if (nProgress == 0)
     {
+        //Close anything that already exists
+        if (progressDialog)
+        {
+            progressDialog->close();
+            progressDialog->deleteLater();
+        }
+
+        //Create a new dialog
         progressDialog = new QProgressDialog(title, "", 0, 100);
         progressDialog->setWindowModality(Qt::ApplicationModal);
         progressDialog->setMinimumHeight(75);
@@ -1560,7 +1569,7 @@ UnitDisplayStatusBarControl::UnitDisplayStatusBarControl(const PlatformStyle *pl
     const QFontMetrics fm(font());
     for (const KomodoUnits::Unit unit : units)
     {
-        max_width = qMax(max_width, fm.width(KomodoUnits::name(unit)));
+        max_width = qMax(max_width, fm.horizontalAdvance(KomodoUnits::name(unit)));
     }
     setMinimumSize(max_width, 0);
     setAlignment(Qt::AlignRight | Qt::AlignVCenter);

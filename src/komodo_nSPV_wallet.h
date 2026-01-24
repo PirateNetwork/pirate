@@ -96,7 +96,7 @@ int32_t NSPV_gettransaction(int32_t skipvalidation,int32_t vout,uint256 txid,int
     //char coinaddr[64];
     //Getscriptaddress(coinaddr,tx.vout[0].scriptPubKey);  causes crash??
     //fprintf(stderr,"%s txid.%s vs hash.%s\n",coinaddr,txid.GetHex().c_str(),tx.GetHash().GetHex().c_str());
-    
+
     if ( skipvalidation == 0 )
     {
         if ( ptr->txprooflen > 0 )
@@ -243,7 +243,10 @@ int64_t NSPV_addinputs(struct NSPV_utxoresp *used,CMutableTransaction &mtx,int64
 
 bool NSPV_SignTx(CMutableTransaction &mtx,int32_t vini,int64_t utxovalue,const CScript scriptPubKey,uint32_t nTime)
 {
-    CTransaction txNewConst(mtx); SignatureData sigdata; CBasicKeyStore keystore; int64_t branchid = NSPV_BRANCHID;
+    CTransaction txNewConst(mtx);
+    SignatureData sigdata;
+    CBasicKeyStore keystore;
+    int64_t branchid = NSPV_BRANCHID;
     if ( NSPV_logintime == 0 || time(NULL) > NSPV_logintime+NSPV_AUTOLOGOUT )
     {
         fprintf(stderr,"need to be logged in to get myprivkey\n");
@@ -255,7 +258,14 @@ bool NSPV_SignTx(CMutableTransaction &mtx,int32_t vini,int64_t utxovalue,const C
         fprintf(stderr,"use legacy sig validation\n");
         branchid = 0;
     }
-    if ( ProduceSignature(TransactionSignatureCreator(&keystore,&txNewConst,vini,utxovalue,SIGHASH_ALL),scriptPubKey,sigdata,branchid) != 0 )
+
+    CCoinsViewCache view(pcoinsTip);
+    std::vector<CTxOut> allPrevOutputs;
+    for (const auto& input : txNewConst.vin) {
+        allPrevOutputs.push_back(view.GetOutputFor(input));
+    }
+    PrecomputedTransactionData txdata(txNewConst, allPrevOutputs);
+    if ( ProduceSignature(TransactionSignatureCreator(&keystore,&txNewConst, txdata, vini,utxovalue,SIGHASH_ALL),scriptPubKey,sigdata,branchid) != 0 )
     {
         UpdateTransaction(mtx,vini,sigdata);
         fprintf(stderr,"SIG_TXHASH %s vini.%d %.8f\n",SIG_TXHASH.GetHex().c_str(),vini,(double)utxovalue/COIN);
@@ -399,7 +409,7 @@ UniValue NSPV_spend(char *srcaddr,char *destaddr,int64_t satoshis) // what its a
         else
             mtx.nLockTime = (uint32_t)chainActive.Tip()->GetMedianTimePast();
     }
-        
+
     memset(used,0,sizeof(used));
 
     if ( NSPV_addinputs(used,mtx,satoshis+txfee,64,NSPV_utxosresult.utxos,NSPV_utxosresult.numutxos) > 0 )

@@ -430,7 +430,7 @@ uint16_t _komodo_userpass(char *username,char *password,FILE *fp)
 void komodo_statefname(char *fname, const char *symbol, const char *str)
 {
     int32_t n,len;
-    snprintf(fname, MAX_STATEFNAME, "%s",GetDataDir(false).string().c_str());
+    snprintf(fname, MAX_STATEFNAME, "%s",GetDataDir(true).string().c_str());
     if ( (n= (int32_t)chainName.symbol().size()) != 0 )
     {
         len = (int32_t)strlen(fname);
@@ -593,8 +593,8 @@ uint32_t komodo_assetmagic(const char *symbol,uint64_t supply,uint8_t *extraptr,
         vcalc_sha256(0,hash.bytes,extraptr,extralen);
         crc0 = hash.uints[0];
         for (int32_t i=0; i<extralen; i++)
-            fprintf(stderr,"%02x",extraptr[i]);
-        fprintf(stderr," extralen.%d crc0.%x\n",extralen,crc0);
+            fprintf(stdout,"%02x",extraptr[i]);
+        fprintf(stdout," extralen.%d crc0.%x\n",extralen,crc0);
     }
 
     return calc_crc32(crc0,buf,len);
@@ -1052,15 +1052,20 @@ void komodo_args(char *argv0)
         fprintf(stderr, "Cannot be STAKED and KMD notary at the same time!\n");
         StartShutdown();
     }
-    SoftSetArg("-ac_name", std::string("PIRATE"));
+    SoftSetArg("-ac_name", std::string("PIRATETST"));
     SoftSetArg("-ac_supply", std::string("0"));
     SoftSetArg("-ac_reward", std::string("25600000000"));
     SoftSetArg("-ac_private", std::string("1"));
     SoftSetArg("-ac_halving", std::string("77777"));
 
-    SoftSetArg("-addnode", std::string("zero.kolo.supernet.org"));
-    vector<string> PIRATEnodes = {"pirate1.cryptoforge.cc,pirate2.cryptoforge.cc,pirate3.cryptoforge.cc,explorer.piratechain.com","78.63.47.105","46.4.67.239","139.99.145.129","94.130.32.156","173.212.200.221","66.248.204.186","91.206.15.138","217.69.15.197","38.91.101.236","49.12.83.114","158.69.26.155","51.81.56.52","84.38.184.139" };
-    mapMultiArgs["-addnode"] = PIRATEnodes;
+    // Only load hardcoded addnodes for mainnet (not testnet or regtest)
+    bool fTestNet = GetBoolArg("-testnet", false);
+    bool fRegTest = GetBoolArg("-regtest", false);
+    if (!fTestNet && !fRegTest) {
+        SoftSetArg("-addnode", std::string("zero.kolo.supernet.org"));
+        vector<string> PIRATEnodes = {"pirate1.cryptoforge.cc,pirate2.cryptoforge.cc,pirate3.cryptoforge.cc,explorer.piratechain.com","78.63.47.105","46.4.67.239","139.99.145.129","94.130.32.156","173.212.200.221","66.248.204.186","91.206.15.138","217.69.15.197","38.91.101.236","49.12.83.114","158.69.26.155","51.81.56.52","84.38.184.139" };
+        mapMultiArgs["-addnode"] = PIRATEnodes;
+    }
 	  std::string name = GetArg("-ac_name","");
     if ( argv0 != 0 )
     {
@@ -1197,7 +1202,7 @@ void komodo_args(char *argv0)
             fprintf(stderr,"-ac_supply must be less than 90 billion\n");
             StartShutdown();
         }
-        fprintf(stderr,"ASSETCHAINS_SUPPLY %llu\n",(long long)ASSETCHAINS_SUPPLY);
+        fprintf(stdout,"ASSETCHAINS_SUPPLY %llu\n",(long long)ASSETCHAINS_SUPPLY);
 
         ASSETCHAINS_COMMISSION = GetArg("-ac_perc",0);
         memset(ASSETCHAINS_OVERRIDE_PUBKEY33, 0, sizeof(ASSETCHAINS_OVERRIDE_PUBKEY33));
@@ -1298,11 +1303,10 @@ void komodo_args(char *argv0)
             ASSETCHAINS_STAKED = 100;
 
 
-				ASSETCHAINS_CANOPY = GetArg("-ac_canopy", -1);
+		ASSETCHAINS_ORCHARD = GetArg("-ac_orchard", -1);
         ASSETCHAINS_SAPLING = GetArg("-ac_sapling", -1);
         if (ASSETCHAINS_SAPLING == -1)
         {
-						ASSETCHAINS_CANOPY = -1;
             ASSETCHAINS_OVERWINTER = GetArg("-ac_overwinter", -1);
         }
         else
@@ -1386,7 +1390,7 @@ void komodo_args(char *argv0)
                 || ASSETCHAINS_CBMATURITY != 0
                 || ASSETCHAINS_ADAPTIVEPOW != 0 )
         {
-            fprintf(stderr,"perc %.4f%% ac_pub=[%02x%02x%02x...] acsize.%d\n",dstr(ASSETCHAINS_COMMISSION)*100,ASSETCHAINS_OVERRIDE_PUBKEY33[0],ASSETCHAINS_OVERRIDE_PUBKEY33[1],ASSETCHAINS_OVERRIDE_PUBKEY33[2],(int32_t)ASSETCHAINS_SCRIPTPUB.size());
+            fprintf(stdout,"perc %.4f%% ac_pub=[%02x%02x%02x...] acsize.%d\n",dstr(ASSETCHAINS_COMMISSION)*100,ASSETCHAINS_OVERRIDE_PUBKEY33[0],ASSETCHAINS_OVERRIDE_PUBKEY33[1],ASSETCHAINS_OVERRIDE_PUBKEY33[2],(int32_t)ASSETCHAINS_SCRIPTPUB.size());
             extraptr = extrabuf;
             memcpy(extraptr,ASSETCHAINS_OVERRIDE_PUBKEY33,33), extralen = 33;
 
@@ -1461,7 +1465,7 @@ void komodo_args(char *argv0)
                 extraptr[extralen++] = 'b';
             if ( ASSETCHAINS_CODAPORT != 0 )
                 extraptr[extralen++] = 'c';
-            fprintf(stderr,"extralen.%d before disable bits\n",extralen);
+            fprintf(stdout,"extralen.%d before disable bits\n",extralen);
             if ( nonz > 0 )
             {
                 memcpy(&extraptr[extralen],disablebits,sizeof(disablebits));
@@ -1519,7 +1523,7 @@ void komodo_args(char *argv0)
             MAX_MONEY = 1000000LL*SATOSHIDEN;
         if ( KOMODO_BIT63SET(MAX_MONEY) != 0 )
             MAX_MONEY = KOMODO_MAXNVALUE;
-        fprintf(stderr,"MAX_MONEY %llu %.8f\n",(long long)MAX_MONEY,(double)MAX_MONEY/SATOSHIDEN);
+        fprintf(stdout,"MAX_MONEY %llu %.8f\n",(long long)MAX_MONEY,(double)MAX_MONEY/SATOSHIDEN);
         uint16_t tmpport = komodo_port(chainName.symbol().c_str(),ASSETCHAINS_SUPPLY,&ASSETCHAINS_MAGIC,extraptr,extralen);
         if ( GetArg("-port",0) != 0 )
         {
@@ -1530,14 +1534,11 @@ void komodo_args(char *argv0)
             ASSETCHAINS_P2PPORT = tmpport;
 
         char* dirname = nullptr;
-        while ( (dirname= (char *)GetDataDir(false).string().c_str()) == 0 || dirname[0] == 0 )
+        if ( (dirname= (char *)GetDataDir(false).string().c_str()) == 0 || dirname[0] == 0 )
         {
-            fprintf(stderr,"waiting for datadir (%s)\n",dirname);
-#ifndef _WIN32
-            sleep(3);
-#else
-            boost::this_thread::sleep(boost::posix_time::milliseconds(3000));
-#endif
+            fprintf(stdout,"Shutting down - cannot continue without valid datadir\n");
+            StartShutdown();
+            return; // Exit the function to prevent further execution
         }
         if ( !chainName.isKMD() )
         {

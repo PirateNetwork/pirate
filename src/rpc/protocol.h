@@ -29,6 +29,8 @@
 
 #include <univalue.h>
 
+namespace fs = boost::filesystem;
+
 //! HTTP status codes
 enum HTTPStatusCode
 {
@@ -67,7 +69,6 @@ enum RPCErrorCode
     RPC_IN_WARMUP                   = -28, //! Client still warming up
     RPC_DISABLED_BEFORE_WITNESSES   = -31, //! Do not allow z_sendmany prior to building witnesses
     RPC_BUILDING_WITNESS_CACHE      = -32, //! Return error while builing witness cache
-    RPC_DISABLED_WHILE_CLEANUP      = -33, //! Return error while note is consolidating in cleanup mode
 
     //! Aliases for backward compatibility
     RPC_TRANSACTION_ERROR           = RPC_VERIFY_ERROR,
@@ -100,7 +101,7 @@ std::string JSONRPCReply(const UniValue& result, const UniValue& error, const Un
 UniValue JSONRPCError(int code, const std::string& message);
 
 /** Get name of RPC authentication cookie file */
-boost::filesystem::path GetAuthCookieFile();
+fs::path GetAuthCookieFile();
 /** Generate a new RPC authentication cookie and write it to disk */
 bool GenerateAuthCookie(std::string *cookie_out);
 /** Read the RPC authentication cookie from disk */

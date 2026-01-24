@@ -275,7 +275,7 @@ Session::Reply Session::SendRequestAndGetReply(const Sock& sock,
         if (pos != kv.end()) {
             reply.keys.emplace(std::string{kv.begin(), pos}, std::string{pos + 1, kv.end()});
         } else {
-            reply.keys.emplace(std::string{kv.begin(), kv.end()}, boost::none);
+            reply.keys.emplace(std::string{kv.begin(), kv.end()}, std::nullopt);
         }
     }
 

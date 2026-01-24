@@ -81,8 +81,11 @@ using namespace tls;
 
 using namespace std;
 
+const int MAX_OUTBOUND_CONNECTIONS = 64;  // Increased from 32 to allow more parallel connections
+int MAX_ADDNODE_CONNECTIONS = 8;  // Reserve slots for addnode connections
+int MAX_REGULAR_OUTBOUND_CONNECTIONS = MAX_OUTBOUND_CONNECTIONS - MAX_ADDNODE_CONNECTIONS;
+
 namespace {
-    const int MAX_OUTBOUND_CONNECTIONS = 16;
     const int MAX_INBOUND_FROMIP = 5;
 
     struct ListenSocket {
@@ -129,6 +132,12 @@ limitedmap<CInv, int64_t> mapAlreadyAskedFor(MAX_INV_SZ);
 static deque<string> vOneShots;
 static CCriticalSection cs_vOneShots;
 
+void AddOneShot(const std::string& strDest)
+{
+    LOCK(cs_vOneShots);
+    vOneShots.push_back(strDest);
+}
+
 static set<CNetAddr> setservAddNodeAddresses;
 static CCriticalSection cs_setservAddNodeAddresses;
 
@@ -139,6 +148,7 @@ NodeId nLastNodeId = 0;
 CCriticalSection cs_nLastNodeId;
 
 static CSemaphore *semOutbound = NULL;
+static CSemaphore *semAddNodeOutbound = NULL;
 static boost::condition_variable messageHandlerCondition;
 
 // Denial-of-service detection/prevention
@@ -164,11 +174,57 @@ static CCriticalSection cs_vNonTLSNodesInbound;
 static std::vector<NODE_ADDR> vNonTLSNodesOutbound;
 static CCriticalSection cs_vNonTLSNodesOutbound;
 
-void AddOneShot(const std::string& strDest)
+bool HasAvailableAddNodeSlots()
 {
-    LOCK(cs_vOneShots);
-    vOneShots.push_back(strDest);
+    LOCK(cs_vNodes);
+    int nAddNodeConnections = 0;
+    BOOST_FOREACH(CNode* pnode, vNodes) {
+        if (pnode->fAddNode && !pnode->fInbound)
+            nAddNodeConnections++;
+    }
+    return nAddNodeConnections < MAX_ADDNODE_CONNECTIONS;
 }
+
+int GetAddNodeConnectionCount()
+{
+    LOCK(cs_vNodes);
+    int nAddNodeConnections = 0;
+    BOOST_FOREACH(CNode* pnode, vNodes) {
+        if (pnode->fAddNode && !pnode->fInbound)
+            nAddNodeConnections++;
+    }
+    return nAddNodeConnections;
+}
+
+int GetTotalOutboundConnectionCount()
+{
+    LOCK(cs_vNodes);
+    int nOutboundConnections = 0;
+    BOOST_FOREACH(CNode* pnode, vNodes) {
+        if (!pnode->fInbound)
+            nOutboundConnections++;
+    }
+    return nOutboundConnections;
+}
+
+int GetTotalInboundConnectionCount()
+{
+    LOCK(cs_vNodes);
+    int nInboundConnections = 0;
+    BOOST_FOREACH(CNode* pnode, vNodes) {
+        if (pnode->fInbound)
+            nInboundConnections++;
+    }
+    return nInboundConnections;
+}
+
+bool IsAddNodeAddress(const CService& addr)
+{
+    LOCK(cs_setservAddNodeAddresses);
+    return setservAddNodeAddresses.count(addr) > 0;
+}
+
+
 
 unsigned short GetListenPort()
 {
@@ -434,10 +490,11 @@ static CAddress GetBindAddress(SOCKET sock)
     return addr_bind;
 }
 
-CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
+CNode* ConnectNode(CAddress addrConnect, const char *pszDest, bool fAddNode)
 {
     if (pszDest == NULL) {
-        if (IsLocal(addrConnect))
+        // Allow local connections for addnode if the option is enabled
+        if (IsLocal(addrConnect) && !(fAddNode && GetBoolArg("-allowlocaladdnode", false)))
             return NULL;
 
         // Look for an existing connection
@@ -468,6 +525,9 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
         return NULL;
     }
 
+    // Use shorter timeout for addnode connections (15 seconds instead of default 60)
+    int connectTimeout = fAddNode ? 15000 : nConnectTimeout;
+    
     if (addrConnect.GetNetwork() == NET_I2P && m_i2p_sam_session.get() != nullptr) {
             i2p::Connection conn;
             if (m_i2p_sam_session->Connect(addrConnect, conn, proxyConnectionFailed)) {
@@ -477,9 +537,9 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
                 // addr_bind = CAddress{conn.me, NODE_NONE};
             }
     } else if (pszDest) {
-        connected = ConnectSocketByName(addrConnect, hSocket, pszDest, Params().GetDefaultPort(), nConnectTimeout, &proxyConnectionFailed);
+        connected = ConnectSocketByName(addrConnect, hSocket, pszDest, Params().GetDefaultPort(), connectTimeout, &proxyConnectionFailed);
     }  else {
-        connected = ConnectSocket(addrConnect, hSocket, nConnectTimeout, &proxyConnectionFailed);
+        connected = ConnectSocket(addrConnect, hSocket, connectTimeout, &proxyConnectionFailed);
     }
 
 
@@ -862,6 +922,7 @@ void CNode::copyStats(CNodeStats &stats, const std::vector<bool> &m_asmap)
     stats.nSendBytes = nSendBytes;
     stats.nRecvBytes = nRecvBytes;
     stats.fWhitelisted = fWhitelisted;
+    stats.fAddNode = fAddNode;
 
     // It is common for nodes with good ping times to suddenly become lagged,
     // due to a new block arriving or other large transfer.
@@ -1183,6 +1244,8 @@ static bool AttemptToEvictConnection(bool fPreferNewConnection) {
         BOOST_FOREACH(CNode *node, vNodes) {
             if (node->fWhitelisted)
                 continue;
+            if (node->fAddNode)  // Protect addnode connections from eviction
+                continue;
             if (!node->fInbound)
                 continue;
             if (node->fDisconnect)
@@ -1205,8 +1268,8 @@ static bool AttemptToEvictConnection(bool fPreferNewConnection) {
 
     const Consensus::Params& params = Params().GetConsensus();
     auto nextEpoch = NextEpoch(height, params);
-    if (nextEpoch) {
-        auto idx = nextEpoch.get();
+    if (nextEpoch.has_value()) {
+        auto idx = nextEpoch.value();
         int nActivationHeight = params.vUpgrades[idx].nActivationHeight;
 
         if (nActivationHeight > 0 &&
@@ -1787,7 +1850,7 @@ void static ProcessOneShot()
     CAddress addr;
     CSemaphoreGrant grant(*semOutbound, true);
     if (grant) {
-        if (!OpenNetworkConnection(addr, &grant, strDest.c_str(), true))
+        if (!OpenNetworkConnection(addr, &grant, strDest.c_str(), true, false))
             AddOneShot(strDest);
     }
 }
@@ -1803,7 +1866,7 @@ void ThreadOpenConnections()
             BOOST_FOREACH(const std::string& strAddr, mapMultiArgs["-connect"])
             {
                 CAddress addr;
-                OpenNetworkConnection(addr, NULL, strAddr.c_str());
+                OpenNetworkConnection(addr, NULL, strAddr.c_str(), false, false);
                 for (int i = 0; i < 10 && i < nLoop; i++)
                 {
                     MilliSleep(500);
@@ -1822,7 +1885,18 @@ void ThreadOpenConnections()
 
         ProcessOneShot();
 
-        MilliSleep(500);
+        // Adaptive sleep based on connection health
+        int nTotalOutbound = GetTotalOutboundConnectionCount();
+        int nTotalInbound = GetTotalInboundConnectionCount();
+        int nAddNodeCount = GetAddNodeConnectionCount();
+        int nTotalConnections = nTotalOutbound + nTotalInbound;
+        
+        // Use adaptive retry interval: prioritize establishing connections when poorly connected
+        int sleepInterval = (nTotalConnections == 0) ? 500 :           // No connections - fast retry
+                           (nTotalConnections < 4) ? 1000 :             // Very few - quick retry
+                           (nTotalOutbound < 4 || nAddNodeCount == 0) ? 2000 :  // Need more outbound/addnodes
+                           (nTotalConnections < 16) ? 3000 : 5000;      // Well connected - slow retry
+        MilliSleep(sleepInterval);
 
         CSemaphoreGrant grant(*semOutbound);
 
@@ -1895,13 +1969,24 @@ void ThreadOpenConnections()
             // do not allow non-default ports, unless after 50 invalid addresses selected already
             if (addr.GetPort() != Params().GetDefaultPort() && nTries < 50)
                 continue;
+                
+            // If we have addnode connections, be more selective with peers.dat addresses
+            // to prioritize maintaining addnode connections
+            {
+                LOCK(cs_vAddedNodes);
+                if (!vAddedNodes.empty() && nTries < 20) {
+                    // Skip peers.dat addresses early if we have addnodes configured
+                    // This gives addnode connections priority over peers.dat
+                    continue;
+                }
+            }
 
             addrConnect = addr;
             break;
         }
 
         if (addrConnect.IsValid())
-            OpenNetworkConnection(addrConnect, &grant);
+            OpenNetworkConnection(addrConnect, &grant, nullptr, false, false);
     }
 }
 
@@ -1922,11 +2007,22 @@ void ThreadOpenAddedConnections()
             }
             BOOST_FOREACH(const std::string& strAddNode, lAddresses) {
                 CAddress addr;
-                CSemaphoreGrant grant(*semOutbound);
-                OpenNetworkConnection(addr, &grant, strAddNode.c_str());
+                CSemaphoreGrant grant(*semAddNodeOutbound);
+                OpenNetworkConnection(addr, &grant, strAddNode.c_str(), false, true);
                 MilliSleep(500);
             }
-            MilliSleep(120000); // Retry every 2 minutes
+            // Use adaptive retry interval based on connection health
+            int nTotalOutbound = GetTotalOutboundConnectionCount();
+            int nTotalInbound = GetTotalInboundConnectionCount();
+            int nAddNodeCount = GetAddNodeConnectionCount();
+            int nTotalConnections = nTotalOutbound + nTotalInbound;
+            
+            // Prioritize establishing addnode connections when poorly connected overall
+            int retryInterval = (nTotalConnections == 0) ? 10000 :      // No connections - fast retry
+                               (nTotalConnections < 4) ? 30000 :         // Very few - moderate retry
+                               (nAddNodeCount == 0) ? 60000 :            // Need addnodes - quick retry
+                               (nTotalConnections < 16) ? 120000 : 300000; // Well connected - slow retry
+            MilliSleep(retryInterval);
         }
     }
 
@@ -1954,6 +2050,7 @@ void ThreadOpenAddedConnections()
         }
         // Attempt to connect to each IP for each addnode entry until at least one is successful per addnode entry
         // (keeping in mind that addnode entries can have many IPs if fNameLookup)
+        // Enhanced logic: Check for existing connections (both inbound and outbound) and mark inbound connections as addnode
         {
             LOCK(cs_vNodes);
             BOOST_FOREACH(CNode* pnode, vNodes)
@@ -1962,6 +2059,17 @@ void ThreadOpenAddedConnections()
                     BOOST_FOREACH(const CService& addrNode, *(it))
                         if (pnode->addr == addrNode)
                         {
+                            // If this is an inbound connection that matches an addnode address, mark it as addnode
+                            if (pnode->fInbound && !pnode->fAddNode) {
+                                pnode->fAddNode = true;
+                                LogPrintf("ThreadOpenAddedConnections: Marked existing inbound connection from %s as addnode connection\n", 
+                                         addrNode.ToString());
+                            }
+                            
+                            // Remove this address from connection attempts since we already have a connection
+                            LogPrint("addnode", "ThreadOpenAddedConnections: Skipping connection attempt to %s (already connected, inbound=%s, addnode=%s)\n", 
+                                    addrNode.ToString(), pnode->fInbound ? "true" : "false", pnode->fAddNode ? "true" : "false");
+                            
                             it = lservAddressesToAdd.erase(it);
                             if ( it != lservAddressesToAdd.begin() )
                                 it--;
@@ -1973,16 +2081,37 @@ void ThreadOpenAddedConnections()
         }
         BOOST_FOREACH(vector<CService>& vserv, lservAddressesToAdd)
         {
-            CSemaphoreGrant grant(*semOutbound);
-            OpenNetworkConnection(CAddress(vserv[i % vserv.size()]), &grant);
+            CSemaphoreGrant grant(*semAddNodeOutbound);
+            CAddress addrToConnect = CAddress(vserv[i % vserv.size()]);
+            LogPrint("addnode", "Attempting prioritized connection to addnode %s\n", addrToConnect.ToString());
+            if (OpenNetworkConnection(addrToConnect, &grant, nullptr, false, true)) {
+                LogPrintf("Successfully connected to prioritized addnode %s\n", addrToConnect.ToString());
+            } else {
+                LogPrint("addnode", "Failed to connect to addnode %s\n", addrToConnect.ToString());
+            }
             MilliSleep(500);
         }
-        MilliSleep(120000); // Retry every 2 minutes
+        
+        // Report connection status before retry
+        int nAddNodeCount = GetAddNodeConnectionCount();
+        int nTotalOutbound = GetTotalOutboundConnectionCount();
+        int nTotalInbound = GetTotalInboundConnectionCount();
+        int nTotalConnections = nTotalOutbound + nTotalInbound;
+        LogPrint("addnode", "Connections - AddNode: %d/%d, Outbound: %d, Inbound: %d, Total: %d\n", 
+                 nAddNodeCount, MAX_ADDNODE_CONNECTIONS, nTotalOutbound, nTotalInbound, nTotalConnections);
+        
+        // Use adaptive retry interval based on connection health
+        // Prioritize establishing addnode connections when poorly connected overall
+        int retryInterval = (nTotalConnections == 0) ? 10000 :      // No connections - fast retry
+                           (nTotalConnections < 4) ? 30000 :         // Very few - moderate retry
+                           (nAddNodeCount == 0) ? 60000 :            // Need addnodes - quick retry
+                           (nTotalConnections < 16) ? 120000 : 300000; // Well connected - slow retry
+        MilliSleep(retryInterval);
     }
 }
 
 // if successful, this moves the passed grant to the constructed node
-bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOutbound, const char *pszDest, bool fOneShot)
+bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOutbound, const char *pszDest, bool fOneShot, bool fAddNode)
 {
     //
     // Initiate outbound network connection
@@ -1997,14 +2126,14 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
     }
 
     if (!pszDest) {
-        if (IsLocal(addrConnect) ||
+        if ((IsLocal(addrConnect) && !(fAddNode && GetBoolArg("-allowlocaladdnode", false))) ||
             FindNode(static_cast<CNetAddr>(addrConnect)) || CNode::IsBanned(addrConnect) ||
             FindNode(addrConnect.ToStringIPPort()))
             return false;
     } else if (FindNode(std::string(pszDest)))
         return false;
 
-    CNode* pnode = ConnectNode(addrConnect, pszDest);
+    CNode* pnode = ConnectNode(addrConnect, pszDest, fAddNode);
     boost::this_thread::interruption_point();
 
 #if defined(USE_TLS)
@@ -2017,13 +2146,13 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
 
             if (!pszDest)
                 strDest = addrConnect.ToStringIP();
-            else
+                       else
                 SplitHostPort(string(pszDest), port, strDest);
 
             if (tlsmanager.isNonTLSAddr(strDest, vNonTLSNodesOutbound, cs_vNonTLSNodesOutbound))
             {
                 // Attempt to reconnect in non-TLS mode
-                pnode = ConnectNode(addrConnect, pszDest);
+                pnode = ConnectNode(addrConnect, pszDest, fAddNode);
                 boost::this_thread::interruption_point();
             }
         }
@@ -2038,6 +2167,8 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
     pnode->fNetworkNode = true;
     if (fOneShot)
         pnode->fOneShot = true;
+    if (fAddNode)
+        pnode->fAddNode = true;
 
     return true;
 }
@@ -2353,8 +2484,14 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     if (semOutbound == NULL) {
         // initialize semaphore
-        int nMaxOutbound = min(MAX_OUTBOUND_CONNECTIONS, nMaxConnections);
+        int nMaxOutbound = min(MAX_REGULAR_OUTBOUND_CONNECTIONS, nMaxConnections - MAX_ADDNODE_CONNECTIONS);
         semOutbound = new CSemaphore(nMaxOutbound);
+    }
+    
+    if (semAddNodeOutbound == NULL) {
+        // initialize separate semaphore for addnode connections
+        int nMaxAddNodeOutbound = min(MAX_ADDNODE_CONNECTIONS, nMaxConnections);
+        semAddNodeOutbound = new CSemaphore(nMaxAddNodeOutbound);
     }
 
     if (pnodeLocalHost == NULL) {
@@ -2406,10 +2543,15 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
             threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "i2pcheck", &ThreadI2PCheck));
         }
     }
-    // Initiate outbound connections from -addnode
+    // Initiate outbound connections from -addnode FIRST (prioritized)
+    LogPrintf("Starting addnode connection thread with reserved %d slots\n", MAX_ADDNODE_CONNECTIONS);
     threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "addcon", &ThreadOpenAddedConnections));
+    
+    // Give addnode connections time to establish before starting regular peer connections
+    MilliSleep(1000);
 
     // Initiate outbound connections
+    LogPrintf("Starting regular peer connections with %d slots available\n", MAX_REGULAR_OUTBOUND_CONNECTIONS);
     threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "opencon", &ThreadOpenConnections));
 
     // Process messages
@@ -2431,8 +2573,12 @@ bool StopNode()
 {
     LogPrintf("StopNode()\n");
     if (semOutbound)
-        for (int i=0; i<MAX_OUTBOUND_CONNECTIONS; i++)
+        for (int i=0; i<MAX_REGULAR_OUTBOUND_CONNECTIONS; i++)
             semOutbound->post();
+    
+    if (semAddNodeOutbound)
+        for (int i=0; i<MAX_ADDNODE_CONNECTIONS; i++)
+            semAddNodeOutbound->post();
 
     if (KOMODO_NSPV_FULLNODE && fAddressesInitialized)
     {
@@ -2469,6 +2615,8 @@ public:
         vhListenSocket.clear();
         delete semOutbound;
         semOutbound = NULL;
+        delete semAddNodeOutbound;
+        semAddNodeOutbound = NULL;
         delete pnodeLocalHost;
         pnodeLocalHost = NULL;
 
@@ -2700,8 +2848,10 @@ CNode::CNode(SOCKET hSocketIn, const CAddress& addrIn, const std::string& addrNa
     addrName = addrNameIn == "" ? addr.ToStringIPPort() : addrNameIn;
     nVersion = 0;
     strSubVer = "";
+    cleanSubVer = "";
     fWhitelisted = false;
     fOneShot = false;
+    fAddNode = false;
     fClient = false; // set by version message
     fInbound = fInboundIn;
     fNetworkNode = false;

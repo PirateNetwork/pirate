@@ -9,14 +9,15 @@
 #include "support/allocators/secure.h"
 #include "uint256.h"
 #include "zcash/address/sapling.hpp"
+#include "zcash/address/pirate_orchard.hpp"
 
-#include <boost/optional.hpp>
+#include <optional>
 
-const uint32_t ZIP32_HARDENED_KEY_LIMIT = 0x80000000;
-const size_t ZIP32_XFVK_SIZE = 169;
-const size_t ZIP32_XSK_SIZE = 169;
-const size_t ZIP32_DXFVK_SIZE = 180;
-const size_t ZIP32_DXSK_SIZE = 180;
+const uint32_t HARDENED_KEY_LIMIT = 0x80000000;
+const size_t SAPLING_ZIP32_XFVK_SIZE = 169;
+const size_t SAPLING_ZIP32_XSK_SIZE = 169;
+const size_t SAPLING_ZIP32_DXFVK_SIZE = 180;
+const size_t SAPLING_ZIP32_DXSK_SIZE = 180;
 
 typedef std::vector<unsigned char, secure_allocator<unsigned char>> RawHDSeed;
 
@@ -53,7 +54,76 @@ uint256 ovkForShieldingFromTaddr(HDSeed& seed);
 
 namespace libzcash {
 
-typedef blob88 diversifier_index_t;
+typedef uint32_t AccountId;
+
+/**
+ * The account identifier used for HD derivation of
+ * transparent and Sapling addresses via the legacy
+ * `getnewaddress` and `z_getnewaddress` code paths,
+ */
+const AccountId ZCASH_LEGACY_ACCOUNT = HARDENED_KEY_LIMIT - 1;
+
+/**
+ * 88-bit diversifier index. This would ideally derive from base_uint
+ * but those values must have bit widths that are multiples of 32.
+ */
+class diversifier_index_t : public base_blob<88> {
+public:
+    diversifier_index_t() {}
+    diversifier_index_t(const base_blob<88>& b) : base_blob<88>(b) {}
+    diversifier_index_t(uint64_t i): base_blob<88>() {
+        data[0] = i & 0xFF;
+        data[1] = (i >> 8) & 0xFF;
+        data[2] = (i >> 16) & 0xFF;
+        data[3] = (i >> 24) & 0xFF;
+        data[4] = (i >> 32) & 0xFF;
+        data[5] = (i >> 40) & 0xFF;
+        data[6] = (i >> 48) & 0xFF;
+        data[7] = (i >> 56) & 0xFF;
+    }
+    explicit diversifier_index_t(const std::vector<unsigned char>& vch) : base_blob<88>(vch) {}
+
+    static diversifier_index_t FromRawBytes(std::array<uint8_t, 11> bytes)
+    {
+        diversifier_index_t buf;
+        std::memcpy(buf.begin(), bytes.data(), 11);
+        return buf;
+    }
+
+    bool increment() {
+        for (int i = 0; i < 11; i++) {
+            this->data[i] += 1;
+            if (this->data[i] != 0) {
+                return true; // no overflow
+            }
+        }
+
+        return false; //overflow
+    }
+
+    std::optional<diversifier_index_t> succ() const {
+        diversifier_index_t next(*this);
+        if (next.increment()) {
+            return next;
+        } else {
+            return std::nullopt;
+        }
+    }
+
+    std::optional<uint32_t> ToTransparentChildIndex() const;
+
+    friend bool operator<(const diversifier_index_t& a, const diversifier_index_t& b) {
+        for (int i = 10; i >= 0; i--) {
+            if (a.data[i] == b.data[i]) {
+                continue;
+            } else {
+                return a.data[i] < b.data[i];
+            }
+        }
+
+        return false;
+    }
+};
 
 struct SaplingExtendedFullViewingKey {
     uint8_t depth;
@@ -75,12 +145,12 @@ struct SaplingExtendedFullViewingKey {
         READWRITE(dk);
     }
 
-    boost::optional<SaplingExtendedFullViewingKey> Derive(uint32_t i) const;
+    std::optional<SaplingExtendedFullViewingKey> Derive(uint32_t i) const;
 
     // Returns the first index starting from j that generates a valid
     // payment address, along with the corresponding address. Returns
     // an error if the diversifier space is exhausted.
-    boost::optional<std::pair<diversifier_index_t, libzcash::SaplingPaymentAddress>>
+    std::optional<std::pair<diversifier_index_t, libzcash::SaplingPaymentAddress>>
         Address(diversifier_index_t j) const;
 
     libzcash::SaplingPaymentAddress DefaultAddress() const;
@@ -171,6 +241,104 @@ struct SaplingDiversifiedExtendedSpendingKey {
         READWRITE(d);
     }
 };
+
+struct OrchardExtendedFullViewingKeyPirate {
+    uint8_t depth;
+    uint32_t parentFVKTag;
+    uint32_t childIndex;
+    uint256 chaincode;
+    libzcash::OrchardFullViewingKeyPirate fvk;
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(depth);
+        READWRITE(parentFVKTag);
+        READWRITE(childIndex);
+        READWRITE(chaincode);
+        READWRITE(fvk);
+    }
+
+    friend inline bool operator==(const OrchardExtendedFullViewingKeyPirate& a, const OrchardExtendedFullViewingKeyPirate& b) {
+        return (
+            a.depth == b.depth &&
+            a.parentFVKTag == b.parentFVKTag &&
+            a.childIndex == b.childIndex &&
+            a.chaincode == b.chaincode &&
+            a.fvk == b.fvk);
+    }
+    friend inline bool operator<(const OrchardExtendedFullViewingKeyPirate& a, const OrchardExtendedFullViewingKeyPirate& b) {
+        return (a.depth < b.depth ||
+            (a.depth == b.depth && a.childIndex < b.childIndex) ||
+            (a.depth == b.depth && a.childIndex == b.childIndex && a.fvk < b.fvk));
+    }
+};
+
+struct OrchardDiversifiedExtendedFullViewingKeyPirate{
+    OrchardExtendedFullViewingKeyPirate extfvk;
+    diversifier_t d;
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(extfvk);
+        READWRITE(d);
+    }
+};
+
+struct OrchardExtendedSpendingKeyPirate {
+    uint8_t depth;
+    uint32_t parentFVKTag;
+    uint32_t childIndex;
+    uint256 chaincode;
+    libzcash::OrchardSpendingKeyPirate sk;
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(depth);
+        READWRITE(parentFVKTag);
+        READWRITE(childIndex);
+        READWRITE(chaincode);
+        READWRITE(sk);
+    }
+
+    static OrchardExtendedSpendingKeyPirate Master(const HDSeed& seed, bool bip39Enabled = true);
+    std::optional<OrchardExtendedSpendingKeyPirate> Derive(uint32_t bip44CoinType, uint32_t account) const;
+    std::optional<OrchardExtendedFullViewingKeyPirate> GetXFVK() const;
+
+    friend bool operator==(const OrchardExtendedSpendingKeyPirate& a, const OrchardExtendedSpendingKeyPirate& b)
+    {
+        return a.depth == b.depth &&
+            a.parentFVKTag == b.parentFVKTag &&
+            a.childIndex == b.childIndex &&
+            a.chaincode == b.chaincode &&
+            a.sk == b.sk;
+    }
+
+    friend inline bool operator<(const OrchardExtendedSpendingKeyPirate& a, const OrchardExtendedSpendingKeyPirate& b) {
+        return (a.depth < b.depth ||
+            (a.depth == b.depth && a.childIndex < b.childIndex) ||
+            (a.depth == b.depth && a.childIndex == b.childIndex && a.sk < b.sk));
+    }
+};
+
+struct OrchardDiversifiedExtendedSpendingKeyPirate{
+    OrchardExtendedSpendingKeyPirate extsk;
+    diversifier_t d;
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(extsk);
+        READWRITE(d);
+    }
+};
+
 
 }
 

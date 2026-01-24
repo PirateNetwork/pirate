@@ -259,25 +259,6 @@
                </property>
               </spacer>
              </item>
-             <item row="1" column="1">
-              <widget class="QCheckBox" name="cbOfflineSigning_HWwallet">
-               <property name="enabled">
-                <bool>true</bool>
-               </property>
-               <property name="minimumSize">
-                <size>
-                 <width>170</width>
-                 <height>0</height>
-                </size>
-               </property>
-               <property name="toolTip">
-                <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Select this option if you use a hardware wallet to authorise the transaction. The hardware wallet has a 0.25% commission fee. If this option is selected, Treasure chest will automatically calculate the fee and add it to the transaction fee.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-               </property>
-               <property name="text">
-                <string>With hardware wallet</string>
-               </property>
-              </widget>
-             </item>
             </layout>
            </widget>
           </item>

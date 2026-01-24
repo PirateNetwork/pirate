@@ -62,7 +62,7 @@ protected:
     virtual void SetUp() {
         ASSETCHAINS_CC = 1;
         EVAL_TEST = this;
-        
+
         std::vector<uint8_t> fakepk;
         fakepk.resize(33);
         fakepk.begin()[0] = testNum++;
@@ -74,7 +74,8 @@ protected:
     void TestRunCCEval(CMutableTransaction mtx)
     {
         CTransaction importTx(mtx);
-        PrecomputedTransactionData txdata(importTx);
+        std::vector<CTxOut> allPrevOutputs;
+        PrecomputedTransactionData txdata(importTx, allPrevOutputs);
         ServerTransactionSignatureChecker checker(&importTx, 0, 0, false, txdata);
         CValidationState verifystate;
         if (!VerifyCoinImport(importTx.vin[0].scriptSig, checker, verifystate))
@@ -90,7 +91,7 @@ TEST_F(TestCoinImport, DISABLED_testProcessImportThroughPipeline)
 
     // first should work
     acceptTxFail(tx);
-    
+
     // should fail in mempool
     ASSERT_FALSE(acceptTx(tx, mainstate));
     EXPECT_EQ("already in mempool", mainstate.GetRejectReason());

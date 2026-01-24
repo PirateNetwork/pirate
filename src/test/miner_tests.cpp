@@ -241,7 +241,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
                 pblock->nSolution = soln;
 
                 CValidationState state;
-                
+
                 if (ProcessNewBlock(1,0,state, NULL, pblock, true, NULL) && state.IsValid()) {
                     goto foundit;
                 }
@@ -260,8 +260,8 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
         }
 */
 
-        // These tests assume null hashFinalSaplingRoot (before Sapling)
-        pblock->hashFinalSaplingRoot = uint256();
+        // These tests assume null hashBlockCommitments (before Sapling)
+        pblock->hashBlockCommitments = uint256();
 
         CValidationState state;
         BOOST_CHECK(ProcessNewBlock(1,0,state, NULL, pblock, true, NULL));

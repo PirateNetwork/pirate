@@ -101,7 +101,9 @@ int zcashconsensus_verify_script(const unsigned char *scriptPubKey, unsigned int
 
          // Regardless of the verification result, the tx did not error.
          set_error(err, zcashconsensus_ERR_OK);
-        PrecomputedTransactionData txdata(tx);
+
+        std::vector<CTxOut> allPrevOutputs;
+        PrecomputedTransactionData txdata(tx, allPrevOutputs);
         CAmount am(0);
         uint32_t consensusBranchId = SPROUT_BRANCH_ID;
         return VerifyScript(

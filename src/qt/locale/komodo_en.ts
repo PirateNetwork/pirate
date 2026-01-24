@@ -4236,7 +4236,7 @@
     </message>
     <message>
         <location line="+4"/>
-        <source>(press q to shutdown and continue later)</source>
+        <source>(press q to quit and continue later)</source>
         <translation type="unfinished"></translation>
     </message>
     <message>

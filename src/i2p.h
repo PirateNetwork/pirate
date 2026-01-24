@@ -130,7 +130,7 @@ private:
          * keys["B"] == (empty std::optional)
          * keys["C"] == "YZ"
          */
-        std::unordered_map<std::string, boost::optional<std::string>> keys;
+        std::unordered_map<std::string, std::optional<std::string>> keys;
 
         /**
          * Get the value of a given key.

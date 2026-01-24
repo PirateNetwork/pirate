@@ -38,6 +38,8 @@
 
 #include <boost/foreach.hpp>
 #include <boost/unordered_map.hpp>
+#include <tl/expected.hpp>
+#include "zcash/History.hpp"
 #include "zcash/IncrementalMerkleTree.hpp"
 
 /**
@@ -317,19 +319,6 @@ struct CAnchorsSproutCacheEntry
     CAnchorsSproutCacheEntry() : entered(false), flags(0) {}
 };
 
-struct CAnchorsSaplingCacheEntry
-{
-    bool entered; // This will be false if the anchor is removed from the cache
-    SaplingMerkleTree tree; // The tree itself
-    unsigned char flags;
-
-    enum Flags {
-        DIRTY = (1 << 0), // This cache entry is potentially different from the version in the parent view.
-    };
-
-    CAnchorsSaplingCacheEntry() : entered(false), flags(0) {}
-};
-
 struct CAnchorsSaplingFrontierCacheEntry
 {
     bool entered; // This will be false if the anchor is removed from the cache
@@ -341,6 +330,32 @@ struct CAnchorsSaplingFrontierCacheEntry
     };
 
     CAnchorsSaplingFrontierCacheEntry() : entered(false), flags(0) {}
+};
+
+struct CAnchorsSaplingMerkleCacheEntry
+{
+    bool entered; // This will be false if the anchor is removed from the cache
+    SaplingMerkleTree tree; // The legacy tree itself
+    unsigned char flags;
+
+    enum Flags {
+        DIRTY = (1 << 0), // This cache entry is potentially different from the version in the parent view.
+    };
+
+    CAnchorsSaplingMerkleCacheEntry() : entered(false), flags(0) {}
+};
+
+struct CAnchorsOrchardFrontierCacheEntry
+{
+    bool entered; // This will be false if the anchor is removed from the cache
+    OrchardMerkleFrontier tree; // The tree itself
+    unsigned char flags;
+
+    enum Flags {
+        DIRTY = (1 << 0), // This cache entry is potentially different from the version in the parent view.
+    };
+
+    CAnchorsOrchardFrontierCacheEntry() : entered(false), flags(0) {}
 };
 
 struct CNullifiersCacheEntry
@@ -355,23 +370,12 @@ struct CNullifiersCacheEntry
     CNullifiersCacheEntry() : entered(false), flags(0) {}
 };
 
-struct CProofHashCacheEntry
-{
-    std::set<std::pair<uint256, int>> txids;
-    unsigned char flags;
-
-    enum Flags {
-        DIRTY = (1 << 0), // This cache entry is potentially different from the version in the parent view.
-    };
-
-    CProofHashCacheEntry() : txids(), flags(0) {}
-};
-
 enum ShieldedType
 {
     SPROUT,
-    SAPLING,
+    SAPLING,  // Legacy SaplingMerkleTree
     SAPLINGFRONTIER,
+    ORCHARDFRONTIER,
 };
 
 enum ProofType
@@ -382,10 +386,11 @@ enum ProofType
 
 typedef boost::unordered_map<uint256, CCoinsCacheEntry, CCoinsKeyHasher> CCoinsMap;
 typedef boost::unordered_map<uint256, CAnchorsSproutCacheEntry, CCoinsKeyHasher> CAnchorsSproutMap;
-typedef boost::unordered_map<uint256, CAnchorsSaplingCacheEntry, CCoinsKeyHasher> CAnchorsSaplingMap;
+typedef boost::unordered_map<uint256, CAnchorsSaplingMerkleCacheEntry, CCoinsKeyHasher> CAnchorsSaplingMap;
 typedef boost::unordered_map<uint256, CAnchorsSaplingFrontierCacheEntry, CCoinsKeyHasher> CAnchorsSaplingFrontierMap;
+typedef boost::unordered_map<uint256, CAnchorsOrchardFrontierCacheEntry, CCoinsKeyHasher> CAnchorsOrchardFrontierMap;
 typedef boost::unordered_map<uint256, CNullifiersCacheEntry, CCoinsKeyHasher> CNullifiersMap;
-typedef boost::unordered_map<uint256, CProofHashCacheEntry, CCoinsKeyHasher> CProofHashMap;
+typedef boost::unordered_map<uint32_t, HistoryCache> CHistoryCacheMap;
 
 struct CCoinsStats
 {
@@ -408,17 +413,17 @@ public:
     //! Retrieve the tree (Sprout) at a particular anchored root in the chain
     virtual bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
 
-    //! Retrieve the tree (Sapling) at a particular anchored root in the chain
+    //! Retrieve the tree (SaplingMerkleTree - legacy) at a particular anchored root in the chain
     virtual bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
 
     //! Retrieve the tree (SaplingFroniter) at a particular anchored root in the chain
     virtual bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const;
 
+    //! Retrieve the tree (OrchardFroniter) at a particular anchored root in the chain
+    virtual bool GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const;
+
     //! Determine whether a nullifier is spent or not
     virtual bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
-
-    //! Determine whether a spendproof has been previously used
-    virtual bool GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const;
 
     //! Retrieve the CCoins (unspent transaction outputs) for a given txid
     virtual bool GetCoins(const uint256 &txid, CCoins &coins) const;
@@ -433,6 +438,15 @@ public:
     //! Get the current "tip" or the latest anchored tree root in the chain
     virtual uint256 GetBestAnchor(ShieldedType type) const;
 
+    //! Get the current chain history length (which should be roughly chain height x2)
+    virtual HistoryIndex GetHistoryLength(uint32_t epochId) const;
+
+    //! Get history node at specified index
+    virtual HistoryNode GetHistoryAt(uint32_t epochId, HistoryIndex index) const;
+
+    //! Get current history root
+    virtual uint256 GetHistoryRoot(uint32_t epochId) const;
+
     //! Do a bulk modification (multiple CCoins changes + BestBlock change).
     //! The passed mapCoins can be modified.
     virtual bool BatchWrite(CCoinsMap &mapCoins,
@@ -440,13 +454,15 @@ public:
                             const uint256 &hashSproutAnchor,
                             const uint256 &hashSaplingAnchor,
                             const uint256 &hashSaplingFrontierAnchor,
+                            const uint256 &hashOrchardFrontierAnchor,
                             CAnchorsSproutMap &mapSproutAnchors,
                             CAnchorsSaplingMap &mapSaplingAnchors,
                             CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
+                            CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
                             CNullifiersMap &mapSproutNullifiers,
                             CNullifiersMap &mapSaplingNullifiers,
-                            CProofHashMap &mapZkOutputProofHash,
-                            CProofHashMap &mapZkSpendProofHash);
+                            CNullifiersMap &mapOrchardNullifiers,
+                            CHistoryCacheMap &historyCacheMap);
 
     //! Calculate statistics about the unspent transaction output set
     virtual bool GetStats(CCoinsStats &stats) const;
@@ -467,25 +483,30 @@ public:
     bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
     bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
     bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const;
+    bool GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const;
     bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
-    bool GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const;
     bool GetCoins(const uint256 &txid, CCoins &coins) const;
     bool HaveCoins(const uint256 &txid) const;
     uint256 GetBestBlock() const;
     uint256 GetBestAnchor(ShieldedType type) const;
+    HistoryIndex GetHistoryLength(uint32_t epochId) const;
+    HistoryNode GetHistoryAt(uint32_t epochId, HistoryIndex index) const;
+    uint256 GetHistoryRoot(uint32_t epochId) const;
     void SetBackend(CCoinsView &viewIn);
     bool BatchWrite(CCoinsMap &mapCoins,
                     const uint256 &hashBlock,
                     const uint256 &hashSproutAnchor,
                     const uint256 &hashSaplingAnchor,
                     const uint256 &hashSaplingFrontierAnchor,
+                    const uint256 &hashOrchardFrontierAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
                     CAnchorsSaplingMap &mapSaplingAnchors,
                     CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
+                    CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
                     CNullifiersMap &mapSproutNullifiers,
                     CNullifiersMap &mapSaplingNullifiers,
-                    CProofHashMap &mapZkOutputProofHash,
-                    CProofHashMap &mapZkSpendProofHash);
+                    CNullifiersMap &mapOrchardNullifiers,
+                    CHistoryCacheMap &historyCacheMap);
     bool GetStats(CCoinsStats &stats) const;
 };
 
@@ -520,6 +541,16 @@ class CTransactionExceptionData
         CTransactionExceptionData() : scriptPubKey(), voutMask() {}
 };
 
+/** The set of shielded requirements that might be unsatisfied. */
+enum class UnsatisfiedShieldedReq {
+    SproutDuplicateNullifier,
+    SproutUnknownAnchor,
+    SaplingDuplicateNullifier,
+    SaplingUnknownAnchor,
+    OrchardDuplicateNullifier,
+    OrchardUnknownAnchor,
+};
+
 /**
  * CCoinsView that adds a memory cache in front of another CCoinsView
  */
@@ -538,13 +569,15 @@ protected:
     mutable uint256 hashSproutAnchor;
     mutable uint256 hashSaplingAnchor;
     mutable uint256 hashSaplingFrontierAnchor;
+    mutable uint256 hashOrchardFrontierAnchor;
     mutable CAnchorsSproutMap cacheSproutAnchors;
     mutable CAnchorsSaplingMap cacheSaplingAnchors;
     mutable CAnchorsSaplingFrontierMap cacheSaplingFrontierAnchors;
+    mutable CAnchorsOrchardFrontierMap cacheOrchardFrontierAnchors;
     mutable CNullifiersMap cacheSproutNullifiers;
     mutable CNullifiersMap cacheSaplingNullifiers;
-    mutable CProofHashMap cacheZkOutputProofHash;
-    mutable CProofHashMap cacheZkSpendProofHash;
+    mutable CNullifiersMap cacheOrchardNullifiers;
+    mutable CHistoryCacheMap historyCacheMap;
 
     /* Cached dynamic memory usage for the inner CCoins objects. */
     mutable size_t cachedCoinsUsage;
@@ -557,25 +590,30 @@ public:
     bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
     bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
     bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const;
+    bool GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const;
     bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
-    bool GetZkProofHash(const uint256 &zkproofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const;
     bool GetCoins(const uint256 &txid, CCoins &coins) const;
     bool HaveCoins(const uint256 &txid) const;
     uint256 GetBestBlock() const;
     uint256 GetBestAnchor(ShieldedType type) const;
+    HistoryIndex GetHistoryLength(uint32_t epochId) const;
+    HistoryNode GetHistoryAt(uint32_t epochId, HistoryIndex index) const;
+    uint256 GetHistoryRoot(uint32_t epochId) const;
     void SetBestBlock(const uint256 &hashBlock);
     bool BatchWrite(CCoinsMap &mapCoins,
                     const uint256 &hashBlock,
                     const uint256 &hashSproutAnchor,
                     const uint256 &hashSaplingAnchor,
                     const uint256 &hashSaplingFrontierAnchor,
+                    const uint256 &hashOrchardFrontierAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
                     CAnchorsSaplingMap &mapSaplingAnchors,
                     CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
+                    CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
                     CNullifiersMap &mapSproutNullifiers,
                     CNullifiersMap &mapSaplingNullifiers,
-                    CProofHashMap &mapZkOutputProofHash,
-                    CProofHashMap &mapZkSpendProofHash);
+                    CNullifiersMap &mapOrchardNullifiers,
+                    CHistoryCacheMap &historyCacheMap);
 
 
     // Adds the tree to mapSproutAnchors (or mapSaplingAnchors based on the type of tree)
@@ -589,8 +627,11 @@ public:
     // Marks nullifiers for a given transaction as spent or not.
     void SetNullifiers(const CTransaction& tx, bool spent);
 
-    // Add txid to track duplicate proof on multiple txes
-    void SetZkProofHashes(const CTransaction& tx, bool addTx);
+    // Push MMR node history at the end of the history tree
+    void PushHistoryNode(uint32_t epochId, const HistoryNode node);
+
+    // Pop MMR node history from the end of the history tree
+    void PopHistoryNode(uint32_t epochId);
 
     /**
      * Return a pointer to CCoins in the cache, or NULL if not found. This is
@@ -643,10 +684,12 @@ public:
 
     //! Check whether all prevouts of the transaction are present in the UTXO set represented by this view
     bool HaveInputs(const CTransaction& tx) const;
+    
+    //! Check whether all shielded spend requirements (anchors/nullifiers) are satisfied
+    tl::expected<void, UnsatisfiedShieldedReq> CheckShieldedRequirements(const CTransaction& tx) const;
 
     //! Check whether all joinsplit requirements (anchors/nullifiers) are satisfied
-    bool HaveJoinSplitRequirements(const CTransaction& tx, int maxProcessingThreads) const;
-    bool HaveJoinSplitRequirementsDuplicateProofs(const CTransaction& tx, int maxProcessingThreads) const;
+    bool HaveJoinSplitRequirements(const CTransaction& tx) const;
 
     //! Return priority of tx at height nHeight
     double GetPriority(const CTransaction &tx, int nHeight) const;
@@ -690,6 +733,18 @@ private:
         const uint256 &currentRoot,
         Tree &tree
     );
+
+    //! Preload history tree for further update.
+    //!
+    //! If extra = true, extra nodes for deletion are also preloaded.
+    //! This will allow to delete tail entries from preloaded tree without
+    //! any further database lookups.
+    //!
+    //! Returns number of peaks, not total number of loaded nodes.
+    uint32_t PreloadHistoryTree(uint32_t epochId, bool extra, std::vector<HistoryEntry> &entries, std::vector<uint32_t> &entry_indices);
+
+    //! Selects history cache for specified epoch.
+    HistoryCache& SelectHistoryCache(uint32_t epochId) const;
 };
 
 #endif // BITCOIN_COINS_H

@@ -154,7 +154,9 @@ BOOST_AUTO_TEST_CASE(tx_valid)
             BOOST_CHECK_MESSAGE(CheckTransaction(tx, state, verifier), strTest + comment);
             BOOST_CHECK_MESSAGE(state.IsValid(), comment);
 
-            PrecomputedTransactionData txdata(tx);
+            // None of these test vectors use ZIP 244.
+            assert(tx.nVersion < ORCHARD_TX_VERSION);
+            PrecomputedTransactionData txdata(tx, {});
             for (unsigned int i = 0; i < tx.vin.size(); i++)
             {
                 if (!mapprevOutScriptPubKeys.count(tx.vin[i].prevout))
@@ -241,7 +243,8 @@ BOOST_AUTO_TEST_CASE(tx_invalid)
             CValidationState state;
             fValid = CheckTransaction(tx, state, verifier) && state.IsValid();
 
-            PrecomputedTransactionData txdata(tx);
+            assert(tx.nVersion < ORCHARD_TX_VERSION);
+            PrecomputedTransactionData txdata(tx, {});
             for (unsigned int i = 0; i < tx.vin.size() && fValid; i++)
             {
                 if (!mapprevOutScriptPubKeys.count(tx.vin[i].prevout))
@@ -408,7 +411,7 @@ void test_simple_sapling_invalidity(uint32_t consensusBranchId, CMutableTransact
         CValidationState state;
 
         BOOST_CHECK(!CheckTransactionWithoutProofVerification(newTx, state));
-        BOOST_CHECK(state.GetRejectReason() == "bad-txns-vin-empty");
+        BOOST_CHECK(state.GetRejectReason() == "bad-txns-no-source-of-funds");
     }
     {
         CMutableTransaction newTx(tx);
@@ -418,7 +421,7 @@ void test_simple_sapling_invalidity(uint32_t consensusBranchId, CMutableTransact
         newTx.vShieldedSpend[0].nullifier = GetRandHash();
 
         BOOST_CHECK(!CheckTransactionWithoutProofVerification(newTx, state));
-        BOOST_CHECK(state.GetRejectReason() == "bad-txns-vout-empty");
+        BOOST_CHECK(state.GetRejectReason() == "bad-txns-no-sink-of-funds");
     }
     {
         // Ensure that nullifiers are never duplicated within a transaction.
@@ -478,12 +481,12 @@ void test_simple_joinsplit_invalidity(uint32_t consensusBranchId, CMutableTransa
 
         // No joinsplits, vin and vout, means it should be invalid.
         BOOST_CHECK(!CheckTransactionWithoutProofVerification(newTx, state));
-        BOOST_CHECK(state.GetRejectReason() == "bad-txns-vin-empty");
+        BOOST_CHECK(state.GetRejectReason() == "bad-txns-no-source-of-funds");
 
         newTx.vin.push_back(CTxIn(uint256S("0000000000000000000000000000000000000000000000000000000000000001"), 0));
 
         BOOST_CHECK(!CheckTransactionWithoutProofVerification(newTx, state));
-        BOOST_CHECK(state.GetRejectReason() == "bad-txns-vout-empty");
+        BOOST_CHECK(state.GetRejectReason() == "bad-txns-no-sink-of-funds");
 
         newTx.vjoinsplit.push_back(JSDescription());
         JSDescription *jsdesc = &newTx.vjoinsplit[0];
@@ -498,7 +501,9 @@ void test_simple_joinsplit_invalidity(uint32_t consensusBranchId, CMutableTransa
         // Empty output script.
         CScript scriptCode;
         CTransaction signTx(newTx);
-        uint256 dataToBeSigned = SignatureHash(scriptCode, signTx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId);
+        std::vector<CTxOut> allPrevOutputs;
+        PrecomputedTransactionData txdata(signTx, allPrevOutputs);
+        uint256 dataToBeSigned = SignatureHash(scriptCode, signTx, NOT_AN_INPUT, SIGHASH_ALL, 0, consensusBranchId, txdata);
 
         assert(crypto_sign_detached(&newTx.joinSplitSig[0], NULL,
                                     dataToBeSigned.begin(), 32,
@@ -514,7 +519,7 @@ void test_simple_joinsplit_invalidity(uint32_t consensusBranchId, CMutableTransa
         CValidationState state;
 
         newTx.vjoinsplit.push_back(JSDescription());
-        
+
         JSDescription *jsdesc = &newTx.vjoinsplit[0];
         jsdesc->vpub_old = -1;
 
@@ -700,6 +705,11 @@ BOOST_AUTO_TEST_CASE(test_big_overwinter_transaction) {
         mtx.vout[i].scriptPubKey = CScript() << OP_1;
     }
 
+    // Fake coins being spent.
+    std::vector<CTxOut> allPrevOutputs;
+    allPrevOutputs.resize(mtx.vin.size());
+    PrecomputedTransactionData txdata(mtx, allPrevOutputs);
+
     // sign all inputs
     for(uint32_t i = 0; i < mtx.vin.size(); i++) {
         bool hashSigned = SignSignature(keystore, scriptPubKey, mtx, i, 1000, sigHashes.at(i % sigHashes.size()), consensusBranchId);
@@ -712,7 +722,6 @@ BOOST_AUTO_TEST_CASE(test_big_overwinter_transaction) {
     ssout >> tx;
 
     // check all inputs concurrently, with the cache
-    PrecomputedTransactionData txdata(tx);
     boost::thread_group threadGroup;
     CCheckQueue<CScriptCheck> scriptcheckqueue(128);
     CCheckQueueControl<CScriptCheck> control(&scriptcheckqueue);

@@ -90,21 +90,35 @@
          </widget>
         </item>
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayoutCoinControl1">
-          <property name="rightMargin">
-           <number>0</number>
-          </property>
-          <property name="bottomMargin">
-           <number>10</number>
-          </property>
+         <layout class="QHBoxLayout" name="horizontalLayoutInput">
           <item>
-           <widget class="QTextEdit" name="teInput">
-            <property name="placeholderText">
-             <string>An on-line wallet will created a sign request when a &quot;viewing only&quot; address was used to send ARRR to a recipient. Paste the 'z_sign_offline' text in this text box and click on 'Sign' to have the transaction authorised. You need the spend key (private key) of the viewing address (public key) in your address book in order to sign the transaction</string>
+           <widget class="QPushButton" name="pasteInputButton">
+            <property name="text">
+             <string>Paste</string>
+            </property>
+            <property name="toolTip">
+             <string>Paste unsigned transaction from clipboard</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="copyInputButton">
+            <property name="text">
+             <string>Copy</string>
+            </property>
+            <property name="toolTip">
+             <string>Copy unsigned transaction to clipboard</string>
             </property>
            </widget>
           </item>
          </layout>
+        </item>
+        <item>
+         <widget class="QTextEdit" name="teInput">
+          <property name="placeholderText">
+           <string>An on-line wallet will created a sign request when a &quot;viewing only&quot; address was used to send ARRR to a recipient. Paste the 'z_sign_offline' text in this text box and click on 'Sign' to have the transaction authorised. You need the spend key (private key) of the viewing address (public key) in your address book in order to sign the transaction</string>
+          </property>
+         </widget>
         </item>
        </layout>
       </item>
@@ -178,6 +192,30 @@
          </widget>
         </item>
         <item>
+         <layout class="QHBoxLayout" name="horizontalLayoutResult">
+          <item>
+           <widget class="QPushButton" name="pasteResultButton">
+            <property name="text">
+             <string>Paste</string>
+            </property>
+            <property name="toolTip">
+             <string>Paste signed transaction from clipboard</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="copyResultButton">
+            <property name="text">
+             <string>Copy</string>
+            </property>
+            <property name="toolTip">
+             <string>Copy signed transaction to clipboard</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
          <widget class="QTextEdit" name="teResult">
           <property name="readOnly">
            <bool>true</bool>
@@ -211,6 +249,32 @@
        <property name="icon">
         <iconset resource="../komodo.qrc">
          <normaloff>:/icons/send</normaloff>:/icons/send</iconset>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+       <property name="default">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="broadcastButton">
+       <property name="minimumSize">
+        <size>
+         <width>150</width>
+         <height>0</height>
+        </size>
+       </property>
+       <property name="toolTip">
+        <string>Broadcast a signed transaction to the network</string>
+       </property>
+       <property name="text">
+        <string>&amp;Broadcast</string>
+       </property>
+       <property name="icon">
+        <iconset resource="../komodo.qrc">
+         <normaloff>:/icons/transaction_confirmed</normaloff>:/icons/transaction_confirmed</iconset>
        </property>
        <property name="autoDefault">
         <bool>false</bool>

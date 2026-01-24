@@ -1,11 +1,10 @@
-#include "gmock/gmock.h"
-#include "crypto/common.h"
 #include "key.h"
-#include "pubkey.h"
-#include "zcash/JoinSplit.hpp"
-#include "util.h"
-
-#include "librustzcash.h"
+#include "base58.h"
+#include "script/sigcache.h"
+#include "chainparams.h"
+#include "gtest/gtest.h"
+#include "crypto/common.h"
+#include "gtest/gtestutils.h"
 
 struct ECCryptoClosure
 {
@@ -17,12 +16,14 @@ ECCryptoClosure instance_of_eccryptoclosure;
 ZCJoinSplit* params;
 
 int main(int argc, char **argv) {
-  assert(init_and_check_sodium() != -1);
-  ECC_Start();
+    assert(init_and_check_sodium() != -1);
+    ECC_Start();
+    ECCVerifyHandle handle;  // Inits secp256k1 verify context
 
-  boost::filesystem::path sapling_spend = ZC_GetParamsDir() / "sapling-spend.params";
-  boost::filesystem::path sapling_output = ZC_GetParamsDir() / "sapling-output.params";
-  boost::filesystem::path sprout_groth16 = ZC_GetParamsDir() / "sprout-groth16.params";
+    //Load the Sapling parameters
+    boost::filesystem::path sapling_spend = ZC_GetParamsDir() / "sapling-spend.params";
+    boost::filesystem::path sapling_output = ZC_GetParamsDir() / "sapling-output.params";
+    boost::filesystem::path sprout_groth16 = ZC_GetParamsDir() / "sprout-groth16.params";
 
     static_assert(
         sizeof(boost::filesystem::path::value_type) == sizeof(codeunit),
@@ -37,10 +38,34 @@ int main(int argc, char **argv) {
         true
     );
 
-  testing::InitGoogleMock(&argc, argv);
+    // Initialize the validity caches. We currently have three:
+    // - Transparent signature validity.
+    // - Sapling bundle validity.
+    // - Orchard bundle validity.
+    // Assign half of the cap to transparent signatures, and split the rest
+    // between Sapling and Orchard bundles.
+    size_t nMaxCacheSize = DEFAULT_MAX_SIG_CACHE_SIZE * ((size_t) 1 << 20);
+    InitSignatureCache(nMaxCacheSize / 2);
+    bundlecache::init(nMaxCacheSize / 4);
 
-  auto ret = RUN_ALL_TESTS();
 
-  ECC_Stop();
-  return ret;
+    SetupNetworking();
+    SelectParams(CBaseChainParams::REGTEST);
+    chainName = assetchain(); // KMD by default
+
+    CBitcoinSecret vchSecret;
+    // this returns false due to network prefix mismatch but works anyway
+    vchSecret.SetString(notarySecret);
+    notaryKey = vchSecret.GetKey();
+
+    // Initialize the test wallet
+    TestWallet testWallet;
+    pTestWallet = &testWallet;
+
+    testing::InitGoogleTest(&argc, argv);
+    
+    auto ret = RUN_ALL_TESTS();
+
+    ECC_Stop();
+    return ret;
 }

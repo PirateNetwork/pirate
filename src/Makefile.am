@@ -31,7 +31,7 @@ else
 LIBRUSTZCASH=$(top_builddir)/target/$(RUST_TARGET)/release/librustzcash.la
 endif
 
-LIBBITCOIN_SERVER=libbitcoin_server.a -lcurl -larchive
+LIBBITCOIN_SERVER=libbitcoin_server.a
 LIBBITCOIN_WALLET=libbitcoin_wallet.a
 LIBBITCOIN_COMMON=libbitcoin_common.a
 LIBBITCOIN_CLI=libbitcoin_cli.a
@@ -41,7 +41,6 @@ LIBBITCOINQT=qt/libkomodoqt.a
 LIBSECP256K1=secp256k1/libsecp256k1.la
 LIBCRYPTOCONDITIONS=cryptoconditions/libcryptoconditions_core.a
 LIBUNIVALUE=univalue/libunivalue.la
-LIBCC=libcc.a
 LIBZCASH=libzcash.a
 LIBTLS=libtls.a
 LIBCJSON=libcjson.a
@@ -65,6 +64,7 @@ CXXBRIDGE_RS = \
   rust/src/sapling/zip32.rs \
 	rust/src/sprout.rs \
   rust/src/streams.rs \
+	rust/src/history.rs \
   rust/src/bridge.rs
 
 CXXBRIDGE_H = \
@@ -74,6 +74,7 @@ CXXBRIDGE_H = \
   rust/gen/include/rust/sapling/zip32.h \
 	rust/gen/include/rust/sprout.h \
   rust/gen/include/rust/streams.h \
+	rust/gen/include/rust/history.h \
   rust/gen/include/rust/bridge.h
 
 CXXBRIDGE_CPP = \
@@ -83,6 +84,7 @@ CXXBRIDGE_CPP = \
   rust/gen/src/sapling/zip32.cpp \
 	rust/gen/src/sprout.cpp \
   rust/gen/src/streams.cpp \
+	rust/gen/src/history.cpp \
   rust/gen/src/bridge.cpp
 
 # We add a rust/cxx.h include to indicate that we provide this (via the rustcxx depends
@@ -112,7 +114,8 @@ RUST_ENV_VARS = \
   CXX="$(CXX)" \
   CXXFLAGS="$(CXXFLAGS)" \
   TERM=dumb
-RUST_BUILD_OPTS = --locked --release --target $(RUST_TARGET) --manifest-path $(top_srcdir)/Cargo.toml
+RUST_BUILD_OPTS =  --release --target $(RUST_TARGET) --manifest-path $(top_srcdir)/Cargo.toml
+RUST_VENDORED_SOURCES = $(top_srcdir)/depends/$(host)/vendored-sources
 
 rust_verbose = $(rust_verbose_@AM_V@)
 rust_verbose_ = $(rust_verbose_@AM_DEFAULT_V@)
@@ -123,21 +126,33 @@ cargo_verbose_ = $(cargo_verbose_@AM_DEFAULT_V@)
 cargo_verbose_1 = --verbose
 
 if ENABLE_ONLINE_RUST
-# Ensure that .cargo/config does not exist
+# Ensure that .cargo/config does not exist for online builds
 CARGO_CONFIGURED = $(top_srcdir)/.cargo/.configured-for-online
 $(CARGO_CONFIGURED):
+	@echo "INFO: Configuring Rust for ONLINE build."
 	$(AM_V_at)rm -f $(top_srcdir)/.cargo/.configured-for-offline $(top_srcdir)/.cargo/config
+	$(AM_V_at)touch $(top_srcdir)/.cargo/persistent-config # Ensure .cargo/persistent-config  exists
+	$(AM_V_at)cp -f $(top_srcdir)/.cargo/persistent-config $(top_srcdir)/.cargo/config
 	$(AM_V_at)touch $@
 
 else
-# Enable dependency vendoring
+# Enable dependency vendoring: ensure .cargo/config exists and append vendored sources directory
+# $(AM_V_at)cp -f $(top_srcdir)/.cargo/persistent-config $(top_srcdir)/.cargo/config
 RUST_BUILD_OPTS += --offline
 
 CARGO_CONFIGURED = $(top_srcdir)/.cargo/.configured-for-offline
-$(CARGO_CONFIGURED): $(top_srcdir)/.cargo/config.offline
-	$(AM_V_at)rm -f $(top_srcdir)/.cargo/.configured-for-online
-	$(AM_V_at)cp $< $(top_srcdir)/.cargo/config
-	$(AM_V_at)echo "directory = \"$(RUST_VENDORED_SOURCES)\"" >>$(top_srcdir)/.cargo/config
+$(CARGO_CONFIGURED):
+	@echo "INFO: Configuring Rust for OFFLINE build (modifying .cargo/config)."
+	$(AM_V_at)rm -f $(top_srcdir)/.cargo/.configured-for-online $(top_srcdir)/.cargo/config
+	$(AM_V_at)touch $(top_srcdir)/.cargo/persistent-config # Ensure .cargo/persistent-config exists
+	$(AM_V_at)cp -f $(top_srcdir)/.cargo/persistent-config $(top_srcdir)/.cargo/config
+	$(AM_V_at)echo "" >>$(top_srcdir)/.cargo/config # Add a newline for safety before appending
+	$(AM_V_at)echo "# Added by Makefile.am for vendored offline build:" >>$(top_srcdir)/.cargo/config
+	$(AM_V_at)echo '[source.crates-io]' >>$(top_srcdir)/.cargo/config
+	$(AM_V_at)echo 'replace-with = "vendored-sources"' >>$(top_srcdir)/.cargo/config
+	$(AM_V_at)echo "" >>$(top_srcdir)/.cargo/config # Add a newline for safety before appending
+	$(AM_V_at)echo '[source.vendored-sources]' >>$(top_srcdir)/.cargo/config
+	$(AM_V_at)echo 'directory = "$(RUST_VENDORED_SOURCES)"' >>$(top_srcdir)/.cargo/config
 	$(AM_V_at)touch $@
 endif
 
@@ -175,11 +190,9 @@ $(LIBCRYPTOCONDITIONS): $(wildcard cryptoconditions/src/*) $(wildcard cryptocond
 #	$(AR) cr $(LIBCJSON) $^
 
 # libcjson build
-LIBCJSON=libcjson.a
 libcjson_a_SOURCES = cJSON.c \
   komodo_cJSON.c komodo_cutils.cpp
 libcjson_a_CPPFLAGS=-fPIC
-EXTRA_LIBRARIES += $(LIBCJSON)
 
 # Make is not made aware of per-object dependencies to avoid limiting building parallelization
 # But to build the less dependent modules first, we manually select their order here:
@@ -191,7 +204,8 @@ EXTRA_LIBRARIES += \
   $(LIBBITCOIN_CLI) \
 	$(LIBCXXBRIDGE) \
   $(LIBZCASH) \
-	$(LIBTLS)
+	$(LIBTLS) \
+  $(LIBCJSON)
 
 if ENABLE_WALLET
 BITCOIN_INCLUDES += $(BDB_CPPFLAGS)
@@ -224,11 +238,14 @@ LIBZCASH_H = \
   zcash/NoteEncryption.hpp \
   zcash/Address.hpp \
   zcash/JoinSplit.hpp \
+	zcash/memo.h \
   zcash/Note.hpp \
   zcash/prf.h \
   zcash/Proof.hpp \
+	zcash/address/pirate_orchard.hpp \
 	zcash/address/sapling.hpp \
 	zcash/address/sprout.hpp \
+	zcash/History.hpp \
   zcash/util.h \
   zcash/Zcash.h \
   zcash/address/zip32.h
@@ -309,6 +326,7 @@ BITCOIN_CORE_H = \
 	span.h \
   primitives/block.h \
 	primitives/sapling.h \
+	primitives/orchard.h \
   primitives/transaction.h \
   protocol.h \
   pubkey.h \
@@ -324,6 +342,7 @@ BITCOIN_CORE_H = \
   script/script.h \
   script/script_error.h \
   script/serverchecker.h \
+	script/sigcache.h \
   script/sign.h \
   script/standard.h \
   serialize.h \
@@ -359,6 +378,7 @@ BITCOIN_CORE_H = \
   wallet/asyncrpcoperation_mergetoaddress.h \
 	wallet/asyncrpcoperation_saplingconsolidation.h \
 	wallet/asyncrpcoperation_saplingconsolidation_address.h \
+  wallet/asyncrpcoperation_orchardconsolidation.h \
 	wallet/asyncrpcoperation_sweeptoaddress.h \
   wallet/asyncrpcoperation_sendmany.h \
   wallet/asyncrpcoperation_shieldcoinbase.h \
@@ -366,16 +386,20 @@ BITCOIN_CORE_H = \
   wallet/db.h \
   wallet/rpcwallet.h \
 	wallet/rpcpiratewallet.h \
+	wallet/orchard.h \
 	wallet/sapling.h \
   wallet/wallet.h \
 	wallet/wallet_fees.h \
   wallet/wallet_ismine.h \
   wallet/walletdb.h \
-  wallet/witness.h \
-  zmq/zmqabstractnotifier.h \
+  wallet/witness.h 
+
+if ENABLE_ZMQ
+  BITCOIN_CORE_H += zmq/zmqabstractnotifier.h \
   zmq/zmqconfig.h \
   zmq/zmqnotificationinterface.h \
   zmq/zmqpublishnotifier.h
+endif
 
 	LIBTLS_H = \
 	    tls/utiltls.h
@@ -420,6 +444,7 @@ libbitcoin_server_a_SOURCES = \
   cc/channels.cpp \
   cc/auction.cpp \
   cc/betprotocol.cpp \
+  cc/cclib.cpp \
   chain.cpp \
   checkpoints.cpp \
   fs.cpp \
@@ -460,7 +485,6 @@ libbitcoin_server_a_SOURCES = \
   txdb.cpp \
   txmempool.cpp \
   validationinterface.cpp \
-	cc/cclib.cpp \
   $(BITCOIN_CORE_H) \
   $(LIBZCASH_H) \
 	$(LIBTLS_H)
@@ -493,6 +517,7 @@ libbitcoin_wallet_a_SOURCES = \
   wallet/asyncrpcoperation_mergetoaddress.cpp \
 	wallet/asyncrpcoperation_saplingconsolidation.cpp \
 	wallet/asyncrpcoperation_saplingconsolidation_address.cpp \
+  wallet/asyncrpcoperation_orchardconsolidation.cpp \
 	wallet/asyncrpcoperation_sweeptoaddress.cpp \
   wallet/asyncrpcoperation_sendmany.cpp \
   wallet/asyncrpcoperation_shieldcoinbase.cpp \
@@ -518,10 +543,7 @@ libbitcoin_wallet_a_SOURCES = \
   $(BITCOIN_CORE_H) \
   $(LIBZCASH_H)
 
-# a static library for cryptoconditions
-libcc_a_SOURCES = cc/cclib.cpp
-libcc_a_CXXFLAGS = -DBUILD_CUSTOMCC -I../secp256k1/include -I../depends/$(shell echo `../depends/config.guess`/include) -I./univalue/include -I./cryptoconditions/include -I./cryptoconditions/src -I./cryptoconditions/src/asn -I. -I./cc -I$(srcdir)/rust/include -I$(srcdir)/rust/gen/include
-libcc_a_LDFLAGS = -version-info 0:0:0
+# libcc library removed - functionality distributed across other libraries
 
 # crypto primitives library
 crypto_libbitcoin_crypto_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_CONFIG_INCLUDES)
@@ -598,6 +620,7 @@ libbitcoin_common_a_SOURCES = \
   metrics.cpp \
   primitives/block.cpp \
   primitives/transaction.cpp \
+	primitives/transaction_info.cpp \
   protocol.cpp \
   pubkey.cpp \
   scheduler.cpp \
@@ -674,49 +697,49 @@ if TARGET_WINDOWS
 pirated_SOURCES += bitcoind-res.rc
 endif
 
+# Optimized linking order - from high-level to low-level dependencies
+# Removed duplicate libraries to reduce binary size and linking time
 pirated_LDADD = \
   $(LIBBITCOIN_SERVER) \
-  $(LIBBITCOIN_COMMON) \
-  $(LIBUNIVALUE) \
-  $(LIBBITCOIN_UTIL) \
-  $(LIBBITCOIN_ZMQ) \
-  $(LIBBITCOIN_CRYPTO)
+  $(CURL_LIBS) \
+  $(ARCHIVE_LIBS)
 
 if ENABLE_WALLET
 pirated_LDADD += $(LIBBITCOIN_WALLET)
 endif
 
+if ENABLE_ZMQ
+pirated_LDADD += $(LIBBITCOIN_ZMQ)
+endif
+
 pirated_LDADD += \
+  $(LIBBITCOIN_COMMON) \
+  $(LIBBITCOIN_CLI) \
+  $(LIBBITCOIN_UTIL) \
   $(LIBZCASH) \
-	$(LIBTLS) \
-	$(LIBRUSTZCASH) \
-	$(LIBCXXBRIDGE) \
+  $(LIBTLS) \
+  $(LIBRUSTZCASH) \
+  $(LIBCXXBRIDGE) \
+  $(LIBCRYPTOCONDITIONS) \
+  $(LIBCJSON) \
+  $(LIBSECP256K1) \
+  $(LIBUNIVALUE) \
   $(LIBLEVELDB) \
   $(LIBMEMENV) \
-  $(LIBSECP256K1) \
-  $(LIBCRYPTOCONDITIONS) \
-	$(LIBCJSON) \
+  $(LIBBITCOIN_CRYPTO) \
+  $(LIBZCASH_LIBS) \
   $(BOOST_LIBS) \
   $(BDB_LIBS) \
   $(SSL_LIBS) \
   $(CRYPTO_LIBS) \
   $(EVENT_PTHREADS_LIBS) \
-  $(EVENT_LIBS) \
-  $(ZMQ_LIBS) \
-  $(LIBBITCOIN_CRYPTO) \
-  $(LIBZCASH_LIBS) \
-  $(LIBSECP256K1) \
-  $(LIBCRYPTOCONDITIONS)
+  $(EVENT_LIBS)
 
-# if TARGET_DARWIN
-# pirated_LDADD += libcc.dylib $(LIBSECP256K1)
-# endif
-# if TARGET_WINDOWS
-# pirated_LDADD += libcc.dll $(LIBSECP256K1)
-# endif
-# if TARGET_LINUX
-# pirated_LDADD += libcc.so $(LIBSECP256K1)
-# endif
+if ENABLE_ZMQ
+pirated_LDADD += $(ZMQ_LIBS)
+endif
+
+# libcc linking removed - functionality integrated into other libraries
 
 
 
@@ -743,36 +766,38 @@ if TARGET_WINDOWS
 pirate_cli_SOURCES += bitcoin-cli-res.rc
 endif
 
+# Optimized pirate-cli linking - minimal dependencies for CLI tool
 pirate_cli_LDADD = \
-	$(LIBBITCOIN_CLI) \
-	$(LIBUNIVALUE) \
-	$(LIBBITCOIN_UTIL) \
-	$(BOOST_LIBS) \
-	$(SSL_LIBS) \
-	$(CRYPTO_LIBS) \
-	$(EVENT_LIBS) \
-	$(LIBZCASH) \
-	$(LIBTLS) \
-	$(LIBRUSTZCASH) \
-	$(LIBCXXBRIDGE) \
-	$(LIBBITCOIN_CRYPTO) \
-  $(LIBZCASH_LIBS)
+  $(LIBBITCOIN_CLI) \
+  $(LIBBITCOIN_UTIL) \
+  $(LIBZCASH) \
+  $(LIBTLS) \
+  $(LIBRUSTZCASH) \
+  $(LIBCXXBRIDGE) \
+  $(LIBBITCOIN_CRYPTO) \
+  $(LIBUNIVALUE) \
+  $(LIBZCASH_LIBS) \
+  $(BOOST_LIBS) \
+  $(SSL_LIBS) \
+  $(CRYPTO_LIBS) \
+  $(EVENT_LIBS)
 
 if ENABLE_WALLET
+# Optimized wallet utility linking - organized by dependency hierarchy
 wallet_utility_LDADD = \
-	libbitcoin_wallet.a \
-	$(LIBBITCOIN_COMMON) \
-	$(LIBBITCOIN_CRYPTO) \
-	$(LIBSECP256K1) \
-	$(LIBBITCOIN_UTIL) \
-	$(BOOST_LIBS) \
-	$(BDB_LIBS) \
-	$(CRYPTO_LIBS) \
-	$(LIBZCASH) \
-	$(LIBRUSTZCASH) \
-	$(LIBCXXBRIDGE) \
-	$(LIBZCASH_LIBS)\
-	$(LIBCRYPTOCONDITIONS)
+  $(LIBBITCOIN_WALLET) \
+  $(LIBBITCOIN_COMMON) \
+  $(LIBBITCOIN_UTIL) \
+  $(LIBZCASH) \
+  $(LIBRUSTZCASH) \
+  $(LIBCXXBRIDGE) \
+  $(LIBCRYPTOCONDITIONS) \
+  $(LIBSECP256K1) \
+  $(LIBBITCOIN_CRYPTO) \
+  $(LIBZCASH_LIBS) \
+  $(BOOST_LIBS) \
+  $(BDB_LIBS) \
+  $(CRYPTO_LIBS)
 endif
 
 # zcash-tx binary #
@@ -789,21 +814,22 @@ if TARGET_WINDOWS
 pirate_tx_SOURCES += bitcoin-tx-res.rc
 endif
 
-# FIXME: Is libzcash needed for zcash_tx?
+# Optimized pirate-tx linking - transaction utility dependencies
 pirate_tx_LDADD = \
-  $(LIBUNIVALUE) \
   $(LIBBITCOIN_COMMON) \
   $(LIBBITCOIN_UTIL) \
-  $(LIBSECP256K1) \
   $(LIBZCASH) \
-	$(LIBTLS) \
-	$(LIBRUSTZCASH) \
-	$(LIBCXXBRIDGE) \
+  $(LIBTLS) \
+  $(LIBRUSTZCASH) \
+  $(LIBCXXBRIDGE) \
+  $(LIBCRYPTOCONDITIONS) \
+  $(LIBSECP256K1) \
+  $(LIBUNIVALUE) \
   $(LIBBITCOIN_CRYPTO) \
   $(LIBZCASH_LIBS) \
-  $(LIBCRYPTOCONDITIONS)
-
-pirate_tx_LDADD += $(BOOST_LIBS) $(CRYPTO_LIBS) -lcurl
+  $(BOOST_LIBS) \
+  $(CRYPTO_LIBS) \
+  $(CURL_LIBS)
 #
 
 # zcash protocol primitives #
@@ -812,10 +838,13 @@ libzcash_a_SOURCES = \
 	zcash/NoteEncryption.cpp \
 	zcash/Address.cpp \
 	zcash/JoinSplit.cpp \
+	zcash/memo.cpp \
 	zcash/Note.cpp \
 	zcash/prf.cpp \
+	zcash/address/pirate_orchard.cpp \
 	zcash/address/sapling.cpp \
 	zcash/address/sprout.cpp \
+	zcash/History.cpp \
 	zcash/util.cpp \
 	zcash/address/zip32.cpp
 
@@ -825,7 +854,6 @@ libzcash_a_CPPFLAGS = -fPIC -DBINARY_OUTPUT -DCURVE_ALT_BN128 \
 	-Wstack-protector $(SAN_CXXFLAGS) -fstack-protector-all -fPIE -fvisibility=hidden \
 	-DSTATIC $(BITCOIN_INCLUDES)
 libzcash_a_CXXFLAGS = $(SAN_CXXFLAGS) $(HARDENED_CXXFLAGS) -fwrapv -fno-strict-aliasing
-libzcash_a_LDFLAGS = $(SAN_LDFLAGS) $(HARDENED_LDFLAGS)
 libzcash_a_CPPFLAGS += -DMONTGOMERY_OUTPUT
 
 # zcashconsensus library #
@@ -867,8 +895,6 @@ libtls_a_SOURCES = \
 libtls_a_CPPFLAGS = -fPIC -DBINARY_OUTPUT -DCURVE_ALT_BN128 -DBOOST_SPIRIT_THREADSAFE -DHAVE_BUILD_INFO -D__STDC_FORMAT_MACROS $(HARDENED_CPPFLAGS) -pipe -O2 -g  -Wstack-protector -fstack-protector-all -fPIE -fvisibility=hidden -DSTATIC $(BITCOIN_INCLUDES) -I$(srcdir)/rust/include -I$(srcdir)/rust/gen/include
 
 libtls_a_CXXFLAGS = $(HARDENED_CXXFLAGS) -fwrapv -fno-strict-aliasing
-
-libtls_a_LDFLAGS = $(HARDENED_LDFLAGS)
 
 libtls_a_CPPFLAGS += -DMONTGOMERY_OUTPUT
 
@@ -921,13 +947,18 @@ if EMBEDDED_LEVELDB
 include Makefile.leveldb.include
 endif
 
-if ENABLE_TESTS
-include Makefile.ktest.include
-#include Makefile.test.include # bitcoin tests
-#include Makefile.gtest.include # zcash tests
-endif
-
-
 if ENABLE_QT
 include Makefile.qt.include
+if ENABLE_TESTS
+#include Makefile.qttest.include
 endif
+endif
+
+if ENABLE_TESTS
+#include Makefile.gtest.include #zcash tests
+#include Makefile.ktest.include #komodo tests 
+#include Makefile.test.include #bitcoin tests
+endif
+
+
+

@@ -69,8 +69,8 @@ public:
     bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
     bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
     bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const;
+    bool GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const;
     bool GetNullifier(const uint256 &nf, ShieldedType type) const;
-    bool GetZkProofHash(const uint256 &zkProofHash, ProofType type, std::set<std::pair<uint256, int>> &txids) const;
     /***
      * @param txid the transaction id
      * @param coins the coins within the txid
@@ -85,18 +85,23 @@ public:
     bool HaveCoins(const uint256 &txid) const;
     uint256 GetBestBlock() const;
     uint256 GetBestAnchor(ShieldedType type) const;
+    HistoryIndex GetHistoryLength(uint32_t epochId) const;
+    HistoryNode GetHistoryAt(uint32_t epochId, HistoryIndex index) const;
+    uint256 GetHistoryRoot(uint32_t epochId) const;
     bool BatchWrite(CCoinsMap &mapCoins,
                     const uint256 &hashBlock,
                     const uint256 &hashSproutAnchor,
                     const uint256 &hashSaplingAnchor,
                     const uint256 &hashSaplingFrontierAnchor,
+                    const uint256 &hashOrchardFrontierAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
                     CAnchorsSaplingMap &mapSaplingAnchors,
                     CAnchorsSaplingFrontierMap & mapSaplingFrontierAnchors,
+                    CAnchorsOrchardFrontierMap & mapOrchardFrontierAnchors,
                     CNullifiersMap &mapSproutNullifiers,
                     CNullifiersMap &mapSaplingNullifiers,
-                    CProofHashMap &mapZkOutputProofHash,
-                    CProofHashMap &mapZkSpendProofHash);
+                    CNullifiersMap &mapOrchardNullifiers,
+                    CHistoryCacheMap &historyCacheMap);
     bool GetStats(CCoinsStats &stats) const;
 };
 

@@ -26,6 +26,8 @@
 #include "primitives/block.h"
 #include "protocol.h"
 
+#include <librustzcash.h>
+
 #define KOMODO_MINDIFF_NBITS 0x200f0f0f
 
 #include <vector>
@@ -80,6 +82,13 @@ public:
         SAPLING_EXTENDED_FVK,
         SAPLING_DIVERSIFIED_EXTENDED_FVK,
 
+        ORCHARD_PAYMENT_ADDRESS,
+        ORCHARD_FULL_VIEWING_KEY,
+        ORCHARD_EXTENDED_FVK,
+        ORCHARD_DIVERSIFIED_EXTENDED_FVK,
+        ORCHARD_EXTENDED_SPEND_KEY,
+        ORCHARD_DIVERSIFIED_EXTENDED_SPEND_KEY,
+
         MAX_BECH32_TYPES
     };
 
@@ -87,6 +96,7 @@ public:
      * @returns parameters that influence chain consensus
      */
     const Consensus::Params& GetConsensus() const { return consensus; }
+
     /***
      * Message header start bytes
      * @returns 4 bytes
@@ -282,7 +292,7 @@ bool SelectParamsFromCommandLine();
 void UpdateNetworkUpgradeParameters(Consensus::UpgradeIndex idx, int nActivationHeight);
 
 void komodo_setactivation(int32_t height);
-void komodo_setcanopy(int32_t height);
+void komodo_setorchard(int32_t height);
 int32_t MAX_BLOCK_SIZE(int32_t height);
 
 #endif // BITCOIN_CHAINPARAMS_H

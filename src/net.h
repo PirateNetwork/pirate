@@ -104,11 +104,12 @@ CNode* FindNode(const CNetAddr& ip);
 CNode* FindNode(const CSubNet& subNet);
 CNode* FindNode(const std::string& addrName);
 CNode* FindNode(const CService& ip);
-CNode* ConnectNode(CAddress addrConnect, const char *pszDest = NULL);
-bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOutbound = NULL, const char *strDest = NULL, bool fOneShot = false);
+CNode* ConnectNode(CAddress addrConnect, const char *pszDest = NULL, bool fAddNode = false);
+bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOutbound = NULL, const char *strDest = NULL, bool fOneShot = false, bool fAddNode = false);
 unsigned short GetListenPort();
 bool BindListenPort(const CService &bindAddr, std::string& strError, bool fWhitelisted = false);
 void LoadPeers();
+void DumpAddresses();
 void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler);
 bool StopNode();
 void SocketSendData(CNode *pnode);
@@ -287,6 +288,7 @@ public:
     uint64_t nSendBytes;
     uint64_t nRecvBytes;
     bool fWhitelisted;
+    bool fAddNode;
     double dPingTime;
     double dPingWait;
     double dMinPing;
@@ -410,6 +412,7 @@ public:
     std::string strSubVer, cleanSubVer;
     bool fWhitelisted; // This peer can bypass DoS banning.
     bool fOneShot;
+    bool fAddNode;     // This peer is from -addnode
     bool fClient;
     bool fInbound;
     bool fNetworkNode;
@@ -817,7 +820,10 @@ public:
     static bool GetTlsValidate();
 };
 
-
+// Addnode connection management functions
+bool HasAvailableAddNodeSlots();
+int GetAddNodeConnectionCount();
+bool IsAddNodeAddress(const CService& addr);
 
 class CTransaction;
 void RelayTransaction(const CTransaction& tx);

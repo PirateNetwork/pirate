@@ -5,8 +5,6 @@
 #include "serialize.h"
 #include "zcash/Zcash.h"
 
-#include <boost/variant.hpp>
-
 namespace libzcash {
 
 const size_t SerializedSaplingPaymentAddressSize = 43;
@@ -33,6 +31,8 @@ public:
         READWRITE(pk_d);
     }
 
+    std::array<uint8_t, 43> GetRawBytes() const;
+
     //! Get the 256-bit SHA256d hash of this payment address.
     uint256 GetHash() const;
 
@@ -51,7 +51,7 @@ public:
     SaplingIncomingViewingKey(uint256 ivk) : uint256(ivk) { }
 
     // Can pass in diversifier for Sapling addr
-    boost::optional<SaplingPaymentAddress> address(diversifier_t d) const;
+    std::optional<SaplingPaymentAddress> address(diversifier_t d) const;
 };
 
 class SaplingFullViewingKey {

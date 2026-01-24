@@ -115,8 +115,8 @@ void OptionsModel::Init(bool resetSettings)
 
     if (!settings.contains("fSaplingConsolidationEnabled"))
         settings.setValue("fSaplingConsolidationEnabled", true);
-    if (!SoftSetBoolArg("-consolidation", settings.value("fSaplingConsolidationEnabled").toBool()))
-        addOverriddenOption("-consolidation");
+    if (!SoftSetBoolArg("-saplingconsolidation", settings.value("fSaplingConsolidationEnabled").toBool()))
+        addOverriddenOption("-saplingconsolidation");
 
     if (!settings.contains("fEnableReindex"))
         settings.setValue("fEnableReindex", false);
@@ -357,12 +357,12 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return settings.value("fUseProxy");
         case ProxyIP: {
             // contains IP at index 0 and port at index 1
-            QStringList strlIpPort = settings.value("addrProxy").toString().split(":", QString::SkipEmptyParts);
+            QStringList strlIpPort = settings.value("addrProxy").toString().split(":", Qt::SkipEmptyParts);
             return strlIpPort.at(0);
         }
         case ProxyPort: {
             // contains IP at index 0 and port at index 1
-            QStringList strlIpPort = settings.value("addrProxy").toString().split(":", QString::SkipEmptyParts);
+            QStringList strlIpPort = settings.value("addrProxy").toString().split(":", Qt::SkipEmptyParts);
             return strlIpPort.at(1);
         }
 
@@ -371,23 +371,23 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return settings.value("fUseSeparateProxyTor");
         case ProxyIPTor: {
             // contains IP at index 0 and port at index 1
-            QStringList strlIpPort = settings.value("addrSeparateProxyTor").toString().split(":", QString::SkipEmptyParts);
+            QStringList strlIpPort = settings.value("addrSeparateProxyTor").toString().split(":", Qt::SkipEmptyParts);
             return strlIpPort.at(0);
         }
         case ProxyPortTor: {
             // contains IP at index 0 and port at index 1
-            QStringList strlIpPort = settings.value("addrSeparateProxyTor").toString().split(":", QString::SkipEmptyParts);
+            QStringList strlIpPort = settings.value("addrSeparateProxyTor").toString().split(":", Qt::SkipEmptyParts);
             return strlIpPort.at(1);
         }
 
         case ControlIPTor: {
             // contains IP at index 0 and port at index 1
-            QStringList strlIpPort = settings.value("controlIpTor").toString().split(":", QString::SkipEmptyParts);
+            QStringList strlIpPort = settings.value("controlIpTor").toString().split(":", Qt::SkipEmptyParts);
             return strlIpPort.at(0);
         }
         case ControlPortTor: {
             // contains IP at index 0 and port at index 1
-            QStringList strlIpPort = settings.value("controlIpTor").toString().split(":", QString::SkipEmptyParts);
+            QStringList strlIpPort = settings.value("controlIpTor").toString().split(":", Qt::SkipEmptyParts);
             return strlIpPort.at(1);
         }
         case ControlPasswordTor: {
@@ -401,12 +401,12 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return settings.value("fIncomingI2P");
         case ProxyIPI2P: {
             // contains IP at index 0 and port at index 1
-            QStringList strlIpPort = settings.value("addrProxyI2P").toString().split(":", QString::SkipEmptyParts);
+            QStringList strlIpPort = settings.value("addrProxyI2P").toString().split(":", Qt::SkipEmptyParts);
             return strlIpPort.at(0);
         }
         case ProxyPortI2P: {
             // contains IP at index 0 and port at index 1
-            QStringList strlIpPort = settings.value("addrProxyI2P").toString().split(":", QString::SkipEmptyParts);
+            QStringList strlIpPort = settings.value("addrProxyI2P").toString().split(":", Qt::SkipEmptyParts);
             return strlIpPort.at(1);
         }
 
@@ -430,9 +430,6 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case EnableZSigning_Spend:
             //  Offline transaction role: Create offline transactions for 'viewing only' addresses
             return settings.value("fEnableZSigning_ModeSpend");
-        case EnableZSigning_HWwallet:
-            // Offline transaction: Does the user use a hardware wallet to authorise the 'Spend' transaction?
-            return settings.value("fEnableZSigning_HWwallet");
         case EnableZSigning_Sign:
             //  Offline transaction role: Sign offline transactions
             return settings.value("fEnableZSigning_ModeSign");
@@ -502,7 +499,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case ProxyIP:
             {
                 // contains current IP at index 0 and current port at index 1
-                QStringList strlIpPort = settings.value("addrProxy").toString().split(":", QString::SkipEmptyParts);
+                QStringList strlIpPort = settings.value("addrProxy").toString().split(":", Qt::SkipEmptyParts);
                 // if that key doesn't exist or has a changed IP
                 if (!settings.contains("addrProxy") || strlIpPort.at(0) != value.toString()) {
                     // construct new value from new IP and current port
@@ -515,7 +512,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case ProxyPort:
             {
                 // contains current IP at index 0 and current port at index 1
-                QStringList strlIpPort = settings.value("addrProxy").toString().split(":", QString::SkipEmptyParts);
+                QStringList strlIpPort = settings.value("addrProxy").toString().split(":", Qt::SkipEmptyParts);
                 // if that key doesn't exist or has a changed port
                 if (!settings.contains("addrProxy") || strlIpPort.at(1) != value.toString()) {
                     // construct new value from current IP and new port
@@ -536,7 +533,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case ProxyIPTor:
             {
                 // contains current IP at index 0 and current port at index 1
-                QStringList strlIpPort = settings.value("addrSeparateProxyTor").toString().split(":", QString::SkipEmptyParts);
+                QStringList strlIpPort = settings.value("addrSeparateProxyTor").toString().split(":", Qt::SkipEmptyParts);
                 // if that key doesn't exist or has a changed IP
                 if (!settings.contains("addrSeparateProxyTor") || strlIpPort.at(0) != value.toString()) {
                     // construct new value from new IP and current port
@@ -549,7 +546,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case ProxyPortTor:
             {
                 // contains current IP at index 0 and current port at index 1
-                QStringList strlIpPort = settings.value("addrSeparateProxyTor").toString().split(":", QString::SkipEmptyParts);
+                QStringList strlIpPort = settings.value("addrSeparateProxyTor").toString().split(":", Qt::SkipEmptyParts);
                 // if that key doesn't exist or has a changed port
                 if (!settings.contains("addrSeparateProxyTor") || strlIpPort.at(1) != value.toString()) {
                     // construct new value from current IP and new port
@@ -562,7 +559,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case ControlIPTor:
             {
                 // contains current IP at index 0 and current port at index 1
-                QStringList strlIpPort = settings.value("controlIpTor").toString().split(":", QString::SkipEmptyParts);
+                QStringList strlIpPort = settings.value("controlIpTor").toString().split(":", Qt::SkipEmptyParts);
                 // if that key doesn't exist or has a changed IP
                 if (!settings.contains("controlIpTor") || strlIpPort.at(0) != value.toString()) {
                     // construct new value from new IP and current port
@@ -575,7 +572,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case ControlPortTor:
             {
                 // contains current IP at index 0 and current port at index 1
-                QStringList strlIpPort = settings.value("controlIpTor").toString().split(":", QString::SkipEmptyParts);
+                QStringList strlIpPort = settings.value("controlIpTor").toString().split(":", Qt::SkipEmptyParts);
                 // if that key doesn't exist or has a changed port
                 if (!settings.contains("controlIpTor") || strlIpPort.at(1) != value.toString()) {
                     // construct new value from current IP and new port
@@ -609,7 +606,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case ProxyIPI2P:
             {
                 // contains current IP at index 0 and current port at index 1
-                QStringList strlIpPort = settings.value("addrProxyI2P").toString().split(":", QString::SkipEmptyParts);
+                QStringList strlIpPort = settings.value("addrProxyI2P").toString().split(":", Qt::SkipEmptyParts);
                 // if that key doesn't exist or has a changed IP
                 if (!settings.contains("addrProxyI2P") || strlIpPort.at(0) != value.toString()) {
                     // construct new value from new IP and current port
@@ -622,7 +619,7 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case ProxyPortI2P:
             {
                 // contains current IP at index 0 and current port at index 1
-                QStringList strlIpPort = settings.value("addrProxyI2P").toString().split(":", QString::SkipEmptyParts);
+                QStringList strlIpPort = settings.value("addrProxyI2P").toString().split(":", Qt::SkipEmptyParts);
                 // if that key doesn't exist or has a changed port
                 if (!settings.contains("addrProxyI2P") || strlIpPort.at(1) != value.toString()) {
                     // construct new value from current IP and new port
@@ -678,12 +675,6 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
                 settings.setValue("fEnableZSigning_ModeSign", value);
                 setRestartRequired(true);
             }
-            break;
-        case EnableZSigning_HWwallet:
-            if (settings.value("fEnableZSigning_HWwallet") != value) {
-                settings.setValue("fEnableZSigning_HWwallet", value);
-            }
-            //Its not necessary to restart the wallet if this configuration option changed.
             break;
         case EnableZSigning_Spend:
             if (settings.value("fEnableZSigning_ModeSpend") != value) {

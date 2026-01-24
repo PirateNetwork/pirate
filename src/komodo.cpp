@@ -232,7 +232,7 @@ void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotar
             else
             {
                 // unable to use faststateinit, so try again only slower
-                fprintf(stderr,"komodo_faststateinit retval.-1\n");
+                fprintf(stdout,"komodo_faststateinit retval.-1\n");
                 while (!ShutdownRequested() && komodo_parsestatefile(sp,fp,symbol,dest) >= 0)
                     ;
             }
@@ -797,7 +797,7 @@ int32_t komodo_connectblock(bool fJustCheck, CBlockIndex *pindex,CBlock& block)
                 notarized = 1;
             }
             // simulate DPoW in regtest mode for dpowconfs tests/etc
-            if ( Params().NetworkIDString() == "regtest" && ( height%7 == 0) ) {
+            if ( Params().NetworkIDString() == "regtest" && ( height%500 == 0) ) {
                 notarized              = 1;
                 sp->SetLastNotarizedHeight(height);
                 sp->SetLastNotarizedHash(block.GetHash());

@@ -43,9 +43,9 @@ void acceptTxFail(const CTransaction tx);
  * @param scriptPubKey
  * @returns the transaction
  */
-CTransaction getInputTx(CScript scriptPubKey);
+// CTransaction getInputTx(CScript scriptPubKey);
 CMutableTransaction spendTx(const CTransaction &txIn, int nOut=0);
-std::vector<uint8_t> getSig(const CMutableTransaction mtx, CScript inputPubKey, int nIn=0);
+// std::vector<uint8_t> getSig(const CMutableTransaction mtx, CScript inputPubKey, int nIn=0);
 
 class TransactionInProcess
 {
@@ -83,7 +83,7 @@ public:
      * Generate a block
      * @returns the block generated
      */
-    std::shared_ptr<CBlock> generateBlock(std::shared_ptr<CWallet> wallet, 
+    std::shared_ptr<CBlock> generateBlock(std::shared_ptr<CWallet> wallet,
             CValidationState* validationState = nullptr);
     /****
      * @brief set the chain time to something reasonable
@@ -112,7 +112,7 @@ public:
      */
     bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pindex,
             bool fJustCheck = false,bool fCheckPOW = false);
-    
+
     boost::filesystem::path GetDataDir();
 private:
     boost::filesystem::path dataDir;
@@ -169,7 +169,7 @@ public:
      * @param txToSpend the specific transaction to spend (ok if not transmitted yet)
      * @returns the transaction
     */
-    TransactionInProcess CreateSpendTransaction(std::shared_ptr<TestWallet> to, 
+    TransactionInProcess CreateSpendTransaction(std::shared_ptr<TestWallet> to,
             CAmount amount, CAmount fee, CCoinControl& coinControl);
     /****
      * @brief create a transaction spending a vout that is not yet in the wallet

@@ -41,6 +41,8 @@
 #include <QSettings>
 #include <QTextDocument>
 #include <QTimer>
+#include <QClipboard>
+#include <QApplication>
 
 extern CRPCTable tableRPC;
 
@@ -57,15 +59,18 @@ ZSignDialog::ZSignDialog(const PlatformStyle *_platformStyle, QWidget *parent) :
     {
         ui->clearButton->setIcon(QIcon());
         ui->signButton->setIcon(QIcon());
+        ui->broadcastButton->setIcon(QIcon());
     } else {
         ui->clearButton->setIcon(_platformStyle->SingleColorIcon(":/icons/remove"));
         ui->signButton->setIcon(_platformStyle->SingleColorIcon(":/icons/send"));
+        ui->broadcastButton->setIcon(_platformStyle->SingleColorIcon(":/icons/transaction_confirmed"));
     }
 
     connect(ui->clearButton, SIGNAL(clicked()), this, SLOT(clear()));
 
     connect(ui->clearButton, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
     connect(ui->signButton, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
+    connect(ui->broadcastButton, SIGNAL(clicked()), this, SLOT(sendResetUnlockSignal()));
 
     connect(ui->teInput, SIGNAL(textChanged()), this, SLOT(sendResetUnlockSignal()));
     connect(ui->teResult, SIGNAL(textChanged()), this, SLOT(sendResetUnlockSignal()));
@@ -76,6 +81,10 @@ ZSignDialog::ZSignDialog(const PlatformStyle *_platformStyle, QWidget *parent) :
     ui->teInput->clear();
     ui->lbResult->setText("Signed transaction output:");
     ui->teResult->clear();
+    
+    // By default, show broadcast button and allow pasting (online mode)
+    ui->teResult->setReadOnly(false);
+    ui->broadcastButton->setVisible(true);
 }
 
 ZSignDialog::~ZSignDialog()
@@ -95,6 +104,28 @@ void ZSignDialog::setClientModel(ClientModel *_clientModel)
 void ZSignDialog::setModel(WalletModel *_model)
 {
     this->model = _model;
+    
+    // Check if we're in offline signing mode (Sign role)
+    updateOfflineMode();
+}
+
+void ZSignDialog::updateOfflineMode()
+{
+    if (model && model->getOptionsModel())
+    {
+        bool enableZSigning = model->getOptionsModel()->data(
+            model->getOptionsModel()->index(OptionsModel::EnableZSigning, 0), Qt::EditRole).toBool();
+        bool enableZSigningSign = model->getOptionsModel()->data(
+            model->getOptionsModel()->index(OptionsModel::EnableZSigning_Sign, 0), Qt::EditRole).toBool();
+        
+        // Hide broadcast button if offline signing is enabled and in Sign role
+        SetOfflineMode(enableZSigning && enableZSigningSign);
+    }
+    else
+    {
+        // Default to online mode if no model
+        SetOfflineMode(false);
+    }
 }
 
 void ZSignDialog::on_signButton_clicked()
@@ -108,141 +139,71 @@ void ZSignDialog::on_signButton_clicked()
 
       QString sTransaction = ui->teInput->toPlainText();
       sTransaction = sTransaction.trimmed();
-      //When creating the transaction from the debug console, the result is wrapped
-      //in "quotation" marks, with the quotations inside the message escaped (\")
-      //Replace the escaped quotations with normal quotation character:
-      if ( sTransaction.contains("\\\"") )
+      
+      //Remove quotation marks if present
+      if (sTransaction.startsWith("\"") && sTransaction.endsWith("\""))
+      {
+        sTransaction = sTransaction.mid(1, sTransaction.length() - 2);
+      }
+      
+      //Replace escaped quotations with normal quotation character
+      if (sTransaction.contains("\\\""))
       {
         sTransaction = sTransaction.replace("\\\"","\"");
       }
-      QStringList sTransactionParts = sTransaction.split(" ");
 
-      //No text provided yet:
-      if (sTransactionParts.size() == 0)
+      //No text provided yet
+      if (sTransaction.isEmpty())
       {
+        ui->teResult->setText("Please paste the hex output from z_createbuildinstructions into the input field above.");
         return;
       }
 
-      UniValue params(UniValue::VARR);
-      std::vector<std::string> strParams;
-
-      QString qsResult="";
-
-      
-      bool bParamSizeInvalid=true;
-      if (sTransactionParts.size()>=17) //Minimum transaction size
+      //Check if input is hex
+      std::string hexInput = sTransaction.toStdString();
+      if (hexInput.find_first_not_of("0123456789abcdefABCDEF") != std::string::npos)
       {
-        // [2] == Version
-        if(sTransactionParts[2] == '2')
-        {
-          if (sTransactionParts.size() == 17)
-          {
-            bParamSizeInvalid=false;
-          }
-        }        
-      }
-      
-      if (
-         (sTransactionParts[0] == "z_sign_offline") &&
-         (sTransactionParts[2] != '2')
-         )
-      {
-        ui->teResult->setText("Only version 2 is supported with this version of Treasure Chest.");
-        return;
-      }   
-      
-      if (
-         (sTransactionParts[0] != "z_sign_offline") ||
-         (bParamSizeInvalid==true)
-         )
-      {
-        qsResult = "z_sign_offline signs the transaction presented in the hex input block\n"
-          "The transaction data block is generated by an online wallet using the 'z_sendmany_prepare_offline' command\n"
+        QString qsResult = "z_buildrawtransaction builds and signs a shielded transaction from builder instructions.\n"
+          "The transaction builder data is generated by an online wallet using the 'z_createbuildinstructions' command.\n"
+          "\nUsage:\n"
+          "1. On your online (view-only) wallet, run:\n"
+          "   z_createbuildinstructions \"fromaddress\" '[{\"address\":\"toaddress\",\"amount\":X.XX}]'\n"
+          "2. Copy the hex output from that command\n"
+          "3. Paste it into the input field above\n"
+          "4. Click 'Sign' to build and sign the transaction\n"
+          "5. Copy the resulting signed transaction\n"
+          "6. Broadcast it on your online wallet using: sendrawtransaction \"hexstring\"\n"
           "\nArguments:\n"
-          "0. Project                 (string, required) Project: arrr=Pirate Chain\n"
-          "1. Version                 (number) The version of the transaction structure. This version of Treasure Chest support version 2\n"
-          "2. \"from_address\"        (string, required) The taddr or zaddr to send the funds from.\n"
-          "3. \"spending notes\"      (array, required) An array of json objects representing the spending notes of the from_address.\n"
-          "    '[{\n"
-          "      \"merkleposition\" :position (numeric, required) spending merkle blockchain position\n"
-          "      \"merklepath\"     :path     (hex string, required) spending merkle blockchain path, 2 chars/hex value\n"
-          "      \"note_d\"         :d        (hex string, required) Note d component, 2 chars/hex value\n"
-          "      \"note_pkd\"       :pkd      (hex string, required) Note pkd component, 2 chars/hex value\n"
-          "      \"note_r\"         :r        (hex string, required) Note r component, 2 chars/hex value\n"
-          "      \"value\"          :value    (numeric, required) amount stored in the note\n"
-          "      \"zip212\"         :value    (numeric, required) zip212 status of the note: 0=BeforeZip212, 1=AfterZip212\n"
-          "    }, ... ]'\n"
-          "4. \"outputs\"             (array, required) An array of json objects representing recipients and the amounts send to them.\n"
-          "    '[{\n"
-          "      \"address\":address  (string, required) The address is a zaddr\n"
-          "      \"amount\":amount    (numeric, required) The numeric amount in KMD is the value\n"
-          "      \"memo\":memo        (hex string, optional) A note about the payment, 2 chars/hex value\n"
-          "    }, ... ]'\n"
-          "5. Minconf                 (numeric, required) Only use funds confirmed at least this many times.\n"          
-          "6. Fee                     (numeric, required) Miners fee\n"
-          "7. Block height            (numeric, required) Network current block height\n"
-          "8. branch ID               (numeric, required) Network branch ID\n"          
-          "9. \"anchor\"              (hex string, required) Anchor for the witnesses\n"
-          "10.MTX overwintered        (numeric, required) Transaction: Overwintered\n"
-          "11.Expiry blocks           (numeric, required) Qty of blocks before the transaction expires and is removed from the mempool, if not confirmed. Default=" + QString::asprintf("%d", DEFAULT_TX_EXPIRY_DELTA) + "\n"
-          "12.MTX VersionGroupID      (numeric, required) Transaction: VersionGroupID\n"
-          "13.MTX Version             (numeric, required) Transaction: Version\n"
-          "14.ZIP212 enabled          (numeric, required) For outputs: 0=BeforeZip212, 1=AfterZip212\n"          
-          "15.Checksum                (numeric, required) Sum of the ASCII values of all the characters in this command\n"
-          "Result:\n"
-          "\"sendrawtransaction\"     (string) A string containing the transaction data that must be pasted into the online wallet\n"
-          "                           to complete the transaction";
-
-          ui->teResult->setText(qsResult);
-          return;
+          "\"hexstring\"              (string, required) The hex-encoded transaction builder instructions\n"
+          "\nResult:\n"
+          "\"transaction\"            (string) Hex-encoded signed transaction ready for broadcast\n";
+        
+        ui->teResult->setText(qsResult);
+        return;
       }
 
-      //Convert the QString array to vector< std::string >
-      QString sTmp;
-      for (int iI=1;iI<sTransactionParts.size();iI++)
-      {
-        //Is it an array element?
-        if (sTransactionParts[iI][0]=="'")
-        {
-          //Array doesn't have the 'single' quotes anymore,
-          //but internally, the strings are still enclosed
-          //in "double quotes".
-          sTmp = sTransactionParts[iI].replace("'","");
-          strParams.push_back ( sTmp.toStdString() );
-        }
-        else
-        {
-          //If it's not an array, then the "double quotes"
-          //must be stripped of
-          sTmp = sTransactionParts[iI].replace("\"","");
-          strParams.push_back ( sTmp.toStdString() );
-        }
-      }      
+      //Create parameters for z_buildrawtransaction
+      UniValue params(UniValue::VARR);
+      params.push_back(hexInput);
       
-      //Convert the vector< std::string > into JSON with data types as defined in rpc/client.cpp: vRPCConvertParams[]
-      params = RPCConvertValues("z_sign_offline", strParams);      
+      //Execute z_buildrawtransaction RPC call
+      oResult = tableRPC.execute("z_buildrawtransaction", params);
       
-      oResult = tableRPC.execute("z_sign_offline", params);
-      if (oResult.empty())
+      if (oResult.isNull() || oResult.getType() != UniValue::VSTR)
       {
-        ui->teResult->setText("Transaction signing failed. The result is empty");
+        ui->teResult->setText("Transaction signing failed. The result is empty or invalid.");
         return;
       }
 
-      if (oResult[0].getType() != UniValue::VSTR)
+      std::string signedTx = oResult.get_str();
+      if (signedTx.empty())
       {
-        ui->teResult->setText("Transaction signing failed. The result is empty");
+        ui->teResult->setText("Transaction signing failed. The signed transaction is empty.");
         return;
       }
-
-      std::string sMessage = oResult[0].get_str();
-      if (sMessage.find("sendrawtransaction") == std::string::npos)
-      {
-        ui->teResult->setText( QString::fromStdString("Transaction signing failed. Could not find the signed transaction in the result: "+sMessage) );
-        return;
-      }
-      ui->lbResult->setText("Signed transaction output: The transaction was successfully signed. Paste the contents in your on-line wallet to complete the transaction");
-      ui->teResult->setText( QString::fromStdString(sMessage) );
+      
+      ui->lbResult->setText("Signed transaction output: The transaction was successfully signed. Copy the hex below and paste it into the Broadcast field or use sendrawtransaction on your online wallet.");
+      ui->teResult->setText(QString::fromStdString(signedTx));
     }
     catch (UniValue& objError)
     {
@@ -262,6 +223,90 @@ void ZSignDialog::on_signButton_clicked()
     catch (...)
     {
         ui->teResult->setText("Transaction signing failed. Could not parse the response. Please look in the log and command line output\n");
+    }
+}
+
+void ZSignDialog::on_broadcastButton_clicked()
+{
+    try
+    {
+        ui->lbResult->setText("Broadcast result:");
+        
+        QString signedTx = ui->teResult->toPlainText();
+        signedTx = signedTx.trimmed();
+        
+        // Remove quotation marks if present
+        if (signedTx.startsWith("\"") && signedTx.endsWith("\""))
+        {
+            signedTx = signedTx.mid(1, signedTx.length() - 2);
+        }
+        
+        // Replace escaped quotations with normal quotation character
+        if (signedTx.contains("\\\""))
+        {
+            signedTx = signedTx.replace("\\\"","\"");
+        }
+        
+        // No text provided
+        if (signedTx.isEmpty())
+        {
+            ui->teResult->setText("Please paste a signed transaction hex into the output field above, or sign a transaction first using the Sign button.");
+            return;
+        }
+        
+        // Check if input is hex
+        std::string hexInput = signedTx.toStdString();
+        if (hexInput.find_first_not_of("0123456789abcdefABCDEF") != std::string::npos)
+        {
+            ui->teResult->setText("Error: The transaction must be in hex format. Please ensure you have a properly signed transaction.");
+            return;
+        }
+        
+        // Create parameters for sendrawtransaction
+        UniValue params(UniValue::VARR);
+        params.push_back(hexInput);
+        
+        // Execute sendrawtransaction RPC call
+        UniValue result = tableRPC.execute("sendrawtransaction", params);
+        
+        if (result.isNull() || !result.isStr())
+        {
+            ui->teResult->setText("Transaction broadcast failed. Invalid response from sendrawtransaction.");
+            return;
+        }
+        
+        std::string txid = result.get_str();
+        if (txid.empty())
+        {
+            ui->teResult->setText("Transaction broadcast failed. The transaction ID is empty.");
+            return;
+        }
+        
+        // Format success message
+        std::string successMsg = "Transaction successfully broadcast to the network!\n\nTransaction ID:\n" + txid;
+        
+        ui->lbResult->setText("Broadcast result: SUCCESS");
+        ui->teResult->setText(QString::fromStdString(successMsg));
+    }
+    catch (UniValue& objError)
+    {
+        try
+        {
+            int code = find_value(objError, "code").get_int();
+            std::string message = find_value(objError, "message").get_str();
+            
+            QString errorMsg;
+            errorMsg.asprintf("Transaction broadcast failed:\nError code: %d\nMessage: %s", code, message.c_str());
+            ui->teResult->setText(errorMsg);
+        }
+        catch (const std::runtime_error&)
+        {
+            ui->teResult->setText("Transaction broadcast failed. Could not parse the error response. Please check the log and command line output.");
+        }
+    }
+    catch (...)
+    {
+        ui->teResult->setText("Transaction broadcast failed. An unexpected error occurred. Please check the log and command line output.");
     }
 }
 
@@ -298,6 +343,39 @@ void ZSignDialog::setResult(const string sHeading, const string sResult)
     ui->teResult->setText( QString::fromStdString(sResult) );
 
     ui->frameResult->show();
+}
+
+void ZSignDialog::SetOfflineMode(bool offline)
+{
+    // Hide broadcast button in offline mode
+    ui->broadcastButton->setVisible(!offline);
+    
+    // Make result text editable in online mode so users can paste signed transactions
+    ui->teResult->setReadOnly(offline);
+}
+
+void ZSignDialog::on_copyInputButton_clicked()
+{
+    QClipboard *clipboard = QApplication::clipboard();
+    clipboard->setText(ui->teInput->toPlainText());
+}
+
+void ZSignDialog::on_pasteInputButton_clicked()
+{
+    QClipboard *clipboard = QApplication::clipboard();
+    ui->teInput->setPlainText(clipboard->text());
+}
+
+void ZSignDialog::on_copyResultButton_clicked()
+{
+    QClipboard *clipboard = QApplication::clipboard();
+    clipboard->setText(ui->teResult->toPlainText());
+}
+
+void ZSignDialog::on_pasteResultButton_clicked()
+{
+    QClipboard *clipboard = QApplication::clipboard();
+    ui->teResult->setPlainText(clipboard->text());
 }
 
 

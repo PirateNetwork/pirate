@@ -203,13 +203,13 @@ QString WalletModel::getSpendingKey(QString strAddress) {
       }
 
       // Sapling support
-      auto sk = boost::apply_visitor(GetSpendingKeyForPaymentAddress(wallet), address);
+      auto sk = std::visit(GetSpendingKeyForPaymentAddress(wallet), address);
       if (!sk) {
           msgBox.setInformativeText("Wallet does not hold private zkey for this zaddrs!!!");
           int ret = msgBox.exec();
           return QString("");
       }
-      return QString::fromStdString(EncodeSpendingKey(sk.get()));
+      return QString::fromStdString(EncodeSpendingKey(sk.value()));
 }
 
 void WalletModel::importSpendingKey(QString strKey) {
@@ -228,7 +228,7 @@ void WalletModel::importSpendingKey(QString strKey) {
       return;
     }
 
-    auto addResult = boost::apply_visitor(AddSpendingKeyToWallet(wallet, Params().GetConsensus()), sk);
+    auto addResult = std::visit(AddSpendingKeyToWallet(wallet, Params().GetConsensus()), sk);
     if (addResult == KeyAlreadyExists) {
         msgBox.setInformativeText("Key already exists!!!");
         int ret = msgBox.exec();
@@ -245,7 +245,7 @@ void WalletModel::importSpendingKey(QString strKey) {
     startedRescan = true;
 
     //Add to ZAddress book
-    auto zInfo = boost::apply_visitor(libzcash::AddressInfoFromSpendingKey{}, sk);
+    auto zInfo = std::visit(libzcash::AddressInfoFromSpendingKey{}, sk);
     wallet->SetZAddressBook(zInfo.second, zInfo.first, "");
 
     updateZAddressBook(QString::fromStdString(EncodePaymentAddress(zInfo.second)), "z-sapling", true, "", CT_NEW);
@@ -295,14 +295,14 @@ QString WalletModel::getViewingKey(QString strAddress) {
       }
 
       // Sapling support
-      auto vk = boost::apply_visitor(GetViewingKeyForPaymentAddress(wallet), address);
+      auto vk = std::visit(GetViewingKeyForPaymentAddress(wallet), address);
       if (!vk) {
           msgBox.setInformativeText("Wallet does not hold private key or viewing key for this zaddr!!!");
           int ret = msgBox.exec();
           return QString("");
       }
 
-      return QString::fromStdString(EncodeViewingKey(vk.get()));
+      return QString::fromStdString(EncodeViewingKey(vk.value()));
 }
 
 void WalletModel::importViewingKey (QString strKey) {
@@ -321,7 +321,7 @@ void WalletModel::importViewingKey (QString strKey) {
         return;
     }
 
-    auto addResult = boost::apply_visitor(AddViewingKeyToWallet(wallet), extfvk);
+    auto addResult = std::visit(AddViewingKeyToWallet(wallet), extfvk);
     if (addResult == KeyAlreadyExists || addResult == SpendingKeyExists) {
         msgBox.setInformativeText("Key already exists!!!");
         int ret = msgBox.exec();
@@ -338,7 +338,7 @@ void WalletModel::importViewingKey (QString strKey) {
     startedRescan = true;
 
     //Add to ZAddress book
-    auto zInfo = boost::apply_visitor(libzcash::AddressInfoFromViewingKey{}, extfvk);
+    auto zInfo = std::visit(libzcash::AddressInfoFromViewingKey{}, extfvk);
     wallet->SetZAddressBook(zInfo.second, zInfo.first, "");
     // const QString zaddr = QString::fromStdString(EncodePaymentAddress(zInfo.second)),
 
@@ -451,7 +451,7 @@ bool WalletModel::validateAddress(const QString &address, bool allowZAddresses)
 
     if (validTAddress) return true;
 
-    if (allowZAddresses) return IsValidPaymentAddressString(address.toStdString(), CurrentEpochBranchId(chainActive.Height(), Params().GetConsensus()));
+    if (allowZAddresses) return IsValidPaymentAddressString(address.toStdString());
 
     return false;
 }
@@ -624,19 +624,19 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
 
         if (bIsMine==true)
         {
-          if (!IsValidPaymentAddress(res, branchId))
+          if (!IsValidPaymentAddress(res))
           {
              return InvalidFromAddress;
           }
 
           // Check that we have the spending key
-          if (!boost::apply_visitor(HaveSpendingKeyForPaymentAddress(wallet), res))
+          if (!std::visit(HaveSpendingKeyForPaymentAddress(wallet), res))
           {
             return HaveNotSpendingKey;
           }
         }
         // Remember whether this is a Sprout or Sapling address
-        fromSapling = boost::get<libzcash::SaplingPaymentAddress>(&res) != nullptr;
+        fromSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
     }
     else
     {
@@ -653,7 +653,7 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
     set<std::string> setAddress; // Used to detect duplicates
 
     // Recipients
-    //std::vector<SendManyRecipient> taddrRecipients;
+    std::vector<SendManyRecipient> oaddrRecipients;
     std::vector<SendManyRecipient> zaddrRecipients;
 
     bool containsSproutOutput = false;
@@ -666,39 +666,18 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
             fSubtractFeeFromAmount = true;
 
         bool isZaddr = false;
+        bool isOaddr = false;
         CTxDestination taddr = DecodeDestination(rcp.address.toStdString());
 
         if (!IsValidDestination(taddr)) {
             auto res = DecodePaymentAddress(rcp.address.toStdString());
-            if (IsValidPaymentAddress(res, branchId)) {
-                isZaddr = true;
+            if (IsValidPaymentAddress(res)) {
 
-                bool toSapling = boost::get<libzcash::SaplingPaymentAddress>(&res) != nullptr;
-                bool toSprout = !toSapling;
-                noSproutAddrs = noSproutAddrs && toSapling;
+                isZaddr = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
+                isOaddr = std::get_if<libzcash::OrchardPaymentAddressPirate>(&res) != nullptr;
 
-                containsSproutOutput |= toSprout;
-                containsSaplingOutput |= toSapling;
+                assert(isZaddr != isOaddr);
 
-                // Sending to both Sprout and Sapling is currently unsupported using z_sendmany
-                if (containsSproutOutput && containsSaplingOutput)
-                {
-                    return SendingBothSproutAndSapling;
-                }
-                if ( GetTime() > KOMODO_SAPLING_DEADLINE )
-                {
-                    if ( fromSprout || toSprout )
-                        return SproutUsageExpired;
-                }
-                if ( toSapling && chainName.isKMD() )
-                    return SproutUsageWillExpireSoon;
-
-                // If we are sending from a shielded address, all recipient
-                // shielded addresses must be of the same type.
-                if ((fromSprout && toSapling) || (fromSapling && toSprout))
-                {
-                    return SendBetweenSproutAndSapling;
-                }
             } else {
                 return InvalidAddress;
             }
@@ -719,12 +698,11 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
             memo = rcp.memo.toStdString();
         }
 
-        if (isZaddr)
-        {
+        if (isZaddr) {
             zaddrRecipients.push_back( SendManyRecipient(rcp.address.toStdString(), rcp.amount, memo) );
-        }
-        else
-        {
+        } else if (isOaddr) {
+            oaddrRecipients.push_back( SendManyRecipient(rcp.address.toStdString(), rcp.amount, memo) );
+        } else {
             //taddr not allowed on PirateNetwork
             return InvalidAddress;
         }
@@ -773,20 +751,9 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
     // As a sanity check, estimate and verify that the size of the transaction will be valid.
     // Depending on the input notes, the actual tx size may turn out to be larger and perhaps invalid.
     size_t txsize = 0;
-    for (int i = 0; i < zaddrRecipients.size(); i++) {
-        auto address = std::get<0>(zaddrRecipients[i]);
-        auto res = DecodePaymentAddress(address);
-        bool toSapling = boost::get<libzcash::SaplingPaymentAddress>(&res) != nullptr;
-        if (toSapling) {
-            mtx.vShieldedOutput.push_back(OutputDescription());
-        } else {
-            JSDescription jsdesc;
-            if (mtx.fOverwintered && (mtx.nVersion >= SAPLING_TX_VERSION)) {
-                jsdesc.proof = GrothProof();
-            }
-            mtx.vjoinsplit.push_back(jsdesc);
-        }
-    }
+
+    // Fine to call this because we are only testing that `mtx` is a valid size.
+    mtx.saplingBundle = sapling::test_only_invalid_bundle(0, zaddrRecipients.size(), 0);
 
     CTransaction tx(mtx);
     txsize += GetSerializeSize(tx, SER_NETWORK, tx.nVersion);
@@ -838,24 +805,9 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
     o.push_back(Pair("fee", std::stod(FormatMoney(nFee))));
     UniValue contextInfo = o;
 
-    // Builder (used if Sapling addresses are involved)
-    boost::optional<TransactionBuilder> builder;
-    if (noSproutAddrs)
-    {
-        builder = TransactionBuilder(Params().GetConsensus(), nextBlockHeight, wallet);
-    }
-
-    // Contextual transaction we will build on
-    // (used if no Sapling addresses are involved)
-    CMutableTransaction contextualTx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nextBlockHeight);
-    bool isShielded = !fromTaddr || zaddrRecipients.size() > 0;
-    if (contextualTx.nVersion == 1 && isShielded)
-    {
-        contextualTx.nVersion = 2; // Tx format should support vjoinsplits
-    }
-    transaction.setBuilder(builder);
-    transaction.setContextualTx(contextualTx);
+    transaction.setTxHeight(nextBlockHeight);
     transaction.setZaddrRecipients(zaddrRecipients);
+    transaction.setOaddrRecipients(oaddrRecipients);
     transaction.setContextInfo(contextInfo);
 
     return SendCoinsReturn(OK);
@@ -941,11 +893,11 @@ WalletModel::SendCoinsReturn WalletModel::zsendCoins(WalletModelZTransaction &tr
 {
     // Create operation and add to global queue
     std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
-    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(transaction.getBuilder(),
-                                                                                 transaction.getContextualTx(),
+    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(Params().GetConsensus(),
+                                                                                 transaction.getTxHeight(),
                                                                                  transaction.getFromAddress().toStdString(),
-                                                                                 transaction.getTaddrRecipients(),
                                                                                  transaction.getZaddrRecipients(),
+                                                                                 transaction.getOaddrRecipients(),
                                                                                  1,
                                                                                  transaction.getTransactionFee(),
                                                                                  transaction.getContextInfo()) );

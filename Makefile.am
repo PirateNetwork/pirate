@@ -346,6 +346,7 @@ DISTCHECK_CONFIGURE_FLAGS = --enable-man
 
 clean-local:
 	rm -rf test_bitcoin.coverage/ zcash-gtest.coverage/ total.coverage/
+	-$(RM) $(top_srcdir)/.cargo/config
 
 clean-all: clean-local
 	$(MAKE) -C src clean-all

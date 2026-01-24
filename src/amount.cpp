@@ -22,7 +22,8 @@
 
 #include "tinyformat.h"
 
-const std::string CURRENCY_UNIT = "KMD";
+const std::string CURRENCY_UNIT = "ARRR";
+const std::string MINOR_CURRENCY_UNIT = "arrrtoshis";
 
 CFeeRate::CFeeRate(const CAmount& nFeePaid, size_t nSize)
 {
