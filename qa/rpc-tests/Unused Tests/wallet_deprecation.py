@@ -31,8 +31,8 @@ class WalletDeprecationTest(BitcoinTestFramework):
 
     def setup_chain(self):
         super().setup_chain()
-        # Save a copy of node 0's PIRATETST.conf
-        with open(os.path.join(self.options.tmpdir, "node0", "PIRATETST.conf"), 'r', encoding='utf8') as f:
+        # Save a copy of node 0's PIRATE.conf
+        with open(os.path.join(self.options.tmpdir, "node0", "PIRATE.conf"), 'r', encoding='utf8') as f:
             self.conf_lines = f.readlines()
 
     def setup_network(self):
@@ -47,7 +47,7 @@ class WalletDeprecationTest(BitcoinTestFramework):
 
     def setup_network_with_config(self, allowed_deprecated):
         conf_lines = self.conf_lines + ["allowdeprecated={}\n".format(v) for v in allowed_deprecated]
-        with open(os.path.join(self.options.tmpdir, "node0", "PIRATETST.conf"), 'w', encoding='utf8') as f:
+        with open(os.path.join(self.options.tmpdir, "node0", "PIRATE.conf"), 'w', encoding='utf8') as f:
             f.writelines(conf_lines)
 
         self.nodes = start_nodes(self.num_nodes, self.options.tmpdir)

@@ -97,7 +97,7 @@ static int AppInitRPC(int argc, char* argv[])
     // Parameters
     //
     ParseParameters(argc, argv);
-    std::string name = GetArg("-ac_name","PIRATETST");
+    std::string name = GetArg("-ac_name","PIRATE");
     if ( !name.empty() )
         chainName = assetchain(name);
 

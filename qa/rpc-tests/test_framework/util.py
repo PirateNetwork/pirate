@@ -216,7 +216,7 @@ def initialize_datadir(dirname, n, clock_offset=0, addnodes=None, p2p_port_overr
         node_p2p_port = p2p_port(n)
         node_rpc_port = rpc_port(n)
     
-    with open(os.path.join(datadir, "PIRATETST.conf"), 'w', encoding='utf8') as f:
+    with open(os.path.join(datadir, "PIRATE.conf"), 'w', encoding='utf8') as f:
         f.write("showmetrics=0\n")
         f.write("rpcuser=" + rpc_u + "\n")
         f.write("rpcpassword=" + rpc_p + "\n")
@@ -382,7 +382,7 @@ def initialize_chain(test_dir, num_nodes, cachedir, cache_behavior='current'):
                 cache_conf = json.load(cache_conf_file)
                 # obtain the clock offset as a negative number of seconds
                 offset = round(cache_conf['cache_time']) - round(time.time())
-                # overwrite port/rpcport and clock offset in PIRATETST.conf
+                # overwrite port/rpcport and clock offset in PIRATE.conf
                 initialize_datadir(test_dir, i, clock_offset=offset) 
 
     def init_persistent(cache_behavior):
@@ -410,7 +410,7 @@ def initialize_chain(test_dir, num_nodes, cachedir, cache_behavior='current'):
             with tarfile.open(wallet_tgz_filename, "r:gz") as wallet_tgz_file:
                 wallet_tgz_file.extractall(path = os.path.join(to_dir, "wallet.dat"))
 
-            # Copy in per-node wallet config and update PIRATETST.conf to set the
+            # Copy in per-node wallet config and update PIRATE.conf to set the
             # clock offsets correctly.
             cache_conf_filename = os.path.join(to_dir, 'cache_config.json')
             if not os.path.exists(cache_conf_filename):
@@ -419,7 +419,7 @@ def initialize_chain(test_dir, num_nodes, cachedir, cache_behavior='current'):
                 cache_conf = json.load(cache_conf_file)
                 # obtain the clock offset as a negative number of seconds
                 offset = round(cache_conf['cache_time']) - round(time.time())
-                # overwrite port/rpcport and clock offset in PIRATETST.conf
+                # overwrite port/rpcport and clock offset in PIRATE.conf
                 initialize_datadir(test_dir, i, clock_offset=offset) 
 
     def cache_rebuild_required():

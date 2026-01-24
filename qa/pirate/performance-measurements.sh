@@ -74,7 +74,7 @@ function pirated_start {
         *)
             rm -rf "$DATADIR"
             mkdir -p "$DATADIR/regtest"
-            touch "$DATADIR/PIRATETST.conf"
+            touch "$DATADIR/PIRATE.conf"
     esac
     ./src/pirated -regtest -datadir="$DATADIR" -rpcuser=user -rpcpassword=password -rpcport=5983 -showmetrics=0 &
     PIRATED_PID=$!
@@ -107,7 +107,7 @@ function pirated_heaptrack_start {
         *)
             rm -rf "$DATADIR"
             mkdir -p "$DATADIR/regtest"
-            touch "$DATADIR/PIRATETST.conf"
+            touch "$DATADIR/PIRATE.conf"
     esac
     heaptrack -o "${TEST_NAME}" ./src/pirated -regtest -datadir="$DATADIR" -rpcuser=user -rpcpassword=password -rpcport=5983 -showmetrics=0 &
     PIRATED_PID=$!
@@ -122,7 +122,7 @@ function pirated_heaptrack_stop {
 function pirated_valgrind_start {
     rm -rf "$DATADIR"
     mkdir -p "$DATADIR/regtest"
-    touch "$DATADIR/PIRATETST.conf"
+    touch "$DATADIR/PIRATE.conf"
     rm -f valgrind.out
     valgrind --leak-check=yes -v --error-limit=no --log-file="valgrind.out" ./src/pirated -regtest -datadir="$DATADIR" -rpcuser=user -rpcpassword=password -rpcport=5983 -showmetrics=0 &
     PIRATED_PID=$!

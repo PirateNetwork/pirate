@@ -128,7 +128,7 @@ class GetChainTipsTest(BitcoinTestFramework):
         
         for i in range(self.num_nodes):
             # Read the node's configuration file to verify ports were set correctly
-            config_file = os.path.join(self.options.tmpdir, "node{}".format(i), "PIRATETST.conf")
+            config_file = os.path.join(self.options.tmpdir, "node{}".format(i), "PIRATE.conf")
             with open(config_file, 'r') as f:
                 config_content = f.read()
             

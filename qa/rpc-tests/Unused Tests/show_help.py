@@ -64,7 +64,7 @@ Options:
 
   -conf=<file>
        Specify configuration file. Relative paths will be prefixed by datadir
-       location. (default: PIRATETST.conf)
+       location. (default: PIRATE.conf)
 
   -daemon
        Run in the background as a daemon and accept commands
