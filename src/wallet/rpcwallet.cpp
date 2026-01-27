@@ -4013,36 +4013,54 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
-    if (fHelp || params.size() > 1)
+    if (fHelp || params.size() > 2)
         throw runtime_error(
-            "z_getbalances ( includeWatchonly )\n"
-            "\nReturns array of wallet sapling addresses and balances.\n"
+            "z_getbalances ( includeWatchonly address )\n"
+            "\nReturns array of wallet sapling and orchard addresses with balances and note counts.\n"
             "Results are an array of Objects, each of which has:\n"
-            "{address, balance, unconfirmed, spendable}\n"
+            "{address, balance, notes, unconfirmed, unconfirmednotes, spendable}\n"
             "\nArguments:\n"
             "1. includeWatchonly (bool, optional, default=false) Also include watchonly addresses (see 'z_importviewingkey')\n"
+            "2. address (string, optional) Return data only for this specific address\n"
             "\nResult\n"
             "[                             (array of json object)\n"
             "  {\n"
-            "    \"address\" : \"address\",      (string) sapling address\n"
-            "    \"balance\" : n               (numeric) confirmed address balance\n"
-            "    \"unconfirmed\" : n           (numeric) unconfirmed address balance\n"
+            "    \"address\" : \"address\",      (string) sapling (zs) or orchard (pirate1) address\n"
+            "    \"balance\" : n               (numeric) confirmed address balance in ARRR\n"
+            "    \"notes\" : n                 (numeric) number of confirmed unspent notes at this address\n"
+            "    \"unconfirmed\" : n           (numeric) unconfirmed address balance in ARRR\n"
+            "    \"unconfirmednotes\" : n      (numeric) number of unconfirmed unspent notes at this address\n"
             "    \"spendable\" : true|false    (bool) True if the wallet contains the spending key for this address\n"
             "  }\n"
             "  ,...\n"
             "]\n"
+            "\nNote: Addresses with 0 balance and 0 notes will still appear in results (unless filtering by address).\n"
             "\nExamples\n"
             + HelpExampleCli("z_getbalances", "")
             + HelpExampleCli("z_getbalances", "false")
+            + HelpExampleCli("z_getbalances", "false \"pirate1addresshere\"")
             + HelpExampleRpc("z_getbalances", "true")
         );
 
-    RPCTypeCheck(params, boost::assign::list_of((UniValue::VBOOL)));
+    RPCTypeCheck(params, boost::assign::list_of((UniValue::VBOOL))(UniValue::VSTR), true);
 
 
     bool fIncludeWatchonly = false;
     if (params.size() > 0) {
         fIncludeWatchonly = params[0].get_bool();
+    }
+
+    // Optional address filter
+    std::optional<libzcash::PaymentAddress> filterAddress;
+    if (params.size() > 1) {
+        std::string addrStr = params[1].get_str();
+        auto decoded = DecodePaymentAddress(addrStr);
+        if (!IsValidPaymentAddress(decoded)) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid address");
+        }
+        filterAddress = decoded;
+        // Override to include watch-only when filtering by specific address
+        fIncludeWatchonly = true;
     }
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -4051,13 +4069,53 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     UniValue results(UniValue::VARR);
 
+    std::map<libzcash::SaplingPaymentAddress, std::vector<CAmount>> mapSaplingResults; // [0]=balance, [1]=confirmedNotes, [2]=unconfirmed, [3]=unconfirmedNotes
+    std::map<libzcash::OrchardPaymentAddressPirate, std::vector<CAmount>> mapOrchardResults; // [0]=balance, [1]=confirmedNotes, [2]=unconfirmed, [3]=unconfirmedNotes
+
+    // Initialize all wallet addresses with zero balance and note count
+    {
+        std::set<libzcash::SaplingPaymentAddress> saplingAddresses;
+        pwalletMain->GetSaplingPaymentAddresses(saplingAddresses);
+        for (auto addr : saplingAddresses) {
+            if (fIncludeWatchonly || HaveSpendingKeyForPaymentAddress(pwalletMain)(addr)) {
+                // Skip if filtering by address and this isn't it
+                if (filterAddress.has_value()) {
+                    auto filterSapling = std::get_if<libzcash::SaplingPaymentAddress>(&filterAddress.value());
+                    if (!filterSapling || *filterSapling != addr) {
+                        continue;
+                    }
+                }
+                std::vector<CAmount> balance = {0, 0, 0, 0}; // balance, confirmedNotes, unconfirmed, unconfirmedNotes
+                mapSaplingResults[addr] = balance;
+            }
+        }
+    }
+    {
+        std::set<libzcash::OrchardPaymentAddressPirate> orchardAddresses;
+        pwalletMain->GetOrchardPaymentAddresses(orchardAddresses);
+        for (auto addr : orchardAddresses) {
+            if (fIncludeWatchonly || HaveSpendingKeyForPaymentAddress(pwalletMain)(addr)) {
+                // Skip if filtering by address and this isn't it
+                if (filterAddress.has_value()) {
+                    auto filterOrchard = std::get_if<libzcash::OrchardPaymentAddressPirate>(&filterAddress.value());
+                    if (!filterOrchard || *filterOrchard != addr) {
+                        continue;
+                    }
+                }
+                std::vector<CAmount> balance = {0, 0, 0, 0}; // balance, confirmedNotes, unconfirmed, unconfirmedNotes
+                mapOrchardResults[addr] = balance;
+            }
+        }
+    }
+
     //Get All Notes
     std::set<libzcash::PaymentAddress> zaddrs = {};
+    if (filterAddress.has_value()) {
+        zaddrs.insert(filterAddress.value());
+    }
     std::vector<SaplingNoteEntry> saplingEntries;
     std::vector<OrchardNoteEntry> orchardEntries;
     pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, zaddrs, 0, 99999999, true, !fIncludeWatchonly, false);
-    std::map<libzcash::SaplingPaymentAddress, std::vector<CAmount>> mapSaplingResults;
-    std::map<libzcash::OrchardPaymentAddressPirate, std::vector<CAmount>> mapOrchardResults;
 
     for (auto & entry : saplingEntries) {
         //Get Note depths
@@ -4068,29 +4126,30 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
         std::map<libzcash::SaplingPaymentAddress, std::vector<CAmount>>::iterator it;
         it = mapSaplingResults.find(entry.address);
         if (it != mapSaplingResults.end()) {
+            CAmount noteValue = CAmount(entry.note.value());
             if (entry.confirmations > 0) {
-                it->second[0] += CAmount(entry.note.value());
+                it->second[0] += noteValue;
+                if (noteValue > 0) {
+                    it->second[1]++; // Increment confirmed note count
+                }
             } else {
-                it->second[1] += CAmount(entry.note.value());
+                it->second[2] += noteValue;
+                if (noteValue > 0) {
+                    it->second[3]++; // Increment unconfirmed note count
+                }
             }
-        } else {
-            std::vector<CAmount> balance;
-            if (entry.confirmations > 0) {
-                balance.push_back(CAmount(entry.note.value()));
-                balance.push_back(0);
-            } else {
-                balance.push_back(0);
-                balance.push_back(CAmount(entry.note.value()));
-            }
-            mapSaplingResults[entry.address] = balance;
         }
+        // Note: If address not found in map, it means it's watch-only and fIncludeWatchonly is false,
+        // so we skip it (it won't be in results)
     }
 
     for (std::map<libzcash::SaplingPaymentAddress, std::vector<CAmount>>::iterator it = mapSaplingResults.begin(); it != mapSaplingResults.end(); it++) {
         UniValue obj(UniValue::VOBJ);
         obj.push_back(Pair("address", EncodePaymentAddress(it->first)));
         obj.push_back(Pair("balance", ValueFromAmount(it->second[0])));
-        obj.push_back(Pair("unconfirmed", ValueFromAmount(it->second[1])));
+        obj.push_back(Pair("notes", (int64_t)it->second[1]));
+        obj.push_back(Pair("unconfirmed", ValueFromAmount(it->second[2])));
+        obj.push_back(Pair("unconfirmednotes", (int64_t)it->second[3]));
         obj.push_back(Pair("spendable", HaveSpendingKeyForPaymentAddress(pwalletMain)(it->first)));
         results.push_back(obj);
     }
@@ -4104,29 +4163,30 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
         std::map<libzcash::OrchardPaymentAddressPirate, std::vector<CAmount>>::iterator it;
         it = mapOrchardResults.find(entry.address);
         if (it != mapOrchardResults.end()) {
+            CAmount noteValue = CAmount(entry.note.value());
             if (entry.confirmations > 0) {
-                it->second[0] += CAmount(entry.note.value());
+                it->second[0] += noteValue;
+                if (noteValue > 0) {
+                    it->second[1]++; // Increment confirmed note count
+                }
             } else {
-                it->second[1] += CAmount(entry.note.value());
+                it->second[2] += noteValue;
+                if (noteValue > 0) {
+                    it->second[3]++; // Increment unconfirmed note count
+                }
             }
-        } else {
-            std::vector<CAmount> balance;
-            if (entry.confirmations > 0) {
-                balance.push_back(CAmount(entry.note.value()));
-                balance.push_back(0);
-            } else {
-                balance.push_back(0);
-                balance.push_back(CAmount(entry.note.value()));
-            }
-            mapOrchardResults[entry.address] = balance;
         }
+        // Note: If address not found in map, it means it's watch-only and fIncludeWatchonly is false,
+        // so we skip it (it won't be in results)
     }
 
     for (std::map<libzcash::OrchardPaymentAddressPirate, std::vector<CAmount>>::iterator it = mapOrchardResults.begin(); it != mapOrchardResults.end(); it++) {
         UniValue obj(UniValue::VOBJ);
         obj.push_back(Pair("address", EncodePaymentAddress(it->first)));
         obj.push_back(Pair("balance", ValueFromAmount(it->second[0])));
-        obj.push_back(Pair("unconfirmed", ValueFromAmount(it->second[1])));
+        obj.push_back(Pair("notes", (int64_t)it->second[1]));
+        obj.push_back(Pair("unconfirmed", ValueFromAmount(it->second[2])));
+        obj.push_back(Pair("unconfirmednotes", (int64_t)it->second[3]));
         obj.push_back(Pair("spendable", HaveSpendingKeyForPaymentAddress(pwalletMain)(it->first)));
         results.push_back(obj);
     }
@@ -4449,15 +4509,16 @@ UniValue z_getoperationstatus(const UniValue& params, bool fHelp, const CPubKey&
 
     if (fHelp || params.size() > 1)
         throw runtime_error(
-            "z_getoperationstatus ([\"operationid\", ... ]) \n"
+            "z_getoperationstatus ([\"operationid\", ... ] | \"operationid\") \n"
             "\nGet operation status and any associated result or error data.  The operation will remain in memory."
             + HelpRequiringPassphrase() + "\n"
             "\nArguments:\n"
-            "1. \"operationid\"         (array, optional) A list of operation ids we are interested in.  If not provided, examine all operations known to the node.\n"
+            "1. operationid         (string or array, optional) A single operation id string, or an array of operation ids.  If not provided, examine all operations known to the node.\n"
             "\nResult:\n"
             "\"    [object, ...]\"      (array) A list of JSON objects\n"
             "\nExamples:\n"
             + HelpExampleCli("z_getoperationstatus", "'[\"operationid\", ... ]'")
+            + HelpExampleCli("z_getoperationstatus", "\"operationid\"")
             + HelpExampleRpc("z_getoperationstatus", "'[\"operationid\", ... ]'")
         );
 
@@ -4472,9 +4533,18 @@ UniValue z_getoperationstatus_IMPL(const UniValue& params, bool fRemoveFinishedO
 
     std::set<AsyncRPCOperationId> filter;
     if (params.size()==1) {
-        UniValue ids = params[0].get_array();
-        for (const UniValue & v : ids.getValues()) {
-            filter.insert(v.get_str());
+        // Accept either a single string or an array of strings
+        if (params[0].isStr()) {
+            // Single operation ID as string
+            filter.insert(params[0].get_str());
+        } else if (params[0].isArray()) {
+            // Array of operation IDs
+            UniValue ids = params[0].get_array();
+            for (const UniValue & v : ids.getValues()) {
+                filter.insert(v.get_str());
+            }
+        } else {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Parameter must be a string operation ID or an array of operation IDs");
         }
     }
     bool useFilter = (filter.size()>0);
