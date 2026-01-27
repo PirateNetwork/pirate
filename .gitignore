@@ -194,3 +194,7 @@ target*
 .cargo/.configured*
 .cargo/config
 src/rust/gen/
+
+# Test configuration files
+PIRATE_7776
+PIRATETST_7776
