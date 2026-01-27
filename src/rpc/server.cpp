@@ -623,6 +623,7 @@ static const CRPCCommand vRPCCommands[] =
     { "wallet",             "z_getbalances",          &z_getbalances,           false },
     { "wallet",             "z_gettotalbalance",      &z_gettotalbalance,      false },
     { "wallet",             "z_mergetoaddress",       &z_mergetoaddress,       false },
+    { "wallet",             "consolidateaddress",     &consolidateaddress,     false },
     { "wallet",             "z_sendmany",             &z_sendmany,             false },
     { "wallet",             "z_sendmany_prepare_offline", &z_sendmany_prepare_offline,     false },
     { "wallet",             "z_sign_offline",             &z_sign_offline,     false },

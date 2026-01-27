@@ -54,6 +54,7 @@
 #include "wallet/asyncrpcoperation_sendmany.h"
 #include "wallet/asyncrpcoperation_shieldcoinbase.h"
 #include "wallet/asyncrpcoperation_saplingconsolidation_address.h"
+#include "wallet/asyncrpcoperation_orchardconsolidation_address.h"
 
 #include "consensus/upgrades.h"
 
@@ -6420,47 +6421,60 @@ UniValue consolidateaddress(const UniValue& params, bool fHelp, const CPubKey& m
 
     if (fHelp || params.size() < 1 || params.size() > 4)
         throw runtime_error(
-            "consolidateaddress \"saplingaddress\" ( fee ) ( maxnotes ) ( maxtransactions )\n"
-            "\nInitiate a Sapling consolidation operation for a specific address.\n"
-            "\nThis is an asynchronous operation that consolidates multiple notes at a Sapling address\n"
-            "\ninto fewer notes to reduce wallet fragmentation and improve performance.\n"
+            "consolidateaddress \"address\" ( fee maxnotes maxtransactions )\n"
+            "\nConsolidate Sapling or Orchard notes at a specific address by combining multiple small notes into fewer larger notes.\n"
+            "This operation helps reduce wallet fragmentation and improves future transaction performance.\n"
             + HelpRequiringPassphrase() + "\n"
             "\nArguments:\n"
-            "1. \"saplingaddress\"      (string, required) The Sapling address to consolidate.\n"
+            "1. address               (string, required) The Sapling (zs) or Orchard (u1) address to consolidate notes for.\n"
             "2. fee                   (numeric, optional, default=0.0001) The fee amount to use for consolidation transactions.\n"
             "3. maxnotes              (numeric, optional, default=50) Maximum number of notes to consolidate per transaction.\n"
             "4. maxtransactions       (numeric, optional, default=10) Maximum number of consolidation transactions to create.\n"
-            "\nResult:\n"
+            "\nResult (immediate):\n"
             "{\n"
-            "  \"opid\": xxx          (string) An operationid to pass to z_getoperationstatus to get the result of the operation.\n"
+            "  \"opid\": xxx                (string) An operationid to pass to z_getoperationstatus to get the result of the operation.\n"
+            "  \"unspent_notes_before\": n  (numeric) Total number of unspent notes in the address before consolidation.\n"
+            "}\n"
+            "\nOperation Result (via z_getoperationstatus or z_getoperationresult):\n"
+            "{\n"
+            "  \"num_tx_created\": n         (numeric) Number of consolidation transactions created.\n"
+            "  \"amount_consolidated\": x.xx (numeric) Total amount consolidated (excluding fees).\n"
+            "  \"notes_consolidated\": n     (numeric) Number of notes that were successfully consolidated.\n"
+            "  \"notes_remaining\": n        (numeric) Number of unspent notes remaining at the address after consolidation.\n"
+            "  \"address\": \"addr\"           (string) The address that was consolidated.\n"
+            "  \"fee_per_tx\": x.xx          (numeric) Fee paid per transaction.\n"
+            "  \"max_notes_per_tx\": n       (numeric) Maximum notes consolidated per transaction.\n"
+            "  \"max_transactions\": n       (numeric) Maximum number of transactions allowed.\n"
+            "  \"consolidation_txids\": [    (array) Transaction IDs of all consolidation transactions.\n"
+            "    \"txid\",                    (string) Transaction ID\n"
+            "    ...\n"
+            "  ]\n"
             "}\n"
             "\nExamples:\n"
             + HelpExampleCli("consolidateaddress", "\"zs14d8tc0hl9q0vg5l28uec5vk6sk34fkj2n8s7jalvw5fxpy6v39yn4s2ga082lymrkjk0x2nqg37\"")
-            + HelpExampleCli("consolidateaddress", "\"zs14d8tc0hl9q0vg5l28uec5vk6sk34fkj2n8s7jalvw5fxpy6v39yn4s2ga082lymrkjk0x2nqg37\" 0.0001")
+            + HelpExampleCli("consolidateaddress", "\"pirate1example7h29vj3vqzj8jklmnxyz6abcdefghqrstuvwxyz0123456789\" 0.0001")
             + HelpExampleCli("consolidateaddress", "\"zs14d8tc0hl9q0vg5l28uec5vk6sk34fkj2n8s7jalvw5fxpy6v39yn4s2ga082lymrkjk0x2nqg37\" 0.0001 30 5")
             + HelpExampleRpc("consolidateaddress", "\"zs14d8tc0hl9q0vg5l28uec5vk6sk34fkj2n8s7jalvw5fxpy6v39yn4s2ga082lymrkjk0x2nqg37\"")
-            + HelpExampleRpc("consolidateaddress", "\"zs14d8tc0hl9q0vg5l28uec5vk6sk34fkj2n8s7jalvw5fxpy6v39yn4s2ga082lymrkjk0x2nqg37\", 0.0001")
+            + HelpExampleRpc("consolidateaddress", "\"pirate1example7h29vj3vqzj8jklmnxyz6abcdefghqrstuvwxyz0123456789\", 0.0001")
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
     EnsureWalletIsUnlocked();
 
-    // Validate the sapling address
-    auto saplingAddress = params[0].get_str();
-    auto decodedAddr = DecodePaymentAddress(saplingAddress);
+    // Validate the address and determine type
+    auto address = params[0].get_str();
+    auto decodedAddr = DecodePaymentAddress(address);
     if (!IsValidPaymentAddress(decodedAddr)) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Sapling address");
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid shielded address");
     }
 
-    auto saplingAddr = boost::get<libzcash::SaplingPaymentAddress>(&decodedAddr);
-    if (saplingAddr == nullptr) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address is not a Sapling address");
-    }
-
-    // Check that we have the spending key for this address and retrieve it while wallet is unlocked
-    libzcash::SaplingExtendedSpendingKey extsk;
-    if (!pwalletMain->GetSaplingExtendedSpendingKey(*saplingAddr, extsk)) {
-        throw JSONRPCError(RPC_WALLET_ERROR, "Wallet does not have spending key for this Sapling address");
+    // Check if it's a Sapling address
+    auto saplingAddr = std::get_if<libzcash::SaplingPaymentAddress>(&decodedAddr);
+    // Check if it's an Orchard address
+    auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddressPirate>(&decodedAddr);
+    
+    if (saplingAddr == nullptr && orchardAddr == nullptr) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address must be a Sapling (zs) or Orchard (u1) address");
     }
 
     // Handle optional fee parameter - default to 0.0001 ARRR if not specified
@@ -6496,22 +6510,77 @@ UniValue consolidateaddress(const UniValue& params, bool fHelp, const CPubKey& m
         }
     }
 
-    // Check that Sapling is active
     int nextBlockHeight = chainActive.Height() + 1;
-    if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Sapling is not yet active");
+    std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
+    std::shared_ptr<AsyncRPCOperation> operation;
+    int noteCount = 0;
+
+    // Route to appropriate consolidation based on address type
+    if (saplingAddr != nullptr) {
+        // Sapling consolidation
+        if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Sapling is not yet active");
+        }
+
+        // Check that we have the spending key for this address
+        libzcash::SaplingExtendedSpendingKey extsk;
+        if (!pwalletMain->GetSaplingExtendedSpendingKey(*saplingAddr, extsk)) {
+            throw JSONRPCError(RPC_WALLET_ERROR, "Wallet does not have spending key for this Sapling address");
+        }
+
+        // Count notes before consolidation
+        {
+            std::vector<SaplingNoteEntry> saplingEntries;
+            std::vector<OrchardNoteEntry> orchardEntries;
+            pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, "", 11);
+            
+            for (const auto& entry : saplingEntries) {
+                if (entry.address == *saplingAddr) {
+                    noteCount++;
+                }
+            }
+        }
+
+        operation = std::shared_ptr<AsyncRPCOperation>(
+            new AsyncRPCOperation_saplingconsolidation_address(nextBlockHeight, *saplingAddr, extsk, nFee, maxNotes, maxTransactions)
+        );
+    } else {
+        // Orchard consolidation
+        if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Orchard is not yet active");
+        }
+
+        // Check that we have the spending key for this address
+        libzcash::OrchardExtendedSpendingKeyPirate extsk;
+        if (!pwalletMain->GetOrchardExtendedSpendingKey(*orchardAddr, extsk)) {
+            throw JSONRPCError(RPC_WALLET_ERROR, "Wallet does not have spending key for this Orchard address");
+        }
+
+        // Count notes before consolidation
+        {
+            std::vector<SaplingNoteEntry> saplingEntries;
+            std::vector<OrchardNoteEntry> orchardEntries;
+            pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, "", 11);
+            
+            for (const auto& entry : orchardEntries) {
+                if (entry.address == *orchardAddr) {
+                    noteCount++;
+                }
+            }
+        }
+
+        operation = std::shared_ptr<AsyncRPCOperation>(
+            new AsyncRPCOperation_orchardconsolidation_address(nextBlockHeight, *orchardAddr, extsk, nFee, maxNotes, maxTransactions)
+        );
     }
 
-    // Create and queue the consolidation operation
-    std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
-    std::shared_ptr<AsyncRPCOperation> operation(
-        new AsyncRPCOperation_saplingconsolidation_address(nextBlockHeight, *saplingAddr, extsk, nFee, maxNotes, maxTransactions)
-    );
+    // Queue the consolidation operation
     q->addOperation(operation);
     AsyncRPCOperationId operationId = operation->getId();
 
     UniValue result(UniValue::VOBJ);
     result.push_back(Pair("opid", operationId));
+    result.push_back(Pair("unspent_notes_before", noteCount));
     return result;
 }
 

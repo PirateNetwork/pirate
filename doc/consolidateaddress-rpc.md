@@ -4,23 +4,25 @@ Distributed under the MIT software license, see the accompanying
 file COPYING or http://www.opensource.org/licenses/mit-license.php.
 -->
 
-# Sapling Address Consolidation RPC
+# Shielded Address Consolidation RPC
 
 ## Overview
 
-The `consolidateaddress` RPC command provides an efficient way to consolidate multiple small Sapling notes at a specific address into fewer, larger notes. This helps reduce wallet fragmentation and improves transaction performance by reducing the number of notes that need to be processed in future transactions.
+The `consolidateaddress` RPC command provides an efficient way to consolidate multiple small Sapling or Orchard notes at a specific address into fewer, larger notes. This helps reduce wallet fragmentation and improves transaction performance by reducing the number of notes that need to be processed in future transactions.
+
+The command automatically detects whether the provided address is a Sapling (zs) or Orchard (pirate1) address and routes to the appropriate consolidation implementation.
 
 ## Command Syntax
 
 ```bash
-consolidateaddress "saplingaddress" ( fee ) ( maxnotes ) ( maxtransactions )
+consolidateaddress "address" ( fee ) ( maxnotes ) ( maxtransactions )
 ```
 
 ### Parameters
 
-1. **saplingaddress** (string, required)
-   - The Sapling address to consolidate notes for
-   - Must be a valid Sapling payment address (starts with `zs`)
+1. **address** (string, required)
+   - The shielded address to consolidate notes for
+   - Must be a valid Sapling payment address (starts with `zs`) or Orchard address (starts with `pirate1`)
 
 2. **fee** (numeric, optional, default=0.0001)
    - The fee amount in ARRR to pay per consolidation transaction
@@ -36,15 +38,42 @@ consolidateaddress "saplingaddress" ( fee ) ( maxnotes ) ( maxtransactions )
    - Helps prevent excessive resource usage for addresses with many notes
    - Range: 1-100
 
-### Return Value
+### Return Value (Immediate)
 
 ```json
 {
-  "opid": "operation-id-string"
+  "opid": "operation-id-string",
+  "unspent_notes_before": 150
 }
 ```
 
-The operation ID can be used with `z_getoperationstatus` and `z_getoperationresult` to monitor progress and retrieve results.
+The operation ID can be used with `z_getoperationstatus` and `z_getoperationresult` to monitor progress and retrieve results. The `unspent_notes_before` field shows the total number of unspent notes at the address before consolidation begins.
+
+### Operation Result
+
+Once the consolidation operation completes, the full result can be retrieved using `z_getoperationresult`. The result includes:
+
+```json
+{
+  "num_tx_created": 3,
+  "amount_consolidated": "1.50000000",
+  "notes_consolidated": 145,
+  "notes_remaining": 5,
+  "address": "zs14d8tc0hl9q0vg5l28uec5vk6sk34fkj2n8s7jalvw5fxpy6v39yn4s2ga082lymrkjk0x2nqg37",
+  "fee_per_tx": "0.00010000",
+  "max_notes_per_tx": 50,
+  "max_transactions": 10,
+  "consolidation_txids": [
+    "txid1...",
+    "txid2...",
+    "txid3..."
+  ]
+}
+```
+
+**New Fields in v6.0.0+:**
+- **notes_consolidated**: Number of notes that were successfully consolidated into the transaction outputs
+- **notes_remaining**: Number of unspent notes still remaining at the address after consolidation completes
 
 ## Algorithm
 
@@ -86,16 +115,25 @@ The consolidation uses a sophisticated two-step intelligent note selection algor
 
 ## Usage Examples
 
-### Basic Consolidation
+### Basic Consolidation (Sapling)
 ```bash
-# Consolidate with default parameters (0.0001 ARRR fee, 50 max notes, 10 max transactions)
+# Consolidate Sapling address with default parameters (0.0001 ARRR fee, 50 max notes, 10 max transactions)
 pirate-cli consolidateaddress "zs14d8tc0hl9q0vg5l28uec5vk6sk34fkj2n8s7jalvw5fxpy6v39yn4s2ga082lymrkjk0x2nqg37"
+```
+
+### Basic Consolidation (Orchard)
+```bash
+# Consolidate Orchard address with default parameters
+pirate-cli consolidateaddress "pirate1example..."
 ```
 
 ### Custom Fee
 ```bash
-# Consolidate with higher fee for faster confirmation
+# Consolidate Sapling address with higher fee for faster confirmation
 pirate-cli consolidateaddress "zs14d8tc0hl9q0vg5l28uec5vk6sk34fkj2n8s7jalvw5fxpy6v39yn4s2ga082lymrkjk0x2nqg37" 0.0002
+
+# Consolidate Orchard address with custom fee
+pirate-cli consolidateaddress "pirate1example..." 0.0002
 ```
 
 ### Optimized Parameters
@@ -115,6 +153,10 @@ curl -X POST -H 'Content-Type: application/json' \
 
 ### Check Operation Status
 ```bash
+# Using single operation ID (string)
+pirate-cli z_getoperationstatus "operation-id"
+
+# Using array of operation IDs
 pirate-cli z_getoperationstatus '["operation-id"]'
 ```
 
@@ -123,7 +165,7 @@ pirate-cli z_getoperationstatus '["operation-id"]'
 pirate-cli z_getoperationresult '["operation-id"]'
 ```
 
-### Sample Result
+### Sample Result (Sapling)
 ```json
 {
   "id": "operation-id",
@@ -133,6 +175,8 @@ pirate-cli z_getoperationresult '["operation-id"]'
   "result": {
     "num_tx_created": 3,
     "amount_consolidated": "1.50000000",
+    "notes_consolidated": 145,
+    "notes_remaining": 5,
     "address": "zs14d8tc0hl9q0vg5l28uec5vk6sk34fkj2n8s7jalvw5fxpy6v39yn4s2ga082lymrkjk0x2nqg37",
     "fee_per_tx": "0.00010000",
     "max_notes_per_tx": 50,
@@ -146,13 +190,38 @@ pirate-cli z_getoperationresult '["operation-id"]'
 }
 ```
 
+### Sample Result (Orchard)
+```json
+{
+  "id": "operation-id",
+  "status": "success",
+  "creation_time": 1640995200,
+  "method": "orchardconsolidation_address",
+  "result": {
+    "num_tx_created": 2,
+    "amount_consolidated": "0.75000000",
+    "notes_consolidated": 82,
+    "notes_remaining": 3,
+    "address": "pirate1example...",
+    "fee_per_tx": "0.00010000",
+    "max_notes_per_tx": 50,
+    "max_transactions": 10,
+    "consolidation_txids": [
+      "txid1...",
+      "txid2..."
+    ]
+  }
+}
+```
+
 ## Error Handling
 
 ### Common Errors
 
-- **RPC_INVALID_ADDRESS_OR_KEY**: Invalid Sapling address provided
+- **RPC_INVALID_ADDRESS_OR_KEY**: Invalid shielded address provided or address type not supported
 - **RPC_WALLET_UNLOCK_NEEDED**: Wallet must be unlocked to access spending keys
-- **RPC_WALLET_ERROR**: Insufficient notes or other wallet-related issues
+- **RPC_WALLET_ERROR**: Insufficient notes, missing spending key, or other wallet-related issues
+- **RPC_INVALID_PARAMETER**: Network upgrade not yet active for the specified address type (Sapling or Orchard)
 
 ### Automatic Stopping Conditions
 
@@ -177,9 +246,11 @@ pirate-cli z_getoperationresult '["operation-id"]'
 
 ## Implementation Files
 
-- **RPC Handler**: `src/wallet/rpcwallet.cpp` - `consolidateaddress()` function
-- **Operation Class**: `src/wallet/asyncrpcoperation_saplingconsolidation_address.h/cpp`
+- **RPC Handler**: `src/wallet/rpcwallet.cpp` - `consolidateaddress()` function with address type detection
+- **Sapling Operation Class**: `src/wallet/asyncrpcoperation_saplingconsolidation_address.h/cpp`
+- **Orchard Operation Class**: `src/wallet/asyncrpcoperation_orchardconsolidation_address.h/cpp`
 - **Client Interface**: `src/rpc/client.cpp` - parameter conversion table
+- **Build Configuration**: `src/Makefile.am` - source file declarations
 
 ## Related Commands
 
@@ -190,6 +261,13 @@ pirate-cli z_getoperationresult '["operation-id"]'
 
 ## Version History
 
-- **v5.9.0**: Initial implementation with intelligent two-step selection algorithm
-- **v5.9.0**: Added optional fee parameter with sensible defaults
-- **v5.9.0**: Enhanced documentation and error handling
+### v5.9.0
+- Initial Sapling implementation with intelligent two-step selection algorithm
+- Added optional fee parameter with sensible defaults
+- Enhanced documentation and error handling
+
+### v6.0.0
+- **Added Orchard address support (pirate1 prefix) with automatic type detection**
+- **Added `unspent_notes_before` field to immediate RPC response**
+- **Added `notes_consolidated` and `notes_remaining` fields to operation result**
+- **Enhanced documentation and error handling for both Sapling and Orchard pools**

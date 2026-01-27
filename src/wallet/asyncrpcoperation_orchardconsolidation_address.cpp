@@ -3,11 +3,11 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 /**
- * @file asyncrpcoperation_saplingconsolidation_address.cpp
- * @brief Implementation of Sapling address consolidation operations
+ * @file asyncrpcoperation_orchardconsolidation_address.cpp
+ * @brief Implementation of Orchard address consolidation operations
  * 
- * This file implements the AsyncRPCOperation_saplingconsolidation_address class that provides
- * asynchronous consolidation of Sapling notes. The consolidation process helps reduce wallet
+ * This file implements the AsyncRPCOperation_orchardconsolidation_address class that provides
+ * asynchronous consolidation of Orchard notes. The consolidation process helps reduce wallet
  * fragmentation by combining multiple small notes into fewer, larger notes.
  * 
  * Algorithm Overview:
@@ -32,7 +32,7 @@
 
 #include "assert.h"
 #include "boost/variant/static_visitor.hpp"
-#include "asyncrpcoperation_saplingconsolidation_address.h"
+#include "asyncrpcoperation_orchardconsolidation_address.h"
 #include "init.h"
 #include "key_io.h"
 #include "rpc/protocol.h"
@@ -47,26 +47,26 @@
 /// @brief Expiry delta for consolidation transactions (blocks)
 /// @details Consolidation transactions expire 40 blocks after creation to ensure
 ///          they don't become stale during network upgrade periods
-const int CONSOLIDATION_EXPIRY_DELTA = 40;
+const int ORCHARD_CONSOLIDATION_EXPIRY_DELTA = 40;
 
 /**
- * @brief Constructor for Sapling address consolidation operation
+ * @brief Constructor for Orchard address consolidation operation
  * 
  * Creates a new consolidation operation with the specified parameters. The spending key
  * is captured during construction while the wallet is unlocked, allowing the operation
  * to proceed even if the wallet is locked afterwards.
  * 
  * @param targetHeight Blockchain height for transaction creation timing
- * @param address Sapling payment address to consolidate notes for
+ * @param address Orchard payment address to consolidate notes for
  * @param spendingKey Extended spending key for the address
  * @param fee Fee amount in zatoshis per consolidation transaction
  * @param maxNotes Maximum number of notes per consolidation transaction
  * @param maxTransactions Maximum number of transactions to create
  */
-AsyncRPCOperation_saplingconsolidation_address::AsyncRPCOperation_saplingconsolidation_address(
+AsyncRPCOperation_orchardconsolidation_address::AsyncRPCOperation_orchardconsolidation_address(
     int targetHeight, 
-    const libzcash::SaplingPaymentAddress& address,
-    const libzcash::SaplingExtendedSpendingKey& spendingKey,
+    const libzcash::OrchardPaymentAddressPirate& address,
+    const libzcash::OrchardExtendedSpendingKeyPirate& spendingKey,
     CAmount fee, 
     int maxNotes,
     int maxTransactions) 
@@ -75,7 +75,7 @@ AsyncRPCOperation_saplingconsolidation_address::AsyncRPCOperation_saplingconsoli
 /**
  * @brief Destructor - clears sensitive data from memory
  */
-AsyncRPCOperation_saplingconsolidation_address::~AsyncRPCOperation_saplingconsolidation_address() {}
+AsyncRPCOperation_orchardconsolidation_address::~AsyncRPCOperation_orchardconsolidation_address() {}
 
 /**
  * @brief Main orchestration method for the consolidation operation
@@ -84,7 +84,7 @@ AsyncRPCOperation_saplingconsolidation_address::~AsyncRPCOperation_saplingconsol
  * consolidation logic implemented in main_impl(). It ensures proper state
  * transitions and error reporting regardless of success or failure.
  */
-void AsyncRPCOperation_saplingconsolidation_address::main() {
+void AsyncRPCOperation_orchardconsolidation_address::main() {
     if (isCancelled())
         return;
 
@@ -122,7 +122,7 @@ void AsyncRPCOperation_saplingconsolidation_address::main() {
         set_state(OperationStatus::FAILED);
     }
 
-    std::string s = strprintf("%s: Sapling Address Consolidation complete. (status=%s", getId(), getStateAsString());
+    std::string s = strprintf("%s: Orchard Address Consolidation complete. (status=%s", getId(), getStateAsString());
     if (success) {
         s += strprintf(", success)\n");
     } else {
@@ -151,13 +151,13 @@ void AsyncRPCOperation_saplingconsolidation_address::main() {
  * @return true if consolidation completed successfully, false on error
  * @throws Various exceptions on transaction building or commitment failures
  */
-bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
-    LogPrint("zrpcunsafe", "%s: Beginning AsyncRPCOperation_saplingconsolidation_address for address %s.\n", 
+bool AsyncRPCOperation_orchardconsolidation_address::main_impl() {
+    LogPrint("zrpcunsafe", "%s: Beginning AsyncRPCOperation_orchardconsolidation_address for address %s.\n", 
              getId(), EncodePaymentAddress(address_));
 
     auto consensusParams = Params().GetConsensus();
     auto nextActivationHeight = NextActivationHeight(targetHeight_, consensusParams);
-    if (nextActivationHeight && targetHeight_ + CONSOLIDATION_EXPIRY_DELTA >= nextActivationHeight.value()) {
+    if (nextActivationHeight && targetHeight_ + ORCHARD_CONSOLIDATION_EXPIRY_DELTA >= nextActivationHeight.value()) {
         LogPrint("zrpcunsafe", "%s: Consolidation txs would be created before a NU activation but may expire after. Skipping.\n", getId());
         setConsolidationResult(0, 0, std::vector<std::string>(), 0, 0);
         return true;
@@ -181,8 +181,8 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
     }
 
     // Filter entries to only include notes for our target address
-    std::vector<SaplingNoteEntry> targetEntries;
-    for (const auto& entry : saplingEntries) {
+    std::vector<OrchardNoteEntry> targetEntries;
+    for (const auto& entry : orchardEntries) {
         if (entry.address == address_) {
             targetEntries.push_back(entry);
         }
@@ -204,7 +204,7 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
     // Sort notes by value (smallest first) for optimal consolidation algorithm
     // This ensures small "dust" notes are prioritized for cleanup
     std::sort(targetEntries.begin(), targetEntries.end(), 
-              [](const SaplingNoteEntry& a, const SaplingNoteEntry& b) {
+              [](const OrchardNoteEntry& a, const OrchardNoteEntry& b) {
                   return a.note.value() < b.note.value();
               });
 
@@ -217,7 +217,7 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
     // Process notes in batches using the two-step intelligent selection algorithm
     size_t processedNotes = 0;
     while (processedNotes < targetEntries.size() - 1 && numTxCreated < maxTransactions_) { // Leave at least one note unconsolidated and respect transaction limit
-        std::vector<SaplingNoteEntry> batchEntries;
+        std::vector<OrchardNoteEntry> batchEntries;
         CAmount batchAmount = 0;
         
         // Step 1: Collect enough notes to exceed the fee amount (smallest first)
@@ -260,22 +260,38 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
                  FormatMoney(fee_), FormatMoney(batchAmount - fee_));
 
         // === SUBSTEP 4C: Cryptographic Preparation ===
-        // Select Sapling notes for spending and prepare cryptographic data
-        std::vector<SaplingOutPoint> ops;
-        std::vector<libzcash::SaplingNote> notes;
+        // Select Orchard notes for spending and prepare cryptographic data
+        std::vector<OrchardOutPoint> ops;
+        std::vector<libzcash::OrchardNote> notes;
         for (const auto& entry : batchEntries) {
             ops.push_back(entry.op);
             notes.push_back(entry.note);
         }
 
-        // Fetch Sapling anchor and merkle paths for cryptographic validation
+        // Fetch Orchard anchor and merkle paths for cryptographic validation
         uint256 anchor;
-        std::vector<libzcash::MerklePath> saplingMerklePaths;
+        std::vector<libzcash::MerklePath> orchardMerklePaths;
         {
             LOCK2(cs_main, pwalletMain->cs_wallet);
-            if (!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
-                LogPrint("zrpcunsafe", "%s: Merkle Path not found for Sapling notes. Stopping.\n", getId());
-                break;
+            
+            // Get merkle paths for all notes
+            for (size_t i = 0; i < ops.size(); i++) {
+                libzcash::MerklePath orchardMerklePath;
+                if (!pwalletMain->OrchardWalletGetMerklePathOfNote(ops[i].hash, ops[i].n, orchardMerklePath)) {
+                    LogPrint("zrpcunsafe", "%s: Merkle Path not found for Orchard note. Stopping.\n", getId());
+                    break;
+                }
+                orchardMerklePaths.push_back(orchardMerklePath);
+            }
+            
+            // Verify we got all paths
+            if (orchardMerklePaths.size() != ops.size()) {
+                throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Failed to get merkle paths for all notes. Stopping.\n", getId()));
+            }
+            
+            // Get anchor from first note
+            if (!pwalletMain->OrchardWalletGetPathRootWithCMU(orchardMerklePaths[0], notes[0].cmx(), anchor)) {
+                throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Getting Anchor failed. Stopping.\n", getId()));
             }
         }
 
@@ -284,36 +300,51 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
         auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
         {
             LOCK2(cs_main, pwalletMain->cs_wallet);
-            int nExpires = chainActive.Tip()->nHeight + CONSOLIDATION_EXPIRY_DELTA;
+            int nExpires = chainActive.Tip()->nHeight + ORCHARD_CONSOLIDATION_EXPIRY_DELTA;
             builder.SetExpiryHeight(nExpires);
         }
 
         LogPrint("zrpcunsafe", "%s: Creating consolidation transaction with input amount=%s, fee=%s, output amount=%s\n", 
                  getId(), FormatMoney(batchAmount), FormatMoney(fee_), FormatMoney(batchAmount - fee_));
 
-        // Add Sapling spends (inputs) using two-step process
+        // Initialize Orchard with spending enabled
+        builder.InitializeOrchard(true, true, anchor);
+
+        // Add Orchard spends (inputs) using two-step process
         // Step 1: Add raw spends with note data and merkle paths
         for (size_t i = 0; i < notes.size(); i++) {
-            if (!builder.AddSaplingSpendRaw(ops[i], address_, notes[i].value(), notes[i].rcm(), saplingMerklePaths[i], anchor)) {
-                throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Adding Raw Sapling Spend failed. Stopping.\n", getId()));
+            if (!builder.AddOrchardSpendRaw(ops[i], address_, notes[i].value(), notes[i].rho(), notes[i].rseed(), orchardMerklePaths[i], anchor)) {
+                throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Adding Raw Orchard Spend failed. Stopping.\n", getId()));
             }
         }
 
         // Step 2: Convert raw spends using spending key
-        if (!builder.ConvertRawSaplingSpend(spendingKey_)) {
-            throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Converting Raw Sapling Spends failed.\n", getId()));
+        if (!builder.ConvertRawOrchardSpend(spendingKey_)) {
+            throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Converting Raw Orchard Spends failed.\n", getId()));
         }
 
         // Set transaction fee and create single consolidated output
         builder.SetFee(fee_);
         
         // Add consolidated output using raw method then convert
-        if (!builder.AddSaplingOutputRaw(address_, batchAmount - fee_)) {
-            throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Adding Raw Sapling Output failed. Stopping.\n", getId()));
+        if (!builder.AddOrchardOutputRaw(address_, batchAmount - fee_)) {
+            throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Adding Raw Orchard Output failed. Stopping.\n", getId()));
         }
         
-        if (!builder.ConvertRawSaplingOutput(spendingKey_.expsk.full_viewing_key().ovk)) {
-            throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Converting Raw Sapling Output failed.\n", getId()));
+        // Get OVK from spending key for output conversion
+        auto fvkOpt = spendingKey_.GetXFVK();
+        if (fvkOpt == std::nullopt) {
+            throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: FVK not found for Orchard spending key. Stopping.\n", getId()));
+        }
+        
+        auto fvk = fvkOpt.value().fvk;
+        auto ovkOpt = fvk.GetOVK();
+        if (ovkOpt == std::nullopt) {
+            throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: OVK not found for Orchard spending key. Stopping.\n", getId()));
+        }
+        
+        if (!builder.ConvertRawOrchardOutput(ovkOpt.value().ovk)) {
+            throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Converting Raw Orchard Output failed.\n", getId()));
         }
 
         // === SUBSTEP 4E: Transaction Finalization ===
@@ -354,7 +385,7 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
         std::vector<OrchardNoteEntry> orchardEntries;
         pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, "", 11);
         
-        for (const auto& entry : saplingEntries) {
+        for (const auto& entry : orchardEntries) {
             if (entry.address == address_) {
                 remainingNotes++;
             }
@@ -376,7 +407,7 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
  * @param amountConsolidated Total amount consolidated (excluding fees paid)
  * @param consolidationTxIds Vector of transaction IDs for tracking on blockchain
  */
-void AsyncRPCOperation_saplingconsolidation_address::setConsolidationResult(
+void AsyncRPCOperation_orchardconsolidation_address::setConsolidationResult(
     int numTxCreated, 
     const CAmount& amountConsolidated, 
     const std::vector<std::string>& consolidationTxIds,
@@ -406,7 +437,7 @@ void AsyncRPCOperation_saplingconsolidation_address::setConsolidationResult(
  * 
  * @note Transactions already committed to the blockchain cannot be reversed
  */
-void AsyncRPCOperation_saplingconsolidation_address::cancel() {
+void AsyncRPCOperation_orchardconsolidation_address::cancel() {
     set_state(OperationStatus::CANCELLED);
 }
 
@@ -415,10 +446,10 @@ void AsyncRPCOperation_saplingconsolidation_address::cancel() {
  * 
  * @return UniValue object with operation status, configuration, and progress details
  */
-UniValue AsyncRPCOperation_saplingconsolidation_address::getStatus() const {
+UniValue AsyncRPCOperation_orchardconsolidation_address::getStatus() const {
     UniValue v = AsyncRPCOperation::getStatus();
     UniValue obj = v.get_obj();
-    obj.push_back(Pair("method", "saplingconsolidation_address"));
+    obj.push_back(Pair("method", "orchardconsolidation_address"));
     obj.push_back(Pair("target_height", targetHeight_));
     obj.push_back(Pair("address", EncodePaymentAddress(address_)));
     obj.push_back(Pair("fee", FormatMoney(fee_)));

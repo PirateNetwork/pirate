@@ -378,6 +378,7 @@ BITCOIN_CORE_H = \
   wallet/asyncrpcoperation_mergetoaddress.h \
 	wallet/asyncrpcoperation_saplingconsolidation.h \
 	wallet/asyncrpcoperation_saplingconsolidation_address.h \
+	wallet/asyncrpcoperation_orchardconsolidation_address.h \
   wallet/asyncrpcoperation_orchardconsolidation.h \
 	wallet/asyncrpcoperation_sweeptoaddress.h \
   wallet/asyncrpcoperation_sendmany.h \
@@ -517,6 +518,7 @@ libbitcoin_wallet_a_SOURCES = \
   wallet/asyncrpcoperation_mergetoaddress.cpp \
 	wallet/asyncrpcoperation_saplingconsolidation.cpp \
 	wallet/asyncrpcoperation_saplingconsolidation_address.cpp \
+	wallet/asyncrpcoperation_orchardconsolidation_address.cpp \
   wallet/asyncrpcoperation_orchardconsolidation.cpp \
 	wallet/asyncrpcoperation_sweeptoaddress.cpp \
   wallet/asyncrpcoperation_sendmany.cpp \
