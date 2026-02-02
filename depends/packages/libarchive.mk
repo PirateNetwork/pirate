@@ -6,6 +6,7 @@ $(package)_download_file=$(package)-$($(package)_version).tar.gz
 $(package)_config_opts=--with-sysroot=$(host_prefix)/lib --without-bz2lib
 $(package)_config_opts_linux=--disable-bsdtar --disable-bsdcpio --disable-shared --enable-static --prefix=$(host_prefix) --host=$(HOST)
 $(package)_config_opts_mingw32=--disable-bsdtar --disable-bsdcpio --disable-shared --enable-static --prefix=$(host_prefix) --host=x86_64-w64-mingw32
+$(package)_config_opts_mingw64=--disable-bsdtar --disable-bsdcpio --disable-shared --enable-static --prefix=$(host_prefix) --host=x86_64-w64-mingw64
 $(package)_config_opts_darwin=--disable-bsdtar --disable-bsdcpio --disable-shared --enable-static --prefix=$(host_prefix) --without-zstd --without-lz4
 $(package)_sha256_hash=fcf87f3ad8db2e4f74f32526dee62dd1fb9894782b0a503a89c9d7a70a235191
 $(package)_cflags_darwin=-mmacosx-version-min=$(OSX_MIN_VERSION)
@@ -13,6 +14,9 @@ $(package)_conf_tool=./configure
 $(package)_patches=0001-libarchive-Do-not-include-sys-mount_h-when-linux-fs_h.patch
 
 $(package)_dependencies=zlib
+
+$(package)_config_env_mingw32=LD_LIBRARY_PATH="$(host_prefix)/lib" PKG_CONFIG_LIBDIR="$(host_prefix)/lib/pkgconfig" CC="$($(package)_cc)" CFLAGS="$($(package)_cflags)" CPPFLAGS="$($(package)_cppflags)" LDFLAGS="$($(package)_ldflags)" AR="$($(package)_ar)" RANLIB="$($(package)_ranlib)" LIBS="-lz"
+$(package)_config_env_mingw64=LD_LIBRARY_PATH="$(host_prefix)/lib" PKG_CONFIG_LIBDIR="$(host_prefix)/lib/pkgconfig" CC="$($(package)_cc)" CFLAGS="$($(package)_cflags)" CPPFLAGS="$($(package)_cppflags)" LDFLAGS="$($(package)_ldflags)" AR="$($(package)_ar)" RANLIB="$($(package)_ranlib)" LIBS="-lz"
 
 ifeq ($(build_os),darwin)
 define $(package)_set_vars

@@ -275,12 +275,28 @@ AC_DEFUN([BITCOIN_QT_CONFIGURE],[
 
   # Smart deduplication: preserve last occurrence of each library (important for static linking order)
   if test -n "$QT_LIBS"; then
+    qt_libs_entries=""
     qt_libs_reversed=""
     qt_libs_deduped=""
     qt_seen_libs=""
+    qt_expect_framework="no"
     
-    # First, reverse the library list to process from end to beginning
+    # Normalize -framework Foo into a single token to preserve pairing.
     for qt_lib in $QT_LIBS; do
+      if test "$qt_expect_framework" = "yes"; then
+        qt_libs_entries="$qt_libs_entries framework=$qt_lib"
+        qt_expect_framework="no"
+        continue
+      fi
+      if test "$qt_lib" = "-framework"; then
+        qt_expect_framework="yes"
+        continue
+      fi
+      qt_libs_entries="$qt_libs_entries $qt_lib"
+    done
+
+    # First, reverse the library list to process from end to beginning
+    for qt_lib in $qt_libs_entries; do
       qt_libs_reversed="$qt_lib $qt_libs_reversed"
     done
     
@@ -298,7 +314,18 @@ AC_DEFUN([BITCOIN_QT_CONFIGURE],[
       esac
     done
     
-    QT_LIBS="$qt_libs_deduped"
+    # Expand framework=Foo tokens back into "-framework Foo".
+    QT_LIBS=""
+    for qt_lib in $qt_libs_deduped; do
+      case "$qt_lib" in
+        framework=*)
+          QT_LIBS="$QT_LIBS -framework ${qt_lib#framework=}"
+          ;;
+        *)
+          QT_LIBS="$QT_LIBS $qt_lib"
+          ;;
+      esac
+    done
   fi
 
   AC_SUBST(QT_PIE_FLAGS)

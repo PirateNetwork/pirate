@@ -88,13 +88,19 @@ ARCH=$(uname -m)
 if [[ $ARCH == 'arm64' ]]; then
     # Add arm64 specific flags
     export RUSTFLAGS="-C link-arg=-undefined -C link-arg=dynamic_lookup"
-    # Add target specification
-    rustup target add aarch64-apple-darwin
+fi
+
+if command -v rustup >/dev/null 2>&1; then
+    if [[ $ARCH == 'arm64' ]]; then
+        rustup target add aarch64-apple-darwin
+    fi
+    export RUSTC="$(rustup which rustc)"
+    export CARGO="$(rustup which cargo)"
 fi
 
 # Build the library
 cd src/rust
-cargo build --release
+${CARGO:-cargo} build --release
 cd ../..
 
 # Build the full node

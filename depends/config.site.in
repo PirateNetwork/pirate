@@ -36,14 +36,17 @@ if test x@host_os@ = xdarwin; then
   PORT=no
 fi
 
-if test x@host_os@ = xmingw32; then
-  if test -z $with_qt_incdir; then
-    with_qt_incdir=$depends_prefix/include
-  fi
-  if test -z $with_qt_libdir; then
-    with_qt_libdir=$depends_prefix/lib
-  fi
-fi
+case @host_os@ in
+  mingw32|mingw64)
+    if test -z $with_qt_incdir; then
+      with_qt_incdir=$depends_prefix/include
+    fi
+    if test -z $with_qt_libdir; then
+      with_qt_libdir=$depends_prefix/lib
+    fi
+    LIBS="-lssl -lcrypto -lz -lws2_32 -lcrypt32 -lwinmm -lwldap32 $LIBS"
+  ;;
+esac
 
 PATH=$depends_prefix/native/bin:$PATH
 PKG_CONFIG="`which pkg-config` --static"

@@ -58,7 +58,7 @@ $(package)_rust_std_sha256_hash_x86_64-w64-mingw64=2ca4a306047c0b8b4029c382910fc
 # --- End of original Rust target mappings ---
 
 define rust_target
-$(if $($(1)_rust_target_$(2)),$($(1)_rust_target_$(2)),$(if $(findstring darwin,$(3)),x86_64-apple-darwin,$(if $(findstring freebsd,$(3)),x86_64-unknown-freebsd,$(2))))
+$(if $($(1)_rust_target_$(2)),$($(1)_rust_target_$(2)),$(if $(findstring darwin,$(3)),$(if $(findstring aarch64,$(2)),aarch64-apple-darwin,$(if $(findstring arm,$(2)),aarch64-apple-darwin,x86_64-apple-darwin)),$(if $(findstring freebsd,$(3)),x86_64-unknown-freebsd,$(2))))
 endef
 
 define $(package)_set_vars

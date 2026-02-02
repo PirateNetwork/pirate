@@ -1,4 +1,4 @@
-![Build Pirated](https://github.com/PirateNetwork/pirate/actions/workflows/pirated_build.yml/badge.svg)
+![Pirate CI](https://github.com/PirateNetwork/pirate/actions/workflows/pirate_build_all.yml/badge.svg)\
 ![Pirate Logo](https://i.ibb.co/F7Dgnxy/Pirate-Logo-Wordmark-Gold.png "Pirate Chain Logo")
 
 ## Pirate Chain

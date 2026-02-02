@@ -58,6 +58,14 @@ else
     ARCH_FLAGS="-arch x86_64"
 fi
 
+if command -v rustup >/dev/null 2>&1; then
+    if [ "$ARCH" = "arm64" ]; then
+        rustup target add aarch64-apple-darwin
+    fi
+    export RUSTC="$(rustup which rustc)"
+    export CARGO="$(rustup which cargo)"
+fi
+
 CPPFLAGS="-I$PREFIX/include $ARCH_FLAGS" LDFLAGS="-L$PREFIX/lib $ARCH_FLAGS -Wl,-no_pie" \
 CXXFLAGS="$ARCH_FLAGS -I$PREFIX/include -fwrapv -fno-strict-aliasing \
 -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-enum-constexpr-conversion \
@@ -67,6 +75,8 @@ CXXFLAGS="$ARCH_FLAGS -I$PREFIX/include -fwrapv -fno-strict-aliasing \
 make "$@" NO_GTEST=0 STATIC=1
 
 cp src/qt/komodo-qt "$mydir"/pirate-qt-mac
+# Strip symbols to reduce release size.
+strip -x "$mydir"/pirate-qt-mac
 
 #Package as App bundle in a dmg
 ./makeReleaseMac.sh

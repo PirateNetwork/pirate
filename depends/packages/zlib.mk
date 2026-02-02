@@ -12,13 +12,29 @@ $(package)_config_opts+=AR="$($(package)_ar)"
 $(package)_config_opts_darwin+=AR="$($(package)_libtool)"
 $(package)_config_opts_darwin+=ARFLAGS="-o"
 $(package)_config_opts_android+=CHOST=$(host)
+$(package)_cppflags_darwin+=-DHAVE_STDIO_H
 endef
 
 # zlib has its own custom configure script that takes in options like CC,
 # CFLAGS, RANLIB, AR, and ARFLAGS from the environment rather than from
 # command-line arguments.
 define $(package)_config_cmds
-  env $($(package)_config_opts) ./configure --static --prefix=$(host_prefix)
+  env $($(package)_config_opts) ./configure --static --prefix=$(host_prefix) && \
+  if [ "$(host_os)" = "darwin" ]; then \
+    if [ -f zconf.h ]; then \
+      if ! grep -q '^#undef NO_FDOPEN' zconf.h; then \
+        printf '\n#undef NO_FDOPEN\n' >> zconf.h; \
+      fi; \
+      if ! grep -q '^#define HAVE_STDIO_H' zconf.h; then \
+        printf '\n#define HAVE_STDIO_H 1\n' >> zconf.h; \
+      fi; \
+    fi; \
+    if [ -f zutil.h ]; then \
+      if ! grep -q 'PIRATE_UNDEF_FDOPEN' zutil.h; then \
+        printf '\n#ifdef __APPLE__\n/* PIRATE_UNDEF_FDOPEN: avoid fdopen macro collision with Xcode headers. */\n#ifdef fdopen\n#undef fdopen\n#endif\n#endif\n' >> zutil.h; \
+      fi; \
+    fi; \
+  fi
 endef
 
 define $(package)_build_cmds
