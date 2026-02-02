@@ -15,9 +15,11 @@ class TransactionFilterProxy;
 class WalletModel;
 
 QT_BEGIN_NAMESPACE
+class QCheckBox;
 class QComboBox;
 class QDateTimeEdit;
 class QFrame;
+class QLabel;
 class QLineEdit;
 class QMenu;
 class QModelIndex;
@@ -36,6 +38,8 @@ public:
     explicit TransactionView(const PlatformStyle *platformStyle, QWidget *parent = 0);
 
     void setModel(WalletModel *model);
+    
+    QLabel* getLazyLoadStatusLabel() { return lazyLoadStatusLabel; }
 
     // Date ranges for filter
     enum DateEnum
@@ -66,8 +70,11 @@ private:
     QComboBox *dateWidget;
     QComboBox *typeWidget;
     QComboBox *watchOnlyWidget;
+    QComboBox *limitWidget;
     QLineEdit *addressWidget;
+    QCheckBox *addressOnlyCheckbox;
     QLineEdit *amountWidget;
+    QLabel *lazyLoadStatusLabel;
 
     QMenu *contextMenu;
     QSignalMapper *mapperThirdPartyTxUrls;
@@ -99,6 +106,12 @@ private Q_SLOTS:
     void openThirdPartyTxUrl(QString url);
     void updateWatchOnlyColumn(bool fHaveWatchOnly);
     void sendResetUnlockSignal();
+    void handleTransactionClicked(const QModelIndex &index);
+    void toggleExpandAll();
+    void clearSearch();
+    void resetFilters();
+    void onLazyLoadComplete();
+    void onLazyLoadProgress(int loaded, int total);
 
 Q_SIGNALS:
     void doubleClicked(const QModelIndex&);
@@ -113,6 +126,7 @@ public Q_SLOTS:
     void chooseDate(int idx);
     void chooseType(int idx);
     void chooseWatchonly(int idx);
+    void chooseLimit(int idx);
     void changedAmount();
     void changedPrefix();
     void exportClicked();

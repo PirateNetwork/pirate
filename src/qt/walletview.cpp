@@ -53,12 +53,17 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, QWidget *parent):
     QHBoxLayout *hbox_buttons = new QHBoxLayout();
     transactionView = new TransactionView(platformStyle, this);
     vbox->addWidget(transactionView);
+    
+    // Add status label (left side) - give it stretch factor to expand and center
+    QLabel *statusLabel = transactionView->getLazyLoadStatusLabel();
+    hbox_buttons->addWidget(statusLabel, 1); // Stretch factor 1 to expand
+    
+    // Add export button (right side)
     QPushButton *exportButton = new QPushButton(tr("&Export"), this);
     exportButton->setToolTip(tr("Export the data in the current tab to a file"));
     if (platformStyle->getImagesOnButtons()) {
         exportButton->setIcon(platformStyle->SingleColorIcon(":/icons/export"));
     }
-    hbox_buttons->addStretch();
     hbox_buttons->addWidget(exportButton);
     vbox->addLayout(hbox_buttons);
     transactionsPage->setLayout(vbox);

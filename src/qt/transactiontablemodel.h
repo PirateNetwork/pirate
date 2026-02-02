@@ -24,6 +24,9 @@ class TransactionTableModel : public QAbstractTableModel
     Q_OBJECT
 
 public:
+    // Initial transaction load limit for quick startup (remaining loaded via lazy load)
+    static const int INITIAL_TX_LIMIT = 50;
+    
     explicit TransactionTableModel(const PlatformStyle *platformStyle, CWallet* wallet, WalletModel *parent = 0);
     ~TransactionTableModel();
 
@@ -74,6 +77,12 @@ public:
         StatusRole,
         /** Unprocessed icon */
         RawDecorationRole,
+        /** Is this a parent record? */
+        IsParentRole,
+        /** Is this a child record? */
+        IsChildRole,
+        /** Index within transaction group (parent=0, children=1,2,3...) */
+        IdxRole,
     };
 
     void refreshWallet();
@@ -83,6 +92,30 @@ public:
     QVariant headerData(int section, Qt::Orientation orientation, int role) const;
     QModelIndex index(int row, int column, const QModelIndex & parent = QModelIndex()) const;
     bool processingQueuedTransactions() const { return fProcessingQueuedTransactions; }
+    
+    /** Toggle expand/collapse state for a transaction's children */
+    void toggleTransactionExpanded(const QModelIndex &index);
+    
+    /** Expand or collapse all parent transactions */
+    void setAllTransactionsExpanded(bool expanded);
+    
+    /** Rebuild cachedWallet from decomposedTxCache (loads all cached transactions for filtering) */
+    void rebuildFromCache();
+    void rebuildFromCache(const QDateTime &dateFrom, const QDateTime &dateTo, 
+                          quint32 typeFilter, int watchOnlyFilter, 
+                          const QString &addrPrefix, qint64 minAmount, 
+                          bool showInactive, int limitParents = -1);
+    
+    // Fast index-based queries for filtering
+    QList<int> findTransactionsByDateRange(qint64 from, qint64 to) const;
+    QList<int> findTransactionsByType(int type) const;
+    QList<int> findTransactionsByAddress(const QString& address) const;
+    QList<int> findWatchOnlyTransactions() const;
+    QList<int> findTransactionsByMinAmount(qint64 minAmount) const;
+    
+    // Statistics
+    int getTotalTransactionCount() const;
+    QMap<int, int> getTypeDistribution() const;
 
 private:
     CWallet* wallet;
@@ -90,6 +123,7 @@ private:
     QStringList columns;
     TransactionTablePriv *priv;
     bool fProcessingQueuedTransactions;
+    bool fPendingRefresh;
     const PlatformStyle *platformStyle;
 
     void subscribeToCoreSignals();
@@ -115,7 +149,11 @@ public Q_SLOTS:
     /** Updates the column title to "Amount (DisplayUnit)" and emits headerDataChanged() signal for table headers to react. */
     void updateAmountColumnTitle();
     /* Needed to update fProcessingQueuedTransactions through a QueuedConnection */
-    void setProcessingQueuedTransactions(bool value) { fProcessingQueuedTransactions = value; }
+    void setProcessingQueuedTransactions(bool value);
+
+Q_SIGNALS:
+    void lazyLoadComplete();
+    void lazyLoadProgress(int loaded, int total);
 
     friend class TransactionTablePriv;
 };

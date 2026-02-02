@@ -20,8 +20,10 @@
 
 #include "ui_interface.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDateTimeEdit>
+#include <QDebug>
 #include <QDesktopServices>
 #include <QDoubleValidator>
 #include <QHBoxLayout>
@@ -30,6 +32,8 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QPoint>
+#include <QProgressDialog>
+#include <QPushButton>
 #include <QScrollBar>
 #include <QSignalMapper>
 #include <QTableView>
@@ -44,25 +48,87 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     // Build filter row
     setContentsMargins(0,0,0,0);
 
-    QHBoxLayout *hlayout = new QHBoxLayout();
-    hlayout->setContentsMargins(0,0,0,0);
-
+    // First line: search field, search button, clear button, address only checkbox
+    QHBoxLayout *searchLayout = new QHBoxLayout();
+    searchLayout->setContentsMargins(0,3,0,3);
     if (platformStyle->getUseExtraSpacing()) {
-        hlayout->setSpacing(5);
-        hlayout->addSpacing(26);
+        searchLayout->setSpacing(8);
+        searchLayout->addSpacing(26);
     } else {
-        hlayout->setSpacing(0);
-        hlayout->addSpacing(23);
+        searchLayout->setSpacing(6);
+        searchLayout->addSpacing(23);
     }
 
+    QLabel *searchLabel = new QLabel(tr("Search:"), this);
+    QFont searchFont = searchLabel->font();
+    searchFont.setBold(true);
+    searchLabel->setFont(searchFont);
+    searchLabel->setStyleSheet("QLabel { color: white; }");
+    searchLayout->addWidget(searchLabel);
+    
+    addressWidget = new QLineEdit(this);
+#if QT_VERSION >= 0x040700
+    addressWidget->setPlaceholderText(tr("Enter address or label to search"));
+#endif
+    addressWidget->setMinimumWidth(200);
+    searchLayout->addWidget(addressWidget);
+
+    // Add search button
+    QPushButton *searchButton = new QPushButton(tr("Search"), this);
+    searchButton->setObjectName("searchButton");
+    if (platformStyle->getUseExtraSpacing()) {
+        searchButton->setFixedWidth(70);
+    } else {
+        searchButton->setFixedWidth(60);
+    }
+    searchLayout->addWidget(searchButton);
+
+    // Add clear button
+    QPushButton *clearButton = new QPushButton(tr("Clear"), this);
+    clearButton->setObjectName("clearButton");
+    if (platformStyle->getUseExtraSpacing()) {
+        clearButton->setFixedWidth(70);
+    } else {
+        clearButton->setFixedWidth(60);
+    }
+    searchLayout->addWidget(clearButton);
+
+    // Add small spacing to visually separate checkbox
+    searchLayout->addSpacing(10);
+
+    addressOnlyCheckbox = new QCheckBox(tr("Address only"), this);
+    addressOnlyCheckbox->setToolTip(tr("Show only matching address records (not full transaction)"));
+    searchLayout->addWidget(addressOnlyCheckbox);
+
+    searchLayout->addStretch();
+
+    // Second line: all other filter controls
+    QHBoxLayout *hlayout2 = new QHBoxLayout();
+    hlayout2->setContentsMargins(0,3,0,3);
+    if (platformStyle->getUseExtraSpacing()) {
+        hlayout2->setSpacing(8);
+        hlayout2->addSpacing(26);
+    } else {
+        hlayout2->setSpacing(6);
+        hlayout2->addSpacing(23);
+    }
+
+    QLabel *filterLabel = new QLabel(tr("Filter:"), this);
+    QFont filterFont = filterLabel->font();
+    filterFont.setBold(true);
+    filterLabel->setFont(filterFont);
+    filterLabel->setStyleSheet("QLabel { color: white; }");
+    hlayout2->addWidget(filterLabel);
+    
     watchOnlyWidget = new QComboBox(this);
     watchOnlyWidget->setFixedWidth(24);
     watchOnlyWidget->addItem("", TransactionFilterProxy::WatchOnlyFilter_All);
     watchOnlyWidget->addItem(platformStyle->SingleColorIcon(":/icons/eye_plus"), "", TransactionFilterProxy::WatchOnlyFilter_Yes);
     watchOnlyWidget->addItem(platformStyle->SingleColorIcon(":/icons/eye_minus"), "", TransactionFilterProxy::WatchOnlyFilter_No);
-    hlayout->addWidget(watchOnlyWidget);
+    hlayout2->addWidget(watchOnlyWidget);
 
     dateWidget = new QComboBox(this);
+    dateWidget->setToolTip(tr("Filter transactions by date range"));
     if (platformStyle->getUseExtraSpacing()) {
         dateWidget->setFixedWidth(121);
     } else {
@@ -76,9 +142,17 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     dateWidget->addItem(tr("This year"), ThisYear);
     dateWidget->addItem(tr("Range..."), Range);
     dateWidget->setObjectName("dateComboBox");
-    hlayout->addWidget(dateWidget);
+    hlayout2->addWidget(dateWidget);
+
+    // Add visual separator
+    QFrame *separator1 = new QFrame(this);
+    separator1->setFrameShape(QFrame::VLine);
+    separator1->setFrameShadow(QFrame::Sunken);
+    separator1->setLineWidth(1);
+    hlayout2->addWidget(separator1);
 
     typeWidget = new QComboBox(this);
+    typeWidget->setToolTip(tr("Filter transactions by type"));
     if (platformStyle->getUseExtraSpacing()) {
         typeWidget->setFixedWidth(121);
     } else {
@@ -97,17 +171,54 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     typeWidget->addItem(tr("Mined"),        TransactionFilterProxy::TYPE(TransactionRecord::Generated));
     typeWidget->addItem(tr("Other"),        TransactionFilterProxy::TYPE(TransactionRecord::Other));
     typeWidget->setObjectName("typeComboBox");
-    hlayout->addWidget(typeWidget);
+    hlayout2->addWidget(typeWidget);
 
-    addressWidget = new QLineEdit(this);
-#if QT_VERSION >= 0x040700
-    addressWidget->setPlaceholderText(tr("Enter address or label to search"));
-#endif
-    hlayout->addWidget(addressWidget);
+    // Add visual separator
+    QFrame *separator2 = new QFrame(this);
+    separator2->setFrameShape(QFrame::VLine);
+    separator2->setFrameShadow(QFrame::Sunken);
+    separator2->setLineWidth(1);
+    hlayout2->addWidget(separator2);
+
+    // Add limit combo box
+    QLabel *limitLabel = new QLabel(tr("Limit:"), this);
+    limitLabel->setStyleSheet("QLabel { color: white; }");
+    hlayout2->addWidget(limitLabel);
+    
+    limitWidget = new QComboBox(this);
+    limitWidget->setToolTip(tr("Limit number of transactions displayed"));
+    limitWidget->addItem(tr("All"), -1);
+    limitWidget->addItem(tr("50"), 50);
+    limitWidget->addItem(tr("100"), 100);
+    limitWidget->addItem(tr("200"), 200);
+    limitWidget->addItem(tr("500"), 500);
+    limitWidget->addItem(tr("1000"), 1000);
+    limitWidget->setCurrentIndex(1); // Default to "50"
+    if (platformStyle->getUseExtraSpacing()) {
+        limitWidget->setFixedWidth(85);
+    } else {
+        limitWidget->setFixedWidth(80);
+    }
+    hlayout2->addWidget(limitWidget);
+
+    // Add visual separator
+    QFrame *separator3 = new QFrame(this);
+    separator3->setFrameShape(QFrame::VLine);
+    separator3->setFrameShadow(QFrame::Sunken);
+    separator3->setLineWidth(1);
+    hlayout2->addWidget(separator3);
+
+    // Add stretch to push remaining items to the right
+    hlayout2->addStretch();
+
+    // Add min amount label
+    QLabel *amountLabel = new QLabel(tr("Min amount:"), this);
+    amountLabel->setStyleSheet("QLabel { color: white; }");
+    hlayout2->addWidget(amountLabel);
 
     amountWidget = new QLineEdit(this);
 #if QT_VERSION >= 0x040700
-    amountWidget->setPlaceholderText(tr("Min amount"));
+    amountWidget->setPlaceholderText(tr("0.00"));
 #endif
     if (platformStyle->getUseExtraSpacing()) {
         amountWidget->setFixedWidth(97);
@@ -115,7 +226,37 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
         amountWidget->setFixedWidth(100);
     }
     amountWidget->setValidator(new QDoubleValidator(0, 1e20, 8, this));
-    hlayout->addWidget(amountWidget);
+    hlayout2->addWidget(amountWidget);
+
+    // Add visual separator
+    QFrame *separator4 = new QFrame(this);
+    separator4->setFrameShape(QFrame::VLine);
+    separator4->setFrameShadow(QFrame::Sunken);
+    separator4->setLineWidth(1);
+    hlayout2->addWidget(separator4);
+
+    // Add reset button
+    QPushButton *resetButton = new QPushButton(tr("Reset"), this);
+    resetButton->setObjectName("resetButton");
+    resetButton->setToolTip(tr("Reset all filters to default"));
+    if (platformStyle->getUseExtraSpacing()) {
+        resetButton->setFixedWidth(70);
+    } else {
+        resetButton->setFixedWidth(60);
+    }
+    hlayout2->addWidget(resetButton);
+
+    // Add expand/collapse all button
+    QPushButton *expandAllButton = new QPushButton(tr("Collapse All"), this);
+    expandAllButton->setObjectName("expandAllButton");
+    expandAllButton->setCheckable(true);
+    expandAllButton->setChecked(true); // Start checked since transactions are expanded by default
+    if (platformStyle->getUseExtraSpacing()) {
+        expandAllButton->setFixedWidth(90);
+    } else {
+        expandAllButton->setFixedWidth(85);
+    }
+    hlayout2->addWidget(expandAllButton);
 
     // Delay before filtering transactions in ms
     static const int input_filter_delay = 200;
@@ -127,22 +268,32 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     QTimer* prefix_typing_delay = new QTimer(this);
     prefix_typing_delay->setSingleShot(true);
     prefix_typing_delay->setInterval(input_filter_delay);
+    
+    // Create lazy load status label
+    lazyLoadStatusLabel = new QLabel(tr("Loading transactions... (filters disabled until complete)"), this);
+    lazyLoadStatusLabel->setStyleSheet("QLabel { color: white; font-weight: bold; }");
+    lazyLoadStatusLabel->setAlignment(Qt::AlignCenter);
+    lazyLoadStatusLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred); // Allow label to expand horizontally
+    lazyLoadStatusLabel->setMinimumHeight(30); // Give it a minimum height for proper spacing
+    lazyLoadStatusLabel->setVisible(true);
 
     QVBoxLayout *vlayout = new QVBoxLayout(this);
     vlayout->setContentsMargins(0,0,0,0);
     vlayout->setSpacing(0);
 
     QTableView *view = new QTableView(this);
-    vlayout->addLayout(hlayout);
+    vlayout->addLayout(searchLayout);
+    vlayout->addLayout(hlayout2);
     vlayout->addWidget(createDateRangeWidget());
-    vlayout->addWidget(view);
+    vlayout->addWidget(view, 1); // Give the table view a stretch factor of 1
+    
     vlayout->setSpacing(0);
     int width = view->verticalScrollBar()->sizeHint().width();
     // Cover scroll bar width with spacing
     if (platformStyle->getUseExtraSpacing()) {
-        hlayout->addSpacing(width+2);
+        searchLayout->addSpacing(width+2);
     } else {
-        hlayout->addSpacing(width);
+        searchLayout->addSpacing(width);
     }
     // Always show scroll bar
     view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
@@ -183,16 +334,25 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     // Connect actions
     connect(mapperThirdPartyTxUrls, SIGNAL(mapped(QString)), this, SLOT(openThirdPartyTxUrl(QString)));
 
+    // Connect filter changes - activated fires when user makes a selection
     connect(dateWidget, SIGNAL(activated(int)), this, SLOT(chooseDate(int)));
     connect(typeWidget, SIGNAL(activated(int)), this, SLOT(chooseType(int)));
     connect(watchOnlyWidget, SIGNAL(activated(int)), this, SLOT(chooseWatchonly(int)));
+    connect(limitWidget, SIGNAL(activated(int)), this, SLOT(chooseLimit(int)));
     connect(amountWidget, SIGNAL(textChanged(QString)), amount_typing_delay, SLOT(start()));
     connect(amount_typing_delay, SIGNAL(timeout()), this, SLOT(changedAmount()));
-    connect(addressWidget, SIGNAL(textChanged(QString)), prefix_typing_delay, SLOT(start()));
-    connect(prefix_typing_delay, SIGNAL(timeout()), this, SLOT(changedPrefix()));
+    // Connect search button and Enter key to trigger search
+    connect(searchButton, SIGNAL(clicked()), this, SLOT(changedPrefix()));
+    connect(addressWidget, SIGNAL(returnPressed()), this, SLOT(changedPrefix()));
+    // Connect clear button
+    connect(clearButton, SIGNAL(clicked()), this, SLOT(clearSearch()));
+    // Connect reset button
+    connect(resetButton, SIGNAL(clicked()), this, SLOT(resetFilters()));
 
     connect(view, SIGNAL(doubleClicked(QModelIndex)), this, SIGNAL(doubleClicked(QModelIndex)));
+    connect(view, SIGNAL(clicked(QModelIndex)), this, SLOT(handleTransactionClicked(QModelIndex)));
     connect(view, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(contextualMenu(QPoint)));
+    connect(expandAllButton, SIGNAL(clicked()), this, SLOT(toggleExpandAll()));
 
     connect(copyAddressAction, SIGNAL(triggered()), this, SLOT(copyAddress()));
     connect(copyLabelAction, SIGNAL(triggered()), this, SLOT(copyLabel()));
@@ -284,6 +444,22 @@ void TransactionView::setModel(WalletModel *_model)
 
         // Watch-only signal
         connect(_model, SIGNAL(notifyWatchonlyChanged(bool)), this, SLOT(updateWatchOnlyColumn(bool)));
+        
+        // Connect lazy load signals
+        connect(_model->getTransactionTableModel(), SIGNAL(lazyLoadComplete()), this, SLOT(onLazyLoadComplete()));
+        connect(_model->getTransactionTableModel(), SIGNAL(lazyLoadProgress(int,int)), this, SLOT(onLazyLoadProgress(int,int)));
+        
+        // Disable all filters until lazy load completes
+        dateWidget->setEnabled(false);
+        typeWidget->setEnabled(false);
+        watchOnlyWidget->setEnabled(false);
+        limitWidget->setEnabled(false);
+        amountWidget->setEnabled(false);
+        addressWidget->setEnabled(false);
+        addressOnlyCheckbox->setEnabled(false);
+        
+        // Initialize limit to default value (50)
+        transactionProxyModel->setLimit(50);
     }
 }
 
@@ -333,6 +509,11 @@ void TransactionView::chooseDate(int idx)
         dateRangeChanged();
         break;
     }
+    
+    // Force view to update (except for Range which calls dateRangeChanged)
+    if(transactionView && dateWidget->itemData(idx).toInt() != Range) {
+        transactionView->reset();
+    }
 }
 
 void TransactionView::chooseType(int idx)
@@ -341,6 +522,10 @@ void TransactionView::chooseType(int idx)
         return;
     transactionProxyModel->setTypeFilter(
         typeWidget->itemData(idx).toInt());
+    // Force view to update
+    if(transactionView) {
+        transactionView->reset();
+    }
 }
 
 void TransactionView::chooseWatchonly(int idx)
@@ -349,13 +534,113 @@ void TransactionView::chooseWatchonly(int idx)
         return;
     transactionProxyModel->setWatchOnlyFilter(
         static_cast<TransactionFilterProxy::WatchOnlyFilter>(watchOnlyWidget->itemData(idx).toInt()));
+    // Force view to update
+    if(transactionView) {
+        transactionView->reset();
+    }
+}
+
+void TransactionView::chooseLimit(int idx)
+{
+    if(!transactionProxyModel)
+        return;
+    int limit = limitWidget->itemData(idx).toInt();
+    qDebug() << "TransactionView::chooseLimit: Setting limit to" << limit;
+    transactionProxyModel->setLimit(limit);
+    // Force view to update
+    if(transactionView) {
+        transactionView->reset();
+    }
 }
 
 void TransactionView::changedPrefix()
 {
     if(!transactionProxyModel)
         return;
-    transactionProxyModel->setAddressPrefix(addressWidget->text());
+    
+    QString searchText = addressWidget->text();
+    transactionProxyModel->setAddressPrefix(searchText);
+    transactionProxyModel->setShowAddressOnly(addressOnlyCheckbox->isChecked());
+    
+    // If searching, reload wallet to search entire history
+    // Otherwise, use the cached 200 transactions
+    if (!searchText.isEmpty() && model) {
+        QProgressDialog progress(tr("Searching transactions..."), tr("Cancel"), 0, 0, this);
+        progress.setWindowModality(Qt::WindowModal);
+        progress.setMinimumDuration(500); // Only show if operation takes > 500ms
+        progress.setValue(0);
+        
+        model->getTransactionTableModel()->refreshWallet();
+        
+        progress.setValue(1);
+    }
+}
+
+void TransactionView::clearSearch()
+{
+    addressWidget->clear();
+    
+    QProgressDialog progress(tr("Refreshing transactions..."), tr("Cancel"), 0, 0, this);
+    progress.setWindowModality(Qt::WindowModal);
+    progress.setMinimumDuration(500);
+    progress.setValue(0);
+    
+    changedPrefix(); // This will trigger refresh to reload default 200
+    
+    progress.setValue(1);
+}
+
+void TransactionView::resetFilters()
+{
+    QProgressDialog progress(tr("Resetting filters..."), tr("Cancel"), 0, 0, this);
+    progress.setWindowModality(Qt::WindowModal);
+    progress.setMinimumDuration(500);
+    progress.setValue(0);
+    
+    // Reset all filters to default
+    dateWidget->setCurrentIndex(0); // All dates
+    typeWidget->setCurrentIndex(0); // All types
+    watchOnlyWidget->setCurrentIndex(0); // All watch-only
+    limitWidget->setCurrentIndex(1); // 50 transactions
+    amountWidget->clear(); // Clear min amount
+    addressWidget->clear(); // Clear search
+    addressOnlyCheckbox->setChecked(false); // Uncheck address only
+    
+    // Trigger filter updates
+    chooseDate(0);
+    chooseType(0);
+    chooseWatchonly(0);
+    chooseLimit(1);
+    changedAmount();
+    changedPrefix();
+    
+    progress.setValue(1);
+}
+
+void TransactionView::onLazyLoadComplete()
+{
+    // Update status label
+    lazyLoadStatusLabel->setText(tr("All transactions loaded and indexed"));
+    lazyLoadStatusLabel->setStyleSheet("QLabel { color: white; font-weight: bold; }"); // White
+    
+    // Enable all filter controls
+    dateWidget->setEnabled(true);
+    typeWidget->setEnabled(true);
+    watchOnlyWidget->setEnabled(true);
+    limitWidget->setEnabled(true);
+    amountWidget->setEnabled(true);
+    addressWidget->setEnabled(true);
+    addressOnlyCheckbox->setEnabled(true);
+    
+    // Keep status visible so user knows all transactions are loaded
+}
+
+void TransactionView::onLazyLoadProgress(int loaded, int total)
+{
+    if (total > 0) {
+        int percent = (loaded * 100) / total;
+        lazyLoadStatusLabel->setText(tr("Loading transactions... %1% complete (filters disabled until complete)").arg(percent));
+    }
 }
 
 void TransactionView::changedAmount()
@@ -407,6 +692,41 @@ void TransactionView::exportClicked()
     else {
         Q_EMIT message(tr("Exporting Successful"), tr("The transaction history was successfully saved to %1.").arg(filename),
             CClientUIInterface::MSG_INFORMATION);
+    }
+}
+
+void TransactionView::handleTransactionClicked(const QModelIndex &index)
+{
+    if (!index.isValid() || !transactionProxyModel)
+        return;
+    
+    // Map proxy index to source model index
+    QModelIndex sourceIndex = transactionProxyModel->mapToSource(index);
+    if (!sourceIndex.isValid())
+        return;
+    
+    // Get the source model and toggle expand/collapse
+    TransactionTableModel* sourceModel = qobject_cast<TransactionTableModel*>(transactionProxyModel->sourceModel());
+    if (sourceModel) {
+        sourceModel->toggleTransactionExpanded(sourceIndex);
+    }
+}
+
+void TransactionView::toggleExpandAll()
+{
+    if (!transactionProxyModel)
+        return;
+    
+    // Get the source model
+    TransactionTableModel* sourceModel = qobject_cast<TransactionTableModel*>(transactionProxyModel->sourceModel());
+    if (sourceModel) {
+        // Find the button and toggle its state
+        QPushButton* button = findChild<QPushButton*>("expandAllButton");
+        if (button) {
+            bool expanding = button->isChecked();
+            button->setText(expanding ? tr("Collapse All") : tr("Expand All"));
+            sourceModel->setAllTransactionsExpanded(expanding);
+        }
     }
 }
 

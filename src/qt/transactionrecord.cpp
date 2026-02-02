@@ -29,204 +29,321 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
 
 /*
  * Decompose CWallet transaction to model transaction records.
+ * Creates one parent record per txid showing total, with child records for each input/output.
  */
 QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTransaction &arcTx)
 {
     QList<TransactionRecord> parts;
-    QList<TransactionRecord> partsChange;
+    
+    // Structure to track inputs/outputs by address
+    struct AddressGroup {
+        std::string address;
+        CAmount amount = 0;
+        int count = 0;
+        std::string memo;
+        std::string memohex;
+        bool involvesWatchAddress = false;
+        bool isInput = false; // true for inputs (spent from), false for outputs (received)
+        bool belongsToWallet = false; // true if this output belongs to the wallet (change/internal)
+    };
+    
+    std::vector<AddressGroup> inputGroups;
+    std::vector<AddressGroup> outputGroups;
+    std::map<std::string, int> inputMap; // address -> index in inputGroups
+    std::map<std::string, int> outputMap; // address -> index in outputGroups
+    
+    CAmount totalInputs = 0;
+    CAmount totalOutputs = 0;
 
+    // Process inputs (money being spent)
     if (arcTx.spentFrom.size() > 0) {
-
-        for (int i = 0; i < arcTx.vTSend.size(); i++) {
-            auto tx = TransactionRecord();
-            tx.archiveType = arcTx.archiveType;
-            tx.hash = arcTx.txid;
-            tx.time = arcTx.nTime;
-            tx.address = arcTx.vTSend[i].encodedAddress;
-            tx.debit = arcTx.vTSend[i].amount;
-            tx.idx = arcTx.vTSend[i].vout;
-            tx.involvesWatchAddress = !arcTx.vTSend[i].mine;
-            tx.involvesOwnAddress = arcTx.receivedIn.find(arcTx.vTSend[i].encodedAddress) != arcTx.receivedIn.end();
-
-            bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vTSend[i].encodedAddress) != arcTx.spentFrom.end();
-            if (change || tx.involvesOwnAddress) {
-                tx.type = TransactionRecord::SendToSelf;
-                partsChange.append(tx);
-            } else {
-                tx.type = TransactionRecord::SendToAddress;
-                parts.append(tx);
+        // Transparent spends are inputs
+        for (int i = 0; i < arcTx.vTSpend.size(); i++) {
+            std::string addr = arcTx.vTSpend[i].encodedAddress;
+            if (inputMap.find(addr) == inputMap.end()) {
+                inputMap[addr] = inputGroups.size();
+                AddressGroup group;
+                group.address = addr;
+                group.isInput = true;
+                inputGroups.push_back(group);
             }
+            int idx = inputMap[addr];
+            inputGroups[idx].amount += arcTx.vTSpend[i].amount;
+            inputGroups[idx].count++;
+            inputGroups[idx].involvesWatchAddress = inputGroups[idx].involvesWatchAddress || !arcTx.vTSpend[i].spendable;
+            totalInputs += arcTx.vTSpend[i].amount;
         }
 
-        for (int i = 0; i < arcTx.vZsSend.size(); i++) {
-            auto tx = TransactionRecord();
-            tx.archiveType = arcTx.archiveType;
-            tx.hash = arcTx.txid;
-            tx.time = arcTx.nTime;
-            tx.address = arcTx.vZsSend[i].encodedAddress;
-            tx.credit = -arcTx.vZsSend[i].amount;
-            tx.idx = arcTx.vZsSend[i].shieldedOutputIndex;
-            tx.involvesWatchAddress = !arcTx.vZsSend[i].mine;
-            tx.involvesOwnAddress = arcTx.receivedIn.find(arcTx.vZsSend[i].encodedAddress) != arcTx.receivedIn.end();
-            tx.memohex = arcTx.vZsSend[i].memo;
-
-            if (arcTx.vZsSend[i].memoStr.length() != 0) {
-                tx.memo = arcTx.vZsSend[i].memoStr;
+        // Sapling spends are inputs
+        for (int i = 0; i < arcTx.vZsSpend.size(); i++) {
+            std::string addr = arcTx.vZsSpend[i].encodedAddress;
+            if (inputMap.find(addr) == inputMap.end()) {
+                inputMap[addr] = inputGroups.size();
+                AddressGroup group;
+                group.address = addr;
+                group.isInput = true;
+                inputGroups.push_back(group);
             }
-
-            bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsSend[i].encodedAddress) != arcTx.spentFrom.end();
-            if (change || tx.involvesOwnAddress) {
-                if (arcTx.vZsSend[i].memoStr.length() == 0) {
-                    tx.type = TransactionRecord::SendToSelf;
-                } else {
-                    tx.type = TransactionRecord::SendToSelfWithMemo;
-                }
-                partsChange.append(tx);
-            } else {
-                if (arcTx.vZsSend[i].memoStr.length() == 0) {
-                    tx.type = TransactionRecord::SendToAddress;
-                } else {
-                    tx.type = TransactionRecord::SendToAddressWithMemo;
-                }
-                parts.append(tx);
-            }
+            int idx = inputMap[addr];
+            inputGroups[idx].amount += arcTx.vZsSpend[i].amount;
+            inputGroups[idx].count++;
+            inputGroups[idx].involvesWatchAddress = inputGroups[idx].involvesWatchAddress || !arcTx.vZsSpend[i].spendable;
+            totalInputs += arcTx.vZsSpend[i].amount;
         }
 
-        for (int i = 0; i < arcTx.vZoSend.size(); i++) {
-            auto tx = TransactionRecord();
-            tx.archiveType = arcTx.archiveType;
-            tx.hash = arcTx.txid;
-            tx.time = arcTx.nTime;
-            tx.address = arcTx.vZoSend[i].encodedAddress;
-            tx.credit = -arcTx.vZoSend[i].amount;
-            tx.idx = arcTx.vZoSend[i].shieldedActionIndex;
-            tx.involvesWatchAddress = !arcTx.vZoSend[i].mine;
-            tx.involvesOwnAddress = arcTx.receivedIn.find(arcTx.vZoSend[i].encodedAddress) != arcTx.receivedIn.end();
-            tx.memohex = arcTx.vZoSend[i].memo;
-
-            if (arcTx.vZoSend[i].memoStr.length() != 0) {
-                tx.memo = arcTx.vZoSend[i].memoStr;
+        // Orchard spends are inputs
+        for (int i = 0; i < arcTx.vZoSpend.size(); i++) {
+            std::string addr = arcTx.vZoSpend[i].encodedAddress;
+            if (inputMap.find(addr) == inputMap.end()) {
+                inputMap[addr] = inputGroups.size();
+                AddressGroup group;
+                group.address = addr;
+                group.isInput = true;
+                inputGroups.push_back(group);
             }
-
-            bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZoSend[i].encodedAddress) != arcTx.spentFrom.end();
-            if (change || tx.involvesOwnAddress) {
-                if (arcTx.vZoSend[i].memoStr.length() == 0) {
-                    tx.type = TransactionRecord::SendToSelf;
-                } else {
-                    tx.type = TransactionRecord::SendToSelfWithMemo;
-                }
-                partsChange.append(tx);
-            } else {
-                if (arcTx.vZoSend[i].memoStr.length() == 0) {
-                    tx.type = TransactionRecord::SendToAddress;
-                } else {
-                    tx.type = TransactionRecord::SendToAddressWithMemo;
-                }
-                parts.append(tx);
-            }
-        }
-
-    }
-
-
-    for (int i = 0; i < arcTx.vTReceived.size(); i++) {
-        auto tx = TransactionRecord();
-        tx.archiveType = arcTx.archiveType;
-        tx.hash = arcTx.txid;
-        tx.time = arcTx.nTime;
-        tx.address = arcTx.vTReceived[i].encodedAddress;
-        tx.debit = arcTx.vTReceived[i].amount;
-        tx.idx = arcTx.vTReceived[i].vout;
-        tx.involvesWatchAddress = !arcTx.vTReceived[i].spendable;
-        tx.involvesOwnAddress = arcTx.sendTo.find(arcTx.vTReceived[i].encodedAddress) != arcTx.sendTo.end();
-
-        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vTReceived[i].encodedAddress) != arcTx.spentFrom.end();
-        if (change || tx.involvesOwnAddress) {
-            if (arcTx.coinbase) {
-                tx.type = TransactionRecord::Generated;
-                parts.append(tx);
-            } else {
-                tx.type = TransactionRecord::SendToSelf;
-                partsChange.append(tx);
-            }
-        } else {
-            tx.type = TransactionRecord::RecvWithAddress;
-            parts.append(tx);
+            int idx = inputMap[addr];
+            inputGroups[idx].amount += arcTx.vZoSpend[i].amount;
+            inputGroups[idx].count++;
+            inputGroups[idx].involvesWatchAddress = inputGroups[idx].involvesWatchAddress || !arcTx.vZoSpend[i].spendable;
+            totalInputs += arcTx.vZoSpend[i].amount;
         }
     }
 
-    for (int i = 0; i < arcTx.vZsReceived.size(); i++) {
-        auto tx = TransactionRecord();
-        tx.archiveType = arcTx.archiveType;
-        tx.hash = arcTx.txid;
-        tx.time = arcTx.nTime;
-        tx.address = arcTx.vZsReceived[i].encodedAddress;
-        tx.debit = arcTx.vZsReceived[i].amount;
-        tx.idx = arcTx.vZsReceived[i].shieldedOutputIndex;
-        tx.involvesWatchAddress = !arcTx.vZsReceived[i].spendable;
-        tx.involvesOwnAddress = arcTx.sendTo.find(arcTx.vZsReceived[i].encodedAddress) != arcTx.sendTo.end();
-        tx.memohex = arcTx.vZsReceived[i].memo;
-
-        if (arcTx.vZsReceived[i].memoStr.length() != 0) {
-            tx.memo = arcTx.vZsReceived[i].memoStr;
+    // Process outputs (money being sent to addresses)
+    // Transparent sends
+    for (int i = 0; i < arcTx.vTSend.size(); i++) {
+        std::string addr = arcTx.vTSend[i].encodedAddress;
+        if (outputMap.find(addr) == outputMap.end()) {
+            outputMap[addr] = outputGroups.size();
+            AddressGroup group;
+            group.address = addr;
+            group.isInput = false;
+            // Check if this output belongs to the wallet
+            group.belongsToWallet = (arcTx.receivedIn.find(addr) != arcTx.receivedIn.end());
+            outputGroups.push_back(group);
         }
+        int idx = outputMap[addr];
+        outputGroups[idx].amount += arcTx.vTSend[i].amount;
+        outputGroups[idx].count++;
+        outputGroups[idx].involvesWatchAddress = outputGroups[idx].involvesWatchAddress || !arcTx.vTSend[i].mine;
+        totalOutputs += arcTx.vTSend[i].amount;
+    }
 
-        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsReceived[i].encodedAddress) != arcTx.spentFrom.end();
-        if (change || tx.involvesOwnAddress) {
-            if (arcTx.vZsReceived[i].memoStr.length() == 0) {
-                tx.type = TransactionRecord::SendToSelf;
-            } else {
-                tx.type = TransactionRecord::SendToSelfWithMemo;
-            }
-            partsChange.append(tx);
-        } else {
-            if (arcTx.vZsReceived[i].memoStr.length() == 0) {
-                tx.type = TransactionRecord::RecvWithAddress;
-            } else {
-                tx.type = TransactionRecord::RecvWithAddressWithMemo;
-            }
+    // Sapling sends (outputs to addresses)
+    for (int i = 0; i < arcTx.vZsSend.size(); i++) {
+        std::string addr = arcTx.vZsSend[i].encodedAddress;
+        if (outputMap.find(addr) == outputMap.end()) {
+            outputMap[addr] = outputGroups.size();
+            AddressGroup group;
+            group.address = addr;
+            group.isInput = false;
+            // Check if this output belongs to the wallet
+            group.belongsToWallet = (arcTx.receivedIn.find(addr) != arcTx.receivedIn.end());
+            outputGroups.push_back(group);
+        }
+        int idx = outputMap[addr];
+        outputGroups[idx].amount += arcTx.vZsSend[i].amount;
+        outputGroups[idx].count++;
+        outputGroups[idx].involvesWatchAddress = outputGroups[idx].involvesWatchAddress || !arcTx.vZsSend[i].mine;
+        if (arcTx.vZsSend[i].memoStr.length() != 0 && outputGroups[idx].memo.empty()) {
+            outputGroups[idx].memo = arcTx.vZsSend[i].memoStr;
+            outputGroups[idx].memohex = arcTx.vZsSend[i].memo;
+        }
+        totalOutputs += arcTx.vZsSend[i].amount;
+    }
 
-            parts.append(tx);
+    // Orchard sends (outputs to addresses)
+    for (int i = 0; i < arcTx.vZoSend.size(); i++) {
+        std::string addr = arcTx.vZoSend[i].encodedAddress;
+        if (outputMap.find(addr) == outputMap.end()) {
+            outputMap[addr] = outputGroups.size();
+            AddressGroup group;
+            group.address = addr;
+            group.isInput = false;
+            // Check if this output belongs to the wallet
+            group.belongsToWallet = (arcTx.receivedIn.find(addr) != arcTx.receivedIn.end());
+            outputGroups.push_back(group);
+        }
+        int idx = outputMap[addr];
+        outputGroups[idx].amount += arcTx.vZoSend[i].amount;
+        outputGroups[idx].count++;
+        outputGroups[idx].involvesWatchAddress = outputGroups[idx].involvesWatchAddress || !arcTx.vZoSend[i].mine;
+        if (arcTx.vZoSend[i].memoStr.length() != 0 && outputGroups[idx].memo.empty()) {
+            outputGroups[idx].memo = arcTx.vZoSend[i].memoStr;
+            outputGroups[idx].memohex = arcTx.vZoSend[i].memo;
+        }
+        totalOutputs += arcTx.vZoSend[i].amount;
+    }
+
+    // Calculate wallet balance change (outputs belonging to wallet minus inputs)
+    CAmount walletOutputs = 0;
+    for (const auto& group : outputGroups) {
+        if (group.belongsToWallet) {
+            walletOutputs += group.amount;
+        }
+    }
+    
+    // Net change is wallet outputs minus inputs (all inputs are from wallet)
+    CAmount txTotal = walletOutputs - totalInputs;
+    
+    TransactionRecord parent;
+    parent.hash = arcTx.txid;
+    parent.time = arcTx.nTime;
+    parent.archiveType = arcTx.archiveType;
+    parent.netChange = txTotal;
+    parent.debit = totalOutputs;
+    parent.credit = -totalInputs;
+    parent.isParent = true;
+    parent.isChild = false;
+    parent.parentIdx = -1;
+    parent.groupCount = inputGroups.size() + outputGroups.size();
+    parent.idx = 0;
+    parent.collapsed = false; // Start with children visible
+    
+    // Determine parent type based on transaction characteristics
+    bool hasMemo = false;
+    bool allOutputsToWallet = true;
+    bool hasExternalOutput = false;
+    
+    // Check outputs for wallet ownership and memos
+    for (const auto& group : outputGroups) {
+        if (!group.belongsToWallet) {
+            allOutputsToWallet = false;
+            hasExternalOutput = true;
+        }
+        if (!group.memo.empty()) {
+            hasMemo = true;
+        }
+    }
+    
+    // Also check input memos
+    for (const auto& group : inputGroups) {
+        if (!group.memo.empty()) {
+            hasMemo = true;
+        }
+    }
+    
+    // Determine transaction type based on rules:
+    if (arcTx.coinbase) {
+        // Coinbase transaction
+        parent.type = Generated;
+    } else if (inputGroups.size() == 0) {
+        // No inputs - this is a received transaction
+        parent.type = hasMemo ? RecvWithAddressWithMemo : RecvWithAddress;
+    } else if (allOutputsToWallet && outputGroups.size() > 0) {
+        // All outputs belong to wallet - internal transfer
+        parent.type = hasMemo ? SendToSelfWithMemo : SendToSelf;
+    } else if (hasExternalOutput) {
+        // Has at least one external output - sending transaction
+        parent.type = hasMemo ? SendToAddressWithMemo : SendToAddress;
+    } else {
+        // Unknown case (should not happen)
+        parent.type = Other;
+    }
+    
+    parts.append(parent);
+    int parentIndex = 0;
+    int childIdx = 1;
+
+    // Create child records for outputs first (sends before change)
+    // First, external outputs (sends)
+    for (const auto& group : outputGroups) {
+        if (!group.belongsToWallet) {
+            TransactionRecord child;
+            child.hash = arcTx.txid;
+            child.time = arcTx.nTime;
+            child.archiveType = arcTx.archiveType;
+            child.type = Output;
+            child.address = group.address;
+            child.groupCount = group.count;
+            child.memo = group.memo;
+            child.memohex = group.memohex;
+            child.involvesWatchAddress = group.involvesWatchAddress;
+            child.involvesOwnAddress = false;
+            child.isParent = false;
+            child.isChild = true;
+            child.parentIdx = parentIndex;
+            child.idx = childIdx++;
+            child.debit = group.amount;
+            child.credit = 0;
+            child.netChange = group.amount;
+            
+            parts.append(child);
+        }
+    }
+    
+    // Then, outputs belonging to wallet (change or received)
+    for (const auto& group : outputGroups) {
+        if (group.belongsToWallet) {
+            TransactionRecord child;
+            child.hash = arcTx.txid;
+            child.time = arcTx.nTime;
+            child.archiveType = arcTx.archiveType;
+            child.type = Output;
+            child.address = group.address;
+            child.groupCount = group.count;
+            child.memo = group.memo;
+            child.memohex = group.memohex;
+            child.involvesWatchAddress = group.involvesWatchAddress;
+            child.involvesOwnAddress = true;
+            child.isParent = false;
+            child.isChild = true;
+            child.parentIdx = parentIndex;
+            child.idx = childIdx++;
+            child.debit = 0;
+            child.credit = group.amount;
+            child.netChange = group.amount;
+            
+            parts.append(child);
         }
     }
 
-    for (int i = 0; i < arcTx.vZoReceived.size(); i++) {
-        auto tx = TransactionRecord();
-        tx.archiveType = arcTx.archiveType;
-        tx.hash = arcTx.txid;
-        tx.time = arcTx.nTime;
-        tx.address = arcTx.vZoReceived[i].encodedAddress;
-        tx.debit = arcTx.vZoReceived[i].amount;
-        tx.idx = arcTx.vZoReceived[i].shieldedActionIndex;
-        tx.involvesWatchAddress = !arcTx.vZoReceived[i].spendable;
-        tx.involvesOwnAddress = arcTx.sendTo.find(arcTx.vZoReceived[i].encodedAddress) != arcTx.sendTo.end();
-        tx.memohex = arcTx.vZoReceived[i].memo;
-
-        if (arcTx.vZoReceived[i].memoStr.length() != 0) {
-            tx.memo = arcTx.vZoReceived[i].memoStr;
-        }
-
-        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZoReceived[i].encodedAddress) != arcTx.spentFrom.end();
-        if (change || tx.involvesOwnAddress) {
-            if (arcTx.vZoReceived[i].memoStr.length() == 0) {
-                tx.type = TransactionRecord::SendToSelf;
-            } else {
-                tx.type = TransactionRecord::SendToSelfWithMemo;
-            }
-            partsChange.append(tx);
-        } else {
-            if (arcTx.vZoReceived[i].memoStr.length() == 0) {
-                tx.type = TransactionRecord::RecvWithAddress;
-            } else {
-                tx.type = TransactionRecord::RecvWithAddressWithMemo;
-            }
-
-            parts.append(tx);
-        }
+    // Create child records for inputs
+    for (const auto& group : inputGroups) {
+        TransactionRecord child;
+        child.hash = arcTx.txid;
+        child.time = arcTx.nTime;
+        child.archiveType = arcTx.archiveType;
+        child.type = Input;
+        child.address = group.address;
+        child.groupCount = group.count;
+        child.memo = group.memo;
+        child.memohex = group.memohex;
+        child.involvesWatchAddress = group.involvesWatchAddress;
+        child.isParent = false;
+        child.isChild = true;
+        child.parentIdx = parentIndex;
+        child.idx = childIdx++;
+        child.debit = 0;
+        child.credit = -group.amount; // Negative for spent
+        child.netChange = -group.amount;
+        
+        parts.append(child);
     }
-
-    if (parts.size() == 0) {
-        parts.append(partsChange);
+    
+    // Add fee record if there are inputs and fee is non-zero (fee = total outputs - total inputs)
+    if (inputGroups.size() > 0) {
+        CAmount fee = totalOutputs - totalInputs;
+        if (fee != 0) {
+            TransactionRecord feeChild;
+            feeChild.hash = arcTx.txid;
+            feeChild.time = arcTx.nTime;
+            feeChild.archiveType = arcTx.archiveType;
+            feeChild.type = Fee;
+            feeChild.address = "";
+            feeChild.groupCount = 0;
+            feeChild.involvesWatchAddress = false;
+            feeChild.involvesOwnAddress = false;
+            feeChild.isParent = false;
+            feeChild.isChild = true;
+            feeChild.parentIdx = parentIndex;
+            feeChild.idx = childIdx++;
+            feeChild.debit = fee;
+            feeChild.credit = 0;
+            feeChild.netChange = fee;
+            
+            parts.append(feeChild);
+        }
     }
 
     return parts;

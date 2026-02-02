@@ -8,6 +8,8 @@
 #include "amount.h"
 
 #include <QDateTime>
+#include <QSet>
+#include <QString>
 #include <QSortFilterProxyModel>
 
 /** Filter the transaction list according to pre-specified rules. */
@@ -49,10 +51,17 @@ public:
     /** Set whether to show conflicted transactions. */
     void setShowInactive(bool showInactive);
 
+    /** Set whether to show only parent records (filter out children). */
+    void setShowParentsOnly(bool parentsOnly);
+
+    /** Set whether to filter records to only show matching address (not full parent). */
+    void setShowAddressOnly(bool addressOnly);
+
     int rowCount(const QModelIndex &parent = QModelIndex()) const;
 
 protected:
     bool filterAcceptsRow(int source_row, const QModelIndex & source_parent) const;
+    bool lessThan(const QModelIndex &left, const QModelIndex &right) const;
 
 private:
     QDateTime dateFrom;
@@ -63,6 +72,14 @@ private:
     CAmount minAmount;
     int limitRows;
     bool showInactive;
+    bool showParentsOnly;
+    bool showAddressOnly;
+    
+    // Cache for parent transactions that have matching children
+    mutable QSet<QString> parentsWithMatchingChildren;
+    mutable QString cachedAddrPrefix;
+    
+    void updateParentChildMatchCache() const;
 };
 
 #endif // KOMODO_QT_TRANSACTIONFILTERPROXY_H

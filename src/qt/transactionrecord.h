@@ -83,20 +83,25 @@ public:
         RecvWithAddressWithMemo,
         RecvFromOther,
         SendToSelf,
-        SendToSelfWithMemo
+        SendToSelfWithMemo,
+        Input,
+        Output,
+        Fee
     };
 
     /** Number of confirmation recommended for accepting a transaction */
     static const int RecommendedNumConfirmations = 6;
 
     TransactionRecord():
-            hash(), time(0), type(Other), address(""), debit(0), credit(0), idx(0), memo("")
+            hash(), time(0), type(Other), address(""), debit(0), credit(0), idx(0), memo(""),
+            isParent(false), isChild(false), parentIdx(-1), groupCount(0), netChange(0), collapsed(true)
     {
     }
 
     TransactionRecord(uint256 _hash, qint64 _time):
             hash(_hash), time(_time), type(Other), address(""), debit(0),
-            credit(0), idx(0), memo("")
+            credit(0), idx(0), memo(""),
+            isParent(false), isChild(false), parentIdx(-1), groupCount(0), netChange(0), collapsed(true)
     {
     }
 
@@ -104,7 +109,8 @@ public:
                 Type _type, const std::string &_address,
                 const CAmount& _debit, const CAmount& _credit):
             hash(_hash), time(_time), type(_type), address(_address), debit(_debit), credit(_credit),
-            idx(0), memo("")
+            idx(0), memo(""),
+            isParent(false), isChild(false), parentIdx(-1), groupCount(0), netChange(0), collapsed(true)
     {
     }
 
@@ -124,6 +130,14 @@ public:
     int archiveType;
     std::string memo;
     std::string memohex;
+    
+    /** Hierarchical grouping support */
+    bool isParent;          // True if this is a summary/parent record
+    bool isChild;           // True if this is a detail/child record
+    int parentIdx;          // Index of parent record (-1 if this is a parent)
+    int groupCount;         // Count of items in this group (for parents)
+    CAmount netChange;      // Net change in wallet balance (credit - debit)
+    bool collapsed;         // True if children are hidden (for parents)
     /**@}*/
 
     /** Subtransaction index, for sort key */
