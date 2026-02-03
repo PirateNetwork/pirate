@@ -115,7 +115,7 @@ RUST_ENV_VARS = \
   CXXFLAGS="$(CXXFLAGS)" \
   TERM=dumb
 RUST_BUILD_OPTS =  --release --target $(RUST_TARGET) --manifest-path $(top_srcdir)/Cargo.toml
-RUST_VENDORED_SOURCES = $(top_srcdir)/depends/$(host)/vendored-sources
+RUST_VENDORED_SOURCES = depends/$(host)/vendored-sources
 
 rust_verbose = $(rust_verbose_@AM_V@)
 rust_verbose_ = $(rust_verbose_@AM_DEFAULT_V@)
