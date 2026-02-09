@@ -13,15 +13,17 @@ use memuse::DynamicUsage;
 use rand_core::OsRng;
 use zcash_encoding::Vector;
 use zcash_primitives::{
+    consensus::{self, BlockHeight},
     keys::OutgoingViewingKey,
     memo::MemoBytes,
     merkle_tree::merkle_path_from_slice,
     sapling::{
         note::ExtractedNoteCommitment,
+        note_encryption::{PreparedIncomingViewingKey, try_sapling_note_decryption, try_sapling_output_recovery},
         prover::TxProver,
         redjubjub::{self, Signature},
         value::{NoteValue, ValueCommitment},
-        Diversifier, Node, Note, PaymentAddress, ProofGenerationKey, Rseed,
+        Diversifier, Node, Note, PaymentAddress, ProofGenerationKey, Rseed, SaplingIvk,
         NOTE_COMMITMENT_TREE_DEPTH,
     },
     transaction::{
@@ -869,3 +871,151 @@ impl BatchValidator {
         }
     }
 }
+
+// Sapling note decryption functions for CXX bridge
+impl Output {
+    /// Attempt to decrypt a Sapling output using an Incoming Viewing Key (IVK).
+    /// 
+    /// Note: PirateNetwork's librustzcash fork has disabled strict ZIP 212 enforcement.
+    /// The library accepts both 0x01 (pre-ZIP212) and 0x02 (post-ZIP212) lead bytes
+    /// at all heights, regardless of network upgrade activation. We use a fixed height
+    /// since it doesn't affect validation.
+    pub(crate) fn try_decrypt_output_ivk(
+        &self,
+        ivk_bytes: &[u8; 32],
+        value_out: &mut u64,
+        diversifier_out: &mut [u8; 11],
+        pk_d_out: &mut [u8; 32],
+        memo_out: &mut [u8; 512],
+        rseed_out: &mut [u8; 32],
+        leadbyte_out: &mut u8,
+        cmu_out: &mut [u8; 32],
+        rcm_out: &mut [u8; 32],
+    ) -> bool {
+        // Convert bytes to SaplingIvk using de_ct and jubjub::Scalar
+        let ivk_scalar = match de_ct(jubjub::Scalar::from_bytes(ivk_bytes)) {
+            Some(s) => s,
+            None => return false,
+        };
+        let ivk = SaplingIvk(ivk_scalar);
+        
+        // Prepare the IVK for decryption
+        let prepared_ivk = PreparedIncomingViewingKey::new(&ivk);
+        
+        // Use MainNetwork with arbitrary height (not used for validation by PirateNetwork fork)
+        let network = consensus::Network::MainNetwork;
+        let height = BlockHeight::from_u32(0);
+        
+        // Attempt decryption with IVK
+        let decrypted = match try_sapling_note_decryption(
+            &network,
+            height,
+            &prepared_ivk,
+            &self.0,
+        ) {
+            Some(r) => r,
+            None => return false,
+        };
+        
+        // decrypted is a tuple: (Note, PaymentAddress, MemoBytes)
+        // Extract value using inner() method to get u64
+        *value_out = decrypted.0.value().inner();
+        *diversifier_out = decrypted.1.diversifier().0;
+        // Extract pk_d bytes - PaymentAddress has to_bytes() method
+        let addr_bytes = decrypted.1.to_bytes();
+        // Payment address is 11 bytes diversifier + 32 bytes pk_d
+        pk_d_out.copy_from_slice(&addr_bytes[11..43]);
+        *memo_out = *decrypted.2.as_array();
+        
+        // Determine leadbyte and extract rseed bytes based on Rseed enum
+        match decrypted.0.rseed() {
+            Rseed::BeforeZip212(rcm) => {
+                *rseed_out = rcm.to_bytes();
+                *leadbyte_out = 0x01; // BeforeZip212 format
+                // For BeforeZip212, rseed IS the rcm
+                *rcm_out = rcm.to_bytes();
+            }
+            Rseed::AfterZip212(rseed_bytes) => {
+                rseed_out.copy_from_slice(rseed_bytes);
+                *leadbyte_out = 0x02; // AfterZip212 (ZIP 212) format
+                // For AfterZip212, compute rcm using PRF^expand
+                let rcm = decrypted.0.rcm();
+                *rcm_out = rcm.to_bytes();
+            }
+        }
+        
+        // Get the note commitment from the output (already computed)
+        *cmu_out = self.0.cmu().to_bytes();
+        
+        true
+    }
+
+    /// Attempt to decrypt a Sapling output using an Outgoing Viewing Key (OVK).
+    /// 
+    /// Note: PirateNetwork's librustzcash fork has disabled strict ZIP 212 enforcement.
+    /// The library accepts both 0x01 (pre-ZIP212) and 0x02 (post-ZIP212) lead bytes
+    /// at all heights, regardless of network upgrade activation. We use a fixed height
+    /// since it doesn't affect validation.
+    pub(crate) fn try_decrypt_output_ovk(
+        &self,
+        ovk_bytes: &[u8; 32],
+        value_out: &mut u64,
+        diversifier_out: &mut [u8; 11],
+        pk_d_out: &mut [u8; 32],
+        memo_out: &mut [u8; 512],
+        rseed_out: &mut [u8; 32],
+        leadbyte_out: &mut u8,
+        cmu_out: &mut [u8; 32],
+        rcm_out: &mut [u8; 32],
+    ) -> bool {
+        let ovk = OutgoingViewingKey(*ovk_bytes);
+        
+        // Use MainNetwork with arbitrary height (not used for validation by PirateNetwork fork)
+        let network = consensus::Network::MainNetwork;
+        let height = BlockHeight::from_u32(0);
+        
+        // Attempt decryption with OVK using the correct API
+        let decrypted = match try_sapling_output_recovery(
+            &network,
+            height,
+            &ovk,
+            &self.0,
+        ) {
+            Some(r) => r,
+            None => return false,
+        };
+        
+        // decrypted is a tuple: (Note, PaymentAddress, MemoBytes)
+        // Extract value using inner() method to get u64
+        *value_out = decrypted.0.value().inner();
+        *diversifier_out = decrypted.1.diversifier().0;
+        // Extract pk_d bytes - PaymentAddress has to_bytes() method
+        let addr_bytes = decrypted.1.to_bytes();
+        // Payment address is 11 bytes diversifier + 32 bytes pk_d
+        pk_d_out.copy_from_slice(&addr_bytes[11..43]);
+        *memo_out = *decrypted.2.as_array();
+        
+        // Determine leadbyte and extract rseed bytes based on Rseed enum
+        match decrypted.0.rseed() {
+            Rseed::BeforeZip212(rcm) => {
+                *rseed_out = rcm.to_bytes();
+                *leadbyte_out = 0x01; // BeforeZip212 format
+                // For BeforeZip212, rseed IS the rcm
+                *rcm_out = rcm.to_bytes();
+            }
+            Rseed::AfterZip212(rseed_bytes) => {
+                rseed_out.copy_from_slice(rseed_bytes);
+                *leadbyte_out = 0x02; // AfterZip212 (ZIP 212) format
+                // For AfterZip212, compute rcm using PRF^expand
+                let rcm = decrypted.0.rcm();
+                *rcm_out = rcm.to_bytes();
+            }
+        }
+        
+        // Get the note commitment from the output (already computed)
+        *cmu_out = self.0.cmu().to_bytes();
+        
+        true
+    }
+}
+

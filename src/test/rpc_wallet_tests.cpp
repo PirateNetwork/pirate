@@ -1319,24 +1319,19 @@ BOOST_AUTO_TEST_CASE(rpc_z_sendmany_taddr_to_sapling)
     ss >> tx;
     BOOST_ASSERT(!tx.vShieldedOutput.empty());
 
+    // Use new Rust-based decryption API
+    auto vOutputs = tx.GetSaplingOutputs();
+    
     // We shouldn't be able to decrypt with the empty ovk
-    BOOST_CHECK(!AttemptSaplingOutDecryption(
-        tx.vShieldedOutput[0].outCiphertext,
-        uint256(),
-        tx.vShieldedOutput[0].cv,
-        tx.vShieldedOutput[0].cm,
-        tx.vShieldedOutput[0].ephemeralKey));
+    auto maybe_pt_empty = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[0], uint256());
+    BOOST_CHECK(!maybe_pt_empty);
 
     // We should be able to decrypt the outCiphertext with the ovk
     // generated for transparent addresses
     HDSeed seed;
     BOOST_ASSERT(pwalletMain->GetHDSeed(seed));
-    BOOST_CHECK(AttemptSaplingOutDecryption(
-        tx.vShieldedOutput[0].outCiphertext,
-        ovkForShieldingFromTaddr(seed),
-        tx.vShieldedOutput[0].cv,
-        tx.vShieldedOutput[0].cm,
-        tx.vShieldedOutput[0].ephemeralKey));
+    auto maybe_pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[0], ovkForShieldingFromTaddr(seed));
+    BOOST_CHECK(maybe_pt && maybe_pt.value().pk_d.has_value());
 
     // Tear down
     chainActive.SetTip(NULL);

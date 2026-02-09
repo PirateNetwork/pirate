@@ -6110,24 +6110,11 @@ void CWallet::UpdateSaplingNullifierNoteMapWithTx(CWalletTx* wtx) {
             if (mapSaplingFullViewingKeys.count(nd.ivk) != 0) {
                 SaplingExtendedFullViewingKey extfvk = mapSaplingFullViewingKeys.at(nd.ivk);
 
-                //Cipher Text
-                libzcash::SaplingEncCiphertext encCiphertext;
-                auto rustEncCiphertext = vOutputs[op.n].enc_ciphertext();
-                std::memcpy(&encCiphertext, &rustEncCiphertext, 580);
-
-                auto ephemeralKey = uint256::FromRawBytes(vOutputs[op.n].ephemeral_key());
-                auto cmu = uint256::FromRawBytes(vOutputs[op.n].cmu());
-
-                auto optDeserialized = SaplingNotePlaintext::attempt_sapling_enc_decryption_deserialization(encCiphertext, nd.ivk, ephemeralKey);
+                // Use Rust decryption
+                auto optPlaintext = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[op.n], nd.ivk);
 
                 // The transaction would not have entered the wallet unless
                 // its plaintext had been successfully decrypted previously.
-                assert(optDeserialized != std::nullopt);
-
-                auto optPlaintext = SaplingNotePlaintext::plaintext_checks_without_height(*optDeserialized, nd.ivk, ephemeralKey, cmu);
-
-                // An item in mapSaplingNoteData must have already been successfully decrypted,
-                // otherwise the item would not exist in the first place.
                 assert(optPlaintext != std::nullopt);
 
                 auto optNote = optPlaintext.value().note(nd.ivk);
@@ -6201,7 +6188,7 @@ void CWallet::UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx) {
                auto note = optDeserialized.value().note().value();
 
 
-               auto optNullifier = note.GetNullifier(extfvk.fvk);
+               auto optNullifier = note.nullifier(extfvk.fvk);
                if (!optNullifier) {
                    // This should not happen.
                    assert(false);
@@ -6961,7 +6948,7 @@ std::pair<mapOrchardNoteData_t, OrchardIncomingViewingKeyMap> CWallet::FindMyOrc
  * @brief Worker thread function for decrypting Sapling notes
  * @param wallet Pointer to the wallet instance
  * @param vIvk Vector of incoming viewing keys to try for decryption
- * @param vSaplingEncryptedNote Vector of encrypted Sapling notes to decrypt
+ * @param vOutputs Vector of Sapling outputs to decrypt
  * @param vPosition Vector of output positions within transactions
  * @param vHash Vector of transaction hashes corresponding to notes
  * @param height Block height for validation context
@@ -6977,7 +6964,7 @@ std::pair<mapOrchardNoteData_t, OrchardIncomingViewingKeyMap> CWallet::FindMyOrc
 static void DecryptSaplingNoteWorker(
     const CWallet *wallet,
     const std::vector<const SaplingIncomingViewingKey*> vIvk,
-    const std::vector<SaplingEncryptedNote> vSaplingEncryptedNote,
+    const std::vector<const sapling::Output*> vSaplingOutput,
     const std::vector<uint32_t> vPosition,
     const std::vector<uint256> vHash,
     const int &height,
@@ -6986,20 +6973,17 @@ static void DecryptSaplingNoteWorker(
     int threadNumber)
 {
     for (int i = 0; i < vIvk.size(); i++) {
-        const SaplingIncomingViewingKey ivk = *vIvk[i];
-        const libzcash::SaplingEncCiphertext encCiphertext = vSaplingEncryptedNote[i].encCiphertext;
-        const uint256 ephemeralKey = vSaplingEncryptedNote[i].ephemeralKey;
-        const uint256 cmu = vSaplingEncryptedNote[i].cmu;
-        const uint256 hash = vHash[i];
 
-        auto result = SaplingNotePlaintext::decrypt(Params().GetConsensus(), height, encCiphertext, ivk, ephemeralKey, cmu);
+        SaplingIncomingViewingKey ivk = *vIvk[i];
+        
+        auto result = SaplingNotePlaintext::AttemptDecryptSaplingOutput(*vSaplingOutput[i], ivk);
         if (result) {
 
             auto address = ivk.address(result.value().d);
 
             // We don't cache the nullifier here as computing it requires knowledge of the note position
             // in the commitment tree, which can only be determined when the transaction has been mined.
-            SaplingOutPoint op {hash, vPosition[i]};
+            SaplingOutPoint op {vHash[i], vPosition[i]};
             SaplingNoteData nd;
             nd.ivk = ivk;
 
@@ -7052,8 +7036,8 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
     std::vector<std::vector<const SaplingIncomingViewingKey*>> vvIvk;
 
     //Create Output thread buckets
-    std::vector<SaplingEncryptedNote> vSaplingEncryptedNote;
-    std::vector<std::vector<SaplingEncryptedNote>> vvSaplingEncryptedNote;
+    std::vector<const sapling::Output*> vSaplingOutput;
+    std::vector<std::vector<const sapling::Output*>> vvSaplingOutput;
 
     //Create transaction position thread buckets
     std::vector<uint32_t> vPosition;
@@ -7065,7 +7049,7 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
 
     for (uint32_t i = 0; i < maxProcessingThreads; i++) {
         vvIvk.emplace_back(vIvk);
-        vvSaplingEncryptedNote.emplace_back(vSaplingEncryptedNote);
+        vvSaplingOutput.emplace_back(vSaplingOutput);
         vvPosition.emplace_back(vPosition);
         vvHash.emplace_back(vHash);
     }
@@ -7078,26 +7062,14 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
         auto vOutputs = vtx[j].GetSaplingOutputs();
 
         for (uint32_t i = 0; i < vOutputs.size(); i++) {
+            auto output = &vOutputs[i];
 
-            //new note
-            SaplingEncryptedNote encrypted_note;
-
-            //Cipher Text
-            auto rustEncCiphertext = vOutputs[i].enc_ciphertext();
-            std::memcpy(&encrypted_note.encCiphertext, &rustEncCiphertext, 580);
-
-            //Ephemeral Key
-            encrypted_note.ephemeralKey = uint256::FromRawBytes(vOutputs[i].ephemeral_key());
-
-            //CMU
-            encrypted_note.cmu = uint256::FromRawBytes(vOutputs[i].cmu());
-
-            //Create a tread entry for every ivk with the current note.
+            //Create a thread entry for every ivk with the current note.
             for (auto it = setSaplingIncomingViewingKeys.begin(); it != setSaplingIncomingViewingKeys.end(); it++) {
                 vvIvk[t].emplace_back(&(*it));
                 vvPosition[t].emplace_back(i);
                 vvHash[t].emplace_back(hash);
-                vvSaplingEncryptedNote[t].emplace_back(encrypted_note);
+                vvSaplingOutput[t].emplace_back(output);
 
                 //Increment ivk vector
                 t++;
@@ -7107,25 +7079,33 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
                 }
             }
         }
-    }
 
-
-    std::vector<boost::thread*> decryptionThreads;
-    for (uint32_t i = 0; i < vvIvk.size(); ++i) {
-        if(!vvIvk[i].empty()) {
-            decryptionThreads.emplace_back(new boost::thread(DecryptSaplingNoteWorker, this, vvIvk[i], vvSaplingEncryptedNote[i], vvPosition[i], vvHash[i], height, &noteData, &viewingKeysToAdd, i));
+        std::vector<boost::thread*> decryptionThreads;
+        for (uint32_t i = 0; i < vvIvk.size(); i++) {
+            if(!vvIvk[i].empty()) {
+                decryptionThreads.emplace_back(new boost::thread(DecryptSaplingNoteWorker, this, vvIvk[i], vvSaplingOutput[i], vvPosition[i], vvHash[i], height, &noteData, &viewingKeysToAdd, i));
+            }
         }
-    }
 
-    // Cleanup
-    for (auto dthread : decryptionThreads) {
-        dthread->join();
-        delete dthread;
+        // Cleanup Threads
+        for (auto dthread : decryptionThreads) {
+            dthread->join();
+            delete dthread;
+        }
+
+        //Reset Vectors for next transaction
+        for (uint32_t i = 0; i < vvIvk.size(); i++) {
+            vvIvk[i].resize(0);
+            vvSaplingOutput[i].resize(0);
+            vvPosition[i].resize(0);
+            vvHash[i].resize(0);
+        }
+
     }
 
     //clean up vectors
     vvIvk.resize(0);
-    vvSaplingEncryptedNote.resize(0);
+    vvSaplingOutput.resize(0);
     vvPosition.resize(0);
     vvHash.resize(0);
 
@@ -8220,18 +8200,10 @@ std::optional<std::pair<
     }
 
     auto vOutputs = this->GetSaplingOutputs();
-    auto encCiphertext = vOutputs[op.n].enc_ciphertext();
-    auto ephemeralKey = uint256::FromRawBytes(vOutputs[op.n].ephemeral_key());
-    auto cmu = uint256::FromRawBytes(vOutputs[op.n].cmu());
     auto nd = this->mapSaplingNoteData.at(op);
 
-    auto maybe_pt = SaplingNotePlaintext::decrypt(
-        params,
-        height,
-        encCiphertext,
-        nd.ivk,
-        ephemeralKey,
-        cmu);
+    // Use Rust decryption
+    auto maybe_pt = SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[op.n], nd.ivk);
     assert(maybe_pt != std::nullopt);
     auto notePt = maybe_pt.value();
 
@@ -8274,27 +8246,15 @@ std::optional<std::pair<
     }
 
     auto vOutputs = this->GetSaplingOutputs();
-    auto encCiphertext = vOutputs[op.n].enc_ciphertext();
-    auto ephemeralKey = uint256::FromRawBytes(vOutputs[op.n].ephemeral_key());
-    auto cmu = uint256::FromRawBytes(vOutputs[op.n].cmu());
     auto nd = this->mapSaplingNoteData.at(op);
 
-    auto optDeserialized = SaplingNotePlaintext::attempt_sapling_enc_decryption_deserialization(encCiphertext, nd.ivk, ephemeralKey);
-
-    // The transaction would not have entered the wallet unless
-    // its plaintext had been successfully decrypted previously.
-    assert(optDeserialized != std::nullopt);
-
-    auto maybe_pt = SaplingNotePlaintext::plaintext_checks_without_height(
-        *optDeserialized,
-        nd.ivk,
-        ephemeralKey,
-        cmu);
+    // Use Rust decryption
+    auto maybe_pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[op.n], nd.ivk);
     assert(maybe_pt != std::nullopt);
     auto notePt = maybe_pt.value();
 
     auto maybe_pa = nd.ivk.address(notePt.d);
-    assert(static_cast<bool>(maybe_pa));
+    assert(maybe_pa != std::nullopt);
     auto pa = maybe_pa.value();
 
     return std::make_pair(notePt, pa);
@@ -8329,36 +8289,20 @@ std::optional<std::pair<
 {
 
     auto vOutputs = this->GetSaplingOutputs();
-    auto encCiphertext = vOutputs[op.n].enc_ciphertext();
-    auto outCiphertext = vOutputs[op.n].out_ciphertext();
-    auto ephemeralKey = uint256::FromRawBytes(vOutputs[op.n].ephemeral_key());
-    auto cmu = uint256::FromRawBytes(vOutputs[op.n].cmu());
-    auto cv = uint256::FromRawBytes(vOutputs[op.n].cv());
 
     for (auto ovk : ovks) {
-        auto outPt = SaplingOutgoingPlaintext::decrypt(
-            outCiphertext,
-            ovk,
-            cv,
-            cmu,
-            ephemeralKey);
-        if (!outPt) {
+        // Use new Orchard-style OVK decryption
+        auto maybe_pt = SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[op.n], ovk);
+        
+        if (!maybe_pt) {
             // Try decrypting with the next ovk
             continue;
         }
 
-        auto maybe_pt = SaplingNotePlaintext::decrypt(
-            params,
-            height,
-            encCiphertext,
-            ephemeralKey,
-            outPt->esk,
-            outPt->pk_d,
-            cmu);
-        assert(static_cast<bool>(maybe_pt));
         auto notePt = maybe_pt.value();
 
-        return std::make_pair(notePt, SaplingPaymentAddress(notePt.d, outPt->pk_d));
+        // For OVK decryption, pk_d is returned in the plaintext
+        return std::make_pair(notePt, SaplingPaymentAddress(notePt.d, notePt.pk_d.value()));
     }
 
     // Couldn't recover with any of the provided OutgoingViewingKeys
@@ -8393,40 +8337,19 @@ std::optional<std::pair<
 {
 
     auto vOutputs = this->GetSaplingOutputs();
-    auto encCiphertext = vOutputs[op.n].enc_ciphertext();
-    auto outCiphertext = vOutputs[op.n].out_ciphertext();
-    auto ephemeralKey = uint256::FromRawBytes(vOutputs[op.n].ephemeral_key());
-    auto cmu = uint256::FromRawBytes(vOutputs[op.n].cmu());
-    auto cv = uint256::FromRawBytes(vOutputs[op.n].cv());
 
+    // Try to decrypt with each ovk
     for (auto ovk : ovks) {
-        auto outPt = SaplingOutgoingPlaintext::decrypt(
-            outCiphertext,
-            ovk,
-            cv,
-            cmu,
-            ephemeralKey);
-        if (!outPt) {
-            // Try decrypting with the next ovk
-            continue;
+        // Use new Orchard-style OVK decryption
+        auto maybe_pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[op.n], ovk);
+        if (maybe_pt) {
+            auto notePt = maybe_pt.value();
+
+            // OVK decryption returns pk_d in the plaintext
+            auto maybe_pa = libzcash::SaplingPaymentAddress(notePt.d, notePt.pk_d.value());
+
+            return std::make_pair(notePt, maybe_pa);
         }
-
-        auto optDeserialized = SaplingNotePlaintext::attempt_sapling_enc_decryption_deserialization(encCiphertext, ephemeralKey, outPt->esk, outPt->pk_d);
-
-        // The transaction would not have entered the wallet unless
-        // its plaintext had been successfully decrypted previously.
-        assert(optDeserialized != std::nullopt);
-
-        auto maybe_pt = SaplingNotePlaintext::plaintext_checks_without_height(
-            *optDeserialized,
-            ephemeralKey,
-            outPt->esk,
-            outPt->pk_d,
-            cmu);
-        assert(static_cast<bool>(maybe_pt));
-        auto notePt = maybe_pt.value();
-
-        return std::make_pair(notePt, SaplingPaymentAddress(notePt.d, outPt->pk_d));
     }
 
     // Couldn't recover with any of the provided OutgoingViewingKeys
@@ -13065,16 +12988,14 @@ void CWallet::GetFilteredNotes(
             SaplingOutPoint op = pair.first;
             SaplingNoteData nd = pair.second;
 
-            // Decrypt the note using the stored incoming viewing key
-            auto encCiphertext = vOutputs[op.n].enc_ciphertext();
-            auto ephemeralKey = uint256::FromRawBytes(vOutputs[op.n].ephemeral_key());
-            auto optDeserialized = SaplingNotePlaintext::attempt_sapling_enc_decryption_deserialization(encCiphertext, nd.ivk, ephemeralKey);
+            // Use Rust decryption
+            auto optPlaintext = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[op.n], nd.ivk);
 
             // The transaction would not have entered the wallet unless
             // its plaintext had been successfully decrypted previously.
-            assert(optDeserialized != std::nullopt);
+            assert(optPlaintext != std::nullopt);
 
-            auto notePt = optDeserialized.value();
+            auto notePt = optPlaintext.value();
             auto maybe_pa = nd.ivk.address(notePt.d);
             assert(static_cast<bool>(maybe_pa));
             auto pa = maybe_pa.value();

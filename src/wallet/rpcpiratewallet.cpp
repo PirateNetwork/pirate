@@ -164,16 +164,8 @@ void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
             for (std::set<uint256>::iterator it = ivks.begin(); it != ivks.end(); it++) {
                 auto ivk = SaplingIncomingViewingKey(*it);
 
-                // Cipher Text
-                libzcash::SaplingEncCiphertext encCiphertext;
-                auto rustEncCiphertext = output.enc_ciphertext();
-                std::memcpy(&encCiphertext, &rustEncCiphertext, 580);
-
-                auto ephemeralKey = uint256::FromRawBytes(output.ephemeral_key());
-                auto cmu = uint256::FromRawBytes(output.cmu());
-
-                auto pt = libzcash::SaplingNotePlaintext::decrypt(params, nHeight,
-                                                                  encCiphertext, ivk, ephemeralKey, cmu);
+                // Use Rust decryption
+                auto pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(output, ivk);
 
                 if (pt) {
                     ivksOut.insert(ivk);
@@ -237,16 +229,8 @@ void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
                 for (std::set<uint256>::iterator it = ivks.begin(); it != ivks.end(); it++) {
                     auto ivk = SaplingIncomingViewingKey(*it);
 
-                    // Cipher Text
-                    libzcash::SaplingEncCiphertext encCiphertext;
-                    auto rustEncCiphertext = output.enc_ciphertext();
-                    std::memcpy(&encCiphertext, &rustEncCiphertext, 580);
-
-                    auto ephemeralKey = uint256::FromRawBytes(output.ephemeral_key());
-                    auto cmu = uint256::FromRawBytes(output.cmu());
-
-                    auto pt = libzcash::SaplingNotePlaintext::decrypt(params, nHeight,
-                                                                      encCiphertext, ivk, ephemeralKey, cmu);
+                    // Use Rust decryption
+                    auto pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(output, ivk);
 
                     if (pt) {
                         ivksOut.insert(ivk);
@@ -289,44 +273,41 @@ void getSaplingSends(const Consensus::Params& params, int nHeight, RpcTx& tx, st
         for (std::set<uint256>::iterator it = ovks.begin(); it != ovks.end(); it++) {
             auto ovk = *it;
             TransactionSendZS send;
-            auto opt = libzcash::SaplingOutgoingPlaintext::decrypt(outCiphertext, ovk, cv, cmu, ephemeralKey);
+            
+            // Use new Orchard-style OVK decryption
+            auto pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(rustOutput, ovk);
 
-            if (opt) {
-                auto opt_unwrapped = opt.value();
-                auto pt = libzcash::SaplingNotePlaintext::decrypt(params, nHeight, encCiphertext, ephemeralKey, opt_unwrapped.esk, opt_unwrapped.pk_d, cmu);
+            if (pt) {
+                ovksOut.insert(ovk);
+                auto pt_unwrapped = pt.value();
+                auto memo = pt_unwrapped.memo();
+                libzcash::SaplingPaymentAddress sentAddr(pt_unwrapped.d, pt_unwrapped.pk_d.value());
 
-                if (pt) {
-                    ovksOut.insert(ovk);
-                    auto pt_unwrapped = pt.value();
-                    auto memo = pt_unwrapped.memo();
-                    libzcash::SaplingPaymentAddress sentAddr(pt_unwrapped.d, opt_unwrapped.pk_d);
+                libzcash::SaplingExtendedSpendingKey extsk;
+                bool addrIsMine = pwalletMain->GetSaplingExtendedSpendingKey(sentAddr, extsk);
 
-                    libzcash::SaplingExtendedSpendingKey extsk;
-                    bool addrIsMine = pwalletMain->GetSaplingExtendedSpendingKey(sentAddr, extsk);
+                send.encodedAddress = EncodePaymentAddress(sentAddr);
+                send.amount = pt_unwrapped.value();
+                send.shieldedOutputIndex = shieldedOutputIndex;
+                send.memo = HexStr(memo);
 
-                    send.encodedAddress = EncodePaymentAddress(sentAddr);
-                    send.amount = pt_unwrapped.value();
-                    send.shieldedOutputIndex = shieldedOutputIndex;
-                    send.memo = HexStr(memo);
-
-                    // If the leading byte is 0xF4 or lower, the memo field should be interpreted as a
-                    // UTF-8-encoded text string.
-                    if (memo[0] <= 0xf4) {
-                        // Trim off trailing zeroes
-                        auto end = std::find_if(
-                            memo.rbegin(),
-                            memo.rend(),
-                            [](unsigned char v) { return v != 0; });
-                        std::string memoStr(memo.begin(), end.base());
-                        if (utf8::is_valid(memoStr)) {
-                            send.memoStr = memoStr;
-                        }
+                // If the leading byte is 0xF4 or lower, the memo field should be interpreted as a
+                // UTF-8-encoded text string.
+                if (memo[0] <= 0xf4) {
+                    // Trim off trailing zeroes
+                    auto end = std::find_if(
+                        memo.rbegin(),
+                        memo.rend(),
+                        [](unsigned char v) { return v != 0; });
+                    std::string memoStr(memo.begin(), end.base());
+                    if (utf8::is_valid(memoStr)) {
+                        send.memoStr = memoStr;
                     }
-
-                    send.mine = addrIsMine;
-                    vSend.push_back(send);
                 }
-                // ovk found no need ot try anymore
+
+                send.mine = addrIsMine;
+                vSend.push_back(send);
+                // ovk found no need to try anymore
                 break;
             }
         }
@@ -340,13 +321,12 @@ void getSaplingReceives(const Consensus::Params& params, int nHeight, RpcTx& tx,
     int shieldedOutputIndex = 0;
     for (const auto& rustOutput : tx.GetSaplingOutputs()) {
         TransactionReceivedZS received;
-        auto cmu = uint256::FromRawBytes(rustOutput.cmu());
-        auto ephemeralKey = uint256::FromRawBytes(rustOutput.ephemeral_key());
-        auto encCiphertext = rustOutput.enc_ciphertext();
 
         for (std::set<uint256>::iterator it = ivks.begin(); it != ivks.end(); it++) {
             auto ivk = SaplingIncomingViewingKey(*it);
-            auto pt = libzcash::SaplingNotePlaintext::decrypt(params, nHeight, encCiphertext, ivk, ephemeralKey, cmu);
+            
+            // Use Rust decryption
+            auto pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(rustOutput, ivk);
 
             if (pt) {
                 ivksOut.insert(ivk);
@@ -2751,11 +2731,8 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
             if (pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
                 bool haveSpendingKey = pwalletMain->HaveSaplingSpendingKey(extfvk);
                 if (haveSpendingKey || fIncludeWatchonly) {
-                    auto cmu = uint256::FromRawBytes(vOutputs[op.n].cmu());
-                    auto ephemeralKey = uint256::FromRawBytes(vOutputs[op.n].ephemeral_key());
-                    auto encCiphertext = vOutputs[op.n].enc_ciphertext();
-
-                    auto pt = libzcash::SaplingNotePlaintext::decrypt(Params().GetConsensus(), txHeight, encCiphertext, ivk, ephemeralKey, cmu);
+                    // Use Rust decryption
+                    auto pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[op.n], ivk);
 
                     if (txType == 0 && pwalletMain->IsLockedNote(op))
                         txType = 3;

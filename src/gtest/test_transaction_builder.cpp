@@ -148,13 +148,10 @@ TEST(TransactionBuilder, Invoke)
 
     // Prepare to spend the note that was just created
     auto vOutputs = tx1.GetSaplingOutputs();
-    auto encCiphertext = vOutputs[0].enc_ciphertext();
-    auto outCiphertext = vOutputs[0].out_ciphertext();
-    auto ephemeralKey = uint256::FromRawBytes(vOutputs[0].ephemeral_key());
     auto cmu = uint256::FromRawBytes(vOutputs[0].cmu());
-    auto cv = uint256::FromRawBytes(vOutputs[0].cv());
 
-    auto maybe_pt = libzcash::SaplingNotePlaintext::decrypt(consensusParams,2,encCiphertext, ivk, ephemeralKey, cmu);
+    // Use Rust decryption
+    auto maybe_pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[0], ivk);
     ASSERT_EQ(static_cast<bool>(maybe_pt), true);
     auto maybe_note = maybe_pt.value().note(ivk);
     ASSERT_EQ(static_cast<bool>(maybe_note), true);
@@ -484,13 +481,10 @@ TEST(TransactionBuilder, ChangeOutput)
 
     // Prepare to spend the note that was just created
     auto vOutputs = tx1.GetSaplingOutputs();
-    auto encCiphertext = vOutputs[0].enc_ciphertext();
-    auto outCiphertext = vOutputs[0].out_ciphertext();
-    auto ephemeralKey = uint256::FromRawBytes(vOutputs[0].ephemeral_key());
     auto cmu = uint256::FromRawBytes(vOutputs[0].cmu());
-    auto cv = uint256::FromRawBytes(vOutputs[0].cv());
 
-    auto maybe_pt = libzcash::SaplingNotePlaintext::decrypt(consensusParams,2,encCiphertext, ivk, ephemeralKey, cmu);
+    // Use Rust decryption
+    auto maybe_pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[0], ivk);
     ASSERT_EQ(static_cast<bool>(maybe_pt), true);
     auto maybe_note = maybe_pt.value().note(ivk);
     ASSERT_EQ(static_cast<bool>(maybe_note), true);
@@ -730,13 +724,10 @@ TEST(TransactionBuilder, SetFee)
 
     // Prepare to spend the note that was just created
     auto vOutputs = tx1.GetSaplingOutputs();
-    auto encCiphertext = vOutputs[0].enc_ciphertext();
-    auto outCiphertext = vOutputs[0].out_ciphertext();
-    auto ephemeralKey = uint256::FromRawBytes(vOutputs[0].ephemeral_key());
     auto cmu = uint256::FromRawBytes(vOutputs[0].cmu());
-    auto cv = uint256::FromRawBytes(vOutputs[0].cv());
 
-    auto maybe_pt = libzcash::SaplingNotePlaintext::decrypt(consensusParams,2,encCiphertext, ivk, ephemeralKey, cmu);
+    // Use Rust decryption
+    auto maybe_pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[0], ivk);
     ASSERT_EQ(static_cast<bool>(maybe_pt), true);
     auto maybe_note = maybe_pt.value().note(ivk);
     ASSERT_EQ(static_cast<bool>(maybe_note), true);

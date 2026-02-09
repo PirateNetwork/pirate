@@ -1,3 +1,16 @@
+// Copyright (c) 2016-2024 The Zcash developers
+// Copyright (c) 2018-2024 The Pirate developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or https://www.opensource.org/licenses/mit-license.php .
+
+/**
+ * @file Note.cpp
+ * @brief Shielded note operations for Sprout, Sapling, and Orchard
+ *
+ * Implements note creation, encryption, decryption, and commitment computation.
+ * Sapling cmu/rcm are cached from Rust decryption to avoid expensive recomputation.
+ */
+
 #include "Note.hpp"
 #include "prf.h"
 #include "crypto/sha256.h"
@@ -9,15 +22,31 @@
 
 #include "zcash/util.h"
 #include "librustzcash.h"
+#include "rust/bridge.h"
 
 using namespace libzcash;
 
+//==============================================================================
+// Sprout Note Implementation
+//==============================================================================
+
+/**
+ * @brief Default constructor - generates random values for testing
+ * Creates a Sprout note with random paying key, nullifier seed, and commitment randomness
+ */
 SproutNote::SproutNote() {
     a_pk = random_uint256();
     rho = random_uint256();
     r = random_uint256();
 }
 
+/**
+ * @brief Compute the note commitment for a Sprout note
+ * @return The SHA256 commitment to this note's contents
+ *
+ * Sprout commitments use SHA256 over the discriminant, paying key,
+ * value, nullifier seed, and randomness.
+ */
 uint256 SproutNote::cm() const {
     unsigned char discriminant = 0xb0;
 
@@ -37,70 +66,27 @@ uint256 SproutNote::cm() const {
     return result;
 }
 
+/**
+ * @brief Compute the nullifier for a Sprout note
+ * @param a_sk The spending key used to compute the nullifier
+ * @return The unique nullifier for this note
+ *
+ * The nullifier is computed using a PRF over the spending key and rho.
+ * Once published, a nullifier prevents double-spending of the note.
+ */
 uint256 SproutNote::nullifier(const SproutSpendingKey& a_sk) const {
     return PRF_nf(a_sk, rho);
 }
 
-// Construct and populate Sapling note for a given payment address and value.
-SaplingNote::SaplingNote(
-    const SaplingPaymentAddress& address,
-    const uint64_t value,
-    Zip212Enabled zip212Enabled
-) : BaseNote(value) {
-    d = address.d;
-    pk_d = address.pk_d;
-    zip_212_enabled = zip212Enabled;
-    if (zip_212_enabled == Zip212Enabled::AfterZip212) {
-        // Per ZIP 212, the rseed field is 32 random bytes.
-        rseed = random_uint256();
-    } else {
-        librustzcash_sapling_generate_r(rseed.begin());
-    }
-}
+//==============================================================================
+// Sprout Note Plaintext Implementation
+//==============================================================================
 
-// Call librustzcash to compute the commitment
-std::optional<uint256> SaplingNote::cmu() const {
-    uint256 result;
-    uint256 rcm_tmp = rcm();
-    if (!librustzcash_sapling_compute_cmu(
-            d.data(),
-            pk_d.begin(),
-            value(),
-            rcm_tmp.begin(),
-            result.begin()
-        ))
-    {
-        return std::nullopt;
-    }
-
-    return result;
-}
-
-// Call librustzcash to compute the nullifier
-std::optional<uint256> SaplingNote::nullifier(const SaplingFullViewingKey& vk, const uint64_t position) const
-{
-    auto ak = vk.ak;
-    auto nk = vk.nk;
-
-    uint256 result;
-    uint256 rcm_tmp = rcm();
-    if (!librustzcash_sapling_compute_nf(
-            d.data(),
-            pk_d.begin(),
-            value(),
-            rcm_tmp.begin(),
-            ak.begin(),
-            nk.begin(),
-            position,
-            result.begin()
-    ))
-    {
-        return std::nullopt;
-    }
-
-    return result;
-}
-
+/**
+ * @brief Construct plaintext from a Sprout note and memo
+ * @param note The note to convert to plaintext
+ * @param memo The memo to attach (512 bytes)
+ */
 SproutNotePlaintext::SproutNotePlaintext(
     const SproutNote& note,
     std::array<unsigned char, ZC_MEMO_SIZE> memo) : BaseNotePlaintext(note, memo)
@@ -109,6 +95,11 @@ SproutNotePlaintext::SproutNotePlaintext(
     r = note.r;
 }
 
+/**
+ * @brief Reconstruct a Sprout note from plaintext
+ * @param addr The payment address to receive the note
+ * @return A SproutNote with the plaintext's value and randomness
+ */
 SproutNote SproutNotePlaintext::note(const SproutPaymentAddress& addr) const
 {
     return SproutNote(addr.a_pk, value_, rho, r);
@@ -150,9 +141,78 @@ ZCNoteEncryption::Ciphertext SproutNotePlaintext::encrypt(ZCNoteEncryption& encr
     return encryptor.encrypt(pk_enc, pt);
 }
 
+//==============================================================================
+// Sapling Note Implementation
+//==============================================================================
 
+/**
+ * @brief Return cached note commitment from Rust decryption
+ * @return The cached commitment, or std::nullopt if not set
+ *
+ * This value is populated during decryption and cached to avoid expensive
+ * recomputation (group operations on BLS12-381 curve).
+ */
+std::optional<uint256> SaplingNote::cmu() const {
+    return cached_cmu;
+}
 
-// Construct and populate SaplingNotePlaintext for a given note and memo.
+/**
+ * @brief Compute the nullifier for a Sapling note
+ * @param vk The full viewing key used to compute the nullifier
+ * @param position The note's position in the commitment tree
+ * @return The unique nullifier, or std::nullopt on failure
+ *
+ * Calls librustzcash to perform the nullifier computation using the
+ * note's diversifier, pk_d, value, cached rcm, and the viewing key components.
+ */
+std::optional<uint256> SaplingNote::nullifier(const SaplingFullViewingKey& vk, const uint64_t position) const
+{
+    auto ak = vk.ak;
+    auto nk = vk.nk;
+
+    uint256 result;
+    uint256 rcm_tmp = rcm();
+    if (!librustzcash_sapling_compute_nf(
+            d.data(),
+            pk_d.begin(),
+            value(),
+            rcm_tmp.begin(),
+            ak.begin(),
+            nk.begin(),
+            position,
+            result.begin()
+    ))
+    {
+        return std::nullopt;
+    }
+
+    return result;
+}
+
+/**
+ * @brief Return cached randomness from Rust decryption
+ * @return The cached rcm value, or zero if not set
+ *
+ * Like cmu(), this value is populated during decryption and cached.
+ * Should always be set when note is created from a decrypted plaintext.
+ */
+uint256 SaplingNote::rcm() const {
+    // Return cached value populated by Rust decryption
+    // This should always be set when note is created from decrypted plaintext
+    return cached_rcm.value_or(uint256());
+}
+
+//==============================================================================
+// Sapling Note Plaintext Implementation
+//==============================================================================
+
+/**
+ * @brief Construct plaintext from a Sapling note and memo
+ * @param note The note to convert to plaintext
+ * @param memo The memo to attach (512 bytes)
+ *
+ * Determines the appropriate leadbyte based on ZIP 212 status.
+ */
 SaplingNotePlaintext::SaplingNotePlaintext(
     const SaplingNote& note,
     std::array<unsigned char, ZC_MEMO_SIZE> memo) : BaseNotePlaintext(note, memo)
@@ -166,7 +226,14 @@ SaplingNotePlaintext::SaplingNotePlaintext(
     }
 }
 
-
+/**
+ * @brief Reconstruct a Sapling note from plaintext
+ * @param ivk The incoming viewing key to derive the payment address
+ * @return A SaplingNote with cached cmu/rcm, or std::nullopt on failure
+ *
+ * Transfers the cached cmu and rcm values from plaintext to the note,
+ * enabling the note to return these values without recomputation.
+ */
 std::optional<SaplingNote> SaplingNotePlaintext::note(const SaplingIncomingViewingKey& ivk) const
 {
     auto addr = ivk.address(d);
@@ -176,305 +243,306 @@ std::optional<SaplingNote> SaplingNotePlaintext::note(const SaplingIncomingViewi
             zip_212_enabled = Zip212Enabled::AfterZip212;
         };
         auto tmp = SaplingNote(d, addr.value().pk_d, value_, rseed, zip_212_enabled);
+        
+        // Transfer cached cmu and rcm from Rust decryption if available
+        if (cmu_) {
+            tmp.set_cached_cmu(cmu_.value());
+        }
+        if (rcm_) {
+            tmp.set_cached_rcm(rcm_.value());
+        }
+        
         return tmp;
     } else {
         return std::nullopt;
     }
 }
 
-std::optional<SaplingOutgoingPlaintext> SaplingOutgoingPlaintext::decrypt(
-    const SaplingOutCiphertext &ciphertext,
-    const uint256& ovk,
-    const uint256& cv,
-    const uint256& cm,
-    const uint256& epk
-)
-{
-    auto pt = AttemptSaplingOutDecryption(ciphertext, ovk, cv, cm, epk);
-    if (!pt) {
-        return std::nullopt;
-    }
-
-    // Deserialize from the plaintext
-    try {
-        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-        ss << pt.value();
-        SaplingOutgoingPlaintext ret;
-        ss >> ret;
-        assert(ss.size() == 0);
-        return ret;
-    } catch (const boost::thread_interrupted&) {
-        throw;
-    } catch (...) {
-        return std::nullopt;
-    }
-}
-
-std::optional<SaplingNotePlaintext> SaplingNotePlaintext::decrypt(
-    const Consensus::Params& params,
-    int height,
-    const SaplingEncCiphertext &ciphertext,
-    const uint256 &ivk,
-    const uint256 &epk,
-    const uint256 &cmu
-)
-{
-    auto ret = attempt_sapling_enc_decryption_deserialization(ciphertext, ivk, epk);
-
-    if (!ret) {
-        return std::nullopt;
-    } else {
-        const SaplingNotePlaintext plaintext = *ret;
-
-        // Check leadbyte is allowed at block height
-        if (!plaintext_version_is_valid(params, height, plaintext.get_leadbyte())) {
-            return std::nullopt;
-        }
-
-        return plaintext_checks_without_height(plaintext, ivk, epk, cmu);
-    }
-}
-
-std::optional<SaplingNotePlaintext> SaplingNotePlaintext::attempt_sapling_enc_decryption_deserialization(
-    const SaplingEncCiphertext &ciphertext,
-    const uint256 &ivk,
-    const uint256 &epk
-)
-{
-    auto encPlaintext = AttemptSaplingEncDecryption(ciphertext, ivk, epk);
-
-    if (!encPlaintext) {
-        return std::nullopt;
-    }
-
-    // Deserialize from the plaintext
-    SaplingNotePlaintext ret;
-    try {
-        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-        ss << encPlaintext.value();
-        ss >> ret;
-        assert(ss.size() == 0);
-        return ret;
-    } catch (const boost::thread_interrupted&) {
-        throw;
-    } catch (...) {
-        return std::nullopt;
-    }
-}
-
-std::optional<SaplingNotePlaintext> SaplingNotePlaintext::plaintext_checks_without_height(
-    const SaplingNotePlaintext &plaintext,
-    const uint256 &ivk,
-    const uint256 &epk,
-    const uint256 &cmu
-)
-{
-    uint256 pk_d;
-    if (!librustzcash_ivk_to_pkd(ivk.begin(), plaintext.d.data(), pk_d.begin())) {
-        return std::nullopt;
-    }
-
-    uint256 cmu_expected;
-    uint256 rcm = plaintext.rcm();
-    if (!librustzcash_sapling_compute_cmu(
-        plaintext.d.data(),
-        pk_d.begin(),
-        plaintext.value(),
-        rcm.begin(),
-        cmu_expected.begin()
-    ))
-    {
-        return std::nullopt;
-    }
-
-    if (cmu_expected != cmu) {
-        return std::nullopt;
-    }
-
-    if (plaintext.get_leadbyte() != 0x01) {
-        // ZIP 212: Check that epk is consistent to guard against linkability
-        // attacks without relying on the soundness of the SNARK.
-        uint256 expected_epk;
-        uint256 esk = plaintext.generate_or_derive_esk();
-        if (!librustzcash_sapling_ka_derivepublic(plaintext.d.data(), esk.begin(), expected_epk.begin())) {
-            return std::nullopt;
-        }
-        if (expected_epk != epk) {
-            return std::nullopt;
-        }
-    }
-
-    return plaintext;
-}
-
-std::optional<SaplingNotePlaintext> SaplingNotePlaintext::decrypt(
-    const Consensus::Params& params,
-    int height,
-    const SaplingEncCiphertext &ciphertext,
-    const uint256 &epk,
-    const uint256 &esk,
-    const uint256 &pk_d,
-    const uint256 &cmu
-)
-{
-    auto ret = attempt_sapling_enc_decryption_deserialization(ciphertext, epk, esk, pk_d);
-
-    if (!ret) {
-        return std::nullopt;
-    } else {
-        SaplingNotePlaintext plaintext = *ret;
-
-        // Check leadbyte is allowed at block height
-        if (!plaintext_version_is_valid(params, height, plaintext.get_leadbyte())) {
-            return std::nullopt;
-        }
-
-        return plaintext_checks_without_height(plaintext, epk, esk, pk_d, cmu);
-    }
-}
-
-std::optional<SaplingNotePlaintext> SaplingNotePlaintext::attempt_sapling_enc_decryption_deserialization(
-    const SaplingEncCiphertext &ciphertext,
-    const uint256 &epk,
-    const uint256 &esk,
-    const uint256 &pk_d
-)
-{
-    auto encPlaintext = AttemptSaplingEncDecryption(ciphertext, epk, esk, pk_d);
-
-    if (!encPlaintext) {
-        return std::nullopt;
-    };
-
-    // Deserialize from the plaintext
-    SaplingNotePlaintext ret;
-    try {
-        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-        ss << encPlaintext.value();
-        ss >> ret;
-        assert(ss.size() == 0);
-        return ret;
-    } catch (const boost::thread_interrupted&) {
-        throw;
-    } catch (...) {
-        return std::nullopt;
-    }
-}
-
-std::optional<SaplingNotePlaintext> SaplingNotePlaintext::plaintext_checks_without_height(
-    const SaplingNotePlaintext &plaintext,
-    const uint256 &epk,
-    const uint256 &esk,
-    const uint256 &pk_d,
-    const uint256 &cmu
-)
-{
-    // Check that epk is consistent with esk
-    uint256 expected_epk;
-    if (!librustzcash_sapling_ka_derivepublic(plaintext.d.data(), esk.begin(), expected_epk.begin())) {
-        return std::nullopt;
-    }
-    if (expected_epk != epk) {
-        return std::nullopt;
-    }
-
-    uint256 cmu_expected;
-    uint256 rcm = plaintext.rcm();
-    if (!librustzcash_sapling_compute_cmu(
-        plaintext.d.data(),
-        pk_d.begin(),
-        plaintext.value(),
-        rcm.begin(),
-        cmu_expected.begin()
-    ))
-    {
-        return std::nullopt;
-    }
-
-    if (cmu_expected != cmu) {
-        return std::nullopt;
-    }
-
-    if (plaintext.get_leadbyte() != 0x01) {
-        // ZIP 212: Additionally check that the esk provided to this function
-        // is consistent with the esk we can derive
-        if (esk != plaintext.generate_or_derive_esk()) {
-            return std::nullopt;
-        }
-    }
-
-    return plaintext;
-}
-
-std::optional<SaplingNotePlaintextEncryptionResult> SaplingNotePlaintext::encrypt(const uint256& pk_d) const
-{
-    // Get the encryptor
-    auto sne = SaplingNoteEncryption::FromDiversifier(d, generate_or_derive_esk());
-    if (!sne) {
-        return std::nullopt;
-    }
-    auto enc = sne.value();
-
-    // Create the plaintext
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-    ss << (*this);
-    SaplingEncPlaintext pt;
-    assert(pt.size() == ss.size());
-    memcpy(&pt[0], &ss[0], pt.size());
-
-    // Encrypt the plaintext
-    auto encciphertext = enc.encrypt_to_recipient(pk_d, pt);
-    if (!encciphertext) {
-        return std::nullopt;
-    }
-    return SaplingNotePlaintextEncryptionResult(encciphertext.value(), enc);
-}
-
-
-SaplingOutCiphertext SaplingOutgoingPlaintext::encrypt(
-        const uint256& ovk,
-        const uint256& cv,
-        const uint256& cm,
-        SaplingNoteEncryption& enc
-    ) const
-{
-    // Create the plaintext
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-    ss << (*this);
-    SaplingOutPlaintext pt;
-    assert(pt.size() == ss.size());
-    memcpy(&pt[0], &ss[0], pt.size());
-
-    return enc.encrypt_to_ourselves(ovk, cv, cm, pt);
-}
-
+/**
+ * @brief Return cached randomness from decryption
+ * @return The cached rcm value, or zero if not set
+ *
+ * This value is populated during AttemptDecryptSaplingOutput.
+ */
 uint256 SaplingNotePlaintext::rcm() const {
-    if (leadbyte != 0x01) {
-        return PRF_rcm(rseed);
-    } else {
-        return rseed;
-    }
+    // Return cached value populated by Rust decryption
+    // This should always be set when plaintext is created from decryption
+    return rcm_.value_or(uint256());
 }
 
-uint256 SaplingNote::rcm() const {
-    if (SaplingNote::get_zip_212_enabled() == libzcash::Zip212Enabled::AfterZip212) {
-        return PRF_rcm(rseed);
-    } else {
-        return rseed;
+/**
+ * @brief Attempt to decrypt a Sapling output using an incoming viewing key
+ * @param output The Sapling output to decrypt
+ * @param ivk The incoming viewing key to use for decryption
+ * @return Decrypted plaintext with cached cmu/rcm, or std::nullopt on failure
+ *
+ * Decryption flow:
+ * 1. Convert ivk (uint256) to std::array for CXX bridge
+ * 2. Call Rust try_decrypt_output_ivk with output parameters
+ * 3. Rust writes decrypted data directly into temporary arrays
+ * 4. Copy results to plaintext struct, including cached cmu/rcm
+ * 5. Return populated plaintext
+ *
+ * All cryptographic operations are performed by Rust for security.
+ */
+std::optional<SaplingNotePlaintext> SaplingNotePlaintext::AttemptDecryptSaplingOutput(
+    const sapling::Output& output,
+    const SaplingIncomingViewingKey& ivk
+)
+{
+    // Datastreams for serialization
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+
+    // Transfer Data
+    std::array<unsigned char, 32> ivk_t;
+    std::array<unsigned char, 11> diversifier_ret;
+    std::array<unsigned char, 32> pk_d_ret;
+    std::array<unsigned char, ZC_MEMO_SIZE> memo_ret;
+    std::array<unsigned char, 32> rseed_ret;
+    unsigned char leadbyte_ret;
+    std::array<unsigned char, 32> cmu_ret;
+    std::array<unsigned char, 32> rcm_ret;
+
+    // Convert ivk to array
+    std::copy(ivk.begin(), ivk.end(), ivk_t.begin());
+
+    // Construct the plaintext from the decrypted data
+    SaplingNotePlaintext ret;
+    ret.pk_d = uint256();
+    ret.cmu_ = uint256();
+    ret.rcm_ = uint256();
+
+    // Call the Rust method on the Output object (it's a member function via CXX bridge)
+    if(!output.try_decrypt_output_ivk(
+        ivk_t,
+        ret.value_,
+        diversifier_ret,
+        pk_d_ret,
+        memo_ret,
+        rseed_ret,
+        leadbyte_ret,
+        cmu_ret,
+        rcm_ret)) {
+            return std::nullopt;
     }
+    
+    // Copy returned data to plaintext
+    std::copy(diversifier_ret.begin(), diversifier_ret.end(), ret.d.begin());
+    std::copy(pk_d_ret.begin(), pk_d_ret.end(), ret.pk_d.value().begin());
+    ret.memo_ = memo_ret;
+    std::copy(rseed_ret.begin(), rseed_ret.end(), ret.rseed.begin());
+    ret.leadbyte = leadbyte_ret;
+    std::copy(cmu_ret.begin(), cmu_ret.end(), ret.cmu_.value().begin());
+    std::copy(rcm_ret.begin(), rcm_ret.end(), ret.rcm_.value().begin());
+
+    return ret;
 }
 
-uint256 SaplingNotePlaintext::generate_or_derive_esk() const {
-    if (leadbyte != 0x01) {
-        return PRF_esk(rseed);
-    } else {
-        uint256 esk;
-        // Pick random esk
-        librustzcash_sapling_generate_r(esk.begin());
-        return esk;
+std::optional<SaplingNotePlaintext> SaplingNotePlaintext::AttemptDecryptSaplingOutput(
+    const sapling::Output& output,
+    const uint256& ovk
+)
+{
+    // Datastreams for serialization
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+
+    // Transfer Data
+    std::array<unsigned char, 32> ovk_t;
+    std::array<unsigned char, 11> diversifier_ret;
+    std::array<unsigned char, 32> pk_d_ret;
+    std::array<unsigned char, ZC_MEMO_SIZE> memo_ret;
+    std::array<unsigned char, 32> rseed_ret;
+    unsigned char leadbyte_ret;
+    std::array<unsigned char, 32> cmu_ret;
+    std::array<unsigned char, 32> rcm_ret;
+
+    // Convert ovk to array
+    std::copy(ovk.begin(), ovk.end(), ovk_t.begin());
+
+    // Construct the plaintext from the decrypted data
+    SaplingNotePlaintext ret;
+    ret.pk_d = uint256();
+    ret.cmu_ = uint256();
+    ret.rcm_ = uint256();
+
+    // Call the Rust method on the Output object (it's a member function via CXX bridge)
+    if(!output.try_decrypt_output_ovk(
+        ovk_t,
+        ret.value_,
+        diversifier_ret,
+        pk_d_ret,
+        memo_ret,
+        rseed_ret,
+        leadbyte_ret,
+        cmu_ret,
+        rcm_ret)) {
+            return std::nullopt;
     }
+    
+    // Copy returned data to plaintext
+    std::copy(diversifier_ret.begin(), diversifier_ret.end(), ret.d.begin());
+    std::copy(pk_d_ret.begin(), pk_d_ret.end(), ret.pk_d.value().begin());
+    ret.memo_ = memo_ret;
+    std::copy(rseed_ret.begin(), rseed_ret.end(), ret.rseed.begin());
+    ret.leadbyte = leadbyte_ret;
+    std::copy(cmu_ret.begin(), cmu_ret.end(), ret.cmu_.value().begin());
+    std::copy(rcm_ret.begin(), rcm_ret.end(), ret.rcm_.value().begin());
+
+    return ret;
 }
 
+//==============================================================================
+// Orchard Note Implementation
+//==============================================================================
+
+/**
+ * @brief Compute the nullifier for an Orchard note
+ * @param fvk The full viewing key used to compute the nullifier
+ * @return The unique nullifier, or std::nullopt on failure
+ *
+ * Uses CDataStream to serialize the viewing key and address for the
+ * Rust bridge, then calls get_nullifer_from_parts to compute the nullifier.
+ */
+std::optional<uint256> OrchardNote::nullifier(const libzcash::OrchardFullViewingKeyPirate& fvk) const
+{
+    // Datastreams for serialization
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream as(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+
+    // Transfer Data
+    libzcash::OrchardFullViewingKey_t fvk_t;
+    libzcash::OrchardPaymentAddress_t address_t;
+    uint256 nullifier_t;
+
+    // Serialize sending data
+    ss << fvk;
+    ss >> fvk_t;
+
+    as << address;
+    as >> address_t;
+
+    if (!get_nullifer_from_parts(
+          fvk_t.begin(),
+          address_t.begin(),
+          value_,
+          rho_.begin(),
+          rseed_.begin(),
+          nullifier_t.begin())) {
+                return std::nullopt;
+    }
+
+    return nullifier_t;
+}
+
+//==============================================================================
+// Orchard Note Plaintext Implementation
+//==============================================================================
+
+/**
+ * @brief Attempt to decrypt an Orchard action using an incoming viewing key
+ * @param action The Orchard action to decrypt
+ * @param ivk The incoming viewing key to use for decryption
+ * @return Decrypted plaintext, or std::nullopt on failure
+ *
+ * All cryptographic operations delegated to Rust try_orchard_decrypt_action_ivk.
+ * Payment address is deserialized from array format after decryption.
+ */
+std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardAction(
+    const orchard_bundle::Action* action,
+    const libzcash::OrchardIncomingViewingKeyPirate ivk
+)
+{
+    // Datastreams for serialization
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+
+    // Transfer Data
+    libzcash::OrchardIncomingViewingKey_t ivk_t;
+    libzcash::OrchardPaymentAddress_t address_t;
+    std::array<unsigned char, ZC_MEMO_SIZE> memo_t;
+    uint64_t value_t;
+    uint256 rho_t;
+    uint256 rseed_t;
+
+    // Serialize sending data
+    ss << ivk;
+    ss >> ivk_t;
+
+    if(!try_orchard_decrypt_action_ivk(
+        action->as_ptr(),
+        ivk_t.begin(),
+        &value_t,
+        address_t.begin(),
+        memo_t.begin(),
+        rho_t.begin(),
+        rseed_t.begin())) {
+          return std::nullopt;
+    }
+
+    // Deserialize returned data
+    libzcash::OrchardPaymentAddressPirate address_r;
+    rs << address_t;
+    rs >> address_r;
+
+    OrchardNotePlaintext ret = OrchardNotePlaintext(
+        value_t, address_r, memo_t, rho_t, rseed_t, 
+        std::nullopt, uint256::FromRawBytes(action->cmx()));
+
+    return ret;
+}
+
+/**
+ * @brief Attempt to decrypt an Orchard action using an outgoing viewing key
+ * @param action The Orchard action to decrypt
+ * @param ovk The outgoing viewing key to use for decryption
+ * @return Decrypted plaintext, or std::nullopt on failure
+ *
+ * Similar to IVK decryption but uses outgoing viewing key.
+ * Allows sender to decrypt their own sent notes.
+ */
+std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardAction(
+    const orchard_bundle::Action* action,
+    const libzcash::OrchardOutgoingViewingKey ovk
+)
+{
+    // Datastreams for serialization
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+
+    // Transfer Data
+    libzcash::OrchardPaymentAddress_t address_t;
+    std::array<unsigned char, ZC_MEMO_SIZE> memo_t;
+    uint64_t value_t;
+    uint256 rho_t;
+    uint256 rseed_t;
+
+    if(!try_orchard_decrypt_action_ovk(
+        action->as_ptr(),
+        ovk.ovk.begin(),
+        &value_t,
+        address_t.begin(),
+        memo_t.begin(),
+        rho_t.begin(),
+        rseed_t.begin())) {
+          return std::nullopt;
+    }
+
+    // Deserialize returned data
+    libzcash::OrchardPaymentAddressPirate address_r;
+    rs << address_t;
+    rs >> address_r;
+
+    OrchardNotePlaintext ret = OrchardNotePlaintext(
+        value_t, address_r, memo_t, rho_t, rseed_t, 
+        std::nullopt, uint256::FromRawBytes(action->cmx()));
+
+    return ret;
+}
+
+/**
+ * @brief Reconstruct an Orchard note from plaintext
+ * @return An OrchardNote with the plaintext's values
+ */
 std::optional<OrchardNote> OrchardNotePlaintext::note() const
 {
     return OrchardNote(address, value_, rho, rseed, cmx);

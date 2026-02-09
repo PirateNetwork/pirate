@@ -440,18 +440,6 @@ public:
     }
 };
 
-/**
- * @brief Encrypted Sapling note information
- * 
- * Contains the encrypted ciphertext, ephemeral key, and commitment
- * for a Sapling note before decryption.
- */
-struct SaplingEncryptedNote {
-    libzcash::SaplingEncCiphertext encCiphertext; //!< Encrypted note ciphertext
-    uint256 ephemeralKey;                         //!< Ephemeral key used for encryption
-    uint256 cmu;                                  //!< Note commitment
-};
-
 class SaplingNoteData
 {
 private:

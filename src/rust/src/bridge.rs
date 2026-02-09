@@ -122,6 +122,34 @@ pub(crate) mod ffi {
         fn out_ciphertext(self: &Output) -> [u8; 80];
         fn zkproof(self: &Output) -> [u8; 192];
         fn serialize_v4(self: &Output, stream: &mut CppStream<'_>) -> Result<()>;
+        
+        fn try_decrypt_output_ivk(
+            self: &Output,
+            ivk_bytes: &[u8; 32],
+
+            value_out: &mut u64,
+            diversifier_out: &mut [u8; 11],
+            pk_d_out: &mut [u8; 32],
+            memo_out: &mut [u8; 512],
+            rseed_out: &mut [u8; 32],
+            leadbyte_out: &mut u8,
+            cmu_out: &mut [u8; 32],
+            rcm_out: &mut [u8; 32],
+        ) -> bool;
+        
+        fn try_decrypt_output_ovk(
+            self: &Output,
+            ovk_bytes: &[u8; 32],
+
+            value_out: &mut u64,
+            diversifier_out: &mut [u8; 11],
+            pk_d_out: &mut [u8; 32],
+            memo_out: &mut [u8; 512],
+            rseed_out: &mut [u8; 32],
+            leadbyte_out: &mut u8,
+            cmu_out: &mut [u8; 32],
+            rcm_out: &mut [u8; 32],
+        ) -> bool;
 
         #[cxx_name = "SaplingBundle"]
         type SaplingBundle;
