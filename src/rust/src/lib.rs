@@ -3,6 +3,7 @@
 
 // Re-export all modules with FFI functions
 pub use crate::rustzcash::*;
+pub use crate::equihash::*;
 pub use crate::orchard_actions::*;
 pub use crate::transaction_ffi::*;
 pub use crate::orchard_wallet::*;
@@ -29,6 +30,8 @@ mod rustzcash;
 mod blake2b;
 #[path = "ed25519.rs"]
 mod ed25519;
+#[path = "equihash.rs"]
+mod equihash;
 #[path = "metrics_ffi.rs"]
 mod metrics_ffi;
 #[path = "streams_ffi.rs"]

@@ -57,7 +57,6 @@ use zcash_primitives::{
     sapling::{
         merkle_hash,
         note::ExtractedNoteCommitment,
-        note_encryption::sapling_ka_agree,
         value::{NoteValue, ValueCommitment},
         redjubjub::{self, Signature},
         spend_sig,
@@ -338,36 +337,6 @@ pub extern "C" fn librustzcash_ivk_to_pkd(
     }
 }
 
-/// Test generation of commitment randomness
-#[test]
-fn test_gen_r() {
-    let mut r1 = [0u8; 32];
-    let mut r2 = [0u8; 32];
-
-    // Verify different r values are generated
-    librustzcash_sapling_generate_r(&mut r1);
-    librustzcash_sapling_generate_r(&mut r2);
-    assert_ne!(r1, r2);
-
-    // Verify r values are valid in the field
-    let _ = jubjub::Scalar::from_bytes(&r1).unwrap();
-    let _ = jubjub::Scalar::from_bytes(&r2).unwrap();
-}
-
-/// Generate uniformly random scalar in Jubjub. The result is of length 32.
-#[no_mangle]
-pub extern "C" fn librustzcash_sapling_generate_r(result: *mut [c_uchar; 32]) {
-    // create random 64 byte buffer
-    let mut rng = OsRng;
-    let mut buffer = [0u8; 64];
-    rng.fill_bytes(&mut buffer);
-
-    // reduce to uniform value
-    let r = jubjub::Scalar::from_bytes_wide(&buffer);
-    let result = unsafe { &mut *result };
-    *result = r.to_bytes();
-}
-
 // Private utility function to get Note from C parameters
 fn priv_get_note(
     diversifier: *const [c_uchar; 11],
@@ -435,112 +404,6 @@ pub extern "C" fn librustzcash_sapling_compute_nf(
     result.copy_from_slice(&nf.0);
 
     true
-}
-
-/// Compute a Sapling commitment.
-///
-/// The `diversifier` parameter must be 11 bytes in length.
-/// The `pk_d` and `r` parameters must be of length 32.
-/// The result is also of length 32 and placed in `result`.
-/// Returns false if `diversifier` or `pk_d` is not valid.
-#[no_mangle]
-pub extern "C" fn librustzcash_sapling_compute_cmu(
-    diversifier: *const [c_uchar; 11],
-    pk_d: *const [c_uchar; 32],
-    value: u64,
-    rcm: *const [c_uchar; 32],
-    result: *mut [c_uchar; 32],
-) -> bool {
-    let note = match priv_get_note(diversifier, pk_d, value, rcm) {
-        Ok(p) => p,
-        Err(_) => return false,
-    };
-
-    let result = unsafe { &mut *result };
-    *result = note.cmu().to_bytes();
-
-    true
-}
-
-#[no_mangle]
-pub extern "C" fn librustzcash_sapling_ka_agree(
-    p: *const [c_uchar; 32],
-    sk: *const [c_uchar; 32],
-    result: *mut [c_uchar; 32],
-) -> bool {
-    // Deserialize p
-    let p = match de_ct(jubjub::ExtendedPoint::from_bytes(unsafe { &*p })) {
-        Some(p) => p,
-        None => return false,
-    };
-
-    // Deserialize sk
-    let sk = match de_ct(jubjub::Scalar::from_bytes(unsafe { &*sk })) {
-        Some(p) => p,
-        None => return false,
-    };
-
-    // Compute key agreement
-    let ka = sapling_ka_agree(&sk, &p);
-
-    // Produce result
-    let result = unsafe { &mut *result };
-    *result = ka.to_bytes();
-
-    true
-}
-
-/// Compute g_d = GH(diversifier) and returns false if the diversifier is
-/// invalid. Computes \[esk\] g_d and writes the result to the 32-byte `result`
-/// buffer. Returns false if `esk` is not a valid scalar.
-#[no_mangle]
-pub extern "C" fn librustzcash_sapling_ka_derivepublic(
-    diversifier: *const [c_uchar; 11],
-    esk: *const [c_uchar; 32],
-    result: *mut [c_uchar; 32],
-) -> bool {
-    let diversifier = Diversifier(unsafe { *diversifier });
-
-    // Compute g_d from the diversifier
-    let g_d = match diversifier.g_d() {
-        Some(g) => g,
-        None => return false,
-    };
-
-    // Deserialize esk
-    let esk = match de_ct(jubjub::Scalar::from_bytes(unsafe { &*esk })) {
-        Some(p) => p,
-        None => return false,
-    };
-
-    let p = g_d * esk;
-
-    let result = unsafe { &mut *result };
-    *result = p.to_bytes();
-
-    true
-}
-
-/// Validates the provided Equihash solution against the given parameters, input
-/// and nonce.
-#[no_mangle]
-pub extern "C" fn librustzcash_eh_isvalid(
-    n: u32,
-    k: u32,
-    input: *const c_uchar,
-    input_len: size_t,
-    nonce: *const c_uchar,
-    nonce_len: size_t,
-    soln: *const c_uchar,
-    soln_len: size_t,
-) -> bool {
-    if (k >= n) || (n % 8 != 0) || (soln_len != (1 << k) * ((n / (k + 1)) as usize + 1) / 8) {
-        return false;
-    }
-    let rs_input = unsafe { slice::from_raw_parts(input, input_len) };
-    let rs_nonce = unsafe { slice::from_raw_parts(nonce, nonce_len) };
-    let rs_soln = unsafe { slice::from_raw_parts(soln, soln_len) };
-    equihash::is_valid_solution(n, k, rs_input, rs_nonce, rs_soln).is_ok()
 }
 
 /// Creates a Sapling verification context. Please free this when you're done.

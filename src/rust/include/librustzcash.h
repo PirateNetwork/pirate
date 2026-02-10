@@ -254,12 +254,6 @@ extern "C" {
         unsigned char *result
     );
 
-    /// Generate uniformly random scalar in Jubjub.
-    /// The result is of length 32.
-    void librustzcash_sapling_generate_r(
-        unsigned char *result
-    );
-
     /// Sprout JoinSplit proof generation.
     void librustzcash_sprout_prove(
         unsigned char *proof_out,

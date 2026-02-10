@@ -22,11 +22,6 @@
 // Sapling
 static const std::string T_SECRET_REGTEST = "cND2ZvtabDbJ1gucx9GWH6XT9kgTAqfb6cotPt5Q5CyxVDhid2EN";
 
-struct TestSaplingNote {
-    libzcash::SaplingNote note;
-    SaplingMerkleTree tree;
-};
-
 const Consensus::Params& RegtestActivateSapling();
 
 void RegtestDeactivateSapling();
@@ -40,11 +35,6 @@ void RegtestDeactivateOrchard();
 libzcash::SaplingExtendedSpendingKey GetTestMasterSaplingSpendingKey();
 
 CKey AddTestCKeyToKeyStore(CBasicKeyStore& keyStore);
-
-/**
- * Generate a dummy SaplingNote and a SaplingMerkleTree with that note's commitment.
- */
-TestSaplingNote GetTestSaplingNote(const libzcash::SaplingPaymentAddress& pa, CAmount value);
 
 CWalletTx GetValidSaplingReceive(const Consensus::Params& consensusParams,
                                  CBasicKeyStore& keyStore,
