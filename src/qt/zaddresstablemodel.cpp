@@ -17,6 +17,9 @@
 #include "wallet/wallet.h"
 
 #include "rpc/server.h"
+#include "chainparams.h"
+#include "consensus/upgrades.h"
+#include "main.h"
 
 #include <QFont>
 #include <QDebug>
@@ -586,7 +589,7 @@ void ZAddressTableModel::updateEntry(const QString &address,
     priv->updateEntry(address, label, isMine, purpose, status);
 }
 
-QString ZAddressTableModel::addRow(const QString &type, const QString &label, const QString &address)
+QString ZAddressTableModel::addRow(const QString &type, const QString &label, const QString &address, bool useDiversified, const QString &addressType)
 {
 
     std::string strLabel = label.toStdString();
@@ -615,17 +618,69 @@ QString ZAddressTableModel::addRow(const QString &type, const QString &label, co
     else if(type == Receive)
     {
         // Generate a new address to associate with given label
-        if ( GetTime() < KOMODO_SAPLING_ACTIVATION )
+        // Check which shielded address type to generate based on network upgrade activation
+        bool saplingActive = false;
+        bool orchardActive = false;
+        
         {
-            strAddress = EncodePaymentAddress(wallet->GenerateNewSproutZKey());
+            LOCK(cs_main);
+            if (chainActive.Tip() != nullptr) {
+                int nHeight = chainActive.Height();
+                const Consensus::Params& consensusParams = Params().GetConsensus();
+                
+                saplingActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_SAPLING);
+                orchardActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_ORCHARD);
+            }
         }
-        else if ( GetTime() < KOMODO_ORCHARD_ACTIVATION )
-        {
-            strAddress = EncodePaymentAddress(wallet->GenerateNewSaplingZKey());
+        
+        // Use user-specified address type if provided, otherwise use default behavior
+        bool useOrchard = false;
+        bool useSapling = false;
+        
+        if (!addressType.isEmpty()) {
+            // User explicitly chose a type
+            if (addressType == "orchard" && orchardActive) {
+                useOrchard = true;
+            } else if (addressType == "sapling" && saplingActive) {
+                useSapling = true;
+            } else {
+                // Invalid or inactive selection
+                editStatus = KEY_GENERATION_FAILURE;
+                return QString();
+            }
+        } else {
+            // Auto-select: prefer Orchard if active, otherwise Sapling
+            if (orchardActive) {
+                useOrchard = true;
+            } else if (saplingActive) {
+                useSapling = true;
+            } else {
+                // Pre-Sapling - Sprout addresses are no longer supported
+                editStatus = KEY_GENERATION_FAILURE;
+                return QString();
+            }
         }
-        else
-        {
-            strAddress = EncodePaymentAddress(wallet->GenerateNewOrchardZKey());
+        
+        if (useOrchard) {
+            // Generate Orchard address
+            if (useDiversified) {
+                strAddress = EncodePaymentAddress(wallet->GenerateNewOrchardDiversifiedAddress());
+            } else {
+                strAddress = EncodePaymentAddress(wallet->GenerateNewOrchardZKey());
+            }
+        }
+        else if (useSapling) {
+            // Generate Sapling address
+            if (useDiversified) {
+                strAddress = EncodePaymentAddress(wallet->GenerateNewSaplingDiversifiedAddress());
+            } else {
+                strAddress = EncodePaymentAddress(wallet->GenerateNewSaplingZKey());
+            }
+        }
+        else {
+            // Should not reach here
+            editStatus = KEY_GENERATION_FAILURE;
+            return QString();
         }
     }
     else
