@@ -38,6 +38,7 @@ bool TransactionFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex &
     QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);
 
     int type = index.data(TransactionTableModel::TypeRole).toInt();
+    int parentType = index.data(TransactionTableModel::ParentTypeRole).toInt();
     QDateTime datetime = index.data(TransactionTableModel::DateRole).toDateTime();
     bool involvesWatchAddress = index.data(TransactionTableModel::WatchonlyRole).toBool();
     QString address = index.data(TransactionTableModel::AddressRole).toString();
@@ -50,7 +51,8 @@ bool TransactionFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex &
         return false;
     if(!showInactive && status == TransactionStatus::Conflicted)
         return false;
-    if(!(TYPE(type) & typeFilter))
+    // Use parent type for filtering so children are included when parent matches
+    if(!(TYPE(parentType) & typeFilter))
         return false;
     if (involvesWatchAddress && watchOnlyFilter == WatchOnlyFilter_No)
         return false;

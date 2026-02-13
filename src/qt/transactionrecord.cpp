@@ -129,6 +129,25 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
         totalOutputs += arcTx.vTSend[i].amount;
     }
 
+    // Transparent receives (for pure receive transactions without spends)
+    for (int i = 0; i < arcTx.vTReceived.size(); i++) {
+        std::string addr = arcTx.vTReceived[i].encodedAddress;
+        // Only add if not already in outputMap (avoid double-counting)
+        if (outputMap.find(addr) == outputMap.end()) {
+            outputMap[addr] = outputGroups.size();
+            AddressGroup group;
+            group.address = addr;
+            group.isInput = false;
+            group.belongsToWallet = true; // Received outputs always belong to wallet
+            group.amount = arcTx.vTReceived[i].amount;
+            group.count = 1;
+            group.involvesWatchAddress = !arcTx.vTReceived[i].spendable;
+            outputGroups.push_back(group);
+            totalOutputs += arcTx.vTReceived[i].amount;
+        }
+        // Skip if already in map - already counted from vTSend
+    }
+
     // Sapling sends (outputs to addresses)
     for (int i = 0; i < arcTx.vZsSend.size(); i++) {
         std::string addr = arcTx.vZsSend[i].encodedAddress;
@@ -152,6 +171,29 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
         totalOutputs += arcTx.vZsSend[i].amount;
     }
 
+    // Sapling receives (for pure receive transactions without spends)
+    for (int i = 0; i < arcTx.vZsReceived.size(); i++) {
+        std::string addr = arcTx.vZsReceived[i].encodedAddress;
+        // Only add if not already in outputMap (avoid double-counting)
+        if (outputMap.find(addr) == outputMap.end()) {
+            outputMap[addr] = outputGroups.size();
+            AddressGroup group;
+            group.address = addr;
+            group.isInput = false;
+            group.belongsToWallet = true; // Received outputs always belong to wallet
+            group.amount = arcTx.vZsReceived[i].amount;
+            group.count = 1;
+            group.involvesWatchAddress = !arcTx.vZsReceived[i].spendable;
+            if (arcTx.vZsReceived[i].memoStr.length() != 0) {
+                group.memo = arcTx.vZsReceived[i].memoStr;
+                group.memohex = arcTx.vZsReceived[i].memo;
+            }
+            outputGroups.push_back(group);
+            totalOutputs += arcTx.vZsReceived[i].amount;
+        }
+        // Skip if already in map - already counted from vZsSend
+    }
+
     // Orchard sends (outputs to addresses)
     for (int i = 0; i < arcTx.vZoSend.size(); i++) {
         std::string addr = arcTx.vZoSend[i].encodedAddress;
@@ -173,6 +215,29 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
             outputGroups[idx].memohex = arcTx.vZoSend[i].memo;
         }
         totalOutputs += arcTx.vZoSend[i].amount;
+    }
+
+    // Orchard receives (for pure receive transactions without spends)
+    for (int i = 0; i < arcTx.vZoReceived.size(); i++) {
+        std::string addr = arcTx.vZoReceived[i].encodedAddress;
+        // Only add if not already in outputMap (avoid double-counting)
+        if (outputMap.find(addr) == outputMap.end()) {
+            outputMap[addr] = outputGroups.size();
+            AddressGroup group;
+            group.address = addr;
+            group.isInput = false;
+            group.belongsToWallet = true; // Received outputs always belong to wallet
+            group.amount = arcTx.vZoReceived[i].amount;
+            group.count = 1;
+            group.involvesWatchAddress = !arcTx.vZoReceived[i].spendable;
+            if (arcTx.vZoReceived[i].memoStr.length() != 0) {
+                group.memo = arcTx.vZoReceived[i].memoStr;
+                group.memohex = arcTx.vZoReceived[i].memo;
+            }
+            outputGroups.push_back(group);
+            totalOutputs += arcTx.vZoReceived[i].amount;
+        }
+        // Skip if already in map - already counted from vZoSend
     }
 
     // Calculate wallet balance change (outputs belonging to wallet minus inputs)

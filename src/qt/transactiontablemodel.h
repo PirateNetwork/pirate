@@ -83,6 +83,8 @@ public:
         IsChildRole,
         /** Index within transaction group (parent=0, children=1,2,3...) */
         IdxRole,
+        /** Parent transaction type (for filtering children by parent type) */
+        ParentTypeRole,
     };
 
     void refreshWallet();

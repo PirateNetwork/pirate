@@ -302,7 +302,7 @@ public:
     /* Load a batch of transactions in background */
     void lazyLoadBatch()
     {
-        const int BATCH_SIZE = 50; // Load 50 transactions per batch
+        const int BATCH_SIZE = 500; // Load 500 transactions per batch
         bool fIncludeWatchonly = true;
         
         QList<RpcArcTransaction> arcTxList;
@@ -1043,8 +1043,8 @@ public:
                         // Just mark that we need to refresh when batch completes
                         parent->fPendingRefresh = true;
                     } else {
-                        // Single update - refresh immediately
-                        Q_EMIT parent->dataChanged(parent->index(0, 0), parent->index(parent->rowCount(QModelIndex())-1, TransactionTableModel::Amount));
+                        // Single update - refresh immediately with layoutChanged to update row count
+                        Q_EMIT parent->layoutChanged();
                     }
                     // Validate inserted records
                     for (int i = lowerIndex; i < lowerIndex + insertSize; i++) {
@@ -1090,6 +1090,8 @@ public:
             
             int removeSize = upperIndex - lowerIndex;
             
+            LogPrintf("=== CT_DELETED: Removing %d records at range [%d, %d)\n", removeSize, lowerIndex, upperIndex);
+            
             // Remove from decomposed cache
             decomposedTxCache.remove(QString::fromStdString(hash.ToString()));
             
@@ -1108,9 +1110,9 @@ public:
         // Erase the records
         cachedWallet.erase(lower, upper);
         
-        // Signal complete refresh instead of row removal
+        // Signal complete refresh with layoutChanged to update row count
         cachedSize = -1;
-        Q_EMIT parent->dataChanged(parent->index(0, 0), parent->index(parent->rowCount(QModelIndex())-1, TransactionTableModel::Amount));
+        Q_EMIT parent->layoutChanged();
         
         // Shift all index values >= upperIndex down by removeSize
         shiftIndexValues(upperIndex, -removeSize);
@@ -1428,7 +1430,7 @@ void TransactionTableModel::setProcessingQueuedTransactions(bool value)
     // When batch processing completes, emit pending refresh if needed
     if (!value && fPendingRefresh) {
         LogPrintf("TransactionTableModel: Batch complete, emitting deferred refresh signal\\n");
-        Q_EMIT dataChanged(index(0, 0), index(rowCount(QModelIndex())-1, Amount));
+        Q_EMIT layoutChanged();
         fPendingRefresh = false;
     }
 }
@@ -2136,6 +2138,16 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
         return rec->isChild;
     case IdxRole:
         return rec->idx;
+    case ParentTypeRole:
+        // For child records, return the parent's type for filtering
+        if (rec->isChild && rec->parentIdx >= 0) {
+            TransactionRecord *parentRec = priv->index(priv->actualIndexToVisibleIndex(rec->parentIdx));
+            if (parentRec && parentRec->isParent) {
+                return parentRec->type;
+            }
+        }
+        // For parent records or if parent not found, return own type
+        return rec->type;
     }
     return QVariant();
 }
