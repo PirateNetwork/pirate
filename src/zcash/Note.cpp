@@ -162,7 +162,7 @@ std::optional<uint256> SaplingNote::cmu() const {
  * @param position The note's position in the commitment tree
  * @return The unique nullifier, or std::nullopt on failure
  *
- * Calls librustzcash to perform the nullifier computation using the
+ * Calls sapling::compute_nullifier to perform the nullifier computation using the
  * note's diversifier, pk_d, value, cached rcm, and the viewing key components.
  */
 std::optional<uint256> SaplingNote::nullifier(const SaplingFullViewingKey& vk, const uint64_t position) const
@@ -172,15 +172,15 @@ std::optional<uint256> SaplingNote::nullifier(const SaplingFullViewingKey& vk, c
 
     uint256 result;
     uint256 rcm_tmp = rcm();
-    if (!librustzcash_sapling_compute_nf(
-            d.data(),
-            pk_d.begin(),
+    if (!sapling::compute_nullifier(
+            d,
+            reinterpret_cast<const std::array<unsigned char, 32>&>(pk_d),
             value(),
-            rcm_tmp.begin(),
-            ak.begin(),
-            nk.begin(),
+            reinterpret_cast<const std::array<unsigned char, 32>&>(rcm_tmp),
+            reinterpret_cast<const std::array<unsigned char, 32>&>(ak),
+            reinterpret_cast<const std::array<unsigned char, 32>&>(nk),
             position,
-            result.begin()
+            reinterpret_cast<std::array<unsigned char, 32>&>(result)
     ))
     {
         return std::nullopt;
@@ -391,6 +391,46 @@ std::optional<SaplingNotePlaintext> SaplingNotePlaintext::AttemptDecryptSaplingO
     return ret;
 }
 
+/**
+ * @brief Compute nullifier directly from an encrypted Sapling output
+ * @param output The encrypted Sapling output
+ * @param vk The full viewing key used to decrypt and compute the nullifier
+ * @param position The note's position in the commitment tree
+ * @return The unique nullifier, or std::nullopt on failure
+ *
+ * This method decrypts the output and computes the nullifier in one call,
+ * using the bridge to call the Rust Output::compute_nullifier method.
+ */
+std::optional<uint256> SaplingNotePlaintext::ComputeNullifierFromOutput(
+    const sapling::Output& output,
+    const SaplingFullViewingKey& vk,
+    uint64_t position
+)
+{
+    std::array<unsigned char, 32> ivk_arr;
+    std::array<unsigned char, 32> ak_arr;
+    std::array<unsigned char, 32> nk_arr;
+    std::array<unsigned char, 32> result_arr;
+
+    // Convert viewing key components to arrays
+    std::copy(vk.ak.begin(), vk.ak.end(), ak_arr.begin());
+    std::copy(vk.nk.begin(), vk.nk.end(), nk_arr.begin());
+    
+    // Derive IVK from ak and nk
+    librustzcash_crh_ivk(ak_arr.data(), nk_arr.data(), ivk_arr.data());
+
+    // Call Rust method on Output to compute nullifier
+    if (!output.compute_nullifier(ivk_arr, ak_arr, nk_arr, position, result_arr)) {
+        return std::nullopt;
+    }
+
+    // Convert result to uint256
+    uint256 result;
+    std::copy(result_arr.begin(), result_arr.end(), result.begin());
+    
+    return result;
+}
+
 //==============================================================================
 // Orchard Note Implementation
 //==============================================================================
@@ -401,7 +441,7 @@ std::optional<SaplingNotePlaintext> SaplingNotePlaintext::AttemptDecryptSaplingO
  * @return The unique nullifier, or std::nullopt on failure
  *
  * Uses CDataStream to serialize the viewing key and address for the
- * Rust bridge, then calls get_nullifer_from_parts to compute the nullifier.
+ * Rust bridge, then calls orchard::compute_nullifier to compute the nullifier.
  */
 std::optional<uint256> OrchardNote::nullifier(const libzcash::OrchardFullViewingKeyPirate& fvk) const
 {
@@ -422,13 +462,13 @@ std::optional<uint256> OrchardNote::nullifier(const libzcash::OrchardFullViewing
     as << address;
     as >> address_t;
 
-    if (!get_nullifer_from_parts(
-          fvk_t.begin(),
-          address_t.begin(),
+    if (!orchard::compute_nullifier(
+          fvk_t,
+          address_t,
           value_,
-          rho_.begin(),
-          rseed_.begin(),
-          nullifier_t.begin())) {
+          reinterpret_cast<const std::array<unsigned char, 32>&>(rho_),
+          reinterpret_cast<const std::array<unsigned char, 32>&>(rseed_),
+          reinterpret_cast<std::array<unsigned char, 32>&>(nullifier_t))) {
                 return std::nullopt;
     }
 
@@ -537,6 +577,53 @@ std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardA
         std::nullopt, uint256::FromRawBytes(action->cmx()));
 
     return ret;
+}
+
+/**
+ * @brief Compute nullifier directly from an encrypted Orchard action
+ * @param action The encrypted Orchard action
+ * @param fvk The full viewing key used to decrypt and compute the nullifier
+ * @return The unique nullifier, or std::nullopt on failure
+ *
+ * This method decrypts the action and computes the nullifier in one call,
+ * using the bridge to call the Rust Action::compute_nullifier method.
+ * Unlike Sapling, Orchard does not require a position parameter.
+ */
+std::optional<uint256> OrchardNotePlaintext::ComputeNullifierFromAction(
+    const orchard_bundle::Action& action,
+    const libzcash::OrchardFullViewingKeyPirate& fvk
+)
+{
+    // Serialize IVK and FVK for bridge call
+    CDataStream ivk_stream(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream fvk_stream(SER_NETWORK, PROTOCOL_VERSION);
+    
+    libzcash::OrchardIncomingViewingKey_t ivk_arr;
+    libzcash::OrchardFullViewingKey_t fvk_arr;
+    std::array<unsigned char, 32> result_arr;
+    
+    // Get IVK from FVK
+    auto ivk_opt = fvk.GetIVK();
+    if (!ivk_opt) {
+        return std::nullopt;
+    }
+    
+    ivk_stream << ivk_opt.value();
+    ivk_stream >> ivk_arr;
+    
+    fvk_stream << fvk;
+    fvk_stream >> fvk_arr;
+    
+    // Call Rust method on Action to compute nullifier
+    if (!action.compute_nullifier(ivk_arr, fvk_arr, result_arr)) {
+        return std::nullopt;
+    }
+
+    // Convert result to uint256
+    uint256 result;
+    std::copy(result_arr.begin(), result_arr.end(), result.begin());
+    
+    return result;
 }
 
 /**

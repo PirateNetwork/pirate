@@ -364,48 +364,6 @@ fn priv_get_note(
     ))
 }
 
-/// Compute a Sapling nullifier.
-///
-/// The `diversifier` parameter must be 11 bytes in length.
-/// The `pk_d`, `r`, `ak` and `nk` parameters must be of length 32.
-/// The result is also of length 32 and placed in `result`.
-/// Returns false if `diversifier` or `pk_d` is not valid.
-#[no_mangle]
-pub extern "C" fn librustzcash_sapling_compute_nf(
-    diversifier: *const [c_uchar; 11],
-    pk_d: *const [c_uchar; 32],
-    value: u64,
-    rcm: *const [c_uchar; 32],
-    ak: *const [c_uchar; 32],
-    nk: *const [c_uchar; 32],
-    position: u64,
-    result: *mut [c_uchar; 32],
-) -> bool {
-    // ZIP 216: Nullifier derivation is not consensus-critical
-    // (nullifiers are revealed, not calculated by consensus).
-    // In any case, ZIP 216 is now enabled retroactively.
-    let note = match priv_get_note(diversifier, pk_d, value, rcm) {
-        Ok(p) => p,
-        Err(_) => return false,
-    };
-
-    let nk = match de_ct(jubjub::ExtendedPoint::from_bytes(unsafe { &*nk })) {
-        Some(p) => p,
-        None => return false,
-    };
-
-    let nk = match de_ct(nk.into_subgroup()) {
-        Some(nk) => NullifierDerivingKey(nk),
-        None => return false,
-    };
-
-    let nf = note.nf(&nk, position);
-    let result = unsafe { &mut *result };
-    result.copy_from_slice(&nf.0);
-
-    true
-}
-
 /// Sprout JoinSplit proof generation.
 #[no_mangle]
 pub extern "C" fn librustzcash_sprout_prove(

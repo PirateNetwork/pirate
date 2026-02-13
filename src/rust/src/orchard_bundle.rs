@@ -1,16 +1,27 @@
 use std::{mem, ptr};
 
+use libc::c_uchar;
 use memuse::DynamicUsage;
 use orchard::{
     bundle::Authorized,
-    keys::OutgoingViewingKey,
+    keys::{FullViewingKey, IncomingViewingKey, OutgoingViewingKey, PreparedIncomingViewingKey},
     note_encryption::OrchardDomain,
     primitives::redpallas::{Signature, SpendAuth},
 };
-use zcash_note_encryption::try_output_recovery_with_ovk;
+use zcash_note_encryption::{try_note_decryption, try_output_recovery_with_ovk};
 use zcash_primitives::transaction::components::{orchard as orchard_serialization, Amount};
+use subtle::CtOption;
 
 use crate::{bridge::ffi, streams::CppStream};
+
+/// Converts CtOption<T> into Option<T>
+fn de_ct<T>(ct: CtOption<T>) -> Option<T> {
+    if ct.is_some().into() {
+        Some(ct.unwrap())
+    } else {
+        None
+    }
+}
 
 pub struct Action(orchard::Action<Signature<SpendAuth>>);
 
@@ -45,6 +56,50 @@ impl Action {
 
     pub(crate) fn spend_auth_sig(&self) -> [u8; 64] {
         self.0.authorization().into()
+    }
+
+    /// Compute nullifier for this action using provided viewing key components
+    /// 
+    /// This is similar to Output::compute_nullifier for Sapling.
+    /// It decrypts the action with the IVK to obtain the note,
+    /// then computes the nullifier using the note and full viewing key.
+    pub(crate) fn compute_nullifier(
+        &self,
+        ivk_bytes: &[c_uchar; 64],
+        fvk_bytes: &[c_uchar; 96],
+        result: &mut [u8; 32],
+    ) -> bool {
+        // Deserialize IVK
+        let ivk = match de_ct(IncomingViewingKey::from_bytes(ivk_bytes)) {
+            Some(k) => k,
+            None => return false,
+        };
+
+        // Deserialize FVK
+        let fvk = match FullViewingKey::from_bytes(fvk_bytes) {
+            Some(k) => k,
+            None => return false,
+        };
+
+        // Prepare the IVK for decryption
+        let prepared_ivk = PreparedIncomingViewingKey::new(&ivk);
+        
+        // Create the domain for decryption
+        let domain = OrchardDomain::for_action(&self.0);
+        
+        // Decrypt the action to get the note
+        let decrypted = match try_note_decryption(&domain, &prepared_ivk, &self.0) {
+            Some(r) => r,
+            None => return false,
+        };
+
+        // Compute the nullifier from the decrypted note
+        let nullifier = decrypted.0.nullifier(&fvk);
+        
+        // Copy result
+        *result = nullifier.to_bytes();
+
+        return true;
     }
 
     pub(crate) fn as_ptr(&self) -> *const ffi::ActionPtr {

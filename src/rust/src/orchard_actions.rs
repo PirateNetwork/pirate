@@ -175,24 +175,26 @@ pub extern "C" fn try_orchard_decrypt_action_fvk(
 }
 
 #[no_mangle]
-pub extern "C" fn get_nullifer_from_parts(
-    fvk_bytes: *const [c_uchar; 96],
-    address_bytes: *const [c_uchar; 43],
+/// Compute nullifier for an Orchard note from its constituent parts
+/// 
+/// This is the standalone version that takes note components directly.
+/// For computing from an encrypted action, use action_compute_nullifier instead.
+pub(crate) fn compute_nullifier(
+    fvk_bytes: &[c_uchar; 96],
+    address_bytes: &[c_uchar; 43],
     value: u64,
-    rho_bytes: *const [c_uchar; 32],
-    rseed_bytes: *const [c_uchar; 32],
-    nullifier_out: *mut [u8; 32],
+    rho_bytes: &[c_uchar; 32],
+    rseed_bytes: &[c_uchar; 32],
+    nullifier_out: &mut [u8; 32],
 ) -> bool {
     //Deserialize FVK
-    let fvk_bytes = unsafe { *fvk_bytes };
-    let fvk = match FullViewingKey::from_bytes(&fvk_bytes) {
+    let fvk = match FullViewingKey::from_bytes(fvk_bytes) {
         Some(k) => k,
         None => return false
     };
 
     //Deserialize Address
-    let address_bytes = unsafe { *address_bytes };
-    let address = match de_ct(Address::from_raw_address_bytes(&address_bytes))  {
+    let address = match de_ct(Address::from_raw_address_bytes(address_bytes))  {
         Some(k) => k,
         None => return false
     };
@@ -201,15 +203,13 @@ pub extern "C" fn get_nullifer_from_parts(
     let note_value = NoteValue::from_raw(value);
 
     //Deserialize Rho
-    let rho_bytes = unsafe { *rho_bytes };
-    let rho = match de_ct(Nullifier::from_bytes(&rho_bytes)) {
+    let rho = match de_ct(Nullifier::from_bytes(rho_bytes)) {
         Some(k) => k,
         None => return false
     };
 
     //Deserialize rseed
-    let rseed_bytes = unsafe { *rseed_bytes };
-    let rseed = match de_ct(RandomSeed::from_bytes(rseed_bytes, &rho)) {
+    let rseed = match de_ct(RandomSeed::from_bytes(*rseed_bytes, &rho)) {
         Some(k) => k,
         None => return false
     };
@@ -217,9 +217,7 @@ pub extern "C" fn get_nullifer_from_parts(
     let note = Note::from_parts(address, note_value, rho, rseed).unwrap();
 
     let nullifier = note.nullifier(&fvk);
-    let nullifier_out = unsafe { &mut *nullifier_out };
     *nullifier_out = nullifier.to_bytes();
 
     return true
-
 }

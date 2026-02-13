@@ -7,7 +7,7 @@ use std::io::{self, Read, Write};
 use std::{mem, ptr};
 
 use bellman::groth16::{prepare_verifying_key, Proof};
-use group::GroupEncoding;
+use group::{cofactor::CofactorGroup, GroupEncoding};
 use incrementalmerkletree::MerklePath;
 use memuse::DynamicUsage;
 use rand_core::OsRng;
@@ -1017,5 +1017,114 @@ impl Output {
         
         true
     }
+
+    /// Compute nullifier for this output using provided viewing key components
+    /// 
+    /// This requires first decrypting the output with the IVK to obtain the note,
+    /// then computing the nullifier using the note and nullifier deriving key.
+    pub(crate) fn compute_nullifier(
+        &self,
+        ivk: &[u8; 32],
+        ak: &[u8; 32],
+        nk: &[u8; 32],
+        position: u64,
+        result: &mut [u8; 32],
+    ) -> bool {
+        // Convert bytes to SaplingIvk
+        let ivk_scalar = match de_ct(jubjub::Scalar::from_bytes(ivk)) {
+            Some(s) => s,
+            None => return false,
+        };
+        let sapling_ivk = SaplingIvk(ivk_scalar);
+        
+        // Prepare the IVK for decryption
+        let prepared_ivk = PreparedIncomingViewingKey::new(&sapling_ivk);
+        
+        // Use MainNetwork with arbitrary height
+        let network = consensus::Network::MainNetwork;
+        let height = BlockHeight::from_u32(0);
+        
+        // Decrypt the output to get the note
+        let decrypted = match try_sapling_note_decryption(
+            &network,
+            height,
+            &prepared_ivk,
+            &self.0,
+        ) {
+            Some(r) => r,
+            None => return false,
+        };
+
+        // Deserialize and validate nk
+        let nk = match de_ct(jubjub::ExtendedPoint::from_bytes(nk)) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        let nk = match de_ct(nk.into_subgroup()) {
+            Some(nk) => zcash_primitives::sapling::NullifierDerivingKey(nk),
+            None => return false,
+        };
+
+        // Compute the nullifier using the decrypted note
+        let nf = decrypted.0.nf(&nk, position);
+        result.copy_from_slice(&nf.0);
+
+        true
+    }
+}
+
+/// Compute a Sapling nullifier from note components.
+///
+/// Returns false if `diversifier` or `pk_d` is not valid.
+pub(crate) fn compute_nullifier(
+    diversifier: &[u8; 11],
+    pk_d: &[u8; 32],
+    value: u64,
+    rcm: &[u8; 32],
+    ak: &[u8; 32],
+    nk: &[u8; 32],
+    position: u64,
+    result: &mut [u8; 32],
+) -> bool {
+    // Construct the payment address
+    let recipient_bytes = {
+        let mut tmp = [0; 43];
+        tmp[..11].copy_from_slice(diversifier);
+        tmp[11..].copy_from_slice(pk_d);
+        tmp
+    };
+    let recipient = match PaymentAddress::from_bytes(&recipient_bytes) {
+        Some(pa) => pa,
+        None => return false,
+    };
+
+    // Deserialize randomness
+    // If this is after ZIP 212, the caller has calculated rcm, and we don't need to call
+    // Note::derive_esk, so we just pretend the note was using this rcm all along.
+    let rseed = match de_ct(jubjub::Scalar::from_bytes(rcm)) {
+        Some(s) => Rseed::BeforeZip212(s),
+        None => return false,
+    };
+
+    // Construct the note
+    let note = Note::from_parts(recipient, NoteValue::from_raw(value), rseed);
+
+    // Deserialize and validate nk
+    let nk = match de_ct(jubjub::ExtendedPoint::from_bytes(nk)) {
+        Some(p) => p,
+        None => return false,
+    };
+
+    let nk = match de_ct(nk.into_subgroup()) {
+        Some(nk) => zcash_primitives::sapling::NullifierDerivingKey(nk),
+        None => return false,
+    };
+
+    // Compute the nullifier
+    let nf = note.nf(&nk, position);
+    result.copy_from_slice(&nf.0);
+
+    true
 }
 

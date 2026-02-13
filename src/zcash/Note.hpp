@@ -280,6 +280,13 @@ public:
         const uint256& ovk
     );
 
+    // Compute nullifier directly from an encrypted output
+    static std::optional<uint256> ComputeNullifierFromOutput(
+        const sapling::Output& output,
+        const SaplingFullViewingKey& vk,
+        uint64_t position
+    );
+
     std::optional<SaplingNote> note(const SaplingIncomingViewingKey& ivk) const;
 
     virtual ~SaplingNotePlaintext() {}
@@ -406,6 +413,12 @@ public:
     static std::optional<OrchardNotePlaintext> AttemptDecryptOrchardAction(
         const orchard_bundle::Action* action,
         const libzcash::OrchardOutgoingViewingKey ovk
+    );
+
+    // Compute nullifier directly from an encrypted action
+    static std::optional<uint256> ComputeNullifierFromAction(
+        const orchard_bundle::Action& action,
+        const libzcash::OrchardFullViewingKeyPirate& fvk
     );
 
     std::optional<OrchardNote> note() const;

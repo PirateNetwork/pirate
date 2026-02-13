@@ -8,17 +8,20 @@ use crate::{
         none_orchard_bundle, orchard_bundle_from_raw_box, parse_orchard_bundle, Action,
         Bundle as OrchardBundle,
     },
+    orchard_actions::{
+        compute_nullifier as compute_nullifier_orchard,
+    },
     builder_ffi::shielded_signature_digest,
     orchard_ffi::{orchard_batch_validation_init, BatchValidator as OrchardBatchValidator},
     params::{network, Network},
     sapling::{
-        apply_sapling_bundle_signatures, build_sapling_bundle, finish_bundle_assembly,
-        init_batch_validator as init_sapling_batch_validator, init_verifier, new_bundle_assembler,
-        new_sapling_builder, none_sapling_bundle, parse_v4_sapling_components,
-        parse_v4_sapling_output, parse_v4_sapling_spend, parse_v5_sapling_bundle,
-        BatchValidator as SaplingBatchValidator, Bundle as SaplingBundle,
-        BundleAssembler as SaplingBundleAssembler, Output, SaplingBuilder,
-        SaplingUnauthorizedBundle, Spend, Verifier,
+        apply_sapling_bundle_signatures, build_sapling_bundle, compute_nullifier,
+        finish_bundle_assembly, init_batch_validator as init_sapling_batch_validator,
+        init_verifier, new_bundle_assembler, new_sapling_builder, none_sapling_bundle,
+        parse_v4_sapling_components, parse_v4_sapling_output, parse_v4_sapling_spend,
+        parse_v5_sapling_bundle, BatchValidator as SaplingBatchValidator,
+        Bundle as SaplingBundle, BundleAssembler as SaplingBundleAssembler, Output,
+        SaplingBuilder, SaplingUnauthorizedBundle, Spend, Verifier,
     },
     streams::{
         from_auto_file, from_blake2b_writer, from_buffered_file, from_data, from_hash_writer,
@@ -122,6 +125,15 @@ pub(crate) mod ffi {
         fn out_ciphertext(self: &Output) -> [u8; 80];
         fn zkproof(self: &Output) -> [u8; 192];
         fn serialize_v4(self: &Output, stream: &mut CppStream<'_>) -> Result<()>;
+        
+        fn compute_nullifier(
+            self: &Output,
+            ivk: &[u8; 32],
+            ak: &[u8; 32],
+            nk: &[u8; 32],
+            position: u64,
+            result: &mut [u8; 32],
+        ) -> bool;
         
         fn try_decrypt_output_ivk(
             self: &Output,
@@ -243,6 +255,17 @@ pub(crate) mod ffi {
             target_height: u32,
         ) -> Result<Box<SaplingUnauthorizedBundle>>;
 
+        fn compute_nullifier(
+            diversifier: &[u8; 11],
+            pk_d: &[u8; 32],
+            value: u64,
+            rcm: &[u8; 32],
+            ak: &[u8; 32],
+            nk: &[u8; 32],
+            position: u64,
+            result: &mut [u8; 32],
+        ) -> bool;
+
         #[cxx_name = "UnauthorizedBundle"]
         type SaplingUnauthorizedBundle;
 
@@ -306,6 +329,15 @@ pub(crate) mod ffi {
         fn out_ciphertext(self: &Action) -> [u8; 80];
         fn spend_auth_sig(self: &Action) -> [u8; 64];
         fn as_ptr(self: &Action) -> *const ActionPtr;
+        
+        // Compute nullifier directly from encrypted action (decrypts first)
+        // Similar to sapling::Output::compute_nullifier
+        fn compute_nullifier(
+            self: &Action,
+            ivk_bytes: &[u8; 64],
+            fvk_bytes: &[u8; 96],
+            result: &mut [u8; 32],
+        ) -> bool;
 
         #[rust_name = "none_orchard_bundle"]
         fn none() -> Box<OrchardBundle>;
@@ -341,6 +373,18 @@ pub(crate) mod ffi {
             sighash: [u8; 32],
         );
         fn validate(self: &mut OrchardBatchValidator) -> bool;
+        
+        // Compute nullifier from note parts (already decrypted)
+        // Similar to sapling::compute_nullifier
+        #[rust_name = "compute_nullifier_orchard"]
+        fn compute_nullifier(
+            fvk_bytes: &[u8; 96],
+            address_bytes: &[u8; 43],
+            value: u64,
+            rho_bytes: &[u8; 32],
+            rseed_bytes: &[u8; 32],
+            result: &mut [u8; 32],
+        ) -> bool;
     }
 
     #[namespace = "merkle_frontier"]

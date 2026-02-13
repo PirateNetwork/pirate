@@ -6110,22 +6110,20 @@ void CWallet::UpdateSaplingNullifierNoteMapWithTx(CWalletTx* wtx) {
             if (mapSaplingFullViewingKeys.count(nd.ivk) != 0) {
                 SaplingExtendedFullViewingKey extfvk = mapSaplingFullViewingKeys.at(nd.ivk);
 
-                // Use Rust decryption
-                auto optPlaintext = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[op.n], nd.ivk);
+                // Compute nullifier directly from Output
+                auto optNullifier = libzcash::SaplingNotePlaintext::ComputeNullifierFromOutput(
+                    vOutputs[op.n], 
+                    extfvk.fvk, 
+                    position
+                );
 
-                // The transaction would not have entered the wallet unless
-                // its plaintext had been successfully decrypted previously.
-                assert(optPlaintext != std::nullopt);
-
-                auto optNote = optPlaintext.value().note(nd.ivk);
-                if (!optNote) {
-                    assert(false);
-                }
-                auto optNullifier = optNote.value().nullifier(extfvk.fvk, position);
                 if (!optNullifier) {
-                    // This should not happen.  If it does, maybe the position has been corrupted or miscalculated?
+                    // This should not happen. If it does, maybe the position has been corrupted or miscalculated?
+                    LogPrintf("ERROR: ComputeNullifierFromOutput failed for output %d in tx %s\n", 
+                              op.n, wtx->GetHash().ToString());
                     assert(false);
                 }
+                
                 uint256 nullifier = optNullifier.value();
                 mapSaplingNullifiersToNotes[nullifier] = op;
                 mapArcSaplingOutPoints[nullifier] = op;
@@ -6179,20 +6177,19 @@ void CWallet::UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx) {
            if (mapOrchardFullViewingKeys.count(nd.ivk) != 0) {
                OrchardExtendedFullViewingKeyPirate extfvk = mapOrchardFullViewingKeys.at(nd.ivk);
 
-               //Cipher Text
-               auto optDeserialized = OrchardNotePlaintext::AttemptDecryptOrchardAction(&vActions[op.n], nd.ivk);
+               // Compute nullifier directly from Action using bridge
+               auto optNullifier = libzcash::OrchardNotePlaintext::ComputeNullifierFromAction(
+                   vActions[op.n],
+                   extfvk.fvk
+               );
 
-               // The transaction would not have entered the wallet unless
-               // it had been successfully decrypted previously.
-               assert(optDeserialized != std::nullopt);
-               auto note = optDeserialized.value().note().value();
-
-
-               auto optNullifier = note.nullifier(extfvk.fvk);
                if (!optNullifier) {
-                   // This should not happen.
+                   // This should not happen. If it does, maybe the witness or action data is corrupted?
+                   LogPrintf("ERROR: ComputeNullifierFromAction failed for action %d in tx %s\n", 
+                             op.n, wtx->GetHash().ToString());
                    assert(false);
                }
+               
                uint256 nullifier = optNullifier.value();
                mapOrchardNullifiersToNotes[nullifier] = op;
                mapArcOrchardOutPoints[nullifier] = op;
