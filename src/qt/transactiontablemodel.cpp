@@ -302,7 +302,7 @@ public:
     /* Load a batch of transactions in background */
     void lazyLoadBatch()
     {
-        const int BATCH_SIZE = 500; // Load 500 transactions per batch
+        const int BATCH_SIZE = 50; // Load 50 transactions per batch
         bool fIncludeWatchonly = true;
         
         QList<RpcArcTransaction> arcTxList;
