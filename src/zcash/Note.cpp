@@ -174,13 +174,13 @@ std::optional<uint256> SaplingNote::nullifier(const SaplingFullViewingKey& vk, c
     uint256 rcm_tmp = rcm();
     if (!sapling::compute_nullifier(
             d,
-            reinterpret_cast<const std::array<unsigned char, 32>&>(pk_d),
+            reinterpret_cast<const uint256_t&>(pk_d),
             value(),
-            reinterpret_cast<const std::array<unsigned char, 32>&>(rcm_tmp),
-            reinterpret_cast<const std::array<unsigned char, 32>&>(ak),
-            reinterpret_cast<const std::array<unsigned char, 32>&>(nk),
+            reinterpret_cast<const uint256_t&>(rcm_tmp),
+            reinterpret_cast<const uint256_t&>(ak),
+            reinterpret_cast<const uint256_t&>(nk),
             position,
-            reinterpret_cast<std::array<unsigned char, 32>&>(result)
+            reinterpret_cast<uint256_t&>(result)
     ))
     {
         return std::nullopt;
@@ -294,14 +294,14 @@ std::optional<SaplingNotePlaintext> SaplingNotePlaintext::AttemptDecryptSaplingO
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    std::array<unsigned char, 32> ivk_t;
+    uint256_t ivk_t;
     std::array<unsigned char, 11> diversifier_ret;
-    std::array<unsigned char, 32> pk_d_ret;
+    uint256_t pk_d_ret;
     std::array<unsigned char, ZC_MEMO_SIZE> memo_ret;
-    std::array<unsigned char, 32> rseed_ret;
+    uint256_t rseed_ret;
     unsigned char leadbyte_ret;
-    std::array<unsigned char, 32> cmu_ret;
-    std::array<unsigned char, 32> rcm_ret;
+    uint256_t cmu_ret;
+    uint256_t rcm_ret;
 
     // Convert ivk to array
     std::copy(ivk.begin(), ivk.end(), ivk_t.begin());
@@ -347,14 +347,14 @@ std::optional<SaplingNotePlaintext> SaplingNotePlaintext::AttemptDecryptSaplingO
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    std::array<unsigned char, 32> ovk_t;
+    uint256_t ovk_t;
     std::array<unsigned char, 11> diversifier_ret;
-    std::array<unsigned char, 32> pk_d_ret;
+    uint256_t pk_d_ret;
     std::array<unsigned char, ZC_MEMO_SIZE> memo_ret;
-    std::array<unsigned char, 32> rseed_ret;
+    uint256_t rseed_ret;
     unsigned char leadbyte_ret;
-    std::array<unsigned char, 32> cmu_ret;
-    std::array<unsigned char, 32> rcm_ret;
+    uint256_t cmu_ret;
+    uint256_t rcm_ret;
 
     // Convert ovk to array
     std::copy(ovk.begin(), ovk.end(), ovk_t.begin());
@@ -407,26 +407,26 @@ std::optional<uint256> SaplingNotePlaintext::ComputeNullifierFromOutput(
     uint64_t position
 )
 {
-    std::array<unsigned char, 32> ivk_arr;
-    std::array<unsigned char, 32> ak_arr;
-    std::array<unsigned char, 32> nk_arr;
-    std::array<unsigned char, 32> result_arr;
+    uint256_t ivk_t;
+    uint256_t ak_t;
+    uint256_t nk_t;
+    uint256_t result_t;
 
     // Convert viewing key components to arrays
-    std::copy(vk.ak.begin(), vk.ak.end(), ak_arr.begin());
-    std::copy(vk.nk.begin(), vk.nk.end(), nk_arr.begin());
+    std::copy(vk.ak.begin(), vk.ak.end(), ak_t.begin());
+    std::copy(vk.nk.begin(), vk.nk.end(), nk_t.begin());
     
     // Derive IVK from ak and nk
-    librustzcash_crh_ivk(ak_arr.data(), nk_arr.data(), ivk_arr.data());
+    librustzcash_crh_ivk(ak_t.data(), nk_t.data(), ivk_t.data());
 
     // Call Rust method on Output to compute nullifier
-    if (!output.compute_nullifier(ivk_arr, ak_arr, nk_arr, position, result_arr)) {
+    if (!output.compute_nullifier(ivk_t, ak_t, nk_t, position, result_t)) {
         return std::nullopt;
     }
 
     // Convert result to uint256
     uint256 result;
-    std::copy(result_arr.begin(), result_arr.end(), result.begin());
+    std::copy(result_t.begin(), result_t.end(), result.begin());
     
     return result;
 }
@@ -466,9 +466,9 @@ std::optional<uint256> OrchardNote::nullifier(const libzcash::OrchardFullViewing
           fvk_t,
           address_t,
           value_,
-          reinterpret_cast<const std::array<unsigned char, 32>&>(rho_),
-          reinterpret_cast<const std::array<unsigned char, 32>&>(rseed_),
-          reinterpret_cast<std::array<unsigned char, 32>&>(nullifier_t))) {
+          reinterpret_cast<const uint256_t&>(rho_),
+          reinterpret_cast<const uint256_t&>(rseed_),
+          reinterpret_cast<uint256_t&>(nullifier_t))) {
                 return std::nullopt;
     }
 
@@ -598,9 +598,9 @@ std::optional<uint256> OrchardNotePlaintext::ComputeNullifierFromAction(
     CDataStream ivk_stream(SER_NETWORK, PROTOCOL_VERSION);
     CDataStream fvk_stream(SER_NETWORK, PROTOCOL_VERSION);
     
-    libzcash::OrchardIncomingViewingKey_t ivk_arr;
-    libzcash::OrchardFullViewingKey_t fvk_arr;
-    std::array<unsigned char, 32> result_arr;
+    libzcash::OrchardIncomingViewingKey_t ivk_t;
+    libzcash::OrchardFullViewingKey_t fvk_t;
+    uint256_t result_t;
     
     // Get IVK from FVK
     auto ivk_opt = fvk.GetIVK();
@@ -609,19 +609,19 @@ std::optional<uint256> OrchardNotePlaintext::ComputeNullifierFromAction(
     }
     
     ivk_stream << ivk_opt.value();
-    ivk_stream >> ivk_arr;
+    ivk_stream >> ivk_t;
     
     fvk_stream << fvk;
-    fvk_stream >> fvk_arr;
+    fvk_stream >> fvk_t;
     
     // Call Rust method on Action to compute nullifier
-    if (!action.compute_nullifier(ivk_arr, fvk_arr, result_arr)) {
+    if (!action.compute_nullifier(ivk_t, fvk_t, result_t)) {
         return std::nullopt;
     }
 
     // Convert result to uint256
     uint256 result;
-    std::copy(result_arr.begin(), result_arr.end(), result.begin());
+    std::copy(result_t.begin(), result_t.end(), result.begin());
     
     return result;
 }

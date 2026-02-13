@@ -29,6 +29,9 @@
 #include <string>
 #include <vector>
 
+/** Type alias for 32-byte array used for serialization over FFI bridge */
+typedef std::array<unsigned char, 32> uint256_t;
+
 /** Template base class for fixed-sized opaque blobs. */
 template<unsigned int BITS>
 class base_blob

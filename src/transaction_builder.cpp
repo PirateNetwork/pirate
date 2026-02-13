@@ -153,7 +153,7 @@ std::optional<OrchardBundle> UnauthorizedBundle::ProveAndSign(
     for (const auto& key : keys) {
         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
         ss << key.sk;
-        std::array<unsigned char, 32> sk_t;
+        uint256_t sk_t;
         std::move(ss.begin(), ss.end(), sk_t.begin());
         for (const auto& byte : sk_t) {
             sks.push_back(byte);
