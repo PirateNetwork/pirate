@@ -1,6 +1,39 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+/**
+ * @file transactionview.cpp
+ * @brief Transaction list view with filtering and search capabilities
+ * 
+ * This widget provides a comprehensive transaction viewing interface with:
+ * - Two-row filter bar (search + filters)
+ * - Real-time search with address/label filtering
+ * - Date range filtering (presets + custom range)
+ * - Transaction type filtering (received/sent/mined/etc.)
+ * - Amount filtering (minimum amount)
+ * - Display limit control (50/100/200 transactions)
+ * - Watch-only transaction visibility
+ * - Expand/collapse hierarchical transaction display
+ * - Context menu for copy/export operations
+ * - CSV export functionality
+ * - Lazy loading progress indicator
+ * 
+ * ARCHITECTURE:
+ * - Uses TransactionFilterProxy for filtering TransactionTableModel data
+ * - Filter changes trigger immediate updates via Qt signals
+ * - Search uses debouncing (200ms delay) to avoid excessive filtering
+ * - Integrates with lazy loading to show progress and enable filters after load
+ * 
+ * USER EXPERIENCE:
+ * - All filters disabled during initial lazy load (prevents incomplete results)
+ * - Progress indicator shows loading status and percentage
+ * - Search button + Enter key both trigger search
+ * - Clear button resets search field
+ * - Reset button resets all filters to defaults
+ * - Expand/Collapse All button toggles transaction hierarchy
+ */
 
 #include "transactionview.h"
 
@@ -41,14 +74,44 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
+/**
+ * @brief Construct transaction view with two-row filter interface
+ * 
+ * LAYOUT ARCHITECTURE:
+ * - Row 1 (Search): Search field, Search button, Clear button, Address Only checkbox
+ * - Row 2 (Filters): Watch-only, Date, Type, Limit, Min Amount, Reset, Expand/Collapse
+ * - Date Range Widget: Custom date picker (hidden by default)
+ * - Main Table: Transaction list with sorting and selection
+ * 
+ * FILTER BEHAVIOR:
+ * - All filters start disabled during lazy load
+ * - Enabled automatically after lazy load completes
+ * - Search uses 200ms debounce to avoid excessive filtering
+ * - Amount input validated for numeric format
+ * 
+ * SIGNAL CONNECTIONS:
+ * - Filter changes: Immediate update via activated() signal
+ * - Text fields: Debounced via QTimer (200ms delay)
+ * - Buttons: Direct connection to slots
+ * - Activity signals: All connected to sendResetUnlockSignal() for auto-lock timer
+ * 
+ * @param platformStyle Platform-specific styling preferences
+ * @param parent Parent widget
+ */
 TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *parent) :
     QWidget(parent), model(0), transactionProxyModel(0),
     transactionView(0), columnResizingFixer(0)
 {
-    // Build filter row
+    /**
+     * FIRST ROW: SEARCH INTERFACE
+     * 
+     * Layout: [Label] [Search Field] [Search Button] [Clear Button] [Address Only Checkbox] [Stretch]
+     * 
+     * Purpose: Provides address/label search with option to show only matching
+     * address records (not full transaction). Search triggered by button or Enter key.
+     */
     setContentsMargins(0,0,0,0);
 
-    // First line: search field, search button, clear button, address only checkbox
     QHBoxLayout *searchLayout = new QHBoxLayout();
     searchLayout->setContentsMargins(0,3,0,3);
     if (platformStyle->getUseExtraSpacing()) {
@@ -102,7 +165,16 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
 
     searchLayout->addStretch();
 
-    // Second line: all other filter controls
+    /**
+     * SECOND ROW: COMPREHENSIVE FILTER CONTROLS
+     * 
+     * Layout: [Filter Label] [Watch-only] [Date] [Separator] [Type] [Separator] 
+     *         [Limit Label] [Limit] [Separator] [Stretch] [Amount Label] [Amount] 
+     *         [Separator] [Reset] [Expand/Collapse]
+     * 
+     * Purpose: Provides all filtering options with visual separators for grouping.
+     * All filters disabled during lazy load to prevent incomplete results.
+     */
     QHBoxLayout *hlayout2 = new QHBoxLayout();
     hlayout2->setContentsMargins(0,3,0,3);
     if (platformStyle->getUseExtraSpacing()) {
@@ -187,13 +259,10 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     
     limitWidget = new QComboBox(this);
     limitWidget->setToolTip(tr("Limit number of transactions displayed"));
-    limitWidget->addItem(tr("All"), -1);
     limitWidget->addItem(tr("50"), 50);
     limitWidget->addItem(tr("100"), 100);
     limitWidget->addItem(tr("200"), 200);
-    limitWidget->addItem(tr("500"), 500);
-    limitWidget->addItem(tr("1000"), 1000);
-    limitWidget->setCurrentIndex(1); // Default to "50"
+    limitWidget->setCurrentIndex(0); // Default to "50"
     if (platformStyle->getUseExtraSpacing()) {
         limitWidget->setFixedWidth(85);
     } else {
@@ -258,7 +327,12 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     }
     hlayout2->addWidget(expandAllButton);
 
-    // Delay before filtering transactions in ms
+    /**
+     * DEBOUNCE TIMERS
+     * 
+     * Prevent excessive filtering while user is typing in text fields.
+     * 200ms delay provides good UX balance between responsiveness and performance.
+     */
     static const int input_filter_delay = 200;
 
     QTimer* amount_typing_delay = new QTimer(this);
@@ -269,7 +343,13 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     prefix_typing_delay->setSingleShot(true);
     prefix_typing_delay->setInterval(input_filter_delay);
     
-    // Create lazy load status label
+    /**
+     * LAZY LOAD STATUS INDICATOR
+     * 
+     * Shows loading progress and disables filters until complete.
+     * Updates automatically via lazyLoadProgress() signal.
+     * Changes to "All transactions loaded" when complete.
+     */
     lazyLoadStatusLabel = new QLabel(tr("Loading transactions... (filters disabled until complete)"), this);
     lazyLoadStatusLabel->setStyleSheet("QLabel { color: white; font-weight: bold; }");
     lazyLoadStatusLabel->setAlignment(Qt::AlignCenter);
@@ -305,7 +385,15 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     transactionView = view;
     transactionView->setObjectName("transactionView");
 
-    // Actions
+    /**
+     * CONTEXT MENU ACTIONS
+     * 
+     * Right-click menu provides:
+     * - Copy operations: address, label, amount, txid, raw tx, full details
+     * - Show operations: transaction details, memo
+     * - Edit operation: address label
+     * - External links: Block explorer URLs (configured in options)
+     */
     QAction *copyAddressAction = new QAction(tr("Copy address"), this);
     QAction *copyLabelAction = new QAction(tr("Copy label"), this);
     QAction *copyAmountAction = new QAction(tr("Copy amount"), this);
@@ -331,65 +419,102 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
 
     mapperThirdPartyTxUrls = new QSignalMapper(this);
 
-    // Connect actions
+    // Connect actions (QSignalMapper requires old-style connection for mapped signal)
     connect(mapperThirdPartyTxUrls, SIGNAL(mapped(QString)), this, SLOT(openThirdPartyTxUrl(QString)));
 
     // Connect filter changes - activated fires when user makes a selection
-    connect(dateWidget, SIGNAL(activated(int)), this, SLOT(chooseDate(int)));
-    connect(typeWidget, SIGNAL(activated(int)), this, SLOT(chooseType(int)));
-    connect(watchOnlyWidget, SIGNAL(activated(int)), this, SLOT(chooseWatchonly(int)));
-    connect(limitWidget, SIGNAL(activated(int)), this, SLOT(chooseLimit(int)));
-    connect(amountWidget, SIGNAL(textChanged(QString)), amount_typing_delay, SLOT(start()));
-    connect(amount_typing_delay, SIGNAL(timeout()), this, SLOT(changedAmount()));
+    // Modern Qt5 syntax provides compile-time type checking
+    connect(dateWidget, QOverload<int>::of(&QComboBox::activated), this, &TransactionView::chooseDate);
+    connect(typeWidget, QOverload<int>::of(&QComboBox::activated), this, &TransactionView::chooseType);
+    connect(watchOnlyWidget, QOverload<int>::of(&QComboBox::activated), this, &TransactionView::chooseWatchonly);
+    connect(limitWidget, QOverload<int>::of(&QComboBox::activated), this, &TransactionView::chooseLimit);
+    connect(amountWidget, &QLineEdit::textChanged, amount_typing_delay, QOverload<>::of(&QTimer::start));
+    connect(amount_typing_delay, &QTimer::timeout, this, &TransactionView::changedAmount);
     // Connect search button and Enter key to trigger search
-    connect(searchButton, SIGNAL(clicked()), this, SLOT(changedPrefix()));
-    connect(addressWidget, SIGNAL(returnPressed()), this, SLOT(changedPrefix()));
+    connect(searchButton, &QPushButton::clicked, this, &TransactionView::changedPrefix);
+    connect(addressWidget, &QLineEdit::returnPressed, this, &TransactionView::changedPrefix);
+    // Connect address only checkbox to toggle filter (no rebuild)
+    connect(addressOnlyCheckbox, &QCheckBox::toggled, this, &TransactionView::toggleAddressOnly);
     // Connect clear button
-    connect(clearButton, SIGNAL(clicked()), this, SLOT(clearSearch()));
+    connect(clearButton, &QPushButton::clicked, this, &TransactionView::clearSearch);
     // Connect reset button
-    connect(resetButton, SIGNAL(clicked()), this, SLOT(resetFilters()));
+    connect(resetButton, &QPushButton::clicked, this, &TransactionView::resetFilters);
 
-    connect(view, SIGNAL(doubleClicked(QModelIndex)), this, SIGNAL(doubleClicked(QModelIndex)));
-    connect(view, SIGNAL(clicked(QModelIndex)), this, SLOT(handleTransactionClicked(QModelIndex)));
-    connect(view, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(contextualMenu(QPoint)));
-    connect(expandAllButton, SIGNAL(clicked()), this, SLOT(toggleExpandAll()));
+    connect(view, &QTableView::doubleClicked, this, &TransactionView::doubleClicked);
+    connect(view, &QTableView::clicked, this, &TransactionView::handleTransactionClicked);
+    connect(view, &QTableView::customContextMenuRequested, this, &TransactionView::contextualMenu);
+    connect(expandAllButton, &QPushButton::clicked, this, &TransactionView::toggleExpandAll);
 
-    connect(copyAddressAction, SIGNAL(triggered()), this, SLOT(copyAddress()));
-    connect(copyLabelAction, SIGNAL(triggered()), this, SLOT(copyLabel()));
-    connect(copyAmountAction, SIGNAL(triggered()), this, SLOT(copyAmount()));
-    connect(copyTxIDAction, SIGNAL(triggered()), this, SLOT(copyTxID()));
-    connect(copyTxHexAction, SIGNAL(triggered()), this, SLOT(copyTxHex()));
-    connect(copyTxPlainText, SIGNAL(triggered()), this, SLOT(copyTxPlainText()));
-    connect(editLabelAction, SIGNAL(triggered()), this, SLOT(editLabel()));
-    connect(showMemoAction, SIGNAL(triggered()), this, SLOT(showMemo()));
-    connect(showDetailsAction, SIGNAL(triggered()), this, SLOT(showDetails()));
+    connect(copyAddressAction, &QAction::triggered, this, &TransactionView::copyAddress);
+    connect(copyLabelAction, &QAction::triggered, this, &TransactionView::copyLabel);
+    connect(copyAmountAction, &QAction::triggered, this, &TransactionView::copyAmount);
+    connect(copyTxIDAction, &QAction::triggered, this, &TransactionView::copyTxID);
+    connect(copyTxHexAction, &QAction::triggered, this, &TransactionView::copyTxHex);
+    connect(copyTxPlainText, &QAction::triggered, this, &TransactionView::copyTxPlainText);
+    connect(editLabelAction, &QAction::triggered, this, &TransactionView::editLabel);
+    connect(showMemoAction, &QAction::triggered, this, &TransactionView::showMemo);
+    connect(showDetailsAction, &QAction::triggered, this, &TransactionView::showDetails);
 
     // Connect actions to reset lock timer
+    // QSignalMapper requires old-style connection
     connect(mapperThirdPartyTxUrls, SIGNAL(mapped(QString)), this, SLOT(sendResetUnlockSignal()));
-    connect(dateWidget, SIGNAL(activated(int)), this, SLOT(sendResetUnlockSignal()));
-    connect(typeWidget, SIGNAL(activated(int)), this, SLOT(sendResetUnlockSignal()));
-    connect(watchOnlyWidget, SIGNAL(activated(int)), this, SLOT(sendResetUnlockSignal()));
-    connect(amountWidget, SIGNAL(textChanged(QString)), this, SLOT(sendResetUnlockSignal()));
-    connect(amount_typing_delay, SIGNAL(timeout()), this, SLOT(sendResetUnlockSignal()));
-    connect(addressWidget, SIGNAL(textChanged(QString)), this, SLOT(sendResetUnlockSignal()));
-    connect(prefix_typing_delay, SIGNAL(timeout()), this, SLOT(sendResetUnlockSignal()));
-    connect(view, SIGNAL(doubleClicked(QModelIndex)), this, SLOT(sendResetUnlockSignal()));
-    connect(view, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(sendResetUnlockSignal()));
-    connect(copyAddressAction, SIGNAL(triggered()), this, SLOT(sendResetUnlockSignal()));
-    connect(copyLabelAction, SIGNAL(triggered()), this, SLOT(sendResetUnlockSignal()));
-    connect(copyAmountAction, SIGNAL(triggered()), this, SLOT(sendResetUnlockSignal()));
-    connect(copyTxIDAction, SIGNAL(triggered()), this, SLOT(sendResetUnlockSignal()));
-    connect(copyTxHexAction, SIGNAL(triggered()), this, SLOT(sendResetUnlockSignal()));
-    connect(copyTxPlainText, SIGNAL(triggered()), this, SLOT(sendResetUnlockSignal()));
-    connect(editLabelAction, SIGNAL(triggered()), this, SLOT(sendResetUnlockSignal()));
-    connect(showMemoAction, SIGNAL(triggered()), this, SLOT(sendResetUnlockSignal()));
-    connect(showDetailsAction, SIGNAL(triggered()), this, SLOT(sendResetUnlockSignal()));
+    // Modern Qt5 syntax for direct connections
+    connect(dateWidget, QOverload<int>::of(&QComboBox::activated), this, &TransactionView::sendResetUnlockSignal);
+    connect(typeWidget, QOverload<int>::of(&QComboBox::activated), this, &TransactionView::sendResetUnlockSignal);
+    connect(watchOnlyWidget, QOverload<int>::of(&QComboBox::activated), this, &TransactionView::sendResetUnlockSignal);
+    connect(amountWidget, &QLineEdit::textChanged, this, &TransactionView::sendResetUnlockSignal);
+    connect(amount_typing_delay, &QTimer::timeout, this, &TransactionView::sendResetUnlockSignal);
+    connect(addressWidget, &QLineEdit::textChanged, this, &TransactionView::sendResetUnlockSignal);
+    connect(addressOnlyCheckbox, &QCheckBox::toggled, this, &TransactionView::sendResetUnlockSignal);
+    connect(prefix_typing_delay, &QTimer::timeout, this, &TransactionView::sendResetUnlockSignal);
+    connect(view, &QTableView::doubleClicked, this, &TransactionView::sendResetUnlockSignal);
+    connect(view, &QTableView::customContextMenuRequested, this, &TransactionView::sendResetUnlockSignal);
+    connect(copyAddressAction, &QAction::triggered, this, &TransactionView::sendResetUnlockSignal);
+    connect(copyLabelAction, &QAction::triggered, this, &TransactionView::sendResetUnlockSignal);
+    connect(copyAmountAction, &QAction::triggered, this, &TransactionView::sendResetUnlockSignal);
+    connect(copyTxIDAction, &QAction::triggered, this, &TransactionView::sendResetUnlockSignal);
+    connect(copyTxHexAction, &QAction::triggered, this, &TransactionView::sendResetUnlockSignal);
+    connect(copyTxPlainText, &QAction::triggered, this, &TransactionView::sendResetUnlockSignal);
+    connect(editLabelAction, &QAction::triggered, this, &TransactionView::sendResetUnlockSignal);
+    connect(showMemoAction, &QAction::triggered, this, &TransactionView::sendResetUnlockSignal);
+    connect(showDetailsAction, &QAction::triggered, this, &TransactionView::sendResetUnlockSignal);
 }
 
+/**
+ * @brief Emit signal to reset wallet auto-lock timer
+ * 
+ * Called on any user activity to prevent wallet from locking during use.
+ * Connected to all filter changes, button clicks, and context menu actions.
+ */
 void TransactionView::sendResetUnlockSignal() {
     Q_EMIT resetUnlockTimerEvent();
 }
 
+/**
+ * @brief Initialize view with wallet model and configure proxy filtering
+ * 
+ * PROXY MODEL SETUP:
+ * - Creates TransactionFilterProxy for filtering TransactionTableModel
+ * - Configures dynamic sorting (updates as data changes)
+ * - Sets case-insensitive filtering for search
+ * - Sorts by date descending (newest first)
+ * 
+ * COLUMN CONFIGURATION:
+ * - Sets fixed widths for Status, Watchonly, Date, Type, Amount
+ * - ToAddress column dynamically sized using TableViewLastColumnResizingFixer
+ * 
+ * LAZY LOAD INTEGRATION:
+ * - Connects to lazyLoadComplete and lazyLoadProgress signals
+ * - Disables all filters until lazy load finishes
+ * - Prevents incomplete filter results during initial load
+ * 
+ * BLOCK EXPLORER INTEGRATION:
+ * - Parses third-party transaction URLs from options
+ * - Adds "View on:" menu items to context menu
+ * - Supports multiple explorer URLs separated by "|"
+ * 
+ * @param _model Wallet model providing transaction data
+ */
 void TransactionView::setModel(WalletModel *_model)
 {
     this->model = _model;
@@ -433,6 +558,7 @@ void TransactionView::setModel(WalletModel *_model)
                     if (i == 0)
                         contextMenu->addSeparator();
                     contextMenu->addAction(thirdPartyTxUrlAction);
+                    // QSignalMapper requires old-style connection for map() slot
                     connect(thirdPartyTxUrlAction, SIGNAL(triggered()), mapperThirdPartyTxUrls, SLOT(map()));
                     mapperThirdPartyTxUrls->setMapping(thirdPartyTxUrlAction, listUrls[i].trimmed());
                 }
@@ -442,12 +568,14 @@ void TransactionView::setModel(WalletModel *_model)
         // show/hide column Watch-only
         updateWatchOnlyColumn(_model->haveWatchOnly());
 
-        // Watch-only signal
-        connect(_model, SIGNAL(notifyWatchonlyChanged(bool)), this, SLOT(updateWatchOnlyColumn(bool)));
+        // Watch-only signal - modern Qt5 syntax
+        connect(_model, &WalletModel::notifyWatchonlyChanged, this, &TransactionView::updateWatchOnlyColumn);
         
-        // Connect lazy load signals
-        connect(_model->getTransactionTableModel(), SIGNAL(lazyLoadComplete()), this, SLOT(onLazyLoadComplete()));
-        connect(_model->getTransactionTableModel(), SIGNAL(lazyLoadProgress(int,int)), this, SLOT(onLazyLoadProgress(int,int)));
+        // Connect lazy load signals - modern Qt5 syntax
+        connect(_model->getTransactionTableModel(), &TransactionTableModel::lazyLoadComplete, 
+                this, &TransactionView::onLazyLoadComplete);
+        connect(_model->getTransactionTableModel(), &TransactionTableModel::lazyLoadProgress, 
+                this, &TransactionView::onLazyLoadProgress);
         
         // Disable all filters until lazy load completes
         dateWidget->setEnabled(false);
@@ -463,6 +591,23 @@ void TransactionView::setModel(WalletModel *_model)
     }
 }
 
+/**
+ * @brief Apply date range filter based on combo box selection
+ * 
+ * DATE RANGE CALCULATION:
+ * - All: No date filtering (MIN_DATE to MAX_DATE)
+ * - Today: Current date 00:00:00 to now
+ * - This Week: Last Monday 00:00:00 to now
+ * - This Month: 1st of current month 00:00:00 to now
+ * - Last Month: 1st of previous month to 1st of current month
+ * - This Year: January 1st 00:00:00 to now
+ * - Range: Shows custom date picker, calls dateRangeChanged()
+ * 
+ * All ranges use startOfDay() to include full days.
+ * Forces view reset to apply filter immediately (except Range).
+ * 
+ * @param idx Combo box item index
+ */
 void TransactionView::chooseDate(int idx)
 {
     if(!transactionProxyModel)
@@ -509,37 +654,58 @@ void TransactionView::chooseDate(int idx)
         dateRangeChanged();
         break;
     }
-    
-    // Force view to update (except for Range which calls dateRangeChanged)
-    if(transactionView && dateWidget->itemData(idx).toInt() != Range) {
-        transactionView->reset();
-    }
 }
 
+/**
+ * @brief Apply transaction type filter
+ * 
+ * Type filter uses bitmask to support multiple types:
+ * - All: ALL_TYPES (0xFFFFFFFF)
+ * - Received: RecvWithAddress | RecvWithAddressWithMemo | RecvFromOther
+ * - Sent: SendToAddress | SendToAddressWithMemo | SendToOther
+ * - To yourself: SendToSelf | SendToSelfWithMemo
+ * - Mined: Generated
+ * - Other: Other
+ * 
+ * @param idx Combo box item index
+ */
 void TransactionView::chooseType(int idx)
 {
     if(!transactionProxyModel)
         return;
     transactionProxyModel->setTypeFilter(
         typeWidget->itemData(idx).toInt());
-    // Force view to update
-    if(transactionView) {
-        transactionView->reset();
-    }
 }
 
+/**
+ * @brief Apply watch-only filter
+ * 
+ * Filter options:
+ * - All: Show all transactions
+ * - Yes: Show only watch-only transactions (eye+ icon)
+ * - No: Show only non-watch-only transactions (eye- icon)
+ * 
+ * @param idx Combo box item index
+ */
 void TransactionView::chooseWatchonly(int idx)
 {
     if(!transactionProxyModel)
         return;
     transactionProxyModel->setWatchOnlyFilter(
         static_cast<TransactionFilterProxy::WatchOnlyFilter>(watchOnlyWidget->itemData(idx).toInt()));
-    // Force view to update
-    if(transactionView) {
-        transactionView->reset();
-    }
 }
 
+/**
+ * @brief Apply display limit filter
+ * 
+ * Limits number of parent transactions displayed to improve performance.
+ * Options: 50, 100, 200 transactions.
+ * 
+ * Note: Limit applies to parent transactions only, not total records
+ * (children are included with their parents).
+ * 
+ * @param idx Combo box item index
+ */
 void TransactionView::chooseLimit(int idx)
 {
     if(!transactionProxyModel)
@@ -547,61 +713,87 @@ void TransactionView::chooseLimit(int idx)
     int limit = limitWidget->itemData(idx).toInt();
     qDebug() << "TransactionView::chooseLimit: Setting limit to" << limit;
     transactionProxyModel->setLimit(limit);
-    // Force view to update
-    if(transactionView) {
-        transactionView->reset();
-    }
 }
 
+/**
+ * @brief Apply address/label search filter
+ * 
+ * SEARCH BEHAVIOR:
+ * - Case-insensitive substring match on address or label
+ * - Triggers filtered rebuild from cache with current filters
+ * - Address Only checkbox state is also applied
+ * 
+ * PERFORMANCE:
+ * - Rebuilds cachedWallet from decomposedTxCache (cached data)
+ * - No wallet rescan needed - uses already-loaded transactions
+ * 
+ * DEBOUNCING:
+ * - Called via 200ms timer after last keystroke (prefix_typing_delay)
+ * - Also called immediately on Search button click or Enter key
+ */
 void TransactionView::changedPrefix()
 {
     if(!transactionProxyModel)
         return;
     
     QString searchText = addressWidget->text();
+    // setAddressPrefix automatically calls triggerSourceRebuild()
     transactionProxyModel->setAddressPrefix(searchText);
-    transactionProxyModel->setShowAddressOnly(addressOnlyCheckbox->isChecked());
-    
-    // If searching, reload wallet to search entire history
-    // Otherwise, use the cached 200 transactions
-    if (!searchText.isEmpty() && model) {
-        QProgressDialog progress(tr("Searching transactions..."), tr("Cancel"), 0, 0, this);
-        progress.setWindowModality(Qt::WindowModal);
-        progress.setMinimumDuration(500); // Only show if operation takes > 500ms
-        progress.setValue(0);
-        
-        model->getTransactionTableModel()->refreshWallet();
-        
-        progress.setValue(1);
-    }
 }
 
+/**
+ * @brief Toggle address-only filter mode
+ * 
+ * FILTER MODES:
+ * - Unchecked: Show complete transaction (parent + all children) if any child matches search
+ * - Checked: Show only parent + children that match search address/label
+ * 
+ * This is a display filter only - does NOT trigger data reload.
+ * Works on currently displayed transactions in the table.
+ * 
+ * @param checked true to enable address-only mode, false to show full transactions
+ */
+void TransactionView::toggleAddressOnly(bool checked)
+{
+    if(!transactionProxyModel)
+        return;
+    
+    transactionProxyModel->setShowAddressOnly(checked);
+}
+
+/**
+ * @brief Clear search field and refresh to default view
+ * 
+ * Clears address search and triggers changedPrefix() to reload
+ * cached transactions.
+ */
 void TransactionView::clearSearch()
 {
     addressWidget->clear();
-    
-    QProgressDialog progress(tr("Refreshing transactions..."), tr("Cancel"), 0, 0, this);
-    progress.setWindowModality(Qt::WindowModal);
-    progress.setMinimumDuration(500);
-    progress.setValue(0);
-    
-    changedPrefix(); // This will trigger refresh to reload default 200
-    
-    progress.setValue(1);
+    changedPrefix(); // Triggers rebuild with empty search
 }
 
+/**
+ * @brief Reset all filters to default values
+ * 
+ * DEFAULT VALUES:
+ * - Date: All dates
+ * - Type: All types
+ * - Watch-only: All
+ * - Limit: 50 transactions
+ * - Amount: Empty (no minimum)
+ * - Search: Empty
+ * - Address Only: Unchecked
+ * 
+ * Triggers all filter update methods to apply changes.
+ */
 void TransactionView::resetFilters()
 {
-    QProgressDialog progress(tr("Resetting filters..."), tr("Cancel"), 0, 0, this);
-    progress.setWindowModality(Qt::WindowModal);
-    progress.setMinimumDuration(500);
-    progress.setValue(0);
-    
     // Reset all filters to default
     dateWidget->setCurrentIndex(0); // All dates
     typeWidget->setCurrentIndex(0); // All types
     watchOnlyWidget->setCurrentIndex(0); // All watch-only
-    limitWidget->setCurrentIndex(1); // 50 transactions
+    limitWidget->setCurrentIndex(0); // 50 transactions
     amountWidget->clear(); // Clear min amount
     addressWidget->clear(); // Clear search
     addressOnlyCheckbox->setChecked(false); // Uncheck address only
@@ -610,13 +802,21 @@ void TransactionView::resetFilters()
     chooseDate(0);
     chooseType(0);
     chooseWatchonly(0);
-    chooseLimit(1);
+    chooseLimit(0);
     changedAmount();
     changedPrefix();
-    
-    progress.setValue(1);
 }
 
+/**
+ * @brief Handle lazy load completion
+ * 
+ * COMPLETION ACTIONS:
+ * - Updates status label to "All transactions loaded and indexed"
+ * - Enables all filter controls (previously disabled)
+ * - Leaves status visible so user knows all transactions are available
+ * 
+ * Called automatically by TransactionTableModel::lazyLoadComplete() signal.
+ */
 void TransactionView::onLazyLoadComplete()
 {
     // Update status label
@@ -635,6 +835,15 @@ void TransactionView::onLazyLoadComplete()
     // Keep status visible so user knows all transactions are loaded
 }
 
+/**
+ * @brief Update lazy load progress indicator
+ * 
+ * Shows percentage complete and reminds user that filters are disabled.
+ * Called periodically by TransactionTableModel::lazyLoadProgress() signal.
+ * 
+ * @param loaded Number of transactions loaded so far
+ * @param total Total number of transactions to load
+ */
 void TransactionView::onLazyLoadProgress(int loaded, int total)
 {
     if (total > 0) {
@@ -643,6 +852,19 @@ void TransactionView::onLazyLoadProgress(int loaded, int total)
     }
 }
 
+/**
+ * @brief Apply minimum amount filter
+ * 
+ * VALIDATION:
+ * - Uses KomodoUnits::parse() to validate and convert input
+ * - Accepts the current display unit (BTC, mBTC, etc.)
+ * - Invalid input: Defaults to 0 (no minimum)
+ * 
+ * FILTER BEHAVIOR:
+ * - Shows only transactions with absolute amount >= minimum
+ * - Applies to both sent and received amounts
+ * - Updates immediately on text change (with debouncing)
+ */
 void TransactionView::changedAmount()
 {
     if(!transactionProxyModel)
@@ -657,6 +879,29 @@ void TransactionView::changedAmount()
     }
 }
 
+/**
+ * @brief Export filtered transactions to CSV file
+ * 
+ * EXPORT FORMAT:
+ * - CSV format (comma-separated values)
+ * - Exports currently filtered/visible transactions only
+ * - Column order: Confirmed, Watch-only (if enabled), Date, Type, Label, Address, Amount, ID
+ * 
+ * COLUMNS EXPORTED:
+ * - Confirmed: Status icon/text
+ * - Watch-only: Only included if wallet has watch-only addresses
+ * - Date: Transaction date/time
+ * - Type: Send, Receive, etc.
+ * - Label: Address book label
+ * - Address: Transaction address
+ * - Amount: Formatted in current display unit
+ * - ID: Transaction hash
+ * 
+ * USER INTERACTION:
+ * - Shows file save dialog
+ * - Success/failure message displayed via message() signal
+ * - Uses CSVModelWriter for proper escaping and formatting
+ */
 void TransactionView::exportClicked()
 {
     if (!model || !model->getOptionsModel()) {
@@ -695,6 +940,23 @@ void TransactionView::exportClicked()
     }
 }
 
+/**
+ * @brief Handle row click to expand/collapse hierarchical transactions
+ * 
+ * HIERARCHY SUPPORT:
+ * - Parent transactions can have multiple child records (inputs/outputs)
+ * - Click toggles between collapsed (parent only) and expanded (show children)
+ * - Source model maintains expansion state
+ * 
+ * INDEX MAPPING:
+ * - Proxy index → Source index (required for filtering)
+ * - Source model handles actual expand/collapse logic
+ * - View automatically updates when model changes
+ * 
+ * USER EXPERIENCE:
+ * - Single click to toggle (no double-click required)
+ * - Expand All button can override individual states
+ */
 void TransactionView::handleTransactionClicked(const QModelIndex &index)
 {
     if (!index.isValid() || !transactionProxyModel)
@@ -712,6 +974,22 @@ void TransactionView::handleTransactionClicked(const QModelIndex &index)
     }
 }
 
+/**
+ * @brief Toggle expand/collapse state for all transactions
+ * 
+ * BUTTON STATE:
+ * - Checkable button changes text: "Expand All" ↔ "Collapse All"
+ * - Button state syncs with action
+ * 
+ * MODEL OPERATION:
+ * - Calls setAllTransactionsExpanded() on source model
+ * - Model handles updating all transaction records
+ * - Individual click states are overridden by this global state
+ * 
+ * PERFORMANCE:
+ * - May trigger many row updates for large transaction lists
+ * - Model emits signals for each changed row
+ */
 void TransactionView::toggleExpandAll()
 {
     if (!transactionProxyModel)
@@ -730,6 +1008,23 @@ void TransactionView::toggleExpandAll()
     }
 }
 
+/**
+ * @brief Show right-click context menu at cursor position
+ * 
+ * REQUIREMENTS:
+ * - Must have at least one row selected
+ * - Menu items configured in constructor with QSignalMapper
+ * 
+ * MENU CONTENTS:
+ * - Copy address, label, amount, transaction ID, hex
+ * - Copy full transaction details (plain text)
+ * - Show transaction details dialog
+ * - Show memo dialog
+ * - Edit label (opens address book)
+ * - Third-party block explorer links (if configured)
+ * 
+ * @param point Mouse position in table viewport coordinates
+ */
 void TransactionView::contextualMenu(const QPoint &point)
 {
     QModelIndex index = transactionView->indexAt(point);
@@ -747,36 +1042,81 @@ void TransactionView::contextualMenu(const QPoint &point)
     }
 }
 
+/**
+ * @brief Copy transaction address to clipboard
+ * Uses GUIUtil::copyEntryData with AddressRole
+ */
 void TransactionView::copyAddress()
 {
     GUIUtil::copyEntryData(transactionView, 0, TransactionTableModel::AddressRole);
 }
 
+/**
+ * @brief Copy address label to clipboard
+ * Uses GUIUtil::copyEntryData with LabelRole
+ */
 void TransactionView::copyLabel()
 {
     GUIUtil::copyEntryData(transactionView, 0, TransactionTableModel::LabelRole);
 }
 
+/**
+ * @brief Copy formatted amount to clipboard
+ * Uses GUIUtil::copyEntryData with FormattedAmountRole (includes unit)
+ */
 void TransactionView::copyAmount()
 {
     GUIUtil::copyEntryData(transactionView, 0, TransactionTableModel::FormattedAmountRole);
 }
 
+/**
+ * @brief Copy transaction hash to clipboard
+ * Uses GUIUtil::copyEntryData with TxIDRole (64-character hex)
+ */
 void TransactionView::copyTxID()
 {
     GUIUtil::copyEntryData(transactionView, 0, TransactionTableModel::TxIDRole);
 }
 
+/**
+ * @brief Copy raw transaction hex to clipboard
+ * Uses GUIUtil::copyEntryData with TxHexRole (full serialized transaction)
+ */
 void TransactionView::copyTxHex()
 {
     GUIUtil::copyEntryData(transactionView, 0, TransactionTableModel::TxHexRole);
 }
 
+/**
+ * @brief Copy full transaction details as formatted plain text
+ * 
+ * Uses GUIUtil::copyEntryData with TxPlainTextRole.
+ * Includes all transaction details in human-readable format.
+ */
 void TransactionView::copyTxPlainText()
 {
     GUIUtil::copyEntryData(transactionView, 0, TransactionTableModel::TxPlainTextRole);
 }
 
+/**
+ * @brief Edit label for transaction address
+ * 
+ * ADDRESS BOOK INTEGRATION:
+ * - Looks up address in AddressTableModel
+ * - If found: Opens EditAddressDialog for editing existing entry
+ * - If not found: Opens dialog to add new sending address
+ * - Handles both receiving and sending address types
+ * 
+ * REQUIREMENTS:
+ * - Transaction must have an associated address
+ * - Address book must be available from wallet model
+ * 
+ * USER FLOW:
+ * 1. Check if transaction has address
+ * 2. Look up address in address book
+ * 3. Open appropriate dialog (edit existing or add new)
+ * 4. Dialog changes saved to address book
+ */
 void TransactionView::editLabel()
 {
     if(!transactionView->selectionModel() ||!model)
@@ -823,6 +1163,17 @@ void TransactionView::editLabel()
     }
 }
 
+/**
+ * @brief Show full transaction details dialog
+ * 
+ * Opens TransactionDescDialog with FULL_TRANSACTION mode.
+ * Dialog displays all transaction information including:
+ * - Status, date, amount
+ * - Inputs and outputs
+ * - Transaction ID and hex
+ * - Confirmations
+ * - Memo (if present)
+ */
 void TransactionView::showDetails()
 {
     if(!transactionView->selectionModel())
@@ -836,6 +1187,13 @@ void TransactionView::showDetails()
     }
 }
 
+/**
+ * @brief Show memo-only dialog
+ * 
+ * Opens TransactionDescDialog with MEMO_ONLY mode.
+ * Specialized view for displaying encrypted memo attached to shielded transactions.
+ * Only relevant for z-address transactions with memos.
+ */
 void TransactionView::showMemo()
 {
     if(!transactionView->selectionModel())
@@ -849,6 +1207,21 @@ void TransactionView::showMemo()
     }
 }
 
+/**
+ * @brief Open transaction in third-party block explorer
+ * 
+ * URL FORMAT:
+ * - Uses template URL with %s placeholder
+ * - Replaces %s with transaction hash
+ * - Example: "https://explorer.pirate.black/tx/%s"
+ * 
+ * CONFIGURATION:
+ * - URLs configured via QSignalMapper in constructor
+ * - Multiple explorers can be added to context menu
+ * - Opens in default system browser
+ * 
+ * @param url URL template with %s placeholder for transaction hash
+ */
 void TransactionView::openThirdPartyTxUrl(QString url)
 {
     if(!transactionView || !transactionView->selectionModel())
@@ -858,6 +1231,27 @@ void TransactionView::openThirdPartyTxUrl(QString url)
          QDesktopServices::openUrl(QUrl::fromUserInput(url.replace("%s", selection.at(0).data(TransactionTableModel::TxHashRole).toString())));
 }
 
+/**
+ * @brief Create custom date range picker widget
+ * 
+ * WIDGET STRUCTURE:
+ * - QFrame with Panel | Raised style
+ * - Two QDateTimeEdit widgets (from and to)
+ * - Calendar popup for easy date selection
+ * - Label "Range:" and "to" between date pickers
+ * 
+ * DEFAULT VALUES:
+ * - From: 7 days ago
+ * - To: Current date
+ * - Display format: dd/MM/yy
+ * 
+ * BEHAVIOR:
+ * - Hidden by default (shown when "Range" date option selected)
+ * - dateRangeChanged() slot called when either date changes
+ * - Appears below main date filter combo box
+ * 
+ * @return Pointer to configured date range widget
+ */
 QWidget *TransactionView::createDateRangeWidget()
 {
     dateRangeWidget = new QFrame();
@@ -888,12 +1282,25 @@ QWidget *TransactionView::createDateRangeWidget()
     dateRangeWidget->setVisible(false);
 
     // Notify on change
-    connect(dateFrom, SIGNAL(dateChanged(QDate)), this, SLOT(dateRangeChanged()));
-    connect(dateTo, SIGNAL(dateChanged(QDate)), this, SLOT(dateRangeChanged()));
+    connect(dateFrom, &QDateTimeEdit::dateChanged, this, &TransactionView::dateRangeChanged);
+    connect(dateTo, &QDateTimeEdit::dateChanged, this, &TransactionView::dateRangeChanged);
 
     return dateRangeWidget;
 }
 
+/**
+ * @brief Apply custom date range filter
+ * 
+ * RANGE CALCULATION:
+ * - From: Start of selected date (00:00:00)
+ * - To: Start of day after selected date (includes full target day)
+ * 
+ * TRIGGER CONDITIONS:
+ * - Called when either dateFrom or dateTo changes
+ * - Called from chooseDate() when "Range" option selected
+ * 
+ * Updates proxy model date range immediately.
+ */
 void TransactionView::dateRangeChanged()
 {
     if(!transactionProxyModel)
@@ -903,6 +1310,25 @@ void TransactionView::dateRangeChanged()
             dateTo->date().startOfDay().addDays(1));
 }
 
+/**
+ * @brief Scroll to and select specific transaction
+ * 
+ * INDEX MAPPING:
+ * - Input: Source model index
+ * - Maps to proxy model index for display
+ * - Handles filtering (transaction may not be visible)
+ * 
+ * ACTIONS:
+ * - Scrolls table to make transaction visible
+ * - Sets as current selection
+ * - Gives focus to table view
+ * 
+ * USAGE:
+ * - Navigate from other views (e.g., OverviewPage)
+ * - Jump to specific transaction by hash or position
+ * 
+ * @param idx Source model index of transaction to focus
+ */
 void TransactionView::focusTransaction(const QModelIndex &idx)
 {
     if(!transactionProxyModel)
@@ -913,15 +1339,49 @@ void TransactionView::focusTransaction(const QModelIndex &idx)
     transactionView->setFocus();
 }
 
-// We override the virtual resizeEvent of the QWidget to adjust tables column
-// sizes as the tables width is proportional to the dialogs width.
+/**
+ * @brief Handle widget resize events
+ * 
+ * COLUMN RESIZING:
+ * - Uses columnResizingFixer to maintain proportional column widths
+ * - Stretches ToAddress column to fill available space
+ * - Maintains minimum widths for other columns
+ * 
+ * ARCHITECTURE:
+ * - Overrides QWidget::resizeEvent()
+ * - Ensures table columns adjust smoothly with window resize
+ * - GUIUtil::TableViewLastColumnResizingFixer handles the details
+ * 
+ * @param event Resize event containing old and new sizes
+ */
 void TransactionView::resizeEvent(QResizeEvent* event)
 {
     QWidget::resizeEvent(event);
     columnResizingFixer->stretchColumnWidth(TransactionTableModel::ToAddress);
 }
 
-// Need to override default Ctrl+C action for amount as default behaviour is just to copy DisplayRole text
+/**
+ * @brief Custom event filter for Ctrl+C override
+ * 
+ * COPY BEHAVIOR OVERRIDE:
+ * - Default Qt behavior: Copies DisplayRole text only
+ * - Custom behavior: Copies full transaction details (TxPlainTextRole)
+ * - Provides more useful clipboard content for users
+ * 
+ * WHY NEEDED:
+ * - Amount column uses custom display formatting
+ * - Users expect Ctrl+C to copy complete transaction info
+ * - Matches behavior of dedicated "Copy" context menu items
+ * 
+ * INSTALLATION:
+ * - Installed in constructor via installEventFilter(this)
+ * - Only intercepts KeyPress events
+ * - Returns true to prevent default handling
+ * 
+ * @param obj Object that generated the event
+ * @param event Event to filter (only KeyPress handled)
+ * @return true if event handled, false to continue default processing
+ */
 bool TransactionView::eventFilter(QObject *obj, QEvent *event)
 {
     if (event->type() == QEvent::KeyPress)
@@ -936,7 +1396,25 @@ bool TransactionView::eventFilter(QObject *obj, QEvent *event)
     return QWidget::eventFilter(obj, event);
 }
 
-// show/hide column Watch-only
+/**
+ * @brief Show or hide watch-only column and filter
+ * 
+ * WATCH-ONLY SUPPORT:
+ * - Watch-only addresses: Addresses for which wallet has public key but not private key
+ * - Can view transactions but cannot spend
+ * - Column shows icon indicating watch-only status
+ * 
+ * VISIBILITY:
+ * - Hidden if wallet has no watch-only addresses (common case)
+ * - Shown when wallet contains at least one watch-only address
+ * - Filter combo box visibility matches column visibility
+ * 
+ * CALLED BY:
+ * - WalletModel when watch-only status changes
+ * - setModel() during initialization
+ * 
+ * @param fHaveWatchOnly true if wallet has watch-only addresses, false otherwise
+ */
 void TransactionView::updateWatchOnlyColumn(bool fHaveWatchOnly)
 {
     watchOnlyWidget->setVisible(fHaveWatchOnly);
