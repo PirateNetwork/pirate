@@ -142,7 +142,10 @@ public:
         initialLoadComplete(false),
         lazyLoadPosition(0),
         lazyLoadTotalSize(0),
-        lazyLoadTimer(nullptr)
+        lazyLoadTimer(nullptr),
+        lastRebuildTime(0),
+        rebuildPendingTimer(nullptr),
+        rebuildPending(false)
     {
     }
     
@@ -151,6 +154,10 @@ public:
         if (lazyLoadTimer) {
             lazyLoadTimer->stop();
             delete lazyLoadTimer;
+        }
+        if (rebuildPendingTimer) {
+            rebuildPendingTimer->stop();
+            delete rebuildPendingTimer;
         }
     }
 
@@ -180,6 +187,13 @@ public:
     int lazyLoadTotalSize;       ///< Total transactions to lazy load
     QTimer* lazyLoadTimer;       ///< Timer for batch processing
     QList<uint256> lazySortedArchive; ///< Sorted list of transaction hashes to load
+    /**@}*/
+    
+    /** @name Rebuild throttling
+     * @{
+     */
+    QTimer* rebuildPendingTimer;  ///< Timer for deferred rebuilds
+    bool rebuildPending;          ///< True if rebuild was deferred during blackout
     /**@}*/
     
     /**
@@ -232,7 +246,26 @@ public:
     qint64 lastMinAmount;
     bool lastShowInactive;
     int lastLimitParents;
+    int64_t lastRebuildTime;  ///< Timestamp of last rebuild for throttling
     /**@}*/
+    
+    /**
+     * @brief Execute a pending rebuild after throttle period expires
+     * 
+     * Called by rebuildPendingTimer after 5-second blackout period.
+     * Rebuilds cachedWallet if rebuildPending flag is set.
+     */
+    void executePendingRebuild()
+    {
+        if (rebuildPending) {
+            rebuildPending = false;
+            lastRebuildTime = GetTime();
+            rebuildFromCache(lastDateFrom, lastDateTo, lastTypeFilter, lastWatchOnlyFilter,
+                           lastAddrPrefix, lastMinAmount, lastShowInactive, lastLimitParents);
+            parent->beginResetModel();
+            parent->endResetModel();
+        }
+    }
     
     /**
      * @brief Shift all index values >= startIdx by offset
@@ -715,6 +748,9 @@ public:
         lastMinAmount = minAmount;
         lastShowInactive = showInactive;
         lastLimitParents = limitParents;
+        
+        // Update rebuild timestamp
+        lastRebuildTime = GetTime();
         
         // Rebuild from the master cache with filters
         rebuildFromCache(dateFrom, dateTo, typeFilter, watchOnlyFilter, 
@@ -1212,80 +1248,36 @@ public:
                 }
                 
                 // Transaction added to decomposedTxCache
-                // Instead of rebuilding entire cache, just insert new records
+                // Trigger rebuild if enough time has passed (throttle to once per 5 seconds)
                 if(!toInsert.isEmpty() && initialLoadComplete)
                 {
-                    // Check if transaction matches current filters before inserting
-                    bool shouldDisplay = true;
+                    int64_t currentTime = GetTime();
+                    int64_t timeSinceLastRebuild = currentTime - lastRebuildTime;
                     
-                    if (lastDateFrom.isValid() || lastDateTo.isValid()) {
-                        QDateTime txTime = QDateTime::fromTime_t(toInsert[0].time);
-                        QDateTime dateFrom = lastDateFrom.isValid() ? lastDateFrom : QDateTime::fromTime_t(0);
-                        QDateTime dateTo = lastDateTo.isValid() ? lastDateTo : QDateTime::fromTime_t(0xFFFFFFFF);
-                        if (txTime < dateFrom || txTime > dateTo) {
-                            shouldDisplay = false;
-                        }
-                    }
-                    
-                    if (shouldDisplay && lastTypeFilter > 0) {
-                        if (!(TransactionFilterProxy::TYPE(toInsert[0].type) & lastTypeFilter)) {
-                            shouldDisplay = false;
-                        }
-                    }
-                    
-                    if (shouldDisplay && !lastAddrPrefix.isEmpty()) {
-                        bool hasMatchingAddress = false;
-                        for (const TransactionRecord& rec : toInsert) {
-                            QString address = QString::fromStdString(rec.address);
-                            if (address.contains(lastAddrPrefix, Qt::CaseInsensitive)) {
-                                hasMatchingAddress = true;
-                                break;
-                            }
-                        }
-                        if (!hasMatchingAddress) {
-                            shouldDisplay = false;
-                        }
-                    }
-                    
-                    if (shouldDisplay && lastMinAmount > 0) {
-                        qint64 absAmount = qAbs(toInsert[0].credit + toInsert[0].debit);
-                        if (absAmount < lastMinAmount) {
-                            shouldDisplay = false;
-                        }
-                    }
-                    
-                    // If transaction matches filters, insert it into cachedWallet
-                    if (shouldDisplay) {
-                        // Find insertion point (maintain sorted order)
-                        int insertPos = cachedWallet.size();
-                        for (int i = 0; i < cachedWallet.size(); i++) {
-                            if (TxLessThan()(toInsert[0], cachedWallet[i])) {
-                                insertPos = i;
-                                break;
-                            }
-                        }
+                    if (timeSinceLastRebuild >= 5) {
+                        // Enough time has passed - rebuild immediately
+                        lastRebuildTime = currentTime;
+                        rebuildFromCache(lastDateFrom, lastDateTo, lastTypeFilter, lastWatchOnlyFilter,
+                                       lastAddrPrefix, lastMinAmount, lastShowInactive, lastLimitParents);
+                        parent->beginResetModel();
+                        parent->endResetModel();
+                    } else {
+                        // Still in blackout period - schedule deferred rebuild
+                        rebuildPending = true;
                         
-                        // Insert new records
-                        parent->beginInsertRows(QModelIndex(), insertPos, insertPos + toInsert.size() - 1);
-                        for (int i = 0; i < toInsert.size(); i++) {
-                            cachedWallet.insert(insertPos + i, toInsert[i]);
-                        }
-                        parent->endInsertRows();
+                        // Calculate time remaining until blackout expires
+                        int remainingMs = (5 - timeSinceLastRebuild) * 1000;
                         
-                        // Update parentIdx for the inserted records
-                        for (int i = insertPos; i < insertPos + toInsert.size(); i++) {
-                            if (cachedWallet[i].isParent) {
-                                // Update children to point to this parent
-                                for (int j = i + 1; j < cachedWallet.size() && cachedWallet[j].hash == cachedWallet[i].hash; j++) {
-                                    if (cachedWallet[j].isChild) {
-                                        cachedWallet[j].parentIdx = i;
-                                    }
-                                }
-                                break;
-                            }
+                        // Create or restart timer to fire when blackout expires
+                        if (!rebuildPendingTimer) {
+                            rebuildPendingTimer = new QTimer();
+                            QObject::connect(rebuildPendingTimer, &QTimer::timeout, [this]() {
+                                executePendingRebuild();
+                            });
                         }
-                        
-                        cachedSize = -1; // Invalidate size cache
+                        rebuildPendingTimer->stop();
+                        rebuildPendingTimer->setSingleShot(true);
+                        rebuildPendingTimer->start(remainingMs);
                     }
                 }
             }

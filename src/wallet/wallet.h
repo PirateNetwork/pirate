@@ -1143,12 +1143,12 @@ public:
 
     void ProcessSaplingBlockTransactions(const CBlockIndex* pblockindex, const CBlock* pblock);
     bool ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex);
-    void IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pblock = nullptr);
+    void IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pblock = nullptr, bool suppressProgress = false);
     void DecrementSaplingWallet(const CBlockIndex* pindex);
 
     void ProcessOrchardBlockTransactions(const CBlockIndex* pblockindex, const CBlock* pblock);
     bool ValidateOrchardWalletTrackedPositions(const CBlockIndex* pindex);
-    void IncrementOrchardWallet(const CBlockIndex* pindex, const CBlock* pblock = nullptr);
+    void IncrementOrchardWallet(const CBlockIndex* pindex, const CBlock* pblock = nullptr, bool suppressProgress = false);
     void DecrementOrchardWallet(const CBlockIndex* pindex);
 
 
@@ -2069,7 +2069,7 @@ public:
          std::vector<std::optional<SproutWitness>>& witnesses,
          uint256 &final_anchor);
     void ReorderWalletTransactions(std::map<std::pair<int,int>, CWalletTx*> &mapSorted, int64_t &maxOrderPos);
-    void UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletTx*> &mapSorted, bool resetOrder);
+    void UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletTx*> &mapSorted);
     bool DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<uint256> &removeArcTxs, bool fRescan = false);
     bool DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan = false);
     bool initalizeArcTx();

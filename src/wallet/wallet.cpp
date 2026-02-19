@@ -4456,7 +4456,7 @@ bool CWallet::ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex) {
 
     int64_t nNow = GetTime();
     int valperc = 0;
-    int i = 0;
+    int t = -1;
     int walletSize = mapWallet.size();
     bool uiShown = false;
 
@@ -4465,7 +4465,8 @@ bool CWallet::ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex) {
         uint256 txid = (*it).first;
         CWalletTx *pwtx = &(*it).second;
 
-        valperc = i/walletSize;
+        t++;
+        valperc = (t * 100) / walletSize;
         if (GetTime() >= nNow + 60) {
             nNow = GetTime();
             LogPrintf("Validating Note Postions... Progress=%d\n", valperc );
@@ -4600,7 +4601,7 @@ bool CWallet::ValidateOrchardWalletTrackedPositions(const CBlockIndex* pindex) {
 
     int64_t nNow = GetTime();
     int valperc = 0;
-    int i = 0;
+    int t = -1;
     int walletSize = mapWallet.size();
     bool uiShown = false;
 
@@ -4609,7 +4610,8 @@ bool CWallet::ValidateOrchardWalletTrackedPositions(const CBlockIndex* pindex) {
         uint256 txid = (*it).first;
         CWalletTx *pwtx = &(*it).second;
 
-        valperc = i/walletSize;
+        t++;
+        valperc = (t * 100) / walletSize;
         if (GetTime() >= nNow + 60) {
             nNow = GetTime();
             LogPrintf("Validating Note Postions... Progress=%d\n", valperc );
@@ -4733,7 +4735,7 @@ bool CWallet::ValidateOrchardWalletTrackedPositions(const CBlockIndex* pindex) {
  * wallet synchronized with the blockchain state. It ensures that all
  * Sapling notes can be properly spent and that witnesses remain valid.
  */
-void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pblock) {
+void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pblock, bool suppressProgress) {
 
     AssertLockHeld(cs_main);
     AssertLockHeld(cs_wallet);
@@ -4838,7 +4840,7 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pb
 
                 //Report Progress to the GUI and log file
                 int witnessHeight = pblockindex->nHeight;
-                if ((witnessHeight % 100 == 0 || GetTime() >= nNow1 + 15) && witnessHeight < chainHeight - 5 ) {
+                if (!suppressProgress && (witnessHeight % 100 == 0 || GetTime() >= nNow1 + 15) && witnessHeight < chainHeight - 5 ) {
                     nNow1 = GetTime();
                     if (!uiShown) {
                         uiShown = true;
@@ -4868,7 +4870,7 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pb
                 pblockindex = chainActive.Next(pblockindex);
             }
 
-            if (uiShown) {
+            if (!suppressProgress && uiShown) {
                 uiInterface.ShowProgress(_("Sapling Wallet Rebuild Complete..."), 100, false);
             }
 
@@ -4915,7 +4917,7 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pb
  * wallet synchronized with the blockchain state. It ensures that all
  * Orchard notes can be properly spent and that witnesses remain valid.
  */
-void CWallet::IncrementOrchardWallet(const CBlockIndex* pindex, const CBlock* pblock) {
+void CWallet::IncrementOrchardWallet(const CBlockIndex* pindex, const CBlock* pblock, bool suppressProgress) {
 
     AssertLockHeld(cs_main);
     AssertLockHeld(cs_wallet);
@@ -5020,7 +5022,7 @@ void CWallet::IncrementOrchardWallet(const CBlockIndex* pindex, const CBlock* pb
 
                 //Report Progress to the GUI and log file
                 int witnessHeight = pblockindex->nHeight;
-                if ((witnessHeight % 100 == 0 || GetTime() >= nNow1 + 15) && witnessHeight < chainHeight - 5 ) {
+                if (!suppressProgress && (witnessHeight % 100 == 0 || GetTime() >= nNow1 + 15) && witnessHeight < chainHeight - 5 ) {
                     nNow1 = GetTime();
                     if (!uiShown) {
                         uiShown = true;
@@ -5050,7 +5052,7 @@ void CWallet::IncrementOrchardWallet(const CBlockIndex* pindex, const CBlock* pb
                 pblockindex = chainActive.Next(pblockindex);
             }
 
-            if (uiShown) {
+            if (!suppressProgress && uiShown) {
                 uiInterface.ShowProgress(_("Witness Cache Complete..."), 100, false);
             }
 
@@ -8709,20 +8711,16 @@ void CWallet::ReorderWalletTransactions(std::map<std::pair<int,int>, CWalletTx*>
 
     int maxSortNumber = chainActive.Tip()->nHeight + 1;
 
-    for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
+    for (auto& [hash, wtx] : mapWallet)
     {
-        CWalletTx* pwtx = &(it->second);
-        maxOrderPos = max(maxOrderPos, pwtx->nOrderPos);
+        maxOrderPos = std::max(maxOrderPos, wtx.nOrderPos);
 
-        if (mapBlockIndex.count(pwtx->hashBlock) > 0) {
-            int wtxHeight = mapBlockIndex[pwtx->hashBlock]->nHeight;
-            auto key = std::make_pair(wtxHeight, pwtx->nIndex);
-            mapSorted.insert(make_pair(key, pwtx));
-        }
-        else {
-            auto key = std::make_pair(maxSortNumber, 0);
-            mapSorted.insert(std::make_pair(key, pwtx));
-            maxSortNumber++;
+        // Use find() to avoid double lookup
+        auto blockIt = mapBlockIndex.find(wtx.hashBlock);
+        if (blockIt != mapBlockIndex.end()) {
+            mapSorted.emplace(std::make_pair(blockIt->second->nHeight, wtx.nIndex), &wtx);
+        } else {
+            mapSorted.emplace(std::make_pair(maxSortNumber++, 0), &wtx);
         }
     }
 }
@@ -8745,45 +8743,23 @@ void CWallet::ReorderWalletTransactions(std::map<std::pair<int,int>, CWalletTx*>
  * 
  * Requires both cs_main and cs_wallet locks for thread safety.
  */
-void CWallet::UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletTx*> &mapSorted, bool resetOrder) {
+void CWallet::UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletTx*> &mapSorted) {
     AssertLockHeld(cs_main);
     AssertLockHeld(cs_wallet);
 
-   int64_t previousPosition = 0;
-   std::map<const uint256, CWalletTx*> mapUpdatedTxs;
+   int64_t nOrderPos = 0;
 
-   //Check the postion of each transaction relative to the previous one.
-   for (map<std::pair<int,int>, CWalletTx*>::iterator it = mapSorted.begin(); it != mapSorted.end(); ++it) {
-       CWalletTx* pwtx = it->second;
-       const uint256 wtxid = pwtx->GetHash();
-
-       if (pwtx->nOrderPos <= previousPosition || resetOrder) {
-           previousPosition++;
-           pwtx->nOrderPos = previousPosition;
-           mapUpdatedTxs.insert(std::make_pair(wtxid, pwtx));
-       }
-       else {
-           previousPosition = pwtx->nOrderPos;
-       }
+   // Update transaction positions in single pass
+   // Note: mapSorted contains pointers to transactions already in mapWallet,
+   // so modifying pwtx->nOrderPos directly updates mapWallet
+   for (const auto& [key, pwtx] : mapSorted) {
+       pwtx->nOrderPos = ++nOrderPos;
    }
 
-  //Update transactions nOrderPos for transactions that changed
-  CWalletDB walletdb(strWalletFile, "r+", false);
-  ArchiveTxPoint arcTxPt;
-  for (map<const uint256, CWalletTx*>::iterator it = mapUpdatedTxs.begin(); it != mapUpdatedTxs.end(); ++it) {
-      CWalletTx* pwtx = it->second;
-      LogPrint("deletetx","Reorder Tx - Updating Positon to %i for Tx %s\n ", pwtx->nOrderPos, pwtx->GetHash().ToString());;
-      const auto itmw = mapWallet.find(pwtx->GetHash());
-      if (itmw != mapWallet.end()) {
-          mapWallet[pwtx->GetHash()].nOrderPos = pwtx->nOrderPos;
-      }
-  }
-
-  //Update Next Wallet Tx Positon
-  nOrderPosNext = previousPosition++;
+  //Update Next Wallet Tx Position
+  nOrderPosNext = nOrderPos + 1;
   CWalletDB(strWalletFile).WriteOrderPosNext(nOrderPosNext);
-  LogPrint("deletetx","Reorder Tx - Total Transactions Reordered %i, Next Position %i\n ", mapUpdatedTxs.size(), nOrderPosNext);
-
+  LogPrint("deletetx","Reorder Tx - Total Transactions Reordered %i, Next Position %i\n ", (int)mapSorted.size(), nOrderPosNext);
 }
 
 /**
@@ -8821,6 +8797,7 @@ bool CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<ui
 
         //remove transaction tracking from the witness tree
         saplingWallet.UnMarkNoteForTransaction(removeTxs[i]);
+        orchardWallet.UnMarkNoteForTransaction(removeTxs[i]);
 
         //remove transaction from the wallet
         if (EraseFromWallet(removeTxs[i])) {
@@ -8849,8 +8826,9 @@ bool CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<ui
         }
     }
 
-    //Cleanup the sapling wallet witness tree
+    //Cleanup the witness tree
     saplingWallet.GarbageCollect();
+    orchardWallet.GarbageCollect();
 
     // Miodrag: release memory back to the OS, only works on linux
     #ifdef __linux__
@@ -8907,14 +8885,7 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
         int64_t maxOrderPos = 0;
         std::map<std::pair<int,int>, CWalletTx*> mapSorted;
         ReorderWalletTransactions(mapSorted, maxOrderPos);
-        if (maxOrderPos > int64_t(mapSorted.size())*10) {
-          //reset the postion when the max postion is 10x bigger than the
-          //number of transactions in the wallet
-          UpdateWalletTransactionOrder(mapSorted, true);
-        }
-        else {
-          UpdateWalletTransactionOrder(mapSorted, false);
-        }
+        UpdateWalletTransactionOrder(mapSorted);
         auto reorderTime = GetTime();
         LogPrint("deletetx","Delete Tx - Time to Reorder %s\n", DateTimeStrFormat("%H:%M:%S", reorderTime-startTime));
 
@@ -9264,6 +9235,10 @@ bool CWallet::initalizeArcTx() {
  * 
  * @note In cold storage mode (nMaxConnections == 0), this function returns false immediately
  */
+
+// Global flag to suppress nested progress dialogs during rescan
+static bool fInRescan = false;
+
 int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, bool fIgnoreBirthday, bool LockOnFinish, bool resetWallets)
 {
     if (nMaxConnections == 0) {
@@ -9273,6 +9248,9 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
     LOCK2(cs_main, cs_wallet);
     //Notify GUI of rescan
     NotifyRescanStarted();
+    
+    // Set flag to suppress nested progress dialogs
+    fInRescan = true;
 
     int ret = 0;
     int64_t nNow = GetTime();
@@ -9380,8 +9358,9 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             //Update the Sapling and Orchard Wallet Merkle tree and set transaction nullifiers
             //This needs to be done after processing the block to ensure
             //that subsequent spends can be detected
-            IncrementSaplingWallet(pindex, &block);
-            IncrementOrchardWallet(pindex, &block);
+            // Pass true to suppress progress dialogs (rescan already shows its own progress)
+            IncrementSaplingWallet(pindex, &block, true);
+            IncrementOrchardWallet(pindex, &block, true);
 
             pindex = chainActive.Next(pindex);
             
@@ -9412,13 +9391,6 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
     for (std::set<OrchardPaymentAddressPirate>::iterator it = orchardAddressesFound.begin(); it != orchardAddressesFound.end(); it++) {
         SetZAddressBook(*it, "orchard", "", true);
-    }
-
-    //Notify GUI of all new transactions found
-    for (set<uint256>::iterator it = txList.begin(); it != txList.end(); ++it)
-    {
-        bool fInsertedNew = (txListOriginal.count(*it) == 0);
-        NotifyTransactionChanged(this, *it, fInsertedNew ? CT_NEW : CT_UPDATED);
     }
 
     //Notify GUI of changes in balances

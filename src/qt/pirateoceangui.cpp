@@ -1486,6 +1486,7 @@ void PirateOceanGUI::ShowProgress(QString title, int nProgress)
         {
             progressDialog->close();
             progressDialog->deleteLater();
+            progressDialog = nullptr;
         }
 
         //Create a new dialog
@@ -1506,6 +1507,7 @@ void PirateOceanGUI::ShowProgress(QString title, int nProgress)
         {
             progressDialog->close();
             progressDialog->deleteLater();
+            progressDialog = nullptr;
         }
     }
     else if (progressDialog && nProgress > 0 && nProgress < 100 ) {

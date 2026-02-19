@@ -2654,7 +2654,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 int64_t maxOrderPos = 0;
                 std::map<std::pair<int,int>, CWalletTx*> mapSorted;
                 pwalletMain->ReorderWalletTransactions(mapSorted, maxOrderPos);
-                pwalletMain->UpdateWalletTransactionOrder(mapSorted, true);
+                pwalletMain->UpdateWalletTransactionOrder(mapSorted);
             }
         }
 
