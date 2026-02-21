@@ -388,7 +388,8 @@ public:
     bool WriteCryptedOrchardFullViewingKey(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk,
                                            const std::vector<unsigned char>& vchCryptedSecret);
     bool WriteOrchardPaymentAddress(const libzcash::OrchardIncomingViewingKeyPirate &ivk,
-                                    const libzcash::OrchardPaymentAddressPirate &addr);
+                                    const libzcash::OrchardPaymentAddressPirate &addr,
+                                    OrchardKeyScope scope);
     bool WriteCryptedOrchardPaymentAddress(const libzcash::OrchardPaymentAddressPirate &addr,
                                            const uint256 chash,
                                            const std::vector<unsigned char> &vchCryptedSecret);

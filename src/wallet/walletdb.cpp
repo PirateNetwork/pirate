@@ -766,12 +766,14 @@ bool CWalletDB::WriteCryptedOrchardFullViewingKey(
 
 bool CWalletDB::WriteOrchardPaymentAddress(
     const libzcash::OrchardIncomingViewingKeyPirate &ivk,
-    const libzcash::OrchardPaymentAddressPirate &addr)
+    const libzcash::OrchardPaymentAddressPirate &addr,
+    OrchardKeyScope scope)
 {
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
-    return Write(std::make_pair(std::string("orchzaddr"), addr), ivk);
+    // Write both IVK and scope to database
+    return Write(std::make_pair(std::string("orchzaddr"), addr), std::make_pair(ivk, static_cast<uint8_t>(scope)));
 }
 
 bool CWalletDB::WriteCryptedOrchardPaymentAddress(
@@ -1135,6 +1137,7 @@ public:
     unsigned int nWalletTx;
     bool fIsEncrypted;
     bool fAnyUnordered;
+    bool fNeedOrchardScopeRederivation;
     int nFileVersion;
     vector<uint256> vWalletUpgrade;
 
@@ -1145,6 +1148,7 @@ public:
         nArcTx = nWalletTx = 0;
         fIsEncrypted = false;
         fAnyUnordered = false;
+        fNeedOrchardScopeRederivation = false;
         nFileVersion = 0;
     }
 };
@@ -2116,11 +2120,35 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             libzcash::OrchardPaymentAddressPirate addr;
             ssKey >> addr;
             libzcash::OrchardIncomingViewingKeyPirate ivk;
-            ssValue >> ivk;
+            OrchardKeyScope scope = OrchardKeyScope::External;
+            
+            // Save original value data before attempting to read
+            CDataStream ssValueCopy(ssValue);
+            
+            // Try to read new format (pair<ivk, scope>)
+            bool readSuccess = false;
+            try {
+                std::pair<libzcash::OrchardIncomingViewingKeyPirate, uint8_t> ivkWithScope;
+                ssValue >> ivkWithScope;
+                ivk = ivkWithScope.first;
+                scope = static_cast<OrchardKeyScope>(ivkWithScope.second);
+                readSuccess = true;
+            } catch (...) {
+                // Fall back to old format (just ivk) - use the copy
+                readSuccess = false;
+            }
+            
+            if (!readSuccess) {
+                ssValueCopy >> ivk;
+                scope = OrchardKeyScope::External;
+                // Mark that we need to rederive scopes for all addresses
+                wss.fNeedOrchardScopeRederivation = true;
+                LogPrintf("Orchard address loaded with old format (no scope) - will rederive scopes after load\n");
+            }
 
             wss.nOrchardAddrs++;
 
-            if (!pwallet->LoadOrchardPaymentAddress(addr, ivk))
+            if (!pwallet->LoadOrchardPaymentAddress(addr, ivk, scope))
             {
                 strErr = "Error reading wallet database: LoadOrchardPaymentAddress failed";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
@@ -2545,6 +2573,16 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
 
     if (wss.nFileVersion < CLIENT_VERSION) // Update
         WriteVersion(CLIENT_VERSION);
+
+    // Rederive Orchard address scopes if we detected old format addresses
+    if (wss.fNeedOrchardScopeRederivation) {
+        LogPrintf("Rederiving Orchard address scopes for wallet upgrade...\n");
+        if (!pwallet->RederiveOrchardAddressScopes()) {
+            LogPrintf("Warning: Some Orchard address scopes could not be rederived\n");
+        } else {
+            LogPrintf("Successfully rederived all Orchard address scopes\n");
+        }
+    }
 
     return result;
 }

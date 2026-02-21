@@ -152,7 +152,7 @@ public:
     MOCK_METHOD3(WriteArcSaplingOp, bool(uint256 nullifier, SaplingOutPoint op, bool txnProtected));
     MOCK_METHOD3(WriteArcOrchardOp, bool(uint256 nullifier, OrchardOutPoint op, bool txnProtected));
     MOCK_METHOD2(WriteSaplingPaymentAddress, bool(const libzcash::SaplingIncomingViewingKey &ivk, const libzcash::SaplingPaymentAddress &addr));
-    MOCK_METHOD2(WriteOrchardPaymentAddress, bool(const libzcash::OrchardIncomingViewingKeyPirate &ivk,const libzcash::OrchardPaymentAddressPirate &addr));
+    MOCK_METHOD3(WriteOrchardPaymentAddress, bool(const libzcash::OrchardIncomingViewingKeyPirate &ivk,const libzcash::OrchardPaymentAddressPirate &addr,OrchardKeyScope scope));
 
     MOCK_METHOD4(WriteCryptedTx, bool(uint256 txid,uint256 hash,const std::vector<unsigned char>& vchCryptedSecret,bool txnProtected));
     MOCK_METHOD4(WriteCryptedArcTx, bool(uint256 txid, uint256 chash, const std::vector<unsigned char>& vchCryptedSecret, bool txnProtected));

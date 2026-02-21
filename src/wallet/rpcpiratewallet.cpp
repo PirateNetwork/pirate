@@ -611,15 +611,20 @@ void getAllSaplingOVKs(std::set<uint256>& ovks, bool fIncludeWatchonly)
         }
     }
 
-    // get ovks for all orchard spending keys (Orcharch OVKs can be used when the source is a Orchard note)
+    // get ovks for all orchard spending keys (Orchard OVKs can be used when the source is a Orchard note)
     std::set<libzcash::OrchardOutgoingViewingKey> ovksOrchard;
     if (fIncludeWatchonly) {
-        pwalletMain->GetOrchardOutgoingViewingKeySet(ovksOrchard);
+        OrchardOutgoingViewingKeySet ovksScoped;
+        pwalletMain->GetOrchardOutgoingViewingKeySet(ovksScoped);
+        // Extract the actual OVKs from the scoped structures
+        for (const auto& ovkWithScope : ovksScoped) {
+            ovksOrchard.insert(ovkWithScope.ovk);
+        }
     } else {
-        std::set<libzcash::OrchardIncomingViewingKeyPirate> setIvks;
+        OrchardIncomingViewingKeySet setIvks;
         pwalletMain->GetOrchardIncomingViewingKeySet(setIvks);
-        for (std::set<libzcash::OrchardIncomingViewingKeyPirate>::iterator it = setIvks.begin(); it != setIvks.end(); it++) {
-            libzcash::OrchardIncomingViewingKeyPirate ivk = (*it);
+        for (const auto& ivkWithScope : setIvks) {
+            const auto& ivk = ivkWithScope.first;
             libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
 
             if (pwalletMain->GetOrchardFullViewingKey(ivk, extfvk)) {
@@ -716,12 +721,17 @@ void getAllOrchardOVKs(std::set<libzcash::OrchardOutgoingViewingKey>& ovks, bool
 
     // get ovks for all spending keys
     if (fIncludeWatchonly) {
-        pwalletMain->GetOrchardOutgoingViewingKeySet(ovks);
+        OrchardOutgoingViewingKeySet ovksScoped;
+        pwalletMain->GetOrchardOutgoingViewingKeySet(ovksScoped);
+        // Extract the actual OVKs from the scoped structures
+        for (const auto& ovkWithScope : ovksScoped) {
+            ovks.insert(ovkWithScope.ovk);
+        }
     } else {
-        std::set<libzcash::OrchardIncomingViewingKeyPirate> setIvks;
+        OrchardIncomingViewingKeySet setIvks;
         pwalletMain->GetOrchardIncomingViewingKeySet(setIvks);
-        for (std::set<libzcash::OrchardIncomingViewingKeyPirate>::iterator it = setIvks.begin(); it != setIvks.end(); it++) {
-            libzcash::OrchardIncomingViewingKeyPirate ivk = (*it);
+        for (const auto& ivkWithScope : setIvks) {
+            const auto& ivk = ivkWithScope.first;
             libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
 
             if (pwalletMain->GetOrchardFullViewingKey(ivk, extfvk)) {
@@ -777,12 +787,11 @@ void getAllOrchardIVKs(std::set<libzcash::OrchardIncomingViewingKeyPirate>& ivks
     if (pwalletMain == nullptr)
         return;
 
-    std::set<libzcash::OrchardIncomingViewingKeyPirate> setIvks;
+    OrchardIncomingViewingKeySet setIvks;
     pwalletMain->GetOrchardIncomingViewingKeySet(setIvks);
-    // get ivks for all spending keys
-    for (std::set<libzcash::OrchardIncomingViewingKeyPirate>::iterator it = setIvks.begin(); it != setIvks.end(); it++) {
-        libzcash::OrchardIncomingViewingKeyPirate ivk = (*it);
-
+    // get ivks for all spending keys (both external and internal)
+    for (const auto& ivkPair : setIvks) {
+        const auto& ivk = ivkPair.first;
 
         if (fIncludeWatchonly) {
             ivks.insert(ivk);
