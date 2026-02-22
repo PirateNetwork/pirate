@@ -15,6 +15,7 @@
 
 #include "base58.h"
 #include "wallet/wallet.h"
+#include "keystore.h"
 
 #include "rpc/server.h"
 #include "chainparams.h"
@@ -31,8 +32,9 @@ const QString ZAddressTableModel::Receive = "R";
 static int column_alignments[] = {
         Qt::AlignCenter|Qt::AlignVCenter, /* mine */
         Qt::AlignRight|Qt::AlignVCenter,   /* balance */
-        Qt::AlignLeft|Qt::AlignVCenter,   /* label */
-        Qt::AlignLeft|Qt::AlignVCenter    /* address */
+        Qt::AlignCenter|Qt::AlignVCenter, /* scope */
+        Qt::AlignLeft|Qt::AlignVCenter,   /* address */
+        Qt::AlignLeft|Qt::AlignVCenter    /* label */
     };
 
 struct ZAddressTableEntry
@@ -48,6 +50,7 @@ struct ZAddressTableEntry
     QString       address;
     CAmount       balance;
     bool          mine;
+    QString       scope;
 
     ZAddressTableEntry() {}
 };
@@ -205,6 +208,7 @@ public:
                   entry.address = QString::fromStdString(EncodePaymentAddress(zaddr));
                   entry.balance = balance;
                   entry.mine = mine;
+                  entry.scope = QObject::tr("Normal");  // Sapling addresses are always Normal
                   cachedAddressTable.append(entry);
 
                 }
@@ -236,6 +240,15 @@ public:
                   entry.address = QString::fromStdString(EncodePaymentAddress(zaddr));
                   entry.balance = balance;
                   entry.mine = mine;
+                  
+                  // Get scope for Orchard addresses
+                  OrchardKeyScope scope;
+                  if (wallet->GetOrchardKeyScope(*orchardAddr, scope)) {
+                      entry.scope = (scope == OrchardKeyScope::External) ? QObject::tr("Normal") : QObject::tr("Change");
+                  } else {
+                      entry.scope = QString("");
+                  }
+                  
                   cachedAddressTable.append(entry);
 
                 }
@@ -302,6 +315,21 @@ public:
                 newEntry.address = address;
                 newEntry.balance = 0;
                 newEntry.mine = mine;
+                
+                // Get scope/type for addresses
+                if (orchardAddr != nullptr) {
+                    OrchardKeyScope scope;
+                    if (wallet->GetOrchardKeyScope(*orchardAddr, scope)) {
+                        newEntry.scope = (scope == OrchardKeyScope::External) ? QObject::tr("Normal") : QObject::tr("Change");
+                    } else {
+                        newEntry.scope = QString("");
+                    }
+                } else if (saplingAddr != nullptr) {
+                    newEntry.scope = QObject::tr("Normal");  // Sapling addresses are always Normal
+                } else {
+                    newEntry.scope = QString("");  // Other address types
+                }
+                
                 cachedAddressTable.insert(lowerIndex, newEntry);
                 parent->endInsertRows();
                 break;
@@ -313,6 +341,21 @@ public:
                 }
                 lower->type = newEntryType;
                 lower->label = label;
+                
+                // Update scope/type for addresses
+                if (orchardAddr != nullptr) {
+                    OrchardKeyScope scope;
+                    if (wallet->GetOrchardKeyScope(*orchardAddr, scope)) {
+                        lower->scope = (scope == OrchardKeyScope::External) ? QObject::tr("Normal") : QObject::tr("Change");
+                    } else {
+                        lower->scope = QString("");
+                    }
+                } else if (saplingAddr != nullptr) {
+                    lower->scope = QObject::tr("Normal");  // Sapling addresses are always Normal
+                } else {
+                    lower->scope = QString("");
+                }
+                
                 parent->emitDataChanged(lowerIndex);
                 break;
             case CT_DELETED:
@@ -354,7 +397,7 @@ ZAddressTableModel::ZAddressTableModel(const PlatformStyle *_platformStyle, CWal
     priv(new ZAddressTablePriv(wallet, this)),
     platformStyle(_platformStyle)
 {
-    columns << tr("Mine") << tr("Balance") << tr("Address") << tr("Label");
+    columns << tr("Mine") << tr("Balance") << tr("Type") << tr("Address") << tr("Label");
     priv->refreshAddressTable();
 
     // This timer will be fired repeatedly to update the balance
@@ -432,6 +475,14 @@ QVariant ZAddressTableModel::data(const QModelIndex &index, int role) const
                 } else {
                     return platformStyle->TextColorIcon(qvariant_cast<QIcon>(QVariant()));
                 }
+            case Balance:
+                {
+                    return KomodoUnits::format(walletModel->getOptionsModel()->getDisplayUnit(), rec->balance, false, KomodoUnits::separatorStandard);
+                }
+            case Scope:
+                return rec->scope;
+            case Address:
+                return rec->address;
             case Label:
                 if(rec->label.isEmpty() && role == Qt::DisplayRole)
                 {
@@ -440,12 +491,6 @@ QVariant ZAddressTableModel::data(const QModelIndex &index, int role) const
                 else
                 {
                     return rec->label;
-                }
-            case Address:
-                return rec->address;
-            case Balance:
-                {
-                    return KomodoUnits::format(walletModel->getOptionsModel()->getDisplayUnit(), rec->balance, false, KomodoUnits::separatorStandard);
                 }
         }
     }

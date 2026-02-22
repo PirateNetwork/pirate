@@ -863,6 +863,24 @@ bool CBasicKeyStore::GetOrchardIncomingViewingKey(const libzcash::OrchardPayment
 }
 
 /**
+ * @brief Retrieve the scope (External/Internal) for an Orchard payment address
+ * @param addr The Orchard payment address
+ * @param scopeOut[out] The scope (External or Internal) if found
+ * @return true if address exists in keystore, false otherwise
+ */
+bool CBasicKeyStore::GetOrchardKeyScope(const libzcash::OrchardPaymentAddressPirate &addr,
+                                        OrchardKeyScope &scopeOut) const
+{
+    LOCK(cs_KeyStore);
+    OrchardIncomingViewingKeyMap::const_iterator mi = mapOrchardIncomingViewingKeys.find(addr);
+    if (mi != mapOrchardIncomingViewingKeys.end()) {
+        scopeOut = mi->second.second;  // Extract scope from (IVK, scope) pair
+        return true;
+    }
+    return false;
+}
+
+/**
  * @brief Retrieve a Sapling extended spending key for a payment address
  * @param addr The Sapling payment address
  * @param extskOut[out] The extended spending key (if found)

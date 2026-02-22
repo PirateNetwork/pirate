@@ -180,6 +180,9 @@ public:
     virtual bool GetOrchardIncomingViewingKey(
         const libzcash::OrchardPaymentAddressPirate &addr,
         libzcash::OrchardIncomingViewingKeyPirate& ivkOut) const =0;
+    virtual bool GetOrchardKeyScope(
+        const libzcash::OrchardPaymentAddressPirate &addr,
+        OrchardKeyScope& scopeOut) const =0;
     virtual void GetOrchardPaymentAddresses(std::set<libzcash::OrchardPaymentAddressPirate> &setAddress) const =0;
 
     // ========== Diversified Address Management ==========
@@ -743,6 +746,10 @@ public:
     virtual bool GetOrchardIncomingViewingKey(
         const libzcash::OrchardPaymentAddressPirate &addr,
         libzcash::OrchardIncomingViewingKeyPirate& ivkOut) const;
+
+    virtual bool GetOrchardKeyScope(
+        const libzcash::OrchardPaymentAddressPirate &addr,
+        OrchardKeyScope& scopeOut) const;
 
     bool GetOrchardExtendedSpendingKey(
         const libzcash::OrchardPaymentAddressPirate &addr,
