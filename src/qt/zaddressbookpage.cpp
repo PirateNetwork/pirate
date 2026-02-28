@@ -23,6 +23,24 @@
 #include <QMessageBox>
 #include <QSortFilterProxyModel>
 
+// Custom proxy model that delegates sort() to the source model
+// so that the source model's group-aware sort() is used instead
+// of QSortFilterProxyModel's flat-list sort.
+class ZAddressGroupProxyModel : public QSortFilterProxyModel
+{
+public:
+    explicit ZAddressGroupProxyModel(QObject* parent = nullptr)
+        : QSortFilterProxyModel(parent) {}
+
+    void sort(int column, Qt::SortOrder order) override
+    {
+        if (sourceModel()) {
+            // Delegate to source model which preserves group structure
+            sourceModel()->sort(column, order);
+        }
+    }
+};
+
 ZAddressBookPage::ZAddressBookPage(const PlatformStyle *platformStyle, Mode _mode, Tabs _tab, QWidget *parent) :
     QWidget(parent),
     ui(new Ui::ZAddressBookPage),
@@ -110,9 +128,9 @@ void ZAddressBookPage::setModel(ZAddressTableModel *_model)
     if(!_model)
         return;
 
-    proxyModel = new QSortFilterProxyModel(this);
+    proxyModel = new ZAddressGroupProxyModel(this);
     proxyModel->setSourceModel(_model);
-    proxyModel->setDynamicSortFilter(true);
+    proxyModel->setDynamicSortFilter(false);  // Disable auto-sort; source model handles sorting
     proxyModel->setSortCaseSensitivity(Qt::CaseInsensitive);
     proxyModel->setFilterCaseSensitivity(Qt::CaseInsensitive);
     proxyModel->setSortRole(Qt::EditRole);

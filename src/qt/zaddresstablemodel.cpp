@@ -51,8 +51,15 @@ struct ZAddressTableEntry
     CAmount       balance;
     bool          mine;
     QString       scope;
+    
+    // Grouping support
+    bool          isGroup;        // True if this is a group header row
+    QString       groupKey;       // Spending key fingerprint for grouping
+    int           childCount;     // Number of addresses under this group
+    bool          isExpanded;     // Whether group is expanded
+    int           level;          // 0 for groups, 1 for children
 
-    ZAddressTableEntry() {}
+    ZAddressTableEntry() : isGroup(false), childCount(0), isExpanded(true), level(0) {}
 };
 
 struct ZAddressTableEntryLessThan
@@ -143,27 +150,41 @@ public:
             stringBalances[QString::fromStdString(EncodePaymentAddress(it->first))] = it->second;
         }
 
-          for (std::map<QString, CAmount>::iterator bi = stringBalances.begin(); bi != stringBalances.end(); bi++) {
-              QString address = bi->first;
-              QList<ZAddressTableEntry>::iterator lower = std::lower_bound(
-                  cachedAddressTable.begin(), cachedAddressTable.end(), address, ZAddressTableEntryLessThan());
-              QList<ZAddressTableEntry>::iterator upper = std::upper_bound(
-                  cachedAddressTable.begin(), cachedAddressTable.end(), address, ZAddressTableEntryLessThan());
-              int lowerIndex = (lower - cachedAddressTable.begin());
-              int upperIndex = (upper - cachedAddressTable.begin());
-              bool inModel = (lower != upper);
-
-              if (inModel) {
-                  if (bi != stringBalances.end()) {
-                      CAmount balance = CAmount(bi->second);
-                      lower->balance = balance;
-                      parent->emitDataChanged(lowerIndex);
-                  } else {
-                      lower->balance = CAmount(0);
-                      parent->emitDataChanged(lowerIndex);
-                  }
-              }
-          }
+        for (std::map<QString, CAmount>::iterator bi = stringBalances.begin(); bi != stringBalances.end(); bi++) {
+            QString address = bi->first;
+            CAmount newBalance = bi->second;
+            
+            // Linear search through table (can't use binary search with grouping)
+            for (int i = 0; i < cachedAddressTable.size(); i++) {
+                ZAddressTableEntry& entry = cachedAddressTable[i];
+                
+                if (!entry.isGroup && entry.address == address) {
+                    // Update child address balance
+                    entry.balance = newBalance;
+                    parent->emitDataChanged(i);
+                    
+                    // Find and update parent group balance
+                    if (!entry.groupKey.isEmpty()) {
+                        // Search backwards for the group header
+                        for (int j = i - 1; j >= 0; j--) {
+                            if (cachedAddressTable[j].isGroup && 
+                                cachedAddressTable[j].groupKey == entry.groupKey) {
+                                // Recalculate group total balance
+                                CAmount totalBalance = 0;
+                                for (int k = j + 1; k < cachedAddressTable.size() && 
+                                     !cachedAddressTable[k].isGroup; k++) {
+                                    totalBalance += cachedAddressTable[k].balance;
+                                }
+                                cachedAddressTable[j].balance = totalBalance;
+                                parent->emitDataChanged(j);
+                                break;
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+        }
     }
 
     void refreshAddressTable()
@@ -175,101 +196,302 @@ public:
             std::map<libzcash::PaymentAddress, CAmount> balances;
             wallet->getZAddressBalances(balances, 1, false);
 
+            // Group addresses by spending key fingerprint
+            std::map<QString, QList<ZAddressTableEntry>> groupedAddresses;
+            QList<ZAddressTableEntry> ungroupedAddresses;  // Collect ungrouped addresses separately
+            std::map<libzcash::SaplingExtendedFullViewingKey, QString> saplingFvkToGroup;
+            std::map<libzcash::OrchardExtendedFullViewingKeyPirate, QString> orchardFvkToGroup;
+            int saplingGroupCounter = 1;  // 1-based counter for Sapling groups
+            int orchardGroupCounter = 1;  // 1-based counter for Orchard groups
 
             for (const std::pair<libzcash::PaymentAddress, CAddressBookData>& item : wallet->mapZAddressBook)
             {
                 const libzcash::PaymentAddress& zaddr = item.first;
-
                 bool mine = false;
+                QString groupKey;
+                QString scope;
+                
+                // Check if this is a Sapling address
                 auto saplingAddr = std::get_if<libzcash::SaplingPaymentAddress>(&zaddr);
-
                 if (saplingAddr != nullptr) {
                     libzcash::SaplingIncomingViewingKey ivk;
                     libzcash::SaplingExtendedFullViewingKey extfvk;
                     if (wallet->GetSaplingIncomingViewingKey(*saplingAddr, ivk) &&
-                        wallet->GetSaplingFullViewingKey(ivk, extfvk) &&
-                        wallet->HaveSaplingSpendingKey(extfvk)) {
-                            mine = true;
+                        wallet->GetSaplingFullViewingKey(ivk, extfvk)) {
+                            // Group by FVK regardless of whether we have the spending key
+                            if (saplingFvkToGroup.find(extfvk) == saplingFvkToGroup.end()) {
+                                saplingFvkToGroup[extfvk] = QString("sapl_%1").arg(saplingGroupCounter++);
+                            }
+                            groupKey = saplingFvkToGroup[extfvk];
+                            if (wallet->HaveSaplingSpendingKey(extfvk)) {
+                                mine = true;
+                            }
                     }
-
-                  CAmount balance = 0;
-                  std::map<libzcash::PaymentAddress, CAmount>::iterator it = balances.find(zaddr);
-                  if (it != balances.end()) {
-                      balance = it->second;
-                  }
-
-                  ZAddressTableEntry::Type addressType = translateTransactionType(
-                          QString::fromStdString(item.second.purpose), mine);
-                  const std::string& strName = item.second.name;
-
-                  ZAddressTableEntry entry;
-                  entry.type = addressType;
-                  entry.label = QString::fromStdString(strName);
-                  entry.address = QString::fromStdString(EncodePaymentAddress(zaddr));
-                  entry.balance = balance;
-                  entry.mine = mine;
-                  entry.scope = QObject::tr("Normal");  // Sapling addresses are always Normal
-                  cachedAddressTable.append(entry);
-
+                    scope = QObject::tr("Normal");  // Sapling addresses are always Normal
                 }
 
+                // Check if this is an Orchard address
                 auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddressPirate>(&zaddr);
-
                 if (orchardAddr != nullptr) {
                     libzcash::OrchardIncomingViewingKeyPirate ivk;
                     libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
                     if (wallet->GetOrchardIncomingViewingKey(*orchardAddr, ivk) &&
-                        wallet->GetOrchardFullViewingKey(ivk, extfvk) &&
-                        wallet->HaveOrchardSpendingKey(extfvk)) {
-                            mine = true;
+                        wallet->GetOrchardFullViewingKey(ivk, extfvk)) {
+                            // Group by FVK regardless of whether we have the spending key
+                            if (orchardFvkToGroup.find(extfvk) == orchardFvkToGroup.end()) {
+                                orchardFvkToGroup[extfvk] = QString("orch_%1").arg(orchardGroupCounter++);
+                            }
+                            groupKey = orchardFvkToGroup[extfvk];
+                            if (wallet->HaveOrchardSpendingKey(extfvk)) {
+                                mine = true;
+                            }
                     }
 
-                  CAmount balance = 0;
-                  std::map<libzcash::PaymentAddress, CAmount>::iterator it = balances.find(zaddr);
-                  if (it != balances.end()) {
-                      balance = it->second;
-                  }
+                    // Get scope for Orchard addresses
+                    OrchardKeyScope orchScope;
+                    if (wallet->GetOrchardKeyScope(*orchardAddr, orchScope)) {
+                        scope = (orchScope == OrchardKeyScope::External) ? QObject::tr("Normal") : QObject::tr("Change");
+                    } else {
+                        scope = QString("");
+                    }
+                }
 
-                  ZAddressTableEntry::Type addressType = translateTransactionType(
-                          QString::fromStdString(item.second.purpose), mine);
-                  const std::string& strName = item.second.name;
+                // Get balance for this address
+                CAmount balance = 0;
+                std::map<libzcash::PaymentAddress, CAmount>::iterator it = balances.find(zaddr);
+                if (it != balances.end()) {
+                    balance = it->second;
+                }
 
-                  ZAddressTableEntry entry;
-                  entry.type = addressType;
-                  entry.label = QString::fromStdString(strName);
-                  entry.address = QString::fromStdString(EncodePaymentAddress(zaddr));
-                  entry.balance = balance;
-                  entry.mine = mine;
-                  
-                  // Get scope for Orchard addresses
-                  OrchardKeyScope scope;
-                  if (wallet->GetOrchardKeyScope(*orchardAddr, scope)) {
-                      entry.scope = (scope == OrchardKeyScope::External) ? QObject::tr("Normal") : QObject::tr("Change");
-                  } else {
-                      entry.scope = QString("");
-                  }
-                  
-                  cachedAddressTable.append(entry);
+                // Create entry
+                ZAddressTableEntry::Type addressType = translateTransactionType(
+                        QString::fromStdString(item.second.purpose), mine);
+                const std::string& strName = item.second.name;
 
+                ZAddressTableEntry entry;
+                entry.type = addressType;
+                entry.label = QString::fromStdString(strName);
+                entry.address = QString::fromStdString(EncodePaymentAddress(zaddr));
+                entry.balance = balance;
+                entry.mine = mine;
+                entry.scope = scope;
+                entry.groupKey = groupKey;
+                entry.level = 1;  // Child level
+                
+                if (!groupKey.isEmpty()) {
+                    groupedAddresses[groupKey].append(entry);
+                } else {
+                    ungroupedAddresses.append(entry);  // Collect ungrouped addresses
                 }
             }
+            
+            // Build table with groups and children first
+            for (auto it = groupedAddresses.begin(); it != groupedAddresses.end(); ++it) {
+                const QString& key = it->first;
+                QList<ZAddressTableEntry>& children = it->second;
+                
+                if (children.isEmpty()) continue;
+                
+                // Create group header
+                ZAddressTableEntry groupHeader;
+                groupHeader.isGroup = true;
+                groupHeader.groupKey = key;
+                groupHeader.childCount = children.size();
+                groupHeader.isExpanded = true;
+                groupHeader.level = 0;
+                groupHeader.type = children[0].type;
+                
+                // Calculate total balance and determine mine status from children
+                CAmount totalBalance = 0;
+                bool anyMine = false;
+                for (const ZAddressTableEntry& child : children) {
+                    totalBalance += child.balance;
+                    if (child.mine) anyMine = true;
+                }
+                groupHeader.balance = totalBalance;
+                groupHeader.mine = anyMine;
+                
+                // Build display name from key prefix and number
+                QString displayName;
+                if (key.startsWith("sapl_"))
+                    displayName = QObject::tr("Sapling Key Group ") + key.mid(5);
+                else if (key.startsWith("orch_"))
+                    displayName = QObject::tr("Orchard Key Group ") + key.mid(5);
+                else
+                    displayName = key;
+                groupHeader.label = QString("");
+                groupHeader.address = displayName;
+                
+                cachedAddressTable.append(groupHeader);
+                
+                // Add children if expanded, with Change addresses always last
+                if (groupHeader.isExpanded) {
+                    std::stable_sort(children.begin(), children.end(),
+                        [](const ZAddressTableEntry& a, const ZAddressTableEntry& b) {
+                            bool aChange = (a.scope == QObject::tr("Change"));
+                            bool bChange = (b.scope == QObject::tr("Change"));
+                            return aChange < bChange;  // false < true => Normal before Change
+                        });
+                    cachedAddressTable.append(children);
+                }
+            }
+            
+            // Add ungrouped addresses at the end
+            cachedAddressTable.append(ungroupedAddresses);
         }
-        // std::lower_bound() and std::upper_bound() require our cachedAddressTable list to be sorted in asc order
-        // Even though the map is already sorted this re-sorting step is needed because the originating map
-        // is sorted by binary address, not by base58() address.
-        std::sort(cachedAddressTable.begin(), cachedAddressTable.end(), ZAddressTableEntryLessThan());
+        // Don't sort after grouping as it would break the parent-child structure
+        // Sorting is handled by the sort() method which maintains grouping
+    }
+
+    // Custom sort that maintains group structure
+    void sort(int column, Qt::SortOrder order)
+    {
+        // Separate groups from ungrouped entries
+        QList<QPair<ZAddressTableEntry, QList<ZAddressTableEntry>>> groups;
+        QList<ZAddressTableEntry> ungrouped;
+        
+        int i = 0;
+        while (i < cachedAddressTable.size()) {
+            ZAddressTableEntry& entry = cachedAddressTable[i];
+            
+            if (entry.isGroup) {
+                // This is a group header
+                QList<ZAddressTableEntry> children;
+                i++; // Move past group header
+                
+                // Collect all children (until next group or end)
+                while (i < cachedAddressTable.size() && !cachedAddressTable[i].isGroup) {
+                    children.append(cachedAddressTable[i]);
+                    i++;
+                }
+                
+                groups.append(qMakePair(entry, children));
+            } else {
+                // Ungrouped entry
+                ungrouped.append(entry);
+                i++;
+            }
+        }
+        
+        // Sort groups based on the column (using group header values)
+        std::sort(groups.begin(), groups.end(), 
+            [column, order](const QPair<ZAddressTableEntry, QList<ZAddressTableEntry>>& a,
+                           const QPair<ZAddressTableEntry, QList<ZAddressTableEntry>>& b) {
+                const ZAddressTableEntry& aEntry = a.first;
+                const ZAddressTableEntry& bEntry = b.first;
+                bool result;
+                
+                switch(column) {
+                    case ZAddressTableModel::isMine:
+                        result = aEntry.mine < bEntry.mine;
+                        break;
+                    case ZAddressTableModel::Balance:
+                        result = aEntry.balance < bEntry.balance;
+                        break;
+                    case ZAddressTableModel::Address:
+                        result = aEntry.address < bEntry.address;
+                        break;
+                    case ZAddressTableModel::Label:
+                        result = aEntry.label < bEntry.label;
+                        break;
+                    default:
+                        result = false;
+                }
+                
+                return (order == Qt::AscendingOrder) ? result : !result;
+            });
+        
+        // Sort children within each group: Change addresses always last, then by column
+        for (auto& group : groups) {
+            QList<ZAddressTableEntry>& children = group.second;
+            std::stable_sort(children.begin(), children.end(),
+                [column, order](const ZAddressTableEntry& a, const ZAddressTableEntry& b) {
+                    bool aChange = (a.scope == QObject::tr("Change"));
+                    bool bChange = (b.scope == QObject::tr("Change"));
+                    // Change always last regardless of sort order
+                    if (aChange != bChange)
+                        return aChange < bChange;  // Normal before Change
+                    
+                    // Within same scope group, sort by the requested column
+                    bool result;
+                    switch(column) {
+                        case ZAddressTableModel::isMine:
+                            result = a.mine < b.mine;
+                            break;
+                        case ZAddressTableModel::Balance:
+                            result = a.balance < b.balance;
+                            break;
+                        case ZAddressTableModel::Scope:
+                            result = a.scope < b.scope;
+                            break;
+                        case ZAddressTableModel::Address:
+                            result = a.address < b.address;
+                            break;
+                        case ZAddressTableModel::Label:
+                            result = a.label < b.label;
+                            break;
+                        default:
+                            result = false;
+                    }
+                    return (order == Qt::AscendingOrder) ? result : !result;
+                });
+        }
+        
+        // Sort ungrouped entries
+        std::sort(ungrouped.begin(), ungrouped.end(),
+            [column, order](const ZAddressTableEntry& a, const ZAddressTableEntry& b) {
+                bool result;
+                
+                switch(column) {
+                    case ZAddressTableModel::isMine:
+                        result = a.mine < b.mine;
+                        break;
+                    case ZAddressTableModel::Balance:
+                        result = a.balance < b.balance;
+                        break;
+                    case ZAddressTableModel::Scope:
+                        result = a.scope < b.scope;
+                        break;
+                    case ZAddressTableModel::Address:
+                        result = a.address < b.address;
+                        break;
+                    case ZAddressTableModel::Label:
+                        result = a.label < b.label;
+                        break;
+                    default:
+                        result = false;
+                }
+                
+                return (order == Qt::AscendingOrder) ? result : !result;
+            });
+        
+        // Rebuild table maintaining group structure
+        cachedAddressTable.clear();
+        
+        // Add sorted groups with their children
+        for (const auto& group : groups) {
+            cachedAddressTable.append(group.first);  // Add group header
+            if (group.first.isExpanded) {
+                cachedAddressTable.append(group.second);  // Add children
+            }
+        }
+        
+        // Add sorted ungrouped entries
+        cachedAddressTable.append(ungrouped);
     }
 
     void updateEntry(const QString &address, const QString &label, bool isMine, const QString &purpose, int status)
     {
-        // Find address / label in model
-        QList<ZAddressTableEntry>::iterator lower = std::lower_bound(
-            cachedAddressTable.begin(), cachedAddressTable.end(), address, ZAddressTableEntryLessThan());
-        QList<ZAddressTableEntry>::iterator upper = std::upper_bound(
-            cachedAddressTable.begin(), cachedAddressTable.end(), address, ZAddressTableEntryLessThan());
-        int lowerIndex = (lower - cachedAddressTable.begin());
-        int upperIndex = (upper - cachedAddressTable.begin());
-        bool inModel = (lower != upper);
+        // Find address in model using linear search (grouping breaks binary search)
+        int foundIndex = -1;
+        for (int i = 0; i < cachedAddressTable.size(); i++) {
+            if (!cachedAddressTable[i].isGroup && cachedAddressTable[i].address == address) {
+                foundIndex = i;
+                break;
+            }
+        }
+        
+        bool inModel = (foundIndex >= 0);
         ZAddressTableEntry::Type newEntryType = translateTransactionType(purpose, isMine);
 
         bool mine = false;
@@ -308,65 +530,47 @@ public:
                     qWarning() << "ZAddressTablePriv::updateEntry: Warning: Got CT_NEW, but entry is already in model";
                     break;
                 }
-                parent->beginInsertRows(QModelIndex(), lowerIndex, lowerIndex);
-
-                newEntry.type = newEntryType;
-                newEntry.label = label;
-                newEntry.address = address;
-                newEntry.balance = 0;
-                newEntry.mine = mine;
                 
-                // Get scope/type for addresses
-                if (orchardAddr != nullptr) {
-                    OrchardKeyScope scope;
-                    if (wallet->GetOrchardKeyScope(*orchardAddr, scope)) {
-                        newEntry.scope = (scope == OrchardKeyScope::External) ? QObject::tr("Normal") : QObject::tr("Change");
-                    } else {
-                        newEntry.scope = QString("");
-                    }
-                } else if (saplingAddr != nullptr) {
-                    newEntry.scope = QObject::tr("Normal");  // Sapling addresses are always Normal
-                } else {
-                    newEntry.scope = QString("");  // Other address types
-                }
-                
-                cachedAddressTable.insert(lowerIndex, newEntry);
-                parent->endInsertRows();
+                // For grouped entries, add after the group header or at end
+                // For now, just refresh the entire table to maintain grouping
+                refreshAddressTable();
                 break;
+                
             case CT_UPDATED:
                 if(!inModel)
                 {
                     qWarning() << "ZAddressTablePriv::updateEntry: Warning: Got CT_UPDATED, but entry is not in model";
                     break;
                 }
-                lower->type = newEntryType;
-                lower->label = label;
+                
+                cachedAddressTable[foundIndex].type = newEntryType;
+                cachedAddressTable[foundIndex].label = label;
                 
                 // Update scope/type for addresses
                 if (orchardAddr != nullptr) {
                     OrchardKeyScope scope;
                     if (wallet->GetOrchardKeyScope(*orchardAddr, scope)) {
-                        lower->scope = (scope == OrchardKeyScope::External) ? QObject::tr("Normal") : QObject::tr("Change");
+                        cachedAddressTable[foundIndex].scope = (scope == OrchardKeyScope::External) ? QObject::tr("Normal") : QObject::tr("Change");
                     } else {
-                        lower->scope = QString("");
+                        cachedAddressTable[foundIndex].scope = QString("");
                     }
                 } else if (saplingAddr != nullptr) {
-                    lower->scope = QObject::tr("Normal");  // Sapling addresses are always Normal
+                    cachedAddressTable[foundIndex].scope = QObject::tr("Normal");  // Sapling addresses are always Normal
                 } else {
-                    lower->scope = QString("");
+                    cachedAddressTable[foundIndex].scope = QString("");  // Other address types
                 }
                 
-                parent->emitDataChanged(lowerIndex);
+                parent->emitDataChanged(foundIndex);
                 break;
+                
             case CT_DELETED:
                 if(!inModel)
                 {
                     qWarning() << "ZAddressTablePriv::updateEntry: Warning: Got CT_DELETED, but entry is not in model";
                     break;
                 }
-                parent->beginRemoveRows(QModelIndex(), lowerIndex, upperIndex-1);
-                cachedAddressTable.erase(lower, upper);
-                parent->endRemoveRows();
+                // For grouped entries, refresh the entire table to maintain grouping
+                refreshAddressTable();
                 break;
             }
         }
@@ -439,6 +643,12 @@ int ZAddressTableModel::columnCount(const QModelIndex &parent) const
     return columns.length();
 }
 
+void ZAddressTableModel::sort(int column, Qt::SortOrder order)
+{
+    priv->sort(column, order);
+    Q_EMIT layoutChanged();
+}
+
 QVariant ZAddressTableModel::data(const QModelIndex &index, int role) const
 {
     if(!index.isValid())
@@ -480,16 +690,24 @@ QVariant ZAddressTableModel::data(const QModelIndex &index, int role) const
                     return KomodoUnits::format(walletModel->getOptionsModel()->getDisplayUnit(), rec->balance, false, KomodoUnits::separatorStandard);
                 }
             case Scope:
+                // Don't show scope for group headers
+                if (rec->isGroup) {
+                    return QVariant();
+                }
                 return rec->scope;
             case Address:
+                // For child addresses, add indentation
+                if (rec->level > 0 && !rec->isGroup) {
+                    return QString("    ") + rec->address;  // Indent child addresses
+                }
                 return rec->address;
             case Label:
-                if(rec->label.isEmpty() && role == Qt::DisplayRole)
-                {
+                if (rec->isGroup) {
+                    // Group headers show group label
+                    return rec->label;
+                } else if(rec->label.isEmpty() && role == Qt::DisplayRole) {
                     return tr("(no label)");
-                }
-                else
-                {
+                } else {
                     return rec->label;
                 }
         }
@@ -500,6 +718,10 @@ QVariant ZAddressTableModel::data(const QModelIndex &index, int role) const
         if(index.column() == Address)
         {
             font = GUIUtil::fixedPitchFont();
+        }
+        // Make group headers bold
+        if (rec->isGroup) {
+            font.setBold(true);
         }
         return font;
     }

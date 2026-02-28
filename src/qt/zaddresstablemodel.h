@@ -68,6 +68,7 @@ public:
     QModelIndex index(int row, int column, const QModelIndex &parent) const;
     bool removeRows(int row, int count, const QModelIndex &parent = QModelIndex());
     Qt::ItemFlags flags(const QModelIndex &index) const;
+    void sort(int column, Qt::SortOrder order = Qt::AscendingOrder);
     /*@}*/
 
     /* Add an address to the model.
