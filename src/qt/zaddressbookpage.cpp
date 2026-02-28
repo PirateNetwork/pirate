@@ -180,7 +180,7 @@ void ZAddressBookPage::exportSK()
     if(!selection.isEmpty())
     {
 
-        QString key = walletModel->getSpendingKey(selection.at(0).data(ZAddressTableModel::Address).toString());
+        QString key = walletModel->getSpendingKey(selection.at(0).data(ZAddressTableModel::AddressRole).toString());
         if (key != "") {
             TransactionDescDialog *dlg = new TransactionDescDialog(selection.at(0), SPENDING_KEY, key);
             dlg->setAttribute(Qt::WA_DeleteOnClose);
@@ -197,7 +197,7 @@ void ZAddressBookPage::exportVK()
     if(!selection.isEmpty())
     {
 
-        QString key = walletModel->getViewingKey(selection.at(0).data(ZAddressTableModel::Address).toString());
+        QString key = walletModel->getViewingKey(selection.at(0).data(ZAddressTableModel::AddressRole).toString());
 
         if (key != "") {
           TransactionDescDialog *dlg = new TransactionDescDialog(selection.at(0), VIEWING_KEY, key);
@@ -315,6 +315,10 @@ void ZAddressBookPage::contextualMenu(const QPoint &point)
     QModelIndex index = ui->tableView->indexAt(point);
     if(index.isValid())
     {
+        // Suppress context menu for group header rows (no raw address)
+        if(index.data(ZAddressTableModel::AddressRole).toString().isEmpty())
+            return;
+
         contextMenu->exec(QCursor::pos());
     }
 

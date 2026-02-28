@@ -745,6 +745,13 @@ QVariant ZAddressTableModel::data(const QModelIndex &index, int role) const
         default: break;
         }
     }
+    else if (role == AddressRole)
+    {
+        // Return raw address string (group headers return empty)
+        if (rec->isGroup)
+            return QVariant();
+        return rec->address;
+    }
     return QVariant();
 }
 
