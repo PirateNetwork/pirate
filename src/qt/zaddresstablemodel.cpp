@@ -533,7 +533,9 @@ public:
                 
                 // For grouped entries, add after the group header or at end
                 // For now, just refresh the entire table to maintain grouping
+                parent->beginResetModel();
                 refreshAddressTable();
+                parent->endResetModel();
                 break;
                 
             case CT_UPDATED:
@@ -570,7 +572,9 @@ public:
                     break;
                 }
                 // For grouped entries, refresh the entire table to maintain grouping
+                parent->beginResetModel();
                 refreshAddressTable();
+                parent->endResetModel();
                 break;
             }
         }
@@ -645,6 +649,7 @@ int ZAddressTableModel::columnCount(const QModelIndex &parent) const
 
 void ZAddressTableModel::sort(int column, Qt::SortOrder order)
 {
+    Q_EMIT layoutAboutToBeChanged();
     priv->sort(column, order);
     Q_EMIT layoutChanged();
 }
