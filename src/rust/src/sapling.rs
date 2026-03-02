@@ -1128,3 +1128,118 @@ pub(crate) fn compute_nullifier(
     true
 }
 
+/// Derive the Outgoing Cipher Key (OCK) for a Sapling output.
+///
+/// The OCK is derived from the Outgoing Viewing Key (OVK), value commitment (cv),
+/// note commitment (cmu), and ephemeral public key (epk).
+///
+/// This implements PRF^ock as defined in the Zcash Protocol Specification section 5.4.2.
+pub(crate) fn derive_sapling_ock(
+    ovk: &[u8; 32],
+    cv: &[u8; 32],
+    cmu: &[u8; 32],
+    epk: &[u8; 32],
+    ock_out: &mut [u8; 32],
+) -> bool {
+    use zcash_note_encryption::EphemeralKeyBytes;
+    use zcash_primitives::sapling::note_encryption::prf_ock;
+    
+    // Parse the value commitment
+    let cv = match de_ct(jubjub::ExtendedPoint::from_bytes(cv)) {
+        Some(p) => p,
+        None => return false,
+    };
+    
+    let cv = match de_ct(cv.into_subgroup()) {
+        Some(cv) => ValueCommitment::from_bytes_not_small_order(&cv.to_bytes()).unwrap(),
+        None => return false,
+    };
+    
+    // Create the OVK
+    let ovk = OutgoingViewingKey(*ovk);
+    
+    // Create ephemeral key bytes
+    let epk = EphemeralKeyBytes(*epk);
+    
+    // Derive the OCK using prf_ock
+    let ock = prf_ock(&ovk, &cv, cmu, &epk);
+    ock_out.copy_from_slice(ock.as_ref());
+    
+    true
+}
+
+impl Output {
+    /// Attempt to decrypt a Sapling output using an Outgoing Cipher Key (OCK).
+    ///
+    /// The OCK can be derived using `derive_sapling_ock` or obtained from other sources.
+    /// This function uses the OCK to decrypt the output ciphertext directly without
+    /// requiring the OVK.
+    pub(crate) fn try_decrypt_output_ock(
+        &self,
+        ock: &[u8; 32],
+        value_out: &mut u64,
+        diversifier_out: &mut [u8; 11],
+        pk_d_out: &mut [u8; 32],
+        memo_out: &mut [u8; 512],
+        rseed_out: &mut [u8; 32],
+        leadbyte_out: &mut u8,
+        cmu_out: &mut [u8; 32],
+        rcm_out: &mut [u8; 32],
+    ) -> bool {
+        use zcash_note_encryption::{OutgoingCipherKey, try_output_recovery_with_ock};
+        use zcash_primitives::sapling::note_encryption::{SaplingDomain, prf_ock};
+        
+        // Create the OCK
+        let ock = OutgoingCipherKey(*ock);
+        
+        // Use MainNetwork with arbitrary height (domain is mainly for ZIP parameter resolution)
+        let network = consensus::Network::MainNetwork;
+        let height = BlockHeight::from_u32(0);
+        let domain = SaplingDomain::for_height(network, height);
+        
+        // Attempt decryption with OCK
+        let decrypted = match try_output_recovery_with_ock(
+            &domain,
+            &ock,
+            &self.0,
+            self.0.out_ciphertext(),
+        ) {
+            Some(r) => r,
+            None => return false,
+        };
+        
+        // Extract the decrypted data
+        // decrypted is a tuple: (Note, PaymentAddress, MemoBytes)
+        *value_out = decrypted.0.value().inner();
+        *diversifier_out = decrypted.1.diversifier().0;
+        
+        // Extract pk_d bytes - PaymentAddress has to_bytes() method
+        let addr_bytes = decrypted.1.to_bytes();
+        // Payment address is 11 bytes diversifier + 32 bytes pk_d
+        pk_d_out.copy_from_slice(&addr_bytes[11..43]);
+        *memo_out = *decrypted.2.as_array();
+        
+        // Determine leadbyte and extract rseed bytes based on Rseed enum
+        match decrypted.0.rseed() {
+            Rseed::BeforeZip212(rcm) => {
+                *rseed_out = rcm.to_bytes();
+                *leadbyte_out = 0x01; // BeforeZip212 format
+                // For BeforeZip212, rseed IS the rcm
+                *rcm_out = rcm.to_bytes();
+            }
+            Rseed::AfterZip212(rseed_bytes) => {
+                rseed_out.copy_from_slice(rseed_bytes);
+                *leadbyte_out = 0x02; // AfterZip212 (ZIP 212) format
+                // For AfterZip212, compute rcm using PRF^expand
+                let rcm = decrypted.0.rcm();
+                *rcm_out = rcm.to_bytes();
+            }
+        }
+        
+        // Get the note commitment from the output (already computed)
+        *cmu_out = self.0.cmu().to_bytes();
+        
+        true
+    }
+}
+

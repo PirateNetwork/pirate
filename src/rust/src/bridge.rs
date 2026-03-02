@@ -10,12 +10,14 @@ use crate::{
     },
     orchard_actions::{
         compute_nullifier as compute_nullifier_orchard,
+        derive_orchard_ock, try_orchard_decrypt_action_ock,
     },
     builder_ffi::shielded_signature_digest,
     orchard_ffi::{orchard_batch_validation_init, BatchValidator as OrchardBatchValidator},
     params::{network, Network},
     sapling::{
         apply_sapling_bundle_signatures, build_sapling_bundle, compute_nullifier,
+        derive_sapling_ock,
         finish_bundle_assembly, init_batch_validator as init_sapling_batch_validator,
         init_verifier, new_bundle_assembler, new_sapling_builder, none_sapling_bundle,
         parse_v4_sapling_components, parse_v4_sapling_output, parse_v4_sapling_spend,
@@ -163,6 +165,20 @@ pub(crate) mod ffi {
             rcm_out: &mut [u8; 32],
         ) -> bool;
 
+        fn try_decrypt_output_ock(
+            self: &Output,
+            ock: &[u8; 32],
+
+            value_out: &mut u64,
+            diversifier_out: &mut [u8; 11],
+            pk_d_out: &mut [u8; 32],
+            memo_out: &mut [u8; 512],
+            rseed_out: &mut [u8; 32],
+            leadbyte_out: &mut u8,
+            cmu_out: &mut [u8; 32],
+            rcm_out: &mut [u8; 32],
+        ) -> bool;
+
         #[cxx_name = "SaplingBundle"]
         type SaplingBundle;
 
@@ -264,6 +280,14 @@ pub(crate) mod ffi {
             nk: &[u8; 32],
             position: u64,
             result: &mut [u8; 32],
+        ) -> bool;
+
+        fn derive_sapling_ock(
+            ovk: &[u8; 32],
+            cv: &[u8; 32],
+            cmu: &[u8; 32],
+            epk: &[u8; 32],
+            ock_out: &mut [u8; 32],
         ) -> bool;
 
         #[cxx_name = "UnauthorizedBundle"]
@@ -384,6 +408,24 @@ pub(crate) mod ffi {
             rho_bytes: &[u8; 32],
             rseed_bytes: &[u8; 32],
             result: &mut [u8; 32],
+        ) -> bool;
+        
+        // Derive Orchard Outgoing Cipher Key for a specific action
+        unsafe fn derive_orchard_ock(
+            orchard_action: *const Action,
+            ovk_bytes: *const [u8; 32],
+            ock_out: *mut [u8; 32],
+        ) -> bool;
+        
+        // Decrypt Orchard action output using OCK
+        unsafe fn try_orchard_decrypt_action_ock(
+            orchard_action: *const Action,
+            ock_bytes: *const [u8; 32],
+            value_out: *mut u64,
+            address_out: *mut [u8; 43],
+            memo_out: *mut [u8; 512],
+            rho_out: *mut [u8; 32],
+            rseed_out: *mut [u8; 32],
         ) -> bool;
     }
 

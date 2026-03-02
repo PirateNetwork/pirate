@@ -710,3 +710,105 @@ libzcash::DiversifiedViewingKey DecodeDiversifiedViewingKey(const std::string& s
     memory_cleanse(data.data(), data.size());
     return libzcash::InvalidEncoding();
 }
+
+std::string EncodeSaplingOutputDisclosure(const SaplingOutputDisclosure& disclosure)
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << disclosure;
+    
+    // Convert to unsigned char vector
+    std::vector<unsigned char> data(ss.begin(), ss.end());
+    
+    // Convert bits for bech32 encoding
+    std::vector<unsigned char> bech32Data;
+    bech32Data.reserve((data.size() * 8 + 4) / 5);
+    ConvertBits<8, 5, true>([&](unsigned char c) { bech32Data.push_back(c); }, data.begin(), data.end());
+    
+    // Encode with the SAPLING_OUTPUT_DISCLOSURE HRP
+    return bech32::Encode(
+        Params().Bech32HRP(CChainParams::SAPLING_OUTPUT_DISCLOSURE),
+        bech32Data
+    );
+}
+
+std::optional<SaplingOutputDisclosure> DecodeSaplingOutputDisclosure(const std::string& str)
+{
+    // Decode bech32
+    auto bech = bech32::Decode(str);
+    if (bech.first.empty()) {
+        return std::nullopt;
+    }
+    
+    // Check if HRP matches
+    if (bech.first != Params().Bech32HRP(CChainParams::SAPLING_OUTPUT_DISCLOSURE)) {
+        return std::nullopt;
+    }
+    
+    // Convert bits back from 5-bit to 8-bit
+    std::vector<unsigned char> data;
+    data.reserve((bech.second.size() * 5 + 7) / 8);
+    if (!ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bech.second.begin(), bech.second.end())) {
+        return std::nullopt;
+    }
+    
+    // Deserialize
+    try {
+        CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
+        SaplingOutputDisclosure disclosure;
+        ss >> disclosure;
+        return disclosure;
+    } catch (const std::exception&) {
+        return std::nullopt;
+    }
+}
+
+std::string EncodeOrchardOutputDisclosure(const OrchardOutputDisclosure& disclosure)
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << disclosure;
+    
+    // Convert to unsigned char vector
+    std::vector<unsigned char> data(ss.begin(), ss.end());
+    
+    // Convert bits for bech32 encoding
+    std::vector<unsigned char> bech32Data;
+    bech32Data.reserve((data.size() * 8 + 4) / 5);
+    ConvertBits<8, 5, true>([&](unsigned char c) { bech32Data.push_back(c); }, data.begin(), data.end());
+    
+    // Encode with the ORCHARD_OUTPUT_DISCLOSURE HRP
+    return bech32::Encode(
+        Params().Bech32HRP(CChainParams::ORCHARD_OUTPUT_DISCLOSURE),
+        bech32Data
+    );
+}
+
+std::optional<OrchardOutputDisclosure> DecodeOrchardOutputDisclosure(const std::string& str)
+{
+    // Decode bech32
+    auto bech = bech32::Decode(str);
+    if (bech.first.empty()) {
+        return std::nullopt;
+    }
+    
+    // Check if HRP matches
+    if (bech.first != Params().Bech32HRP(CChainParams::ORCHARD_OUTPUT_DISCLOSURE)) {
+        return std::nullopt;
+    }
+    
+    // Convert bits back from 5-bit to 8-bit
+    std::vector<unsigned char> data;
+    data.reserve((bech.second.size() * 5 + 7) / 8);
+    if (!ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bech.second.begin(), bech.second.end())) {
+        return std::nullopt;
+    }
+    
+    // Deserialize
+    try {
+        CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
+        OrchardOutputDisclosure disclosure;
+        ss >> disclosure;
+        return disclosure;
+    } catch (const std::exception&) {
+        return std::nullopt;
+    }
+}

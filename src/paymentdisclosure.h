@@ -17,6 +17,7 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <optional>
 
 
 // Ensure that the two different protocol messages, payment disclosure blobs and transactions,
@@ -144,5 +145,80 @@ struct PaymentDisclosure {
 
 typedef std::pair<PaymentDisclosureKey, PaymentDisclosureInfo> PaymentDisclosureKeyInfo;
 
+/**
+ * Structure representing a Sapling Output Disclosure with associated transaction information.
+ * This is used for proof-of-payment functionality, allowing someone to prove they paid to a
+ * specific Sapling output without revealing the full spending key.
+ */
+class SaplingOutputDisclosure
+{
+public:
+    uint256 txid;                      // Transaction ID
+    uint32_t outputIndex;              // Output index in the transaction
+    std::array<uint8_t, 32> ock;      // The Outgoing Cipher Key (32 bytes)
+
+    SaplingOutputDisclosure() : txid(), outputIndex(0), ock() {}
+
+    SaplingOutputDisclosure(const uint256& txid_, uint32_t outputIndex_, const std::array<uint8_t, 32>& ock_)
+        : txid(txid_), outputIndex(outputIndex_), ock(ock_) {}
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(txid);
+        READWRITE(outputIndex);
+        // Serialize the OCK array
+        for (size_t i = 0; i < 32; ++i) {
+            READWRITE(ock[i]);
+        }
+    }
+
+    bool operator==(const SaplingOutputDisclosure& other) const {
+        return txid == other.txid && outputIndex == other.outputIndex && ock == other.ock;
+    }
+
+    bool operator!=(const SaplingOutputDisclosure& other) const {
+        return !(*this == other);
+    }
+};
+
+/**
+ * Structure representing an Orchard Output Disclosure with associated transaction information.
+ * This is used for proof-of-payment functionality, allowing someone to prove they paid to a
+ * specific Orchard output without revealing the full spending key.
+ */
+class OrchardOutputDisclosure
+{
+public:
+    uint256 txid;                      // Transaction ID
+    uint32_t outputIndex;              // Output index in the transaction (action index)
+    std::array<uint8_t, 32> ock;      // The Outgoing Cipher Key (32 bytes)
+
+    OrchardOutputDisclosure() : txid(), outputIndex(0), ock() {}
+
+    OrchardOutputDisclosure(const uint256& txid_, uint32_t outputIndex_, const std::array<uint8_t, 32>& ock_)
+        : txid(txid_), outputIndex(outputIndex_), ock(ock_) {}
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(txid);
+        READWRITE(outputIndex);
+        // Serialize the OCK array
+        for (size_t i = 0; i < 32; ++i) {
+            READWRITE(ock[i]);
+        }
+    }
+
+    bool operator==(const OrchardOutputDisclosure& other) const {
+        return txid == other.txid && outputIndex == other.outputIndex && ock == other.ock;
+    }
+
+    bool operator!=(const OrchardOutputDisclosure& other) const {
+        return !(*this == other);
+    }
+};
 
 #endif // ZCASH_PAYMENTDISCLOSURE_H

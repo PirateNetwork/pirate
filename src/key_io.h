@@ -13,8 +13,10 @@
 #include <script/standard.h>
 #include <zcash/Address.hpp>
 #include <zcash/address/zip32.h>
+#include <paymentdisclosure.h>
 
 #include <string>
+#include <optional>
 
 CKey DecodeSecret(const std::string& str);
 CKey DecodeCustomSecret(const std::string& str, uint8_t secret_key);
@@ -46,5 +48,27 @@ libzcash::DiversifiedSpendingKey DecodeDiversifiedSpendingKey(const std::string&
 
 std::string EncodeDiversifiedViewingKey(const libzcash::DiversifiedViewingKey& zkey);
 libzcash::DiversifiedViewingKey DecodeDiversifiedViewingKey(const std::string& str);
+
+/**
+ * Encode a SaplingOutputDisclosure as bech32 string
+ */
+std::string EncodeSaplingOutputDisclosure(const SaplingOutputDisclosure& disclosure);
+
+/**
+ * Decode a bech32 string to SaplingOutputDisclosure
+ * Returns an optional that contains the disclosure if decoding was successful
+ */
+std::optional<SaplingOutputDisclosure> DecodeSaplingOutputDisclosure(const std::string& str);
+
+/**
+ * Encode an OrchardOutputDisclosure as bech32 string
+ */
+std::string EncodeOrchardOutputDisclosure(const OrchardOutputDisclosure& disclosure);
+
+/**
+ * Decode a bech32 string to OrchardOutputDisclosure
+ * Returns an optional that contains the disclosure if decoding was successful
+ */
+std::optional<OrchardOutputDisclosure> DecodeOrchardOutputDisclosure(const std::string& str);
 
 #endif // BITCOIN_KEYIO_H

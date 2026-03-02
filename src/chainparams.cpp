@@ -219,6 +219,7 @@ public:
         bech32HRPs[SAPLING_DIVERSIFIED_EXTENDED_SPEND_KEY]    = "secret-diversified-extended-key-main";
         bech32HRPs[SAPLING_EXTENDED_FVK]                      = "zxviews";
         bech32HRPs[SAPLING_DIVERSIFIED_EXTENDED_FVK]          = "zdxviews";
+        bech32HRPs[SAPLING_OUTPUT_DISCLOSURE]                 = "zdisc";
 
         bech32HRPs[ORCHARD_PAYMENT_ADDRESS]                   = "pirate";
         bech32HRPs[ORCHARD_FULL_VIEWING_KEY]                  = "pirate-viewing-key";
@@ -226,6 +227,7 @@ public:
         bech32HRPs[ORCHARD_DIVERSIFIED_EXTENDED_FVK]          = "pirate-diversified-extended-viewing-key";
         bech32HRPs[ORCHARD_EXTENDED_SPEND_KEY]                = "pirate-secret-extended-key";
         bech32HRPs[ORCHARD_DIVERSIFIED_EXTENDED_SPEND_KEY]    = "pirate-secret-diversified-6extended-key";
+        bech32HRPs[ORCHARD_OUTPUT_DISCLOSURE]                 = "odisc";
 
 
         vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_main), std::end(chainparams_seed_main));
@@ -434,6 +436,7 @@ public:
         bech32HRPs[SAPLING_INCOMING_VIEWING_KEY] = "zivktestsapling";
         bech32HRPs[SAPLING_EXTENDED_SPEND_KEY]   = "secret-extended-key-test";
         bech32HRPs[SAPLING_EXTENDED_FVK]         = "zxviewtestsapling";
+        bech32HRPs[SAPLING_OUTPUT_DISCLOSURE]    = "zdisctest";
 
         bech32HRPs[ORCHARD_PAYMENT_ADDRESS]                   = "pirate-test";
         bech32HRPs[ORCHARD_FULL_VIEWING_KEY]                  = "pirate-viewing-key-test";
@@ -441,6 +444,7 @@ public:
         bech32HRPs[ORCHARD_DIVERSIFIED_EXTENDED_FVK]          = "pirate-diversified-extended-viewing-key-test";
         bech32HRPs[ORCHARD_EXTENDED_SPEND_KEY]                = "pirate-secret-extended-key-test";
         bech32HRPs[ORCHARD_DIVERSIFIED_EXTENDED_SPEND_KEY]    = "pirate-secret-diversified-6extended-key-test";
+        bech32HRPs[ORCHARD_OUTPUT_DISCLOSURE]                 = "odisctest";
 
         vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_test), std::end(chainparams_seed_test));
 
@@ -563,6 +567,7 @@ public:
         bech32HRPs[SAPLING_INCOMING_VIEWING_KEY] = "zivkregtestsapling";
         bech32HRPs[SAPLING_EXTENDED_SPEND_KEY]   = "secret-extended-key-regtest";
         bech32HRPs[SAPLING_EXTENDED_FVK]         = "zxviewregtestsapling";
+        bech32HRPs[SAPLING_OUTPUT_DISCLOSURE]    = "zdiscregtest";
 
         bech32HRPs[ORCHARD_PAYMENT_ADDRESS]                   = "pirate-regtest";
         bech32HRPs[ORCHARD_FULL_VIEWING_KEY]                  = "pirate-viewing-key-regtest";
@@ -570,6 +575,7 @@ public:
         bech32HRPs[ORCHARD_DIVERSIFIED_EXTENDED_FVK]          = "pirate-diversified-extended-viewing-key-regtest";
         bech32HRPs[ORCHARD_EXTENDED_SPEND_KEY]                = "pirate-secret-extended-key-regtest";
         bech32HRPs[ORCHARD_DIVERSIFIED_EXTENDED_SPEND_KEY]    = "pirate-secret-diversified-6extended-key-regtest";
+        bech32HRPs[ORCHARD_OUTPUT_DISCLOSURE]                 = "odiscregtest";
 
         // Founders reward script expects a vector of 2-of-3 multisig addresses
         vFoundersRewardAddress = { "t2FwcEhFdNXuFMv1tcYwaBJtYVtMj8b1uTg" };
