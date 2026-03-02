@@ -205,5 +205,5 @@ void ReceiveRequestDialog::on_btnCopyURI_clicked()
 
 void ReceiveRequestDialog::on_btnCopyAddress_clicked()
 {
-    GUIUtil::setClipboard(info.address);
+    GUIUtil::setClipboard(info.address.trimmed());
 }

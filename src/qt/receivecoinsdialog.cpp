@@ -252,7 +252,7 @@ void ReceiveCoinsDialog::copyColumnToClipboard(int column)
     if (!firstIndex.isValid()) {
         return;
     }
-    GUIUtil::setClipboard(model->getRecentRequestsTableModel()->index(firstIndex.row(), column).data(Qt::EditRole).toString());
+    GUIUtil::setClipboard(model->getRecentRequestsTableModel()->index(firstIndex.row(), column).data(Qt::EditRole).toString().trimmed());
 }
 
 // context menu

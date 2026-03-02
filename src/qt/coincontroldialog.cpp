@@ -245,24 +245,24 @@ void CoinControlDialog::copyAmount()
 void CoinControlDialog::copyLabel()
 {
     if (ui->radioTreeMode->isChecked() && contextMenuItem->text(COLUMN_LABEL).length() == 0 && contextMenuItem->parent())
-        GUIUtil::setClipboard(contextMenuItem->parent()->text(COLUMN_LABEL));
+        GUIUtil::setClipboard(contextMenuItem->parent()->text(COLUMN_LABEL).trimmed());
     else
-        GUIUtil::setClipboard(contextMenuItem->text(COLUMN_LABEL));
+        GUIUtil::setClipboard(contextMenuItem->text(COLUMN_LABEL).trimmed());
 }
 
 // context menu action: copy address
 void CoinControlDialog::copyAddress()
 {
     if (ui->radioTreeMode->isChecked() && contextMenuItem->text(COLUMN_ADDRESS).length() == 0 && contextMenuItem->parent())
-        GUIUtil::setClipboard(contextMenuItem->parent()->text(COLUMN_ADDRESS));
+        GUIUtil::setClipboard(contextMenuItem->parent()->text(COLUMN_ADDRESS).trimmed());
     else
-        GUIUtil::setClipboard(contextMenuItem->text(COLUMN_ADDRESS));
+        GUIUtil::setClipboard(contextMenuItem->text(COLUMN_ADDRESS).trimmed());
 }
 
 // context menu action: copy transaction id
 void CoinControlDialog::copyTransactionHash()
 {
-    GUIUtil::setClipboard(contextMenuItem->text(COLUMN_TXHASH));
+    GUIUtil::setClipboard(contextMenuItem->text(COLUMN_TXHASH).trimmed());
 }
 
 // context menu action: lock coin

@@ -285,8 +285,8 @@ void copyEntryData(QAbstractItemView *view, int column, int role)
 
     if(!selection.isEmpty())
     {
-        // Copy first item
-        setClipboard(selection.at(0).data(role).toString());
+        // Copy first item (trim whitespace)
+        setClipboard(selection.at(0).data(role).toString().trimmed());
     }
 }
 
