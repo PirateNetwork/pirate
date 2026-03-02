@@ -789,6 +789,13 @@ public:
             
             if (recordCount == 0) continue;
             
+            // Bounds check
+            if (startIdx + recordCount > decomposedTxCache.size()) {
+                LogPrintf("WARNING: rebuildFromCache: txHashIndex entry exceeds cache bounds (start=%d, count=%d, cache_size=%d)\n",
+                         startIdx, recordCount, decomposedTxCache.size());
+                continue;
+            }
+            
             // Check parent record against filters
             bool parentMatches = false;
             qint64 parentTime = 0;
@@ -861,7 +868,13 @@ public:
                 break;
             }
             // Copy records from decomposedTxCache to cachedWallet
-            for (int i = matched.startIdx; i < matched.startIdx + matched.count; i++) {
+            int endIdx = matched.startIdx + matched.count;
+            if (endIdx > decomposedTxCache.size()) {
+                LogPrintf("WARNING: rebuildFromCache: endIdx %d exceeds decomposedTxCache size %d, clamping\n",
+                         endIdx, decomposedTxCache.size());
+                endIdx = decomposedTxCache.size();
+            }
+            for (int i = matched.startIdx; i < endIdx; i++) {
                 cachedWallet.append(decomposedTxCache[i]);
             }
             loadedParents++;
@@ -1082,7 +1095,13 @@ public:
             } else {
                 // Already cached - just add to display
                 QPair<int, int> pos = txHashIndex[txHashStr];
-                for (int i = pos.first; i < pos.first + pos.second; i++) {
+                int endIdx = pos.first + pos.second;
+                if (endIdx > decomposedTxCache.size()) {
+                    LogPrintf("WARNING: refreshWallet: cached tx exceeds bounds (start=%d, count=%d, cache_size=%d)\n",
+                             pos.first, pos.second, decomposedTxCache.size());
+                    endIdx = decomposedTxCache.size();
+                }
+                for (int i = pos.first; i < endIdx; i++) {
                     cachedWallet.append(decomposedTxCache[i]);
                 }
                 addedToDisplay++;
@@ -1215,7 +1234,13 @@ public:
                 if (txHashIndex.contains(hashStr)) {
                     // Already in decomposedTxCache - copy records from it
                     QPair<int, int> pos = txHashIndex[hashStr];
-                    for (int i = pos.first; i < pos.first + pos.second; i++) {
+                    int endIdx = pos.first + pos.second;
+                    if (endIdx > decomposedTxCache.size()) {
+                        LogPrintf("WARNING: updateWallet: cached tx exceeds bounds (start=%d, count=%d, cache_size=%d)\n",
+                                 pos.first, pos.second, decomposedTxCache.size());
+                        endIdx = decomposedTxCache.size();
+                    }
+                    for (int i = pos.first; i < endIdx; i++) {
                         toInsert.append(decomposedTxCache[i]);
                     }
                 } else {
@@ -1300,7 +1325,13 @@ public:
                 QPair<int, int> pos = txHashIndex[hashStr];
                 // Remove from indexes if initial load complete
                 if (initialLoadComplete) {
-                    for (int i = pos.first; i < pos.first + pos.second; i++) {
+                    int endIdx = pos.first + pos.second;
+                    if (endIdx > decomposedTxCache.size()) {
+                        LogPrintf("WARNING: CT_DELETED: cached tx exceeds bounds (start=%d, count=%d, cache_size=%d)\n",
+                                 pos.first, pos.second, decomposedTxCache.size());
+                        endIdx = decomposedTxCache.size();
+                    }
+                    for (int i = pos.first; i < endIdx; i++) {
                         const TransactionRecord& rec = decomposedTxCache[i];
                         dateIndex.remove(rec.time, i);
                         typeIndex.remove(rec.type, i);
