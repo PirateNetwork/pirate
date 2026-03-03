@@ -507,8 +507,6 @@ extern UniValue z_getoperationresult(const UniValue& params, bool fHelp, const C
 extern UniValue z_listoperationids(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue opreturn_burn(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue z_validateaddress(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcmisc.cpp
-extern UniValue z_getpaymentdisclosure(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcdisclosure.cpp
-extern UniValue z_validatepaymentdisclosure(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcdisclosure.cpp
 
 extern UniValue MoMoMdata(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue calc_MoM(const UniValue& params, bool fHelp, const CPubKey& mypk);

@@ -46,8 +46,6 @@
 
 #include <univalue.h>
 
-#include "paymentdisclosure.h"
-
 // Default transaction fee if caller does not specify one.
 #define SHIELD_COINBASE_DEFAULT_MINERS_FEE 10000
 
@@ -140,7 +138,6 @@ public:
 
     // Configuration flags for testing
     bool testmode = false;                  ///< Set to true to disable sending txs and generating proofs
-    // bool paymentDisclosureMode = true; // Set to true to save esk for encrypted notes in payment disclosure database.
 
 private:
     friend class ShieldToAddress;

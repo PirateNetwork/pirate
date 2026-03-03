@@ -640,11 +640,7 @@ static const CRPCCommand vRPCCommands[] =
     { "wallet",             "z_setaddressbook",       &z_setaddressbook,       true  },
     { "wallet",             "z_exportwallet",         &z_exportwallet,         true  },
     { "wallet",             "z_importwallet",         &z_importwallet,         true  },
-    { "wallet",             "opreturn_burn",          &opreturn_burn,          true  },
-
-    // TODO: rearrange into another category
-    { "disclosure",         "z_getpaymentdisclosure", &z_getpaymentdisclosure, true  },
-    { "disclosure",         "z_validatepaymentdisclosure", &z_validatepaymentdisclosure, true }
+    { "wallet",             "opreturn_burn",          &opreturn_burn,          true  }
 #endif // ENABLE_WALLET
 };
 

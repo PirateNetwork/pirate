@@ -319,7 +319,6 @@ BITCOIN_CORE_H = \
   noui.h \
 	params.h \
   paymentdisclosure.h \
-  paymentdisclosuredb.h \
   policy/fees.h \
   pow.h \
   prevector.h \
@@ -468,7 +467,6 @@ libbitcoin_server_a_SOURCES = \
   notarisationdb.cpp \
 	params.cpp \
   paymentdisclosure.cpp \
-  paymentdisclosuredb.cpp \
   policy/fees.cpp \
   pow.cpp \
   rest.cpp \
@@ -526,9 +524,7 @@ libbitcoin_wallet_a_SOURCES = \
   wallet/crypter.cpp \
   wallet/db.cpp \
   paymentdisclosure.cpp \
-  paymentdisclosuredb.cpp \
   transaction_builder.cpp \
-  wallet/rpcdisclosure.cpp \
   wallet/rpcdump.cpp \
   cc/CCtokens.cpp \
   cc/CCassetsCore.cpp \

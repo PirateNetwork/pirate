@@ -49,9 +49,6 @@
 
 #include "asyncrpcoperation_shieldcoinbase.h"
 
-#include "paymentdisclosure.h"
-#include "paymentdisclosuredb.h"
-
 using namespace libzcash;
 
 /**

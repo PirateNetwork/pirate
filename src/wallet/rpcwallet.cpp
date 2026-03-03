@@ -9652,9 +9652,6 @@ extern UniValue z_importviewingkey(const UniValue& params, bool fHelp, const CPu
 extern UniValue z_exportwallet(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue z_importwallet(const UniValue& params, bool fHelp, const CPubKey& mypk);
 
-extern UniValue z_getpaymentdisclosure(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcdisclosure.cpp
-extern UniValue z_validatepaymentdisclosure(const UniValue& params, bool fHelp, const CPubKey& mypk);
-
 /**
  * z_exportsaplingdisclosure - Export a Sapling output disclosure for proof of payment
  * 
@@ -9928,11 +9925,8 @@ static const CRPCCommand commands[] =
     { "wallet",             "z_importwallet",           &z_importwallet,           true  },
     { "wallet",             "z_viewtransaction",        &z_viewtransaction,        true  },
     { "wallet",             "rescan",                   &rescan,                   true  },
-    // TODO: rearrange into another category
-    { "disclosure",         "z_getpaymentdisclosure",   &z_getpaymentdisclosure,   true  },
-    { "disclosure",         "z_validatepaymentdisclosure", &z_validatepaymentdisclosure, true },
 
-    // { "consolidation",         "enableconsolidation",      &enableconsolidation,       true },
+    // { "consolidation",         "enableconsolidation",      &enableconsolidation",       true },
     { "consolidation",         "consolidationstatus",      &consolidationstatus,       true },
     { "consolidation",         "consolidateaddress",       &consolidateaddress,        true },
     { "sweep",                  "sweepstatus",             &sweepstatus,               true }

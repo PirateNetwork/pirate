@@ -121,7 +121,6 @@ public:
     virtual UniValue getStatus() const;
 
     bool testmode = false;                ///< Enable test mode for debugging
-    bool paymentDisclosureMode = true;    ///< Enable payment disclosure tracking
 
 private:
     friend class TEST_FRIEND_AsyncRPCOperation_sendmany;
@@ -190,8 +189,6 @@ private:
      * @return true if operation completed successfully, false otherwise
      */
     bool main_impl();
-
-    std::vector<PaymentDisclosureKeyInfo> paymentDisclosureData_; ///< Payment disclosure data
 };
 
 /**

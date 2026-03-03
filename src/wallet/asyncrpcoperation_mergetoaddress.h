@@ -35,7 +35,6 @@
 
 #include "amount.h"
 #include "asyncrpcoperation.h"
-#include "paymentdisclosure.h"
 #include "primitives/transaction.h"
 #include "transaction_builder.h"
 #include "wallet.h"
@@ -134,9 +133,8 @@ public:
      */
     virtual UniValue getStatus() const;
 
-    // Configuration flags for testing and privacy
+    // Configuration flags for testing
     bool testmode = false;                  ///< Set to true to disable sending txs and generating proofs
-    bool paymentDisclosureMode = true;      ///< Set to true to save esk for encrypted notes in payment disclosure database
 
 private:
     friend class TEST_FRIEND_AsyncRPCOperation_mergetoaddress; // Friend class for unit testing

@@ -52,8 +52,6 @@
 #include <string>
 #include <thread>
 
-#include "paymentdisclosuredb.h"
-
 using namespace libzcash;
 
 /**
@@ -217,9 +215,6 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
     } else {
         LogPrint("zrpc", "%s: z_sendmany initialized\n", getId());
     }
-
-    // Enable payment disclosure if experimental mode is active
-    paymentDisclosureMode = fExperimentalMode && GetBoolArg("-paymentdisclosure", true);
 }
 
 /**
@@ -327,27 +322,6 @@ void AsyncRPCOperation_sendmany::main()
         logMessage += strprintf(", error=%s)\n", getErrorMessage());
     }
     LogPrintf("%s", logMessage);
-
-    // =================================================================
-    // PAYMENT DISCLOSURE PROCESSING
-    // =================================================================
-    
-    if (operationSuccessful && paymentDisclosureMode && !paymentDisclosureData_.empty()) {
-        uint256 transactionHash = tx_.GetHash();
-        std::shared_ptr<PaymentDisclosureDB> paymentDisclosureDB = PaymentDisclosureDB::sharedInstance();
-        
-        for (PaymentDisclosureKeyInfo& disclosureInfo : paymentDisclosureData_) {
-            disclosureInfo.first.hash = transactionHash;
-            
-            if (!paymentDisclosureDB->Put(disclosureInfo.first, disclosureInfo.second)) {
-                LogPrint("paymentdisclosure", "%s: Payment Disclosure: Error writing entry to database for key %s\n", 
-                        getId(), disclosureInfo.first.ToString());
-            } else {
-                LogPrint("paymentdisclosure", "%s: Payment Disclosure: Successfully added entry to database for key %s\n", 
-                        getId(), disclosureInfo.first.ToString());
-            }
-        }
-    }
 }
 
 /**

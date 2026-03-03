@@ -59,8 +59,6 @@
 #include <string>
 #include <thread>
 
-#include "paymentdisclosuredb.h"
-
 using namespace libzcash;
 
 
