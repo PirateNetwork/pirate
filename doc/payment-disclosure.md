@@ -1,107 +1,403 @@
-# Payment Disclosure (Experimental Feature)
+# Payment Disclosure
 
-**Summary**
+## Summary
 
-Use RPC calls `z_getpaymentdisclosure` and `z_validatepaymentdisclosure` to reveal details of a shielded payment.
+Payment disclosure allows the sender of a shielded transaction to reveal the details of a specific output or action they created. The disclosure is a decryption key that allows anyone to decrypt and view a single shielded output/action without compromising any other transaction data. This feature supports both **Sapling** and **Orchard** shielded pools.
 
-**Who should read this document**
+Use RPC calls `z_exportsaplingdisclosure`, `z_exportorcharddisclosure`, and `z_verifydisclosure` to generate and verify payment disclosures. A graphical interface is also available in the wallet GUI.
 
-Frequent users of shielded transactions, payment processors, exchanges, block explorer
+## Who Should Read This Document
 
-### Experimental Feature
+- Frequent users of shielded transactions
+- Payment processors and exchanges
+- Merchants accepting shielded payments
+- Anyone needing proof of payment for shielded transactions
 
-This is an experimental feature.  Enable it by launching `zcashd` with flags:
+---
 
-    zcashd -experimentalfeatures -paymentdisclosure -debug=paymentdisclosure -txindex=1
+## Background
 
-These flags can also be set as options in `zcash.conf`.
+Payment disclosure is a decryption key that allows a sender to reveal the details of a specific shielded output they created. By sharing this key, the sender can demonstrate that they transferred funds to a recipient's shielded address. This is particularly useful when:
 
-All nodes that generate or validate payment disclosures must run with `txindex=1` enabled.
+- A merchant claims they didn't receive payment
+- You need to demonstrate payment to a third party (e.g., dispute resolution)
+- Regulatory or compliance requirements demand proof of payment
+- Auditing or record-keeping purposes
 
-### Background
+The payment disclosure reveals:
+- The transaction ID
+- The specific output/action index
+- The recipient's address
+- The amount sent
+- The memo field contents
 
-Payment Disclosure is an implementation of the work-in-progress Payment Disclosure ZIP [1].
+**Important:** Payment disclosure does NOT compromise the privacy of other outputs in the transaction or any future transactions.
 
-The ZIP describes a method of proving that a payment was sent to a shielded address. In the typical case, this means enabling a sender to present a proof that they transferred funds to a recipient's shielded address. 
+---
 
-[1] https://github.com/zcash/zips/pull/119
+## Use Cases
 
-### Example Use Case
+### Example 1: Merchant Payment Verification
 
-Alice the customer sends 10 ZEC to Bob the merchant at the shielded address shown on their website.  However, Bob is not sure if he received the funds.
+Alice sends 100 ARRR to Bob's shielded address for goods. Bob claims he never received the payment. Alice generates a payment disclosure (a decryption key for that specific output) and provides it to Bob, who can decrypt and view the payment details to confirm the payment was made to his address.
 
-Alice's node is running with payment disclosure enabled, so Alice generates a payment disclosure and provides it to Bob, who verifies the payment was made.
+### Example 2: Dispute Resolution
 
-If Bob is a bad merchant, Alice can present the payment disclosure to a third party to validate that payment was indeed made.
+If Bob continues to dispute the payment, Alice can provide the payment disclosure to a third party mediator or platform administrator, allowing them to decrypt and view the payment details to confirm the payment was sent.
 
-### Solution
+### Example 3: Tax Records
 
-A payment disclosure can be generated for any output of a JoinSplit using the RPC call:
+A business needs to maintain proof of payments made to contractors using shielded addresses for tax reporting purposes.
 
-    z_getpaymentdisclosure txid js_index output_index (message)
+---
 
-An optional message can be supplied.  This could be used for a refund address or some other reference, as currently it is not common practice to (ahead of time) include a refund address in the memo field when making a payment.
+## Technical Details
 
-To validate a payment disclosure, the following RPC call can be used:
+### Encoding Format
 
-    z_validatepaymentdisclosure hexdata
+Payment disclosures are encoded using Bech32 format with network-specific prefixes:
 
-### Example
+#### Mainnet
+- **Sapling:** `pirate-sapling-payment-disclosure`
+- **Orchard:** `pirate-orchard-payment-disclosure`
 
-Generate a payment disclosure for the first joinsplit, second output (index starts from zero):
+#### Testnet
+- **Sapling:** `zdisctest`
+- **Orchard:** `odisctest`
 
-    zcash-cli z_getpaymentdisclosure 79189528d611e811a1c7bb0358dd31343033d14b4c1e998d7c4799c40f8b652b 0 1 "Hello"
-    
-This returns a payment disclosure in the form of a hex string:
+#### Regtest
+- **Sapling:** `zdiscregtest`
+- **Orchard:** `odiscregtest`
 
-    706462ff000a3722aafa8190cdf9710bfad6da2af6d3a74262c1fc96ad47df814b0cd5641c2b658b0fc499477c8d991e4c4bd133303431dd5803bbc7a111e811d6289518790000000000000000017e861adb829d8cb1cbcf6330b8c2e25fb0d08041a67a857815a136f0227f8a5342bce5b3c0d894e2983000eb594702d3c1580817d0374e15078528e56bb6f80c0548656c6c6f59a7085395c9e706d82afe3157c54ad4ae5bf144fcc774a8d9c921c58471402019c156ec5641e2173c4fb6467df5f28530dc4636fa71f4d0e48fc5c560fac500
+### Supported Scenarios
 
-To validate the payment disclosure:
+The payment disclosure system automatically handles various transaction types:
 
-    zcash-cli z_validatepaymentdisclosure HEXDATA
-    
-This returns data related to the payment and the payment disclosure:
+- **Sapling → Sapling**: Uses sender's Sapling OVK
+- **Sapling → Orchard**: Uses sender's Sapling OVK
+- **Orchard → Orchard**: Uses sender's Orchard OVK
+- **Orchard → Sapling**: Uses sender's Orchard OVK
+- **Transparent → Sapling**: Uses derived transparent OVK
+- **Transparent → Orchard**: Uses derived transparent OVK
 
-    {
-      "txid": "79189528d611e811a1c7bb0358dd31343033d14b4c1e998d7c4799c40f8b652b",
-      "jsIndex": 0,
-      "outputIndex": 1,
-      "version": 0,
-      "onetimePrivKey": "1c64d50c4b81df47ad96fcc16242a7d3f62adad6fa0b71f9cd9081faaa22370a",
-      "message": "Hello",
-      "joinSplitPubKey": "d1c465d16166b602992479acfac18e87dc18065f6cefde6a002e70bc371b9faf",
-      "signatureVerified": true,
-      "paymentAddress": "ztaZJXy8iX8nrk2ytXKDBoTWqPkhQcj6E2ifARnD3wfkFwsxXs5SoX7NGmrjkzSiSKn8VtLHTJae48vX5NakvmDhtGNY5eb",
-      "memo": "f600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-      "value": 12.49900000,
-      "commitmentMatch": true,
-      "valid": true
-    }
+---
 
-The `signatureVerified` field confirms that the payment disclosure was generated and signed with the joinSplitPrivKey, which should only be known by the node generating and sending the transaction 7918...652b in question.
+## Using Payment Disclosure (GUI)
 
-### Where is the data stored?
+### Creating a Payment Disclosure
 
-For all nodes, payment disclosure does not touch `wallet.dat` in any way.
+1. **Open the Transactions Tab**
+   - Navigate to the "Transactions" tab in your wallet
 
-For nodes that only validate payment disclosures, no data is stored locally.
+2. **Locate Your Transaction**
+   - Find the transaction for which you want to create a disclosure
+   - Right-click on the transaction or double-click to open details
 
-For nodes that generate payment disclosures, a LevelDB database is created in the node's datadir.  For most users, this would be in the folder:
+3. **View Transaction Details**
+   - In the transaction details dialog, check "Show Payment Disclosure Keys"
+   - The dialog will display all outgoing shielded payments in the transaction
 
-    $HOME/.zcash/paymentdisclosure
-    
-If you decide you don't want to use payment disclosure, it is safe to shut down your node and delete the database folder.
+4. **Copy the Disclosure Key**
+   - Click the "Copy" button next to the disclosure key you want
+   - The disclosure key is now in your clipboard
+   - Share this key with the recipient or third party
 
-### Security Properties
+### Verifying a Payment Disclosure
 
-Please consult the work-in-progress ZIP for details about the protocol, security properties and caveats.
+1. **Open Verification Dialog**
+   - Go to **Tools → Verify Payment Disclosure** in the menu bar
+   - Or use the keyboard shortcut (if configured)
 
-### Reminder
+2. **Enter the Disclosure Key**
+   - Paste the payment disclosure key into the input box
+   - The format will be detected automatically (Sapling or Orchard)
 
-Feedback is most welcome!
+3. **Verify**
+   - Click "Verify Disclosure"
+   - If valid, you'll see:
+     - Disclosure type (Sapling or Orchard)
+     - Transaction ID
+     - Output/Action index
+     - Value sent
+     - Recipient address
+     - Memo contents (in hex format)
 
-This is an experimental feature so there are no guarantees that the protocol, database format, RPC interface etc. will remain the same in the future.
+4. **Review Results**
+   - Green text indicates successful verification
+   - Red text indicates an error (invalid key, transaction not found, etc.)
 
-### Notes
+---
 
-Currently there is no user friendly way to help senders identify which joinsplit output index maps to a given payment they made.  It is possible to construct this from `debug.log`.  Ideas and feedback are most welcome on how to improve the user experience.
+## Using Payment Disclosure (RPC)
+
+### Prerequisites
+
+Your node must have the transaction indexed to create or verify payment disclosures:
+```bash
+treasurechest-cli gettransaction <txid>
+```
+
+If the transaction is not found, you may need to run with `-txindex=1` enabled.
+
+### Creating a Sapling Payment Disclosure
+
+**Command:**
+```bash
+treasurechest-cli z_exportsaplingdisclosure "txid" output_index
+```
+
+**Parameters:**
+- `txid` (string, required): The transaction ID
+- `output_index` (numeric, required): The Sapling output index (starts from 0)
+
+**Example:**
+```bash
+treasurechest-cli z_exportsaplingdisclosure "8d3c9f1e2a5b7d4c6e8f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d" 0
+```
+
+**Result:**
+```
+pirate-sapling-payment-disclosure1qqqq...
+```
+
+### Creating an Orchard Payment Disclosure
+
+**Command:**
+```bash
+treasurechest-cli z_exportorcharddisclosure "txid" action_index
+```
+
+**Parameters:**
+- `txid` (string, required): The transaction ID
+- `action_index` (numeric, required): The Orchard action index (starts from 0)
+
+**Example:**
+```bash
+treasurechest-cli z_exportorcharddisclosure "403fee829dac18435fd575807ead7ef627767f5ebe5074214136b34de8968cdf" 1
+```
+
+**Result:**
+```
+pirate-orchard-payment-disclosure1qqqq...
+```
+
+### Verifying a Payment Disclosure (Any Type)
+
+**Command:**
+```bash
+treasurechest-cli z_verifydisclosure "disclosure_key"
+```
+
+**Parameters:**
+- `disclosure_key` (string, required): The payment disclosure key (Sapling or Orchard)
+
+The command automatically detects whether the disclosure is for Sapling or Orchard.
+
+**Example (Sapling):**
+```bash
+treasurechest-cli z_verifydisclosure "pirate-sapling-payment-disclosure1qqqq..."
+```
+
+**Result:**
+```json
+{
+  "disclosure_type": "Sapling",
+  "txid": "8d3c9f1e2a5b7d4c6e8f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d",
+  "output_index": 0,
+  "value": 100.00000000,
+  "address": "pirate1xyz...",
+  "memo": "f60000000000..."
+}
+```
+
+**Example (Orchard):**
+```bash
+treasurechest-cli z_verifydisclosure "pirate-orchard-payment-disclosure1qqqq..."
+```
+
+**Result:**
+```json
+{
+  "disclosure_type": "Orchard",
+  "txid": "403fee829dac18435fd575807ead7ef627767f5ebe5074214136b34de8968cdf",
+  "action_index": 1,
+  "value": 3285777.99098000,
+  "address": "pirate1v2pxvcxp3gq2adjy58m9n4hg0z3p0afn44can393pt69nf8q4djy6dl0g2qy548jq4fgxqc49gx",
+  "memo": "f60000000000..."
+}
+```
+
+**Note:** The key difference is:
+- Sapling disclosures use `output_index`
+- Orchard disclosures use `action_index`
+
+---
+
+## Identifying Output/Action Indices
+
+When creating a payment disclosure, you need to know which output or action index corresponds to the payment you want to prove.
+
+### Method 1: Using z_listunspent
+
+If the transaction is relatively recent and outputs are still unspent:
+
+```bash
+treasurechest-cli z_listunspent 0 999999 false '["your_address"]'
+```
+
+Look for your transaction ID in the results to find the output indices.
+
+### Method 2: Using getrawtransaction
+
+```bash
+treasurechest-cli getrawtransaction "txid" 1
+```
+
+This shows the full transaction structure including all outputs. Count the Sapling or Orchard outputs to determine indices (starting from 0).
+
+### Method 3: Transaction Details in GUI
+
+The transaction details dialog in the GUI shows all outputs when "Show Payment Disclosure Keys" is checked, making it easy to identify which output corresponds to which recipient.
+
+---
+
+## Security Considerations
+
+### What Payment Disclosure Reveals
+
+✅ **Disclosed Information:**
+- That YOU sent the payment (proves sender identity)
+- The recipient's address
+- The amount sent
+- The transaction ID and output/action index
+- The memo contents
+
+❌ **NOT Disclosed:**
+- Other outputs in the same transaction
+- Any inputs used in the transaction
+- Information about any other transactions
+- The recipient's balance or transaction history
+
+### Best Practices
+
+1. **Only share disclosures when necessary**: Payment disclosures reveal sensitive information about a specific payment.
+
+2. **Verify the recipient**: When sharing a disclosure, ensure you're sending it to the correct party.
+
+3. **Store disclosures securely**: If keeping records of payment disclosures, store them securely.
+
+4. **Transaction must be confirmed**: Payment disclosures can only be generated for confirmed transactions.
+
+5. **Backup considerations**: Payment disclosures are generated on-demand from your wallet keys and the blockchain. No special backup is needed beyond your wallet backup.
+
+---
+
+## Troubleshooting
+
+### Error: "Transaction not found"
+
+- Ensure the transaction is confirmed and on the blockchain
+- If running a pruned node, you may need `-txindex=1`
+- Try `treasurechest-cli gettransaction <txid>` to verify the transaction exists
+
+### Error: "Output index out of range"
+
+- Verify the correct output/action index
+- Use `getrawtransaction` to see how many outputs exist
+- Remember indices start from 0
+
+### Empty/Blank disclosure key returned
+
+This usually means:
+- The wallet doesn't have the necessary keys to generate the disclosure
+- The output was not sent by this wallet
+- You're trying to generate a disclosure for a received payment (only senders can generate disclosures)
+
+### Error: "Invalid disclosure encoding"
+
+- Ensure you copied the complete disclosure key
+- Check for any extra characters or truncation
+- Verify you're using the correct network (mainnet vs testnet)
+
+### GUI shows "Failed to generate disclosure"
+
+- The transaction may not be fully confirmed yet
+- The output may be a received payment rather than a sent payment
+- Your wallet may not have the spending authority for the sending address
+
+---
+
+## FAQ
+
+**Q: Can the recipient generate a payment disclosure?**  
+A: No. Only the sender who has the outgoing viewing key (OVK) can generate a payment disclosure.
+
+**Q: Does payment disclosure work for transparent addresses?**  
+A: Payment disclosures are only for shielded (Sapling and Orchard) payments. Transparent transactions are already public on the blockchain.
+
+**Q: Can I generate a disclosure for a payment I received?**  
+A: No. You can only generate disclosures for payments you sent.
+
+**Q: Will this compromise my privacy?**  
+A: Payment disclosures only reveal information about the specific output you disclose. Other outputs in the transaction and all other transactions remain private.
+
+**Q: How long does a disclosure key last?**  
+A: Payment disclosure keys are derived from cryptographic information in the transaction and your wallet. They remain valid as long as the transaction exists on the blockchain.
+
+**Q: Can I generate a disclosure for change outputs?**  
+A: Yes, but this is rarely useful since change outputs return to your own address.
+
+**Q: What if I lose my wallet?**  
+A: If you restore your wallet from seed phrase, you can regenerate payment disclosures for any transactions you sent, as long as the transactions are on the blockchain.
+
+**Q: Do I need any special configuration?**  
+A: No special configuration is required. The feature works with standard wallet configuration.
+
+---
+
+## Technical Implementation Notes
+
+### Cryptographic Components
+
+A payment disclosure is essentially a packaged decryption key:
+- **Outgoing Cipher Key (OCK)**: Derived from the sender's OVK and transaction data; this is the actual decryption key
+- **Bech32 Encoding**: For human-readable and error-detecting encoding
+- **Output/Action Decryption**: Uses the OCK to decrypt a single shielded output/action
+
+### Data Flow
+
+1. **Generation**: Wallet uses sender's OVK + transaction data → derives OCK → encodes as Bech32
+2. **Verification**: Parse Bech32 → extract OCK + transaction reference → decrypt the specific output/action → display details
+
+The payment disclosure itself is NOT a cryptographic proof. It is a key that allows single output/action decryption, making the encrypted payment details readable.
+
+### Network Support
+
+- ✅ Mainnet
+- ✅ Testnet  
+- ✅ Regtest
+
+All networks use different Bech32 prefixes to prevent cross-network confusion.
+
+---
+
+## Additional Resources
+
+- **RPC Documentation**: Use `treasurechest-cli help z_exportsaplingdisclosure`
+- **GUI Tutorial**: Available in the Help menu
+- **Community Support**: Visit the Pirate Chain community forums
+- **Source Code**: Available in the TreasureChest repository
+
+---
+
+## Version History
+
+- **v6.0.0**: Initial implementation of Sapling and Orchard payment disclosure
+  - Unified verification command supporting both protocols
+  - GUI integration
+  - Support for all transaction types (including cross-pool)
+  - Automatic OVK selection based on transaction type
+
+---
+
+*For questions or issues, please contact the Pirate Chain development team or open an issue on GitHub.*

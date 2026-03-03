@@ -124,6 +124,7 @@ private:
     QAction *importViewAction;
     QAction *showSeedAction;
     QAction *rescanAction;
+    QAction *verifyPaymentDisclosureAction;
 
     QSystemTrayIcon *trayIcon;
     QMenu *trayIconMenu;
@@ -234,6 +235,8 @@ private Q_SLOTS:
     void rescan();
     /** Show open dialog */
     void openClicked();
+    /** Show verify payment disclosure dialog */
+    void gotoVerifyPaymentDisclosure();
 #endif // ENABLE_WALLET
     /** Show configuration dialog */
     void optionsClicked();

@@ -86,6 +86,7 @@ public:
         WatchonlyRole,                    ///< Boolean: involves watch-only address
         WatchonlyDecorationRole,          ///< Watch-only icon (QIcon)
         LongDescriptionRole,              ///< HTML formatted transaction details
+        LongDescriptionNoDisclosureRole,  ///< HTML formatted transaction details without payment disclosure
         MemoDescriptionRole,              ///< Zcash memo string (decoded)
         AddressRole,                      ///< Transaction address (QString)
         LabelRole,                        ///< Address label from address book

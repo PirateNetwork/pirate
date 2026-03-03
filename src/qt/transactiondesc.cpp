@@ -23,6 +23,8 @@
 #include "wallet/wallet.h"
 #include "wallet/rpcpiratewallet.h"
 #include "key_io.h"
+#include "paymentdisclosure.h"
+#include <rust/bridge.h>
 
 #include <stdint.h>
 #include <string>
@@ -51,7 +53,7 @@ QString TransactionDesc::FormatTxStatus(const CWalletTx& wtx)
     }
 }
 
-QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int unit)
+QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int unit, bool showPaymentDisclosure)
 {
     QString strHTML;
     QString sendHTML;
@@ -114,6 +116,8 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
         tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Sapling Input")  + "<br>";
         tempHTML += "<b>" + tr("    Address") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZsSpend[i].encodedAddress)  + "<br>";
         tempHTML += "<b>" + tr("    Value") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, CAmount(arcTx.vZsSpend[i].amount)) + "<br>";
+        tempHTML += "<b>" + tr("    Spending From Txid") + ":</b> " + GUIUtil::HtmlEscape(QString::fromStdString(arcTx.vZsSpend[i].spendTxid)) + "<br>";
+        tempHTML += "<b>" + tr("    Spending Output Index") + ":</b> " + QString::number(arcTx.vZsSpend[i].spendShieldedOutputIndex) + "<br>";
         recHTML += tempHTML;
     }
 
@@ -122,6 +126,8 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
         tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Orchard Input")  + "<br>";
         tempHTML += "<b>" + tr("    Address") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZoSpend[i].encodedAddress)  + "<br>";
         tempHTML += "<b>" + tr("    Value") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, CAmount(arcTx.vZoSpend[i].amount)) + "<br>";
+        tempHTML += "<b>" + tr("    Spending From Txid") + ":</b> " + GUIUtil::HtmlEscape(QString::fromStdString(arcTx.vZoSpend[i].spendTxid)) + "<br>";
+        tempHTML += "<b>" + tr("    Spending Action Index") + ":</b> " + QString::number(arcTx.vZoSpend[i].spendShieldedActionIndex) + "<br>";
         recHTML += tempHTML;
     }
 
@@ -157,6 +163,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
                 tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Sapling Send")  + "<br>";
             }
             tempHTML += "<b>" + tr("    Address") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZsSend[i].encodedAddress)  + "<br>";
+            tempHTML += "<b>" + tr("    Output Index") + ":</b> " + QString::number(arcTx.vZsSend[i].shieldedOutputIndex) + "<br>";
             tempHTML += "<b>" + tr("    Value") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, CAmount(arcTx.vZsSend[i].amount)) + "<br>";
             if (change) {
                 tempHTML += "<b>" + tr("    Change") + ":</b> True<br>";
@@ -165,6 +172,13 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
                 tempHTML += "<b>" + tr("    Change") + ":</b> False<br>";
             }
             tempHTML += "<b>" + tr("    Memo") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZsSend[i].memoStr)  + "<br>";
+            // Generate payment disclosure
+            if (showPaymentDisclosure) {
+                std::string disclosure = GenerateSaplingDisclosure(wallet, arcTx.txid, arcTx.vZsSend[i].shieldedOutputIndex);
+                if (!disclosure.empty()) {
+                    tempHTML += "<b>" + tr("    Payment Disclosure") + ":</b> " + GUIUtil::HtmlEscape(QString::fromStdString(disclosure))  + "<br>";
+                }
+            }
             if (change) {
                 sendChangeHTML += tempHTML;
             } else {
@@ -182,6 +196,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
                 tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Orchard Send")  + "<br>";
             }
             tempHTML += "<b>" + tr("    Address") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZoSend[i].encodedAddress)  + "<br>";
+            tempHTML += "<b>" + tr("    Action Index") + ":</b> " + QString::number(arcTx.vZoSend[i].shieldedActionIndex) + "<br>";
             tempHTML += "<b>" + tr("    Value") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, CAmount(arcTx.vZoSend[i].amount)) + "<br>";
             if (change) {
                 tempHTML += "<b>" + tr("    Change") + ":</b> True<br>";
@@ -190,6 +205,13 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
                 tempHTML += "<b>" + tr("    Change") + ":</b> False<br>";
             }
             tempHTML += "<b>" + tr("    Memo") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZoSend[i].memoStr)  + "<br>";
+            // Generate payment disclosure
+            if (showPaymentDisclosure) {
+                std::string disclosure = GenerateOrchardDisclosure(wallet, arcTx.txid, arcTx.vZoSend[i].shieldedActionIndex);
+                if (!disclosure.empty()) {
+                    tempHTML += "<b>" + tr("    Payment Disclosure") + ":</b> " + GUIUtil::HtmlEscape(QString::fromStdString(disclosure))  + "<br>";
+                }
+            }
             if (change) {
                 sendChangeHTML += tempHTML;
             } else {
@@ -232,6 +254,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
                 tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Sapling Received")  + "<br>";
             }
             tempHTML += "<b>" + tr("    Address") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZsReceived[i].encodedAddress)  + "<br>";
+            tempHTML += "<b>" + tr("    Output Index") + ":</b> " + QString::number(arcTx.vZsReceived[i].shieldedOutputIndex) + "<br>";
             tempHTML += "<b>" + tr("    Value") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, CAmount(arcTx.vZsReceived[i].amount)) + "<br>";
             if (change) {
                 tempHTML += "<b>" + tr("    Change") + ":</b> True<br>";
@@ -240,6 +263,13 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
                 tempHTML += "<b>" + tr("    Change") + ":</b> False<br>";
             }
             tempHTML += "<b>" + tr("    Memo") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZsReceived[i].memoStr)  + "<br>";
+            // Generate payment disclosure
+            if (showPaymentDisclosure) {
+                std::string disclosure = GenerateSaplingDisclosure(wallet, arcTx.txid, arcTx.vZsReceived[i].shieldedOutputIndex);
+                if (!disclosure.empty()) {
+                    tempHTML += "<b>" + tr("    Payment Disclosure") + ":</b> " + GUIUtil::HtmlEscape(QString::fromStdString(disclosure))  + "<br>";
+                }
+            }
             if (change) {
                 recChangeHTML += tempHTML;
             } else {
@@ -261,6 +291,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
                 tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Orchard Received")  + "<br>";
             }
             tempHTML += "<b>" + tr("    Address") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZoReceived[i].encodedAddress)  + "<br>";
+            tempHTML += "<b>" + tr("    Action Index") + ":</b> " + QString::number(arcTx.vZoReceived[i].shieldedActionIndex) + "<br>";
             tempHTML += "<b>" + tr("    Value") + ":</b> " + KomodoUnits::formatHtmlWithUnit(unit, CAmount(arcTx.vZoReceived[i].amount)) + "<br>";
             if (change) {
                 tempHTML += "<b>" + tr("    Change") + ":</b> True<br>";
@@ -269,6 +300,13 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
                 tempHTML += "<b>" + tr("    Change") + ":</b> False<br>";
             }
             tempHTML += "<b>" + tr("    Memo") + ":</b> " + GUIUtil::HtmlEscape(arcTx.vZoReceived[i].memoStr)  + "<br>";
+            // Generate payment disclosure
+            if (showPaymentDisclosure) {
+                std::string disclosure = GenerateOrchardDisclosure(wallet, arcTx.txid, arcTx.vZoReceived[i].shieldedActionIndex);
+                if (!disclosure.empty()) {
+                    tempHTML += "<b>" + tr("    Payment Disclosure") + ":</b> " + GUIUtil::HtmlEscape(QString::fromStdString(disclosure))  + "<br>";
+                }
+            }
             if (change) {
                 recChangeHTML += tempHTML;
             } else {

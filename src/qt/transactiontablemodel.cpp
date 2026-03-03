@@ -1583,14 +1583,14 @@ public:
      * @param unit Display unit for amounts
      * @return HTML formatted transaction description
      */
-    QString describe(TransactionRecord *rec, int unit)
+    QString describe(TransactionRecord *rec, int unit, bool showPaymentDisclosure = true)
     {
         {
             LOCK2(cs_main, wallet->cs_wallet);
             std::map<uint256, ArchiveTxPoint>::iterator mi = wallet->mapArcTxs.find(rec->hash);
             if(mi != wallet->mapArcTxs.end())
             {
-                return TransactionDesc::toHTML(wallet, rec, unit);
+                return TransactionDesc::toHTML(wallet, rec, unit, showPaymentDisclosure);
             }
         }
         return QString();
@@ -2560,7 +2560,9 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
     case WatchonlyDecorationRole:
         return txWatchonlyDecoration(rec);
     case LongDescriptionRole:
-        return priv->describe(rec, walletModel->getOptionsModel()->getDisplayUnit());
+        return priv->describe(rec, walletModel->getOptionsModel()->getDisplayUnit(), true);
+    case LongDescriptionNoDisclosureRole:
+        return priv->describe(rec, walletModel->getOptionsModel()->getDisplayUnit(), false);
     case MemoDescriptionRole:
         return QString::fromStdString("Memo:<br>" + rec->memo + "<br><br>Memo Hex:<br>" + rec->memohex);
     case AddressRole:

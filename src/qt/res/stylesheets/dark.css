@@ -407,6 +407,16 @@ QDialog#OpenPhraseDialog QPlainTextEdit{
     color: #ffffff;
 }
 
+QDialog#VerifyPaymentDisclosureDialog {
+    background-color: #303030;
+    color: #ffffff;
+}
+
+QDialog#VerifyPaymentDisclosureDialog QPlainTextEdit {
+    background-color: #202020;
+    color: #ffffff;
+}
+
 QStackedWidget#SendCoinsEntry QLabel#messageLabel {
     color: red;
 }

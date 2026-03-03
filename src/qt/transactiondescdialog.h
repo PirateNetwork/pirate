@@ -6,14 +6,11 @@
 #define KOMODO_QT_TRANSACTIONDESCDIALOG_H
 
 #include <QDialog>
+#include <QModelIndex>
 
 namespace Ui {
     class TransactionDescDialog;
 }
-
-QT_BEGIN_NAMESPACE
-class QModelIndex;
-QT_END_NAMESPACE
 
 enum
 {
@@ -33,8 +30,14 @@ public:
     explicit TransactionDescDialog(const QModelIndex &idx, int type, QString message = "", QWidget *parent = 0);
     ~TransactionDescDialog();
 
+private Q_SLOTS:
+    void onShowPaymentDisclosureChanged(int state);
+
 private:
     Ui::TransactionDescDialog *ui;
+    QPersistentModelIndex modelIndex;
+    int dialogType;
+    void updateDisplay();
 };
 
 #endif // KOMODO_QT_TRANSACTIONDESCDIALOG_H

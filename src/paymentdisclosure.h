@@ -221,4 +221,96 @@ public:
     }
 };
 
+// Forward declaration
+class CWallet;
+
+/**
+ * Generate a Sapling output disclosure key for a given transaction and output index.
+ * This function searches the wallet for an OVK that can decrypt the output and creates
+ * an encoded disclosure that can be shared for proof-of-payment.
+ * 
+ * @param wallet The wallet to search for OVKs
+ * @param txid The transaction ID
+ * @param outputIndex The index of the Sapling output to create a disclosure for
+ * @return The encoded disclosure string, or empty string if no matching OVK found
+ */
+std::string GenerateSaplingDisclosure(CWallet* wallet, const uint256& txid, int outputIndex);
+
+/**
+ * Generate an Orchard action disclosure key for a given transaction and action index.
+ * This function searches the wallet for an OVK that can decrypt the action and creates
+ * an encoded disclosure that can be shared for proof-of-payment.
+ * 
+ * @param wallet The wallet to search for OVKs
+ * @param txid The transaction ID
+ * @param actionIndex The index of the Orchard action to create a disclosure for
+ * @return The encoded disclosure string, or empty string if no matching OVK found
+ */
+std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int actionIndex);
+
+/**
+ * Structure representing the result of verifying a Sapling output disclosure
+ */
+struct SaplingDisclosureVerificationResult {
+    bool success;
+    std::string error;
+    uint256 txid;
+    uint32_t outputIndex;
+    uint64_t value;
+    std::string address;
+    std::string memoHex;
+};
+
+/**
+ * Structure representing the result of verifying an Orchard action disclosure
+ */
+struct OrchardDisclosureVerificationResult {
+    bool success;
+    std::string error;
+    uint256 txid;
+    uint32_t actionIndex;
+    uint64_t value;
+    std::string address;
+    std::string memoHex;
+};
+
+/**
+ * Verify and decrypt a Sapling output disclosure.
+ * 
+ * @param disclosureStr The bech32-encoded Sapling disclosure key
+ * @return A result structure containing the decrypted data or error information
+ */
+SaplingDisclosureVerificationResult VerifySaplingDisclosure(const std::string& disclosureStr);
+
+/**
+ * Verify and decrypt an Orchard action disclosure.
+ * 
+ * @param disclosureStr The bech32-encoded Orchard disclosure key
+ * @return A result structure containing the decrypted data or error information
+ */
+OrchardDisclosureVerificationResult VerifyOrchardDisclosure(const std::string& disclosureStr);
+
+/**
+ * Unified structure for disclosure verification results that handles both Sapling and Orchard
+ */
+struct UnifiedDisclosureVerificationResult {
+    bool success;
+    std::string error;
+    std::string disclosureType;  // "Sapling" or "Orchard"
+    uint256 txid;
+    uint32_t outputIndex;  // For both output index (Sapling) and action index (Orchard)
+    uint64_t value;
+    std::string address;
+    std::string memoHex;
+};
+
+/**
+ * Verify and decrypt a payment disclosure of any type (Sapling or Orchard).
+ * Automatically detects the disclosure type by attempting to decode it.
+ * 
+ * @param disclosureStr The bech32-encoded disclosure key (Sapling or Orchard)
+ * @return A unified result structure containing the decrypted data or error information
+ */
+UnifiedDisclosureVerificationResult VerifyPaymentDisclosure(const std::string& disclosureStr);
+
 #endif // ZCASH_PAYMENTDISCLOSURE_H

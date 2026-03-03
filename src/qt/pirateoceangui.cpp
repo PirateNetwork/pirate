@@ -26,6 +26,7 @@
 #include "walletframe.h"
 #include "walletmodel.h"
 #include "wallet/wallet.h"
+#include "verifypaymentdisclosuredialog.h"
 #endif // ENABLE_WALLET
 
 #include "chainparams.h"
@@ -464,6 +465,9 @@ void PirateOceanGUI::createActions()
     rescanAction = new QAction(platformStyle->TextColorIcon(":/icons/key"), tr("&Rescan"), this);
     rescanAction->setStatusTip(tr("Rescan wallet"));
 
+    verifyPaymentDisclosureAction = new QAction(platformStyle->TextColorIcon(":/icons/verify"), tr("&Verify Payment Disclosure..."), this);
+    verifyPaymentDisclosureAction->setStatusTip(tr("Verify a payment disclosure key"));
+
     showHelpMessageAction = new QAction(platformStyle->TextColorIcon(":/icons/info"), tr("&Command-line options"), this);
     showHelpMessageAction->setMenuRole(QAction::NoRole);
     showHelpMessageAction->setStatusTip(tr("Show the %1 help message to get a list with possible Pirate command-line options").arg(tr(PACKAGE_NAME)));
@@ -482,6 +486,7 @@ void PirateOceanGUI::createActions()
     connect(importViewAction, SIGNAL(triggered()), this, SLOT(gotoImportVK()));
     connect(showSeedAction, SIGNAL(triggered()), this, SLOT(showSeedPhrase()));
     connect(rescanAction, SIGNAL(triggered()), this, SLOT(rescan()));
+    connect(verifyPaymentDisclosureAction, SIGNAL(triggered()), this, SLOT(gotoVerifyPaymentDisclosure()));
 
     // prevents an open debug window from becoming stuck/unusable on client shutdown
     connect(quitAction, SIGNAL(triggered()), rpcConsole, SLOT(hide()));
@@ -540,6 +545,8 @@ void PirateOceanGUI::createMenuBar()
         file->addAction(importViewAction);
         file->addSeparator();
         file->addAction(showSeedAction);
+        file->addSeparator();
+        file->addAction(verifyPaymentDisclosureAction);
         file->addSeparator();
         file->addAction(rescanAction);
         file->addAction(usedSendingAddressesAction);
@@ -996,6 +1003,14 @@ void PirateOceanGUI::rescan()
     if (walletFrame) walletFrame->resetUnlockTimer();
 
     if (walletFrame) walletFrame->rescan();
+}
+
+void PirateOceanGUI::gotoVerifyPaymentDisclosure()
+{
+    if (walletFrame) walletFrame->resetUnlockTimer();
+
+    VerifyPaymentDisclosureDialog dlg(this);
+    dlg.exec();
 }
 
 #endif // ENABLE_WALLET

@@ -219,7 +219,7 @@ public:
         bech32HRPs[SAPLING_DIVERSIFIED_EXTENDED_SPEND_KEY]    = "secret-diversified-extended-key-main";
         bech32HRPs[SAPLING_EXTENDED_FVK]                      = "zxviews";
         bech32HRPs[SAPLING_DIVERSIFIED_EXTENDED_FVK]          = "zdxviews";
-        bech32HRPs[SAPLING_OUTPUT_DISCLOSURE]                 = "zdisc";
+        bech32HRPs[SAPLING_OUTPUT_DISCLOSURE]                 = "pirate-sapling-payment-disclosure";
 
         bech32HRPs[ORCHARD_PAYMENT_ADDRESS]                   = "pirate";
         bech32HRPs[ORCHARD_FULL_VIEWING_KEY]                  = "pirate-viewing-key";
@@ -227,7 +227,7 @@ public:
         bech32HRPs[ORCHARD_DIVERSIFIED_EXTENDED_FVK]          = "pirate-diversified-extended-viewing-key";
         bech32HRPs[ORCHARD_EXTENDED_SPEND_KEY]                = "pirate-secret-extended-key";
         bech32HRPs[ORCHARD_DIVERSIFIED_EXTENDED_SPEND_KEY]    = "pirate-secret-diversified-6extended-key";
-        bech32HRPs[ORCHARD_OUTPUT_DISCLOSURE]                 = "odisc";
+        bech32HRPs[ORCHARD_OUTPUT_DISCLOSURE]                 = "pirate-orchard-payment-disclosure";
 
 
         vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_main), std::end(chainparams_seed_main));

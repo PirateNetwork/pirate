@@ -25,6 +25,16 @@
     </widget>
    </item>
    <item>
+    <widget class="QCheckBox" name="showPaymentDisclosureCheckbox">
+     <property name="text">
+      <string>Show Payment Disclosure Keys</string>
+     </property>
+     <property name="checked">
+      <bool>false</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
     <widget class="QDialogButtonBox" name="buttonBox">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>

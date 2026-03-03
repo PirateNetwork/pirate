@@ -234,6 +234,16 @@ QDialog#TransactionDescDialog {
     color: #ffffff;
 }
 
+QDialog#VerifyPaymentDisclosureDialog {
+    background-color: #303030;
+    color: #ffffff;
+}
+
+QDialog#VerifyPaymentDisclosureDialog QPlainTextEdit {
+    background-color: #202020;
+    color: #ffffff;
+}
+
 QFileDialog {
     background-color: #303030;
     color: #ffffff;

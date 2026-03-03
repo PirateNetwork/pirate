@@ -122,6 +122,7 @@ QT_FORMS_UI = \
   qt/forms/sendcoinsentry.ui \
   qt/forms/signverifymessagedialog.ui \
   qt/forms/transactiondescdialog.ui \
+  qt/forms/verifypaymentdisclosuredialog.ui \
   qt/forms/zaddressbookpage.ui \
   qt/forms/editzaddressdialog.ui \
   qt/forms/newseed.ui \
@@ -187,6 +188,7 @@ QT_MOC_CPP = \
   qt/moc_utilitydialog.cpp \
   qt/moc_unlocktimerdialog.cpp \
   qt/moc_updatedialog.cpp \
+  qt/moc_verifypaymentdisclosuredialog.cpp \
   qt/moc_walletframe.cpp \
   qt/moc_walletmodel.cpp \
   qt/moc_walletview.cpp 
@@ -277,6 +279,7 @@ KOMODO_QT_H = \
   qt/utilitydialog.h \
   qt/unlocktimerdialog.h \
   qt/updatedialog.h \
+  qt/verifypaymentdisclosuredialog.h \
   qt/walletframe.h \
   qt/walletmodel.h \
   qt/walletmodeltransaction.h \
@@ -404,6 +407,7 @@ KOMODO_QT_WALLET_CPP = \
   qt/transactionview.cpp \
   qt/unlocktimerdialog.cpp \
   qt/updatedialog.cpp \
+  qt/verifypaymentdisclosuredialog.cpp \
   qt/walletframe.cpp \
   qt/walletmodel.cpp \
   qt/walletmodeltransaction.cpp \

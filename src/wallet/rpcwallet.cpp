@@ -9692,236 +9692,36 @@ UniValue z_exportsaplingdisclosure(const UniValue& params, bool fHelp, const CPu
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Output index must be non-negative");
     }
 
-    // Get the transaction
-    CTransaction tx;
-    uint256 hashBlock;
-    if (!GetTransaction(txid, tx, hashBlock, true)) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Transaction not found");
-    }
-
-    // Check if this is a Sapling transaction with outputs
-    const auto& saplingBundle = tx.GetSaplingBundle();
-    if (!saplingBundle.IsPresent()) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Transaction has no Sapling outputs");
-    }
-
-    const auto& bundleDetails = saplingBundle.GetDetails();
-    if (bundleDetails.num_outputs() == 0) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Transaction has no Sapling outputs");
-    }
-
-    if (outputIndex >= (int)bundleDetails.num_outputs()) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Output index %d out of range", outputIndex));
-    }
-
-    // Get the specific output
-    rust::Box<sapling::Output> output = bundleDetails.get_output(outputIndex);
-
-    // Get the OVK from the wallet
-    // We need to find which OVK can actually decrypt this output
-    // Try all OVKs in the wallet (both Sapling and Orchard) and use the one that successfully decrypts
-    std::array<uint8_t, 32> ovkBytes;
-    std::array<uint8_t, 32> ock;
-    bool found = false;
-
-    // Get output components needed for OCK derivation and decryption
-    auto cv = output->cv();
-    auto cmu = output->cmu();
-    auto epk = output->ephemeral_key();
-
-    // Iterate through all Sapling addresses in the wallet
-    std::set<libzcash::SaplingPaymentAddress> addresses;
-    pwalletMain->GetSaplingPaymentAddresses(addresses);
-
-    for (const auto& addr : addresses) {
-        // Get the spending key for this address if we have it
-        libzcash::SaplingExtendedSpendingKey extsk;
-        if (pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
-            auto ovk = extsk.expsk.ovk;
-            std::copy(ovk.begin(), ovk.end(), ovkBytes.begin());
-            
-            // Derive the OCK for this OVK
-            if (!sapling::derive_sapling_ock(ovkBytes, cv, cmu, epk, ock)) {
-                continue; // Try next OVK
-            }
-            
-            // Test if this OCK can decrypt the output
-            uint64_t test_value;
-            std::array<uint8_t, 11> test_diversifier;
-            std::array<uint8_t, 32> test_pk_d;
-            std::array<uint8_t, 512> test_memo;
-            std::array<uint8_t, 32> test_rseed;
-            uint8_t test_leadbyte;
-            std::array<uint8_t, 32> test_cmu_out;
-            std::array<uint8_t, 32> test_rcm;
-            
-            if (output->try_decrypt_output_ock(
-                    ock, test_value, test_diversifier, test_pk_d, test_memo,
-                    test_rseed, test_leadbyte, test_cmu_out, test_rcm)) {
-                // Successfully decrypted, this is the right OVK
-                found = true;
-                break;
-            }
+    // Use the shared function to generate the disclosure
+    std::string encodedDisclosure = GenerateSaplingDisclosure(pwalletMain, txid, outputIndex);
+    
+    if (encodedDisclosure.empty()) {
+        // Check why it failed
+        CTransaction tx;
+        uint256 hashBlock;
+        if (!GetTransaction(txid, tx, hashBlock, true)) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Transaction not found");
         }
-    }
 
-    // If not found with Sapling OVKs, try Orchard OVKs
-    // Transactions that spend from Orchard and send to Sapling use Orchard OVKs
-    if (!found) {
-        std::set<libzcash::OrchardPaymentAddressPirate> orchardAddresses;
-        pwalletMain->GetOrchardPaymentAddresses(orchardAddresses);
-
-        for (const auto& addr : orchardAddresses) {
-            // Get the spending key for this address if we have it
-            libzcash::OrchardExtendedSpendingKeyPirate extsk;
-            if (pwalletMain->GetOrchardExtendedSpendingKey(addr, extsk)) {
-                // Get the FVK and then the OVK
-                auto fvkOpt = extsk.sk.GetFVK();
-                if (!fvkOpt) {
-                    continue; // Try next key
-                }
-                
-                auto ovkOpt = fvkOpt->GetOVK();
-                if (!ovkOpt) {
-                    continue; // Try next key
-                }
-                
-                auto ovk = ovkOpt->ovk;
-                std::copy(ovk.begin(), ovk.end(), ovkBytes.begin());
-                
-                // Derive the OCK for this OVK
-                if (!sapling::derive_sapling_ock(ovkBytes, cv, cmu, epk, ock)) {
-                    continue; // Try next OVK
-                }
-                
-                // Test if this OCK can decrypt the output
-                uint64_t test_value;
-                std::array<uint8_t, 11> test_diversifier;
-                std::array<uint8_t, 32> test_pk_d;
-                std::array<uint8_t, 512> test_memo;
-                std::array<uint8_t, 32> test_rseed;
-                uint8_t test_leadbyte;
-                std::array<uint8_t, 32> test_cmu_out;
-                std::array<uint8_t, 32> test_rcm;
-                
-                if (output->try_decrypt_output_ock(
-                        ock, test_value, test_diversifier, test_pk_d, test_memo,
-                        test_rseed, test_leadbyte, test_cmu_out, test_rcm)) {
-                    // Successfully decrypted, this is the right OVK
-                    found = true;
-                    break;
-                }
-            }
+        const auto& saplingBundle = tx.GetSaplingBundle();
+        if (!saplingBundle.IsPresent()) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Transaction has no Sapling outputs");
         }
-    }
 
-    if (!found) {
+        const auto& bundleDetails = saplingBundle.GetDetails();
+        if (bundleDetails.num_outputs() == 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Transaction has no Sapling outputs");
+        }
+
+        if (outputIndex >= (int)bundleDetails.num_outputs()) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Output index %d out of range", outputIndex));
+        }
+
+        // If we got here, the wallet doesn't have the right OVK
         throw JSONRPCError(RPC_WALLET_ERROR, "No OVK in wallet can decrypt this output. You may not be the sender of this transaction.");
     }
 
-    // Create the disclosure structure and encode it
-    SaplingOutputDisclosure disclosureStruct(txid, static_cast<uint32_t>(outputIndex), ock);
-    std::string encodedDisclosure = EncodeSaplingOutputDisclosure(disclosureStruct);
-
     return encodedDisclosure;
-}
-
-/**
- * z_verifysaplingdisclosure - Verify/decrypt a Sapling transaction output using a disclosure key
- * 
- * This allows verification and decryption of a specific output for proof-of-payment purposes
- * without requiring the full OVK or spending keys.
- */
-UniValue z_verifysaplingdisclosure(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    if (fHelp || params.size() != 1)
-        throw runtime_error(
-            "z_verifysaplingdisclosure \"disclosure\"\n"
-            "\nVerifies and decrypts a Sapling transaction output using a disclosure key.\n"
-            "The disclosure should be in bech32 encoded format (as returned by z_exportsaplingdisclosure).\n"
-            "\nArguments:\n"
-            "1. \"disclosure\"    (string, required) The disclosure key in bech32 format\n"
-            "\nResult:\n"
-            "{\n"
-            "  \"txid\": \"hex\",                (string) The transaction id\n"
-            "  \"output_index\": n,            (numeric) The output index\n"
-            "  \"value\": n,                   (numeric) The note value in zatoshis\n"
-            "  \"address\": \"saplingaddress\", (string) The Sapling payment address\n"
-            "  \"memo\": \"hex\"               (string) The memo in hex format\n"
-            "}\n"
-            "\nExamples:\n"
-            + HelpExampleCli("z_verifysaplingdisclosure", "\"zdisc1...\"")
-            + HelpExampleRpc("z_verifysaplingdisclosure", "\"zdisc1...\"")
-        );
-
-    LOCK(cs_main);
-
-    // Parse the bech32-encoded disclosure
-    std::string disclosureStr = params[0].get_str();
-    auto disclosureOptional = DecodeSaplingOutputDisclosure(disclosureStr);
-    
-    if (!disclosureOptional) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid disclosure encoding");
-    }
-    
-    SaplingOutputDisclosure disclosureStruct = *disclosureOptional;
-
-    // Get the transaction
-    CTransaction tx;
-    uint256 hashBlock;
-    if (!GetTransaction(disclosureStruct.txid, tx, hashBlock, true)) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Transaction not found");
-    }
-
-    // Check if this is a Sapling transaction with outputs
-    const auto& saplingBundle = tx.GetSaplingBundle();
-    if (!saplingBundle.IsPresent()) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Transaction has no Sapling outputs");
-    }
-
-    const auto& bundleDetails = saplingBundle.GetDetails();
-    if (bundleDetails.num_outputs() == 0) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Transaction has no Sapling outputs");
-    }
-
-    if (disclosureStruct.outputIndex >= bundleDetails.num_outputs()) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Output index %d out of range", disclosureStruct.outputIndex));
-    }
-
-    // Get the specific output
-    rust::Box<sapling::Output> output = bundleDetails.get_output(disclosureStruct.outputIndex);
-
-    // Decrypt with disclosure key
-    uint64_t value;
-    std::array<uint8_t, 11> diversifier;
-    std::array<uint8_t, 32> pk_d;
-    std::array<uint8_t, 512> memo;
-    std::array<uint8_t, 32> rseed;
-    uint8_t leadbyte;
-    std::array<uint8_t, 32> cmu_out;
-    std::array<uint8_t, 32> rcm;
-
-    if (!output->try_decrypt_output_ock(
-            disclosureStruct.ock, value, diversifier, pk_d, memo,
-            rseed, leadbyte, cmu_out, rcm)) {
-        throw JSONRPCError(RPC_WALLET_ERROR, "Failed to decrypt output with provided disclosure key");
-    }
-
-    // Construct the payment address from diversifier and pk_d
-    diversifier_t div;
-    std::copy(diversifier.begin(), diversifier.end(), div.begin());
-    uint256 pkd = uint256::FromRawBytes(pk_d);
-    libzcash::SaplingPaymentAddress paymentAddr(div, pkd);
-
-    // Build result
-    UniValue result(UniValue::VOBJ);
-    result.push_back(Pair("txid", disclosureStruct.txid.GetHex()));
-    result.push_back(Pair("output_index", static_cast<int>(disclosureStruct.outputIndex)));
-    result.push_back(Pair("value", ValueFromAmount(value)));
-    result.push_back(Pair("address", EncodePaymentAddress(paymentAddr)));
-    result.push_back(Pair("memo", HexStr(memo.begin(), memo.end())));
-
-    return result;
 }
 
 /**
@@ -9961,189 +9761,96 @@ UniValue z_exportorcharddisclosure(const UniValue& params, bool fHelp, const CPu
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Action index must be non-negative");
     }
 
-    // Get the transaction
-    CTransaction tx;
-    uint256 hashBlock;
-    if (!GetTransaction(txid, tx, hashBlock, true)) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Transaction not found");
-    }
-
-    // Check if this is an Orchard transaction with actions
-    const auto& orchardBundle = tx.GetOrchardBundle();
-    if (!orchardBundle.IsPresent()) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Transaction has no Orchard actions");
-    }
-
-    const auto& bundleDetails = orchardBundle.GetDetails();
-    if (bundleDetails.num_actions() == 0) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Transaction has no Orchard actions");
-    }
-
-    if (actionIndex >= (int)bundleDetails.num_actions()) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Action index %d out of range", actionIndex));
-    }
-
-    // Get all actions from the bundle
-    auto actions = bundleDetails.actions();
-    const auto& action = actions[actionIndex];
-
-    // Get the OVK from the wallet
-    // We need to find which OVK can actually decrypt this action
-    // Try all OVKs in the wallet and use the one that successfully decrypts
-    std::array<uint8_t, 32> ovkBytes;
-    std::array<uint8_t, 32> ock;
-    bool found = false;
-
-    // Iterate through all Orchard addresses in the wallet
-    std::set<libzcash::OrchardPaymentAddressPirate> addresses;
-    pwalletMain->GetOrchardPaymentAddresses(addresses);
-
-    for (const auto& addr : addresses) {
-        // Get the spending key for this address if we have it
-        libzcash::OrchardExtendedSpendingKeyPirate extsk;
-        if (pwalletMain->GetOrchardExtendedSpendingKey(addr, extsk)) {
-            // Get the FVK and then the OVK
-            auto fvkOpt = extsk.sk.GetFVK();
-            if (!fvkOpt) {
-                continue; // Try next key
-            }
-            
-            auto ovkOpt = fvkOpt->GetOVK();
-            if (!ovkOpt) {
-                continue; // Try next key
-            }
-            
-            auto ovk = ovkOpt->ovk;
-            std::copy(ovk.begin(), ovk.end(), ovkBytes.begin());
-            
-            // Derive the OCK for this OVK
-            if (!orchard::derive_orchard_ock(&action, &ovkBytes, &ock)) {
-                continue; // Try next OVK
-            }
-            
-            // Test if this OCK can decrypt the action
-            uint64_t test_value;
-            std::array<uint8_t, 43> test_address;
-            std::array<uint8_t, 512> test_memo;
-            std::array<uint8_t, 32> test_rho;
-            std::array<uint8_t, 32> test_rseed;
-            
-            if (orchard::try_orchard_decrypt_action_ock(
-                    &action, &ock, &test_value, &test_address, &test_memo,
-                    &test_rho, &test_rseed)) {
-                // Successfully decrypted, this is the right OVK
-                found = true;
-                break;
-            }
+    // Use the shared function to generate the disclosure
+    std::string encodedDisclosure = GenerateOrchardDisclosure(pwalletMain, txid, actionIndex);
+    
+    if (encodedDisclosure.empty()) {
+        // Check why it failed
+        CTransaction tx;
+        uint256 hashBlock;
+        if (!GetTransaction(txid, tx, hashBlock, true)) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Transaction not found");
         }
-    }
 
-    if (!found) {
+        const auto& orchardBundle = tx.GetOrchardBundle();
+        if (!orchardBundle.IsPresent()) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Transaction has no Orchard actions");
+        }
+
+        const auto& bundleDetails = orchardBundle.GetDetails();
+        if (bundleDetails.num_actions() == 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Transaction has no Orchard actions");
+        }
+
+        if (actionIndex >= (int)bundleDetails.num_actions()) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Action index %d out of range", actionIndex));
+        }
+
+        // If we got here, the wallet doesn't have the right OVK
         throw JSONRPCError(RPC_WALLET_ERROR, "No OVK in wallet can decrypt this action. You may not be the sender of this transaction.");
     }
-
-    // Create the disclosure structure and encode it
-    OrchardOutputDisclosure disclosureStruct(txid, static_cast<uint32_t>(actionIndex), ock);
-    std::string encodedDisclosure = EncodeOrchardOutputDisclosure(disclosureStruct);
 
     return encodedDisclosure;
 }
 
 /**
- * z_verifyorcharddisclosure - Verify/decrypt an Orchard transaction action using a disclosure key
+ * z_verifydisclosure - Unified RPC to verify/decrypt either Sapling or Orchard disclosure
  * 
- * This allows verification and decryption of a specific action for proof-of-payment purposes
- * without requiring the full OVK or spending keys.
+ * Automatically detects the disclosure type and verifies accordingly.
  */
-UniValue z_verifyorcharddisclosure(const UniValue& params, bool fHelp, const CPubKey& mypk)
+UniValue z_verifydisclosure(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (fHelp || params.size() != 1)
         throw runtime_error(
-            "z_verifyorcharddisclosure \"disclosure\"\n"
-            "\nVerifies and decrypts an Orchard transaction action using a disclosure key.\n"
-            "The disclosure should be in bech32 encoded format (as returned by z_exportorcharddisclosure).\n"
+            "z_verifydisclosure \"disclosure\"\n"
+            "\nVerifies and decrypts a Sapling or Orchard transaction output/action using a disclosure key.\n"
+            "Automatically detects whether the disclosure is for Sapling or Orchard.\n"
+            "The disclosure should be in bech32 encoded format (as returned by z_exportsaplingdisclosure or z_exportorcharddisclosure).\n"
             "\nArguments:\n"
             "1. \"disclosure\"    (string, required) The disclosure key in bech32 format\n"
             "\nResult:\n"
             "{\n"
+            "  \"disclosure_type\": \"type\",   (string) Either \"Sapling\" or \"Orchard\"\n"
             "  \"txid\": \"hex\",                (string) The transaction id\n"
-            "  \"action_index\": n,            (numeric) The action index\n"
+            "  \"output_index\": n,            (numeric) The output index (for Sapling)\n"
+            "  \"action_index\": n,            (numeric) The action index (for Orchard)\n"
             "  \"value\": n,                   (numeric) The note value in zatoshis\n"
-            "  \"address\": \"orchardaddress\", (string) The Orchard payment address\n"
+            "  \"address\": \"address\",        (string) The payment address\n"
             "  \"memo\": \"hex\"               (string) The memo in hex format\n"
             "}\n"
             "\nExamples:\n"
-            + HelpExampleCli("z_verifyorcharddisclosure", "\"odisc1...\"")
-            + HelpExampleRpc("z_verifyorcharddisclosure", "\"odisc1...\"")
+            + HelpExampleCli("z_verifydisclosure", "\"zdisc1...\"")
+            + HelpExampleCli("z_verifydisclosure", "\"odisc1...\"")
+            + HelpExampleRpc("z_verifydisclosure", "\"zdisc1...\"")
         );
 
     LOCK(cs_main);
 
-    // Parse the bech32-encoded disclosure
+    // Parse the bech32-encoded disclosure and verify (auto-detects type)
     std::string disclosureStr = params[0].get_str();
-    auto disclosureOptional = DecodeOrchardOutputDisclosure(disclosureStr);
+    UnifiedDisclosureVerificationResult result = VerifyPaymentDisclosure(disclosureStr);
     
-    if (!disclosureOptional) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid disclosure encoding");
+    if (!result.success) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, result.error);
+    }
+
+    // Build JSON result
+    UniValue jsonResult(UniValue::VOBJ);
+    jsonResult.push_back(Pair("disclosure_type", result.disclosureType));
+    jsonResult.push_back(Pair("txid", result.txid.GetHex()));
+    
+    // Use appropriate field name based on disclosure type
+    if (result.disclosureType == "Orchard") {
+        jsonResult.push_back(Pair("action_index", static_cast<int>(result.outputIndex)));
+    } else {
+        jsonResult.push_back(Pair("output_index", static_cast<int>(result.outputIndex)));
     }
     
-    OrchardOutputDisclosure disclosureStruct = *disclosureOptional;
+    jsonResult.push_back(Pair("value", ValueFromAmount(result.value)));
+    jsonResult.push_back(Pair("address", result.address));
+    jsonResult.push_back(Pair("memo", result.memoHex));
 
-    // Get the transaction
-    CTransaction tx;
-    uint256 hashBlock;
-    if (!GetTransaction(disclosureStruct.txid, tx, hashBlock, true)) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Transaction not found");
-    }
-
-    // Check if this is an Orchard transaction with actions
-    const auto& orchardBundle = tx.GetOrchardBundle();
-    if (!orchardBundle.IsPresent()) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Transaction has no Orchard actions");
-    }
-
-    const auto& bundleDetails = orchardBundle.GetDetails();
-    if (bundleDetails.num_actions() == 0) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, "Transaction has no Orchard actions");
-    }
-
-    if (disclosureStruct.outputIndex >= bundleDetails.num_actions()) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Action index %d out of range", disclosureStruct.outputIndex));
-    }
-
-    // Get all actions from the bundle
-    auto actions = bundleDetails.actions();
-    const auto& action = actions[disclosureStruct.outputIndex];
-
-    // Decrypt with disclosure key
-    uint64_t value;
-    std::array<uint8_t, 43> address;
-    std::array<uint8_t, 512> memo;
-    std::array<uint8_t, 32> rho;
-    std::array<uint8_t, 32> rseed;
-
-    if (!orchard::try_orchard_decrypt_action_ock(
-            &action, &disclosureStruct.ock, &value, &address, &memo,
-            &rho, &rseed)) {
-        throw JSONRPCError(RPC_WALLET_ERROR, "Failed to decrypt action with provided disclosure key");
-    }
-
-    // Construct the payment address from the raw address bytes (11-byte diversifier + 32-byte pk_d)
-    diversifier_t div;
-    std::copy(address.begin(), address.begin() + 11, div.begin());
-    uint256 pkd;
-    std::copy(address.begin() + 11, address.end(), pkd.begin());
-    libzcash::OrchardPaymentAddressPirate paymentAddr(div, pkd);
-
-    // Build result
-    UniValue result(UniValue::VOBJ);
-    result.push_back(Pair("txid", disclosureStruct.txid.GetHex()));
-    result.push_back(Pair("action_index", static_cast<int>(disclosureStruct.outputIndex)));
-    result.push_back(Pair("value", ValueFromAmount(value)));
-    result.push_back(Pair("address", EncodePaymentAddress(paymentAddr)));
-    result.push_back(Pair("memo", HexStr(memo.begin(), memo.end())));
-
-    return result;
+    return jsonResult;
 }
 
 
@@ -10212,9 +9919,8 @@ static const CRPCCommand commands[] =
     { "wallet",             "z_exportkey",              &z_exportkey,              true  },
     { "wallet",             "z_exportseedphrase",       &z_exportseedphrase,       true  },
     { "wallet",             "z_exportsaplingdisclosure", &z_exportsaplingdisclosure, true  },
-    { "wallet",             "z_verifysaplingdisclosure", &z_verifysaplingdisclosure, false },
     { "wallet",             "z_exportorcharddisclosure", &z_exportorcharddisclosure, true  },
-    { "wallet",             "z_verifyorcharddisclosure", &z_verifyorcharddisclosure, false },
+    { "wallet",             "z_verifydisclosure",        &z_verifydisclosure,        false },
     { "wallet",             "z_importkey",              &z_importkey,              true  },
     { "wallet",             "z_exportviewingkey",       &z_exportviewingkey,       true  },
     { "wallet",             "z_importviewingkey",       &z_importviewingkey,       true  },
