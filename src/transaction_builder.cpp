@@ -531,20 +531,20 @@ bool TransactionBuilder::ConvertRawOrchardSpend(libzcash::OrchardExtendedSpendin
     }
     auto fvk = fvkOpt.value().fvk;
 
-    if (!firstOrchardSpendAddr.has_value()) {
+    if (!firstOrchardChangeAddr.has_value()) {
         auto ovkOpt = fvk.GetOVK();
         if (ovkOpt == std::nullopt) {
             throw std::runtime_error("TransactionBuilder cannot get ovk from FVK");
         }
         auto ovk = ovkOpt.value();
 
-        auto changeAddrOpt = fvk.GetDefaultAddress();
+        auto changeAddrOpt = fvk.GetDefaultAddressInternal();
         if (changeAddrOpt == std::nullopt) {
-            throw std::runtime_error("TransactionBuilder cannot get default address from FVK");
+            throw std::runtime_error("TransactionBuilder cannot get default internal address from FVK");
         }
         auto changeAddr = changeAddrOpt.value();
 
-        firstOrchardSpendAddr = std::make_pair(ovk.ovk, changeAddr);
+        firstOrchardChangeAddr = std::make_pair(ovk.ovk, changeAddr);
     }
 
     for (int i = 0; i < vOrchardSpends.size(); i++) {
@@ -748,9 +748,9 @@ TransactionBuilderResult TransactionBuilder::Build()
             assert(AddTransparentOutput(tChangeAddr.value(), change));
 
         // If no change address was set, use the first Sapling or Orchard address
-        } else if (firstOrchardSpendAddr) {
-            AddOrchardOutputRaw(firstOrchardSpendAddr->second, change, std::nullopt);
-            ConvertRawOrchardOutput(firstOrchardSpendAddr->first);
+        } else if (firstOrchardChangeAddr) {
+            AddOrchardOutputRaw(firstOrchardChangeAddr->second, change, std::nullopt);
+            ConvertRawOrchardOutput(firstOrchardChangeAddr->first);
 
         } else if (firstSaplingSpendAddr) {
             AddSaplingOutputRaw(firstSaplingSpendAddr->second, change, std::nullopt);

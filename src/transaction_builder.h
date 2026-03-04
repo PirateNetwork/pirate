@@ -330,7 +330,7 @@ private:
     std::optional<std::pair<uint256, libzcash::SaplingPaymentAddress>> saplingChangeAddr;
 
     std::vector<libzcash::OrchardSpendingKeyPirate> orchardSpendingKeys;
-    std::optional<std::pair<uint256, libzcash::OrchardPaymentAddressPirate>> firstOrchardSpendAddr;
+    std::optional<std::pair<uint256, libzcash::OrchardPaymentAddressPirate>> firstOrchardChangeAddr;
     std::optional<std::pair<uint256, libzcash::OrchardPaymentAddressPirate>> orchardChangeAddr;
 
     std::optional<CTxDestination> tChangeAddr;

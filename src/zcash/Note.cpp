@@ -591,6 +591,7 @@ std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardA
  */
 std::optional<uint256> OrchardNotePlaintext::ComputeNullifierFromAction(
     const orchard_bundle::Action& action,
+    const libzcash::OrchardIncomingViewingKeyPirate& ivk,
     const libzcash::OrchardFullViewingKeyPirate& fvk
 )
 {
@@ -602,13 +603,8 @@ std::optional<uint256> OrchardNotePlaintext::ComputeNullifierFromAction(
     libzcash::OrchardFullViewingKey_t fvk_t;
     uint256_t result_t;
     
-    // Get IVK from FVK
-    auto ivk_opt = fvk.GetIVK();
-    if (!ivk_opt) {
-        return std::nullopt;
-    }
-    
-    ivk_stream << ivk_opt.value();
+    // Use provided IVK
+    ivk_stream << ivk;
     ivk_stream >> ivk_t;
     
     fvk_stream << fvk;

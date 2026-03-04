@@ -418,6 +418,7 @@ public:
     // Compute nullifier directly from an encrypted action
     static std::optional<uint256> ComputeNullifierFromAction(
         const orchard_bundle::Action& action,
+        const libzcash::OrchardIncomingViewingKeyPirate& ivk,
         const libzcash::OrchardFullViewingKeyPirate& fvk
     );
 

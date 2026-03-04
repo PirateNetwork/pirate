@@ -6321,8 +6321,10 @@ void CWallet::UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx) {
                    : mapOrchardFullViewingKeys.at(ivkInternal);
 
                // Compute nullifier directly from Action using bridge
+               // Use the IVK stored in note data (could be external or internal)
                auto optNullifier = libzcash::OrchardNotePlaintext::ComputeNullifierFromAction(
                    vActions[op.n],
+                   nd.ivk,
                    extfvk.fvk
                );
 
