@@ -11,7 +11,7 @@
 #include "transaction_builder.h"
 
 #include "rust/orchard/wallet.h"
-#include "zcash/address/pirate_orchard.hpp"
+#include "zcash/address/orchard.hpp"
 #include "zcash/IncrementalMerkleTree.hpp"
 
 // class OrchardWallet;

@@ -2,8 +2,8 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
-#ifndef ZC_ADDRESS_PIRATE_ORCHARD_H_
-#define ZC_ADDRESS_PIRATE_ORCHARD_H_
+#ifndef ZC_ADDRESS_ORCHARD_H_
+#define ZC_ADDRESS_ORCHARD_H_
 
 #include "serialize.h"
 #include "uint256.h"
@@ -235,4 +235,4 @@ public:
 
 } // namespace libzcash
 
-#endif // ZC_ADDRESS_PIRATE_ORCHARD_H_
+#endif // ZC_ADDRESS_ORCHARD_H_

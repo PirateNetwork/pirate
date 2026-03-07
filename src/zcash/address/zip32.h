@@ -9,7 +9,7 @@
 #include "support/allocators/secure.h"
 #include "uint256.h"
 #include "zcash/address/sapling.hpp"
-#include "zcash/address/pirate_orchard.hpp"
+#include "zcash/address/orchard.hpp"
 
 #include <optional>
 

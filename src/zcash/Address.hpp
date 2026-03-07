@@ -1,7 +1,7 @@
 #ifndef ZC_ADDRESS_H_
 #define ZC_ADDRESS_H_
 
-#include "zcash/address/pirate_orchard.hpp"
+#include "zcash/address/orchard.hpp"
 #include "zcash/address/sapling.hpp"
 #include "zcash/address/sprout.hpp"
 #include "zcash/address/zip32.h"
