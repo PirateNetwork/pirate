@@ -4,12 +4,9 @@
 #include "uint256.h"
 #include "uint252.h"
 #include "serialize.h"
+#include "zcash/Zcash.h"
 
 namespace libzcash {
-
-const size_t SerializedSproutPaymentAddressSize = 64;
-const size_t SerializedSproutViewingKeySize = 64;
-const size_t SerializedSproutSpendingKeySize = 32;
 
 class SproutPaymentAddress {
 public:

@@ -29,8 +29,15 @@
 #include <string>
 #include <vector>
 
-/** Type alias for 32-byte array used for serialization over FFI bridge */
-typedef std::array<unsigned char, 32> uint256_t;
+#include <array>
+
+/// 256-bit (32-byte) array — used for keys, hashes, scalars, and commitment values
+typedef std::array<uint8_t, 32>  uint256_t;
+
+/// 256-bit (32-byte) array alias using unsigned char — legacy FFI layer compatibility
+typedef std::array<unsigned char, 32> uchar256_t;
+
+
 
 /** Template base class for fixed-sized opaque blobs. */
 template<unsigned int BITS>
@@ -146,16 +153,16 @@ public:
     uint256(const base_blob<256>& b) : base_blob<256>(b) {}
     explicit uint256(const std::vector<unsigned char>& vch) : base_blob<256>(vch) {}
 
-    static uint256 FromRawBytes(std::array<uint8_t, 32> bytes)
+    static uint256 FromRawBytes(uint256_t bytes)
     {
         uint256 buf;
         std::memcpy(buf.begin(), bytes.data(), 32);
         return buf;
     }
 
-    std::array<uint8_t, 32> ToRawBytes() const
+    uint256_t ToRawBytes() const
     {
-        std::array<uint8_t, 32> buf;
+        uint256_t buf;
         std::memcpy(buf.data(), begin(), 32);
         return buf;
     }

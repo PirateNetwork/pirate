@@ -7,13 +7,6 @@
 
 namespace libzcash {
 
-const size_t SerializedSaplingPaymentAddressSize = 43;
-const size_t SerializedSaplingFullViewingKeySize = 96;
-const size_t SerializedSaplingExpandedSpendingKeySize = 96;
-const size_t SerializedSaplingSpendingKeySize = 32;
-
-typedef std::array<unsigned char, ZC_DIVERSIFIER_SIZE> diversifier_t;
-
 //! Sapling functions.
 class SaplingPaymentAddress {
 public:

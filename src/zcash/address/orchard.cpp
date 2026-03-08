@@ -11,7 +11,7 @@
 namespace libzcash
 {
 
-const unsigned char ZCASH_ORCHARH_FVFP_PERSONALIZATION[crypto_generichash_blake2b_PERSONALBYTES] =
+const unsigned char ZCASH_ORCHARD_FVFP_PERSONALIZATION[crypto_generichash_blake2b_PERSONALBYTES] =
     {'Z', 'c', 'a', 's', 'h', 'O', 'r', 'c', 'h', 'a', 'r', 'd', 'F', 'V', 'F', 'P'};
 
 
@@ -130,7 +130,7 @@ std::optional<OrchardPaymentAddressPirate> OrchardIncomingViewingKeyPirate::addr
 
 uint256 OrchardFullViewingKeyPirate::GetFingerprint() const
 {
-    CBLAKE2bWriter ss(SER_GETHASH, 0, ZCASH_ORCHARH_FVFP_PERSONALIZATION);
+    CBLAKE2bWriter ss(SER_GETHASH, 0, ZCASH_ORCHARD_FVFP_PERSONALIZATION);
     ss << *this;
     return ss.GetHash();
 }

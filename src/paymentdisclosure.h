@@ -26,11 +26,11 @@ class SaplingOutputDisclosure
 public:
     uint256 txid;                      // Transaction ID
     uint32_t outputIndex;              // Output index in the transaction
-    std::array<uint8_t, 32> ock;      // The Outgoing Cipher Key (32 bytes)
+    uint256_t ock;      // The Outgoing Cipher Key (32 bytes)
 
     SaplingOutputDisclosure() : txid(), outputIndex(0), ock() {}
 
-    SaplingOutputDisclosure(const uint256& txid_, uint32_t outputIndex_, const std::array<uint8_t, 32>& ock_)
+    SaplingOutputDisclosure(const uint256& txid_, uint32_t outputIndex_, const uint256_t& ock_)
         : txid(txid_), outputIndex(outputIndex_), ock(ock_) {}
 
     ADD_SERIALIZE_METHODS;
@@ -64,11 +64,11 @@ class OrchardOutputDisclosure
 public:
     uint256 txid;                      // Transaction ID
     uint32_t outputIndex;              // Output index in the transaction (action index)
-    std::array<uint8_t, 32> ock;      // The Outgoing Cipher Key (32 bytes)
+    uint256_t ock;      // The Outgoing Cipher Key (32 bytes)
 
     OrchardOutputDisclosure() : txid(), outputIndex(0), ock() {}
 
-    OrchardOutputDisclosure(const uint256& txid_, uint32_t outputIndex_, const std::array<uint8_t, 32>& ock_)
+    OrchardOutputDisclosure(const uint256& txid_, uint32_t outputIndex_, const uint256_t& ock_)
         : txid(txid_), outputIndex(outputIndex_), ock(ock_) {}
 
     ADD_SERIALIZE_METHODS;
