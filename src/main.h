@@ -916,6 +916,7 @@ bool WriteBlockToDisk(const CBlock& block, CDiskBlockPos& pos, const CMessageHea
 bool ReadBlockFromDisk(CBlock& block, const CDiskBlockPos& pos,bool checkPOW);
 bool ReadBlockFromDisk(CBlock& block, const CBlockIndex* pindex,bool checkPOW);
 bool PruneOneBlockFile(bool tempfile, const int fileNumber);
+bool AlignPersistedShieldedSubtrees(std::string& error);
 
 /** Functions for validating blocks and updating the block tree */
 
