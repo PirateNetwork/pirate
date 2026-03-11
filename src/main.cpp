@@ -3937,6 +3937,9 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     OrchardMerkleFrontier orchard_frontier_tree;
     assert(view.GetOrchardFrontierAnchorAt(view.GetBestAnchor(ORCHARDFRONTIER), orchard_frontier_tree));
 
+    const bool persistShieldedSubtreeMetadata =
+        !fJustCheck && pcoinsTip != nullptr && view.GetBestBlock() == pcoinsTip->GetBestBlock();
+
     // Grab the consensus branch ID for this block and its parent
     auto consensusBranchId = CurrentEpochBranchId(pindex->nHeight, chainparams.GetConsensus());
     auto prevConsensusBranchId = CurrentEpochBranchId(pindex->nHeight - 1, chainparams.GetConsensus());
@@ -4445,7 +4448,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             return AbortNode(state, "Failed to write blockhash index");
     }
 
-    if (!fJustCheck) {
+    if (persistShieldedSubtreeMetadata) {
         if (!completedSaplingSubtrees.empty()) {
             if (!pblocktree->WriteShieldedSubtrees(SAPLINGFRONTIER, completedSaplingSubtrees)) {
                 return AbortNode(state, "Failed to write Sapling subtree metadata");
