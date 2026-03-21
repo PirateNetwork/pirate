@@ -33,6 +33,37 @@ use crate::{
         test_only_invalid_sapling_bundle, test_only_replace_sapling_nullifier,
         test_only_replace_sapling_output_parts,
     },
+    orchard_keys::{
+        ivk_to_address as orchard_keys_ivk_to_address,
+        ivk_to_address_from_index as orchard_keys_ivk_to_address_from_index,
+        fvk_to_ovk, fvk_to_ovk_internal,
+        fvk_to_ivk as orchard_keys_fvk_to_ivk, fvk_to_ivk_internal as orchard_keys_fvk_to_ivk_internal,
+        fvk_to_default_address, fvk_to_default_address_internal,
+        fvk_to_address, fvk_to_address_internal,
+        fvk_to_address_from_index, fvk_to_address_from_index_internal,
+        sk_is_valid, sk_to_fvk,
+        sk_to_default_address, sk_to_default_address_internal,
+        derive_master_key, derive_child_key,
+    },    sapling_keys::{
+        check_diversifier,
+        ivk_to_address as sapling_keys_ivk_to_address,
+        ivk_to_address_from_index as sapling_keys_ivk_to_address_from_index,
+        sk_to_expsk as sapling_keys_sk_to_expsk,
+        expsk_to_fvk as sapling_keys_expsk_to_fvk,
+        expsk_to_default_address as sapling_keys_expsk_to_default_address,
+        expsk_to_default_address_internal as sapling_keys_expsk_to_default_address_internal,
+        fvk_to_ivk as sapling_keys_fvk_to_ivk,
+        fvk_to_ivk_internal as sapling_keys_fvk_to_ivk_internal,
+        fvk_to_default_address as sapling_keys_fvk_to_default_address,
+        fvk_to_default_address_internal as sapling_keys_fvk_to_default_address_internal,
+        fvk_to_address as sapling_keys_fvk_to_address,
+        fvk_to_address_internal as sapling_keys_fvk_to_address_internal,
+        fvk_to_address_from_index as sapling_keys_fvk_to_address_from_index,
+        fvk_to_address_from_index_internal as sapling_keys_fvk_to_address_from_index_internal,
+    },
+    transparent::{
+        ovk_for_shielding_from_taddr as transparent_keys_ovk_for_shielding_from_taddr,
+    },
 };
 
 #[allow(clippy::needless_lifetimes)]
@@ -505,5 +536,72 @@ pub(crate) mod ffi {
             sapling_bundle: &SaplingUnauthorizedBundle,
             orchard_bundle: *const OrchardUnauthorizedBundlePtr,
         ) -> Result<[u8; 32]>;
+    }
+
+    #[namespace = "orchard_keys"]
+    extern "Rust" {
+        #[cxx_name = "ivk_to_address"]
+        fn orchard_keys_ivk_to_address(ivk: &[u8; 64], diversifier: &[u8; 11], out: &mut [u8; 43]) -> bool;
+        #[cxx_name = "ivk_to_address_from_index"]
+        fn orchard_keys_ivk_to_address_from_index(ivk: &[u8; 64], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
+        fn fvk_to_ovk(fvk: &[u8; 96], out: &mut [u8; 32]) -> bool;
+        fn fvk_to_ovk_internal(fvk: &[u8; 96], out: &mut [u8; 32]) -> bool;
+        #[cxx_name = "fvk_to_ivk"]
+        fn orchard_keys_fvk_to_ivk(fvk: &[u8; 96], out: &mut [u8; 64]) -> bool;
+        #[cxx_name = "fvk_to_ivk_internal"]
+        fn orchard_keys_fvk_to_ivk_internal(fvk: &[u8; 96], out: &mut [u8; 64]) -> bool;
+        fn fvk_to_default_address(fvk: &[u8; 96], out: &mut [u8; 43]) -> bool;
+        fn fvk_to_default_address_internal(fvk: &[u8; 96], out: &mut [u8; 43]) -> bool;
+        fn fvk_to_address(fvk: &[u8; 96], diversifier: &[u8; 11], out: &mut [u8; 43]) -> bool;
+        fn fvk_to_address_internal(fvk: &[u8; 96], diversifier: &[u8; 11], out: &mut [u8; 43]) -> bool;
+        fn fvk_to_address_from_index(fvk: &[u8; 96], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
+        fn fvk_to_address_from_index_internal(fvk: &[u8; 96], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
+        fn sk_is_valid(sk: &[u8; 32]) -> bool;
+        fn sk_to_fvk(sk: &[u8; 32], out: &mut [u8; 96]) -> bool;
+        fn sk_to_default_address(sk: &[u8; 32], out: &mut [u8; 43]) -> bool;
+        fn sk_to_default_address_internal(sk: &[u8; 32], out: &mut [u8; 43]) -> bool;
+        fn derive_master_key(seed: &[u8], out: &mut [u8; 73]) -> bool;
+        fn derive_child_key(xsk: &[u8; 73], coin_type: u32, account: u32, out: &mut [u8; 73]) -> bool;
+    }
+
+    #[namespace = "sapling_keys"]
+    extern "Rust" {
+        fn check_diversifier(diversifier: &[u8; 11]) -> bool;
+        #[cxx_name = "ivk_to_address"]
+        fn sapling_keys_ivk_to_address(ivk: &[u8; 32], diversifier: &[u8; 11], out: &mut [u8; 43]) -> bool;
+        #[cxx_name = "ivk_to_address_from_index"]
+        fn sapling_keys_ivk_to_address_from_index(ivk: &[u8; 32], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
+        #[cxx_name = "sk_to_expsk"]
+        fn sapling_keys_sk_to_expsk(sk: &[u8; 32], out: &mut [u8; 96]) -> bool;
+        #[cxx_name = "expsk_to_fvk"]
+        fn sapling_keys_expsk_to_fvk(expsk: &[u8; 96], out: &mut [u8; 96]) -> bool;
+        #[cxx_name = "expsk_to_default_address"]
+        fn sapling_keys_expsk_to_default_address(expsk: &[u8; 96], out: &mut [u8; 43]) -> bool;
+        #[cxx_name = "expsk_to_default_address_internal"]
+        fn sapling_keys_expsk_to_default_address_internal(expsk: &[u8; 96], out: &mut [u8; 43]) -> bool;
+        #[cxx_name = "fvk_to_ivk"]
+        fn sapling_keys_fvk_to_ivk(fvk: &[u8; 96], out: &mut [u8; 32]) -> bool;
+        #[cxx_name = "fvk_to_ivk_internal"]
+        fn sapling_keys_fvk_to_ivk_internal(fvk: &[u8; 96], out: &mut [u8; 32]) -> bool;
+        #[cxx_name = "fvk_to_default_address"]
+        fn sapling_keys_fvk_to_default_address(fvk: &[u8; 96], out: &mut [u8; 43]) -> bool;
+        #[cxx_name = "fvk_to_default_address_internal"]
+        fn sapling_keys_fvk_to_default_address_internal(fvk: &[u8; 96], out: &mut [u8; 43]) -> bool;
+        #[cxx_name = "fvk_to_address"]
+        fn sapling_keys_fvk_to_address(fvk: &[u8; 96], diversifier: &[u8; 11], out: &mut [u8; 43]) -> bool;
+        #[cxx_name = "fvk_to_address_internal"]
+        fn sapling_keys_fvk_to_address_internal(fvk: &[u8; 96], diversifier: &[u8; 11], out: &mut [u8; 43]) -> bool;
+        #[cxx_name = "fvk_to_address_from_index"]
+        fn sapling_keys_fvk_to_address_from_index(fvk: &[u8; 96], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
+        #[cxx_name = "fvk_to_address_from_index_internal"]
+        fn sapling_keys_fvk_to_address_from_index_internal(fvk: &[u8; 96], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
+    }
+
+    #[namespace = "transparent_keys"]
+    extern "Rust" {
+        /// Derives the 32-byte OVK used when shielding funds from a transparent address.
+        /// `seed` is the raw HD seed bytes. Always returns true.
+        #[cxx_name = "ovk_for_shielding_from_taddr"]
+        fn transparent_keys_ovk_for_shielding_from_taddr(seed: &[u8], out: &mut [u8; 32]) -> bool;
     }
 }

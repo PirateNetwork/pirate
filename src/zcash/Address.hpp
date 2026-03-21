@@ -17,7 +17,7 @@ public:
     friend bool operator<(const InvalidEncoding &a, const InvalidEncoding &b) { return true; }
 };
 
-typedef std::variant<InvalidEncoding, SproutPaymentAddress, SaplingPaymentAddress, OrchardPaymentAddressPirate> PaymentAddress;
+typedef std::variant<InvalidEncoding, SproutPaymentAddress, SaplingPaymentAddress, OrchardPaymentAddress> PaymentAddress;
 typedef std::variant<InvalidEncoding, SproutViewingKey, SaplingExtendedFullViewingKey, OrchardExtendedFullViewingKeyPirate> ViewingKey;
 typedef std::variant<InvalidEncoding, SaplingDiversifiedExtendedFullViewingKey, OrchardDiversifiedExtendedFullViewingKeyPirate> DiversifiedViewingKey;
 typedef std::variant<InvalidEncoding, SproutSpendingKey, SaplingExtendedSpendingKey, OrchardExtendedSpendingKeyPirate> SpendingKey;

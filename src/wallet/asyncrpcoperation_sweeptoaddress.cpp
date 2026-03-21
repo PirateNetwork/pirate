@@ -84,7 +84,7 @@ std::optional<libzcash::SaplingPaymentAddress> rpcSaplingSweepAddress;
  * Target address for Orchard sweeps or cross-protocol sweeps from Sapling.
  * Mutually exclusive with rpcSaplingSweepAddress.
  */
-std::optional<libzcash::OrchardPaymentAddressPirate> rpcOrchardSweepAddress;
+std::optional<libzcash::OrchardPaymentAddress> rpcOrchardSweepAddress;
 
 //==============================================================================
 // CLASS IMPLEMENTATION
@@ -191,9 +191,9 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
     std::vector<SaplingNoteEntry> saplingNoteEntries;
     std::vector<OrchardNoteEntry> orchardNoteEntries;
     libzcash::SaplingPaymentAddress saplingSweepAddress;
-    libzcash::OrchardPaymentAddressPirate orchardSweepAddress;
+    libzcash::OrchardPaymentAddress orchardSweepAddress;
     std::map<libzcash::SaplingIncomingViewingKey, std::vector<SaplingNoteEntry>> mapSaplingIvks;
-    std::map<libzcash::OrchardPaymentAddressPirate, std::vector<OrchardNoteEntry>> mapOrchardSpendingKeys;
+    std::map<libzcash::OrchardPaymentAddress, std::vector<OrchardNoteEntry>> mapOrchardSpendingKeys;
     bool hasSaplingTarget = false;
     bool hasOrchardTarget = false;
 
@@ -222,8 +222,8 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 if (std::get_if<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
                     saplingSweepAddress = *(std::get_if<libzcash::SaplingPaymentAddress>(&zAddress));
                     hasSaplingTarget = true;
-                } else if (std::get_if<libzcash::OrchardPaymentAddressPirate>(&zAddress) != nullptr) {
-                    orchardSweepAddress = std::get<libzcash::OrchardPaymentAddressPirate>(zAddress);
+                } else if (std::get_if<libzcash::OrchardPaymentAddress>(&zAddress) != nullptr) {
+                    orchardSweepAddress = std::get<libzcash::OrchardPaymentAddress>(zAddress);
                     hasOrchardTarget = true;
                 } else {
                     LogPrint("zrpcunsafe", "%s: Invalid sweep address format.\n", getId());
@@ -517,17 +517,17 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
 
         // Get outgoing viewing key from extended spending key
         uint256 orchardOvk;
-        auto orchardFvk = orchardExtendedSpendingKey.sk.GetFVK();
-        if (!orchardFvk) {
+        libzcash::OrchardFullViewingKey orchardFvk;
+        if (!orchardExtendedSpendingKey.sk.DeriveFVK(&orchardFvk)) {
             LogPrint("zrpcunsafe", "%s: Failed to get FVK from spending key. Stopping.\n", getId());
             continue;
         }
-        auto orchardOvkResult = orchardFvk->GetOVK();
-        if (!orchardOvkResult) {
+        libzcash::OrchardOutgoingViewingKey orchardOvkObj;
+        if (!orchardFvk.DeriveOVK(&orchardOvkObj)) {
             LogPrint("zrpcunsafe", "%s: Failed to get OVK from FVK. Stopping.\n", getId());
             continue;
         }
-        orchardOvk = orchardOvkResult->ovk;
+        orchardOvk = orchardOvkObj.ovk;
 
         // Add output to the single destination address
         if (hasOrchardTarget) {
@@ -651,7 +651,7 @@ void AsyncRPCOperation_sweeptoaddress::setSaplingSweepAddress(const libzcash::Sa
  * 
  * @param address Valid Orchard payment address for sweep destination
  */
-void AsyncRPCOperation_sweeptoaddress::setOrchardSweepAddress(const libzcash::OrchardPaymentAddressPirate& address) {
+void AsyncRPCOperation_sweeptoaddress::setOrchardSweepAddress(const libzcash::OrchardPaymentAddress& address) {
     rpcOrchardSweepAddress = address;
     rpcSaplingSweepAddress.reset(); // Clear Sapling address to ensure only one destination
 }

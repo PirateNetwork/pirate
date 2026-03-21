@@ -65,7 +65,7 @@ const int ORCHARD_CONSOLIDATION_EXPIRY_DELTA = 40;
  */
 AsyncRPCOperation_orchardconsolidation_address::AsyncRPCOperation_orchardconsolidation_address(
     int targetHeight, 
-    const libzcash::OrchardPaymentAddressPirate& address,
+    const libzcash::OrchardPaymentAddress& address,
     const libzcash::OrchardExtendedSpendingKeyPirate& spendingKey,
     CAmount fee, 
     int maxNotes,
@@ -338,12 +338,12 @@ bool AsyncRPCOperation_orchardconsolidation_address::main_impl() {
         }
         
         auto fvk = fvkOpt.value().fvk;
-        auto ovkOpt = fvk.GetOVK();
-        if (ovkOpt == std::nullopt) {
+        libzcash::OrchardOutgoingViewingKey ovk;
+        if (!fvk.DeriveOVK(&ovk)) {
             throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: OVK not found for Orchard spending key. Stopping.\n", getId()));
         }
         
-        if (!builder.ConvertRawOrchardOutput(ovkOpt.value().ovk)) {
+        if (!builder.ConvertRawOrchardOutput(ovk.ovk)) {
             throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Converting Raw Orchard Output failed.\n", getId()));
         }
 

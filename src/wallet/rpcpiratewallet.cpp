@@ -133,7 +133,7 @@ void getTransparentRecieves(RpcTx& tx, vector<TransactionReceivedT>& vReceived, 
 }
 
 template <typename RpcTx>
-void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<uint256>& ivks, std::set<uint256>& ivksOut, vector<TransactionSpendZS>& vSpend, bool fIncludeWatchonly)
+void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<SaplingIncomingViewingKey>& ivks, std::set<SaplingIncomingViewingKey>& ivksOut, vector<TransactionSpendZS>& vSpend, bool fIncludeWatchonly)
 {
     // Sapling Inputs belonging to the wallet
     for (const auto& rustSpend : tx.GetSaplingSpends()) {
@@ -161,8 +161,8 @@ void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
             // Access the output directly from the returned const reference
             const sapling::Output& output = vOutputs[op.n];
 
-            for (std::set<uint256>::iterator it = ivks.begin(); it != ivks.end(); it++) {
-                auto ivk = SaplingIncomingViewingKey(*it);
+            for (auto it = ivks.begin(); it != ivks.end(); it++) {
+                auto ivk = *it;
 
                 // Use Rust decryption
                 auto pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(output, ivk);
@@ -170,8 +170,8 @@ void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
                 if (pt) {
                     ivksOut.insert(ivk);
                     auto note = pt.value();
-                    auto pa = ivk.address(note.d);
-                    auto address = pa.value();
+                    SaplingPaymentAddress address;
+                    assert(ivk.DeriveAddress(&address, note.d));
                     spend.encodedAddress = EncodePaymentAddress(address);
                     spend.amount = note.value();
                     spend.spendShieldedOutputIndex = (int)op.n;
@@ -226,8 +226,8 @@ void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
                 // Access the output directly from the returned const reference
                 const sapling::Output& output = vOutputs[op.n];
 
-                for (std::set<uint256>::iterator it = ivks.begin(); it != ivks.end(); it++) {
-                    auto ivk = SaplingIncomingViewingKey(*it);
+                for (auto it = ivks.begin(); it != ivks.end(); it++) {
+                    auto ivk = *it;
 
                     // Use Rust decryption
                     auto pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(output, ivk);
@@ -235,8 +235,8 @@ void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
                     if (pt) {
                         ivksOut.insert(ivk);
                         auto note = pt.value();
-                        auto pa = ivk.address(note.d);
-                        auto address = pa.value();
+                        SaplingPaymentAddress address;
+                        assert(ivk.DeriveAddress(&address, note.d));
                         spend.encodedAddress = EncodePaymentAddress(address);
                         spend.amount = note.value();
                         spend.spendShieldedOutputIndex = (int)op.n;
@@ -316,14 +316,14 @@ void getSaplingSends(const Consensus::Params& params, int nHeight, RpcTx& tx, st
 }
 
 template <typename RpcTx>
-void getSaplingReceives(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<uint256>& ivks, std::set<uint256>& ivksOut, vector<TransactionReceivedZS>& vReceived, bool fIncludeWatchonly)
+void getSaplingReceives(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<SaplingIncomingViewingKey>& ivks, std::set<SaplingIncomingViewingKey>& ivksOut, vector<TransactionReceivedZS>& vReceived, bool fIncludeWatchonly)
 {
     int shieldedOutputIndex = 0;
     for (const auto& rustOutput : tx.GetSaplingOutputs()) {
         TransactionReceivedZS received;
 
-        for (std::set<uint256>::iterator it = ivks.begin(); it != ivks.end(); it++) {
-            auto ivk = SaplingIncomingViewingKey(*it);
+        for (auto it = ivks.begin(); it != ivks.end(); it++) {
+            auto ivk = *it;
             
             // Use Rust decryption
             auto pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(rustOutput, ivk);
@@ -331,8 +331,8 @@ void getSaplingReceives(const Consensus::Params& params, int nHeight, RpcTx& tx,
             if (pt) {
                 ivksOut.insert(ivk);
                 auto note = pt.value();
-                auto pa = ivk.address(note.d);
-                auto address = pa.value();
+                SaplingPaymentAddress address;
+                assert(ivk.DeriveAddress(&address, note.d));
                 auto memo = note.memo();
                 received.encodedAddress = EncodePaymentAddress(address);
                 received.amount = note.value();
@@ -418,7 +418,7 @@ void getOrchardSends(const Consensus::Params& params, int nHeight, RpcTx& tx, st
 }
 
 template <typename RpcTx>
-void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::OrchardIncomingViewingKeyPirate>& ivks, std::set<libzcash::OrchardIncomingViewingKeyPirate>& ivksOut, vector<TransactionSpendZO>& vSpend, bool fIncludeWatchonly)
+void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::OrchardIncomingViewingKey>& ivks, std::set<libzcash::OrchardIncomingViewingKey>& ivksOut, vector<TransactionSpendZO>& vSpend, bool fIncludeWatchonly)
 {
     // Sapling Inputs belonging to the wallet
     for (const auto& rustSpend : tx.GetOrchardActions()) {
@@ -446,7 +446,7 @@ void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
             // Access the action directly from the returned const reference
             const orchard_bundle::Action& rustAction = vActions[op.n];
 
-            for (std::set<OrchardIncomingViewingKeyPirate>::iterator it = ivks.begin(); it != ivks.end(); it++) {
+            for (std::set<OrchardIncomingViewingKey>::iterator it = ivks.begin(); it != ivks.end(); it++) {
                 auto ivk = *it;
                 auto pt = OrchardNotePlaintext::AttemptDecryptOrchardAction(&rustAction, ivk);
 
@@ -509,7 +509,7 @@ void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
                 // Access the action directly from the returned const reference
                 const orchard_bundle::Action& rustAction = vActions[op.n];
 
-                for (std::set<OrchardIncomingViewingKeyPirate>::iterator it = ivks.begin(); it != ivks.end(); it++) {
+                for (std::set<OrchardIncomingViewingKey>::iterator it = ivks.begin(); it != ivks.end(); it++) {
                     auto ivk = *it;
                     auto pt = OrchardNotePlaintext::AttemptDecryptOrchardAction(&rustAction, ivk);
 
@@ -539,13 +539,13 @@ void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
 }
 
 template <typename RpcTx>
-void getOrchardReceives(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::OrchardIncomingViewingKeyPirate>& ivks, std::set<libzcash::OrchardIncomingViewingKeyPirate>& ivksOut, vector<TransactionReceivedZO>& vReceived, bool fIncludeWatchonly)
+void getOrchardReceives(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::OrchardIncomingViewingKey>& ivks, std::set<libzcash::OrchardIncomingViewingKey>& ivksOut, vector<TransactionReceivedZO>& vReceived, bool fIncludeWatchonly)
 {
     int shieldedActionIndex = 0;
     for (const auto& rustAction : tx.GetOrchardActions()) {
         TransactionReceivedZO received;
 
-        for (std::set<libzcash::OrchardIncomingViewingKeyPirate>::iterator it = ivks.begin(); it != ivks.end(); it++) {
+        for (std::set<libzcash::OrchardIncomingViewingKey>::iterator it = ivks.begin(); it != ivks.end(); it++) {
             auto ivk = *it;
             auto pt = OrchardNotePlaintext::AttemptDecryptOrchardAction(&rustAction, ivk);
 
@@ -630,14 +630,14 @@ void getAllSaplingOVKs(std::set<uint256>& ovks, bool fIncludeWatchonly)
             if (pwalletMain->GetOrchardFullViewingKey(ivk, extfvk)) {
                 if (pwalletMain->HaveOrchardSpendingKey(extfvk) || fIncludeWatchonly) {
                     // External OVK
-                    auto ovkOpt_e = extfvk.fvk.GetOVK();
-                    if (ovkOpt_e != std::nullopt) {
-                        ovksOrchard.insert(ovkOpt_e.value());
+                    OrchardOutgoingViewingKey ovk_e;
+                    if (extfvk.fvk.DeriveOVK(&ovk_e)) {
+                        ovksOrchard.insert(ovk_e);
                     }
                     // Internal OVK
-                    auto ovkOpt_i = extfvk.fvk.GetOVKinternal();
-                    if (ovkOpt_i != std::nullopt) {
-                        ovksOrchard.insert(ovkOpt_i.value());
+                    OrchardOutgoingViewingKey ovk_i;
+                    if (extfvk.fvk.DeriveOVKinternal(&ovk_i)) {
+                        ovksOrchard.insert(ovk_i);
                     }
                 }
             }
@@ -655,7 +655,7 @@ void getAllSaplingOVKs(std::set<uint256>& ovks, bool fIncludeWatchonly)
     }
 }
 
-void getAllSaplingIVKs(std::set<uint256>& ivks, bool fIncludeWatchonly)
+void getAllSaplingIVKs(std::set<SaplingIncomingViewingKey>& ivks, bool fIncludeWatchonly)
 {
     // exit if pwalletMain is not set
     if (pwalletMain == nullptr)
@@ -685,7 +685,7 @@ void getRpcArcTxSaplingKeys(const CWalletTx& tx, int txHeight, RpcArcTransaction
 {
     AssertLockHeld(pwalletMain->cs_wallet);
 
-    std::set<uint256> ivks;
+    std::set<SaplingIncomingViewingKey> ivks;
     std::set<uint256> ovks;
 
     getAllSaplingOVKs(ovks, fIncludeWatchonly);
@@ -737,14 +737,14 @@ void getAllOrchardOVKs(std::set<libzcash::OrchardOutgoingViewingKey>& ovks, bool
             if (pwalletMain->GetOrchardFullViewingKey(ivk, extfvk)) {
                 if (pwalletMain->HaveOrchardSpendingKey(extfvk) || fIncludeWatchonly) {
                     // External OVK
-                    auto ovkOpt_e = extfvk.fvk.GetOVK();
-                    if (ovkOpt_e != std::nullopt) {
-                        ovks.insert(ovkOpt_e.value());
+                    OrchardOutgoingViewingKey ovk_e;
+                    if (extfvk.fvk.DeriveOVK(&ovk_e)) {
+                        ovks.insert(ovk_e);
                     }
                     // Internal OVK
-                    auto ovkOpt_i = extfvk.fvk.GetOVKinternal();
-                    if (ovkOpt_i != std::nullopt) {
-                        ovks.insert(ovkOpt_i.value());
+                    OrchardOutgoingViewingKey ovk_i;
+                    if (extfvk.fvk.DeriveOVKinternal(&ovk_i)) {
+                        ovks.insert(ovk_i);
                     }
                 }
             }
@@ -781,7 +781,7 @@ void getAllOrchardOVKs(std::set<libzcash::OrchardOutgoingViewingKey>& ovks, bool
     }
 }
 
-void getAllOrchardIVKs(std::set<libzcash::OrchardIncomingViewingKeyPirate>& ivks, bool fIncludeWatchonly)
+void getAllOrchardIVKs(std::set<libzcash::OrchardIncomingViewingKey>& ivks, bool fIncludeWatchonly)
 {
     // exit if pwalletMain is not set
     if (pwalletMain == nullptr)
@@ -810,7 +810,7 @@ void getRpcArcTxOrchardKeys(const CWalletTx& tx, int txHeight, RpcArcTransaction
 {
     AssertLockHeld(pwalletMain->cs_wallet);
 
-    std::set<libzcash::OrchardIncomingViewingKeyPirate> ivks;
+    std::set<libzcash::OrchardIncomingViewingKey> ivks;
     std::set<libzcash::OrchardOutgoingViewingKey> ovks;
 
     getAllOrchardOVKs(ovks, fIncludeWatchonly);
@@ -859,9 +859,9 @@ void getRpcArcTx(uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly
     uint256 hashBlock;
     int nIndex;
     ArchiveTxPoint arcTxPt;
-    std::set<uint256> saplingIvks;
+    std::set<SaplingIncomingViewingKey> saplingIvks;
     std::set<uint256> saplingOvks;
-    std::set<libzcash::OrchardIncomingViewingKeyPirate> orchardIvks;
+    std::set<libzcash::OrchardIncomingViewingKey> orchardIvks;
     std::set<libzcash::OrchardOutgoingViewingKey> orchardOvks;
 
     // try to find the transaction to pull the hashblock
@@ -1001,9 +1001,9 @@ void getRpcArcTx(CWalletTx& tx, RpcArcTransaction& arcTx, bool fIncludeWatchonly
     AssertLockHeld(cs_main);
     AssertLockHeld(pwalletMain->cs_wallet);
 
-    std::set<uint256> saplingIvks;
+    std::set<SaplingIncomingViewingKey> saplingIvks;
     std::set<uint256> saplingOvks;
-    std::set<libzcash::OrchardIncomingViewingKeyPirate> orchardIvks;
+    std::set<libzcash::OrchardIncomingViewingKey> orchardIvks;
     std::set<libzcash::OrchardOutgoingViewingKey> orchardOvks;
     ArchiveTxPoint arcTxPt;
     std::map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.find(tx.GetHash());
@@ -1794,7 +1794,7 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
     CTxDestination tAddress = DecodeDestination(encodedAddress);
     auto zAddress = DecodePaymentAddress(encodedAddress);
     SaplingPaymentAddress zsAddress;
-    OrchardPaymentAddressPirate zoAddress;
+    OrchardPaymentAddress zoAddress;
 
     if (IsValidDestination(tAddress))
         isTAddress = true;
@@ -1804,8 +1804,8 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
             zsAddress = *(std::get_if<libzcash::SaplingPaymentAddress>(&zAddress));
             isZsAddress = true;
         }
-        if (std::get_if<libzcash::OrchardPaymentAddressPirate>(&zAddress) != nullptr) {
-            zoAddress = *(std::get_if<libzcash::OrchardPaymentAddressPirate>(&zAddress));
+        if (std::get_if<libzcash::OrchardPaymentAddress>(&zAddress) != nullptr) {
+            zoAddress = *(std::get_if<libzcash::OrchardPaymentAddress>(&zAddress));
             isZoAddress = true;
         }
     }
@@ -2083,7 +2083,7 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
     CTxDestination tAddress = DecodeDestination(encodedAddress);
     auto zAddress = DecodePaymentAddress(encodedAddress);
     SaplingPaymentAddress zsAddress;
-    OrchardPaymentAddressPirate zoAddress;
+    OrchardPaymentAddress zoAddress;
 
     if (IsValidDestination(tAddress))
         isTAddress = true;
@@ -2093,8 +2093,8 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
             zsAddress = *(std::get_if<libzcash::SaplingPaymentAddress>(&zAddress));
             isZsAddress = true;
         }
-        if (std::get_if<libzcash::OrchardPaymentAddressPirate>(&zAddress) != nullptr) {
-            zoAddress = *(std::get_if<libzcash::OrchardPaymentAddressPirate>(&zAddress));
+        if (std::get_if<libzcash::OrchardPaymentAddress>(&zAddress) != nullptr) {
+            zoAddress = *(std::get_if<libzcash::OrchardPaymentAddress>(&zAddress));
             isZoAddress = true;
         }
     }
@@ -2371,7 +2371,7 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
     CTxDestination tAddress = DecodeDestination(encodedAddress);
     auto zAddress = DecodePaymentAddress(encodedAddress);
     SaplingPaymentAddress zsAddress;
-    OrchardPaymentAddressPirate zoAddress;
+    OrchardPaymentAddress zoAddress;
 
     if (IsValidDestination(tAddress))
         isTAddress = true;
@@ -2381,8 +2381,8 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
             zsAddress = *(std::get_if<libzcash::SaplingPaymentAddress>(&zAddress));
             isZsAddress = true;
         }
-        if (std::get_if<libzcash::OrchardPaymentAddressPirate>(&zAddress) != nullptr) {
-            zoAddress = *(std::get_if<libzcash::OrchardPaymentAddressPirate>(&zAddress));
+        if (std::get_if<libzcash::OrchardPaymentAddress>(&zAddress) != nullptr) {
+            zoAddress = *(std::get_if<libzcash::OrchardPaymentAddress>(&zAddress));
             isZoAddress = true;
         }
     }
@@ -2747,8 +2747,8 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
                         txType = 3;
 
                     auto note = pt.value();
-                    auto pa = ivk.address(note.d);
-                    auto addr = pa.value();
+                    SaplingPaymentAddress addr;
+                    assert(ivk.DeriveAddress(&addr, note.d));
                     string addressString = EncodePaymentAddress(addr);
                     if (addressBalances.count(addressString) == 0)
                         addressBalances.insert(make_pair(addressString, txAmounts));
@@ -2997,7 +2997,7 @@ void decrypttransaction(CTransaction& tx, RpcArcTransaction& arcTx, int nHeight)
     getAllSaplingOVKs(saplingOvks, true);
 
     // get Ivks for sapling decryption
-    std::set<uint256> saplingIvks;
+    std::set<SaplingIncomingViewingKey> saplingIvks;
     getAllSaplingIVKs(saplingIvks, true);
 
     // get Ovks for sapling decryption
@@ -3005,7 +3005,7 @@ void decrypttransaction(CTransaction& tx, RpcArcTransaction& arcTx, int nHeight)
     getAllOrchardOVKs(orchardOvks, true);
 
     // get Ivks for sapling decryption
-    std::set<libzcash::OrchardIncomingViewingKeyPirate> orchardIvks;
+    std::set<libzcash::OrchardIncomingViewingKey> orchardIvks;
     getAllOrchardIVKs(orchardIvks, true);
 
     auto params = Params().GetConsensus();

@@ -46,6 +46,7 @@
 
 #include <primitives/sapling.h>
 #include <primitives/orchard.h>
+#include "zcash/address/sapling.hpp"
 
 /**
  * A flag that is ORed into the protocol version to designate that a transaction
@@ -369,9 +370,9 @@ class ArchiveTxPoint
 public:
     uint256 hashBlock;
     int nIndex;
-    std::set<uint256> saplingIvks;
+    std::set<libzcash::SaplingIncomingViewingKey> saplingIvks;
     std::set<uint256> saplingOvks;
-    std::set<libzcash::OrchardIncomingViewingKeyPirate> orchardIvks;
+    std::set<libzcash::OrchardIncomingViewingKey> orchardIvks;
     std::set<libzcash::OrchardOutgoingViewingKey> orchardOvks;
 
     // In-Memory Only
@@ -384,7 +385,7 @@ public:
         nIndex = nIn;
         writeToDisk = true;
     }
-    ArchiveTxPoint(uint256 hashIn, int nIn, std::set<uint256> nSaplingIvks, std::set<uint256> nSaplingOvks, std::set<libzcash::OrchardIncomingViewingKeyPirate> nOrchardIvks, std::set<libzcash::OrchardOutgoingViewingKey> nOrchardOvks)
+    ArchiveTxPoint(uint256 hashIn, int nIn, std::set<libzcash::SaplingIncomingViewingKey> nSaplingIvks, std::set<uint256> nSaplingOvks, std::set<libzcash::OrchardIncomingViewingKey> nOrchardIvks, std::set<libzcash::OrchardOutgoingViewingKey> nOrchardOvks)
     {
         hashBlock = hashIn;
         nIndex = nIn;

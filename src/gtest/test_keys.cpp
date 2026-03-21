@@ -45,7 +45,10 @@ TEST(Keys, EncodeAndDecodeSapling)
             ASSERT_TRUE(vk2_ptr != nullptr);
             auto vk2 = *vk2_ptr;
             ASSERT_EQ(vk, vk2);
-            ASSERT_EQ(vk.fvk.in_viewing_key(), vk2.fvk.in_viewing_key());
+            libzcash::SaplingIncomingViewingKey ivk1, ivk2;
+      vk.fvk.DeriveIVK(&ivk1);
+      vk2.fvk.DeriveIVK(&ivk2);
+      ASSERT_EQ(ivk1, ivk2);
         }
     }
 }

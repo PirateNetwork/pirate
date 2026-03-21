@@ -4,10 +4,7 @@ use zcash_primitives::{
     primitives::{Diversifier, Nullifier, ProofGenerationKey, Rseed},
 };
 
-use crate::{
-    librustzcash_ask_to_ak, librustzcash_check_diversifier, librustzcash_crh_ivk,
-    librustzcash_ivk_to_pkd, librustzcash_nsk_to_nk,
-};
+use crate::librustzcash_ivk_to_pkd;
 
 #[test]
 fn key_components() {
@@ -659,31 +656,14 @@ fn key_components() {
 
         let ak = SPENDING_KEY_GENERATOR * ask;
         assert_eq!(&ak.to_bytes(), &tv.ak);
-        {
-            let mut ak = [0u8; 32];
-            librustzcash_ask_to_ak(&tv.ask, &mut ak);
-            assert_eq!(&ak, &tv.ak);
-        }
 
         let pgk = ProofGenerationKey { ak, nsk };
         let fvk = pgk.to_viewing_key();
         assert_eq!(&fvk.nk.to_bytes(), &tv.nk);
-        {
-            let mut nk = [0u8; 32];
-            librustzcash_nsk_to_nk(&tv.nsk, &mut nk);
-            assert_eq!(&nk, &tv.nk);
-        }
 
         assert_eq!(&fvk.ivk().to_repr(), &tv.ivk);
-        {
-            let mut ivk = [0u8; 32];
-            librustzcash_crh_ivk(&tv.ak, &tv.nk, &mut ivk);
-            assert_eq!(&ivk, &tv.ivk);
-        }
 
         let diversifier = Diversifier(tv.default_d);
-        assert!(librustzcash_check_diversifier(&tv.default_d));
-
         let addr = fvk.to_payment_address(diversifier).unwrap();
         assert_eq!(&addr.pk_d().to_bytes(), &tv.default_pk_d);
         {

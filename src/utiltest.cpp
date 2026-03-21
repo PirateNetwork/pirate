@@ -63,7 +63,8 @@ CWalletTx GetValidSaplingReceive(const Consensus::Params& consensusParams,
     CKey tsk = AddTestCKeyToKeyStore(keyStore);
     auto scriptPubKey = GetScriptForDestination(tsk.GetPubKey().GetID());
     // To zaddr
-    auto fvk = sk.expsk.full_viewing_key();
+    libzcash::SaplingFullViewingKey fvk;
+    sk.expsk.DeriveFVK(&fvk);
     auto pa = sk.DefaultAddress();
 
     auto builder = TransactionBuilder(consensusParams, 1, &keyStore);

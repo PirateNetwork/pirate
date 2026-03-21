@@ -86,7 +86,7 @@ std::string GenerateSaplingDisclosure(CWallet* wallet, const uint256& txid, int 
     // If not found with Sapling OVKs, try Orchard OVKs
     // Transactions that spend from Orchard and send to Sapling use Orchard OVKs
     if (!found) {
-        std::set<libzcash::OrchardPaymentAddressPirate> orchardAddresses;
+        std::set<libzcash::OrchardPaymentAddress> orchardAddresses;
         wallet->GetOrchardPaymentAddresses(orchardAddresses);
 
         for (const auto& addr : orchardAddresses) {
@@ -94,17 +94,17 @@ std::string GenerateSaplingDisclosure(CWallet* wallet, const uint256& txid, int 
             libzcash::OrchardExtendedSpendingKeyPirate extsk;
             if (wallet->GetOrchardExtendedSpendingKey(addr, extsk)) {
                 // Get the FVK and then the OVK
-                auto fvkOpt = extsk.sk.GetFVK();
-                if (!fvkOpt) {
+                libzcash::OrchardFullViewingKey fvk;
+                if (!extsk.sk.DeriveFVK(&fvk)) {
                     continue; // Try next key
                 }
                 
-                auto ovkOpt = fvkOpt->GetOVK();
-                if (!ovkOpt) {
+                libzcash::OrchardOutgoingViewingKey ovkObj;
+                if (!fvk.DeriveOVK(&ovkObj)) {
                     continue; // Try next key
                 }
                 
-                auto ovk = ovkOpt->ovk;
+                auto ovk = ovkObj.ovk;
                 std::copy(ovk.begin(), ovk.end(), ovkBytes.begin());
                 
                 // Derive the OCK for this OVK
@@ -204,7 +204,7 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
     bool found = false;
 
     // Iterate through all Orchard addresses in the wallet
-    std::set<libzcash::OrchardPaymentAddressPirate> addresses;
+    std::set<libzcash::OrchardPaymentAddress> addresses;
     wallet->GetOrchardPaymentAddresses(addresses);
 
     for (const auto& addr : addresses) {
@@ -212,17 +212,17 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
         libzcash::OrchardExtendedSpendingKeyPirate extsk;
         if (wallet->GetOrchardExtendedSpendingKey(addr, extsk)) {
             // Get the FVK and then the OVK
-            auto fvkOpt = extsk.sk.GetFVK();
-            if (!fvkOpt) {
+            libzcash::OrchardFullViewingKey fvk;
+            if (!extsk.sk.DeriveFVK(&fvk)) {
                 continue; // Try next key
             }
             
-            auto ovkOpt = fvkOpt->GetOVK();
-            if (!ovkOpt) {
+            libzcash::OrchardOutgoingViewingKey ovkObj;
+            if (!fvk.DeriveOVK(&ovkObj)) {
                 continue; // Try next key
             }
             
-            auto ovk = ovkOpt->ovk;
+            auto ovk = ovkObj.ovk;
             std::copy(ovk.begin(), ovk.end(), ovkBytes.begin());
             
             // Derive the OCK for this OVK
@@ -467,7 +467,7 @@ OrchardDisclosureVerificationResult VerifyOrchardDisclosure(const std::string& d
     std::copy(address.begin(), address.begin() + 11, div.begin());
     uint256 pkd;
     std::copy(address.begin() + 11, address.end(), pkd.begin());
-    libzcash::OrchardPaymentAddressPirate paymentAddr(div, pkd);
+    libzcash::OrchardPaymentAddress paymentAddr(div, pkd);
 
     // Build successful result
     result.success = true;

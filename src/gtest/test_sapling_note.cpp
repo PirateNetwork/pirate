@@ -49,14 +49,18 @@ TEST(SaplingNote, TestVectors)
 
     // Test nullifier
     SaplingSpendingKey spendingKey(sk);
-    ASSERT_EQ(note.nullifier(spendingKey.full_viewing_key(), note_pos), nf);
+    libzcash::SaplingFullViewingKey nf_fvk;
+    spendingKey.expanded_spending_key().DeriveFVK(&nf_fvk);
+    ASSERT_EQ(note.nullifier(nf_fvk, note_pos), nf);
 }
 
 
 TEST(SaplingNote, Random)
 {
     // Test creating random notes using the same spending key
-    auto address = SaplingSpendingKey::random().default_address();
+    auto randSk1 = SaplingSpendingKey::random();
+    libzcash::SaplingPaymentAddress address;
+    randSk1.expanded_spending_key().DeriveDefaultAddress(&address);
     SaplingNote note1(address, GetRand(MAX_MONEY), Zip212Enabled::BeforeZip212);
     SaplingNote note2(address, GetRand(MAX_MONEY), Zip212Enabled::BeforeZip212);
 
@@ -66,7 +70,10 @@ TEST(SaplingNote, Random)
     ASSERT_NE(note1.rcm(), note2.rcm());
 
     // Test diversifier and pk_d are not the same for different spending keys
-    SaplingNote note3(SaplingSpendingKey::random().default_address(), GetRand(MAX_MONEY), Zip212Enabled::BeforeZip212);
+    auto randSk3 = SaplingSpendingKey::random();
+    libzcash::SaplingPaymentAddress addr3;
+    randSk3.expanded_spending_key().DeriveDefaultAddress(&addr3);
+    SaplingNote note3(addr3, GetRand(MAX_MONEY), Zip212Enabled::BeforeZip212);
     ASSERT_NE(note1.d, note3.d);
     ASSERT_NE(note1.pk_d, note3.pk_d);
 }

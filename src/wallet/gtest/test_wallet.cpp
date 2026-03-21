@@ -50,7 +50,7 @@ CScript scriptPubKey;
 libzcash::SaplingPaymentAddress saplingAddress;
 
 //Orchard Address for regtest
-libzcash::OrchardPaymentAddressPirate orchardAddress;
+libzcash::OrchardPaymentAddress orchardAddress;
 
 //Create a Sapling Wallet
 SaplingWallet saplingWallet;
@@ -134,7 +134,7 @@ TEST(WalletTests, AddCoinbaseTransactionsToWallet) {
         std::vector<CTransaction> vtx;
         std::vector<CTransaction> addedVtx;
         std::set<libzcash::SaplingPaymentAddress> saplingAddrs;
-        std::set<libzcash::OrchardPaymentAddressPirate> orchardAddrs;
+        std::set<libzcash::OrchardPaymentAddress> orchardAddrs;
         vtx.push_back(coinbaseTx);
         CBlock block;
         pTestWallet->AddToWalletIfInvolvingMe(vtx, addedVtx, &block, testHeight, true, saplingAddrs, orchardAddrs,true);

@@ -674,7 +674,7 @@ WalletModel::SendCoinsReturn WalletModel::prepareZTransaction(WalletModelZTransa
             if (IsValidPaymentAddress(res)) {
 
                 isZaddr = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
-                isOaddr = std::get_if<libzcash::OrchardPaymentAddressPirate>(&res) != nullptr;
+                isOaddr = std::get_if<libzcash::OrchardPaymentAddress>(&res) != nullptr;
 
                 assert(isZaddr != isOaddr);
 

@@ -105,7 +105,7 @@ public:
         return bech32::Encode(m_params.Bech32HRP(CChainParams::SAPLING_PAYMENT_ADDRESS), data);
     }
 
-    std::string operator()(const libzcash::OrchardPaymentAddressPirate& zaddr) const
+    std::string operator()(const libzcash::OrchardPaymentAddress& zaddr) const
     {
         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
         ss << zaddr;
@@ -501,7 +501,7 @@ libzcash::PaymentAddress DecodePaymentAddress(const std::string& str)
         data.reserve((bechOrchAddr.second.size() * 5) / 8);
         if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bechOrchAddr.second.begin(), bechOrchAddr.second.end())) {
             CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
-            libzcash::OrchardPaymentAddressPirate ret;
+            libzcash::OrchardPaymentAddress ret;
             ss >> ret;
             memory_cleanse(ss.data(), ss.size());
             memory_cleanse(data.data(), data.size());

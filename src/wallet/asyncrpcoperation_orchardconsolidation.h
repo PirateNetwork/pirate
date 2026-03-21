@@ -143,7 +143,7 @@ private:
      * @param spendingKey Output parameter for the extended spending key
      * @return true if key was found, false otherwise
      */
-    bool getOrchardExtendedSpendingKey(const libzcash::OrchardPaymentAddressPirate& address, 
+    bool getOrchardExtendedSpendingKey(const libzcash::OrchardPaymentAddress& address, 
                                      libzcash::OrchardExtendedSpendingKeyPirate& spendingKey);
 
 private:

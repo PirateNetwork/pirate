@@ -69,7 +69,7 @@ public:
      * @note A fee of 10000 zatoshis (0.0001 ARRR) is recommended for reliable network acceptance.
      */
     AsyncRPCOperation_orchardconsolidation_address(int targetHeight, 
-                                                   const libzcash::OrchardPaymentAddressPirate& address,
+                                                   const libzcash::OrchardPaymentAddress& address,
                                                    const libzcash::OrchardExtendedSpendingKeyPirate& spendingKey,
                                                    CAmount fee, 
                                                    int maxNotes,
@@ -112,7 +112,7 @@ public:
 
 private:
     int targetHeight_;                                        ///< Blockchain height for transaction creation
-    libzcash::OrchardPaymentAddressPirate address_;          ///< Target address for consolidation
+    libzcash::OrchardPaymentAddress address_;          ///< Target address for consolidation
     libzcash::OrchardExtendedSpendingKeyPirate spendingKey_; ///< Spending key (captured during construction)
     CAmount fee_;                                            ///< Fee per transaction in zatoshis
     int maxNotes_;                                           ///< Maximum notes per transaction

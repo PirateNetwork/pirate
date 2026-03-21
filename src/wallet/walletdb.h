@@ -377,7 +377,7 @@ public:
                                       const uint256 chash);
 
     //Orchard
-    bool WriteOrchardZKey(const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+    bool WriteOrchardZKey(const libzcash::OrchardIncomingViewingKey &ivk,
                                  const libzcash::OrchardExtendedSpendingKeyPirate &extsk,
                                  const CKeyMetadata &keyMeta);
     bool WriteCryptedOrchardZKey(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk,
@@ -387,30 +387,30 @@ public:
     bool EraseOrchardFullViewingKey(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk);
     bool WriteCryptedOrchardFullViewingKey(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk,
                                            const std::vector<unsigned char>& vchCryptedSecret);
-    bool WriteOrchardPaymentAddress(const libzcash::OrchardIncomingViewingKeyPirate &ivk,
-                                    const libzcash::OrchardPaymentAddressPirate &addr,
+    bool WriteOrchardPaymentAddress(const libzcash::OrchardIncomingViewingKey &ivk,
+                                    const libzcash::OrchardPaymentAddress &addr,
                                     OrchardKeyScope scope);
-    bool WriteCryptedOrchardPaymentAddress(const libzcash::OrchardPaymentAddressPirate &addr,
+    bool WriteCryptedOrchardPaymentAddress(const libzcash::OrchardPaymentAddress &addr,
                                            const uint256 chash,
                                            const std::vector<unsigned char> &vchCryptedSecret);
 
      //Wrtie the address, ivk and path of diversified address to the wallet
      bool WriteOrchardDiversifiedAddress(
-         const libzcash::OrchardPaymentAddressPirate &addr,
-         const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+         const libzcash::OrchardPaymentAddress &addr,
+         const libzcash::OrchardIncomingViewingKey &ivk,
          const blob88 &path);
      bool WriteCryptedOrchardDiversifiedAddress(
-         const libzcash::OrchardPaymentAddressPirate &addr,
+         const libzcash::OrchardPaymentAddress &addr,
          const uint256 chash,
          const std::vector<unsigned char> &vchCryptedSecret);
 
      //Write the last used diversifier and ivk used
      bool WriteLastOrchardDiversifierUsed(
-         const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+         const libzcash::OrchardIncomingViewingKey &ivk,
          const blob88 &path);
      bool WriteLastCryptedOrchardDiversifierUsed(
          const uint256 chash,
-         const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+         const libzcash::OrchardIncomingViewingKey &ivk,
          const std::vector<unsigned char> &vchCryptedSecret);
 
      //Write the current spending key used to create diversified addresses to the wallet

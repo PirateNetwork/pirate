@@ -6,7 +6,7 @@ use incrementalmerkletree::Hashable;
 use rand_core::{OsRng, RngCore};
 
 use zcash_primitives::{
-    constants::{CRH_IVK_PERSONALIZATION, PROOF_GENERATION_KEY_GENERATOR, SPENDING_KEY_GENERATOR},
+    constants::CRH_IVK_PERSONALIZATION,
     merkle_tree::HashSer,
     sapling::{
         merkle_hash,
@@ -25,8 +25,6 @@ mod ffi {
         fn tree_uncommitted() -> [u8; 32];
         fn merkle_hash(depth: usize, lhs: &[u8; 32], rhs: &[u8; 32]) -> [u8; 32];
         fn to_scalar(input: &[u8; 64]) -> [u8; 32];
-        fn ask_to_ak(ask: &[u8; 32]) -> [u8; 32];
-        fn nsk_to_nk(nsk: &[u8; 32]) -> [u8; 32];
         fn crh_ivk(ak: &[u8; 32], nk: &[u8; 32]) -> [u8; 32];
         fn check_diversifier(diversifier: [u8; 11]) -> bool;
         fn ivk_to_pkd(ivk: &[u8; 32], diversifier: [u8; 11]) -> Result<[u8; 32]>;
@@ -48,15 +46,6 @@ mod ffi {
     }
 }
 
-/// Reads an FsRepr from a [u8; 32]
-/// and multiplies it by the given base.
-fn fixed_scalar_mult(from: &[u8; 32], p_g: &jubjub::SubgroupPoint) -> jubjub::SubgroupPoint {
-    // We only call this with `from` being a valid jubjub::Scalar.
-    let f = jubjub::Scalar::from_bytes(from).unwrap();
-
-    p_g * f
-}
-
 /// Writes the "uncommitted" note value for empty leaves of the Merkle tree.
 ///
 /// `result` must be a valid pointer to 32 bytes which will be written.
@@ -72,16 +61,6 @@ fn tree_uncommitted() -> [u8; 32] {
 
 fn to_scalar(input: &[u8; 64]) -> [u8; 32] {
     jubjub::Scalar::from_bytes_wide(input).to_bytes()
-}
-
-pub(crate) fn ask_to_ak(ask: &[u8; 32]) -> [u8; 32] {
-    let ak = fixed_scalar_mult(ask, &SPENDING_KEY_GENERATOR);
-    ak.to_bytes()
-}
-
-pub(crate) fn nsk_to_nk(nsk: &[u8; 32]) -> [u8; 32] {
-    let nk = fixed_scalar_mult(nsk, &PROOF_GENERATION_KEY_GENERATOR);
-    nk.to_bytes()
 }
 
 pub(crate) fn crh_ivk(ak: &[u8; 32], nk: &[u8; 32]) -> [u8; 32] {

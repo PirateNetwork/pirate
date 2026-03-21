@@ -410,7 +410,9 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
         
         // Set outgoing viewing key from first available extended spending key
         if (!outgoingViewingKey) {
-            outgoingViewingKey = extendedSpendingKey.expsk.full_viewing_key().ovk;
+            libzcash::SaplingFullViewingKey fvk;
+            extendedSpendingKey.expsk.DeriveFVK(&fvk);
+            outgoingViewingKey = fvk.ovk;
         }
     }
 
@@ -497,13 +499,13 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
             }
 
             auto fullViewingKey = fullViewingKeyOpt.value().fvk;
-            auto outgoingViewingKeyOpt = fullViewingKey.GetOVK();
-            if (outgoingViewingKeyOpt == std::nullopt) {
+            OrchardOutgoingViewingKey outgoingViewingKeyObj;
+            if (!fullViewingKey.DeriveOVK(&outgoingViewingKeyObj)) {
                 throw JSONRPCError(RPC_WALLET_ERROR,
                                    strprintf("%s: OVK not found for Orchard spending key. Stopping.\n", getId()));
             }
 
-            outgoingViewingKey = outgoingViewingKeyOpt.value().ovk;
+            outgoingViewingKey = outgoingViewingKeyObj.ovk;
         }
     }
     
@@ -576,7 +578,7 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
         
         // If we have any Orchard payment addresses, ensure Orchard is initialized
         // This is necessary to handle the case where we are sending to an Orchard address
-        if (std::get_if<libzcash::OrchardPaymentAddressPirate>(&toPaymentAddress_) != nullptr) {
+        if (std::get_if<libzcash::OrchardPaymentAddress>(&toPaymentAddress_) != nullptr) {
             if (!orchardInitialized) {
                 builder_.InitializeOrchard(false, true, uint256());
             }
@@ -625,7 +627,7 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
 
         // Determine the payment address type (Sapling or Orchard)
         auto saplingPaymentAddress = std::get_if<libzcash::SaplingPaymentAddress>(&toPaymentAddress_);
-        auto orchardPaymentAddress = std::get_if<libzcash::OrchardPaymentAddressPirate>(&toPaymentAddress_);
+        auto orchardPaymentAddress = std::get_if<libzcash::OrchardPaymentAddress>(&toPaymentAddress_);
 
         if (saplingPaymentAddress == nullptr && orchardPaymentAddress == nullptr) {
             // This should never happen as we have already determined that the payment is to a shielded address

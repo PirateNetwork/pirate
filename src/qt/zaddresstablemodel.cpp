@@ -139,7 +139,7 @@ public:
                 balances[addr] = 0;
         }
 
-        std::set<libzcash::OrchardPaymentAddressPirate> orchAddresses;
+        std::set<libzcash::OrchardPaymentAddress> orchAddresses;
         wallet->GetOrchardPaymentAddresses(orchAddresses);
         for (auto addr : orchAddresses) {
             if (balances.count(addr) == 0)
@@ -231,9 +231,9 @@ public:
                 }
 
                 // Check if this is an Orchard address
-                auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddressPirate>(&zaddr);
+                auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddress>(&zaddr);
                 if (orchardAddr != nullptr) {
-                    libzcash::OrchardIncomingViewingKeyPirate ivk;
+                    libzcash::OrchardIncomingViewingKey ivk;
                     libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
                     if (wallet->GetOrchardIncomingViewingKey(*orchardAddr, ivk) &&
                         wallet->GetOrchardFullViewingKey(ivk, extfvk)) {
@@ -498,7 +498,7 @@ public:
         ZAddressTableEntry newEntry;
         libzcash::PaymentAddress zaddr = DecodePaymentAddress(address.toStdString());
         auto saplingAddr = std::get_if<libzcash::SaplingPaymentAddress>(&zaddr);
-        auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddressPirate>(&zaddr);
+        auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddress>(&zaddr);
 
         if (saplingAddr != nullptr || orchardAddr != nullptr) {
 
@@ -513,7 +513,7 @@ public:
             }
 
             if (orchardAddr != nullptr) {
-                libzcash::OrchardIncomingViewingKeyPirate ivk;
+                libzcash::OrchardIncomingViewingKey ivk;
                 libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
                 if (wallet->GetOrchardIncomingViewingKey(*orchardAddr, ivk) &&
                     wallet->GetOrchardFullViewingKey(ivk, extfvk) &&

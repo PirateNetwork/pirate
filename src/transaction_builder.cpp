@@ -57,8 +57,8 @@ Builder::Builder(
 }
 
 bool Builder::AddSpendFromParts(
-    const libzcash::OrchardFullViewingKeyPirate fvk,
-    const libzcash::OrchardPaymentAddressPirate addr,
+    const libzcash::OrchardFullViewingKey fvk,
+    const libzcash::OrchardPaymentAddress addr,
     const CAmount value,
     const uint256 rho,
     const uint256 rseed,
@@ -104,7 +104,7 @@ bool Builder::AddSpendFromParts(
 
 bool Builder::AddOutput(
     const std::optional<uint256>& ovk,
-    const libzcash::OrchardPaymentAddressPirate& to,
+    const libzcash::OrchardPaymentAddress& to,
     CAmount value,
     const std::optional<libzcash::Memo>& memo)
 {
@@ -140,7 +140,7 @@ std::optional<UnauthorizedBundle> Builder::Build()
 }
 
 std::optional<OrchardBundle> UnauthorizedBundle::ProveAndSign(
-    std::vector<libzcash::OrchardSpendingKeyPirate> keys,
+    std::vector<libzcash::OrchardSpendingKey> keys,
     uint256 sighash)
 {
     if (!inner) {
@@ -377,7 +377,8 @@ bool TransactionBuilder::ConvertRawSaplingSpend(libzcash::SaplingExtendedSpendin
     CDataStream ssExtSk(SER_NETWORK, PROTOCOL_VERSION);
     ssExtSk << extsk;
 
-    auto ivk = extsk.ToXFVK().fvk.in_viewing_key();
+    libzcash::SaplingIncomingViewingKey ivk;
+    extsk.ToXFVK().fvk.DeriveIVK(&ivk);
 
     // Consistency check: all anchors must equal the first one
     for (int i = 0; i < vSaplingSpends.size(); i++) {
@@ -392,23 +393,21 @@ bool TransactionBuilder::ConvertRawSaplingSpend(libzcash::SaplingExtendedSpendin
         std::move(ss.begin(), ss.end(), merkle_path.begin());
 
         // Check FVK is valid for Address
-        auto ckeckAddrOpt = ivk.address(vSaplingSpends[i].addr.d);
-        if (ckeckAddrOpt == std::nullopt) {
+        libzcash::SaplingPaymentAddress checkAddr;
+        if (!ivk.DeriveAddress(&checkAddr, vSaplingSpends[i].addr.d)) {
             fprintf(stderr, "Nullopt - TransactionBuilder cannot add Sapling Spend with FVK that does not match Address\n");
             throw std::runtime_error("TransactionBuilder cannot add Sapling Spend with FVK that does not match Address");
-        } else {
-            auto checkAddr = ckeckAddrOpt.value();
-            if (!(checkAddr == vSaplingSpends[i].addr)) {
-                fprintf(stderr, "TransactionBuilder cannot add Sapling Spend with FVK that does not match Address\n");
-                throw std::runtime_error("TransactionBuilder cannot add Sapling Spend with FVK that does not match Address");
-            }
+        }
+        if (!(checkAddr == vSaplingSpends[i].addr)) {
+            fprintf(stderr, "TransactionBuilder cannot add Sapling Spend with FVK that does not match Address\n");
+            throw std::runtime_error("TransactionBuilder cannot add Sapling Spend with FVK that does not match Address");
         }
 
         // Add the spend to the sapling builder
         saplingBuilder->add_spend(
             {reinterpret_cast<uint8_t*>(ssExtSk.data()), ssExtSk.size()},
             vSaplingSpends[i].addr.d,
-            vSaplingSpends[i].addr.GetRawBytes(),
+            vSaplingSpends[i].addr.ToBytes(),
             vSaplingSpends[i].value,
             vSaplingSpends[i].rcm.GetRawBytes(),
             merkle_path);
@@ -459,7 +458,7 @@ bool TransactionBuilder::ConvertRawSaplingOutput(uint256 ovk)
 
     for (int i = 0; i < vSaplingOutputs.size(); i++) {
         auto memoBytes = libzcash::Memo::ToBytes(vSaplingOutputs[i].memo);
-        saplingBuilder->add_recipient(ovk.GetRawBytes(), vSaplingOutputs[i].addr.GetRawBytes(), vSaplingOutputs[i].value, memoBytes);
+        saplingBuilder->add_recipient(ovk.GetRawBytes(), vSaplingOutputs[i].addr.ToBytes(), vSaplingOutputs[i].value, memoBytes);
         valueBalanceSapling -= vSaplingOutputs[i].value;
     }
 
@@ -483,7 +482,7 @@ void TransactionBuilder::InitializeOrchard(
 
 bool TransactionBuilder::AddOrchardSpendRaw(
     OrchardOutPoint op,
-    libzcash::OrchardPaymentAddressPirate addr,
+    libzcash::OrchardPaymentAddress addr,
     CAmount value,
     uint256 rho,
     uint256 rseed,
@@ -532,17 +531,15 @@ bool TransactionBuilder::ConvertRawOrchardSpend(libzcash::OrchardExtendedSpendin
     auto fvk = fvkOpt.value().fvk;
 
     if (!firstOrchardChangeAddr.has_value()) {
-        auto ovkOpt = fvk.GetOVK();
-        if (ovkOpt == std::nullopt) {
+        libzcash::OrchardOutgoingViewingKey ovk;
+        if (!fvk.DeriveOVK(&ovk)) {
             throw std::runtime_error("TransactionBuilder cannot get ovk from FVK");
         }
-        auto ovk = ovkOpt.value();
 
-        auto changeAddrOpt = fvk.GetDefaultAddressInternal();
-        if (changeAddrOpt == std::nullopt) {
+        libzcash::OrchardPaymentAddress changeAddr;
+        if (!fvk.DeriveDefaultAddressInternal(&changeAddr)) {
             throw std::runtime_error("TransactionBuilder cannot get default internal address from FVK");
         }
-        auto changeAddr = changeAddrOpt.value();
 
         firstOrchardChangeAddr = std::make_pair(ovk.ovk, changeAddr);
     }
@@ -553,17 +550,15 @@ bool TransactionBuilder::ConvertRawOrchardSpend(libzcash::OrchardExtendedSpendin
         }
 
         // Check FVK is valid for Address
-        auto checkAddrOpt = fvk.GetAddress(vOrchardSpends[i].addr.d);
-        if (checkAddrOpt == std::nullopt) {
+        libzcash::OrchardPaymentAddress checkAddr;
+        if (!fvk.DeriveAddress(&checkAddr, vOrchardSpends[i].addr.d)) {
             throw std::runtime_error("NullOpt - TransactionBuilder cannot add Orchard Spend with FVK that does not match Address\n");
-        } else {
-            auto addr = checkAddrOpt.value();
-            if (addr != vOrchardSpends[i].addr) {
-                fprintf(stderr, "Note Address %s\n", EncodePaymentAddress(vOrchardSpends[i].addr).c_str());
-                fprintf(stderr, "FVK Address %s\n", EncodePaymentAddress(addr).c_str());
-                fprintf(stderr, "TransactionBuilder cannot add Orchard Spend with FVK that does not match Address\n");
-                throw std::runtime_error(strprintf("TransactionBuilder cannot add Orchard Spend with FVK that does not match Address\n"));
-            }
+        }
+        if (checkAddr != vOrchardSpends[i].addr) {
+            fprintf(stderr, "Note Address %s\n", EncodePaymentAddress(vOrchardSpends[i].addr).c_str());
+            fprintf(stderr, "FVK Address %s\n", EncodePaymentAddress(checkAddr).c_str());
+            fprintf(stderr, "TransactionBuilder cannot add Orchard Spend with FVK that does not match Address\n");
+            throw std::runtime_error(strprintf("TransactionBuilder cannot add Orchard Spend with FVK that does not match Address\n"));
         }
 
         orchardBuilder.value().AddSpendFromParts(
@@ -589,7 +584,7 @@ bool TransactionBuilder::ConvertRawOrchardSpend(libzcash::OrchardExtendedSpendin
 }
 
 bool TransactionBuilder::AddOrchardOutputRaw(
-    libzcash::OrchardPaymentAddressPirate to,
+    libzcash::OrchardPaymentAddress to,
     CAmount value,
     const std::optional<libzcash::Memo>& memo)
 {
@@ -677,7 +672,7 @@ void TransactionBuilder::AddOpRet(CScript& s)
 }
 
 
-void TransactionBuilder::SendChangeTo(libzcash::OrchardPaymentAddressPirate changeAddr, uint256 ovk)
+void TransactionBuilder::SendChangeTo(libzcash::OrchardPaymentAddress changeAddr, uint256 ovk)
 {
     orchardChangeAddr = std::make_pair(ovk, changeAddr);
     tChangeAddr = std::nullopt;
@@ -822,7 +817,7 @@ TransactionBuilderResult TransactionBuilder::Build()
     if (orchardBundle.has_value()) {
         // Populate a random key when not spending from orchard.
         if (orchardSpendingKeys.size() == 0) {
-            auto randomKey = libzcash::OrchardSpendingKeyPirate().random();
+            auto randomKey = libzcash::OrchardSpendingKey().random();
             if (randomKey != std::nullopt) {
                 orchardSpendingKeys.push_back(randomKey.value());
             } else {

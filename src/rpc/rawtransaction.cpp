@@ -1979,9 +1979,9 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
 
       //Get the spending key for each address referenced
       for (int i = 0; i < tb.vOrchardSpends.size(); i++) {
-          libzcash::OrchardPaymentAddressPirate addr = tb.vOrchardSpends[i].addr;
+          libzcash::OrchardPaymentAddress addr = tb.vOrchardSpends[i].addr;
 
-          libzcash::OrchardIncomingViewingKeyPirate ivk;
+          libzcash::OrchardIncomingViewingKey ivk;
           if (!pwalletMain->GetOrchardIncomingViewingKey(addr, ivk))
               throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Incoming Viewing key for Sapling Spend not found.");
 
@@ -2025,12 +2025,12 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
       }
 
       auto fvk = fvkOpt.value().fvk;
-      auto ovkOpt = fvk.GetOVK();
-      if (fvkOpt == std::nullopt) {
+      libzcash::OrchardOutgoingViewingKey ovkObj;
+      if (!fvk.DeriveOVK(&ovkObj)) {
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR,"OVK not found for Orchard spending key. Stopping.");
       }
 
-      ovk = ovkOpt.value().ovk;
+      ovk = ovkObj.ovk;
   }
 
   //Validate the outgoing viewing key passed is not null
@@ -2159,7 +2159,7 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
               toSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
 
               // Remember whether this is Orchard address
-              toOrchard = std::get_if<libzcash::OrchardPaymentAddressPirate>(&res) != nullptr;
+              toOrchard = std::get_if<libzcash::OrchardPaymentAddress>(&res) != nullptr;
 
               // Remember whether this is Sprout address
               bool toSprout = std::get_if<libzcash::SproutPaymentAddress>(&res) != nullptr;
@@ -2215,7 +2215,7 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
           if (toSapling) {
               tb.AddSaplingOutputRaw(*std::get_if<libzcash::SaplingPaymentAddress>(&res), nAmount, hexMemo);
           } else if (toOrchard) {
-              tb.AddOrchardOutputRaw(*std::get_if<libzcash::OrchardPaymentAddressPirate>(&res), nAmount, hexMemo);
+              tb.AddOrchardOutputRaw(*std::get_if<libzcash::OrchardPaymentAddress>(&res), nAmount, hexMemo);
           } else {
               throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, unknown address format: ")+address );
           }
@@ -2244,7 +2244,7 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
       bool fromSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
 
       // Remember whether this is Orchard address
-      bool fromOrchard = std::get_if<libzcash::OrchardPaymentAddressPirate>(&res) != nullptr;
+      bool fromOrchard = std::get_if<libzcash::OrchardPaymentAddress>(&res) != nullptr;
 
       // Remember whether this is Sprout address
       bool fromSprout = std::get_if<libzcash::SproutPaymentAddress>(&res) != nullptr;

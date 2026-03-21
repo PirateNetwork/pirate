@@ -154,8 +154,8 @@ bool AsyncRPCOperation_orchardconsolidation::main_impl()
         // Data structures for current round
         std::vector<SaplingNoteEntry> saplingEntries;
         std::vector<OrchardNoteEntry> orchardEntries;
-        std::set<libzcash::OrchardPaymentAddressPirate> targetOrchardAddresses;
-        std::map<libzcash::OrchardPaymentAddressPirate, std::vector<OrchardNoteEntry>> addressToNotesMap;
+        std::set<libzcash::OrchardPaymentAddress> targetOrchardAddresses;
+        std::map<libzcash::OrchardPaymentAddress, std::vector<OrchardNoteEntry>> addressToNotesMap;
         std::map<std::pair<int, int>, OrchardNoteEntry> sortedEntriesMap;
         
         {
@@ -170,8 +170,8 @@ bool AsyncRPCOperation_orchardconsolidation::main_impl()
                 const std::vector<std::string>& configuredAddresses = mapMultiArgs["-consolidateorchardaddress"];
                 for (size_t i = 0; i < configuredAddresses.size(); i++) {
                     libzcash::PaymentAddress paymentAddr = DecodePaymentAddress(configuredAddresses[i]);
-                    if (std::get_if<libzcash::OrchardPaymentAddressPirate>(&paymentAddr) != nullptr) {
-                        libzcash::OrchardPaymentAddressPirate orchardAddr = std::get<libzcash::OrchardPaymentAddressPirate>(paymentAddr);
+                    if (std::get_if<libzcash::OrchardPaymentAddress>(&paymentAddr) != nullptr) {
+                        libzcash::OrchardPaymentAddress orchardAddr = std::get<libzcash::OrchardPaymentAddress>(paymentAddr);
                         targetOrchardAddresses.insert(orchardAddr);
                     }
                 }
@@ -345,21 +345,21 @@ bool AsyncRPCOperation_orchardconsolidation::main_impl()
                 transactionBuilder.AddOrchardOutputRaw(address, outputAmount, std::nullopt);
                 
                 // Convert raw Orchard output using outgoing viewing key from extended spending key
-                auto orchardFvk = orchardSpendingKey.sk.GetFVK();
-                if (!orchardFvk) {
+                libzcash::OrchardFullViewingKey orchardFvk;
+                if (!orchardSpendingKey.sk.DeriveFVK(&orchardFvk)) {
                     LogPrint("zrpcunsafe", "%s: Failed to get FVK from spending key. Stopping.\n", getId());
                     unlockOrchardNotes(selectedInputs);
                     roundComplete = true;
                     break;
                 }
-                auto orchardOvk = orchardFvk->GetOVK();
-                if (!orchardOvk) {
+                libzcash::OrchardOutgoingViewingKey orchardOvkObj;
+                if (!orchardFvk.DeriveOVK(&orchardOvkObj)) {
                     LogPrint("zrpcunsafe", "%s: Failed to get OVK from FVK. Stopping.\n", getId());
                     unlockOrchardNotes(selectedInputs);
                     roundComplete = true;
                     break;
                 }
-                transactionBuilder.ConvertRawOrchardOutput(orchardOvk->ovk);
+                transactionBuilder.ConvertRawOrchardOutput(orchardOvkObj.ovk);
 
                 // Build and commit the Orchard consolidation transaction
                 auto buildResult = transactionBuilder.Build();
@@ -481,7 +481,7 @@ UniValue AsyncRPCOperation_orchardconsolidation::getStatus() const
  * @param spendingKey Output parameter for the retrieved spending key
  * @return true if key found, false if address not owned by wallet
  */
-bool AsyncRPCOperation_orchardconsolidation::getOrchardExtendedSpendingKey(const libzcash::OrchardPaymentAddressPirate& address, 
+bool AsyncRPCOperation_orchardconsolidation::getOrchardExtendedSpendingKey(const libzcash::OrchardPaymentAddress& address, 
                                                                           libzcash::OrchardExtendedSpendingKeyPirate& spendingKey)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);

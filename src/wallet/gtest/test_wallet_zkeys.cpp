@@ -69,14 +69,16 @@ TEST(wallet_zkeys_tests, StoreAndLoadSaplingZkeys) {
     blob88 diversifier;
     diversifier.begin()[0] = 10;
     auto dpa = sk.ToXFVK().Address(diversifier).value().second;
-    auto fvk = sk.expsk.full_viewing_key();
+    libzcash::SaplingFullViewingKey fvk;
+    sk.expsk.DeriveFVK(&fvk);
 
     // verify wallet only has the default address
     EXPECT_TRUE(wallet.HaveSaplingIncomingViewingKey(sk.DefaultAddress()));
     EXPECT_FALSE(wallet.HaveSaplingIncomingViewingKey(dpa));
 
     // manually add a diversified address
-    auto ivk = fvk.in_viewing_key();
+    libzcash::SaplingIncomingViewingKey ivk;
+    fvk.DeriveIVK(&ivk);
     EXPECT_TRUE(wallet.AddSaplingIncomingViewingKey(ivk, dpa));
 
     // verify wallet did add it
@@ -91,7 +93,10 @@ TEST(wallet_zkeys_tests, StoreAndLoadSaplingZkeys) {
     ASSERT_TRUE(wallet.LoadSaplingZKey(sk2));
 
     // attach metadata to this third key
-    auto ivk2 = sk2.expsk.full_viewing_key().in_viewing_key();
+    libzcash::SaplingIncomingViewingKey ivk2;
+    libzcash::SaplingFullViewingKey fvk2;
+    sk2.expsk.DeriveFVK(&fvk2);
+    fvk2.DeriveIVK(&ivk2);
     int64_t now = GetTime();
     CKeyMetadata meta(now);
     ASSERT_TRUE(wallet.LoadSaplingZKeyMetadata(ivk2, meta));
@@ -150,7 +155,10 @@ TEST(wallet_zkeys_tests, WriteCryptedSaplingZkeyDirectToDb) {
     auto dpa = extsk.ToXFVK().Address(diversifier).value().second;
 
     // Add diversified address to the wallet
-    auto ivk = extsk.expsk.full_viewing_key().in_viewing_key();
+    libzcash::SaplingIncomingViewingKey ivk;
+    libzcash::SaplingFullViewingKey ivk_fvk;
+    extsk.expsk.DeriveFVK(&ivk_fvk);
+    ivk_fvk.DeriveIVK(&ivk);
     EXPECT_TRUE(wallet.AddSaplingIncomingViewingKey(ivk, dpa));
 
     // encrypt wallet
@@ -219,7 +227,7 @@ TEST(wallet_zkeys_tests, StoreAndLoadOrchardKeys) {
     CWallet wallet;
 
     // wallet should be empty
-    std::set<libzcash::OrchardPaymentAddressPirate> orchardAddrs;
+    std::set<libzcash::OrchardPaymentAddress> orchardAddrs;
     wallet.GetOrchardPaymentAddresses(orchardAddrs);
     ASSERT_EQ(0, orchardAddrs.size());
 
@@ -278,7 +286,7 @@ TEST(wallet_zkeys_tests, EncryptAndUnlockOrchardKeys) {
     wallet.GenerateNewSeed();
 
     // wallet should be empty
-    std::set<libzcash::OrchardPaymentAddressPirate> orchardAddrs;
+    std::set<libzcash::OrchardPaymentAddress> orchardAddrs;
     wallet.GetOrchardPaymentAddresses(orchardAddrs);
     ASSERT_EQ(0, orchardAddrs.size());
 
@@ -328,17 +336,15 @@ TEST(wallet_zkeys_tests, EncryptAndUnlockOrchardKeys) {
     libzcash::OrchardExtendedSpendingKeyPirate keyOut;
     EXPECT_FALSE(wallet2.GetOrchardExtendedSpendingKey(orchardAddr, keyOut));
 
-    auto defaultAddrOpt = keyOut.sk.GetDefaultAddress();
-    ASSERT_TRUE(defaultAddrOpt.has_value());
-    ASSERT_FALSE(orchardAddr == defaultAddrOpt.value());
+    libzcash::OrchardPaymentAddress defaultAddr;
+    ASSERT_TRUE(keyOut.sk.DeriveDefaultAddress(&defaultAddr));
+    ASSERT_FALSE(orchardAddr == defaultAddr);
 
     // unlock wallet to get spending keys and verify payment addresses
     wallet2.Unlock(strWalletPass);
 
     EXPECT_TRUE(wallet2.GetOrchardExtendedSpendingKey(orchardAddr, keyOut));
-    defaultAddrOpt = keyOut.sk.GetDefaultAddress();
-    ASSERT_TRUE(defaultAddrOpt .has_value());
+    ASSERT_TRUE(keyOut.sk.DeriveDefaultAddress(&defaultAddr));
 
-    auto defaultAddr = defaultAddrOpt.value();
     ASSERT_EQ(orchardAddr, defaultAddr);
 }

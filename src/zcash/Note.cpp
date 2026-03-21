@@ -23,6 +23,7 @@
 #include "zcash/util.h"
 #include "librustzcash.h"
 #include "rust/bridge.h"
+#include "support/cleanse.h"
 
 using namespace libzcash;
 
@@ -236,13 +237,13 @@ SaplingNotePlaintext::SaplingNotePlaintext(
  */
 std::optional<SaplingNote> SaplingNotePlaintext::note(const SaplingIncomingViewingKey& ivk) const
 {
-    auto addr = ivk.address(d);
-    if (addr) {
+    SaplingPaymentAddress addr;
+    if (ivk.DeriveAddress(&addr, d)) {
         Zip212Enabled zip_212_enabled = Zip212Enabled::BeforeZip212;
         if (leadbyte != 0x01) {
             zip_212_enabled = Zip212Enabled::AfterZip212;
         };
-        auto tmp = SaplingNote(d, addr.value().pk_d, value_, rseed, zip_212_enabled);
+        auto tmp = SaplingNote(d, addr.pk_d, value_, rseed, zip_212_enabled);
         
         // Transfer cached cmu and rcm from Rust decryption if available
         if (cmu_) {
@@ -303,8 +304,10 @@ std::optional<SaplingNotePlaintext> SaplingNotePlaintext::AttemptDecryptSaplingO
     uint256_t cmu_ret;
     uint256_t rcm_ret;
 
-    // Convert ivk to array
-    std::copy(ivk.begin(), ivk.end(), ivk_t.begin());
+    // Serialize ivk into transfer array
+    ss << ivk;
+    ss >> ivk_t;
+    memory_cleanse(ss.data(), ss.size());
 
     // Construct the plaintext from the decrypted data
     SaplingNotePlaintext ret;
@@ -326,14 +329,23 @@ std::optional<SaplingNotePlaintext> SaplingNotePlaintext::AttemptDecryptSaplingO
             return std::nullopt;
     }
     
-    // Copy returned data to plaintext
-    std::copy(diversifier_ret.begin(), diversifier_ret.end(), ret.d.begin());
-    std::copy(pk_d_ret.begin(), pk_d_ret.end(), ret.pk_d.value().begin());
+    // Deserialize returned data via CDataStream
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+    rs << pk_d_ret << rseed_ret << cmu_ret << rcm_ret;
+
+    ret.d = diversifier_ret;
+    rs >> ret.pk_d.value();
     ret.memo_ = memo_ret;
-    std::copy(rseed_ret.begin(), rseed_ret.end(), ret.rseed.begin());
+    rs >> ret.rseed;
     ret.leadbyte = leadbyte_ret;
-    std::copy(cmu_ret.begin(), cmu_ret.end(), ret.cmu_.value().begin());
-    std::copy(rcm_ret.begin(), rcm_ret.end(), ret.rcm_.value().begin());
+    rs >> ret.cmu_.value() >> ret.rcm_.value();
+
+    memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(ivk_t.data(), ivk_t.size());
+    memory_cleanse(pk_d_ret.data(), pk_d_ret.size());
+    memory_cleanse(rseed_ret.data(), rseed_ret.size());
+    memory_cleanse(cmu_ret.data(), cmu_ret.size());
+    memory_cleanse(rcm_ret.data(), rcm_ret.size());
 
     return ret;
 }
@@ -356,8 +368,10 @@ std::optional<SaplingNotePlaintext> SaplingNotePlaintext::AttemptDecryptSaplingO
     uint256_t cmu_ret;
     uint256_t rcm_ret;
 
-    // Convert ovk to array
-    std::copy(ovk.begin(), ovk.end(), ovk_t.begin());
+    // Serialize ovk into transfer array
+    ss << ovk;
+    ss >> ovk_t;
+    memory_cleanse(ss.data(), ss.size());
 
     // Construct the plaintext from the decrypted data
     SaplingNotePlaintext ret;
@@ -379,14 +393,23 @@ std::optional<SaplingNotePlaintext> SaplingNotePlaintext::AttemptDecryptSaplingO
             return std::nullopt;
     }
     
-    // Copy returned data to plaintext
-    std::copy(diversifier_ret.begin(), diversifier_ret.end(), ret.d.begin());
-    std::copy(pk_d_ret.begin(), pk_d_ret.end(), ret.pk_d.value().begin());
+    // Deserialize returned data via CDataStream
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+    rs << pk_d_ret << rseed_ret << cmu_ret << rcm_ret;
+
+    ret.d = diversifier_ret;
+    rs >> ret.pk_d.value();
     ret.memo_ = memo_ret;
-    std::copy(rseed_ret.begin(), rseed_ret.end(), ret.rseed.begin());
+    rs >> ret.rseed;
     ret.leadbyte = leadbyte_ret;
-    std::copy(cmu_ret.begin(), cmu_ret.end(), ret.cmu_.value().begin());
-    std::copy(rcm_ret.begin(), rcm_ret.end(), ret.rcm_.value().begin());
+    rs >> ret.cmu_.value() >> ret.rcm_.value();
+
+    memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(ovk_t.data(), ovk_t.size());
+    memory_cleanse(pk_d_ret.data(), pk_d_ret.size());
+    memory_cleanse(rseed_ret.data(), rseed_ret.size());
+    memory_cleanse(cmu_ret.data(), cmu_ret.size());
+    memory_cleanse(rcm_ret.data(), rcm_ret.size());
 
     return ret;
 }
@@ -412,12 +435,20 @@ std::optional<uint256> SaplingNotePlaintext::ComputeNullifierFromOutput(
     uint256_t nk_t;
     uint256_t result_t;
 
-    // Convert viewing key components to arrays
+    // Serialize FVK and derive IVK via fvk_to_ivk
+    {
+        CDataStream fvk_ss(SER_NETWORK, PROTOCOL_VERSION);
+        std::array<unsigned char, 96> fvk_t;
+        fvk_ss << vk;
+        fvk_ss >> fvk_t;
+        sapling_keys::fvk_to_ivk(fvk_t, ivk_t);
+        memory_cleanse(fvk_ss.data(), fvk_ss.size());
+        memory_cleanse(fvk_t.data(), fvk_t.size());
+    }
+
+    // Convert ak and nk to arrays for nullifier computation
     std::copy(vk.ak.begin(), vk.ak.end(), ak_t.begin());
     std::copy(vk.nk.begin(), vk.nk.end(), nk_t.begin());
-    
-    // Derive IVK from ak and nk
-    librustzcash_crh_ivk(ak_t.data(), nk_t.data(), ivk_t.data());
 
     // Call Rust method on Output to compute nullifier
     if (!output.compute_nullifier(ivk_t, ak_t, nk_t, position, result_t)) {
@@ -443,7 +474,7 @@ std::optional<uint256> SaplingNotePlaintext::ComputeNullifierFromOutput(
  * Uses CDataStream to serialize the viewing key and address for the
  * Rust bridge, then calls orchard::compute_nullifier to compute the nullifier.
  */
-std::optional<uint256> OrchardNote::nullifier(const libzcash::OrchardFullViewingKeyPirate& fvk) const
+std::optional<uint256> OrchardNote::nullifier(const libzcash::OrchardFullViewingKey& fvk) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
@@ -451,8 +482,8 @@ std::optional<uint256> OrchardNote::nullifier(const libzcash::OrchardFullViewing
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    libzcash::OrchardFullViewingKey_t fvk_t;
-    libzcash::OrchardPaymentAddress_t address_t;
+    libzcash::OrchardFullViewingKey_FFI_t fvk_t;
+    libzcash::OrchardPaymentAddress_FFI_t address_t;
     uint256 nullifier_t;
 
     // Serialize sending data
@@ -490,7 +521,7 @@ std::optional<uint256> OrchardNote::nullifier(const libzcash::OrchardFullViewing
  */
 std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardAction(
     const orchard_bundle::Action* action,
-    const libzcash::OrchardIncomingViewingKeyPirate ivk
+    const libzcash::OrchardIncomingViewingKey ivk
 )
 {
     // Datastreams for serialization
@@ -498,8 +529,8 @@ std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardA
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    libzcash::OrchardIncomingViewingKey_t ivk_t;
-    libzcash::OrchardPaymentAddress_t address_t;
+    libzcash::OrchardIncomingViewingKey_FFI_t ivk_t;
+    libzcash::OrchardPaymentAddress_FFI_t address_t;
     std::array<unsigned char, ZC_MEMO_SIZE> memo_t;
     uint64_t value_t;
     uint256 rho_t;
@@ -521,7 +552,7 @@ std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardA
     }
 
     // Deserialize returned data
-    libzcash::OrchardPaymentAddressPirate address_r;
+    libzcash::OrchardPaymentAddress address_r;
     rs << address_t;
     rs >> address_r;
 
@@ -550,7 +581,7 @@ std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardA
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    libzcash::OrchardPaymentAddress_t address_t;
+    libzcash::OrchardPaymentAddress_FFI_t address_t;
     std::array<unsigned char, ZC_MEMO_SIZE> memo_t;
     uint64_t value_t;
     uint256 rho_t;
@@ -568,7 +599,7 @@ std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardA
     }
 
     // Deserialize returned data
-    libzcash::OrchardPaymentAddressPirate address_r;
+    libzcash::OrchardPaymentAddress address_r;
     rs << address_t;
     rs >> address_r;
 
@@ -591,16 +622,16 @@ std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardA
  */
 std::optional<uint256> OrchardNotePlaintext::ComputeNullifierFromAction(
     const orchard_bundle::Action& action,
-    const libzcash::OrchardIncomingViewingKeyPirate& ivk,
-    const libzcash::OrchardFullViewingKeyPirate& fvk
+    const libzcash::OrchardIncomingViewingKey& ivk,
+    const libzcash::OrchardFullViewingKey& fvk
 )
 {
     // Serialize IVK and FVK for bridge call
     CDataStream ivk_stream(SER_NETWORK, PROTOCOL_VERSION);
     CDataStream fvk_stream(SER_NETWORK, PROTOCOL_VERSION);
     
-    libzcash::OrchardIncomingViewingKey_t ivk_t;
-    libzcash::OrchardFullViewingKey_t fvk_t;
+    libzcash::OrchardIncomingViewingKey_FFI_t ivk_t;
+    libzcash::OrchardFullViewingKey_FFI_t fvk_t;
     uint256_t result_t;
     
     // Use provided IVK

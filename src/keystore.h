@@ -166,24 +166,24 @@ public:
     //! Support for Orchard full viewing keys (XFVK) with external/internal scope
     virtual bool AddOrchardExtendedFullViewingKey(
         const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) =0;
-    virtual bool HaveOrchardFullViewingKey(const libzcash::OrchardIncomingViewingKeyPirate &ivk) const =0;
+    virtual bool HaveOrchardFullViewingKey(const libzcash::OrchardIncomingViewingKey &ivk) const =0;
     virtual bool GetOrchardFullViewingKey(
-        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        const libzcash::OrchardIncomingViewingKey &ivk,
         libzcash::OrchardExtendedFullViewingKeyPirate& extfvkOut) const =0;
 
     //! Orchard incoming viewing keys (IVK) with scope tracking
     virtual bool AddOrchardIncomingViewingKey(
-        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
-        const libzcash::OrchardPaymentAddressPirate &addr,
+        const libzcash::OrchardIncomingViewingKey &ivk,
+        const libzcash::OrchardPaymentAddress &addr,
         OrchardKeyScope scope) =0;
-    virtual bool HaveOrchardIncomingViewingKey(const libzcash::OrchardPaymentAddressPirate &addr) const =0;
+    virtual bool HaveOrchardIncomingViewingKey(const libzcash::OrchardPaymentAddress &addr) const =0;
     virtual bool GetOrchardIncomingViewingKey(
-        const libzcash::OrchardPaymentAddressPirate &addr,
-        libzcash::OrchardIncomingViewingKeyPirate& ivkOut) const =0;
+        const libzcash::OrchardPaymentAddress &addr,
+        libzcash::OrchardIncomingViewingKey& ivkOut) const =0;
     virtual bool GetOrchardKeyScope(
-        const libzcash::OrchardPaymentAddressPirate &addr,
+        const libzcash::OrchardPaymentAddress &addr,
         OrchardKeyScope& scopeOut) const =0;
-    virtual void GetOrchardPaymentAddresses(std::set<libzcash::OrchardPaymentAddressPirate> &setAddress) const =0;
+    virtual void GetOrchardPaymentAddresses(std::set<libzcash::OrchardPaymentAddress> &setAddress) const =0;
 
     // ========== Diversified Address Management ==========
     //! Sapling diversified addresses
@@ -198,12 +198,12 @@ public:
 
     //! Orchard diversified addresses
     virtual bool AddOrchardDiversifiedAddress(
-        const libzcash::OrchardPaymentAddressPirate &addr,
-        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        const libzcash::OrchardPaymentAddress &addr,
+        const libzcash::OrchardIncomingViewingKey &ivk,
         const blob88 &path) =0;
 
     virtual bool AddLastOrchardDiversifierUsed(
-        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        const libzcash::OrchardIncomingViewingKey &ivk,
         const blob88 &path) =0;
 
     // ========== Sprout Viewing Keys ==========
@@ -268,11 +268,11 @@ typedef std::map<libzcash::SaplingIncomingViewingKey, blob88> LastSaplingDiversi
  * - Scope preservation during database operations
  */
 struct OrchardIVKWithScope {
-    libzcash::OrchardIncomingViewingKeyPirate ivk;  //!< The incoming viewing key
+    libzcash::OrchardIncomingViewingKey ivk;  //!< The incoming viewing key
     OrchardKeyScope scope;                           //!< External or Internal scope
     
     OrchardIVKWithScope() : ivk(), scope(OrchardKeyScope::External) {}
-    OrchardIVKWithScope(const libzcash::OrchardIncomingViewingKeyPirate& ivk_, OrchardKeyScope scope_) 
+    OrchardIVKWithScope(const libzcash::OrchardIncomingViewingKey& ivk_, OrchardKeyScope scope_) 
         : ivk(ivk_), scope(scope_) {}
     
     //! Comparison operator for map/set storage (compares both IVK and scope)
@@ -322,22 +322,22 @@ typedef std::map<OrchardIVKWithScope, libzcash::OrchardExtendedFullViewingKeyPir
  * Maps discovered address -> (ivk, scope) for transaction scanning.
  * Each address maps to exactly one (IVK, scope) pair.
  */
-typedef std::map<libzcash::OrchardPaymentAddressPirate, std::pair<libzcash::OrchardIncomingViewingKeyPirate, OrchardKeyScope>> OrchardIncomingViewingKeyMap;
+typedef std::map<libzcash::OrchardPaymentAddress, std::pair<libzcash::OrchardIncomingViewingKey, OrchardKeyScope>> OrchardIncomingViewingKeyMap;
 
 /**
  * Maps IVK -> scope for efficient iteration during transaction scanning.
  * Note: If the same IVK is used with different scopes, only the most
  * recently added scope is tracked.
  */
-typedef std::map<libzcash::OrchardIncomingViewingKeyPirate, OrchardKeyScope> OrchardIncomingViewingKeySet;
+typedef std::map<libzcash::OrchardIncomingViewingKey, OrchardKeyScope> OrchardIncomingViewingKeySet;
 
 //! Set of outgoing viewing keys with scope for sent note decryption
 typedef std::set<OrchardOVKWithScope> OrchardOutgoingViewingKeySet;
 
 //! Diversified Orchard address management
-typedef std::pair<libzcash::OrchardIncomingViewingKeyPirate, blob88> OrchardDiversifierPath;
-typedef std::map<libzcash::OrchardPaymentAddressPirate, OrchardDiversifierPath> OrchardPaymentAddresses;
-typedef std::map<libzcash::OrchardIncomingViewingKeyPirate, blob88> LastOrchardDiversifierPath;
+typedef std::pair<libzcash::OrchardIncomingViewingKey, blob88> OrchardDiversifierPath;
+typedef std::map<libzcash::OrchardPaymentAddress, OrchardDiversifierPath> OrchardPaymentAddresses;
+typedef std::map<libzcash::OrchardIncomingViewingKey, blob88> LastOrchardDiversifierPath;
 
 /**
  * @class CBasicKeyStore
@@ -733,33 +733,33 @@ public:
 
     virtual bool AddOrchardExtendedFullViewingKey(
         const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk);
-    virtual bool HaveOrchardFullViewingKey(const libzcash::OrchardIncomingViewingKeyPirate &ivk) const;
+    virtual bool HaveOrchardFullViewingKey(const libzcash::OrchardIncomingViewingKey &ivk) const;
     virtual bool GetOrchardFullViewingKey(
-        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        const libzcash::OrchardIncomingViewingKey &ivk,
         libzcash::OrchardExtendedFullViewingKeyPirate& extfvkOut) const;
 
     virtual bool AddOrchardIncomingViewingKey(
-        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
-        const libzcash::OrchardPaymentAddressPirate &addr,
+        const libzcash::OrchardIncomingViewingKey &ivk,
+        const libzcash::OrchardPaymentAddress &addr,
         OrchardKeyScope scope);
-    virtual bool HaveOrchardIncomingViewingKey(const libzcash::OrchardPaymentAddressPirate &addr) const;
+    virtual bool HaveOrchardIncomingViewingKey(const libzcash::OrchardPaymentAddress &addr) const;
     virtual bool GetOrchardIncomingViewingKey(
-        const libzcash::OrchardPaymentAddressPirate &addr,
-        libzcash::OrchardIncomingViewingKeyPirate& ivkOut) const;
+        const libzcash::OrchardPaymentAddress &addr,
+        libzcash::OrchardIncomingViewingKey& ivkOut) const;
 
     virtual bool GetOrchardKeyScope(
-        const libzcash::OrchardPaymentAddressPirate &addr,
+        const libzcash::OrchardPaymentAddress &addr,
         OrchardKeyScope& scopeOut) const;
 
     bool GetOrchardExtendedSpendingKey(
-        const libzcash::OrchardPaymentAddressPirate &addr,
+        const libzcash::OrchardPaymentAddress &addr,
         libzcash::OrchardExtendedSpendingKeyPirate &extskOut) const;
 
     /**
      * @brief Get all Orchard payment addresses from the keystore
      * @param setAddress Output set to populate with addresses
      */
-    void GetOrchardPaymentAddresses(std::set<libzcash::OrchardPaymentAddressPirate> &setAddress) const
+    void GetOrchardPaymentAddresses(std::set<libzcash::OrchardPaymentAddress> &setAddress) const
     {
         setAddress.clear();
         {
@@ -775,12 +775,12 @@ public:
 
     // ========== Orchard Diversified Addresses ==========
     virtual bool AddOrchardDiversifiedAddress(
-        const libzcash::OrchardPaymentAddressPirate &addr,
-        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        const libzcash::OrchardPaymentAddress &addr,
+        const libzcash::OrchardIncomingViewingKey &ivk,
         const blob88 &path);
 
     virtual bool AddLastOrchardDiversifierUsed(
-        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        const libzcash::OrchardIncomingViewingKey &ivk,
         const blob88 &path);
 
     // ========== Sprout Viewing Keys ==========

@@ -221,7 +221,7 @@ public:
      * @param zaddr Orchard payment address
      * @return true if transaction was successfully built and sent
      */
-    bool operator()(const libzcash::OrchardPaymentAddressPirate& zaddr) const;
+    bool operator()(const libzcash::OrchardPaymentAddress& zaddr) const;
     
     /**
      * @brief Handler for invalid address encoding
