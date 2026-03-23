@@ -8,7 +8,7 @@
 #include "random.h"
 #include "streams.h"
 #include "version.h"
-#include "zcash/prf.h"
+#include <rust/bridge.h>
 
 #include <librustzcash.h>
 #include <sodium.h>
@@ -18,9 +18,6 @@ const unsigned char ZCASH_HD_SEED_FP_ENCRYTION[crypto_generichash_blake2b_PERSON
 
 const unsigned char ZCASH_HD_SEED_FP_PERSONAL[crypto_generichash_blake2b_PERSONALBYTES] =
     {'Z', 'c', 'a', 's', 'h', '_', 'H', 'D', '_', 'S', 'e', 'e', 'd', '_', 'F', 'P'};
-
-const unsigned char ZCASH_TADDR_OVK_PERSONAL[crypto_generichash_blake2b_PERSONALBYTES] =
-    {'Z', 'c', 'T', 'a', 'd', 'd', 'r', 'T', 'o', 'S', 'a', 'p', 'l', 'i', 'n', 'g'};
 
 HDSeed HDSeed::Random(size_t len)
 {
@@ -128,25 +125,13 @@ uint256 HDSeed::EncryptionFingerprint() const
 
 uint256 ovkForShieldingFromTaddr(HDSeed& seed) {
     auto rawSeed = seed.RawSeed();
-
-    // I = BLAKE2b-512("ZcTaddrToSapling", seed)
-    crypto_generichash_blake2b_state state;
-    assert(crypto_generichash_blake2b_init_salt_personal(
-        &state,
-        NULL, 0, // No key.
-        64,
-        NULL,    // No salt.
-        ZCASH_TADDR_OVK_PERSONAL) == 0);
-    crypto_generichash_blake2b_update(&state, rawSeed.data(), rawSeed.size());
-    auto intermediate = std::array<unsigned char, 64>();
-    crypto_generichash_blake2b_final(&state, intermediate.data(), 64);
-
-    // I_L = I[0..32]
-    uint256 intermediate_L;
-    memcpy(intermediate_L.begin(), intermediate.data(), 32);
-
-    // ovk = truncate_32(PRF^expand(I_L, [0x02]))
-    return PRF_ovk(intermediate_L);
+    std::array<unsigned char, 32> ovk_out;
+    transparent_keys::ovk_for_shielding_from_taddr(
+        rust::Slice<const uint8_t>{rawSeed.data(), rawSeed.size()},
+        ovk_out);
+    uint256 ovk;
+    memcpy(ovk.begin(), ovk_out.data(), 32);
+    return ovk;
 }
 
 namespace libzcash {
@@ -256,7 +241,7 @@ SaplingExtendedFullViewingKey SaplingExtendedSpendingKey::ToXFVK() const
     ret.parentFVKTag = parentFVKTag;
     ret.childIndex = childIndex;
     ret.chaincode = chaincode;
-    ret.fvk = expsk.full_viewing_key();
+    expsk.DeriveFVK(&ret.fvk);
     ret.dk = dk;
     return ret;
 }
@@ -273,7 +258,7 @@ OrchardExtendedSpendingKeyPirate OrchardExtendedSpendingKeyPirate::Master(const 
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); //returning stream
 
     //Tranfer Data
-    OrchardExtendedSpendingKey_t xsk_t_out;
+    OrchardExtendedSpendingKey_FFI_t xsk_t_out;
 
     //Return Type
     OrchardExtendedSpendingKeyPirate xsk;
@@ -284,9 +269,9 @@ OrchardExtendedSpendingKeyPirate OrchardExtendedSpendingKeyPirate::Master(const 
 
     //Call rust FFI
     if (bip39Enabled) {
-        orchard_derive_master_key(bip39_seed,64,xsk_t_out.begin());
+        orchard_keys::derive_master_key(rust::Slice<const uint8_t>{bip39_seed, 64}, xsk_t_out);
     } else {
-        orchard_derive_master_key(rawSeed.data(), rawSeed.size(), xsk_t_out.begin());
+        orchard_keys::derive_master_key(rust::Slice<const uint8_t>{rawSeed.data(), rawSeed.size()}, xsk_t_out);
     }
 
     //Deserialize rust result
@@ -311,8 +296,8 @@ std::optional<OrchardExtendedSpendingKeyPirate> OrchardExtendedSpendingKeyPirate
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); //returning stream
 
     //Tranfer Data
-    OrchardExtendedSpendingKey_t xsk_t_out;
-    OrchardExtendedSpendingKey_t xsk_t_in;
+    OrchardExtendedSpendingKey_FFI_t xsk_t_out;
+    OrchardExtendedSpendingKey_FFI_t xsk_t_in;
 
     //Return Type
     OrchardExtendedSpendingKeyPirate xsk;
@@ -325,7 +310,7 @@ std::optional<OrchardExtendedSpendingKeyPirate> OrchardExtendedSpendingKeyPirate
     ss >> xsk_t_in;
 
     //Call rust FFI
-    rustCompleted = orchard_derive_child_key(xsk_t_in.begin(), bip44CoinType, account, xsk_t_out.begin());
+    rustCompleted = orchard_keys::derive_child_key(xsk_t_in, bip44CoinType, account, xsk_t_out);
 
     //Deserialize rust result on success
     if (rustCompleted) {
@@ -349,14 +334,14 @@ std::optional<OrchardExtendedSpendingKeyPirate> OrchardExtendedSpendingKeyPirate
 
 std::optional<OrchardExtendedFullViewingKeyPirate> OrchardExtendedSpendingKeyPirate::GetXFVK() const
 {
-    auto fvkOpt = sk.GetFVK();
-    if (fvkOpt != std::nullopt) {
+    OrchardFullViewingKey fvk;
+    if (sk.DeriveFVK(&fvk)) {
         OrchardExtendedFullViewingKeyPirate ret;
         ret.depth = depth;
         ret.parentFVKTag = parentFVKTag;
         ret.childIndex = childIndex;
         ret.chaincode = chaincode;
-        ret.fvk = fvkOpt.value();
+        ret.fvk = fvk;
         return ret;
     }
     return std::nullopt;

@@ -314,7 +314,7 @@ bool ShieldToAddress::operator()(const libzcash::SaplingPaymentAddress& zaddr) c
  * @return true if transaction was built and sent successfully
  * @throws JSONRPCError if HD seed is not available or transaction fails
  */
-bool ShieldToAddress::operator()(const libzcash::OrchardPaymentAddressPirate& zaddr) const
+bool ShieldToAddress::operator()(const libzcash::OrchardPaymentAddress& zaddr) const
 {
     m_op->builder_.SetFee(m_op->fee_);
 

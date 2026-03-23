@@ -9,7 +9,7 @@
 #include "support/allocators/secure.h"
 #include "uint256.h"
 #include "zcash/address/sapling.hpp"
-#include "zcash/address/pirate_orchard.hpp"
+#include "zcash/address/orchard.hpp"
 
 #include <optional>
 
@@ -247,7 +247,7 @@ struct OrchardExtendedFullViewingKeyPirate {
     uint32_t parentFVKTag;
     uint32_t childIndex;
     uint256 chaincode;
-    libzcash::OrchardFullViewingKeyPirate fvk;
+    libzcash::OrchardFullViewingKey fvk;
 
     ADD_SERIALIZE_METHODS;
 
@@ -293,7 +293,7 @@ struct OrchardExtendedSpendingKeyPirate {
     uint32_t parentFVKTag;
     uint32_t childIndex;
     uint256 chaincode;
-    libzcash::OrchardSpendingKeyPirate sk;
+    libzcash::OrchardSpendingKey sk;
 
     ADD_SERIALIZE_METHODS;
 

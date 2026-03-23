@@ -321,7 +321,10 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingZKey()
     if (fFileBacked && !CWalletDB(strWalletFile).WriteHDChain(hdChain))
         throw std::runtime_error("CWallet::GenerateNewSaplingZKey(): Writing HD chain model failed");
 
-    auto ivk = xsk.expsk.full_viewing_key().in_viewing_key();
+    SaplingIncomingViewingKey ivk;
+    SaplingFullViewingKey fvk;
+    xsk.expsk.DeriveFVK(&fvk);
+    fvk.DeriveIVK(&ivk);
     mapSaplingSpendingKeyMetadata[ivk] = metadata;
 
     auto addr = xsk.DefaultAddress();
@@ -344,7 +347,7 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingZKey()
  * The first generated key (account 0) is set as the primary key for diversification.
  * Metadata including keypath and seed fingerprint is stored with the key.
  */
-OrchardPaymentAddressPirate CWallet::GenerateNewOrchardZKey()
+OrchardPaymentAddress CWallet::GenerateNewOrchardZKey()
 {
     AssertLockHeld(cs_wallet); // mapSaplingSpendingKeyMetadata
 
@@ -399,15 +402,12 @@ OrchardPaymentAddressPirate CWallet::GenerateNewOrchardZKey()
     } while (HaveOrchardSpendingKey(extfvk));
 
     // Get external IVK and address
-    auto ivkOpt = extfvk.fvk.GetIVK();
-    auto addressOpt = extfvk.fvk.GetDefaultAddress();
+    OrchardIncomingViewingKey ivk;
+    OrchardPaymentAddress address;
 
-    if (ivkOpt == std::nullopt || addressOpt == std::nullopt) {
+    if (!extfvk.fvk.DeriveIVK(&ivk) || !extfvk.fvk.DeriveDefaultAddress(&address)) {
         throw std::runtime_error("CWallet::GenerateNewSaplingZKey(): Address Generation failed");
     }
-
-    auto ivk = ivkOpt.value();
-    auto address = addressOpt.value();
 
     // Update the chain model in the database
     if (fFileBacked && !CWalletDB(strWalletFile).WriteHDChain(hdChain))
@@ -459,7 +459,10 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingDiversifiedAddress()
         extsk = m_32h_cth.Derive(0 | HARDENED_KEY_LIMIT);
 
         //Check of default spending key
-        auto ivk = extsk.expsk.full_viewing_key().in_viewing_key();
+        SaplingIncomingViewingKey ivk;
+        libzcash::SaplingFullViewingKey fvk;
+        extsk.expsk.DeriveFVK(&fvk);
+        fvk.DeriveIVK(&ivk);
         libzcash::SaplingExtendedFullViewingKey extfvk;
         GetSaplingFullViewingKey(ivk, extfvk);
         if (!HaveSaplingSpendingKey(extfvk)) {
@@ -486,7 +489,10 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingDiversifiedAddress()
         extsk = primarySaplingSpendingKey.value();
     }
 
-    auto ivk = extsk.expsk.full_viewing_key().in_viewing_key();
+    SaplingIncomingViewingKey ivk;
+    SaplingFullViewingKey fvk;
+    extsk.expsk.DeriveFVK(&fvk);
+    fvk.DeriveIVK(&ivk);
     SaplingPaymentAddress addr;
     blob88 diversifier;
     arith_uint88 div;
@@ -549,14 +555,14 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingDiversifiedAddress()
  * - Stores the new address and diversifier path in the wallet
  * - Returns the generated diversified payment address
  */
-OrchardPaymentAddressPirate CWallet::GenerateNewOrchardDiversifiedAddress()
+OrchardPaymentAddress CWallet::GenerateNewOrchardDiversifiedAddress()
 {
     AssertLockHeld(cs_wallet); // mapOrchardSpendingKeyMetadata
 
     libzcash::OrchardExtendedSpendingKeyPirate extsk;
     libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-    libzcash::OrchardIncomingViewingKeyPirate ivk;
-    libzcash::OrchardPaymentAddressPirate addr;
+    libzcash::OrchardIncomingViewingKey ivk;
+    libzcash::OrchardPaymentAddress addr;
 
     if (primaryOrchardSpendingKey == std::nullopt) {
 
@@ -602,17 +608,15 @@ OrchardPaymentAddressPirate CWallet::GenerateNewOrchardDiversifiedAddress()
             }
             extfvk = extfvkOpt.value();
 
-            auto ivkOpt = extfvk.fvk.GetIVK();
-            if (ivkOpt == std::nullopt) {
+            OrchardIncomingViewingKey ivkDerived;
+            if (!extfvk.fvk.DeriveIVK(&ivkDerived)) {
                 continue;
             }
-            ivk = ivkOpt.value();
+            ivk = ivkDerived;
 
-            auto addrOpt = extfvk.fvk.GetDefaultAddress();
-            if (addrOpt == std::nullopt) {
+            if (!extfvk.fvk.DeriveDefaultAddress(&addr)) {
                 continue;
             }
-            addr = addrOpt.value();
 
             break;
         } while (true);
@@ -632,7 +636,11 @@ OrchardPaymentAddressPirate CWallet::GenerateNewOrchardDiversifiedAddress()
     } else {
         extsk = primaryOrchardSpendingKey.value();
         extfvk = extsk.GetXFVK().value();
-        ivk = extfvk.fvk.GetIVK().value();
+        OrchardIncomingViewingKey ivkDerived;
+        if (!extfvk.fvk.DeriveIVK(&ivkDerived)) {
+            throw std::runtime_error("Failed to derive IVK from FVK");
+        }
+        ivk = ivkDerived;
     }
 
     blob88 diversifierIndex;
@@ -651,9 +659,7 @@ OrchardPaymentAddressPirate CWallet::GenerateNewOrchardDiversifiedAddress()
 
     bool found = false;
     do {
-      auto addrOpt = extfvk.fvk.GetAddressFromIndex(diversifierIndex);
-      if (addrOpt != std::nullopt) {
-          addr = addrOpt.value();
+      if (extfvk.fvk.DeriveAddressFromIndex(&addr, diversifierIndex)) {
           if (!GetOrchardExtendedSpendingKey(addr, extsk)) {
               found = true;
               //Save last used diversifier by ivk
@@ -868,7 +874,8 @@ bool CWallet::AddSaplingZKey(
         return false;
     }
 
-    auto ivk = extsk.ToXFVK().fvk.in_viewing_key();
+    SaplingIncomingViewingKey ivk;
+    extsk.ToXFVK().fvk.DeriveIVK(&ivk);
 
     if (!IsCrypted()) {
         if (!CCryptoKeyStore::AddSaplingSpendingKey(extsk)) {
@@ -1086,8 +1093,8 @@ bool CWallet::AddSaplingDiversifiedAddress(
  * storage. Returns false if the wallet is encrypted and locked.
  */
 bool CWallet::AddOrchardDiversifiedAddress(
-    const libzcash::OrchardPaymentAddressPirate &addr,
-    const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+    const libzcash::OrchardPaymentAddress &addr,
+    const libzcash::OrchardIncomingViewingKey &ivk,
     const blob88 &path)
 {
     AssertLockHeld(cs_wallet); // mapSaplingSpendingKeyMetadata
@@ -1187,7 +1194,7 @@ bool CWallet::AddLastSaplingDiversifierUsed(
  * Returns false if the wallet is encrypted and locked.
  */
 bool CWallet::AddLastOrchardDiversifierUsed(
-    const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+    const libzcash::OrchardIncomingViewingKey &ivk,
     const blob88 &path)
 {
     AssertLockHeld(cs_wallet); // mapSaplingSpendingKeyMetadata
@@ -1254,11 +1261,10 @@ bool CWallet::AddOrchardZKey(
     auto extfvk = extfvkOpt.value();
 
     //Get OrchardIncomingViewingKey (external)
-    auto ivkOpt = extfvk.fvk.GetIVK();
-    if (ivkOpt == std::nullopt) {
+    OrchardIncomingViewingKey ivk;
+    if (!extfvk.fvk.DeriveIVK(&ivk)) {
         return false;
     }
-    auto ivk = ivkOpt.value();
 
     if (!IsCrypted()) {
         if (!CCryptoKeyStore::AddOrchardSpendingKey(extsk)) {
@@ -1367,8 +1373,8 @@ bool CWallet::AddOrchardExtendedFullViewingKey(const libzcash::OrchardExtendedFu
  * before storage.
  */
 bool CWallet::AddOrchardIncomingViewingKey(
-    const libzcash::OrchardIncomingViewingKeyPirate &ivk,
-    const libzcash::OrchardPaymentAddressPirate &addr,
+    const libzcash::OrchardIncomingViewingKey &ivk,
+    const libzcash::OrchardPaymentAddress &addr,
     OrchardKeyScope scope)
 {
     AssertLockHeld(cs_wallet);
@@ -1426,15 +1432,14 @@ bool CWallet::RederiveOrchardAddressScopes()
     LogPrintf("RederiveOrchardAddressScopes: Starting scope validation for Orchard addresses\n");
     
     // Build a map of IVK -> scope from all full viewing keys
-    std::map<libzcash::OrchardIncomingViewingKeyPirate, OrchardKeyScope> ivkScopeMap;
+    std::map<libzcash::OrchardIncomingViewingKey, OrchardKeyScope> ivkScopeMap;
     
     // Process full viewing keys (includes spending keys, view-only keys, and watch-only keys)
     // Each FVK has both an external IVK (scope 0) and internal IVK (scope 1)
     for (const auto& [ivkWithScope, extfvk] : mapOrchardFullViewingKeys) {
         // Derive external IVK (scope 0)
-        auto ivkExternalOpt = extfvk.fvk.GetIVK();
-        if (ivkExternalOpt) {
-            auto ivkExternal = ivkExternalOpt.value();
+        OrchardIncomingViewingKey ivkExternal;
+        if (extfvk.fvk.DeriveIVK(&ivkExternal)) {
             ivkScopeMap[ivkExternal] = OrchardKeyScope::External;
             LogPrintf("RederiveOrchardAddressScopes: Registered external IVK (scope: 0)\n");
         } else {
@@ -1442,9 +1447,8 @@ bool CWallet::RederiveOrchardAddressScopes()
         }
         
         // Derive internal IVK (scope 1)
-        auto ivkInternalOpt = extfvk.fvk.GetIVKinternal();
-        if (ivkInternalOpt) {
-            auto ivkInternal = ivkInternalOpt.value();
+        OrchardIncomingViewingKey ivkInternal;
+        if (extfvk.fvk.DeriveIVKinternal(&ivkInternal)) {
             ivkScopeMap[ivkInternal] = OrchardKeyScope::Internal;
             LogPrintf("RederiveOrchardAddressScopes: Registered internal IVK (scope: 1)\n");
         } else {
@@ -1932,7 +1936,9 @@ bool CWallet::LoadTempHeldCryptedData()
                 CKeyMetadata metadata;
                 DeserializeFromDecryptionOutput(vchSecret, metadata);
 
-                if (!LoadSaplingZKeyMetadata(extfvk.fvk.in_viewing_key(), metadata)) {
+                SaplingIncomingViewingKey ivk;
+                extfvk.fvk.DeriveIVK(&ivk);
+                if (!LoadSaplingZKeyMetadata(ivk, metadata)) {
                     return false;
                 }
 
@@ -1978,7 +1984,7 @@ bool CWallet::LoadSaplingZKeyMetadata(const libzcash::SaplingIncomingViewingKey 
  * first key timestamp if this key is older than previously recorded keys. If the
  * seed fingerprint is empty (indicating a legacy key), sets nTimeFirstKey to 1.
  */
-bool CWallet::LoadOrchardZKeyMetadata(const libzcash::OrchardIncomingViewingKeyPirate &ivk, const CKeyMetadata &meta)
+bool CWallet::LoadOrchardZKeyMetadata(const libzcash::OrchardIncomingViewingKey &ivk, const CKeyMetadata &meta)
 {
     AssertLockHeld(cs_wallet); // mapSaplingSpendingKeyMetadata
     if (meta.nCreateTime && (!nTimeFirstKey || meta.nCreateTime < nTimeFirstKey))
@@ -2210,8 +2216,8 @@ bool CWallet::LoadSaplingPaymentAddress(
  * wallet initialization when loading address mappings from the database.
  */
 bool CWallet::LoadOrchardPaymentAddress(
-    const libzcash::OrchardPaymentAddressPirate &addr,
-    const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+    const libzcash::OrchardPaymentAddress &addr,
+    const libzcash::OrchardIncomingViewingKey &ivk,
     OrchardKeyScope scope)
 {
     // Use the persisted scope from database
@@ -2260,7 +2266,7 @@ bool CWallet::LoadCryptedSaplingPaymentAddress(const uint256 &chash, const std::
  * incoming viewing key from the database. The wallet must be unlocked for this
  * operation. The hash is used to verify the integrity of the decrypted data.
  */
-bool CWallet::LoadCryptedOrchardPaymentAddress(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret, libzcash::OrchardPaymentAddressPirate& addr)
+bool CWallet::LoadCryptedOrchardPaymentAddress(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret, libzcash::OrchardPaymentAddress& addr)
 {
     if (IsLocked()) {
         return false;
@@ -2273,7 +2279,7 @@ bool CWallet::LoadCryptedOrchardPaymentAddress(const uint256 &chash, const std::
 
     // Manually deserialize to handle backward compatibility
     CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
-    libzcash::OrchardIncomingViewingKeyPirate ivk;
+    libzcash::OrchardIncomingViewingKey ivk;
     ss >> addr >> ivk;
     
     // Try to read scope if available (new format), otherwise default to External (old format)
@@ -2325,8 +2331,8 @@ bool CWallet::LoadSaplingDiversifiedAddress(
  * address data from the database.
  */
 bool CWallet::LoadOrchardDiversifiedAddress(
-    const libzcash::OrchardPaymentAddressPirate &addr,
-    const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+    const libzcash::OrchardPaymentAddress &addr,
+    const libzcash::OrchardIncomingViewingKey &ivk,
     const blob88 &path)
 {
     return CCryptoKeyStore::AddOrchardDiversifiedAddress(addr, ivk, path);
@@ -2387,8 +2393,8 @@ bool CWallet::LoadCryptedOrchardDiversifiedAddress(const uint256 &chash, const s
         return false;
     }
 
-    libzcash::OrchardPaymentAddressPirate addr;
-    libzcash::OrchardIncomingViewingKeyPirate ivk;
+    libzcash::OrchardPaymentAddress addr;
+    libzcash::OrchardIncomingViewingKey ivk;
     blob88 path;
     DeserializeFromDecryptionOutput(vchSecret, addr, ivk, path);
     if(HashWithFP(addr) != chash) {
@@ -2424,7 +2430,7 @@ bool CWallet::LoadLastSaplingDiversifierUsed(
  * This is used to continue generating addresses from where the wallet left off.
  */
 bool CWallet::LoadLastOrchardDiversifierUsed(
-    const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+    const libzcash::OrchardIncomingViewingKey &ivk,
     const blob88 &path)
 {
     return CCryptoKeyStore::AddLastOrchardDiversifierUsed(ivk, path);
@@ -2472,7 +2478,7 @@ bool CWallet::LoadLastCryptedOrchardDiversifierUsed(const uint256 &chash, const 
         return false;
     }
 
-    libzcash::OrchardIncomingViewingKeyPirate ivk;
+    libzcash::OrchardIncomingViewingKey ivk;
     blob88 path;
     DeserializeFromDecryptionOutput(vchSecret, ivk, path);
     if (HashWithFP(ivk) != chash) {
@@ -3271,11 +3277,11 @@ std::set<std::pair<libzcash::PaymentAddress, uint256>> CWallet::GetNullifiersFor
     }
 
     // (There may be more than one diversified address for a given ivk.)
-    std::map<libzcash::OrchardIncomingViewingKeyPirate, std::vector<libzcash::OrchardPaymentAddressPirate>> ivkMapOrchard;
+    std::map<libzcash::OrchardIncomingViewingKey, std::vector<libzcash::OrchardPaymentAddress>> ivkMapOrchard;
     for (const auto & addr : addresses) {
-        auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddressPirate>(&addr);
+        auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddress>(&addr);
         if (orchardAddr != nullptr) {
-            libzcash::OrchardIncomingViewingKeyPirate ivk;
+            libzcash::OrchardIncomingViewingKey ivk;
             this->GetOrchardIncomingViewingKey(*orchardAddr, ivk);
             ivkMapOrchard[ivk].push_back(*orchardAddr);
         }
@@ -5623,7 +5629,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         }
 
         //Encrypt Orchard Diversified Addresses
-        for (map<libzcash::OrchardPaymentAddressPirate, OrchardDiversifierPath>::iterator it = mapOrchardPaymentAddresses.begin(); it != mapOrchardPaymentAddresses.end(); ++it) {
+        for (map<libzcash::OrchardPaymentAddress, OrchardDiversifierPath>::iterator it = mapOrchardPaymentAddresses.begin(); it != mapOrchardPaymentAddresses.end(); ++it) {
             if (!AddOrchardDiversifiedAddress((*it).first, (*it).second.first, (*it).second.second)) {
                 LogPrintf("Setting encrypted orchard diversified payment address failed!!!\n");
                 return false;
@@ -5639,7 +5645,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         }
 
         //Encrypt the last orchard diversifier path used for each spendingkey
-        for (map<libzcash::OrchardIncomingViewingKeyPirate, blob88>::iterator it = mapLastOrchardDiversifierPath.begin(); it != mapLastOrchardDiversifierPath.end(); ++it) {
+        for (map<libzcash::OrchardIncomingViewingKey, blob88>::iterator it = mapLastOrchardDiversifierPath.begin(); it != mapLastOrchardDiversifierPath.end(); ++it) {
             if (!AddLastOrchardDiversifierUsed((*it).first, (*it).second)) {
                 LogPrintf("Setting encrypted last orchard diversified path failed!!!\n");
                 return false;
@@ -6535,7 +6541,7 @@ void CWallet::AddToWalletIfInvolvingMe(
     const int nHeight,
     bool fUpdate,
     std::set<SaplingPaymentAddress>& saplingAddressesFound,
-    std::set<OrchardPaymentAddressPirate>& orchardAddressesFound,
+    std::set<OrchardPaymentAddress>& orchardAddressesFound,
     bool fRescan)
 {
     {
@@ -6691,7 +6697,7 @@ void CWallet::SyncTransactions(const std::vector<CTransaction> &vtx, const CBloc
 {
     LOCK(cs_wallet);
     std::set<SaplingPaymentAddress> saplingAddressesFound;
-    std::set<OrchardPaymentAddressPirate> orchardAddressesFound;
+    std::set<OrchardPaymentAddress> orchardAddressesFound;
 
     std::vector<CTransaction> vOurs;
     AddToWalletIfInvolvingMe(vtx, vOurs, pblock, nHeight, true, saplingAddressesFound, orchardAddressesFound, false);
@@ -6700,7 +6706,7 @@ void CWallet::SyncTransactions(const std::vector<CTransaction> &vtx, const CBloc
         SetZAddressBook(*it, "z-sapling", "", true);
     }
 
-    for (std::set<OrchardPaymentAddressPirate>::iterator it = orchardAddressesFound.begin(); it != orchardAddressesFound.end(); it++) {
+    for (std::set<OrchardPaymentAddress>::iterator it = orchardAddressesFound.begin(); it != orchardAddressesFound.end(); it++) {
         SetZAddressBook(*it, "orchard", "", true);
     }
 
@@ -6941,7 +6947,7 @@ mapSproutNoteData_t CWallet::FindMySproutNotes(const CTransaction &tx) const
  */
 static void DecryptOrchardNoteWorker(
     const CWallet *wallet,
-    const std::vector<std::pair<const OrchardIncomingViewingKeyPirate*, OrchardKeyScope>> vIvkWithScope,
+    const std::vector<std::pair<const OrchardIncomingViewingKey*, OrchardKeyScope>> vIvkWithScope,
     const std::vector<orchard_bundle::Action*> vOrchardEncryptedAction,
     const std::vector<uint32_t> vPosition,
     const std::vector<uint256> vHash,
@@ -6952,7 +6958,7 @@ static void DecryptOrchardNoteWorker(
 {
     for (int i = 0; i < vIvkWithScope.size(); i++) {
 
-        OrchardIncomingViewingKeyPirate ivk = *vIvkWithScope[i].first;
+        OrchardIncomingViewingKey ivk = *vIvkWithScope[i].first;
         OrchardKeyScope scope = vIvkWithScope[i].second;
         auto result = OrchardNotePlaintext::AttemptDecryptOrchardAction(vOrchardEncryptedAction[i], ivk);
         if (result != std::nullopt) {
@@ -7008,8 +7014,8 @@ std::pair<mapOrchardNoteData_t, OrchardIncomingViewingKeyMap> CWallet::FindMyOrc
     OrchardIncomingViewingKeyMap viewingKeysToAdd;
 
     //Create key+scope thread buckets
-    std::vector<std::pair<const OrchardIncomingViewingKeyPirate*, OrchardKeyScope>> vIvkWithScope;
-    std::vector<std::vector<std::pair<const OrchardIncomingViewingKeyPirate*, OrchardKeyScope>>> vvIvkWithScope;
+    std::vector<std::pair<const OrchardIncomingViewingKey*, OrchardKeyScope>> vIvkWithScope;
+    std::vector<std::vector<std::pair<const OrchardIncomingViewingKey*, OrchardKeyScope>>> vvIvkWithScope;
 
     //Create Output thread buckets
     std::vector<orchard_bundle::Action*> vOrchardEncryptedAction;
@@ -7124,7 +7130,8 @@ static void DecryptSaplingNoteWorker(
         auto result = SaplingNotePlaintext::AttemptDecryptSaplingOutput(*vSaplingOutput[i], ivk);
         if (result) {
 
-            auto address = ivk.address(result.value().d);
+            SaplingPaymentAddress address;
+            assert(ivk.DeriveAddress(&address, result.value().d));
 
             // We don't cache the nullifier here as computing it requires knowledge of the note position
             // in the commitment tree, which can only be determined when the transaction has been mined.
@@ -7135,14 +7142,14 @@ static void DecryptSaplingNoteWorker(
             //Cache Address and value - in Memory Only
             auto note = result.value();
             nd.value = note.value();
-            nd.address = address.value();
+            nd.address = address;
 
             if (nd.value >= minTxValue) {
                 //Only add notes greater then this value
                 //dust filter
                 {
                     LOCK(wallet->cs_wallet_threadedfunction);
-                    viewingKeysToAdd->insert(make_pair(address.value(),ivk));
+                    viewingKeysToAdd->insert(make_pair(address,ivk));
                     noteData->insert(std::make_pair(op, nd));
                 }
             }
@@ -8352,9 +8359,8 @@ std::optional<std::pair<
     assert(maybe_pt != std::nullopt);
     auto notePt = maybe_pt.value();
 
-    auto maybe_pa = nd.ivk.address(notePt.d);
-    assert(maybe_pa != std::nullopt);
-    auto pa = maybe_pa.value();
+    SaplingPaymentAddress pa;
+    assert(nd.ivk.DeriveAddress(&pa, notePt.d));
 
     return std::make_pair(notePt, pa);
 }
@@ -8398,9 +8404,8 @@ std::optional<std::pair<
     assert(maybe_pt != std::nullopt);
     auto notePt = maybe_pt.value();
 
-    auto maybe_pa = nd.ivk.address(notePt.d);
-    assert(maybe_pa != std::nullopt);
-    auto pa = maybe_pa.value();
+    SaplingPaymentAddress pa;
+    assert(nd.ivk.DeriveAddress(&pa, notePt.d));
 
     return std::make_pair(notePt, pa);
 }
@@ -8522,7 +8527,7 @@ std::optional<std::pair<
  */
 std::optional<std::pair<
     OrchardNotePlaintext,
-    OrchardPaymentAddressPirate>> CWalletTx::DecryptOrchardNote(OrchardOutPoint op) const
+    OrchardPaymentAddress>> CWalletTx::DecryptOrchardNote(OrchardOutPoint op) const
 {
     // Check whether we can decrypt this OrchardOutPoint
     if (this->mapOrchardNoteData.count(op) == 0) {
@@ -9415,7 +9420,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
     //Collect Sapling Addresses to notify GUI after rescan
     std::set<SaplingPaymentAddress> saplingAddressesFound;
-    std::set<OrchardPaymentAddressPirate> orchardAddressesFound;
+    std::set<OrchardPaymentAddress> orchardAddressesFound;
 
     {
         //Lock cs_keystore to prevent wallet from locking during rescan
@@ -9535,7 +9540,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
         SetZAddressBook(*it, "z-sapling", "", true);
     }
 
-    for (std::set<OrchardPaymentAddressPirate>::iterator it = orchardAddressesFound.begin(); it != orchardAddressesFound.end(); it++) {
+    for (std::set<OrchardPaymentAddress>::iterator it = orchardAddressesFound.begin(); it != orchardAddressesFound.end(); it++) {
         SetZAddressBook(*it, "orchard", "", true);
     }
 
@@ -13111,9 +13116,8 @@ void CWallet::GetFilteredNotes(
             assert(optPlaintext != std::nullopt);
 
             auto notePt = optPlaintext.value();
-            auto maybe_pa = nd.ivk.address(notePt.d);
-            assert(static_cast<bool>(maybe_pa));
-            auto pa = maybe_pa.value();
+            SaplingPaymentAddress pa;
+            assert(nd.ivk.DeriveAddress(&pa, notePt.d));
 
             // Skip notes that don't match the address filter
             if (!(filterAddresses.empty() || filterAddresses.count(pa))) {
@@ -13230,9 +13234,9 @@ bool IncomingViewingKeyBelongsToWallet::operator()(const libzcash::SaplingPaymen
  * @param zaddr The Orchard payment address to check  
  * @return true if the wallet has the corresponding incoming viewing key
  */
-bool IncomingViewingKeyBelongsToWallet::operator()(const libzcash::OrchardPaymentAddressPirate &zaddr) const
+bool IncomingViewingKeyBelongsToWallet::operator()(const libzcash::OrchardPaymentAddress &zaddr) const
 {
-    libzcash::OrchardIncomingViewingKeyPirate ivk;
+    libzcash::OrchardIncomingViewingKey ivk;
     return m_wallet->GetOrchardIncomingViewingKey(zaddr, ivk);
 }
 
@@ -13276,9 +13280,9 @@ bool PaymentAddressBelongsToWallet::operator()(const libzcash::SaplingPaymentAdd
  * @param zaddr The Orchard payment address to check
  * @return true if the wallet has both the incoming viewing key and full viewing key
  */
-bool PaymentAddressBelongsToWallet::operator()(const libzcash::OrchardPaymentAddressPirate &zaddr) const
+bool PaymentAddressBelongsToWallet::operator()(const libzcash::OrchardPaymentAddress &zaddr) const
 {
-    libzcash::OrchardIncomingViewingKeyPirate ivk;
+    libzcash::OrchardIncomingViewingKey ivk;
 
     // If we have a OrchardExtendedSpendingKey in the wallet, then we will
     // also have the corresponding OrchardFullViewingKey.
@@ -13351,9 +13355,9 @@ std::optional<libzcash::ViewingKey> GetViewingKeyForPaymentAddress::operator()(
  * by looking up the incoming viewing key and corresponding full viewing key.
  */
 std::optional<libzcash::ViewingKey> GetViewingKeyForPaymentAddress::operator()(
-    const libzcash::OrchardPaymentAddressPirate &zaddr) const
+    const libzcash::OrchardPaymentAddress &zaddr) const
 {
-    libzcash::OrchardIncomingViewingKeyPirate ivk;
+    libzcash::OrchardIncomingViewingKey ivk;
     libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
 
     if (m_wallet->GetOrchardIncomingViewingKey(zaddr, ivk) &&
@@ -13413,9 +13417,9 @@ bool HaveSpendingKeyForPaymentAddress::operator()(const libzcash::SaplingPayment
  * Verifies that the wallet has both the incoming viewing key and full viewing key
  * for the address, which indicates a spending key exists.
  */
-bool HaveSpendingKeyForPaymentAddress::operator()(const libzcash::OrchardPaymentAddressPirate &zaddr) const
+bool HaveSpendingKeyForPaymentAddress::operator()(const libzcash::OrchardPaymentAddress &zaddr) const
 {
-    libzcash::OrchardIncomingViewingKeyPirate ivk;
+    libzcash::OrchardIncomingViewingKey ivk;
     libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
 
     return m_wallet->GetOrchardIncomingViewingKey(zaddr, ivk) &&
@@ -13471,7 +13475,7 @@ std::optional<libzcash::SpendingKey> GetSpendingKeyForPaymentAddress::operator()
  * @return Optional SpendingKey if found, nullopt otherwise
  */
 std::optional<libzcash::SpendingKey> GetSpendingKeyForPaymentAddress::operator()(
-    const libzcash::OrchardPaymentAddressPirate &zaddr) const
+    const libzcash::OrchardPaymentAddress &zaddr) const
 {
     libzcash::OrchardExtendedSpendingKeyPirate extsk;
     if (m_wallet->GetOrchardExtendedSpendingKey(zaddr, extsk)) {
@@ -13521,9 +13525,11 @@ KeyAddResult AddViewingKeyToWallet::operator()(const libzcash::SproutViewingKey 
  * exists, returns SpendingKeyExists. Also loads watch-only data for the key.
  */
 KeyAddResult AddViewingKeyToWallet::operator()(const libzcash::SaplingExtendedFullViewingKey &extfvk) const {
+    SaplingIncomingViewingKey ivk;
+    extfvk.fvk.DeriveIVK(&ivk);
     if (m_wallet->HaveSaplingSpendingKey(extfvk)) {
         return SpendingKeyExists;
-    } else if (m_wallet->HaveSaplingFullViewingKey(extfvk.fvk.in_viewing_key())) {
+    } else if (m_wallet->HaveSaplingFullViewingKey(ivk)) {
         return KeyAlreadyExists;
     } else if (m_wallet->AddSaplingExtendedFullViewingKey(extfvk)) {
         m_wallet->LoadSaplingWatchOnly(extfvk);
@@ -13542,11 +13548,10 @@ KeyAddResult AddViewingKeyToWallet::operator()(const libzcash::SaplingExtendedFu
  * exists, returns SpendingKeyExists. Also loads watch-only data for the key.
  */
 KeyAddResult AddViewingKeyToWallet::operator()(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) const {
-    auto ivkOpt = extfvk.fvk.GetIVK();
-    if (ivkOpt == nullopt) {
+    OrchardIncomingViewingKey ivk;
+    if (!extfvk.fvk.DeriveIVK(&ivk)) {
        return KeyNotAdded;
     }
-    auto ivk = ivkOpt.value();
 
     if (m_wallet->HaveOrchardSpendingKey(extfvk)) {
         return SpendingKeyExists;
@@ -13579,8 +13584,12 @@ KeyAddResult AddViewingKeyToWallet::operator()(const libzcash::InvalidEncoding& 
  */
 KeyAddResult AddDiversifiedViewingKeyToWallet::operator()(const libzcash::SaplingDiversifiedExtendedFullViewingKey &extdfvk) const {
     auto extfvk = extdfvk.extfvk;
-    auto ivk = extfvk.fvk.in_viewing_key();
-    auto addr = ivk.address(extdfvk.d).value();
+    SaplingIncomingViewingKey ivk;
+    extfvk.fvk.DeriveIVK(&ivk);
+    SaplingPaymentAddress addr;
+    if (!ivk.DeriveAddress(&addr, extdfvk.d)) {
+        return KeyNotAdded;
+    }
     KeyAddResult result = KeyNotAdded;
 
     if (m_wallet->HaveSaplingSpendingKey(extfvk)) {
@@ -13616,20 +13625,18 @@ KeyAddResult AddDiversifiedViewingKeyToWallet::operator()(const libzcash::Orchar
 
     // Attempt to derive the diversified viewing key's IVK
     // This will throw if the diversified key is invalid or cannot derive an IVK
-    auto ivkOpt = extfvk.fvk.GetIVK();
-    if (ivkOpt == std::nullopt) {
+    OrchardIncomingViewingKey ivk;
+    if (!extfvk.fvk.DeriveIVK(&ivk)) {
         throw std::invalid_argument("Cannot derive default address from invalid diversified viewing key");
     }
-    auto ivk = ivkOpt.value();
     KeyAddResult result = KeyNotAdded;
 
     // Attempt to derive the default address from the diversified viewing key
     // This will throw if the diversified key is invalid or cannot derive an address
-    auto addrOpt = extfvk.fvk.GetAddress(extdfvk.d);
-    if (addrOpt == std::nullopt) {
+    OrchardPaymentAddress addr;
+    if (!extfvk.fvk.DeriveAddress(&addr, extdfvk.d)) {
         throw std::invalid_argument("Cannot derive default address from invalid diversified viewing key");
     }
-    auto addr = addrOpt.value();
 
     if (m_wallet->HaveOrchardSpendingKey(extfvk)) {
         result = SpendingKeyExists;
@@ -13701,7 +13708,8 @@ KeyAddResult AddSpendingKeyToWallet::operator()(const libzcash::SproutSpendingKe
  */
 KeyAddResult AddSpendingKeyToWallet::operator()(const libzcash::SaplingExtendedSpendingKey &sk) const {
     auto extfvk = sk.ToXFVK();
-    auto ivk = extfvk.fvk.in_viewing_key();
+    SaplingIncomingViewingKey ivk;
+    extfvk.fvk.DeriveIVK(&ivk);
     auto addr = sk.DefaultAddress();
     {
         if (log){
@@ -13752,17 +13760,15 @@ KeyAddResult AddSpendingKeyToWallet::operator()(const libzcash::OrchardExtendedS
     }
     auto extfvk = extfvkOpt.value();
 
-    auto ivkOpt = extfvk.fvk.GetIVK();
-    if (ivkOpt == std::nullopt) {
+    OrchardIncomingViewingKey ivk;
+    if (!extfvk.fvk.DeriveIVK(&ivk)) {
         return KeyNotAdded;
     }
-    auto ivk = ivkOpt.value();
 
-    auto addrOpt = extfvk.fvk.GetDefaultAddress();
-    if (addrOpt == std::nullopt) {
+    OrchardPaymentAddress addr;
+    if (!extfvk.fvk.DeriveDefaultAddress(&addr)) {
         return KeyNotAdded;
     }
-    auto addr = addrOpt.value();
 
     {
         if (log){
@@ -13816,8 +13822,12 @@ KeyAddResult AddSpendingKeyToWallet::operator()(const libzcash::InvalidEncoding&
  */
 KeyAddResult AddDiversifiedSpendingKeyToWallet::operator()(const libzcash::SaplingDiversifiedExtendedSpendingKey &extdsk) const {
     auto extfvk = extdsk.extsk.ToXFVK();
-    auto ivk = extfvk.fvk.in_viewing_key();
-    auto addr = ivk.address(extdsk.d).value();
+    SaplingIncomingViewingKey ivk;
+    extfvk.fvk.DeriveIVK(&ivk);
+    SaplingPaymentAddress addr;
+    if (!ivk.DeriveAddress(&addr, extdsk.d)) {
+        return KeyNotAdded;
+    }
     KeyAddResult result = KeyNotAdded;
 
 
@@ -13859,17 +13869,15 @@ KeyAddResult AddDiversifiedSpendingKeyToWallet::operator()(const libzcash::Orcha
     }
     auto extfvk = extfvkOpt.value();
 
-    auto ivkOpt = extfvk.fvk.GetIVK();
-    if (ivkOpt == std::nullopt) {
+    OrchardIncomingViewingKey ivk;
+    if (!extfvk.fvk.DeriveIVK(&ivk)) {
         return KeyNotAdded;
     }
-    auto ivk = ivkOpt.value();
 
-    auto addrOpt = extfvk.fvk.GetAddress(extdsk.d);
-    if (addrOpt == std::nullopt) {
+    OrchardPaymentAddress addr;
+    if (!extfvk.fvk.DeriveAddress(&addr, extdsk.d)) {
         return KeyNotAdded;
     }
-    auto addr = addrOpt.value();
 
     KeyAddResult result = KeyNotAdded;
 

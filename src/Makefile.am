@@ -60,7 +60,6 @@ endif
 CXXBRIDGE_RS = \
 	rust/src/blake2b.rs \
 	rust/src/ed25519.rs \
-  rust/src/sapling/spec.rs \
   rust/src/sapling/zip32.rs \
 	rust/src/sprout.rs \
   rust/src/streams.rs \
@@ -70,7 +69,6 @@ CXXBRIDGE_RS = \
 CXXBRIDGE_H = \
 	rust/gen/include/rust/blake2b.h \
 	rust/gen/include/rust/ed25519.h \
-  rust/gen/include/rust/sapling/spec.h \
   rust/gen/include/rust/sapling/zip32.h \
 	rust/gen/include/rust/sprout.h \
   rust/gen/include/rust/streams.h \
@@ -80,7 +78,6 @@ CXXBRIDGE_H = \
 CXXBRIDGE_CPP = \
 	rust/gen/src/blake2b.cpp \
 	rust/gen/src/ed25519.cpp \
-  rust/gen/src/sapling/spec.cpp \
   rust/gen/src/sapling/zip32.cpp \
 	rust/gen/src/sprout.cpp \
   rust/gen/src/streams.cpp \
@@ -242,7 +239,7 @@ LIBZCASH_H = \
   zcash/Note.hpp \
   zcash/prf.h \
   zcash/Proof.hpp \
-	zcash/address/pirate_orchard.hpp \
+	zcash/address/orchard.hpp \
 	zcash/address/sapling.hpp \
 	zcash/address/sprout.hpp \
 	zcash/History.hpp \
@@ -839,7 +836,7 @@ libzcash_a_SOURCES = \
 	zcash/memo.cpp \
 	zcash/Note.cpp \
 	zcash/prf.cpp \
-	zcash/address/pirate_orchard.cpp \
+	zcash/address/orchard.cpp \
 	zcash/address/sapling.cpp \
 	zcash/address/sprout.cpp \
 	zcash/History.cpp \

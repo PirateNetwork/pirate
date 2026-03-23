@@ -446,7 +446,8 @@ bool CBasicKeyStore::AddSaplingExtendedFullViewingKey(
     const libzcash::SaplingExtendedFullViewingKey &extfvk)
 {
     LOCK(cs_KeyStore);
-    auto ivk = extfvk.fvk.in_viewing_key();
+    libzcash::SaplingIncomingViewingKey ivk;
+    extfvk.fvk.DeriveIVK(&ivk);
     mapSaplingFullViewingKeys[ivk] = extfvk;
     setSaplingOutgoingViewingKeys.insert(extfvk.fvk.ovk);
 
@@ -474,28 +475,27 @@ bool CBasicKeyStore::AddOrchardExtendedFullViewingKey(
     const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
 {
     LOCK(cs_KeyStore);
-    // Get external keys
-    auto ivkOpt = extfvk.fvk.GetIVK();
-    auto ovkOpt = extfvk.fvk.GetOVK();
-    auto addressOpt = extfvk.fvk.GetDefaultAddress();
 
-    // Get internal keys
-    auto ivkInternalOpt = extfvk.fvk.GetIVKinternal();
-    auto ovkInternalOpt = extfvk.fvk.GetOVKinternal();
-    auto addressInternalOpt = extfvk.fvk.GetDefaultAddressInternal();
+    // Derive external keys
+    libzcash::OrchardIncomingViewingKey ivk;
+    libzcash::OrchardOutgoingViewingKey ovk;
+    libzcash::OrchardPaymentAddress address;
+    bool ivkDerived         = extfvk.fvk.DeriveIVK(&ivk);
+    bool ovkDerived         = extfvk.fvk.DeriveOVK(&ovk);
+    bool addressDerived     = extfvk.fvk.DeriveDefaultAddress(&address);
 
-    if (ivkOpt == std::nullopt || ovkOpt == std::nullopt || addressOpt == std::nullopt ||
-        ivkInternalOpt == std::nullopt || ovkInternalOpt == std::nullopt || addressInternalOpt == std::nullopt) {
+    // Derive internal keys
+    libzcash::OrchardIncomingViewingKey ivkInternal;
+    libzcash::OrchardOutgoingViewingKey ovkInternal;
+    libzcash::OrchardPaymentAddress addressInternal;
+    bool ivkInternalDerived     = extfvk.fvk.DeriveIVKinternal(&ivkInternal);
+    bool ovkInternalDerived     = extfvk.fvk.DeriveOVKinternal(&ovkInternal);
+    bool addressInternalDerived = extfvk.fvk.DeriveDefaultAddressInternal(&addressInternal);
+
+    if (!ivkDerived || !ovkDerived || !addressDerived ||
+        !ivkInternalDerived || !ovkInternalDerived || !addressInternalDerived) {
         return false;
     }
-
-    auto ivk = ivkOpt.value();
-    auto ovk = ovkOpt.value();
-    auto address = addressOpt.value();
-    
-    auto ivkInternal = ivkInternalOpt.value();
-    auto ovkInternal = ovkInternalOpt.value();
-    auto addressInternal = addressInternalOpt.value();
 
     // Store external FVK and OVK with scope flag
     OrchardIVKWithScope ivkExternal(ivk, OrchardKeyScope::External);
@@ -564,8 +564,8 @@ bool CBasicKeyStore::AddSaplingIncomingViewingKey(
  * discovered while the wallet is locked, and is cleared during SetBestChainINTERNAL.
  */
 bool CBasicKeyStore::AddOrchardIncomingViewingKey(
-    const libzcash::OrchardIncomingViewingKeyPirate &ivk,
-    const libzcash::OrchardPaymentAddressPirate &addr,
+    const libzcash::OrchardIncomingViewingKey &ivk,
+    const libzcash::OrchardPaymentAddress &addr,
     OrchardKeyScope scope)
 {
     LOCK(cs_KeyStore);
@@ -623,8 +623,8 @@ bool CBasicKeyStore::AddSaplingDiversifiedAddress(
  * supporting proper address management and re-derivation.
  */
 bool CBasicKeyStore::AddOrchardDiversifiedAddress(
-    const libzcash::OrchardPaymentAddressPirate &addr,
-    const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+    const libzcash::OrchardPaymentAddress &addr,
+    const libzcash::OrchardIncomingViewingKey &ivk,
     const blob88 &path
 )
 {
@@ -667,7 +667,7 @@ bool CBasicKeyStore::AddLastSaplingDiversifierUsed(
  * address generation and proper gap limit handling during wallet recovery.
  */
 bool CBasicKeyStore::AddLastOrchardDiversifierUsed(
-    const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+    const libzcash::OrchardIncomingViewingKey &ivk,
     const blob88 &path)
 {
     LOCK(cs_KeyStore);
@@ -721,7 +721,7 @@ bool CBasicKeyStore::HaveSaplingFullViewingKey(const libzcash::SaplingIncomingVi
  * 
  * Checks both external and internal scope since the same IVK can exist with either scope.
  */
-bool CBasicKeyStore::HaveOrchardFullViewingKey(const libzcash::OrchardIncomingViewingKeyPirate &ivk) const
+bool CBasicKeyStore::HaveOrchardFullViewingKey(const libzcash::OrchardIncomingViewingKey &ivk) const
 {
     LOCK(cs_KeyStore);
     // Check both external and internal scope
@@ -747,7 +747,7 @@ bool CBasicKeyStore::HaveSaplingIncomingViewingKey(const libzcash::SaplingPaymen
  * @param addr The Orchard payment address to check
  * @return true if IVK exists for this address, false otherwise
  */
-bool CBasicKeyStore::HaveOrchardIncomingViewingKey(const libzcash::OrchardPaymentAddressPirate &addr) const
+bool CBasicKeyStore::HaveOrchardIncomingViewingKey(const libzcash::OrchardPaymentAddress &addr) const
 {
     LOCK(cs_KeyStore);
     return mapOrchardIncomingViewingKeys.count(addr) > 0;
@@ -801,7 +801,7 @@ bool CBasicKeyStore::GetSaplingFullViewingKey(
  * is checked first as it's more commonly used. Returns the first match found.
  */
 bool CBasicKeyStore::GetOrchardFullViewingKey(
-    const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+    const libzcash::OrchardIncomingViewingKey &ivk,
     libzcash::OrchardExtendedFullViewingKeyPirate &extfvkOut) const
 {
     LOCK(cs_KeyStore);
@@ -850,8 +850,8 @@ bool CBasicKeyStore::GetSaplingIncomingViewingKey(const libzcash::SaplingPayment
  * and not the scope. To retrieve both IVK and scope, access mapOrchardIncomingViewingKeys
  * directly and use .first for IVK and .second for scope.
  */
-bool CBasicKeyStore::GetOrchardIncomingViewingKey(const libzcash::OrchardPaymentAddressPirate &addr,
-                                   libzcash::OrchardIncomingViewingKeyPirate &ivkOut) const
+bool CBasicKeyStore::GetOrchardIncomingViewingKey(const libzcash::OrchardPaymentAddress &addr,
+                                   libzcash::OrchardIncomingViewingKey &ivkOut) const
 {
     LOCK(cs_KeyStore);
     OrchardIncomingViewingKeyMap::const_iterator mi = mapOrchardIncomingViewingKeys.find(addr);
@@ -868,7 +868,7 @@ bool CBasicKeyStore::GetOrchardIncomingViewingKey(const libzcash::OrchardPayment
  * @param scopeOut[out] The scope (External or Internal) if found
  * @return true if address exists in keystore, false otherwise
  */
-bool CBasicKeyStore::GetOrchardKeyScope(const libzcash::OrchardPaymentAddressPirate &addr,
+bool CBasicKeyStore::GetOrchardKeyScope(const libzcash::OrchardPaymentAddress &addr,
                                         OrchardKeyScope &scopeOut) const
 {
     LOCK(cs_KeyStore);
@@ -919,9 +919,9 @@ bool CBasicKeyStore::GetSaplingExtendedSpendingKey(const libzcash::SaplingPaymen
  * This only succeeds if the wallet has the full spending authority for this address.
  * Watch-only wallets will not have the spending key even if they have the viewing keys.
  */
-bool CBasicKeyStore::GetOrchardExtendedSpendingKey(const libzcash::OrchardPaymentAddressPirate &addr,
+bool CBasicKeyStore::GetOrchardExtendedSpendingKey(const libzcash::OrchardPaymentAddress &addr,
                                     libzcash::OrchardExtendedSpendingKeyPirate &extskOut) const {
-    libzcash::OrchardIncomingViewingKeyPirate ivk;
+    libzcash::OrchardIncomingViewingKey ivk;
     libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
 
     LOCK(cs_KeyStore);

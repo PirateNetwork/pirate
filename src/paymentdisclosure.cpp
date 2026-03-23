@@ -38,8 +38,8 @@ std::string GenerateSaplingDisclosure(CWallet* wallet, const uint256& txid, int 
     // Get the OVK from the wallet
     // We need to find which OVK can actually decrypt this output
     // Try all OVKs in the wallet (both Sapling and Orchard) and use the one that successfully decrypts
-    std::array<uint8_t, 32> ovkBytes;
-    std::array<uint8_t, 32> ock;
+    uint256_t ovkBytes;
+    uint256_t ock;
     bool found = false;
 
     // Get output components needed for OCK derivation and decryption
@@ -66,12 +66,12 @@ std::string GenerateSaplingDisclosure(CWallet* wallet, const uint256& txid, int 
             // Test if this OCK can decrypt the output
             uint64_t test_value;
             std::array<uint8_t, 11> test_diversifier;
-            std::array<uint8_t, 32> test_pk_d;
+            uint256_t test_pk_d;
             std::array<uint8_t, 512> test_memo;
-            std::array<uint8_t, 32> test_rseed;
+            uint256_t test_rseed;
             uint8_t test_leadbyte;
-            std::array<uint8_t, 32> test_cmu_out;
-            std::array<uint8_t, 32> test_rcm;
+            uint256_t test_cmu_out;
+            uint256_t test_rcm;
             
             if (output->try_decrypt_output_ock(
                     ock, test_value, test_diversifier, test_pk_d, test_memo,
@@ -86,7 +86,7 @@ std::string GenerateSaplingDisclosure(CWallet* wallet, const uint256& txid, int 
     // If not found with Sapling OVKs, try Orchard OVKs
     // Transactions that spend from Orchard and send to Sapling use Orchard OVKs
     if (!found) {
-        std::set<libzcash::OrchardPaymentAddressPirate> orchardAddresses;
+        std::set<libzcash::OrchardPaymentAddress> orchardAddresses;
         wallet->GetOrchardPaymentAddresses(orchardAddresses);
 
         for (const auto& addr : orchardAddresses) {
@@ -94,17 +94,17 @@ std::string GenerateSaplingDisclosure(CWallet* wallet, const uint256& txid, int 
             libzcash::OrchardExtendedSpendingKeyPirate extsk;
             if (wallet->GetOrchardExtendedSpendingKey(addr, extsk)) {
                 // Get the FVK and then the OVK
-                auto fvkOpt = extsk.sk.GetFVK();
-                if (!fvkOpt) {
+                libzcash::OrchardFullViewingKey fvk;
+                if (!extsk.sk.DeriveFVK(&fvk)) {
                     continue; // Try next key
                 }
                 
-                auto ovkOpt = fvkOpt->GetOVK();
-                if (!ovkOpt) {
+                libzcash::OrchardOutgoingViewingKey ovkObj;
+                if (!fvk.DeriveOVK(&ovkObj)) {
                     continue; // Try next key
                 }
                 
-                auto ovk = ovkOpt->ovk;
+                auto ovk = ovkObj.ovk;
                 std::copy(ovk.begin(), ovk.end(), ovkBytes.begin());
                 
                 // Derive the OCK for this OVK
@@ -115,12 +115,12 @@ std::string GenerateSaplingDisclosure(CWallet* wallet, const uint256& txid, int 
                 // Test if this OCK can decrypt the output
                 uint64_t test_value;
                 std::array<uint8_t, 11> test_diversifier;
-                std::array<uint8_t, 32> test_pk_d;
+                uint256_t test_pk_d;
                 std::array<uint8_t, 512> test_memo;
-                std::array<uint8_t, 32> test_rseed;
+                uint256_t test_rseed;
                 uint8_t test_leadbyte;
-                std::array<uint8_t, 32> test_cmu_out;
-                std::array<uint8_t, 32> test_rcm;
+                uint256_t test_cmu_out;
+                uint256_t test_rcm;
                 
                 if (output->try_decrypt_output_ock(
                         ock, test_value, test_diversifier, test_pk_d, test_memo,
@@ -146,12 +146,12 @@ std::string GenerateSaplingDisclosure(CWallet* wallet, const uint256& txid, int 
                 // Test if this OCK can decrypt the output
                 uint64_t test_value;
                 std::array<uint8_t, 11> test_diversifier;
-                std::array<uint8_t, 32> test_pk_d;
+                uint256_t test_pk_d;
                 std::array<uint8_t, 512> test_memo;
-                std::array<uint8_t, 32> test_rseed;
+                uint256_t test_rseed;
                 uint8_t test_leadbyte;
-                std::array<uint8_t, 32> test_cmu_out;
-                std::array<uint8_t, 32> test_rcm;
+                uint256_t test_cmu_out;
+                uint256_t test_rcm;
                 
                 if (output->try_decrypt_output_ock(
                         ock, test_value, test_diversifier, test_pk_d, test_memo,
@@ -199,12 +199,12 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
     // Get the OVK from the wallet
     // We need to find which OVK can actually decrypt this action
     // Try all OVKs in the wallet and use the one that successfully decrypts
-    std::array<uint8_t, 32> ovkBytes;
-    std::array<uint8_t, 32> ock;
+    uint256_t ovkBytes;
+    uint256_t ock;
     bool found = false;
 
     // Iterate through all Orchard addresses in the wallet
-    std::set<libzcash::OrchardPaymentAddressPirate> addresses;
+    std::set<libzcash::OrchardPaymentAddress> addresses;
     wallet->GetOrchardPaymentAddresses(addresses);
 
     for (const auto& addr : addresses) {
@@ -212,17 +212,17 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
         libzcash::OrchardExtendedSpendingKeyPirate extsk;
         if (wallet->GetOrchardExtendedSpendingKey(addr, extsk)) {
             // Get the FVK and then the OVK
-            auto fvkOpt = extsk.sk.GetFVK();
-            if (!fvkOpt) {
+            libzcash::OrchardFullViewingKey fvk;
+            if (!extsk.sk.DeriveFVK(&fvk)) {
                 continue; // Try next key
             }
             
-            auto ovkOpt = fvkOpt->GetOVK();
-            if (!ovkOpt) {
+            libzcash::OrchardOutgoingViewingKey ovkObj;
+            if (!fvk.DeriveOVK(&ovkObj)) {
                 continue; // Try next key
             }
             
-            auto ovk = ovkOpt->ovk;
+            auto ovk = ovkObj.ovk;
             std::copy(ovk.begin(), ovk.end(), ovkBytes.begin());
             
             // Derive the OCK for this OVK
@@ -234,8 +234,8 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
             uint64_t test_value;
             std::array<uint8_t, 43> test_address;
             std::array<uint8_t, 512> test_memo;
-            std::array<uint8_t, 32> test_rho;
-            std::array<uint8_t, 32> test_rseed;
+            uint256_t test_rho;
+            uint256_t test_rseed;
             
             if (orchard::try_orchard_decrypt_action_ock(
                     &action, &ock, &test_value, &test_address, &test_memo,
@@ -269,8 +269,8 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
                 uint64_t test_value;
                 std::array<uint8_t, 43> test_address;
                 std::array<uint8_t, 512> test_memo;
-                std::array<uint8_t, 32> test_rho;
-                std::array<uint8_t, 32> test_rseed;
+                uint256_t test_rho;
+                uint256_t test_rseed;
                 
                 if (orchard::try_orchard_decrypt_action_ock(
                         &action, &ock, &test_value, &test_address, &test_memo,
@@ -297,8 +297,8 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
                 uint64_t test_value;
                 std::array<uint8_t, 43> test_address;
                 std::array<uint8_t, 512> test_memo;
-                std::array<uint8_t, 32> test_rho;
-                std::array<uint8_t, 32> test_rseed;
+                uint256_t test_rho;
+                uint256_t test_rseed;
                 
                 if (orchard::try_orchard_decrypt_action_ock(
                         &action, &ock, &test_value, &test_address, &test_memo,
@@ -369,12 +369,12 @@ SaplingDisclosureVerificationResult VerifySaplingDisclosure(const std::string& d
     // Decrypt with disclosure key
     uint64_t value;
     std::array<uint8_t, 11> diversifier;
-    std::array<uint8_t, 32> pk_d;
+    uint256_t pk_d;
     std::array<uint8_t, 512> memo;
-    std::array<uint8_t, 32> rseed;
+    uint256_t rseed;
     uint8_t leadbyte;
-    std::array<uint8_t, 32> cmu_out;
-    std::array<uint8_t, 32> rcm;
+    uint256_t cmu_out;
+    uint256_t rcm;
 
     if (!output->try_decrypt_output_ock(
             disclosureStruct.ock, value, diversifier, pk_d, memo,
@@ -452,8 +452,8 @@ OrchardDisclosureVerificationResult VerifyOrchardDisclosure(const std::string& d
     uint64_t value;
     std::array<uint8_t, 43> address;
     std::array<uint8_t, 512> memo;
-    std::array<uint8_t, 32> rho;
-    std::array<uint8_t, 32> rseed;
+    uint256_t rho;
+    uint256_t rseed;
 
     if (!orchard::try_orchard_decrypt_action_ock(
             &action, &disclosureStruct.ock, &value, &address, &memo,
@@ -467,7 +467,7 @@ OrchardDisclosureVerificationResult VerifyOrchardDisclosure(const std::string& d
     std::copy(address.begin(), address.begin() + 11, div.begin());
     uint256 pkd;
     std::copy(address.begin() + 11, address.end(), pkd.begin());
-    libzcash::OrchardPaymentAddressPirate paymentAddr(div, pkd);
+    libzcash::OrchardPaymentAddress paymentAddr(div, pkd);
 
     // Build successful result
     result.success = true;

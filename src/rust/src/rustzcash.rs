@@ -21,7 +21,6 @@
 
 
 use bellman::groth16::{self, Parameters, PreparedVerifyingKey, Proof, prepare_verifying_key, VerifyingKey};
-use blake2s_simd::Params as Blake2sParams;
 use bls12_381::Bls12;
 use tracing::info;
 use group::{cofactor::CofactorGroup, GroupEncoding};
@@ -52,7 +51,6 @@ use std::os::windows::ffi::OsStringExt;
 
 use zcash_primitives::{
     block::equihash,
-    constants::{CRH_IVK_PERSONALIZATION, PROOF_GENERATION_KEY_GENERATOR, SPENDING_KEY_GENERATOR},
     merkle_tree::{HashSer,merkle_path_from_slice},
     sapling::{
         merkle_hash,
@@ -92,6 +90,8 @@ mod orchard_bundle;
 mod orchard_ffi;
 mod orchard_keys_ffi;
 mod orchard_keys;
+mod sapling_keys;
+mod transparent;
 mod params;
 mod sapling;
 mod sprout;
@@ -126,15 +126,6 @@ fn de_ct<T>(ct: CtOption<T>) -> Option<T> {
     } else {
         None
     }
-}
-
-/// Reads an FsRepr from a [u8; 32]
-/// and multiplies it by the given base.
-fn fixed_scalar_mult(from: &[u8; 32], p_g: &jubjub::SubgroupPoint) -> jubjub::SubgroupPoint {
-    // We only call this with `from` being a valid jubjub::Scalar.
-    let f = jubjub::Scalar::from_bytes(from).unwrap();
-
-    p_g * f
 }
 
 /// Loads the zk-SNARK parameters into memory and saves paths as necessary.
@@ -251,69 +242,6 @@ pub extern "C" fn librustzcash_merkle_hash(
     // is a valid pointer to 32 bytes that can be mutated.
     let result = unsafe { &mut *result };
     *result = tmp;
-}
-
-#[no_mangle] // ToScalar
-pub extern "C" fn librustzcash_to_scalar(input: *const [c_uchar; 64], result: *mut [c_uchar; 32]) {
-    // Should be okay, because caller is responsible for ensuring
-    // the pointer is a valid pointer to 32 bytes, and that is the
-    // size of the representation
-    let scalar = jubjub::Scalar::from_bytes_wide(unsafe { &*input });
-
-    let result = unsafe { &mut *result };
-
-    *result = scalar.to_bytes();
-}
-
-#[no_mangle]
-pub extern "C" fn librustzcash_ask_to_ak(ask: *const [c_uchar; 32], result: *mut [c_uchar; 32]) {
-    let ask = unsafe { &*ask };
-    let ak = fixed_scalar_mult(ask, &SPENDING_KEY_GENERATOR);
-
-    let result = unsafe { &mut *result };
-
-    *result = ak.to_bytes();
-}
-
-#[no_mangle]
-pub extern "C" fn librustzcash_nsk_to_nk(nsk: *const [c_uchar; 32], result: *mut [c_uchar; 32]) {
-    let nsk = unsafe { &*nsk };
-    let nk = fixed_scalar_mult(nsk, &PROOF_GENERATION_KEY_GENERATOR);
-
-    let result = unsafe { &mut *result };
-
-    *result = nk.to_bytes();
-}
-
-#[no_mangle]
-pub extern "C" fn librustzcash_crh_ivk(
-    ak: *const [c_uchar; 32],
-    nk: *const [c_uchar; 32],
-    result: *mut [c_uchar; 32],
-) {
-    let ak = unsafe { &*ak };
-    let nk = unsafe { &*nk };
-
-    let mut h = Blake2sParams::new()
-        .hash_length(32)
-        .personal(CRH_IVK_PERSONALIZATION)
-        .to_state();
-    h.update(ak);
-    h.update(nk);
-    let mut h = h.finalize().as_ref().to_vec();
-
-    // Drop the last five bits, so it can be interpreted as a scalar.
-    h[31] &= 0b0000_0111;
-
-    let result = unsafe { &mut *result };
-
-    result.copy_from_slice(&h);
-}
-
-#[no_mangle]
-pub extern "C" fn librustzcash_check_diversifier(diversifier: *const [c_uchar; 11]) -> bool {
-    let diversifier = Diversifier(unsafe { *diversifier });
-    diversifier.g_d().is_some()
 }
 
 #[no_mangle]

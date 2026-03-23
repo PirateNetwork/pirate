@@ -238,7 +238,11 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl()
                     }
 
                     // Verify this note belongs to the address we're processing
-                    if (incomingViewKey == extendedSpendingKey.expsk.full_viewing_key().in_viewing_key() && 
+                    libzcash::SaplingIncomingViewingKey derivedIvk;
+                    libzcash::SaplingFullViewingKey derivedFvk;
+                    extendedSpendingKey.expsk.DeriveFVK(&derivedFvk);
+                    derivedFvk.DeriveIVK(&derivedIvk);
+                    if (incomingViewKey == derivedIvk &&
                         noteEntry.address == address) {
                         totalInputAmount += CAmount(noteEntry.note.value());
                         selectedInputs.push_back(noteEntry);

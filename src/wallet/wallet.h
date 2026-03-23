@@ -513,19 +513,19 @@ public:
     OrchardNoteData() : nullifier(), value {0} {
         setPosition(UINT64_MAX); // Use UINT64_MAX as sentinel for unset position
     }
-    OrchardNoteData(libzcash::OrchardIncomingViewingKeyPirate ivk) : ivk {ivk}, nullifier(), value {0} {
+    OrchardNoteData(libzcash::OrchardIncomingViewingKey ivk) : ivk {ivk}, nullifier(), value {0} {
         setPosition(UINT64_MAX); // Use UINT64_MAX as sentinel for unset position
     }
-    OrchardNoteData(libzcash::OrchardIncomingViewingKeyPirate ivk, uint256 n) : ivk {ivk}, nullifier(n), value {0} {
+    OrchardNoteData(libzcash::OrchardIncomingViewingKey ivk, uint256 n) : ivk {ivk}, nullifier(n), value {0} {
         setPosition(UINT64_MAX); // Use UINT64_MAX as sentinel for unset position
     }
 
-    libzcash::OrchardIncomingViewingKeyPirate ivk;
+    libzcash::OrchardIncomingViewingKey ivk;
     std::optional<uint256> nullifier;
 
     //In Memory Only
     CAmount value;
-    libzcash::OrchardPaymentAddressPirate address;
+    libzcash::OrchardPaymentAddress address;
 
     ADD_SERIALIZE_METHODS;
 
@@ -589,7 +589,7 @@ struct SaplingNoteEntry
 struct OrchardNoteEntry
 {
     OrchardOutPoint op;
-    libzcash::OrchardPaymentAddressPirate address;
+    libzcash::OrchardPaymentAddress address;
     libzcash::OrchardNote note;
     std::array<unsigned char, ZC_MEMO_SIZE> memo;
     int confirmations;
@@ -850,7 +850,7 @@ public:
 
     std::optional<std::pair<
         libzcash::OrchardNotePlaintext,
-        libzcash::OrchardPaymentAddressPirate>> DecryptOrchardNote(OrchardOutPoint op) const;
+        libzcash::OrchardPaymentAddress>> DecryptOrchardNote(OrchardOutPoint op) const;
 
     //! filter decides which addresses will count towards the debit
     CAmount GetDebit(const isminefilter& filter) const;
@@ -1592,7 +1592,7 @@ public:
     std::map<CKeyID, CKeyMetadata> mapKeyMetadata;
     std::map<libzcash::SproutPaymentAddress, CKeyMetadata> mapSproutZKeyMetadata;
     std::map<libzcash::SaplingIncomingViewingKey, CKeyMetadata> mapSaplingSpendingKeyMetadata;
-    std::map<libzcash::OrchardIncomingViewingKeyPirate, CKeyMetadata> mapOrchardSpendingKeyMetadata;
+    std::map<libzcash::OrchardIncomingViewingKey, CKeyMetadata> mapOrchardSpendingKeyMetadata;
 
     //Temporary Holfing maps for crypted data to be loaded after all keys are loaded
     std::map<uint256, std::vector<unsigned char>> mapTempHoldCryptedSaplingMetadata;
@@ -1954,9 +1954,9 @@ public:
       * Orchard ZKeys
       */
     //! Generates new Orchard key
-    libzcash::OrchardPaymentAddressPirate GenerateNewOrchardZKey();
+    libzcash::OrchardPaymentAddress GenerateNewOrchardZKey();
     //! Generates new Sapling diversified payment address
-    libzcash::OrchardPaymentAddressPirate GenerateNewOrchardDiversifiedAddress();
+    libzcash::OrchardPaymentAddress GenerateNewOrchardDiversifiedAddress();
     //Set Primary key for address diversification
     bool SetPrimaryOrchardSpendingKey(
         const libzcash::OrchardExtendedSpendingKeyPirate &extsk);
@@ -1969,22 +1969,22 @@ public:
     bool AddOrchardExtendedFullViewingKey(
         const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk);
     bool AddOrchardIncomingViewingKey(
-        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
-        const libzcash::OrchardPaymentAddressPirate &addr,
+        const libzcash::OrchardIncomingViewingKey &ivk,
+        const libzcash::OrchardPaymentAddress &addr,
         OrchardKeyScope scope);
     bool RederiveOrchardAddressScopes();
     bool AddOrchardDiversifiedAddress(
-        const libzcash::OrchardPaymentAddressPirate &addr,
-        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        const libzcash::OrchardPaymentAddress &addr,
+        const libzcash::OrchardIncomingViewingKey &ivk,
         const blob88 &path);
     bool AddLastOrchardDiversifierUsed(
-        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        const libzcash::OrchardIncomingViewingKey &ivk,
         const blob88 &path);
 
     //! Adds spending key to the store, without saving it to disk (used by LoadWallet)
     bool LoadOrchardZKey(const libzcash::OrchardExtendedSpendingKeyPirate &key);
     //! Load spending key metadata (used by LoadWallet)
-    bool LoadOrchardZKeyMetadata(const libzcash::OrchardIncomingViewingKeyPirate &ivk, const CKeyMetadata &meta);
+    bool LoadOrchardZKeyMetadata(const libzcash::OrchardIncomingViewingKey &ivk, const CKeyMetadata &meta);
     //! Add Sapling full viewing key to the store, without saving it to disk (used by LoadWallet)
     bool LoadOrchardFullViewingKey(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk);
     bool LoadCryptedOrchardExtendedFullViewingKey(
@@ -1995,24 +1995,24 @@ public:
     //! Adds a Sapling payment address -> incoming viewing key map entry,
     //! without saving it to disk (used by LoadWallet)
     bool LoadOrchardPaymentAddress(
-        const libzcash::OrchardPaymentAddressPirate &addr,
-        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        const libzcash::OrchardPaymentAddress &addr,
+        const libzcash::OrchardIncomingViewingKey &ivk,
         OrchardKeyScope scope);
     bool LoadCryptedOrchardPaymentAddress(
         const uint256 &chash,
         const std::vector<unsigned char> &vchCryptedSecret,
-        libzcash::OrchardPaymentAddressPirate& addr);
+        libzcash::OrchardPaymentAddress& addr);
 
     bool LoadOrchardDiversifiedAddress(
-        const libzcash::OrchardPaymentAddressPirate &addr,
-        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        const libzcash::OrchardPaymentAddress &addr,
+        const libzcash::OrchardIncomingViewingKey &ivk,
         const blob88 &path);
     bool LoadCryptedOrchardDiversifiedAddress(
         const uint256 &chash,
         const std::vector<unsigned char> &vchCryptedSecret);
 
     bool LoadLastOrchardDiversifierUsed(
-        const libzcash::OrchardIncomingViewingKeyPirate &ivk,
+        const libzcash::OrchardIncomingViewingKey &ivk,
         const blob88 &path);
     bool LoadLastCryptedOrchardDiversifierUsed(
         const uint256 &chash,
@@ -2068,7 +2068,7 @@ public:
         const int nHeight,
         bool fUpdate,
         std::set<libzcash::SaplingPaymentAddress>& addressesFound,
-        std::set<libzcash::OrchardPaymentAddressPirate>& orchardAddressesFound,
+        std::set<libzcash::OrchardPaymentAddress>& orchardAddressesFound,
         bool fRescan = false);
     void WitnessNoteCommitment(
          std::vector<uint256> commitments,
@@ -2375,7 +2375,7 @@ public:
 
     bool operator()(const libzcash::SproutPaymentAddress &zaddr) const;
     bool operator()(const libzcash::SaplingPaymentAddress &zaddr) const;
-    bool operator()(const libzcash::OrchardPaymentAddressPirate &zaddr) const;
+    bool operator()(const libzcash::OrchardPaymentAddress &zaddr) const;
     bool operator()(const libzcash::InvalidEncoding& no) const;
 };
 
@@ -2388,7 +2388,7 @@ public:
 
     std::optional<libzcash::ViewingKey> operator()(const libzcash::SproutPaymentAddress &zaddr) const;
     std::optional<libzcash::ViewingKey> operator()(const libzcash::SaplingPaymentAddress &zaddr) const;
-    std::optional<libzcash::ViewingKey> operator()(const libzcash::OrchardPaymentAddressPirate &zaddr) const;
+    std::optional<libzcash::ViewingKey> operator()(const libzcash::OrchardPaymentAddress &zaddr) const;
     std::optional<libzcash::ViewingKey> operator()(const libzcash::InvalidEncoding& no) const;
 };
 
@@ -2401,7 +2401,7 @@ public:
 
     bool operator()(const libzcash::SproutPaymentAddress &zaddr) const;
     bool operator()(const libzcash::SaplingPaymentAddress &zaddr) const;
-    bool operator()(const libzcash::OrchardPaymentAddressPirate &zaddr) const;
+    bool operator()(const libzcash::OrchardPaymentAddress &zaddr) const;
     bool operator()(const libzcash::InvalidEncoding& no) const;
 };
 
@@ -2414,7 +2414,7 @@ public:
 
     bool operator()(const libzcash::SproutPaymentAddress &zaddr) const;
     bool operator()(const libzcash::SaplingPaymentAddress &zaddr) const;
-    bool operator()(const libzcash::OrchardPaymentAddressPirate &zaddr) const;
+    bool operator()(const libzcash::OrchardPaymentAddress &zaddr) const;
     bool operator()(const libzcash::InvalidEncoding& no) const;
 };
 
@@ -2427,7 +2427,7 @@ public:
 
     std::optional<libzcash::SpendingKey> operator()(const libzcash::SproutPaymentAddress &zaddr) const;
     std::optional<libzcash::SpendingKey> operator()(const libzcash::SaplingPaymentAddress &zaddr) const;
-    std::optional<libzcash::SpendingKey> operator()(const libzcash::OrchardPaymentAddressPirate &zaddr) const;
+    std::optional<libzcash::SpendingKey> operator()(const libzcash::OrchardPaymentAddress &zaddr) const;
     std::optional<libzcash::SpendingKey> operator()(const libzcash::InvalidEncoding& no) const;
 };
 

@@ -5,6 +5,9 @@
 #ifndef BITCOIN_WALLET_RPCPIRATEWALLET_H
 #define BITCOIN_WALLET_RPCPIRATEWALLET_H
 
+#include "zcash/address/sapling.hpp"
+#include "zcash/address/orchard.hpp"
+
 struct balancestruct {
     CAmount confirmed;
     CAmount unconfirmed;
@@ -139,9 +142,9 @@ public:
     CAmount saplingValue = 0;
     CAmount orchardValue = 0;
     int archiveType;
-    std::set<uint256> saplingIvks;
+    std::set<libzcash::SaplingIncomingViewingKey> saplingIvks;
     std::set<uint256> saplingOvks;
-    std::set<libzcash::OrchardIncomingViewingKeyPirate> orchardIvks;
+    std::set<libzcash::OrchardIncomingViewingKey> orchardIvks;
     std::set<libzcash::OrchardOutgoingViewingKey> orchardOvks;
     std::set<string> spentFrom;
     std::set<string> sendTo;
@@ -181,26 +184,26 @@ template <typename RpcTx>
 void getSaplingSends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<uint256>& ovks, std::set<uint256>& ovksOut, vector<TransactionSendZS>& vSend);
 
 template <typename RpcTx>
-void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<uint256>& ivks, std::set<uint256>& ivksOut, vector<TransactionSpendZS>& vSpend, bool fIncludeWatchonly = false);
+void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::SaplingIncomingViewingKey>& ivks, std::set<libzcash::SaplingIncomingViewingKey>& ivksOut, vector<TransactionSpendZS>& vSpend, bool fIncludeWatchonly = false);
 
 template <typename RpcTx>
-void getSaplingReceives(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<uint256>& ivks, std::set<uint256>& ivksOut, vector<TransactionReceivedZS>& vReceived, bool fIncludeWatchonly = false);
+void getSaplingReceives(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::SaplingIncomingViewingKey>& ivks, std::set<libzcash::SaplingIncomingViewingKey>& ivksOut, vector<TransactionReceivedZS>& vReceived, bool fIncludeWatchonly = false);
 
 // Orchard
 template <typename RpcTx>
 void getOrchardSends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::OrchardOutgoingViewingKey>& ovks, std::set<libzcash::OrchardOutgoingViewingKey>& ovksOut, vector<TransactionSendZO>& vSend);
 
 template <typename RpcTx>
-void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::OrchardIncomingViewingKeyPirate>& ivks, std::set<libzcash::OrchardIncomingViewingKeyPirate>& ivksOut, vector<TransactionSpendZS>& vSpend, bool fIncludeWatchonly = false);
+void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::OrchardIncomingViewingKey>& ivks, std::set<libzcash::OrchardIncomingViewingKey>& ivksOut, vector<TransactionSpendZS>& vSpend, bool fIncludeWatchonly = false);
 
 template <typename RpcTx>
-void getOrchardReceives(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::OrchardIncomingViewingKeyPirate>& ivks, std::set<libzcash::OrchardIncomingViewingKeyPirate>& ivksOut, vector<TransactionReceivedZO>& vReceived, bool fIncludeWatchonly = false);
+void getOrchardReceives(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::OrchardIncomingViewingKey>& ivks, std::set<libzcash::OrchardIncomingViewingKey>& ivksOut, vector<TransactionReceivedZO>& vReceived, bool fIncludeWatchonly = false);
 
 
 void getAllSaplingOVKs(std::set<uint256>& ovks, bool fIncludeWatchonly = false);
-void getAllSaplingIVKs(std::set<uint256>& ivks, bool fIncludeWatchonly = false);
+void getAllSaplingIVKs(std::set<libzcash::SaplingIncomingViewingKey>& ivks, bool fIncludeWatchonly = false);
 void getAllOrchardOVKs(std::set<libzcash::OrchardOutgoingViewingKey>& ovks, bool fIncludeWatchonly = false);
-void getAllOrchardIVKs(std::set<libzcash::OrchardIncomingViewingKeyPirate>& ivks, bool fIncludeWatchonly = false);
+void getAllOrchardIVKs(std::set<libzcash::OrchardIncomingViewingKey>& ivks, bool fIncludeWatchonly = false);
 
 void getRpcArcTxSaplingKeys(const CWalletTx& tx, int txHeight, RpcArcTransaction& arcTx, bool fIncludeWatchonly = false);
 void getRpcArcTxOrchardKeys(const CWalletTx& tx, int txHeight, RpcArcTransaction& arcTx, bool fIncludeWatchonly = false);

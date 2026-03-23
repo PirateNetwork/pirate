@@ -312,8 +312,12 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
             throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Adding Raw Sapling Output failed. Stopping.\n", getId()));
         }
         
-        if (!builder.ConvertRawSaplingOutput(spendingKey_.expsk.full_viewing_key().ovk)) {
+        {
+            libzcash::SaplingFullViewingKey fvk;
+            spendingKey_.expsk.DeriveFVK(&fvk);
+            if (!builder.ConvertRawSaplingOutput(fvk.ovk)) {
             throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Converting Raw Sapling Output failed.\n", getId()));
+            }
         }
 
         // === SUBSTEP 4E: Transaction Finalization ===

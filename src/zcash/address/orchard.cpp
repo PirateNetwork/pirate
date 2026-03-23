@@ -2,38 +2,36 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
-#include "zcash/address/sapling.hpp"
+#include "zcash/address/orchard.hpp"
 
 #include "hash.h"
 #include "streams.h"
-#include "support/cleanse.h"
 #include "zcash/NoteEncryption.hpp"
-#include "zcash/prf.h"
 #include <algorithm>
 #include <rust/bridge.h>
 
 namespace libzcash
 {
 
-const unsigned char ZCASH_SAPLING_FVFP_PERSONALIZATION[crypto_generichash_blake2b_PERSONALBYTES] =
-      {'Z', 'c', 'a', 's', 'h', 'S', 'a', 'p', 'l', 'i', 'n', 'g', 'F', 'V', 'F', 'P'};
+const unsigned char ZCASH_ORCHARD_FVFP_PERSONALIZATION[crypto_generichash_blake2b_PERSONALBYTES] =
+    {'Z', 'c', 'a', 's', 'h', 'O', 'r', 'c', 'h', 'a', 'r', 'd', 'F', 'V', 'F', 'P'};
 
 
-//! Sapling
-uint256 SaplingPaymentAddress::GetHash() const
+//! Orchard
+uint256 OrchardPaymentAddress::GetHash() const
 {
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << *this;
     return Hash(ss.begin(), ss.end());
 }
 
-SaplingPaymentAddress_FFI_t SaplingPaymentAddress::ToBytes() const
+OrchardPaymentAddress_FFI_t OrchardPaymentAddress::ToBytes() const
 {
     // Data Stream for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
 
     // Return Data
-    SaplingPaymentAddress_FFI_t address_t;
+    OrchardPaymentAddress_FFI_t address_t;
 
     // Serialize data
     ss << *this;
@@ -42,22 +40,22 @@ SaplingPaymentAddress_FFI_t SaplingPaymentAddress::ToBytes() const
     return address_t;
 }
 
-bool SaplingIncomingViewingKey::DeriveAddress(SaplingPaymentAddress* addr, diversifier_t d) const
+bool OrchardIncomingViewingKey::DeriveAddress(OrchardPaymentAddress* addr, diversifier_t d) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    SaplingIncomingViewingKey_FFI_t ivk_t;
-    SaplingPaymentAddress_FFI_t address_t;
+    OrchardIncomingViewingKey_FFI_t ivk_t;
+    OrchardPaymentAddress_FFI_t address_t;
 
     // Serialize sending data
     ss << *this;
     ss >> ivk_t;
 
     // Call rust FFI
-    bool rustCompleted = sapling_keys::ivk_to_address(ivk_t, d, address_t);
+    bool rustCompleted = orchard_keys::ivk_to_address(ivk_t, d, address_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -74,7 +72,7 @@ bool SaplingIncomingViewingKey::DeriveAddress(SaplingPaymentAddress* addr, diver
     return rustCompleted;
 }
 
-bool SaplingIncomingViewingKey::DeriveAddressFromIndex(SaplingPaymentAddress* addr, blob88 diversifier_index) const
+bool OrchardIncomingViewingKey::DeriveAddressFromIndex(OrchardPaymentAddress* addr, blob88 diversifier_index) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
@@ -82,8 +80,8 @@ bool SaplingIncomingViewingKey::DeriveAddressFromIndex(SaplingPaymentAddress* ad
     CDataStream di_ss(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    SaplingIncomingViewingKey_FFI_t ivk_t;
-    SaplingPaymentAddress_FFI_t address_t;
+    OrchardIncomingViewingKey_FFI_t ivk_t;
+    OrchardPaymentAddress_FFI_t address_t;
     uint88_t di_t;
 
     // Serialize sending data
@@ -93,7 +91,7 @@ bool SaplingIncomingViewingKey::DeriveAddressFromIndex(SaplingPaymentAddress* ad
     di_ss >> di_t;
 
     // Call rust FFI
-    bool rustCompleted = sapling_keys::ivk_to_address_from_index(ivk_t, di_t, address_t);
+    bool rustCompleted = orchard_keys::ivk_to_address_from_index(ivk_t, di_t, address_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -112,42 +110,93 @@ bool SaplingIncomingViewingKey::DeriveAddressFromIndex(SaplingPaymentAddress* ad
     return rustCompleted;
 }
 
-uint256 SaplingFullViewingKey::GetFingerprint() const {
-    CBLAKE2bWriter ss(SER_GETHASH, 0, ZCASH_SAPLING_FVFP_PERSONALIZATION);
+uint256 OrchardFullViewingKey::GetFingerprint() const
+{
+    CBLAKE2bWriter ss(SER_GETHASH, 0, ZCASH_ORCHARD_FVFP_PERSONALIZATION);
     ss << *this;
     return ss.GetHash();
 }
 
-bool SaplingFullViewingKey::DeriveOVK(SaplingOutgoingViewingKey* out_ovk) const {
-    // In Sapling the OVK is a direct component of the FVK — no FFI required.
-    out_ovk->ovk = ovk;
-    return true;
-}
-
-bool SaplingFullViewingKey::DeriveOVKinternal(SaplingOutgoingViewingKey* out_ovk) const {
-    // In Sapling there is no separate internal OVK; use the same field.
-    out_ovk->ovk = ovk;
-    return true;
-}
-
-bool SaplingFullViewingKey::DeriveIVK(SaplingIncomingViewingKey* ivk) const {
+bool OrchardFullViewingKey::DeriveOVK(OrchardOutgoingViewingKey* ovk) const
+{
     // Datastreams for serialization
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
-    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); // returning stream
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    SaplingFullViewingKey_FFI_t fvk_t;
-    SaplingIncomingViewingKey_FFI_t ivk_t;
-
-    // rust result
-    bool rustCompleted;
+    OrchardFullViewingKey_FFI_t fvk_t;
+    OrchardOutgoingViewingKey_FFI_t ovk_t;
 
     // Serialize sending data
     ss << *this;
     ss >> fvk_t;
 
     // Call rust FFI
-    rustCompleted = sapling_keys::fvk_to_ivk(fvk_t, ivk_t);
+    bool rustCompleted = orchard_keys::fvk_to_ovk(fvk_t, ovk_t);
+
+    // Deserialize rust result on success
+    if (rustCompleted) {
+        rs << ovk_t;
+        rs >> *ovk;
+    }
+
+    // Cleanse the memory of the transfer and serialization objects
+    memory_cleanse(ss.data(), ss.size());
+    memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(fvk_t.data(), fvk_t.size());
+    memory_cleanse(ovk_t.data(), ovk_t.size());
+
+    return rustCompleted;
+}
+
+bool OrchardFullViewingKey::DeriveOVKinternal(OrchardOutgoingViewingKey* ovk) const
+{
+    // Datastreams for serialization
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+
+    // Transfer Data
+    OrchardFullViewingKey_FFI_t fvk_t;
+    OrchardOutgoingViewingKey_FFI_t ovk_t;
+
+    // Serialize sending data
+    ss << *this;
+    ss >> fvk_t;
+
+    // Call rust FFI
+    bool rustCompleted = orchard_keys::fvk_to_ovk_internal(fvk_t, ovk_t);
+
+    // Deserialize rust result on success
+    if (rustCompleted) {
+        rs << ovk_t;
+        rs >> *ovk;
+    }
+
+    // Cleanse the memory of the transfer and serialization objects
+    memory_cleanse(ss.data(), ss.size());
+    memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(fvk_t.data(), fvk_t.size());
+    memory_cleanse(ovk_t.data(), ovk_t.size());
+
+    return rustCompleted;
+}
+
+bool OrchardFullViewingKey::DeriveIVK(OrchardIncomingViewingKey* ivk) const
+{
+    // Datastreams for serialization
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+
+    // Transfer Data
+    OrchardFullViewingKey_FFI_t fvk_t;
+    OrchardIncomingViewingKey_FFI_t ivk_t;
+
+    // Serialize sending data
+    ss << *this;
+    ss >> fvk_t;
+
+    // Call rust FFI
+    bool rustCompleted = orchard_keys::fvk_to_ivk(fvk_t, ivk_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -164,24 +213,22 @@ bool SaplingFullViewingKey::DeriveIVK(SaplingIncomingViewingKey* ivk) const {
     return rustCompleted;
 }
 
-bool SaplingFullViewingKey::DeriveIVKinternal(SaplingIncomingViewingKey* ivk) const {
+bool OrchardFullViewingKey::DeriveIVKinternal(OrchardIncomingViewingKey* ivk) const
+{
     // Datastreams for serialization
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
-    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); // returning stream
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    SaplingFullViewingKey_FFI_t fvk_t;
-    SaplingIncomingViewingKey_FFI_t ivk_t;
-
-    // rust result
-    bool rustCompleted;
+    OrchardFullViewingKey_FFI_t fvk_t;
+    OrchardIncomingViewingKey_FFI_t ivk_t;
 
     // Serialize sending data
     ss << *this;
     ss >> fvk_t;
 
     // Call rust FFI
-    rustCompleted = sapling_keys::fvk_to_ivk_internal(fvk_t, ivk_t);
+    bool rustCompleted = orchard_keys::fvk_to_ivk_internal(fvk_t, ivk_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -198,22 +245,22 @@ bool SaplingFullViewingKey::DeriveIVKinternal(SaplingIncomingViewingKey* ivk) co
     return rustCompleted;
 }
 
-bool SaplingFullViewingKey::DeriveDefaultAddress(SaplingPaymentAddress* addr) const
+bool OrchardFullViewingKey::DeriveDefaultAddress(OrchardPaymentAddress* addr) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    SaplingPaymentAddress_FFI_t address_t;
-    SaplingFullViewingKey_FFI_t fvk_t;
+    OrchardPaymentAddress_FFI_t address_t;
+    OrchardFullViewingKey_FFI_t fvk_t;
 
     // Serialize sending data
     ss << *this;
     ss >> fvk_t;
 
     // Call rust FFI
-    bool rustCompleted = sapling_keys::fvk_to_default_address(fvk_t, address_t);
+    bool rustCompleted = orchard_keys::fvk_to_default_address(fvk_t, address_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -230,22 +277,22 @@ bool SaplingFullViewingKey::DeriveDefaultAddress(SaplingPaymentAddress* addr) co
     return rustCompleted;
 }
 
-bool SaplingFullViewingKey::DeriveDefaultAddressInternal(SaplingPaymentAddress* addr) const
+bool OrchardFullViewingKey::DeriveDefaultAddressInternal(OrchardPaymentAddress* addr) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    SaplingPaymentAddress_FFI_t address_t;
-    SaplingFullViewingKey_FFI_t fvk_t;
+    OrchardPaymentAddress_FFI_t address_t;
+    OrchardFullViewingKey_FFI_t fvk_t;
 
     // Serialize sending data
     ss << *this;
     ss >> fvk_t;
 
     // Call rust FFI
-    bool rustCompleted = sapling_keys::fvk_to_default_address_internal(fvk_t, address_t);
+    bool rustCompleted = orchard_keys::fvk_to_default_address_internal(fvk_t, address_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -262,15 +309,15 @@ bool SaplingFullViewingKey::DeriveDefaultAddressInternal(SaplingPaymentAddress* 
     return rustCompleted;
 }
 
-bool SaplingFullViewingKey::DeriveAddress(SaplingPaymentAddress* addr, diversifier_t diversifier) const
+bool OrchardFullViewingKey::DeriveAddress(OrchardPaymentAddress* addr, diversifier_t diversifier) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); // returning stream
 
-    // Transfer Data
-    SaplingPaymentAddress_FFI_t address_t;
-    SaplingFullViewingKey_FFI_t fvk_t;
+    // Tranfer Data
+    OrchardPaymentAddress_FFI_t address_t;
+    OrchardFullViewingKey_FFI_t fvk_t;
 
     // rust result
     bool rustCompleted;
@@ -280,7 +327,7 @@ bool SaplingFullViewingKey::DeriveAddress(SaplingPaymentAddress* addr, diversifi
     ss >> fvk_t;
 
     // Call rust FFI
-    rustCompleted = sapling_keys::fvk_to_address(fvk_t, diversifier, address_t);
+    rustCompleted = orchard_keys::fvk_to_address(fvk_t, diversifier, address_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -297,15 +344,15 @@ bool SaplingFullViewingKey::DeriveAddress(SaplingPaymentAddress* addr, diversifi
     return rustCompleted;
 }
 
-bool SaplingFullViewingKey::DeriveAddressInternal(SaplingPaymentAddress* addr, diversifier_t diversifier) const
+bool OrchardFullViewingKey::DeriveAddressInternal(OrchardPaymentAddress* addr, diversifier_t diversifier) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); // returning stream
 
-    // Transfer Data
-    SaplingPaymentAddress_FFI_t address_t;
-    SaplingFullViewingKey_FFI_t fvk_t;
+    // Tranfer Data
+    OrchardPaymentAddress_FFI_t address_t;
+    OrchardFullViewingKey_FFI_t fvk_t;
 
     // rust result
     bool rustCompleted;
@@ -315,7 +362,7 @@ bool SaplingFullViewingKey::DeriveAddressInternal(SaplingPaymentAddress* addr, d
     ss >> fvk_t;
 
     // Call rust FFI
-    rustCompleted = sapling_keys::fvk_to_address_internal(fvk_t, diversifier, address_t);
+    rustCompleted = orchard_keys::fvk_to_address_internal(fvk_t, diversifier, address_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -332,16 +379,16 @@ bool SaplingFullViewingKey::DeriveAddressInternal(SaplingPaymentAddress* addr, d
     return rustCompleted;
 }
 
-bool SaplingFullViewingKey::DeriveAddressFromIndex(SaplingPaymentAddress* addr, blob88 diversifier_index) const
+bool OrchardFullViewingKey::DeriveAddressFromIndex(OrchardPaymentAddress* addr, blob88 diversifier_index) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); // returning stream
     CDataStream di_ss(SER_NETWORK, PROTOCOL_VERSION); // diversifier stream
 
-    // Transfer Data
-    SaplingPaymentAddress_FFI_t address_t;
-    SaplingFullViewingKey_FFI_t fvk_t;
+    // Tranfer Data
+    OrchardPaymentAddress_FFI_t address_t;
+    OrchardFullViewingKey_FFI_t fvk_t;
     uint88_t di_t;
 
     // rust result
@@ -354,7 +401,7 @@ bool SaplingFullViewingKey::DeriveAddressFromIndex(SaplingPaymentAddress* addr, 
     di_ss >> di_t;
 
     // Call rust FFI
-    rustCompleted = sapling_keys::fvk_to_address_from_index(fvk_t, di_t, address_t);
+    rustCompleted = orchard_keys::fvk_to_address_from_index(fvk_t, di_t, address_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -373,16 +420,16 @@ bool SaplingFullViewingKey::DeriveAddressFromIndex(SaplingPaymentAddress* addr, 
     return rustCompleted;
 }
 
-bool SaplingFullViewingKey::DeriveAddressFromIndexInternal(SaplingPaymentAddress* addr, blob88 diversifier_index) const
+bool OrchardFullViewingKey::DeriveAddressFromIndexInternal(OrchardPaymentAddress* addr, blob88 diversifier_index) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); // returning stream
     CDataStream di_ss(SER_NETWORK, PROTOCOL_VERSION); // diversifier stream
 
-    // Transfer Data
-    SaplingPaymentAddress_FFI_t address_t;
-    SaplingFullViewingKey_FFI_t fvk_t;
+    // Tranfer Data
+    OrchardPaymentAddress_FFI_t address_t;
+    OrchardFullViewingKey_FFI_t fvk_t;
     uint88_t di_t;
 
     // rust result
@@ -395,7 +442,7 @@ bool SaplingFullViewingKey::DeriveAddressFromIndexInternal(SaplingPaymentAddress
     di_ss >> di_t;
 
     // Call rust FFI
-    rustCompleted = sapling_keys::fvk_to_address_from_index_internal(fvk_t, di_t, address_t);
+    rustCompleted = orchard_keys::fvk_to_address_from_index_internal(fvk_t, di_t, address_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -414,30 +461,67 @@ bool SaplingFullViewingKey::DeriveAddressFromIndexInternal(SaplingPaymentAddress
     return rustCompleted;
 }
 
-bool SaplingExpandedSpendingKey::DeriveFVK(SaplingFullViewingKey* fvk) const
+std::optional<OrchardSpendingKey> OrchardSpendingKey::random()
+{
+    while (true) {
+        auto bytes = random_uint256();
+        uint256_t sk_bytes;
+        std::copy(bytes.begin(), bytes.end(), sk_bytes.begin());
+        if (orchard_keys::sk_is_valid(sk_bytes)) {
+            return OrchardSpendingKey(bytes);
+        }
+    }
+}
+
+bool OrchardSpendingKey::IsValid()
+{
+    // Datastreams for serialization
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
+
+    // Tranfer Data
+    OrchardSpendingKey_FFI_t sk_t;
+
+    // Serialize sending data
+    ss << *this;
+    ss >> sk_t;
+
+    // rust result
+    bool rustCompleted;
+
+    // Call rust FFI
+    rustCompleted = orchard_keys::sk_is_valid(sk_t);
+
+    // Cleanse the memory of the transfer and serialization objects
+    memory_cleanse(ss.data(), ss.size());
+
+    // return results
+    return rustCompleted;
+}
+
+bool OrchardSpendingKey::DeriveFVK(OrchardFullViewingKey* fvk) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); // returning stream
 
     // Transfer Data
-    SaplingExpandedSpendingKey_FFI_t expsk_t;
-    SaplingFullViewingKey_FFI_t fvk_t;
-    SaplingIncomingViewingKey_FFI_t ivk_t;
+    OrchardFullViewingKey_FFI_t fvk_t;
+    OrchardSpendingKey_FFI_t sk_t;
+    OrchardIncomingViewingKey_FFI_t ivk_t;
 
     // rust result
     bool rustCompleted;
 
     // Serialize sending data
     ss << *this;
-    ss >> expsk_t;
+    ss >> sk_t;
 
     // Call rust FFI
-    rustCompleted = sapling_keys::expsk_to_fvk(expsk_t, fvk_t);
+    rustCompleted = orchard_keys::sk_to_fvk(sk_t, fvk_t);
 
     // Validate: the derived IVK must be non-null (guards against degenerate scalar combinations).
     if (rustCompleted) {
-        rustCompleted = sapling_keys::fvk_to_ivk(fvk_t, ivk_t);
+        rustCompleted = orchard_keys::fvk_to_ivk(fvk_t, ivk_t);
         if (rustCompleted) {
             uint256 ivk;
             std::copy(ivk_t.begin(), ivk_t.end(), ivk.begin());
@@ -455,125 +539,75 @@ bool SaplingExpandedSpendingKey::DeriveFVK(SaplingFullViewingKey* fvk) const
     // Cleanse the memory of the transfer and serialization objects
     memory_cleanse(ss.data(), ss.size());
     memory_cleanse(rs.data(), rs.size());
-    memory_cleanse(expsk_t.data(), expsk_t.size());
     memory_cleanse(fvk_t.data(), fvk_t.size());
+    memory_cleanse(sk_t.data(), sk_t.size());
     memory_cleanse(ivk_t.data(), ivk_t.size());
 
     return rustCompleted;
 }
 
-bool SaplingExpandedSpendingKey::DeriveDefaultAddress(SaplingPaymentAddress* addr) const
+bool OrchardSpendingKey::DeriveDefaultAddress(OrchardPaymentAddress* addr) const
 {
     // Datastreams for serialization
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
-    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); // returning stream
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    SaplingExpandedSpendingKey_FFI_t expsk_t;
-    SaplingPaymentAddress_FFI_t address_t;
-
-    // rust result
-    bool rustCompleted;
-
-    // Serialize sending data
-    ss << *this;
-    ss >> expsk_t;
-
-    // Call rust FFI
-    rustCompleted = sapling_keys::expsk_to_default_address(expsk_t, address_t);
-
-    // Deserialize rust result on success
-    if (rustCompleted) {
-        rs << address_t;
-        rs >> *addr;
-    }
-
-    // Cleanse the memory of the transfer and serialization objects
-    memory_cleanse(ss.data(), ss.size());
-    memory_cleanse(rs.data(), rs.size());
-    memory_cleanse(expsk_t.data(), expsk_t.size());
-    memory_cleanse(address_t.data(), address_t.size());
-
-    return rustCompleted;
-}
-
-bool SaplingExpandedSpendingKey::DeriveDefaultAddressInternal(SaplingPaymentAddress* addr) const
-{
-    // Datastreams for serialization
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
-    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); // returning stream
-
-    // Transfer Data
-    SaplingExpandedSpendingKey_FFI_t expsk_t;
-    SaplingPaymentAddress_FFI_t address_t;
-
-    // rust result
-    bool rustCompleted;
-
-    // Serialize sending data
-    ss << *this;
-    ss >> expsk_t;
-
-    // Call rust FFI
-    rustCompleted = sapling_keys::expsk_to_default_address_internal(expsk_t, address_t);
-
-    // Deserialize rust result on success
-    if (rustCompleted) {
-        rs << address_t;
-        rs >> *addr;
-    }
-
-    // Cleanse the memory of the transfer and serialization objects
-    memory_cleanse(ss.data(), ss.size());
-    memory_cleanse(rs.data(), rs.size());
-    memory_cleanse(expsk_t.data(), expsk_t.size());
-    memory_cleanse(address_t.data(), address_t.size());
-
-    return rustCompleted;
-}
-
-SaplingSpendingKey SaplingSpendingKey::random() {
-    while (true) {
-        auto sk = SaplingSpendingKey(random_uint256());
-        SaplingFullViewingKey fvk;
-        if (sk.expanded_spending_key().DeriveFVK(&fvk)) {
-            return sk;
-        }
-    }
-}
-
-SaplingExpandedSpendingKey SaplingSpendingKey::expanded_spending_key() const {
-    // Datastreams for serialization
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
-    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); // returning stream
-
-    // Transfer Data
-    SaplingSpendingKey_FFI_t sk_t;
-    SaplingExpandedSpendingKey_FFI_t expsk_t;
-
-    // Default result
-    SaplingExpandedSpendingKey expsk;
+    OrchardPaymentAddress_FFI_t address_t;
+    OrchardSpendingKey_FFI_t sk_t;
 
     // Serialize sending data
     ss << *this;
     ss >> sk_t;
 
     // Call rust FFI
-    bool rustCompleted = sapling_keys::sk_to_expsk(sk_t, expsk_t);
+    bool rustCompleted = orchard_keys::sk_to_default_address(sk_t, address_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
-        rs << expsk_t;
-        rs >> expsk;
+        rs << address_t;
+        rs >> *addr;
     }
 
     // Cleanse the memory of the transfer and serialization objects
     memory_cleanse(ss.data(), ss.size());
     memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(address_t.data(), address_t.size());
     memory_cleanse(sk_t.data(), sk_t.size());
-    memory_cleanse(expsk_t.data(), expsk_t.size());
 
-    return expsk;
+    return rustCompleted;
 }
 
+bool OrchardSpendingKey::DeriveDefaultAddressInternal(OrchardPaymentAddress* addr) const
+{
+    // Datastreams for serialization
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+
+    // Transfer Data
+    OrchardPaymentAddress_FFI_t address_t;
+    OrchardSpendingKey_FFI_t sk_t;
+
+    // Serialize sending data
+    ss << *this;
+    ss >> sk_t;
+
+    // Call rust FFI
+    bool rustCompleted = orchard_keys::sk_to_default_address_internal(sk_t, address_t);
+
+    // Deserialize rust result on success
+    if (rustCompleted) {
+        rs << address_t;
+        rs >> *addr;
+    }
+
+    // Cleanse the memory of the transfer and serialization objects
+    memory_cleanse(ss.data(), ss.size());
+    memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(address_t.data(), address_t.size());
+    memory_cleanse(sk_t.data(), sk_t.size());
+
+    return rustCompleted;
 }
+
+} // namespace libzcash

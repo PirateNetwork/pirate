@@ -62,6 +62,8 @@ mod orchard_ffi;
 mod orchard_keys_ffi;
 #[path = "orchard_keys.rs"]
 mod orchard_keys;
+#[path = "sapling_keys.rs"]
+mod sapling_keys;
 #[path = "params.rs"]
 mod params;
 #[path = "sapling.rs"]

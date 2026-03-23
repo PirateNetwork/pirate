@@ -29,7 +29,7 @@ static const CAmount DEFAULT_SWEEP_FEE = 10000;
 extern CAmount fSweepTxFee;
 extern bool fSweepMapUsed;
 extern std::optional<libzcash::SaplingPaymentAddress> rpcSaplingSweepAddress;
-extern std::optional<libzcash::OrchardPaymentAddressPirate> rpcOrchardSweepAddress;
+extern std::optional<libzcash::OrchardPaymentAddress> rpcOrchardSweepAddress;
 
 /**
  * @class AsyncRPCOperation_sweeptoaddress
@@ -98,7 +98,7 @@ public:
      * 
      * @param address Orchard payment address to sweep funds to
      */
-    void setOrchardSweepAddress(const libzcash::OrchardPaymentAddressPirate& address);
+    void setOrchardSweepAddress(const libzcash::OrchardPaymentAddress& address);
 
 private:
     int targetHeight_;    ///< Target blockchain height for transactions

@@ -19,11 +19,11 @@ namespace libzcash {
       return std::make_pair("z-sapling", sk.DefaultAddress());
   }
   std::pair<std::string, PaymentAddress> AddressInfoFromSpendingKey::operator()(const OrchardExtendedSpendingKeyPirate &extsk) const {
-      auto addressOpt = extsk.sk.GetDefaultAddress();
-      if (addressOpt == std::nullopt) {
+      libzcash::OrchardPaymentAddress address;
+      if (!extsk.sk.DeriveDefaultAddress(&address)) {
           throw std::invalid_argument("Cannot derive default address from invalid spending key");
       }
-      return std::make_pair("z-orchard", addressOpt.value());
+      return std::make_pair("z-orchard", address);
   }
   std::pair<std::string, PaymentAddress> AddressInfoFromSpendingKey::operator()(const InvalidEncoding&) const {
       throw std::invalid_argument("Cannot derive default address from invalid spending key");
@@ -31,19 +31,24 @@ namespace libzcash {
 
   //Diversifid SpendingKeys
   std::pair<std::string, PaymentAddress> AddressInfoFromDiversifiedSpendingKey::operator()(const SaplingDiversifiedExtendedSpendingKey &dsk) const {
-      SaplingPaymentAddress addr = dsk.extsk.ToXFVK().fvk.in_viewing_key().address(dsk.d).value();
+      SaplingPaymentAddress addr;
+      libzcash::SaplingIncomingViewingKey ivk;
+      dsk.extsk.ToXFVK().fvk.DeriveIVK(&ivk);
+      if (!ivk.DeriveAddress(&addr, dsk.d)) {
+          throw std::invalid_argument("Cannot derive address from invalid diversifier");
+      }
       return std::make_pair("z-sapling", addr);
   }
     std::pair<std::string, PaymentAddress> AddressInfoFromDiversifiedSpendingKey::operator()(const OrchardDiversifiedExtendedSpendingKeyPirate &dsk) const {
-        auto fvkOpt = dsk.extsk.sk.GetFVK();
-        if (fvkOpt == std::nullopt) {
+        libzcash::OrchardFullViewingKey fvk;
+        if (!dsk.extsk.sk.DeriveFVK(&fvk)) {
             throw std::invalid_argument("Cannot derive default address from invalid diversified spending key");
         }
-        auto addressOpt = fvkOpt.value().GetAddress(dsk.d);
-        if (addressOpt == std::nullopt) {
+        libzcash::OrchardPaymentAddress address;
+        if (!fvk.DeriveAddress(&address, dsk.d)) {
             throw std::invalid_argument("Cannot derive default address from invalid diversified spending key");
         }
-        return std::make_pair("z-orchard", addressOpt.value());
+        return std::make_pair("z-orchard", address);
     }
   std::pair<std::string, PaymentAddress> AddressInfoFromDiversifiedSpendingKey::operator()(const InvalidEncoding&) const {
       throw std::invalid_argument("Cannot derive default address from invalid spending key");
@@ -57,11 +62,11 @@ namespace libzcash {
       return std::make_pair("z-sapling", sk.DefaultAddress());
   }
   std::pair<std::string, PaymentAddress> AddressInfoFromViewingKey::operator()(const OrchardExtendedFullViewingKeyPirate &sk) const {
-      auto address = sk.fvk.GetDefaultAddress();
-      if (address == std::nullopt) {
+      libzcash::OrchardPaymentAddress address;
+      if (!sk.fvk.DeriveDefaultAddress(&address)) {
           throw std::invalid_argument("Cannot derive default address from invalid viewing key");
       }
-      return std::make_pair("z-orchard", address.value());
+      return std::make_pair("z-orchard", address);
   }
   std::pair<std::string, PaymentAddress> AddressInfoFromViewingKey::operator()(const InvalidEncoding&) const {
       throw std::invalid_argument("Cannot derive default address from invalid viewing key");
@@ -69,15 +74,20 @@ namespace libzcash {
 
   //Diversified Viewing Keys
   std::pair<std::string, PaymentAddress> AddressInfoFromDiversifiedViewingKey::operator()(const SaplingDiversifiedExtendedFullViewingKey &dvk) const {
-      SaplingPaymentAddress addr = dvk.extfvk.fvk.in_viewing_key().address(dvk.d).value();
+      SaplingPaymentAddress addr;
+      libzcash::SaplingIncomingViewingKey ivk;
+      dvk.extfvk.fvk.DeriveIVK(&ivk);
+      if (!ivk.DeriveAddress(&addr, dvk.d)) {
+          throw std::invalid_argument("Cannot derive address from invalid diversifier");
+      }
       return std::make_pair("z-sapling", addr);
   }
   std::pair<std::string, PaymentAddress> AddressInfoFromDiversifiedViewingKey::operator()(const OrchardDiversifiedExtendedFullViewingKeyPirate &dvk) const {
-      auto addr = dvk.extfvk.fvk.GetAddress(dvk.d);
-      if (addr == std::nullopt) {
+      libzcash::OrchardPaymentAddress addr;
+      if (!dvk.extfvk.fvk.DeriveAddress(&addr, dvk.d)) {
           throw std::invalid_argument("Cannot derive default address from invalid diversified full viewing key");
       }
-      return std::make_pair("z-orchard", addr.value());
+      return std::make_pair("z-orchard", addr);
   }
   std::pair<std::string, PaymentAddress> AddressInfoFromDiversifiedViewingKey::operator()(const InvalidEncoding&) const {
       throw std::invalid_argument("Cannot derive address from invalid viewing key");
@@ -96,7 +106,7 @@ class IsValidAddressForNetwork : public boost::static_visitor<bool> {
             return true;
         }
 
-        bool operator()(const libzcash::OrchardPaymentAddressPirate &addr) const {
+        bool operator()(const libzcash::OrchardPaymentAddress &addr) const {
             return true;
         }
 

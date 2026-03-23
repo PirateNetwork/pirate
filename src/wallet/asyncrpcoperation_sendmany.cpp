@@ -167,7 +167,7 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
             }
 
             // Check if this is an Orchard payment address
-            auto orchardPaymentAddress = std::get_if<libzcash::OrchardPaymentAddressPirate>(&decodedAddress);
+            auto orchardPaymentAddress = std::get_if<libzcash::OrchardPaymentAddress>(&decodedAddress);
             if (orchardPaymentAddress != nullptr) {
                 isFromOrchardAddress_ = true;
                 isFromPrivateAddress_ = true;
@@ -712,7 +712,11 @@ bool AsyncRPCOperation_sendmany::main_impl()
             throw JSONRPCError(RPC_WALLET_ERROR, strprintf("%s: Invalid Sapling spending key type. Stopping.\n", getId()));
         }
         extsk = *extskPtr;
-        ovk = extsk.expsk.full_viewing_key().ovk;
+        {
+            libzcash::SaplingFullViewingKey fvk;
+            extsk.expsk.DeriveFVK(&fvk);
+            ovk = fvk.ovk;
+        }
 
         // Select and process Sapling notes for spending
         CAmount sum = 0;
@@ -766,14 +770,14 @@ bool AsyncRPCOperation_sendmany::main_impl()
         }
 
         auto fvk = fvkOpt.value().fvk;
-        auto ovkOpt = fvk.GetOVK();
-        if (ovkOpt == std::nullopt) {
+        OrchardOutgoingViewingKey ovkObj;
+        if (!fvk.DeriveOVK(&ovkObj)) {
           throw JSONRPCError(
               RPC_WALLET_ERROR,
                strprintf("%s: OVK not found for Orchard spending key. Stopping.\n", getId()));
         }
 
-        ovk = ovkOpt.value().ovk;
+        ovk = ovkObj.ovk;
 
         // Process Orchard notes for spending
         CAmount sum = 0;
@@ -865,8 +869,8 @@ bool AsyncRPCOperation_sendmany::main_impl()
 
         // Decode and validate the Orchard payment address
         auto decodedAddress = DecodePaymentAddress(recipientAddress);
-        assert(std::get_if<libzcash::OrchardPaymentAddressPirate>(&decodedAddress) != nullptr);
-        auto orchardPaymentAddress = *(std::get_if<libzcash::OrchardPaymentAddressPirate>(&decodedAddress));
+        assert(std::get_if<libzcash::OrchardPaymentAddress>(&decodedAddress) != nullptr);
+        auto orchardPaymentAddress = *(std::get_if<libzcash::OrchardPaymentAddress>(&decodedAddress));
 
         // Convert hex memo to Memo object or nullopt
         std::optional<libzcash::Memo> memo = std::nullopt;

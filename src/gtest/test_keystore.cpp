@@ -70,20 +70,25 @@ TEST(keystore_tests, sapling_keys) {
         EXPECT_EQ(exp_sk, exp_sk_2);
 
         // Check that full viewing key derived from sk and expanded sk are the same
-        auto full_viewing_key = sk.full_viewing_key();
-        EXPECT_EQ(full_viewing_key, exp_sk.full_viewing_key());
+        libzcash::SaplingFullViewingKey full_viewing_key;
+        exp_sk.DeriveFVK(&full_viewing_key);
+        libzcash::SaplingFullViewingKey exp_sk_fvk;
+        exp_sk.DeriveFVK(&exp_sk_fvk);
+        EXPECT_EQ(full_viewing_key, exp_sk_fvk);
 
         // Check that full viewing key from primitives and from sk are the same
         auto full_viewing_key_2 = libzcash::SaplingFullViewingKey(ak, nk, ovk);
         EXPECT_EQ(full_viewing_key, full_viewing_key_2);
 
         // Check that incoming viewing key from primitives and from sk are the same
-        auto in_viewing_key = full_viewing_key.in_viewing_key();
+        libzcash::SaplingIncomingViewingKey in_viewing_key;
+      full_viewing_key.DeriveIVK(&in_viewing_key);
         auto in_viewing_key_2 = libzcash::SaplingIncomingViewingKey(ivk);
         EXPECT_EQ(in_viewing_key, in_viewing_key_2);
 
         // Check that the default address from primitives and from sk method are the same
-        auto default_addr = sk.default_address();
+        libzcash::SaplingPaymentAddress default_addr;
+        exp_sk.DeriveDefaultAddress(&default_addr);
         auto addrOpt2 = in_viewing_key.address(default_d);
         EXPECT_TRUE(addrOpt2);
         auto default_addr_2 = addrOpt2.value();
@@ -202,7 +207,8 @@ TEST(keystore_tests, StoreAndRetrieveSaplingSpendingKey) {
     HDSeed seed(rawSeed);
     auto sk = libzcash::SaplingExtendedSpendingKey::Master(seed);
     auto extfvk = sk.ToXFVK();
-    auto ivk = extfvk.fvk.in_viewing_key();
+    libzcash::SaplingIncomingViewingKey ivk;
+   extfvk.fvk.DeriveIVK(&ivk);
     auto addr = sk.DefaultAddress();
 
     // Sanity-check: we can't get a key we haven't added

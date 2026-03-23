@@ -66,8 +66,8 @@ public:
     /// Returns `false` if the given Merkle path does not have the required anchor
     /// for the given note.
     bool AddSpendFromParts(
-        const libzcash::OrchardFullViewingKeyPirate fvk,
-        const libzcash::OrchardPaymentAddressPirate addr,
+        const libzcash::OrchardFullViewingKey fvk,
+        const libzcash::OrchardPaymentAddress addr,
         const CAmount value,
         const uint256 rho,
         const uint256 rseed,
@@ -76,7 +76,7 @@ public:
     /// Adds an address which will receive funds in this bundle.
     bool AddOutput(
         const std::optional<uint256>& ovk,
-        const libzcash::OrchardPaymentAddressPirate& to,
+        const libzcash::OrchardPaymentAddress& to,
         CAmount value,
         const std::optional<libzcash::Memo>& memo = std::nullopt);
 
@@ -143,7 +143,7 @@ public:
     /// object in any way will cause an exception. This emulates Rust's compile-time
     /// move semantics at runtime.
     std::optional<OrchardBundle> ProveAndSign(
-        std::vector<libzcash::OrchardSpendingKeyPirate> keys,
+        std::vector<libzcash::OrchardSpendingKey> keys,
         uint256 sighash);
 };
 
@@ -187,7 +187,7 @@ class OrchardSpendDescriptionInfo
 {
 public:
     OrchardOutPoint op;
-    libzcash::OrchardPaymentAddressPirate addr;
+    libzcash::OrchardPaymentAddress addr;
     CAmount value;
     uint256 rho;
     uint256 rseed;
@@ -198,7 +198,7 @@ public:
 
     OrchardSpendDescriptionInfo(
         OrchardOutPoint opIn,
-        libzcash::OrchardPaymentAddressPirate addrIn,
+        libzcash::OrchardPaymentAddress addrIn,
         CAmount valueIn,
         uint256 rhoIn,
         uint256 rseedIn,
@@ -251,13 +251,13 @@ public:
 class OrchardOutputDescriptionInfo
 {
 public:
-    libzcash::OrchardPaymentAddressPirate addr;
+    libzcash::OrchardPaymentAddress addr;
     CAmount value;
     std::optional<libzcash::Memo> memo;
 
     OrchardOutputDescriptionInfo() : memo(std::nullopt) {}
     OrchardOutputDescriptionInfo(
-        libzcash::OrchardPaymentAddressPirate addrIn,
+        libzcash::OrchardPaymentAddress addrIn,
         CAmount valueIn,
         const std::optional<libzcash::Memo>& memoIn = std::nullopt)
     : addr(addrIn), value(valueIn), memo(memoIn)
@@ -329,9 +329,9 @@ private:
     std::optional<std::pair<uint256, libzcash::SaplingPaymentAddress>> firstSaplingSpendAddr;
     std::optional<std::pair<uint256, libzcash::SaplingPaymentAddress>> saplingChangeAddr;
 
-    std::vector<libzcash::OrchardSpendingKeyPirate> orchardSpendingKeys;
-    std::optional<std::pair<uint256, libzcash::OrchardPaymentAddressPirate>> firstOrchardChangeAddr;
-    std::optional<std::pair<uint256, libzcash::OrchardPaymentAddressPirate>> orchardChangeAddr;
+    std::vector<libzcash::OrchardSpendingKey> orchardSpendingKeys;
+    std::optional<std::pair<uint256, libzcash::OrchardPaymentAddress>> firstOrchardChangeAddr;
+    std::optional<std::pair<uint256, libzcash::OrchardPaymentAddress>> orchardChangeAddr;
 
     std::optional<CTxDestination> tChangeAddr;
     std::optional<CScript> opReturn;
@@ -410,7 +410,7 @@ public:
 
     bool AddOrchardSpendRaw(
         OrchardOutPoint op,
-        libzcash::OrchardPaymentAddressPirate addr,
+        libzcash::OrchardPaymentAddress addr,
         CAmount value,
         uint256 rho,
         uint256 rseed,
@@ -420,7 +420,7 @@ public:
     bool ConvertRawOrchardSpend(libzcash::OrchardExtendedSpendingKeyPirate extsk);
 
     bool AddOrchardOutputRaw(
-        libzcash::OrchardPaymentAddressPirate to,
+        libzcash::OrchardPaymentAddress to,
         CAmount value,
         const std::optional<libzcash::Memo>& memo = std::nullopt);
 
@@ -438,7 +438,7 @@ public:
 
 
     // Change
-    void SendChangeTo(libzcash::OrchardPaymentAddressPirate changeAddr, uint256 ovk);
+    void SendChangeTo(libzcash::OrchardPaymentAddress changeAddr, uint256 ovk);
 
     void SendChangeTo(libzcash::SaplingPaymentAddress changeAddr, uint256 ovk);
 

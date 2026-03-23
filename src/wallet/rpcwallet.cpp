@@ -3273,7 +3273,7 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
         }
     }
 
-    std::map<libzcash::OrchardPaymentAddressPirate, std::vector<OrchardNoteEntry>> mapResultsOrchard;
+    std::map<libzcash::OrchardPaymentAddress, std::vector<OrchardNoteEntry>> mapResultsOrchard;
 
     for (auto & entry : orchardEntries) {
         //Only Look at notes with the filtered address or add the note address to the address set
@@ -3288,7 +3288,7 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
         }
 
         //Map all notes by address
-        std::map<libzcash::OrchardPaymentAddressPirate, std::vector<OrchardNoteEntry>>::iterator it;
+        std::map<libzcash::OrchardPaymentAddress, std::vector<OrchardNoteEntry>>::iterator it;
         it = mapResultsOrchard.find(entry.address);
         if (it != mapResultsOrchard.end()) {
             it->second.push_back(entry);
@@ -3345,7 +3345,7 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
 
 
-    for (std::map<libzcash::OrchardPaymentAddressPirate, std::vector<OrchardNoteEntry>>::iterator itOrchard = mapResultsOrchard.begin(); itOrchard != mapResultsOrchard.end(); itOrchard++) {
+    for (std::map<libzcash::OrchardPaymentAddress, std::vector<OrchardNoteEntry>>::iterator itOrchard = mapResultsOrchard.begin(); itOrchard != mapResultsOrchard.end(); itOrchard++) {
 
         std::vector<OrchardNoteEntry> entries = (*itOrchard).second;
 
@@ -3365,7 +3365,7 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
             obj.push_back(Pair("outindex", (int)entry.op.n));
             obj.push_back(Pair("confirmations", dpowconfs));
             obj.push_back(Pair("rawconfirmations", entry.confirmations));
-            libzcash::OrchardIncomingViewingKeyPirate ivk;
+            libzcash::OrchardIncomingViewingKey ivk;
             libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
             pwalletMain->GetOrchardIncomingViewingKey(entry.address, ivk);
             pwalletMain->GetOrchardFullViewingKey(ivk, extfvk);
@@ -4072,7 +4072,7 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
     UniValue results(UniValue::VARR);
 
     std::map<libzcash::SaplingPaymentAddress, std::vector<CAmount>> mapSaplingResults; // [0]=balance, [1]=confirmedNotes, [2]=unconfirmed, [3]=unconfirmedNotes
-    std::map<libzcash::OrchardPaymentAddressPirate, std::vector<CAmount>> mapOrchardResults; // [0]=balance, [1]=confirmedNotes, [2]=unconfirmed, [3]=unconfirmedNotes
+    std::map<libzcash::OrchardPaymentAddress, std::vector<CAmount>> mapOrchardResults; // [0]=balance, [1]=confirmedNotes, [2]=unconfirmed, [3]=unconfirmedNotes
 
     // Initialize all wallet addresses with zero balance and note count
     {
@@ -4093,13 +4093,13 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
         }
     }
     {
-        std::set<libzcash::OrchardPaymentAddressPirate> orchardAddresses;
+        std::set<libzcash::OrchardPaymentAddress> orchardAddresses;
         pwalletMain->GetOrchardPaymentAddresses(orchardAddresses);
         for (auto addr : orchardAddresses) {
             if (fIncludeWatchonly || HaveSpendingKeyForPaymentAddress(pwalletMain)(addr)) {
                 // Skip if filtering by address and this isn't it
                 if (filterAddress.has_value()) {
-                    auto filterOrchard = std::get_if<libzcash::OrchardPaymentAddressPirate>(&filterAddress.value());
+                    auto filterOrchard = std::get_if<libzcash::OrchardPaymentAddress>(&filterAddress.value());
                     if (!filterOrchard || *filterOrchard != addr) {
                         continue;
                     }
@@ -4162,7 +4162,7 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
         int dpowconfs = komodo_dpowconfs(nHeight, entry.confirmations);
 
         //Map all balances by address
-        std::map<libzcash::OrchardPaymentAddressPirate, std::vector<CAmount>>::iterator it;
+        std::map<libzcash::OrchardPaymentAddress, std::vector<CAmount>>::iterator it;
         it = mapOrchardResults.find(entry.address);
         if (it != mapOrchardResults.end()) {
             CAmount noteValue = CAmount(entry.note.value());
@@ -4182,7 +4182,7 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
         // so we skip it (it won't be in results)
     }
 
-    for (std::map<libzcash::OrchardPaymentAddressPirate, std::vector<CAmount>>::iterator it = mapOrchardResults.begin(); it != mapOrchardResults.end(); it++) {
+    for (std::map<libzcash::OrchardPaymentAddress, std::vector<CAmount>>::iterator it = mapOrchardResults.begin(); it != mapOrchardResults.end(); it++) {
         UniValue obj(UniValue::VOBJ);
         obj.push_back(Pair("address", EncodePaymentAddress(it->first)));
         obj.push_back(Pair("balance", ValueFromAmount(it->second[0])));
@@ -5481,7 +5481,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
         fromSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
 
         // Remember whether this is Orchard address
-        fromOrchard = std::get_if<libzcash::OrchardPaymentAddressPirate>(&res) != nullptr;
+        fromOrchard = std::get_if<libzcash::OrchardPaymentAddress>(&res) != nullptr;
 
         // Remember whether this is Sprout address
         fromSprout = std::get_if<libzcash::SproutPaymentAddress>(&res) != nullptr;
@@ -5532,7 +5532,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
                 toSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
 
                 // Remember whether this is Orchard address
-                toOrchard = std::get_if<libzcash::OrchardPaymentAddressPirate>(&res) != nullptr;
+                toOrchard = std::get_if<libzcash::OrchardPaymentAddress>(&res) != nullptr;
 
                 // Remember whether this is Sprout address
                 bool toSprout = std::get_if<libzcash::SproutPaymentAddress>(&res) != nullptr;
@@ -6543,7 +6543,7 @@ UniValue consolidateaddress(const UniValue& params, bool fHelp, const CPubKey& m
     // Check if it's a Sapling address
     auto saplingAddr = std::get_if<libzcash::SaplingPaymentAddress>(&decodedAddr);
     // Check if it's an Orchard address
-    auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddressPirate>(&decodedAddr);
+    auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddress>(&decodedAddr);
     
     if (saplingAddr == nullptr && orchardAddr == nullptr) {
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address must be a Sapling (zs) or Orchard (u1) address");
@@ -6855,7 +6855,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
                 }
             } 
             // Validate Orchard destination
-            else if (std::get_if<libzcash::OrchardPaymentAddressPirate>(&decodeAddr) != nullptr) {
+            else if (std::get_if<libzcash::OrchardPaymentAddress>(&decodeAddr) != nullptr) {
                 isToOrchardZaddr = true;
                 if (!orchardActive) {
                     throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Orchard has not activated");

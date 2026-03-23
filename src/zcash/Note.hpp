@@ -354,9 +354,9 @@ private:
     uint256 cmx_;
     friend class OrchardNotePlaintext;
 public:
-    OrchardPaymentAddressPirate address;
+    OrchardPaymentAddress address;
 
-    OrchardNote(OrchardPaymentAddressPirate address, uint64_t value, uint256 rho, uint256 rseed, uint256 cmx)
+    OrchardNote(OrchardPaymentAddress address, uint64_t value, uint256 rho, uint256 rseed, uint256 cmx)
             : BaseNote(value), address(address), rho_(rho), rseed_(rseed), cmx_(cmx) {}
 
     virtual ~OrchardNote() {};
@@ -365,7 +365,7 @@ public:
     uint256 rseed() const { return rseed_; }
     uint256 cmx() const { return cmx_; }
 
-    std::optional<uint256> nullifier(const libzcash::OrchardFullViewingKeyPirate& fvk) const;
+    std::optional<uint256> nullifier(const libzcash::OrchardFullViewingKey& fvk) const;
 };
 
 /**
@@ -379,7 +379,7 @@ public:
  */
 class OrchardNotePlaintext : public BaseNotePlaintext {
 private:
-    libzcash::OrchardPaymentAddressPirate address;
+    libzcash::OrchardPaymentAddress address;
     uint256 rho;
     uint256 rseed;
     std::optional<uint256> nullifier;
@@ -390,7 +390,7 @@ public:
 
     OrchardNotePlaintext(
       const CAmount value,
-      const libzcash::OrchardPaymentAddressPirate address,
+      const libzcash::OrchardPaymentAddress address,
       const std::array<unsigned char, ZC_MEMO_SIZE> memo,
       const uint256 rho,
       const uint256 rseed,
@@ -400,14 +400,14 @@ public:
 
     virtual ~OrchardNotePlaintext() {}
 
-    libzcash::OrchardPaymentAddressPirate GetAddress() {
+    libzcash::OrchardPaymentAddress GetAddress() {
         return address;
     };
 
     // Rust-based decryption methods
     static std::optional<OrchardNotePlaintext> AttemptDecryptOrchardAction(
         const orchard_bundle::Action* action,
-        const libzcash::OrchardIncomingViewingKeyPirate ivk
+        const libzcash::OrchardIncomingViewingKey ivk
     );
 
     static std::optional<OrchardNotePlaintext> AttemptDecryptOrchardAction(
@@ -418,8 +418,8 @@ public:
     // Compute nullifier directly from an encrypted action
     static std::optional<uint256> ComputeNullifierFromAction(
         const orchard_bundle::Action& action,
-        const libzcash::OrchardIncomingViewingKeyPirate& ivk,
-        const libzcash::OrchardFullViewingKeyPirate& fvk
+        const libzcash::OrchardIncomingViewingKey& ivk,
+        const libzcash::OrchardFullViewingKey& fvk
     );
 
     std::optional<OrchardNote> note() const;

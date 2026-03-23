@@ -447,11 +447,7 @@ libzcash_a-Address.o:
 0000000000000032 r .LC4
 000000000000004a r .LC5
 000000000000005f r .LC6
-                 U librustzcash_ask_to_ak
-                 U librustzcash_check_diversifier
-                 U librustzcash_crh_ivk
                  U librustzcash_ivk_to_pkd
-                 U librustzcash_nsk_to_nk
                  U memmove
                  U __stack_chk_fail
                  U _Unwind_Resume
@@ -2995,8 +2991,7 @@ libzcash_a-prf.o:
 0000000000000068 r .LC2
 0000000000000000 r .LC3
 0000000000000015 r .LC4
-                 U librustzcash_check_diversifier
-                 U librustzcash_to_scalar
+
                  U __stack_chk_fail
                  U _Unwind_Resume
 0000000000000000 T PRF_expand(uint256 const&, unsigned char)

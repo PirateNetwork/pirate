@@ -78,14 +78,19 @@ TEST(TransactionBuilder, Invoke)
 
     // Create a Sapling spending key and full viewing key
     auto sk_from = libzcash::SaplingSpendingKey::random();
-    auto fvk_from = sk_from.full_viewing_key();
+    auto expsk_from = sk_from.expanded_spending_key();
+    libzcash::SaplingFullViewingKey fvk_from;
+    expsk_from.DeriveFVK(&fvk_from);
 
     auto sk = libzcash::SaplingSpendingKey::random();
     auto expsk = sk.expanded_spending_key();
-    auto fvk = sk.full_viewing_key();
-    auto ivk = fvk.in_viewing_key();
+    libzcash::SaplingFullViewingKey fvk;
+    expsk.DeriveFVK(&fvk);
+    SaplingIncomingViewingKey ivk;
+    fvk.DeriveIVK(&ivk);
     libzcash::diversifier_t d = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    auto pk = *ivk.address(d);
+    SaplingPaymentAddress pk;
+    ASSERT_TRUE(ivk.DeriveAddress(&pk, d));
 
     libzcash::SaplingExtendedSpendingKey extsk;
     extsk.expsk = expsk;
@@ -290,14 +295,19 @@ TEST(TransactionBuilder, FailsWithNegativeChange)
 
     // Create a Sapling spending key and full viewing key
     auto sk_from = libzcash::SaplingSpendingKey::random();
-    auto fvk_from = sk_from.full_viewing_key();
+    auto expsk_from = sk_from.expanded_spending_key();
+    libzcash::SaplingFullViewingKey fvk_from;
+    expsk_from.DeriveFVK(&fvk_from);
 
     auto sk = libzcash::SaplingSpendingKey::random();
     auto expsk = sk.expanded_spending_key();
-    auto fvk = sk.full_viewing_key();
-    auto ivk = fvk.in_viewing_key();
+    libzcash::SaplingFullViewingKey fvk;
+    expsk.DeriveFVK(&fvk);
+    SaplingIncomingViewingKey ivk;
+    fvk.DeriveIVK(&ivk);
     libzcash::diversifier_t d = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    auto pk = *ivk.address(d);
+    SaplingPaymentAddress pk;
+    ASSERT_TRUE(ivk.DeriveAddress(&pk, d));
 
     libzcash::SaplingExtendedSpendingKey extsk;
     extsk.expsk = expsk;
@@ -399,17 +409,23 @@ TEST(TransactionBuilder, ChangeOutput)
     
     // Create a Sapling spending key and full viewing key
     auto sk_from = libzcash::SaplingSpendingKey::random();
-    auto fvk_from = sk_from.full_viewing_key();
+    auto expsk_from = sk_from.expanded_spending_key();
+    libzcash::SaplingFullViewingKey fvk_from;
+    expsk_from.DeriveFVK(&fvk_from);
 
     auto sk = libzcash::SaplingSpendingKey::random();
     auto expsk = sk.expanded_spending_key();
-    auto fvk = sk.full_viewing_key();
-    auto ivk = fvk.in_viewing_key();
+    libzcash::SaplingFullViewingKey fvk;
+    expsk.DeriveFVK(&fvk);
+    SaplingIncomingViewingKey ivk;
+    fvk.DeriveIVK(&ivk);
     libzcash::diversifier_t d = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    auto pk = *ivk.address(d);
+    SaplingPaymentAddress pk;
+    ASSERT_TRUE(ivk.DeriveAddress(&pk, d));
 
     libzcash::diversifier_t change_d = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    auto change_pk = *ivk.address(change_d);
+    SaplingPaymentAddress change_pk;
+    ASSERT_TRUE(ivk.DeriveAddress(&change_pk, change_d));
 
     libzcash::SaplingExtendedSpendingKey extsk;
     extsk.expsk = expsk;
@@ -649,17 +665,23 @@ TEST(TransactionBuilder, SetFee)
     
     // Create a Sapling spending key and full viewing key
     auto sk_from = libzcash::SaplingSpendingKey::random();
-    auto fvk_from = sk_from.full_viewing_key();
+    auto expsk_from = sk_from.expanded_spending_key();
+    libzcash::SaplingFullViewingKey fvk_from;
+    expsk_from.DeriveFVK(&fvk_from);
 
     auto sk = libzcash::SaplingSpendingKey::random();
     auto expsk = sk.expanded_spending_key();
-    auto fvk = sk.full_viewing_key();
-    auto ivk = fvk.in_viewing_key();
+    libzcash::SaplingFullViewingKey fvk;
+    expsk.DeriveFVK(&fvk);
+    SaplingIncomingViewingKey ivk;
+    fvk.DeriveIVK(&ivk);
     libzcash::diversifier_t d = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    auto pk = *ivk.address(d);
+    SaplingPaymentAddress pk;
+    ASSERT_TRUE(ivk.DeriveAddress(&pk, d));
 
     libzcash::diversifier_t change_d = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-    auto change_pk = *ivk.address(change_d);
+    SaplingPaymentAddress change_pk;
+    ASSERT_TRUE(ivk.DeriveAddress(&change_pk, change_d));
 
     libzcash::SaplingExtendedSpendingKey extsk;
     extsk.expsk = expsk;
@@ -831,7 +853,8 @@ TEST(TransactionBuilder, CheckSaplingTxVersion)
 
     auto sk = libzcash::SaplingSpendingKey::random();
     auto expsk = sk.expanded_spending_key();
-    auto pk = sk.default_address();
+    libzcash::SaplingPaymentAddress pk;
+    expsk.DeriveDefaultAddress(&pk);
 
     // Cannot add Sapling outputs to a non-Sapling transaction
     auto builder = TransactionBuilder(consensusParams, 1);
