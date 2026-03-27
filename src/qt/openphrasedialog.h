@@ -21,9 +21,6 @@ public:
     explicit OpenPhraseDialog(QWidget *parent, WalletModel *model);
     ~OpenPhraseDialog();
 
-private Q_SLOTS:
-    void on_cmbLanguage_currentIndexChanged(int index);
-
 private:
     Ui::OpenPhraseDialog *ui;
     WalletModel *walletModel;

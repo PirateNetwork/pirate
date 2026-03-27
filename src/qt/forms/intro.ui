@@ -244,6 +244,75 @@
     </spacer>
    </item>
    <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_lang">
+     <item>
+      <widget class="QLabel" name="langLabel">
+       <property name="text">
+        <string>Language:</string>
+       </property>
+       <property name="buddy">
+        <cstring>cmbLanguage</cstring>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="cmbLanguage"/>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer_lang">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_seedLang">
+     <item>
+      <widget class="QLabel" name="seedLangLabel">
+       <property name="text">
+        <string>Seed phrase language:</string>
+       </property>
+       <property name="buddy">
+        <cstring>cmbSeedPhraseLanguage</cstring>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="cmbSeedPhraseLanguage">
+       <item><property name="text"><string notr="true">English</string></property></item>
+       <item><property name="text"><string notr="true">中文(简体)</string></property></item>
+       <item><property name="text"><string notr="true">中文(繁體)</string></property></item>
+       <item><property name="text"><string notr="true">Français</string></property></item>
+       <item><property name="text"><string notr="true">Italiano</string></property></item>
+       <item><property name="text"><string notr="true">日本語</string></property></item>
+       <item><property name="text"><string notr="true">한국어</string></property></item>
+       <item><property name="text"><string notr="true">Español</string></property></item>
+      </widget>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer_seedLang">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <item>
     <widget class="QDialogButtonBox" name="buttonBox">
      <property name="orientation">
       <enum>Qt::Horizontal</enum>

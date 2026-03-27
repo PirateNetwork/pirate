@@ -958,7 +958,7 @@
             <enum>Qt::PlainText</enum>
            </property>
            <property name="buddy">
-            <cstring></cstring>
+            <cstring>controlPasswordTor</cstring>
            </property>
           </widget>
          </item>
@@ -1142,6 +1142,38 @@
            <property name="toolTip">
             <string>The user interface language can be set here. This setting will take effect after restarting %1.</string>
            </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_seedLang">
+         <item>
+          <widget class="QLabel" name="seedLangLabel">
+           <property name="text">
+            <string>Seed phrase &amp;language:</string>
+           </property>
+           <property name="textFormat">
+            <enum>Qt::PlainText</enum>
+           </property>
+           <property name="buddy">
+            <cstring>cmbSeedPhraseLanguage</cstring>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QComboBox" name="cmbSeedPhraseLanguage">
+           <property name="toolTip">
+            <string>The BIP-39 word list language used to display and restore your seed phrase.</string>
+           </property>
+           <item><property name="text"><string notr="true">English</string></property></item>
+           <item><property name="text"><string notr="true">中文(简体)</string></property></item>
+           <item><property name="text"><string notr="true">中文(繁體)</string></property></item>
+           <item><property name="text"><string notr="true">Français</string></property></item>
+           <item><property name="text"><string notr="true">Italiano</string></property></item>
+           <item><property name="text"><string notr="true">日本語</string></property></item>
+           <item><property name="text"><string notr="true">한국어</string></property></item>
+           <item><property name="text"><string notr="true">Español</string></property></item>
           </widget>
          </item>
         </layout>

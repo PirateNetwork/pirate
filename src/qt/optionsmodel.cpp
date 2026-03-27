@@ -76,6 +76,10 @@ void OptionsModel::Init(bool resetSettings)
         settings.setValue("nDisplayUnit", KomodoUnits::ARRR);
     nDisplayUnit = settings.value("nDisplayUnit").toInt();
 
+    if (!settings.contains("nSeedPhraseLanguage"))
+        settings.setValue("nSeedPhraseLanguage", 0);
+    nSeedPhraseLanguage = settings.value("nSeedPhraseLanguage").toInt();
+
     if (!settings.contains("strThirdPartyTxUrls"))
         settings.setValue("strThirdPartyTxUrls", "");
     strThirdPartyTxUrls = settings.value("strThirdPartyTxUrls", "").toString();
@@ -448,6 +452,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return strThirdPartyTxUrls;
         case Language:
             return settings.value("language");
+        case SeedPhraseLanguage:
+            return nSeedPhraseLanguage;
         case DatabaseCache:
             return settings.value("nDatabaseCache");
         case ThreadsScriptVerif:
@@ -718,6 +724,12 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             if (settings.value("language") != value) {
                 settings.setValue("language", value);
                 setRestartRequired(true);
+            }
+            break;
+        case SeedPhraseLanguage:
+            if (nSeedPhraseLanguage != value.toInt()) {
+                nSeedPhraseLanguage = value.toInt();
+                settings.setValue("nSeedPhraseLanguage", nSeedPhraseLanguage);
             }
             break;
         case DatabaseCache:

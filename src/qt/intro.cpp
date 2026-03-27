@@ -14,7 +14,9 @@
 
 #include "util.h"
 
+#include <QDir>
 #include <QFileDialog>
+#include <QLocale>
 #include <QSettings>
 #include <QMessageBox>
 
@@ -151,6 +153,33 @@ Intro::Intro(QWidget *parent) :
         tr("The wallet will also be stored in this directory.")
     );
     startThread();
+
+    // Populate language selector
+    {
+        QSettings settings;
+        QString currentLang = settings.value("language", "").toString();
+        ui->cmbLanguage->addItem(QString("(") + tr("default") + QString(")"), QVariant(""));
+        QDir translations(":translations");
+        Q_FOREACH(const QString &langStr, translations.entryList()) {
+            QLocale locale(langStr);
+            if (locale.language() != QLocale::C) {
+                QString nativeName = locale.nativeLanguageName();
+                if (!locale.nativeCountryName().isEmpty())
+                    nativeName += QString(" (") + locale.nativeCountryName() + QString(")");
+                ui->cmbLanguage->addItem(nativeName + " [" + langStr + "]", QVariant(langStr));
+            }
+        }
+        int idx = ui->cmbLanguage->findData(QVariant(currentLang));
+        if (idx >= 0) ui->cmbLanguage->setCurrentIndex(idx);
+    }
+
+    // Pre-select seed phrase language from QSettings
+    {
+        QSettings settings;
+        int seedLang = settings.value("nSeedPhraseLanguage", 0).toInt();
+        if (seedLang >= 0 && seedLang < ui->cmbSeedPhraseLanguage->count())
+            ui->cmbSeedPhraseLanguage->setCurrentIndex(seedLang);
+    }
 }
 
 Intro::~Intro()
@@ -164,6 +193,16 @@ Intro::~Intro()
 QString Intro::getDataDirectory()
 {
     return ui->dataDirectory->text();
+}
+
+QString Intro::getLanguage() const
+{
+    return ui->cmbLanguage->itemData(ui->cmbLanguage->currentIndex()).toString();
+}
+
+int Intro::getSeedPhraseLanguage() const
+{
+    return ui->cmbSeedPhraseLanguage->currentIndex();
 }
 
 void Intro::setDataDirectory(const QString &dataDir)
@@ -199,7 +238,7 @@ bool Intro::pickDataDirectory()
 //This overrides assests directories. Because we use different directories every time we change asset, then we don't need it.
 //    dataDir = settings.value("strDataDir", dataDir).toString();
 
-    if(!fs::exists(GUIUtil::qstringToBoostPath(dataDir)) || GetBoolArg("-choosedatadir", DEFAULT_CHOOSE_DATADIR) || settings.value("fReset", false).toBool() || GetBoolArg("-resetguisettings", false))
+    if(!fs::exists(GUIUtil::qstringToBoostPath(dataDir)) || GetBoolArg("-choosedatadir", DEFAULT_CHOOSE_DATADIR) || !settings.contains("strDataDir") || settings.value("fReset", false).toBool() || GetBoolArg("-resetguisettings", false))
     {
         /* If current default data directory does not exist, let the user choose one */
         Intro intro;
@@ -226,6 +265,8 @@ bool Intro::pickDataDirectory()
 
         settings.setValue("strDataDir", dataDir);
         settings.setValue("fReset", false);
+        settings.setValue("language", intro.getLanguage());
+        settings.setValue("nSeedPhraseLanguage", intro.getSeedPhraseLanguage());
     }
     /* Only override -datadir if different from the default, to make it possible to
      * override -datadir in the komodo.conf file in the default data directory

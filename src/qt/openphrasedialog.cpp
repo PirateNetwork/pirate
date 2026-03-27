@@ -5,6 +5,7 @@
 #include "openphrasedialog.h"
 #include "ui_openphrasedialog.h"
 #include "walletmodel.h"
+#include "optionsmodel.h"
 
 #include <QString>
 
@@ -14,19 +15,14 @@ OpenPhraseDialog::OpenPhraseDialog(QWidget *parent, WalletModel *model) :
     ui(new Ui::OpenPhraseDialog)
 {
     ui->setupUi(this);
-    // Initial display in English (index 0); combobox signal will update if changed.
-    on_cmbLanguage_currentIndexChanged(0);
+    std::string phrase;
+    int lang = walletModel ? walletModel->getOptionsModel()->getSeedPhraseLanguage() : 0;
+    if (walletModel && walletModel->getSeedPhrase(phrase, lang)) {
+        ui->txtPhrase->setPlainText(QString::fromStdString(phrase));
+    }
 }
 
 OpenPhraseDialog::~OpenPhraseDialog()
 {
     delete ui;
-}
-
-void OpenPhraseDialog::on_cmbLanguage_currentIndexChanged(int index)
-{
-    std::string phrase;
-    if (walletModel && walletModel->getSeedPhrase(phrase, index)) {
-        ui->txtPhrase->setPlainText(QString::fromStdString(phrase));
-    }
 }
