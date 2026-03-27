@@ -25,7 +25,6 @@ use bls12_381::Bls12;
 use tracing::info;
 use group::{cofactor::CofactorGroup, GroupEncoding};
 use libc::{c_uchar, size_t};
-use rand_core::{OsRng, RngCore};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
@@ -33,11 +32,6 @@ use std::slice;
 use std::sync::Once;
 use std::convert::TryFrom;
 use subtle::CtOption;
-
-//Bip32 HDseed crates
-use libc::c_char;
-use bip39::{Language, Mnemonic};
-use std::ffi::{CString,CStr};
 
 #[cfg(not(target_os = "windows"))]
 use std::ffi::OsStr;
@@ -91,6 +85,7 @@ mod orchard_ffi;
 mod orchard_keys_ffi;
 mod orchard_keys;
 mod sapling_keys;
+mod seed;
 mod transparent;
 mod params;
 mod sapling;
@@ -487,62 +482,5 @@ pub extern "C" fn librustzcash_zip32_xfvk_address(
     true
 }
 
-#[no_mangle]
-pub extern "C" fn librustzcash_getrandom(buf: *mut u8, buf_len: usize) {
-    let buf = unsafe { slice::from_raw_parts_mut(buf, buf_len) };
-    OsRng.fill_bytes(buf);
-}
-
-#[no_mangle]
-pub extern "C" fn librustzcash_restore_seed_from_phase(buf: *mut u8, buf_len: usize, seed_phrase: *const c_char) -> u32 {
-    let buf = unsafe { slice::from_raw_parts_mut(buf, buf_len) };
-
-    let c_str: &CStr = unsafe { CStr::from_ptr(seed_phrase)};
-    let rust_seed_phrase = c_str.to_str().unwrap().to_string();
-
-    let phrase = match Mnemonic::from_phrase(rust_seed_phrase.clone(), Language::English) {
-        Ok(p) =>   p ,
-        Err(_) =>  return 0
-    };
-
-    buf.copy_from_slice(&phrase.entropy());
-    std::mem::forget(phrase);
-
-    1
-}
-
-#[no_mangle]
-pub extern "C" fn librustzcash_get_bip39_seed(buf: *mut u8, buf_len: usize) -> *const c_uchar {
-    let buf = unsafe { slice::from_raw_parts_mut(buf, buf_len) };
-
-    let tmp_seed = bip39::Seed::new(&Mnemonic::from_entropy(&buf, Language::English).unwrap(), "");
-    let bip39_seed = tmp_seed.as_bytes().as_ptr();
-    std::mem::forget(tmp_seed);
-    bip39_seed
-}
-
-#[no_mangle]
-pub extern "C" fn librustzcash_get_seed_phrase(seed: *const c_uchar, length: u8) -> *const c_char {
-    //16 byte = 12 word mnemonic
-    //24 byte = 18 word mnemonic
-    //32 byte = 24 word mnemonic (default for PirateChain)
-    if (length!=16) && (length!=24) && (length!=32) {
-      let result="Internal error: The HDseed length is invalid.";
-      let c_str = CString::new(result).unwrap();
-      let phrase = c_str.as_ptr();
-      std::mem::forget(c_str);
-      return phrase;
-    }
-
-    let seed = unsafe { std::slice::from_raw_parts(seed, length.into()) };
-
-
-    let s_mnemonic = Mnemonic::from_entropy(&seed, Language::English).unwrap();
-
-    let s = s_mnemonic.phrase().to_string();
-    let c_str = CString::new(s).unwrap();
-    let phrase = c_str.as_ptr();
-
-    std::mem::forget(c_str);
-    phrase
-}
+// Seed generation and mnemonic phrase functions have been moved to seed.rs
+// and are now exposed via the hd_seed bridge namespace.

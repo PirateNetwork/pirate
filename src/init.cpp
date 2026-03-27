@@ -2420,7 +2420,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
 
             if (pwalletMain->createType == RECOVERY) {
-                if (!pwalletMain->RestoreSeedFromPhrase(recoverySeedPhrase)) {
+                if (!pwalletMain->RestoreSeedFromPhrase(recoverySeedPhrase, recoverySeedLangCode)) {
                     LogPrintf("Invalid Seed Phrase - shutting down.\n");
                     return false;
                 }

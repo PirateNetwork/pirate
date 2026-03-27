@@ -23,6 +23,9 @@ public:
     explicit NewSeed(const NetworkStyle *networkStyle);
     ~NewSeed();
 
+    //! Returns the index of the selected BIP-39 language (matches hd_seed::MnemonicLanguage enum).
+    int selectedLanguage() const;
+
     Ui::NewSeedForm *ui;
 private:
 

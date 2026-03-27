@@ -399,6 +399,7 @@ public:
     bool HaveHDSeed() const;
     bool GetHDSeed(HDSeed& seedOut) const;
     bool GetSeedPhrase(std::string& phraseOut) const;
+    bool GetSeedPhrase(std::string& phraseOut, uint32_t langCode) const;
 
     // ========== Transparent Key Management ==========
     bool AddKeyPubKey(const CKey& key, const CPubKey &pubkey);

@@ -30,10 +30,10 @@ public:
     HDSeed(RawHDSeed& seedIn) : seed(seedIn) {}
 
     static HDSeed Random(size_t len = 32);
-    static HDSeed RestoreFromPhrase(std::string &phrase);
-    bool IsValidPhrase(std::string &phrase);
+    static HDSeed RestoreFromPhrase(std::string &phrase, uint32_t langCode = 0);
+    bool IsValidPhrase(std::string &phrase, uint32_t langCode = 0);
     bool IsNull() const { return seed.empty(); };
-    void GetPhrase(std::string &phrase);
+    void GetPhrase(std::string &phrase, uint32_t langCode = 0);
     uint256 Fingerprint() const;
     uint256 EncryptionFingerprint() const;
     RawHDSeed RawSeed() const { return seed; }

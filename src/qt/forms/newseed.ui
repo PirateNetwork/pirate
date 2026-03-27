@@ -56,6 +56,29 @@
        </widget>
       </item>
       <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_lang">
+        <item>
+         <widget class="QLabel" name="label_lang">
+          <property name="text">
+           <string>Language:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="cmbLanguage">
+          <item><property name="text"><string>English</string></property></item>
+          <item><property name="text"><string>Chinese Simplified</string></property></item>
+          <item><property name="text"><string>Chinese Traditional</string></property></item>
+          <item><property name="text"><string>French</string></property></item>
+          <item><property name="text"><string>Italian</string></property></item>
+          <item><property name="text"><string>Japanese</string></property></item>
+          <item><property name="text"><string>Korean</string></property></item>
+          <item><property name="text"><string>Spanish</string></property></item>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
        <widget class="QFrame" name="innerFrame">
         <property name="frameShape">
          <enum>QFrame::StyledPanel</enum>

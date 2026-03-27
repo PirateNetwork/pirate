@@ -74,6 +74,7 @@ extern int fDeleteInterval;
 extern unsigned int fDeleteTransactionsAfterNBlocks;
 extern unsigned int fKeepLastNTransactions;
 extern std::string recoverySeedPhrase;
+extern uint32_t recoverySeedLangCode;
 extern bool usingGUI;
 extern int recoveryHeight;
 extern int maxProcessingThreads;
@@ -2267,7 +2268,9 @@ public:
        this function). */
     void GenerateNewSeed();
     bool IsValidPhrase(std::string &phrase);
+    bool IsValidPhrase(std::string &phrase, uint32_t langCode);
     bool RestoreSeedFromPhrase(std::string &phrase);
+    bool RestoreSeedFromPhrase(std::string &phrase, uint32_t langCode);
 
     bool SetHDSeed(const HDSeed& seed);
 

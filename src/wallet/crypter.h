@@ -187,6 +187,7 @@ public:
     bool HaveHDSeed() const;
     bool GetHDSeed(HDSeed& seedOut) const;
     bool GetSeedPhrase(std::string& phraseOut) const;
+    bool GetSeedPhrase(std::string& phraseOut, uint32_t langCode) const;
 
     bool AddCryptedKey(const CPubKey& vchPubKey, const std::vector<unsigned char>& vchCryptedSecret);
     bool HaveKey(const CKeyID& address) const

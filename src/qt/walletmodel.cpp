@@ -1320,6 +1320,16 @@ bool WalletModel::getSeedPhrase(std::string &phrase) const
     return true;
 }
 
+bool WalletModel::getSeedPhrase(std::string &phrase, int langCode) const
+{
+    if (wallet->bip39Enabled) {
+      return wallet->GetSeedPhrase(phrase, (uint32_t)langCode);
+    }
+
+    phrase = "Bip39 is not enabled for this wallet. Bip39 can only be enabled by creating a new wallet.";
+    return true;
+}
+
 void WalletModel::rescan()
 {
     startedRescan = true;

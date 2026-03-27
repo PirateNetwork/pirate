@@ -144,6 +144,9 @@ unsigned int fKeepLastNTransactions = DEFAULT_TX_RETENTION_LASTTX;
 /** Recovery seed phrase for wallet restoration */
 std::string recoverySeedPhrase = "";
 
+/** BIP-39 language index (hd_seed::MnemonicLanguage) chosen by the user during restore */
+uint32_t recoverySeedLangCode = 0;
+
 /** Flag indicating if GUI is being used */
 bool usingGUI = false;
 
@@ -8020,6 +8023,14 @@ bool CWallet::IsValidPhrase(std::string &phrase)
     return checkSeed.IsValidPhrase(phrase);
 }
 
+bool CWallet::IsValidPhrase(std::string &phrase, uint32_t langCode)
+{
+    LOCK(cs_wallet);
+
+    HDSeed checkSeed;
+    return checkSeed.IsValidPhrase(phrase, langCode);
+}
+
 /**
  * @brief Restore wallet seed from a BIP39 mnemonic phrase
  * @param phrase The BIP39 mnemonic phrase to restore from
@@ -8055,6 +8066,30 @@ bool CWallet::RestoreSeedFromPhrase(std::string &phrase)
     // store the key creation time together with
     // the child index counter in the database
     // as a hdchain object
+    CHDChain newHdChain;
+    newHdChain.nVersion = CHDChain::VERSION_HD_BASE;
+    newHdChain.seedFp = seed.Fingerprint();
+    newHdChain.nCreateTime = nCreationTime;
+    SetHDChain(newHdChain, false);
+
+    return true;
+}
+
+bool CWallet::RestoreSeedFromPhrase(std::string &phrase, uint32_t langCode)
+{
+    LOCK(cs_wallet);
+
+    if (!IsValidPhrase(phrase, langCode)) {
+        return false;
+    }
+
+    auto seed = HDSeed::RestoreFromPhrase(phrase, langCode);
+
+    int64_t nCreationTime = GetTime();
+
+    if (!SetHDSeed(seed))
+        throw std::runtime_error(std::string(__func__) + ": SetHDSeed failed");
+
     CHDChain newHdChain;
     newHdChain.nVersion = CHDChain::VERSION_HD_BASE;
     newHdChain.seedFp = seed.Fingerprint();

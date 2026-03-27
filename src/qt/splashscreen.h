@@ -92,6 +92,9 @@ private Q_SLOTS:
     /** Press quit from password screen */
     void on_btnQuit_clicked();
 
+    /** Update the displayed seed phrase when the user picks a different language */
+    void on_newSeedLanguageChanged(int index);
+
 };
 
 #endif // KOMODO_QT_SPLASHSCREEN_H

@@ -4,22 +4,29 @@
 
 #include "openphrasedialog.h"
 #include "ui_openphrasedialog.h"
+#include "walletmodel.h"
 
-// #include "guiutil.h"
-// #include "walletmodel.h"
+#include <QString>
 
-#include <QUrl>
-
-OpenPhraseDialog::OpenPhraseDialog(QWidget *parent, QString phraseIn) :
+OpenPhraseDialog::OpenPhraseDialog(QWidget *parent, WalletModel *model) :
     QDialog(parent),
-    phrase(phraseIn),
+    walletModel(model),
     ui(new Ui::OpenPhraseDialog)
 {
     ui->setupUi(this);
-    ui->txtPhrase->setPlainText(phrase);
+    // Initial display in English (index 0); combobox signal will update if changed.
+    on_cmbLanguage_currentIndexChanged(0);
 }
 
 OpenPhraseDialog::~OpenPhraseDialog()
 {
     delete ui;
+}
+
+void OpenPhraseDialog::on_cmbLanguage_currentIndexChanged(int index)
+{
+    std::string phrase;
+    if (walletModel && walletModel->getSeedPhrase(phrase, index)) {
+        ui->txtPhrase->setPlainText(QString::fromStdString(phrase));
+    }
 }

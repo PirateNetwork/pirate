@@ -11,17 +11,22 @@ namespace Ui {
     class OpenPhraseDialog;
 }
 
+class WalletModel;
+
 class OpenPhraseDialog : public QDialog
 {
     Q_OBJECT
 
 public:
-    explicit OpenPhraseDialog(QWidget *parent, QString phraseIn);
+    explicit OpenPhraseDialog(QWidget *parent, WalletModel *model);
     ~OpenPhraseDialog();
+
+private Q_SLOTS:
+    void on_cmbLanguage_currentIndexChanged(int index);
 
 private:
     Ui::OpenPhraseDialog *ui;
-    QString phrase;
+    WalletModel *walletModel;
 };
 
 #endif // KOMODO_QT_OPENPHRASEDIALOG_H

@@ -22,14 +22,16 @@ const unsigned char ZCASH_HD_SEED_FP_PERSONAL[crypto_generichash_blake2b_PERSONA
 HDSeed HDSeed::Random(size_t len)
 {
     assert(len == 32);
-    RawHDSeed rawSeed(len, 0);
-    librustzcash_getrandom(rawSeed.data(), len);
+    std::array<uint8_t, 32> buf;
+    hd_seed::random_bytes(buf);
+    RawHDSeed rawSeed(buf.begin(), buf.end());
     return HDSeed(rawSeed);
 }
 
-HDSeed HDSeed::RestoreFromPhrase(std::string &phrase)
+HDSeed HDSeed::RestoreFromPhrase(std::string &phrase, uint32_t langCode)
 {
     bool bResult;
+    auto lang = static_cast<hd_seed::MnemonicLanguage>(langCode);
 
     //Count the nr of words in the phrase:
     std::stringstream stream( phrase );
@@ -38,42 +40,38 @@ HDSeed HDSeed::RestoreFromPhrase(std::string &phrase)
     if (iCount==12) //12 word mnemonic: 16 byte entropy
     {
       RawHDSeed restoredSeed(16, 0);
-      bResult = librustzcash_restore_seed_from_phase(restoredSeed.data(), 16, phrase.c_str());
+      bResult = hd_seed::phrase_to_entropy(phrase, lang, rust::Slice<uint8_t>{restoredSeed.data(), 16});
       if (bResult==false)
       {
-        printf("librustzcash_restore_seed_from_phase() Restpre failed\n");
-        throw std::runtime_error("librustzcash_restore_seed_from_phase() Restore failed");
+        throw std::runtime_error("phrase_to_entropy(): Restore from 12-word phrase failed");
       }
-
       return HDSeed(restoredSeed);
     }
     else if (iCount==18) //18 word mnemonic : 24 byte entropy
     {
       RawHDSeed restoredSeed(24, 0);
-      bResult = librustzcash_restore_seed_from_phase(restoredSeed.data(), 24, phrase.c_str());
+      bResult = hd_seed::phrase_to_entropy(phrase, lang, rust::Slice<uint8_t>{restoredSeed.data(), 24});
       if (bResult==false)
       {
-        printf("librustzcash_restore_seed_from_phase() Retore failed\n");
-        throw std::runtime_error("librustzcash_restore_seed_from_phase() Restore failed");
+        throw std::runtime_error("phrase_to_entropy(): Restore from 18-word phrase failed");
       }
       return HDSeed(restoredSeed);
     }
     else //24 word mnemonic: 32 byte entropy
     {
-      //Restore from Phrase
       RawHDSeed restoredSeed(32, 0);
-      bResult = librustzcash_restore_seed_from_phase(restoredSeed.data(), 32, phrase.c_str());
+      bResult = hd_seed::phrase_to_entropy(phrase, lang, rust::Slice<uint8_t>{restoredSeed.data(), 32});
       if (bResult==false)
       {
-        printf("librustzcash_restore_seed_from_phase() Restore failed\n");
-        throw std::runtime_error("librustzcash_restore_seed_from_phase() Restore failed");
+        throw std::runtime_error("phrase_to_entropy(): Restore from 24-word phrase failed");
       }
       return HDSeed(restoredSeed);
     }
 }
 
-bool HDSeed::IsValidPhrase(std::string &phrase)
+bool HDSeed::IsValidPhrase(std::string &phrase, uint32_t langCode)
 {
+    auto lang = static_cast<hd_seed::MnemonicLanguage>(langCode);
     //Count the nr of words in the phrase:
     std::stringstream stream(phrase);
     unsigned int iCount = std::distance(std::istream_iterator<std::string>(stream), std::istream_iterator<std::string>());
@@ -81,18 +79,17 @@ bool HDSeed::IsValidPhrase(std::string &phrase)
     if (iCount==12) //12 word mnemonic: 16 byte entropy
     {
       RawHDSeed restoredSeed(16, 0);
-      return librustzcash_restore_seed_from_phase(restoredSeed.data(), 16, phrase.c_str());
+      return hd_seed::phrase_to_entropy(phrase, lang, rust::Slice<uint8_t>{restoredSeed.data(), 16});
     }
     else if (iCount==18) //18 word mnemonic : 24 byte entropy
     {
       RawHDSeed restoredSeed(24, 0);
-      return librustzcash_restore_seed_from_phase(restoredSeed.data(), 24, phrase.c_str());
+      return hd_seed::phrase_to_entropy(phrase, lang, rust::Slice<uint8_t>{restoredSeed.data(), 24});
     }
     else if (iCount==24) //24 word mnemonic: 32 byte entropy
     {
-      //Restore from Phrase
       RawHDSeed restoredSeed(32, 0);
-      return librustzcash_restore_seed_from_phase(restoredSeed.data(), 32, phrase.c_str());
+      return hd_seed::phrase_to_entropy(phrase, lang, rust::Slice<uint8_t>{restoredSeed.data(), 32});
     }
     else
     {
@@ -101,12 +98,13 @@ bool HDSeed::IsValidPhrase(std::string &phrase)
     }
 }
 
-void HDSeed::GetPhrase(std::string &phrase)
+void HDSeed::GetPhrase(std::string &phrase, uint32_t langCode)
 {
     auto rawSeed = this->RawSeed();
-    char *rustPhrase = librustzcash_get_seed_phrase(rawSeed.data(), rawSeed.size() );
-    std::string newPhrase(rustPhrase);
-    phrase = newPhrase;
+    auto lang = static_cast<hd_seed::MnemonicLanguage>(langCode);
+    phrase = std::string(hd_seed::entropy_to_phrase(
+        rust::Slice<const uint8_t>{rawSeed.data(), rawSeed.size()},
+        lang));
 }
 
 uint256 HDSeed::Fingerprint() const
@@ -195,18 +193,20 @@ SaplingExtendedSpendingKey SaplingExtendedSpendingKey::Master(const HDSeed& seed
     auto rawSeed = seed.RawSeed();
     CSerializeData m_bytes(SAPLING_ZIP32_XSK_SIZE);
 
-    unsigned char* bip39_seed = librustzcash_get_bip39_seed(rawSeed.data(),rawSeed.size());
-
     if (bip39Enabled) {
+        std::array<uint8_t, 64> bip39_seed;
+        hd_seed::entropy_to_bip39_seed(
+            rust::Slice<const uint8_t>{rawSeed.data(), rawSeed.size()},
+            bip39_seed);
         librustzcash_zip32_xsk_master(
-            bip39_seed,
+            bip39_seed.data(),
             64,
             reinterpret_cast<unsigned char*>(m_bytes.data()));
     } else {
-      librustzcash_zip32_xsk_master(
-          rawSeed.data(),
-          rawSeed.size(),
-          reinterpret_cast<unsigned char*>(m_bytes.data()));
+        librustzcash_zip32_xsk_master(
+            rawSeed.data(),
+            rawSeed.size(),
+            reinterpret_cast<unsigned char*>(m_bytes.data()));
     }
 
 
@@ -265,11 +265,14 @@ OrchardExtendedSpendingKeyPirate OrchardExtendedSpendingKeyPirate::Master(const 
 
     //Get raw seed to derive Master Spending key from
     auto rawSeed = seed.RawSeed();
-    unsigned char* bip39_seed = librustzcash_get_bip39_seed(rawSeed.data(),rawSeed.size());
+    std::array<uint8_t, 64> bip39_seed = {};
 
     //Call rust FFI
     if (bip39Enabled) {
-        orchard_keys::derive_master_key(rust::Slice<const uint8_t>{bip39_seed, 64}, xsk_t_out);
+        hd_seed::entropy_to_bip39_seed(
+            rust::Slice<const uint8_t>{rawSeed.data(), rawSeed.size()},
+            bip39_seed);
+        orchard_keys::derive_master_key(rust::Slice<const uint8_t>{bip39_seed.data(), 64}, xsk_t_out);
     } else {
         orchard_keys::derive_master_key(rust::Slice<const uint8_t>{rawSeed.data(), rawSeed.size()}, xsk_t_out);
     }
@@ -282,7 +285,7 @@ OrchardExtendedSpendingKeyPirate OrchardExtendedSpendingKeyPirate::Master(const 
     memory_cleanse(rs.data(), rs.size());
     memory_cleanse(xsk_t_out.data(), xsk_t_out.size());
     memory_cleanse(rawSeed.data(), rawSeed.size());
-    memory_cleanse(bip39_seed, sizeof(bip39_seed));
+    memory_cleanse(bip39_seed.data(), bip39_seed.size());
 
     //Return data
     return xsk;

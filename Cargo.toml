@@ -46,7 +46,7 @@ zcash_primitives = { version = "=0.13.0-rc.1", features = ["temporary-zcashd", "
 zcash_proofs = { version = "=0.13.0-rc.1", features = ["directories"] }
 ed25519-zebra = "4"
 rand = "0.8"
-tiny-bip39 = "0.6.2"
+tiny-bip39 = { version = "0.6.2", features = ["chinese-simplified", "chinese-traditional", "french", "italian", "japanese", "korean", "spanish"] }
 wagyu-zcash-parameters = "0.2"
 
 # Rust/C++ interop

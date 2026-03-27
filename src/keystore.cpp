@@ -123,6 +123,18 @@ bool CBasicKeyStore::GetSeedPhrase(std::string &phraseOut) const
     }
 }
 
+bool CBasicKeyStore::GetSeedPhrase(std::string &phraseOut, uint32_t langCode) const
+{
+    LOCK(cs_KeyStore);
+    if (hdSeed.IsNull()) {
+        return false;
+    } else {
+        HDSeed seed = hdSeed;
+        seed.GetPhrase(phraseOut, langCode);
+        return true;
+    }
+}
+
 /**
  * @brief Add a private key with its corresponding public key
  * @param key The private key to add
