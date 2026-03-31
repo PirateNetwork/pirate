@@ -5,27 +5,31 @@
 /**
  * @file asyncrpcoperation_saplingconsolidation_address.cpp
  * @brief Implementation of Sapling address consolidation operations
- * 
+ *
  * This file implements the AsyncRPCOperation_saplingconsolidation_address class that provides
- * asynchronous consolidation of Sapling notes. The consolidation process helps reduce wallet
- * fragmentation by combining multiple small notes into fewer, larger notes.
- * 
+ * asynchronous consolidation of Sapling notes for a single address. The consolidation process
+ * reduces wallet fragmentation by combining multiple notes into fewer, larger notes.
+ *
  * Algorithm Overview:
- * The consolidation uses a two-step intelligent selection process:
- * 1. Fee Coverage Phase: Select smallest notes first until total value exceeds the required fee
- * 2. Optimization Phase: Add additional notes up to maxNotes limit to maximize consolidation efficiency
- * 
- * This approach ensures that:
- * - Consolidation transactions can always pay their fees
- * - Small "dust" notes are prioritized for cleanup
- * - Batch sizes are optimized within memory and processing constraints
- * 
+ * Each transaction is built from a fresh note selection:
+ * 1. GetFilteredNotes is called with maxNotes_ as the cap and fee_+1 as the minimum aggregate
+ *    value threshold. Internally it uses a dual-heap streaming algorithm to return up to
+ *    maxNotes_ notes (half smallest + half largest by value) without scanning the full wallet.
+ * 2. If the returned set has fewer than 2 notes or its total value does not exceed the fee,
+ *    consolidation stops — no viable transaction can be formed.
+ * 3. All returned notes are spent as inputs in a single consolidation transaction whose output
+ *    is the net amount (total input value minus fee) sent back to the same address.
+ * 4. After each successful commit, previously spent notes are excluded by ignoreSpent=true on
+ *    the next call, naturally advancing to the next working set with no manual index tracking.
+ * 5. The loop repeats until maxTransactions_ transactions have been created or no more
+ *    consolidatable notes remain.
+ *
  * Security Features:
- * - Spending keys are captured during construction while wallet is unlocked
- * - Minimum 11-block confirmation requirement for note selection
- * - Merkle path validation for all spent notes
- * - Proper handling of network upgrade boundaries
- * 
+ * - Spending key is captured during construction while the wallet is unlocked
+ * - Minimum 11-block confirmation depth required for all selected notes
+ * - Merkle path validated for every spent note
+ * - Network upgrade boundary check prevents transactions from expiring across an activation
+ *
  * @author Pirate Chain Development Team
  * @date 2025
  */
@@ -134,22 +138,17 @@ void AsyncRPCOperation_saplingconsolidation_address::main() {
 
 /**
  * @brief Core consolidation implementation
- * 
- * Implements the complete consolidation algorithm:
- * 1. Validates timing against network upgrades
- * 2. Retrieves and filters notes for the target address
- * 3. Implements intelligent two-step note selection:
- *    a) Select smallest notes to cover fee requirements
- *    b) Add additional notes up to maxNotes limit for efficiency
- * 4. Creates consolidation transactions using TransactionBuilder
- * 5. Commits transactions and tracks results
- * 
- * The algorithm prioritizes small notes for cleanup while ensuring each
- * transaction can pay its required fees. It respects both note count and
- * transaction count limits to prevent resource exhaustion.
- * 
- * @return true if consolidation completed successfully, false on error
- * @throws Various exceptions on transaction building or commitment failures
+ *
+ * Each loop iteration:
+ * 1. Calls GetFilteredNotes with maxNotes_ and minAggregateValue = fee_+1 to obtain a
+ *    bounded, pre-filtered set of unspent notes for the target address.
+ * 2. Checks feasibility: at least 2 notes and total value > fee required.
+ * 3. Spends all returned notes as inputs; output = total input value - fee.
+ * 4. Commits the transaction. Spent notes are excluded automatically on the next call
+ *    via ignoreSpent=true. Repeats until maxTransactions_ reached or no notes remain.
+ *
+ * @return true when the operation completes (with or without transactions created)
+ * @throws builder exceptions propagated up to main() for error reporting
  */
 bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
     LogPrint("zrpcunsafe", "%s: Beginning AsyncRPCOperation_saplingconsolidation_address for address %s.\n", 
@@ -167,103 +166,64 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
     std::vector<std::string> consolidationTxIds;
     CAmount amountConsolidated = 0;
 
-    // === STEP 1: Note Discovery and Filtering ===
-    // Get all confirmed notes and filter to target address only
-    std::vector<CSproutNotePlaintextEntry> sproutEntries;
-    std::vector<SaplingNoteEntry> saplingEntries;
+    // filterAddresses is fixed for the lifetime of this operation.
     std::set<libzcash::PaymentAddress> filterAddresses;
     filterAddresses.insert(address_);
 
-    {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        // We set minDepth to 11 to avoid unconfirmed notes and ensure stability
-        pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, "", 11);
-    }
-
-    // Filter entries to only include notes for our target address
-    std::vector<SaplingNoteEntry> targetEntries;
-    for (const auto& entry : saplingEntries) {
-        if (entry.address == address_) {
-            targetEntries.push_back(entry);
-        }
-    }
-
-    LogPrint("zrpcunsafe", "%s: Found %d notes for address %s\n", 
-             getId(), targetEntries.size(), EncodePaymentAddress(address_));
-
-    // === STEP 2: Consolidation Feasibility Check ===
-    // Check if we have enough notes to consolidate
-    if (targetEntries.size() < 2) {
-        LogPrint("zrpcunsafe", "%s: Not enough notes to consolidate (need at least 2, found %d)\n", 
-                 getId(), targetEntries.size());
-        setConsolidationResult(0, 0, std::vector<std::string>());
-        return true;
-    }
-
-    // === STEP 3: Note Preparation and Sorting ===
-    // Sort notes by value (smallest first) for optimal consolidation algorithm
-    // This ensures small "dust" notes are prioritized for cleanup
-    std::sort(targetEntries.begin(), targetEntries.end(), 
-              [](const SaplingNoteEntry& a, const SaplingNoteEntry& b) {
-                  return a.note.value() < b.note.value();
-              });
-
-    // Use the spending key that was retrieved when the operation was created (while wallet was unlocked)
-    // This ensures the operation can proceed even if the wallet gets locked afterwards
-
-    CCoinsViewCache coinsView(pcoinsTip);
-
-    // === STEP 4: Intelligent Batch Processing Loop ===
-    // Process notes in batches using the two-step intelligent selection algorithm
-    size_t processedNotes = 0;
-    while (processedNotes < targetEntries.size() - 1 && numTxCreated < maxTransactions_) { // Leave at least one note unconsolidated and respect transaction limit
-        std::vector<SaplingNoteEntry> batchEntries;
-        CAmount batchAmount = 0;
-        
-        // Step 1: Collect enough notes to exceed the fee amount (smallest first)
-        size_t remainingNotes = targetEntries.size() - processedNotes;
-        if (remainingNotes < 2) break; // Need at least 2 notes to consolidate
-        
-        // Check transaction limit to prevent resource exhaustion
-        if (numTxCreated >= maxTransactions_) {
-            LogPrint("zrpcunsafe", "%s: Reached maximum number of transactions (%d), stopping\n", 
-                     getId(), maxTransactions_);
+    // === Batch Processing Loop ===
+    // Each iteration fetches a fresh bounded set of unspent notes for this address.
+    // After CommitAutomatedTx the newly spent notes are excluded by ignoreSpent=true,
+    // so the next call naturally returns a different working set without any manual
+    // index tracking.
+    while (numTxCreated < maxTransactions_) {
+        if (isCancelled() || ShutdownRequested()) {
+            LogPrint("zrpcunsafe", "%s: Stopping consolidation loop (cancelled or shutdown).\n", getId());
             break;
         }
-        
-        // === SUBSTEP 4A: Fee Coverage Phase ===
-        // Start with smallest notes until we have enough to cover the fee
-        for (size_t i = processedNotes; i < targetEntries.size() && batchAmount <= fee_; i++) {
-            batchEntries.push_back(targetEntries[i]);
-            batchAmount += CAmount(targetEntries[i].note.value());
+        // === STEP 1: Note Discovery ===
+        // GetFilteredNotes uses a dual-heap streaming algorithm to return up to maxNotes_
+        // notes (half smallest + half largest by value) for this address, exiting early
+        // as soon as the aggregate value meets the fee_ + 1 threshold.
+        std::vector<CSproutNotePlaintextEntry> sproutEntries;
+        std::vector<SaplingNoteEntry> saplingEntries;
+        {
+            LOCK2(cs_main, pwalletMain->cs_wallet);
+            pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, filterAddresses,
+                                          11, INT_MAX, true, true, true,
+                                          maxNotes_, fee_ + 1);
         }
-        
-        // Validate fee coverage - abort if insufficient funds remain
-        if (batchAmount <= fee_) {
-            LogPrint("zrpcunsafe", "%s: Remaining notes (%d) insufficient to cover fee %s (total: %s), stopping\n", 
-                     getId(), remainingNotes, FormatMoney(fee_), FormatMoney(batchAmount));
+
+        // Compute total aggregate value of this iteration's working set.
+        CAmount workingSetValue = 0;
+        for (const auto& e : saplingEntries)
+            workingSetValue += CAmount(e.note.value());
+
+        LogPrint("zrpcunsafe", "%s: Working set: %d notes, aggregate=%s for address %s\n",
+                 getId(), (int)saplingEntries.size(), FormatMoney(workingSetValue), EncodePaymentAddress(address_));
+
+        // === STEP 2: Feasibility Check ===
+        // Require at least 2 notes AND total value > fee to form a valid transaction.
+        if (saplingEntries.size() < 2) {
+            LogPrint("zrpcunsafe", "%s: Not enough notes to consolidate (need at least 2, found %d)\n",
+                     getId(), (int)saplingEntries.size());
             break;
         }
-        
-        // === SUBSTEP 4B: Optimization Phase ===
-        // Add remaining notes up to maxNotes_ limit for maximum consolidation efficiency
-        size_t currentBatchSize = batchEntries.size();
-        for (size_t i = processedNotes + currentBatchSize; 
-             i < targetEntries.size() && batchEntries.size() < (size_t)maxNotes_; 
-             i++) {
-            batchEntries.push_back(targetEntries[i]);
-            batchAmount += CAmount(targetEntries[i].note.value());
+        if (workingSetValue <= fee_) {
+            LogPrint("zrpcunsafe", "%s: Working set aggregate value %s does not exceed fee %s — "
+                     "all selected notes are dust relative to fee, nothing to consolidate\n",
+                     getId(), FormatMoney(workingSetValue), FormatMoney(fee_));
+            break;
         }
 
-        LogPrint("zrpcunsafe", "%s: Selected %d notes for batch (total amount=%s, fee=%s, net=%s)\n", 
-                 getId(), batchEntries.size(), FormatMoney(batchAmount), 
-                 FormatMoney(fee_), FormatMoney(batchAmount - fee_));
+        LogPrint("zrpcunsafe", "%s: Selected %d notes for batch (total amount=%s, fee=%s, net=%s)\n",
+                 getId(), (int)saplingEntries.size(), FormatMoney(workingSetValue),
+                 FormatMoney(fee_), FormatMoney(workingSetValue - fee_));
 
-        // === SUBSTEP 4C: Cryptographic Preparation ===
-        // Select Sapling notes for spending and prepare cryptographic data
+        // === STEP 3: Cryptographic Preparation ===
+        // Build ops and notes vectors from the full working set returned by GetFilteredNotes.
         std::vector<SaplingOutPoint> ops;
         std::vector<libzcash::SaplingNote> notes;
-        for (const auto& entry : batchEntries) {
+        for (const auto& entry : saplingEntries) {
             ops.push_back(entry.op);
             notes.push_back(entry.note);
         }
@@ -279,8 +239,7 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
             }
         }
 
-        // === SUBSTEP 4D: Transaction Construction ===
-        // Build the consolidation transaction using TransactionBuilder
+        // === STEP 4: Transaction Construction ===
         auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
         {
             LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -288,8 +247,8 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
             builder.SetExpiryHeight(nExpires);
         }
 
-        LogPrint("zrpcunsafe", "%s: Creating consolidation transaction with input amount=%s, fee=%s, output amount=%s\n", 
-                 getId(), FormatMoney(batchAmount), FormatMoney(fee_), FormatMoney(batchAmount - fee_));
+        LogPrint("zrpcunsafe", "%s: Creating consolidation transaction with input amount=%s, fee=%s, output amount=%s\n",
+                 getId(), FormatMoney(workingSetValue), FormatMoney(fee_), FormatMoney(workingSetValue - fee_));
 
         // Add Sapling spends (inputs)
         for (size_t i = 0; i < notes.size(); i++) {
@@ -298,15 +257,14 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
 
         // Set transaction fee and create single consolidated output
         builder.SetFee(fee_);
-        builder.AddSaplingOutput(spendingKey_.expsk.ovk, address_, batchAmount - fee_);
+        builder.AddSaplingOutput(spendingKey_.expsk.ovk, address_, workingSetValue - fee_);
 
-        // === SUBSTEP 4E: Transaction Finalization ===
-        // Build and commit the consolidation transaction to the blockchain
+        // === STEP 5: Commit ===
         auto tx = builder.Build().GetTxOrThrow();
 
         // Check for cancellation before committing
-        if (isCancelled()) {
-            LogPrint("zrpcunsafe", "%s: Canceled. Stopping.\n", getId());
+        if (isCancelled() || ShutdownRequested()) {
+            LogPrint("zrpcunsafe", "%s: Canceled or shutdown. Stopping.\n", getId());
             break;
         }
 
@@ -314,17 +272,17 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
         {
             LOCK2(cs_main, pwalletMain->cs_wallet);
             if (!pwalletMain->CommitAutomatedTx(tx)) {
-                throw runtime_error("Failed to commit consolidation transaction");
+                LogPrint("zrpcunsafe", "%s: Failed to commit consolidation transaction, stopping.\n", getId());
+                break;
             }
         }
 
-        LogPrint("zrpcunsafe", "%s: Committed consolidation transaction with txid=%s\n", 
+        LogPrint("zrpcunsafe", "%s: Committed consolidation transaction with txid=%s\n",
                  getId(), tx.GetHash().ToString());
 
-        amountConsolidated += batchAmount - fee_;
+        amountConsolidated += workingSetValue - fee_;
         numTxCreated++;
         consolidationTxIds.push_back(tx.GetHash().ToString());
-        processedNotes += batchEntries.size();
     }
 
     LogPrint("zrpcunsafe", "%s: Created %d transactions with total output amount=%s\n", 

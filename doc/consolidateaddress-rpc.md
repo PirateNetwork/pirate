@@ -29,12 +29,12 @@ consolidateaddress "saplingaddress" ( fee ) ( maxnotes ) ( maxtransactions )
 3. **maxnotes** (numeric, optional, default=50)
    - Maximum number of notes to include in a single consolidation transaction
    - Higher values increase transaction size but improve consolidation efficiency
-   - Range: 2-200 (practical limit based on transaction size constraints)
+   - Range: 1-100 (enforced by the RPC)
 
 4. **maxtransactions** (numeric, optional, default=10)
    - Maximum number of consolidation transactions to create
    - Helps prevent excessive resource usage for addresses with many notes
-   - Range: 1-100
+   - Range: 1-50 (enforced by the RPC)
 
 ### Return Value
 
@@ -160,14 +160,15 @@ pirate-cli z_getoperationresult '["operation-id"]'
 - Remaining notes insufficient to cover transaction fees
 - Maximum transaction limit reached
 - Network upgrade activation detected within expiry window
+- Operation cancelled or node shutdown requested
 
 ## Performance Considerations
 
 ### Optimal Parameters
 
 - **Fee**: Use 0.0001 ARRR for standard confirmation time
-- **MaxNotes**: Use 30-50 for balance between efficiency and transaction size
-- **MaxTransactions**: Use 5-10 to prevent excessive resource usage
+- **MaxNotes**: Use 30-100 for balance between efficiency and transaction size
+- **MaxTransactions**: Use 5-20 to prevent excessive resource usage (max 50)
 
 ### When to Consolidate
 

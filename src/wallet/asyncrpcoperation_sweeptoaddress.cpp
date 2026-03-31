@@ -79,169 +79,140 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
         return true;
     }
 
-    std::vector<CSproutNotePlaintextEntry> sproutEntries;
-    std::vector<SaplingNoteEntry> saplingEntries;
+    // Resolve sweep destination address — RPC-set address takes priority over config.
     libzcash::SaplingPaymentAddress sweepAddress;
-    std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>> mapAddresses;
-
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
-        // We set minDepth to 11 to avoid unconfirmed notes and in anticipation of specifying
-        // an anchor at height N-10 for each Sprout JoinSplit description
-        // Consider, should notes be sorted?
-        pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, "", 11);
-        if (!fromRPC_) {
-            if (fSweepMapUsed) {
-                const vector<string>& v = mapMultiArgs["-sweepsaplingaddress"];
-                for(int i = 0; i < v.size(); i++) {
-                    auto zAddress = DecodePaymentAddress(v[i]);
-                    if (boost::get<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
-                        sweepAddress = boost::get<libzcash::SaplingPaymentAddress>(zAddress);
-                    }
+        if (rpcSweepAddress.is_initialized()) {
+            sweepAddress = *rpcSweepAddress;
+        } else if (!fromRPC_ && fSweepMapUsed) {
+            const vector<string>& v = mapMultiArgs["-sweepsaplingaddress"];
+            bool found = false;
+            for (int i = 0; i < (int)v.size(); i++) {
+                auto zAddress = DecodePaymentAddress(v[i]);
+                if (boost::get<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
+                    sweepAddress = boost::get<libzcash::SaplingPaymentAddress>(zAddress);
+                    found = true;
                 }
-            } else {
-                return false;
             }
+            if (!found) return false;
         } else {
-            if (boost::get<libzcash::SaplingPaymentAddress>(&rpcSweepAddress) != nullptr) {
-                sweepAddress = boost::get<libzcash::SaplingPaymentAddress>(rpcSweepAddress);
-            } else {
-                return false;
-            }
+            return false;
         }
+    }
 
-        for (auto & entry : saplingEntries) {
-            //Map all notes by address
-            if (sweepAddress == entry.address) {
-                continue;
-            } else {
-                std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>>::iterator it;
-                it = mapAddresses.find(entry.address);
-                if (it != mapAddresses.end()) {
-                    it->second.push_back(entry);
-                } else {
-                    std::vector<SaplingNoteEntry> entries;
-                    entries.push_back(entry);
-                    mapAddresses[entry.address] = entries;
-                }
-            }
+    // Read all wallet Sapling addresses from the keystore - no note data loaded.
+    // GetSaplingPaymentAddresses is O(num_keys), not O(num_notes).
+    std::vector<libzcash::SaplingPaymentAddress> candidateAddresses;
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        std::set<libzcash::SaplingPaymentAddress> allAddrs;
+        pwalletMain->GetSaplingPaymentAddresses(allAddrs);
+        for (const auto& addr : allAddrs) {
+            if (!(addr == sweepAddress))
+                candidateAddresses.push_back(addr);
         }
     }
 
     int numTxCreated = 0;
     std::vector<std::string> sweepTxIds;
     CAmount amountSwept = 0;
-    CCoinsViewCache coinsView(pcoinsTip);
-    bool sweepComplete = true;
+    const int maxQuantity = 50;
 
-    for (std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>>::iterator it = mapAddresses.begin(); it != mapAddresses.end(); it++) {
-        auto addr = (*it).first;
-        auto saplingEntries = (*it).second;
-
+    for (const auto& addr : candidateAddresses) {
+        if (isCancelled() || ShutdownRequested())
+            break;
+        // Skip watch-only addresses - spending key required to build spends.
         libzcash::SaplingExtendedSpendingKey extsk;
-        if (pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
-
-            std::vector<SaplingNoteEntry> fromNotes;
-            CAmount amountToSend = pwalletMain->targetSweepQty;
-            int maxQuantity = 50;
-
-            //Count Notes availiable for this address
-            int targetCount = 0;
-            int noteCount = 0;
-            for (const SaplingNoteEntry& saplingEntry : saplingEntries) {
-
-              libzcash::SaplingIncomingViewingKey ivk;
-              pwalletMain->GetSaplingIncomingViewingKey(boost::get<libzcash::SaplingPaymentAddress>(saplingEntry.address), ivk);
-
-              if (ivk == extsk.expsk.full_viewing_key().in_viewing_key() && saplingEntry.address == addr) {
-                noteCount ++;
-              }
-            }
-
-            //Don't sweep if under the threshold
-            if (noteCount <= targetCount){
+        {
+            LOCK2(cs_main, pwalletMain->cs_wallet);
+            if (!pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk))
                 continue;
+        }
+
+        // Per-address inner loop: keep sweeping until no more eligible notes remain.
+        // Committed notes are excluded by ignoreSpent=true on the next call.
+        while (true) {
+            if (isCancelled() || ShutdownRequested()) {
+                LogPrint("zrpcunsafe", "%s: Stopping sweep inner loop (cancelled or shutdown).", getId());
+                break;
+            }
+            std::vector<CSproutNotePlaintextEntry> sproutEntries;
+            std::vector<SaplingNoteEntry> saplingEntries;
+            {
+                LOCK2(cs_main, pwalletMain->cs_wallet);
+                std::set<libzcash::PaymentAddress> filterAddresses;
+                filterAddresses.insert(addr);
+                pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, filterAddresses,
+                                              11, INT_MAX, true, true, true,
+                                              maxQuantity, fSweepTxFee + 1);
             }
 
-            //if we make it here then we need to sweep and the routine is considered incomplete
-            sweepComplete = false;
+            if (saplingEntries.empty())
+                break;
 
-            for (const SaplingNoteEntry& saplingEntry : saplingEntries) {
+            CAmount amountToSend = 0;
+            for (const auto& e : saplingEntries)
+                amountToSend += CAmount(e.note.value());
 
-                libzcash::SaplingIncomingViewingKey ivk;
-                pwalletMain->GetSaplingIncomingViewingKey(boost::get<libzcash::SaplingPaymentAddress>(saplingEntry.address), ivk);
-
-                //Select Notes from that same address we will be sending to.
-                if (ivk == extsk.expsk.full_viewing_key().in_viewing_key() && saplingEntry.address == addr) {
-                  amountToSend += CAmount(saplingEntry.note.value());
-                  fromNotes.push_back(saplingEntry);
-                }
-
-                if (fromNotes.size() >= maxQuantity)
-                  break;
-
-            }
-
-            int minQuantity = 1;
-            if (fromNotes.size() < minQuantity)
-              continue;
+            if (amountToSend <= fSweepTxFee)
+                break;
 
             CAmount fee = fSweepTxFee;
-            if (amountToSend <= fSweepTxFee) {
-              fee = 0;
-            }
-            amountSwept += amountToSend;
+
             auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
             {
                 LOCK2(cs_main, pwalletMain->cs_wallet);
-                builder.SetExpiryHeight(chainActive.Tip()->nHeight+ SWEEP_EXPIRY_DELTA);
+                builder.SetExpiryHeight(chainActive.Tip()->nHeight + SWEEP_EXPIRY_DELTA);
             }
             LogPrint("zrpcunsafe", "%s: Beginning creating transaction with Sapling output amount=%s\n", getId(), FormatMoney(amountToSend - fee));
 
-            // Select Sapling notes
             std::vector<SaplingOutPoint> ops;
             std::vector<libzcash::SaplingNote> notes;
-            for (auto fromNote : fromNotes) {
-                ops.push_back(fromNote.op);
-                notes.push_back(fromNote.note);
+            for (const auto& entry : saplingEntries) {
+                ops.push_back(entry.op);
+                notes.push_back(entry.note);
             }
 
-            // Fetch Sapling anchor and merkle paths
             uint256 anchor;
             std::vector<libzcash::MerklePath> saplingMerklePaths;
             {
                 LOCK2(cs_main, pwalletMain->cs_wallet);
                 if (!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
                     LogPrint("zrpcunsafe", "%s: Merkle Path not found for Sapling note. Stopping.\n", getId());
+                    break;
                 }
             }
 
-            // Add Sapling spends
-            for (size_t i = 0; i < notes.size(); i++) {
+            for (size_t i = 0; i < notes.size(); i++)
                 builder.AddSaplingSpend(extsk.expsk, notes[i], anchor, saplingMerklePaths[i]);
-            }
 
             builder.SetFee(fee);
             builder.AddSaplingOutput(extsk.expsk.ovk, sweepAddress, amountToSend - fee);
 
             auto tx = builder.Build().GetTxOrThrow();
 
-            if (isCancelled()) {
-                LogPrint("zrpcunsafe", "%s: Canceled. Stopping.\n", getId());
+            if (isCancelled() || ShutdownRequested()) {
+                LogPrint("zrpcunsafe", "%s: Canceled or shutdown. Stopping.\n", getId());
                 break;
             }
 
-            if (!pwalletMain->CommitAutomatedTx(tx)) {
-                return false;
+            {
+                LOCK2(cs_main, pwalletMain->cs_wallet);
+                if (!pwalletMain->CommitAutomatedTx(tx)) {
+                    LogPrint("zrpcunsafe", "%s: Failed to commit sweep transaction, stopping.\n", getId());
+                    break;
+                }
             }
             LogPrint("zrpcunsafe", "%s: Committed sweep transaction with txid=%s\n", getId(), tx.GetHash().ToString());
+            numTxCreated++;
             amountSwept += amountToSend - fee;
             sweepTxIds.push_back(tx.GetHash().ToString());
-
         }
     }
 
-    if (sweepComplete) {
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
         pwalletMain->nextSweep = pwalletMain->sweepInterval + chainActive.Tip()->nHeight;
         pwalletMain->fSweepRunning = false;
     }

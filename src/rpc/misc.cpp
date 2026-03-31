@@ -333,16 +333,6 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
     obj.push_back(Pair("relayfee",      ValueFromAmount(::minRelayTxFee.GetFeePerK())));
     obj.push_back(Pair("errors",        GetWarnings("statusbar")));
 
-    obj.push_back(Pair("cleanup_mode", fCleanUpMode? "Active" : "Inactive"));
-    obj.push_back(Pair("cleanup_status",pwalletMain->strCleanUpStatus));
-    obj.push_back(Pair("cleanup_unspent_notes",pwalletMain->cleanupCurrentRoundUnspent));
-    obj.push_back(Pair("cleanup_unspent_target",pwalletMain->targetConsolidationQty));
-    obj.push_back(Pair("cleanup_confirmed_txs",pwalletMain->cleanUpConfirmed));
-    obj.push_back(Pair("cleanup_unconfirmed_txs",pwalletMain->cleanUpUnconfirmed));
-    obj.push_back(Pair("cleanup_conflicted_txs",pwalletMain->cleanUpConflicted));
-    obj.push_back(Pair("cleanup_expiration_height",pwalletMain->cleanupMaxExpirationHieght));
-
-
      if ( NOTARY_PUBKEY33[0] != 0 ) {
         char pubkeystr[65]; int32_t notaryid; std::string notaryname;
         if ( (notaryid= StakedNotaryID(notaryname, (char *)NOTARY_ADDRESS.c_str())) != -1 ) {

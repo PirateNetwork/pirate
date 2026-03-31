@@ -2653,11 +2653,6 @@ int CWallet::SaplingWitnessMinimumHeight(const uint256& nullifier, int nWitnessH
 //     return;
 //   }
 //
-//   if (fCleanUpMode) {
-//       fBuilingWitnessCache = false;
-//       return;
-//   }
-//
 //   //Disable RPC while IsInitialBlockDownload()
 //   if (IsInitialBlockDownload() && !fInitWitnessesBuilt) {
 //       fBuilingWitnessCache = true;
@@ -7985,7 +7980,32 @@ void CWallet::GetFilteredNotes(
 /**
  * Find notes in the wallet filtered by payment addresses, min depth, max depth,
  * if the note is spent, if a spending key is required, and if the notes are locked.
- * These notes are decrypted and added to the output parameter vector, outEntries.
+ *
+ * When maxNotes > 0 the function uses a streaming dual-heap selection algorithm.
+ * The two heaps are strictly disjoint — every qualifying note is owned by at most
+ * one heap:
+ *
+ *   smallestHeap  max-heap of up to (maxNotes/2) entries
+ *                 Retains the N notes with the smallest values seen so far.
+ *                 top() = largest-of-smallest; evicted when a cheaper note arrives.
+ *
+ *   largestHeap   min-heap of up to (maxNotes/2) entries
+ *                 Retains the N notes with the largest values seen so far.
+ *                 top() = smallest-of-largest; evicted when a pricier note arrives.
+ *
+ * Routing (applied in order for each qualifying note):
+ *   1. smallestHeap has room               → insert into smallestHeap.
+ *   2. note.value < smallestHeap.top:      → replace top in smallestHeap;
+ *                                             cascade evicted top → try largestHeap.
+ *   3. otherwise                           → try largestHeap directly.
+ *
+ * Because the heaps are disjoint, a single aggregateValue counter tracks the
+ * combined total of both heaps exactly.
+ *
+ * Early exit: the scan stops as soon as BOTH heaps are full AND
+ * aggregateValue >= minAggregateValue.  This minimises lock-hold time while
+ * guaranteeing the caller's minimum value requirement is met by the working set.
+ * Pass minAggregateValue=0 to disable early exit.
  */
 void CWallet::GetFilteredNotes(
     std::vector<CSproutNotePlaintextEntry>& sproutEntries,
@@ -7995,11 +8015,41 @@ void CWallet::GetFilteredNotes(
     int maxDepth,
     bool ignoreSpent,
     bool requireSpendingKey,
-    bool ignoreLocked)
+    bool ignoreLocked,
+    int maxNotes,
+    CAmount minAggregateValue)
 {
     LOCK2(cs_main, cs_wallet);
 
+    // When maxNotes > 0 use bounded streaming selection; otherwise fall through
+    // to the original unbounded path (behaviour unchanged for existing callers).
+    const bool bounded = (maxNotes > 0);
+    const int halfNotes = bounded ? std::max(1, maxNotes / 2) : 0;
+
+    // smallestHeap: max-heap — top() is the largest-of-the-smallest candidates.
+    // Evict top when a note with a lower value is seen.
+    auto cmpMax = [](const SaplingNoteEntry& a, const SaplingNoteEntry& b) {
+        return a.note.value() < b.note.value();
+    };
+    // largestHeap: min-heap — top() is the smallest-of-the-largest candidates.
+    // Evict top when a note with a higher value is seen.
+    auto cmpMin = [](const SaplingNoteEntry& a, const SaplingNoteEntry& b) {
+        return a.note.value() > b.note.value();
+    };
+
+    std::priority_queue<SaplingNoteEntry,
+                        std::vector<SaplingNoteEntry>,
+                        decltype(cmpMax)> smallestHeap(cmpMax);
+    std::priority_queue<SaplingNoteEntry,
+                        std::vector<SaplingNoteEntry>,
+                        decltype(cmpMin)> largestHeap(cmpMin);
+    // Single aggregate tracks the combined total of both disjoint heaps.
+    CAmount aggregateValue = 0;
+    bool earlyExit = false;
+
     for (auto & p : mapWallet) {
+        if (earlyExit) break;
+
         CWalletTx wtx = p.second;
 
         // Filter the transactions before checking for notes
@@ -8019,62 +8069,6 @@ void CWallet::GetFilteredNotes(
                 continue;
             }
         }
-
-        // for (auto & pair : wtx.mapSproutNoteData) {
-        //     JSOutPoint jsop = pair.first;
-        //     SproutNoteData nd = pair.second;
-        //     SproutPaymentAddress pa = nd.address;
-        //
-        //     // skip notes which belong to a different payment address in the wallet
-        //     if (!(filterAddresses.empty() || filterAddresses.count(pa))) {
-        //         continue;
-        //     }
-        //
-        //     // skip note which has been spent
-        //     if (ignoreSpent && nd.nullifier && IsSproutSpent(*nd.nullifier)) {
-        //         continue;
-        //     }
-        //
-        //     // skip notes which cannot be spent
-        //     if (requireSpendingKey && !HaveSproutSpendingKey(pa)) {
-        //         continue;
-        //     }
-        //
-        //     // skip locked notes
-        //     if (ignoreLocked && IsLockedNote(jsop)) {
-        //         continue;
-        //     }
-        //
-        //     int i = jsop.js; // Index into CTransaction.vjoinsplit
-        //     int j = jsop.n; // Index into JSDescription.ciphertexts
-        //
-        //     // Get cached decryptor
-        //     ZCNoteDecryption decryptor;
-        //     if (!GetNoteDecryptor(pa, decryptor)) {
-        //         // Note decryptors are created when the wallet is loaded, so it should always exist
-        //         throw std::runtime_error(strprintf("Could not find note decryptor for payment address %s", EncodePaymentAddress(pa)));
-        //     }
-        //
-        //     // determine amount of funds in the note
-        //     auto hSig = wtx.vjoinsplit[i].h_sig(*pzcashParams, wtx.joinSplitPubKey);
-        //     try {
-        //         SproutNotePlaintext plaintext = SproutNotePlaintext::decrypt(
-        //                 decryptor,
-        //                 wtx.vjoinsplit[i].ciphertexts[j],
-        //                 wtx.vjoinsplit[i].ephemeralKey,
-        //                 hSig,
-        //                 (unsigned char) j);
-        //
-        //         sproutEntries.push_back(CSproutNotePlaintextEntry{jsop, pa, plaintext, wtx.GetDepthInMainChain()});
-        //
-        //     } catch (const note_decryption_failed &err) {
-        //         // Couldn't decrypt with this spending key
-        //         throw std::runtime_error(strprintf("Could not decrypt note for payment address %s", EncodePaymentAddress(pa)));
-        //     } catch (const std::exception &exc) {
-        //         // Unexpected failure
-        //         throw std::runtime_error(strprintf("Error while decrypting note for payment address %s: %s", EncodePaymentAddress(pa), exc.what()));
-        //     }
-        // }
 
         for (auto & pair : wtx.mapSaplingNoteData) {
             SaplingOutPoint op = pair.first;
@@ -8109,15 +8103,91 @@ void CWallet::GetFilteredNotes(
                 }
             }
 
-            // skip locked notes
-            // TODO: Add locking for Sapling notes -> done
-             if (ignoreLocked && IsLockedNote(op)) {
-                 continue;
-             }
+            if (ignoreLocked && IsLockedNote(op)) {
+                continue;
+            }
 
             auto note = notePt.note(nd.ivk).get();
-            saplingEntries.push_back(SaplingNoteEntry {
-                op, pa, note, notePt.memo(), wtx.GetDepthInMainChain() });
+            SaplingNoteEntry entry { op, pa, note, notePt.memo(), wtx.GetDepthInMainChain() };
+
+            if (!bounded) {
+                // Unbounded path: original behaviour, all qualifying notes collected.
+                saplingEntries.push_back(entry);
+                continue;
+            }
+
+            // === Streaming bounded selection (disjoint heaps) ===
+            //
+            // Each note has exactly one owner: smallestHeap or largestHeap.
+            // aggregateValue tracks the combined total of both heaps.
+            //
+            // Routing rules (applied in order):
+            //   1. smallestHeap has room              → insert there.
+            //   2. note is smaller than smallestHeap.top:
+            //        evict top → cascade into largestHeap, insert note into smallestHeap.
+            //        Net aggregateValue change: +v (incoming) replaces nothing; the
+            //        evicted value stays in the system via largestHeap if it qualifies.
+            //   3. Otherwise → route directly to largestHeap.
+            CAmount v = CAmount(note.value());
+
+            if ((int)smallestHeap.size() < halfNotes) {
+                smallestHeap.push(entry);
+                aggregateValue += v;
+            } else if (v < CAmount(smallestHeap.top().note.value())) {
+                SaplingNoteEntry evicted = smallestHeap.top();
+                CAmount evictedVal = CAmount(evicted.note.value());
+                // Remove evicted from aggregate; it may re-enter via largestHeap below.
+                aggregateValue -= evictedVal;
+                smallestHeap.pop();
+                smallestHeap.push(entry);
+                aggregateValue += v;
+
+                // Cascade evicted note into largestHeap.
+                if ((int)largestHeap.size() < halfNotes) {
+                    largestHeap.push(evicted);
+                    aggregateValue += evictedVal;
+                } else if (evictedVal > CAmount(largestHeap.top().note.value())) {
+                    aggregateValue -= CAmount(largestHeap.top().note.value());
+                    largestHeap.pop();
+                    largestHeap.push(evicted);
+                    aggregateValue += evictedVal;
+                }
+            } else {
+                // Note is too large for smallestHeap — try largestHeap directly.
+                if ((int)largestHeap.size() < halfNotes) {
+                    largestHeap.push(entry);
+                    aggregateValue += v;
+                } else if (v > CAmount(largestHeap.top().note.value())) {
+                    aggregateValue -= CAmount(largestHeap.top().note.value());
+                    largestHeap.pop();
+                    largestHeap.push(entry);
+                    aggregateValue += v;
+                }
+            }
+
+            // Early exit: both heaps full AND working set satisfies minimum value.
+            if (minAggregateValue > 0 &&
+                (int)smallestHeap.size() >= halfNotes &&
+                (int)largestHeap.size() >= halfNotes &&
+                aggregateValue >= minAggregateValue) {
+                earlyExit = true;
+                break;
+            }
+
+        }
+    }
+
+    if (bounded) {
+        // Drain both disjoint heaps into saplingEntries.
+        // Contains the smallest/largest notes seen before the early-exit fired
+        // (or from the full wallet scan if minAggregateValue=0 or never satisfied).
+        while (!smallestHeap.empty()) {
+            saplingEntries.push_back(smallestHeap.top());
+            smallestHeap.pop();
+        }
+        while (!largestHeap.empty()) {
+            saplingEntries.push_back(largestHeap.top());
+            largestHeap.pop();
         }
     }
 }

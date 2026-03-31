@@ -896,15 +896,6 @@ public:
     int nextConsolidation = 0;
     int targetConsolidationQty = 100;
 
-    string strCleanUpStatus = "";
-    bool fCleanupRoundComplete = false;
-    std::vector<uint256> vCleanUpTxids;
-    int cleanUpConfirmed = 0;
-    int cleanUpConflicted = 0;
-    int cleanUpUnconfirmed = 0;
-    int cleanupMaxExpirationHieght = 0;
-    int cleanupCurrentRoundUnspent = 0;
-
     bool fSaplingSweepEnabled = false;
     bool fSweepRunning = false;
     int sweepInterval = (Params().GetConsensus().nPowTargetSpacing/60) * 15; //Intialize every 15 minutes
@@ -1826,7 +1817,13 @@ public:
                           bool requireSpendingKey=true);
 
     /* Find notes filtered by payment addresses, min depth, max depth, if they are spent,
-       if a spending key is required, and if they are locked */
+       if a spending key is required, and if they are locked.
+       When maxNotes > 0 a streaming dual-heap selection (half-smallest / half-largest)
+       is used.  The scan exits early once both heaps are full AND the combined
+       aggregate value of the working set >= minAggregateValue, so the lock is held
+       for the minimum time necessary to satisfy the caller's value requirement.
+       Pass minAggregateValue=0 to disable early exit (both heaps filled from the full
+       wallet scan before returning). */
     void GetFilteredNotes(std::vector<CSproutNotePlaintextEntry>& sproutEntries,
                           std::vector<SaplingNoteEntry>& saplingEntries,
                           std::set<libzcash::PaymentAddress>& filterAddresses,
@@ -1834,7 +1831,9 @@ public:
                           int maxDepth=INT_MAX,
                           bool ignoreSpent=true,
                           bool requireSpendingKey=true,
-                          bool ignoreLocked=true);
+                          bool ignoreLocked=true,
+                          int maxNotes=0,
+                          CAmount minAggregateValue=0);
 };
 
 /** A key allocated from the key pool. */

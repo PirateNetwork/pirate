@@ -1,6 +1,7 @@
 #include "assert.h"
 #include "boost/variant/static_visitor.hpp"
 #include "asyncrpcoperation_saplingconsolidation.h"
+#include "asyncrpcoperation_sweeptoaddress.h"
 #include "init.h"
 #include "key_io.h"
 #include "rpc/protocol.h"
@@ -70,17 +71,6 @@ void AsyncRPCOperation_saplingconsolidation::main() {
 }
 
 bool AsyncRPCOperation_saplingconsolidation::main_impl() {
-
-    {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        if (fCleanUpMode && pwalletMain->fCleanupRoundComplete) {
-            //update the mode statuses and recheck next round
-            checkCleanUpConfirmedOrExpired();
-            LogPrint("zrpcunsafe", "%s: Cleanup in round complete status, skipping this cycle.\n", getId());
-            return true;
-        }
-    }
-
     LogPrint("zrpcunsafe", "%s: Beginning AsyncRPCOperation_saplingconsolidation.\n", getId());
     auto consensusParams = Params().GetConsensus();
     auto nextActivationHeight = NextActivationHeight(targetHeight_, consensusParams);
@@ -90,249 +80,172 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
         return true;
     }
 
-
-    int64_t nNow = GetTime();
-    bool roundComplete = false;
-    bool foundAddressWithMultipleNotes = false;
-    bool consolidationComplete = true;
     int numTxCreated = 0;
     std::vector<std::string> consolidationTxIds;
     CAmount amountConsolidated = 0;
+
+    // STEP 1: Read wallet addresses and config from keystore only - no note data loaded.
+    // GetSaplingPaymentAddresses reads key metadata only, O(num_keys) not O(num_notes).
     int consolidationTarget = 0;
+    std::vector<libzcash::SaplingPaymentAddress> candidateAddresses;
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        consolidationTarget = pwalletMain->targetConsolidationQty;
 
-    for (int i = 0; i < 50; i++) {
+        if (pwalletMain->fSaplingSweepEnabled) {
+            // When sweep is active, consolidation is restricted to the sweep destination
+            // address only - consolidating into it prepares funds for the sweep.
+            if (rpcSweepAddress.is_initialized()) {
+                candidateAddresses.push_back(*rpcSweepAddress);
+            } else if (fSweepMapUsed) {
+                const vector<string>& v = mapMultiArgs["-sweepsaplingaddress"];
+                for (int i = 0; i < (int)v.size(); i++) {
+                    auto zAddress = DecodePaymentAddress(v[i]);
+                    if (boost::get<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr)
+                        candidateAddresses.push_back(boost::get<libzcash::SaplingPaymentAddress>(zAddress));
+                }
+            }
+            // If sweep is enabled but no sweep address is configured, skip consolidation.
+        } else if (fConsolidationMapUsed) {
+            // Sweep not active: use the explicit consolidation address filter list.
+            const vector<string>& v = mapMultiArgs["-consolidatesaplingaddress"];
+            for (int i = 0; i < (int)v.size(); i++) {
+                auto zAddress = DecodePaymentAddress(v[i]);
+                if (boost::get<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr)
+                    candidateAddresses.push_back(boost::get<libzcash::SaplingPaymentAddress>(zAddress));
+            }
+        } else {
+            // No filter active: consolidate all wallet Sapling addresses.
+            // GetSaplingPaymentAddresses reads key metadata only, O(num_keys) not O(num_notes).
+            std::set<libzcash::SaplingPaymentAddress> allAddrs;
+            pwalletMain->GetSaplingPaymentAddresses(allAddrs);
+            candidateAddresses.assign(allAddrs.begin(), allAddrs.end());
+        }
+    }
 
-        std::vector<CSproutNotePlaintextEntry> sproutEntries;
-        std::vector<SaplingNoteEntry> saplingEntries;
-        std::set<libzcash::SaplingPaymentAddress> addresses;
-        std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>> mapAddresses;
-        std::map<std::pair<int,int>, SaplingNoteEntry> mapsortedEntries;
+    // STEP 2: Per-address: check spending key, probe for threshold, then consolidate.
+    for (const auto& addr : candidateAddresses) {
+        if (isCancelled() || ShutdownRequested())
+            break;
+        // Spending key check first - skip watch-only addresses immediately.
+        libzcash::SaplingExtendedSpendingKey extsk;
         {
             LOCK2(cs_main, pwalletMain->cs_wallet);
-            consolidationTarget = pwalletMain->targetConsolidationQty;
-            // We set minDepth to 11 to avoid unconfirmed notes and in anticipation of specifying
-            // an anchor at height N-10 for each Sprout JoinSplit description
-            // Consider, should notes be sorted?
-            pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, "", 11);
-            if (fConsolidationMapUsed) {
-                const vector<string>& v = mapMultiArgs["-consolidatesaplingaddress"];
-                for(int i = 0; i < v.size(); i++) {
-                    auto zAddress = DecodePaymentAddress(v[i]);
-                    if (boost::get<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
-                        libzcash::SaplingPaymentAddress saplingAddress = boost::get<libzcash::SaplingPaymentAddress>(zAddress);
-                        addresses.insert(saplingAddress);
-                    }
-                }
-            }
-
-            //Sort Entries
-            for (auto & entry : saplingEntries) {
-                  auto entryIndex = std::make_pair(entry.confirmations, entry.op.n);
-                  mapsortedEntries.insert({entryIndex, entry});
-            }
-
-            //Store unspent note size for reporting
-            if (fCleanUpMode) {
-                int nNoteCount = saplingEntries.size();
-                pwalletMain->cleanupCurrentRoundUnspent = nNoteCount;
-            }
-
-            for (std::map<std::pair<int,int>, SaplingNoteEntry>::reverse_iterator rit = mapsortedEntries.rbegin(); rit != mapsortedEntries.rend(); rit++) {
-                SaplingNoteEntry entry = (*rit).second;
-                //Map all notes by address
-                if (addresses.count(entry.address) > 0 || !fConsolidationMapUsed) {
-                    std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>>::iterator it;
-                    it = mapAddresses.find(entry.address);
-                    if (it != mapAddresses.end()) {
-                        it->second.push_back(entry);
-                    } else {
-                        std::vector<SaplingNoteEntry> entries;
-                        entries.push_back(entry);
-                        mapAddresses[entry.address] = entries;
-                    }
-                }
-            }
+            if (!pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk))
+                continue;
         }
 
-        CCoinsViewCache coinsView(pcoinsTip);
-        consolidationComplete = true;
+        // Threshold probe: fetch at most consolidationTarget notes under a brief lock.
+        // GetFilteredNotes exits early once maxNotes is reached, so lock hold is bounded.
+        {
+            std::vector<CSproutNotePlaintextEntry> sproutProbe;
+            std::vector<SaplingNoteEntry> saplingProbe;
+            {
+                LOCK2(cs_main, pwalletMain->cs_wallet);
+                std::set<libzcash::PaymentAddress> filterAddr;
+                filterAddr.insert(addr);
+                pwalletMain->GetFilteredNotes(sproutProbe, saplingProbe, filterAddr,
+                                              11, INT_MAX, true, true, true,
+                                              consolidationTarget, 0);
+            }
+            if ((int)saplingProbe.size() < consolidationTarget)
+                continue;
+        }
 
-        //Don't consolidate if under the threshold
-        if (saplingEntries.size() < consolidationTarget){
-            roundComplete = true;
-        } else {
-            //if we make it here then we need to consolidate and the routine is considered incomplete
-            consolidationComplete = false;
+        // Random note count bounds chosen once per address.
+        // maxQuantity must be chosen first so minQuantity can be clamped below it.
+        const int maxQuantity = rand() % 35 + 10;          // [10, 44]
+        const int minQuantity = rand() % std::min(9, maxQuantity - 1) + 2;  // [2, min(10, maxQuantity-1)]
 
-            for (std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>>::iterator it = mapAddresses.begin(); it != mapAddresses.end(); it++) {
-                auto addr = (*it).first;
-                auto addrSaplingEntries = (*it).second;
+        // Per-address inner loop: keep consolidating until fewer than minQuantity
+        // unspent notes remain or they cannot cover the fee.
+        // Committed notes are excluded by ignoreSpent=true on the next call.
+        while (true) {
+            if (isCancelled() || ShutdownRequested()) {
+                LogPrint("zrpcunsafe", "%s: Stopping consolidation inner loop (cancelled or shutdown).", getId());
+                break;
+            }
+            std::vector<CSproutNotePlaintextEntry> sproutEntries;
+            std::vector<SaplingNoteEntry> saplingEntries;
+            {
+                LOCK2(cs_main, pwalletMain->cs_wallet);
+                std::set<libzcash::PaymentAddress> filterAddresses;
+                filterAddresses.insert(addr);
+                pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, filterAddresses,
+                                              11, INT_MAX, true, true, true,
+                                              maxQuantity, fConsolidationTxFee + 1);
+            }
 
-                libzcash::SaplingExtendedSpendingKey extsk;
-                if (pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
+            if ((int)saplingEntries.size() < minQuantity)
+                break;
 
-                    std::vector<SaplingNoteEntry> fromNotes;
-                    CAmount amountToSend = 0;
+            CAmount amountToSend = 0;
+            for (const auto& e : saplingEntries)
+                amountToSend += CAmount(e.note.value());
 
-                    int minQuantity = rand() % 10 + 2;
-                    int maxQuantity = rand() % 35 + 10;
-                    if (fCleanUpMode) {
-                        minQuantity = 2;
-                        maxQuantity = 25;
-                    }
+            if (amountToSend <= fConsolidationTxFee)
+                break;
 
-                    if (addrSaplingEntries.size() > 1) {
-                        foundAddressWithMultipleNotes = true;
-                    }
+            std::vector<SaplingOutPoint> ops;
+            std::vector<libzcash::SaplingNote> notes;
+            for (const auto& entry : saplingEntries) {
+                ops.push_back(entry.op);
+                notes.push_back(entry.note);
+            }
 
-                    for (const SaplingNoteEntry& saplingEntry : addrSaplingEntries) {
-
-                        libzcash::SaplingIncomingViewingKey ivk;
-                        pwalletMain->GetSaplingIncomingViewingKey(boost::get<libzcash::SaplingPaymentAddress>(saplingEntry.address), ivk);
-
-                        //Select Notes from that same address we will be sending to.
-                        if (ivk == extsk.expsk.full_viewing_key().in_viewing_key() && saplingEntry.address == addr) {
-                          amountToSend += CAmount(saplingEntry.note.value());
-                          fromNotes.push_back(saplingEntry);
-                        }
-
-                        //Only use a randomly determined number of notes between 10 and 45
-                        if (fromNotes.size() >= maxQuantity)
-                            break;
-
-                    }
-
-                    //random minimum 2 - 12 required
-                    if (fromNotes.size() < minQuantity)
-                        continue;
-
-                    // Select Sapling notes
-                    std::vector<SaplingOutPoint> ops;
-                    std::vector<libzcash::SaplingNote> notes;
-                    for (auto fromNote : fromNotes) {
-                        ops.push_back(fromNote.op);
-                        notes.push_back(fromNote.note);
-                    }
-
-                    // Fetch Sapling anchor and merkle paths
-                    uint256 anchor;
-                    std::vector<libzcash::MerklePath> saplingMerklePaths;
-                    {
-                        LOCK2(cs_main, pwalletMain->cs_wallet);
-                        if (!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
-                            LogPrint("zrpcunsafe", "%s: Merkle Path not found for Sapling note. Stopping.\n", getId());
-                        }
-                    }
-
-                    CAmount fee = fConsolidationTxFee;
-                    if (amountToSend <= fConsolidationTxFee) {
-                      fee = 0;
-                    }
-                    amountConsolidated += amountToSend;
-                    auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
-                    int nExpires = 0;
-                    {
-                        LOCK2(cs_main, pwalletMain->cs_wallet);
-                        nExpires = chainActive.Tip()->nHeight + CONSOLIDATION_EXPIRY_DELTA;
-                        builder.SetExpiryHeight(nExpires);
-                    }
-                    LogPrint("zrpcunsafe", "%s: Beginning creating transaction with Sapling output amount=%s\n", getId(), FormatMoney(amountToSend - fee));
-
-                    // Add Sapling spends
-                    for (size_t i = 0; i < notes.size(); i++) {
-                        builder.AddSaplingSpend(extsk.expsk, notes[i], anchor, saplingMerklePaths[i]);
-                    }
-
-
-                    builder.SetFee(fee);
-                    builder.AddSaplingOutput(extsk.expsk.ovk, addr, amountToSend - fee);
-
-                    auto tx = builder.Build().GetTxOrThrow();
-
-                    if (isCancelled()) {
-                        LogPrint("zrpcunsafe", "%s: Canceled. Stopping.\n", getId());
-                        break;
-                    }
-
-                    if (!pwalletMain->CommitAutomatedTx(tx)) {
-                        return false;
-                    }
-                    LogPrint("zrpcunsafe", "%s: Committed consolidation transaction with txid=%s\n", getId(), tx.GetHash().ToString());
-                    amountConsolidated += amountToSend - fee;
-                    numTxCreated++;
-                    consolidationTxIds.push_back(tx.GetHash().ToString());
-
-                    //Gather up txids until the round is complete
-                    if (fCleanUpMode) {
-                        {
-                            LOCK2(cs_main, pwalletMain->cs_wallet);
-                            pwalletMain->cleanupCurrentRoundUnspent = pwalletMain->cleanupCurrentRoundUnspent - fromNotes.size();
-                            pwalletMain->cleanUpUnconfirmed++;
-                            pwalletMain->vCleanUpTxids.push_back(tx.GetHash());
-                            pwalletMain->cleanupMaxExpirationHieght = std::max(pwalletMain->cleanupMaxExpirationHieght, nExpires);
-                        }
-                    }
-                }
-
-                if (fCleanUpMode && nNow + 180 < GetTime()) {
-                    LogPrint("zrpcunsafe", "%s: Exiting inner loop, long running.\n", getId());
+            uint256 anchor;
+            std::vector<libzcash::MerklePath> saplingMerklePaths;
+            {
+                LOCK2(cs_main, pwalletMain->cs_wallet);
+                if (!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
+                    LogPrint("zrpcunsafe", "%s: Merkle Path not found for Sapling note. Stopping.\n", getId());
                     break;
                 }
             }
-        }
 
-        if (fCleanUpMode && nNow + 180 < GetTime()) {
-            LogPrint("zrpcunsafe", "%s: Exiting outer loop, long running.\n", getId());
-            break;
-        }
-
-        if (roundComplete) {
-            break;
-        }
-
-        if (!foundAddressWithMultipleNotes) {
-            break;
-        }
-    }
-
-    updateCleanupMetrics();
-
-    if (roundComplete) {
-        {
-            LOCK2(cs_main, pwalletMain->cs_wallet);
-            pwalletMain->fCleanupRoundComplete = true;
-        }
-    }
-
-    if (!foundAddressWithMultipleNotes) {
-        //Exit Cleanup mode. All Addresses only have 1 note
-        //no more consolidation possible
-        {
-            LOCK2(cs_main, pwalletMain->cs_wallet);
-            pwalletMain->fCleanupRoundComplete = true;
-        }
-        //also consider the routine complete
-        consolidationComplete = true;
-    }
-
-    if (consolidationComplete || fCleanUpMode) {
-        {
-            LOCK2(cs_main, pwalletMain->cs_wallet);
-            if (fCleanUpMode) {
-                //Let the wallet catchup if the process ran long
-                auto waitBlocks = ((GetTime() - nNow)/60);
-                pwalletMain->nextConsolidation = chainActive.Tip()->nHeight + waitBlocks;
-            } else {
-                pwalletMain->nextConsolidation = pwalletMain->initializeConsolidationInterval + chainActive.Tip()->nHeight;
-                pwalletMain->fConsolidationRunning = false;
+            auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
+            {
+                LOCK2(cs_main, pwalletMain->cs_wallet);
+                builder.SetExpiryHeight(chainActive.Tip()->nHeight + CONSOLIDATION_EXPIRY_DELTA);
             }
+            LogPrint("zrpcunsafe", "%s: Beginning creating transaction with Sapling output amount=%s\n", getId(), FormatMoney(amountToSend - fConsolidationTxFee));
+
+            for (size_t i = 0; i < notes.size(); i++)
+                builder.AddSaplingSpend(extsk.expsk, notes[i], anchor, saplingMerklePaths[i]);
+
+            builder.SetFee(fConsolidationTxFee);
+            builder.AddSaplingOutput(extsk.expsk.ovk, addr, amountToSend - fConsolidationTxFee);
+
+            auto tx = builder.Build().GetTxOrThrow();
+
+            if (isCancelled() || ShutdownRequested()) {
+                LogPrint("zrpcunsafe", "%s: Canceled. Stopping.\n", getId());
+                break;
+            }
+
+            {
+                LOCK2(cs_main, pwalletMain->cs_wallet);
+                if (!pwalletMain->CommitAutomatedTx(tx)) {
+                    LogPrint("zrpcunsafe", "%s: Failed to commit consolidation transaction, stopping.\n", getId());
+                    break;
+                }
+            }
+            LogPrint("zrpcunsafe", "%s: Committed consolidation transaction with txid=%s\n", getId(), tx.GetHash().ToString());
+            amountConsolidated += amountToSend - fConsolidationTxFee;
+            numTxCreated++;
+            consolidationTxIds.push_back(tx.GetHash().ToString());
         }
+    }
+
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        pwalletMain->nextConsolidation = pwalletMain->initializeConsolidationInterval + chainActive.Tip()->nHeight;
+        pwalletMain->fConsolidationRunning = false;
     }
 
     LogPrint("zrpcunsafe", "%s: Created %d transactions with total Sapling output amount=%s\n", getId(), numTxCreated, FormatMoney(amountConsolidated));
     setConsolidationResult(numTxCreated, amountConsolidated, consolidationTxIds);
     return true;
-
 }
 
 void AsyncRPCOperation_saplingconsolidation::setConsolidationResult(int numTxCreated, const CAmount& amountConsolidated, const std::vector<std::string>& consolidationTxIds) {
@@ -359,110 +272,4 @@ UniValue AsyncRPCOperation_saplingconsolidation::getStatus() const {
     return obj;
 }
 
-void AsyncRPCOperation_saplingconsolidation::updateCleanupMetrics() {
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    int expiredTxs = 0;
-    int unconfirmedTxs = 0;
-    int confirmedTxs = 0;
-
-    for (int i = 0; i < pwalletMain->vCleanUpTxids.size(); i++) {
-        std::map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.find(pwalletMain->vCleanUpTxids[i]);
-        if (it != pwalletMain->mapWallet.end()) {
-            CWalletTx *pwtx = &(*it).second;
-
-            if (pwtx->GetDepthInMainChain() < 0) {
-                expiredTxs++;
-            }
-
-            if (pwtx->GetDepthInMainChain() == 0) {
-                unconfirmedTxs++;
-            }
-
-        } else {
-            expiredTxs++;
-        }
-    }
-
-    pwalletMain->cleanUpConfirmed = pwalletMain->vCleanUpTxids.size() - expiredTxs - unconfirmedTxs;
-    pwalletMain->cleanUpConflicted = expiredTxs;
-    pwalletMain->cleanUpUnconfirmed = unconfirmedTxs;
-
-    return;
-
-}
-
-void AsyncRPCOperation_saplingconsolidation::checkCleanUpConfirmedOrExpired() {
-
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    bool foundExpired = false;
-    bool foundUnconfirmed = false;
-
-    int expiredTxs = 0;
-    int unconfirmedTxs = 0;
-    int confirmedTxs = 0;
-
-    for (int i = 0; i < pwalletMain->vCleanUpTxids.size(); i++) {
-
-        std::map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.find(pwalletMain->vCleanUpTxids[i]);
-        if (it != pwalletMain->mapWallet.end()) {
-            CWalletTx *pwtx = &(*it).second;
-
-            if (pwtx->GetDepthInMainChain() < 0) {
-                foundExpired = true;
-                expiredTxs++;
-            }
-
-            if (pwtx->GetDepthInMainChain() == 0) {
-                foundUnconfirmed = true;
-                unconfirmedTxs++;
-            }
-
-        } else {
-            foundExpired = true;
-            expiredTxs++;
-        }
-
-    }
-
-    pwalletMain->cleanUpConfirmed = pwalletMain->vCleanUpTxids.size() - expiredTxs - unconfirmedTxs;
-    pwalletMain->cleanUpConflicted = expiredTxs;
-    pwalletMain->cleanUpUnconfirmed = unconfirmedTxs;
-
-    //All cleanup transactions have been confirmed
-    if (!foundExpired && !foundUnconfirmed) {
-        LogPrintf("Cleanup mode complete, resuming normal operations.\n");
-        fCleanUpMode = false;
-        pwalletMain->strCleanUpStatus = "Complete";
-        pwalletMain->vCleanUpTxids.resize(0);
-        pwalletMain->cleanUpConfirmed = 0;
-        pwalletMain->cleanUpConflicted = 0;
-        pwalletMain->cleanUpUnconfirmed = 0;
-        pwalletMain->cleanupMaxExpirationHieght = 0;
-        pwalletMain->cleanupCurrentRoundUnspent = 0;
-        pwalletMain->nextConsolidation = pwalletMain->initializeConsolidationInterval + chainActive.Tip()->nHeight;
-        pwalletMain->fConsolidationRunning = false;
-        return;
-    }
-
-    //Cleanup transactions are either  confirmed or expired.
-    //Reset and process another round.
-    if (foundExpired && !foundUnconfirmed) {
-        pwalletMain->vCleanUpTxids.resize(0);
-        pwalletMain->cleanUpConfirmed = 0;
-        pwalletMain->cleanUpConflicted = 0;
-        pwalletMain->cleanUpUnconfirmed = 0;
-        pwalletMain->cleanupMaxExpirationHieght = 0;
-        pwalletMain->cleanupCurrentRoundUnspent = 0;
-        pwalletMain->fCleanupRoundComplete = false;
-        pwalletMain->strCleanUpStatus = "Creating cleanup transactions.";
-        return;
-    }
-
-    //Else there are still some uncofirmed transactions, wcontinue to wait.
-    pwalletMain->strCleanUpStatus = "Waiting for cleanup transactions to confirm.";
-    return;
-
-}
