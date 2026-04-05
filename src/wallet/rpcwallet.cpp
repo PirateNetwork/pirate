@@ -54,8 +54,11 @@
 #include "wallet/asyncrpcoperation_mergetoaddress.h"
 #include "wallet/asyncrpcoperation_sendmany.h"
 #include "wallet/asyncrpcoperation_shieldcoinbase.h"
+#include "wallet/asyncrpcoperation_saplingconsolidation.h"
 #include "wallet/asyncrpcoperation_saplingconsolidation_address.h"
 #include "wallet/asyncrpcoperation_orchardconsolidation_address.h"
+#include "wallet/asyncrpcoperation_orchardconsolidation.h"
+#include "wallet/asyncrpcoperation_sweeptoaddress.h"
 
 #include "consensus/upgrades.h"
 
@@ -6302,6 +6305,20 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp, const CPubKey& myp
     return o;
 }
 
+// Helper: parse an integer from a UniValue that may be VNUM or VSTR (CLI can pass either).
+static int64_t ParseConsolidationInt(const UniValue& v)
+{
+    if (v.isNum())
+        return v.get_int64();
+    if (v.isStr()) {
+        int64_t out;
+        if (!ParseInt64(v.get_str(), &out))
+            throw JSONRPCError(RPC_TYPE_ERROR, "Value is not a valid integer");
+        return out;
+    }
+    throw JSONRPCError(RPC_TYPE_ERROR, "Expected numeric value");
+}
+
 UniValue enableconsolidation(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
 
@@ -6333,9 +6350,9 @@ UniValue enableconsolidation(const UniValue& params, bool fHelp, const CPubKey& 
               enabled = true;
           }
       } else if(params[0].isStr()) {
-          if (params[0].get_str() == "true" || "1") {
+          if (params[0].get_str() == "true" || params[0].get_str() == "1") {
               enabled = true;
-          } else if (params[0].get_str() == "false" || "0") {
+          } else if (params[0].get_str() == "false" || params[0].get_str() == "0") {
               enabled = false;
           } else {
             throw JSONRPCError(RPC_TYPE_ERROR, "Invalid type provided. Verbose parameter must be a boolean.");
@@ -6353,58 +6370,6 @@ UniValue enableconsolidation(const UniValue& params, bool fHelp, const CPubKey& 
       return result;
 }
 
-UniValue sweepstatus(const UniValue& params, bool fHelp, const CPubKey& mypk)
-{
-    if (!EnsureWalletIsAvailable(fHelp))
-        return NullUniValue;
-
-    if (fHelp || params.size() > 0)
-        throw runtime_error(
-            "sweepstatus\n"
-            "\nReturns the current status and configuration of the sweep-to-address function.\n"
-            "\nResult:\n"
-            "{\n"
-            "  \"sweepEnabled\" : true|false,           (boolean) Whether sweep functionality is enabled\n"
-            "  \"sweepAddress\" : \"configured|not configured\", (string) Whether a sweep address has been configured\n"
-            "  \"sweepTxFee\" : x.xxxx,                 (numeric) The configured transaction fee for sweep operations\n"
-            "  \"availableUTXOs\" : n,                  (numeric) Number of UTXOs available for sweeping\n"
-            "  \"availableValue\" : x.xxxx,             (numeric) Total value of UTXOs available for sweeping\n"
-            "  \"lastSweepTime\" : \"timestamp|never\", (string) When the last sweep occurred\n"
-            "  \"nextSweepCheck\" : \"manual trigger only\", (string) Indicates sweep is manual trigger only\n"
-            "}\n"
-            "\nExamples:\n"
-            + HelpExampleCli("sweepstatus", "")
-            + HelpExampleRpc("sweepstatus", "")
-        );
-
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    EnsureWalletIsUnlockedForReporting();
-
-    UniValue result(UniValue::VOBJ);
-    
-    // Main sweep status
-    result.push_back(Pair("sweepEnabled", pwalletMain->fSweepEnabled));
-    
-    if (pwalletMain->fSweepEnabled) {
-            if (pwalletMain->fSweepRunning) {
-            result.push_back(Pair("nextSweep", pwalletMain->sweepInterval + chainActive.Tip()->nHeight));
-            } else {
-            if (pwalletMain->nextSweep == 0) {
-                result.push_back(Pair("nextSweep",  chainActive.Tip()->nHeight + 1));
-            } else {
-                result.push_back(Pair("nextSweep", pwalletMain->nextSweep));
-            }
-        }
-        // Sweep operation status - these would need additional tracking implementation
-        result.push_back(Pair("sweepInterval", pwalletMain->sweepInterval));
-        result.push_back(Pair("targetQty", pwalletMain->targetSweepQty));
-    } else {
-        result.push_back(Pair("status", "Sweep functionality is disabled"));
-    }
-
-    return result;
-}
-
 UniValue consolidationstatus(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
 
@@ -6414,11 +6379,21 @@ UniValue consolidationstatus(const UniValue& params, bool fHelp, const CPubKey& 
     if (fHelp || params.size() > 0)
         throw runtime_error(
             "consolidationstatus\n"
-            "\nEnable or Disable consolidation function in a running node."
+            "\nReturns the current status of the automatic Sapling note consolidation process.\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"consolidationEnabled\": true|false,  (boolean) Whether auto-consolidation is enabled\n"
+            "  \"isRunning\": true|false,              (boolean) Whether a consolidation run is in progress\n"
+            "  \"nextConsolidation\": n,               (numeric) Block height at which the next run will occur\n"
+            "  \"consolidationInterval\": n,           (numeric) Number of blocks between consolidation runs\n"
+            "  \"targetQty\": n,                       (numeric) Min notes per address required to trigger consolidation\n"
+            "  \"consolidationTxFee\": n,              (numeric) Fee in satoshis used per consolidation transaction\n"
+            "  \"addressFilterEnabled\": true|false,   (boolean) Whether consolidation is restricted to an explicit address list\n"
+            "  \"consolidationAddresses\": [...]       (array)   Explicit address list, empty means all wallet addresses\n"
             "}\n"
             "\nExamples:\n"
-            + HelpExampleCli("consolidationstatus", "true")
-            + HelpExampleRpc("consolidationstatus", "true")
+            + HelpExampleCli("consolidationstatus", "")
+            + HelpExampleRpc("consolidationstatus", "")
         );
 
       LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -6441,8 +6416,18 @@ UniValue consolidationstatus(const UniValue& params, bool fHelp, const CPubKey& 
       }
       saplingStatus.push_back(Pair("consolidationInterval", pwalletMain->saplingConsolidationInterval));
       saplingStatus.push_back(Pair("targetQty", pwalletMain->targetSaplingConsolidationQty));
+      saplingStatus.push_back(Pair("consolidationTxFee", fSaplingConsolidationTxFee));
+      saplingStatus.push_back(Pair("addressFilterEnabled", fSaplingConsolidationMapUsed));
+      {
+          UniValue addrs(UniValue::VARR);
+          if (fSaplingConsolidationMapUsed) {
+              for (const std::string& a : mapMultiArgs["-consolidatesaplingaddress"])
+                  addrs.push_back(a);
+          }
+          saplingStatus.push_back(Pair("consolidationAddresses", addrs));
+      }
       result.push_back(Pair("sapling", saplingStatus));
-      
+
       // Orchard consolidation status
       UniValue orchardStatus(UniValue::VOBJ);
       orchardStatus.push_back(Pair("consolidationEnabled", pwalletMain->fOrchardConsolidationEnabled));
@@ -6458,9 +6443,440 @@ UniValue consolidationstatus(const UniValue& params, bool fHelp, const CPubKey& 
       }
       orchardStatus.push_back(Pair("consolidationInterval", pwalletMain->orchardConsolidationInterval));
       orchardStatus.push_back(Pair("targetQty", pwalletMain->targetOrchardConsolidationQty));
+      orchardStatus.push_back(Pair("consolidationTxFee", fOrchardConsolidationTxFee));
+      orchardStatus.push_back(Pair("addressFilterEnabled", fOrchardConsolidationMapUsed));
+      {
+          UniValue addrs(UniValue::VARR);
+          if (fOrchardConsolidationMapUsed) {
+              for (const std::string& a : mapMultiArgs["-consolidateorchardaddress"])
+                  addrs.push_back(a);
+          }
+          orchardStatus.push_back(Pair("consolidationAddresses", addrs));
+      }
       result.push_back(Pair("orchard", orchardStatus));
 
       return result;
+}
+
+UniValue consolidationaddresses(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() < 1 || params.size() > 2)
+        throw runtime_error(
+            "consolidationaddresses \"action\" ( \"zaddr\" )\n"
+            "\nManage the explicit list of Sapling addresses used by auto-consolidation.\n"
+            "When the list is non-empty only those addresses are consolidated;\n"
+            "when the list is cleared all wallet addresses are eligible.\n"
+            "All addresses must be Sapling addresses whose spending key is in this wallet.\n"
+            "\nActions:\n"
+            "  list              Return the current list of consolidation addresses.\n"
+            "  add \"zaddr\"       Add a Sapling address to the list.\n"
+            "  remove \"zaddr\"    Remove a Sapling address from the list.\n"
+            "  clear             Clear all addresses (consolidate all wallet addresses).\n"
+            "\nExamples:\n"
+            + HelpExampleCli("consolidationaddresses", "list")
+            + HelpExampleCli("consolidationaddresses", "add \"zs1...\"")
+            + HelpExampleCli("consolidationaddresses", "remove \"zs1...\"")
+            + HelpExampleCli("consolidationaddresses", "clear")
+        );
+
+    std::string action = params[0].get_str();
+
+    if (action == "list") {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        UniValue result(UniValue::VOBJ);
+        UniValue arr(UniValue::VARR);
+        if (fSaplingConsolidationMapUsed) {
+            for (const std::string& a : mapMultiArgs["-consolidatesaplingaddress"])
+                arr.push_back(a);
+        }
+        result.push_back(Pair("filterEnabled", fSaplingConsolidationMapUsed));
+        result.push_back(Pair("addresses", arr));
+        return result;
+
+    } else if (action == "add") {
+        if (params.size() < 2)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "add requires a Sapling address argument");
+
+        std::string addrStr = params[1].get_str();
+        auto decoded = DecodePaymentAddress(addrStr);
+        if (!IsValidPaymentAddress(decoded))
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Sapling address");
+        auto* saplingAddr = std::get_if<libzcash::SaplingPaymentAddress>(&decoded);
+        if (!saplingAddr)
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address is not a Sapling address");
+
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        EnsureWalletIsUnlocked();
+
+        libzcash::SaplingExtendedSpendingKey extsk;
+        if (!pwalletMain->GetSaplingExtendedSpendingKey(*saplingAddr, extsk))
+            throw JSONRPCError(RPC_WALLET_ERROR, "Wallet does not have the spending key for this address");
+
+        std::vector<std::string>& addrList = mapMultiArgs["-consolidatesaplingaddress"];
+        for (const std::string& a : addrList) {
+            if (a == addrStr)
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Address is already in the consolidation list");
+        }
+        addrList.push_back(addrStr);
+        fSaplingConsolidationMapUsed = true;
+
+        UniValue result(UniValue::VOBJ);
+        result.push_back(Pair("added", addrStr));
+        result.push_back(Pair("totalAddresses", (int)addrList.size()));
+        return result;
+
+    } else if (action == "remove") {
+        if (params.size() < 2)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "remove requires a Sapling address argument");
+
+        std::string addrStr = params[1].get_str();
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+
+        std::vector<std::string>& addrList = mapMultiArgs["-consolidatesaplingaddress"];
+        auto it = std::find(addrList.begin(), addrList.end(), addrStr);
+        if (it == addrList.end())
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Address not found in the consolidation list");
+        addrList.erase(it);
+        if (addrList.empty())
+            fSaplingConsolidationMapUsed = false;
+
+        UniValue result(UniValue::VOBJ);
+        result.push_back(Pair("removed", addrStr));
+        result.push_back(Pair("totalAddresses", (int)addrList.size()));
+        result.push_back(Pair("filterEnabled", fSaplingConsolidationMapUsed));
+        return result;
+
+    } else if (action == "clear") {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        mapMultiArgs["-consolidatesaplingaddress"].clear();
+        fSaplingConsolidationMapUsed = false;
+
+        UniValue result(UniValue::VOBJ);
+        result.push_back(Pair("cleared", true));
+        result.push_back(Pair("filterEnabled", false));
+        return result;
+
+    } else {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Unknown action. Use: list, add, remove, clear");
+    }
+}
+
+UniValue setconsolidationtarget(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setconsolidationtarget qty\n"
+            "\nSet the minimum number of notes an address must have before automatic\n"
+            "consolidation will process it. Must be at least 2.\n"
+            "\nArguments:\n"
+            "1. qty    (numeric, required) Minimum note count threshold per address (>= 2).\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"targetQty\": n    (numeric) The updated consolidation target quantity.\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setconsolidationtarget", "50")
+            + HelpExampleRpc("setconsolidationtarget", "50")
+        );
+
+    int qty = (int)ParseConsolidationInt(params[0]);
+    if (qty < 2)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "targetQty must be at least 2");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    pwalletMain->targetSaplingConsolidationQty = qty;
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("targetQty", pwalletMain->targetSaplingConsolidationQty));
+    return result;
+}
+
+UniValue setconsolidationfee(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setconsolidationfee fee\n"
+            "\nSet the fee (in satoshis) used for each automatic consolidation transaction.\n"
+            "Use 0 for no fee.\n"
+            "\nArguments:\n"
+            "1. fee    (numeric, required) Fee amount in satoshis (>= 0).\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"consolidationTxFee\": n    (numeric) The updated fee in satoshis.\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setconsolidationfee", "10000")
+            + HelpExampleRpc("setconsolidationfee", "10000")
+        );
+
+    int64_t fee = ParseConsolidationInt(params[0]);
+    if (fee < 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "fee cannot be negative");
+
+    fSaplingConsolidationTxFee = (CAmount)fee;
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("consolidationTxFee", fSaplingConsolidationTxFee));
+    return result;
+}
+
+UniValue setconsolidationinterval(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setconsolidationinterval blocks\n"
+            "\nSet the number of blocks between automatic consolidation runs.\n"
+            "Must be at least 1.\n"
+            "\nArguments:\n"
+            "1. blocks    (numeric, required) Block interval between consolidation runs (>= 1).\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"consolidationInterval\": n    (numeric) The updated interval.\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setconsolidationinterval", "1008")
+            + HelpExampleRpc("setconsolidationinterval", "1008")
+        );
+
+    int interval = (int)ParseConsolidationInt(params[0]);
+    if (interval < 1)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "interval must be at least 1");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    pwalletMain->saplingConsolidationInterval = interval;
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("consolidationInterval", pwalletMain->saplingConsolidationInterval));
+    return result;
+}
+
+// ─── Sweep RPCs ───────────────────────────────────────────────────────────────
+
+UniValue enablesweep(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "enablesweep true|false\n"
+            "\nEnable or disable automatic Sapling note sweeping in a running node.\n"
+            "\nArguments:\n"
+            "1. enabled    (boolean or 0/1, required) true to enable, false to disable.\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"sweepEnabled\": true|false\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("enablesweep", "true")
+            + HelpExampleRpc("enablesweep", "true")
+        );
+
+    bool enabled = false;
+    if (params[0].isNum()) {
+        enabled = params[0].get_int() != 0;
+    } else if (params[0].isBool()) {
+        enabled = params[0].isTrue();
+    } else if (params[0].isStr()) {
+        const std::string& s = params[0].get_str();
+        if (s == "true" || s == "1") enabled = true;
+        else if (s == "false" || s == "0") enabled = false;
+        else throw JSONRPCError(RPC_TYPE_ERROR, "Invalid value. Expected true/false or 0/1.");
+    } else {
+        throw JSONRPCError(RPC_TYPE_ERROR, "Invalid type provided. Expected boolean.");
+    }
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    if (enabled) {
+        bool hasAddress = rpcSaplingSweepAddress.has_value() || rpcOrchardSweepAddress.has_value() ||
+                          (!mapMultiArgs["-sweepaddress"].empty());
+        if (!hasAddress)
+            throw JSONRPCError(RPC_WALLET_ERROR,
+                "No sweep address configured. Set one with setsweepaddress or -sweepaddress before enabling sweep.");
+    }
+
+    pwalletMain->fSweepEnabled = enabled;
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("sweepEnabled", enabled));
+    return result;
+}
+
+UniValue sweepstatus(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() > 0)
+        throw runtime_error(
+            "sweepstatus\n"
+            "\nReturns the current status of the automatic Sapling note sweep process.\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"sweepEnabled\": true|false,   (boolean) Whether auto-sweep is enabled\n"
+            "  \"isRunning\": true|false,       (boolean) Whether a sweep run is in progress\n"
+            "  \"nextSweep\": n,                (numeric) Block height at which the next sweep will occur\n"
+            "  \"sweepInterval\": n,            (numeric) Number of blocks between sweep runs\n"
+            "  \"sweepTxFee\": n,               (numeric) Fee in satoshis used per sweep transaction\n"
+            "  \"sweepAddress\": \"addr\"          (string)  Active sweep destination address, or (not set)\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("sweepstatus", "")
+            + HelpExampleRpc("sweepstatus", "")
+        );
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlockedForReporting();
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("sweepEnabled", pwalletMain->fSweepEnabled));
+    result.push_back(Pair("isRunning", pwalletMain->fSweepRunning));
+    if (pwalletMain->fSweepRunning) {
+        result.push_back(Pair("nextSweep", pwalletMain->sweepInterval + chainActive.Tip()->nHeight));
+    } else {
+        if (pwalletMain->nextSweep == 0) {
+            result.push_back(Pair("nextSweep", chainActive.Tip()->nHeight + 1));
+        } else {
+            result.push_back(Pair("nextSweep", pwalletMain->nextSweep));
+        }
+    }
+    result.push_back(Pair("sweepInterval", pwalletMain->sweepInterval));
+    result.push_back(Pair("sweepTxFee", fSweepTxFee));
+    if (rpcSaplingSweepAddress.has_value()) {
+        result.push_back(Pair("sweepAddress", EncodePaymentAddress(rpcSaplingSweepAddress.value())));
+    } else if (rpcOrchardSweepAddress.has_value()) {
+        result.push_back(Pair("sweepAddress", EncodePaymentAddress(rpcOrchardSweepAddress.value())));
+    } else if (fSweepMapUsed) {
+        const vector<string>& v = mapMultiArgs["-sweepaddress"];
+        result.push_back(Pair("sweepAddress", v.empty() ? "(not set)" : v[0]));
+    } else {
+        result.push_back(Pair("sweepAddress", "(not set)"));
+    }
+    return result;
+}
+
+UniValue setsweepfee(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setsweepfee fee\n"
+            "\nSet the fee (in satoshis) used for each automatic sweep transaction.\n"
+            "Use 0 for no fee.\n"
+            "\nArguments:\n"
+            "1. fee    (numeric, required) Fee amount in satoshis (>= 0).\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"sweepTxFee\": n    (numeric) The updated fee in satoshis.\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setsweepfee", "10000")
+            + HelpExampleRpc("setsweepfee", "10000")
+        );
+
+    int64_t fee = ParseConsolidationInt(params[0]);
+    if (fee < 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "fee cannot be negative");
+
+    fSweepTxFee = (CAmount)fee;
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("sweepTxFee", fSweepTxFee));
+    return result;
+}
+
+UniValue setsweepinterval(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setsweepinterval blocks\n"
+            "\nSet the number of blocks between automatic sweep runs.\n"
+            "Must be at least 1.\n"
+            "\nArguments:\n"
+            "1. blocks    (numeric, required) Block interval between sweep runs (>= 1).\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"sweepInterval\": n    (numeric) The updated interval.\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setsweepinterval", "144")
+            + HelpExampleRpc("setsweepinterval", "144")
+        );
+
+    int interval = (int)ParseConsolidationInt(params[0]);
+    if (interval < 1)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "interval must be at least 1");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    pwalletMain->sweepInterval = interval;
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("sweepInterval", pwalletMain->sweepInterval));
+    return result;
+}
+
+UniValue setsweepaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setsweepaddress \"saplingaddress\"\n"
+            "\nSet the Sapling address that auto-sweep will move funds to.\n"
+            "The address must exist in the wallet (spending key required).\n"
+            "Only one sweep address may be active at a time.\n"
+            "\nArguments:\n"
+            "1. \"saplingaddress\"    (string, required) The Sapling zs address to sweep funds to.\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"sweepAddress\": \"addr\"    (string) The newly set sweep address.\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setsweepaddress", "\"zs1...\"")
+            + HelpExampleRpc("setsweepaddress", "\"zs1...\"")
+        );
+
+    std::string addrStr = params[0].get_str();
+    auto decoded = DecodePaymentAddress(addrStr);
+    if (!IsValidPaymentAddress(decoded))
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Sapling address");
+
+    auto* saplingAddr = std::get_if<libzcash::SaplingPaymentAddress>(&decoded);
+    if (saplingAddr == nullptr)
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address is not a Sapling address");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    EnsureWalletIsUnlocked();
+
+    libzcash::SaplingExtendedSpendingKey extsk;
+    if (!pwalletMain->GetSaplingExtendedSpendingKey(*saplingAddr, extsk))
+        throw JSONRPCError(RPC_WALLET_ERROR, "Wallet does not have the spending key for this address");
+
+    rpcSaplingSweepAddress = *saplingAddr;
+    rpcOrchardSweepAddress.reset();
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("sweepAddress", EncodePaymentAddress(*saplingAddr)));
+    return result;
 }
 
 /**
@@ -9926,10 +10342,19 @@ static const CRPCCommand commands[] =
     { "wallet",             "z_viewtransaction",        &z_viewtransaction,        true  },
     { "wallet",             "rescan",                   &rescan,                   true  },
 
-    // { "consolidation",         "enableconsolidation",      &enableconsolidation",       true },
+    { "consolidation",         "enableconsolidation",      &enableconsolidation,       true },
+    { "consolidation",         "consolidationaddresses",   &consolidationaddresses,    true },
     { "consolidation",         "consolidationstatus",      &consolidationstatus,       true },
+    { "consolidation",         "setconsolidationtarget",   &setconsolidationtarget,    true },
+    { "consolidation",         "setconsolidationfee",      &setconsolidationfee,       true },
+    { "consolidation",         "setconsolidationinterval", &setconsolidationinterval,  true },
     { "consolidation",         "consolidateaddress",       &consolidateaddress,        true },
-    { "sweep",                  "sweepstatus",             &sweepstatus,               true }
+
+    { "sweep",                 "enablesweep",              &enablesweep,               true },
+    { "sweep",                 "sweepstatus",              &sweepstatus,               true },
+    { "sweep",                 "setsweepfee",              &setsweepfee,               true },
+    { "sweep",                 "setsweepinterval",         &setsweepinterval,          true },
+    { "sweep",                 "setsweepaddress",          &setsweepaddress,           true }
 
 };
 

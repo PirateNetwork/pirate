@@ -189,7 +189,7 @@ src/cc/libcc.so
 src/libcc.so
 
 artifacts*
-release*
+/release*
 target*
 .cargo/.configured*
 .cargo/config

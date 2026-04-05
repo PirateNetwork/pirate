@@ -2296,7 +2296,13 @@ public:
                           bool requireSpendingKey=true);
 
     /* Find notes filtered by payment addresses, min depth, max depth, if they are spent,
-       if a spending key is required, and if they are locked */
+       if a spending key is required, and if they are locked.
+       When maxNotes > 0 a streaming dual-heap selection (half-smallest / half-largest)
+       is used.  The scan exits early once both heaps are full AND the combined
+       aggregate value of the working set >= minAggregateValue, so the lock is held
+       for the minimum time necessary to satisfy the caller's value requirement.
+       Pass minAggregateValue=0 to disable early exit (both heaps filled from the full
+       wallet scan before returning). */
     void GetFilteredNotes(std::vector<SaplingNoteEntry>& saplingEntries,
                           std::vector<OrchardNoteEntry>& orchardEntries,
                           std::set<libzcash::PaymentAddress>& filterAddresses,
@@ -2304,7 +2310,9 @@ public:
                           int maxDepth=INT_MAX,
                           bool ignoreSpent=true,
                           bool requireSpendingKey=true,
-                          bool ignoreLocked=true);
+                          bool ignoreLocked=true,
+                          int maxNotes=0,
+                          CAmount minAggregateValue=0);
 };
 
 /** A key allocated from the key pool. */
