@@ -4120,7 +4120,7 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
     std::vector<SaplingNoteEntry> saplingEntries;
     std::vector<OrchardNoteEntry> orchardEntries;
-    pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, zaddrs, 0, 99999999, true, !fIncludeWatchonly, false);
+    pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, zaddrs, 0, INT_MAX, true, !fIncludeWatchonly, false);
 
     for (auto & entry : saplingEntries) {
         //Get Note depths

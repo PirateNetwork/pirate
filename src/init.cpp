@@ -516,6 +516,8 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-consolidationtxfee", _("(DEPRECATED) Use -saplingconsolidationtxfee instead"));
     strUsage += HelpMessageOpt("-consolidateaddress=<zaddr>", _("(DEPRECATED) Use protocol-specific address options instead"));
 
+    strUsage += HelpMessageOpt("-usedpowconfs", _("Use dPoW confirmation count instead of raw chain depth when filtering notes (default: false)"));
+
     // Sweep commands
     strUsage += HelpMessageOpt("-sweep", _("Enable auto note sweep, automatically move all funds to a single address periodically"));
     strUsage += HelpMessageOpt("-sweepaddress=<zaddr>", _("Specify address to sweep funds to (supports both Sapling and Orchard addresses)"));
@@ -2555,6 +2557,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             return InitError("Deprecated parameter -sweeporchardaddress is no longer supported. Use -sweepaddress instead.");
         }
         
+        pwalletMain->fUseDpowConfs = GetBoolArg("-usedpowconfs", false);
+
         // Unified sweep support
         bool hasSweep = GetBoolArg("-sweep", false) || !mapMultiArgs["-sweepaddress"].empty();
         

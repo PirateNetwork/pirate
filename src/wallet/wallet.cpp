@@ -13056,8 +13056,7 @@ bool CWallet::LoadCryptedOrchardWallet(const CKeyingMaterial& vchSecret) {
  * @param requireSpendingKey Whether to only include notes for which we have the spending key
  * 
  * This is a convenience wrapper around the more detailed GetFilteredNotes function.
- * It handles address decoding and sets default values for maxDepth (INT_MAX) and 
- * ignoreLocked (false) parameters.
+ * It handles address decoding and sets default values for ignoreLocked (false) parameters.
  */
 void CWallet::GetFilteredNotes(
     std::vector<SaplingNoteEntry>& saplingEntries,
@@ -13077,7 +13076,7 @@ void CWallet::GetFilteredNotes(
 }
 
 /**
- * Find notes in the wallet filtered by payment addresses, min depth, max depth,
+ * Find notes in the wallet filtered by payment addresses, min depth,
  * if the note is spent, if a spending key is required, and if the notes are locked.
  *
  * When maxNotes > 0 the function uses a streaming dual-heap selection algorithm.
@@ -13125,25 +13124,60 @@ void CWallet::GetFilteredNotes(
     const bool bounded = (maxNotes > 0);
     const int halfNotes = bounded ? std::max(1, maxNotes / 2) : 0;
 
+    // ── Protocol detection ───────────────────────────────────────────────────
+    // If filterAddresses is non-empty, inspect which protocols are represented
+    // so we can skip entire protocol note loops when no matching address type
+    // is present. When filterAddresses is empty all protocols are searched.
+    bool searchSapling = true;
+    bool searchOrchard = true;
+    if (!filterAddresses.empty()) {
+        searchSapling = false;
+        searchOrchard = false;
+        for (const auto& addr : filterAddresses) {
+            if (std::get_if<libzcash::SaplingPaymentAddress>(&addr) != nullptr)
+                searchSapling = true;
+            else if (std::get_if<libzcash::OrchardPaymentAddress>(&addr) != nullptr)
+                searchOrchard = true;
+            if (searchSapling && searchOrchard)
+                break; // both already needed, no point checking further
+        }
+    }
+
+    // ── Sapling heaps ────────────────────────────────────────────────────────
     // smallestHeap: max-heap — top() is the largest-of-the-smallest candidates.
-    // Evict top when a note with a lower value is seen.
-    auto cmpMax = [](const SaplingNoteEntry& a, const SaplingNoteEntry& b) {
+    auto sapCmpMax = [](const SaplingNoteEntry& a, const SaplingNoteEntry& b) {
         return a.note.value() < b.note.value();
     };
     // largestHeap: min-heap — top() is the smallest-of-the-largest candidates.
-    // Evict top when a note with a higher value is seen.
-    auto cmpMin = [](const SaplingNoteEntry& a, const SaplingNoteEntry& b) {
+    auto sapCmpMin = [](const SaplingNoteEntry& a, const SaplingNoteEntry& b) {
         return a.note.value() > b.note.value();
     };
+    std::priority_queue<SaplingNoteEntry,
+                        std::vector<SaplingNoteEntry>,
+                        decltype(sapCmpMax)> sapSmallestHeap(sapCmpMax);
+    std::priority_queue<SaplingNoteEntry,
+                        std::vector<SaplingNoteEntry>,
+                        decltype(sapCmpMin)> sapLargestHeap(sapCmpMin);
 
-    std::priority_queue<SaplingNoteEntry,
-                        std::vector<SaplingNoteEntry>,
-                        decltype(cmpMax)> smallestHeap(cmpMax);
-    std::priority_queue<SaplingNoteEntry,
-                        std::vector<SaplingNoteEntry>,
-                        decltype(cmpMin)> largestHeap(cmpMin);
-    // Single aggregate tracks the combined total of both disjoint heaps.
+    // ── Orchard heaps ────────────────────────────────────────────────────────
+    auto orchCmpMax = [](const OrchardNoteEntry& a, const OrchardNoteEntry& b) {
+        return a.note.value() < b.note.value();
+    };
+    auto orchCmpMin = [](const OrchardNoteEntry& a, const OrchardNoteEntry& b) {
+        return a.note.value() > b.note.value();
+    };
+    std::priority_queue<OrchardNoteEntry,
+                        std::vector<OrchardNoteEntry>,
+                        decltype(orchCmpMax)> orchSmallestHeap(orchCmpMax);
+    std::priority_queue<OrchardNoteEntry,
+                        std::vector<OrchardNoteEntry>,
+                        decltype(orchCmpMin)> orchLargestHeap(orchCmpMin);
+
+    // Single aggregate tracks the combined total across all four heaps.
     CAmount aggregateValue = 0;
+    // earlyExit is set when a single protocol's heaps are full AND value is met.
+    // The outer mapWallet loop checks this on each iteration; the per-note inner
+    // loops break out themselves once the flag is set.
     bool earlyExit = false;
 
     for (auto & p : mapWallet) {
@@ -13155,193 +13189,188 @@ void CWallet::GetFilteredNotes(
         if (!CheckFinalTx(wtx) || wtx.GetBlocksToMaturity() > 0)
             continue;
 
-        // Apply depth filtering based on confirmation requirements
-        if (minDepth > 1) {
-            // For deeper requirements, use dPoW (delayed Proof of Work) confirmations
-            int nHeight    = tx_height(wtx.GetHash());
-            int nDepth     = wtx.GetDepthInMainChain();
-            int dpowconfs  = komodo_dpowconfs(nHeight, nDepth);
-            if (dpowconfs < minDepth || dpowconfs > maxDepth) {
-                continue;
-            }
-        } else {
-            // For shallow requirements, use standard depth checks
-            if (wtx.GetDepthInMainChain() < minDepth ||
-                wtx.GetDepthInMainChain() > maxDepth) {
-                continue;
-            }
-        }
+        const int chainDepth = wtx.GetDepthInMainChain();
+        const int nDepth = fUseDpowConfs
+            ? komodo_dpowconfs(tx_height(wtx.GetHash()), chainDepth)
+            : chainDepth;
+        if (nDepth < minDepth || nDepth > maxDepth)
+            continue;
 
-        // Process Sapling notes in this transaction
-        auto vOutputs = wtx.GetSaplingOutputs();
+        // ── Sapling notes ────────────────────────────────────────────────────
+        if (searchSapling) {
+            auto vOutputs = wtx.GetSaplingOutputs();
 
-        for (auto & pair : wtx.mapSaplingNoteData) {
-            SaplingOutPoint op = pair.first;
-            SaplingNoteData nd = pair.second;
+            for (auto & pair : wtx.mapSaplingNoteData) {
+                if (earlyExit) break;
 
-            // Use Rust decryption
-            auto optPlaintext = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[op.n], nd.ivk);
+                SaplingOutPoint op = pair.first;
+                SaplingNoteData nd = pair.second;
 
-            // The transaction would not have entered the wallet unless
-            // its plaintext had been successfully decrypted previously.
-            assert(optPlaintext != std::nullopt);
+                auto optPlaintext = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[op.n], nd.ivk);
+                assert(optPlaintext != std::nullopt);
 
-            auto notePt = optPlaintext.value();
-            SaplingPaymentAddress pa;
-            assert(nd.ivk.DeriveAddress(&pa, notePt.d));
+                auto notePt = optPlaintext.value();
+                SaplingPaymentAddress pa;
+                assert(nd.ivk.DeriveAddress(&pa, notePt.d));
 
-            // Skip notes that don't match the address filter
-            if (!(filterAddresses.empty() || filterAddresses.count(pa))) {
-                continue;
-            }
+                if (!(filterAddresses.empty() || filterAddresses.count(pa)))
+                    continue;
+                if (ignoreSpent && nd.nullifier && IsSaplingSpent(*nd.nullifier))
+                    continue;
+                if (requireSpendingKey) {
+                    libzcash::SaplingExtendedFullViewingKey extfvk;
+                    if (!(GetSaplingFullViewingKey(nd.ivk, extfvk) &&
+                          HaveSaplingSpendingKey(extfvk)))
+                        continue;
+                }
+                if (ignoreLocked && IsLockedNote(op))
+                    continue;
 
-            // Skip spent notes if requested
-            if (ignoreSpent && nd.nullifier && IsSaplingSpent(*nd.nullifier)) {
-                continue;
-            }
+                auto note = notePt.note(nd.ivk).value();
+                SaplingNoteEntry entry { op, pa, note, notePt.memo(), chainDepth };
 
-            // Skip notes for which we don't have the spending key (if required)
-            if (requireSpendingKey) {
-                libzcash::SaplingExtendedFullViewingKey extfvk;
-                if (!(GetSaplingFullViewingKey(nd.ivk, extfvk) &&
-                    HaveSaplingSpendingKey(extfvk))) {
+                if (!bounded) {
+                    saplingEntries.push_back(entry);
                     continue;
                 }
-            }
 
-            // Skip locked notes if requested
-            if (ignoreLocked && IsLockedNote(op)) {
-                continue;
-            }
+                // === Streaming bounded selection (disjoint heaps) ===
+                CAmount v = CAmount(note.value());
 
-            // Add qualifying Sapling note to results
-            auto note = notePt.note(nd.ivk).value();
-            SaplingNoteEntry entry { op, pa, note, notePt.memo(), wtx.GetDepthInMainChain() };
-
-            if (!bounded) {
-                // Unbounded path: original behaviour, all qualifying notes collected.
-                saplingEntries.push_back(entry);
-                continue;
-            }
-
-            // === Streaming bounded selection (disjoint heaps) ===
-            //
-            // Each note has exactly one owner: smallestHeap or largestHeap.
-            // aggregateValue tracks the combined total of both heaps.
-            //
-            // Routing rules (applied in order):
-            //   1. smallestHeap has room              → insert there.
-            //   2. note is smaller than smallestHeap.top:
-            //        evict top → cascade into largestHeap, insert note into smallestHeap.
-            //        Net aggregateValue change: +v (incoming) replaces nothing; the
-            //        evicted value stays in the system via largestHeap if it qualifies.
-            //   3. Otherwise → route directly to largestHeap.
-            CAmount v = CAmount(note.value());
-
-            if ((int)smallestHeap.size() < halfNotes) {
-                smallestHeap.push(entry);
-                aggregateValue += v;
-            } else if (v < CAmount(smallestHeap.top().note.value())) {
-                SaplingNoteEntry evicted = smallestHeap.top();
-                CAmount evictedVal = CAmount(evicted.note.value());
-                // Remove evicted from aggregate; it may re-enter via largestHeap below.
-                aggregateValue -= evictedVal;
-                smallestHeap.pop();
-                smallestHeap.push(entry);
-                aggregateValue += v;
-
-                // Cascade evicted note into largestHeap.
-                if ((int)largestHeap.size() < halfNotes) {
-                    largestHeap.push(evicted);
-                    aggregateValue += evictedVal;
-                } else if (evictedVal > CAmount(largestHeap.top().note.value())) {
-                    aggregateValue -= CAmount(largestHeap.top().note.value());
-                    largestHeap.pop();
-                    largestHeap.push(evicted);
-                    aggregateValue += evictedVal;
-                }
-            } else {
-                // Note is too large for smallestHeap — try largestHeap directly.
-                if ((int)largestHeap.size() < halfNotes) {
-                    largestHeap.push(entry);
+                if ((int)sapSmallestHeap.size() < halfNotes) {
+                    sapSmallestHeap.push(entry);
                     aggregateValue += v;
-                } else if (v > CAmount(largestHeap.top().note.value())) {
-                    aggregateValue -= CAmount(largestHeap.top().note.value());
-                    largestHeap.pop();
-                    largestHeap.push(entry);
+                } else if (v < CAmount(sapSmallestHeap.top().note.value())) {
+                    SaplingNoteEntry evicted = sapSmallestHeap.top();
+                    CAmount evictedVal = CAmount(evicted.note.value());
+                    aggregateValue -= evictedVal;
+                    sapSmallestHeap.pop();
+                    sapSmallestHeap.push(entry);
                     aggregateValue += v;
+                    if ((int)sapLargestHeap.size() < halfNotes) {
+                        sapLargestHeap.push(evicted);
+                        aggregateValue += evictedVal;
+                    } else if (evictedVal > CAmount(sapLargestHeap.top().note.value())) {
+                        aggregateValue -= CAmount(sapLargestHeap.top().note.value());
+                        sapLargestHeap.pop();
+                        sapLargestHeap.push(evicted);
+                        aggregateValue += evictedVal;
+                    }
+                } else {
+                    if ((int)sapLargestHeap.size() < halfNotes) {
+                        sapLargestHeap.push(entry);
+                        aggregateValue += v;
+                    } else if (v > CAmount(sapLargestHeap.top().note.value())) {
+                        aggregateValue -= CAmount(sapLargestHeap.top().note.value());
+                        sapLargestHeap.pop();
+                        sapLargestHeap.push(entry);
+                        aggregateValue += v;
+                    }
                 }
-            }
 
-            // Early exit: both heaps full AND working set satisfies minimum value.
-            if (minAggregateValue > 0 &&
-                (int)smallestHeap.size() >= halfNotes &&
-                (int)largestHeap.size() >= halfNotes &&
-                aggregateValue >= minAggregateValue) {
-                earlyExit = true;
-                break;
-            }
+                // Early exit: Sapling heaps full AND combined aggregate satisfies requirement.
+                if (minAggregateValue > 0 &&
+                    (int)sapSmallestHeap.size() >= halfNotes &&
+                    (int)sapLargestHeap.size() >= halfNotes &&
+                    aggregateValue >= minAggregateValue) {
+                    earlyExit = true;
+                    break;
+                }
+            } // end Sapling loop
+        } // end if (searchSapling)
 
-        } // end: for (auto & pair : wtx.mapSaplingNoteData)
+        if (earlyExit) break;
 
-        // Process Orchard notes in this transaction
-        auto vActions = wtx.GetOrchardActions();
+        // ── Orchard notes ────────────────────────────────────────────────────
+        if (searchOrchard) {
+            auto vActions = wtx.GetOrchardActions();
 
-        for (auto & pair : wtx.mapOrchardNoteData) {
-            OrchardOutPoint op = pair.first;
-            OrchardNoteData nd = pair.second;
+            for (auto & pair : wtx.mapOrchardNoteData) {
+                if (earlyExit) break;
 
-            // Decrypt the Orchard note using the stored incoming viewing key
-            auto optDeserialized = OrchardNotePlaintext::AttemptDecryptOrchardAction(&vActions[op.n], nd.ivk);
+                OrchardOutPoint op = pair.first;
+                OrchardNoteData nd = pair.second;
 
-            // The transaction would not have entered the wallet unless
-            // its plaintext had been successfully decrypted previously.
-            assert(optDeserialized != std::nullopt);
+                auto optDeserialized = OrchardNotePlaintext::AttemptDecryptOrchardAction(&vActions[op.n], nd.ivk);
+                assert(optDeserialized != std::nullopt);
 
-            auto notePt = optDeserialized.value();
-            auto pa = notePt.GetAddress();
-            auto memo = notePt.memo();
-            auto note = notePt.note().value();
+                auto notePt = optDeserialized.value();
+                auto pa   = notePt.GetAddress();
+                auto memo = notePt.memo();
+                auto note = notePt.note().value();
 
-            // Skip notes that don't match the address filter
-            if (!(filterAddresses.empty() || filterAddresses.count(pa))) {
-                continue;
-            }
+                if (!(filterAddresses.empty() || filterAddresses.count(pa)))
+                    continue;
+                if (ignoreSpent && nd.nullifier && IsOrchardSpent(*nd.nullifier))
+                    continue;
+                if (requireSpendingKey) {
+                    libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+                    if (!(GetOrchardFullViewingKey(nd.ivk, extfvk) &&
+                          HaveOrchardSpendingKey(extfvk)))
+                        continue;
+                }
+                if (ignoreLocked && IsLockedNote(op))
+                    continue;
 
-            // Skip spent notes if requested
-            if (ignoreSpent && nd.nullifier && IsOrchardSpent(*nd.nullifier)) {
-                continue;
-            }
+                OrchardNoteEntry entry { op, pa, note, memo, chainDepth };
 
-            // Skip notes for which we don't have the spending key (if required)
-            if (requireSpendingKey) {
-                libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-                if (!(GetOrchardFullViewingKey(nd.ivk, extfvk) &&
-                    HaveOrchardSpendingKey(extfvk))) {
+                if (!bounded) {
+                    orchardEntries.push_back(entry);
                     continue;
                 }
-            }
 
-            // Skip locked notes if requested
-            if (ignoreLocked && IsLockedNote(op)) {
-                continue;
-            }
+                // === Streaming bounded selection (disjoint heaps) ===
+                CAmount v = CAmount(note.value());
 
-            // Add qualifying Orchard note to results
-            orchardEntries.push_back(OrchardNoteEntry {op, pa, note, memo, wtx.GetDepthInMainChain()});
-        }
-    }
+                if ((int)orchSmallestHeap.size() < halfNotes) {
+                    orchSmallestHeap.push(entry);
+                    aggregateValue += v;
+                } else if (v < CAmount(orchSmallestHeap.top().note.value())) {
+                    OrchardNoteEntry evicted = orchSmallestHeap.top();
+                    CAmount evictedVal = CAmount(evicted.note.value());
+                    aggregateValue -= evictedVal;
+                    orchSmallestHeap.pop();
+                    orchSmallestHeap.push(entry);
+                    aggregateValue += v;
+                    if ((int)orchLargestHeap.size() < halfNotes) {
+                        orchLargestHeap.push(evicted);
+                        aggregateValue += evictedVal;
+                    } else if (evictedVal > CAmount(orchLargestHeap.top().note.value())) {
+                        aggregateValue -= CAmount(orchLargestHeap.top().note.value());
+                        orchLargestHeap.pop();
+                        orchLargestHeap.push(evicted);
+                        aggregateValue += evictedVal;
+                    }
+                } else {
+                    if ((int)orchLargestHeap.size() < halfNotes) {
+                        orchLargestHeap.push(entry);
+                        aggregateValue += v;
+                    } else if (v > CAmount(orchLargestHeap.top().note.value())) {
+                        aggregateValue -= CAmount(orchLargestHeap.top().note.value());
+                        orchLargestHeap.pop();
+                        orchLargestHeap.push(entry);
+                        aggregateValue += v;
+                    }
+                }
 
-    // Drain both heaps into saplingEntries (bounded path only).
+                // Early exit: Orchard heaps full AND combined aggregate satisfies requirement.
+                if (minAggregateValue > 0 &&
+                    (int)orchSmallestHeap.size() >= halfNotes &&
+                    (int)orchLargestHeap.size() >= halfNotes &&
+                    aggregateValue >= minAggregateValue) {
+                    earlyExit = true;
+                    break;
+                }
+            } // end Orchard loop
+        } // end if (searchOrchard)
+    } // end mapWallet loop
+
+    // Drain heaps into result vectors (bounded path only).
     if (bounded) {
-        while (!smallestHeap.empty()) {
-            saplingEntries.push_back(smallestHeap.top());
-            smallestHeap.pop();
-        }
-        while (!largestHeap.empty()) {
-            saplingEntries.push_back(largestHeap.top());
-            largestHeap.pop();
-        }
+        while (!sapSmallestHeap.empty()) { saplingEntries.push_back(sapSmallestHeap.top()); sapSmallestHeap.pop(); }
+        while (!sapLargestHeap.empty())  { saplingEntries.push_back(sapLargestHeap.top());  sapLargestHeap.pop();  }
+        while (!orchSmallestHeap.empty()) { orchardEntries.push_back(orchSmallestHeap.top()); orchSmallestHeap.pop(); }
+        while (!orchLargestHeap.empty())  { orchardEntries.push_back(orchLargestHeap.top());  orchLargestHeap.pop();  }
     }
 }
 

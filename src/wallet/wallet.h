@@ -1102,6 +1102,15 @@ public:
     int nextOrchardConsolidation = 0;
     int targetOrchardConsolidationQty = 100;
 
+    // Use dPoW confirmation count for note depth filtering
+    // Use dPoW (delayed Proof-of-Work) notarisation confirmation count instead of
+    // raw GetDepthInMainChain() when filtering notes in GetFilteredNotes.  When true,
+    // komodo_dpowconfs() is applied to the raw confirmation count, which makes depth
+    // effectively infinite for transactions already buried beneath a notarisation and
+    // prevents spending notes that will be reorganised away before a notarisation.
+    // Enable with -usedpowconfs on the command line.
+    bool fUseDpowConfs = false;
+
     // Protocol-agnostic sweep configuration
     bool fSweepEnabled = false;          // Unified sweep flag supporting all protocols
     bool fSweepRunning = false;
@@ -2295,7 +2304,7 @@ public:
                           bool ignoreSpent=true,
                           bool requireSpendingKey=true);
 
-    /* Find notes filtered by payment addresses, min depth, max depth, if they are spent,
+    /* Find notes filtered by payment addresses, min depth, if they are spent,
        if a spending key is required, and if they are locked.
        When maxNotes > 0 a streaming dual-heap selection (half-smallest / half-largest)
        is used.  The scan exits early once both heaps are full AND the combined
