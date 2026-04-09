@@ -11,12 +11,8 @@
  */
 
 #include "asyncrpcoperation_sweeptoaddress.h"
-#include "assert.h"
-#include "boost/variant/static_visitor.hpp"
 #include "init.h"
 #include "key_io.h"
-#include "random.h"
-#include "rpc/protocol.h"
 #include "sync.h"
 #include "tinyformat.h"
 #include "transaction_builder.h"
@@ -24,51 +20,20 @@
 #include "utilmoneystr.h"
 #include "wallet.h"
 
-//==============================================================================
-// GLOBAL CONFIGURATION CONSTANTS
-//==============================================================================
-
+// Global configuration variables
 /**
- * Global sweep transaction fee amount
- * Can be modified at runtime to adjust fee levels based on network conditions
+ * Global variables for sweep configuration
+ * These are set during initialization from command line parameters
  */
 CAmount fSweepTxFee = DEFAULT_SWEEP_FEE;
-
-/**
- * Flag indicating whether sweep address mapping is configured
- * When true, operations use configured address mapping from command-line arguments
- */
 bool fSweepMapUsed = false;
 
 /**
- * Number of blocks before sweep transactions expire
- * Prevents transactions from remaining in mempool indefinitely
+ * Number of blocks to set as expiration delta for sweep transactions
+ * This provides sufficient time for transaction confirmation while preventing
+ * transactions from staying in mempool indefinitely
  */
 const int SWEEP_EXPIRY_DELTA = 40;
-
-/**
- * Maximum number of notes to include in a single sweep transaction
- * Prevents transactions from becoming too large
- */
-const int MAX_NOTES_PER_TRANSACTION = 50;
-
-/**
- * Minimum number of notes required to perform consolidation
- * Single notes are not consolidated as there's no efficiency benefit
- */
-const int MIN_NOTES_FOR_CONSOLIDATION = 1;
-
-/**
- * @brief Minimum confirmation depth for notes to be swept
- * 
- * Notes must have at least this many confirmations before inclusion
- * in sweep operations to prevent double-spending.
- */
-const int MIN_CONFIRMATION_DEPTH = 11;
-
-//==============================================================================
-// RPC DESTINATION ADDRESS MANAGEMENT
-//==============================================================================
 
 /**
  * @brief Sapling destination address for RPC-initiated sweep operations
@@ -86,40 +51,38 @@ std::optional<libzcash::SaplingPaymentAddress> rpcSaplingSweepAddress;
  */
 std::optional<libzcash::OrchardPaymentAddress> rpcOrchardSweepAddress;
 
-//==============================================================================
-// CLASS IMPLEMENTATION
-//==============================================================================
-
-//==============================================================================
-// CONSTRUCTOR AND LIFECYCLE MANAGEMENT
-//==============================================================================
-
 /**
- * @brief Constructs a sweep-to-address operation
+ * @brief Constructor for sweep-to-address operation
  * 
- * Creates operation for automatic execution at specified target height.
- * Supports both RPC-initiated and command-line initiated sweeps.
- * 
- * @param targetHeight Blockchain height for sweep execution
+ * @param targetHeight Target blockchain height for sweep operations
  * @param fromRpc True for RPC calls, false for command-line operations
  */
 AsyncRPCOperation_sweeptoaddress::AsyncRPCOperation_sweeptoaddress(int targetHeight, bool fromRpc) : targetHeight_(targetHeight), fromRPC_(fromRpc) {}
 
 /**
- * @brief Destructor with automatic resource cleanup
+ * @brief Destructor - automatically cleans up resources
  */
 AsyncRPCOperation_sweeptoaddress::~AsyncRPCOperation_sweeptoaddress() {}
 
 /**
- * @brief Main entry point for sweep operation with error handling
+ * @brief Main execution wrapper for sweep-to-address operation
  * 
- * Wrapper function providing exception handling and state management
- * for the asynchronous sweep operation. Delegates to main_impl().
+ * This method is the main entry point for executing the sweep operation.
+ * It performs the following steps:
+ * 1. Validates the operation state and handles cancellation
+ * 2. Sets up execution timing and state management
+ * 3. Calls the core sweep logic
+ * 4. Handles exceptions with detailed error reporting
+ * 5. Updates final operation status and logs results
+ * 
+ * The sweep process moves funds from multiple addresses into a single
+ * destination address across Sapling and Orchard protocols.
  */
 void AsyncRPCOperation_sweeptoaddress::main()
 {
-    if (isCancelled())
+    if (isCancelled()) {
         return;
+    }
 
     set_state(OperationStatus::EXECUTING);
     start_execution_clock();
@@ -133,18 +96,18 @@ void AsyncRPCOperation_sweeptoaddress::main()
         std::string message = find_value(objError, "message").get_str();
         set_error_code(code);
         set_error_message(message);
-    } catch (const runtime_error& e) {
+    } catch (const std::runtime_error& e) {
         set_error_code(-1);
-        set_error_message("runtime error: " + string(e.what()));
-    } catch (const logic_error& e) {
+        set_error_message("Runtime error: " + std::string(e.what()));
+    } catch (const std::logic_error& e) {
         set_error_code(-1);
-        set_error_message("logic error: " + string(e.what()));
-    } catch (const exception& e) {
+        set_error_message("Logic error: " + std::string(e.what()));
+    } catch (const std::exception& e) {
         set_error_code(-1);
-        set_error_message("general exception: " + string(e.what()));
+        set_error_message("General exception: " + std::string(e.what()));
     } catch (...) {
         set_error_code(-2);
-        set_error_message("unknown error");
+        set_error_message("Unknown error occurred during sweep");
     }
 
     stop_execution_clock();
@@ -155,30 +118,18 @@ void AsyncRPCOperation_sweeptoaddress::main()
         set_state(OperationStatus::FAILED);
     }
 
-    std::string s = strprintf("%s: Sweep transaction to single destination created. (status=%s", getId(), getStateAsString());
+    std::string logMessage = strprintf("%s: Sweep transaction to single destination created. (status=%s", getId(), getStateAsString());
     if (success) {
-        s += strprintf(", success)\n");
+        logMessage += strprintf(", success)\n");
     } else {
-        s += strprintf(", error=%s)\n", getErrorMessage());
+        logMessage += strprintf(", error=%s)\n", getErrorMessage());
     }
 
-    LogPrintf("%s", s);
+    LogPrintf("%s", logMessage);
 }
 
-/**
- * @brief Core implementation of sweep operation
- * 
- * Consolidates shielded notes from multiple protocols (Sapling/Orchard) 
- * into single destination address. Handles cross-protocol transfers,
- * note discovery, transaction building, and network compatibility.
- * 
- * @return true if operation completed successfully
- * @throws JSONRPCError For transaction building failures
- * @throws runtime_error For system/network failures
- */
 bool AsyncRPCOperation_sweeptoaddress::main_impl()
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
     LogPrint("zrpcunsafe", "%s: Beginning asyncrpcoperation_sweeptoaddress.\n", getId());
     auto consensusParams = Params().GetConsensus();
     auto nextActivationHeight = NextActivationHeight(targetHeight_, consensusParams);
@@ -223,20 +174,22 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
         }
     }
 
-    // Read all wallet Sapling addresses from the keystore - no note data loaded.
-    // GetSaplingPaymentAddresses is O(num_keys), not O(num_notes).
-    std::vector<libzcash::SaplingPaymentAddress> saplingCandidates;
-    std::set<libzcash::OrchardPaymentAddress> orchardCandidateSet;
+    // Read all wallet addresses from the keystore - no note data loaded.
+    // GetXPaymentAddresses is O(num_keys), not O(num_notes).
+    std::set<libzcash::SaplingPaymentAddress> saplingCandidates;
+    std::set<libzcash::OrchardPaymentAddress> orchardCandidates;
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
-        std::set<libzcash::SaplingPaymentAddress> allSaplingAddrs;
-        pwalletMain->GetSaplingPaymentAddresses(allSaplingAddrs);
-        for (const auto& addr : allSaplingAddrs) {
-            if (!(hasSaplingTarget && addr == saplingSweepAddress))
-                saplingCandidates.push_back(addr);
-        }
-        // Collect Orchard addresses for Orchard processing pass below.
-        pwalletMain->GetOrchardPaymentAddresses(orchardCandidateSet);
+        // Fill then erase target: O(n) fill + O(log n) erase, no per-element branch.
+        pwalletMain->GetSaplingPaymentAddresses(saplingCandidates);
+        if (hasSaplingTarget)
+            saplingCandidates.erase(saplingSweepAddress);
+
+        // Collect Orchard addresses for Orchard processing pass below,
+        // excluding the sweep target so we never sweep from target to itself.
+        pwalletMain->GetOrchardPaymentAddresses(orchardCandidates);
+        if (hasOrchardTarget)
+            orchardCandidates.erase(orchardSweepAddress);
     }
 
     int numTxCreated = 0;
@@ -272,19 +225,33 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, filterAddresses,
                                               11, INT_MAX, true, true, true,
                                               maxQuantity, fSweepTxFee + 1);
+                // Lock immediately so no other async operation can select the same notes.
+                for (const auto& e : saplingEntries)
+                    pwalletMain->LockNote(e.op);
             }
 
-            if (saplingEntries.empty())
+            auto unlockSaplingEntries = [&]() {
+                LOCK2(cs_main, pwalletMain->cs_wallet);
+                for (const auto& e : saplingEntries)
+                    pwalletMain->UnlockNote(e.op);
+            };
+
+            if (saplingEntries.empty()) {
+                unlockSaplingEntries();
                 break;
+            }
 
             CAmount amountToSend = 0;
             for (const auto& e : saplingEntries)
                 amountToSend += CAmount(e.note.value());
 
-            if (amountToSend <= fSweepTxFee)
+            if (amountToSend <= fSweepTxFee) {
+                unlockSaplingEntries();
                 break;
+            }
 
-            CAmount fee = fSweepTxFee;
+            const CAmount fee = fSweepTxFee;
+            const CAmount outputAmount = amountToSend - fee;
 
             std::vector<SaplingOutPoint> ops;
             std::vector<libzcash::SaplingNote> notes;
@@ -299,6 +266,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 LOCK2(cs_main, pwalletMain->cs_wallet);
                 if (!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
                     LogPrint("zrpcunsafe", "%s: Merkle Path not found for Sapling note. Stopping.\n", getId());
+                    unlockSaplingEntries();
                     break;
                 }
             }
@@ -310,42 +278,67 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
             }
             LogPrint("zrpcunsafe", "%s: Creating Sapling sweep transaction with output amount=%s\n", getId(), FormatMoney(amountToSend - fee));
 
+            bool buildFailed = false;
             for (size_t i = 0; i < notes.size(); i++) {
                 if (!builder.AddSaplingSpendRaw(ops[i], addr, notes[i].value(), notes[i].rcm(), saplingMerklePaths[i], anchor)) {
                     LogPrint("zrpcunsafe", "%s: Adding Raw Sapling Spend failed. Stopping.\n", getId());
+                    buildFailed = true;
                     break;
                 }
+            }
+            if (buildFailed) {
+                unlockSaplingEntries();
+                break;
             }
 
             if (!builder.ConvertRawSaplingSpend(extsk)) {
                 LogPrint("zrpcunsafe", "%s: Converting Raw Sapling Spends failed. Stopping.\n", getId());
+                unlockSaplingEntries();
                 break;
             }
 
             builder.SetFee(fee);
 
             if (hasSaplingTarget) {
-                if (!builder.AddSaplingOutputRaw(saplingSweepAddress, amountToSend - fee)) {
+                if (!builder.AddSaplingOutputRaw(saplingSweepAddress, outputAmount)) {
                     LogPrint("zrpcunsafe", "%s: Adding Raw Sapling Output failed. Stopping.\n", getId());
+                    unlockSaplingEntries();
                     break;
                 }
                 if (!builder.ConvertRawSaplingOutput(extsk.expsk.ovk)) {
                     LogPrint("zrpcunsafe", "%s: Converting Raw Sapling Output failed. Stopping.\n", getId());
+                    unlockSaplingEntries();
                     break;
                 }
             } else if (hasOrchardTarget) {
-                builder.AddOrchardOutputRaw(orchardSweepAddress, amountToSend - fee, std::nullopt);
+                if (!builder.AddOrchardOutputRaw(orchardSweepAddress, outputAmount, std::nullopt)) {
+                    LogPrint("zrpcunsafe", "%s: Adding Raw Orchard Output failed. Stopping.\n", getId());
+                    unlockSaplingEntries();
+                    break;
+                }
                 builder.InitializeOrchard(false, true, uint256());
-                builder.ConvertRawOrchardOutput(extsk.expsk.ovk);
+                if (!builder.ConvertRawOrchardOutput(extsk.expsk.ovk)) {
+                    LogPrint("zrpcunsafe", "%s: Converting Raw Orchard Output failed. Stopping.\n", getId());
+                    unlockSaplingEntries();
+                    break;
+                }
             } else {
                 LogPrint("zrpcunsafe", "%s: No target address specified for Sapling sweep. Stopping.\n", getId());
+                unlockSaplingEntries();
                 break;
             }
 
-            auto tx = builder.Build().GetTxOrThrow();
+            auto buildResult = builder.Build();
+            if (!buildResult.IsTx()) {
+                LogPrint("zrpcunsafe", "%s: Failed to build sweep transaction. Stopping.\n", getId());
+                unlockSaplingEntries();
+                break;
+            }
+            auto tx = buildResult.GetTxOrThrow();
 
             if (isCancelled() || ShutdownRequested()) {
                 LogPrint("zrpcunsafe", "%s: Canceled or shutdown. Stopping.\n", getId());
+                unlockSaplingEntries();
                 break;
             }
 
@@ -353,22 +346,22 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 LOCK2(cs_main, pwalletMain->cs_wallet);
                 if (!pwalletMain->CommitAutomatedTx(tx)) {
                     LogPrint("zrpcunsafe", "%s: Failed to commit sweep transaction, stopping.\n", getId());
+                    unlockSaplingEntries();
                     break;
                 }
             }
             LogPrint("zrpcunsafe", "%s: Committed Sapling sweep transaction with txid=%s\n", getId(), tx.GetHash().ToString());
+            unlockSaplingEntries();
             numTxCreated++;
-            amountSwept += amountToSend - fee;
+            amountSwept += outputAmount;
             sweepTxIds.push_back(tx.GetHash().ToString());
         }
     }
 
     // === Orchard sweep pass ===
-    for (const auto& orchardAddr : orchardCandidateSet) {
+    for (const auto& orchardAddr : orchardCandidates) {
         if (isCancelled() || ShutdownRequested())
             break;
-        if (hasOrchardTarget && orchardAddr == orchardSweepAddress)
-            continue; // Skip notes already at the target address
 
         libzcash::OrchardExtendedSpendingKeyPirate orchardExtendedSpendingKey;
         {
@@ -393,121 +386,155 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, filterAddresses,
                                               11, INT_MAX, true, true, true,
                                               maxQuantity, fSweepTxFee + 1);
+                // Lock immediately so no other async operation can select the same notes.
+                for (const auto& e : orchardEntries)
+                    pwalletMain->LockNote(e.op);
             }
 
-            if (orchardEntries.empty())
-                break;
+            auto unlockOrchardEntries = [&]() {
+                LOCK2(cs_main, pwalletMain->cs_wallet);
+                for (const auto& e : orchardEntries)
+                    pwalletMain->UnlockNote(e.op);
+            };
 
-            CAmount orchardAmountToSend = 0;
+            if (orchardEntries.empty()) {
+                unlockOrchardEntries();
+                break;
+            }
+
+            CAmount amountToSend = 0;
             for (const auto& e : orchardEntries)
-                orchardAmountToSend += CAmount(e.note.value());
+                amountToSend += CAmount(e.note.value());
 
-            if (orchardAmountToSend <= fSweepTxFee)
+            if (amountToSend <= fSweepTxFee) {
+                unlockOrchardEntries();
                 break;
+            }
 
-            CAmount orchardFee = fSweepTxFee;
+            const CAmount fee = fSweepTxFee;
+            const CAmount outputAmount = amountToSend - fee;
 
-            auto orchardBuilder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
+            auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
             {
                 LOCK2(cs_main, pwalletMain->cs_wallet);
-                orchardBuilder.SetExpiryHeight(chainActive.Tip()->nHeight + SWEEP_EXPIRY_DELTA);
+                builder.SetExpiryHeight(chainActive.Tip()->nHeight + SWEEP_EXPIRY_DELTA);
             }
-            LogPrint("zrpcunsafe", "%s: Creating Orchard sweep transaction with %d notes, output amount=%s\n", getId(), (int)orchardEntries.size(), FormatMoney(orchardAmountToSend - orchardFee));
+            LogPrint("zrpcunsafe", "%s: Creating Orchard sweep transaction with %d notes, output amount=%s\n",
+                     getId(), (int)orchardEntries.size(), FormatMoney(outputAmount));
 
-            uint256 orchardAnchor;
-            bool buildFailed = false;
-            for (auto& orchardEntry : orchardEntries) {
-                libzcash::MerklePath orchardSweepMerklePath;
-                if (!pwalletMain->OrchardWalletGetMerklePathOfNote(orchardEntry.op.hash, orchardEntry.op.n, orchardSweepMerklePath)) {
+            std::vector<OrchardOutPoint> ops;
+            for (const auto& entry : orchardEntries)
+                ops.push_back(entry.op);
+
+            uint256 anchor;
+            std::vector<libzcash::MerklePath> orchardMerklePaths;
+            {
+                LOCK2(cs_main, pwalletMain->cs_wallet);
+                if (!pwalletMain->GetOrchardNoteMerklePaths(ops, orchardMerklePaths, anchor)) {
                     LogPrint("zrpcunsafe", "%s: Merkle Path not found for Orchard note. Stopping.\n", getId());
-                    buildFailed = true;
+                    unlockOrchardEntries();
                     break;
                 }
+            }
 
-                uint256 anchor;
-                if (!pwalletMain->OrchardWalletGetPathRootWithCMU(orchardSweepMerklePath, orchardEntry.note.cmx(), anchor)) {
-                    LogPrint("zrpcunsafe", "%s: Getting Anchor failed for Orchard note. Stopping.\n", getId());
-                    buildFailed = true;
-                    break;
-                }
-
-                if (orchardAnchor.IsNull()) {
-                    orchardAnchor = anchor;
-                } else if (orchardAnchor != anchor) {
-                    LogPrint("zrpcunsafe", "%s: Anchor mismatch for Orchard notes. Stopping.\n", getId());
-                    buildFailed = true;
-                    break;
-                }
-
-                libzcash::OrchardNote orchardNote = orchardEntry.note;
-                if (!orchardBuilder.AddOrchardSpendRaw(orchardEntry.op, orchardEntry.address, orchardNote.value(), orchardNote.rho(), orchardNote.rseed(), orchardSweepMerklePath, orchardAnchor)) {
+            bool buildFailed = false;
+            for (size_t i = 0; i < orchardEntries.size(); i++) {
+                const auto& entry = orchardEntries[i];
+                auto orchardNote = entry.note;
+                if (!builder.AddOrchardSpendRaw(entry.op, entry.address,
+                                                orchardNote.value(), orchardNote.rho(),
+                                                orchardNote.rseed(), orchardMerklePaths[i], anchor)) {
                     LogPrint("zrpcunsafe", "%s: Adding Raw Orchard Spend failed. Stopping.\n", getId());
                     buildFailed = true;
                     break;
                 }
             }
-            if (buildFailed) break;
+            if (buildFailed) {
+                unlockOrchardEntries();
+                break;
+            }
 
-            orchardBuilder.InitializeOrchard(true, true, orchardAnchor);
+            builder.InitializeOrchard(true, true, anchor);
 
-            if (!orchardBuilder.ConvertRawOrchardSpend(orchardExtendedSpendingKey)) {
+            if (!builder.ConvertRawOrchardSpend(orchardExtendedSpendingKey)) {
                 LogPrint("zrpcunsafe", "%s: Converting Raw Orchard Spends failed. Stopping.\n", getId());
+                unlockOrchardEntries();
                 break;
             }
 
-            orchardBuilder.SetFee(orchardFee);
+            builder.SetFee(fee);
 
-            // Get outgoing viewing key
-            uint256 orchardOvk;
-            libzcash::OrchardFullViewingKey orchardFvk;
-            if (!orchardExtendedSpendingKey.sk.DeriveFVK(&orchardFvk)) {
+            libzcash::OrchardFullViewingKey fvk;
+            if (!orchardExtendedSpendingKey.sk.DeriveFVK(&fvk)) {
                 LogPrint("zrpcunsafe", "%s: Failed to get FVK from spending key. Stopping.\n", getId());
+                unlockOrchardEntries();
                 break;
             }
-            libzcash::OrchardOutgoingViewingKey orchardOvkObj;
-            if (!orchardFvk.DeriveOVK(&orchardOvkObj)) {
+            libzcash::OrchardOutgoingViewingKey ovk;
+            if (!fvk.DeriveOVK(&ovk)) {
                 LogPrint("zrpcunsafe", "%s: Failed to get OVK from FVK. Stopping.\n", getId());
+                unlockOrchardEntries();
                 break;
             }
-            orchardOvk = orchardOvkObj.ovk;
 
             if (hasOrchardTarget) {
-                orchardBuilder.AddOrchardOutputRaw(orchardSweepAddress, orchardAmountToSend - orchardFee, std::nullopt);
-                orchardBuilder.ConvertRawOrchardOutput(orchardOvk);
+                if (!builder.AddOrchardOutputRaw(orchardSweepAddress, outputAmount, std::nullopt)) {
+                    LogPrint("zrpcunsafe", "%s: Adding Raw Orchard Output failed. Stopping.\n", getId());
+                    unlockOrchardEntries();
+                    break;
+                }
+                if (!builder.ConvertRawOrchardOutput(ovk.ovk)) {
+                    LogPrint("zrpcunsafe", "%s: Converting Raw Orchard Output failed. Stopping.\n", getId());
+                    unlockOrchardEntries();
+                    break;
+                }
             } else if (hasSaplingTarget) {
-                orchardBuilder.AddSaplingOutputRaw(saplingSweepAddress, orchardAmountToSend - orchardFee, std::nullopt);
-                orchardBuilder.ConvertRawSaplingOutput(orchardOvk);
+                if (!builder.AddSaplingOutputRaw(saplingSweepAddress, outputAmount, std::nullopt)) {
+                    LogPrint("zrpcunsafe", "%s: Adding Raw Sapling Output failed. Stopping.\n", getId());
+                    unlockOrchardEntries();
+                    break;
+                }
+                if (!builder.ConvertRawSaplingOutput(ovk.ovk)) {
+                    LogPrint("zrpcunsafe", "%s: Converting Raw Sapling Output failed. Stopping.\n", getId());
+                    unlockOrchardEntries();
+                    break;
+                }
             } else {
                 LogPrint("zrpcunsafe", "%s: No target address specified for Orchard sweep. Stopping.\n", getId());
+                unlockOrchardEntries();
                 break;
             }
 
-            auto orchardTx = orchardBuilder.Build().GetTxOrThrow();
+            auto buildResult = builder.Build();
+            if (!buildResult.IsTx()) {
+                LogPrint("zrpcunsafe", "%s: Failed to build Orchard sweep transaction. Stopping.\n", getId());
+                unlockOrchardEntries();
+                break;
+            }
+            auto tx = buildResult.GetTxOrThrow();
 
             if (isCancelled() || ShutdownRequested()) {
                 LogPrint("zrpcunsafe", "%s: Canceled or shutdown. Stopping.\n", getId());
+                unlockOrchardEntries();
                 break;
             }
 
             {
                 LOCK2(cs_main, pwalletMain->cs_wallet);
-                if (!pwalletMain->CommitAutomatedTx(orchardTx)) {
+                if (!pwalletMain->CommitAutomatedTx(tx)) {
                     LogPrint("zrpcunsafe", "%s: Failed to commit Orchard sweep transaction, stopping.\n", getId());
+                    unlockOrchardEntries();
                     break;
                 }
             }
-            LogPrint("zrpcunsafe", "%s: Committed Orchard sweep transaction with txid=%s\n", getId(), orchardTx.GetHash().ToString());
+            LogPrint("zrpcunsafe", "%s: Committed Orchard sweep transaction with txid=%s\n",
+                     getId(), tx.GetHash().ToString());
+            unlockOrchardEntries();
             numTxCreated++;
-            amountSwept += orchardAmountToSend - orchardFee;
-            sweepTxIds.push_back(orchardTx.GetHash().ToString());
-        }
-    }
-
-    {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        pwalletMain->nextSweep = pwalletMain->sweepInterval + chainActive.Tip()->nHeight;
-        pwalletMain->fSweepRunning = false;
-    }
+            amountSwept += outputAmount;
+            sweepTxIds.push_back(tx.GetHash().ToString());
+        } // while (true) — Orchard inner loop
+    } // for orchardAddr
 
     LogPrint("zrpcunsafe", "%s: Created %d transactions with total output amount=%s to single destination\n", getId(), numTxCreated, FormatMoney(amountSwept));
     setSweepResult(numTxCreated, amountSwept, sweepTxIds);
@@ -515,14 +542,14 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
 }
 
 /**
- * @brief Sets the final result of the sweep operation
+ * @brief Set sweep operation results
  * 
- * Formats and stores sweep operation results in JSON structure
- * for client retrieval via RPC calls.
+ * Formats and stores the results of the sweep operation for reporting
+ * via the getStatus() method and operation completion callbacks.
  * 
- * @param numTxCreated Number of sweep transactions created and broadcast
- * @param amountSwept Total net amount transferred (excluding fees)
- * @param sweepTxIds Vector of transaction IDs for created transactions
+ * @param numTxCreated Number of sweep transactions successfully created
+ * @param amountSwept Total amount swept across all transactions (in zatoshis)
+ * @param sweepTxIds Vector of transaction IDs for all created sweep transactions
  */
 void AsyncRPCOperation_sweeptoaddress::setSweepResult(int numTxCreated, const CAmount& amountSwept, const std::vector<std::string>& sweepTxIds)
 {
@@ -538,26 +565,17 @@ void AsyncRPCOperation_sweeptoaddress::setSweepResult(int numTxCreated, const CA
 }
 
 /**
- * @brief Cancels the sweep operation
+ * @brief Cancel the sweep operation
  * 
- * Sets operation state to cancelled, preventing further execution.
- * Already-broadcast transactions cannot be cancelled.
+ * Sets the operation state to cancelled. The operation will check for
+ * cancellation at safe points and stop processing gracefully.
  */
 void AsyncRPCOperation_sweeptoaddress::cancel()
 {
     set_state(OperationStatus::CANCELLED);
 }
 
-/**
- * @brief Returns comprehensive status information for the sweep operation
- * 
- * Extends base AsyncRPCOperation status with sweep-specific details
- * including method type and target height.
- * 
- * @return UniValue object with operation status, results, and configuration
- */
-UniValue AsyncRPCOperation_sweeptoaddress::getStatus() const
-{
+UniValue AsyncRPCOperation_sweeptoaddress::getStatus() const {
     UniValue v = AsyncRPCOperation::getStatus();
     UniValue obj = v.get_obj();
     obj.push_back(Pair("method", "sweeptoaddress"));
@@ -565,15 +583,8 @@ UniValue AsyncRPCOperation_sweeptoaddress::getStatus() const
     return obj;
 }
 
-//==============================================================================
-// ADDRESS CONFIGURATION FUNCTIONS
-//==============================================================================
-
 /**
- * @brief Configures Sapling destination address for RPC-initiated sweeps
- * 
- * Sets target Sapling address and clears any Orchard address to ensure
- * single destination protocol per operation.
+ * @brief Configure Sapling destination address for RPC-initiated sweeps
  * 
  * @param address Valid Sapling payment address for sweep destination
  */
@@ -583,10 +594,7 @@ void AsyncRPCOperation_sweeptoaddress::setSaplingSweepAddress(const libzcash::Sa
 }
 
 /**
- * @brief Configures Orchard destination address for RPC-initiated sweeps
- * 
- * Sets target Orchard address and clears any Sapling address to ensure
- * single destination protocol per operation.
+ * @brief Configure Orchard destination address for RPC-initiated sweeps
  * 
  * @param address Valid Orchard payment address for sweep destination
  */

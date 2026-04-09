@@ -1,46 +1,10 @@
-// Copyright (c) 2025 Pirate Chain Development Team
+// Copyright (c) 2022-2025 The Pirate Network developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-/**
- * @file asyncrpcoperation_saplingconsolidation_address.cpp
- * @brief Implementation of Sapling address consolidation operations
- *
- * This file implements the AsyncRPCOperation_saplingconsolidation_address class that provides
- * asynchronous consolidation of Sapling notes for a single address. The consolidation process
- * reduces wallet fragmentation by combining multiple notes into fewer, larger notes.
- *
- * Algorithm Overview:
- * Each transaction is built from a fresh note selection:
- * 1. GetFilteredNotes is called with maxNotes_ as the cap and fee_+1 as the minimum aggregate
- *    value threshold. Internally it uses a dual-heap streaming algorithm to return up to
- *    maxNotes_ notes (half smallest + half largest by value) without scanning the full wallet.
- * 2. If the returned set has fewer than 2 notes or its total value does not exceed the fee,
- *    consolidation stops — no viable transaction can be formed.
- * 3. All returned notes are spent as inputs in a single consolidation transaction whose output
- *    is the net amount (total input value minus fee) sent back to the same address.
- * 4. After each successful commit, previously spent notes are excluded by ignoreSpent=true on
- *    the next call, naturally advancing to the next working set with no manual index tracking.
- * 5. The loop repeats until maxTransactions_ transactions have been created or no more
- *    consolidatable notes remain.
- *
- * Security Features:
- * - Spending key is captured during construction while the wallet is unlocked
- * - Minimum 11-block confirmation depth required for all selected notes
- * - Merkle path validated for every spent note
- * - Network upgrade boundary check prevents transactions from expiring across an activation
- *
- * @author Pirate Chain Development Team
- * @date 2025
- */
-
-#include "assert.h"
-#include "boost/variant/static_visitor.hpp"
 #include "asyncrpcoperation_saplingconsolidation_address.h"
 #include "init.h"
 #include "key_io.h"
-#include "rpc/protocol.h"
-#include "random.h"
 #include "sync.h"
 #include "tinyformat.h"
 #include "transaction_builder.h"
@@ -48,19 +12,18 @@
 #include "utilmoneystr.h"
 #include "wallet.h"
 
-/// @brief Expiry delta for consolidation transactions (blocks)
-/// @details Consolidation transactions expire 40 blocks after creation to ensure
-///          they don't become stale during network upgrade periods
+// Global configuration variables
+/**
+ * Number of blocks to set as expiration delta for consolidation transactions
+ * This provides sufficient time for transaction confirmation while preventing
+ * transactions from staying in mempool indefinitely
+ */
 const int CONSOLIDATION_EXPIRY_DELTA = 40;
 
 /**
  * @brief Constructor for Sapling address consolidation operation
  * 
- * Creates a new consolidation operation with the specified parameters. The spending key
- * is captured during construction while the wallet is unlocked, allowing the operation
- * to proceed even if the wallet is locked afterwards.
- * 
- * @param targetHeight Blockchain height for transaction creation timing
+ * @param targetHeight Target blockchain height for consolidation operations
  * @param address Sapling payment address to consolidate notes for
  * @param spendingKey Extended spending key for the address
  * @param fee Fee amount in zatoshis per consolidation transaction
@@ -77,20 +40,29 @@ AsyncRPCOperation_saplingconsolidation_address::AsyncRPCOperation_saplingconsoli
     : targetHeight_(targetHeight), address_(address), spendingKey_(spendingKey), fee_(fee), maxNotes_(maxNotes), maxTransactions_(maxTransactions) {}
 
 /**
- * @brief Destructor - clears sensitive data from memory
+ * @brief Destructor - automatically cleans up resources
  */
 AsyncRPCOperation_saplingconsolidation_address::~AsyncRPCOperation_saplingconsolidation_address() {}
 
 /**
- * @brief Main orchestration method for the consolidation operation
+ * @brief Main execution wrapper for Sapling address consolidation operation
  * 
- * This method provides error handling and state management around the core
- * consolidation logic implemented in main_impl(). It ensures proper state
- * transitions and error reporting regardless of success or failure.
+ * This method is the main entry point for executing the consolidation operation.
+ * It performs the following steps:
+ * 1. Validates the operation state and handles cancellation
+ * 2. Sets up execution timing and state management
+ * 3. Calls the core consolidation logic
+ * 4. Handles exceptions with detailed error reporting
+ * 5. Updates final operation status and logs results
+ * 
+ * The consolidation process combines multiple Sapling notes into fewer notes
+ * to improve wallet performance and reduce transaction complexity.
  */
-void AsyncRPCOperation_saplingconsolidation_address::main() {
-    if (isCancelled())
+void AsyncRPCOperation_saplingconsolidation_address::main()
+{
+    if (isCancelled()) {
         return;
+    }
 
     set_state(OperationStatus::EXECUTING);
     start_execution_clock();
@@ -104,18 +76,18 @@ void AsyncRPCOperation_saplingconsolidation_address::main() {
         std::string message = find_value(objError, "message").get_str();
         set_error_code(code);
         set_error_message(message);
-    } catch (const runtime_error& e) {
+    } catch (const std::runtime_error& e) {
         set_error_code(-1);
-        set_error_message("runtime error: " + string(e.what()));
-    } catch (const logic_error& e) {
+        set_error_message("Runtime error: " + std::string(e.what()));
+    } catch (const std::logic_error& e) {
         set_error_code(-1);
-        set_error_message("logic error: " + string(e.what()));
-    } catch (const exception& e) {
+        set_error_message("Logic error: " + std::string(e.what()));
+    } catch (const std::exception& e) {
         set_error_code(-1);
-        set_error_message("general exception: " + string(e.what()));
+        set_error_message("General exception: " + std::string(e.what()));
     } catch (...) {
         set_error_code(-2);
-        set_error_message("unknown error");
+        set_error_message("Unknown error occurred during consolidation");
     }
 
     stop_execution_clock();
@@ -126,34 +98,21 @@ void AsyncRPCOperation_saplingconsolidation_address::main() {
         set_state(OperationStatus::FAILED);
     }
 
-    std::string s = strprintf("%s: Sapling Address Consolidation complete. (status=%s", getId(), getStateAsString());
+    std::string logMessage = strprintf("%s: Sapling Address Consolidation complete. (status=%s", getId(), getStateAsString());
     if (success) {
-        s += strprintf(", success)\n");
+        logMessage += strprintf(", success)\n");
     } else {
-        s += strprintf(", error=%s)\n", getErrorMessage());
+        logMessage += strprintf(", error=%s)\n", getErrorMessage());
     }
 
-    LogPrintf("%s", s);
+    LogPrintf("%s", logMessage);
 }
 
-/**
- * @brief Core consolidation implementation
- *
- * Each loop iteration:
- * 1. Calls GetFilteredNotes with maxNotes_ and minAggregateValue = fee_+1 to obtain a
- *    bounded, pre-filtered set of unspent notes for the target address.
- * 2. Checks feasibility: at least 2 notes and total value > fee required.
- * 3. Spends all returned notes as inputs; output = total input value - fee.
- * 4. Commits the transaction. Spent notes are excluded automatically on the next call
- *    via ignoreSpent=true. Repeats until maxTransactions_ reached or no notes remain.
- *
- * @return true when the operation completes (with or without transactions created)
- * @throws builder exceptions propagated up to main() for error reporting
- */
 bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
-    LogPrint("zrpcunsafe", "%s: Beginning AsyncRPCOperation_saplingconsolidation_address for address %s.\n", 
+    LogPrint("zrpcunsafe", "%s: Beginning AsyncRPCOperation_saplingconsolidation_address for address %s.\n",
              getId(), EncodePaymentAddress(address_));
-
+    
+    // Get consensus parameters and check for network upgrade compatibility
     auto consensusParams = Params().GetConsensus();
     auto nextActivationHeight = NextActivationHeight(targetHeight_, consensusParams);
     if (nextActivationHeight && targetHeight_ + CONSOLIDATION_EXPIRY_DELTA >= nextActivationHeight.value()) {
@@ -164,6 +123,7 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
 
     int numTxCreated = 0;
     int processedNotes = 0;
+    int txAttempted = 0; // incremented after feasibility passes, before commit
     std::vector<std::string> consolidationTxIds;
     CAmount amountConsolidated = 0;
 
@@ -192,33 +152,48 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
             pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, filterAddresses,
                                           11, INT_MAX, true, true, true,
                                           maxNotes_, fee_ + 1);
+            // Lock immediately so no other async operation can select the same notes.
+            for (const auto& e : saplingEntries)
+                pwalletMain->LockNote(e.op);
         }
 
+        auto unlockSaplingEntries = [&]() {
+            LOCK2(cs_main, pwalletMain->cs_wallet);
+            for (const auto& e : saplingEntries)
+                pwalletMain->UnlockNote(e.op);
+        };
+
         // Compute total aggregate value of this iteration's working set.
-        CAmount workingSetValue = 0;
+        CAmount amountToSend = 0;
         for (const auto& e : saplingEntries)
-            workingSetValue += CAmount(e.note.value());
+            amountToSend += CAmount(e.note.value());
 
         LogPrint("zrpcunsafe", "%s: Working set: %d notes, aggregate=%s for address %s\n",
-                 getId(), (int)saplingEntries.size(), FormatMoney(workingSetValue), EncodePaymentAddress(address_));
+                 getId(), (int)saplingEntries.size(), FormatMoney(amountToSend), EncodePaymentAddress(address_));
 
         // === STEP 2: Feasibility Check ===
         // Require at least 2 notes AND total value > fee to form a valid transaction.
         if (saplingEntries.size() < 2) {
             LogPrint("zrpcunsafe", "%s: Not enough notes to consolidate (need at least 2, found %d)\n",
                      getId(), (int)saplingEntries.size());
+            unlockSaplingEntries();
             break;
         }
-        if (workingSetValue <= fee_) {
+        if (amountToSend <= fee_) {
             LogPrint("zrpcunsafe", "%s: Working set aggregate value %s does not exceed fee %s — "
                      "all selected notes are dust relative to fee, nothing to consolidate\n",
-                     getId(), FormatMoney(workingSetValue), FormatMoney(fee_));
+                     getId(), FormatMoney(amountToSend), FormatMoney(fee_));
+            unlockSaplingEntries();
             break;
         }
 
+        const CAmount outputAmount = amountToSend - fee_;
+
         LogPrint("zrpcunsafe", "%s: Selected %d notes for batch (total amount=%s, fee=%s, net=%s)\n",
-                 getId(), (int)saplingEntries.size(), FormatMoney(workingSetValue),
-                 FormatMoney(fee_), FormatMoney(workingSetValue - fee_));
+                 getId(), (int)saplingEntries.size(), FormatMoney(amountToSend),
+                 FormatMoney(fee_), FormatMoney(outputAmount));
+
+        txAttempted++;
 
         // === STEP 3: Cryptographic Preparation ===
         // Build ops and notes vectors from the full working set returned by GetFilteredNotes.
@@ -236,6 +211,7 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
             LOCK2(cs_main, pwalletMain->cs_wallet);
             if (!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
                 LogPrint("zrpcunsafe", "%s: Merkle Path not found for Sapling notes. Stopping.\n", getId());
+                unlockSaplingEntries();
                 break;
             }
         }
@@ -244,12 +220,11 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
         auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
         {
             LOCK2(cs_main, pwalletMain->cs_wallet);
-            int nExpires = chainActive.Tip()->nHeight + CONSOLIDATION_EXPIRY_DELTA;
-            builder.SetExpiryHeight(nExpires);
+            builder.SetExpiryHeight(chainActive.Tip()->nHeight + CONSOLIDATION_EXPIRY_DELTA);
         }
 
         LogPrint("zrpcunsafe", "%s: Creating consolidation transaction with input amount=%s, fee=%s, output amount=%s\n",
-                 getId(), FormatMoney(workingSetValue), FormatMoney(fee_), FormatMoney(workingSetValue - fee_));
+                 getId(), FormatMoney(amountToSend), FormatMoney(fee_), FormatMoney(outputAmount));
 
         // Add Sapling spends (inputs) using two-step process
         // Step 1: Add raw spends with note data and merkle paths
@@ -261,11 +236,15 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
                 break;
             }
         }
-        if (buildFailed) break;
+        if (buildFailed) {
+            unlockSaplingEntries();
+            break;
+        }
 
         // Step 2: Convert raw spends using spending key
         if (!builder.ConvertRawSaplingSpend(spendingKey_)) {
             LogPrint("zrpcunsafe", "%s: Converting Raw Sapling Spends failed. Stopping.\n", getId());
+            unlockSaplingEntries();
             break;
         }
 
@@ -273,8 +252,9 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
         builder.SetFee(fee_);
 
         // Add consolidated output using raw method then convert
-        if (!builder.AddSaplingOutputRaw(address_, workingSetValue - fee_)) {
+        if (!builder.AddSaplingOutputRaw(address_, outputAmount)) {
             LogPrint("zrpcunsafe", "%s: Adding Raw Sapling Output failed. Stopping.\n", getId());
+            unlockSaplingEntries();
             break;
         }
 
@@ -282,6 +262,7 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
         spendingKey_.expsk.DeriveFVK(&fvk);
         if (!builder.ConvertRawSaplingOutput(fvk.ovk)) {
             LogPrint("zrpcunsafe", "%s: Converting Raw Sapling Output failed. Stopping.\n", getId());
+            unlockSaplingEntries();
             break;
         }
 
@@ -289,6 +270,7 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
         auto buildResult = builder.Build();
         if (!buildResult.IsTx()) {
             LogPrint("zrpcunsafe", "%s: Failed to build consolidation transaction: %s. Stopping.\n", getId(), buildResult.GetError());
+            unlockSaplingEntries();
             break;
         }
         auto tx = buildResult.GetTxOrThrow();
@@ -296,6 +278,7 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
         // Check for cancellation before committing
         if (isCancelled() || ShutdownRequested()) {
             LogPrint("zrpcunsafe", "%s: Canceled or shutdown. Stopping.\n", getId());
+            unlockSaplingEntries();
             break;
         }
 
@@ -304,14 +287,15 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
             LOCK2(cs_main, pwalletMain->cs_wallet);
             if (!pwalletMain->CommitAutomatedTx(tx)) {
                 LogPrint("zrpcunsafe", "%s: Failed to commit consolidation transaction, stopping.\n", getId());
+                unlockSaplingEntries();
                 break;
             }
         }
 
         LogPrint("zrpcunsafe", "%s: Committed consolidation transaction with txid=%s\n",
                  getId(), tx.GetHash().ToString());
-
-        amountConsolidated += workingSetValue - fee_;
+        unlockSaplingEntries();
+        amountConsolidated += outputAmount;
         numTxCreated++;
         processedNotes += (int)saplingEntries.size();
         consolidationTxIds.push_back(tx.GetHash().ToString());
@@ -320,35 +304,38 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
     LogPrint("zrpcunsafe", "%s: Created %d transactions with total output amount=%s\n", 
              getId(), numTxCreated, FormatMoney(amountConsolidated));
 
-    // Count remaining unspent notes after consolidation
+    // Count remaining unspent notes for this address after consolidation.
+    // Use filterAddresses (already scoped to address_) to avoid a full-wallet scan.
     int remainingNotes = 0;
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
-        std::vector<SaplingNoteEntry> saplingEntries;
-        std::vector<OrchardNoteEntry> orchardEntries;
-        pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, "", 11);
-        
-        for (const auto& entry : saplingEntries) {
-            if (entry.address == address_) {
-                remainingNotes++;
-            }
-        }
+        std::vector<SaplingNoteEntry> remainingSapling;
+        std::vector<OrchardNoteEntry> remainingOrchard;
+        pwalletMain->GetFilteredNotes(remainingSapling, remainingOrchard, filterAddresses, 11, INT_MAX, true, true, false);
+        remainingNotes = (int)remainingSapling.size();
     }
 
     setConsolidationResult(numTxCreated, amountConsolidated, consolidationTxIds, processedNotes, remainingNotes);
+
+    // Return false if transactions were attempted (feasibility passed) but none committed.
+    // A clean stop (nothing to consolidate) still returns true.
+    if (txAttempted > 0 && numTxCreated == 0)
+        return false;
+
     return true;
 }
 
 /**
- * @brief Sets the final result of the consolidation operation
+ * @brief Set consolidation operation results
  * 
- * Creates a structured result object containing all relevant information about
- * the consolidation operation including transaction count, amounts, and IDs.
- * This result can be retrieved via z_getoperationstatus or z_getoperationresult.
+ * Formats and stores the results of the consolidation operation for reporting
+ * via the getStatus() method and operation completion callbacks.
  * 
  * @param numTxCreated Number of consolidation transactions successfully created
- * @param amountConsolidated Total amount consolidated (excluding fees paid)
- * @param consolidationTxIds Vector of transaction IDs for tracking on blockchain
+ * @param amountConsolidated Total amount consolidated across all transactions (in zatoshis)
+ * @param consolidationTxIds Vector of transaction IDs for all created consolidation transactions
+ * @param notesConsolidated Number of individual notes spent across all transactions
+ * @param notesRemaining Number of unspent notes remaining after consolidation
  */
 void AsyncRPCOperation_saplingconsolidation_address::setConsolidationResult(
     int numTxCreated, 
@@ -376,19 +363,15 @@ void AsyncRPCOperation_saplingconsolidation_address::setConsolidationResult(
 }
 
 /**
- * @brief Cancels the consolidation operation
+ * @brief Cancel the consolidation operation
  * 
- * @note Transactions already committed to the blockchain cannot be reversed
+ * Sets the operation state to cancelled. The operation will check for
+ * cancellation at safe points and stop processing gracefully.
  */
 void AsyncRPCOperation_saplingconsolidation_address::cancel() {
     set_state(OperationStatus::CANCELLED);
 }
 
-/**
- * @brief Gets detailed status information for the operation
- * 
- * @return UniValue object with operation status, configuration, and progress details
- */
 UniValue AsyncRPCOperation_saplingconsolidation_address::getStatus() const {
     UniValue v = AsyncRPCOperation::getStatus();
     UniValue obj = v.get_obj();

@@ -2,21 +2,11 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-/**
- * @file asyncrpcoperation_orchardconsolidation.cpp
- * @brief Implementation of asynchronous Orchard note consolidation operation
- * 
- * Implements automatic consolidation of Orchard shielded notes to reduce
- * wallet fragmentation and improve transaction performance.
- */
-
 #include "asyncrpcoperation_orchardconsolidation.h"
-#include "assert.h"
-#include "boost/variant/static_visitor.hpp"
+#include "asyncrpcoperation_sweeptoaddress.h"
 #include "init.h"
 #include "key_io.h"
 #include "random.h"
-#include "rpc/protocol.h"
 #include "sync.h"
 #include "tinyformat.h"
 #include "transaction_builder.h"
@@ -24,41 +14,46 @@
 #include "utilmoneystr.h"
 #include "wallet.h"
 
+// Global configuration variables
 /**
- * Global Orchard consolidation fee setting
- * Can be modified via configuration parameters
+ * Global variables for Orchard consolidation configuration
+ * These are set during initialization from command line parameters
  */
 CAmount fOrchardConsolidationTxFee = DEFAULT_ORCHARD_CONSOLIDATION_FEE;
-
-/**
- * Flag indicating whether Orchard consolidation address mapping is used
- * When true, only specific addresses from configuration are consolidated
- */
 bool fOrchardConsolidationMapUsed = false;
 
 /**
- * Number of blocks before Orchard consolidation transactions expire
- * Provides sufficient time for confirmation while preventing mempool buildup
+ * Number of blocks to set as expiration delta for consolidation transactions
+ * This provides sufficient time for transaction confirmation while preventing
+ * transactions from staying in mempool indefinitely
  */
 const int ORCHARD_CONSOLIDATION_EXPIRY_DELTA = 40;
 
 /**
  * @brief Constructor for Orchard consolidation operation
  * 
- * @param targetHeight Blockchain height for transaction targeting and expiration
+ * @param targetHeight Target blockchain height for consolidation operations
  */
 AsyncRPCOperation_orchardconsolidation::AsyncRPCOperation_orchardconsolidation(int targetHeight) : targetHeight_(targetHeight) {}
 
 /**
- * @brief Destructor with automatic resource cleanup
+ * @brief Destructor - automatically cleans up resources
  */
 AsyncRPCOperation_orchardconsolidation::~AsyncRPCOperation_orchardconsolidation() {}
 
 /**
- * @brief Main execution entry point for Orchard consolidation operation
+ * @brief Main execution wrapper for Orchard consolidation operation
  * 
- * Handles complete consolidation lifecycle including state management,
- * error handling, timing control, and result reporting.
+ * This method is the main entry point for executing the consolidation operation.
+ * It performs the following steps:
+ * 1. Validates the operation state and handles cancellation
+ * 2. Sets up execution timing and state management
+ * 3. Calls the core consolidation logic
+ * 4. Handles exceptions with detailed error reporting
+ * 5. Updates final operation status and logs results
+ * 
+ * The consolidation process combines multiple Orchard notes into fewer notes
+ * to improve wallet performance and reduce transaction complexity.
  */
 void AsyncRPCOperation_orchardconsolidation::main()
 {
@@ -110,17 +105,7 @@ void AsyncRPCOperation_orchardconsolidation::main()
     LogPrintf("%s", logMessage);
 }
 
-/**
- * @brief Core implementation of Orchard note consolidation logic
- * 
- * Performs multi-round consolidation of Orchard notes using intelligent
- * selection strategies and action-based transactions.
- * 
- * @return true if consolidation completed successfully, false otherwise
- * @throws JSONRPCError For wallet access or transaction building errors
- */
-bool AsyncRPCOperation_orchardconsolidation::main_impl()
-{
+bool AsyncRPCOperation_orchardconsolidation::main_impl() {
     LogPrint("zrpcunsafe", "%s: Beginning AsyncRPCOperation_orchardconsolidation.\n", getId());
     
     // Get consensus parameters and check for network upgrade compatibility
@@ -128,295 +113,241 @@ bool AsyncRPCOperation_orchardconsolidation::main_impl()
     auto nextActivationHeight = NextActivationHeight(targetHeight_, consensusParams);
     if (nextActivationHeight && targetHeight_ + ORCHARD_CONSOLIDATION_EXPIRY_DELTA >= nextActivationHeight.value()) {
         LogPrint("zrpcunsafe", "%s: Orchard consolidation txs would be created before a NU activation but may expire after. Skipping this round.\n", getId());
-        
-        //Set Next Orchard consolidation time
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        pwalletMain->nextOrchardConsolidation = pwalletMain->orchardConsolidationInterval + chainActive.Tip()->nHeight;
-        pwalletMain->fOrchardConsolidationRunning = false;
-        
+        {
+            LOCK2(cs_main, pwalletMain->cs_wallet);
+            pwalletMain->nextOrchardConsolidation = pwalletMain->orchardConsolidationInterval + chainActive.Tip()->nHeight;
+            pwalletMain->fOrchardConsolidationRunning = false;
+        }
+        setConsolidationResult(0, 0, std::vector<std::string>());
         return true;
     }
 
-    // Initialize consolidation tracking variables
-    int64_t startTime = GetTime();
-    bool roundComplete = false;
     int numTxCreated = 0;
     std::vector<std::string> consolidationTxIds;
     CAmount amountConsolidated = 0;
+
+    // STEP 1: Read wallet addresses and config from keystore only - no note data loaded.
+    // GetOrchardPaymentAddresses reads key metadata only, O(num_keys) not O(num_notes).
     int consolidationTarget = 0;
-
-    // Main consolidation loop - process up to 50 rounds
-    for (int roundIndex = 0; roundIndex < 50; roundIndex++) {
+    std::vector<libzcash::OrchardPaymentAddress> candidateAddresses;
+    {
         LOCK2(cs_main, pwalletMain->cs_wallet);
-        // Reset flag for each round
-        roundComplete = false;
-        
-        // Data structures for current round
-        std::vector<SaplingNoteEntry> saplingEntries;
-        std::vector<OrchardNoteEntry> orchardEntries;
-        std::set<libzcash::OrchardPaymentAddress> targetOrchardAddresses;
-        std::map<libzcash::OrchardPaymentAddress, std::vector<OrchardNoteEntry>> addressToNotesMap;
-        std::map<std::pair<int, int>, OrchardNoteEntry> sortedEntriesMap;
-        
-        {
-            consolidationTarget = pwalletMain->targetOrchardConsolidationQty;
-            
-            // Get filtered Orchard notes with minimum depth of 11 for stability
-            // This avoids unconfirmed notes and provides buffer for anchor selection
-            pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, "", 11);
-            
-            // Build target address set if Orchard consolidation mapping is used
-            if (fOrchardConsolidationMapUsed) {
-                const std::vector<std::string>& configuredAddresses = mapMultiArgs["-consolidateorchardaddress"];
-                for (size_t i = 0; i < configuredAddresses.size(); i++) {
-                    libzcash::PaymentAddress paymentAddr = DecodePaymentAddress(configuredAddresses[i]);
-                    if (std::get_if<libzcash::OrchardPaymentAddress>(&paymentAddr) != nullptr) {
-                        libzcash::OrchardPaymentAddress orchardAddr = std::get<libzcash::OrchardPaymentAddress>(paymentAddr);
-                        targetOrchardAddresses.insert(orchardAddr);
-                    }
+        consolidationTarget = pwalletMain->targetOrchardConsolidationQty;
+
+        if (pwalletMain->fSweepEnabled) {
+            // When sweep is active, consolidation is restricted to the sweep destination
+            // address only - consolidating into it prepares funds for the sweep.
+            if (rpcOrchardSweepAddress.has_value()) {
+                candidateAddresses.push_back(rpcOrchardSweepAddress.value());
+            } else if (fSweepMapUsed) {
+                const vector<string>& v = mapMultiArgs["-sweepaddress"];
+                for (int i = 0; i < (int)v.size(); i++) {
+                    auto zAddress = DecodePaymentAddress(v[i]);
+                    if (std::get_if<libzcash::OrchardPaymentAddress>(&zAddress) != nullptr)
+                        candidateAddresses.push_back(std::get<libzcash::OrchardPaymentAddress>(zAddress));
                 }
             }
-
-            // Sort Orchard entries by confirmation count and output index for consistent processing
-            for (const auto& entry : orchardEntries) {
-                auto sortKey = std::make_pair(entry.confirmations, entry.op.n);
-                sortedEntriesMap.insert({sortKey, entry});
+            // If sweep is enabled but no Orchard address is configured, skip consolidation.
+        } else if (fOrchardConsolidationMapUsed) {
+            // Sweep not active: use the explicit consolidation address filter list.
+            const vector<string>& v = mapMultiArgs["-consolidateorchardaddress"];
+            for (int i = 0; i < (int)v.size(); i++) {
+                auto zAddress = DecodePaymentAddress(v[i]);
+                if (std::get_if<libzcash::OrchardPaymentAddress>(&zAddress) != nullptr)
+                    candidateAddresses.push_back(std::get<libzcash::OrchardPaymentAddress>(zAddress));
             }
-
-            // Group Orchard notes by address - process in reverse order (most confirmed first)
-            for (auto rit = sortedEntriesMap.rbegin(); rit != sortedEntriesMap.rend(); ++rit) {
-                const OrchardNoteEntry& entry = rit->second;
-                
-                // Only process notes from target addresses (or all if no mapping)
-                if (targetOrchardAddresses.count(entry.address) > 0 || !fOrchardConsolidationMapUsed) {
-                    auto it = addressToNotesMap.find(entry.address);
-                    if (it != addressToNotesMap.end()) {
-                        it->second.push_back(entry);
-                    } else {
-                        std::vector<OrchardNoteEntry> noteList;
-                        noteList.push_back(entry);
-                        addressToNotesMap[entry.address] = noteList;
-                    }
-                }
-            }
-        }
-
-        // Initialize coins view for transaction validation
-        CCoinsViewCache coinsView(pcoinsTip);
-
-        // Check if we have enough Orchard notes to justify consolidation
-        if (orchardEntries.size() < static_cast<size_t>(consolidationTarget)) {
-            // Not enough notes to consolidate - exit this round
-            LogPrint("zrpcunsafe", "%s: Not enough Orchard notes to consolidate (%zu < %d). Exiting round.\n", 
-                     getId(), orchardEntries.size(), consolidationTarget);
-            roundComplete = true;
-            break;
         } else {
-            // Process each Orchard address that has notes
-            for (auto it = addressToNotesMap.begin(); it != addressToNotesMap.end(); ++it) {
-                const auto& address = it->first;
-                const auto& addressNotes = it->second;
-
-                // Get the extended spending key for this Orchard address
-                libzcash::OrchardExtendedSpendingKeyPirate orchardSpendingKey;
-                if (!getOrchardExtendedSpendingKey(address, orchardSpendingKey)) {
-                    // Skip addresses we don't have spending keys for
-                    LogPrint("zrpcunsafe", "%s: No extended spending key found for Orchard address. Skipping.\n", getId());
-                    continue;
-                }
-
-                std::vector<OrchardNoteEntry> selectedInputs;
-                CAmount totalInputAmount = 0;
-
-                // Determine consolidation parameters for Orchard
-                int minNoteQuantity = rand() % 10 + 2;      // 2-11 notes minimum
-                int maxNoteQuantity = rand() % 35 + 10;     // 10-44 notes maximum
-
-                // Select Orchard notes from this address for consolidation
-                for (const OrchardNoteEntry& noteEntry : addressNotes) {
-                    // Verify this note belongs to the address we're processing
-                    if (noteEntry.address == address) {
-                        selectedInputs.push_back(noteEntry);
-                        totalInputAmount += noteEntry.note.value();
-                    }
-
-                    // Limit the number of inputs to avoid oversized transactions
-                    if (selectedInputs.size() >= static_cast<size_t>(maxNoteQuantity)) {
-                        break;
-                    }
-                }
-
-                // Skip if we don't have enough notes to consolidate
-                if (selectedInputs.size() < static_cast<size_t>(minNoteQuantity)) {
-                    continue;
-                }
-
-                // Lock the selected Orchard notes to prevent double-spending
-                lockOrchardNotes(selectedInputs);
-
-                // Calculate fee and output amount for Orchard transaction
-                CAmount transactionFee = fOrchardConsolidationTxFee;
-                if (totalInputAmount <= fOrchardConsolidationTxFee) {
-                    transactionFee = 0; // Waive fee if input amount is too small
-                }
-                CAmount outputAmount = totalInputAmount - transactionFee;
-
-                // Skip if output amount would be zero or negative
-                if (outputAmount <= 0) {
-                    LogPrint("zrpcunsafe", "%s: Output amount would be zero or negative (%s). Skipping this address.\n", 
-                            getId(), FormatMoney(outputAmount));
-                    unlockOrchardNotes(selectedInputs);
-                    continue;
-                }
-
-                // Build the Orchard consolidation transaction
-                auto transactionBuilder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
-                int expirationHeight = 0;
-                
-                {
-                    expirationHeight = chainActive.Tip()->nHeight + ORCHARD_CONSOLIDATION_EXPIRY_DELTA;
-                    transactionBuilder.SetExpiryHeight(expirationHeight);
-
-                    LogPrint("zrpcunsafe", "%s: Building Orchard consolidation transaction with %d inputs, output amount=%s\n", 
-                            getId(), selectedInputs.size(), FormatMoney(outputAmount));
-
-                    // Add all selected Orchard notes as transaction inputs (actions)
-                    uint256 orchardAnchor;
-                    for (const auto& inputEntry : selectedInputs) {
-                        // Get Merkle path for this Orchard note
-                        libzcash::MerklePath merklePath;
-                        if (!pwalletMain->OrchardWalletGetMerklePathOfNote(inputEntry.op.hash, inputEntry.op.n, merklePath)) {
-                            LogPrint("zrpcunsafe", "%s: Failed to get Merkle path for Orchard note %s:%d. Stopping.\n", 
-                                    getId(), inputEntry.op.hash.ToString(), inputEntry.op.n);
-                            unlockOrchardNotes(selectedInputs);
-                            roundComplete = true;
-                            break;
-                        }
-
-                        // Get CMX and anchor for this Orchard note (create mutable copy for method calls)
-                        auto orchardNote = inputEntry.note;
-                        auto cmx = orchardNote.cmx();
-                        uint256 anchor;
-                        if (!pwalletMain->OrchardWalletGetPathRootWithCMU(merklePath, cmx, anchor)) {
-                            LogPrint("zrpcunsafe", "%s: Failed to get anchor for Orchard note %s:%d. Stopping.\n", 
-                                    getId(), inputEntry.op.hash.ToString(), inputEntry.op.n);
-                            unlockOrchardNotes(selectedInputs);
-                            roundComplete = true;
-                            break;
-                        }
-
-                        // Store the anchor for later use
-                        if (orchardAnchor.IsNull()) {
-                            orchardAnchor = anchor; // Use the first anchor found
-                        } else if (orchardAnchor != anchor) {
-                            LogPrint("zrpcunsafe", "%s: Multiple anchors found for Orchard notes. Stopping.\n", getId());
-                            unlockOrchardNotes(selectedInputs);
-                            roundComplete = true;
-                            break;
-                        }
-
-                        // Add the Orchard spend action to the transaction builder
-                        if (!transactionBuilder.AddOrchardSpendRaw(inputEntry.op, inputEntry.address, 
-                                                                  orchardNote.value(), orchardNote.rho(), 
-                                                                  orchardNote.rseed(), merklePath, anchor)) {
-                            LogPrint("zrpcunsafe", "%s: Failed to add Orchard spend for note %s:%d. Stopping.\n", 
-                                    getId(), inputEntry.op.hash.ToString(), inputEntry.op.n);
-                            unlockOrchardNotes(selectedInputs);
-                            roundComplete = true;
-                            break;
-                        }
-                    }
-
-                    // Initialize Orchard builder with the anchor, consolidation transactions will always have inputs and outputs
-                    transactionBuilder.InitializeOrchard(true, true, orchardAnchor);
-
-                    // Convert raw Orchard spends to signed spends using extended spending key
-                    if (!transactionBuilder.ConvertRawOrchardSpend(orchardSpendingKey)) {
-                        LogPrint("zrpcunsafe", "%s: Failed to convert raw Orchard spends. Stopping.\n", getId());
-                        unlockOrchardNotes(selectedInputs);
-                        roundComplete = true;
-                        break;
-                    }
-                }
-
-                // Set transaction fee and add Orchard output action
-                transactionBuilder.SetFee(transactionFee);
-                
-                transactionBuilder.AddOrchardOutputRaw(address, outputAmount, std::nullopt);
-                
-                // Convert raw Orchard output using outgoing viewing key from extended spending key
-                libzcash::OrchardFullViewingKey orchardFvk;
-                if (!orchardSpendingKey.sk.DeriveFVK(&orchardFvk)) {
-                    LogPrint("zrpcunsafe", "%s: Failed to get FVK from spending key. Stopping.\n", getId());
-                    unlockOrchardNotes(selectedInputs);
-                    roundComplete = true;
-                    break;
-                }
-                libzcash::OrchardOutgoingViewingKey orchardOvkObj;
-                if (!orchardFvk.DeriveOVK(&orchardOvkObj)) {
-                    LogPrint("zrpcunsafe", "%s: Failed to get OVK from FVK. Stopping.\n", getId());
-                    unlockOrchardNotes(selectedInputs);
-                    roundComplete = true;
-                    break;
-                }
-                transactionBuilder.ConvertRawOrchardOutput(orchardOvkObj.ovk);
-
-                // Build and commit the Orchard consolidation transaction
-                auto buildResult = transactionBuilder.Build();
-                if (!buildResult.IsTx()) {
-                    LogPrint("zrpcunsafe", "%s: Failed to build Orchard consolidation transaction: %s\n", 
-                            getId(), buildResult.GetError());
-                    unlockOrchardNotes(selectedInputs);
-                    roundComplete = true;
-                    break;
-                }
-                auto consolidationTx = buildResult.GetTxOrThrow();
-
-                // Check for cancellation before committing
-                if (isCancelled()) {
-                    LogPrint("zrpcunsafe", "%s: Operation cancelled. Stopping.\n", getId());
-                    unlockOrchardNotes(selectedInputs);
-                    roundComplete = true;
-                    break;
-                }
-
-                // Commit the transaction to the wallet
-                if (!pwalletMain->CommitAutomatedTx(consolidationTx)) {
-                    LogPrint("zrpcunsafe", "%s: Failed to commit Orchard consolidation transaction. Stopping.\n", getId());
-                    unlockOrchardNotes(selectedInputs);
-                    roundComplete = true;
-                    break;
-                }
-
-                LogPrint("zrpcunsafe", "%s: Committed Orchard consolidation transaction with txid=%s, consolidated %d notes\n", 
-                        getId(), consolidationTx.GetHash().ToString(), selectedInputs.size());
-
-                // Unlock the notes after successful transaction commit
-                unlockOrchardNotes(selectedInputs);
-
-                // Update consolidation tracking
-                amountConsolidated += outputAmount;
-                numTxCreated++;
-                consolidationTxIds.push_back(consolidationTx.GetHash().ToString());
-            }
-        }
-
-        // Exit conditions for the consolidation loop
-        if (roundComplete) {
-            break;
+            // No filter active: consolidate all wallet Orchard addresses.
+            std::set<libzcash::OrchardPaymentAddress> allAddrs;
+            pwalletMain->GetOrchardPaymentAddresses(allAddrs);
+            candidateAddresses.assign(allAddrs.begin(), allAddrs.end());
         }
     }
 
-    // Check if Orchard consolidation is complete (no more addresses with multiple notes)
-    if (roundComplete) {
-        // All addresses now have single notes - consolidation complete
-        // No more consolidation is possible or beneficial
+    // STEP 2: Per-address: check spending key, probe for threshold, then consolidate.
+    for (const auto& addr : candidateAddresses) {
+        if (isCancelled() || ShutdownRequested())
+            break;
+        // Spending key check first - skip watch-only addresses immediately.
+        libzcash::OrchardExtendedSpendingKeyPirate extsk;
+        {
+            LOCK2(cs_main, pwalletMain->cs_wallet);
+            if (!pwalletMain->GetOrchardExtendedSpendingKey(addr, extsk))
+                continue;
+        }
+
+        // Threshold probe: fetch at most consolidationTarget notes under a brief lock.
+        // GetFilteredNotes exits early once maxNotes is reached, so lock hold is bounded.
+        {
+            std::vector<SaplingNoteEntry> saplingProbe;
+            std::vector<OrchardNoteEntry> orchardProbe;
+            {
+                LOCK2(cs_main, pwalletMain->cs_wallet);
+                std::set<libzcash::PaymentAddress> filterAddr;
+                filterAddr.insert(addr);
+                pwalletMain->GetFilteredNotes(saplingProbe, orchardProbe, filterAddr,
+                                              11, INT_MAX, true, true, true,
+                                              consolidationTarget, 0);
+            }
+            if ((int)orchardProbe.size() < consolidationTarget)
+                continue;
+        }
+
+        // Random note count bounds chosen once per address.
+        const int maxQuantity = rand() % 35 + 10;                               // [10, 44]
+        const int minQuantity = rand() % std::min(9, maxQuantity - 1) + 2;      // [2, min(10, maxQuantity-1)]
+
+        // Per-address inner loop: keep consolidating until fewer than minQuantity
+        // unspent notes remain or they cannot cover the fee.
+        while (true) {
+            if (isCancelled() || ShutdownRequested()) {
+                LogPrint("zrpcunsafe", "%s: Stopping Orchard consolidation inner loop (cancelled or shutdown).\n", getId());
+                break;
+            }
+            std::vector<SaplingNoteEntry> saplingEntries;
+            std::vector<OrchardNoteEntry> orchardEntries;
+            {
+                LOCK2(cs_main, pwalletMain->cs_wallet);
+                std::set<libzcash::PaymentAddress> filterAddresses;
+                filterAddresses.insert(addr);
+                pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, filterAddresses,
+                                              11, INT_MAX, true, true, true,
+                                              maxQuantity, fOrchardConsolidationTxFee + 1);
+                // Lock immediately so no other async operation can select the same notes.
+                for (const auto& e : orchardEntries)
+                    pwalletMain->LockNote(e.op);
+            }
+
+            auto unlockOrchardEntries = [&]() {
+                LOCK2(cs_main, pwalletMain->cs_wallet);
+                for (const auto& e : orchardEntries)
+                    pwalletMain->UnlockNote(e.op);
+            };
+
+            if ((int)orchardEntries.size() < minQuantity) {
+                unlockOrchardEntries();
+                break;
+            }
+
+            CAmount amountToSend = 0;
+            for (const auto& e : orchardEntries)
+                amountToSend += CAmount(e.note.value());
+
+            if (amountToSend <= fOrchardConsolidationTxFee) {
+                unlockOrchardEntries();
+                break;
+            }
+
+            const CAmount outputAmount = amountToSend - fOrchardConsolidationTxFee;
+
+            std::vector<OrchardOutPoint> ops;
+            for (const auto& entry : orchardEntries)
+                ops.push_back(entry.op);
+
+            uint256 anchor;
+            std::vector<libzcash::MerklePath> orchardMerklePaths;
+            {
+                LOCK2(cs_main, pwalletMain->cs_wallet);
+                if (!pwalletMain->GetOrchardNoteMerklePaths(ops, orchardMerklePaths, anchor)) {
+                    LogPrint("zrpcunsafe", "%s: Merkle Path not found for Orchard note. Stopping.\n", getId());
+                    unlockOrchardEntries();
+                    break;
+                }
+            }
+
+            auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
+            {
+                LOCK2(cs_main, pwalletMain->cs_wallet);
+                builder.SetExpiryHeight(chainActive.Tip()->nHeight + ORCHARD_CONSOLIDATION_EXPIRY_DELTA);
+            }
+            LogPrint("zrpcunsafe", "%s: Building Orchard consolidation transaction with %d inputs, output amount=%s\n",
+                    getId(), orchardEntries.size(), FormatMoney(outputAmount));
+
+            bool buildFailed = false;
+            for (size_t i = 0; i < orchardEntries.size(); i++) {
+                const auto& entry = orchardEntries[i];
+                auto orchardNote = entry.note;
+                if (!builder.AddOrchardSpendRaw(entry.op, entry.address,
+                                                orchardNote.value(), orchardNote.rho(),
+                                                orchardNote.rseed(), orchardMerklePaths[i], anchor)) {
+                    LogPrint("zrpcunsafe", "%s: Failed to add Orchard spend for note %s:%d. Stopping.\n",
+                            getId(), entry.op.hash.ToString(), entry.op.n);
+                    buildFailed = true;
+                    break;
+                }
+            }
+            if (buildFailed) {
+                unlockOrchardEntries();
+                break;
+            }
+
+            builder.InitializeOrchard(true, true, anchor);
+
+            if (!builder.ConvertRawOrchardSpend(extsk)) {
+                LogPrint("zrpcunsafe", "%s: Failed to convert raw Orchard spends. Stopping.\n", getId());
+                unlockOrchardEntries();
+                break;
+            }
+
+            builder.SetFee(fOrchardConsolidationTxFee);
+
+            if (!builder.AddOrchardOutputRaw(addr, outputAmount, std::nullopt)) {
+                LogPrint("zrpcunsafe", "%s: Failed to add Orchard output. Stopping.\n", getId());
+                unlockOrchardEntries();
+                break;
+            }
+
+            libzcash::OrchardFullViewingKey fvk;
+            if (!extsk.sk.DeriveFVK(&fvk)) {
+                LogPrint("zrpcunsafe", "%s: Failed to get FVK from spending key. Stopping.\n", getId());
+                unlockOrchardEntries();
+                break;
+            }
+            libzcash::OrchardOutgoingViewingKey ovk;
+            if (!fvk.DeriveOVK(&ovk)) {
+                LogPrint("zrpcunsafe", "%s: Failed to get OVK from FVK. Stopping.\n", getId());
+                unlockOrchardEntries();
+                break;
+            }
+            builder.ConvertRawOrchardOutput(ovk.ovk);
+
+            auto buildResult = builder.Build();
+            if (!buildResult.IsTx()) {
+                LogPrint("zrpcunsafe", "%s: Failed to build Orchard consolidation transaction. Stopping.\n", getId());
+                unlockOrchardEntries();
+                break;
+            }
+            auto tx = buildResult.GetTxOrThrow();
+
+            if (isCancelled() || ShutdownRequested()) {
+                LogPrint("zrpcunsafe", "%s: Canceled. Stopping.\n", getId());
+                unlockOrchardEntries();
+                break;
+            }
+
+            {
+                LOCK2(cs_main, pwalletMain->cs_wallet);
+                if (!pwalletMain->CommitAutomatedTx(tx)) {
+                    LogPrint("zrpcunsafe", "%s: Failed to commit Orchard consolidation transaction. Stopping.\n", getId());
+                    unlockOrchardEntries();
+                    break;
+                }
+            }
+            LogPrint("zrpcunsafe", "%s: Committed Orchard consolidation transaction with txid=%s\n", getId(), tx.GetHash().ToString());
+            unlockOrchardEntries();
+            amountConsolidated += outputAmount;
+            numTxCreated++;
+            consolidationTxIds.push_back(tx.GetHash().ToString());
+        }
+    }
+
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
         pwalletMain->nextOrchardConsolidation = pwalletMain->orchardConsolidationInterval + chainActive.Tip()->nHeight;
         pwalletMain->fOrchardConsolidationRunning = false;
     }
 
-    LogPrint("zrpcunsafe", "%s: Created %d Orchard consolidation transactions with total output amount=%s\n", 
-             getId(), numTxCreated, FormatMoney(amountConsolidated));
+    LogPrint("zrpcunsafe", "%s: Created %d Orchard consolidation transactions with total output amount=%s\n", getId(), numTxCreated, FormatMoney(amountConsolidated));
     setConsolidationResult(numTxCreated, amountConsolidated, consolidationTxIds);
     return true;
 }
@@ -427,9 +358,9 @@ bool AsyncRPCOperation_orchardconsolidation::main_impl()
  * Formats and stores the results of the consolidation operation for reporting
  * via the getStatus() method and operation completion callbacks.
  * 
- * @param numTxCreated Number of consolidation transactions created
- * @param amountConsolidated Total amount consolidated across all transactions
- * @param consolidationTxIds Vector of transaction IDs for created transactions
+ * @param numTxCreated Number of consolidation transactions successfully created
+ * @param amountConsolidated Total amount consolidated across all transactions (in zatoshis)
+ * @param consolidationTxIds Vector of transaction IDs for all created consolidation transactions
  */
 void AsyncRPCOperation_orchardconsolidation::setConsolidationResult(int numTxCreated, const CAmount& amountConsolidated, const std::vector<std::string>& consolidationTxIds)
 {
@@ -449,81 +380,18 @@ void AsyncRPCOperation_orchardconsolidation::setConsolidationResult(int numTxCre
 /**
  * @brief Cancel the consolidation operation
  * 
- * Sets the operation state to cancelled, stopping further processing gracefully.
- * Already-broadcast transactions will complete normally.
+ * Sets the operation state to cancelled. The operation will check for
+ * cancellation at safe points and stop processing gracefully.
  */
 void AsyncRPCOperation_orchardconsolidation::cancel()
 {
     set_state(OperationStatus::CANCELLED);
 }
 
-/**
- * @brief Get current operation status with consolidation-specific information
- * 
- * @return UniValue object containing operation status, method name, and target height
- */
-UniValue AsyncRPCOperation_orchardconsolidation::getStatus() const
-{
-    UniValue baseStatus = AsyncRPCOperation::getStatus();
-    UniValue statusObj = baseStatus.get_obj();
-    statusObj.push_back(Pair("method", "orchardconsolidation"));
-    statusObj.push_back(Pair("target_height", targetHeight_));
-    return statusObj;
-}
-
-/**
- * @brief Get Orchard extended spending key for address
- * 
- * Retrieves the extended spending key associated with an Orchard payment address.
- * Required for note detection and spending operations.
- * 
- * @param address The Orchard payment address to look up
- * @param spendingKey Output parameter for the retrieved spending key
- * @return true if key found, false if address not owned by wallet
- */
-bool AsyncRPCOperation_orchardconsolidation::getOrchardExtendedSpendingKey(const libzcash::OrchardPaymentAddress& address, 
-                                                                          libzcash::OrchardExtendedSpendingKeyPirate& spendingKey)
-{
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    
-    // Search through Orchard extended spending keys for this address
-    if (pwalletMain->GetOrchardExtendedSpendingKey(address, spendingKey)) {
-        return true;
-    }
-    
-    LogPrint("zrpcunsafe", "%s: No extended spending key found for Orchard address\n", getId());
-    return false;
-}
-
-/**
- * @brief Lock Orchard notes to prevent double-spending during consolidation
- * 
- * Locks selected Orchard notes to ensure exclusive access during consolidation
- * operations, preventing concurrent operations from using the same notes.
- * 
- * @param selectedInputs Vector of Orchard note entries to lock
- */
-void AsyncRPCOperation_orchardconsolidation::lockOrchardNotes(const std::vector<OrchardNoteEntry>& selectedInputs)
-{
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    for (const auto& inputEntry : selectedInputs) {
-        pwalletMain->LockNote(inputEntry.op);
-    }
-}
-
-/**
- * @brief Unlock Orchard notes to restore availability for other operations
- * 
- * Releases exclusive locks on previously locked Orchard notes, making them
- * available for other wallet operations. Should be called regardless of
- * consolidation outcome to prevent resource leaks.
- * 
- * @param selectedInputs Vector of Orchard note entries to unlock
- */
-void AsyncRPCOperation_orchardconsolidation::unlockOrchardNotes(const std::vector<OrchardNoteEntry>& selectedInputs)
-{
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    for (const auto& inputEntry : selectedInputs) {
-        pwalletMain->UnlockNote(inputEntry.op);
-    }
+UniValue AsyncRPCOperation_orchardconsolidation::getStatus() const {
+    UniValue v = AsyncRPCOperation::getStatus();
+    UniValue obj = v.get_obj();
+    obj.push_back(Pair("method", "orchardconsolidation"));
+    obj.push_back(Pair("target_height", targetHeight_));
+    return obj;
 }
