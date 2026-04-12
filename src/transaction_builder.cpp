@@ -5,6 +5,8 @@
 
 #include "transaction_builder.h"
 
+#include "consensus/consensus.h"
+#include "consensus/upgrades.h"
 #include "core_io.h" //for EncodeHexTx
 #include "key_io.h"
 #include "main.h"
@@ -423,6 +425,9 @@ bool TransactionBuilder::ConvertRawSaplingSpend(libzcash::SaplingExtendedSpendin
     auto tx_result = maybe_tx.value();
     auto signedtxn = EncodeHexTx(tx_result);
 
+    // Accumulate committed count before clearing the staging vector
+    nCommittedSaplingSpends += vSaplingSpends.size();
+
     // reset Spend Vector
     vSaplingSpends.resize(0);
 
@@ -461,6 +466,9 @@ bool TransactionBuilder::ConvertRawSaplingOutput(uint256 ovk)
         saplingBuilder->add_recipient(ovk.GetRawBytes(), vSaplingOutputs[i].addr.ToBytes(), vSaplingOutputs[i].value, memoBytes);
         valueBalanceSapling -= vSaplingOutputs[i].value;
     }
+
+    // Accumulate committed count before clearing the staging vector
+    nCommittedSaplingOutputs += vSaplingOutputs.size();
 
     // reset Output Vector
     vSaplingOutputs.resize(0);
@@ -577,6 +585,9 @@ bool TransactionBuilder::ConvertRawOrchardSpend(libzcash::OrchardExtendedSpendin
     // Add to list of keys to sign bundle
     orchardSpendingKeys.push_back(extsk.sk);
 
+    // Accumulate committed count before clearing the staging vector
+    nCommittedOrchardSpends += vOrchardSpends.size();
+
     // reset spend vector
     vOrchardSpends.resize(0);
 
@@ -622,6 +633,9 @@ bool TransactionBuilder::ConvertRawOrchardOutput(uint256 ovk)
 
         valueBalanceOrchard -= vOrchardOutputs[i].value;
     }
+
+    // Accumulate committed count before clearing the staging vector
+    nCommittedOrchardOutputs += vOrchardOutputs.size();
 
     // reset Output Vector
     vOrchardOutputs.resize(0);
@@ -697,6 +711,82 @@ bool TransactionBuilder::SendChangeTo(CTxDestination& changeAddr)
     orchardChangeAddr = std::nullopt;
 
     return true;
+}
+
+// Returns true if the estimated transaction size fits within 95% of the protocol limit.
+// Transparent base is measured by serializing mtx (scriptSigs absent) + 107 bytes/input.
+// Orchard proof model (empirical, verified n=2,4,39,85): proof = 2720 + 2272*n bytes.
+// Proof-length varint is 3 bytes for n<28, 5 bytes for n>=28 (proof exceeds 65535).
+// extraOutputs budgets for outputs not yet queued (e.g. change), routed to the active pool.
+bool TransactionBuilder::IsValidSize(int extraOutputs) const
+{
+    // ZIP-225 component sizes
+    static constexpr size_t SAPLING_SPEND_SIZE           = 384;
+    static constexpr size_t SAPLING_OUTPUT_SIZE          = 948;
+    static constexpr size_t SAPLING_BUNDLE_OVERHEAD      = 104;
+    static constexpr size_t ORCHARD_ACTION_SIZE          = 884;
+    // Halo2 proof: verified exact at n=2,4,39,85: proof = 2720 + 2272*n
+    static constexpr size_t ORCHARD_PROOF_BASE           = 2720;
+    static constexpr size_t ORCHARD_PROOF_PER_ACTION     = 2272;
+    static constexpr size_t ORCHARD_BUNDLE_OVERHEAD_BASE = 106; // flags+valueBalance+anchor+bindingSig+varint
+    static constexpr size_t ORCHARD_LARGE_PROOF_THRESHOLD = 28; // proof >65535 bytes at n>=28
+    static constexpr size_t P2PKH_SCRIPTSIG_SIZE         = 107;
+
+    // Transparent: serialize mtx (empty scriptSigs) + estimate scriptSig bytes
+    const size_t nTransparentInputs  = tIns.size();
+    const size_t nTransparentOutputs = mtx.vout.size();
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << CTransaction(mtx);
+    const size_t transparentBase = ss.size() + nTransparentInputs * P2PKH_SCRIPTSIG_SIZE;
+
+    // Shielded counts: committed (already in Rust builder) + pending in staging vectors
+    const size_t nSaplingSpends      = nCommittedSaplingSpends  + vSaplingSpends.size();
+    const size_t nSaplingOutputsBase = nCommittedSaplingOutputs + vSaplingOutputs.size();
+    const size_t nOrchardSpends      = nCommittedOrchardSpends  + vOrchardSpends.size();
+    const size_t nOrchardOutputsBase = nCommittedOrchardOutputs + vOrchardOutputs.size();
+
+    const bool orchardPoolActive = (nOrchardSpends > 0 || nOrchardOutputsBase > 0);
+    const size_t nSaplingOutputs = nSaplingOutputsBase + (orchardPoolActive ? 0 : static_cast<size_t>(extraOutputs));
+    const size_t nOrchardOutputs = nOrchardOutputsBase + (orchardPoolActive ? static_cast<size_t>(extraOutputs) : 0);
+    const size_t nOrchardActions = std::max(nOrchardSpends, nOrchardOutputs);
+
+    size_t estimate = transparentBase;
+
+    if (nSaplingSpends > 0 || nSaplingOutputs > 0) {
+        estimate += nSaplingSpends  * SAPLING_SPEND_SIZE
+                  + nSaplingOutputs * SAPLING_OUTPUT_SIZE
+                  + SAPLING_BUNDLE_OVERHEAD;
+    }
+
+    size_t orchardProofEst = 0;
+    size_t proofVarintSize = 0;
+    if (nOrchardActions > 0) {
+        orchardProofEst = ORCHARD_PROOF_BASE + nOrchardActions * ORCHARD_PROOF_PER_ACTION;
+        proofVarintSize = (nOrchardActions >= ORCHARD_LARGE_PROOF_THRESHOLD) ? 5 : 3;
+        estimate += nOrchardActions * ORCHARD_ACTION_SIZE
+                  + orchardProofEst + proofVarintSize
+                  + ORCHARD_BUNDLE_OVERHEAD_BASE;
+    }
+
+    const size_t maxTxSize = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_SAPLING)
+        ? MAX_TX_SIZE_AFTER_SAPLING : MAX_TX_SIZE_BEFORE_SAPLING;
+    const size_t limit = maxTxSize - maxTxSize / 20;
+
+    // LogPrintf("IsValidSize: transparent_base=%u (serialized=%u scriptsig_est=%u inputs=%u outputs=%u) "
+    //           "sapling_spends=%u sapling_outputs=%u "
+    //           "orchard_spends=%u orchard_outputs=%u orchard_actions=%u "
+    //           "orchard_proof_est=%u varint=%u "
+    //           "estimated_total=%u limit=%u max=%u valid=%s\n",
+    //     transparentBase,
+    //     transparentBase - nTransparentInputs * P2PKH_SCRIPTSIG_SIZE,
+    //     nTransparentInputs * P2PKH_SCRIPTSIG_SIZE,
+    //     nTransparentInputs, nTransparentOutputs, nSaplingSpends, nSaplingOutputs,
+    //     nOrchardSpends, nOrchardOutputs, nOrchardActions,
+    //     orchardProofEst, proofVarintSize,
+    //     estimate, limit, maxTxSize,
+    //     (estimate <= limit ? "YES" : "NO"));
+
+    return estimate <= limit;
 }
 
 TransactionBuilderResult TransactionBuilder::Build()

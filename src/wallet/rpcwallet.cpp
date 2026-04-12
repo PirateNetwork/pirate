@@ -5428,18 +5428,17 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (fHelp || params.size() < 2 || params.size() > 4)
         throw runtime_error(
             "z_sendmany \"fromaddress\" [{\"address\":... ,\"amount\":...},...] ( minconf ) ( fee )\n"
-            "\nSend multiple times. Amounts are decimal numbers with at most 8 digits of precision."
-            "\nChange generated from a taddr flows to a new taddr address, while change generated from a zaddr returns to itself."
-            "\nWhen sending coinbase UTXOs to a zaddr, change is not allowed. The entire value of the UTXO(s) must be consumed."
-            + strprintf("\nBefore Sapling activates, the maximum number of zaddr outputs is %d due to transaction size limits.\n", Z_SENDMANY_MAX_ZADDR_OUTPUTS_BEFORE_SAPLING)
+            "\nSend multiple times from a shielded (Sapling or Orchard) address. Amounts are decimal numbers with at most 8 digits of precision."
+            "\nChange generated from a zaddr returns to itself."
+            "\nTo send from a transparent address, use z_shieldcoinbase instead.\n"
             + HelpRequiringPassphrase() + "\n"
             "\nArguments:\n"
-            "1. \"fromaddress\"         (string, required) The taddr or zaddr to send the funds from.\n"
+            "1. \"fromaddress\"         (string, required) The Sapling or Orchard zaddr to send funds from.\n"
             "2. \"amounts\"             (array, required) An array of json objects representing the amounts to send.\n"
             "    [{\n"
-            "      \"address\":address  (string, required) The address is a sapling or orchard\n"
-            "      \"amount\":amount    (numeric, required) The numeric amount in KMD is the value\n"
-            "      \"memo\":memo        (string, optional) If the address is a zaddr, raw data represented in hexadecimal string format\n"
+            "      \"address\":address  (string, required) The recipient Sapling or Orchard address\n"
+            "      \"amount\":amount    (numeric, required) The numeric amount in " + CURRENCY_UNIT + " is the value\n"
+            "      \"memo\":memo        (string, optional) Raw data represented in hexadecimal string format\n"
             "    }, ... ]\n"
             "3. minconf               (numeric, optional, default=1) Only use funds confirmed at least this many times.\n"
             "4. fee                   (numeric, optional, default="
@@ -5447,8 +5446,8 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "\nResult:\n"
             "\"operationid\"          (string) An operationid to pass to z_getoperationstatus to get the result of the operation.\n"
             "\nExamples:\n"
-            + HelpExampleCli("z_sendmany", "\"RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPV\" '[{\"address\": \"zs14d8tc0hl9q0vg5l28uec5vk6sk34fkj2n8s7jalvw5fxpy6v39yn4s2ga082lymrkjk0x2nqg37\" ,\"amount\": 5.0}]'")
-            + HelpExampleRpc("z_sendmany", "\"RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPV\", [{\"address\": \"zs14d8tc0hl9q0vg5l28uec5vk6sk34fkj2n8s7jalvw5fxpy6v39yn4s2ga082lymrkjk0x2nqg37\" ,\"amount\": 5.0}]")
+            + HelpExampleCli("z_sendmany", "\"zs1youraddress\" '[{\"address\": \"zs14d8tc0hl9q0vg5l28uec5vk6sk34fkj2n8s7jalvw5fxpy6v39yn4s2ga082lymrkjk0x2nqg37\", \"amount\": 5.0}]'")
+            + HelpExampleRpc("z_sendmany", "\"zs1youraddress\", [{\"address\": \"zs14d8tc0hl9q0vg5l28uec5vk6sk34fkj2n8s7jalvw5fxpy6v39yn4s2ga082lymrkjk0x2nqg37\", \"amount\": 5.0}]")
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -5459,50 +5458,40 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     // Check that the from address is valid.
     auto fromaddress = params[0].get_str();
-    bool fromTaddr = false;
     bool fromSapling = false;
     bool fromOrchard = false;
-    bool fromSprout = false;
-
-    uint32_t branchId = CurrentEpochBranchId(chainActive.Height(), Params().GetConsensus());
 
     CTxDestination taddr = DecodeDestination(fromaddress);
-    fromTaddr = IsValidDestination(taddr);
-    if (!fromTaddr) {
-        auto res = DecodePaymentAddress(fromaddress);
-        if (!IsValidPaymentAddress(res)) {
-            // invalid
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a taddr, sapling or orchard.");
-        }
-
-        // Check that we have the spending key
-        if (!std::visit(HaveSpendingKeyForPaymentAddress(pwalletMain), res)) {
-             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "From address does not belong to this node, zaddr spending key not found.");
-        }
-
-        // Remember whether this is Sapling address
-        fromSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
-
-        // Remember whether this is Orchard address
-        fromOrchard = std::get_if<libzcash::OrchardPaymentAddress>(&res) != nullptr;
-
-        // Remember whether this is Sprout address
-        fromSprout = std::get_if<libzcash::SproutPaymentAddress>(&res) != nullptr;
-        if (fromSprout) {
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a taddr, sapling or orchard.");
-        }
+    if (IsValidDestination(taddr)) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY,
+            "Transparent addresses are not supported as a source for z_sendmany. "
+            "To shield funds from a transparent address, use z_shieldcoinbase.");
     }
+
+    auto res = DecodePaymentAddress(fromaddress);
+    if (!IsValidPaymentAddress(res)) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a sapling or orchard address.");
+    }
+
+    // Check that we have the spending key
+    if (!std::visit(HaveSpendingKeyForPaymentAddress(pwalletMain), res)) {
+         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "From address does not belong to this node, zaddr spending key not found.");
+    }
+
+    if (std::get_if<libzcash::SproutPaymentAddress>(&res) != nullptr) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a sapling or orchard address.");
+    }
+
+    fromSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
+    fromOrchard = std::get_if<libzcash::OrchardPaymentAddress>(&res) != nullptr;
 
     UniValue outputs = params[1].get_array();
 
     if (outputs.size()==0)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, amounts array is empty.");
 
-    // Keep track of addresses to spot duplicates
+    // Keep track of addresses to detect duplicates
     set<std::string> setAddress;
-
-    // Track whether we see any Sprout addresses
-    bool noSproutAddrs = !fromSprout;
 
     // Recipients
     std::vector<SendManyRecipient> saplingRecipients;
@@ -5553,7 +5542,8 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
             throw JSONRPCError(RPC_INVALID_PARAMETER,"Cannot send to transaparent addresses using z_sendmany");
         }
 
-        setAddress.insert(address);
+        if (!setAddress.insert(address).second)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, duplicated address: ") + address);
 
         UniValue memoValue = find_value(o, "memo");
         string memo;
@@ -5586,27 +5576,6 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
 
     int nextBlockHeight = chainActive.Height() + 1;
-    CMutableTransaction mtx;
-    mtx.fOverwintered = true;
-    mtx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
-    mtx.nVersion = SAPLING_TX_VERSION;
-    unsigned int max_tx_size = MAX_TX_SIZE_AFTER_SAPLING;
-    if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
-        if (NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_OVERWINTER)) {
-            mtx.nVersionGroupId = OVERWINTER_VERSION_GROUP_ID;
-            mtx.nVersion = OVERWINTER_TX_VERSION;
-        } else {
-            mtx.fOverwintered = false;
-            mtx.nVersion = 2;
-        }
-
-        max_tx_size = MAX_TX_SIZE_BEFORE_SAPLING;
-
-        // Check the number of zaddr outputs does not exceed the limit.
-        if (saplingRecipients.size() > Z_SENDMANY_MAX_ZADDR_OUTPUTS_BEFORE_SAPLING)  {
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, too many zaddr outputs");
-        }
-    }
 
     // If Sapling is not active, do not allow sending from or sending to Sapling addresses.
     if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
@@ -5615,29 +5584,11 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
         }
     }
 
-    // If Sapling is not active, do not allow sending from or sending to Sapling addresses.
+    // If Orchard is not active, do not allow sending from or sending to Orchard addresses.
     if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
         if (fromOrchard || containsOrchardOutput) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Orchard has not activated");
         }
-    }
-
-    // As a sanity check, estimate and verify that the size of the transaction will be valid.
-    // Depending on the input notes, the actual tx size may turn out to be larger and perhaps invalid.
-    size_t txsize = 0;
-
-    // Fine to call this because we are only testing that `mtx` is a valid size.
-    mtx.saplingBundle = sapling::test_only_invalid_bundle(0, saplingRecipients.size(), 0);
-
-    CTransaction tx(mtx);
-    txsize += GetSerializeSize(tx, SER_NETWORK, tx.nVersion);
-    if (fromTaddr) {
-        txsize += CTXIN_SPEND_DUST_SIZE;
-        txsize += CTXOUT_REGULAR_SIZE;      // There will probably be taddr change
-    }
-
-    if (txsize > max_tx_size) {
-        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Too many outputs, size of raw transaction would be larger than limit of %d bytes", max_tx_size ));
     }
 
     // Minimum confirmations
