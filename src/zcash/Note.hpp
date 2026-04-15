@@ -280,10 +280,14 @@ public:
         const uint256& ovk
     );
 
-    // Compute nullifier directly from an encrypted output
+    // Compute nullifier directly from an encrypted output.
+    // ivk must be the IVK that successfully decrypted the note (external or internal).
+    // ak and nk must match the scope of ivk: for internal notes use nk_internal, not nk.
     static std::optional<uint256> ComputeNullifierFromOutput(
         const sapling::Output& output,
-        const SaplingFullViewingKey& vk,
+        const SaplingIncomingViewingKey& ivk,
+        const uint256& ak,
+        const uint256& nk,
         uint64_t position
     );
 

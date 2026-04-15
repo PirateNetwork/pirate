@@ -3380,8 +3380,7 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
             obj.push_back(Pair("amount", ValueFromAmount(CAmount(entry.note.value())))); // note.value() is equivalent to plaintext.value()
             obj.push_back(Pair("memo", HexStr(entry.memo)));
             if (hasOrchardFullViewingKey) {
-                obj.push_back(Pair("change", false));
-                // obj.push_back(Pair("change", pwalletMain->IsNoteSaplingChange(nullifierSet, entry.address, entry.op)));
+                obj.push_back(Pair("change", pwalletMain->IsNoteOrchardChange(nullifierSet, entry.address, entry.op)));
             } else {
                 obj.push_back(Pair("change", false));
             }
@@ -3949,6 +3948,38 @@ UniValue z_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubK
             result.push_back(obj);
         }
     }
+
+    if (std::get_if<libzcash::OrchardPaymentAddress>(&zaddr) != nullptr) {
+
+        std::set<std::pair<PaymentAddress, uint256>> nullifierSet = pwalletMain->GetNullifiersForAddresses({zaddr});
+        libzcash::OrchardIncomingViewingKey ivk;
+        pwalletMain->GetOrchardIncomingViewingKey(*(std::get_if<libzcash::OrchardPaymentAddress>(&zaddr)), ivk);
+        bool hasOrchardFullViewingKey = pwalletMain->HaveOrchardFullViewingKey(ivk);
+
+        for (OrchardNoteEntry & entry : orchardEntries) {
+            UniValue obj(UniValue::VOBJ);
+
+            int nHeight   = tx_height(entry.op.hash);
+            int dpowconfs = komodo_dpowconfs(nHeight, entry.confirmations);
+            // Only return notarized results when minconf>1
+            if (nMinDepth > 1 && dpowconfs == 1)
+                continue;
+
+            obj.push_back(Pair("txid", entry.op.hash.ToString()));
+            obj.push_back(Pair("amount", ValueFromAmount(CAmount(entry.note.value()))));
+            obj.push_back(Pair("memo", HexStr(entry.memo)));
+            obj.push_back(Pair("outindex", (int)entry.op.n));
+            obj.push_back(Pair("rawconfirmations", entry.confirmations));
+            obj.push_back(Pair("confirmations", dpowconfs));
+            if (hasOrchardFullViewingKey) {
+                obj.push_back(Pair("change", pwalletMain->IsNoteOrchardChange(nullifierSet, entry.address, entry.op)));
+            } else {
+                obj.push_back(Pair("change", false));
+            }
+            result.push_back(obj);
+        }
+    }
+
     return result;
 }
 

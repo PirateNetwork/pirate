@@ -389,7 +389,7 @@ public:
                                            const std::vector<unsigned char>& vchCryptedSecret);
     bool WriteOrchardPaymentAddress(const libzcash::OrchardIncomingViewingKey &ivk,
                                     const libzcash::OrchardPaymentAddress &addr,
-                                    OrchardKeyScope scope);
+                                    KeyScope scope);
     bool WriteCryptedOrchardPaymentAddress(const libzcash::OrchardPaymentAddress &addr,
                                            const uint256 chash,
                                            const std::vector<unsigned char> &vchCryptedSecret);

@@ -326,7 +326,7 @@ private:
     uint256 saplingAnchor = uint256S("0000000000000000000000000000000000000000000000000000000000000000");
     uint256 orchardAnchor = uint256S("0000000000000000000000000000000000000000000000000000000000000000");
 
-    std::optional<std::pair<uint256, libzcash::SaplingPaymentAddress>> firstSaplingSpendAddr;
+    std::optional<std::pair<uint256, libzcash::SaplingPaymentAddress>> firstSaplingChangeAddr;
     std::optional<std::pair<uint256, libzcash::SaplingPaymentAddress>> saplingChangeAddr;
 
     std::vector<libzcash::OrchardSpendingKey> orchardSpendingKeys;

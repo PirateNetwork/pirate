@@ -56,10 +56,17 @@ use crate::{
         fvk_to_ivk_internal as sapling_keys_fvk_to_ivk_internal,
         fvk_to_default_address as sapling_keys_fvk_to_default_address,
         fvk_to_default_address_internal as sapling_keys_fvk_to_default_address_internal,
+        dfvk_to_change_address as sapling_keys_dfvk_to_change_address,
+        dfvk_to_ivk_internal as sapling_keys_dfvk_to_ivk_internal,
+        dfvk_to_nk_internal as sapling_keys_dfvk_to_nk_internal,
+        dfvk_to_ovk_internal as sapling_keys_dfvk_to_ovk_internal,
+        dfvk_to_address_internal as sapling_keys_dfvk_to_address_internal,
+        dfvk_to_address_from_index_internal as sapling_keys_dfvk_to_address_from_index_internal,
         fvk_to_address as sapling_keys_fvk_to_address,
         fvk_to_address_internal as sapling_keys_fvk_to_address_internal,
         fvk_to_address_from_index as sapling_keys_fvk_to_address_from_index,
         fvk_to_address_from_index_internal as sapling_keys_fvk_to_address_from_index_internal,
+        xsk_derive_internal as sapling_keys_xsk_derive_internal,
     },
     transparent::{
         ovk_for_shielding_from_taddr as transparent_keys_ovk_for_shielding_from_taddr,
@@ -593,6 +600,18 @@ pub(crate) mod ffi {
         fn sapling_keys_fvk_to_default_address(fvk: &[u8; 96], out: &mut [u8; 43]) -> bool;
         #[cxx_name = "fvk_to_default_address_internal"]
         fn sapling_keys_fvk_to_default_address_internal(fvk: &[u8; 96], out: &mut [u8; 43]) -> bool;
+        #[cxx_name = "dfvk_to_change_address"]
+        fn sapling_keys_dfvk_to_change_address(dfvk: &[u8; 128], out: &mut [u8; 43]) -> bool;
+        #[cxx_name = "dfvk_to_ivk_internal"]
+        fn sapling_keys_dfvk_to_ivk_internal(dfvk: &[u8; 128], out: &mut [u8; 32]) -> bool;
+        #[cxx_name = "dfvk_to_nk_internal"]
+        fn sapling_keys_dfvk_to_nk_internal(dfvk: &[u8; 128], out: &mut [u8; 32]) -> bool;
+        #[cxx_name = "dfvk_to_ovk_internal"]
+        fn sapling_keys_dfvk_to_ovk_internal(dfvk: &[u8; 128], out: &mut [u8; 32]) -> bool;
+        #[cxx_name = "dfvk_to_address_internal"]
+        fn sapling_keys_dfvk_to_address_internal(dfvk: &[u8; 128], diversifier: &[u8; 11], out: &mut [u8; 43]) -> bool;
+        #[cxx_name = "dfvk_to_address_from_index_internal"]
+        fn sapling_keys_dfvk_to_address_from_index_internal(dfvk: &[u8; 128], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
         #[cxx_name = "fvk_to_address"]
         fn sapling_keys_fvk_to_address(fvk: &[u8; 96], diversifier: &[u8; 11], out: &mut [u8; 43]) -> bool;
         #[cxx_name = "fvk_to_address_internal"]
@@ -601,6 +620,10 @@ pub(crate) mod ffi {
         fn sapling_keys_fvk_to_address_from_index(fvk: &[u8; 96], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
         #[cxx_name = "fvk_to_address_from_index_internal"]
         fn sapling_keys_fvk_to_address_from_index_internal(fvk: &[u8; 96], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
+        /// Derives the internal (change) ExtendedSpendingKey from the external 169-byte XSK.
+        /// The result contains nsk_internal, required for zk-SNARK proofs over internal notes.
+        #[cxx_name = "xsk_derive_internal"]
+        fn sapling_keys_xsk_derive_internal(xsk: &[u8; 169]) -> [u8; 169];
     }
 
     #[namespace = "hd_seed"]

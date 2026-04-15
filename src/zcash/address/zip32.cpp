@@ -188,6 +188,184 @@ libzcash::SaplingPaymentAddress SaplingExtendedFullViewingKey::DefaultAddress() 
     return addr.value().second;
 }
 
+bool SaplingExtendedFullViewingKey::DeriveIVKinternal(libzcash::SaplingIncomingViewingKey* ivk) const
+{
+    // Build the 128-byte DFVK: fvk (96 bytes) followed by dk (32 bytes).
+    // sapling_derive_internal_fvk hashes fvk||dk, so the real dk is essential.
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+
+    SaplingDiversifiableFullViewingKey_FFI_t dfvk_t;
+    SaplingIncomingViewingKey_FFI_t ivk_t;
+
+    ss << fvk;
+    ss << dk;
+    ss >> dfvk_t;
+
+    bool rustCompleted = sapling_keys::dfvk_to_ivk_internal(dfvk_t, ivk_t);
+
+    if (rustCompleted) {
+        rs << ivk_t;
+        rs >> *ivk;
+    }
+
+    memory_cleanse(ss.data(), ss.size());
+    memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(dfvk_t.data(), dfvk_t.size());
+    memory_cleanse(ivk_t.data(), ivk_t.size());
+
+    return rustCompleted;
+}
+
+bool SaplingExtendedFullViewingKey::DeriveNKinternal(uint256* nk) const
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+
+    SaplingDiversifiableFullViewingKey_FFI_t dfvk_t;
+    SaplingIncomingViewingKey_FFI_t nk_t;  // reuse 32-byte type
+
+    ss << fvk;
+    ss << dk;
+    ss >> dfvk_t;
+
+    bool rustCompleted = sapling_keys::dfvk_to_nk_internal(dfvk_t, nk_t);
+
+    if (rustCompleted) {
+        rs << nk_t;
+        rs >> *nk;
+    }
+
+    memory_cleanse(ss.data(), ss.size());
+    memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(dfvk_t.data(), dfvk_t.size());
+    memory_cleanse(nk_t.data(), nk_t.size());
+
+    return rustCompleted;
+}
+
+bool SaplingExtendedFullViewingKey::DeriveOVKinternal(libzcash::SaplingOutgoingViewingKey* ovk) const
+{
+    // The internal OVK is derived by sapling_derive_internal_fvk(fvk, dk) as r[32..].
+    // The real dk is required: zeroing it produces a wrong ovk_internal.
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+
+    SaplingDiversifiableFullViewingKey_FFI_t dfvk_t;
+    SaplingOutgoingViewingKey_FFI_t ovk_t;
+
+    ss << fvk;
+    ss << dk;
+    ss >> dfvk_t;
+
+    bool rustCompleted = sapling_keys::dfvk_to_ovk_internal(dfvk_t, ovk_t);
+
+    if (rustCompleted) {
+        rs << ovk_t;
+        rs >> *ovk;
+    }
+
+    memory_cleanse(ss.data(), ss.size());
+    memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(dfvk_t.data(), dfvk_t.size());
+    memory_cleanse(ovk_t.data(), ovk_t.size());
+
+    return rustCompleted;
+}
+
+bool SaplingExtendedFullViewingKey::DeriveAddressInternal(libzcash::SaplingPaymentAddress* addr, diversifier_t diversifier) const
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+
+    SaplingDiversifiableFullViewingKey_FFI_t dfvk_t;
+    SaplingPaymentAddress_FFI_t address_t;
+
+    ss << fvk;
+    ss << dk;
+    ss >> dfvk_t;
+
+    bool rustCompleted = sapling_keys::dfvk_to_address_internal(dfvk_t, diversifier, address_t);
+
+    if (rustCompleted) {
+        rs << address_t;
+        rs >> *addr;
+    }
+
+    memory_cleanse(ss.data(), ss.size());
+    memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(dfvk_t.data(), dfvk_t.size());
+    memory_cleanse(address_t.data(), address_t.size());
+
+    return rustCompleted;
+}
+
+bool SaplingExtendedFullViewingKey::DeriveAddressFromIndexInternal(libzcash::SaplingPaymentAddress* addr, blob88 diversifier_index) const
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream di_ss(SER_NETWORK, PROTOCOL_VERSION);
+
+    SaplingDiversifiableFullViewingKey_FFI_t dfvk_t;
+    SaplingPaymentAddress_FFI_t address_t;
+    uint88_t di_t;
+
+    ss << fvk;
+    ss << dk;
+    ss >> dfvk_t;
+
+    di_ss << diversifier_index;
+    di_ss >> di_t;
+
+    bool rustCompleted = sapling_keys::dfvk_to_address_from_index_internal(dfvk_t, di_t, address_t);
+
+    if (rustCompleted) {
+        rs << address_t;
+        rs >> *addr;
+    }
+
+    memory_cleanse(ss.data(), ss.size());
+    memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(di_ss.data(), di_ss.size());
+    memory_cleanse(dfvk_t.data(), dfvk_t.size());
+    memory_cleanse(address_t.data(), address_t.size());
+    memory_cleanse(di_t.data(), di_t.size());
+
+    return rustCompleted;
+}
+
+bool SaplingExtendedFullViewingKey::DefaultAddressInternal(libzcash::SaplingPaymentAddress* addr) const
+{
+    // Derive the change address using the proper ZIP 32 internal dk derivation.
+    // Serializes as [fvk(96) || dk(32)] = 128-byte DFVK and calls the Rust
+    // DiversifiableFullViewingKey::change_address() which derives dk_internal
+    // via sapling_derive_internal_fvk, producing a visually distinct address.
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+
+    SaplingDiversifiableFullViewingKey_FFI_t dfvk_t;
+    SaplingPaymentAddress_FFI_t address_t;
+
+    // Build the 128-byte DFVK: fvk (96 bytes) followed by dk (32 bytes)
+    ss << fvk;
+    ss << dk;
+    ss >> dfvk_t;
+
+    bool rustCompleted = sapling_keys::dfvk_to_change_address(dfvk_t, address_t);
+
+    if (rustCompleted) {
+        rs << address_t;
+        rs >> *addr;
+    }
+
+    memory_cleanse(ss.data(), ss.size());
+    memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(dfvk_t.data(), dfvk_t.size());
+    memory_cleanse(address_t.data(), address_t.size());
+
+    return rustCompleted;
+}
+
 SaplingExtendedSpendingKey SaplingExtendedSpendingKey::Master(const HDSeed& seed, bool bip39Enabled)
 {
     auto rawSeed = seed.RawSeed();
@@ -232,6 +410,30 @@ SaplingExtendedSpendingKey SaplingExtendedSpendingKey::Derive(uint32_t i) const
     SaplingExtendedSpendingKey xsk_i;
     ss_i >> xsk_i;
     return xsk_i;
+}
+
+bool SaplingExtendedSpendingKey::DeriveInternal(SaplingExtendedSpendingKey* xsk_int) const
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+
+    SaplingExtendedSpendingKey_FFI_t xsk_in_t;
+    SaplingExtendedSpendingKey_FFI_t xsk_out_t;
+
+    ss << *this;
+    ss >> xsk_in_t;
+
+    xsk_out_t = sapling_keys::xsk_derive_internal(xsk_in_t);
+
+    rs << xsk_out_t;
+    rs >> *xsk_int;
+
+    memory_cleanse(ss.data(), ss.size());
+    memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(xsk_in_t.data(), xsk_in_t.size());
+    memory_cleanse(xsk_out_t.data(), xsk_out_t.size());
+
+    return true;
 }
 
 SaplingExtendedFullViewingKey SaplingExtendedSpendingKey::ToXFVK() const

@@ -156,7 +156,8 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
         for (int i = 0; i < arcTx.vZsSend.size(); i++) {
             QString tempHTML;
             bool internal = arcTx.receivedIn.find(arcTx.vZsSend[i].encodedAddress) != arcTx.receivedIn.end();
-            bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsSend[i].encodedAddress) != arcTx.spentFrom.end();
+            bool change = arcTx.vZsSend[i].isInternalScope ||
+                          (arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsSend[i].encodedAddress) != arcTx.spentFrom.end());
             if (internal) {
                 tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Internal Sapling Send/Receive")  + "<br>";
             } else {
@@ -189,7 +190,8 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
         for (int i = 0; i < arcTx.vZoSend.size(); i++) {
             QString tempHTML;
             bool internal = arcTx.receivedIn.find(arcTx.vZoSend[i].encodedAddress) != arcTx.receivedIn.end();
-            bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZoSend[i].encodedAddress) != arcTx.spentFrom.end();
+            bool change = arcTx.vZoSend[i].isInternalScope ||
+                          (arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZoSend[i].encodedAddress) != arcTx.spentFrom.end());
             if (internal) {
                 tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Internal Orchard Send/Receive")  + "<br>";
             } else {
@@ -246,7 +248,8 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
     for (int i = 0; i < arcTx.vZsReceived.size(); i++) {
         QString tempHTML;
         bool internal = arcTx.sendTo.find(arcTx.vZsReceived[i].encodedAddress) != arcTx.sendTo.end();
-        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsReceived[i].encodedAddress) != arcTx.spentFrom.end();
+        bool change = arcTx.vZsReceived[i].isInternalScope ||
+                      (arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsReceived[i].encodedAddress) != arcTx.spentFrom.end());
         if (!internal || arcTx.coinbase) {
             if (arcTx.coinbase) {
                 tempHTML += "<br><b>" + tr("   Type") + ":</b> " + tr("Sapling Coinbase Received")  + "<br>";
@@ -282,7 +285,8 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
     for (int i = 0; i < arcTx.vZoReceived.size(); i++) {
         QString tempHTML;
         bool internal = arcTx.sendTo.find(arcTx.vZoReceived[i].encodedAddress) != arcTx.sendTo.end();
-        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZoReceived[i].encodedAddress) != arcTx.spentFrom.end();
+        bool change = arcTx.vZoReceived[i].isInternalScope ||
+                      (arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZoReceived[i].encodedAddress) != arcTx.spentFrom.end());
 
         if (!internal || arcTx.coinbase) {
             if (arcTx.coinbase) {
@@ -317,11 +321,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
         
     }
 
-    if (allChange) {
-        strHTML += sendHTML + sendChangeHTML + recHTML + recChangeHTML;
-    } else {
-        strHTML += sendHTML + recHTML;
-    }
+    strHTML += sendHTML + sendChangeHTML + recHTML + recChangeHTML;
 
 
     strHTML += "</font></html>";

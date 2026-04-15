@@ -306,6 +306,14 @@ void getSaplingSends(const Consensus::Params& params, int nHeight, RpcTx& tx, st
                 }
 
                 send.mine = addrIsMine;
+
+                // Mark as internal scope (ZIP-32 change address)
+                {
+                    KeyScope scope;
+                    if (pwalletMain->GetSaplingKeyScope(sentAddr, scope) && scope == KeyScope::Internal)
+                        send.isInternalScope = true;
+                }
+
                 vSend.push_back(send);
                 // ovk found no need to try anymore
                 break;
@@ -342,6 +350,14 @@ void getSaplingReceives(const Consensus::Params& params, int nHeight, RpcTx& tx,
                 libzcash::SaplingExtendedFullViewingKey extfvk;
                 pwalletMain->GetSaplingFullViewingKey(ivk, extfvk);
                 received.spendable = pwalletMain->HaveSaplingSpendingKey(extfvk);
+
+                // Mark as internal scope (ZIP-32 change address) so the UI always
+                // labels this output as "change" regardless of spending address.
+                {
+                    KeyScope scope;
+                    if (pwalletMain->GetSaplingKeyScope(address, scope) && scope == KeyScope::Internal)
+                        received.isInternalScope = true;
+                }
 
                 // If the leading byte is 0xF4 or lower, the memo field should be interpreted as a
                 // UTF-8-encoded text string.
@@ -408,6 +424,14 @@ void getOrchardSends(const Consensus::Params& params, int nHeight, RpcTx& tx, st
                 }
 
                 send.mine = addrIsMine;
+
+                // Mark as internal scope (ZIP-32 change address)
+                {
+                    KeyScope scope;
+                    if (pwalletMain->GetOrchardKeyScope(addr, scope) && scope == KeyScope::Internal)
+                        send.isInternalScope = true;
+                }
+
                 vSend.push_back(send);
                 // ovk found no need to try anymore
                 break;
@@ -563,6 +587,14 @@ void getOrchardReceives(const Consensus::Params& params, int nHeight, RpcTx& tx,
                 pwalletMain->GetOrchardFullViewingKey(ivk, extfvk);
                 received.spendable = pwalletMain->HaveOrchardSpendingKey(extfvk);
 
+                // Mark as internal scope (ZIP-32 change address)
+                {
+                    auto orchAddr = note.GetAddress();
+                    KeyScope scope;
+                    if (pwalletMain->GetOrchardKeyScope(orchAddr, scope) && scope == KeyScope::Internal)
+                        received.isInternalScope = true;
+                }
+
                 // If the leading byte is 0xF4 or lower, the memo field should be interpreted as a
                 // UTF-8-encoded text string.
                 if (memo[0] <= 0xf4) {
@@ -597,10 +629,10 @@ void getAllSaplingOVKs(std::set<uint256>& ovks, bool fIncludeWatchonly)
     if (fIncludeWatchonly) {
         pwalletMain->GetSaplingOutgoingViewingKeySet(ovks);
     } else {
-        std::set<libzcash::SaplingIncomingViewingKey> setIvks;
+        SaplingIncomingViewingKeySet setIvks;
         pwalletMain->GetSaplingIncomingViewingKeySet(setIvks);
-        for (std::set<libzcash::SaplingIncomingViewingKey>::iterator it = setIvks.begin(); it != setIvks.end(); it++) {
-            libzcash::SaplingIncomingViewingKey ivk = (*it);
+        for (const auto& ivkWithScope : setIvks) {
+            const libzcash::SaplingIncomingViewingKey& ivk = ivkWithScope.first;
             libzcash::SaplingExtendedFullViewingKey extfvk;
 
             if (pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
@@ -661,12 +693,11 @@ void getAllSaplingIVKs(std::set<SaplingIncomingViewingKey>& ivks, bool fIncludeW
     if (pwalletMain == nullptr)
         return;
 
-    std::set<libzcash::SaplingIncomingViewingKey> setIvks;
+    SaplingIncomingViewingKeySet setIvks;
     pwalletMain->GetSaplingIncomingViewingKeySet(setIvks);
     // get ivks for all spending keys
-    for (std::set<libzcash::SaplingIncomingViewingKey>::iterator it = setIvks.begin(); it != setIvks.end(); it++) {
-        libzcash::SaplingIncomingViewingKey ivk = (*it);
-
+    for (const auto& ivkWithScope : setIvks) {
+        const libzcash::SaplingIncomingViewingKey& ivk = ivkWithScope.first;
 
         if (fIncludeWatchonly) {
             ivks.insert(ivk);
@@ -756,10 +787,10 @@ void getAllOrchardOVKs(std::set<libzcash::OrchardOutgoingViewingKey>& ovks, bool
     if (fIncludeWatchonly) {
         pwalletMain->GetSaplingOutgoingViewingKeySet(ovksSapling);
     } else {
-        std::set<libzcash::SaplingIncomingViewingKey> setIvks;
+        SaplingIncomingViewingKeySet setIvks;
         pwalletMain->GetSaplingIncomingViewingKeySet(setIvks);
-        for (std::set<libzcash::SaplingIncomingViewingKey>::iterator it = setIvks.begin(); it != setIvks.end(); it++) {
-            libzcash::SaplingIncomingViewingKey ivk = (*it);
+        for (const auto& ivkWithScope : setIvks) {
+            const libzcash::SaplingIncomingViewingKey& ivk = ivkWithScope.first;
             libzcash::SaplingExtendedFullViewingKey extfvk;
 
             if (pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
@@ -883,6 +914,12 @@ void getRpcArcTx(uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly
             saplingOvks = arcTxPt.saplingOvks;
             orchardIvks = arcTxPt.orchardIvks;
             orchardOvks = arcTxPt.orchardOvks;
+            // Supplement with fresh IVKs for spend resolution. The cached set may
+            // be incomplete if internal IVKs were added after this tx was first
+            // processed (e.g. Sapling change-address spend support).
+            if (!tx.GetSaplingSpends().empty()) {
+                getAllSaplingIVKs(saplingIvks, fIncludeWatchonly);
+            }
         }
 
         // Find the block it claims to be in
@@ -1020,6 +1057,12 @@ void getRpcArcTx(CWalletTx& tx, RpcArcTransaction& arcTx, bool fIncludeWatchonly
             saplingOvks = arcTxPt.saplingOvks;
             orchardIvks = arcTxPt.orchardIvks;
             orchardOvks = arcTxPt.orchardOvks;
+            // Supplement with fresh IVKs for spend resolution. The cached set may
+            // be incomplete if internal IVKs were added after this tx was first
+            // processed (e.g. Sapling change-address spend support).
+            if (!tx.GetSaplingSpends().empty()) {
+                getAllSaplingIVKs(saplingIvks, fIncludeWatchonly);
+            }
         }
     } else {
         getAllSaplingOVKs(saplingOvks, fIncludeWatchonly);
@@ -1221,7 +1264,8 @@ void getRpcArcTxJSONSends(RpcArcTransaction& arcTx, UniValue& ArcTxJSON, bool fi
 
     for (int i = 0; i < arcTx.vZsSend.size(); i++) {
         UniValue obj(UniValue::VOBJ);
-        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsSend[i].encodedAddress) != arcTx.spentFrom.end();
+        bool change = arcTx.vZsSend[i].isInternalScope ||
+                      (arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsSend[i].encodedAddress) != arcTx.spentFrom.end());
         obj.push_back(Pair("type", "sapling"));
         obj.push_back(Pair("output", arcTx.vZsSend[i].shieldedOutputIndex));
         obj.push_back(Pair("outgoing", !arcTx.vZsSend[i].mine ? true : false));
@@ -1237,7 +1281,8 @@ void getRpcArcTxJSONSends(RpcArcTransaction& arcTx, UniValue& ArcTxJSON, bool fi
 
     for (int i = 0; i < arcTx.vZoSend.size(); i++) {
         UniValue obj(UniValue::VOBJ);
-        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZoSend[i].encodedAddress) != arcTx.spentFrom.end();
+        bool change = arcTx.vZoSend[i].isInternalScope ||
+                      (arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZoSend[i].encodedAddress) != arcTx.spentFrom.end());
         obj.push_back(Pair("type", "orchard"));
         obj.push_back(Pair("output", arcTx.vZoSend[i].shieldedActionIndex));
         obj.push_back(Pair("outgoing", !arcTx.vZoSend[i].mine ? true : false));
@@ -1272,7 +1317,8 @@ void getRpcArcTxJSONReceives(RpcArcTransaction& arcTx, UniValue& ArcTxJSON, bool
 
     for (int i = 0; i < arcTx.vZsReceived.size(); i++) {
         UniValue obj(UniValue::VOBJ);
-        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsReceived[i].encodedAddress) != arcTx.spentFrom.end();
+        bool change = arcTx.vZsReceived[i].isInternalScope ||
+                      (arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZsReceived[i].encodedAddress) != arcTx.spentFrom.end());
         obj.push_back(Pair("type", "sapling"));
         obj.push_back(Pair("output", arcTx.vZsReceived[i].shieldedOutputIndex));
         obj.push_back(Pair("outgoing", false));
@@ -1289,7 +1335,8 @@ void getRpcArcTxJSONReceives(RpcArcTransaction& arcTx, UniValue& ArcTxJSON, bool
 
     for (int i = 0; i < arcTx.vZoReceived.size(); i++) {
         UniValue obj(UniValue::VOBJ);
-        bool change = arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZoReceived[i].encodedAddress) != arcTx.spentFrom.end();
+        bool change = arcTx.vZoReceived[i].isInternalScope ||
+                      (arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZoReceived[i].encodedAddress) != arcTx.spentFrom.end());
         obj.push_back(Pair("type", "orchard"));
         obj.push_back(Pair("output", arcTx.vZoReceived[i].shieldedActionIndex));
         obj.push_back(Pair("outgoing", false));

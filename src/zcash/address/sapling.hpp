@@ -159,41 +159,25 @@ public:
     // In Sapling the OVK is a direct field component; always returns true.
     bool DeriveOVK(SaplingOutgoingViewingKey* out_ovk) const;
 
-    // Derives the internal outgoing viewing key from this full viewing key into *out_ovk.
-    // In Sapling there is no separate internal OVK; returns the same OVK as DeriveOVK.
-    bool DeriveOVKinternal(SaplingOutgoingViewingKey* out_ovk) const;
-
     // Derives the incoming viewing key from this full viewing key into *ivk.
     // Returns true on success, false if the FFI call fails.
     bool DeriveIVK(SaplingIncomingViewingKey* ivk) const;
-
-    // Derives the internal incoming viewing key from this full viewing key into *ivk.
-    // Returns true on success, false if the FFI call fails.
-    bool DeriveIVKinternal(SaplingIncomingViewingKey* ivk) const;
 
     // Derives the default payment address from the FVK into *addr.
     // Returns true on success, false if the FFI call fails.
     bool DeriveDefaultAddress(SaplingPaymentAddress* addr) const;
 
-    // Derives the internal default payment address from the FVK into *addr.
-    // Returns true on success, false if the FFI call fails.
-    bool DeriveDefaultAddressInternal(SaplingPaymentAddress* addr) const;
-
     // Derives the address for a given diversifier from this full viewing key (external chain).
     // Writes result to *addr. Returns true on success, false if the FFI call fails.
     bool DeriveAddress(SaplingPaymentAddress* addr, diversifier_t diversifier) const;
-
-    // Derives the address for a given diversifier from this full viewing key (internal chain).
-    // Writes result to *addr. Returns true on success, false if the FFI call fails.
-    bool DeriveAddressInternal(SaplingPaymentAddress* addr, diversifier_t diversifier) const;
 
     // Derives the address for a given diversifier index from this full viewing key (external chain).
     // Writes result to *addr. Returns true on success, false if the FFI call fails.
     bool DeriveAddressFromIndex(SaplingPaymentAddress* addr, blob88 diversifier_index) const;
 
-    // Derives the address for a given diversifier index from this full viewing key (internal chain).
-    // Writes result to *addr. Returns true on success, false if the FFI call fails.
-    bool DeriveAddressFromIndexInternal(SaplingPaymentAddress* addr, blob88 diversifier_index) const;
+    // NOTE: All internal-scope (change) derivations have been moved to
+    // SaplingExtendedFullViewingKey, which carries the real dk needed to
+    // correctly compute nk_internal via sapling_derive_internal_fvk(fvk, dk).
 
     friend inline bool operator==(const SaplingFullViewingKey& a, const SaplingFullViewingKey& b)
     {
@@ -240,10 +224,8 @@ public:
     // Returns true on success, false if ask or nsk are not canonical field elements.
     bool DeriveDefaultAddress(SaplingPaymentAddress* addr) const;
 
-    // Derives the default internal payment address from this expanded spending key into *addr.
-    // Follows expsk → FVK → IVK (Internal) → first-valid-raw-diversifier.
-    // Returns true on success, false if ask or nsk are not canonical field elements.
-    bool DeriveDefaultAddressInternal(SaplingPaymentAddress* addr) const;
+    // NOTE: DeriveDefaultAddressInternal has been removed. Internal-scope derivations
+    // require the real dk and must use SaplingExtendedSpendingKey::ToXFVK().<method>.
 
     friend inline bool operator==(const SaplingExpandedSpendingKey& a, const SaplingExpandedSpendingKey& b)
     {

@@ -426,7 +426,9 @@ std::optional<SaplingNotePlaintext> SaplingNotePlaintext::AttemptDecryptSaplingO
  */
 std::optional<uint256> SaplingNotePlaintext::ComputeNullifierFromOutput(
     const sapling::Output& output,
-    const SaplingFullViewingKey& vk,
+    const SaplingIncomingViewingKey& ivk,
+    const uint256& ak,
+    const uint256& nk,
     uint64_t position
 )
 {
@@ -435,20 +437,13 @@ std::optional<uint256> SaplingNotePlaintext::ComputeNullifierFromOutput(
     uint256_t nk_t;
     uint256_t result_t;
 
-    // Serialize FVK and derive IVK via fvk_to_ivk
-    {
-        CDataStream fvk_ss(SER_NETWORK, PROTOCOL_VERSION);
-        std::array<unsigned char, 96> fvk_t;
-        fvk_ss << vk;
-        fvk_ss >> fvk_t;
-        sapling_keys::fvk_to_ivk(fvk_t, ivk_t);
-        memory_cleanse(fvk_ss.data(), fvk_ss.size());
-        memory_cleanse(fvk_t.data(), fvk_t.size());
-    }
+    // Use the IVK that decrypted the note directly (may be external or internal).
+    std::copy(ivk.ivk.begin(), ivk.ivk.end(), ivk_t.begin());
 
-    // Convert ak and nk to arrays for nullifier computation
-    std::copy(vk.ak.begin(), vk.ak.end(), ak_t.begin());
-    std::copy(vk.nk.begin(), vk.nk.end(), nk_t.begin());
+    // ak is always the same for both scopes; nk must match the scope of ivk.
+    // Caller is responsible for passing nk_internal when ivk is the internal IVK.
+    std::copy(ak.begin(), ak.end(), ak_t.begin());
+    std::copy(nk.begin(), nk.end(), nk_t.begin());
 
     // Call Rust method on Output to compute nullifier
     if (!output.compute_nullifier(ivk_t, ak_t, nk_t, position, result_t)) {

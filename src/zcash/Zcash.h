@@ -94,6 +94,12 @@ const size_t SerializedSaplingFullViewingKeySize      = 96;
 const size_t SerializedSaplingExpandedSpendingKeySize = 96;
 //! Serialized Sapling spending key (raw scalar, 32 bytes).
 const size_t SerializedSaplingSpendingKeySize         = 32;
+//! Serialized Sapling diversifiable full viewing key: fvk (96) || dk (32).
+//! The dk is required for ZIP 32 internal address derivation (change address).
+const size_t SerializedSaplingDiversifiableFullViewingKeySize = 128;
+//! Serialized Sapling extended spending key (XSK = expsk + chain code + depth/index metadata + dk).
+//! Layout matches SAPLING_ZIP32_XSK_SIZE (169 bytes) in zip32.h.
+const size_t SerializedSaplingExtendedSpendingKeySize = 169;
 
 // -------------------------------------------------------------------
 // Orchard — serialized byte sizes
@@ -154,6 +160,13 @@ typedef std::array<unsigned char, SerializedSaplingFullViewingKeySize>      Sapl
 typedef std::array<unsigned char, SerializedSaplingExpandedSpendingKeySize> SaplingExpandedSpendingKey_FFI_t;
 //! Opaque buffer for a Sapling spending key (raw scalar).
 typedef std::array<unsigned char, SerializedSaplingSpendingKeySize>         SaplingSpendingKey_FFI_t;
+//! Opaque buffer for a Sapling diversifiable full viewing key (fvk[96] || dk[32] = 128 bytes).
+//! Used to pass the full DFVK across the FFI boundary for operations that require the real dk,
+//! such as deriving the internal change address via ZIP 32 sapling_derive_internal_fvk.
+typedef std::array<unsigned char, SerializedSaplingDiversifiableFullViewingKeySize> SaplingDiversifiableFullViewingKey_FFI_t;
+//! Opaque buffer for a Sapling extended spending key (169 bytes) across the FFI boundary.
+//! Used to derive the internal (change) extended spending key via ZIP 32.
+typedef std::array<unsigned char, SerializedSaplingExtendedSpendingKeySize> SaplingExtendedSpendingKey_FFI_t;
 
 // -------------------------------------------------------------------
 // Orchard FFI transfer types

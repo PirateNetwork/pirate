@@ -379,8 +379,19 @@ bool TransactionBuilder::ConvertRawSaplingSpend(libzcash::SaplingExtendedSpendin
     CDataStream ssExtSk(SER_NETWORK, PROTOCOL_VERSION);
     ssExtSk << extsk;
 
+    // Derive the internal extended spending key. Internal (change) addresses use a
+    // different nk_internal, so the zk-SNARK proof requires nsk_internal, not nsk.
+    CDataStream ssIntSk(SER_NETWORK, PROTOCOL_VERSION);
+    libzcash::SaplingExtendedSpendingKey xskInternal;
+    if (!extsk.DeriveInternal(&xskInternal)) {
+        throw std::runtime_error("TransactionBuilder: failed to derive Sapling internal spending key");
+    }
+    ssIntSk << xskInternal;
+
     libzcash::SaplingIncomingViewingKey ivk;
     extsk.ToXFVK().fvk.DeriveIVK(&ivk);
+    libzcash::SaplingIncomingViewingKey ivkInternal;
+    const bool haveInternalIvk = extsk.ToXFVK().DeriveIVKinternal(&ivkInternal);
 
     // Consistency check: all anchors must equal the first one
     for (int i = 0; i < vSaplingSpends.size(); i++) {
@@ -394,28 +405,41 @@ bool TransactionBuilder::ConvertRawSaplingSpend(libzcash::SaplingExtendedSpendin
         std::array<unsigned char, 1065> merkle_path;
         std::move(ss.begin(), ss.end(), merkle_path.begin());
 
-        // Check FVK is valid for Address
+        // Check FVK is valid for Address — try external scope first, then internal (change).
         libzcash::SaplingPaymentAddress checkAddr;
-        if (!ivk.DeriveAddress(&checkAddr, vSaplingSpends[i].addr.d)) {
-            fprintf(stderr, "Nullopt - TransactionBuilder cannot add Sapling Spend with FVK that does not match Address\n");
-            throw std::runtime_error("TransactionBuilder cannot add Sapling Spend with FVK that does not match Address");
+        bool addrMatched = false;
+        bool isInternalSpend = false;
+        if (ivk.DeriveAddress(&checkAddr, vSaplingSpends[i].addr.d) && checkAddr == vSaplingSpends[i].addr) {
+            addrMatched = true;
+        } else if (haveInternalIvk && ivkInternal.DeriveAddress(&checkAddr, vSaplingSpends[i].addr.d) && checkAddr == vSaplingSpends[i].addr) {
+            addrMatched = true;
+            isInternalSpend = true;
         }
-        if (!(checkAddr == vSaplingSpends[i].addr)) {
+        if (!addrMatched) {
             fprintf(stderr, "TransactionBuilder cannot add Sapling Spend with FVK that does not match Address\n");
             throw std::runtime_error("TransactionBuilder cannot add Sapling Spend with FVK that does not match Address");
         }
 
+        // For internal (change) addresses the zk-SNARK proof requires nsk_internal,
+        // not nsk. Use the pre-derived internal spending key in that case.
+        auto& ssSpendSk = isInternalSpend ? ssIntSk : ssExtSk;
+
         // Add the spend to the sapling builder
         saplingBuilder->add_spend(
-            {reinterpret_cast<uint8_t*>(ssExtSk.data()), ssExtSk.size()},
+            {reinterpret_cast<uint8_t*>(ssSpendSk.data()), ssSpendSk.size()},
             vSaplingSpends[i].addr.d,
             vSaplingSpends[i].addr.ToBytes(),
             vSaplingSpends[i].value,
             vSaplingSpends[i].rcm.GetRawBytes(),
             merkle_path);
 
-        if (!firstSaplingSpendAddr.has_value()) {
-            firstSaplingSpendAddr = std::make_pair(extsk.ToXFVK().fvk.ovk, vSaplingSpends[i].addr);
+        if (!firstSaplingChangeAddr.has_value()) {
+            const auto xfvk = extsk.ToXFVK();
+            libzcash::SaplingPaymentAddress changeAddr;
+            if (!xfvk.DefaultAddressInternal(&changeAddr)) {
+                throw std::runtime_error("TransactionBuilder cannot derive internal change address from Sapling FVK");
+            }
+            firstSaplingChangeAddr = std::make_pair(xfvk.fvk.ovk, changeAddr);
         }
 
         valueBalanceSapling += vSaplingSpends[i].value;
@@ -557,16 +581,18 @@ bool TransactionBuilder::ConvertRawOrchardSpend(libzcash::OrchardExtendedSpendin
             return false;
         }
 
-        // Check FVK is valid for Address
+        // Check FVK is valid for Address — try external scope first, then internal (change).
         libzcash::OrchardPaymentAddress checkAddr;
-        if (!fvk.DeriveAddress(&checkAddr, vOrchardSpends[i].addr.d)) {
-            throw std::runtime_error("NullOpt - TransactionBuilder cannot add Orchard Spend with FVK that does not match Address\n");
+        bool addrMatched = false;
+        if (fvk.DeriveAddress(&checkAddr, vOrchardSpends[i].addr.d) && checkAddr == vOrchardSpends[i].addr) {
+            addrMatched = true;
+        } else if (fvk.DeriveAddressInternal(&checkAddr, vOrchardSpends[i].addr.d) && checkAddr == vOrchardSpends[i].addr) {
+            addrMatched = true;
         }
-        if (checkAddr != vOrchardSpends[i].addr) {
+        if (!addrMatched) {
             fprintf(stderr, "Note Address %s\n", EncodePaymentAddress(vOrchardSpends[i].addr).c_str());
-            fprintf(stderr, "FVK Address %s\n", EncodePaymentAddress(checkAddr).c_str());
             fprintf(stderr, "TransactionBuilder cannot add Orchard Spend with FVK that does not match Address\n");
-            throw std::runtime_error(strprintf("TransactionBuilder cannot add Orchard Spend with FVK that does not match Address\n"));
+            throw std::runtime_error("TransactionBuilder cannot add Orchard Spend with FVK that does not match Address");
         }
 
         orchardBuilder.value().AddSpendFromParts(
@@ -837,9 +863,9 @@ TransactionBuilderResult TransactionBuilder::Build()
             AddOrchardOutputRaw(firstOrchardChangeAddr->second, change, std::nullopt);
             ConvertRawOrchardOutput(firstOrchardChangeAddr->first);
 
-        } else if (firstSaplingSpendAddr) {
-            AddSaplingOutputRaw(firstSaplingSpendAddr->second, change, std::nullopt);
-            ConvertRawSaplingOutput(firstSaplingSpendAddr->first);
+        } else if (firstSaplingChangeAddr) {
+            AddSaplingOutputRaw(firstSaplingChangeAddr->second, change, std::nullopt);
+            ConvertRawSaplingOutput(firstSaplingChangeAddr->first);
         
         } else {
             return TransactionBuilderResult("Could not determine change address");

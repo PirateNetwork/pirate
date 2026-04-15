@@ -1258,9 +1258,12 @@ protected:
 
                 }
 
-                for (std::pair<const libzcash::SaplingPaymentAddress, libzcash::SaplingIncomingViewingKey>& ivkItem : mapUnsavedSaplingIncomingViewingKeys) {
-                    auto addr = ivkItem.first;
-                    auto ivk = ivkItem.second;
+                for (auto& ivkItem : mapUnsavedSaplingIncomingViewingKeys) {
+                    auto addr  = ivkItem.first;
+                    auto ivk   = ivkItem.second.first;
+                    auto scope = ivkItem.second.second;
+                    // Internal addresses are re-derived from the FVK on load; skip persisting.
+                    if (scope == KeyScope::Internal) continue;
 
                     // Write all archived sapling outpoint
                     if (!walletdb.WriteSaplingPaymentAddress(ivk, addr)) {
@@ -1409,9 +1412,12 @@ protected:
 
                     }
 
-                    for (std::pair<const libzcash::SaplingPaymentAddress, libzcash::SaplingIncomingViewingKey>& ivkItem : mapUnsavedSaplingIncomingViewingKeys) {
-                        auto addr = ivkItem.first;
-                        auto ivk = ivkItem.second;
+                    for (auto& ivkItem : mapUnsavedSaplingIncomingViewingKeys) {
+                        auto addr  = ivkItem.first;
+                        auto ivk   = ivkItem.second.first;
+                        auto scope = ivkItem.second.second;
+                        // Internal addresses are re-derived from the FVK on load; skip persisting.
+                        if (scope == KeyScope::Internal) continue;
 
                         std::vector<unsigned char> vchCryptedSecret;
                         uint256 chash = HashWithFP(addr);
@@ -1910,7 +1916,8 @@ public:
         const libzcash::SaplingExtendedFullViewingKey &extfvk);
     bool AddSaplingIncomingViewingKey(
         const libzcash::SaplingIncomingViewingKey &ivk,
-        const libzcash::SaplingPaymentAddress &addr);
+        const libzcash::SaplingPaymentAddress &addr,
+        KeyScope scope = KeyScope::External);
     bool AddSaplingDiversifiedAddress(
         const libzcash::SaplingPaymentAddress &addr,
         const libzcash::SaplingIncomingViewingKey &ivk,
@@ -1981,7 +1988,7 @@ public:
     bool AddOrchardIncomingViewingKey(
         const libzcash::OrchardIncomingViewingKey &ivk,
         const libzcash::OrchardPaymentAddress &addr,
-        OrchardKeyScope scope);
+        KeyScope scope);
     bool RederiveOrchardAddressScopes();
     bool AddOrchardDiversifiedAddress(
         const libzcash::OrchardPaymentAddress &addr,
@@ -2007,7 +2014,7 @@ public:
     bool LoadOrchardPaymentAddress(
         const libzcash::OrchardPaymentAddress &addr,
         const libzcash::OrchardIncomingViewingKey &ivk,
-        OrchardKeyScope scope);
+        KeyScope scope);
     bool LoadCryptedOrchardPaymentAddress(
         const uint256 &chash,
         const std::vector<unsigned char> &vchCryptedSecret,
