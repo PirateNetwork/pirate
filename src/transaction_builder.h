@@ -326,7 +326,7 @@ private:
     uint256 saplingAnchor = uint256S("0000000000000000000000000000000000000000000000000000000000000000");
     uint256 orchardAnchor = uint256S("0000000000000000000000000000000000000000000000000000000000000000");
 
-    std::optional<std::pair<uint256, libzcash::SaplingPaymentAddress>> firstSaplingSpendAddr;
+    std::optional<std::pair<uint256, libzcash::SaplingPaymentAddress>> firstSaplingChangeAddr;
     std::optional<std::pair<uint256, libzcash::SaplingPaymentAddress>> saplingChangeAddr;
 
     std::vector<libzcash::OrchardSpendingKey> orchardSpendingKeys;
@@ -353,6 +353,15 @@ public:
 
     std::vector<OrchardSpendDescriptionInfo> vOrchardSpends;
     std::vector<OrchardOutputDescriptionInfo> vOrchardOutputs;
+
+    // Running totals of shielded components that have been committed to the
+    // Rust builders via ConvertRaw*(). The staging vectors above are cleared
+    // after each convert call, so these counters preserve the committed counts
+    // for use by IsValidSize().
+    size_t nCommittedSaplingSpends  = 0;
+    size_t nCommittedSaplingOutputs = 0;
+    size_t nCommittedOrchardSpends  = 0;
+    size_t nCommittedOrchardOutputs = 0;
 
 
     TransactionBuilder();
@@ -443,6 +452,30 @@ public:
     void SendChangeTo(libzcash::SaplingPaymentAddress changeAddr, uint256 ovk);
 
     bool SendChangeTo(CTxDestination& changeAddr);
+
+    /**
+     * @brief Check whether the estimated transaction size is within the protocol limit
+     *
+     * Calculates a conservative upper-bound estimate of the transaction size
+     * using the current vectors of inputs and outputs, plus @p extraOutputs
+     * additional outputs (e.g. change outputs not yet queued).
+     *
+     * Per-component sizes (Zcash v5 protocol):
+     *   Transparent input:  148 bytes (outpoint + scriptsig + sequence)
+     *   Transparent output:  34 bytes
+     *   Sapling spend:      384 bytes
+     *   Sapling output:     948 bytes
+     *   Orchard action:     820 bytes
+     *   Orchard bundle overhead (proof + binding sig): 2208 bytes
+     *   Sapling bundle overhead (anchor + valueBalance + binding sig): 104 bytes
+     *
+     * @param extraOutputs  Number of additional outputs not yet in the vectors
+     *                      (defaults to 2 for the typical change-output scenario)
+     * @return              true  if the estimated size is within 95% of the maximum
+     *                      allowed at @p nHeight (190 000 bytes post-Sapling, 95 000
+     *                      bytes pre-Sapling); false if the limit would be exceeded
+     */
+    bool IsValidSize(int extraOutputs = 2) const;
 
     TransactionBuilderResult Build();
 

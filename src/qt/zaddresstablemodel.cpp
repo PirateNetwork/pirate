@@ -227,7 +227,13 @@ public:
                                 mine = true;
                             }
                     }
-                    scope = QObject::tr("Normal");  // Sapling addresses are always Normal
+                    // Get scope for Sapling addresses
+                    KeyScope sapScope;
+                    if (wallet->GetSaplingKeyScope(*saplingAddr, sapScope)) {
+                        scope = (sapScope == KeyScope::External) ? QObject::tr("Normal") : QObject::tr("Change");
+                    } else {
+                        scope = QObject::tr("Normal");
+                    }
                 }
 
                 // Check if this is an Orchard address
@@ -248,9 +254,9 @@ public:
                     }
 
                     // Get scope for Orchard addresses
-                    OrchardKeyScope orchScope;
+                    KeyScope orchScope;
                     if (wallet->GetOrchardKeyScope(*orchardAddr, orchScope)) {
-                        scope = (orchScope == OrchardKeyScope::External) ? QObject::tr("Normal") : QObject::tr("Change");
+                        scope = (orchScope == KeyScope::External) ? QObject::tr("Normal") : QObject::tr("Change");
                     } else {
                         scope = QString("");
                     }
@@ -550,14 +556,19 @@ public:
                 
                 // Update scope/type for addresses
                 if (orchardAddr != nullptr) {
-                    OrchardKeyScope scope;
+                    KeyScope scope;
                     if (wallet->GetOrchardKeyScope(*orchardAddr, scope)) {
-                        cachedAddressTable[foundIndex].scope = (scope == OrchardKeyScope::External) ? QObject::tr("Normal") : QObject::tr("Change");
+                        cachedAddressTable[foundIndex].scope = (scope == KeyScope::External) ? QObject::tr("Normal") : QObject::tr("Change");
                     } else {
                         cachedAddressTable[foundIndex].scope = QString("");
                     }
                 } else if (saplingAddr != nullptr) {
-                    cachedAddressTable[foundIndex].scope = QObject::tr("Normal");  // Sapling addresses are always Normal
+                    KeyScope sapScope;
+                    if (wallet->GetSaplingKeyScope(*saplingAddr, sapScope)) {
+                        cachedAddressTable[foundIndex].scope = (sapScope == KeyScope::External) ? QObject::tr("Normal") : QObject::tr("Change");
+                    } else {
+                        cachedAddressTable[foundIndex].scope = QObject::tr("Normal");
+                    }
                 } else {
                     cachedAddressTable[foundIndex].scope = QString("");  // Other address types
                 }

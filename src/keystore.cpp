@@ -123,6 +123,18 @@ bool CBasicKeyStore::GetSeedPhrase(std::string &phraseOut) const
     }
 }
 
+bool CBasicKeyStore::GetSeedPhrase(std::string &phraseOut, uint32_t langCode) const
+{
+    LOCK(cs_KeyStore);
+    if (hdSeed.IsNull()) {
+        return false;
+    } else {
+        HDSeed seed = hdSeed;
+        seed.GetPhrase(phraseOut, langCode);
+        return true;
+    }
+}
+
 /**
  * @brief Add a private key with its corresponding public key
  * @param key The private key to add
@@ -446,12 +458,27 @@ bool CBasicKeyStore::AddSaplingExtendedFullViewingKey(
     const libzcash::SaplingExtendedFullViewingKey &extfvk)
 {
     LOCK(cs_KeyStore);
+
+    // Derive and register external IVK + default address
     libzcash::SaplingIncomingViewingKey ivk;
     extfvk.fvk.DeriveIVK(&ivk);
     mapSaplingFullViewingKeys[ivk] = extfvk;
     setSaplingOutgoingViewingKeys.insert(extfvk.fvk.ovk);
+    CBasicKeyStore::AddSaplingIncomingViewingKey(ivk, extfvk.DefaultAddress(), KeyScope::External);
 
-    return CBasicKeyStore::AddSaplingIncomingViewingKey(ivk, extfvk.DefaultAddress());
+    // Derive and register internal IVK + internal default address (change address)
+    // Also register internal IVK in mapSaplingFullViewingKeys so that GetSaplingFullViewingKey
+    // succeeds for change addresses — mirrors how Orchard registers both scopes in
+    // mapOrchardFullViewingKeys, and is required for correct Qt group assignment.
+    libzcash::SaplingIncomingViewingKey ivkInternal;
+    libzcash::SaplingPaymentAddress addrInternal;
+    if (extfvk.DeriveIVKinternal(&ivkInternal) &&
+        extfvk.DefaultAddressInternal(&addrInternal)) {
+        mapSaplingFullViewingKeys[ivkInternal] = extfvk;
+        CBasicKeyStore::AddSaplingIncomingViewingKey(ivkInternal, addrInternal, KeyScope::Internal);
+    }
+
+    return true;
 }
 
 /**
@@ -461,15 +488,14 @@ bool CBasicKeyStore::AddSaplingExtendedFullViewingKey(
  * 
  * This function extracts and stores both external and internal keys from the XFVK:
  * - External IVK/OVK: Used for receiving funds from external sources (scope = External)
- * - Internal IVK/OVK: Used for change addresses and internal transfers (scope = Internal)
- * 
- * Each derived key is stored with its appropriate scope flag to enable:
- * - Correct address generation (external vs internal/change addresses)
+ * - Internal IVK: Used to detect and decrypt change outputs (scope = Internal)
+ *
+ * The internal OVK is intentionally not stored — it is only needed when building
+ * transactions, and transaction_builder derives it directly from the spending key.
+ *
+ * Keys are stored with their scope flag to enable:
  * - Proper transaction scanning (identifying received vs change outputs)
  * - Scope preservation during database persistence
- * 
- * The external default address and internal default address are automatically added
- * to the keystore with their respective scopes.
  */
 bool CBasicKeyStore::AddOrchardExtendedFullViewingKey(
     const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
@@ -484,67 +510,46 @@ bool CBasicKeyStore::AddOrchardExtendedFullViewingKey(
     bool ovkDerived         = extfvk.fvk.DeriveOVK(&ovk);
     bool addressDerived     = extfvk.fvk.DeriveDefaultAddress(&address);
 
-    // Derive internal keys
+    // Derive internal keys (IVK + address only; OVK not stored — tx_builder derives it from the spending key)
     libzcash::OrchardIncomingViewingKey ivkInternal;
-    libzcash::OrchardOutgoingViewingKey ovkInternal;
     libzcash::OrchardPaymentAddress addressInternal;
     bool ivkInternalDerived     = extfvk.fvk.DeriveIVKinternal(&ivkInternal);
-    bool ovkInternalDerived     = extfvk.fvk.DeriveOVKinternal(&ovkInternal);
     bool addressInternalDerived = extfvk.fvk.DeriveDefaultAddressInternal(&addressInternal);
 
     if (!ivkDerived || !ovkDerived || !addressDerived ||
-        !ivkInternalDerived || !ovkInternalDerived || !addressInternalDerived) {
+        !ivkInternalDerived || !addressInternalDerived) {
         return false;
     }
 
-    // Store external FVK and OVK with scope flag
-    OrchardIVKWithScope ivkExternal(ivk, OrchardKeyScope::External);
-    OrchardOVKWithScope ovkExternal(ovk, OrchardKeyScope::External);
+    // Store external FVK and OVK
+    OrchardIVKWithScope ivkExternal(ivk, KeyScope::External);
+    OrchardOVKWithScope ovkExternal(ovk, KeyScope::External);
     mapOrchardFullViewingKeys[ivkExternal] = extfvk;
     setOrchardOutgoingViewingKeys.insert(ovkExternal);
-    
-    // Store internal FVK and OVK with scope flag
-    OrchardIVKWithScope ivkInternalScoped(ivkInternal, OrchardKeyScope::Internal);
-    OrchardOVKWithScope ovkInternalScoped(ovkInternal, OrchardKeyScope::Internal);
+
+    // Store internal FVK (no internal OVK entry)
+    OrchardIVKWithScope ivkInternalScoped(ivkInternal, KeyScope::Internal);
     mapOrchardFullViewingKeys[ivkInternalScoped] = extfvk;
-    setOrchardOutgoingViewingKeys.insert(ovkInternalScoped);
 
     // Add external IVK with default address
-    if (!CBasicKeyStore::AddOrchardIncomingViewingKey(ivk, address, OrchardKeyScope::External)) {
+    if (!CBasicKeyStore::AddOrchardIncomingViewingKey(ivk, address, KeyScope::External)) {
         return false;
     }
     
     // Add internal IVK with default internal address
-    return CBasicKeyStore::AddOrchardIncomingViewingKey(ivkInternal, addressInternal, OrchardKeyScope::Internal);
+    return CBasicKeyStore::AddOrchardIncomingViewingKey(ivkInternal, addressInternal, KeyScope::Internal);
 }
 
-/**
- * @brief Add a Sapling incoming viewing key (IVK) with its associated payment address
- * @param ivk The Sapling incoming viewing key to add
- * @param addr The Sapling payment address associated with this IVK
- * @return true on success
- * 
- * Updates the wallet's internal address->IVK map. If the address already exists in the map,
- * it will be overwritten with the new IVK (though in practice, each address should have only
- * one IVK). The IVK is also added to a set for efficient iteration during transaction scanning.
- * 
- * Unlike Orchard IVKs, Sapling IVKs do not have explicit internal/external scope tracking.
- */
+// Stores the (IVK, scope) pair, enabling distinction of External (receive) vs Internal (change) addresses.
 bool CBasicKeyStore::AddSaplingIncomingViewingKey(
     const libzcash::SaplingIncomingViewingKey &ivk,
-    const libzcash::SaplingPaymentAddress &addr)
+    const libzcash::SaplingPaymentAddress &addr,
+    KeyScope scope)
 {
     LOCK(cs_KeyStore);
-
-    // Add addr -> IVK to SaplingIncomingViewingKeyMap
-    mapSaplingIncomingViewingKeys[addr] = ivk;
-    
-    // Add IVK to set for transaction scanning
-    setSaplingIncomingViewingKeys.insert(ivk);
-
-    // Track new address->IVK pairs discovered while wallet is locked
-    mapUnsavedSaplingIncomingViewingKeys[addr] = ivk;
-
+    mapSaplingIncomingViewingKeys[addr] = std::make_pair(ivk, scope);
+    setSaplingIncomingViewingKeys[ivk] = scope;
+    mapUnsavedSaplingIncomingViewingKeys[addr] = std::make_pair(ivk, scope);
     return true;
 }
 
@@ -566,7 +571,7 @@ bool CBasicKeyStore::AddSaplingIncomingViewingKey(
 bool CBasicKeyStore::AddOrchardIncomingViewingKey(
     const libzcash::OrchardIncomingViewingKey &ivk,
     const libzcash::OrchardPaymentAddress &addr,
-    OrchardKeyScope scope)
+    KeyScope scope)
 {
     LOCK(cs_KeyStore);
 
@@ -725,8 +730,8 @@ bool CBasicKeyStore::HaveOrchardFullViewingKey(const libzcash::OrchardIncomingVi
 {
     LOCK(cs_KeyStore);
     // Check both external and internal scope
-    OrchardIVKWithScope ivkExternal(ivk, OrchardKeyScope::External);
-    OrchardIVKWithScope ivkInternal(ivk, OrchardKeyScope::Internal);
+    OrchardIVKWithScope ivkExternal(ivk, KeyScope::External);
+    OrchardIVKWithScope ivkInternal(ivk, KeyScope::Internal);
     return mapOrchardFullViewingKeys.count(ivkExternal) > 0 || 
            mapOrchardFullViewingKeys.count(ivkInternal) > 0;
 }
@@ -806,14 +811,14 @@ bool CBasicKeyStore::GetOrchardFullViewingKey(
 {
     LOCK(cs_KeyStore);
     // Try external scope first
-    OrchardIVKWithScope ivkExternal(ivk, OrchardKeyScope::External);
+    OrchardIVKWithScope ivkExternal(ivk, KeyScope::External);
     OrchardFullViewingKeyMap::const_iterator mi = mapOrchardFullViewingKeys.find(ivkExternal);
     if (mi != mapOrchardFullViewingKeys.end()) {
         extfvkOut = mi->second;
         return true;
     }
     // Try internal scope
-    OrchardIVKWithScope ivkInternal(ivk, OrchardKeyScope::Internal);
+    OrchardIVKWithScope ivkInternal(ivk, KeyScope::Internal);
     mi = mapOrchardFullViewingKeys.find(ivkInternal);
     if (mi != mapOrchardFullViewingKeys.end()) {
         extfvkOut = mi->second;
@@ -834,7 +839,19 @@ bool CBasicKeyStore::GetSaplingIncomingViewingKey(const libzcash::SaplingPayment
     LOCK(cs_KeyStore);
     SaplingIncomingViewingKeyMap::const_iterator mi = mapSaplingIncomingViewingKeys.find(addr);
     if (mi != mapSaplingIncomingViewingKeys.end()) {
-        ivkOut = mi->second;
+        ivkOut = mi->second.first;
+        return true;
+    }
+    return false;
+}
+
+bool CBasicKeyStore::GetSaplingKeyScope(const libzcash::SaplingPaymentAddress &addr,
+                                        KeyScope &scopeOut) const
+{
+    LOCK(cs_KeyStore);
+    SaplingIncomingViewingKeyMap::const_iterator mi = mapSaplingIncomingViewingKeys.find(addr);
+    if (mi != mapSaplingIncomingViewingKeys.end()) {
+        scopeOut = mi->second.second;
         return true;
     }
     return false;
@@ -869,7 +886,7 @@ bool CBasicKeyStore::GetOrchardIncomingViewingKey(const libzcash::OrchardPayment
  * @return true if address exists in keystore, false otherwise
  */
 bool CBasicKeyStore::GetOrchardKeyScope(const libzcash::OrchardPaymentAddress &addr,
-                                        OrchardKeyScope &scopeOut) const
+                                        KeyScope &scopeOut) const
 {
     LOCK(cs_KeyStore);
     OrchardIncomingViewingKeyMap::const_iterator mi = mapOrchardIncomingViewingKeys.find(addr);

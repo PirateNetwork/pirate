@@ -1313,7 +1313,18 @@ bool WalletModel::getPrivKey(const CKeyID &address, CKey& vchPrivKeyOut) const
 bool WalletModel::getSeedPhrase(std::string &phrase) const
 {
     if (wallet->bip39Enabled) {
-      return wallet->GetSeedPhrase(phrase);
+      int lang = optionsModel ? optionsModel->getSeedPhraseLanguage() : 0;
+      return wallet->GetSeedPhrase(phrase, (uint32_t)lang);
+    }
+
+    phrase = "Bip39 is not enabled for this wallet. Bip39 can only be enabled by creating a new wallet.";
+    return true;
+}
+
+bool WalletModel::getSeedPhrase(std::string &phrase, int langCode) const
+{
+    if (wallet->bip39Enabled) {
+      return wallet->GetSeedPhrase(phrase, (uint32_t)langCode);
     }
 
     phrase = "Bip39 is not enabled for this wallet. Bip39 can only be enabled by creating a new wallet.";

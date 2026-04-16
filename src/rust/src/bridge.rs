@@ -56,13 +56,26 @@ use crate::{
         fvk_to_ivk_internal as sapling_keys_fvk_to_ivk_internal,
         fvk_to_default_address as sapling_keys_fvk_to_default_address,
         fvk_to_default_address_internal as sapling_keys_fvk_to_default_address_internal,
+        dfvk_to_change_address as sapling_keys_dfvk_to_change_address,
+        dfvk_to_ivk_internal as sapling_keys_dfvk_to_ivk_internal,
+        dfvk_to_nk_internal as sapling_keys_dfvk_to_nk_internal,
+        dfvk_to_ovk_internal as sapling_keys_dfvk_to_ovk_internal,
+        dfvk_to_address_internal as sapling_keys_dfvk_to_address_internal,
+        dfvk_to_address_from_index_internal as sapling_keys_dfvk_to_address_from_index_internal,
         fvk_to_address as sapling_keys_fvk_to_address,
         fvk_to_address_internal as sapling_keys_fvk_to_address_internal,
         fvk_to_address_from_index as sapling_keys_fvk_to_address_from_index,
         fvk_to_address_from_index_internal as sapling_keys_fvk_to_address_from_index_internal,
+        xsk_derive_internal as sapling_keys_xsk_derive_internal,
     },
     transparent::{
         ovk_for_shielding_from_taddr as transparent_keys_ovk_for_shielding_from_taddr,
+    },
+    seed::{
+        random_bytes as hd_seed_random_bytes,
+        entropy_to_bip39_seed as hd_seed_entropy_to_bip39_seed,
+        hd_seed_entropy_to_phrase,
+        hd_seed_phrase_to_entropy,
     },
 };
 
@@ -587,6 +600,18 @@ pub(crate) mod ffi {
         fn sapling_keys_fvk_to_default_address(fvk: &[u8; 96], out: &mut [u8; 43]) -> bool;
         #[cxx_name = "fvk_to_default_address_internal"]
         fn sapling_keys_fvk_to_default_address_internal(fvk: &[u8; 96], out: &mut [u8; 43]) -> bool;
+        #[cxx_name = "dfvk_to_change_address"]
+        fn sapling_keys_dfvk_to_change_address(dfvk: &[u8; 128], out: &mut [u8; 43]) -> bool;
+        #[cxx_name = "dfvk_to_ivk_internal"]
+        fn sapling_keys_dfvk_to_ivk_internal(dfvk: &[u8; 128], out: &mut [u8; 32]) -> bool;
+        #[cxx_name = "dfvk_to_nk_internal"]
+        fn sapling_keys_dfvk_to_nk_internal(dfvk: &[u8; 128], out: &mut [u8; 32]) -> bool;
+        #[cxx_name = "dfvk_to_ovk_internal"]
+        fn sapling_keys_dfvk_to_ovk_internal(dfvk: &[u8; 128], out: &mut [u8; 32]) -> bool;
+        #[cxx_name = "dfvk_to_address_internal"]
+        fn sapling_keys_dfvk_to_address_internal(dfvk: &[u8; 128], diversifier: &[u8; 11], out: &mut [u8; 43]) -> bool;
+        #[cxx_name = "dfvk_to_address_from_index_internal"]
+        fn sapling_keys_dfvk_to_address_from_index_internal(dfvk: &[u8; 128], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
         #[cxx_name = "fvk_to_address"]
         fn sapling_keys_fvk_to_address(fvk: &[u8; 96], diversifier: &[u8; 11], out: &mut [u8; 43]) -> bool;
         #[cxx_name = "fvk_to_address_internal"]
@@ -595,6 +620,32 @@ pub(crate) mod ffi {
         fn sapling_keys_fvk_to_address_from_index(fvk: &[u8; 96], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
         #[cxx_name = "fvk_to_address_from_index_internal"]
         fn sapling_keys_fvk_to_address_from_index_internal(fvk: &[u8; 96], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
+        /// Derives the internal (change) ExtendedSpendingKey from the external 169-byte XSK.
+        /// The result contains nsk_internal, required for zk-SNARK proofs over internal notes.
+        #[cxx_name = "xsk_derive_internal"]
+        fn sapling_keys_xsk_derive_internal(xsk: &[u8; 169]) -> [u8; 169];
+    }
+
+    #[namespace = "hd_seed"]
+    /// Selects the BIP-39 word list language for mnemonic phrase generation and restoration.
+    /// Word lists for all variants are compiled into the binary.
+    enum MnemonicLanguage {
+        /// BIP-39 English word list (default, always available).
+        English = 0,
+        /// BIP-39 Chinese Simplified word list.
+        ChineseSimplified = 1,
+        /// BIP-39 Chinese Traditional word list.
+        ChineseTraditional = 2,
+        /// BIP-39 French word list.
+        French = 3,
+        /// BIP-39 Italian word list.
+        Italian = 4,
+        /// BIP-39 Japanese word list.
+        Japanese = 5,
+        /// BIP-39 Korean word list.
+        Korean = 6,
+        /// BIP-39 Spanish word list.
+        Spanish = 7,
     }
 
     #[namespace = "transparent_keys"]
@@ -603,5 +654,30 @@ pub(crate) mod ffi {
         /// `seed` is the raw HD seed bytes. Always returns true.
         #[cxx_name = "ovk_for_shielding_from_taddr"]
         fn transparent_keys_ovk_for_shielding_from_taddr(seed: &[u8], out: &mut [u8; 32]) -> bool;
+    }
+
+    #[namespace = "hd_seed"]
+    extern "Rust" {
+        /// Fills `out` with 32 cryptographically secure random bytes via the OS CSPRNG.
+        #[cxx_name = "random_bytes"]
+        fn hd_seed_random_bytes(out: &mut [u8; 32]);
+
+        /// Derives the BIP-39 mnemonic phrase from raw entropy (16, 24, or 32 bytes)
+        /// using the specified word-list language.
+        /// Returns an error string if the entropy length is invalid.
+        #[cxx_name = "entropy_to_phrase"]
+        fn hd_seed_entropy_to_phrase(entropy: &[u8], lang: MnemonicLanguage) -> String;
+
+        /// Restores entropy from a BIP-39 mnemonic phrase into `out` (16, 24, or 32 bytes).
+        /// `lang` must match the language used when the phrase was generated.
+        /// Returns true on success.
+        #[cxx_name = "phrase_to_entropy"]
+        fn hd_seed_phrase_to_entropy(phrase: &str, lang: MnemonicLanguage, out: &mut [u8]) -> bool;
+
+        /// Derives the 64-byte BIP-39 PBKDF2 seed from raw entropy (no passphrase).
+        /// Language does not affect this derivation.
+        /// Returns true on success.
+        #[cxx_name = "entropy_to_bip39_seed"]
+        fn hd_seed_entropy_to_bip39_seed(entropy: &[u8], out: &mut [u8; 64]) -> bool;
     }
 }

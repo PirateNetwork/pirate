@@ -74,6 +74,7 @@ extern int fDeleteInterval;
 extern unsigned int fDeleteTransactionsAfterNBlocks;
 extern unsigned int fKeepLastNTransactions;
 extern std::string recoverySeedPhrase;
+extern uint32_t recoverySeedLangCode;
 extern bool usingGUI;
 extern int recoveryHeight;
 extern int maxProcessingThreads;
@@ -1101,6 +1102,15 @@ public:
     int nextOrchardConsolidation = 0;
     int targetOrchardConsolidationQty = 100;
 
+    // Use dPoW confirmation count for note depth filtering
+    // Use dPoW (delayed Proof-of-Work) notarisation confirmation count instead of
+    // raw GetDepthInMainChain() when filtering notes in GetFilteredNotes.  When true,
+    // komodo_dpowconfs() is applied to the raw confirmation count, which makes depth
+    // effectively infinite for transactions already buried beneath a notarisation and
+    // prevents spending notes that will be reorganised away before a notarisation.
+    // Enable with -usedpowconfs on the command line.
+    bool fUseDpowConfs = false;
+
     // Protocol-agnostic sweep configuration
     bool fSweepEnabled = false;          // Unified sweep flag supporting all protocols
     bool fSweepRunning = false;
@@ -1248,9 +1258,12 @@ protected:
 
                 }
 
-                for (std::pair<const libzcash::SaplingPaymentAddress, libzcash::SaplingIncomingViewingKey>& ivkItem : mapUnsavedSaplingIncomingViewingKeys) {
-                    auto addr = ivkItem.first;
-                    auto ivk = ivkItem.second;
+                for (auto& ivkItem : mapUnsavedSaplingIncomingViewingKeys) {
+                    auto addr  = ivkItem.first;
+                    auto ivk   = ivkItem.second.first;
+                    auto scope = ivkItem.second.second;
+                    // Internal addresses are re-derived from the FVK on load; skip persisting.
+                    if (scope == KeyScope::Internal) continue;
 
                     // Write all archived sapling outpoint
                     if (!walletdb.WriteSaplingPaymentAddress(ivk, addr)) {
@@ -1399,9 +1412,12 @@ protected:
 
                     }
 
-                    for (std::pair<const libzcash::SaplingPaymentAddress, libzcash::SaplingIncomingViewingKey>& ivkItem : mapUnsavedSaplingIncomingViewingKeys) {
-                        auto addr = ivkItem.first;
-                        auto ivk = ivkItem.second;
+                    for (auto& ivkItem : mapUnsavedSaplingIncomingViewingKeys) {
+                        auto addr  = ivkItem.first;
+                        auto ivk   = ivkItem.second.first;
+                        auto scope = ivkItem.second.second;
+                        // Internal addresses are re-derived from the FVK on load; skip persisting.
+                        if (scope == KeyScope::Internal) continue;
 
                         std::vector<unsigned char> vchCryptedSecret;
                         uint256 chash = HashWithFP(addr);
@@ -1900,7 +1916,8 @@ public:
         const libzcash::SaplingExtendedFullViewingKey &extfvk);
     bool AddSaplingIncomingViewingKey(
         const libzcash::SaplingIncomingViewingKey &ivk,
-        const libzcash::SaplingPaymentAddress &addr);
+        const libzcash::SaplingPaymentAddress &addr,
+        KeyScope scope = KeyScope::External);
     bool AddSaplingDiversifiedAddress(
         const libzcash::SaplingPaymentAddress &addr,
         const libzcash::SaplingIncomingViewingKey &ivk,
@@ -1971,7 +1988,7 @@ public:
     bool AddOrchardIncomingViewingKey(
         const libzcash::OrchardIncomingViewingKey &ivk,
         const libzcash::OrchardPaymentAddress &addr,
-        OrchardKeyScope scope);
+        KeyScope scope);
     bool RederiveOrchardAddressScopes();
     bool AddOrchardDiversifiedAddress(
         const libzcash::OrchardPaymentAddress &addr,
@@ -1997,7 +2014,7 @@ public:
     bool LoadOrchardPaymentAddress(
         const libzcash::OrchardPaymentAddress &addr,
         const libzcash::OrchardIncomingViewingKey &ivk,
-        OrchardKeyScope scope);
+        KeyScope scope);
     bool LoadCryptedOrchardPaymentAddress(
         const uint256 &chash,
         const std::vector<unsigned char> &vchCryptedSecret,
@@ -2267,7 +2284,9 @@ public:
        this function). */
     void GenerateNewSeed();
     bool IsValidPhrase(std::string &phrase);
+    bool IsValidPhrase(std::string &phrase, uint32_t langCode);
     bool RestoreSeedFromPhrase(std::string &phrase);
+    bool RestoreSeedFromPhrase(std::string &phrase, uint32_t langCode);
 
     bool SetHDSeed(const HDSeed& seed);
 
@@ -2292,8 +2311,14 @@ public:
                           bool ignoreSpent=true,
                           bool requireSpendingKey=true);
 
-    /* Find notes filtered by payment addresses, min depth, max depth, if they are spent,
-       if a spending key is required, and if they are locked */
+    /* Find notes filtered by payment addresses, min depth, if they are spent,
+       if a spending key is required, and if they are locked.
+       When maxNotes > 0 a streaming dual-heap selection (half-smallest / half-largest)
+       is used.  The scan exits early once both heaps are full AND the combined
+       aggregate value of the working set >= minAggregateValue, so the lock is held
+       for the minimum time necessary to satisfy the caller's value requirement.
+       Pass minAggregateValue=0 to disable early exit (both heaps filled from the full
+       wallet scan before returning). */
     void GetFilteredNotes(std::vector<SaplingNoteEntry>& saplingEntries,
                           std::vector<OrchardNoteEntry>& orchardEntries,
                           std::set<libzcash::PaymentAddress>& filterAddresses,
@@ -2301,7 +2326,9 @@ public:
                           int maxDepth=INT_MAX,
                           bool ignoreSpent=true,
                           bool requireSpendingKey=true,
-                          bool ignoreLocked=true);
+                          bool ignoreLocked=true,
+                          int maxNotes=0,
+                          CAmount minAggregateValue=0);
 };
 
 /** A key allocated from the key pool. */

@@ -34,6 +34,7 @@
 
 #include <QApplication>
 #include <QCloseEvent>
+#include <QComboBox>
 #include <QDesktopWidget>
 #include <QPainter>
 #include <QRadialGradient>
@@ -204,6 +205,8 @@ SplashScreen::SplashScreen(const NetworkStyle *networkStyle) :
     newSeed->setStyleSheet(styleSheet);
     layout->addWidget(newSeed);
     newSeed->setVisible(false);
+    connect(newSeed->ui->cmbLanguage, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, &SplashScreen::on_newSeedLanguageChanged);
 
     //Add Open Wallet
     openWallet = new OpenWallet(networkStyle);
@@ -369,7 +372,8 @@ void SplashScreen::on_btnRestore_clicked()
       }
 
 
-      if (pwalletMain->IsValidPhrase(phrase)) {
+      if (pwalletMain->IsValidPhrase(phrase, restoreSeed->selectedLanguage())) {
+          recoverySeedLangCode = (uint32_t)restoreSeed->selectedLanguage();
           recoverySeedPhrase = phrase;
           pwalletMain->createType = RECOVERY;
           this->restoreSeed->ui->lblInvalid->setVisible(false);
@@ -404,6 +408,14 @@ void SplashScreen::on_btnOpen_clicked()
   }
 
   openWallet->ui->lblIncorrect->setVisible(true);
+}
+
+void SplashScreen::on_newSeedLanguageChanged(int index)
+{
+    std::string phrase;
+    if (pwalletMain && pwalletMain->GetSeedPhrase(phrase, (uint32_t)index)) {
+        newSeed->ui->txtSeed->setPlainText(QString::fromStdString(phrase));
+    }
 }
 
 void SplashScreen::on_btnQuit_clicked()

@@ -709,6 +709,8 @@ int main(int argc, char *argv[])
     // User language is set up: pick a data directory
     if (!Intro::pickDataDirectory())
         return EXIT_SUCCESS;
+    // Re-apply translations if user changed language in the intro dialog
+    initTranslations(qtTranslatorBase, qtTranslator, translatorBase, translator);
 
     /// 6. Determine availability of data directory and parse komodo.conf
     /// - Do not call GetDataDir(true) before this step finishes

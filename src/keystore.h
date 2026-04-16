@@ -35,16 +35,15 @@
 #include <boost/signals2/signal.hpp>
 
 /**
- * @enum OrchardKeyScope
- * @brief Defines the scope of Orchard keys (External or Internal)
- * 
+ * @enum KeyScope
+ * @brief Defines the scope of shielded keys (External or Internal)
+ *
  * External scope (0): Keys used for receiving funds from external sources
  * Internal scope (1): Keys used for change addresses and internal transfers
- * 
- * This enum must be defined before the CKeyStore class as it's used throughout
- * the keystore interface for Orchard key management.
+ *
+ * Shared by both Sapling and Orchard key management throughout the keystore.
  */
-enum class OrchardKeyScope : uint8_t {
+enum class KeyScope : uint8_t {
     External = 0,  //!< External addresses for receiving funds
     Internal = 1   //!< Internal addresses for change and internal transfers
 };
@@ -143,14 +142,18 @@ public:
         const libzcash::SaplingIncomingViewingKey &ivk,
         libzcash::SaplingExtendedFullViewingKey& extfvkOut) const =0;
 
-    //! Sapling incoming viewing keys (IVK)
+    //! Sapling incoming viewing keys (IVK) with scope tracking (External = receive, Internal = change)
     virtual bool AddSaplingIncomingViewingKey(
         const libzcash::SaplingIncomingViewingKey &ivk,
-        const libzcash::SaplingPaymentAddress &addr) =0;
+        const libzcash::SaplingPaymentAddress &addr,
+        KeyScope scope = KeyScope::External) =0;
     virtual bool HaveSaplingIncomingViewingKey(const libzcash::SaplingPaymentAddress &addr) const =0;
     virtual bool GetSaplingIncomingViewingKey(
         const libzcash::SaplingPaymentAddress &addr,
         libzcash::SaplingIncomingViewingKey& ivkOut) const =0;
+    virtual bool GetSaplingKeyScope(
+        const libzcash::SaplingPaymentAddress &addr,
+        KeyScope& scopeOut) const =0;
     virtual void GetSaplingPaymentAddresses(std::set<libzcash::SaplingPaymentAddress> &setAddress) const =0;
 
 
@@ -175,14 +178,14 @@ public:
     virtual bool AddOrchardIncomingViewingKey(
         const libzcash::OrchardIncomingViewingKey &ivk,
         const libzcash::OrchardPaymentAddress &addr,
-        OrchardKeyScope scope) =0;
+        KeyScope scope) =0;
     virtual bool HaveOrchardIncomingViewingKey(const libzcash::OrchardPaymentAddress &addr) const =0;
     virtual bool GetOrchardIncomingViewingKey(
         const libzcash::OrchardPaymentAddress &addr,
         libzcash::OrchardIncomingViewingKey& ivkOut) const =0;
     virtual bool GetOrchardKeyScope(
         const libzcash::OrchardPaymentAddress &addr,
-        OrchardKeyScope& scopeOut) const =0;
+        KeyScope& scopeOut) const =0;
     virtual void GetOrchardPaymentAddresses(std::set<libzcash::OrchardPaymentAddress> &setAddress) const =0;
 
     // ========== Diversified Address Management ==========
@@ -242,11 +245,11 @@ typedef std::map<libzcash::SproutPaymentAddress, ZCNoteDecryption> NoteDecryptor
 typedef std::map<libzcash::SaplingExtendedFullViewingKey, libzcash::SaplingExtendedSpendingKey> SaplingSpendingKeyMap;
 typedef std::map<libzcash::SaplingIncomingViewingKey, libzcash::SaplingExtendedFullViewingKey> SaplingFullViewingKeyMap;
 
-//! Maps from payment address to incoming viewing key
-typedef std::map<libzcash::SaplingPaymentAddress, libzcash::SaplingIncomingViewingKey> SaplingIncomingViewingKeyMap;
+//! Maps from payment address to (incoming viewing key, scope) — scope tracks External vs Internal (change) addresses
+typedef std::map<libzcash::SaplingPaymentAddress, std::pair<libzcash::SaplingIncomingViewingKey, KeyScope>> SaplingIncomingViewingKeyMap;
 
 //! Set of incoming viewing keys for transaction scanning
-typedef std::set<libzcash::SaplingIncomingViewingKey> SaplingIncomingViewingKeySet;
+typedef std::map<libzcash::SaplingIncomingViewingKey, KeyScope> SaplingIncomingViewingKeySet;//!< IVK -> scope mapping for transaction scanning
 
 //! Set of outgoing viewing keys for sent note decryption
 typedef std::set<uint256> SaplingOutgoingViewingKeySet;
@@ -269,10 +272,10 @@ typedef std::map<libzcash::SaplingIncomingViewingKey, blob88> LastSaplingDiversi
  */
 struct OrchardIVKWithScope {
     libzcash::OrchardIncomingViewingKey ivk;  //!< The incoming viewing key
-    OrchardKeyScope scope;                           //!< External or Internal scope
+    KeyScope scope;                           //!< External or Internal scope
     
-    OrchardIVKWithScope() : ivk(), scope(OrchardKeyScope::External) {}
-    OrchardIVKWithScope(const libzcash::OrchardIncomingViewingKey& ivk_, OrchardKeyScope scope_) 
+    OrchardIVKWithScope() : ivk(), scope(KeyScope::External) {}
+    OrchardIVKWithScope(const libzcash::OrchardIncomingViewingKey& ivk_, KeyScope scope_) 
         : ivk(ivk_), scope(scope_) {}
     
     //! Comparison operator for map/set storage (compares both IVK and scope)
@@ -296,10 +299,10 @@ struct OrchardIVKWithScope {
  */
 struct OrchardOVKWithScope {
     libzcash::OrchardOutgoingViewingKey ovk;  //!< The outgoing viewing key
-    OrchardKeyScope scope;                     //!< External or Internal scope
+    KeyScope scope;                     //!< External or Internal scope
     
-    OrchardOVKWithScope() : ovk(), scope(OrchardKeyScope::External) {}
-    OrchardOVKWithScope(const libzcash::OrchardOutgoingViewingKey& ovk_, OrchardKeyScope scope_) 
+    OrchardOVKWithScope() : ovk(), scope(KeyScope::External) {}
+    OrchardOVKWithScope(const libzcash::OrchardOutgoingViewingKey& ovk_, KeyScope scope_) 
         : ovk(ovk_), scope(scope_) {}
     
     //! Comparison operator for set storage (compares both OVK and scope)
@@ -322,14 +325,14 @@ typedef std::map<OrchardIVKWithScope, libzcash::OrchardExtendedFullViewingKeyPir
  * Maps discovered address -> (ivk, scope) for transaction scanning.
  * Each address maps to exactly one (IVK, scope) pair.
  */
-typedef std::map<libzcash::OrchardPaymentAddress, std::pair<libzcash::OrchardIncomingViewingKey, OrchardKeyScope>> OrchardIncomingViewingKeyMap;
+typedef std::map<libzcash::OrchardPaymentAddress, std::pair<libzcash::OrchardIncomingViewingKey, KeyScope>> OrchardIncomingViewingKeyMap;
 
 /**
  * Maps IVK -> scope for efficient iteration during transaction scanning.
  * Note: If the same IVK is used with different scopes, only the most
  * recently added scope is tracked.
  */
-typedef std::map<libzcash::OrchardIncomingViewingKey, OrchardKeyScope> OrchardIncomingViewingKeySet;
+typedef std::map<libzcash::OrchardIncomingViewingKey, KeyScope> OrchardIncomingViewingKeySet;
 
 //! Set of outgoing viewing keys with scope for sent note decryption
 typedef std::set<OrchardOVKWithScope> OrchardOutgoingViewingKeySet;
@@ -378,7 +381,7 @@ protected:
     SaplingFullViewingKeyMap mapSaplingFullViewingKeys;        //!< Sapling full viewing keys (unencrypted)
     SaplingIncomingViewingKeyMap mapSaplingIncomingViewingKeys;//!< Address -> IVK mapping
     SaplingIncomingViewingKeyMap mapUnsavedSaplingIncomingViewingKeys; //!< Unsaved IVKs (cleared during SetBestChainINTERNAL)
-    SaplingIncomingViewingKeySet setSaplingIncomingViewingKeys;//!< IVK set for transaction scanning
+    SaplingIncomingViewingKeySet setSaplingIncomingViewingKeys;//!< IVK -> scope mapping for transaction scanning
     SaplingOutgoingViewingKeySet setSaplingOutgoingViewingKeys;//!< OVK set for sent note decryption
     SaplingPaymentAddresses mapSaplingPaymentAddresses;        //!< Diversified address tracking
     LastSaplingDiversifierPath mapLastSaplingDiversifierPath;  //!< Last used diversifier per IVK
@@ -399,6 +402,7 @@ public:
     bool HaveHDSeed() const;
     bool GetHDSeed(HDSeed& seedOut) const;
     bool GetSeedPhrase(std::string& phraseOut) const;
+    bool GetSeedPhrase(std::string& phraseOut, uint32_t langCode) const;
 
     // ========== Transparent Key Management ==========
     bool AddKeyPubKey(const CKey& key, const CPubKey &pubkey);
@@ -627,11 +631,15 @@ public:
 
     virtual bool AddSaplingIncomingViewingKey(
         const libzcash::SaplingIncomingViewingKey &ivk,
-        const libzcash::SaplingPaymentAddress &addr);
+        const libzcash::SaplingPaymentAddress &addr,
+        KeyScope scope = KeyScope::External);
     virtual bool HaveSaplingIncomingViewingKey(const libzcash::SaplingPaymentAddress &addr) const;
     virtual bool GetSaplingIncomingViewingKey(
         const libzcash::SaplingPaymentAddress &addr,
         libzcash::SaplingIncomingViewingKey& ivkOut) const;
+    virtual bool GetSaplingKeyScope(
+        const libzcash::SaplingPaymentAddress &addr,
+        KeyScope& scopeOut) const;
 
     bool GetSaplingExtendedSpendingKey(
         const libzcash::SaplingPaymentAddress &addr,
@@ -741,7 +749,7 @@ public:
     virtual bool AddOrchardIncomingViewingKey(
         const libzcash::OrchardIncomingViewingKey &ivk,
         const libzcash::OrchardPaymentAddress &addr,
-        OrchardKeyScope scope);
+        KeyScope scope);
     virtual bool HaveOrchardIncomingViewingKey(const libzcash::OrchardPaymentAddress &addr) const;
     virtual bool GetOrchardIncomingViewingKey(
         const libzcash::OrchardPaymentAddress &addr,
@@ -749,7 +757,7 @@ public:
 
     virtual bool GetOrchardKeyScope(
         const libzcash::OrchardPaymentAddress &addr,
-        OrchardKeyScope& scopeOut) const;
+        KeyScope& scopeOut) const;
 
     bool GetOrchardExtendedSpendingKey(
         const libzcash::OrchardPaymentAddress &addr,

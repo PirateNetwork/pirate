@@ -144,6 +144,9 @@ unsigned int fKeepLastNTransactions = DEFAULT_TX_RETENTION_LASTTX;
 /** Recovery seed phrase for wallet restoration */
 std::string recoverySeedPhrase = "";
 
+/** BIP-39 language index (hd_seed::MnemonicLanguage) chosen by the user during restore */
+uint32_t recoverySeedLangCode = 0;
+
 /** Flag indicating if GUI is being used */
 bool usingGUI = false;
 
@@ -332,6 +335,13 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingZKey()
         throw std::runtime_error("CWallet::GenerateNewSaplingZKey(): AddSaplingZKey failed");
     }
 
+    // Register the internal change address in the address book immediately so
+    // the Qt model shows it without needing a rescan or restart.
+    libzcash::SaplingPaymentAddress changeAddr;
+    if (xsk.ToXFVK().DefaultAddressInternal(&changeAddr)) {
+        SetZAddressBook(changeAddr, "z-sapling", "receive");
+    }
+
     nTimeFirstKey = 1;
     // return default sapling payment address.
     return addr;
@@ -378,7 +388,12 @@ OrchardPaymentAddress CWallet::GenerateNewOrchardZKey()
         metadata.hdKeypath = "m/32'/" + std::to_string(coinType) + "'/" + std::to_string(account) + "'";
         metadata.seedFp = hdChain.seedFp;
 
-        LogPrintf("Orchard Keypath %s\n", metadata.hdKeypath);
+        // Set Primary key for diversification
+        if (hdChain.orchardAccountCounter == 0) {
+            if (xskOpt != std::nullopt) {
+                SetPrimaryOrchardSpendingKey(xskOpt.value());
+            }
+        }
 
         // Increment childkey index
         hdChain.orchardAccountCounter++;
@@ -387,11 +402,6 @@ OrchardPaymentAddress CWallet::GenerateNewOrchardZKey()
             continue;
         }
         xsk = xskOpt.value();
-
-        // Set Primary key for diversification
-        if (hdChain.orchardAccountCounter == 0) {
-            SetPrimaryOrchardSpendingKey(xsk);
-        }
 
         auto extfvkOpt = xsk.GetXFVK();
         if (extfvkOpt == std::nullopt) {
@@ -406,22 +416,29 @@ OrchardPaymentAddress CWallet::GenerateNewOrchardZKey()
     OrchardPaymentAddress address;
 
     if (!extfvk.fvk.DeriveIVK(&ivk) || !extfvk.fvk.DeriveDefaultAddress(&address)) {
-        throw std::runtime_error("CWallet::GenerateNewSaplingZKey(): Address Generation failed");
+        throw std::runtime_error("CWallet::GenerateNewOrchardZKey(): Address Generation failed");
     }
 
     // Update the chain model in the database
     if (fFileBacked && !CWalletDB(strWalletFile).WriteHDChain(hdChain))
-        throw std::runtime_error("CWallet::GenerateNewSaplingZKey(): Writing HD chain model failed");
+        throw std::runtime_error("CWallet::GenerateNewOrchardZKey(): Writing HD chain model failed");
 
     // Populate metadata for external IVK
     mapOrchardSpendingKeyMetadata[ivk] = metadata;
 
     if (!AddOrchardZKey(xsk)) {
-        throw std::runtime_error("CWallet::GenerateNewSaplingZKey(): AddSaplingZKey failed");
+        throw std::runtime_error("CWallet::GenerateNewOrchardZKey(): AddOrchardZKey failed");
+    }
+
+    // Register the internal change address in the address book immediately so
+    // the Qt model shows it without needing a rescan or restart.
+    OrchardPaymentAddress changeAddr;
+    if (extfvk.fvk.DeriveDefaultAddressInternal(&changeAddr)) {
+        SetZAddressBook(changeAddr, "orchard", "receive");
     }
 
     nTimeFirstKey = 1;
-    // return default sapling payment address.
+    // return default orchard payment address.
     return address;
 }
 
@@ -678,7 +695,7 @@ OrchardPaymentAddress CWallet::GenerateNewOrchardDiversifiedAddress()
     while (!found);
 
     //Add to wallet
-    if (!AddOrchardIncomingViewingKey(ivk, addr, OrchardKeyScope::External)) {
+    if (!AddOrchardIncomingViewingKey(ivk, addr, KeyScope::External)) {
         throw std::runtime_error("CWallet::GenerateNewOrchardDiversifiedAddress(): AddOrchardIncomingViewingKey failed");
     }
 
@@ -947,7 +964,8 @@ bool CWallet::AddSaplingZKey(
  */
 bool CWallet::AddSaplingIncomingViewingKey(
     const libzcash::SaplingIncomingViewingKey &ivk,
-    const libzcash::SaplingPaymentAddress &addr)
+    const libzcash::SaplingPaymentAddress &addr,
+    KeyScope scope)
 {
     AssertLockHeld(cs_wallet); // mapSaplingSpendingKeyMetadata
 
@@ -955,11 +973,17 @@ bool CWallet::AddSaplingIncomingViewingKey(
         return false;
     }
 
-    if (!CCryptoKeyStore::AddSaplingIncomingViewingKey(ivk, addr)) {
+    if (!CCryptoKeyStore::AddSaplingIncomingViewingKey(ivk, addr, scope)) {
         return false;
     }
 
     if (!fFileBacked) {
+        return true;
+    }
+
+    // Only persist explicitly-registered external addresses; internal change
+    // addresses are re-derived from the FVK on every wallet load.
+    if (scope == KeyScope::Internal) {
         return true;
     }
 
@@ -1375,7 +1399,7 @@ bool CWallet::AddOrchardExtendedFullViewingKey(const libzcash::OrchardExtendedFu
 bool CWallet::AddOrchardIncomingViewingKey(
     const libzcash::OrchardIncomingViewingKey &ivk,
     const libzcash::OrchardPaymentAddress &addr,
-    OrchardKeyScope scope)
+    KeyScope scope)
 {
     AssertLockHeld(cs_wallet);
 
@@ -1432,7 +1456,7 @@ bool CWallet::RederiveOrchardAddressScopes()
     LogPrintf("RederiveOrchardAddressScopes: Starting scope validation for Orchard addresses\n");
     
     // Build a map of IVK -> scope from all full viewing keys
-    std::map<libzcash::OrchardIncomingViewingKey, OrchardKeyScope> ivkScopeMap;
+    std::map<libzcash::OrchardIncomingViewingKey, KeyScope> ivkScopeMap;
     
     // Process full viewing keys (includes spending keys, view-only keys, and watch-only keys)
     // Each FVK has both an external IVK (scope 0) and internal IVK (scope 1)
@@ -1440,7 +1464,7 @@ bool CWallet::RederiveOrchardAddressScopes()
         // Derive external IVK (scope 0)
         OrchardIncomingViewingKey ivkExternal;
         if (extfvk.fvk.DeriveIVK(&ivkExternal)) {
-            ivkScopeMap[ivkExternal] = OrchardKeyScope::External;
+            ivkScopeMap[ivkExternal] = KeyScope::External;
             LogPrintf("RederiveOrchardAddressScopes: Registered external IVK (scope: 0)\n");
         } else {
             LogPrintf("RederiveOrchardAddressScopes: Failed to derive external IVK from FVK\n");
@@ -1449,7 +1473,7 @@ bool CWallet::RederiveOrchardAddressScopes()
         // Derive internal IVK (scope 1)
         OrchardIncomingViewingKey ivkInternal;
         if (extfvk.fvk.DeriveIVKinternal(&ivkInternal)) {
-            ivkScopeMap[ivkInternal] = OrchardKeyScope::Internal;
+            ivkScopeMap[ivkInternal] = KeyScope::Internal;
             LogPrintf("RederiveOrchardAddressScopes: Registered internal IVK (scope: 1)\n");
         } else {
             LogPrintf("RederiveOrchardAddressScopes: Failed to derive internal IVK from FVK\n");
@@ -1467,7 +1491,7 @@ bool CWallet::RederiveOrchardAddressScopes()
     
     for (auto& [addr, ivkScopePair] : mapOrchardIncomingViewingKeys) {
         const auto& currentIvk = ivkScopePair.first;
-        OrchardKeyScope currentScope = ivkScopePair.second;
+        KeyScope currentScope = ivkScopePair.second;
         
         // Look up the correct scope for this IVK
         auto it = ivkScopeMap.find(currentIvk);
@@ -1476,7 +1500,7 @@ bool CWallet::RederiveOrchardAddressScopes()
             continue;
         }
         
-        OrchardKeyScope correctScope = it->second;
+        KeyScope correctScope = it->second;
         
         // Update if scope differs
         if (currentScope != correctScope) {
@@ -2202,7 +2226,7 @@ bool CWallet::LoadSaplingPaymentAddress(
     const libzcash::SaplingPaymentAddress &addr,
     const libzcash::SaplingIncomingViewingKey &ivk)
 {
-    return CCryptoKeyStore::AddSaplingIncomingViewingKey(ivk, addr);
+    return CCryptoKeyStore::AddSaplingIncomingViewingKey(ivk, addr, KeyScope::External);
 }
 
 /**
@@ -2218,7 +2242,7 @@ bool CWallet::LoadSaplingPaymentAddress(
 bool CWallet::LoadOrchardPaymentAddress(
     const libzcash::OrchardPaymentAddress &addr,
     const libzcash::OrchardIncomingViewingKey &ivk,
-    OrchardKeyScope scope)
+    KeyScope scope)
 {
     // Use the persisted scope from database
     return CCryptoKeyStore::AddOrchardIncomingViewingKey(ivk, addr, scope);
@@ -2283,7 +2307,7 @@ bool CWallet::LoadCryptedOrchardPaymentAddress(const uint256 &chash, const std::
     ss >> addr >> ivk;
     
     // Try to read scope if available (new format), otherwise default to External (old format)
-    uint8_t scopeValue = static_cast<uint8_t>(OrchardKeyScope::External);
+    uint8_t scopeValue = static_cast<uint8_t>(KeyScope::External);
     try {
         if (!ss.empty()) {
             ss >> scopeValue;
@@ -2296,7 +2320,7 @@ bool CWallet::LoadCryptedOrchardPaymentAddress(const uint256 &chash, const std::
         return false;
     }
 
-    OrchardKeyScope scope = static_cast<OrchardKeyScope>(scopeValue);
+    KeyScope scope = static_cast<KeyScope>(scopeValue);
     return CCryptoKeyStore::AddOrchardIncomingViewingKey(ivk, addr, scope);
 }
 
@@ -3365,33 +3389,42 @@ bool CWallet::IsNoteSproutChange(
 }
 
 /**
- * @brief Determine if a Sapling note is change from the same transaction
- * @param nullifierSet Set of nullifiers for addresses in the transaction
+ * @brief Determine if a Sapling note is change
+ * @param nullifierSet Set of (address, nullifier) pairs for all notes spent in the transaction
  * @param address The payment address that received the note
  * @param op The Sapling output point of the note
  * @return true if the note is considered change, false otherwise
  * 
- * A note is marked as "change" if the address that received it also spent
- * notes in the same transaction. This detects:
- * - Change created by spending fractions of notes (z_sendmany change)
- * - Notes created by consolidation transactions (z_mergetoaddress)
- * - Notes sent from one address to itself
+ * A note is marked as "change" using two complementary checks, applied in order:
  * 
- * The function examines all Sapling spend descriptions in the transaction to
- * find if any nullifiers match the receiving address.
+ * 1. ZIP-32 internal scope (primary): If the receiving address belongs to the
+ *    wallet's internal key scope (KeyScope::Internal), it is unconditionally
+ *    treated as change. Internal addresses are derived at scope index 1 from
+ *    the Sapling extended full viewing key and are the canonical ZIP-32 change
+ *    addresses — they are never shared with external parties.
+ * 
+ * 2. Legacy nullifier match (fallback): If the receiving address also appears
+ *    as a spending address in the same transaction (i.e. its nullifier is in
+ *    nullifierSet), the note is treated as change. This handles:
+ *    - Change created by spending fractions of notes (z_sendmany)
+ *    - Notes created by consolidation transactions (z_mergetoaddress)
+ *    - Notes sent from one address to itself
  */
 bool CWallet::IsNoteSaplingChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet,
         const libzcash::PaymentAddress & address,
         const SaplingOutPoint & op)
 {
-    // A Note is marked as "change" if the address that received it
-    // also spent Notes in the same transaction. This will catch,
-    // for instance:
-    // - Change created by spending fractions of Notes (because
-    //   z_sendmany sends change to the originating z-address).
-    // - Notes created by consolidation transactions (e.g. using
-    //   z_mergetoaddress).
-    // - Notes sent from one address to itself.
+    // A note is change if its receiving address is the internal (change) address
+    // derived from the spending key, regardless of transaction structure.
+    auto saplingAddr = std::get_if<libzcash::SaplingPaymentAddress>(&address);
+    if (saplingAddr) {
+        KeyScope scope;
+        if (GetSaplingKeyScope(*saplingAddr, scope) && scope == KeyScope::Internal) {
+            return true;
+        }
+    }
+
+    // Legacy: also mark as change if the receiving address spent notes in the same tx.
     for (const auto& spend : mapWallet[op.hash].GetSaplingSpends())  {
         uint256 nullifier = uint256::FromRawBytes(spend.nullifier());
         if (nullifierSet.count(std::make_pair(address, nullifier))) {
@@ -3402,33 +3435,42 @@ bool CWallet::IsNoteSaplingChange(const std::set<std::pair<libzcash::PaymentAddr
 }
 
 /**
- * @brief Determine if an Orchard note is change from the same transaction
- * @param nullifierSet Set of nullifiers for addresses in the transaction
+ * @brief Determine if an Orchard note is change
+ * @param nullifierSet Set of (address, nullifier) pairs for all notes spent in the transaction
  * @param address The payment address that received the note
  * @param op The Orchard output point of the note
  * @return true if the note is considered change, false otherwise
  * 
- * A note is marked as "change" if the address that received it also spent
- * notes in the same transaction. This detects:
- * - Change created by spending fractions of notes (z_sendmany change)
- * - Notes created by consolidation transactions (z_mergetoaddress)
- * - Notes sent from one address to itself
+ * A note is marked as "change" using two complementary checks, applied in order:
  * 
- * The function examines all Orchard action descriptions in the transaction to
- * find if any nullifiers match the receiving address.
+ * 1. ZIP-32 internal scope (primary): If the receiving address belongs to the
+ *    wallet's internal key scope (KeyScope::Internal), it is unconditionally
+ *    treated as change. Internal addresses are derived at scope index 1 from
+ *    the Orchard extended full viewing key and are the canonical ZIP-32 change
+ *    addresses — they are never shared with external parties.
+ * 
+ * 2. Legacy nullifier match (fallback): If the receiving address also appears
+ *    as a spending address in the same transaction (i.e. its nullifier is in
+ *    nullifierSet), the note is treated as change. This handles:
+ *    - Change created by spending fractions of notes (z_sendmany)
+ *    - Notes created by consolidation transactions (z_mergetoaddress)
+ *    - Notes sent from one address to itself
  */
 bool CWallet::IsNoteOrchardChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet,
         const libzcash::PaymentAddress & address,
         const OrchardOutPoint & op)
 {
-    // A Note is marked as "change" if the address that received it
-    // also spent Notes in the same transaction. This will catch,
-    // for instance:
-    // - Change created by spending fractions of Notes (because
-    //   z_sendmany sends change to the originating z-address).
-    // - Notes created by consolidation transactions (e.g. using
-    //   z_mergetoaddress).
-    // - Notes sent from one address to itself.
+    // A note is change if its receiving address is the internal (change) address
+    // derived from the spending key (ZIP-32 scope 1), regardless of transaction structure.
+    auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddress>(&address);
+    if (orchardAddr) {
+        KeyScope scope;
+        if (GetOrchardKeyScope(*orchardAddr, scope) && scope == KeyScope::Internal) {
+            return true;
+        }
+    }
+
+    // Legacy: also mark as change if the receiving address spent notes in the same tx.
     for (const auto& action : mapWallet[op.hash].GetOrchardActions())  {
         uint256 nullifier = uint256::FromRawBytes(action.nullifier());
         if (nullifierSet.count(std::make_pair(address, nullifier))) {
@@ -5600,9 +5642,12 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         }
 
         //Encrypt SaplingPaymentAddress
-        for (map<libzcash::SaplingPaymentAddress, libzcash::SaplingIncomingViewingKey>::iterator it = mapSaplingIncomingViewingKeys.begin(); it != mapSaplingIncomingViewingKeys.end(); it++)
+        for (auto it = mapSaplingIncomingViewingKeys.begin(); it != mapSaplingIncomingViewingKeys.end(); it++)
         {
-            if (!AddSaplingIncomingViewingKey((*it).second, (*it).first)) {
+            const auto& addr  = it->first;
+            const auto& ivk   = it->second.first;
+            const auto& scope = it->second.second;
+            if (!AddSaplingIncomingViewingKey(ivk, addr, scope)) {
                 LogPrintf("Setting encrypted sapling payment address failed!!!\n");
                 return false;
             }
@@ -6255,10 +6300,25 @@ void CWallet::UpdateSaplingNullifierNoteMapWithTx(CWalletTx* wtx) {
             if (mapSaplingFullViewingKeys.count(nd.ivk) != 0) {
                 SaplingExtendedFullViewingKey extfvk = mapSaplingFullViewingKeys.at(nd.ivk);
 
-                // Compute nullifier directly from Output
+                // For internal (change) notes, nk_internal differs from the external nk.
+                // Detect whether nd.ivk is the internal IVK and derive nk_internal when so.
+                // Using the external nk for an internal note produces the wrong nullifier.
+                uint256 nk_for_nullifier = extfvk.fvk.nk;
+                libzcash::SaplingIncomingViewingKey ivkInternal;
+                if (extfvk.DeriveIVKinternal(&ivkInternal) && nd.ivk == ivkInternal) {
+                    if (!extfvk.DeriveNKinternal(&nk_for_nullifier)) {
+                        LogPrintf("ERROR: DeriveNKinternal failed for output %d in tx %s\n",
+                                  op.n, wtx->GetHash().ToString());
+                        assert(false);
+                    }
+                }
+
+                // Compute nullifier directly from Output, passing the correct nk for this scope.
                 auto optNullifier = libzcash::SaplingNotePlaintext::ComputeNullifierFromOutput(
-                    vOutputs[op.n], 
-                    extfvk.fvk, 
+                    vOutputs[op.n],
+                    nd.ivk,
+                    extfvk.fvk.ak,
+                    nk_for_nullifier,
                     position
                 );
 
@@ -6319,8 +6379,8 @@ void CWallet::UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx) {
        else {
            uint64_t position = nd.getPosition().value();
            // Skip if we only have incoming viewing key
-           OrchardIVKWithScope ivkExternal = {nd.ivk, OrchardKeyScope::External};
-           OrchardIVKWithScope ivkInternal = {nd.ivk, OrchardKeyScope::Internal};
+           OrchardIVKWithScope ivkExternal = {nd.ivk, KeyScope::External};
+           OrchardIVKWithScope ivkInternal = {nd.ivk, KeyScope::Internal};
            if (mapOrchardFullViewingKeys.count(ivkExternal) != 0 || mapOrchardFullViewingKeys.count(ivkInternal) != 0) {
                OrchardExtendedFullViewingKeyPirate extfvk = mapOrchardFullViewingKeys.count(ivkExternal) != 0 
                    ? mapOrchardFullViewingKeys.at(ivkExternal)
@@ -6561,9 +6621,13 @@ void CWallet::AddToWalletIfInvolvingMe(
         for (const auto &saplingAddressToAdd : saplingAddressesToAdd) {
             //Loaded into memory only
             //This will be saved during the wallet SetBestChainINTERNAL
-            CCryptoKeyStore::AddSaplingIncomingViewingKey(saplingAddressToAdd.second, saplingAddressToAdd.first);
-            //Store addresses to notify GUI later
-            saplingAddressesFound.insert(saplingAddressToAdd.first);
+            const auto& saplingAddr  = saplingAddressToAdd.first;
+            const auto& saplingIvk   = saplingAddressToAdd.second.first;
+            const auto& saplingScope = saplingAddressToAdd.second.second;
+            CCryptoKeyStore::AddSaplingIncomingViewingKey(saplingIvk, saplingAddr, saplingScope);
+            // Notify the GUI for all scopes so the address persists in mapZAddressBook
+            // (Internal/change addresses shown as "Change" in the UI, same as Orchard)
+            saplingAddressesFound.insert(saplingAddr);
         }
 
         //Step 2b -- add orchard addresses
@@ -6707,6 +6771,7 @@ void CWallet::SyncTransactions(const std::vector<CTransaction> &vtx, const CBloc
     }
 
     for (std::set<OrchardPaymentAddress>::iterator it = orchardAddressesFound.begin(); it != orchardAddressesFound.end(); it++) {
+        // Internal (change) Orchard addresses are added so the UI can label them "Change".
         SetZAddressBook(*it, "orchard", "", true);
     }
 
@@ -6947,7 +7012,7 @@ mapSproutNoteData_t CWallet::FindMySproutNotes(const CTransaction &tx) const
  */
 static void DecryptOrchardNoteWorker(
     const CWallet *wallet,
-    const std::vector<std::pair<const OrchardIncomingViewingKey*, OrchardKeyScope>> vIvkWithScope,
+    const std::vector<std::pair<const OrchardIncomingViewingKey*, KeyScope>> vIvkWithScope,
     const std::vector<orchard_bundle::Action*> vOrchardEncryptedAction,
     const std::vector<uint32_t> vPosition,
     const std::vector<uint256> vHash,
@@ -6959,7 +7024,7 @@ static void DecryptOrchardNoteWorker(
     for (int i = 0; i < vIvkWithScope.size(); i++) {
 
         OrchardIncomingViewingKey ivk = *vIvkWithScope[i].first;
-        OrchardKeyScope scope = vIvkWithScope[i].second;
+        KeyScope scope = vIvkWithScope[i].second;
         auto result = OrchardNotePlaintext::AttemptDecryptOrchardAction(vOrchardEncryptedAction[i], ivk);
         if (result != std::nullopt) {
 
@@ -7014,8 +7079,8 @@ std::pair<mapOrchardNoteData_t, OrchardIncomingViewingKeyMap> CWallet::FindMyOrc
     OrchardIncomingViewingKeyMap viewingKeysToAdd;
 
     //Create key+scope thread buckets
-    std::vector<std::pair<const OrchardIncomingViewingKey*, OrchardKeyScope>> vIvkWithScope;
-    std::vector<std::vector<std::pair<const OrchardIncomingViewingKey*, OrchardKeyScope>>> vvIvkWithScope;
+    std::vector<std::pair<const OrchardIncomingViewingKey*, KeyScope>> vIvkWithScope;
+    std::vector<std::vector<std::pair<const OrchardIncomingViewingKey*, KeyScope>>> vvIvkWithScope;
 
     //Create Output thread buckets
     std::vector<orchard_bundle::Action*> vOrchardEncryptedAction;
@@ -7114,7 +7179,7 @@ std::pair<mapOrchardNoteData_t, OrchardIncomingViewingKeyMap> CWallet::FindMyOrc
  */
 static void DecryptSaplingNoteWorker(
     const CWallet *wallet,
-    const std::vector<const SaplingIncomingViewingKey*> vIvk,
+    const std::vector<std::pair<const SaplingIncomingViewingKey*, KeyScope>> vIvkWithScope,
     const std::vector<const sapling::Output*> vSaplingOutput,
     const std::vector<uint32_t> vPosition,
     const std::vector<uint256> vHash,
@@ -7123,9 +7188,10 @@ static void DecryptSaplingNoteWorker(
     SaplingIncomingViewingKeyMap *viewingKeysToAdd,
     int threadNumber)
 {
-    for (int i = 0; i < vIvk.size(); i++) {
+    for (int i = 0; i < vIvkWithScope.size(); i++) {
 
-        SaplingIncomingViewingKey ivk = *vIvk[i];
+        SaplingIncomingViewingKey ivk = *vIvkWithScope[i].first;
+        KeyScope scope = vIvkWithScope[i].second;
         
         auto result = SaplingNotePlaintext::AttemptDecryptSaplingOutput(*vSaplingOutput[i], ivk);
         if (result) {
@@ -7149,7 +7215,7 @@ static void DecryptSaplingNoteWorker(
                 //dust filter
                 {
                     LOCK(wallet->cs_wallet_threadedfunction);
-                    viewingKeysToAdd->insert(make_pair(address,ivk));
+                    viewingKeysToAdd->insert(make_pair(address, make_pair(ivk, scope)));
                     noteData->insert(std::make_pair(op, nd));
                 }
             }
@@ -7183,9 +7249,9 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
     mapSaplingNoteData_t noteData;
     SaplingIncomingViewingKeyMap viewingKeysToAdd;
 
-    //Create key thread buckets
-    std::vector<const SaplingIncomingViewingKey*> vIvk;
-    std::vector<std::vector<const SaplingIncomingViewingKey*>> vvIvk;
+    //Create key+scope thread buckets
+    std::vector<std::pair<const SaplingIncomingViewingKey*, KeyScope>> vIvkWithScope;
+    std::vector<std::vector<std::pair<const SaplingIncomingViewingKey*, KeyScope>>> vvIvkWithScope;
 
     //Create Output thread buckets
     std::vector<const sapling::Output*> vSaplingOutput;
@@ -7200,7 +7266,7 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
     std::vector<std::vector<uint256>> vvHash;
 
     for (uint32_t i = 0; i < maxProcessingThreads; i++) {
-        vvIvk.emplace_back(vIvk);
+        vvIvkWithScope.emplace_back(vIvkWithScope);
         vvSaplingOutput.emplace_back(vSaplingOutput);
         vvPosition.emplace_back(vPosition);
         vvHash.emplace_back(vHash);
@@ -7218,7 +7284,7 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
 
             //Create a thread entry for every ivk with the current note.
             for (auto it = setSaplingIncomingViewingKeys.begin(); it != setSaplingIncomingViewingKeys.end(); it++) {
-                vvIvk[t].emplace_back(&(*it));
+                vvIvkWithScope[t].emplace_back(&(it->first), it->second);
                 vvPosition[t].emplace_back(i);
                 vvHash[t].emplace_back(hash);
                 vvSaplingOutput[t].emplace_back(output);
@@ -7226,16 +7292,16 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
                 //Increment ivk vector
                 t++;
                 //reset if ivk vector is greater qty of threads being used
-                if (t >= vvIvk.size()) {
+                if (t >= vvIvkWithScope.size()) {
                     t = 0;
                 }
             }
         }
 
         std::vector<boost::thread*> decryptionThreads;
-        for (uint32_t i = 0; i < vvIvk.size(); i++) {
-            if(!vvIvk[i].empty()) {
-                decryptionThreads.emplace_back(new boost::thread(DecryptSaplingNoteWorker, this, vvIvk[i], vvSaplingOutput[i], vvPosition[i], vvHash[i], height, &noteData, &viewingKeysToAdd, i));
+        for (uint32_t i = 0; i < vvIvkWithScope.size(); i++) {
+            if(!vvIvkWithScope[i].empty()) {
+                decryptionThreads.emplace_back(new boost::thread(DecryptSaplingNoteWorker, this, vvIvkWithScope[i], vvSaplingOutput[i], vvPosition[i], vvHash[i], height, &noteData, &viewingKeysToAdd, i));
             }
         }
 
@@ -7246,8 +7312,8 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
         }
 
         //Reset Vectors for next transaction
-        for (uint32_t i = 0; i < vvIvk.size(); i++) {
-            vvIvk[i].resize(0);
+        for (uint32_t i = 0; i < vvIvkWithScope.size(); i++) {
+            vvIvkWithScope[i].resize(0);
             vvSaplingOutput[i].resize(0);
             vvPosition[i].resize(0);
             vvHash[i].resize(0);
@@ -7256,7 +7322,7 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
     }
 
     //clean up vectors
-    vvIvk.resize(0);
+    vvIvkWithScope.resize(0);
     vvSaplingOutput.resize(0);
     vvPosition.resize(0);
     vvHash.resize(0);
@@ -8020,6 +8086,14 @@ bool CWallet::IsValidPhrase(std::string &phrase)
     return checkSeed.IsValidPhrase(phrase);
 }
 
+bool CWallet::IsValidPhrase(std::string &phrase, uint32_t langCode)
+{
+    LOCK(cs_wallet);
+
+    HDSeed checkSeed;
+    return checkSeed.IsValidPhrase(phrase, langCode);
+}
+
 /**
  * @brief Restore wallet seed from a BIP39 mnemonic phrase
  * @param phrase The BIP39 mnemonic phrase to restore from
@@ -8055,6 +8129,30 @@ bool CWallet::RestoreSeedFromPhrase(std::string &phrase)
     // store the key creation time together with
     // the child index counter in the database
     // as a hdchain object
+    CHDChain newHdChain;
+    newHdChain.nVersion = CHDChain::VERSION_HD_BASE;
+    newHdChain.seedFp = seed.Fingerprint();
+    newHdChain.nCreateTime = nCreationTime;
+    SetHDChain(newHdChain, false);
+
+    return true;
+}
+
+bool CWallet::RestoreSeedFromPhrase(std::string &phrase, uint32_t langCode)
+{
+    LOCK(cs_wallet);
+
+    if (!IsValidPhrase(phrase, langCode)) {
+        return false;
+    }
+
+    auto seed = HDSeed::RestoreFromPhrase(phrase, langCode);
+
+    int64_t nCreationTime = GetTime();
+
+    if (!SetHDSeed(seed))
+        throw std::runtime_error(std::string(__func__) + ": SetHDSeed failed");
+
     CHDChain newHdChain;
     newHdChain.nVersion = CHDChain::VERSION_HD_BASE;
     newHdChain.seedFp = seed.Fingerprint();
@@ -9541,6 +9639,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
     }
 
     for (std::set<OrchardPaymentAddress>::iterator it = orchardAddressesFound.begin(); it != orchardAddressesFound.end(); it++) {
+        // Internal (change) Orchard addresses are added so the UI can label them "Change".
         SetZAddressBook(*it, "orchard", "", true);
     }
 
@@ -13021,8 +13120,7 @@ bool CWallet::LoadCryptedOrchardWallet(const CKeyingMaterial& vchSecret) {
  * @param requireSpendingKey Whether to only include notes for which we have the spending key
  * 
  * This is a convenience wrapper around the more detailed GetFilteredNotes function.
- * It handles address decoding and sets default values for maxDepth (INT_MAX) and 
- * ignoreLocked (false) parameters.
+ * It handles address decoding and sets default values for ignoreLocked (false) parameters.
  */
 void CWallet::GetFilteredNotes(
     std::vector<SaplingNoteEntry>& saplingEntries,
@@ -13042,27 +13140,34 @@ void CWallet::GetFilteredNotes(
 }
 
 /**
- * @brief Find notes in the wallet with comprehensive filtering options
- * @param saplingEntries[out] Vector to store found Sapling note entries
- * @param orchardEntries[out] Vector to store found Orchard note entries  
- * @param filterAddresses Set of payment addresses to filter by (empty for all addresses)
- * @param minDepth Minimum confirmation depth required for notes
- * @param maxDepth Maximum confirmation depth allowed for notes
- * @param ignoreSpent Whether to exclude spent notes from results
- * @param requireSpendingKey Whether to only include notes for which we have the spending key
- * @param ignoreLocked Whether to exclude locked notes from results
- * 
- * This function performs a comprehensive search through all wallet transactions,
- * extracting both Sapling and Orchard notes that match the specified criteria.
- * The function respects depth-based network confirmation requirements using
- * either regular depth checks or dPoW (delayed Proof of Work) confirmation counts.
- * 
- * For each matching note, the function:
- * 1. Validates transaction finality and maturity
- * 2. Checks confirmation depth requirements  
- * 3. Attempts note decryption using stored viewing keys
- * 4. Applies address, spending key, and lock filters
- * 5. Adds qualifying notes to the appropriate output vector
+ * Find notes in the wallet filtered by payment addresses, min depth,
+ * if the note is spent, if a spending key is required, and if the notes are locked.
+ *
+ * When maxNotes > 0 the function uses a streaming dual-heap selection algorithm.
+ * The two heaps are strictly disjoint — every qualifying note is owned by at most
+ * one heap:
+ *
+ *   smallestHeap  max-heap of up to (maxNotes/2) entries
+ *                 Retains the N notes with the smallest values seen so far.
+ *                 top() = largest-of-smallest; evicted when a cheaper note arrives.
+ *
+ *   largestHeap   min-heap of up to (maxNotes/2) entries
+ *                 Retains the N notes with the largest values seen so far.
+ *                 top() = smallest-of-largest; evicted when a pricier note arrives.
+ *
+ * Routing (applied in order for each qualifying note):
+ *   1. smallestHeap has room               → insert into smallestHeap.
+ *   2. note.value < smallestHeap.top:      → replace top in smallestHeap;
+ *                                             cascade evicted top → try largestHeap.
+ *   3. otherwise                           → try largestHeap directly.
+ *
+ * Because the heaps are disjoint, a single aggregateValue counter tracks the
+ * combined total of both heaps exactly.
+ *
+ * Early exit: the scan stops as soon as BOTH heaps are full AND
+ * aggregateValue >= minAggregateValue.  This minimises lock-hold time while
+ * guaranteeing the caller's minimum value requirement is met by the working set.
+ * Pass minAggregateValue=0 to disable early exit.
  */
 void CWallet::GetFilteredNotes(
     std::vector<SaplingNoteEntry>& saplingEntries,
@@ -13072,129 +13177,264 @@ void CWallet::GetFilteredNotes(
     int maxDepth,
     bool ignoreSpent,
     bool requireSpendingKey,
-    bool ignoreLocked)
+    bool ignoreLocked,
+    int maxNotes,
+    CAmount minAggregateValue)
 {
     LOCK2(cs_main, cs_wallet);
 
-    // Iterate through all wallet transactions to find matching notes
+    // When maxNotes > 0 use bounded streaming selection; otherwise fall through
+    // to the original unbounded path (behaviour unchanged for existing callers).
+    const bool bounded = (maxNotes > 0);
+    const int halfNotes = bounded ? std::max(1, maxNotes / 2) : 0;
+
+    // ── Protocol detection ───────────────────────────────────────────────────
+    // If filterAddresses is non-empty, inspect which protocols are represented
+    // so we can skip entire protocol note loops when no matching address type
+    // is present. When filterAddresses is empty all protocols are searched.
+    bool searchSapling = true;
+    bool searchOrchard = true;
+    if (!filterAddresses.empty()) {
+        searchSapling = false;
+        searchOrchard = false;
+        for (const auto& addr : filterAddresses) {
+            if (std::get_if<libzcash::SaplingPaymentAddress>(&addr) != nullptr)
+                searchSapling = true;
+            else if (std::get_if<libzcash::OrchardPaymentAddress>(&addr) != nullptr)
+                searchOrchard = true;
+            if (searchSapling && searchOrchard)
+                break; // both already needed, no point checking further
+        }
+    }
+
+    // ── Sapling heaps ────────────────────────────────────────────────────────
+    // smallestHeap: max-heap — top() is the largest-of-the-smallest candidates.
+    auto sapCmpMax = [](const SaplingNoteEntry& a, const SaplingNoteEntry& b) {
+        return a.note.value() < b.note.value();
+    };
+    // largestHeap: min-heap — top() is the smallest-of-the-largest candidates.
+    auto sapCmpMin = [](const SaplingNoteEntry& a, const SaplingNoteEntry& b) {
+        return a.note.value() > b.note.value();
+    };
+    std::priority_queue<SaplingNoteEntry,
+                        std::vector<SaplingNoteEntry>,
+                        decltype(sapCmpMax)> sapSmallestHeap(sapCmpMax);
+    std::priority_queue<SaplingNoteEntry,
+                        std::vector<SaplingNoteEntry>,
+                        decltype(sapCmpMin)> sapLargestHeap(sapCmpMin);
+
+    // ── Orchard heaps ────────────────────────────────────────────────────────
+    auto orchCmpMax = [](const OrchardNoteEntry& a, const OrchardNoteEntry& b) {
+        return a.note.value() < b.note.value();
+    };
+    auto orchCmpMin = [](const OrchardNoteEntry& a, const OrchardNoteEntry& b) {
+        return a.note.value() > b.note.value();
+    };
+    std::priority_queue<OrchardNoteEntry,
+                        std::vector<OrchardNoteEntry>,
+                        decltype(orchCmpMax)> orchSmallestHeap(orchCmpMax);
+    std::priority_queue<OrchardNoteEntry,
+                        std::vector<OrchardNoteEntry>,
+                        decltype(orchCmpMin)> orchLargestHeap(orchCmpMin);
+
+    // Single aggregate tracks the combined total across all four heaps.
+    CAmount aggregateValue = 0;
+    // earlyExit is set when a single protocol's heaps are full AND value is met.
+    // The outer mapWallet loop checks this on each iteration; the per-note inner
+    // loops break out themselves once the flag is set.
+    bool earlyExit = false;
+
     for (auto & p : mapWallet) {
+        if (earlyExit) break;
+
         CWalletTx wtx = p.second;
 
         // Skip transactions that are not final or still maturing
         if (!CheckFinalTx(wtx) || wtx.GetBlocksToMaturity() > 0)
             continue;
 
-        // Apply depth filtering based on confirmation requirements
-        if (minDepth > 1) {
-            // For deeper requirements, use dPoW (delayed Proof of Work) confirmations
-            int nHeight    = tx_height(wtx.GetHash());
-            int nDepth     = wtx.GetDepthInMainChain();
-            int dpowconfs  = komodo_dpowconfs(nHeight, nDepth);
-            if (dpowconfs < minDepth || dpowconfs > maxDepth) {
-                continue;
-            }
-        } else {
-            // For shallow requirements, use standard depth checks
-            if (wtx.GetDepthInMainChain() < minDepth ||
-                wtx.GetDepthInMainChain() > maxDepth) {
-                continue;
-            }
-        }
+        const int chainDepth = wtx.GetDepthInMainChain();
+        const int nDepth = fUseDpowConfs
+            ? komodo_dpowconfs(tx_height(wtx.GetHash()), chainDepth)
+            : chainDepth;
+        if (nDepth < minDepth || nDepth > maxDepth)
+            continue;
 
-        // Process Sapling notes in this transaction
-        auto vOutputs = wtx.GetSaplingOutputs();
+        // ── Sapling notes ────────────────────────────────────────────────────
+        if (searchSapling) {
+            auto vOutputs = wtx.GetSaplingOutputs();
 
-        for (auto & pair : wtx.mapSaplingNoteData) {
-            SaplingOutPoint op = pair.first;
-            SaplingNoteData nd = pair.second;
+            for (auto & pair : wtx.mapSaplingNoteData) {
+                if (earlyExit) break;
 
-            // Use Rust decryption
-            auto optPlaintext = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[op.n], nd.ivk);
+                SaplingOutPoint op = pair.first;
+                SaplingNoteData nd = pair.second;
 
-            // The transaction would not have entered the wallet unless
-            // its plaintext had been successfully decrypted previously.
-            assert(optPlaintext != std::nullopt);
+                auto optPlaintext = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[op.n], nd.ivk);
+                assert(optPlaintext != std::nullopt);
 
-            auto notePt = optPlaintext.value();
-            SaplingPaymentAddress pa;
-            assert(nd.ivk.DeriveAddress(&pa, notePt.d));
+                auto notePt = optPlaintext.value();
+                SaplingPaymentAddress pa;
+                assert(nd.ivk.DeriveAddress(&pa, notePt.d));
 
-            // Skip notes that don't match the address filter
-            if (!(filterAddresses.empty() || filterAddresses.count(pa))) {
-                continue;
-            }
+                if (!(filterAddresses.empty() || filterAddresses.count(pa)))
+                    continue;
+                if (ignoreSpent && nd.nullifier && IsSaplingSpent(*nd.nullifier))
+                    continue;
+                if (requireSpendingKey) {
+                    libzcash::SaplingExtendedFullViewingKey extfvk;
+                    if (!(GetSaplingFullViewingKey(nd.ivk, extfvk) &&
+                          HaveSaplingSpendingKey(extfvk)))
+                        continue;
+                }
+                if (ignoreLocked && IsLockedNote(op))
+                    continue;
 
-            // Skip spent notes if requested
-            if (ignoreSpent && nd.nullifier && IsSaplingSpent(*nd.nullifier)) {
-                continue;
-            }
+                auto note = notePt.note(nd.ivk).value();
+                SaplingNoteEntry entry { op, pa, note, notePt.memo(), chainDepth };
 
-            // Skip notes for which we don't have the spending key (if required)
-            if (requireSpendingKey) {
-                libzcash::SaplingExtendedFullViewingKey extfvk;
-                if (!(GetSaplingFullViewingKey(nd.ivk, extfvk) &&
-                    HaveSaplingSpendingKey(extfvk))) {
+                if (!bounded) {
+                    saplingEntries.push_back(entry);
                     continue;
                 }
-            }
 
-            // Skip locked notes if requested
-            if (ignoreLocked && IsLockedNote(op)) {
-                continue;
-            }
+                // === Streaming bounded selection (disjoint heaps) ===
+                CAmount v = CAmount(note.value());
 
-            // Add qualifying Sapling note to results
-            auto note = notePt.note(nd.ivk).value();
-            saplingEntries.push_back(SaplingNoteEntry {
-                op, pa, note, notePt.memo(), wtx.GetDepthInMainChain() });
-        }
+                if ((int)sapSmallestHeap.size() < halfNotes) {
+                    sapSmallestHeap.push(entry);
+                    aggregateValue += v;
+                } else if (v < CAmount(sapSmallestHeap.top().note.value())) {
+                    SaplingNoteEntry evicted = sapSmallestHeap.top();
+                    CAmount evictedVal = CAmount(evicted.note.value());
+                    aggregateValue -= evictedVal;
+                    sapSmallestHeap.pop();
+                    sapSmallestHeap.push(entry);
+                    aggregateValue += v;
+                    if ((int)sapLargestHeap.size() < halfNotes) {
+                        sapLargestHeap.push(evicted);
+                        aggregateValue += evictedVal;
+                    } else if (evictedVal > CAmount(sapLargestHeap.top().note.value())) {
+                        aggregateValue -= CAmount(sapLargestHeap.top().note.value());
+                        sapLargestHeap.pop();
+                        sapLargestHeap.push(evicted);
+                        aggregateValue += evictedVal;
+                    }
+                } else {
+                    if ((int)sapLargestHeap.size() < halfNotes) {
+                        sapLargestHeap.push(entry);
+                        aggregateValue += v;
+                    } else if (v > CAmount(sapLargestHeap.top().note.value())) {
+                        aggregateValue -= CAmount(sapLargestHeap.top().note.value());
+                        sapLargestHeap.pop();
+                        sapLargestHeap.push(entry);
+                        aggregateValue += v;
+                    }
+                }
 
-        // Process Orchard notes in this transaction
-        auto vActions = wtx.GetOrchardActions();
+                // Early exit: Sapling heaps full AND combined aggregate satisfies requirement.
+                if (minAggregateValue > 0 &&
+                    (int)sapSmallestHeap.size() >= halfNotes &&
+                    (int)sapLargestHeap.size() >= halfNotes &&
+                    aggregateValue >= minAggregateValue) {
+                    earlyExit = true;
+                    break;
+                }
+            } // end Sapling loop
+        } // end if (searchSapling)
 
-        for (auto & pair : wtx.mapOrchardNoteData) {
-            OrchardOutPoint op = pair.first;
-            OrchardNoteData nd = pair.second;
+        if (earlyExit) break;
 
-            // Decrypt the Orchard note using the stored incoming viewing key
-            auto optDeserialized = OrchardNotePlaintext::AttemptDecryptOrchardAction(&vActions[op.n], nd.ivk);
+        // ── Orchard notes ────────────────────────────────────────────────────
+        if (searchOrchard) {
+            auto vActions = wtx.GetOrchardActions();
 
-            // The transaction would not have entered the wallet unless
-            // its plaintext had been successfully decrypted previously.
-            assert(optDeserialized != std::nullopt);
+            for (auto & pair : wtx.mapOrchardNoteData) {
+                if (earlyExit) break;
 
-            auto notePt = optDeserialized.value();
-            auto pa = notePt.GetAddress();
-            auto memo = notePt.memo();
-            auto note = notePt.note().value();
+                OrchardOutPoint op = pair.first;
+                OrchardNoteData nd = pair.second;
 
-            // Skip notes that don't match the address filter
-            if (!(filterAddresses.empty() || filterAddresses.count(pa))) {
-                continue;
-            }
+                auto optDeserialized = OrchardNotePlaintext::AttemptDecryptOrchardAction(&vActions[op.n], nd.ivk);
+                assert(optDeserialized != std::nullopt);
 
-            // Skip spent notes if requested
-            if (ignoreSpent && nd.nullifier && IsOrchardSpent(*nd.nullifier)) {
-                continue;
-            }
+                auto notePt = optDeserialized.value();
+                auto pa   = notePt.GetAddress();
+                auto memo = notePt.memo();
+                auto note = notePt.note().value();
 
-            // Skip notes for which we don't have the spending key (if required)
-            if (requireSpendingKey) {
-                libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-                if (!(GetOrchardFullViewingKey(nd.ivk, extfvk) &&
-                    HaveOrchardSpendingKey(extfvk))) {
+                if (!(filterAddresses.empty() || filterAddresses.count(pa)))
+                    continue;
+                if (ignoreSpent && nd.nullifier && IsOrchardSpent(*nd.nullifier))
+                    continue;
+                if (requireSpendingKey) {
+                    libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+                    if (!(GetOrchardFullViewingKey(nd.ivk, extfvk) &&
+                          HaveOrchardSpendingKey(extfvk)))
+                        continue;
+                }
+                if (ignoreLocked && IsLockedNote(op))
+                    continue;
+
+                OrchardNoteEntry entry { op, pa, note, memo, chainDepth };
+
+                if (!bounded) {
+                    orchardEntries.push_back(entry);
                     continue;
                 }
-            }
 
-            // Skip locked notes if requested
-            if (ignoreLocked && IsLockedNote(op)) {
-                continue;
-            }
+                // === Streaming bounded selection (disjoint heaps) ===
+                CAmount v = CAmount(note.value());
 
-            // Add qualifying Orchard note to results
-            orchardEntries.push_back(OrchardNoteEntry {op, pa, note, memo, wtx.GetDepthInMainChain()});
-        }
+                if ((int)orchSmallestHeap.size() < halfNotes) {
+                    orchSmallestHeap.push(entry);
+                    aggregateValue += v;
+                } else if (v < CAmount(orchSmallestHeap.top().note.value())) {
+                    OrchardNoteEntry evicted = orchSmallestHeap.top();
+                    CAmount evictedVal = CAmount(evicted.note.value());
+                    aggregateValue -= evictedVal;
+                    orchSmallestHeap.pop();
+                    orchSmallestHeap.push(entry);
+                    aggregateValue += v;
+                    if ((int)orchLargestHeap.size() < halfNotes) {
+                        orchLargestHeap.push(evicted);
+                        aggregateValue += evictedVal;
+                    } else if (evictedVal > CAmount(orchLargestHeap.top().note.value())) {
+                        aggregateValue -= CAmount(orchLargestHeap.top().note.value());
+                        orchLargestHeap.pop();
+                        orchLargestHeap.push(evicted);
+                        aggregateValue += evictedVal;
+                    }
+                } else {
+                    if ((int)orchLargestHeap.size() < halfNotes) {
+                        orchLargestHeap.push(entry);
+                        aggregateValue += v;
+                    } else if (v > CAmount(orchLargestHeap.top().note.value())) {
+                        aggregateValue -= CAmount(orchLargestHeap.top().note.value());
+                        orchLargestHeap.pop();
+                        orchLargestHeap.push(entry);
+                        aggregateValue += v;
+                    }
+                }
+
+                // Early exit: Orchard heaps full AND combined aggregate satisfies requirement.
+                if (minAggregateValue > 0 &&
+                    (int)orchSmallestHeap.size() >= halfNotes &&
+                    (int)orchLargestHeap.size() >= halfNotes &&
+                    aggregateValue >= minAggregateValue) {
+                    earlyExit = true;
+                    break;
+                }
+            } // end Orchard loop
+        } // end if (searchOrchard)
+    } // end mapWallet loop
+
+    // Drain heaps into result vectors (bounded path only).
+    if (bounded) {
+        while (!sapSmallestHeap.empty()) { saplingEntries.push_back(sapSmallestHeap.top()); sapSmallestHeap.pop(); }
+        while (!sapLargestHeap.empty())  { saplingEntries.push_back(sapLargestHeap.top());  sapLargestHeap.pop();  }
+        while (!orchSmallestHeap.empty()) { orchardEntries.push_back(orchSmallestHeap.top()); orchSmallestHeap.pop(); }
+        while (!orchLargestHeap.empty())  { orchardEntries.push_back(orchLargestHeap.top());  orchLargestHeap.pop();  }
     }
 }
 
@@ -13650,7 +13890,7 @@ KeyAddResult AddDiversifiedViewingKeyToWallet::operator()(const libzcash::Orchar
     }
 
     // Attempt to add the incoming viewing key for the diversified address
-    if (m_wallet->AddOrchardIncomingViewingKey(ivk, addr, OrchardKeyScope::External)) {
+    if (m_wallet->AddOrchardIncomingViewingKey(ivk, addr, KeyScope::External)) {
         if (result == SpendingKeyExists || result == KeyAlreadyExists) {
             return KeyExistsAddressAdded;
         } else {
@@ -13891,7 +14131,7 @@ KeyAddResult AddDiversifiedSpendingKeyToWallet::operator()(const libzcash::Orcha
         result = KeyAdded;
     }
 
-    if (m_wallet->AddOrchardIncomingViewingKey(ivk, addr, OrchardKeyScope::External)) {
+    if (m_wallet->AddOrchardIncomingViewingKey(ivk, addr, KeyScope::External)) {
         if (result == KeyAlreadyExists) {
             return KeyExistsAddressAdded;
         } else {

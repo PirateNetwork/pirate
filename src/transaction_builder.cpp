@@ -5,6 +5,8 @@
 
 #include "transaction_builder.h"
 
+#include "consensus/consensus.h"
+#include "consensus/upgrades.h"
 #include "core_io.h" //for EncodeHexTx
 #include "key_io.h"
 #include "main.h"
@@ -377,8 +379,19 @@ bool TransactionBuilder::ConvertRawSaplingSpend(libzcash::SaplingExtendedSpendin
     CDataStream ssExtSk(SER_NETWORK, PROTOCOL_VERSION);
     ssExtSk << extsk;
 
+    // Derive the internal extended spending key. Internal (change) addresses use a
+    // different nk_internal, so the zk-SNARK proof requires nsk_internal, not nsk.
+    CDataStream ssIntSk(SER_NETWORK, PROTOCOL_VERSION);
+    libzcash::SaplingExtendedSpendingKey xskInternal;
+    if (!extsk.DeriveInternal(&xskInternal)) {
+        throw std::runtime_error("TransactionBuilder: failed to derive Sapling internal spending key");
+    }
+    ssIntSk << xskInternal;
+
     libzcash::SaplingIncomingViewingKey ivk;
     extsk.ToXFVK().fvk.DeriveIVK(&ivk);
+    libzcash::SaplingIncomingViewingKey ivkInternal;
+    const bool haveInternalIvk = extsk.ToXFVK().DeriveIVKinternal(&ivkInternal);
 
     // Consistency check: all anchors must equal the first one
     for (int i = 0; i < vSaplingSpends.size(); i++) {
@@ -392,28 +405,41 @@ bool TransactionBuilder::ConvertRawSaplingSpend(libzcash::SaplingExtendedSpendin
         std::array<unsigned char, 1065> merkle_path;
         std::move(ss.begin(), ss.end(), merkle_path.begin());
 
-        // Check FVK is valid for Address
+        // Check FVK is valid for Address — try external scope first, then internal (change).
         libzcash::SaplingPaymentAddress checkAddr;
-        if (!ivk.DeriveAddress(&checkAddr, vSaplingSpends[i].addr.d)) {
-            fprintf(stderr, "Nullopt - TransactionBuilder cannot add Sapling Spend with FVK that does not match Address\n");
-            throw std::runtime_error("TransactionBuilder cannot add Sapling Spend with FVK that does not match Address");
+        bool addrMatched = false;
+        bool isInternalSpend = false;
+        if (ivk.DeriveAddress(&checkAddr, vSaplingSpends[i].addr.d) && checkAddr == vSaplingSpends[i].addr) {
+            addrMatched = true;
+        } else if (haveInternalIvk && ivkInternal.DeriveAddress(&checkAddr, vSaplingSpends[i].addr.d) && checkAddr == vSaplingSpends[i].addr) {
+            addrMatched = true;
+            isInternalSpend = true;
         }
-        if (!(checkAddr == vSaplingSpends[i].addr)) {
+        if (!addrMatched) {
             fprintf(stderr, "TransactionBuilder cannot add Sapling Spend with FVK that does not match Address\n");
             throw std::runtime_error("TransactionBuilder cannot add Sapling Spend with FVK that does not match Address");
         }
 
+        // For internal (change) addresses the zk-SNARK proof requires nsk_internal,
+        // not nsk. Use the pre-derived internal spending key in that case.
+        auto& ssSpendSk = isInternalSpend ? ssIntSk : ssExtSk;
+
         // Add the spend to the sapling builder
         saplingBuilder->add_spend(
-            {reinterpret_cast<uint8_t*>(ssExtSk.data()), ssExtSk.size()},
+            {reinterpret_cast<uint8_t*>(ssSpendSk.data()), ssSpendSk.size()},
             vSaplingSpends[i].addr.d,
             vSaplingSpends[i].addr.ToBytes(),
             vSaplingSpends[i].value,
             vSaplingSpends[i].rcm.GetRawBytes(),
             merkle_path);
 
-        if (!firstSaplingSpendAddr.has_value()) {
-            firstSaplingSpendAddr = std::make_pair(extsk.ToXFVK().fvk.ovk, vSaplingSpends[i].addr);
+        if (!firstSaplingChangeAddr.has_value()) {
+            const auto xfvk = extsk.ToXFVK();
+            libzcash::SaplingPaymentAddress changeAddr;
+            if (!xfvk.DefaultAddressInternal(&changeAddr)) {
+                throw std::runtime_error("TransactionBuilder cannot derive internal change address from Sapling FVK");
+            }
+            firstSaplingChangeAddr = std::make_pair(xfvk.fvk.ovk, changeAddr);
         }
 
         valueBalanceSapling += vSaplingSpends[i].value;
@@ -422,6 +448,9 @@ bool TransactionBuilder::ConvertRawSaplingSpend(libzcash::SaplingExtendedSpendin
     std::optional<CTransaction> maybe_tx = CTransaction(mtx);
     auto tx_result = maybe_tx.value();
     auto signedtxn = EncodeHexTx(tx_result);
+
+    // Accumulate committed count before clearing the staging vector
+    nCommittedSaplingSpends += vSaplingSpends.size();
 
     // reset Spend Vector
     vSaplingSpends.resize(0);
@@ -461,6 +490,9 @@ bool TransactionBuilder::ConvertRawSaplingOutput(uint256 ovk)
         saplingBuilder->add_recipient(ovk.GetRawBytes(), vSaplingOutputs[i].addr.ToBytes(), vSaplingOutputs[i].value, memoBytes);
         valueBalanceSapling -= vSaplingOutputs[i].value;
     }
+
+    // Accumulate committed count before clearing the staging vector
+    nCommittedSaplingOutputs += vSaplingOutputs.size();
 
     // reset Output Vector
     vSaplingOutputs.resize(0);
@@ -549,16 +581,18 @@ bool TransactionBuilder::ConvertRawOrchardSpend(libzcash::OrchardExtendedSpendin
             return false;
         }
 
-        // Check FVK is valid for Address
+        // Check FVK is valid for Address — try external scope first, then internal (change).
         libzcash::OrchardPaymentAddress checkAddr;
-        if (!fvk.DeriveAddress(&checkAddr, vOrchardSpends[i].addr.d)) {
-            throw std::runtime_error("NullOpt - TransactionBuilder cannot add Orchard Spend with FVK that does not match Address\n");
+        bool addrMatched = false;
+        if (fvk.DeriveAddress(&checkAddr, vOrchardSpends[i].addr.d) && checkAddr == vOrchardSpends[i].addr) {
+            addrMatched = true;
+        } else if (fvk.DeriveAddressInternal(&checkAddr, vOrchardSpends[i].addr.d) && checkAddr == vOrchardSpends[i].addr) {
+            addrMatched = true;
         }
-        if (checkAddr != vOrchardSpends[i].addr) {
+        if (!addrMatched) {
             fprintf(stderr, "Note Address %s\n", EncodePaymentAddress(vOrchardSpends[i].addr).c_str());
-            fprintf(stderr, "FVK Address %s\n", EncodePaymentAddress(checkAddr).c_str());
             fprintf(stderr, "TransactionBuilder cannot add Orchard Spend with FVK that does not match Address\n");
-            throw std::runtime_error(strprintf("TransactionBuilder cannot add Orchard Spend with FVK that does not match Address\n"));
+            throw std::runtime_error("TransactionBuilder cannot add Orchard Spend with FVK that does not match Address");
         }
 
         orchardBuilder.value().AddSpendFromParts(
@@ -576,6 +610,9 @@ bool TransactionBuilder::ConvertRawOrchardSpend(libzcash::OrchardExtendedSpendin
 
     // Add to list of keys to sign bundle
     orchardSpendingKeys.push_back(extsk.sk);
+
+    // Accumulate committed count before clearing the staging vector
+    nCommittedOrchardSpends += vOrchardSpends.size();
 
     // reset spend vector
     vOrchardSpends.resize(0);
@@ -622,6 +659,9 @@ bool TransactionBuilder::ConvertRawOrchardOutput(uint256 ovk)
 
         valueBalanceOrchard -= vOrchardOutputs[i].value;
     }
+
+    // Accumulate committed count before clearing the staging vector
+    nCommittedOrchardOutputs += vOrchardOutputs.size();
 
     // reset Output Vector
     vOrchardOutputs.resize(0);
@@ -699,6 +739,82 @@ bool TransactionBuilder::SendChangeTo(CTxDestination& changeAddr)
     return true;
 }
 
+// Returns true if the estimated transaction size fits within 95% of the protocol limit.
+// Transparent base is measured by serializing mtx (scriptSigs absent) + 107 bytes/input.
+// Orchard proof model (empirical, verified n=2,4,39,85): proof = 2720 + 2272*n bytes.
+// Proof-length varint is 3 bytes for n<28, 5 bytes for n>=28 (proof exceeds 65535).
+// extraOutputs budgets for outputs not yet queued (e.g. change), routed to the active pool.
+bool TransactionBuilder::IsValidSize(int extraOutputs) const
+{
+    // ZIP-225 component sizes
+    static constexpr size_t SAPLING_SPEND_SIZE           = 384;
+    static constexpr size_t SAPLING_OUTPUT_SIZE          = 948;
+    static constexpr size_t SAPLING_BUNDLE_OVERHEAD      = 104;
+    static constexpr size_t ORCHARD_ACTION_SIZE          = 884;
+    // Halo2 proof: verified exact at n=2,4,39,85: proof = 2720 + 2272*n
+    static constexpr size_t ORCHARD_PROOF_BASE           = 2720;
+    static constexpr size_t ORCHARD_PROOF_PER_ACTION     = 2272;
+    static constexpr size_t ORCHARD_BUNDLE_OVERHEAD_BASE = 106; // flags+valueBalance+anchor+bindingSig+varint
+    static constexpr size_t ORCHARD_LARGE_PROOF_THRESHOLD = 28; // proof >65535 bytes at n>=28
+    static constexpr size_t P2PKH_SCRIPTSIG_SIZE         = 107;
+
+    // Transparent: serialize mtx (empty scriptSigs) + estimate scriptSig bytes
+    const size_t nTransparentInputs  = tIns.size();
+    const size_t nTransparentOutputs = mtx.vout.size();
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << CTransaction(mtx);
+    const size_t transparentBase = ss.size() + nTransparentInputs * P2PKH_SCRIPTSIG_SIZE;
+
+    // Shielded counts: committed (already in Rust builder) + pending in staging vectors
+    const size_t nSaplingSpends      = nCommittedSaplingSpends  + vSaplingSpends.size();
+    const size_t nSaplingOutputsBase = nCommittedSaplingOutputs + vSaplingOutputs.size();
+    const size_t nOrchardSpends      = nCommittedOrchardSpends  + vOrchardSpends.size();
+    const size_t nOrchardOutputsBase = nCommittedOrchardOutputs + vOrchardOutputs.size();
+
+    const bool orchardPoolActive = (nOrchardSpends > 0 || nOrchardOutputsBase > 0);
+    const size_t nSaplingOutputs = nSaplingOutputsBase + (orchardPoolActive ? 0 : static_cast<size_t>(extraOutputs));
+    const size_t nOrchardOutputs = nOrchardOutputsBase + (orchardPoolActive ? static_cast<size_t>(extraOutputs) : 0);
+    const size_t nOrchardActions = std::max(nOrchardSpends, nOrchardOutputs);
+
+    size_t estimate = transparentBase;
+
+    if (nSaplingSpends > 0 || nSaplingOutputs > 0) {
+        estimate += nSaplingSpends  * SAPLING_SPEND_SIZE
+                  + nSaplingOutputs * SAPLING_OUTPUT_SIZE
+                  + SAPLING_BUNDLE_OVERHEAD;
+    }
+
+    size_t orchardProofEst = 0;
+    size_t proofVarintSize = 0;
+    if (nOrchardActions > 0) {
+        orchardProofEst = ORCHARD_PROOF_BASE + nOrchardActions * ORCHARD_PROOF_PER_ACTION;
+        proofVarintSize = (nOrchardActions >= ORCHARD_LARGE_PROOF_THRESHOLD) ? 5 : 3;
+        estimate += nOrchardActions * ORCHARD_ACTION_SIZE
+                  + orchardProofEst + proofVarintSize
+                  + ORCHARD_BUNDLE_OVERHEAD_BASE;
+    }
+
+    const size_t maxTxSize = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_SAPLING)
+        ? MAX_TX_SIZE_AFTER_SAPLING : MAX_TX_SIZE_BEFORE_SAPLING;
+    const size_t limit = maxTxSize - maxTxSize / 20;
+
+    // LogPrintf("IsValidSize: transparent_base=%u (serialized=%u scriptsig_est=%u inputs=%u outputs=%u) "
+    //           "sapling_spends=%u sapling_outputs=%u "
+    //           "orchard_spends=%u orchard_outputs=%u orchard_actions=%u "
+    //           "orchard_proof_est=%u varint=%u "
+    //           "estimated_total=%u limit=%u max=%u valid=%s\n",
+    //     transparentBase,
+    //     transparentBase - nTransparentInputs * P2PKH_SCRIPTSIG_SIZE,
+    //     nTransparentInputs * P2PKH_SCRIPTSIG_SIZE,
+    //     nTransparentInputs, nTransparentOutputs, nSaplingSpends, nSaplingOutputs,
+    //     nOrchardSpends, nOrchardOutputs, nOrchardActions,
+    //     orchardProofEst, proofVarintSize,
+    //     estimate, limit, maxTxSize,
+    //     (estimate <= limit ? "YES" : "NO"));
+
+    return estimate <= limit;
+}
+
 TransactionBuilderResult TransactionBuilder::Build()
 {
     std::optional<CTransaction> maybe_tx = CTransaction(mtx);
@@ -747,9 +863,9 @@ TransactionBuilderResult TransactionBuilder::Build()
             AddOrchardOutputRaw(firstOrchardChangeAddr->second, change, std::nullopt);
             ConvertRawOrchardOutput(firstOrchardChangeAddr->first);
 
-        } else if (firstSaplingSpendAddr) {
-            AddSaplingOutputRaw(firstSaplingSpendAddr->second, change, std::nullopt);
-            ConvertRawSaplingOutput(firstSaplingSpendAddr->first);
+        } else if (firstSaplingChangeAddr) {
+            AddSaplingOutputRaw(firstSaplingChangeAddr->second, change, std::nullopt);
+            ConvertRawSaplingOutput(firstSaplingChangeAddr->first);
         
         } else {
             return TransactionBuilderResult("Could not determine change address");

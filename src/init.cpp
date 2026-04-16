@@ -499,27 +499,31 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-disablewallet", _("Do not load the wallet and disable wallet RPC calls"));
     strUsage += HelpMessageOpt("-mintxvalue=<amt>", strprintf(_("Set minimum incoming value of notes that will be added to the wallet in Arrtoshis (default: %u)"), 1));
     strUsage += HelpMessageOpt("-keypool=<n>", strprintf(_("Set key pool size to <n> (default: %u)"), 100));
-    
+
     // Protocol-specific consolidation commands
     strUsage += HelpMessageOpt("-saplingconsolidation", _("Enable auto Sapling note consolidation"));
     strUsage += HelpMessageOpt("-saplingconsolidationtxfee", strprintf(_("Fee amount in Satoshis used for Sapling consolidation transactions. (default %i)"), DEFAULT_SAPLING_CONSOLIDATION_FEE));
-    strUsage += HelpMessageOpt("-saplingconsolidationinterval", strprintf(_("Interval in blocks between Sapling note consolidation (default %i)"), DEFAULT_SAPLING_CONSOLIDATION_INTERVAL));
+    strUsage += HelpMessageOpt("-saplingconsolidationinterval=<n>", strprintf(_("Interval in blocks between Sapling note consolidation (default %i)"), DEFAULT_SAPLING_CONSOLIDATION_INTERVAL));
     strUsage += HelpMessageOpt("-orchardconsolidation", _("Enable auto Orchard note consolidation"));
     strUsage += HelpMessageOpt("-orchardconsolidationtxfee", strprintf(_("Fee amount in Satoshis used for Orchard consolidation transactions. (default %i)"), DEFAULT_ORCHARD_CONSOLIDATION_FEE));
-    strUsage += HelpMessageOpt("-orchardconsolidationinterval", strprintf(_("Interval in blocks between Orchard note consolidation (default %i)"), DEFAULT_ORCHARD_CONSOLIDATION_INTERVAL));
-    strUsage += HelpMessageOpt("-consolidatesaplingaddress=<zaddr>", _("Specify Sapling Address to Consolidate (default: all)"));
-    strUsage += HelpMessageOpt("-consolidateorchardaddress=<zaddr>", _("Specify Orchard Address to Consolidate (default: all)"));
-    
+    strUsage += HelpMessageOpt("-orchardconsolidationinterval=<n>", strprintf(_("Interval in blocks between Orchard note consolidation (default %i)"), DEFAULT_ORCHARD_CONSOLIDATION_INTERVAL));
+    strUsage += HelpMessageOpt("-consolidatesaplingaddress=<zaddr>", _("Specify Sapling address to consolidate (default: all). Must match sweep address when sweep is enabled."));
+    strUsage += HelpMessageOpt("-consolidateorchardaddress=<zaddr>", _("Specify Orchard address to consolidate (default: all). Must match sweep address when sweep is enabled."));
+    strUsage += HelpMessageOpt("-consolidationtargetqty=<n>", strprintf(_("Minimum number of notes an address must have before auto-consolidation processes it (default: %i, minimum: 2)"), 100));
+
     // Deprecated consolidation commands
     strUsage += HelpMessageOpt("-consolidation", _("(DEPRECATED) Use -saplingconsolidation instead"));
     strUsage += HelpMessageOpt("-consolidationtxfee", _("(DEPRECATED) Use -saplingconsolidationtxfee instead"));
     strUsage += HelpMessageOpt("-consolidateaddress=<zaddr>", _("(DEPRECATED) Use protocol-specific address options instead"));
-    
+
+    strUsage += HelpMessageOpt("-usedpowconfs", _("Use dPoW confirmation count instead of raw chain depth when filtering notes (default: false)"));
+
     // Sweep commands
     strUsage += HelpMessageOpt("-sweep", _("Enable auto note sweep, automatically move all funds to a single address periodically"));
-    strUsage += HelpMessageOpt("-sweepaddress=<zaddr>", _("Specify Address to Sweep funds to (supports both Sapling and Orchard addresses)"));
+    strUsage += HelpMessageOpt("-sweepaddress=<zaddr>", _("Specify address to sweep funds to (supports both Sapling and Orchard addresses)"));
     strUsage += HelpMessageOpt("-sweeptxfee", strprintf(_("Fee amount in Satoshis used for sweep transactions. (default %i)"), DEFAULT_SWEEP_FEE));
-    
+    strUsage += HelpMessageOpt("-sweepinterval=<n>", _("Number of blocks between automatic sweep runs (default: ~15 minutes of blocks)"));
+
     // Deprecated sweep commands
     strUsage += HelpMessageOpt("-sweepsaplingaddress=<zaddr>", _("(DEPRECATED) Use -sweepaddress instead"));
     strUsage += HelpMessageOpt("-sweeporchardaddress=<zaddr>", _("(DEPRECATED) Use -sweepaddress instead"));
@@ -2420,7 +2424,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
 
             if (pwalletMain->createType == RECOVERY) {
-                if (!pwalletMain->RestoreSeedFromPhrase(recoverySeedPhrase)) {
+                if (!pwalletMain->RestoreSeedFromPhrase(recoverySeedPhrase, recoverySeedLangCode)) {
                     LogPrintf("Invalid Seed Phrase - shutting down.\n");
                     return false;
                 }
@@ -2477,42 +2481,70 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         if (mapArgs.count("-consolidateaddress")) {
             return InitError("Deprecated parameter -consolidateaddress is no longer supported. Use -consolidatesaplingaddress and/or -consolidateorchardaddress instead.");
         }
-        
+
         // Protocol-specific consolidation configuration
         pwalletMain->fSaplingConsolidationEnabled = GetBoolArg("-saplingconsolidation", false);
         pwalletMain->fOrchardConsolidationEnabled = GetBoolArg("-orchardconsolidation", false);
-        
+
         // Set protocol-specific fees
         fSaplingConsolidationTxFee = GetArg("-saplingconsolidationtxfee", DEFAULT_SAPLING_CONSOLIDATION_FEE);
         fOrchardConsolidationTxFee = GetArg("-orchardconsolidationtxfee", DEFAULT_ORCHARD_CONSOLIDATION_FEE);
-        
+
         // Address configuration
         fSaplingConsolidationMapUsed = !mapMultiArgs["-consolidatesaplingaddress"].empty();
         fOrchardConsolidationMapUsed = !mapMultiArgs["-consolidateorchardaddress"].empty();
-        
-        // Initialize consolidation intervals
-        pwalletMain->saplingConsolidationInterval = GetArg("-saplingconsolidationinterval", DEFAULT_SAPLING_CONSOLIDATION_INTERVAL);
-        pwalletMain->targetSaplingConsolidationQty = 100;
-        pwalletMain->orchardConsolidationInterval = GetArg("-orchardconsolidationinterval", DEFAULT_ORCHARD_CONSOLIDATION_INTERVAL);
-        pwalletMain->targetOrchardConsolidationQty = 100;
 
-        //Validate Sapling Addresses
+        // Initialize consolidation target quantity (shared across protocols)
+        {
+            int targetQty = (int)GetArg("-consolidationtargetqty", 100);
+            if (targetQty < 2) {
+                return InitError("-consolidationtargetqty must be at least 2");
+            }
+            pwalletMain->targetSaplingConsolidationQty = targetQty;
+            pwalletMain->targetOrchardConsolidationQty = targetQty;
+        }
+
+        // Initialize consolidation intervals with bounds validation
+        if (mapArgs.count("-saplingconsolidationinterval")) {
+            int interval = (int)GetArg("-saplingconsolidationinterval", 0);
+            if (interval < 1) {
+                return InitError("-saplingconsolidationinterval must be at least 1");
+            }
+            pwalletMain->saplingConsolidationInterval = interval;
+        }
+        if (mapArgs.count("-orchardconsolidationinterval")) {
+            int interval = (int)GetArg("-orchardconsolidationinterval", 0);
+            if (interval < 1) {
+                return InitError("-orchardconsolidationinterval must be at least 1");
+            }
+            pwalletMain->orchardConsolidationInterval = interval;
+        }
+
+        //Validate Sapling Consolidation Addresses
         vector<string>& vsaplingaddresses = mapMultiArgs["-consolidatesaplingaddress"];
-        for (int i = 0; i < vsaplingaddresses.size(); i++) {
+        for (int i = 0; i < (int)vsaplingaddresses.size(); i++) {
             LogPrintf("Consolidating Sapling Address: %s\n", vsaplingaddresses[i]);
             auto zAddress = DecodePaymentAddress(vsaplingaddresses[i]);
             if (!IsValidPaymentAddress(zAddress)) {
                 return InitError("Invalid Sapling consolidation address");
             }
+            auto hasSpendingKey = std::visit(HaveSpendingKeyForPaymentAddress(pwalletMain), zAddress);
+            if (!hasSpendingKey) {
+                return InitError("Wallet must have the spending key for consolidation address: " + vsaplingaddresses[i]);
+            }
         }
 
-        //Validate Orchard Addresses
+        //Validate Orchard Consolidation Addresses
         vector<string>& vorchardaddresses = mapMultiArgs["-consolidateorchardaddress"];
-        for (int i = 0; i < vorchardaddresses.size(); i++) {
+        for (int i = 0; i < (int)vorchardaddresses.size(); i++) {
             LogPrintf("Consolidating Orchard Address: %s\n", vorchardaddresses[i]);
             auto orchardAddress = DecodePaymentAddress(vorchardaddresses[i]);
             if (!IsValidPaymentAddress(orchardAddress)) {
                 return InitError("Invalid Orchard consolidation address");
+            }
+            auto hasSpendingKey = std::visit(HaveSpendingKeyForPaymentAddress(pwalletMain), orchardAddress);
+            if (!hasSpendingKey) {
+                return InitError("Wallet must have the spending key for Orchard consolidation address: " + vorchardaddresses[i]);
             }
         }
 
@@ -2525,6 +2557,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             return InitError("Deprecated parameter -sweeporchardaddress is no longer supported. Use -sweepaddress instead.");
         }
         
+        pwalletMain->fUseDpowConfs = GetBoolArg("-usedpowconfs", false);
+
         // Unified sweep support
         bool hasSweep = GetBoolArg("-sweep", false) || !mapMultiArgs["-sweepaddress"].empty();
         
@@ -2533,20 +2567,29 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
         if (pwalletMain->fSweepEnabled) {
             fSweepTxFee = GetArg("-sweeptxfee", DEFAULT_SWEEP_FEE);
-            
+
+            // Sweep interval with bounds validation
+            if (mapArgs.count("-sweepinterval")) {
+                int interval = (int)GetArg("-sweepinterval", 0);
+                if (interval < 1) {
+                    return InitError("-sweepinterval must be at least 1");
+                }
+                pwalletMain->sweepInterval = interval;
+            }
+
             // Handle unified sweep address configuration
             bool hasSweepAddress = !mapMultiArgs["-sweepaddress"].empty();
             fSweepMapUsed = hasSweepAddress;
 
             // Validate sweep addresses
             vector<string> allSweepAddresses;
-            
+
             // Collect sweep addresses from unified parameter
             if (hasSweepAddress) {
                 vector<string>& vSweep = mapMultiArgs["-sweepaddress"];
                 allSweepAddresses.insert(allSweepAddresses.end(), vSweep.begin(), vSweep.end());
             }
-            
+
             // Validate that only one sweep address is specified total
             if (allSweepAddresses.size() != 1) {
                 return InitError("Exactly one sweep address must be specified across all sweep parameters.");
@@ -2567,32 +2610,24 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
             // Validate consolidation compatibility with sweep
             if (pwalletMain->fSaplingConsolidationEnabled) {
-                //Validate 1 Consolidation address only that matches the sweep address
-                vector<string>& vsaplingaddresses = mapMultiArgs["-consolidatesaplingaddress"];
-                if (vsaplingaddresses.size() == 0) {
-                    fSaplingConsolidationMapUsed = true;
-                    mapMultiArgs["-consolidatesaplingaddress"] = allSweepAddresses;
-                } else {
-                    for (int i = 0; i < vsaplingaddresses.size(); i++) {
-                        if (allSweepAddresses[0] != vsaplingaddresses[i]) {
-                            return InitError("Sapling consolidation can only be used on the sweep address when sweep is enabled.");
-                        }
-                    }
+                // When sweep is active, consolidation is automatically restricted to the
+                // sweep address at runtime regardless of the consolidation address list.
+                // A configured consolidation address list will be ignored while sweep is active.
+                vector<string>& vcons = mapMultiArgs["-consolidatesaplingaddress"];
+                if (!vcons.empty() && (vcons.size() != 1 || vcons[0] != allSweepAddresses[0])) {
+                    LogPrintf("WARNING: Sapling consolidation address list will be ignored while sweep is enabled. "
+                              "Consolidation will only process the sweep address.\n");
                 }
             }
-            
+
             if (pwalletMain->fOrchardConsolidationEnabled) {
-                //Validate Orchard consolidation compatibility with sweep
-                vector<string>& vorchardaddresses = mapMultiArgs["-consolidateorchardaddress"];
-                if (vorchardaddresses.size() == 0) {
-                    fOrchardConsolidationMapUsed = true;
-                    mapMultiArgs["-consolidateorchardaddress"] = allSweepAddresses;
-                } else {
-                    for (int i = 0; i < vorchardaddresses.size(); i++) {
-                        if (allSweepAddresses[0] != vorchardaddresses[i]) {
-                            return InitError("Orchard consolidation can only be used on the sweep address when sweep is enabled.");
-                        }
-                    }
+                // When sweep is active, Orchard consolidation is automatically restricted to the
+                // sweep address at runtime regardless of the consolidation address list.
+                // A configured consolidation address list will be ignored while sweep is active.
+                vector<string>& vcons = mapMultiArgs["-consolidateorchardaddress"];
+                if (!vcons.empty() && (vcons.size() != 1 || vcons[0] != allSweepAddresses[0])) {
+                    LogPrintf("WARNING: Orchard consolidation address list will be ignored while sweep is enabled. "
+                              "Consolidation will only process the sweep address.\n");
                 }
             }
         }

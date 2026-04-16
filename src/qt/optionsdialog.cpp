@@ -303,6 +303,7 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->enableHexEncoding, OptionsModel::EnableHexMemo);
     mapper->addMapping(ui->theme, OptionsModel::Theme);
     mapper->addMapping(ui->thirdPartyTxUrls, OptionsModel::ThirdPartyTxUrls);
+    mapper->addMapping(ui->cmbSeedPhraseLanguage, OptionsModel::SeedPhraseLanguage);
 
 
 }

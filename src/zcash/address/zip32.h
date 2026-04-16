@@ -30,10 +30,10 @@ public:
     HDSeed(RawHDSeed& seedIn) : seed(seedIn) {}
 
     static HDSeed Random(size_t len = 32);
-    static HDSeed RestoreFromPhrase(std::string &phrase);
-    bool IsValidPhrase(std::string &phrase);
+    static HDSeed RestoreFromPhrase(std::string &phrase, uint32_t langCode = 0);
+    bool IsValidPhrase(std::string &phrase, uint32_t langCode = 0);
     bool IsNull() const { return seed.empty(); };
-    void GetPhrase(std::string &phrase);
+    void GetPhrase(std::string &phrase, uint32_t langCode = 0);
     uint256 Fingerprint() const;
     uint256 EncryptionFingerprint() const;
     RawHDSeed RawSeed() const { return seed; }
@@ -155,6 +155,34 @@ struct SaplingExtendedFullViewingKey {
 
     libzcash::SaplingPaymentAddress DefaultAddress() const;
 
+    // Derives the default internal (change) payment address using proper ZIP 32
+    // dk_internal derivation via the full 128-byte DFVK (fvk||dk).
+    // Returns false if derivation fails (extremely unlikely for any real key).
+    bool DefaultAddressInternal(libzcash::SaplingPaymentAddress* addr) const;
+
+    // Derives the internal (change scope) incoming viewing key using the full
+    // 128-byte DFVK (fvk||dk). sapling_derive_internal_fvk hashes fvk||dk
+    // together — zeroing dk produces a wrong nk_internal and change notes cannot
+    // be decrypted. Always use this instead of fvk.DeriveIVKinternal().
+    bool DeriveIVKinternal(libzcash::SaplingIncomingViewingKey* ivk) const;
+
+    // Derives the internal (change scope) nullifier deriving key (nk_internal) using the
+    // full 128-byte DFVK (fvk||dk). nk_internal = H*(i_nsk) + nk — differs from the
+    // external nk. Required to compute correct nullifiers for change notes.
+    bool DeriveNKinternal(uint256* nk) const;
+
+    // Derives the internal (change scope) outgoing viewing key using the full
+    // 128-byte DFVK (fvk||dk). The internal OVK differs from the external OVK.
+    bool DeriveOVKinternal(libzcash::SaplingOutgoingViewingKey* ovk) const;
+
+    // Derives the internal payment address for the given explicit diversifier using
+    // the full 128-byte DFVK (fvk||dk) so that nk_internal is computed correctly.
+    bool DeriveAddressInternal(libzcash::SaplingPaymentAddress* addr, diversifier_t diversifier) const;
+
+    // Derives the internal payment address at a given diversifier index using the
+    // full 128-byte DFVK (fvk||dk) so that nk_internal is computed correctly.
+    bool DeriveAddressFromIndexInternal(libzcash::SaplingPaymentAddress* addr, blob88 diversifier_index) const;
+
     friend inline bool operator==(const SaplingExtendedFullViewingKey& a, const SaplingExtendedFullViewingKey& b) {
         return (
             a.depth == b.depth &&
@@ -207,6 +235,11 @@ struct SaplingExtendedSpendingKey {
     static SaplingExtendedSpendingKey Master(const HDSeed& seed, bool bip39Enabled = true);
 
     SaplingExtendedSpendingKey Derive(uint32_t i) const;
+
+    /** Derive the internal (change) extended spending key from this external key.
+     *  The internal key has a different nk_internal, requiring nsk_internal for proofs.
+     *  Mirrors SaplingExtendedFullViewingKey::DeriveIVKinternal() at the spending key level. */
+    bool DeriveInternal(SaplingExtendedSpendingKey* xsk_int) const;
 
     SaplingExtendedFullViewingKey ToXFVK() const;
 

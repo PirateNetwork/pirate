@@ -83,6 +83,7 @@ public:
     string memo;
     string memoStr;
     bool mine;
+    bool isInternalScope = false;
 };
 
 class TransactionSendZO
@@ -94,6 +95,7 @@ public:
     string memo;
     string memoStr;
     bool mine;
+    bool isInternalScope = false;
 };
 
 class TransactionReceivedZS
@@ -105,6 +107,7 @@ public:
     string memo;
     string memoStr;
     bool spendable;
+    bool isInternalScope = false;
 };
 
 class TransactionReceivedZO
@@ -116,6 +119,7 @@ public:
     string memo;
     string memoStr;
     bool spendable;
+    bool isInternalScope = false;
 };
 
 enum ArchiveType {

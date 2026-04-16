@@ -475,13 +475,7 @@ void WalletView::showSeedPhrase()
       return;
     }
 
-    QString phrase = "";
-    std::string recoverySeedPhrase = "";
-    if (walletModel->getSeedPhrase(recoverySeedPhrase)) {
-        phrase = QString::fromStdString(recoverySeedPhrase);
-    }
-
-    OpenPhraseDialog dlg(this, phrase);
+    OpenPhraseDialog dlg(this, walletModel);
     dlg.exec();
     dlg.close();
 

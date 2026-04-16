@@ -66,6 +66,7 @@ public:
         ProxyPortI2P,                   // int
         IPv4Disable,                    // bool
         IPv6Disable,                    // bool
+        SeedPhraseLanguage,             // int  (0=English … 7=Spanish, matches hd_seed::MnemonicLanguage)
         OptionIDRowCount,
     };
 
@@ -85,6 +86,7 @@ public:
     bool getMinimizeOnClose() const { return fMinimizeOnClose; }
     int getDisplayUnit() const { return nDisplayUnit; }
     bool getHexMemo() const { return fEnableHexMemo; }
+    int getSeedPhraseLanguage() const { return nSeedPhraseLanguage; }
     QString getThirdPartyTxUrls() const { return "http://explorer.piratechain.com/tx/%s"; }
     // #ifdef ENABLE_BIP70
     // bool getProxySettings(QNetworkProxy& proxy) const;
@@ -103,6 +105,7 @@ private:
     QString language;
     int nDisplayUnit;
     bool fEnableHexMemo;
+    int nSeedPhraseLanguage;
     QString strThirdPartyTxUrls;
     QString strTheme;
     /* settings that were overridden by command-line */

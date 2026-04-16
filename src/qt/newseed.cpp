@@ -16,3 +16,8 @@ NewSeed::~NewSeed()
 {
 
 }
+
+int NewSeed::selectedLanguage() const
+{
+    return ui->cmbLanguage->currentIndex();
+}

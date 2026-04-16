@@ -20,14 +20,15 @@
 
 /**
  * @file asyncrpcoperation_sendmany.h
- * @brief Asynchronous sendmany operation for multi-recipient transactions
- * 
- * Implements z_sendmany RPC operation for sending funds to multiple recipients.
- * Supports transparent, Sapling, and Orchard addresses with memo support.
- * 
- * Purpose: Send funds to multiple recipients in a single transaction
- * Inputs: Source address funds (transparent/Sapling/Orchard)
- * Outputs: Multiple recipient outputs with optional memos
+ * @brief Asynchronous sendmany operation for multi-recipient shielded transactions
+ *
+ * Implements the z_sendmany RPC operation: sends funds from a single Sapling or
+ * Orchard source address to one or more Sapling/Orchard recipients in a single
+ * transaction. Transparent source addresses are not accepted; use z_shieldcoinbase
+ * to move transparent funds into the shielded pool first.
+ *
+ * Inputs:  Sapling or Orchard shielded notes owned by the from-address
+ * Outputs: Sapling and/or Orchard outputs with optional encrypted memos
  */
 
 #ifndef ASYNCRPCOPERATION_SENDMANY_H
@@ -56,35 +57,43 @@ using namespace libzcash;
 // Recipient tuple: (address, amount, memo)
 typedef std::tuple<std::string, CAmount, std::string> SendManyRecipient;
 
-// Input UTXO tuple: (txid, vout, amount, coinbase, destination)
-typedef std::tuple<uint256, int, CAmount, bool, CTxDestination> SendManyInputUTXO;
-
 /**
  * @class AsyncRPCOperation_sendmany
- * @brief Asynchronous sendmany operation for multi-recipient transactions
- * 
- * Implements the z_sendmany RPC operation, allowing users to send funds
- * from a single source address to multiple recipients in one transaction.
- * Supports all address types (transparent, Sapling, Orchard) with memos.
- * 
- * Purpose: Send funds to multiple recipients efficiently
- * Inputs: Source address funds (any protocol)
- * Outputs: Multiple recipient outputs with optional encrypted memos
+ * @brief Asynchronous z_sendmany operation
+ *
+ * Builds and broadcasts a shielded multi-recipient transaction. The source
+ * address must be a Sapling or Orchard payment address for which the wallet
+ * holds the spending key (or a watch-only address for offline signing).
+ *
+ * Note selection: notes are sorted largest-first. The minimum set that covers
+ * (outputs + fee) is selected; if the wallet holds more than 100 notes an
+ * additional random batch of small notes is included for opportunistic
+ * consolidation.
+ *
+ * Errors are reported through set_error_code() / set_error_message() rather
+ * than exceptions; call getStatus() to inspect the outcome.
  */
 class AsyncRPCOperation_sendmany : public AsyncRPCOperation
 {
 public:
     /**
-     * @brief Constructor for sendmany operation
-     * 
-     * @param consensusParams Consensus parameters for the current network
-     * @param nHeight Current blockchain height
-     * @param fromAddress Source address for funds
-     * @param saplingOutputs Vector of Sapling recipients
-     * @param orchardOutputs Vector of Orchard recipients
-     * @param minDepth Minimum confirmation depth for inputs
-     * @param fee Transaction fee amount
-     * @param contextInfo Additional context information
+     * @brief Construct a z_sendmany operation
+     *
+     * Validates all parameters, decodes and classifies the from-address
+     * (Sapling or Orchard only — transparent addresses are rejected),
+     * and loads the spending key or sets the offline flag if the key is
+     * not held locally.
+     *
+     * @param consensusParams  Network consensus parameters
+     * @param nHeight          Block height used to initialise the transaction builder
+     * @param fromAddress      Sapling or Orchard payment address to spend from
+     * @param saplingOutputs   Sapling recipients: (address, amount, hex-memo)
+     * @param orchardOutputs   Orchard recipients:  (address, amount, hex-memo)
+     * @param minDepth         Minimum confirmation depth for input notes (must be > 0)
+     * @param fee              Miner fee in zatoshis (default ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE)
+     * @param contextInfo      Arbitrary context stored in the operation status
+     *
+     * @throws JSONRPCError    On any invalid parameter or unsupported address type
      */
     AsyncRPCOperation_sendmany(
         const Consensus::Params& consensusParams,
@@ -96,9 +105,7 @@ public:
         CAmount fee = ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE,
         UniValue contextInfo = NullUniValue);
         
-    /**
-     * @brief Destructor with automatic resource cleanup
-     */
+    /// Destructor — all members are RAII-managed; no explicit cleanup needed.
     virtual ~AsyncRPCOperation_sendmany();
 
     // Prevent copying and moving to ensure single ownership of transaction resources
@@ -108,15 +115,17 @@ public:
     AsyncRPCOperation_sendmany& operator=(AsyncRPCOperation_sendmany&&) = delete;      
 
     /**
-     * @brief Main execution entry point for sendmany operation
-     * Constructs and broadcasts the multi-recipient transaction
+     * @brief Main execution entry point
+     *
+     * Transitions state to EXECUTING, calls main_impl(), handles all
+     * exceptions, updates state to SUCCESS or FAILED, and logs the outcome.
      */
     virtual void main();
 
     /**
-     * @brief Get current operation status with transaction details
-     * 
-     * @return UniValue object containing operation status and transaction info
+     * @brief Get operation status including RPC method and parameters
+     *
+     * @return UniValue status object with "method" and "params" fields appended
      */
     virtual UniValue getStatus() const;
 
@@ -125,68 +134,55 @@ public:
 private:
     friend class TEST_FRIEND_AsyncRPCOperation_sendmany;
 
-    UniValue contextinfo_;                  ///< Additional context information
-    uint32_t consensusBranchId_;           ///< Consensus branch ID for transaction
-    CAmount fee_;                          ///< Transaction fee amount
-    int mindepth_;                         ///< Minimum confirmation depth for inputs
-    std::string fromaddress_;              ///< Source address string
+    UniValue contextinfo_;                  ///< Context passed at construction; included in getStatus()
+    CAmount fee_;                           ///< Miner fee in zatoshis
+    int mindepth_;                          ///< Minimum note confirmation depth
+    std::string fromaddress_;              ///< Source payment address string (Sapling or Orchard)
 
-    // Source address type flags
-    bool isFromTransparentAddress_;        ///< True if source is transparent address (t-addr)
-    bool isFromSaplingAddress_;            ///< True if source is Sapling shielded address 
-    bool isFromOrchardAddress_;            ///< True if source is Orchard shielded address
-    bool isFromPrivateAddress_;            ///< True if source is any shielded address type
+    // Source address type flags (exactly one is true after construction)
+    bool isFromSaplingAddress_ = false;    ///< True when the source is a Sapling payment address
+    bool isFromOrchardAddress_ = false;    ///< True when the source is an Orchard payment address
 
-    CTxDestination fromtaddr_;             ///< Transparent source address destination
-    std::string fromAddress_;              ///< Formatted source address string
-    PaymentAddress frompaymentaddress_;    ///< Shielded source payment address
-    SpendingKey spendingkey_;              ///< Spending key for shielded sources
-    bool hasOfflineSpendingKey;            ///< True if offline spending key is available
+    PaymentAddress frompaymentaddress_;    ///< Decoded source payment address
+    SpendingKey spendingkey_;              ///< Spending key (empty when hasOfflineSpendingKey is true)
+    bool hasOfflineSpendingKey = false;    ///< True when the wallet does not hold the spending key locally
 
     // Output recipients
-    std::vector<SendManyRecipient> saplingOutputs_;   ///< Sapling recipient outputs
-    std::vector<SendManyRecipient> orchardOutputs_;   ///< Orchard recipient outputs
+    std::vector<SendManyRecipient> saplingOutputs_;   ///< Sapling recipients supplied at construction
+    std::vector<SendManyRecipient> orchardOutputs_;   ///< Orchard recipients supplied at construction
 
-    // Input collections
-    std::vector<SendManyInputUTXO> transparentInputs_; ///< Transparent input UTXOs
-    std::vector<SaplingNoteEntry> saplingInputs_;      ///< Sapling input notes
-    std::vector<OrchardNoteEntry> orchardInputs_;      ///< Orchard input notes
+    // Input notes (populated by find_unspent_notes(), sorted descending by value)
+    std::vector<SaplingNoteEntry> saplingInputs_;      ///< Selected Sapling input notes
+    std::vector<OrchardNoteEntry> orchardInputs_;      ///< Selected Orchard input notes
 
-    TransactionBuilder builder_;           ///< Transaction builder instance
-    CTransaction tx_;                      ///< Constructed transaction
-
-    /**
-     * @brief Add transparent outputs to transaction
-     */
-    void add_taddr_outputs_to_tx();
+    TransactionBuilder builder_;           ///< Builds the transaction incrementally
+    CTransaction tx_;                      ///< Final constructed transaction
 
     /**
-     * @brief Find unspent shielded notes for inputs
-     * 
-     * @return true if sufficient notes found, false otherwise
+     * @brief Find, lock, and sort unspent shielded notes for spending
+     *
+     * Populates saplingInputs_ and orchardInputs_ from wallet notes meeting
+     * mindepth_. Notes are immediately wallet-locked to prevent duplicate
+     * selection by concurrent operations. Both collections are sorted
+     * descending by value before returning.
+     *
+     * @return true if at least one spendable note was found
      */
     bool find_unspent_notes();
 
     /**
-     * @brief Find transparent UTXOs for inputs
-     * 
-     * @param fAcceptCoinbase Whether to accept coinbase UTXOs
-     * @return true if sufficient UTXOs found, false otherwise
+     * @brief Convert a hex string to a fixed-size memo byte array
+     *
+     * @param s   Hexadecimal memo string (may be empty)
+     * @return    ZC_MEMO_SIZE-byte array; bytes beyond the input are 0xF6
+     * @throws std::runtime_error if @p s is not valid hex or exceeds ZC_MEMO_SIZE bytes
      */
-    bool find_utxos(bool fAcceptCoinbase);
+    std::array<unsigned char, ZC_MEMO_SIZE> get_memo_from_hex_string(const std::string& s);
 
     /**
-     * @brief Convert hex string to memo array
-     * 
-     * @param s Hex string representation of memo
-     * @return Fixed-size memo array
-     */
-    std::array<unsigned char, ZC_MEMO_SIZE> get_memo_from_hex_string(std::string s);
-
-    /**
-     * @brief Core implementation of sendmany logic
-     * 
-     * @return true if operation completed successfully, false otherwise
+     * @brief Core transaction-building logic
+     *
+     * @return true on success; on failure sets error code/message and returns false
      */
     bool main_impl();
 };
@@ -214,22 +210,12 @@ public:
 
     // Delegated methods
 
-    void add_taddr_outputs_to_tx()
-    {
-        delegate->add_taddr_outputs_to_tx();
-    }
-
     bool find_unspent_notes()
     {
         return delegate->find_unspent_notes();
     }
 
-    bool find_utxos(bool fAcceptCoinbase)
-    {
-        return delegate->find_utxos(fAcceptCoinbase);
-    }
-
-    std::array<unsigned char, ZC_MEMO_SIZE> get_memo_from_hex_string(std::string s)
+    std::array<unsigned char, ZC_MEMO_SIZE> get_memo_from_hex_string(const std::string& s)
     {
         return delegate->get_memo_from_hex_string(s);
     }

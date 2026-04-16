@@ -22,14 +22,16 @@ const unsigned char ZCASH_HD_SEED_FP_PERSONAL[crypto_generichash_blake2b_PERSONA
 HDSeed HDSeed::Random(size_t len)
 {
     assert(len == 32);
-    RawHDSeed rawSeed(len, 0);
-    librustzcash_getrandom(rawSeed.data(), len);
+    std::array<uint8_t, 32> buf;
+    hd_seed::random_bytes(buf);
+    RawHDSeed rawSeed(buf.begin(), buf.end());
     return HDSeed(rawSeed);
 }
 
-HDSeed HDSeed::RestoreFromPhrase(std::string &phrase)
+HDSeed HDSeed::RestoreFromPhrase(std::string &phrase, uint32_t langCode)
 {
     bool bResult;
+    auto lang = static_cast<hd_seed::MnemonicLanguage>(langCode);
 
     //Count the nr of words in the phrase:
     std::stringstream stream( phrase );
@@ -38,42 +40,38 @@ HDSeed HDSeed::RestoreFromPhrase(std::string &phrase)
     if (iCount==12) //12 word mnemonic: 16 byte entropy
     {
       RawHDSeed restoredSeed(16, 0);
-      bResult = librustzcash_restore_seed_from_phase(restoredSeed.data(), 16, phrase.c_str());
+      bResult = hd_seed::phrase_to_entropy(phrase, lang, rust::Slice<uint8_t>{restoredSeed.data(), 16});
       if (bResult==false)
       {
-        printf("librustzcash_restore_seed_from_phase() Restpre failed\n");
-        throw std::runtime_error("librustzcash_restore_seed_from_phase() Restore failed");
+        throw std::runtime_error("phrase_to_entropy(): Restore from 12-word phrase failed");
       }
-
       return HDSeed(restoredSeed);
     }
     else if (iCount==18) //18 word mnemonic : 24 byte entropy
     {
       RawHDSeed restoredSeed(24, 0);
-      bResult = librustzcash_restore_seed_from_phase(restoredSeed.data(), 24, phrase.c_str());
+      bResult = hd_seed::phrase_to_entropy(phrase, lang, rust::Slice<uint8_t>{restoredSeed.data(), 24});
       if (bResult==false)
       {
-        printf("librustzcash_restore_seed_from_phase() Retore failed\n");
-        throw std::runtime_error("librustzcash_restore_seed_from_phase() Restore failed");
+        throw std::runtime_error("phrase_to_entropy(): Restore from 18-word phrase failed");
       }
       return HDSeed(restoredSeed);
     }
     else //24 word mnemonic: 32 byte entropy
     {
-      //Restore from Phrase
       RawHDSeed restoredSeed(32, 0);
-      bResult = librustzcash_restore_seed_from_phase(restoredSeed.data(), 32, phrase.c_str());
+      bResult = hd_seed::phrase_to_entropy(phrase, lang, rust::Slice<uint8_t>{restoredSeed.data(), 32});
       if (bResult==false)
       {
-        printf("librustzcash_restore_seed_from_phase() Restore failed\n");
-        throw std::runtime_error("librustzcash_restore_seed_from_phase() Restore failed");
+        throw std::runtime_error("phrase_to_entropy(): Restore from 24-word phrase failed");
       }
       return HDSeed(restoredSeed);
     }
 }
 
-bool HDSeed::IsValidPhrase(std::string &phrase)
+bool HDSeed::IsValidPhrase(std::string &phrase, uint32_t langCode)
 {
+    auto lang = static_cast<hd_seed::MnemonicLanguage>(langCode);
     //Count the nr of words in the phrase:
     std::stringstream stream(phrase);
     unsigned int iCount = std::distance(std::istream_iterator<std::string>(stream), std::istream_iterator<std::string>());
@@ -81,18 +79,17 @@ bool HDSeed::IsValidPhrase(std::string &phrase)
     if (iCount==12) //12 word mnemonic: 16 byte entropy
     {
       RawHDSeed restoredSeed(16, 0);
-      return librustzcash_restore_seed_from_phase(restoredSeed.data(), 16, phrase.c_str());
+      return hd_seed::phrase_to_entropy(phrase, lang, rust::Slice<uint8_t>{restoredSeed.data(), 16});
     }
     else if (iCount==18) //18 word mnemonic : 24 byte entropy
     {
       RawHDSeed restoredSeed(24, 0);
-      return librustzcash_restore_seed_from_phase(restoredSeed.data(), 24, phrase.c_str());
+      return hd_seed::phrase_to_entropy(phrase, lang, rust::Slice<uint8_t>{restoredSeed.data(), 24});
     }
     else if (iCount==24) //24 word mnemonic: 32 byte entropy
     {
-      //Restore from Phrase
       RawHDSeed restoredSeed(32, 0);
-      return librustzcash_restore_seed_from_phase(restoredSeed.data(), 32, phrase.c_str());
+      return hd_seed::phrase_to_entropy(phrase, lang, rust::Slice<uint8_t>{restoredSeed.data(), 32});
     }
     else
     {
@@ -101,12 +98,13 @@ bool HDSeed::IsValidPhrase(std::string &phrase)
     }
 }
 
-void HDSeed::GetPhrase(std::string &phrase)
+void HDSeed::GetPhrase(std::string &phrase, uint32_t langCode)
 {
     auto rawSeed = this->RawSeed();
-    char *rustPhrase = librustzcash_get_seed_phrase(rawSeed.data(), rawSeed.size() );
-    std::string newPhrase(rustPhrase);
-    phrase = newPhrase;
+    auto lang = static_cast<hd_seed::MnemonicLanguage>(langCode);
+    phrase = std::string(hd_seed::entropy_to_phrase(
+        rust::Slice<const uint8_t>{rawSeed.data(), rawSeed.size()},
+        lang));
 }
 
 uint256 HDSeed::Fingerprint() const
@@ -190,23 +188,203 @@ libzcash::SaplingPaymentAddress SaplingExtendedFullViewingKey::DefaultAddress() 
     return addr.value().second;
 }
 
+bool SaplingExtendedFullViewingKey::DeriveIVKinternal(libzcash::SaplingIncomingViewingKey* ivk) const
+{
+    // Build the 128-byte DFVK: fvk (96 bytes) followed by dk (32 bytes).
+    // sapling_derive_internal_fvk hashes fvk||dk, so the real dk is essential.
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+
+    SaplingDiversifiableFullViewingKey_FFI_t dfvk_t;
+    SaplingIncomingViewingKey_FFI_t ivk_t;
+
+    ss << fvk;
+    ss << dk;
+    ss >> dfvk_t;
+
+    bool rustCompleted = sapling_keys::dfvk_to_ivk_internal(dfvk_t, ivk_t);
+
+    if (rustCompleted) {
+        rs << ivk_t;
+        rs >> *ivk;
+    }
+
+    memory_cleanse(ss.data(), ss.size());
+    memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(dfvk_t.data(), dfvk_t.size());
+    memory_cleanse(ivk_t.data(), ivk_t.size());
+
+    return rustCompleted;
+}
+
+bool SaplingExtendedFullViewingKey::DeriveNKinternal(uint256* nk) const
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+
+    SaplingDiversifiableFullViewingKey_FFI_t dfvk_t;
+    SaplingIncomingViewingKey_FFI_t nk_t;  // reuse 32-byte type
+
+    ss << fvk;
+    ss << dk;
+    ss >> dfvk_t;
+
+    bool rustCompleted = sapling_keys::dfvk_to_nk_internal(dfvk_t, nk_t);
+
+    if (rustCompleted) {
+        rs << nk_t;
+        rs >> *nk;
+    }
+
+    memory_cleanse(ss.data(), ss.size());
+    memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(dfvk_t.data(), dfvk_t.size());
+    memory_cleanse(nk_t.data(), nk_t.size());
+
+    return rustCompleted;
+}
+
+bool SaplingExtendedFullViewingKey::DeriveOVKinternal(libzcash::SaplingOutgoingViewingKey* ovk) const
+{
+    // The internal OVK is derived by sapling_derive_internal_fvk(fvk, dk) as r[32..].
+    // The real dk is required: zeroing it produces a wrong ovk_internal.
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+
+    SaplingDiversifiableFullViewingKey_FFI_t dfvk_t;
+    SaplingOutgoingViewingKey_FFI_t ovk_t;
+
+    ss << fvk;
+    ss << dk;
+    ss >> dfvk_t;
+
+    bool rustCompleted = sapling_keys::dfvk_to_ovk_internal(dfvk_t, ovk_t);
+
+    if (rustCompleted) {
+        rs << ovk_t;
+        rs >> *ovk;
+    }
+
+    memory_cleanse(ss.data(), ss.size());
+    memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(dfvk_t.data(), dfvk_t.size());
+    memory_cleanse(ovk_t.data(), ovk_t.size());
+
+    return rustCompleted;
+}
+
+bool SaplingExtendedFullViewingKey::DeriveAddressInternal(libzcash::SaplingPaymentAddress* addr, diversifier_t diversifier) const
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+
+    SaplingDiversifiableFullViewingKey_FFI_t dfvk_t;
+    SaplingPaymentAddress_FFI_t address_t;
+
+    ss << fvk;
+    ss << dk;
+    ss >> dfvk_t;
+
+    bool rustCompleted = sapling_keys::dfvk_to_address_internal(dfvk_t, diversifier, address_t);
+
+    if (rustCompleted) {
+        rs << address_t;
+        rs >> *addr;
+    }
+
+    memory_cleanse(ss.data(), ss.size());
+    memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(dfvk_t.data(), dfvk_t.size());
+    memory_cleanse(address_t.data(), address_t.size());
+
+    return rustCompleted;
+}
+
+bool SaplingExtendedFullViewingKey::DeriveAddressFromIndexInternal(libzcash::SaplingPaymentAddress* addr, blob88 diversifier_index) const
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream di_ss(SER_NETWORK, PROTOCOL_VERSION);
+
+    SaplingDiversifiableFullViewingKey_FFI_t dfvk_t;
+    SaplingPaymentAddress_FFI_t address_t;
+    uint88_t di_t;
+
+    ss << fvk;
+    ss << dk;
+    ss >> dfvk_t;
+
+    di_ss << diversifier_index;
+    di_ss >> di_t;
+
+    bool rustCompleted = sapling_keys::dfvk_to_address_from_index_internal(dfvk_t, di_t, address_t);
+
+    if (rustCompleted) {
+        rs << address_t;
+        rs >> *addr;
+    }
+
+    memory_cleanse(ss.data(), ss.size());
+    memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(di_ss.data(), di_ss.size());
+    memory_cleanse(dfvk_t.data(), dfvk_t.size());
+    memory_cleanse(address_t.data(), address_t.size());
+    memory_cleanse(di_t.data(), di_t.size());
+
+    return rustCompleted;
+}
+
+bool SaplingExtendedFullViewingKey::DefaultAddressInternal(libzcash::SaplingPaymentAddress* addr) const
+{
+    // Derive the change address using the proper ZIP 32 internal dk derivation.
+    // Serializes as [fvk(96) || dk(32)] = 128-byte DFVK and calls the Rust
+    // DiversifiableFullViewingKey::change_address() which derives dk_internal
+    // via sapling_derive_internal_fvk, producing a visually distinct address.
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+
+    SaplingDiversifiableFullViewingKey_FFI_t dfvk_t;
+    SaplingPaymentAddress_FFI_t address_t;
+
+    // Build the 128-byte DFVK: fvk (96 bytes) followed by dk (32 bytes)
+    ss << fvk;
+    ss << dk;
+    ss >> dfvk_t;
+
+    bool rustCompleted = sapling_keys::dfvk_to_change_address(dfvk_t, address_t);
+
+    if (rustCompleted) {
+        rs << address_t;
+        rs >> *addr;
+    }
+
+    memory_cleanse(ss.data(), ss.size());
+    memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(dfvk_t.data(), dfvk_t.size());
+    memory_cleanse(address_t.data(), address_t.size());
+
+    return rustCompleted;
+}
+
 SaplingExtendedSpendingKey SaplingExtendedSpendingKey::Master(const HDSeed& seed, bool bip39Enabled)
 {
     auto rawSeed = seed.RawSeed();
     CSerializeData m_bytes(SAPLING_ZIP32_XSK_SIZE);
 
-    unsigned char* bip39_seed = librustzcash_get_bip39_seed(rawSeed.data(),rawSeed.size());
-
     if (bip39Enabled) {
+        std::array<uint8_t, 64> bip39_seed;
+        hd_seed::entropy_to_bip39_seed(
+            rust::Slice<const uint8_t>{rawSeed.data(), rawSeed.size()},
+            bip39_seed);
         librustzcash_zip32_xsk_master(
-            bip39_seed,
+            bip39_seed.data(),
             64,
             reinterpret_cast<unsigned char*>(m_bytes.data()));
     } else {
-      librustzcash_zip32_xsk_master(
-          rawSeed.data(),
-          rawSeed.size(),
-          reinterpret_cast<unsigned char*>(m_bytes.data()));
+        librustzcash_zip32_xsk_master(
+            rawSeed.data(),
+            rawSeed.size(),
+            reinterpret_cast<unsigned char*>(m_bytes.data()));
     }
 
 
@@ -232,6 +410,30 @@ SaplingExtendedSpendingKey SaplingExtendedSpendingKey::Derive(uint32_t i) const
     SaplingExtendedSpendingKey xsk_i;
     ss_i >> xsk_i;
     return xsk_i;
+}
+
+bool SaplingExtendedSpendingKey::DeriveInternal(SaplingExtendedSpendingKey* xsk_int) const
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
+
+    SaplingExtendedSpendingKey_FFI_t xsk_in_t;
+    SaplingExtendedSpendingKey_FFI_t xsk_out_t;
+
+    ss << *this;
+    ss >> xsk_in_t;
+
+    xsk_out_t = sapling_keys::xsk_derive_internal(xsk_in_t);
+
+    rs << xsk_out_t;
+    rs >> *xsk_int;
+
+    memory_cleanse(ss.data(), ss.size());
+    memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(xsk_in_t.data(), xsk_in_t.size());
+    memory_cleanse(xsk_out_t.data(), xsk_out_t.size());
+
+    return true;
 }
 
 SaplingExtendedFullViewingKey SaplingExtendedSpendingKey::ToXFVK() const
@@ -265,11 +467,14 @@ OrchardExtendedSpendingKeyPirate OrchardExtendedSpendingKeyPirate::Master(const 
 
     //Get raw seed to derive Master Spending key from
     auto rawSeed = seed.RawSeed();
-    unsigned char* bip39_seed = librustzcash_get_bip39_seed(rawSeed.data(),rawSeed.size());
+    std::array<uint8_t, 64> bip39_seed = {};
 
     //Call rust FFI
     if (bip39Enabled) {
-        orchard_keys::derive_master_key(rust::Slice<const uint8_t>{bip39_seed, 64}, xsk_t_out);
+        hd_seed::entropy_to_bip39_seed(
+            rust::Slice<const uint8_t>{rawSeed.data(), rawSeed.size()},
+            bip39_seed);
+        orchard_keys::derive_master_key(rust::Slice<const uint8_t>{bip39_seed.data(), 64}, xsk_t_out);
     } else {
         orchard_keys::derive_master_key(rust::Slice<const uint8_t>{rawSeed.data(), rawSeed.size()}, xsk_t_out);
     }
@@ -282,7 +487,7 @@ OrchardExtendedSpendingKeyPirate OrchardExtendedSpendingKeyPirate::Master(const 
     memory_cleanse(rs.data(), rs.size());
     memory_cleanse(xsk_t_out.data(), xsk_t_out.size());
     memory_cleanse(rawSeed.data(), rawSeed.size());
-    memory_cleanse(bip39_seed, sizeof(bip39_seed));
+    memory_cleanse(bip39_seed.data(), bip39_seed.size());
 
     //Return data
     return xsk;

@@ -4,19 +4,22 @@
 
 #include "openphrasedialog.h"
 #include "ui_openphrasedialog.h"
+#include "walletmodel.h"
+#include "optionsmodel.h"
 
-// #include "guiutil.h"
-// #include "walletmodel.h"
+#include <QString>
 
-#include <QUrl>
-
-OpenPhraseDialog::OpenPhraseDialog(QWidget *parent, QString phraseIn) :
+OpenPhraseDialog::OpenPhraseDialog(QWidget *parent, WalletModel *model) :
     QDialog(parent),
-    phrase(phraseIn),
+    walletModel(model),
     ui(new Ui::OpenPhraseDialog)
 {
     ui->setupUi(this);
-    ui->txtPhrase->setPlainText(phrase);
+    std::string phrase;
+    int lang = walletModel ? walletModel->getOptionsModel()->getSeedPhraseLanguage() : 0;
+    if (walletModel && walletModel->getSeedPhrase(phrase, lang)) {
+        ui->txtPhrase->setPlainText(QString::fromStdString(phrase));
+    }
 }
 
 OpenPhraseDialog::~OpenPhraseDialog()

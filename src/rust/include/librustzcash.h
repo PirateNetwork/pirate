@@ -320,33 +320,6 @@ extern "C" {
         unsigned char *addr_ret
     );
 
-    /// Fills the provided buffer with random bytes. This is intended to
-    /// be a cryptographically secure RNG; it uses Rust's `OsRng`, which
-    /// is implemented in terms of the `getrandom` crate. The first call
-    /// to this function may block until sufficient randomness is available.
-    void librustzcash_getrandom(
-        unsigned char *buf,
-        size_t buf_len
-    );
-
-    uint32_t librustzcash_restore_seed_from_phase(
-        unsigned char *buf,
-        size_t buf_len,
-        const char *seed_phrase
-    );
-
-    unsigned char* librustzcash_get_bip39_seed(
-        unsigned char *buf,
-        size_t buf_len
-    );
-
-    //Get phrase for 16,24 or 32 byte entropy,
-    //which corresponds to a 12, 18 or 24 word mnemonic
-    char* librustzcash_get_seed_phrase(
-        unsigned char *seed,
-        unsigned char length
-    );
-
 #ifdef __cplusplus
 }
 #endif

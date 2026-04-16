@@ -242,6 +242,7 @@ public:
     bool IsSpendable(const CTxDestination& dest) const;
     bool getPrivKey(const CKeyID &address, CKey& vchPrivKeyOut) const;
     bool getSeedPhrase(std::string &phrase) const;
+    bool getSeedPhrase(std::string &phrase, int langCode) const;
     void rescan();
     void getOutputs(const std::vector<COutPoint>& vOutpoints, std::vector<COutput>& vOutputs);
     bool isSpent(const COutPoint& outpoint) const;

@@ -767,7 +767,7 @@ bool CWalletDB::WriteCryptedOrchardFullViewingKey(
 bool CWalletDB::WriteOrchardPaymentAddress(
     const libzcash::OrchardIncomingViewingKey &ivk,
     const libzcash::OrchardPaymentAddress &addr,
-    OrchardKeyScope scope)
+    KeyScope scope)
 {
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
@@ -1683,6 +1683,17 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 pwallet->mapZAddressBook[key.DefaultAddress()].purpose = "unknown";
             }
 
+            // Also register the internal (change) address in the address book so
+            // the Qt model can display it with scope "Change" on startup.
+            libzcash::SaplingPaymentAddress internalAddr;
+            if (key.ToXFVK().DefaultAddressInternal(&internalAddr)) {
+                auto ri = pwallet->mapZAddressBook.find(internalAddr);
+                if (ri == pwallet->mapZAddressBook.end()) {
+                    pwallet->mapZAddressBook[internalAddr].name = "z-sapling";
+                    pwallet->mapZAddressBook[internalAddr].purpose = "unknown";
+                }
+            }
+
             //add checks for integrity
             wss.nSaplingKeys++;
         }
@@ -1707,6 +1718,16 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (r == pwallet->mapZAddressBook.end()) {
                 pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
                 pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
+            }
+
+            // Also register the internal (change) address.
+            libzcash::SaplingPaymentAddress internalAddr;
+            if (extfvk.DefaultAddressInternal(&internalAddr)) {
+                auto ri = pwallet->mapZAddressBook.find(internalAddr);
+                if (ri == pwallet->mapZAddressBook.end()) {
+                    pwallet->mapZAddressBook[internalAddr].name = "z-sapling";
+                    pwallet->mapZAddressBook[internalAddr].purpose = "unknown";
+                }
             }
 
             wss.fIsEncrypted = true;
@@ -1739,6 +1760,16 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
             }
 
+            // Also register the internal (change) address.
+            libzcash::SaplingPaymentAddress internalAddr;
+            if (extfvk.DefaultAddressInternal(&internalAddr)) {
+                auto ri = pwallet->mapZAddressBook.find(internalAddr);
+                if (ri == pwallet->mapZAddressBook.end()) {
+                    pwallet->mapZAddressBook[internalAddr].name = "z-sapling";
+                    pwallet->mapZAddressBook[internalAddr].purpose = "unknown";
+                }
+            }
+
             // Viewing keys have no birthday information for now,
             // so set the wallet birthday to the beginning of time.
             pwallet->nTimeFirstKey = 1;
@@ -1764,6 +1795,16 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (r == pwallet->mapZAddressBook.end()) {
                 pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
                 pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
+            }
+
+            // Also register the internal (change) address.
+            libzcash::SaplingPaymentAddress internalAddr;
+            if (extfvk.DefaultAddressInternal(&internalAddr)) {
+                auto ri = pwallet->mapZAddressBook.find(internalAddr);
+                if (ri == pwallet->mapZAddressBook.end()) {
+                    pwallet->mapZAddressBook[internalAddr].name = "z-sapling";
+                    pwallet->mapZAddressBook[internalAddr].purpose = "unknown";
+                }
             }
 
             // Viewing keys have no birthday information for now,
@@ -1981,6 +2022,17 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 pwallet->mapZAddressBook[addr].purpose = "unknown";
             }
 
+            // Also register the internal (change) address in the address book so
+            // the Qt model can display it with scope "Change" on startup.
+            libzcash::OrchardPaymentAddress internalAddr;
+            if (extfvk.fvk.DeriveDefaultAddressInternal(&internalAddr)) {
+                auto ri = pwallet->mapZAddressBook.find(internalAddr);
+                if (ri == pwallet->mapZAddressBook.end()) {
+                    pwallet->mapZAddressBook[internalAddr].name = "orchard";
+                    pwallet->mapZAddressBook[internalAddr].purpose = "unknown";
+                }
+            }
+
             //add checks for integrity
             wss.nOrchardKeys++;
         }
@@ -1995,7 +2047,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
 
             if (!pwallet->LoadCryptedOrchardZKey(extfvkFinger, vchCryptedSecret, extfvk))
             {
-                strErr = "Error reading wallet database: LoadCryptedSaplingZKey failed";
+                strErr = "Error reading wallet database: LoadCryptedOrchardZKey failed";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
@@ -2012,6 +2064,16 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (r == pwallet->mapZAddressBook.end()) {
                 pwallet->mapZAddressBook[addr].name = "orchard";
                 pwallet->mapZAddressBook[addr].purpose = "unknown";
+            }
+
+            // Also register the internal (change) address.
+            libzcash::OrchardPaymentAddress internalAddr;
+            if (extfvk.fvk.DeriveDefaultAddressInternal(&internalAddr)) {
+                auto ri = pwallet->mapZAddressBook.find(internalAddr);
+                if (ri == pwallet->mapZAddressBook.end()) {
+                    pwallet->mapZAddressBook[internalAddr].name = "orchard";
+                    pwallet->mapZAddressBook[internalAddr].purpose = "unknown";
+                }
             }
 
             wss.fIsEncrypted = true;
@@ -2051,6 +2113,16 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 pwallet->mapZAddressBook[addr].purpose = "unknown";
             }
 
+            // Also register the internal (change) address.
+            libzcash::OrchardPaymentAddress internalAddr;
+            if (extfvk.fvk.DeriveDefaultAddressInternal(&internalAddr)) {
+                auto ri = pwallet->mapZAddressBook.find(internalAddr);
+                if (ri == pwallet->mapZAddressBook.end()) {
+                    pwallet->mapZAddressBook[internalAddr].name = "orchard";
+                    pwallet->mapZAddressBook[internalAddr].purpose = "unknown";
+                }
+            }
+
             // Viewing keys have no birthday information for now,
             // so set the wallet birthday to the beginning of time.
             pwallet->nTimeFirstKey = 1;
@@ -2064,7 +2136,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
             if (!pwallet->LoadCryptedOrchardExtendedFullViewingKey(extfvkFinger, vchCryptedSecret, extfvk))
             {
-                strErr = "Error reading wallet database: LoadCryptedSaplingExtendedFullViewingKey failed";
+                strErr = "Error reading wallet database: LoadCryptedOrchardExtendedFullViewingKey failed";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
@@ -2083,6 +2155,16 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (r == pwallet->mapZAddressBook.end()) {
                 pwallet->mapZAddressBook[addr].name = "orchard";
                 pwallet->mapZAddressBook[addr].purpose = "unknown";
+            }
+
+            // Also register the internal (change) address.
+            libzcash::OrchardPaymentAddress internalAddr;
+            if (extfvk.fvk.DeriveDefaultAddressInternal(&internalAddr)) {
+                auto ri = pwallet->mapZAddressBook.find(internalAddr);
+                if (ri == pwallet->mapZAddressBook.end()) {
+                    pwallet->mapZAddressBook[internalAddr].name = "orchard";
+                    pwallet->mapZAddressBook[internalAddr].purpose = "unknown";
+                }
             }
 
             // Viewing keys have no birthday information for now,
@@ -2116,7 +2198,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             libzcash::OrchardPaymentAddress addr;
             ssKey >> addr;
             libzcash::OrchardIncomingViewingKey ivk;
-            OrchardKeyScope scope = OrchardKeyScope::External;
+            KeyScope scope = KeyScope::External;
             
             // Save original value data before attempting to read
             CDataStream ssValueCopy(ssValue);
@@ -2127,7 +2209,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 std::pair<libzcash::OrchardIncomingViewingKey, uint8_t> ivkWithScope;
                 ssValue >> ivkWithScope;
                 ivk = ivkWithScope.first;
-                scope = static_cast<OrchardKeyScope>(ivkWithScope.second);
+                scope = static_cast<KeyScope>(ivkWithScope.second);
                 readSuccess = true;
             } catch (...) {
                 // Fall back to old format (just ivk) - use the copy
@@ -2136,7 +2218,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             
             if (!readSuccess) {
                 ssValueCopy >> ivk;
-                scope = OrchardKeyScope::External;
+                scope = KeyScope::External;
                 // Mark that we need to rederive scopes for all addresses
                 wss.fNeedOrchardScopeRederivation = true;
                 LogPrintf("Orchard address loaded with old format (no scope) - will rederive scopes after load\n");

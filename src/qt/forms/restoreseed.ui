@@ -50,6 +50,29 @@
        </widget>
       </item>
       <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_lang">
+        <item>
+         <widget class="QLabel" name="label_lang">
+          <property name="text">
+           <string>Language:</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QComboBox" name="cmbLanguage">
+          <item><property name="text"><string notr="true">English</string></property></item>
+          <item><property name="text"><string notr="true">中文(简体)</string></property></item>
+          <item><property name="text"><string notr="true">中文(繁體)</string></property></item>
+          <item><property name="text"><string notr="true">Français</string></property></item>
+          <item><property name="text"><string notr="true">Italiano</string></property></item>
+          <item><property name="text"><string notr="true">日本語</string></property></item>
+          <item><property name="text"><string notr="true">한국어</string></property></item>
+          <item><property name="text"><string notr="true">Español</string></property></item>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
        <widget class="QPlainTextEdit" name="txtSeed">
         <property name="readOnly">
          <bool>false</bool>

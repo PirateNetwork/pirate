@@ -133,39 +133,7 @@ private:
      */
     void setConsolidationResult(int numTxCreated, const CAmount& amountConsolidated, const std::vector<std::string>& consolidationTxIds);
 
-    /**
-     * @brief Get Orchard extended spending key for address
-     * 
-     * Retrieves the extended spending key associated with an Orchard address
-     * for note detection and spending operations.
-     * 
-     * @param address The Orchard payment address
-     * @param spendingKey Output parameter for the extended spending key
-     * @return true if key was found, false otherwise
-     */
-    bool getOrchardExtendedSpendingKey(const libzcash::OrchardPaymentAddress& address, 
-                                     libzcash::OrchardExtendedSpendingKeyPirate& spendingKey);
-
 private:
-    /**
-     * @brief Lock Orchard notes to prevent double-spending
-     * 
-     * Locks selected Orchard notes to prevent concurrent operations
-     * from using them during consolidation.
-     * 
-     * @param selectedInputs Vector of Orchard note entries to lock
-     */
-    void lockOrchardNotes(const std::vector<OrchardNoteEntry>& selectedInputs);
-
-    /**
-     * @brief Unlock Orchard notes after operation completion
-     * 
-     * Releases locks on Orchard notes once consolidation is complete
-     * or cancelled, making them available for other operations.
-     * 
-     * @param selectedInputs Vector of Orchard note entries to unlock
-     */
-    void unlockOrchardNotes(const std::vector<OrchardNoteEntry>& selectedInputs);
 };
 
 #endif /* ASYNCRPCOPERATION_ORCHARDCONSOLIDATION_H */

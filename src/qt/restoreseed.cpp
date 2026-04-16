@@ -16,3 +16,8 @@ RestoreSeed::~RestoreSeed()
 {
 
 }
+
+int RestoreSeed::selectedLanguage() const
+{
+    return ui->cmbLanguage->currentIndex();
+}
