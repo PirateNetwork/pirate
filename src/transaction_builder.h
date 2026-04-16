@@ -358,10 +358,10 @@ public:
     // Rust builders via ConvertRaw*(). The staging vectors above are cleared
     // after each convert call, so these counters preserve the committed counts
     // for use by IsValidSize().
-    uint64_t nCommittedSaplingSpends  = 0;
-    uint64_t nCommittedSaplingOutputs = 0;
-    uint64_t nCommittedOrchardSpends  = 0;
-    uint64_t nCommittedOrchardOutputs = 0;
+    size_t nCommittedSaplingSpends  = 0;
+    size_t nCommittedSaplingOutputs = 0;
+    size_t nCommittedOrchardSpends  = 0;
+    size_t nCommittedOrchardOutputs = 0;
 
 
     TransactionBuilder();
@@ -495,10 +495,6 @@ public:
         READWRITE(orchardAnchor);
         READWRITE(vOrchardSpends);
         READWRITE(vOrchardOutputs);
-        READWRITE(nCommittedSaplingSpends);
-        READWRITE(nCommittedSaplingOutputs);
-        READWRITE(nCommittedOrchardSpends);
-        READWRITE(nCommittedOrchardOutputs);
         READWRITE(fee);
         READWRITE(checksum);
     }
