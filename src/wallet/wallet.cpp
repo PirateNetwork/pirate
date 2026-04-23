@@ -7038,6 +7038,7 @@ static void DecryptOrchardNoteWorker(
             auto note = result.value();
             nd.value = note.value();
             nd.address = note.GetAddress();
+            nd.fNoteDataInitialized = true;
 
             LogPrintf("\n\nOrchard Transaction Found %s, %i\n\n", vHash[i].ToString(), vPosition[i]);
             if (nd.value >= minTxValue) {
@@ -7209,6 +7210,7 @@ static void DecryptSaplingNoteWorker(
             auto note = result.value();
             nd.value = note.value();
             nd.address = address;
+            nd.fNoteDataInitialized = true;
 
             if (nd.value >= minTxValue) {
                 //Only add notes greater then this value
@@ -9180,13 +9182,10 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
             //Check for unspent inputs or spend less than N Blocks ago. (Sapling)
             for (auto & pair : pwtx->mapSaplingNoteData) {
               SaplingNoteData nd = pair.second;
-              if (!nd.nullifier || pwalletMain->GetSaplingSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
+              if (!nd.fNoteDataInitialized || !nd.nullifier || pwalletMain->GetSaplingSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
                 LogPrint("deletetx","DeleteTx - Unspent sapling input tx %s\n", pwtx->GetHash().ToString());
-                //Don't keep zero value notes
-                if (nd.value > 0) {
-                    deleteTx = false;
-                    continue;
-                }
+                deleteTx = false;
+                break;
               }
             }
 
@@ -9220,13 +9219,10 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
             //Check for unspent inputs or spend less than N Blocks ago. (Orchard)
             for (auto & pair : pwtx->mapOrchardNoteData) {
               OrchardNoteData nd = pair.second;
-              if (!nd.nullifier || pwalletMain->GetOrchardSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
+              if (!nd.fNoteDataInitialized || !nd.nullifier || pwalletMain->GetOrchardSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
                 LogPrint("deletetx","DeleteTx - Unspent orchard input tx %s\n", pwtx->GetHash().ToString());
-                //Don't keep zero value notes
-                if (nd.value > 0) {
-                    deleteTx = false;
-                    continue;
-                }
+                deleteTx = false;
+                break;
               }
             }
 
@@ -9392,51 +9388,96 @@ bool CWallet::initalizeArcTx() {
     AssertLockHeld(cs_main);
     AssertLockHeld(cs_wallet);
 
+    int txTotal = 0, saplingInitialized = 0, saplingFailed = 0, orchardInitialized = 0, orchardFailed = 0;
+
     for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
         const uint256& wtxid = (*it).first;
         const CWalletTx wtx = (*it).second;
         int txHeight = chainActive.Tip()->nHeight - wtx.GetDepthInMainChain();
+        txTotal++;
 
         if (wtx.GetDepthInMainChain() > 0) {
             map<uint256, ArchiveTxPoint>::iterator ait = mapArcTxs.find(wtxid);
             if (ait == mapArcTxs.end()){
+                LogPrint("deletetx","initalizeArcTx - tx %s missing from mapArcTxs, triggering rescan\n", wtxid.ToString());
                 return false;
             }
         }
 
         //Check for sporutdata and rescan if found to remove
         if (wtx.mapSproutNoteData.size() > 0) {
+            LogPrint("deletetx","initalizeArcTx - tx %s has sprout note data, triggering rescan\n", wtxid.ToString());
             return false;
         }
 
         //Initalize in memory saplingnotedata
+        LogPrint("deletetx","initalizeArcTx - tx %s: %u sapling outputs, %u in mapSaplingNoteData\n",
+            wtxid.ToString(), wtx.GetSaplingOutputsCount(), wtx.mapSaplingNoteData.size());
         for (uint32_t i = 0; i < wtx.GetSaplingOutputsCount(); ++i) {
             auto op = SaplingOutPoint(wtxid, i);
 
             if (wtx.mapSaplingNoteData.count(op) != 0) {
                 auto nd = wtx.mapSaplingNoteData.at(op);
-                auto decrypted = wtx.DecryptSaplingNote(Params().GetConsensus(), txHeight, op);
-                if (decrypted) {
-                    nd.value = decrypted->first.value();
-                    nd.address = decrypted->second;
-                    //Set the updated Sapling Note Data
-                    it->second.mapSaplingNoteData[op] = nd;
+                auto vOutputs = wtx.GetSaplingOutputs();
+                bool decryptSuccess = false;
+                // nd.ivk is in-memory only and empty after DB load; try all wallet IVKs
+                for (auto ivkIt = setSaplingIncomingViewingKeys.begin(); ivkIt != setSaplingIncomingViewingKeys.end(); ++ivkIt) {
+                    SaplingIncomingViewingKey ivk = ivkIt->first;
+                    auto maybe_pt = SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[i], ivk);
+                    if (maybe_pt) {
+                        SaplingPaymentAddress address;
+                        assert(ivk.DeriveAddress(&address, maybe_pt.value().d));
+                        nd.ivk = ivk;
+                        nd.value = maybe_pt.value().value();
+                        nd.address = address;
+                        nd.fNoteDataInitialized = true;
+                        it->second.mapSaplingNoteData[op] = nd;
+                        saplingInitialized++;
+                        LogPrint("deletetx","initalizeArcTx - tx %s output %u initialized (value=%li)\n",
+                            wtxid.ToString(), i, nd.value);
+                        decryptSuccess = true;
+                        break;
+                    }
+                }
+                if (!decryptSuccess) {
+                    saplingFailed++;
+                    LogPrintf("initalizeArcTx - tx %s output %u decryption FAILED (tried %u IVKs)\n",
+                        wtxid.ToString(), i, (unsigned)setSaplingIncomingViewingKeys.size());
                 }
             }
         }
 
         //Initalize in memory orchardnotedata
+        LogPrint("deletetx","initalizeArcTx - tx %s: %u orchard actions, %u in mapOrchardNoteData\n",
+            wtxid.ToString(), wtx.GetOrchardActionsCount(), wtx.mapOrchardNoteData.size());
         for (uint32_t i = 0; i < wtx.GetOrchardActionsCount(); ++i) {
             auto op = OrchardOutPoint(wtxid, i);
 
             if (wtx.mapOrchardNoteData.count(op) != 0) {
                 auto nd = wtx.mapOrchardNoteData.at(op);
-                auto decrypted = wtx.DecryptOrchardNote(op);
-                if (decrypted) {
-                    nd.value = decrypted->first.value();
-                    nd.address = decrypted->second;
-                    //Set the updated Sapling Note Data
-                    it->second.mapOrchardNoteData[op] = nd;
+                auto vActions = wtx.GetOrchardActions();
+                bool decryptSuccess = false;
+                // nd.ivk is in-memory only and empty after DB load; try all wallet IVKs
+                for (auto ivkIt = setOrchardIncomingViewingKeys.begin(); ivkIt != setOrchardIncomingViewingKeys.end(); ++ivkIt) {
+                    OrchardIncomingViewingKey ivk = ivkIt->first;
+                    auto maybe_pt = OrchardNotePlaintext::AttemptDecryptOrchardAction(&vActions[i], ivk);
+                    if (maybe_pt) {
+                        nd.ivk = ivk;
+                        nd.value = maybe_pt.value().value();
+                        nd.address = maybe_pt.value().GetAddress();
+                        nd.fNoteDataInitialized = true;
+                        it->second.mapOrchardNoteData[op] = nd;
+                        orchardInitialized++;
+                        LogPrint("deletetx","initalizeArcTx - tx %s action %u initialized (value=%li)\n",
+                            wtxid.ToString(), i, nd.value);
+                        decryptSuccess = true;
+                        break;
+                    }
+                }
+                if (!decryptSuccess) {
+                    orchardFailed++;
+                    LogPrintf("initalizeArcTx - tx %s action %u decryption FAILED (tried %u IVKs)\n",
+                        wtxid.ToString(), i, (unsigned)setOrchardIncomingViewingKeys.size());
                 }
             }
         }
@@ -9444,6 +9485,9 @@ bool CWallet::initalizeArcTx() {
         ArchiveTxPoint arcTx;
         AddToArcTxs(wtx, txHeight, arcTx);
     }
+
+    LogPrintf("initalizeArcTx - complete: %d txs, sapling initialized=%d failed=%d, orchard initialized=%d failed=%d\n",
+        txTotal, saplingInitialized, saplingFailed, orchardInitialized, orchardFailed);
 
     for (map<uint256, ArchiveTxPoint>::iterator it = mapArcTxs.begin(); it != mapArcTxs.end(); it++) {
         //Add to mapAddressTxids the Archived that are no longer in the wallet

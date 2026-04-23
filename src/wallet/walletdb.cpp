@@ -1138,6 +1138,7 @@ public:
     bool fIsEncrypted;
     bool fAnyUnordered;
     bool fNeedOrchardScopeRederivation;
+    bool fNeedZapAndRescan;
     int nFileVersion;
     vector<uint256> vWalletUpgrade;
 
@@ -1149,6 +1150,7 @@ public:
         fIsEncrypted = false;
         fAnyUnordered = false;
         fNeedOrchardScopeRederivation = false;
+        fNeedZapAndRescan = false;
         nFileVersion = 0;
     }
 };
@@ -1212,6 +1214,8 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         {
 
             if (nMaxConnections > 0) {
+                try
+                {
                 uint256 hash;
                 CWalletTx wtx;
 
@@ -1273,6 +1277,11 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
 
                 wss.nWalletTx++;
                 pwallet->AddToWallet(wtx, true, NULL, 0);
+                } catch (...) {
+                    strErr = strprintf("Error deserializing %s record - wallet will be rescanned", strType);
+                    LogPrintf("Loading Error %s - %s\n", strType, strErr);
+                    return false;
+                }
             }
         }
         else if (strType == "arctx" || strType == "carctx") //carctx is encrypted arctx
@@ -1305,59 +1314,75 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                     wss.nArcTx++;
                     pwallet->LoadArcTxs(txid, arcTxPt);
                 }
-                catch (...) {}
+                catch (...) {
+                    LogPrintf("Error deserializing arctx/carctx record - will zap all transactions and rescan\n");
+                    wss.fNeedZapAndRescan = true;
+                }
             }
 
         }
         else if (strType == "arczsop" || strType == "carczsop") //carczsop is encrypted arczsop
         {
             if (nMaxConnections > 0) {
-                uint256 nullifier;
-                SaplingOutPoint op;
-                if (strType == "arczsop") {
-                    ssKey >> nullifier;
-                    ssValue >> op;
-                } else {
-                    uint256 chash;
-                    ssKey >> chash;
-                    vector<unsigned char> vchCryptedSecret;
-                    ssValue >> vchCryptedSecret;
+                try
+                {
+                    uint256 nullifier;
+                    SaplingOutPoint op;
+                    if (strType == "arczsop") {
+                        ssKey >> nullifier;
+                        ssValue >> op;
+                    } else {
+                        uint256 chash;
+                        ssKey >> chash;
+                        vector<unsigned char> vchCryptedSecret;
+                        ssValue >> vchCryptedSecret;
 
-                    if (!pwallet->DecryptArchivedSaplingOutpoint(chash, vchCryptedSecret, nullifier, op))
-                    {
-                        strErr = "Error reading wallet database: DecryptArchivedSaplingOutpoint failed";
-                        LogPrintf("Loading Error %s - %s\n", strType, strErr);
-                        return false;
+                        if (!pwallet->DecryptArchivedSaplingOutpoint(chash, vchCryptedSecret, nullifier, op))
+                        {
+                            strErr = "Error reading wallet database: DecryptArchivedSaplingOutpoint failed";
+                            LogPrintf("Loading Error %s - %s\n", strType, strErr);
+                            return false;
+                        }
                     }
-                }
 
-                pwallet->AddToArcSaplingOutPoints(nullifier, op);
+                    pwallet->AddToArcSaplingOutPoints(nullifier, op);
+                }
+                catch (...) {
+                    LogPrintf("Error deserializing %s record - will zap all transactions and rescan\n", strType);
+                    wss.fNeedZapAndRescan = true;
+                }
             }
         }
-        else if (strType == "arcorchop" || strType == "carcorchop") //carczsop is encrypted arczsop
+        else if (strType == "arcorchop" || strType == "carcorchop") //carcorchop is encrypted arcorchop
         {
             if (nMaxConnections > 0) {
-                uint256 nullifier;
-                OrchardOutPoint op;
-                if (strType == "arcorchop") {
-                    ssKey >> nullifier;
-                    ssValue >> op;
-                } else {
-                    uint256 chash;
-                    ssKey >> chash;
-                    vector<unsigned char> vchCryptedSecret;
-                    ssValue >> vchCryptedSecret;
+                try
+                {
+                    uint256 nullifier;
+                    OrchardOutPoint op;
+                    if (strType == "arcorchop") {
+                        ssKey >> nullifier;
+                        ssValue >> op;
+                    } else {
+                        uint256 chash;
+                        ssKey >> chash;
+                        vector<unsigned char> vchCryptedSecret;
+                        ssValue >> vchCryptedSecret;
 
-                    if (!pwallet->DecryptArchivedOrchardOutpoint(chash, vchCryptedSecret, nullifier, op))
-                    {
-
-                        strErr = "Error reading wallet database: DecryptArchivedSaplingOutpoint failed";
-                        LogPrintf("Loading Error %s - %s\n", strType, strErr);
-                        return false;
+                        if (!pwallet->DecryptArchivedOrchardOutpoint(chash, vchCryptedSecret, nullifier, op))
+                        {
+                            strErr = "Error reading wallet database: DecryptArchivedOrchardOutpoint failed";
+                            LogPrintf("Loading Error %s - %s\n", strType, strErr);
+                            return false;
+                        }
                     }
-                }
 
-                pwallet->AddToArcOrchardOutPoints(nullifier, op);
+                    pwallet->AddToArcOrchardOutPoints(nullifier, op);
+                }
+                catch (...) {
+                    LogPrintf("Error deserializing %s record - will zap all transactions and rescan\n", strType);
+                    wss.fNeedZapAndRescan = true;
+                }
             }
         }
         //End transaction data records
@@ -2561,9 +2586,13 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
                 {
                     // Leave other errors alone, if we try to fix them we might make things worse.
                     fNoncriticalErrors = true; // ... but do warn the user there is something wrong.
-                    // set rescan for any error that is not vin-empty on staking chains.
-                    if ( deadTxns.empty() && strType == "tx")
-                        SoftSetBoolArg("-rescan", true);
+                    // On tx/ctx/outpoint deserialization failure, zap all tx records and rescan.
+                    if ( deadTxns.empty() && (strType == "tx" || strType == "ctx" ||
+                         strType == "arczsop" || strType == "carczsop" ||
+                         strType == "arcorchop" || strType == "carcorchop")) {
+                        LogPrintf("Error deserializing %s record - will zap all transactions and rescan\n", strType);
+                        wss.fNeedZapAndRescan = true;
+                    }
                 }
             }
             if (!strErr.empty())
@@ -2580,6 +2609,19 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
 
     if(!pwallet->LoadTempHeldCryptedData()) {
         LogPrintf("Loading Temp Held crypted data failed!!!\n");
+    }
+
+    // If any tx or arctx record failed to deserialize (e.g. version 5.x -> 6.0 format change),
+    // zap ALL transaction and archive transaction records from the DB so a clean rescan can rebuild them.
+    if (wss.fNeedZapAndRescan) {
+        LogPrintf("Transaction deserialization errors detected (possible version upgrade from 5.x to 6.0). "
+                  "Zapping all wallet transaction records and scheduling full rescan.\n");
+        vector<CWalletTx> vWtx;
+        DBErrors zapErr = ZapWalletTx(pwallet, vWtx);
+        if (zapErr != DB_LOAD_OK)
+            LogPrintf("Warning: ZapWalletTx returned error %d during deserialization recovery\n", (int)zapErr);
+        SoftSetBoolArg("-rescan", true);
+        fNoncriticalErrors = false; // treat as recoverable; rescan will rebuild
     }
 
     if ( !deadTxns.empty() )

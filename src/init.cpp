@@ -2251,9 +2251,13 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 strErrors << _("Error loading wallet.dat: Wallet corrupted") << "\n";
             else if (nLoadWalletRet == DB_NONCRITICAL_ERROR)
             {
-                string msg(_("Warning: error reading wallet.dat! All keys read correctly, but transaction data"
-                             " or address book entries might be missing or incorrect."));
-                InitWarning(msg);
+                // DB_NONCRITICAL_ERROR now only covers non-critical, non-transactional
+                // record failures (transaction deserialization failures are handled
+                // internally by LoadWallet via ZapWalletTx + SoftSetBoolArg("-rescan")).
+                // Log the warning but continue loading — arc tx verification below will
+                // catch any remaining inconsistencies.
+                LogPrintf("Warning: wallet.dat contains unrecognised non-critical records. Wallet will continue loading.\n");
+                uiInterface.InitMessage(_("Wallet loading with minor warnings..."));
             }
             else if (nLoadWalletRet == DB_TOO_NEW)
                 strErrors << _("Error loading wallet.dat: Wallet requires newer version of Pirate") << "\n";
@@ -2268,15 +2272,19 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         }
 
         bool fInitializeArcTx = true;
-        if (nLoadWalletRet == DB_LOAD_OK) {
+        // Run arc tx validation for both DB_LOAD_OK and DB_NONCRITICAL_ERROR —
+        // the latter can still have a valid wallet state with minor non-transactional warnings.
+        if (nLoadWalletRet == DB_LOAD_OK || nLoadWalletRet == DB_NONCRITICAL_ERROR) {
             uiInterface.InitMessage(_("Validating transaction archive..."));
-            bool fInitializeArcTx = false;
+            bool fInitializeArcTxInner = false;
             {
               LOCK2(cs_main, pwalletMain->cs_wallet);
               if (chainActive.Tip())
-                  fInitializeArcTx = pwalletMain->initalizeArcTx();
+                  fInitializeArcTxInner = pwalletMain->initalizeArcTx();
             }
-            if(!fInitializeArcTx && chainActive.Tip()) {
+            if(!fInitializeArcTxInner && chainActive.Tip()) {
+              fInitializeArcTx = false; // signal line ~2706 to trigger rescan after reload
+              SoftSetBoolArg("-rescan", true);
               //ArcTx validation failed, delete wallet point and clear vWtx
               delete pwalletMain;
               pwalletMain = NULL;
@@ -2331,28 +2339,16 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                   pwalletMain->seedEncyptionFP = seed.EncryptionFingerprint();
               }
 
-              DBErrors nLoadWalletRet = pwalletMain->LoadWallet(fFirstRun);
-              if (nLoadWalletRet != DB_LOAD_OK)
-              {
-                  if (nLoadWalletRet == DB_CORRUPT)
-                      strErrors << _("Error loading wallet.dat: Wallet corrupted") << "\n";
-                  else if (nLoadWalletRet == DB_NONCRITICAL_ERROR)
-                  {
-                      string msg(_("Warning: error reading wallet.dat! All keys read correctly, but transaction data"
-                                   " or address book entries might be missing or incorrect."));
-                      InitWarning(msg);
-                  }
-                  else if (nLoadWalletRet == DB_TOO_NEW)
-                      strErrors << _("Error loading wallet.dat: Wallet requires newer version of Pirate") << "\n";
-
-                  else if (nLoadWalletRet == DB_NEED_REWRITE)
-                  {
-                      strErrors << _("Wallet needed to be rewritten: restart Pirate to complete") << "\n";
-                      LogPrintf("%s", strErrors.str());
-                      return InitError(strErrors.str());
-                  }
-                  else
-                      strErrors << _("Error loading wallet.dat") << "\n";
+              // Reload wallet after zap — transactions are gone so this must succeed cleanly.
+              DBErrors nReloadWalletRet = pwalletMain->LoadWallet(fFirstRun);
+              if (nReloadWalletRet == DB_CORRUPT) {
+                  strErrors << _("Error loading wallet.dat: Wallet corrupted after zap") << "\n";
+              } else if (nReloadWalletRet == DB_NEED_REWRITE) {
+                  strErrors << _("Wallet needed to be rewritten: restart Pirate to complete") << "\n";
+                  LogPrintf("%s", strErrors.str());
+                  return InitError(strErrors.str());
+              } else if (nReloadWalletRet != DB_LOAD_OK) {
+                  strErrors << _("Error loading wallet.dat after arc tx zap") << "\n";
               }
 
             } else {
@@ -2364,8 +2360,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             }
 
         } else {
-            string msg(_("Warning: error reading wallet.dat! Archive Transaction verification skipped!!!"));
-            InitWarning(msg);
+            // Fatal wallet load error (DB_CORRUPT etc.) — strErrors already populated above.
+            LogPrintf("Wallet load failed with error %d, startup will abort if strErrors is non-empty.\n", (int)nLoadWalletRet);
         }
 
         if (GetBoolArg("-upgradewallet", fFirstRun))
