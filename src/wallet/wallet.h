@@ -450,13 +450,13 @@ public:
      * We initialize the height to -1 for the same reason as we do in SproutNoteData.
      * See the comment in that class for a full description.
      */
-    SaplingNoteData() : nullifier(), value {0} {
+    SaplingNoteData() : nullifier(), value {0}, fNoteDataInitialized {false} {
         setPosition(UINT64_MAX); // Use UINT64_MAX as sentinel for unset position
     }
-    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk) : ivk {ivk}, nullifier(), value {0} {
+    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk) : ivk {ivk}, nullifier(), value {0}, fNoteDataInitialized {false} {
         setPosition(UINT64_MAX); // Use UINT64_MAX as sentinel for unset position
     }
-    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk, uint256 n) : ivk {ivk}, nullifier(n), value {0} {
+    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk, uint256 n) : ivk {ivk}, nullifier(n), value {0}, fNoteDataInitialized {false} {
         setPosition(UINT64_MAX); // Use UINT64_MAX as sentinel for unset position
     }
 
@@ -466,6 +466,7 @@ public:
     //In Memory Only
     CAmount value;
     libzcash::SaplingPaymentAddress address;
+    bool fNoteDataInitialized;
 
     ADD_SERIALIZE_METHODS;
 
@@ -511,13 +512,13 @@ public:
      * We initialize the height to -1 for the same reason as we do in SproutNoteData.
      * See the comment in that class for a full description.
      */
-    OrchardNoteData() : nullifier(), value {0} {
+    OrchardNoteData() : nullifier(), value {0}, fNoteDataInitialized {false} {
         setPosition(UINT64_MAX); // Use UINT64_MAX as sentinel for unset position
     }
-    OrchardNoteData(libzcash::OrchardIncomingViewingKey ivk) : ivk {ivk}, nullifier(), value {0} {
+    OrchardNoteData(libzcash::OrchardIncomingViewingKey ivk) : ivk {ivk}, nullifier(), value {0}, fNoteDataInitialized {false} {
         setPosition(UINT64_MAX); // Use UINT64_MAX as sentinel for unset position
     }
-    OrchardNoteData(libzcash::OrchardIncomingViewingKey ivk, uint256 n) : ivk {ivk}, nullifier(n), value {0} {
+    OrchardNoteData(libzcash::OrchardIncomingViewingKey ivk, uint256 n) : ivk {ivk}, nullifier(n), value {0}, fNoteDataInitialized {false} {
         setPosition(UINT64_MAX); // Use UINT64_MAX as sentinel for unset position
     }
 
@@ -527,6 +528,7 @@ public:
     //In Memory Only
     CAmount value;
     libzcash::OrchardPaymentAddress address;
+    bool fNoteDataInitialized;
 
     ADD_SERIALIZE_METHODS;
 
