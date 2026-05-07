@@ -115,12 +115,23 @@ void static inline AssertLockHeldInternal(const char* pszName, const char* pszFi
 void PrintLockContention(const char* pszName, const char* pszFile, int nLine);
 #endif
 
+// Activated via -debug=threadlock in PIRATE.conf.
+// PrintLockWaiting  is called when a thread is about to block waiting for a lock.
+// PrintLockTaken    is called every time a LOCK/LOCK2/TRY_LOCK succeeds.
+// PrintLockReleased is called every time the guard goes out of scope.
+void PrintLockWaiting(const char* pszName, const char* pszFile, int nLine, void* pMutex);
+void PrintLockTaken(const char* pszName, const char* pszFile, int nLine, bool fTry, void* pMutex);
+void PrintLockReleased(const char* pszName, const char* pszFile, int nLine, void* pMutex);
+
 /** Wrapper around boost::unique_lock<Mutex> */
 template <typename Mutex>
 class SCOPED_CAPABILITY CMutexLock
 {
 private:
     boost::unique_lock<Mutex> lock;
+    const char* lockName;
+    const char* lockFile;
+    int lockLine;
 
     void Enter(const char* pszName, const char* pszFile, int nLine)
     {
@@ -128,24 +139,32 @@ private:
 #ifdef DEBUG_LOCKCONTENTION
         if (!lock.try_lock()) {
             PrintLockContention(pszName, pszFile, nLine);
-#endif
+            PrintLockWaiting(pszName, pszFile, nLine, (void*)lock.mutex());
             lock.lock();
-#ifdef DEBUG_LOCKCONTENTION
+        }
+#else
+        if (!lock.try_lock()) {
+            PrintLockWaiting(pszName, pszFile, nLine, (void*)lock.mutex());
+            lock.lock();
         }
 #endif
+        PrintLockTaken(pszName, pszFile, nLine, false, (void*)lock.mutex());
     }
 
     bool TryEnter(const char* pszName, const char* pszFile, int nLine)
     {
         EnterCritical(pszName, pszFile, nLine, (void*)(lock.mutex()), true);
         lock.try_lock();
-        if (!lock.owns_lock())
+        if (!lock.owns_lock()) {
             LeaveCritical();
+        } else {
+            PrintLockTaken(pszName, pszFile, nLine, true, (void*)lock.mutex());
+        }
         return lock.owns_lock();
     }
 
 public:
-    CMutexLock(Mutex& mutexIn, const char* pszName, const char* pszFile, int nLine, bool fTry = false) ACQUIRE(mutexIn) : lock(mutexIn, boost::defer_lock)
+    CMutexLock(Mutex& mutexIn, const char* pszName, const char* pszFile, int nLine, bool fTry = false) ACQUIRE(mutexIn) : lock(mutexIn, boost::defer_lock), lockName(pszName), lockFile(pszFile), lockLine(nLine)
     {
         if (fTry)
             TryEnter(pszName, pszFile, nLine);
@@ -153,7 +172,7 @@ public:
             Enter(pszName, pszFile, nLine);
     }
 
-    CMutexLock(Mutex* pmutexIn, const char* pszName, const char* pszFile, int nLine, bool fTry = false) ACQUIRE(pmutexIn)
+    CMutexLock(Mutex* pmutexIn, const char* pszName, const char* pszFile, int nLine, bool fTry = false) ACQUIRE(pmutexIn) : lockName(pszName), lockFile(pszFile), lockLine(nLine)
     {
         if (!pmutexIn) return;
 
@@ -166,8 +185,10 @@ public:
 
     ~CMutexLock() RELEASE()
     {
-        if (lock.owns_lock())
+        if (lock.owns_lock()) {
+            PrintLockReleased(lockName, lockFile, lockLine, (void*)lock.mutex());
             LeaveCritical();
+        }
     }
 
     operator bool()
