@@ -20,6 +20,9 @@
 #ifndef INTERNAL_H
 #define INTERNAL_H
 
+#ifndef __cplusplus
+#include <stdbool.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -27,8 +30,6 @@ extern "C" {
 
 
 #define BUF_SIZE 4096 
-
-typedef char bool;
 
 
 /*
