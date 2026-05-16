@@ -1,4 +1,10 @@
-![Pirate CI](https://github.com/PirateNetwork/pirate/actions/workflows/pirate_build_all.yml/badge.svg)\
+| Target | CLI | QT |
+| --- | --- | --- |
+| Linux x86_64 | [![CLI Linux x86_64](https://img.shields.io/github/check-runs/PirateNetwork/pirate/master?nameFilter=CLI%20%28Linux%20x86_64%29&label=CLI)](https://github.com/PirateNetwork/pirate/actions/workflows/pirate_build_all.yml) | [![QT Linux x86_64](https://img.shields.io/github/check-runs/PirateNetwork/pirate/master?nameFilter=QT%20%28Linux%20x86_64%29&label=QT)](https://github.com/PirateNetwork/pirate/actions/workflows/pirate_build_all.yml) |
+| Windows x86_64 cross | [![CLI Windows x86_64 cross](https://img.shields.io/github/check-runs/PirateNetwork/pirate/master?nameFilter=CLI%20%28Windows%20x86_64%20cross%29&label=CLI)](https://github.com/PirateNetwork/pirate/actions/workflows/pirate_build_all.yml) | [![QT Windows x86_64 cross](https://img.shields.io/github/check-runs/PirateNetwork/pirate/master?nameFilter=QT%20%28Windows%20x86_64%20cross%29&label=QT)](https://github.com/PirateNetwork/pirate/actions/workflows/pirate_build_all.yml) |
+| Linux AArch64 cross | [![CLI Linux AArch64 cross](https://img.shields.io/github/check-runs/PirateNetwork/pirate/master?nameFilter=CLI%20%28Linux%20AArch64%20cross%29&label=CLI)](https://github.com/PirateNetwork/pirate/actions/workflows/pirate_build_all.yml) | [![QT Linux AArch64 cross](https://img.shields.io/github/check-runs/PirateNetwork/pirate/master?nameFilter=QT%20%28Linux%20AArch64%20cross%29&label=QT)](https://github.com/PirateNetwork/pirate/actions/workflows/pirate_build_all.yml) |
+| macOS | [![CLI macOS](https://img.shields.io/github/check-runs/PirateNetwork/pirate/master?nameFilter=CLI%20%28macOS%29&label=CLI)](https://github.com/PirateNetwork/pirate/actions/workflows/pirate_build_all.yml) | [![QT macOS](https://img.shields.io/github/check-runs/PirateNetwork/pirate/master?nameFilter=QT%20%28macOS%29&label=QT)](https://github.com/PirateNetwork/pirate/actions/workflows/pirate_build_all.yml) |
+
 ![Pirate Logo](https://i.ibb.co/F7Dgnxy/Pirate-Logo-Wordmark-Gold.png "Pirate Chain Logo")
 
 ## Pirate Chain
@@ -56,133 +62,232 @@ at README_offline_transaction_signing.md
 
 A list of outstanding improvements is included in README_todo.md
 
-## Dependencies Ubuntu
-
-### Dependencies (Ubuntu 18.04) - End of life, will be removed in future updates.
-```shell
-#The following packages are needed:
-sudo apt-get update && sudo apt-get upgrade -y
-sudo apt-get install build-essential pkg-config m4 g++-multilib autoconf libtool libncurses-dev unzip git python3 python3-zmq zlib1g-dev wget libcurl4-gnutls-dev bsdmainutils curl libsodium-dev bison
-
-#gcc9 is also required
-sudo apt-get update -y && apt-get upgrade -y
-sudo apt-get install software-properties-common -y
-sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
-sudo apt-get update -y
-sudo apt-get install gcc-9 g++-9 -y
-sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 60 --slave /usr/bin/g++ g++ /usr/bin/g++-9
-
-```
-
-### Dependencies (Ubuntu 20.04)
-```shell
-#The following packages are needed:
-sudo apt-get update && sudo apt-get upgrade -y
-sudo apt-get install build-essential pkg-config m4 g++-multilib autoconf libtool libncurses-dev unzip git python3 python3-zmq zlib1g-dev wget libcurl4-gnutls-dev bsdmainutils curl libsodium-dev bison
-```
-
-### Dependencies (Ubuntu 22.04)
-```shell
-#The following packages are needed:
-sudo apt-get update && sudo apt-get upgrade -y
-sudo apt-get install build-essential pkg-config m4 g++-multilib autoconf libtool libncurses-dev unzip git python3 python3-zmq zlib1g-dev wget libcurl4-gnutls-dev bsdmainutils curl libsodium-dev bison liblz4-dev
-```
-
-## Dependencies Other Linux
-
-### Dependencies Manjaro
-```shell
-#The following packages are needed:
-pacman -Syu base-devel pkg-config glibc m4 gcc autoconf libtool ncurses unzip git python python-pyzmq zlib wget libcurl-gnutls automake curl cmake mingw-w64
-```
-
-### Build Pirate
-
-This software is based on zcash and considered experimental and is continuously undergoing heavy development.
+## Build Pirate
 
 The dev branch is considered the bleeding edge codebase while the master-branch is considered tested (unit tests, runtime tests, functionality). At no point of time do the Pirate developers take any responsibility for any damage out of the usage of this software.
 Pirate builds for all operating systems out of the same codebase. Follow the OS specific instructions from below.
 
-#### Linux
+Clone the repository first:
+
 ```shell
 git clone https://github.com/PirateNetwork/pirate --branch master
 cd pirate
-# This step is not required for when using the Qt GUI
-./zcutil/fetch-params.sh
-
-# -j8 = using 8 threads for the compilation - replace 8 with number of threads you want to use; -j$(nproc) for all threads available
-
-#For CLI binaries
-./zcutil/build.sh -j8
-
-#For qt GUI binaries
-./zcutil/build-qt-linux.sh -j8
-
-#If you get this compile error:
-qt/moc_addressbookpage.cpp:142:1: error: ‘QT_INIT_METAOBJECT’ does not name a type
-  142 | QT_INIT_METAOBJECT const QMetaObject AddressBookPage::staticMetaObject = { {
-      | ^~~~~~~~~~~~~~~~~~
-  146 | QT_INIT_METAOBJECT const QMetaObject ZAddressBookPage::staticMetaObject = { {
-      | ^~~~~~~~~~~~~~~~~~
-
-Qt is incompatible with the libgl library.
-Remove library: sudo apt-get remove libgl-dev
-Install libraries: sudo apt-get install mesa-common-dev libglu1-mesa-dev
 ```
 
-#### OSX
-Ensure you have [brew](https://brew.sh) and the command line tools installed (comes automatically with XCode) and run:
-```shell
-brew update
-brew upgrade
-brew tap discoteq/discoteq; brew install flock
-brew install autoconf autogen automake gcc@9 binutilsprotobuf coreutils wget python3
-git clone https://github.com/PirateNetwork/pirate --branch master
-cd pirate
-# This step is not required for when using the Qt GUI
-./zcutil/fetch-params.sh
+Build jobs use `-j` to set parallelism. On Linux hosts you can use `-j$(nproc)`. On macOS you can use `-j$(sysctl -n hw.ncpu)`.
 
-# -j8 = using 8 threads for the compilation - replace 8 with number of threads you want to use; -j$(nproc) for all threads available
+`./zcutil/fetch-params.sh` is not required to compile. Run it before running the node or tests if the Sapling parameters are not already installed.
 
-#For CLI binaries
-./zcutil/build-mac.sh -j8
+### Linux x86_64
 
-#For qt GUI binaries
-./zcutil/build-qt-mac.sh -j8
-```
-
-#### Windows
-Use a debian cross-compilation setup with mingw for windows and run:
-
-#### Dependencies (Ubuntu 20.04)
-```shell
-sudo apt-get install build-essential pkg-config m4 g++-multilib autoconf libtool libncurses-dev unzip git python3 python3-zmq zlib1g-dev wget libcurl4-gnutls-dev bsdmainutils curl libsodium-dev bison mingw-w64
-```
-
-#### Dependencies (Ubuntu 20.04)
-```shell
-sudo apt-get install build-essential pkg-config m4 g++-multilib autoconf libtool libncurses-dev unzip git python3 python3-zmq zlib1g-dev wget libcurl4-gnutls-dev bsdmainutils curl libsodium-dev bison liblz4-dev mingw-w64
-```
+Install dependencies on Ubuntu 24.04/22.04:
 
 ```shell
-sudo update-alternatives --config x86_64-w64-mingw32-gcc
-# (configure to use POSIX variant)
-sudo update-alternatives --config x86_64-w64-mingw32-g++
-# (configure to use POSIX variant)
-
-git clone https://github.com/PirateNetwork/pirate --branch master
-cd pirate
-# This step is not required for when using the Qt GUI
-./zcutil/fetch-params.sh
-
-# -j8 = using 8 threads for the compilation - replace 8 with number of threads you want to use; -j$(nproc) for all threads available
-
-#For CLI binaries
-./zcutil/build-win.sh -j8
-
-#For qt GUI binaries
-./zcutil/build-qt-win.sh -j8
+sudo apt-get update
+sudo apt-get install -y \
+  build-essential \
+  pkg-config \
+  m4 \
+  g++-multilib \
+  autoconf \
+  libtool \
+  libncurses-dev \
+  unzip \
+  git \
+  python3 \
+  python3-zmq \
+  zlib1g-dev \
+  wget \
+  libcurl4-gnutls-dev \
+  bsdmainutils \
+  curl \
+  libsodium-dev \
+  bison \
+  liblz4-dev \
+  zip
 ```
+
+For Qt GUI builds, also install:
+
+```shell
+sudo apt-get install -y \
+  dpkg-dev \
+  qtbase5-dev \
+  qttools5-dev \
+  qttools5-dev-tools
+```
+
+Build CLI binaries:
+
+```shell
+./zcutil/build.sh -j$(nproc)
+```
+
+Build the Qt GUI:
+
+```shell
+./zcutil/build-qt-linux.sh -j$(nproc)
+```
+
+Outputs:
+
+- CLI: `src/pirated`, `src/pirate-cli`, `src/pirate-tx`
+- Qt: `pirate-qt-linux`
+
+### Windows x86_64 Cross-Compile
+
+Use an Ubuntu/Debian cross-compilation host.
+
+Install dependencies:
+
+```shell
+sudo apt-get update
+sudo apt-get install -y \
+  build-essential \
+  pkg-config \
+  m4 \
+  autoconf \
+  libtool \
+  unzip \
+  git \
+  python3 \
+  python3-zmq \
+  zlib1g-dev \
+  wget \
+  libcurl4-gnutls-dev \
+  bsdmainutils \
+  curl \
+  libsodium-dev \
+  bison \
+  liblz4-dev \
+  zip \
+  gcc-mingw-w64-x86-64-posix \
+  g++-mingw-w64-x86-64-posix \
+  binutils-mingw-w64-x86-64
+```
+
+If your distro only provides `x86_64-w64-mingw32-*` binaries, add the `x86_64-w64-mingw64-*` aliases used by the CLI build:
+
+```shell
+for tool in ar ranlib strip nm gcc g++ windres dlltool objcopy; do
+  if ! command -v x86_64-w64-mingw64-$tool >/dev/null 2>&1; then
+    if command -v x86_64-w64-mingw32-$tool >/dev/null 2>&1; then
+      sudo ln -sf "$(command -v x86_64-w64-mingw32-$tool)" "/usr/bin/x86_64-w64-mingw64-$tool"
+    fi
+  fi
+done
+```
+
+Build CLI binaries:
+
+```shell
+./zcutil/build-win.sh -j$(nproc)
+```
+
+Build the Qt GUI:
+
+```shell
+./zcutil/build-qt-win.sh -j$(nproc)
+```
+
+Outputs:
+
+- CLI: `src/pirated.exe`, `src/pirate-cli.exe`, `src/pirate-tx.exe`
+- Qt: `pirate-qt-win.exe`
+
+### Linux AArch64 Cross-Compile
+
+Use an Ubuntu/Debian x86_64 host to cross-compile Linux arm64/AArch64 binaries.
+
+Install dependencies:
+
+```shell
+sudo apt-get update
+sudo apt-get install -y \
+  build-essential \
+  pkg-config \
+  m4 \
+  autoconf \
+  libtool \
+  unzip \
+  git \
+  python3 \
+  python3-zmq \
+  zlib1g-dev \
+  wget \
+  libcurl4-gnutls-dev \
+  bsdmainutils \
+  curl \
+  libsodium-dev \
+  bison \
+  liblz4-dev \
+  zip \
+  dpkg-dev \
+  gcc-aarch64-linux-gnu \
+  g++-aarch64-linux-gnu \
+  binutils-aarch64-linux-gnu
+```
+
+Create the host alias expected by the dependency build:
+
+```shell
+ln -sfn aarch64-linux-gnu depends/aarch64-unknown-linux-gnu
+```
+
+Build CLI binaries:
+
+```shell
+./zcutil/build-arm.sh -j$(nproc)
+```
+
+Build the Qt GUI:
+
+```shell
+./zcutil/build-qt-arm.sh -j$(nproc)
+```
+
+Outputs:
+
+- CLI: `src/pirated`, `src/pirate-cli`, `src/pirate-tx`
+- Qt: `pirate-qt-arm`
+
+### macOS
+
+Install Xcode Command Line Tools, Homebrew, and Rust:
+
+```shell
+xcode-select --install
+brew install autoconf automake libtool coreutils bison pkgconf python wget curl
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+. "$HOME/.cargo/env"
+```
+
+For Qt GUI builds, also install:
+
+```shell
+brew install qt@5 create-dmg
+export PATH="$(brew --prefix qt@5)/bin:$PATH"
+```
+
+Build CLI binaries:
+
+```shell
+CONFIGURE_FLAGS=--disable-hardening ./zcutil/build-mac.sh -j$(sysctl -n hw.ncpu)
+```
+
+Build the Qt GUI and DMG:
+
+```shell
+./zcutil/build-qt-mac.sh -j$(sysctl -n hw.ncpu)
+```
+
+Outputs:
+
+- CLI: `src/pirated`, `src/pirate-cli`, `src/pirate-tx`
+- Qt: `pirate-qt-mac` and `pirate-qt-mac.dmg`
+
+The macOS scripts build for the native architecture of the machine running the build: Apple Silicon builds arm64 binaries, and Intel builds x86_64 binaries. The current GitHub Actions `macos-latest` runner is Apple Silicon/arm64.
+
 **Pirate is experimental and a work-in-progress.** Use at your own risk.
 
 To run the Pirate GUI wallet:
@@ -190,7 +295,10 @@ To run the Pirate GUI wallet:
 **Linux**
 `pirate-qt-linux`
 
-**OSX**
+**Linux AArch64**
+`pirate-qt-arm`
+
+**macOS**
 `pirate-qt-mac`
 
 **Windows**
@@ -199,7 +307,7 @@ To run the Pirate GUI wallet:
 
 To run the daemon for Pirate Chain:  
 `pirated`
-both pirated and pirate-cli are located in the src directory after successfully building  
+`pirated`, `pirate-cli`, and `pirate-tx` are located in the `src` directory after successfully building CLI targets.
 
 To reset the Pirate Chain blockchain change into the *~/.komodo/PIRATE* data directory and delete the corresponding files by running `rm -rf blocks chainstate debug.log komodostate db.log` and restart daemon
 
