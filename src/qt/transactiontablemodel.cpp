@@ -1314,8 +1314,6 @@ public:
                 break;
             }
             // Removed -- remove entire transaction from table
-            cachedSize = -1; // Invalidate cache BEFORE removal
-            
             int removeSize = upperIndex - lowerIndex;
             
             // Note: We don't remove from decomposedTxCache (it's the master archive)
@@ -1347,35 +1345,33 @@ public:
                 txHashIndex.remove(hashStr);
             }
             
-            // Remove from cachedWallet indexes (display cache)
-            for (int i = lowerIndex; i < upperIndex; i++) {
-                // These indexes were for cachedWallet, they're rebuilt on filter changes
-                // So we don't need to maintain them here
-            }
-            
-            // Erase the records
-            cachedWallet.erase(lower, upper);
-            
-            // Signal complete refresh with layoutChanged to update row count
-            cachedSize = -1;
-            Q_EMIT parent->layoutChanged();
-            
-            // Shift all index values >= upperIndex down by removeSize
-            shiftIndexValues(upperIndex, -removeSize);
-            
-            // CRITICAL: After deletion, all parentIdx values >= upperIndex have shifted down by removeSize
-            // We need to update ALL children that reference parents at or after the deletion point
+            // Tell Qt to discard all live QModelIndex objects before we mutate.
+            // Using beginResetModel/endResetModel (rather than layoutChanged) is
+            // mandatory here: layoutChanged fires synchronously and Qt views will
+            // immediately call data()/rowCount() while parentIdx values are still
+            // stale, causing an access violation when iterating cachedWallet.
+            parent->beginResetModel();
+
+            // Update parentIdx for remaining children BEFORE erasing so that
+            // lowerIndex/upperIndex still refer to the correct positions.
             for (int i = 0; i < cachedWallet.size(); i++) {
                 if (cachedWallet[i].isChild) {
                     if (cachedWallet[i].parentIdx >= upperIndex) {
-                        // Parent was after deleted range, shift index down
+                        // Parent is after deleted range – shift index down
                         cachedWallet[i].parentIdx -= removeSize;
                     } else if (cachedWallet[i].parentIdx >= lowerIndex) {
-                        // Parent was in deleted range, invalidate this child
+                        // Parent is inside deleted range – orphan the child
                         cachedWallet[i].parentIdx = -1;
                     }
                 }
             }
+
+            // Erase the records from the display cache
+            cachedWallet.erase(lower, upper);
+            cachedSize = -1;
+
+            // All data mutations are now complete – safe to notify Qt
+            parent->endResetModel();
             break;
         }
         case CT_UPDATED:
