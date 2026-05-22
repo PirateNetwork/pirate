@@ -46,16 +46,73 @@
 #include "komodo_kv.h"
 #include "komodo_gateway.h"
 #include "rpc/rawtransaction.h"
+#include "txdb.h"
 
 #include <stdint.h>
 
 #include <univalue.h>
 
+#include <algorithm>
+#include <cctype>
+#include <limits>
 #include <regex>
+#include <string>
 
 #include "cc/CCinclude.h"
 
 using namespace std;
+
+namespace {
+
+enum class ShieldedSubtreeProtocol {
+    Sapling,
+    Orchard,
+};
+
+ShieldedSubtreeProtocol ParseShieldedSubtreeProtocol(const UniValue& value)
+{
+    std::string protocol = value.get_str();
+    std::transform(protocol.begin(), protocol.end(), protocol.begin(), [](unsigned char c) {
+        return std::tolower(c);
+    });
+
+    if (protocol == "sapling") {
+        return ShieldedSubtreeProtocol::Sapling;
+    }
+    if (protocol == "orchard") {
+        return ShieldedSubtreeProtocol::Orchard;
+    }
+
+    throw JSONRPCError(RPC_INVALID_PARAMETER, "shielded protocol must be \"sapling\" or \"orchard\"");
+}
+
+uint64_t ParseNonNegativeUint64(const UniValue& value, const std::string& fieldName)
+{
+    if (!(value.isNum() || value.isStr())) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, fieldName + " must be a non-negative integer");
+    }
+
+    int64_t parsed = value.get_int64();
+    if (parsed < 0) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, fieldName + " must be a non-negative integer");
+    }
+
+    return static_cast<uint64_t>(parsed);
+}
+
+ShieldedType ToShieldedType(ShieldedSubtreeProtocol protocol)
+{
+    switch (protocol) {
+    case ShieldedSubtreeProtocol::Sapling:
+        return SAPLINGFRONTIER;
+    case ShieldedSubtreeProtocol::Orchard:
+        return ORCHARDFRONTIER;
+    }
+
+    throw JSONRPCError(RPC_INVALID_PARAMETER, "unknown shielded protocol");
+}
+
+} // namespace
 
 // TODO: remove
 //extern int32_t KOMODO_INSYNC;
@@ -2335,6 +2392,87 @@ UniValue z_gettreestatelegacy(const UniValue& params, bool fHelp, const CPubKey&
     return res;
 }
 
+UniValue z_getsubtreesbyindex(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (fHelp || params.size() < 2 || params.size() > 3)
+        throw runtime_error(
+            "z_getsubtreesbyindex \"sapling|orchard\" start_index ( limit )\n"
+            "Return roots of completed shielded 2^16 subtrees from the active chain.\n"
+            "\nArguments:\n"
+            "1. \"sapling|orchard\"      (string, required) Shielded protocol to query\n"
+            "2. start_index              (numeric, required) Subtree index to start from\n"
+            "3. limit                    (numeric, optional, default=0) Maximum number of subtrees to return, or 0 for all\n"
+            "\nResult:\n"
+            "[\n"
+            "  {\n"
+            "    \"index\": n,                    (numeric) subtree index\n"
+            "    \"root\": \"hex\",               (string) subtree root hash\n"
+            "    \"completingBlockHash\": \"hex\",(string) block hash that completed the subtree\n"
+            "    \"completingBlockHeight\": n     (numeric) block height that completed the subtree\n"
+            "  }\n"
+            "]\n"
+            "\nExamples:\n"
+            + HelpExampleCli("z_getsubtreesbyindex", "\"sapling\" 0 10")
+            + HelpExampleRpc("z_getsubtreesbyindex", "\"sapling\", 0, 10")
+        );
+
+    ShieldedSubtreeProtocol protocol = ParseShieldedSubtreeProtocol(params[0]);
+    uint64_t startIndex = ParseNonNegativeUint64(params[1], "start_index");
+    uint64_t limit = params.size() == 3 ? ParseNonNegativeUint64(params[2], "limit") : 0;
+    if (limit > std::numeric_limits<uint32_t>::max()) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "limit exceeds uint32 range");
+    }
+
+    LOCK(cs_main);
+
+    std::string subtreeError;
+    if (!AlignPersistedShieldedSubtrees(subtreeError)) {
+        throw JSONRPCError(RPC_DATABASE_ERROR, subtreeError);
+    }
+
+    std::vector<std::pair<uint64_t, ShieldedSubtreeData>> subtrees;
+    if (!pblocktree->ReadShieldedSubtrees(ToShieldedType(protocol), startIndex, static_cast<uint32_t>(limit), subtrees)) {
+        throw JSONRPCError(RPC_DATABASE_ERROR, "Failed to read persisted subtree metadata");
+    }
+    UniValue result(UniValue::VARR);
+
+    for (const auto& it : subtrees) {
+        const uint64_t subtreeIndex = it.first;
+        const ShieldedSubtreeData& subtree = it.second;
+        if (subtree.nHeight < 0) {
+            throw JSONRPCError(
+                RPC_DATABASE_ERROR,
+                strprintf(
+                    "subtree index %llu has invalid completion height %d",
+                    static_cast<unsigned long long>(subtreeIndex),
+                    subtree.nHeight));
+        }
+        const CBlockIndex* completingBlock = chainActive[subtree.nHeight];
+        if (completingBlock == nullptr) {
+            throw JSONRPCError(
+                RPC_DATABASE_ERROR,
+                strprintf("missing active block index at subtree completion height %d", subtree.nHeight));
+        }
+        if (completingBlock->GetBlockHash() != subtree.blockHash) {
+            throw JSONRPCError(
+                RPC_DATABASE_ERROR,
+                strprintf(
+                    "persisted subtree metadata mismatch at index %llu and height %d",
+                    static_cast<unsigned long long>(subtreeIndex),
+                    subtree.nHeight));
+        }
+
+        UniValue entry(UniValue::VOBJ);
+        entry.push_back(Pair("index", static_cast<int64_t>(subtreeIndex)));
+        entry.push_back(Pair("root", HexStr(subtree.root.begin(), subtree.root.end())));
+        entry.push_back(Pair("completingBlockHash", subtree.blockHash.GetHex()));
+        entry.push_back(Pair("completingBlockHeight", static_cast<int64_t>(subtree.nHeight)));
+        result.push_back(entry);
+    }
+
+    return result;
+}
+
 /**
  * @brief Convert memory pool information to JSON format
  * @return JSON object containing memory pool statistics
@@ -2576,6 +2714,7 @@ static const CRPCCommand commands[] =
     { "blockchain",         "getchaintips",           &getchaintips,           true  },
     { "blockchain",         "z_gettreestate",         &z_gettreestate,         true  },
     { "blockchain",         "z_gettreestatelegacy",   &z_gettreestatelegacy,   true  },
+    { "blockchain",         "z_getsubtreesbyindex",   &z_getsubtreesbyindex,   true  },
     { "blockchain",         "getchaintxstats",        &getchaintxstats,        true  },
     { "blockchain",         "getdifficulty",          &getdifficulty,          true  },
     { "blockchain",         "getmempoolinfo",         &getmempoolinfo,         true  },

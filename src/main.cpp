@@ -3670,6 +3670,81 @@ CCriticalSection& get_cs_main()
     return cs_main;
 }
 
+static bool AlignPersistedShieldedSubtreesForType(ShieldedType type, std::string& error)
+{
+    AssertLockHeld(cs_main);
+
+    if (pblocktree == nullptr) {
+        return true;
+    }
+
+    while (true) {
+        uint64_t latestIndex = 0;
+        if (!pblocktree->ReadLatestShieldedSubtreeIndex(type, latestIndex)) {
+            return true;
+        }
+
+        ShieldedSubtreeData subtree;
+        if (!pblocktree->ReadShieldedSubtree(type, latestIndex, subtree)) {
+            error = strprintf(
+                "missing persisted subtree metadata for type %d at index %llu",
+                static_cast<int>(type),
+                static_cast<unsigned long long>(latestIndex));
+            return false;
+        }
+
+        const int activeTipHeight = chainActive.Tip() ? chainActive.Tip()->nHeight : -1;
+        if (subtree.nHeight < 0) {
+            error = strprintf(
+                "persisted subtree metadata for type %d has invalid height %d",
+                static_cast<int>(type),
+                subtree.nHeight);
+            return false;
+        }
+
+        if (subtree.nHeight > activeTipHeight) {
+            if (!pblocktree->TruncateShieldedSubtrees(type, activeTipHeight)) {
+                error = strprintf(
+                    "failed to truncate persisted subtree metadata for type %d above active tip height %d",
+                    static_cast<int>(type),
+                    activeTipHeight);
+                return false;
+            }
+            continue;
+        }
+
+        const CBlockIndex* pindex = chainActive[subtree.nHeight];
+        if (pindex == nullptr) {
+            error = strprintf(
+                "active chain missing block at subtree completion height %d for type %d",
+                subtree.nHeight,
+                static_cast<int>(type));
+            return false;
+        }
+
+        if (pindex->GetBlockHash() != subtree.blockHash) {
+            const int truncateHeight = subtree.nHeight - 1;
+            if (!pblocktree->TruncateShieldedSubtrees(type, truncateHeight)) {
+                error = strprintf(
+                    "failed to rewind persisted subtree metadata for type %d from height %d",
+                    static_cast<int>(type),
+                    subtree.nHeight);
+                return false;
+            }
+            continue;
+        }
+
+        return true;
+    }
+}
+
+bool AlignPersistedShieldedSubtrees(std::string& error)
+{
+    AssertLockHeld(cs_main);
+    return AlignPersistedShieldedSubtreesForType(SAPLINGFRONTIER, error) &&
+           AlignPersistedShieldedSubtreesForType(ORCHARDFRONTIER, error);
+}
+
 /*****
  * @brief Apply the effects of this block (with given index) on the UTXO set represented by coins
  * @param block the block to add
@@ -3862,12 +3937,17 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     OrchardMerkleFrontier orchard_frontier_tree;
     assert(view.GetOrchardFrontierAnchorAt(view.GetBestAnchor(ORCHARDFRONTIER), orchard_frontier_tree));
 
+    const bool persistShieldedSubtreeMetadata =
+        !fJustCheck && pcoinsTip != nullptr && view.GetBestBlock() == pcoinsTip->GetBestBlock();
+
     // Grab the consensus branch ID for this block and its parent
     auto consensusBranchId = CurrentEpochBranchId(pindex->nHeight, chainparams.GetConsensus());
     auto prevConsensusBranchId = CurrentEpochBranchId(pindex->nHeight - 1, chainparams.GetConsensus());
 
     size_t total_sapling_tx = 0;
     size_t total_orchard_tx = 0;
+    std::vector<std::pair<uint64_t, ShieldedSubtreeData>> completedSaplingSubtrees;
+    std::vector<std::pair<uint64_t, ShieldedSubtreeData>> completedOrchardSubtrees;
 
     CAmount chainSupplyDelta = 0;
     CAmount transparentValueDelta = 0;
@@ -4040,15 +4120,47 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                 uint256 commitment = uint256::FromRawBytes(output.cmu());
                 sapling_tree.append(commitment);
             }
-            
+
             // Append to frontier tree using bundle
-            sapling_frontier_tree.AppendBundle(tx.GetSaplingBundle());
+            auto saplingResult = sapling_frontier_tree.AppendBundle(tx.GetSaplingBundle());
+            if (saplingResult.has_subtree_boundary) {
+                auto completedIndex = sapling_frontier_tree.current_subtree_index();
+                if (completedIndex == 0) {
+                    return state.DoS(
+                        100,
+                        error("ConnectBlock(): Sapling subtree boundary reached before subtree index advanced"),
+                        REJECT_INVALID,
+                        "bad-sapling-subtree-index");
+                }
+                completedSaplingSubtrees.emplace_back(
+                    completedIndex - 1,
+                    ShieldedSubtreeData(
+                        saplingResult.completed_subtree_root,
+                        pindex->nHeight,
+                        pindex->GetBlockHash()));
+            }
             total_sapling_tx += 1;
         }
 
         //Append Orchard Outputs to OrchardMerkleFrontier
         if (tx.GetOrchardBundle().IsPresent()) {
-            orchard_frontier_tree.AppendBundle(tx.GetOrchardBundle());
+            auto orchardResult = orchard_frontier_tree.AppendBundle(tx.GetOrchardBundle());
+            if (orchardResult.has_subtree_boundary) {
+                auto completedIndex = orchard_frontier_tree.current_subtree_index();
+                if (completedIndex == 0) {
+                    return state.DoS(
+                        100,
+                        error("ConnectBlock(): Orchard subtree boundary reached before subtree index advanced"),
+                        REJECT_INVALID,
+                        "bad-orchard-subtree-index");
+                }
+                completedOrchardSubtrees.emplace_back(
+                    completedIndex - 1,
+                    ShieldedSubtreeData(
+                        orchardResult.completed_subtree_root,
+                        pindex->nHeight,
+                        pindex->GetBlockHash()));
+            }
             total_orchard_tx += 1;
         }
 
@@ -4334,6 +4446,19 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
         if (!pblocktree->WriteTimestampBlockIndex(CTimestampBlockIndexKey(pindex->GetBlockHash()), CTimestampBlockIndexValue(logicalTS)))
             return AbortNode(state, "Failed to write blockhash index");
+    }
+
+    if (persistShieldedSubtreeMetadata) {
+        if (!completedSaplingSubtrees.empty()) {
+            if (!pblocktree->WriteShieldedSubtrees(SAPLINGFRONTIER, completedSaplingSubtrees)) {
+                return AbortNode(state, "Failed to write Sapling subtree metadata");
+            }
+        }
+        if (!completedOrchardSubtrees.empty()) {
+            if (!pblocktree->WriteShieldedSubtrees(ORCHARDFRONTIER, completedOrchardSubtrees)) {
+                return AbortNode(state, "Failed to write Orchard subtree metadata");
+            }
+        }
     }
 
     // add this block to the view's block chain
@@ -4643,6 +4768,13 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
 
     // Update chainActive and related variables.
     UpdateTip(pindexDelete->pprev);
+
+    if (!pblocktree->TruncateShieldedSubtrees(SAPLINGFRONTIER, chainActive.Height())) {
+        return AbortNode(state, "Failed to truncate Sapling subtree metadata");
+    }
+    if (!pblocktree->TruncateShieldedSubtrees(ORCHARDFRONTIER, chainActive.Height())) {
+        return AbortNode(state, "Failed to truncate Orchard subtree metadata");
+    }
 
     // Get the current commitment tree
     SproutMerkleTree newSproutTree;
@@ -7028,6 +7160,14 @@ bool static LoadBlockIndexDB()
 
     LOCK(cs_main);
     chainActive.SetTip(it->second);
+
+    {
+        std::string subtreeError;
+        if (!AlignPersistedShieldedSubtrees(subtreeError)) {
+            LogPrintf("Failed to align persisted shielded subtree metadata: %s\n", subtreeError);
+            return false;
+        }
+    }
 
     // Set hashFinalSproutRoot for the end of best chain
     it->second->hashFinalSproutRoot = pcoinsTip->GetBestAnchor(SPROUT);

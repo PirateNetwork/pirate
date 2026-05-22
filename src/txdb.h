@@ -55,6 +55,30 @@ static const int64_t nMaxDbCache = sizeof(void*) > 4 ? 16384 : 1024;
 //! min. -dbcache in (MiB)
 static const int64_t nMinDbCache = 4;
 
+class ShieldedSubtreeData
+{
+public:
+    uint8_t leadbyte = 0x00;
+    libzcash::SubtreeRoot root;
+    int nHeight;
+    uint256 blockHash;
+
+    ShieldedSubtreeData() : nHeight(0) {}
+
+    ShieldedSubtreeData(libzcash::SubtreeRoot root, int nHeight, uint256 blockHash)
+        : root(root), nHeight(nHeight), blockHash(blockHash) {}
+
+    ADD_SERIALIZE_METHODS;
+
+    template <typename Stream, typename Operation>
+    inline void SerializationOp(Stream& s, Operation ser_action) {
+        READWRITE(leadbyte);
+        READWRITE(root);
+        READWRITE(nHeight);
+        READWRITE(blockHash);
+    }
+};
+
 /**
  * CCoinsView backed by the coin database (chainstate/)
 */
@@ -291,6 +315,20 @@ public:
      * @returns true on success
      */
     bool ReadFlag(const std::string &name, bool &fValue) const;
+    bool WriteShieldedSubtrees(
+        ShieldedType type,
+        const std::vector<std::pair<uint64_t, ShieldedSubtreeData>>& subtrees);
+    bool ReadShieldedSubtrees(
+        ShieldedType type,
+        uint64_t startIndex,
+        uint32_t limit,
+        std::vector<std::pair<uint64_t, ShieldedSubtreeData>>& subtrees) const;
+    bool ReadShieldedSubtree(
+        ShieldedType type,
+        uint64_t index,
+        ShieldedSubtreeData& subtree) const;
+    bool ReadLatestShieldedSubtreeIndex(ShieldedType type, uint64_t& index) const;
+    bool TruncateShieldedSubtrees(ShieldedType type, int newTipHeight);
     /****
      * Load the block headers from disk
      * NOTE: this does no consistency check beyond verifying records exist

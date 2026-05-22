@@ -63,6 +63,10 @@ static const char DB_TIMESTAMPINDEX = 'H';
 static const char DB_BLOCKHASHINDEX = 'h';
 static const char DB_SPENTINDEX = 'p';
 static const char DB_BLOCK_INDEX = 'b';
+static const char DB_SAPLING_SUBTREE = 'j';
+static const char DB_ORCHARD_SUBTREE = 'J';
+static const char DB_BEST_SAPLING_SUBTREE = 'k';
+static const char DB_BEST_ORCHARD_SUBTREE = 'K';
 
 //History Node
 static const char DB_MMR_LENGTH = 'M';
@@ -80,6 +84,34 @@ static const char SPEND_PROOF_HASH = 'e';
 static const char OUTPUT_PROOF_HASH = 'E';
 
 static const char DB_VERSION = 'V';
+
+namespace {
+
+char ShieldedSubtreeEntryKey(ShieldedType type)
+{
+    switch (type) {
+    case SAPLINGFRONTIER:
+        return DB_SAPLING_SUBTREE;
+    case ORCHARDFRONTIER:
+        return DB_ORCHARD_SUBTREE;
+    default:
+        throw runtime_error("Unknown shielded type for subtree metadata");
+    }
+}
+
+char ShieldedSubtreeBestKey(ShieldedType type)
+{
+    switch (type) {
+    case SAPLINGFRONTIER:
+        return DB_BEST_SAPLING_SUBTREE;
+    case ORCHARDFRONTIER:
+        return DB_BEST_ORCHARD_SUBTREE;
+    default:
+        throw runtime_error("Unknown shielded type for subtree metadata");
+    }
+}
+
+} // namespace
 
 CCoinsViewDB::CCoinsViewDB(std::string dbName, size_t nCacheSize, bool fMemory, bool fWipe) : db(GetDataDir() / dbName, nCacheSize, fMemory, fWipe) {
 }
@@ -856,6 +888,139 @@ bool CBlockTreeDB::ReadFlag(const std::string &name, bool &fValue) const {
         return false;
     fValue = ch == '1';
     return true;
+}
+
+bool CBlockTreeDB::WriteShieldedSubtrees(
+    ShieldedType type,
+    const std::vector<std::pair<uint64_t, ShieldedSubtreeData>>& subtrees)
+{
+    if (subtrees.empty()) {
+        return true;
+    }
+
+    uint64_t latestIndex = 0;
+    bool hasLatest = ReadLatestShieldedSubtreeIndex(type, latestIndex);
+    uint64_t expectedIndex = hasLatest ? latestIndex + 1 : 0;
+    for (const auto& it : subtrees) {
+        if (it.first != expectedIndex) {
+            LogPrintf(
+                "%s: subtree metadata discontinuity for type=%d expected=%llu actual=%llu\n",
+                __func__,
+                static_cast<int>(type),
+                static_cast<unsigned long long>(expectedIndex),
+                static_cast<unsigned long long>(it.first));
+            return false;
+        }
+        expectedIndex++;
+    }
+
+    const char entryKey = ShieldedSubtreeEntryKey(type);
+    const char bestKey = ShieldedSubtreeBestKey(type);
+    CDBBatch batch(*this);
+    for (const auto& it : subtrees) {
+        batch.Write(std::make_pair(entryKey, it.first), it.second);
+    }
+    batch.Write(bestKey, subtrees.back().first);
+    return WriteBatch(batch, true);
+}
+
+bool CBlockTreeDB::ReadShieldedSubtrees(
+    ShieldedType type,
+    uint64_t startIndex,
+    uint32_t limit,
+    std::vector<std::pair<uint64_t, ShieldedSubtreeData>>& subtrees) const
+{
+    subtrees.clear();
+
+    boost::scoped_ptr<CDBIterator> pcursor(const_cast<CBlockTreeDB*>(this)->NewIterator());
+    const char entryKey = ShieldedSubtreeEntryKey(type);
+    pcursor->Seek(std::make_pair(entryKey, startIndex));
+
+    uint64_t expectedIndex = startIndex;
+    while (pcursor->Valid()) {
+        boost::this_thread::interruption_point();
+        try {
+            std::pair<char, uint64_t> keyObj;
+            pcursor->GetKey(keyObj);
+            if (keyObj.first != entryKey) {
+                break;
+            }
+            if (keyObj.second != expectedIndex) {
+                LogPrintf(
+                    "%s: subtree metadata gap for type=%d expected=%llu actual=%llu\n",
+                    __func__,
+                    static_cast<int>(type),
+                    static_cast<unsigned long long>(expectedIndex),
+                    static_cast<unsigned long long>(keyObj.second));
+                return false;
+            }
+
+            ShieldedSubtreeData subtree;
+            if (!pcursor->GetValue(subtree)) {
+                return false;
+            }
+            subtrees.push_back(std::make_pair(keyObj.second, subtree));
+            expectedIndex++;
+            if (limit != 0 && subtrees.size() >= limit) {
+                break;
+            }
+            pcursor->Next();
+        } catch (const std::exception&) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool CBlockTreeDB::ReadShieldedSubtree(
+    ShieldedType type,
+    uint64_t index,
+    ShieldedSubtreeData& subtree) const
+{
+    return Read(std::make_pair(ShieldedSubtreeEntryKey(type), index), subtree);
+}
+
+bool CBlockTreeDB::ReadLatestShieldedSubtreeIndex(ShieldedType type, uint64_t& index) const
+{
+    return Read(ShieldedSubtreeBestKey(type), index);
+}
+
+bool CBlockTreeDB::TruncateShieldedSubtrees(ShieldedType type, int newTipHeight)
+{
+    uint64_t latestIndex = 0;
+    if (!ReadLatestShieldedSubtreeIndex(type, latestIndex)) {
+        return true;
+    }
+
+    const char entryKey = ShieldedSubtreeEntryKey(type);
+    const char bestKey = ShieldedSubtreeBestKey(type);
+    CDBBatch batch(*this);
+    bool changed = false;
+    while (true) {
+        ShieldedSubtreeData subtree;
+        if (!Read(std::make_pair(entryKey, latestIndex), subtree)) {
+            return false;
+        }
+        if (subtree.nHeight <= newTipHeight) {
+            break;
+        }
+
+        batch.Erase(std::make_pair(entryKey, latestIndex));
+        changed = true;
+        if (latestIndex == 0) {
+            batch.Erase(bestKey);
+            return WriteBatch(batch, true);
+        }
+        latestIndex--;
+    }
+
+    if (!changed) {
+        return true;
+    }
+
+    batch.Write(bestKey, latestIndex);
+    return WriteBatch(batch, true);
 }
 
 void komodo_index2pubkey33(uint8_t *pubkey33,CBlockIndex *pindex,int32_t height);

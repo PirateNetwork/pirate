@@ -437,6 +437,7 @@ extern UniValue verifychain(const UniValue& params, bool fHelp, const CPubKey& m
 extern UniValue getchaintips(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue z_gettreestate(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue z_gettreestatelegacy(const UniValue& params, bool fHelp, const CPubKey& mypk);
+extern UniValue z_getsubtreesbyindex(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue invalidateblock(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue reconsiderblock(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue getspentinfo(const UniValue& params, bool fHelp, const CPubKey& mypk);
