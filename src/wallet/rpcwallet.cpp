@@ -2429,39 +2429,52 @@ UniValue walletpassphrase(const UniValue& params, bool fHelp, const CPubKey& myp
             "\nAs json rpc call\n"
             + HelpExampleRpc("walletpassphrase", "\"my pass phrase\", 60")
         );
-
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
     if (fHelp)
         return true;
-    if (!pwalletMain->IsCrypted())
-        throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletpassphrase was called.");
 
-    // Note that the walletpassphrase is stored in params[0] which is not mlock()ed
+    if (!params[0].isStr())
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected string passphrase");
+    if (!params[1].isNum())
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected numeric timeout");
+
+    // Validate early so bad input cannot cancel an existing relock timer.
     SecureString strWalletPass;
     strWalletPass.reserve(100);
-    // TODO: get rid of this .c_str() by implementing SecureString::operator=(std::string)
-    // Alternately, find a way to make params[0] mlock()'d to begin with.
     strWalletPass = params[0].get_str().c_str();
 
-    if (strWalletPass.length() > 0)
-    {
-        if (!pwalletMain->Unlock(strWalletPass))
-            throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
-    }
-    else
+    if (strWalletPass.length() == 0)
         throw runtime_error(
             "walletpassphrase <passphrase> <timeout>\n"
             "Stores the wallet decryption key in memory for <timeout> seconds.");
 
-    // No need to check return values, because the wallet was unlocked above
-    pwalletMain->UpdateNullifierNoteMap();
-    pwalletMain->TopUpKeyPool();
-
     int64_t nSleepTime = params[1].get_int64();
-    LOCK(cs_nWalletUnlockTime);
-    nWalletUnlockTime = GetTime() + nSleepTime;
-    RPCRunLater("lockwallet", boost::bind(LockWallet, pwalletMain), nSleepTime);
+    if (nSleepTime <= 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, timeout must be greater than 0");
+    if (nSleepTime > 100000000)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, timeout too large");
+    
+    // Cancel stale lockwallet timer before unlock and long wallet operations.
+    RPCCancelRunLater("lockwallet");
+
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+
+        if (!pwalletMain->IsCrypted())
+            throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletpassphrase was called.");
+
+        if (!pwalletMain->Unlock(strWalletPass))
+            throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
+
+        // No need to check return values, because the wallet was unlocked above
+        pwalletMain->UpdateNullifierNoteMap();
+        pwalletMain->TopUpKeyPool();
+    }
+
+    {
+        LOCK2(pwalletMain->cs_wallet, cs_nWalletUnlockTime);
+        nWalletUnlockTime = GetTime() + nSleepTime;
+        RPCRunLater("lockwallet", boost::bind(LockWallet, pwalletMain), nSleepTime);
+    }
 
     return NullUniValue;
 }
@@ -2535,15 +2548,18 @@ UniValue walletlock(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("walletlock", "")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-
     if (fHelp)
         return true;
-    if (!pwalletMain->IsCrypted())
-        throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletlock was called.");
+
+    // Manual walletlock should also clear any pending timer-based lock.
+    RPCCancelRunLater("lockwallet");
 
     {
-        LOCK(cs_nWalletUnlockTime);
+        LOCK2(pwalletMain->cs_wallet, cs_nWalletUnlockTime);
+
+        if (!pwalletMain->IsCrypted())
+            throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletlock was called.");
+
         pwalletMain->Lock();
         nWalletUnlockTime = 0;
     }

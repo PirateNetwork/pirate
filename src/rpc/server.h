@@ -138,6 +138,9 @@ void RPCUnregisterTimerInterface(RPCTimerInterface *iface);
  */
 void RPCRunLater(const std::string& name, boost::function<void(void)> func, int64_t nSeconds);
 
+/** Cancel an existing named timer (if any). */
+void RPCCancelRunLater(const std::string& name);
+
 typedef UniValue(*rpcfn_type)(const UniValue& params, bool fHelp, const CPubKey& mypk);
 
 class CRPCCommand

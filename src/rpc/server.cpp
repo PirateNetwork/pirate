@@ -990,6 +990,11 @@ void RPCRunLater(const std::string& name, boost::function<void(void)> func, int6
     deadlineTimers.insert(std::make_pair(name, boost::shared_ptr<RPCTimerBase>(timerInterface->NewTimer(func, nSeconds*1000))));
 }
 
+void RPCCancelRunLater(const std::string& name)
+{
+    deadlineTimers.erase(name);
+}
+
 CRPCTable tableRPC;
 
 // Return async rpc queue
