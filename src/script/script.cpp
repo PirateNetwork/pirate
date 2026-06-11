@@ -497,8 +497,8 @@ bool CScript::IsCoinImport() const
     vector<unsigned char> data;
     opcodetype opcode;
     if (this->GetOp(pc, opcode, data))
-        if (opcode > OP_0 && opcode <= OP_PUSHDATA4)
-            return data.begin()[0] == EVAL_IMPORTCOIN;
+        if (opcode > OP_0 && opcode <= OP_PUSHDATA4 && !data.empty())
+            return data[0] == EVAL_IMPORTCOIN;
     return false;
 }
 
