@@ -103,14 +103,15 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
 
     // Read all wallet Sapling addresses from the keystore - no note data loaded.
     // GetSaplingPaymentAddresses is O(num_keys), not O(num_notes).
-    std::vector<libzcash::SaplingPaymentAddress> candidateAddresses;
+    std::set<libzcash::PaymentAddress> filterAddresses;
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
         std::set<libzcash::SaplingPaymentAddress> allAddrs;
         pwalletMain->GetSaplingPaymentAddresses(allAddrs);
         for (const auto& addr : allAddrs) {
-            if (!(addr == sweepAddress))
-                candidateAddresses.push_back(addr);
+            if (!(addr == sweepAddress)) {
+                filterAddresses.insert(addr);
+            }
         }
     }
 
@@ -119,9 +120,30 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
     CAmount amountSwept = 0;
     const int maxQuantity = 50;
 
-    for (const auto& addr : candidateAddresses) {
+    struct AddressSweepWork {
+        libzcash::SaplingPaymentAddress addr;
+        libzcash::SaplingExtendedSpendingKey extsk;
+        std::vector<SaplingNoteEntry> saplingEntries;
+    };
+
+    std::vector<AddressSweepWork> addressWork;
+
+    std::vector<CSproutNotePlaintextEntry> sproutEntries;
+    std::vector<SaplingNoteEntry> allSaplingEntries;
+    if (!filterAddresses.empty()) {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        pwalletMain->GetFilteredNotes(sproutEntries, allSaplingEntries,
+                                      filterAddresses,
+                                      11, INT_MAX, true, true, true);
+    }
+
+    std::map<libzcash::SaplingPaymentAddress, size_t> workIndexByAddress;
+    for (const auto& paymentAddr : filterAddresses) {
         if (isCancelled() || ShutdownRequested())
             break;
+
+        const auto& addr = boost::get<libzcash::SaplingPaymentAddress>(paymentAddr);
+
         // Skip watch-only addresses - spending key required to build spends.
         libzcash::SaplingExtendedSpendingKey extsk;
         {
@@ -130,35 +152,47 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
                 continue;
         }
 
-        // Per-address inner loop: keep sweeping until no more eligible notes remain.
-        // Committed notes are excluded by ignoreSpent=true on the next call.
-        while (true) {
+        workIndexByAddress[addr] = addressWork.size();
+        addressWork.push_back({addr, extsk, {}});
+    }
+
+    for (const auto& entry : allSaplingEntries) {
+        auto it = workIndexByAddress.find(entry.address);
+        if (it != workIndexByAddress.end()) {
+            addressWork[it->second].saplingEntries.push_back(entry);
+        }
+    }
+
+    for (auto& work : addressWork) {
+        if (work.saplingEntries.empty())
+            continue;
+
+        size_t cursor = 0;
+
+        while (cursor < work.saplingEntries.size()) {
             if (isCancelled() || ShutdownRequested()) {
                 LogPrint("zrpcunsafe", "%s: Stopping sweep inner loop (cancelled or shutdown).", getId());
                 break;
             }
-            std::vector<CSproutNotePlaintextEntry> sproutEntries;
-            std::vector<SaplingNoteEntry> saplingEntries;
-            {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
-                std::set<libzcash::PaymentAddress> filterAddresses;
-                filterAddresses.insert(addr);
-                pwalletMain->GetFilteredNotes(sproutEntries, saplingEntries, filterAddresses,
-                                              11, INT_MAX, true, true, true,
-                                              maxQuantity, fSweepTxFee + 1);
+            CAmount fee = fSweepTxFee;
+            std::vector<SaplingOutPoint> ops;
+            std::vector<libzcash::SaplingNote> notes;
+            CAmount amountToSend = 0;
+
+            int selected = 0;
+            while (cursor < work.saplingEntries.size() && selected < maxQuantity) {
+                const auto& entry = work.saplingEntries[cursor++];
+                ops.push_back(entry.op);
+                notes.push_back(entry.note);
+                amountToSend += CAmount(entry.note.value());
+                selected++;
             }
 
-            if (saplingEntries.empty())
+            if (ops.empty())
                 break;
 
-            CAmount amountToSend = 0;
-            for (const auto& e : saplingEntries)
-                amountToSend += CAmount(e.note.value());
-
-            if (amountToSend <= fSweepTxFee)
+            if (amountToSend <= fee)
                 break;
-
-            CAmount fee = fSweepTxFee;
 
             auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
             {
@@ -166,13 +200,6 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
                 builder.SetExpiryHeight(chainActive.Tip()->nHeight + SWEEP_EXPIRY_DELTA);
             }
             LogPrint("zrpcunsafe", "%s: Beginning creating transaction with Sapling output amount=%s\n", getId(), FormatMoney(amountToSend - fee));
-
-            std::vector<SaplingOutPoint> ops;
-            std::vector<libzcash::SaplingNote> notes;
-            for (const auto& entry : saplingEntries) {
-                ops.push_back(entry.op);
-                notes.push_back(entry.note);
-            }
 
             uint256 anchor;
             std::vector<libzcash::MerklePath> saplingMerklePaths;
@@ -185,10 +212,10 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl() {
             }
 
             for (size_t i = 0; i < notes.size(); i++)
-                builder.AddSaplingSpend(extsk.expsk, notes[i], anchor, saplingMerklePaths[i]);
+                builder.AddSaplingSpend(work.extsk.expsk, notes[i], anchor, saplingMerklePaths[i]);
 
             builder.SetFee(fee);
-            builder.AddSaplingOutput(extsk.expsk.ovk, sweepAddress, amountToSend - fee);
+            builder.AddSaplingOutput(work.extsk.expsk.ovk, sweepAddress, amountToSend - fee);
 
             auto tx = builder.Build().GetTxOrThrow();
 
