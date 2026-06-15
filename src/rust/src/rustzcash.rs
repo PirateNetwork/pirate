@@ -61,7 +61,6 @@ use ::zip32::{ChildIndex, DiversifierIndex};
 
 mod blake2b;
 mod ed25519;
-mod metrics_ffi;
 mod streams_ffi;
 mod tracing_ffi;
 

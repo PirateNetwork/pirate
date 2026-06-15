@@ -30,8 +30,6 @@ mod blake2b;
 mod ed25519;
 #[path = "equihash.rs"]
 mod equihash;
-#[path = "metrics_ffi.rs"]
-mod metrics_ffi;
 #[path = "streams_ffi.rs"]
 mod streams_ffi;
 #[path = "tracing_ffi.rs"]
