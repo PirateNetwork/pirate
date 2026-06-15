@@ -278,6 +278,7 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
                 break;
             }
 
+            builder.InitializeSapling(anchor);
             if (!builder.ConvertRawSaplingSpend(extsk)) {
                 LogPrint("zrpcunsafe", "%s: Failed to convert raw Sapling spends. Stopping.\n", getId());
                 unlockSaplingEntries();

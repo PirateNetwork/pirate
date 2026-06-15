@@ -14,7 +14,7 @@ use crate::{
     },
     builder_ffi::shielded_signature_digest,
     orchard_ffi::{orchard_batch_validation_init, BatchValidator as OrchardBatchValidator},
-    params::{network, Network},
+
     sapling::{
         apply_sapling_bundle_signatures, build_sapling_bundle, compute_nullifier,
         derive_sapling_ock,
@@ -108,18 +108,6 @@ pub(crate) mod ffi {
         fn from_hash_writer(writer: Pin<&mut CHashWriter>) -> Box<CppStream<'_>>;
         fn from_blake2b_writer(writer: Pin<&mut CBLAKE2bWriter>) -> Box<CppStream<'_>>;
         fn from_size_computer(sc: Pin<&mut CSizeComputer>) -> Box<CppStream<'_>>;
-    }
-
-    #[namespace = "consensus"]
-    extern "Rust" {
-        type Network;
-
-        fn network(
-            network: &str,
-            overwinter: i32,
-            sapling: i32,
-            orchard: i32,
-        ) -> Result<Box<Network>>;
     }
 
     #[namespace = "libzcash"]
@@ -292,11 +280,10 @@ pub(crate) mod ffi {
         type SaplingBuilder;
 
         #[cxx_name = "new_builder"]
-        fn new_sapling_builder(network: &Network, height: u32) -> Box<SaplingBuilder>;
+        fn new_sapling_builder(anchor: [u8; 32], coinbase: bool) -> Result<Box<SaplingBuilder>>;
         fn add_spend(
             self: &mut SaplingBuilder,
             extsk: &[u8],
-            diversifier: [u8; 11],
             recipient: [u8; 43],
             value: u64,
             rcm: [u8; 32],
@@ -312,7 +299,6 @@ pub(crate) mod ffi {
         #[cxx_name = "build_bundle"]
         fn build_sapling_bundle(
             builder: Box<SaplingBuilder>,
-            target_height: u32,
         ) -> Result<Box<SaplingUnauthorizedBundle>>;
 
         fn compute_nullifier(
@@ -398,11 +384,10 @@ pub(crate) mod ffi {
         fn spend_auth_sig(self: &Action) -> [u8; 64];
         fn as_ptr(self: &Action) -> *const ActionPtr;
         
-        // Compute nullifier directly from encrypted action (decrypts first)
-        // Similar to sapling::Output::compute_nullifier
+        // Compute nullifier directly from encrypted action (decrypts first).
+        // FVK is the single source of truth — IVK is derived internally from the FVK.
         fn compute_nullifier(
             self: &Action,
-            ivk_bytes: &[u8; 64],
             fvk_bytes: &[u8; 96],
             result: &mut [u8; 32],
         ) -> bool;
@@ -420,6 +405,7 @@ pub(crate) mod ffi {
         fn is_present(self: &OrchardBundle) -> bool;
         fn actions(self: &OrchardBundle) -> Vec<Action>;
         fn num_actions(self: &OrchardBundle) -> usize;
+        fn get_action(self: &OrchardBundle, action_index: usize) -> Result<Box<Action>>;
         fn enable_spends(self: &OrchardBundle) -> bool;
         fn enable_outputs(self: &OrchardBundle) -> bool;
         fn value_balance_zat(self: &OrchardBundle) -> i64;
@@ -453,23 +439,23 @@ pub(crate) mod ffi {
             rseed_bytes: &[u8; 32],
             result: &mut [u8; 32],
         ) -> bool;
-        
+
         // Derive Orchard Outgoing Cipher Key for a specific action
-        unsafe fn derive_orchard_ock(
-            orchard_action: *const Action,
-            ovk_bytes: *const [u8; 32],
-            ock_out: *mut [u8; 32],
+        fn derive_orchard_ock(
+            orchard_action: &Action,
+            ovk_bytes: &[u8; 32],
+            ock_out: &mut [u8; 32],
         ) -> bool;
-        
+
         // Decrypt Orchard action output using OCK
-        unsafe fn try_orchard_decrypt_action_ock(
-            orchard_action: *const Action,
-            ock_bytes: *const [u8; 32],
-            value_out: *mut u64,
-            address_out: *mut [u8; 43],
-            memo_out: *mut [u8; 512],
-            rho_out: *mut [u8; 32],
-            rseed_out: *mut [u8; 32],
+        fn try_orchard_decrypt_action_ock(
+            orchard_action: &Action,
+            ock_bytes: &[u8; 32],
+            value_out: &mut u64,
+            address_out: &mut [u8; 43],
+            memo_out: &mut [u8; 512],
+            rho_out: &mut [u8; 32],
+            rseed_out: &mut [u8; 32],
         ) -> bool;
     }
 

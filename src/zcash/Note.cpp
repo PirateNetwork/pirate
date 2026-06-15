@@ -617,31 +617,22 @@ std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardA
  */
 std::optional<uint256> OrchardNotePlaintext::ComputeNullifierFromAction(
     const orchard_bundle::Action& action,
-    const libzcash::OrchardIncomingViewingKey& ivk,
     const libzcash::OrchardFullViewingKey& fvk
 )
 {
-    // Serialize IVK and FVK for bridge call
-    CDataStream ivk_stream(SER_NETWORK, PROTOCOL_VERSION);
+    // FVK is the single source of truth — IVK is derived internally in Rust.
     CDataStream fvk_stream(SER_NETWORK, PROTOCOL_VERSION);
-    
-    libzcash::OrchardIncomingViewingKey_FFI_t ivk_t;
     libzcash::OrchardFullViewingKey_FFI_t fvk_t;
     uint256_t result_t;
-    
-    // Use provided IVK
-    ivk_stream << ivk;
-    ivk_stream >> ivk_t;
     
     fvk_stream << fvk;
     fvk_stream >> fvk_t;
     
-    // Call Rust method on Action to compute nullifier
-    if (!action.compute_nullifier(ivk_t, fvk_t, result_t)) {
+    // Call Rust method on Action to compute nullifier (IVK derived from FVK internally)
+    if (!action.compute_nullifier(fvk_t, result_t)) {
         return std::nullopt;
     }
 
-    // Convert result to uint256
     uint256 result;
     std::copy(result_t.begin(), result_t.end(), result.begin());
     

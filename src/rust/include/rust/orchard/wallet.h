@@ -7,7 +7,6 @@
 #define ZCASH_RUST_INCLUDE_RUST_ORCHARD_WALLET_H
 
 #include "rust/builder.h"
-#include "rust/orchard/keys.h"
 
 #ifdef __cplusplus
 extern "C" {

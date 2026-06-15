@@ -226,7 +226,7 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
             std::copy(ovk.begin(), ovk.end(), ovkBytes.begin());
             
             // Derive the OCK for this OVK
-            if (!orchard::derive_orchard_ock(&action, &ovkBytes, &ock)) {
+            if (!orchard::derive_orchard_ock(action, ovkBytes, ock)) {
                 continue; // Try next OVK
             }
             
@@ -238,8 +238,8 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
             uint256_t test_rseed;
             
             if (orchard::try_orchard_decrypt_action_ock(
-                    &action, &ock, &test_value, &test_address, &test_memo,
-                    &test_rho, &test_rseed)) {
+                    action, ock, test_value, test_address, test_memo,
+                    test_rho, test_rseed)) {
                 // Successfully decrypted, this is the right OVK
                 found = true;
                 break;
@@ -261,7 +261,7 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
                 std::copy(ovk.begin(), ovk.end(), ovkBytes.begin());
                 
                 // Derive the OCK for this OVK
-                if (!orchard::derive_orchard_ock(&action, &ovkBytes, &ock)) {
+                if (!orchard::derive_orchard_ock(action, ovkBytes, ock)) {
                     continue; // Try next OVK
                 }
                 
@@ -273,8 +273,8 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
                 uint256_t test_rseed;
                 
                 if (orchard::try_orchard_decrypt_action_ock(
-                        &action, &ock, &test_value, &test_address, &test_memo,
-                        &test_rho, &test_rseed)) {
+                        action, ock, test_value, test_address, test_memo,
+                        test_rho, test_rseed)) {
                     // Successfully decrypted, this is the right OVK
                     found = true;
                     break;
@@ -292,7 +292,7 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
             std::copy(ovk.begin(), ovk.end(), ovkBytes.begin());
             
             // Derive the OCK for this OVK
-            if (orchard::derive_orchard_ock(&action, &ovkBytes, &ock)) {
+            if (orchard::derive_orchard_ock(action, ovkBytes, ock)) {
                 // Test if this OCK can decrypt the action
                 uint64_t test_value;
                 std::array<uint8_t, 43> test_address;
@@ -301,8 +301,8 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
                 uint256_t test_rseed;
                 
                 if (orchard::try_orchard_decrypt_action_ock(
-                        &action, &ock, &test_value, &test_address, &test_memo,
-                        &test_rho, &test_rseed)) {
+                        action, ock, test_value, test_address, test_memo,
+                        test_rho, test_rseed)) {
                     // Successfully decrypted, this is the right OVK
                     found = true;
                 }
@@ -445,8 +445,7 @@ OrchardDisclosureVerificationResult VerifyOrchardDisclosure(const std::string& d
     }
 
     // Get all actions from the bundle
-    auto actions = bundleDetails.actions();
-    const auto& action = actions[disclosureStruct.outputIndex];
+    auto action = bundleDetails.get_action(disclosureStruct.outputIndex);
 
     // Decrypt with disclosure key
     uint64_t value;
@@ -456,8 +455,8 @@ OrchardDisclosureVerificationResult VerifyOrchardDisclosure(const std::string& d
     uint256_t rseed;
 
     if (!orchard::try_orchard_decrypt_action_ock(
-            &action, &disclosureStruct.ock, &value, &address, &memo,
-            &rho, &rseed)) {
+            *action, disclosureStruct.ock, value, address, memo,
+            rho, rseed)) {
         result.error = "Failed to decrypt action with provided disclosure key";
         return result;
     }

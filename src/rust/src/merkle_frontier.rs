@@ -11,8 +11,8 @@ use orchard::{
 
 use zcash_primitives::{
     merkle_tree::{read_frontier_v1, write_commitment_tree, write_frontier_v1, HashSer},
-    sapling::{NOTE_COMMITMENT_TREE_DEPTH, Node, note::ExtractedNoteCommitment as SaplingExtractedNoteCommitment},
 };
+use sapling_crypto::{NOTE_COMMITMENT_TREE_DEPTH, Node, note::ExtractedNoteCommitment as SaplingExtractedNoteCommitment};
 
 // use crate::{bridge::ffi, orchard_bundle, streams::CppStream, wallet::Wallet};
 use crate::{bridge::ffi, sapling::Bundle as SaplingBundle, orchard_bundle, streams::CppStream, orchard_wallet::Wallet as OrchardWalletInternal, sapling_wallet::Wallet as SaplingWalletInternal};
@@ -22,7 +22,7 @@ use crate::de_ct;
 // This is also defined in `IncrementalMerkleTree.hpp`
 pub const TRACKED_SUBTREE_HEIGHT: u8 = 16;
 
-type Inner<H> = Frontier<H, NOTE_COMMITMENT_TREE_DEPTH>;
+type Inner<H> = Frontier<H, { NOTE_COMMITMENT_TREE_DEPTH }>;
 
 /// An incremental Merkle frontier.
 #[derive(Clone)]
@@ -57,6 +57,11 @@ impl<H: Copy + Hashable + HashSer> MerkleFrontier<H> {
                 e,
             )
         })
+    }
+
+    /// Returns a reference to the inner `Frontier`.
+    pub(crate) fn as_inner(&self) -> &incrementalmerkletree::frontier::Frontier<H, NOTE_COMMITMENT_TREE_DEPTH> {
+        &self.0
     }
 
     /// Returns the amount of memory dynamically allocated for the frontier.
@@ -175,11 +180,10 @@ impl OrchardFrontier {
                 let level = Level::from(TRACKED_SUBTREE_HEIGHT);
                 let pos = non_empty_frontier.position();
                 if pos.is_complete_subtree(level) {
-                    assert_eq!(tracked_root, None);
                     tracked_root = Some(non_empty_frontier.root(Some(level)))
                 }
             }
-            
+
             // Return the result.
             Ok(if let Some(root_hash) = tracked_root {
                 ffi::OrchardAppendResult {
@@ -201,7 +205,7 @@ impl OrchardFrontier {
     ///
     /// TODO: Remove once `crate::wallet` is migrated to `cxx`.
     pub(crate) fn init_wallet(&self, wallet: *mut OrchardWallet) -> bool {
-        crate::orchard_wallet::orchard_wallet_init_from_frontier(wallet as *mut OrchardWalletInternal, &self.0)
+        crate::orchard_wallet::orchard_wallet_init_from_frontier(wallet as *mut OrchardWalletInternal, self as *const _)
     }
 }
 
@@ -215,7 +219,7 @@ pub(crate) fn sapling_empty_root() -> [u8; 32] {
     root
 }
 
-/// An Sapling incremental Merkle frontier.
+/// A Sapling incremental Merkle frontier.
 pub(crate) type SaplingFrontier = MerkleFrontier<Node>;
 
 /// Constructs a new empty Sapling Merkle frontier.
@@ -223,7 +227,7 @@ pub(crate) fn new_sapling() -> Box<SaplingFrontier> {
     Box::new(MerkleFrontier(Inner::empty()))
 }
 
-/// Attempts to parse an Orchard Merkle frontier from the given C++ stream.
+/// Attempts to parse a Sapling Merkle frontier from the given C++ stream.
 pub(crate) fn parse_sapling(reader: &mut CppStream<'_>) -> Result<Box<SaplingFrontier>, String> {
     SaplingFrontier::parse(reader)
 }
@@ -304,11 +308,10 @@ impl SaplingFrontier {
             let level = Level::from(TRACKED_SUBTREE_HEIGHT);
             let pos = non_empty_frontier.position();
             if pos.is_complete_subtree(level) {
-                assert_eq!(tracked_root, None);
                 tracked_root = Some(non_empty_frontier.root(Some(level)))
             }
         }
-        
+
         // Return the result.
         Ok(if let Some(root_hash) = tracked_root {
 
@@ -329,13 +332,13 @@ impl SaplingFrontier {
 
     }
 
-    /// Overwrites the first bridge of the SApling wallet's note commitment tree to have
+    /// Overwrites the first bridge of the Sapling wallet's note commitment tree to have
     /// `self` as its latest state.
     ///
     /// This will fail with an assertion error if any checkpoints exist in the tree.
     ///
     /// TODO: Remove once `crate::wallet` is migrated to `cxx`.
     pub(crate) fn init_wallet(&self, wallet: *mut SaplingWallet) -> bool {
-        crate::sapling_wallet::sapling_wallet_init_from_frontier(wallet as *mut SaplingWalletInternal, &self.0)
+        crate::sapling_wallet::sapling_wallet_init_from_frontier(wallet as *mut SaplingWalletInternal, self as *const _)
     }
 }

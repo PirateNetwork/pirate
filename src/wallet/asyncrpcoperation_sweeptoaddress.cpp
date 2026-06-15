@@ -291,6 +291,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 break;
             }
 
+            builder.InitializeSapling(anchor);
             if (!builder.ConvertRawSaplingSpend(extsk)) {
                 LogPrint("zrpcunsafe", "%s: Converting Raw Sapling Spends failed. Stopping.\n", getId());
                 unlockSaplingEntries();
@@ -494,6 +495,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                     unlockOrchardEntries();
                     break;
                 }
+                builder.InitializeSapling(uint256()); // Dummy anchor for cross-protocol output conversion   
                 if (!builder.ConvertRawSaplingOutput(ovk.ovk)) {
                     LogPrint("zrpcunsafe", "%s: Converting Raw Sapling Output failed. Stopping.\n", getId());
                     unlockOrchardEntries();

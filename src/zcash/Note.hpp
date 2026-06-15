@@ -419,10 +419,10 @@ public:
         const libzcash::OrchardOutgoingViewingKey ovk
     );
 
-    // Compute nullifier directly from an encrypted action
+    // Compute nullifier directly from an encrypted action.
+    // IVK is derived internally from the FVK — only fvk is needed.
     static std::optional<uint256> ComputeNullifierFromAction(
         const orchard_bundle::Action& action,
-        const libzcash::OrchardIncomingViewingKey& ivk,
         const libzcash::OrchardFullViewingKey& fvk
     );
 

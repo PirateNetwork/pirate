@@ -6,7 +6,6 @@
 #define ZCASH_RUST_INCLUDE_RUST_BUILDER_H
 
 #include "rust/pointers.h"
-#include "rust/orchard/keys.h"
 #include "rust/transaction.h"
 
 #ifdef __cplusplus

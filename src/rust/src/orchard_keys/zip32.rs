@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Key structures for Orchard.
 
 use core::fmt;
@@ -79,7 +80,7 @@ impl TryFrom<u32> for ChildIndex {
         if index < (1 << 31) {
             Ok(Self(index + (1 << 31)))
         } else {
-            Err(Error::InvalidChildIndex(32))
+            Err(Error::InvalidChildIndex(index))
         }
     }
 }
@@ -195,7 +196,7 @@ impl ExtendedSpendingKey {
         let fvk: FullViewingKey = (&sk_i).into();
 
         Ok(Self {
-            depth: self.depth + 1,
+            depth: self.depth.checked_add(1).ok_or(Error::InvalidChildIndex(u32::MAX))?,
             parent_fvk_tag: FvkFingerprint::from(&fvk).tag(),
             child_index: index,
             chain_code: c_i,
@@ -214,7 +215,9 @@ impl ExtendedSpendingKey {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
-        assert!(bytes.len() == 73);
+        if bytes.len() != 73 {
+            return Err(Error::InvalidSpendingKey);
+        }
 
         //Deserialize Depth
         let depth: u8 = bytes[0];

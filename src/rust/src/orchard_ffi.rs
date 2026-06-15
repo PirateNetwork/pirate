@@ -80,6 +80,10 @@ impl BatchValidator {
         if let Some(inner) = self.0.take() {
             let vk = (unsafe { crate::ORCHARD_VK.as_ref() })
                 .expect("Parameters not loaded: ORCHARD_VK should have been initialized");
+            assert!(
+                vk.circuit_version() == orchard::circuit::OrchardCircuitVersion::FixedPostNu6_2,
+                "ORCHARD_VK must use FixedPostNu6_2; InsecurePreNu6_2 is forbidden for live-network verification"
+            );
             if inner.validator.validate(vk, OsRng) {
                 // `BatchValidator::validate()` is only called if every
                 // `BatchValidator::check_bundle()` returned `true`, so at this point

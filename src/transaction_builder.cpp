@@ -98,8 +98,6 @@ bool Builder::AddSpendFromParts(
             merklepath_t.begin())) {
         hasActions = true;
         return true;
-    } else {
-        return false;
     }
     return false;
 }
@@ -119,7 +117,7 @@ bool Builder::AddOutput(
             ovk.has_value() ? ovk->begin() : nullptr,
             to.ToBytes().data(),
             value,
-            memo.has_value() ? memo.value().ToBytes().data() : nullptr)) {
+            memo.has_value() ? memo->ToBytes().data() : nullptr)) {
         return false;
     }
 
@@ -210,7 +208,7 @@ std::string TransactionBuilderResult::GetError()
     }
 }
 
-TransactionBuilder::TransactionBuilder() : saplingBuilder(sapling::new_builder(*RustNetwork(), 1))
+TransactionBuilder::TransactionBuilder() 
 {
     // Set the network the transactions will be submitted to, main, test or regtest
     strNetworkID = Params().NetworkIDString();
@@ -221,8 +219,7 @@ TransactionBuilder::TransactionBuilder(
     int nHeight,
     CKeyStore* keystore) : consensusParams(consensusParams),
                            nHeight(nHeight),
-                           keystore(keystore),
-                           saplingBuilder(sapling::new_builder(*RustNetwork(), nHeight))
+                           keystore(keystore)
 {
     // Create a new mutable transaction to build on
     mtx = CreateNewContextualCMutableTransaction(consensusParams, nHeight);
@@ -232,11 +229,8 @@ TransactionBuilder::TransactionBuilder(
 
     // Set the network the transactions will be submitted to, main, test or regtest
     strNetworkID = Params().NetworkIDString();
-
-    // Create a fresh sapling builder with the correct info.
-    if (mtx.nVersion >= SAPLING_MIN_TX_VERSION) {
-        saplingBuilder = std::move(sapling::new_builder(*RustNetwork(), nHeight));
-    }
+    // saplingBuilder is std::optional, defaults to nullopt.
+    // Call InitializeSapling(anchor) before adding Sapling spends.
 }
 
 // Transaction Builder initialization functions
@@ -253,11 +247,8 @@ void TransactionBuilder::InitializeTransactionBuilder(const Consensus::Params& c
 
     // Set the network the transactions will be submitted to, main, test or regtest
     strNetworkID = Params().NetworkIDString();
-
-    // Create a fresh sapling builder with the correct info.
-    if (mtx.nVersion >= SAPLING_MIN_TX_VERSION) {
-        saplingBuilder = std::move(sapling::new_builder(*RustNetwork(), nHeight));
-    }
+    // saplingBuilder is std::optional, defaults to nullopt.
+    // Call InitializeSapling(anchor) before adding Sapling spends.
 }
 
 void TransactionBuilder::SetFee(CAmount fee)
@@ -329,11 +320,13 @@ bool TransactionBuilder::ValidateChecksum()
 
 // Sapling
 
-void TransactionBuilder::InitializeSapling()
+void TransactionBuilder::InitializeSapling(uint256 anchor)
 {
-    // Create a fresh sapling builder with the correct info.
+    // Create a fresh sapling builder with the correct anchor.
     if (mtx.nVersion >= SAPLING_MIN_TX_VERSION) {
-        saplingBuilder = std::move(sapling::new_builder(*RustNetwork(), nHeight));
+        std::array<uint8_t, 32> anchorBytes;
+        std::copy(anchor.begin(), anchor.end(), anchorBytes.begin());
+        saplingBuilder = std::move(sapling::new_builder(anchorBytes, false));
     }
 }
 
@@ -393,6 +386,17 @@ bool TransactionBuilder::ConvertRawSaplingSpend(libzcash::SaplingExtendedSpendin
     libzcash::SaplingIncomingViewingKey ivkInternal;
     const bool haveInternalIvk = extsk.ToXFVK().DeriveIVKinternal(&ivkInternal);
 
+    // Re-create the sapling builder with the actual anchor.
+    // When called via the async wallet ops, AddSaplingSpendRaw has already
+    // populated saplingAnchor. When called via rawtransaction RPC, InitializeSapling
+    // was already called with the correct anchor. Recreating here ensures both
+    // paths produce a builder with the correct chain anchor.
+    if (!vSaplingSpends.empty() && mtx.nVersion >= SAPLING_MIN_TX_VERSION) {
+        std::array<uint8_t, 32> anchorBytes;
+        std::copy(saplingAnchor.begin(), saplingAnchor.end(), anchorBytes.begin());
+        saplingBuilder = std::move(sapling::new_builder(anchorBytes, false));
+    }
+
     // Consistency check: all anchors must equal the first one
     for (int i = 0; i < vSaplingSpends.size(); i++) {
         if (saplingAnchor != vSaplingSpends[i].anchor) {
@@ -425,9 +429,11 @@ bool TransactionBuilder::ConvertRawSaplingSpend(libzcash::SaplingExtendedSpendin
         auto& ssSpendSk = isInternalSpend ? ssIntSk : ssExtSk;
 
         // Add the spend to the sapling builder
-        saplingBuilder->add_spend(
+        if (!saplingBuilder.has_value()) {
+            throw std::runtime_error("TransactionBuilder cannot add Sapling spend without Sapling builder (call InitializeSapling first)");
+        }
+        saplingBuilder.value()->add_spend(
             {reinterpret_cast<uint8_t*>(ssSpendSk.data()), ssSpendSk.size()},
-            vSaplingSpends[i].addr.d,
             vSaplingSpends[i].addr.ToBytes(),
             vSaplingSpends[i].value,
             vSaplingSpends[i].rcm.GetRawBytes(),
@@ -444,10 +450,6 @@ bool TransactionBuilder::ConvertRawSaplingSpend(libzcash::SaplingExtendedSpendin
 
         valueBalanceSapling += vSaplingSpends[i].value;
     }
-
-    std::optional<CTransaction> maybe_tx = CTransaction(mtx);
-    auto tx_result = maybe_tx.value();
-    auto signedtxn = EncodeHexTx(tx_result);
 
     // Accumulate committed count before clearing the staging vector
     nCommittedSaplingSpends += vSaplingSpends.size();
@@ -486,8 +488,11 @@ bool TransactionBuilder::ConvertRawSaplingOutput(uint256 ovk)
     }
 
     for (int i = 0; i < vSaplingOutputs.size(); i++) {
+        if (!saplingBuilder.has_value()) {
+            throw std::runtime_error("TransactionBuilder cannot add Sapling output without Sapling builder (call InitializeSapling first)");
+        }
         auto memoBytes = libzcash::Memo::ToBytes(vSaplingOutputs[i].memo);
-        saplingBuilder->add_recipient(ovk.GetRawBytes(), vSaplingOutputs[i].addr.ToBytes(), vSaplingOutputs[i].value, memoBytes);
+        saplingBuilder.value()->add_recipient(ovk.GetRawBytes(), vSaplingOutputs[i].addr.ToBytes(), vSaplingOutputs[i].value, memoBytes);
         valueBalanceSapling -= vSaplingOutputs[i].value;
     }
 
@@ -595,13 +600,15 @@ bool TransactionBuilder::ConvertRawOrchardSpend(libzcash::OrchardExtendedSpendin
             throw std::runtime_error("TransactionBuilder cannot add Orchard Spend with FVK that does not match Address");
         }
 
-        orchardBuilder.value().AddSpendFromParts(
-            fvk,
-            vOrchardSpends[i].addr,
-            vOrchardSpends[i].value,
-            vOrchardSpends[i].rho,
-            vOrchardSpends[i].rseed,
-            vOrchardSpends[i].orchardMerklePath);
+        if (!orchardBuilder->AddSpendFromParts(
+                fvk,
+                vOrchardSpends[i].addr,
+                vOrchardSpends[i].value,
+                vOrchardSpends[i].rho,
+                vOrchardSpends[i].rseed,
+                vOrchardSpends[i].orchardMerklePath)) {
+            throw std::runtime_error("TransactionBuilder: orchard_builder_add_spend_from_parts failed");
+        }
 
         valueBalanceOrchard += vOrchardSpends[i].value;
         LogPrintf("Adding orchard spend value %i\n", vOrchardSpends[i].value);
@@ -642,7 +649,7 @@ bool TransactionBuilder::ConvertRawOrchardOutput(uint256 ovk)
         return true;
     }
 
-    // Sanity check: cannot add Sapling output to pre-Sapling transaction
+    // Sanity check: cannot add Orchard output to pre-Orchard transaction
     if (!orchardBuilder.has_value()) {
         // Try to give a useful error.
         if (mtx.nVersion < ORCHARD_MIN_TX_VERSION) {
@@ -653,7 +660,7 @@ bool TransactionBuilder::ConvertRawOrchardOutput(uint256 ovk)
     }
 
     for (int i = 0; i < vOrchardOutputs.size(); i++) {
-        if (!orchardBuilder.value().AddOutput(ovk, vOrchardOutputs[i].addr, vOrchardOutputs[i].value, vOrchardOutputs[i].memo)) {
+        if (!orchardBuilder->AddOutput(ovk, vOrchardOutputs[i].addr, vOrchardOutputs[i].value, vOrchardOutputs[i].memo)) {
             return false;
         }
 
@@ -817,13 +824,17 @@ bool TransactionBuilder::IsValidSize(int extraOutputs) const
 
 TransactionBuilderResult TransactionBuilder::Build()
 {
-    std::optional<CTransaction> maybe_tx = CTransaction(mtx);
-    auto tx_result = maybe_tx.value();
-    auto signedtxn = EncodeHexTx(tx_result);
-
     //
     // Consistency checks
     //
+
+    // Guard: staging vectors must have been flushed via Convert* before Build().
+    if (!vSaplingSpends.empty() || !vSaplingOutputs.empty() ||
+        !vOrchardSpends.empty()  || !vOrchardOutputs.empty()) {
+        return TransactionBuilderResult(
+            "TransactionBuilder::Build called with unconverted staging spends/outputs; "
+            "call ConvertRaw* before Build()");
+    }
 
     // Clear Pending Inputs and Outputs
     vSaplingSpends.resize(0);
@@ -875,9 +886,14 @@ TransactionBuilderResult TransactionBuilder::Build()
     //
     // Sapling spends and outputs
     //
+    // If no Sapling spends or outputs were added, initialize an empty builder
+    // so we can produce a valid (empty) Sapling bundle for the ZIP 244 sighash.
+    if (!saplingBuilder.has_value()) {
+        saplingBuilder = std::move(sapling::new_builder({}, false));
+    }
     std::optional<rust::Box<sapling::UnauthorizedBundle>> maybeSaplingBundle;
     try {
-        maybeSaplingBundle = sapling::build_bundle(std::move(saplingBuilder), nHeight);
+        maybeSaplingBundle = sapling::build_bundle(std::move(saplingBuilder.value()));
     } catch (rust::Error e) {
         return TransactionBuilderResult("Failed to build Sapling bundle: " + std::string(e.what()));
     }
@@ -885,7 +901,7 @@ TransactionBuilderResult TransactionBuilder::Build()
     if (!maybeSaplingBundle.has_value()) {
         return TransactionBuilderResult("Failed to build Sapling bundle: no bundle returned");
     }
-    auto saplingBundle = std::move(maybeSaplingBundle.value());
+    auto saplingBundle = std::move(maybeSaplingBundle);
 
     //
     // Orchard
@@ -917,7 +933,7 @@ TransactionBuilderResult TransactionBuilder::Build()
                 consensusBranchId,
                 mtx,
                 tIns,
-                *saplingBundle,
+                *saplingBundle.value(),
                 orchardBundle);
         } else {
             CScript scriptCode;
@@ -944,7 +960,7 @@ TransactionBuilderResult TransactionBuilder::Build()
             orchardSpendingKeys,
             dataToBeSigned);
         if (authorizedBundle.has_value()) {
-            mtx.orchardBundle = authorizedBundle.value();
+            mtx.orchardBundle = std::move(authorizedBundle.value());
         } else {
             return TransactionBuilderResult("Failed to create Orchard proof or signatures");
         }
@@ -953,7 +969,7 @@ TransactionBuilderResult TransactionBuilder::Build()
     // Create Sapling spendAuth and binding signatures
     try {
         mtx.saplingBundle = sapling::apply_bundle_signatures(
-            std::move(saplingBundle), dataToBeSigned.GetRawBytes());
+            std::move(saplingBundle.value()), dataToBeSigned.GetRawBytes());
     } catch (rust::Error e) {
         return TransactionBuilderResult(e.what());
     }
@@ -975,10 +991,6 @@ TransactionBuilderResult TransactionBuilder::Build()
             UpdateTransaction(mtx, nIn, sigdata);
         }
     }
-
-    maybe_tx = CTransaction(mtx);
-    tx_result = maybe_tx.value();
-    signedtxn = EncodeHexTx(tx_result);
 
     return CTransaction(mtx);
 }

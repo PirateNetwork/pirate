@@ -242,6 +242,7 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
         }
 
         // Step 2: Convert raw spends using spending key
+        builder.InitializeSapling(anchor);
         if (!builder.ConvertRawSaplingSpend(spendingKey_)) {
             LogPrint("zrpcunsafe", "%s: Converting Raw Sapling Spends failed. Stopping.\n", getId());
             unlockSaplingEntries();

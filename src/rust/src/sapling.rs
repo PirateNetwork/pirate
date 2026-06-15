@@ -3,46 +3,48 @@
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
 use std::convert::TryInto;
-use std::io::{self, Read, Write};
+use std::io::{self};
 use std::{mem, ptr};
 
-use bellman::groth16::{prepare_verifying_key, Proof};
+use bellman::groth16::Proof;
 use group::{cofactor::CofactorGroup, GroupEncoding};
 use incrementalmerkletree::MerklePath;
 use memuse::DynamicUsage;
 use rand_core::OsRng;
-use zcash_encoding::Vector;
-use zcash_primitives::{
-    consensus::{self, BlockHeight},
-    keys::OutgoingViewingKey,
-    memo::MemoBytes,
-    merkle_tree::merkle_path_from_slice,
-    sapling::{
-        note::ExtractedNoteCommitment,
-        note_encryption::{PreparedIncomingViewingKey, try_sapling_note_decryption, try_sapling_output_recovery},
-        prover::TxProver,
-        redjubjub::{self, Signature},
-        value::{NoteValue, ValueCommitment},
-        Diversifier, Node, Note, PaymentAddress, ProofGenerationKey, Rseed, SaplingIvk,
-        NOTE_COMMITMENT_TREE_DEPTH,
+use redjubjub::{Binding, SpendAuth};
+use sapling_crypto::{
+    bundle::{
+        Authorized as SaplingAuthorized, Bundle as SaplingBundle,
+        GrothProofBytes,
+        OutputDescription as SaplingOutputDescription,
+        SpendDescription as SaplingSpendDescription,
     },
+    builder::{BundleType, Builder as SaplingCryptoBuilder, InProgress, Proven, Unsigned},
+    circuit::{OutputParameters, SpendParameters},
+    keys::{FullViewingKey, OutgoingViewingKey, SpendAuthorizingKey},
+    note::ExtractedNoteCommitment,
+    note_encryption::{PreparedIncomingViewingKey, Zip212Enforcement, try_sapling_note_decryption, try_sapling_output_recovery},
+    value::{NoteValue, ValueCommitment},
+    Anchor, BatchValidator as SaplingBatchValidator, Node, Note, NullifierDerivingKey,
+    PaymentAddress, Rseed, SaplingIvk, SaplingVerificationContext,
+    NOTE_COMMITMENT_TREE_DEPTH,
+};
+use sapling_crypto::zip32::ExtendedSpendingKey;
+use zcash_primitives::{
+    merkle_tree::merkle_path_from_slice,
     transaction::{
-        components::{sapling, Amount},
+        components::{sapling as sapling_serialization, GROTH_PROOF_SIZE},
         txid::{BlockTxCommitmentDigester, TxIdDigester},
         Authorized, Transaction, TransactionDigest,
     },
-    zip32::ExtendedSpendingKey,
 };
-use zcash_proofs::sapling::{
-    self as sapling_proofs, SaplingProvingContext, SaplingVerificationContext,
+use zcash_protocol::{
+    value::ZatBalance as Amount,
 };
-
-use super::GROTH_PROOF_SIZE;
-use super::{
-    de_ct, SAPLING_OUTPUT_PARAMS, SAPLING_OUTPUT_VK, SAPLING_SPEND_PARAMS, SAPLING_SPEND_VK,
-};
-use crate::params::Network;
 use crate::{
+    de_ct,
+    SAPLING_SPEND_PARAMS, SAPLING_OUTPUT_PARAMS,
+    SAPLING_SPEND_VK, SAPLING_OUTPUT_VK,
     bridge::ffi,
     bundlecache::{sapling_bundle_validity_cache, sapling_bundle_validity_cache_mut, CacheEntries},
     streams::CppStream,
@@ -52,10 +54,10 @@ mod zip32;
 
 const SAPLING_TREE_DEPTH: usize = 32;
 
-pub(crate) struct Spend(sapling::SpendDescription<sapling::Authorized>);
+pub(crate) struct Spend(SaplingSpendDescription<SaplingAuthorized>);
 
 pub(crate) fn parse_v4_sapling_spend(bytes: &[u8]) -> Result<Box<Spend>, String> {
-    sapling::SpendDescription::read(&mut io::Cursor::new(bytes))
+    sapling_serialization::temporary_zcashd_read_spend_v4(&mut io::Cursor::new(bytes))
         .map(Spend)
         .map(Box::new)
         .map_err(|e| format!("{}", e))
@@ -75,7 +77,7 @@ impl Spend {
     }
 
     pub(crate) fn rk(&self) -> [u8; 32] {
-        self.0.rk().0.to_bytes()
+        (*self.0.rk()).into()
     }
 
     pub(crate) fn zkproof(&self) -> [u8; 192] {
@@ -83,19 +85,14 @@ impl Spend {
     }
 
     pub(crate) fn spend_auth_sig(&self) -> [u8; 64] {
-        let mut ret = [0; 64];
-        self.0
-            .spend_auth_sig()
-            .write(&mut ret[..])
-            .expect("correct length");
-        ret
+        (*self.0.spend_auth_sig()).into()
     }
 }
 
-pub struct Output(sapling::OutputDescription<[u8; 192]>);
+pub struct Output(SaplingOutputDescription<[u8; 192]>);
 
 pub(crate) fn parse_v4_sapling_output(bytes: &[u8]) -> Result<Box<Output>, String> {
-    sapling::OutputDescription::read(&mut io::Cursor::new(bytes))
+    sapling_serialization::temporary_zcashd_read_output_v4(&mut io::Cursor::new(bytes))
         .map(Output)
         .map(Box::new)
         .map_err(|e| format!("{}", e))
@@ -127,19 +124,18 @@ impl Output {
     }
 
     pub(crate) fn as_ptr(&self) -> *const ffi::OutputPtr {
-        let ret: *const sapling::OutputDescription<[u8; 192]> = &self.0;
+        let ret: *const SaplingOutputDescription<[u8; 192]> = &self.0;
         ret.cast()
     }
 
     pub(crate) fn serialize_v4(&self, writer: &mut CppStream<'_>) -> Result<(), String> {
-        self.0
-            .write_v4(writer)
+        sapling_serialization::temporary_zcashd_write_output_v4(writer, &self.0)
             .map_err(|e| format!("Failed to write v4 Sapling Output Description: {}", e))
     }
 }
 
 #[derive(Clone)]
-pub struct Bundle(pub Option<sapling::Bundle<sapling::Authorized>>);
+pub struct Bundle(pub Option<SaplingBundle<SaplingAuthorized, Amount>>);
 
 pub(crate) fn none_sapling_bundle() -> Box<Bundle> {
     Box::new(Bundle(None))
@@ -166,37 +162,15 @@ impl Bundle {
 
     pub(crate) fn serialize_v4_components(
         &self,
-        mut writer: &mut CppStream<'_>,
+        writer: &mut CppStream<'_>,
         has_sapling: bool,
     ) -> Result<(), String> {
-        if has_sapling {
-            let mut write_v4 = || {
-                writer.write_all(
-                    &self
-                        .0
-                        .as_ref()
-                        .map_or(Amount::zero(), |b| *b.value_balance())
-                        .to_i64_le_bytes(),
-                )?;
-                Vector::write(
-                    &mut writer,
-                    self.0.as_ref().map_or(&[], |b| b.shielded_spends()),
-                    |w, e| e.write_v4(w),
-                )?;
-                Vector::write(
-                    &mut writer,
-                    self.0.as_ref().map_or(&[], |b| b.shielded_outputs()),
-                    |w, e| e.write_v4(w),
-                )
-            };
-            write_v4().map_err(|e| format!("{}", e))?;
-        } else if self.0.is_some() {
-            return Err(
-                "Sapling components may not be present if Sapling is not active.".to_string(),
-            );
-        }
-
-        Ok(())
+        sapling_serialization::temporary_zcashd_write_v4_components(
+            writer,
+            self.0.as_ref(),
+            has_sapling,
+        )
+        .map_err(|e| format!("{}", e))
     }
 
     /// Serializes an authorized Sapling bundle to the given stream.
@@ -207,13 +181,13 @@ impl Bundle {
             .map_err(|e| format!("Failed to serialize Sapling bundle: {}", e))
     }
 
-    pub(crate) fn inner(&self) -> Option<&sapling::Bundle<sapling::Authorized>> {
+    pub(crate) fn inner(&self) -> Option<&SaplingBundle<SaplingAuthorized, Amount>> {
         self.0.as_ref()
     }
 
     pub(crate) fn as_ptr(&self) -> *const ffi::SaplingBundlePtr {
         if let Some(bundle) = self.inner() {
-            let ret: *const sapling::Bundle<sapling::Authorized> = bundle;
+            let ret: *const SaplingBundle<SaplingAuthorized, Amount> = bundle;
             ret.cast()
         } else {
             ptr::null()
@@ -247,15 +221,14 @@ impl Bundle {
     pub(crate) fn get_spend(&self, spend_index: usize) -> Result<Box<Spend>, String> {
         let bundle = match &self.0 {
             Some(b) => b,
-            None => return Err(format!("Failed to retireve sapling bundle")),
+            None => return Err("Failed to retrieve sapling bundle".to_owned()),
         };
-
-        let spend = match bundle.shielded_spends().iter().nth(spend_index) {
-            Some(s) => s.clone(),
-            None => return Err(format!("Failed to retireve spend description")),
-        };
-
-        return Ok(Box::new(Spend(spend)));
+        bundle
+            .shielded_spends()
+            .get(spend_index)
+            .cloned()
+            .map(|s| Box::new(Spend(s)))
+            .ok_or_else(|| "Failed to retrieve spend description".to_owned())
     }
 
     pub(crate) fn outputs(&self) -> Vec<Output> {
@@ -270,15 +243,14 @@ impl Bundle {
     pub(crate) fn get_output(&self, out_index: usize) -> Result<Box<Output>, String> {
         let bundle = match &self.0 {
             Some(b) => b,
-            None => return Err(format!("Failed to retireve sapling bundle")),
+            None => return Err("Failed to retrieve sapling bundle".to_owned()),
         };
-
-        let output = match bundle.shielded_outputs().iter().nth(out_index) {
-            Some(o) => o.clone(),
-            None => return Err(format!("Failed to retireve ouput description")),
-        };
-
-        return Ok(Box::new(Output(output)));
+        bundle
+            .shielded_outputs()
+            .get(out_index)
+            .cloned()
+            .map(|o| Box::new(Output(o)))
+            .ok_or_else(|| "Failed to retrieve output description".to_owned())
     }
 
     pub(crate) fn num_spends(&self) -> usize {
@@ -308,13 +280,13 @@ impl Bundle {
     ///
     /// Panics if the bundle is not present.
     pub(crate) fn binding_sig(&self) -> [u8; 64] {
-        let mut ret = [0; 64];
-        self.inner()
+        let binding_sig = self.inner()
             .expect("Bundle actions should have been checked to be non-empty")
             .authorization()
-            .binding_sig
-            .write(&mut ret[..])
-            .expect("correct length");
+            .binding_sig;
+        let sig_bytes: [u8; 64] = binding_sig.into();
+        let mut ret = [0; 64];
+        ret.copy_from_slice(&sig_bytes);
         ret
     }
 
@@ -325,8 +297,8 @@ impl Bundle {
 
 pub(crate) struct BundleAssembler {
     value_balance: Amount,
-    shielded_spends: Vec<sapling::SpendDescription<sapling::Authorized>>,
-    shielded_outputs: Vec<sapling::OutputDescription<[u8; 192]>>, // GROTH_PROOF_SIZE
+    shielded_spends: Vec<SaplingSpendDescription<SaplingAuthorized>>,
+    shielded_outputs: Vec<SaplingOutputDescription<GrothProofBytes>>,
 }
 
 pub(crate) fn new_bundle_assembler() -> Box<BundleAssembler> {
@@ -347,40 +319,35 @@ pub(crate) fn parse_v4_sapling_components(
 
 impl BundleAssembler {
     pub(crate) fn parse_v4_components(
-        mut reader: &mut CppStream<'_>,
+        reader: &mut CppStream<'_>,
         has_sapling: bool,
     ) -> io::Result<Box<Self>> {
-        let (value_balance, shielded_spends, shielded_outputs) = if has_sapling {
-            let vb = {
-                let mut tmp = [0; 8];
-                reader.read_exact(&mut tmp)?;
-                Amount::from_i64_le_bytes(tmp).map_err(|_| {
-                    io::Error::new(io::ErrorKind::InvalidData, "valueBalance out of range")
-                })?
-            };
-            #[allow(clippy::redundant_closure)]
-            let ss: Vec<sapling::SpendDescription<sapling::Authorized>> =
-                Vector::read(&mut reader, |r| sapling::SpendDescription::read(r))?;
-            #[allow(clippy::redundant_closure)]
-            let so: Vec<sapling::OutputDescription<sapling::GrothProofBytes>> =
-                Vector::read(&mut reader, |r| sapling::OutputDescription::read(r))?;
-            (vb, ss, so)
-        } else {
-            (Amount::zero(), vec![], vec![])
-        };
+        let (value_balance, shielded_spends, shielded_outputs) =
+            sapling_serialization::temporary_zcashd_read_v4_components(reader, has_sapling)?;
 
-        Ok(Box::new(Self {
-            value_balance,
-            shielded_spends,
-            shielded_outputs,
-        }))
+        if shielded_spends.is_empty()
+            && shielded_outputs.is_empty()
+            && value_balance != Amount::zero()
+        {
+            Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "nonzero valueBalanceSapling has no sources or sinks",
+            ))
+        } else {
+            Ok(Box::new(Self {
+                value_balance,
+                shielded_spends,
+                shielded_outputs,
+            }))
+        }
     }
 
     pub(crate) fn add_spend_to_assembler(
         &mut self,
         spend_bytes: [u8; 384],
     ) -> bool {
-        let spend = match  sapling::SpendDescription::read(&mut io::Cursor::new(&spend_bytes))
+        let spend = match sapling_serialization::temporary_zcashd_read_spend_v4(
+                &mut io::Cursor::new(&spend_bytes))
             .map_err(|e| format!("{}", e)) {
                 Ok(s) => s,
                 Err(_) => return false
@@ -394,7 +361,8 @@ impl BundleAssembler {
         &mut self,
         output_bytes: [u8; 948],
     ) -> bool {
-        let output = match  sapling::OutputDescription::read(&mut io::Cursor::new(&output_bytes))
+        let output = match sapling_serialization::temporary_zcashd_read_output_v4(
+                &mut io::Cursor::new(&output_bytes))
             .map_err(|e| format!("{}", e)) {
                 Ok(s) => s,
                 Err(_) => return false
@@ -411,7 +379,7 @@ impl BundleAssembler {
 
         let value_balance = match Amount::from_i64(value_balance) {
             Ok(vb) => vb,
-            Err(()) => return false,
+            Err(_e) => return false,
         };
 
         self.value_balance = value_balance;
@@ -429,125 +397,42 @@ pub(crate) fn finish_bundle_assembly(
     assembler: Box<BundleAssembler>,
     binding_sig: [u8; 64],
 ) -> Box<Bundle> {
-    let binding_sig = redjubjub::Signature::read(&binding_sig[..]).expect("parsed elsewhere");
+    let binding_sig: redjubjub::Signature<Binding> = binding_sig.into();
 
-    Box::new(Bundle(Some(sapling::Bundle::temporary_zcashd_from_parts(
+    Box::new(Bundle(SaplingBundle::from_parts(
         assembler.shielded_spends,
         assembler.shielded_outputs,
         assembler.value_balance,
-        sapling::Authorized { binding_sig },
-    ))))
-}
-
-pub(crate) struct StaticTxProver;
-
-impl TxProver for StaticTxProver {
-    type SaplingProvingContext = SaplingProvingContext;
-
-    fn new_sapling_proving_context(&self) -> Self::SaplingProvingContext {
-        SaplingProvingContext::new()
-    }
-
-    fn spend_proof(
-        &self,
-        ctx: &mut Self::SaplingProvingContext,
-        proof_generation_key: ProofGenerationKey,
-        diversifier: Diversifier,
-        rseed: Rseed,
-        ar: jubjub::Fr,
-        value: u64,
-        anchor: bls12_381::Scalar,
-        merkle_path: MerklePath<Node, NOTE_COMMITMENT_TREE_DEPTH>,
-    ) -> Result<
-        (
-            [u8; GROTH_PROOF_SIZE],
-            ValueCommitment,
-            redjubjub::PublicKey,
-        ),
-        (),
-    > {
-        let (proof, cv, rk) = ctx.spend_proof(
-            proof_generation_key,
-            diversifier,
-            rseed,
-            ar,
-            value,
-            anchor,
-            merkle_path,
-            unsafe { SAPLING_SPEND_PARAMS.as_ref() }
-                .expect("Parameters not loaded: SAPLING_SPEND_PARAMS should have been initialized"),
-            &prepare_verifying_key(
-                unsafe { SAPLING_SPEND_VK.as_ref() }
-                    .expect("Parameters not loaded: SAPLING_SPEND_VK should have been initialized"),
-            ),
-        )?;
-
-        let mut zkproof = [0u8; GROTH_PROOF_SIZE];
-        proof
-            .write(&mut zkproof[..])
-            .expect("should be able to serialize a proof");
-
-        Ok((zkproof, cv, rk))
-    }
-
-    fn output_proof(
-        &self,
-        ctx: &mut Self::SaplingProvingContext,
-        esk: jubjub::Fr,
-        payment_address: PaymentAddress,
-        rcm: jubjub::Fr,
-        value: u64,
-    ) -> ([u8; GROTH_PROOF_SIZE], ValueCommitment) {
-        let (proof, cv) = ctx.output_proof(
-            esk,
-            payment_address,
-            rcm,
-            value,
-            unsafe { SAPLING_OUTPUT_PARAMS.as_ref() }.expect(
-                "Parameters not loaded: SAPLING_OUTPUT_PARAMS should have been initialized",
-            ),
-        );
-
-        let mut zkproof = [0u8; GROTH_PROOF_SIZE];
-        proof
-            .write(&mut zkproof[..])
-            .expect("should be able to serialize a proof");
-
-        (zkproof, cv)
-    }
-
-    fn binding_sig(
-        &self,
-        ctx: &mut Self::SaplingProvingContext,
-        value_balance: zcash_primitives::transaction::components::Amount,
-        sighash: &[u8; 32],
-    ) -> Result<redjubjub::Signature, ()> {
-        ctx.binding_sig(value_balance, sighash)
-    }
-}
-
-pub(crate) struct SaplingBuilder(sapling::builder::SaplingBuilder<Network>);
-
-pub(crate) fn new_sapling_builder(network: &Network, target_height: u32) -> Box<SaplingBuilder> {
-    Box::new(SaplingBuilder(sapling::builder::SaplingBuilder::new(
-        *network,
-        target_height.into(),
+        SaplingAuthorized { binding_sig },
     )))
 }
 
-#[allow(clippy::boxed_local)]
+pub(crate) struct SaplingBuilder {
+    inner: SaplingCryptoBuilder,
+    extsks: Vec<ExtendedSpendingKey>,
+}
+
+pub(crate) fn new_sapling_builder(anchor: [u8; 32], coinbase: bool) -> Result<Box<SaplingBuilder>, String> {
+    let zip212 = sapling_crypto::note_encryption::Zip212Enforcement::On;
+    let bundle_type = if coinbase { BundleType::Coinbase } else { BundleType::DEFAULT };
+    let anchor = de_ct(Anchor::from_bytes(anchor))
+        .ok_or_else(|| "Invalid Sapling anchor".to_owned())?;
+    Ok(Box::new(SaplingBuilder {
+        inner: SaplingCryptoBuilder::new(zip212, bundle_type, anchor),
+        extsks: vec![],
+    }))
+}
+
 pub(crate) fn build_sapling_bundle(
     builder: Box<SaplingBuilder>,
-    target_height: u32,
 ) -> Result<Box<SaplingUnauthorizedBundle>, String> {
-    builder.build(target_height).map(Box::new)
+    builder.build().map(Box::new)
 }
 
 impl SaplingBuilder {
     pub(crate) fn add_spend(
         &mut self,
         extsk: &[u8],
-        diversifier: [u8; 11],
         recipient: [u8; 43],
         value: u64,
         rcm: [u8; 32],
@@ -555,22 +440,23 @@ impl SaplingBuilder {
     ) -> Result<(), String> {
         let extsk =
             ExtendedSpendingKey::from_bytes(extsk).map_err(|_| "Invalid ExtSK".to_owned())?;
-        let diversifier = Diversifier(diversifier);
         let recipient =
             PaymentAddress::from_bytes(&recipient).ok_or("Invalid recipient address")?;
         let value = NoteValue::from_raw(value);
-        // If this is after ZIP 212, the caller has calculated rcm, and we don't need to call
-        // Note::derive_esk, so we just pretend the note was using this rcm all along.
         let rseed = de_ct(jubjub::Scalar::from_bytes(&rcm))
             .map(Rseed::BeforeZip212)
             .ok_or("Invalid rcm")?;
         let note = Note::from_parts(recipient, value, rseed);
-        let merkle_path = merkle_path_from_slice(&merkle_path)
-            .map_err(|e| format!("Invalid Sapling Merkle path: {}", e))?;
+        let merkle_path: MerklePath<Node, NOTE_COMMITMENT_TREE_DEPTH> =
+            merkle_path_from_slice(&merkle_path)
+                .map_err(|e| format!("Invalid Sapling Merkle path: {}", e))?;
 
-        self.0
-            .add_spend(OsRng, extsk, diversifier, note, merkle_path)
-            .map_err(|e| format!("Failed to add Sapling spend: {}", e))
+        let fvk = FullViewingKey::from_expanded_spending_key(&extsk.expsk);
+        self.inner
+            .add_spend(fvk, note, merkle_path)
+            .map_err(|e| format!("Failed to add Sapling spend: {}", e))?;
+        self.extsks.push(extsk);
+        Ok(())
     }
 
     pub(crate) fn add_recipient(
@@ -583,28 +469,38 @@ impl SaplingBuilder {
         let ovk = Some(OutgoingViewingKey(ovk));
         let to = PaymentAddress::from_bytes(&to).ok_or("Invalid recipient address")?;
         let value = NoteValue::from_raw(value);
-        let memo = MemoBytes::from_bytes(&memo).map_err(|e| format!("Invalid memo: {}", e))?;
-
-        self.0
-            .add_output(OsRng, ovk, to, value, memo)
+        self.inner
+            .add_output(ovk, to, value, memo)
             .map_err(|e| format!("Failed to add Sapling recipient: {}", e))
     }
 
-    fn build(self, target_height: u32) -> Result<SaplingUnauthorizedBundle, String> {
-        let prover = crate::sapling::StaticTxProver;
-        let mut ctx = prover.new_sapling_proving_context();
-        let rng = OsRng;
-        let bundle = self
-            .0
-            .build(&prover, &mut ctx, rng, target_height.into(), None)
+    fn build(self) -> Result<SaplingUnauthorizedBundle, String> {
+        let spend_params = unsafe { SAPLING_SPEND_PARAMS.as_ref() }
+            .expect("Parameters not loaded: SAPLING_SPEND_PARAMS");
+        let output_params = unsafe { SAPLING_OUTPUT_PARAMS.as_ref() }
+            .expect("Parameters not loaded: SAPLING_OUTPUT_PARAMS");
+
+        let result = self.inner
+            .build::<SpendParameters, OutputParameters, _, Amount>(
+                &self.extsks,
+                OsRng,
+            )
             .map_err(|e| format!("Failed to build Sapling bundle: {}", e))?;
-        Ok(SaplingUnauthorizedBundle { bundle, ctx })
+
+        let (bundle, _metadata) = match result {
+            Some(pair) => pair,
+            None => return Ok(SaplingUnauthorizedBundle { bundle: None, signing_keys: vec![] }),
+        };
+
+        let proven = bundle.create_proofs(spend_params, output_params, OsRng, ());
+        let signing_keys = self.extsks.iter().map(|sk| sk.expsk.ask.clone()).collect();
+        Ok(SaplingUnauthorizedBundle { bundle: Some(proven), signing_keys })
     }
 }
 
 pub(crate) struct SaplingUnauthorizedBundle {
-    pub(crate) bundle: Option<sapling::Bundle<sapling::builder::Unauthorized>>,
-    ctx: SaplingProvingContext,
+    pub(crate) bundle: Option<SaplingBundle<InProgress<Proven, Unsigned>, Amount>>,
+    signing_keys: Vec<SpendAuthorizingKey>,
 }
 
 pub(crate) fn apply_sapling_bundle_signatures(
@@ -616,12 +512,11 @@ pub(crate) fn apply_sapling_bundle_signatures(
 
 impl SaplingUnauthorizedBundle {
     fn apply_signatures(self, sighash_bytes: [u8; 32]) -> Result<crate::sapling::Bundle, String> {
-        let SaplingUnauthorizedBundle { bundle, mut ctx } = self;
+        let SaplingUnauthorizedBundle { bundle, signing_keys } = self;
 
         let authorized = if let Some(bundle) = bundle {
-            let prover = crate::sapling::StaticTxProver;
-            let (authorized, _) = bundle
-                .apply_signatures(&prover, &mut ctx, &mut OsRng, &sighash_bytes)
+            let authorized = bundle
+                .apply_signatures(OsRng, sighash_bytes, &signing_keys)
                 .map_err(|e| format!("Failed to apply signatures to Sapling bundle: {}", e))?;
             Some(authorized)
         } else {
@@ -635,10 +530,7 @@ impl SaplingUnauthorizedBundle {
 pub(crate) struct Verifier(SaplingVerificationContext);
 
 pub(crate) fn init_verifier() -> Box<Verifier> {
-    // We consider ZIP 216 active all of the time because blocks prior to NU5
-    // activation (on mainnet and testnet) did not contain Sapling transactions
-    // that violated its canonicity rule.
-    Box::new(Verifier(SaplingVerificationContext::new(true)))
+    Box::new(Verifier(SaplingVerificationContext::new()))
 }
 
 impl Verifier {
@@ -653,37 +545,26 @@ impl Verifier {
         spend_auth_sig: &[u8; 64],
         sighash_value: &[u8; 32],
     ) -> bool {
-        // Deserialize the value commitment
         let cv = match Option::from(ValueCommitment::from_bytes_not_small_order(cv)) {
             Some(p) => p,
             None => return false,
         };
-
-        // Deserialize the anchor, which should be an element
-        // of Fr.
         let anchor = match de_ct(bls12_381::Scalar::from_bytes(anchor)) {
             Some(a) => a,
             None => return false,
         };
-
-        // Deserialize rk
-        let rk = match redjubjub::PublicKey::read(&rk[..]) {
-            Ok(p) => p,
+        let rk: redjubjub::VerificationKey<SpendAuth> = match (*rk).try_into() {
+            Ok(k) => k,
             Err(_) => return false,
         };
-
-        // Deserialize the signature
-        let spend_auth_sig = match Signature::read(&spend_auth_sig[..]) {
-            Ok(sig) => sig,
-            Err(_) => return false,
-        };
-
-        // Deserialize the proof
+        let spend_auth_sig: redjubjub::Signature<SpendAuth> = (*spend_auth_sig).into();
         let zkproof = match Proof::read(&zkproof[..]) {
             Ok(p) => p,
             Err(_) => return false,
         };
 
+        let spend_vk = unsafe { SAPLING_SPEND_VK.as_ref() }
+            .expect("Parameters not loaded: SAPLING_SPEND_VK");
         self.0.check_spend(
             &cv,
             anchor,
@@ -692,10 +573,7 @@ impl Verifier {
             sighash_value,
             spend_auth_sig,
             zkproof,
-            &prepare_verifying_key(
-                unsafe { SAPLING_SPEND_VK.as_ref() }
-                    .expect("Parameters not loaded: SAPLING_SPEND_VK should have been initialized"),
-            ),
+            &spend_vk.prepare(),
         )
     }
 
@@ -706,41 +584,26 @@ impl Verifier {
         ephemeral_key: &[u8; 32],
         zkproof: &[u8; GROTH_PROOF_SIZE],
     ) -> bool {
-        // Deserialize the value commitment
         let cv = match Option::from(ValueCommitment::from_bytes_not_small_order(cv)) {
             Some(p) => p,
             None => return false,
         };
-
-        // Deserialize the extracted note commitment.
         let cmu = match Option::from(ExtractedNoteCommitment::from_bytes(cm)) {
             Some(a) => a,
             None => return false,
         };
-
-        // Deserialize the ephemeral key
         let epk = match de_ct(jubjub::ExtendedPoint::from_bytes(ephemeral_key)) {
             Some(p) => p,
             None => return false,
         };
-
-        // Deserialize the proof
         let zkproof = match Proof::read(&zkproof[..]) {
             Ok(p) => p,
             Err(_) => return false,
         };
 
-        self.0.check_output(
-            &cv,
-            cmu,
-            epk,
-            zkproof,
-            &prepare_verifying_key(
-                unsafe { SAPLING_OUTPUT_VK.as_ref() }.expect(
-                    "Parameters not loaded: SAPLING_OUTPUT_VK should have been initialized",
-                ),
-            ),
-        )
+        let output_vk = unsafe { SAPLING_OUTPUT_VK.as_ref() }
+            .expect("Parameters not loaded: SAPLING_OUTPUT_VK");
+        self.0.check_output(&cv, cmu, epk, zkproof, &output_vk.prepare())
     }
 
     pub(crate) fn final_check(
@@ -749,24 +612,13 @@ impl Verifier {
         binding_sig: &[u8; 64],
         sighash_value: &[u8; 32],
     ) -> bool {
-        let value_balance = match Amount::from_i64(value_balance) {
-            Ok(vb) => vb,
-            Err(()) => return false,
-        };
-
-        // Deserialize the signature
-        let binding_sig = match Signature::read(&binding_sig[..]) {
-            Ok(sig) => sig,
-            Err(_) => return false,
-        };
-
-        self.0
-            .final_check(value_balance, sighash_value, binding_sig)
+        let binding_sig: redjubjub::Signature<Binding> = (*binding_sig).into();
+        self.0.final_check(value_balance, sighash_value, binding_sig)
     }
 }
 
 struct BatchValidatorInner {
-    validator: sapling_proofs::BatchValidator,
+    validator: SaplingBatchValidator,
     queued_entries: CacheEntries,
 }
 
@@ -774,7 +626,7 @@ pub(crate) struct BatchValidator(Option<BatchValidatorInner>);
 
 pub(crate) fn init_batch_validator(cache_store: bool) -> Box<BatchValidator> {
     Box::new(BatchValidator(Some(BatchValidatorInner {
-        validator: sapling_proofs::BatchValidator::new(),
+        validator: SaplingBatchValidator::new(),
         queued_entries: CacheEntries::new(cache_store),
     })))
 }
@@ -901,16 +753,11 @@ impl Output {
         // Prepare the IVK for decryption
         let prepared_ivk = PreparedIncomingViewingKey::new(&ivk);
         
-        // Use MainNetwork with arbitrary height (not used for validation by PirateNetwork fork)
-        let network = consensus::Network::MainNetwork;
-        let height = BlockHeight::from_u32(0);
-        
         // Attempt decryption with IVK
         let decrypted = match try_sapling_note_decryption(
-            &network,
-            height,
             &prepared_ivk,
             &self.0,
+            Zip212Enforcement::Off,
         ) {
             Some(r) => r,
             None => return false,
@@ -924,7 +771,7 @@ impl Output {
         let addr_bytes = decrypted.1.to_bytes();
         // Payment address is 11 bytes diversifier + 32 bytes pk_d
         pk_d_out.copy_from_slice(&addr_bytes[11..43]);
-        *memo_out = *decrypted.2.as_array();
+        *memo_out = decrypted.2;
         
         // Determine leadbyte and extract rseed bytes based on Rseed enum
         match decrypted.0.rseed() {
@@ -969,16 +816,11 @@ impl Output {
     ) -> bool {
         let ovk = OutgoingViewingKey(*ovk_bytes);
         
-        // Use MainNetwork with arbitrary height (not used for validation by PirateNetwork fork)
-        let network = consensus::Network::MainNetwork;
-        let height = BlockHeight::from_u32(0);
-        
         // Attempt decryption with OVK using the correct API
         let decrypted = match try_sapling_output_recovery(
-            &network,
-            height,
             &ovk,
             &self.0,
+            Zip212Enforcement::Off,
         ) {
             Some(r) => r,
             None => return false,
@@ -992,7 +834,7 @@ impl Output {
         let addr_bytes = decrypted.1.to_bytes();
         // Payment address is 11 bytes diversifier + 32 bytes pk_d
         pk_d_out.copy_from_slice(&addr_bytes[11..43]);
-        *memo_out = *decrypted.2.as_array();
+        *memo_out = decrypted.2;
         
         // Determine leadbyte and extract rseed bytes based on Rseed enum
         match decrypted.0.rseed() {
@@ -1024,7 +866,7 @@ impl Output {
     pub(crate) fn compute_nullifier(
         &self,
         ivk: &[u8; 32],
-        ak: &[u8; 32],
+        _ak: &[u8; 32],
         nk: &[u8; 32],
         position: u64,
         result: &mut [u8; 32],
@@ -1039,16 +881,11 @@ impl Output {
         // Prepare the IVK for decryption
         let prepared_ivk = PreparedIncomingViewingKey::new(&sapling_ivk);
         
-        // Use MainNetwork with arbitrary height
-        let network = consensus::Network::MainNetwork;
-        let height = BlockHeight::from_u32(0);
-        
         // Decrypt the output to get the note
         let decrypted = match try_sapling_note_decryption(
-            &network,
-            height,
             &prepared_ivk,
             &self.0,
+            Zip212Enforcement::Off,
         ) {
             Some(r) => r,
             None => return false,
@@ -1061,7 +898,7 @@ impl Output {
         };
 
         let nk = match de_ct(nk.into_subgroup()) {
-            Some(nk) => zcash_primitives::sapling::NullifierDerivingKey(nk),
+            Some(nk) => NullifierDerivingKey(nk),
             None => return false,
         };
 
@@ -1081,7 +918,7 @@ pub(crate) fn compute_nullifier(
     pk_d: &[u8; 32],
     value: u64,
     rcm: &[u8; 32],
-    ak: &[u8; 32],
+    _ak: &[u8; 32],
     nk: &[u8; 32],
     position: u64,
     result: &mut [u8; 32],
@@ -1116,7 +953,7 @@ pub(crate) fn compute_nullifier(
     };
 
     let nk = match de_ct(nk.into_subgroup()) {
-        Some(nk) => zcash_primitives::sapling::NullifierDerivingKey(nk),
+        Some(nk) => NullifierDerivingKey(nk),
         None => return false,
     };
 
@@ -1141,16 +978,11 @@ pub(crate) fn derive_sapling_ock(
     ock_out: &mut [u8; 32],
 ) -> bool {
     use zcash_note_encryption::EphemeralKeyBytes;
-    use zcash_primitives::sapling::note_encryption::prf_ock;
+    use sapling_crypto::note_encryption::prf_ock;
     
-    // Parse the value commitment
-    let cv = match de_ct(jubjub::ExtendedPoint::from_bytes(cv)) {
+    // Parse the value commitment directly from the raw cv bytes
+    let cv = match de_ct(ValueCommitment::from_bytes_not_small_order(cv)) {
         Some(p) => p,
-        None => return false,
-    };
-    
-    let cv = match de_ct(cv.into_subgroup()) {
-        Some(cv) => ValueCommitment::from_bytes_not_small_order(&cv.to_bytes()).unwrap(),
         None => return false,
     };
     
@@ -1186,15 +1018,13 @@ impl Output {
         rcm_out: &mut [u8; 32],
     ) -> bool {
         use zcash_note_encryption::{OutgoingCipherKey, try_output_recovery_with_ock};
-        use zcash_primitives::sapling::note_encryption::{SaplingDomain, prf_ock};
+        use sapling_crypto::note_encryption::SaplingDomain;
         
         // Create the OCK
         let ock = OutgoingCipherKey(*ock);
         
-        // Use MainNetwork with arbitrary height (domain is mainly for ZIP parameter resolution)
-        let network = consensus::Network::MainNetwork;
-        let height = BlockHeight::from_u32(0);
-        let domain = SaplingDomain::for_height(network, height);
+        // Pirate never activated Canopy, so ZIP 212 is always Off
+        let domain = SaplingDomain::new(Zip212Enforcement::Off);
         
         // Attempt decryption with OCK
         let decrypted = match try_output_recovery_with_ock(
@@ -1216,7 +1046,7 @@ impl Output {
         let addr_bytes = decrypted.1.to_bytes();
         // Payment address is 11 bytes diversifier + 32 bytes pk_d
         pk_d_out.copy_from_slice(&addr_bytes[11..43]);
-        *memo_out = *decrypted.2.as_array();
+        *memo_out = decrypted.2;
         
         // Determine leadbyte and extract rseed bytes based on Rseed enum
         match decrypted.0.rseed() {

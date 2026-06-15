@@ -1960,7 +1960,7 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
       }
 
       //Create a new sapling bulider before converting the store sapling notes
-      tb.InitializeSapling();
+      tb.InitializeSapling(primaryAnchor);
 
       //Add the stored sapling notes to the sapling builder
       if (!tb.ConvertRawSaplingSpend(primarySaplingKey))
@@ -2038,8 +2038,16 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
       throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Spending key failed to produce a non-null outgoing viewing key.");
   }
 
+  //Initialize the sapling builder if there are sapling outputs but no sapling spends.
+  //This can happen when spending from Orchard and sending to a Sapling address (cross-pool send).
+  if (tb.vSaplingSpends.size() == 0 && tb.vSaplingOutputs.size() > 0) {
+      tb.InitializeSapling(uint256());
+  }
+
   //Add the stored outputs to the sapling builder
-  tb.ConvertRawSaplingOutput(ovk);
+  if (tb.vSaplingOutputs.size() > 0 && !tb.ConvertRawSaplingOutput(ovk)) {
+      throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX converting raw Sapling Outputs failed.");
+  }
 
   //Initialize the orchard builder if there are orchard outputs and the orchard builder has not already been initialized
   //This can happen when there are no orchard spends but there are orchard outputs
@@ -2048,7 +2056,9 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
   }
 
   //Add the stored outputs to the orchard builder
-  tb.ConvertRawOrchardOutput(ovk);
+  if (tb.vOrchardOutputs.size() > 0 && !tb.ConvertRawOrchardOutput(ovk)) {
+      throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX converting raw Orchard Outputs failed.");
+  }
 
   //Build and sign transaction
   auto rtx = tb.Build().GetTxOrThrow();

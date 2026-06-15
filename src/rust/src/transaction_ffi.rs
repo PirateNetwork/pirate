@@ -6,12 +6,16 @@ use blake2b_simd::Hash;
 use libc::{c_uchar, size_t};
 use tracing::error;
 use zcash_encoding::Vector;
+use zcash_protocol::{consensus::BranchId, value::Zatoshis};
+use zcash_transparent::{
+    address::Script,
+    bundle::{self as transparent},
+    sighash::{self as transparent_sighash, TransparentAuthorizingContext},
+};
+use sapling_crypto::bundle::Authorized as SaplingSigAuth;
 use zcash_primitives::{
-    consensus::BranchId,
-    legacy::Script,
     transaction::{
-        components::{sapling, transparent, Amount},
-        sighash::{SignableInput, TransparentAuthorizingContext},
+        sighash::{SignableInput},
         sighash_v5::v5_signature_hash,
         txid::TxIdDigester,
         Authorization, Transaction, TransactionData, TxDigests, TxVersion,
@@ -49,7 +53,7 @@ pub extern "C" fn zcash_transaction_digests(
         match tx.version() {
             // Pre-NU5 transaction formats don't have authorizing data commitments; when
             // included in the authDataCommitment tree, they use the [0xff; 32] value.
-            TxVersion::Sprout(_) | TxVersion::Overwinter | TxVersion::Sapling => {
+            TxVersion::Sprout(_) | TxVersion::V4 => {
                 *auth_digest_ret = [0xff; 32]
             }
             _ => auth_digest_ret.copy_from_slice(tx.auth_commitment().as_bytes()),
@@ -69,17 +73,17 @@ impl transparent::Authorization for TransparentAuth {
 }
 
 impl TransparentAuthorizingContext for TransparentAuth {
-    fn input_amounts(&self) -> Vec<Amount> {
+    fn input_amounts(&self) -> Vec<Zatoshis> {
         self.all_prev_outputs
             .iter()
-            .map(|prevout| prevout.value)
+            .map(|prevout| prevout.value())
             .collect()
     }
 
     fn input_scriptpubkeys(&self) -> Vec<Script> {
         self.all_prev_outputs
             .iter()
-            .map(|prevout| prevout.script_pubkey.clone())
+            .map(|prevout| prevout.script_pubkey().clone())
             .collect()
     }
 }
@@ -148,7 +152,7 @@ pub(crate) struct PrecomputedAuth;
 
 impl Authorization for PrecomputedAuth {
     type TransparentAuth = TransparentAuth;
-    type SaplingAuth = sapling::Authorized;
+    type SaplingAuth = SaplingSigAuth;
     type OrchardAuth = orchard::bundle::Authorized;
 }
 
@@ -192,7 +196,7 @@ pub extern "C" fn zcash_transaction_precomputed_init(
     };
 
     match tx.version() {
-        TxVersion::Sprout(_) | TxVersion::Overwinter | TxVersion::Sapling => {
+        TxVersion::Sprout(_) | TxVersion::V4 => {
             // We don't support these legacy transaction formats in this API.
             ptr::null_mut()
         }
@@ -251,7 +255,7 @@ pub extern "C" fn zcash_transaction_zip244_signature_digest(
     };
     if matches!(
         precomputed_tx.tx.version(),
-        TxVersion::Sprout(_) | TxVersion::Overwinter | TxVersion::Sapling,
+        TxVersion::Sprout(_) | TxVersion::V4,
     ) {
         error!("Cannot calculate ZIP 244 digest for pre-v5 transaction");
         return false;
@@ -274,22 +278,16 @@ pub extern "C" fn zcash_transaction_zip244_signature_digest(
             }
         };
 
-        SignableInput::Transparent {
-            // This conversion to `u8` is always fine:
-            // - We only call this FFI method once we already know we are using ZIP 244.
-            // - Even if we weren't, `hash_type` is one byte tacked onto the end of a
-            //   signature, so it always fits into a `u8` (and TBH I don't know why we
-            //   ever set it to `u32`).
-            hash_type: hash_type.try_into().unwrap(),
-            index,
-            // `script_code` is unused by `v5_signature_hash`, so instead of passing the
-            // real `script_code` across the FFI (and paying the serialization and parsing
-            // cost for no benefit), we set it to the prevout's `script_pubkey`. This
-            // happens to be correct anyway for every output script kind except P2SH.
-            script_code: &prevout.script_pubkey,
-            script_pubkey: &prevout.script_pubkey,
-            value: prevout.value,
-        }
+        SignableInput::Transparent(
+            transparent_sighash::SignableInput::from_parts(
+                precomputed_tx.tx.transparent_bundle().unwrap(),
+                transparent_sighash::SighashType::from_raw(hash_type.try_into().unwrap()),
+                index,
+                prevout.script_pubkey(),
+                prevout.script_pubkey(),
+                prevout.value(),
+            ).expect("index already validated")
+        )
     };
 
     let sighash = v5_signature_hash(

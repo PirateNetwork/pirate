@@ -1,3 +1,4 @@
+#![allow(static_mut_refs)]
 //! FFI between the C++ zcashd codebase and the Rust Zcash crates.
 //!
 //! This is internal to zcashd and is not an officially-supported API.
@@ -20,17 +21,16 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 
-use bellman::groth16::{self, Parameters, PreparedVerifyingKey, Proof, prepare_verifying_key, VerifyingKey};
+use bellman::groth16::{PreparedVerifyingKey, prepare_verifying_key, VerifyingKey, Parameters};
 use bls12_381::Bls12;
 use tracing::info;
-use group::{cofactor::CofactorGroup, GroupEncoding};
+use group::GroupEncoding;
 use libc::{c_uchar, size_t};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::slice;
 use std::sync::Once;
-use std::convert::TryFrom;
 use subtle::CtOption;
 
 #[cfg(not(target_os = "windows"))]
@@ -43,34 +43,27 @@ use std::ffi::OsString;
 #[cfg(target_os = "windows")]
 use std::os::windows::ffi::OsStringExt;
 
-use zcash_primitives::{
-    block::equihash,
-    merkle_tree::{HashSer,merkle_path_from_slice},
-    sapling::{
-        merkle_hash,
-        note::ExtractedNoteCommitment,
-        value::{NoteValue, ValueCommitment},
-        redjubjub::{self, Signature},
-        spend_sig,
-        Diversifier, Node, Note, NullifierDerivingKey, PaymentAddress, ProofGenerationKey, Rseed},
-    transaction::components::{Amount, GROTH_PROOF_SIZE},
-    zip32,
-};
-use zcash_proofs::{
-    sapling::{SaplingProvingContext, SaplingVerificationContext},
-    sprout as old_sprout,
-};
+use sapling_crypto::circuit::{OutputParameters, OutputVerifyingKey, SpendParameters, SpendVerifyingKey};
 
-use zcash_primitives::consensus::BranchId;
+use zcash_primitives::{
+    merkle_tree::HashSer,
+    transaction::components::GROTH_PROOF_SIZE,
+};
+use sapling_crypto::{
+    merkle_hash,
+    Diversifier, Node,
+};
+use zcash_proofs::sprout as old_sprout;
 
 use incrementalmerkletree::Hashable;
+use sapling_crypto::zip32 as sapling_zip32;
+use ::zip32::{ChildIndex, DiversifierIndex};
 
 mod blake2b;
 mod ed25519;
 mod metrics_ffi;
 mod streams_ffi;
 mod tracing_ffi;
-mod zcashd_orchard;
 
 mod bridge;
 
@@ -82,12 +75,10 @@ mod merkle_frontier;
 mod orchard_actions;
 mod orchard_bundle;
 mod orchard_ffi;
-mod orchard_keys_ffi;
 mod orchard_keys;
 mod sapling_keys;
 mod seed;
 mod transparent;
-mod params;
 mod sapling;
 mod sprout;
 mod streams;
@@ -97,24 +88,22 @@ mod orchard_wallet;
 
 mod test_harness_ffi;
 
-const SAPLING_TREE_DEPTH: usize = 32;
-
 #[cfg(test)]
 mod tests;
 
 static PROOF_PARAMETERS_LOADED: Once = Once::new();
-static mut SAPLING_SPEND_VK: Option<groth16::VerifyingKey<Bls12>> = None;
-static mut SAPLING_OUTPUT_VK: Option<groth16::VerifyingKey<Bls12>> = None;
+static mut SAPLING_SPEND_VK: Option<SpendVerifyingKey> = None;
+static mut SAPLING_OUTPUT_VK: Option<OutputVerifyingKey> = None;
 static mut SPROUT_GROTH16_VK: Option<PreparedVerifyingKey<Bls12>> = None;
 
-static mut SAPLING_SPEND_PARAMS: Option<Parameters<Bls12>> = None;
-static mut SAPLING_OUTPUT_PARAMS: Option<Parameters<Bls12>> = None;
+static mut SAPLING_SPEND_PARAMS: Option<SpendParameters> = None;
+static mut SAPLING_OUTPUT_PARAMS: Option<OutputParameters> = None;
 static mut SPROUT_GROTH16_PARAMS_PATH: Option<PathBuf> = None;
 
 static mut ORCHARD_PK: Option<orchard::circuit::ProvingKey> = None;
 static mut ORCHARD_VK: Option<orchard::circuit::VerifyingKey> = None;
 
-/// Converts CtOption<t> into Option<T>
+/// Converts CtOption<T> into Option<T>
 fn de_ct<T>(ct: CtOption<T>) -> Option<T> {
     if ct.is_some().into() {
         Some(ct.unwrap())
@@ -168,17 +157,15 @@ pub extern "C" fn librustzcash_init_zksnark_params(
         // Load params
         let (sapling_spend_params, sapling_output_params) = {
             let (spend_buf, output_buf) = wagyu_zcash_parameters::load_sapling_parameters();
-            let spend_params = Parameters::<Bls12>::read(&spend_buf[..], false)
+            let spend_params = SpendParameters::read(&spend_buf[..], false)
                 .expect("couldn't deserialize Sapling spend parameters");
-            let output_params = Parameters::<Bls12>::read(&output_buf[..], false)
-                .expect("couldn't deserialize Sapling spend parameters");
+            let output_params = OutputParameters::read(&output_buf[..], false)
+                .expect("couldn't deserialize Sapling output parameters");
             (spend_params, output_params)
         };
 
-        // We need to clone these because we aren't necessarily storing the proving
-        // parameters in memory.
-        let sapling_spend_vk = sapling_spend_params.vk.clone();
-        let sapling_output_vk = sapling_output_params.vk.clone();
+        let sapling_spend_vk = sapling_spend_params.verifying_key();
+        let sapling_output_vk = sapling_output_params.verifying_key();
 
         // Generate Orchard parameters.
         info!(target: "main", "Loading Orchard parameters");
@@ -258,33 +245,6 @@ pub extern "C" fn librustzcash_ivk_to_pkd(
     } else {
         false
     }
-}
-
-// Private utility function to get Note from C parameters
-fn priv_get_note(
-    diversifier: *const [c_uchar; 11],
-    pk_d: *const [c_uchar; 32],
-    value: u64,
-    rcm: *const [c_uchar; 32],
-) -> Result<Note, ()> {
-    let recipient_bytes = {
-        let mut tmp = [0; 43];
-        tmp[..11].copy_from_slice(unsafe { &*diversifier });
-        tmp[11..].copy_from_slice(unsafe { &*pk_d });
-        tmp
-    };
-    let recipient = PaymentAddress::from_bytes(&recipient_bytes).ok_or(())?;
-
-    // Deserialize randomness
-    // If this is after ZIP 212, the caller has calculated rcm, and we don't need to call
-    // Note::derive_esk, so we just pretend the note was using this rcm all along.
-    let rseed = Rseed::BeforeZip212(de_ct(jubjub::Scalar::from_bytes(unsafe { &*rcm })).ok_or(())?);
-
-    Ok(Note::from_parts(
-        recipient,
-        NoteValue::from_raw(value),
-        rseed,
-    ))
 }
 
 /// Sprout JoinSplit proof generation.
@@ -409,7 +369,7 @@ pub extern "C" fn librustzcash_zip32_xsk_master(
 ) {
     let seed = unsafe { std::slice::from_raw_parts(seed, seedlen) };
 
-    let xsk = zip32::ExtendedSpendingKey::master(seed);
+    let xsk = sapling_zip32::ExtendedSpendingKey::master(seed);
 
     xsk.write(&mut (unsafe { &mut *xsk_master })[..])
         .expect("should be able to serialize an ExtendedSpendingKey");
@@ -422,9 +382,9 @@ pub extern "C" fn librustzcash_zip32_xsk_derive(
     i: u32,
     xsk_i: *mut [c_uchar; 169],
 ) {
-    let xsk_parent = zip32::ExtendedSpendingKey::read(&unsafe { *xsk_parent }[..])
+    let xsk_parent = sapling_zip32::ExtendedSpendingKey::read(&unsafe { *xsk_parent }[..])
         .expect("valid ExtendedSpendingKey");
-    let i = zip32::ChildIndex::from_index(i);
+    let i = ChildIndex::from_index(i).expect("expected hardened child index");
 
     let xsk = xsk_parent.derive_child(i);
 
@@ -437,21 +397,14 @@ pub extern "C" fn librustzcash_zip32_xsk_derive(
 pub extern "C" fn librustzcash_zip32_xfvk_derive(
     xfvk_parent: *const [c_uchar; 169],
     i: u32,
-    xfvk_i: *mut [c_uchar; 169],
+    _xfvk_i: *mut [c_uchar; 169],
 ) -> bool {
-    let xfvk_parent = zip32::ExtendedFullViewingKey::read(&unsafe { *xfvk_parent }[..])
+    let xfvk_parent = sapling_zip32::ExtendedFullViewingKey::read(&unsafe { *xfvk_parent }[..])
         .expect("valid ExtendedFullViewingKey");
-    let i = zip32::ChildIndex::from_index(i);
-
-    let xfvk = match xfvk_parent.derive_child(i) {
-        Ok(xfvk) => xfvk,
-        Err(_) => return false,
-    };
-
-    xfvk.write(&mut (unsafe { &mut *xfvk_i })[..])
-        .expect("should be able to serialize an ExtendedFullViewingKey");
-
-    true
+    let _ = xfvk_parent;
+    let _ = i;
+    // XFVK child derivation is not supported in sapling-crypto 0.7
+    false
 }
 
 /// Derive a PaymentAddress from an ExtendedFullViewingKey.
@@ -462,11 +415,11 @@ pub extern "C" fn librustzcash_zip32_xfvk_address(
     j_ret: *mut [c_uchar; 11],
     addr_ret: *mut [c_uchar; 43],
 ) -> bool {
-    let xfvk = match zip32::ExtendedFullViewingKey::read(&unsafe { *xfvk }[..]) {
+    let xfvk = match sapling_zip32::ExtendedFullViewingKey::read(&unsafe { *xfvk }[..]) {
         Ok(xfvk) => xfvk,
         Err(_) => return false,
     };
-    let j = zip32::DiversifierIndex(unsafe { *j });
+    let j = DiversifierIndex::from(unsafe { *j });
 
     let addr = match xfvk.find_address(j) {
         Some(addr) => addr,
@@ -476,7 +429,7 @@ pub extern "C" fn librustzcash_zip32_xfvk_address(
     let j_ret = unsafe { &mut *j_ret };
     let addr_ret = unsafe { &mut *addr_ret };
 
-    j_ret.copy_from_slice(&(addr.0).0);
+    j_ret.copy_from_slice(addr.0.as_bytes());
     addr_ret.copy_from_slice(&addr.1.to_bytes());
 
     true

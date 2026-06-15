@@ -1,8 +1,8 @@
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use bridgetree::BridgeTree;
-use byteorder::{ByteOrder, LittleEndian, ReadBytesExt, WriteBytesExt};
 use incrementalmerkletree::{MerklePath, Position};
 use libc::c_uchar;
-use std::collections::{BTreeSet, BTreeMap};
+use std::collections::BTreeMap;
 use std::io;
 use std::convert::TryInto;
 use tracing::error;
@@ -10,34 +10,25 @@ use subtle::CtOption;
 
 use zcash_encoding::{Optional, Vector};
 
-use zcash_note_encryption::try_note_decryption;
 
-use zcash_primitives::{
-    consensus::BlockHeight,
-    merkle_tree::{read_position, write_position, write_merkle_path, merkle_path_from_slice, compute_root_from_witness},
-    sapling::{NOTE_COMMITMENT_TREE_DEPTH},
-    transaction::{components::Amount, TxId},
-};
+use zcash_primitives::merkle_tree::{read_position, write_position, merkle_path_from_slice};
+use zcash_protocol::{consensus::BlockHeight, value::ZatBalance as Amount};
+use crate::incremental_merkle_tree::{read_tree, write_tree, NOTE_COMMITMENT_TREE_DEPTH, MAX_CHECKPOINTS};
+use zcash_primitives::transaction::TxId;
 
 use orchard::{
     bundle::Authorized,
-    keys::{FullViewingKey, IncomingViewingKey, PreparedIncomingViewingKey, OutgoingViewingKey, Scope, SpendingKey},
-    note::{Nullifier,ExtractedNoteCommitment},
-    note_encryption::OrchardDomain,
+    note::ExtractedNoteCommitment,
     tree::{MerkleHashOrchard},
-    Address, Bundle, Note,
+    Bundle,
 };
 
 use crate::{
-    builder_ffi::OrchardSpendInfo,
-    incremental_merkle_tree::{read_tree, write_tree},
     orchard_bundle::Action,
     streams_ffi::{CppStreamReader, CppStreamWriter, ReadCb, StreamObj, WriteCb},
-    zcashd_orchard::OrderedAddress,
 };
 
 pub const ORCHARD_TREE_DEPTH: usize = 32;
-pub const MAX_CHECKPOINTS: usize = 100;
 const NOTE_STATE_V1: u8 = 1;
 pub type OrchardPath = MerklePath<MerkleHashOrchard, NOTE_COMMITMENT_TREE_DEPTH>;
 
@@ -48,6 +39,25 @@ fn de_ct<T>(ct: CtOption<T>) -> Option<T> {
     } else {
         None
     }
+}
+
+/// Serializes a `MerklePath` in the format expected by `merkle_path_from_slice`:
+/// - 1 byte: DEPTH
+/// - DEPTH groups of 33 bytes (1 length byte = 32, then 32 bytes of hash) in REVERSE path order
+/// - 8 bytes: leaf position as little-endian u64
+fn write_merkle_path<H: zcash_primitives::merkle_tree::HashSer, W: std::io::Write, const DEPTH: u8>(
+    mut writer: W,
+    path: &MerklePath<H, DEPTH>,
+) -> std::io::Result<()> {
+    writer.write_all(&[DEPTH])?;
+    // merkle_path_from_slice reverses the chunk order when reading, so we write in reverse.
+    for elem in path.path_elems().iter().rev() {
+        writer.write_all(&[32u8])?;
+        elem.write(&mut writer)?;
+    }
+    let pos: u64 = path.position().into();
+    writer.write_all(&pos.to_le_bytes())?;
+    Ok(())
 }
 
 /// A data structure tracking the last transaction whose notes
@@ -65,7 +75,7 @@ pub struct Wallet {
     wallet_note_positions: BTreeMap<TxId, NotePositions>,
     /// The incremental Merkle tree used to track note commitments and witnesses for notes
     /// belonging to the wallet.
-    commitment_tree: BridgeTree<MerkleHashOrchard, u32, NOTE_COMMITMENT_TREE_DEPTH>,
+    commitment_tree: BridgeTree<MerkleHashOrchard, u32, { NOTE_COMMITMENT_TREE_DEPTH }>,
     /// The block height at which the last checkpoint was created, if any.
     last_checkpoint: Option<BlockHeight>,
     /// The block height and transaction index of the note most recently added to
@@ -74,12 +84,14 @@ pub struct Wallet {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum WalletError {
     OutOfOrder(LastObserved, BlockHeight, usize, usize),
     NoteCommitmentTreeFull,
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum RewindError {
     /// The note commitment tree does not contain enough checkpoints to
     /// rewind to the requested height. The number of blocks that
@@ -139,7 +151,7 @@ impl Wallet {
             }
         }
 
-        self.commitment_tree.checkpoint(block_height.into());
+        self.commitment_tree.checkpoint(u32::from(block_height));
         self.last_checkpoint = Some(block_height);
         true
     }
@@ -170,67 +182,43 @@ impl Wallet {
             }
 
             tracing::trace!("Rewinding note commitment tree");
-            let blocks_to_rewind = <u32>::from(checkpoint_height) - <u32>::from(to_height);
+            let blocks_to_rewind = u32::from(checkpoint_height) - u32::from(to_height);
             let checkpoint_count = self.commitment_tree.checkpoints().len();
+            let has_tracked_notes = self
+                .wallet_note_positions
+                .values()
+                .any(|n| !n.note_positions.is_empty());
+
+            let mut rewind_succeeded = true;
             for _ in 0..blocks_to_rewind {
-                // If the rewind fails, we have no more checkpoints. This is fine in the
-                // case that we have a recently-initialized tree, so long as we have no
-                // witnessed indices. In the case that we have any witnessed notes, we
-                // have hit the maximum rewind limit, and this is an error.
                 if !self.commitment_tree.rewind() {
                     assert!(self.commitment_tree.checkpoints().is_empty());
-                    if !self.commitment_tree.marked_indices().is_empty() {
+                    if has_tracked_notes {
                         return Err(RewindError::InsufficientCheckpoints(checkpoint_count));
                     }
+                    rewind_succeeded = false;
+                    break;
                 }
             }
 
-            // retain notes that correspond to transactions that are not "un-mined" after
-            // the rewind
-            let to_retain: BTreeSet<_> = self
-                .wallet_note_positions
-                .iter()
-                .filter_map(|(txid, n)| {
-                    if n.tx_height <= to_height {
-                        Some(*txid)
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            tracing::trace!("Retaining notes in transactions {:?}", to_retain);
-
-            // self.mined_notes.retain(|_, v| to_retain.contains(&v.txid));
-
-            // nullifier and received note data are retained, because these values are stable
-            // once we've observed a note for the first time. The block height at which we
-            // observed the note is removed along with the note positions, because the
-            // transaction will no longer have been observed as having been mined.
             self.wallet_note_positions
-                .retain(|txid, _| to_retain.contains(txid));
-
-            // reset our last observed height to ensure that notes added in the future are
-            // from a new block
+                .retain(|_, n| n.tx_height <= to_height);
             self.last_observed = Some(LastObserved {
                 block_height: to_height,
                 block_tx_idx: None,
                 tx_action_idx: None,
             });
-
-            self.last_checkpoint = if checkpoint_count > blocks_to_rewind as usize {
+            self.last_checkpoint = if rewind_succeeded
+                && checkpoint_count > blocks_to_rewind as usize
+            {
                 Some(to_height)
             } else {
-                // checkpoint_count <= blocks_to_rewind
                 None
             };
-
             Ok(to_height)
-        } else if self.commitment_tree.marked_indices().is_empty() {
+        } else if !self.wallet_note_positions.values().any(|n| !n.note_positions.is_empty()) {
             tracing::trace!("No witnessed notes in tree, allowing rewind without checkpoints");
 
-            // If we have no witnessed notes, it's okay to keep "rewinding" even though
-            // we have no checkpoints. We then allow last_observed to assume the height
-            // to which we have reset the tree state.
             self.last_observed = Some(LastObserved {
                 block_height: to_height,
                 block_tx_idx: None,
@@ -283,7 +271,7 @@ impl Wallet {
             tx_action_idx: None,
         });
 
-        for (action_idx, action) in bundle.actions().iter().enumerate() {
+        for action in bundle.actions().iter() {
             // append the note commitment for each action to the note commitment tree
             if !self
                 .commitment_tree
@@ -299,97 +287,54 @@ impl Wallet {
     pub fn clear_single_txid_postions(
         &mut self,
         txid: &TxId,
-    ) -> Result<(), WalletError>  {
-
-        //Check if txid already exists
-        match self.wallet_note_positions.get(txid) {
-           Some(_) => {
-               self.wallet_note_positions.remove(txid);
-               ()
-           },
-           None => ()
-        }
-
+    ) -> Result<(), WalletError> {
+        self.wallet_note_positions.remove(txid);
         Ok(())
-
     }
 
     pub fn create_empty_txid_positions(
         &mut self,
         block_height: BlockHeight,
         txid: &TxId,
-    ) -> Result<(), WalletError>  {
-
-        //Check if txid already exists
-        match self.wallet_note_positions.get(txid) {
-           Some(_) => {
-               self.wallet_note_positions.remove(txid);
-               ()
-           },
-           None => ()
-        }
-
-        self.wallet_note_positions
-            .insert(
-                *txid,
-                NotePositions {
-                    tx_height: block_height,
-                    note_positions: BTreeMap::default(),
-                },
-            );
-
+    ) -> Result<(), WalletError> {
+        // insert() replaces any existing entry for the same txid
+        self.wallet_note_positions.insert(
+            *txid,
+            NotePositions {
+                tx_height: block_height,
+                note_positions: BTreeMap::default(),
+            },
+        );
         Ok(())
-
     }
 
     pub fn get_position_of_note(
-        &mut self,
+        &self,
         txid: &TxId,
         tx_action_idx: &usize,
-    ) ->Option<Position> {
-        //Check if txid already exists
-        let txid_positions = match self.wallet_note_positions.get(txid) {
-           Some(positions) => {
-               positions
-           },
-           None => {
-               return None;
-           }
-       };
-
-        let output_position = match txid_positions.note_positions.get(tx_action_idx) {
-           Some(position) => {
-               position
-           },
-           None => {
-               return None;
-           }
-       };
-
-       return Some(*output_position)
-
+    ) -> Option<Position> {
+        self.wallet_note_positions
+            .get(txid)?
+            .note_positions
+            .get(tx_action_idx)
+            .copied()
     }
 
     pub fn unmark_positions_of_transaction(
         &mut self,
         txid: &TxId,
     ) -> bool {
-        let txid_positions = match self.wallet_note_positions.get(txid) {
-           Some(positions) => {
-               positions
-           },
-           None => {
-               return false;
-           }
-       };
-
-        for (_, position) in txid_positions.note_positions.iter() {
-            self.commitment_tree.remove_mark(*position);
+        let Some(tx_notes) = self.wallet_note_positions.get(txid) else {
+            return false;
+        };
+        // Collect positions first so the immutable borrow on wallet_note_positions
+        // ends before the mutable remove() call below.
+        let positions: Vec<Position> = tx_notes.note_positions.values().copied().collect();
+        for position in positions {
+            let _ = self.commitment_tree.remove_mark(position);
         }
-
         self.wallet_note_positions.remove(txid);
-
-       true
+        true
     }
 
     pub fn orchard_append_single_commitment(
@@ -425,21 +370,25 @@ impl Wallet {
             tx_action_idx: Some(tx_action_idx),
         });
 
-        if !self.commitment_tree.append(MerkleHashOrchard::from_cmx(&ExtractedNoteCommitment::from_bytes(&orchard_action.cmx()).unwrap()))
-        {
+        let leaf = MerkleHashOrchard::from_cmx(
+            &ExtractedNoteCommitment::from_bytes(&orchard_action.cmx()).unwrap(),
+        );
+        if !self.commitment_tree.append(leaf) {
             return Err(WalletError::NoteCommitmentTreeFull);
         }
 
         if is_mine {
-            let pos = self.commitment_tree.mark().expect("tree is not empty");
+            let pos = self
+                .commitment_tree
+                .mark()
+                .expect("tree is not empty after marked append");
             assert!(self
-                    .wallet_note_positions
-                    .get_mut(txid)
-                    .expect("This should already be created")
-                    .note_positions
-                    .insert(tx_action_idx, pos)
-                    .is_none());
-
+                .wallet_note_positions
+                .get_mut(txid)
+                .expect("This should already be created")
+                .note_positions
+                .insert(tx_action_idx, pos)
+                .is_none());
         }
 
 
@@ -682,10 +631,11 @@ pub extern "C" fn orchard_wallet_load_note_commitment_tree(
     stream: Option<StreamObj>,
     read_cb: Option<ReadCb>,
 ) -> bool {
-    let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null.");
+    let wallet_ref = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null.");
     let mut reader = CppStreamReader::from_raw_parts(stream, read_cb.unwrap());
 
-    let mut read_v1 = move |mut reader: CppStreamReader| -> io::Result<()> {
+    let read_v1 = move |mut reader: CppStreamReader| -> io::Result<()> {
+        let wallet = wallet_ref;
         let last_checkpoint = Optional::read(&mut reader, |r| {
             r.read_u32::<LittleEndian>().map(BlockHeight::from)
         })?;
@@ -709,6 +659,25 @@ pub extern "C" fn orchard_wallet_load_note_commitment_tree(
 
         wallet.last_checkpoint = last_checkpoint;
         wallet.commitment_tree = commitment_tree;
+
+        // If the tree is empty (SER_V4 ShardTree format or corrupted data),
+        // but we have tracked note positions, clear last_checkpoint to trigger rescan.
+        let tree_is_empty = wallet.commitment_tree.checkpoints().is_empty()
+            && wallet.commitment_tree.marked_indices().is_empty();
+        if tree_is_empty
+            && wallet
+                .wallet_note_positions
+                .values()
+                .any(|n| !n.note_positions.is_empty())
+        {
+            tracing::warn!(
+                "Orchard note commitment tree is empty but wallet has {} tracked note positions. \
+                 Clearing last_checkpoint to trigger a rescan and rebuild witness data.",
+                wallet.wallet_note_positions.len()
+            );
+            wallet.last_checkpoint = None;
+        }
+
         Ok(())
     };
 
@@ -722,6 +691,18 @@ pub extern "C" fn orchard_wallet_load_note_commitment_tree(
         }
         Ok(NOTE_STATE_V1) => match read_v1(reader) {
             Ok(_) => true,
+            Err(e) if e.to_string().contains("rescan required") => {
+                tracing::warn!(
+                    "Orchard note commitment tree wallet data requires rescan ({}). \
+                     Tree will be rebuilt.",
+                    e
+                );
+                // wallet_ref was moved into the closure; re-derive from the raw pointer.
+                let w = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null.");
+                w.last_checkpoint = None;
+                w.commitment_tree = BridgeTree::new(MAX_CHECKPOINTS);
+                true
+            }
             Err(e) => {
                 error!(
                     "Failed to read Orchard note commitment or last checkpoint height: {}",
@@ -743,30 +724,24 @@ pub extern "C" fn orchard_wallet_load_note_commitment_tree(
 #[no_mangle]
 pub extern "C" fn orchard_wallet_init_from_frontier(
     wallet: *mut Wallet,
-    frontier: *const bridgetree::Frontier<MerkleHashOrchard, NOTE_COMMITMENT_TREE_DEPTH>,
+    frontier: *const crate::merkle_frontier::OrchardFrontier,
 ) -> bool {
     let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null.");
-    let frontier = unsafe { frontier.as_ref() }.expect("Wallet pointer may not be null.");
+    let frontier = unsafe { frontier.as_ref() }.expect("Frontier pointer may not be null.");
 
-    if wallet.commitment_tree.checkpoints().is_empty()
-        && wallet.commitment_tree.marked_indices().is_empty()
-    {
-        wallet.commitment_tree = frontier.value().map_or_else(
-            || BridgeTree::new(MAX_CHECKPOINTS),
-            |nonempty_frontier| {
-                BridgeTree::from_frontier(MAX_CHECKPOINTS, nonempty_frontier.clone())
-            },
-        );
-        true
-    } else {
-        // if we have any checkpoints in the tree, or if we have any witnessed notes,
-        // don't allow reinitialization
-        error!(
-            "Invalid attempt to reinitialize note commitment tree: {} checkpoints present.",
-            wallet.commitment_tree.checkpoints().len()
-        );
-        false
+    let has_existing_data = !wallet.commitment_tree.checkpoints().is_empty()
+        || !wallet.commitment_tree.marked_indices().is_empty();
+
+    if has_existing_data {
+        // Tree already has data from a prior wallet load; don't reinitialize.
+        return true;
     }
+
+    wallet.commitment_tree = frontier.as_inner().value().map_or_else(
+        || BridgeTree::new(MAX_CHECKPOINTS),
+        |nonempty_frontier| BridgeTree::from_frontier(MAX_CHECKPOINTS, nonempty_frontier.clone()),
+    );
+    true
 }
 
 
@@ -778,18 +753,17 @@ pub extern "C" fn orchard_is_note_tracked(
     tx_action_idx: usize,
     position_out: *mut u64,
 ) -> bool {
-    let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null");
+    let wallet = unsafe { wallet.as_ref() }.expect("Wallet pointer may not be null");
     let txid = TxId::from_bytes(*unsafe { txid.as_ref() }.expect("txid may not be null."));
+    let position_out = unsafe { position_out.as_mut() }.expect("position_out may not be null.");
 
     if let Some(position) = wallet.get_position_of_note(&txid, &tx_action_idx) {
-        let position_out = unsafe { &mut *position_out };
         *position_out = position.into();
         return true;
     }
 
-    let position_out = unsafe { &mut *position_out };
     *position_out = u64::MAX;
-    return false;
+    false
 }
 
 #[no_mangle]
@@ -799,15 +773,14 @@ pub extern "C" fn orchard_wallet_get_path_for_note(
     tx_action_idx: usize,
     path_ret: *mut [u8; 1 + 33 * ORCHARD_TREE_DEPTH + 8],
 ) -> bool {
-    let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null");
+    let wallet = unsafe { wallet.as_ref() }.expect("Wallet pointer may not be null");
     let txid = TxId::from_bytes(*unsafe { txid.as_ref() }.expect("txid may not be null."));
 
     if let Some(position) = wallet.get_position_of_note(&txid, &tx_action_idx) {
-        if let Ok(witness) = wallet.commitment_tree.witness(position, 0) {
-            if let Ok(path) = OrchardPath::from_parts(witness, position) {
-                // println!("Sapling Path {:?}", path);
+        if let Ok(path_vec) = wallet.commitment_tree.witness(position, 0) {
+            if let Ok(path) = OrchardPath::from_parts(path_vec, position) {
                 let mut buffer = vec![];
-                if let Ok(_) = write_merkle_path(&mut buffer, path) {
+                if write_merkle_path(&mut buffer, &path).is_ok() {
                     if let Ok(rust_path_ret) = buffer.try_into() {
                         let path_ret = unsafe { &mut *path_ret };
                         *path_ret = rust_path_ret;
@@ -850,7 +823,7 @@ pub extern "C" fn get_orchard_path_root_with_cm(
         None => return false,
     };
 
-    let anchor = compute_root_from_witness(cm, merkle_path.position(), merkle_path.path_elems());
+    let anchor = merkle_path.root(cm);
 
     let anchor_out = unsafe { &mut *anchor_out };
     *anchor_out = anchor.to_bytes();

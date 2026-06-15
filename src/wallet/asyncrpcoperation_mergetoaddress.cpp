@@ -418,6 +418,7 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
 
     // Add Sapling notes to the transaction builder
     // Iterate through all the selected notes and add them to the transaction
+    bool saplingInitialized = false;
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
         
@@ -425,6 +426,7 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
              keyIterator != uniqueExtendedKeys.end(); keyIterator++) {
             
             auto currentExtendedKey = *keyIterator;
+            uint256 saplingAnchorForKey; // tracks anchor across notes for this key
 
             // Process each note that uses this extended spending key
             for (int noteIndex = 0; noteIndex < saplingExtendedKeys.size(); noteIndex++) {
@@ -447,6 +449,7 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
                         throw JSONRPCError(RPC_WALLET_ERROR, 
                                            strprintf("%s: Getting Anchor failed. Stopping.\n", getId()));
                     }
+                    saplingAnchorForKey = anchor;
 
                     // Create recipient address from note data
                     libzcash::SaplingPaymentAddress recipient(saplingNotes[noteIndex].d, 
@@ -466,6 +469,8 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
             }
             
             // Convert the raw Sapling spend using the extended spending key (once per key)
+            builder_.InitializeSapling(saplingAnchorForKey);
+            saplingInitialized = true;
             if (!builder_.ConvertRawSaplingSpend(currentExtendedKey)) {
                 throw JSONRPCError(RPC_WALLET_ERROR, 
                                    strprintf("%s: Converting Raw Sapling Spends failed.\n", getId()));
@@ -581,6 +586,14 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
         if (std::get_if<libzcash::OrchardPaymentAddress>(&toPaymentAddress_) != nullptr) {
             if (!orchardInitialized) {
                 builder_.InitializeOrchard(false, true, uint256());
+            }
+        }
+
+        // If we have any Sapling payment addresses, ensure Sapling is initialized
+        // This handles sending to a Sapling address when no Sapling spends were added
+        if (std::get_if<libzcash::SaplingPaymentAddress>(&toPaymentAddress_) != nullptr) {
+            if (!saplingInitialized) {
+                builder_.InitializeSapling(uint256());
             }
         }
     }

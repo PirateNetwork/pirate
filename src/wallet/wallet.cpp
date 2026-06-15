@@ -6390,7 +6390,6 @@ void CWallet::UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx) {
                // Use the IVK stored in note data (could be external or internal)
                auto optNullifier = libzcash::OrchardNotePlaintext::ComputeNullifierFromAction(
                    vActions[op.n],
-                   nd.ivk,
                    extfvk.fvk
                );
 

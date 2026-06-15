@@ -7,10 +7,10 @@ use incrementalmerkletree::Hashable;
 use libc::{size_t, c_uchar};
 use orchard::keys::{SpendingKey, SpendAuthorizingKey,PreparedIncomingViewingKey};
 use orchard::{
-    builder::{Builder, InProgress, Unauthorized, Unproven},
+    builder::{BundleType, Builder, InProgress, Unauthorized, Unproven},
     bundle::{Authorized, Flags},
     keys::{FullViewingKey, OutgoingViewingKey, Scope},
-    note::{Nullifier,RandomSeed},
+    note::{Nullifier, Rho, RandomSeed},
     note_encryption::OrchardDomain,
     tree::{MerkleHashOrchard, MerklePath},
     value::NoteValue,
@@ -19,15 +19,14 @@ use orchard::{
 use rand_core::OsRng;
 use tracing::error;
 use zcash_primitives::{
-    consensus::BranchId,
     merkle_tree::merkle_path_from_slice,
     transaction::{
-        components::{sapling, Amount},
         sighash::{signature_hash, SignableInput},
         txid::TxIdDigester,
         Authorization, Transaction, TransactionData,
     },
 };
+use zcash_protocol::{consensus::BranchId, value::ZatBalance as Amount};
 
 use zcash_note_encryption::try_note_decryption;
 
@@ -39,6 +38,7 @@ use crate::{
     ORCHARD_PK,
 };
 
+#[allow(dead_code)]
 pub struct OrchardSpendInfo {
     fvk: FullViewingKey,
     note: Note,
@@ -46,6 +46,7 @@ pub struct OrchardSpendInfo {
 }
 
 impl OrchardSpendInfo {
+    #[allow(dead_code)]
     pub fn from_parts(fvk: FullViewingKey, note: Note, merkle_path: MerklePath) -> Self {
         OrchardSpendInfo {
             fvk,
@@ -80,8 +81,15 @@ pub extern "C" fn orchard_builder_new(
     let anchor = unsafe { anchor.as_ref() }
         .map(|a| orchard::Anchor::from_bytes(*a).unwrap())
         .unwrap_or_else(|| MerkleHashOrchard::empty_root(32.into()).into());
+    let bundle_type = if spends_enabled && outputs_enabled {
+        BundleType::DEFAULT
+    } else if !spends_enabled {
+        BundleType::Transactional { flags: Flags::SPENDS_DISABLED, bundle_required: false }
+    } else {
+        BundleType::Transactional { flags: Flags::OUTPUTS_DISABLED, bundle_required: false }
+    };
     Box::into_raw(Box::new(Builder::new(
-        Flags::from_parts(spends_enabled, outputs_enabled),
+        bundle_type,
         anchor,
     )))
 }
@@ -155,7 +163,11 @@ pub extern "C" fn orchard_builder_add_spend_from_parts(
     };
 
     let rho_bytes = unsafe { *rho_bytes };
-    let rho = match de_ct(Nullifier::from_bytes(&rho_bytes)) {
+    let nf = match de_ct(Nullifier::from_bytes(&rho_bytes)) {
+        Some(r) => r,
+        None => return false,
+    };
+    let rho = match de_ct(Rho::from_bytes(&nf.to_bytes())) {
         Some(r) => r,
         None => return false,
     };
@@ -215,7 +227,7 @@ pub extern "C" fn orchard_builder_add_recipient(
     let value = NoteValue::from_raw(value);
     let memo = unsafe { memo.as_ref() }.copied();
 
-    match builder.add_recipient(ovk, recipient, value, memo) {
+    match builder.add_output(ovk, recipient, value, memo.unwrap_or([0u8; 512])) {
         Ok(()) => true,
         Err(e) => {
             error!("Failed to add Orchard recipient: {}", e);
@@ -267,7 +279,11 @@ pub extern "C" fn orchard_builder_build(
     let builder = unsafe { Box::from_raw(builder) };
 
     match builder.build(OsRng) {
-        Ok(bundle) => Box::into_raw(Box::new(bundle)),
+        Ok(Some((bundle, _))) => Box::into_raw(Box::new(bundle)),
+        Ok(None) => {
+            error!("Orchard builder produced no bundle");
+            ptr::null_mut()
+        }
         Err(e) => {
             error!("Failed to build Orchard bundle: {:?}", e);
             ptr::null_mut()
@@ -395,7 +411,7 @@ pub(crate) fn shielded_signature_digest(
     struct Signable {}
     impl Authorization for Signable {
         type TransparentAuth = TransparentAuth;
-        type SaplingAuth = sapling::builder::Unauthorized;
+        type SaplingAuth = sapling_crypto::builder::InProgress<sapling_crypto::builder::Proven, sapling_crypto::builder::Unsigned>;
         type OrchardAuth = InProgress<Unproven, Unauthorized>;
     }
 

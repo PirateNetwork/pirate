@@ -51,11 +51,12 @@ public:
     // Builder should never be copied
     Builder(const Builder&) = delete;
     Builder& operator=(const Builder&) = delete;
-    Builder(Builder&& builder) : inner(std::move(builder.inner)) {}
+    Builder(Builder&& builder) : inner(std::move(builder.inner)), hasActions(builder.hasActions) {}
     Builder& operator=(Builder&& builder)
     {
         if (this != &builder) {
             inner = std::move(builder.inner);
+            hasActions = builder.hasActions;
         }
         return *this;
     }
@@ -320,7 +321,7 @@ private:
 
     std::optional<orchard::Builder> orchardBuilder;
     CAmount valueBalanceSapling = 0;
-    rust::Box<sapling::Builder> saplingBuilder;
+    std::optional<rust::Box<sapling::Builder>> saplingBuilder;
     CAmount valueBalanceOrchard = 0;
 
     uint256 saplingAnchor = uint256S("0000000000000000000000000000000000000000000000000000000000000000");
@@ -337,15 +338,6 @@ private:
     std::optional<CScript> opReturn;
 
     bool AddOpRetLast(CScript& s);
-
-    const rust::Box<consensus::Network> RustNetwork() const
-    {
-        return consensus::network(
-            strNetworkID,
-            consensusParams.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight,
-            consensusParams.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight,
-            consensusParams.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight);
-    }
 
 public:
     std::vector<SaplingSpendDescriptionInfo> vSaplingSpends;
@@ -391,7 +383,7 @@ public:
 
 
     // Sapling
-    void InitializeSapling();
+    void InitializeSapling(uint256 anchor);
 
     bool AddSaplingSpendRaw(
         SaplingOutPoint op,
@@ -423,7 +415,7 @@ public:
         CAmount value,
         uint256 rho,
         uint256 rseed,
-        libzcash::MerklePath saplingMerklePath,
+        libzcash::MerklePath orchardMerklePath,
         uint256 anchor);
 
     bool ConvertRawOrchardSpend(libzcash::OrchardExtendedSpendingKeyPirate extsk);

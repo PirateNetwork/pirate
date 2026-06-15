@@ -4,24 +4,15 @@ use libc::c_uchar;
 use memuse::DynamicUsage;
 use orchard::{
     bundle::Authorized,
-    keys::{FullViewingKey, IncomingViewingKey, OutgoingViewingKey, PreparedIncomingViewingKey},
+    keys::{FullViewingKey, OutgoingViewingKey, PreparedIncomingViewingKey},
     note_encryption::OrchardDomain,
     primitives::redpallas::{Signature, SpendAuth},
 };
 use zcash_note_encryption::{try_note_decryption, try_output_recovery_with_ovk};
-use zcash_primitives::transaction::components::{orchard as orchard_serialization, Amount};
-use subtle::CtOption;
+use zcash_primitives::transaction::components::orchard as orchard_serialization;
+use zcash_protocol::value::ZatBalance as Amount;
 
 use crate::{bridge::ffi, streams::CppStream};
-
-/// Converts CtOption<T> into Option<T>
-fn de_ct<T>(ct: CtOption<T>) -> Option<T> {
-    if ct.is_some().into() {
-        Some(ct.unwrap())
-    } else {
-        None
-    }
-}
 
 pub struct Action(orchard::Action<Signature<SpendAuth>>);
 
@@ -60,46 +51,44 @@ impl Action {
 
     /// Compute nullifier for this action using provided viewing key components
     /// 
-    /// This is similar to Output::compute_nullifier for Sapling.
-    /// It decrypts the action with the IVK to obtain the note,
-    /// then computes the nullifier using the note and full viewing key.
+    /// Decrypts the action with the IVK derived from the FVK to obtain the note,
+    /// then computes the nullifier. Using the FVK as the single source of truth
+    /// ensures the IVK and nullifier derivation are always consistent.
     pub(crate) fn compute_nullifier(
         &self,
-        ivk_bytes: &[c_uchar; 64],
         fvk_bytes: &[c_uchar; 96],
         result: &mut [u8; 32],
     ) -> bool {
-        // Deserialize IVK
-        let ivk = match de_ct(IncomingViewingKey::from_bytes(ivk_bytes)) {
-            Some(k) => k,
-            None => return false,
-        };
-
-        // Deserialize FVK
+        // Deserialize FVK — single source of truth for both IVK derivation and nullifier
         let fvk = match FullViewingKey::from_bytes(fvk_bytes) {
             Some(k) => k,
             None => return false,
         };
 
-        // Prepare the IVK for decryption
+        // Derive IVK from FVK (try external scope first, then internal)
+        let ivk = fvk.to_ivk(orchard::keys::Scope::External);
         let prepared_ivk = PreparedIncomingViewingKey::new(&ivk);
-        
+
         // Create the domain for decryption
         let domain = OrchardDomain::for_action(&self.0);
         
-        // Decrypt the action to get the note
-        let decrypted = match try_note_decryption(&domain, &prepared_ivk, &self.0) {
-            Some(r) => r,
-            None => return false,
+        // Try external scope decryption
+        let decrypted = if let Some(r) = try_note_decryption(&domain, &prepared_ivk, &self.0) {
+            r
+        } else {
+            // Try internal scope (change)
+            let ivk_internal = fvk.to_ivk(orchard::keys::Scope::Internal);
+            let prepared_ivk_internal = PreparedIncomingViewingKey::new(&ivk_internal);
+            match try_note_decryption(&domain, &prepared_ivk_internal, &self.0) {
+                Some(r) => r,
+                None => return false,
+            }
         };
 
-        // Compute the nullifier from the decrypted note
+        // Compute the nullifier from the decrypted note using the FVK
         let nullifier = decrypted.0.nullifier(&fvk);
-        
-        // Copy result
         *result = nullifier.to_bytes();
-
-        return true;
+        true
     }
 
     pub(crate) fn as_ptr(&self) -> *const ffi::ActionPtr {
@@ -200,6 +189,13 @@ impl Bundle {
 
     pub(crate) fn num_actions(&self) -> usize {
         self.inner().map(|b| b.actions().len()).unwrap_or(0)
+    }
+
+    /// Returns the action at the given index, or an error if out of range.
+    pub(crate) fn get_action(&self, action_index: usize) -> Result<Box<Action>, String> {
+        self.inner()
+            .and_then(|b| b.actions().get(action_index).map(|a| Box::new(Action(a.clone()))))
+            .ok_or_else(|| format!("No Orchard action at index {}", action_index))
     }
 
     /// Returns whether the Orchard bundle is present and spends are enabled.

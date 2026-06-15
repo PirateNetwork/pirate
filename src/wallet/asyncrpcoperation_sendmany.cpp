@@ -409,11 +409,17 @@ bool AsyncRPCOperation_sendmany::main_impl()
             }
         }
 
+        builder_.InitializeSapling(anchor);
         if (!builder_.ConvertRawSaplingSpend(extsk)) {
             set_error_code(RPC_WALLET_ERROR);
             set_error_message(strprintf("%s: Converting Raw Sapling Spends failed.", getId()));
             unlock_notes();
             return false;
+        }
+    } else {
+        // Initialize Sapling builder without spending (outputs only)
+        if (!saplingOutputs_.empty()) {
+            builder_.InitializeSapling(uint256()); 
         }
     }
 

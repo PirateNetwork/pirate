@@ -1,11 +1,10 @@
 use group::GroupEncoding;
-use zcash_primitives::{
-    sapling::{
-        keys::{ExpandedSpendingKey, FullViewingKey},
-        Diversifier, SaplingIvk,
-    },
-    zip32::{sapling::DiversifiableFullViewingKey, ExtendedSpendingKey, Scope},
+use sapling_crypto::{
+    keys::{ExpandedSpendingKey, FullViewingKey},
+    zip32::{DiversifiableFullViewingKey, ExtendedSpendingKey},
+    Diversifier, SaplingIvk,
 };
+use zip32::Scope;
 
 // ── Diversifier ──────────────────────────────────────────────────────────────
 
@@ -401,11 +400,7 @@ pub fn expsk_to_default_address(expsk: &[u8; 96], out: &mut [u8; 43]) -> bool {
     match ExpandedSpendingKey::from_bytes(expsk) {
         Ok(expsk_key) => {
             let fvk = FullViewingKey::from_expanded_spending_key(&expsk_key);
-            let mut fvk_bytes = [0u8; 96];
-            fvk_bytes[..32].copy_from_slice(&fvk.vk.ak.to_bytes());
-            fvk_bytes[32..64].copy_from_slice(&fvk.vk.nk.0.to_bytes());
-            fvk_bytes[64..].copy_from_slice(&fvk.ovk.0);
-            match dfvk_from_fvk(&fvk_bytes) {
+            match dfvk_from_fvk(&fvk.to_bytes()) {
                 Some(dfvk) => ivk_default_address(&dfvk.to_ivk(Scope::External), out),
                 None => false,
             }
@@ -422,11 +417,7 @@ pub fn expsk_to_default_address_internal(expsk: &[u8; 96], out: &mut [u8; 43]) -
     match ExpandedSpendingKey::from_bytes(expsk) {
         Ok(expsk_key) => {
             let fvk = FullViewingKey::from_expanded_spending_key(&expsk_key);
-            let mut fvk_bytes = [0u8; 96];
-            fvk_bytes[..32].copy_from_slice(&fvk.vk.ak.to_bytes());
-            fvk_bytes[32..64].copy_from_slice(&fvk.vk.nk.0.to_bytes());
-            fvk_bytes[64..].copy_from_slice(&fvk.ovk.0);
-            match dfvk_from_fvk(&fvk_bytes) {
+            match dfvk_from_fvk(&fvk.to_bytes()) {
                 Some(dfvk) => ivk_default_address(&dfvk.to_ivk(Scope::Internal), out),
                 None => false,
             }

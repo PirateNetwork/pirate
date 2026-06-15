@@ -7,7 +7,6 @@ pub use crate::equihash::*;
 pub use crate::orchard_actions::*;
 pub use crate::transaction_ffi::*;
 pub use crate::orchard_wallet::*;
-pub use crate::orchard_keys_ffi::*;
 pub use crate::orchard_ffi::*;
 pub use crate::orchard_bundle::*;
 pub use crate::builder_ffi::*;
@@ -15,7 +14,6 @@ pub use crate::bundlecache::*;
 pub use crate::history::*;
 pub use crate::incremental_merkle_tree::*;
 pub use crate::merkle_frontier::*;
-pub use crate::params::*;
 pub use crate::sapling::*;
 pub use crate::sprout::*;
 pub use crate::streams::*;
@@ -38,8 +36,6 @@ mod metrics_ffi;
 mod streams_ffi;
 #[path = "tracing_ffi.rs"]
 mod tracing_ffi;
-#[path = "zcashd_orchard.rs"]
-mod zcashd_orchard;
 #[path = "bridge.rs"]
 mod bridge;
 #[path = "builder_ffi.rs"]
@@ -58,14 +54,10 @@ mod orchard_actions;
 mod orchard_bundle;
 #[path = "orchard_ffi.rs"]
 mod orchard_ffi;
-#[path = "orchard_keys_ffi.rs"]
-mod orchard_keys_ffi;
 #[path = "orchard_keys.rs"]
 mod orchard_keys;
 #[path = "sapling_keys.rs"]
 mod sapling_keys;
-#[path = "params.rs"]
-mod params;
 #[path = "sapling.rs"]
 mod sapling;
 #[path = "sprout.rs"]
