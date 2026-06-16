@@ -5,7 +5,7 @@ use tracing::{debug, error};
 
 use crate::{
     bundlecache::{orchard_bundle_validity_cache, orchard_bundle_validity_cache_mut, CacheEntries},
-    orchard_bundle::Bundle,
+    orchard_protocol::orchard_bundle::Bundle,
 };
 
 struct BatchValidatorInner {

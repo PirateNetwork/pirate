@@ -24,7 +24,7 @@ use orchard::{
 };
 
 use crate::{
-    orchard_bundle::Action,
+    orchard_protocol::orchard_bundle::Action,
     streams_ffi::{CppStreamReader, CppStreamWriter, ReadCb, StreamObj, WriteCb},
 };
 

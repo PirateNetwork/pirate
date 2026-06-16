@@ -20,7 +20,7 @@ use crate::incremental_merkle_tree::{read_tree, write_tree, NOTE_COMMITMENT_TREE
 
 use crate::{
     streams_ffi::{CppStreamReader, CppStreamWriter, ReadCb, StreamObj, WriteCb},
-    sapling::{Bundle, Output}
+    sapling_protocol::{sapling_bundle::{Bundle, Output}}
 };
 
 type SaplingPath = MerklePath<Node, NOTE_COMMITMENT_TREE_DEPTH>;

@@ -9,7 +9,7 @@ use orchard::{
 
 use zcash_note_encryption::{try_note_decryption, try_output_recovery_with_ovk};
 
-use crate::orchard_bundle::Action;
+use crate::orchard_protocol::orchard_bundle::Action;
 use subtle::CtOption;
 
 /// Converts CtOption<t> into Option<T>

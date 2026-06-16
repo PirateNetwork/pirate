@@ -15,7 +15,7 @@ use zcash_primitives::{
 use sapling_crypto::{NOTE_COMMITMENT_TREE_DEPTH, Node, note::ExtractedNoteCommitment as SaplingExtractedNoteCommitment};
 
 // use crate::{bridge::ffi, orchard_bundle, streams::CppStream, wallet::Wallet};
-use crate::{bridge::ffi, sapling::Bundle as SaplingBundle, orchard_bundle, streams::CppStream, orchard_wallet::Wallet as OrchardWalletInternal, sapling_wallet::Wallet as SaplingWalletInternal};
+use crate::{bridge::ffi, sapling_protocol::Bundle as SaplingBundle, orchard_protocol::orchard_bundle, streams::CppStream, orchard_protocol::orchard_wallet::Wallet as OrchardWalletInternal, sapling_protocol::sapling_wallet::Wallet as SaplingWalletInternal};
 
 use crate::de_ct;
 
@@ -205,7 +205,7 @@ impl OrchardFrontier {
     ///
     /// TODO: Remove once `crate::wallet` is migrated to `cxx`.
     pub(crate) fn init_wallet(&self, wallet: *mut OrchardWallet) -> bool {
-        crate::orchard_wallet::orchard_wallet_init_from_frontier(wallet as *mut OrchardWalletInternal, self as *const _)
+        crate::orchard_protocol::orchard_wallet::orchard_wallet_init_from_frontier(wallet as *mut OrchardWalletInternal, self as *const _)
     }
 }
 
@@ -339,6 +339,6 @@ impl SaplingFrontier {
     ///
     /// TODO: Remove once `crate::wallet` is migrated to `cxx`.
     pub(crate) fn init_wallet(&self, wallet: *mut SaplingWallet) -> bool {
-        crate::sapling_wallet::sapling_wallet_init_from_frontier(wallet as *mut SaplingWalletInternal, self as *const _)
+        crate::sapling_protocol::sapling_wallet::sapling_wallet_init_from_frontier(wallet as *mut SaplingWalletInternal, self as *const _)
     }
 }

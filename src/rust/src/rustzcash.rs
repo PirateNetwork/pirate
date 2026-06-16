@@ -59,28 +59,16 @@ mod bundlecache;
 mod history;
 mod incremental_merkle_tree;
 mod merkle_frontier;
-#[path = "orchard_protocol/orchard_actions.rs"]
-mod orchard_actions;
-#[path = "orchard_protocol/orchard_bundle.rs"]
-mod orchard_bundle;
-#[path = "orchard_protocol/orchard_validator.rs"]
-mod orchard_ffi;
-#[path = "orchard_protocol/orchard_keys.rs"]
-mod orchard_keys;
-#[path = "sapling_protocol/sapling_keys.rs"]
-mod sapling_keys;
-mod seed;
-mod transparent;
-#[path = "sapling_protocol/sapling.rs"]
-mod sapling;
+#[path = "orchard_protocol/orchard_protocol.rs"]
+mod orchard_protocol;
+#[path = "sapling_protocol/sapling_protocol.rs"]
+mod sapling_protocol;
 #[path = "sprout_protocol/sprout.rs"]
 mod sprout;
+mod seed;
+mod transparent;
 mod streams;
 mod transaction_ffi;
-#[path = "sapling_protocol/sapling_wallet.rs"]
-mod sapling_wallet;
-#[path = "orchard_protocol/orchard_wallet.rs"]
-mod orchard_wallet;
 
 mod test_harness_ffi;
 
@@ -190,7 +178,7 @@ pub extern "C" fn librustzcash_init_zksnark_params(
 /// `result` must be a valid pointer to 32 bytes which will be written.
 #[no_mangle]
 pub extern "C" fn librustzcash_tree_uncommitted(result: *mut [c_uchar; 32]) {
-    unsafe { *result = sapling::spec::tree_uncommitted(); }
+    unsafe { *result = sapling_protocol::spec::tree_uncommitted(); }
 }
 
 /// Computes a merkle tree hash for a given depth. The `depth` parameter should

@@ -16,7 +16,7 @@ pub(crate) fn test_only_invalid_sapling_bundle(
     spends: usize,
     outputs: usize,
     value_balance: i64,
-) -> Box<crate::sapling::Bundle> {
+) -> Box<crate::sapling_protocol::Bundle> {
     let mut rng = thread_rng();
 
     fn gen_array<R: Rng, const N: usize>(mut rng: R) -> [u8; N] {
@@ -86,11 +86,11 @@ pub(crate) fn test_only_invalid_sapling_bundle(
         Amount::from_i64(value_balance).unwrap(),
         SaplingSig { binding_sig },
     );
-    Box::new(crate::sapling::Bundle(bundle))
+    Box::new(crate::sapling_protocol::Bundle(bundle))
 }
 
 pub(crate) fn test_only_replace_sapling_nullifier(
-    bundle: &mut crate::sapling::Bundle,
+    bundle: &mut crate::sapling_protocol::Bundle,
     spend_index: usize,
     nullifier: [u8; 32],
 ) {
@@ -123,7 +123,7 @@ pub(crate) fn test_only_replace_sapling_nullifier(
 }
 
 pub(crate) fn test_only_replace_sapling_output_parts(
-    bundle: &mut crate::sapling::Bundle,
+    bundle: &mut crate::sapling_protocol::Bundle,
     output_index: usize,
     cmu: [u8; 32],
     enc_ciphertext: [u8; 580],

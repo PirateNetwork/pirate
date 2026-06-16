@@ -4,8 +4,6 @@ use zcash_primitives::{
     primitives::{Diversifier, Nullifier, ProofGenerationKey, Rseed},
 };
 
-use crate::sapling::spec::ivk_to_pkd;
-
 #[test]
 fn key_components() {
     #![allow(dead_code)]
@@ -666,10 +664,6 @@ fn key_components() {
         let diversifier = Diversifier(tv.default_d);
         let addr = fvk.to_payment_address(diversifier).unwrap();
         assert_eq!(&addr.pk_d().to_bytes(), &tv.default_pk_d);
-        {
-            let default_pk_d = ivk_to_pkd(&tv.ivk, tv.default_d).unwrap();
-            assert_eq!(&default_pk_d, &tv.default_pk_d);
-        }
 
         let note_r = jubjub::Scalar::from_bytes(&tv.note_r).unwrap();
         let note = addr

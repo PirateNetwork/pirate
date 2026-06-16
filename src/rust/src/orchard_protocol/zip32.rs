@@ -11,7 +11,7 @@ use orchard::{
     keys::{FullViewingKey, SpendingKey},
 };
 
-use crate::orchard_keys::prf_expand::PrfExpand;
+use crate::orchard_protocol::orchard_keys::prf_expand::PrfExpand;
 
 const ZIP32_ORCHARD_PERSONALIZATION: &[u8; 16] = b"ZcashIP32Orchard";
 const ZIP32_ORCHARD_FVFP_PERSONALIZATION: &[u8; 16] = b"ZcashOrchardFVFP";

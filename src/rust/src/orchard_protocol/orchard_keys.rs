@@ -4,7 +4,7 @@ use orchard::{
     keys::{DiversifierIndex, Diversifier, FullViewingKey, IncomingViewingKey, Scope, SpendingKey},
 };
 
-use crate::orchard_keys::zip32::{ExtendedSpendingKey, ChildIndex, ZIP32_PURPOSE};
+use crate::orchard_protocol::orchard_keys::zip32::{ExtendedSpendingKey, ChildIndex, ZIP32_PURPOSE};
 
 #[path = "zip32.rs"]
 mod zip32;

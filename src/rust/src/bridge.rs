@@ -4,47 +4,41 @@ use crate::{
         new_orchard, new_sapling, orchard_empty_root, parse_orchard, parse_sapling,
         sapling_empty_root, OrchardFrontier, OrchardWallet, SaplingFrontier, SaplingWallet,
     },
-    orchard_bundle::{
-        none_orchard_bundle, orchard_bundle_from_raw_box, parse_orchard_bundle, Action,
-        Bundle as OrchardBundle,
-    },
-    orchard_actions::{
-        compute_nullifier as compute_nullifier_orchard,
-        derive_orchard_ock, try_orchard_decrypt_action_ock,
+    orchard_protocol::{
+        orchard_bundle::{
+            none_orchard_bundle, orchard_bundle_from_raw_box, parse_orchard_bundle, Action,
+            Bundle as OrchardBundle,
+        },
+        orchard_actions::{
+            compute_nullifier as compute_nullifier_orchard,
+            derive_orchard_ock, try_orchard_decrypt_action_ock,
+        },
+        orchard_validator::{orchard_batch_validation_init, BatchValidator as OrchardBatchValidator},
+        orchard_keys::{
+            ivk_to_address as orchard_keys_ivk_to_address,
+            ivk_to_address_from_index as orchard_keys_ivk_to_address_from_index,
+            fvk_to_ovk, fvk_to_ovk_internal,
+            fvk_to_ivk as orchard_keys_fvk_to_ivk, fvk_to_ivk_internal as orchard_keys_fvk_to_ivk_internal,
+            fvk_to_default_address, fvk_to_default_address_internal,
+            fvk_to_address, fvk_to_address_internal,
+            fvk_to_address_from_index, fvk_to_address_from_index_internal,
+            sk_is_valid, sk_to_fvk,
+            sk_to_default_address, sk_to_default_address_internal,
+            derive_master_key, derive_child_key,
+        },
     },
     builder_ffi::shielded_signature_digest,
-    orchard_ffi::{orchard_batch_validation_init, BatchValidator as OrchardBatchValidator},
-
-    sapling::{
+    sapling_protocol::{
         apply_sapling_bundle_signatures, build_sapling_bundle, compute_nullifier,
         derive_sapling_ock,
-        finish_bundle_assembly, init_batch_validator as init_sapling_batch_validator,
-        init_verifier, new_bundle_assembler, new_sapling_builder, none_sapling_bundle,
+        finish_bundle_assembly, new_bundle_assembler, new_sapling_builder, none_sapling_bundle,
         parse_v4_sapling_components, parse_v4_sapling_output, parse_v4_sapling_spend,
-        parse_v5_sapling_bundle, BatchValidator as SaplingBatchValidator,
-        Bundle as SaplingBundle, BundleAssembler as SaplingBundleAssembler, Output,
+        parse_v5_sapling_bundle,
+        sapling_validator::{init_batch_validator as init_sapling_batch_validator, BatchValidator as SaplingBatchValidator},
+        init_verifier, Bundle as SaplingBundle, BundleAssembler as SaplingBundleAssembler, Output,
         SaplingBuilder, SaplingUnauthorizedBundle, Spend, Verifier,
     },
-    streams::{
-        from_auto_file, from_blake2b_writer, from_buffered_file, from_data, from_hash_writer,
-        from_secure_data, from_size_computer, CppStream,
-    },
-    test_harness_ffi::{
-        test_only_invalid_sapling_bundle, test_only_replace_sapling_nullifier,
-        test_only_replace_sapling_output_parts,
-    },
-    orchard_keys::{
-        ivk_to_address as orchard_keys_ivk_to_address,
-        ivk_to_address_from_index as orchard_keys_ivk_to_address_from_index,
-        fvk_to_ovk, fvk_to_ovk_internal,
-        fvk_to_ivk as orchard_keys_fvk_to_ivk, fvk_to_ivk_internal as orchard_keys_fvk_to_ivk_internal,
-        fvk_to_default_address, fvk_to_default_address_internal,
-        fvk_to_address, fvk_to_address_internal,
-        fvk_to_address_from_index, fvk_to_address_from_index_internal,
-        sk_is_valid, sk_to_fvk,
-        sk_to_default_address, sk_to_default_address_internal,
-        derive_master_key, derive_child_key,
-    },    sapling_keys::{
+    sapling_protocol::sapling_keys::{
         check_diversifier,
         ivk_to_address as sapling_keys_ivk_to_address,
         ivk_to_address_from_index as sapling_keys_ivk_to_address_from_index,
@@ -76,6 +70,14 @@ use crate::{
         entropy_to_bip39_seed as hd_seed_entropy_to_bip39_seed,
         hd_seed_entropy_to_phrase,
         hd_seed_phrase_to_entropy,
+    },
+    streams::{
+        from_auto_file, from_blake2b_writer, from_buffered_file, from_data, from_hash_writer,
+        from_secure_data, from_size_computer, CppStream,
+    },
+    test_harness_ffi::{
+        test_only_invalid_sapling_bundle, test_only_replace_sapling_nullifier,
+        test_only_replace_sapling_output_parts,
     },
 };
 

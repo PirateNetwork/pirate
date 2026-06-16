@@ -32,8 +32,8 @@ use zcash_note_encryption::try_note_decryption;
 
 use crate::{
     bridge::ffi::OrchardUnauthorizedBundlePtr,
-    orchard_bundle::Action,
-    orchard_wallet::{ORCHARD_TREE_DEPTH,OrchardPath},
+    orchard_protocol::orchard_bundle::Action,
+    orchard_protocol::orchard_wallet::{ORCHARD_TREE_DEPTH,OrchardPath},
     transaction_ffi::{MapTransparent, TransparentAuth},
     ORCHARD_PK,
 };
@@ -376,7 +376,7 @@ pub(crate) fn shielded_signature_digest(
     consensus_branch_id: u32,
     tx_bytes: &[u8],
     all_prev_outputs: &[u8],
-    sapling_bundle: &crate::sapling::SaplingUnauthorizedBundle,
+    sapling_bundle: &crate::sapling_protocol::SaplingUnauthorizedBundle,
     orchard_bundle: *const OrchardUnauthorizedBundlePtr,
 ) -> Result<[u8; 32], String> {
     // TODO: This is also parsing a transaction that may have partially-filled fields.

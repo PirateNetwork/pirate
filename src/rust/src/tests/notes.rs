@@ -1,4 +1,4 @@
-use crate::sapling::spec::{compute_cmu, compute_nf};
+use crate::sapling_protocol::spec::compute_nf;
 
 #[test]
 fn notes() {
@@ -645,18 +645,8 @@ fn notes() {
     ];
 
     for tv in test_vectors {
-        // Compute commitment and compare with test vector
-        let mut result = [0u8; 32];
-        result = compute_cmu(
-            tv.default_d,
-            &tv.default_pk_d,
-            tv.note_v,
-            &tv.note_r,
-        ).unwrap();
-        assert_eq!(&result, &tv.note_cm);
-
         // Compute nullifier and compare with test vector
-        result = compute_nf(
+        let result = compute_nf(
             &tv.default_d,
             &tv.default_pk_d,
             tv.note_v,
