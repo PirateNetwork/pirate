@@ -6,7 +6,9 @@ use orchard::{
 
 use crate::orchard_keys::zip32::{ExtendedSpendingKey, ChildIndex, ZIP32_PURPOSE};
 
+#[path = "zip32.rs"]
 mod zip32;
+#[path = "prf_expand.rs"]
 mod prf_expand;
 
 // ── IVK operations ──────────────────────────────────────────────────────────

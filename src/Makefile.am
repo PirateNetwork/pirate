@@ -66,8 +66,8 @@ endif
 CXXBRIDGE_RS = \
 	rust/src/blake2b.rs \
 	rust/src/ed25519.rs \
-  rust/src/sapling/zip32.rs \
-	rust/src/sprout.rs \
+  rust/src/sapling_protocol/zip32.rs \
+	rust/src/sprout_protocol/sprout.rs \
   rust/src/streams.rs \
 	rust/src/history.rs \
   rust/src/bridge.rs
@@ -75,8 +75,6 @@ CXXBRIDGE_RS = \
 CXXBRIDGE_H = \
 	rust/gen/include/rust/blake2b.h \
 	rust/gen/include/rust/ed25519.h \
-  rust/gen/include/rust/sapling/zip32.h \
-	rust/gen/include/rust/sprout.h \
   rust/gen/include/rust/streams.h \
 	rust/gen/include/rust/history.h \
   rust/gen/include/rust/bridge.h
@@ -98,6 +96,12 @@ $(CXXBRIDGE_RS): ;
 $(CXXBRIDGE_H) $(CXXBRIDGE_CPP): $(CXXBRIDGE_RS)
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(CXXBRIDGE) $(CXXBRIDGE_OPTS) $(basename $(patsubst rust/gen/include/rust/%,rust/src/%,$(patsubst rust/gen/src/%,rust/src/%,$@))).rs -o $@
+rust/gen/include/rust/sprout.h rust/gen/src/sprout.cpp: rust/src/sprout_protocol/sprout.rs
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)$(CXXBRIDGE) $(CXXBRIDGE_OPTS) rust/src/sprout_protocol/sprout.rs -o $@
+rust/gen/include/rust/sapling/zip32.h rust/gen/src/sapling/zip32.cpp: rust/src/sapling_protocol/zip32.rs
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)$(CXXBRIDGE) $(CXXBRIDGE_OPTS) rust/src/sapling_protocol/zip32.rs -o $@
 
 # We pass through CC etc. flags so they are available to Rust dependencies that internally
 # compile C or C++ code with the `cc` crate.

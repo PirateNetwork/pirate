@@ -2,9 +2,12 @@ use std::fs::File;
 use std::io::BufReader;
 
 use bellman::groth16::Parameters;
+use zcash_primitives::transaction::components::GROTH_PROOF_SIZE;
 use zcash_proofs::sprout;
 
-use crate::{GROTH_PROOF_SIZE, SPROUT_GROTH16_PARAMS_PATH, SPROUT_GROTH16_VK};
+use crate::{SPROUT_GROTH16_PARAMS_PATH, SPROUT_GROTH16_VK};
+
+pub mod legacy_ffi;
 
 #[allow(clippy::too_many_arguments)]
 #[cxx::bridge(namespace = "sprout")]

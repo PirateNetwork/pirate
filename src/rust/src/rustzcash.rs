@@ -21,13 +21,10 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 
-use bellman::groth16::{PreparedVerifyingKey, prepare_verifying_key, VerifyingKey, Parameters};
+use bellman::groth16::{PreparedVerifyingKey, prepare_verifying_key, VerifyingKey};
 use bls12_381::Bls12;
 use tracing::info;
-use group::GroupEncoding;
 use libc::{c_uchar, size_t};
-use std::fs::File;
-use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use std::slice;
 use std::sync::Once;
@@ -45,17 +42,8 @@ use std::os::windows::ffi::OsStringExt;
 
 use sapling_crypto::circuit::{OutputParameters, OutputVerifyingKey, SpendParameters, SpendVerifyingKey};
 
-use zcash_primitives::{
-    merkle_tree::HashSer,
-    transaction::components::GROTH_PROOF_SIZE,
-};
-use sapling_crypto::{
-    merkle_hash,
-    Diversifier, Node,
-};
-use zcash_proofs::sprout as old_sprout;
+use sapling_crypto::merkle_hash;
 
-use incrementalmerkletree::Hashable;
 use sapling_crypto::zip32 as sapling_zip32;
 use ::zip32::{ChildIndex, DiversifierIndex};
 
@@ -71,18 +59,27 @@ mod bundlecache;
 mod history;
 mod incremental_merkle_tree;
 mod merkle_frontier;
+#[path = "orchard_protocol/orchard_actions.rs"]
 mod orchard_actions;
+#[path = "orchard_protocol/orchard_bundle.rs"]
 mod orchard_bundle;
+#[path = "orchard_protocol/orchard_validator.rs"]
 mod orchard_ffi;
+#[path = "orchard_protocol/orchard_keys.rs"]
 mod orchard_keys;
+#[path = "sapling_protocol/sapling_keys.rs"]
 mod sapling_keys;
 mod seed;
 mod transparent;
+#[path = "sapling_protocol/sapling.rs"]
 mod sapling;
+#[path = "sprout_protocol/sprout.rs"]
 mod sprout;
 mod streams;
 mod transaction_ffi;
+#[path = "sapling_protocol/sapling_wallet.rs"]
 mod sapling_wallet;
+#[path = "orchard_protocol/orchard_wallet.rs"]
 mod orchard_wallet;
 
 mod test_harness_ffi;
@@ -147,7 +144,7 @@ pub extern "C" fn librustzcash_init_zksnark_params(
         let sprout_path = sprout_path.as_ref().map(Path::new);
 
         let sprout_vk = {
-            let sprout_vk_bytes = include_bytes!("sprout-groth16.vk");
+            let sprout_vk_bytes = include_bytes!("sprout_protocol/sprout-groth16.vk");
             let vk = VerifyingKey::<Bls12>::read(&sprout_vk_bytes[..])
                 .expect("should be able to parse Sprout verification key");
             prepare_verifying_key(&vk)
@@ -193,12 +190,7 @@ pub extern "C" fn librustzcash_init_zksnark_params(
 /// `result` must be a valid pointer to 32 bytes which will be written.
 #[no_mangle]
 pub extern "C" fn librustzcash_tree_uncommitted(result: *mut [c_uchar; 32]) {
-    // Should be okay, caller is responsible for ensuring the pointer
-    // is a valid pointer to 32 bytes that can be mutated.
-    let result = unsafe { &mut *result };
-    Node::empty_leaf()
-        .write(&mut result[..])
-        .expect("Sapling leaves are 32 bytes");
+    unsafe { *result = sapling::spec::tree_uncommitted(); }
 }
 
 /// Computes a merkle tree hash for a given depth. The `depth` parameter should
@@ -223,140 +215,6 @@ pub extern "C" fn librustzcash_merkle_hash(
     // is a valid pointer to 32 bytes that can be mutated.
     let result = unsafe { &mut *result };
     *result = tmp;
-}
-
-#[no_mangle]
-pub extern "C" fn librustzcash_ivk_to_pkd(
-    ivk: *const [c_uchar; 32],
-    diversifier: *const [c_uchar; 11],
-    result: *mut [c_uchar; 32],
-) -> bool {
-    let ivk = de_ct(jubjub::Scalar::from_bytes(unsafe { &*ivk }));
-    let diversifier = Diversifier(unsafe { *diversifier });
-    if let (Some(ivk), Some(g_d)) = (ivk, diversifier.g_d()) {
-        let pk_d = g_d * ivk;
-
-        let result = unsafe { &mut *result };
-
-        *result = pk_d.to_bytes();
-
-        true
-    } else {
-        false
-    }
-}
-
-/// Sprout JoinSplit proof generation.
-#[no_mangle]
-pub extern "C" fn librustzcash_sprout_prove(
-    proof_out: *mut [c_uchar; GROTH_PROOF_SIZE],
-
-    phi: *const [c_uchar; 32],
-    rt: *const [c_uchar; 32],
-    h_sig: *const [c_uchar; 32],
-
-    // First input
-    in_sk1: *const [c_uchar; 32],
-    in_value1: u64,
-    in_rho1: *const [c_uchar; 32],
-    in_r1: *const [c_uchar; 32],
-    in_auth1: *const [c_uchar; old_sprout::WITNESS_PATH_SIZE],
-
-    // Second input
-    in_sk2: *const [c_uchar; 32],
-    in_value2: u64,
-    in_rho2: *const [c_uchar; 32],
-    in_r2: *const [c_uchar; 32],
-    in_auth2: *const [c_uchar; old_sprout::WITNESS_PATH_SIZE],
-
-    // First output
-    out_pk1: *const [c_uchar; 32],
-    out_value1: u64,
-    out_r1: *const [c_uchar; 32],
-
-    // Second output
-    out_pk2: *const [c_uchar; 32],
-    out_value2: u64,
-    out_r2: *const [c_uchar; 32],
-
-    // Public value
-    vpub_old: u64,
-    vpub_new: u64,
-) {
-    // Load parameters from disk
-    let sprout_fs = File::open(
-        unsafe { &SPROUT_GROTH16_PARAMS_PATH }
-            .as_ref()
-            .expect("parameters should have been initialized"),
-    )
-    .expect("couldn't load Sprout groth16 parameters file");
-
-    let mut sprout_fs = BufReader::with_capacity(1024 * 1024, sprout_fs);
-
-    let params = Parameters::read(&mut sprout_fs, false)
-        .expect("couldn't deserialize Sprout JoinSplit parameters file");
-
-    drop(sprout_fs);
-
-    let proof = old_sprout::create_proof(
-        unsafe { *phi },
-        unsafe { *rt },
-        unsafe { *h_sig },
-        unsafe { *in_sk1 },
-        in_value1,
-        unsafe { *in_rho1 },
-        unsafe { *in_r1 },
-        unsafe { &*in_auth1 },
-        unsafe { *in_sk2 },
-        in_value2,
-        unsafe { *in_rho2 },
-        unsafe { *in_r2 },
-        unsafe { &*in_auth2 },
-        unsafe { *out_pk1 },
-        out_value1,
-        unsafe { *out_r1 },
-        unsafe { *out_pk2 },
-        out_value2,
-        unsafe { *out_r2 },
-        vpub_old,
-        vpub_new,
-        &params,
-    );
-
-    proof
-        .write(&mut (unsafe { &mut *proof_out })[..])
-        .expect("should be able to serialize a proof");
-}
-
-/// Sprout JoinSplit proof verification.
-#[no_mangle]
-pub extern "C" fn librustzcash_sprout_verify(
-    proof: *const [c_uchar; GROTH_PROOF_SIZE],
-    rt: *const [c_uchar; 32],
-    h_sig: *const [c_uchar; 32],
-    mac1: *const [c_uchar; 32],
-    mac2: *const [c_uchar; 32],
-    nf1: *const [c_uchar; 32],
-    nf2: *const [c_uchar; 32],
-    cm1: *const [c_uchar; 32],
-    cm2: *const [c_uchar; 32],
-    vpub_old: u64,
-    vpub_new: u64,
-) -> bool {
-    old_sprout::verify_proof(
-        unsafe { &*proof },
-        unsafe { &*rt },
-        unsafe { &*h_sig },
-        unsafe { &*mac1 },
-        unsafe { &*mac2 },
-        unsafe { &*nf1 },
-        unsafe { &*nf2 },
-        unsafe { &*cm1 },
-        unsafe { &*cm2 },
-        vpub_old,
-        vpub_new,
-        unsafe { SPROUT_GROTH16_VK.as_ref() }.expect("parameters should have been initialized"),
-    )
 }
 
 /// Derive the master ExtendedSpendingKey from a seed.

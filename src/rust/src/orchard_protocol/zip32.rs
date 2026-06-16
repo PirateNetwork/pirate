@@ -180,7 +180,7 @@ impl ExtendedSpendingKey {
         // I := PRF^Expand(c_par, [0x81] || sk_par || I2LEOSP(i))
         let I: [u8; 64] = PrfExpand::OrchardZip32Child.with_ad_slices(
             &self.chain_code.0,
-            &[self.sk.to_bytes(), &index.0.to_le_bytes()],
+            &[self.sk.to_bytes(), &{let mut b = [0u8; 32]; b[..4].copy_from_slice(&index.0.to_le_bytes()); b}],
         );
 
         // I_L is used as the child spending key sk_i.

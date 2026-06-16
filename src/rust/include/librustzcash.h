@@ -34,8 +34,6 @@
 extern "C" {
 #endif
 
-    bool librustzcash_ivk_to_pkd(const unsigned char *ivk, const unsigned char *diversifier, unsigned char *result);
-
     /// Loads the zk-SNARK parameters into memory and saves
     /// paths as necessary. Only called once.
     void librustzcash_init_zksnark_params(
@@ -197,31 +195,6 @@ extern "C" {
     /// The `pk_d`, `r`, `ak` and `nk` parameters must be of length 32.
     /// The result is also of length 32 and placed in `result`.
     /// Returns false if the diversifier or pk_d is not valid
-    bool librustzcash_sapling_compute_nf(
-        const unsigned char *diversifier,
-        const unsigned char *pk_d,
-        const uint64_t value,
-        const unsigned char *rcm,
-        const unsigned char *ak,
-        const unsigned char *nk,
-        const uint64_t position,
-        unsigned char *result
-    );
-
-    /// Compute a Sapling commitment.
-    ///
-    /// The `diversifier` parameter must be 11 bytes in length.
-    /// The `pk_d` and `r` parameters must be of length 32.
-    /// The result is also of length 32 and placed in `result`.
-    /// Returns false if the diversifier or pk_d is not valid
-    bool librustzcash_sapling_compute_cmu(
-        const unsigned char *diversifier,
-        const unsigned char *pk_d,
-        const uint64_t value,
-        const unsigned char *rcm,
-        unsigned char *result
-    );
-
     /// Compute [sk] [8] P for some 32-byte
     /// point P, and 32-byte Fs. If P or sk
     /// are invalid, returns false. Otherwise,

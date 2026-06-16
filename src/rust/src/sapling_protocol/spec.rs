@@ -2,12 +2,13 @@ use std::convert::TryInto;
 
 use blake2s_simd::Params as Blake2sParams;
 use group::{cofactor::CofactorGroup, GroupEncoding};
+use incrementalmerkletree::Hashable;
+use zcash_primitives::merkle_tree::HashSer;
 use rand_core::{OsRng, RngCore};
 
 use sapling_crypto::{
     constants::CRH_IVK_PERSONALIZATION,
     merkle_hash,
-    note::{ExtractedNoteCommitment, NoteCommitment},
     value::NoteValue,
     Diversifier, Node, Note, NullifierDerivingKey, PaymentAddress, Rseed,
 };
@@ -181,24 +182,6 @@ pub(crate) fn compute_cmu(
     value: u64,
     rcm: &[u8; 32],
 ) -> Result<[u8; 32], String> {
-    let diversifier = Diversifier(diversifier);
-    let g_d = diversifier
-        .g_d()
-        .ok_or_else(|| "Invalid diversifier".to_string())?;
-
-    let pk_d =
-        de_ct(jubjub::ExtendedPoint::from_bytes(pk_d)).ok_or_else(|| "Invalid pk_d".to_string())?;
-    let pk_d = de_ct(pk_d.into_subgroup())
-        .ok_or_else(|| "pk_d is not in the prime-order subgroup".to_string())?;
-
-    let rcm = de_ct(jubjub::Scalar::from_bytes(rcm)).ok_or_else(|| "Invalid rcm".to_string())?;
-
-    let cmu = ExtractedNoteCommitment::from(NoteCommitment::temporary_zcashd_derive(
-        g_d.to_bytes(),
-        pk_d.to_bytes(),
-        NoteValue::from_raw(value),
-        rcm,
-    ));
-
-    Ok(cmu.to_bytes())
+    let note = priv_get_note(&diversifier, pk_d, value, rcm)?;
+    Ok(note.cmu().to_bytes())
 }

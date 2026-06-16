@@ -50,9 +50,9 @@ use crate::{
     streams::CppStream,
 };
 
-#[path = "sapling_protocol/zip32.rs"]
+#[path = "zip32.rs"]
 mod zip32;
-#[path = "sapling_protocol/spec.rs"]
+#[path = "spec.rs"]
 pub(crate) mod spec;
 
 const SAPLING_TREE_DEPTH: usize = 32;

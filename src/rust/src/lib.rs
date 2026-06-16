@@ -46,27 +46,27 @@ mod history;
 mod incremental_merkle_tree;
 #[path = "merkle_frontier.rs"]
 mod merkle_frontier;
-#[path = "orchard_actions.rs"]
+#[path = "orchard_protocol/orchard_actions.rs"]
 mod orchard_actions;
-#[path = "orchard_bundle.rs"]
+#[path = "orchard_protocol/orchard_bundle.rs"]
 mod orchard_bundle;
-#[path = "orchard_ffi.rs"]
+#[path = "orchard_protocol/orchard_validator.rs"]
 mod orchard_ffi;
-#[path = "orchard_keys.rs"]
+#[path = "orchard_protocol/orchard_keys.rs"]
 mod orchard_keys;
-#[path = "sapling_keys.rs"]
+#[path = "sapling_protocol/sapling_keys.rs"]
 mod sapling_keys;
-#[path = "sapling.rs"]
+#[path = "sapling_protocol/sapling.rs"]
 mod sapling;
-#[path = "sprout.rs"]
+#[path = "sprout_protocol/sprout.rs"]
 mod sprout;
 #[path = "streams.rs"]
 mod streams;
 #[path = "transaction_ffi.rs"]
 mod transaction_ffi;
-#[path = "sapling_wallet.rs"]
+#[path = "sapling_protocol/sapling_wallet.rs"]
 mod sapling_wallet;
-#[path = "orchard_wallet.rs"]
+#[path = "orchard_protocol/orchard_wallet.rs"]
 mod orchard_wallet;
 #[path = "test_harness_ffi.rs"]
 mod test_harness_ffi; 
