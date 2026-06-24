@@ -9,6 +9,9 @@
 #include "streams.h"
 #include "version.h"
 #include <rust/bridge.h>
+#include <rust/sapling_keys_bridge.h>
+#include <rust/orchard_keys_bridge.h>
+#include <rust/seed_bridge.h>
 
 #include <librustzcash.h>
 #include <sodium.h>

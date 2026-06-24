@@ -6,6 +6,7 @@ pub(crate) mod orchard_actions;
 pub(crate) mod orchard_validator;
 pub(crate) mod orchard_keys;
 pub(crate) mod orchard_wallet;
+pub(crate) mod orchard_keys_bridge;
 
 pub(crate) use orchard_bundle::*;
 pub(crate) use orchard_actions::*;

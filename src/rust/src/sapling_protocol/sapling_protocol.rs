@@ -9,6 +9,7 @@ pub(crate) mod sapling_actions;
 pub(crate) mod sapling_validator;
 pub(crate) mod sapling_keys;
 pub(crate) mod sapling_wallet;
+pub(crate) mod sapling_keys_bridge;
 
 pub(crate) use sapling_bundle::*;
 pub(crate) use sapling_actions::*;

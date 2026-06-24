@@ -3,7 +3,6 @@
 
 // Re-export all modules with FFI functions
 pub use crate::rustzcash::*;
-pub use crate::equihash::*;
 pub use crate::orchard_protocol::*;
 pub use crate::transaction_ffi::*;
 pub use crate::builder_ffi::*;
@@ -20,18 +19,16 @@ pub use crate::streams::*;
 mod rustzcash;
 
 // Include all other modules
-#[path = "blake2b.rs"]
+#[path = "crypto/blake2b.rs"]
 mod blake2b;
-#[path = "ed25519.rs"]
-mod ed25519;
-#[path = "equihash.rs"]
-mod equihash;
 #[path = "streams_ffi.rs"]
 mod streams_ffi;
 #[path = "tracing_ffi.rs"]
 mod tracing_ffi;
 #[path = "bridge.rs"]
 mod bridge;
+#[path = "seed_bridge.rs"]
+mod seed_bridge;
 #[path = "builder_ffi.rs"]
 mod builder_ffi;
 #[path = "bundlecache.rs"]

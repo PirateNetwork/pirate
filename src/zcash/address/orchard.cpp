@@ -9,6 +9,7 @@
 #include "zcash/NoteEncryption.hpp"
 #include <algorithm>
 #include <rust/bridge.h>
+#include <rust/orchard_keys_bridge.h>
 
 namespace libzcash
 {

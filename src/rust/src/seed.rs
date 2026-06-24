@@ -8,12 +8,12 @@
 //!
 //! All functions are exposed to C++ through the `hd_seed` bridge namespace defined in bridge.rs.
 //! Language-sensitive functions accept a `bip39::Language`; the bridge wrappers in this module
-//! map from the `hd_seed::MnemonicLanguage` cxx shared enum (defined in bridge.rs) via
+//! map from the `hd_seed::MnemonicLanguage` cxx shared enum (defined in seed_bridge.rs) via
 //! `lang_to_bip39`.
 
 use bip39::{Language, Mnemonic, Seed};
 use rand_core::{OsRng, RngCore};
-use crate::bridge::ffi::MnemonicLanguage;
+use crate::seed_bridge::ffi::MnemonicLanguage;
 
 /// Fills `out` with 32 cryptographically secure random bytes via the OS CSPRNG.
 ///

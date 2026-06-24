@@ -64,29 +64,32 @@ endif
 # endif
 
 CXXBRIDGE_RS = \
-	rust/src/blake2b.rs \
-	rust/src/ed25519.rs \
+	rust/src/crypto/blake2b.rs \
   rust/src/sapling_protocol/zip32.rs \
 	rust/src/sprout_protocol/sprout.rs \
   rust/src/streams.rs \
 	rust/src/history.rs \
-  rust/src/bridge.rs
+  rust/src/bridge.rs \
+  rust/src/sapling_protocol/sapling_keys_bridge.rs \
+  rust/src/orchard_protocol/orchard_keys_bridge.rs \
+  rust/src/seed_bridge.rs
 
 CXXBRIDGE_H = \
 	rust/gen/include/rust/blake2b.h \
-	rust/gen/include/rust/ed25519.h \
   rust/gen/include/rust/streams.h \
 	rust/gen/include/rust/history.h \
   rust/gen/include/rust/bridge.h
 
 CXXBRIDGE_CPP = \
 	rust/gen/src/blake2b.cpp \
-	rust/gen/src/ed25519.cpp \
   rust/gen/src/sapling/zip32.cpp \
 	rust/gen/src/sprout.cpp \
   rust/gen/src/streams.cpp \
 	rust/gen/src/history.cpp \
-  rust/gen/src/bridge.cpp
+  rust/gen/src/bridge.cpp \
+  rust/gen/src/sapling_keys_bridge.cpp \
+  rust/gen/src/orchard_keys_bridge.cpp \
+  rust/gen/src/seed_bridge.cpp
 
 # We add a rust/cxx.h include to indicate that we provide this (via the rustcxx depends
 # package), so that cxxbridge doesn't include it within the generated headers and code.
@@ -96,12 +99,24 @@ $(CXXBRIDGE_RS): ;
 $(CXXBRIDGE_H) $(CXXBRIDGE_CPP): $(CXXBRIDGE_RS)
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(CXXBRIDGE) $(CXXBRIDGE_OPTS) $(basename $(patsubst rust/gen/include/rust/%,rust/src/%,$(patsubst rust/gen/src/%,rust/src/%,$@))).rs -o $@
+rust/gen/include/rust/blake2b.h rust/gen/src/blake2b.cpp: rust/src/crypto/blake2b.rs
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)$(CXXBRIDGE) $(CXXBRIDGE_OPTS) rust/src/crypto/blake2b.rs -o $@
 rust/gen/include/rust/sprout.h rust/gen/src/sprout.cpp: rust/src/sprout_protocol/sprout.rs
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(CXXBRIDGE) $(CXXBRIDGE_OPTS) rust/src/sprout_protocol/sprout.rs -o $@
 rust/gen/include/rust/sapling/zip32.h rust/gen/src/sapling/zip32.cpp: rust/src/sapling_protocol/zip32.rs
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(CXXBRIDGE) $(CXXBRIDGE_OPTS) rust/src/sapling_protocol/zip32.rs -o $@
+rust/gen/include/rust/sapling_keys_bridge.h rust/gen/src/sapling_keys_bridge.cpp: rust/src/sapling_protocol/sapling_keys_bridge.rs
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)$(CXXBRIDGE) $(CXXBRIDGE_OPTS) rust/src/sapling_protocol/sapling_keys_bridge.rs -o $@
+rust/gen/include/rust/orchard_keys_bridge.h rust/gen/src/orchard_keys_bridge.cpp: rust/src/orchard_protocol/orchard_keys_bridge.rs
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)$(CXXBRIDGE) $(CXXBRIDGE_OPTS) rust/src/orchard_protocol/orchard_keys_bridge.rs -o $@
+rust/gen/include/rust/seed_bridge.h rust/gen/src/seed_bridge.cpp: rust/src/seed_bridge.rs
+	@$(MKDIR_P) $(@D)
+	$(AM_V_GEN)$(CXXBRIDGE) $(CXXBRIDGE_OPTS) rust/src/seed_bridge.rs -o $@
 
 # We pass through CC etc. flags so they are available to Rust dependencies that internally
 # compile C or C++ code with the `cc` crate.
@@ -895,7 +910,13 @@ libtls_a_CXXFLAGS = $(HARDENED_CXXFLAGS) -fwrapv -fno-strict-aliasing
 
 libtls_a_CPPFLAGS += -DMONTGOMERY_OUTPUT
 
-BUILT_SOURCES = $(CXXBRIDGE_H)
+BUILT_SOURCES = $(CXXBRIDGE_H) \
+  rust/gen/include/rust/sapling_keys_bridge.h \
+  rust/gen/include/rust/orchard_keys_bridge.h \
+  rust/gen/include/rust/seed_bridge.h \
+  rust/gen/include/rust/blake2b.h \
+  rust/gen/include/rust/sprout.h \
+  rust/gen/include/rust/sapling/zip32.h
 
 CLEANFILES = leveldb/libleveldb.a leveldb/libmemenv.a *.gcda *.gcno */*.gcno wallet/*/*.gcno
 

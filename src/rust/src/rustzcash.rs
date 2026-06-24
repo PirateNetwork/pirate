@@ -47,12 +47,13 @@ use sapling_crypto::merkle_hash;
 use sapling_crypto::zip32 as sapling_zip32;
 use ::zip32::{ChildIndex, DiversifierIndex};
 
+#[path = "crypto/blake2b.rs"]
 mod blake2b;
-mod ed25519;
 mod streams_ffi;
 mod tracing_ffi;
 
 mod bridge;
+mod seed_bridge;
 
 mod builder_ffi;
 mod bundlecache;

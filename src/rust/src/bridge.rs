@@ -14,18 +14,6 @@ use crate::{
             derive_orchard_ock, try_orchard_decrypt_action_ock,
         },
         orchard_validator::{orchard_batch_validation_init, BatchValidator as OrchardBatchValidator},
-        orchard_keys::{
-            ivk_to_address as orchard_keys_ivk_to_address,
-            ivk_to_address_from_index as orchard_keys_ivk_to_address_from_index,
-            fvk_to_ovk, fvk_to_ovk_internal,
-            fvk_to_ivk as orchard_keys_fvk_to_ivk, fvk_to_ivk_internal as orchard_keys_fvk_to_ivk_internal,
-            fvk_to_default_address, fvk_to_default_address_internal,
-            fvk_to_address, fvk_to_address_internal,
-            fvk_to_address_from_index, fvk_to_address_from_index_internal,
-            sk_is_valid, sk_to_fvk,
-            sk_to_default_address, sk_to_default_address_internal,
-            derive_master_key, derive_child_key,
-        },
     },
     builder_ffi::shielded_signature_digest,
     sapling_protocol::{
@@ -37,39 +25,6 @@ use crate::{
         sapling_validator::{init_batch_validator as init_sapling_batch_validator, BatchValidator as SaplingBatchValidator},
         init_verifier, Bundle as SaplingBundle, BundleAssembler as SaplingBundleAssembler, Output,
         SaplingBuilder, SaplingUnauthorizedBundle, Spend, Verifier,
-    },
-    sapling_protocol::sapling_keys::{
-        check_diversifier,
-        ivk_to_address as sapling_keys_ivk_to_address,
-        ivk_to_address_from_index as sapling_keys_ivk_to_address_from_index,
-        sk_to_expsk as sapling_keys_sk_to_expsk,
-        expsk_to_fvk as sapling_keys_expsk_to_fvk,
-        expsk_to_default_address as sapling_keys_expsk_to_default_address,
-        expsk_to_default_address_internal as sapling_keys_expsk_to_default_address_internal,
-        fvk_to_ivk as sapling_keys_fvk_to_ivk,
-        fvk_to_ivk_internal as sapling_keys_fvk_to_ivk_internal,
-        fvk_to_default_address as sapling_keys_fvk_to_default_address,
-        fvk_to_default_address_internal as sapling_keys_fvk_to_default_address_internal,
-        dfvk_to_change_address as sapling_keys_dfvk_to_change_address,
-        dfvk_to_ivk_internal as sapling_keys_dfvk_to_ivk_internal,
-        dfvk_to_nk_internal as sapling_keys_dfvk_to_nk_internal,
-        dfvk_to_ovk_internal as sapling_keys_dfvk_to_ovk_internal,
-        dfvk_to_address_internal as sapling_keys_dfvk_to_address_internal,
-        dfvk_to_address_from_index_internal as sapling_keys_dfvk_to_address_from_index_internal,
-        fvk_to_address as sapling_keys_fvk_to_address,
-        fvk_to_address_internal as sapling_keys_fvk_to_address_internal,
-        fvk_to_address_from_index as sapling_keys_fvk_to_address_from_index,
-        fvk_to_address_from_index_internal as sapling_keys_fvk_to_address_from_index_internal,
-        xsk_derive_internal as sapling_keys_xsk_derive_internal,
-    },
-    transparent::{
-        ovk_for_shielding_from_taddr as transparent_keys_ovk_for_shielding_from_taddr,
-    },
-    seed::{
-        random_bytes as hd_seed_random_bytes,
-        entropy_to_bip39_seed as hd_seed_entropy_to_bip39_seed,
-        hd_seed_entropy_to_phrase,
-        hd_seed_phrase_to_entropy,
     },
     streams::{
         from_auto_file, from_blake2b_writer, from_buffered_file, from_data, from_hash_writer,
@@ -537,135 +492,5 @@ pub(crate) mod ffi {
             sapling_bundle: &SaplingUnauthorizedBundle,
             orchard_bundle: *const OrchardUnauthorizedBundlePtr,
         ) -> Result<[u8; 32]>;
-    }
-
-    #[namespace = "orchard_keys"]
-    extern "Rust" {
-        #[cxx_name = "ivk_to_address"]
-        fn orchard_keys_ivk_to_address(ivk: &[u8; 64], diversifier: &[u8; 11], out: &mut [u8; 43]) -> bool;
-        #[cxx_name = "ivk_to_address_from_index"]
-        fn orchard_keys_ivk_to_address_from_index(ivk: &[u8; 64], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
-        fn fvk_to_ovk(fvk: &[u8; 96], out: &mut [u8; 32]) -> bool;
-        fn fvk_to_ovk_internal(fvk: &[u8; 96], out: &mut [u8; 32]) -> bool;
-        #[cxx_name = "fvk_to_ivk"]
-        fn orchard_keys_fvk_to_ivk(fvk: &[u8; 96], out: &mut [u8; 64]) -> bool;
-        #[cxx_name = "fvk_to_ivk_internal"]
-        fn orchard_keys_fvk_to_ivk_internal(fvk: &[u8; 96], out: &mut [u8; 64]) -> bool;
-        fn fvk_to_default_address(fvk: &[u8; 96], out: &mut [u8; 43]) -> bool;
-        fn fvk_to_default_address_internal(fvk: &[u8; 96], out: &mut [u8; 43]) -> bool;
-        fn fvk_to_address(fvk: &[u8; 96], diversifier: &[u8; 11], out: &mut [u8; 43]) -> bool;
-        fn fvk_to_address_internal(fvk: &[u8; 96], diversifier: &[u8; 11], out: &mut [u8; 43]) -> bool;
-        fn fvk_to_address_from_index(fvk: &[u8; 96], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
-        fn fvk_to_address_from_index_internal(fvk: &[u8; 96], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
-        fn sk_is_valid(sk: &[u8; 32]) -> bool;
-        fn sk_to_fvk(sk: &[u8; 32], out: &mut [u8; 96]) -> bool;
-        fn sk_to_default_address(sk: &[u8; 32], out: &mut [u8; 43]) -> bool;
-        fn sk_to_default_address_internal(sk: &[u8; 32], out: &mut [u8; 43]) -> bool;
-        fn derive_master_key(seed: &[u8], out: &mut [u8; 73]) -> bool;
-        fn derive_child_key(xsk: &[u8; 73], coin_type: u32, account: u32, out: &mut [u8; 73]) -> bool;
-    }
-
-    #[namespace = "sapling_keys"]
-    extern "Rust" {
-        fn check_diversifier(diversifier: &[u8; 11]) -> bool;
-        #[cxx_name = "ivk_to_address"]
-        fn sapling_keys_ivk_to_address(ivk: &[u8; 32], diversifier: &[u8; 11], out: &mut [u8; 43]) -> bool;
-        #[cxx_name = "ivk_to_address_from_index"]
-        fn sapling_keys_ivk_to_address_from_index(ivk: &[u8; 32], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
-        #[cxx_name = "sk_to_expsk"]
-        fn sapling_keys_sk_to_expsk(sk: &[u8; 32], out: &mut [u8; 96]) -> bool;
-        #[cxx_name = "expsk_to_fvk"]
-        fn sapling_keys_expsk_to_fvk(expsk: &[u8; 96], out: &mut [u8; 96]) -> bool;
-        #[cxx_name = "expsk_to_default_address"]
-        fn sapling_keys_expsk_to_default_address(expsk: &[u8; 96], out: &mut [u8; 43]) -> bool;
-        #[cxx_name = "expsk_to_default_address_internal"]
-        fn sapling_keys_expsk_to_default_address_internal(expsk: &[u8; 96], out: &mut [u8; 43]) -> bool;
-        #[cxx_name = "fvk_to_ivk"]
-        fn sapling_keys_fvk_to_ivk(fvk: &[u8; 96], out: &mut [u8; 32]) -> bool;
-        #[cxx_name = "fvk_to_ivk_internal"]
-        fn sapling_keys_fvk_to_ivk_internal(fvk: &[u8; 96], out: &mut [u8; 32]) -> bool;
-        #[cxx_name = "fvk_to_default_address"]
-        fn sapling_keys_fvk_to_default_address(fvk: &[u8; 96], out: &mut [u8; 43]) -> bool;
-        #[cxx_name = "fvk_to_default_address_internal"]
-        fn sapling_keys_fvk_to_default_address_internal(fvk: &[u8; 96], out: &mut [u8; 43]) -> bool;
-        #[cxx_name = "dfvk_to_change_address"]
-        fn sapling_keys_dfvk_to_change_address(dfvk: &[u8; 128], out: &mut [u8; 43]) -> bool;
-        #[cxx_name = "dfvk_to_ivk_internal"]
-        fn sapling_keys_dfvk_to_ivk_internal(dfvk: &[u8; 128], out: &mut [u8; 32]) -> bool;
-        #[cxx_name = "dfvk_to_nk_internal"]
-        fn sapling_keys_dfvk_to_nk_internal(dfvk: &[u8; 128], out: &mut [u8; 32]) -> bool;
-        #[cxx_name = "dfvk_to_ovk_internal"]
-        fn sapling_keys_dfvk_to_ovk_internal(dfvk: &[u8; 128], out: &mut [u8; 32]) -> bool;
-        #[cxx_name = "dfvk_to_address_internal"]
-        fn sapling_keys_dfvk_to_address_internal(dfvk: &[u8; 128], diversifier: &[u8; 11], out: &mut [u8; 43]) -> bool;
-        #[cxx_name = "dfvk_to_address_from_index_internal"]
-        fn sapling_keys_dfvk_to_address_from_index_internal(dfvk: &[u8; 128], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
-        #[cxx_name = "fvk_to_address"]
-        fn sapling_keys_fvk_to_address(fvk: &[u8; 96], diversifier: &[u8; 11], out: &mut [u8; 43]) -> bool;
-        #[cxx_name = "fvk_to_address_internal"]
-        fn sapling_keys_fvk_to_address_internal(fvk: &[u8; 96], diversifier: &[u8; 11], out: &mut [u8; 43]) -> bool;
-        #[cxx_name = "fvk_to_address_from_index"]
-        fn sapling_keys_fvk_to_address_from_index(fvk: &[u8; 96], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
-        #[cxx_name = "fvk_to_address_from_index_internal"]
-        fn sapling_keys_fvk_to_address_from_index_internal(fvk: &[u8; 96], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
-        /// Derives the internal (change) ExtendedSpendingKey from the external 169-byte XSK.
-        /// The result contains nsk_internal, required for zk-SNARK proofs over internal notes.
-        #[cxx_name = "xsk_derive_internal"]
-        fn sapling_keys_xsk_derive_internal(xsk: &[u8; 169]) -> [u8; 169];
-    }
-
-    #[namespace = "hd_seed"]
-    /// Selects the BIP-39 word list language for mnemonic phrase generation and restoration.
-    /// Word lists for all variants are compiled into the binary.
-    enum MnemonicLanguage {
-        /// BIP-39 English word list (default, always available).
-        English = 0,
-        /// BIP-39 Chinese Simplified word list.
-        ChineseSimplified = 1,
-        /// BIP-39 Chinese Traditional word list.
-        ChineseTraditional = 2,
-        /// BIP-39 French word list.
-        French = 3,
-        /// BIP-39 Italian word list.
-        Italian = 4,
-        /// BIP-39 Japanese word list.
-        Japanese = 5,
-        /// BIP-39 Korean word list.
-        Korean = 6,
-        /// BIP-39 Spanish word list.
-        Spanish = 7,
-    }
-
-    #[namespace = "transparent_keys"]
-    extern "Rust" {
-        /// Derives the 32-byte OVK used when shielding funds from a transparent address.
-        /// `seed` is the raw HD seed bytes. Always returns true.
-        #[cxx_name = "ovk_for_shielding_from_taddr"]
-        fn transparent_keys_ovk_for_shielding_from_taddr(seed: &[u8], out: &mut [u8; 32]) -> bool;
-    }
-
-    #[namespace = "hd_seed"]
-    extern "Rust" {
-        /// Fills `out` with 32 cryptographically secure random bytes via the OS CSPRNG.
-        #[cxx_name = "random_bytes"]
-        fn hd_seed_random_bytes(out: &mut [u8; 32]);
-
-        /// Derives the BIP-39 mnemonic phrase from raw entropy (16, 24, or 32 bytes)
-        /// using the specified word-list language.
-        /// Returns an error string if the entropy length is invalid.
-        #[cxx_name = "entropy_to_phrase"]
-        fn hd_seed_entropy_to_phrase(entropy: &[u8], lang: MnemonicLanguage) -> String;
-
-        /// Restores entropy from a BIP-39 mnemonic phrase into `out` (16, 24, or 32 bytes).
-        /// `lang` must match the language used when the phrase was generated.
-        /// Returns true on success.
-        #[cxx_name = "phrase_to_entropy"]
-        fn hd_seed_phrase_to_entropy(phrase: &str, lang: MnemonicLanguage, out: &mut [u8]) -> bool;
-
-        /// Derives the 64-byte BIP-39 PBKDF2 seed from raw entropy (no passphrase).
-        /// Language does not affect this derivation.
-        /// Returns true on success.
-        #[cxx_name = "entropy_to_bip39_seed"]
-        fn hd_seed_entropy_to_bip39_seed(entropy: &[u8], out: &mut [u8; 64]) -> bool;
     }
 }

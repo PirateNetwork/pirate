@@ -11,6 +11,7 @@
 #include "zcash/prf.h"
 #include <algorithm>
 #include <rust/bridge.h>
+#include <rust/sapling_keys_bridge.h>
 
 namespace libzcash
 {
