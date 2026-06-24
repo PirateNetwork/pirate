@@ -180,13 +180,10 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
     std::set<libzcash::OrchardPaymentAddress> orchardCandidates;
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
-        // Fill then erase target: O(n) fill + O(log n) erase, no per-element branch.
         pwalletMain->GetSaplingPaymentAddresses(saplingCandidates);
         if (hasSaplingTarget)
             saplingCandidates.erase(saplingSweepAddress);
 
-        // Collect Orchard addresses for Orchard processing pass below,
-        // excluding the sweep target so we never sweep from target to itself.
         pwalletMain->GetOrchardPaymentAddresses(orchardCandidates);
         if (hasOrchardTarget)
             orchardCandidates.erase(orchardSweepAddress);
@@ -197,10 +194,54 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
     CAmount amountSwept = 0;
     const int maxQuantity = 50;
 
-    // === Sapling sweep pass ===
+    struct AddressSweepWork {
+        libzcash::SaplingPaymentAddress addr;
+        libzcash::SaplingExtendedSpendingKey extsk;
+        std::vector<SaplingNoteEntry> saplingEntries;
+    };
+
+    struct OrchardSweepWork {
+        libzcash::OrchardPaymentAddress addr;
+        libzcash::OrchardExtendedSpendingKeyPirate extsk;
+        std::vector<OrchardNoteEntry> orchardEntries;
+    };
+
+    std::set<libzcash::PaymentAddress> allFilterAddresses;
+    for (const auto& addr : saplingCandidates) {
+        allFilterAddresses.insert(addr);
+    }
+    for (const auto& addr : orchardCandidates) {
+        allFilterAddresses.insert(addr);
+    }
+
+    std::vector<SaplingNoteEntry> allSaplingEntries;
+    std::vector<OrchardNoteEntry> allOrchardEntries;
+    if (!allFilterAddresses.empty()) {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        pwalletMain->GetFilteredNotes(allSaplingEntries, allOrchardEntries,
+                                      allFilterAddresses,
+                                      11, INT_MAX, true, true, true,
+                                      0, 0);
+    }
+
+    auto unlockAllFetchedNotes = [&]() {
+        if (allSaplingEntries.empty() && allOrchardEntries.empty()) {
+            return;
+        }
+
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        for (const auto& entry : allSaplingEntries)
+            pwalletMain->UnlockNote(entry.op);
+        for (const auto& entry : allOrchardEntries)
+            pwalletMain->UnlockNote(entry.op);
+    };
+
+    std::vector<AddressSweepWork> saplingWork;
+    std::map<libzcash::SaplingPaymentAddress, size_t> saplingWorkIndexByAddress;
     for (const auto& addr : saplingCandidates) {
         if (isCancelled() || ShutdownRequested())
             break;
+
         // Skip watch-only addresses - spending key required to build spends.
         libzcash::SaplingExtendedSpendingKey extsk;
         {
@@ -209,56 +250,75 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 continue;
         }
 
-        // Per-address inner loop: keep sweeping until no more eligible notes remain.
-        // Committed notes are excluded by ignoreSpent=true on the next call.
-        while (true) {
+        saplingWorkIndexByAddress[addr] = saplingWork.size();
+        saplingWork.push_back({addr, extsk, {}});
+    }
+
+    for (const auto& entry : allSaplingEntries) {
+        auto it = saplingWorkIndexByAddress.find(entry.address);
+        if (it != saplingWorkIndexByAddress.end()) {
+            saplingWork[it->second].saplingEntries.push_back(entry);
+        }
+    }
+
+    std::vector<OrchardSweepWork> orchardWork;
+    std::map<libzcash::OrchardPaymentAddress, size_t> orchardWorkIndexByAddress;
+    for (const auto& addr : orchardCandidates) {
+        if (isCancelled() || ShutdownRequested())
+            break;
+
+        libzcash::OrchardExtendedSpendingKeyPirate orchardExtendedSpendingKey;
+        {
+            LOCK2(cs_main, pwalletMain->cs_wallet);
+            if (!pwalletMain->GetOrchardExtendedSpendingKey(addr, orchardExtendedSpendingKey))
+                continue;
+        }
+
+        orchardWorkIndexByAddress[addr] = orchardWork.size();
+        orchardWork.push_back({addr, orchardExtendedSpendingKey, {}});
+    }
+
+    for (const auto& entry : allOrchardEntries) {
+        auto it = orchardWorkIndexByAddress.find(entry.address);
+        if (it != orchardWorkIndexByAddress.end()) {
+            orchardWork[it->second].orchardEntries.push_back(entry);
+        }
+    }
+
+    // === Sapling sweep pass ===
+    for (auto& work : saplingWork) {
+        if (work.saplingEntries.empty())
+            continue;
+
+        size_t cursor = 0;
+
+        while (cursor < work.saplingEntries.size()) {
             if (isCancelled() || ShutdownRequested()) {
-                LogPrint("zrpcunsafe", "%s: Stopping sweep inner loop (cancelled or shutdown).", getId());
-                break;
-            }
-            std::vector<SaplingNoteEntry> saplingEntries;
-            std::vector<OrchardNoteEntry> orchardEntries;
-            {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
-                std::set<libzcash::PaymentAddress> filterAddresses;
-                filterAddresses.insert(addr);
-                pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, filterAddresses,
-                                              11, INT_MAX, true, true, true,
-                                              maxQuantity, fSweepTxFee + 1);
-                // Lock immediately so no other async operation can select the same notes.
-                for (const auto& e : saplingEntries)
-                    pwalletMain->LockNote(e.op);
-            }
-
-            auto unlockSaplingEntries = [&]() {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
-                for (const auto& e : saplingEntries)
-                    pwalletMain->UnlockNote(e.op);
-            };
-
-            if (saplingEntries.empty()) {
-                unlockSaplingEntries();
-                break;
-            }
-
-            CAmount amountToSend = 0;
-            for (const auto& e : saplingEntries)
-                amountToSend += CAmount(e.note.value());
-
-            if (amountToSend <= fSweepTxFee) {
-                unlockSaplingEntries();
+                LogPrint("zrpcunsafe", "%s: Stopping sweep inner loop (cancelled or shutdown).\n", getId());
                 break;
             }
 
             const CAmount fee = fSweepTxFee;
-            const CAmount outputAmount = amountToSend - fee;
-
             std::vector<SaplingOutPoint> ops;
             std::vector<libzcash::SaplingNote> notes;
-            for (const auto& entry : saplingEntries) {
+            CAmount amountToSend = 0;
+
+            int selected = 0;
+            while (cursor < work.saplingEntries.size() && selected < maxQuantity) {
+                const auto& entry = work.saplingEntries[cursor++];
                 ops.push_back(entry.op);
                 notes.push_back(entry.note);
+                amountToSend += CAmount(entry.note.value());
+                selected++;
             }
+
+            if (ops.empty())
+                break;
+
+            if (amountToSend <= fee)
+                break;
+
+            const CAmount outputAmount = amountToSend - fee;
 
             uint256 anchor;
             std::vector<libzcash::MerklePath> saplingMerklePaths;
@@ -266,7 +326,6 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 LOCK2(cs_main, pwalletMain->cs_wallet);
                 if (!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
                     LogPrint("zrpcunsafe", "%s: Merkle Path not found for Sapling note. Stopping.\n", getId());
-                    unlockSaplingEntries();
                     break;
                 }
             }
@@ -276,25 +335,24 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 LOCK2(cs_main, pwalletMain->cs_wallet);
                 builder.SetExpiryHeight(chainActive.Tip()->nHeight + SWEEP_EXPIRY_DELTA);
             }
-            LogPrint("zrpcunsafe", "%s: Creating Sapling sweep transaction with output amount=%s\n", getId(), FormatMoney(amountToSend - fee));
+            LogPrint("zrpcunsafe", "%s: Creating Sapling sweep transaction with output amount=%s\n", getId(), FormatMoney(outputAmount));
 
             bool buildFailed = false;
+            const auto& selectedSaplingOps = ops;
             for (size_t i = 0; i < notes.size(); i++) {
-                if (!builder.AddSaplingSpendRaw(ops[i], addr, notes[i].value(), notes[i].rcm(), saplingMerklePaths[i], anchor)) {
+                if (!builder.AddSaplingSpendRaw(selectedSaplingOps[i], work.addr, notes[i].value(), notes[i].rcm(), saplingMerklePaths[i], anchor)) {
                     LogPrint("zrpcunsafe", "%s: Adding Raw Sapling Spend failed. Stopping.\n", getId());
                     buildFailed = true;
                     break;
                 }
             }
             if (buildFailed) {
-                unlockSaplingEntries();
                 break;
             }
 
             builder.InitializeSapling(anchor);
-            if (!builder.ConvertRawSaplingSpend(extsk)) {
+            if (!builder.ConvertRawSaplingSpend(work.extsk)) {
                 LogPrint("zrpcunsafe", "%s: Converting Raw Sapling Spends failed. Stopping.\n", getId());
-                unlockSaplingEntries();
                 break;
             }
 
@@ -303,43 +361,36 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
             if (hasSaplingTarget) {
                 if (!builder.AddSaplingOutputRaw(saplingSweepAddress, outputAmount)) {
                     LogPrint("zrpcunsafe", "%s: Adding Raw Sapling Output failed. Stopping.\n", getId());
-                    unlockSaplingEntries();
                     break;
                 }
-                if (!builder.ConvertRawSaplingOutput(extsk.expsk.ovk)) {
+                if (!builder.ConvertRawSaplingOutput(work.extsk.expsk.ovk)) {
                     LogPrint("zrpcunsafe", "%s: Converting Raw Sapling Output failed. Stopping.\n", getId());
-                    unlockSaplingEntries();
                     break;
                 }
             } else if (hasOrchardTarget) {
                 if (!builder.AddOrchardOutputRaw(orchardSweepAddress, outputAmount, std::nullopt)) {
                     LogPrint("zrpcunsafe", "%s: Adding Raw Orchard Output failed. Stopping.\n", getId());
-                    unlockSaplingEntries();
                     break;
                 }
                 builder.InitializeOrchard(false, true, uint256());
-                if (!builder.ConvertRawOrchardOutput(extsk.expsk.ovk)) {
+                if (!builder.ConvertRawOrchardOutput(work.extsk.expsk.ovk)) {
                     LogPrint("zrpcunsafe", "%s: Converting Raw Orchard Output failed. Stopping.\n", getId());
-                    unlockSaplingEntries();
                     break;
                 }
             } else {
                 LogPrint("zrpcunsafe", "%s: No target address specified for Sapling sweep. Stopping.\n", getId());
-                unlockSaplingEntries();
                 break;
             }
 
             auto buildResult = builder.Build();
             if (!buildResult.IsTx()) {
                 LogPrint("zrpcunsafe", "%s: Failed to build sweep transaction. Stopping.\n", getId());
-                unlockSaplingEntries();
                 break;
             }
             auto tx = buildResult.GetTxOrThrow();
 
             if (isCancelled() || ShutdownRequested()) {
                 LogPrint("zrpcunsafe", "%s: Canceled or shutdown. Stopping.\n", getId());
-                unlockSaplingEntries();
                 break;
             }
 
@@ -347,12 +398,10 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 LOCK2(cs_main, pwalletMain->cs_wallet);
                 if (!pwalletMain->CommitAutomatedTx(tx)) {
                     LogPrint("zrpcunsafe", "%s: Failed to commit sweep transaction, stopping.\n", getId());
-                    unlockSaplingEntries();
                     break;
                 }
             }
             LogPrint("zrpcunsafe", "%s: Committed Sapling sweep transaction with txid=%s\n", getId(), tx.GetHash().ToString());
-            unlockSaplingEntries();
             numTxCreated++;
             amountSwept += outputAmount;
             sweepTxIds.push_back(tx.GetHash().ToString());
@@ -360,59 +409,38 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
     }
 
     // === Orchard sweep pass ===
-    for (const auto& orchardAddr : orchardCandidates) {
-        if (isCancelled() || ShutdownRequested())
-            break;
+    for (auto& work : orchardWork) {
+        if (work.orchardEntries.empty())
+            continue;
 
-        libzcash::OrchardExtendedSpendingKeyPirate orchardExtendedSpendingKey;
-        {
-            LOCK2(cs_main, pwalletMain->cs_wallet);
-            if (!pwalletMain->GetOrchardExtendedSpendingKey(orchardAddr, orchardExtendedSpendingKey))
-                continue;
-        }
+        size_t cursor = 0;
 
-        // Per-address inner loop for Orchard
-        while (true) {
+        while (cursor < work.orchardEntries.size()) {
             if (isCancelled() || ShutdownRequested()) {
                 LogPrint("zrpcunsafe", "%s: Stopping Orchard sweep inner loop (cancelled or shutdown).\n", getId());
                 break;
             }
 
-            std::vector<SaplingNoteEntry> saplingEntries;
-            std::vector<OrchardNoteEntry> orchardEntries;
-            {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
-                std::set<libzcash::PaymentAddress> filterAddresses;
-                filterAddresses.insert(orchardAddr);
-                pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, filterAddresses,
-                                              11, INT_MAX, true, true, true,
-                                              maxQuantity, fSweepTxFee + 1);
-                // Lock immediately so no other async operation can select the same notes.
-                for (const auto& e : orchardEntries)
-                    pwalletMain->LockNote(e.op);
-            }
-
-            auto unlockOrchardEntries = [&]() {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
-                for (const auto& e : orchardEntries)
-                    pwalletMain->UnlockNote(e.op);
-            };
-
-            if (orchardEntries.empty()) {
-                unlockOrchardEntries();
-                break;
-            }
-
-            CAmount amountToSend = 0;
-            for (const auto& e : orchardEntries)
-                amountToSend += CAmount(e.note.value());
-
-            if (amountToSend <= fSweepTxFee) {
-                unlockOrchardEntries();
-                break;
-            }
-
             const CAmount fee = fSweepTxFee;
+            std::vector<OrchardNoteEntry> selectedOrchardEntries;
+            std::vector<OrchardOutPoint> ops;
+            CAmount amountToSend = 0;
+
+            int selected = 0;
+            while (cursor < work.orchardEntries.size() && selected < maxQuantity) {
+                const auto& entry = work.orchardEntries[cursor++];
+                selectedOrchardEntries.push_back(entry);
+                ops.push_back(entry.op);
+                amountToSend += CAmount(entry.note.value());
+                selected++;
+            }
+
+            if (ops.empty())
+                break;
+
+            if (amountToSend <= fee)
+                break;
+
             const CAmount outputAmount = amountToSend - fee;
 
             auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
@@ -421,11 +449,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 builder.SetExpiryHeight(chainActive.Tip()->nHeight + SWEEP_EXPIRY_DELTA);
             }
             LogPrint("zrpcunsafe", "%s: Creating Orchard sweep transaction with %d notes, output amount=%s\n",
-                     getId(), (int)orchardEntries.size(), FormatMoney(outputAmount));
-
-            std::vector<OrchardOutPoint> ops;
-            for (const auto& entry : orchardEntries)
-                ops.push_back(entry.op);
+                     getId(), (int)selectedOrchardEntries.size(), FormatMoney(outputAmount));
 
             uint256 anchor;
             std::vector<libzcash::MerklePath> orchardMerklePaths;
@@ -433,16 +457,15 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 LOCK2(cs_main, pwalletMain->cs_wallet);
                 if (!pwalletMain->GetOrchardNoteMerklePaths(ops, orchardMerklePaths, anchor)) {
                     LogPrint("zrpcunsafe", "%s: Merkle Path not found for Orchard note. Stopping.\n", getId());
-                    unlockOrchardEntries();
                     break;
                 }
             }
 
             bool buildFailed = false;
-            for (size_t i = 0; i < orchardEntries.size(); i++) {
-                const auto& entry = orchardEntries[i];
+            for (size_t i = 0; i < selectedOrchardEntries.size(); i++) {
+                const auto& entry = selectedOrchardEntries[i];
                 auto orchardNote = entry.note;
-                if (!builder.AddOrchardSpendRaw(entry.op, entry.address,
+                if (!builder.AddOrchardSpendRaw(entry.op, work.addr,
                                                 orchardNote.value(), orchardNote.rho(),
                                                 orchardNote.rseed(), orchardMerklePaths[i], anchor)) {
                     LogPrint("zrpcunsafe", "%s: Adding Raw Orchard Spend failed. Stopping.\n", getId());
@@ -451,73 +474,62 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 }
             }
             if (buildFailed) {
-                unlockOrchardEntries();
                 break;
             }
 
             builder.InitializeOrchard(true, true, anchor);
 
-            if (!builder.ConvertRawOrchardSpend(orchardExtendedSpendingKey)) {
+            if (!builder.ConvertRawOrchardSpend(work.extsk)) {
                 LogPrint("zrpcunsafe", "%s: Converting Raw Orchard Spends failed. Stopping.\n", getId());
-                unlockOrchardEntries();
                 break;
             }
 
             builder.SetFee(fee);
 
             libzcash::OrchardFullViewingKey fvk;
-            if (!orchardExtendedSpendingKey.sk.DeriveFVK(&fvk)) {
+            if (!work.extsk.sk.DeriveFVK(&fvk)) {
                 LogPrint("zrpcunsafe", "%s: Failed to get FVK from spending key. Stopping.\n", getId());
-                unlockOrchardEntries();
                 break;
             }
             libzcash::OrchardOutgoingViewingKey ovk;
             if (!fvk.DeriveOVK(&ovk)) {
                 LogPrint("zrpcunsafe", "%s: Failed to get OVK from FVK. Stopping.\n", getId());
-                unlockOrchardEntries();
                 break;
             }
 
             if (hasOrchardTarget) {
                 if (!builder.AddOrchardOutputRaw(orchardSweepAddress, outputAmount, std::nullopt)) {
                     LogPrint("zrpcunsafe", "%s: Adding Raw Orchard Output failed. Stopping.\n", getId());
-                    unlockOrchardEntries();
                     break;
                 }
                 if (!builder.ConvertRawOrchardOutput(ovk.ovk)) {
                     LogPrint("zrpcunsafe", "%s: Converting Raw Orchard Output failed. Stopping.\n", getId());
-                    unlockOrchardEntries();
                     break;
                 }
             } else if (hasSaplingTarget) {
                 if (!builder.AddSaplingOutputRaw(saplingSweepAddress, outputAmount, std::nullopt)) {
                     LogPrint("zrpcunsafe", "%s: Adding Raw Sapling Output failed. Stopping.\n", getId());
-                    unlockOrchardEntries();
                     break;
                 }
-                builder.InitializeSapling(uint256()); // Dummy anchor for cross-protocol output conversion   
+                builder.InitializeSapling(uint256()); // Dummy anchor for cross-protocol output conversion
                 if (!builder.ConvertRawSaplingOutput(ovk.ovk)) {
                     LogPrint("zrpcunsafe", "%s: Converting Raw Sapling Output failed. Stopping.\n", getId());
-                    unlockOrchardEntries();
                     break;
                 }
             } else {
                 LogPrint("zrpcunsafe", "%s: No target address specified for Orchard sweep. Stopping.\n", getId());
-                unlockOrchardEntries();
                 break;
             }
 
             auto buildResult = builder.Build();
             if (!buildResult.IsTx()) {
                 LogPrint("zrpcunsafe", "%s: Failed to build Orchard sweep transaction. Stopping.\n", getId());
-                unlockOrchardEntries();
                 break;
             }
             auto tx = buildResult.GetTxOrThrow();
 
             if (isCancelled() || ShutdownRequested()) {
                 LogPrint("zrpcunsafe", "%s: Canceled or shutdown. Stopping.\n", getId());
-                unlockOrchardEntries();
                 break;
             }
 
@@ -525,18 +537,18 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 LOCK2(cs_main, pwalletMain->cs_wallet);
                 if (!pwalletMain->CommitAutomatedTx(tx)) {
                     LogPrint("zrpcunsafe", "%s: Failed to commit Orchard sweep transaction, stopping.\n", getId());
-                    unlockOrchardEntries();
                     break;
                 }
             }
             LogPrint("zrpcunsafe", "%s: Committed Orchard sweep transaction with txid=%s\n",
                      getId(), tx.GetHash().ToString());
-            unlockOrchardEntries();
             numTxCreated++;
             amountSwept += outputAmount;
             sweepTxIds.push_back(tx.GetHash().ToString());
-        } // while (true) — Orchard inner loop
-    } // for orchardAddr
+        }
+    }
+
+    unlockAllFetchedNotes();
 
     LogPrint("zrpcunsafe", "%s: Created %d transactions with total output amount=%s to single destination\n", getId(), numTxCreated, FormatMoney(amountSwept));
     setSweepResult(numTxCreated, amountSwept, sweepTxIds);

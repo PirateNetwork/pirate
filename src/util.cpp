@@ -56,6 +56,7 @@
 
 #include <algorithm>
 #include <fcntl.h>
+#include <set>
 #include <sys/resource.h>
 #include <sys/stat.h>
 
@@ -100,6 +101,7 @@
 #include <boost/program_options/detail/config_file.hpp>
 #include <boost/program_options/parsers.hpp>
 #include <boost/thread.hpp>
+#include <boost/lexical_cast.hpp>
 #include <openssl/crypto.h>
 #include <openssl/conf.h>
 
@@ -340,6 +342,79 @@ int LogPrintStr(const std::string &str)
         }
     }
     return ret;
+}
+
+// Activated via -debug=threadlock in PIRATE.conf.
+// Defined here (libbitcoin_util) so all binaries including pirate-cli have the symbols.
+
+struct LockHolderInfo {
+    boost::thread::id threadId;
+    const char* file;
+    int line;
+    const char* name;
+};
+
+static boost::mutex cs_lockHolderMap;
+// Per-mutex: who holds it and which threads are currently waiting on it.
+static std::map<void*, LockHolderInfo> mapLockHolders;
+static std::map<void*, std::set<boost::thread::id>> mapLockWaiters;
+
+void PrintLockWaiting(const char* pszName, const char* pszFile, int nLine, void* pMutex)
+{
+    if (!LogAcceptCategory("threadlock")) return;
+    std::string holderDesc;
+    {
+        boost::lock_guard<boost::mutex> guard(cs_lockHolderMap);
+        mapLockWaiters[pMutex].insert(boost::this_thread::get_id());
+        auto it = mapLockHolders.find(pMutex);
+        if (it != mapLockHolders.end()) {
+            const LockHolderInfo& h = it->second;
+            holderDesc = strprintf(" -- held by thread %s at %s:%d",
+                                   boost::lexical_cast<std::string>(h.threadId),
+                                   h.file, h.line);
+        }
+    }
+    LogPrintStr(strprintf("LOCK WAITING [thread %s]: %s  %s:%d%s\n",
+                          boost::lexical_cast<std::string>(boost::this_thread::get_id()),
+                          pszName, pszFile, nLine, holderDesc));
+}
+
+void PrintLockTaken(const char* pszName, const char* pszFile, int nLine, bool fTry, void* pMutex)
+{
+    if (!LogAcceptCategory("threadlock")) return;
+    bool wasWaiting = false;
+    {
+        boost::lock_guard<boost::mutex> guard(cs_lockHolderMap);
+        auto& waiters = mapLockWaiters[pMutex];
+        wasWaiting = waiters.erase(boost::this_thread::get_id()) > 0;
+        if (waiters.empty()) mapLockWaiters.erase(pMutex);
+        mapLockHolders[pMutex] = {boost::this_thread::get_id(), pszFile, nLine, pszName};
+    }
+    // Only log if this thread had to wait (another thread held the lock).
+    if (wasWaiting) {
+        LogPrintStr(strprintf("LOCK TAKEN%s [thread %s]: %s  %s:%d\n",
+                              fTry ? " (TRY)" : "",
+                              boost::lexical_cast<std::string>(boost::this_thread::get_id()),
+                              pszName, pszFile, nLine));
+    }
+}
+
+void PrintLockReleased(const char* pszName, const char* pszFile, int nLine, void* pMutex)
+{
+    if (!LogAcceptCategory("threadlock")) return;
+    bool hasWaiters = false;
+    {
+        boost::lock_guard<boost::mutex> guard(cs_lockHolderMap);
+        mapLockHolders.erase(pMutex);
+        auto it = mapLockWaiters.find(pMutex);
+        hasWaiters = (it != mapLockWaiters.end() && !it->second.empty());
+    }
+    // Only log if another thread is currently blocked waiting for this lock.
+    if (hasWaiters) {
+        LogPrintStr(strprintf("LOCK RELEASED [thread %s]: %s  %s:%d\n",
+                              boost::lexical_cast<std::string>(boost::this_thread::get_id()),
+                              pszName, pszFile, nLine));
+    }
 }
 
 static void InterpretNegativeSetting(string name, map<string, string>& mapSettingsRet)

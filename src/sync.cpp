@@ -35,6 +35,9 @@ void PrintLockContention(const char* pszName, const char* pszFile, int nLine)
 }
 #endif /* DEBUG_LOCKCONTENTION */
 
+// PrintLockWaiting / PrintLockTaken / PrintLockReleased are defined in util.cpp
+// so that they are part of libbitcoin_util and available to all binaries.
+
 #ifdef DEBUG_LOCKORDER
 //
 // Early deadlock detection.
