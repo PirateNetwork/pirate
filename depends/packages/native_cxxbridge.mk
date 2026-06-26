@@ -1,15 +1,15 @@
 package=native_cxxbridge
 # The version needs to match cxx in Cargo.toml
-$(package)_version=1.0.107
+$(package)_version=1.0.194
 $(package)_download_path=https://github.com/dtolnay/cxx/archive/refs/tags
 $(package)_file_name=native_cxxbridge-$($(package)_version).tar.gz
 $(package)_download_file=$($(package)_version).tar.gz
-$(package)_sha256_hash=961256a942c2369d84db29f6f7d09bce7fa7de221ec729856216a87b0970b1df
+$(package)_sha256_hash=2edf94915ab43778b02a13e522d050a76dea607d1a05f769911775676d27cb3c
 $(package)_build_subdir=gen/cmd
 $(package)_dependencies=native_rust
 # This file is somewhat annoying to update, but can be done like so from the repo base:
-# $ export VERSION=1.0.107
-# $ rm .cargo/config .cargo/.configured-for-offline
+# $ export VERSION=1.0.194
+# $ rm .cargo/config.toml .cargo/.configured-for-offline
 # $ mkdir tmp
 # $ cd tmp
 # $ tar xf ../depends/sources/native_cxxbridge-$VERSION.tar.gz
@@ -38,12 +38,11 @@ define $(package)_preprocess_cmds
   echo "[source.crates-io]" >.cargo/config && \
   echo "replace-with = \"vendored-sources\"" >>.cargo/config && \
   echo "[source.vendored-sources]" >>.cargo/config && \
-  echo "directory = \"$(CRATE_REGISTRY)\"" >>.cargo/config && \
-  echo "" >> .cargo/config
+  echo "directory = \"$(CRATE_REGISTRY)\"" >>.cargo/config
 endef
 
 define $(package)_build_cmds
-  cargo build --offline --release --package=cxxbridge-cmd --bin=cxxbridge
+  cargo build --locked --offline --release --package=cxxbridge-cmd --bin=cxxbridge
 endef
 
 define $(package)_stage_cmds
