@@ -69,7 +69,8 @@ class CHDChain
 {
 public:
     static const int VERSION_HD_BASE = 1;
-    static const int CURRENT_VERSION = VERSION_HD_BASE;
+    static const int VERSION_WITH_ORCHARD = 2;
+    static const int CURRENT_VERSION = VERSION_WITH_ORCHARD;
     int nVersion;
     uint256 seedFp;
     int64_t nCreateTime; // 0 means unknown
@@ -87,7 +88,9 @@ public:
         READWRITE(seedFp);
         READWRITE(nCreateTime);
         READWRITE(saplingAccountCounter);
-        READWRITE(orchardAccountCounter);
+        if (nVersion >= VERSION_WITH_ORCHARD) {
+            READWRITE(orchardAccountCounter);
+        }
     }
 
     void SetNull()
