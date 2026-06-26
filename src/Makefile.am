@@ -933,6 +933,7 @@ clean-local:
 	-$(RM) *.a
 	-$(RM) crypto/*.a
 	-$(RM) cryptoconditions/.libs/*.a
+	-$(RM) -r rust/gen
 
 clean-all: clean-local
 	-$(MAKE) -C univalue clean-all
