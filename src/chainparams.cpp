@@ -986,6 +986,16 @@ const CChainParams::CCheckpointData GetACCheckPoints()
                                 //   total number of tx / (checkpoint block height / (24 * 24))
                 };
 
+    /* PIRATETST */
+    const CChainParams::CCheckpointData checkpointDataPIRATETST = {
+                boost::assign::map_list_of
+                (	0,	Params(CBaseChainParams::MAIN).GetConsensus().hashGenesisBlock)
+                (	462,	uint256S("0x010c10e9417ec675d13dc85fd9611ca7a2a74c51f61b49aa15b11db3aa5b5440")),
+                0,           // * UNIX timestamp of last checkpoint block
+                0,           // * total number of transactions between genesis and last checkpoint
+                2777         // * estimated number of transactions per day after checkpoint
+                };
+
     /* should not be called with KMD, as the intention is to use it exclusively with AC, but anyway ... */
     const std::unordered_map<std::string, CChainParams::CCheckpointData> mapACCheckpointsData =
         boost::assign::map_list_of
@@ -999,6 +1009,7 @@ const CChainParams::CCheckpointData GetACCheckPoints()
         ("MARTY", checkpointDataMARTY)
         ("NINJA", checkpointDataNINJA)
         ("PIRATE", checkpointDataPIRATE)
+        ("PIRATETST", checkpointDataPIRATETST)
         ("SUPERNET", checkpointDataSUPERNET);
 
     auto it = mapACCheckpointsData.find(chainName.ToString());
