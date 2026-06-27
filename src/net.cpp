@@ -2872,6 +2872,8 @@ CNode::CNode(SOCKET hSocketIn, const CAddress& addrIn, const std::string& addrNa
     fPingQueued = false;
     nPingRetry = 0;
     nMinPingUsecTime = std::numeric_limits<int64_t>::max();
+    nLastGetBlocksRecv = 0;
+    nLastGetHeadersRecv = 0;
 
     {
         LOCK(cs_nLastNodeId);

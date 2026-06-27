@@ -8757,6 +8757,25 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         uint256 hashStop;
         vRecv >> locator >> hashStop;
 
+        // Reject oversized locators — legitimate GetLocator() produces at most ~32 entries.
+        // A peer sending hundreds of entries is either buggy or malicious.
+        static const size_t MAX_LOCATOR_SZ = 101;
+        if (locator.vHave.size() > MAX_LOCATOR_SZ) {
+            Misbehaving(pfrom->GetId(), 20);
+            return error("getblocks locator size %u exceeds limit %u from peer=%d",
+                         locator.vHave.size(), MAX_LOCATOR_SZ, pfrom->id);
+        }
+
+        // Rate-limit: at most one GETBLOCKS per second per peer.
+        {
+            int64_t now = GetTime();
+            if (now - pfrom->nLastGetBlocksRecv < 1) {
+                LogPrint("net", "rate-limiting getblocks from peer=%d\n", pfrom->id);
+                return true;
+            }
+            pfrom->nLastGetBlocksRecv = now;
+        }
+
         LOCK(cs_main);
 
         // Find the last block the caller has in the main chain
@@ -8792,6 +8811,24 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         CBlockLocator locator;
         uint256 hashStop;
         vRecv >> locator >> hashStop;
+
+        // Reject oversized locators.
+        static const size_t MAX_LOCATOR_SZ = 101;
+        if (!locator.IsNull() && locator.vHave.size() > MAX_LOCATOR_SZ) {
+            Misbehaving(pfrom->GetId(), 20);
+            return error("getheaders locator size %u exceeds limit %u from peer=%d",
+                         locator.vHave.size(), MAX_LOCATOR_SZ, pfrom->id);
+        }
+
+        // Rate-limit: at most one GETHEADERS per second per peer.
+        {
+            int64_t now = GetTime();
+            if (now - pfrom->nLastGetHeadersRecv < 1) {
+                LogPrint("net", "rate-limiting getheaders from peer=%d\n", pfrom->id);
+                return true;
+            }
+            pfrom->nLastGetHeadersRecv = now;
+        }
 
         LOCK(cs_main);
 

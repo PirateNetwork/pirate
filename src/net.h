@@ -405,6 +405,10 @@ public:
     CService addrLocal;
     int nVersion;
     int lasthdrsreq,sendhdrsreq;
+    /** Timestamps (seconds) of the last GETBLOCKS and GETHEADERS received from this peer,
+     *  used to enforce a minimum inter-request interval. */
+    int64_t nLastGetBlocksRecv;
+    int64_t nLastGetHeadersRecv;
     // strSubVer is whatever byte array we read from the wire. However, this field is intended
     // to be printed out, displayed to humans in various forms and so on. So we sanitize it and
     // store the sanitized version in cleanSubVer. The original should be used when dealing with
