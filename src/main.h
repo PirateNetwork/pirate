@@ -86,7 +86,10 @@ static const unsigned int MAX_STANDARD_TX_SIGOPS = MAX_BLOCK_SIGOPS/5;
 /** Default for -minrelaytxfee, minimum relay fee for transactions */
 static const unsigned int DEFAULT_MIN_RELAY_TX_FEE = 100;
 /** Default for -maxorphantx, maximum number of orphan transactions kept in memory */
-static const unsigned int DEFAULT_MAX_ORPHAN_TRANSACTIONS = 100;
+/** Maximum number of unconnectable transactions in memory */
+static const unsigned int DEFAULT_MAX_ORPHAN_TRANSACTIONS = 200;
+/** Maximum number of orphan transactions a single peer may contribute.\n *  Set to global/10 so a single IP (max 5 connections) can fill at most\n *  10% of the pool, always leaving 90% available for honest peers. */
+static const unsigned int DEFAULT_MAX_ORPHAN_PER_PEER = 5;
 /** Default for -txexpirydelta, in number of blocks */
 static const unsigned int DEFAULT_TX_EXPIRY_DELTA = 200;
 /** The maximum size of a blk?????.dat file (since 0.8) */

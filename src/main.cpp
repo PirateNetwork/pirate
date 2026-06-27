@@ -142,6 +142,8 @@ struct COrphanTx {
 };
 map<uint256, COrphanTx> mapOrphanTransactions GUARDED_BY(cs_main);;
 map<uint256, set<uint256> > mapOrphanTransactionsByPrev GUARDED_BY(cs_main);;
+/** Per-peer index: maps NodeId -> set of orphan tx hashes from that peer */
+map<NodeId, set<uint256> > mapOrphansByPeer GUARDED_BY(cs_main);
 void EraseOrphansFor(NodeId peer) REQUIRES(cs_main);
 
 /**
@@ -840,8 +842,19 @@ bool AddOrphanTx(const CTransaction& tx, NodeId peer) REQUIRES(cs_main)
         return false;
     }
 
+    // Enforce per-peer slot limit to prevent a single peer from filling the
+    // entire orphan pool and starving legitimate orphans from other peers.
+    unsigned int nMaxOrphanPerPeer = (unsigned int)GetArg("-maxorphanperpeer", DEFAULT_MAX_ORPHAN_PER_PEER);
+    if (mapOrphansByPeer[peer].size() >= nMaxOrphanPerPeer)
+    {
+        LogPrint("mempool", "ignoring orphan tx %s from peer=%d (per-peer limit reached)\n",
+                 hash.ToString(), peer);
+        return false;
+    }
+
     mapOrphanTransactions[hash].tx = tx;
     mapOrphanTransactions[hash].fromPeer = peer;
+    mapOrphansByPeer[peer].insert(hash);
     BOOST_FOREACH(const CTxIn& txin, tx.vin)
     mapOrphanTransactionsByPrev[txin.prevout.hash].insert(hash);
 
@@ -864,21 +877,29 @@ void static EraseOrphanTx(uint256 hash) REQUIRES(cs_main)
         if (itPrev->second.empty())
             mapOrphanTransactionsByPrev.erase(itPrev);
     }
+    // Remove from the per-peer index
+    NodeId peer = it->second.fromPeer;
+    map<NodeId, set<uint256> >::iterator itPeer = mapOrphansByPeer.find(peer);
+    if (itPeer != mapOrphansByPeer.end()) {
+        itPeer->second.erase(hash);
+        if (itPeer->second.empty())
+            mapOrphansByPeer.erase(itPeer);
+    }
     mapOrphanTransactions.erase(it);
 }
 
 void EraseOrphansFor(NodeId peer)
 {
+    // Use the per-peer index for O(1) lookup instead of O(n) linear scan.
+    map<NodeId, set<uint256> >::iterator itPeer = mapOrphansByPeer.find(peer);
+    if (itPeer == mapOrphansByPeer.end())
+        return;
+    // Copy the set since EraseOrphanTx modifies mapOrphansByPeer
+    set<uint256> hashes = itPeer->second;
     int nErased = 0;
-    map<uint256, COrphanTx>::iterator iter = mapOrphanTransactions.begin();
-    while (iter != mapOrphanTransactions.end())
-    {
-        map<uint256, COrphanTx>::iterator maybeErase = iter++; // increment to avoid iterator becoming invalid
-        if (maybeErase->second.fromPeer == peer)
-        {
-            EraseOrphanTx(maybeErase->second.tx.GetHash());
-            ++nErased;
-        }
+    for (const uint256& hash : hashes) {
+        EraseOrphanTx(hash);
+        ++nErased;
     }
     if (nErased > 0) LogPrint("mempool", "Erased %d orphan tx from peer %d\n", nErased, peer);
 }
