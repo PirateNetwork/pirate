@@ -42,6 +42,7 @@
 #include "sync.h"
 #include "tinyformat.h"
 #include "txmempool.h"
+#include "policy/policy.h"
 #include "uint256.h"
 
 #include <algorithm>

@@ -448,14 +448,9 @@ namespace {
 
     void LimitMempoolSize(CTxMemPool& pool, size_t limit, unsigned long age)
     {
-        /*    int expired = pool.Expire(GetTime() - age);
-         if (expired != 0)
-         LogPrint("mempool", "Expired %i transactions from the memory pool\n", expired);
-
-         std::vector<uint256> vNoSpendsRemaining;
-         pool.TrimToSize(limit, &vNoSpendsRemaining);
-         BOOST_FOREACH(const uint256& removed, vNoSpendsRemaining)
-         pcoinsTip->Uncache(removed);*/
+        LOCK(pool.cs);
+        pool.Expire(GetTime() - age);
+        pool.TrimToSize(limit);
     }
 
     // Requires cs_main.
@@ -2431,6 +2426,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
                 }
             }
         }
+        LimitMempoolSize(mempool, GetArg("-maxmempool", DEFAULT_MAX_MEMPOOL_SIZE) * 1000000, GetArg("-mempoolexpiry", DEFAULT_MEMPOOL_EXPIRY) * 60 * 60);
     }
     return true;
 }
@@ -5023,6 +5019,7 @@ bool ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *pblock)
 
     // Remove transactions that expire at new block height from mempool
     mempool.removeExpired(pindexNew->nHeight);
+    LimitMempoolSize(mempool, GetArg("-maxmempool", DEFAULT_MAX_MEMPOOL_SIZE) * 1000000, GetArg("-mempoolexpiry", DEFAULT_MEMPOOL_EXPIRY) * 60 * 60);
 
     // Update chainActive & related variables.
     UpdateTip(pindexNew);
@@ -5441,7 +5438,7 @@ bool InvalidateBlock(CValidationState& state, CBlockIndex *pindex) {
             return false;
         }
     }
-    //LimitMempoolSize(mempool, GetArg("-maxmempool", DEFAULT_MAX_MEMPOOL_SIZE) * 1000000, GetArg("-mempoolexpiry", DEFAULT_MEMPOOL_EXPIRY) * 60 * 60);
+    LimitMempoolSize(mempool, GetArg("-maxmempool", DEFAULT_MAX_MEMPOOL_SIZE) * 1000000, GetArg("-mempoolexpiry", DEFAULT_MEMPOOL_EXPIRY) * 60 * 60);
 
     // The resulting new best tip may not be in setBlockIndexCandidates anymore, so
     // add it again.

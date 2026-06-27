@@ -224,6 +224,21 @@ public:
                         std::list<CTransaction>& conflicts, bool fCurrentEstimate = true);
     void removeWithoutBranchId(uint32_t nMemPoolBranchId);
     void clear();
+
+    /**
+     * Remove transactions from the mempool that have been in the pool for
+     * longer than `age` seconds. Returns the number of transactions removed.
+     * Requires cs held by caller.
+     */
+    int Expire(int64_t time);
+
+    /**
+     * Trim the mempool to at most `sizelimit` bytes, evicting the lowest
+     * fee-rate transactions first. Expired entries are removed first.
+     * Requires cs held by caller.
+     */
+    void TrimToSize(size_t sizelimit);
+
     void queryHashes(std::vector<uint256>& vtxid);
     void pruneSpent(const uint256& hash, CCoins &coins);
     unsigned int GetTransactionsUpdated() const;

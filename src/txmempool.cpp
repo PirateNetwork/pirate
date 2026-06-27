@@ -657,6 +657,39 @@ void CTxMemPool::clear()
     ++nTransactionsUpdated;
 }
 
+int CTxMemPool::Expire(int64_t time)
+{
+    AssertLockHeld(cs);
+    std::list<CTransaction> toRemove;
+    for (indexed_transaction_set::const_iterator it = mapTx.begin(); it != mapTx.end(); ++it) {
+        if (it->GetTime() < time)
+            toRemove.push_back(it->GetTx());
+    }
+    for (const CTransaction& tx : toRemove) {
+        std::list<CTransaction> removed;
+        remove(tx, removed, true);
+    }
+    if (!toRemove.empty())
+        LogPrint("mempool", "Expired %d transactions from the memory pool\n", (int)toRemove.size());
+    return (int)toRemove.size();
+}
+
+void CTxMemPool::TrimToSize(size_t sizelimit)
+{
+    AssertLockHeld(cs);
+    // The fee-rate index (index 1) is sorted highest-fee-rate first.
+    // Iterate in reverse (lowest fee rate first) and evict until we are
+    // under the size limit.
+    typedef indexed_transaction_set::nth_index<1>::type fee_sorted_set;
+    while (DynamicMemoryUsage() > sizelimit && !mapTx.empty()) {
+        fee_sorted_set& feeIndex = mapTx.get<1>();
+        // rbegin() points at the lowest fee-rate entry
+        fee_sorted_set::reverse_iterator worst = feeIndex.rbegin();
+        std::list<CTransaction> removed;
+        remove(worst->GetTx(), removed, true);
+    }
+}
+
 void CTxMemPool::check(const CCoinsViewCache *pcoins) const
 {
     if (nCheckFrequency == 0)

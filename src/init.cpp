@@ -28,6 +28,7 @@
 #include "amount.h"
 #include "checkpoints.h"
 #include "compat/sanity.h"
+#include "policy/policy.h"
 #include "consensus/upgrades.h"
 #include "consensus/validation.h"
 #include "httpserver.h"
@@ -425,6 +426,8 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-dbcache=<n>", strprintf(_("Set database cache size in megabytes (%d to %d, default: %d)"), nMinDbCache, nMaxDbCache, nDefaultDbCache));
     strUsage += HelpMessageOpt("-loadblock=<file>", _("Imports blocks from external blk000??.dat file") + " " + _("on startup"));
     strUsage += HelpMessageOpt("-maxorphantx=<n>", strprintf(_("Keep at most <n> unconnectable transactions in memory (default: %u)"), DEFAULT_MAX_ORPHAN_TRANSACTIONS));
+    strUsage += HelpMessageOpt("-maxmempool=<n>", strprintf(_("Keep the transaction memory pool below <n> megabytes (default: %u)"), DEFAULT_MAX_MEMPOOL_SIZE));
+    strUsage += HelpMessageOpt("-mempoolexpiry=<n>", strprintf(_("Do not keep transactions in the mempool longer than <n> hours (default: %u)"), DEFAULT_MEMPOOL_EXPIRY));
     strUsage += HelpMessageOpt("-mempooltxinputlimit=<n>", _("[DEPRECATED FROM OVERWINTER] Set the maximum number of transparent inputs in a transaction that the mempool will accept (default: 0 = no limit applied)"));
     strUsage += HelpMessageOpt("-par=<n>", strprintf(_("Set the number of script verification threads (%u to %d, 0 = auto, <0 = leave that many cores free, default: %d)"),
         -(int)boost::thread::hardware_concurrency(), MAX_SCRIPTCHECK_THREADS, DEFAULT_SCRIPTCHECK_THREADS));
@@ -1419,7 +1422,25 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     // a transaction spammer can cheaply fill blocks using
     // 1-satoshi-fee transactions. It should be set above the real
     // cost to you of processing a transaction.
-    
+
+    // Validate -maxmempool: must be between 100 MB and 10,000 MB
+    {
+        int64_t nMaxMempool = GetArg("-maxmempool", DEFAULT_MAX_MEMPOOL_SIZE);
+        if (nMaxMempool < 100)
+            return InitError(_("-maxmempool must be at least 100 MB"));
+        if (nMaxMempool > 10000)
+            return InitError(_("-maxmempool must not exceed 10000 MB"));
+    }
+
+    // Validate -mempoolexpiry: must be between 1 hour and 8760 hours (1 year)
+    {
+        int64_t nMempoolExpiry = GetArg("-mempoolexpiry", DEFAULT_MEMPOOL_EXPIRY);
+        if (nMempoolExpiry < 1)
+            return InitError(_("-mempoolexpiry must be at least 1 hour"));
+        if (nMempoolExpiry > 8760)
+            return InitError(_("-mempoolexpiry must not exceed 8760 hours (1 year)"));
+    }
+
     if (mapArgs.count("-minrelaytxfee"))
     {   
         CAmount n = 0;
