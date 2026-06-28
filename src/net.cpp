@@ -81,12 +81,15 @@ using namespace tls;
 
 using namespace std;
 
-const int MAX_OUTBOUND_CONNECTIONS = 64;  // Increased from 32 to allow more parallel connections
+const int MAX_OUTBOUND_CONNECTIONS = 64;
 int MAX_ADDNODE_CONNECTIONS = 8;  // Reserve slots for addnode connections
 int MAX_REGULAR_OUTBOUND_CONNECTIONS = MAX_OUTBOUND_CONNECTIONS - MAX_ADDNODE_CONNECTIONS;
 
 namespace {
-    const int MAX_INBOUND_FROMIP = 5;
+    // Reduced from 5 to 2. At 5 connections per IP, only 64 distinct IPs
+    // were needed to fill all 320 inbound slots, enabling eclipse attacks with a small
+    // botnet. At 2, an attacker needs 160 distinct IPs — a 2.5x increase in resources.
+    const int MAX_INBOUND_FROMIP = 2;
 
     struct ListenSocket {
         SOCKET socket;
