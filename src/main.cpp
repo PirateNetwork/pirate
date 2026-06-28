@@ -9554,8 +9554,18 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
         //
         if (fSendTrickle)
         {
+            const char* msg_type;
+            int make_flags;
+            if (pto->m_wants_addrv2) {
+                msg_type = NetMsgType::ADDRV2;
+                make_flags = ADDRV2_FORMAT;
+            } else {
+                msg_type = NetMsgType::ADDR;
+                make_flags = 0;
+            }
+
             vector<CAddress> vAddr;
-            vAddr.reserve(pto->vAddrToSend.size());
+            vAddr.reserve(std::min<size_t>(pto->vAddrToSend.size(), MAX_ADDR_TO_SEND));
             BOOST_FOREACH(const CAddress& addr, pto->vAddrToSend)
             {
                 if (!pto->addrKnown.contains(addr.GetKey()))
@@ -9563,28 +9573,20 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                     pto->addrKnown.insert(addr.GetKey());
                     vAddr.push_back(addr);
 
+                    // Flush a full batch as a single addr message, then start a new batch.
                     if (vAddr.size() >= MAX_ADDR_TO_SEND)
                     {
-                      // Should be impossible since we always check size before adding to
-                      // vAddrToSend. Recover by trimming the vector.
-                      vAddr.resize(MAX_ADDR_TO_SEND);
+                        pto->PushAddrMessage(CNetMsgMaker(std::min(pto->nVersion, PROTOCOL_VERSION)).Make(make_flags, msg_type, vAddr));
+                        vAddr.clear();
                     }
-                    const char* msg_type;
-                    int make_flags;
-                    if (pto->m_wants_addrv2) {
-                        msg_type = NetMsgType::ADDRV2;
-                        make_flags = ADDRV2_FORMAT;
-                    } else {
-                        msg_type = NetMsgType::ADDR;
-                        make_flags = 0;
-                    }
-                    pto->PushAddrMessage(CNetMsgMaker(std::min(pto->nVersion, PROTOCOL_VERSION)).Make(make_flags, msg_type, pto->vAddrToSend));
-
                 }
             }
 
             pto->vAddrToSend.clear();
-            vAddr.clear();
+
+            // Send any remaining addresses that didn't fill a complete batch.
+            if (!vAddr.empty())
+                pto->PushAddrMessage(CNetMsgMaker(std::min(pto->nVersion, PROTOCOL_VERSION)).Make(make_flags, msg_type, vAddr));
         }
 
         CNodeState &state = *State(pto->GetId());
