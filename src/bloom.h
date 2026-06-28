@@ -89,7 +89,20 @@ public:
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action) {
-        READWRITE(vData);
+        if (ser_action.ForRead()) {
+            // Reject oversized filters before allocating: a peer cannot
+            // excuse a vData larger than the protocol bloom-filter limit.
+            uint64_t nSize = ReadCompactSize(s);
+            if (nSize > MAX_BLOOM_FILTER_SIZE)
+                throw std::ios_base::failure("CBloomFilter vData size too large");
+            vData.resize(nSize);
+            if (nSize > 0)
+                s.read((char*)vData.data(), nSize);
+        } else {
+            WriteCompactSize(s, vData.size());
+            if (!vData.empty())
+                s.write((const char*)vData.data(), vData.size());
+        }
         READWRITE(nHashFuncs);
         READWRITE(nTweak);
         READWRITE(nFlags);
