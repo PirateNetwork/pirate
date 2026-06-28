@@ -8476,16 +8476,21 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         OverrideStream<CDataStream> s(&vRecv, vRecv.GetType(), stream_version);
         vector<CAddress> vAddr;
-        s >> vAddr;
+        // Read and validate the count before allocating, so an oversized addr
+        // vector is rejected without first decoding it all.
+        unsigned int nAddrCount = ReadCompactSize(s);
+        if (nAddrCount > 1000)
+        {
+            Misbehaving(pfrom->GetId(), 20);
+            return error("%s message size() = %u", strCommand, nAddrCount);
+        }
+        vAddr.resize(nAddrCount);
+        for (unsigned int n = 0; n < nAddrCount; n++)
+            s >> vAddr[n];
 
         // Don't want addr from older versions unless seeding
         if (pfrom->nVersion < CADDR_TIME_VERSION && addrman.size() > 1000)
             return true;
-        if (vAddr.size() > 1000)
-        {
-            Misbehaving(pfrom->GetId(), 20);
-            return error("%s message size() = %u", strCommand, vAddr.size());
-        }
 
         // Store the new addresses
         vector<CAddress> vAddrOk;
@@ -8705,12 +8710,17 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     else if (strCommand == NetMsgType::INV)
     {
         vector<CInv> vInv;
-        vRecv >> vInv;
-        if (vInv.size() > MAX_INV_SZ)
+        // Read and validate the count before allocating, so an oversized
+        // inv vector is rejected without first decoding it all.
+        unsigned int nInvCount = ReadCompactSize(vRecv);
+        if (nInvCount > MAX_INV_SZ)
         {
             Misbehaving(pfrom->GetId(), 20);
-            return error("message inv size() = %u", vInv.size());
+            return error("message inv size() = %u", nInvCount);
         }
+        vInv.resize(nInvCount);
+        for (unsigned int n = 0; n < nInvCount; n++)
+            vRecv >> vInv[n];
 
         LOCK(cs_main);
 
@@ -8767,12 +8777,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     else if (strCommand == NetMsgType::GETDATA)
     {
         vector<CInv> vInv;
-        vRecv >> vInv;
-        if (vInv.size() > MAX_INV_SZ)
+        // Read and validate the count before allocating.
+        unsigned int nInvCount = ReadCompactSize(vRecv);
+        if (nInvCount > MAX_INV_SZ)
         {
             Misbehaving(pfrom->GetId(), 20);
-            return error("message getdata size() = %u", vInv.size());
+            return error("message getdata size() = %u", nInvCount);
         }
+        vInv.resize(nInvCount);
+        for (unsigned int n = 0; n < nInvCount; n++)
+            vRecv >> vInv[n];
 
         if (fDebug || (vInv.size() != 1))
             LogPrint("net", "received getdata (%u invsz) peer=%d\n", vInv.size(), pfrom->id);
