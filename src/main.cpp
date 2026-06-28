@@ -9218,22 +9218,24 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         {
             if (alert.ProcessAlert(Params().AlertKey()))
             {
-                // Relay
+                // Relay — rate limited to at most one alert per peer per 60 seconds
+                // to limit amplification from a signing key compromise.
                 pfrom->setKnown.insert(alertHash);
+                int64_t now = GetTime();
                 {
                     LOCK(cs_vNodes);
-                    BOOST_FOREACH(CNode* pnode, vNodes)
-                    alert.RelayTo(pnode);
+                    BOOST_FOREACH(CNode* pnode, vNodes) {
+                        if (now - pnode->nLastAlertRelayed >= 60) {
+                            pnode->nLastAlertRelayed = now;
+                            alert.RelayTo(pnode);
+                        }
+                    }
                 }
             }
             else {
-                // Small DoS penalty so peers that send us lots of
-                // duplicate/expired/invalid-signature/whatever alerts
-                // eventually get banned.
-                // This isn't a Misbehaving(100) (immediate ban) because the
-                // peer might be an older or different implementation with
-                // a different signature key, etc.
-                Misbehaving(pfrom->GetId(), 10);
+                // Raised from 10 to 50: a peer sending invalid alerts has no
+                // legitimate reason to do so and should be banned quickly.
+                Misbehaving(pfrom->GetId(), 50);
             }
         }
     }
