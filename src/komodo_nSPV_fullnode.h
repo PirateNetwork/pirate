@@ -1010,7 +1010,10 @@ void komodo_nSPVreq(CNode *pfrom,std::vector<uint8_t> request) // received a req
             if ( timestamp > pfrom->prevtimes[ind] )
             {
                 struct NSPV_mempoolresp M; char coinaddr[64];
-                if ( len < sizeof(M)+64 )
+                // Minimum fixed header before the variable-length address:
+                // type byte + isCC + funcid + vout + txid + slen byte
+                int32_t minmempoollen = 1 + (int32_t)(sizeof(uint8_t) + sizeof(uint8_t) + sizeof(int32_t) + sizeof(uint256)) + 1;
+                if ( len >= minmempoollen && len < sizeof(M)+64 )
                 {
                     int32_t vout; uint256 txid; uint8_t funcid,isCC = 0;
                     n = 1;
@@ -1019,7 +1022,7 @@ void komodo_nSPVreq(CNode *pfrom,std::vector<uint8_t> request) // received a req
                     n += iguana_rwnum(0,&request[n],sizeof(vout),&vout);
                     n += iguana_rwbignum(0,&request[n],sizeof(txid),(uint8_t *)&txid);
                     slen = request[n++];
-                    if ( slen < 63 )
+                    if ( slen < 63 && n + slen <= len )
                     {
                         memcpy(coinaddr,&request[n],slen), n += slen;
                         coinaddr[slen] = 0;
@@ -1172,17 +1175,21 @@ void komodo_nSPVreq(CNode *pfrom,std::vector<uint8_t> request) // received a req
             if ( timestamp > pfrom->prevtimes[ind] )
             {
                 struct NSPV_remoterpcresp R; int32_t p;
-                p = 1;
-                p+=iguana_rwnum(0,&request[p],sizeof(slen),&slen);
-                memset(&R,0,sizeof(R));
-                if (request.size() == p+slen && (slen=NSPV_remoterpc(&R,(char *)&request[p],slen))>0 )
+                // Ensure the declared length field is fully present before reading it
+                if ( len >= 1 + (int32_t)sizeof(slen) )
                 {
-                    response.resize(1 + slen);
-                    response[0] = NSPV_REMOTERPCRESP;
-                    NSPV_rwremoterpcresp(1,&response[1],&R,slen);
-                    pfrom->PushMessage(NetMsgType::NSPV,response);
-                    pfrom->prevtimes[ind] = timestamp;
-                    NSPV_remoterpc_purge(&R);
+                    p = 1;
+                    p+=iguana_rwnum(0,&request[p],sizeof(slen),&slen);
+                    memset(&R,0,sizeof(R));
+                    if ( slen > 0 && request.size() == (size_t)(p+slen) && (slen=NSPV_remoterpc(&R,(char *)&request[p],slen))>0 )
+                    {
+                        response.resize(1 + slen);
+                        response[0] = NSPV_REMOTERPCRESP;
+                        NSPV_rwremoterpcresp(1,&response[1],&R,slen);
+                        pfrom->PushMessage(NetMsgType::NSPV,response);
+                        pfrom->prevtimes[ind] = timestamp;
+                        NSPV_remoterpc_purge(&R);
+                    }
                 }
             }
         }
@@ -1207,7 +1214,10 @@ void komodo_nSPVreq(CNode *pfrom,std::vector<uint8_t> request) // received a req
                 {
                     n = 1;
                     int32_t addrlen = request[n++];
-                    if (addrlen < sizeof(coinaddr))
+                    // Ensure the address plus the fixed fields that follow (amount, evalcode,
+                    // and the funcids length byte) all fit within the received payload.
+                    if (addrlen < (int32_t)sizeof(coinaddr) &&
+                        n + addrlen + (int32_t)(sizeof(amount) + sizeof(evalcode) + sizeof(uint8_t)) <= len)
                     {
                         memcpy(coinaddr, &request[n], addrlen);
                         coinaddr[addrlen] = 0;
@@ -1218,7 +1228,9 @@ void komodo_nSPVreq(CNode *pfrom,std::vector<uint8_t> request) // received a req
                         n += sizeof(evalcode);
 
                         int32_t funcidslen = request[n++];
-                        if (funcidslen < sizeof(funcids))
+                        // Ensure the funcids list plus the trailing filtertxid fit as well.
+                        if (funcidslen < (int32_t)sizeof(funcids) &&
+                            n + funcidslen + (int32_t)sizeof(filtertxid) <= len)
                         {
                             memcpy(funcids, &request[n], funcidslen);
                             funcids[funcidslen] = 0;

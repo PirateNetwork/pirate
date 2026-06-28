@@ -26,11 +26,50 @@
 #ifndef KOMODO_NSPV_H
 #define KOMODO_NSPV_H
 
+// ---- nSPV response deserialization bounds guard (read path only) ----
+// A malicious nSPV server can send a short response payload with forged
+// internal length/count fields (numhdrs, numutxos, numtxids, txlen, ...),
+// driving out-of-bounds reads and attacker-controlled allocations/loops in
+// the NSPV_rw* deserializers. To contain this without changing every helper
+// signature (which would also affect the trusted serialize path), the read
+// path records the end of the attacker-controlled buffer in a thread-local,
+// and the variable-length / vector helpers refuse to read or allocate past
+// it. The guard is inert on the serialize path, where the bound is unset.
+static thread_local const uint8_t *NSPV_rw_bufend = NULL;
+static thread_local bool NSPV_rw_overflow = false;
+
+static inline void NSPV_rw_setbounds(const uint8_t *buf,int32_t buflen)
+{
+    NSPV_rw_bufend = (buf != NULL && buflen >= 0) ? buf + buflen : NULL;
+    NSPV_rw_overflow = false;
+}
+
+// returns 1 if `need` bytes can be safely read starting at `serialized`
+static inline int32_t NSPV_rw_inbounds(const uint8_t *serialized,int64_t need)
+{
+    if ( need < 0 )
+    {
+        NSPV_rw_overflow = true;
+        return 0;
+    }
+    if ( NSPV_rw_bufend != NULL && (serialized + need) > NSPV_rw_bufend )
+    {
+        NSPV_rw_overflow = true;
+        return 0;
+    }
+    return 1;
+}
+
 int32_t iguana_rwbuf(int32_t rwflag,uint8_t *serialized,int32_t len,uint8_t *buf)
 {
     if ( rwflag != 0 )
         memcpy(serialized,buf,len);
-    else memcpy(buf,serialized,len);
+    else
+    {
+        if ( NSPV_rw_inbounds(serialized,len) == 0 )
+            return(len); // refuse out-of-bounds read; caller aborts on overflow flag
+        memcpy(buf,serialized,len);
+    }
     return(len);
 }
 
@@ -51,9 +90,14 @@ int32_t NSPV_rwequihdr(int32_t rwflag,uint8_t *serialized,struct NSPV_equihdr *p
 int32_t iguana_rwequihdrvec(int32_t rwflag,uint8_t *serialized,uint16_t *vecsizep,struct NSPV_equihdr **ptrp)
 {
     int32_t i,vsize,len = 0;
+    // Serialized size of one equihdr record (must match NSPV_rwequihdr).
+    const int32_t equihdrsersize = (int32_t)(sizeof(int32_t) + 3*sizeof(uint256) + 2*sizeof(uint32_t) + sizeof(uint256) + sizeof(((struct NSPV_equihdr *)0)->nSolution));
     len += iguana_rwnum(rwflag,&serialized[len],sizeof(*vecsizep),vecsizep);
     if ( (vsize= *vecsizep) != 0 )
     {
+        // Reject counts that would read past the attacker-controlled buffer.
+        if ( NSPV_rw_inbounds(&serialized[len],(int64_t)vsize * equihdrsersize) == 0 )
+            return(len);
         //fprintf(stderr,"vsize.%d ptrp.%p alloc %ld\n",vsize,*ptrp,sizeof(struct NSPV_equihdr)*vsize);
         if ( *ptrp == 0 )
             *ptrp = (struct NSPV_equihdr *)calloc(sizeof(struct NSPV_equihdr),vsize); // relies on uint16_t being "small" to prevent mem exhaustion
@@ -69,6 +113,9 @@ int32_t iguana_rwuint8vec(int32_t rwflag,uint8_t *serialized,int32_t *biglenp,ui
     len += iguana_rwnum(rwflag,&serialized[len],sizeof(*biglenp),biglenp);
     if ( (vsize= *biglenp) > 0 && vsize < MAX_TX_SIZE_AFTER_SAPLING )
     {
+        // Reject a declared length that would read past the buffer.
+        if ( NSPV_rw_inbounds(&serialized[len],vsize) == 0 )
+            return(len);
         if ( *ptrp == 0 )
             *ptrp = (uint8_t *)calloc(1,vsize);
         len += iguana_rwbuf(rwflag,&serialized[len],vsize,*ptrp);
@@ -93,6 +140,10 @@ int32_t NSPV_rwutxosresp(int32_t rwflag,uint8_t *serialized,struct NSPV_utxosres
     len += iguana_rwnum(rwflag,&serialized[len],sizeof(ptr->numutxos),&ptr->numutxos);
     if ( ptr->numutxos != 0 )
     {
+        // Serialized size of one NSPV_utxoresp (txid+satoshis+extradata+vout+height).
+        const int32_t utxosersize = (int32_t)(sizeof(uint256) + 2*sizeof(int64_t) + 2*sizeof(int32_t));
+        if ( NSPV_rw_inbounds(&serialized[len],(int64_t)ptr->numutxos * utxosersize) == 0 )
+            return(len);
         if ( ptr->utxos == 0 )
             ptr->utxos = (struct NSPV_utxoresp *)calloc(sizeof(*ptr->utxos),ptr->numutxos); // relies on uint16_t being "small" to prevent mem exhaustion
         for (i=0; i<ptr->numutxos; i++)
@@ -153,6 +204,10 @@ int32_t NSPV_rwtxidsresp(int32_t rwflag,uint8_t *serialized,struct NSPV_txidsres
     len += iguana_rwnum(rwflag,&serialized[len],sizeof(ptr->numtxids),&ptr->numtxids);
     if ( ptr->numtxids != 0 )
     {
+        // Serialized size of one NSPV_txidresp (txid+satoshis+vout+height).
+        const int32_t txidsersize = (int32_t)(sizeof(uint256) + sizeof(int64_t) + 2*sizeof(int32_t));
+        if ( NSPV_rw_inbounds(&serialized[len],(int64_t)ptr->numtxids * txidsersize) == 0 )
+            return(len);
         if ( ptr->txids == 0 )
             ptr->txids = (struct NSPV_txidresp *)calloc(sizeof(*ptr->txids),ptr->numtxids);
         for (i=0; i<ptr->numtxids; i++)
@@ -202,6 +257,9 @@ int32_t NSPV_rwmempoolresp(int32_t rwflag,uint8_t *serialized,struct NSPV_mempoo
     len += iguana_rwnum(rwflag,&serialized[len],sizeof(ptr->numtxids),&ptr->numtxids);
     if ( ptr->numtxids != 0 )
     {
+        // Each mempool txid is serialized as a single uint256.
+        if ( NSPV_rw_inbounds(&serialized[len],(int64_t)ptr->numtxids * (int32_t)sizeof(uint256)) == 0 )
+            return(len);
         if ( ptr->txids == 0 )
             ptr->txids = (uint256 *)calloc(sizeof(*ptr->txids),ptr->numtxids);
         for (i=0; i<ptr->numtxids; i++)

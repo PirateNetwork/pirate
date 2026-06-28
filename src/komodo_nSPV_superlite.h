@@ -130,12 +130,49 @@ struct NSPV_ntzsproofresp *NSPV_ntzsproof_add(struct NSPV_ntzsproofresp *ptr)
 
 // komodo_nSPVresp is called from async message processing
 
+// Minimum serialized length of a response body (the bytes after the 1-byte
+// type tag) for a given response type. Computed exactly by serializing a
+// zeroed struct, so it stays correct if the wire layout changes. Variable
+// vectors contribute only their (empty) length/count field, giving the
+// smallest legal body. A response shorter than this is malformed and would
+// otherwise drive out-of-bounds reads in the fixed-field deserializers.
+static int32_t NSPV_resp_minsize(uint8_t resp)
+{
+    uint8_t scratch[2048]; int32_t n = 0;
+    memset(scratch,0,sizeof(scratch));
+    switch ( resp )
+    {
+        case NSPV_INFORESP:        { struct NSPV_inforesp x;      memset(&x,0,sizeof(x)); n = NSPV_rwinforesp(1,scratch,&x); break; }
+        case NSPV_UTXOSRESP:
+        case NSPV_CCMODULEUTXOSRESP:{ struct NSPV_utxosresp x;     memset(&x,0,sizeof(x)); n = NSPV_rwutxosresp(1,scratch,&x); break; }
+        case NSPV_TXIDSRESP:       { struct NSPV_txidsresp x;     memset(&x,0,sizeof(x)); n = NSPV_rwtxidsresp(1,scratch,&x); break; }
+        case NSPV_MEMPOOLRESP:     { struct NSPV_mempoolresp x;   memset(&x,0,sizeof(x)); n = NSPV_rwmempoolresp(1,scratch,&x); break; }
+        case NSPV_NTZSRESP:        { struct NSPV_ntzsresp x;      memset(&x,0,sizeof(x)); n = NSPV_rwntzsresp(1,scratch,&x); break; }
+        case NSPV_NTZSPROOFRESP:   { struct NSPV_ntzsproofresp x; memset(&x,0,sizeof(x)); n = NSPV_rwntzsproofresp(1,scratch,&x); break; }
+        case NSPV_TXPROOFRESP:     { struct NSPV_txproof x;       memset(&x,0,sizeof(x)); n = NSPV_rwtxproof(1,scratch,&x); break; }
+        case NSPV_SPENTINFORESP:   { struct NSPV_spentinfo x;     memset(&x,0,sizeof(x)); n = NSPV_rwspentinfo(1,scratch,&x); break; }
+        case NSPV_BROADCASTRESP:   { struct NSPV_broadcastresp x; memset(&x,0,sizeof(x)); n = NSPV_rwbroadcastresp(1,scratch,&x); break; }
+        default: break;
+    }
+    return(n);
+}
+
 void komodo_nSPVresp(CNode *pfrom,std::vector<uint8_t> response) // received a response
 {
     struct NSPV_inforesp I; int32_t len; uint32_t timestamp = (uint32_t)time(NULL);
     strncpy(NSPV_lastpeer,pfrom->addr.ToString().c_str(),sizeof(NSPV_lastpeer)-1);
     if ( (len= response.size()) > 0 )
     {
+        // Reject responses whose body is too short for the fixed fields of the
+        // declared type, then bound the variable-length deserializers to the
+        // received buffer so forged internal counts cannot read past it.
+        int32_t minsize = NSPV_resp_minsize(response[0]);
+        if ( minsize > 0 && len < 1 + minsize )
+        {
+            LogPrint("nspv","nSPV response type 0x%02x too short: len.%d < %d\n",response[0],len,1+minsize);
+            return;
+        }
+        NSPV_rw_setbounds(&response[1],len-1);
         switch ( response[0] )
         {
             case NSPV_INFORESP:
@@ -212,6 +249,9 @@ void komodo_nSPVresp(CNode *pfrom,std::vector<uint8_t> response) // received a r
             default: fprintf(stderr,"unexpected response %02x size.%d at %u\n",response[0],(int32_t)response.size(),timestamp);
                 break;
         }
+        if ( NSPV_rw_overflow )
+            LogPrint("nspv","nSPV response type 0x%02x had truncated/forged length fields\n",response[0]);
+        NSPV_rw_setbounds(NULL,0);
     }
 }
 
