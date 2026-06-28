@@ -9451,6 +9451,12 @@ bool ProcessMessages(CNode* pfrom)
         catch (const std::ios_base::failure& e)
         {
             pfrom->PushMessage(NetMsgType::REJECT, strCommand, REJECT_MALFORMED, string("error parsing message"));
+            // Penalize peers that send malformed/under-length/over-long messages so a
+            // single peer cannot stream parse-error traffic indefinitely to evade banning.
+            {
+                LOCK(cs_main);
+                Misbehaving(pfrom->GetId(), 10);
+            }
             if (strstr(e.what(), "end of data"))
             {
                 // Allow exceptions from under-length message on vRecv
