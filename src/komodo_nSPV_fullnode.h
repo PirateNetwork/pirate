@@ -914,11 +914,17 @@ void komodo_nSPVreq(CNode *pfrom,std::vector<uint8_t> request) // received a req
         else if ( request[0] == NSPV_UTXOS )
         {
             //fprintf(stderr,"utxos: %u > %u, ind.%d, len.%d\n",timestamp,pfrom->prevtimes[ind],ind,len);
-            if ( timestamp > pfrom->prevtimes[ind] )
+            if ( timestamp > pfrom->prevtimes[ind] + 4 ) // rate limit: 1 request per 5 seconds
             {
                 struct NSPV_utxosresp U;
                 if ( len < 64+5 && (request[1] == len-3 || request[1] == len-7 || request[1] == len-11) )
                 {
+                    // Explicit bounds check: address length must fit within payload
+                    if ( request[1] == 0 || (int32_t)request[1] > len - 3 )
+                    {
+                        LogPrint("nspv", "NSPV_UTXOS: invalid address length %d in payload len %d\n", request[1], len);
+                        return;
+                    }
                     int32_t skipcount = 0; char coinaddr[64]; uint8_t filter; uint8_t isCC = 0;
                     memcpy(coinaddr,&request[2],request[1]);
                     coinaddr[request[1]] = 0;
@@ -954,11 +960,17 @@ void komodo_nSPVreq(CNode *pfrom,std::vector<uint8_t> request) // received a req
         }
         else if ( request[0] == NSPV_TXIDS )
         {
-            if ( timestamp > pfrom->prevtimes[ind] )
+            if ( timestamp > pfrom->prevtimes[ind] + 4 ) // rate limit: 1 request per 5 seconds
             {
                 struct NSPV_txidsresp T;
                 if ( len < 64+5 && (request[1] == len-3 || request[1] == len-7 || request[1] == len-11) )
                 {
+                    // Explicit bounds check: address length must fit within payload
+                    if ( request[1] == 0 || (int32_t)request[1] > len - 3 )
+                    {
+                        LogPrint("nspv", "NSPV_TXIDS: invalid address length %d in payload len %d\n", request[1], len);
+                        return;
+                    }
                     int32_t skipcount = 0; char coinaddr[64]; uint32_t filter; uint8_t isCC = 0;
                     memcpy(coinaddr,&request[2],request[1]);
                     coinaddr[request[1]] = 0;

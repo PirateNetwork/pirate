@@ -8659,6 +8659,14 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         std::vector<uint8_t> payload;
         vRecv >> payload;
 
+        // Hard cap on nSPV payload size to prevent memory allocation DoS.
+        static const size_t MAX_NSPV_REQ_SIZE = 1024;
+        if (payload.size() > MAX_NSPV_REQ_SIZE) {
+            Misbehaving(pfrom->GetId(), 10);
+            return error("nSPV payload size %u exceeds limit %u from peer=%d",
+                         payload.size(), MAX_NSPV_REQ_SIZE, pfrom->id);
+        }
+
         if (strCommand == NetMsgType::GETNSPV && KOMODO_NSPV == 0) {
             komodo_nSPVreq(pfrom, payload);
         } else if (strCommand == NetMsgType::NSPV && KOMODO_NSPV_SUPERLITE) {
