@@ -139,7 +139,15 @@ CC* GetCryptoCondition(CScript const& scriptSig)
     opcodetype opcode;
     std::vector<unsigned char> ffbin;
     if (scriptSig.GetOp(pc, opcode, ffbin))
+    {
+        // The fulfillment is the pushed data minus its trailing hashtype byte.
+        // Guard against an empty push so ffbin.size()-1 (size_t) cannot
+        // underflow to SIZE_MAX and drive an out-of-bounds read in the
+        // BER decoder. scriptSig is attacker-controlled (CC tx input).
+        if (ffbin.empty())
+            return(0);
         return cc_readFulfillmentBinary((uint8_t*)ffbin.data(), ffbin.size()-1);
+    }
     else return(0);
 }
 
