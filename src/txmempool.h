@@ -256,6 +256,10 @@ public:
 
     bool nullifierExists(const uint256& nullifier, ShieldedType type) const;
 
+    /** Returns true if a Sapling spend or output zk-proof with this hash is
+     *  already present in any transaction in the mempool. Caller must hold cs. */
+    bool existsProofHash(const uint256& proofHash) const;
+
     void NotifyRecentlyAdded();
     bool IsFullyNotified();
 

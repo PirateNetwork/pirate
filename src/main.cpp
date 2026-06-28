@@ -175,6 +175,8 @@ namespace {
             case UnsatisfiedShieldedReq::OrchardUnknownAnchor:
                 return REJECT_INVALID;
         }
+        assert(false); // all UnsatisfiedShieldedReq values are handled above
+        return REJECT_INVALID;
     }
 
     std::string ShieldedReqRejectReason(UnsatisfiedShieldedReq shieldedReq)
@@ -187,6 +189,8 @@ namespace {
             case UnsatisfiedShieldedReq::OrchardDuplicateNullifier: return "bad-txns-orchard-duplicate-nullifier";
             case UnsatisfiedShieldedReq::OrchardUnknownAnchor:      return "bad-txns-orchard-unknown-anchor";
         }
+        assert(false); // all UnsatisfiedShieldedReq values are handled above
+        return "bad-txns-shielded-requirements-not-met";
     }
 
     /** Abort with a message */
@@ -1456,7 +1460,7 @@ bool ContextualCheckTransaction(
             }
         }
     }
-    
+
     return true;
 }
 
@@ -2079,36 +2083,6 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
     }
 
 
-    // Check for duplicate sapling zkproofs in this transaction (mempool only) - move to CheckTransaction to enforce at consensus
-    {
-        set<libzcash::GrothProof> vSaplingOutputProof;
-        for (const auto& output : tx.GetSaplingSpends()) {
-            libzcash::GrothProof zkproof;
-            auto rustZKProok = output.zkproof();
-            std::memcpy(&zkproof, &rustZKProok, 192);
-
-            if (vSaplingOutputProof.count(zkproof))
-                return state.Invalid(error("AcceptToMemoryPool: duplicate proof requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-proof-requirements-not-met");
-
-            vSaplingOutputProof.insert(zkproof);
-        }
-    }
-
-    // Check for duplicate sapling zkproofs in this transaction (mempool only) - move to CheckTransaction to enforce at consensus
-    {
-        set<libzcash::GrothProof> vSaplingSpendProof;
-        for (const auto& spend : tx.GetSaplingSpends()) {
-            libzcash::GrothProof zkproof;
-            auto rustZKProok = spend.zkproof();
-            std::memcpy(&zkproof, &rustZKProok, 192);
-
-            if (vSaplingSpendProof.count(zkproof))
-                return state.Invalid(error("AcceptToMemoryPool: duplicate proof requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-proof-requirements-not-met");
-
-            vSaplingSpendProof.insert(zkproof);
-        }
-    }
-
     auto verifier = ProofVerifier::Strict();
     if (chainName.isKMD() && chainActive.Tip() != nullptr
             && !komodo_validate_interest(tx, chainActive.Tip()->nHeight + 1, chainActive.Tip()->GetMedianTimePast() + 777))
@@ -2185,6 +2159,26 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         for (const uint256& nf : tx.GetOrchardBundle().GetNullifiers()) {
             if (pool.nullifierExists(nf, ORCHARDFRONTIER)) {
                 return state.Invalid(error("AcceptToMemoryPool: duplicate nullifier requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-nullifier-requirements-not-met");
+            }
+        }
+        //Check for duplicate Sapling spend/output zkproofs, both within this
+        //transaction and against proofs already in the mempool. Each proof hash
+        //is computed once and tested against the in-tx set and the pool indexes.
+        {
+            set<uint256> vTxProofHashes;
+            for (const auto& spend : tx.GetSaplingSpends()) {
+                auto zkproof = spend.zkproof();
+                auto proofHash = Hash(zkproof.begin(), zkproof.end());
+                if (!vTxProofHashes.insert(proofHash).second || pool.existsProofHash(proofHash)) {
+                    return state.Invalid(error("AcceptToMemoryPool: duplicate proof requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-proof-requirements-not-met");
+                }
+            }
+            for (const auto& output : tx.GetSaplingOutputs()) {
+                auto zkproof = output.zkproof();
+                auto proofHash = Hash(zkproof.begin(), zkproof.end());
+                if (!vTxProofHashes.insert(proofHash).second || pool.existsProofHash(proofHash)) {
+                    return state.Invalid(error("AcceptToMemoryPool: duplicate proof requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-proof-requirements-not-met");
+                }
             }
         }
     }
@@ -6254,6 +6248,7 @@ bool ContextualCheckBlock(int32_t slowflag,const CBlock& block, CValidationState
     const int nHeight = pindexPrev == NULL ? 0 : pindexPrev->nHeight + 1;
     const Consensus::Params& consensusParams = Params().GetConsensus();
     bool sapling = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_SAPLING);
+    bool orchardActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_ORCHARD);
 
     uint32_t cmptime = block.nTime;
     const int32_t txheight = nHeight == 0 ? komodo_block2height((CBlock *)&block) : nHeight;
@@ -6273,6 +6268,16 @@ bool ContextualCheckBlock(int32_t slowflag,const CBlock& block, CValidationState
 
 
     // Check that all transactions are finalized, also validate interest in each tx
+    //
+    // Block-wide Sapling duplicate-proof rule (active from Orchard onward):
+    // every Sapling spend/output zk-proof in the block must be unique. Because
+    // each SpendDescription/OutputDescription carries its own Groth16 proof, a
+    // repeated proof anywhere in the block — within one transaction or across
+    // two — indicates a malformed/replayed bundle and is rejected. The set is
+    // accumulated across all transactions so cross-transaction reuse is caught,
+    // not just intra-transaction reuse. Gated on Orchard activation so it does
+    // not affect historical blocks mined before the upgrade.
+    std::set<uint256> vBlockSaplingProofHashes;
     for (uint32_t i = 0; i < block.vtx.size(); i++) {
         const CTransaction& tx = block.vtx[i];
 
@@ -6293,6 +6298,27 @@ bool ContextualCheckBlock(int32_t slowflag,const CBlock& block, CValidationState
         // Check transaction contextually against consensus rules at block height
         if (!ContextualCheckTransaction(tx, state, nHeight, 100)) {
             return false; // Failure reason has been set in validation state object
+        }
+
+        // Accumulate this transaction's Sapling proofs into the block-wide set
+        // and reject on the first collision (covers both intra- and cross-tx).
+        if (orchardActive) {
+            for (const auto& spend : tx.GetSaplingSpends()) {
+                auto zkproof = spend.zkproof();
+                auto proofHash = Hash(zkproof.begin(), zkproof.end());
+                if (!vBlockSaplingProofHashes.insert(proofHash).second) {
+                    return state.DoS(100, error("%s: duplicate Sapling proof in block", __func__),
+                                    REJECT_INVALID, "bad-txns-sapling-duplicate-proof");
+                }
+            }
+            for (const auto& output : tx.GetSaplingOutputs()) {
+                auto zkproof = output.zkproof();
+                auto proofHash = Hash(zkproof.begin(), zkproof.end());
+                if (!vBlockSaplingProofHashes.insert(proofHash).second) {
+                    return state.DoS(100, error("%s: duplicate Sapling proof in block", __func__),
+                                    REJECT_INVALID, "bad-txns-sapling-duplicate-proof");
+                }
+            }
         }
     }
 

@@ -652,6 +652,15 @@ void CTxMemPool::clear()
     LOCK(cs);
     mapTx.clear();
     mapNextTx.clear();
+    // Reset the shielded index maps. These hold const CTransaction* pointers
+    // into mapTx entries; failing to clear them here would leave dangling
+    // pointers (use-after-free in removeConflicts) and cause false-positive
+    // duplicate nullifier/proof rejections after the pool is emptied.
+    mapSproutNullifiers.clear();
+    mapSaplingNullifiers.clear();
+    mapOrchardNullifiers.clear();
+    mapZkSpendProofHash.clear();
+    mapZkOutputProofHash.clear();
     totalTxSize = 0;
     cachedInnerUsage = 0;
     ++nTransactionsUpdated;
@@ -835,6 +844,7 @@ void CTxMemPool::checkNullifiers(ShieldedType type) const
             break;
         case SAPLINGFRONTIER:
             mapToUse = &mapSaplingNullifiers;
+            break;
         case ORCHARDFRONTIER:
             mapToUse = &mapOrchardNullifiers;
             break;
@@ -963,6 +973,13 @@ bool CTxMemPool::nullifierExists(const uint256& nullifier, ShieldedType type) co
         default:
             throw runtime_error("Unknown nullifier type");
     }
+}
+
+bool CTxMemPool::existsProofHash(const uint256& proofHash) const
+{
+    // Caller must hold cs (mirrors nullifierExists). A proof hash is checked
+    // against both the spend-proof and output-proof indexes.
+    return mapZkSpendProofHash.count(proofHash) || mapZkOutputProofHash.count(proofHash);
 }
 
 void CTxMemPool::NotifyRecentlyAdded()
