@@ -765,7 +765,7 @@ struct CheckTransationResults
 };
 
 /// Check a transaction contextually against a set of consensus rules */
-bool ContextualCheckTransaction(const CTransaction tx, CValidationState &state, int nHeight, int dosLevel,
+bool ContextualCheckTransaction(const CTransaction& tx, CValidationState &state, int nHeight, int dosLevel,
                                 bool (*isInitBlockDownload)() = IsInitialBlockDownload);
 
 

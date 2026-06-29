@@ -1260,7 +1260,7 @@ bool ContextualCheckCoinbaseTransaction(const CTransaction& tx, const int nHeigh
  * 3. The isInitBlockDownload argument is only to assist with testing.
  */
 bool ContextualCheckTransaction(
-    const CTransaction tx,
+    const CTransaction& tx,
     CValidationState &state,
     const int nHeight,
     const int dosLevel,
