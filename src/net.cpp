@@ -2644,8 +2644,11 @@ void RelayTransaction(const CTransaction& tx, const CDataStream& ss)
     CInv inv(MSG_TX, tx.GetHash());
     {
         LOCK(cs_mapRelay);
-        // Expire old relay messages
-        while (!vRelayExpiration.empty() && vRelayExpiration.front().first < GetTime())
+        // Expire old relay messages, and enforce a hard entry cap so the cache
+        // cannot grow unbounded within the 15-minute window under a tx flood.
+        static const size_t MAX_RELAY_ENTRIES = 15000;
+        while (!vRelayExpiration.empty() &&
+               (vRelayExpiration.front().first < GetTime() || mapRelay.size() >= MAX_RELAY_ENTRIES))
         {
             mapRelay.erase(vRelayExpiration.front().second);
             vRelayExpiration.pop_front();
