@@ -860,6 +860,12 @@ UniValue getblockhashes(const UniValue& params, bool fHelp, const CPubKey& mypk)
     bool fActiveOnly = false;
     bool fLogicalTS = false;
 
+    // high is the upper (newer) timestamp, low the lower (older) one. Reject
+    // inverted ranges, which can also arise from negative ints wrapping to huge
+    // unsigned values and ballooning the scan/result set.
+    if (high < low)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "high timestamp must be >= low timestamp");
+
     if (params.size() > 2) {
         if (params[2].isObject()) {
             UniValue noOrphans = find_value(params[2].get_obj(), "noOrphans");
@@ -883,6 +889,11 @@ UniValue getblockhashes(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
 
     UniValue result(UniValue::VARR);
+
+    // Bound the response size to avoid excessive memory/CPU for very wide ranges.
+    static const size_t MAX_BLOCKHASHES_RESULTS = 100000;
+    if (blockHashes.size() > MAX_BLOCKHASHES_RESULTS)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Too many results; narrow the timestamp range");
 
     for (std::vector<std::pair<uint256, unsigned int> >::const_iterator it=blockHashes.begin(); it!=blockHashes.end(); it++) {
         if (fLogicalTS) {

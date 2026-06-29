@@ -1952,10 +1952,10 @@ UniValue listtransactions(const UniValue& params, bool fHelp, const CPubKey& myp
     string strAccount = "*";
     if (params.size() > 0)
         strAccount = params[0].get_str();
-    int nCount = 10;
+    int64_t nCount = 10;
     if (params.size() > 1)
         nCount = params[1].get_int();
-    int nFrom = 0;
+    int64_t nFrom = 0;
     if (params.size() > 2)
         nFrom = params[2].get_int();
     isminefilter filter = ISMINE_SPENDABLE;
