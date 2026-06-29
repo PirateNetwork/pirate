@@ -978,6 +978,8 @@ bool AppInitServers(boost::thread_group& threadGroup)
         return false;
     if (GetBoolArg("-rest", false) && !StartREST())
         return false;
+    if (GetBoolArg("-rest", false) && mapArgs.count("-rpcallowip"))
+        LogPrintf("WARNING: -rest is enabled together with -rpcallowip; the unauthenticated REST interface may be reachable from non-loopback addresses. Restrict -rpcallowip/-rpcbind to trusted hosts.\n");
     if (!StartHTTPServer())
         return false;
     return true;
