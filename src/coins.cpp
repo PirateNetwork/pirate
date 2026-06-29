@@ -1159,6 +1159,7 @@ tl::expected<void, UnsatisfiedShieldedReq> CCoinsViewCache::CheckShieldedRequire
     }
 
     //Add this transaction sapling spend to spend thread batches
+    std::set<uint256> validatedSaplingAnchors;
     for (const auto& spend : tx.GetSaplingSpends()) {
         auto nullifier = uint256::FromRawBytes(spend.nullifier());
         auto rt = uint256::FromRawBytes(spend.anchor());
@@ -1169,13 +1170,18 @@ tl::expected<void, UnsatisfiedShieldedReq> CCoinsViewCache::CheckShieldedRequire
             LogPrintf("Sapling double-spend detected txid=%s nf=%s\n", txid, nf);
             return tl::unexpected(UnsatisfiedShieldedReq::SaplingDuplicateNullifier);
         }
-        
-        SaplingMerkleFrontier tree;
-        if (!GetSaplingFrontierAnchorAt(rt, tree)) {
-            auto txid = tx.GetHash().ToString();
-            auto anchor = rt.ToString();
-            LogPrintf("Transaction uses unknown Sapling anchor txid=%s anchor=%s\n", txid, anchor);
-            return tl::unexpected(UnsatisfiedShieldedReq::SaplingUnknownAnchor);
+
+        // Resolve each distinct anchor once; spends sharing an anchor (common)
+        // need not re-load/copy the frontier on every iteration.
+        if (validatedSaplingAnchors.count(rt) == 0) {
+            SaplingMerkleFrontier tree;
+            if (!GetSaplingFrontierAnchorAt(rt, tree)) {
+                auto txid = tx.GetHash().ToString();
+                auto anchor = rt.ToString();
+                LogPrintf("Transaction uses unknown Sapling anchor txid=%s anchor=%s\n", txid, anchor);
+                return tl::unexpected(UnsatisfiedShieldedReq::SaplingUnknownAnchor);
+            }
+            validatedSaplingAnchors.insert(rt);
         }
     }
 
