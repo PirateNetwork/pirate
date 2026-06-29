@@ -135,6 +135,8 @@ uint64_t komodo_kvfee(uint32_t flags,int32_t opretlen,int32_t keylen)
     int32_t numdays,k; uint64_t fee;
     if ( (k= keylen) > 32 )
         k = 32;
+    if ( k <= 0 ) // keylen is attacker-controlled; avoid divide-by-zero
+        k = 1;
     numdays = komodo_kvnumdays(flags);
     if ( (fee= (numdays*(opretlen * opretlen / k))) < 100000 )
         fee = 100000;
@@ -216,6 +218,8 @@ void komodo_kvupdate(uint8_t *opretbuf,int32_t opretlen,uint64_t value)
     uint16_t valuesize;
     int32_t height;
     uint32_t flags;
+    if ( opretlen < 13 ) // fixed header: type + keylen + valuesize + height + flags
+        return;
     iguana_rwnum(0,&opretbuf[1],sizeof(keylen),&keylen);
     iguana_rwnum(0,&opretbuf[3],sizeof(valuesize),&valuesize);
     iguana_rwnum(0,&opretbuf[5],sizeof(height),&height);

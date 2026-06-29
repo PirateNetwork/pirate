@@ -105,7 +105,7 @@ void komodo_eventadd_opreturn( komodo_state *sp, const char *symbol, int32_t hei
     if ( sp != nullptr && !chainName.isKMD() )
     {
         sp->add_event(symbol, height, opret);
-        if ( opret.opret.data()[0] == 'K' && opret.opret.size() != 40 )
+        if ( opret.opret.size() > 0 && opret.opret.data()[0] == 'K' && opret.opret.size() != 40 )
         {
             komodo_kvupdate(opret.opret.data(), opret.opret.size(), opret.value);
         }

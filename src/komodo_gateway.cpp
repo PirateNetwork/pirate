@@ -128,6 +128,7 @@ int32_t komodo_check_deposit(int32_t height,const CBlock& block)
                         }
                     }
                     if ( fNotaryProofVinTxFound 
+                            && block.vtx[txn_count-1].vin[0].prevout.n < tx.vout.size()
                             && block.vtx[0].vout[0].scriptPubKey == tx.vout[block.vtx[txn_count-1].vin[0].prevout.n].scriptPubKey )
                     {
                         notmatched = 1;
@@ -159,13 +160,13 @@ int32_t komodo_check_deposit(int32_t height,const CBlock& block)
         uint64_t total = 0;
         for (int32_t i=1; i<n; i++)
         {
-            uint8_t *script = (uint8_t *)&block.vtx[0].vout[i].scriptPubKey[0];
+            const CScript &spk = block.vtx[0].vout[i].scriptPubKey;
             if ( (val= block.vtx[0].vout[i].nValue) < 0 || val >= MAX_MONEY )
             {
                 overflow = 1;
                 break;
             }
-            if ( i > 1 && script[0] != 0x6a && val < 5000 )
+            if ( i > 1 && (spk.empty() || spk[0] != 0x6a) && val < 5000 )
                 strangeout++;
             total += val;
             if ( total < prevtotal || (val != 0 && total == prevtotal) )
@@ -195,8 +196,11 @@ int32_t komodo_check_deposit(int32_t height,const CBlock& block)
             }
             else if ( height > 814000 )
             {
-                uint8_t *script = (uint8_t *)&block.vtx[0].vout[0].scriptPubKey[0];
+                const CScript &cbspk = block.vtx[0].vout[0].scriptPubKey;
                 int32_t num;
+                if ( cbspk.size() < 34 ) // need at least pushlen + 33-byte pubkey
+                    return(-1 * (height > 1000000));
+                uint8_t *script = (uint8_t *)&cbspk[0];
                 return(-1 * (komodo_electednotary(&num,script+1,height,0) >= 0) * (height > 1000000));
             }
         }

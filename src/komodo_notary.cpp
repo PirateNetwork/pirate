@@ -102,6 +102,8 @@ int32_t ht_index_from_height(int32_t height)
 int32_t komodo_isnotaryvout(char *coinaddr,uint32_t tiptime) // from ac_private chains only
 {
     int32_t season = getacseason(tiptime);
+    if ( season == 0 ) // tiptime beyond last known season; avoid season-1 underflow
+        return(0);
     if ( NOTARY_ADDRESSES[season-1][0][0] == 0 )
     {
         uint8_t pubkeys[64][33];
