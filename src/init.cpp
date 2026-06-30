@@ -2295,6 +2295,24 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 strErrors << _("Error loading wallet.dat") << "\n";
         }
 
+        // The wallet is now unlocked (via GUI splash, openwallet RPC, etc.) and fully
+        // loaded. If it still uses the weak legacy KDF, transparently re-encrypt the
+        // master key with the current memory-hard KDF, reusing the passphrase that just
+        // opened it. Running this after LoadWallet means ChangeWalletPassphrase's verify
+        // step checks every crypted key decrypts before persisting the new master key.
+        // Only the master-key wrapping changes; no spending-key material is touched.
+        if ((nLoadWalletRet == DB_LOAD_OK || nLoadWalletRet == DB_NONCRITICAL_ERROR) &&
+            pwalletMain->IsCrypted() && strOpeningWalletPassphrase != NULL &&
+            pwalletMain->NeedsKDFUpgrade()) {
+            uiInterface.InitMessage(_("Upgrading wallet encryption..."));
+            LogPrintf("Upgrading wallet encryption KDF to current method...\n");
+            if (pwalletMain->ChangeWalletPassphrase(*strOpeningWalletPassphrase, *strOpeningWalletPassphrase)) {
+                LogPrintf("Wallet encryption KDF upgraded successfully.\n");
+            } else {
+                LogPrintf("Warning: automatic wallet encryption KDF upgrade failed; continuing with existing encryption.\n");
+            }
+        }
+
         bool fInitializeArcTx = true;
         // Run arc tx validation for both DB_LOAD_OK and DB_NONCRITICAL_ERROR —
         // the latter can still have a valid wallet state with minor non-transactional warnings.
@@ -2345,6 +2363,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
               //Reopen the wallet
               pwalletMain->OpenWallet(*strOpeningWalletPassphrase);
+
               delete strOpeningWalletPassphrase;
 
               SetRPCNeedsUnlocked(false);

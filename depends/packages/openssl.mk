@@ -42,7 +42,6 @@ $(package)_config_opts+=no-rc5
 $(package)_config_opts+=no-rdrand
 $(package)_config_opts+=no-rfc3779
 $(package)_config_opts+=no-rmd160
-$(package)_config_opts+=no-scrypt
 $(package)_config_opts+=no-sctp
 $(package)_config_opts+=no-seed
 $(package)_config_opts+=no-shared

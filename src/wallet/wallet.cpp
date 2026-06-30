@@ -2936,23 +2936,34 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
             if (CCryptoKeyStore::Unlock(vMasterKey))
             {
                 int64_t nStartTime = GetTimeMillis();
-                crypter.SetKeyFromPassphrase(strNewWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod);
-                pMasterKey.second.nDeriveIterations = pMasterKey.second.nDeriveIterations * (100 / ((double)(GetTimeMillis() - nStartTime)));
 
-                nStartTime = GetTimeMillis();
-                crypter.SetKeyFromPassphrase(strNewWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod);
-                pMasterKey.second.nDeriveIterations = (pMasterKey.second.nDeriveIterations + pMasterKey.second.nDeriveIterations * 100 / ((double)(GetTimeMillis() - nStartTime))) / 2;
+                // Re-encrypt the master key, upgrading the KDF to scrypt (memory-hard).
+                unsigned int newMethod = WALLET_DERIVATION_METHOD_SCRYPT;
+                unsigned int newParam  = WALLET_SCRYPT_DEFAULT_N;
 
-                if (pMasterKey.second.nDeriveIterations < 25000)
-                    pMasterKey.second.nDeriveIterations = 25000;
+                if (!crypter.SetKeyFromPassphrase(strNewWalletPassphrase, pMasterKey.second.vchSalt, newParam, newMethod))
+                {
+                    // Fallback: hardened legacy KDF (iterated SHA-512), calibrated to ~1s with a high floor.
+                    newMethod = WALLET_DERIVATION_METHOD_SHA512;
+                    nStartTime = GetTimeMillis();
+                    crypter.SetKeyFromPassphrase(strNewWalletPassphrase, pMasterKey.second.vchSalt, 25000, newMethod);
+                    newParam = 25000000 / std::max((int64_t)1, GetTimeMillis() - nStartTime);
+                    if (newParam < WALLET_PBKDF2_MIN_ITERATIONS)
+                        newParam = WALLET_PBKDF2_MIN_ITERATIONS;
+                    if (!crypter.SetKeyFromPassphrase(strNewWalletPassphrase, pMasterKey.second.vchSalt, newParam, newMethod))
+                        return false;
+                }
 
-                LogPrintf("Wallet passphrase changed to an nDeriveIterations of %i\n", pMasterKey.second.nDeriveIterations);
+                pMasterKey.second.nDerivationMethod = newMethod;
+                pMasterKey.second.nDeriveIterations = newParam;
 
-                if (!crypter.SetKeyFromPassphrase(strNewWalletPassphrase, pMasterKey.second.vchSalt, pMasterKey.second.nDeriveIterations, pMasterKey.second.nDerivationMethod))
-                    return false;
+                LogPrintf("Wallet passphrase changed; master key re-encrypted (method=%i, param=%i) in %.0f ms\n",
+                          newMethod, newParam, (double)(GetTimeMillis() - nStartTime));
+
                 if (!crypter.Encrypt(vMasterKey, pMasterKey.second.vchCryptedKey))
                     return false;
                 CWalletDB(strWalletFile).WriteMasterKey(pMasterKey.first, pMasterKey.second);
+
                 if (fWasLocked)
                     Lock();
                 return true;
@@ -2960,6 +2971,23 @@ bool CWallet::ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase,
         }
     }
 
+    return false;
+}
+
+/**
+ * @brief Report whether any master key still uses the weak legacy (SHA-512) KDF.
+ * @return true if at least one master key has nDerivationMethod == legacy SHA-512.
+ *
+ * Used at startup to decide whether to transparently re-encrypt the wallet with
+ * the current memory-hard KDF (scrypt) via ChangeWalletPassphrase.
+ */
+bool CWallet::NeedsKDFUpgrade() const
+{
+    LOCK(cs_wallet);
+    for (const auto& entry : mapMasterKeys) {
+        if (entry.second.nDerivationMethod == WALLET_DERIVATION_METHOD_SHA512)
+            return true;
+    }
     return false;
 }
 
@@ -5480,20 +5508,33 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
 
     CCrypter crypter;
     int64_t nStartTime = GetTimeMillis();
-    crypter.SetKeyFromPassphrase(strWalletPassphrase, kMasterKey.vchSalt, 25000, kMasterKey.nDerivationMethod);
-    kMasterKey.nDeriveIterations = 2500000 / ((double)(GetTimeMillis() - nStartTime));
 
-    nStartTime = GetTimeMillis();
-    crypter.SetKeyFromPassphrase(strWalletPassphrase, kMasterKey.vchSalt, kMasterKey.nDeriveIterations, kMasterKey.nDerivationMethod);
-    kMasterKey.nDeriveIterations = (kMasterKey.nDeriveIterations + kMasterKey.nDeriveIterations * 100 / ((double)(GetTimeMillis() - nStartTime))) / 2;
-
-    if (kMasterKey.nDeriveIterations < 25000)
-        kMasterKey.nDeriveIterations = 25000;
-
-    LogPrintf("Encrypting Wallet with an nDeriveIterations of %i\n", kMasterKey.nDeriveIterations);
+    // Prefer scrypt (memory-hard) for new wallet encryption.
+    kMasterKey.nDerivationMethod = WALLET_DERIVATION_METHOD_SCRYPT;
+    kMasterKey.nDeriveIterations = WALLET_SCRYPT_DEFAULT_N;
 
     if (!crypter.SetKeyFromPassphrase(strWalletPassphrase, kMasterKey.vchSalt, kMasterKey.nDeriveIterations, kMasterKey.nDerivationMethod))
-        return false;
+    {
+        // Fallback: hardened legacy KDF (iterated SHA-512), calibrated to ~1s with a high floor.
+        kMasterKey.nDerivationMethod = WALLET_DERIVATION_METHOD_SHA512;
+        nStartTime = GetTimeMillis();
+        crypter.SetKeyFromPassphrase(strWalletPassphrase, kMasterKey.vchSalt, 25000, kMasterKey.nDerivationMethod);
+        kMasterKey.nDeriveIterations = 25000000 / std::max((int64_t)1, GetTimeMillis() - nStartTime);
+
+        nStartTime = GetTimeMillis();
+        crypter.SetKeyFromPassphrase(strWalletPassphrase, kMasterKey.vchSalt, kMasterKey.nDeriveIterations, kMasterKey.nDerivationMethod);
+        kMasterKey.nDeriveIterations = (kMasterKey.nDeriveIterations + kMasterKey.nDeriveIterations * 1000 / std::max((int64_t)1, GetTimeMillis() - nStartTime)) / 2;
+
+        if (kMasterKey.nDeriveIterations < WALLET_PBKDF2_MIN_ITERATIONS)
+            kMasterKey.nDeriveIterations = WALLET_PBKDF2_MIN_ITERATIONS;
+
+        if (!crypter.SetKeyFromPassphrase(strWalletPassphrase, kMasterKey.vchSalt, kMasterKey.nDeriveIterations, kMasterKey.nDerivationMethod))
+            return false;
+    }
+
+    LogPrintf("Encrypting wallet (method=%i, param=%i) in %.0f ms\n",
+              kMasterKey.nDerivationMethod, kMasterKey.nDeriveIterations, (double)(GetTimeMillis() - nStartTime));
+
     if (!crypter.Encrypt(vMasterKey, kMasterKey.vchCryptedKey))
         return false;
 

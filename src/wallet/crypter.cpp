@@ -32,24 +32,72 @@
 
 using namespace libzcash;
 
+// Fixed scrypt parameters for nDerivationMethod == WALLET_DERIVATION_METHOD_SCRYPT.
+// N (the cost parameter) is stored per-wallet in CMasterKey::nDeriveIterations and
+// must be a power of two within [2^MIN_LOGN, 2^MAX_LOGN]. r and p are fixed.
+// Memory use is ~128 * N * r bytes; the bounds below cap that so a crafted wallet
+// file cannot force an unbounded allocation (denial of service) at unlock time.
+static const uint64_t WALLET_SCRYPT_R = 8;
+static const uint64_t WALLET_SCRYPT_P = 1;
+static const unsigned int WALLET_SCRYPT_MIN_LOGN = 14; // N >= 16384  (~16 MiB)
+static const unsigned int WALLET_SCRYPT_MAX_LOGN = 20; // N <= 1048576 (~1 GiB)
+
+static inline bool IsPowerOfTwo(uint64_t n)
+{
+    return n != 0 && (n & (n - 1)) == 0;
+}
+
 bool CCrypter::SetKeyFromPassphrase(const SecureString& strKeyData, const std::vector<unsigned char>& chSalt, const unsigned int nRounds, const unsigned int nDerivationMethod)
 {
     if (nRounds < 1 || chSalt.size() != WALLET_CRYPTO_SALT_SIZE)
         return false;
 
-    int i = 0;
-    if (nDerivationMethod == 0)
-        i = EVP_BytesToKey(EVP_aes_256_cbc(), EVP_sha512(), &chSalt[0],
-                           (unsigned char*)&strKeyData[0], strKeyData.size(), nRounds, chKey, chIV);
+    if (nDerivationMethod == WALLET_DERIVATION_METHOD_SHA512)
+    {
+        int i = EVP_BytesToKey(EVP_aes_256_cbc(), EVP_sha512(), &chSalt[0],
+                               (unsigned char*)&strKeyData[0], strKeyData.size(), nRounds, chKey, chIV);
+        if (i != (int)WALLET_CRYPTO_KEY_SIZE) {
+            memory_cleanse(chKey, sizeof(chKey));
+            memory_cleanse(chIV, sizeof(chIV));
+            return false;
+        }
+        fKeySet = true;
+        return true;
+    }
+    else if (nDerivationMethod == WALLET_DERIVATION_METHOD_SCRYPT)
+    {
+        // nRounds carries the scrypt cost parameter N. Validate it is a power of two
+        // within the permitted range before deriving, to bound memory use.
+        const uint64_t N = nRounds;
+        if (!IsPowerOfTwo(N) ||
+            N < ((uint64_t)1 << WALLET_SCRYPT_MIN_LOGN) ||
+            N > ((uint64_t)1 << WALLET_SCRYPT_MAX_LOGN)) {
+            return false;
+        }
+        // Allow scrypt's working set plus headroom; anything beyond is rejected by OpenSSL.
+        const uint64_t maxmem = (uint64_t)128 * N * WALLET_SCRYPT_R * 2;
 
-    if (i != (int)WALLET_CRYPTO_KEY_SIZE) {
-        memory_cleanse(chKey, sizeof(chKey));
-        memory_cleanse(chIV, sizeof(chIV));
-        return false;
+        // Derive 64 bytes and split into key||IV, mirroring EVP_BytesToKey's output.
+        unsigned char buf[WALLET_CRYPTO_KEY_SIZE * 2];
+        int ok = EVP_PBE_scrypt((const char*)&strKeyData[0], strKeyData.size(),
+                                &chSalt[0], chSalt.size(),
+                                N, WALLET_SCRYPT_R, WALLET_SCRYPT_P, maxmem,
+                                buf, sizeof(buf));
+        if (ok != 1) {
+            memory_cleanse(buf, sizeof(buf));
+            memory_cleanse(chKey, sizeof(chKey));
+            memory_cleanse(chIV, sizeof(chIV));
+            return false;
+        }
+        memcpy(chKey, buf, WALLET_CRYPTO_KEY_SIZE);
+        memcpy(chIV, buf + WALLET_CRYPTO_KEY_SIZE, WALLET_CRYPTO_KEY_SIZE);
+        memory_cleanse(buf, sizeof(buf));
+        fKeySet = true;
+        return true;
     }
 
-    fKeySet = true;
-    return true;
+    // Unknown derivation method.
+    return false;
 }
 
 bool CCrypter::SetKey(const CKeyingMaterial& chNewKey, const std::vector<unsigned char>& chNewIV)

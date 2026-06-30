@@ -33,6 +33,15 @@ class uint256;
 const unsigned int WALLET_CRYPTO_KEY_SIZE = 32;
 const unsigned int WALLET_CRYPTO_SALT_SIZE = 8;
 
+//! Key-derivation methods stored in CMasterKey::nDerivationMethod
+const unsigned int WALLET_DERIVATION_METHOD_SHA512 = 0; //!< legacy EVP_BytesToKey(SHA-512); nDeriveIterations = round count
+const unsigned int WALLET_DERIVATION_METHOD_SCRYPT = 1; //!< scrypt; nDeriveIterations = N (cost), r/p fixed
+
+//! Default scrypt cost parameter (N) for newly encrypted wallets (~128 MiB working set with r=8).
+const unsigned int WALLET_SCRYPT_DEFAULT_N = 1u << 17;
+//! Hardened minimum iteration count for the legacy SHA-512 KDF (used as a fallback only).
+const unsigned int WALLET_PBKDF2_MIN_ITERATIONS = 200000;
+
 /**
  * Private key encryption is done based on a CMasterKey,
  * which holds a salt and random encryption key.
