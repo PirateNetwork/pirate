@@ -2923,7 +2923,7 @@ DBErrors CWalletDB::FindOldRecordsToZap(
             } else if (strType == "zkeymeta") {
                 libzcash::SproutPaymentAddress addr;
                 ssKey >> addr;
-                vCSproutPaymentAddresses.push_back(addr);
+                vSproutMetaData.push_back(addr);
             }
 
 
