@@ -2313,6 +2313,20 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             }
         }
 
+        // Migrate plaintext records that now have an encrypted-on-disk form. If the
+        // wallet is encrypted and unlocked, re-persist them encrypted (each writer
+        // erases the plaintext record). In-memory copies are unchanged. One-time:
+        // once stored encrypted, the plaintext record no longer exists to migrate.
+        if ((nLoadWalletRet == DB_LOAD_OK || nLoadWalletRet == DB_NONCRITICAL_ERROR) &&
+            pwalletMain->IsCrypted() && !pwalletMain->IsLocked()) {
+            if (!pwalletMain->WriteHDChainToDisk(pwalletMain->GetHDChain())) {
+                LogPrintf("Warning: could not migrate HD chain to encrypted storage.\n");
+            }
+            if (!pwalletMain->MigrateDestDataToEncrypted()) {
+                LogPrintf("Warning: could not migrate destination data to encrypted storage.\n");
+            }
+        }
+
         bool fInitializeArcTx = true;
         // Run arc tx validation for both DB_LOAD_OK and DB_NONCRITICAL_ERROR —
         // the latter can still have a valid wallet state with minor non-transactional warnings.

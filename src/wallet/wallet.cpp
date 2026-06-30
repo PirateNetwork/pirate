@@ -321,7 +321,7 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingZKey()
     } while (HaveSaplingSpendingKey(xsk.ToXFVK()));
 
     // Update the chain model in the database
-    if (fFileBacked && !CWalletDB(strWalletFile).WriteHDChain(hdChain))
+    if (!WriteHDChainToDisk(hdChain))
         throw std::runtime_error("CWallet::GenerateNewSaplingZKey(): Writing HD chain model failed");
 
     SaplingIncomingViewingKey ivk;
@@ -420,7 +420,7 @@ OrchardPaymentAddress CWallet::GenerateNewOrchardZKey()
     }
 
     // Update the chain model in the database
-    if (fFileBacked && !CWalletDB(strWalletFile).WriteHDChain(hdChain))
+    if (!WriteHDChainToDisk(hdChain))
         throw std::runtime_error("CWallet::GenerateNewOrchardZKey(): Writing HD chain model failed");
 
     // Populate metadata for external IVK
@@ -5744,16 +5744,19 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             ss << SaplingWalletNoteCommitmentTreeWriter(saplingWallet);
             
             std::vector<unsigned char> vchCryptedSecret;
-            std::string saplingTreeKey = "sapling_note_commitment_tree";
-            uint256 chash = HashWithFP(saplingTreeKey);
             CKeyingMaterial vchSecret(ss.begin(), ss.end());
+            // Content-bound, secret-salted hash: serves as the AES IV and as an integrity
+            // tag verified on load. Stored in the record value under a stable key.
+            uint256 chash = HashWithFP(vchSecret);
+            std::string saplingTreeKey = "sapling_note_commitment_tree";
+            uint256 legacyChash = HashWithFP(saplingTreeKey);
 
             if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
                 LogPrintf("Encrypting Sapling wallet frontier tree failed!!!\n");
                 return false;
             }
 
-            if (!pwalletdbEncryption->WriteCryptedSaplingWitnesses(vchCryptedSecret, chash)) {
+            if (!pwalletdbEncryption->WriteCryptedSaplingWitnesses(chash, vchCryptedSecret, legacyChash)) {
                 LogPrintf("Writing encrypted Sapling wallet frontier tree failed!!!\n");
                 return false;
             }
@@ -5765,16 +5768,19 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             ss << OrchardWalletNoteCommitmentTreeWriter(orchardWallet);
             
             std::vector<unsigned char> vchCryptedSecret;
-            std::string orchardTreeKey = "orchard_note_commitment_tree";
-            uint256 chash = HashWithFP(orchardTreeKey);
             CKeyingMaterial vchSecret(ss.begin(), ss.end());
+            // Content-bound, secret-salted hash: serves as the AES IV and as an integrity
+            // tag verified on load. Stored in the record value under a stable key.
+            uint256 chash = HashWithFP(vchSecret);
+            std::string orchardTreeKey = "orchard_note_commitment_tree";
+            uint256 legacyChash = HashWithFP(orchardTreeKey);
 
             if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
                 LogPrintf("Encrypting Orchard wallet frontier tree failed!!!\n");
                 return false;
             }
 
-            if (!pwalletdbEncryption->WriteCryptedOrchardWitnesses(vchCryptedSecret, chash)) {
+            if (!pwalletdbEncryption->WriteCryptedOrchardWitnesses(chash, vchCryptedSecret, legacyChash)) {
                 LogPrintf("Writing encrypted Orchard wallet frontier tree failed!!!\n");
                 return false;
             }
@@ -5801,6 +5807,18 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             if (!SetAddressBook((*it).first, (*it).second.name, (*it).second.purpose)) {
                 LogPrintf("Setting encrypted addressbook failed!!!\n");
                 return false;
+            }
+        }
+
+        //Encrypt destination data tuples (payment-request metadata, etc.). Re-persisting
+        //each tuple encrypts it on disk and erases the plaintext form whose DB key would
+        //otherwise expose the transparent address.
+        for (std::map<CTxDestination, CAddressBookData>::iterator it = mapAddressBook.begin(); it != mapAddressBook.end(); ++it) {
+            for (CAddressBookData::StringMap::iterator dit = (*it).second.destdata.begin(); dit != (*it).second.destdata.end(); ++dit) {
+                if (!WriteDestDataToDisk((*it).first, dit->first, dit->second)) {
+                    LogPrintf("Setting encrypted dest data failed!!!\n");
+                    return false;
+                }
             }
         }
 
@@ -8292,10 +8310,97 @@ bool CWallet::SetHDSeed(const HDSeed& seed)
 void CWallet::SetHDChain(const CHDChain& chain, bool memonly)
 {
     LOCK(cs_wallet);
-    if (!memonly && fFileBacked && !CWalletDB(strWalletFile).WriteHDChain(chain))
+    if (!memonly && !WriteHDChainToDisk(chain))
         throw std::runtime_error(std::string(__func__) + ": writing chain failed");
 
     hdChain = chain;
+}
+
+/**
+ * @brief Persist the HD chain to the wallet database, encrypting it on disk when
+ *        the wallet is encrypted and unlocked.
+ * @param chain The HD chain to write (the in-memory copy stays plaintext).
+ * @return true on success.
+ *
+ * Mirrors the crypted-with-erase pattern used for other records: on an encrypted,
+ * unlocked wallet the chain is serialized, encrypted under the master key with a
+ * secret-salted IV, written as `chdchain`, and the plaintext `hdchain` is erased.
+ * The seed fingerprint, account counters, and creation time therefore no longer
+ * leak from disk. Non-encrypted wallets keep the plaintext `hdchain` record.
+ */
+bool CWallet::WriteHDChainToDisk(const CHDChain& chain)
+{
+    if (!fFileBacked)
+        return true;
+
+    if (!IsCrypted())
+        return CWalletDB(strWalletFile).WriteHDChain(chain);
+
+    // Encrypted wallet: encrypting requires the master key, i.e. an unlocked wallet.
+    // HD-chain writes happen during key generation / migration, which are unlocked.
+    if (IsLocked())
+        return false;
+
+    CHDChain chainCopy = chain;
+    uint256 chash = HashWithFP(chainCopy.seedFp);
+    CKeyingMaterial vchSecret = SerializeForEncryptionInput(chainCopy);
+    std::vector<unsigned char> vchCryptedSecret;
+    if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
+        LogPrintf("Encrypting HD chain failed!!!\n");
+        return false;
+    }
+    return CWalletDB(strWalletFile).WriteCryptedHDChain(chash, vchCryptedSecret);
+}
+
+/**
+ * @brief Decrypt an on-disk `chdchain` record back into a plaintext CHDChain.
+ * @param chash Secret-salted IV/fingerprint stored with the record.
+ * @param vchCryptedSecret Encrypted blob.
+ * @param chain[out] Decrypted chain.
+ * @return true if decryption succeeds and the fingerprint matches.
+ */
+bool CWallet::DecryptHDChain(const uint256& chash, std::vector<unsigned char>& vchCryptedSecret, CHDChain& chain)
+{
+    if (IsLocked())
+        return false;
+
+    CKeyingMaterial vchSecret;
+    if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
+        LogPrintf("Decrypting HD chain failed!!!\n");
+        return false;
+    }
+    DeserializeFromDecryptionOutput(vchSecret, chain);
+    return HashWithFP(chain.seedFp) == chash;
+}
+
+/**
+ * @brief Decrypt and integrity-verify an encrypted Sapling note-commitment-tree blob.
+ * @param chash Content-bound, secret-salted hash stored in the record value; used as the AES IV.
+ * @param vchCryptedSecret Encrypted blob.
+ * @param vchSecret[out] Decrypted serialized tree.
+ * @return true if decryption succeeds and `HashWithFP(plaintext) == chash`.
+ *
+ * The new on-disk format (`csaplingwitnessenc`) binds the plaintext to `chash`, so any
+ * tampering with the ciphertext is detected here and the load fails closed. `chash` is
+ * secret-salted (via the never-persisted seed fingerprint), so an attacker cannot forge it.
+ * Legacy `csaplingwitness` records predate this binding and are read by a separate branch.
+ */
+bool CWallet::DecryptSaplingWitnessTree(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, CKeyingMaterial& vchSecret)
+{
+    if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret))
+        return false;
+    return HashWithFP(vchSecret) == chash;
+}
+
+/**
+ * @brief Decrypt and integrity-verify an encrypted Orchard note-commitment-tree blob.
+ * @see DecryptSaplingWitnessTree for the verification semantics.
+ */
+bool CWallet::DecryptOrchardWitnessTree(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, CKeyingMaterial& vchSecret)
+{
+    if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret))
+        return false;
+    return HashWithFP(vchSecret) == chash;
 }
 
 /**
@@ -12729,7 +12834,7 @@ bool CWallet::AddDestData(const CTxDestination &dest, const std::string &key, co
     mapAddressBook[dest].destdata.insert(std::make_pair(key, value));
     if (!fFileBacked)
         return true;
-    return CWalletDB(strWalletFile).WriteDestData(EncodeDestination(dest), key, value);
+    return WriteDestDataToDisk(dest, key, value);
 }
 
 bool CWallet::EraseDestData(const CTxDestination &dest, const std::string &key)
@@ -12738,7 +12843,103 @@ bool CWallet::EraseDestData(const CTxDestination &dest, const std::string &key)
         return false;
     if (!fFileBacked)
         return true;
-    return CWalletDB(strWalletFile).EraseDestData(EncodeDestination(dest), key);
+
+    const std::string strAddress = EncodeDestination(dest);
+    CWalletDB walletdb(strWalletFile);
+    if (IsCrypted()) {
+        // The encrypted form is stored under a secret-salted hash of (address, key);
+        // recompute it to remove the matching cdestdata record.
+        std::pair<std::string, std::string> addrKey = std::make_pair(strAddress, key);
+        uint256 chash = HashWithFP(addrKey);
+        walletdb.EraseCryptedDestData(chash);
+    }
+    // Also remove any plaintext form that may still be present (unencrypted wallets,
+    // or records not yet migrated).
+    return walletdb.EraseDestData(strAddress, key);
+}
+
+/**
+ * @brief Persist a destination-data tuple, encrypting it on disk when the wallet is encrypted+unlocked.
+ *
+ * Mirrors the crypted-with-erase pattern used for the HD chain and other records. On an encrypted,
+ * unlocked wallet the (address, key, value) triple is serialized, encrypted under the master key with
+ * a secret-salted IV, written as `cdestdata` keyed by HashWithFP(address, key), and the plaintext
+ * `destdata` record is erased so the transparent address no longer sits in the DB key. The in-memory
+ * copy in mapAddressBook stays plaintext.
+ */
+bool CWallet::WriteDestDataToDisk(const CTxDestination &dest, const std::string &key, const std::string &value)
+{
+    if (!fFileBacked)
+        return true;
+
+    std::string strAddress = EncodeDestination(dest);
+
+    if (!IsCrypted())
+        return CWalletDB(strWalletFile).WriteDestData(strAddress, key, value);
+
+    // Encrypting requires the master key, i.e. an unlocked wallet. New destdata writes
+    // (e.g. payment requests) and migration happen while the wallet is unlocked.
+    if (IsLocked())
+        return false;
+
+    std::pair<std::string, std::string> addrKey = std::make_pair(strAddress, key);
+    uint256 chash = HashWithFP(addrKey);
+    std::string strAddressCopy = strAddress;
+    std::string strKeyCopy = key;
+    std::string strValueCopy = value;
+    CKeyingMaterial vchSecret = SerializeForEncryptionInput(strAddressCopy, strKeyCopy, strValueCopy);
+    std::vector<unsigned char> vchCryptedSecret;
+    if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
+        LogPrintf("Encrypting dest data failed!!!\n");
+        return false;
+    }
+    return CWalletDB(strWalletFile).WriteCryptedDestData(strAddress, key, chash, vchCryptedSecret);
+}
+
+/**
+ * @brief Decrypt an on-disk `cdestdata` record back into its (address, key, value) triple.
+ * @param chash Secret-salted IV/fingerprint stored with the record.
+ * @param vchCryptedSecret Encrypted blob.
+ * @param address,key,value[out] Decrypted destination-data triple.
+ * @return true if decryption succeeds and the (address, key) fingerprint matches.
+ */
+bool CWallet::DecryptDestData(const uint256& chash, std::vector<unsigned char>& vchCryptedSecret,
+                              std::string& address, std::string& key, std::string& value)
+{
+    if (IsLocked())
+        return false;
+
+    CKeyingMaterial vchSecret;
+    if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
+        LogPrintf("Decrypting dest data failed!!!\n");
+        return false;
+    }
+    DeserializeFromDecryptionOutput(vchSecret, address, key, value);
+    std::pair<std::string, std::string> addrKey = std::make_pair(address, key);
+    return HashWithFP(addrKey) == chash;
+}
+
+/**
+ * @brief Re-persist every in-memory destination-data tuple in encrypted form.
+ *
+ * Used at startup to migrate wallets that were encrypted before destdata gained an
+ * encrypted-on-disk form. Each WriteDestDataToDisk call encrypts the tuple and erases
+ * the matching plaintext record. No-op (returns true) unless the wallet is encrypted
+ * and unlocked. Once migrated the plaintext records no longer exist.
+ */
+bool CWallet::MigrateDestDataToEncrypted()
+{
+    if (!fFileBacked || !IsCrypted() || IsLocked())
+        return true;
+
+    LOCK(cs_wallet);
+    for (std::map<CTxDestination, CAddressBookData>::iterator it = mapAddressBook.begin(); it != mapAddressBook.end(); ++it) {
+        for (CAddressBookData::StringMap::iterator dit = it->second.destdata.begin(); dit != it->second.destdata.end(); ++dit) {
+            if (!WriteDestDataToDisk(it->first, dit->first, dit->second))
+                return false;
+        }
+    }
+    return true;
 }
 
 bool CWallet::LoadDestData(const CTxDestination &dest, const std::string &key, const std::string &value)

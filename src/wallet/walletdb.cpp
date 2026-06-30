@@ -655,16 +655,21 @@ bool CWalletDB::WriteSaplingWitnesses(const SaplingWallet& wallet)
             SaplingWalletNoteCommitmentTreeWriter(wallet));
 }
 
-bool CWalletDB::WriteCryptedSaplingWitnesses(const std::vector<unsigned char>& vchCryptedSecret,
-                                              const uint256 chash)
+bool CWalletDB::WriteCryptedSaplingWitnesses(const uint256 chash, const std::vector<unsigned char>& vchCryptedSecret,
+                                              const uint256 legacyChash)
 {
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
-    if (!Write(std::make_pair(std::string("csaplingwitness"), chash), vchCryptedSecret, true))
+    // Stable singleton key; the value carries the content-bound hash (AES IV + integrity
+    // tag) so the record can be verified on load and rewrites overwrite in place.
+    if (!Write(std::string("csaplingwitnessenc"), std::make_pair(chash, vchCryptedSecret), true))
         return false;
-    
+
+    // Drop the plaintext form and any pre-upgrade encrypted record (keyed by the old
+    // fixed-string IV) so only the verified record remains.
     Erase(std::string("sapling_note_commitment_tree"));
+    Erase(std::make_pair(std::string("csaplingwitness"), legacyChash));
     return true;
 }
 
@@ -886,16 +891,21 @@ bool CWalletDB::WriteOrchardWitnesses(const OrchardWallet& wallet)
             OrchardWalletNoteCommitmentTreeWriter(wallet));
 }
 
-bool CWalletDB::WriteCryptedOrchardWitnesses(const std::vector<unsigned char>& vchCryptedSecret,
-                                              const uint256 chash)
+bool CWalletDB::WriteCryptedOrchardWitnesses(const uint256 chash, const std::vector<unsigned char>& vchCryptedSecret,
+                                              const uint256 legacyChash)
 {
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
-    if (!Write(std::make_pair(std::string("corchardwitness"), chash), vchCryptedSecret, true))
+    // Stable singleton key; the value carries the content-bound hash (AES IV + integrity
+    // tag) so the record can be verified on load and rewrites overwrite in place.
+    if (!Write(std::string("corchardwitnessenc"), std::make_pair(chash, vchCryptedSecret), true))
         return false;
-    
+
+    // Drop the plaintext form and any pre-upgrade encrypted record (keyed by the old
+    // fixed-string IV) so only the verified record remains.
     Erase(std::string("orchard_note_commitment_tree"));
+    Erase(std::make_pair(std::string("corchardwitness"), legacyChash));
     return true;
 }
 
@@ -1190,11 +1200,59 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 return false;
             }
         }
-        else if (strType == "hdchain") //no need to encrypt
+        else if (strType == "hdchain") //plaintext for non-encrypted wallets
         {
             CHDChain chain;
             ssValue >> chain;
             pwallet->SetHDChain(chain, true);
+        }
+        else if (strType == "chdchain") //encrypted hdchain (in-memory copy is plaintext)
+        {
+            uint256 chash;
+            ssValue >> chash;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+
+            CHDChain chain;
+            if (!pwallet->DecryptHDChain(chash, vchCryptedSecret, chain)) {
+                strErr = "Error reading wallet database: DecryptHDChain failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
+                return false;
+            }
+            pwallet->SetHDChain(chain, true);
+        }
+        else if (strType == "destdata") //plaintext for non-encrypted wallets (migrated to cdestdata once encrypted)
+        {
+            std::string strAddress, strKey, strValue;
+            ssKey >> strAddress;
+            ssKey >> strKey;
+            ssValue >> strValue;
+            if (!pwallet->LoadDestData(DecodeDestination(strAddress), strKey, strValue))
+            {
+                strErr = "Error reading wallet database: LoadDestData failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
+                return false;
+            }
+        }
+        else if (strType == "cdestdata") //encrypted destination data (in-memory copy is plaintext)
+        {
+            uint256 chash;
+            ssKey >> chash;
+            vector<unsigned char> vchCryptedSecret;
+            ssValue >> vchCryptedSecret;
+
+            std::string strAddress, strKey, strValue;
+            if (!pwallet->DecryptDestData(chash, vchCryptedSecret, strAddress, strKey, strValue)) {
+                strErr = "Error reading wallet database: DecryptDestData failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
+                return false;
+            }
+            if (!pwallet->LoadDestData(DecodeDestination(strAddress), strKey, strValue))
+            {
+                strErr = "Error reading wallet database: LoadDestData failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
+                return false;
+            }
         }
         else if (strType == "version") //no need to encrypt
         {
@@ -1988,7 +2046,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             auto loader = pwallet->GetSaplingNoteCommitmentTreeLoader();
             ssValue >> loader;
         }
-        else if (strType == "csaplingwitness")
+        else if (strType == "csaplingwitness") //legacy pre-integrity-check format (migrates to csaplingwitnessenc on next SetBestChain)
         {
             uint256 chash;
             ssKey >> chash;
@@ -1998,6 +2056,26 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             CKeyingMaterial vchSecret;
             if (!pwallet->DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
                 strErr = "Error reading wallet database: Failed to decrypt Sapling witness tree";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
+                return false;
+            }
+            
+            if (!pwallet->LoadCryptedSaplingWallet(vchSecret)) {
+                strErr = "Error reading wallet database: LoadCryptedSaplingWalletWitness failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
+                return false;
+            }
+        }
+        else if (strType == "csaplingwitnessenc") //content-verified format: value = (chash, ciphertext)
+        {
+            std::pair<uint256, std::vector<unsigned char>> value;
+            ssValue >> value;
+            const uint256& chash = value.first;
+            const std::vector<unsigned char>& vchCryptedSecret = value.second;
+            
+            CKeyingMaterial vchSecret;
+            if (!pwallet->DecryptSaplingWitnessTree(chash, vchCryptedSecret, vchSecret)) {
+                strErr = "Error reading wallet database: Failed to decrypt or verify Sapling witness tree";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
@@ -2372,7 +2450,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             auto loader = pwallet->GetOrchardNoteCommitmentTreeLoader();
             ssValue >> loader;
         }
-        else if (strType == "corchardwitness")
+        else if (strType == "corchardwitness") //legacy pre-integrity-check format (migrates to corchardwitnessenc on next SetBestChain)
         {
             uint256 chash;
             ssKey >> chash;
@@ -2382,6 +2460,26 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             CKeyingMaterial vchSecret;
             if (!pwallet->DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
                 strErr = "Error reading wallet database: Failed to decrypt Orchard witness tree";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
+                return false;
+            }
+            
+            if (!pwallet->LoadCryptedOrchardWallet(vchSecret)) {
+                strErr = "Error reading wallet database: LoadCryptedOrchardWalletWitness failed";
+                LogPrintf("Loading Error %s - %s\n", strType, strErr);
+                return false;
+            }
+        }
+        else if (strType == "corchardwitnessenc") //content-verified format: value = (chash, ciphertext)
+        {
+            std::pair<uint256, std::vector<unsigned char>> value;
+            ssValue >> value;
+            const uint256& chash = value.first;
+            const std::vector<unsigned char>& vchCryptedSecret = value.second;
+            
+            CKeyingMaterial vchSecret;
+            if (!pwallet->DecryptOrchardWitnessTree(chash, vchCryptedSecret, vchSecret)) {
+                strErr = "Error reading wallet database: Failed to decrypt or verify Orchard witness tree";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
@@ -3203,10 +3301,28 @@ bool CWalletDB::WriteDestData(const std::string &address, const std::string &key
     return Write(std::make_pair(std::string("destdata"), std::make_pair(address, key)), value);
 }
 
+bool CWalletDB::WriteCryptedDestData(const std::string &address, const std::string &key, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret)
+{
+    nWalletDBUpdated++;
+    if (!Write(std::make_pair(std::string("cdestdata"), chash), vchCryptedSecret)) {
+        return false;
+    }
+    // Drop any plaintext form of this (address, key) so the transparent address
+    // no longer sits in the DB key.
+    Erase(std::make_pair(std::string("destdata"), std::make_pair(address, key)));
+    return true;
+}
+
 bool CWalletDB::EraseDestData(const std::string &address, const std::string &key)
 {
     nWalletDBUpdated++;
     return Erase(std::make_pair(std::string("destdata"), std::make_pair(address, key)));
+}
+
+bool CWalletDB::EraseCryptedDestData(const uint256& chash)
+{
+    nWalletDBUpdated++;
+    return Erase(std::make_pair(std::string("cdestdata"), chash));
 }
 
 
@@ -3232,4 +3348,14 @@ bool CWalletDB::WriteHDChain(const CHDChain& chain)
 {
     nWalletDBUpdated++;
     return Write(std::string("hdchain"), chain);
+}
+
+bool CWalletDB::WriteCryptedHDChain(const uint256 chash, const std::vector<unsigned char>& vchCryptedSecret)
+{
+    nWalletDBUpdated++;
+    if (!Write(std::string("chdchain"), std::make_pair(chash, vchCryptedSecret))) {
+        return false;
+    }
+    Erase(std::string("hdchain"));
+    return true;
 }

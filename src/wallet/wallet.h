@@ -1492,9 +1492,12 @@ protected:
             ss << SaplingWalletNoteCommitmentTreeWriter(saplingWallet);
             
             std::vector<unsigned char> vchCryptedSecret;
-            std::string saplingTreeKey = "sapling_note_commitment_tree";
-            uint256 chash = HashWithFP(saplingTreeKey);
             CKeyingMaterial vchSecret(ss.begin(), ss.end());
+            // Content-bound, secret-salted hash: serves as the AES IV and as an integrity
+            // tag verified on load. Stored in the record value under a stable key.
+            uint256 chash = HashWithFP(vchSecret);
+            std::string saplingTreeKey = "sapling_note_commitment_tree";
+            uint256 legacyChash = HashWithFP(saplingTreeKey);
 
             if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
                 LogPrintf("SetBestChain(): Failed to encrypt Sapling witnesses, aborting atomic write\n");
@@ -1502,7 +1505,7 @@ protected:
                 return;
             }
 
-            if (!walletdb.WriteCryptedSaplingWitnesses(vchCryptedSecret, chash)) {
+            if (!walletdb.WriteCryptedSaplingWitnesses(chash, vchCryptedSecret, legacyChash)) {
                 LogPrintf("SetBestChain(): Failed to write encrypted Sapling witnesses, aborting atomic write\n");
                 walletdb.TxnAbort();
                 return;
@@ -1523,9 +1526,12 @@ protected:
             ss << OrchardWalletNoteCommitmentTreeWriter(orchardWallet);
             
             std::vector<unsigned char> vchCryptedSecret;
-            std::string orchardTreeKey = "orchard_note_commitment_tree";
-            uint256 chash = HashWithFP(orchardTreeKey);
             CKeyingMaterial vchSecret(ss.begin(), ss.end());
+            // Content-bound, secret-salted hash: serves as the AES IV and as an integrity
+            // tag verified on load. Stored in the record value under a stable key.
+            uint256 chash = HashWithFP(vchSecret);
+            std::string orchardTreeKey = "orchard_note_commitment_tree";
+            uint256 legacyChash = HashWithFP(orchardTreeKey);
 
             if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
                 LogPrintf("SetBestChain(): Failed to encrypt Orchard witnesses, aborting atomic write\n");
@@ -1533,7 +1539,7 @@ protected:
                 return;
             }
 
-            if (!walletdb.WriteCryptedOrchardWitnesses(vchCryptedSecret, chash)) {
+            if (!walletdb.WriteCryptedOrchardWitnesses(chash, vchCryptedSecret, legacyChash)) {
                 LogPrintf("SetBestChain(): Failed to write encrypted Orchard witnesses, aborting atomic write\n");
                 walletdb.TxnAbort();
                 return;
@@ -1808,6 +1814,13 @@ public:
     bool AddDestData(const CTxDestination &dest, const std::string &key, const std::string &value);
     //! Erases a destination data tuple in the store and on disk
     bool EraseDestData(const CTxDestination &dest, const std::string &key);
+    //! Persist a destination-data tuple, encrypting it on disk when the wallet is encrypted+unlocked
+    bool WriteDestDataToDisk(const CTxDestination &dest, const std::string &key, const std::string &value);
+    //! Decrypt an on-disk encrypted destination-data record (used by LoadWallet)
+    bool DecryptDestData(const uint256& chash, std::vector<unsigned char>& vchCryptedSecret,
+                         std::string& address, std::string& key, std::string& value);
+    //! Re-persist all in-memory destination data in encrypted form (startup migration)
+    bool MigrateDestDataToEncrypted();
     //! Adds a destination data tuple to the store, without saving it to disk
     bool LoadDestData(const CTxDestination &dest, const std::string &key, const std::string &value);
     //! Look up a destination data tuple in the store, return true if found false otherwise
@@ -2299,6 +2312,16 @@ public:
     /* Set the HD chain model (chain child index counters) */
     void SetHDChain(const CHDChain& chain, bool memonly);
     const CHDChain& GetHDChain() const { return hdChain; }
+
+    /* Persist the HD chain, encrypting it on disk when the wallet is encrypted+unlocked */
+    bool WriteHDChainToDisk(const CHDChain& chain);
+    /* Decrypt an on-disk encrypted HD chain record (used by LoadWallet) */
+    bool DecryptHDChain(const uint256& chash, std::vector<unsigned char>& vchCryptedSecret, CHDChain& chain);
+
+    /* Decrypt + integrity-verify an encrypted Sapling note-commitment-tree blob (used by LoadWallet) */
+    bool DecryptSaplingWitnessTree(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, CKeyingMaterial& vchSecret);
+    /* Decrypt + integrity-verify an encrypted Orchard note-commitment-tree blob (used by LoadWallet) */
+    bool DecryptOrchardWitnessTree(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, CKeyingMaterial& vchSecret);
 
     /* Set the current HD seed, without saving it to disk (used by LoadWallet) */
     bool LoadHDSeed(const HDSeed& key);

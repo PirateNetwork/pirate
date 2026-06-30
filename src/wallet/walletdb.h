@@ -281,8 +281,12 @@ public:
 
     /// Write destination data key,value tuple to database
     bool WriteDestData(const std::string &address, const std::string &key, const std::string &value);
+    /// Write encrypted destination data (keyed by secret-salted hash), erasing the plaintext form
+    bool WriteCryptedDestData(const std::string &address, const std::string &key, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret);
     /// Erase destination data tuple from wallet database
     bool EraseDestData(const std::string &address, const std::string &key);
+    /// Erase encrypted destination data record by its secret-salted hash
+    bool EraseCryptedDestData(const uint256& chash);
 
     bool WriteAccountingEntry(const CAccountingEntry& acentry);
     CAmount GetAccountCreditDebit(const std::string& strAccount);
@@ -318,6 +322,8 @@ public:
     bool WriteCryptedHDSeed(const uint256& seedFp, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret);
     //! write the hdchain model (external chain child index counter)
     bool WriteHDChain(const CHDChain& chain);
+    //! write the hdchain encrypted on disk (in-memory copy stays plaintext)
+    bool WriteCryptedHDChain(const uint256 chash, const std::vector<unsigned char>& vchCryptedSecret);
 
     /// Write spending key to wallet database, where key is payment address and value is spending key.
     bool WriteZKey(const libzcash::SproutPaymentAddress& addr, const libzcash::SproutSpendingKey& key, const CKeyMetadata &keyMeta);
@@ -376,8 +382,8 @@ public:
     bool EraseSaplingExtendedFullViewingKey(const libzcash::SaplingExtendedFullViewingKey &extfvk);
 
     bool WriteSaplingWitnesses(const SaplingWallet& wallet);
-    bool WriteCryptedSaplingWitnesses(const std::vector<unsigned char>& vchCryptedSecret,
-                                      const uint256 chash);
+    bool WriteCryptedSaplingWitnesses(const uint256 chash, const std::vector<unsigned char>& vchCryptedSecret,
+                                      const uint256 legacyChash);
 
     //Orchard
     bool WriteOrchardZKey(const libzcash::OrchardIncomingViewingKey &ivk,
@@ -424,8 +430,8 @@ public:
                            const std::vector<unsigned char>& vchCryptedSecret);
 
       bool WriteOrchardWitnesses(const OrchardWallet& wallet);
-      bool WriteCryptedOrchardWitnesses(const std::vector<unsigned char>& vchCryptedSecret,
-                                        const uint256 chash);
+      bool WriteCryptedOrchardWitnesses(const uint256 chash, const std::vector<unsigned char>& vchCryptedSecret,
+                                        const uint256 legacyChash);
 
 private:
     CWalletDB(const CWalletDB&);
