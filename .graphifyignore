@@ -1,0 +1,18 @@
+# Build artifacts and vendored binary outputs - excluded from graphify scans
+# so /graphify and /graphify --update don't crawl gigabytes of compiled objects.
+target/
+depends/
+autom4te.cache/
+.temphold/
+.deps/
+.libs/
+*.a
+*.o
+
+# Compiled binaries left in-tree from a local build
+src/qt/komodo-qt
+src/pirated
+src/pirate-test
+src/pirate-tx
+src/pirate-cli
+src/wallet-utility
