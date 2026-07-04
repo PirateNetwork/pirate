@@ -337,8 +337,17 @@ RUST_DIST = $(top_srcdir)/.cargo $(top_srcdir)/Cargo.toml $(top_srcdir)/Cargo.lo
 
 EXTRA_DIST = $(top_srcdir)/share/genbuild.sh qa/pull-tester/rpc-tests.sh qa/pull-tester/run-bitcoin-cli qa/rpc-tests qa/zcash $(DIST_DOCS) $(BIN_CHECKS) $(RUST_DIST)
 
+# src/cryptoconditions vendors its own copy of secp256k1 (see
+# src/cryptoconditions/configure.ac's AC_CONFIG_SUBDIRS) purely so
+# cryptoconditions can link it internally; that copy's own `make install`
+# still installs its public headers/library/pkgconfig file system-wide as
+# if it were a standalone dependency, which we don't want to ship, so
+# install-exec-hook below removes them after the recursive install finishes.
 install-exec-hook:
 	mv $(DESTDIR)$(bindir)/fetch-params.sh $(DESTDIR)$(bindir)/zcash-fetch-params
+	rm -f $(DESTDIR)$(includedir)/secp256k1*.h
+	rm -f $(DESTDIR)$(libdir)/libsecp256k1.*
+	rm -f $(DESTDIR)$(libdir)/pkgconfig/libsecp256k1.pc
 
 .INTERMEDIATE: $(COVERAGE_INFO)
 

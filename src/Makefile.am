@@ -320,6 +320,7 @@ BITCOIN_CORE_H = \
   hash.h \
   httprpc.h \
   httpserver.h \
+  embeddedprocess.h \
 	i2p.h \
   init.h \
   key.h \
@@ -423,6 +424,14 @@ if ENABLE_ZMQ
   zmq/zmqpublishnotifier.h
 endif
 
+if ENABLE_EMBEDDED_TOR
+  BITCOIN_CORE_H += tor_process.h
+endif
+
+if ENABLE_EMBEDDED_I2PD
+  BITCOIN_CORE_H += i2pd_process.h
+endif
+
 	LIBTLS_H = \
 	    tls/utiltls.h
 
@@ -474,6 +483,7 @@ libbitcoin_server_a_SOURCES = \
   deprecation.cpp \
   httprpc.cpp \
   httpserver.cpp \
+  embeddedprocess.cpp \
 	i2p.cpp \
   init.cpp \
   dbwrapper.cpp \
@@ -509,6 +519,14 @@ libbitcoin_server_a_SOURCES = \
   $(BITCOIN_CORE_H) \
   $(LIBZCASH_H) \
 	$(LIBTLS_H)
+
+if ENABLE_EMBEDDED_TOR
+libbitcoin_server_a_SOURCES += tor_process.cpp
+endif
+
+if ENABLE_EMBEDDED_I2PD
+libbitcoin_server_a_SOURCES += i2pd_process.cpp
+endif
 
 libcxxbridge_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(EVENT_CFLAGS) $(EVENT_PTHREADS_CFLAGS)
 libcxxbridge_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
@@ -975,6 +993,66 @@ endif
 
 if ENABLE_TESTS
 #include Makefile.gtest.include #zcash tests
-#include Makefile.ktest.include #komodo tests 
+#include Makefile.ktest.include #komodo tests
 #include Makefile.test.include #bitcoin tests
 endif
+
+# Bundle the depends-built tor/i2pd binaries (see depends/packages/tor.mk,
+# depends/packages/i2pd.mk) alongside pirated/pirate-cli so embeddedprocess.cpp's
+# FindBinary() can discover them as a sibling of the running executable. Silently
+# skipped if TOR_BINARY_PATH/I2PD_BINARY_PATH don't point at an actual file, so a
+# manual ./configure without the depends tree doesn't break `make install`.
+install-exec-hook:
+if ENABLE_EMBEDDED_TOR
+	@if test -f "$(TOR_BINARY_PATH)"; then \
+		$(MKDIR_P) "$(DESTDIR)$(bindir)"; \
+		$(INSTALL_PROGRAM) "$(TOR_BINARY_PATH)" "$(DESTDIR)$(bindir)/tor"; \
+		$(STRIP) "$(DESTDIR)$(bindir)/tor" 2>/dev/null || true; \
+	else \
+		echo "warning: embedded Tor enabled but no tor binary found at '$(TOR_BINARY_PATH)', skipping bundling"; \
+	fi
+endif
+if ENABLE_EMBEDDED_I2PD
+	@if test -f "$(I2PD_BINARY_PATH)"; then \
+		$(MKDIR_P) "$(DESTDIR)$(bindir)"; \
+		$(INSTALL_PROGRAM) "$(I2PD_BINARY_PATH)" "$(DESTDIR)$(bindir)/i2pd"; \
+		$(STRIP) "$(DESTDIR)$(bindir)/i2pd" 2>/dev/null || true; \
+	else \
+		echo "warning: embedded I2P enabled but no i2pd binary found at '$(I2PD_BINARY_PATH)', skipping bundling"; \
+	fi
+endif
+
+BUILT_SOURCES += embedded_binary_hashes.h
+CLEANFILES += embedded_binary_hashes.h
+
+# Generated at build time from the exact tor/i2pd binaries this build produced
+# (see depends/packages/tor.mk, depends/packages/i2pd.mk), hashed after
+# stripping a throwaway copy so it matches what install-exec-hook above
+# actually ships (it strips the installed copy in place). embeddedprocess.cpp's
+# FindBinary() uses this to refuse a same-named sibling binary that doesn't
+# match what this build shipped - see embedded_binary_hashes.h's own comment.
+embedded_binary_hashes.h: $(TOR_BINARY_PATH) $(I2PD_BINARY_PATH)
+	@sha256_of() { \
+		f="$$1"; \
+		if [ -z "$$f" ] || [ ! -f "$$f" ]; then return; fi; \
+		tmp=$$(mktemp) || return; \
+		cp "$$f" "$$tmp" 2>/dev/null || { rm -f "$$tmp"; return; }; \
+		$(STRIP) "$$tmp" >/dev/null 2>&1 || true; \
+		if command -v sha256sum >/dev/null 2>&1; then \
+			sha256sum "$$tmp" | awk '{print $$1}'; \
+		elif command -v shasum >/dev/null 2>&1; then \
+			shasum -a 256 "$$tmp" | awk '{print $$1}'; \
+		fi; \
+		rm -f "$$tmp"; \
+	}; \
+	TORHASH=$$(sha256_of "$(TOR_BINARY_PATH)"); \
+	I2PDHASH=$$(sha256_of "$(I2PD_BINARY_PATH)"); \
+	{ \
+		echo "// Auto-generated at build time from the tor/i2pd binaries this build produced - do not edit."; \
+		echo "#ifndef BITCOIN_EMBEDDED_BINARY_HASHES_H"; \
+		echo "#define BITCOIN_EMBEDDED_BINARY_HASHES_H"; \
+		echo "#define EMBEDDED_TOR_SHA256 \"$$TORHASH\""; \
+		echo "#define EMBEDDED_I2PD_SHA256 \"$$I2PDHASH\""; \
+		echo "#endif"; \
+	} > $@.tmp
+	@mv $@.tmp $@

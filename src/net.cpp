@@ -2578,10 +2578,14 @@ bool StopNode()
     if (semOutbound)
         for (int i=0; i<MAX_REGULAR_OUTBOUND_CONNECTIONS; i++)
             semOutbound->post();
-    
+
     if (semAddNodeOutbound)
         for (int i=0; i<MAX_ADDNODE_CONNECTIONS; i++)
             semAddNodeOutbound->post();
+
+    // The I2P SAM session is never otherwise torn down explicitly; without this it
+    // only gets destroyed implicitly at process exit via the CNetCleanup static.
+    m_i2p_sam_session.reset();
 
     if (KOMODO_NSPV_FULLNODE && fAddressesInitialized)
     {

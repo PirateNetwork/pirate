@@ -12,6 +12,7 @@ packages:
 - "bsdmainutils"
 - "binutils-gold"
 - "ca-certificates"
+- "cmake"
 - "faketime"
 - "g++-multilib"
 - "git-core"

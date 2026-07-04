@@ -82,6 +82,7 @@ then
 fi
 
 PREFIX="$(pwd)/depends/$BUILD/"
+ARTIFACTS_DIR="$(pwd)/artifacts"
 
 HOST="$HOST" BUILD="$BUILD" "$MAKE" "$@" -C ./depends/ V=1
 ./autogen.sh
@@ -96,4 +97,15 @@ DEBUGGING_ARG='--enable-debug'
 nice -n 20 "$MAKE" "$@"
 #V=1
 
-cp src/qt/komodo-qt ./pirate-qt-linux
+cp src/qt/pirate-qt ./pirate-qt-linux
+
+# `--prefix` above points at the depends tree so the build itself can find its
+# dependencies; that's not where a human wants the finished binaries, so stage
+# a real `make install` through a throwaway DESTDIR and re-root just the
+# `$PREFIX` subtree into a flat, repo-local artifacts/ folder.
+STAGING_DIR="$(mktemp -d)"
+"$MAKE" install DESTDIR="$STAGING_DIR"
+rm -rf "$ARTIFACTS_DIR"
+mkdir -p "$ARTIFACTS_DIR"
+cp -a "${STAGING_DIR}${PREFIX}." "$ARTIFACTS_DIR/"
+rm -rf "$STAGING_DIR"

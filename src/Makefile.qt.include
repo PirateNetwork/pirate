@@ -7,7 +7,7 @@ CXXFLAGS+=-fPIC -DHAVE_DECL_EVP_MD_CTX_NEW
 
 #PROTOC=/usr/bin/protoc # this is already fixed in configure.ac, PROTOC should be set till here
 
-bin_PROGRAMS += qt/komodo-qt
+bin_PROGRAMS += qt/pirate-qt
 EXTRA_LIBRARIES += qt/libkomodoqt.a
 
 # komodo qt core #
@@ -457,7 +457,7 @@ RES_IMAGES = \
 
 RES_MOVIES = $(wildcard $(srcdir)/qt/res/movies/spinner-*.png)
 
-KOMODO_RC = qt/res/komodo-qt-res.rc
+KOMODO_RC = qt/res/pirate-qt-res.rc
 
 KOMODO_QT_INCLUDES = -I$(builddir)/qt -I$(srcdir)/qt -I$(srcdir)/qt/forms \
   -I$(builddir)/qt/forms -DQT_NO_KEYWORDS
@@ -478,24 +478,24 @@ QT_FORMS_H=$(join $(dir $(QT_FORMS_UI)),$(addprefix ui_, $(notdir $(QT_FORMS_UI:
 # Most files will depend on the forms and moc files as includes. Generate them
 # before anything else.
 $(QT_MOC): $(QT_FORMS_H)
-$(qt_libkomodoqt_a_OBJECTS) $(qt_komodo_qt_OBJECTS) : | $(QT_MOC)
+$(qt_libkomodoqt_a_OBJECTS) $(qt_pirate_qt_OBJECTS) : | $(QT_MOC)
 
 #Generating these with a half-written protobuf header leads to wacky results.
 #This makes sure it's done.
 $(QT_MOC): $(PROTOBUF_H)
 $(QT_MOC_CPP): $(PROTOBUF_H)
 
-# komodo-qt binary #
-qt_komodo_qt_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(KOMODO_QT_INCLUDES) \
+# pirate-qt binary #
+qt_pirate_qt_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(KOMODO_QT_INCLUDES) \
   $(QT_INCLUDES) $(PROTOBUF_CFLAGS) $(QR_CFLAGS)
-qt_komodo_qt_CXXFLAGS = $(AM_CXXFLAGS) $(QT_PIE_FLAGS)
+qt_pirate_qt_CXXFLAGS = $(AM_CXXFLAGS) $(QT_PIE_FLAGS)
 
-qt_komodo_qt_SOURCES = qt/komodo.cpp
+qt_pirate_qt_SOURCES = qt/komodo.cpp
 if TARGET_DARWIN
-  qt_komodo_qt_SOURCES += $(KOMODO_MM)
+  qt_pirate_qt_SOURCES += $(KOMODO_MM)
 endif
 if TARGET_WINDOWS
-  qt_komodo_qt_SOURCES += $(KOMODO_RC)
+  qt_pirate_qt_SOURCES += $(KOMODO_RC)
 endif
 
 # libbitcoin_server.a(libbitcoin_server_a-rpcserver.o): In function `__static_initialization_and_destruction_0(int, int)':
@@ -520,32 +520,32 @@ endif
 #
 # 	Link of komodod:
 #	----------------
-# komodo_qt_clean: FORCE
-#	rm -f $(CLEAN_QT) $(qt_libkomodoqt_a_OBJECTS) $(qt_komodo_qt_OBJECTS) qt/komodo-qt$(EXEEXT) $(LIBBITCOINQT)
+# pirate_qt_clean: FORCE
+#	rm -f $(CLEAN_QT) $(qt_libkomodoqt_a_OBJECTS) $(qt_pirate_qt_OBJECTS) qt/pirate-qt$(EXEEXT) $(LIBBITCOINQT)
 #
-# komodo_qt : qt/komodo-qt$(EXEEXT)
+# pirate_qt : qt/pirate-qt$(EXEEXT)
 #
 # From written makefile:
 # komodod$(EXEEXT): $(komodod_OBJECTS) $(komodod_DEPENDENCIES) $(EXTRA_komodod_DEPENDENCIES)
 #	@rm -f komodod$(EXEEXT)
 #	$(AM_V_CXXLD)$(komodod_LINK) $(komodod_OBJECTS) $(komodod_LDADD) $(LIBS)
 
-qt_komodo_qt_LDADD = $(LIBBITCOIN_SERVER) \
+qt_pirate_qt_LDADD = $(LIBBITCOIN_SERVER) \
   $(CURL_LIBS) \
   $(ARCHIVE_LIBS) \
   qt/libkomodoqt.a
 if ENABLE_ZMQ
-qt_komodo_qt_LDADD += $(LIBBITCOIN_ZMQ) $(ZMQ_LIBS)
+qt_pirate_qt_LDADD += $(LIBBITCOIN_ZMQ) $(ZMQ_LIBS)
 endif
 
 if ENABLE_WALLET
 $(info $(red)[ Forge ]$(reset) ENABLE_WALLET)
 $(info $$EXTRA_LIBRARIES is [${EXTRA_LIBRARIES}])
 # LIBBITCOIN_CLI should be first?
-qt_komodo_qt_LDADD += libbitcoin_wallet.a
+qt_pirate_qt_LDADD += libbitcoin_wallet.a
 endif
 
-qt_komodo_qt_LDADD += $(LIBBITCOIN_CLI) \
+qt_pirate_qt_LDADD += $(LIBBITCOIN_CLI) \
   $(LIBBITCOIN_COMMON) \
   $(LIBBITCOIN_UTIL) \
   $(LIBBITCOIN_CONSENSUS) \
@@ -568,10 +568,10 @@ qt_komodo_qt_LDADD += $(LIBBITCOIN_CLI) \
   $(EVENT_PTHREADS_LIBS) \
   $(EVENT_LIBS)
 
-qt_komodo_qt_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(QT_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
-qt_komodo_qt_LIBTOOLFLAGS = --tag CXX
+qt_pirate_qt_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(QT_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
+qt_pirate_qt_LIBTOOLFLAGS = --tag CXX
 
-qt_komodo_qt_LDADD += \
+qt_pirate_qt_LDADD += \
   $(LIBCJSON) \
   $(LIBZCASH) \
   $(LIBTLS) \
@@ -581,14 +581,14 @@ qt_komodo_qt_LDADD += \
   $(LIBCRYPTOCONDITIONS)
 
 if TARGET_DARWIN
-  qt_komodo_qt_LDADD += -lc++
+  qt_pirate_qt_LDADD += -lc++
 endif
 
-$(info $(red)[ Forge ]$(reset) Check the komodo-qt dependencies ...)
-#$(info $$qt_komodo_qt_CXXFLAGS is [${qt_komodo_qt_CXXFLAGS}])
-$(info $$qt_komodo_qt_CPPFLAGS is [${qt_komodo_qt_CPPFLAGS}])
-$(info $$qt_komodo_qt_LDADD is [${qt_komodo_qt_LDADD}])
-$(info $$qt_komodo_qt_LDFLAGS is [${qt_komodo_qt_LDFLAGS}])
+$(info $(red)[ Forge ]$(reset) Check the pirate-qt dependencies ...)
+#$(info $$qt_pirate_qt_CXXFLAGS is [${qt_pirate_qt_CXXFLAGS}])
+$(info $$qt_pirate_qt_CPPFLAGS is [${qt_pirate_qt_CPPFLAGS}])
+$(info $$qt_pirate_qt_LDADD is [${qt_pirate_qt_LDADD}])
+$(info $$qt_pirate_qt_LDFLAGS is [${qt_pirate_qt_LDFLAGS}])
 $(info $(red)[ Forge ]$(reset) Check the pirated dependencies ...)
 $(info $$pirated_CPPFLAGS is [${pirated_CPPFLAGS}])
 $(info $$pirated_LDADD is [${pirated_LDADD}])
@@ -628,10 +628,10 @@ CLEAN_QT = $(nodist_qt_libkomodoqt_a_SOURCES) $(QT_QM) $(QT_FORMS_H) qt/*.gcda q
 
 CLEANFILES += $(CLEAN_QT)
 
-komodo_qt_clean: FORCE
-	rm -f $(CLEAN_QT) $(qt_libkomodoqt_a_OBJECTS) $(qt_komodo_qt_OBJECTS) qt/komodo-qt$(EXEEXT) $(LIBBITCOINQT)
+pirate_qt_clean: FORCE
+	rm -f $(CLEAN_QT) $(qt_libkomodoqt_a_OBJECTS) $(qt_pirate_qt_OBJECTS) qt/pirate-qt$(EXEEXT) $(LIBBITCOINQT)
 
-komodo_qt : qt/komodo-qt$(EXEEXT)
+pirate_qt : qt/pirate-qt$(EXEEXT)
 
 ui_%.h: %.ui
 	@test -f $(UIC)

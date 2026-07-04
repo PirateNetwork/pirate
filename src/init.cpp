@@ -56,6 +56,12 @@
 #include "scheduler.h"
 #include "txdb.h"
 #include "torcontrol.h"
+#if ENABLE_EMBEDDED_TOR
+#include "tor_process.h"
+#endif
+#if ENABLE_EMBEDDED_I2PD
+#include "i2pd_process.h"
+#endif
 #include "ui_interface.h"
 #include "util.h"
 #include "utilmoneystr.h"
@@ -265,7 +271,13 @@ void Shutdown()
  #endif
 #endif
     StopNode();
+#if ENABLE_EMBEDDED_I2PD
+    StopEmbeddedI2Pd();
+#endif
     StopTorControl();
+#if ENABLE_EMBEDDED_TOR
+    StopEmbeddedTor();
+#endif
     UnregisterNodeSignals(GetNodeSignals());
 
     if (fFeeEstimatesInitialized)
@@ -470,6 +482,10 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-onion=<ip:port>", strprintf(_("Use separate SOCKS5 proxy to reach peers via Tor hidden services (default: %s)"), "-proxy"));
     strUsage += HelpMessageOpt("-i2psam=<ip:port>", strprintf(_("I2P SAM proxy to reach I2P peers and accept I2P connections (default: none)")));
     strUsage += HelpMessageOpt("-i2pacceptincoming", strprintf(_("If set and -i2psam is also set then incoming I2P connections are accepted via the SAM proxy. If this is not set but -i2psam is set then only outgoing connections will be made to the I2P network. Ignored if -i2psam is not set. Listening for incoming I2P connections is done through the SAM proxy, not by binding to a local address and port (default: 1)")));
+#if ENABLE_EMBEDDED_I2PD
+    strUsage += HelpMessageOpt("-i2pdautostart", strprintf(_("Automatically launch and manage a bundled I2P (i2pd) daemon so I2P works without a separately running router (default: %u)"), DEFAULT_I2PD_AUTOSTART));
+    strUsage += HelpMessageOpt("-i2pdpath=<path>", _("Path to the i2pd binary to use instead of auto-detection"));
+#endif
     strUsage += HelpMessageOpt("-onlynet=<net>", _("Only connect to nodes in network <net> (ipv4, ipv6, onion or i2p)"));
     strUsage += HelpMessageOpt("-disableipv4", _("Disable Ipv4 network connections") + " " + _("(default: 0)"));
     strUsage += HelpMessageOpt("-disableipv6", _("Disable Ipv6 network connections") + " " + _("(default: 0)"));
@@ -485,6 +501,10 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-timeout=<n>", strprintf(_("Specify connection timeout in milliseconds (minimum: 1, default: %d)"), DEFAULT_CONNECT_TIMEOUT));
     strUsage += HelpMessageOpt("-torcontrol=<ip>:<port>", strprintf(_("Tor control port to use if onion listening enabled (default: %s)"), DEFAULT_TOR_CONTROL));
     strUsage += HelpMessageOpt("-torpassword=<pass>", _("Tor control port password (default: empty)"));
+#if ENABLE_EMBEDDED_TOR
+    strUsage += HelpMessageOpt("-torautostart", strprintf(_("Automatically launch and manage a bundled Tor daemon so Tor works without a separately running instance (default: %u)"), DEFAULT_TOR_AUTOSTART));
+    strUsage += HelpMessageOpt("-torpath=<path>", _("Path to the tor binary to use instead of auto-detection"));
+#endif
     strUsage += HelpMessageOpt("-tlsenforcement=<0 or 1>", _("Only connect to TLS compatible peers. (default: 0)"));
     strUsage += HelpMessageOpt("-tlsfallbacknontls=<0 or 1>", _("If a TLS connection fails, the next connection attempt of the same peer (based on IP address) takes place without TLS (default: 1)"));
     strUsage += HelpMessageOpt("-tlsvalidate=<0 or 1>", _("Connect to peers only with valid certificates (default: 0)"));
@@ -1257,6 +1277,17 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         if (SoftSetBoolArg("-discover", false))
             LogPrintf("%s: parameter interaction: -proxy set -> setting -discover=0\n", __func__);
     }
+
+#if ENABLE_EMBEDDED_I2PD
+    // If the embedded i2pd daemon is going to be auto-launched, enable I2P by
+    // default (unless the user already pointed -i2psam at something else) so
+    // the feature actually works out of the box rather than requiring the
+    // user to separately discover and set -i2psam themselves.
+    if (GetBoolArg("-i2pdautostart", DEFAULT_I2PD_AUTOSTART)) {
+        if (SoftSetArg("-i2psam", "127.0.0.1:7656"))
+            LogPrintf("%s: parameter interaction: -i2pdautostart=1 -> setting -i2psam=127.0.0.1:7656\n", __func__);
+    }
+#endif
 
     if (!GetBoolArg("-listen", DEFAULT_LISTEN)) {
         // do not try to retrieve public IP when not listening (pointless)
@@ -2957,8 +2988,16 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     // Start the thread that updates komodo internal structures
     threadGroup.create_thread(&ThreadUpdateKomodoInternals);
 
-    if (GetBoolArg("-listenonion", DEFAULT_LISTEN_ONION))
+    if (GetBoolArg("-listenonion", DEFAULT_LISTEN_ONION)) {
+#if ENABLE_EMBEDDED_TOR
+        StartEmbeddedTor();
+#endif
         StartTorControl(threadGroup, scheduler);
+    }
+
+#if ENABLE_EMBEDDED_I2PD
+    StartEmbeddedI2Pd();
+#endif
 
     StartNode(threadGroup, scheduler);
 

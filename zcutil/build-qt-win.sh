@@ -3,6 +3,7 @@ HOST=x86_64-w64-mingw32
 CXX=x86_64-w64-mingw32-g++-posix
 CC=x86_64-w64-mingw32-gcc-posix
 PREFIX="$(pwd)/depends/$HOST"
+ARTIFACTS_DIR="$(pwd)/artifacts"
 
 set -eu -o pipefail
 
@@ -23,5 +24,18 @@ sed -i 's/-lboost_system-mt /-lboost_system-mt-s /' configure
 cd src/
 CC="${CC}" CXX="${CXX}" make "$@" V=1
 
-mv qt/komodo-qt.exe qt/pirate-qt-win.exe
+cp qt/pirate-qt.exe qt/pirate-qt-win.exe
 cp qt/pirate-qt-win.exe ../pirate-qt-win.exe
+
+cd ..
+
+# `--prefix` above points at the depends tree so the build itself can find its
+# dependencies; that's not where a human wants the finished binaries, so stage
+# a real `make install` through a throwaway DESTDIR and re-root just the
+# `$PREFIX` subtree into a flat, repo-local artifacts/ folder.
+STAGING_DIR="$(mktemp -d)"
+make install DESTDIR="$STAGING_DIR"
+rm -rf "$ARTIFACTS_DIR"
+mkdir -p "$ARTIFACTS_DIR"
+cp -a "${STAGING_DIR}${PREFIX}/." "$ARTIFACTS_DIR/"
+rm -rf "$STAGING_DIR"

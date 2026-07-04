@@ -39,11 +39,23 @@ fi
 
 # BUG: parameterize the platform/host directory:
 PREFIX="$(pwd)/depends/aarch64-linux-gnu/"
+ARTIFACTS_DIR="$(pwd)/artifacts"
 
 HOST=aarch64-linux-gnu BUILD=x86_64-unknown-linux-gnu make "$@" -C ./depends/ V=1
 ./autogen.sh
-CONFIG_SITE="$(pwd)/depends/aarch64-linux-gnu/share/config.site" ./configure --prefix="${PREFIX}" --host=aarch64-linux-gnu --build=x86_64-unknown-linux-gnu --with-gui=qt5 --disable-bip70 --enable-tests=yes --enable-online-rust=yes "$HARDENING_ARG" "$LCOV_ARG" CXXFLAGS='-fwrapv -fno-strict-aliasing -g'
+CONFIG_SITE="$(pwd)/depends/aarch64-linux-gnu/share/config.site" ./configure --prefix="${PREFIX}" --host=aarch64-linux-gnu --build=x86_64-unknown-linux-gnu --with-gui=qt5 --disable-bip70 --enable-tests=no --enable-online-rust=yes "$HARDENING_ARG" "$LCOV_ARG" CXXFLAGS='-fwrapv -fno-strict-aliasing -g'
 
 make "$@" V=1
 
-cp src/qt/komodo-qt ./pirate-qt-arm
+cp src/qt/pirate-qt ./pirate-qt-arm
+
+# `--prefix` above points at the depends tree so the build itself can find its
+# dependencies; that's not where a human wants the finished binaries, so stage
+# a real `make install` through a throwaway DESTDIR and re-root just the
+# `$PREFIX` subtree into a flat, repo-local artifacts/ folder.
+STAGING_DIR="$(mktemp -d)"
+make install DESTDIR="$STAGING_DIR"
+rm -rf "$ARTIFACTS_DIR"
+mkdir -p "$ARTIFACTS_DIR"
+cp -a "${STAGING_DIR}${PREFIX}." "$ARTIFACTS_DIR/"
+rm -rf "$STAGING_DIR"

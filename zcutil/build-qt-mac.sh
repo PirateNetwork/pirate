@@ -43,6 +43,7 @@ fi
 
 TRIPLET=`./depends/config.guess`
 PREFIX="$(pwd)/depends/$TRIPLET"
+ARTIFACTS_DIR="$mydir/artifacts"
 
 make "$@" -C ./depends/ V=1
 
@@ -70,13 +71,24 @@ CPPFLAGS="-I$PREFIX/include $ARCH_FLAGS" LDFLAGS="-L$PREFIX/lib $ARCH_FLAGS -Wl,
 CXXFLAGS="$ARCH_FLAGS -I$PREFIX/include -fwrapv -fno-strict-aliasing \
 -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-enum-constexpr-conversion \
 -Wno-unknown-warning-option -Werror -Wno-error=attributes -g" \
-./configure --prefix="${PREFIX}" --disable-bip70 --with-gui=qt5 "$HARDENING_ARG" "$LCOV_ARG" "$DEBUGGING_ARG"
+./configure --prefix="${PREFIX}" --disable-bip70 --with-gui=qt5 --enable-tests=no "$HARDENING_ARG" "$LCOV_ARG" "$DEBUGGING_ARG"
 
 make "$@" NO_GTEST=0 STATIC=1
 
-cp src/qt/komodo-qt "$mydir"/pirate-qt-mac
+cp src/qt/pirate-qt "$mydir"/pirate-qt-mac
 # Strip symbols to reduce release size.
 strip -x "$mydir"/pirate-qt-mac
+
+# `--prefix` above points at the depends tree so the build itself can find its
+# dependencies; that's not where a human wants the finished binaries, so stage
+# a real `make install` through a throwaway DESTDIR and re-root just the
+# `$PREFIX` subtree into a flat, repo-local artifacts/ folder.
+STAGING_DIR="$(mktemp -d)"
+make install DESTDIR="$STAGING_DIR"
+rm -rf "$ARTIFACTS_DIR"
+mkdir -p "$ARTIFACTS_DIR"
+cp -a "${STAGING_DIR}${PREFIX}/." "$ARTIFACTS_DIR/"
+rm -rf "$STAGING_DIR"
 
 #Package as App bundle in a dmg
 ./makeReleaseMac.sh

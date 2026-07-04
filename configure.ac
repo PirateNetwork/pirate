@@ -186,6 +186,12 @@ AC_ARG_ENABLE([zmq],
   [use_zmq=$enableval],
   [use_zmq=yes])
 
+AC_ARG_ENABLE([embedded-onion-routing],
+  [AS_HELP_STRING([--disable-embedded-onion-routing],
+  [disable bundling/auto-managing Tor and I2P (i2pd) daemons so the node no longer tries to spawn/manage them itself])],
+  [use_embedded_onion_routing=$enableval],
+  [use_embedded_onion_routing=yes])
+
 AC_ARG_WITH([protoc-bindir],[AS_HELP_STRING([--with-protoc-bindir=BIN_DIR],[specify protoc bin path])], [protoc_bin_path=$withval], [])
 
 AC_ARG_ENABLE(man,
@@ -898,6 +904,39 @@ fi
 
 AM_CONDITIONAL([ENABLE_ZMQ], [test "x$use_zmq" = "xyes"])
 
+if test "x$use_embedded_onion_routing" = "xyes"; then
+  AC_DEFINE([ENABLE_EMBEDDED_TOR],[1],[Define to 1 to bundle/auto-manage a Tor daemon])
+  AC_DEFINE([ENABLE_EMBEDDED_I2PD],[1],[Define to 1 to bundle/auto-manage an I2P (i2pd) daemon])
+else
+  AC_DEFINE([ENABLE_EMBEDDED_TOR],[0],[Define to 1 to bundle/auto-manage a Tor daemon])
+  AC_DEFINE([ENABLE_EMBEDDED_I2PD],[0],[Define to 1 to bundle/auto-manage an I2P (i2pd) daemon])
+fi
+AM_CONDITIONAL([ENABLE_EMBEDDED_TOR], [test "x$use_embedded_onion_routing" = "xyes"])
+AM_CONDITIONAL([ENABLE_EMBEDDED_I2PD], [test "x$use_embedded_onion_routing" = "xyes"])
+
+dnl $with_tor_bin/$with_i2pd_bin may already be pre-set by depends/config.site.in
+dnl (pointing at the depends-built binaries); --with-tor-bin/--with-i2pd-bin let
+dnl that be overridden explicitly. Left empty when embedded support is disabled,
+dnl or when neither depends nor an explicit path provided one - the Makefile.am
+dnl install-exec-hook skips bundling a binary it can't find.
+AC_ARG_WITH([tor-bin],
+  [AS_HELP_STRING([--with-tor-bin=PATH],[path to a tor binary to bundle for embedded Tor support (default: autodetected via depends)])],
+  [tor_bin_path=$withval],
+  [tor_bin_path=$with_tor_bin])
+AC_ARG_WITH([i2pd-bin],
+  [AS_HELP_STRING([--with-i2pd-bin=PATH],[path to an i2pd binary to bundle for embedded I2P support (default: autodetected via depends)])],
+  [i2pd_bin_path=$withval],
+  [i2pd_bin_path=$with_i2pd_bin])
+AC_SUBST([TOR_BINARY_PATH])
+AC_SUBST([I2PD_BINARY_PATH])
+if test "x$use_embedded_onion_routing" = "xyes"; then
+  TOR_BINARY_PATH=$tor_bin_path
+  I2PD_BINARY_PATH=$i2pd_bin_path
+else
+  TOR_BINARY_PATH=
+  I2PD_BINARY_PATH=
+fi
+
 AC_MSG_CHECKING([whether to build test_bitcoin])
 if test x$use_tests = xyes; then
   AC_MSG_RESULT([yes])
@@ -1033,6 +1072,7 @@ if test x$bitcoin_enable_qt != xno; then
     echo "    with qr     = $use_qr"
 fi
 echo "  with zmq      = $use_zmq"
+echo "  embedded onion routing = $use_embedded_onion_routing"
 echo "  with test     = $use_tests"
 echo "  debug enabled = $enable_debug"
 echo "  werror        = $enable_werror"

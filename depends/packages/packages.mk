@@ -13,4 +13,6 @@ $(host_arch)_$(host_os)_native_packages += native_b2
 
 wallet_packages := bdb
 
+tor_i2pd_packages := tor i2pd
+
 packages := boost openssl libevent zeromq $(zcash_packages) zlib libarchive googletest libcurl
