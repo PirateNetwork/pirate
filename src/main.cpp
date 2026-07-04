@@ -4244,6 +4244,28 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         pindex->hashFinalSproutRoot = sprout_tree.root();
     }
 
+    // Turnstile enforcement (ZIP 209): reject any block that would drive a shielded
+    // value pool negative. A cumulative pool balance can only become negative if a
+    // transaction withdrew more value than was ever deposited, which is impossible for
+    // a valid chain. This is a consensus-level backstop that is independent of the
+    // Sapling/Orchard zk-proof soundness: if a proof-system flaw ever allowed value to
+    // be minted out of a shielded pool, this check halts the chain here instead of
+    // silently accepting the inflation. The balances are std::optional; when the
+    // cumulative value is unknown (history not fully available) the check is skipped,
+    // so it can never reject an otherwise-valid block.
+    if (pindex->nChainSaplingValue && *pindex->nChainSaplingValue < 0) {
+        return state.DoS(100,
+            error("ConnectBlock(): turnstile violation in Sapling shielded value pool: %s",
+                  FormatMoney(*pindex->nChainSaplingValue)),
+            REJECT_INVALID, "turnstile-violation-sapling-shielded-pool");
+    }
+    if (pindex->nChainOrchardValue && *pindex->nChainOrchardValue < 0) {
+        return state.DoS(100,
+            error("ConnectBlock(): turnstile violation in Orchard shielded value pool: %s",
+                  FormatMoney(*pindex->nChainOrchardValue)),
+            REJECT_INVALID, "turnstile-violation-orchard-shielded-pool");
+    }
+
     blockundo.old_sprout_tree_root = old_sprout_tree_root;
 
     // If Sapling is active, block.hashBlockCommitments must be the
