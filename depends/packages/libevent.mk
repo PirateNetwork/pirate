@@ -27,8 +27,9 @@ define $(package)_stage_cmds
   $(MAKE) DESTDIR=$($(package)_staging_dir) install
 endef
 
+# Tor's DNSPort implementation includes this legacy compatibility header.
 define $(package)_postprocess_cmds
   rm lib/*.la && \
   rm include/ev*.h && \
-  rm include/event2/*_compat.h
+  find include/event2 -type f -name '*_compat.h' ! -name 'dns_compat.h' -delete
 endef
