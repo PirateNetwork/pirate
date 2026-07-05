@@ -1,0 +1,28 @@
+diff --git a/build/CMakeLists.txt b/build/CMakeLists.txt
+index 156e54a..36b745e 100644
+--- a/build/CMakeLists.txt
++++ b/build/CMakeLists.txt
+@@ -236,7 +236,7 @@ if(WITH_STATIC)
+   endif()
+ 
+   set(Boost_USE_STATIC_LIBS ON)
+-  if(MSVC)
++  if(MSVC OR MINGW)
+     set(Boost_USE_STATIC_RUNTIME ON)
+   else()
+     set(Boost_USE_STATIC_RUNTIME OFF)
+@@ -374,12 +374,12 @@ if(WITH_BINARY)
+   endif()
+ 
+   if(WITH_STATIC)
+-    if(NOT MSVC)
++    if(NOT MSVC AND NOT APPLE)
+       set_target_properties("${PROJECT_NAME}" PROPERTIES LINK_FLAGS "-static")
+     endif()
+   endif()
+ 
+-  if(WITH_HARDENING AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
++  if(WITH_HARDENING AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND NOT MINGW)
+     set_target_properties("${PROJECT_NAME}" PROPERTIES LINK_FLAGS "-z relro -z now")
+   endif()
+ 

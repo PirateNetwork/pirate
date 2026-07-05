@@ -7,11 +7,21 @@ ac_tool_prefix=${host_alias}-
 if test -z $with_boost; then
   with_boost=$depends_prefix
 fi
+
+case @host_os@ in
+  mingw32|mingw64)
+    embedded_bin_suffix=.exe
+  ;;
+  *)
+    embedded_bin_suffix=
+  ;;
+esac
+
 if test -z $with_tor_bin; then
-  with_tor_bin=$depends_prefix/bin/tor
+  with_tor_bin=$depends_prefix/bin/tor$embedded_bin_suffix
 fi
 if test -z $with_i2pd_bin; then
-  with_i2pd_bin=$depends_prefix/bin/i2pd
+  with_i2pd_bin=$depends_prefix/bin/i2pd$embedded_bin_suffix
 fi
 if test -z $with_qt_plugindir; then
   with_qt_plugindir=$depends_prefix/plugins

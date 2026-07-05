@@ -140,16 +140,6 @@ jobs:
             gcc-mingw-w64-x86-64-posix \
             g++-mingw-w64-x86-64-posix \
             binutils-mingw-w64-x86-64
-      - name: Ensure mingw-w64 tool aliases
-        shell: bash
-        run: |
-          for tool in ar ranlib strip nm gcc g++ windres dlltool objcopy; do
-            if ! command -v x86_64-w64-mingw64-$tool >/dev/null 2>&1; then
-              if command -v x86_64-w64-mingw32-$tool >/dev/null 2>&1; then
-                sudo ln -sf "$(command -v x86_64-w64-mingw32-$tool)" "/usr/bin/x86_64-w64-mingw64-$tool"
-              fi
-            fi
-          done
       - name: Build daemon (cross)
         run: |
           chmod +x zcutil/build-win.sh
@@ -258,6 +248,8 @@ jobs:
         env:
           HOMEBREW_NO_AUTO_UPDATE: 1
         run: |
+          brew untap aws/tap 2>/dev/null || true
+
           install_brew_formulae() {
             missing=()
             for formula in "$@"; do
@@ -420,16 +412,6 @@ jobs:
             gcc-mingw-w64-x86-64-posix \
             g++-mingw-w64-x86-64-posix \
             binutils-mingw-w64-x86-64
-      - name: Ensure mingw-w64 tool aliases
-        shell: bash
-        run: |
-          for tool in ar ranlib strip nm gcc g++ windres dlltool objcopy; do
-            if ! command -v x86_64-w64-mingw64-$tool >/dev/null 2>&1; then
-              if command -v x86_64-w64-mingw32-$tool >/dev/null 2>&1; then
-                sudo ln -sf "$(command -v x86_64-w64-mingw32-$tool)" "/usr/bin/x86_64-w64-mingw64-$tool"
-              fi
-            fi
-          done
       - name: Build QT (Windows cross)
         run: |
           chmod +x zcutil/build-qt-win.sh
@@ -543,6 +525,8 @@ jobs:
         env:
           HOMEBREW_NO_AUTO_UPDATE: 1
         run: |
+          brew untap aws/tap 2>/dev/null || true
+
           install_brew_formulae() {
             missing=()
             for formula in "$@"; do
