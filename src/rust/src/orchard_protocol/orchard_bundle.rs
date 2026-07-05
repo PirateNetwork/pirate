@@ -1,4 +1,3 @@
-use std::convert::TryFrom;
 use std::{mem, ptr};
 
 use libc::c_uchar;
@@ -102,6 +101,35 @@ impl Action {
     }
 }
 
+/// Returns the [`zcash_protocol::consensus::BranchId`] to hand to upstream's
+/// `bundle_version_for_branch`/`read_v5_bundle` so they resolve to Pirate's actual
+/// deployed Orchard `BundleVersion`.
+///
+/// Pirate has never deployed the pre-NU6.2 insecure circuit (`InsecurePreNu6_2` is
+/// guarded off; "Pirate never deployed" it, per the security audit) — every Orchard
+/// bundle on this chain has always used the fixed circuit, `BundleVersion::orchard_v2()`.
+/// Upstream's `BranchId::orchard_protocol_revision` maps `Nu5`/`Nu6`/`Nu6_1` to the
+/// *insecure* `InsecureV1` revision and only `Nu6_2` to `V2` — because on real Zcash
+/// mainnet, those branches genuinely had different circuits. Pirate's own
+/// `UPGRADE_ORCHARD` branch ID (`0xc2d6d0b4`) happens to numerically equal upstream's
+/// `Nu5`, but was never insecure on this chain, so passing it straight through would
+/// silently select the wrong (insecure) `BundleVersion`. We instead always resolve to
+/// `Nu6_2`, which is upstream's stand-in for "the fixed circuit" and is what every
+/// Orchard bundle on Pirate has actually used.
+///
+/// `_consensus_branch_id` is accepted (the caller — a v5, Orchard-epoch transaction —
+/// already guarantees it names the Orchard pool) but unused today, since Pirate's own
+/// `consensus/upgrades.h` has no separate NU6/NU6.1/NU6.2 branches to distinguish.
+///
+/// TODO(ironwood): once Pirate defines its own post-Ironwood-activation branch, this
+/// needs real branch-ID-keyed dispatch, resolving to `Nu6_3` (-> `ironwood_v3`/
+/// `orchard_v3`) for bundles on or after that branch.
+fn pirate_current_orchard_branch(
+    _consensus_branch_id: u32,
+) -> zcash_protocol::consensus::BranchId {
+    zcash_protocol::consensus::BranchId::Nu6_2
+}
+
 #[derive(Clone)]
 pub struct Bundle(Option<orchard::Bundle<Authorized, Amount>>);
 
@@ -140,15 +168,15 @@ impl Bundle {
 
     /// Parses an authorized Orchard bundle from the given stream.
     ///
-    /// `consensus_branch_id` identifies the transaction's consensus epoch, which determines
-    /// the [`orchard::bundle::BundleVersion`] (and therefore circuit/flag-byte semantics) the
-    /// bundle is parsed under. See `bundle_version_for_branch` upstream.
+    /// `consensus_branch_id` is the transaction's on-wire consensus branch ID (the caller
+    /// only invokes this for v5, Orchard-epoch transactions). It is currently unused: see
+    /// [`pirate_current_orchard_branch`] for why upstream's branch-ID-keyed
+    /// `bundle_version_for_branch` can't be driven directly off Pirate's own branch ID here.
     pub(crate) fn parse(
         reader: &mut CppStream<'_>,
         consensus_branch_id: u32,
     ) -> Result<Box<Self>, String> {
-        let branch_id = zcash_protocol::consensus::BranchId::try_from(consensus_branch_id)
-            .map_err(|_| format!("Unknown consensus branch id: {}", consensus_branch_id))?;
+        let branch_id = pirate_current_orchard_branch(consensus_branch_id);
         match orchard_serialization::read_v5_bundle(reader, branch_id) {
             Ok(parsed) => Ok(Box::new(Bundle(parsed))),
             Err(e) => Err(format!("Failed to parse Orchard bundle: {}", e)),
