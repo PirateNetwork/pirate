@@ -262,9 +262,24 @@ HistoryNode CCoinsViewDB::GetHistoryAt(uint32_t epochId, HistoryIndex index) con
         }
         std::copy(std::begin(tmpMmrNode), std::end(tmpMmrNode), mmrNode.begin());
     } else {
-        if (!db.Read(make_pair(DB_MMR_NODE, make_pair(epochId, index)), mmrNode)) {
+        // TODO(ironwood): no network upgrade in this tree's consensus/upgrades.h yet
+        // produces a NodeDataV3 (317-byte) history node - every currently-definable
+        // epoch was last written using the NODE_V2_SERIALIZED_LENGTH (244-byte)
+        // container. Reading at that older, guaranteed-safe length here (rather than
+        // the current NODE_SERIALIZED_LENGTH, which is sized for V3) avoids the same
+        // "History data inconsistent" exception the V1 branch above guards against:
+        // a client that has this fix will still only ever have *written* 244 bytes
+        // for these epochs, so requesting more than that would fail outright, while
+        // requesting exactly 244 is safe for both older and newer writers (extra
+        // padding a newer writer added is simply ignored). When an actual Ironwood/
+        // NU6.3 upgrade with its own branch ID is added, this needs to become a
+        // three-way dispatch (V1 / V2 / V3) keyed on that new epoch, the same way
+        // IsV1HistoryTree splits V1 from V2 today.
+        std::array<unsigned char, NODE_V2_SERIALIZED_LENGTH> tmpMmrNode;
+        if (!db.Read(make_pair(DB_MMR_NODE, make_pair(epochId, index)), tmpMmrNode)) {
             throw runtime_error("History data inconsistent (expected node not found) - reindex?");
         }
+        std::copy(std::begin(tmpMmrNode), std::end(tmpMmrNode), mmrNode.begin());
     }
 
     return mmrNode;
