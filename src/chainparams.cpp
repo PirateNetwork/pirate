@@ -135,6 +135,8 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
         consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nProtocolVersion = 170007;
         consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
+        consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nProtocolVersion = 170007;
+        consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
 
         // The best chain should have at least this much work.
         // if (chainName.isKMD()) {
@@ -397,6 +399,8 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 280000;
         consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nProtocolVersion = 170007;
         consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight = 280500;
+        consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nProtocolVersion = 170007;
+        consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
 
         pchMessageStart[0] = 0x5A;
         pchMessageStart[1] = 0x1F;
@@ -501,6 +505,8 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 100;
         consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nProtocolVersion = 170007;
         consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight = 200;
+        consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nProtocolVersion = 170007;
+        consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight = 250;
 
         // The best chain should have at least this much work.
         consensus.nMinimumChainWork = uint256S("0x00");

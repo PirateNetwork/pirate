@@ -48,6 +48,14 @@ const struct NUInfo NetworkUpgradeInfo[Consensus::MAX_NETWORK_UPGRADES] = {
         /*.nBranchId =*/ 0xc2d6d0b4,
         /*.strName =*/ "Orchard",
         /*.strInfo =*/ "Activate Orchard.",
+    },
+    {
+        // Matches upstream Zcash's Nu6_3 branch ID (zcash_protocol::consensus::BranchId::Nu6_2
+        // -> Nu6_3), so that Rust-side code deriving a BundleVersion from this branch ID via
+        // upstream's bundle_version_for_branch resolves to BundleVersion::ironwood_v3().
+        /*.nBranchId =*/ 0x37a5165b,
+        /*.strName =*/ "Ironwood",
+        /*.strInfo =*/ "Activate the Ironwood shielded pool.",
     }
 };
 
