@@ -26,6 +26,12 @@ typedef struct OutputPtr OutputPtr;
 struct ActionPtr;
 typedef struct ActionPtr ActionPtr;
 
+/// Typesafe pointer to a Rust-allocated orchard::bundle::Bundle value for the Ironwood pool
+/// slot. SCAFFOLDING ONLY: not yet used by any C++ code (no v6 transaction format exists
+/// in this tree).
+struct IronwoodBundlePtr;
+typedef struct IronwoodBundlePtr IronwoodBundlePtr;
+
 #ifdef __cplusplus
 }
 #endif

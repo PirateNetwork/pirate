@@ -62,6 +62,8 @@ mod incremental_merkle_tree;
 mod merkle_frontier;
 #[path = "orchard_protocol/orchard_protocol.rs"]
 mod orchard_protocol;
+#[path = "ironwood_protocol/ironwood_protocol.rs"]
+mod ironwood_protocol;
 #[path = "sapling_protocol/sapling_protocol.rs"]
 mod sapling_protocol;
 #[path = "sprout_protocol/sprout.rs"]

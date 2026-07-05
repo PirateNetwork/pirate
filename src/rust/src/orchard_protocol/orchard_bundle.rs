@@ -14,7 +14,7 @@ use zcash_protocol::value::ZatBalance as Amount;
 
 use crate::{bridge::ffi, streams::CppStream};
 
-pub struct Action(orchard::Action<Signature<SpendAuth>>);
+pub struct Action(pub(crate) orchard::Action<Signature<SpendAuth>>);
 
 impl Action {
     pub(crate) fn cv(&self) -> [u8; 32] {

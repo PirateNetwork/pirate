@@ -15,6 +15,10 @@ use crate::{
         },
         orchard_validator::{orchard_batch_validation_init, BatchValidator as OrchardBatchValidator},
     },
+    ironwood_protocol::ironwood_bundle::{
+        none_ironwood_bundle, ironwood_bundle_from_raw_box, parse_ironwood_bundle,
+        Bundle as IronwoodBundle,
+    },
     builder_ffi::shielded_signature_digest,
     sapling_protocol::{
         apply_sapling_bundle_signatures, build_sapling_bundle, compute_nullifier,
@@ -89,6 +93,7 @@ pub(crate) mod ffi {
         type SaplingBundlePtr;
         type OutputPtr;
         type ActionPtr;
+        type IronwoodBundlePtr;
     }
 
     #[namespace = "sapling"]
@@ -370,6 +375,37 @@ pub(crate) mod ffi {
         fn proof(self: &OrchardBundle) -> Vec<u8>;
         fn binding_sig(self: &OrchardBundle) -> [u8; 64];
         fn coinbase_outputs_are_valid(self: &OrchardBundle) -> bool;
+    }
+
+    // SCAFFOLDING ONLY: IronwoodBundle is not yet used by any C++ code (no v6 transaction
+    // format exists in this tree). It reuses the `Action` type declared above in
+    // `orchard_bundle` — Ironwood shares the Orchard Action circuit and note format,
+    // distinguished only by BundleVersion.
+    #[namespace = "ironwood_bundle"]
+    extern "Rust" {
+        type IronwoodBundle;
+
+        #[rust_name = "none_ironwood_bundle"]
+        fn none() -> Box<IronwoodBundle>;
+        #[rust_name = "ironwood_bundle_from_raw_box"]
+        unsafe fn from_raw_box(bundle: *mut IronwoodBundlePtr) -> Box<IronwoodBundle>;
+        fn box_clone(self: &IronwoodBundle) -> Box<IronwoodBundle>;
+        #[rust_name = "parse_ironwood_bundle"]
+        fn parse(stream: &mut CppStream<'_>, consensus_branch_id: u32) -> Result<Box<IronwoodBundle>>;
+        fn serialize(self: &IronwoodBundle, stream: &mut CppStream<'_>) -> Result<()>;
+        fn as_ptr(self: &IronwoodBundle) -> *const IronwoodBundlePtr;
+        fn recursive_dynamic_usage(self: &IronwoodBundle) -> usize;
+        fn is_present(self: &IronwoodBundle) -> bool;
+        fn actions(self: &IronwoodBundle) -> Vec<Action>;
+        fn num_actions(self: &IronwoodBundle) -> usize;
+        fn get_action(self: &IronwoodBundle, action_index: usize) -> Result<Box<Action>>;
+        fn enable_spends(self: &IronwoodBundle) -> bool;
+        fn enable_outputs(self: &IronwoodBundle) -> bool;
+        fn value_balance_zat(self: &IronwoodBundle) -> i64;
+        fn anchor(self: &IronwoodBundle) -> [u8; 32];
+        fn proof(self: &IronwoodBundle) -> Vec<u8>;
+        fn binding_sig(self: &IronwoodBundle) -> [u8; 64];
+        fn coinbase_outputs_are_valid(self: &IronwoodBundle) -> bool;
     }
 
     #[namespace = "orchard"]
