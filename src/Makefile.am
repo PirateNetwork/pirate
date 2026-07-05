@@ -1006,8 +1006,8 @@ install-exec-hook:
 if ENABLE_EMBEDDED_TOR
 	@if test -f "$(TOR_BINARY_PATH)"; then \
 		$(MKDIR_P) "$(DESTDIR)$(bindir)"; \
-		$(INSTALL_PROGRAM) "$(TOR_BINARY_PATH)" "$(DESTDIR)$(bindir)/tor"; \
-		$(STRIP) "$(DESTDIR)$(bindir)/tor" 2>/dev/null || true; \
+		$(INSTALL_PROGRAM) "$(TOR_BINARY_PATH)" "$(DESTDIR)$(bindir)/tor$(EXEEXT)"; \
+		$(STRIP) "$(DESTDIR)$(bindir)/tor$(EXEEXT)" 2>/dev/null || true; \
 	else \
 		echo "warning: embedded Tor enabled but no tor binary found at '$(TOR_BINARY_PATH)', skipping bundling"; \
 	fi
@@ -1015,8 +1015,8 @@ endif
 if ENABLE_EMBEDDED_I2PD
 	@if test -f "$(I2PD_BINARY_PATH)"; then \
 		$(MKDIR_P) "$(DESTDIR)$(bindir)"; \
-		$(INSTALL_PROGRAM) "$(I2PD_BINARY_PATH)" "$(DESTDIR)$(bindir)/i2pd"; \
-		$(STRIP) "$(DESTDIR)$(bindir)/i2pd" 2>/dev/null || true; \
+		$(INSTALL_PROGRAM) "$(I2PD_BINARY_PATH)" "$(DESTDIR)$(bindir)/i2pd$(EXEEXT)"; \
+		$(STRIP) "$(DESTDIR)$(bindir)/i2pd$(EXEEXT)" 2>/dev/null || true; \
 	else \
 		echo "warning: embedded I2P enabled but no i2pd binary found at '$(I2PD_BINARY_PATH)', skipping bundling"; \
 	fi
