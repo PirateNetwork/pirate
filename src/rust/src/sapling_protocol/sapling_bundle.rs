@@ -33,7 +33,7 @@ use sapling_crypto::zip32::ExtendedSpendingKey;
 use zcash_primitives::{
     merkle_tree::merkle_path_from_slice,
     transaction::{components::{sapling as sapling_serialization, GROTH_PROOF_SIZE},
-        Authorized, Transaction, TransactionDigest,
+        Authorized, Transaction, TransactionDigest, TxVersion,
     },
 };
 use zcash_protocol::value::ZatBalance as Amount;
@@ -266,7 +266,8 @@ impl Bundle {
     }
 
     pub(crate) fn commitment<D: TransactionDigest<Authorized>>(&self, digester: D) -> D::SaplingDigest {
-        digester.digest_sapling(self.inner())
+        // TreasureChest only builds/accepts v5 transactions today.
+        digester.digest_sapling(TxVersion::V5, self.inner())
     }
 }
 

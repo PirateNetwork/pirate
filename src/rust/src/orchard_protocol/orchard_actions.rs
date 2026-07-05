@@ -3,7 +3,7 @@ use libc::c_uchar;
 use orchard::{
     Address, Note,
     keys::{OutgoingViewingKey, IncomingViewingKey, PreparedIncomingViewingKey, FullViewingKey, Scope},
-    note::{Rho, RandomSeed},
+    note::{NoteVersion, Rho, RandomSeed},
     note_encryption::OrchardDomain,
     value::NoteValue};
 
@@ -208,7 +208,7 @@ pub(crate) fn compute_nullifier(
         None => return false
     };
 
-    let note = match de_ct(Note::from_parts(address, note_value, rho, rseed)) {
+    let note = match de_ct(Note::from_parts(address, note_value, rho, rseed, NoteVersion::V2)) {
         Some(n) => n,
         None => return false,
     };

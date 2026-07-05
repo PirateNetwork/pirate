@@ -154,8 +154,11 @@ pub extern "C" fn librustzcash_init_zksnark_params(
 
         // Generate Orchard parameters.
         info!(target: "main", "Loading Orchard parameters");
-        let orchard_pk = load_proving_keys.then(orchard::circuit::ProvingKey::build);
-        let orchard_vk = orchard::circuit::VerifyingKey::build();
+        let orchard_pk = load_proving_keys.then(|| {
+            orchard::circuit::ProvingKey::build(orchard::circuit::OrchardCircuitVersion::FixedPostNu6_2)
+        });
+        let orchard_vk =
+            orchard::circuit::VerifyingKey::build(orchard::circuit::OrchardCircuitVersion::FixedPostNu6_2);
 
         // Caller is responsible for calling this function once, so
         // these global mutations are safe.

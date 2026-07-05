@@ -355,7 +355,7 @@ pub(crate) mod ffi {
         unsafe fn from_raw_box(bundle: *mut OrchardBundlePtr) -> Box<OrchardBundle>;
         fn box_clone(self: &OrchardBundle) -> Box<OrchardBundle>;
         #[rust_name = "parse_orchard_bundle"]
-        fn parse(stream: &mut CppStream<'_>) -> Result<Box<OrchardBundle>>;
+        fn parse(stream: &mut CppStream<'_>, consensus_branch_id: u32) -> Result<Box<OrchardBundle>>;
         fn serialize(self: &OrchardBundle, stream: &mut CppStream<'_>) -> Result<()>;
         fn as_ptr(self: &OrchardBundle) -> *const OrchardBundlePtr;
         fn recursive_dynamic_usage(self: &OrchardBundle) -> usize;

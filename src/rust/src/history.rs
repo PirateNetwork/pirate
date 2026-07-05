@@ -22,11 +22,11 @@ mod ffi {
             // Indices of provided tree nodes, length of p_len
             indices: &[u32],
             // Provided tree nodes data, length of p_len
-            nodes: &[[u8; 253]], // zcash_history::MAX_ENTRY_SIZE
+            nodes: &[[u8; 326]], // zcash_history::MAX_ENTRY_SIZE
             // New node
-            new_node_bytes: &[u8; 244], // zcash_history::MAX_NODE_DATA_SIZE
+            new_node_bytes: &[u8; 317], // zcash_history::MAX_NODE_DATA_SIZE
             // Return buffer for appended leaves, should be pre-allocated of ceiling(log2(t_len)) length
-            buf_ret: &mut [[u8; 244]], // zcash_history::MAX_NODE_DATA_SIZE
+            buf_ret: &mut [[u8; 317]], // zcash_history::MAX_NODE_DATA_SIZE
         ) -> Result<Effect>;
 
         fn remove(
@@ -37,12 +37,12 @@ mod ffi {
             // Indices of provided tree nodes, length of p_len+e_len
             indices: &[u32],
             // Provided tree nodes data, length of p_len+e_len
-            nodes: &[[u8; 253]], // zcash_history::MAX_ENTRY_SIZE
+            nodes: &[[u8; 326]], // zcash_history::MAX_ENTRY_SIZE
             // Peaks count
             p_len: usize,
         ) -> Result<Effect>;
 
-        fn hash_node(cbranch: u32, node_bytes: &[u8; 244]) -> Result<[u8; 32]>;
+        fn hash_node(cbranch: u32, node_bytes: &[u8; 317]) -> Result<[u8; 32]>;
     }
 }
 

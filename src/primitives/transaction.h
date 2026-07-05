@@ -715,12 +715,12 @@ public:
 
         if (isOrchardV5) {
             // Common Transaction Fields (plus version bytes above)
+            uint32_t consensusBranchId;
             if (ser_action.ForRead()) {
-                uint32_t consensusBranchId;
                 READWRITE(consensusBranchId);
                 *const_cast<std::optional<uint32_t>*>(&nConsensusBranchId) = consensusBranchId;
             } else {
-                uint32_t consensusBranchId = nConsensusBranchId.value();
+                consensusBranchId = nConsensusBranchId.value();
                 READWRITE(consensusBranchId);
             }
             READWRITE(*const_cast<uint32_t*>(&nLockTime));
@@ -734,7 +734,11 @@ public:
             READWRITE(saplingBundle);
 
             // Orchard Transaction Fields
-            READWRITE(orchardBundle);
+            if (ser_action.ForRead()) {
+                orchardBundle.Unserialize(s, consensusBranchId);
+            } else {
+                orchardBundle.Serialize(s);
+            }
         } else {
             // Legacy transaction formats
             READWRITE(*const_cast<std::vector<CTxIn>*>(&vin));
@@ -991,12 +995,12 @@ struct CMutableTransaction {
 
         if (isOrchardV5) {
             // Common Transaction Fields (plus version bytes above)
+            uint32_t consensusBranchId;
             if (ser_action.ForRead()) {
-                uint32_t consensusBranchId;
                 READWRITE(consensusBranchId);
                 nConsensusBranchId = consensusBranchId;
             } else {
-                uint32_t consensusBranchId = nConsensusBranchId.value();
+                consensusBranchId = nConsensusBranchId.value();
                 READWRITE(consensusBranchId);
             }
             READWRITE(nLockTime);
@@ -1010,7 +1014,11 @@ struct CMutableTransaction {
             READWRITE(saplingBundle);
 
             // Orchard Transaction Fields
-            READWRITE(orchardBundle);
+            if (ser_action.ForRead()) {
+                orchardBundle.Unserialize(s, consensusBranchId);
+            } else {
+                orchardBundle.Serialize(s);
+            }
         } else {
             READWRITE(vin);
             READWRITE(vout);

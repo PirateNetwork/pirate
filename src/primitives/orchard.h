@@ -74,9 +74,9 @@ public:
     }
 
     template<typename Stream>
-    void Unserialize(Stream& s) {
+    void Unserialize(Stream& s, uint32_t consensusBranchId) {
         try {
-            inner = orchard_bundle::parse(*ToRustStream(s));
+            inner = orchard_bundle::parse(*ToRustStream(s), consensusBranchId);
         } catch (const std::exception& e) {
             throw std::ios_base::failure(e.what());
         }

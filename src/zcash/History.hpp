@@ -12,7 +12,10 @@
 #include "librustzcash.h"
 
 #define NODE_V1_SERIALIZED_LENGTH 171
-#define NODE_SERIALIZED_LENGTH 244
+#define NODE_V2_SERIALIZED_LENGTH 244
+// NodeDataV3, added upstream for the Ironwood pool (zcash_history 0.5.0-pre.0).
+#define NODE_V3_SERIALIZED_LENGTH 317
+#define NODE_SERIALIZED_LENGTH NODE_V3_SERIALIZED_LENGTH
 #define ENTRY_SERIALIZED_LENGTH (NODE_SERIALIZED_LENGTH + 9)
 
 typedef std::array<unsigned char, NODE_SERIALIZED_LENGTH> HistoryNode;

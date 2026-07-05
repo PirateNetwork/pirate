@@ -81,17 +81,19 @@ pub extern "C" fn orchard_builder_new(
     let anchor = unsafe { anchor.as_ref() }
         .map(|a| orchard::Anchor::from_bytes(*a).unwrap())
         .unwrap_or_else(|| MerkleHashOrchard::empty_root(32.into()).into());
-    let bundle_type = if spends_enabled && outputs_enabled {
-        BundleType::DEFAULT
+    let flags = if spends_enabled && outputs_enabled {
+        Flags::ENABLED
     } else if !spends_enabled {
-        BundleType::Transactional { flags: Flags::SPENDS_DISABLED, bundle_required: false }
+        Flags::SPENDS_DISABLED
     } else {
-        BundleType::Transactional { flags: Flags::OUTPUTS_DISABLED, bundle_required: false }
+        Flags::OUTPUTS_DISABLED
     };
-    Box::into_raw(Box::new(Builder::new(
-        bundle_type,
-        anchor,
-    )))
+    // Pirate's currently-active circuit/pool: NU6.2-era Orchard. Not yet PostNu6_3/Ironwood.
+    let bundle_version = orchard::bundle::BundleVersion::orchard_v2();
+    Box::into_raw(Box::new(
+        Builder::new(BundleType::DEFAULT, bundle_version, flags, anchor)
+            .expect("flags are representable under orchard_v2 and bundle_type is not Coinbase"),
+    ))
 }
 
 #[no_mangle]
@@ -180,7 +182,13 @@ pub extern "C" fn orchard_builder_add_spend_from_parts(
 
     let note_value = NoteValue::from_raw(value_raw);
 
-    let note = match de_ct(Note::from_parts(address, note_value, rho, rseed)) {
+    let note = match de_ct(Note::from_parts(
+        address,
+        note_value,
+        rho,
+        rseed,
+        orchard::note::NoteVersion::V2,
+    )) {
         Some(r) => r,
         None => return false,
     };

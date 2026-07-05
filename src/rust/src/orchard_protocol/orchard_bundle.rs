@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use std::{mem, ptr};
 
 use libc::c_uchar;
@@ -115,8 +116,11 @@ pub(crate) unsafe fn orchard_bundle_from_raw_box(
 }
 
 /// Parses an authorized Orchard bundle from the given stream.
-pub(crate) fn parse_orchard_bundle(reader: &mut CppStream<'_>) -> Result<Box<Bundle>, String> {
-    Bundle::parse(reader)
+pub(crate) fn parse_orchard_bundle(
+    reader: &mut CppStream<'_>,
+    consensus_branch_id: u32,
+) -> Result<Box<Bundle>, String> {
+    Bundle::parse(reader, consensus_branch_id)
 }
 
 impl Bundle {
@@ -135,8 +139,17 @@ impl Bundle {
     }
 
     /// Parses an authorized Orchard bundle from the given stream.
-    pub(crate) fn parse(reader: &mut CppStream<'_>) -> Result<Box<Self>, String> {
-        match orchard_serialization::read_v5_bundle(reader) {
+    ///
+    /// `consensus_branch_id` identifies the transaction's consensus epoch, which determines
+    /// the [`orchard::bundle::BundleVersion`] (and therefore circuit/flag-byte semantics) the
+    /// bundle is parsed under. See `bundle_version_for_branch` upstream.
+    pub(crate) fn parse(
+        reader: &mut CppStream<'_>,
+        consensus_branch_id: u32,
+    ) -> Result<Box<Self>, String> {
+        let branch_id = zcash_protocol::consensus::BranchId::try_from(consensus_branch_id)
+            .map_err(|_| format!("Unknown consensus branch id: {}", consensus_branch_id))?;
+        match orchard_serialization::read_v5_bundle(reader, branch_id) {
             Ok(parsed) => Ok(Box::new(Bundle(parsed))),
             Err(e) => Err(format!("Failed to parse Orchard bundle: {}", e)),
         }
