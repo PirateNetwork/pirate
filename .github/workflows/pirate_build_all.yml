@@ -248,6 +248,8 @@ jobs:
         env:
           HOMEBREW_NO_AUTO_UPDATE: 1
         run: |
+          brew untap aws/tap 2>/dev/null || true
+
           install_brew_formulae() {
             missing=()
             for formula in "$@"; do
@@ -523,6 +525,8 @@ jobs:
         env:
           HOMEBREW_NO_AUTO_UPDATE: 1
         run: |
+          brew untap aws/tap 2>/dev/null || true
+
           install_brew_formulae() {
             missing=()
             for formula in "$@"; do
