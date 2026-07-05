@@ -10,6 +10,7 @@ define $(package)_set_vars
   $(package)_config_opts=--disable-unittests --disable-system-torrc --disable-asciidoc
   $(package)_config_opts+=--disable-tool-name-check --disable-dependency-tracking --enable-option-checking
   $(package)_config_opts+=--enable-static-tor
+  $(package)_config_opts_darwin=--disable-static-tor --enable-static-openssl --enable-static-libevent --enable-static-zlib
   $(package)_config_opts+=--with-openssl-dir=$(host_prefix)
   $(package)_config_opts+=--with-libevent-dir=$(host_prefix)
   $(package)_config_opts+=--with-zlib-dir=$(host_prefix)
