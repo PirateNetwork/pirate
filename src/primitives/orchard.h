@@ -82,6 +82,26 @@ public:
         }
     }
 
+    // v6 (Ironwood-era) Orchard slot (BundleVersion::orchard_v3). SCAFFOLDING ONLY: not
+    // yet called by any transaction format in this tree.
+    template<typename Stream>
+    void SerializeV6(Stream& s) const {
+        try {
+            inner->serialize_v6(*ToRustStream(s));
+        } catch (const std::exception& e) {
+            throw std::ios_base::failure(e.what());
+        }
+    }
+
+    template<typename Stream>
+    void UnserializeV6(Stream& s, uint32_t consensusBranchId) {
+        try {
+            inner = orchard_bundle::parse_v6(*ToRustStream(s), consensusBranchId);
+        } catch (const std::exception& e) {
+            throw std::ios_base::failure(e.what());
+        }
+    }
+
     /// Returns true if this contains an Orchard bundle, or false if there is no
     /// Orchard component.
     bool IsPresent() const { return inner->is_present(); }

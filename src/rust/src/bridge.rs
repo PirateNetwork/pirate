@@ -6,7 +6,8 @@ use crate::{
     },
     orchard_protocol::{
         orchard_bundle::{
-            none_orchard_bundle, orchard_bundle_from_raw_box, parse_orchard_bundle, Action,
+            none_orchard_bundle, orchard_bundle_from_raw_box, parse_orchard_bundle,
+            parse_orchard_bundle_v6, Action,
             Bundle as OrchardBundle,
         },
         orchard_actions::{
@@ -362,6 +363,10 @@ pub(crate) mod ffi {
         #[rust_name = "parse_orchard_bundle"]
         fn parse(stream: &mut CppStream<'_>, consensus_branch_id: u32) -> Result<Box<OrchardBundle>>;
         fn serialize(self: &OrchardBundle, stream: &mut CppStream<'_>) -> Result<()>;
+        // v6 (Ironwood-era) Orchard slot. SCAFFOLDING ONLY: unused until v6 exists.
+        #[rust_name = "parse_orchard_bundle_v6"]
+        fn parse_v6(stream: &mut CppStream<'_>, consensus_branch_id: u32) -> Result<Box<OrchardBundle>>;
+        fn serialize_v6(self: &OrchardBundle, stream: &mut CppStream<'_>) -> Result<()>;
         fn as_ptr(self: &OrchardBundle) -> *const OrchardBundlePtr;
         fn recursive_dynamic_usage(self: &OrchardBundle) -> usize;
         fn is_present(self: &OrchardBundle) -> bool;

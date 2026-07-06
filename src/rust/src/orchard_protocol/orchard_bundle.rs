@@ -7,6 +7,7 @@ use orchard::{
     keys::{FullViewingKey, OutgoingViewingKey, PreparedIncomingViewingKey},
     note_encryption::OrchardDomain,
     primitives::redpallas::{Signature, SpendAuth},
+    ValuePool,
 };
 use zcash_note_encryption::{try_note_decryption, try_output_recovery_with_ovk};
 use zcash_primitives::transaction::components::orchard as orchard_serialization;
@@ -130,6 +131,18 @@ fn pirate_current_orchard_branch(
     zcash_protocol::consensus::BranchId::Nu6_2
 }
 
+/// The [`zcash_protocol::consensus::BranchId`] for the Orchard slot of a v6
+/// (Ironwood-era) transaction, resolving to `BundleVersion::orchard_v3()`.
+///
+/// SCAFFOLDING ONLY: no v6-producing consensus rule is active anywhere on Pirate yet, so
+/// `_consensus_branch_id` is unused for the same reason as
+/// [`pirate_current_orchard_branch`] — there is nothing yet to dispatch on.
+fn pirate_current_orchard_v6_branch(
+    _consensus_branch_id: u32,
+) -> zcash_protocol::consensus::BranchId {
+    zcash_protocol::consensus::BranchId::Nu6_3
+}
+
 #[derive(Clone)]
 pub struct Bundle(Option<orchard::Bundle<Authorized, Amount>>);
 
@@ -149,6 +162,16 @@ pub(crate) fn parse_orchard_bundle(
     consensus_branch_id: u32,
 ) -> Result<Box<Bundle>, String> {
     Bundle::parse(reader, consensus_branch_id)
+}
+
+/// Parses an authorized Orchard bundle from the Orchard slot of a v6 (Ironwood-era)
+/// transaction. SCAFFOLDING ONLY: no v6-producing consensus rule is active anywhere on
+/// Pirate yet.
+pub(crate) fn parse_orchard_bundle_v6(
+    reader: &mut CppStream<'_>,
+    consensus_branch_id: u32,
+) -> Result<Box<Bundle>, String> {
+    Bundle::parse_v6(reader, consensus_branch_id)
 }
 
 impl Bundle {
@@ -189,6 +212,27 @@ impl Bundle {
     pub(crate) fn serialize(&self, writer: &mut CppStream<'_>) -> Result<(), String> {
         orchard_serialization::write_v5_bundle(self.inner(), writer)
             .map_err(|e| format!("Failed to serialize Orchard bundle: {}", e))
+    }
+
+    /// Parses an authorized Orchard bundle from the Orchard slot of a v6 transaction.
+    /// See [`pirate_current_orchard_v6_branch`].
+    pub(crate) fn parse_v6(
+        reader: &mut CppStream<'_>,
+        consensus_branch_id: u32,
+    ) -> Result<Box<Self>, String> {
+        let branch_id = pirate_current_orchard_v6_branch(consensus_branch_id);
+        match orchard_serialization::read_v6_bundle(reader, branch_id, ValuePool::Orchard) {
+            Ok(parsed) => Ok(Box::new(Bundle(parsed))),
+            Err(e) => Err(format!("Failed to parse v6 Orchard bundle: {}", e)),
+        }
+    }
+
+    /// Serializes an authorized Orchard bundle to the Orchard slot of a v6 transaction.
+    ///
+    /// If `bundle == None`, this serializes `nActionsOrchard = 0`.
+    pub(crate) fn serialize_v6(&self, writer: &mut CppStream<'_>) -> Result<(), String> {
+        orchard_serialization::write_v6_bundle(self.inner(), writer)
+            .map_err(|e| format!("Failed to serialize v6 Orchard bundle: {}", e))
     }
 
     pub(crate) fn inner(&self) -> Option<&orchard::Bundle<Authorized, Amount>> {

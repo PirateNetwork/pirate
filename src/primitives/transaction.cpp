@@ -147,7 +147,8 @@ CMutableTransaction::CMutableTransaction(const CTransaction& tx) : nVersion(tx.n
                                                                    nConsensusBranchId(tx.GetConsensusBranchId()),
                                                                    vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
                                                                    vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
-                                                                   saplingBundle(tx.GetSaplingBundle()), orchardBundle(tx.GetOrchardBundle())
+                                                                   saplingBundle(tx.GetSaplingBundle()), orchardBundle(tx.GetOrchardBundle()),
+                                                                   ironwoodBundle(tx.GetIronwoodBundle())
 {
 
 }
@@ -203,13 +204,14 @@ CTransaction::CTransaction() : nVersion(CTransaction::SPROUT_MIN_CURRENT_VERSION
                               nConsensusBranchId(std::nullopt),
                               vin(), vout(), nLockTime(0),
                               vjoinsplit(), joinSplitPubKey(), joinSplitSig(),
-                              saplingBundle(), orchardBundle() {}
+                              saplingBundle(), orchardBundle(), ironwoodBundle() {}
 
 CTransaction::CTransaction(const CMutableTransaction& tx) : nVersion(tx.nVersion), fOverwintered(tx.fOverwintered), nVersionGroupId(tx.nVersionGroupId), nExpiryHeight(tx.nExpiryHeight),
                                                             nConsensusBranchId(tx.nConsensusBranchId),
                                                             vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
                                                             vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
-                                                            saplingBundle(tx.saplingBundle), orchardBundle(tx.orchardBundle)
+                                                            saplingBundle(tx.saplingBundle), orchardBundle(tx.orchardBundle),
+                                                            ironwoodBundle(tx.ironwoodBundle)
 {
     UpdateHash();
 }
@@ -222,7 +224,8 @@ CTransaction::CTransaction(
                               nConsensusBranchId(tx.nConsensusBranchId),
                               vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
                               vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
-                              saplingBundle(tx.saplingBundle), orchardBundle(tx.orchardBundle)
+                              saplingBundle(tx.saplingBundle), orchardBundle(tx.orchardBundle),
+                              ironwoodBundle(tx.ironwoodBundle)
 {
     assert(evilDeveloperFlag);
 }
@@ -231,7 +234,8 @@ CTransaction::CTransaction(CMutableTransaction&& tx) : nVersion(tx.nVersion), fO
                                                        nConsensusBranchId(tx.nConsensusBranchId),
                                                        vin(std::move(tx.vin)), vout(std::move(tx.vout)), nLockTime(tx.nLockTime), nExpiryHeight(tx.nExpiryHeight),
                                                        vjoinsplit(std::move(tx.vjoinsplit)), joinSplitPubKey(std::move(tx.joinSplitPubKey)), joinSplitSig(std::move(tx.joinSplitSig)),
-                                                       saplingBundle(std::move(tx.saplingBundle)), orchardBundle(std::move(tx.orchardBundle))
+                                                       saplingBundle(std::move(tx.saplingBundle)), orchardBundle(std::move(tx.orchardBundle)),
+                                                       ironwoodBundle(std::move(tx.ironwoodBundle))
 {
     UpdateHash();
 }
@@ -248,6 +252,7 @@ CTransaction& CTransaction::operator=(const CTransaction& tx)
     *const_cast<uint32_t*>(&nExpiryHeight) = tx.nExpiryHeight;
     saplingBundle = tx.saplingBundle;
     orchardBundle = tx.orchardBundle;
+    ironwoodBundle = tx.ironwoodBundle;
     *const_cast<std::vector<JSDescription>*>(&vjoinsplit) = tx.vjoinsplit;
     *const_cast<uint256*>(&joinSplitPubKey) = tx.joinSplitPubKey;
     *const_cast<joinsplit_sig_t*>(&joinSplitSig) = tx.joinSplitSig;
@@ -513,4 +518,12 @@ const SaplingBundle& CTransaction::GetSaplingBundle() const
 const OrchardBundle& CTransaction::GetOrchardBundle() const
 {
     return orchardBundle;
+}
+
+/**
+ * Returns the Ironwood bundle for the transaction.
+ */
+const IronwoodBundle& CTransaction::GetIronwoodBundle() const
+{
+    return ironwoodBundle;
 }
