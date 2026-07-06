@@ -90,6 +90,14 @@ static mut SPROUT_GROTH16_PARAMS_PATH: Option<PathBuf> = None;
 static mut ORCHARD_PK: Option<orchard::circuit::ProvingKey> = None;
 static mut ORCHARD_VK: Option<orchard::circuit::VerifyingKey> = None;
 
+// SCAFFOLDING ONLY: loaded eagerly alongside ORCHARD_PK/VK for consistency, but nothing
+// in this tree can construct or validate an Ironwood bundle yet (no v6 transaction
+// support). The Ironwood pool requires PostNu6_3, a distinct circuit from Orchard's
+// current FixedPostNu6_2 (see OrchardCircuitVersion::supports_cross_address_restriction),
+// so it needs its own key pair rather than reusing ORCHARD_PK/VK.
+static mut IRONWOOD_PK: Option<orchard::circuit::ProvingKey> = None;
+static mut IRONWOOD_VK: Option<orchard::circuit::VerifyingKey> = None;
+
 /// Converts CtOption<T> into Option<T>
 fn de_ct<T>(ct: CtOption<T>) -> Option<T> {
     if ct.is_some().into() {
@@ -162,6 +170,14 @@ pub extern "C" fn librustzcash_init_zksnark_params(
         let orchard_vk =
             orchard::circuit::VerifyingKey::build(orchard::circuit::OrchardCircuitVersion::FixedPostNu6_2);
 
+        // Generate Ironwood parameters. SCAFFOLDING ONLY: see IRONWOOD_PK/VK above.
+        info!(target: "main", "Loading Ironwood parameters");
+        let ironwood_pk = load_proving_keys.then(|| {
+            orchard::circuit::ProvingKey::build(orchard::circuit::OrchardCircuitVersion::PostNu6_3)
+        });
+        let ironwood_vk =
+            orchard::circuit::VerifyingKey::build(orchard::circuit::OrchardCircuitVersion::PostNu6_3);
+
         // Caller is responsible for calling this function once, so
         // these global mutations are safe.
         unsafe {
@@ -175,6 +191,9 @@ pub extern "C" fn librustzcash_init_zksnark_params(
 
             ORCHARD_PK = orchard_pk;
             ORCHARD_VK = Some(orchard_vk);
+
+            IRONWOOD_PK = ironwood_pk;
+            IRONWOOD_VK = Some(ironwood_vk);
         }
     });
 }

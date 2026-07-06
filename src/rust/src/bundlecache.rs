@@ -97,6 +97,9 @@ impl BundleValidityCache {
 static BUNDLE_CACHES_LOADED: Once = Once::new();
 static mut SAPLING_BUNDLE_VALIDITY_CACHE: Option<RwLock<BundleValidityCache>> = None;
 static mut ORCHARD_BUNDLE_VALIDITY_CACHE: Option<RwLock<BundleValidityCache>> = None;
+// SCAFFOLDING ONLY: initialized alongside the others, but nothing queues Ironwood
+// bundles into it yet (no v6 transaction support exists in this tree).
+static mut IRONWOOD_BUNDLE_VALIDITY_CACHE: Option<RwLock<BundleValidityCache>> = None;
 
 pub(crate) fn init(cache_bytes: usize) {
     BUNDLE_CACHES_LOADED.call_once(|| unsafe {
@@ -108,6 +111,11 @@ pub(crate) fn init(cache_bytes: usize) {
         ORCHARD_BUNDLE_VALIDITY_CACHE = Some(RwLock::new(BundleValidityCache::new(
             "Orchard",
             b"OrchardVeriCache",
+            cache_bytes,
+        )));
+        IRONWOOD_BUNDLE_VALIDITY_CACHE = Some(RwLock::new(BundleValidityCache::new(
+            "Ironwood",
+            b"IronwoodVeriCch1",
             cache_bytes,
         )));
     });
@@ -138,6 +146,21 @@ pub(crate) fn orchard_bundle_validity_cache() -> RwLockReadGuard<'static, Bundle
 pub(crate) fn orchard_bundle_validity_cache_mut() -> RwLockWriteGuard<'static, BundleValidityCache>
 {
     (unsafe { ORCHARD_BUNDLE_VALIDITY_CACHE.as_mut() })
+        .expect("bundlecache::init() should have been called")
+        .write()
+        .unwrap()
+}
+
+pub(crate) fn ironwood_bundle_validity_cache() -> RwLockReadGuard<'static, BundleValidityCache> {
+    (unsafe { IRONWOOD_BUNDLE_VALIDITY_CACHE.as_ref() })
+        .expect("bundlecache::init() should have been called")
+        .read()
+        .unwrap()
+}
+
+pub(crate) fn ironwood_bundle_validity_cache_mut(
+) -> RwLockWriteGuard<'static, BundleValidityCache> {
+    (unsafe { IRONWOOD_BUNDLE_VALIDITY_CACHE.as_mut() })
         .expect("bundlecache::init() should have been called")
         .write()
         .unwrap()

@@ -9,5 +9,7 @@
 #![allow(dead_code)]
 
 pub(crate) mod ironwood_bundle;
+pub(crate) mod ironwood_validator;
 
 pub(crate) use ironwood_bundle::*;
+pub(crate) use ironwood_validator::*;

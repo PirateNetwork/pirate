@@ -16,9 +16,14 @@ use crate::{
         },
         orchard_validator::{orchard_batch_validation_init, BatchValidator as OrchardBatchValidator},
     },
-    ironwood_protocol::ironwood_bundle::{
-        none_ironwood_bundle, ironwood_bundle_from_raw_box, parse_ironwood_bundle,
-        Bundle as IronwoodBundle,
+    ironwood_protocol::{
+        ironwood_bundle::{
+            none_ironwood_bundle, ironwood_bundle_from_raw_box, parse_ironwood_bundle,
+            Bundle as IronwoodBundle,
+        },
+        ironwood_validator::{
+            ironwood_batch_validation_init, BatchValidator as IronwoodBatchValidator,
+        },
     },
     builder_ffi::shielded_signature_digest,
     sapling_protocol::{
@@ -425,7 +430,7 @@ pub(crate) mod ffi {
             sighash: [u8; 32],
         );
         fn validate(self: &mut OrchardBatchValidator) -> bool;
-        
+
         // Compute nullifier from note parts (already decrypted)
         // Similar to sapling::compute_nullifier
         #[rust_name = "compute_nullifier_orchard"]
@@ -455,6 +460,22 @@ pub(crate) mod ffi {
             rho_out: &mut [u8; 32],
             rseed_out: &mut [u8; 32],
         ) -> bool;
+    }
+
+    // SCAFFOLDING ONLY: not yet called by any C++ code (no v6 transaction support exists
+    // in this tree).
+    #[namespace = "ironwood"]
+    extern "Rust" {
+        #[cxx_name = "BatchValidator"]
+        type IronwoodBatchValidator;
+        #[cxx_name = "init_batch_validator"]
+        fn ironwood_batch_validation_init(cache_store: bool) -> Box<IronwoodBatchValidator>;
+        fn add_bundle(
+            self: &mut IronwoodBatchValidator,
+            bundle: Box<IronwoodBundle>,
+            sighash: [u8; 32],
+        );
+        fn validate(self: &mut IronwoodBatchValidator) -> bool;
     }
 
     #[namespace = "merkle_frontier"]
